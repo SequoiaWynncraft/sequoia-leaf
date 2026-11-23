@@ -280,7 +280,10 @@ goes to whoever `hearPresent`s. Each says whether they are a guest. Each call sa
 page is on (`device()` in `live.ts`: a phone when its window was under 700 CSS pixels wide at
 sign-in, else a desktop), for the staff's record of who played. While the page is in a live room of
 the place it is at (`realtime.ts` says so at each welcome), the room keeps where the member is, and
-the half-minute call only asks who is about (`GET`); a change of staying is still told.
+the half-minute call only asks who is about (`GET`); a change of staying is still told. The room
+says whenever who is where changes (`about`), and the page asks at once (`askAgain`), as it does at
+each welcome. Answers are taken in the order they were asked for: one that comes after a later one
+is dropped. Everybody listed says when Leaf last saw them (`seen`).
 
 **Live** (`realtime.ts`). `joinLive(room, ears)` puts the player in one of Leaf's live rooms (the
 wire and the rooms are in `@sequoia-leaf/core`'s `live.ts`) and keeps them there: the connection

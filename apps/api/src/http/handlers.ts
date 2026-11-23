@@ -590,6 +590,7 @@ const presentJson = (here: Here) =>
       username: player.username,
       place: player.place,
       guest: player.guest,
+      seen_at: iso(player.seenAt),
     })),
     resting: here.resting.map(leftJson),
     gone: here.gone.map(leftJson),

@@ -771,7 +771,7 @@ describe("the live guild", () => {
 describe("who is here, and who is dozing", () => {
   test("those resting: never the member, nobody in the game, nobody last at their camp; newest first, at most twelve", () => {
     const at = Date.UTC(2026, 10, 25, 12);
-    const present = [{ id: "a", name: "Alice", place: "works" as const, rank: null, guest: false }];
+    const present = [{ id: "a", name: "Alice", place: "works" as const, rank: null, guest: false, seen: null }];
     const resting = [
       { id: ME, name: "Tester", place: "town" as const, seen: at - 1, guest: false },
       { id: "a", name: "Alice", place: "town" as const, seen: at - 2, guest: false },
@@ -801,16 +801,17 @@ describe("who is here, and who is dozing", () => {
 
   test("everybody at the Works or the stump but the member (whoever is in town is there live), at most twelve", () => {
     const present = [
-      { id: ME, name: "Tester", place: "town" as const, rank: "captain", guest: false },
-      { id: "a", name: "Alice", place: "works" as const, rank: "chief", guest: false },
-      { id: "b", name: "Bob", place: "camp" as const, rank: null, guest: false },
-      { id: "c", name: "Cleo", place: "town" as const, rank: null, guest: false },
+      { id: ME, name: "Tester", place: "town" as const, rank: "captain", guest: false, seen: null },
+      { id: "a", name: "Alice", place: "works" as const, rank: "chief", guest: false, seen: null },
+      { id: "b", name: "Bob", place: "camp" as const, rank: null, guest: false, seen: null },
+      { id: "c", name: "Cleo", place: "town" as const, rank: null, guest: false, seen: null },
       ...Array.from({ length: 14 }, (_, i) => ({
         id: `n${i}`,
         name: `N${i}`,
         place: "table" as const,
         rank: null,
         guest: false,
+        seen: null,
       })),
     ];
     const v = toVisitors(present, ME);
@@ -820,7 +821,7 @@ describe("who is here, and who is dozing", () => {
   });
 
   test("a guest is drawn like any member, their own skin and name, with Guest for a rank, here or dozing", () => {
-    const present = [{ id: "g", name: "Wanderer", place: "table" as const, rank: null, guest: true }];
+    const present = [{ id: "g", name: "Wanderer", place: "table" as const, rank: null, guest: true, seen: null }];
     const gone = [{ id: "h", name: "Drifter", place: "works" as const, seen: 5, guest: true }];
     expect(toVisitors(present, ME)).toEqual([
       { id: "g", name: "Wanderer", rank: "Guest", at: "table", skin: "/v1/game/skins/g" },

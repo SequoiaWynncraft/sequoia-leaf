@@ -18,6 +18,7 @@ import {
   Effect,
   Layer,
   Option,
+  PubSub,
   Queue,
   Schedule,
   Schema,
@@ -267,7 +268,8 @@ export type Opened = "served" | "full" | "busy" | "stopping";
  * knows, as if their game said so: written when they come in, every `presenceMs` while they stay,
  * and when they go, so that nobody's page need say where they are while it is in a room. The same
  * moments open, keep and close their visit there (`Visits`); and Leaf's farewell closes every open
- * visit before it closes any connection.
+ * visit before it closes any connection. Whenever who is where changes, everybody in every room of
+ * the game's places is told (`{ t: "about" }`), to ask Leaf's list again.
  *
  * A player in a visit's room (`visitRoom`: somebody's yard, from Top yards) hears what Leaf does to
  * the state they visit while they are in it, as the play service tells it (`Watchers`). A visit's
@@ -365,6 +367,22 @@ export class Live extends Context.Service<
       yield* Effect.forkScoped(
         Effect.forever(
           Effect.flatMap(Queue.takeAll(whereabouts), (all) => Effect.forEach(all, write, { discard: true })),
+        ),
+      );
+
+      // Every change to who is where, once it is written (here, or by a page saying where it is), is
+      // told to everybody in every room of the game's places, so that each page asks Leaf's list
+      // again at once. A visit's room is no place, and its pages show nobody about.
+      const about = say({ t: "about" });
+      const changed = yield* presence.changes;
+      yield* Effect.forkScoped(
+        Effect.forever(
+          Effect.flatMap(PubSub.take(changed), () =>
+            Effect.sync(() => {
+              for (const room of rooms.all())
+                if (placeOf(room.kindName)) for (const o of room.occupants.values()) o.outbox.send(about);
+            }),
+          ),
         ),
       );
 

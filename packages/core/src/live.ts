@@ -271,6 +271,13 @@ export type ToClient =
   | { t: "left"; id: number }
   | { t: "act"; id: number; kind: string; arg: string }
   | { t: "pong"; c: number; s: number }
+  /**
+   * Who is where has changed: somebody came into the game, went, or is somewhere else in it, as
+   * Leaf's list of who is about (`GET /v1/game/presence`) now says. Told to everybody in every room
+   * of the game's places, so that every page asks for the list at once rather than at its next turn.
+   * A page from before it was told ignores it, as it ignores anything it does not know.
+   */
+  | { t: "about" }
   | { t: "error"; code: "unknown_room" | "not_in_room" | "bad_act" }
   /**
    * In a visit's room: a batch of commands Leaf has just done to the state visited, as it kept them.
@@ -365,6 +372,8 @@ export function readToClient(text: string): ToClient | null {
       return num(v.id) && str(v.kind) && str(v.arg) ? { t: "act", id: v.id, kind: v.kind, arg: v.arg } : null;
     case "pong":
       return num(v.c) && num(v.s) ? { t: "pong", c: v.c, s: v.s } : null;
+    case "about":
+      return { t: "about" };
     case "error": {
       const code = ERRORS.find((c) => c === v.code);
       return code ? { t: "error", code } : null;

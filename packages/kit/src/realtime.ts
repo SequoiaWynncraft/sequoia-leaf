@@ -44,7 +44,7 @@ import {
 
 import { device, member } from "./live.ts";
 import { ask, type LiveSocket, outside } from "./net.ts";
-import { inRoom } from "./presence.ts";
+import { askAgain, inRoom } from "./presence.ts";
 
 // What a page needs of the wire to draw who is in its room.
 export { Flag, type LiveMember, type Motion } from "@sequoia-leaf/core";
@@ -368,6 +368,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
         for (const r of m.roster) l.people.set(r.id, r);
         shown = l;
         inRoom(room);
+        // Whoever came or went while the page was not in the room, Leaf's list says now.
+        askAgain();
         // Nothing has been sent on this connection yet: whatever the player says next goes at once.
         sent = null;
         ears.welcome?.(m.you, m.room, m.roster);
@@ -393,6 +395,9 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
         return;
       case "pong":
         l.clock?.add(m.c, m.s, outside.now());
+        return;
+      case "about":
+        if (shown === l) askAgain();
         return;
       case "error":
         return;

@@ -174,9 +174,9 @@ describe("who is about, from the guild", () => {
   test("on the guild's server: everybody but the member, wherever they are, guests marked, newest gone first", () => {
     const about = toAbout(
       [
-        { id: "me", name: "Tester", place: "town", rank: null, guest: false },
-        { id: "c", name: "Campfellow", place: "camp", rank: null, guest: false },
-        { id: "g", name: "Pebblefoot", place: "town", rank: null, guest: true },
+        { id: "me", name: "Tester", place: "town", rank: null, guest: false, seen: null },
+        { id: "c", name: "Campfellow", place: "camp", rank: null, guest: false, seen: null },
+        { id: "g", name: "Pebblefoot", place: "town", rank: null, guest: true, seen: null },
       ],
       [
         { id: "f", name: "Fernhollow", place: "town", seen: NOW - 180 * MIN, guest: false },

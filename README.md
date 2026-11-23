@@ -506,12 +506,15 @@ as it was, and on for a player Leaf has never been told about); and `device`, `p
 optional, is what the page is on, by its window's width when it signed in
 (under 700 CSS pixels is a phone), for the staff's record of who played.
 Anything else gets 400 `invalid_place`. It records
-both, with whether the player is a guest, and answers `{ "present": [{ "id",
-"username", "place", "guest" }], "resting": [{ "id", "username", "place",
-"guest", "seen_at" }] }`: `present` is the 50 seen most recently of everyone
-whose game said where they were in the last 90 seconds, the player included,
-in name order; `resting` is those last seen between 90 seconds and a day ago
-whose `stay` was true, newest first, at most 24. A game that says the same place
+both, with whether the player is a guest, and answers `{ "present": [...],
+"resting": [...], "gone": [...] }`, each `{ "id", "username", "place", "guest",
+"seen_at" }`: `present` is the 50 seen most recently of everyone whose game
+said where they were in the last 90 seconds and who has not left a live room
+since, the player included, in name order; `resting` is the rest of those last
+seen in the last day (between 90 seconds and a day ago, or who left a room)
+whose `stay` was true, newest first, at most 24, and `gone` the same of those
+whose `stay` was false. The 90 seconds are the visits' (`VISIT_RULES.silentMs`),
+so Leaf's two records of who is where agree. A game that says the same place
 and `stay` less than 5 seconds after anything was last written for its player is
 answered the lists, but nothing is written; somewhere else, or other about
 staying, is written at once. A player in one of Live's rooms of the game's
@@ -519,7 +522,8 @@ places (the town) is written there by Live itself, as if their game had said so
 (below). Players not seen for a day are forgotten.
 `GET /v1/game/presence` answers the same lists and writes nothing: a page in
 one of Live's rooms asks it every 30 seconds, since the room keeps where its
-player is. Each `PUT` is also a visit's call (see
+player is, and at once whenever the room says who is where has changed (`about`,
+below). Each `PUT` is also a visit's call (see
 [Who played](#who-played-the-staffs-view)); a `GET` is not.
 
 ### The play service
@@ -929,10 +933,18 @@ the game's places (`town`) is present there as `PUT /v1/game/presence` has it,
 written by Live: when they come into the room (keeping what they last said
 about staying, and staying if they never said), again every 30 seconds while
 they are in it, and when they leave it (their connection's grace run out, a
-`leave`, or another room), as last seen there then, unless their game has said
-since that they are somewhere else. So pages that ask who is about count them
-right, and they rest in town after they go, though their page never says where
-it is. The same moments open, keep and close their visit there.
+`leave`, or another room), as last seen there then and gone from then on, unless
+their game has said since that they are somewhere else. So pages that ask who is
+about count them right, and they rest in town after they go, though their page
+never says where it is. The same moments open, keep and close their visit there.
+Every change to who is where, once it is written (somebody comes into a room or
+leaves it, a page says its player is somewhere else, or says otherwise about
+staying), is told to everybody in every room of the game's places as
+`{ "t": "about" }` (not a visit's room), and each page
+asks the lists again at once; a write that only says again what was said is not
+a change. A message a page does not know is ignored, so a page from before it was
+told simply asks every 30 seconds as it did: a message added for pages to hear is
+not a new `LIVE_VERSION`.
 
 **What it is not, yet.** Positions are the game's to say, inside the room and
 at its pace: right for walking about together, never for anything that pays or

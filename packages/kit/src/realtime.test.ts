@@ -298,6 +298,37 @@ describe("a live room", () => {
     expect(w.sent.filter((x) => x.path === "/v1/game/presence").map((x) => x.method)).toEqual(["GET", "PUT"]);
   });
 
+  test("asks who is about again at each welcome, and whenever the room says who is where has changed", async () => {
+    const w = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: TESTER },
+      "GET /v1/game/presence": { status: 200, body: { present: [], resting: [] } },
+      "PUT /v1/game/presence": { status: 200, body: { present: [], resting: [] } },
+    });
+    world = w;
+    await start();
+    undo = pretend({
+      socket: (url) => {
+        const s = new FakeSocket(url);
+        sockets.push(s);
+        return s;
+      },
+    });
+    room = joinLive("town");
+    here("town");
+    await Bun.sleep(10);
+    const s = socket(0);
+    s.open();
+    s.says(welcome(1, w.clock.now));
+    await Bun.sleep(10);
+    s.says({ t: "about" });
+    await Bun.sleep(10);
+    here(null);
+
+    // Said before the room welcomed the page; then asked at the welcome, and again at the room's word.
+    expect(w.sent.filter((x) => x.path === "/v1/game/presence").map((x) => x.method)).toEqual(["PUT", "GET", "GET"]);
+  });
+
   test("sends a stop or a jump at once, even with a move still waiting its turn", async () => {
     const w = await live();
     room = joinLive("town");

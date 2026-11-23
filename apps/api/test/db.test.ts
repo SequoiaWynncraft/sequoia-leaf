@@ -35,9 +35,13 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 28 (`time_in`), for a test going back before it: `played` as migrations 23 and 27 left it. */
+/**
+ * Undoes migrations 28 (`time_in`) and 29 (`presence_left`), for a test going back before them:
+ * `played` as migrations 23 and 27 left it.
+ */
 const beforeTimeIn = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
+    yield* sql`ALTER TABLE presence DROP COLUMN left_at`;
     yield* sql`DROP TABLE time_in`;
     yield* sql`ALTER TABLE visits DROP COLUMN acted_at`;
     yield* sql`
@@ -99,6 +103,7 @@ describe("the database", () => {
       { migration_id: 26, name: "play_kept" },
       { migration_id: 27, name: "afk" },
       { migration_id: 28, name: "time_in" },
+      { migration_id: 29, name: "presence_left" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -160,7 +165,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 28 },
+      { latest: 29 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
