@@ -71,7 +71,7 @@ import { HOP, walkers } from "./actors.ts";
 import { armAt, type Arms, arms, beltTile, marksOf, PAINTS, ride, STEPS, TILE, withArm, woodOf } from "./art/belts.ts";
 import { BEYOND, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
-import { DEPOT as DEPOT_ART, FLAG_AT, lookOf } from "./art/machines.ts";
+import { DEPOT as DEPOT_ART, FLAG_AT, gathererHat, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
 import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
@@ -526,7 +526,7 @@ function piece(
   let head = foot - 16;
   switch (k) {
     case GATHERER: {
-      const hat = Math.floor(hash(i, 3, 7) * 4);
+      const hat = gathererHat(grade);
       const left = d === 2 || (d !== 0 && hash(i, 4, 7) > 0.5);
       const p = work / WORK.gather;
       const pose = !powered ? 4 : out !== NONE ? 3 : !working ? 0 : p < 0.2 ? 0 : p < 0.4 ? 1 : p < 0.72 ? 2 : 3;

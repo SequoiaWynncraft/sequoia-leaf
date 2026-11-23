@@ -24,7 +24,7 @@ import { hash, makeCanvas, must, vnoise } from "@sequoia-leaf/kit/util.ts";
 import { type Arms, arms, beltTile, marksOf, TILE, woodOf } from "./belts.ts";
 import { type Ground, paintGround } from "./ground.ts";
 import { type ItemArt, makeItems, makePlain } from "./items.ts";
-import { lookOf, type Machines, makeMachines } from "./machines.ts";
+import { gathererHat, lookOf, type Machines, makeMachines } from "./machines.ts";
 import { bush, fern, trunk } from "./nature.ts";
 import { bm, DEEP, spr, type Sprite } from "./pal.ts";
 
@@ -213,9 +213,9 @@ export const KIND_PIC: Readonly<Record<KindName, (p: Parts, grade: number) => HT
     g.drawImage(plank, 8 - (plank.width >> 1), 7 - (plank.height >> 1));
     return c;
   },
-  // A gatherer of the second grade has his rake stood beside him; of the third, his wheelbarrow too.
+  // A gatherer in his grade's hat; of the second grade with his rake stood beside him, of the third his wheelbarrow too.
   gatherer: ({ m }, grade) => {
-    const gnome = must(m.gnome[0]?.[0], "gnome").c;
+    const gnome = must(m.gnome[gathererHat(grade)]?.[0], "gnome").c;
     if (grade < 2) return gnome;
     const barrow = grade >= 3 ? m.barrow : null;
     const left = barrow ? barrow.width - 4 : 0;

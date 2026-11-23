@@ -195,7 +195,8 @@ is the back of the workshop the town sees from the front: the same planks, stone
 brass wheel.
 
 **Grades.** A grade is written as a numeral: "Belt II". Each grade has a look of its own
-(`art/machines.ts`, `art/belts.ts`). The first is plain wood. The second is wax and brass: a belt,
+(`art/machines.ts`, `art/belts.ts`). A gatherer's hat says its grade: clay red at the first, green
+at the second and gold at the third (`gathererHat`). The first is plain wood. The second is wax and brass: a belt,
 splitter, joiner or sorter runs on paler waxed wood with a brass edge and chevron, a mill, a bench,
 a workshop and a Study have a brass band and plate, a tunnel a brass lip on its hood, and a
 gatherer a rake. The third is iron and brass: a belt, splitter, joiner or sorter runs on iron

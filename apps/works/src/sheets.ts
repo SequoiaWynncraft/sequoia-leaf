@@ -17,7 +17,7 @@ import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { arms, beltTile, marksOf, woodOf } from "./art/belts.ts";
 import { type Art, meetingTile } from "./art/index.ts";
-import { FLAG_AT, lookOf } from "./art/machines.ts";
+import { FLAG_AT, gathererHat, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
 import { type Entry, showSheet } from "./sheet.ts";
 
@@ -144,10 +144,10 @@ function grades(art: Art): Entry[] {
       name: at(grade),
       pics: [0, 1, 2, 3].map((side) => standing(art, m.hood[lookOf(grade)]?.[side], grade, -1)),
     });
-  head("Gatherers: each grade, standing, bent, lifting and asleep; facing left");
+  head("Gatherers: each grade in its hat, standing, bent, lifting and asleep; facing left");
   for (const grade of GRADES) {
     const gnome = (pose: number, left = false): HTMLCanvasElement => {
-      const c = standing(art, (left ? m.gnomeLeft : m.gnome)[0]?.[pose], grade, 1);
+      const c = standing(art, (left ? m.gnomeLeft : m.gnome)[gathererHat(grade)]?.[pose], grade, 1);
       const g = c.getContext("2d");
       const rake = left ? m.rakeLeft : m.rake;
       if (grade >= 2) g?.drawImage(rake.c, 2 + (left ? 2 : 13) - rake.ax, 16 + 15 - rake.ay);
@@ -263,7 +263,10 @@ export function sheets(art: Art, which: string): void {
   const entries: Entry[] = [
     { name: "Gathering and making", pics: [], head: true },
     { name: `${named("gatherer")}: stands, leans, bends, lifts, sleeps`, pics: pics(m.gnome[0] ?? []) },
-    { name: "the other hats", pics: pics([m.gnome[1]?.[0], m.gnome[2]?.[0], m.gnome[3]?.[0]]) },
+    {
+      name: "the hats of the second and third grades",
+      pics: pics([m.gnome[gathererHat(2)]?.[0], m.gnome[gathererHat(3)]?.[0]]),
+    },
     { name: "basket, rake, wheelbarrow", pics: [m.basket, m.rake.c, m.barrow] },
     { name: `${named("mill")}, sawing`, pics: pics(m.saw[0] ?? []) },
     { name: `${named("mill")}, firing`, pics: pics(m.kiln[0] ?? []) },

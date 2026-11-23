@@ -132,8 +132,8 @@ function fire(g: Ctx, x: number, y: number, w: number, h: number, step: number):
 // ---------- the gatherer: a gnome ----------
 
 /**
- * The gnome's hats: the first four by which gatherer it is, and all five for the gnomes who come to
- * the gate (the last, blue, is Pipwick's, as in town).
+ * The gnome's hats: a gatherer's by its grade (`GATHERER_HAT`), and all five for the gnomes who come
+ * to the gate (the last, blue, is Pipwick's, as in town).
  */
 const HATS: readonly (readonly [string, string])[] = [
   [CLAY[2], CLAY[1]],
@@ -144,6 +144,10 @@ const HATS: readonly (readonly [string, string])[] = [
 ];
 /** Which of `HATS` is Pipwick's. */
 export const PIPWICK_HAT = 4;
+/** Which of `HATS` a gatherer wears at each grade, the first first: clay red, then green, then gold. */
+const GATHERER_HATS = [0, 3, 1] as const;
+/** The hat a gatherer of a grade wears, so that each grade can be told at a glance. */
+export const gathererHat = (grade: number): number => GATHERER_HATS[Math.max(0, grade - 1)] ?? GATHERER_HATS[0];
 
 /**
  * A gnome, in one of five poses: standing, leaning, bent to the ground, lifting what he has found
@@ -439,7 +443,7 @@ function workshop(lit: boolean, step: number, grade = 1): Sprite {
 
 // ---------- the Study ----------
 
-/** The scholars' hat: plum, where a gatherer's is one of four and Pipwick's is blue. */
+/** The scholars' hat: plum, where a gatherer's is red, green or gold by its grade and Pipwick's is blue. */
 const SCHOLAR: readonly [string, string] = [SKY[3], SKY[2]];
 /** The spines on a shelf, by turns: muted, and no two alike side by side. */
 const SPINES = [CLAY[1], WATER[1], PAPER[0], GREEN[2], SKY[3], CLAY[0], WATER[2], STONE[1]] as const;
