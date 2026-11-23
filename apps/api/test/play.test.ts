@@ -1964,7 +1964,7 @@ describe("Leaf tending the Works", () => {
     expect(answerOf(body.state).tick).toBe(at);
   });
 
-  it("brings a yard up once however many ask for it at once, in slices each followed by a rest as long", async () => {
+  it("brings a yard up once however many ask for it at once, in slices with a turn of the thread between", async () => {
     const { game, run } = counted();
     await keepMid();
     clock.now += 8 * HOUR;
@@ -1981,12 +1981,27 @@ describe("Leaf tending the Works", () => {
     expect(visits.map((v) => ("rev" in v ? v.rev : null))).toEqual([1, 1, 1, 2]);
     expect((await storedYard()).rev).toBe(2);
     expect(run.slices.length).toBeGreaterThan(1);
-    // The thread's own clock, read inside each slice: what is between two is at least as long as the first.
-    const short = run.slices.slice(1).filter((next, n) => {
-      const last = run.slices[n];
-      return last !== undefined && next.began - last.ended < last.ended - last.began;
-    });
-    expect(short).toEqual([]);
+  });
+
+  it("rests between slices only for what waits for the thread: a timer due during one runs before the next", async () => {
+    const { game, run } = counted();
+    await keepMid();
+    clock.now += 8 * HOUR;
+    const visiting = services.run(Play.use((play) => play.visit(alice, game, { playerId: bob, guest: false })));
+    await until(() => run.slices.length > 0);
+    // Set while a slice may be running: it runs once that slice ends, before the slice after.
+    const timer = await new Promise<number>((resolve) => setTimeout(() => resolve(performance.now()), 0));
+    const timed = run.slices.length;
+    await visiting;
+
+    expect(run.slices.length - timed).toBeGreaterThan(10);
+    const before = run.slices.filter((s) => s.ended <= timer);
+    expect(before.length).toBeGreaterThan(0);
+    expect(run.slices[before.length]?.began ?? 0).toBeGreaterThanOrEqual(timer);
+    // With nothing else waiting, the next slice comes at once: far less time between slices than in them.
+    const between = run.slices.slice(1).reduce((all, next, n) => all + next.began - (run.slices[n]?.ended ?? 0), 0);
+    const within = run.slices.reduce((all, slice) => all + slice.ended - slice.began, 0);
+    expect(between).toBeLessThan(within / 2);
   });
 
   it("brings a yard written lately up once for its whole line: fifty visitors, and its owner's command behind them", async () => {
@@ -2066,12 +2081,13 @@ describe("Leaf tending the Works", () => {
     const meanwhile = run.slices.slice(before);
     await tend;
     expect(sent.status).toBe("done");
-    // From her yard's first slice to its last: one of Leaf's own after every three of hers, never two in a row.
+    // From her yard's first slice to its last: one of Leaf's own after every seven of hers, never two in a row.
     const hers = meanwhile.flatMap((s, n) => (s.owner === alice ? [n] : []));
     const between = meanwhile.slice(hers[0], (hers.at(-1) ?? 0) + 1).map((s) => (s.owner === alice ? "a" : "t"));
     expect(hers.length).toBeGreaterThan(8);
     expect(between.join("")).not.toContain("tt");
-    expect(between.join("")).not.toContain("aaaa");
+    expect(between.join("")).not.toContain("aaaaaaaa");
+    expect(between.join("")).toContain("aaaaaaa");
     expect(between.filter((s) => s === "t").length).toBeGreaterThan(1);
     // Leaf went on tending the others after.
     expect(run.slices.length).toBeGreaterThan(before + meanwhile.length);

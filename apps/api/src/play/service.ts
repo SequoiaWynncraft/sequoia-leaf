@@ -43,13 +43,18 @@ const DIFFERENCES = { rate: 1 / 60, burst: 1 } as const;
  */
 export const TEND_AFTER = 2 * 60_000;
 /**
- * How long one slice of running states on lasts, in nanoseconds; a rest as long follows it. One
- * slice runs at a time for every state and every job together. Live's rooms answer every 16 ms,
- * and a slice can hold up each step of a move on its way: 2 ms keeps them as they are.
+ * How long one slice of running states on lasts, in nanoseconds; between two, the thread takes one
+ * turn, so that whatever waits for it (a request, a room's tick, a timer) goes first. One slice runs
+ * at a time for every state and every job together. Live's rooms answer every 16 ms, and a slice
+ * can hold up each step of a move on its way: 2 ms keeps them as they are.
  */
 const SLICE_NS = 2_000_000n;
-/** How many slices for players' jobs a waiting tend lets go first; the next is its own. */
-const TEND_WAITS = 3;
+/**
+ * How many slices for players' jobs (a yard somebody has open, or a visitor waits on) a waiting
+ * tend lets go first; the next is its own: Leaf's own tending takes one slice in eight while a
+ * player waits on one.
+ */
+const TEND_WAITS = 7;
 /** How many times in all a job is done, each from what is stored, when what is stored moves on under it. */
 const TRIES = 3;
 /**
@@ -345,13 +350,14 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * again from it, `TRIES` times in all. Anything going wrong drops the copy. A batch is done whatever
  * becomes of its request; any other job whose caller has gone while it waited is never done.
  *
- * One slice of running states on (`SLICE_NS`) runs at a time, then a rest as long (`nextSlice`):
+ * One slice of running states on (`SLICE_NS`) runs at a time, then one turn of the thread, so that
+ * whatever waits for it goes first (`nextSlice`):
  * players' slices go round the states asking for one, in the order they asked (a tend with a
  * player's job behind it in its line runs for it), so a state far behind never holds up another's
  * command for all of its catching up; Leaf's own tends take one slice, the first tend's, after
- * each `TEND_WAITS` of those. Leaf puts a tend in the line of each state
- * of a game that tends its states stored longer ago than `TEND_AFTER` (`tend`), but those found
- * standing still or with one in line, and waits for none; each reads nothing until its first turn.
+ * each `TEND_WAITS` of those. Leaf puts a tend in the line of each state of a game that tends its
+ * states that is due one (`due_at`: `TEND_AFTER` after it was written, never while it stands
+ * still), but those with one in line, and waits for none; each reads nothing until its first turn.
  */
 export class Play extends Context.Service<
   Play,
@@ -424,11 +430,10 @@ export class Play extends Context.Service<
             const began = nanos();
             ask.job.waited += began - ask.asked;
             const ran = yield* Effect.exit(Effect.sync(() => ask.work(() => nanos() - began < SLICE_NS)));
-            const rested = 2n * nanos() - began;
             Deferred.doneUnsafe(ask.done, ran);
-            // The rest, on the monotonic clock. Timers wake a little early: whole milliseconds until it is over.
-            do yield* Effect.sleep(Math.max(1, Math.ceil(Number(rested - nanos()) / 1e6)));
-            while (rested > nanos());
+            // One turn of the thread: whatever waits for it runs before the next slice; with nothing
+            // waiting, the next comes at once.
+            yield* Effect.yieldNow;
           }
         }),
         scope,
