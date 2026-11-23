@@ -69,23 +69,8 @@ import { placeOf } from "./screen.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Scene, Stage } from "./stage.ts";
 import { type Door, makeTouch } from "./touch.ts";
-import {
-  allLights,
-  buildTown,
-  crabAt,
-  crabsStanding,
-  drawGlows,
-  drawStrings,
-  drawWater,
-  lightTable,
-  openDoor,
-  props,
-  stepTown,
-  table,
-  thingName,
-  touchThing,
-  twinkleAll,
-} from "./town.ts";
+import { crabAt, lightTable, openDoor, props, stepTown, table, thingName, touchThing, twinkleAll } from "./town.ts";
+import { allLights, buildTown, crabsStanding, drawGlows, drawStrings, drawWater } from "./townart.ts";
 import { initUI, openPanel, showArrival, townDock } from "./ui.ts";
 import { isVisitor, stepVisitors, worksTools } from "./visitors.ts";
 import { H, place, type PlaceId, PLACES, pondD, SEATS, TOWN, W } from "./world.ts";

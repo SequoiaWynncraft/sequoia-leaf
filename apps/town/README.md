@@ -553,6 +553,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/world.ts`                        | The town's map: paths, pond, what is solid, where places are                                    |
 | `src/leaf.ts`                         | The member's town and camp on Leaf: the copy, commands done at once or asked, keeping Leaf told |
 | `src/town.ts`, `src/camptouch.ts`     | What each thing does when touched, and the parts that move                                      |
+| `src/townart.ts`                      | The town built from its sprites, and its moving parts drawn each frame                          |
 | `src/props.ts`                        | Things that stand and can be touched                                                            |
 | `src/actors.ts`, `src/pets.ts`        | Walking, sitting, speaking; the town's own put where Leaf's clock has them; the pets            |
 | `src/folkart.ts`                      | How each of the town's own is drawn (never a skin)                                              |
