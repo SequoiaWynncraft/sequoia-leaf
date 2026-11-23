@@ -35,16 +35,24 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 32 (when each state is next due a tend), for a test going back before it. */
+/** Undoes migration 33 (who is about from visits), for a test going back before it. */
+const beforeAboutFromVisits = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    yield* sql`DROP INDEX visits_by_heard`;
+    yield* sql`ALTER TABLE players_seen DROP COLUMN stay`;
+  });
+
+/** Undoes migrations 33 and 32 (when each state is next due a tend), for a test going back before them. */
 const beforePlayDue = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
+    yield* beforeAboutFromVisits(sql);
     yield* sql`DROP INDEX play_state_due`;
     yield* sql`ALTER TABLE play_state DROP COLUMN due_at`;
   });
 
 /**
- * Undoes migrations 32 (`play_due`), 31 (a state's generation, `play_state.born`) and 30 (the
- * Tally's `tallies` and `camp_visits`), for a test going back before them.
+ * Undoes migrations 33 (`about_from_visits`), 32 (`play_due`), 31 (a state's generation,
+ * `play_state.born`) and 30 (the Tally's `tallies` and `camp_visits`), for a test going back before them.
  */
 const beforeTallies = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
@@ -55,7 +63,7 @@ const beforeTallies = (sql: SqlClient.SqlClient) =>
   });
 
 /**
- * Undoes migrations 32 (`play_due`), 31 (`play_born`), 30 (`tallies`), 29 (`presence_left`) and 28 (`time_in`), for a
+ * Undoes migrations 33 to 28 (`about_from_visits`, `play_due`, `play_born`, `tallies`, `presence_left`, `time_in`), for a
  * test going back before them: `played` as migrations 23 and 27 left it.
  */
 const beforeTimeIn = (sql: SqlClient.SqlClient) =>
@@ -127,6 +135,7 @@ describe("the database", () => {
       { migration_id: 30, name: "tallies" },
       { migration_id: 31, name: "play_born" },
       { migration_id: 32, name: "play_due" },
+      { migration_id: 33, name: "about_from_visits" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -190,7 +199,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 32 },
+      { latest: 33 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -359,6 +368,38 @@ describe("the database", () => {
     expect(await query(path, (sql) => sql`SELECT game, due_at AS due FROM play_state ORDER BY game`)).toEqual([
       { game: "town", due: null },
       { game: "works", due: written + 120_000 },
+    ]);
+  });
+
+  it("keeps whether each player's character stays from their presence row, and yes for one with none", async () => {
+    const path = join(directory, "leaf.db");
+    const [stays, goes, unsaid] = ["a", "b", "c"].map((n) => `00000000-0000-4000-8000-00000000000${n}`);
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // Back to before migration 33: two players with presence rows, one without.
+        yield* beforeAboutFromVisits(sql);
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 33`;
+        for (const [player, stay] of [
+          [stays, 1],
+          [goes, 0],
+          [unsaid, null],
+        ] as const) {
+          yield* sql`
+            INSERT INTO players_seen (player_id, name, guest, first_seen_at, last_seen_at) VALUES (${player}, 'P', 0, 1, 1)
+          `;
+          if (stay !== null)
+            yield* sql`
+              INSERT INTO presence (player_id, username, place, seen_at, stay, guest) VALUES (${player}, 'P', 'town', 1, ${stay}, 0)
+            `;
+        }
+      }),
+    );
+    expect(await query(path, (sql) => sql`SELECT player_id AS player, stay FROM players_seen ORDER BY 1`)).toEqual([
+      { player: stays, stay: 1 },
+      { player: goes, stay: 0 },
+      { player: unsaid, stay: 1 },
     ]);
   });
 

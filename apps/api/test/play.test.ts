@@ -672,6 +672,21 @@ describe("the limits", () => {
     expect((await send("POST", "/v1/game/play/raid", { commands: [] }, bob)).status).toBe(200);
   });
 
+  it("refuse a batch that comes too fast as nothing the player did: it keeps nobody from being away", async () => {
+    await opened();
+    expect((await send("PUT", "/v1/game/presence", { place: "table" })).status).toBe(200);
+    for (let n = 0; n < 20; n++) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another, as a page sends them
+      await send("POST", "/v1/game/play/raid", { commands: [] });
+    }
+    const tooMany = await send("POST", "/v1/game/play/raid", { commands: ided([{ do: "start", trail: 0 }]) });
+
+    expect(tooMany.status).toBe(429);
+    expect(await (await send("GET", "/v1/game/presence")).json()).toMatchObject({
+      present: [{ id: alice, acted_at: null }],
+    });
+  });
+
   it("are ten commands a second done, in bursts of forty, across all games: a batch past it is refused whole", async () => {
     await opened();
     const post = (commands: readonly unknown[], player: PlayerId = alice) =>

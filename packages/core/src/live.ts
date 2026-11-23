@@ -276,12 +276,13 @@ export type ToClient =
   | { t: "act"; id: number; kind: string; arg: string }
   | { t: "pong"; c: number; s: number }
   /**
-   * Who is where has changed: somebody came into the game, went, or is somewhere else in it, as
-   * Leaf's list of who is about (`GET /v1/game/presence`) now says. Told to everybody in every room
-   * of the game's places, so that every page asks for the list at once rather than at its next turn.
-   * A page from before it was told ignores it, as it ignores anything it does not know.
+   * Who is where has changed: somebody came into the game, went, or is somewhere else in it. Told to
+   * everybody in every room of the game's places with Leaf's list of who is about now (`who`, as
+   * `GET /v1/game/presence` answers it), so that no page need ask for it. From a Leaf that sends no
+   * list, the page asks for it. A page from before it was told ignores it, as it ignores anything it
+   * does not know.
    */
-  | { t: "about" }
+  | { t: "about"; who?: unknown }
   | { t: "error"; code: "unknown_room" | "not_in_room" | "bad_act" }
   /**
    * In a visit's room: a batch of commands Leaf has just done to the state visited, as it kept them.
@@ -377,7 +378,7 @@ export function readToClient(text: string): ToClient | null {
     case "pong":
       return num(v.c) && num(v.s) ? { t: "pong", c: v.c, s: v.s } : null;
     case "about":
-      return { t: "about" };
+      return record(v.who) ? { t: "about", who: v.who } : { t: "about" };
     case "error": {
       const code = ERRORS.find((c) => c === v.code);
       return code ? { t: "error", code } : null;

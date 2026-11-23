@@ -429,11 +429,17 @@ interface Row {
   stay: number;
   guest: number;
 }
+/** Where each player is, or was last, as everybody else sees them: their newest visit, and whether they stay. */
 const rows = () =>
   services?.query<Row>(
-    (sql) => sql`SELECT player_id, username, place, seen_at, stay, guest FROM presence ORDER BY username`,
+    (sql) => sql`
+      SELECT v.player_id, p.name AS username, v.place, coalesce(v.left_at, v.heard_at) AS seen_at, p.stay, v.guest
+      FROM visits AS v JOIN players_seen AS p ON p.player_id = v.player_id
+      WHERE v.id IN (SELECT max(id) FROM visits GROUP BY player_id)
+      ORDER BY username
+    `,
   ) ?? Promise.resolve([]);
-/** The presence rows once they pass `which`, waiting a little for Live to write them. */
+/** Where each player is once that passes `which`, waiting a little for Live to write it. */
 async function rowsWhen(which: (rows: readonly Row[]) => boolean, ms = 2000): Promise<readonly Row[]> {
   const until = Date.now() + ms;
   for (;;) {

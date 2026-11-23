@@ -12,7 +12,6 @@ import { Credits } from "./earning/run.ts";
 import { Events } from "./events/store.ts";
 import { Mojang } from "./game/mojang.ts";
 import { PlayerNames } from "./game/names.ts";
-import { Presence } from "./game/presence.ts";
 import { Skins } from "./game/skins.ts";
 import { ApiRoutes, NotFound } from "./http/handlers.ts";
 import { SafetyHeaders } from "./http/headers.ts";
@@ -103,7 +102,6 @@ export const serveLeaf = (options: {
 export const Stores = Layer.mergeAll(
   Events.layer,
   Quests.layer,
-  Presence.layer,
   ActivityReport.layer.pipe(Layer.provideMerge(Visits.layer)),
   Layer.mergeAll(Skins.layer, Tallies.layer).pipe(Layer.provideMerge(PlayerNames.layer)),
   PlayStore.layer,

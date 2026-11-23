@@ -5,9 +5,9 @@ import { SITS_AFTER } from "@sequoia-leaf/town/clock.ts";
 import { Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
+import { PRESENT_FOR_MS } from "../src/activity/visits.ts";
 import { runCreditSync } from "../src/earning/run.ts";
 import { Events, type PlayerEvent } from "../src/events/store.ts";
-import { PRESENT_FOR_MS } from "../src/game/presence.ts";
 import { API_POLICY } from "../src/http/headers.ts";
 import { StreamTuning } from "../src/http/streams.ts";
 import { Ledger } from "../src/ledger/store.ts";
@@ -241,7 +241,7 @@ describe("signing in with the website's cookie", () => {
     expect([twice.status, withBearer.status, write.status]).toEqual([401, 401, 401]);
     expect(await codeOf(twice)).toBe("unauthorized");
     expect(backend.calls).toEqual([]);
-    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM presence`)).toEqual([{ n: 0 }]);
+    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM visits`)).toEqual([{ n: 0 }]);
   });
 
   it("finds the session cookie among others", async () => {
@@ -263,7 +263,7 @@ describe("signing in with the website's cookie", () => {
     expect([none.status, elsewhere.status, presence.status, reroll.status]).toEqual([403, 403, 403, 403]);
     expect(await none.json()).toEqual({ code: "bad_origin", message: "Leaf takes this only from its own pages" });
     expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM play_state`)).toEqual([{ n: 0 }]);
-    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM presence`)).toEqual([{ n: 0 }]);
+    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM visits`)).toEqual([{ n: 0 }]);
     expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM quest_rerolls`)).toEqual([{ n: 0 }]);
   });
 
@@ -1254,11 +1254,36 @@ function paddedTo(body: object, bytes: number): string {
   return `${text.slice(0, -1)},"pad":"${"x".repeat(bytes - text.length - 9)}"}`;
 }
 
-/** Writes presence rows straight into the table, as games seen earlier would have left them. */
-function seen(rows: readonly Record<string, string | number>[]) {
-  const [first, ...rest] = rows;
-  if (!first) return Promise.resolve();
-  return services.query((sql) => sql`INSERT INTO presence ${sql.insert([first, ...rest])}`);
+/** Somebody's game seen earlier: who, where, when Leaf last heard of them there, and whether they stay. */
+interface Seen {
+  readonly playerId: string;
+  readonly username: string;
+  readonly place: string;
+  readonly seenAt: number;
+  readonly stay: number;
+  readonly guest?: number;
+}
+/** Writes each one's visit straight into the tables, open since and last heard of at `seenAt`, as their game would have left it. */
+function seen(rows: readonly Seen[]) {
+  return services.query((sql) =>
+    Effect.forEach(rows, (r) =>
+      Effect.gen(function* () {
+        const guest = r.guest ?? 0;
+        const [session] = yield* sql<{ id: number }>`
+          INSERT INTO sessions (player_id, guest, started_at) VALUES (${r.playerId}, ${guest}, ${r.seenAt}) RETURNING id
+        `;
+        yield* sql`
+          INSERT INTO visits (session_id, player_id, guest, place, source, entered_at, heard_at, instance)
+          VALUES (${session?.id ?? 0}, ${r.playerId}, ${guest}, ${r.place}, 'call', ${r.seenAt}, ${r.seenAt}, 'earlier')
+        `;
+        yield* sql`
+          INSERT INTO players_seen (player_id, name, guest, first_seen_at, last_seen_at, stay)
+          VALUES (${r.playerId}, ${r.username}, ${guest}, ${r.seenAt}, ${r.seenAt}, ${r.stay})
+        `;
+        return [];
+      }),
+    ).pipe(Effect.map((all) => all.flat())),
+  );
 }
 
 function arrive(place: string, sent: Sent = alicesPage, stay?: unknown) {
@@ -1266,14 +1291,22 @@ function arrive(place: string, sent: Sent = alicesPage, stay?: unknown) {
 }
 
 const iso = (at: number) => new Date(at).toISOString();
-const presenceRows = () => services.query((sql) => sql`SELECT place, seen_at, stay FROM presence`);
+/** Where each player is, or was last: their newest visit, when Leaf last heard of them there, and whether they stay. */
+const presenceRows = () =>
+  services.query(
+    (sql) => sql`
+      SELECT v.place, coalesce(v.left_at, v.heard_at) AS seen_at, p.stay
+      FROM visits AS v JOIN players_seen AS p ON p.player_id = v.player_id
+      WHERE v.id IN (SELECT max(id) FROM visits GROUP BY player_id) ORDER BY v.player_id
+    `,
+  );
 
 describe("GET /v1/game/presence", () => {
   it("lists who is about as the call that says where one is does, and writes nothing", async () => {
     await arrive("works", { bearer: "bob-token" });
     clock.now = T0 + 30_000;
     await arrive("town");
-    const before = await services.query((sql) => sql`SELECT * FROM presence ORDER BY player_id`);
+    const before = await services.query((sql) => sql`SELECT * FROM players_seen ORDER BY player_id`);
     const visits = await services.query((sql) => sql`SELECT * FROM visits ORDER BY id`);
     clock.now = T0 + 60_000;
 
@@ -1281,6 +1314,7 @@ describe("GET /v1/game/presence", () => {
 
     expect(looked.status).toBe(200);
     expect(await looked.json()).toEqual({
+      at: iso(T0 + 60_000),
       present: [
         { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 30_000), acted_at: null },
         { id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0), acted_at: null },
@@ -1288,7 +1322,7 @@ describe("GET /v1/game/presence", () => {
       resting: [],
       gone: [],
     });
-    expect(await services.query((sql) => sql`SELECT * FROM presence ORDER BY player_id`)).toEqual(before);
+    expect(await services.query((sql) => sql`SELECT * FROM players_seen ORDER BY player_id`)).toEqual(before);
     expect(await services.query((sql) => sql`SELECT * FROM visits ORDER BY id`)).toEqual(visits);
   });
 });
@@ -1302,6 +1336,7 @@ describe("PUT /v1/game/presence", () => {
     const later = await arrive("camp");
 
     expect(await first.json()).toEqual({
+      at: iso(T0 + 60_000),
       present: [
         { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 60_000), acted_at: null },
         { id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0), acted_at: null },
@@ -1310,6 +1345,7 @@ describe("PUT /v1/game/presence", () => {
       gone: [],
     });
     expect(await later.json()).toEqual({
+      at: iso(T0 + 91_000),
       present: [
         { id: alice, username: "Alice", place: "camp", guest: false, seen_at: iso(T0 + 91_000), acted_at: null },
       ],
@@ -1348,6 +1384,7 @@ describe("PUT /v1/game/presence", () => {
       .toSorted((a, b) => b.seenAt - a.seenAt);
     expect(kept.length).toBeGreaterThan(0);
     expect(body).toEqual({
+      at: iso(now),
       present: [
         { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(now), acted_at: null },
         {
@@ -1400,6 +1437,7 @@ describe("PUT /v1/game/presence", () => {
     const back = await arrive("town");
 
     expect(await without.json()).toEqual({
+      at: iso(T0 + 5 * MINUTE),
       present: [
         { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 5 * MINUTE), acted_at: null },
       ],
@@ -1411,13 +1449,14 @@ describe("PUT /v1/game/presence", () => {
       gone: [{ id: bob, place: "table", seen_at: iso(T0 + 6 * MINUTE) }],
     });
     expect(await back.json()).toEqual({
+      at: iso(T0 + 13 * MINUTE),
       present: [
         { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 13 * MINUTE), acted_at: null },
       ],
       resting: [{ id: bob, username: "Bob", place: "camp", guest: false, seen_at: iso(T0 + 10 * MINUTE) }],
       gone: [],
     });
-    expect(await services.query((sql) => sql`SELECT stay FROM presence ORDER BY player_id`)).toEqual([
+    expect(await services.query((sql) => sql`SELECT stay FROM players_seen ORDER BY player_id`)).toEqual([
       { stay: 1 },
       { stay: 1 },
     ]);
@@ -1432,6 +1471,7 @@ describe("PUT /v1/game/presence", () => {
     const guestGone = await arrive("camp");
 
     expect(await withGuest.json()).toEqual({
+      at: iso(T0 + 2 * MINUTE),
       present: [
         { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 2 * MINUTE), acted_at: null },
         { id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0 + 2 * MINUTE), acted_at: null },
@@ -1467,23 +1507,18 @@ describe("PUT /v1/game/presence", () => {
     );
   });
 
-  it("answers a game saying the same again within 5 seconds, without writing it down", async () => {
+  it("hears a game saying the same again at once: Leaf last saw them then", async () => {
     await arrive("town");
-    clock.now = T0 + 4999;
+    clock.now = T0 + 1000;
     const soon = await arrive("town");
-    const kept = await presenceRows();
-    clock.now = T0 + 5000;
-    await arrive("town");
 
-    expect(soon.status).toBe(200);
     expect(await soon.json()).toEqual({
-      // Not written down: Leaf saw them last at the write before.
-      present: [{ id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0), acted_at: null }],
+      at: iso(T0 + 1000),
+      present: [{ id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 1000), acted_at: null }],
       resting: [],
       gone: [],
     });
-    expect(kept).toEqual([{ place: "town", seen_at: T0, stay: 1 }]);
-    expect(await presenceRows()).toEqual([{ place: "town", seen_at: T0 + 5000, stay: 1 }]);
+    expect(await presenceRows()).toEqual([{ place: "town", seen_at: T0 + 1000, stay: 1 }]);
   });
 
   it("writes at once a game saying it is somewhere else, or other about staying, however soon", async () => {
@@ -1506,12 +1541,18 @@ describe("PUT /v1/game/presence", () => {
     expect(await response.json()).toMatchObject({ code: "invalid_place" });
   });
 
-  it("forgets anyone not seen for a day", async () => {
+  it("lists nobody not seen for a day", async () => {
     await arrive("works", { bearer: "bob-token" });
     clock.now = T0 + DAY + 1;
-    await arrive("table");
 
-    expect(await services.query((sql) => sql`SELECT player_id FROM presence`)).toEqual([{ player_id: alice }]);
+    expect(await (await arrive("table")).json()).toEqual({
+      at: iso(T0 + DAY + 1),
+      present: [
+        { id: alice, username: "Alice", place: "table", guest: false, seen_at: iso(T0 + DAY + 1), acted_at: null },
+      ],
+      resting: [],
+      gone: [],
+    });
   });
 
   it("refuses a place that is not one", async () => {

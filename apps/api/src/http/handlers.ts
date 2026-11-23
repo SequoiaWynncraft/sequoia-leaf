@@ -28,6 +28,7 @@ import { HttpClient, HttpRouter, HttpServerError, HttpServerRequest, HttpServerR
 import { HttpApiBuilder, HttpApiError, HttpApiSecurity } from "effect/http-api";
 import { SqlClient } from "effect/sql";
 
+import { whoIsAbout } from "../activity/about.ts";
 import { ActivityReport } from "../activity/report.ts";
 import { Visits } from "../activity/visits.ts";
 import { rateCard } from "../announce/rate-card.ts";
@@ -74,7 +75,6 @@ import { eventJsonText, Events } from "../events/store.ts";
 import { GUILD_EVENT_TYPES, guildDay, type GuildEvent, guildEvents } from "../game/guild.ts";
 import { knownAmong } from "../game/known.ts";
 import { PlayerNames } from "../game/names.ts";
-import { type Here, Presence } from "../game/presence.ts";
 import { Skins } from "../game/skins.ts";
 import { Ledger } from "../ledger/store.ts";
 import { Coins } from "../play/coins.ts";
@@ -589,32 +589,6 @@ const GameHelloHandlers = HttpApiBuilder.group(LeafApi, "gameHello", (handlers) 
 );
 
 /** Who is about, as the presence routes answer it. */
-const leftJson = (player: Here["resting"][number]) => ({
-  id: player.playerId,
-  username: player.username,
-  place: player.place,
-  guest: player.guest,
-  seen_at: iso(player.seenAt),
-});
-
-/** Who is about, with when each of those here last did something (`acted`, as `Visits.lastActed` has it). */
-const presentJson = (here: Here, acted: ReadonlyMap<string, number>) =>
-  ({
-    present: here.present.map((player) => {
-      const did = acted.get(player.playerId);
-      return {
-        id: player.playerId,
-        username: player.username,
-        place: player.place,
-        guest: player.guest,
-        seen_at: iso(player.seenAt),
-        acted_at: did === undefined ? null : iso(did),
-      };
-    }),
-    resting: here.resting.map(leftJson),
-    gone: here.gone.map(leftJson),
-  }) satisfies typeof Body.Present.Type;
-
 /**
  * A write from a page that believes it is another player than the session's, such as one left open
  * after someone else signed in: nothing is done.
@@ -678,7 +652,6 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
     const events = yield* Events;
     const skins = yield* Skins;
     const names = yield* PlayerNames;
-    const presence = yield* Presence;
     const visits = yield* Visits;
     const guild = yield* GuildFeed;
     const streams = yield* OpenStreams;
@@ -780,29 +753,19 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             const identity = yield* CurrentIdentity;
             const now = yield* Clock.currentTimeMillis;
             const guest = isGuest(identity);
-            const here = yield* presence.arrive(
-              identity.playerId,
-              identity.username,
-              payload.place,
-              payload.stay ?? null,
-              guest,
-              now,
-            );
             yield* visits.called(
               { playerId: identity.playerId, username: identity.username, guest, device: payload.device ?? null },
               payload.place,
+              payload.stay ?? null,
               now,
             );
-            const acted = yield* visits.lastActed(here.present.map((player) => player.playerId));
-            return HttpServerResponse.jsonUnsafe(presentJson(here, acted));
+            return HttpServerResponse.jsonUnsafe(yield* whoIsAbout(now));
           }),
         )
         // The same lists, writing nothing: for a page in a live room, where the room keeps the player's place.
         .handle("whoIsAbout", () =>
           Effect.gen(function* () {
-            const here = yield* presence.look(yield* Clock.currentTimeMillis);
-            const acted = yield* visits.lastActed(here.present.map((player) => player.playerId));
-            return HttpServerResponse.jsonUnsafe(presentJson(here, acted));
+            return HttpServerResponse.jsonUnsafe(yield* whoIsAbout(yield* Clock.currentTimeMillis));
           }),
         )
         .handle("oldSave", () => Effect.fail(notYou))
@@ -850,8 +813,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             }
             // In a batch Leaf took, anything but what the page sends by itself is the player at the keys, done or refused.
             if (payload.commands.some((command) => !played.chore(command))) {
-              // Back from being away: every page is told, so that nobody shows them away a moment longer.
-              if (yield* visits.acted(identity.playerId, yield* Clock.currentTimeMillis)) yield* presence.back;
+              yield* visits.acted(identity.playerId, yield* Clock.currentTimeMillis);
             }
             return HttpServerResponse.jsonUnsafe({
               rev: batch.rev,
