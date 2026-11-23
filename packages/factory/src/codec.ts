@@ -404,8 +404,8 @@ const FIRST_TIERS = [4, 10] as const;
  * A yard the first design kept, brought over: what is cheap to bring, and the rest let go. It is a
  * new yard with every goal below a tier done, the tier its story had reached (2 at most, so that
  * the Study and research are still to come); the plots it owned that the tier sells are its own
- * again, and those it does not sell yet are paid back into the till; what it was paid, what the depot sold for it and how many side orders it handed over stay
- * its totals, so its place on the board holds. Its pieces, what they held, its orders and its blueprints are let go; its Coins were never
+ * again, and those it does not sell yet are paid back into the till, beside what the till held; what it was paid, what the depot sold for it and how many side orders it handed over stay
+ * its totals, so its place on the board holds; and it counts its Coins entries on from where it was. Its pieces, what they held, its orders and its blueprints are let go; its Coins were never
  * in it, and are its owner's as they were.
  */
 function fromFirst(raw: Rec, land: Land): Yard | null {
@@ -419,6 +419,13 @@ function fromFirst(raw: Rec, land: Land): Yard | null {
   y.paid = Math.round(paid * MILLI);
   y.sold = Math.round(sold * MILLI);
   y.handed = whole(raw.done, 1e9) ?? 0;
+  // Each Coins entry the yard makes is named by this count: begun again, it would name entries that are already in the ledger.
+  const bank = whole(raw.bank, Number.MAX_SAFE_INTEGER);
+  if (bank === null) return null;
+  y.bank = bank;
+  // What its till held, not yet paid in, is still its own.
+  const till = typeof raw.till === "number" && Number.isFinite(raw.till) && raw.till >= 0 ? raw.till : 0;
+  y.till = Math.floor(till * MILLI);
   for (const name of raw.plots) {
     const p = typeof name === "string" ? plotNamed(name) : null;
     if (p === null || y.plots.includes(p)) continue;
