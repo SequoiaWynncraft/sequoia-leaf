@@ -1,3 +1,4 @@
+import { drawBase, drawFigure, drawStars, framesOf } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * A contact sheet of every figure with its name, for looking at the art large while drawing it:
  * open the page with `?sheet`. Each is shown standing on its base, then using its ability, then
@@ -14,8 +15,6 @@ import {
   TROUBLE_IDS,
   type UnitKind,
 } from "@sequoia-leaf/raid/content/figures.ts";
-
-import { drawBase, drawFigure, drawStars, framesOf } from "./art/sprites.ts";
 
 export function showSheet(): void {
   const zoom = 3;

@@ -13,6 +13,7 @@
   "dependencies": {
     "@sequoia-leaf/core": "workspace:*",
     "@sequoia-leaf/factory": "workspace:*",
+    "@sequoia-leaf/figures": "workspace:*",
     "@sequoia-leaf/kit": "workspace:*",
     "@sequoia-leaf/pulls": "workspace:*",
     "@sequoia-leaf/raid": "workspace:*",

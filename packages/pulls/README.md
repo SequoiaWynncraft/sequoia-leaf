@@ -14,20 +14,36 @@ the banners route's answer.
 ## What is won
 
 Seven rarities (`RARITIES`), each with its colour, in three tiers: filler (Leafkin, Sapling, Sprite),
-mid (Dryad, Druid) and top (Treant, Yggdrasil). Every prize (`PRIZES`) is something another game
-already has, named by kind: `thing:` (the town's), `look:` (the raid table's), or
-`headliner:<banner>`. Filler is the market's stall stock by price, read from the town's catalogue,
-so it follows the catalogue. Which member a banner's headliner is, Leaf reads from its
-`banner_people` table; nothing about them is in this package.
+mid (Dryad, Druid) and top (Treant, Yggdrasil). Every prize (`PRIZES`) is one of The Little Raid's
+figures (`figure:<id>`) or a banner's headliner (`headliner:<banner>`). A figure's rarity is its
+price in the raid (`tier` in `packages/raid`), so a figure added there is in a pool:
+
+| Rarity    | Figures                                       |
+| --------- | --------------------------------------------- |
+| Leafkin   | every figure of price 1                       |
+| Sapling   | every figure of price 2                       |
+| Sprite    | every figure of price 3                       |
+| Dryad     | of price 4: all but the two that are Druid    |
+| Druid     | of price 4: Crab #40 and the Apothecary Gnome |
+| Treant    | every figure of price 5                       |
+| Yggdrasil | a banner's headliner                          |
+
+Which member a banner's headliner is, Leaf reads from its `banner_people` table; nothing about
+them is in this package.
 
 What a prize is, once won, is the other games' to say, from the award (`pull:<prize>`): the town
-sends a `thing:` to the camp once, as a parcel, and for a `headliner:` the banner's statue
-(`statue-<banner>`); the raid's table owns a `look:` as if it were bought. A second copy of a prize
-brings nothing but its Seeds.
+puts a figure in the camp's Storage once (its thing `figure-<id>`), and for a `headliner:` the
+banner's statue (`statue-<banner>`). A second copy of a prize brings nothing but its Seeds.
+
+Before the pools gave figures they gave the town's things (`thing:<id>`) and the raid table's looks
+(`look:<id>`). `EARLIER` lists those with the rarity each had. None is in a pool or to be had for
+Seeds, and the page counts none among a pool's prizes; what a player won of them is still held, is
+named in their history, and is awarded as before (the camp has the thing, the raid's table owns the
+look).
 
 ## Pools
 
-`grove` is always open, and its top tier is the three Treant prizes. A banner (`BANNERS`) is open
+`grove` is always open, and its top tier is the Treant figures. A banner (`BANNERS`) is open
 from `from` until `until` by Leaf's clock, and its top tier adds its headliner.
 
 ## One pull
@@ -44,6 +60,6 @@ due), `history` (the last 200 pulls), `pulls` (ever) and `rng`. `advance` adds t
 fallen due, one every 24 hours, at most 7 waiting; nothing else changes with time. The page is
 shown everything but `rng`, and the banners open now.
 
-A stored prize that is no longer one (the Treasury's wares, which went) is dropped when the state is
-read. `awards` is `pull:<prize>` for each prize held; `standing` is the number of different prizes, with
+A stored prize of earlier pulls reads as it was kept; only the Treasury's wares, which went before
+any of this, are dropped when the state is read. `awards` is `pull:<prize>` for each prize held; `standing` is the number of different prizes, with
 pulls ever and top-tier prizes won; each top-tier prize is logged as `pulls_top`.

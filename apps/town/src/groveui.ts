@@ -1,7 +1,8 @@
 /**
  * The Grove's words and buttons over its picture, built from the kit: the way back, the pools, the
- * Leaf, the pulls towards a top prize, the pull buttons, Skip, the names in the end picture, and
- * one panel with the prizes and their chances, the Seeds and what they buy, and the last pulls.
+ * Leaf, the pulls towards a top prize, the pull buttons, Skip, Next where a ceremony waits, the
+ * names in the end picture, and one panel with the prizes and their chances (the rules behind its
+ * "?"), the Seeds and what they buy, and the last pulls.
  * Everything shown is Leaf's view (`pulls.ts` says how it is worded); a press goes to
  * `grovescene.ts`, which asks Leaf.
  */
@@ -40,7 +41,6 @@ import {
   past,
   percent,
   pityLine,
-  prizeIs,
   prizeName,
   pullKey,
   RARITY_NAMES,
@@ -67,7 +67,7 @@ export interface GroveHost {
   /** On to the next beat of the ceremony, and straight to its end picture. */
   next(): void;
   toEnd(): void;
-  /** A prize's own picture, a pixel to each of its own. */
+  /** A prize's own picture, a pixel to each of its own: a figure of the raid, or the headliner. */
   picture(prize: string): HTMLCanvasElement;
 }
 
@@ -105,12 +105,17 @@ export function makeGroveUi(host: GroveHost) {
   });
   const banner = el("div", "grove-banner", {}, back, pools, leaf, words);
   const skip = el("button", "k-btn wood sm grove-skip", { type: "button", text: "Skip", hidden: true });
+  /** On from a prize the ceremony waits at: shown only there. */
+  const go = button("wood grove-go", ["Next"], () => {
+    host.next();
+  });
+  go.hidden = true;
   const names = el("div", "grove-names", { hidden: true });
   const end = el("div", "grove-end", { hidden: true });
   const panel = el("div", "k-panel grove-panel", { hidden: true });
   /** What Leaf refused, said where it stays whatever is drawn again. */
   const said = el("div", "k-plaque k-read grove-said", { hidden: true });
-  const stage = el("div", "grove-stage", {}, canvas, banner, skip, names, end, said, panel);
+  const stage = el("div", "grove-stage", {}, canvas, banner, skip, go, names, end, said, panel);
   const root = $("grove");
   root.append(stage);
 
@@ -135,12 +140,6 @@ export function makeGroveUi(host: GroveHost) {
   /** The pulls are offered at a ceremony's end, and not on the banner behind it. */
   const atEnd = (): boolean => host.state() === "end";
   const nameOf = (prize: string): string => prizeName(prize, host.banners());
-  /** A prize's picture in a hollow `box` units square, at the largest of these sizes that fits it. */
-  function hollow(prize: string, box: number): HTMLElement {
-    const src = host.picture(prize);
-    const scale = [3, 2, 1, 0.5].find((k) => src.width * k <= box - 2 && src.height * k <= box - 2) ?? 0.25;
-    return slot(pic(src, scale), box);
-  }
   // ---------- the pulls ----------
 
   /** What the last ceremony was for, so that its end picture offers the same again. */
@@ -251,9 +250,12 @@ export function makeGroveUi(host: GroveHost) {
   // ---------- the panel ----------
 
   let tab: Tab | null = null;
+  /** The rules are on show among the prizes: the "?" there shows them and puts them away. */
+  let ruled = false;
 
   function openPanel(to: Tab): void {
     if (tab === null) sfx.open();
+    ruled &&= to === tab;
     tab = to;
     panel.hidden = false;
     renderPanel();
@@ -272,12 +274,32 @@ export function makeGroveUi(host: GroveHost) {
     const v = host.view();
     const b = onBanner();
     const shown = chances(b !== null);
-    for (const line of rules(b ? b.person.name : null)) body.append(el("div", "k-read", { text: line }));
     /** The prizes this pool can give, by rarity. */
     const listOf = (rarity: Rarity): readonly string[] =>
       shown[rarity] === 0 ? [] : rarity === "Yggdrasil" ? (b ? [headliner(b.id)] : []) : PRIZES[rarity];
     const all = RARITY_NAMES.flatMap(listOf);
-    body.append(el("div", "", { text: `Yours: ${all.filter((prize) => v.have[prize]).length} of ${all.length}` }));
+    body.append(
+      el(
+        "div",
+        "k-row",
+        {},
+        el("span", "k-grow", { text: `Yours: ${all.filter((prize) => v.have[prize]).length} of ${all.length}` }),
+        el("button", "k-btn blue icon sm grove-rules", {
+          type: "button",
+          "aria-label": "Rules",
+          "aria-expanded": String(ruled),
+          text: "?",
+          onclick: () => {
+            ruled = !ruled;
+            sfx.tap();
+            renderPanel();
+            // The panel is drawn again: the press stays on the button that was pressed.
+            panel.querySelector<HTMLElement>(".grove-rules")?.focus();
+          },
+        }),
+      ),
+    );
+    if (ruled) for (const line of rules(b ? b.person.name : null)) body.append(el("div", "k-read", { text: line }));
     for (const rarity of RARITY_NAMES.toReversed()) {
       if (shown[rarity] === 0) continue;
       const list = listOf(rarity);
@@ -293,7 +315,7 @@ export function makeGroveUi(host: GroveHost) {
               "div",
               `k-slot k-info-tile${have > 0 ? " lit" : ""}`,
               {},
-              el("span", "k-info-tile-pic", {}, pic(host.picture(prize), host.picture(prize).width > 40 ? 0.5 : 1)),
+              el("span", "k-info-tile-pic", {}, pic(host.picture(prize))),
               el("span", "k-info-tile-name k-s", { text: nameOf(prize) }),
               have > 0 ? el("span", "k-info-tagged corner", { text: `x${count(have)}` }) : null,
             );
@@ -322,13 +344,13 @@ export function makeGroveUi(host: GroveHost) {
           "div",
           "k-card",
           {},
-          hollow(o.prize, 28),
+          slot(pic(host.picture(o.prize)), 32),
           el(
             "div",
             "k-grow k-col",
             {},
             el("span", "k-pix", { text: nameOf(o.prize) }),
-            el("span", "k-wrap", {}, plate(o.rarity), el("span", "k-read k-dim", { text: prizeIs(o.prize) })),
+            el("span", "k-wrap", {}, plate(o.rarity)),
           ),
           o.owned ? el("span", "k-dim", { text: "Yours" }) : buy,
         ),
@@ -420,6 +442,7 @@ export function makeGroveUi(host: GroveHost) {
     canvas,
     banner,
     skip,
+    go,
     end,
     names,
     tick,
@@ -446,13 +469,9 @@ export function makeGroveUi(host: GroveHost) {
     panelOpen: (): boolean => tab !== null,
     /** The name of the pool on show, as the picture writes it. */
     poolName: (): string => onBanner()?.person.name ?? EVERGREEN,
-    /** The picture is `w` by `h` art pixels, `scale` screen pixels to each, upright or not. */
-    fit(w: number, h: number, scale: number, tall: boolean): void {
-      stage.style.width = `${w * scale}px`;
-      stage.style.height = `${h * scale}px`;
-      stage.style.left = `${Math.max(0, Math.floor((innerWidth - w * scale) / 2))}px`;
-      stage.style.top = `${Math.max(0, Math.floor((innerHeight - h * scale) / 2))}px`;
-      stage.style.setProperty("--g", `${scale}px`);
+    /** The frame is `w` by `h` art pixels, `scale` CSS pixels to each, upright or not, `left` and `top` CSS pixels in from the window's corner. */
+    fit(w: number, h: number, scale: number, tall: boolean, left: number, top: number): void {
+      stage.style.cssText = `left:${left}px;top:${top}px;width:${w * scale}px;height:${h * scale}px;--g:${scale}px;--fx:${left}px;--fy:${top}px`;
       stage.className = `grove-stage ${tall ? "tall" : "desk"}`;
     },
     /** A ceremony begins: the names for its end picture, and what its end offers again (`n` pulls; nothing after an exchange). */

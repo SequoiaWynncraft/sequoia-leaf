@@ -162,6 +162,40 @@ export function savings(run: Run): Savings {
   };
 }
 
+/** How a run's streak pays, in one sentence, from the table the run pays from. */
+export function streakRule(): string {
+  const table = ECONOMY.streakAcorns;
+  const groups: { pay: number; from: number; to: number }[] = [];
+  for (let n = 1; n < table.length; n++) {
+    const pay = table[n] ?? 0;
+    const last = groups.at(-1);
+    if (pay <= 0) continue;
+    if (last && last.pay === pay && last.to === n - 1) last.to = n;
+    else groups.push({ pay, from: n, to: n });
+  }
+  const parts = groups.map((g, i) => {
+    const at =
+      i === groups.length - 1 && g.to === table.length - 1
+        ? `${g.from} or more`
+        : g.to === g.from
+          ? `${g.from}`
+          : g.to === g.from + 1
+            ? `${g.from} or ${g.to}`
+            : `${g.from} to ${g.to}`;
+    return `${g.pay} at ${at}`;
+  });
+  const least = groups[0]?.from ?? 2;
+  return `Win or lose ${least} or more rooms in a row for extra acorns each room: ${parts.join(", ")}.`;
+}
+/** A streak as the takings name it: "Win streak 3", "Loss streak 2". */
+export const streakName = (streak: number): string => `${streak > 0 ? "Win" : "Loss"} streak ${Math.abs(streak)}`;
+/** The run's streak in a sentence, or null when it is under 2. */
+export function streakNow(run: Run): string | null {
+  const n = Math.abs(run.streak);
+  if (n < 2) return null;
+  return `You have ${run.streak > 0 ? "won" : "lost"} ${n} rooms in a row.`;
+}
+
 /** Traits whose step is higher now than it was: the ones that have just switched on, or on harder. */
 export function steppedUp(before: ReadonlyMap<TraitId, number>, run: Run): { trait: TraitId; step: number }[] {
   const out: { trait: TraitId; step: number }[] = [];

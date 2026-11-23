@@ -1,3 +1,4 @@
+import { PAL } from "@sequoia-leaf/figures/pal.ts";
 /**
  * The small pictures: one for every trait, component, finished item and boon, the three kinds of
  * room, and the few signs the buttons carry. Typed as rows of letters like the figures, baked once
@@ -10,8 +11,6 @@ import { type BoonId, BOONS } from "@sequoia-leaf/raid/content/boons.ts";
 import { isComponentId, type ItemId } from "@sequoia-leaf/raid/content/items.ts";
 import type { RoomKind } from "@sequoia-leaf/raid/content/rooms.ts";
 import type { TraitId } from "@sequoia-leaf/raid/content/traits.ts";
-
-import { PAL } from "./pal.ts";
 
 const TRAIT_ROWS: Readonly<Record<TraitId, readonly string[]>> = {
   ember: [
@@ -563,7 +562,9 @@ export type Glyph =
   | "figure"
   | "brush"
   | "leaf"
-  | "coin";
+  | "coin"
+  | "flame"
+  | "frost";
 
 const GLYPH_ROWS: Readonly<Record<Glyph, readonly string[]>> = {
   acorn: [
@@ -711,6 +712,18 @@ const GLYPH_ROWS: Readonly<Record<Glyph, readonly string[]>> = {
     ".oyyYYYYyyo.",
     "..ooyyyyoo..",
     "....oooo....",
+  ],
+  flame: ["...r...", "...rr..", "..rrr.r", ".rryrrr", ".ryyyrr", "rryYyyr", "ryYYYyr", "ryYYYyr", ".rrrrr."],
+  frost: [
+    "....u....",
+    ".u..W..u.",
+    "..W.W.W..",
+    "...WWW...",
+    "uWWWUWWWu",
+    "...WWW...",
+    "..W.W.W..",
+    ".u..W..u.",
+    "....u....",
   ],
 };
 

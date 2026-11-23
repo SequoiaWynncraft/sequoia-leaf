@@ -161,6 +161,8 @@ export type {
 // The run.
 export {
   abandon,
+  type AcornsWhy,
+  ACORNS_WHYS,
   beginFight,
   type Begun,
   buy,
@@ -177,6 +179,7 @@ export {
   interestCap,
   interestNow,
   move,
+  nextStreak,
   type Note,
   opposition,
   partyOf,
@@ -203,6 +206,7 @@ export {
   STALL_POOL,
   layOutAfresh,
   startRun,
+  streakPay,
   summariseRun,
   type Taken,
   takeTakings,

@@ -95,6 +95,7 @@ and lets a game's command take Leaf (see the play service).
 | `apps/works`          | The Works, a game in the town.                                                |
 | `apps/battler`        | The Little Raid, a game in the town.                                          |
 | `packages/kit`        | What the town and its games share: look, sound and plumbing.                  |
+| `packages/figures`    | The raid's figures as pictures, for the raid's page and the town's.           |
 | `Dockerfile`          | The production image, with the game's pages built into it.                    |
 
 ## How Leaf is earned
@@ -721,15 +722,15 @@ command sent behind them was answered in 67 to 83 ms; their page's commands
 after, once every half second, took 4 to 5 ms at the median and 11 ms at worst.
 
 **The town and the camp** keep the camp (what stands where, each thing by an
-id of its own, the tray, the parcels by the trail, the letters, the pets),
+id of its own, the tray of things not set out, the letters, the pets),
 the caller waiting at it and when the next sets out, the chest's and the
 welcome's UTC days, when the member was last here, how far their news has been
 told and whether their character stays. Its commands, what happens by itself
 and what its page is shown are in `packages/town/README.md`. Buying at a stall
 takes the price; the chest pays 3 Coins once a UTC day, free of the cap; where
 a camp stands (things set out, callers greeted, the crab's sightings) is shown
-on a person's card. Each trophy the player holds (an award) goes by the trail
-as a parcel.
+on a person's card. Each trophy the player holds (an award) goes into the
+camp's tray.
 
 **The pulls** keep what each player has won, their counters, Seeds and free
 pulls; the rules and odds are in `packages/pulls/README.md`. Pulls paid with
@@ -1170,6 +1171,11 @@ During a deploy the old and the new container run side by side for a few
 seconds on the same database file. That is safe: SQLite locks the file between
 them, and the credit sync's lease lets only one of them read the feed.
 Otherwise the service is built to run as a single instance.
+
+A game's state the new container wrote in a shape the old one cannot read is
+answered 409 `state_unreadable` by the old one; a page asks again each second
+for 30 seconds, as it does a Leaf without the play service (`play.ts` in the
+kit), and shows the card for it only after.
 
 A deploy starts the new container, waits for it to answer `/healthz`, and then
 stops the old one with SIGTERM. The proxy in front (Traefik) shares requests
