@@ -517,7 +517,12 @@ export const encodeTable = (state: Table): string =>
     looks: state.looks,
   });
 
-/** A table from the text Leaf stored, or null for anything that is not one this version could have made. */
+/**
+ * A table from the text Leaf stored, or null for anything not of this version's shape. Under
+ * today's content and numbers it refuses nothing more: a trail picked that is not open is the
+ * first, and a run that does not read (or could not have been kept: one over, one with no number)
+ * is let go of, so the almanac and the looks bought are never out of reach.
+ */
 export function decodeTable(text: string): Table | null {
   let raw: unknown;
   try {
@@ -527,18 +532,13 @@ export function decodeTable(text: string): Table | null {
   }
   if (!isRecord(raw) || raw.game !== GAME || raw.v !== TABLE_VERSION) return null;
   const { rng, runs, trail } = raw;
-  if (!whole(rng, 0, UINT) || !whole(runs, 0, 1_000_000_000) || !whole(trail, 0, TRAIL_COUNT - 1)) return null;
+  if (!whole(rng, 0, UINT) || !whole(runs, 0, 1_000_000_000) || !whole(trail, 0, 999)) return null;
   const almanac = readAlmanac(raw.almanac);
   const looks = readLooks(raw.looks);
-  if (!almanac || !looks || !trailOpen(almanac, trail)) return null;
-  let run: Run | null = null;
-  if (raw.run !== null) {
-    const read = checkRun(raw.run);
-    // A run that ends is let go of at once, and the one in hand has a number.
-    if (!read.ok || read.run.phase === "over" || runs === 0) return null;
-    run = read.run;
-  }
-  return { rng, runs, run, almanac, trail, looks };
+  if (!almanac || !looks) return null;
+  const read = raw.run === null ? null : checkRun(raw.run);
+  const run = read?.ok && read.run.phase !== "over" && runs > 0 ? read.run : null;
+  return { rng, runs, run, almanac, trail: trailOpen(almanac, trail) ? trail : 0, looks };
 }
 
 /**

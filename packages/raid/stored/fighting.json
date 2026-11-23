@@ -1,0 +1,637 @@
+{
+  "game": "little-raid-table",
+  "v": 1,
+  "rng": 2006499529,
+  "runs": 1,
+  "run": {
+    "seed": 2120416475,
+    "rng": 3671487253,
+    "trail": 0,
+    "room": 6,
+    "phase": "fight",
+    "resolve": 20,
+    "acorns": 15,
+    "streak": 6,
+    "level": 5,
+    "xp": 0,
+    "board": [
+      null,
+      null,
+      {
+        "id": 10,
+        "kind": "glorp",
+        "stars": 1,
+        "items": [],
+        "fed": 0
+      },
+      {
+        "id": 2,
+        "kind": "slug",
+        "stars": 2,
+        "items": ["chestnut"],
+        "fed": 0
+      },
+      {
+        "id": 12,
+        "kind": "glorp",
+        "stars": 1,
+        "items": [],
+        "fed": 0
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      {
+        "id": 9,
+        "kind": "drizzlefrog",
+        "stars": 1,
+        "items": ["plume"],
+        "fed": 0
+      },
+      {
+        "id": 3,
+        "kind": "finch",
+        "stars": 2,
+        "items": ["wasptail"],
+        "fed": 0
+      },
+      {
+        "id": 1,
+        "kind": "mossmote",
+        "stars": 1,
+        "items": [],
+        "fed": 0
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "bench": [
+      {
+        "id": 8,
+        "kind": "mossmote",
+        "stars": 1,
+        "items": [],
+        "fed": 0
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "items": [],
+    "stall": ["crab7", null, "moth", "lanterngnome", "barrowgnome"],
+    "held": false,
+    "rustles": 1,
+    "bought": 1,
+    "boons": ["headstart", "extrachair"],
+    "choices": [],
+    "foe": {
+      "who": "The forest",
+      "title": "A stiff wind",
+      "figures": [
+        {
+          "kind": "mud",
+          "stars": 2,
+          "seat": 3,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "bramble",
+          "stars": 2,
+          "seat": 2,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "wasp",
+          "stars": 2,
+          "seat": 5,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "gust",
+          "stars": 2,
+          "seat": 15,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "gust",
+          "stars": 2,
+          "seat": 19,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "magpie",
+          "stars": 2,
+          "seat": 17,
+          "items": [],
+          "fed": 0
+        }
+      ],
+      "boons": [],
+      "might": 100
+    },
+    "record": [
+      {
+        "room": 0,
+        "kind": "trouble",
+        "result": "win",
+        "standing": [1, 0],
+        "boss": null
+      },
+      {
+        "room": 1,
+        "kind": "trouble",
+        "result": "win",
+        "standing": [2, 0],
+        "boss": null
+      },
+      {
+        "room": 2,
+        "kind": "spar",
+        "result": "win",
+        "standing": [2, 0],
+        "boss": null
+      },
+      {
+        "room": 3,
+        "kind": "spar",
+        "result": "win",
+        "standing": [1, 0],
+        "boss": null
+      },
+      {
+        "room": 4,
+        "kind": "boss",
+        "result": "win",
+        "standing": [4, 0],
+        "boss": "oldbramble"
+      },
+      {
+        "room": 5,
+        "kind": "spar",
+        "result": "win",
+        "standing": [3, 0],
+        "boss": null
+      }
+    ],
+    "nextId": 13,
+    "won": false,
+    "left": false,
+    "last": {
+      "seed": 1759391717,
+      "sides": [
+        {
+          "who": "You",
+          "title": "",
+          "figures": [
+            {
+              "kind": "glorp",
+              "stars": 1,
+              "seat": 2,
+              "items": [],
+              "fed": 0
+            },
+            {
+              "kind": "slug",
+              "stars": 2,
+              "seat": 3,
+              "items": ["chestnut"],
+              "fed": 0
+            },
+            {
+              "kind": "drizzlefrog",
+              "stars": 1,
+              "seat": 16,
+              "items": ["plume"],
+              "fed": 0
+            },
+            {
+              "kind": "finch",
+              "stars": 2,
+              "seat": 17,
+              "items": ["wasptail"],
+              "fed": 0
+            },
+            {
+              "kind": "mossmote",
+              "stars": 1,
+              "seat": 18,
+              "items": [],
+              "fed": 0
+            }
+          ],
+          "boons": ["headstart"],
+          "might": 100
+        },
+        {
+          "who": "Crab #7",
+          "title": "brought Crab Sneaks",
+          "figures": [
+            {
+              "kind": "kettle",
+              "stars": 1,
+              "seat": 17,
+              "items": [],
+              "fed": 0
+            },
+            {
+              "kind": "worm",
+              "stars": 3,
+              "seat": 4,
+              "items": ["chestnut"],
+              "fed": 0
+            },
+            {
+              "kind": "slug",
+              "stars": 1,
+              "seat": 3,
+              "items": [],
+              "fed": 0
+            },
+            {
+              "kind": "glorp",
+              "stars": 1,
+              "seat": 2,
+              "items": [],
+              "fed": 0
+            }
+          ],
+          "boons": [],
+          "might": 100
+        }
+      ]
+    },
+    "fight": {
+      "setup": {
+        "seed": 2984435675,
+        "sides": [
+          {
+            "who": "You",
+            "title": "",
+            "figures": [
+              {
+                "kind": "glorp",
+                "stars": 1,
+                "seat": 2,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "slug",
+                "stars": 2,
+                "seat": 3,
+                "items": ["chestnut"],
+                "fed": 0
+              },
+              {
+                "kind": "glorp",
+                "stars": 1,
+                "seat": 4,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "drizzlefrog",
+                "stars": 1,
+                "seat": 16,
+                "items": ["plume"],
+                "fed": 0
+              },
+              {
+                "kind": "finch",
+                "stars": 2,
+                "seat": 17,
+                "items": ["wasptail"],
+                "fed": 0
+              },
+              {
+                "kind": "mossmote",
+                "stars": 1,
+                "seat": 18,
+                "items": [],
+                "fed": 0
+              }
+            ],
+            "boons": ["headstart"],
+            "might": 100
+          },
+          {
+            "who": "The forest",
+            "title": "A stiff wind",
+            "figures": [
+              {
+                "kind": "mud",
+                "stars": 2,
+                "seat": 3,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "bramble",
+                "stars": 2,
+                "seat": 2,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "wasp",
+                "stars": 2,
+                "seat": 5,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "gust",
+                "stars": 2,
+                "seat": 15,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "gust",
+                "stars": 2,
+                "seat": 19,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "magpie",
+                "stars": 2,
+                "seat": 17,
+                "items": [],
+                "fed": 0
+              }
+            ],
+            "boons": [],
+            "might": 100
+          }
+        ]
+      },
+      "outcome": {
+        "result": "win",
+        "ticks": 379,
+        "seconds": 18.95,
+        "standing": [7, 0],
+        "dusk": false,
+        "units": [
+          {
+            "id": 0,
+            "side": 1,
+            "kind": "bramble",
+            "stars": 2,
+            "summoned": false,
+            "alive": false,
+            "hp": 0,
+            "maxHp": 540,
+            "dealt": 299,
+            "taken": 546,
+            "healed": 0,
+            "casts": 0
+          },
+          {
+            "id": 1,
+            "side": 0,
+            "kind": "glorp",
+            "stars": 1,
+            "summoned": false,
+            "alive": true,
+            "hp": 170,
+            "maxHp": 400,
+            "dealt": 306,
+            "taken": 320,
+            "healed": 90,
+            "casts": 2
+          },
+          {
+            "id": 2,
+            "side": 1,
+            "kind": "mud",
+            "stars": 2,
+            "summoned": false,
+            "alive": false,
+            "hp": 0,
+            "maxHp": 1260,
+            "dealt": 430,
+            "taken": 1299,
+            "healed": 0,
+            "casts": 1
+          },
+          {
+            "id": 3,
+            "side": 0,
+            "kind": "slug",
+            "stars": 2,
+            "summoned": false,
+            "alive": true,
+            "hp": 229,
+            "maxHp": 890,
+            "dealt": 441,
+            "taken": 969,
+            "healed": 198,
+            "casts": 2
+          },
+          {
+            "id": 4,
+            "side": 1,
+            "kind": "wasp",
+            "stars": 2,
+            "summoned": false,
+            "alive": false,
+            "hp": 0,
+            "maxHp": 270,
+            "dealt": 290,
+            "taken": 288,
+            "healed": 0,
+            "casts": 1
+          },
+          {
+            "id": 5,
+            "side": 0,
+            "kind": "glorp",
+            "stars": 1,
+            "summoned": false,
+            "alive": false,
+            "hp": 0,
+            "maxHp": 400,
+            "dealt": 100,
+            "taken": 472,
+            "healed": 35,
+            "casts": 1
+          },
+          {
+            "id": 6,
+            "side": 1,
+            "kind": "gust",
+            "stars": 2,
+            "summoned": false,
+            "alive": false,
+            "hp": 0,
+            "maxHp": 432,
+            "dealt": 604,
+            "taken": 454,
+            "healed": 0,
+            "casts": 3
+          },
+          {
+            "id": 7,
+            "side": 0,
+            "kind": "drizzlefrog",
+            "stars": 1,
+            "summoned": false,
+            "alive": true,
+            "hp": 400,
+            "maxHp": 400,
+            "dealt": 804,
+            "taken": 0,
+            "healed": 0,
+            "casts": 2
+          },
+          {
+            "id": 8,
+            "side": 1,
+            "kind": "magpie",
+            "stars": 2,
+            "summoned": false,
+            "alive": false,
+            "hp": 0,
+            "maxHp": 540,
+            "dealt": 310,
+            "taken": 598,
+            "healed": 0,
+            "casts": 1
+          },
+          {
+            "id": 9,
+            "side": 0,
+            "kind": "finch",
+            "stars": 2,
+            "summoned": false,
+            "alive": true,
+            "hp": 414,
+            "maxHp": 414,
+            "dealt": 1336,
+            "taken": 0,
+            "healed": 0,
+            "casts": 4
+          },
+          {
+            "id": 10,
+            "side": 1,
+            "kind": "gust",
+            "stars": 2,
+            "summoned": false,
+            "alive": false,
+            "hp": 0,
+            "maxHp": 432,
+            "dealt": 434,
+            "taken": 435,
+            "healed": 0,
+            "casts": 2
+          },
+          {
+            "id": 11,
+            "side": 0,
+            "kind": "mossmote",
+            "stars": 1,
+            "summoned": false,
+            "alive": true,
+            "hp": 104,
+            "maxHp": 250,
+            "dealt": 190,
+            "taken": 310,
+            "healed": 54,
+            "casts": 3
+          },
+          {
+            "id": 12,
+            "side": 0,
+            "kind": "glorplet",
+            "stars": 1,
+            "summoned": true,
+            "alive": false,
+            "hp": 0,
+            "maxHp": 200,
+            "dealt": 108,
+            "taken": 201,
+            "healed": 0,
+            "casts": 0
+          },
+          {
+            "id": 13,
+            "side": 0,
+            "kind": "glorplet",
+            "stars": 1,
+            "summoned": true,
+            "alive": true,
+            "hp": 105,
+            "maxHp": 200,
+            "dealt": 225,
+            "taken": 95,
+            "healed": 0,
+            "casts": 0
+          },
+          {
+            "id": 14,
+            "side": 0,
+            "kind": "glorplet",
+            "stars": 1,
+            "summoned": true,
+            "alive": true,
+            "hp": 200,
+            "maxHp": 200,
+            "dealt": 110,
+            "taken": 0,
+            "healed": 0,
+            "casts": 0
+          }
+        ]
+      }
+    },
+    "seen": {
+      "fielded": ["mossmote", "slug", "finch", "drizzlefrog", "glorp"],
+      "threeStars": [],
+      "forged": ["wasptail"],
+      "topped": []
+    }
+  },
+  "almanac": {
+    "fielded": [],
+    "threeStars": [],
+    "forged": [],
+    "topped": [],
+    "bosses": [[], [], []],
+    "best": [0, 0, 0],
+    "runs": 0
+  },
+  "trail": 0,
+  "looks": {
+    "cloth": "bare",
+    "lantern": "iron",
+    "bases": "plain",
+    "owned": []
+  }
+}

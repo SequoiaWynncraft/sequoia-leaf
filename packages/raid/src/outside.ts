@@ -159,7 +159,11 @@ export function loadAlmanac(text: string): Almanac | null {
   return readAlmanac(raw.almanac);
 }
 
-/** An almanac from plain data, as `JSON.parse` gives it back. Anything that is not a whole almanac is none. */
+/**
+ * An almanac from plain data, as `JSON.parse` gives it back. Anything that is not a whole almanac
+ * is none; one kept with another number of trails has one for each trail now, and a furthest room
+ * no further than there are rooms.
+ */
 export function readAlmanac(a: unknown): Almanac | null {
   if (!isRecord(a)) return null;
   const fielded = uniqueList(a.fielded, isFigureId, FIGURE_IDS.length);
@@ -168,20 +172,27 @@ export function readAlmanac(a: unknown): Almanac | null {
   const topped = uniqueList(a.topped, isTraitId, TRAIT_IDS.length);
   // An almanac kept while some figures were locked lists those it opened; that list means nothing now.
   if (!fielded || !threeStars || !forged || !topped) return null;
-  if (!Array.isArray(a.bosses) || a.bosses.length !== TRAIL_COUNT) return null;
+  if (!Array.isArray(a.bosses) || a.bosses.length > 99 || !Array.isArray(a.best) || a.best.length > 99) return null;
   const bosses: BossId[][] = [];
   for (const list of a.bosses) {
     const beaten = uniqueList(list, isBossId, BOSS_IDS.length);
     if (!beaten) return null;
     bosses.push(beaten);
   }
-  if (!Array.isArray(a.best) || a.best.length !== TRAIL_COUNT) return null;
   const best: number[] = [];
   for (const room of a.best) {
-    if (typeof room !== "number" || !Number.isInteger(room) || room < 0 || room > ROOM_COUNT) return null;
+    if (typeof room !== "number" || !Number.isInteger(room) || room < 0) return null;
     best.push(room);
   }
   const runs = a.runs;
   if (typeof runs !== "number" || !Number.isInteger(runs) || runs < 0) return null;
-  return { fielded, threeStars, forged, topped, bosses, best, runs };
+  return {
+    fielded,
+    threeStars,
+    forged,
+    topped,
+    bosses: TRAILS.map((_, i) => bosses[i] ?? []),
+    best: TRAILS.map((_, i) => Math.min(ROOM_COUNT, best[i] ?? 0)),
+    runs,
+  };
 }

@@ -1,0 +1,271 @@
+import { describe, expect, test } from "bun:test";
+import { readdirSync, readFileSync } from "node:fs";
+
+import { type Ctx, isRefused } from "@sequoia-leaf/core";
+
+import { FIGURE_IDS, FIGURES } from "./content/figures.ts";
+import { HOLDS } from "./content/items.ts";
+import { ECONOMY, MAX_LEVEL, TRAIL_COUNT } from "./content/rooms.ts";
+import { traitNumber } from "./content/traits.ts";
+import { RAID, type Table } from "./game.ts";
+import type { Piece, Run } from "./run.ts";
+
+/**
+ * Tables as Leaf stores them, made by the rules of earlier versions and frozen in `../stored`. Each
+ * must read after any change to the content or the numbers: a change that breaks one needs a
+ * migration where the table is read, never a player locked out of the table, its almanac or the
+ * looks they bought.
+ */
+const STORED = new URL("../stored/", import.meta.url);
+const FIXTURES = readdirSync(STORED).map((name): [string, string] => [
+  name,
+  readFileSync(new URL(name, STORED), "utf8"),
+]);
+const fixture = (name: string): string => FIXTURES.find(([n]) => n === name)?.[1] ?? "";
+
+const ctx = (seed = 99): Ctx => ({
+  now: 1_800_000_000_000,
+  player: { id: "10000000-0000-0000-0000-000000000001", guest: false },
+  seed,
+  room: 1e9,
+  awards: [],
+});
+const read = (text: string): Table => {
+  const table = RAID.decode(text);
+  if (!table) throw new Error("does not read");
+  return table;
+};
+const runOf = (table: Table): Run => {
+  if (!table.run) throw new Error("no run");
+  return table.run;
+};
+/** A fixture as later rules might find it: its text with `change` made to its data. */
+function shifted(name: string, change: (raw: Table & { run: Run }) => void): string {
+  const raw: Table & { run: Run } = JSON.parse(fixture(name));
+  change(raw);
+  return JSON.stringify(raw);
+}
+
+describe("every stored table kept as a fixture", () => {
+  test.each(FIXTURES)("%s reads, reads the same once stored again, and plays on", (_, text) => {
+    const table = read(text);
+    expect(read(RAID.encode(table))).toEqual(table);
+    expect(RAID.view(table, ctx())).toBeDefined();
+    const run = table.run;
+    const next = !run ? "start" : run.phase === "fight" ? "take" : run.choices.length > 0 ? "choose" : "fight";
+    const command = RAID.command({ do: next, trail: 0, option: 0 });
+    if (!command) throw new Error("no command");
+    const done = RAID.apply(table, command, ctx());
+    expect(isRefused(done) ? done.refused : "done").toBe("done");
+  });
+  test("there is one for each kind of table Leaf keeps", () => {
+    expect(FIXTURES.map(([name]) => name).toSorted()).toEqual([
+      "fighting.json",
+      "long-time.json",
+      "new-table.json",
+      "older-run.json",
+      "picks-waiting.json",
+      "planning.json",
+      "starter-waiting.json",
+    ]);
+  });
+});
+
+describe("a table stored under other numbers", () => {
+  test("experience past a level's step now: the levels it makes are gained", () => {
+    const run = runOf(
+      read(
+        shifted("planning.json", (raw) => {
+          raw.run.level = 2;
+          raw.run.xp = (ECONOMY.levelXp[1] ?? 0) + (ECONOMY.levelXp[2] ?? 0) + 1;
+        }),
+      ),
+    );
+    expect([run.level, run.xp]).toEqual([4, 1]);
+  });
+
+  test("a level above the top now: the top, with no experience", () => {
+    const run = runOf(
+      read(
+        shifted("planning.json", (raw) => {
+          raw.run.level = MAX_LEVEL + 2;
+          raw.run.xp = 7;
+        }),
+      ),
+    );
+    expect([run.level, run.xp]).toEqual([MAX_LEVEL, 0]);
+  });
+
+  test("a stall of another size: cut to today's, or filled out with empty places", () => {
+    const longer = runOf(
+      read(
+        shifted("planning.json", (raw) => {
+          raw.run.stall = [...raw.run.stall, "worm", "worm"];
+        }),
+      ),
+    );
+    expect(longer.stall).toEqual(runOf(read(fixture("planning.json"))).stall);
+    const shorter = runOf(
+      read(
+        shifted("planning.json", (raw) => {
+          raw.run.stall = raw.run.stall.slice(0, 2);
+        }),
+      ),
+    );
+    expect(shorter.stall).toHaveLength(ECONOMY.stall);
+    expect(shorter.stall.slice(2)).toEqual([null, null, null]);
+  });
+
+  test("a bench of another size: filled out with empty places, or its figures past the end moved up or sold", () => {
+    const base = runOf(read(fixture("planning.json")));
+    const shorter = runOf(
+      read(
+        shifted("planning.json", (raw) => {
+          raw.run.bench = raw.run.bench.slice(0, 4);
+        }),
+      ),
+    );
+    expect(shorter.bench).toHaveLength(ECONOMY.bench);
+    // A bench twice as long with a figure at its far end, and every place before it taken.
+    const extra: Piece = { id: base.nextId, kind: "worm", stars: 1, items: [], fed: 0 };
+    const crowded = runOf(
+      read(
+        shifted("planning.json", (raw) => {
+          raw.run.bench = [...raw.run.bench, ...raw.run.bench.map(() => null)];
+          raw.run.bench[raw.run.bench.length - 1] = extra;
+          raw.run.nextId += 1;
+        }),
+      ),
+    );
+    expect(crowded.bench).toHaveLength(ECONOMY.bench);
+    const free = base.bench.indexOf(null);
+    if (free >= 0) expect(crowded.bench[free]).toEqual(extra);
+    else expect(crowded.acorns).toBe(base.acorns + FIGURES.worm.tier);
+  });
+
+  test("starters that no longer cost 1 are offered as they were", () => {
+    const options = runOf(
+      read(
+        shifted("starter-waiting.json", (raw) => {
+          raw.run.choices = [{ kind: "starter", options: ["worm", "badger", "greg"] }];
+        }),
+      ),
+    ).choices;
+    expect(options).toEqual([{ kind: "starter", options: ["worm", "badger", "greg"] }]);
+  });
+
+  test("more resolve, or more boon redraws, than a run has now: as many as it has", () => {
+    const run = runOf(
+      read(
+        shifted("picks-waiting.json", (raw) => {
+          raw.run.resolve = ECONOMY.resolve + 5;
+          raw.run.choices = raw.run.choices.map((c) => (c.kind === "boon" ? { ...c, redraws: 4 } : c));
+        }),
+      ),
+    );
+    expect(run.resolve).toBe(ECONOMY.resolve);
+    expect(run.choices.find((c) => c.kind === "boon")).toMatchObject({ redraws: ECONOMY.boonRedraws });
+  });
+
+  test("a figure holding more than a figure holds now: the rest go to the item bench", () => {
+    const run = runOf(
+      read(
+        shifted("long-time.json", (raw) => {
+          const holder = raw.run.board.find((p) => p?.items.length === HOLDS);
+          holder?.items.push("glowthorn");
+        }),
+      ),
+    );
+    expect(run.board.every((p) => !p || p.items.length <= HOLDS)).toBe(true);
+    expect(run.items).toEqual(["glowthorn"]);
+  });
+
+  test("Greg fed more than he eats now, or anybody else fed at all: as much as he eats, and nothing", () => {
+    const run = runOf(
+      read(
+        shifted("long-time.json", (raw) => {
+          const someone = raw.run.board.find((p) => p !== null);
+          if (someone) someone.fed = 3;
+          raw.run.bench[0] = { id: raw.run.nextId, kind: "greg", stars: 1, items: [], fed: 40 };
+          raw.run.nextId += 1;
+        }),
+      ),
+    );
+    expect(run.board.find((p) => p !== null)?.fed).toBe(0);
+    expect(run.bench[0]?.fed).toBe(traitNumber("greg", "most", 1));
+  });
+
+  test("an almanac kept with another number of trails: one for each trail now", () => {
+    const fewer = read(
+      shifted("long-time.json", (raw) => {
+        raw.almanac.bosses = raw.almanac.bosses.slice(0, 1);
+        raw.almanac.best = raw.almanac.best.slice(0, 1);
+      }),
+    );
+    expect(fewer.almanac.bosses).toHaveLength(TRAIL_COUNT);
+    expect(fewer.almanac.best).toHaveLength(TRAIL_COUNT);
+    expect(fewer.almanac.bosses[0]).toEqual(read(fixture("long-time.json")).almanac.bosses[0] ?? []);
+    const more = read(
+      shifted("long-time.json", (raw) => {
+        raw.almanac.bosses = [...raw.almanac.bosses, []];
+        raw.almanac.best = [...raw.almanac.best, 99];
+      }),
+    );
+    expect(more.almanac).toEqual(read(fixture("long-time.json")).almanac);
+  });
+
+  test("a trail picked that is not open now: the first", () => {
+    const table = read(
+      shifted("long-time.json", (raw) => {
+        raw.almanac.bosses = raw.almanac.bosses.map(() => []);
+      }),
+    );
+    expect(table.trail).toBe(0);
+  });
+
+  test("a look worn that is not the member's now is put away for the plain one", () => {
+    const table = read(
+      shifted("long-time.json", (raw) => {
+        raw.looks.owned = raw.looks.owned.filter((id) => id !== "jar");
+      }),
+    );
+    expect(table.looks.lantern).toBe("iron");
+    expect(table.looks.owned).not.toContain("jar");
+  });
+});
+
+describe("a table whose run cannot be read", () => {
+  test("is kept without the run: the almanac, the looks and the trail stand", () => {
+    const whole = read(fixture("long-time.json"));
+    const table = read(
+      shifted("long-time.json", (raw) => {
+        Object.assign(raw.run, { board: [{ id: 1, kind: "nobody", stars: 1, items: [], fed: 0 }] });
+      }),
+    );
+    expect(table).toEqual({ ...whole, run: null });
+  });
+});
+
+describe("text that is not a table", () => {
+  test("does not read", () => {
+    for (const text of [
+      "{",
+      "null",
+      shifted("new-table.json", (raw) => {
+        Object.assign(raw, { v: 0 });
+      }),
+      shifted("new-table.json", (raw) => {
+        raw.rng = -1;
+      }),
+      shifted("new-table.json", (raw) => {
+        Object.assign(raw, { almanac: null });
+      }),
+      shifted("new-table.json", (raw) => {
+        Object.assign(raw.looks, { owned: ["nothing"] });
+      }),
+    ]) {
+      expect(RAID.decode(text)).toBeNull();
+    }
+    expect(FIGURE_IDS).toContain("worm");
+  });
+});

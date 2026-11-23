@@ -133,8 +133,12 @@ const RARITY_OF = new Map(
       [...PRIZES[rarity], ...(EARLIER[rarity] ?? [])].map((prize): [string, Rarity] => [prize, rarity]),
     ),
 );
-/** The rarity of a prize, or of what was one earlier; undefined for anything else. */
-export const rarityOf = (prize: string): Rarity | undefined => RARITY_OF.get(prize);
+/**
+ * The rarity of a prize, or of what was one earlier: a headliner's, of any banner (one since retired
+ * is still Yggdrasil); undefined for anything else.
+ */
+export const rarityOf = (prize: string): Rarity | undefined =>
+  RARITY_OF.get(prize) ?? (prize.startsWith(headliner("")) ? "Yggdrasil" : undefined);
 
 // ---------- the state ----------
 
@@ -213,13 +217,17 @@ export interface PullsNote {
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const whole = (v: unknown, least: number, most = Number.MAX_SAFE_INTEGER): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= least && v <= most;
-const isPool = (v: unknown): v is string => v === "grove" || BANNERS.some(({ id }) => id === v);
+/** A prize's or a pool's name: what is won and where is the rules' to say, not the reader's. */
+const isName = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 64;
 
-/** A command off the wire, or null. Fields it does not use (the command's id) are let be. */
+/**
+ * A command off the wire, or null. Fields it does not use (the command's id) are let be. A pool
+ * these rules do not know is a pool that is closed (`isOpen`), as a banner retired is.
+ */
 export function readCommand(v: unknown): PullsCommand | null {
   if (!isRecord(v)) return null;
   if (v.do === "pull") {
-    return isPool(v.pool) && (v.n === 1 || v.n === 10) && (v.with === "leaf" || v.with === "free")
+    return isName(v.pool) && (v.n === 1 || v.n === 10) && (v.with === "leaf" || v.with === "free")
       ? { do: "pull", pool: v.pool, n: v.n, with: v.with }
       : null;
   }
@@ -359,33 +367,26 @@ export const PULLS_VERSION = 1;
 
 export const encodePulls = (s: Pulls): string => JSON.stringify({ game: GAME, v: PULLS_VERSION, ...s });
 
+/*
+ * Reading what Leaf stored is done in two layers. `shapeOf` takes the shape every state of this
+ * version has, and refuses anything else; it names no number of `RATES`, no banner and no prize.
+ * `settle` brings a state of that shape under today's content and numbers, and refuses nothing.
+ */
+
 function countersOf(v: unknown): Counters | null {
-  return isRecord(v) &&
-    whole(v.top, 0, RATES.top.certainAt - 1) &&
-    whole(v.mid, 0, RATES.mid.certainAt - 1) &&
-    typeof v.owed === "boolean"
+  return isRecord(v) && whole(v.top, 0) && whole(v.mid, 0) && typeof v.owed === "boolean"
     ? { top: v.top, mid: v.mid, owed: v.owed }
     : null;
 }
 
 function pulledOf(v: unknown): Pulled | null {
-  return isRecord(v) &&
-    typeof v.prize === "string" &&
-    isPool(v.pool) &&
-    whole(v.at, 0) &&
-    whole(v.top, 1, RATES.top.certainAt)
+  return isRecord(v) && isName(v.prize) && isName(v.pool) && whole(v.at, 0) && whole(v.top, 0)
     ? { prize: v.prize, pool: v.pool, at: v.at, top: v.top }
     : null;
 }
 
-/** Prizes that were won once and are let go: the Treasury's wares. A stored state may still name them. */
-const RETIRED: ReadonlySet<string> = new Set(["ware:water", "ware:plate", "ware:jar", "ware:crown"]);
-
-/**
- * A player's pulls from the text Leaf stored, or null for anything this version could not have made.
- * What was a prize and no longer is (the Treasury's wares) is let go: the pull paid its Seeds.
- */
-export function decodePulls(text: string): Pulls | null {
+/** A player's pulls in the shape this version keeps them, or null for anything else. */
+function shapeOf(text: string): Pulls | null {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -395,27 +396,54 @@ export function decodePulls(text: string): Pulls | null {
   if (!isRecord(raw) || raw.game !== GAME || raw.v !== PULLS_VERSION) return null;
   const { have, counters, seeds, free, history, pulls, rng } = raw;
   if (!isRecord(have) || !isRecord(counters) || !isRecord(free) || !Array.isArray(history)) return null;
-  if (!whole(seeds, 0) || !whole(pulls, 0) || !whole(rng, 0, 0xffffffff) || history.length > HISTORY) return null;
+  if (!whole(seeds, 0) || !whole(pulls, 0) || !whole(rng, 0, 0xffffffff)) return null;
   const { waiting, next } = free;
   const grove = countersOf(counters.grove);
   const banner = countersOf(counters.banner);
-  if (!whole(waiting, 0, RATES.free.most) || !whole(next, 0) || !grove || !banner || grove.owed) return null;
+  if (!whole(waiting, 0) || !whole(next, 0) || !grove || !banner) return null;
   const owned: Record<string, number> = {};
   for (const [prize, n] of Object.entries(have)) {
-    if (!whole(n, 1)) return null;
-    if (RETIRED.has(prize)) continue;
-    if (!RARITY_OF.has(prize)) return null;
+    if (!isName(prize) || !whole(n, 1)) return null;
     owned[prize] = n;
   }
   const kept: Pulled[] = [];
   for (const v of history) {
     const pulled = pulledOf(v);
     if (!pulled) return null;
-    if (RETIRED.has(pulled.prize)) continue;
-    if (!RARITY_OF.has(pulled.prize)) return null;
     kept.push(pulled);
   }
   return { have: owned, counters: { grove, banner }, seeds, free: { waiting, next }, history: kept, pulls, rng };
+}
+
+/** Prizes that were won once and are let go: the Treasury's wares. A stored state may still name them. */
+const RETIRED: ReadonlySet<string> = new Set(["ware:water", "ware:plate", "ware:jar", "ware:crown"]);
+
+/**
+ * Pulls as today's content and numbers have them. A counter past where a prize is certain now is
+ * certain on the next pull; free pulls past the most wait as the most; a longer history keeps its
+ * last pulls; the grove owes nothing. A prize or a pool these rules do not know (a banner retired,
+ * its headliner, a figure gone from the raid) is kept as it was won. Only the Treasury's wares are
+ * let go: the pull paid its Seeds.
+ */
+function settle(s: Pulls): Pulls {
+  const certain = (c: Counters, owed: boolean): Counters => ({
+    top: Math.min(c.top, RATES.top.certainAt - 1),
+    mid: Math.min(c.mid, RATES.mid.certainAt - 1),
+    owed,
+  });
+  return {
+    ...s,
+    have: Object.fromEntries(Object.entries(s.have).filter(([prize]) => !RETIRED.has(prize))),
+    counters: { grove: certain(s.counters.grove, false), banner: certain(s.counters.banner, s.counters.banner.owed) },
+    free: { waiting: Math.min(s.free.waiting, RATES.free.most), next: s.free.next },
+    history: s.history.filter(({ prize }) => !RETIRED.has(prize)).slice(-HISTORY),
+  };
+}
+
+/** A player's pulls from the text Leaf stored, under today's content and numbers; null for anything not of this version's shape. */
+export function decodePulls(text: string): Pulls | null {
+  const shaped = shapeOf(text);
+  return shaped && settle(shaped);
 }
 
 /** A new player's pulls: nothing won, the counters at 0, and one free pull waiting. */
@@ -445,7 +473,7 @@ export const PULLS: Game<Pulls, PullsCommand, PullsView, PullsNote> = {
     also: {
       pulls: s.pulls,
       top: Object.entries(s.have).reduce((sum, [prize, n]) => {
-        const rarity = RARITY_OF.get(prize);
+        const rarity = rarityOf(prize);
         return rarity !== undefined && RARITIES[rarity].tier === "top" ? sum + n : sum;
       }, 0),
     },

@@ -1,17 +1,26 @@
 /**
  * A run in progress as plain data and as text, and back. A run is plain data, so saving is writing
- * it out with a version on it. Reading is the careful half: the data is read field by field into a
- * fresh run, and anything that is not a run this version of the game could have made is refused,
- * with a word about what was wrong. A fight in progress keeps its setup; how it comes out is worked
- * out again from that, and is the same.
+ * it out with a version on it. Reading is the careful half, done in two layers.
+ *
+ * The first reads the shape every run of this version has, field by field into a fresh run, and
+ * refuses anything else with a word about what was wrong: figures, items and boons the content does
+ * not have, numbers that are no numbers, parts that contradict each other. It names none of the
+ * numbers that tune the game. The second (`settle`) brings a run of that shape under today's
+ * numbers, and refuses nothing: experience past a step makes its levels, the stall and the bench
+ * are today's size, a figure holds what a figure may hold now, and the rest is clamped or carried.
+ * What the run drew (the stall, who waits in the room, what the picks offer, the fight being
+ * fought) and no longer reads is drawn again: the room is laid out afresh, as `layOutAfresh` does.
  *
  * A run saved by an older game of the same version is brought up to date as it is read, each change
  * where its field is read: a field it did not keep yet gets what a new run starts with, and a charm
  * taken before charms were emblems gets its emblem on the item bench.
  */
-import { BOON_IDS, type BoonId, boonNumber, isBoonId } from "./content/boons.ts";
-import { FIGURE_IDS, type FigureId, FIGURES, isBossId, isFigureId, isStars, traitsOf } from "./content/figures.ts";
+import { mix } from "@sequoia-leaf/core";
+
+import { BOON_IDS, type BoonId, isBoonId } from "./content/boons.ts";
+import { FIGURE_IDS, type FigureId, isBossId, isFigureId, isStars } from "./content/figures.ts";
 import {
+  carries,
   EMBLEMS,
   FINISHED_IDS,
   HOLDS,
@@ -21,13 +30,25 @@ import {
   isItemId,
   type ItemId,
 } from "./content/items.ts";
-import { ECONOMY, MAX_LEVEL, ROOM_COUNT, ROOMS, TRAIL_COUNT } from "./content/rooms.ts";
+import { ECONOMY, MAX_LEVEL, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS, traitNumber } from "./content/traits.ts";
 import { resolveFight } from "./fight/engine.ts";
 import type { FightSetup } from "./fight/types.ts";
 import { SEATS } from "./hex.ts";
-import { isParty } from "./party.ts";
-import { type Choice, fieldCap, fielded, type Fought, type Piece, type RoomRecord, type Run } from "./run.ts";
+import { isParty, type Party } from "./party.ts";
+import {
+  type Choice,
+  fielded,
+  type Fought,
+  gainXp,
+  layOutAfresh,
+  type Piece,
+  pieces,
+  type RoomRecord,
+  type Run,
+  sellValue,
+  stallSize,
+} from "./run.ts";
 
 /** The version a run is written with: 2 keeps the fight being fought. */
 export const SAVE_VERSION = 2;
@@ -55,62 +76,57 @@ function unique<T>(items: T[], what: string): T[] {
   return new Set(items).size === items.length ? items : bad(what);
 }
 const UINT = 0xffffffff;
+/** The most of anything a run could keep, whatever the numbers: room for them to grow. */
+const ROOMY = 999;
 
-function readItems(v: unknown, what: string): ItemId[] {
-  const items = each(v, isItemId, HOLDS, what);
-  // A figure never holds two loose components: the second would have forged with the first.
-  return items.filter(isComponentId).length > 1 ? bad(what) : items;
-}
+// ---------- the shape ----------
+
+/** What a figure holds, or a note says it holds. */
+const readItems = (v: unknown, what: string): ItemId[] => each(v, isItemId, 8, what);
 function readPiece(v: unknown, nextId: number): Piece | null {
   if (v === null) return null;
   const p = record(v, "a figure");
-  const kind = one(p.kind, isFigureId, "a figure's kind");
-  const items = readItems(p.items, "what a figure holds");
-  // Nobody holds the emblem of a kin it is already.
-  if (items.some((item) => isEmblemId(item) && traitsOf(kind).includes(EMBLEMS[item]))) bad("what a figure holds");
   return {
     id: whole(p.id, 1, nextId - 1, "a figure's number"),
-    kind,
+    kind: one(p.kind, isFigureId, "a figure's kind"),
     stars: one(p.stars, isStars, "a figure's stars"),
-    items,
-    fed: whole(p.fed, 0, kind === "greg" ? traitNumber("greg", "most", 1) : 0, "how much Greg has eaten"),
+    items: readItems(p.items, "what a figure holds"),
+    fed: whole(p.fed, 0, ROOMY, "how much Greg has eaten"),
   };
 }
-/** A pick waiting. One shown to the page behind the first has its kind and nothing of what it will offer. */
-function readChoice(v: unknown, unseen = false): Choice {
+const isChoiceKind = (v: unknown): v is Choice["kind"] => v === "starter" || v === "component" || v === "boon";
+/** A pick waiting, with nothing on offer: as it is shown behind the first, and before it is drawn again. */
+function blankChoice(v: unknown): Choice {
   const c = record(v, "a choice");
-  if (unseen) {
-    if (c.kind === "component") return { kind: "component", options: [] };
-    if (c.kind === "boon")
-      return { kind: "boon", options: [], redraws: whole(c.redraws, 0, ECONOMY.boonRedraws, "a choice") };
-    return bad("a choice");
-  }
+  const kind = one(c.kind, isChoiceKind, "a choice");
+  return kind === "boon"
+    ? { kind, options: [], redraws: whole(c.redraws, 0, ROOMY, "the boon redraws") }
+    : { kind, options: [] };
+}
+/** A pick waiting, with what it offers. */
+function readChoice(v: unknown): Choice {
+  const c = record(v, "a choice");
   if (c.kind === "starter") {
     const options = unique(each(c.options, isFigureId, 8, "the starters"), "the starters");
-    if (options.length === 0 || options.some((id) => FIGURES[id].tier !== 1)) bad("the starters");
-    return { kind: "starter", options };
+    return options.length === 0 ? bad("the starters") : { kind: "starter", options };
   }
   if (c.kind === "component") {
     const options = each(c.options, isComponentId, 8, "the components on offer");
     return options.length === 0 ? bad("the components on offer") : { kind: "component", options };
   }
-  if (c.kind === "boon") {
-    const options = unique(each(c.options, isBoonId, 8, "the boons on offer"), "the boons on offer");
-    if (options.length === 0) bad("the boons on offer");
-    return { kind: "boon", options, redraws: whole(c.redraws, 0, ECONOMY.boonRedraws, "the boon redraws") };
-  }
-  return bad("a choice");
+  const blank = blankChoice(c);
+  if (blank.kind !== "boon") return bad("a choice");
+  const options = unique(each(c.options, isBoonId, 8, "the boons on offer"), "the boons on offer");
+  return options.length === 0 ? bad("the boons on offer") : { ...blank, options };
 }
+const isRoomKind = (v: unknown): v is RoomRecord["kind"] => v === "trouble" || v === "spar" || v === "boss";
 function readRecord(v: unknown, room: number): RoomRecord {
   const r = record(v, "the record");
-  const at = whole(r.room, 0, room, "the record");
-  const kind = ROOMS[at]?.kind ?? bad("the record");
-  if (r.kind !== kind) bad("the record");
   const result = r.result === "win" || r.result === "loss" || r.result === "draw" ? r.result : bad("the record");
   const standing = list(r.standing, 2, "the record");
   return {
-    room: at,
-    kind,
+    room: whole(r.room, 0, room, "the record"),
+    kind: one(r.kind, isRoomKind, "the record"),
     result,
     standing: [whole(standing[0], 0, 99, "the record"), whole(standing[1], 0, 99, "the record")],
     boss: r.boss === null ? null : one(r.boss, isBossId, "the record"),
@@ -135,25 +151,36 @@ function readFought(v: unknown, fighting: boolean): Fought | null {
   if (setup.sides[0].figures.length === 0 || setup.sides[1].figures.length === 0) bad("the fight");
   return { setup, outcome: resolveFight(setup) };
 }
+function readFoe(v: unknown): Party {
+  const foe = one(v, isParty, "who is waiting in the room");
+  return foe.figures.length === 0 ? bad("who is waiting in the room") : foe;
+}
 
-/** A run, or (`shown`) a run as the page is shown it: with no streams, and only the first pick's options. */
+/**
+ * A run, or (`shown`) a run as the page is shown it: with no streams, and only the first pick's
+ * options. What the run drew and no longer reads is drawn again; a run as shown has no stream to
+ * draw it from, and is refused.
+ */
 function readRun(v: unknown, shown = false): Run {
   const r = record(v, "the run");
+  let afresh = false;
+  /** A part the run drew: read, or (on Leaf) `otherwise`, and drawn again unless it is only looked back on. */
+  const drawn = <T>(read: () => T, otherwise: T, again = true): T => {
+    try {
+      return read();
+    } catch (err) {
+      if (shown || !(err instanceof Nonsense)) throw err;
+      afresh ||= again;
+      return otherwise;
+    }
+  };
   const boons: BoonId[] = unique(each(r.boons, isBoonId, BOON_IDS.length, "the boons"), "the boons");
-  const level = whole(r.level, 1, MAX_LEVEL, "the level");
-  const need = level >= MAX_LEVEL ? 1 : (ECONOMY.levelXp[level - 1] ?? 1);
-  const room = whole(r.room, 0, ROOM_COUNT - 1, "the room");
+  const room = whole(r.room, 0, ROOMY, "the room");
   const nextId = whole(r.nextId, 1, 1_000_000, "the figures' numbers");
   const phase = r.phase === "plan" || r.phase === "fight" || r.phase === "over" ? r.phase : bad("the phase");
-  const stallSize = boons.includes("widestall") ? boonNumber("widestall", "offers") : ECONOMY.stall;
-  const stall = list(r.stall, stallSize, "the stall").map((x): FigureId | null =>
-    x === null ? null : one(x, isFigureId, "the stall"),
-  );
-  if (stall.length !== stallSize) bad("the stall");
   const board = list(r.board, SEATS, "the board").map((x) => readPiece(x, nextId));
-  const bench = list(r.bench, ECONOMY.bench, "the bench").map((x) => readPiece(x, nextId));
+  const bench = list(r.bench, ROOMY, "the bench").map((x) => readPiece(x, nextId));
   if (board.length !== SEATS) bad("the board");
-  if (bench.length !== ECONOMY.bench) bad("the bench");
   const ids = [...board, ...bench].flatMap((p) => (p ? [p.id] : []));
   unique(ids, "the figures' numbers");
   const items = each(r.items, isItemId, 400, "the item bench");
@@ -166,36 +193,42 @@ function readRun(v: unknown, shown = false): Run {
   unique(emblems, "the emblems");
   // A run saved while some figures were locked lists the ones its stall could offer; every figure can now.
   const seen = record(r.seen, "the almanac notes");
-  const foe = one(r.foe, isParty, "who is waiting in the room");
-  if (foe.figures.length === 0) bad("who is waiting in the room");
   const run: Run = {
     seed: shown ? 0 : whole(r.seed, 0, UINT, "the seed"),
     rng: shown ? 0 : whole(r.rng, 0, UINT, "the random stream"),
-    trail: whole(r.trail, 0, TRAIL_COUNT - 1, "the trail"),
+    trail: whole(r.trail, 0, ROOMY, "the trail"),
     room,
     phase,
-    resolve: whole(r.resolve, 0, ECONOMY.resolve, "the resolve"),
+    resolve: whole(r.resolve, 0, ROOMY, "the resolve"),
     acorns: whole(r.acorns, 0, 100_000, "the acorns"),
     // A run saved before streaks were kept has none.
     streak: r.streak === undefined ? 0 : whole(r.streak, -400, 400, "the streak"),
-    level,
-    xp: whole(r.xp, 0, need - 1, "the experience"),
+    level: whole(r.level, 1, ROOMY, "the level"),
+    xp: whole(r.xp, 0, 100_000, "the experience"),
     board,
     bench,
     items,
-    stall,
+    stall: drawn(
+      () =>
+        list(r.stall, ROOMY, "the stall").map((x): FigureId | null =>
+          x === null ? null : one(x, isFigureId, "the stall"),
+        ),
+      [],
+    ),
     held: flag(r.held, "the held stall"),
-    rustles: whole(r.rustles, 0, 8, "the free rustles"),
+    rustles: whole(r.rustles, 0, ROOMY, "the free rustles"),
     bought: whole(r.bought, 0, 10_000, "the figures bought"),
     boons,
-    choices: list(r.choices, 8, "the choices").map((c, i) => readChoice(c, shown && i > 0)),
-    foe,
+    choices: list(r.choices, 8, "the choices").map((c, i) =>
+      shown && i > 0 ? blankChoice(c) : drawn(() => readChoice(c), blankChoice(c)),
+    ),
+    foe: drawn(() => readFoe(r.foe), { who: "", title: "", figures: [], boons: [], might: 100 }),
     record: list(r.record, 400, "the record").map((x) => readRecord(x, room)),
     nextId,
     won: flag(r.won, "the ending"),
     left: flag(r.left, "the ending"),
-    last: readLast(r.last),
-    fight: readFought(r.fight, phase === "fight"),
+    last: drawn(() => readLast(r.last), null, false),
+    fight: drawn(() => readFought(r.fight, phase === "fight"), null),
     seen: {
       fielded: unique(each(seen.fielded, isFigureId, FIGURE_IDS.length, "the almanac notes"), "the almanac notes"),
       threeStars: unique(
@@ -207,7 +240,6 @@ function readRun(v: unknown, shown = false): Run {
     },
   };
   // The parts have to agree with each other, too.
-  if (fielded(run) > fieldCap(run)) bad("how many are on the board");
   if (run.phase === "fight" && fielded(run) === 0) bad("who is fighting");
   if (run.phase !== "over" && (run.won || run.left || run.resolve <= 0)) bad("the ending");
   if (run.won && (run.left || run.resolve <= 0)) bad("the ending");
@@ -218,7 +250,57 @@ function readRun(v: unknown, shown = false): Run {
   if (Math.abs(run.streak) > run.record.length) bad("the streak");
   if (run.streak > 0 && lastResult !== "win") bad("the streak");
   if (run.streak < 0 && lastResult !== "loss") bad("the streak");
+  if (afresh && run.phase !== "over") layOutAfresh(run, mix(run.rng, 0xa7e5));
+  if (!shown) settle(run);
   return run;
+}
+
+// ---------- today's numbers ----------
+
+/**
+ * Brings a run of the right shape under today's numbers, and refuses nothing. The trail, the room,
+ * the level and resolve go no higher than they go now; experience past a level's step makes the
+ * levels it makes; the stall is today's size, cut or filled out with empty places; the bench is
+ * today's size, its figures past the end moved up into empty places or, with none, sold for what
+ * they are worth; a figure holds what a figure may hold now (as many, one loose component, no
+ * emblem of a kin it is), and the rest goes to the item bench; Greg has eaten no more than he eats,
+ * and nobody else anything; a pick of boons has no more redraws than one has now.
+ */
+function settle(run: Run): void {
+  run.trail = Math.min(run.trail, TRAIL_COUNT - 1);
+  run.room = Math.min(run.room, ROOM_COUNT - 1);
+  run.resolve = Math.min(run.resolve, ECONOMY.resolve);
+  run.level = Math.min(run.level, MAX_LEVEL);
+  gainXp(run, 0, []);
+  if (run.level >= MAX_LEVEL) run.xp = 0;
+  const offers = stallSize(run);
+  run.stall = Array.from({ length: offers }, (_, i) => run.stall[i] ?? null);
+  const bench = Array.from({ length: ECONOMY.bench }, (_, i) => run.bench[i] ?? null);
+  for (const piece of run.bench.slice(ECONOMY.bench)) {
+    if (!piece) continue;
+    const free = bench.indexOf(null);
+    if (free >= 0) bench[free] = piece;
+    else {
+      run.acorns += sellValue(piece);
+      run.items.push(...piece.items);
+    }
+  }
+  run.bench = bench;
+  for (const piece of pieces(run)) {
+    const held: ItemId[] = [];
+    for (const item of piece.items) {
+      const fits =
+        held.length < HOLDS &&
+        !(isComponentId(item) && held.some(isComponentId)) &&
+        !(isEmblemId(item) && carries(piece.kind, held, EMBLEMS[item]));
+      (fits ? held : run.items).push(item);
+    }
+    piece.items = held;
+    piece.fed = piece.kind === "greg" ? Math.min(piece.fed, traitNumber("greg", "most", 1)) : 0;
+  }
+  for (const choice of run.choices) {
+    if (choice.kind === "boon") choice.redraws = Math.min(choice.redraws, ECONOMY.boonRedraws);
+  }
 }
 
 export type Loaded = { ok: true; run: Run } | { ok: false; why: string };

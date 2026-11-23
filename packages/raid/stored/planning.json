@@ -1,0 +1,258 @@
+{
+  "game": "little-raid-table",
+  "v": 1,
+  "rng": 4144936207,
+  "runs": 1,
+  "run": {
+    "seed": 2120416475,
+    "rng": 648779488,
+    "trail": 0,
+    "room": 4,
+    "phase": "plan",
+    "resolve": 20,
+    "acorns": 8,
+    "streak": 4,
+    "level": 4,
+    "xp": 2,
+    "board": [
+      null,
+      null,
+      null,
+      {
+        "id": 2,
+        "kind": "slug",
+        "stars": 2,
+        "items": ["chestnut"],
+        "fed": 0
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      {
+        "id": 9,
+        "kind": "drizzlefrog",
+        "stars": 1,
+        "items": [],
+        "fed": 0
+      },
+      {
+        "id": 3,
+        "kind": "finch",
+        "stars": 2,
+        "items": ["thorn"],
+        "fed": 0
+      },
+      {
+        "id": 1,
+        "kind": "mossmote",
+        "stars": 1,
+        "items": [],
+        "fed": 0
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "bench": [
+      {
+        "id": 8,
+        "kind": "mossmote",
+        "stars": 1,
+        "items": [],
+        "fed": 0
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "items": [],
+    "stall": ["worm", "emberkit", null, null, null],
+    "held": false,
+    "rustles": 1,
+    "bought": 3,
+    "boons": ["headstart"],
+    "choices": [],
+    "foe": {
+      "who": "The forest",
+      "title": "Old Bramble",
+      "figures": [
+        {
+          "kind": "oldbramble",
+          "stars": 1,
+          "seat": 3,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "bramble",
+          "stars": 1,
+          "seat": 1,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "bramble",
+          "stars": 1,
+          "seat": 5,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "toadstool",
+          "stars": 1,
+          "seat": 17,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "wasp",
+          "stars": 1,
+          "seat": 12,
+          "items": [],
+          "fed": 0
+        }
+      ],
+      "boons": [],
+      "might": 100
+    },
+    "record": [
+      {
+        "room": 0,
+        "kind": "trouble",
+        "result": "win",
+        "standing": [1, 0],
+        "boss": null
+      },
+      {
+        "room": 1,
+        "kind": "trouble",
+        "result": "win",
+        "standing": [2, 0],
+        "boss": null
+      },
+      {
+        "room": 2,
+        "kind": "spar",
+        "result": "win",
+        "standing": [2, 0],
+        "boss": null
+      },
+      {
+        "room": 3,
+        "kind": "spar",
+        "result": "win",
+        "standing": [1, 0],
+        "boss": null
+      }
+    ],
+    "nextId": 10,
+    "won": false,
+    "left": false,
+    "last": {
+      "seed": 2069846552,
+      "sides": [
+        {
+          "who": "You",
+          "title": "",
+          "figures": [
+            {
+              "kind": "slug",
+              "stars": 2,
+              "seat": 3,
+              "items": ["chestnut"],
+              "fed": 0
+            },
+            {
+              "kind": "finch",
+              "stars": 1,
+              "seat": 16,
+              "items": ["thorn"],
+              "fed": 0
+            },
+            {
+              "kind": "mossmote",
+              "stars": 1,
+              "seat": 17,
+              "items": [],
+              "fed": 0
+            }
+          ],
+          "boons": ["headstart"],
+          "might": 100
+        },
+        {
+          "who": "a Barrow Gnome",
+          "title": "brought Burrow Bulwarks",
+          "figures": [
+            {
+              "kind": "rock",
+              "stars": 1,
+              "seat": 3,
+              "items": ["chestnut"],
+              "fed": 0
+            },
+            {
+              "kind": "worm",
+              "stars": 2,
+              "seat": 4,
+              "items": [],
+              "fed": 0
+            },
+            {
+              "kind": "slug",
+              "stars": 1,
+              "seat": 2,
+              "items": [],
+              "fed": 0
+            }
+          ],
+          "boons": [],
+          "might": 100
+        }
+      ]
+    },
+    "fight": null,
+    "seen": {
+      "fielded": ["mossmote", "slug", "finch"],
+      "threeStars": [],
+      "forged": [],
+      "topped": []
+    }
+  },
+  "almanac": {
+    "fielded": [],
+    "threeStars": [],
+    "forged": [],
+    "topped": [],
+    "bosses": [[], [], []],
+    "best": [0, 0, 0],
+    "runs": 0
+  },
+  "trail": 0,
+  "looks": {
+    "cloth": "bare",
+    "lantern": "iron",
+    "bases": "plain",
+    "owned": []
+  }
+}

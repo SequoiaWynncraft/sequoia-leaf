@@ -5,6 +5,7 @@ import type { CoinChange, Ctx, Done, Logged, Refused } from "@sequoia-leaf/core"
 import { SENSIBLE } from "./bot.ts";
 import { FIGURES } from "./content/figures.ts";
 import { EMBLEM_IDS, EMBLEMS } from "./content/items.ts";
+import { newLooks } from "./content/looks.ts";
 import { resolveFight } from "./fight/engine.ts";
 import {
   decodeTable,
@@ -411,13 +412,17 @@ describe("keeping a table", () => {
       expect(RAID.decode(text)).toBeNull();
     }
     expect(RAID.decode(changed((r) => (r.rng = -1)))).toBeNull();
-    expect(RAID.decode(changed((r) => (r.trail = 2)))).toBeNull();
-    expect(RAID.decode(changed((r) => (r.runs = 0)))).toBeNull();
     expect(
-      RAID.decode(changed((r) => (r.looks = { cloth: "plum", lantern: "iron", bases: "plain", owned: [] }))),
+      RAID.decode(changed((r) => (r.looks = { cloth: "disco", lantern: "iron", bases: "plain", owned: [] }))),
     ).toBeNull();
-    expect(RAID.decode(changed((r) => (r.run = { phase: "plan" })))).toBeNull();
     expect(RAID.decode(changed(() => undefined))).not.toBeNull();
+    // What contradicts the rules now is put right, and a run that does not read is let go (`stored.test.ts`).
+    expect(RAID.decode(changed((r) => (r.trail = 2)))?.trail).toBe(0);
+    expect(RAID.decode(changed((r) => (r.runs = 0)))?.run).toBeNull();
+    expect(RAID.decode(changed((r) => (r.run = { phase: "plan" })))?.run).toBeNull();
+    expect(
+      RAID.decode(changed((r) => (r.looks = { cloth: "plum", lantern: "iron", bases: "plain", owned: [] })))?.looks,
+    ).toEqual(newLooks());
   });
   test("a table stored when a charm counted for its kin comes back with the charm's emblem on the item bench, once", () => {
     const state = planned(started(9));

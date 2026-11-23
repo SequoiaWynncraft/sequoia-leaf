@@ -1,0 +1,56 @@
+{
+  "game": "pulls",
+  "v": 1,
+  "have": {
+    "thing:rock": 2,
+    "thing:lantern-post": 1,
+    "look:baize": 1,
+    "thing:crab-throne": 1,
+    "ware:jar": 1
+  },
+  "counters": {
+    "grove": {
+      "top": 0,
+      "mid": 0,
+      "owed": false
+    },
+    "banner": {
+      "top": 0,
+      "mid": 0,
+      "owed": false
+    }
+  },
+  "seeds": 41,
+  "free": {
+    "waiting": 1,
+    "next": 1795694400000
+  },
+  "history": [
+    {
+      "prize": "thing:rock",
+      "pool": "grove",
+      "at": 1795219200000,
+      "top": 1
+    },
+    {
+      "prize": "ware:jar",
+      "pool": "grove",
+      "at": 1795219200000,
+      "top": 2
+    },
+    {
+      "prize": "look:baize",
+      "pool": "grove",
+      "at": 1795219200000,
+      "top": 3
+    },
+    {
+      "prize": "thing:crab-throne",
+      "pool": "grove",
+      "at": 1795305600000,
+      "top": 77
+    }
+  ],
+  "pulls": 80,
+  "rng": 2016158565
+}

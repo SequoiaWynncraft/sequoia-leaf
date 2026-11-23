@@ -89,6 +89,7 @@ describe("the prizes", () => {
     expect(BANNERS.filter(({ id }) => !isThing(`statue-${id}`))).toEqual([]);
     expect(rarityOf("figure:greg")).toBe("Treant");
     expect(rarityOf("figure:nobody")).toBeUndefined();
+    expect(rarityOf("headliner:banner-0")).toBe("Yggdrasil");
   });
 
   it("of earlier pulls are things and looks the town and the raid still have, each once, and in no pool", () => {
@@ -174,7 +175,8 @@ describe("a pull", () => {
     expect(refused(s, pull("grove"), ctx(Date.UTC(2030, 0, 1)))).toBeNull();
     expect(PULLS.view(s, ctx()).open).toEqual([{ id: "banner-1", until: Date.UTC(2026, 11, 8) }]);
     expect(PULLS.view(s, ctx(Date.UTC(2026, 11, 8))).open).toEqual([]);
-    expect(PULLS.command({ id: "c-1", ...pull("banner-9") })).toBeNull();
+    // A banner these rules do not know (one retired, or never) is closed.
+    expect(refused(s, pull("banner-9"))).toBe("closed");
     expect(PULLS.command({ ...pull("grove"), n: 5 })).toBeNull();
   });
 
@@ -286,8 +288,11 @@ describe("keeping it", () => {
     const held = { ...s, have: { ...s.have, "ware:jar": 2 }, history: [past, ...s.history.slice(1)] };
     expect(PULLS.decode(PULLS.encode(held))).toEqual({ ...s, history: s.history.slice(1) });
     expect(PULLS.decode(PULLS.encode({ ...s, have: { "figure:worm": 0 } }))).toBeNull();
-    expect(PULLS.decode(PULLS.encode({ ...s, have: { "figure:nobody": 1 } }))).toBeNull();
-    expect(PULLS.decode(PULLS.encode({ ...s, counters: { ...s.counters, banner: counters(80) } }))).toBeNull();
+    // Under other content or numbers it still reads (`stored.test.ts`).
+    expect(PULLS.decode(PULLS.encode({ ...s, have: { "figure:nobody": 1 } }))?.have).toEqual({ "figure:nobody": 1 });
+    expect(
+      PULLS.decode(PULLS.encode({ ...s, counters: { ...s.counters, banner: counters(80) } }))?.counters.banner,
+    ).toEqual(counters(79));
     const { rng, ...shown } = s;
     expect(rng).toBeNumber();
     expect(PULLS.view(s, ctx())).toEqual({ ...shown, open: [{ id: "banner-1", until: Date.UTC(2026, 11, 8) }] });

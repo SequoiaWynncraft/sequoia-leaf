@@ -1,15 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
-import { BOSS_IDS, FIGURE_IDS, FIGURES } from "./content/figures.ts";
+import { BOSS_IDS, type BossId, FIGURE_IDS, FIGURES } from "./content/figures.ts";
 import { FINISHED_IDS } from "./content/items.ts";
 import { PAYOUT } from "./content/keepsakes.ts";
-import { TRAILS } from "./content/rooms.ts";
+import { ROOM_COUNT, TRAILS } from "./content/rooms.ts";
 import { TRAIT_IDS } from "./content/traits.ts";
 import {
   ALMANAC_VERSION,
   loadAlmanac,
   newAlmanac,
   payout,
+  readAlmanac,
   recordRun,
   saveAlmanac,
   trailCleared,
@@ -202,14 +203,25 @@ describe("keeping the almanac", () => {
     expect(loadAlmanac(change((a) => (a.fielded = ["worm", "worm"])))).toBeNull();
     expect(loadAlmanac(change((a) => (a.forged = ["thorn"])))).toBeNull();
     expect(loadAlmanac(change((a) => (a.bosses = [["gnat"], [], []])))).toBeNull();
-    expect(loadAlmanac(change((a) => (a.bosses = [[]])))).toBeNull();
-    expect(loadAlmanac(change((a) => (a.best = [16, 0, 0])))).toBeNull();
-    expect(loadAlmanac(change((a) => (a.best = [3, 0])))).toBeNull();
+    expect(loadAlmanac(change((a) => (a.best = [3, "far", 0])))).toBeNull();
     expect(loadAlmanac(change((a) => (a.runs = -1)))).toBeNull();
     // An almanac kept while some figures were locked still loads, whatever it says it opened.
     const kept = loadAlmanac(change((a) => (a.opened = ["kettle", "crab40"])));
     expect(kept).not.toBeNull();
     expect(kept && "opened" in kept).toBe(false);
     expect(loadAlmanac(change((a) => delete a.topped))).toBeNull();
+  });
+  test("one kept with another number of trails, or rooms, has one for each trail now and no room past the last", () => {
+    const almanac = recordRun(newAlmanac(), WON).almanac;
+    const fewer = readAlmanac({ ...almanac, bosses: [["bigcrab"]], best: [3] });
+    expect([fewer?.bosses, fewer?.best]).toEqual([
+      TRAILS.map((_, i): BossId[] => (i === 0 ? ["bigcrab"] : [])),
+      TRAILS.map((_, i) => (i === 0 ? 3 : 0)),
+    ]);
+    const more = readAlmanac({ ...almanac, bosses: [[], [], [], []], best: [ROOM_COUNT + 1, 0, 0, 9] });
+    expect([more?.bosses, more?.best]).toEqual([
+      TRAILS.map(() => []),
+      TRAILS.map((_, i) => (i === 0 ? ROOM_COUNT : 0)),
+    ]);
   });
 });

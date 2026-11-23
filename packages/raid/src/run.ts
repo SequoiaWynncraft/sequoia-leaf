@@ -324,7 +324,8 @@ export function opposition(seed: number, roomIndex: number, trailIndex: number):
 /** Who the stall may offer: every figure, to everyone, from the first run. Nothing won or bought anywhere changes it. */
 export const STALL_POOL: readonly FigureId[] = FIGURE_IDS;
 
-const stallSize = (run: Run): number =>
+/** How many offers the stall has: more with A Wider Stall. */
+export const stallSize = (run: Pick<Run, "boons">): number =>
   run.boons.includes("widestall") ? boonNumber("widestall", "offers") : ECONOMY.stall;
 function drawOffer(run: Run): FigureId | null {
   const odds = STALL_ODDS[Math.min(run.level, STALL_ODDS.length) - 1] ?? STALL_ODDS[0];
@@ -673,7 +674,8 @@ export function hold(run: Run, on: boolean = !run.held): Done {
   run.held = on;
   return yes([{ t: "held", on }]);
 }
-function gainXp(run: Run, amount: number, notes: Note[]): void {
+/** Adds experience, and the levels it makes. */
+export function gainXp(run: Run, amount: number, notes: Note[]): void {
   if (run.level >= MAX_LEVEL) return;
   run.xp += amount;
   for (;;) {

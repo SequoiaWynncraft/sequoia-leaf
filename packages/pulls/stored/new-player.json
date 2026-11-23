@@ -1,0 +1,25 @@
+{
+  "game": "pulls",
+  "v": 1,
+  "have": {},
+  "counters": {
+    "grove": {
+      "top": 0,
+      "mid": 0,
+      "owed": false
+    },
+    "banner": {
+      "top": 0,
+      "mid": 0,
+      "owed": false
+    }
+  },
+  "seeds": 0,
+  "free": {
+    "waiting": 1,
+    "next": 1795694400000
+  },
+  "history": [],
+  "pulls": 0,
+  "rng": 1526937530
+}

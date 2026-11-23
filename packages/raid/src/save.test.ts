@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { planRoom, SENSIBLE } from "./bot.ts";
 import { FIGURE_IDS, FIGURES } from "./content/figures.ts";
 import { FINISHED_IDS, isEmblemId } from "./content/items.ts";
+import { ECONOMY } from "./content/rooms.ts";
 import { TRAIT_IDS } from "./content/traits.ts";
 import { beginFight, buy, choose, giveItem, pieces, type Run, rustle, spotOf, startRun, takeTakings } from "./run.ts";
 import { checkRun, loadRun, SAVE_VERSION, saveRun } from "./save.ts";
@@ -35,6 +36,12 @@ function tampered(run: Run, change: (raw: Record<string, unknown>, whole: Record
   change(whole.run, whole);
   return JSON.stringify(whole);
 }
+/** Loads text that must load. */
+const mustLoad = (text: string): Run => {
+  const read = loadRun(text);
+  if (!read.ok) throw new Error(read.why);
+  return read.run;
+};
 /** Loads text that must be refused, and gives back the reason. */
 const refused = (text: string): string => {
   const loaded = loadRun(text);
@@ -64,7 +71,9 @@ describe("saving a run", () => {
     expect(reload(run).last).toEqual(run.last);
     const old = loadRun(tampered(run, (raw) => delete raw.last));
     expect(old.ok && old.run.last).toBeNull();
-    expect(refused(tampered(run, (raw) => (raw.last = { seed: 1, sides: [] })))).toContain("the last fight");
+    // A last fight that no longer reads is only looked back on: the run loads without it.
+    const unread = loadRun(tampered(run, (raw) => (raw.last = { seed: 1, sides: [] })));
+    expect(unread.ok && unread.run.last).toBeNull();
   });
   test("the streak comes back, and a run saved before streaks were kept loads with none", () => {
     const run = midRun(31, 4);
@@ -158,6 +167,77 @@ describe("saving a run", () => {
   });
 });
 
+describe("loading puts right what today's rules would not allow", () => {
+  const run = midRun(12, 4);
+  /** The run with a worm holding `items` on the bench's last place. */
+  const worm = (items: string[], fed = 0) =>
+    mustLoad(
+      tampered(run, (raw) => {
+        raw.boons = ["burrowcharm"];
+        listIn(raw.bench)[8] = { id: run.nextId, kind: "worm", stars: 1, items, fed };
+        raw.nextId = run.nextId + 1;
+      }),
+    );
+  test("what a figure holds that it may not hold now goes to the item bench, and nobody but Greg has eaten", () => {
+    const two = worm(["thorn", "plume"], 3);
+    expect([two.bench[8]?.items, two.bench[8]?.fed, two.items.slice(-1)]).toEqual([["thorn"], 0, ["plume"]]);
+    expect(worm(["hoard", "hoard", "hoard", "hoard"]).bench[8]?.items).toEqual(["hoard", "hoard", "hoard"]);
+    // A worm is a burrow kin already.
+    const kin = worm(["burrowcharm"]);
+    expect([kin.bench[8]?.items, kin.items.filter((item) => item === "burrowcharm")]).toEqual([[], ["burrowcharm"]]);
+  });
+  test("more on the board than may be fielded now stand there: setting out is refused until one is benched", () => {
+    const crowded = mustLoad(
+      tampered(run, (raw) => {
+        const board = listIn(raw.board);
+        for (let seat = 0; seat < 20; seat++) board[seat] = { id: seat + 1, kind: "worm", stars: 1, items: [], fed: 0 };
+        raw.nextId = 100;
+        raw.bench = listIn(raw.bench).map(() => null);
+      }),
+    );
+    expect(beginFight(crowded)).toMatchObject({ ok: false, code: "too_many_fielded" });
+  });
+  test("what the run drew and no longer reads is drawn again: the room is laid out afresh, and what the player has stands", () => {
+    const again = [
+      tampered(run, (raw) => (raw.stall = ["dragon", null, null, null, null])),
+      tampered(run, (raw) => (raw.foe = { who: "x" })),
+      tampered(run, (raw) => (raw.foe = { who: "x", title: "", figures: [], charms: [], boons: [], might: 100 })),
+      tampered(run, (raw) => (raw.choices = [{ kind: "boon", options: [], redraws: 0 }])),
+    ].map(mustLoad);
+    for (const laid of again) {
+      expect([laid.board, laid.bench, laid.items, laid.acorns, laid.level, laid.room]).toEqual([
+        run.board,
+        run.bench,
+        run.items,
+        run.acorns,
+        run.level,
+        run.room,
+      ]);
+      expect(laid.stall.every((offer) => offer === null || FIGURE_IDS.includes(offer))).toBe(true);
+      expect(laid.foe.figures.length).toBeGreaterThan(0);
+    }
+    expect(again[3]?.choices).toMatchObject([{ kind: "boon", redraws: 0 }]);
+    expect(again[3]?.choices[0]?.options).toHaveLength(3);
+  });
+  test("a run in a fight that no longer reads is put back to planning the room", () => {
+    const fighting = midRun(12, 4);
+    expect(beginFight(fighting).ok).toBe(true);
+    const back = mustLoad(
+      tampered(fighting, (raw) => {
+        raw.fight = { setup: { seed: 1, sides: [] } };
+      }),
+    );
+    expect([back.phase, back.fight, back.room]).toEqual(["plan", null, fighting.room]);
+  });
+  test("a stall or a bench of another size is today's size, and starters that cost more are offered as they were", () => {
+    expect(mustLoad(tampered(run, (raw) => (raw.stall = [null]))).stall).toHaveLength(ECONOMY.stall);
+    expect(mustLoad(tampered(run, (raw) => listIn(raw.bench).push(null))).bench).toHaveLength(ECONOMY.bench);
+    const fresh = startRun(4);
+    const greg = mustLoad(tampered(fresh, (raw) => (raw.choices = [{ kind: "starter", options: ["greg"] }])));
+    expect(greg.choices).toEqual([{ kind: "starter", options: ["greg"] }]);
+  });
+});
+
 describe("loading refuses nonsense", () => {
   const run = midRun(12, 4);
   test("text that is not a save at all", () => {
@@ -174,15 +254,13 @@ describe("loading refuses nonsense", () => {
       ["acorns", -1],
       ["acorns", 1.5],
       ["acorns", "lots"],
-      ["resolve", 21],
       ["resolve", -3],
       ["level", 0],
-      ["level", 9],
-      ["room", 15],
-      ["trail", 3],
+      ["room", -1],
+      ["trail", 0.5],
       ["rng", -1],
       ["seed", 2 ** 32],
-      ["xp", 9999],
+      ["xp", -1],
       ["phase", "napping"],
       ["held", "yes"],
     ];
@@ -192,7 +270,6 @@ describe("loading refuses nonsense", () => {
     }
   });
   test("figures, items and boons that do not exist", () => {
-    expect(refused(tampered(run, (raw) => (raw.stall = ["dragon", null, null, null, null])))).toContain("the stall");
     expect(refused(tampered(run, (raw) => (raw.boons = ["godmode"])))).toContain("the boons");
     expect(refused(tampered(run, (raw) => (raw.items = ["thorn", "excalibur"])))).toContain("the item bench");
     const withPiece = (piece: unknown): string =>
@@ -205,27 +282,11 @@ describe("loading refuses nonsense", () => {
     expect(withPiece({ id: 1_000_000, kind: "worm", stars: 1, items: [], fed: 0 })).toContain("number");
     expect(withPiece({ id: 2, kind: "bigcrab", stars: 1, items: [], fed: 0 })).toContain("kind");
     expect(withPiece({ id: 2, kind: "worm", stars: 4, items: [], fed: 0 })).toContain("stars");
-    expect(withPiece({ id: 2, kind: "worm", stars: 1, items: ["thorn", "plume"], fed: 0 })).toContain("holds");
-    expect(withPiece({ id: 2, kind: "worm", stars: 1, items: ["hoard", "hoard", "hoard", "hoard"], fed: 0 })).toContain(
-      "holds",
-    );
-    expect(withPiece({ id: 2, kind: "worm", stars: 1, items: [], fed: 3 })).toContain("Greg");
+    expect(withPiece({ id: 2, kind: "worm", stars: 1, items: ["excalibur"], fed: 0 })).toContain("holds");
     expect(withPiece("a worm")).toContain("a figure");
   });
-  test("a board of the wrong size, too many on it, or two figures with one number", () => {
+  test("a board of the wrong size, or two figures with one number", () => {
     expect(refused(tampered(run, (raw) => (raw.board = [])))).toContain("the board");
-    expect(refused(tampered(run, (raw) => listIn(raw.bench).push(null)))).toContain("the bench");
-    expect(
-      refused(
-        tampered(run, (raw) => {
-          const board = listIn(raw.board);
-          for (let seat = 0; seat < 20; seat++)
-            board[seat] = { id: seat + 1, kind: "worm", stars: 1, items: [], fed: 0 };
-          raw.nextId = 100;
-          raw.bench = listIn(raw.bench).map(() => null);
-        }),
-      ),
-    ).toContain("how many are on the board");
     expect(
       refused(
         tampered(run, (raw) => {
@@ -236,22 +297,9 @@ describe("loading refuses nonsense", () => {
       ),
     ).toContain("numbers");
   });
-  test("a stall of the wrong size, a foe that is no party, a choice that is no choice", () => {
-    expect(refused(tampered(run, (raw) => (raw.stall = [null])))).toContain("the stall");
-    expect(refused(tampered(run, (raw) => (raw.foe = { who: "x" })))).toContain("who is waiting");
-    expect(
-      refused(
-        tampered(run, (raw) => (raw.foe = { who: "x", title: "", figures: [], charms: [], boons: [], might: 100 })),
-      ),
-    ).toContain("who is waiting");
+  test("a choice that is no choice", () => {
     expect(refused(tampered(run, (raw) => (raw.choices = [{ kind: "wish", options: ["worm"] }])))).toContain(
       "a choice",
-    );
-    expect(refused(tampered(run, (raw) => (raw.choices = [{ kind: "starter", options: ["greg"] }])))).toContain(
-      "the starters",
-    );
-    expect(refused(tampered(run, (raw) => (raw.choices = [{ kind: "boon", options: [], redraws: 0 }])))).toContain(
-      "the boons on offer",
     );
   });
   test("an ending that contradicts itself", () => {
@@ -260,7 +308,7 @@ describe("loading refuses nonsense", () => {
     expect(refused(tampered(run, (raw) => delete raw.seen))).toContain("the almanac notes");
     expect(refused(tampered(run, (raw) => delete raw.record))).toContain("the record");
   });
-  test("an emblem with no charm to give it, two of one emblem, or one held by a figure of its kin", () => {
+  test("an emblem with no charm to give it, or two of one emblem", () => {
     expect(refused(tampered(run, (raw) => listIn(raw.items).push("crabcharm")))).toContain("the emblems");
     expect(
       refused(
@@ -270,14 +318,6 @@ describe("loading refuses nonsense", () => {
         }),
       ),
     ).toContain("the emblems");
-    expect(
-      refused(
-        tampered(run, (raw) => {
-          raw.boons = ["burrowcharm"];
-          listIn(raw.bench)[8] = { id: 2, kind: "worm", stars: 1, items: ["burrowcharm"], fed: 0 };
-        }),
-      ),
-    ).toContain("what a figure holds");
   });
   test("extra fields are dropped rather than kept", () => {
     const loaded = loadRun(tampered(run, (raw) => (raw.cheat = { acorns: 9999 })));
