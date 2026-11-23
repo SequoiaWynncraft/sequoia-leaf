@@ -1,7 +1,7 @@
 /**
  * Run by `budgets.test.ts`, once for each yard, in a Bun of its own with JSC's collector logging
- * (`BUN_JSC_logGC=1`): reads a yard (`flat`, as `encode` keeps one, or `today`, as today's rules
- * keep one), warms the tick up, then works in windows. Each is between `BEGIN name` and `END name
+ * (`BUN_JSC_logGC=1`) and its compiler on the main thread (`BUN_JSC_useConcurrentJIT=0`): reads a yard as `encode` keeps one, on the generator's land (`generated`) or
+ * the guild's (`guild`), warms the tick up, then works in windows. Each is between `BEGIN name` and `END name
  * filled came`, and opened by a forced collection. Every collection the log shows in a window, young
  * or full, says how many bytes were allocated since the last (`ca=`, in KB); `filled` is how many
  * orders the window filled, `came` how many things the depot took in. Each window runs the tick
@@ -16,18 +16,24 @@
  */
 import * as F from "../src/index.ts";
 import { makeLand } from "./land.ts";
-import { fromText, landOf } from "./sides.ts";
 
-const [file, form] = process.argv.slice(2);
+const [file, on] = process.argv.slice(2);
 const text = await Bun.file(file ?? "").text();
-const y = form === "flat" ? F.decode(text, landOf(makeLand(7, 7, 7))) : fromText(text);
+const y = F.decode(text, on === "generated" ? makeLand(7, 7, 7) : F.LAND);
 if (!y) throw new Error("the yard does not read");
 /** Runs the yard on `n` ticks. */
 const ticks = (n: number): void => {
   for (let k = 0; k < n; k++) F.step(y);
 };
 const came = (): number => y.depot.reduce((a, b) => a + b, 0);
+// Warmed up, and then through a few collections: the compiler throws code away at a collection and
+// compiles it again, and what it compiles is counted as allocated, so a window that opens with a
+// collection measures that until it has settled. A tick that allocates allocates in every window.
 ticks(3000);
+for (let k = 0; k < 4; k++) {
+  Bun.gc(true);
+  ticks(1000);
+}
 let news = 0;
 let depot = 0;
 

@@ -1,11 +1,11 @@
 /**
- * Colours. A belt, tunnel mouth, splitter or joiner has a tint, 0 or one of six colours a player
- * gives to tell lines apart; it changes nothing about how the yard runs. A splitter or a joiner is
- * coloured by itself; a belt or a tunnel mouth with its whole line: every belt and tunnel joined
+ * Colours. A belt, tunnel mouth, splitter, joiner or sorter has a tint, 0 or one of six colours a
+ * player gives to tell lines apart; it changes nothing about how the yard runs. A splitter, joiner or
+ * sorter is coloured by itself; a belt or a tunnel mouth with its whole line: every belt and tunnel joined
  * end to end with it, as things are handed on, as far as the next thing that is neither.
  */
 import { toward } from "./land.ts";
-import { BELT, JOINER, NONE, SPLITTER, TUNNEL } from "./tables.ts";
+import { BELT, JOINER, NONE, SORTER, SPLITTER, TUNNEL } from "./tables.ts";
 import { behind, nextOf, takes } from "./wire.ts";
 import type { Yard } from "./yard.ts";
 
@@ -38,7 +38,7 @@ function after(y: Yard, i: number): number {
 /** The tiles coloured together with a tile: a splitter or a joiner by itself, a belt or a tunnel mouth with its line. */
 export function lineOf(y: Yard, i: number): number[] {
   const k = i < 0 ? NONE : y.kind[i];
-  if (k === SPLITTER || k === JOINER) return [i];
+  if (k === SPLITTER || k === JOINER || k === SORTER) return [i];
   if (!inLine(y, i)) return [];
   const line = [i];
   const on = new Set(line);

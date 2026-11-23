@@ -25,22 +25,6 @@ const RIGHT: Dir[] = [1, 2, 3, 0];
 const BACK: Dir[] = [2, 3, 0, 1];
 const DIRS: Dir[] = [0, 1, 2, 3];
 
-export const PLANS_BOUGHT = [
-  "rakes",
-  "boiler",
-  "waxed",
-  "tunnel",
-  "flywheel",
-  "workshop",
-  "tallpylons",
-  "bigcrates",
-  "tooling",
-  "barrows",
-  "rollers",
-  "jigs",
-  "fourth",
-] as const;
-
 const BENCHES: [Raw, Raw][] = [
   ["deadfall", "ore"],
   ["ore", "stone"],
@@ -79,11 +63,11 @@ export class Gen {
   why = "";
 
   constructor(land: F.Land, seed: number) {
-    this.y = F.create({ land, story: 20, seed: 1758855484 });
+    // Every goal of the slice done: every kind, a crate of 128, taller pylons, the bigger flywheel.
+    this.y = F.create({ land, tier: 4, seed: 1758855484 });
     this.W = land.w;
     this.H = land.h;
     this.r = rng(seed);
-    for (const p of PLANS_BOUGHT) if (!this.cmd({ do: "buyPlan", plan: p })) throw new Error(`plan ${p}`);
     const seen = new Uint8Array(land.w * land.h);
     for (let i = 0; i < land.w * land.h; i++) {
       const kind = this.deposit(i);

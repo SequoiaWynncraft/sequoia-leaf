@@ -15,6 +15,8 @@ import {
   right,
   setDown,
   type Spent,
+  stops,
+  stopsRefusal,
   turn,
   turnable,
   worthAt,
@@ -23,17 +25,22 @@ import { BLUEPRINT } from "./content/machines.ts";
 import { join } from "./lines.ts";
 import {
   BELT,
-  COST,
   CRATE,
   DEPOT,
+  gradeOf,
+  isGraded,
   isItem,
   isKind,
   type Item,
   JOINER,
   type Kind,
   NONE,
+  price,
   RECIPE,
+  SORTER,
   SPLITTER,
+  STOP,
+  TOP,
   TUNNEL,
 } from "./tables.ts";
 import { changed, holds, PIECE_BYTES, type Yard } from "./yard.ts";
@@ -41,12 +48,14 @@ import { changed, holds, PIECE_BYTES, type Yard } from "./yard.ts";
 /** How many colours there are to give. */
 export const TINTS = 6;
 
-/** What a piece keeps when it is copied or kept in a blueprint, besides what it is, where and which way. */
+/** What a piece keeps when it is copied, moved or kept in a blueprint, besides what it is, where and which way: only what is not as new. */
 export interface Kept {
   readonly recipe?: Item;
   readonly open?: false;
   readonly tint?: number;
   readonly shut?: number;
+  /** Its grade, when it is above 1. */
+  readonly grade?: number;
 }
 
 /** A piece as it is asked for: what, on which tile, which way, and what it keeps. */
@@ -59,16 +68,19 @@ export interface Piece extends Kept {
   readonly span: number;
 }
 
-const tinted = (k: number): boolean => k === BELT || k === TUNNEL || k === SPLITTER || k === JOINER;
+const tinted = (k: number): boolean => k === BELT || k === TUNNEL || k === SPLITTER || k === JOINER || k === SORTER;
 const upTo = (v: unknown, most: number): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= most;
 
 /** What a record has of what a piece keeps, if that kind of piece may keep it. */
 export const keptOf = (v: { readonly [K in keyof Kept]?: unknown }, k: Kind): Kept => ({
-  ...(typeof v.recipe === "number" && isItem(v.recipe) && RECIPE[v.recipe]?.by === k ? { recipe: v.recipe } : {}),
+  ...(typeof v.recipe === "number" && isItem(v.recipe) && (k === SORTER || RECIPE[v.recipe]?.by === k)
+    ? { recipe: v.recipe }
+    : {}),
   ...(v.open === false && k === CRATE ? { open: v.open } : {}),
   ...(upTo(v.tint, TINTS) && tinted(k) ? { tint: v.tint } : {}),
   ...(upTo(v.shut, 7) && k === SPLITTER ? { shut: v.shut } : {}),
+  ...(upTo(v.grade, TOP) && v.grade > 1 && isGraded(k) ? { grade: v.grade } : {}),
 });
 
 /** What the piece standing on a tile keeps. */
@@ -77,13 +89,14 @@ export function keptAt(y: Yard, i: number): Kept {
   if (!isKind(k)) return {};
   const r = y.row[i] ?? -1;
   const h = y.holders;
-  const recipe = holds(k) && r >= 0 ? (h.recipe[r] ?? NONE) : NONE;
+  const recipe = y.set[i] ?? NONE;
   return keptOf(
     {
       ...(recipe === NONE ? {} : { recipe }),
       ...(k === CRATE && r >= 0 && h.open[r] === 0 ? { open: false } : {}),
       tint: y.tint[i],
       shut: y.shut[i],
+      grade: y.grade[i],
     },
     k,
   );
@@ -161,16 +174,23 @@ export function within(y: Yard, x0: number, y0: number, x1: number, y1: number):
   return out;
 }
 
-/** What a set of pieces costs to stand, each priced in turn, the pieces to hand first. `bare` prices them as on empty ground. */
-export function priceOf(y: Yard, pieces: readonly Pick<Piece, "kind" | "x" | "y">[], bare = false): number {
+/** What a set of pieces costs to stand, each priced in turn as `priceAt` prices one, the pieces to hand first. */
+export function priceOf(y: Yard, pieces: readonly Pick<Piece, "kind" | "x" | "y" | "grade">[]): number {
   const spare = Uint8Array.from(y.spare);
   let cost = 0;
   for (const p of pieces) {
+    const g = gradeOf(p.kind, p.grade);
     const i = at(y, p.x, p.y);
-    const there = bare || i < 0 ? NONE : (y.kind[i] ?? NONE);
-    if (there === p.kind) continue;
-    if ((spare[p.kind] ?? 0) > 0) spare[p.kind] = (spare[p.kind] ?? 0) - 1;
-    else cost += COST[p.kind] ?? 0;
+    const there = i < 0 ? NONE : (y.kind[i] ?? NONE);
+    if (there === p.kind) {
+      cost += price(p.kind, g) - price(p.kind, y.grade[i] ?? 0);
+      continue;
+    }
+    cost += price(p.kind, g);
+    if ((spare[p.kind] ?? 0) > 0) {
+      spare[p.kind] = (spare[p.kind] ?? 0) - 1;
+      cost -= price(p.kind, gradeOf(p.kind));
+    }
     if (there === NONE) continue;
     cost -= worthAt(y, i);
     if (y.free[i] === 1) spare[there] = (spare[there] ?? 0) + 1;
@@ -190,12 +210,16 @@ export function refusals(
   const lifted = (moving ?? []).map((i) => y.kind[i] ?? NONE);
   for (const i of moving ?? []) y.kind[i] = NONE;
   const taken = new Set<number>();
+  // Cart stops are counted as they are set down, with those already standing.
+  let stopping = stops(y);
   const out = pieces.map((p) => {
     const tiles = tilesOf(y, [p]);
     const shared = tiles.some((i) => taken.has(i));
     for (const i of tiles) taken.add(i);
     if (moving && tiles.some((i) => i >= 0 && y.kind[i] !== NONE)) return "Something is here already";
-    const why = refusal(y, p.kind, p.x, p.y, Infinity, p.dir, p.kind === TUNNEL ? p.span : undefined);
+    const why = refusal(y, p.kind, p.x, p.y, Infinity, p.dir, p);
+    if (why === null && p.kind === STOP && y.kind[tiles[0] ?? -1] !== STOP && ++stopping > y.open.stops)
+      return stopsRefusal(y);
     return why ?? (shared ? "Two pieces cannot stand on one tile" : null);
   });
   (moving ?? []).forEach((i, k) => (y.kind[i] = lifted[k] ?? NONE));
@@ -233,7 +257,7 @@ export function stand(
   let cost = 0;
   const laid: number[] = [];
   for (const p of pieces) {
-    const did = setDown(y, p.kind, p.x, p.y, p.dir, Infinity, p.kind === TUNNEL ? p.span : undefined);
+    const did = setDown(y, p.kind, p.x, p.y, p.dir, Infinity, p);
     if (!did.ok) continue;
     cost += did.cost;
     const kept = keptOf(p, p.kind);
@@ -242,7 +266,7 @@ export function stand(
       y.tint[i] = kept.tint ?? 0;
       if (kept.shut !== undefined) y.shut[i] = kept.shut;
       const r = y.row[i] ?? -1;
-      if (kept.recipe !== undefined && r >= 0) y.holders.recipe[r] = kept.recipe;
+      if (kept.recipe !== undefined) y.set[i] = kept.recipe;
       if (kept.open === false && r >= 0) y.holders.open[r] = 0;
       if (joins && (p.kind === BELT || p.kind === TUNNEL)) laid.push(i);
     }
@@ -252,7 +276,21 @@ export function stand(
 }
 
 /** The per-tile parts of a piece, lifted off its tile to be set down on another. */
-const PARTS = ["kind", "dir", "item", "prog", "via", "tint", "turn", "shut", "free", "span", "row"] as const;
+const PARTS = [
+  "kind",
+  "dir",
+  "item",
+  "prog",
+  "via",
+  "tint",
+  "turn",
+  "shut",
+  "set",
+  "grade",
+  "free",
+  "span",
+  "row",
+] as const;
 
 /**
  * Moves the pieces on some tiles as one: turned `turns` quarter turns right, the corner of their box
@@ -267,7 +305,8 @@ export function move(y: Yard, tiles: readonly number[], turns: number, x: number
   if (why !== undefined) return why;
   const lifted = left.map((i) => PARTS.map((part) => y[part][i] ?? 0));
   for (const i of left) {
-    for (const part of PARTS) y[part][i] = part === "kind" || part === "item" ? NONE : part === "row" ? -1 : 0;
+    for (const part of PARTS)
+      y[part][i] = part === "kind" || part === "item" || part === "set" ? NONE : part === "row" ? -1 : 0;
   }
   const ways = to.flatMap((p): Dir[] => (reach(p) > 0 ? [p.dir, p.dir] : [p.dir]));
   tilesOf(y, to).forEach((i, k) => {
@@ -298,11 +337,11 @@ export function clear(y: Yard, tiles: readonly number[]): Refund {
 
 // ---------- blueprints ----------
 
-/** Why a set of pieces cannot be kept as a blueprint, or nothing if it can. */
-export function blueprintRefusal(pieces: readonly Piece[]): string | null {
+/** Why a set of pieces cannot be kept as one of a yard's blueprints, or nothing if it can. */
+export function blueprintRefusal(y: Yard, pieces: readonly Piece[]): string | null {
   if (pieces.length === 0) return "There is nothing here to save";
-  if (pieces.length > BLUEPRINT.pieces)
-    return `A blueprint holds at most ${BLUEPRINT.pieces} pieces. This is ${pieces.length}`;
+  if (pieces.length > y.open.pieces)
+    return `A blueprint holds at most ${y.open.pieces} pieces. This is ${pieces.length}`;
   const box = boxOf(pieces);
   if (box.w > BLUEPRINT.w || box.h > BLUEPRINT.h)
     return `A blueprint is at most ${BLUEPRINT.w} tiles by ${BLUEPRINT.h}. This is ${box.w} by ${box.h}`;
@@ -314,7 +353,18 @@ export function packPieces(pieces: readonly Piece[]): Uint8Array {
   const out = new Uint8Array(pieces.length * PIECE_BYTES);
   pieces.forEach((p, n) =>
     out.set(
-      [p.kind, p.x, p.y, p.dir, p.span, p.recipe ?? NONE, p.open === false ? 0 : 1, p.tint ?? 0, p.shut ?? 0],
+      [
+        p.kind,
+        p.x,
+        p.y,
+        p.dir,
+        p.span,
+        p.recipe ?? NONE,
+        p.open === false ? 0 : 1,
+        p.tint ?? 0,
+        p.shut ?? 0,
+        p.grade ?? 1,
+      ],
       n * PIECE_BYTES,
     ),
   );
@@ -325,10 +375,8 @@ export function packPieces(pieces: readonly Piece[]): Uint8Array {
 export function piecesOf(bytes: Uint8Array): Piece[] {
   const out: Piece[] = [];
   for (let from = 0; from + PIECE_BYTES <= bytes.length; from += PIECE_BYTES) {
-    const [k = NONE, x = 0, z = 0, d = 0, span = 0, recipe = NONE, open = 1, tint = 0, shut = 0] = bytes.subarray(
-      from,
-      from + PIECE_BYTES,
-    );
+    const [k = NONE, x = 0, z = 0, d = 0, span = 0, recipe = NONE, open = 1, tint = 0, shut = 0, grade = 1] =
+      bytes.subarray(from, from + PIECE_BYTES);
     if (!isKind(k) || !isDir(d)) continue;
     out.push({
       kind: k,
@@ -336,7 +384,7 @@ export function piecesOf(bytes: Uint8Array): Piece[] {
       y: z,
       dir: d,
       span,
-      ...keptOf({ recipe, open: open === 0 ? false : undefined, tint, shut }, k),
+      ...keptOf({ recipe, open: open === 0 ? false : undefined, tint, shut, grade }, k),
     });
   }
   return out;
@@ -345,7 +393,7 @@ export function piecesOf(bytes: Uint8Array): Piece[] {
 /** Keeps the pieces on some tiles as the blueprint in a place. Says why it cannot be done, or nothing when it is. */
 export function saveBlueprint(y: Yard, slot: number, tiles: readonly number[]): string | null {
   const pieces = placed(piecesAt(y, tiles), 0, 0, 0);
-  const why = slot >= 0 && slot < y.blueprints.length ? blueprintRefusal(pieces) : "There is no such blueprint";
+  const why = slot >= 0 && slot < y.open.blueprints ? blueprintRefusal(y, pieces) : "There is no such blueprint";
   if (why === null) y.blueprints[slot] = packPieces(pieces);
   return why;
 }
@@ -355,4 +403,34 @@ export function deleteBlueprint(y: Yard, slot: number): boolean {
   if (!y.blueprints[slot]) return false;
   y.blueprints[slot] = null;
   return true;
+}
+
+// ---------- raising an area ----------
+
+/** The pieces on some tiles that can be raised: of a kind with a grade, below the highest the yard may build of it. */
+const raisable = (y: Yard, tiles: readonly number[]): Piece[] =>
+  piecesAt(y, tiles).filter((p) => isGraded(p.kind) && (p.grade ?? 1) < (y.open.kinds[p.kind] ?? 0));
+
+/** What raising every piece on some tiles to the highest grade the yard may build of its kind costs. */
+export const upgradePrice = (y: Yard, tiles: readonly number[]): number =>
+  raisable(y, tiles).reduce(
+    (sum, p) => sum + price(p.kind, y.open.kinds[p.kind] ?? 0) - price(p.kind, gradeOf(p.kind, p.grade)),
+    0,
+  );
+
+/** Why the pieces on some tiles cannot be raised with `coins` in the purse, or nothing if they can. */
+export function upgradeRefusal(y: Yard, tiles: readonly number[], coins: number): string | null {
+  if (raisable(y, tiles).length === 0) return "Nothing here can be raised";
+  const short = upgradePrice(y, tiles) - coins;
+  return short > 0 ? `Not enough Coins: ${short} short` : null;
+}
+
+/** Raises every piece on some tiles that can be raised to the highest grade the yard may build of its kind, all of them or none, and says what it cost. */
+export function upgrade(y: Yard, tiles: readonly number[], coins: number): Spent {
+  const why = upgradeRefusal(y, tiles, coins);
+  if (why !== null) return { ok: false, why };
+  const cost = upgradePrice(y, tiles);
+  for (const p of raisable(y, tiles))
+    setDown(y, p.kind, p.x, p.y, p.dir, Infinity, { grade: y.open.kinds[p.kind] ?? 1, span: p.span });
+  return { ok: true, cost };
 }
