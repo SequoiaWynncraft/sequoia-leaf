@@ -446,13 +446,9 @@ export function makeGroveUi(host: GroveHost) {
     panelOpen: (): boolean => tab !== null,
     /** The name of the pool on show, as the picture writes it. */
     poolName: (): string => onBanner()?.person.name ?? EVERGREEN,
-    /** The picture is `w` by `h` art pixels, `scale` screen pixels to each, upright or not. */
-    fit(w: number, h: number, scale: number, tall: boolean): void {
-      stage.style.width = `${w * scale}px`;
-      stage.style.height = `${h * scale}px`;
-      stage.style.left = `${Math.max(0, Math.floor((innerWidth - w * scale) / 2))}px`;
-      stage.style.top = `${Math.max(0, Math.floor((innerHeight - h * scale) / 2))}px`;
-      stage.style.setProperty("--g", `${scale}px`);
+    /** The frame is `w` by `h` art pixels, `scale` CSS pixels to each, upright or not, `left` and `top` CSS pixels in from the window's corner. */
+    fit(w: number, h: number, scale: number, tall: boolean, left: number, top: number): void {
+      stage.style.cssText = `left:${left}px;top:${top}px;width:${w * scale}px;height:${h * scale}px;--g:${scale}px;--fx:${left}px;--fy:${top}px`;
       stage.className = `grove-stage ${tall ? "tall" : "desk"}`;
     },
     /** A ceremony begins: the names for its end picture, and what its end offers again (`n` pulls; nothing after an exchange). */
