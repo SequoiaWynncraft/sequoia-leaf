@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { pressedTwice } from "@sequoia-leaf/kit/dom.ts";
-import { BANNERS, draw, headliner, PRIZES, type Rarity, RATES } from "@sequoia-leaf/pulls";
+import { BANNERS, draw, EARLIER, headliner, PRIZES, type Rarity, RATES } from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
 
 import {
@@ -33,20 +33,20 @@ const WITHOUT: BannerPerson[] = [{ ...banner, headliner: null }];
 
 test("what a reveal says of a prize: its name, what it is for, whether it is new, and the Seeds it gave", () => {
   expect(
-    revealOf({ t: "pull", prize: "thing:fountain", rarity: "Treant", have: 1, top: 34, fifty: "lost" }, WITH),
+    revealOf({ t: "pull", prize: "figure:greg", rarity: "Treant", have: 1, top: 34, fifty: "lost" }, WITH),
   ).toEqual({
-    name: "Moonwater fountain",
+    name: "Greg",
     rarity: "Treant",
-    is: "For your camp",
+    is: "A character for your camp",
     have: "New",
     owned: false,
     seeds: `+${RATES.seeds.top} Seeds`,
     fifty: "50/50 lost",
   });
-  const again = revealOf({ t: "pull", prize: "thing:pinecone", rarity: "Leafkin", have: 3 }, WITH);
+  const again = revealOf({ t: "pull", prize: "figure:crab7", rarity: "Leafkin", have: 3 }, WITH);
   expect([again.have, again.owned, again.seeds, again.fifty]).toEqual(["You have 3", true, "+1 Seed", null]);
-  const look = revealOf({ t: "exchange", prize: "look:gingham", rarity: "Dryad", have: 1 }, WITH);
-  expect([look.name, look.is, look.seeds]).toEqual(["Picnic gingham", "A look for the raid's table", null]);
+  const bought = revealOf({ t: "exchange", prize: "figure:heron", rarity: "Dryad", have: 1 }, WITH);
+  expect([bought.name, bought.is, bought.seeds]).toEqual(["Reed Heron", "A character for your camp", null]);
   const person = revealOf(
     { t: "pull", prize: headliner(banner.id), rarity: "Yggdrasil", have: 1, fifty: "owed" },
     WITH,
@@ -56,14 +56,19 @@ test("what a reveal says of a prize: its name, what it is for, whether it is new
     "A statue for your camp",
     "Owed from a lost 50/50",
   ]);
-  expect(seedsOf([{ t: "pull", prize: "thing:pinecone", rarity: "Leafkin", have: 1 }])).toBe("+1 Seed");
+  expect(seedsOf([{ t: "pull", prize: "figure:crab7", rarity: "Leafkin", have: 1 }])).toBe("+1 Seed");
 });
 
-test("every prize in the pools has a name and something it is for", () => {
-  for (const prize of RARITY_NAMES.flatMap((r) => PRIZES[r])) {
+test("every prize in the pools, and every prize of earlier pulls, has a name; a figure is a character for the camp", () => {
+  const earlier = Object.values(EARLIER).flat();
+  for (const prize of [...RARITY_NAMES.flatMap((r) => PRIZES[r]), ...earlier])
     expect(prizeName(prize, WITH)).not.toBe(prize.split(":")[1] ?? "");
-    expect(prizeIs(prize)).not.toBe("");
-  }
+  expect([prizeName("thing:plank-path", WITH), prizeName("look:gingham", WITH)]).toEqual([
+    "Plank path",
+    "Picnic gingham",
+  ]);
+  for (const prize of RARITY_NAMES.flatMap((r) => PRIZES[r]))
+    expect(prizeIs(prize)).toBe(prize.startsWith("figure:") ? "A character for your camp" : "A statue for your camp");
 });
 
 test("the pity line counts towards the pull that is certain, and a lost 50/50 names who is next", () => {
@@ -217,10 +222,17 @@ test("the next free pull is said until the most are waiting", () => {
   expect(nextFree({ waiting: RATES.free.most, next }, "UTC")).toBeNull();
 });
 
-test("Seeds buy a mid-tier prize the player does not have, and the history is newest first", () => {
-  const list = offers({ have: { "look:baize": 1 }, seeds: RATES.exchange.Dryad }, PRIZES);
-  expect(list).toHaveLength(PRIZES.Dryad.length + PRIZES.Druid.length);
-  expect(list.find((o) => o.prize === "look:baize")).toMatchObject({
+test("Seeds buy a mid-tier figure the player does not have, and the history is newest first, earlier prizes in it", () => {
+  // A mid-tier look of earlier pulls is held, and is not among what Seeds buy.
+  const list = offers({ have: { "figure:badger": 1, "look:baize": 1 }, seeds: RATES.exchange.Dryad }, PRIZES);
+  expect(list.map((o) => o.prize)).toEqual([
+    "figure:badger",
+    "figure:fogowl",
+    "figure:heron",
+    "figure:crab40",
+    "figure:apothecary",
+  ]);
+  expect(list.find((o) => o.prize === "figure:badger")).toMatchObject({
     owned: true,
     enough: true,
     price: RATES.exchange.Dryad,
@@ -236,11 +248,13 @@ test("Seeds buy a mid-tier prize the player does not have, and the history is ne
     [
       { prize: "thing:pinecone", pool: "grove", at, top: 3 },
       { prize: "thing:fountain", pool: banner.id, at: at + 60_000, top: 34 },
+      { prize: "figure:moth", pool: "grove", at: at + 120_000, top: 4 },
     ],
     WITH,
     "UTC",
   );
   expect(rows).toEqual([
+    { prize: "figure:moth", rarity: "Leafkin", pool: "Evergreen", when: "25 November, 12:02", top: null },
     {
       prize: "thing:fountain",
       rarity: "Treant",

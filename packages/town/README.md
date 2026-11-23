@@ -41,9 +41,9 @@ A new member's camp is the one every member starts with (`NEW_CAMP`), and the fi
 ## What happens by itself
 
 `advance` does two things at Leaf's clock. Each award the member holds (`Ctx.awards`) that brings
-a camp thing the camp has not had goes into the tray and is noted in `earned`: a trophy (the award is the thing's id), a pull's thing (`pull:thing:<id>`), and a
+a camp thing the camp has not had goes into the tray and is noted in `earned`: a trophy (the award is the thing's id), a figure of the raid won in a pull (`pull:figure:<id>`, which brings the thing `figure-<id>`), a
 banner's headliner (`pull:headliner:<banner>`), which brings that banner's statue
-(`statue-<banner>`). Each comes once, however many copies a pull gave. When `nextCall` has come, the caller still waiting leaves (what they
+(`statue-<banner>`), and a thing that earlier pulls gave (`pull:thing:<id>`). Each comes once, however many copies a pull gave. When `nextCall` has come, the caller still waiting leaves (what they
 brought is posted if the box has room), and the next sets out: one of four, bringing a present
 two times in five and a note seven times in ten; `nextCall` is drawn again, 46 to 76 seconds on.
 One caller at most each call, however long nobody was here.

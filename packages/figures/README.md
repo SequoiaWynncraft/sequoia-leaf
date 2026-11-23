@@ -8,7 +8,8 @@ this is only how they look.
 - `src/pal.ts`: the letters' colours (`PAL`), and the colours of the bases.
 - `src/sprites.ts`: those rows baked into pictures and drawn: `framesOf` (standing, breathing,
   casting, tipped over, hit, not yet opened, facing either way), `drawFigure`, `portrait`,
-  `drawBase`, `drawStars` and `starsPic`.
+  `drawBase`, `drawStars` and `starsPic`; and how one moves while it stands, by the clock alone
+  (`beatAt`, `hoverAt`).
 
 ```sh
 bun test         # every figure a member can own has its pictures, in colours that exist

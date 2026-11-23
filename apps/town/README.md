@@ -190,12 +190,16 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   new (`camp.fresh`, which Leaf keeps): the hammer carries how many, the camp's card in town says
   so, and the things are marked "New" in the list. Opening Storage is looking (`looked`): the
   marks stay until it is shut.
-- **Things.** Seventy-five of them (`things.ts`, in `packages/town`), in eight kinds, each drawn in the town's way and
+- **Things.** 104 of them (`things.ts`, in `packages/town`), in nine kinds, each drawn in the town's way and
   nearly all doing something when touched: a lantern goes out and lights, a wind chime rings, the
   music box plays its tune, Worm looks out of Worm's pot, and something in the barrel looks back.
   They come from the market for Coins, from the games as trophies that
   cannot be bought (a carved figure for each boss beaten in The Little Raid, a model of each
   capstone built in the Works), from pulls as prizes, and from the town's own as small presents.
+  A pull's prize is a **character**: one of The Little Raid's figures, drawn with the raid's own
+  pictures from `packages/figures` (`character` in `campart.ts`), on 3 squares of ground. Set out, it
+  breathes as it does on the raid's table, and the one that flies hovers (`stepLive` in
+  `camptouch.ts`); "Rotate" mirrors it, and touched it hops and says its line from the raid.
   A banner's headliner brings a statue of that member (`statues.ts`): Leaf says who
   (`GET /v1/game/banners`), the thing is called "Statue of NAME", and its picture is their own
   figure facing us, every colour turned to marble by its lightness, on the fox statue's plinth
@@ -262,7 +266,7 @@ on each way in while Leaf has named nobody, and the pulls again when a banner is
 - **The banner.** The first thing seen is the pool on show: a banner that is open and has a
   headliner (their figure from their own skin, their name, and when it ends), with the always-open
   pool, "Evergreen", on a tab beside it; with no such banner, Evergreen alone, with its three top
-  prizes standing in the clearing. Who a banner's headliner is comes from Leaf
+  figures standing in the clearing. Who a banner's headliner is comes from Leaf
   (`GET /v1/game/banners`), and nothing about them is in the page.
 - **Pulling.** "Pull 1" and "Pull 10" say their price in Leaf and ask to be pressed twice. While a
   free pull waits, one pull is "Free pull". With too little Leaf, with Leaf's spending off, or for
@@ -271,8 +275,9 @@ on each way in while Leaf has named nobody, and the pulls again when a banner is
 - **The ceremony** plays what Leaf answered. Night falls on the clearing, a drop of light lands on
   the path, a light for each pull rises among the trees and flares in its prize's colour, and the
   sky shows the best tier: green by day for filler, gold for mid, an aurora for top. Then each
-  prize is shown in its tier's light: its own picture (a headliner walks in as the town's people
-  walk), its name, its rarity in the rarity's colour, what it is for, whether it is new, the
+  prize is shown in its tier's light: its own picture (a figure of the raid as the camp draws it,
+  breathing once it is lit; a headliner walks in as the town's people walk), its name, its rarity
+  in the rarity's colour, what it is, whether it is new, the
   Seeds it gave, and for a banner's top prize how its 50/50 fell. Ten pulls end on all ten set out
   in the clearing, the rarest in front. Skip (or a tap, Space or the right arrow) goes on to the
   next prize; held, to the end. Every beat has its sound.
@@ -280,7 +285,8 @@ on each way in while Leaf has named nobody, and the pulls again when a banner is
   under it names who the next top prize is.
 - **The panel** has three tabs: every prize of the pool by rarity with its chance, the rules in
   numbers written from the rules' own table (`RATES`) and how many of each the member has; the
-  Seeds and each mid-tier prize they buy; and the last 200 pulls.
+  Seeds and each mid-tier prize they buy; and the last 200 pulls, among them the things and looks
+  that pulls gave before they gave figures.
 
 The Grove is in one state at a time (`groveState` in `pulls.ts`): arriving, at the banner, a
 command sent and not yet answered, a ceremony, a ceremony's end, or leaving. A pull or an exchange is

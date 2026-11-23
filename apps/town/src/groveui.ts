@@ -67,7 +67,7 @@ export interface GroveHost {
   /** On to the next beat of the ceremony, and straight to its end picture. */
   next(): void;
   toEnd(): void;
-  /** A prize's own picture, a pixel to each of its own. */
+  /** A prize's own picture, a pixel to each of its own: a figure of the raid, or the headliner. */
   picture(prize: string): HTMLCanvasElement;
 }
 
@@ -135,12 +135,6 @@ export function makeGroveUi(host: GroveHost) {
   /** The pulls are offered at a ceremony's end, and not on the banner behind it. */
   const atEnd = (): boolean => host.state() === "end";
   const nameOf = (prize: string): string => prizeName(prize, host.banners());
-  /** A prize's picture in a hollow `box` units square, at the largest of these sizes that fits it. */
-  function hollow(prize: string, box: number): HTMLElement {
-    const src = host.picture(prize);
-    const scale = [3, 2, 1, 0.5].find((k) => src.width * k <= box - 2 && src.height * k <= box - 2) ?? 0.25;
-    return slot(pic(src, scale), box);
-  }
   // ---------- the pulls ----------
 
   /** What the last ceremony was for, so that its end picture offers the same again. */
@@ -293,7 +287,7 @@ export function makeGroveUi(host: GroveHost) {
               "div",
               `k-slot k-info-tile${have > 0 ? " lit" : ""}`,
               {},
-              el("span", "k-info-tile-pic", {}, pic(host.picture(prize), host.picture(prize).width > 40 ? 0.5 : 1)),
+              el("span", "k-info-tile-pic", {}, pic(host.picture(prize))),
               el("span", "k-info-tile-name k-s", { text: nameOf(prize) }),
               have > 0 ? el("span", "k-info-tagged corner", { text: `x${count(have)}` }) : null,
             );
@@ -322,7 +316,7 @@ export function makeGroveUi(host: GroveHost) {
           "div",
           "k-card",
           {},
-          hollow(o.prize, 28),
+          slot(pic(host.picture(o.prize)), 32),
           el(
             "div",
             "k-grow k-col",
