@@ -13,12 +13,15 @@ import {
 } from "@sequoia-leaf/core";
 
 import { restart, start } from "./live.ts";
-import { backoff, onWake, pretend } from "./net.ts";
+import { backoff, onWake, outside, pretend } from "./net.ts";
 import { here } from "./presence.ts";
 import { forgetLedger } from "./purse.ts";
 import {
   askWhy,
   ClockSync,
+  type Conn,
+  type ConnEvent,
+  firstConn,
   firstTry,
   joinLive,
   LIVE_BACKOFF,
@@ -28,6 +31,7 @@ import {
   sendIn,
   silent,
   type Step,
+  stepConn,
   Track,
 } from "./realtime.ts";
 import { FakeSocket, HELLO, type Reply, type Standin, standin, TESTER } from "./standin.ts";
@@ -197,6 +201,118 @@ describe("trying again", () => {
     expect(silent(60_000, 120_000, 124_999)).toBe(false);
     expect(silent(60_000, 120_000, 125_000)).toBe(true);
     expect(silent(0, null, 60_000)).toBe(false);
+  });
+});
+
+/** A connection dropped, as its socket says. */
+const drop = (link: string, code: number, now = 5000): ConnEvent<string> => ({
+  do: "dropped",
+  link,
+  code,
+  now,
+  chance: 0,
+});
+
+describe("where the connection is", () => {
+  type C = Conn<string>;
+  const down = (over: Partial<Omit<Extract<C, { at: "down" }>, "at">> = {}): C => ({
+    at: "down",
+    shown: null,
+    tries: 0,
+    failed: 0,
+    restart: false,
+    lastTry: -Infinity,
+    retryAt: -Infinity,
+    ...over,
+  });
+  const on = (where: "connecting" | "open", over: Partial<Omit<Extract<C, { link: string }>, "at">> = {}): C => ({
+    at: where,
+    shown: null,
+    link: "a",
+    since: 1000,
+    tries: 0,
+    failed: 0,
+    restart: false,
+    ...over,
+  });
+
+  test.each<[string, C, ConnEvent<string>, C]>([
+    ["a try begins from down", firstConn(), { do: "try", link: "a", now: 1000 }, on("connecting")],
+    ["a try begins only from down", on("connecting"), { do: "try", link: "b", now: 1000 }, on("connecting")],
+    [
+      "the try opens: nothing has failed since",
+      on("connecting", { failed: 2 }),
+      { do: "opened", link: "a" },
+      on("open"),
+    ],
+    ["another connection opening is nothing", on("connecting"), { do: "opened", link: "b" }, on("connecting")],
+    [
+      "the welcome shows this connection, and its tries start again",
+      on("open", { tries: 4, restart: true }),
+      { do: "welcomed", link: "a" },
+      on("open", { shown: "a" }),
+    ],
+    [
+      "a welcomed connection dropped waits the first wait",
+      on("open", { shown: "a", since: 900 }),
+      drop("a", 1006),
+      down({ shown: "a", tries: 1, lastTry: 900, retryAt: 5250 }),
+    ],
+    [
+      "dropped as Leaf restarts, the first wait is the second, and the welcome will say so",
+      on("open", { shown: "a" }),
+      drop("a", CLOSE.restart),
+      down({ shown: "a", tries: 2, restart: true, lastTry: 1000, retryAt: 5500 }),
+    ],
+    [
+      "a try that did not open counts as failed, and waits longer",
+      on("connecting", { shown: "z", tries: 3, failed: 1, restart: true }),
+      drop("a", 1006),
+      down({ shown: "z", tries: 4, failed: 2, restart: true, lastTry: 1000, retryAt: 7000 }),
+    ],
+    [
+      "opened elsewhere: let go",
+      on("open", { shown: "a" }),
+      drop("a", CLOSE.replaced),
+      { at: "gone", why: "replaced" },
+    ],
+    ["signed out: let go", on("connecting"), drop("a", CLOSE.signedOut), { at: "gone", why: "signedout" }],
+    ["another connection dropping is nothing", on("open"), drop("b", 1006), on("open")],
+    [
+      "back while a try has been opening over a second: tried again at once",
+      on("connecting", { since: 1000 }),
+      { do: "wake", now: 2000 },
+      down({ failed: 1, lastTry: 1000, retryAt: 2000 }),
+    ],
+    ["back while a try has just begun: nothing", on("connecting"), { do: "wake", now: 1500 }, on("connecting")],
+    [
+      "back while down: the wait is cut to a second after the last try",
+      down({ lastTry: 1000, retryAt: 9000 }),
+      { do: "wake", now: 1200 },
+      down({ lastTry: 1000, retryAt: 2000 }),
+    ],
+    [
+      "back while down with a try due sooner: left as it is",
+      down({ lastTry: 1000, retryAt: 1500 }),
+      { do: "wake", now: 1200 },
+      down({ lastTry: 1000, retryAt: 1500 }),
+    ],
+    [
+      "Leaf says signed out while trying: let go",
+      down(),
+      { do: "letGo", why: "signedout" },
+      { at: "gone", why: "signedout" },
+    ],
+    ["Leaf says signed out while open: kept", on("open"), { do: "letGo", why: "signedout" }, on("open")],
+    ["the page closes it", on("open", { shown: "a" }), { do: "close" }, { at: "gone", why: "closed" }],
+    [
+      "nothing moves a connection let go of",
+      { at: "gone", why: "replaced" },
+      { do: "try", link: "a", now: 0 },
+      { at: "gone", why: "replaced" },
+    ],
+  ])("%s", (_name, from, event, to) => {
+    expect(stepConn(from, event)).toEqual(to);
   });
 });
 
@@ -801,6 +917,33 @@ describe("coming back after a drop", () => {
     const had = made.length;
     pass(60_000);
     expect(made.length).toBe(had);
+  });
+
+  test("a try that does not open by the deadline is let go and tried again, and one still opening after a second goes again as the page comes back", async () => {
+    const seen: LiveStatus[] = [];
+    const w = await live();
+    room = joinLive("town", { status: (s) => seen.push(s) });
+    welcomed(last());
+    last().drop();
+    // A network that is up and passes nothing: the try never opens, nor closes.
+    nextTry();
+    const blackHoled = last();
+    pass(outside.deadline - 10);
+    expect([blackHoled.closed, made.length]).toEqual([null, 2]);
+    pass(10);
+    expect(blackHoled.closed).toBe(CLOSE.done);
+    expect(seen.at(-1)).toBe("closed");
+    expect(nextTry()).toBeLessThanOrEqual(1260);
+    // Coming back to the page while a try has been opening for over a second: it goes again at once.
+    const slow = last();
+    pass(1500);
+    const had = made.length;
+    w.wake();
+    expect([slow.closed, made.length]).toEqual([CLOSE.done, had + 1]);
+    // The old one closing late is nothing to the page.
+    slow.drop();
+    welcomed(last());
+    expect(seen.at(-1)).toBe("open");
   });
 
   test("a try that opened starts the count of tries that did not again", async () => {
