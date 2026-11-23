@@ -4,12 +4,14 @@
  * town's way: from the kit's colours, lit from the upper left, with a dark edge.
  */
 
+import { framesOf, portrait } from "@sequoia-leaf/figures/sprites.ts";
 import { BARK, CREAM, EARTH, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, ell, flipped, outlined, outlineInPlace, R, rgb } from "@sequoia-leaf/kit/pix.ts";
 import { FOOT_Y, FRAME_W } from "@sequoia-leaf/kit/skin.ts";
 import { type Ctx, hash, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
+import { FIGURE_IDS, type FigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import type { PetId } from "@sequoia-leaf/town/camp.ts";
-import { THINGS } from "@sequoia-leaf/town/things.ts";
+import { figureThing, THINGS } from "@sequoia-leaf/town/things.ts";
 
 import { drawFern } from "./ground.ts";
 import {
@@ -1440,6 +1442,23 @@ function parcel(crate: Sprite): Sprite {
 
 const one = (sprite: Sprite): Sprite[][] => [[sprite]];
 
+/**
+ * One of the raid's figures as it stands in a camp, in the raid's own pictures: facing right, then
+ * left, and in each its two standing pictures. One that flies has those two again for each pixel it
+ * hovers over its spot, so its state is the picture (0 or 1) and twice the hover.
+ */
+function character(kind: FigureId): Sprite[][] {
+  return [false, true].map((left) => {
+    const f = framesOf(kind, left);
+    return (f.flies ? [0, 1, 2, 3] : [0]).flatMap((hover) =>
+      ([0, 1] as const).map((beat) => {
+        const c = portrait(kind, { beat, left });
+        return { c, ax: f.ax, ay: c.height + hover };
+      }),
+    );
+  });
+}
+
 export function makeCampArt(s: Sprites): CampArt {
   const cabins = ROOFS.map((_r, i) => cabin(i));
   const trophies = Object.keys(FIGURES).map((id) => [id, trophy(id)] as const);
@@ -1527,6 +1546,7 @@ export function makeCampArt(s: Sprites): CampArt {
     "crab-drawing": one(rows(CRAB_DRAWING)),
   };
   for (const [id, t] of trophies) things[id] = one(t.whole);
+  for (const id of FIGURE_IDS) things[figureThing(id)] = character(id);
   // A statue's two pictures are painted on again when whose it is comes (`carve`), so what stands shows it.
   const statues = new Map<string, (figure: HTMLCanvasElement) => void>();
   for (const { id } of THINGS.filter((t) => t.id.startsWith("statue-"))) {

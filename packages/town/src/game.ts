@@ -56,7 +56,7 @@ import {
   WHILE_AWAY,
 } from "./folk.ts";
 import { isLetter, type Letter, letter, post, tidied } from "./mail.ts";
-import { isThing, thingOf, turnsOf } from "./things.ts";
+import { figureThing, isThing, thingOf, turnsOf } from "./things.ts";
 
 // ---------- the state ----------
 
@@ -241,10 +241,15 @@ const further = (a: number | null, b: number | null): number | null =>
   a === null ? b : b === null ? a : Math.max(a, b);
 
 /**
- * The camp thing an award brings: a trophy is named as its thing, a pull's `thing:` prize is that
- * thing, and a banner's headliner is that banner's statue.
+ * The camp thing an award brings: a trophy is named as its thing, a pull's `figure:` prize is that
+ * figure's thing, a banner's headliner is that banner's statue, and a `thing:` prize of earlier
+ * pulls is that thing.
  */
-const thingWon = (award: string): string => award.replace(/^pull:thing:/, "").replace(/^pull:headliner:/, "statue-");
+const thingWon = (award: string): string =>
+  award
+    .replace(/^pull:figure:/, figureThing(""))
+    .replace(/^pull:headliner:/, "statue-")
+    .replace(/^pull:thing:/, "");
 
 /**
  * The state at `ctx.now`: the things the member has won elsewhere (trophies, a pull's prizes) that

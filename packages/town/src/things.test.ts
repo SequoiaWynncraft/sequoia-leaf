@@ -1,12 +1,30 @@
 import { describe, expect, test } from "bun:test";
 
-import { footprint, KINDS, thingOf, THINGS } from "./things.ts";
+import { FIGURE_IDS, FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
+
+import { figureThing, footprint, KINDS, thingOf, THINGS } from "./things.ts";
 
 describe("the catalogue", () => {
-  test("there are forty things and more, each with a name of its own", () => {
+  test("there are forty things and more, each with a name of its own among its kind", () => {
     expect(THINGS.length).toBeGreaterThanOrEqual(40);
     expect(new Set(THINGS.map((t) => t.id)).size).toBe(THINGS.length);
-    expect(new Set(THINGS.map((t) => t.name)).size).toBe(THINGS.length);
+    // A character has its name from the raid, which a thing of another kind may have too (Rock, Orphion).
+    expect(new Set(THINGS.map((t) => `${t.kind}: ${t.name}`)).size).toBe(THINGS.length);
+  });
+
+  test("every figure of the raid is a character: its name and its line from there, on 3 squares, mirrored by a turn", () => {
+    const characters = THINGS.filter((t) => t.kind === "characters");
+    expect(characters.map((t) => t.id)).toEqual(FIGURE_IDS.map(figureThing));
+    for (const id of FIGURE_IDS)
+      expect(thingOf(figureThing(id))).toMatchObject({
+        name: FIGURES[id].name,
+        about: FIGURES[id].quip,
+        w: 3,
+        d: 1,
+        turns: "flip",
+        solid: "all",
+        rooted: false,
+      });
   });
 
   test("every name can be kept in a record, and every thing takes some ground", () => {

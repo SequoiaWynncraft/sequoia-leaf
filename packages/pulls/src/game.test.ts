@@ -1,13 +1,17 @@
 import { describe, expect, it } from "bun:test";
 
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
+import { RAID } from "@sequoia-leaf/raid";
+import { FIGURE_IDS, FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
 import { isBoughtLook } from "@sequoia-leaf/raid/content/looks.ts";
-import { isThing } from "@sequoia-leaf/town/things.ts";
+import { TOWN } from "@sequoia-leaf/town";
+import { figureThing, isThing } from "@sequoia-leaf/town/things.ts";
 
 import {
   BANNERS,
   type Counters,
   draw,
+  EARLIER,
   headliner,
   HISTORY,
   PRIZES,
@@ -56,32 +60,53 @@ function refused(state: Pulls, c: PullsCommand, at = ctx()): string | null {
 const tiers = (c: Counters, n: number) =>
   new Set(Array.from({ length: n }, (_, seed) => RARITIES[draw({ ...c }, null, { rng: seed }).rarity].tier));
 
-/** Whether a prize is something the town or the raid has, or a banner's headliner. */
+/** The figures of one of the raid's prices, as prizes. */
+const priced = (price: number): string[] =>
+  FIGURE_IDS.filter((id) => FIGURES[id].tier === price).map((id) => `figure:${id}`);
+/** Whether a prize of earlier pulls is a thing the town has, or a look the raid's table sells. */
 function known(prize: string): boolean {
   const [kind = "", id = ""] = prize.split(/:(.*)/);
-  if (kind === "thing") return isThing(id);
-  if (kind === "look") return isBoughtLook(id);
-  return kind === "headliner" && BANNERS.some((banner) => banner.id === id);
+  return kind === "thing" ? isThing(id) : kind === "look" && isBoughtLook(id);
 }
 
 describe("the prizes", () => {
-  it("are things the town and the raid have, each once, filler by the market's prices", () => {
+  it("are the raid's figures, each in one rarity by its price there, and a banner's headliner", () => {
     const all = Object.values(PRIZES).flat();
-    expect(all.filter((prize) => !known(prize))).toEqual([]);
-    expect(new Set(all).size).toBe(all.length);
-    expect(PRIZES.Leafkin).toEqual(
-      ["rock", "stepping-stones", "plank-path", "log-fence", "picket", "pinecone", "painted-pebble", "acorn-jar"].map(
-        (id) => `thing:${id}`,
-      ),
-    );
-    expect(PRIZES.Sapling).toContain("thing:sunflower");
-    expect(PRIZES.Sprite).toContain("thing:toadstool");
+    expect(all.toSorted()).toEqual([...FIGURE_IDS.map((id) => `figure:${id}`), "headliner:banner-1"].toSorted());
+    expect([PRIZES.Leafkin, PRIZES.Sapling, PRIZES.Sprite, PRIZES.Treant]).toEqual([
+      priced(1),
+      priced(2),
+      priced(3),
+      priced(5),
+    ]);
+    expect([...PRIZES.Dryad, ...PRIZES.Druid].toSorted()).toEqual(priced(4).toSorted());
+    expect(PRIZES.Dryad).toEqual(["figure:badger", "figure:fogowl", "figure:heron"]);
+    expect(PRIZES.Druid).toEqual(["figure:crab40", "figure:apothecary"]);
+    expect(Object.values(PRIZES).map((list) => list.length)).toEqual([7, 7, 6, 3, 2, 3, 1]);
     expect(PRIZES.Yggdrasil).toEqual(["headliner:banner-1"]);
-    // The town has a statue to send for each banner's headliner, and nothing is a ware any more.
+    // The town has a thing to send for each figure, and a statue for each banner's headliner.
+    expect(FIGURE_IDS.filter((id) => !isThing(figureThing(id)))).toEqual([]);
     expect(BANNERS.filter(({ id }) => !isThing(`statue-${id}`))).toEqual([]);
-    expect(all.filter((prize) => prize.startsWith("ware:"))).toEqual([]);
-    expect(rarityOf("look:plum")).toBe("Druid");
-    expect(rarityOf("look:bare")).toBeUndefined();
+    expect(rarityOf("figure:greg")).toBe("Treant");
+    expect(rarityOf("figure:nobody")).toBeUndefined();
+  });
+
+  it("of earlier pulls are things and looks the town and the raid still have, each once, and in no pool", () => {
+    const earlier = Object.values(EARLIER).flat();
+    expect(earlier.filter((prize) => !known(prize))).toEqual([]);
+    expect(new Set(earlier).size).toBe(earlier.length);
+    expect(earlier).toHaveLength(69);
+    expect(
+      Object.values(PRIZES)
+        .flat()
+        .filter((prize) => earlier.includes(prize)),
+    ).toEqual([]);
+    expect([rarityOf("look:plum"), rarityOf("thing:fountain"), rarityOf("thing:rock")]).toEqual([
+      "Druid",
+      "Treant",
+      "Leafkin",
+    ]);
+    expect([rarityOf("look:bare"), rarityOf("ware:jar")]).toEqual([undefined, undefined]);
   });
 });
 
@@ -156,7 +181,7 @@ describe("a pull", () => {
   it("is not for a guest", () => {
     const s = { ...fresh(), seeds: 500 };
     expect(refused(s, pull("grove", 1, "free"), ctx(T0, true))).toBe("members_only");
-    expect(refused(s, exchange("look:baize"), ctx(T0, true))).toBe("members_only");
+    expect(refused(s, exchange("figure:badger"), ctx(T0, true))).toBe("members_only");
   });
 
   it("takes 1,000 Leaf, ten at once as one spend keyed by the pulls before them", () => {
@@ -213,20 +238,22 @@ describe("free pulls", () => {
 });
 
 describe("Seeds", () => {
-  it("buy a mid-tier prize the player does not have: 60 for a Dryad one, 150 for a Druid one", () => {
+  it("buy a mid-tier figure the player does not have: 60 for a Dryad one, 150 for a Druid one", () => {
     const s = { ...fresh(), seeds: 200 };
-    expect(refused(s, exchange("thing:fountain"))).toBe("not_for_seeds");
-    expect(refused(s, exchange("thing:rock"))).toBe("not_for_seeds");
+    expect(refused(s, exchange("figure:greg"))).toBe("not_for_seeds");
+    expect(refused(s, exchange("figure:worm"))).toBe("not_for_seeds");
     expect(refused(s, exchange("headliner:banner-1"))).toBe("not_for_seeds");
     expect(refused(s, exchange("nothing"))).toBe("not_for_seeds");
-    const dryad = done(s, exchange("look:baize"));
-    expect(dryad.notes).toEqual([{ t: "exchange", prize: "look:baize", rarity: "Dryad", have: 1 }]);
+    const dryad = done(s, exchange("figure:badger"));
+    expect(dryad.notes).toEqual([{ t: "exchange", prize: "figure:badger", rarity: "Dryad", have: 1 }]);
     expect(dryad.state.seeds).toBe(140);
-    expect(refused(dryad.state, exchange("look:baize"))).toBe("owned");
-    expect(refused(dryad.state, exchange("look:plum"))).toBe("not_enough_seeds");
-    expect(refused(dryad.state, exchange("ware:crown"))).toBe("not_for_seeds");
-    const druid = done({ ...dryad.state, seeds: 150 }, exchange("look:plum"));
-    expect([druid.state.seeds, druid.state.have["look:plum"], druid.state.pulls]).toEqual([0, 1, 0]);
+    expect(refused(dryad.state, exchange("figure:badger"))).toBe("owned");
+    expect(refused(dryad.state, exchange("figure:crab40"))).toBe("not_enough_seeds");
+    // What was a mid-tier prize of earlier pulls, or a ware, is not to be had.
+    for (const prize of ["look:baize", "thing:glass-lantern", "look:plum", "thing:sun-banner", "ware:crown"])
+      expect(refused(dryad.state, exchange(prize))).toBe("not_for_seeds");
+    const druid = done({ ...dryad.state, seeds: 150 }, exchange("figure:crab40"));
+    expect([druid.state.seeds, druid.state.have["figure:crab40"], druid.state.pulls]).toEqual([0, 1, 0]);
   });
 });
 
@@ -241,12 +268,37 @@ describe("keeping it", () => {
     const past = { prize: "ware:jar", pool: "grove", at: T0, top: 3 };
     const held = { ...s, have: { ...s.have, "ware:jar": 2 }, history: [past, ...s.history.slice(1)] };
     expect(PULLS.decode(PULLS.encode(held))).toEqual({ ...s, history: s.history.slice(1) });
-    expect(PULLS.decode(PULLS.encode({ ...s, have: { "thing:rock": 0 } }))).toBeNull();
+    expect(PULLS.decode(PULLS.encode({ ...s, have: { "figure:worm": 0 } }))).toBeNull();
+    expect(PULLS.decode(PULLS.encode({ ...s, have: { "figure:nobody": 1 } }))).toBeNull();
     expect(PULLS.decode(PULLS.encode({ ...s, counters: { ...s.counters, banner: counters(80) } }))).toBeNull();
     const { rng, ...shown } = s;
     expect(rng).toBeNumber();
     expect(PULLS.view(s, ctx())).toEqual({ ...shown, open: [{ id: "banner-1", until: Date.UTC(2026, 11, 8) }] });
     expect(PULLS.awards?.(s)).toEqual(Object.keys(s.have).map((prize) => `pull:${prize}`));
+  });
+
+  it("keeps what earlier pulls gave: it reads, is in the history with its rarity, and is still the camp's and the table's", () => {
+    const earlier = { "thing:fountain": 2, "look:baize": 1, "thing:plank-path": 1 };
+    const won = { prize: "thing:fountain", pool: "grove", at: T0, top: 41 };
+    // A member's pulls as they were stored before the pools gave figures, and after a ten-pull since.
+    const before = { ...fresh(), have: earlier, history: [won], pulls: 4, seeds: 23 };
+    const read = PULLS.decode(PULLS.encode(before));
+    expect(read).toEqual(before);
+    const after = done(read ?? before, pull("grove")).state;
+    expect(after.have).toMatchObject(earlier);
+    expect(after.history[0]).toEqual(won);
+    expect(rarityOf(won.prize)).toBe("Treant");
+    expect(Object.keys(after.have).filter((prize) => !(prize in earlier) && !prize.startsWith("figure:"))).toEqual([]);
+
+    // The awards the other games read: the camp is sent each thing and each figure once, the table owns the look.
+    const awards = PULLS.awards?.(after) ?? [];
+    const figures = Object.keys(after.have).flatMap((prize) =>
+      prize.startsWith("figure:") ? [figureThing(prize.slice(7))] : [],
+    );
+    const town = TOWN.advance(TOWN.create(ctx()), { ...ctx(), awards });
+    expect(town.camp.tray).toEqual(Object.fromEntries(["fountain", "plank-path", ...figures].map((id) => [id, 1])));
+    expect(figures.length).toBeGreaterThan(0);
+    expect(RAID.advance(RAID.create(ctx()), { ...ctx(), awards }).looks.owned).toContain("baize");
   });
 });
 
@@ -275,52 +327,67 @@ function expected(): { top: number; mid: number } {
 }
 
 describe("a million pulls", () => {
-  it("give each tier and rarity its share of what RATES works out to, within a small margin", () => {
-    const want = expected();
-    expect(want.top).toBeCloseTo(0.018696, 6);
-    expect(want.mid).toBeCloseTo(0.121153, 6);
-    const filler = 1 - want.top - want.mid;
-    const { Leafkin, Sapling, Sprite } = RATES.filler;
-    const { Dryad, Druid } = RATES.mid;
-    const share: Record<Rarity, number> = {
-      Leafkin: (filler * Leafkin) / (Leafkin + Sapling + Sprite),
-      Sapling: (filler * Sapling) / (Leafkin + Sapling + Sprite),
-      Sprite: (filler * Sprite) / (Leafkin + Sapling + Sprite),
-      Dryad: (want.mid * Dryad) / (Dryad + Druid),
-      Druid: (want.mid * Druid) / (Dryad + Druid),
-      // A won 50/50 is the headliner, and a lost one owes the next: two top-tier prizes in three.
-      Treant: want.top / 3,
-      Yggdrasil: (want.top * 2) / 3,
-    };
-
-    const N = 1_000_000;
-    const got: Record<Rarity, number> = {
-      Leafkin: 0,
-      Sapling: 0,
-      Sprite: 0,
-      Dryad: 0,
-      Druid: 0,
-      Treant: 0,
-      Yggdrasil: 0,
-    };
-    const c = counters();
-    const s = { rng: 2026 };
-    let longest = 0;
-    let fillers = 0;
-    let mostFillers = 0;
-    for (let i = 0; i < N; i++) {
-      const { rarity, top } = draw(c, headliner("banner-1"), s);
-      got[rarity] += 1;
-      longest = Math.max(longest, top);
-      fillers = RARITIES[rarity].tier === "filler" ? fillers + 1 : 0;
-      mostFillers = Math.max(mostFillers, fillers);
-    }
-    // Few rounds ever reach the 80th pull: the chance on each pull from the 66th is high.
-    expect(longest).toBeLessThanOrEqual(RATES.top.certainAt);
-    expect(mostFillers).toBe(RATES.mid.certainAt - 1);
-    expect(Math.abs((got.Treant + got.Yggdrasil) / N - want.top)).toBeLessThan(0.0005);
-    expect(Math.abs((got.Dryad + got.Druid) / N - want.mid)).toBeLessThan(0.001);
-    const rarities: Rarity[] = ["Leafkin", "Sapling", "Sprite", "Dryad", "Druid", "Treant", "Yggdrasil"];
-    expect(rarities.filter((rarity) => Math.abs(got[rarity] / N - share[rarity]) >= 0.001)).toEqual([]);
+  const want = expected();
+  const filler = 1 - want.top - want.mid;
+  const { Leafkin, Sapling, Sprite } = RATES.filler;
+  const { Dryad, Druid } = RATES.mid;
+  /** Each rarity's share of many pulls: in a banner, or in the always-open pool, where every top-tier prize is a Treant. */
+  const shares = (banner: boolean): Record<Rarity, number> => ({
+    Leafkin: (filler * Leafkin) / (Leafkin + Sapling + Sprite),
+    Sapling: (filler * Sapling) / (Leafkin + Sapling + Sprite),
+    Sprite: (filler * Sprite) / (Leafkin + Sapling + Sprite),
+    Dryad: (want.mid * Dryad) / (Dryad + Druid),
+    Druid: (want.mid * Druid) / (Dryad + Druid),
+    // A won 50/50 is the headliner, and a lost one owes the next: two top-tier prizes in three.
+    Treant: banner ? want.top / 3 : want.top,
+    Yggdrasil: banner ? (want.top * 2) / 3 : 0,
   });
+
+  it.each([
+    ["a banner", headliner("banner-1")],
+    ["the always-open pool", null],
+  ])(
+    "from %s give only figures and its headliner, each tier and rarity as often as RATES works out to",
+    (_pool, headline) => {
+      expect(want.top).toBeCloseTo(0.018696, 6);
+      expect(want.mid).toBeCloseTo(0.121153, 6);
+      const share = shares(headline !== null);
+
+      const N = 1_000_000;
+      const got: Record<Rarity, number> = {
+        Leafkin: 0,
+        Sapling: 0,
+        Sprite: 0,
+        Dryad: 0,
+        Druid: 0,
+        Treant: 0,
+        Yggdrasil: 0,
+      };
+      const drawn = new Set<string>();
+      const c = counters();
+      const s = { rng: 2026 };
+      let longest = 0;
+      let fillers = 0;
+      let mostFillers = 0;
+      for (let i = 0; i < N; i++) {
+        const { prize, rarity, top } = draw(c, headline, s);
+        got[rarity] += 1;
+        drawn.add(prize);
+        longest = Math.max(longest, top);
+        fillers = RARITIES[rarity].tier === "filler" ? fillers + 1 : 0;
+        mostFillers = Math.max(mostFillers, fillers);
+      }
+      // Every figure comes, and nothing else but the banner's headliner.
+      expect([...drawn].toSorted()).toEqual(
+        [...FIGURE_IDS.map((id) => `figure:${id}`), ...(headline === null ? [] : [headline])].toSorted(),
+      );
+      // Few rounds ever reach the 80th pull: the chance on each pull from the 66th is high.
+      expect(longest).toBeLessThanOrEqual(RATES.top.certainAt);
+      expect(mostFillers).toBe(RATES.mid.certainAt - 1);
+      expect(Math.abs((got.Treant + got.Yggdrasil) / N - want.top)).toBeLessThan(0.0005);
+      expect(Math.abs((got.Dryad + got.Druid) / N - want.mid)).toBeLessThan(0.001);
+      const rarities: Rarity[] = ["Leafkin", "Sapling", "Sprite", "Dryad", "Druid", "Treant", "Yggdrasil"];
+      expect(rarities.filter((rarity) => Math.abs(got[rarity] / N - share[rarity]) >= 0.001)).toEqual([]);
+    },
+  );
 });

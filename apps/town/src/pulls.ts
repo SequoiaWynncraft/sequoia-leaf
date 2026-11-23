@@ -17,6 +17,7 @@ import {
   topChance,
 } from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
+import { FIGURES, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { LOOK_KINDS, LOOKS } from "@sequoia-leaf/raid/content/looks.ts";
 import { thingOf } from "@sequoia-leaf/town/things.ts";
 
@@ -53,20 +54,21 @@ export const poolName = (pool: string, banners: readonly BannerPerson[]): string
 
 // ---------- a prize ----------
 
-/** What a prize is called. A headliner is called by their name, which only Leaf knows. */
+/**
+ * What a prize is called: a figure by its name in the raid, a headliner by their name, which only
+ * Leaf knows, and a thing or a look of earlier pulls by its own.
+ */
 export function prizeName(prize: string, banners: readonly BannerPerson[]): string {
   const [kind = "", id = ""] = prize.split(":");
+  if (kind === "figure") return isFigureId(id) ? FIGURES[id].name : id;
   if (kind === "thing") return thingOf(id)?.name ?? id;
   if (kind === "look") return LOOK_KINDS.flatMap((k) => LOOKS[k]).find((l) => l.id === id)?.name ?? id;
   return banners.find((b) => b.id === id)?.headliner?.name ?? "The headliner";
 }
 
-/** What a prize is for. */
-export function prizeIs(prize: string): string {
-  if (prize.startsWith("thing:")) return "For your camp";
-  if (prize.startsWith("look:")) return "A look for the raid's table";
-  return "A statue for your camp";
-}
+/** What a prize a pool gives is: a figure, or a banner's headliner. */
+export const prizeIs = (prize: string): string =>
+  prize.startsWith("figure:") ? "A character for your camp" : "A statue for your camp";
 
 /** What a reveal says of the prize a pull drew, or Seeds bought. */
 export interface Reveal {

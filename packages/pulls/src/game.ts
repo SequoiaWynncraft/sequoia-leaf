@@ -1,8 +1,9 @@
 /**
  * Pulls as Leaf plays them: each pull draws a prize from a pool at the odds in `RATES`, with counters
- * that make a top-tier prize certain by the 80th pull and a mid-tier one by the 10th. `grove` is
- * always open; a banner is open between its dates, and its top tier holds its headliner. Every pull
- * also gives Seeds, which buy a mid-tier prize the player does not have.
+ * that make a top-tier prize certain by the 80th pull and a mid-tier one by the 10th. A prize is one
+ * of The Little Raid's figures, or a banner's headliner. `grove` is always open; a banner is open
+ * between its dates, and its top tier holds its headliner. Every pull also gives Seeds, which buy a
+ * mid-tier prize the player does not have.
  *
  * Every draw comes from the state's stream, stirred with Leaf's dice (`Ctx.seed`) before a pull, so
  * nothing a player has seen says what comes next. The page is never shown the stream.
@@ -20,8 +21,7 @@ import {
   type Refused,
   type Stream,
 } from "@sequoia-leaf/core";
-import type { LookId } from "@sequoia-leaf/raid/content/looks.ts";
-import { PRESENTS, STALLS } from "@sequoia-leaf/town/catalogue.ts";
+import { FIGURE_IDS, type FigureId, FIGURES, type Tier as Price } from "@sequoia-leaf/raid/content/figures.ts";
 
 // ---------- what is won ----------
 
@@ -81,34 +81,55 @@ export const BANNERS: readonly Banner[] = [
 /** A banner's headliner, as a prize. */
 export const headliner = (banner: string): string => `headliner:${banner}`;
 
-const sold = STALLS.flatMap((stall) => stall.stock);
-/** The market's things priced from `least` to `most` Coins. */
-const market = (least: number, most: number): string[] =>
-  sold.filter(({ price }) => price >= least && price <= most).map(({ thing }) => `thing:${thing}`);
-const looks = (...ids: LookId[]): string[] => ids.map((id) => `look:${id}`);
+/** The figures of one of the raid's five prices, as prizes. */
+const figures = (price: Price): string[] =>
+  FIGURE_IDS.filter((id) => FIGURES[id].tier === price).map((id) => `figure:${id}`);
+/** The figures of the raid's fourth price that are Druid; the others of that price are Dryad. */
+const DRUID: readonly FigureId[] = ["crab40", "apothecary"];
+const druid = DRUID.map((id) => `figure:${id}`);
 
 /**
- * Every prize, by rarity. `thing:` is one of the town's things, which the camp is sent once;
- * `look:` one of the raid table's looks, owned there as if bought; and `headliner:` a banner's
- * headliner, whose statue (the town's `statue-<banner>`) the camp is sent.
+ * Every prize, by rarity: `figure:` is one of the raid's figures, by its price there, and
+ * `headliner:` a banner's headliner. The camp is sent a figure once, as the town's `figure-<id>`,
+ * and for a headliner their statue (`statue-<banner>`).
  */
 export const PRIZES: Readonly<Record<Rarity, readonly string[]>> = {
-  Leafkin: [...market(0, 60), ...PRESENTS.map((id) => `thing:${id}`)],
-  Sapling: market(61, 200),
-  Sprite: market(201, Infinity),
-  Dryad: [...looks("baize", "gingham", "paper", "moss"), "thing:glass-lantern"],
-  Druid: [...looks("plum", "jar", "gilt"), "thing:sun-banner"],
-  Treant: ["thing:crab-throne", "thing:fox-statue", "thing:fountain"],
+  Leafkin: figures(1),
+  Sapling: figures(2),
+  Sprite: figures(3),
+  Dryad: figures(4).filter((prize) => !druid.includes(prize)),
+  Druid: druid,
+  Treant: figures(5),
   Yggdrasil: BANNERS.map(({ id }) => headliner(id)),
+};
+
+const once = (kind: "thing" | "look", ids: string): string[] => ids.split(" ").map((id) => `${kind}:${id}`);
+/**
+ * What was a prize before the pools gave figures, with the rarity it had: `thing:` one of the
+ * town's things, `look:` one of the raid table's looks. None is in a pool or to be had for Seeds.
+ * What a player won of them is still theirs: it is held, named in their history and awarded as before.
+ */
+export const EARLIER: Readonly<Partial<Record<Rarity, readonly string[]>>> = {
+  Leafkin: once("thing", "rock stepping-stones plank-path log-fence picket pinecone painted-pebble acorn-jar"),
+  Sapling: once("thing", "candle-stump stump rug-moss flower-pot potted-fern pumpkin sunflower stone-wall woodpile"),
+  Sprite: once(
+    "thing",
+    "lantern-post paper-lantern firefly-lamp glowcap moth-lantern brazier fairy-lights barrel gnome gnome-fishing gnome-napping crab-statue wind-chime birdhouse bird-bath cook-pot music-box telescope well my-stall cushion log-seat bench rocker picnic hammock rug-woven pennant windsock bunting weathervane guild-banner toadstool berry-bush worm-pot flower-bed sapling fairy-ring doormat arch",
+  ),
+  Dryad: [...once("look", "baize gingham paper moss"), "thing:glass-lantern"],
+  Druid: [...once("look", "plum jar gilt"), "thing:sun-banner"],
+  Treant: once("thing", "crab-throne fox-statue fountain"),
 };
 
 const isRarity = (v: string): v is Rarity => Object.hasOwn(RARITIES, v);
 const RARITY_OF = new Map(
   Object.keys(RARITIES)
     .filter(isRarity)
-    .flatMap((rarity) => PRIZES[rarity].map((prize): [string, Rarity] => [prize, rarity])),
+    .flatMap((rarity) =>
+      [...PRIZES[rarity], ...(EARLIER[rarity] ?? [])].map((prize): [string, Rarity] => [prize, rarity]),
+    ),
 );
-/** A prize's rarity, or undefined for what is not a prize. */
+/** The rarity of a prize, or of what was one earlier; undefined for anything else. */
 export const rarityOf = (prize: string): Rarity | undefined => RARITY_OF.get(prize);
 
 // ---------- the state ----------
@@ -288,7 +309,7 @@ function pull(state: Pulls, c: Extract<PullsCommand, { do: "pull" }>, ctx: Ctx):
 
 function exchange(state: Pulls, prize: string): Answer {
   const rarity = RARITY_OF.get(prize);
-  if (rarity !== "Dryad" && rarity !== "Druid") return no("not_for_seeds");
+  if ((rarity !== "Dryad" && rarity !== "Druid") || !PRIZES[rarity].includes(prize)) return no("not_for_seeds");
   if (state.have[prize] !== undefined) return no("owned");
   const price = RATES.exchange[rarity];
   if (state.seeds < price) return no("not_enough_seeds");
@@ -345,7 +366,7 @@ function pulledOf(v: unknown): Pulled | null {
     : null;
 }
 
-/** Prizes that were won once and are no more: the Treasury's wares. A stored state may still name them. */
+/** Prizes that were won once and are let go: the Treasury's wares. A stored state may still name them. */
 const RETIRED: ReadonlySet<string> = new Set(["ware:water", "ware:plate", "ware:jar", "ware:crown"]);
 
 /**
@@ -417,6 +438,6 @@ export const PULLS: Game<Pulls, PullsCommand, PullsView, PullsNote> = {
       }, 0),
     },
   }),
-  // Each prize the player has: the town sends a thing or a statue to the camp, the raid's table owns a look.
+  // Each prize the player has: the town sends a figure, a statue or an earlier thing to the camp, the raid's table owns an earlier look.
   awards: (s) => Object.keys(s.have).map((prize) => `pull:${prize}`),
 };

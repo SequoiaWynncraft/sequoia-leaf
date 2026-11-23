@@ -9,13 +9,14 @@
  * whatever crosses the whole picture are drawn on from the frame to the window's edges. One
  * timeline: `paint` draws the whole picture for the time `t` alone (seconds since the pull was
  * answered), from nothing kept between frames. A person is the town's own walking figure (the
- * kit's `bake`), drawn large and moved as the town moves it; a thing is its own picture from the
- * game's art.
+ * kit's `bake`), drawn large and moved as the town moves it; a figure of the raid is the raid's own
+ * picture of it, as the camp shows it.
  *
  * `main.ts` drives it through `Scene`. What is said and counted is in `pulls.ts`, and the words and
  * buttons over the picture are `groveui.ts`.
  */
 
+import { beatAt } from "@sequoia-leaf/figures/sprites.ts";
 import { member, refreshLeaf } from "@sequoia-leaf/kit/live.ts";
 import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
 import { CORAL, CREAM, EARTH, GOLD, GREEN, INK, LEAF, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
@@ -36,9 +37,8 @@ import {
   RATES,
 } from "@sequoia-leaf/pulls";
 import { type BannerPerson, readBanners, readNotes, readView } from "@sequoia-leaf/pulls/wire.ts";
-import { baseOf, clothOf, lanternOf } from "@sequoia-leaf/raid/content/looks.ts";
+import { figureThing } from "@sequoia-leaf/town/things.ts";
 
-import { paintSwatch } from "../../battler/src/screen/art/table.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import { G, hooks } from "./game.ts";
 import { buildStage, type Light, type Stage as Backdrop } from "./grovestage.ts";
@@ -88,7 +88,7 @@ interface Shown {
   readonly finish: Finish;
   /** Its rarity's colour, with a darker and a lighter one beside it. */
   readonly tones: Trio;
-  /** Its picture, a pixel to each of its own; a headliner has the figure too. */
+  /** Its picture, a pixel to each of its own; a headliner has their walking figure too. */
   readonly pic: HTMLCanvasElement;
   readonly body: Body | null;
 }
@@ -179,8 +179,9 @@ const hopOf = (t: number, k: number, times = 1, each = 0.26): number =>
 
 /** Where one aurora colour gives way to the next, the columns of the two are shuffled together. */
 const seam = (x: number): number => (hash(x >> 1, 7, 3) - 0.5) * 0.2;
-/** How large a prize stands in the end picture. */
-const endSize = (p: Shown): number => (p.body ? 6 : fitting(p.pic, 92, 124, [6, 5, 4, 3, 2, 1]));
+/** How large a prize stands in a reveal and in the end picture: a person, or a figure of the raid, each kind at one size. */
+const revealSize = (p: Shown): number => (p.body ? 10 : 7);
+const endSize = (p: Shown): number => (p.body ? 6 : 3);
 /** How rare a prize is, among the rarities. */
 const worth = (p: Shown): number => RARITY_NAMES.indexOf(p.note.rarity);
 
@@ -522,16 +523,14 @@ export function makeGrove(
   /** Pictures made from the stage, kept; and pictures made for what is on show, let go with it. */
   const keptCache = new Map<string, HTMLCanvasElement>();
   const shownCache = new Map<string, HTMLCanvasElement>();
-  /** A prize's own picture from the game's art, a pixel to each of its own. */
-  function picture(prize: string): HTMLCanvasElement {
+  /**
+   * A prize's own picture, a pixel to each of its own: the headliner's walking figure, or a figure of
+   * the raid as the camp shows it, in the first or the second of its two standing pictures.
+   */
+  function picture(prize: string, beat: 0 | 1 = 0): HTMLCanvasElement {
     const [kind, id = ""] = prize.split(":");
     if (kind === "headliner") return person?.body.frames[0]?.[0] ?? art.parcel.c;
-    return memo(keptCache, `prize${prize}`, () => {
-      if (kind === "thing") return pictureOf(art, id, 0, 0)?.c ?? art.parcel.c;
-      // A look is shown as the raid's table shows it before it is bought: tried on a corner of the table.
-      if (kind === "look") return paintSwatch(clothOf(id) ?? "bare", lanternOf(id) ?? "iron", baseOf(id) ?? "plain");
-      return art.parcel.c;
-    });
+    return pictureOf(art, figureThing(id), 0, beat)?.c ?? art.parcel.c;
   }
 
   /** A picture `k` art pixels to each of its own. */
@@ -610,10 +609,14 @@ export function makeGrove(
     });
   }
 
-  /** A prize's picture as it stands at a size: a figure facing `dir` in a pose of its walk, or a thing as it is. */
+  /**
+   * A prize's picture as it stands at a size: a person facing `dir` in a pose of their walk, or a
+   * figure of the raid in the first of its two standing pictures or (`pose` 1) the second.
+   */
   function standing(p: Shown, k: number, dir = 0, pose = 0): { spr: HTMLCanvasElement; id: string } {
-    const id = `${p.note.prize}${p.body ? `${dir}${pose}` : ""}`;
-    return { spr: sized(p.body?.frames[dir]?.[pose] ?? p.pic, id, k), id: `${id}/${k}` };
+    const id = `${p.note.prize}${p.body ? dir : ""}${pose}`;
+    const src = p.body?.frames[dir]?.[pose] ?? picture(p.note.prize, pose === 1 ? 1 : 0);
+    return { spr: sized(src, id, k), id: `${id}/${k}` };
   }
   // ---------------------------------------------------------------- drawing helpers
 
@@ -861,7 +864,7 @@ export function makeGrove(
     say(name, x, at.y + sink + (4 - px) * 5, px, CREAM, INK);
   }
 
-  /** What stands in the clearing on the banner: its headliner, hopping now and then, or the always-open pool's three top prizes. `sink` drops them out of the picture. */
+  /** What stands in the clearing on the banner: its headliner, hopping now and then, or the always-open pool's three top figures. `sink` drops them out of the picture. */
   function faces(ti: number, sink: number): void {
     const feet = (TALL ? THIRD - 18 : 344) + sink;
     const cx = TALL ? 118 : 110;
@@ -874,14 +877,15 @@ export function makeGrove(
       return;
     }
     const stands = [
-      [176, -40, 84],
+      [158, -40, 84],
       [92, -22, 100],
       [0, 0, 132],
     ] as const;
     PRIZES.Treant.forEach((prize, i) => {
       const [dx, dy, box] = stands[i % stands.length] ?? [0, 0, 100];
-      const pic = picture(prize);
-      const spr = sized(pic, prize, fitting(pic, box, box * 1.4, [6, 5, 4, 3, 2, 1]));
+      const beat = beatAt(ti, i / 3);
+      const pic = picture(prize, beat);
+      const spr = sized(pic, `${prize}${beat}`, fitting(pic, box, box * 1.4, [6, 5, 4, 3, 2, 1]));
       ellipse(cx + dx, feet + dy - 1, spr.width * 0.46, 4, INK);
       g.drawImage(spr, r(cx + dx - spr.width / 2), feet + dy - spr.height);
     });
@@ -1173,15 +1177,17 @@ export function makeGrove(
       }
 
     // 0.10–0.35: it comes in from the left as a flat shape in its rarity's colour (a person walks,
-    // as the town's people walk); 0.35: it is in its own colours, a person turned to face us, and hops (twice for an aurora)
+    // as the town's people walk); 0.35: it is in its own colours, a person turned to face us, and
+    // hops (twice for an aurora); from then a figure of the raid breathes as it does on the raid's table
     if (u >= 0.1) {
-      const K = p.body ? 10 : fitting(p.pic, 190, 210, [14, 12, 10, 8, 6, 5, 4, 3, 2, 1]);
+      const K = revealSize(p);
       const half = (p.body ? 12 : p.pic.width) * K * 0.5;
       const k = clamp01((u - 0.1) / 0.23);
       const from = X0 - half - 20;
       const x = isLit ? pl.cx : r(lerp(from, pl.cx, outCubic(k)));
       // a step of the walk for every five of its own pixels walked, as in the town
-      const pose = isLit ? 0 : (WALK[Math.floor((x - from) / K / 5) % 4] ?? 0);
+      const step = WALK[Math.floor((x - from) / K / 5) % 4] ?? 0;
+      const pose = p.body ? (isLit ? 0 : step) : isLit ? beatAt(u - 0.35) : 0;
       const { spr, id } = standing(p, K, isLit ? 0 : 2, pose);
       const up = isLit ? hopOf(u - 0.35, 10, f === "aurora" ? 2 : 1) : 0;
       const [sx, sy] = footed(p, spr, K, x, pl.feet, up);
@@ -1397,9 +1403,9 @@ export function makeGrove(
         flood(INK);
         g.restore();
       }
-      // the rarest goes on hopping, pleased
+      // the rarest goes on hopping, pleased; a figure of the raid breathes, each out of step with the next
       const size = endSize(p);
-      const { spr, id } = standing(p, size);
+      const { spr, id } = standing(p, size, 0, p.body ? 0 : beatAt(v, k / 3));
       const glad = isRare && τ >= HOP ? hopOf(mod(τ - HOP, 1.6) - 1.0, 6, 2) : 0;
       const [x, y] = footed(p, spr, size, spot.x, spot.feet, dy + glad);
       ellipse(spot.x, spot.feet - 1, Math.max(14, spr.width * 0.42), 3, INK);
