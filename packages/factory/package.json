@@ -7,7 +7,7 @@
     "./*": "./src/*"
   },
   "scripts": {
-    "test": "bun test"
+    "test": "bun test --parallel"
   },
   "dependencies": {
     "@sequoia-leaf/core": "workspace:*"

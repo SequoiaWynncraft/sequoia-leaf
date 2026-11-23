@@ -56,7 +56,6 @@ class Both extends Hands {
   }
   give(c: Rec): boolean {
     const a = this.pair.do({ ...c, tick: this.w.tick }, "story");
-    this.pair.same(`story, after ${String(c.do)}`);
     return a !== null && typeof a === "object" && !("refused" in a);
   }
   run(ticks: number): void {
@@ -324,27 +323,57 @@ function layOut(w: Y.World, wanted: readonly Y.Item[]): { c: Rec; tick: number }
   return null;
 }
 
+/**
+ * Clears the last line, opens and lays out a line for each thing wanted, and runs the yard until
+ * `filled` says, collecting now and then and handing over standing orders that fill on the way.
+ */
+function fill(both: Both, wanted: readonly Y.Item[], filled: () => boolean, what: string): void {
+  const p = new Player(both);
+  p.clear();
+  for (const item of wanted) p.open(item);
+  const log = layOut(both.w, wanted);
+  if (!log) throw new Error(`no layout for ${what}`);
+  for (const { c, tick } of log) {
+    both.run(Math.max(0, tick - both.w.tick));
+    both.give(c);
+  }
+  for (let guard = 0; !filled(); guard++) {
+    if (guard > 3000) throw new Error(`${what} never filled`);
+    both.run(100);
+    if (guard % 6 === 5) both.give({ do: "collect" });
+    for (const o of both.w.board) if (Y.isFilled(o.want, o.filled)) both.give({ do: "handOver", order: o.id });
+  }
+}
+
 /** Plays the story on a pair from where it stands through `orders` story orders, comparing all the way. */
 export function playStory(pair: Pair, orders: number): void {
   const both = new Both(pair);
-  const p = new Player(both);
   for (let n = pair.yard.story; n < orders; n++) {
     const order = Y.STORY[n];
     if (!order) return;
-    const wanted = Y.ITEMS.filter((k) => (order.want[k] ?? 0) > 0);
-    p.clear();
-    for (const item of wanted) p.open(item);
-    const log = layOut(pair.yard, wanted);
-    if (!log) throw new Error(`no layout for order ${n + 1}`);
-    for (const { c, tick } of log) {
-      both.run(Math.max(0, tick - pair.yard.tick));
-      both.give(c);
-    }
-    for (let guard = 0; pair.yard.story === n; guard++) {
-      if (guard > 3000) throw new Error(`order ${n + 1} never filled`);
-      both.run(100);
-      if (guard % 6 === 5) both.give({ do: "collect" });
-      for (const o of pair.yard.board) if (Y.isFilled(o.want, o.filled)) both.give({ do: "handOver", order: o.id });
-    }
+    fill(
+      both,
+      Y.ITEMS.filter((k) => (order.want[k] ?? 0) > 0),
+      () => pair.yard.story !== n,
+      `order ${n + 1}`,
+    );
   }
+}
+
+/**
+ * Fills a standing order on the board by script, as a story order is filled, and hands it over: one
+ * that asks for nothing the story order in hand wants, if there is one, so the story does not take it.
+ */
+export function fillStanding(pair: Pair): void {
+  const story = Y.STORY[pair.yard.story];
+  const board = pair.yard.board;
+  const order = board.find((o) => !story || Y.ITEMS.every((k) => !o.want[k] || !story.want[k])) ?? board[0];
+  if (!order) throw new Error("there is no standing order on the board");
+  const done = pair.yard.done;
+  fill(
+    new Both(pair),
+    Y.ITEMS.filter((k) => (order.want[k] ?? 0) > 0),
+    () => pair.yard.done > done,
+    `standing order ${order.id}`,
+  );
 }

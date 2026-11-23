@@ -18,11 +18,11 @@ game as today's.
 | Leaf's game: commands, Coins, time, the view                               | `src/game.ts`                                                                 |
 | keeping a yard, and the check                                              | `src/codec.ts`, `src/bytes.ts`, `src/check.ts`                                |
 | the route for a run of belt; what a piece is doing                         | `src/route.ts`; `src/status.ts`                                               |
-| proving it is today's game                                                 | `test/sides.ts` (the picture and the pair), then the tests                    |
-| what it costs                                                              | `bench.ts`, and `test/big.test.ts` for the budgets                            |
+| proving it is today's game                                                 | `test/sides.ts` (the comparison and the pair), then the tests                 |
+| what it costs                                                              | `bench.ts`, and `test/budgets.test.ts` for the budgets                        |
 
 ```sh
-bun test                       # the side-by-side harness and the budgets
+bun test --parallel            # the side-by-side harness and the budgets, a Bun to each file
 bun bench.ts [real-yard.json]  # times and sizes beside today's yard
 ```
 
@@ -46,13 +46,14 @@ nothing:
 | `row`  | Int32 | the piece's row in a side table, or -1                                      |
 | `lit`  | Uint8 | 1 where power reaches                                                       |
 
-Side tables have a row for each piece that needs one, kept packed (a removed row takes the last):
+Side tables have a row for each piece that needs one, kept packed (a removed row takes the last),
+and grow by half when full:
 
 - **holders**, for gatherers, mills, benches, workshops, crates and boilers: `out`, `making`,
   `recipe` (things, Uint8), `work` (Float64, ticks at the plain pace), `idle`, `open`, `fuel`,
   `kinds` (Uint8), `count` (Uint16), and `stock`, how many of each thing (Uint16, 23 a row);
 - **tunnels**, for each way-in mouth: `under` (thing, Uint8) and `along` (eighths, Uint8), three a row;
-- **blueprints**: each one's pieces as 9 bytes a piece.
+- **blueprints**: each one's pieces as 9 bytes a piece (kept in fewer, below).
 
 The plumbing (`wire`) is worked out once after a change: four lists of tiles, sized by what
 stands (the order things are handed on in, the tiles that carry, the machines that work, the
@@ -73,22 +74,56 @@ when a Coin is paid in.
 ## Keeping a yard
 
 `encode` writes a JSON record of the yard's numbers and orders, as today's `save` does, with its
-pieces packed into bytes (`cells`, in base64) and its blueprints the same. A piece is a few bytes:
-the gap since the last piece, its kind and way and whether it carries something, the thing and its
-progress, then only the parts that are not as new. `decode` refuses a record of the wrong shape or
-version whole, and builds every piece again through the rules (`vouch`), so anything that could not
-have come about by playing is left out, as today's `load` leaves it out.
+pieces packed into bytes (`cells`, in base64) and each blueprint the same. The pieces' bytes begin
+with how many there are; a piece is a few bytes: the gap since the last piece, its kind and way and
+whether it carries something, the thing and its progress, then only the parts that are not as new.
+A blueprint's piece is its kind, x, y and way, then only the parts it keeps. `decode` refuses whole
+a record of the wrong shape or version, and pieces' bytes cut short, left over, with a part it does
+not know or with a count past what the tables allow; it builds every piece again through the rules
+(`vouch`), so anything that could not have come about by playing is left out, as today's `load`
+leaves it out.
 
-`check` is one pass over the yard into 32 bits, for Leaf and the page to compare their copies. It
-leaves out the seed, Leaf's clock and the letter, and a machine's note that it found nothing to
-start on, which is worked out again; a yard read back gives the same check.
+`check` is one pass over the yard into 32 bits, for Leaf and the page to compare their copies: every
+part of the yard the rules read. It leaves out what only Leaf holds (the seed, its clock, the
+letter), news, what is worked out again (what is open, rates, power, the plumbing, a machine's idle
+note) and which row of a side table holds a piece's parts; a yard read back gives the same check.
+`test/codec.test.ts` changes every other part of a yard in turn, and fails on one added unmixed.
 
 ## The harness
 
-`test/sides.ts` gives both rules one picture of a yard: every part of every piece, and every number
-of the yard, exactly. A `Pair` takes the same command off the wire into both and compares the
-answers (refusals, Coins, notes) and the pictures. The tests run it on a new yard, on every yard in
-`packages/yard/src/yards`, on today's working yard, on random play (`test/random.ts`), on the
-story played by script (`test/story.ts`, after `apps/works/review/balance.ts`), on time away, on a
-yard of about 6,000 pieces made by the scale study's generator (`test/gen.ts`, built with commands,
-so the same commands build it again on today's rules), and on the codec.
+`test/sides.ts` reads both rules without changing either (`differs`): the land they stand on, every
+number of the yard, every part of every tile, that the flat yard's side tables agree with its tiles,
+and power and the plumbing, read where a yard holds them and worked out on copies where it does not.
+A `Pair` gives both the same command off the wire, compares the answers (refusals, Coins, notes), and
+compares the yards after every command, done or refused, and every 100 ticks. Where a command names
+an area or a blueprint, each rules choose and place its pieces from their own yard (`Pair.choose`);
+some go through Leaf's play service (`Pair.apply`), ahead of its lead and in the yard's past.
+
+One difference is allowed, in one direction: today's yard colours a line by following its plumbing,
+so after a paint, or a piece set down beside a colour, it may hold power and the plumbing worked out
+where the flat yard, which follows the pieces, holds neither. Neither outcome differs.
+
+The tests run pairs on a new yard, on every yard in `packages/yard/src/yards`, on today's working
+yard, on random play (`test/random.ts`, which counts what took effect and fails if a kind of
+command, piece or plan never did), on the story played by script (`test/story.ts`, after
+`apps/works/review/balance.ts`), on time away, on a shut crate filled by two feeders, on refusals
+followed by a tick taken cold, on a yard of about 6,000 pieces made by the scale study's generator
+(`test/gen.ts`, built with commands, then built again by them on today's rules and compared after
+each of its 82,749 commands, power worked out on copies after every thousandth), and on the codec.
+
+## Budgets
+
+Held by `test/budgets.test.ts`, at about 6,000 pieces on 112 by 84 tiles unless said:
+
+- memory, every array a yard reaches but its land: under 400 KB; a yard of nothing but crates, as
+  many as the land holds: under 1 MB;
+- kept: packed, three full blueprints included, under 40 KB; as the store keeps it, UTF-8 text,
+  under 56 KB;
+- allocation: a tick of a yard whose plumbing is worked out, in which no order is filled, allocates
+  nothing (no collection in a thousand ticks, and no byte, on a yard that takes things in and one that
+  does not); and nothing the tick calls, in any file, makes an array, object, closure, string or
+  iterator, but the plumbing worked out again and an order filled (`test/calls.ts`);
+- work: a tick reads as many numbers for the same pieces on maps of two sizes;
+- time: the median tick under 2 ms.
+
+Measured beside them and printed: the first tick after a change, and a tick that fills an order.

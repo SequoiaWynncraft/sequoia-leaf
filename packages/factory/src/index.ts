@@ -13,7 +13,7 @@ export * from "./content/plans.ts";
 export * from "./content/plots.ts";
 export * from "./content/recipes.ts";
 export * from "./content/story.ts";
-export { decode, encode, type Keep, type KeptPiece, VERSION, vouch } from "./codec.ts";
+export { decode, encode, type Keep, type KeptPiece, type KeptPrint, VERSION, vouch } from "./codec.ts";
 export * from "./game.ts";
 export * from "./land.ts";
 export { join, lineOf, paint } from "./lines.ts";

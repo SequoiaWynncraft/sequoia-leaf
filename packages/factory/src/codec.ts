@@ -1,27 +1,32 @@
 /**
  * Keeping a yard, and reading it back. The yard is written as a small JSON record of its numbers and
- * orders, as today's yard is, with its pieces packed into bytes (`cells`, base64) and its blueprints
- * the same. Reading gives back a yard it can vouch for or nothing at all: a record of the wrong shape
+ * orders, as today's yard is, with its pieces packed into bytes (`cells`, base64) and each of its
+ * blueprints the same (`packPrint`). Reading gives back a yard it can vouch for or nothing at all: a record of the wrong shape
  * or version is refused whole; inside a good one, a plot, plan or piece that could not have come
  * about by playing is left out, by building each piece again through the rules (`vouch`).
  *
- * A piece's bytes, in tile order: the tiles since the last piece less one (varint); a byte of its
- * kind (low four bits), its way (two bits), whether it carries something (64) and whether more
- * parts follow (128); if it carries, the thing (byte) and its progress in eighths with the side it
- * came in from (a byte, four bits each); if more follow, which (varint, a bit each), then those:
+ * The pieces' bytes are how many pieces there are (varint), then each piece in tile order: the tiles
+ * since the last piece less one (varint); a byte of its kind (low four bits), its way (two bits),
+ * whether it carries something (64) and whether more parts follow (128); if it carries, the thing
+ * (byte) and its progress in eighths with the side it came in from (a byte, four bits each); if more
+ * follow, which (varint, a bit each), then those:
  *   2 what it holds: how many kinds (varint), then a thing (byte) and how many (varint) each
  *   4 out (byte)   8 work (num)   16 making (byte)   32 turn (byte)   64 recipe (byte)
  *   128 span (byte, +8), and for a way-in mouth a thing (byte) and its progress (byte) for each tile under
  *   256 a shut crate   512 fuel (byte)   1024 one of the pieces to hand   2048 tint (byte)   4096 shut ways (byte)
+ *
+ * Bytes that are not pieces are refused whole: bytes cut short or left over, a part this version
+ * does not know, and any count past what the tables allow (more pieces than tiles, more kinds of
+ * thing than there are, more of one thing than any piece holds, a tunnel longer than tunnels go).
  */
 import { build, isDir, planState, plotState, refusal } from "./build.ts";
 import { fromBase64, Reader, toBase64, Writer } from "./bytes.ts";
 import { here } from "./clock.ts";
-import { BLUEPRINT, BLUEPRINTS, BUFFER, FUEL, SPAN, TICKS } from "./content/machines.ts";
+import { BLUEPRINT, BLUEPRINTS, BUFFER, CRATE_HOLDS, FUEL, SPAN, TICKS } from "./content/machines.ts";
 import { STORY } from "./content/story.ts";
 import { LAND, type Land } from "./land.ts";
 import { countsOf, fillBoard, reask } from "./orders.ts";
-import { blueprintRefusal, keptOf, packPieces, type Piece, placed, TINTS } from "./pieces.ts";
+import { blueprintRefusal, keptOf, packPieces, type Piece, piecesOf, placed, TINTS } from "./pieces.ts";
 import {
   ALL_ITEMS,
   BOILER,
@@ -37,6 +42,7 @@ import {
   itemName,
   JOINER,
   NONE,
+  PLAN_INFO,
   planName,
   planNamed,
   plotName,
@@ -54,7 +60,6 @@ import {
   emptyYard,
   held,
   holds,
-  PIECE_BYTES,
   put,
   reopen,
   type Standing,
@@ -62,7 +67,13 @@ import {
   type Yard,
 } from "./yard.ts";
 
-export const VERSION = 4;
+/** 5: the pieces' bytes begin with how many pieces there are. */
+export const VERSION = 5;
+
+/** The parts a piece's bytes may say follow, a bit each. */
+const PARTS = 0x1ffe;
+/** The most of one thing any piece holds: a crate grown as large as a plan makes it. */
+const HOLDS_MOST = Math.max(BUFFER, FUEL, CRATE_HOLDS, ...PLAN_INFO.map((p) => p?.effect.crate ?? 0));
 
 /** A piece as kept, in the yard's own units, before it is vouched for. */
 export interface KeptPiece {
@@ -123,6 +134,9 @@ function packCells(y: Yard): Uint8Array {
   const o = new Writer();
   const h = y.holders;
   const t = y.tunnels;
+  let pieces = 0;
+  for (const k of y.kind) if (k !== NONE && k !== DEPOT) pieces++;
+  o.varint(pieces);
   let last = -1;
   for (let i = 0; i < y.kind.length; i++) {
     const k = y.kind[i] ?? NONE;
@@ -180,6 +194,68 @@ function packCells(y: Yard): Uint8Array {
   return o.bytes();
 }
 
+/**
+ * A blueprint as kept: each piece in its order, as its kind, x and y (a byte each), then its way
+ * with a bit for each part that follows (4 span, 8 tint, 16 shut ways, 32 a shut crate, 64 recipe),
+ * then those, a byte each.
+ */
+function packPrint(b: Uint8Array): Uint8Array {
+  const o = new Writer();
+  for (const p of piecesOf(b)) {
+    o.byte(p.kind);
+    o.byte(p.x);
+    o.byte(p.y);
+    const { span, tint = 0, shut = 0, recipe } = p;
+    o.byte(
+      p.dir |
+        (span > 0 ? 4 : 0) |
+        (tint > 0 ? 8 : 0) |
+        (shut > 0 ? 16 : 0) |
+        (p.open === false ? 32 : 0) |
+        (recipe === undefined ? 0 : 64),
+    );
+    if (span > 0) o.byte(span);
+    if (tint > 0) o.byte(tint);
+    if (shut > 0) o.byte(shut);
+    if (recipe !== undefined) o.byte(recipe);
+  }
+  return o.bytes();
+}
+
+/** A blueprint's pieces as kept, before they are vouched for: every part a plain number. */
+export type KeptPrint = readonly {
+  readonly kind: number;
+  readonly x: number;
+  readonly y: number;
+  readonly dir: number;
+  readonly span: number;
+  readonly recipe: number;
+  readonly open: boolean;
+  readonly tint: number;
+  readonly shut: number;
+}[];
+
+/** A kept blueprint's pieces read back from their bytes, or null for bytes that are not pieces. */
+function unpackPrint(bytes: Uint8Array | null): KeptPrint | null {
+  if (!bytes) return null;
+  const r = new Reader(bytes);
+  const out: KeptPrint[number][] = [];
+  while (!r.done) {
+    const kind = r.byte();
+    const x = r.byte();
+    const y = r.byte();
+    const f = r.byte();
+    if (f > 127) return null;
+    const span = f & 4 ? r.byte() : 0;
+    const tint = f & 8 ? r.byte() : 0;
+    const shut = f & 16 ? r.byte() : 0;
+    const recipe = f & 64 ? r.byte() : NONE;
+    if (r.over) return null;
+    out.push({ kind, x, y, dir: f & 3, span, recipe, open: (f & 32) === 0, tint, shut });
+  }
+  return out;
+}
+
 export interface Keep {
   /** Whether to keep the seed: never in what the page is shown. */
   readonly seed?: boolean;
@@ -217,7 +293,7 @@ export function encode(y: Yard, keep: Keep = {}): string {
     paid: y.paid,
     pace: { ticks: y.pace.ticks, warm: y.pace.warm, made: tally(y.pace.made) },
     cells: toBase64(packCells(y)),
-    ...(prints.some((b) => b !== null) ? { blueprints: prints.map((b) => b && toBase64(b)) } : {}),
+    ...(prints.some((b) => b !== null) ? { blueprints: prints.map((b) => b && toBase64(packPrint(b))) } : {}),
   });
 }
 
@@ -227,8 +303,10 @@ export function encode(y: Yard, keep: Keep = {}): string {
 function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
   const r = new Reader(bytes);
   const out: KeptPiece[] = [];
+  const pieces = r.varint();
+  if (r.over || pieces > tiles) return null;
   let tile = -1;
-  while (!r.done) {
+  for (let n = 0; n < pieces; n++) {
     tile += r.varint() + 1;
     const kd = r.byte();
     if (r.over || tile >= tiles) return null;
@@ -240,9 +318,17 @@ function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
       p.via = pv >> 4;
     }
     const f = kd & 128 ? r.varint() : 0;
+    if (f > PARTS || (f & ~PARTS) !== 0) return null;
     if (f & 2) {
+      const kinds = r.varint();
+      if (kinds > ITEM_COUNT) return null;
       const pairs: [number, number][] = [];
-      for (let n = r.varint(); n > 0 && pairs.length < ITEM_COUNT; n--) pairs.push([r.byte(), r.varint()]);
+      for (let k = 0; k < kinds; k++) {
+        const thing = r.byte();
+        const many = r.varint();
+        if (many > HOLDS_MOST) return null;
+        pairs.push([thing, many]);
+      }
       p.held = pairs;
     }
     if (f & 4) p.out = r.byte();
@@ -252,9 +338,10 @@ function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
     if (f & 64) p.recipe = r.byte();
     if (f & 128) {
       p.span = r.byte() - 8;
+      if (p.span < -SPAN || p.span > SPAN) return null;
       const under: number[] = [];
       const along: number[] = [];
-      for (let s = 0; s < p.span && s < SPAN; s++) {
+      for (let s = 0; s < p.span; s++) {
         under.push(r.byte());
         along.push(r.byte());
       }
@@ -269,7 +356,7 @@ function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
     if (r.over) return null;
     out.push(p);
   }
-  return out;
+  return r.done ? out : null;
 }
 
 /** A yard read back from text, on the guild's land unless another is given; nothing if the text is not a yard. */
@@ -289,21 +376,18 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
   return vouch(
     raw,
     pieces,
-    prints.map((b) => (typeof b === "string" ? fromBase64(b) : null)),
+    prints.map((b) => (typeof b === "string" ? unpackPrint(fromBase64(b)) : null)),
     land,
   );
 }
 
 /** A kept blueprint read back: real pieces within a blueprint's limits, or nothing. */
-function blueprint(v: Uint8Array | null | undefined): Uint8Array | null {
-  if (!v || v.length % PIECE_BYTES !== 0) return null;
+function blueprint(v: KeptPrint | null | undefined): Uint8Array | null {
+  if (!v) return null;
   const pieces: Piece[] = [];
-  for (let at = 0; at < v.length; at += PIECE_BYTES) {
-    const [k = NONE, x = 99, z = 99, d = 9, span = 9, recipe = NONE, open = 1, tint = 0, shut = 0] = v.subarray(
-      at,
-      at + PIECE_BYTES,
-    );
-    if (!isKind(k) || k === DEPOT || !isDir(d) || x > BLUEPRINT.w - 1 || z > BLUEPRINT.h - 1 || span > SPAN)
+  for (const { kind: k, x, y: z, dir: d, span, recipe, open, tint, shut } of v) {
+    if (!isKind(k) || k === DEPOT || !isDir(d)) return null;
+    if (whole(x, BLUEPRINT.w - 1) === null || whole(z, BLUEPRINT.h - 1) === null || whole(span, SPAN) === null)
       return null;
     pieces.push({
       kind: k,
@@ -311,7 +395,7 @@ function blueprint(v: Uint8Array | null | undefined): Uint8Array | null {
       y: z,
       dir: d,
       span,
-      ...keptOf({ recipe, open: open === 0 ? false : undefined, tint, shut }, k),
+      ...keptOf({ recipe, open: open ? undefined : false, tint, shut }, k),
     });
   }
   return blueprintRefusal(pieces) === null ? packPieces(placed(pieces, 0, 0, 0)) : null;
@@ -395,11 +479,16 @@ function unpack(y: Yard, i: number, o: KeptPiece): void {
 }
 
 /**
- * A yard from a kept record: its numbers as JSON gives them, its pieces, and its blueprints' bytes.
+ * A yard from a kept record: its numbers as JSON gives them, its pieces, and its blueprints' pieces.
  * Everything is checked, and every piece built again through the rules, so what comes back is a
  * yard that could have come about by playing.
  */
-export function vouch(raw: Rec, pieces: readonly KeptPiece[], prints: readonly unknown[], land: Land): Yard | null {
+export function vouch(
+  raw: Rec,
+  pieces: readonly KeptPiece[],
+  prints: readonly (KeptPrint | null)[],
+  land: Land,
+): Yard | null {
   const seed = "seed" in raw ? whole(raw.seed, 0xffffffff) : null;
   const tick = whole(raw.tick, 1e12);
   const at = amount(raw.at, 8.64e15);
@@ -435,10 +524,7 @@ export function vouch(raw: Rec, pieces: readonly KeptPiece[], prints: readonly u
   const y = emptyYard(land, story);
   Object.assign(y, { seed, tick, at, till, bank, told: Math.min(told, story), away: keptAway(raw.away) });
   Object.assign(y, { serial, done, swapAt, sold, paid, board: [] });
-  y.blueprints = Array.from({ length: BLUEPRINTS }, (_, k) => {
-    const b = prints[k];
-    return blueprint(b instanceof Uint8Array ? b : null);
-  });
+  y.blueprints = Array.from({ length: BLUEPRINTS }, (_, k) => blueprint(prints[k]));
   y.depot = untally(raw.depot, 1e12);
   y.given = untally(raw.given, 1e12);
   const want = STORY[story] ? countsOf(STORY[story].want) : counts();

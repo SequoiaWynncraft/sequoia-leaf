@@ -100,8 +100,11 @@ export function landFrom(infos: readonly PlotInfo[]): Land {
 export const LAND: Land = landFrom(PLOTS);
 
 /** The tile a way leads to from a tile, or -1 off the map. */
-export const toward = (land: Land, i: number, way: number): number =>
-  ((land.edge[i] ?? 15) >> way) & 1 ? -1 : i + (land.step[way & 3] ?? 0);
+export const toward = (land: Land, i: number, way: number): number => {
+  // A way may be given as a way and a turn (3 and 1): it is the same way all the way round.
+  const d = way & 3;
+  return ((land.edge[i] ?? 15) >> d) & 1 ? -1 : i + (land.step[d] ?? 0);
+};
 
 /** The tile at (x, y), or -1 off the map. */
 export const tileAt = (land: Land, x: number, y: number): Tile | -1 => {
