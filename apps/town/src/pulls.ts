@@ -1,7 +1,8 @@
 /**
  * What the Grove says and counts, with no page in it: what a prize is called and is for, what a
  * reveal says of it, the line for the pulls towards a top prize, the chances and the rules as
- * `RATES` has them, and why a pull cannot be made. `grovescene.ts` and `groveui.ts` show them.
+ * `RATES` has them, when each beat of a ceremony falls and where its clock waits, and why a pull
+ * cannot be made. `grovescene.ts` and `groveui.ts` show them.
  */
 
 import {
@@ -159,6 +160,45 @@ export function rules(headliner: string | null): string[] {
     `Free pull: 1 every ${free.every / 3_600_000} hours. Up to ${free.most} wait.`,
   ];
 }
+
+// ---------- a ceremony's clock ----------
+
+/** How long each reveal holds, by its tier; a top prize's begins with half a second of black. */
+const REVEAL: Record<Tier, number> = { filler: 1.3, mid: 1.9, top: 3.4 };
+const FRAME = 1 / 60;
+
+/** When each beat of a ceremony falls, in seconds on its clock. */
+export interface Timeline {
+  /** When the reveals begin: after the tell, or at once for a prize had for Seeds. */
+  readonly tell: number;
+  readonly starts: readonly number[];
+  readonly end: number;
+  /**
+   * Where the clock stops until the player goes on: the last frame of the reveal of each mid-tier
+   * or top prize among several. One prize alone stays on show whatever it is, so it has none.
+   */
+  readonly waits: readonly number[];
+}
+
+/** The timeline of a ceremony for prizes of these tiers, in the order Leaf drew them. */
+export function timeline(tiers: readonly Tier[], tell: number): Timeline {
+  const starts: number[] = [];
+  const waits: number[] = [];
+  let at = tell;
+  for (const tier of tiers) {
+    starts.push(at);
+    at += REVEAL[tier];
+    if (tier !== "filler" && tiers.length > 1) waits.push(at - FRAME);
+  }
+  return { tell, starts, end: at, waits };
+}
+
+/** The clock `dt` after `t`: it runs as far as a wait, and stands there. */
+export const ticked = (line: Timeline, t: number, dt: number): number =>
+  line.waits.find((w) => t <= w && w < t + dt) ?? t + dt;
+
+/** Where going on puts the clock: at the next reveal (the first, from the tell), and after the last at the end. */
+export const onward = (line: Timeline, t: number): number => line.starts.find((start) => start > t) ?? line.end;
 
 // ---------- the buttons ----------
 

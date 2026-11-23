@@ -279,12 +279,16 @@ on each way in while Leaf has named nobody, and the pulls again when a banner is
   breathing once it is lit; a headliner walks in as the town's people walk), its name, its rarity
   in the rarity's colour, what it is, whether it is new, the
   Seeds it gave, and for a banner's top prize how its 50/50 fell. Ten pulls end on all ten set out
-  in the clearing, the rarest in front. Skip (or a tap, Space or the right arrow) goes on to the
-  next prize; held, to the end. Every beat has its sound.
+  in the clearing, the rarest in front. A filler prize gives way to the next by itself; at a
+  mid-tier or top prize among several the ceremony's clock stands once its reveal is done
+  (`timeline` and `ticked` in `pulls.ts`), the prize and the sky going on moving, until "Next", a
+  tap on the picture or a key goes on. Skip (or a tap, Space or the right arrow) goes on to the
+  next prize; held, to the end, past every wait. Every beat has its sound.
 - **The count towards a top prize** is on the banner ("34 of 80"), and after a lost 50/50 the line
   under it names who the next top prize is.
-- **The panel** has three tabs: every prize of the pool by rarity with its chance, the rules in
-  numbers written from the rules' own table (`RATES`) and how many of each the member has; the
+- **The panel** has three tabs: every prize of the pool by rarity with its chance and how many of
+  each the member has, with the rules in numbers written from the rules' own table (`RATES`)
+  behind its "?"; the
   Seeds and each mid-tier prize they buy; and the last 200 pulls, among them the things and looks
   that pulls gave before they gave figures.
 
@@ -565,7 +569,7 @@ id), `pets()` and `guests()` say what is there, `pet(n)` touches one, and `choos
 lives there first.
 
 `window.town.grove` is the same for the Grove: `go()` goes in, `state()` says its state, the
-ceremony's time and beats and Leaf's view, `jump(t)` moves the ceremony's
+ceremony's time, beats and waits and Leaf's view, `jump(t)` moves the ceremony's
 clock (with `hold(true)`, a still of any moment), `pool(id)` shows a pool, and `again()` asks Leaf
 for the pulls again.
 

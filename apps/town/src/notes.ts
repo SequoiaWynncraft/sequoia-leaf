@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "grove-hold",
+    at: "2026-11-23T10:29Z",
+    title: "Rare prizes wait for you",
+    lines: [
+      "In 10 pulls at the Grove, a Dryad or better stays on screen until you press Next, tap the picture or press a key. Skip still goes past it.",
+      "The Prizes list opens on the prizes. The rules are behind the ? there.",
+    ],
+  },
+  {
     id: "pull-characters",
     at: "2026-11-23T09:40Z",
     title: "Pulls give characters",
