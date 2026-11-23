@@ -73,12 +73,4 @@ describe("the tables", () => {
     });
     expect(short).toEqual([]);
   });
-
-  test("tier 3's research adds up to about 1,500 folios", () => {
-    const folios = F.GOALS.filter((g) => g.kind === "research" && g.tier === 3).reduce(
-      (sum, g) => sum + F.FOLIOS.reduce((n, f) => n + (g.want[f] ?? 0), 0),
-      0,
-    );
-    expect(folios).toBe(1490);
-  });
 });

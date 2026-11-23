@@ -112,9 +112,9 @@ describe("decode refuses whole", () => {
     expect(F.decode(withCells(good, crate(F.ITEM_COUNT)))).not.toBeNull();
     expect(F.decode(withCells(good, crate(F.ITEM_COUNT + 1)))).toBeNull();
     expect(F.decode(withCells(good, crate(F.ITEM_COUNT + 1, F.ITEM_COUNT)))).toBeNull();
-    expect(F.decode(withCells(good, crate(1, 1, 128)))).not.toBeNull();
-    expect(F.decode(withCells(good, crate(1, 1, 129)))).toBeNull();
-    // A tunnel's way-in mouth passing under 3 tiles, under 4, and a far mouth 4 back.
+    expect(F.decode(withCells(good, crate(1, 1, F.CRATE_MOST)))).not.toBeNull();
+    expect(F.decode(withCells(good, crate(1, 1, F.CRATE_MOST + 1)))).toBeNull();
+    // A tunnel's way-in mouth passing under as many tiles as any tunnel may, under one more, and a far mouth one more back.
     const tunnel = (span: number): number[] => [
       1,
       5,
@@ -123,9 +123,9 @@ describe("decode refuses whole", () => {
       span + 8,
       ...Array<number>(Math.max(0, span) * 2).fill(0),
     ];
-    expect(F.decode(withCells(good, tunnel(3)))).not.toBeNull();
-    expect(F.decode(withCells(good, tunnel(4)))).toBeNull();
-    expect(F.decode(withCells(good, tunnel(-4)))).toBeNull();
+    expect(F.decode(withCells(good, tunnel(F.SPAN_MOST)))).not.toBeNull();
+    expect(F.decode(withCells(good, tunnel(F.SPAN_MOST + 1)))).toBeNull();
+    expect(F.decode(withCells(good, tunnel(-(F.SPAN_MOST + 1))))).toBeNull();
     // More pieces than the land has tiles.
     expect(F.decode(withCells(good, varint(F.LAND.w * F.LAND.h + 1)))).toBeNull();
     // A part this version does not know: the lowest bit, and the one past the highest.

@@ -47,7 +47,7 @@ describe("an order hung", () => {
     must(y, { do: "swap", order: first.id });
     const hung = y.board.at(-1);
     if (!hung) throw new Error("nothing hung");
-    expect([y.board.length, hung.starts]).toEqual([3, y.tick + F.ORDER_WAITS]);
+    expect([y.board.length, hung.starts]).toEqual([y.open.hooks, y.tick + F.ORDER_WAITS]);
     expect(y.board.some((o) => o.id === first.id)).toBe(false);
     // Left out of the check: the same as the yard without it, and as the page's copy, which has no seed.
     const without = F.decode(F.encode(y), y.land);
@@ -136,6 +136,6 @@ describe("an order hung", () => {
     if (!order) throw new Error("no board");
     for (const n of F.ALL_ITEMS) order.filled[n] = order.want[n] ?? 0;
     expect(give(page, { do: "handOver", order: order.id })).not.toHaveProperty("refused");
-    expect(page.board.length).toBe(2);
+    expect(page.board.length).toBe(page.open.hooks - 1);
   });
 });
