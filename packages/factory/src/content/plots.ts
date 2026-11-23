@@ -165,7 +165,7 @@ export const PLOTS: readonly PlotInfo[] = [
     name: "The Old Quarry",
     col: 0,
     row: 2,
-    price: 2200,
+    price: 1500,
     why: "More stone than the yard could ever use, and a little ore.",
     rows: [
       "................",
