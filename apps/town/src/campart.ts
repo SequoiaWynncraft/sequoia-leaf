@@ -1424,7 +1424,7 @@ export interface CampArt {
   carve: (id: string, figure: HTMLCanvasElement) => void;
   /** Things in the catalogue that have no picture of their own yet. */
   undrawn: readonly string[];
-  /** A parcel waiting to be opened, and the posts either side of the trail. */
+  /** A parcel, which the Grove shows for a prize with no picture of its own, and the posts either side of the trail. */
   parcel: Sprite;
   gatepost: readonly Sprite[];
 }

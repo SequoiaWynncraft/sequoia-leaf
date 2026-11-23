@@ -4,8 +4,8 @@
  * the member does as a command:
  *
  * - `doNow`, for what the shared rules work out on the copy (setting out, moving, turning, putting
- *   away, unpacking, a present taken, a lantern lit, the mail read, the crab spotted, a pet chosen,
- *   staying in town): shown at once, and sent;
+ *   away, a present taken, the tray looked in, a lantern lit, the mail read, the crab spotted, a
+ *   pet chosen, staying in town): shown at once, and sent;
  * - `ask`, for what only Leaf can answer (the arrival letter put away, a caller greeted, the chest,
  *   buying): sent, and shown when Leaf answers. Meanwhile nothing more is done (the kit's one rule),
  *   but one purchase may follow another.
@@ -40,7 +40,6 @@ export const ok = (did: Did | null): did is { notes: TownNote[] } => did !== nul
 /** What the page says of a refusal, where it says anything. */
 const WORDS: Readonly<Record<string, string>> = {
   ...WHY_NOT,
-  trail_full: "Too many parcels are waiting by the trail. Unpack some first.",
   plenty: "You have plenty of those.",
   not_enough_coins: "Not enough Coins.",
 };

@@ -1,7 +1,9 @@
 /**
  * A camp, as rules: the clearing's squares, what stands where, what may be set down and what may
- * not, the tray of things put away, and who lives there. Each thing standing in a camp has an id of
- * its own (`n`), so a command names the thing it means and never a place in a list.
+ * not, the tray of things not set out (a player reads "Storage"), and who lives there. Each thing
+ * standing in a camp has an id of its own (`n`), so a command names the thing it means and never a
+ * place in a list. Nothing stands in a camp that its member did not set there: whatever they get
+ * goes into the tray (`store`).
  */
 
 import type { Letter } from "./mail.ts";
@@ -56,10 +58,13 @@ export interface Camp {
   /** The pet the member chose to begin with; empty until they have chosen. */
   first: PetId | "";
   placed: Placed[];
-  /** Things put away, and how many of each. */
+  /**
+   * The things the member has that are not set out, and how many of each. A player reads "Storage"
+   * wherever it is named; in the code, and in what Leaf stores, its one name is `tray`.
+   */
   tray: Record<string, number>;
-  /** Things bought or won that have not yet been unpacked in the camp. */
-  parcels: string[];
+  /** How many of each thing in the tray came since the member last looked in it. */
+  fresh: Record<string, number>;
   letters: Letter[];
   /** How many of the town's own who dropped by the member has greeted. */
   greeted: number;
@@ -272,28 +277,29 @@ export function petsOf(camp: Pick<Camp, "first" | "placed" | "greeted">): PetId[
   return [camp.first, ...rest.slice(0, more)];
 }
 
-/** How many parcels may wait by the trail at once: nothing more is sent while that many are there. */
-export const MOST_PARCELS = 200;
-
 /**
- * How many of any one thing a member may have, standing in the camp, in the tray and waiting by
- * the trail together: nothing more of it is sent while they have that many.
+ * How many of any one thing a member may have, standing in the camp and in the tray together:
+ * nothing more of it is kept while they have that many.
  */
 export const MOST_OWNED = 999;
 
 /** How many of a thing the member has, wherever it is. */
-export function owned(
-  camp: {
-    readonly placed: readonly Spot[];
-    readonly tray: Readonly<Record<string, number>>;
-    readonly parcels: readonly string[];
-  },
-  id: string,
-): number {
-  return (
-    camp.placed.filter((p) => p.id === id).length + (camp.tray[id] ?? 0) + camp.parcels.filter((p) => p === id).length
-  );
+export const owned = (camp: Pick<Camp, "placed" | "tray">, id: string): number =>
+  camp.placed.filter((p) => p.id === id).length + (camp.tray[id] ?? 0);
+
+/**
+ * One more of a thing goes into the tray, new to the member: the one way anything they get (bought,
+ * won, taken out of a letter) arrives. False, and nothing kept, when they have as many as may be had.
+ */
+export function store(camp: Pick<Camp, "placed" | "tray" | "fresh">, id: string): boolean {
+  if (owned(camp, id) >= MOST_OWNED) return false;
+  camp.tray[id] = (camp.tray[id] ?? 0) + 1;
+  camp.fresh[id] = (camp.fresh[id] ?? 0) + 1;
+  return true;
 }
+
+/** How many things in the tray are new to the member. */
+export const newThings = (camp: Pick<Camp, "fresh">): number => Object.values(camp.fresh).reduce((a, n) => a + n, 0);
 
 // ---------- a new camp ----------
 
@@ -317,7 +323,7 @@ export const newCamp = (): Camp => ({
   first: "",
   placed: NEW_CAMP.map(({ id, x, y, t }, n) => ({ n, id, x, y, t, s: 0 })),
   tray: {},
-  parcels: [],
+  fresh: {},
   letters: [],
   greeted: 0,
   earned: [],

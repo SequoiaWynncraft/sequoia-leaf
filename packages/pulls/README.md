@@ -21,7 +21,7 @@ so it follows the catalogue. Which member a banner's headliner is, Leaf reads fr
 `banner_people` table; nothing about them is in this package.
 
 What a prize is, once won, is the other games' to say, from the award (`pull:<prize>`): the town
-sends a `thing:` to the camp once, as a parcel, and for a `headliner:` the banner's statue
+puts a `thing:` in the camp's Storage once, and for a `headliner:` the banner's statue
 (`statue-<banner>`); the raid's table owns a `look:` as if it were bought. A second copy of a prize
 brings nothing but its Seeds.
 

@@ -8,6 +8,7 @@ import { BARK, CREAM, EARTH, GOLD, GREEN, INK, SKY, STONE, WATER } from "@sequoi
 import { ell, R } from "@sequoia-leaf/kit/pix.ts";
 import { hush, noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, lerp, type Pt, rng } from "@sequoia-leaf/kit/util.ts";
+import { newThings } from "@sequoia-leaf/town/camp.ts";
 import { LOST_CRAB } from "@sequoia-leaf/town/catalogue.ts";
 import {
   bannerAt,
@@ -670,9 +671,9 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     tap: nudge,
     hops: true,
     tip: CAMP,
-    // Something is waiting at the camp: a letter, or a parcel.
+    // Something is waiting at the camp: a letter, or a new thing in the tray.
     extra: (g, sx, sy) => {
-      if (mine().parcels.length === 0 && waiting(mine().letters) === 0) return;
+      if (newThings(mine()) === 0 && waiting(mine().letters) === 0) return;
       const bob = Math.round(Math.sin(G.t * 4) * 1.5);
       g.drawImage(s.bang.c, sx - 1, sy - 37 + bob);
     },

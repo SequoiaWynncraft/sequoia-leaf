@@ -1516,7 +1516,7 @@
             }
           ],
           "tray": {},
-          "parcels": [],
+          "fresh": {},
           "letters": [],
           "greeted": 0,
           "earned": []
@@ -1562,7 +1562,12 @@
           },
           {
             "id": "t-3",
-            "do": "unpack",
+            "do": "looked"
+          },
+          {
+            "id": "t-4",
+            "do": "setOut",
+            "thing": "rock",
             "x": 30,
             "y": 20,
             "t": 0
@@ -1585,13 +1590,11 @@
         },
         {
           "id": "t-3",
-          "notes": [
-            {
-              "t": "landed",
-              "thing": "rock",
-              "n": 11
-            }
-          ]
+          "notes": []
+        },
+        {
+          "id": "t-4",
+          "notes": []
         }
       ],
       "state": {
@@ -1687,7 +1690,7 @@
             }
           ],
           "tray": {},
-          "parcels": [],
+          "fresh": {},
           "letters": [
             {
               "id": "w-9",
