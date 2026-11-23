@@ -18,7 +18,9 @@
  *
  * Bytes that are not pieces are refused whole: bytes cut short or left over, a part this version
  * does not know, and any count past what the tables allow (more pieces than tiles, more kinds of
- * thing than there are, more of one thing than any piece holds, a tunnel longer than tunnels go).
+ * thing than there are, more of one thing than any piece holds, a tunnel longer than tunnels go). *
+ * A yard kept by the Works' first design (version 3, its pieces a list) is brought over as far as is
+ * cheap (`fromFirst`): it is a new yard at the tier its story had reached.
  */
 import { build, isDir, keeps, plotState, refusal } from "./build.ts";
 import { fromBase64, Reader, toBase64, Writer } from "./bytes.ts";
@@ -55,6 +57,7 @@ import {
   JOINER,
   locked,
   MADE_BY,
+  MILLI,
   nextHand,
   NONE,
   type Open,
@@ -392,6 +395,43 @@ function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
   return r.done ? out : null;
 }
 
+/** The version of the yards the Works' first design kept. */
+const FIRST = 3;
+/** How many of the first design's twenty story orders a yard had filled to begin a tier: tier 1 from 4, tier 2 from 10. */
+const FIRST_TIERS = [4, 10] as const;
+
+/**
+ * A yard the first design kept, brought over: what is cheap to bring, and the rest let go. It is a
+ * new yard with every goal below a tier done, the tier its story had reached (2 at most, so that
+ * the Study and research are still to come); the plots it owned that the tier sells are its own
+ * again, and those it does not sell yet are paid back into the till; what it was paid, what the depot sold for it and how many side orders it handed over stay
+ * its totals, so its place on the board holds. Its pieces, what they held, its orders and its blueprints are let go; its Coins were never
+ * in it, and are its owner's as they were.
+ */
+function fromFirst(raw: Rec, land: Land): Yard | null {
+  const story = whole(raw.story, 1000);
+  const paid = typeof raw.paid === "number" && Number.isFinite(raw.paid) && raw.paid >= 0 ? raw.paid : null;
+  const sold = typeof raw.sold === "number" && Number.isFinite(raw.sold) && raw.sold >= 0 ? raw.sold : null;
+  if (story === null || paid === null || sold === null || !Array.isArray(raw.plots)) return null;
+  const y = emptyYard(land, FIRST_TIERS.filter((from) => story >= from).length);
+  y.seed = (whole(raw.seed, 2 ** 32 - 1) ?? 1) >>> 0;
+  y.at = whole(raw.at, Number.MAX_SAFE_INTEGER) ?? 0;
+  y.paid = Math.round(paid * MILLI);
+  y.sold = Math.round(sold * MILLI);
+  y.handed = whole(raw.done, 1e9) ?? 0;
+  for (const name of raw.plots) {
+    const p = typeof name === "string" ? plotNamed(name) : null;
+    if (p === null || y.plots.includes(p)) continue;
+    if (plotState(y, p).state === "for sale") y.plots.push(p);
+    // A plot the tier does not sell yet is paid back, in the till, at what it would cost again.
+    else y.till += (land.plots.find((q) => q.plot === p)?.price ?? 0) * MILLI;
+  }
+  // What the till holds was not earned while away.
+  y.seen = here(y);
+  fillBoard(y);
+  return y;
+}
+
 /** A yard read back from text, on the guild's land unless another is given; nothing if the text is not a yard. */
 export function decode(text: string | null | undefined, land: Land = LAND): Yard | null {
   if (!text) return null;
@@ -401,6 +441,7 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
   } catch {
     return null;
   }
+  if (isRec(raw) && raw.v === FIRST && Array.isArray(raw.cells)) return fromFirst(raw, land);
   if (!isRec(raw) || raw.v !== VERSION || typeof raw.cells !== "string") return null;
   const bytes = fromBase64(raw.cells);
   const pieces = bytes && unpackCells(bytes, land.w * land.h);
