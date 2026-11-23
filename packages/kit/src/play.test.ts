@@ -253,12 +253,14 @@ describe("sending commands", () => {
     expect(play.state).toEqual({ n: 40 });
   });
 
-  test("say afk=1 while the player is AFK, as reads and the request that outlives the page do, and nothing of it otherwise", async () => {
+  test("say afk=1 while the player is AFK, as the opening, reads and the request that outlives the page do, and nothing of it otherwise", async () => {
     const { routes, leaf } = counterLeaf();
-    const play = await opened(routes);
-    const w = world;
-    if (!w) throw new Error("no world");
+    // Opened in a tab that is hidden.
+    const w = standin(routes);
+    world = w;
     w.player.afk = true;
+    const play = await openPlay<Count, Add, string>("raid", COUNTER, { player: "p" });
+    if ("trouble" in play) throw new Error(play.trouble);
     await play.send({ do: "add", by: 1 });
     await play.refresh();
     play.flush();
@@ -266,7 +268,7 @@ describe("sending commands", () => {
     w.player.afk = false;
     await play.send({ do: "add", by: 2 });
     expect(w.sent.map((s) => `${s.method} ${s.path}`)).toEqual([
-      "GET /v1/game/play/raid",
+      "GET /v1/game/play/raid?afk=1",
       "POST /v1/game/play/raid?afk=1",
       "GET /v1/game/play/raid?afk=1",
       "GET /v1/game/play/raid?afk=1",
