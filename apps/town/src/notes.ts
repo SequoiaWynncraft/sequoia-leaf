@@ -25,10 +25,10 @@ export interface Part {
 export const NOTES: readonly Note[] = [
   {
     id: "works-splitter-grades",
-    at: "2026-11-23T23:59Z",
+    at: "2026-11-23T20:52Z",
     title: "The Works: grades for splitters, joiners and sorters",
     lines: [
-      "Splitters, joiners and sorters come in grades I to III, as belts do. Yours were raised to the highest belt grade your yard has, for free, so no line is slower.",
+      "Splitters, joiners and sorters come in grades I to III, as belts do. Yours were raised to the highest belt grade your yard has unlocked, for free, so no line is slower.",
       "Grade III now has a look of its own: iron and brass, where grade II is waxed wood and brass.",
     ],
     more: [
