@@ -147,6 +147,12 @@ export function framesOf(kind: UnitKind, left = false): Frames {
   return left ? f.left : f.right;
 }
 
+/** Which of a figure's two standing pictures shows at `t` seconds; `phase` (0 to 1) keeps neighbours out of step. */
+export const beatAt = (t: number, phase = 0): 0 | 1 => (Math.floor(t * 1.7 + phase * 2) % 2 === 0 ? 0 : 1);
+/** How far over its spot a figure that flies hovers at `t` seconds, in its own pixels: 1 to 3, and 0 for one that stands. */
+export const hoverAt = (kind: UnitKind, t: number, phase = 0): number =>
+  framesOf(kind).flies ? 2 + Math.round(Math.sin(t * 4 + phase * 6)) : 0;
+
 export interface Shown {
   pose?: Pose;
   /** Which of the two standing pictures. */

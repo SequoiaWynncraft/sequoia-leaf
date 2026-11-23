@@ -252,6 +252,7 @@ export function runView(run: Run): RunView {
     phase: run.phase,
     resolve: run.resolve,
     acorns: run.acorns,
+    streak: run.streak,
     level: run.level,
     xp: run.xp,
     board: run.board,

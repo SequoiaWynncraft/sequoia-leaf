@@ -35,3 +35,40 @@ test("no rule sets its own face, size or weight: every text is one of the kit's 
   }
   expect(stray).toEqual([]);
 });
+
+/**
+ * Gold is for dark panels. On paper (a letter, a note, what a character says) it cannot be read, so
+ * one rule in `kit.css` writes those things in ink there. A style that writes in gold and is not
+ * named in that rule would be pale yellow on cream the first time it is put on a letter, as a
+ * thing's count was. A card and a chip are dark themselves wherever they stand.
+ */
+test("nothing written on paper is in the gold of a dark panel", async () => {
+  const css = (await Bun.file(`${import.meta.dir}/kit.css`).text()).replace(/\/\*[\s\S]*?\*\//g, "");
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selectors = "", body = ""]) => ({
+    selectors: selectors.trim(),
+    body,
+  }));
+  // What is written in ink on paper: the list of plain classes, and any rule of its own.
+  const ON_PAPER = ":is(.k-paper, .k-say) ";
+  const inked: string[] = [];
+  for (const { selectors, body } of rules) {
+    if (!selectors.startsWith(ON_PAPER) || !/color:\s*#96560a/.test(body)) continue;
+    const said = selectors.slice(ON_PAPER.length);
+    const listed = /^:is\(([^)]*)\):not\(\.k-chip \*, \.k-btn \*\)$/.exec(said)?.[1];
+    if (listed === undefined) inked.push(said);
+    else {
+      const classes = listed.split(",").map((one) => one.trim());
+      // One class each: a longer selector in the list would outweigh the green of Leaf that follows it.
+      expect(classes.filter((one) => !/^\.[\w-]+$/.test(one))).toEqual([]);
+      inked.push(...classes);
+    }
+  }
+  expect(inked.length).toBeGreaterThan(0);
+  const stray: string[] = [];
+  for (const { selectors, body } of rules) {
+    if (!/(?:^|[;\s])color:\s*var\(--k-gold(?:-lt)?\)/.test(body)) continue;
+    for (const one of selectors.split(",").map((part) => part.trim()))
+      if (!/^\.k-(?:info|chip)\b/.test(one) && !inked.includes(one)) stray.push(one);
+  }
+  expect(stray).toEqual([]);
+});

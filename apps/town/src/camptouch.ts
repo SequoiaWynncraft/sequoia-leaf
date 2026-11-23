@@ -3,14 +3,16 @@
  * keep still (a flame, a string of bulbs, a fountain's water, Moth), and the light they give.
  */
 
+import { beatAt, hoverAt } from "@sequoia-leaf/figures/sprites.ts";
 import { BARK, CREAM, EARTH, GOLD, GREEN, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, lerp, pick } from "@sequoia-leaf/kit/util.ts";
+import { type FigureId, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { TOGGLES } from "@sequoia-leaf/town";
 import type { Placed } from "@sequoia-leaf/town/camp.ts";
 import { LOST_CRAB } from "@sequoia-leaf/town/catalogue.ts";
-import { footprint, type Thing } from "@sequoia-leaf/town/things.ts";
+import { figureThing, footprint, type Thing } from "@sequoia-leaf/town/things.ts";
 
 import { onScreen } from "./actors.ts";
 import { type CampArt, HUES, pictureOf, SHELF_SLOTS, TUBES, WICKS } from "./campart.ts";
@@ -107,6 +109,13 @@ function repaint(l: Live, w: TouchWorld): void {
   if (!s) return;
   l.prop.sprite = s;
   if (l.prop.hit) l.prop.hit = { x: l.prop.x - s.ax, y: l.prop.y - s.ay, w: s.c.width, h: s.c.height };
+}
+
+/** Shows a thing in a state of the page's own (a vane round, a breath in), if it is not in it. */
+function show(l: Live, w: TouchWorld, state: number): void {
+  if (state === stateOf(l)) return;
+  l.moment = state;
+  repaint(l, w);
 }
 
 /** Puts a thing in another state for a moment: something looks out, and goes back in. */
@@ -494,12 +503,26 @@ const TOUCH: Readonly<Record<string, Touch>> = {
   },
 };
 
+/** The figure of the raid a camp's character is; null for any other thing. */
+function figureOf(thing: Thing): FigureId | null {
+  const id = thing.id.slice(figureThing("").length);
+  return thing.kind === "characters" && isFigureId(id) ? id : null;
+}
+
 /** A thing is touched: it does what it does, or at the least it shivers and shines. */
 export function touch(l: Live, w: TouchWorld, wx: number, wy: number): void {
   l.taps++;
   const fn = TOUCH[l.thing.id];
   if (fn) {
     fn(l, w, wx, wy);
+    return;
+  }
+  // A character hops, and says its line.
+  if (l.thing.kind === "characters") {
+    l.prop.hops = true;
+    nudge(l);
+    sfx.pop();
+    float(l.prop.x, top(l) - 2, l.thing.about, CREAM, 2.6);
     return;
   }
   // A trophy: it catches the light, and says what it was for.
@@ -522,12 +545,12 @@ export function stepLive(l: Live, w: TouchWorld, dt: number): void {
     l.moment = null;
     if (id === "tiny-cairn" || id === "bird-bath") sfx.pop();
     repaint(l, w);
-  } else if (id === "weathervane" && l.backAt > 0) {
-    const s = Math.floor((G.t - l.at) * 9) % 2;
-    if (s !== stateOf(l)) {
-      l.moment = s;
-      repaint(l, w);
-    }
+  } else if (id === "weathervane" && l.backAt > 0) show(l, w, Math.floor((G.t - l.at) * 9) % 2);
+  const figure = figureOf(l.thing);
+  // A character stands as it does on the raid's table: breathing, and hovering if it flies.
+  if (figure) {
+    const phase = ((l.placed.x * 7 + l.placed.y * 3) % 10) / 10;
+    show(l, w, beatAt(G.t, phase) + 2 * hoverAt(figure, G.t, phase));
   }
   if (!onScreen(l.prop.x, l.prop.y, 30)) return;
   if (id === "fire-ring" || id === "brazier") {

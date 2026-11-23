@@ -1,3 +1,4 @@
+import { framesOf } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The party's figures as they stand on the table while planning: one pawn for every figure the
  * member owns, on a seat of the board or in a hollow of the bench. A pawn follows its figure about
@@ -14,7 +15,6 @@ import type { TraitId } from "@sequoia-leaf/raid/content/traits.ts";
 
 import { glyphPic, itemPic } from "./art/icons.ts";
 import { TRAIT_COLOUR } from "./art/pal.ts";
-import { framesOf } from "./art/sprites.ts";
 import { burst, fly, later, ring, say } from "./fx.ts";
 import { type Pt, seatAtPoint, seatXY, slotAtPoint, slotXY } from "./geometry.ts";
 import { signal } from "./signals.ts";

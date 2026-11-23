@@ -11,6 +11,9 @@
       "path": "./packages/kit"
     },
     {
+      "path": "./packages/figures"
+    },
+    {
       "path": "./packages/raid"
     },
     {

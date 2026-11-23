@@ -1,8 +1,9 @@
 /**
  * The camp's own part of the interface: the cabin (the member's own things), the mailbox, the
- * signpost (to town, and to everybody else's camp), and the tray that things are put away into. At
- * somebody else's camp there is only the signpost, home or to town, and the strip that says whose
- * camp it is. The purse, the feed and the panel's frame are shared with the town (`hud.ts`).
+ * signpost (to town, and to everybody else's camp), and the tray (a player reads "Storage"):
+ * everything the member has that is not set out, by kind, which the hammer opens. At somebody
+ * else's camp there is only the signpost, home or to town, and the strip that says whose camp it
+ * is. The purse, the feed and the panel's frame are shared with the town (`hud.ts`).
  */
 
 import { link } from "@sequoia-leaf/kit/card.ts";
@@ -16,7 +17,7 @@ import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { COSY, KIND, type PetId, PETS, petsOf, trayList } from "@sequoia-leaf/town/camp.ts";
 import { folkNamed } from "@sequoia-leaf/town/folk.ts";
 import { tidied } from "@sequoia-leaf/town/mail.ts";
-import { thingOf, THINGS } from "@sequoia-leaf/town/things.ts";
+import { KIND_NAMES, KINDS, thingOf, THINGS } from "@sequoia-leaf/town/things.ts";
 
 import { type CampArt, type CampIcon, campIcon, pictureOf } from "./campart.ts";
 import type { CampScene } from "./campscene.ts";
@@ -30,17 +31,19 @@ import {
   centre,
   closePanel,
   fly,
+  hammerAt,
   openPanel,
   pic,
   refreshPanel,
   setDock,
   setFace,
   setHammer,
+  setHammerNew,
   setStrip,
   slot,
   when,
 } from "./hud.ts";
-import { doNow, mine, town, visiting } from "./leaf.ts";
+import { doNow, mine, ok, refusal, town, visiting } from "./leaf.ts";
 import { MY_PETS, PET_ABOUT, PET_CHOICE } from "./pets.ts";
 import { openPanel as openTownPanel, thingSlot } from "./ui.ts";
 
@@ -53,7 +56,7 @@ export interface CampUi {
   arrived(): void;
   /** Decorating has been turned on or off. */
   decorating(on: boolean): void;
-  /** The tray, or the thing in hand, has changed. */
+  /** The tray, what is new in it, or the thing in hand, has changed. */
   tray(): void;
   /** A thing's picture flies from a point in the camp to the tray. */
   toTray(pic: HTMLCanvasElement, from: Pt, id: string): void;
@@ -268,8 +271,16 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
             el("div", "k-read", { text: l.text }),
           );
           if (gift && !l.taken) {
-            const take = button("sm", [glyph("gift"), "Take it"], () => {
-              at().unwrap(l.id);
+            // Out of the letter and into the tray: it is seen going to the hammer, which opens it.
+            const take = button("sm", [glyph("gift"), "Take it"], (b) => {
+              const did = doNow({ do: "takePresent", letter: l.id });
+              if (!ok(did)) {
+                if (did) hooks.feed(refusal(did.refused), "coral");
+                return;
+              }
+              sfx.pop();
+              const sprite = pictureOf(art, gift.id, 0, 0);
+              if (sprite) fly(sprite.c, centre(b), hammerAt(), 1);
               refreshPanel();
             });
             paper.append(
@@ -379,7 +390,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
 
   const tray = $("tray");
   const hand = el("div", "k-grow k-row");
-  const row = el("div", "row");
+  const list = el("div", "list k-scroll");
   tray.replaceChildren(
     el(
       "div",
@@ -390,9 +401,11 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
         at().decorate(false);
       }),
     ),
-    row,
+    list,
   );
   const traySlots = new Map<string, HTMLElement>();
+  /** What was new when the tray was opened, or came while it was open: marked until it is shut. */
+  const marked = new Set<string>();
 
   function trayPic(id: string): HTMLCanvasElement | null {
     const sprite = pictureOf(art, id, 0, 0);
@@ -401,9 +414,36 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
     return pic(sprite.c, big <= 14 ? 2 : big <= 28 ? 1 : 0.5);
   }
 
+  /** One thing in the tray: its picture, its name, and how many when there is more than one. A tap takes one in hand. */
+  function traySlot(id: string, n: number): HTMLElement {
+    const thing = thingOf(id);
+    const fresh = marked.has(id);
+    const b = el(
+      "button",
+      fresh ? "k-slot lit" : "k-slot",
+      { type: "button" },
+      el("span", "pic", {}, trayPic(id)),
+      el("span", "k-s", { text: thing?.name ?? id }),
+      n > 1 ? el("span", "n", { text: n }) : null,
+      fresh ? el("span", "new k-s k-gold", { text: "New" }) : null,
+    );
+    b.addEventListener("click", () => {
+      at().takeOut(id);
+    });
+    // A tap sets it out; pointing (or a finger kept on it) shows its card.
+    if (thing) link(b, thingRef(id), { acts: true });
+    traySlots.set(id, b);
+    return b;
+  }
+
   function drawTray(): void {
     const s = at();
+    setHammerNew(mine().fresh.length);
     if (!s.decorating()) return;
+    // The tray is open, so what is new in it has been looked at: Leaf is told, and it stays marked here.
+    const { fresh, looked } = mine();
+    for (const id of fresh) marked.add(id);
+    if (fresh.length > 0) doNow({ do: "looked", through: looked + fresh.length });
     const held = s.held();
     hand.replaceChildren(
       ...(held
@@ -424,30 +464,27 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
                   }),
                 ]),
           ]
-        : [el("span", "k-d", { text: "Drag a thing to move it. Tap one below to place it." })]),
+        : [el("span", "k-title", { text: "Storage" })]),
     );
     traySlots.clear();
-    const list = trayList(mine());
-    row.replaceChildren(
-      ...(list.length > 0
-        ? list.map(({ id, n }) => {
-            const thing = thingOf(id);
-            const b = el(
-              "button",
-              "k-slot",
-              { type: "button", "aria-label": thing?.name ?? id },
-              trayPic(id),
-              n > 1 ? el("span", "n", { text: n }) : null,
-            );
-            b.addEventListener("click", () => {
-              s.takeOut(id);
-            });
-            // A tap sets it out; pointing (or a finger kept on it) shows its card.
-            if (thing) link(b, thingRef(id), { acts: true });
-            traySlots.set(id, b);
-            return b;
+    const stored = trayList(mine());
+    list.replaceChildren(
+      ...(stored.length > 0
+        ? KINDS.flatMap((kind) => {
+            const of = stored.filter(({ id }) => thingOf(id)?.kind === kind);
+            return of.length > 0
+              ? [
+                  el(
+                    "div",
+                    "kind",
+                    {},
+                    el("div", "k-label", { text: KIND_NAMES[kind] }),
+                    el("div", "grid", {}, ...of.map(({ id, n }) => traySlot(id, n))),
+                  ),
+                ]
+              : [];
           })
-        : [el("span", "k-d empty", { text: "Nothing is put away. The market in town sells things for a camp." })]),
+        : [el("span", "k-d", { text: "Storage is empty. The market in town sells things for a camp." })]),
     );
   }
 
@@ -517,6 +554,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
       });
       tray.hidden = true;
       document.body.classList.remove("decorating");
+      setHammerNew(home ? mine().fresh.length : 0);
     },
 
     decorating(on) {
@@ -525,15 +563,19 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
       setHammer((): void => {
         at().decorate(!at().decorating());
       }, on);
-      if (on) drawTray();
+      marked.clear();
+      if (!on) return;
+      drawTray();
+      // What is new is brought into sight.
+      list.querySelector(".lit")?.scrollIntoView({ block: "nearest" });
     },
 
     tray: drawTray,
 
     toTray(picture, from, id) {
-      const p = toPage(from.x, from.y);
-      const to = traySlots.get(id) ?? row;
-      fly(picture, p, centre(to), 1, drawTray);
+      const to = traySlots.get(id) ?? list;
+      to.scrollIntoView({ block: "nearest" });
+      fly(picture, toPage(from.x, from.y), centre(to), 1, drawTray);
     },
   };
 }
