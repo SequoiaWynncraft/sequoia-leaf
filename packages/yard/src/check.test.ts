@@ -8,6 +8,7 @@ import { KINDS } from "./content/machines.ts";
 import { create } from "./create.ts";
 import { put, steps, workingYard } from "./fixtures.ts";
 import { DIRS, RIGHT } from "./grid.ts";
+import { counts, isFilled, ORDER_WAITS, swap, swapRefusal } from "./orders.ts";
 import { saveBlueprint, within } from "./pieces.ts";
 import { load, save } from "./save.ts";
 import { blank, type Building, type World } from "./world.ts";
@@ -255,7 +256,6 @@ describe("the check", () => {
       "the story": (w) => void (w.filled.plank = (w.filled.plank ?? 0) + 1),
       "what the depot has taken in": (w) => void (w.depot.ore = (w.depot.ore ?? 0) + 1),
       "what has gone to orders": (w) => void (w.given.ore = (w.given.ore ?? 0) + 1),
-      "the orders hung": (w) => void (w.serial += 1),
       "the next free swap": (w) => void (w.swapAt += 1),
       "the owner's last command": (w) => void (w.seen = { ...w.seen, tick: w.seen.tick + 1 }),
       "a plot": (w) => void w.plots.push("meadow"),
@@ -270,6 +270,30 @@ describe("the check", () => {
       change(w);
       expect([what, check(w) === before]).toEqual([what, false]);
     }
+  });
+
+  test("leaves out an order Leaf has hung that does not count yet: a page told of it in time agrees, and one never told disagrees from the tick it counts", () => {
+    let swapped = 0;
+    for (const [name, leaf] of yards()) {
+      const order = leaf.board.find((o) => !isFilled(o.want, o.filled));
+      if (!order || swapRefusal(leaf, order.id) !== null) continue;
+      // The page's copies have no seed: they take the order down and hang none.
+      const told = read(save({ ...leaf, seed: null }));
+      const never = read(save({ ...leaf, seed: null }));
+      for (const w of [leaf, told, never]) expect(swap(w, order.id)).toBe(true);
+      const hung = leaf.board.filter((o) => !told.board.some((t) => t.id === o.id));
+      expect([name, hung.map((o) => counts(o, leaf.tick))]).toEqual([name, [false]]);
+      expect([name, check(told), check(never)]).toEqual([name, check(leaf), check(leaf)]);
+      told.board.push(...structuredClone(hung));
+      for (const w of [leaf, told, never]) steps(w, ORDER_WAITS - 1);
+      expect([name, check(told), check(never)]).toEqual([name, check(leaf), check(leaf)]);
+      for (const w of [leaf, told, never]) steps(w, 1);
+      expect([name, check(told) === check(leaf), check(never) === check(leaf)]).toEqual([name, true, false]);
+      for (const w of [leaf, told]) steps(w, 1000);
+      expect([name, check(told)]).toEqual([name, check(leaf)]);
+      swapped++;
+    }
+    expect(swapped).toBeGreaterThan(2);
   });
 
   test("covers every field of a piece and of the yard but those it leaves out", () => {
@@ -299,6 +323,7 @@ describe("the check", () => {
       "land",
       "power",
       "seed",
+      "serial",
       "at",
       "away",
       "rates",
@@ -326,7 +351,6 @@ describe("the check", () => {
       "plans",
       "plots",
       "seen",
-      "serial",
       "sold",
       "spare",
       "story",

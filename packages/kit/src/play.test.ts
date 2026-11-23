@@ -97,6 +97,9 @@ async function opened(routes: Record<string, Route>): Promise<Play<Count, Add, s
   if ("trouble" in play) throw new Error(play.trouble);
   return play;
 }
+/** An answer that never comes. */
+const never = (): Promise<Reply> => new Promise<Reply>(() => undefined);
+
 /** Waits until nothing is waiting for Leaf, a millisecond at a time. */
 async function settled(play: Play<Count, Add, string>, tries = 200): Promise<void> {
   if (tries === 0 || !play.waiting()) return;
@@ -465,6 +468,64 @@ describe("sending commands", () => {
     world = standin({ "GET /v1/game/play/raid": () => ({ status: 401, body: { code: "unauthorized" } }) });
     await play.refresh();
     expect(told).toEqual(["signedout"]);
+  });
+
+  test("asking for the state again ends the page for what ends it at the opening, and asks nothing after", async () => {
+    const ends = [
+      [{ status: 409, body: { code: "state_unreadable", message: "Kept" } }, "unreadable"],
+      [{ status: 404, body: { code: "nothing_to_visit", message: "None" } }, "nothing"],
+    ] as const;
+    for (const [reply, why] of ends) {
+      const { routes } = counterLeaf();
+      // oxlint-disable-next-line no-await-in-loop -- one page after another
+      const play = await opened(routes);
+      const told: string[] = [];
+      play.onTrouble((trouble) => told.push(trouble));
+      world?.done();
+      world = standin({ "GET /v1/game/play/raid": reply });
+      // oxlint-disable-next-line no-await-in-loop -- one page after another
+      await play.refresh();
+      // oxlint-disable-next-line no-await-in-loop -- one page after another
+      await play.refresh();
+      expect([why, told, world.sent.length]).toEqual([why, [why], 1]);
+    }
+  });
+
+  test("a request that never settles is let go at its deadline: a batch goes again with the same ids, and a read can be asked again", async () => {
+    const { routes, leaf } = counterLeaf();
+    let hang = true;
+    world = standin({
+      "GET /v1/game/play/raid": () => (hang ? never() : routes["GET /v1/game/play/raid"]()),
+      "POST /v1/game/play/raid": (sent) => (hang ? never() : routes["POST /v1/game/play/raid"](sent)),
+    });
+    hang = false;
+    const play = await openPlay<Count, Add, string>("raid", COUNTER, {
+      player: "p",
+      retry: { first: 1, most: 4 },
+      deadline: 20,
+    });
+    if ("trouble" in play) throw new Error(play.trouble);
+    hang = true;
+    const answer = play.send({ do: "add", by: 3 });
+    await Bun.sleep(1);
+    hang = false;
+    expect(await answer).toEqual({ notes: ["added 3"] });
+    const ids = world.sent
+      .filter((s) => s.method === "POST")
+      .map((s) =>
+        isRecord(s.body) && Array.isArray(s.body.commands)
+          ? s.body.commands.map((c) => (isRecord(c) ? c.id : null))
+          : [],
+      );
+    expect([ids.length, ids[1]]).toEqual([2, ids[0]]);
+    expect(leaf.n).toBe(3);
+    // A read that never settles is let go too, and the next is asked.
+    hang = true;
+    const reads = world.sent.length;
+    await play.refresh();
+    hang = false;
+    await play.refresh();
+    expect([world.sent.length - reads, play.state]).toEqual([2, { n: 3 }]);
   });
 
   test("say who the page believes the member is, with every batch", async () => {

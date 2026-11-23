@@ -242,7 +242,8 @@ into the game's own types by `reader` (a page built for older rules than Leaf's 
 Leaf's answer: what it did (the game's notes) or the code it was refused with. Commands go in
 order, one request at a time, as many as are waiting in each (up to 32), and after a network
 failure, or Leaf having trouble or asking to slow down, the same request goes again with the same
-ids, so nothing is done twice. Each batch carries `player`, who the page believes it is; on
+ids, so nothing is done twice; a request unanswered after ten seconds (`DEADLINE`) is let go and
+counts as no answer. Each batch carries `player`, who the page believes it is; on
 `not_you` (signed in as somebody else since) nothing more is sent and the page loads again. A state
 Leaf cannot read (`state_unreadable`) stops the page with `unreadableCard()` ("Your game could not
 be read. It has been kept; tell the guild."), sending nothing again. A 404 `not_found`, from a Leaf
@@ -257,7 +258,9 @@ is read as the page comes back (`outside.wake`). A visit says none of this, nor 
 without Leaf, shown at once; each answer's state takes the copy's place (with what is still waiting
 worked out again on top), and `onState` tells the page when that is not what it was showing.
 `refresh()` asks for the state again, one question at a time; its answer is let go if a command
-was sent meanwhile, as that command's answer is newer. A game whose page keeps a copy of its own
+was sent meanwhile, as that command's answer is newer. What ends the page at the opening (signed
+out, a state Leaf cannot read, nothing to visit) ends it here too, told to `onTrouble`; any other
+failure is let go, for the page to ask again. A game whose page keeps a copy of its own
 (the Works) is answered short (`reader.short`): a batch's answer is not the state, `onAnswer` gives
 it to the page with each command and its answer, and only a read takes the copy's place;
 `refresh(differs)` says the tick at which the page found its copy not to be Leaf's, which Leaf
