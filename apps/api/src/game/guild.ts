@@ -1,4 +1,6 @@
-import { Option, Schema } from "effect";
+import { DAY_MS, utcDay } from "@sequoia-leaf/core";
+import { Effect, Option, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/sql";
 
 import type { PlayersEvent } from "../events/store.ts";
 
@@ -66,3 +68,46 @@ export function guildEvents(events: readonly PlayersEvent[], names: ReadonlyMap<
     return [{ id: event.id, type: view.value.type, json }];
   });
 }
+
+/** The raids and wars Leaf paid for: those it wrote an event for, so those the guild's events tell of. */
+const TOLD = "activities a JOIN ledger_entries l ON l.idempotency_key = a.source_key";
+
+/**
+ * What the town shows of the guild that its newest events cannot say, as the
+ * rest of the answer's JSON: how many raids and wars the guild finished in the
+ * UTC day of `now`, by when each happened, each once however many members it
+ * paid (their rows share a `detail` and an `occurred_at`); and the last
+ * territory fought at, by when the war happened, of two at one moment the one
+ * whose name sorts later.
+ */
+export const guildDay = Effect.fnUntraced(function* (now: number) {
+  const sql = yield* SqlClient.SqlClient;
+  const from = utcDay(now) * DAY_MS;
+  const counted = SqlSchema.findAll({
+    Request: Schema.Int,
+    Result: Schema.Struct({ kind: Schema.Literals(["raid", "war"]), count: Schema.Int }),
+    execute: (since) => sql`
+      SELECT a.kind AS kind, COUNT(DISTINCT a.detail || char(31) || a.occurred_at) AS count
+      FROM ${sql.literal(TOLD)}
+      WHERE a.occurred_at >= ${since} AND a.occurred_at < ${since + DAY_MS}
+      GROUP BY a.kind
+    `,
+  });
+  const lastWar = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: Schema.Struct({ territory: Schema.String, occurredAt: Schema.Int }),
+    execute: () => sql`
+      SELECT a.detail AS territory, a.occurred_at AS occurredAt
+      FROM ${sql.literal(TOLD)}
+      WHERE a.kind = 'war'
+      ORDER BY a.occurred_at DESC, a.detail DESC LIMIT 1
+    `,
+  });
+  const counts = yield* counted(from);
+  const [war] = yield* lastWar(undefined);
+  const count = (kind: "raid" | "war") => counts.find((row) => row.kind === kind)?.count ?? 0;
+  return JSON.stringify({
+    today: { from: new Date(from).toISOString(), raids: count("raid"), wars: count("war") },
+    last_war: war ? { territory: war.territory, occurred_at: new Date(war.occurredAt).toISOString() } : null,
+  }).slice(1);
+});

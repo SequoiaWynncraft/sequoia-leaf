@@ -16,8 +16,9 @@ import {
 
 import type { Happening } from "./guild.ts";
 import {
+  BEGINS,
   type Ev,
-  GATHER,
+  KEPT,
   letterLines,
   makeLive,
   makeNews,
@@ -25,6 +26,7 @@ import {
   prepare,
   prepared,
   rankName,
+  readDay,
   readEvent,
   readEvents,
   readQuests,
@@ -41,6 +43,7 @@ const answer = (route: string): unknown => {
   const r = isRecord(contract) ? contract[route] : null;
   return isRecord(r) ? r.body : null;
 };
+const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
 const QUESTS = answer("GET /v1/me/quests");
 const EVENTS = answer("GET /v1/me/events");
 /** A list, or nothing. */
@@ -48,12 +51,15 @@ const listed = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
 const ME = "10000000-0000-0000-0000-00000000000a";
 
-/** One of the guild's events, as the guild's stream sends it. */
-function guildEvent(id: number, who: string, type: string, data: Record<string, unknown>): Ev {
+/** When Leaf wrote the guild's events down, unless a test says. */
+const T0 = Date.UTC(2026, 10, 25, 12, 40);
+
+/** One of the guild's events, as the guild's stream sends it, written down by Leaf at `at`. */
+function guildEvent(id: number, who: string, type: string, data: Record<string, unknown>, at = T0): Ev {
   const e = readEvent({
     id,
     type,
-    created_at: "2026-11-25T12:40:00.000Z",
+    created_at: new Date(at).toISOString(),
     player: { id: `id-${who}`, username: who },
     data,
   });
@@ -64,12 +70,31 @@ const sse = (text: string): Reply =>
   new Response(text, { status: 200, headers: { "Content-Type": "text/event-stream" } });
 const frame = (id: number, type: string, data: unknown): string =>
   `id: ${id}\nevent: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
-/** One of the guild's events as a frame of the guild's stream. */
-const ev = (id: number, who: string, type: string, data: Record<string, unknown>): string =>
-  frame(id, type, { id, type, created_at: "x", player: { id: `id-${who}`, username: who }, data });
+/** One of the guild's events as a frame of the guild's stream, written down by Leaf at `at`. */
+const ev = (id: number, who: string, type: string, data: Record<string, unknown>, at: number): string =>
+  frame(id, type, {
+    id,
+    type,
+    created_at: new Date(at).toISOString(),
+    player: { id: `id-${who}`, username: who },
+    data,
+  });
 
-const raid = (id: number, who: string, at = "2026-11-25T12:31:00.000Z", detail = "Nest of the Grootslangs"): Ev =>
-  guildEvent(id, who, "leaf_earned", { source: "raid", detail, occurred_at: at });
+/** Somebody paid for a raid that ended at `ended`, written down by Leaf at `at`. */
+const raid = (
+  id: number,
+  who: string,
+  at = T0,
+  ended = "2026-11-25T12:31:00.000Z",
+  detail = "Nest of the Grootslangs",
+): Ev => guildEvent(id, who, "leaf_earned", { source: "raid", detail, occurred_at: ended }, at);
+
+const iso = (at: number): string => new Date(at).toISOString();
+/** Somebody fought a war at `ended`, written down by Leaf at `at`. */
+const warAt = (id: number, who: string, land: string, ended: number, at = T0): Ev =>
+  guildEvent(id, who, "leaf_earned", { source: "war", detail: land, occurred_at: iso(ended) }, at);
+/** When the day of `T0` began. */
+const DAY = Date.UTC(2026, 10, 25);
 
 describe("the quest board, live", () => {
   test("the member's quests are notes, each with its kind, its ways to finish it and what a reroll costs", () => {
@@ -175,29 +200,155 @@ describe("the arrival letter, live", () => {
 });
 
 describe("the guild's news, live", () => {
-  test("raid events with one detail and occurred_at are one party, told once all have come in", () => {
+  const alice = { id: "id-Alice", name: "Alice", you: false };
+  const bob = { id: "id-Bob", name: "Bob", you: false };
+  const dara = { id: "id-Dara", name: "Dara", you: false };
+
+  test("raid events with one detail and occurred_at are one party, which begins a set time after Leaf wrote the first down", () => {
     const news = makeNews(ME);
-    news.add(raid(1, "Alice"), 0);
-    news.add(raid(2, "Bob"), 500);
-    news.add(raid(3, "Cleo", "2026-11-25T12:45:00.000Z"), 900);
-    news.add(raid(4, "Dara"), 900);
-    expect(news.due(900 + GATHER - 1)).toEqual([]);
-    const told = news.due(900 + GATHER);
-    expect(told).toEqual([
+    news.add(raid(1, "Alice"));
+    news.add(raid(2, "Bob", T0 + 500));
+    news.add(raid(3, "Cleo", T0 + 900, "2026-11-25T12:45:00.000Z"));
+    news.add(raid(4, "Dara", T0 + 900));
+    expect(news.due(T0 + BEGINS - 1)).toEqual([]);
+    const at = T0 + BEGINS;
+    expect(news.due(at)).toEqual([{ kind: "party", raid: "Nest of the Grootslangs", who: [alice, bob, dara], at }]);
+    expect(news.due(at + 900)).toEqual([
       {
         kind: "party",
         raid: "Nest of the Grootslangs",
-        who: [
-          { id: "id-Alice", name: "Alice", you: false },
-          { id: "id-Bob", name: "Bob", you: false },
-          { id: "id-Dara", name: "Dara", you: false },
-        ],
+        who: [{ id: "id-Cleo", name: "Cleo", you: false }],
+        at: at + 900,
       },
-      { kind: "party", raid: "Nest of the Grootslangs", who: [{ id: "id-Cleo", name: "Cleo", you: false }] },
     ]);
-    // A late name for a party already told does not tell it again.
-    news.add(raid(5, "Eli"), 9000);
-    expect(news.due(9000 + GATHER)).toEqual([]);
+    // A name Leaf wrote down after the party began is not of it, and does not tell it again.
+    news.add(raid(5, "Eli", at + 9000));
+    expect(news.due(at + 60_000)).toEqual([]);
+    expect(news.deeds().moments.map((m) => m.who.length)).toEqual([3, 1]);
+  });
+
+  test("the same moments whenever a page hears: as they happen, late, or all at once on opening", () => {
+    const events = [
+      raid(1, "Alice"),
+      raid(2, "Bob", T0 + 400),
+      guildEvent(3, "Cleo", "leaf_earned", { source: "war", detail: "Detlas", occurred_at: "w" }, T0 + 2000),
+      raid(4, "Dara", T0 + BEGINS + 5),
+    ];
+    const live = makeNews(ME);
+    const told: Happening[] = [];
+    // Heard as Leaf's stream sends them, a couple of seconds after each was written down.
+    for (let now = T0; now <= T0 + 30_000; now += 100) {
+      for (const e of events) if (e.at + 2000 <= now) live.add(e);
+      told.push(...live.due(now));
+    }
+    expect(told.map((h) => [h.kind, "at" in h && h.at])).toEqual([
+      ["party", T0 + BEGINS],
+      ["war", T0 + 2000 + BEGINS],
+    ]);
+    // A page that hears everything late, and one that opens after and reads Leaf's newest: the same moments.
+    const late = makeNews(ME);
+    const opened = makeNews(ME);
+    for (const e of events) {
+      late.add(e);
+      opened.add(e, true);
+    }
+    expect(late.deeds().moments).toEqual(live.deeds().moments);
+    expect(opened.deeds().moments).toEqual(live.deeds().moments);
+    expect(live.deeds().moments).toMatchObject([
+      { kind: "party", who: [alice, bob], at: T0 + BEGINS },
+      { kind: "war", what: "Detlas", at: T0 + 2000 + BEGINS },
+    ]);
+  });
+
+  test("a page that comes in the middle of a moment is told of it, with when it began; one that comes after it is over is not", () => {
+    const middle = makeNews(ME);
+    middle.add(raid(1, "Alice"), true);
+    expect(middle.due(T0 + BEGINS + 9000)).toMatchObject([{ kind: "party", at: T0 + BEGINS }]);
+    expect(middle.due(T0 + BEGINS + 9100)).toEqual([]);
+    const after = makeNews(ME);
+    after.add(raid(1, "Alice"), true);
+    after.add(guildEvent(2, "Bob", "level_up", { level: 10 }), true);
+    expect(after.due(T0 + 5 * 60_000)).toEqual([]);
+    // It is still kept, so that a later row of it is not another.
+    expect(after.deeds().moments).toMatchObject([{ kind: "party", at: T0 + BEGINS }]);
+  });
+
+  test("the day's raids and the last war are Leaf's to say: sixty later events of other kinds change neither", () => {
+    const opened = makeNews(ME);
+    opened.said({ from: DAY, party: 9, war: 2 }, { land: "Detlas", happened: T0 - 3_600_000 });
+    // What Leaf counted the day with: none of it is counted again.
+    opened.add(raid(1, "Alice"), true);
+    opened.add(warAt(2, "Bob", "Detlas", T0 - 3_600_000), true);
+    const live = makeNews(ME);
+    live.said({ from: DAY, party: 8, war: 1 }, null);
+    live.add(raid(1, "Alice"));
+    live.add(warAt(2, "Bob", "Detlas", T0 - 3_600_000));
+    // A page that opens as the last war begins joins it there: it is a moment of its own time, and is told.
+    expect(opened.deeds().moments).toMatchObject([{ kind: "party" }, { kind: "war", at: T0 + BEGINS }]);
+    expect(opened.due(T0 + BEGINS).map((h) => h.kind)).toEqual(["party", "war"]);
+    for (const news of [opened, live]) {
+      for (let i = 0; i < 60; i++) news.add(guildEvent(3 + i, "Cleo", "level_up", { level: i }));
+      expect(news.deeds().day).toEqual({ from: DAY, party: 9, war: 2 });
+      expect(news.deeds().moments.filter((m) => m.kind === "war")).toMatchObject([
+        { what: "Detlas", happened: T0 - 3_600_000 },
+      ]);
+    }
+  });
+
+  test("a raid of five members is one raid, and a later row of it is not another", () => {
+    const news = makeNews(ME);
+    news.said({ from: DAY, party: 0, war: 0 }, null);
+    ["Alice", "Bob", "Cleo", "Dara", "Eli"].forEach((who, i) => news.add(raid(1 + i, who, T0 + i * 100)));
+    news.add(raid(9, "Fenn", T0 + 3_600_000));
+    expect(news.deeds().day.party).toBe(1);
+    news.add(raid(10, "Alice", T0 + 3_600_000, "2026-11-25T13:31:00.000Z"));
+    expect(news.deeds().day.party).toBe(2);
+  });
+
+  test("a raid counts in the UTC day it happened: one from before midnight, written after, is not one of the new day's", () => {
+    const news = makeNews(ME);
+    news.said({ from: DAY, party: 4, war: 0 }, null);
+    const midnight = DAY + 86_400_000;
+    news.add(raid(1, "Alice", midnight - 20_000, iso(midnight - 60_000)));
+    expect(news.deeds().day).toEqual({ from: DAY, party: 5, war: 0 });
+    news.add(raid(2, "Bob", midnight + 40_000, iso(midnight + 5000)));
+    expect(news.deeds().day).toEqual({ from: midnight, party: 1, war: 0 });
+    // Written after midnight, it happened the day before.
+    news.add(raid(3, "Cleo", midnight + 50_000, iso(midnight - 30_000)));
+    expect(news.deeds().day).toEqual({ from: midnight, party: 1, war: 0 });
+  });
+
+  test(`the newest ${KEPT} moments are kept, and the last war of those let go stays for the banner`, () => {
+    const news = makeNews(ME);
+    news.said({ from: DAY, party: 0, war: 0 }, { land: "Almuj", happened: T0 - 7_200_000 });
+    news.add(warAt(1, "Alice", "Detlas", T0 - 60_000));
+    // An older war, heard of late.
+    news.add(warAt(2, "Bob", "Ragni", T0 - 3_600_000));
+    for (let i = 0; i < KEPT; i++) news.add(raid(3 + i, "Cleo", T0, iso(T0 - 1000 * (i + 1))));
+    const { moments, day } = news.deeds();
+    expect(moments.length).toBe(KEPT + 1);
+    expect(moments.filter((m) => m.kind === "war")).toMatchObject([{ what: "Detlas", happened: T0 - 60_000 }]);
+    expect(day).toEqual({ from: DAY, party: KEPT, war: 2 });
+    // A later row of the war let go is not that war again.
+    news.add(warAt(900, "Dara", "Detlas", T0 - 60_000, T0 + 60_000));
+    expect(news.deeds().day.war).toBe(2);
+    expect(news.due(T0 + 120_000).filter((h) => h.kind === "war")).toEqual([]);
+  });
+
+  test("Leaf's answer is read for the day and the last war; one without them is no word of either", () => {
+    expect(
+      readDay(
+        isRecord(GAME) && isRecord(GAME["GET /v1/game/guild/events"]) ? GAME["GET /v1/game/guild/events"].body : null,
+      ),
+    ).toEqual({
+      day: { from: DAY, party: 9, war: 1 },
+      flag: { land: "Detlas", happened: Date.UTC(2026, 10, 25, 12, 37) },
+    });
+    expect(readDay({ events: [], today: { from: iso(DAY), raids: 0, wars: 0 }, last_war: null })).toEqual({
+      day: { from: DAY, party: 0, war: 0 },
+      flag: null,
+    });
+    expect(readDay({ events: [] })).toBeNull();
   });
 
   test("a war is the banner for that territory; a level and a milestone are lines", () => {
@@ -209,11 +360,10 @@ describe("the guild's news, live", () => {
         occurred_at: "2026-11-25T12:37:00.000Z",
         in_claim: true,
       }),
-      0,
     );
-    news.add(guildEvent(2, "Bob", "level_up", { level: 10 }), 0);
-    news.add(guildEvent(3, "Cleo", "achievement_paid", { label: "Gold", tier: "gold" }), 0);
-    const told = news.due(GATHER);
+    news.add(guildEvent(2, "Bob", "level_up", { level: 10 }));
+    news.add(guildEvent(3, "Cleo", "achievement_paid", { label: "Gold", tier: "gold" }));
+    const told = news.due(T0 + BEGINS);
     expect(told.map((h) => h.kind)).toEqual(["reached", "milestone", "war"]);
     expect(told.map((h) => lineFor(h)?.[0])).toEqual([
       "Bob reached level 10.",
@@ -228,22 +378,23 @@ describe("the guild's news, live", () => {
       const news = makeNews(ME);
       const at = { occurred_at: "2026-11-25T12:37:00.000Z", ...claim };
       fought.forEach((who, i) => {
-        news.add(guildEvent(i + 1, who, "leaf_earned", { source: "war", detail: "Ragni", ...at }), 0);
-        news.add(guildEvent(i + 10, who, "leaf_earned", { source: "raid", detail: "TNA", ...at }), 0);
+        news.add(guildEvent(2 * i + 1, who, "leaf_earned", { source: "war", detail: "Ragni", ...at }));
+        news.add(guildEvent(2 * i + 2, who, "leaf_earned", { source: "raid", detail: "TNA", ...at }));
       });
-      news.add(guildEvent(20, "Tester", "leaf_earned", { source: "war", detail: "Ragni", ...at }), 0);
-      const told = news.due(GATHER);
+      news.add(guildEvent(20, "Tester", "leaf_earned", { source: "war", detail: "Ragni", ...at }));
+      const told = news.due(T0 + BEGINS);
       const war = told.find((h) => h.kind === "war");
       const party = told.find((h) => h.kind === "party");
       expect(party && lineFor(party)?.[0]).toBe("Alice, Bob and Cleo came back from TNA.");
       expect(war && lineFor(war)).toEqual(["Alice, Bob and 2 more fought at Ragni.", "rose"]);
     }
-    // The member is "You", first, as in a raid party's line.
+    // The member is "You", first, as in a raid party's line; among the moment's own they are where Leaf told of them.
     const news = makeNews("id-Alice");
-    news.add(guildEvent(1, "Bob", "leaf_earned", { source: "war", detail: "Detlas", occurred_at: "t" }), 0);
-    news.add(guildEvent(2, "Alice", "leaf_earned", { source: "war", detail: "Detlas", occurred_at: "t" }), 0);
-    const [war] = news.due(GATHER);
+    news.add(guildEvent(1, "Bob", "leaf_earned", { source: "war", detail: "Detlas", occurred_at: "t" }));
+    news.add(guildEvent(2, "Alice", "leaf_earned", { source: "war", detail: "Detlas", occurred_at: "t" }));
+    const [war] = news.due(T0 + BEGINS);
     expect(war && lineFor(war)?.[0]).toBe("You and Bob fought at Detlas.");
+    expect(news.deeds().moments[0]?.who.map((p) => p.name)).toEqual(["Bob", "Alice"]);
   });
 
   test("another member's level is a line only at a multiple of five; the member's own always is", () => {
@@ -260,10 +411,10 @@ describe("the guild's news, live", () => {
       return e;
     };
     [71, 74, 75, 76, 80, 100, 103].forEach((level, i) => {
-      news.add(guildEvent(i + 1, "Wrenly", "level_up", { level }), 0);
+      news.add(guildEvent(i + 1, "Wrenly", "level_up", { level }));
     });
-    news.add(mine(20, 74), 0);
-    news.add(mine(21, 75), 0);
+    news.add(mine(20, 74));
+    news.add(mine(21, 75));
     const told = news.due(0);
     // Every level still reaches the town, for whatever it does in the world; only the feed is choosy.
     expect(told.length).toBe(9);
@@ -279,11 +430,11 @@ describe("the guild's news, live", () => {
   test("no amount of Leaf in any line of the feed", () => {
     const news = makeNews(ME);
     const amounts = { leaf: 110, xp: 110 };
-    news.add(guildEvent(1, "Alice", "leaf_earned", { source: "raid", detail: "TNA", occurred_at: "a", ...amounts }), 0);
-    news.add(guildEvent(2, "Bob", "leaf_earned", { source: "war", detail: "Ragni", occurred_at: "b", ...amounts }), 0);
-    news.add(guildEvent(3, "Cleo", "level_up", { level: 5, leaf: 100 }), 0);
-    news.add(guildEvent(4, "Dara", "achievement_paid", { label: "Silver", tier: "silver", leaf: 1000 }), 0);
-    const lines = news.due(GATHER).flatMap((h) => lineFor(h)?.[0] ?? []);
+    news.add(guildEvent(1, "Alice", "leaf_earned", { source: "raid", detail: "TNA", occurred_at: "a", ...amounts }));
+    news.add(guildEvent(2, "Bob", "leaf_earned", { source: "war", detail: "Ragni", occurred_at: "b", ...amounts }));
+    news.add(guildEvent(3, "Cleo", "level_up", { level: 5, leaf: 100 }));
+    news.add(guildEvent(4, "Dara", "achievement_paid", { label: "Silver", tier: "silver", leaf: 1000 }));
+    const lines = news.due(T0 + BEGINS).flatMap((h) => lineFor(h)?.[0] ?? []);
     expect(lines.length).toBe(4);
     for (const line of lines) {
       expect(line).not.toMatch(/Leaf|110|100|1000/);
@@ -295,15 +446,15 @@ describe("the guild's news, live", () => {
     const mine = readEvent({
       id: 7,
       type: "leaf_earned",
-      created_at: "x",
+      created_at: new Date(T0).toISOString(),
       player: { id: ME, username: "Tester" },
       data: { source: "raid", detail: "TNA", occurred_at: "t" },
     });
     if (!mine) throw new Error("not an event");
-    news.add(raid(6, "Alice", "t", "TNA"), 0);
-    news.add(mine, 0);
-    news.add(mine, 10);
-    const told = news.due(10 + GATHER);
+    news.add(raid(6, "Alice", T0, "t", "TNA"));
+    news.add(mine);
+    news.add(mine);
+    const told = news.due(T0 + BEGINS);
     expect(told.length).toBe(1);
     expect(told.map((h) => lineFor(h)?.[0])).toEqual(["You and Alice came back from TNA."]);
   });
@@ -360,15 +511,16 @@ describe("the live guild", () => {
       "GET /v1/me/events/stream": sse(
         `id: 140\n\n${frame(141, "leaf_earned", { id: 141, type: "leaf_earned", created_at: "x", data: { source: "raid", detail: "TNA", occurred_at: "t", leaf: 110, xp: 110 } })}`,
       ),
-      "GET /v1/game/guild/events/stream": sse(
-        frame(900, "leaf_earned", {
-          id: 900,
-          type: "leaf_earned",
-          created_at: "x",
-          player: { id: TESTER.player.id, username: "Tester" },
-          data: { source: "raid", detail: "TNA", occurred_at: "t" },
-        }).repeat(2),
-      ),
+      "GET /v1/game/guild/events/stream": () =>
+        sse(
+          frame(900, "leaf_earned", {
+            id: 900,
+            type: "leaf_earned",
+            created_at: new Date(world?.clock.now ?? 0).toISOString(),
+            player: { id: TESTER.player.id, username: "Tester" },
+            data: { source: "raid", detail: "TNA", occurred_at: "t" },
+          }).repeat(2),
+        ),
     });
     await start();
     // How far Leaf's town says the member's news has been told.
@@ -382,7 +534,7 @@ describe("the live guild", () => {
     const heard: Happening[] = [];
     guild.hear((h) => heard.push(h));
     await Bun.sleep(20);
-    world.clock.now += GATHER;
+    world.clock.now += BEGINS;
     guild.step(0.1);
     guild.step(0.1);
     expect(heard.filter((h) => h.kind === "party").length).toBe(1);
@@ -517,8 +669,8 @@ describe("the live guild", () => {
     await Bun.sleep(20);
     for (let i = 0; i < 300; i++) guild.step(1);
 
-    expect(guild.heard()).toBe(true);
-    expect(guild.visitors().map((v) => v.name)).toEqual(["Alice", "Visitor", "Mira"]);
+    // Those Leaf's own answer has are in town, where they are drawn live.
+    expect(guild.visitors().map((v) => v.name)).toEqual(["Mira"]);
     expect(guild.resting().map((r) => r.name)).toEqual(["Bob"]);
     const named = new Set(
       [...reply.present, ...reply.resting].flatMap((m) => (isRecord(m) && typeof m.id === "string" ? [m.id] : [])),
@@ -538,12 +690,35 @@ describe("the live guild", () => {
       "GET /v1/game/me": { status: 200, body: TESTER },
       "GET /v1/me/quests": { status: 200, body: QUESTS },
       "GET /v1/me/events": { status: 200, body: EVENTS },
-      "GET /v1/game/guild/events/stream": sse(
-        ev(900, "Alice", "leaf_earned", { source: "raid", detail: "TNA", occurred_at: "t" }) +
-          ev(901, "Bob", "leaf_earned", { source: "war", detail: "Detlas", occurred_at: "t", in_claim: true }) +
-          ev(902, "Cleo", "level_up", { level: 74 }) +
-          ev(903, "Dara", "achievement_paid", { label: "Gold", tier: "gold" }),
-      ),
+      // What a page that opens reads to catch up: a raid long over, and a level, which is not told again.
+      "GET /v1/game/guild/events": () => ({
+        status: 200,
+        body: {
+          events: [
+            guildFrame(880, "Eli", "leaf_earned", { source: "raid", detail: "NOL", occurred_at: "s" }, -3_600_000),
+            guildFrame(881, "Eli", "level_up", { level: 80 }, -3_600_000),
+          ],
+        },
+      }),
+      "GET /v1/game/guild/events/stream": (s) => {
+        asked.push(s.path);
+        const at = world?.clock.now ?? 0;
+        return sse(
+          ev(900, "Alice", "leaf_earned", { source: "raid", detail: "TNA", occurred_at: "t" }, at) +
+            ev(901, "Bob", "leaf_earned", { source: "war", detail: "Detlas", occurred_at: "t", in_claim: true }, at) +
+            ev(902, "Cleo", "level_up", { level: 74 }, at) +
+            ev(903, "Dara", "achievement_paid", { label: "Gold", tier: "gold" }, at),
+        );
+      },
+    });
+    const asked: string[] = [];
+    /** One of the guild's events as Leaf's list has it, written down `ago` from now. */
+    const guildFrame = (id: number, who: string, type: string, data: Record<string, unknown>, ago: number) => ({
+      id,
+      type,
+      created_at: new Date((world?.clock.now ?? 0) + ago).toISOString(),
+      player: { id: `id-${who}`, username: who },
+      data,
     });
     await start();
     expect(await prepare(null)).toBe(true);
@@ -560,11 +735,15 @@ describe("the live guild", () => {
     });
     await Bun.sleep(20);
     guild.step(0.1);
+    // The stream goes on from where the newest it read ended.
+    expect(asked).toEqual(["/v1/game/guild/events/stream?after=881"]);
     expect(heard.toSorted()).toEqual(["milestone", "reached"]);
     expect(said).toEqual([[0, "Dara reached a milestone: Gold."]]);
-    world.clock.now += GATHER;
+    world.clock.now += BEGINS;
     guild.step(0.1);
     expect(heard.toSorted()).toEqual(["milestone", "party", "reached", "war"]);
+    // The raid an hour ago is over, and still kept, so that a later row of it is not another.
+    expect(guild.deeds().moments.map((m) => m.what)).toEqual(["NOL", "TNA", "Detlas"]);
     expect(said.length).toBe(1);
     for (let s = 0; s < 60; s++) {
       world.clock.now += 1000;
@@ -607,16 +786,25 @@ describe("who is here, and who is dozing", () => {
     ];
     const r = toResting(resting, present, ME);
     expect(r.length).toBe(12);
-    expect(r[0]).toEqual({ id: "n13", name: "N13", rank: null, at: "table", skin: "/v1/game/skins/n13", seen: at + 4 });
+    expect(r[0]).toEqual({
+      id: "n13",
+      name: "N13",
+      rank: null,
+      at: "table",
+      skin: "/v1/game/skins/n13",
+      seen: at + 4,
+      stays: true,
+    });
     expect(r.map((x) => x.seen)).toEqual(r.map((x) => x.seen).toSorted((x, y) => y - x));
     expect(r.some((x) => x.id === ME || x.id === "a" || x.id === "b")).toBe(false);
   });
 
-  test("everybody but the member, nobody at their own camp, at most twelve", () => {
+  test("everybody at the Works or the stump but the member (whoever is in town is there live), at most twelve", () => {
     const present = [
       { id: ME, name: "Tester", place: "town" as const, rank: "captain", guest: false },
       { id: "a", name: "Alice", place: "works" as const, rank: "chief", guest: false },
       { id: "b", name: "Bob", place: "camp" as const, rank: null, guest: false },
+      { id: "c", name: "Cleo", place: "town" as const, rank: null, guest: false },
       ...Array.from({ length: 14 }, (_, i) => ({
         id: `n${i}`,
         name: `N${i}`,
@@ -628,17 +816,17 @@ describe("who is here, and who is dozing", () => {
     const v = toVisitors(present, ME);
     expect(v.length).toBe(12);
     expect(v[0]).toEqual({ id: "a", name: "Alice", rank: "Chief", at: "works", skin: "/v1/game/skins/a" });
-    expect(v.some((x) => x.id === ME || x.id === "b")).toBe(false);
+    expect(v.some((x) => x.id === ME || x.id === "b" || x.id === "c")).toBe(false);
   });
 
   test("a guest is drawn like any member, their own skin and name, with Guest for a rank, here or dozing", () => {
-    const present = [{ id: "g", name: "Wanderer", place: "town" as const, rank: null, guest: true }];
+    const present = [{ id: "g", name: "Wanderer", place: "table" as const, rank: null, guest: true }];
     const gone = [{ id: "h", name: "Drifter", place: "works" as const, seen: 5, guest: true }];
     expect(toVisitors(present, ME)).toEqual([
-      { id: "g", name: "Wanderer", rank: "Guest", at: "town", skin: "/v1/game/skins/g" },
+      { id: "g", name: "Wanderer", rank: "Guest", at: "table", skin: "/v1/game/skins/g" },
     ]);
-    expect(toResting(gone, present, ME)).toEqual([
-      { id: "h", name: "Drifter", rank: "Guest", at: "works", skin: "/v1/game/skins/h", seen: 5 },
+    expect(toResting(gone, present, ME, false)).toEqual([
+      { id: "h", name: "Drifter", rank: "Guest", at: "works", skin: "/v1/game/skins/h", seen: 5, stays: false },
     ]);
   });
 
@@ -654,8 +842,6 @@ describe("who is here, and who is dozing", () => {
   });
 });
 
-const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
-
 describe("the guild's news Leaf really sends", () => {
   const route = isRecord(GAME) ? GAME["GET /v1/game/guild/events"] : null;
   const events = readEvents(isRecord(route) ? route.body : null);
@@ -663,8 +849,8 @@ describe("the guild's news Leaf really sends", () => {
   test("members paid for one raid at one time come home as one party; nothing says how much", () => {
     expect(events.length).toBeGreaterThan(10);
     const news = makeNews(ME);
-    for (const e of events) news.add(e, 0);
-    const told = news.due(GATHER);
+    for (const e of events) news.add(e);
+    const told = news.due(Math.max(...events.map((e) => e.at)) + BEGINS);
     const parties = told.filter((h) => h.kind === "party");
     expect(parties.length).toBe(9);
     expect(parties.filter((h) => h.who.length === 2).map((h) => h.who.map((p) => p.name))).toEqual([
@@ -727,7 +913,6 @@ describe("a guest's town", () => {
     expect(world?.sent.map((s) => s.path)).toEqual(["/v1/game/hello", "/v1/game/me", "/v1/game/presence"]);
     // Others in town, members and guests, are there all the same.
     expect(guild.visitors()).toEqual([
-      { id: "m-1", name: "Mira", rank: null, at: "town", skin: "/v1/game/skins/m-1" },
       { id: "g-2", name: "Drifter", rank: "Guest", at: "table", skin: "/v1/game/skins/g-2" },
     ]);
   });

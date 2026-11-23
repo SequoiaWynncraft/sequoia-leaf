@@ -10,7 +10,7 @@ member's own camp.
 ```sh
 bun run dev      # with hot reload
 bun run build    # dist/
-bun test         # the arrival letter, the town's own, the town's own and the crabs by Leaf's clock, the guild live, strings of lights tied at both ends, the town live, what a touch means
+bun test         # the arrival letter, the town's own, what goes by Leaf's clock on the town's ground, the guild live, strings of lights tied at both ends, the town live, what a touch means
 ```
 
 The town always plays on Leaf: on a developer's machine that is `apps/api/test/play.ts` (the
@@ -101,6 +101,12 @@ says so.
   beside them. What answers a player is still worked out on each page, from where the players
   are: a word for somebody walking by (the same word on each page), a crab edging away from feet,
   a napper woken by a touch, a hop at a cheer.
+  The same goes for what follows from what Leaf said: where members in the games stand and those
+  gone doze (**Who is here**), and a raid party home or a war (**The guild's news**), each from
+  Leaf's list or the event's own time. And for the stump's board: while somebody is at it (a
+  player sitting there, or a member Leaf lists at the table) a carved figure goes to a free hex
+  beside its own every 2.1 seconds (`boardAt`), the moves taken back after 32 so that it is set out
+  again every 64; with nobody at it, it is set out. A knock on the stump makes them all jump.
 - **Members.** Real members in the game are about the town, live, where they really are, and those
   who have gone in the last day doze in town (both below). A member's card has their
   name and rank, and for one dozing, how long ago they dozed off. A name shows only over somebody
@@ -111,13 +117,13 @@ says so.
   is on a figure from 10 pixels across, the mouse from 7.
 - **Nobody inside anybody** (`apart.ts`). A figure is drawn 10 pixels across and as tall as its pose
   (`headOf`: 21 standing, 19 sitting facing us, 16 sitting side on or facing away); two overlapping
-  by over a third of the smaller are on top of one another (`crowds`). A walk anybody is sent on in
-  town (the member's to a tapped spot or a place, a visitor's, a dozer's to a seat)
+  by over a third of the smaller are on top of one another (`crowds`). A walk the member is sent on in
+  town (to a tapped spot or a place)
   ends where it was going, or, with somebody standing or sitting still there, at the nearest place
   to it that is on top of nobody and a straight walk from it, 21 pixels away at most (`stopAt`,
   `beside`). The end is looked at again all along the walk's last stretch. A seat somebody stands
   or sits on is not free, tapped or chosen as the nearest; somebody who finds their seat taken when
-  they get there goes to the next free one, or, with none, stays standing (a dozer dozes there).
+  they get there goes to the next free one, or, with none, stays standing.
   Other players walk where their own pages send them, so members standing or sitting still on top
   of one another anyway (the member, live players, those visiting or dozing) are drawn apart, the
   same on every page. In turn, whoever sits first and then by account: somebody on top of nobody
@@ -226,7 +232,8 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   top bar a strip says whose camp it is, with "My camp"; the signpost offers Home and Town. Their
   camp is read again every half minute, and as the tab comes back. Nothing to visit puts the page
   behind the kit's card, "No camp to visit", with "My camp".
-- **The guild, live.** The same moments reach a camp: a line in the feed, a paper lantern going up
+- **The guild, live.** The same moments reach a camp, as each begins by Leaf's clock (`cue`, as in
+  town: none from before the page was there): a line in the feed, a paper lantern going up
   beyond the trees (and over the clearing, where the far trees are out of sight) when a raid comes
   home, a pennant on the cabin roof for land taken, and whoever is there, pets included, hopping.
   The town carries on quietly meanwhile, so the party is gone or back and the banner is up when
@@ -328,10 +335,28 @@ card says so and the town is not loaded.
   letter is put away and with each `here`, and moves on as the member's own news arrives while
   they are in town, so that the next letter does not tell it again. On a first visit it starts
   from the member's newest news, so the letter tells none of it.
-- **The guild's news.** The town listens to the guild's events. Members paid for the same raid at
-  the same moment are one party: they walk in through the gate (any of them in town already come
-  over), the first hangs a lantern in the tree, and the feed names them and the raid. A war raises
-  the banner for that territory, and the feed says only what its events do: "Alice and Bob fought at Detlas.", never who won. A milestone is a line in the feed, and so is a level: the
+- **The guild's news.** The town reads the guild's 50 newest events as it opens and listens from
+  there. Members paid for the same raid at the same moment are one party, and it is staged from
+  its own time by Leaf's clock, the same second on every page: it begins 6 seconds after Leaf wrote
+  the first of them down (Leaf's stream looks every 2, so every page has heard). Those of it with
+  no figure in town walk in through the gate, the first four of it each in their own place
+  (`homecoming`); the town cheers 1.5
+  seconds in and the feed names them and the raid; the first walks on to the lantern tree and a
+  lantern goes up 8.5 seconds in; then they go out again, and it is over at 23. Whoever of it is
+  in town already (live, at a game's door) hops where they are, and whoever dozes sleeps through
+  it. A page that opens in the middle puts everybody where they are by then, and plays only what
+  is still to come (`cue` in `game.ts`: what is seen or heard once is played at its moment of
+  Leaf's clock, and not if the page was not there for it); one that opens after sees what it left.
+  What it left is Leaf's to say, which has every event: with the newest events come how many
+  raids and wars the guild finished in the UTC day, each once, by when each happened, and the last
+  territory fought at, by when the war happened. The page adds what it hears after by the same
+  rule (a raid or war it has not heard of is one more in the day it happened; a war that happened
+  later is the last), so a page open all day and one just opened show the same. The tree holds
+  one lantern for each raid today, the newest seven, each in the next place round it, and says
+  how many there are; the banner is the last territory's, in its own colours, with a streamer for
+  each war today. The feed says only what its events do: "Alice and Bob fought at Detlas.", never
+  who won. A guest is given none of the guild's news, so sees none of this. A
+  milestone is a line in the feed, and so is a level: the
   member's own always, anybody else's only at a multiple of five. The member is "You", and no line
   says how much Leaf anybody was paid (`news.ts` has every line). The feed takes these lines one at
   a time, twenty seconds apart, oldest first, and drops one that has waited five minutes; what
@@ -366,13 +391,20 @@ card says so and the town is not loaded.
   about as visitors (`visitors.ts`) in their own skins: by the Works' door, or watching at the
   stump; those in town are there live instead, and nobody drawn live, fading away included, is a
   visitor or a dozer as well. Nobody at their own camp.
-  Those there when the page opens stand where they are from the start; anybody after comes in
-  through the gate. They never speak, and their card has only their name and rank; a
-  guest's says "Guest". Up to twelve of the others, most recent first, doze at a free seat
+  Where each is follows from Leaf's list and Leaf's clock, so it is the same on every page. A
+  visitor stands at one of the spots of where they are, by their account (two on one spot are
+  drawn apart). Leaf's list says nothing of when anybody came, so they are there from the moment
+  the page hears of them; two pages ask at different moments, half a minute apart at most. They
+  never speak, and their card has only their name and rank; a
+  guest's says "Guest". Up to twelve of the others, most recent first, doze on a seat
   for where they were (a log at the fire for the town, the log at the stump for the table, the bench
-  by the Works' door for the Works, then whatever seat is free; never the member's own; nobody last
-  at their camp): eyes closed, a "z" drifting up, never speaking or moving. A visitor who goes sits
-  down to doze if they stay, and walks out through the gate if not; a dozer who comes back gets up.
+  by the Works' door for the Works, then whatever seat is left; never the member's own; nobody last
+  at their camp): eyes closed, a "z" drifting up every 2 seconds, never speaking or moving.
+  Whoever has been gone longest chooses first, and a seat a player or one of the town's own sits
+  on is passed over (`dozing`): a player may sit down where somebody dozes, and the dozer is on
+  the next seat in its order from then, on every page. A visitor who goes stays on their feet until 120 seconds after Leaf
+  last saw them (Leaf lists them as gone at 90, and by 120 every page has asked), then walks to
+  their seat to doze if they stay, and out through the gate if not, or if no seat is left.
 - **Who is about** (`aboutui.ts`, its rules in `about.ts`). A small wooden button beside the purse
   (under it where the screen is too narrow) with two heads and how many are in the game now, the
   member too, opens a panel that lists them: **In town**, everybody in the live room with the
@@ -449,7 +481,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/props.ts`, `src/flights.ts`      | Things that stand and can be touched; things in the air                                         |
 | `src/actors.ts`, `src/pets.ts`        | Walking, sitting, speaking; the town's own put where Leaf's clock has them; the pets            |
 | `src/folkart.ts`                      | How each of the town's own is drawn (never a skin)                                              |
-| `src/events.ts`                       | Staging the guild's moments in the town, or applying them quietly                               |
+| `src/events.ts`                       | What of the guild's moments is played once, each at its time: the fanfare, the cheer, the line  |
 | `src/draw.ts`                         | Drawing a frame of any place; name plates and speech; the round hole a door closes to           |
 | `src/hud.ts`                          | The purse, corner, feed, dock, panel and cards, shared by both places                           |
 | `src/ui.ts`, `src/campui.ts`          | The town's panels and arrival letter; the camp's panels and tray                                |
@@ -458,7 +490,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/games.ts`                        | The games that are places, and what each says is waiting                                        |
 | `src/guild.ts`, `src/live.ts`         | The questions asked of the guild, and the guild's server answering them                         |
 | `src/news.ts`                         | The feed's line for each of the guild's moments, and their pace                                 |
-| `src/visitors.ts`                     | Real members in the game, standing about the town, and those dozing in it                       |
+| `src/visitors.ts`                     | Real members put where Leaf's list and clock have them: visiting, dozing, home from a raid      |
 | `src/players.ts`, `src/motion.ts`     | The town live: in the room, everybody else drawn from it, emotes; its rules                     |
 | `src/apart.ts`                        | Back where the member stood after a reload; members on one spot drawn a step apart              |
 | `src/aboutui.ts`, `src/about.ts`      | Who is about: the button and its panel; who goes in which part, and the words                   |
@@ -470,7 +502,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/campsfx.ts`                      | The camp's own sounds                                                                           |
 
 The catalogue of camp things (`things.ts`), what is for sale (`catalogue.ts`), the mailbox
-(`mail.ts`), the town's own (`folk.ts`), what they and the crabs do by the clock (`clock.ts`), a
+(`mail.ts`), the town's own (`folk.ts`), what goes by Leaf's clock (`clock.ts`), a
 camp's rules (`camp.ts`) and the town's commands (`game.ts`) are in `packages/town`, the rules Leaf plays the town by; the page imports them from
 there and works out with them what it shows at once. `grid.ts`, `letter.ts`, `games.ts`, `live.ts`,
 `news.ts`, `motion.ts`, `apart.ts` and `about.ts` have no page in them, and tests beside them (`motion.test.ts`
@@ -500,8 +532,10 @@ got, `leave()` comes back, `kept()` gives the town as the page shows it (Leaf's 
 asks Leaf for it again (after staging something), `who()` says where each of the town's own is and
 what it is doing and `crabs()` where each crab is and whether it is running off, both by Leaf's
 clock at the moment they are asked (neither `skip` nor `hold` moves that clock; held, the picture
-stays as it was last put), `visitors()` says which real members are in town, where, and whether they are
-dozing, `where()` says which place is on and how dark the walk has got, `purse()` says what the
+stays as it was last put), `visitors()` says which real members are in town, where, what each is
+doing and whether they are dozing, `board()` which hex each figure on the stump is on and whether
+anybody is at it, and `moments()` how many lanterns hang, whose banner flies and the last cheers
+played with when each was, all three by Leaf's clock too, `where()` says which place is on and how dark the walk has got, `purse()` says what the
 purse holds, `page(x, y)` turns a point in the place that is on into a point on the page, and
 `prompt()` says where the prompt is on the page while it is up.
 

@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { leaf, type PlayerId, playerId } from "@sequoia-leaf/core";
+import { SITS_AFTER } from "@sequoia-leaf/town/clock.ts";
 import { Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
+import { runCreditSync } from "../src/earning/run.ts";
 import { Events, type PlayerEvent } from "../src/events/store.ts";
+import { PRESENT_FOR_MS } from "../src/game/presence.ts";
 import { API_POLICY } from "../src/http/headers.ts";
 import { StreamTuning } from "../src/http/streams.ts";
 import { Ledger } from "../src/ledger/store.ts";
@@ -855,6 +858,39 @@ describe("GET /v1/game/skins/{uuid}", () => {
   });
 });
 
+/** A raid or a war as the backend's feed lists it: one row for each member of it. */
+const raidOf = (completion: number, at: number, ...members: PlayerId[]) =>
+  members.map((member) => ({
+    completion_id: completion,
+    completed_at: new Date(at).toISOString(),
+    raid_name: "The Nameless Anomaly",
+    season_rating: 110,
+    player_uuid: member,
+  }));
+const warOf = (submission: number, at: number, territory: string, ...members: PlayerId[]) =>
+  members.map((member) => ({
+    war_submission_id: submission,
+    completed_at: new Date(at).toISOString(),
+    territory,
+    in_claim: true,
+    war_points: 40,
+    season_rating: 60,
+    player_uuid: member,
+  }));
+/** Leaf has read the backend's feed since `since`, and reads it now as it stands. */
+async function synced(since: number, raids: unknown[], wars: unknown[] = []): Promise<void> {
+  const now = clock.now;
+  clock.now = since;
+  await services.run(runCreditSync("recent"));
+  backend.credits = () => ({ raids, wars });
+  clock.now = now;
+  await services.run(runCreditSync("recent"));
+}
+const dayOf = async (): Promise<unknown> => {
+  const { events: _, ...day } = Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Unknown))(await guild());
+  return day;
+};
+
 describe("GET /v1/game/guild/events", () => {
   beforeEach(async () => {
     mojang.profiles.set(bob, { name: "Bob", skin: undefined });
@@ -875,7 +911,7 @@ describe("GET /v1/game/guild/events", () => {
       },
     });
 
-    expect(await guild()).toEqual({
+    expect(await guild()).toMatchObject({
       events: [
         {
           id: 1,
@@ -914,7 +950,7 @@ describe("GET /v1/game/guild/events", () => {
     await happened(bob, { type: "quest_completed", data: { quest: questLike } });
     await happened(bob, { type: "quest_rerolled", data: { replaced: questLike, quest: questLike, leaf: 100 } });
 
-    expect(await guild()).toEqual({
+    expect(await guild()).toMatchObject({
       events: [
         expect.objectContaining({ type: "level_up", data: { level: 7 } }),
         expect.objectContaining({ type: "achievement_paid", data: { label: "Gold", tier: "gold" } }),
@@ -929,7 +965,7 @@ describe("GET /v1/game/guild/events", () => {
     await raided(carol, 330);
     await get("/v1/game/me");
 
-    expect(await guild()).toEqual({
+    expect(await guild()).toMatchObject({
       events: [
         expect.objectContaining({ id: 1, player: { id: alice, username: "Alice" } }),
         expect.objectContaining({ id: 2, player: { id: bob, username: "Bob" } }),
@@ -942,7 +978,7 @@ describe("GET /v1/game/guild/events", () => {
     mojang.profiles.set(dave, { name: "Dave", skin: undefined });
     await raided(dave, 110);
 
-    expect(await guild()).toEqual({ events: [] });
+    expect(await guild()).toMatchObject({ events: [] });
     expect(mojang.calls).toEqual([]);
   });
 
@@ -973,7 +1009,7 @@ describe("GET /v1/game/guild/events", () => {
     await guild();
     await guild();
 
-    expect(whileDown).toEqual({ events: [] });
+    expect(whileDown).toMatchObject({ events: [] });
     expect(mojang.calls).toEqual([`profile ${bob}`, `profile ${bob}`]);
   });
 
@@ -990,6 +1026,65 @@ describe("GET /v1/game/guild/events", () => {
     expect(latest).toEqual(Array.from({ length: 50 }, (_, index) => 211 + index));
     expect(after).toEqual(Array.from({ length: 200 }, (_, index) => 11 + index));
     expect(end).toEqual(Array.from({ length: 10 }, (_, index) => 251 + index));
+  });
+
+  it("says the guild's day whatever came after: each raid once however many were in it, and the last war", async () => {
+    const erin = playerId("10000000-0000-0000-0000-00000000000e");
+    await synced(
+      T0 - HOUR,
+      [...raidOf(100, T0 - 20 * MINUTE, alice, bob, carol, dave, erin), ...raidOf(101, T0 - 10 * MINUTE, bob)],
+      warOf(900, T0 - 15 * MINUTE, "Detlas", alice, bob),
+    );
+    for (let n = 1; n <= 60; n++) {
+      // oxlint-disable-next-line no-await-in-loop -- in order, so ids follow n
+      await happened(bob, { type: "level_up", data: { level: n, leaf: 10 } });
+    }
+
+    const body = Schema.decodeUnknownSync(
+      Schema.Struct({ events: Schema.Array(Schema.Struct({ type: Schema.String })) }),
+    )(await guild());
+    expect(new Set(body.events.map((event) => event.type))).toEqual(new Set(["level_up"]));
+    expect(await dayOf()).toEqual({
+      today: { from: "2026-11-25T00:00:00.000Z", raids: 2, wars: 1 },
+      last_war: { territory: "Detlas", occurred_at: new Date(T0 - 15 * MINUTE).toISOString() },
+    });
+    // A page that asks from a position is catching up, and is told only the events.
+    expect(
+      Object.keys(
+        Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Unknown))(
+          await guild("/v1/game/guild/events?after=0"),
+        ),
+      ),
+    ).toEqual(["events"]);
+  });
+
+  it("counts a raid in the UTC day it happened, not the day Leaf wrote it down", async () => {
+    const midnight = T0 + 12 * HOUR;
+    clock.now = midnight + 5 * MINUTE;
+    await synced(T0, [...raidOf(100, midnight - 30_000, alice, bob), ...raidOf(101, midnight + 30_000, bob)]);
+
+    expect(await dayOf()).toEqual({ today: { from: "2026-11-26T00:00:00.000Z", raids: 1, wars: 0 }, last_war: null });
+  });
+
+  it("the last war is the one that happened last, whenever Leaf heard of it; of two at one moment, the later name", async () => {
+    await synced(T0 - HOUR, [], warOf(900, T0 - 10 * MINUTE, "Detlas", alice));
+    // An older war, reported late.
+    backend.credits = () => ({ raids: [], wars: warOf(901, T0 - 15 * MINUTE, "Almuj", bob) });
+    clock.now = T0 + MINUTE;
+    await services.run(runCreditSync("recent"));
+    const afterLate = await dayOf();
+    backend.credits = () => ({
+      raids: [],
+      wars: [...warOf(902, T0, "Ragni", alice), ...warOf(903, T0, "Troms", bob), ...warOf(904, T0, "Nesaak", bob)],
+    });
+    clock.now = T0 + 2 * MINUTE;
+    await services.run(runCreditSync("recent"));
+
+    expect(afterLate).toMatchObject({
+      today: { wars: 2 },
+      last_war: { territory: "Detlas", occurred_at: new Date(T0 - 10 * MINUTE).toISOString() },
+    });
+    expect(await dayOf()).toMatchObject({ today: { wars: 5 }, last_war: { territory: "Troms" } });
   });
 
   it("refuses an after that is not an event id", async () => {
@@ -1189,6 +1284,10 @@ describe("PUT /v1/game/presence", () => {
       resting: [{ id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0) }],
       gone: [],
     });
+  });
+
+  it("lists somebody as gone 30 seconds before the town has them sit down or go: every page asks in that time", () => {
+    expect(SITS_AFTER - PRESENT_FOR_MS).toBe(30_000);
   });
 
   it("lists as resting those seen between 90 seconds and a day ago who stay, newest first, at most 24", async () => {

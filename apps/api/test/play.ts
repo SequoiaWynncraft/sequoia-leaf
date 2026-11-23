@@ -49,7 +49,10 @@
  * kept yard, a time away, a filled order, the others' yards on the board: `stage-works.ts`), and
  * `POST /test/play/town` one in Tester's town and camp (a lived-in camp, a caller waiting, a time
  * away, a full mailbox, Coins to shop with, the others' camps on the board, prizes won, a
- * banner's person and a timed quest at any hour: `stage-town.ts`), and `POST /test/play/pulls` one
+ * banner's person and a timed quest at any hour: `stage-town.ts`; and, for the guild's news,
+ * `{ "home": true }` has Alderwick and Sedgewren, two members who are not in the game, finish a
+ * raid with Mossling now, `{ "war": true }` has the two fight a war now, and `{ "levels": n }` has
+ * the four reach a level n times between them, n more events after those), and `POST /test/play/pulls` one
  * in Tester's pulls (a banner's headliner, Leaf's clock on a day the banner is open, Leaf,
  * counters, Seeds and prizes: `stage-pulls.ts`); nothing like them is served by the guild's own Leaf.
  */
@@ -63,6 +66,7 @@ import type { SqlClient } from "effect/sql";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
+import { Events } from "../src/events/store.ts";
 import type { Quests } from "../src/quests/store.ts";
 import { LiveClient } from "./live-client.ts";
 import { stagePulls } from "./stage-pulls.ts";
@@ -177,6 +181,27 @@ const pebblefoot = {
   look: { skin: [240, 200, 170, 255], hair: [200, 200, 205, 255], shirt: [180, 130, 60, 255], legs: [90, 70, 50, 255] },
 } as const;
 
+/** Two members who are not in the game: they raid and fight when a tour asks (`{ home: true }`, `{ war: true }`). */
+const away: readonly Member[] = [
+  {
+    id: playerId("7e570000-0000-4000-8000-000000000008"),
+    name: "Alderwick",
+    rank: "Captain",
+    look: { skin: [214, 160, 124, 255], hair: [70, 50, 36, 255], shirt: [40, 96, 110, 255], legs: [52, 48, 60, 255] },
+  },
+  {
+    id: playerId("7e570000-0000-4000-8000-000000000009"),
+    name: "Sedgewren",
+    rank: "Recruit",
+    look: {
+      skin: [176, 122, 92, 255],
+      hair: [224, 214, 190, 255],
+      shirt: [150, 110, 40, 255],
+      legs: [60, 70, 48, 255],
+    },
+  },
+];
+
 /** With `--admin`: one of the guild's staff, a website admin, not in the guild. */
 const warden = { id: playerId("7e570000-0000-4000-8000-000000000007"), name: "Warden" } as const;
 /** Warden's session, for asking `GET /v1/game/admin/activity` with a Bearer header. */
@@ -272,7 +297,7 @@ const { backend, fetcher } = fakeBackend({
 });
 
 const mojang = fakeMojang();
-for (const [index, member] of [...members, pebblefoot, ...crowd].entries()) {
+for (const [index, member] of [...members, pebblefoot, ...crowd, ...away].entries()) {
   const texture = `5e1f${index.toString(16)}a`;
   mojang.profiles.set(member.id, { name: member.name, skin: `http://textures.minecraft.net/texture/${texture}` });
   mojang.textures.set(`https://textures.minecraft.net/texture/${texture}`, skinPng(member.look));
@@ -522,24 +547,38 @@ if (birchwood && mossling && fernhollow && quillon) {
   setInterval(() => void here(), 30_000);
 }
 
+/** A party finished a raid, or fought a war, 40 seconds ago, and Leaf reads of it now: the `n`th such, for its name. */
+function justNow(what: "raid" | "war", party: readonly Member[], n: number): Promise<void> {
+  const ended = new Date(Date.now() - 40_000).toISOString();
+  for (const member of party) {
+    if (what === "raid")
+      raids.push({
+        completion_id: 7000 + n,
+        completed_at: ended,
+        raid_name: pick(RAID_NAMES, n),
+        season_rating: 110,
+        player_uuid: member.id,
+      });
+    else
+      wars.push({
+        war_submission_id: 9500 + n,
+        completed_at: ended,
+        territory: pick(TERRITORIES, n),
+        in_claim: true,
+        war_points: 35,
+        season_rating: 30,
+        player_uuid: member.id,
+      });
+  }
+  return leaf.run(runCreditSync("recent").pipe(Effect.ignore));
+}
+
 /** Every minute, two or three of the four come back from a raid. */
 function keepBusy() {
   let n = 0;
   setInterval(() => {
     n += 1;
-    const party = [pick(mates, n), pick(mates, n + 1), ...(n % 2 === 0 ? [pick(mates, n + 2)] : [])];
-    const completion = 7000 + n;
-    const now = new Date(Date.now() - 40_000).toISOString();
-    for (const member of party) {
-      raids.push({
-        completion_id: completion,
-        completed_at: now,
-        raid_name: pick(RAID_NAMES, n),
-        season_rating: 110,
-        player_uuid: member.id,
-      });
-    }
-    void leaf.run(runCreditSync("recent").pipe(Effect.ignore));
+    void justNow("raid", [pick(mates, n), pick(mates, n + 1), ...(n % 2 === 0 ? [pick(mates, n + 2)] : [])], n);
   }, MINUTE);
 }
 if (busy) {
@@ -635,6 +674,25 @@ const stageThePulls = (ops: readonly unknown[]) =>
     }
     return yield* stagePulls(tester.id, ops, others, clock.now);
   });
+/** Stages Tester's town (`stage-town.ts`), and the guild's news that only this script can make: a raid party home, a war fought. */
+let staged = 0;
+const stageTheTown = (ops: readonly unknown[]) =>
+  Effect.gen(function* () {
+    for (const op of ops) {
+      if (typeof op !== "object" || op === null) continue;
+      const party = "home" in op && op.home === true ? [...away, ...mates.slice(1, 2)] : null;
+      if (party) yield* Effect.promise(() => justNow("raid", party, 500 + ++staged));
+      if ("war" in op && op.war === true) yield* Effect.promise(() => justNow("war", away, 500 + ++staged));
+      const levels = "levels" in op && typeof op.levels === "number" ? op.levels : 0;
+      for (let n = 0; n < levels; n++) {
+        const reached = Events.use((events) =>
+          events.insert(pick(mates, n).id, { type: "level_up", data: { level: 20 + n, leaf: 0 } }, clock.now),
+        );
+        yield* Effect.promise(() => leaf.run(reached));
+      }
+    }
+    return yield* stageTown(tester.id, ops, others);
+  });
 /** Everybody but Tester whose yard or camp a tour may stage. */
 const others = [
   ...mates.map((m) => ({ id: m.id, guest: false })),
@@ -647,7 +705,7 @@ const served = await leaf.serve(
     signingRoute("/sign-in"),
     signingRoute("/sign-out"),
     stagingRoute("raid", (ops) => stageRaid(tester.id, ops)),
-    stagingRoute("town", (ops) => stageTown(tester.id, ops, others)),
+    stagingRoute("town", stageTheTown),
     stagingRoute("works", (ops) => stageWorks(tester.id, ops, others)),
     stagingRoute("pulls", (ops) => stageThePulls(ops)),
   ),

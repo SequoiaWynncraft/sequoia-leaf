@@ -3,6 +3,7 @@
 import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, ell, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, hash, makeCanvas, vnoise } from "@sequoia-leaf/kit/util.ts";
+import { BOARD } from "@sequoia-leaf/town/clock.ts";
 
 import { drawFern } from "./ground.ts";
 import type { PlaceId } from "./world.ts";
@@ -653,24 +654,6 @@ function shortLog(): Sprite {
   ell(g, 2.5, 4.5, 1.2, 2.6, BARK[4]);
   return spr(c, 7, 10);
 }
-
-/** Where the hexes of the stump's board are, in the stump's own pixels: a row of five, four, five. */
-export const BOARD: readonly (readonly [number, number])[] = [
-  [12, 7],
-  [18, 7],
-  [24, 7],
-  [30, 7],
-  [36, 7],
-  [15, 11],
-  [21, 11],
-  [27, 11],
-  [33, 11],
-  [12, 15],
-  [18, 15],
-  [24, 15],
-  [30, 15],
-  [36, 15],
-];
 
 /**
  * The great stump at the edge of town: wide enough to play on, its rings showing, a board of

@@ -9,17 +9,27 @@ import { ell, R } from "@sequoia-leaf/kit/pix.ts";
 import { hush, noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, lerp, type Pt, rng } from "@sequoia-leaf/kit/util.ts";
 import { LOST_CRAB } from "@sequoia-leaf/town/catalogue.ts";
-import { crabAt as crabByClock, hiding, stretchOf } from "@sequoia-leaf/town/clock.ts";
+import {
+  bannerAt,
+  BOARD,
+  boardAt,
+  crabAt as crabByClock,
+  hiding,
+  HOME,
+  seedOf,
+  SET_OUT,
+  stretchOf,
+} from "@sequoia-leaf/town/clock.ts";
 import { waiting } from "@sequoia-leaf/town/mail.ts";
 
-import { goSit, onScreen } from "./actors.ts";
+import { goSit, onScreen, sitsOn } from "./actors.ts";
 import { unread } from "./board.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle } from "./fx.ts";
-import { type Actor, G, hooks, SEED } from "./game.ts";
+import { type Actor, G, hooks, SEED, today } from "./game.ts";
 import { GROUND, paintTrunk } from "./ground.ts";
 import { ask, doNow, mine, ok, town } from "./leaf.ts";
 import { flame, type Light, makeProp, type Prop, propUnder, type Standing } from "./props.ts";
-import { BOARD, type Sprite, type Sprites } from "./sprites.ts";
+import type { Sprite, Sprites } from "./sprites.ts";
 import { type Strand, STRINGS, wire } from "./strings.ts";
 import {
   BUILDINGS,
@@ -77,53 +87,53 @@ const BANNERS: readonly (readonly [string, string])[] = [
   [GREEN[3], GREEN[2]],
 ];
 
-export const banner = {
-  x: 300,
-  y: 152,
-  up: 0,
-  goal: 0,
-  hue: 0,
-  name: "",
-  next: "",
-  flutter: 0,
-  ribbons: 0,
-  cheered: true,
-};
+export const banner = { x: 300, y: 152, flutter: 0 };
 
-interface Slot {
-  dx: number;
-  dy: number;
-  lit: boolean;
-  at: number;
-  col: number;
-  from: Pt | null;
-  landed: boolean;
+/**
+ * The banner by Leaf's clock (`now`): whose it is, how far up the pole and when it is at the top
+ * (`bannerAt`, from the guild's wars), null before any.
+ */
+export const flown = (now = G.now): ReturnType<typeof bannerAt> =>
+  bannerAt(
+    hooks
+      .deeds()
+      .moments.flatMap((m) =>
+        m.kind === "war" ? [{ land: m.what || "new ground", happened: m.happened, at: m.at }] : [],
+      ),
+    now,
+  );
+
+/** The lantern tree, and where in it a lantern hangs, from the middle of its foot. */
+export const tree = { x: 352, y: 200, shakeAt: -9 };
+const SLOTS: readonly Pt[] = [
+  { x: -20, y: -37 },
+  { x: -12, y: -31 },
+  { x: -4, y: -27 },
+  { x: 6, y: -26 },
+  { x: 14, y: -29 },
+  { x: 22, y: -35 },
+  { x: -27, y: -45 },
+];
+/** How long a lantern takes up into the tree, and how long one let go is seen drifting away, in milliseconds. */
+const RISE = 900;
+const DRIFT = 9000;
+
+/** The lanterns by Leaf's clock: one for each raid today, each hung `HOME.hang` after its party began. */
+const raised = (): ReturnType<typeof today> => today("party", HOME.hang);
+
+/**
+ * The lanterns hanging, as many as the tree has places for, the newest: each in the next place
+ * round the tree by its number in the day (`n`), with when it went up (0 for one from before the
+ * page). One that took an older one's place has let that one go.
+ */
+function lanterns(): { n: number; at: Pt; hung: number }[] {
+  const { n: all, at: ups } = raised();
+  return SLOTS.flatMap((_, k) => {
+    const n = all - Math.min(all, SLOTS.length) + k;
+    const at = SLOTS[n % SLOTS.length];
+    return at && n < all ? [{ n, at, hung: ups[n - (all - ups.length)] ?? 0 }] : [];
+  });
 }
-
-export const tree = {
-  x: 352,
-  y: 200,
-  shakeAt: -9,
-  slots: [
-    [-20, -37],
-    [-12, -31],
-    [-4, -27],
-    [6, -26],
-    [14, -29],
-    [22, -35],
-    [-27, -45],
-  ].map(([dx, dy], i): Slot => ({
-    dx: dx ?? 0,
-    dy: dy ?? 0,
-    lit: i === 1 || i === 4,
-    at: -100 + i,
-    col: i % 3,
-    from: null,
-    landed: true,
-  })),
-  /** Lanterns let go to make room, drifting up through the canopy. */
-  adrift: new Array<{ x: number; y: number; col: number; life: number }>(),
-};
 
 export const chest = { openUntil: 0 };
 
@@ -131,20 +141,12 @@ export const chest = { openUntil: 0 };
 export const door = { open: 0, goal: 0 };
 
 /**
- * The board on the great stump: which hex each carved figure stands on, and the one that is in
- * the middle of a move. `lit` rises when somebody sits down to play.
+ * The board on the great stump. While somebody is at it (`played`) its carved figures are where
+ * Leaf's clock has them (`boardAt`); with nobody, set out. `jumpAt` is when they last all jumped
+ * for a knock (the town's clock), `moved` the move last heard, and `lit` rises when the member
+ * sits down to play.
  */
-export const table = {
-  x: 444,
-  y: 200,
-  at: [9, 11, 13, 1, 3],
-  moving: -1,
-  from: 0,
-  movedAt: -9,
-  next: 2,
-  lit: 0,
-  goal: 0,
-};
+export const table = { x: 444, y: 200, played: false, jumpAt: -9, moved: 0, lit: 0, goal: 0 };
 
 export interface Crab {
   n: number;
@@ -341,21 +343,21 @@ function tapTree(p: Prop): void {
   tree.shakeAt = G.t;
   flutter(tree.x, tree.y - 52, 14, [GOLD[1], GOLD[0], SKY[5]], 24, 10);
   sfx.twinkle();
-  const n = tree.slots.filter((s) => s.lit).length;
+  const { n } = raised();
   float(tree.x, tree.y - 70, `${n} lantern${n === 1 ? "" : "s"}, one a raid`, GOLD[2], 2.2);
 }
 
 function tapPole(): void {
   banner.flutter = 1;
   sfx.pluck(6);
-  if (banner.up > 0.5) float(banner.x, banner.y - 78, banner.name, GOLD[2], 2);
+  const b = flown();
+  if (b && b.up > 0.5) float(banner.x, banner.y - 78, b.land, GOLD[2], 2);
   else float(banner.x, banner.y - 40, "No banner yet", CREAM, 2);
 }
 
 /** A knock on the stump: every carved figure jumps. */
 function tapTable(p: Prop): void {
-  table.movedAt = G.t;
-  table.moving = -2;
+  table.jumpAt = G.t;
   noise(0.03, 1900, { vol: 0.1, q: 5 });
   tone(330, 0.07, { vol: 0.08, type: "square" });
   nudge(p);
@@ -374,8 +376,7 @@ export function openDoor(open: boolean): void {
 export function lightTable(lit: boolean): void {
   table.goal = lit ? 1 : 0;
   if (!lit) return;
-  table.movedAt = G.t;
-  table.moving = -2;
+  table.jumpAt = G.t;
   sfx.twinkle();
 }
 
@@ -549,31 +550,24 @@ export function touchThing(name: string, own = true): boolean {
 
 // ---------- the guild's moments ----------
 
-/** A lantern goes up into the tree from someone's hands; when the tree is full, the oldest drifts away. */
-export function hangLantern(from: Pt): void {
-  let slot = tree.slots.find((s) => !s.lit);
-  if (!slot) {
-    slot = tree.slots.reduce((a, b) => (a.at < b.at ? a : b));
-    tree.adrift.push({ x: tree.x + slot.dx, y: tree.y + slot.dy + 4, col: slot.col, life: 0 });
-  }
-  slot.lit = true;
-  slot.at = G.t;
-  slot.from = { x: from.x, y: from.y };
-  slot.landed = false;
-  slot.col = G.raidsToday % 3;
-  sfx.pop();
+/** How many lanterns the day has, one a raid: the tree shows the newest of them. */
+export const hung = (): number => raised().n;
+
+/** Whether a lantern goes up at a moment of Leaf's clock: a raid of another day hangs none in today's tree. */
+export const hangs = (at: number): boolean => lanterns().some((l) => l.hung === at);
+
+/** The lantern that went up at `at` is in the tree: it lands with a sparkle. */
+export function landLantern(at: number): void {
+  const l = lanterns().find((o) => o.hung === at);
+  if (!l) return;
+  sparkle(tree.x + l.at.x, tree.y + l.at.y + 4, 12, 6);
+  if (G.home) sfx.bell();
 }
 
-export function raiseBanner(name: string): void {
-  banner.next = name;
-  banner.goal = banner.up > 0.3 ? 0.12 : 1;
-  if (banner.up <= 0.3) {
-    banner.name = name;
-    banner.next = "";
-    banner.hue = G.lands % BANNERS.length;
-  }
-  banner.cheered = false;
-  banner.flutter = 1;
+/** The banner is at the top of its pole. */
+export function crownBanner(): void {
+  burst(banner.x + 8, banner.y - 64, 22, [GOLD[1], SKY[4], CREAM, SKY[5]], 60);
+  sparkle(banner.x + 8, banner.y - 60, 10, 10);
 }
 
 /**
@@ -1037,43 +1031,10 @@ export function stepTown(dt: number, walkers: readonly Actor[]): void {
   if (doorLight) doorLight.boost = Math.max(doorLight.boost, door.open);
   table.lit += Math.sign(table.goal - table.lit) * Math.min(Math.abs(table.goal - table.lit), dt * 3);
   if (tableLight) tableLight.boost = Math.max(tableLight.boost, table.lit);
-  stepTable(dt);
+  stepTable(walkers);
 
-  // The banner.
-  banner.flutter = Math.max(0, banner.flutter - dt * 0.5);
-  if (banner.up !== banner.goal) {
-    const d = banner.goal - banner.up;
-    banner.up += Math.sign(d) * Math.min(Math.abs(d), dt * 0.75);
-    if (banner.up === banner.goal && banner.next) {
-      banner.name = banner.next;
-      banner.next = "";
-      banner.hue = G.lands % BANNERS.length;
-      banner.goal = 1;
-    } else if (banner.up === banner.goal && banner.goal === 1 && !banner.cheered) {
-      banner.cheered = true;
-      banner.ribbons = Math.min(5, banner.ribbons + 1);
-      burst(banner.x + 8, banner.y - 64, 22, [GOLD[1], SKY[4], CREAM, SKY[5]], 60);
-      sparkle(banner.x + 8, banner.y - 60, 10, 10);
-    }
-  }
-
-  // Lanterns landing in the tree, and old ones adrift.
-  for (const s of tree.slots) {
-    if (s.lit && !s.landed && G.t - s.at > 0.9) {
-      s.landed = true;
-      s.from = null;
-      sparkle(tree.x + s.dx, tree.y + s.dy + 4, 12, 6);
-      if (G.home) sfx.bell();
-    }
-  }
-  for (let i = tree.adrift.length - 1; i >= 0; i--) {
-    const a = tree.adrift[i];
-    if (!a) continue;
-    a.life += dt;
-    a.y -= dt * 11;
-    a.x += Math.sin(a.life * 1.3) * dt * 5;
-    if (a.life > 9) tree.adrift.splice(i, 1);
-  }
+  // The banner flaps hard on its way up or down.
+  banner.flutter = (flown()?.up ?? 1) < 1 ? 1 : Math.max(0, banner.flutter - dt * 0.5);
 
   // Crabs.
   for (let i = calls.length - 1; i >= 0; i--) {
@@ -1126,31 +1087,23 @@ export function stepTown(dt: number, walkers: readonly Actor[]): void {
   }
 }
 
-/** While anybody is at the stump, a figure is moved every couple of seconds. */
-function stepTable(dt: number): void {
-  if (table.moving !== -1 && G.t - table.movedAt > 0.3) table.moving = -1;
-  const all = G.player ? [G.player, ...G.visitors] : G.visitors;
-  const played = all.some(
-    (a) => !a.away && !a.moving && a.dozing === null && (a.seat?.at === "table" || a.doing === "table"),
+/**
+ * Whether anybody is at the stump, which every page knows the same: a player sitting at it (the
+ * member, or another in the room) or a member Leaf lists at the table, standing by it. Each move
+ * is heard.
+ */
+function stepTable(walkers: readonly Actor[]): void {
+  const played = [...walkers, ...G.visitors].some(
+    (a) =>
+      !a.away &&
+      !a.moving &&
+      a.dozing === null &&
+      (a.doing === "table" || SEATS.some((s) => s.at === "table" && sitsOn(a, s))),
   );
-  if (!played) return;
-  table.next -= dt;
-  if (table.next > 0) return;
-  table.next = 1.3 + Math.random() * 1.6;
-  const which = Math.floor(Math.random() * table.at.length);
-  const here = BOARD[table.at[which] ?? 0];
-  if (!here) return;
-  // The hexes beside this one that nobody stands on.
-  const free = BOARD.map((_cell, i) => i).filter((i) => {
-    const there = BOARD[i];
-    return there && !table.at.includes(i) && Math.abs(there[0] - here[0]) <= 6 && Math.abs(there[1] - here[1]) <= 4;
-  });
-  const to = free[Math.floor(Math.random() * free.length)];
-  if (to === undefined) return;
-  table.from = table.at[which] ?? 0;
-  table.at[which] = to;
-  table.moving = which;
-  table.movedAt = G.t;
+  table.played = played;
+  const moved = played ? boardAt(SEED, G.now).moved?.at : undefined;
+  if (moved === undefined || moved === table.moved) return;
+  table.moved = moved;
   if (G.home && onScreen(table.x, table.y)) {
     noise(0.025, 2100, { vol: 0.05, q: 5 });
     tone(392, 0.05, { vol: 0.04, type: "square", at: 0.2 });
@@ -1182,25 +1135,23 @@ function drawDoor(g: Ctx, sx: number, sy: number): void {
   }
 }
 
-/** The carved figures on the stump's board, each on its hex; one may be in the air. */
+/** The carved figures on the stump's board, each on its hex: the one the clock is moving on its way, and all of them in the air for a knock. */
 function drawPieces(g: Ctx, sx: number, sy: number): void {
   if (!S) return;
-  const since = G.t - table.movedAt;
-  table.at.forEach((cell, i) => {
+  const jump = (G.t - table.jumpAt) / 0.3;
+  const { on, moved } = table.played ? boardAt(SEED, G.now) : { on: SET_OUT, moved: null };
+  on.forEach((cell, i) => {
     const pic = S?.pieces[i % (S?.pieces.length ?? 1)];
     const to = BOARD[cell];
     if (!pic || !to) return;
-    let x = to[0];
-    let y = to[1];
-    let up = 0;
-    if (since < 0.3 && table.moving === -2) up = Math.abs(Math.sin((since / 0.3) * Math.PI)) * (2 + (i % 2));
-    else if (since < 0.3 && table.moving === i) {
-      const from = BOARD[table.from] ?? to;
-      const k = since / 0.3;
-      x = lerp(from[0], to[0], k);
-      y = lerp(from[1], to[1], k);
-      up = Math.sin(k * Math.PI) * 3;
-    }
+    const k = moved?.piece === i ? (G.now - moved.at) / 300 : 1;
+    const from = (moved && k < 1 && BOARD[moved.from]) || to;
+    const x = lerp(from[0], to[0], k);
+    const y = lerp(from[1], to[1], k);
+    const up = Math.max(
+      k < 1 ? Math.sin(k * Math.PI) * 3 : 0,
+      jump < 1 ? Math.abs(Math.sin(jump * Math.PI)) * (2 + (i % 2)) : 0,
+    );
     g.drawImage(pic, sx - 24 + Math.round(x) - 1, sy - 32 + Math.round(y - up) - 5);
   });
 }
@@ -1249,9 +1200,13 @@ function tongues(i: number): readonly (readonly [number, number])[] {
 }
 
 function drawBanner(g: Ctx, sx: number, sy: number): void {
-  if (banner.up <= 0.02) return;
-  const [a, b] = BANNERS[banner.hue % BANNERS.length] ?? ["#000", "#000"];
-  const top = sy - 68 + Math.round((1 - banner.up) * 44);
+  const flag = flown();
+  if (!flag || flag.up <= 0.02) return;
+  // Each territory has its own colours, and there is a streamer for every land fought for today.
+  const hue = seedOf(flag.land) % BANNERS.length;
+  const ribbons = Math.min(5, today("war").n);
+  const [a, b] = BANNERS[hue] ?? ["#000", "#000"];
+  const top = sy - 68 + Math.round((1 - flag.up) * 44);
   const speed = 4 + banner.flutter * 7;
   const reach = 1.3 + banner.flutter * 2;
   const wave = (i: number): number => Math.round(Math.sin(G.t * speed - i * 0.55) * (i / 15) * reach);
@@ -1276,10 +1231,9 @@ function drawBanner(g: Ctx, sx: number, sy: number): void {
     [7, 2],
   ] as const)
     R(g, sx + 5 + dx, y + dy, 2, 1, GOLD[1]);
-  // A streamer for every land taken tonight.
-  for (let i = 1; i < banner.ribbons; i++) {
+  for (let i = 1; i < ribbons; i++) {
     const ry = top + 22 + i * 4;
-    const [c] = BANNERS[(banner.hue + i) % BANNERS.length] ?? ["#000"];
+    const [c] = BANNERS[(hue + i) % BANNERS.length] ?? ["#000"];
     for (let k = 0; k < 7; k++) R(g, sx + 3 + k, ry + Math.round(Math.sin(G.t * 5 - k * 0.7 + i) * (k / 6)), 1, 2, c);
   }
 }
@@ -1287,18 +1241,18 @@ function drawBanner(g: Ctx, sx: number, sy: number): void {
 function drawTreeLanterns(g: Ctx, sx: number, sy: number): void {
   if (!S) return;
   const shake = clamp(1 - (G.t - tree.shakeAt) / 0.9, 0, 1);
-  for (const s of tree.slots) {
-    if (!s.lit) continue;
-    const pic = S.lanterns[s.col % S.lanterns.length];
+  for (const l of lanterns()) {
+    const pic = S.lanterns[(l.n % SLOTS.length) % S.lanterns.length];
     if (!pic) continue;
-    let x = sx + s.dx;
-    let y = sy + s.dy;
-    const flying = clamp((G.t - s.at) / 0.9, 0, 1);
-    if (s.from && flying < 1) {
+    let x = sx + l.at.x;
+    let y = sy + l.at.y;
+    const flying = (G.now - l.hung) / RISE;
+    if (flying < 1) {
+      // Up from the hands of whoever hung it, beside the tree.
       const e = 1 - (1 - flying) ** 3;
-      x = Math.round(lerp(s.from.x - tree.x + sx, x, e));
-      y = Math.round(lerp(s.from.y - tree.y + sy - 14, y, e) - Math.sin(flying * Math.PI) * 10);
-    } else x += Math.round(Math.sin(G.t * 1.7 + s.dx) * 0.6 + Math.sin(G.t * 16 + s.dx) * shake * 2);
+      x = Math.round(lerp(sx - 8, x, e));
+      y = Math.round(lerp(sy - 8, y, e) - Math.sin(flying * Math.PI) * 10);
+    } else x += Math.round(Math.sin(G.t * 1.7 + l.at.x) * 0.6 + Math.sin(G.t * 16 + l.at.x) * shake * 2);
     g.drawImage(pic.c, x - pic.ax, y - pic.ay);
   }
 }
@@ -1340,13 +1294,17 @@ export function drawGlows(g: Ctx, cx: number, cy: number, glow: HTMLCanvasElemen
       g.globalAlpha = 1;
     });
   }
-  for (const a of tree.adrift) {
-    const pic = S.lanterns[a.col % S.lanterns.length];
-    if (!pic) continue;
-    g.globalAlpha = clamp(1 - (a.life - 6) / 3, 0, 1);
-    g.drawImage(pic.c, Math.round(a.x) - cx - pic.ax, Math.round(a.y) - cy - pic.ay);
+  // A lantern let go to make room for a newer one drifts up through the canopy.
+  for (const l of lanterns()) {
+    const life = (G.now - l.hung) / 1000;
+    const pic = S.lanterns[(l.n % SLOTS.length) % S.lanterns.length];
+    if (!pic || l.n < SLOTS.length || life * 1000 >= DRIFT) continue;
+    const x = Math.round(tree.x + l.at.x + (5 / 1.3) * (1 - Math.cos(life * 1.3))) - cx;
+    const y = Math.round(tree.y + l.at.y + 4 - life * 11) - cy;
+    g.globalAlpha = clamp(1 - (life - 6) / 3, 0, 1);
+    g.drawImage(pic.c, x - pic.ax, y - pic.ay);
     g.globalAlpha *= 0.35;
-    g.drawImage(glow, Math.round(a.x) - cx - 12, Math.round(a.y) - cy - 8, 24, 24);
+    g.drawImage(glow, x - 12, y - 8, 24, 24);
     g.globalAlpha = 1;
   }
 }
@@ -1360,9 +1318,9 @@ export function allLights(): Light[] {
   fireLight.power = 1;
   fireLight.boost = fire.boost;
   scratch.push(fireLight);
-  for (const s of tree.slots) {
-    if (!s.lit || !s.landed) continue;
-    scratch.push({ x: tree.x + s.dx, y: tree.y + s.dy + 5, r: 17, power: 0.75, boost: 0, phase: s.dx });
+  for (const l of lanterns()) {
+    if (G.now - l.hung < RISE) continue;
+    scratch.push({ x: tree.x + l.at.x, y: tree.y + l.at.y + 5, r: 17, power: 0.75, boost: 0, phase: l.at.x });
   }
   return scratch;
 }
