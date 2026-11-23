@@ -266,8 +266,10 @@ already holds: `{ clock, tick, check, serial }`, Leaf's tick now, the yard's tic
 and its check there, and how many orders the board has ever hung. `check(w)` (`check.ts`) mixes
 every field the rules read, of every piece and of the yard, into 32 bits in one pass, numbering
 things, kinds, plots and plans by the rules' own lists; it leaves out the seed, `at`, `away`, the
-news and what is worked out from the rest. A yard and the yard read back from its save, or from what
-the page is shown, have the same check, and two yards with the same check run on alike. Only Leaf
+news and what is worked out from the rest. Each word is finished as MurmurHash3 finishes its sum
+before it is joined, so that any bit of any field reaches every bit of the check. A yard and the
+yard read back from its save, or from what the page is shown, have the same check, and two yards
+with the same check run on alike. Only Leaf
 can move `serial`: it hangs an order from the seed (a hand over, a swap, a fourth hook, the board
 going up), which the page's copy, with no seed, leaves empty.
 
@@ -318,9 +320,8 @@ if (!("refused" in done)) {
 // hung no order, the checks are of the same moment. Alike, the copy stays as it is.
 const same = answer.tick === last.tick && answer.serial === copy.serial && answer.check === last.check;
 
-// Otherwise, Leaf's yard asked for, with every command not yet answered done again on top, each at its tick.
+// Otherwise, once every command sent has been answered (and with nothing more sent), Leaf's yard.
 copy = WORKS.decode(view.yard);
-for (const c of unanswered) play(copy, c);
 
 // Every frame: run the copy on to Leaf's tick now, Leaf's last clock and a tick for each 100 ms since.
 stepTo(copy, clock + Math.floor((performance.now() - arrived) / 100));

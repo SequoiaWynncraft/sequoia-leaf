@@ -1242,7 +1242,7 @@ describe("a batch's answer", () => {
     expect((await shownYard(await send("GET", "/v1/game/play/works"))).yard.away?.seconds).toBe(3600 - LEAD / 10);
   });
 
-  it("once its page found its copy not Leaf's, is followed by an opening that says the tick, which Leaf logs with whose and which game", async () => {
+  it("once its page found its copy not Leaf's, is followed by an opening that says the tick, which Leaf logs with whose and which game, once a minute", async () => {
     const lines: { message: unknown; annotations: unknown }[] = [];
     const capture = Logger.layer([
       Logger.map(Logger.formatStructured, ({ message, annotations }) => void lines.push({ message, annotations })),
@@ -1254,7 +1254,24 @@ describe("a batch's answer", () => {
       ),
     );
     expect(opening.status).toBe("open");
-    expect(lines.filter((l) => JSON.stringify(l.message).includes("not Leaf's"))).toEqual([
+    // However often the page says so, once a minute for a player and a game.
+    const again = (tick: number) =>
+      services.run(
+        Play.use((play) => play.open({ playerId: alice, guest: false }, GAMES.works, tick)).pipe(
+          Effect.provide(capture),
+          Effect.provideService(References.MinimumLogLevel, "All"),
+        ),
+      );
+    await again(1235);
+    clock.now += 59_000;
+    await again(1236);
+    clock.now += 1_000;
+    await again(1237);
+    expect(lines.filter((l) => JSON.stringify(l.message).includes("not Leaf's")).map((l) => l.annotations)).toEqual([
+      { player: alice, game: "works", tick: 1234 },
+      { player: alice, game: "works", tick: 1237 },
+    ]);
+    expect(lines.filter((l) => JSON.stringify(l.message).includes("not Leaf's")).slice(0, 1)).toEqual([
       {
         message: "A page's copy of the works state was not Leaf's",
         annotations: { player: alice, game: "works", tick: 1234 },

@@ -3,14 +3,16 @@
  * than with the yard (`WORKS.answer`), and the page works it out on its own copy for the same tick:
  * the same number is the same yard, as far as the rules can tell.
  *
- * One pass mixes in, a 32-bit word at a time (FNV's multiply), every field the rules read: every
- * part of every piece, and everything of the yard's that is kept. Left out are what only Leaf holds
+ * One pass mixes in, a 32-bit word at a time, every field the rules read: every part of every
+ * piece, and everything of the yard's that is kept. Each word is first finished as MurmurHash3
+ * finishes its sum, so that any bit of it reaches every bit of the check, and then joined as
+ * MurmurHash3 joins a block; a number is taken as both halves of its 64 bits. Left out are what only Leaf holds
  * (`seed`), what Leaf and the page each move by their own clock (`at`, the moment a tick stands for,
  * which Leaf sets again while a yard stands still), the letter only the page is shown (`away`), the
  * news, and whatever is worked out again from the rest: power, the plumbing, what is open and how
  * fast, a machine's `idle`, `kinds` and `count`, where a thing on a belt came from (`via`), and an
- * order's words. Things, kinds, plots and plans are numbered by the rules' own lists, and a number
- * that is not whole is mixed by its bits, so that any two places running these rules agree.
+ * order's words. Things, kinds, plots and plans are numbered by the rules' own lists, so that any two
+ * places running these rules agree.
  */
 import { ITEMS, type Tally } from "./content/items.ts";
 import { KINDS } from "./content/machines.ts";
@@ -30,13 +32,20 @@ const bits = new Float64Array(1);
 const words = new Uint32Array(bits.buffer);
 let h = 0;
 
-const mix = (v: number): void => {
-  h = Math.imul(h ^ v, 0x01000193);
-};
-/** A number: a whole one that fits a word as itself, any other by its 64 bits. */
+/** MurmurHash3's finish: every bit of a word reaching every bit of what comes out. */
+function finish(x: number): number {
+  const a = Math.imul(x ^ (x >>> 16), 0x85ebca6b);
+  const b = Math.imul(a ^ (a >>> 13), 0xc2b2ae35);
+  return b ^ (b >>> 16);
+}
+/** A word mixed in: finished, then joined to the sum as MurmurHash3 joins a block. */
+function mix(v: number): void {
+  const k = h ^ finish(v);
+  h = (Math.imul((k << 13) | (k >>> 19), 5) + 0xe6546b64) | 0;
+}
+/** A number, as both halves of its 64 bits (-0 as 0, which it equals). */
 function num(x: number): void {
-  if ((x | 0) === x) return mix(x);
-  bits[0] = x;
+  bits[0] = x + 0;
   mix(words[0] ?? 0);
   mix(words[1] ?? 0);
 }
@@ -101,5 +110,5 @@ export function check(w: World): number {
     mix(i);
     piece(b);
   }
-  return h >>> 0;
+  return finish(h) >>> 0;
 }

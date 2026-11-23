@@ -26,6 +26,8 @@ export const BATCHES = { rate: 10, burst: 20 } as const;
 export const COMMANDS = { rate: 10, burst: 40 } as const;
 /** How many players' allowances are kept before those filled up again are let go. */
 const ALLOWANCES_KEPT = 1000;
+/** How often a page saying its copy was not Leaf's state is logged, for a player and a game: once a minute. */
+const DIFFERENCES = { rate: 1 / 60, burst: 1 } as const;
 /**
  * How long a state of a game that tends its states (`Game.tend`) may go unwritten before Leaf tends
  * it itself: long enough that one whose player's page is open, sending a command now and then, is
@@ -270,7 +272,8 @@ export class Play extends Context.Service<
   {
     /**
      * The player's state in a game, made for them if they have none. `differs` is the tick at which
-     * their page found its copy not to be the state Leaf has: a fault in the rules, logged.
+     * their page found its copy not to be the state Leaf has: a fault in the rules, logged at most
+     * once a minute for a player and a game.
      */
     readonly open: (playing: Playing, played: Played, differs?: number) => Effect.Effect<Opening>;
     /** Does a batch of commands, as they came off the wire. */
@@ -295,6 +298,8 @@ export class Play extends Context.Service<
       const dice = random.intBetween(0, 0xffffffff);
       // Each player's batches and commands, across all games.
       const pace = new Allowances([BATCHES, COMMANDS], ALLOWANCES_KEPT);
+      // Each player's and game's differences logged.
+      const differed = new Allowances([DIFFERENCES], ALLOWANCES_KEPT);
       // Every lane, by `keyOf`; and how many jobs have arrived, in all of them.
       const lanes = new Map<string, Lane>();
       let arrivals = 0;
@@ -635,11 +640,14 @@ export class Play extends Context.Service<
             }),
           ).pipe(
             Effect.ensuring(
-              differs === undefined
-                ? Effect.void
-                : Effect.logWarning(`A page's copy of the ${played.id} state was not Leaf's`).pipe(
-                    Effect.annotateLogs({ player: playing.playerId, game: played.id, tick: differs }),
-                  ),
+              Effect.suspend(() =>
+                differs === undefined ||
+                !differed.take(keyOf(playing.playerId, played), clock.currentTimeMillisUnsafe(), [1])
+                  ? Effect.void
+                  : Effect.logWarning(`A page's copy of the ${played.id} state was not Leaf's`).pipe(
+                      Effect.annotateLogs({ player: playing.playerId, game: played.id, tick: differs }),
+                    ),
+              ),
             ),
           ),
         send: (playing, played, commands) =>

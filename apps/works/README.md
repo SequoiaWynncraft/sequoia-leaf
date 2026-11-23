@@ -32,11 +32,15 @@ and sent with the tick the copy stood at; a command the rules refuse is said so 
 each command sent the page keeps the copy's tick and check just after it. Leaf answers a batch with
 its clock and its yard's tick, check and orders hung after it, not the yard (the yard's README).
 When Leaf did what the copy did, at the same tick, and hung no order, the checks are compared;
-alike, the copy is left as it is. Otherwise (a command Leaf turned down, a command done at another
-tick, an order only Leaf could hang, or checks that differ) the page asks Leaf for its yard, in turn
-with the batches, and the copy becomes Leaf's yard with every command still unanswered done again on
-top, each at its own tick. Checks that differ are a fault in the rules or the check: the page counts
-them (`works.state().differences`) and tells Leaf the tick as it asks, and Leaf logs it. Each frame
+alike, the copy is left as it is. Otherwise (checks that differ, a command Leaf turned down or did at
+another tick, an order only Leaf could hang, a tab come back) the page takes Leaf's yard: it sends
+nothing and does nothing to the copy, keeping what the member does meanwhile; once every batch
+already sent has been answered it asks for Leaf's yard, and again every two seconds until it comes;
+the copy is then Leaf's yard, and what the member did is done, at the yard's tick then. Should that
+take more than a second, the line over the dock says the yard is catching up with the guild's
+server. Checks that differ are a fault in the rules or the check: the page counts them
+(`works.state().differences`) and tells Leaf the tick as it asks, and Leaf logs it, once a minute
+at most. Each frame
 the copy is run on to Leaf's tick now: the tick Leaf last gave, and one for each tenth of a second
 since, never earlier than one already shown. A copy more than a minute behind (a tab put away) is
 not run on: the page asks Leaf for its yard, which Leaf has run on meanwhile, and shows that when it
