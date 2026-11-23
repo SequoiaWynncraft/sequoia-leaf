@@ -479,7 +479,8 @@ export class Live extends Context.Service<
       // ---- time ----
 
       // Every tick: players whose grace has run out leave their room, players of whom nothing is
-      // left are forgotten, and each room with any change sends it to everyone in it.
+      // left are forgotten, anybody shown walking whose game has gone quiet stops, and each room
+      // with any change sends it to everyone in it.
       const flush = Effect.flatMap(Clock.currentTimeMillis, (now) =>
         Effect.sync(() => {
           tick++;
@@ -490,7 +491,10 @@ export class Live extends Context.Service<
             }
             if (p.gone(now)) players.delete(id);
           }
-          for (const room of rooms.all()) room.flush(tick, now);
+          for (const room of rooms.all()) {
+            room.quiet(now);
+            room.flush(tick, now);
+          }
         }),
       );
       yield* Effect.forkScoped(Effect.repeat(flush, Schedule.fixed(Duration.millis(1000 / SERVER_HZ))));

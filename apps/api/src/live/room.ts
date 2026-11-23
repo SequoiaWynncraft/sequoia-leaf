@@ -32,6 +32,13 @@ export interface Occupant {
 
 /** The fastest a motion may say a player moves, in the room's units a second. */
 const MOST_SPEED = 1024;
+/**
+ * How long somebody shown walking may go without a move before the room stands them still where
+ * they are, in milliseconds. A game says where its walking player is twenty times a second; one that
+ * says nothing for this long has stopped drawing them (its tab hidden, its page stalled), and they
+ * are not walking anywhere.
+ */
+export const QUIET_MS = 300;
 /** How much further than the room's pace a move may go before it is a jump: half as far again, and a little. */
 const PACE_SLACK = 1.5;
 const PACE_REACH = 8;
@@ -156,6 +163,15 @@ export class Room {
   reconnected(id: number): void {
     const o = this.occupants.get(id);
     if (o) o.heard = null;
+  }
+
+  /**
+   * Everybody shown walking whose game has sent no move for `QUIET_MS` by `time` stops where they
+   * are, as `halt` stops them: a page that has stopped drawing its player (a hidden tab) never leaves
+   * them walking on the spot for everybody else. Their next move walks them on.
+   */
+  quiet(time: number): void {
+    for (const o of this.occupants.values()) if (time - o.movedAt >= QUIET_MS) this.halt(o.member.id);
   }
 
   /** Somebody has stopped where they are, as when their connection drops: everyone sees them stand. */
