@@ -90,6 +90,7 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
 import { beltTile } from "../art/belts.ts";
 import type { Art } from "../art/index.ts";
+import { copyOf } from "../art/items.ts";
 import { FLAG_AT } from "../art/machines.ts";
 import { yardSfx } from "../sound.ts";
 import { type Given, leaves, type Listed, type Need, needs, some, unlocks, wantsGiven } from "./goal.ts";
@@ -452,7 +453,9 @@ const SIDES = ["2 / 3", "3 / 2", "2 / 1", "1 / 2"] as const;
 function waysOf(art: Art, p: StandingPrint, ways: WaysPrint, hands: Hands): HTMLElement {
   const box = el("div", "ways");
   const d = ways.dir;
-  const tile = beltTile(ways.arms, d, 5, 0, ways.tint);
+  // A copy: the tile is the belts' own, kept for every splitter that looks the same, and the
+  // arrowheads and the flag drawn on it here are this splitter's alone.
+  const tile = copyOf(beltTile(ways.arms, d, 5, 0, ways.tint));
   const g = tile.getContext("2d");
   [d, LEFT[d], RIGHT[d]].forEach((side, k) => {
     const head = art.m.heads[k]?.[d];
