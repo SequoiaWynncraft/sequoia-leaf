@@ -68,6 +68,12 @@ export interface RerollRules {
   readonly freePerDay: number;
   /** What each further reroll that day costs. */
   readonly leaf: number;
+  /**
+   * How long after a reroll the quest it replaced still takes a raid or war from before the
+   * reroll that is reported late (the backend holds a raid back, and the sync waits for it to
+   * settle), in milliseconds.
+   */
+  readonly heldMs: number;
 }
 
 /**
@@ -142,6 +148,11 @@ export interface QuestBook {
   readonly dailyChargedDay: number;
   /** The most recent quest of each slot, finished or not. */
   readonly latest: { readonly [slot in QuestSlot]?: Quest };
+  /**
+   * The quests rerolls replaced lately (within `RerollRules.heldMs`), oldest first: each still
+   * takes an activity from its own time that is reported late. None is kept for a book without.
+   */
+  readonly replaced?: readonly Quest[];
 }
 
 /** The book of a player who has never had a quest: one daily is ready on the day they start. */
@@ -223,6 +234,11 @@ export interface QuestStep {
   readonly written: readonly Quest[];
   /** The quests this step finished. Each pays its reward once. */
   readonly completed: readonly Quest[];
+  /**
+   * The rerolls this step undid: those of a slot from a quest's `sequence` on, after an activity
+   * reported late finished the quest they replaced. What each cost is given back.
+   */
+  readonly undone?: readonly { readonly slot: QuestSlot; readonly from: number }[];
 }
 
 /**
@@ -242,16 +258,26 @@ export function refreshQuests(book: QuestBook, playerId: PlayerId, at: number, r
  * activity toward every quest it fits, finishes the ones it completes, and
  * hands out their successors. The activity that finishes a quest does not
  * count toward the quest that replaces it.
+ *
+ * An activity from before a slot's quest began, reported late, counts toward
+ * the quest a reroll replaced, if that one was open then and nothing in the
+ * slot has finished since (`QuestBook.replaced`). Should it finish it, the
+ * reroll is undone (`QuestStep.undone`): the quest the reroll gave stands only
+ * where the slot would have handed it out anyway, a daily with a banked daily
+ * left; otherwise it is withdrawn, ending where it began, and a finished
+ * weekly keeps its week.
  */
 export function applyActivityToQuests(book: QuestBook, activity: Activity, rules: QuestRules): QuestStep {
   const step = startStep(book, activity.playerId, rules);
   const at = activity.occurredAt;
   refresh(step, at);
   // The quests are fixed before counting, so one handed out below never sees this activity.
-  for (const quest of QUEST_SLOTS.map((slot) => step.latest[slot])) {
-    if (quest === undefined || quest.completedAt !== null) {
+  for (const latest of QUEST_SLOTS.map((slot) => step.latest[slot])) {
+    if (latest === undefined || latest.completedAt !== null) {
       continue;
     }
+    const replaced = at < latest.startedAt ? openAt(step.replaced, latest.slot, at) : undefined;
+    const quest = replaced ?? latest;
     if (at < quest.startedAt || (quest.expiresAt !== null && at >= quest.expiresAt)) {
       continue;
     }
@@ -264,12 +290,16 @@ export function applyActivityToQuests(book: QuestBook, activity: Activity, rules
       progress: Math.min(objectiveTarget(goal.objective), goal.progress + (gains[index] ?? 0)),
     }));
     if (!goals.some(goalMet)) {
-      write(step, { ...quest, goals });
+      keep(step, { ...quest, goals });
       continue;
     }
     const done: Quest = { ...quest, goals, completedAt: at };
-    write(step, done);
+    keep(step, done);
     step.completed.push(done);
+    if (replaced !== undefined) {
+      undo(step, latest, done);
+      continue;
+    }
     if (quest.slot === "daily") {
       step.dailyCharges -= 1;
       if (step.dailyCharges > 0) {
@@ -289,8 +319,11 @@ interface Step {
   dailyCharges: number;
   dailyChargedDay: number;
   readonly latest: { [slot in QuestSlot]?: Quest };
+  /** The quests rerolls replaced lately, as this step leaves them. */
+  replaced: readonly Quest[];
   readonly written: Map<string, Quest>;
   readonly completed: Quest[];
+  readonly undone: { readonly slot: QuestSlot; readonly from: number }[];
 }
 
 function startStep(book: QuestBook, playerId: PlayerId, rules: QuestRules): Step {
@@ -300,17 +333,57 @@ function startStep(book: QuestBook, playerId: PlayerId, rules: QuestRules): Step
     dailyCharges: book.dailyCharges,
     dailyChargedDay: book.dailyChargedDay,
     latest: { ...book.latest },
+    replaced: book.replaced ?? [],
     written: new Map(),
     completed: [],
+    undone: [],
   };
 }
 
 function finishStep(step: Step): QuestStep {
   return {
-    book: { dailyCharges: step.dailyCharges, dailyChargedDay: step.dailyChargedDay, latest: step.latest },
+    book: {
+      dailyCharges: step.dailyCharges,
+      dailyChargedDay: step.dailyChargedDay,
+      latest: step.latest,
+      replaced: step.replaced,
+    },
     written: [...step.written.values()],
     completed: step.completed,
+    undone: step.undone,
   };
+}
+
+/** The quest a reroll replaced in a slot that was open at `at`, unfinished, if it is still held. */
+function openAt(replaced: readonly Quest[], slot: QuestSlot, at: number): Quest | undefined {
+  return replaced.find(
+    (q) => q.slot === slot && q.completedAt === null && q.startedAt <= at && q.expiresAt !== null && at < q.expiresAt,
+  );
+}
+
+/** Writes a quest a reroll replaced, changed, where it is kept; or the slot's latest. */
+function keep(step: Step, quest: Quest): void {
+  if (step.latest[quest.slot]?.sequence === quest.sequence) {
+    write(step, quest);
+    return;
+  }
+  step.replaced = step.replaced.map((q) => (q.slot === quest.slot && q.sequence === quest.sequence ? quest : q));
+  step.written.set(`${quest.slot}:${quest.sequence}`, quest);
+}
+
+/**
+ * A quest a reroll replaced (`done`) has just finished, on an activity reported late: the rerolls
+ * of its slot from it on are undone. Its finishing uses a banked daily, as finishing does; the
+ * quest the slot holds now (`latest`, the rerolls' last) stands as the next daily while one is
+ * left, and is otherwise withdrawn: ended where it began, so that it never held the slot.
+ */
+function undo(step: Step, latest: Quest, done: Quest): void {
+  step.undone.push({ slot: done.slot, from: done.sequence });
+  if (done.slot === "daily") {
+    step.dailyCharges = Math.max(0, step.dailyCharges - 1);
+    if (step.dailyCharges > 0) return;
+  }
+  write(step, { ...latest, expiresAt: latest.startedAt });
 }
 
 function refresh(step: Step, at: number): void {
@@ -334,8 +407,10 @@ function refresh(step: Step, at: number): void {
   if (step.dailyCharges > 0 && !holdsSlot(step.latest.daily, at)) {
     issue(step, "daily", day * DAY_MS, null);
   }
-  if (!holdsSlot(step.latest.weekly, at)) {
-    const weekStart = utcWeekStart(at);
+  // One weekly a week: a week whose weekly was withdrawn, a quest it replaced having finished, gets no other.
+  const weekStart = utcWeekStart(at);
+  const weekly = step.latest.weekly;
+  if (!holdsSlot(weekly, at) && !(weekly !== undefined && withdrawn(weekly) && weekly.startedAt >= weekStart)) {
     issue(step, "weekly", weekStart, weekStart + WEEK_MS);
   }
   const window = step.rules.timed === undefined ? undefined : timedWindowAt(at, step.rules.timed);
@@ -456,6 +531,9 @@ export function rerollQuest(
 export function nextDailyChargeAt(book: QuestBook, rules: QuestRules): number | null {
   return book.dailyCharges >= rules.dailyChargeCap ? null : (book.dailyChargedDay + 1) * DAY_MS;
 }
+
+/** Whether a quest ended where it began: it never held its slot (withdrawn, or of a slot the rules gave up). */
+const withdrawn = (quest: Quest): boolean => quest.expiresAt !== null && quest.expiresAt <= quest.startedAt;
 
 /** Whether the slot's latest quest still occupies the slot at this moment. */
 function holdsSlot(quest: Quest | undefined, at: number): boolean {

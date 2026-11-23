@@ -526,6 +526,46 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     expect(backendCalls.filter((path) => path === "/internal/player-credits")).toHaveLength(1);
   });
 
+  it("pays a quest a raid finished though the raid is reported after the quest was rerolled away, and undoes the reroll", async () => {
+    await get("/v1/me/quests?sync=1");
+    // A minute after the raids, the backend still holds them back: the reroll's sync finds nothing.
+    clock.now = T0 + 2 * MINUTE;
+    expect((await reroll("daily:1")).status).toBe(200);
+    // Then the backend lists them, dated before the reroll.
+    dailyFinished();
+    clock.now = T0 + 5 * MINUTE;
+    const after = await (await get("/v1/me/quests?sync=1")).json();
+
+    expect(after).toMatchObject({ recently_completed: [{ id: "daily:1" }] });
+    // Its one banked daily used, the daily the reroll gave is withdrawn: only the weekly is left.
+    expect(after).toMatchObject({ daily: { charges: 0 }, quests: [{ slot: "weekly" }] });
+    const paid = await services.query(
+      (sql) => sql`SELECT idempotency_key AS key FROM ledger_entries WHERE kind = 'earn' AND origin = 'quest'`,
+    );
+    expect(paid).toEqual([{ key: `quest:${alice}:daily:1` }]);
+  });
+
+  it("gives back what the rerolls after a quest finished late cost", async () => {
+    await earn(500);
+    await get("/v1/me/quests?sync=1");
+    clock.now = T0 + 2 * MINUTE;
+    await reroll("daily:1");
+    clock.now = T0 + 3 * MINUTE;
+    expect(await (await reroll("daily:2", 100)).json()).toMatchObject({ leaf: 400, spent: 100 });
+    dailyFinished();
+    clock.now = T0 + 6 * MINUTE;
+    await get("/v1/me/quests?sync=1");
+
+    const rerolls = await services.query(
+      (sql) => sql`SELECT kind, balance_delta AS delta FROM ledger_entries WHERE origin = 'reroll' ORDER BY id`,
+    );
+    expect(rerolls).toEqual([
+      { kind: "spend", delta: -100 },
+      { kind: "reversal", delta: 100 },
+    ]);
+    expect(await quests()).toMatchObject({ recently_completed: [{ id: "daily:1" }] });
+  });
+
   it("asks for a session like every /v1/me route", async () => {
     const response = await app.request("/v1/me/quests/daily:1/reroll", { method: "POST" });
 

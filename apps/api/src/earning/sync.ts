@@ -7,6 +7,7 @@ import {
   openQuestBook,
   type PlayerId,
   type Quest,
+  type QuestSlot,
   type Rules,
 } from "@sequoia-leaf/core";
 import { Effect, Schema } from "effect";
@@ -68,9 +69,13 @@ const recordPlayer = Effect.fnUntraced(function* (
   const events = yield* Events;
   let leafPaid = 0;
   const levelBefore = yield* levelOf(playerId, rules.levels);
-  let book = (yield* quests.book(playerId)) ?? openQuestBook(activities[0]?.occurredAt ?? now);
+  const stored = (yield* quests.book(playerId)) ?? openQuestBook(activities[0]?.occurredAt ?? now);
+  // The quests rerolls replaced lately take activities from their own time reported late.
+  const held = rules.quests.reroll?.heldMs;
+  let book = held === undefined ? stored : { ...stored, replaced: yield* quests.replaced(playerId, now - held) };
   const written = new Map<string, Quest>();
   const completed: Quest[] = [];
+  const undone: { readonly slot: QuestSlot; readonly from: number }[] = [];
   for (const activity of activities) {
     yield* insertActivity(activity, now);
     const amount = leafForActivity(activity, rules.earning);
@@ -108,12 +113,13 @@ const recordPlayer = Effect.fnUntraced(function* (
       written.set(`${quest.slot}:${quest.sequence}`, quest);
     }
     completed.push(...step.completed);
+    undone.push(...(step.undone ?? []));
     for (const quest of step.completed) {
       leafPaid += quest.reward.leaf;
       yield* events.insert(playerId, { type: "quest_completed", data: { quest: questJson(quest) } }, now);
     }
   }
-  yield* quests.saveStep(playerId, { book, written: [...written.values()], completed }, now);
+  yield* quests.saveStep(playerId, { book, written: [...written.values()], completed, undone }, now);
   return leafPaid + (yield* levelUp(playerId, levelBefore, rules.levels, now));
 });
 

@@ -2,7 +2,22 @@ import { describe, expect, it } from "bun:test";
 
 import { decodeSnapshot, Flag, type Motion, readToClient, type ToClient } from "@sequoia-leaf/core";
 
-import { QUIET_MS, Room, Rooms } from "../src/live/room.ts";
+import {
+  halted,
+  moved,
+  type Occupant,
+  QUIET_MS,
+  reconnected,
+  Room,
+  Rooms,
+  type Shown,
+  told,
+} from "../src/live/room.ts";
+
+/** Where the room shows somebody, or null before their first move. */
+const motionOf = (o: Occupant) => (o.shown.state === "seen" ? o.shown.motion : null);
+/** The number of the move the room shows of somebody, or null before their first. */
+const seqOf = (o: Occupant) => (o.shown.state === "seen" ? o.shown.seq : null);
 
 /** What one person in a room was sent: the text decoded, and the binary frames as they were. */
 function inbox() {
@@ -101,7 +116,7 @@ describe("a room", () => {
     const alice = room.join(person("Alice"), a.outbox, 0, 30, 1);
     room.move(alice.member.id, 1, { x: -40, y: 9000, vx: 1e9, vy: -1e9, facing: 3, pose: 2, flags: 0, jump: 4 }, 0);
 
-    expect(alice.motion).toEqual({ x: 0, y: 352, vx: 1024, vy: -1024, facing: 3, pose: 2, flags: 0, jump: 1 });
+    expect(motionOf(alice)).toEqual({ x: 0, y: 352, vx: 1024, vy: -1024, facing: 3, pose: 2, flags: 0, jump: 1 });
   });
 
   it("takes every move of the present connection, in the order sent, whatever its numbers", () => {
@@ -113,7 +128,7 @@ describe("a room", () => {
     room.reconnected(id);
     room.move(id, 1, at(2, 2), 0);
 
-    expect([alice.seq, alice.motion?.x]).toEqual([1, 2]);
+    expect([seqOf(alice), motionOf(alice)?.x]).toEqual([1, 2]);
   });
 
   it("counts jumps itself: when the game's count changes, and at a new connection's first move", () => {
@@ -123,7 +138,7 @@ describe("a room", () => {
     const shown: number[] = [];
     const move = (jump: number) => {
       room.move(id, 1, at(0, 0, 0, jump), 0);
-      shown.push(alice.motion?.jump ?? -1);
+      shown.push(motionOf(alice)?.jump ?? -1);
     };
     move(0);
     move(0);
@@ -147,7 +162,7 @@ describe("a room", () => {
     const shown: number[] = [];
     const move = (x: number, time: number, jump = 0) => {
       room.move(id, 1, at(x, 100, Flag.Moving, jump), time);
-      shown.push(alice.motion?.jump ?? -1);
+      shown.push(motionOf(alice)?.jump ?? -1);
     };
     move(100, 1000);
     // Walking at the town's pace, 64 a second, twenty moves a second: never a jump.
@@ -172,7 +187,7 @@ describe("a room", () => {
     // Far outside the room on its left: kept at its edge, where Alice already is.
     room.move(alice.member.id, 2, at(-5000, 100), 1050);
 
-    expect(alice.motion).toMatchObject({ x: 0, jump: 1 });
+    expect(motionOf(alice)).toMatchObject({ x: 0, jump: 1 });
   });
 
   it("keeps a jump through a later move before the tick, since only the newest motion counts", () => {
@@ -310,5 +325,50 @@ describe("the rooms", () => {
 
   it("has no room of a kind there is not", () => {
     expect(new Rooms().place("hall")).toBeUndefined();
+  });
+});
+
+/** A move walking right along y 100, at the room's pace, with the game's jump count. */
+const walking = (x: number, jump = 0): Motion => ({
+  x,
+  y: 100,
+  vx: 64,
+  vy: 0,
+  facing: 2,
+  pose: 1,
+  flags: Flag.Moving,
+  jump,
+});
+
+describe("what a room shows of somebody", () => {
+  const kind = { width: 512, height: 352, speed: 64 };
+
+  it("is nothing before a first move, which is a jump from nowhere and goes nowhere", () => {
+    const first = moved({ state: "unseen" }, 1, walking(10), 1000, kind);
+
+    expect(first.went).toBe(false);
+    expect(first.shown).toMatchObject({ state: "seen", seq: 1, movedAt: 1000, changed: true, jump: 1, heard: 0 });
+  });
+
+  it("counts a jump when the game's count changes, when a move outpaces the room, or on a new connection's first move", () => {
+    const first = moved({ state: "unseen" }, 1, walking(10), 1000, kind).shown;
+    const walked = moved(first, 2, walking(12), 1050, kind);
+    const hopped = moved(walked.shown, 3, walking(12, 1), 1100, kind).shown;
+    const outpaced = moved(hopped, 4, walking(300, 1), 1150, kind).shown;
+    const again = moved(reconnected(outpaced), 5, walking(301, 7), 1200, kind).shown;
+
+    expect([walked.went, walked.shown.state === "seen" ? walked.shown.jump : -1]).toEqual([true, 1]);
+    expect([hopped, outpaced, again].map((s) => (s.state === "seen" ? s.jump : -1))).toEqual([2, 3, 4]);
+  });
+
+  it("stands somebody walking where they are, to be told, and leaves anybody standing or unseen as they are", () => {
+    const seen = moved({ state: "unseen" }, 1, walking(10), 1000, kind).shown;
+    const standing = told(halted(seen));
+
+    expect(halted(seen)).toMatchObject({ changed: true, motion: { x: 10, vx: 0, vy: 0, flags: 0 } });
+    expect(halted(standing)).toBe(standing);
+    expect(standing).toMatchObject({ changed: false });
+    const unseen: Shown = { state: "unseen" };
+    expect([halted(unseen), told(unseen), reconnected(unseen)]).toEqual([unseen, unseen, unseen]);
   });
 });

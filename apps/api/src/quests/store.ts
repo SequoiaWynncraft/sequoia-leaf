@@ -14,7 +14,7 @@ import {
   RAID_KEYS,
   utcDay,
 } from "@sequoia-leaf/core";
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
 import { Ledger } from "../ledger/store.ts";
@@ -116,10 +116,16 @@ export class Quests extends Context.Service<
     readonly book: (playerId: PlayerId) => Effect.Effect<QuestBook | undefined>;
     /**
      * Saves a step: the player's daily charges, every quest handed out or
-     * changed, and the reward of every quest finished. Call it in the same
-     * transaction as what caused the step.
+     * changed, the reward of every quest finished, and for every reroll the
+     * step undid (`QuestStep.undone`) the Leaf it cost given back, once. Call
+     * it in the same transaction as what caused the step.
      */
     readonly saveStep: (playerId: PlayerId, step: QuestStep, now: number) => Effect.Effect<void>;
+    /**
+     * The quests rerolls replaced at or after `since`, oldest first, that have not finished: each
+     * still takes an activity from its own time reported late (`QuestBook.replaced`).
+     */
+    readonly replaced: (playerId: PlayerId, since: number) => Effect.Effect<readonly Quest[]>;
     /** A player's quests finished at or after a moment, newest first. */
     readonly completedSince: (playerId: PlayerId, since: number) => Effect.Effect<readonly Quest[]>;
     /** How many times a player rerolled each slot on the UTC day of `at`. Slots not rerolled that day are absent. */
@@ -153,6 +159,26 @@ export class Quests extends Context.Service<
            AND quest.sequence = (SELECT MAX(later.sequence) FROM quests AS later
                                  WHERE later.player_id = quest.player_id AND later.slot = quest.slot)
           WHERE player.player_id = ${playerId}
+        `,
+      });
+      const replacedSince = SqlSchema.findAll({
+        Request: Schema.Struct({ playerId: Schema.String, since: Schema.Int }),
+        Result: QuestRow,
+        execute: ({ playerId, since }) => sql`
+          SELECT ${sql.literal(QUEST_COLUMNS)} FROM quests
+          WHERE player_id = ${playerId} AND completed_at IS NULL AND (slot, sequence) IN (
+            SELECT slot, sequence FROM quest_rerolls WHERE player_id = ${playerId} AND rerolled_at >= ${since}
+          )
+          ORDER BY expires_at, slot
+        `,
+      });
+      const rerollsFrom = SqlSchema.findAll({
+        Request: Schema.Struct({ playerId: Schema.String, slot: Schema.String, from: Schema.Int }),
+        Result: Schema.Struct({ sequence: Schema.Int }),
+        execute: ({ playerId, slot, from }) => sql`
+          SELECT sequence FROM quest_rerolls
+          WHERE player_id = ${playerId} AND slot = ${slot} AND sequence >= ${from} AND leaf > 0
+          ORDER BY sequence
         `,
       });
       const completedSince = SqlSchema.findAll({
@@ -222,6 +248,22 @@ export class Quests extends Context.Service<
         for (const quest of step.written) {
           yield* saveQuest(playerId, quest).pipe(Effect.orDie);
         }
+        // A reroll undone gives back what it cost, once.
+        for (const { slot, from } of step.undone ?? []) {
+          for (const { sequence } of yield* rerollsFrom({ playerId, slot, from }).pipe(Effect.orDie)) {
+            const spent = yield* ledger.entry(`reroll:${playerId}:${slot}:${sequence}`);
+            if (Option.isNone(spent)) continue;
+            yield* ledger.post(
+              {
+                kind: "reversal",
+                playerId,
+                reverses: spent.value,
+                idempotencyKey: `reroll-undone:${playerId}:${slot}:${sequence}`,
+              },
+              now,
+            );
+          }
+        }
         for (const quest of step.completed) {
           yield* ledger.insert(
             draftEntry({
@@ -256,6 +298,11 @@ export class Quests extends Context.Service<
             Effect.orDie,
           ),
         saveStep,
+        replaced: (playerId, since) =>
+          replacedSince({ playerId, since }).pipe(
+            Effect.map((rows) => rows.map(toQuest)),
+            Effect.orDie,
+          ),
         completedSince: (playerId, since) =>
           completedSince({ playerId, since }).pipe(
             Effect.map((rows) => rows.map(toQuest)),

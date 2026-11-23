@@ -32,6 +32,7 @@ import { Allowance } from "../allowance.ts";
 import { type Identity, isGuest } from "../api/api.ts";
 import { PLACES } from "../api/schemas.ts";
 import { Tallies } from "../tally/store.ts";
+import { graceOver, type Link, linked, NO_LINK, type Stop, stopped, unlinked } from "./lifecycle.ts";
 import { type Occupant, type Room, Rooms } from "./room.ts";
 import { Watchers } from "./watchers.ts";
 
@@ -198,19 +199,16 @@ class Pipe {
  */
 class Player {
   identity: Identity;
-  room: Room | null = null;
-  occupant: Occupant | null = null;
-  pipe: Pipe | null = null;
-  /** When their last connection closed, while they have none. */
-  goneAt: number | null = null;
+  /** Where they are: in no room, or in one as its occupant, hearing what Leaf tells it if it is still (`Watchers`). */
+  place: Place = NOWHERE;
+  /** Their connection: none, open, or gone a moment ago, in their grace (`lifecycle.ts` moves it). */
+  link: Link<Pipe> = NO_LINK;
   /** Connections of theirs let in and not yet open: while there are any, the record is theirs. */
   opening = 0;
   /** What their connection's page said it is on, if it did. */
   device: Device | null = null;
   /** When Leaf was last told they did something here (`Visits.acted`), at most every `ACTED_EVERY`. */
   actedTold = Number.NEGATIVE_INFINITY;
-  /** In a still room, what stops them hearing what Leaf tells it (`Watchers`). */
-  hearing: (() => void) | null = null;
   readonly moves: Allowance;
   readonly texts: Allowance;
   readonly acts: Allowance;
@@ -226,21 +224,32 @@ class Player {
     this.strikes = new Allowance(STRIKES, now);
   }
 
+  /** Their connection, while one is open. */
+  get pipe(): Pipe | null {
+    return this.link.state === "open" ? this.link.pipe : null;
+  }
+
   /** The room's outbox for this player: whichever connection they have now, or none. */
   send(frame: string | Uint8Array): void {
     this.pipe?.send(frame);
   }
 
-  /** Whether nothing is left of them: no connection, opening or open, no place, and nothing owed on any allowance. */
+  /** Whether nothing is left of them: no connection, opening, open or in its grace, no place, and nothing owed on any allowance. */
   gone(now: number): boolean {
     return (
       this.opening === 0 &&
-      this.pipe === null &&
-      this.room === null &&
+      this.link.state === "none" &&
+      this.place.at === "none" &&
       [this.moves, this.texts, this.acts, this.opens, this.strikes].every((a) => a.full(now))
     );
   }
 }
+
+/** Where a player is in Live: in no room, or in one as its occupant, with what stops them hearing a still room. */
+type Place =
+  | { readonly at: "none" }
+  | { readonly at: "room"; readonly room: Room; readonly occupant: Occupant; readonly hearing: (() => void) | null };
+const NOWHERE: Place = { at: "none" };
 
 /**
  * What Live has done in the last minute, for its log line: connections opened and closed, frames in
@@ -330,8 +339,8 @@ export class Live extends Context.Service<
       const players = new Map<string, Player>();
       let counts = noCounts();
       let tick = 0;
-      /** Leaf is stopping: no connection is let in, and one still opening is told to come back. */
-      let stopping = false;
+      /** Leaf's stop: while it is not running, no connection is let in, and one still opening is told to come back. */
+      let stop: Stop = "running";
 
       // ---- where players are, as their visits have it ----
 
@@ -348,9 +357,8 @@ export class Live extends Context.Service<
        * player who left as the connections closed may be back in the next Leaf already, in a visit
        * of its own.
        */
-      let visitsClosed = false;
       const ofVisits = (effect: Effect.Effect<void>) =>
-        Effect.suspend(() => (visitsClosed ? Effect.void : quietly("live visits", effect)));
+        Effect.suspend(() => (stop === "visits closed" ? Effect.void : quietly("live visits", effect)));
       const write = (w: Whereabouts): Effect.Effect<void> => {
         switch (w.kind) {
           case "in":
@@ -365,7 +373,7 @@ export class Live extends Context.Service<
             return ofVisits(visits.closeAll(w.at)).pipe(
               Effect.andThen(
                 Effect.sync(() => {
-                  visitsClosed = true;
+                  stop = stopped(stop, "visits closed");
                 }),
               ),
               Effect.ensuring(Deferred.succeed(w.done, undefined)),
@@ -394,12 +402,11 @@ export class Live extends Context.Service<
       // ---- who is in which room: these three alone change it ----
 
       const leave = (p: Player, now: number): void => {
-        const { room, occupant } = p;
-        p.hearing?.();
-        p.hearing = null;
-        p.room = null;
-        p.occupant = null;
-        if (!room || !occupant) return;
+        const was = p.place;
+        p.place = NOWHERE;
+        if (was.at !== "room") return;
+        const { room, occupant } = was;
+        was.hearing?.();
         room.leave(occupant.member.id);
         rooms.tidy(room);
         const place = placeOf(room.kindName);
@@ -420,18 +427,19 @@ export class Live extends Context.Service<
           rank: identity.guildRank,
           guest: isGuest(identity),
         };
-        const shown = p.occupant?.member;
+        const was = p.place;
+        const shown = was.at === "room" ? was.occupant.member : undefined;
         const same = shown?.name === who.name && shown.rank === who.rank && shown.guest === who.guest;
-        if (p.room?.kindName === kindName && p.occupant && same) {
-          return p.room.greet(p.occupant, now, SERVER_HZ, LIVE_VERSION);
+        if (was.at === "room" && was.room.kindName === kindName && same) {
+          return was.room.greet(was.occupant, now, SERVER_HZ, LIVE_VERSION);
         }
         leave(p, now);
         const room = rooms.place(kindName);
         if (!room) return;
-        p.occupant = room.join(who, p, now, SERVER_HZ, LIVE_VERSION);
-        p.room = room;
+        const occupant = room.join(who, p, now, SERVER_HZ, LIVE_VERSION);
         // In a visit's room they hear what Leaf does to the state visited.
-        if (room.kind.still === true) p.hearing = watchers.hear(room.kindName, p);
+        const hearing = room.kind.still === true ? watchers.hear(room.kindName, p) : null;
+        p.place = { at: "room", room, occupant, hearing };
         const place = placeOf(kindName);
         if (place) Queue.offerUnsafe(whereabouts, { kind: "in", players: [inRoom(p)], place, at: now });
       };
@@ -455,7 +463,9 @@ export class Live extends Context.Service<
           counts.movesIn++;
           const move = decodeMove(frame);
           if (!move || !p.moves.take(now)) return strike(p, now);
-          if (p.room && p.occupant && p.room.move(p.occupant.member.id, move.seq, move.motion, now)) acted(p, now);
+          const { place } = p;
+          if (place.at === "room" && place.room.move(place.occupant.member.id, move.seq, move.motion, now))
+            acted(p, now);
           return;
         }
         counts.textsIn++;
@@ -475,7 +485,7 @@ export class Live extends Context.Service<
               return strike(p, now);
             }
             if (!p.acts.take(now)) return strike(p, now);
-            if (!p.room || !p.occupant) return p.send(say({ t: "error", code: "not_in_room" }));
+            if (p.place.at !== "room") return p.send(say({ t: "error", code: "not_in_room" }));
             acted(p, now);
             Queue.offerUnsafe(whereabouts, {
               kind: "act",
@@ -484,7 +494,7 @@ export class Live extends Context.Service<
               arg: m.arg,
               at: now,
             });
-            return p.room.act(p.occupant.member.id, m.kind, m.arg);
+            return p.place.room.act(p.place.occupant.member.id, m.kind, m.arg);
         }
       };
 
@@ -497,8 +507,8 @@ export class Live extends Context.Service<
         Effect.sync(() => {
           tick++;
           for (const [id, p] of players) {
-            if (p.goneAt !== null && now - p.goneAt >= tuning.graceMs) {
-              p.goneAt = null;
+            if (graceOver(p.link, now, tuning.graceMs)) {
+              p.link = NO_LINK;
               leave(p, now);
             }
             if (p.gone(now)) players.delete(id);
@@ -516,7 +526,7 @@ export class Live extends Context.Service<
         Effect.sync(() => {
           const byPlace = new Map<string, Visitor[]>();
           for (const p of players.values()) {
-            const place = p.room ? placeOf(p.room.kindName) : null;
+            const place = p.place.at === "room" ? placeOf(p.place.room.kindName) : null;
             if (!place) continue;
             const those = byPlace.get(place) ?? [];
             those.push(inRoom(p));
@@ -532,7 +542,7 @@ export class Live extends Context.Service<
         const inRooms: Record<string, number> = {};
         for (const room of rooms.all()) inRooms[room.name] = room.size;
         let connected = 0;
-        for (const p of players.values()) if (p.pipe) connected++;
+        for (const p of players.values()) if (p.link.state === "open") connected++;
         return { players: players.size, connected, rooms: inRooms };
       });
 
@@ -588,11 +598,11 @@ export class Live extends Context.Service<
             Effect.flatMap(Clock.currentTimeMillis, (now) =>
               Effect.sync(() => {
                 counts.closed++;
-                if (p.pipe !== pipe) return;
-                p.pipe = null;
-                if (pipe.closedWith === CLOSE.signedOut) return leave(p, now);
-                p.goneAt = now;
-                if (p.occupant) p.room?.halt(p.occupant.member.id);
+                const after = unlinked(p.link, pipe, pipe.closedWith === CLOSE.signedOut, now);
+                if (after === null) return;
+                p.link = after.link;
+                if (after.leaves) return leave(p, now);
+                if (p.place.at === "room") p.place.room.halt(p.place.occupant.member.id);
               }),
             ),
           );
@@ -600,16 +610,16 @@ export class Live extends Context.Service<
           // From here to the end, nothing waits: whether Leaf is stopping is asked in the same step
           // as the connection is made the player's. Opened after the farewell, it is told to come
           // back, and is never anybody's.
-          if (stopping) {
+          if (stop !== "running") {
             yield* pipe.closeNow(CLOSE.restart, "restart");
             return null;
           }
-          p.pipe?.close(CLOSE.replaced, "replaced");
-          p.pipe = pipe;
+          const { link, replaced } = linked(p.link, pipe);
+          replaced?.close(CLOSE.replaced, "replaced");
+          p.link = link;
           p.identity = identity;
           p.device = device;
-          p.goneAt = null;
-          if (p.occupant) p.room?.reconnected(p.occupant.member.id);
+          if (p.place.at === "room") p.place.room.reconnected(p.place.occupant.member.id);
           enter(p, kindName, now);
           counts.opened++;
           return { socket, pipe };
@@ -650,7 +660,7 @@ export class Live extends Context.Service<
       ) =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
-          if (stopping) return "stopping" as const;
+          if (stop !== "running") return "stopping" as const;
           // Looked for, counted and taken in one step, with nothing in between: no two can both
           // take the last place.
           const id = identity.playerId;
@@ -678,8 +688,8 @@ export class Live extends Context.Service<
       // Every open visit is closed first, after everything said before it, so that none a player
       // opens in the next Leaf, once their connection here has closed, is closed with them.
       const farewell = Effect.gen(function* () {
-        const first = !stopping;
-        stopping = true;
+        const first = stop === "running";
+        stop = stopped(stop, "farewell");
         if (first) {
           const done = yield* Deferred.make<void>();
           Queue.offerUnsafe(whereabouts, { kind: "farewell", at: yield* Clock.currentTimeMillis, done });
