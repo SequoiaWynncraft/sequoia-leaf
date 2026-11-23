@@ -265,9 +265,15 @@ export class Player {
       // a line it cannot do without, it makes room for by taking up old lines.
       const brings = this.depotLines().some((l) => l.item === u.item && l.rate > 0);
       const p = b.depotLine(u) ?? (brings ? null : b.depotLine(u, true));
+      const mark = p || brings ? null : b.save();
+      const parts = mark ? this.apart(u, b) : null;
       if (p) plans.push(p);
       else if (brings) this.note(g, `no room for more ${many(u.item)}`);
-      else {
+      else if (parts) {
+        plans.push(...parts);
+        this.note(g, `${many(u.item)} split off lines of their parts`);
+      } else {
+        if (mark) b.back(mark);
         // Else it builds the most of the line that fits, at half the pace and half again, and waits the longer.
         let less: Planned | null = null;
         for (let pace = u.perMinute / 2; !less && pace >= SLOWEST; pace /= 2)
@@ -330,6 +336,33 @@ export class Player {
     }
     if (built) this.read = measure(this.y);
     return built;
+  }
+
+  /**
+   * A line too big to lay as one block, laid as its parts first: each made by a line of its own into
+   * the depot (laid as its own parts in turn, once, if it must be), with twice what the line takes of
+   * it, so that splitting off half is enough; then the most of the line itself that fits, split off
+   * them. The lines, in the order they are to be built, or nothing.
+   */
+  private apart(u: Unit, b: Builder, deeper = 1): Planned[] | null {
+    const recipe = F.RECIPE[u.item];
+    if (!recipe || u.kind === F.GATHERER) return null;
+    const out: Planned[] = [];
+    for (const [k, part] of recipe.from.entries()) {
+      if (F.isRaw(part)) continue;
+      const hub = size(part, 2 * u.perMinute * (recipe.need[k] ?? 1), this.grades);
+      const line = b.depotLine(hub) ?? b.depotLine(hub, true);
+      const lines = line ? [line] : deeper > 0 ? this.apart(hub, b, deeper - 1) : null;
+      if (!lines) return null;
+      out.push(...lines);
+    }
+    if (out.length === 0) return null;
+    // Then the line itself, the most of it that fits, at its pace and half and half again.
+    for (let pace = u.perMinute; pace >= SLOWEST; pace /= 2) {
+      const line = b.depotLine(pace === u.perMinute ? u : size(u.item, pace, this.grades), true);
+      if (line) return [...out, line];
+    }
+    return null;
   }
 
   /**
