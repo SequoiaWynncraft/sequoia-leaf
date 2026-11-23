@@ -599,8 +599,9 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   to how long they have played it, when that is at most 3 minutes
   (`IDLE_MS`; a page in view calls at least every 75 seconds); a longer gap
   adds nothing. Leaf's own tending (below) is not a call. It is written as the
-  call arrives, with that moment, before the call waits for anything: one that
-  waits in a line (below) counts from when it came. `GET /v1/game/people/{player}` answers `{ "id", "name",
+  call arrives, with that moment, before the call waits for anything, and by
+  Leaf itself, so that the caller going away cannot stop it: one that waits in
+  a line (below) counts from when it came. `GET /v1/game/people/{player}` answers `{ "id", "name",
 "games", "played" }`: for each game they stand in or have played a second
   of, `played` in whole seconds and, with a standing, its `place`, `score`
   and `also`; and `played` for all games together.
@@ -656,42 +657,56 @@ jobs one at a time in that order, each at its own moment: a batch is done at the
 moment it arrived, however long it waited. A lane holds at most one copy of the
 state in memory. For each job it reads the stored state if it has no copy or
 the stored `rev` is no longer its copy's (a staging step or another Leaf wrote
-it), brings the copy to the job's moment, and then shows it, or does the batch
-to it and keeps it. A state that tends is brought there 2 ms of work at a time,
+it), brings the copy to the job's moment, and then shows it; or does each of
+the batch's commands to it in order, once the copy is run on to the tick the
+command is done at, weighing each against the balances as they stood before any
+was kept, and keeps it. A state that tends is run on 2 ms of work at a time,
 with as long a rest after each; one slice runs at a time for every state and
 every job together. The next slice goes to the players' job that arrived
-first, but a tend that has waited through three of those has the next: a
-player's job waits behind at most one slice of Leaf's own tending, and the
-tending goes on however busy the players are. No transaction runs a state on:
-the copy is there before one begins. The copy is written by a batch, and when a
+first (a tend with one behind it in its line runs as that one's), but a tend
+that has waited through three of those has the next: a player's job waits
+behind at most one slice of Leaf's own tending, and the tending goes on however
+busy the players are. No transaction runs a state on or does a command: a
+batch's transaction only checks and writes, the stored `rev` first, whether or
+not the state changed, then the balances its commands were weighed against
+(Coins, what may still be earned, and Leaf if any was taken), then the state,
+the answers, the Coins and the log. The copy is written by a batch, and when a
 job leaves the line empty with the copy run on past what is stored, as a batch
 of no commands keeps a state (where it stands and what it has won with it, and
-`rev` up by one); nothing else writes it, and the job is answered after. A
-new player's state is made in memory and stored by the first of those, in its
-transaction. Anything going wrong in a job drops the copy, and the next job
-reads what is stored. A batch is done whatever becomes of its request; an
-open, a visit or a tend whose caller has gone while it waited is never done.
-A lane with nothing in its line and nothing unsaved is let go. Every minute
-Leaf puts a tend in the line of each state no batch has written for two
-minutes (`TEND_AFTER`; an open page sends something more often), one after
-another, but for those it found standing still when it last read them (a yard
-eight hours after its owner was last there), until they are written again. A
-tend that fails is logged (`Tending the <game> state of <player> failed`), and
-the others are tended all the same. Leaf stopped with jobs waiting has written
+`rev` up by one); nothing else writes it, and the job is answered after. When
+what is stored has moved on (another Leaf wrote it, as for about twenty seconds
+of every deploy, or a tool did), nothing is written, and the job is done again
+from what is stored at its own moment, three times at most before it fails: so
+between two Leafs the row decides, and no command is lost or done twice. A new
+player's state is made in memory, their Coins opened with the welcome as it is,
+and stored by the first of those. Anything going wrong in a job drops the copy,
+and the next job reads what is stored. A batch is done whatever becomes of its
+request; an open, a visit or a tend whose caller has gone while it waited is
+never done. A lane with nothing in its line and nothing unsaved is let go.
+Every minute, from a minute after it starts (so that a Leaf starting beside one
+stopping does not tend against it), Leaf puts a tend in the line of each state
+no batch has written for two minutes (`TEND_AFTER`; an open page sends
+something more often), but for those it found standing still when it last read
+them (a yard eight hours after its owner was last there), until they are
+written again, and those with a tend in their line already; it waits for none
+of them, and each reads nothing until the slices give it its first turn. A tend
+that fails is logged (`Tending the <game> state of <player> failed`), and the
+others are tended all the same. Leaf stopped with jobs waiting has written
 nothing of them: every state is as last stored, only behind, and the next Leaf
-runs it on from there. A minute in which Leaf tended anything logs `tended`:
-how many states, and how long it took. On the development machine, tending the
+runs it on from there. A sweep whose tends have all ended logs `tended`: how
+many states, and how long they took. On the development machine, tending the
 largest kept yard (228 pieces) takes 9.5 ms of work two and a half minutes
 behind and 0.9 s eight hours behind, so half a core keeps about 7,900 such
 yards up; its owner opening it eight hours behind, on a Leaf just started,
 waits about 2 s. `bun apps/api/test/live-load.ts 32 20
 50 10` timed the town while fifty of them, eight hours behind, were tended and
-ten players visited one at once: 16.9 ms at the median, 31.8 ms at the 95th
-percentile and 35.8 ms at worst, against 16.0, 31.6 and 34.5 ms without; the ten
-visits were answered within 2.1 s. With `32 20 50 0 50`, fifty players visited a
-large yard written a minute ago at once, all answered within 0.06 s, and its
-owner's command sent behind them was answered in 58 ms; their page's commands
-after, once every half second, took 4 ms at the median and 9 ms at worst.
+ten players visited one at once: 17.4 ms at the median, 32.8 ms at the 95th
+percentile and 36.9 ms at worst, against 15.9, 31.6 and 33.7 ms without; the ten
+visits were answered within 2.7 s, the other forty-nine tends taking every
+fourth slice meanwhile. With `32 20 50 0 50`, fifty players visited a large yard
+written a minute ago at once, all answered within 0.07 s, and its owner's
+command sent behind them was answered in 67 to 83 ms; their page's commands
+after, once every half second, took 4 to 5 ms at the median and 11 ms at worst.
 
 **The town and the camp** keep the camp (what stands where, each thing by an
 id of its own, the tray, the parcels by the trail, the letters, the pets),

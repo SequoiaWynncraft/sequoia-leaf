@@ -1,5 +1,5 @@
 import { DEFAULT_RULES, RULE_CHANGES } from "@sequoia-leaf/core";
-import { Cause, Clock, Effect, Layer, Schedule } from "effect";
+import { Cause, Clock, type Duration, Effect, Layer, Schedule } from "effect";
 
 import { runAchievementSync } from "./achievements/run.ts";
 import { Visits } from "./activity/visits.ts";
@@ -91,20 +91,26 @@ const silentVisits = step(
   }),
 );
 
-/** Runs on the games' states that go on by themselves, where no page has kept them up for a while (a yard whose owner is away). */
+/**
+ * Puts a tend in the line of the games' states that go on by themselves, where no page has kept them
+ * up for a while (a yard whose owner is away), and waits for none of them.
+ */
 const tending = step(
   "Tending the games' states",
-  Play.use((play) => play.tend(Object.values(GAMES))),
+  Play.use((play) => Effect.asVoid(play.tend(Object.values(GAMES)))),
 );
 
-/** Runs a job at the start of every minute on its own fiber, so a slow run of one never holds up another. */
-const everyMinute = <R>(job: Effect.Effect<void, never, R>) =>
-  job.pipe(Effect.repeat(Schedule.cron("* * * * *")), Effect.forkScoped);
+/**
+ * Runs a job at the start of every minute on its own fiber, so a slow run of one never holds up
+ * another: the first at once, or once `after` has passed.
+ */
+const everyMinute = <R>(job: Effect.Effect<void, never, R>, after: Duration.Input = 0) =>
+  Effect.sleep(after).pipe(Effect.andThen(job.pipe(Effect.repeat(Schedule.cron("* * * * *")))), Effect.forkScoped);
 
 /**
  * What Leaf does every minute, for as long as it runs: the two feed syncs,
- * snapshots and offsite copies, closing silent visits, and tending the games' states, each on its
- * own. An offsite copy can take minutes; the syncs, the deep sync at minute 17, and snapshots carry
+ * snapshots and offsite copies, closing silent visits, and from its second minute tending the
+ * games' states, each on its own. An offsite copy can take minutes; the syncs, the deep sync at minute 17, and snapshots carry
  * on meanwhile.
  */
 export const EveryMinute = Layer.effectDiscard(
@@ -114,7 +120,8 @@ export const EveryMinute = Layer.effectDiscard(
     yield* everyMinute(yield* snapshots);
     yield* everyMinute(yield* offsiteCopies);
     yield* everyMinute(silentVisits);
-    yield* everyMinute(tending);
+    // A minute after Leaf starts: one starting beside one stopping, as in a deploy, does not tend against it.
+    yield* everyMinute(tending, "1 minute");
   }),
 );
 

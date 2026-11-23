@@ -121,7 +121,7 @@ const started = performance.now();
 let tended = "none";
 if (yards > 0)
   void leaf.run(
-    Play.use((play) => play.tend(Object.values(GAMES))).pipe(
+    Play.use((play) => Effect.flatten(play.tend(Object.values(GAMES)))).pipe(
       Effect.andThen(
         Effect.sync(() => {
           tended = `${yards} yards, eight hours each, in ${((performance.now() - started) / 1000).toFixed(1)} s`;

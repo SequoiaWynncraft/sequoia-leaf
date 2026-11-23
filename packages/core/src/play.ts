@@ -101,12 +101,16 @@ export interface Game<State, Command, View, Note> {
   advance(state: State, ctx: Ctx): State;
   /**
    * For a game whose states go on by themselves for hours, too much to do at once (a yard working
-   * while its owner is away): runs the state on toward `ctx.now` for as long as `more` says, asked
-   * before each step, and says whether there is further to go. Leaf runs such states itself, a
-   * slice of work at a time, so that `advance` is left only a moment's worth.
+   * while its owner is away): runs the state on toward `ctx.now`, or with a command toward where
+   * `apply` does it, for as long as `more` says, asked before each step, and says whether there is
+   * further to go. Leaf runs such states itself, a slice of work at a time, before it shows a state
+   * and before each command, so that neither `advance` nor `apply` has any running on left to do.
    */
-  tend?(state: State, ctx: Ctx, more: () => boolean): boolean;
-  /** Does one command, or refuses it. */
+  tend?(state: State, ctx: Ctx, more: () => boolean, command?: Command): boolean;
+  /**
+   * Does one command, or refuses it. Refused, the state is as running on to the command alone
+   * leaves it: time only goes forward.
+   */
   apply(state: State, command: Command, ctx: Ctx): Done<State, Note> | Refused;
   /** What the player's browser is given: the state without anything that tells the future. */
   view(state: State, ctx: Ctx): View;
