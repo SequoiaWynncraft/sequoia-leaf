@@ -327,6 +327,17 @@ describe("old lines taken up to make room", () => {
     expect({ got, near: near(got, p.rate) }).toEqual({ got, near: true });
   });
 
+  test("an old line a new line draws from is needed again: no line worked out after it may take it up", () => {
+    const y = F.create({ tier: 4, seed: 1 });
+    const planks = line(y, size(F.item("plank"), F.makes(F.MILL, 1, recipe("plank")), ones));
+    build(y, [planks]);
+    const old: Old[] = [{ id: 0, tiles: planks.lines[0]?.run ?? [], restores: [], sources: [0] }];
+    const builder = new Builder(y, ones, kept([planks]), old);
+    const tools = builder.depotLine(size(F.item("tool"), 1, ones));
+    expect(tools?.taps).toEqual([{ source: 0, rate: planks.rate / 2 }]);
+    expect(builder.save().old).toEqual([]);
+  });
+
   test("an old line taken up for one line is gone for the next: none worked out after it takes up what the first laid there", () => {
     const { y, old } = strip();
     const builder = new Builder(y, ones, [], old);

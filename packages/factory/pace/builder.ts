@@ -364,18 +364,19 @@ export class Builder {
       this.sources.length = lines;
       return null;
     };
-    const done = (rate: number, taken: readonly Old[] = []): Planned => ({
-      item,
-      rate,
-      into,
-      cmds: this.cmds.slice(start.cmds),
-      lines: this.sources.slice(lines),
-      taps: this.taps.slice(start.taps),
-      joined: this.joined.slice(start.joined),
-      onto: this.onto.slice(start.onto),
-      taken: taken.map((o) => o.id),
-      gone: taken.flatMap((o) => o.sources),
-    });
+    const done = (rate: number, taken: readonly Old[] = []): Planned =>
+      this.keep({
+        item,
+        rate,
+        into,
+        cmds: this.cmds.slice(start.cmds),
+        lines: this.sources.slice(lines),
+        taps: this.taps.slice(start.taps),
+        joined: this.joined.slice(start.joined),
+        onto: this.onto.slice(start.onto),
+        taken: taken.map((o) => o.id),
+        gone: taken.flatMap((o) => o.sources),
+      });
     const passes = [
       { loose: false, planning: false, lay: build },
       { loose: true, planning: false, lay: build },
@@ -495,6 +496,17 @@ export class Builder {
     this.onto.push(...plan.onto);
     this.sources.push(...plan.sources);
     return this.retire({ rate, taken });
+  }
+
+  /**
+   * An old line a line just worked out draws from (a source it taps) or runs onto (a belt it joins)
+   * is needed again: no line worked out after it may take it up.
+   */
+  private keep(p: Planned): Planned {
+    const tapped = new Set(p.taps.map((t) => t.source));
+    const joined = new Set(p.joined);
+    this.old = this.old.filter((o) => !o.sources.some((s) => tapped.has(s)) && !o.tiles.some((i) => joined.has(i)));
+    return p;
   }
 
   /** The old lines a clearing took up are gone: the next line worked out never takes up what stands there now. */
