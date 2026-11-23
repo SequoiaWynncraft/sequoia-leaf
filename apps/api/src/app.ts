@@ -1,4 +1,4 @@
-import { BunHttpServer } from "@effect/platform-bun";
+import { BunHttpServer, BunServices } from "@effect/platform-bun";
 import { Duration, Effect, Layer } from "effect";
 import { SecureRandom } from "effect/crypto";
 import { FetchHttpClient, HttpRouter } from "effect/http";
@@ -112,8 +112,8 @@ export const Stores = Layer.mergeAll(
 ).pipe(Layer.provideMerge(Ledger.layer));
 
 /**
- * What Leaf reaches outside its own code (its settings, its database, Mojang, the network and the
- * machine's dice), the play service and the credit sync on the stores, and the live rooms, which the routes serve and
+ * What Leaf reaches outside its own code (its settings, its database, Mojang, the network, the
+ * machine's dice and its processes), the play service and the credit sync on the stores, and the live rooms, which the routes serve and
  * the server's farewell closes, and which write who is in them into the stores' presence and visits.
  */
 export const Services = Layer.mergeAll(Play.layer, Credits.layer, Live.layer).pipe(
@@ -122,6 +122,7 @@ export const Services = Layer.mergeAll(Play.layer, Credits.layer, Live.layer).pi
   Layer.provideMerge(Database),
   Layer.provide(Mojang.layer),
   Layer.provide(SecureRandom.layerWebCrypto),
+  Layer.provideMerge(BunServices.layer),
   Layer.provideMerge(FetchHttpClient.layer),
   Layer.provideMerge(AppConfig.layer),
 );

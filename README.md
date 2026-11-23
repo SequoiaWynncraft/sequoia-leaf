@@ -1394,7 +1394,9 @@ docker run --publish 3000:3000 --volume leaf-data:/data --env BACKEND_INTERNAL_T
 
 Every six hours the server writes a snapshot, a complete copy of the database
 consistent as of one moment, to `/data/backups`, and keeps the newest 28, which
-is a week. A snapshot is an ordinary SQLite file. To restore one, stop the app
+is a week. Another process makes each one (`apps/api/src/backup/vacuum.ts`),
+reading the database file beside Leaf, so Leaf goes on answering meanwhile. A
+snapshot is an ordinary SQLite file. To restore one, stop the app
 in Coolify, copy the snapshot over `/data/leaf.db`, delete `leaf.db-wal` and
 `leaf.db-shm` beside it, and start the app.
 

@@ -1,5 +1,6 @@
 import { deflateSync } from "node:zlib";
 
+import { BunServices } from "@effect/platform-bun";
 import type { Activity, PlayerId, Posting } from "@sequoia-leaf/core";
 import {
   Clock,
@@ -165,6 +166,7 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     handClock,
     Layer.succeed(LeafInstance)(fakes.instance ?? crypto.randomUUID()),
     Layer.succeed(PlayMeter)(fakes.meter ?? null),
+    BunServices.layer,
     fakes.dice === undefined ? SecureRandom.layerWebCrypto : Layer.succeed(SecureRandom.SecureRandom)(fakes.dice),
     fakes.log === true
       ? Layer.mergeAll(Logger.layer([Logger.consoleJson]), Layer.succeed(References.MinimumLogLevel)("Warn"))
