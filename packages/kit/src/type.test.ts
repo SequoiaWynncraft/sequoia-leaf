@@ -35,3 +35,25 @@ test("no rule sets its own face, size or weight: every text is one of the kit's 
   }
   expect(stray).toEqual([]);
 });
+
+/**
+ * Gold is for dark panels. On paper (a letter, a note, what a character says) it cannot be read, so
+ * one rule in `kit.css` writes those things in ink there. A style that writes in gold and is not
+ * named in that rule would be pale yellow on cream the first time it is put on a letter, as a
+ * thing's count was. A card and a chip are dark themselves wherever they stand.
+ */
+test("nothing written on paper is in the gold of a dark panel", async () => {
+  const css = (await Bun.file(`${import.meta.dir}/kit.css`).text()).replace(/\/\*[\s\S]*?\*\//g, "");
+  const inked = /:is\(\.k-paper, \.k-say\) :is\(([^)]*)\):not\(\.k-chip \*, \.k-btn \*\)\s*\{\s*color: #96560a/
+    .exec(css)?.[1]
+    ?.split(",")
+    .map((one) => one.trim());
+  expect(inked?.length ?? 0).toBeGreaterThan(0);
+  const stray: string[] = [];
+  for (const [, selectors = "", body = ""] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!/(?:^|[;\s])color:\s*var\(--k-gold(?:-lt)?\)/.test(body)) continue;
+    for (const one of selectors.split(",").map((part) => part.trim()))
+      if (!/^\.k-(?:info|chip)\b/.test(one) && !inked?.includes(one)) stray.push(one);
+  }
+  expect(stray).toEqual([]);
+});
