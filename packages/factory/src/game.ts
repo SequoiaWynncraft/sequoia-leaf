@@ -252,7 +252,8 @@ const TOOL: Partial<Record<Command["do"], Lock>> = {
 
 /** Does a command to a yard already at its tick. Nothing is changed unless it is done. */
 function act(y: Yard, c: Command): Did {
-  const tool = TOOL[c.do];
+  // One piece stood again (a removal undone) is a piece built: it is of no tool.
+  const tool = c.do === "stand" && c.pieces.length === 1 ? undefined : TOOL[c.do];
   const lock = tool === undefined ? null : locked(y.open, tool);
   if (lock !== null) return { refused: LOCKED, why: lock };
   switch (c.do) {
