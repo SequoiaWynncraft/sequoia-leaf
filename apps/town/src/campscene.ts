@@ -576,7 +576,7 @@ export function makeCamp(
   }
 
   function sitOn(l: Live, wx: number, wy: number): void {
-    if (decor) return;
+    if (decor()) return;
     const p = player();
     const own = (seatsOf.get(l.placed.n)?.seats ?? []).filter((s) => !s.taken || s === p.seat);
     const best = own.toSorted((a, b) => dist(wx, wy, a.x, a.y - 6) - dist(wx, wy, b.x, b.y - 6))[0];
@@ -821,8 +821,7 @@ export function makeCamp(
     seed = host ? nameSeed(host.id) % 5000 : 0;
     pets = [];
     lanterns.length = 0;
-    sel = null;
-    decor = false;
+    decorating = null;
     pan.x = 0;
     pan.y = 0;
 
@@ -872,20 +871,27 @@ export function makeCamp(
 
   // ---------- decorating ----------
 
-  let decor = false;
-  let sel: Hold | null = null;
+  /** Decorating, and whatever is in hand meanwhile; null while not decorating, when nothing can be in hand. */
+  let decorating: { hand: Hold | null } | null = null;
+  const decor = (): boolean => decorating !== null;
+  /** What is in hand, while decorating. */
+  const hand = (): Hold | null => decorating?.hand ?? null;
+  /** Takes something in hand, or puts it down (null): only while decorating. */
+  function grip(h: Hold | null): void {
+    if (decorating) decorating.hand = h;
+  }
 
   function decorate(on: boolean): void {
-    if (decor === on || (on && visiting())) return;
-    decor = on;
+    if (decor() === on || (on && visiting())) return;
     if (on) {
+      decorating = { hand: null };
       closePanel();
       closeCard();
       halt();
       sfx.open();
     } else {
       settle();
-      sel = null;
+      decorating = null;
       sfx.close();
     }
     pan.x = 0;
@@ -898,7 +904,7 @@ export function makeCamp(
 
   /** Shows the thing in hand where it would go; anything else is where it stands. */
   function showHeld(): void {
-    const h = sel;
+    const h = hand();
     const l = h ? liveAt(h.n) : null;
     if (!h || !l) return;
     const at = footOf({ ...l.placed, x: h.x, y: h.y, t: h.t });
@@ -922,14 +928,14 @@ export function makeCamp(
   function pickUp(n: number, grab: Pt): void {
     const p = placedAt(n);
     if (!p) return;
-    sel = { n, x: p.x, y: p.y, t: p.t, ok: "ok", dragging: true, grab, moved: false };
+    grip({ n, x: p.x, y: p.y, t: p.t, ok: "ok", dragging: true, grab, moved: false });
     csfx.lift();
     showHeld();
     ui.tray();
   }
 
   function dragTo(at: Pt): void {
-    const h = sel;
+    const h = hand();
     const p = h ? placedAt(h.n) : null;
     const thing = p ? thingOf(p.id) : null;
     if (!h || !p || !thing || !h.dragging) return;
@@ -950,7 +956,7 @@ export function makeCamp(
 
   /** The thing in hand is set down where it is held, or goes back where it came from. */
   function settle(): void {
-    const h = sel;
+    const h = hand();
     const p = h ? placedAt(h.n) : null;
     if (!h || !p) return;
     const was = h.dragging;
@@ -984,7 +990,7 @@ export function makeCamp(
   }
 
   function turn(): void {
-    const h = sel;
+    const h = hand();
     if (!h) return;
     // Nothing is done to a thing Leaf has not numbered yet: it is a moment.
     if (h.n < 0) {
@@ -1022,7 +1028,7 @@ export function makeCamp(
   }
 
   function stow(): void {
-    const h = sel;
+    const h = hand();
     const p = h ? placedAt(h.n) : null;
     const thing = p ? thingOf(p.id) : null;
     if (!h || !p || !thing) return;
@@ -1041,7 +1047,7 @@ export function makeCamp(
       return;
     }
     if (at && sprite) ui.toTray(sprite.c, { x: at.x, y: at.y - sprite.c.height / 2 }, thing.id);
-    sel = null;
+    grip(null);
     sfx.pop();
     rebuild();
     ui.tray();
@@ -1086,10 +1092,10 @@ export function makeCamp(
    */
   async function numberedAs(mark: number): Promise<void> {
     const n = await numbered(mark);
-    const h = sel;
+    const h = hand();
     if (!h || h.n !== mark) return;
     if (n === null) {
-      sel = null;
+      grip(null);
       ui.tray();
       return;
     }
@@ -1100,7 +1106,7 @@ export function makeCamp(
 
   function takeOut(id: string): boolean {
     const thing = thingOf(id);
-    if (!decor || !thing) return false;
+    if (!decor() || !thing) return false;
     settle();
     // With as many set out as may be, it stays in the tray.
     if (campFull(mine().placed)) {
@@ -1126,9 +1132,11 @@ export function makeCamp(
     void numberedAs(n);
     rebuild();
     const where = placedAt(n);
-    sel = where
-      ? { n, x: where.x, y: where.y, t: where.t, ok: "ok", dragging: false, grab: { x: 0, y: 0 }, moved: false }
-      : null;
+    grip(
+      where
+        ? { n, x: where.x, y: where.y, t: where.t, ok: "ok", dragging: false, grab: { x: 0, y: 0 }, moved: false }
+        : null,
+    );
     const at = where ? footOf(where) : null;
     if (at) {
       puff(at.x, at.y, 5, "#966c4a");
@@ -1171,7 +1179,7 @@ export function makeCamp(
   const touch = makeTouch({
     ground,
     // While decorating, nothing is walked up to and used.
-    doors: () => (decor ? [] : spots),
+    doors: () => (decor() ? [] : spots),
     people: everybody,
     greet: meet,
     own(x, y) {
@@ -1233,9 +1241,9 @@ export function makeCamp(
     },
     under(g, cx, cy) {
       // A soft grid round whatever is in hand, and the ground it would take.
-      const h = sel;
+      const h = hand();
       const l = h ? liveAt(h.n) : null;
-      if (decor && h && l) {
+      if (decor() && h && l) {
         const [w, d] = footprint(l.thing, h.t);
         if (h.dragging)
           for (let y = h.y - 3; y <= h.y + d + 2; y++)
@@ -1275,9 +1283,9 @@ export function makeCamp(
         g.globalAlpha = 1;
       }
       // Gold corners round the thing in hand.
-      const h = sel;
+      const h = hand();
       const l = h ? liveAt(h.n) : null;
-      const box = decor && l ? l.prop.hit : null;
+      const box = decor() && l ? l.prop.hit : null;
       if (!box) return;
       const x0 = Math.round(box.x) - cx - 2;
       const y0 = Math.round(box.y) - cy - 2;
@@ -1330,7 +1338,7 @@ export function makeCamp(
       G.t += dt;
       const p = player();
       stepActor(p, dt, ground);
-      touch.step(dt, sel?.dragging ? null : steer);
+      touch.step(dt, hand()?.dragging ? null : steer);
       for (const a of guests) stepActor(a, dt, ground);
       // Whoever is out past the posts is behind the great tree, and then gone.
       for (const a of everybody()) a.alpha = clamp((CW + 12 - a.x) / 6, 0, 1);
@@ -1376,7 +1384,7 @@ export function makeCamp(
       }
 
       // Something dragged near an edge of the view pushes the view along: of as much of it as the tray leaves.
-      if (sel?.dragging && lastDrag) {
+      if (hand()?.dragging && lastDrag) {
         const tray = covered();
         const fx = (lastDrag.x - G.cam.x) / G.view.w;
         const fy = (lastDrag.y - G.cam.y) / (tray?.under ? (tray.top * G.view.dpr) / G.view.z : G.view.h);
@@ -1397,20 +1405,20 @@ export function makeCamp(
 
     tap(x, y, finger) {
       lastDrag = { x, y };
-      if (!decor || !awake()) return touch.tap(x, y, finger);
+      if (!decor() || !awake()) return touch.tap(x, y, finger);
       // Decorating, a touch takes hold of a thing, or puts down what is in hand and walks.
       show.touch = finger;
       closeCard();
       const n = thingAt(x, y);
       if (n !== null) {
-        if (sel && sel.n !== n) settle();
+        if ((hand()?.n ?? n) !== n) settle();
         const l = liveAt(n);
         pickUp(n, l ? { x: x - l.prop.x, y: y - l.prop.y } : { x: 0, y: 0 });
         return false;
       }
-      if (sel) {
+      if (hand()) {
         settle();
-        sel = null;
+        grip(null);
         ui.tray();
       }
       return touch.walk(x, y);
@@ -1423,16 +1431,16 @@ export function makeCamp(
 
     release(_at, over) {
       lastDrag = null;
-      if (!sel?.dragging) return;
+      if (!hand()?.dragging) return;
       if (over?.closest("#tray")) stow();
       else settle();
     },
 
     point(at) {
-      if (!decor || !at || !awake()) return touch.point(at);
+      if (!decor() || !at || !awake()) return touch.point(at);
       // The thing in hand has its own corners.
-      const n = sel?.dragging ? null : thingAt(at.x, at.y);
-      const l = n !== null && n !== sel?.n ? liveAt(n) : null;
+      const n = hand()?.dragging ? null : thingAt(at.x, at.y);
+      const l = n !== null && n !== hand()?.n ? liveAt(n) : null;
       const h: Hover | null = l?.prop.hit
         ? { box: l.prop.hit, tip: [l.thing.name, ""], ref: thingRef(l.thing.id) }
         : null;
@@ -1440,16 +1448,16 @@ export function makeCamp(
       show.pointed = null;
       return h;
     },
-    act: () => (decor ? turn() : touch.act()),
+    act: () => (decor() ? turn() : touch.act()),
 
     back() {
       if (G.panel) closePanel();
-      else if (decor) decorate(false);
+      else if (decor()) decorate(false);
       else closeCard();
     },
 
     key(k) {
-      if (!decor) return false;
+      if (!decor()) return false;
       if (k === "r") turn();
       else if (k === "delete" || k === "backspace") stow();
       else return false;
@@ -1478,10 +1486,11 @@ export function makeCamp(
     },
 
     go,
-    decorating: () => decor,
+    decorating: () => decor(),
     decorate,
     held() {
-      const p = sel ? placedAt(sel.n) : null;
+      const h = hand();
+      const p = h ? placedAt(h.n) : null;
       const thing = p ? thingOf(p.id) : null;
       return thing ? { name: thing.name, turns: turnsOf(thing) > 1, stays: thing.rooted } : null;
     },
@@ -1513,12 +1522,12 @@ export function makeCamp(
       take: takeOut,
       grab(n) {
         const l = liveAt(n);
-        if (!decor || !l) return;
-        if (sel && sel.n !== n) settle();
+        if (!decor() || !l) return;
+        if ((hand()?.n ?? n) !== n) settle();
         pickUp(n, { x: 0, y: -4 });
       },
       dragTo(cx, cy) {
-        const h = sel;
+        const h = hand();
         const p = h ? placedAt(h.n) : null;
         const thing = p ? thingOf(p.id) : null;
         if (!h || !thing) return;
@@ -1535,8 +1544,9 @@ export function makeCamp(
         });
       },
       hand() {
-        const p = sel ? placedAt(sel.n) : null;
-        return sel && p ? { id: p.id, cx: sel.x, cy: sel.y, ok: sel.ok } : null;
+        const h = hand();
+        const p = h ? placedAt(h.n) : null;
+        return h && p ? { id: p.id, cx: h.x, cy: h.y, ok: h.ok } : null;
       },
       pets() {
         return pets.map((p) => ({ name: p.name, x: Math.round(p.x), y: Math.round(p.y) }));
