@@ -13,6 +13,7 @@ import {
   countsOf,
   deliver,
   FACTORY,
+  GATHERER,
   GOALS,
   isFilled,
   item,
@@ -1656,7 +1657,8 @@ describe("a yard the Works' first design kept", () => {
       depot: { plank: 300 },
       sold: 16_597,
       paid: 40_230,
-      cells: [{ i: 2000, k: "gatherer", d: 0 }],
+      // The gatherer it was given, where it stood on the deadfall by the depot.
+      cells: [{ i: 15 * 48 + 20, k: "gatherer", d: 0, g: 1 }],
     });
     await services.query(
       (sql) => sql`
@@ -1675,6 +1677,7 @@ describe("a yard the Works' first design kept", () => {
     expect(opening.status).toBe(200);
     const { clock: tick, yard } = yardOf(Schema.decodeUnknownSync(Shown)(await opening.json()).state);
     expect([yard.open.tier, yard.handed, Math.floor((yard.paid + yard.sold) / MILLI)]).toEqual([2, 27, 56_827]);
+    expect(yard.kind[15 * 48 + 20]).toBe(GATHERER);
     // Grove, the Far Seam, Windfall Hollow and the Millpond are for later tiers: 11,600 Coins back.
     expect(yard.till).toBe(11_600 * MILLI);
     const collected = await send("POST", "/v1/game/play/works", { commands: [{ id: "f-1", do: "collect", tick }] });
