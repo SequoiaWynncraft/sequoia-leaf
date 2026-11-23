@@ -27,12 +27,13 @@ import {
   makeFolk,
   peopleOn,
   placeFolk,
-  release,
   rouse,
   say,
   seatFree,
   stepActor,
   stepFolk,
+  stop,
+  walkAlong,
   walkTo,
   wayTo,
 } from "./actors.ts";
@@ -305,9 +306,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   }
 
   function halt(): void {
-    release(player);
-    player.path = [];
-    player.arrive = null;
+    stop(player);
     doorTo(null);
     show.dest = null;
   }
@@ -339,8 +338,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     closeCard();
     if (id === "works") {
       player.dir = 3;
-      player.path = [{ x: place("works").stand.x, y: THRESHOLD }];
-      player.arrive = null;
+      walkAlong(player, [{ x: place("works").stand.x, y: THRESHOLD }]);
     } else lightTable(true);
   }
 
@@ -636,8 +634,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       // Out of the dark of the doorway and back to where they stood.
       putAt(place("works").stand.x, THRESHOLD);
       player.dir = 0;
-      player.path = [{ ...place("works").stand }];
-      player.arrive = null;
+      walkAlong(player, [{ ...place("works").stand }]);
     },
 
     wayOut(to) {

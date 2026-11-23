@@ -24,7 +24,7 @@ import { clamp, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { FOLK } from "@sequoia-leaf/town/folk.ts";
 
 import { stepAbout } from "./aboutui.ts";
-import { release, walkLeft } from "./actors.ts";
+import { walkAlong, walkLeft } from "./actors.ts";
 import { makeCampArt } from "./campart.ts";
 import { type CampScene, makeCamp } from "./campscene.ts";
 import { makeCampUi } from "./campui.ts";
@@ -284,10 +284,7 @@ async function boot(): Promise<void> {
     tipOff(TIP);
     const p = G.player;
     const way = scenes[off.from].wayOut(off.to.place);
-    if (!p) return;
-    release(p);
-    p.path = [...way];
-    p.arrive = null;
+    if (p) walkAlong(p, way);
   }
 
   /** At the darkest moment of a walk: the place walked off from is put away, and the next put on. */

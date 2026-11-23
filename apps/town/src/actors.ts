@@ -14,12 +14,20 @@ import type { Townsperson } from "@sequoia-leaf/town/folk.ts";
 import { beside, crowds, type Placed } from "./apart.ts";
 import { folkArt } from "./folkart.ts";
 import { puff } from "./fx.ts";
-import { type Actor, G, SEED, type Who } from "./game.ts";
+import { type Actor, G, type Move, SEED, type Who } from "./game.ts";
 import type { Ground } from "./grid.ts";
 import type { Steer } from "./stage.ts";
 import { type Seat, SEATS, STALL_BEHIND, STALL_FRONT_Y, STALL_TOP_Y, TOWN } from "./world.ts";
 
 export const HOP = 0.3;
+
+const STILL: Move = { kind: "still" };
+const NOWHERE: readonly Pt[] = [];
+
+/** The seat somebody's feet are on, the one kept for them, and the way still to walk, from what they are doing. */
+const seatOf = (m: Move): Seat | null => (m.kind === "seated" || m.kind === "puppet" ? m.seat : null);
+const goalOf = (m: Move): Seat | null => (m.kind === "toSeat" ? m.seat : null);
+const pathOf = (m: Move): readonly Pt[] => (m.kind === "walking" || m.kind === "toSeat" ? m.path : NOWHERE);
 
 function blank(who: Who, body: Body | null, x: number, y: number, you: boolean): Actor {
   return {
@@ -36,12 +44,18 @@ function blank(who: Who, body: Body | null, x: number, y: number, you: boolean):
     dir: 0,
     side: -1,
     speed: you ? 64 : 30 + Math.random() * 10,
-    path: [],
-    arrive: null,
+    move: STILL,
+    get seat() {
+      return seatOf(this.move);
+    },
+    get goal() {
+      return goalOf(this.move);
+    },
+    get path() {
+      return pathOf(this.move);
+    },
     walked: 0,
     moving: false,
-    seat: null,
-    goal: null,
     sat: -9,
     hold: 0,
     hop: 0,
@@ -120,30 +134,37 @@ export function face(a: Actor, x: number, y: number): void {
   if (Math.abs(dx) > 0.3) a.side = dx < 0 ? -1 : 1;
 }
 
+/** Somebody sits down on a seat, which is theirs while they sit; any other they had or were walking to is let go. */
 export function sit(a: Actor, seat: Seat): void {
+  const m = a.move;
+  if ((m.kind === "toSeat" || m.kind === "seated") && m.seat !== seat) m.seat.taken = false;
   seat.taken = true;
-  a.seat = seat;
-  a.goal = null;
+  a.move = { kind: "seated", seat };
   a.sat = G.t;
   a.dir = seat.dir;
-  a.path = [];
-  a.arrive = null;
   if (a.you) sfx.sit();
 }
 
-export function stand(a: Actor): void {
-  if (!a.seat) return;
-  a.x = a.seat.from.x;
-  a.y = a.seat.from.y;
-  a.seat.taken = false;
-  a.seat = null;
+/**
+ * Whatever somebody is doing with their feet, they stop and stand where they are: up off a seat
+ * (onto the ground before it), a seat kept for them let go, a walk dropped with what was to happen
+ * at its end. Somebody put where others say is left as they are.
+ */
+export function stop(a: Actor): void {
+  const m = a.move;
+  if (m.kind === "puppet" || m.kind === "still") return;
+  if (m.kind === "seated") {
+    a.x = m.seat.from.x;
+    a.y = m.seat.from.y;
+  }
+  if (m.kind === "seated" || m.kind === "toSeat") m.seat.taken = false;
+  a.move = STILL;
 }
 
-/** Lets go of whatever seat someone holds, so that somebody else may have it. */
-export function release(a: Actor): void {
-  if (a.goal) a.goal.taken = false;
-  a.goal = null;
-  stand(a);
+/** Somebody put where others say this frame (a live player, a member visiting): on their feet, or on a seat of their own. */
+export function putAs(a: Actor, seat: Seat | null): void {
+  const m = a.move;
+  if (m.kind !== "puppet" || m.seat !== seat) a.move = { kind: "puppet", seat };
 }
 
 /** Everybody on each ground, as whoever draws it says: for where a walk there ends. */
@@ -176,9 +197,9 @@ export function stopAt(a: Actor, to: Pt, ground: Ground = TOWN): Pt {
  * its sitter would be. A member dozing on it has it only until somebody awake sits there, and then
  * dozes on the next (`visitors.ts`).
  */
-export const seatFree = (s: Seat, a: Actor | null): boolean =>
+export const seatFree = (s: Seat, a: Actor | null, ground: Ground = TOWN): boolean =>
   (!s.taken || a?.goal === s) &&
-  stillOn(TOWN, a, true).every((o) => !crowds(o, { x: s.x, y: s.y, tall: tallOf(true, s.dir) }));
+  stillOn(ground, a, true).every((o) => !crowds(o, { x: s.x, y: s.y, tall: tallOf(true, s.dir) }));
 
 /** Whether somebody sits on one of the town's seats: another player's seat is their own, where the town's is. */
 export const sitsOn = (a: Actor, s: Seat): boolean => a.seat !== null && dist(a.seat.x, a.seat.y, s.x, s.y) <= 2;
@@ -211,13 +232,66 @@ export function walkLeft(a: Actor): number {
  * is the town's unless another is given.
  */
 export function walkTo(a: Actor, to: Pt, then: (() => void) | null = null, ground: Ground = TOWN): void {
-  stand(a);
-  a.path = wayTo(a, to, ground);
-  a.arrive = then;
-  if (a.path.length === 0) {
-    a.arrive = null;
+  stop(a);
+  walkAlong(a, wayTo(a, to, ground), then);
+}
+
+/** Sets somebody walking a way already worked out, point by point, from whatever they were doing; `then` happens at its end. */
+export function walkAlong(a: Actor, path: readonly Pt[], then: (() => void) | null = null): void {
+  stop(a);
+  if (path.length === 0) {
     then?.();
+    return;
   }
+  a.move = { kind: "walking", path: [...path], done: then };
+}
+
+/**
+ * Walks somebody to a seat to sit on it, keeping it for them on the way. If by then somebody stands
+ * or sits where they would sit (`seatFree`), they let it go and stay standing where the walk ended.
+ * `then` is told the seat they sat on, if any.
+ */
+export function walkToSeat(
+  a: Actor,
+  s: Seat,
+  then: ((sat: Seat | null) => void) | null = null,
+  ground: Ground = TOWN,
+): void {
+  stop(a);
+  s.taken = true;
+  a.move = { kind: "toSeat", seat: s, path: wayTo(a, s.from, ground), done: then };
+  if (a.path.length === 0) reached(a, ground);
+}
+
+/** The end of the way somebody was walking: they stand there, or sit on the seat kept for them if it is still free; then what was to happen does. */
+function reached(a: Actor, ground: Ground): void {
+  const m = a.move;
+  if (m.kind === "walking") {
+    a.move = STILL;
+    m.done?.();
+  } else if (m.kind === "toSeat") {
+    const sat = seatFree(m.seat, a, ground) ? m.seat : null;
+    if (sat) sit(a, sat);
+    else stop(a);
+    m.done?.(sat);
+  }
+}
+
+/**
+ * Somebody is hopped over to a point, out of somewhere they were shut in: a walk they were on goes
+ * on from there, round whatever is in the way now, to the same end and what was to happen there.
+ */
+export function hopTo(a: Actor, to: Pt, ground: Ground = TOWN): void {
+  a.x = to.x;
+  a.y = to.y;
+  hop(a);
+  const m = a.move;
+  if (m.kind !== "walking" && m.kind !== "toSeat") return;
+  // The last point of the way on open ground is walked to afresh; what lies past it (off the ground, out past the trail's posts) after.
+  const last = m.path.findLastIndex((p) => !ground.footBlocked(p.x, p.y));
+  const on = m.path[last];
+  if (!on) return;
+  m.path.splice(0, last + 1, ...ground.findPath(a, on, a.you));
 }
 
 /** A foot coming down: a little dust on the paths, and for the player a soft step. */
@@ -251,16 +325,19 @@ export function stepActor(a: Actor, dt: number, ground: Ground = TOWN): void {
     a.hold -= dt;
     return;
   }
+  const m = a.move;
+  if (m.kind !== "walking" && m.kind !== "toSeat") return;
+  const path = m.path;
   let left = a.speed * dt;
   const before = a.walked;
-  while (left > 0 && a.path.length > 0) {
-    let p = a.path[0];
+  while (left > 0 && path.length > 0) {
+    let p = path[0];
     if (!p) break;
     // The last stretch of a walk: somebody may have stopped where it ends since it set out.
-    const q = a.path.length === 1 && ends.has(p) ? stopAt(a, p, ground) : p;
+    const q = path.length === 1 && ends.has(p) ? stopAt(a, p, ground) : p;
     if (q.x !== p.x || q.y !== p.y) {
       ends.add(q);
-      a.path[0] = p = q;
+      path[0] = p = q;
     }
     const d = dist(a.x, a.y, p.x, p.y);
     a.moving = true;
@@ -270,13 +347,11 @@ export function stepActor(a: Actor, dt: number, ground: Ground = TOWN): void {
       a.y = p.y;
       a.walked += d;
       left -= d;
-      a.path.shift();
-      if (a.path.length === 0) {
+      path.shift();
+      if (path.length === 0) {
         // Standing still from now on, for whoever looks for a place next.
         a.moving = false;
-        const fn = a.arrive;
-        a.arrive = null;
-        fn?.();
+        reached(a, ground);
         break;
       }
     } else {
@@ -478,24 +553,15 @@ export function freeSeat(a: Actor, where: Seat["at"]): Seat | null {
 export const stallAt = (n: number): Pt => STALL_BEHIND[n] ?? { x: 108, y: 238 };
 
 /**
- * Walks somebody to a seat to sit on it, keeping it for them on the way. If by then somebody stands
- * or sits where they would sit (`seatFree`), they let it go for the seat `after` gives, or, with
- * none, stay standing where the walk ended. `then` is told the seat they sat on, if any.
+ * Walks somebody to a seat to sit on it (`walkToSeat`); if somebody is there by then, on to the seat
+ * `after` gives, or, with none, they stay standing where the walk ended. `then` is told the seat
+ * they sat on, if any.
  */
 export function goToSeat(a: Actor, s: Seat, after: () => Seat | null, then?: (sat: Seat | null) => void): void {
-  release(a);
-  s.taken = true;
-  a.goal = s;
-  walkTo(a, s.from, () => {
-    if (seatFree(s, a)) {
-      sit(a, s);
-      then?.(s);
-      return;
-    }
-    release(a);
-    const other = after();
+  walkToSeat(a, s, (sat) => {
+    const other = sat ? null : after();
     if (other) goToSeat(a, other, after, then);
-    else then?.(null);
+    else then?.(sat);
   });
 }
 

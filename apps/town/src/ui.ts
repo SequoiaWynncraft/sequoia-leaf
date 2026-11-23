@@ -21,7 +21,7 @@ import { folk, folkNamed, KEEPER } from "@sequoia-leaf/town/folk.ts";
 import { waiting } from "@sequoia-leaf/town/mail.ts";
 import { thingOf } from "@sequoia-leaf/town/things.ts";
 
-import { goSit, hop, inTown, release, rouse, say, sitters } from "./actors.ts";
+import { goSit, hop, inTown, rouse, say, sitters, stop } from "./actors.ts";
 import { kindLine, noteWhen, openingTab, readNews, redrawn, TABS } from "./board.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import { named, registerCards, thingRef } from "./cards.ts";
@@ -645,7 +645,7 @@ function fireside(body: HTMLElement): () => void {
       seat.replaceChildren(
         p?.seat
           ? button("wood", ["Stand up"], () => {
-              release(p);
+              stop(p);
               sfx.tap();
             })
           : button("", [p?.goal ? "On your way" : "Sit down"], (b) => {

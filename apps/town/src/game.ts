@@ -29,6 +29,25 @@ export interface Who {
   voice: number;
 }
 
+/**
+ * What somebody's feet are doing: standing still; walking a way, with what to do at its end;
+ * walking to a seat kept for them on the way, told the seat they sat on (none: somebody was there
+ * by then); sitting on a seat; or put where somebody else says, each frame (a live player, a member
+ * visiting), on their feet or on a seat of their own. A walk's end and its seat go with the walk:
+ * nothing of a walk outlives it.
+ */
+export type Move =
+  | { readonly kind: "still" }
+  | { readonly kind: "walking"; readonly path: Pt[]; readonly done: (() => void) | null }
+  | {
+      readonly kind: "toSeat";
+      readonly seat: Seat;
+      readonly path: Pt[];
+      readonly done: ((sat: Seat | null) => void) | null;
+    }
+  | { readonly kind: "seated"; readonly seat: Seat }
+  | { readonly kind: "puppet"; readonly seat: Seat | null };
+
 export interface Actor {
   /** A member's account, the same on every page; empty for the town's own. */
   id: string;
@@ -50,14 +69,17 @@ export interface Actor {
   /** Which way they last went across: -1 left, 1 right (for a sprite that is only drawn side on). */
   side: -1 | 1;
   speed: number;
-  /** Points still to walk to, and what to do on reaching the last. */
-  path: Pt[];
-  arrive: (() => void) | null;
+  /** What their feet are doing (`actors.ts` moves it): the one record of where they are going and what they sit on. */
+  move: Move;
+  /** The seat they sit on (a seat of their own, for somebody put where others say), if any: from `move`. */
+  readonly seat: Seat | null;
+  /** A seat being walked to, kept for them: from `move`. */
+  readonly goal: Seat | null;
+  /** Points still to walk to: from `move`. */
+  readonly path: readonly Pt[];
   walked: number;
+  /** Whether they went anywhere this step. */
   moving: boolean;
-  seat: Seat | null;
-  /** A seat being walked to, kept for them. */
-  goal: Seat | null;
   sat: number;
   /** Seconds to stand still for, when someone has their attention. */
   hold: number;

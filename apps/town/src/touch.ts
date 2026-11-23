@@ -12,7 +12,7 @@ import type { Dir } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, dist, must, type Pt, type Rect } from "@sequoia-leaf/kit/util.ts";
 
-import { feet, headOf, hop, pushOf, release, shove, walkTo } from "./actors.ts";
+import { feet, headOf, hop, pushOf, shove, stop, walkTo } from "./actors.ts";
 import { ring } from "./fx.ts";
 import { type Actor, G, type Prompted, show } from "./game.ts";
 import type { Ground } from "./grid.ts";
@@ -213,7 +213,7 @@ export function makeTouch(here: Here) {
     const d = showing();
     const m = me();
     if (d) use(d);
-    else if (m.seat) release(m);
+    else if (m.seat) stop(m);
     else {
       hop(m);
       sfx.tap();

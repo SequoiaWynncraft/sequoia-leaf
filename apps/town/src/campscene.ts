@@ -38,7 +38,7 @@ import { AT_CAMP, folk } from "@sequoia-leaf/town/folk.ts";
 import { BOX_FULL, waiting } from "@sequoia-leaf/town/mail.ts";
 import { footprint, thingOf, turnsOf } from "@sequoia-leaf/town/things.ts";
 
-import { face, hop, makeFolk, release, say, sit, stepActor, walkTo, wayTo } from "./actors.ts";
+import { face, hop, hopTo, makeFolk, say, stepActor, stop, walkAlong, walkTo, walkToSeat, wayTo } from "./actors.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import {
   CAMP_GROUND,
@@ -149,10 +149,7 @@ function player(): Actor {
 
 /** The member stops whatever they are doing: walking somewhere, sitting. */
 function halt(): void {
-  const p = player();
-  release(p);
-  p.path = [];
-  p.arrive = null;
+  stop(player());
   show.dest = null;
 }
 
@@ -407,24 +404,14 @@ export function makeCamp(
       return list;
     });
     for (const a of everybody()) {
-      if (a.seat && old.includes(a.seat) && !seats.includes(a.seat)) release(a);
-      // Nobody is left fenced in: whoever can no longer get to the trail hops over to where they can.
+      if (a.seat && old.includes(a.seat) && !seats.includes(a.seat)) stop(a);
+      // Nobody is left fenced in: whoever can no longer get to the trail hops over to where they can,
+      // and goes on with whatever walk they were on.
       if (!a.seat && a.x < CW - CELL && !ground.footBlocked(a.x, a.y) && cutOff(a)) {
         const to = wayOut(a);
-        if (to) {
-          a.x = to.x;
-          a.y = to.y;
-          a.path = [];
-          hop(a);
-        }
+        if (to) hopTo(a, to, ground);
       }
-      if (!a.seat && a.x < CW - CELL && ground.footBlocked(a.x, a.y)) {
-        const to = ground.nearestFree(a.x, a.y);
-        a.x = to.x;
-        a.y = to.y;
-        a.path = [];
-        hop(a);
-      }
+      if (!a.seat && a.x < CW - CELL && ground.footBlocked(a.x, a.y)) hopTo(a, ground.nearestFree(a.x, a.y), ground);
     }
     for (const p of pets) {
       if (p.x >= CW - CELL || !ground.footBlocked(p.x, p.y)) continue;
@@ -585,17 +572,8 @@ export function makeCamp(
       return;
     }
     halt();
-    best.taken = true;
-    p.goal = best;
     sfx.tap();
-    walkTo(
-      p,
-      best.from,
-      () => {
-        sit(p, best);
-      },
-      ground,
-    );
+    walkToSeat(p, best, null, ground);
   }
 
   /** Everything about to happen and everything said is forgotten: the camp is being left. */
@@ -620,17 +598,15 @@ export function makeCamp(
   }
 
   function gone(a: Actor): void {
-    release(a);
+    stop(a);
     guests = guests.filter((g) => g !== a);
     if (show.card === a) closeCard();
   }
 
   function walkOff(a: Actor): void {
-    walkTo(a, { x: CW - 6, y: TRAIL_Y + 2 }, null, ground);
-    a.path.push({ ...TRAIL_END });
-    a.arrive = (): void => {
+    walkAlong(a, [...wayTo(a, { x: CW - 6, y: TRAIL_Y + 2 }, ground), { ...TRAIL_END }], () => {
       gone(a);
-    };
+    });
   }
 
   /** The caller Leaf says is waiting at the camp, and their figure here. */
@@ -838,17 +814,16 @@ export function makeCamp(
     pan.y = 0;
 
     const p = player();
-    release(p);
+    stop(p);
     p.x = TRAIL_END.x;
     p.y = TRAIL_END.y;
     p.dir = 1;
     p.alpha = 0;
     p.speed = 64;
     p.say = "";
-    p.path = [{ ...TRAIL_IN }];
-    p.arrive = (): void => {
+    walkAlong(p, [{ ...TRAIL_IN }], () => {
       p.dir = 1;
-    };
+    });
 
     byId.clear();
     seatsOf.clear();
