@@ -3,7 +3,6 @@
  * the way by tunnel where tunnels are open. A screen lays a belt from two taps with it.
  */
 import { at, digsUnder, type Dir, DX, DY } from "./build.ts";
-import { SPAN } from "./content/machines.ts";
 import { toward } from "./land.ts";
 import {
   BELT,
@@ -13,10 +12,12 @@ import {
   DEPOT,
   JOINER,
   type Kind,
-  kindBit,
   MILL,
   NONE,
+  SORTER,
   SPLITTER,
+  STOP,
+  STUDY,
   TUNNEL,
   WORKSHOP,
 } from "./tables.ts";
@@ -39,8 +40,8 @@ const DIRS: readonly Dir[] = [0, 1, 2, 3];
 /** Whether the piece on tile `t` would take things from tile `c`, handed over going `d`. */
 function takesFrom(y: Yard, t: number, c: number, d: Dir): boolean {
   const k = y.kind[t] ?? NONE;
-  if (k === DEPOT) return true;
-  if (k === SPLITTER) return d === y.dir[t];
+  if (k === DEPOT || k === STOP || k === STUDY) return true;
+  if (k === SPLITTER || k === SORTER) return d === y.dir[t];
   if (k === TUNNEL) return (y.span[t] ?? 0) > 0 && d === y.dir[t];
   if (k === BELT || k === JOINER || k === MILL || k === BENCH || k === WORKSHOP || k === CRATE || k === BOILER)
     return c !== ahead(y, t);
@@ -82,7 +83,7 @@ function search(
   // A clear tile is one a belt may be built on: `refusal` for a belt on empty ground, asked of the land directly.
   const { land } = y;
   const owned = land.plots.map((p) => y.plots.includes(p.plot));
-  const belts = (y.open.kinds & kindBit(BELT)) !== 0;
+  const belts = y.open.kinds[BELT] !== 0;
   const clear = (i: number): boolean =>
     i >= 0 &&
     belts &&
@@ -91,7 +92,7 @@ function search(
     land.water[i] === 0 &&
     land.trunk[i] === 0;
   if (!clear(start)) return null;
-  const digs = tunnels && (y.open.kinds & kindBit(TUNNEL)) !== 0;
+  const digs = tunnels && y.open.kinds[TUNNEL] !== 0;
   const target = y.kind[goal] !== NONE ? goal : -1;
   const toDepot = y.kind[goal] === DEPOT;
 
@@ -130,7 +131,7 @@ function search(
         if (!clear(j)) continue;
         push(j * 5, c + 1, s, -1);
         if (!digs || ruled.has(j)) continue;
-        for (let span = 1; span <= SPAN; span++) {
+        for (let span = 1; span <= y.open.span; span++) {
           // Nothing is dug under the depot, so no longer tunnel this way will do either.
           if (!digsUnder(y, x + DX[d] * (span + 1), z + DY[d] * (span + 1))) break;
           const e = at(y, x + DX[d] * (span + 2), z + DY[d] * (span + 2));

@@ -11,13 +11,12 @@ import * as F from "../src/index.ts";
 import { reached } from "./calls.ts";
 import { type Gen, generate } from "./gen.ts";
 import { makeLand, widened } from "./land.ts";
-import { landOf, record } from "./sides.ts";
+import { delivering } from "./yards.ts";
 
 const land = makeLand(7, 7, 7);
-const flatLand = landOf(land);
 let made: Gen | null = null;
 /** The generated yard, made once, and the commands that made it. */
-const gen = (): Gen => (made ??= generate(flatLand, 6000));
+const gen = (): Gen => (made ??= generate(land, 6000));
 const pieces = (y: F.Yard): number => y.kind.filter((k) => k !== F.NONE).length;
 const kb = (bytes: number): string => `${(bytes / 1024).toFixed(1)} KB`;
 /** The bytes text takes as the store keeps it. */
@@ -25,7 +24,8 @@ const utf8 = (s: string): number => Buffer.byteLength(s, "utf8");
 
 /** Gives a yard's blueprints as many of its pieces as each holds, from boxes across the middle of the yard. */
 function saveBlueprints(y: F.Yard): void {
-  const { w, h, pieces: most } = F.BLUEPRINT;
+  const { w, h } = F.BLUEPRINT;
+  const most = y.open.pieces;
   for (let slot = 0; slot < y.blueprints.length; slot++)
     for (let shrink = 0; shrink < 12 && !y.blueprints[slot]; shrink++) {
       const x0 = 8 + slot * w;
@@ -39,7 +39,7 @@ let ran: F.Yard | null = null;
 /** The generated yard after running 3,000 ticks, read back and with its blueprints full, as a yard in play is kept. */
 function running(): F.Yard {
   if (ran) return ran;
-  const y = F.decode(F.encode(gen().y), flatLand);
+  const y = F.decode(F.encode(gen().y), land);
   if (!y) throw new Error("the generated yard does not read back");
   for (let k = 0; k < 3000; k++) F.step(y);
   saveBlueprints(y);
@@ -49,7 +49,7 @@ function running(): F.Yard {
 
 /** The generated yard made again, by the same commands, on a land of another size with the generator's land at its top left. */
 function remade(w: number, h: number): F.Yard {
-  const y = F.create({ land: landOf(widened(land, w, h)), story: 20, seed: 1758855484 });
+  const y = F.create({ land: widened(land, w, h), tier: 4, seed: 1758855484 });
   for (const c of gen().commands) {
     const read = F.readCommand(c);
     if (read) F.play(y, read);
@@ -110,10 +110,10 @@ describe("memory", () => {
   }, 60_000);
 
   test("at worst, a yard of nothing but crates, as many as the land holds, holds under 1 MB", () => {
-    const y = F.create({ land: flatLand, story: 20, seed: 1 });
+    const y = F.create({ land, tier: 4, seed: 1 });
     let room = 0;
-    for (let z = 0; z < flatLand.h; z++)
-      for (let x = 0; x < flatLand.w; x++) {
+    for (let z = 0; z < land.h; z++)
+      for (let x = 0; x < land.w; x++) {
         if (F.refusal(y, F.CRATE, x, z, Infinity) !== null) continue;
         room++;
         F.build(y, F.CRATE, x, z, 0, Infinity);
@@ -129,11 +129,11 @@ describe("memory", () => {
 describe("kept", () => {
   test("packed, under 40 KB; as the store keeps it, UTF-8 text with its pieces and blueprints in base64, under 56 KB", () => {
     const text = F.encode(running());
-    const { rec } = record(text);
+    const rec: unknown = JSON.parse(text);
+    if (typeof rec !== "object" || rec === null || !("cells" in rec)) throw new Error("the kept yard is not a record");
     const cells = typeof rec.cells === "string" ? F.fromBase64(rec.cells) : null;
-    const prints = (Array.isArray(rec.blueprints) ? rec.blueprints : []).map((b) =>
-      typeof b === "string" ? F.fromBase64(b) : null,
-    );
+    const kept = "blueprints" in rec && Array.isArray(rec.blueprints) ? rec.blueprints : [];
+    const prints = kept.map((b: unknown) => (typeof b === "string" ? F.fromBase64(b) : null));
     if (!cells) throw new Error("the kept yard has no pieces' bytes");
     expect(cells.length).toBeGreaterThan(10_000);
     expect(prints.filter((b) => b !== null && b.length >= F.PIECE_BYTES * 100).length).toBe(3);
@@ -152,11 +152,12 @@ interface Window {
   readonly came: number;
 }
 /** Runs `alloc.ts` on a yard's text in a Bun of its own, and reads its windows off the collector's log. */
-function windows(text: string, form: "flat" | "today"): Map<string, Window> {
-  const file = `${tmpdir()}/factory-alloc-${process.pid}-${form}.txt`;
+function windows(text: string, on: "generated" | "guild"): Map<string, Window> {
+  const file = `${tmpdir()}/factory-alloc-${process.pid}-${on}.txt`;
   writeFileSync(file, text);
-  const child = Bun.spawnSync([process.execPath, `${import.meta.dir}/alloc.ts`, file, form], {
-    env: { ...process.env, BUN_JSC_logGC: "1" },
+  const child = Bun.spawnSync([process.execPath, `${import.meta.dir}/alloc.ts`, file, on], {
+    // The compiler on the main thread, so it compiles at the same ticks every run, never in a window by chance.
+    env: { ...process.env, BUN_JSC_logGC: "1", BUN_JSC_useConcurrentJIT: "0" },
   });
   rmSync(file);
   const log = child.stderr.toString();
@@ -176,15 +177,12 @@ function windows(text: string, form: "flat" | "today"): Map<string, Window> {
 const since = (w: Window | undefined): string => kb((w?.kb.slice(1) ?? []).reduce((a, b) => a + b, 0) * 1024);
 
 describe("allocation", () => {
-  test("a tick of a yard whose plumbing is worked out, in which no order is filled, allocates nothing: in a thousand ticks no collection, young or full, but the two that open and close the window, and not a byte between them", async () => {
-    const generated = windows(F.encode(running()), "flat");
-    const reference = windows(
-      await Bun.file(new URL("../../yard/src/yards/large.json", import.meta.url)).text(),
-      "today",
-    );
+  test("a tick of a yard whose plumbing is worked out, in which no order is filled, allocates nothing: in a thousand ticks no collection, young or full, but the two that open and close the window, and not a byte between them", () => {
+    const generated = windows(F.encode(running()), "generated");
+    const reference = windows(F.encode(delivering()), "guild");
     expect([...generated.keys()]).toEqual(["steady", "changed", "repowered"]);
     expect([...reference.keys()]).toEqual(["steady", "changed", "repowered", "filled"]);
-    // The generated yard's lines end in crates; the reference yard's at the depot, so its thousand
+    // The generated yard's lines end in crates; the delivering yard's at the depot, so its thousand
     // ticks take in things, and go through the orders, without filling one.
     expect(generated.get("steady")).toEqual({ kb: [expect.any(Number), 0], filled: 0, came: 0 });
     expect(reference.get("steady")).toEqual({ kb: [expect.any(Number), 0], filled: 0, came: expect.any(Number) });
@@ -199,8 +197,8 @@ describe("allocation", () => {
     const excused = new Set([
       // Worked out once after a change, by the first tick after it.
       "rewire",
-      // A story order filled, and a standing order filled.
-      "finishStory",
+      // A goal finished, and a standing order filled.
+      "finish",
       "filledOrder",
     ]);
     const tick = reached("tick.ts", "step", excused);
@@ -229,7 +227,7 @@ describe("work in step with what stands", () => {
     expect(a.reads()).toBeGreaterThan(pieces(small));
     // A bare yard reads next to nothing, on either map.
     const bare = (w: number, h: number): number => {
-      const y = F.create({ land: landOf(widened(land, w, h)), story: 20 });
+      const y = F.create({ land: widened(land, w, h), tier: 4 });
       F.rewire(y);
       const c = counted(y);
       F.step(c.yard);

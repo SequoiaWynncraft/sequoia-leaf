@@ -10,7 +10,8 @@ export interface Ask {
   readonly line: string;
 }
 
-export const ASKS: Record<ItemName, readonly Ask[]> = {
+/** Folios are never asked for. */
+export const ASKS: Partial<Record<ItemName, readonly Ask[]>> = {
   deadfall: [
     { from: "The campfire", line: "The fire is down to its last log and somebody has started a long story." },
     { from: "Worm", line: "Worm lives under a log. Worm would like a second log, for guests." },
