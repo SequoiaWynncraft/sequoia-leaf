@@ -18,8 +18,7 @@ import {
   unask,
   when,
 } from "@sequoia-leaf/kit/dom.ts";
-import { isGuest } from "@sequoia-leaf/kit/live.ts";
-import { balance, leafOpen, leafShown, leafShut } from "@sequoia-leaf/kit/purse.ts";
+import { balance, leafOpen, leafShut } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tipAt } from "@sequoia-leaf/kit/tip.ts";
@@ -152,7 +151,7 @@ export function makeGroveUi(host: GroveHost) {
    */
   function pullButton(n: 1 | 10): HTMLElement {
     const waiting = host.view().free.waiting;
-    if (n === 1 && waiting > 0 && !isGuest())
+    if (n === 1 && waiting > 0)
       return button(
         "leaf grove-pull",
         [el("span", "", { text: "Free pull" }), el("span", "k-sub", { text: `${waiting} waiting` })],
@@ -199,16 +198,15 @@ export function makeGroveUi(host: GroveHost) {
         }),
       ),
     );
-    leaf.hidden = !leafShown();
     leaf.replaceChildren(amount("leaf", count(balance().leaf)));
 
     const c = b ? v.counters.banner : v.counters.grove;
     const owed = b ? owedLine(c, b.person.name) : null;
     const bar = el("i");
     bar.style.setProperty("--v", `${(c.top / RATES.top.certainAt) * 100}%`);
-    const next = isGuest() ? null : nextFree(v.free);
+    const next = nextFree(v.free);
     // Said under the buttons when not even one pull can be made.
-    const shut = v.free.waiting > 0 && !isGuest() ? null : cannotPull(1, balance().leaf, leafOpen(), leafShut());
+    const shut = v.free.waiting > 0 ? null : cannotPull(1, balance().leaf, leafOpen(), leafShut());
     words.replaceChildren(
       // Only beside a banner does the always-open pool need saying.
       ...(open ? [el("div", "k-over", { text: b ? `Until ${dayAndTime(b.until)}` : "Always open" })] : []),
