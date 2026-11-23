@@ -25,7 +25,7 @@ export interface Part {
 export const NOTES: readonly Note[] = [
   {
     id: "leaf-turns",
-    at: "2026-11-24T23:59Z",
+    at: "2026-11-23T23:43Z",
     title: "Rerolls and yards wait their turn",
     lines: [
       "Rerolling a quest while Leaf is counting a raid you just did no longer swaps away a quest that raid finished.",
