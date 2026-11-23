@@ -6,8 +6,9 @@
  *
  * Each step: `{ fresh: true }` puts a new member's town in its place (the next visit is a first
  * one), its counter going on from the old one's so that no id or Coins key is made twice; `{ lived: true }`
- * sets out about forty things, puts some in the tray, and leaves three parcels by the trail and a
- * pet chosen; `{ caller: true }` has the next caller set out at the next look; `{ away: minutes }`
+ * sets out about forty things, puts some in the tray and three more that are new, and a pet
+ * chosen; `{ tray: n }` puts the first n things of the catalogue in the tray, one to three of
+ * each, none of them new; `{ caller: true }` has the next caller set out at the next look; `{ away: minutes }`
  * has the member last here that long ago, on another UTC day; `{ mailbox: "full" }` fills the
  * mailbox with letters that each hold a present; `{ coins: n }` puts n Coins in the purse.
  * `{ others: [n, ...] }` gives the nth of `others` a camp of their own with that many more things
@@ -29,9 +30,10 @@ import {
   timedWindowAt,
 } from "@sequoia-leaf/core";
 import { TOWN, type Town } from "@sequoia-leaf/town";
-import { freeSpot, PETS } from "@sequoia-leaf/town/camp.ts";
+import { freeSpot, PETS, store } from "@sequoia-leaf/town/camp.ts";
 import { GIFTS } from "@sequoia-leaf/town/folk.ts";
 import { BOX, letter } from "@sequoia-leaf/town/mail.ts";
+import { THINGS } from "@sequoia-leaf/town/things.ts";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
@@ -85,7 +87,8 @@ function liveIn(s: Town, many: number = LIVED.length): void {
     if (spot) s.camp.placed.push({ n: s.made++, id, x: spot.x, y: spot.y, t: 0, s: i % 3 === 0 ? 1 : 0 });
   });
   s.camp.tray = { cushion: 2, glowcap: 1, "rug-moss": 1 };
-  s.camp.parcels = ["lantern-post", "toadstool", "sapling"];
+  s.camp.fresh = [];
+  for (const id of ["lantern-post", "toadstool", "sapling"]) store(s.camp, id);
   s.camp.first = "cat";
   s.camp.greeted = Math.max(s.camp.greeted, 2);
 }
@@ -93,6 +96,11 @@ function liveIn(s: Town, many: number = LIVED.length): void {
 /** Does one staging step to a town. */
 function step(s: Town, op: Record<string, unknown>, now: number): void {
   if (op.lived === true) liveIn(s);
+  const kinds = whole(op.tray, THINGS.length) ?? 0;
+  for (const [i, thing] of THINGS.filter((t) => !t.rooted)
+    .slice(0, kinds)
+    .entries())
+    s.camp.tray[thing.id] = 1 + (i % 3);
   if (op.caller === true) s.nextCall = now;
   const away = whole(op.away, 30 * 24 * 60);
   if (away !== null) {
@@ -205,5 +213,5 @@ export const stageTown = (playerId: PlayerId, ops: readonly unknown[], others: r
     } else {
       yield* sql`INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${playerId}, 'town', 1, ${text}, ${now})`;
     }
-    return { placed: s.camp.placed.length, parcels: s.camp.parcels.length, letters: s.camp.letters.length };
+    return { placed: s.camp.placed.length, fresh: s.camp.fresh.length, letters: s.camp.letters.length };
   });

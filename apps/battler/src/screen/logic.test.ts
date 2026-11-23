@@ -34,6 +34,9 @@ import {
   savings,
   steppedUp,
   stepsOf,
+  streakName,
+  streakNow,
+  streakRule,
   TraitWatch,
   whereIs,
 } from "./logic.ts";
@@ -181,6 +184,24 @@ describe("the purse as it is counted", () => {
     run.boons.push("deeppockets");
     run.acorns = 23;
     expect(savings(run)).toEqual({ per: 5, most: 6, piles: 4, loose: 3, pays: 4, toNext: 2 });
+  });
+});
+
+describe("the streak as it is told", () => {
+  test("the rule is said from the table it pays from", () => {
+    expect(streakRule()).toBe(
+      "Win or lose 3 or more rooms in a row for extra acorns each room: 1 at 3 or 4, 2 at 5 or more.",
+    );
+  });
+  test("a streak is told from 2, won or lost", () => {
+    const run = begun();
+    run.streak = 1;
+    expect(streakNow(run)).toBeNull();
+    run.streak = 3;
+    expect(streakNow(run)).toBe("You have won 3 rooms in a row.");
+    run.streak = -2;
+    expect(streakNow(run)).toBe("You have lost 2 rooms in a row.");
+    expect([streakName(3), streakName(-2)]).toEqual(["Win streak 3", "Loss streak 2"]);
   });
 });
 

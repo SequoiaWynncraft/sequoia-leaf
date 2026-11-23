@@ -3,12 +3,24 @@
  * takes and what it does. Where it is sold and for how much is in `catalogue.ts`; how each is drawn
  * and what touching it shows are the town page's (`campart.ts`, `camptouch.ts`).
  */
+import { FIGURE_IDS, FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
 
-export const KINDS = ["home", "seats", "lights", "flags", "plants", "fences", "oddments", "trophies"] as const;
+export const KINDS = [
+  "home",
+  "characters",
+  "seats",
+  "lights",
+  "flags",
+  "plants",
+  "fences",
+  "oddments",
+  "trophies",
+] as const;
 export type Kind = (typeof KINDS)[number];
 
 export const KIND_NAMES: Readonly<Record<Kind, string>> = {
   home: "The camp itself",
+  characters: "Characters",
   seats: "Seats",
   lights: "Lights",
   flags: "Flags",
@@ -73,6 +85,9 @@ function thing(
     ...extra,
   };
 }
+
+/** The camp thing one of The Little Raid's figures is. */
+export const figureThing = (figure: string): string => `figure-${figure}`;
 
 export const THINGS: readonly Thing[] = [
   // What every camp begins with.
@@ -302,6 +317,14 @@ export const THINGS: readonly Thing[] = [
   thing("trophy-bigcrab", "The Crab Nobody Counted", "trophies", 1, 1, "For finishing The Little Raid.", ""),
   thing("model-crab", "Clockwork crab, a model", "trophies", 1, 1, "For building one in the Works.", ""),
   thing("model-beacon", "Beacon, a model", "trophies", 1, 1, "For building one in the Works.", ""),
+
+  // The Little Raid's figures, won at the Grove: each has its name and its line from there. A figure's
+  // picture is 20 to 24 pixels wide and a square is 8, so each takes 3 squares.
+  ...FIGURE_IDS.map((id) =>
+    thing(figureThing(id), FIGURES[id].name, "characters", 3, 1, FIGURES[id].quip, "Says its line.", {
+      turns: "flip",
+    }),
+  ),
 ];
 
 const BY_ID = new Map(THINGS.map((t) => [t.id, t]));

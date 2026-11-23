@@ -212,6 +212,9 @@ export function setDock(entries: readonly DockEntry[]): void {
   litFor = null;
 }
 
+/** Where a button of the dock is on the page, for what flies to it. */
+export const dockAt = (id: string): Pt => centre(dockButtons.get(id) ?? $("dock"));
+
 function markDock(): void {
   for (const [id, b] of dockButtons) {
     const lit = G.panel === id || (G.panel === null && G.near === id);
@@ -280,9 +283,15 @@ export function closePanel(): void {
   markDock();
 }
 
-/** The part of the page a panel is covering, so the camera can keep the member clear of it. */
-export function panelBox(): DOMRect | null {
-  return G.panel ? $("panel").getBoundingClientRect() : null;
+/**
+ * What the open panel, or else the tray, covers of the page, so the camera can keep the member
+ * clear of it: everything below `top` when it lies along the bottom (`under`), else everything
+ * right of `left`.
+ */
+export function covered(): { top: number; left: number; under: boolean } | null {
+  const tray = $("tray");
+  const box = G.panel ? $("panel").getBoundingClientRect() : tray.hidden ? null : tray.getBoundingClientRect();
+  return box && { top: box.top, left: box.left, under: !G.panel || box.width > window.innerWidth * 0.7 };
 }
 
 /** Brings the open panel up to date now. */
@@ -451,6 +460,14 @@ export function setHammer(does: (() => void) | null, on = false): void {
   hammer.classList.toggle("wood", !on);
   hammer.setAttribute("aria-pressed", on ? "true" : "false");
 }
+
+/** How many new things are in the camp's Storage, hung on the hammer; for none, nothing is. */
+export function setHammerNew(n: number): void {
+  hammer?.replaceChildren(glyph("hammer"), ...(n > 0 ? [el("span", "k-chip lit", { text: n })] : []));
+}
+
+/** Where the hammer is on the page, for what flies into Storage. */
+export const hammerAt = (): Pt => centre(hammer ?? $("corner"));
 
 let strip: (() => void) | null = null;
 

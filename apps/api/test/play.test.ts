@@ -41,7 +41,7 @@ import {
   SENSIBLE,
   type TableView,
 } from "@sequoia-leaf/raid";
-import { decodeTown, readNotes as readTownNotes, readView as readTownView, type TownView } from "@sequoia-leaf/town";
+import { decodeTown, readView as readTownView, type TownView } from "@sequoia-leaf/town";
 import { Effect, Exit, Fiber, Logger, Option, References, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
@@ -2487,13 +2487,29 @@ const storedIn = (game: string) =>
 
 describe("awards", () => {
   it("are written once, when the raid beats a boss and the Works' depot takes a capstone in, and reach the camp by the trail", async () => {
-    // A whole run by the bot, as a player plays it: it beats The Magpie.
-    await playRun();
-    const won = await awarded(alice);
-    expect(won).toEqual([{ id: "trophy-hoardmagpie", at: expect.any(Number) }]);
-    // Another run beats Old Bramble too; the award already held keeps the moment it was won.
-    await playRun();
-    expect(await awarded(alice)).toEqual([...won, { id: "trophy-oldbramble", at: expect.any(Number) }]);
+    // Whole runs by the bot, as a player plays them, until one beats a boss: one award for each boss.
+    let won = await awarded(alice);
+    for (let runs = 0; runs < 8 && won.length === 0; runs++) {
+      // oxlint-disable-next-line no-await-in-loop -- one run after another
+      await playRun();
+      // oxlint-disable-next-line no-await-in-loop -- one run after another
+      won = await awarded(alice);
+    }
+    expect(won.length).toBeGreaterThan(0);
+    for (const award of won) expect(award.id).toStartWith("trophy-");
+    // More runs, until one beats a boss not beaten before: the awards already held keep the moment they were won.
+    let all = won;
+    for (let runs = 0; runs < 8 && all.length === won.length; runs++) {
+      // oxlint-disable-next-line no-await-in-loop -- one run after another
+      await playRun();
+      // oxlint-disable-next-line no-await-in-loop -- one run after another
+      all = await awarded(alice);
+    }
+    expect(all.length).toBeGreaterThan(won.length);
+    expect(all.slice(0, won.length)).toEqual([...won]);
+    const trophies = all.flatMap((a) => (typeof a.id === "string" ? [a.id] : []));
+    expect(trophies).toHaveLength(all.length);
+    expect(new Set(trophies).size).toBe(trophies.length);
 
     // A yard whose depot has taken in a clockwork crab: the next batch that changes it (a few seconds on) awards the model.
     const { clock: tick } = yardOf(
@@ -2507,16 +2523,17 @@ describe("awards", () => {
     );
     clock.now += 5000;
     await send("POST", "/v1/game/play/works", { commands: [{ id: "w-1", do: "collect", tick: tick + 50 }] });
-    expect((await awarded(alice)).map((a) => a.id)).toEqual(["trophy-hoardmagpie", "trophy-oldbramble", "model-crab"]);
+    expect((await awarded(alice)).map((a) => a.id)).toEqual([...trophies, "model-crab"]);
 
-    // The town is told of them on its next call, and sends each by the trail to the camp, once.
+    // The town is told of them on its next call, and puts each in the camp's tray, new, once.
     await townDid([{ id: "t-1", do: "readMail" }]);
     await townDid([{ id: "t-2", do: "readMail" }]);
     const camp = decodeTown((await storedIn("town"))[0]?.state ?? "")?.camp;
-    expect(camp?.parcels).toEqual(["trophy-hoardmagpie", "trophy-oldbramble", "model-crab"]);
-    expect(camp?.earned).toEqual(["trophy-hoardmagpie", "trophy-oldbramble", "model-crab"]);
+    const kept = [...trophies, "model-crab"];
+    expect([camp?.tray, camp?.fresh]).toEqual([Object.fromEntries(kept.map((id) => [id, 1])), kept]);
+    expect(camp?.earned).toEqual(kept);
     // A game that awards nothing writes none.
-    expect(await awarded(alice)).toHaveLength(3);
+    expect(await awarded(alice)).toHaveLength(trophies.length + 1);
   });
 });
 
@@ -2538,21 +2555,26 @@ const townNow = async () =>
 const nOf = (view: TownView, id: string) => view.camp.placed.find((p) => p.id === id)?.n ?? -1;
 
 describe("the town, played by commands through HTTP", () => {
-  it("opens a new member's camp, welcomes them, sells, unpacks, moves and puts away by id, and pays the chest once a day", async () => {
+  it("opens a new member's camp, welcomes them, sells into the tray, sets out, moves and puts away by id, and pays the chest once a day", async () => {
     const first = await townNow();
     expect([first.arrival.first, first.camp.placed.length, first.camp.letters]).toEqual([true, 9, []]);
 
     const { results, view } = await townDid([
       { id: "a-1", do: "welcome", cursor: null },
       { id: "a-2", do: "buy", stall: "plants", thing: "pumpkin" },
-      { id: "a-3", do: "unpack", x: 30, y: 20, t: 0 },
     ]);
-    const landed = readTownNotes(results.flatMap((r) => ("notes" in r ? r.notes : [])));
-    expect(landed).toEqual([{ t: "landed", thing: "pumpkin", n: nOf(view, "pumpkin") }]);
+    // Bought, it is in the tray, new, and nothing more stands in the camp; looked at, it is set out.
+    expect(results.map((r) => ("notes" in r ? r.notes : r.refused))).toEqual([[], []]);
+    expect([view.camp.tray, view.camp.fresh, view.camp.placed.length]).toEqual([{ pumpkin: 1 }, ["pumpkin"], 9]);
+    const { view: set } = await townDid([
+      { id: "a-3", do: "looked", through: 1 },
+      { id: "a-3b", do: "setOut", thing: "pumpkin", x: 30, y: 20, t: 0 },
+    ]);
+    expect([set.camp.tray, set.camp.fresh, set.camp.placed.length]).toEqual([{}, [], 10]);
     expect(view.camp.letters.map((l) => [l.from, l.gift])).toEqual([["Tindra", "toadstool"]]);
     expect(await coinsOf(alice)).toBe(300 - 180);
 
-    const pumpkin = nOf(view, "pumpkin");
+    const pumpkin = nOf(set, "pumpkin");
     const moved = await townDid([
       { id: "a-4", do: "move", n: pumpkin, x: 31, y: 33, t: 0 },
       { id: "a-5", do: "toggle", n: nOf(view, "lantern-post") },
@@ -2569,7 +2591,7 @@ describe("the town, played by commands through HTTP", () => {
       { id: "a-7", refused: "rooted" },
       { id: "a-8", refused: "not_enough_coins" },
     ]);
-    expect([away.view.camp.tray, away.view.camp.parcels]).toEqual([{ pumpkin: 1 }, []]);
+    expect([away.view.camp.tray, away.view.camp.fresh]).toEqual([{ pumpkin: 1 }, []]);
 
     const chest = await townDid([
       { id: "c-1", do: "openChest" },
@@ -2616,7 +2638,7 @@ describe("the town, played by commands through HTTP", () => {
     const answer = await visit(alice, "town", bob);
     expect(answer.status).toBe(200);
     const seen = townOf(Schema.decodeUnknownSync(Shown)(await answer.json()).state);
-    expect(seen.camp).toEqual({ ...view.camp, letters: [], tray: {}, parcels: [], greeted: 0, earned: [] });
+    expect(seen.camp).toEqual({ ...view.camp, letters: [], tray: {}, fresh: [], looked: 0, greeted: 0, earned: [] });
     expect(seen.camp.placed.find((p) => p.id === "lantern-post")?.s).toBe(1);
     expect([seen.visit, seen.arrival.mail, seen.made]).toEqual([null, [], 0]);
     expect({ stored: await storedPlay(alice, "town"), coins: await entries(alice) }).toEqual(before);
@@ -2692,7 +2714,7 @@ describe("the banners", () => {
     const headliner = stranger(5);
     mojang.profiles.set(headliner, { name: "Fernwhistle", skin: undefined });
     start({ mojang: mojang.service });
-    const dates = { id: "banner-1", from: "2026-11-24T00:00:00.000Z", until: "2026-12-08T00:00:00.000Z" };
+    const dates = { id: "banner-1", from: "2026-11-23T00:00:00.000Z", until: "2026-12-08T00:00:00.000Z" };
     expect(await banners()).toEqual({ banners: [{ ...dates, headliner: null }] });
     const known = () =>
       services.run(

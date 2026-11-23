@@ -1,8 +1,9 @@
 # The game's pages, built from the three apps, the kit they share, the core
-# rules the kit shares with Leaf (the live wire), and the games' rules
+# rules the kit shares with Leaf (the live wire), the games' rules
 # (packages/raid, packages/factory and packages/town, which the pages share with
-# Leaf's play service). Each build is plain files, so only /app/public goes on
-# to the image.
+# Leaf's play service), and the raid's figures, which the raid's page and the
+# town's draw (packages/figures). Each build is plain files, so only
+# /app/public goes on to the image.
 FROM docker.io/oven/bun:1.4.4-slim AS pages
 
 WORKDIR /app
@@ -14,6 +15,7 @@ COPY packages/raid/package.json packages/raid/
 COPY packages/factory/package.json packages/factory/
 COPY packages/town/package.json packages/town/
 COPY packages/pulls/package.json packages/pulls/
+COPY packages/figures/package.json packages/figures/
 COPY apps/town/package.json apps/town/
 COPY apps/works/package.json apps/works/
 COPY apps/battler/package.json apps/battler/
@@ -25,6 +27,7 @@ COPY packages/raid packages/raid
 COPY packages/factory packages/factory
 COPY packages/town packages/town
 COPY packages/pulls packages/pulls
+COPY packages/figures packages/figures
 COPY apps/town apps/town
 COPY apps/works apps/works
 COPY apps/battler apps/battler

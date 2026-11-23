@@ -367,7 +367,7 @@ describe("the yard, on Leaf", () => {
       "GET /v1/game/play/works": (sent) =>
         opening
           ? fake.routes["GET /v1/game/play/works"](sent)
-          : { status: 409, body: { code: "state_unreadable", message: "Kept" } },
+          : { status: 401, body: { code: "unauthorized", message: "Signed out" } },
     });
     const told: Trouble[] = [];
     expect(await openYard("p", (why) => told.push(why))).toBeNull();
@@ -380,7 +380,7 @@ describe("the yard, on Leaf", () => {
     for (const later of [2000, 4000, 10_000, 60_000]) runYard(1000 + later);
     await Bun.sleep(5);
     const reads = net.world.sent.filter((s) => s.method === "GET").length;
-    expect([told, reads]).toEqual([["unreadable"], 2]);
+    expect([told, reads]).toEqual([["signedout"], 2]);
     // The screen that says why can be pressed: the page is no longer taking, so nothing is stopped.
     expect(catchingUp(performance.now() + 60_000)).toBe(false);
     // Nor does a later frame begin taking again, however far behind the copy is by then.

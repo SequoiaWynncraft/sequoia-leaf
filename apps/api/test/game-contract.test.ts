@@ -201,14 +201,15 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     reason: "chest",
   });
   // The town on the play service: a new member's camp and the letter at the gate; the letter put
-  // away, a thing bought at a stall, and the parcel unpacked where the page proposes.
+  // away, a thing bought at a stall, which is in the tray and new, the tray looked in, and the thing set out.
   await call("GET /v1/game/play/{game}, the town", "GET", "/v1/game/play/town");
   await call("POST /v1/game/play/{game}, the town", "POST", "/v1/game/play/town", {
     player: alice,
     commands: [
       { id: "t-1", do: "welcome", cursor: null },
       { id: "t-2", do: "buy", stall: "lamps", thing: "rock" },
-      { id: "t-3", do: "unpack", x: 30, y: 20, t: 0 },
+      { id: "t-3", do: "looked", through: 1 },
+      { id: "t-4", do: "setOut", thing: "rock", x: 30, y: 20, t: 0 },
     ],
   });
   // The Works' board: Bob's yard, Alice's and the guest's, as the play service writes where each stands.
