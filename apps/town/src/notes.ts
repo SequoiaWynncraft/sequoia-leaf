@@ -25,7 +25,7 @@ export interface Part {
 export const NOTES: readonly Note[] = [
   {
     id: "tally",
-    at: "2026-11-24T23:59Z",
+    at: "2026-11-23T21:59Z",
     title: "The Tally: leaderboards for nearly everything",
     lines: [
       "A new post between the Grove and the quest board, and on the dock: boards of who has done the most, for this week and for all time.",
