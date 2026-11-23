@@ -901,7 +901,7 @@ export function drawFight(g: Ctx, list: Standing[]): void {
       dx += a.hx * k;
       dy += a.hy * k;
     }
-    const shine = shineOf(u.kind, a.x, V.t);
+    const shine = shineOf(u.kind, u.items, a.x, V.t);
     const x = Math.round(V.bx + a.x + dx);
     const y = Math.round(V.by + a.y + dy - back - lift - shine.hop);
     const hover = fallen < 0 ? hoverAt(u.kind, V.t, a.phase) : 0;
