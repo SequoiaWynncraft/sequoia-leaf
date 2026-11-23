@@ -24,6 +24,14 @@ export interface Part {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "works-visit-live",
+    at: "2026-11-23T21:22Z",
+    title: "The Works: visits keep up",
+    lines: [
+      "A yard you visit shows what its owner builds about half a second after they do it. It used to catch up every 30 seconds, all at once.",
+    ],
+  },
+  {
     id: "works-splitter-grades",
     at: "2026-11-23T20:52Z",
     title: "The Works: grades for splitters, joiners and sorters",
