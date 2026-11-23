@@ -955,6 +955,21 @@ describe("who is waiting", () => {
     expect(spent(13, 0)).toBeGreaterThan(spent(7, 0));
     expect(spent(7, 0)).toBeGreaterThan(spent(2, 0));
   });
+  test("a partner brings only what a member at its level could have found: costs the stall offers, starred only where it offers them often", () => {
+    for (const [room, spec] of ROOMS.entries()) {
+      if (!spec.spar) continue;
+      const odds = STALL_ODDS[spec.spar.level - 1] ?? [];
+      for (let seed = 1; seed <= 300; seed++) {
+        for (const p of sparParty(seed * 2654435761, room, 2).figures) {
+          if (!isFigureId(p.kind)) throw new Error("a sparring partner brought trouble");
+          const offered = odds[FIGURES[p.kind].tier - 1] ?? 0;
+          expect(offered).toBeGreaterThan(0);
+          if (p.stars >= 2) expect(offered).toBeGreaterThanOrEqual(12);
+          if (p.stars === 3) expect(offered).toBeGreaterThanOrEqual(30);
+        }
+      }
+    }
+  });
   test("a partner's party has a taste: its kin and calling turn up more than chance", () => {
     let matching = 0;
     let total = 0;
