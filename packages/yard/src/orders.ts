@@ -4,9 +4,14 @@
  * There is the story, one order after another, and once it is under way there is the board: a few
  * standing orders from places in town and the town's own, which never run out and never expire. Each
  * thing the depot takes in goes toward one order that still wants it, the story's first and then
- * the board's from the top. A story order pays the moment it is filled; a standing order, once
- * filled, waits on the board until it is handed over (`claim`), so the board is never emptied
- * behind the member's back.
+ * the board's in the order they were hung. A story order pays the moment it is filled; a standing
+ * order, once filled, waits on the board until it is handed over (`claim`), so the board is never
+ * emptied behind the member's back.
+ *
+ * A standing order is drawn from the yard's seed, which only Leaf holds, so the page's copy cannot
+ * hang one. Each is hung `ORDER_WAITS` ticks before it counts (`starts`): until then the depot gives
+ * it nothing and nothing else in the rules reads it, and Leaf's answer to a command tells the page of
+ * it in time to put it on its own board.
  */
 import { ASKS } from "./content/asks.ts";
 import { ITEM, type Item, ITEMS, type Raw, type Tally } from "./content/items.ts";
@@ -25,6 +30,11 @@ export const DEPOT_SHARE = 0.01;
 const ORDER_WORK = { first: 6000, more: 600, deepest: 0.4, ground: 0.3 } as const;
 /** Ticks between free swaps: ten minutes of the yard's time. */
 export const SWAP_EVERY = 6000;
+/** Ticks an order hangs on the board before it counts: five seconds, longer than Leaf takes to answer. */
+export const ORDER_WAITS = 50;
+
+/** Whether an order counts at a tick: the depot gives to it, and the check mixes it in. */
+export const counts = (order: Standing, tick: number): boolean => tick >= order.starts;
 
 /** The depot takes in `n` of a thing: it counts toward the yard's pace, pays its price, and goes toward whichever orders want it. */
 export function deliver(w: World, item: Item, n: number): void {
@@ -55,7 +65,7 @@ function offer(w: World, item: Item, n: number): number {
   }
   for (const order of w.board) {
     const wants = (order.want[item] ?? 0) - (order.filled[item] ?? 0);
-    if (wants <= 0) continue;
+    if (wants <= 0 || !counts(order, w.tick)) continue;
     const used = Math.min(n, wants);
     order.filled[item] = (order.filled[item] ?? 0) + used;
     w.given[item] = (w.given[item] ?? 0) + used;
@@ -88,10 +98,14 @@ export function fillBoard(w: World): void {
   if (w.news.length > 200) w.news.splice(0, w.news.length - 200);
 }
 
-/** Takes an order down and hangs a fresh one in its place; a yard with no seed leaves the place empty. */
+/**
+ * Takes an order down, and hangs a fresh one at the end of the board, drawn while the old one still
+ * hung; a yard with no seed hangs none, and Leaf's comes with its answer.
+ */
 function rehang(w: World, slot: number): void {
-  if (w.seed === null) w.board.splice(slot, 1);
-  else w.board[slot] = fresh(w, w.seed);
+  const next = w.seed === null ? null : fresh(w, w.seed);
+  w.board.splice(slot, 1);
+  if (next) w.board.push(next);
 }
 
 /** Everything the yard could make as it stands: what lies in its plots, and whatever its machines make of that. */
@@ -183,6 +197,7 @@ export function fresh(w: World, seed: number): Standing {
     want,
     pay,
     filled: {},
+    starts: w.tick + ORDER_WAITS,
   };
 }
 
@@ -213,8 +228,8 @@ export function reask(o: Standing): Standing {
 const slotOf = (w: World, id: number): number => w.board.findIndex((o) => o.id === id);
 
 /**
- * Hands a filled standing order over, by its id: it pays into the till and a fresh order takes its
- * place. A filled order waits for this for as long as it takes; nothing on the board ever runs out.
+ * Hands a filled standing order over, by its id: it pays into the till and a fresh order is hung.
+ * A filled order waits for this for as long as it takes; nothing on the board ever runs out.
  * Gives back what it paid, or nothing if that order is not on the board filled.
  */
 export function claim(w: World, id: number): number | null {

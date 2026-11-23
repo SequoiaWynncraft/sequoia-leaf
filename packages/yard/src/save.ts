@@ -5,8 +5,9 @@
  * left out and the rest is kept. A yard without its seed (what the page is shown) is written and
  * read without one, and one with no blueprint kept is written without any. A line's colour and a
  * splitter's shut ways are two more parts kept only when they are not as new. So a save from before
- * there were colours, blueprints or shut ways reads as a yard with none of them, and the version did
- * not change for them.
+ * there were colours, blueprints or shut ways reads as a yard with none of them, one from before
+ * orders waited to count has orders that count from the start, and the version did not change for
+ * them.
  */
 import { build, planState, plotState, refusal } from "./build.ts";
 import { here } from "./clock.ts";
@@ -163,7 +164,8 @@ function unpack(w: World, b: Building, o: Rec): void {
     }
 }
 
-function standing(v: unknown): Standing | null {
+/** A standing order read back (kept in a yard, or in Leaf's answer), or nothing. One kept before orders waited to count counts from the start. */
+export function readStanding(v: unknown): Standing | null {
   if (!isRec(v)) return null;
   const id = whole(v.id, 1e9);
   const title = words(v.title);
@@ -177,7 +179,7 @@ function standing(v: unknown): Standing | null {
   const filled = tally(v.filled, 1e6);
   for (const item of ITEMS)
     if ((filled[item] ?? 0) > 0) filled[item] = Math.min(Math.floor(filled[item] ?? 0), want[item] ?? 0);
-  return reask({ id, title, from, line, want, pay, filled });
+  return reask({ id, title, from, line, want, pay, filled, starts: whole(v.starts, 1e12) ?? 0 });
 }
 
 /** A time away kept in a yard, or nothing. */
@@ -294,7 +296,7 @@ export function load(text: string | null | undefined, land: Land = LAND): World 
   for (const [b, o] of kept) unpack(w, b, o);
 
   for (const o of raw.board) {
-    const order = standing(o);
+    const order = readStanding(o);
     if (order && w.open.board && w.board.length < w.rates.slots) w.board.push(order);
   }
   fillBoard(w);

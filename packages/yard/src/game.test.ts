@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { CoinChange, Ctx, Done, Refused } from "@sequoia-leaf/core";
 
 import { refusal } from "./build.ts";
+import { check } from "./check.ts";
 import { AWAY_MOST_MS, awayOf, here, TICK_MS } from "./clock.ts";
 import { ITEMS } from "./content/items.ts";
 import { STAND_MOST } from "./content/machines.ts";
@@ -67,8 +68,9 @@ function clear(w: World, n: number): { x: number; y: number }[] {
   }
   return out;
 }
-/** Sends the depot everything an order still wants, and what the story order wants of it first. */
+/** Runs the yard on until an order counts, and sends the depot everything it still wants, and what the story order wants of it first. */
 function fill(w: World, order: Standing): void {
+  steps(w, Math.max(0, order.starts - w.tick));
   for (const item of ITEMS) {
     const n = (order.want[item] ?? 0) - (order.filled[item] ?? 0);
     if (n > 0) deliver(w, item, n + Math.max(0, (storyOrder(w)?.want[item] ?? 0) - (w.filled[item] ?? 0)));
@@ -466,7 +468,7 @@ describe("Coins", () => {
 });
 
 describe("what the page is shown", () => {
-  test("has no seed, and a yard read from it hangs no order: a slot it would fill stays empty", () => {
+  test("has no seed, and a yard read from it hangs no order: Leaf hangs it, at the end of the board", () => {
     const w = kept(create({ seed: 5, story: 6 }));
     const view = WORKS.view(w, ctx(T0 + 4 * SECOND));
     expect(view.clock).toBe(40);
@@ -477,7 +479,7 @@ describe("what the page is shown", () => {
     expect(page.board.map((o) => o.id)).toEqual([0, 2]);
     // Leaf, with the seed, hangs the next.
     did(w, { do: "swap", order: 1, tick: 0 });
-    expect(w.board.map((o) => o.id)).toEqual([0, 3, 2]);
+    expect(w.board.map((o) => o.id)).toEqual([0, 2, 3]);
   });
   test("a yard read back from its text is the yard, and goes on as it would have", () => {
     for (const yard of Object.values(YARDS)) {
@@ -516,10 +518,9 @@ describe("what the page is shown", () => {
 
 describe("Leaf and the page agree", () => {
   /**
-   * The page does each command to its copy at once and sends it; Leaf does it a moment later; its
-   * answer reaches the page after the page has done the next. The page takes Leaf's yard and does
-   * every command still unanswered again on top: each time, that is the copy it was showing, and
-   * once everything is answered the two yards are the same text.
+   * The page does each command to its copy at once and sends it, with its check just after; Leaf
+   * does it a moment later, and answers with the yard's tick and check there: each time they are the
+   * page's. Once everything is answered, the two yards are the same text.
    */
   test.each(Object.entries(YARDS))("on the %s yard", (_, yard) => {
     const start = decoded(JSON.stringify(yard));
@@ -559,8 +560,6 @@ describe("Leaf and the page agree", () => {
     const coloured = (text: string): number => decoded(text).cells.filter((p) => p?.tint === 5).length;
     /** The splitter's shut ways after each command, as Leaf shows a visitor them. */
     const shut: number[] = [];
-    let unanswered: WorksCommand[] = [];
-    let inbox: { readonly view: string; readonly after: number } | null = null;
     let tick = opened.clock;
     for (const act of acts) {
       // The page acts every seven ticks, on its copy, and sends it.
@@ -568,28 +567,21 @@ describe("Leaf and the page agree", () => {
       stepTo(page, tick);
       const command: WorksCommand = { ...act, tick };
       expect(refused(play(page, command))).toBeNull();
-      unanswered.push(command);
-      // The answer to the one before arrives, with this one still on its way.
-      if (inbox) {
-        const { view, after } = inbox;
-        const rebuilt = decoded(view);
-        unanswered = unanswered.filter((u) => u.tick > after);
-        for (const u of unanswered) play(rebuilt, u);
-        stepTo(rebuilt, page.tick);
-        expect(save(rebuilt)).toBe(save(page));
-      }
       // Leaf has it four ticks after it was made.
       const now = leafAt(tick + 4);
       const leaf = WORKS.advance(decoded(stored), ctx(now));
       expect(refused(WORKS.apply(leaf, command, ctx(now)))).toBeNull();
       stored = WORKS.encode(leaf);
-      inbox = { view: WORKS.view(leaf, ctx(now)).yard, after: tick };
+      expect([act.do, WORKS.answer?.(leaf, ctx(now))]).toEqual([
+        act.do,
+        expect.objectContaining({ tick, check: check(page) }),
+      ]);
       shut.push(decoded(WORKS.visit?.(leaf, ctx(now)).yard ?? "").cells[at(page, a.x, a.y)]?.shut ?? 0);
     }
     expect(shut.filter((s, k) => s !== shut[k - 1])).toEqual([0, 1, 0, 2, 0]);
     expect(coloured(stored)).toBeGreaterThan(0);
     expect(coloured(WORKS.visit?.(decoded(stored), ctx(leafAt(tick + 5))).yard ?? "")).toBe(coloured(stored));
-    const last = decoded(inbox?.view ?? "");
+    const last = decoded(WORKS.view(decoded(stored), ctx(leafAt(tick + 5))).yard);
     stepTo(last, page.tick + 100);
     stepTo(page, page.tick + 100);
     expect(save(last)).toBe(save(page));

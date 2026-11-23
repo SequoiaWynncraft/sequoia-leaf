@@ -1,13 +1,14 @@
 /** What the whole town shares: the clock, who is about, and where the camera is looking. The member's town is Leaf's (`leaf.ts`). */
 
+import { DAY_MS, utcDay } from "@sequoia-leaf/core";
 import type { Body, Dir } from "@sequoia-leaf/kit/skin.ts";
 import type { Pt, Rect } from "@sequoia-leaf/kit/util.ts";
-import { seedOf } from "@sequoia-leaf/town/clock.ts";
+import { seedOf, stagedBy } from "@sequoia-leaf/town/clock.ts";
 import type { Doing as FolkDoing, Townsperson } from "@sequoia-leaf/town/folk.ts";
 
 import type { FolkArt } from "./folkart.ts";
 import type { GameId } from "./games.ts";
-import type { Tone } from "./guild.ts";
+import type { Deeds, Moment, Tone } from "./guild.ts";
 import type { PlaceId, Seat } from "./world.ts";
 
 export type PanelId = PlaceId | "profile";
@@ -66,22 +67,20 @@ export interface Actor {
   sayFor: number;
   alpha: number;
   away: boolean;
-  /** A visitor taking part in one of the guild's moments is `busy`; otherwise whoever draws them leads them (`led`). */
-  mode: "idle" | "busy" | "led";
   doing: Doing;
   greeted: number;
   /** Their name shows until this moment of the town's clock, whatever else: somebody who has just arrived. */
   named: number;
 }
 
-/** The town's live room, by name; and its seed, which with Leaf's clock (`G.now`) says what the town's own and the crabs do. */
+/** The town's live room, by name; and its seed, which with Leaf's clock (`G.now`) says what the town does by itself. */
 export const ROOM = "town";
 export const SEED = seedOf(ROOM);
 
 export interface Game {
   /** Seconds of town time. */
   t: number;
-  /** Leaf's clock as of this step, in milliseconds since 1970 (the page's own, out of a room): what the town's own and the crabs go by. */
+  /** Leaf's clock as of this step, in milliseconds since 1970 (the page's own, out of a room): what the town goes by. */
   now: number;
   player: Actor | null;
   cinfy: Actor | null;
@@ -104,8 +103,6 @@ export interface Game {
   where: "town" | "camp" | "grove";
   /** How far night has closed in on the walk between two places: 0 for not at all, 1 for dark. */
   dark: number;
-  raidsToday: number;
-  lands: number;
   /** Which of the market's stalls the member last looked at. */
   stall: number;
 }
@@ -125,8 +122,6 @@ export const G: Game = {
   inDoor: false,
   where: "town",
   dark: 0,
-  raidsToday: 2,
-  lands: 0,
   stall: 0,
 };
 
@@ -186,6 +181,8 @@ export const hooks: {
   visitCamp: (id: string, name?: string) => void;
   /** Tell the town's room that the member touched a thing in town, by its name. */
   tell: (name: string) => void;
+  /** The guild's raid parties and wars, as the guild has them (`guild.deeds`). */
+  deeds: () => Deeds;
 } = {
   visit: () => undefined,
   feed: () => undefined,
@@ -195,7 +192,20 @@ export const hooks: {
   groveBanner: () => null,
   visitCamp: () => undefined,
   tell: () => undefined,
+  deeds: () => ({ moments: [], day: { from: 0, party: 0, war: 0 } }),
 };
+
+/**
+ * The guild's raids (`party`) or wars of today (UTC, by Leaf's clock) that the town has staged for
+ * `ms`: how many, and when each of those it still knows of got there (`stagedBy`). The count is
+ * Leaf's, so it is the same on a page just opened as on one open all day.
+ */
+export function today(kind: Moment["kind"], ms = 0): ReturnType<typeof stagedBy> {
+  const { moments, day } = hooks.deeds();
+  const now = utcDay(G.now);
+  const whens = moments.flatMap((m) => (m.kind === kind && utcDay(m.happened) === now ? [m.at + ms] : []));
+  return stagedBy(day.from === now * DAY_MS ? day[kind] : 0, whens, G.now);
+}
 
 /** Listeners for "something the panels show has changed". */
 const watchers: (() => void)[] = [];
@@ -210,6 +220,34 @@ export function changed(): void {
 export function toPage(x: number, y: number): Pt {
   const k = G.view.z / G.view.dpr;
   return { x: (x - Math.round(G.cam.x)) * k, y: (y - Math.round(G.cam.y)) * k };
+}
+
+// ---------- at a moment of Leaf's clock ----------
+
+/** How late something timed by Leaf's clock may still be played, in milliseconds: later, the page was not looking. */
+const LATE = 1000;
+const cues: { at: number; where: Game["where"]; play: () => void }[] = [];
+/** Leaf's clock when this page first looked for what was due. */
+let since: number | null = null;
+
+/**
+ * Something seen or heard once, at a moment of Leaf's clock, in the place on the stage now. It is
+ * not played if the page was not there for it: the moment was before the page came, the page was
+ * put away, or the member has gone somewhere else. Whatever lasts is drawn from the clock instead.
+ */
+export function cue(at: number, play: () => void): void {
+  cues.push({ at, where: G.where, play });
+}
+
+/** Plays whatever has come due by Leaf's clock (`G.now`). */
+export function stepCues(): void {
+  since ??= G.now;
+  for (let i = cues.length - 1; i >= 0; i--) {
+    const c = cues[i];
+    if (!c || c.at > G.now) continue;
+    cues.splice(i, 1);
+    if (c.where === G.where && c.at >= since && G.now - c.at < LATE) c.play();
+  }
 }
 
 // ---------- a little later ----------

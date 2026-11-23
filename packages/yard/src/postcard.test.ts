@@ -23,8 +23,17 @@ describe("the postcard for the town", () => {
   test("filled orders waiting at the gate come first", () => {
     const w = create({ seed: 3 });
     w.board = [
-      { id: 1, title: "Lanterns", from: "Tindra", line: "", want: { lantern: 2 }, pay: 50, filled: { lantern: 2 } },
-      { id: 2, title: "Pots", from: "Pipwick", line: "", want: { pot: 2 }, pay: 50, filled: { pot: 2 } },
+      {
+        id: 1,
+        title: "Lanterns",
+        from: "Tindra",
+        line: "",
+        want: { lantern: 2 },
+        pay: 50,
+        filled: { lantern: 2 },
+        starts: 0,
+      },
+      { id: 2, title: "Pots", from: "Pipwick", line: "", want: { pot: 2 }, pay: 50, filled: { pot: 2 }, starts: 0 },
     ];
     expect(postcard(w).waiting).toBe("2 orders are filled and waiting at the gate.");
   });

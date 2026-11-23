@@ -41,6 +41,14 @@ export class MemoryStore implements Store {
   }
 }
 
+/** What a route answers, unless the page lets the request go first (`init.signal`): then it fails, as a browser's fetch does. */
+function unlessLetGo<T>(reply: T | Promise<T>, signal: AbortSignal | null | undefined): Promise<T> {
+  return new Promise((resolve, reject) => {
+    signal?.addEventListener("abort", () => reject(new DOMException("Let go", "AbortError")), { once: true });
+    Promise.resolve(reply).then(resolve, reject);
+  });
+}
+
 export interface Standin {
   store: MemoryStore;
   sent: Sent[];
@@ -78,7 +86,9 @@ export function standin(
       sent.push(s);
       const route = routes[`${method} ${path.split("?")[0] ?? path}`];
       const reply =
-        typeof route === "function" ? await route(s) : (route ?? { status: 404, body: { code: "not_found" } });
+        typeof route === "function"
+          ? await unlessLetGo(route(s), init.signal)
+          : (route ?? { status: 404, body: { code: "not_found" } });
       if (reply === "offline") throw new TypeError("Failed to fetch");
       if (reply instanceof Response) return reply;
       return new Response(JSON.stringify(reply.body ?? null), {

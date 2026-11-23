@@ -32,6 +32,8 @@ export interface Opened {
   readonly text: () => string;
   /** What the player's page is given of it. */
   readonly view: (ctx: Ctx) => unknown;
+  /** What a batch is answered with: the game's short answer (`Game.answer`), or else the view. */
+  readonly answer: (ctx: Ctx) => unknown;
   /** What a visitor is given of it, or null for a game that cannot be visited. */
   readonly visit: ((ctx: Ctx) => unknown) | null;
   /** Where it stands among everyone's, or null for a game with no board. */
@@ -72,7 +74,7 @@ export interface Played {
  * goes on only from a state whose command was done. One the rules refuse leaves the state as the
  * rules left it, as running on to it alone would (`Game.apply`).
  */
-export function played<State, Command, View, Note>(game: Game<State, Command, View, Note>): Played {
+export function played<State, Command, View, Note, Short>(game: Game<State, Command, View, Note, Short>): Played {
   const held = (decoded: State): Held => {
     let state = decoded;
     /** The state as it was before a command that has not been kept. */
@@ -109,6 +111,7 @@ export function played<State, Command, View, Note>(game: Game<State, Command, Vi
       },
       text: () => game.encode(current()),
       view: (at) => game.view(current(), at),
+      answer: (at) => (game.answer ? game.answer(current(), at) : game.view(current(), at)),
       visit: game.visit ? (at) => game.visit?.(current(), at) : null,
       standing: () => game.standing?.(current()) ?? null,
       awards: () => game.awards?.(current()) ?? [],
