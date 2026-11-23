@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { at, build, create, deliver, refusal, route, stand, step, type World } from "@sequoia-leaf/yard";
+import { at, build, create, deliver, refusal, repower, route, stand, step, type World } from "@sequoia-leaf/yard";
 
 import { nudge } from "./teach.ts";
 
@@ -18,7 +18,7 @@ describe("teaching", () => {
     // On deadfall, on the yard's own land, where the depot's power reaches.
     const i = at(w, first?.x ?? -1, first?.y ?? -1);
     expect(w.land.deposit[i]).toBe("deadfall");
-    expect(w.power[i]).toBe(1);
+    expect((w.power ?? repower(w))[i]).toBe(1);
 
     build(w, "gatherer", first?.x ?? 0, first?.y ?? 0, 0, 0);
     const second = nudge(w, none, false);
@@ -50,14 +50,15 @@ describe("teaching", () => {
     expect(pylon?.tool).toBe("pylon");
     // Where it points, a pylon would carry power to ore.
     build(w, "pylon", pylon?.x ?? 0, pylon?.y ?? 0, 0, 99);
-    const lit = w.land.deposit.some((d, i) => d === "ore" && w.power[i] === 1);
+    const power = w.power ?? repower(w);
+    const lit = w.land.deposit.some((d, i) => d === "ore" && power[i] === 1);
     expect(lit).toBe(true);
     expect(nudge(w, none, false)).toBeNull();
 
     const later = create({ story: 2 });
     const bench = nudge(later, none, false);
     expect(bench?.id).toBe("bench");
-    expect(later.power[at(later, bench?.x ?? -1, bench?.y ?? -1)]).toBe(1);
+    expect((later.power ?? repower(later))[at(later, bench?.x ?? -1, bench?.y ?? -1)]).toBe(1);
     expect(nudge(later, new Set(["bench"]), false)).toBeNull();
   });
   test("later it speaks up once for the board, for a shortage of power, and for a machine that has jammed", () => {

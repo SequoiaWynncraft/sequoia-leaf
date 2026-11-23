@@ -17,10 +17,12 @@ import { MADE_BY, MILLED, RECIPE, type Recipe } from "./content/recipes.ts";
 import { BACK, DX, DY, LEFT, RIGHT } from "./grid.ts";
 import { besideWater } from "./land.ts";
 import { deliver } from "./orders.ts";
+import { repower } from "./power.ts";
 import { type Building, put, take, type Wire, type World } from "./world.ts";
 
 /** Works out the yard's plumbing from what stands where. */
 export function rewire(w: World): Wire {
+  const lit = w.power ?? repower(w);
   const { land, cells } = w;
   const n = cells.length;
   const next = new Int32Array(n).fill(-1);
@@ -69,7 +71,7 @@ export function rewire(w: World): Wire {
       case "bench":
       case "workshop":
         next[i] = ahead;
-        if (w.power[i] === 1) {
+        if (lit[i] === 1) {
           work.push(i);
           demand += KIND[b.kind].draw;
         }
@@ -78,10 +80,10 @@ export function rewire(w: World): Wire {
         next[i] = ahead;
         break;
       case "wheel":
-        if (w.power[i] === 1 && besideWater(land, x, y)) steady += KIND.wheel.gives;
+        if (lit[i] === 1 && besideWater(land, x, y)) steady += KIND.wheel.gives;
         break;
       case "boiler":
-        if (w.power[i] === 1) boilers.push(i);
+        if (lit[i] === 1) boilers.push(i);
         break;
       case "pylon":
       case "depot":

@@ -21,6 +21,7 @@ import {
   PLANS,
   planState,
   power,
+  repower,
   SHIFT,
   type Standing,
   STARTERS,
@@ -381,12 +382,10 @@ function powerBook(_art: Art, body: HTMLElement): () => void {
   const build = (): void => {
     const w = S.world;
     const p = power(w);
+    const lit = w.power ?? repower(w);
     const count = (kind: Kind, live: boolean): number =>
-      w.cells.reduce((n, b, i) => n + (b?.kind === kind && (w.power[i] === 1) === live ? 1 : 0), 0);
-    const burning = w.cells.reduce(
-      (n, b, i) => n + (b?.kind === "boiler" && w.power[i] === 1 && b.fuel > 0 ? 1 : 0),
-      0,
-    );
+      w.cells.reduce((n, b, i) => n + (b?.kind === kind && (lit[i] === 1) === live ? 1 : 0), 0);
+    const burning = w.cells.reduce((n, b, i) => n + (b?.kind === "boiler" && lit[i] === 1 && b.fuel > 0 ? 1 : 0), 0);
     const cold = count("boiler", true) - burning;
     const gives = [
       ...row("The depot", "always", w.rates.depot, true),

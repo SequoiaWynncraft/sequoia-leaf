@@ -14,6 +14,7 @@ import {
   type Plot,
   plotState,
   REACH,
+  repower,
   rewire,
   RIGHT,
   takes,
@@ -133,8 +134,9 @@ function wires(w: World): Wire[] {
   const nodes: { x: number; y: number; at: Pt; joined: boolean }[] = [
     { x: cx, y: cy, at: { x: cx * TILE + 8 - 14, y: (cy - 1) * TILE - 8 }, joined: true },
   ];
+  const power = w.power ?? repower(w);
   w.cells.forEach((b, i) => {
-    if (b?.kind !== "pylon" || w.power[i] !== 1) return;
+    if (b?.kind !== "pylon" || power[i] !== 1) return;
     const x = i % W;
     const y = (i - x) / W;
     nodes.push({ x, y, at: pylonTop(x, y, tall), joined: false });

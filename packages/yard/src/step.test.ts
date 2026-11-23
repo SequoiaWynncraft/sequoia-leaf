@@ -6,6 +6,7 @@ import { BUFFER, CRATE, FUEL, KIND, TICKS } from "./content/machines.ts";
 import { RECIPES } from "./content/recipes.ts";
 import { bare, belts, lit, on, put, steps } from "./fixtures.ts";
 import { DEPOT_SHARE } from "./orders.ts";
+import { repower } from "./power.ts";
 import { status } from "./status.ts";
 import { power, rewire, takes } from "./step.ts";
 import { at, put as hold, type World } from "./world.ts";
@@ -453,7 +454,7 @@ describe("power", () => {
     expect(power(w).demand).toBe(0);
     put(w, "pylon", 5, 3);
     put(w, "pylon", 3, 2);
-    expect(w.power[at(w, 1, 1)]).toBe(1);
+    expect((w.power ?? repower(w))[at(w, 1, 1)]).toBe(1);
     expect(power(w).demand).toBe(KIND.gatherer.draw);
     steps(w, 100);
     expect(on(w, 2, 1).item).toBe("deadfall");
@@ -461,14 +462,14 @@ describe("power", () => {
   test("a pylon on its own, out of reach of the depot and of every joined pylon, carries nothing", () => {
     const w = bare({}, { w: 40 });
     put(w, "pylon", 1, 1);
-    expect(w.power[at(w, 1, 2)]).toBe(0);
+    expect((w.power ?? repower(w))[at(w, 1, 2)]).toBe(0);
     // Taking away the pylon between cuts off the one beyond.
     put(w, "pylon", 8, 3);
-    expect(w.power[at(w, 1, 2)]).toBe(0);
+    expect((w.power ?? repower(w))[at(w, 1, 2)]).toBe(0);
     put(w, "pylon", 14, 5);
-    expect(w.power[at(w, 1, 2)]).toBe(1);
+    expect((w.power ?? repower(w))[at(w, 1, 2)]).toBe(1);
     remove(w, 8, 3);
-    expect(w.power[at(w, 1, 2)]).toBe(0);
+    expect((w.power ?? repower(w))[at(w, 1, 2)]).toBe(0);
   });
   test("supply and demand are two numbers: what the depot gives, and what every machine in reach draws", () => {
     const w = bare({ "9,5": "ore" });

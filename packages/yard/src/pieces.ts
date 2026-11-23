@@ -3,12 +3,11 @@
  * down), moving a set as one, taking a set away, and the yard's blueprints. Each is built on what a
  * single piece does in `build.ts`.
  */
-import { build, join, type Refund, refusal, remove, type Spent, turn, turnable, worth } from "./build.ts";
+import { join, type Refund, refusal, remove, setDown, type Spent, turn, turnable, worth } from "./build.ts";
 import { isItem, type Item } from "./content/items.ts";
 import { BLUEPRINT, KIND, type Kind } from "./content/machines.ts";
 import { RECIPE } from "./content/recipes.ts";
 import { type Dir, DX, DY, RIGHT } from "./grid.ts";
-import { repower } from "./power.ts";
 import { at, changed, TINTS, type World } from "./world.ts";
 
 /**
@@ -180,7 +179,7 @@ export function standRefusal(
 
 /**
  * Stands a set of pieces, all of them or none, and says what it cost. Each goes down as a single
- * piece does (`build`): over one of its kind it only turns it, and a splitter or a joiner takes a
+ * piece does (`setDown`): over one of its kind it only turns it, and a splitter or a joiner takes a
  * belt's place. One that is new keeps what it was asked to (`Kept`) and nothing else: a copy of an
  * uncoloured belt stays uncoloured. With `joins`, as a run of belt is laid, a new belt or tunnel
  * asked for no colour takes the colour of the line it joins, whatever order the pieces come in. `bend` is a
@@ -199,16 +198,14 @@ export function stand(
   let cost = 0;
   const laid: number[] = [];
   for (const p of pieces) {
-    const fresh = w.cells[at(w, p.x, p.y)]?.kind !== p.kind;
-    const did = build(w, p.kind, p.x, p.y, p.dir, Infinity, p.kind === "tunnel" ? p.span : undefined);
-    if (did.ok) cost += did.cost;
-    if (!fresh) continue;
-    const line = p.kind === "belt" || p.kind === "tunnel";
-    for (const i of tilesOf(w, [p])) {
+    const did = setDown(w, p.kind, p.x, p.y, p.dir, Infinity, p.kind === "tunnel" ? p.span : undefined);
+    if (!did.ok) continue;
+    cost += did.cost;
+    for (const i of did.laid) {
       const made = w.cells[i];
-      // The colour `build` gave it came of what stood there or beside it: a run is joined below, as a whole.
+      // The colour it came with is of what stood there: a run is joined below, as a whole.
       if (made) Object.assign(made, { tint: 0 }, keptOf(p, p.kind));
-      if (line && joins) laid.push(i);
+      if (joins && (p.kind === "belt" || p.kind === "tunnel")) laid.push(i);
     }
   }
   join(w, laid);
@@ -239,7 +236,7 @@ export function move(w: World, tiles: readonly number[], turns: number, x: numbe
     w.cells[i] = b;
   });
   changed(w);
-  repower(w);
+  w.power = null;
   return null;
 }
 
