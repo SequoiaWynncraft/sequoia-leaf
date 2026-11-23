@@ -16,7 +16,6 @@ import {
   past,
   percent,
   pityLine,
-  prizeIs,
   prizeName,
   pullKey,
   RARITY_NAMES,
@@ -34,35 +33,29 @@ const banner = BANNERS[0] ?? { id: "banner-1", from: 0, until: 0 };
 const WITH: BannerPerson[] = [{ ...banner, headliner: { id: "mossback", name: "Mossback" } }];
 const WITHOUT: BannerPerson[] = [{ ...banner, headliner: null }];
 
-test("what a reveal says of a prize: its name, what it is for, whether it is new, and the Seeds it gave", () => {
+test("what a reveal says of a prize: its name, whether it is new, and the Seeds it gave; never how a 50/50 fell", () => {
   expect(
     revealOf({ t: "pull", prize: "figure:greg", rarity: "Treant", have: 1, top: 34, fifty: "lost" }, WITH),
   ).toEqual({
     name: "Greg",
     rarity: "Treant",
-    is: "A character for your camp",
     have: "New",
     owned: false,
     seeds: `+${RATES.seeds.top} Seeds`,
-    fifty: "50/50 lost",
   });
   const again = revealOf({ t: "pull", prize: "figure:crab7", rarity: "Leafkin", have: 3 }, WITH);
-  expect([again.have, again.owned, again.seeds, again.fifty]).toEqual(["You have 3", true, "+1 Seed", null]);
+  expect([again.have, again.owned, again.seeds]).toEqual(["You have 3", true, "+1 Seed"]);
   const bought = revealOf({ t: "exchange", prize: "figure:heron", rarity: "Dryad", have: 1 }, WITH);
-  expect([bought.name, bought.is, bought.seeds]).toEqual(["Reed Heron", "A character for your camp", null]);
+  expect([bought.name, bought.seeds]).toEqual(["Reed Heron", null]);
   const person = revealOf(
     { t: "pull", prize: headliner(banner.id), rarity: "Yggdrasil", have: 1, fifty: "owed" },
     WITH,
   );
-  expect([person.name, person.is, person.fifty]).toEqual([
-    "Mossback",
-    "A statue for your camp",
-    "Owed from a lost 50/50",
-  ]);
+  expect(person).toEqual({ name: "Mossback", rarity: "Yggdrasil", have: "New", owned: false, seeds: "+20 Seeds" });
   expect(seedsOf([{ t: "pull", prize: "figure:crab7", rarity: "Leafkin", have: 1 }])).toBe("+1 Seed");
 });
 
-test("every prize in the pools, and every prize of earlier pulls, has a name; a figure is a character for the camp", () => {
+test("every prize in the pools, and every prize of earlier pulls, has a name", () => {
   const earlier = Object.values(EARLIER).flat();
   for (const prize of [...RARITY_NAMES.flatMap((r) => PRIZES[r]), ...earlier])
     expect(prizeName(prize, WITH)).not.toBe(prize.split(":")[1] ?? "");
@@ -70,8 +63,6 @@ test("every prize in the pools, and every prize of earlier pulls, has a name; a 
     "Plank path",
     "Picnic gingham",
   ]);
-  for (const prize of RARITY_NAMES.flatMap((r) => PRIZES[r]))
-    expect(prizeIs(prize)).toBe(prize.startsWith("figure:") ? "A character for your camp" : "A statue for your camp");
 });
 
 test("the pity line counts towards the pull that is certain, and a lost 50/50 names who is next", () => {

@@ -1257,8 +1257,6 @@ export function makeGrove(
     if (u >= rankAt) {
       const drop = u - rankAt < 1 / 30 ? -2 : 0;
       chip(rarity, rx, ry + drop, p.tones.m, p.tones.l, dark(p.tones.m) ? INK : CREAM);
-      const is = p.says.is;
-      say(is, pl.nameX === null ? r(W / 2 - widthOf(g, is, 2) / 2) : rx, ry + 30 + drop, 2, CREAM, INK);
     }
     const sc = lit(p, u);
     for (let j = 0; j < starsN; j++) {
@@ -1283,18 +1281,17 @@ export function makeGrove(
           R(sx + Math.cos(ang) * d, sy + Math.sin(ang) * d, τ < 0.12 ? 2 : 1, τ < 0.12 ? 2 : 1, k % 2 ? sc.l : CREAM);
         }
     }
-    // the tags, a beat apart: whether it is new, the Seeds it gave, and for a banner's top prize how its 50/50 fell
+    // the tags, a beat apart: whether it is new, and the Seeds it gave. How a banner's 50/50 fell is not said.
     const ta = tagAt(p);
     const tags: Tag[][] = [
       [p.says.owned ? [p.says.have, SKY[1], SKY[3], WATER[3]] : [p.says.have, GOLD[1], GOLD[3], INK]],
     ];
     if (p.says.seeds) tags[0]?.push([p.says.seeds, GREEN[1], GREEN[4], LEAF]);
-    if (p.says.fifty) tags.push([[p.says.fifty, SKY[1], SKY[3], CREAM]]);
     tags.forEach((row, n) => {
       let x = left(row.reduce((sum, [text]) => sum + chipWidth(text) + 8, -8)) + (pl.nameX === null ? 0 : 3);
       row.forEach(([text, bg, top, fg], m) => {
         const at = ta + (n * 2 + m) * 0.07;
-        if (u >= at) chip(text, x, ry + 56 + n * 28 + (u - at < 1 / 30 ? -3 : u - at < 2 / 30 ? 1 : 0), bg, top, fg);
+        if (u >= at) chip(text, x, ry + 30 + n * 28 + (u - at < 1 / 30 ? -3 : u - at < 2 / 30 ? 1 : 0), bg, top, fg);
         x += chipWidth(text) + 8;
       });
     });
