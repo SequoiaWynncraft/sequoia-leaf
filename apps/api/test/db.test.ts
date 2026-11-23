@@ -35,12 +35,20 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
+/** Undoes migration 30 (the Tally's `tallies` and `camp_visits`), for a test going back before it. */
+const beforeTallies = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    yield* sql`DROP TABLE tallies`;
+    yield* sql`DROP TABLE camp_visits`;
+  });
+
 /**
- * Undoes migrations 28 (`time_in`) and 29 (`presence_left`), for a test going back before them:
- * `played` as migrations 23 and 27 left it.
+ * Undoes migrations 30 (`tallies`), 29 (`presence_left`) and 28 (`time_in`), for a test going back
+ * before them: `played` as migrations 23 and 27 left it.
  */
 const beforeTimeIn = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
+    yield* beforeTallies(sql);
     yield* sql`ALTER TABLE presence DROP COLUMN left_at`;
     yield* sql`DROP TABLE time_in`;
     yield* sql`ALTER TABLE visits DROP COLUMN acted_at`;
@@ -104,6 +112,7 @@ describe("the database", () => {
       { migration_id: 27, name: "afk" },
       { migration_id: 28, name: "time_in" },
       { migration_id: 29, name: "presence_left" },
+      { migration_id: 30, name: "tallies" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -151,6 +160,8 @@ describe("the database", () => {
           "banner_people",
           "play_kept",
           "time_in",
+          "tallies",
+          "camp_visits",
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;
         }
@@ -165,7 +176,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 29 },
+      { latest: 30 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);

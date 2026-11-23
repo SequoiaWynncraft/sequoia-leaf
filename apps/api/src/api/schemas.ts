@@ -255,6 +255,29 @@ export const Person = Schema.Struct({
 });
 
 /**
+ * A board of the Tally for a span: its id, the span, the week it is of (its Monday 00:00 UTC; null
+ * for all time), its top ten (each with its place, how many score higher and one, its player's id,
+ * name as the guild's news has it, whether a guest, its score, and whether it is the caller's own),
+ * and the caller's own place and score, or null when they are not on it.
+ */
+export const Tally = Schema.Struct({
+  board: Schema.String,
+  period: Schema.Literals(["week", "all"]),
+  from: Schema.NullOr(Schema.String),
+  top: Schema.Array(
+    Schema.Struct({
+      place: Schema.Number,
+      id: Schema.String,
+      name: Schema.String,
+      guest: Schema.Boolean,
+      score: Schema.Number,
+      you: Schema.Boolean,
+    }),
+  ),
+  you: Schema.NullOr(Schema.Struct({ place: Schema.Number, score: Schema.Number })),
+});
+
+/**
  * Every pull banner, with its dates and its headliner: the member Leaf's `banner_people` names for
  * it, named as the boards name players ("Someone" for one Leaf has no name for), or null for none yet.
  */

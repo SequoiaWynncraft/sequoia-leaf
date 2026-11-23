@@ -31,7 +31,7 @@ says so.
 - **The town.** A map a little larger than the screen, with a camera that follows. Walk with WASD
   or the arrow keys, or tap a spot and the character finds a way round things; hold and drag to
   steer. Buildings, trunks and the pond are solid.
-- **Places.** The Treasury (Cinfy behind the counter), the Grove (below), the quest board, the market stalls, the
+- **Places.** The Treasury (Cinfy behind the counter), the Grove (below), the quest board, the Tally, the market stalls, the
   Works (chimney, belt, crates, and a bench by the door), the great stump where The Little Raid is
   played, the campfire and its log seats, the crab pond, and the gate with the signpost to "Your
   camp". Tap a place or its prompt, walk on into it, or walk up and press E (or Enter), to open
@@ -50,6 +50,19 @@ says so.
   at a time. The board shows a "!" while there is news the member has
   not opened; the id of the newest note they opened is kept in the browser under `town.notes.seen`. The panel opens on "News" while there is unread news, and on
   the quests otherwise.
+- **The Tally** (`tally.ts`, `tallyui.ts`, `tallyart.ts`, `tally.css`). A carved post on the lawn
+  between the Grove and the quest board, where the town keeps count: Leaf's leaderboards
+  (`GET /v1/game/tally/{board}/{period}`; the boards are `TALLY_BOARDS` in core). Its panel lists
+  the boards by group (the guild, the Works, The Little Raid, the town) beside the board chosen, or,
+  where the panel is narrow, behind "Boards". A board is for this week or all time (tabs; a board
+  kept for all time only has the one): the top three stand on plinths, each face as the town draws
+  it, with name and score (where the board is too narrow for three names side by side, the three
+  are rows beside their plinths), places 4 to 10 are rows under them, and the member's own place is
+  pinned at the foot when they are on the board but not in its top ten. A tie shares a place;
+  guests are marked "Guest". Choosing anybody shows their card. A board is read when chosen and each
+  minute while it stays open; it rises as it comes, a note a place. Until the member first opens
+  the Tally the post carries a mark (`town.tally.seen` in the browser), and the first time, first
+  place lands with a fanfare.
 - **The market.** Three stalls sell things for a camp, for Coins: lamps and oddments (kept by
   Sootpaw, asleep on the counter until somebody shops), seats, rugs and flags (Bramblewick), and
   plants, fences and paths (Tindra). Nothing sells out and nothing rotates; each row says how many

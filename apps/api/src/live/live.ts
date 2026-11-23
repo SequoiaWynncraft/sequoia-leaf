@@ -31,6 +31,7 @@ import { Allowance } from "../allowance.ts";
 import { type Identity, isGuest } from "../api/api.ts";
 import { PLACES } from "../api/schemas.ts";
 import { Presence } from "../game/presence.ts";
+import { Tallies } from "../tally/store.ts";
 import { type Occupant, type Room, Rooms } from "./room.ts";
 import { Watchers } from "./watchers.ts";
 
@@ -71,12 +72,20 @@ const placeOf = (kindName: string): string | null => PLACES.find((p) => p === ki
 
 /**
  * What Live has to write down about where players are, in the order it happened: players in a room
- * (come in, or still there), one gone from it, and Leaf's farewell, when every open visit closes.
+ * (come in, or still there), one gone from it, one who did something (for their time, and an act
+ * for the Tally), and Leaf's farewell, when every open visit closes.
  */
 type Whereabouts =
   | { readonly kind: "in"; readonly players: readonly Visitor[]; readonly place: string; readonly at: number }
   | { readonly kind: "left"; readonly playerId: PlayerId; readonly place: string; readonly at: number }
   | { readonly kind: "acted"; readonly playerId: PlayerId; readonly at: number }
+  | {
+      readonly kind: "act";
+      readonly playerId: PlayerId;
+      readonly act: string;
+      readonly arg: string;
+      readonly at: number;
+    }
   | { readonly kind: "farewell"; readonly at: number; readonly done: Deferred.Deferred<void> };
 
 /** A write of where players are that fails is logged, not tried again: the next one, at most `presenceMs` later, says as much. */
@@ -313,6 +322,7 @@ export class Live extends Context.Service<
       const presence = yield* Presence;
       const visits = yield* Visits;
       const watchers = yield* Watchers;
+      const tallies = yield* Tallies;
       const rooms = new Rooms();
       const players = new Map<string, Player>();
       let counts = noCounts();
@@ -356,6 +366,8 @@ export class Live extends Context.Service<
             return ofVisits(
               Effect.flatMap(visits.acted(w.playerId, w.at), (back) => (back ? presence.back : Effect.void)),
             );
+          case "act":
+            return quietly("live tallies", tallies.acted(w.playerId, w.act, w.arg, w.at));
           case "farewell":
             return ofVisits(visits.closeAll(w.at)).pipe(
               Effect.andThen(
@@ -475,6 +487,13 @@ export class Live extends Context.Service<
             if (!p.acts.take(now)) return strike(p, now);
             if (!p.room || !p.occupant) return p.send(say({ t: "error", code: "not_in_room" }));
             acted(p, now);
+            Queue.offerUnsafe(whereabouts, {
+              kind: "act",
+              playerId: p.identity.playerId,
+              act: m.kind,
+              arg: m.arg,
+              at: now,
+            });
             return p.room.act(p.occupant.member.id, m.kind, m.arg);
         }
       };

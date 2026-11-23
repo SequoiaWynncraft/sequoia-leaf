@@ -317,7 +317,7 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
       if (stretchOf(now) === stretchOf(s.spotAt)) return no("too_soon");
       s.sightings = Math.min(1e6, s.sightings + 1);
       s.spotAt = now;
-      return done(s);
+      return done(s, { log: [{ kind: LOGGED.townCrab, data: {} }] });
     case "buy": {
       const sold = STALLS.find((st) => st.id === c.stall)?.stock.find((k) => k.thing === c.thing);
       if (!sold) return no("not_for_sale");
@@ -334,8 +334,9 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
     case "greet":
       if (s.visit?.id !== c.visit) return no("no_such_visit");
       camp.greeted = Math.min(999, camp.greeted + 1);
+      const by = s.visit.who;
       leave(s, s.visit);
-      return done(s);
+      return done(s, { log: [{ kind: LOGGED.townGreeted, data: { by } }] });
     case "readMail":
       for (const l of camp.letters) l.read = true;
       return done(s);

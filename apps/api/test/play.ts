@@ -56,7 +56,9 @@
  * raid with Mossling now, `{ "war": true }` has the two fight a war now, and `{ "levels": n }` has
  * the four reach a level n times between them, n more events after those), and `POST /test/play/pulls` one
  * in Tester's pulls (a banner's headliner, Leaf's clock on a day the banner is open, Leaf,
- * counters, Seeds and prizes: `stage-pulls.ts`); nothing like them is served by the guild's own Leaf.
+ * counters, Seeds and prizes: `stage-pulls.ts`), and `POST /test/play/tally` fills the Tally's boards
+ * with everybody here, Tester off the top of most (`stage-tally.ts`); nothing like them is served
+ * by the guild's own Leaf.
  */
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -73,6 +75,7 @@ import type { Quests } from "../src/quests/store.ts";
 import { LiveClient } from "./live-client.ts";
 import { stagePulls } from "./stage-pulls.ts";
 import { stageRaid } from "./stage-raid.ts";
+import { stageTally } from "./stage-tally.ts";
 import { stageTown } from "./stage-town.ts";
 import { stageWorks } from "./stage-works.ts";
 import {
@@ -711,6 +714,7 @@ const served = await leaf.serve(
     stagingRoute("town", stageTheTown),
     stagingRoute("works", (ops) => stageWorks(tester.id, ops, others)),
     stagingRoute("pulls", (ops) => stageThePulls(ops)),
+    stagingRoute("tally", () => stageTally(tester.id, others, clock.now)),
   ),
 );
 

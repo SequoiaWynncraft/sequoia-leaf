@@ -227,6 +227,10 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     );
   }
   await call("GET /v1/game/play/{game}/standings", "GET", "/v1/game/play/works/standings");
+  // The Tally: this week's guild raids, the SEQ levels, and a week asked of a board kept for all time only.
+  await call("GET /v1/game/tally/{board}/{period}", "GET", "/v1/game/tally/raids/week");
+  await call("GET /v1/game/tally/{board}/{period}, all time", "GET", "/v1/game/tally/level/all");
+  await call("GET /v1/game/tally/{board}/{period}, no such board", "GET", "/v1/game/tally/level/week");
   // Bob's yard, as a visitor is given it; the raid, which cannot be visited; and Alice's numbers on her card.
   await app.request("/v1/game/play/works", { headers: { Authorization: "Bearer bob-token" } });
   await call("GET /v1/game/play/{game}/of/{player}", "GET", `/v1/game/play/works/of/${bob}`);

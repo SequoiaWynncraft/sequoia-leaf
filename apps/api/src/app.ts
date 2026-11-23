@@ -26,6 +26,7 @@ import { Play } from "./play/service.ts";
 import { PlayStore } from "./play/store.ts";
 import { Purchases } from "./purchases/store.ts";
 import { Quests } from "./quests/store.ts";
+import { Tallies } from "./tally/store.ts";
 
 /**
  * Leaf's HTTP routes, the game's live connection, and the game's pages when there are any, with the
@@ -103,7 +104,7 @@ export const Stores = Layer.mergeAll(
   Quests.layer,
   Presence.layer,
   ActivityReport.layer.pipe(Layer.provideMerge(Visits.layer)),
-  Skins.layer.pipe(Layer.provideMerge(PlayerNames.layer)),
+  Layer.mergeAll(Skins.layer, Tallies.layer).pipe(Layer.provideMerge(PlayerNames.layer)),
   PlayStore.layer,
   Coins.layer,
   Purchases.layer,

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <title>Guild Town</title>
     <link rel="stylesheet" href="../../packages/kit/src/kit.css" />
+    <link rel="stylesheet" href="./src/tally.css" />
     <style>
       /* Only where the town puts things; how they look is the kit's. */
       :root {
@@ -12,7 +13,7 @@
         --top: max(calc(var(--u) * 4), env(safe-area-inset-top));
         --bottom: max(calc(var(--u) * 4), env(safe-area-inset-bottom));
         /* The dock: a slot's side, and how tall the whole plank stands off the bottom. */
-        --slot: min(calc(var(--u) * 21), calc((100vw - var(--u) * 27) / 9));
+        --slot: min(calc(var(--u) * 21), calc((100vw - var(--u) * 28) / 10));
         --dock: calc(var(--u) * 33 + var(--bottom));
         --sheet-floor: var(--dock);
       }
@@ -300,7 +301,7 @@
         z-index: 4;
         left: var(--edge);
         bottom: var(--bottom);
-        width: min(calc(var(--u) * 170), calc(50vw - var(--slot) * 4.5 - var(--u) * 12));
+        width: min(calc(var(--u) * 170), calc(50vw - var(--slot) * 5 - var(--u) * 12));
         display: flex;
         flex-direction: column;
         gap: calc(var(--u) * 2);

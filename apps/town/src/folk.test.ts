@@ -40,6 +40,7 @@ const MEMBERS_ONLY: Readonly<Record<string, string>> = {
   "apps/town/src/sheet.ts": "the art sheet",
   "apps/town/src/actors.ts": "the type of a member's figure",
   "apps/town/src/aboutui.ts": "the faces of those listed in Who is about, members and guests alone",
+  "apps/town/src/tallyui.ts": "the faces of those on the Tally's boards, members and guests alone",
   "apps/town/src/campart.ts": "the size of a member's figure, for a banner's statue",
   "apps/town/src/statues.ts":
     "a banner's statue, carved from its member's own skin, or their made-up look until it loads",
