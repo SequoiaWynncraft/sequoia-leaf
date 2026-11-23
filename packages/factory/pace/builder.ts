@@ -396,7 +396,7 @@ export class Builder {
         break;
       }
     }
-    const cleared = clear && block ? this.clearing(block, start, lines) : null;
+    const cleared = clear && block ? this.clearing(block) : null;
     return cleared ? done(cleared.rate, cleared.taken) : none();
   }
 
@@ -407,24 +407,14 @@ export class Builder {
    * time, nearest that place first, and the block tried again with the rest still standing to be
    * split; failing that, all of them go, and the block is laid as it was worked out. A belt of
    * another line that one of them had set a splitter on is laid again. What it makes a minute and
-   * the lines it took up, or nothing.
+   * the lines it took up, or nothing. Whatever was worked out before it (a plot bought for the line)
+   * stays.
    */
-  private clearing(
-    lay: () => number,
-    start: { readonly cmds: number; readonly taps: number; readonly joined: number; readonly onto: number },
-    lines: number,
-  ): { rate: number; taken: Old[] } | null {
+  private clearing(lay: () => number): { rate: number; taken: Old[] } | null {
     if (this.old.length === 0) return null;
-    const before = structuredClone(this.y);
-    const kept = [...this.sources];
+    const mark = this.save();
     const back = (): null => {
-      this.y = structuredClone(before);
-      this.cmds.length = start.cmds;
-      this.taps.length = start.taps;
-      this.joined.length = start.joined;
-      this.onto.length = start.onto;
-      this.sources.length = 0;
-      this.sources.push(...kept);
+      this.back(mark);
       return null;
     };
     const takeUp = (taken: readonly Old[], keep: boolean): boolean => {
@@ -467,11 +457,11 @@ export class Builder {
     this.ver++;
     if (!laid) return back();
     const plan = {
-      cmds: this.cmds.slice(start.cmds),
-      taps: this.taps.slice(start.taps),
-      joined: this.joined.slice(start.joined),
-      onto: this.onto.slice(start.onto),
-      sources: this.sources.slice(lines),
+      cmds: this.cmds.slice(mark.cmds),
+      taps: this.taps.slice(mark.taps),
+      joined: this.joined.slice(mark.joined),
+      onto: this.onto.slice(mark.onto),
+      sources: this.sources.slice(mark.sources.length),
     };
     const used = new Set(plan.cmds.flatMap((c) => this.tilesOf(c)));
     const there =
