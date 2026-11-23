@@ -347,11 +347,14 @@ export function drain(y: Yard): News[] {
 export const holds = (k: number): boolean =>
   k === GATHERER || k === MILL || k === BENCH || k === WORKSHOP || k === CRATE || k === BOILER;
 
+/** How much a full side table grows by: a half, so a yard of nothing but crates stays under a megabyte. */
+const grown = (size: number): number => Math.ceil(size * 1.5);
+
 /** A new row in a side table for the piece on a tile, the table grown if it is full. */
 export function holderRow(y: Yard, tile: number): number {
   let h = y.holders;
   if (h.size === h.tile.length) {
-    const bigger = holders(h.size * 2);
+    const bigger = holders(grown(h.size));
     for (const key of [
       "tile",
       "out",
@@ -387,7 +390,7 @@ export function holderRow(y: Yard, tile: number): number {
 export function tunnelRow(y: Yard, tile: number): number {
   let t = y.tunnels;
   if (t.size === t.tile.length) {
-    const bigger = tunnels(t.size * 2);
+    const bigger = tunnels(grown(t.size));
     for (const key of ["tile", "under", "along"] as const) bigger[key].set(t[key]);
     bigger.size = t.size;
     y.tunnels = t = bigger;
@@ -470,19 +473,19 @@ export function vacate(y: Yard, i: number): void {
   y.span[i] = 0;
 }
 
-/** The bytes a yard holds in memory: every array of it, its side tables and its plumbing; not its land, which yards share. */
+/**
+ * The bytes a yard holds in memory: every typed array it reaches, through its side tables, its
+ * plumbing, its orders and its records, each once; not its land, which yards share.
+ */
 export function bytesHeld(y: Yard): number {
-  let n = 0;
-  const add = (a: ArrayBufferView | null | undefined): void => {
-    n += a?.byteLength ?? 0;
+  const seen = new Set<ArrayBufferView>();
+  const walk = (v: unknown): void => {
+    if (ArrayBuffer.isView(v)) seen.add(v);
+    else if (Array.isArray(v)) for (const part of v) walk(part);
+    else if (typeof v === "object" && v !== null) for (const part of Object.values(v)) walk(part);
   };
-  for (const a of [y.kind, y.dir, y.item, y.prog, y.via, y.tint, y.turn, y.shut, y.free, y.span, y.row, y.lit]) add(a);
-  const h = y.holders;
-  for (const a of [h.tile, h.out, h.making, h.recipe, h.work, h.idle, h.open, h.fuel, h.kinds, h.count, h.stock])
-    add(a);
-  for (const a of [y.tunnels.tile, y.tunnels.under, y.tunnels.along]) add(a);
-  if (y.wire) for (const a of [y.wire.order, y.wire.carry, y.wire.work, y.wire.boilers, y.wire.taken]) add(a);
-  for (const a of [y.spare, y.filled, y.depot, y.given, y.pace.made, y.seen.depot, ...y.blueprints]) add(a);
-  for (const o of y.board) for (const a of [o.want, o.filled]) add(a);
+  for (const [key, part] of Object.entries(y)) if (key !== "land") walk(part);
+  let n = 0;
+  for (const a of seen) n += a.byteLength;
   return n;
 }

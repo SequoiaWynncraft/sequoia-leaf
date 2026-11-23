@@ -8,7 +8,7 @@ import type { Ctx } from "@sequoia-leaf/core";
 import * as Y from "@sequoia-leaf/yard";
 
 import * as F from "../src/index.ts";
-import { fromText, pictureF, pictureY } from "./sides.ts";
+import { expectSame, fromText } from "./sides.ts";
 
 const ctx = (now: number): Ctx => ({ now, player: { id: "p", guest: false }, seed: 99, room: 1e9, awards: [] });
 const HOUR = 3600 * 1000;
@@ -51,13 +51,13 @@ describe("time away", () => {
     const ywork = tendAll(Y.WORKS, w, at0 + 9 * HOUR, 1000);
     const fwork = tendAll(F.FACTORY, y, at0 + 9 * HOUR, 7777);
     expect(ywork).toBeGreaterThan(fwork);
-    expect(pictureF(y)).toEqual(pictureY(w));
+    expectSame(w, y);
     expect(y.tick - y.seen.tick).toBe(F.AWAY_MOST_MS / F.TICK_MS);
     // Standing still, Leaf's clock is kept: advance lets the hours go.
     Y.WORKS.advance(w, ctx(at0 + 10 * HOUR));
     F.FACTORY.advance(y, ctx(at0 + 10 * HOUR));
     expect(y.at).toBe(at0 + 10 * HOUR);
-    expect(pictureF(y)).toEqual(pictureY(w));
+    expectSame(w, y);
     // The letter: what it did while its owner was away, as the page is shown it.
     expect(JSON.parse(F.FACTORY.view(y, ctx(at0 + 10 * HOUR)).yard).away).toEqual(
       JSON.parse(Y.WORKS.view(w, ctx(at0 + 10 * HOUR)).yard).away,
@@ -70,8 +70,8 @@ describe("time away", () => {
     tendAll(F.FACTORY, y, at0 + HOUR, 1);
     tendAll(F.FACTORY, z, at0 + HOUR, 1e9);
     tendAll(Y.WORKS, w, at0 + HOUR, 500);
-    expect(pictureF(z)).toEqual(pictureF(y));
-    expect(pictureF(z)).toEqual(pictureY(w));
+    expectSame(w, y);
+    expectSame(w, z);
     // Toward a command's tick, then the command, then on to the clock.
     const c = { do: "collect", tick: w.tick + 36_000 + 5 } as const;
     const cw = Y.WORKS.command(c);
@@ -84,6 +84,6 @@ describe("time away", () => {
     expect(JSON.stringify({ ...b, state: null })).toBe(JSON.stringify({ ...a, state: null }));
     tendAll(Y.WORKS, w, at0 + 2 * HOUR, 2500);
     tendAll(F.FACTORY, z, at0 + 2 * HOUR, 9000);
-    expect(pictureF(z)).toEqual(pictureY(w));
+    expectSame(w, z);
   }, 30_000);
 });

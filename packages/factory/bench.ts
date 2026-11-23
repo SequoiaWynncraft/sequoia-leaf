@@ -56,11 +56,17 @@ function made(name: string, cols: number, rows: number, target: number): Bench {
   const t = now();
   const g = generate(land, target);
   console.error(`${name}: generated in ${fmt(now() - t)} ms with ${g.commands.length} commands`);
-  const pair = new Pair(
-    Y.create({ land: yLand, story: 20, seed: 1758855484 }),
-    F.create({ land, story: 20, seed: 1758855484 }),
-  );
-  for (const c of g.commands) pair.do(c);
+  // Built on each by the same commands and compared once: the tests compare after every command.
+  const yard = Y.create({ land: yLand, story: 20, seed: 1758855484 });
+  const flat = F.create({ land, story: 20, seed: 1758855484 });
+  for (const c of g.commands) {
+    const cy = Y.readCommand(c);
+    const cf = F.readCommand(c);
+    if (cy) Y.play(yard, cy);
+    if (cf) F.play(flat, cf);
+  }
+  const pair = new Pair(yard, flat);
+  pair.same(`${name}, built`);
   pair.run(3000, 1000, name);
   return { name, yard: pair.yard, flat: pair.flat, yLand };
 }

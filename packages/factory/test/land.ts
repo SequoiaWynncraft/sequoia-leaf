@@ -124,3 +124,50 @@ export function makeLand(cols: number, rows: number, seed = 7): Land {
     depot: [cx, cy],
   };
 }
+
+/** A small bare land, one plot owned, with a few deposits where asked and the depot's middle at `depot`. */
+export function bareLand(
+  w: number,
+  h: number,
+  deposits: readonly [number, number, Raw][],
+  depot: [number, number],
+): Land {
+  const deposit: (Raw | null)[] = Array.from({ length: w * h }, () => null);
+  for (const [x, y, raw] of deposits) deposit[y * w + x] = raw;
+  return {
+    w,
+    h,
+    deposit,
+    water: new Uint8Array(w * h),
+    trunk: new Uint8Array(w * h),
+    plot: new Int8Array(w * h),
+    plots: [{ id: "yard", name: "The Yard", why: "", price: 0, x: 0, y: 0, w, h }],
+    depot,
+  };
+}
+
+/**
+ * The same land in a larger map: its tiles at the top left, bare owned ground to the right and below.
+ * The same pieces stand on it at the same places, so a yard can be made again on a map of another size.
+ */
+export function widened(land: Land, w: number, h: number): Land {
+  const deposit: (Raw | null)[] = Array.from({ length: w * h }, () => null);
+  const water = new Uint8Array(w * h);
+  const trunk = new Uint8Array(w * h);
+  for (let y = 0; y < land.h; y++)
+    for (let x = 0; x < land.w; x++) {
+      deposit[y * w + x] = land.deposit[y * land.w + x] ?? null;
+      water[y * w + x] = land.water[y * land.w + x] ?? 0;
+      trunk[y * w + x] = land.trunk[y * land.w + x] ?? 0;
+    }
+  return {
+    w,
+    h,
+    deposit,
+    water,
+    trunk,
+    plot: new Int8Array(w * h),
+    plots: [{ id: "yard", name: "The Yard", why: "", price: 0, x: 0, y: 0, w, h }],
+    depot: land.depot,
+  };
+}

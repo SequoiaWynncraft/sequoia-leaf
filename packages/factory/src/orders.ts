@@ -77,18 +77,22 @@ function offer(y: Yard, thing: number, n: number): number {
     if (isFilled(want, y.filled)) finishStory(y, story);
     return used;
   }
-  for (const order of y.board) {
-    const wants = (order.want[thing] ?? 0) - (order.filled[thing] ?? 0);
-    if (wants <= 0) continue;
+  for (let o = 0; o < y.board.length; o++) {
+    const order = y.board[o];
+    const wants = order ? (order.want[thing] ?? 0) - (order.filled[thing] ?? 0) : 0;
+    if (!order || wants <= 0) continue;
     const used = Math.min(n, wants);
     order.filled[thing] = (order.filled[thing] ?? 0) + used;
     y.given[thing] = (y.given[thing] ?? 0) + used;
-    // A filled order waits on the board to be handed over: see `claim`.
-    if (isFilled(order.want, order.filled))
-      y.news.push({ kind: "filled", id: order.id, title: order.title, pay: order.pay });
+    if (isFilled(order.want, order.filled)) filledOrder(y, order);
     return used;
   }
   return 0;
+}
+
+/** A standing order is filled: it waits on the board to be handed over (`claim`), and a screen is told. */
+function filledOrder(y: Yard, order: Standing): void {
+  y.news.push({ kind: "filled", id: order.id, title: order.title, pay: order.pay });
 }
 
 function finishStory(y: Yard, order: StoryOrder): void {
