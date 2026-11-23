@@ -3,8 +3,8 @@
  * happens (the wire is `@sequoia-leaf/core`'s `live.ts`; the server is `apps/api/src/live`).
  *
  * `joinLive(room, ears)` opens the connection and keeps it open: after a drop it connects again
- * within a moment, and keeps trying every second or so while Leaf is away (`retryAfter`), at once
- * when the page comes back to the front or the network returns; then it joins the room again, and
+ * within a moment, and keeps trying while Leaf is away, waiting longer each time up to five seconds
+ * (`LIVE_BACKOFF`), at once when the page comes back to the front or the network returns; then it joins the room again, and
  * says where the player is again (Leaf shows others that as a jump). An open connection that has
  * gone silent is closed and opened again. Why a connection closed is its close code alone
  * (`CLOSE`): told the player opened the game live somewhere else, or that their session ended,
@@ -43,7 +43,7 @@ import {
 } from "@sequoia-leaf/core";
 
 import { device, member } from "./live.ts";
-import { ask, type LiveSocket, outside } from "./net.ts";
+import { ask, type Backoff, backoff, type LiveSocket, outside } from "./net.ts";
 import { askAgain, inRoom } from "./presence.ts";
 
 // What a page needs of the wire to draw who is in its room.
@@ -252,17 +252,11 @@ export interface LiveRoom {
 // ---------- trying again ----------
 
 /**
- * How long to wait before the next try after a drop, by how many tries there have been since it
- * (`tries`, 0 before the first) and how long the connection has been down (`down`, ms): a quarter
- * of a second, then half, then a second each time for the first thirty seconds, two for the next
- * minute, and five after that; each with up to a quarter more by `chance` (0 to 1), so that pages
- * dropped together do not all come back in the same instant. A drop because Leaf is restarting
- * starts at the second wait (`firstTry`).
+ * How the page connects again after a drop: a quarter of a second, doubling to five seconds, each
+ * with up to a quarter more by chance. A drop because Leaf is restarting starts at the second wait
+ * (`firstTry`).
  */
-export function retryAfter(tries: number, down: number, chance: number): number {
-  const wait = tries <= 0 ? 250 : tries === 1 ? 500 : down < 30_000 ? 1000 : down < 90_000 ? 2000 : 5000;
-  return wait * (1 + chance / 4);
-}
+export const LIVE_BACKOFF: Backoff = { first: 250, most: 5000, jitter: 0.25 };
 
 /** The first try's number after a drop with this close code: Leaf restarting is given half a second, not a quarter. */
 export const firstTry = (code: number): number => (code === CLOSE.restart ? 1 : 0);
@@ -507,7 +501,7 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       tries = firstTry(code);
     }
     if (!l.open) failed++;
-    const wait = retryAfter(tries++, now - downSince, Math.random());
+    const wait = backoff(LIVE_BACKOFF, tries++);
     retryAt = now + wait;
     retry = setTimeout(connect, wait);
     if (askWhy(failed)) void findOutWhy();

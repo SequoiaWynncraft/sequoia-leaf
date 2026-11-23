@@ -1,7 +1,14 @@
 /**
  * Everything the game asks of the world outside its page, in one place so tests can stand in for
  * it: the guild's server, the browser's storage, where the page is and how to go somewhere else,
- * and the clock. Every request to the server goes through `ask` or `listen` here.
+ * and the clock. Every request to the server goes through `ask` or `listen` here, under one policy:
+ *
+ * - every request has a deadline (`Outside.deadline`): one not answered by then is let go as no
+ *   answer, so nothing waits on a request that will never come back;
+ * - whatever is tried again after a failure waits by one rule (`Backoff`, `backoff`), with numbers
+ *   of its own for each channel;
+ * - an answer that is no longer news is let go by what it answers: a state's `rev`, the purse's
+ *   `version`, the connection it came on; never by a flag kept beside the question.
  */
 
 /** The part of a WebSocket the game uses. */
@@ -47,6 +54,8 @@ export interface Outside {
    * focus, or the browser says the network is back. Returns how to stop.
    */
   wake(fn: () => void): () => void;
+  /** How long a request may go unanswered before it is let go as no answer, in milliseconds. */
+  deadline: number;
 }
 
 /** The browser's `wake`: the page shown again, focused, or back on the network. */
@@ -97,6 +106,7 @@ export const outside: Outside = {
   socket: (url) => new WebSocket(url),
   width: () => (typeof innerWidth === "number" ? innerWidth : 0),
   wake: onWake,
+  deadline: 10_000,
 };
 
 /** Puts stand-ins in place of parts of the outside world (for tests). Returns how to put them back. */
@@ -114,11 +124,19 @@ export interface Answer {
   body: unknown;
 }
 
-/** Asks the server something. Never throws: no answer is status 0, and a body that is not JSON is null. */
+/** A signal that lets a request go after `ms`, or when `also` does. */
+const within = (ms: number, also?: AbortSignal | null): AbortSignal =>
+  also ? AbortSignal.any([also, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms);
+
+/**
+ * Asks the server something. Never throws: no answer, or none within the deadline, is status 0, and
+ * a body that is not JSON is null.
+ */
 export async function ask(path: string, init: RequestInit = {}): Promise<Answer> {
   let res: Response;
+  const signal = within(outside.deadline, init.signal);
   try {
-    res = await outside.fetch(path, { credentials: "same-origin", ...init });
+    res = await outside.fetch(path, { credentials: "same-origin", ...init, signal });
   } catch {
     return { status: 0, body: null };
   }
@@ -142,6 +160,21 @@ export const put = (path: string, body: unknown, keepalive = false): Promise<Ans
 
 export const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
+
+/**
+ * How long to wait before trying again: `first` after the first failure, twice as long after each
+ * one after it, up to `most`; each with up to `jitter` (a fraction of it) more by chance, so that
+ * pages that failed together do not all come back in the same instant.
+ */
+export interface Backoff {
+  readonly first: number;
+  readonly most: number;
+  readonly jitter: number;
+}
+
+/** The wait before try `tries` (0, the first after a failure), with `chance` from 0 to 1. */
+export const backoff = (b: Backoff, tries: number, chance: number = Math.random()): number =>
+  Math.min(b.most, b.first * 2 ** Math.max(0, tries)) * (1 + b.jitter * chance);
 
 // ---------- streams ----------
 
@@ -190,14 +223,20 @@ export interface Listening {
   stop(): void;
 }
 
-/** The longest wait between two tries at a stream that keeps failing, in milliseconds. */
-const MOST_WAIT = 60_000;
+/** How a stream is opened again after it ended or failed: two seconds, doubling to a minute. */
+export const STREAM_BACKOFF: Backoff = { first: 2000, most: 60_000, jitter: 0.25 };
+/**
+ * How long an open stream may say nothing before it is let go and opened again: Leaf writes a
+ * comment on every stream every 20 seconds, so this much quiet is a connection that has died.
+ */
+export const STREAM_QUIET = 45_000;
 
 /**
  * Keeps a server-sent event stream open, and opens it again from where it got to whenever it ends
- * (the server closes one every quarter of an hour). `after` is where to start; without it, only
- * what happens from now on. A stream the server refuses because the member is signed out or not a
- * member is let go.
+ * (the server closes one every quarter of an hour), fails, or goes quiet (`STREAM_QUIET`); one that
+ * does not start answering within the deadline is let go as failed. `after` is where to start;
+ * without it, only what happens from now on. A stream the server refuses because the member is
+ * signed out or not a member is let go.
  */
 export function listen(
   path: string,
@@ -206,74 +245,81 @@ export function listen(
 ): Listening {
   let last = opts.after ?? null;
   let stopped = false;
-  let waitFor = 2000;
+  /** Tries since the stream last opened. */
+  let tries = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
-  const abort = new AbortController();
+  /** Lets go of the connection open now, if any. */
+  let current: AbortController | null = null;
 
+  function take(text: string, held: { rest: string }): void {
+    const read = frames(held.rest + text);
+    held.rest = read.rest;
+    for (const f of read.frames) {
+      if (f.id !== null) last = f.id;
+      if (f.data === null) {
+        if (f.id !== null) opts.opened?.(f.id);
+        continue;
+      }
+      let data: unknown = null;
+      try {
+        data = JSON.parse(f.data);
+      } catch {
+        continue;
+      }
+      if (f.id !== null) hear({ id: f.id, type: f.type, data });
+    }
+  }
+
+  /** One connection, read until it ends: whether to open another. */
   async function once(): Promise<"again" | "done"> {
     const url = last === null ? path : `${path}${path.includes("?") ? "&" : "?"}after=${last}`;
-    let res: Response;
+    const conn = new AbortController();
+    current = conn;
+    // Let go if it has not started answering by the deadline, or once it has, if it goes quiet.
+    let quiet = setTimeout(() => conn.abort(), outside.deadline);
     try {
-      res = await outside.fetch(url, {
+      const res = await outside.fetch(url, {
         credentials: "same-origin",
         headers: { Accept: "text/event-stream" },
-        signal: abort.signal,
+        signal: conn.signal,
       });
-    } catch {
-      return "again";
-    }
-    if (res.status === 401 || res.status === 403) return "done";
-    if (!res.ok || !res.body) return "again";
-    waitFor = 2000;
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let held = "";
-    const take = (text: string): void => {
-      held += text;
-      const read = frames(held);
-      held = read.rest;
-      for (const f of read.frames) {
-        if (f.id !== null) last = f.id;
-        if (f.data === null) {
-          if (f.id !== null) opts.opened?.(f.id);
-          continue;
-        }
-        let data: unknown = null;
-        try {
-          data = JSON.parse(f.data);
-        } catch {
-          continue;
-        }
-        if (f.id !== null) hear({ id: f.id, type: f.type, data });
+      if (res.status === 401 || res.status === 403) return "done";
+      if (!res.ok || !res.body) return "again";
+      tries = 0;
+      const reader = res.body.getReader();
+      // Let go, the read on its way ends at once.
+      conn.signal.addEventListener("abort", () => void reader.cancel().catch(() => undefined), { once: true });
+      const decoder = new TextDecoder();
+      const held = { rest: "" };
+      for (;;) {
+        clearTimeout(quiet);
+        quiet = setTimeout(() => conn.abort(), STREAM_QUIET);
+        // oxlint-disable-next-line no-await-in-loop -- a stream is read a piece at a time
+        const { done, value } = await reader.read();
+        if (done || stopped) return "again";
+        take(decoder.decode(value, { stream: true }), held);
       }
-    };
-    const pump = async (): Promise<void> => {
-      const { done, value } = await reader.read();
-      if (done || stopped) return;
-      take(decoder.decode(value, { stream: true }));
-      await pump();
-    };
-    try {
-      await pump();
     } catch {
-      // The connection dropped: open it again from where it got to.
+      // No answer, or the connection dropped or went quiet: open it again from where it got to.
+      return "again";
+    } finally {
+      clearTimeout(quiet);
+      conn.abort();
     }
-    return "again";
   }
 
   async function go(): Promise<void> {
     timer = null;
     const next = await once();
     if (stopped || next === "done") return;
-    timer = setTimeout(() => void go(), waitFor);
-    waitFor = Math.min(MOST_WAIT, waitFor * 2);
+    timer = setTimeout(() => void go(), backoff(STREAM_BACKOFF, tries++));
   }
   void go();
   return {
     stop() {
       stopped = true;
       if (timer !== null) clearTimeout(timer);
-      abort.abort();
+      current?.abort();
     },
   };
 }

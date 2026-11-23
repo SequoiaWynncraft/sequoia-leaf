@@ -13,7 +13,7 @@ import {
 } from "@sequoia-leaf/core";
 
 import { restart, start } from "./live.ts";
-import { onWake, pretend } from "./net.ts";
+import { backoff, onWake, pretend } from "./net.ts";
 import { here } from "./presence.ts";
 import { forgetLedger } from "./purse.ts";
 import {
@@ -21,10 +21,10 @@ import {
   ClockSync,
   firstTry,
   joinLive,
+  LIVE_BACKOFF,
   type LiveRoom,
   type LiveStatus,
   Playout,
-  retryAfter,
   sendIn,
   silent,
   type Step,
@@ -166,29 +166,20 @@ describe("sending the player's motion", () => {
 });
 
 describe("trying again", () => {
-  test("waits a quarter second, then half, then a second for thirty seconds, two for a minute, then five", () => {
-    const waits = (
-      [
-        [0, 0],
-        [1, 300],
-        [2, 900],
-        [20, 29_999],
-        [21, 30_000],
-        [40, 89_999],
-        [41, 90_000],
-        [99, 3_600_000],
-      ] as const
-    ).map(([tries, down]) => retryAfter(tries, down, 0));
-    expect(waits).toEqual([250, 500, 1000, 1000, 2000, 2000, 5000, 5000]);
-  });
-
-  test("each with up to a quarter more by chance", () => {
-    expect([retryAfter(0, 0, 1), retryAfter(2, 0, 0.5), retryAfter(9, 100_000, 1)]).toEqual([312.5, 1125, 6250]);
+  test("waits a quarter second, doubling to five seconds at most, each with up to a quarter more by chance", () => {
+    expect([0, 1, 2, 3, 4, 5, 40].map((tries) => backoff(LIVE_BACKOFF, tries, 0))).toEqual([
+      250, 500, 1000, 2000, 4000, 5000, 5000,
+    ]);
+    expect([backoff(LIVE_BACKOFF, 0, 1), backoff(LIVE_BACKOFF, 2, 0.5), backoff(LIVE_BACKOFF, 9, 1)]).toEqual([
+      312.5, 1125, 6250,
+    ]);
   });
 
   test("starts at half a second when Leaf said it is restarting", () => {
-    expect(retryAfter(firstTry(CLOSE.restart), 0, 0)).toBe(500);
-    expect([1006, CLOSE.done, CLOSE.policy].map((code) => retryAfter(firstTry(code), 0, 0))).toEqual([250, 250, 250]);
+    expect(backoff(LIVE_BACKOFF, firstTry(CLOSE.restart), 0)).toBe(500);
+    expect([1006, CLOSE.done, CLOSE.policy].map((code) => backoff(LIVE_BACKOFF, firstTry(code), 0))).toEqual([
+      250, 250, 250,
+    ]);
   });
 
   test("asks why after three tries in a row that did not open, and every fifth after", () => {
@@ -582,9 +573,6 @@ async function settle(): Promise<void> {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 }
 
-/** The wait after a drop, by how long the connection has been down, before chance adds to it. */
-const baseWait = (since: number): number => (since < 30_000 ? 1000 : since < 90_000 ? 2000 : 5000);
-
 describe("coming back after a drop", () => {
   let world: Standin | null = null;
   let room: LiveRoom | null = null;
@@ -658,45 +646,20 @@ describe("coming back after a drop", () => {
     s.says(welcome(1, world?.clock.now ?? 0));
   }
 
-  test("tries again after a quarter second, then half, then every second, with up to a quarter more", async () => {
+  test("tries again after a quarter second, doubling to five seconds, with up to a quarter more, and from the start again after a welcome", async () => {
     await live();
     room = joinLive("town");
     welcomed(last());
     last().drop();
     const waits: number[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8; i++) {
       waits.push(nextTry());
       last().drop();
     }
-    const [a = 0, b = 0, ...rest] = waits;
-    expect(a).toBeGreaterThanOrEqual(250);
-    expect(a).toBeLessThanOrEqual(320);
-    expect(b).toBeGreaterThanOrEqual(500);
-    expect(b).toBeLessThanOrEqual(630);
-    for (const w of rest) {
-      expect(w).toBeGreaterThanOrEqual(1000);
-      expect(w).toBeLessThanOrEqual(1260);
+    for (const [tries, wait] of waits.entries()) {
+      expect(wait).toBeGreaterThanOrEqual(backoff(LIVE_BACKOFF, tries, 0));
+      expect(wait).toBeLessThanOrEqual(backoff(LIVE_BACKOFF, tries, 1) + 10);
     }
-  });
-
-  test("every two seconds after the first thirty, every five after ninety, and from the start again after a welcome", async () => {
-    const w = await live();
-    room = joinLive("town");
-    welcomed(last());
-    const down = w.clock.now;
-    last().drop();
-    const seen: [number, number][] = [];
-    while (w.clock.now - down < 120_000) {
-      const since = w.clock.now - down;
-      seen.push([since, nextTry()]);
-      last().drop();
-    }
-    for (const [since, wait] of seen.slice(2)) {
-      expect(wait).toBeGreaterThanOrEqual(baseWait(since));
-      expect(wait).toBeLessThanOrEqual(baseWait(since) * 1.25 + 10);
-    }
-    expect(seen.some(([since]) => since >= 90_000)).toBe(true);
-
     nextTry();
     welcomed(last());
     last().drop();

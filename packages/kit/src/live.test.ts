@@ -28,6 +28,7 @@ import {
 import {
   GUEST,
   HELLO,
+  keptOpen,
   membersOnly,
   MemoryStore,
   type Reply,
@@ -195,6 +196,9 @@ function memberStream(events: readonly { id: number; type: string; data: unknown
   };
 }
 
+/** Leaf earned, as the member's stream says it. */
+const earned = (id: number): string => `id: ${id}\nevent: leaf_earned\ndata: {"leaf":125}\n\n`;
+
 describe("following the member's Leaf", () => {
   test("Leaf paid between the first look and the stream opening is heard at once, and the purse fetched again", async () => {
     const raid = { id: 141, type: "leaf_earned", data: { source: "raid", leaf: 110, xp: 110 } };
@@ -214,6 +218,33 @@ describe("following the member's Leaf", () => {
     expect(world.sent.map((s) => s.path)).toContain("/v1/me/events/stream?after=140");
     expect(heard).toEqual([141]);
     expect(balance().leaf).toBe(2560);
+  });
+
+  test("a question about the purse Leaf never answers does not keep the next news from being heard", async () => {
+    const stream = keptOpen();
+    let asked = 0;
+    world = standin(
+      {
+        "GET /v1/game/hello": HELLO,
+        // The first look, then a question that never comes back, then Leaf's newer word.
+        "GET /v1/game/me": () => {
+          asked++;
+          if (asked === 1) return { status: 200, body: TESTER };
+          if (asked === 2) return new Promise<never>(() => undefined);
+          return { status: 200, body: { ...TESTER, leaf: 2700 } };
+        },
+        "GET /v1/me/events/stream": stream.open,
+      },
+      { deadline: 20 },
+    );
+    await start();
+    ears = followLeaf();
+    await Bun.sleep(5);
+    stream.say(`id: 140\n\n${earned(141)}`);
+    await Bun.sleep(500);
+    stream.say(earned(142));
+    await Bun.sleep(500);
+    expect([asked, balance().leaf]).toEqual([3, 2700]);
   });
 });
 

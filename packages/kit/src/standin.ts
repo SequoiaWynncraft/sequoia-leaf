@@ -69,7 +69,7 @@ export interface Standin {
  */
 export function standin(
   routes: Record<string, Route | Reply>,
-  opts: { href?: string; top?: boolean; store?: MemoryStore; width?: number } = {},
+  opts: { href?: string; top?: boolean; store?: MemoryStore; width?: number; deadline?: number } = {},
 ): Standin {
   const store = opts.store ?? new MemoryStore();
   const sent: Sent[] = [];
@@ -110,6 +110,7 @@ export function standin(
       throw new Error("No live connection in this test");
     },
     width: () => opts.width ?? 1280,
+    deadline: opts.deadline ?? 10_000,
     wake: (fn) => {
       woken.add(fn);
       return () => {
@@ -166,6 +167,27 @@ export function membersOnly(asked: string[]): Record<string, Route> {
       "GET /v1/game/guild/events/stream",
     ].map((route) => [route, refuse]),
   );
+}
+
+/**
+ * A stream that stays open, for a route of server-sent events: each `open()` is a new connection's
+ * answer, and `say(text)` sends more on the newest one.
+ */
+export function keptOpen(): { open: () => Response; say: (text: string) => void } {
+  const encoder = new TextEncoder();
+  let newest: ReadableStreamDefaultController<Uint8Array> | null = null;
+  return {
+    open: () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(c) {
+            newest = c;
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "text/event-stream" } },
+      ),
+    say: (text) => newest?.enqueue(encoder.encode(text)),
+  };
 }
 
 export const HELLO = {

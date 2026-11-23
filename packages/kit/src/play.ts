@@ -29,8 +29,8 @@
  *   `not_found`) or cannot read the state the new one wrote (409 `state_unreadable`): either is asked
  *   again each second for 30 seconds (`NOT_YET`), and only then stops the page, for no server or a
  *   state that does not read, with nothing sent again: the page shows the kit's card for it.
- * - Every request the page waits on is let go after `DEADLINE`, as if Leaf had not answered: a batch
- *   goes again with the same ids, as after any failure.
+ * - Every request the page waits on is let go at the kit's deadline (`net.ts`), as if Leaf had not
+ *   answered: a batch goes again with the same ids, as after any failure (`RETRY`).
  * - As the page is hidden or put away, or the town closes the game, everything Leaf has not
  *   answered is sent at once in a request that outlives the page (`flush`), so the last thing done
  *   before leaving is not lost.
@@ -47,7 +47,7 @@
 
 import { type GameId, MOST_COMMANDS, playPath, visitPath } from "@sequoia-leaf/core";
 
-import { ask, isRecord, outside } from "./net.ts";
+import { ask, type Backoff, backoff, isRecord, outside } from "./net.ts";
 import { fromTown } from "./shell.ts";
 
 /** Reads what Leaf sends into the game's own types; null for anything these rules could not have made. */
@@ -108,12 +108,8 @@ const MOST_BYTES = 12_000;
 /** What a command's id and the punctuation round it add to a body. */
 const ID_ROOM = 40;
 
-/** How long to wait before sending a batch again after it failed, doubling each time up to `most`. */
-export interface Retry {
-  first: number;
-  most: number;
-}
-const RETRY: Retry = { first: 500, most: 10_000 };
+/** How a batch that failed is sent again: half a second, doubling to ten seconds. */
+export const RETRY: Backoff = { first: 500, most: 10_000, jitter: 0.25 };
 
 /** How the Leaf before this one, during a deploy (no play service yet, or a state it cannot read), is waited for: a try each `every` ms, `tries` times. */
 export interface NotYet {
@@ -125,9 +121,6 @@ export const NOT_YET: NotYet = { every: 1000, tries: 30 };
 
 /** How long a page in view goes without a call to Leaf before it reads its state, checked every quarter of it. */
 export const STILL_HERE = 60_000;
-
-/** How long a request may go unanswered before it is let go as no answer: ten seconds. */
-export const DEADLINE = 10_000;
 
 /** Whether an answer is the 404 of a Leaf that has no play service yet, rather than one about the game. */
 const notYet = (reply: { status: number; body: unknown }): boolean =>
@@ -173,9 +166,8 @@ export async function openPlay<View, Command extends object, Note, Short = never
     readonly of?: string;
     /** Whether the page is put aside for now and says nothing of itself (the town, under a game). */
     readonly away?: () => boolean;
-    readonly retry?: Retry;
+    readonly retry?: Backoff;
     readonly notYet?: NotYet;
-    readonly deadline?: number;
   },
 ): Promise<Play<View, Command, Note, Short> | { trouble: Trouble }> {
   const path = playPath(game);
@@ -183,9 +175,6 @@ export async function openPlay<View, Command extends object, Note, Short = never
   /** Where the state is read: the player's own, or the one visited. */
   const read = options.of === undefined ? path : visitPath(game, options.of);
   const waitFor = options.notYet ?? NOT_YET;
-  const deadline = options.deadline ?? DEADLINE;
-  /** A request to Leaf, let go as no answer once it has gone unanswered past the deadline. */
-  const timed: typeof ask = (to, init) => ask(to, { ...init, signal: AbortSignal.timeout(deadline) });
   let stopped = false;
   /**
    * Asks, and while Leaf answers "not yet" or that the state does not read (the Leaf before this one,
@@ -198,7 +187,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
     await wait(waitFor.every);
     return stopped ? reply : patiently(asking, tried + 1);
   }
-  const first = await patiently(() => timed(read));
+  const first = await patiently(() => ask(read));
   if (notYet(first)) return { trouble: "noserver" };
   const end = endOf(first);
   if (end !== null) return { trouble: end };
@@ -223,10 +212,11 @@ export async function openPlay<View, Command extends object, Note, Short = never
   let calledAt = outside.now();
   const call: typeof ask = (to, init) => {
     calledAt = outside.now();
-    return timed(to, init);
+    return ask(to, init);
   };
   const quiet = (): boolean => visiting || options.away?.() === true;
-  let pause = retry.first;
+  /** How many times in a row the batch on its way has failed. */
+  let tries = 0;
   /** The question for the state again on its way, if one is. */
   let asking: Promise<void> | null = null;
   const hearers = new Set<(state: View, differs: boolean) => void>();
@@ -349,7 +339,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
       );
       if (stopped) return;
       if (reply.status === 200 && isRecord(reply.body)) {
-        pause = retry.first;
+        tries = 0;
         if (!took(reply.body, batch)) {
           stopped = true;
           return;
@@ -388,8 +378,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
       }
       // No answer, trouble, or too fast: the same batch again in a moment, with the same ids.
       // oxlint-disable-next-line no-await-in-loop -- waiting before trying again
-      await wait(pause);
-      pause = Math.min(retry.most, pause * 2);
+      await wait(backoff(retry, tries++));
       if (stopped) return;
     }
     void pump();

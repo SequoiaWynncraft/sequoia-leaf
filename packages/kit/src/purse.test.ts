@@ -93,6 +93,23 @@ describe("the purse", () => {
     expect(balance().coins).toBe(230);
   });
 
+  test("a question Leaf never answers is let go at its deadline, and the purse asks again", async () => {
+    let asked = 0;
+    world = standin(
+      {
+        "GET /v1/game/me": () =>
+          ++asked === 1 ? new Promise<never>(() => undefined) : { status: 200, body: { coins: 50 } },
+      },
+      { deadline: 20 },
+    );
+    fromLeaf(100);
+    refreshCoins();
+    await Bun.sleep(40);
+    refreshCoins();
+    await answered();
+    expect([asked, balance().coins]).toEqual([2, 50]);
+  });
+
   test("asks nothing before it holds Leaf's Coins", async () => {
     world = standin({});
     refreshCoins();

@@ -91,7 +91,7 @@ async function opened(routes: Record<string, Route>): Promise<Play<Count, Add, s
   world = standin(routes);
   const play = await openPlay<Count, Add, string>("raid", COUNTER, {
     player: "p",
-    retry: { first: 1, most: 4 },
+    retry: { first: 1, most: 4, jitter: 0 },
     notYet: { every: 1, tries: 3 },
   });
   if ("trouble" in play) throw new Error(play.trouble);
@@ -530,15 +530,17 @@ describe("sending commands", () => {
   test("a request that never settles is let go at its deadline: a batch goes again with the same ids, and a read can be asked again", async () => {
     const { routes, leaf } = counterLeaf();
     let hang = true;
-    world = standin({
-      "GET /v1/game/play/raid": () => (hang ? never() : routes["GET /v1/game/play/raid"]()),
-      "POST /v1/game/play/raid": (sent) => (hang ? never() : routes["POST /v1/game/play/raid"](sent)),
-    });
+    world = standin(
+      {
+        "GET /v1/game/play/raid": () => (hang ? never() : routes["GET /v1/game/play/raid"]()),
+        "POST /v1/game/play/raid": (sent) => (hang ? never() : routes["POST /v1/game/play/raid"](sent)),
+      },
+      { deadline: 20 },
+    );
     hang = false;
     const play = await openPlay<Count, Add, string>("raid", COUNTER, {
       player: "p",
-      retry: { first: 1, most: 4 },
-      deadline: 20,
+      retry: { first: 1, most: 4, jitter: 0 },
     });
     if ("trouble" in play) throw new Error(play.trouble);
     hang = true;
@@ -628,7 +630,10 @@ describe("sending commands", () => {
 /** The counter, answered short, opened on a stand-in Leaf. */
 async function shortly(routes: Record<string, Route>): Promise<Play<Count, Add, string, Sum>> {
   world = standin(routes);
-  const play = await openPlay<Count, Add, string, Sum>("raid", SHORT, { player: "p", retry: { first: 1, most: 4 } });
+  const play = await openPlay<Count, Add, string, Sum>("raid", SHORT, {
+    player: "p",
+    retry: { first: 1, most: 4, jitter: 0 },
+  });
   if ("trouble" in play) throw new Error(play.trouble);
   return play;
 }
