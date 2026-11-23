@@ -18,17 +18,28 @@ export interface Outbox {
 export interface Occupant {
   readonly member: LiveMember;
   readonly outbox: Outbox;
-  motion: Motion | null;
-  /** The number of the move their motion is, as their game numbered it. */
-  seq: number;
-  dirty: boolean;
-  /** Their jumps as the room counts them: what everybody else is shown. */
-  jump: number;
-  /** The jump count their game last sent, on its present connection; null before it sends one. */
-  heard: number | null;
-  /** When the room last took a move of theirs, by Leaf's clock. */
-  movedAt: number;
+  /** What the room shows of them, moved only by `moved`, `halted`, `reconnected` and `told`. */
+  shown: Shown;
 }
+
+/**
+ * What a room shows of somebody: nothing before their first move (`unseen`); then (`seen`) their
+ * motion as everybody is shown it, the number their game gave the move, when the room took it,
+ * whether it changed since the room last told everybody, the room's count of their jumps (what
+ * everybody else is shown), and the jump count their game last sent on its present connection
+ * (`heard`; null on a new connection, whose first move is a jump, wherever it counts from).
+ */
+export type Shown =
+  | { readonly state: "unseen" }
+  | {
+      readonly state: "seen";
+      readonly motion: Motion;
+      readonly seq: number;
+      readonly movedAt: number;
+      readonly changed: boolean;
+      readonly jump: number;
+      readonly heard: number | null;
+    };
 
 /** The fastest a motion may say a player moves, in the room's units a second. */
 const MOST_SPEED = 1024;
@@ -54,6 +65,58 @@ function outpaced(from: { x: number; y: number }, to: { x: number; y: number }, 
 }
 
 const clamp = (n: number, low: number, high: number): number => Math.min(high, Math.max(low, n));
+
+/**
+ * Somebody's move `m`, numbered `seq` by their game, taken at `time` in a room of `kind`: kept
+ * inside the room and below the fastest anybody moves. The room's count of their jumps goes up
+ * whenever their game's count changes (or on a new connection's first move), and whenever the move
+ * goes further than the room's pace allows since the last (`outpaced`). Says too whether they went
+ * anywhere: a first move, or one that only turns them, does not.
+ */
+export function moved(
+  shown: Shown,
+  seq: number,
+  m: Motion,
+  time: number,
+  kind: Pick<RoomKind, "width" | "height" | "speed">,
+): { readonly shown: Shown; readonly went: boolean } {
+  const x = clamp(m.x, 0, kind.width);
+  const y = clamp(m.y, 0, kind.height);
+  const was = shown.state === "seen" ? shown : null;
+  const jumped = was === null || was.heard !== m.jump || outpaced(was.motion, { x, y }, time - was.movedAt, kind.speed);
+  const jump = ((was?.jump ?? 0) + (jumped ? 1 : 0)) & 0xff;
+  const motion = {
+    x,
+    y,
+    vx: clamp(m.vx, -MOST_SPEED, MOST_SPEED),
+    vy: clamp(m.vy, -MOST_SPEED, MOST_SPEED),
+    facing: m.facing,
+    pose: m.pose,
+    flags: m.flags,
+    jump,
+  };
+  return {
+    shown: { state: "seen", motion, seq, movedAt: time, changed: true, jump, heard: m.jump },
+    went: was !== null && (was.motion.x !== x || was.motion.y !== y),
+  };
+}
+
+/** Somebody shown walking stops where they are, and everybody is to be told; anybody else stays as they are. */
+export const halted = (shown: Shown): Shown =>
+  shown.state === "seen" && (shown.motion.flags & Flag.Moving) !== 0
+    ? {
+        ...shown,
+        motion: { ...shown.motion, vx: 0, vy: 0, flags: shown.motion.flags & ~Flag.Moving },
+        changed: true,
+      }
+    : shown;
+
+/** Somebody's game has a new connection: whatever it counts its jumps from, its first move is one. */
+export const reconnected = (shown: Shown): Shown => (shown.state === "seen" ? { ...shown, heard: null } : shown);
+
+/** Everybody has been told where somebody is. */
+export const told = (shown: Shown): Shown =>
+  shown.state === "seen" && shown.changed ? { ...shown, changed: false } : shown;
 
 /**
  * One copy of a room: who is in it and where. It is plain state, changed by one thing at a time, and
@@ -87,16 +150,7 @@ export class Room {
   /** Lets somebody in, tells everyone else that they came, and greets them. Returns them. */
   join(who: Omit<LiveMember, "id">, outbox: Outbox, time: number, hz: number, version: number): Occupant {
     const id = this.freeId();
-    const occupant: Occupant = {
-      member: { id, ...who },
-      outbox,
-      motion: null,
-      seq: 0,
-      dirty: false,
-      jump: 0,
-      heard: null,
-      movedAt: time,
-    };
+    const occupant: Occupant = { member: { id, ...who }, outbox, shown: { state: "unseen" } };
     this.occupants.set(id, occupant);
     this.others(id, text({ t: "joined", member: occupant.member }));
     this.greet(occupant, time, hz, version);
@@ -134,35 +188,15 @@ export class Room {
   move(id: number, seq: number, m: Motion, time: number): boolean {
     const o = this.occupants.get(id);
     if (!o || this.kind.still === true) return false;
-    const x = clamp(m.x, 0, this.kind.width);
-    const y = clamp(m.y, 0, this.kind.height);
-    const was = o.motion;
-    if (o.heard !== m.jump) {
-      o.heard = m.jump;
-      o.jump = (o.jump + 1) & 0xff;
-    } else if (was && outpaced(was, { x, y }, time - o.movedAt, this.kind.speed)) {
-      o.jump = (o.jump + 1) & 0xff;
-    }
-    o.movedAt = time;
-    o.seq = seq;
-    o.motion = {
-      x,
-      y,
-      vx: clamp(m.vx, -MOST_SPEED, MOST_SPEED),
-      vy: clamp(m.vy, -MOST_SPEED, MOST_SPEED),
-      facing: m.facing,
-      pose: m.pose,
-      flags: m.flags,
-      jump: o.jump,
-    };
-    o.dirty = true;
-    return was !== null && (was.x !== x || was.y !== y);
+    const next = moved(o.shown, seq, m, time, this.kind);
+    o.shown = next.shown;
+    return next.went;
   }
 
   /** Somebody's game has a new connection: whatever it counts its jumps from, its first move is one. */
   reconnected(id: number): void {
     const o = this.occupants.get(id);
-    if (o) o.heard = null;
+    if (o) o.shown = reconnected(o.shown);
   }
 
   /**
@@ -171,15 +205,14 @@ export class Room {
    * them walking on the spot for everybody else. Their next move walks them on.
    */
   quiet(time: number): void {
-    for (const o of this.occupants.values()) if (time - o.movedAt >= QUIET_MS) this.halt(o.member.id);
+    for (const o of this.occupants.values())
+      if (o.shown.state === "seen" && time - o.shown.movedAt >= QUIET_MS) o.shown = halted(o.shown);
   }
 
   /** Somebody has stopped where they are, as when their connection drops: everyone sees them stand. */
   halt(id: number): void {
     const o = this.occupants.get(id);
-    if (!o?.motion || (o.motion.flags & Flag.Moving) === 0) return;
-    o.motion = { ...o.motion, vx: 0, vy: 0, flags: o.motion.flags & ~Flag.Moving };
-    o.dirty = true;
+    if (o) o.shown = halted(o.shown);
   }
 
   /** Tells everyone else what somebody did; in a still room, nobody. */
@@ -190,19 +223,19 @@ export class Room {
 
   /** Sends everyone the motion that changed since the last tick, if any did, in one snapshot made once. */
   flush(tick: number, time: number): boolean {
-    const changed = this.entries((o) => o.dirty);
+    const changed = this.entries((shown) => shown.changed);
     if (changed.length === 0) return false;
-    for (const o of this.occupants.values()) o.dirty = false;
+    for (const o of this.occupants.values()) o.shown = told(o.shown);
     const frame = encodeSnapshot(tick, time, changed);
     for (const o of this.occupants.values()) o.outbox.send(frame);
     return true;
   }
 
-  private entries(which: (o: Occupant) => boolean): Entry[] {
+  private entries(which: (shown: Extract<Shown, { state: "seen" }>) => boolean): Entry[] {
     const out: Entry[] = [];
     for (const o of this.occupants.values()) {
-      if (o.motion === null || !which(o)) continue;
-      out.push({ id: o.member.id, seq: o.seq, ...o.motion });
+      if (o.shown.state !== "seen" || !which(o.shown)) continue;
+      out.push({ id: o.member.id, seq: o.shown.seq, ...o.shown.motion });
     }
     return out;
   }
