@@ -4,7 +4,7 @@
  * trouble is written as one; and a regular's party for sparring is one that could be stored and
  * sent as it is.
  */
-import { type BoonId, BOONS, isBoonId } from "./content/boons.ts";
+import { type BoonId, isBoonId } from "./content/boons.ts";
 import {
   type FigureId,
   FIGURES,
@@ -12,11 +12,10 @@ import {
   isStars,
   isUnitKind,
   type Stars,
-  traitsOf,
   type UnitKind,
 } from "./content/figures.ts";
-import { HOLDS, isItemId, type ItemId } from "./content/items.ts";
-import { isTraitId, stepFor, TRAIT_IDS, type TraitId } from "./content/traits.ts";
+import { carriedTraits, HOLDS, isItemId, type ItemId } from "./content/items.ts";
+import { stepFor, TRAIT_IDS, type TraitId } from "./content/traits.ts";
 import { SEATS } from "./hex.ts";
 
 export interface Placed {
@@ -34,8 +33,6 @@ export interface Party {
   /** A line about it: "A few gnats", "brought Embers and Fangs". */
   title: string;
   figures: Placed[];
-  /** Each counts as one more of a trait. */
-  charms: TraitId[];
   /** Boons that change the fight. */
   boons: BoonId[];
   /** Health and attack, in percent: 100 for plain. */
@@ -44,16 +41,26 @@ export interface Party {
 
 export type TraitCounts = Partial<Record<TraitId, number>>;
 
-/** How many of each trait a party fields: one for each *different* figure that carries it, and one for each charm. */
-export function countTraits(kinds: readonly UnitKind[], charms: readonly TraitId[] = []): TraitCounts {
-  const counts: TraitCounts = {};
-  const seen = new Set<FigureId>();
-  for (const kind of kinds) {
-    if (!isFigureId(kind) || seen.has(kind)) continue;
-    seen.add(kind);
-    for (const trait of traitsOf(kind)) counts[trait] = (counts[trait] ?? 0) + 1;
+/** A figure as far as its traits go: what it is, and what it holds (an emblem makes it one of a kin as well). */
+export interface Carrier {
+  readonly kind: UnitKind;
+  readonly items: readonly ItemId[];
+}
+
+/**
+ * How many of each trait a party fields: one for each *different* figure that carries it, by its
+ * own traits or by an emblem any copy of it holds. Two copies of one figure count once.
+ */
+export function countTraits(figures: readonly Carrier[]): TraitCounts {
+  const carried = new Map<FigureId, Set<TraitId>>();
+  for (const p of figures) {
+    if (!isFigureId(p.kind)) continue;
+    const traits = carried.get(p.kind) ?? new Set<TraitId>();
+    for (const trait of carriedTraits(p.kind, p.items)) traits.add(trait);
+    carried.set(p.kind, traits);
   }
-  for (const trait of charms) counts[trait] = (counts[trait] ?? 0) + 1;
+  const counts: TraitCounts = {};
+  for (const traits of carried.values()) for (const trait of traits) counts[trait] = (counts[trait] ?? 0) + 1;
   return counts;
 }
 export interface TraitState {
@@ -62,8 +69,9 @@ export interface TraitState {
   /** 0 while it is not switched on. */
   step: number;
 }
-/** Every trait a party has any of, with its count and the step that puts it on; the switched-on ones first. */
-export function traitStates(counts: TraitCounts): TraitState[] {
+/** Every trait some figures carry, with its count and the step that puts it on; the switched-on ones first. */
+export function traitStates(figures: readonly Carrier[]): TraitState[] {
+  const counts = countTraits(figures);
   const out: TraitState[] = [];
   for (const trait of TRAIT_IDS) {
     const count = counts[trait] ?? 0;
@@ -72,27 +80,14 @@ export function traitStates(counts: TraitCounts): TraitState[] {
   return out.toSorted((a, b) => b.step - a.step || b.count - a.count);
 }
 /** The steps a party's traits are on, with nothing for those that are off. */
-export function traitSteps(party: Pick<Party, "figures" | "charms">): Partial<Record<TraitId, number>> {
-  const counts = countTraits(
-    party.figures.map((p) => p.kind),
-    party.charms,
-  );
+export function traitSteps(party: Pick<Party, "figures">): Partial<Record<TraitId, number>> {
+  const counts = countTraits(party.figures);
   const steps: Partial<Record<TraitId, number>> = {};
   for (const trait of TRAIT_IDS) {
     const step = stepFor(trait, counts[trait] ?? 0);
     if (step > 0) steps[trait] = step;
   }
   return steps;
-}
-
-/** The kins that charms held as boons count toward. */
-export function charmsOf(boons: readonly BoonId[]): TraitId[] {
-  const out: TraitId[] = [];
-  for (const id of boons) {
-    const charm = BOONS[id].charm;
-    if (charm !== undefined) out.push(charm);
-  }
-  return out;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -112,15 +107,17 @@ export function isPlaced(v: unknown): v is Placed {
     isWhole(v.fed, 0, 1000)
   );
 }
-/** Whether something is a whole party: the check for one that has been stored or sent. Nobody shares a seat. */
+/**
+ * Whether something is a whole party: the check for one that has been stored or sent. Nobody shares a
+ * seat. A party stored when charms counted for a kin has `charms` too, which is let be.
+ */
 export function isParty(v: unknown): v is Party {
   if (!isRecord(v)) return false;
-  const { figures, charms, boons } = v;
+  const { figures, boons } = v;
   if (typeof v.who !== "string" || v.who.length > 80 || typeof v.title !== "string" || v.title.length > 200)
     return false;
   if (!Array.isArray(figures) || figures.length > SEATS || !figures.every(isPlaced)) return false;
   if (new Set(figures.map((p) => p.seat)).size !== figures.length) return false;
-  if (!Array.isArray(charms) || charms.length > 32 || !charms.every(isTraitId)) return false;
   if (!Array.isArray(boons) || boons.length > 32 || !boons.every(isBoonId)) return false;
   return isWhole(v.might, 10, 1000);
 }

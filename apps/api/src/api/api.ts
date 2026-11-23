@@ -78,7 +78,8 @@ export class CurrentIdentity extends Context.Service<CurrentIdentity, Identity>(
 
 /**
  * Whether someone is in the game as a guest: signed in, but neither a member of the guild now nor a
- * website admin. Guests play, but have no Leaf, quests or news of the guild's.
+ * website admin. Guests play, and spend their Leaf on what is for everyone, but have no XP, quests
+ * or news of the guild's.
  */
 export const isGuest = (identity: Identity): boolean => identity.guildRank === null && !identity.admin;
 
@@ -188,6 +189,8 @@ export class GameHelloApi extends HttpApiGroup.make("gameHello")
   .prefix("/v1/game") {}
 
 const GameParams = { game: Schema.String };
+/** A play call's word that its player is away from the keys: `afk=1`, from the kit's `afk.ts`. Anything else is not. */
+const AfkQuery = { afk: Schema.optional(Schema.String) };
 
 /**
  * What only the browser game uses, open to anyone signed in, members and guests alike, but for the
@@ -225,12 +228,13 @@ export class GameApi extends HttpApiGroup.make("game")
     HttpApiEndpoint.get("play", "/play/:game", {
       params: GameParams,
       // From a page that found its copy of the state not Leaf's: the tick it found it at.
-      query: { differs: Schema.optional(Schema.String) },
+      query: { differs: Schema.optional(Schema.String), ...AfkQuery },
       success: PlayShown,
       error: [Missing, StateUnreadable],
     }),
     HttpApiEndpoint.post("command", "/play/:game", {
       params: GameParams,
+      query: AfkQuery,
       payload: PlayBody,
       success: Played,
       error: [Invalid, Missing, NotYou, StateUnreadable, SlowDown],
@@ -242,6 +246,7 @@ export class GameApi extends HttpApiGroup.make("game")
     }),
     HttpApiEndpoint.get("visit", "/play/:game/of/:player", {
       params: { ...GameParams, player: Schema.String },
+      query: AfkQuery,
       success: PlayShown,
       error: [Missing, StateUnreadable, SlowDown],
     }),

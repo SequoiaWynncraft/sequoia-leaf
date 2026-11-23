@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import type { CoinChange, Ctx, Done, Logged, Refused } from "@sequoia-leaf/core";
 
 import { SENSIBLE } from "./bot.ts";
+import { FIGURES } from "./content/figures.ts";
+import { EMBLEM_IDS, EMBLEMS } from "./content/items.ts";
 import { resolveFight } from "./fight/engine.ts";
 import {
   decodeTable,
@@ -18,7 +20,8 @@ import {
   tableView,
 } from "./game.ts";
 import { payout } from "./outside.ts";
-import { pieces, summariseRun } from "./run.ts";
+import { isParty } from "./party.ts";
+import { pieces, spotOf, summariseRun } from "./run.ts";
 import { RAID_STATS } from "./stats.ts";
 import { readNotes, readView } from "./wire.ts";
 
@@ -300,7 +303,9 @@ describe("every command a player has", () => {
     const bought = must(state, { do: "buyLook", kind: "lantern", look: "jar" }, ctx(1));
     expect(bought.state.looks).toEqual({ cloth: "bare", lantern: "jar", bases: "plain", owned: ["jar"] });
     expect(bought.notes).toEqual([{ t: "look", kind: "lantern", id: "jar" }]);
-    expect(bought.leaf).toEqual([{ amount: 28_000, reason: "Raid table look: Jar of fireflies", key: "look:jar" }]);
+    expect(bought.leaf).toEqual([
+      { amount: 28_000, reason: "Raid table look: Jar of fireflies", key: "look:jar", for: "everyone" },
+    ]);
     expect(state.looks.owned).toEqual([]);
     expect(RAID.apply(bought.state, { do: "buyLook", kind: "lantern", look: "jar" }, ctx(1))).toEqual({
       refused: "owned",
@@ -414,6 +419,22 @@ describe("keeping a table", () => {
     expect(RAID.decode(changed((r) => (r.run = { phase: "plan" })))).toBeNull();
     expect(RAID.decode(changed(() => undefined))).not.toBeNull();
   });
+  test("a table stored when a charm counted for its kin comes back with the charm's emblem on the item bench, once", () => {
+    const state = planned(started(9));
+    const run = state.run;
+    if (!run) throw new Error("no run");
+    const stored: unknown = JSON.parse(RAID.encode(state));
+    if (typeof stored !== "object" || stored === null || !("run" in stored)) throw new Error("not a table");
+    const raw = stored.run;
+    if (typeof raw !== "object" || raw === null) throw new Error("no run");
+    // The charm among the boons, no emblem anywhere, and the foe with the old `charms`.
+    const old = JSON.stringify({ ...stored, run: { ...raw, boons: ["crabcharm"], foe: { ...run.foe, charms: [] } } });
+    const once = RAID.decode(old);
+    expect(once?.run?.items).toEqual([...run.items, "crabcharm"]);
+    expect(once?.run?.foe).toMatchObject(run.foe);
+    const twice = once ? RAID.decode(RAID.encode(once)) : null;
+    expect(twice?.run?.items).toEqual([...run.items, "crabcharm"]);
+  });
 });
 
 describe("commands off the wire", () => {
@@ -474,6 +495,14 @@ describe("what the page may show before Leaf answers", () => {
     same({ do: "hold", on: true });
     same({ do: "bench", seat: 20 });
     same({ do: "move", from: { on: "bench", at: 0 }, to: { on: "board", at: 4 } });
+    // Whoever else the bot bought is sold, down to the last figure, which cannot be.
+    for (let guard = 0; guard < 20; guard++) {
+      const run = state.run;
+      const other = run ? pieces(run).find((p) => p.id !== run.board[4]?.id) : undefined;
+      const from = run && other ? spotOf(run, other.id) : null;
+      if (!from) break;
+      same({ do: "sell", from });
+    }
     const sold = predict(RAID.view(state, ctx()), { do: "sell", from: { on: "board", at: 4 } });
     expect(sold).toEqual({ refused: "last_figure" });
     same({ do: "buy", offer });
@@ -481,6 +510,24 @@ describe("what the page may show before Leaf answers", () => {
     // The offer just bought has gone from the stall, as Leaf would say.
     expect(predict(RAID.view(state, ctx()), { do: "buy", offer })).toEqual({ refused: "stall_empty" });
     expect(predict(RAID.view(state, ctx()), { do: "rustle" })).toBeNull();
+  });
+});
+
+describe("an emblem handed to a figure of its kin already", () => {
+  test("is refused on the page as Leaf refuses it, with the sentence the page shows", () => {
+    const state = started(9);
+    const run = state.run;
+    const figure = run ? pieces(run)[0] : undefined;
+    const spot = run && figure ? spotOf(run, figure.id) : null;
+    if (!run || !figure || !spot) throw new Error("nobody to hand it to");
+    const own = EMBLEM_IDS.find((id) => EMBLEMS[id] === FIGURES[figure.kind].kin);
+    if (!own) throw new Error("no emblem of its kin");
+    run.boons = [own];
+    run.items = [own];
+    const command: RaidCommand = { do: "give", item: 0, to: spot };
+    expect(predict(RAID.view(state, ctx()), command)).toEqual({ refused: "already_kin" });
+    expect(RAID.apply(state, command, ctx())).toEqual({ refused: "already_kin" });
+    expect(refusalText("already_kin")).toBe("It is of that kin already.");
   });
 });
 
@@ -586,5 +633,28 @@ describe("awards", () => {
     state.almanac.bosses[0] = ["oldbramble", "bigcrab"];
     state.almanac.bosses[1] = ["oldbramble"];
     expect(RAID.awards?.(state)).toEqual(["trophy-oldbramble", "trophy-bigcrab"]);
+  });
+});
+
+describe("the board a member fought with", () => {
+  test("is left for Leaf to keep at each fight, by trail and room: the party the fight was decided from", () => {
+    const first = must(planned(started(5)), { do: "fight" });
+    const note = first.notes[0];
+    if (note?.t !== "fight") throw new Error("no fight note");
+    expect(first.keep).toEqual([{ slot: "board:0:0", data: note.setup.sides[0] }]);
+    expect(isParty(first.keep?.[0]?.data)).toBe(true);
+    expect(note.outcome).toEqual(resolveFight(note.setup));
+    const second = must(planned(must(first.state, { do: "take" }).state), { do: "fight" });
+    expect(second.keep).toEqual([{ slot: "board:0:1", data: second.state.run?.fight?.setup.sides[0] }]);
+    expect(isParty(second.keep?.[0]?.data)).toBe(true);
+  });
+  test("is not left by a refused command, by any other command, or by a guest's fight", () => {
+    const state = planned(started(5));
+    const fought = must(state, { do: "fight" });
+    expect(RAID.apply(fought.state, { do: "fight" }, ctx())).toEqual({ refused: "fighting" });
+    expect(must(fought.state, { do: "take" }).keep).toBeUndefined();
+    const guest = must(state, { do: "fight" }, { ...ctx(), player: { ...PLAYER, guest: true } });
+    expect(guest.notes[0]).toMatchObject({ t: "fight" });
+    expect(guest.keep).toBeUndefined();
   });
 });

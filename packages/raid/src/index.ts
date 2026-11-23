@@ -52,9 +52,14 @@ export {
 } from "./content/traits.ts";
 export { drawName, drawTip, GOOD_WITH, type Role, roleLine, ROLES, type Three } from "./content/advice.ts";
 export {
+  carriedTraits,
+  carries,
   COMPONENT_IDS,
   type ComponentId,
   COMPONENTS,
+  EMBLEM_IDS,
+  type EmblemId,
+  EMBLEMS,
   FINISHED,
   FINISHED_IDS,
   type FinishedId,
@@ -62,16 +67,19 @@ export {
   holdItem,
   HOLDS,
   isComponentId,
+  isEmblemId,
   isItemId,
   isFinishedId,
   ITEM_IDS,
   itemAdds,
   type ItemId,
   itemName,
+  itemQuip,
   itemShort,
   type ItemStats,
   itemStats,
   itemText,
+  type NotHeld,
 } from "./content/items.ts";
 export {
   BOON_IDS,
@@ -127,6 +135,7 @@ export {
 
 // A party, as plain data.
 export {
+  type Carrier,
   countTraits,
   isParty,
   type Party,

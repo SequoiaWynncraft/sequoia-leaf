@@ -1,7 +1,8 @@
 /**
  * Everything the game asks of the world outside its page, in one place so tests can stand in for
  * it: the guild's server, the browser's storage, where the page is and how to go somewhere else,
- * and the clock. Every request to the server goes through `ask` or `listen` here.
+ * the clock, and whether the player is at the keys. Every request to the server goes through `ask`
+ * or `listen` here.
  */
 
 /** The part of a WebSocket the game uses. */
@@ -47,7 +48,29 @@ export interface Outside {
    * focus, or the browser says the network is back. Returns how to stop.
    */
   wake(fn: () => void): () => void;
+  /** Whether the player is away from the keys (AFK): the page hidden, or nothing done on it for `AFK_AFTER`. */
+  afk(): boolean;
 }
+
+/** How long a page in view goes with nothing done on it before its player is AFK: five minutes. */
+export const AFK_AFTER = 5 * 60_000;
+
+/** When the player last did anything on the page: pressed, touched, scrolled or moved over it, or brought it back into view. */
+let doneAt = Date.now();
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  const did = (): void => {
+    doneAt = Date.now();
+  };
+  for (const type of ["pointerdown", "pointermove", "keydown", "wheel", "touchstart"])
+    window.addEventListener(type, did, { capture: true, passive: true });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) did();
+  });
+}
+
+/** The browser's `afk`. */
+const browserAfk = (): boolean =>
+  typeof document !== "undefined" && (document.hidden || Date.now() - doneAt >= AFK_AFTER);
 
 /** The browser's `wake`: the page shown again, focused, or back on the network. */
 export function onWake(fn: () => void): () => void {
@@ -97,6 +120,7 @@ export const outside: Outside = {
   socket: (url) => new WebSocket(url),
   width: () => (typeof innerWidth === "number" ? innerWidth : 0),
   wake: onWake,
+  afk: browserAfk,
 };
 
 /** Puts stand-ins in place of parts of the outside world (for tests). Returns how to put them back. */

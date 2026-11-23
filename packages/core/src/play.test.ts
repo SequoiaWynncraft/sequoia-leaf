@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { COMMAND_ID, GAME_IDS, gameId, isRefused, playPath } from "./play.ts";
+import { COMMAND_ID, GAME_IDS, gameId, isRefused, mayBuy, playPath } from "./play.ts";
 
 describe("the games Leaf plays", () => {
   it("are the raid, the Works, the town and the pulls, known by name and nothing else", () => {
@@ -21,5 +21,12 @@ describe("the games Leaf plays", () => {
     expect(COMMAND_ID.test("")).toBe(false);
     expect(COMMAND_ID.test("a".repeat(65))).toBe(false);
     expect(COMMAND_ID.test("no spaces")).toBe(false);
+  });
+});
+
+describe("who may spend Leaf on something", () => {
+  it("is anyone for what is for everyone, and only a member for what is for members", () => {
+    expect([mayBuy("everyone", false), mayBuy("everyone", true)]).toEqual([true, true]);
+    expect([mayBuy("members", false), mayBuy("members", true)]).toEqual([true, false]);
   });
 });

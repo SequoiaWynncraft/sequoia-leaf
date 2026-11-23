@@ -14,6 +14,8 @@ import {
   DAY_MS,
   type Done,
   type Game,
+  type Kept,
+  type LeafFor,
   LOGGED,
   type Logged,
   mix,
@@ -42,6 +44,8 @@ export type Tier = (typeof RARITIES)[Rarity]["tier"];
 export const RATES = {
   /** Leaf a pull costs. */
   leaf: 1000,
+  /** Who may pull for Leaf. */
+  for: "everyone" satisfies LeafFor,
   /**
    * A top-tier prize: `chance` up to `rampAfter` pulls since the last one, then more on each pull
    * until it is certain on the `certainAt`th. In a banner, it is the headliner with chance
@@ -266,6 +270,9 @@ export function draw(c: Counters, headline: string | null, s: Stream): Drawn {
 type Answer = Done<Pulls, PullsNote> | Refused;
 const no = (refused: string): Refused => ({ refused });
 
+/** How many of each prize the player has, left for Leaf to keep by a command that changes it. */
+const keepHave = (s: Pulls): Kept[] => [{ slot: "have", data: s.have }];
+
 /** A copy to change, sharing nothing that changes. */
 const copy = (s: Pulls): Pulls => ({
   ...s,
@@ -284,7 +291,12 @@ function pull(state: Pulls, c: Extract<PullsCommand, { do: "pull" }>, ctx: Ctx):
   if (c.with === "free") s.free.waiting -= c.n;
   const grove = c.pool === "grove";
   const counters = grove ? s.counters.grove : s.counters.banner;
-  const spend = { amount: c.n * RATES.leaf, reason: `Pulls: ${c.n} in ${c.pool}`, key: `pull:${s.pulls}` };
+  const spend = {
+    amount: c.n * RATES.leaf,
+    reason: `Pulls: ${c.n} in ${c.pool}`,
+    key: `pull:${s.pulls}`,
+    for: RATES.for,
+  };
   const notes: PullsNote[] = [];
   const log: Logged[] = [];
   for (let i = 0; i < c.n; i++) {
@@ -304,7 +316,7 @@ function pull(state: Pulls, c: Extract<PullsCommand, { do: "pull" }>, ctx: Ctx):
     }
   }
   s.history = s.history.slice(-HISTORY);
-  return { state: s, notes, log, leaf: c.with === "leaf" ? [spend] : [] };
+  return { state: s, notes, log, leaf: c.with === "leaf" ? [spend] : [], keep: keepHave(s) };
 }
 
 function exchange(state: Pulls, prize: string): Answer {
@@ -316,11 +328,11 @@ function exchange(state: Pulls, prize: string): Answer {
   const s = copy(state);
   s.seeds -= price;
   s.have[prize] = 1;
-  return { state: s, notes: [{ t: "exchange", prize, rarity, have: 1 }] };
+  return { state: s, notes: [{ t: "exchange", prize, rarity, have: 1 }], keep: keepHave(s) };
 }
 
 export const applyCommand = (state: Pulls, c: PullsCommand, ctx: Ctx): Answer =>
-  ctx.player.guest ? no("members_only") : c.do === "pull" ? pull(state, c, ctx) : exchange(state, c.prize);
+  c.do === "pull" ? pull(state, c, ctx) : exchange(state, c.prize);
 
 /** The free pulls fallen due by Leaf's clock. Nothing else passes with time. */
 export function advance(s: Pulls, ctx: Pick<Ctx, "now">): Pulls {
