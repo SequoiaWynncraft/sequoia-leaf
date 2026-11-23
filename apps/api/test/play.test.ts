@@ -2060,6 +2060,38 @@ describe("Leaf tending the Works", () => {
     expect(run.slices.length).toBeGreaterThan(before + meanwhile.length);
   });
 
+  it("goes round the yards catching up, so a command to a yard kept up waits for a slice of each, not all of theirs", async () => {
+    const { game, run } = counted();
+    // Bob's, Carol's and Dave's yards left two hours ago, as after a deploy; Alice's a minute ago.
+    clock.now -= 2 * HOUR;
+    for (const owner of [bob, carol, dave]) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      await keepMid(services, undefined, owner);
+    }
+    clock.now += 2 * HOUR - MINUTE;
+    await keepMid();
+    clock.now += MINUTE;
+    // Their owners open them at once, and Alice's page sends a command once they are catching up.
+    let caughtUp = 0;
+    const opens = [bob, carol, dave].map((owner) =>
+      services.run(Play.use((play) => play.open({ playerId: owner, guest: false }, game))).then(() => void caughtUp++),
+    );
+    await until(() => run.slices.length >= 3);
+    const before = run.slices.length;
+    const sent = await services.run(
+      Play.use((play) => play.send({ playerId: alice, guest: false }, game, [{ id: "w-1", do: "collect", tick: 0 }])),
+    );
+    const answered = run.slices.length;
+    const caughtUpBy = caughtUp;
+    await Promise.all(opens);
+
+    expect(sent.status).toBe("done");
+    // Answered within a round of the three, while all three were still catching up.
+    expect(caughtUpBy).toBe(0);
+    expect(answered - before).toBeLessThan(8);
+    expect(run.slices.length - answered).toBeGreaterThan(30);
+  });
+
   it("logs a yard it cannot tend, whose and of which game, and tends the others all the same", async () => {
     const { game } = counted((owner) => owner === bob);
     await keepMid(services, undefined, bob);

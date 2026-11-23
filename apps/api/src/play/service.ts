@@ -24,6 +24,7 @@ import { Ledger } from "../ledger/store.ts";
 import { Watchers } from "../live/watchers.ts";
 import { type CoinEntry, Coins } from "./coins.ts";
 import type { Attempt, Held, Played } from "./games.ts";
+import { nextSlice } from "./slices.ts";
 import { PlayStore } from "./store.ts";
 
 /** How often a player may send a batch of commands: ten a second, bursts of twenty. */
@@ -327,9 +328,11 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * again from it, `TRIES` times in all. Anything going wrong drops the copy. A batch is done whatever
  * becomes of its request; any other job whose caller has gone while it waited is never done.
  *
- * One slice of running states on (`SLICE_NS`) runs at a time, then a rest as long: the next to the
- * players' job that arrived first (a tend with one behind it in its line runs for it), but to Leaf's
- * own once one has waited through `TEND_WAITS` of those. Leaf puts a tend in the line of each state
+ * One slice of running states on (`SLICE_NS`) runs at a time, then a rest as long (`nextSlice`):
+ * players' slices go round the states asking for one, in the order they asked (a tend with a
+ * player's job behind it in its line runs for it), so a state far behind never holds up another's
+ * command for all of its catching up; Leaf's own tends take one slice, the first tend's, after
+ * each `TEND_WAITS` of those. Leaf puts a tend in the line of each state
  * of a game that tends its states stored longer ago than `TEND_AFTER` (`tend`), but those found
  * standing still or with one in line, and waits for none; each reads nothing until its first turn.
  */
@@ -381,19 +384,16 @@ export class Play extends Context.Service<
       let waited = 0;
       /** Whose a slice is: the oldest player's job waiting in the line of the lane that asks, or else its own. */
       const whose = (ask: Ask) => ask.job.lane.jobs.find((job) => job.kind !== "tend" && !job.gone) ?? ask.job;
-      /** The slice to run next, taken from those asked for. */
+      /** The slice to run next, taken from those asked for (`nextSlice`). */
       const nextAsk = () => {
-        const first = (tend: boolean) =>
-          asks.reduce<Ask | undefined>(
-            (o, a) => ((whose(a).kind === "tend") === tend && (o === undefined || whose(a).seq < whose(o).seq) ? a : o),
-            undefined,
-          );
-        const player = first(false);
-        const tend = first(true);
-        const ask = tend !== undefined && (player === undefined || waited >= TEND_WAITS) ? tend : player;
-        waited = ask === player && tend !== undefined ? waited + 1 : 0;
-        if (ask !== undefined) asks.splice(asks.indexOf(ask), 1);
-        return ask;
+        const weighed = asks.map((ask) => {
+          const job = whose(ask);
+          return { tend: job.kind === "tend", seq: job.seq };
+        });
+        const turn = nextSlice(weighed, waited, TEND_WAITS);
+        if (turn === null) return undefined;
+        waited = turn.waited;
+        return asks.splice(turn.index, 1)[0];
       };
       yield* Effect.forkIn(
         Effect.gen(function* () {

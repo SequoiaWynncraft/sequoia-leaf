@@ -738,11 +738,13 @@ the batch's commands to it in order, once the copy is run on to the tick the
 command is done at, weighing each against the balances as they stood before any
 was kept, and keeps it. A state that tends is run on 2 ms of work at a time,
 with as long a rest after each; one slice runs at a time for every state and
-every job together. The next slice goes to the players' job that arrived
-first (a tend with one behind it in its line runs as that one's), but a tend
-that has waited through three of those has the next: a player's job waits
-behind at most one slice of Leaf's own tending, and the tending goes on however
-busy the players are. No transaction runs a state on or does a command: a
+every job together. Players' slices go round the states asking for one, in
+the order they asked (a tend with a player's job behind it in its line runs as
+that one's), so a yard catching up eight hours holds up another yard's command
+for one slice, not for all of its catching up; but a tend that has waited
+through three of those has the next, the tend that came first: a player's job
+waits behind at most one slice of Leaf's own tending, and the tending goes on
+however busy the players are. No transaction runs a state on or does a command: a
 batch's transaction only checks and writes, the stored `rev` first, whether or
 not the state changed, then the balances its commands were weighed against
 (Coins, what may still be earned, and Leaf if any was taken), then the state,
