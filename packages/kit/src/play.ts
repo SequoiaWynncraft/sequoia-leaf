@@ -13,6 +13,8 @@
  *   of Leaf's answer for it. Commands go to Leaf in order, one request at a time, as many as are
  *   waiting in each (up to 32); after a network failure, or Leaf having trouble or asking to slow
  *   down, the same request goes again with the same ids, so nothing is done twice.
+ * - `refresh()` asks Leaf for the state again, one question at a time: asked again meanwhile, it
+ *   gives the one on its way. Its answer is let go if a command was sent meanwhile.
  * - `predict`, for a command the shared rules can work out without Leaf, gives the copy after it:
  *   it is shown at once. When Leaf answers, Leaf's state takes the copy's place (with what is still
  *   waiting worked out again on top), and if that is not what the page was showing, the page is
@@ -69,7 +71,10 @@ export interface Play<View, Command extends object, Note> {
   onState(fn: (state: View, differs: boolean) => void): () => void;
   /** Hears when the page cannot send any more: signed out, or Leaf will not take it. */
   onTrouble(fn: (why: Trouble) => void): () => void;
-  /** Asks Leaf for the state again, when nothing is waiting for it; the answer is let go if a command was sent meanwhile. */
+  /**
+   * Asks Leaf for the state again, when nothing is waiting for it: one question at a time, so asked
+   * again meanwhile it gives the one on its way. The answer is let go if a command was sent meanwhile.
+   */
   refresh(): Promise<void>;
   /**
    * Sends what Leaf has not answered at once, without waiting for it: for a page about to go. The
@@ -189,6 +194,8 @@ export async function openPlay<View, Command extends object, Note>(
   };
   const quiet = (): boolean => visiting || options.away?.() === true;
   let pause = retry.first;
+  /** The question for the state again on its way, if one is. */
+  let asking: Promise<void> | null = null;
   const hearers = new Set<(state: View, differs: boolean) => void>();
   const troubled = new Set<(why: Trouble) => void>();
 
@@ -355,8 +362,8 @@ export async function openPlay<View, Command extends object, Note>(
     void outside.fetch(path, { ...(left.length > 0 ? post : {}), credentials: "same-origin", keepalive: true });
   }
 
-  async function refresh(): Promise<void> {
-    if (stopped || flying !== null || queue.length > 0) return;
+  /** Leaf's state read again and taken, unless anything was sent meanwhile. */
+  async function readAgain(): Promise<void> {
     const asked = call(read);
     const mine = calls;
     const reply = await asked;
@@ -365,6 +372,14 @@ export async function openPlay<View, Command extends object, Note>(
     if (reply.status === 200 && isRecord(reply.body) && flying === null && queue.length === 0 && calls === mine) {
       took({ ...reply.body, results: [] }, []);
     }
+  }
+
+  function refresh(): Promise<void> {
+    if (stopped || flying !== null || queue.length > 0) return asking ?? Promise.resolve();
+    asking ??= readAgain().finally(() => {
+      asking = null;
+    });
+    return asking;
   }
 
   if (typeof window !== "undefined") {

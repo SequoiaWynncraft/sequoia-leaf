@@ -5,7 +5,7 @@
  * guild's own Leaf has no such route.
  */
 import type { PlayerId } from "@sequoia-leaf/core";
-import { deliver, ITEMS, STORY, storyOrder, WORKS, type World } from "@sequoia-leaf/yard";
+import { deliver, here, ITEMS, STORY, storyOrder, WORKS, type World } from "@sequoia-leaf/yard";
 import large from "@sequoia-leaf/yard/yards/large.json";
 import mid from "@sequoia-leaf/yard/yards/mid.json";
 import short from "@sequoia-leaf/yard/yards/short.json";
@@ -23,8 +23,9 @@ const whole = (v: unknown, most: number): number | null =>
 /**
  * Does one staging step to a yard: `{ yard: "mid" }` puts a kept yard (or `"new"`, a new one) in
  * its place, and `{ text: "..." }` any yard as its save's text, counting its Coins on from the one
- * it replaces; `{ away: minutes }` has Leaf's clock pass that long unwatched; `{ fill: n }` sends
- * the depot what the nth standing order still wants, and the story order first.
+ * it replaces; `{ away: minutes }` has its owner leave it that long ago, and runs it every tick
+ * since as Leaf would have; `{ fill: n }` sends the depot what the nth standing order still wants,
+ * and the story order first.
  */
 function step(w: World | null, op: Record<string, unknown>, now: number): World | null {
   const named = Object.entries(YARDS).find(([name]) => name === op.yard)?.[1];
@@ -43,7 +44,11 @@ function step(w: World | null, op: Record<string, unknown>, now: number): World 
   }
   if (!w) return w;
   const away = whole(op.away, 7 * 24 * 60);
-  if (away !== null) w.at -= away * 60_000;
+  if (away !== null) {
+    w.seen = here(w);
+    w.at -= away * 60_000;
+    WORKS.advance(w, { now, player: { id: "tester", guest: false }, seed: 0, room: 0, awards: [] });
+  }
   const order = w.board[whole(op.fill, 3) ?? -1];
   if (order)
     for (const k of ITEMS) {

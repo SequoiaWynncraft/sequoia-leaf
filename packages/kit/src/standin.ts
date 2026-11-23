@@ -19,7 +19,8 @@ export interface Sent {
 
 /** What a route answers: a status and JSON, a whole Response, or nothing at all (no network). */
 export type Reply = { status: number; body?: unknown } | Response | "offline";
-export type Route = (sent: Sent) => Reply;
+/** A route answers at once, or when its promise does: an answer that takes its time. */
+export type Route = (sent: Sent) => Reply | Promise<Reply>;
 
 export class MemoryStore implements Store {
   readonly map = new Map<string, string>();
@@ -76,7 +77,8 @@ export function standin(
       const s: Sent = { method, path, body, keepalive: init.keepalive === true };
       sent.push(s);
       const route = routes[`${method} ${path.split("?")[0] ?? path}`];
-      const reply = typeof route === "function" ? route(s) : (route ?? { status: 404, body: { code: "not_found" } });
+      const reply =
+        typeof route === "function" ? await route(s) : (route ?? { status: 404, body: { code: "not_found" } });
       if (reply === "offline") throw new TypeError("Failed to fetch");
       if (reply instanceof Response) return reply;
       return new Response(JSON.stringify(reply.body ?? null), {

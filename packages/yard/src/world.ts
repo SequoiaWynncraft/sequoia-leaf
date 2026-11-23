@@ -106,10 +106,18 @@ export type News =
   | { readonly kind: "filled"; readonly id: number; readonly title: string; readonly pay: number }
   | { readonly kind: "standing"; readonly id: number; readonly title: string; readonly pay: number };
 
-/** A time the yard worked on unwatched: for how long, and what it earned into the till meanwhile. */
+/** A time the yard worked on while its owner was away: for how long, the Coins its till gained, and what its depot took in. */
 export interface Away {
   readonly seconds: number;
   readonly coins: number;
+  readonly made: Tally;
+}
+
+/** The yard at its owner's last command: the tick, what its till held, and what its depot had ever taken in. */
+export interface Seen {
+  readonly tick: number;
+  readonly till: number;
+  readonly depot: Tally;
 }
 
 /** How fast things go and how far things reach, with the plans that have been bought counted in. */
@@ -166,8 +174,10 @@ export interface World {
   /** How many changes to Coins the yard has made, each keyed by its number; and how many story orders it has logged. */
   bank: number;
   told: number;
-  /** What the yard did while nobody watched, caught up on by Leaf's clock, until it is put away. */
+  /** What the yard did while its owner was away, as Leaf shows it (`view`), until the letter is put away. */
   away: Away | null;
+  /** The yard at its owner's last command: it works for eight hours after it, then stands still. */
+  seen: Seen;
   plots: PlotId[];
   plans: PlanId[];
   /** The pieces the yard has to hand that are not standing: each costs nothing to stand. */

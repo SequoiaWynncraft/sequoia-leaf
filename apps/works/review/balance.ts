@@ -16,6 +16,7 @@ import { writeFileSync } from "node:fs";
 
 import {
   at,
+  awayOf,
   besideWater,
   build,
   buyPlan,
@@ -28,8 +29,8 @@ import {
   DIRS,
   DX,
   DY,
-  forward,
   fresh,
+  here,
   isFilled,
   ITEM,
   type Item,
@@ -56,7 +57,9 @@ import {
   type Spent,
   stand,
   step,
+  stepTo,
   STORY,
+  type Tally,
   TICKS,
   workOf,
   type World,
@@ -532,13 +535,20 @@ function layOut(p: Player, wanted: readonly Item[]): Player | null {
   return tries.toSorted((a, c) => a.size().belts - c.size().belts)[0] ?? null;
 }
 
+/** What the depot takes in over the next `ticks` of a yard left alone, counted as a time away is. */
+function takenIn(w: World, ticks: number): Tally {
+  w.seen = here(w);
+  stepTo(w, w.tick + ticks);
+  return awayOf(w)?.made ?? {};
+}
+
 /** Things a minute a line turns out with some plans bought, over twenty minutes of every tick. */
 function pace(w: World, item: Item, plans: readonly PlanId[]): number {
   const twin = load(save(w));
   if (!twin) return 0;
   for (const id of plans) buyPlan(twin, id, Infinity);
-  forward(twin, 3000, true);
-  return (forward(twin, 12_000, true).made[item] ?? 0) / 20;
+  takenIn(twin, 3000);
+  return (takenIn(twin, 12_000)[item] ?? 0) / 20;
 }
 
 // ---------- what things are worth ----------
@@ -575,7 +585,6 @@ let thought = 0;
 let longest = { minutes: 0, title: "" };
 const doneAt: number[] = [];
 const hourly: { title: string; depot: number; orders: number }[] = [];
-let late: World | null = null;
 /** The yard and its player as they stood after each order, to try other things from. */
 const stages = new Map<number, Player>();
 for (const [n, order] of STORY.entries()) {
@@ -621,11 +630,10 @@ for (const [n, order] of STORY.entries()) {
   // What this yard earns an hour left running as it is: measured over ten minutes more.
   const twin = load(save(p.w));
   if (twin) {
-    const ten = forward(twin, 6000, true);
-    const orders = ITEMS.reduce((sum, k) => sum + (ten.made[k] ?? 0) * ITEM[k].worth, 0) * 6;
+    const ten = takenIn(twin, 6000);
+    const orders = ITEMS.reduce((sum, k) => sum + (ten[k] ?? 0) * ITEM[k].worth, 0) * 6;
     hourly.push({ title: order.title, depot: orders * DEPOT_SHARE, orders });
   }
-  if (n === 16) late = load(save(p.w));
   stages.set(n, p.twin());
   const think = THINK.order + THINK.machine * machines;
   thought += filled - began + think;
@@ -808,27 +816,4 @@ for (const plot of PLOTS.toSorted((a, b) => a.price - b.price)) {
   console.log(
     `   ${pad(plot.name, 18)}${lpad(plot.price, 7)}  ${pad(ground, 44)}${needs.length ? `${needs.length} orders paying ${pays} (${(pays / plot.price).toFixed(1)}x its price)` : "nothing: room, and more of what the yard has"}`,
   );
-}
-
-// ---------- away ----------
-
-console.log("\n8. Catching up after eight hours away, on the biggest yard the script built");
-if (late) {
-  const quick = load(save(late));
-  const exact = load(save(late));
-  if (quick && exact) {
-    let started = performance.now();
-    const a = forward(quick, 288_000);
-    const quickMs = performance.now() - started;
-    started = performance.now();
-    const b = forward(exact, 288_000, true);
-    const exactMs = performance.now() - started;
-    const size = late.cells.filter((c) => c).length;
-    console.log(
-      `   ${size} things built. The quick way ran ${a.run} ticks in ${quickMs.toFixed(1)} ms; every tick, ${exactMs.toFixed(0)} ms.`,
-    );
-    console.log(
-      `   Coins: quick ${a.coins}, every tick ${b.coins}. Things taken in: quick ${ITEMS.reduce((s, k) => s + (a.made[k] ?? 0), 0)}, every tick ${ITEMS.reduce((s, k) => s + (b.made[k] ?? 0), 0)}.`,
-    );
-  }
 }

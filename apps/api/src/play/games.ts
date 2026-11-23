@@ -25,7 +25,7 @@ export type Attempt =
       readonly keep: () => void;
     };
 
-/** A stored state, opened at Leaf's clock, that commands are done to one at a time. */
+/** A state brought to Leaf's clock, that commands are done to one at a time. */
 export interface Opened {
   readonly attempt: (command: unknown, ctx: Ctx) => Attempt;
   /** The state as it stands, as the game stores it. */
@@ -40,6 +40,18 @@ export interface Opened {
   readonly awards: () => readonly string[];
 }
 
+/** A stored state read into memory, one state however it is used: run on, brought to a moment, and commanded. */
+export interface Held {
+  /**
+   * Runs it on toward `ctx.now`, or toward where a command (one the game `reads`) is done, while
+   * `more` says to (`Game.tend`), and says whether there is further to go: never, for a game that
+   * does not tend its states.
+   */
+  readonly run: (ctx: Ctx, more: () => boolean, command?: unknown) => boolean;
+  /** Brings it to `ctx.now` (`Game.advance`), to show and to do commands to. */
+  readonly open: (ctx: Ctx) => Opened;
+}
+
 /** A game as the play service handles it: in stored text and JSON, whatever the game's own types. */
 export interface Played {
   readonly id: GameId;
@@ -47,66 +59,77 @@ export interface Played {
   readonly create: (ctx: Ctx) => string;
   /** Whether a command reads as one of the game's. */
   readonly reads: (command: unknown) => boolean;
-  /** A stored state brought to `ctx.now`; null when the text is not one the game can read. */
-  readonly open: (text: string, ctx: Ctx) => Opened | null;
+  /** A stored state read into memory; null when the text is not one the game can read. */
+  readonly read: (text: string) => Held | null;
+  /** Whether its states go on by themselves (`Game.tend`), for Leaf to tend. */
+  readonly tends: boolean;
 }
 
 /**
  * Wraps a game for the service, keeping its own types inside. A game's rules may change the state
  * they are given in place (the Works' do), so the state is kept as text before each command, and a
- * command that is not kept (refused by the rules, or by the service for Coins or Leaf) is undone from it:
- * the service goes on only from a state whose command was done.
+ * command done that the service does not keep (for Coins or Leaf) is undone from it: the service
+ * goes on only from a state whose command was done. One the rules refuse leaves the state as the
+ * rules left it, as running on to it alone would (`Game.apply`).
  */
 export function played<State, Command, View, Note>(game: Game<State, Command, View, Note>): Played {
+  const held = (decoded: State): Held => {
+    let state = decoded;
+    /** The state as it was before a command that has not been kept. */
+    let undo: string | null = null;
+    const current = (): State => {
+      if (undo !== null) {
+        state = game.decode(undo) ?? state;
+        undo = null;
+      }
+      return state;
+    };
+    const opened: Opened = {
+      attempt: (raw, at) => {
+        const command = game.command(raw);
+        if (command === null) {
+          return { refused: "invalid_command" };
+        }
+        const before = game.encode(current());
+        const answer = game.apply(state, command, at);
+        if (isRefused(answer)) {
+          return { refused: answer.refused };
+        }
+        undo = before;
+        return {
+          notes: answer.notes,
+          coins: answer.coins ?? [],
+          leaf: answer.leaf ?? [],
+          log: answer.log ?? [],
+          keep: () => {
+            state = answer.state;
+            undo = null;
+          },
+        };
+      },
+      text: () => game.encode(current()),
+      view: (at) => game.view(current(), at),
+      visit: game.visit ? (at) => game.visit?.(current(), at) : null,
+      standing: () => game.standing?.(current()) ?? null,
+      awards: () => game.awards?.(current()) ?? [],
+    };
+    return {
+      run: (ctx, more, raw) => game.tend?.(current(), ctx, more, game.command(raw) ?? undefined) ?? false,
+      open: (ctx) => {
+        state = game.advance(current(), ctx);
+        return opened;
+      },
+    };
+  };
   return {
     id: game.id,
     create: (ctx) => game.encode(game.create(ctx)),
     reads: (command) => game.command(command) !== null,
-    open: (text, ctx) => {
+    read: (text) => {
       const decoded = game.decode(text);
-      if (decoded === null) {
-        return null;
-      }
-      let state = game.advance(decoded, ctx);
-      /** The state as it was before a command that has not been kept. */
-      let undo: string | null = null;
-      const current = (): State => {
-        if (undo !== null) {
-          state = game.decode(undo) ?? state;
-          undo = null;
-        }
-        return state;
-      };
-      return {
-        attempt: (raw, at) => {
-          const command = game.command(raw);
-          if (command === null) {
-            return { refused: "invalid_command" };
-          }
-          const before = game.encode(current());
-          const answer = game.apply(state, command, at);
-          undo = before;
-          if (isRefused(answer)) {
-            return { refused: answer.refused };
-          }
-          return {
-            notes: answer.notes,
-            coins: answer.coins ?? [],
-            leaf: answer.leaf ?? [],
-            log: answer.log ?? [],
-            keep: () => {
-              state = answer.state;
-              undo = null;
-            },
-          };
-        },
-        text: () => game.encode(current()),
-        view: (at) => game.view(current(), at),
-        visit: game.visit ? (at) => game.visit?.(current(), at) : null,
-        standing: () => game.standing?.(current()) ?? null,
-        awards: () => game.awards?.(current()) ?? [],
-      };
+      return decoded === null ? null : held(decoded);
     },
+    tends: game.tend !== undefined,
   };
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { buyPlan, paint, setOpen, setRecipe, setWay } from "./build.ts";
+import { here } from "./clock.ts";
 import { create } from "./create.ts";
 import { belts, on, put, steps, workingYard } from "./fixtures.ts";
 import { deliver } from "./orders.ts";
@@ -37,8 +38,9 @@ describe("saving", () => {
     paint(w, mouth % w.land.w, Math.floor(mouth / w.land.w), 6);
     expect(w.cells.filter((b) => b && b.tint > 0).length).toBeGreaterThan(8);
     w.at = 1_800_000_000_000;
-    Object.assign(w, { bank: 12, told: 3, away: { seconds: 900, coins: 41 } });
+    Object.assign(w, { bank: 12, told: 3, away: { seconds: 900, coins: 41, made: { plank: 30 } } });
     steps(w, 777);
+    w.seen = here(w);
     deliver(w, "pot", 40);
     const text = save(w);
     const back = load(text);
@@ -57,6 +59,7 @@ describe("saving", () => {
       "bank",
       "told",
       "away",
+      "seen",
       "plots",
       "plans",
       "story",
@@ -69,6 +72,14 @@ describe("saving", () => {
     steps(w, 1234);
     steps(back, 1234);
     expect(save(back)).toBe(save(w));
+  });
+  test("a save from before yards knew their owner's last command reads as last seen at its last tick", () => {
+    const w = workingYard();
+    steps(w, 500);
+    const text = save(w);
+    const without = text.replace(`,"seen":${JSON.stringify(w.seen)}`, "");
+    expect(without).not.toContain("seen");
+    expect(load(without)?.seen).toEqual(here(w));
   });
   test("a save from before belts had colours reads with none, and a colour that makes no sense is none", () => {
     const w = create();

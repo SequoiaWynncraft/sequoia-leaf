@@ -6,7 +6,8 @@
  * Time is Leaf's. A yard holds `tick`, how many ticks it has run, and `at`, the moment of Leaf's
  * clock that tick stands for; ten ticks are a second, so Leaf's tick for a yard is
  * `tick + floor((now - at) / TICK_MS)` (`clockOf`). Every command carries the tick the page's copy
- * stood at when the player did it, and is done at that tick, so the two yards agree.
+ * stood at when the player did it, and is done at that tick, so the two yards agree. A yard runs
+ * tick for tick for eight hours after its owner's last command, and then stands still (`clock.ts`).
  *
  * Coins are the ledger's. What the yard earns gathers in its till; a command with a price pays the
  * till in and then takes the price, `remove` gives back what a piece cost, and `collect` pays the
@@ -16,7 +17,7 @@
 import { type CoinChange, type Ctx, type Done, type Game, LOGGED, type Logged, type Refused } from "@sequoia-leaf/core";
 
 import { build, buyPlan, buyPlot, paint, remove, setOpen, setRecipe, setWay, tipOut, turn } from "./build.ts";
-import { AWAY_MOST_MS, forward, TICK_MS } from "./clock.ts";
+import { awayOf, here, stillAt, TICK_MS } from "./clock.ts";
 import { isItem, type Item } from "./content/items.ts";
 import { BLUEPRINTS, isKind, type Kind, STAND_MOST } from "./content/machines.ts";
 import { isPlanId, type PlanId, PLANS } from "./content/plans.ts";
@@ -33,8 +34,6 @@ import { collect, drain, type News, TINTS, type World } from "./world.ts";
 
 /** How far behind Leaf's clock `advance` leaves a yard, in ticks, so that a command made a moment ago is never in its past; and how far ahead a command may be done. */
 export const LEAD = 30;
-/** The most ticks `advance` runs one by one; further behind, the yard is moved on quickly (`forward`). */
-export const EXACT_MOST = 3000;
 
 interface At {
   readonly x: number;
@@ -76,7 +75,7 @@ export type WorksAct =
 /** A command: what the player did, and the tick the page's copy stood at when they did it. */
 export type WorksCommand = WorksAct & { readonly tick: number };
 
-/** What the page is given: the yard as stored, without its seed, and Leaf's tick now. */
+/** What the page is given: the yard as stored, without its seed, with what it did while its owner was away, and Leaf's tick now. */
 export interface WorksView {
   readonly yard: string;
   readonly clock: number;
@@ -123,27 +122,45 @@ const REASON = {
 /** Leaf's tick for a yard at a moment of its clock. */
 export const clockOf = (w: World, now: number): number => w.tick + Math.floor((now - w.at) / TICK_MS);
 
-/** Runs the yard on, a tick at a time, to `tick`, moving the moment it stands for with it. */
+/** Runs the yard on, a tick at a time, to `tick` or to where it stands still, moving the moment it stands for with it. */
 export function stepTo(w: World, tick: number): void {
-  const n = Math.max(0, tick - w.tick);
+  const n = Math.max(0, Math.min(tick, stillAt(w)) - w.tick);
   for (let k = 0; k < n; k++) step(w);
   w.at += n * TICK_MS;
 }
 
-/** Brings a yard that has fallen behind to within `LEAD` of Leaf's clock. */
+/** The tick a command is done at by Leaf's clock: its own, but none further than `LEAD` past the clock. */
+const tickOf = (w: World, c: WorksCommand, now: number): number => Math.min(c.tick, clockOf(w, now) + LEAD);
+
+/**
+ * Runs a yard toward a tick, a tick at a time for as long as `more` says and never past where it
+ * stands still, and says whether it has further to go.
+ */
+function runTo(w: World, tick: number, more: () => boolean): boolean {
+  const to = Math.min(tick, stillAt(w));
+  while (w.tick < to && more()) stepTo(w, w.tick + 1);
+  return w.tick < to;
+}
+
+/**
+ * Runs a yard toward `LEAD` short of Leaf's clock while `more` says, and says whether it has
+ * further to go; or toward the tick a command is done at, whose news is what happened on the way.
+ * What happened unwatched is no command's news.
+ */
+function runOn(w: World, now: number, more: () => boolean, c?: WorksCommand): boolean {
+  if (c) return runTo(w, tickOf(w, c, now), more);
+  const further = runTo(w, clockOf(w, now) - LEAD, more);
+  drain(w);
+  return further;
+}
+
+/**
+ * Brings a yard to within `LEAD` of Leaf's clock. One standing still keeps Leaf's clock with it:
+ * the time since is let go, and it starts again from its owner's next command.
+ */
 function advance(w: World, ctx: Ctx): World {
-  const n = clockOf(w, ctx.now) - LEAD - w.tick;
-  if (n <= 0) return w;
-  if (n <= EXACT_MOST) {
-    stepTo(w, w.tick + n);
-    // What happened unwatched is no command's news.
-    drain(w);
-    return w;
-  }
-  // Longer than five minutes: moved on quickly, for at most eight hours, and the time left over is let go.
-  const did = forward(w, Math.min(n, AWAY_MOST_MS / TICK_MS));
-  w.at = ctx.now - LEAD * TICK_MS;
-  w.away = { seconds: (w.away?.seconds ?? 0) + did.seconds, coins: (w.away?.coins ?? 0) + did.coins };
+  runOn(w, ctx.now, () => true);
+  if (w.tick >= stillAt(w)) w.at = ctx.now;
   return w;
 }
 
@@ -261,6 +278,7 @@ export function play(w: World, c: WorksCommand): Done<World, WorksNote> | Turned
   stepTo(w, c.tick);
   const did = act(w, c);
   if ("refused" in did) return did;
+  w.seen = here(w);
   return { state: w, notes: drain(w), coins: did.coins, log: [...did.log, ...told(w)] };
 }
 
@@ -373,8 +391,11 @@ export function readNotes(v: unknown): WorksNote[] | null {
   return notes.every((n) => n !== null) ? notes.filter((n) => n !== null) : null;
 }
 
-/** What the page is given of a yard: all of it but its stream, and Leaf's tick now. */
-const view = (w: World, ctx: Ctx): WorksView => ({ yard: save({ ...w, seed: null }), clock: clockOf(w, ctx.now) });
+/** What the page is given of a yard: all of it but its stream, with what it did while its owner was away, and Leaf's tick now. */
+const view = (w: World, ctx: Ctx): WorksView => ({
+  yard: save({ ...w, seed: null, away: awayOf(w) }),
+  clock: clockOf(w, ctx.now),
+});
 
 /** The Works, for Leaf's play service. */
 export const WORKS: Game<World, WorksCommand, WorksView, WorksNote> = {
@@ -385,8 +406,9 @@ export const WORKS: Game<World, WorksCommand, WorksView, WorksNote> = {
     return w;
   },
   advance,
+  tend: (w, ctx, more, c) => runOn(w, ctx.now, more, c),
   // A tick further ahead than `LEAD` past Leaf's clock is done at `LEAD`.
-  apply: (w, c, ctx) => play(w, { ...c, tick: Math.min(c.tick, clockOf(w, ctx.now) + LEAD) }),
+  apply: (w, c, ctx) => play(w, { ...c, tick: tickOf(w, c, ctx.now) }),
   view,
   // A visitor is given what the owner is, but for the blueprints.
   visit: (w, ctx) => view({ ...w, blueprints: [] }, ctx),
