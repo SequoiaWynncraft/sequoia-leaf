@@ -55,7 +55,7 @@ import {
   pieces,
   roleLine,
   ROOMS,
-  type Run,
+  type RunView,
   sellValue,
   specOf,
   spotOf,
@@ -179,7 +179,7 @@ export interface FigureExtras {
   /** Its numbers as the next fight would start them, when they are known. */
   numbers?: Numbers | null;
   /** The run, for the traits' counts and the rack; none in the almanac. */
-  run?: Run | null;
+  run?: RunView | null;
   /** The party it belongs to, for the traits' counts, when it is not the member's. */
   party?: Pick<Party, "figures"> | null;
   /** The almanac's card: the long sentence and the flavour line too. */
@@ -305,7 +305,7 @@ function drawChip(draw: number): Chip | null {
 // ---------- a trait ----------
 
 /** A figure in a trait's roster: lit if fielded, tagged if on the bench or the stall. */
-function member(id: FigureId, run: Run | null): Entry {
+function member(id: FigureId, run: RunView | null): Entry {
   const where = run ? whereIs(run, id) : null;
   const own = run
     ? pieces(run)
@@ -323,7 +323,7 @@ function member(id: FigureId, run: Run | null): Entry {
 }
 
 /** A trait: what it is, its steps (the one reached lit, the next saying how many more), and every figure that carries it. */
-export function traitDesc(id: TraitId, run: Run | null, lore = false): Description {
+export function traitDesc(id: TraitId, run: RunView | null, lore = false): Description {
   const spec = TRAITS[id];
   const state = run ? ownTraitCount(run, id) : null;
   const count = state?.count ?? 0;
@@ -380,7 +380,7 @@ const itemWords = (id: ItemId): HTMLElement => {
  * component's "makes" lines put first, lit and tagged "have", the ones whose other half the party
  * already holds.
  */
-export function itemDesc(id: ItemId, run: Run | null, itemAt = -1, lore = false): Description {
+export function itemDesc(id: ItemId, run: RunView | null, itemAt = -1, lore = false): Description {
   const blocks: Block[] = [{ body: itemWords(id) }];
   if (lore) {
     blocks.push({ body: itemText(id) });
@@ -408,7 +408,7 @@ export function itemDesc(id: ItemId, run: Run | null, itemAt = -1, lore = false)
 }
 
 /** A component's "makes" lines: the other half, an arrow, and the finished item; the ones the party can finish first. */
-export function makesLines(id: ItemId, run: Run | null, itemAt = -1): Entry[] {
+export function makesLines(id: ItemId, run: RunView | null, itemAt = -1): Entry[] {
   if (!isComponentId(id)) return [];
   const held = new Set(run ? combosWithHeld(run, id, itemAt).map((c) => c.with) : []);
   const line = (r: { with: ComponentId; makes: ItemId }): Entry =>
@@ -435,11 +435,11 @@ export function boonDesc(id: BoonId): Description {
 // ---------- the rest ----------
 
 /** A room on the track: what kind it is, who is or was there, and what it gives. */
-function roomDesc(index: number, run: Run): Description | null {
+function roomDesc(index: number, run: RunView): Description | null {
   const room = ROOMS[index];
   if (!room) return null;
   const record = run.record.findLast((r) => r.room === index);
-  const here = run.room === index && run.phase !== "over";
+  const here = run.room === index && run.stage.phase !== "over";
   const kind = room.kind === "spar" ? "Sparring" : room.kind === "boss" ? "A boss" : "Trouble";
   const lines: string[] = [];
   if (here)
@@ -471,7 +471,7 @@ function roomDesc(index: number, run: Run): Description | null {
 }
 
 /** The purse of acorns: how the savings are counted. */
-function purseDesc(run: Run): Description {
+function purseDesc(run: RunView): Description {
   const s = savings(run);
   return {
     name: "Acorns",
@@ -493,7 +493,7 @@ function purseDesc(run: Run): Description {
 }
 
 /** The level: how many may be fielded, and what the stall offers at it. */
-function levelDesc(run: Run): Description {
+function levelDesc(run: RunView): Description {
   const odds = STALL_ODDS[Math.min(run.level, STALL_ODDS.length) - 1] ?? STALL_ODDS[0] ?? [100, 0, 0, 0, 0];
   const parts = odds.flatMap((share, i) => (share > 0 ? [`${tierName[i + 1] ?? ""} ${share}%`] : []));
   return {
@@ -510,7 +510,7 @@ function levelDesc(run: Run): Description {
 }
 
 /** What giving the item on the rack to one of the party would do: what the two make, or just that it is given. */
-function dropDesc(run: Run, at: number, pieceId: number): Description | null {
+function dropDesc(run: RunView, at: number, pieceId: number): Description | null {
   const item = run.items[at];
   const spot = spotOf(run, pieceId);
   const piece = spot ? pieceAt(run, spot) : null;
@@ -540,7 +540,7 @@ export function registerCards(): void {
     const spot = run ? spotOf(run, id) : null;
     const piece = run && spot ? pieceAt(run, spot) : null;
     if (!run || !spot || !piece) return null;
-    const planning = S.mode === "plan" && run.phase === "plan" && run.choices.length === 0;
+    const planning = S.screen.at === "plan" && run.stage.phase === "plan" && run.stage.picks.length === 0;
     return figureDesc(piece.kind, piece.stars, {
       items: piece.items,
       fed: piece.fed,

@@ -1,4 +1,4 @@
-import { drawBase, drawFigure, drawStars, framesOf } from "@sequoia-leaf/figures/sprites.ts";
+import { drawFigure, drawStanding, drawStars, framesOf } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * A contact sheet of every figure with its name, for looking at the art large while drawing it:
  * open the page with `?sheet`. Each is shown standing on its base, then using its ability, then
@@ -47,12 +47,10 @@ export function showSheet(): void {
     g.fillStyle = BARK[4];
     g.fillRect(cell.x + 1, cell.y + 1, cell.w - 2, Math.max(46, f.h + 22) - 2);
     const a = cell.x + 4 + f.ax;
-    drawBase(g, cell.kind, a, foot);
-    drawFigure(g, cell.kind, a, foot);
+    drawStanding(g, cell.kind, a, foot, "plain");
     drawStars(g, cell.kind in FIGURES ? 2 : 1, a, foot - f.tall - 2);
     const b = a + f.w + 2;
-    drawBase(g, cell.kind, b, foot);
-    drawFigure(g, cell.kind, b, foot, { pose: "cast", left: true });
+    drawStanding(g, cell.kind, b, foot, "plain", { pose: "cast", left: true });
     drawFigure(g, cell.kind, b + f.w / 2 + f.fallen.width / 2 + 2, foot, { pose: "fallen" });
   }
   const big = makeCanvas(small.c.width * zoom, small.c.height * zoom);

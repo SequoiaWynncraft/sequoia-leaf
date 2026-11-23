@@ -24,6 +24,28 @@ export interface Part {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "raid-fixes",
+    at: "2026-11-23T23:24Z",
+    title: "The Little Raid: fixes",
+    lines: [
+      "A fight shows the result that is paid, and a page left in a fight that another device finished goes on to the next room.",
+      "Bought bases stay under your figures in fights.",
+    ],
+    more: [
+      {
+        head: "Fixed",
+        points: [
+          "A page opened before an update could play a fight as won and then take health for a loss. It now shows only the result that is paid.",
+          "A fight in progress during an update is paid the result it had when you set out.",
+          "If another device took a room's takings while this one was still playing the fight, this page stopped after the fight with no way on. It now goes on to the next room.",
+          "Mossy bases and gilt rims are under your figures in fights too, not only while planning.",
+          "With a figure held by one finger, resting and lifting a second finger moved or sold it there. Only the finger holding it puts it down now.",
+          "The two regulars watching from the logs are different from one raid to the next, and the last boss walks in again each time you fight the last room again.",
+        ],
+      },
+    ],
+  },
+  {
     id: "tally",
     at: "2026-11-23T21:59Z",
     title: "The Tally: leaderboards for nearly everything",

@@ -36,9 +36,13 @@ describe("the looks of the table", () => {
     expect(wear(looks, "cloth", "bare")).toBe(true);
   });
 
-  test("are read back only as a member could have them: nothing worn that was not bought", () => {
+  test("are read back only as a member could have them: nothing worn that was not bought, nothing free listed as bought", () => {
     expect(readLooks(newLooks())).toEqual(newLooks());
-    expect(readLooks({ cloth: "plum", lantern: "jar", bases: "gilt", owned: [] })).toBeNull();
+    expect(readLooks({ cloth: "plum", lantern: "jar", bases: "gilt", owned: ["jar"] })).toEqual({
+      ...newLooks(),
+      lantern: "jar",
+      owned: ["jar"],
+    });
     expect(readLooks({ cloth: "plum", lantern: "jar", bases: "gilt", owned: ["plum", "jar", "gilt"] })).toEqual({
       cloth: "plum",
       lantern: "jar",
@@ -46,7 +50,7 @@ describe("the looks of the table", () => {
       owned: ["plum", "jar", "gilt"],
     });
     expect(readLooks({ ...newLooks(), owned: ["baize", "baize"] })).toBeNull();
-    expect(readLooks({ ...newLooks(), owned: ["bare"] })).toBeNull();
+    expect(readLooks({ ...newLooks(), owned: ["bare", "moss"] })).toEqual({ ...newLooks(), owned: ["moss"] });
     expect(readLooks({ ...newLooks(), cloth: "disco" })).toBeNull();
     expect(readLooks("bare")).toBeNull();
   });

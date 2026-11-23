@@ -1,0 +1,1254 @@
+{
+  "game": "pulls",
+  "v": 1,
+  "have": {
+    "figure:moth": 12,
+    "figure:bushgnome": 4,
+    "figure:finch": 26,
+    "figure:barrowgnome": 7,
+    "figure:worm": 8,
+    "figure:crab23": 4,
+    "figure:chickaree": 9,
+    "figure:fogowl": 7,
+    "figure:rock": 6,
+    "figure:kettle": 10,
+    "figure:jay": 10,
+    "figure:cindernewt": 2,
+    "figure:glorp": 5,
+    "figure:drizzlefrog": 10,
+    "figure:slug": 8,
+    "figure:mossmote": 7,
+    "figure:crab7": 15,
+    "figure:heron": 5,
+    "figure:lanterngnome": 6,
+    "figure:crab12": 5,
+    "figure:leafling": 3,
+    "figure:hearthcat": 1,
+    "figure:badger": 7,
+    "figure:crab40": 3,
+    "figure:apothecary": 4,
+    "figure:emberkit": 14,
+    "headliner:banner-1": 2
+  },
+  "counters": {
+    "grove": {
+      "top": 23,
+      "mid": 9,
+      "owed": false
+    },
+    "banner": {
+      "top": 16,
+      "mid": 6,
+      "owed": false
+    }
+  },
+  "seeds": 361,
+  "free": {
+    "waiting": 0,
+    "next": 1795694400000
+  },
+  "history": [
+    {
+      "prize": "figure:moth",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 1
+    },
+    {
+      "prize": "figure:bushgnome",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 2
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 3
+    },
+    {
+      "prize": "figure:barrowgnome",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 4
+    },
+    {
+      "prize": "figure:worm",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 5
+    },
+    {
+      "prize": "figure:crab23",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 6
+    },
+    {
+      "prize": "figure:chickaree",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 7
+    },
+    {
+      "prize": "figure:moth",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 8
+    },
+    {
+      "prize": "figure:moth",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 9
+    },
+    {
+      "prize": "figure:fogowl",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 10
+    },
+    {
+      "prize": "figure:rock",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 11
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 1
+    },
+    {
+      "prize": "figure:rock",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 2
+    },
+    {
+      "prize": "figure:kettle",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 3
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 4
+    },
+    {
+      "prize": "figure:jay",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 5
+    },
+    {
+      "prize": "figure:cindernewt",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 6
+    },
+    {
+      "prize": "figure:worm",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 7
+    },
+    {
+      "prize": "figure:kettle",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 8
+    },
+    {
+      "prize": "figure:glorp",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 9
+    },
+    {
+      "prize": "figure:fogowl",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 10
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 11
+    },
+    {
+      "prize": "figure:drizzlefrog",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 12
+    },
+    {
+      "prize": "figure:slug",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 13
+    },
+    {
+      "prize": "figure:mossmote",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 14
+    },
+    {
+      "prize": "figure:barrowgnome",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 15
+    },
+    {
+      "prize": "figure:worm",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 16
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 17
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 18
+    },
+    {
+      "prize": "figure:heron",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 19
+    },
+    {
+      "prize": "figure:mossmote",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 20
+    },
+    {
+      "prize": "figure:lanterngnome",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 12
+    },
+    {
+      "prize": "figure:crab12",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 13
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 14
+    },
+    {
+      "prize": "figure:leafling",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 15
+    },
+    {
+      "prize": "figure:rock",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 16
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 17
+    },
+    {
+      "prize": "figure:hearthcat",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 18
+    },
+    {
+      "prize": "figure:chickaree",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 1
+    },
+    {
+      "prize": "figure:badger",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 2
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 3
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 21
+    },
+    {
+      "prize": "figure:mossmote",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 22
+    },
+    {
+      "prize": "figure:jay",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 23
+    },
+    {
+      "prize": "figure:drizzlefrog",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 24
+    },
+    {
+      "prize": "figure:kettle",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 25
+    },
+    {
+      "prize": "figure:kettle",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 26
+    },
+    {
+      "prize": "figure:badger",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 27
+    },
+    {
+      "prize": "figure:crab40",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 28
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 29
+    },
+    {
+      "prize": "figure:barrowgnome",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 30
+    },
+    {
+      "prize": "figure:glorp",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 31
+    },
+    {
+      "prize": "figure:apothecary",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 32
+    },
+    {
+      "prize": "figure:crab23",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 33
+    },
+    {
+      "prize": "figure:apothecary",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 34
+    },
+    {
+      "prize": "figure:barrowgnome",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 35
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 36
+    },
+    {
+      "prize": "figure:mossmote",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 37
+    },
+    {
+      "prize": "figure:jay",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 38
+    },
+    {
+      "prize": "figure:barrowgnome",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 39
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 40
+    },
+    {
+      "prize": "figure:crab12",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 4
+    },
+    {
+      "prize": "figure:chickaree",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 5
+    },
+    {
+      "prize": "figure:cindernewt",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 6
+    },
+    {
+      "prize": "figure:chickaree",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 7
+    },
+    {
+      "prize": "figure:slug",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 8
+    },
+    {
+      "prize": "figure:lanterngnome",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 9
+    },
+    {
+      "prize": "figure:lanterngnome",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 10
+    },
+    {
+      "prize": "figure:chickaree",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 11
+    },
+    {
+      "prize": "figure:apothecary",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 12
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 13
+    },
+    {
+      "prize": "figure:worm",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 41
+    },
+    {
+      "prize": "figure:drizzlefrog",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 42
+    },
+    {
+      "prize": "figure:kettle",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 43
+    },
+    {
+      "prize": "figure:badger",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 44
+    },
+    {
+      "prize": "figure:slug",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 45
+    },
+    {
+      "prize": "figure:moth",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 46
+    },
+    {
+      "prize": "figure:rock",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 47
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 48
+    },
+    {
+      "prize": "figure:drizzlefrog",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 49
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 50
+    },
+    {
+      "prize": "figure:emberkit",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 51
+    },
+    {
+      "prize": "figure:kettle",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 52
+    },
+    {
+      "prize": "figure:drizzlefrog",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 53
+    },
+    {
+      "prize": "figure:heron",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 54
+    },
+    {
+      "prize": "figure:crab12",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 55
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 56
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 57
+    },
+    {
+      "prize": "figure:emberkit",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 58
+    },
+    {
+      "prize": "figure:moth",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 59
+    },
+    {
+      "prize": "figure:emberkit",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 60
+    },
+    {
+      "prize": "figure:badger",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 14
+    },
+    {
+      "prize": "figure:emberkit",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 15
+    },
+    {
+      "prize": "figure:worm",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 16
+    },
+    {
+      "prize": "figure:drizzlefrog",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 17
+    },
+    {
+      "prize": "figure:worm",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 18
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 19
+    },
+    {
+      "prize": "figure:emberkit",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 20
+    },
+    {
+      "prize": "figure:kettle",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 21
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 22
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "grove",
+      "at": 1795608000000,
+      "top": 23
+    },
+    {
+      "prize": "figure:kettle",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 61
+    },
+    {
+      "prize": "figure:lanterngnome",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 62
+    },
+    {
+      "prize": "figure:leafling",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 63
+    },
+    {
+      "prize": "figure:fogowl",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 64
+    },
+    {
+      "prize": "figure:emberkit",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 65
+    },
+    {
+      "prize": "figure:chickaree",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 66
+    },
+    {
+      "prize": "figure:chickaree",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 67
+    },
+    {
+      "prize": "headliner:banner-1",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 68
+    },
+    {
+      "prize": "figure:slug",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 1
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 2
+    },
+    {
+      "prize": "figure:emberkit",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 3
+    },
+    {
+      "prize": "figure:moth",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 4
+    },
+    {
+      "prize": "figure:slug",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 5
+    },
+    {
+      "prize": "figure:mossmote",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 6
+    },
+    {
+      "prize": "figure:lanterngnome",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 7
+    },
+    {
+      "prize": "figure:worm",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 8
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 9
+    },
+    {
+      "prize": "figure:fogowl",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 10
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 11
+    },
+    {
+      "prize": "figure:slug",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 12
+    },
+    {
+      "prize": "figure:glorp",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 13
+    },
+    {
+      "prize": "figure:fogowl",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 14
+    },
+    {
+      "prize": "figure:drizzlefrog",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 15
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 16
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 17
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 18
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 19
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 20
+    },
+    {
+      "prize": "figure:glorp",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 21
+    },
+    {
+      "prize": "figure:chickaree",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 22
+    },
+    {
+      "prize": "figure:jay",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 23
+    },
+    {
+      "prize": "figure:badger",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 24
+    },
+    {
+      "prize": "figure:slug",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 25
+    },
+    {
+      "prize": "figure:kettle",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 26
+    },
+    {
+      "prize": "figure:moth",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 27
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 28
+    },
+    {
+      "prize": "figure:crab12",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 29
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 30
+    },
+    {
+      "prize": "figure:rock",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 31
+    },
+    {
+      "prize": "figure:barrowgnome",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 32
+    },
+    {
+      "prize": "figure:emberkit",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 33
+    },
+    {
+      "prize": "figure:heron",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 34
+    },
+    {
+      "prize": "figure:emberkit",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 35
+    },
+    {
+      "prize": "figure:crab23",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 36
+    },
+    {
+      "prize": "figure:drizzlefrog",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 37
+    },
+    {
+      "prize": "figure:worm",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 38
+    },
+    {
+      "prize": "figure:heron",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 39
+    },
+    {
+      "prize": "figure:drizzlefrog",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 40
+    },
+    {
+      "prize": "figure:bushgnome",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 41
+    },
+    {
+      "prize": "figure:jay",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 42
+    },
+    {
+      "prize": "figure:bushgnome",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 43
+    },
+    {
+      "prize": "figure:jay",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 44
+    },
+    {
+      "prize": "figure:fogowl",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 45
+    },
+    {
+      "prize": "figure:heron",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 46
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 47
+    },
+    {
+      "prize": "figure:emberkit",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 48
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 49
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 50
+    },
+    {
+      "prize": "figure:glorp",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 51
+    },
+    {
+      "prize": "figure:lanterngnome",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 52
+    },
+    {
+      "prize": "figure:badger",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 53
+    },
+    {
+      "prize": "figure:emberkit",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 54
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 55
+    },
+    {
+      "prize": "figure:crab40",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 56
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 57
+    },
+    {
+      "prize": "figure:slug",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 58
+    },
+    {
+      "prize": "figure:leafling",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 59
+    },
+    {
+      "prize": "figure:chickaree",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 60
+    },
+    {
+      "prize": "figure:moth",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 61
+    },
+    {
+      "prize": "figure:moth",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 62
+    },
+    {
+      "prize": "figure:crab12",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 63
+    },
+    {
+      "prize": "figure:kettle",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 64
+    },
+    {
+      "prize": "figure:mossmote",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 65
+    },
+    {
+      "prize": "figure:crab40",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 66
+    },
+    {
+      "prize": "figure:badger",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 67
+    },
+    {
+      "prize": "figure:jay",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 68
+    },
+    {
+      "prize": "figure:barrowgnome",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 69
+    },
+    {
+      "prize": "figure:mossmote",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 70
+    },
+    {
+      "prize": "figure:fogowl",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 71
+    },
+    {
+      "prize": "figure:jay",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 72
+    },
+    {
+      "prize": "figure:crab23",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 73
+    },
+    {
+      "prize": "figure:rock",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 74
+    },
+    {
+      "prize": "headliner:banner-1",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 75
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 1
+    },
+    {
+      "prize": "figure:emberkit",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 2
+    },
+    {
+      "prize": "figure:jay",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 3
+    },
+    {
+      "prize": "figure:moth",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 4
+    },
+    {
+      "prize": "figure:bushgnome",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 5
+    },
+    {
+      "prize": "figure:finch",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 6
+    },
+    {
+      "prize": "figure:drizzlefrog",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 7
+    },
+    {
+      "prize": "figure:jay",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 8
+    },
+    {
+      "prize": "figure:emberkit",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 9
+    },
+    {
+      "prize": "figure:apothecary",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 10
+    },
+    {
+      "prize": "figure:emberkit",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 11
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 12
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 13
+    },
+    {
+      "prize": "figure:moth",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 14
+    },
+    {
+      "prize": "figure:moth",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 15
+    },
+    {
+      "prize": "figure:crab7",
+      "pool": "banner-1",
+      "at": 1795608000000,
+      "top": 16
+    }
+  ],
+  "pulls": 200,
+  "rng": 2637446527
+}

@@ -8,8 +8,10 @@ import { KINS } from "./content/traits.ts";
 import { newAlmanac, payout, recordRun } from "./outside.ts";
 import {
   beginFight,
+  endingOf,
   fieldCap,
   fielded,
+  picksOf,
   pieces,
   type Run,
   STALL_POOL,
@@ -18,7 +20,7 @@ import {
   takeTakings,
   traitsNow,
 } from "./run.ts";
-import { loadRun, saveRun } from "./save.ts";
+import { checkRun } from "./save.ts";
 
 /** Everything that must be true of a run however it has been played. */
 function expectSound(run: Run): void {
@@ -40,8 +42,8 @@ function expectSound(run: Run): void {
   const counts = new Map<string, number>();
   for (const p of own) if (p.stars < 3) counts.set(`${p.kind}${p.stars}`, (counts.get(`${p.kind}${p.stars}`) ?? 0) + 1);
   for (const n of counts.values()) expect(n).toBeLessThan(3);
-  // And it would save and load as it stands.
-  const loaded = loadRun(saveRun(run));
+  // And it would be kept and read back as it stands.
+  const loaded = checkRun(JSON.parse(JSON.stringify(run)));
   expect(loaded.ok && loaded.run).toEqual(run);
 }
 
@@ -66,16 +68,16 @@ describe("the bot plays by the rules", () => {
       for (const seed of [1, 2, 3]) {
         const run = startRun(seed * 101);
         let rooms = 0;
-        while (run.phase !== "over") {
+        while (run.stage.phase !== "over") {
           planRoom(run, habit);
-          expect(run.choices.length).toBe(0);
+          expect(picksOf(run)).toHaveLength(0);
           expect(fielded(run)).toBeGreaterThan(0);
           expectSound(run);
           const taken = playRoom(run, habit);
           expect(taken.ok).toBe(true);
           expect(++rooms).toBeLessThan(60);
         }
-        expect(run.won || run.resolve === 0).toBe(true);
+        expect(endingOf(run) === "won" || run.resolve === 0).toBe(true);
         expect(run.record.length).toBe(rooms);
       }
     }
@@ -87,7 +89,7 @@ describe("the bot plays by the rules", () => {
   });
   test("it fields as many as it may, once it owns them", () => {
     const run = startRun(9);
-    for (let i = 0; i < 6 && run.phase !== "over"; i++) {
+    for (let i = 0; i < 6 && run.stage.phase !== "over"; i++) {
       planRoom(run, SENSIBLE);
       if (pieces(run).length >= fieldCap(run)) expect(fielded(run)).toBe(fieldCap(run));
       beginFight(run);
@@ -128,7 +130,7 @@ describe("the bot plays by the rules", () => {
   test("it switches traits on, makes items and takes boons along the way", () => {
     const run = startRun(4);
     let traits = 0;
-    while (run.phase !== "over") {
+    while (run.stage.phase !== "over") {
       planRoom(run, SENSIBLE);
       traits = Math.max(traits, traitsNow(run).filter((t) => t.step > 0).length);
       beginFight(run);

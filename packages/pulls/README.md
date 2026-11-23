@@ -60,6 +60,11 @@ due), `history` (the last 200 pulls), `pulls` (ever) and `rng`. `advance` adds t
 fallen due, one every 24 hours, at most 7 waiting; nothing else changes with time. The page is
 shown everything but `rng`, and the banners open now.
 
-A stored prize of earlier pulls reads as it was kept; only the Treasury's wares, which went before
-any of this, are dropped when the state is read. `awards` is `pull:<prize>` for each prize held; `standing` is the number of different prizes, with
+A stored state is read in two layers. The shape is checked first, and anything else is refused; it
+names no number of `RATES`, no banner and no prize. Then the state is brought under today's content
+and numbers, and nothing is refused: a counter past certainty is certain on the next pull, free
+pulls past the most wait as the most, a longer history keeps its last pulls, and a prize or pool
+these rules do not know (a banner retired, its headliner, a figure gone from the raid) is kept as it
+was won. Only the Treasury's wares, which went before any of this, are dropped. `stored/` holds
+states as Leaf stores them, frozen; `src/stored.test.ts` fails if a change stops one reading. `awards` is `pull:<prize>` for each prize held; `standing` is the number of different prizes, with
 pulls ever and top-tier prizes won; each top-tier prize is logged as `pulls_top`.

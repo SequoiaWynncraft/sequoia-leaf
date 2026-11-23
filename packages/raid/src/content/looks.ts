@@ -113,18 +113,27 @@ export function wear(looks: Looks, kind: LookKind, id: string): boolean {
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-/** Looks from plain data, or null if they are not a member's looks: nothing is worn that was not bought. */
+const isLookId = (v: unknown): v is LookId => LOOK_KINDS.some((kind) => LOOKS[kind].some((l) => l.id === v));
+/**
+ * Looks from plain data, or null if they are not a member's looks. A look bought that is free now
+ * is no longer listed as bought, and one worn that is not the member's now is put away for the
+ * plain one of its kind.
+ */
 export function readLooks(v: unknown): Looks | null {
-  if (!isRecord(v) || !Array.isArray(v.owned) || v.owned.length > 16) return null;
+  if (!isRecord(v) || !Array.isArray(v.owned) || v.owned.length > 64) return null;
   const owned: LookId[] = [];
   for (const id of v.owned) {
-    if (!isBoughtLook(id) || owned.includes(id)) return null;
-    owned.push(id);
+    if (!isLookId(id) || owned.includes(id)) return null;
+    if (isBoughtLook(id)) owned.push(id);
   }
   const cloth = clothOf(v.cloth);
   const lantern = lanternOf(v.lantern);
   const bases = baseOf(v.bases);
   if (!cloth || !lantern || !bases) return null;
-  const looks: Looks = { cloth, lantern, bases, owned };
-  return owns(looks, "cloth", cloth) && owns(looks, "lantern", lantern) && owns(looks, "bases", bases) ? looks : null;
+  const looks = newLooks();
+  looks.owned = owned;
+  wear(looks, "cloth", cloth);
+  wear(looks, "lantern", lantern);
+  wear(looks, "bases", bases);
+  return looks;
 }

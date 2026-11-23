@@ -28,7 +28,7 @@ import {
   enterRun,
   goHome,
   leaveTable,
-  rejoin,
+  lookBack,
   setOut,
   startNew,
   toFront,
@@ -36,22 +36,19 @@ import {
 } from "./screen/flow.ts";
 import { stepFx } from "./screen/fx.ts";
 import { openHand, unpick } from "./screen/hand.ts";
-import { openHandle } from "./screen/handle.ts";
 import { postcard } from "./screen/logic.ts";
 import { hearNotes, stepPawns, syncPawns } from "./screen/pawns.ts";
 import { drawOver, drawScene, stepScene, wordsScene } from "./screen/scene.ts";
-import { showSheet } from "./screen/sheet.ts";
-import { onSignal } from "./screen/signals.ts";
 import { snd } from "./screen/sounds.ts";
 import * as stage from "./screen/stage.ts";
-import { onChange, onHeld, onMoved, onNotes, onRefused, openTable, S } from "./screen/state.ts";
+import { onChange, onHeld, onNotes, onRefused, openTable, S } from "./screen/state.ts";
 import { registerCards } from "./screen/ui/cards.ts";
-import { closeSheet, onCarry, placeSheet, registerFought, sheetUp, toggleLastFight } from "./screen/ui/fightsheet.ts";
+import { onCarry, placeSheet, registerFought, sheetUp } from "./screen/ui/fightsheet.ts";
 import { openLight } from "./screen/ui/lit.ts";
 import { renderNudge, stepNudge } from "./screen/ui/nudge.ts";
 import { openPages, pagesClick, renderPages, showPage } from "./screen/ui/pages.ts";
 import { renderPicks } from "./screen/ui/picks.ts";
-import { acornLanded, buildTable, placeFoe, renderTable, stepTable, toast, wakeChip } from "./screen/ui/table.ts";
+import { buildTable, placeFoe, renderTable, stepTable, toast, wakeChip } from "./screen/ui/table.ts";
 
 /** What the page says where no Leaf answers: the table is the guild's server's. */
 const NEEDS_LEAF = "The table needs the guild's server.";
@@ -74,9 +71,10 @@ async function setOutOn(trail: number): Promise<void> {
 
 async function boot(): Promise<void> {
   await fontsReady();
-  // Every figure on one sheet: a picture of the rules' figures, which needs no table.
-  if (new URLSearchParams(location.search).has("sheet")) {
-    showSheet();
+  // Every figure on one sheet: a picture of the rules' figures, which needs no table (for looking at, `review/`).
+  const asked = new URLSearchParams(location.search);
+  if (asked.has("sheet")) {
+    (await import("../review/sheet.ts")).showSheet();
     return;
   }
   // Who the member is, and then the table as Leaf has it. Without Leaf there is no table.
@@ -98,7 +96,7 @@ async function boot(): Promise<void> {
   }
   registerCards();
   registerFought();
-  onCarry(carryOn);
+  onCarry(carryOn, lookBack);
   buildTable({
     rustle: () => void doRustle(),
     hold: doHold,
@@ -112,11 +110,11 @@ async function boot(): Promise<void> {
       renderTable();
     },
     frontPage: toFront,
-    lastFight: toggleLastFight,
+    lastFight: lookBack,
     traitOn,
   });
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && sheetUp() === "again") closeSheet();
+    if (e.key === "Escape" && sheetUp() === "again") lookBack();
   });
   openPages({
     carryOn: () => {
@@ -145,7 +143,7 @@ async function boot(): Promise<void> {
     }
   });
   onChange(() => {
-    if (S.mode === "plan") syncPawns(S.run);
+    if (S.screen.at === "plan") syncPawns(S.run);
     sendCard();
     renderTable();
     renderPicks();
@@ -160,9 +158,6 @@ async function boot(): Promise<void> {
   });
   // A tap or a drag while Leaf answers a rustle, a pick, setting out or the takings does nothing, and says so.
   onHeld(() => snd.no());
-  // Leaf's table is not what this page was showing (the member played on another page): take it.
-  onMoved(rejoin);
-  onSignal("acorn", acornLanded);
   onTraitWoke((trait) => wakeChip(trait));
 
   stage.open({
@@ -187,10 +182,10 @@ async function boot(): Promise<void> {
   });
   openHand(must(document.querySelector<HTMLCanvasElement>("#view"), "the table's canvas"));
   openLight();
-  openHandle();
+  // A handle for staging and looking at the table from outside, for the tours only (`review/handle.ts`).
+  if (asked.has("handle")) (await import("../review/handle.ts")).openHandle();
 
   // A run in progress is offered again on the front page; nothing starts by itself.
-  S.mode = "front";
   renderTable();
   renderPicks();
   renderPages();

@@ -120,8 +120,10 @@ kit's card: "The table needs the guild's server."
 
 Leaf keeps the table (`GET` and `POST /v1/game/play/raid`, through the kit's `play.ts`). The page
 opens it as Leaf has it, and a run in hand is offered again on the front page, on any device; a run
-left in the middle of a fight comes back at that fight, which plays out the same from the setup
-Leaf kept; the last fight's setup is kept too, so "Last fight" plays it again after a reload.
+left in the middle of a fight comes back at that fight, played from the setup Leaf kept to the
+outcome Leaf kept; the last fight's setup is kept too, so "Last fight" plays it again after a
+reload. A fight these rules would play otherwise than Leaf decided it (a page opened before a
+deploy) is not shown: only how Leaf says it came out, and what it paid.
 
 Every move is a command (`src/screen/state.ts`):
 
@@ -136,6 +138,14 @@ Every move is a command (`src/screen/state.ts`):
   answer.
 - Whenever Leaf's state is not what the page was showing (the member played on in another page, a
   guess was wrong, something was changed by hand), the page takes Leaf's and draws again.
+
+What the table is showing is one value (`src/screen/screen.ts`): the front page, planning a room
+(and whether "Last fight" is up), a fight being played, its takings being counted out, or how a run
+ended; one pure `step` moves it, and `bun test` covers every move. A fight on screen is a playback
+of its own (the run's number at the table, its room, its seed): it plays to its end whatever Leaf's
+run does meanwhile, then the takings are asked for; taken on another page already, the table goes
+on to the room Leaf's run is in. While the takings are counted, the purse, health and level show
+what they were until their line is counted (`shownCounts`).
 
 Coins shown are the kit's purse's, which are Leaf's, the same number the town and the Works show;
 the purse asks Leaf again when a run has paid. A finished or abandoned run pays them on Leaf. Leaf
@@ -174,8 +184,9 @@ timed can be stepped by hand.
 | ----------------------------- | ------------------------------------------------------------------------------------------------ |
 | `src/main.ts`                 | Puts the parts together; speaks to the town                                                      |
 | `@sequoia-leaf/raid`          | The rules, and the table as Leaf plays it (`packages/raid`, with its README)                     |
-| `src/screen/state.ts`         | The page's copy of Leaf's table and what is on screen; every move is a command (`doNow`, `ask`)  |
-| `src/screen/flow.ts`          | What happens when: sitting down, setting out, the fight, counting out the takings, the end       |
+| `src/screen/state.ts`         | The page's copy of Leaf's table; every move is a command (`doNow`, `ask`); `go` moves the screen |
+| `src/screen/screen.ts`        | What the table is showing, as one value, and the one function that moves it on                   |
+| `src/screen/flow.ts`          | Acts out each move of the screen: sitting down, the fight, counting out the takings, the end     |
 | `src/screen/stage.ts`         | The canvases, the size of an art pixel, where the board sits, the clock                          |
 | `src/screen/geometry.ts`      | Where hexes, seats and bench hollows are, and which is under a point                             |
 | `src/screen/scene.ts`         | Drawing a frame: the board, lit hexes, who is waiting across it, the party, the fight            |
@@ -189,9 +200,8 @@ timed can be stepped by hand.
 | `src/screen/keep.ts`          | The view settings kept in the browser                                                            |
 | `src/screen/sounds.ts`        | The table's sounds, made from the kit's tones                                                    |
 | `src/screen/signals.ts`       | Small happenings more than one part answers: an acorn landing, a star                            |
-| `src/screen/handle.ts`        | `window.raid`, for looking at the game from outside                                              |
 | `@sequoia-leaf/figures`       | The figures' pictures, which the town draws too (`packages/figures`, with its README)            |
-| `src/screen/art/icons.ts`     | A small picture for every trait, item, boon, kind of room and button                             |
+| `src/screen/art/icons.ts`     | A small picture for every trait, item, boon, kind of room and button, typed in `icons.txt`       |
 | `src/screen/art/table.ts`     | The painted table, the halves of the board, the looks                                            |
 | `src/screen/art/pal.ts`       | A colour for each trait                                                                          |
 | `src/screen/ui/table.ts`      | The interface round the table: purse, track, traits, rack, stall, buttons, the fight's panel     |
@@ -230,12 +240,14 @@ on a phone, a party. `copy()` is the page's own copy of the run and `leaf()` the
 table it draws from, to change by hand and see Leaf's next answer put it back; `redraw()` draws the
 table from them.
 
-`?sheet` in the address shows every figure on one sheet with its name.
+`?sheet` in the address shows every figure on one sheet with its name (`review/sheet.ts`), and
+`?handle` opens `window.raid`, for staging and looking at the game from outside (`review/handle.ts`).
+Neither runs in a page opened without them.
 
 The lists in `review/` are the tours the screenshots came from. `review/tour.ts` runs one against a
 play server of its own: it builds the page, starts `apps/api/test/play.ts` on a free port with
-`--dice 1` (so the tour plays the same game every time), signs in as its Tester and has the kit's
-driver go through the steps:
+`--dice 1` (so the tour plays the same game every time), signs in as its Tester, opens the page with
+`?handle` and has the kit's driver go through the steps:
 
 ```sh
 bun review/tour.ts review/tour-desktop.json <out-dir>
@@ -258,9 +270,8 @@ moments a card used to go missing (a click on the chip, the stall changing size,
 again under the pointer, just after a drag, the first room with a nudge up) and prints whether the
 card is up after each.
 
-`review/balance.ts` plays whole runs with bots of different habits and prints how far each gets
-(`bun review/balance.ts 200 0`); it is the rules' gauge and has nothing to do with the screen. Its
-`suits` section is how the items a card recommends were checked.
+`packages/raid/review/balance.ts`, the rules' gauge, plays whole runs with bots of different habits;
+its `suits` section is how the items a card recommends were checked.
 
 ## Where the shape comes from
 

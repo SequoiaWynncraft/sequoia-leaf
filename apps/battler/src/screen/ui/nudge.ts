@@ -5,7 +5,7 @@
  * Which nudges have been given is kept with the prefs.
  */
 import { el, unit } from "@sequoia-leaf/kit/dom.ts";
-import { fielded, pieces, type Run } from "@sequoia-leaf/raid";
+import { fielded, picksOf, pieces, type RunView } from "@sequoia-leaf/raid";
 
 import { glyph } from "../art/icons.ts";
 import { fightOn } from "../fightview.ts";
@@ -39,14 +39,14 @@ const teach = (id: NudgeId): void => {
 };
 
 /** Whether the thing a nudge asks for has been done. */
-function done(id: NudgeId, run: Run): boolean {
+function done(id: NudgeId, run: RunView): boolean {
   switch (id) {
     case "pick":
       return pieces(run).length > 0;
     case "buy":
       return pieces(run).length > 1;
     case "setout":
-      return run.phase !== "plan" || run.room > 0;
+      return run.stage.phase !== "plan" || run.room > 0;
     case "field":
       return fielded(run) >= 2;
     case "item":
@@ -65,7 +65,7 @@ function done(id: NudgeId, run: Run): boolean {
 const of = (sel: string): DOMRect | null => document.querySelector(sel)?.getBoundingClientRect() ?? null;
 
 /** The box on the page a nudge points at. */
-function target(id: NudgeId, run: Run): DOMRect | null {
+function target(id: NudgeId, run: RunView): DOMRect | null {
   switch (id) {
     case "pick":
       return of("#picks");
@@ -135,7 +135,7 @@ function hide(): void {
 /** Shows the nudge that is due, if any. */
 export function renderNudge(): void {
   const run = S.run;
-  if (!run || pageUp() || S.mode === "front" || S.mode === "over" || S.mode === "after") {
+  if (!run || pageUp() || S.screen.at === "front" || S.screen.at === "over" || S.screen.at === "after") {
     hide();
     return;
   }
@@ -154,7 +154,13 @@ export function renderNudge(): void {
     }
   }
   if (learnt) prefsChanged();
-  const doing: Doing = fightOn() ? "fight" : run.choices.length > 0 ? "pick" : S.mode === "plan" ? "plan" : "other";
+  const doing: Doing = fightOn()
+    ? "fight"
+    : picksOf(run).length > 0
+      ? "pick"
+      : S.screen.at === "plan"
+        ? "plan"
+        : "other";
   const id = nudgeFor(run, doing, S.prefs.taught);
   if (!id) {
     now = null;

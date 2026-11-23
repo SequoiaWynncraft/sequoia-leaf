@@ -627,7 +627,10 @@
         "run": {
           "trail": 0,
           "room": 0,
-          "phase": "plan",
+          "stage": {
+            "phase": "plan",
+            "picks": []
+          },
           "resolve": 20,
           "acorns": 2,
           "streak": 0,
@@ -676,7 +679,6 @@
           "rustles": 1,
           "bought": 0,
           "boons": [],
-          "choices": [],
           "foe": {
             "who": "The forest",
             "title": "A few gnats",
@@ -701,10 +703,7 @@
           },
           "record": [],
           "nextId": 2,
-          "won": false,
-          "left": false,
           "last": null,
-          "fight": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -765,7 +764,10 @@
         "run": {
           "trail": 0,
           "room": 0,
-          "phase": "plan",
+          "stage": {
+            "phase": "plan",
+            "picks": []
+          },
           "resolve": 20,
           "acorns": 2,
           "streak": 0,
@@ -814,7 +816,6 @@
           "rustles": 1,
           "bought": 0,
           "boons": [],
-          "choices": [],
           "foe": {
             "who": "The forest",
             "title": "A few gnats",
@@ -839,10 +840,7 @@
           },
           "record": [],
           "nextId": 2,
-          "won": false,
-          "left": false,
           "last": null,
-          "fight": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -929,7 +927,10 @@
         "run": {
           "trail": 0,
           "room": 0,
-          "phase": "plan",
+          "stage": {
+            "phase": "plan",
+            "picks": []
+          },
           "resolve": 20,
           "acorns": 2,
           "streak": 0,
@@ -978,7 +979,6 @@
           "rustles": 1,
           "bought": 0,
           "boons": [],
-          "choices": [],
           "foe": {
             "who": "The forest",
             "title": "A few gnats",
@@ -1003,10 +1003,7 @@
           },
           "record": [],
           "nextId": 2,
-          "won": false,
-          "left": false,
           "last": null,
-          "fight": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -1106,7 +1103,10 @@
         "run": {
           "trail": 0,
           "room": 0,
-          "phase": "plan",
+          "stage": {
+            "phase": "plan",
+            "picks": []
+          },
           "resolve": 20,
           "acorns": 2,
           "streak": 0,
@@ -1155,7 +1155,6 @@
           "rustles": 1,
           "bought": 0,
           "boons": [],
-          "choices": [],
           "foe": {
             "who": "The forest",
             "title": "A few gnats",
@@ -1180,10 +1179,7 @@
           },
           "record": [],
           "nextId": 2,
-          "won": false,
-          "left": false,
           "last": null,
-          "fight": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -1252,7 +1248,10 @@
         "run": {
           "trail": 0,
           "room": 0,
-          "phase": "plan",
+          "stage": {
+            "phase": "plan",
+            "picks": []
+          },
           "resolve": 20,
           "acorns": 2,
           "streak": 0,
@@ -1301,7 +1300,6 @@
           "rustles": 1,
           "bought": 0,
           "boons": [],
-          "choices": [],
           "foe": {
             "who": "The forest",
             "title": "A few gnats",
@@ -1326,10 +1324,7 @@
           },
           "record": [],
           "nextId": 2,
-          "won": false,
-          "left": false,
           "last": null,
-          "fight": null,
           "seen": {
             "fielded": [],
             "threeStars": [],

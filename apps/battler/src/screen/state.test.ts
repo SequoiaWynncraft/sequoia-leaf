@@ -65,7 +65,7 @@ afterEach(() => {
   world?.done();
   world = null;
   S.run = null;
-  S.ended = null;
+  S.screen = { at: "front" };
 });
 
 /** Waits until a condition holds, a millisecond at a time. */
@@ -91,7 +91,7 @@ const offers = (): number[] => (S.run?.stall ?? []).flatMap((kind, i) => (kind =
 describe("the table, on Leaf", () => {
   test("opens as Leaf has it, and nothing of the game is kept in the browser", async () => {
     const fake = await seated();
-    expect(S.run?.phase).toBe("plan");
+    expect(S.run?.stage.phase).toBe("plan");
     expect(S.runs).toBe(1);
     const offer = S.run?.stall.findIndex((k) => k !== null) ?? 0;
     expect(doNow({ do: "buy", offer })?.ok).toBe(true);
@@ -151,7 +151,7 @@ describe("the table, on Leaf", () => {
     expect(S.run?.bench.some((p) => p !== null)).toBe(true);
     await until(() => !waitingForLeaf());
     expect(refusals).toHaveLength(1);
-    expect(S.run?.phase).toBe("fight");
+    expect(S.run?.stage.phase).toBe("fight");
     expect(S.run?.acorns).toBe(acorns);
     expect(S.run?.bench.some((p) => p !== null)).toBe(false);
   });

@@ -1,0 +1,23 @@
+{
+  "game": "little-raid-table",
+  "v": 1,
+  "rng": 3983905246,
+  "runs": 0,
+  "run": null,
+  "almanac": {
+    "fielded": [],
+    "threeStars": [],
+    "forged": [],
+    "topped": [],
+    "bosses": [[], [], []],
+    "best": [0, 0, 0],
+    "runs": 0
+  },
+  "trail": 0,
+  "looks": {
+    "cloth": "bare",
+    "lantern": "iron",
+    "bases": "plain",
+    "owned": []
+  }
+}

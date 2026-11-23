@@ -5,11 +5,20 @@
  * fight" opens it again for the fight the run kept, until the next fight takes its place.
  *
  * The fight is played again from the setup the run kept to be counted, so the sheet says the same
- * after a reload as it did when the fight ended.
+ * after a reload as it did when the fight ended. As a fight ends, its title is how Leaf decided it
+ * came out, and a fight these rules would play otherwise has no tally.
  */
 import { register } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
-import { type Fight, type FightEvent, type FightSetup, openFight, stepFight, tally } from "@sequoia-leaf/raid";
+import {
+  type Fight,
+  type FightEvent,
+  type FightSetup,
+  type FightSummary,
+  openFight,
+  stepFight,
+  tally,
+} from "@sequoia-leaf/raid";
 
 import { fightTitle, opening } from "../logic.ts";
 import { snd } from "../sounds.ts";
@@ -32,11 +41,11 @@ const SH: {
   box: HTMLElement | null;
   takings: HTMLElement | null;
   carry: (() => void) | null;
-} = { up: null, played: null, view: null, box: null, takings: null, carry: null };
+  look: (() => void) | null;
+} = { up: null, played: null, view: null, box: null, takings: null, carry: null, look: null };
 
-/** The last fight the run kept (or the run just ended), played again; the same one as before if it has not changed. */
-function played(): Played | null {
-  const setup = S.run?.last ?? S.ended?.run.last ?? null;
+/** A fight played again from its setup: the same one as before if it has not changed. */
+function played(setup: FightSetup | null): Played | null {
   if (!setup) return null;
   const key = JSON.stringify(setup);
   if (SH.played?.key === key) return SH.played;
@@ -65,14 +74,13 @@ export function registerFought(): void {
   });
 }
 
-/** What "Carry on" does: whoever runs the room says. */
-export function onCarry(fn: () => void): void {
-  SH.carry = fn;
+/** What "Carry on", and putting the last fight away, do: whoever runs the room says. */
+export function onCarry(carry: () => void, look: () => void): void {
+  SH.carry = carry;
+  SH.look = look;
 }
 
 export const sheetUp = (): "after" | "again" | null => SH.up;
-/** Whether there is a last fight to look back on. */
-export const hasLastFight = (): boolean => (S.run?.last ?? null) !== null;
 
 /** Keeps the sheet clear of the bar along the top, however tall the window is. */
 export function placeSheet(): void {
@@ -86,31 +94,36 @@ export function placeSheet(): void {
 }
 
 /**
- * Opens the sheet: `after` as a fight ends, with room for the takings and "Carry on"; `again` from
- * "Last fight", with a button to put it away.
+ * Opens the sheet: `after` as a fight ends, for that fight as Leaf decided it (`leaf`), with room for
+ * the takings and "Carry on"; `again` for the last fight the run kept, with a button to put it away.
  */
-export function openSheet(how: "after" | "again"): void {
-  const p = played();
+export function openSheet(
+  how: "after" | "again",
+  leaf?: { setup: FightSetup; outcome: FightSummary; kept: boolean },
+): void {
+  const p = played(leaf?.setup ?? S.run?.last ?? null);
   const bottom = document.getElementById("bottom");
   if (!p || !bottom) return;
   closeSheet(false);
-  const result = p.fight.result ?? "draw";
-  const title = fightTitle(result, p.fight.tick);
+  const result = leaf?.outcome.result ?? p.fight.result ?? "draw";
+  const title = fightTitle(result, leaf?.outcome.ticks ?? p.fight.tick);
   const view = tallyView(foughtRef, "sheet");
   view.across(p.setup.sides[1].who);
-  view.show(
-    p.fight.units,
-    tally(
-      p.events,
-      p.fight.units.map((u) => u.id),
-    ),
-  );
+  if (leaf?.kept !== false) {
+    view.show(
+      p.fight.units,
+      tally(
+        p.events,
+        p.fight.units.map((u) => u.id),
+      ),
+    );
+  }
   const close =
     how === "again"
       ? el(
           "button",
           "k-btn wood icon sm",
-          { type: "button", "aria-label": "Put it away", onclick: () => closeSheet() },
+          { type: "button", "aria-label": "Put it away", onclick: () => SH.look?.() },
           icon("close"),
         )
       : null;
@@ -164,10 +177,4 @@ export function closeSheet(sound = true): void {
   SH.view = null;
   SH.takings = null;
   SH.up = null;
-}
-
-/** Opens "Last fight", or puts it away if it is up. */
-export function toggleLastFight(): void {
-  if (SH.up === "again") closeSheet();
-  else if (S.mode === "plan" && hasLastFight() && (S.run?.choices.length ?? 0) === 0) openSheet("again");
 }

@@ -13,7 +13,7 @@ through `index.ts`.
 
 ```sh
 bun test                                         # the rules, checked against their own sentences
-bun ../../apps/battler/review/balance.ts 200 0   # 200 runs for each bot habit on the first trail
+bun review/balance.ts 200 0                      # 200 runs for each bot habit on the first trail
 ```
 
 ## The rules as built
@@ -309,7 +309,7 @@ it would send. `encodeTable` and `decodeTable` are the table as Leaf stores it.
 | `formation.ts`         | A plain way of seating a party, used by the bot and the sparring partners                                             |
 | `spar.ts`              | The regulars' parties for sparring                                                                                    |
 | `run.ts`               | The run and every action on it                                                                                        |
-| `save.ts`              | A run as plain data and as text, and back                                                                             |
+| `save.ts`              | A run read back from plain data: shape first, then today's numbers                                                    |
 | `outside.ts`           | Payout, almanac, trails                                                                                               |
 | `content/looks.ts`     | How the table may look: cloths, lanterns, bases                                                                       |
 | `game.ts`              | The table as Leaf plays it: state, commands, what the page is shown, predictions                                      |
@@ -348,8 +348,9 @@ import * as raid from "@sequoia-leaf/raid";
 let almanac = raid.newAlmanac();
 const run = raid.startRun(seed, { trail: 0 });
 
-// A choice is waiting whenever run.choices has anything in it: the first pick, a component, a boon.
-// Nothing else is allowed until it is settled.
+// Where the run stands is one value, run.stage: planning (with the picks waiting, the first up),
+// fighting (with the fight Leaf decided), or over (and how). While a pick waits (raid.picksOf(run)),
+// nothing else is allowed until it is settled.
 raid.choose(run, 1);
 
 // Planning. Read the run to draw it: run.stall, run.bench, run.board, run.items, run.acorns,
@@ -374,7 +375,7 @@ if (begun.ok) {
 // beginFight: that is all "skip" is.
 const taken = raid.takeTakings(run);
 
-if (run.phase === "over") {
+if (run.stage.phase === "over") {
   const summary = raid.summariseRun(run);
   const paid = raid.payout(summary); // Coins
   const recorded = raid.recordRun(almanac, summary); // .news says what is new
@@ -410,15 +411,19 @@ a shield); the health and shields it gave, to others or itself; how many it fell
 still stands. What a summoned figure did counts for whoever summoned it, so a Glorplet has no entry
 of its own. `partsOf(did, "damage" | "tanked" | "healing")` gives the parts a bar is drawn in.
 
-**Saving.** `saveRun(run)` is a string (version 2); `loadRun(text)` gives back the identical run, or
-a reason it is refused, and `checkRun(v)` does the same for plain data. It reads the data field by
-field and turns away anything this version could not have made. A run saved by an older game is
-brought up to date as it is read, without a new version: a field it did not keep yet gets what a new
-run starts with, a charm taken when charms counted for their kin gets its emblem on the item bench
-(once: not when the emblem is on the bench or held already), and a stored party's old `charms` is
-let be and counts for nothing. A fight in progress keeps its setup, and how it comes out is worked
-out again from that. The last fight fought is kept as its setup (`run.last`), so it can be played
-again to be looked back on.
+**Reading it back.** A run is kept as the plain data it is. `checkRun(v)` reads it back in two
+layers: first the shape (figures, items and boons the content has, numbers that are numbers, parts
+that agree), refusing anything else with a reason; then today's numbers, refusing nothing: xp past a
+step makes its levels, the stall and the bench are today's size, a figure holds what one may hold
+now and the rest goes to the item bench, and what the run drew and no longer reads is laid out
+afresh (`layOutAfresh`). A run kept by an older game is brought up to date as it is read: a field it
+did not keep yet gets what a new run starts with, a charm taken when charms counted for their kin
+gets its emblem on the item bench (once), and a stored party's old `charms` is let be. A table of
+version 1 kept where its run stood as a phase, the picks, two flags and the fight beside them; it
+reads as one `stage`. A fight in progress keeps its setup and the outcome Leaf decided, read as it
+was kept. The last fight fought is kept as its setup (`run.last`), so it can be played again to be
+looked back on. `stored/` holds tables as Leaf stores them, frozen; `stored.test.ts` fails if a
+change stops one reading.
 
 ## Trying the numbers
 

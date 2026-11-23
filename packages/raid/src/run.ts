@@ -65,7 +65,15 @@ export type Choice =
   | { kind: "starter"; options: FigureId[] }
   | { kind: "component"; options: ComponentId[] }
   | { kind: "boon"; options: BoonId[]; redraws: number };
-export type Phase = "plan" | "fight" | "over";
+/** How a run ended: its last boss beaten, its health gone, or walked home from. */
+export type Ending = "won" | "lost" | "left";
+/**
+ * Where a run stands, as one value: planning a room, with the picks waiting (the first is up); the
+ * room's fight, as Leaf decided it when the party set out; or over, and how.
+ */
+export type Stage =
+  { phase: "plan"; picks: Choice[] } | { phase: "fight"; fight: Fought } | { phase: "over"; ending: Ending };
+export type Phase = Stage["phase"];
 /** How one room went. */
 export interface RoomRecord {
   room: number;
@@ -83,7 +91,7 @@ export interface Run {
   trail: number;
   /** The room being planned for or fought, counting from 0. */
   room: number;
-  phase: Phase;
+  stage: Stage;
   resolve: number;
   acorns: number;
   /** Rooms won in a row (above 0), or lost in a row (below 0), up to the last one fought. A draw makes it 0. */
@@ -101,19 +109,12 @@ export interface Run {
   rustles: number;
   bought: number;
   boons: BoonId[];
-  /** Waiting to be chosen, first one first. */
-  choices: Choice[];
   /** Who is waiting in the room. */
   foe: Party;
   record: RoomRecord[];
   nextId: number;
-  won: boolean;
-  /** The player walked home early. */
-  left: boolean;
   /** The last fight fought, as it was set up, so that it can be played again to be looked back on. */
   last: FightSetup | null;
-  /** The fight being fought: the boards as they were locked, its seed, and how it comes out. Null outside a fight. */
-  fight: Fought | null;
   /** Things this run has done that the almanac remembers. */
   seen: {
     fielded: FigureId[];
@@ -123,10 +124,41 @@ export interface Run {
   };
 }
 
+/**
+ * A run without its streams: what the page is shown of it, and all that a command that draws
+ * nothing reads and changes. The page keeps one, and does such commands to it ahead of Leaf.
+ */
+export type RunView = Omit<Run, "seed" | "rng">;
+
+/** The picks waiting, the first one up; none outside planning. */
+export const picksOf = (run: Pick<Run, "stage">): readonly Choice[] =>
+  run.stage.phase === "plan" ? run.stage.picks : [];
+/** The fight being fought, as Leaf decided it; null outside a fight. */
+export const foughtOf = ({ stage }: Pick<Run, "stage">): Fought | null =>
+  stage.phase === "fight" ? stage.fight : null;
+/** How the run ended; null for one not over. */
+export const endingOf = ({ stage }: Pick<Run, "stage">): Ending | null =>
+  stage.phase === "over" ? stage.ending : null;
+
 /** A fight as the run keeps it while it is being fought: its setup, and how it came out. */
 export interface Fought {
   setup: FightSetup;
   outcome: FightSummary;
+}
+
+/**
+ * Whether the rules loaded here play a fight from its setup to the outcome Leaf kept. A page whose
+ * rules are not Leaf's (one opened before a deploy) does not, and loads again rather than show a
+ * fight that is not the one paid for.
+ */
+export function playsAsKept({ setup, outcome }: Fought): boolean {
+  const here = resolveFight(setup);
+  return (
+    here.result === outcome.result &&
+    here.ticks === outcome.ticks &&
+    here.standing[0] === outcome.standing[0] &&
+    here.standing[1] === outcome.standing[1]
+  );
 }
 
 /** Why acorns were paid: the room, a win, savings, gnomes, a streak, or Windfall. */
@@ -220,36 +252,36 @@ const yes = (notes: Note[]): Done => ({ ok: true, notes });
 // ---------- looking at a run ----------
 
 /** Everyone the party owns, board first. */
-export function pieces(run: Run): Piece[] {
+export function pieces(run: Pick<Run, "board" | "bench">): Piece[] {
   const out: Piece[] = [];
   for (const p of run.board) if (p) out.push(p);
   for (const p of run.bench) if (p) out.push(p);
   return out;
 }
-export const fielded = (run: Run): number => run.board.reduce((n, p) => n + (p ? 1 : 0), 0);
+export const fielded = (run: Pick<Run, "board">): number => run.board.reduce((n, p) => n + (p ? 1 : 0), 0);
 /** How many figures may be fielded: the level, and one more with An Extra Chair. */
-export const fieldCap = (run: Run): number =>
+export const fieldCap = (run: Pick<Run, "level" | "boons">): number =>
   run.level + (run.boons.includes("extrachair") ? boonNumber("extrachair", "more") : 0);
 /** Who is at a spot: null for nobody, undefined for no such spot. */
-export function pieceAt(run: Run, spot: Spot): Piece | null | undefined {
+export function pieceAt(run: RunView, spot: Spot): Piece | null | undefined {
   if (!Number.isInteger(spot.at)) return undefined;
   return spot.on === "board" ? run.board[spot.at] : run.bench[spot.at];
 }
 /** Where a figure is, by its number. */
-export function spotOf(run: Run, piece: number): Spot | null {
+export function spotOf(run: Pick<Run, "board" | "bench">, piece: number): Spot | null {
   const seat = run.board.findIndex((p) => p?.id === piece);
   if (seat >= 0) return { on: "board", at: seat };
   const slot = run.bench.findIndex((p) => p?.id === piece);
   return slot >= 0 ? { on: "bench", at: slot } : null;
 }
 /** Experience still needed for the next level; 0 at the top. */
-export const xpToNext = (run: Run): number =>
+export const xpToNext = (run: Pick<Run, "level" | "xp">): number =>
   run.level >= MAX_LEVEL ? 0 : (ECONOMY.levelXp[run.level - 1] ?? 0) - run.xp;
 /** The most interest a room can pay. */
-export const interestCap = (run: Run): number =>
+export const interestCap = (run: Pick<Run, "boons">): number =>
   run.boons.includes("deeppockets") ? boonNumber("deeppockets", "cap") : ECONOMY.interestMost;
 /** What the acorns now held would earn after the next room. */
-export const interestNow = (run: Run): number => {
+export const interestNow = (run: Pick<Run, "boons" | "acorns">): number => {
   const per = run.boons.includes("deeppockets") ? boonNumber("deeppockets", "per") : ECONOMY.interestPer;
   return Math.min(interestCap(run), Math.floor(run.acorns / per));
 };
@@ -265,7 +297,7 @@ export function streakPay(streak: number): number {
   return table[Math.min(Math.abs(streak), table.length - 1)] ?? 0;
 }
 /** What an offer on the stall costs right now; 0 for an empty place. */
-export function priceOf(run: Run, offer: number): number {
+export function priceOf(run: Pick<Run, "stall" | "boons" | "bought">, offer: number): number {
   const kind = run.stall[offer];
   if (!kind) return 0;
   const off = run.boons.includes("haggler") && run.bought === 0 ? boonNumber("haggler", "off") : 0;
@@ -273,9 +305,9 @@ export function priceOf(run: Run, offer: number): number {
 }
 export const sellValue = (piece: Piece): number => sellPrice(FIGURES[piece.kind].tier, piece.stars);
 /** What the next rustle costs. */
-export const rustleCost = (run: Run): number => (run.rustles > 0 ? 0 : ECONOMY.rustle);
+export const rustleCost = (run: Pick<Run, "rustles">): number => (run.rustles > 0 ? 0 : ECONOMY.rustle);
 /** The party as it would go into a fight now. */
-export function partyOf(run: Run): Party {
+export function partyOf(run: Pick<Run, "board" | "boons">): Party {
   const figures: Placed[] = [];
   run.board.forEach((p, seat) => {
     if (p) figures.push({ kind: p.kind, stars: p.stars, seat, items: p.items.slice(), fed: p.fed });
@@ -289,13 +321,10 @@ export function partyOf(run: Run): Party {
   };
 }
 /** The traits the fielded party has any of, with counts and steps, switched-on ones first. */
-export const traitsNow = (run: Run): TraitState[] => traitStates(run.board.flatMap((p) => (p ? [p] : [])));
+export const traitsNow = (run: Pick<Run, "board">): TraitState[] =>
+  traitStates(run.board.flatMap((p) => (p ? [p] : [])));
 /** The room the run is in. */
-export const roomNow = (run: Run) => ROOMS[Math.min(run.room, ROOM_COUNT - 1)];
-/** The fight for the room being fought: the same setup every time it is asked for. Null outside a fight. */
-export function fightSetup(run: Run): FightSetup | null {
-  return run.phase === "fight" ? (run.fight?.setup ?? null) : null;
-}
+export const roomNow = (run: Pick<Run, "room">) => ROOMS[Math.min(run.room, ROOM_COUNT - 1)];
 
 // ---------- the forest's side ----------
 
@@ -324,7 +353,8 @@ export function opposition(seed: number, roomIndex: number, trailIndex: number):
 /** Who the stall may offer: every figure, to everyone, from the first run. Nothing won or bought anywhere changes it. */
 export const STALL_POOL: readonly FigureId[] = FIGURE_IDS;
 
-const stallSize = (run: Run): number =>
+/** How many offers the stall has: more with A Wider Stall. */
+export const stallSize = (run: Pick<Run, "boons">): number =>
   run.boons.includes("widestall") ? boonNumber("widestall", "offers") : ECONOMY.stall;
 function drawOffer(run: Run): FigureId | null {
   const odds = STALL_ODDS[Math.min(run.level, STALL_ODDS.length) - 1] ?? STALL_ODDS[0];
@@ -362,7 +392,7 @@ function boonOptions(run: Run, not: readonly BoonId[]): BoonId[] {
 }
 const componentOptions = (run: Run, count: number): ComponentId[] => shuffled(run, COMPONENT_IDS).slice(0, count);
 
-function newPiece(run: Run, kind: FigureId): Piece {
+function newPiece(run: RunView, kind: FigureId): Piece {
   return { id: run.nextId++, kind, stars: 1, items: [], fed: 0 };
 }
 function remember<T>(list: T[], v: T): void {
@@ -387,7 +417,7 @@ export function startRun(seed: number, options: RunOptions = {}): Run {
     rng: mix(seed >>> 0, 1),
     trail,
     room: 0,
-    phase: "plan",
+    stage: { phase: "plan", picks: [] },
     resolve: ECONOMY.resolve,
     acorns: ECONOMY.startAcorns,
     streak: 0,
@@ -401,18 +431,17 @@ export function startRun(seed: number, options: RunOptions = {}): Run {
     rustles: ECONOMY.freeRustles,
     bought: 0,
     boons: [],
-    choices: [],
     foe: { who: "", title: "", figures: [], boons: [], might: 100 },
     record: [],
     nextId: 1,
-    won: false,
-    left: false,
     last: null,
-    fight: null,
     seen: { fielded: [], threeStars: [], forged: [], topped: [] },
   };
   const cheapest = STALL_POOL.filter((id) => FIGURES[id].tier === 1);
-  run.choices.push({ kind: "starter", options: shuffled(run, cheapest).slice(0, ECONOMY.starters) });
+  run.stage = {
+    phase: "plan",
+    picks: [{ kind: "starter", options: shuffled(run, cheapest).slice(0, ECONOMY.starters) }],
+  };
   restock(run);
   run.foe = opposition(draw32(run), 0, trail);
   return run;
@@ -429,16 +458,12 @@ export function startRun(seed: number, options: RunOptions = {}): Run {
 export function layOutAfresh(run: Run, seed: number): void {
   run.seed = seed >>> 0;
   run.rng = mix(run.seed, 1);
-  run.phase = "plan";
-  run.fight = null;
   run.last = null;
-  run.won = false;
-  run.left = false;
   run.held = false;
   run.bought = 0;
   run.rustles = ECONOMY.freeRustles + (run.boons.includes("regular") ? boonNumber("regular", "rustles") : 0);
   const cheapest = STALL_POOL.filter((id) => FIGURES[id].tier === 1);
-  run.choices = run.choices.map((choice): Choice => {
+  const picks = picksOf(run).map((choice): Choice => {
     if (choice.kind === "starter")
       return { kind: "starter", options: shuffled(run, cheapest).slice(0, ECONOMY.starters) };
     if (choice.kind === "component") {
@@ -447,25 +472,26 @@ export function layOutAfresh(run: Run, seed: number): void {
     }
     return { kind: "boon", options: boonOptions(run, []), redraws: Math.min(choice.redraws, ECONOMY.boonRedraws) };
   });
+  run.stage = { phase: "plan", picks };
   restock(run);
   run.foe = opposition(draw32(run), run.room, run.trail);
 }
 
 /** Why nothing can be planned just now, or null if it can. */
-function notPlanning(run: Run): Why | null {
-  if (run.phase === "over") return "raid_over";
-  if (run.phase === "fight") return "fighting";
-  const choice = run.choices[0];
-  if (!choice) return null;
-  if (choice.kind === "starter") return "pick_starter";
-  return choice.kind === "boon" ? "pick_boon" : "pick_component";
+function notPlanning({ stage }: Pick<Run, "stage">): Why | null {
+  if (stage.phase === "over") return "raid_over";
+  if (stage.phase === "fight") return "fighting";
+  const up = stage.picks[0];
+  if (!up) return null;
+  return up.kind === "starter" ? "pick_starter" : up.kind === "boon" ? "pick_boon" : "pick_component";
 }
 
 /** Settles the choice that is waiting, by taking one of its options. */
 export function choose(run: Run, option: number): Done {
-  if (run.phase === "over") return no("raid_over");
-  const choice = run.choices[0];
-  if (!choice) return no("nothing_to_choose");
+  const { stage } = run;
+  if (stage.phase === "over") return no("raid_over");
+  const choice = stage.phase === "plan" ? stage.picks[0] : undefined;
+  if (stage.phase !== "plan" || !choice) return no("nothing_to_choose");
   const notes: Note[] = [];
   if (choice.kind === "starter") {
     const kind = choice.options[option];
@@ -508,15 +534,15 @@ export function choose(run: Run, option: number): Done {
       notes.push({ t: "items", why: "charm", items: [boon] });
     }
   }
-  run.choices.shift();
-  const next = run.choices[0];
+  stage.picks.shift();
+  const next = stage.picks[0];
   if (next) notes.push({ t: "choice", kind: next.kind });
   return yes(notes);
 }
 /** Swaps the three boons on offer for three others. Each offer of boons allows it once. */
 export function redraw(run: Run): Done {
-  if (run.phase === "over") return no("raid_over");
-  const choice = run.choices[0];
+  if (run.stage.phase === "over") return no("raid_over");
+  const choice = picksOf(run)[0];
   if (choice?.kind !== "boon") return no("no_boons");
   if (choice.redraws <= 0) return no("redrawn");
   choice.redraws--;
@@ -532,7 +558,7 @@ export function redraw(run: Run): Done {
  * items of the other two go to it while it has room, and the rest back to the item bench. `loose`
  * is a figure just bought that has no place of its own yet.
  */
-function merge(run: Run, loose: Piece | null, notes: Note[]): void {
+function merge(run: RunView, loose: Piece | null, notes: Note[]): void {
   let spare = loose;
   for (;;) {
     const groups = new Map<string, Piece[]>();
@@ -590,7 +616,7 @@ function merge(run: Run, loose: Piece | null, notes: Note[]): void {
 // ---------- planning ----------
 
 /** Buys an offer from the stall onto the bench. With a full bench, only if it completes three of a kind. */
-export function buy(run: Run, offerAt: number): Done {
+export function buy(run: RunView, offerAt: number): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
   const kind = run.stall[offerAt];
@@ -612,7 +638,7 @@ export function buy(run: Run, offerAt: number): Done {
   return yes(notes);
 }
 /** Sells a figure for acorns. What it was holding goes back to the item bench. */
-export function sell(run: Run, from: Spot): Done {
+export function sell(run: RunView, from: Spot): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
   const piece = pieceAt(run, from);
@@ -628,7 +654,7 @@ export function sell(run: Run, from: Spot): Done {
   ]);
 }
 /** Moves a figure to another spot, changing places with whoever is there. */
-export function move(run: Run, from: Spot, to: Spot): Done {
+export function move(run: RunView, from: Spot, to: Spot): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
   const piece = pieceAt(run, from);
@@ -646,7 +672,7 @@ export function move(run: Run, from: Spot, to: Spot): Done {
   return yes([{ t: "moved", piece: piece.id, from, to, swapped: there?.id ?? null }]);
 }
 /** Takes a figure off the board to the first free place on the bench. */
-export function toBench(run: Run, seat: number): Done {
+export function toBench(run: RunView, seat: number): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
   if (!run.board[seat]) return no("nobody_there");
@@ -667,13 +693,14 @@ export function rustle(run: Run): Done {
   return yes([{ t: "rustled", cost, stall: run.stall.slice() }]);
 }
 /** Keeps the stall as it is for the next room, or lets it go again. */
-export function hold(run: Run, on: boolean = !run.held): Done {
+export function hold(run: RunView, on: boolean = !run.held): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
   run.held = on;
   return yes([{ t: "held", on }]);
 }
-function gainXp(run: Run, amount: number, notes: Note[]): void {
+/** Adds experience, and the levels it makes. */
+export function gainXp(run: RunView, amount: number, notes: Note[]): void {
   if (run.level >= MAX_LEVEL) return;
   run.xp += amount;
   for (;;) {
@@ -686,7 +713,7 @@ function gainXp(run: Run, amount: number, notes: Note[]): void {
   if (run.level >= MAX_LEVEL) run.xp = 0;
 }
 /** Buys experience with acorns. */
-export function buyXp(run: Run): Done {
+export function buyXp(run: RunView): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
   if (run.level >= MAX_LEVEL) return no("top_level");
@@ -700,7 +727,7 @@ export function buyXp(run: Run): Done {
  * Hands an item from the item bench to a figure. Two components on one figure become a finished
  * item; an emblem is not given to a figure of its kin already.
  */
-export function giveItem(run: Run, itemAt: number, to: Spot): Done {
+export function giveItem(run: RunView, itemAt: number, to: Spot): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
   const item = run.items[itemAt];
@@ -727,14 +754,13 @@ export function beginFight(run: Run): Begun {
   if (stop) return no(stop);
   if (fielded(run) === 0) return no("board_empty");
   if (fielded(run) > fieldCap(run)) return no("too_many_fielded");
-  run.phase = "fight";
   for (const p of run.board) if (p) remember(run.seen.fielded, p.kind);
   for (const state of traitsNow(run)) {
     if (state.step >= topStep(state.trait)) remember(run.seen.topped, state.trait);
   }
   const setup: FightSetup = { seed: draw32(run), sides: [partyOf(run), structuredClone(run.foe)] };
   const outcome = resolveFight(setup);
-  run.fight = { setup, outcome };
+  run.stage = { phase: "fight", fight: { setup, outcome } };
   return { ok: true, notes: [{ t: "fight", room: run.room, seed: setup.seed, setup, outcome }], setup };
 }
 
@@ -744,9 +770,9 @@ export function beginFight(run: Run): Begun {
  * It may be called at any point after `beginFight`, which is all "skip" is.
  */
 export function takeTakings(run: Run): Taken {
-  const fought = run.phase === "fight" ? run.fight : null;
-  if (!fought) return no(run.phase === "over" ? "raid_over" : "no_fight");
-  const { setup, outcome: fight } = fought;
+  const { stage } = run;
+  if (stage.phase !== "fight") return no(stage.phase === "over" ? "raid_over" : "no_fight");
+  const { setup, outcome: fight } = stage.fight;
   const room = ROOMS[run.room];
   if (!room) return no("no_such_room");
   const won = fight.result === "win";
@@ -756,7 +782,6 @@ export function takeTakings(run: Run): Taken {
   run.record.push({ room: run.room, kind: room.kind, result: fight.result, standing: fight.standing, boss });
   run.streak = nextStreak(run.streak, fight.result);
   run.last = setup;
-  run.fight = null;
 
   if (!won) {
     // A loss costs a base and one more for each enemy left; a draw only the base.
@@ -774,9 +799,8 @@ export function takeTakings(run: Run): Taken {
     }
   }
   if (run.resolve <= 0 || (won && last)) {
-    run.phase = "over";
-    run.won = won && last;
-    notes.push({ t: "over", won: run.won });
+    run.stage = { phase: "over", ending: won && last ? "won" : "lost" };
+    notes.push({ t: "over", won: won && last });
     return { ok: true, notes, fight };
   }
 
@@ -800,20 +824,20 @@ export function takeTakings(run: Run): Taken {
   gainXp(run, xp, notes);
 
   // Things to choose: components from trouble and bosses, a boon after some rooms.
+  const picks: Choice[] = [];
   if (room.kind !== "spar") {
-    const picks = room.kind === "boss" && won ? 2 : 1;
-    for (let i = 0; i < picks; i++) {
+    for (let i = 0; i < (room.kind === "boss" && won ? 2 : 1); i++) {
       const count = won ? ECONOMY.componentsWon : ECONOMY.componentsLost;
-      run.choices.push({ kind: "component", options: componentOptions(run, count) });
+      picks.push({ kind: "component", options: componentOptions(run, count) });
     }
   }
   const boonDue =
     ECONOMY.boonRooms.some((r) => r === run.room) && run.record.filter((r) => r.room === run.room).length === 1;
-  if (boonDue) run.choices.push({ kind: "boon", options: boonOptions(run, []), redraws: ECONOMY.boonRedraws });
+  if (boonDue) picks.push({ kind: "boon", options: boonOptions(run, []), redraws: ECONOMY.boonRedraws });
 
   // On to the next room. The last one is fought again until it is won or resolve runs out.
   if (!last) run.room++;
-  run.phase = "plan";
+  run.stage = { phase: "plan", picks };
   run.bought = 0;
   run.rustles = ECONOMY.freeRustles + (run.boons.includes("regular") ? boonNumber("regular", "rustles") : 0);
   if (run.held) run.held = false;
@@ -821,18 +845,15 @@ export function takeTakings(run: Run): Taken {
   run.foe = opposition(draw32(run), run.room, run.trail);
   const next = ROOMS[run.room];
   if (next) notes.push({ t: "room", room: run.room, kind: next.kind, who: run.foe.who, title: run.foe.title });
-  const waiting = run.choices[0];
+  const waiting = picks[0];
   if (waiting) notes.push({ t: "choice", kind: waiting.kind });
   return { ok: true, notes, fight };
 }
 
 /** Walks home early. The run is over, and is still paid for the rooms it cleared. */
-export function abandon(run: Run): Done {
-  if (run.phase === "over") return no("raid_over");
-  run.phase = "over";
-  run.left = true;
-  run.choices = [];
-  run.fight = null;
+export function abandon(run: RunView): Done {
+  if (run.stage.phase === "over") return no("raid_over");
+  run.stage = { phase: "over", ending: "left" };
   return yes([{ t: "over", won: false }]);
 }
 
@@ -841,8 +862,8 @@ export function abandon(run: Run): Done {
 /** What a run amounted to: what the payout and the almanac are worked out from. */
 export interface RunSummary {
   trail: number;
-  won: boolean;
-  left: boolean;
+  /** How it ended; null for a run not over. */
+  ending: Ending | null;
   /** Rooms won. */
   cleared: number;
   /** The furthest room met, counting from 1. */
@@ -855,14 +876,13 @@ export interface RunSummary {
   /** Traits switched on at their top step. */
   topped: TraitId[];
 }
-export function summariseRun(run: Run): RunSummary {
+export function summariseRun(run: RunView): RunSummary {
   const wonRooms = new Set(run.record.filter((r) => r.result === "win").map((r) => r.room));
   const bosses: BossId[] = [];
   for (const r of run.record) if (r.result === "win" && r.boss && !bosses.includes(r.boss)) bosses.push(r.boss);
   return {
     trail: run.trail,
-    won: run.won,
-    left: run.left,
+    ending: endingOf(run),
     cleared: wonRooms.size,
     reached: Math.min(
       ROOM_COUNT,

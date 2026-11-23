@@ -181,7 +181,6 @@ export {
   type Done,
   fieldCap,
   fielded,
-  fightSetup,
   type Fought,
   giveItem,
   hold,
@@ -203,9 +202,14 @@ export {
   type Refused,
   roomNow,
   type RoomRecord,
+  type Ending,
+  endingOf,
+  foughtOf,
+  picksOf,
   type Run,
   type RunOptions,
   type RunSummary,
+  type Stage,
   rustle,
   rustleCost,
   sell,
@@ -214,6 +218,7 @@ export {
   spotOf,
   STALL_POOL,
   layOutAfresh,
+  playsAsKept,
   startRun,
   streakPay,
   summariseRun,
@@ -225,20 +230,17 @@ export {
   whyText,
   xpToNext,
 } from "./run.ts";
-export { checkRun, type Loaded, loadRun, SAVE_VERSION, saveRun } from "./save.ts";
+export { checkRun, type Loaded, readRunView } from "./save.ts";
 
 // Between runs.
 export {
   type Almanac,
-  ALMANAC_VERSION,
-  loadAlmanac,
   newAlmanac,
   readAlmanac,
   type News,
   type Payout,
   payout,
   recordRun,
-  saveAlmanac,
   trailCleared,
   trailOpen,
 } from "./outside.ts";
@@ -251,6 +253,7 @@ export {
   type Habit,
   type Hands,
   planRoom,
+  planWith,
   playRoom,
   playRun,
   ROLLER,
@@ -289,9 +292,11 @@ export {
 export {
   decodeTable,
   encodeTable,
-  localRun,
+  isPredicted,
+  legal,
   newTable,
   planCommands,
+  type Predicted,
   PREDICTED,
   predict,
   RAID,

@@ -1,26 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
-import { BOSS_IDS, FIGURE_IDS, FIGURES } from "./content/figures.ts";
+import { BOSS_IDS, type BossId, FIGURE_IDS, FIGURES } from "./content/figures.ts";
 import { FINISHED_IDS } from "./content/items.ts";
 import { PAYOUT } from "./content/keepsakes.ts";
-import { TRAILS } from "./content/rooms.ts";
+import { ROOM_COUNT, TRAILS } from "./content/rooms.ts";
 import { TRAIT_IDS } from "./content/traits.ts";
-import {
-  ALMANAC_VERSION,
-  loadAlmanac,
-  newAlmanac,
-  payout,
-  recordRun,
-  saveAlmanac,
-  trailCleared,
-  trailOpen,
-} from "./outside.ts";
+import { type Almanac, newAlmanac, payout, readAlmanac, recordRun, trailCleared, trailOpen } from "./outside.ts";
 import { type RunSummary, startRun } from "./run.ts";
 
 const summary = (more: Partial<RunSummary> = {}): RunSummary => ({
   trail: 0,
-  won: false,
-  left: false,
+  ending: "lost",
   cleared: 0,
   reached: 1,
   bosses: [],
@@ -31,11 +21,22 @@ const summary = (more: Partial<RunSummary> = {}): RunSummary => ({
   ...more,
 });
 const WON = summary({
-  won: true,
+  ending: "won",
   cleared: 15,
   reached: 15,
   bosses: ["oldbramble", "hoardmagpie", "bigcrab"],
 });
+
+/** An almanac as a table keeps it, written out and read back. */
+const saveAlmanac = (almanac: Almanac): string => JSON.stringify({ almanac });
+function loadAlmanac(text: string): Almanac | null {
+  try {
+    const raw: unknown = JSON.parse(text);
+    return readAlmanac(typeof raw === "object" && raw !== null && "almanac" in raw ? raw.almanac : null);
+  } catch {
+    return null;
+  }
+}
 
 describe("the payout", () => {
   test("is for rooms won, bosses beaten, and a bonus for winning", () => {
@@ -52,7 +53,7 @@ describe("the payout", () => {
   });
   test("an abandoned run is paid for what it cleared, the same as one that walked home", () => {
     const walked = summary({ cleared: 6, bosses: ["oldbramble"] });
-    expect(payout({ ...walked, left: true })).toEqual(payout(walked));
+    expect(payout({ ...walked, ending: "left" })).toEqual(payout(walked));
   });
   test("harder trails pay their share more, and the lines add up to the total", () => {
     for (let trail = 0; trail < TRAILS.length; trail++) {
@@ -196,20 +197,29 @@ describe("keeping the almanac", () => {
     };
     expect(loadAlmanac(change(() => {}))).not.toBeNull();
     for (const text of ["", "nope", "{}", "[]", "null"]) expect(loadAlmanac(text)).toBeNull();
-    expect(loadAlmanac(change((_, whole) => (whole.v = ALMANAC_VERSION + 1)))).toBeNull();
-    expect(loadAlmanac(change((_, whole) => (whole.game = "little-raid")))).toBeNull();
     expect(loadAlmanac(change((a) => (a.fielded = ["dragon"])))).toBeNull();
     expect(loadAlmanac(change((a) => (a.fielded = ["worm", "worm"])))).toBeNull();
     expect(loadAlmanac(change((a) => (a.forged = ["thorn"])))).toBeNull();
     expect(loadAlmanac(change((a) => (a.bosses = [["gnat"], [], []])))).toBeNull();
-    expect(loadAlmanac(change((a) => (a.bosses = [[]])))).toBeNull();
-    expect(loadAlmanac(change((a) => (a.best = [16, 0, 0])))).toBeNull();
-    expect(loadAlmanac(change((a) => (a.best = [3, 0])))).toBeNull();
+    expect(loadAlmanac(change((a) => (a.best = [3, "far", 0])))).toBeNull();
     expect(loadAlmanac(change((a) => (a.runs = -1)))).toBeNull();
     // An almanac kept while some figures were locked still loads, whatever it says it opened.
     const kept = loadAlmanac(change((a) => (a.opened = ["kettle", "crab40"])));
     expect(kept).not.toBeNull();
     expect(kept && "opened" in kept).toBe(false);
     expect(loadAlmanac(change((a) => delete a.topped))).toBeNull();
+  });
+  test("one kept with another number of trails, or rooms, has one for each trail now and no room past the last", () => {
+    const almanac = recordRun(newAlmanac(), WON).almanac;
+    const fewer = readAlmanac({ ...almanac, bosses: [["bigcrab"]], best: [3] });
+    expect([fewer?.bosses, fewer?.best]).toEqual([
+      TRAILS.map((_, i): BossId[] => (i === 0 ? ["bigcrab"] : [])),
+      TRAILS.map((_, i) => (i === 0 ? 3 : 0)),
+    ]);
+    const more = readAlmanac({ ...almanac, bosses: [[], [], [], []], best: [ROOM_COUNT + 1, 0, 0, 9] });
+    expect([more?.bosses, more?.best]).toEqual([
+      TRAILS.map(() => []),
+      TRAILS.map((_, i) => (i === 0 ? ROOM_COUNT : 0)),
+    ]);
   });
 });

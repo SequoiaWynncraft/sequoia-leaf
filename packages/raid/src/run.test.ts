@@ -13,9 +13,10 @@ import {
   buy,
   buyXp,
   choose,
+  endingOf,
   fieldCap,
   fielded,
-  fightSetup,
+  foughtOf,
   giveItem,
   hold,
   interestNow,
@@ -23,6 +24,7 @@ import {
   move,
   nextStreak,
   opposition,
+  picksOf,
   type Piece,
   pieceAt,
   pieces,
@@ -103,13 +105,13 @@ function fight(run: Run) {
 }
 /** Settles whatever is waiting to be chosen, taking the first option each time. */
 function settle(run: Run): void {
-  while (run.choices.length > 0) expect(choose(run, 0).ok).toBe(true);
+  while (picksOf(run).length > 0) expect(choose(run, 0).ok).toBe(true);
 }
 
 describe("starting a run", () => {
   test("it opens on a pick of one from three one-acorn figures, and nothing else may happen first", () => {
     const run = startRun(42);
-    const choice = run.choices[0];
+    const choice = picksOf(run)[0];
     expect(choice?.kind).toBe("starter");
     if (choice?.kind !== "starter") return;
     expect(choice.options.length).toBe(3);
@@ -121,7 +123,7 @@ describe("starting a run", () => {
     const picked = choose(run, 1);
     expect(picked.ok).toBe(true);
     expect(run.board[3]?.kind).toBe(choice.options[1] ?? "worm");
-    expect(run.choices.length).toBe(0);
+    expect(picksOf(run).length).toBe(0);
   });
   test("it starts with a few acorns, twenty resolve, level one, and a stall of five cheap figures", () => {
     const run = started();
@@ -129,7 +131,7 @@ describe("starting a run", () => {
     expect(run.resolve).toBe(20);
     expect(run.level).toBe(1);
     expect(run.room).toBe(0);
-    expect(run.phase).toBe("plan");
+    expect(run.stage.phase).toBe("plan");
     expect(run.stall.length).toBe(5);
     for (const kind of run.stall) expect(kind && FIGURES[kind].tier).toBe(1);
     expect(run.board.length).toBe(28);
@@ -715,10 +717,10 @@ describe("resolve", () => {
     const taken = fight(run);
     expect(taken.fight.result).toBe("loss");
     expect(run.resolve).toBe(0);
-    expect(run.phase).toBe("over");
-    expect(run.won).toBe(false);
+    expect(run.stage.phase).toBe("over");
+    expect(endingOf(run)).toBe("lost");
     expect(taken.notes.at(-1)).toEqual({ t: "over", won: false });
-    expect(summariseRun(run)).toMatchObject({ cleared: 1, won: false, left: false, reached: 2 });
+    expect(summariseRun(run)).toMatchObject({ cleared: 1, ending: "lost", reached: 2 });
     expect(buy(run, 0)).toMatchObject({ ok: false, why: "The raid is over." });
     expect(takeTakings(run)).toMatchObject({ ok: false, why: "The raid is over." });
   });
@@ -728,23 +730,23 @@ describe("the rooms", () => {
   test("a room is planned, fought and paid for, in that order", () => {
     const run = winning();
     expect(takeTakings(run)).toMatchObject({ ok: false, why: "There has been no fight yet." });
-    expect(fightSetup(run)).toBeNull();
+    expect(foughtOf(run)).toBeNull();
     const begun = beginFight(run);
     expect(begun.ok).toBe(true);
-    expect(run.phase).toBe("fight");
+    expect(run.stage.phase).toBe("fight");
     for (const refused of [buy(run, 0), rustle(run), buyXp(run), sell(run, { on: "board", at: 3 }), hold(run)]) {
       expect(refused).toMatchObject({ ok: false, why: "The figures are busy fighting." });
     }
     expect(beginFight(run).ok).toBe(false);
     expect(takeTakings(run).ok).toBe(true);
-    expect(run.phase).toBe("plan");
+    expect(run.stage.phase).toBe("plan");
     expect(run.room).toBe(1);
   });
   test("the fight a screen is given is the fight the run pays out on", () => {
     const run = winning(5);
     const begun = beginFight(run);
     if (!begun.ok) throw new Error(begun.why);
-    expect(fightSetup(run)).toEqual(begun.setup);
+    expect(foughtOf(run)?.setup).toEqual(begun.setup);
     const watched = resolveFight(begun.setup);
     const taken = takeTakings(run);
     expect(taken.ok && taken.fight).toEqual(watched);
@@ -769,9 +771,9 @@ describe("the rooms", () => {
     }
     const taken = fight(run);
     expect(taken.fight.result).toBe("win");
-    expect(run.phase).toBe("over");
-    expect(run.won).toBe(true);
-    expect(summariseRun(run)).toMatchObject({ won: true, bosses: ["bigcrab"], reached: 15 });
+    expect(run.stage.phase).toBe("over");
+    expect(endingOf(run)).toBe("won");
+    expect(summariseRun(run)).toMatchObject({ ending: "won", bosses: ["bigcrab"], reached: 15 });
     expect(taken.notes.at(-1)).toEqual({ t: "over", won: true });
   });
   test("the last room is fought again until it is won or resolve runs out", () => {
@@ -780,7 +782,7 @@ describe("the rooms", () => {
     run.foe = opposition(run.seed, run.room, 0);
     const first = fight(run);
     expect(first.fight.result).toBe("loss");
-    expect(run.phase).toBe("plan");
+    expect(run.stage.phase).toBe("plan");
     expect(run.room).toBe(ROOM_COUNT - 1);
     expect(run.foe.figures.some((p) => p.kind === "bigcrab")).toBe(true);
     settle(run);
@@ -790,16 +792,16 @@ describe("the rooms", () => {
     takeTakings(run);
     settle(run);
     fight(run);
-    expect(run.phase).toBe("over");
-    expect(run.won).toBe(false);
+    expect(run.stage.phase).toBe("over");
+    expect(endingOf(run)).toBe("lost");
     expect(run.record.length).toBe(3);
   });
   test("walking home early ends the run", () => {
     const run = winning();
     fight(run);
     expect(abandon(run).ok).toBe(true);
-    expect(run.phase).toBe("over");
-    expect(summariseRun(run)).toMatchObject({ left: true, won: false, cleared: 1 });
+    expect(run.stage.phase).toBe("over");
+    expect(summariseRun(run)).toMatchObject({ ending: "left", cleared: 1 });
     expect(abandon(run)).toMatchObject({ ok: false, why: "The raid is over." });
   });
   test("Greg eats after every fight he is in, up to a point", () => {
@@ -819,7 +821,7 @@ describe("choices after a room", () => {
   test("trouble gives a pick of one component from three when won, from two when lost", () => {
     const won = winning();
     fight(won);
-    const pick = won.choices[0];
+    const pick = picksOf(won)[0];
     expect(pick?.kind).toBe("component");
     expect(pick?.options.length).toBe(3);
     expect(new Set(pick?.options).size).toBe(3);
@@ -830,17 +832,17 @@ describe("choices after a room", () => {
 
     const lost = losing();
     fight(lost);
-    expect(lost.choices[0]?.options.length).toBe(2);
+    expect(picksOf(lost)[0]?.options.length).toBe(2);
   });
   test("sparring gives none; a boss gives two picks when beaten", () => {
     const run = winning();
     run.room = 2;
     fight(run);
-    expect(run.choices.length).toBe(0);
+    expect(picksOf(run).length).toBe(0);
     run.room = 4;
     run.foe = structuredClone(PUSHOVER);
     fight(run);
-    expect(run.choices.map((c) => c.kind)).toEqual(["component", "component", "boon"]);
+    expect(picksOf(run).map((c) => c.kind)).toEqual(["component", "component", "boon"]);
   });
   test("a boon is offered after the second room and after the first two bosses: three to pick from, one redraw", () => {
     expect(ECONOMY.boonRooms).toEqual([1, 4, 9]);
@@ -848,7 +850,7 @@ describe("choices after a room", () => {
     run.room = 1;
     fight(run);
     settleComponents(run);
-    const offer = run.choices[0];
+    const offer = picksOf(run)[0];
     expect(offer?.kind).toBe("boon");
     if (offer?.kind !== "boon") return;
     const first = offer.options.slice();
@@ -868,14 +870,13 @@ describe("choices after a room", () => {
     run.boons = ["secondwind", "extrachair", "windfall", "basket", "headstart"];
     run.room = 1;
     for (let i = 0; i < 30; i++) {
-      run.choices = [];
+      run.stage = { phase: "plan", picks: [] };
       run.record = [];
-      run.phase = "plan";
       run.room = 1;
       run.foe = structuredClone(PUSHOVER);
       fight(run);
       settleComponents(run);
-      const offer = run.choices[0];
+      const offer = picksOf(run)[0];
       if (offer?.kind !== "boon") throw new Error("no boon offered");
       for (const boon of offer.options) {
         expect(run.boons).not.toContain(boon);
@@ -887,14 +888,14 @@ describe("choices after a room", () => {
   });
 });
 function settleComponents(run: Run): void {
-  while (run.choices[0]?.kind === "component") choose(run, 0);
+  while (picksOf(run)[0]?.kind === "component") choose(run, 0);
 }
 
 /** A winning run that has just been offered, and taken, one boon. */
 const withBoon = (boon: Run["boons"][number], prepare: (run: Run) => void = () => {}): Run => {
   const run = winning();
   prepare(run);
-  run.choices = [{ kind: "boon", options: [boon], redraws: 0 }];
+  run.stage = { phase: "plan", picks: [{ kind: "boon", options: [boon], redraws: 0 }] };
   expect(choose(run, 0).ok).toBe(true);
   return run;
 };
@@ -965,7 +966,7 @@ describe("boons", () => {
   });
   test("choosing a charm puts its emblem on the item bench, and counts for nothing until a figure holds it", () => {
     const run = winning();
-    run.choices = [{ kind: "boon", options: ["crabcharm"], redraws: 0 }];
+    run.stage = { phase: "plan", picks: [{ kind: "boon", options: ["crabcharm"], redraws: 0 }] };
     const done = choose(run, 0);
     expect(done.ok && done.notes).toEqual([
       { t: "boon", boon: "crabcharm" },
@@ -1079,12 +1080,14 @@ describe("a room laid out afresh", () => {
     );
     beginFight(run);
     takeTakings(run);
-    // In the middle of the next fight, with a pick waiting.
-    run.choices = [
-      { kind: "component", options: ["thorn", "bark"] },
-      { kind: "boon", options: [], redraws: 9 },
-    ];
-    run.phase = "fight";
+    // Picks waiting, one drawn from a stream that cannot be trusted.
+    run.stage = {
+      phase: "plan",
+      picks: [
+        { kind: "component", options: ["thorn", "bark"] },
+        { kind: "boon", options: [], redraws: 9 },
+      ],
+    };
     const before = structuredClone(run);
     layOutAfresh(run, 0xdecaf);
     for (const kept of [
@@ -1102,14 +1105,15 @@ describe("a room laid out afresh", () => {
     ] as const) {
       expect([kept, run[kept]]).toEqual([kept, before[kept]]);
     }
-    expect(run).toMatchObject({ phase: "plan", fight: null, seed: 0xdecaf });
+    expect(run).toMatchObject({ seed: 0xdecaf });
+    expect(run.stage.phase).toBe("plan");
     expect(run.stall).toHaveLength(ECONOMY.stall);
     expect(run.foe.figures.length).toBeGreaterThan(0);
-    expect(run.choices.map((c) => [c.kind, c.options.length])).toEqual([
+    expect(picksOf(run).map((c) => [c.kind, c.options.length])).toEqual([
       ["component", ECONOMY.componentsLost],
       ["boon", ECONOMY.boonOptions],
     ]);
-    expect(run.choices[1]).toMatchObject({ redraws: ECONOMY.boonRedraws });
+    expect(picksOf(run)[1]).toMatchObject({ redraws: ECONOMY.boonRedraws });
     expect(run.rustles).toBe(ECONOMY.freeRustles);
     // Laid out from another seed, it comes out otherwise; from the same, the same.
     const again = structuredClone(before);

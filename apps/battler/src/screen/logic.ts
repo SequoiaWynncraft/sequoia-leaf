@@ -4,10 +4,11 @@
  * next nudge for a new member is, what the postcard for the town says. They are here, apart from
  * the drawing, so that they can be checked by tests.
  */
-import type { Postcard } from "@sequoia-leaf/core";
+import { mix, type Postcard } from "@sequoia-leaf/core";
 import {
   type Almanac,
   boonNumber,
+  buy,
   COMPONENT_IDS,
   type ComponentId,
   countTraits,
@@ -27,13 +28,14 @@ import {
   interestNow,
   isComponentId,
   type ItemId,
+  legal,
   openFight,
   type Party,
   partyOf,
+  picksOf,
   type Piece,
   pieces,
-  priceOf,
-  type Run,
+  type RunView,
   specOf,
   type Spot,
   type Stars,
@@ -46,6 +48,7 @@ import {
   traitsOf,
   type UnitKind,
 } from "@sequoia-leaf/raid";
+import { regularNamed, REGULARS } from "@sequoia-leaf/raid/content/rooms.ts";
 
 /** Where a figure picked up from `from` may be put down: free seats, free hollows, and places it would swap into. */
 export interface Reach {
@@ -56,46 +59,37 @@ export interface Reach {
   slotSwaps: number[];
 }
 
-export function reachOf(run: Run, from: Spot): Reach {
+/** Where a figure picked up from `from` may be put down: every place the rules would move it to. */
+export function reachOf(run: RunView, from: Spot): Reach {
   const out: Reach = { seats: [], swaps: [], slots: [], slotSwaps: [] };
-  // A figure coming off the bench onto a free seat makes one more on the board.
-  const room = from.on === "board" || fielded(run) < fieldCap(run);
+  const may = (to: Spot): boolean => legal(run, { do: "move", from, to });
   run.board.forEach((piece, at) => {
-    if (from.on === "board" && from.at === at) return;
-    if (piece) out.swaps.push(at);
-    else if (room) out.seats.push(at);
+    if (may({ on: "board", at })) (piece ? out.swaps : out.seats).push(at);
   });
   run.bench.forEach((piece, at) => {
-    if (from.on === "bench" && from.at === at) return;
-    if (piece) out.slotSwaps.push(at);
-    else out.slots.push(at);
+    if (may({ on: "bench", at })) (piece ? out.slotSwaps : out.slots).push(at);
   });
   return out;
 }
 
-/** Where a figure straight off the stall may be put: free hollows, and free seats while there is room on the board. */
-export function reachOfOffer(run: Run): Reach {
-  const room = fielded(run) < fieldCap(run);
-  const seats: number[] = [];
-  const slots: number[] = [];
-  if (run.bench.includes(null)) {
-    run.board.forEach((piece, at) => {
-      if (!piece && room) seats.push(at);
-    });
-    run.bench.forEach((piece, at) => {
-      if (!piece) slots.push(at);
-    });
-  }
-  return { seats, swaps: [], slots, slotSwaps: [] };
+/**
+ * Where an offer carried off the stall may be put down: bought (to the bench's first free hollow),
+ * then anywhere the rules would move it from there; nowhere for one that cannot be bought, or that
+ * goes straight into three of a kind.
+ */
+export function reachOfOffer(run: RunView, offer: number): Reach {
+  const after = structuredClone(run);
+  const done = buy(after, offer);
+  const bought = done.ok ? done.notes.find((n) => n.t === "bought") : undefined;
+  const from = bought?.t === "bought" ? bought.to : null;
+  if (!from) return { seats: [], swaps: [], slots: [], slotSwaps: [] };
+  const reach = reachOf(after, from);
+  // Where it lands on the bench is one of the places, though it is already there.
+  return { seats: reach.seats, swaps: [], slots: [from.at, ...reach.slots].toSorted((a, b) => a - b), slotSwaps: [] };
 }
 
-/** Whether an offer on the stall can be paid for and has somewhere to go (or completes three of a kind). */
-export function canBuy(run: Run, offer: number): boolean {
-  const kind = run.stall[offer];
-  if (!kind || run.acorns < priceOf(run, offer)) return false;
-  if (run.bench.includes(null)) return true;
-  return pieces(run).filter((p) => p.kind === kind && p.stars === 1).length >= 2;
-}
+/** Whether an offer on the stall can be bought now: paid for, with somewhere to go (or completing three of a kind). */
+export const canBuy = (run: RunView, offer: number): boolean => legal(run, { do: "buy", offer });
 
 /**
  * What handing an item to a figure would do: nothing (no room, or an emblem of a kin it is already),
@@ -117,7 +111,7 @@ export function recipesOf(item: ComponentId): { with: ComponentId; makes: Finish
 }
 
 /** The loose components the party has: on the item bench, and held unforged by a figure. */
-export function looseComponents(run: Run): ComponentId[] {
+export function looseComponents(run: RunView): ComponentId[] {
   const out: ComponentId[] = [];
   for (const item of run.items) if (isComponentId(item)) out.push(item);
   for (const p of pieces(run)) for (const item of p.items) if (isComponentId(item)) out.push(item);
@@ -125,7 +119,11 @@ export function looseComponents(run: Run): ComponentId[] {
 }
 
 /** What a component would make with each *other* loose component the party has, without repeats. */
-export function combosWithHeld(run: Run, item: ComponentId, itemAt = -1): { with: ComponentId; makes: FinishedId }[] {
+export function combosWithHeld(
+  run: RunView,
+  item: ComponentId,
+  itemAt = -1,
+): { with: ComponentId; makes: FinishedId }[] {
   const others: ComponentId[] = [];
   run.items.forEach((held, at) => {
     if (at !== itemAt && isComponentId(held) && !others.includes(held)) others.push(held);
@@ -149,7 +147,7 @@ export interface Savings {
   /** Acorns still to save for one more pile; 0 when every pile is full. */
   toNext: number;
 }
-export function savings(run: Run): Savings {
+export function savings(run: RunView): Savings {
   const most = interestCap(run);
   const pays = interestNow(run);
   const per = run.boons.includes("deeppockets") ? boonNumber("deeppockets", "per") : ECONOMY.interestPer;
@@ -192,14 +190,14 @@ export function streakRule(): string {
 /** A streak as the takings name it: "Win streak 3", "Loss streak 2". */
 export const streakName = (streak: number): string => `${streak > 0 ? "Win" : "Loss"} streak ${Math.abs(streak)}`;
 /** The run's streak in a sentence, or null when it is under 2. */
-export function streakNow(run: Run): string | null {
+export function streakNow(run: RunView): string | null {
   const n = Math.abs(run.streak);
   if (n < 2) return null;
   return `You have ${run.streak > 0 ? "won" : "lost"} ${n} rooms in a row.`;
 }
 
 /** Traits whose step is higher now than it was: the ones that have just switched on, or on harder. */
-export function steppedUp(before: ReadonlyMap<TraitId, number>, run: Run): { trait: TraitId; step: number }[] {
+export function steppedUp(before: ReadonlyMap<TraitId, number>, run: RunView): { trait: TraitId; step: number }[] {
   const out: { trait: TraitId; step: number }[] = [];
   for (const state of traitsNow(run)) {
     if (state.step > (before.get(state.trait) ?? 0)) out.push({ trait: state.trait, step: state.step });
@@ -207,7 +205,7 @@ export function steppedUp(before: ReadonlyMap<TraitId, number>, run: Run): { tra
   return out;
 }
 /** The step every trait is on. */
-export function stepsOf(run: Run): Map<TraitId, number> {
+export function stepsOf(run: RunView): Map<TraitId, number> {
   const steps = new Map<TraitId, number>();
   for (const state of traitsNow(run)) steps.set(state.trait, state.step);
   return steps;
@@ -222,7 +220,7 @@ export class TraitWatch {
   private steps: Map<TraitId, number> | null = null;
   private of: number | null = null;
   /** The traits whose step has gone up since the last look at the same run; none at the first look at a run. */
-  look(run: Run, which: number): { trait: TraitId; step: number }[] {
+  look(run: RunView, which: number): { trait: TraitId; step: number }[] {
     const up = this.steps !== null && this.of === which ? steppedUp(this.steps, run) : [];
     this.steps = stepsOf(run);
     this.of = which;
@@ -248,9 +246,9 @@ export type Doing = "pick" | "plan" | "fight" | "other";
  * The one nudge to show now, if any: the earliest not yet given whose moment has come. Each is a
  * single thing to do, in the place where it matters; none of them is shown twice.
  */
-export function nudgeFor(run: Run, doing: Doing, taught: readonly string[]): NudgeId | null {
+export function nudgeFor(run: RunView, doing: Doing, taught: readonly string[]): NudgeId | null {
   const fresh = (id: NudgeId): boolean => !taught.includes(id);
-  const choice = run.choices[0];
+  const choice = picksOf(run)[0];
   if (doing === "pick") return choice?.kind === "starter" && fresh("pick") ? "pick" : null;
   if (doing === "fight") return fresh("watch") ? "watch" : null;
   if (doing !== "plan" || choice) return null;
@@ -327,7 +325,7 @@ export function startNumbers(party: Party, seat: number, against: Party = EMPTY)
 }
 
 /** The numbers of one of the member's own figures: on the board with the party's traits, on the bench with only what it holds. */
-export function pieceNumbers(run: Run, spot: Spot): Numbers | null {
+export function pieceNumbers(run: RunView, spot: Spot): Numbers | null {
   if (spot.on === "board") return startNumbers(partyOf(run), spot.at);
   const piece = run.bench[spot.at];
   if (!piece) return null;
@@ -353,10 +351,10 @@ export function traitCount(party: Pick<Party, "figures">, trait: TraitId): Trait
   return { count, next: steps.find((need) => need > count) ?? steps.at(-1) ?? 1, step: stepFor(trait, count) };
 }
 /** The same for the member's party as it is fielded now. */
-export const ownTraitCount = (run: Run, trait: TraitId): TraitCount => traitCount(partyOf(run), trait);
+export const ownTraitCount = (run: RunView, trait: TraitId): TraitCount => traitCount(partyOf(run), trait);
 
 /** Where the member has a figure just now: fielded, on the bench, on the stall, or nowhere. */
-export function whereIs(run: Run, kind: FigureId): "board" | "bench" | "stall" | null {
+export function whereIs(run: RunView, kind: FigureId): "board" | "bench" | "stall" | null {
   if (run.board.some((p) => p?.kind === kind)) return "board";
   if (run.bench.some((p) => p?.kind === kind)) return "bench";
   if (run.stall.includes(kind)) return "stall";
@@ -364,7 +362,7 @@ export function whereIs(run: Run, kind: FigureId): "board" | "bench" | "stall" |
 }
 
 /** Whether the rack has a finished item, or both the components that make it. */
-export function rackHas(run: Run, item: FinishedId): "item" | "parts" | null {
+export function rackHas(run: RunView, item: FinishedId): "item" | "parts" | null {
   if (run.items.includes(item)) return "item";
   const [a, b] = FINISHED[item].made;
   const loose = run.items.filter(isComponentId);
@@ -382,10 +380,10 @@ export const membersOf = (trait: TraitId): FigureId[] =>
  * it got to, or the board set out; and every boss ever beaten, for carved figures in the member's
  * camp. The table keeps no till.
  */
-export function postcard(run: Run | null, almanac: Almanac): Postcard {
+export function postcard(run: RunView | null, almanac: Almanac): Postcard {
   const trail = run ? TRAILS[run.trail] : undefined;
   const waiting =
-    run && run.phase !== "over"
+    run && run.stage.phase !== "over"
       ? `A raid is under way: room ${run.room + 1}, on ${trail?.name ?? "the trail"}.`
       : almanac.runs === 0
         ? "The board is set out. One crab is uncounted."
@@ -401,3 +399,19 @@ export function fightTitle(result: FightResult, ticks: number): string {
   const how = result === "win" ? "Room won" : result === "loss" ? "Room lost" : "A draw";
   return `${how} · ${Math.max(1, Math.round(ticks / HZ))} s`;
 }
+
+/**
+ * The two regulars who watch from the side logs, never the one across the table: picked by the
+ * run's number at the table, so they stay the same all raid and change from one raid to the next.
+ */
+export function watchersOf(runNumber: number, across: string): [FigureId, FigureId] {
+  const skip = regularNamed(across)?.kind;
+  const others = REGULARS.map((r) => r.kind).filter((k) => k !== skip);
+  const roll = mix(runNumber, 0x5ea7);
+  const a = others[roll % others.length] ?? "moth";
+  const rest = others.filter((k) => k !== a);
+  return [a, rest[(roll >>> 8) % rest.length] ?? "crab7"];
+}
+
+/** Which walk-in the far party is on: one for each room met, and again each time a room is fought again. */
+export const arrivalOf = (run: Pick<RunView, "room" | "record">): string => `${run.room}:${run.record.length}`;

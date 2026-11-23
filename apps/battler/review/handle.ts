@@ -18,28 +18,42 @@ import {
   HZ,
   isBossId,
   MEASURES,
+  picksOf,
   pieceAt,
   pieces,
   planCommands,
   type RaidCommand,
   ROOMS,
-  type Run,
+  type RunView,
   SENSIBLE,
   type TableView,
 } from "@sequoia-leaf/raid";
 
-import { fightState } from "./fightview.ts";
-import { carryOn, enterRun, setOut, startNew } from "./flow.ts";
-import { grab, hover, tapPawn, unpick } from "./hand.ts";
-import { heldRow, heldTop } from "./held.ts";
-import { NUDGES } from "./logic.ts";
-import { pawns, syncPawns } from "./pawns.ts";
-import { arrive } from "./scene.ts";
-import * as stage from "./stage.ts";
-import { again, ask, changed, type Did, doNow, leafView, prefsChanged, S, waitingForLeaf } from "./state.ts";
-import { closeSheet, sheetUp, toggleLastFight } from "./ui/fightsheet.ts";
-import { type PageId, showPage } from "./ui/pages.ts";
-import { redrawTallies, TV } from "./ui/tally.ts";
+import { fightState } from "../src/screen/fightview.ts";
+import { carryOn, enterRun, lookBack, setOut, startNew, toFront } from "../src/screen/flow.ts";
+import { grab, hover, tapPawn, unpick } from "../src/screen/hand.ts";
+import { heldRow, heldTop } from "../src/screen/held.ts";
+import { NUDGES } from "../src/screen/logic.ts";
+import { pawns, syncPawns } from "../src/screen/pawns.ts";
+import { arrive } from "../src/screen/scene.ts";
+import { type Ended, endedIn } from "../src/screen/screen.ts";
+import * as stage from "../src/screen/stage.ts";
+import {
+  again,
+  ask,
+  changed,
+  type Did,
+  doNow,
+  go,
+  leafView,
+  prefsChanged,
+  S,
+  tableNow,
+  waitingForLeaf,
+} from "../src/screen/state.ts";
+import { sheetUp } from "../src/screen/ui/fightsheet.ts";
+import { type PageId, showPage } from "../src/screen/ui/pages.ts";
+import { redrawTallies, TV } from "../src/screen/ui/tally.ts";
 
 type Jump = "front" | "boon" | "component" | "spar" | "boss" | "lastboss" | "end";
 
@@ -102,7 +116,7 @@ export interface Handle {
   offer(at: number, kind: string): Promise<void>;
   item(id: string): Promise<void>;
   /** The page's own copy of the run, to change by hand. */
-  copy(): Run | null;
+  copy(): RunView | null;
   /** Draws the table again from the copy as it stands. */
   redraw(): void;
   /** Leaf's table as the page last heard it, and whether anything sent is still waiting for an answer. */
@@ -164,33 +178,43 @@ async function plan(rounds = 30): Promise<void> {
   await plan(rounds - 1);
 }
 
+/** How the last run the bot played to its end ended, for the page to show it (the screen did not see it taken). */
+let botEnded: Ended | null = null;
+/** Takes a room's takings as the bot, keeping how the run ended if they ended it. */
+async function take(): Promise<boolean> {
+  const did = await ask({ do: "take" });
+  if (did?.ok) botEnded = endedIn(did.notes) ?? botEnded;
+  return did?.ok === true;
+}
+
 /** One whole room played by the bot through the same commands the member's actions send. */
 async function botRoom(): Promise<boolean> {
   // What the page has sent first (the takings of a fight just watched); a fight not yet taken is taken.
   await settled();
-  if (S.run?.phase === "fight" && !(await ask({ do: "take" }))?.ok) return false;
-  if (S.run?.phase !== "plan") return false;
+  if (S.run?.stage.phase === "fight" && !(await take())) return false;
+  if (S.run?.stage.phase !== "plan") return false;
   await plan();
   const begun = await ask({ do: "fight" });
   if (!begun?.ok) return false;
-  return (await ask({ do: "take" }))?.ok === true;
+  return take();
 }
 
+/** Sits down to the table as Leaf has it now, or at the end of a run the bot played out, and says where it is. */
 function settle(): string {
-  const run = S.run;
-  if (!run) return "no run";
-  if (run.phase === "over") {
-    closeSheet(false);
-    S.mode = "over";
-    changed();
-    return "over";
+  const ended = botEnded;
+  botEnded = null;
+  if (ended && !leafView()?.run) {
+    go({ e: "ended", ended });
+    return S.screen.at;
   }
-  enterRun(false);
-  return `room ${run.room + 1}, ${ROOMS[run.room]?.kind ?? ""}, ${run.choices[0]?.kind ?? "planning"}`;
+  enterRun();
+  const run = S.run;
+  if (!run || S.screen.at === "front") return S.screen.at;
+  return `room ${run.room + 1}, ${ROOMS[run.room]?.kind ?? ""}, ${picksOf(run)[0]?.kind ?? "planning"}`;
 }
 
 /** Whether the run is at the room a jump is for. */
-const there = (run: Run, where: Jump): boolean =>
+const there = (run: RunView, where: Jump): boolean =>
   where === "lastboss"
     ? run.room === ROOMS.length - 1
     : where === "boss" || where === "spar"
@@ -200,16 +224,16 @@ const there = (run: Run, where: Jump): boolean =>
 async function playTo(where: Jump, guard = 60): Promise<void> {
   await settled();
   const run = S.run;
-  if (guard === 0 || !run || run.phase === "over") return;
+  if (guard === 0 || !run || run.stage.phase === "over") return;
   if (where === "boon" || where === "component") {
     // Whatever is waiting ahead of the pick that is wanted is settled plainly; the pick itself is left.
-    if (run.choices[0]?.kind === where) return;
-    if (run.choices.some((c) => c.kind === where)) {
+    if (picksOf(run)[0]?.kind === where) return;
+    if (picksOf(run).some((c) => c.kind === where)) {
       await ask({ do: "choose", option: 0 });
       return playTo(where, guard - 1);
     }
   } else if (where !== "end" && there(run, where)) {
-    if (run.choices.length > 0) await plan();
+    if (picksOf(run).length > 0) await plan();
     return;
   }
   if (!(await botRoom())) return;
@@ -217,7 +241,7 @@ async function playTo(where: Jump, guard = 60): Promise<void> {
 }
 
 async function bot(rooms: number): Promise<void> {
-  if (rooms <= 0 || !S.run || S.run.phase === "over") return;
+  if (rooms <= 0 || !S.run || S.run.stage.phase === "over") return;
   if (!(await botRoom())) return;
   return bot(rooms - 1);
 }
@@ -228,17 +252,13 @@ export function openHandle(): void {
       // From the chosen seed where the play server stages it; otherwise as the front page sets out.
       const staging = await staged({ start: { seed, trail } });
       if (staging.length === 0) await startNew(trail);
-      S.ended = null;
-      S.mode = "plan";
       return settle();
     },
     async fresh() {
       await staged({ fresh: true });
-      S.ended = null;
       S.prefs.taught = [];
       prefsChanged();
-      S.mode = "front";
-      changed();
+      go({ e: "sit", ...tableNow() });
     },
     async bot(rooms = 1) {
       await bot(rooms);
@@ -246,25 +266,24 @@ export function openHandle(): void {
     },
     async plan() {
       const run = S.run;
-      if (!run || run.phase !== "plan") return "not planning";
+      if (!run || run.stage.phase !== "plan") return "not planning";
       await plan();
       return settle();
     },
     async to(where) {
       if (where === "front") {
-        S.mode = "front";
-        changed();
-        return "front";
+        toFront();
+        return S.screen.at;
       }
       await playTo(where);
       return settle();
     },
     arrive() {
-      if (S.run && S.mode === "plan") arrive(S.run);
+      if (S.run && S.screen.at === "plan") arrive(S.run);
     },
     async fight() {
       await setOut();
-      return S.mode;
+      return S.screen.at;
     },
     tick(steps) {
       stage.skip(steps / (HZ * S.prefs.speed));
@@ -291,14 +310,14 @@ export function openHandle(): void {
     state() {
       const run = S.run;
       return {
-        mode: S.mode,
+        mode: S.screen.at,
         room: run ? run.room + 1 : 0,
         kind: run ? ROOMS[run.room]?.kind : "",
-        phase: run?.phase,
+        phase: run?.stage.phase,
         acorns: run?.acorns,
         level: run?.level,
         resolve: run?.resolve,
-        choice: run?.choices[0]?.kind ?? null,
+        choice: (run && picksOf(run)[0]?.kind) ?? null,
         boss: run?.foe.figures.some((p) => isBossId(p.kind)) ?? false,
         coins: balance().coins,
         fight: fightState(),
@@ -350,10 +369,10 @@ export function openHandle(): void {
     page: showPage,
     carry() {
       carryOn();
-      return S.mode;
+      return S.screen.at;
     },
     last() {
-      toggleLastFight();
+      lookBack();
       return sheetUp() ?? "none";
     },
     tally(measure, side) {

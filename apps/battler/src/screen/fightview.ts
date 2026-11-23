@@ -1,4 +1,13 @@
-import { beatAt, drawBase, drawFigure, drawStars, framesOf, hoverAt } from "@sequoia-leaf/figures/sprites.ts";
+import { type Move, moveAt } from "@sequoia-leaf/figures/move.ts";
+import {
+  type BaseLook,
+  beatAt,
+  drawFigure,
+  drawStanding,
+  drawStars,
+  framesOf,
+  hoverAt,
+} from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The fight, played on the table from the rules' own steps. The rules decide everything; this
  * turns each thing that happened into something seen on the board: figures walk, turn, lunge,
@@ -46,15 +55,8 @@ interface Actor {
   /** Feet, from the board's corner, with the halves together. */
   x: number;
   y: number;
-  fx: number;
-  fy: number;
-  tx: number;
-  ty: number;
-  m0: number;
-  mDur: number;
-  arc: number;
-  /** Goes under the board for the middle of the move. */
-  under: boolean;
+  /** Where it is going, by the fight's clock, and whether it goes under the board for the middle of the way; null standing. */
+  move: (Move & { under: boolean }) | null;
   left: boolean;
   /** Not yet on the board: one that turns up later. */
   bornAt: number;
@@ -77,12 +79,8 @@ interface Actor {
 
 type ShotLook =
   "seed" | "pebble" | "cone" | "beam" | "cushion" | "tea" | "plaster" | "drop" | "dust" | "gust" | "pellet";
-interface Shot {
-  from: Pt;
-  to: Pt;
-  t0: number;
-  dur: number;
-  arc: number;
+/** Something thrown: a move by the fight's clock, at an even pace, drawn as what it is. */
+interface Shot extends Move {
   look: ShotLook;
   col: string;
 }
@@ -101,7 +99,8 @@ interface Cue {
   ev: FightEvent;
 }
 
-type Stage = "off" | "run-in" | "run" | "done";
+/** How far the fight on the table has been played: not at all, the run-in, the steps, or done (when, by the stage's clock). */
+type Stage = "off" | "run-in" | "run" | { done: number };
 
 const FV: {
   fight: Fight | null;
@@ -116,9 +115,10 @@ const FV: {
   pops: Pop[];
   dusk: number;
   clacked: boolean;
-  doneAt: number;
+  /** The look of the bases the member's figures stand on. */
+  bases: BaseLook;
+  /** Told once, when the fight has been played to its end and shown a moment longer. */
   done: (() => void) | null;
-  told: boolean;
   /** Everything that has been shown happening so far, the opening first: what the tally is counted from. */
   seen: FightEvent[];
 } = {
@@ -133,9 +133,8 @@ const FV: {
   pops: [],
   dusk: 0,
   clacked: false,
-  doneAt: 0,
+  bases: "plain",
   done: null,
-  told: false,
   seen: [],
 };
 
@@ -152,7 +151,7 @@ function markOf(col: string): HTMLCanvasElement {
 export const fightOn = (): boolean => FV.fight !== null;
 /** Where the fight has got to, for looking from outside. */
 export const fightState = (): {
-  stage: Stage;
+  stage: string;
   tick: number;
   clock: number;
   over: boolean;
@@ -161,7 +160,7 @@ export const fightState = (): {
   lit: number;
   thrown: number;
 } => ({
-  stage: FV.stage,
+  stage: typeof FV.stage === "string" ? FV.stage : "done",
   tick: FV.fight?.tick ?? 0,
   clock: FV.clock,
   over: FV.fight?.over ?? false,
@@ -188,14 +187,7 @@ function actorFor(unit: Unit, at: Pt, bornAt: number): Actor {
     unit,
     x: at.x,
     y: at.y,
-    fx: at.x,
-    fy: at.y,
-    tx: at.x,
-    ty: at.y,
-    m0: -99,
-    mDur: 1,
-    arc: 0,
-    under: false,
+    move: null,
     left: unit.side === 1,
     bornAt,
     lungeAt: -99,
@@ -219,10 +211,11 @@ function actorFor(unit: Unit, at: Pt, bornAt: number): Actor {
  * Begins playing a fight. `done` is called once, when it has been played to its end (or skipped
  * to it); the figures then stay as they ended until `endFight`.
  */
-export function startFight(setup: FightSetup, speed: Speed, done: () => void): void {
+export function startFight(setup: FightSetup, speed: Speed, bases: BaseLook, done: () => void): void {
   const fight = openFight(setup);
   FV.fight = fight;
   FV.speed = speed;
+  FV.bases = bases;
   FV.stage = "run-in";
   FV.shots = [];
   FV.flashes = [];
@@ -230,7 +223,6 @@ export function startFight(setup: FightSetup, speed: Speed, done: () => void): v
   FV.dusk = 0;
   FV.clacked = false;
   FV.done = done;
-  FV.told = false;
   FV.seen = [];
   // Everyone starts where they were seated; what the opening did to them is acted out in the run-in.
   FV.actors = fight.units.map((u) =>
@@ -270,7 +262,7 @@ export function endFight(): void {
 /** Goes straight to the end: the fight comes out the same, it is only not watched. */
 export function skipFight(): void {
   const f = FV.fight;
-  if (!f || FV.stage === "done") return;
+  if (!f || typeof FV.stage !== "string") return;
   // What was still to be shown counts all the same.
   for (const cue of FV.cues) FV.seen.push(cue.ev);
   while (!f.over) FV.seen.push(...stepFight(f));
@@ -287,7 +279,7 @@ export function skipFight(): void {
     const at = feetAt(u.cell);
     a.x = at.x;
     a.y = at.y;
-    a.m0 = -99;
+    a.move = null;
     a.bornAt = -Infinity;
     a.hpShown = u.hp;
     a.down = !u.alive;
@@ -299,9 +291,8 @@ export function skipFight(): void {
 }
 
 function finish(): void {
-  if (FV.stage === "done") return;
-  FV.stage = "done";
-  FV.doneAt = V.t;
+  if (typeof FV.stage !== "string") return;
+  FV.stage = { done: V.t };
   const f = FV.fight;
   if (!f) return;
   // Whoever is left standing on the side that won hops about it.
@@ -313,14 +304,7 @@ function finish(): void {
 }
 
 function travel(a: Actor, to: Pt, ticks: number, arc: number, under = false): void {
-  a.fx = a.x;
-  a.fy = a.y;
-  a.tx = to.x;
-  a.ty = to.y;
-  a.m0 = FV.clock;
-  a.mDur = Math.max(1, ticks);
-  a.arc = arc;
-  a.under = under;
+  a.move = { from: { x: a.x, y: a.y }, to, t0: FV.clock, dur: Math.max(1, ticks), arc, smooth: false, under };
   if (Math.abs(to.x - a.x) > 1) a.left = to.x < a.x;
 }
 
@@ -401,6 +385,7 @@ function show(ev: FightEvent): void {
         t0: now,
         dur: Math.max(1, ev.ticks),
         arc: lobbed ? 8 + distance(ev.from, ev.to) * 2.5 : look === "beam" ? 0 : 3,
+        smooth: false,
         look,
         col: colourOf(a.unit.kind),
       });
@@ -581,7 +566,7 @@ function show(ev: FightEvent): void {
       } else {
         a.x = at.x;
         a.y = at.y;
-        a.m0 = -99;
+        a.move = null;
       }
       burst(at.x, at.y - 4, 10, [colourOf(ev.kind), CREAM, "#ffffff"], { speed: 28, ttl: 0.4 });
       if (ev.kind === "uncounted" || ev.kind === "biguncounted")
@@ -666,19 +651,20 @@ export function stepFightView(dt: number): void {
         finish();
       }
     }
-  } else if (FV.stage === "done") {
+  } else if (typeof FV.stage !== "string") {
     FV.clock += dt * HZ;
-    if (!FV.told && V.t - FV.doneAt > 0.7) {
-      FV.told = true;
-      FV.done?.();
+    const tell = V.t - FV.stage.done > 0.7 ? FV.done : null;
+    if (tell) {
+      FV.done = null;
+      tell();
     }
   }
   for (const a of FV.actors) {
-    if (a.m0 > -90) {
-      const k = clamp((FV.clock - a.m0) / a.mDur, 0, 1);
-      a.x = lerp(a.fx, a.tx, k);
-      a.y = lerp(a.fy, a.ty, k);
-      if (k >= 1) a.m0 = -99;
+    if (a.move) {
+      const now = moveAt(a.move, FV.clock);
+      a.x = now.x;
+      a.y = now.y;
+      if (now.k >= 1) a.move = null;
     }
     a.hpShown += (a.unit.hp - a.hpShown) * Math.min(1, dt * 10 * FV.speed);
   }
@@ -692,9 +678,10 @@ export function stepFightView(dt: number): void {
 }
 
 function drawShot(g: Ctx, s: Shot): void {
-  const k = clamp((FV.clock - s.t0) / s.dur, 0, 1);
-  const x = Math.round(V.bx + lerp(s.from.x, s.to.x, k));
-  const y = Math.round(V.by + lerp(s.from.y, s.to.y, k) - Math.sin(k * Math.PI) * s.arc);
+  const now = moveAt(s, FV.clock);
+  const k = now.k;
+  const x = Math.round(V.bx + now.x);
+  const y = Math.round(V.by + now.y - now.lift);
   switch (s.look) {
     case "seed":
       R(g, x - 1, y, 3, 2, INK);
@@ -878,10 +865,10 @@ export function drawFight(g: Ctx, list: Standing[]): void {
     const back = u.side === 1 ? Math.round(V.gap) : 0;
     let lift = 0;
     let sunk = false;
-    if (a.m0 > -90) {
-      const k = clamp((c - a.m0) / a.mDur, 0, 1);
-      lift = Math.sin(k * Math.PI) * a.arc;
-      sunk = a.under && k > 0.15 && k < 0.85;
+    if (a.move) {
+      const now = moveAt(a.move, c);
+      lift = now.lift;
+      sunk = a.move.under && now.k > 0.15 && now.k < 0.85;
     }
     const born = c - a.bornAt;
     if (born >= 0 && born < 4) lift += (4 - born) * 2;
@@ -925,8 +912,9 @@ export function drawFight(g: Ctx, list: Standing[]): void {
           return;
         }
         if (shine.dim) g.globalAlpha = DIM;
-        drawBase(g, u.kind, x, y);
-        drawFigure(g, u.kind, x, y - 2 - hover, {
+        // The member's figures stand on the bases they chose; the forest's, and what is summoned, on plain ones.
+        drawStanding(g, u.kind, x, y, u.side === 0 ? FV.bases : "plain", {
+          hover,
           pose: c < a.castUntil ? "cast" : "idle",
           beat,
           left: a.left,

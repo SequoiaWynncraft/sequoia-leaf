@@ -3,20 +3,20 @@ import { BOON_IDS, isBoonId } from "./content/boons.ts";
  * Reading back what Leaf sends the page: the table's view and the notes of each command, field by
  * field, into the game's own types. Anything that does not read is a view or a note this version of
  * the rules could not have made: the page was built for other rules than Leaf's, and loads again.
- * A fight's outcome is not read but worked out again from its setup, which gives the same.
+ * A fight's outcome is read as Leaf decided it: the page plays the fight from its setup, and loads
+ * again if its rules do not play it to that (`playsAsKept`).
  */
 import { BOSS_IDS, FIGURE_IDS, isBossId, isFigureId, isStars } from "./content/figures.ts";
 import { FINISHED_IDS, isComponentId, isFinishedId, isItemId } from "./content/items.ts";
 import { baseOf, clothOf, isLookKind, lanternOf, readLooks } from "./content/looks.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS } from "./content/traits.ts";
-import { resolveFight } from "./fight/engine.ts";
-import { type RaidNote, type RunView, runView, type TableView } from "./game.ts";
+import type { RaidNote, RunView, TableView } from "./game.ts";
 import { type News, type Payout, readAlmanac, trailOpen } from "./outside.ts";
-import { ACORNS_WHYS, type AcornsWhy, type Note, type RunSummary, type Spot } from "./run.ts";
-import { checkRun, fields, Nonsense } from "./save.ts";
+import { ACORNS_WHYS, type AcornsWhy, type Ending, type Note, type RunSummary, type Spot } from "./run.ts";
+import { fields, Nonsense, readRunView } from "./save.ts";
 
-const { record, whole, flag, list, one, each, items, setup, bad } = fields;
+const { record, whole, flag, list, one, each, items, setup, outcome, bad } = fields;
 const UINT = 0xffffffff;
 const MOST = 1_000_000;
 
@@ -24,10 +24,8 @@ const isRoomKind = (v: unknown): v is "trouble" | "spar" | "boss" => v === "trou
 const text = (v: unknown, what: string): string => (typeof v === "string" && v.length <= 200 ? v : bad(what));
 
 /** A run as the page is shown it. */
-function runOf(v: unknown, what: string): RunView {
-  const read = checkRun(v, true);
-  return read.ok ? runView(read.run) : bad(what);
-}
+const runOf = (v: unknown, what: string): RunView => readRunView(v) ?? bad(what);
+const isEnding = (v: unknown): v is Ending => v === "won" || v === "lost" || v === "left";
 
 /** The table as Leaf shows it to the page, or null for anything this version could not have sent. */
 export function readView(v: unknown): TableView | null {
@@ -38,7 +36,7 @@ export function readView(v: unknown): TableView | null {
     const trail = whole(r.trail, 0, TRAIL_COUNT - 1, "the trail");
     if (!trailOpen(almanac, trail)) bad("the trail");
     const run = r.run === null ? null : runOf(r.run, "the run");
-    if (run?.phase === "over") bad("the run");
+    if (run?.stage.phase === "over") bad("the run");
     return { runs: whole(r.runs, 0, 1_000_000_000, "the runs"), run, almanac, trail, looks };
   } catch (err) {
     if (err instanceof Nonsense) return null;
@@ -58,8 +56,7 @@ function summaryOf(v: unknown): RunSummary {
   const what = "what the run came to";
   return {
     trail: whole(s.trail, 0, TRAIL_COUNT - 1, what),
-    won: flag(s.won, what),
-    left: flag(s.left, what),
+    ending: s.ending === null ? null : one(s.ending, isEnding, what),
     cleared: whole(s.cleared, 0, ROOM_COUNT, what),
     reached: whole(s.reached, 0, ROOM_COUNT, what),
     bosses: each(s.bosses, isBossId, BOSS_IDS.length, what),
@@ -191,16 +188,14 @@ function runNote(n: Record<string, unknown>): Note {
         change: whole(n.change, -ECONOMY.resolve, ECONOMY.resolve, what),
         left: whole(n.left, 0, ECONOMY.resolve, what),
       };
-    case "fight": {
-      const fought = setup(n.setup, what);
+    case "fight":
       return {
         t: "fight",
         room: whole(n.room, 0, ROOM_COUNT - 1, what),
         seed: whole(n.seed, 0, UINT, what),
-        setup: fought,
-        outcome: resolveFight(fought),
+        setup: setup(n.setup, what),
+        outcome: outcome(n.outcome, what),
       };
-    }
     case "result": {
       const standing = list(n.standing, 2, what);
       return {
