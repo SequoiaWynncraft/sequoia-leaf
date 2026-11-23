@@ -93,7 +93,11 @@ export const { cellBlocked, footBlocked, nearestFree, findPath } = TOWN;
 /** The Grove's standing stone, by its foot: on the lawn between the Treasury and the market. */
 export const GROVE: Pt = { x: 104, y: 180 };
 
-export type PlaceId = "treasury" | "grove" | "quests" | "market" | "works" | "table" | "fire" | "pond" | "camp";
+export type PlaceId =
+  "treasury" | "grove" | "quests" | "tally" | "market" | "works" | "table" | "fire" | "pond" | "camp";
+
+/** The Tally's post, by its foot: on the lawn between the Grove and the quest board. */
+export const TALLY: Pt = { x: 152, y: 190 };
 
 export interface Place {
   id: PlaceId;
@@ -130,6 +134,14 @@ export const PLACES: readonly Place[] = [
     stand: { x: 198, y: 168 },
     face: 3,
     prompt: { x: 198, y: 116 },
+  },
+  {
+    id: "tally",
+    name: "The Tally",
+    about: "Leaderboards: who has done the most.",
+    stand: { x: TALLY.x, y: TALLY.y + 13 },
+    face: 3,
+    prompt: { x: TALLY.x, y: TALLY.y - 60 },
   },
   {
     id: "market",
@@ -325,6 +337,7 @@ function build(): void {
   fill(58, 39, 63, 43, 1);
   fill(0, 42, GW - 1, 43, 1); // the ferns along the bottom
   fill(22, 19, 26, 19, 1); // quest board
+  fill(18, 23, 19, 23, 1); // the Tally
   fill(12, 21, 13, 22, 1); // the Grove's standing stone
   fill(10, 22, 10, 22, 1); // and the young trees either side of it
   fill(15, 22, 15, 22, 1);

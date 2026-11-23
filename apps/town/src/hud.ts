@@ -249,6 +249,7 @@ export function openPanel(spec: PanelSpec): void {
   onShut = spec.shut ?? null;
   G.panel = spec.id;
   const p = $("panel");
+  p.dataset.panel = spec.id;
   p.hidden = true;
   p.replaceChildren();
   const x = el(

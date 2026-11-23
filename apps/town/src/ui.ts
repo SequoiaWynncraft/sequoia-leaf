@@ -51,6 +51,7 @@ import type { Letter } from "./letter.ts";
 import { NOTES, type Part } from "./notes.ts";
 import { emote, EMOTE_NAMES } from "./players.ts";
 import { icon, type Sprites } from "./sprites.ts";
+import { tallyPanel } from "./tallyui.ts";
 import { LOG, thingName, touchThing } from "./town.ts";
 import { place, PLACES } from "./world.ts";
 
@@ -851,6 +852,7 @@ const BUILD: Record<PanelId, (body: HTMLElement) => (() => void) | null> = {
   treasury,
   grove: groveCard,
   quests: board,
+  tally: tallyPanel,
   market,
   works: doorCard("works"),
   table: doorCard("table"),

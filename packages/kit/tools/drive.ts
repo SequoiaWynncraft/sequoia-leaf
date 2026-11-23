@@ -74,7 +74,8 @@ if (!Array.isArray(parsed) || !parsed.every(isStep)) throw new Error("steps must
 const steps: Step[] = parsed;
 mkdirSync(outDir, { recursive: true });
 
-const port = 9400 + Math.floor(Math.random() * 400);
+/** Chromium's DevTools port: `DRIVE_PORT`, for a run kept to ports of its own, or else one at random. */
+const port = Number(process.env["DRIVE_PORT"] ?? "") || 9400 + Math.floor(Math.random() * 400);
 /**
  * This run's folder, under `TMPDIR` (or `~/.cache`, never `/tmp`), removed when the run ends: Chromium's
  * profile, about 15 MB, and an empty config folder, so the machine's own Chromium flags and

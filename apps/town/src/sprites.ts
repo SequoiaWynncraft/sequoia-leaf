@@ -953,6 +953,21 @@ const ICON_ROWS: Readonly<Record<PlaceId, readonly string[]>> = {
     "owwwwwwwwwwo",
     ".oooooooooo.",
   ],
+  // Four strokes and one across them: the old way of counting.
+  tally: [
+    "............",
+    "..w.w.w.w.y.",
+    "..w.w.w.wy..",
+    "..w.w.w.y...",
+    "..w.w.wyw...",
+    "..w.w.y.w...",
+    "..w.wyw.w...",
+    "..w.y.w.w...",
+    "..wyw.w.w...",
+    "..y.w.w.w...",
+    ".yw.w.w.w...",
+    "............",
+  ],
   market: [
     ".nnnnnnnnnn.",
     "rrwwrrwwrrww",

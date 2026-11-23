@@ -77,7 +77,7 @@ const raidBoard = (key: RaidKey): TallyBoard => ({
 });
 
 /** Every board, in the order the Tally lists them. */
-export const TALLY_BOARDS: readonly TallyBoard[] = [
+export const TALLY_BOARDS: readonly [TallyBoard, ...TallyBoard[]] = [
   {
     id: "raids",
     group: "guild",

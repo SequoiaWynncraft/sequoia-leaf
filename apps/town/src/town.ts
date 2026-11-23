@@ -31,6 +31,8 @@ import { ask, doNow, mine, ok, town } from "./leaf.ts";
 import { flame, type Light, makeProp, type Prop, propUnder, type Standing } from "./props.ts";
 import type { Sprite, Sprites } from "./sprites.ts";
 import { type Strand, STRINGS, wire } from "./strings.ts";
+import { tallyNew } from "./tally.ts";
+import { tallyPost } from "./tallyart.ts";
 import {
   BUILDINGS,
   GROVE,
@@ -41,6 +43,7 @@ import {
   POSTS,
   SEATS,
   STALL_FEET,
+  TALLY,
   TRUNKS,
   trunkTall,
   WORKS_BENCH,
@@ -710,6 +713,21 @@ export function buildTown(s: Sprites, ground: Ctx): void {
       g.drawImage(s.bang.c, sx + 20, sy - 56 + bob);
     },
   });
+  // The Tally, where the town keeps count: a mark over it until the member has looked.
+  add("board", tallyPost(), TALLY.x, TALLY.y, {
+    place: "tally",
+    tip: tipOf("tally"),
+    tap: (p) => {
+      sfx.knock();
+      nudge(p);
+    },
+    extra: (g, sx, sy) => {
+      if (!tallyNew()) return;
+      const bob = Math.round(Math.sin(G.t * 4) * 1.5);
+      g.drawImage(s.bang.c, sx - 1, sy - 64 + bob);
+    },
+  });
+  shadow(ground, TALLY.x, TALLY.y, 10, 2);
   add("pole", s.pole, banner.x, banner.y, {
     tap: tapPole,
     extra: drawBanner,
@@ -818,12 +836,11 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     [300, 316, 0],
     [356, 334, 2],
     [40, 196, 0],
-    [150, 196, 2],
+    [128, 210, 2],
     [214, 328, 1],
   ] as const)
     patch(x, y, k);
   for (const [x, y, k] of [
-    [150, 184, 0],
     [46, 158, 1],
     [404, 172, 0],
     [476, 176, 2],
