@@ -287,14 +287,19 @@ export function haste(f: Fight, target: Unit, percent: number, seconds: number, 
   target.hasteUntil = Math.max(target.hasteUntil, f.tick + ticks);
   emit(f, { t: "status", id: target.id, status: "haste", on: true, ticks, amount: target.hasteBy, by: by?.id ?? -1 });
 }
-/** Braces: takes a share less from every attack and ability for a while, and whoever attacks it up close is hurt. */
+/**
+ * Braces: takes a share less from every attack and ability for a while, and whoever attacks it up
+ * close is hurt. Braced again while it lasts (a Rock digging in during It Is A Rock), it keeps the
+ * stronger share and sting, until the later end.
+ */
 export function brace(f: Fight, target: Unit, percent: number, stub: number, seconds: number): void {
   if (!target.alive) return;
   const ticks = secs(seconds);
-  target.bracedBy = percent;
-  target.stub = stub;
-  target.bracedUntil = f.tick + ticks;
-  emit(f, { t: "status", id: target.id, status: "braced", on: true, ticks, amount: percent, by: target.id });
+  const running = target.bracedUntil > f.tick;
+  target.bracedBy = running ? Math.max(target.bracedBy, percent) : percent;
+  target.stub = running ? Math.max(target.stub, stub) : stub;
+  target.bracedUntil = Math.max(target.bracedUntil, f.tick + ticks);
+  emit(f, { t: "status", id: target.id, status: "braced", on: true, ticks, amount: target.bracedBy, by: target.id });
 }
 /** Goes where nothing can reach it for a while. */
 export function hide(f: Fight, u: Unit, ticks: number): void {
@@ -418,6 +423,7 @@ export function enter(f: Fight, s: Start): Unit {
     sneakBy: 0,
     digs: false,
     digHeal: 0,
+    digLess: 0,
     digFor: 0,
     regrow: 0,
     thorns: 0,
@@ -548,9 +554,10 @@ export function hurt(
 /** What a figure does about having been hurt and still being up. */
 function answer(f: Fight, u: Unit): void {
   if (u.digs && u.hp * 2 < u.maxHp) {
-    // Burrow: the first time under half health, it goes to ground.
+    // Burrow: the first time under half health, it digs in where it stands and keeps fighting.
     u.digs = false;
-    hide(f, u, u.digFor);
+    heal(f, u, (u.maxHp * u.digHeal) / 100, "burrow", null);
+    brace(f, u, u.digLess, 0, u.digFor);
   }
   if (u.logUnder > 0 && u.hp * 100 < u.maxHp * u.logUnder) {
     // Hollow Log: once, it climbs inside.

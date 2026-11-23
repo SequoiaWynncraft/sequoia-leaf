@@ -6,7 +6,7 @@ import { pick, type Stream, weighted } from "@sequoia-leaf/core";
  * saved boards exist, this makes one up from a seed: a regular, a taste for one kin and one
  * calling, and a party about as good as a member's would be by that room, made only of what a
  * member at its level could have found at the stall. What comes out is a plain `Party`, the same
- * shape a real saved board will have.
+ * shape a real saved board will have. It holds components and what they forge into, never an emblem.
  */
 import { FIGURE_IDS, type FigureId, FIGURES, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
 import { type ComponentId, holdItem, type ItemId } from "./content/items.ts";
@@ -106,14 +106,14 @@ export function sparParty(seed: number, roomIndex: number, trailIndex: number): 
     const c = holder ? chosen[holder.i] : undefined;
     if (!holder || !c) break;
     for (let n = 0; n < 2 && components > 0; n++) {
-      const got = holdItem(held[holder.i] ?? [], pick(s, suits(c.kind)));
-      if (!got) break;
+      const got = holdItem({ kind: c.kind, items: held[holder.i] ?? [] }, pick(s, suits(c.kind)));
+      if ("refused" in got) break;
       held[holder.i] = got.held;
       components--;
     }
   }
 
-  const counts = countTraits(chosen.map((c) => c.kind));
+  const counts = countTraits(chosen.map((c) => ({ kind: c.kind, items: [] })));
   const seats = arrange(
     chosen.map((c) => ({ kind: c.kind, health: specOf(c.kind).hp * starScale(c.stars) })),
     stepFor("sneak", counts.sneak ?? 0) > 0,
@@ -129,7 +129,6 @@ export function sparParty(seed: number, roomIndex: number, trailIndex: number): 
     who,
     title: `brought ${TRAITS[kin].name} ${TRAITS[calling].name}s`,
     figures,
-    charms: [],
     boons: [],
     might: 100,
   };

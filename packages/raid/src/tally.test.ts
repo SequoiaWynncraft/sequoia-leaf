@@ -144,9 +144,12 @@ describe("the tally", () => {
           at("kettle", 3, 2),
           at("mossmote", 1, 2),
         ]),
-        partyOfFigures([at("barrowgnome", 3, 0, 2), at("crab12", 2, 2), at("moth", 4, 2), at("cindernewt", 3, 1)], {
-          charms: ["moss"],
-        }),
+        partyOfFigures([
+          at("barrowgnome", 3, 0, 2),
+          at("crab12", 2, 2),
+          at("moth", 4, 2, 1, ["mosscharm"]),
+          at("cindernewt", 3, 1),
+        ]),
       ],
     };
     const tape = recordFight(setup);

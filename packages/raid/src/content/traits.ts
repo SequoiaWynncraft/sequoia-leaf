@@ -75,11 +75,14 @@ export const TRAITS = {
     steps: [2, 4],
     gist: "Has a hole. Uses it.",
     text: [
-      "Burrow figures dig in: +{armour} armour. The first time one drops under half health it goes to ground for {under} seconds, where nothing can reach it, and comes up with {heal}% of its health back.",
-      "Burrow figures dig in deep: +{armour} armour. The first time one drops under half health it goes to ground for {under} seconds, where nothing can reach it, and comes up with {heal}% of its health back.",
+      "Burrow figures dig in: +{armour} armour. The first time one drops under half health it gets {heal}% of its health back and takes {less}% less from attacks and abilities for {lasts} seconds, still fighting.",
+      "Burrow figures dig in deep: +{armour} armour. The first time one drops under half health it gets {heal}% of its health back and takes {less}% less from attacks and abilities for {lasts} seconds, still fighting.",
     ],
-    short: ["+{armour} armour, hides {under}s at half health.", "+{armour} armour, hides {under}s at half health."],
-    n: { armour: [15, 20], under: [2, 4], heal: [15, 15] },
+    short: [
+      "+{armour} armour; at half health {less}% less for {lasts}s.",
+      "+{armour} armour; at half health {less}% less for {lasts}s.",
+    ],
+    n: { armour: [15, 20], heal: [10, 10], less: [25, 35], lasts: [2, 3] },
   },
   feather: {
     name: "Feather",
@@ -99,14 +102,15 @@ export const TRAITS = {
   crab: {
     name: "Crab",
     sort: "kin",
-    steps: [2, 4],
+    steps: [2, 4, 5],
     gist: "Roll call. One crab is always uncounted.",
     text: [
       "Roll call: when the fight starts, an Uncounted Crab joins beside your crabs, with as many stars as your best crab.",
       "Roll call: when the fight starts, a Big Uncounted Crab joins beside your crabs, with as many stars as your best crab.",
+      "Roll call: when the fight starts, a Big Uncounted Crab and an Uncounted Crab join beside your crabs, with as many stars as your best crab.",
     ],
-    short: ["An Uncounted Crab joins.", "A Big Uncounted Crab joins."],
-    n: { big: [0, 1] },
+    short: ["An Uncounted Crab joins.", "A Big Uncounted Crab joins.", "A Big and a small Uncounted Crab join."],
+    n: { big: [0, 1, 1], small: [1, 0, 1] },
   },
   gnome: {
     name: "Gnome",
@@ -114,11 +118,14 @@ export const TRAITS = {
     steps: [2, 4],
     gist: "Finds acorns. Does not say where.",
     text: [
-      "After a room you win, the gnomes find {win} more acorn.",
-      "After a room you win, the gnomes find {win} more acorns, and {loss} even if you lose.",
+      "Gnome figures have {health}% more health. After every room, won or lost, the gnomes find {win} more acorn.",
+      "Gnome figures have {health}% more health. After a room you win the gnomes find {win} more acorns, and {loss} after one you lose.",
     ],
-    short: ["+{win} acorn after a win.", "+{win} acorns a win, +{loss} a loss."],
-    n: { win: [1, 3], loss: [0, 1] },
+    short: [
+      "+{health}% health, +{win} acorn after every room.",
+      "+{health}% health, +{win} acorns a win, +{loss} a loss.",
+    ],
+    n: { win: [1, 3], loss: [1, 2], health: [10, 20] },
   },
   bulwark: {
     name: "Bulwark",

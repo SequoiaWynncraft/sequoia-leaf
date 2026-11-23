@@ -116,9 +116,10 @@ export interface Unit {
   /** Sneak: attacks left that land hard, and how much harder. */
   sneakHits: number;
   sneakBy: number;
-  /** Burrow: still has its dive in hand, and what it comes up with. */
+  /** Burrow: still has its digging in to come, the health it gets back, and how much less it takes for how many seconds. */
   digs: boolean;
   digHeal: number;
+  digLess: number;
   digFor: number;
   /** Health regrown each second, in percent. */
   regrow: number;

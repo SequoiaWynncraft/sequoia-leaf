@@ -137,16 +137,24 @@ describe("whether an offer can be bought", () => {
   });
 });
 
+/** A Finch (a Feather and a Slinger) holding these. */
+const finch = (items: ItemId[]): Pick<Piece, "kind" | "items"> => ({ kind: "finch", items });
+
 describe("handing an item over", () => {
   test("a first component is simply held", () => {
-    expect(handing({ items: [] }, "thorn")).toEqual({ can: true, forged: null });
+    expect(handing(finch([]), "thorn")).toEqual({ can: true, forged: null });
   });
   test("a second component forges with the first, and says with what", () => {
-    expect(handing({ items: ["thorn"] }, "plume")).toEqual({ can: true, forged: "wasptail", with: "thorn" });
-    expect(handing({ items: ["hoard", "bark"] }, "bark")).toEqual({ can: true, forged: "stump", with: "bark" });
+    expect(handing(finch(["thorn"]), "plume")).toEqual({ can: true, forged: "wasptail", with: "thorn" });
+    expect(handing(finch(["hoard", "bark"]), "bark")).toEqual({ can: true, forged: "stump", with: "bark" });
   });
   test("a figure holding three finished items takes no more", () => {
-    expect(handing({ items: ["hoard", "stump", "quilt"] }, "thorn")).toEqual({ can: false });
+    expect(handing(finch(["hoard", "stump", "quilt"]), "thorn")).toEqual({ can: false });
+  });
+  test("an emblem is simply held, and not by a figure of its kin already, so that figure is not lit to take it", () => {
+    expect(handing(finch(["thorn"]), "crabcharm")).toEqual({ can: true, forged: null });
+    expect(handing(finch([]), "feathercharm")).toEqual({ can: false });
+    expect(handing(finch(["crabcharm"]), "crabcharm")).toEqual({ can: false });
   });
   test("every component makes something with each of the five", () => {
     const made = recipesOf("glowcap");
@@ -348,6 +356,9 @@ describe("what a card says about a figure", () => {
     run.board[1] = { id: 2, kind: "kettle", stars: 1, items: [], fed: 0 };
     expect(ownTraitCount(run, "ember")).toEqual({ count: 2, next: 4, step: 1 });
     expect(ownTraitCount(run, "sage")).toEqual({ count: 0, next: 2, step: 0 });
+    // A Finch holding an Ember emblem is a third Ember.
+    run.board[2] = { id: 3, kind: "finch", stars: 1, items: ["embercharm"], fed: 0 };
+    expect(ownTraitCount(run, "ember")).toEqual({ count: 3, next: 4, step: 1 });
   });
   test("a trait's figures run cheapest first", () => {
     expect(membersOf("ember")).toEqual(["emberkit", "kettle", "cindernewt", "hearthcat"]);
