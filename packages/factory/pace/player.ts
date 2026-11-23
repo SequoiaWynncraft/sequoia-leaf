@@ -150,7 +150,9 @@ export class Player {
   private sold = 0;
   /** The goal what is bought now is bought for. */
   private current: F.Goal | null = null;
-  private studies = false;
+  /** The kinds of folio Studies have been built for, and the research the player has read. */
+  private readonly studied = new Set<F.Item>();
+  private readonly known = new Set<F.Goal>();
   /** Every line built, and which of them each tile's piece belongs to (-1 for none). */
   private readonly built: Built[] = [];
   private readonly owner: Int32Array;
@@ -165,12 +167,13 @@ export class Player {
   /** The grade the player builds a kind at now: its policy's, or the highest unlocked if that is lower. */
   readonly grades: Grades = (k) => Math.max(1, Math.min(this.s.grades[F.kindName(k)] ?? 1, F.highest(this.y.open, k)));
 
-  /** Plays every node in its order, and then waits for every piece of research to be known. */
+  /** Plays every node, each in its order once it may be taken up, and then waits for every piece of research to be known. */
   play(): Game {
     let stuck: string | null = null;
     try {
       this.tend();
-      for (const id of this.s.nodes) this.node(F.goal(id));
+      const nodes = this.s.nodes.map((id) => F.goal(id));
+      for (let g = this.next(nodes); g !== undefined; g = this.next(nodes)) this.node(g);
       this.research();
       this.run("wait", () => !this.s.research.every((id) => this.isDone(F.goal(id))));
     } catch (e) {
@@ -191,46 +194,59 @@ export class Player {
     };
   }
 
-  /** Turns to a node once it may be taken up, builds what it needs, and waits for it to be done. */
-  private node(g: F.Goal): void {
+  /**
+   * The node the player turns to next: the first in its order not done that may be taken up, waiting
+   * (on research it needs, or for its tier to open) until one may; nothing once all are done.
+   */
+  private next(nodes: readonly F.Goal[]): F.Goal | undefined {
     this.research();
-    this.run("wait", () => !F.ready(this.y.open, g) && !this.isDone(g));
-    if (this.isDone(g)) return;
+    const open = (): F.Goal | undefined => nodes.find((g) => !this.isDone(g) && F.ready(this.y.open, g));
+    this.run("wait", () => open() === undefined && !nodes.every((g) => this.isDone(g)));
+    return open();
+  }
+
+  /** Turns to a node, builds what it needs, and waits for it to be done. */
+  private node(g: F.Goal): void {
     this.cameAt.set(g, this.y.tick);
     this.current = g;
     if (this.y.hand !== g) this.give({ do: "take", node: F.GOALS[g]?.id });
     this.busy(this.s.hands.read);
     const tier = F.GOALS[g]?.tier ?? 0;
+    const minutes = this.s.minutes[tier] ?? this.s.minutes.at(-1) ?? 10;
     const want = F.GOALS[g]?.want ?? F.counts();
     // What the standing lines really bring is read once new lines have filled; while it is short of the pace the goal wants, the player builds again.
     for (let round = 0; round < ROUNDS && !this.isDone(g); round++) {
-      const units = shortfall(want, this.y.got[g] ?? null, this.s.minutes[tier] ?? 10, this.depotLines(), this.grades);
+      const units = shortfall(want, this.y.got[g] ?? null, minutes, this.depotLines(), this.grades);
       if (units.length === 0 || !this.build(units, [], g)) break;
     }
     this.run("wait", () => !this.isDone(g));
   }
 
-  /** Once the Study is unlocked: the line of research filled, and Studies with folio lines built to the pace asked for. */
+  /**
+   * Once the Study is unlocked, the line of research kept as the player wants it (`queue`); and for
+   * each kind of folio, once it may be made and research of the tiers open wants it, Studies with
+   * folio lines built for `folios` a minute of it.
+   */
   private research(): void {
-    if (this.studies || F.highest(this.y.open, F.STUDY) === 0) return;
-    this.studies = true;
+    if (F.highest(this.y.open, F.STUDY) === 0) return;
     this.queue();
+    const studies: Unit[] = [];
+    for (const folio of F.FOLIOS) {
+      if (this.studied.has(folio) || F.locked(this.y.open, { make: folio }) !== null) continue;
+      const wanted = this.s.research.some((id) => {
+        const g = F.goal(id);
+        const info = F.GOALS[g];
+        return info !== undefined && !this.isDone(g) && info.tier <= this.y.open.tier && (info.want[folio] ?? 0) > 0;
+      });
+      if (!wanted) continue;
+      this.studied.add(folio);
+      const each = F.makes(F.STUDY, this.grades(F.STUDY), null);
+      const count = Math.max(1, Math.ceil(this.s.folios / each - 1e-9));
+      for (let k = 0; k < count; k++) studies.push(size(folio, this.s.folios / count, this.grades));
+    }
+    if (studies.length === 0) return;
     const first = this.y.line[0];
     if (first !== undefined) this.current = first;
-    const wanted = new Map<F.Item, number>();
-    for (const id of this.s.research) {
-      const want = F.GOALS[F.goal(id)]?.want;
-      for (const f of F.FOLIOS) wanted.set(f, (wanted.get(f) ?? 0) + (want?.[f] ?? 0));
-    }
-    const all = [...wanted.values()].reduce((a, b) => a + b, 0);
-    const studies: Unit[] = [];
-    for (const [folio, n] of wanted) {
-      if (n === 0 || F.locked(this.y.open, { make: folio }) !== null) continue;
-      const pace = (this.s.folios * n) / all;
-      const each = F.makes(F.STUDY, this.grades(F.STUDY), null);
-      const count = Math.max(1, Math.ceil(pace / each - 1e-9));
-      for (let k = 0; k < count; k++) studies.push(size(folio, pace / count, this.grades));
-    }
     this.build([], studies, null);
   }
 
@@ -563,15 +579,49 @@ export class Player {
     return worst;
   }
 
-  /** Puts research in the line, in its order, each as soon as it may be studied, until the line is full. */
+  /**
+   * The research in the order the player wants it known: what the nodes of the tiers open and not yet
+   * done need, in the order it turns to them, each after what it needs in turn; then its list.
+   */
+  private priority(): F.Goal[] {
+    const out: F.Goal[] = [];
+    const add = (g: F.Goal): void => {
+      const info = F.GOALS[g];
+      if (!info || F.isNode(g) || out.includes(g) || this.isDone(g)) return;
+      for (const n of info.needs) add(n);
+      out.push(g);
+    };
+    for (const id of this.s.nodes) {
+      const g = F.goal(id);
+      const info = F.GOALS[g];
+      if (info && !this.isDone(g) && info.tier <= this.y.open.tier) for (const n of info.needs) add(n);
+    }
+    for (const id of this.s.research) add(F.goal(id));
+    return out;
+  }
+
+  /**
+   * Keeps the line of research full, in the order the player wants (`priority`): what may be studied
+   * goes in as soon as it may; when something it wants sooner may be studied, what stands behind it
+   * in the line comes out and goes back in after it.
+   */
   private queue(): void {
     const was = this.tending;
     this.tending = true;
-    for (const id of this.s.research) {
-      if (this.y.line.length >= F.LINE) break;
-      if (F.studyRefusal(this.y, F.goal(id)) !== null) continue;
-      this.busy(this.s.hands.read);
-      this.give({ do: "study", research: id });
+    const want = this.priority()
+      .filter((g) => this.y.line.includes(g) || F.ready(this.y.open, g))
+      .slice(0, F.LINE);
+    const line = [...this.y.line];
+    let k = 0;
+    while (k < line.length && line[k] === want[k]) k++;
+    for (const g of line.slice(k).toReversed()) {
+      this.busy(this.s.hands.order);
+      this.give({ do: "unstudy", research: F.GOALS[g]?.id });
+    }
+    for (const g of want.slice(k)) {
+      this.busy(this.known.has(g) ? this.s.hands.order : this.s.hands.read);
+      this.known.add(g);
+      this.give({ do: "study", research: F.GOALS[g]?.id });
     }
     this.tending = was;
   }
