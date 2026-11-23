@@ -170,13 +170,14 @@ each machine (`recipesFor`), the router, keeping a blueprint, what the board may
 a yard back.
 
 - **Tools.** A command of a tool the yard has not unlocked is refused with the code `locked`: `paint`
-  (Paint); `move`, `clear`, `stand`, `placeBlueprint` (Select); `saveBlueprint` (any blueprints);
-  `upgrade` (Upgrading an area, and Select). A single piece (`build`) and a run of belt (`lay`) never
-  are.
+  (Paint); `move`, `clear`, `placeBlueprint` and a `stand` of two pieces or more (Select);
+  `saveBlueprint` (any blueprints); `upgrade` (Upgrading an area, and Select). A single piece
+  (`build`, or a `stand` of one: a removal undone) and a run of belt (`lay`) never are.
 - **A run of belt** (`lay`) reads only belts and tunnels: where each leg goes, which way, how far
   and at what grade. A leg of any other kind does not read; a colour or a setting on one is let be.
   A run that names a tunnel twice, by both its mouths, is refused before anything changes, and a run
-  is charged the price `priceOf` gives it.
+  is charged the price `priceOf` gives it. Its `turn` turns a belt already standing where the run
+  starts, and nothing but a belt.
 - **Standing pieces** (`stand`) is for a copy or an undone removal, at most 160 a command; a colour
   in it needs Paint, and what a piece is set to its own unlock. A blueprint is set down by naming its
   place, its corner and its turns (`placeBlueprint`), all or none, whatever its size. A tunnel named

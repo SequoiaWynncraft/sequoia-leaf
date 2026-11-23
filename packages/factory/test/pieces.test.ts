@@ -272,3 +272,22 @@ describe("a sorter", () => {
     expect(back && F.keptAt(back, F.at(back, 4, 4))).toEqual({ recipe: brick });
   });
 });
+
+describe("a run of belt", () => {
+  test("turns the belt where it starts with it, and nothing but a belt", () => {
+    const y = yard();
+    must(y, { do: "build", kind: "belt", x: 4, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "mill", x: 6, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "splitter", x: 8, y: 4, dir: 0 });
+    must(y, { do: "lay", legs: [], turn: { x: 4, y: 4, dir: 1 } });
+    expect(y.dir[F.at(y, 4, 4)]).toBe(1);
+    for (const x of [6, 8, 10]) {
+      const before = F.encode(y);
+      expect(give(y, { do: "lay", legs: [], turn: { x, y: 4, dir: 1 } })).toMatchObject({
+        refused: "cannot_lay",
+        why: "There is no belt there to turn",
+      });
+      expect(F.encode(y)).toBe(before);
+    }
+  });
+});

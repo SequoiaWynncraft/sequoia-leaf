@@ -9,6 +9,7 @@ import {
   DX,
   DY,
   isDir,
+  kindAt,
   otherMouth,
   priceAt,
   type Refund,
@@ -19,7 +20,6 @@ import {
   type Spent,
   stops,
   turn,
-  turnable,
 } from "./build.ts";
 import { join } from "./lines.ts";
 import {
@@ -260,7 +260,8 @@ export function stand(
   joins = false,
   bend?: Pick<Piece, "x" | "y" | "dir">,
 ): Spent {
-  const why = bend && !turnable(y, bend.x, bend.y) ? "There is nothing there to turn" : standRefusal(y, pieces, coins);
+  const why =
+    bend && kindAt(y, bend.x, bend.y) !== BELT ? "There is no belt there to turn" : standRefusal(y, pieces, coins);
   if (why !== null) return { ok: false, why };
   if (bend) turn(y, bend.x, bend.y, bend.dir);
   let cost = 0;
