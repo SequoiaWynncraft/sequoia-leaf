@@ -1516,7 +1516,8 @@
             }
           ],
           "tray": {},
-          "fresh": {},
+          "fresh": [],
+          "looked": 0,
           "letters": [],
           "greeted": 0,
           "earned": []
@@ -1563,9 +1564,7 @@
           {
             "id": "t-3",
             "do": "looked",
-            "seen": {
-              "rock": 1
-            }
+            "through": 1
           },
           {
             "id": "t-4",
@@ -1693,7 +1692,8 @@
             }
           ],
           "tray": {},
-          "fresh": {},
+          "fresh": [],
+          "looked": 1,
           "letters": [
             {
               "id": "w-9",

@@ -30,7 +30,7 @@ import {
   timedWindowAt,
 } from "@sequoia-leaf/core";
 import { TOWN, type Town } from "@sequoia-leaf/town";
-import { freeSpot, newThings, PETS, store } from "@sequoia-leaf/town/camp.ts";
+import { freeSpot, PETS, store } from "@sequoia-leaf/town/camp.ts";
 import { GIFTS } from "@sequoia-leaf/town/folk.ts";
 import { BOX, letter } from "@sequoia-leaf/town/mail.ts";
 import { THINGS } from "@sequoia-leaf/town/things.ts";
@@ -87,6 +87,7 @@ function liveIn(s: Town, many: number = LIVED.length): void {
     if (spot) s.camp.placed.push({ n: s.made++, id, x: spot.x, y: spot.y, t: 0, s: i % 3 === 0 ? 1 : 0 });
   });
   s.camp.tray = { cushion: 2, glowcap: 1, "rug-moss": 1 };
+  s.camp.fresh = [];
   for (const id of ["lantern-post", "toadstool", "sapling"]) store(s.camp, id);
   s.camp.first = "cat";
   s.camp.greeted = Math.max(s.camp.greeted, 2);
@@ -212,5 +213,5 @@ export const stageTown = (playerId: PlayerId, ops: readonly unknown[], others: r
     } else {
       yield* sql`INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${playerId}, 'town', 1, ${text}, ${now})`;
     }
-    return { placed: s.camp.placed.length, fresh: newThings(s.camp), letters: s.camp.letters.length };
+    return { placed: s.camp.placed.length, fresh: s.camp.fresh.length, letters: s.camp.letters.length };
   });

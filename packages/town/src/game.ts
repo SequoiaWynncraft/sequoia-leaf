@@ -32,6 +32,8 @@ import {
   CGH,
   CGW,
   isPet,
+  lookedThrough,
+  MOST_NEW,
   MOST_OWNED,
   newCamp,
   type PetId,
@@ -141,8 +143,8 @@ export type TownCommand =
   | { do: "readMail" }
   | { do: "takePresent"; letter: string }
   | { do: "clearLetters" }
-  /** The member has looked in the tray: what it showed as new (how many of each thing) is new no more. What came since stays new. */
-  | { do: "looked"; seen: Record<string, number> }
+  /** The member has looked in the tray, at every arrival up to the `through`th (`camp.looked` and what was new, as their page had them). */
+  | { do: "looked"; through: number }
   | ({ do: "setOut"; thing: string } & At)
   /** Moving and turning: the page works out where, the rules check it. */
   | ({ do: "move"; n: number } & At)
@@ -343,11 +345,7 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
       camp.letters = tidied(camp.letters);
       return done(s);
     case "looked":
-      for (const [id, n] of Object.entries(c.seen)) {
-        const left = (camp.fresh[id] ?? 0) - n;
-        if (left > 0) camp.fresh[id] = left;
-        else delete camp.fresh[id];
-      }
+      lookedThrough(camp, c.through);
       return done(s);
     case "setOut": {
       if ((camp.tray[c.thing] ?? 0) < 1) return no("not_in_tray");
@@ -357,8 +355,6 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
       const left = (camp.tray[c.thing] ?? 0) - 1;
       if (left > 0) camp.tray[c.thing] = left;
       else delete camp.tray[c.thing];
-      // Taken in hand, it has been looked at.
-      delete camp.fresh[c.thing];
       camp.placed.push({ n: next(s), id: c.thing, x: c.x, y: c.y, t: c.t, s: 0 });
       return done(s);
     }
@@ -437,7 +433,8 @@ export const visitView = (s: Town): TownView => ({
     first: s.camp.first,
     placed: s.camp.placed.map((p) => ({ ...p })),
     tray: {},
-    fresh: {},
+    fresh: [],
+    looked: 0,
     letters: [],
     greeted: 0,
     earned: [],
@@ -508,10 +505,8 @@ export function readCommand(v: unknown): TownCommand | null {
     case "readMail":
     case "clearLetters":
       return { do: v.do };
-    case "looked": {
-      const seen = counts(v.seen);
-      return seen && { do: "looked", seen };
-    }
+    case "looked":
+      return whole(v.through, 0, 1e9) ? { do: "looked", through: v.through } : null;
     case "buy":
       return typeof v.stall === "string" && isThing(v.thing) ? { do: "buy", stall: v.stall, thing: v.thing } : null;
     case "choosePet":
@@ -601,9 +596,11 @@ function storedCamp(v: unknown): Camp | null {
   const letters = all(v.letters, (l) => (isLetter(l) ? { ...l, from: nowNamed(l.from) } : null));
   const earned = all(v.earned, (p) => (isThing(p) ? p : null));
   const tray = counts(v.tray);
-  const fresh = counts(v.fresh ?? {});
-  if (!placed || !parcels || !letters || !earned || !tray || !fresh) return null;
-  const camp: Camp = { first: v.first, placed, tray, fresh, letters, greeted: v.greeted, earned };
+  const fresh = all(v.fresh ?? [], (p) => (isThing(p) ? p : null));
+  const looked = v.looked ?? 0;
+  if (!placed || !parcels || !letters || !earned || !tray || !fresh || !whole(looked, 0, 1e9)) return null;
+  if (fresh.length > MOST_NEW) return null;
+  const camp: Camp = { first: v.first, placed, tray, fresh, looked, letters, greeted: v.greeted, earned };
   for (const id of parcels) store(camp, id);
   return camp;
 }

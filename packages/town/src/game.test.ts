@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { type Ctx, DAY_MS, type Done, LOGGED, type Refused } from "@sequoia-leaf/core";
 
-import { canPlace, MOST_OWNED, MOST_PLACED, NEW_CAMP, newThings, YARD } from "./camp.ts";
+import { canPlace, MOST_NEW, MOST_OWNED, MOST_PLACED, NEW_CAMP, store, YARD } from "./camp.ts";
 import { STALLS } from "./catalogue.ts";
 import { STRETCH, stretchOf } from "./clock.ts";
 import { CALLERS, folk, GIFTS } from "./folk.ts";
@@ -156,7 +156,7 @@ describe("buying", () => {
 
   test("puts one thing in the tray, new, and nothing on the ground, and takes the stall's price, keyed by a number of its own", () => {
     const one = did(fresh(), { do: "buy", stall: stall.id, thing: ware.thing });
-    expect([one.state.camp.tray, one.state.camp.fresh]).toEqual([{ [ware.thing]: 1 }, { [ware.thing]: 1 }]);
+    expect([one.state.camp.tray, one.state.camp.fresh]).toEqual([{ [ware.thing]: 1 }, [ware.thing]]);
     expect(one.state.camp.placed).toEqual(fresh().camp.placed);
     expect(one.coins).toEqual([{ amount: -ware.price, reason: "A thing for the camp", key: "buy:9" }]);
     expect(one.log).toEqual([{ kind: LOGGED.townBought, data: { thing: ware.thing, price: ware.price } }]);
@@ -246,7 +246,7 @@ describe("things won", () => {
     const won = TOWN.advance(fresh(), ctx(T0, awards));
     expect([won.camp.tray, won.camp.fresh]).toEqual([
       { "trophy-oldbramble": 1, "model-crab": 1 },
-      { "trophy-oldbramble": 1, "model-crab": 1 },
+      ["trophy-oldbramble", "model-crab"],
     ]);
     expect(won.camp.placed).toEqual(fresh().camp.placed);
     expect(won.camp.earned).toEqual(["trophy-oldbramble", "model-crab"]);
@@ -275,7 +275,7 @@ describe("things won", () => {
     const won = TOWN.advance(s, ctx(T0, ["model-crab"]));
     expect([won.camp.tray, won.camp.fresh, won.camp.earned]).toEqual([
       { "model-crab": MOST_OWNED },
-      {},
+      [],
       ["model-crab"],
     ]);
   });
@@ -294,7 +294,7 @@ describe("the mailbox", () => {
     const s = fresh();
     s.camp.letters = [letter("a", "Tindra", "for you", "pumpkin")];
     const one = did(s, { do: "takePresent", letter: "a" }).state;
-    expect([one.camp.tray, one.camp.fresh]).toEqual([{ pumpkin: 1 }, { pumpkin: 1 }]);
+    expect([one.camp.tray, one.camp.fresh]).toEqual([{ pumpkin: 1 }, ["pumpkin"]]);
     expect(one.camp.placed).toEqual(s.camp.placed);
     expect(one.camp.letters[0]?.taken).toBe(true);
     expect(refused(one, { do: "takePresent", letter: "a" })).toBe("no_present");
@@ -318,22 +318,23 @@ describe("things in the camp", () => {
     let s = TOWN.advance(fresh(), ctx(T0, ["model-crab"]));
     s = did(s, { do: "buy", stall: stall.id, thing: ware.thing }).state;
     s = did(s, { do: "buy", stall: stall.id, thing: ware.thing }).state;
-    expect([s.camp.fresh, newThings(s.camp)]).toEqual([{ "model-crab": 1, [ware.thing]: 2 }, 3]);
-    // One taken in hand has been looked at; the rest are new until the tray is looked in.
+    expect([s.camp.fresh, s.camp.looked]).toEqual([["model-crab", ware.thing, ware.thing], 0]);
+    // A page that showed the first two says so: those are new no more, and the third still is.
+    s = did(s, { do: "looked", through: 2 }).state;
+    expect([s.camp.fresh, s.camp.looked]).toEqual([[ware.thing], 2]);
+    // Said again, or by a second page that showed the same, it takes the mark off nothing more.
+    s = did(s, { do: "looked", through: 2 }).state;
+    expect([s.camp.fresh, s.camp.looked]).toEqual([[ware.thing], 2]);
+    // One more arrives before Leaf hears the page looked at all three: it is new still.
+    s = did(s, { do: "buy", stall: stall.id, thing: ware.thing }).state;
+    s = did(s, { do: "looked", through: 3 }).state;
+    expect([s.camp.fresh, s.camp.looked]).toEqual([[ware.thing], 3]);
+    s = did(s, { do: "looked", through: 99 }).state;
+    expect([s.camp.fresh, s.camp.looked]).toEqual([[], 4]);
+    // Setting one out and putting it away again makes nothing new.
     s = did(s, { do: "setOut", thing: ware.thing, x: 30, y: 20, t: 0 }).state;
-    expect([s.camp.tray, s.camp.fresh]).toEqual([{ "model-crab": 1, [ware.thing]: 1 }, { "model-crab": 1 }]);
-    // Looked in: what the page showed as new is new no more, and what it had not shown yet stays new.
-    s = did(s, { do: "looked", seen: {} }).state;
-    expect(newThings(s.camp)).toBe(1);
-    // One more of a thing shown as new arrives before Leaf hears the tray was looked in: it is new still.
-    s = did(s, { do: "looked", seen: { "model-crab": 1 } }).state;
-    s.camp.fresh["model-crab"] = 2;
-    s = did(s, { do: "looked", seen: { "model-crab": 1 } }).state;
-    expect(s.camp.fresh).toEqual({ "model-crab": 1 });
-    s = did(s, { do: "looked", seen: { "model-crab": 1 } }).state;
-    expect([s.camp.tray, s.camp.fresh, newThings(s.camp)]).toEqual([{ "model-crab": 1, [ware.thing]: 1 }, {}, 0]);
     s = did(s, { do: "putAway", n: nOf(s, ware.thing) }).state;
-    expect([s.camp.tray[ware.thing], s.camp.fresh]).toEqual([2, {}]);
+    expect([s.camp.tray[ware.thing], s.camp.fresh]).toEqual([3, []]);
   });
 
   test("a thing is set out of the tray only where it may stand, turned a way it turns", () => {
@@ -447,7 +448,7 @@ function largest(): Town {
       if (canPlace(s.camp.placed, id, x, y, 0) === "ok") s.camp.placed.push({ n: s.made++, id, x, y, t: 0, s: 0 });
     }
   s.camp.tray = Object.fromEntries(THINGS.map((t) => [t.id, MOST_OWNED]));
-  s.camp.fresh = { ...s.camp.tray };
+  s.camp.fresh = Array.from({ length: MOST_NEW }, (_v, i) => THINGS[i % THINGS.length]?.id ?? "rock");
   s.camp.letters = Array.from({ length: BOX }, (_v, i) =>
     letter(`m-${i}`, "Pipwick", "Came by. You were out. I fed the fire. ".repeat(6).trim(), i % 2 ? "pinecone" : ""),
   );
@@ -473,17 +474,23 @@ describe("keeping a town", () => {
       expect(decodeTown(bad)).toBeNull();
   });
 
+  test("past 500 arrivals nobody looked at, the oldest count as looked at", () => {
+    const s = fresh();
+    for (let i = 0; i <= MOST_NEW; i++) store(s.camp, i === 0 ? "rock" : "stump");
+    expect([s.camp.fresh.length, s.camp.fresh[0], s.camp.looked]).toEqual([MOST_NEW, "stump", 1]);
+  });
+
   test("a camp kept with parcels by the trail is read with them in the tray, new, and what stood still stands", () => {
     const s = fresh();
     s.camp.tray = { rock: 1 };
     const kept = JSON.stringify({
       ...JSON.parse(encodeTown(s)),
-      camp: { ...s.camp, fresh: undefined, parcels: ["rock", "toadstool", "rock"] },
+      camp: { ...s.camp, fresh: undefined, looked: undefined, parcels: ["rock", "toadstool", "rock"] },
     });
     expect(decodeTown(kept)?.camp).toEqual({
       ...s.camp,
       tray: { rock: 3, toadstool: 1 },
-      fresh: { rock: 2, toadstool: 1 },
+      fresh: ["rock", "toadstool", "rock"],
     });
   });
 
@@ -503,7 +510,7 @@ describe("keeping a town", () => {
 function lived(): Town {
   const s = TOWN.advance(fresh(), ctx(fresh().nextCall));
   s.camp.tray = { stump: 1, rock: 1 };
-  s.camp.fresh = { rock: 1 };
+  s.camp.fresh = ["rock"];
   s.camp.letters = [letter("w-1", "Tindra", "For you.", "toadstool")];
   return s;
 }
@@ -527,7 +534,7 @@ describe("the page's copy", () => {
     const commands: TownCommand[] = [
       { do: "setOut", thing: "stump", x: 33, y: 20, t: 0 },
       { do: "takePresent", letter: "w-1" },
-      { do: "looked", seen: { stump: 1 } },
+      { do: "looked", through: 1 },
       { do: "move", n: stump, x: 30, y: 33, t: 0 },
       { do: "toggle", n: lantern },
       { do: "putAway", n: stump },
@@ -586,7 +593,7 @@ describe("a visit", () => {
     if (lantern) lantern.s = 1;
     // A caller waiting, a letter, and things in the tray, one of them new: the owner's own.
     expect(s.visit).not.toBeNull();
-    expect([s.camp.letters.length, s.camp.fresh, s.camp.tray]).toEqual([1, { rock: 1 }, { stump: 1, rock: 1 }]);
+    expect([s.camp.letters.length, s.camp.fresh, s.camp.tray]).toEqual([1, ["rock"], { stump: 1, rock: 1 }]);
     const before = encodeTown(s);
     const seen = TOWN.visit?.(s, ctx()) ?? null;
     expect(seen).toEqual({
@@ -597,7 +604,16 @@ describe("a visit", () => {
       seenAt: 0,
       cursor: null,
       stay: false,
-      camp: { first: "fox", placed: s.camp.placed, tray: {}, fresh: {}, letters: [], greeted: 0, earned: [] },
+      camp: {
+        first: "fox",
+        placed: s.camp.placed,
+        tray: {},
+        fresh: [],
+        looked: 0,
+        letters: [],
+        greeted: 0,
+        earned: [],
+      },
       visit: null,
       made: 0,
       arrival: { first: false, newDay: false, away: 0, said: [], mail: [] },

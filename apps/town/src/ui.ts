@@ -16,7 +16,7 @@ import { fromLedger } from "@sequoia-leaf/kit/purse.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { dist, makeCanvas, pick } from "@sequoia-leaf/kit/util.ts";
-import { newThings, owned } from "@sequoia-leaf/town/camp.ts";
+import { owned } from "@sequoia-leaf/town/camp.ts";
 import { LOST_CRAB, STALLS, type Stock } from "@sequoia-leaf/town/catalogue.ts";
 import { folk, folkNamed, KEEPER } from "@sequoia-leaf/town/folk.ts";
 import { waiting } from "@sequoia-leaf/town/mail.ts";
@@ -706,7 +706,7 @@ const many = (n: number, one: string, more: string): string => `${COUNT[n] ?? n}
 export function campWaiting(): string {
   const camp = mine();
   const letters = waiting(camp.letters);
-  const fresh = newThings(camp);
+  const fresh = camp.fresh.length;
   const parts: string[] = [];
   if (letters > 0) parts.push(`${many(letters, "letter", "letters")} in the mailbox.`);
   if (fresh > 0) parts.push(`${many(fresh, "new thing", "new things")} in Storage.`);

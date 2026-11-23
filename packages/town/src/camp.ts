@@ -63,8 +63,13 @@ export interface Camp {
    * wherever it is named; in the code, and in what Leaf stores, its one name is `tray`.
    */
   tray: Record<string, number>;
-  /** How many of each thing in the tray came since the member last looked in it. */
-  fresh: Record<string, number>;
+  /**
+   * The things that came into the tray since the member last looked in it, oldest first, and how
+   * many arrivals they have looked at in all (`looked`). A page says how far it has shown by that
+   * count, so looking twice, or from two pages, never takes the mark off what came after.
+   */
+  fresh: string[];
+  looked: number;
   letters: Letter[];
   /** How many of the town's own who dropped by the member has greeted. */
   greeted: number;
@@ -291,15 +296,25 @@ export const owned = (camp: Pick<Camp, "placed" | "tray">, id: string): number =
  * One more of a thing goes into the tray, new to the member: the one way anything they get (bought,
  * won, taken out of a letter) arrives. False, and nothing kept, when they have as many as may be had.
  */
-export function store(camp: Pick<Camp, "placed" | "tray" | "fresh">, id: string): boolean {
+export function store(camp: Pick<Camp, "placed" | "tray" | "fresh" | "looked">, id: string): boolean {
   if (owned(camp, id) >= MOST_OWNED) return false;
   camp.tray[id] = (camp.tray[id] ?? 0) + 1;
-  camp.fresh[id] = (camp.fresh[id] ?? 0) + 1;
+  camp.fresh.push(id);
+  // Past `MOST_NEW` the oldest counts as looked at.
+  if (camp.fresh.length > MOST_NEW) lookedThrough(camp, camp.looked + 1);
   return true;
 }
 
-/** How many things in the tray are new to the member. */
-export const newThings = (camp: Pick<Camp, "fresh">): number => Object.values(camp.fresh).reduce((a, n) => a + n, 0);
+/** How many arrivals are kept as new at once. */
+export const MOST_NEW = 500;
+
+/** The member has looked at every arrival up to the `through`th: those are new no more. */
+export function lookedThrough(camp: Pick<Camp, "fresh" | "looked">, through: number): void {
+  const seen = Math.min(camp.fresh.length, through - camp.looked);
+  if (seen <= 0) return;
+  camp.fresh.splice(0, seen);
+  camp.looked += seen;
+}
 
 // ---------- a new camp ----------
 
@@ -323,7 +338,8 @@ export const newCamp = (): Camp => ({
   first: "",
   placed: NEW_CAMP.map(({ id, x, y, t }, n) => ({ n, id, x, y, t, s: 0 })),
   tray: {},
-  fresh: {},
+  fresh: [],
+  looked: 0,
   letters: [],
   greeted: 0,
   earned: [],

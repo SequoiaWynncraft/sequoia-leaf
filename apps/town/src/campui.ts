@@ -14,7 +14,7 @@ import { readBoard, type Row } from "@sequoia-leaf/kit/person.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
-import { COSY, KIND, newThings, type PetId, PETS, petsOf, trayList } from "@sequoia-leaf/town/camp.ts";
+import { COSY, KIND, type PetId, PETS, petsOf, trayList } from "@sequoia-leaf/town/camp.ts";
 import { folkNamed } from "@sequoia-leaf/town/folk.ts";
 import { tidied } from "@sequoia-leaf/town/mail.ts";
 import { KIND_NAMES, KINDS, thingOf, THINGS } from "@sequoia-leaf/town/things.ts";
@@ -438,12 +438,12 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
 
   function drawTray(): void {
     const s = at();
-    setHammerNew(newThings(mine()));
+    setHammerNew(mine().fresh.length);
     if (!s.decorating()) return;
     // The tray is open, so what is new in it has been looked at: Leaf is told, and it stays marked here.
-    const fresh = Object.keys(mine().fresh);
+    const { fresh, looked } = mine();
     for (const id of fresh) marked.add(id);
-    if (fresh.length > 0) doNow({ do: "looked", seen: mine().fresh });
+    if (fresh.length > 0) doNow({ do: "looked", through: looked + fresh.length });
     const held = s.held();
     hand.replaceChildren(
       ...(held
@@ -554,7 +554,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
       });
       tray.hidden = true;
       document.body.classList.remove("decorating");
-      setHammerNew(home ? newThings(mine()) : 0);
+      setHammerNew(home ? mine().fresh.length : 0);
     },
 
     decorating(on) {

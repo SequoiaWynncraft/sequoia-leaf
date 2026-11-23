@@ -30,8 +30,8 @@ here (`seenAt`), how far their own news has been told (`cursor`), whether their 
 town, the camp, the caller waiting at it (`visit`), when the next caller sets out (`nextCall`), and
 Leaf's stream (`rng`) and counter (`made`). The camp holds the pet chosen first, the things standing
 (each with an id of its own, `n`, made from `made` and never used again), the tray (everything the
-member has that is not set out; a player reads "Storage"), how many of each thing in it are new
-to them (`fresh`), the letters, how many callers were greeted and which trophies have been handed
+member has that is not set out; a player reads "Storage"), which arrivals in it are new to them
+(`fresh`, oldest first, and `looked`, how many arrivals they have looked at in all), the letters, how many callers were greeted and which trophies have been handed
 over. Nothing stands in a camp that its member did not set there: whatever they get goes into the
 tray, new, by `store` (`camp.ts`).
 
@@ -57,24 +57,24 @@ before they are greeted or put away.
 Things are named by id, never by a place in a list. Where a thing goes is proposed by the page (a
 square, `x` and `y`, and a turn, `t`) and checked here.
 
-| `do`           | Fields           | What it does                                                                                                                | Refused with                                                     |
-| -------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `welcome`      | `cursor`         | Posts the mail while away (below); the member is welcomed today and here now; takes `cursor` if it is further on            |                                                                  |
-| `here`         | `cursor`         | The member is here now; takes `cursor` if it is further on                                                                  |                                                                  |
-| `openChest`    |                  | 3 Coins, once a UTC day                                                                                                     | `opened_today`                                                   |
-| `spotCrab`     |                  | One more sighting, once for each place the crab hides (60 seconds of Leaf's clock, `stretchOf`)                             | `too_soon`                                                       |
-| `buy`          | `stall`, `thing` | The thing goes into the tray, new; takes the stall's price                                                                  | `not_for_sale`, `plenty` (999 of it)                             |
-| `choosePet`    | `pet`            | The first pet                                                                                                               | `pet_chosen`                                                     |
-| `greet`        | `visit`          | The caller waiting, by id: counted, what they brought posted, and gone                                                      | `no_such_visit`                                                  |
-| `readMail`     |                  | Every letter read                                                                                                           |                                                                  |
-| `takePresent`  | `letter`         | The present goes into the tray, new                                                                                         | `no_present`, `plenty` (the present stays in its letter)         |
-| `clearLetters` |                  | Letters read and emptied are thrown out                                                                                     |                                                                  |
-| `looked`       |                  | The member has looked in the tray: nothing in it is new                                                                     |                                                                  |
-| `setOut`       | `thing`, `x y t` | One out of the tray, there; that thing is no longer new                                                                     | `not_in_tray`, `full` (300 standing), where it may not stand     |
-| `move`         | `n`, `x y t`     | Moves and turns a thing                                                                                                     | `no_such_thing`, where it may not stand                          |
-| `putAway`      | `n`              | Into the tray                                                                                                               | `no_such_thing`, `rooted` (the cabin, the mailbox, the signpost) |
-| `toggle`       | `n`              | A lantern post or candle stump lit or dark; a paper lantern, pane or pennant the next of five colours; a gnome turned round | `no_such_thing`, `nothing_to_toggle`                             |
-| `stay`         | `on`             | Whether the member's character stays in town after they go                                                                  |                                                                  |
+| `do`           | Fields           | What it does                                                                                                                         | Refused with                                                     |
+| -------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `welcome`      | `cursor`         | Posts the mail while away (below); the member is welcomed today and here now; takes `cursor` if it is further on                     |                                                                  |
+| `here`         | `cursor`         | The member is here now; takes `cursor` if it is further on                                                                           |                                                                  |
+| `openChest`    |                  | 3 Coins, once a UTC day                                                                                                              | `opened_today`                                                   |
+| `spotCrab`     |                  | One more sighting, once for each place the crab hides (60 seconds of Leaf's clock, `stretchOf`)                                      | `too_soon`                                                       |
+| `buy`          | `stall`, `thing` | The thing goes into the tray, new; takes the stall's price                                                                           | `not_for_sale`, `plenty` (999 of it)                             |
+| `choosePet`    | `pet`            | The first pet                                                                                                                        | `pet_chosen`                                                     |
+| `greet`        | `visit`          | The caller waiting, by id: counted, what they brought posted, and gone                                                               | `no_such_visit`                                                  |
+| `readMail`     |                  | Every letter read                                                                                                                    |                                                                  |
+| `takePresent`  | `letter`         | The present goes into the tray, new                                                                                                  | `no_present`, `plenty` (the present stays in its letter)         |
+| `clearLetters` |                  | Letters read and emptied are thrown out                                                                                              |                                                                  |
+| `looked`       | `through`        | The member has looked at every arrival up to that one (`looked` and what was new, as their page had them): what came after stays new |                                                                  |
+| `setOut`       | `thing`, `x y t` | One out of the tray, there                                                                                                           | `not_in_tray`, `full` (300 standing), where it may not stand     |
+| `move`         | `n`, `x y t`     | Moves and turns a thing                                                                                                              | `no_such_thing`, where it may not stand                          |
+| `putAway`      | `n`              | Into the tray                                                                                                                        | `no_such_thing`, `rooted` (the cabin, the mailbox, the signpost) |
+| `toggle`       | `n`              | A lantern post or candle stump lit or dark; a paper lantern, pane or pennant the next of five colours; a gnome turned round          | `no_such_thing`, `nothing_to_toggle`                             |
+| `stay`         | `on`             | Whether the member's character stays in town after they go                                                                           |                                                                  |
 
 Where a thing may not stand is said as `off` (in the trees), `trail`, `taken`, `shut` (it would
 shut the cabin's door, the mailbox or the signpost off from the trail) or `cannot_turn` (it does
