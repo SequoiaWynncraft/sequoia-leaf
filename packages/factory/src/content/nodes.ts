@@ -278,7 +278,19 @@ export const NODES: readonly NodeInfo[] = [
     want: { lantern: 400, brass: 60 },
     pay: 5000,
     unlocks: { plots: ["hollow", "seam", "pond"] },
-    needs: ["oilpress", "workshop", "brassfolio"],
+    // Every piece of the tier's research: the Study is what tier 3 is about, and it works while the yard's owner is away.
+    needs: [
+      "oilpress",
+      "workshop",
+      "flywheel",
+      "tooling",
+      "sorter",
+      "planchest",
+      "carttrack",
+      "nightshift",
+      "upgrading",
+      "brassfolio",
+    ],
     gift: { id: "tree-lanterns", line: "Lanterns from the Works hang in the great tree." },
   },
 

@@ -172,6 +172,13 @@ describe("the tier's screen", () => {
     expect(waits(tierPrint().commission?.needs ?? [])).toEqual([
       "oilpress: not begun: build",
       "workshop: not begun",
+      "flywheel: not begun",
+      "tooling: not begun",
+      "sorter: not begun",
+      "planchest: not begun",
+      "carttrack: not begun",
+      "nightshift: not begun",
+      "upgrading: not begun",
       "brassfolio: not begun",
     ]);
     expect(tierPrint().research).toEqual({ known: 0, all: 10 });
@@ -179,10 +186,18 @@ describe("the tier's screen", () => {
     expect(waits(tierPrint().commission?.needs ?? [])[0]).toBe("oilpress: not begun: study");
     study(y, goal("oilpress"));
     study(y, goal("workshop"));
-    // Both under way: nothing more of what it waits on can be begun yet (the Brass folio waits on research itself).
+    // Both under way: the next that can be begun says how; the rest wait on research before them, or
+    // on a place in the line (the Brass folio waits on research itself).
     expect(waits(tierPrint().commission?.needs ?? [])).toEqual([
       "oilpress: being studied",
       "workshop: in the line",
+      "flywheel: not begun: study",
+      "tooling: not begun",
+      "sorter: not begun",
+      "planchest: not begun",
+      "carttrack: not begun",
+      "nightshift: not begun",
+      "upgrading: not begun",
       "brassfolio: not begun",
     ]);
     // A folio studied moves a bar, and builds nothing again: the screen prints the same.
@@ -264,11 +279,11 @@ describe("research", () => {
     // Something could be studied: the bar is there, and says nothing is.
     expect(stripPrint()).toEqual({ hidden: false, goal: null, have: 0, of: 0 });
     study(y, goal("workshop"));
-    expect(stripPrint()).toEqual({ hidden: false, goal: goal("workshop"), have: 0, of: 150 });
+    expect(stripPrint()).toEqual({ hidden: false, goal: goal("workshop"), have: 0, of: 225 });
     const got = y.got[goal("workshop")];
     if (!got) throw new Error("nothing is being studied");
     got[item("timber")] = 30;
-    expect(stripPrint()).toMatchObject({ have: 30, of: 150 });
+    expect(stripPrint()).toMatchObject({ have: 30, of: 225 });
     S.visiting = { id: "q", name: "Somebody" };
     expect(stripPrint().hidden).toBe(true);
     S.visiting = null;
