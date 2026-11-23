@@ -4,6 +4,7 @@ import { type Ctx, DAY_MS, type Done, LOGGED, type Refused } from "@sequoia-leaf
 
 import { canPlace, MOST_OWNED, MOST_PARCELS, MOST_PLACED, NEW_CAMP, YARD } from "./camp.ts";
 import { STALLS } from "./catalogue.ts";
+import { STRETCH, stretchOf } from "./clock.ts";
 import { CALLERS, folk, GIFTS } from "./folk.ts";
 import {
   CALLS,
@@ -139,11 +140,12 @@ describe("the chest", () => {
 });
 
 describe("the missing crab", () => {
-  test("is counted at most once in five seconds", () => {
-    const s = did(fresh(), { do: "spotCrab" }).state;
+  test("is counted once for each place it hides: a second sighting in one stretch is refused", () => {
+    const from = stretchOf(T0) * STRETCH;
+    const s = did(fresh(), { do: "spotCrab" }, ctx(from)).state;
     expect(s.sightings).toBe(1);
-    expect(refused(s, { do: "spotCrab" }, ctx(T0 + 4999))).toBe("too_soon");
-    expect(did(s, { do: "spotCrab" }, ctx(T0 + 5000)).state.sightings).toBe(2);
+    expect(refused(s, { do: "spotCrab" }, ctx(from + STRETCH - 1))).toBe("too_soon");
+    expect(did(s, { do: "spotCrab" }, ctx(from + STRETCH)).state.sightings).toBe(2);
   });
 });
 

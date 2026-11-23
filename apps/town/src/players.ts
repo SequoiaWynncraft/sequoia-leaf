@@ -17,6 +17,7 @@ import { type Emote, EMOTES } from "@sequoia-leaf/kit/emotes.ts";
 import { type LetGo, letGoCard, member, where } from "@sequoia-leaf/kit/live.ts";
 import {
   joinLive,
+  leafClock,
   type LiveEars,
   type LiveMember,
   type LiveRoom,
@@ -29,7 +30,7 @@ import { clamp, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { face, feet, footfall, headOf, hop, makeActor, onScreen, stepActor } from "./actors.ts";
 import { emoteOver } from "./fx.ts";
-import { type Actor, G, hooks, toPage } from "./game.ts";
+import { type Actor, G, hooks, ROOM, toPage } from "./game.ts";
 import { GUEST, rankName } from "./live.ts";
 import { Company, type Fellow, linkShown, NAMED_FOR, othersIn, stepOf } from "./motion.ts";
 import { touchThing } from "./town.ts";
@@ -177,7 +178,7 @@ function enterRoom(): void {
   was = null;
   status = null;
   downAt = null;
-  room = joinLive("town", ears);
+  room = joinLive(ROOM, ears);
 }
 
 /**
@@ -205,6 +206,9 @@ export function townOnStage(on: boolean): void {
 
 /** Whether the page is in the room just now (live, on the stage, and not let go of). */
 export const inRoom = (): boolean => room !== null;
+
+/** Leaf's clock now, as far as this page can tell: out of a room, as it last heard. */
+export const leafNow = (): number => room?.serverNow() ?? leafClock(Date.now());
 
 // ---------- each moment ----------
 

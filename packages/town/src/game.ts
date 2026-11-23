@@ -41,6 +41,7 @@ import {
   type Verdict,
 } from "./camp.ts";
 import { STALLS } from "./catalogue.ts";
+import { stretchOf } from "./clock.ts";
 import {
   type AwayCall,
   type Caller,
@@ -174,8 +175,6 @@ export type Why =
 
 /** How often a caller sets out: 46 to 76 seconds after the last. */
 export const CALLS = { least: 46_000, more: 30_000 } as const;
-/** How soon the missing crab can be spotted again. */
-export const SPOT_EVERY = 5000;
 const HOUR = 3_600_000;
 /** How many colours a paper lantern, a pane of glass or a pennant comes in. */
 export const COLOURS = 5;
@@ -323,7 +322,8 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
       });
     }
     case "spotCrab":
-      if (now - s.spotAt < SPOT_EVERY) return no("too_soon");
+      // Once for each place it hides: the stretch is the clock's, the same as the page works out.
+      if (stretchOf(now) === stretchOf(s.spotAt)) return no("too_soon");
       s.sightings = Math.min(1e6, s.sightings + 1);
       s.spotAt = now;
       return done(s);

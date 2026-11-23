@@ -10,7 +10,7 @@ member's own camp.
 ```sh
 bun run dev      # with hot reload
 bun run build    # dist/
-bun test         # the arrival letter, the town's own, the guild live, strings of lights tied at both ends, the town live, what a touch means
+bun test         # the arrival letter, the town's own, the town's own and the crabs by Leaf's clock, the guild live, strings of lights tied at both ends, the town live, what a touch means
 ```
 
 The town always plays on Leaf: on a developer's machine that is `apps/api/test/play.ts` (the
@@ -88,7 +88,19 @@ says so.
   two-step waddle (`folkart.ts`). Each one's name plate is the kit's leaf green with the acorn
   before it (`@sequoia-leaf/kit/mark.ts`); members' plates are cream. Tapping one shows its card:
   its name with the mark, what it is ("Stallkeeper, and a gnome"), what it is doing, a wave, and
-  the way to its stall or the Treasury. They talk, greet the member, and cheer when the guild does.
+  the way to its stall or the Treasury. They talk, greet whoever walks by, and cheer when the guild does.
+- **One town for everybody** (`clock.ts`, in `packages/town`). Where each of the town's own and each
+  crab is, what it is doing and what it says to itself is worked out from two things every page has
+  the same: the room's name with the UTC day, and Leaf's clock (`G.now`, from the room's
+  `serverNow`; a page in no room goes by its own). Nothing is stepped from frame to frame and
+  nothing is sent, so every page in the room shows Pipwick at the same spot of the same errand
+  saying the same line, and a page that opens in the middle of his walk puts him part-way along it.
+  The clock says where somebody set out from, where to and when; the page walks the way between
+  the two along the town's paths at the figure's own pace (`byClock` in `actors.ts`). Nobody of
+  them waits for anybody or goes round anybody: somebody standing on a spot of theirs is drawn
+  beside them. What answers a player is still worked out on each page, from where the players
+  are: a word for somebody walking by (the same word on each page), a crab edging away from feet,
+  a napper woken by a touch, a hop at a cheer.
 - **Members.** Real members in the game are about the town, live, where they really are, and those
   who have gone in the last day doze in town (both below). A member's card has their
   name and rank, and for one dozing, how long ago they dozed off. A name shows only over somebody
@@ -100,7 +112,7 @@ says so.
 - **Nobody inside anybody** (`apart.ts`). A figure is drawn 10 pixels across and as tall as its pose
   (`headOf`: 21 standing, 19 sitting facing us, 16 sitting side on or facing away); two overlapping
   by over a third of the smaller are on top of one another (`crowds`). A walk anybody is sent on in
-  town (the member's to a tapped spot or a place, a visitor's, a dozer's to a seat, the town's own)
+  town (the member's to a tapped spot or a place, a visitor's, a dozer's to a seat)
   ends where it was going, or, with somebody standing or sitting still there, at the nearest place
   to it that is on top of nobody and a straight walk from it, 21 pixels away at most (`stopAt`,
   `beside`). The end is looked at again all along the walk's last stretch. A seat somebody stands
@@ -118,8 +130,11 @@ says so.
 - **Touching things.** Lantern posts, mushrooms, flowers, ferns, the great trunks, the fire, the
   water, the crabs, the pieces on the stump's board, the strings of lights and the sky all do
   something when tapped, with a sound. Pointing at a thing whose meaning is not plain (or keeping
-  a finger on it) says what it is. One crab is never at roll call; it is hiding somewhere in town,
-  and runs when found. Leaf counts a sighting at most once in five seconds.
+  a finger on it) says what it is. One crab is never at roll call; it hides in one of nine places
+  in town for 60 seconds by Leaf's clock, the same place on every page, and then in another. Each
+  member can find it there once: touched, it runs off on that member's page and is gone for them
+  until the 60 seconds are up, and is counted as their sighting; on the others' pages it only hops
+  and stays to be found. Leaf works out which 60 seconds it is from its own clock.
 - **Every touch is seen** (`touchThing` in `town.ts`). Each touch on a thing, a tap on a crab's tile
   or the roll called at the pond, a log on the fire, goes through one place by the thing's name:
   its kind and the point on it (`post:174,100`, `water:404,295`), a crab's number (`crab:3`), or
@@ -432,7 +447,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/leaf.ts`                         | The member's town and camp on Leaf: the copy, commands done at once or asked, keeping Leaf told |
 | `src/town.ts`, `src/camptouch.ts`     | What each thing does when touched, and the parts that move                                      |
 | `src/props.ts`, `src/flights.ts`      | Things that stand and can be touched; things in the air                                         |
-| `src/actors.ts`, `src/pets.ts`        | Walking, sitting, speaking; the town's own about their evening; the pets                        |
+| `src/actors.ts`, `src/pets.ts`        | Walking, sitting, speaking; the town's own put where Leaf's clock has them; the pets            |
 | `src/folkart.ts`                      | How each of the town's own is drawn (never a skin)                                              |
 | `src/events.ts`                       | Staging the guild's moments in the town, or applying them quietly                               |
 | `src/draw.ts`                         | Drawing a frame of any place; name plates and speech; the round hole a door closes to           |
@@ -455,8 +470,8 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/campsfx.ts`                      | The camp's own sounds                                                                           |
 
 The catalogue of camp things (`things.ts`), what is for sale (`catalogue.ts`), the mailbox
-(`mail.ts`), the town's own (`folk.ts`), a camp's rules (`camp.ts`) and the town's commands
-(`game.ts`) are in `packages/town`, the rules Leaf plays the town by; the page imports them from
+(`mail.ts`), the town's own (`folk.ts`), what they and the crabs do by the clock (`clock.ts`), a
+camp's rules (`camp.ts`) and the town's commands (`game.ts`) are in `packages/town`, the rules Leaf plays the town by; the page imports them from
 there and works out with them what it shows at once. `grid.ts`, `letter.ts`, `games.ts`, `live.ts`,
 `news.ts`, `motion.ts`, `apart.ts` and `about.ts` have no page in them, and tests beside them (`motion.test.ts`
 plays Leaf's side of a live connection with the kit's stand-in socket); `folk.test.ts` also reads
@@ -483,7 +498,9 @@ would be drawn this moment, `told()` what the room was last told of the member a
 how the live connection is, `inside(game)` goes through a door, `door()` says how far that has
 got, `leave()` comes back, `kept()` gives the town as the page shows it (Leaf's copy), `again()`
 asks Leaf for it again (after staging something), `who()` says where each of the town's own is and
-what it is doing, `visitors()` says which real members are in town, where, and whether they are
+what it is doing and `crabs()` where each crab is and whether it is running off, both by Leaf's
+clock at the moment they are asked (neither `skip` nor `hold` moves that clock; held, the picture
+stays as it was last put), `visitors()` says which real members are in town, where, and whether they are
 dozing, `where()` says which place is on and how dark the walk has got, `purse()` says what the
 purse holds, `page(x, y)` turns a point in the place that is on into a point on the page, and
 `prompt()` says where the prompt is on the page while it is up.
