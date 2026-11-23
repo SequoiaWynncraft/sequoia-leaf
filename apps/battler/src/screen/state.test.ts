@@ -65,7 +65,7 @@ afterEach(() => {
   world?.done();
   world = null;
   S.run = null;
-  S.ended = null;
+  S.screen = { at: "front" };
 });
 
 /** Waits until a condition holds, a millisecond at a time. */

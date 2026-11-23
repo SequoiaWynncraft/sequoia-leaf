@@ -30,15 +30,27 @@ import {
 } from "@sequoia-leaf/raid";
 
 import { fightState } from "./fightview.ts";
-import { carryOn, enterRun, setOut, startNew } from "./flow.ts";
+import { carryOn, enterRun, lookBack, setOut, startNew, toFront } from "./flow.ts";
 import { grab, hover, tapPawn, unpick } from "./hand.ts";
 import { heldRow, heldTop } from "./held.ts";
 import { NUDGES } from "./logic.ts";
 import { pawns, syncPawns } from "./pawns.ts";
 import { arrive } from "./scene.ts";
 import * as stage from "./stage.ts";
-import { again, ask, changed, type Did, doNow, leafView, prefsChanged, S, waitingForLeaf } from "./state.ts";
-import { closeSheet, sheetUp, toggleLastFight } from "./ui/fightsheet.ts";
+import {
+  again,
+  ask,
+  changed,
+  type Did,
+  doNow,
+  go,
+  leafView,
+  prefsChanged,
+  S,
+  tableNow,
+  waitingForLeaf,
+} from "./state.ts";
+import { sheetUp } from "./ui/fightsheet.ts";
 import { type PageId, showPage } from "./ui/pages.ts";
 import { redrawTallies, TV } from "./ui/tally.ts";
 
@@ -177,16 +189,11 @@ async function botRoom(): Promise<boolean> {
   return (await ask({ do: "take" }))?.ok === true;
 }
 
+/** Sits down to the table as Leaf has it now, and says where it is. */
 function settle(): string {
+  enterRun();
   const run = S.run;
-  if (!run) return "no run";
-  if (run.stage.phase === "over") {
-    closeSheet(false);
-    S.mode = "over";
-    changed();
-    return "over";
-  }
-  enterRun(false);
+  if (!run || S.screen.at === "front") return S.screen.at;
   return `room ${run.room + 1}, ${ROOMS[run.room]?.kind ?? ""}, ${picksOf(run)[0]?.kind ?? "planning"}`;
 }
 
@@ -229,17 +236,13 @@ export function openHandle(): void {
       // From the chosen seed where the play server stages it; otherwise as the front page sets out.
       const staging = await staged({ start: { seed, trail } });
       if (staging.length === 0) await startNew(trail);
-      S.ended = null;
-      S.mode = "plan";
       return settle();
     },
     async fresh() {
       await staged({ fresh: true });
-      S.ended = null;
       S.prefs.taught = [];
       prefsChanged();
-      S.mode = "front";
-      changed();
+      go({ e: "sit", ...tableNow() });
     },
     async bot(rooms = 1) {
       await bot(rooms);
@@ -253,19 +256,18 @@ export function openHandle(): void {
     },
     async to(where) {
       if (where === "front") {
-        S.mode = "front";
-        changed();
-        return "front";
+        toFront();
+        return S.screen.at;
       }
       await playTo(where);
       return settle();
     },
     arrive() {
-      if (S.run && S.mode === "plan") arrive(S.run);
+      if (S.run && S.screen.at === "plan") arrive(S.run);
     },
     async fight() {
       await setOut();
-      return S.mode;
+      return S.screen.at;
     },
     tick(steps) {
       stage.skip(steps / (HZ * S.prefs.speed));
@@ -292,7 +294,7 @@ export function openHandle(): void {
     state() {
       const run = S.run;
       return {
-        mode: S.mode,
+        mode: S.screen.at,
         room: run ? run.room + 1 : 0,
         kind: run ? ROOMS[run.room]?.kind : "",
         phase: run?.stage.phase,
@@ -351,10 +353,10 @@ export function openHandle(): void {
     page: showPage,
     carry() {
       carryOn();
-      return S.mode;
+      return S.screen.at;
     },
     last() {
-      toggleLastFight();
+      lookBack();
       return sheetUp() ?? "none";
     },
     tally(measure, side) {

@@ -540,7 +540,7 @@ export function registerCards(): void {
     const spot = run ? spotOf(run, id) : null;
     const piece = run && spot ? pieceAt(run, spot) : null;
     if (!run || !spot || !piece) return null;
-    const planning = S.mode === "plan" && run.stage.phase === "plan" && run.stage.picks.length === 0;
+    const planning = S.screen.at === "plan" && run.stage.phase === "plan" && run.stage.picks.length === 0;
     return figureDesc(piece.kind, piece.stars, {
       items: piece.items,
       fed: piece.fed,

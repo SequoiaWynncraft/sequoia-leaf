@@ -59,7 +59,7 @@ let restKey = "";
 
 /** Whether figures may be moved about just now: planning, with nothing waiting to be chosen. */
 export const planning = (): boolean =>
-  S.mode === "plan" && S.run?.stage.phase === "plan" && S.run.stage.picks.length === 0;
+  S.screen.at === "plan" && S.run?.stage.phase === "plan" && S.run.stage.picks.length === 0;
 
 const spotOfPawn = (id: number): Spot | null => pawns.get(id)?.spot ?? null;
 const sameSpot = (a: Spot, b: Spot): boolean => a.on === b.on && a.at === b.at;
@@ -306,7 +306,7 @@ function strangerAt(
   x: number,
   y: number,
 ): { ref: string; box: { x: number; y: number; w: number; h: number } } | null {
-  if (S.mode === "fight" || S.mode === "after") {
+  if (S.screen.at === "fight" || S.screen.at === "after") {
     const u = unitUnder(x, y);
     return u ? { ref: unitRef(u.unit.id), box: pageBox(u.x, u.y, framesOf(u.unit.kind).tall) } : null;
   }
@@ -330,7 +330,7 @@ function cardUnder(
     const px = artPx();
     return { ref: itemRef(held.item), box: { x: top.x, y: top.y, w: held.w * px, h: held.h * px } };
   }
-  const fighting = S.mode === "fight" || S.mode === "after";
+  const fighting = S.screen.at === "fight" || S.screen.at === "after";
   const own = fighting ? null : pawnAt(run, x, y);
   if (own) return { ref: pieceRef(own.id), box: pawnBox(own) };
   return strangerAt(run, x, y);

@@ -13,6 +13,10 @@
  * Whenever Leaf's state is not what the page was showing (another page of the member's acted, or
  * a guess was wrong, or something here was changed by hand), the page takes Leaf's and draws again.
  * Only the member's view settings stay in the browser (`keep.ts`).
+ *
+ * What the table is showing is one value (`S.screen`, `screen.ts`), moved on only by `go`, which
+ * also asks Leaf for a room's takings once its fight has been played; whoever animates the table
+ * hears each move (`onScreen`).
  */
 import { makeHold, openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/kit/play.ts";
 import {
@@ -20,34 +24,21 @@ import {
   type Looks,
   newAlmanac,
   newLooks,
-  type News,
-  type Payout,
   predict,
   type RaidCommand,
   type RaidNote,
   readNotes,
   readView,
   refusalText,
-  type RunSummary,
   type RunView,
   type TableView,
 } from "@sequoia-leaf/raid";
 
 import { keepPrefs, newPrefs, type Prefs, readPrefs } from "./keep.ts";
-
-/** Which part of the game is on screen: the front page, planning a room, the fight, what it paid, the end. */
-export type Mode = "front" | "plan" | "fight" | "after" | "over";
-
-/** How a finished run came out, for the page at the end. */
-export interface Ended {
-  run: RunView;
-  summary: RunSummary;
-  paid: Payout;
-  news: News[];
-}
+import { endedOf, type Event, type Screen, step, type Table } from "./screen.ts";
 
 export const S: {
-  /** The run in hand, as the page's copy; after a run ends, that run until the next is set out on. */
+  /** The run in hand, as the page's copy; while the screen shows a run that has ended, that run. */
   run: RunView | null;
   almanac: Almanac;
   looks: Looks;
@@ -56,8 +47,8 @@ export const S: {
   /** Runs begun at this table. */
   runs: number;
   prefs: Prefs;
-  mode: Mode;
-  ended: Ended | null;
+  /** What the table is showing; moved on by `go`. */
+  screen: Screen;
 } = {
   run: null,
   almanac: newAlmanac(),
@@ -65,8 +56,7 @@ export const S: {
   trail: 0,
   runs: 0,
   prefs: newPrefs(),
-  mode: "front",
-  ended: null,
+  screen: { at: "front" },
 };
 
 /** What a command did: its notes, or the sentence it was turned down with. */
@@ -77,8 +67,7 @@ const noteHearers: NotesHeard[] = [];
 const changeHearers: (() => void)[] = [];
 const refusalHearers: ((why: string) => void)[] = [];
 const heldHearers: (() => void)[] = [];
-const endHearers: ((ended: Ended) => void)[] = [];
-const movedHearers: (() => void)[] = [];
+const screenHearers: ((before: Screen, now: Screen) => void)[] = [];
 
 /** Hears what every command did, in order. */
 export const onNotes = (fn: NotesHeard): void => void noteHearers.push(fn);
@@ -88,10 +77,8 @@ export const onChange = (fn: () => void): void => void changeHearers.push(fn);
 export const onRefused = (fn: (why: string) => void): void => void refusalHearers.push(fn);
 /** Hears that a command was held off while Leaf answers another: nothing was done or sent. */
 export const onHeld = (fn: () => void): void => void heldHearers.push(fn);
-/** Hears that a run has ended: what it came to and what it paid. */
-export const onEnded = (fn: (ended: Ended) => void): void => void endHearers.push(fn);
-/** Hears that Leaf's table is not the one the page was showing: the page takes it and draws again. */
-export const onMoved = (fn: () => void): void => void movedHearers.push(fn);
+/** Hears each move of the screen: what it was, and what it is now. */
+export const onScreen = (fn: (before: Screen, now: Screen) => void): void => void screenHearers.push(fn);
 
 export function changed(): void {
   for (const fn of changeHearers) fn();
@@ -130,8 +117,50 @@ function take(view: TableView): void {
   S.looks = view.looks;
   S.trail = view.trail;
   S.runs = view.runs;
-  // A run that has ended stays on the table, for its last page, until the next one is set out on.
-  S.run = view.run ?? S.ended?.run ?? null;
+  // A run that has ended stays on the table, for its last page, while the screen shows it.
+  S.run = view.run ?? endedOf(S.screen)?.run ?? null;
+}
+
+/** Leaf's run as the page has it, and the runs begun at the table: what the screen sits down to. */
+export const tableNow = (): Table => ({ run: table?.state.run ?? null, runs: S.runs });
+
+let moving = false;
+const moves: Event[] = [];
+/**
+ * Moves the screen on (`step`), and tells whoever animates the table. A move asked for while one is
+ * being told waits its turn. A fight played to its end has its room settled by Leaf: its takings,
+ * or, taken on another page already, the table as Leaf has it.
+ */
+export function go(event: Event): void {
+  moves.push(event);
+  if (moving) return;
+  moving = true;
+  try {
+    for (let ev = moves.shift(); ev; ev = moves.shift()) {
+      const before = S.screen;
+      S.screen = step(before, ev);
+      if (S.screen === before) continue;
+      if (table) take(table.state);
+      if (S.screen.at === "after" && before.at === "fight") void settleRoom();
+      for (const fn of screenHearers) fn(before, S.screen);
+    }
+  } finally {
+    moving = false;
+  }
+}
+
+/** Asks Leaf to settle the room whose fight was played, after anything already on its way to Leaf. */
+async function settleRoom(): Promise<void> {
+  const play = table;
+  if (!play) return;
+  const answer = await hold.until(false, play.send({ do: "take" }));
+  take(play.state);
+  if ("refused" in answer) {
+    go({ e: "elsewhere", ...tableNow() });
+    return;
+  }
+  tellNotes(answer.notes);
+  go({ e: "taken", notes: answer.notes });
 }
 
 /** The table's state as Leaf gave it, for looking at from outside. */
@@ -157,22 +186,10 @@ export async function openTable(player: string, trouble: (why: Trouble) => void)
     const before = picture();
     take(view);
     if (hold.asking() || picture() === before) return;
-    for (const fn of movedHearers) fn();
+    go({ e: "leaf", ...tableNow() });
     changed();
   });
   return null;
-}
-
-/** What an answer's notes mean for the page itself: a run ended, or one set out on. */
-function noted(notes: readonly RaidNote[]): void {
-  for (const note of notes) {
-    if (note.t === "ended") {
-      const ended: Ended = { run: note.run, summary: note.summary, paid: note.paid, news: note.news };
-      S.ended = ended;
-      for (const fn of endHearers) fn(ended);
-    } else if (note.t === "started") S.ended = null;
-  }
-  if (table) take(table.state);
 }
 
 /** Sends a command shown already. Should Leaf see it otherwise, its state is already the page's, and the member hears why. */
@@ -223,7 +240,6 @@ export async function ask(command: RaidCommand, waiting: Element | null = null):
     changed();
     return { ok: false, why };
   }
-  noted(answer.notes);
   tellNotes(answer.notes);
   changed();
   return { ok: true, notes: answer.notes };

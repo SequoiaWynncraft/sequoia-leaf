@@ -41,6 +41,7 @@ import { fightEvents, fightUnits } from "../fightview.ts";
 import type { Speed } from "../keep.ts";
 import { light } from "../light.ts";
 import { canBuy, opening, savings, TraitWatch } from "../logic.ts";
+import { shownCounts } from "../screen.ts";
 import { artPx, place, V } from "../stage.ts";
 import { busy, S } from "../state.ts";
 import { acorns, boonRef, figPic, figureRef, itemRef, pic, traitRef, unitRef } from "./cards.ts";
@@ -63,19 +64,6 @@ export interface Asks {
   /** A trait has just switched on, or on harder. */
   traitOn: (trait: TraitId, step: number) => void;
 }
-
-/**
- * Numbers held back from the run's own while a ceremony counts them out: the acorns in the purse
- * until each one lands, and the rest until the takings reach them. `null` shows the run's number.
- */
-export const shown: {
-  acorns: number | null;
-  resolve: number | null;
-  xp: number | null;
-  level: number | null;
-  /** When to stop waiting for acorns still in the air. */
-  settleAt: number;
-} = { acorns: null, resolve: null, xp: null, level: null, settleAt: 0 };
 
 let asks: Asks | null = null;
 let stallKey = "";
@@ -256,7 +244,7 @@ function renderTrack(run: RunView): void {
 function renderResolve(run: RunView): void {
   const node = byId("resolve");
   if (!node) return;
-  const n = shown.resolve ?? run.resolve;
+  const n = shownCounts(S.screen, run).resolve;
   const was = node.dataset.n;
   node.replaceChildren(icon("heart"), el("b", n <= 5 ? "k-coral" : "", { text: String(n) }));
   node.dataset.n = String(n);
@@ -283,7 +271,7 @@ function renderTraits(run: RunView): void {
   const key = states.map((t) => `${t.trait}${t.count}`).join();
   // A step that has gone up since the last look is an event: the chip lights and the figures answer.
   const ups = traitSteps.look(run, S.runs);
-  if (S.mode === "plan") {
+  if (S.screen.at === "plan") {
     for (const up of ups) asks?.traitOn(up.trait, up.step);
   }
   const lit = ups.map((u) => u.trait);
@@ -408,7 +396,8 @@ function renderPurseSide(run: RunView): void {
   const node = byId("acorns");
   const level = byId("level");
   if (!node || !level) return;
-  const n = shown.acorns ?? run.acorns;
+  const shown = shownCounts(S.screen, run);
+  const n = shown.acorns;
   const s = savings(run);
   const piles = el("span", "piles", {});
   const held = Math.min(s.most, Math.floor(n / s.per));
@@ -433,8 +422,8 @@ function renderPurseSide(run: RunView): void {
   node.dataset.n = String(n);
   if (was !== undefined && Number(was) < n) replay(node, "k-bump");
 
-  const lv = shown.level ?? run.level;
-  const xp = shown.xp ?? run.xp;
+  const lv = shown.level;
+  const xp = shown.xp;
   const need = lv >= MAX_LEVEL ? 0 : (ECONOMY.levelXp[lv - 1] ?? 0);
   const bar = el(
     "div",
@@ -500,7 +489,7 @@ function renderFoe(run: RunView): void {
   const foe = byId("foe");
   if (!foe) return;
   // While a fight's sheet is up the room that is over is what is talked about, not the one coming.
-  foe.hidden = S.mode === "front" || S.mode === "over" || S.mode === "after";
+  foe.hidden = S.screen.at === "front" || S.screen.at === "over" || S.screen.at === "after";
   if (regularNamed(run.foe.who)) {
     foe.replaceChildren(
       el("div", "brought", {}, folkName(opening(run.foe.who), "k-pix"), el("span", "", { text: run.foe.title })),
@@ -534,19 +523,19 @@ export function placeFoe(): void {
 
 /** Draws the interface again from the run. */
 export function renderTable(): void {
-  document.body.dataset.mode = S.mode;
+  document.body.dataset.mode = S.screen.at;
   const sound = byId("sound");
   const muted = isMuted() ? "mute" : "sound";
   if (sound) face(sound, muted, icon(muted));
   const run = S.run;
   document.body.classList.toggle("no-run", !run);
-  if ((!run || S.mode === "front" || S.mode === "over") && (light.kept !== null || light.pointed !== null))
+  if ((!run || S.screen.at === "front" || S.screen.at === "over") && (light.kept !== null || light.pointed !== null))
     forgetLight();
   if (!run) return;
-  document.body.dataset.picking = picksOf(run).length > 0 && S.mode === "plan" ? "yes" : "no";
+  document.body.dataset.picking = picksOf(run).length > 0 && S.screen.at === "plan" ? "yes" : "no";
   renderTrack(run);
   const last = byId("lastfight");
-  if (last) last.hidden = S.mode !== "plan" || run.last === null || picksOf(run).length > 0;
+  if (last) last.hidden = S.screen.at !== "plan" || run.last === null || picksOf(run).length > 0;
   renderResolve(run);
   renderTraits(run);
   renderRack(run);
@@ -565,24 +554,6 @@ export function forgetTable(): void {
   trackKey = "";
   forgetLight();
   traitSteps.forget();
-  shown.acorns = null;
-  shown.resolve = null;
-  shown.xp = null;
-  shown.level = null;
-}
-
-/** An acorn has landed in the purse: one more shows. */
-export function acornLanded(): void {
-  const run = S.run;
-  if (!run || shown.acorns === null) return;
-  shown.acorns = Math.min(run.acorns, shown.acorns + 1);
-  if (shown.acorns >= run.acorns) shown.acorns = null;
-  renderPurseSide(run);
-}
-/** Holds the purse at a number while acorns fly to it; they are counted in as they land. */
-export function holdAcorns(at: number, seconds = 2.4): void {
-  shown.acorns = at;
-  shown.settleAt = V.t + seconds;
 }
 /** The tally of the fight on the table, in the lower panel while it plays. */
 let panelTally: TallyView | null = null;
@@ -598,15 +569,11 @@ function renderTally(): void {
 }
 let talliedAt = -9;
 
-/** Every moment: gives up waiting for acorns that never landed, keeps the fight's count fresh, and dims the stall while Leaf is busy. */
+/** Every moment: keeps the fight's count fresh, and dims the stall while Leaf is busy. */
 export function stepTable(): void {
   const waiting = busy() ? "yes" : "no";
   if (document.body.dataset.busy !== waiting) document.body.dataset.busy = waiting;
-  if (shown.acorns !== null && V.t > shown.settleAt) {
-    shown.acorns = null;
-    if (S.run) renderPurseSide(S.run);
-  }
-  if (S.mode === "fight" && V.t - talliedAt > 0.35) {
+  if (S.screen.at === "fight" && V.t - talliedAt > 0.35) {
     talliedAt = V.t;
     renderTally();
   }

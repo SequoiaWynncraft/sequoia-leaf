@@ -101,7 +101,8 @@ interface Cue {
   ev: FightEvent;
 }
 
-type Stage = "off" | "run-in" | "run" | "done";
+/** How far the fight on the table has been played: not at all, the run-in, the steps, or done (when, by the stage's clock). */
+type Stage = "off" | "run-in" | "run" | { done: number };
 
 const FV: {
   fight: Fight | null;
@@ -116,9 +117,8 @@ const FV: {
   pops: Pop[];
   dusk: number;
   clacked: boolean;
-  doneAt: number;
+  /** Told once, when the fight has been played to its end and shown a moment longer. */
   done: (() => void) | null;
-  told: boolean;
   /** Everything that has been shown happening so far, the opening first: what the tally is counted from. */
   seen: FightEvent[];
 } = {
@@ -133,9 +133,7 @@ const FV: {
   pops: [],
   dusk: 0,
   clacked: false,
-  doneAt: 0,
   done: null,
-  told: false,
   seen: [],
 };
 
@@ -152,7 +150,7 @@ function markOf(col: string): HTMLCanvasElement {
 export const fightOn = (): boolean => FV.fight !== null;
 /** Where the fight has got to, for looking from outside. */
 export const fightState = (): {
-  stage: Stage;
+  stage: string;
   tick: number;
   clock: number;
   over: boolean;
@@ -161,7 +159,7 @@ export const fightState = (): {
   lit: number;
   thrown: number;
 } => ({
-  stage: FV.stage,
+  stage: typeof FV.stage === "string" ? FV.stage : "done",
   tick: FV.fight?.tick ?? 0,
   clock: FV.clock,
   over: FV.fight?.over ?? false,
@@ -230,7 +228,6 @@ export function startFight(setup: FightSetup, speed: Speed, done: () => void): v
   FV.dusk = 0;
   FV.clacked = false;
   FV.done = done;
-  FV.told = false;
   FV.seen = [];
   // Everyone starts where they were seated; what the opening did to them is acted out in the run-in.
   FV.actors = fight.units.map((u) =>
@@ -270,7 +267,7 @@ export function endFight(): void {
 /** Goes straight to the end: the fight comes out the same, it is only not watched. */
 export function skipFight(): void {
   const f = FV.fight;
-  if (!f || FV.stage === "done") return;
+  if (!f || typeof FV.stage !== "string") return;
   // What was still to be shown counts all the same.
   for (const cue of FV.cues) FV.seen.push(cue.ev);
   while (!f.over) FV.seen.push(...stepFight(f));
@@ -299,9 +296,8 @@ export function skipFight(): void {
 }
 
 function finish(): void {
-  if (FV.stage === "done") return;
-  FV.stage = "done";
-  FV.doneAt = V.t;
+  if (typeof FV.stage !== "string") return;
+  FV.stage = { done: V.t };
   const f = FV.fight;
   if (!f) return;
   // Whoever is left standing on the side that won hops about it.
@@ -666,11 +662,12 @@ export function stepFightView(dt: number): void {
         finish();
       }
     }
-  } else if (FV.stage === "done") {
+  } else if (typeof FV.stage !== "string") {
     FV.clock += dt * HZ;
-    if (!FV.told && V.t - FV.doneAt > 0.7) {
-      FV.told = true;
-      FV.done?.();
+    const tell = V.t - FV.stage.done > 0.7 ? FV.done : null;
+    if (tell) {
+      FV.done = null;
+      tell();
     }
   }
   for (const a of FV.actors) {

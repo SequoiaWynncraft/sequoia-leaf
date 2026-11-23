@@ -1,24 +1,13 @@
 /**
- * What happens when: sitting down to a run, setting out, the fight, counting out what the room
- * paid, and going on to the next room or to the end. Leaf and the rules do all the deciding; this
- * is the order things are shown in.
+ * What happens when, as it is shown: sitting down to a run, setting out, the fight, counting out
+ * what the room paid, and going on to the next room or to the end. Leaf and the rules do all the
+ * deciding, and the screen (`screen.ts`) says where the table is; this asks for its moves and acts
+ * each one out.
  */
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { GOLD, LEAF } from "@sequoia-leaf/kit/palette.ts";
 import { leave, tell } from "@sequoia-leaf/kit/shell.ts";
-import {
-  type AcornsWhy,
-  type BossId,
-  endingOf,
-  type FightSummary,
-  foughtOf,
-  isBossId,
-  playsAsKept,
-  type RaidNote,
-  specOf,
-  type TraitId,
-  TRAITS,
-} from "@sequoia-leaf/raid";
+import { type AcornsWhy, endingOf, picksOf, type RaidNote, specOf, type TraitId, TRAITS } from "@sequoia-leaf/raid";
 
 import { glyphPic } from "./art/icons.ts";
 import { endFight, fightOn, setSpeed, skipFight, startFight } from "./fightview.ts";
@@ -28,88 +17,43 @@ import { planning, unpick } from "./hand.ts";
 import type { Speed } from "./keep.ts";
 import { streakName } from "./logic.ts";
 import { cheer, clearPawns, pawns, syncPawns } from "./pawns.ts";
-import { arrive, arrived, settleArrival, watchersCheer } from "./scene.ts";
+import { arrive, arrived, watchersCheer } from "./scene.ts";
+import { endedIn, type Playback, type Screen } from "./screen.ts";
 import { signal } from "./signals.ts";
 import { snd } from "./sounds.ts";
 import { boardSpot, dress } from "./stage.ts";
-import { ask, changed, doNow, prefsChanged, S } from "./state.ts";
+import { ask, changed, doNow, go, onScreen, prefsChanged, S, tableNow } from "./state.ts";
 import { acorns } from "./ui/cards.ts";
 import { closeSheet, openSheet, sheetTaking, sheetUp } from "./ui/fightsheet.ts";
-import { forgetTable, holdAcorns, renderTable, shown, wakeChip } from "./ui/table.ts";
+import { forgetTable, wakeChip } from "./ui/table.ts";
 
 const MIDDLE = { x: BOARD_W / 2, y: 64 };
 
-/** Puts the table as the run has it: a run just begun, or one picked up again. */
-export function enterRun(walkIn = true): void {
-  const run = S.run;
-  if (!run) return;
-  unpick();
-  closeSheet(false);
-  forgetTable();
-  clearPawns();
-  clearFx();
-  endFight();
-  dress(S.looks.cloth, S.looks.lantern);
-  syncPawns(run, true);
-  if (run.stage.phase === "fight") {
-    S.mode = "fight";
-    settleArrival(run);
-    changed();
-    playFight();
-    return;
-  }
-  S.mode = "plan";
-  if (walkIn) arrive(run);
-  else settleArrival(run);
-  changed();
+/** Sits down to the table as Leaf has it: a run just begun, or one picked up again. */
+export function enterRun(): void {
+  go({ e: "sit", ...tableNow() });
 }
 
 /** Sets out on a trail: Leaf lays a new run out (putting down any run in hand), and the table shows it. Says whether it did. */
 export async function startNew(trail: number): Promise<boolean> {
   const did = await ask({ do: "start", trail }, document.getElementById("start"));
   if (!did?.ok) return false;
-  S.mode = "plan";
   enterRun();
   return true;
 }
 
-/**
- * Leaf's table moved on without this page (the member played on another page of the game): the
- * table shows it as Leaf has it. A fight on screen plays out first; its takings say the rest.
- */
-export function rejoin(): void {
-  if (S.mode === "fight" || S.mode === "after" || S.mode === "over") return;
-  const run = S.run;
-  if (!run || run.stage.phase === "over") {
-    if (S.mode === "plan") {
-      S.mode = "front";
-      changed();
-    }
-    return;
-  }
-  if (S.mode === "plan") enterRun(false);
-}
-
 /** Steps back from the board to the front page; the run is kept as it is. */
 export function toFront(): void {
-  if (S.mode === "fight" || S.mode === "after") return;
-  unpick();
-  closeSheet(false);
-  S.mode = "front";
-  changed();
+  go({ e: "front" });
 }
 
 /** Walks home early: the run ends here, and is still paid for the rooms it cleared. */
 export async function goHome(): Promise<void> {
   if (!S.run || S.run.stage.phase === "over") return;
   unpick();
-  closeSheet(false);
-  endFight();
-  clearFx();
   const did = await ask({ do: "abandon" });
-  if (!did?.ok) return;
-  S.mode = "over";
-  changed();
+  const ended = did?.ok ? endedIn(did.notes) : null;
+  if (ended) go({ e: "ended", ended });
 }
 
 /** Leaves the table for the town. */
@@ -158,27 +102,70 @@ export function traitOn(trait: TraitId, step: number): void {
 export async function setOut(): Promise<void> {
   if (!planning()) return;
   unpick();
-  closeSheet(false);
-  const begun = await ask({ do: "fight" }, document.getElementById("setout"));
-  if (!begun?.ok || S.run?.stage.phase !== "fight") return;
-  S.mode = "fight";
-  changed();
-  playFight();
-}
-
-/**
- * Plays the fight Leaf decided. One these rules would play otherwise (a page opened before a
- * deploy, or a fight decided before one) is not shown: only how Leaf says it came out, and what it paid.
- */
-function playFight(): void {
-  const fought = S.run ? foughtOf(S.run) : null;
-  if (!fought) return;
-  if (playsAsKept(fought)) startFight(fought.setup, S.prefs.speed, () => takings(true));
-  else takings(false);
+  if ((await ask({ do: "fight" }, document.getElementById("setout")))?.ok) enterRun();
 }
 
 export function doSkip(): void {
-  if (S.mode === "fight" && fightOn()) skipFight();
+  if (S.screen.at === "fight" && fightOn()) skipFight();
+}
+
+/** Goes on from a fight's sheet: to planning the next room, or to the end of the raid. */
+export function carryOn(): void {
+  if (S.screen.at !== "after" || !S.screen.takings.notes) return;
+  snd.tap();
+  go({ e: "carry", ...tableNow() });
+}
+
+/** Opens the last fight's sheet while planning with nothing to pick, or puts it away. */
+export function lookBack(): void {
+  const s = S.screen;
+  if (s.at === "plan" && (s.looking || (S.run?.last && picksOf(S.run).length === 0))) go({ e: "look" });
+}
+
+/**
+ * Acts out a move of the screen. Sitting down from the front page lays the table out afresh; a
+ * fight that is new to the screen is played (or, one these rules would play otherwise than Leaf
+ * decided it, only ended); Leaf's answer for the takings opens the sheet and counts them out;
+ * leaving them puts the fight and the sheet away; a room planned that is new has its party walk in.
+ */
+function acted(before: Screen, now: Screen): void {
+  const run = S.run;
+  const away = before.at === "front" || before.at === "over";
+  if (away && now.at !== "front" && now.at !== "over" && run) {
+    forgetTable();
+    clearPawns();
+    clearFx();
+    dress(S.looks.cloth, S.looks.lantern);
+    syncPawns(run, true);
+  }
+  if (before.at === "after" && now.at !== "after") forgetLater();
+  if (now.at !== "fight" && now.at !== "after") endFight();
+  if (now.at === "fight" && !(before.at === "fight" && before.play.key === now.play.key)) played(now.play);
+  if (now.at === "after" && now.takings.notes && !(before.at === "after" && before.takings.notes))
+    counting(now.takings.notes, now.play);
+  const sheet = now.at === "after" && now.takings.notes ? "after" : now.at === "plan" && now.looking ? "again" : null;
+  if (sheetUp() !== sheet) {
+    if (sheet === "again") openSheet("again");
+    else if (sheet === null) closeSheet(before.at === "plan");
+  }
+  if (now.at === "plan" && before.at !== "plan" && run) {
+    unpick();
+    syncPawns(run, true);
+    if (!arrived(run)) arrive(run);
+  }
+  if (now.at === "front" || now.at === "over") {
+    unpick();
+    clearFx();
+  }
+  changed();
+}
+onScreen(acted);
+
+/** Plays a fight new to the screen, as Leaf decided it; one these rules would play otherwise is only ended. */
+function played(play: Playback): void {
+  unpick();
+  if (play.kept) startFight(play.fought.setup, S.prefs.speed, () => go({ e: "played", key: play.key }));
+  else go({ e: "played", key: play.key });
 }
 
 const WHY: Readonly<Record<AcornsWhy, string>> = {
@@ -192,99 +179,31 @@ const WHY: Readonly<Record<AcornsWhy, string>> = {
 /** What a line of the takings is called. The run has taken the room by then, so its streak is the one paid for. */
 const whyName = (why: AcornsWhy): string => (why === "streak" && S.run ? streakName(S.run.streak) : WHY[why]);
 
-/**
- * The fight is done: Leaf settles the room from the fight it decided, its sheet rises with the
- * tally, and what it paid is counted out where it can be seen, a line at a time on the sheet too.
- * The table waits on "Carry on".
- */
-function takings(kept: boolean): void {
-  const run = S.run;
-  const outcome = run ? foughtOf(run)?.outcome : undefined;
-  if (!run || !outcome) return;
-  const boss = run.foe.figures.map((p) => p.kind).find(isBossId);
-  const room = run.room;
-  shown.resolve = run.resolve;
-  shown.xp = run.xp;
-  shown.level = run.level;
-  holdAcorns(run.acorns, 9);
-  S.mode = "after";
-  void taken(boss, room, { outcome, kept });
-}
-
-/** Asks Leaf to settle the room, and counts out what it paid. */
-async function taken(
-  boss: BossId | undefined,
-  room: number,
-  fight: { outcome: FightSummary; kept: boolean },
-): Promise<void> {
-  const did = await ask({ do: "take" });
-  if (did?.ok) {
-    counting(did.notes, boss, room, fight);
-    return;
-  }
-  // Taken already, on another page: the table goes on as Leaf has it.
-  shown.resolve = null;
-  shown.xp = null;
-  shown.level = null;
-  shown.acorns = null;
-  endFight();
-  if (S.run && S.run.stage.phase !== "over") enterRun(false);
-  else {
-    S.mode = "front";
-    changed();
-  }
-}
-
 /** Leaf has settled the room: its sheet rises, and what it paid is counted out. */
-function counting(
-  notes: readonly RaidNote[],
-  boss: BossId | undefined,
-  room: number,
-  fight: { outcome: FightSummary; kept: boolean },
-): void {
+function counting(notes: readonly RaidNote[], play: Playback): void {
   signal("fought");
-  openSheet("after", fight);
+  openSheet("after", { setup: play.fought.setup, outcome: play.fought.outcome, kept: play.kept });
   const result = notes.find((n) => n.t === "result");
   const won = result?.t === "result" && result.result === "win";
-  // The run has moved on by now: it may be over.
-  const over = S.run?.stage.phase === "over";
-  if (over && S.run && endingOf(S.run) === "won")
+  const ended = endedIn(notes);
+  if (ended && endingOf(ended.run) === "won")
     tell({ town: "news", text: "A little raid cleared: The Crab Nobody Counted has been counted.", tone: "gold" });
-  else if (won && boss)
-    tell({ town: "news", text: `${specOf(boss).name} was seen off at the stump, room ${room + 1}.`, tone: "gold" });
+  else if (won && play.boss)
+    tell({
+      town: "news",
+      text: `${specOf(play.boss).name} was seen off at the stump, room ${play.room + 1}.`,
+      tone: "gold",
+    });
   let t = 0.1;
   const levels = notes.some((n) => n.t === "level");
-  for (const note of notes) t = count(note, t, levels);
-  later(t + 0.5, counted);
-}
-
-/** The takings have all been counted out: the purse, resolve and level show the run's own numbers. */
-function counted(): void {
-  shown.resolve = null;
-  shown.xp = null;
-  shown.level = null;
-  shown.acorns = null;
-  renderTable();
-  signal("counted");
-}
-
-/** Goes on from a fight's sheet: to planning the next room, or to the end of the raid. */
-export function carryOn(): void {
-  const run = S.run;
-  if (S.mode !== "after" || !run || sheetUp() !== "after") return;
-  // Whatever of the count was still to come is shown counted.
-  forgetLater();
-  counted();
-  closeSheet(false);
-  endFight();
-  snd.tap();
-  if (run.stage.phase === "over") S.mode = "over";
-  else {
-    S.mode = "plan";
-    syncPawns(run, true);
-    if (!arrived(run)) arrive(run);
-  }
-  changed();
+  notes.forEach((note, i) => {
+    later(t, () => go({ e: "count", upTo: i + 1 }));
+    t = count(note, t, levels);
+  });
+  later(t + 0.5, () => {
+    go({ e: "counted" });
+    signal("counted");
+  });
 }
 
 /** Where the purse of acorns is, from the board's corner. */
@@ -320,8 +239,6 @@ function count(note: RaidNote, at: number, levels: boolean): number {
             `${note.change > 0 ? "+" : ""}${note.change}`,
           ),
         );
-        shown.resolve = null;
-        renderTable();
         snd.resolve();
         const spot = boardSpot(document.getElementById("resolve"));
         if (spot)
@@ -364,6 +281,7 @@ function count(note: RaidNote, at: number, levels: boolean): number {
             land: () => {
               snd.acorn(i);
               signal("acorn", 1);
+              go({ e: "landed" });
             },
           });
         }
@@ -376,8 +294,6 @@ function count(note: RaidNote, at: number, levels: boolean): number {
       if (levels) return at;
       later(at, () => {
         sheetTaking("Experience", el("b", "k-leafy", { text: `+${note.gained}` }));
-        shown.xp = null;
-        renderTable();
         snd.xp();
       });
       return at + 0.25;
@@ -387,9 +303,6 @@ function count(note: RaidNote, at: number, levels: boolean): number {
     {
       later(at, () => {
         sheetTaking("Level up", el("b", "k-leafy", { text: `Level ${note.level}` }));
-        shown.xp = null;
-        shown.level = null;
-        renderTable();
         snd.level();
         say(MIDDLE.x, MIDDLE.y + 30, `Level ${note.level}: field one more`, LEAF, { big: true, ttl: 1.6 });
       });

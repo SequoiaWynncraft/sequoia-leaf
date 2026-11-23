@@ -44,6 +44,7 @@ import {
 
 import { glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
 import { paintSwatch } from "../art/table.ts";
+import { endedOf } from "../screen.ts";
 import { snd } from "../sounds.ts";
 import { dress } from "../stage.ts";
 import { ask, S } from "../state.ts";
@@ -80,7 +81,7 @@ export function showPage(id: PageId | null): void {
   renderPages(true);
 }
 export const pageUp = (): PageId | null =>
-  extra ?? (S.mode === "front" ? "front" : S.mode === "over" ? "summary" : null);
+  extra ?? (S.screen.at === "front" ? "front" : S.screen.at === "over" ? "summary" : null);
 
 const close = (): HTMLElement =>
   el(
@@ -584,7 +585,7 @@ function looks(): HTMLElement {
 // ---------- the end of a run ----------
 
 function summary(): HTMLElement | null {
-  const ended = S.ended;
+  const ended = endedOf(S.screen);
   if (!ended) return null;
   const { run, summary: sum, paid, news } = ended;
   const title = sum.ending === "won" ? "The raid is done." : sum.ending === "left" ? "Home early." : "Home again.";
@@ -684,7 +685,7 @@ export function renderPages(force = false): void {
   const box = document.getElementById("modal");
   if (!box) return;
   const id = pageUp();
-  const key = `${id}:${S.runs}:${S.run?.room ?? 0}:${S.ended ? 1 : 0}`;
+  const key = `${id}:${S.runs}:${S.run?.room ?? 0}:${endedOf(S.screen) ? 1 : 0}`;
   if (!force && key === shownKey) return;
   shownKey = key;
   if (!id) {

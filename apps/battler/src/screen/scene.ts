@@ -340,7 +340,7 @@ export function drawScene(g: Ctx): void {
   g.drawImage(near, V.bx - 1, V.by + HOME_ROWS * ROW - 1);
   drawLamps(g);
   const run = S.run;
-  if (!run || S.mode === "front" || S.mode === "over") return;
+  if (!run || S.screen.at === "front" || S.screen.at === "over") return;
   drawPeople(g, run);
   const fighting = fightOn();
   if (!fighting) {
@@ -457,8 +457,8 @@ export function foeAt(run: RunView, x: number, y: number): { kind: UnitKind; sta
 
 /** The item a figure holds under a point measured from the board's corner: in its row under the base. */
 export function heldUnder(run: RunView, x: number, y: number): HeldAt | null {
-  if (S.mode === "fight" || S.mode === "after") return fightHeldUnder(x, y);
-  if (S.mode !== "plan") return null;
+  if (S.screen.at === "fight" || S.screen.at === "after") return fightHeldUnder(x, y);
+  if (S.screen.at !== "plan") return null;
   for (const p of pawns.values()) {
     if (p.leaving || !p.spot || p.id === marks.held) continue;
     const piece = pieceAt(run, p.spot);

@@ -41,11 +41,11 @@ const SH: {
   box: HTMLElement | null;
   takings: HTMLElement | null;
   carry: (() => void) | null;
-} = { up: null, played: null, view: null, box: null, takings: null, carry: null };
+  look: (() => void) | null;
+} = { up: null, played: null, view: null, box: null, takings: null, carry: null, look: null };
 
-/** The last fight the run kept (or the run just ended), played again; the same one as before if it has not changed. */
-function played(): Played | null {
-  const setup = S.run?.last ?? S.ended?.run.last ?? null;
+/** A fight played again from its setup: the same one as before if it has not changed. */
+function played(setup: FightSetup | null): Played | null {
   if (!setup) return null;
   const key = JSON.stringify(setup);
   if (SH.played?.key === key) return SH.played;
@@ -74,9 +74,10 @@ export function registerFought(): void {
   });
 }
 
-/** What "Carry on" does: whoever runs the room says. */
-export function onCarry(fn: () => void): void {
-  SH.carry = fn;
+/** What "Carry on", and putting the last fight away, do: whoever runs the room says. */
+export function onCarry(carry: () => void, look: () => void): void {
+  SH.carry = carry;
+  SH.look = look;
 }
 
 export const sheetUp = (): "after" | "again" | null => SH.up;
@@ -95,11 +96,14 @@ export function placeSheet(): void {
 }
 
 /**
- * Opens the sheet: `after` as a fight ends, with how Leaf decided it came out (`leaf`), room for the
- * takings and "Carry on"; `again` from "Last fight", with a button to put it away.
+ * Opens the sheet: `after` as a fight ends, for that fight as Leaf decided it (`leaf`), with room for
+ * the takings and "Carry on"; `again` for the last fight the run kept, with a button to put it away.
  */
-export function openSheet(how: "after" | "again", leaf?: { outcome: FightSummary; kept: boolean }): void {
-  const p = played();
+export function openSheet(
+  how: "after" | "again",
+  leaf?: { setup: FightSetup; outcome: FightSummary; kept: boolean },
+): void {
+  const p = played(leaf?.setup ?? S.run?.last ?? null);
   const bottom = document.getElementById("bottom");
   if (!p || !bottom) return;
   closeSheet(false);
@@ -121,7 +125,7 @@ export function openSheet(how: "after" | "again", leaf?: { outcome: FightSummary
       ? el(
           "button",
           "k-btn wood icon sm",
-          { type: "button", "aria-label": "Put it away", onclick: () => closeSheet() },
+          { type: "button", "aria-label": "Put it away", onclick: () => SH.look?.() },
           icon("close"),
         )
       : null;
@@ -175,11 +179,4 @@ export function closeSheet(sound = true): void {
   SH.view = null;
   SH.takings = null;
   SH.up = null;
-}
-
-/** Opens "Last fight", or puts it away if it is up. */
-export function toggleLastFight(): void {
-  if (SH.up === "again") closeSheet();
-  else if (S.mode === "plan" && hasLastFight() && S.run?.stage.phase === "plan" && S.run.stage.picks.length === 0)
-    openSheet("again");
 }

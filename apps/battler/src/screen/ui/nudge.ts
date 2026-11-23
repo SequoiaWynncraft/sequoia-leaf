@@ -135,7 +135,7 @@ function hide(): void {
 /** Shows the nudge that is due, if any. */
 export function renderNudge(): void {
   const run = S.run;
-  if (!run || pageUp() || S.mode === "front" || S.mode === "over" || S.mode === "after") {
+  if (!run || pageUp() || S.screen.at === "front" || S.screen.at === "over" || S.screen.at === "after") {
     hide();
     return;
   }
@@ -154,7 +154,13 @@ export function renderNudge(): void {
     }
   }
   if (learnt) prefsChanged();
-  const doing: Doing = fightOn() ? "fight" : picksOf(run).length > 0 ? "pick" : S.mode === "plan" ? "plan" : "other";
+  const doing: Doing = fightOn()
+    ? "fight"
+    : picksOf(run).length > 0
+      ? "pick"
+      : S.screen.at === "plan"
+        ? "plan"
+        : "other";
   const id = nudgeFor(run, doing, S.prefs.taught);
   if (!id) {
     now = null;
