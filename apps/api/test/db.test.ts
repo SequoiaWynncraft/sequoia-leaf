@@ -75,6 +75,7 @@ describe("the database", () => {
       { migration_id: 21, name: "awards" },
       { migration_id: 22, name: "banner_people" },
       { migration_id: 23, name: "played" },
+      { migration_id: 24, name: "play_guest" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -134,11 +135,47 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 23 },
+      { latest: 24 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM presence WHERE stay = 1`)).toEqual([{ n: 0 }]);
+  });
+
+  it("marks each state kept before it knew a guest's as theirs: from where it stands, or else as the player was last seen", async () => {
+    const path = join(directory, "leaf.db");
+    const guest = "00000000-0000-4000-8000-00000000000a";
+    const member = "00000000-0000-4000-8000-00000000000b";
+    const unknown = "00000000-0000-4000-8000-00000000000c";
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // Back to before migration 24 (after 23, `played`), with a guest on a board, a guest last seen,
+        // and a player never seen.
+        yield* sql`ALTER TABLE play_state DROP COLUMN guest`;
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id = 24`;
+        for (const [player, game] of [
+          [guest, "works"],
+          [guest, "town"],
+          [member, "works"],
+          [unknown, "works"],
+        ] as const) {
+          yield* sql`INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${player}, ${game}, 1, '{}', 1)`;
+        }
+        yield* sql`INSERT INTO standings (player_id, game, score, also, guest, updated_at) VALUES (${guest}, 'works', 5, '{}', 1, 1)`;
+        yield* sql`INSERT INTO players_seen (player_id, name, guest, first_seen_at, last_seen_at) VALUES (${guest}, 'G', 1, 1, 1)`;
+        yield* sql`INSERT INTO players_seen (player_id, name, guest, first_seen_at, last_seen_at) VALUES (${member}, 'M', 0, 1, 1)`;
+      }),
+    );
+    expect(
+      await query(path, (sql) => sql`SELECT player_id AS player, game, guest FROM play_state ORDER BY player_id, game`),
+    ).toEqual([
+      { player: guest, game: "town", guest: 1 },
+      { player: guest, game: "works", guest: 1 },
+      { player: member, game: "works", guest: 0 },
+      { player: unknown, game: "works", guest: 0 },
+    ]);
   });
 
   it("enforces foreign keys, which SQLite leaves off unless asked", async () => {

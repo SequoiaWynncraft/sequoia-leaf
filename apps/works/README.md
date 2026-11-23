@@ -32,8 +32,10 @@ and sent with the tick the copy stood at; a command the rules refuse is said so 
 frame, if Leaf has answered since the last, the copy becomes Leaf's yard with every command still
 unanswered done again on top, each at its own tick; then the copy is run on to Leaf's tick now: the
 tick Leaf last gave, and one for each tenth of a second since, never earlier than one already
-shown. A copy more than a minute behind (a tab put away) is not run on: the page sends `collect`
-and shows Leaf's yard when it comes. News (a story order done, an order filled) comes from the
+shown. A copy more than a minute behind (a tab put away) is not run on: the page asks Leaf for its
+yard, which Leaf has run on meanwhile, and shows that when it comes; away for less than five
+minutes, there is no letter. A copy standing still (its owner away eight hours) holds Leaf's tick
+with it from the frame it stops in until the member acts, as Leaf does. News (a story order done, an order filled) comes from the
 copy's own stepping, and is not told again when the same ticks are stepped once more. Swapping,
 handing over and buying a plan leave a place on the board empty until Leaf hangs the next order
 there; a place the board would have filled sends `collect`, so Leaf does.
@@ -176,8 +178,9 @@ handing over (from the panel, or by tapping him) sends the crate across, pays, a
 off over his head. Whoever walks about the yard is one of the yard's gnomes (`actors.ts`), drawn
 from the gatherer's pictures with a two-step waddle. A plot bought: the
 cleared ground opens out from its signpost and the undergrowth falls away. Coming back after five
-minutes or more: Leaf's yard carries what it worked out while nobody watched (how long, and what
-the till gained), a letter on paper says so, and putting it away pays the till into the purse.
+minutes or more: Leaf's yard carries what Leaf counted while its owner was away (how long it worked,
+the Coins it earned, what the depot took in), and a letter on paper says so (the five things taken
+in most, and the orders waiting to be handed over); putting it away pays the till into the purse.
 
 **Teaching.** `teach.ts` looks at the yard and says what the next small thing to try is, and where:
 the first gatherer, the mill, the belt, the first planks arriving, a pylon towards the ore, a
@@ -214,7 +217,8 @@ clockwork crab is made. Opened alone it plays just the same.
 `window.works` has handles for taking pictures of the game and trying it by script. `stage(...ops)`
 stages a moment in the yard on the play server on this machine (`apps/api/test/play.ts`, through
 `POST /test/play/works`) and takes it: `{ yard: "new" }` or one of the kept yards `"small"`,
-`"short"`, `"mid"`, `"large"`; `{ away: minutes }`, a time nobody watched; `{ fill: n }`, the nth
+`"short"`, `"mid"`, `"large"`; `{ away: minutes }`, its owner away that long and the yard run
+every tick meanwhile; `{ fill: n }`, the nth
 standing order filled; `{ text: "..." }`, any yard as its save's text. `hold(true)` stops the screen
 running the yard on, and `hold(true, lead, at)` shows it `lead` of the way into its next tick with
 the screen's clock at `at` seconds, so a picture can be taken twice the same; `skip(seconds)` moves

@@ -20,8 +20,16 @@ export const BOARD_MOST = 20;
  */
 export const IDLE_MS = 3 * 60_000;
 
-/** A player's state in a game, as stored: how many batches have changed it, and the game's own text. */
-const Stored = Schema.Struct({ rev: Schema.Int, state: Schema.String });
+/**
+ * A player's state in a game, as stored: how many batches have changed it, the game's own text,
+ * when it was last written, and whether the player was a guest when it was.
+ */
+const Stored = Schema.Struct({
+  rev: Schema.Int,
+  state: Schema.String,
+  updatedAt: Schema.Int,
+  guest: Schema.BooleanFromBit,
+});
 export type Stored = typeof Stored.Type;
 
 const Answered = Schema.Struct({ result: Schema.String });
@@ -67,26 +75,39 @@ export class PlayStore extends Context.Service<
   {
     /** The player's state in a game, or none yet. */
     readonly read: (playerId: PlayerId, game: string) => Effect.Effect<Option.Option<Stored>>;
+    /** The players whose state in a game was last written before `before`, longest ago first, with each state's `rev`. */
+    readonly unwritten: (
+      game: string,
+      before: number,
+    ) => Effect.Effect<readonly { readonly playerId: PlayerId; readonly rev: number }[]>;
     /** Stores a new player's state, untouched (`rev` 0). Says whether it did: false when one was there already. */
-    readonly create: (playerId: PlayerId, game: string, state: string, now: number) => Effect.Effect<boolean>;
-    /** Stores a state over the one at `over`, as `over + 1`. Says whether it did: false when it changed meanwhile. */
+    readonly create: (
+      playerId: PlayerId,
+      game: string,
+      state: string,
+      guest: boolean,
+      now: number,
+    ) => Effect.Effect<boolean>;
+    /** Whether the player's state in a game is stored at `rev`. */
+    readonly isAt: (playerId: PlayerId, game: string, rev: number) => Effect.Effect<boolean>;
+    /** Stores a state over the one there, its `rev` up by one. */
     readonly write: (
       playerId: PlayerId,
       game: string,
-      over: number,
       state: string,
+      guest: boolean,
       now: number,
-    ) => Effect.Effect<boolean>;
+    ) => Effect.Effect<void>;
     /** What a command answered (its notes or its refusal, as JSON), if it was done before. */
     readonly answered: (playerId: PlayerId, game: string, commandId: string) => Effect.Effect<Option.Option<string>>;
-    /** Keeps what a command answered, and the `rev` it led to. */
+    /** Keeps what a command answered, and the `rev` it led to. Says whether it did: false when one was kept for it already. */
     readonly answer: (
       playerId: PlayerId,
       game: string,
       commandId: string,
       rev: number,
       result: string,
-    ) => Effect.Effect<void>;
+    ) => Effect.Effect<boolean>;
     /** Lets go of the answers to the player's commands to a game but the newest `ANSWERS_KEPT`. */
     readonly keepNewest: (playerId: PlayerId, game: string) => Effect.Effect<void>;
     /**
@@ -135,7 +156,14 @@ export class PlayStore extends Context.Service<
         Request: Schema.Struct({ playerId: Schema.String, game: Schema.String }),
         Result: Stored,
         execute: ({ playerId, game }) =>
-          sql`SELECT rev, state FROM play_state WHERE player_id = ${playerId} AND game = ${game}`,
+          sql`SELECT rev, state, updated_at AS updatedAt, guest FROM play_state WHERE player_id = ${playerId} AND game = ${game}`,
+      });
+      const unwritten = SqlSchema.findAll({
+        Request: Schema.Struct({ game: Schema.String, before: Schema.Int }),
+        Result: Schema.Struct({ playerId: PlayerUuid, rev: Schema.Int }),
+        execute: ({ game, before }) => sql`
+          SELECT player_id AS playerId, rev FROM play_state WHERE game = ${game} AND updated_at < ${before} ORDER BY updated_at
+        `,
       });
       const answered = SqlSchema.findOneOption({
         Request: Schema.Struct({ playerId: Schema.String, game: Schema.String, commandId: Schema.String }),
@@ -195,32 +223,39 @@ export class PlayStore extends Context.Service<
       });
       return PlayStore.of({
         read: (playerId, game) => read({ playerId, game }).pipe(Effect.orDie),
-        create: (playerId, game, state, now) =>
+        unwritten: (game, before) => unwritten({ game, before }).pipe(Effect.orDie),
+        create: (playerId, game, state, guest, now) =>
           sql`
-            INSERT INTO play_state (player_id, game, rev, state, updated_at)
-            VALUES (${playerId}, ${game}, 0, ${state}, ${now})
+            INSERT INTO play_state (player_id, game, rev, state, guest, updated_at)
+            VALUES (${playerId}, ${game}, 0, ${state}, ${guest ? 1 : 0}, ${now})
             ON CONFLICT (player_id, game) DO NOTHING
             RETURNING rev
           `.pipe(
             Effect.map((rows) => rows.length > 0),
             Effect.orDie,
           ),
-        write: (playerId, game, over, state, now) =>
-          sql`
-            UPDATE play_state SET rev = rev + 1, state = ${state}, updated_at = ${now}
-            WHERE player_id = ${playerId} AND game = ${game} AND rev = ${over}
-            RETURNING rev
-          `.pipe(
+        isAt: (playerId, game, rev) =>
+          sql`SELECT rev FROM play_state WHERE player_id = ${playerId} AND game = ${game} AND rev = ${rev}`.pipe(
             Effect.map((rows) => rows.length > 0),
             Effect.orDie,
           ),
+        write: (playerId, game, state, guest, now) =>
+          sql`
+            UPDATE play_state SET rev = rev + 1, state = ${state}, guest = ${guest ? 1 : 0}, updated_at = ${now}
+            WHERE player_id = ${playerId} AND game = ${game}
+          `.pipe(Effect.asVoid, Effect.orDie),
         answered: (playerId, game, commandId) =>
           answered({ playerId, game, commandId }).pipe(Effect.map(Option.map((row) => row.result)), Effect.orDie),
         answer: (playerId, game, commandId, rev, result) =>
           sql`
             INSERT INTO play_commands (player_id, game, command_id, rev, result)
             VALUES (${playerId}, ${game}, ${commandId}, ${rev}, ${result})
-          `.pipe(Effect.asVoid, Effect.orDie),
+            ON CONFLICT (player_id, game, command_id) DO NOTHING
+            RETURNING id
+          `.pipe(
+            Effect.map((rows) => rows.length > 0),
+            Effect.orDie,
+          ),
         keepNewest: (playerId, game) =>
           sql`
             DELETE FROM play_commands
