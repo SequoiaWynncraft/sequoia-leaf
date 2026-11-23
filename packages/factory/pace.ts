@@ -1,19 +1,24 @@
 /**
  * How long the slice takes: `bun pace.ts` (`--json` for the same as data, `--seed N` for another
  * land's orders, `--seeds 1-12` for the least, the middle and the most of each tier over those
- * seeds, `--folios N` for the folios a minute the Studies are built for). It plays tiers 0 to 3 of
- * the second design from a new yard to the last goal of tier 3, by the real rules, as one careful,
- * ordinary player would (`pace/player.ts`), and prints how long each goal and each tier took:
- * building, waiting for Coins, waiting for deliveries.
+ * seeds, `--folios N` for the folios a minute the Studies are built for). It plays the second design
+ * from a new yard through every node below and every piece of research below, by the real rules, as
+ * one careful, ordinary player would (`pace/player.ts`), and prints how long each goal and each tier
+ * took: building, waiting for Coins, waiting for deliveries.
  *
  * Everything the player decides by is below, as data: the order of goals, what it builds with what
- * it unlocks, and the seconds a person takes over each thing. Change them and run it again; the same
- * seed and the same numbers give the same table, to the tick.
+ * it unlocks, and the seconds a person takes over each thing. A new tier needs only its nodes and its
+ * research added to the two lists (and, in `pace/table.ts`, the time it is meant to take). Change them
+ * and run it again; the same seed and the same numbers give the same table, to the tick.
  */
 import { type Hands, Player, type Settings } from "./pace/player.ts";
 import { type Report, report, seeds, seedsText, text } from "./pace/table.ts";
 
-/** The nodes in the order the player turns to them: lessons in theirs; in each tier the projects in the table's order, then the commission. */
+/**
+ * The nodes in the order the player turns to them: lessons in theirs; in each tier the projects in
+ * the table's order, then the commission. It turns to the first not done that may be taken: one that
+ * needs research waits for it, and a later one goes first meanwhile.
+ */
 export const NODES = [
   // Tier 0.
   "planks",
@@ -39,9 +44,13 @@ export const NODES = [
   "lanterns",
 ];
 
-/** Research in the order the player studies it; each goes in the line as soon as what it needs is known, the line kept full. */
+/**
+ * Research in the order the player studies it, after what the nodes of the tiers open need (which
+ * goes first, each piece after what it needs: `researchOrder`); each goes in the line as soon as it
+ * may be studied, the line kept full, and moved ahead of what it comes before once it may be.
+ */
 export const RESEARCH = [
-  // What the commission needs, and the machines that make it quicker, first.
+  // The machines that make lines quicker, then the rest in the table's order.
   "oilpress",
   "workshop",
   "tooling",
@@ -56,20 +65,28 @@ export const RESEARCH = [
 
 /**
  * The minutes of waiting a goal's lines are built for, by tier: a careful player builds enough to
- * see a goal done in a few minutes once its lines stand, and accepts longer as goals grow.
+ * see a goal done in a few minutes once its lines stand, and accepts longer as goals grow. A tier
+ * past the last here takes the last.
  */
 export const MINUTES = [3, 8, 12, 15];
 
-/** Folios a minute the Studies are built for, unless `--folios` says: two Studies at grade 1, each fed flat out (one every 5 seconds). */
+/**
+ * Folios a minute the Studies are built for, of each kind of folio once research of an open tier
+ * wants it, unless `--folios` says: two Studies at grade 1, each fed flat out (one every 5 seconds).
+ */
 export const FOLIOS = 24;
 
 /**
  * What the player builds with what it unlocks: new pieces at the highest grade unlocked, up to
  * these (grade 2 belts and gatherers once the wax and the rakes are done, grade 2 machines once they
- * are researched). Power: before a goal's lines, boilers (a waterwheel when short by no more than
- * one gives) for whatever the yard would then draw beyond what it gives. It never tears anything
- * down, never builds for an order, and buys a plot only when the land has too little of what a line
- * gathers, or no room for it.
+ * are researched). Power: after a goal's lines, boilers (a waterwheel when short by no more than
+ * one gives, and the other where the one will not fit) for whatever the yard would then draw beyond
+ * what it gives. It never builds for an order, and buys a plot only when the land has too little of
+ * what a line gathers, or no room for it. Where greedy placing finds no room for a line, it plans
+ * the line as a block (`pace/builder.ts`); a line it cannot do without that still fits nowhere is laid
+ * where old lines stood, taking up those built for goals now finished, nearest first, as few as one
+ * at a time from the nearest will make room for (not the fewest of any choice), or is
+ * laid as its parts first, each a line into the depot, and split off them.
  */
 export const GRADES = { belt: 2, tunnel: 2, gatherer: 2, mill: 2, bench: 2, workshop: 2, study: 1 } as const;
 /** When a free swap is due, it swaps the order that would take longest to fill at what its lines bring the depot, if that is more than half an hour (an order nothing it has built brings, at once). */

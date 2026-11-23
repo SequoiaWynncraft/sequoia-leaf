@@ -1,26 +1,39 @@
 /**
  * One careful, ordinary player, playing the real yard by the real rules: every change is a command
  * off the wire, given with `play` at the yard's tick, and the yard runs on, tick by tick, while the
- * player works. The player keeps what it builds, and for the goal in hand builds only the lines its
- * planner says are missing (`needs.ts`), laid out first on a copy (`builder.ts`).
+ * player works. For the goal in hand it builds only the lines its planner says are missing
+ * (`needs.ts`), laid out first on a copy (`builder.ts`). It keeps what it builds, until a line it
+ * cannot do without (nothing standing brings its thing) fits nowhere: then it takes up the fewest it
+ * can of the old lines in its way, those built for goals now finished that nothing still in use draws
+ * from, and gets their Coins back; it knows which line each piece belongs to, and what each draws on.
  *
  * What it believes the standing lines bring the depot is what it reads off the yard once its new
  * lines have filled (`measure.ts`), as a player reads the pace on the page: a split above another,
  * a joined belt, a machine short of a part are all in it. While that is short of the pace the goal in
- * hand wants, it builds again. Where a line will not fit at that pace, it builds the most of it that
- * does, at half the pace and half again, and waits the longer.
+ * hand wants, it builds again. Where a line will not fit at that pace, it lays its parts first, each a
+ * line into the depot, or builds the most of it that does, at half the pace and half again, and
+ * waits the longer.
  *
  * Coins are real: the yard keeps no purse, so the player keeps one, as Leaf's ledger does. It pays
  * for each piece as it sets it down, and when it cannot, it waits with the yard running. Once a
  * minute, as the page does, it collects the till, hands over filled orders, swaps an order nothing
- * it has built could fill, and keeps the line of research full.
+ * it has built could fill, and keeps the line of research full, what the open nodes need first.
  *
  * A person's time is real too: each thing done costs seconds (`Hands`), during which the yard runs
  * on. Every tick of the yard's clock is marked as building (thinking and reading included), waiting
  * for Coins, or waiting for deliveries or folios, so any stretch of it can be split in three.
  */
 import * as F from "../src/index.ts";
-import { Builder, piecesStanding, type Planned, powerOf, type Rec, type Source } from "./builder.ts";
+import {
+  Builder,
+  type Old,
+  piecesStanding,
+  type Planned,
+  powerOf,
+  type Rec,
+  type Restore,
+  type Source,
+} from "./builder.ts";
 import { measure } from "./measure.ts";
 import { capacity, type Delivers, type Grades, shortfall, size, type Unit } from "./needs.ts";
 
@@ -97,6 +110,22 @@ export interface Game {
 const STUCK = 12 * 36_000;
 /** How many times the player builds for a goal: once, and twice more while what its lines really bring is short of what the goal wants. */
 const ROUNDS = 3;
+/** A line as the player built it, kept so that it may be taken up again (`Old`). */
+interface Built {
+  /** The goal it was built for; nothing for Studies and power. */
+  readonly goal: F.Goal | null;
+  readonly into: Planned["into"];
+  readonly item: F.Item | null;
+  /** The tiles its pieces stand on now. */
+  readonly tiles: Set<number>;
+  readonly restores: Restore[];
+  /** Its places among the lines. */
+  readonly sources: number[];
+  /** The lines it draws from or runs onto (their places among what was built). */
+  readonly on: Set<number>;
+  gone: boolean;
+}
+
 /** The slowest line the player builds when a faster one does not fit, things a minute. */
 const SLOWEST = 1;
 const MINUTE = F.MINUTE;
@@ -125,23 +154,30 @@ export class Player {
   private sold = 0;
   /** The goal what is bought now is bought for. */
   private current: F.Goal | null = null;
-  private studies = false;
+  /** The kinds of folio Studies have been built for, and the research the player has read. */
+  private readonly studied = new Set<F.Item>();
+  private readonly known = new Set<F.Goal>();
+  /** Every line built, and which of them each tile's piece belongs to (-1 for none). */
+  private readonly built: Built[] = [];
+  private readonly owner: Int32Array;
 
   constructor(s: Settings) {
     this.s = s;
     this.y = F.create({ seed: s.seed });
     this.purse = s.purse;
+    this.owner = new Int32Array(this.y.kind.length).fill(-1);
   }
 
   /** The grade the player builds a kind at now: its policy's, or the highest unlocked if that is lower. */
   readonly grades: Grades = (k) => Math.max(1, Math.min(this.s.grades[F.kindName(k)] ?? 1, F.highest(this.y.open, k)));
 
-  /** Plays every node in its order, and then waits for every piece of research to be known. */
+  /** Plays every node, each in its order once it may be taken up, and then waits for every piece of research to be known. */
   play(): Game {
     let stuck: string | null = null;
     try {
       this.tend();
-      for (const id of this.s.nodes) this.node(F.goal(id));
+      const nodes = this.s.nodes.map((id) => F.goal(id));
+      for (let g = this.next(nodes); g !== undefined; g = this.next(nodes)) this.node(g);
       this.research();
       this.run("wait", () => !this.s.research.every((id) => this.isDone(F.goal(id))));
     } catch (e) {
@@ -162,46 +198,59 @@ export class Player {
     };
   }
 
-  /** Turns to a node once it may be taken up, builds what it needs, and waits for it to be done. */
-  private node(g: F.Goal): void {
+  /**
+   * The node the player turns to next: the first in its order not done that may be taken up, waiting
+   * (on research it needs, or for its tier to open) until one may; nothing once all are done.
+   */
+  private next(nodes: readonly F.Goal[]): F.Goal | undefined {
     this.research();
-    this.run("wait", () => !F.ready(this.y.open, g) && !this.isDone(g));
-    if (this.isDone(g)) return;
+    const open = (): F.Goal | undefined => nodes.find((g) => !this.isDone(g) && F.ready(this.y.open, g));
+    this.run("wait", () => open() === undefined && !nodes.every((g) => this.isDone(g)));
+    return open();
+  }
+
+  /** Turns to a node, builds what it needs, and waits for it to be done. */
+  private node(g: F.Goal): void {
     this.cameAt.set(g, this.y.tick);
     this.current = g;
     if (this.y.hand !== g) this.give({ do: "take", node: F.GOALS[g]?.id });
     this.busy(this.s.hands.read);
     const tier = F.GOALS[g]?.tier ?? 0;
+    const minutes = this.s.minutes[tier] ?? this.s.minutes.at(-1) ?? 10;
     const want = F.GOALS[g]?.want ?? F.counts();
     // What the standing lines really bring is read once new lines have filled; while it is short of the pace the goal wants, the player builds again.
     for (let round = 0; round < ROUNDS && !this.isDone(g); round++) {
-      const units = shortfall(want, this.y.got[g] ?? null, this.s.minutes[tier] ?? 10, this.depotLines(), this.grades);
+      const units = shortfall(want, this.y.got[g] ?? null, minutes, this.depotLines(), this.grades);
       if (units.length === 0 || !this.build(units, [], g)) break;
     }
     this.run("wait", () => !this.isDone(g));
   }
 
-  /** Once the Study is unlocked: the line of research filled, and Studies with folio lines built to the pace asked for. */
+  /**
+   * Once the Study is unlocked, the line of research kept as the player wants it (`queue`); and for
+   * each kind of folio, once it may be made and research of the tiers open wants it, Studies with
+   * folio lines built for `folios` a minute of it.
+   */
   private research(): void {
-    if (this.studies || F.highest(this.y.open, F.STUDY) === 0) return;
-    this.studies = true;
+    if (F.highest(this.y.open, F.STUDY) === 0) return;
     this.queue();
+    const studies: Unit[] = [];
+    for (const folio of F.FOLIOS) {
+      if (this.studied.has(folio) || F.locked(this.y.open, { make: folio }) !== null) continue;
+      const wanted = this.s.research.some((id) => {
+        const g = F.goal(id);
+        const info = F.GOALS[g];
+        return info !== undefined && !this.isDone(g) && info.tier <= this.y.open.tier && (info.want[folio] ?? 0) > 0;
+      });
+      if (!wanted) continue;
+      this.studied.add(folio);
+      const each = F.makes(F.STUDY, this.grades(F.STUDY), null);
+      const count = Math.max(1, Math.ceil(this.s.folios / each - 1e-9));
+      for (let k = 0; k < count; k++) studies.push(size(folio, this.s.folios / count, this.grades));
+    }
+    if (studies.length === 0) return;
     const first = this.y.line[0];
     if (first !== undefined) this.current = first;
-    const wanted = new Map<F.Item, number>();
-    for (const id of this.s.research) {
-      const want = F.GOALS[F.goal(id)]?.want;
-      for (const f of F.FOLIOS) wanted.set(f, (wanted.get(f) ?? 0) + (want?.[f] ?? 0));
-    }
-    const all = [...wanted.values()].reduce((a, b) => a + b, 0);
-    const studies: Unit[] = [];
-    for (const [folio, n] of wanted) {
-      if (n === 0 || F.locked(this.y.open, { make: folio }) !== null) continue;
-      const pace = (this.s.folios * n) / all;
-      const each = F.makes(F.STUDY, this.grades(F.STUDY), null);
-      const count = Math.max(1, Math.ceil(pace / each - 1e-9));
-      for (let k = 0; k < count; k++) studies.push(size(folio, pace / count, this.grades));
-    }
     this.build([], studies, null);
   }
 
@@ -213,25 +262,32 @@ export class Player {
     const makesPower = F.highest(this.y.open, F.BOILER) > 0 || F.highest(this.y.open, F.WHEEL) > 0;
     const now = powerOf(this.y);
     if (depot.length + studies.length === 0 && (now.draws <= now.gives || !makesPower)) return false;
-    const b = new Builder(this.y, this.grades, this.lines);
+    const b = new Builder(this.y, this.grades, this.lines, this.old(g));
     const plans: Planned[] = [];
     for (const u of depot) {
-      const p = b.depotLine(u);
-      // With no room for another line of a thing that standing lines bring, the player waits on those.
+      // With no room for another line of a thing that standing lines bring, the player waits on those;
+      // a line it cannot do without, it makes room for by taking up old lines.
+      const brings = this.depotLines().some((l) => l.item === u.item && l.rate > 0);
+      const p = b.depotLine(u) ?? (brings ? null : b.depotLine(u, true));
+      const mark = p || brings ? null : b.save();
+      const parts = mark ? this.apart(u, b) : null;
       if (p) plans.push(p);
-      else if (this.depotLines().some((l) => l.item === u.item && l.rate > 0))
-        this.note(g, `no room for more ${many(u.item)}`);
-      else {
+      else if (brings) this.note(g, `no room for more ${many(u.item)}`);
+      else if (parts) {
+        plans.push(...parts);
+        this.note(g, `${many(u.item)} split off lines of their parts`);
+      } else {
+        if (mark) b.back(mark);
         // Else it builds the most of the line that fits, at half the pace and half again, and waits the longer.
         let less: Planned | null = null;
         for (let pace = u.perMinute / 2; !less && pace >= SLOWEST; pace /= 2)
-          less = b.depotLine(size(u.item, pace, this.grades));
+          less = b.depotLine(size(u.item, pace, this.grades), true);
         if (!less) throw this.cannot(u, b);
         plans.push(less);
         this.note(g, `only ${less.rate.toFixed(1)} ${many(u.item)} a minute fitted`);
       }
     }
-    for (const u of studies) plans.push(b.studyLine(u) ?? this.fail(u, b));
+    for (const u of studies) plans.push(b.studyLine(u) ?? b.studyLine(u, true) ?? this.fail(u, b));
     const then = powerOf(b.y);
     plans.push(...b.power(then.draws - then.gives));
     let built = false;
@@ -239,7 +295,39 @@ export class Player {
       if (g !== null && this.isDone(g)) break;
       built = built || p.into !== "power";
       if (p.into !== "power") this.busy(this.s.hands.think);
-      for (const c of p.cmds) this.buy(c);
+      const id = this.built.length;
+      const me: Built = {
+        goal: g,
+        into: p.into,
+        item: p.item,
+        tiles: new Set(),
+        restores: [],
+        sources: [],
+        on: new Set(),
+        gone: false,
+      };
+      this.built.push(me);
+      // The belts lines taken up had set splitters on go back to the lines they were belts of.
+      const back = new Map<number, number>();
+      for (const t of p.taken) {
+        const old = this.built[t];
+        if (!old) continue;
+        old.gone = true;
+        for (const r of old.restores) back.set(r.tile, r.owner);
+      }
+      for (const c of p.cmds) {
+        this.own(c, id, back);
+        this.buy(c);
+      }
+      for (const s of p.gone) {
+        const line = this.lines[s];
+        if (line) this.lines[s] = { ...line, rate: 0, tapped: 0, run: [], joinedAt: [] };
+      }
+      for (const e of p.onto) {
+        const o = this.owner[e] ?? -1;
+        if (o >= 0 && o !== id) me.on.add(o);
+      }
+      me.sources.push(...p.lines.map((_, k) => this.lines.length + k));
       this.lines.push(...p.lines);
       for (const t of p.taps) {
         const line = this.lines[t.source];
@@ -252,6 +340,94 @@ export class Player {
     }
     if (built) this.read = measure(this.y);
     return built;
+  }
+
+  /**
+   * A line too big to lay as one block, laid as its parts first: each made by a line of its own into
+   * the depot (laid as its own parts in turn, once, if it must be), with twice what the line takes of
+   * it, so that splitting off half is enough; then the most of the line itself that fits, split off
+   * them. The lines, in the order they are to be built, or nothing.
+   */
+  private apart(u: Unit, b: Builder, deeper = 1): Planned[] | null {
+    const recipe = F.RECIPE[u.item];
+    if (!recipe || u.kind === F.GATHERER) return null;
+    const out: Planned[] = [];
+    for (const [k, part] of recipe.from.entries()) {
+      if (F.isRaw(part)) continue;
+      const hub = size(part, 2 * u.perMinute * (recipe.need[k] ?? 1), this.grades);
+      const line = b.depotLine(hub) ?? b.depotLine(hub, true);
+      const lines = line ? [line] : deeper > 0 ? this.apart(hub, b, deeper - 1) : null;
+      if (!lines) return null;
+      out.push(...lines);
+    }
+    if (out.length === 0) return null;
+    // Then the line itself, the most of it that fits, at its pace and half and half again.
+    for (let pace = u.perMinute; pace >= SLOWEST; pace /= 2) {
+      const line = b.depotLine(pace === u.perMinute ? u : size(u.item, pace, this.grades), true);
+      if (line) return [...out, line];
+    }
+    return null;
+  }
+
+  /**
+   * The lines built for goals now finished, that nothing still in use draws from and whose thing the
+   * goal in hand does not want: what may be taken up to make room (`Builder.clearing`). Studies and
+   * power are always kept, and pylons, which light more than their own line.
+   */
+  private old(g: F.Goal | null): Old[] {
+    const want = g === null ? null : (F.GOALS[g]?.want ?? null);
+    const kept = new Set<number>();
+    for (const [id, b] of this.built.entries()) {
+      if (b.gone) continue;
+      const finished = b.goal !== null && this.isDone(b.goal);
+      const wanted = b.item !== null && want !== null && (want[b.item] ?? 0) > 0;
+      if (b.into !== "depot" || !finished || wanted) kept.add(id);
+    }
+    for (const id of kept) for (const o of this.built[id]?.on ?? []) if (!this.built[o]?.gone) kept.add(o);
+    return this.built.flatMap((b, id): Old[] =>
+      b.gone || kept.has(id)
+        ? []
+        : [
+            {
+              id,
+              tiles: [...b.tiles].filter((i) => this.y.kind[i] !== F.PYLON),
+              restores: b.restores,
+              sources: b.sources,
+            },
+          ],
+    );
+  }
+
+  /** Notes which line each tile's piece belongs to, as a command of line `id` sets pieces down or takes them up; a belt laid again goes back to its own line (`back`). */
+  private own(c: Rec, id: number, back: ReadonlyMap<number, number>): void {
+    const me = this.built[id];
+    const read = F.readCommand({ tick: this.y.tick, ...c });
+    if (!me || !read) return;
+    const y = this.y;
+    const take = (i: number, to: number): void => {
+      if (i < 0) return;
+      const was = this.owner[i] ?? -1;
+      if (was >= 0) this.built[was]?.tiles.delete(i);
+      this.owner[i] = to;
+      if (to >= 0) this.built[to]?.tiles.add(i);
+    };
+    if (read.do === "build") {
+      const i = F.at(y, read.x, read.y);
+      const was = this.owner[i] ?? -1;
+      if (read.kind === F.SPLITTER && y.kind[i] === F.BELT) {
+        const d = y.dir[i] ?? 0;
+        me.restores.push({ tile: i, dir: F.isDir(d) ? d : 0, grade: y.grade[i] ?? 1, owner: was });
+        if (was >= 0) me.on.add(was);
+      }
+      take(i, back.get(i) ?? id);
+    }
+    if (read.do === "lay")
+      for (const leg of read.legs) {
+        take(F.at(y, leg.x, leg.y), id);
+        const far = F.legSpan(leg) + 1;
+        if (leg.tunnel) take(F.at(y, leg.x + (F.DX[leg.dir] ?? 0) * far, leg.y + (F.DY[leg.dir] ?? 0) * far), id);
+      }
+    if (read.do === "clear") for (const i of read.tiles) take(i, -1);
   }
 
   private cannot(u: Unit, b: Builder): Error {
@@ -311,6 +487,8 @@ export class Player {
   private secondsOf(c: Rec): number {
     const h = this.s.hands;
     if (c.do === "lay") return h.run + h.tile * (Array.isArray(c.legs) ? c.legs.length : 0);
+    // Taking a line up: drawn over with Select, as a run is laid, and cleared.
+    if (c.do === "clear") return h.run + h.tile * (Array.isArray(c.tiles) ? c.tiles.length : 0);
     if (c.do === "buyPlot") return h.plot;
     if (c.do === "recipe") return h.set;
     return h.piece;
@@ -336,6 +514,7 @@ export class Player {
     if (read.do === "build") add(named(read.kind, read.grade));
     if (read.do === "lay") for (const leg of read.legs) add(named(F.legKind(leg), leg.grade));
     if (read.do === "buyPlot") add(`plot ${F.plotName(read.plot)}`);
+    if (read.do === "clear") for (const _ of read.tiles) add("taken up");
   }
 
   /** A person busy for some seconds, the yard running on meanwhile. Tending the yard on the way takes its own time, on top. */
@@ -437,15 +616,30 @@ export class Player {
     return worst;
   }
 
-  /** Puts research in the line, in its order, each as soon as it may be studied, until the line is full. */
+  /**
+   * Keeps the line of research full, in the order the player wants (`researchOrder`): what may be studied
+   * goes in as soon as it may; when something it wants sooner may be studied, what stands behind it
+   * in the line comes out and goes back in after it.
+   */
   private queue(): void {
     const was = this.tending;
     this.tending = true;
-    for (const id of this.s.research) {
-      if (this.y.line.length >= F.LINE) break;
-      if (F.studyRefusal(this.y, F.goal(id)) !== null) continue;
-      this.busy(this.s.hands.read);
-      this.give({ do: "study", research: id });
+    const want = researchOrder(this.y.open, this.s.nodes, this.s.research)
+      .filter((g) => this.y.line.includes(g) || F.ready(this.y.open, g))
+      .slice(0, F.LINE);
+    const line = [...this.y.line];
+    let k = 0;
+    while (k < line.length && line[k] === want[k]) k++;
+    // The yard runs on while the player reaches for each: research that becomes known meanwhile has
+    // left the line, and is passed over rather than asked for.
+    for (const g of line.slice(k).toReversed()) {
+      this.busy(this.s.hands.order);
+      if (this.y.line.includes(g)) this.give({ do: "unstudy", research: F.GOALS[g]?.id });
+    }
+    for (const g of want.slice(k)) {
+      this.busy(this.known.has(g) ? this.s.hands.order : this.s.hands.read);
+      this.known.add(g);
+      if (!this.y.line.includes(g) && F.ready(this.y.open, g)) this.give({ do: "study", research: F.GOALS[g]?.id });
     }
     this.tending = was;
   }
@@ -494,6 +688,28 @@ export class Player {
       this.tierAt.push(y.tick);
     }
   }
+}
+
+/**
+ * The research not yet known, in the order a player wants it known: what the nodes of the tiers open
+ * and not yet done need (`nodes`, in the order the player turns to them), each after what it needs in
+ * turn; then the rest of its list (`research`).
+ */
+export function researchOrder(open: F.Open, nodes: readonly string[], research: readonly string[]): F.Goal[] {
+  const out: F.Goal[] = [];
+  const add = (g: F.Goal): void => {
+    const info = F.GOALS[g];
+    if (!info || F.isNode(g) || out.includes(g) || open.done[g] === 1) return;
+    for (const n of info.needs) add(n);
+    out.push(g);
+  };
+  for (const id of nodes) {
+    const g = F.goal(id);
+    const info = F.GOALS[g];
+    if (info && open.done[g] !== 1 && info.tier <= open.tier) for (const n of info.needs) add(n);
+  }
+  for (const id of research) add(F.goal(id));
+  return out;
 }
 
 const many = (n: F.Item): string => F.ITEM_INFO[n]?.many ?? "things";
