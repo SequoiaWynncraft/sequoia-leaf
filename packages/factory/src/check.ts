@@ -2,12 +2,12 @@
  * The check: one pass over the yard into 32 bits, for Leaf and the page to compare their copies at a
  * tick without sending the yard. It mixes in everything `decode` keeps of the rules' state: the
  * clock, the power put by, the till and its counter, the goals (those done, in order, the node in
- * hand, the line of research, and what each goal not done has been given) and the board (each order's
- * wants, what came in, its pay, its words and when it began to count), the depot's books (what awards
- * and the standing are read from), what was seen at the owner's last command, the pieces to
- * hand, the blueprints, and every part of every piece, tile by tile, numbered by the tables. Every
- * number that may pass 32 bits (the clock, the counters, the Coins, the books) is mixed in by both
- * halves of its 64.
+ * hand and those in line after it, the line of research, and what each goal not done has been
+ * given) and the board (each order's wants, what came in, its pay, its words and when it began to
+ * count), the depot's books (what awards and the standing are read from), what was seen at the
+ * owner's last command, the pieces to hand, the blueprints, and every part of every piece, tile by
+ * tile, numbered by the tables. Every number that may pass 32 bits (the clock, the counters, the
+ * Coins, the books) is mixed in by both halves of its 64.
  *
  * It leaves out only what a yard read back from its kept form works out again or never had, so that
  * one gives the same check: what only Leaf holds and moves (the seed and `serial`, the orders ever
@@ -60,6 +60,8 @@ export function check(y: Yard): number {
   for (const g of y.done) mix(g);
   mix(-1);
   mix(y.hand);
+  for (const g of y.queue) mix(g);
+  mix(-1);
   for (const g of y.line) mix(g);
   mix(-1);
   y.got.forEach((got, g) => {
@@ -107,6 +109,7 @@ export function check(y: Yard): number {
         ((y.turn[i] ?? 0) << 4) |
         ((y.shut[i] ?? 0) << 8) |
         ((y.free[i] ?? 0) << 12) |
+        ((y.first[i] ?? 0) << 13) |
         (((y.span[i] ?? 0) + 8) << 16) |
         ((y.set[i] ?? 0) << 24),
     );

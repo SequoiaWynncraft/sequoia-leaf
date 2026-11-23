@@ -37,7 +37,8 @@ describe("what is unlocked", () => {
         (u.blueprints ? 1 : 0) +
         NUMBERED.filter((of) => u[of] !== undefined).length -
         folded.length +
-        (u.board ? 1 : 0);
+        (u.board ? 1 : 0) +
+        (u.first ? 1 : 0);
       expect([id, list.length]).toEqual([id, fields]);
       for (const e of list) {
         expect([id, e.name.length > 0, /^[A-Z].*\.$/.test(e.says)]).toEqual([id, true, true]);
@@ -105,7 +106,7 @@ describe("what is unlocked", () => {
       const [e] = F.unlocked({ blueprints: p });
       if (e?.is !== "blueprints") throw new Error("not blueprints");
       expect(e.was.count).toBe(prints.findLast((q) => q.count < p.count)?.count ?? 0);
-      expect(e.says).toContain(String(p.pieces));
+      expect(e.says).toContain(p.pieces.toLocaleString("en-US"));
     }
   });
 

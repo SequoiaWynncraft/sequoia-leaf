@@ -365,23 +365,35 @@ function carryOn(y: Yard, i: number, wire: Wire): void {
   y.via[i] = 0;
 }
 
-/** A splitter sends what it carries to its ways out in turn: ahead, left, right, from the way after the last. */
+/**
+ * A splitter sends what it carries to its ways out in turn: ahead, left, right, from the way after
+ * the last. One with a way put first sends it that way whenever the tile there takes it, and only
+ * otherwise to the others in turn.
+ */
 function split(y: Yard, i: number, wire: Wire): void {
   const n = y.item[i] ?? NONE;
   if (n === NONE || (y.prog[i] ?? 0) < 8) return;
+  const first = (y.first[i] ?? 0) - 1;
+  if (first >= 0 && pass(y, i, n, first, wire)) return;
   const turn = y.turn[i] ?? 0;
   for (let k = 0; k < 3; k++) {
     const way = (k + turn) % 3;
-    const to = wayOut(y, i, way);
-    const side = ((y.dir[i] ?? 0) + (way === 0 ? 2 : way === 1 ? 1 : 3)) & 3;
-    if (!accepts(y, to, n, side, wire)) continue;
-    give(y, to, n, side, (y.prog[i] ?? 8) - 8);
-    y.item[i] = NONE;
-    y.prog[i] = 0;
-    y.via[i] = 0;
+    if (way === first || !pass(y, i, n, way, wire)) continue;
     y.turn[i] = (way + 1) % 3;
     return;
   }
+}
+
+/** Hands the thing `n` a splitter carries to its way out `way`, if the tile there takes it. Says whether it did. */
+function pass(y: Yard, i: number, n: number, way: number, wire: Wire): boolean {
+  const to = wayOut(y, i, way);
+  const side = ((y.dir[i] ?? 0) + (way === 0 ? 2 : way === 1 ? 1 : 3)) & 3;
+  if (!accepts(y, to, n, side, wire)) return false;
+  give(y, to, n, side, (y.prog[i] ?? 8) - 8);
+  y.item[i] = NONE;
+  y.prog[i] = 0;
+  y.via[i] = 0;
+  return true;
 }
 
 /** Where a sorter sends what it carries: the thing it is set to to its left, anything else ahead. */

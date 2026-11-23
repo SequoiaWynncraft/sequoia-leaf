@@ -13,8 +13,8 @@
  *   2 what it holds: how many kinds (varint), then a thing (byte) and how many (varint) each
  *   4 out (byte)   8 work (varint)   16 making (byte)   32 turn (byte)   64 what it is set to (byte)
  *   128 span (byte, +8), and for a way-in mouth a thing (byte) and its progress (byte) for each tile under
- *   256 a shut crate   512 fuel (byte)   1024 one of the pieces to hand   2048 tint (byte)   4096 shut ways (byte)
- *   8192 a grade above 1 (byte)
+ *   256 a shut crate   512 fuel (byte)   1024 one of the pieces to hand   2048 tint (byte)
+ *   4096 a splitter's ways (byte: its shut ways and the way it puts first, `packWays`)   8192 a grade above 1 (byte)
  *
  * Bytes that are not pieces are refused whole: bytes cut short or left over, a part this version
  * does not know, and any count past what the tables allow (more pieces than tiles, more kinds of
@@ -28,8 +28,18 @@ import { here } from "./clock.ts";
 import { BLUEPRINT, FUEL, STUDY_HOLDS, TICKS } from "./content/machines.ts";
 import { NODES } from "./content/nodes.ts";
 import { LAND, type Land } from "./land.ts";
-import { counting, fillBoard, giveGoal, ORDER_WAITS, study } from "./orders.ts";
-import { blueprintRefusal, keptOf, packPieces, type Piece, piecesOf, placed, TINTS } from "./pieces.ts";
+import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
+import {
+  blueprintRefusal,
+  keptOf,
+  packPieces,
+  packWays,
+  type Piece,
+  piecesOf,
+  placed,
+  TINTS,
+  unpackWays,
+} from "./pieces.ts";
 import {
   ALL_GOALS,
   ALL_ITEMS,
@@ -192,7 +202,7 @@ function packCells(y: Yard): Uint8Array {
     if (holder && h.fuel[r] !== 0) f |= 512;
     if (y.free[i] === 1) f |= 1024;
     if (y.tint[i] !== 0) f |= 2048;
-    if (y.shut[i] !== 0) f |= 4096;
+    if (y.shut[i] !== 0 || y.first[i] !== 0) f |= 4096;
     if ((y.grade[i] ?? 0) > 1) f |= 8192;
     const carrying = y.item[i] !== NONE;
     o.byte(k | ((y.dir[i] ?? 0) << 4) | (carrying ? 64 : 0) | (f === 0 ? 0 : 128));
@@ -224,7 +234,7 @@ function packCells(y: Yard): Uint8Array {
     }
     if (f & 512) o.byte(h.fuel[r] ?? 0);
     if (f & 2048) o.byte(y.tint[i] ?? 0);
-    if (f & 4096) o.byte(y.shut[i] ?? 0);
+    if (f & 4096) o.byte(packWays(y.shut[i] ?? 0, y.first[i] ?? 0));
     if (f & 8192) o.byte(y.grade[i] ?? 1);
   }
   return o.bytes();
@@ -232,8 +242,8 @@ function packCells(y: Yard): Uint8Array {
 
 /**
  * A blueprint as kept: each piece in its order, as its kind, x and y (a byte each), then its way
- * with a bit for each part that follows (4 span, 8 tint, 16 shut ways, 32 a shut crate, 64 recipe,
- * 128 a grade above 1), then those, a byte each.
+ * with a bit for each part that follows (4 span, 8 tint, 16 a splitter's ways, 32 a shut crate,
+ * 64 recipe, 128 a grade above 1), then those, a byte each.
  */
 function packPrint(b: Uint8Array): Uint8Array {
   const o = new Writer();
@@ -241,19 +251,20 @@ function packPrint(b: Uint8Array): Uint8Array {
     o.byte(p.kind);
     o.byte(p.x);
     o.byte(p.y);
-    const { span, tint = 0, shut = 0, recipe, grade = 1 } = p;
+    const { span, tint = 0, recipe, grade = 1 } = p;
+    const ways = packWays(p.shut ?? 0, (p.first ?? -1) + 1);
     o.byte(
       p.dir |
         (span > 0 ? 4 : 0) |
         (tint > 0 ? 8 : 0) |
-        (shut > 0 ? 16 : 0) |
+        (ways > 0 ? 16 : 0) |
         (p.open === false ? 32 : 0) |
         (recipe === undefined ? 0 : 64) |
         (grade > 1 ? 128 : 0),
     );
     if (span > 0) o.byte(span);
     if (tint > 0) o.byte(tint);
-    if (shut > 0) o.byte(shut);
+    if (ways > 0) o.byte(ways);
     if (recipe !== undefined) o.byte(recipe);
     if (grade > 1) o.byte(grade);
   }
@@ -270,7 +281,7 @@ export type KeptPrint = readonly {
   readonly recipe: number;
   readonly open: boolean;
   readonly tint: number;
-  readonly shut: number;
+  readonly ways: number;
   readonly grade: number;
 }[];
 
@@ -286,11 +297,11 @@ function unpackPrint(bytes: Uint8Array | null): KeptPrint | null {
     const f = r.byte();
     const span = f & 4 ? r.byte() : 0;
     const tint = f & 8 ? r.byte() : 0;
-    const shut = f & 16 ? r.byte() : 0;
+    const ways = f & 16 ? r.byte() : 0;
     const recipe = f & 64 ? r.byte() : NONE;
     const grade = f & 128 ? r.byte() : 1;
     if (r.over) return null;
-    out.push({ kind, x, y, dir: f & 3, span, recipe, open: (f & 32) === 0, tint, shut, grade });
+    out.push({ kind, x, y, dir: f & 3, span, recipe, open: (f & 32) === 0, tint, ways, grade });
   }
   return out;
 }
@@ -322,6 +333,7 @@ export function encode(y: Yard, keep: Keep = {}): string {
     plots: y.plots.map(plotName),
     done: y.done.map(goalId),
     hand: y.hand === -1 ? null : goalId(y.hand),
+    ...(y.queue.length > 0 ? { queue: y.queue.map(goalId) } : {}),
     line: y.line.map(goalId),
     got: Object.fromEntries(y.got.flatMap((got, g) => (got && isGoal(g) ? [[goalId(g), tally(got)]] : []))),
     board: y.board.map(keptOrder),
@@ -571,7 +583,7 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
 function blueprint(open: Open, slot: number, v: KeptPrint | null | undefined): Uint8Array | null {
   if (!v) return null;
   const pieces: Piece[] = [];
-  for (const { kind: k, x, y: z, dir: d, span, recipe, open: lets, tint, shut, grade } of v) {
+  for (const { kind: k, x, y: z, dir: d, span, recipe, open: lets, tint, ways, grade } of v) {
     if (!isKind(k) || k === DEPOT || !isDir(d)) return null;
     if (whole(x, BLUEPRINT.w - 1) === null || whole(z, BLUEPRINT.h - 1) === null || whole(span, SPAN_MOST) === null)
       return null;
@@ -581,7 +593,7 @@ function blueprint(open: Open, slot: number, v: KeptPrint | null | undefined): U
       y: z,
       dir: d,
       span,
-      ...keptOf({ recipe, open: lets ? undefined : false, tint, shut, grade }, k),
+      ...keptOf({ recipe, open: lets ? undefined : false, tint, ...unpackWays(ways), grade }, k),
     });
   }
   return blueprintRefusal(open, slot, pieces) === null ? packPieces(placed(pieces, 0, 0, 0)) : null;
@@ -694,7 +706,12 @@ function unpack(y: Yard, i: number, o: KeptPiece, studied: Goal | undefined): vo
   }
   if (k === SPLITTER || k === JOINER) y.turn[i] = whole(o.turn, 2) ?? 0;
   if (k === SORTER && o.recipe !== undefined && isItem(o.recipe)) y.set[i] = o.recipe;
-  if (k === SPLITTER) y.shut[i] = whole(o.ways, 7) ?? 0;
+  if (k === SPLITTER) {
+    // Its shut ways, and the way it puts first where the yard may put one first and that way is open.
+    const { shut = 0, first } = keptOf(unpackWays(whole(o.ways, 255) ?? 0), SPLITTER);
+    y.shut[i] = shut;
+    if (first !== undefined && locked(y.open, { first: true }) === null) y.first[i] = first + 1;
+  }
   const span = y.span[i] ?? 0;
   const t = tunnelOf(y, i);
   if (t >= 0 && o.under && o.along) {
@@ -774,6 +791,12 @@ export function vouch(
   y.got = GOALS.map(() => null);
   const hand = goalNamed(raw.hand);
   hold(y, hand !== null && isNode(hand) && ready(y.open, hand) ? hand : nextHand(y.open));
+  // The nodes in line after it, each only if it could be put there now; a yard kept before there was a line has none.
+  const queued: unknown[] = Array.isArray(raw.queue) ? raw.queue : [];
+  for (const id of queued) {
+    const g = goalNamed(id);
+    if (g !== null) queue(y, g);
+  }
   const line: unknown[] = Array.isArray(raw.line) ? raw.line : [];
   for (const id of line) {
     const g = goalNamed(id);

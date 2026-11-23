@@ -39,7 +39,7 @@ function makeableFor(g: F.Goal): F.Item[] {
 describe("the tables", () => {
   test("every node and every piece of research can be reached", () => {
     expect(ids(reach()).toSorted()).toEqual(ids(F.ALL_GOALS).toSorted());
-    expect(F.openOf(reach()).tier).toBe(4);
+    expect(F.openOf(reach()).tier).toBe(F.TIERS.length);
   });
 
   test("ids are unique, across the nodes and the research", () => {
@@ -47,10 +47,10 @@ describe("the tables", () => {
     expect(new Set(all).size).toBe(all.length);
   });
 
-  test("tier 0 is lessons; each tier from 1 has one commission; projects in tiers 1 and 2, research from tier 3", () => {
-    expect([0, 1, 2, 3].map((t) => by(t, "commission"))).toEqual([0, 1, 1, 1]);
+  test("tier 0 is lessons; each tier from 1 has one commission; projects in tiers 1, 2 and 4, research from tier 3", () => {
+    expect([0, 1, 2, 3, 4].map((t) => by(t, "commission"))).toEqual([0, 1, 1, 1, 1]);
     expect(F.GOALS.filter((g) => g.kind === "lesson").every((g) => g.tier === 0)).toBe(true);
-    expect([1, 2].map((t) => by(t, "project") > 0)).toEqual([true, true]);
+    expect([1, 2, 3, 4].map((t) => by(t, "project") > 0)).toEqual([true, true, false, true]);
     expect(F.GOALS.filter((g) => g.kind === "research").every((g) => g.tier >= 3)).toBe(true);
   });
 

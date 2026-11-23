@@ -121,7 +121,7 @@ export interface Wire {
   readonly demand: number;
 }
 
-/** A piece kept in a blueprint, 10 bytes: kind, x, y, way, span, recipe, open, tint, shut, grade. */
+/** A piece kept in a blueprint, 10 bytes: kind, x, y, way, span, recipe, open, tint, a splitter's ways (`packWays`), grade. */
 export const PIECE_BYTES = 10;
 
 export interface Yard {
@@ -134,10 +134,14 @@ export interface Yard {
   readonly prog: Uint8Array;
   /** The side it was handed in from: 0 for none, else 1 and the way to that tile. Only for drawing. */
   readonly via: Uint8Array;
-  /** A line's colour, 0 to 6; a splitter's next way out or a joiner's next way in; a splitter's shut ways, a bit each. */
+  /**
+   * A line's colour, 0 to 6; a splitter's next way out or a joiner's next way in; a splitter's shut
+   * ways, a bit each; and the way a splitter puts first, 1 + the way, or 0 for none.
+   */
   readonly tint: Uint8Array;
   readonly turn: Uint8Array;
   readonly shut: Uint8Array;
+  readonly first: Uint8Array;
   /** The one thing a machine is told to make, or `NONE`. */
   readonly set: Uint8Array;
   /** A piece's grade, 1 to 3, or 0 for a kind that has none. */
@@ -177,11 +181,13 @@ export interface Yard {
   readonly spare: Uint8Array;
   blueprints: (Uint8Array | null)[];
   /**
-   * The goals done, in the order they were done; the node in hand, or -1; the research being studied
-   * and that waiting after it; and what each goal not done has been given.
+   * The goals done, in the order they were done; the node in hand, or -1; the nodes waiting after it,
+   * in the player's order; the research being studied and that waiting after it; and what each goal
+   * not done has been given.
    */
   done: Goal[];
   hand: Goal | -1;
+  queue: Goal[];
   line: Goal[];
   got: (Counts | null)[];
   board: Standing[];
@@ -231,6 +237,7 @@ export function emptyYard(land: Land, tier = 0): Yard {
     tint: new Uint8Array(n),
     turn: new Uint8Array(n),
     shut: new Uint8Array(n),
+    first: new Uint8Array(n),
     set: new Uint8Array(n).fill(NONE),
     grade: new Uint8Array(n),
     free: new Uint8Array(n),
@@ -257,6 +264,7 @@ export function emptyYard(land: Land, tier = 0): Yard {
     blueprints: Array.from({ length: BLUEPRINTS_MOST }, () => null),
     done,
     hand: -1,
+    queue: [],
     line: [],
     got: GOALS.map(() => null),
     board: [],
@@ -449,6 +457,7 @@ export function vacate(y: Yard, i: number): void {
   y.tint[i] = 0;
   y.turn[i] = 0;
   y.shut[i] = 0;
+  y.first[i] = 0;
   y.set[i] = NONE;
   y.grade[i] = 0;
   y.free[i] = 0;
