@@ -32,6 +32,8 @@ import {
   power,
   readCommand,
   stepTo,
+  stops,
+  STUDY,
 } from "@sequoia-leaf/factory";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { keepLeaf, pageCard, serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
@@ -57,7 +59,7 @@ import { layout } from "./layout.ts";
 import { drawWords, drawYard, lap, picture, spent, wipe } from "./scene.ts";
 import { sheets } from "./sheets.ts";
 import { murmur, yardSfx } from "./sound.ts";
-import { S, type Tool, toPage } from "./state.ts";
+import { builds, gradeInHand, S, type Tool, toPage } from "./state.ts";
 /** A goal's id, as a script reads it; null for none. */
 const goalId = (g: number): string | null => GOALS[g]?.id ?? null;
 /** A tool as a script names it, as the page holds it; undefined for a name that is none. */
@@ -65,7 +67,7 @@ function toolNamed(name: Named): Tool | undefined {
   if (name === null || name === "remove" || name === "select" || name === "paint") return name;
   return kindNamed(name) ?? undefined;
 }
-import { nudge } from "./teach.ts";
+import { type Nudge, nudge } from "./teach.ts";
 import {
   aimAt,
   buyLand,
@@ -77,6 +79,7 @@ import {
   runEnd,
   runOver,
   runStart,
+  setGrade,
   setTool,
   stepClearing,
   takeAway,
@@ -110,11 +113,11 @@ const NEEDS_LEAF = "The Works needs the guild's server.";
 
 /** A moment staged in the yard by the play server on a developer's machine (`apps/api/test/play.ts`), for the tours. */
 type Staged =
-  | { yard: "small" | "short" | "mid" | "large" | "new" }
+  | { yard: "small" | "short" | "mid" | "hall" | "study" | "large" | "new" }
   | { text: string }
   | { away: number }
   | { fill: number }
-  | { feed: true };
+  | { feed: true | { but: Record<string, number> } };
 /** A tool as a script names it: a kind of piece by its name, the spade, Select, the brush, or nothing. */
 type Named = string | null;
 
@@ -137,6 +140,8 @@ declare global {
        */
       bench: (frames: number, hz?: number) => { ms: Record<string, number>; picture: Pt; pieces: number };
       pick: (tool: Named, dir?: Dir) => void;
+      /** Chooses the grade the kind in hand is built at, as its button over the toolbar does. */
+      grade: (grade: number) => void;
       finger: (on: boolean) => void;
       aim: (x: number, y: number) => void;
       tap: (x: number, y: number) => void;
@@ -189,8 +194,12 @@ function measure(): void {
   const track = $(S.visiting ? "visit" : "track").getBoundingClientRect();
   const hand = $("hand").getBoundingClientRect();
   const dock = $("dock").getBoundingClientRect();
+  document.documentElement.style.setProperty("--trackb", `${Math.round(track.bottom)}px`);
+  // The research being studied hangs under the order in hand, when it is there: read once it has
+  // moved with it, for it moves without changing size, and nothing would measure again.
+  const study = $("study").hidden ? track : $("study").getBoundingClientRect();
   // On a narrow screen the order in hand runs the width of it, and the yard is clear only below.
-  inset.top = track.width > window.innerWidth * 0.6 ? Math.max(top.bottom, track.bottom) : top.bottom;
+  inset.top = track.width > window.innerWidth * 0.6 ? Math.max(top.bottom, track.bottom, study.bottom) : top.bottom;
   // A visit has nothing along the bottom.
   inset.bottom = S.visiting ? 0 : Math.max(0, window.innerHeight - hand.top);
   document.documentElement.style.setProperty("--toph", `${Math.round(top.bottom)}px`);
@@ -199,6 +208,39 @@ function measure(): void {
   const floor = dock.height > 0 ? window.innerHeight - dock.top : 0;
   document.documentElement.style.setProperty("--sheet-floor", `${Math.round(floor)}px`);
   document.documentElement.style.setProperty("--handh", `${Math.round(hand.height)}px`);
+}
+
+/**
+ * Says a nudge beside the part of the interface it is about (a book's button, the grades over the
+ * toolbar, a tool's slot), its tail on that part; or puts it away, where the nudge is about a tile
+ * of the yard or the part is not on the page just now.
+ */
+function coach(n: Nudge | null): void {
+  const box = $("coach");
+  const part = n?.part;
+  const at =
+    part === "tier" || part === "research"
+      ? document.querySelector(`#books [data-book="${part}"]`)
+      : part === "grades"
+        ? document.querySelector("#hand .grades")
+        : part === "tool" && n && typeof n.tool === "number"
+          ? document.querySelector(`#dock [data-tool="${n.tool}"]`)
+          : null;
+  if (!n || !(at instanceof HTMLElement) || at.hidden || S.panel !== null) {
+    box.hidden = true;
+    return;
+  }
+  if (box.textContent !== n.text) box.textContent = n.text;
+  box.hidden = false;
+  const r = at.getBoundingClientRect();
+  const b = box.getBoundingClientRect();
+  // Under what is at the top of the page, over what is at the bottom.
+  const below = r.top < window.innerHeight / 2;
+  const x = Math.round(Math.min(Math.max(8, r.left + r.width / 2 - b.width / 2), window.innerWidth - b.width - 8));
+  const y = Math.round(below ? r.bottom + 10 : r.top - b.height - 10);
+  box.classList.toggle("below", below);
+  box.style.transform = `translate(${x}px, ${y}px)`;
+  box.style.setProperty("--tail", `${Math.round(r.left + r.width / 2 - x - 6)}px`);
 }
 
 /** The middle of the depot, in the yard's pixels: where the camera starts. */
@@ -279,7 +321,7 @@ async function boot(): Promise<void> {
   initPanels(art);
   initBoard(me.id);
   initCard(art);
-  initHud(art);
+  initHud();
   initDock(art);
   initInput(canvas);
   panelHooks.handOver = (order): void => {
@@ -317,7 +359,7 @@ async function boot(): Promise<void> {
   window.addEventListener("resize", fit);
   // The dock grows a row when the story opens more tools than fit: everything over it moves up.
   const watch = new ResizeObserver(measure);
-  for (const id of ["top", "dock", "hand", "track", "visit"]) watch.observe($(id));
+  for (const id of ["top", "dock", "hand", "track", "visit", "study"]) watch.observe($(id));
 
   // ---------- the clock ----------
 
@@ -342,14 +384,24 @@ async function boot(): Promise<void> {
   let nudgeAt = 0;
   let shown = "";
   let since = 0;
+  /** A lesson learnt by doing that is said beside the interface: taken once what it asked for is done. */
+  let doing = "";
   function nudges(): void {
     if (S.t < nudgeAt) return;
     nudgeAt = S.t + 0.4;
-    const n = reading() || S.visiting ? null : nudge(S.world, new Set(screen.taught), S.finger);
+    const looking = { picked: S.picked, hand: builds(S.tool) ? S.tool : null };
+    const n = reading() || S.visiting ? null : nudge(S.world, new Set(screen.taught), S.finger, looking);
+    if (doing !== "" && n?.id !== doing) {
+      // It was asked for and is no longer: done, and not said again.
+      screen.taught.push(doing);
+      doing = "";
+    }
     if (!n) {
       S.nudge = null;
       S.nudgeTool = null;
+      S.nudgePart = null;
       shown = "";
+      coach(null);
       return;
     }
     if (n.id !== shown) {
@@ -364,8 +416,12 @@ async function boot(): Promise<void> {
       screen.taught.push(n.id);
       return;
     }
-    S.nudge = { x: n.x, y: n.y, text: n.text, id: n.id };
+    if (n.lasting && n.part !== undefined) doing = n.id;
+    // About a part of the interface, it is said beside that part; about a tile, over the tile.
+    S.nudge = n.part === undefined ? { x: n.x, y: n.y, text: n.text, id: n.id } : null;
     S.nudgeTool = n.tool;
+    S.nudgePart = n.part === "tier" || n.part === "research" || n.part === "grades" ? n.part : null;
+    coach(n.part === undefined ? null : n);
   }
 
   /** A single pixel to take the picture onto, for `bench`. */
@@ -384,7 +440,7 @@ async function boot(): Promise<void> {
       if (S.world.away && !reading() && !S.visiting) showLetter(S.world.away, refreshAll);
       // What a visited yard does is its owner's news: the visitor's purse and town are not told.
       if (news.length > 0 && !S.visiting) {
-        onNews(art, news);
+        onNews(news);
         refreshAll();
       }
     }
@@ -527,6 +583,7 @@ async function boot(): Promise<void> {
           ? []
           : ["planks", "pylon", "bench", "board", "select", "short", "starved"];
       shown = "";
+      doing = "";
       nudgeAt = 0;
       look(home().x, home().y, true);
       refreshAll();
@@ -588,6 +645,7 @@ async function boot(): Promise<void> {
       const tool = toolNamed(name);
       if (tool !== undefined) setTool(tool);
     },
+    grade: setGrade,
     finger(on) {
       S.finger = on;
       if (on) S.hover = null;
@@ -696,9 +754,19 @@ async function boot(): Promise<void> {
         tier: w.open.tier,
         built: layout(w, S.rev).built,
         painted: w.kind.reduce((n, k, i) => n + (k !== NONE && (w.tint[i] ?? 0) > 0 ? 1 : 0), 0),
-        nudge: S.nudge?.id ?? null,
+        nudge: S.nudge?.id ?? (shown === "" ? null : shown),
         nudgeAt: S.nudge ? { x: S.nudge.x, y: S.nudge.y } : null,
+        nudgePart: S.nudgePart,
+        taught: screen.taught,
         tool: typeof S.tool === "number" ? kindName(S.tool) : S.tool,
+        grade: builds(S.tool) ? gradeInHand(S.tool) : null,
+        line: w.line.map(goalId),
+        studied:
+          w.line[0] === undefined
+            ? null
+            : Object.fromEntries(Object.entries(w.got[w.line[0]] ?? {}).filter(([, n]) => n > 0)),
+        studies: w.kind.reduce((n, k) => n + (k === STUDY ? 1 : 0), 0),
+        stops: stops(w),
         aim: S.aim,
         run: S.run ? { legs: S.run.legs.length, cost: S.run.cost, why: S.run.why } : null,
         mark: S.mark ? { pieces: S.mark.pieces.length, cost: S.mark.cost } : null,

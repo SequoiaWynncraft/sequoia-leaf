@@ -41,6 +41,7 @@ import {
   litOf,
   MILL,
   NONE,
+  openOf,
   PACE,
   PYLON,
   REACH,
@@ -49,8 +50,9 @@ import {
   RIGHT,
   SORTER,
   SPLITTER,
-  START,
   STATES,
+  STOP,
+  STUDY,
   tilesOf,
   TROUBLE,
   TUNNEL,
@@ -66,15 +68,15 @@ import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx, hash, makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { HOP, walkers } from "./actors.ts";
-import { armAt, type Arms, arms, beltTile, PAINTS, ride, STEPS, TILE, withArm } from "./art/belts.ts";
+import { armAt, type Arms, arms, beltTile, marksOf, PAINTS, ride, STEPS, TILE, withArm, woodOf } from "./art/belts.ts";
 import { BEYOND, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
-import { DEPOT as DEPOT_ART } from "./art/machines.ts";
+import { DEPOT as DEPOT_ART, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
 import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
 import { armsAt, asIf, type Layout, layout, pylonTop } from "./layout.ts";
-import { builds, draws, type Group, type Mark, S, seenFrom } from "./state.ts";
+import { builds, draws, type Group, handGrade, type Mark, S, seenFrom } from "./state.ts";
 
 /** What the frame needs to know about the moment: how far into the next tick it is, and how the yard is going. */
 export interface Moment {
@@ -84,10 +86,14 @@ export interface Moment {
   pace: number;
 }
 
-/** How far across its tile a thing on a belt moves in a tick: every grade is drawn as the first. */
-const ALONG = (PACE[1] ?? 2) / 8;
+/**
+ * How far across its tile a thing moves in a tick on a belt, tunnel or sorter of each grade (a sorter
+ * has none, and goes at the top grade's pace). A splitter and a joiner are drawn at the first grade's.
+ */
+const ALONG = PACE.map((pace) => pace / 8);
+const FIRST = ALONG[1] ?? 0.25;
 /** The power the depot gives at first: a depot that gives more wears its flywheel. */
-const DEPOT_FIRST = START.depot ?? 0;
+const DEPOT_FIRST = openOf([]).depot;
 
 /** The milliseconds a frame's parts have taken, counted only while somebody is looking (`on`): `bench`, or the meter. */
 export const spent: { on: boolean; at: number; ms: Record<string, number> } = { on: false, at: 0, ms: {} };
@@ -485,10 +491,11 @@ const first = <T>(list: readonly T[], i: number): T | undefined => list[clamp(Ma
 const wet = (y: Yard, i: number, side: Dir): boolean => y.land.water[i + DX[side] + DY[side] * y.land.w] === 1;
 
 /**
- * Puts one piece into the frame: the kind `k` facing `d` on tile `i`, with a tunnel's `span` and a
- * crate `open` or shut. `x`, `top` is its tile's top-left corner in the picture. Every grade is drawn
- * as the first. `ghost` draws it as something not yet built: faint, at rest, and with nothing
- * remembered or read of what it holds; a real one (`ghost` 0) is what stands on the tile.
+ * Puts one piece into the frame: the kind `k` facing `d` on tile `i`, at a `grade` (0 for a kind with
+ * none), with a tunnel's `span` and a crate `open` or shut. `x`, `top` is its tile's top-left corner
+ * in the picture. A grade above the first is drawn in its own look (`lookOf`), with the grade's mark
+ * in the tile's top-left corner. `ghost` draws it as something not yet built: faint, at rest, and
+ * with nothing remembered or read of what it holds; a real one (`ghost` 0) is what stands on the tile.
  */
 function piece(
   art: Art,
@@ -496,6 +503,7 @@ function piece(
   i: number,
   k: number,
   d: Dir,
+  grade: number,
   span: number,
   open: boolean,
   x: number,
@@ -504,6 +512,7 @@ function piece(
   ghost: number,
 ): void {
   const m = art.m;
+  const look = lookOf(grade);
   const foot = top + TILE;
   const cx = x + 8;
   const z = foot + camY;
@@ -532,6 +541,8 @@ function piece(
       head = foot - 15;
       const gear = m.basket;
       put(gear, left ? x + 15 - gear.width : x, foot - gear.height, z - 0.2, a);
+      // From the second grade he has a rake, stood in the ground on his other side.
+      if (look > 0) stand(left ? m.rakeLeft : m.rake, x + (left ? 2 : 13), foot - 1, z - 0.1, a);
       const carried = out !== NONE ? out : pose === 3 ? (y.land.deposit[i] ?? NONE) : NONE;
       if (isItem(carried) && real) {
         const pic = art.item(carried);
@@ -543,7 +554,7 @@ function piece(
     }
     case MILL: {
       const face = real && r >= 0 ? faceOf(y, i, r) : SAW;
-      const frames = face === SAW ? m.saw : face === KILN ? m.kiln : m.press;
+      const frames = (face === SAW ? m.saw : face === KILN ? m.kiln : m.press)[look] ?? [];
       const p = making !== NONE ? work / (RECIPE[making]?.work ?? 24) : 0;
       const step = !working
         ? 0
@@ -577,7 +588,7 @@ function piece(
       const p = making !== NONE ? work / (RECIPE[making]?.work ?? 40) : 0;
       const beat = (p * 2) % 1;
       const step = !working ? 0 : beat < 0.55 ? 0 : beat < 0.75 ? 1 : 2;
-      const s = first(m.bench, step);
+      const s = first(m.bench[look] ?? [], step);
       if (!s) break;
       stand(s, cx, foot, z, a);
       if (real) {
@@ -587,7 +598,7 @@ function piece(
       break;
     }
     case WORKSHOP: {
-      const s = m.workshop[working || !real ? 1 : 0]?.[working ? Math.floor(t * 6) % 2 : 0];
+      const s = m.workshop[look]?.[working || !real ? 1 : 0]?.[working ? Math.floor(t * 6) % 2 : 0];
       if (!s) break;
       stand(s, cx, foot, z, a);
       head = foot - 25;
@@ -642,17 +653,38 @@ function piece(
       break;
     }
     case TUNNEL: {
-      const s = m.hood[span > 0 ? d : BACK[d]];
+      const s = m.hood[look]?.[span > 0 ? d : BACK[d]];
       if (s) stand(s, cx, foot + 1, z - 2, a);
       break;
     }
+    case STUDY: {
+      // Unlit, the lamp is out; lit, the book lies shut until there is a folio to read, and a page turns for each.
+      const p = work / WORK.study;
+      const state = !powered ? 0 : !working ? (real ? 1 : 2) : p < 0.6 ? 2 : p < 0.8 ? 3 : 4;
+      const s = m.study[look]?.[state];
+      if (!s) break;
+      stand(s, cx, foot, z, a);
+      head = foot - 24;
+      if (real && powered) light(cx - 4, foot - 13, 15, 0.6);
+      break;
+    }
+    case STOP: {
+      // Its cart takes what it is handed, rolls under, and comes back empty.
+      const took = real ? (mem.puffAt[i] ?? 0) : 0;
+      const since = took > 0 ? S.t - took : 9;
+      const cart = since < 0 || since >= 0.5 ? 0 : since < 0.1 ? 1 : since < 0.22 ? 2 : since < 0.36 ? 3 : 4;
+      const s = m.stop[cart];
+      if (s) stand(s, cx, foot, z, a);
+      head = foot - 20;
+      break;
+    }
     default:
-      // What lies flat (belts, splitters, joiners) is drawn with the floor.
-      if (draws(k)) return;
-      // A kind this page does not draw (`DRAWN`: the Study, the cart stop, the sorter): a plain post says one stands here.
-      stand(art.marker, cx, foot - 2, z, a);
-      head = foot - 10;
+      // What lies flat (belts, splitters, joiners, sorters) is drawn with the floor.
+      return;
   }
+  // The grade's mark, in the same corner of every graded piece: a belt has it in its own tile.
+  const pip = m.pips[grade - 2];
+  if (pip) put(pip, x, top, z + 0.55, a);
   // The brass pointer on its way out, and whatever it is holding with nowhere to send it.
   const hands = k === GATHERER || k === MILL || k === BENCH || k === WORKSHOP || k === CRATE;
   if (hands) {
@@ -948,10 +980,18 @@ function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, 
         const k = yard.kind[i] ?? NONE;
         const d = p.dir;
         const a = draws(k) ? armsAt(yard, i) : 0;
-        if (a !== 0) h.drawImage(beltTile(a, d, 0, 0, yard.tint[i] ?? 0), x, top);
-        const over = k === SPLITTER ? art.m.splitter[d] : k === JOINER ? art.m.joiner[d] : undefined;
+        const grade = yard.grade[i] ?? 0;
+        if (a !== 0) h.drawImage(beltTile(a, d, 0, woodOf(grade), yard.tint[i] ?? 0, marksOf(grade)), x, top);
+        const over =
+          k === SPLITTER
+            ? art.m.splitter[d]
+            : k === JOINER
+              ? art.m.joiner[d]
+              : k === SORTER
+                ? art.sorter(d, yard.set[i] ?? NONE)
+                : undefined;
         if (over) h.drawImage(over, x, top);
-        piece(art, yard, i, k, d, yard.span[i] ?? 0, p.open ?? true, x, top, now, 1);
+        piece(art, yard, i, k, d, grade, yard.span[i] ?? 0, p.open ?? true, x, top, now, 1);
       }
     }
     for (const d of listed.slice(mark, used).toSorted((p, q) => p.z - q.z)) h.drawImage(d.c, d.x - camX, d.y - camY);
@@ -1021,12 +1061,12 @@ interface Tiled {
 }
 /**
  * What lies flat and stays put until the yard changes: every tile that carries, gathered by its
- * shape, way and colour; over those, the splitters' arrowheads and the joiners' tops, gathered by
- * picture; and where the splitters are.
+ * shape, way, colour and grade; over those, the splitters' arrowheads, the joiners' tops and the
+ * sorters' boards, gathered by picture; and where the splitters are.
  */
 let laid: {
   of: Layout;
-  belts: (Tiled & { arms: Arms; dir: Dir; tint: number })[];
+  belts: (Tiled & { arms: Arms; dir: Dir; tint: number; grade: number })[];
   tops: (Tiled & { pic: HTMLCanvasElement })[];
   splitters: number[];
 } | null = null;
@@ -1054,15 +1094,17 @@ function laidOf(L: Layout, art: Art): NonNullable<typeof laid> {
       }
       here(tiles);
     };
-    const key = (a * 4 + d) * 7 + tint;
+    const grade = y.grade[i] ?? 0;
+    const key = ((a * 4 + d) * 7 + tint) * 4 + grade;
     let tiles = belts.get(key);
     if (!tiles) {
       tiles = new Path2D();
       belts.set(key, tiles);
-      made.belts.push({ arms: a, dir: d, tint, tiles });
+      made.belts.push({ arms: a, dir: d, tint, grade, tiles });
     }
     here(tiles);
     if (k === JOINER) top(art.m.joiner[d]);
+    if (k === SORTER) top(art.sorter(d, y.set[i] ?? NONE));
     if (k !== SPLITTER) continue;
     made.splitters.push(i);
     // An arrowhead on each way out that leads somewhere.
@@ -1155,14 +1197,20 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
 
   lap("floor");
   // ---------- belts, lying flat, and what rides on them ----------
-  // Every grade is drawn as the first, and moves as the first does.
-  const tier = 0;
-  const along = ALONG;
-  const step = Math.floor((w.tick + now.lead) * along * TILE) % STEPS;
+  // A belt of each grade marches at its own pace, in its own wood. What has no grade (a splitter, a
+  // joiner, a sorter) lies in plain wood and marches as the first grade does.
+  const steps = ALONG.map((along) => Math.floor((w.tick + now.lead) * along * TILE) % STEPS);
+  steps[0] = steps[1] ?? 0;
+  const step = steps[1] ?? 0;
   // Each kind in one go: its tile, at this step of the march, fills every tile of that kind.
   const flat = laidOf(L, art);
   g.setTransform(1, 0, 0, 1, -cx, -cy);
-  for (const kind of flat.belts) lay(g, beltTile(kind.arms, kind.dir, step, tier, kind.tint), kind.tiles);
+  for (const kind of flat.belts)
+    lay(
+      g,
+      beltTile(kind.arms, kind.dir, steps[kind.grade] ?? step, woodOf(kind.grade), kind.tint, marksOf(kind.grade)),
+      kind.tiles,
+    );
   g.setTransform(1, 0, 0, 1, 0, 0);
   let laps = 0;
   for (let ty = ty0; ty <= ty1; ty++)
@@ -1180,14 +1228,14 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
       // In from the side it was handed over on, out the way the tile sends it.
       const from = via > 0 ? (via - 1) & 3 : BACK[d];
       const to: number = k === SPLITTER ? sendWay(w, i, a) : k === SORTER && n === w.set[i] ? LEFT[d] : d;
-      const prog = Math.min(1, prog8 / 8 + (prog8 < 8 ? now.lead * along : 0));
+      const prog = Math.min(1, prog8 / 8 + (prog8 < 8 ? now.lead * alongAt(w, i) : 0));
       const pic = art.item(n);
       const left = x + Math.round(ride(from, to, prog, false)) - (pic.width >> 1);
       const top = y + Math.round(ride(from, to, prog, true)) - (pic.height >> 1) - 1;
       g.drawImage(pic, left, top);
       // A splitter or a joiner to the left or above is topped after this is drawn, and this lies over its top.
       const beside = left < x && tx > 0 ? w.kind[i - 1] : top < y && ty > 0 ? w.kind[i - land.w] : NONE;
-      if (beside === SPLITTER || beside === JOINER) {
+      if (beside === SPLITTER || beside === JOINER || beside === SORTER) {
         const over = (lapping[laps++] ??= { pic, x: 0, y: 0, w: 0, h: 0 });
         over.pic = pic;
         over.x = left;
@@ -1202,7 +1250,7 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
           stand(grown(art.bang), x + 8, y - 4 - Math.round(Math.abs(Math.sin(S.t * 4 + i)) * 2), (ty + 1) * TILE + 0.6);
       }
     }
-  // Over what is carried: the arrowheads and the joiners' tops, each picture in one go; then each idle splitter's vane.
+  // Over what is carried: the arrowheads, the joiners' tops and the sorters' boards, each picture in one go; then each idle splitter's vane.
   g.setTransform(1, 0, 0, 1, -cx, -cy);
   for (const top of flat.tops) lay(g, top.pic, top.tiles);
   g.setTransform(1, 0, 0, 1, 0, 0);
@@ -1228,7 +1276,7 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
       if (k === NONE || k === DEPOT) continue;
       const r = holderOf(w, i);
       const open = k !== CRATE || r < 0 || w.holders.open[r] === 1;
-      piece(art, w, i, k, dirAt(w, i), w.span[i] ?? 0, open, tx * TILE - cx, ty * TILE - cy, now, 0);
+      piece(art, w, i, k, dirAt(w, i), w.grade[i] ?? 0, w.span[i] ?? 0, open, tx * TILE - cx, ty * TILE - cy, now, 0);
     }
 
   // The depot, with whatever it wears.
@@ -1317,21 +1365,28 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
 
   blit(g, standing(gr), cx - gr.x, cy - gr.y, W, H, 0, 0);
 
-  // What the depot takes in hops over the sill and is gone.
-  for (const i of L.intoDepot) {
+  // What the depot takes in hops over the sill and is gone; what a cart stop takes hops into its cart, which rolls under with it.
+  for (let n = 0; n < L.intoDepot.length; n++) {
+    const i = L.intoDepot[n] ?? 0;
     if (w.kind[i] === NONE) continue;
     memOf(w, i);
-    const n = w.item[i] ?? NONE;
+    const item = w.item[i] ?? NONE;
     const r = holderOf(w, i);
     const out = r >= 0 ? (w.holders.out[r] ?? NONE) : NONE;
-    const has = n !== NONE ? n : out;
-    const ready = n !== NONE ? (w.prog[i] ?? 0) / 8 + now.lead * along >= 0.85 : out !== NONE;
+    const has = item !== NONE ? item : out;
+    const ready = item !== NONE ? (w.prog[i] ?? 0) / 8 + now.lead * alongAt(w, i) >= 0.85 : out !== NONE;
     const had = mem.held[i] ?? NONE;
     if (isItem(had) && mem.ready[i] === 1 && (has !== had || !ready)) {
       const x = (i % land.w) * TILE + 8;
       const y = Math.floor(i / land.w) * TILE + 8;
-      const way = dirAt(w, i);
+      const stop = L.intoStop[n] ?? -1;
+      // A sorter sends the thing it is set to out to its left.
+      const way = w.kind[i] === SORTER && had === w.set[i] ? LEFT[dirAt(w, i)] : dirAt(w, i);
       hops.push({ pic: art.item(had), x: x + DX[way] * 8, y: y + DY[way] * 8, dx: DX[way], dy: DY[way], t: S.t });
+      if (stop >= 0) {
+        memOf(w, stop);
+        mem.puffAt[stop] = S.t;
+      }
     }
     mem.held[i] = has;
     mem.ready[i] = ready ? 1 : 0;
@@ -1438,19 +1493,30 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     for (const leg of S.run.legs) {
       const x = leg.x * TILE - cx;
       const y = leg.y * TILE - cy;
-      if (!leg.tunnel) g.drawImage(beltTile(armsFor(leg.dir), leg.dir, step, tier), x, y);
+      if (!leg.tunnel)
+        g.drawImage(
+          beltTile(armsFor(leg.dir), leg.dir, steps[leg.grade] ?? step, woodOf(leg.grade), 0, marksOf(leg.grade)),
+          x,
+          y,
+        );
       else {
         // Its far mouth comes up `span + 1` tiles ahead.
         const far = (leg.span + 1) * TILE;
-        const near = art.m.hood[leg.dir];
-        const out = art.m.hood[BACK[leg.dir]];
+        const near = art.m.hood[lookOf(leg.grade)]?.[leg.dir];
+        const out = art.m.hood[lookOf(leg.grade)]?.[BACK[leg.dir]];
         if (near) g.drawImage(near.c, x + 8 - near.ax, y + TILE + 1 - near.ay);
         if (out && leg.span > 0)
           g.drawImage(out.c, x + DX[leg.dir] * far + 8 - out.ax, y + DY[leg.dir] * far + TILE + 1 - out.ay);
       }
     }
-    for (const turn of S.run.turns)
-      g.drawImage(beltTile(armsFor(turn.dir), turn.dir, step, tier), turn.x * TILE - cx, turn.y * TILE - cy);
+    for (const turn of S.run.turns) {
+      const grade = w.grade[turn.y * land.w + turn.x] ?? 1;
+      g.drawImage(
+        beltTile(armsFor(turn.dir), turn.dir, steps[grade] ?? step, woodOf(grade), 0, marksOf(grade)),
+        turn.x * TILE - cx,
+        turn.y * TILE - cy,
+      );
+    }
     g.globalAlpha = 1;
     const last = S.run.legs.at(-1) ?? S.run.turns.at(-1);
     if (last) corners(g, last.x * TILE - cx, last.y * TILE - cy, TILE, TILE, bad ? CORAL : GOLD[2], true);
@@ -1469,18 +1535,35 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     } else if (!S.run) {
       const mark = used;
       const before = lit;
+      // At the grade it would stand at: the one in hand, or the higher one of a piece of its kind it would only turn.
+      const grade = S.aim.grade ?? handGrade();
       if (tool === BELT || tool === SPLITTER || tool === JOINER || tool === TUNNEL || tool === SORTER) {
         g.globalAlpha = 0.8;
-        const a = tool === SPLITTER ? splitArms(S.dir) : tool === TUNNEL ? tunnelArms(S.dir) : armsFor(S.dir);
-        g.drawImage(beltTile(a, S.dir, step, tier), x, y);
-        const top = tool === SPLITTER ? art.m.splitter[S.dir] : tool === JOINER ? art.m.joiner[S.dir] : undefined;
+        const a =
+          tool === SPLITTER
+            ? splitArms(S.dir)
+            : tool === TUNNEL
+              ? tunnelArms(S.dir)
+              : tool === SORTER
+                ? sortArms(S.dir)
+                : armsFor(S.dir);
+        const graded = tool === BELT || tool === TUNNEL ? grade : 0;
+        g.drawImage(beltTile(a, S.dir, steps[graded] ?? step, woodOf(graded), 0, marksOf(graded)), x, y);
+        const top =
+          tool === SPLITTER
+            ? art.m.splitter[S.dir]
+            : tool === JOINER
+              ? art.m.joiner[S.dir]
+              : tool === SORTER
+                ? art.sorter(S.dir, NONE)
+                : undefined;
         if (top) g.drawImage(top, x, y);
         g.globalAlpha = 1;
       }
-      piece(art, w, S.aim.y * land.w + S.aim.x, tool, S.dir, 1, true, x, y, now, bad ? 0.5 : 0.8);
+      piece(art, w, S.aim.y * land.w + S.aim.x, tool, S.dir, grade, 1, true, x, y, now, bad ? 0.5 : 0.8);
       const far = S.aim.far ?? -1;
       if (tool === TUNNEL && far >= 0) {
-        const out = art.m.hood[BACK[S.dir]];
+        const out = art.m.hood[lookOf(grade)]?.[BACK[S.dir]];
         const fx = far % land.w;
         const fy = (far - fx) / land.w;
         if (out) put(out.c, fx * TILE - cx + 8 - out.ax, fy * TILE - cy + TILE + 1 - out.ay, 0, 0.8);
@@ -1524,10 +1607,19 @@ function sendWay(y: Yard, i: number, a: Arms): Dir {
   return d;
 }
 
-/** A straight belt's arms, pointing a way; a splitter's, every way out open; a tunnel's, in from behind. */
+/** A straight belt's arms, pointing a way; a splitter's, every way out open; a sorter's, ahead and to its left; a tunnel's, in from behind. */
 const armsFor = (dir: Dir): Arms => withArm(withArm(0, dir, 2), BACK[dir], 1);
 const splitArms = (dir: Dir): Arms => withArm(arms(2, 2, 2, 2), BACK[dir], 1);
+const sortArms = (dir: Dir): Arms => withArm(armsFor(dir), LEFT[dir], 2);
 const tunnelArms = (dir: Dir): Arms => withArm(0, BACK[dir], 1);
+
+/**
+ * How far across its tile a thing on the piece there moves in a tick, as the frame shows it between
+ * ticks: its grade's pace on a belt or tunnel, the top grade's on a sorter, and the first grade's on
+ * a splitter or a joiner, as they have always been drawn.
+ */
+const alongAt = (y: Yard, i: number): number =>
+  y.kind[i] === SPLITTER || y.kind[i] === JOINER ? FIRST : (ALONG[y.grade[i] ?? 0] ?? FIRST);
 
 // ---------- words, in the guild's font, over the picture ----------
 
@@ -1613,12 +1705,13 @@ export function drawWords(ctx: Ctx, px: number, clear: number): void {
       const lines = wrap(ctx, text, Math.min(130 * px, wide - 16 * px), px);
       const size = bubbleSize(ctx, lines, px);
       const top = hy - size.h - 4 * px + bob;
-      // Under the thing it points at, if there is no room over it.
+      // Under the thing it points at, if there is no room over it; and clear of the interface even
+      // then, when the thing itself is under it.
       bubble(
         ctx,
         lines,
         clamp(hx - Math.round(size.w / 2), 2 * px, Math.max(2 * px, wide - size.w - 2 * px)),
-        top < clear + 2 * px ? hy + 34 * z + bob : top,
+        top < clear + 2 * px ? Math.max(hy + 34 * z + bob, clear + 2 * px) : top,
         px,
         hx,
       );

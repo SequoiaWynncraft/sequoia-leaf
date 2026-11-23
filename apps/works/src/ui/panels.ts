@@ -1,12 +1,12 @@
 /**
- * The yard's books, each a panel: the orders, the projects, where the power comes from and goes, and
- * the yard's sheet (`views.ts`: the map, the trouble and what the yard makes and needs, which is the
- * depot's panel).
+ * The yard's books, each a panel: the orders, the tier's own screen (`tier.ts`), research
+ * (`research.ts`), where the power comes from and goes, and the yard's sheet (`views.ts`: the map,
+ * the trouble and what the yard makes and needs, which is the depot's panel). The tier's screen and
+ * research are full sheets on a phone.
  */
 
 import {
   ALL_GOALS,
-  ALL_ITEMS,
   BENCH,
   BOILER,
   counting,
@@ -16,31 +16,25 @@ import {
   GATHERER,
   GIVES,
   type Goal,
-  goal,
   GOALS,
   HALF,
   holderOf,
   isFilled,
-  isNode,
-  type Item,
-  item,
   type Kind,
-  kind,
   KIND_INFO,
   litOf,
   MILL,
   NODES,
-  plot,
   power,
-  ready,
   STUDY,
   SWAP_EVERY,
   swapRefusal,
   TICK_MS,
+  tierName,
+  unlockedBy,
   WHEEL,
   WORKSHOP,
 } from "@sequoia-leaf/factory";
-import { thing } from "@sequoia-leaf/kit/card.ts";
 import { amount, asking, asksAgain, el, icon, pressedTwice, replay } from "@sequoia-leaf/kit/dom.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
@@ -48,15 +42,17 @@ import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
 import type { Art } from "../art/index.ts";
 import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
-import { takeInHand } from "../tools.ts";
 import { doNow } from "../yard.ts";
 import { board } from "./board.ts";
-import { itemRef, machineRef, nodeRef, plotRef } from "./card.ts";
+import { head, leaves, type Listed, type Need, needs, some, unlocks, type Wants, wants, wantsIn } from "./goal.ts";
 import { feed, handLabel } from "./notes.ts";
-import { $, button, shows, unlockWords, wantWords, yardIcon } from "./parts.ts";
+import { $, button, shows, wantWords, yardIcon } from "./parts.ts";
+import { researchHooks, researchScreen } from "./research.ts";
+import { given, needsOf, researchOpen, tierOpen, whatNext } from "./standing.ts";
+import { beginButton, tierHooks, tierScreen } from "./tier.ts";
 import { sheet, sheetIcon, sheetTitle } from "./views.ts";
 
-export type PanelId = "orders" | "board" | "projects" | "depot" | "power";
+export type PanelId = "orders" | "board" | "tier" | "research" | "depot" | "power";
 
 /** What the panels ask of the rest of the screen. */
 export const panelHooks: {
@@ -65,59 +61,18 @@ export const panelHooks: {
   changed: () => void;
 } = { handOver: () => {}, changed: () => {} };
 
+/** What each panel is called: the tier's screen, by the tier. */
 const TITLES: Record<PanelId, () => string> = {
   orders: () => "Orders",
   board: () => "Top yards",
-  projects: () => "Projects",
+  tier: () => tierName(S.world.open.tier),
+  research: () => "Research",
   depot: sheetTitle,
   power: () => "Power",
 };
 
-// ---------- what an order wants ----------
-
-/** Each thing an order or a node wants, with how many: as a panel prints it, and builds its bars from. */
-type Wants = readonly (readonly [Item, number])[];
-const wantsIn = (want: Counts): Wants =>
-  ALL_ITEMS.filter((k) => (want[k] ?? 0) > 0).map((k) => [k, want[k] ?? 0] as const);
-
-/**
- * Rows for what an order wants, and a way to bring their bars up to date without rebuilding them:
- * the bars are drawn from the yard at every refresh, and so are never behind it.
- */
-function wants(want: Wants, filled: () => Counts | null): { rows: HTMLElement[]; update: () => void } {
-  const parts = want.map(([k, of]) => {
-    const bar = el("i");
-    const count = el("span", "n");
-    const holder = el("div", "k-bar", {}, bar);
-    const row = el("div", "want", {}, thing(itemRef(k)), holder, count);
-    return { k, of, bar, count, holder, row };
-  });
-  const update = (): void => {
-    const f = filled();
-    for (const p of parts) {
-      const have = Math.min(f?.[p.k] ?? 0, p.of);
-      p.bar.style.setProperty("--v", `${(have / p.of) * 100}%`);
-      p.count.textContent = `${have} / ${p.of}`;
-      p.holder.classList.toggle("leaf", have >= p.of);
-    }
-  };
-  update();
-  return { rows: parts.map((p) => p.row), update };
-}
-
-/** What a node unlocks, each machine, recipe and plot as a thing that explains itself. */
-export function opensThings(g: Goal): HTMLElement[] {
-  const u = GOALS[g]?.unlocks ?? {};
-  return [
-    ...(u.kinds ?? []).map((k) => thing(machineRef(kind(k)))),
-    ...(u.recipes ?? []).map((n) => thing(itemRef(item(n)))),
-    ...(u.plots ?? []).map((id) => thing(plotRef(plot(id)))),
-    ...unlockWords(u).map((words) => el("b", "", { text: `${words.charAt(0).toUpperCase()}${words.slice(1)}` })),
-  ];
-}
-
-/** The lesson that unlocks side orders, and its place among the lessons. */
-const BOARD_AT = ALL_GOALS.find((g) => GOALS[g]?.unlocks.board === true) ?? goal("gears");
+/** The lesson that puts the board of side orders up. */
+const BOARD_AT = ALL_GOALS.find((g) => unlockedBy(g).some((u) => u.is === "board"));
 
 /** An order on the list, as far as where it goes in the list is concerned: which it is, and whether it is filled. */
 interface Placed {
@@ -155,10 +110,15 @@ interface OrderLine extends Placed {
 export const plural = (name: string): string =>
   /[^aeiou]y$/.test(name) ? `${name.slice(0, -1)}ies` : /(?:ch|sh|s|x)$/.test(name) ? `${name}es` : `${name}s`;
 
-/** What the orders panel prints: the node in hand and how it is spoken of, whether the board is up and its places, and each order. */
+/**
+ * What the orders panel prints: the node in hand, how it is spoken of and what it still waits on;
+ * the tier, whose screen a node is taken in; whether the board is up and its places; and each order.
+ */
 export function ordersPrint(): {
   readonly hand: Goal | -1;
   readonly label: string;
+  readonly needs: readonly Need[];
+  readonly next: string;
   readonly board: boolean;
   readonly hooks: number;
   readonly orders: readonly OrderLine[];
@@ -167,6 +127,8 @@ export function ordersPrint(): {
   return {
     hand: w.hand,
     label: handLabel(),
+    needs: w.hand === -1 ? [] : needsOf(w.hand, true),
+    next: whatNext(),
     board: w.open.board,
     hooks: w.open.hooks,
     orders: w.board.map((s) => ({
@@ -184,7 +146,7 @@ export function ordersPrint(): {
 }
 
 function orders(_art: Art, body: HTMLElement): () => void {
-  let live: (() => void)[] = [];
+  let live: Listed[] = [];
   let places: number[] = [];
   const draw = (p: ReturnType<typeof ordersPrint>): void => {
     live = [];
@@ -193,40 +155,37 @@ function orders(_art: Art, body: HTMLElement): () => void {
     const node = g === -1 ? undefined : NODES[g];
     const kids: HTMLElement[] = [];
     if (g !== -1 && o && node) {
-      const rows = wants(wantsIn(o.want), () => S.world.got[g] ?? null);
-      live.push(rows.update);
-      const opens = opensThings(g);
+      // The node in hand, on paper: who asks and what they say, and its lists.
+      const lists = some(
+        wants(wantsIn(o.want), () => S.world.got[g] ?? null),
+        needs(p.needs, { given, begin: beginButton }),
+        unlocks(g),
+        leaves(g),
+      );
+      live.push(...lists);
       kids.push(
         el(
           "div",
-          "k-paper order",
+          "k-paper goal",
           {},
           el("div", "k-label", { text: `${p.label} · from ${node.from}` }),
-          el("div", "k-title", { text: o.title }),
+          head(g, o.pay > 0 ? el("span", "k-chip", {}, amount("coin", o.pay)) : null),
           el("div", "k-read k-dim", { text: node.say }),
-          ...rows.rows,
-          el(
-            "div",
-            "k-row",
-            {},
-            el("div", "k-grow opens", {}, opens.length > 0 ? el("span", "k-label", { text: "Opens" }) : null, ...opens),
-            // A project pays nothing, and says nothing of pay.
-            o.pay > 0 ? el("span", "k-chip", {}, amount("coin", o.pay)) : null,
-          ),
+          ...lists.map((l) => l.node),
         ),
       );
     } else
       kids.push(
         el(
           "div",
-          "k-paper order",
+          "k-paper goal",
           {},
           el("div", "k-title", { text: "No project in hand" }),
-          el("div", "k-read k-dim", { text: "Take one in Projects." }),
+          el("div", "k-read k-dim", { text: p.next }),
         ),
       );
     kids.push(el("div", "k-label", { text: "Side orders" }));
-    if (!p.board)
+    if (!p.board && BOARD_AT !== undefined)
       kids.push(
         el("div", "k-d", {
           text: `Unlock when you fill lesson ${LESSONS.indexOf(BOARD_AT) + 1}: ${GOALS[BOARD_AT]?.title}.`,
@@ -237,7 +196,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
     for (const s of shown) {
       const filled = (): Counts | null => S.world.board.find((b) => b.id === s.id)?.filled ?? null;
       const rows = wants(s.want, filled);
-      live.push(rows.update);
+      if (rows) live.push(rows);
       const ask = `swap:${s.id}`;
       const act = s.full
         ? button("sm", ["Hand over"], () => {
@@ -282,7 +241,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
             el("span", "k-chip", {}, amount("coin", s.pay)),
           ),
           el("div", "k-d", { text: s.line }),
-          ...rows.rows,
+          rows?.node ?? null,
         ),
       );
     }
@@ -307,114 +266,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
   const shape = shows(ordersPrint, draw);
   return () => {
     shape();
-    for (const f of live) f();
-  };
-}
-
-// ---------- projects ----------
-
-/** Whether there are projects at all: from tier 1 on, and not in somebody else's yard. */
-export const projectsOpen = (): boolean => S.world.open.tier >= 1 && S.visiting === null;
-
-/** The projects and commissions of the tiers open, in their order. */
-const nodesOpen = (): Goal[] =>
-  ALL_GOALS.filter((g) => {
-    const info = GOALS[g];
-    return isNode(g) && info !== undefined && info.kind !== "lesson" && info.tier <= S.world.open.tier;
-  });
-
-/** The projects and the commission that may be taken in hand now, but for the one in hand. */
-export const takeable = (): Goal[] => nodesOpen().filter((g) => g !== S.world.hand && ready(S.world.open, g));
-
-/**
- * What the projects panel prints: the node in hand; each project or commission of the tiers open
- * not yet done that may be taken (or a commission that may not yet), with the titles of what it still
- * needs first; and those done.
- */
-export function projectsPrint(): {
-  readonly hand: Goal | -1;
-  readonly open: readonly { readonly goal: Goal; readonly take: boolean; readonly needs: readonly string[] }[];
-  readonly done: readonly Goal[];
-} {
-  const w = S.world;
-  const nodes = nodesOpen();
-  return {
-    hand: w.hand,
-    open: nodes.flatMap((g) => {
-      const info = GOALS[g];
-      if (!info || w.open.done[g] === 1) return [];
-      const take = ready(w.open, g);
-      // Nothing that is not ready is shown, but for the commission, with what it still needs.
-      if (!take && info.kind !== "commission") return [];
-      return [
-        { goal: g, take, needs: info.needs.filter((n) => w.open.done[n] !== 1).map((n) => GOALS[n]?.title ?? "") },
-      ];
-    }),
-    done: nodes.filter((g) => w.open.done[g] === 1),
-  };
-}
-
-/**
- * The projects as a list: each that may be taken up (and the commission), with what it wants and
- * has been given and what it unlocks, and one button that takes it in hand; the one in hand marked.
- * A commission not ready yet says what it still needs. The done ones follow, plainly.
- */
-function projects(_art: Art, body: HTMLElement): () => void {
-  let live: (() => void)[] = [];
-  const draw = (p: ReturnType<typeof projectsPrint>): void => {
-    live = [];
-    const kids: HTMLElement[] = [];
-    for (const { goal: g, take, needs } of p.open) {
-      const info = GOALS[g];
-      if (!info) continue;
-      const held = p.hand === g;
-      const side = held
-        ? el("span", "k-chip lit", {}, icon("check"), "In hand")
-        : take
-          ? button("sm", ["Take"], (b) => {
-              if (takeInHand(g) !== null) replay(b, "shake");
-              else feed(`In hand: ${info.title}.`, "gold");
-              panelHooks.changed();
-            })
-          : el("span", "k-chip", {}, icon("lock"), "Not yet");
-      const rows = wants(wantsIn(info.want), () => S.world.got[g] ?? null);
-      live.push(rows.update);
-      const opens = opensThings(g);
-      kids.push(
-        el(
-          "div",
-          `k-card plan${held ? " owned" : take ? "" : " locked"}`,
-          {},
-          el("div", "k-row", {}, el("div", "k-grow", {}, thing(nodeRef(g))), side),
-          el("div", "k-d", { text: NODES[g]?.say ?? "" }),
-          ...rows.rows,
-          opens.length > 0 ? el("div", "k-grow opens", {}, el("span", "k-label", { text: "Unlocks" }), ...opens) : null,
-          needs.length > 0 ? el("div", "k-d k-gold", { text: `Needs ${needs.join(" and ")} first.` }) : null,
-        ),
-      );
-    }
-    if (p.done.length > 0) kids.push(el("div", "k-label", { text: "Done" }));
-    for (const g of p.done)
-      kids.push(
-        el(
-          "div",
-          "k-card plan owned",
-          {},
-          el(
-            "div",
-            "k-row",
-            {},
-            el("div", "k-grow", {}, thing(nodeRef(g))),
-            el("span", "k-chip lit", {}, icon("check"), "Done"),
-          ),
-        ),
-      );
-    body.replaceChildren(...kids);
-  };
-  const shape = shows(projectsPrint, draw);
-  return () => {
-    shape();
-    for (const f of live) f();
+    for (const l of live) l.update();
   };
 }
 
@@ -533,32 +385,41 @@ function powerBook(_art: Art, body: HTMLElement): () => void {
 const BUILD: Record<PanelId, (art: Art, body: HTMLElement) => () => void> = {
   orders,
   board,
-  projects,
+  tier: (_art, body) => tierScreen(body),
+  research: (_art, body) => researchScreen(body),
   depot: (art, body) => sheet(art, body),
   power: powerBook,
 };
 const HEAD: Record<PanelId, () => Node> = {
   orders: () => yardIcon("orders"),
   board: () => yardIcon("board"),
-  projects: () => yardIcon("projects"),
+  tier: () => yardIcon("projects"),
+  research: () => yardIcon("research"),
   depot: () => sheetIcon(),
   power: () => yardIcon("bolt"),
 };
+/** The panels that are a full sheet on a phone: each is a screen of its own, with rows to tap. */
+const FULL: ReadonlySet<PanelId> = new Set<PanelId>(["tier", "research"]);
 
 let refresh: (() => void) | null = null;
 let theArt: Art | null = null;
 
 export function initPanels(art: Art): void {
   theArt = art;
+  tierHooks.changed = (): void => panelHooks.changed();
+  tierHooks.research = (): void => openPanel("research");
+  tierHooks.close = closePanel;
+  researchHooks.changed = (): void => panelHooks.changed();
 }
 
 export function openPanel(id: PanelId): void {
   // A panel is there only once it has something to say.
-  if (S.panel === id || !theArt || (id === "projects" && !projectsOpen())) return;
+  if (S.panel === id || !theArt || (id === "tier" && !tierOpen()) || (id === "research" && !researchOpen())) return;
   tipOff();
   S.panel = id;
   const p = $("panel");
   p.hidden = true;
+  p.classList.toggle("full", FULL.has(id));
   p.replaceChildren();
   // Which panel it is, for the page's styles: the yard's sheet is a full sheet on a phone.
   p.dataset.panel = id;
@@ -568,7 +429,16 @@ export function openPanel(id: PanelId): void {
     { type: "button", "aria-label": "Close", onclick: closePanel },
     icon("close"),
   );
-  p.append(el("header", "k-head", {}, HEAD[id](), el("h2", "k-title", { text: TITLES[id]() }), x));
+  // A title in two parts ("Tier 2: The stream") breaks between them where it must.
+  const [first = "", ...rest] = TITLES[id]().split(": ");
+  const title = el(
+    "h2",
+    "k-title",
+    {},
+    el("span", "", { text: rest.length > 0 ? `${first}:` : first }),
+    ...(rest.length > 0 ? [" ", el("span", "", { text: rest.join(": ") })] : []),
+  );
+  p.append(el("header", "k-head", {}, HEAD[id](), title, x));
   const body = el("div", "k-body k-scroll");
   p.append(body);
   refresh = BUILD[id](theArt, body);

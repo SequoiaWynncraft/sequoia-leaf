@@ -1,11 +1,13 @@
 /**
  * The tools along the bottom, and over them the line that says what is in hand with the buttons
  * that act on it: turn, undo, and (for a finger, which cannot hover) build and put away. With
- * Select in hand the line holds what is done to the marked pieces, and the yard's blueprints.
+ * Select in hand the line holds what is done to the marked pieces, and the yard's blueprints. With a
+ * kind in hand that the yard may build above the first grade, the line holds a button for each
+ * grade it may build: the numeral and the price of one; the one chosen is lit, and is what the
+ * kind's slot shows and prices.
  *
  * A kind of piece or a tool is in the dock only once the yard may use it (`usable`, which asks
- * `locked`), and a kind only if this page draws it (`DRAWN`): the pieces of later tiers that have no
- * art yet (the Study, the cart stop, the sorter) are not in it.
+ * `locked`). The cart stop's slot says how many stand of how many may, and is off when no more may.
  */
 
 import {
@@ -18,26 +20,33 @@ import {
   DX,
   DY,
   GATHERER,
+  highest,
+  isGraded,
   type Kind,
   KIND_INFO,
+  locked,
   MILL,
+  numeral,
   type Piece,
   piecesOf,
   priceOf,
   PYLON,
+  STOP,
+  stops,
+  STUDY,
   TUNNEL,
   WHEEL,
   WORKSHOP,
 } from "@sequoia-leaf/factory";
 import { link } from "@sequoia-leaf/kit/card.ts";
-import { asking, el, icon, pressedTwice, shown } from "@sequoia-leaf/kit/dom.ts";
+import { amount, asking, asksAgain, el, icon, pressedTwice, shown } from "@sequoia-leaf/kit/dom.ts";
 import { GOLD, GREEN, INK, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { PAINTS } from "../art/belts.ts";
 import { type Art, bare } from "../art/index.ts";
-import { builds, DRAWN, S, type Tool } from "../state.ts";
+import { builds, DRAWN, gradeInHand, S, type Tool } from "../state.ts";
 import {
   askSave,
   cancel,
@@ -48,9 +57,12 @@ import {
   piecesInHand,
   rotate,
   saveMark,
+  setGrade,
   setTool,
   toolHooks,
   undo,
+  upgradeCost,
+  upgradeMark,
   usable,
 } from "../tools.ts";
 import { CATCHING_UP, catchingUp } from "../yard.ts";
@@ -69,20 +81,41 @@ let known: Set<Kind | "select" | "paint"> | null = null;
 let message = "";
 let messageUntil = 0;
 
+/** How many cart stops stand, of how many may: what the stop's slot says in place of a price. */
+const stopsStand = (): { stand: number; may: number } => ({ stand: stops(S.world), may: S.world.open.stops });
+
 function slotFor(art: Art, k: Kind, fresh: boolean): HTMLElement {
-  const cost = costOf(S.world, k);
+  // At the grade chosen for it: its picture, its price, and its card.
+  const grade = gradeInHand(k);
+  const cost = costOf(S.world, k, grade);
+  const { stand, may } = stopsStand();
+  // No more of a kind may stand: its slot is off, and says so when pressed.
+  const full = k === STOP && stand >= may;
+  const under =
+    k === STOP
+      ? el("span", "k-dim", { text: `${stand} of ${may}` })
+      : el("span", cost === 0 ? "k-dim" : "k-gold", { text: cost === 0 ? "free" : String(cost) });
   const b = el(
     "button",
-    `k-slot${S.tool === k ? " lit" : ""}${fresh ? " new" : ""}${S.nudgeTool === k && S.tool !== k ? " nudged" : ""}`,
-    { type: "button", "aria-label": KIND_INFO[k]?.name ?? "", "aria-pressed": S.tool === k ? "true" : "false" },
-    el("span", "art", {}, fitted(art.icon(k), 20, 19)),
-    el("span", cost === 0 ? "k-dim" : "k-gold", { text: cost === 0 ? "free" : String(cost) }),
+    `k-slot${S.tool === k ? " lit" : ""}${fresh ? " new" : ""}${S.nudgeTool === k && S.tool !== k ? " nudged" : ""}${full ? " off" : ""}`,
+    {
+      type: "button",
+      "aria-label": KIND_INFO[k]?.name ?? "",
+      "aria-pressed": S.tool === k ? "true" : "false",
+      "data-tool": String(k),
+    },
+    el("span", "art", {}, fitted(art.icon(k, grade), 20, 19)),
+    under,
   );
   b.addEventListener("click", () => {
+    if (full && S.tool !== k) {
+      say(`${locked(S.world.open, { stops: stand + 1 }) ?? "No more may stand"}.`);
+      return;
+    }
     setTool(S.tool === k ? null : k);
   });
   // Clicking takes it up as the tool; pointing (or a finger kept on it) shows the machine's card.
-  link(b, machineRef(k), { acts: true });
+  link(b, machineRef(k, grade), { acts: true });
   return b;
 }
 
@@ -187,6 +220,11 @@ function handLine(): { text: string; bad: boolean } {
     return { text: `${n} belt${n === 1 ? "" : "s"}, ${S.run.cost === 0 ? "free" : `${S.run.cost} Coins`}`, bad: false };
   }
   if (S.aim?.why) return { text: S.aim.why, bad: true };
+  // Over a piece of its kind of a lower grade, it raises that piece: the line says to what, and for how much.
+  if (S.aim?.raises !== undefined && !S.from) {
+    const what = `Raise to ${numeral(S.aim.grade ?? 1)}: ${price(S.aim.cost)}.`;
+    return { text: f ? `${what} Tap again, or Raise.` : `${what} Click to raise it.`, bad: false };
+  }
   if (tool === BELT) {
     if (!f) return { text: "Belt: drag to place a line. R rotates it.", bad: false };
     return { text: S.from ? "Now tap where it ends." : "Tap where the line starts.", bad: false };
@@ -201,6 +239,7 @@ const DOT = new Map<number, string>([
   [BENCH, GOLD[1]],
   [WORKSHOP, GOLD[1]],
   [CRATE, "#a35d3b"],
+  [STUDY, GOLD[1]],
   [PYLON, WATER[3]],
   [WHEEL, WATER[3]],
   [BOILER, WATER[3]],
@@ -277,9 +316,50 @@ function buildHand(): void {
         hold("copy");
       }),
       action("Remove", "Del", clearMark),
-      button("sm", ["Save"], askSave),
+      ...(S.world.open.blueprints > 0 ? [button("sm", ["Save"], askSave)] : []),
     );
   }
+  // With "Upgrading an area" known, and something marked that can be raised: the whole price, asked twice.
+  const raise = acting && locked(S.world.open, { use: "upgrade" }) === null ? upgradeCost() : 0;
+  const upgrade =
+    raise > 0
+      ? button(
+          asking("upgrade") ? "sm asking" : "sm",
+          [asksAgain("upgrade", ["Upgrade", amount("coin", raise)], "Press again")],
+          () => {
+            if (pressedTwice("upgrade", buildHand)) upgradeMark();
+          },
+        )
+      : null;
+  if (upgrade) upgrade.dataset.act = "upgrade";
+  // The grades a kind in hand may be built at: the numeral and the price of one, the chosen one lit.
+  const top = builds(tool) && isGraded(tool) ? highest(S.world.open, tool) : 1;
+  const grades =
+    builds(tool) && top > 1
+      ? Array.from({ length: top }, (_, k) => {
+          const grade = k + 1;
+          const cost = costOf(S.world, tool, grade);
+          const on = gradeInHand(tool) === grade;
+          const b = el(
+            "button",
+            `k-slot${on ? " lit" : ""}`,
+            {
+              type: "button",
+              "aria-label": `${KIND_INFO[tool]?.name ?? ""} ${numeral(grade)}`,
+              "aria-pressed": on ? "true" : "false",
+              "data-grade": String(grade),
+            },
+            el("b", "", { text: numeral(grade) }),
+            el("span", cost === 0 ? "k-s k-dim" : "k-s k-gold", { text: cost === 0 ? "free" : String(cost) }),
+          );
+          b.addEventListener("click", () => {
+            setGrade(grade);
+          });
+          // Pointing (or a finger kept on it) shows what that grade is.
+          link(b, machineRef(tool, grade), { acts: true });
+          return b;
+        })
+      : [];
   const turn = button("wood icon sm", [yardIcon("turn")], rotate);
   tip(turn, "Rotate (R)", "With no tool picked, it rotates the piece you last pointed at.");
   const back = button("wood icon sm undo", [yardIcon("undo")], () => {
@@ -304,9 +384,14 @@ function buildHand(): void {
   }
   if (aiming) {
     const bad = (S.run?.why ?? (S.run ? null : S.aim?.why)) != null;
-    const go = button(bad ? "sm off" : "sm", [icon("check"), tool === "remove" ? "Remove" : "Build"], () => {
-      confirm();
-    });
+    const raising = !S.run && S.aim?.raises !== undefined;
+    const go = button(
+      bad ? "sm off" : "sm",
+      [icon("check"), tool === "remove" ? "Remove" : raising ? "Raise" : "Build"],
+      () => {
+        confirm();
+      },
+    );
     kids.push(go);
   }
   // The brush's colours: a piece of belt in each, and one with none.
@@ -331,6 +416,8 @@ function buildHand(): void {
   hand.replaceChildren(
     el("span", line.bad ? "say bad" : "say", { text: line.text }),
     ...(tints.length > 0 ? [el("div", "tints", {}, ...tints)] : []),
+    ...(grades.length > 0 ? [el("div", `grades${S.nudgePart === "grades" ? " nudged" : ""}`, {}, ...grades)] : []),
+    ...(upgrade ? [el("div", "acts", {}, upgrade)] : []),
     el("div", acting ? "acts tight" : "acts", {}, ...kids),
   );
   hand.classList.toggle("building", tool !== null);
@@ -343,18 +430,23 @@ export function initDock(art: Art): void {
   dockKey = when(
     () =>
       `${openTools().join()}|${usable("select")}|${usable("paint")}|${S.tool}|${S.nudgeTool}|${openTools()
-        .map((k) => costOf(S.world, k))
-        .join()}`,
+        .map((k) => `${gradeInHand(k)}:${costOf(S.world, k, gradeInHand(k))}`)
+        .join()}|${usable(STOP) ? `${stopsStand().stand}/${stopsStand().may}` : ""}`,
     () => {
       buildDock(art);
     },
   );
   handKey = when(() => {
     const l = handLine();
+    const tool = S.tool;
     // With Select in hand, also what is marked or held, and (by the yard's own count of changes) the blueprints.
     const select =
-      S.tool === "select" ? `${S.mark !== null}|${S.corner !== null}|${S.group?.as}|${S.saving}|${S.rev}` : "";
-    return `${S.tool}|${S.tint}|${S.finger}|${S.aim !== null}|${S.run !== null}|${l.text}|${(S.run?.why ?? S.aim?.why) != null}|${select}`;
+      tool === "select"
+        ? `${S.mark !== null}|${S.corner !== null}|${S.group?.as}|${S.saving}|${S.rev}|${asking("upgrade")}`
+        : "";
+    // With a graded kind in hand, the grades it may be built at, the one chosen, and what one costs now.
+    const graded = builds(tool) && isGraded(tool) ? `${highest(S.world.open, tool)}|${gradeInHand(tool)}|${S.rev}` : "";
+    return `${tool}|${S.tint}|${S.finger}|${S.aim !== null}|${S.run !== null}|${l.text}|${(S.run?.why ?? S.aim?.why) != null}|${select}|${graded}|${S.nudgePart}`;
   }, buildHand);
   toolHooks.changed = refreshDock;
   toolHooks.said = say;

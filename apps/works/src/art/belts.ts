@@ -40,12 +40,30 @@ interface Wood {
   rail: string;
   railLit: string;
 }
-/** Plain slats, waxed slats, and steel rollers: what the belt plans leave on the ground. */
+/**
+ * Plain slats, as a belt of the first grade lies in the yard; the lighter slats its picture has on a
+ * button; steel rollers, kept for the era that brings them; and waxed boards, pale, with a bright
+ * edge to the bed: the second grade, and for now the third.
+ */
 const WOODS: readonly Wood[] = [
   { bed: BARK[0], slat: BARK[1], mark: BARK[3], rail: BARK[2], railLit: BARK[3] },
   { bed: BARK[0], slat: BARK[2], mark: GOLD[0], rail: BARK[3], railLit: BARK[4] },
   { bed: "#33303a", slat: STONE[1], mark: GOLD[1], rail: BARK[3], railLit: GOLD[0] },
+  { bed: BARK[1], slat: BARK[3], mark: GOLD[1], rail: BARK[4], railLit: GOLD[0] },
 ];
+/** The wood a belt of a grade is drawn in, in the yard: `tier` for `beltTile`. */
+export const woodOf = (grade: number): number => (grade >= 2 ? 3 : 0);
+/** How many of the grade's marks a belt of a grade wears in the corner of its tile: one for the second, two for the third. */
+export const marksOf = (grade: number): number => Math.max(0, Math.min(2, grade - 1));
+/** The mark of a grade above the first: a stud of muted brass with a dark edge, as every graded piece wears (`machines.ts`, `PIP`). */
+const STUD = [
+  [INK, INK, INK, INK],
+  [INK, GOLD[1], GOLD[0], INK],
+  [INK, GOLD[0], GOLD[0], INK],
+  [INK, INK, INK, INK],
+] as const;
+/** How far apart two studs stand. */
+const STUD_STEP = 3;
 
 /**
  * The paint a player can give a line, by its `tint`, 1 to 6: where the yard's light falls on it and
@@ -74,12 +92,13 @@ const cache = new Map<number, HTMLCanvasElement>();
 
 /**
  * A belt tile. `main` is the way the middle of the tile carries things; `step` is how far the
- * march has come, 0 to 15; `tier` is 0, 1 or 2 for plain, waxed and roller belts; `tint` is the
- * line's colour, or 0. The tiles kept are at most seven times those of a yard with no colour in it,
- * and a splitter's are at most eight times those of one with no way shut.
+ * march has come, 0 to 15; `tier` is the wood it is drawn in (`WOODS`, `woodOf`); `tint` is the
+ * line's colour, or 0; `marks` is how many of the grade's studs it wears in its top-left corner. The
+ * tiles kept are at most seven times those of a yard with no colour in it, and a splitter's are at
+ * most eight times those of one with no way shut.
  */
-export function beltTile(a: Arms, main: Dir, step: number, tier: number, tint = 0): HTMLCanvasElement {
-  const key = (((a * 4 + main) * STEPS + step) * 3 + tier) * 7 + tint;
+export function beltTile(a: Arms, main: Dir, step: number, tier: number, tint = 0, marks = 0): HTMLCanvasElement {
+  const key = ((((a * 4 + main) * STEPS + step) * WOODS.length + tier) * 7 + tint) * 3 + marks;
   const had = cache.get(key);
   if (had) return had;
   const wood = WOODS[tier] ?? WOODS[0];
@@ -122,6 +141,11 @@ export function beltTile(a: Arms, main: Dir, step: number, tier: number, tint = 
     return false;
   };
   const tile = paint(TILE, TILE, (x, y) => {
+    // The grade's studs, in the corner: over the rail there, whichever way the belt runs.
+    if (y < STUD.length && x < STUD.length + (marks - 1) * STUD_STEP && marks > 0) {
+      const col = STUD[y]?.[x < STUD.length ? x : x - (marks - 1) * STUD_STEP];
+      if (col !== undefined) return col;
+    }
     const shut = bar(x, y);
     if (shut) return shut;
     const p = part(x, y);

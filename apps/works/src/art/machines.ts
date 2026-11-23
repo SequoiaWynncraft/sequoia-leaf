@@ -4,7 +4,7 @@
  * sixteen pixels square, and may rise above it; its picture goes with its foot on the tile's foot.
  */
 
-import { BARK, CREAM, GOLD, GREEN, INK, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
+import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, ell, flipped, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, hash, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
@@ -151,7 +151,7 @@ export const PIPWICK_HAT = 4;
  * the dusk is too deep to see by). Standing or with his arms up, `step` 1 or 2 is one foot of a
  * waddle: that boot lifted, and the rest of him leant a pixel over the other.
  */
-function gnome(hat: readonly [string, string], pose: number, step = 0): Sprite {
+function gnomePic(hat: readonly [string, string], pose: number, step = 0): Canvas {
   const { c, g } = makeCanvas(12, 15);
   const [hx, hy] = pose === 1 ? [1, 1] : pose === 2 ? [2, 4] : pose === 4 ? [0, 3] : [0, 0];
   const lean = step === 1 ? -1 : step === 2 ? 1 : 0;
@@ -208,16 +208,54 @@ function gnome(hat: readonly [string, string], pose: number, step = 0): Sprite {
     R(g, x + 2 + (pose === 2 ? 1 : 0), y - 5 + (pose === 2 ? 1 : 0), 1, 1, hat[0]);
   }
   R(g, x + 1, y - 2, 1, 1, CREAM);
-  return spr(c, 6, 15);
+  return c;
 }
+const gnome = (hat: readonly [string, string], pose: number, step = 0): Sprite => spr(gnomePic(hat, pose, step), 6, 15);
 
-const RAKE = ["nnnnn", "n.n.n", "..b..", "..b..", "..b..", "..b..", "..b..", "..b..", "..b..", "..b.."];
+/** The rake a second-grade gatherer keeps by him, stood in the ground: a steel head on a pale handle. */
+const RAKE = [
+  "ttttttt",
+  "S.S.S.S",
+  "S.S.S.S",
+  "...n...",
+  "...n...",
+  "...n...",
+  "...n...",
+  "...n...",
+  "...n...",
+  "...n...",
+  "...n...",
+  "...n...",
+  "...b...",
+];
 const BASKET = [".N..N.", "NnNnNn", "nNnNnN", ".nNnN."];
 const BARROW = ["...nnnnnn.", "b..NNNNNN.", ".bbnnnnnn.", "...bbbbb..", "...sS..b..", "...Ss..b.."];
 
+// ---------- the brass a higher grade wears ----------
+
+/** Brass as the yard has it: in shade, lit, and where the light catches it. */
+const BRASS = [GOLD[0], GOLD[1], GOLD[2]] as const;
+
+/**
+ * What a machine of the second grade and up wears: a brass band, two pixels deep, across it from `x`
+ * for `w` at row `y`, and a small plate at (`px`, `py`). Grade 1 wears nothing.
+ */
+function fitted(g: Ctx, grade: number, x: number, y: number, w: number, px: number, py: number): void {
+  if (grade < 2) return;
+  R(g, x, y, w, 2, BRASS[0]);
+  R(g, x, y, w, 1, BRASS[1]);
+  R(g, x + 1, y, 2, 1, BRASS[2]);
+  // A rivet at each end.
+  R(g, x, y + 1, 1, 1, BARK[0]);
+  R(g, x + w - 1, y + 1, 1, 1, BARK[0]);
+  R(g, px, py, 3, 2, BRASS[1]);
+  R(g, px, py, 1, 1, BRASS[2]);
+  R(g, px, py + 1, 3, 1, BRASS[0]);
+}
+
 // ---------- the mill's three faces ----------
 
-function saw(step: number): Sprite {
+function saw(step: number, grade = 1): Sprite {
   return tile(15, (g) => {
     // The blade stands half out of the table: a steel disc, its teeth one way and then the other as it turns.
     for (let k = 0; k < 9; k++) {
@@ -245,10 +283,11 @@ function saw(step: number): Sprite {
     // Sawdust.
     R(g, 10, 14, 3, 1, "#cbb894");
     R(g, 11, 13, 1, 1, "#e9d8b8");
+    fitted(g, grade, 0, 9, 16, 6, 12);
   });
 }
 
-function kiln(step: number): Sprite {
+function kiln(step: number, grade = 1): Sprite {
   return tile(19, (g) => {
     // The chimney behind, then a dome of fired brick on a stone foot.
     R(g, 10, 0, 4, 7, STONE[1]);
@@ -271,10 +310,12 @@ function kiln(step: number): Sprite {
     arch(g, 4, 9, 8, 8, STONE[2]);
     fire(g, 5, 11, 6, 6, step);
     R(g, 5, 10, 6, 1, DARK);
+    // The band hoops the dome over the arch; the plate is the arch's keystone.
+    fitted(g, grade, 2, 6, 12, 6, 8);
   });
 }
 
-function press(step: number): Sprite {
+function press(step: number, grade = 1): Sprite {
   return tile(19, (g) => {
     const plate = 7 + step * 2;
     // Two posts, a beam across, and a screw that drives the plate down.
@@ -299,12 +340,13 @@ function press(step: number): Sprite {
     R(g, 0, 16, 16, 3, BARK[2]);
     R(g, 0, 16, 16, 1, BARK[3]);
     R(g, 0, 18, 16, 1, BARK[0]);
+    fitted(g, grade, 0, 16, 16, 6, 2);
   });
 }
 
 // ---------- bench and workshop ----------
 
-function bench(step: number): Sprite {
+function bench(step: number, grade = 1): Sprite {
   return tile(16, (g) => {
     // The hammer on its post: raised, on its way, and struck.
     R(g, 11, 3, 2, 5, BARK[1]);
@@ -335,10 +377,11 @@ function bench(step: number): Sprite {
     R(g, 13, 12, 2, 4, BARK[2]);
     R(g, 3, 13, 10, 1, BARK[1]);
     R(g, 5, 12, 2, 1, GOLD[1]);
+    fitted(g, grade, 0, 10, 16, 8, 13);
   });
 }
 
-function workshop(lit: boolean, step: number): Sprite {
+function workshop(lit: boolean, step: number, grade = 1): Sprite {
   return tile(25, (g) => {
     R(g, 11, 0, 2, 5, STONE[0]);
     R(g, 11, 0, 1, 5, STONE[2]);
@@ -359,6 +402,132 @@ function workshop(lit: boolean, step: number): Sprite {
     // And the brass wheel that says it is working.
     ell(g, 11, 15.5, 4, 4, BARK[0]);
     gear(g, 11, 15, 2, 6, step / 2, GOLD[1], GOLD[0]);
+    // The band runs along the wall's foot, over the stone; the plate is the window's lintel.
+    fitted(g, grade, 1, 19, 14, 3, 11);
+  });
+}
+
+// ---------- the Study ----------
+
+/** The scholars' hat: plum, where a gatherer's is one of four and Pipwick's is blue. */
+const SCHOLAR: readonly [string, string] = [SKY[3], SKY[2]];
+/** The spines on a shelf, by turns: muted, and no two alike side by side. */
+const SPINES = [CLAY[1], WATER[1], PAPER[0], GREEN[2], SKY[3], CLAY[0], WATER[2], STONE[1]] as const;
+
+/**
+ * The Study: a case of books, a lectern under a hanging lamp, and a gnome scholar who reads there.
+ * `state` 0 is unlit (the lamp out, the book shut, the scholar asleep on his feet's end), 1 lit with
+ * nothing to study (the book shut, the scholar standing by), and 2 to 4 at work on a folio: the page
+ * lying, lifted and turned, once for each folio studied.
+ */
+function study(state: number, grade = 1): Sprite {
+  return tile(24, (g) => {
+    const lit = state > 0;
+    const open = state >= 2;
+    // The case: a cornice, and three rows of books on two shelves.
+    R(g, 1, 1, 14, 17, BARK[1]);
+    R(g, 2, 2, 12, 15, BARK[0]);
+    R(g, 0, 0, 16, 1, BARK[3]);
+    R(g, 0, 1, 16, 1, BARK[2]);
+    for (let row = 0; row < 3; row++) {
+      const top = 2 + row * 5;
+      if (row < 2) R(g, 2, top + 4, 12, 1, BARK[2]);
+      for (let x = 2, n = row * 3; x < 14; n++) {
+        // A book two pixels thick has a lit edge; here and there one is shorter than its neighbours.
+        const wide = hash(n, row, 71) > 0.45 && x < 13 ? 2 : 1;
+        const short = hash(n, row, 72) > 0.7 ? 1 : 0;
+        const col = SPINES[(n * 3 + row * 5) % SPINES.length] ?? CLAY[1];
+        R(g, x, top + short, wide, 4 - short, col);
+        if (wide === 2) R(g, x, top + short, 1, 1, CREAM);
+        x += wide;
+      }
+    }
+    fitted(g, grade, 1, 6, 14, 6, 0);
+    // The scholar, turned to the lectern: asleep with no light to read by, bent to the page at work.
+    const pose = !lit ? 4 : open ? 1 : 0;
+    g.drawImage(flipped(gnomePic(SCHOLAR, pose)), 5, 9);
+    // The lectern: a post and a foot, and a sloping top with the book on it.
+    R(g, 3, 17, 2, 6, BARK[2]);
+    R(g, 3, 17, 1, 6, BARK[3]);
+    R(g, 1, 22, 6, 2, BARK[1]);
+    R(g, 1, 22, 6, 1, BARK[3]);
+    R(g, 0, 15, 8, 2, BARK[4]);
+    R(g, 0, 15, 8, 1, GOLD[0]);
+    if (open) {
+      // A folio lying open: two pages, and a third on its way over.
+      R(g, 1, 13, 6, 2, PAPER[2]);
+      R(g, 4, 13, 1, 2, PAPER[0]);
+      R(g, 1, 14, 6, 1, PAPER[1]);
+      if (state === 3) R(g, 5, 11, 1, 2, PAPER[2]);
+      if (state === 4) R(g, 3, 11, 1, 2, PAPER[2]);
+      // His hand is on the page while it turns.
+      if (state >= 3) {
+        R(g, 7, 13, 2, 1, WATER[1]);
+        R(g, state === 3 ? 6 : 5, 12, 1, 1, "#e9d8b8");
+      }
+    } else {
+      R(g, 2, 13, 5, 2, CLAY[1]);
+      R(g, 2, 13, 5, 1, CLAY[2]);
+      R(g, 2, 14, 5, 1, PAPER[0]);
+    }
+    // The lamp hangs over the book from the cornice.
+    R(g, 3, 2, 1, 2, BARK[0]);
+    lantern(g, 1, 4, lit ? GOLD[2] : STONE[0], lit ? CREAM : STONE[1]);
+  });
+}
+
+// ---------- the cart stop ----------
+
+/**
+ * The cart stop: a short rail into a timbered hole. `cart` is where its cart is: 0 waiting empty at
+ * the mouth, 1 there with a load, 2 rolling under with it, 3 gone under, 4 coming back up empty.
+ */
+function stop(cart: number): Sprite {
+  return tile(20, (g) => {
+    // The hole, and the rails running into it over their sleepers.
+    R(g, 3, 4, 10, 10, DARK);
+    for (const y of [10, 13, 16, 19]) {
+      R(g, 3, y, 10, 1, y > 10 ? BARK[3] : BARK[1]);
+      if (y > 10 && y < 19) R(g, 3, y + 1, 10, 1, BARK[0]);
+    }
+    for (const x of [5, 10]) {
+      R(g, x, 6, 1, 14, STONE[2]);
+      R(g, x, 6, 1, 5, STONE[0]);
+    }
+    if (cart !== 3) {
+      const under = cart === 2 || cart === 4;
+      const top = under ? 7 : 12;
+      // In the hole it is in shadow.
+      const wood = under ? BARK[1] : BARK[3];
+      const iron = under ? STONE[0] : STONE[1];
+      R(g, 4, top, 8, 5, wood);
+      R(g, 4, top, 8, 1, iron);
+      R(g, 4, top + 4, 8, 1, under ? BARK[0] : BARK[1]);
+      R(g, 6, top + 1, 1, 3, under ? BARK[0] : BARK[2]);
+      R(g, 9, top + 1, 1, 3, under ? BARK[0] : BARK[2]);
+      R(g, 4, top + 5, 2, 2, iron);
+      R(g, 10, top + 5, 2, 2, iron);
+      if (!under) {
+        R(g, 4, top + 5, 1, 1, STONE[3]);
+        R(g, 10, top + 5, 1, 1, STONE[3]);
+      }
+      if (cart === 1 || cart === 2) {
+        // Whatever it was handed, heaped over the rim.
+        R(g, 5, top - 1, 6, 1, under ? BARK[2] : "#cbb894");
+        R(g, 6, top - 2, 3, 1, under ? BARK[1] : "#e9d8b8");
+        if (!under) R(g, 9, top - 1, 1, 1, GOLD[1]);
+      }
+    }
+    // The timbers of the mouth stand over whatever passes under them.
+    for (const x of [1, 13]) {
+      R(g, x, 3, 2, 11, BARK[2]);
+      R(g, x, 3, 1, 11, BARK[3]);
+    }
+    R(g, 0, 0, 16, 4, BARK[2]);
+    R(g, 0, 0, 16, 1, BARK[4]);
+    R(g, 0, 3, 16, 1, BARK[0]);
+    R(g, 2, 1, 1, 1, STONE[2]);
+    R(g, 13, 1, 1, 1, STONE[2]);
   });
 }
 
@@ -448,7 +617,7 @@ function boiler(step: number): Sprite {
 // ---------- carrying ----------
 
 /** A stone hood over half a tile, with the dark of a tunnel under it; `side` is the side it stands on. */
-function hood(side: number): Sprite {
+function hood(side: number, grade = 1): Sprite {
   const { c, g } = makeCanvas(16, 18);
   // Seen from the south everything is a stone box; what changes is where its mouth is.
   const box = (x: number, y: number, w: number, h: number): void => {
@@ -476,6 +645,25 @@ function hood(side: number): Sprite {
     arch(g, 4, 3, 8, 8, DARK);
   }
   R(g, side === 0 ? 13 : 2, side === 1 ? 13 : 4, 2, 1, GREEN[3]);
+  if (grade >= 2) {
+    // A brass lip on the mouth: over it where the mouth is at a side, round it where it faces us.
+    if (side === 0 || side === 2) {
+      const x = side === 0 ? 8 : 4;
+      R(g, x, 7, 4, 1, BRASS[1]);
+      R(g, x, 7, 1, 1, BRASS[2]);
+      R(g, side === 0 ? 11 : 4, 8, 1, 9, BRASS[0]);
+    } else if (side === 1) {
+      R(g, 2, 12, 12, 1, BRASS[1]);
+      R(g, 2, 12, 2, 1, BRASS[2]);
+      R(g, 2, 10, 1, 2, BRASS[0]);
+      R(g, 13, 10, 1, 2, BRASS[0]);
+    } else {
+      arch(g, 3, 2, 10, 9, BRASS[1]);
+      arch(g, 4, 3, 8, 8, DARK);
+      R(g, 5, 2, 3, 1, BRASS[2]);
+      R(g, 12, 5, 1, 6, BRASS[0]);
+    }
+  }
   return spr(c, 8, 18);
 }
 
@@ -748,22 +936,32 @@ export interface Machines {
   gnomeLeft: Sprite[][];
   /** waddle[hat][carrying ? 1 : 0][step]: a gnome walking, two steps, empty-handed or with his arms up. */
   waddle: Sprite[][][];
-  rake: Canvas;
+  /** The rake a gatherer of the second grade keeps stood beside him, and the same on his other side. */
+  rake: Sprite;
+  rakeLeft: Sprite;
   basket: Canvas;
   barrow: Canvas;
-  /** Each mill face, cold first and then the steps of its work. */
-  saw: Sprite[];
-  kiln: Sprite[];
-  press: Sprite[];
-  bench: Sprite[];
-  /** workshop[lit ? 1 : 0][step]. */
-  workshop: Sprite[][];
+  /**
+   * What has a grade is drawn in two looks, `[0]` as the first grade and `[1]` with the brass of the
+   * second and third (`lookOf`). Each mill face, cold first and then the steps of its work:
+   * saw[look][step].
+   */
+  saw: Sprite[][];
+  kiln: Sprite[][];
+  press: Sprite[][];
+  bench: Sprite[][];
+  /** workshop[look][lit ? 1 : 0][step]. */
+  workshop: Sprite[][][];
+  /** study[look][state]: unlit, lit with nothing to study, and the three steps of a page turned. */
+  study: Sprite[][];
+  /** stop[cart]: its cart waiting empty, waiting with a load, rolling under, gone, and coming back. */
+  stop: Sprite[];
   /** pylon[tall ? 1 : 0][light: 0 out, 1 dim, 2 bright]. */
   pylon: Sprite[][];
   wheel: Sprite[];
   boiler: Sprite[];
-  /** hood[side]. */
-  hood: Sprite[];
+  /** hood[look][side]. */
+  hood: Sprite[][];
   /** splitter[dir] and joiner[dir]: what marks the tile, pointing each way. */
   splitter: Canvas[];
   joiner: Canvas[];
@@ -782,8 +980,28 @@ export interface Machines {
   gate: Sprite;
   fenceAcross: Sprite;
   fenceDown: Sprite;
-  /** The brass that second- and third-tier machines wear. */
-  pip: Canvas;
+  /**
+   * The mark every piece of the second grade wears in the top-left corner of its tile, and the two of
+   * the third: pips[0] and pips[1]. A belt has the same mark as part of its tile (`belts.ts`).
+   */
+  pips: Canvas[];
+}
+
+/** Which of a graded piece's two looks a grade is drawn in: the first grade's, or the brass of the second and third. */
+export const lookOf = (grade: number): number => (grade >= 2 ? 1 : 0);
+/** The two looks, as the grades they are drawn from. */
+const LOOKS = [1, 2] as const;
+/**
+ * The mark of a grade above the first, typed: one stud of muted brass with its dark edge for the
+ * second, two side by side for the third. A belt's tile and every other graded piece use the same.
+ */
+export const PIP = { rows: ["kkkk", "kyok", "kook", "kkkk"], step: 3 } as const;
+/** The mark of a grade as a small picture, or nothing for the first. */
+function pips(count: number): Canvas {
+  const { c, g } = makeCanvas(PIP.rows[0].length + (count - 1) * PIP.step, PIP.rows.length);
+  const one = bitmap(PIP.rows, PAL);
+  for (let k = 0; k < count; k++) g.drawImage(one, k * PIP.step, 0);
+  return c;
 }
 
 const mirror = (s: Sprite): Sprite => ({ c: flipped(s.c), ax: s.c.width - s.ax, ay: s.ay });
@@ -795,18 +1013,21 @@ export function makeMachines(): Machines {
     gnome: gnomes,
     gnomeLeft: gnomes.map((row) => row.map(mirror)),
     waddle: HATS.map((hat) => [0, 3].map((pose) => [gnome(hat, pose, 1), gnome(hat, pose, 2)])),
-    rake: outlined(bitmap(RAKE, PAL), INK),
+    rake: spr(bitmap(RAKE, PAL), 3, RAKE.length),
+    rakeLeft: mirror(spr(bitmap(RAKE, PAL), 3, RAKE.length)),
     basket: outlined(bitmap(BASKET, PAL), INK),
     barrow: outlined(bitmap(BARROW, PAL), INK),
-    saw: [0, 1, 2].map(saw),
-    kiln: [0, 1, 2, 3].map(kiln),
-    press: [0, 1, 2].map(press),
-    bench: [0, 1, 2].map(bench),
-    workshop: [false, true].map((lit) => [0, 1].map((s) => workshop(lit, s))),
+    saw: LOOKS.map((grade) => [0, 1, 2].map((s) => saw(s, grade))),
+    kiln: LOOKS.map((grade) => [0, 1, 2, 3].map((s) => kiln(s, grade))),
+    press: LOOKS.map((grade) => [0, 1, 2].map((s) => press(s, grade))),
+    bench: LOOKS.map((grade) => [0, 1, 2].map((s) => bench(s, grade))),
+    workshop: LOOKS.map((grade) => [false, true].map((lit) => [0, 1].map((s) => workshop(lit, s, grade)))),
+    study: LOOKS.map((grade) => [0, 1, 2, 3, 4].map((state) => study(state, grade))),
+    stop: [0, 1, 2, 3, 4].map(stop),
     pylon: [false, true].map((tall) => [0, 1, 2].map((l) => pylon(tall, l))),
     wheel: [0, 1, 2, 3].map(wheel),
     boiler: [0, 1, 2].map(boiler),
-    hood: [0, 1, 2, 3].map(hood),
+    hood: LOOKS.map((grade) => [0, 1, 2, 3].map((side) => hood(side, grade))),
     splitter: eachWay(SPLITTER),
     joiner: eachWay(JOINER),
     heads: HEADS.map(([top, foot]) =>
@@ -822,6 +1043,6 @@ export function makeMachines(): Machines {
     gate: gate(),
     fenceAcross: fence(true),
     fenceDown: fence(false),
-    pip: outlined(bitmap(["Yy", "yo"], PAL), INK),
+    pips: [1, 2].map(pips),
   };
 }

@@ -4,7 +4,7 @@
  * until they come back. What it did meanwhile is counted, not guessed: the difference from the moment
  * it was last seen (`seen`).
  */
-import { ALL_ITEMS, MILLI } from "./tables.ts";
+import { ALL_ITEMS, type Goal, isNode, MILLI } from "./tables.ts";
 import { type Away, counts, type Seen, type Yard } from "./yard.ts";
 
 /** One tick of the yard in Leaf's time. */
@@ -30,3 +30,10 @@ export function awayOf(y: Yard): Away | null {
   const coins = Math.floor(y.till / MILLI) - Math.floor(y.seen.till / MILLI);
   return { seconds: Math.floor((ticks * TICK_MS) / 1000), coins, made };
 }
+
+/**
+ * The research that became known since the yard's owner was last there, in the order it did: of the
+ * goals done since the yard last logged one (`told`). Leaf logs with every command done, which is
+ * also when it notes where the owner last saw the yard (`seen`), so the two are of one moment.
+ */
+export const knownSince = (y: Yard): Goal[] => y.done.slice(y.told).filter((g) => !isNode(g));

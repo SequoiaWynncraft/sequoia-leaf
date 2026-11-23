@@ -1,20 +1,29 @@
 /**
  * Teaching by doing. Looking at the yard as it stands, this says what the next small thing to try
  * is, and where: one nudge at a time, in the place it matters. The lessons of the first tier are the
- * lesson, each nudge keyed on the lesson in hand; after them the yard is left to explain itself when
- * something goes wrong.
+ * lesson, each nudge keyed on the lesson in hand; after them each new idea is said once, when its
+ * thing first exists (the tier's screen, a machine's numbers, the grades, the Study, research), and
+ * otherwise the yard is left to explain itself when something goes wrong.
  *
- * Nothing here draws anything or touches the yard.
+ * A nudge is about a tile of the yard, or about a part of the interface (`part`), beside which it is
+ * then said. Nothing here draws anything or touches the yard.
  */
 
 import {
+  ALL_GOALS,
   BELT,
   BENCH,
   condition,
   DEADFALL,
   DEPOT,
+  FOLIOS,
   GATHERER,
   goal,
+  GOALS,
+  highest,
+  isGraded,
+  isMaker,
+  isNode,
   item,
   type Kind,
   litOf,
@@ -24,8 +33,12 @@ import {
   NONE,
   power,
   PYLON,
+  ready,
+  RECIPES_N,
+  recipeSays,
   refusal,
   STATES,
+  STUDY,
   TROUBLE,
   WORKSHOP,
   type Yard,
@@ -42,6 +55,17 @@ export interface Nudge {
   tool: Kind | "select" | null;
   /** Lessons that are learnt by doing stay until done; the rest are said for a while and then count as taken. */
   lasting: boolean;
+  /**
+   * The part of the interface it is about, and is said beside, in place of a tile: the tier's
+   * button, research's, the grades over the toolbar, or the slot of the tool it wants picked up.
+   */
+  part?: "tier" | "research" | "grades" | "tool";
+}
+
+/** What the member has before them that the yard does not hold: the tile whose card is open (or -1), and the kind of piece in hand. */
+export interface Looking {
+  readonly picked: number;
+  readonly hand: Kind | null;
 }
 
 const has = (w: Yard, kind: Kind): number => w.kind.indexOf(kind);
@@ -74,8 +98,21 @@ const owned = (w: Yard, i: number): boolean => {
   return plot !== undefined && w.plots.includes(plot.plot);
 };
 
-/** The next thing worth saying, or nothing. `finger` words the belt lesson for taps rather than a drag. */
-export function nudge(w: Yard, taught: ReadonlySet<string>, finger: boolean): Nudge | null {
+/** Whether the yard may make a recipe that takes more than 1 of a part: from then on a card says numbers. */
+const counted = (w: Yard): boolean =>
+  RECIPES_N.some((r) => r.need.some((n) => n > 1) && locked(w.open, { make: r.out }) === null);
+
+/**
+ * The next thing worth saying, or nothing. `finger` words a lesson for taps rather than a mouse;
+ * `at` is what the member has before them (a card open, a kind in hand), for the ideas that are
+ * taught where they are met.
+ */
+export function nudge(
+  w: Yard,
+  taught: ReadonlySet<string>,
+  finger: boolean,
+  at: Looking = { picked: -1, hand: null },
+): Nudge | null {
   const [cx, cy] = w.land.depot;
   const told = (id: string): boolean => taught.has(id);
   const lit = litOf(w);
@@ -173,6 +210,30 @@ export function nudge(w: Yard, taught: ReadonlySet<string>, finger: boolean): Nu
       };
   }
 
+  // The grades, the first time a kind that has two is in hand: said beside the buttons that choose one.
+  if (!told("grades") && at.hand !== null && isGraded(at.hand) && highest(w.open, at.hand) > 1)
+    return {
+      id: "grades",
+      text: finger ? "Choose the grade to build here." : "Choose the grade to build here, or press G.",
+      x: cx,
+      y: cy - 1,
+      tool: null,
+      lasting: false,
+      part: "grades",
+    };
+
+  // A machine's numbers, the first time a card is opened once the yard counts.
+  const picked = at.picked >= 0 ? (w.kind[at.picked] ?? NONE) : NONE;
+  if (!told("numbers") && (isMaker(picked) || picked === GATHERER) && counted(w))
+    return {
+      id: "numbers",
+      text: "Its card says what it makes and needs a minute: count the machines that feed it there.",
+      x: at.picked % w.land.w,
+      y: Math.floor(at.picked / w.land.w),
+      tool: null,
+      lasting: false,
+    };
+
   if (w.open.board && !told("board"))
     return {
       id: "board",
@@ -182,6 +243,46 @@ export function nudge(w: Yard, taught: ReadonlySet<string>, finger: boolean): Nu
       tool: null,
       lasting: false,
     };
+
+  // The tier's own screen, once there is more than lessons: what is on it is its projects, or from the tier that has none, its research.
+  if (w.open.tier >= 1 && !told("tier"))
+    return {
+      id: "tier",
+      text: GOALS.some((g) => g.kind === "project" && g.tier === w.open.tier)
+        ? `Open Tier ${w.open.tier} here to take a project: each one unlocks something.`
+        : `Open Tier ${w.open.tier} here for its commission and what it needs first.`,
+      x: cx,
+      y: cy - 1,
+      tool: null,
+      lasting: false,
+      part: "tier",
+    };
+
+  // The Study, once it may be built and until one stands; then research, until something is studied.
+  if (locked(w.open, { build: STUDY }) === null) {
+    const folio = FOLIOS.find((f) => locked(w.open, { make: f }) === null);
+    if (has(w, STUDY) < 0 && !told("study") && folio !== undefined)
+      return {
+        id: "study",
+        text: `Build a Study and bring it folios: ${recipeSays(folio).replace(/^A /, "a ")}`,
+        x: cx,
+        y: cy - 1,
+        tool: STUDY,
+        lasting: true,
+        part: "tool",
+      };
+    const open = ALL_GOALS.some((g) => !isNode(g) && ready(w.open, g));
+    if (has(w, STUDY) >= 0 && w.line.length === 0 && open && !told("research"))
+      return {
+        id: "research",
+        text: "Choose here what the Study studies.",
+        x: cx,
+        y: cy - 1,
+        tool: null,
+        lasting: true,
+        part: "research",
+      };
+  }
 
   // Select only once the yard has it.
   const pieces = w.kind.reduce((n, k) => n + (k !== NONE && k !== DEPOT ? 1 : 0), 0);

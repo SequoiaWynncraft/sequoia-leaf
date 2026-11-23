@@ -7,11 +7,25 @@ import { GATHERER, isRaw, type Item, type Kind, PACE, RECIPE, type Recipe, STUDY
 
 /** Ticks in a minute. */
 export const MINUTE = 600;
+/** How far across its tile a thing on a belt is counted in: eighths (`tick.ts`). */
+const ACROSS = 8;
 
 /** How many times a minute a piece of a kind and grade finishes: a gatherer's thing, a machine's recipe, a Study's folio. */
 export function makes(k: Kind, grade: number, r: Recipe | null): number {
   const work = k === GATHERER ? WORK.gather : k === STUDY ? WORK.study : (r?.work ?? 0);
   return work > 0 ? (MINUTE * (PACE[grade] ?? 0)) / work : 0;
+}
+
+/**
+ * How many things a minute a line of belt (or a tunnel) of a grade carries, fed flat out. A tile
+ * holds one thing, and a thing set on a line starts at its tile's edge and crosses it in whole ticks:
+ * 4, 3 and 2 at the three grades' paces, so 150, 200 and 300 a minute. Not 225 at grade 2: what a
+ * thing has over at the end of a tile it keeps on the next, so the tiles after the first never hold a
+ * line back, but the first lets the next thing on only every third tick, whatever feeds it.
+ */
+export function carried(grade: number): number {
+  const pace = PACE[grade] ?? 0;
+  return pace > 0 ? MINUTE / Math.ceil(ACROSS / pace) : 0;
 }
 
 /** What a machine of a grade needs of each part a minute to make a recipe flat out. */

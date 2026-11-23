@@ -1,14 +1,15 @@
 /**
  * What is always in view over the yard: the power as two numbers and a bar, the node in hand (a
- * lesson, a project or the commission), the buttons for the yard's books, and the way back to town.
- * Projects has its button only once tier 1 is open. The last button is the depot's until the yard
- * owns a second plot, and from then the yard's (`views.ts`; on a phone it leads the row instead, so
- * that its count has room: `index.html`): the same sheet, with its map and its list of trouble, and on
- * the button how many pieces are in trouble. In a visit, only "Top yards" of the books, and in the
- * node's place a strip that says whose yard it is.
+ * lesson, a project or the commission) and under it the research being studied, the buttons for the
+ * yard's books, and the way back to town. The tier's screen has its button only once tier 1 is open,
+ * and research only once the Study may be built. The last button is the depot's until the yard owns
+ * a second plot, and from then the yard's (`views.ts`; on a phone it leads the row instead, so that
+ * its count has room: `index.html`): the same sheet, with its map and its list of trouble, and on the
+ * button how many pieces are in trouble. In a visit, only "Top yards" of the books, and in the node's
+ * place a strip that says whose yard it is.
  */
 
-import { ALL_ITEMS, GOALS, isFilled, NODES, power, TICK_MS } from "@sequoia-leaf/factory";
+import { GOALS, isFilled, NODES, power, TICK_MS, tierName } from "@sequoia-leaf/factory";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
@@ -17,16 +18,20 @@ import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 
-import type { Art } from "../art/index.ts";
 import { S } from "../state.ts";
 import { collect, keepScreen } from "../yard.ts";
-import { orderRef } from "./card.ts";
+import { wantsShort } from "./goal.ts";
 import { handLabel } from "./notes.ts";
-import { type PanelId, projectsOpen, takeable, togglePanel } from "./panels.ts";
-import { $, button, pic, shows, wantRows, when, type YardIcon, yardIcon } from "./parts.ts";
+import { openPanel, type PanelId, togglePanel } from "./panels.ts";
+import { $, button, pic, shows, when, type YardIcon, yardIcon } from "./parts.ts";
+import { orderRef } from "./refs.ts";
+import { studyStrip } from "./research.ts";
+import { givenTo, researchOpen, takeable, tierOpen } from "./standing.ts";
 import { hasViews, refreshWalk, wrongCount } from "./views.ts";
 
 const books = new Map<PanelId, HTMLElement>();
+/** What each book's button is called: the tier's, by the tier. */
+const titles = new Map<PanelId, (tier: number) => string>();
 
 /** Puts a small count on a button's corner, or takes it off. One of three digits or more is set small, to fit the corner. */
 function set(b: HTMLElement, n: string | null): void {
@@ -66,7 +71,7 @@ function powerPlaque(): () => void {
   );
 }
 
-function tracker(art: Art): () => void {
+function tracker(): () => void {
   const host = $("track");
   host.addEventListener("click", () => {
     togglePanel("orders");
@@ -77,20 +82,17 @@ function tracker(art: Art): () => void {
     () => {
       const w = S.world;
       const o = w.hand === -1 ? undefined : GOALS[w.hand];
-      const got = w.hand === -1 ? null : (w.got[w.hand] ?? null);
       return {
         label: handLabel(),
         from: w.hand === -1 ? null : (NODES[w.hand]?.from ?? null),
         title: o?.title ?? null,
         ready: w.board.filter((s) => isFilled(s.want, s.filled)).length,
-        wants: o
-          ? ALL_ITEMS.filter((k) => (o.want[k] ?? 0) > 0).map(
-              (k) => [k, Math.min(got?.[k] ?? 0, o.want[k] ?? 0), o.want[k] ?? 1] as const,
-            )
-          : [],
+        wants: w.hand === -1 ? [] : givenTo(w.hand),
       };
     },
     (p) => {
+      // What it wants, by the one part that lays such rows out: here each a picture, a bar and a count.
+      const wanted = wantsShort(p.wants);
       host.replaceChildren(
         el(
           "div",
@@ -100,7 +102,7 @@ function tracker(art: Art): () => void {
           p.ready > 0 ? el("span", "k-chip lit", { text: `${p.ready} to hand over` }) : null,
         ),
         el("div", "", { text: p.title ?? "No project in hand" }),
-        ...wantRows(art, p.wants),
+        ...(wanted ? [wanted.node] : []),
       );
     },
   );
@@ -108,20 +110,22 @@ function tracker(art: Art): () => void {
 
 function bookButtons(): () => void {
   const host = $("books");
-  const make = (id: PanelId & YardIcon, title: string, key: string, about?: () => string): HTMLElement => {
-    const b = el("button", "k-btn wood icon pip", { type: "button", "aria-label": title }, yardIcon(id));
+  const make = (id: PanelId, art: YardIcon, title: (tier: number) => string, key: string, about?: () => string) => {
+    const b = el("button", "k-btn wood icon pip", { type: "button", "data-book": id }, yardIcon(art));
     b.addEventListener("click", () => {
       togglePanel(id);
     });
-    tip(b, `${title} (${key})`, about);
+    tip(b, () => `${title(S.world.open.tier)} (${key})`, about);
     books.set(id, b);
+    titles.set(id, title);
     if (!S.visiting || id === "board") host.append(b);
     return b;
   };
-  const ordersBtn = make("orders", "Orders", "O");
-  make("board", "Top yards", "T");
-  const projectsBtn = make("projects", "Projects", "P", () => "Deliveries for the guild. Each unlocks something.");
-  const depotBtn = make("depot", "The depot", "I");
+  const ordersBtn = make("orders", "orders", () => "Orders", "O");
+  make("board", "board", () => "Top yards", "T");
+  const tierBtn = make("tier", "projects", tierName, "P");
+  const researchBtn = make("research", "research", () => "Research", "L");
+  const depotBtn = make("depot", "depot", () => "The depot", "I");
   // The same sheet once the yard owns a second plot, with its map and its list of trouble: the yard's button.
   const yardBtn = el(
     "button",
@@ -138,21 +142,28 @@ function bookButtons(): () => void {
     () => ({
       ready: S.world.board.filter((s) => isFilled(s.want, s.filled)).length,
       open: takeable().length,
-      // Projects is there only once there are projects: from tier 1 on, and not in a visit.
-      projects: projectsOpen(),
+      // The tier's screen is there once there is more than lessons, and research once the Study may be built.
+      tier: tierOpen() ? S.world.open.tier : null,
+      research: researchOpen(),
       yard: hasViews(),
       // Looked for at most once a second, and not at all in a yard of one plot or in a visit.
       wrong: S.visiting ? 0 : wrongCount(),
       panel: S.panel,
+      nudged: S.nudgePart,
     }),
     (p) => {
       set(ordersBtn, p.ready > 0 ? String(p.ready) : null);
-      set(projectsBtn, p.open > 0 ? String(p.open) : null);
-      projectsBtn.hidden = !p.projects;
+      set(tierBtn, p.open > 0 ? String(p.open) : null);
+      tierBtn.hidden = p.tier === null;
+      researchBtn.hidden = !p.research;
       depotBtn.hidden = p.yard;
       yardBtn.hidden = !p.yard;
       set(yardBtn, p.wrong > 0 ? String(p.wrong) : null);
-      for (const [id, b] of books) b.classList.toggle("down", p.panel === id);
+      for (const [id, b] of books) {
+        b.classList.toggle("down", p.panel === id);
+        b.classList.toggle("nudged", p.nudged === id && p.panel !== id);
+        b.setAttribute("aria-label", titles.get(id)?.(p.tier ?? 0) ?? "");
+      }
       yardBtn.classList.toggle("down", p.panel === "depot");
     },
   );
@@ -213,8 +224,10 @@ function visitStrip(who: { readonly id: string; readonly name: string }): () => 
 
 let parts: (() => void)[] = [];
 
-export function initHud(art: Art): void {
-  parts = S.visiting ? [visitStrip(S.visiting), bookButtons()] : [powerPlaque(), tracker(art), bookButtons()];
+export function initHud(): void {
+  parts = S.visiting
+    ? [visitStrip(S.visiting), bookButtons()]
+    : [powerPlaque(), tracker(), studyStrip(() => openPanel("research")), bookButtons()];
   corner();
 }
 

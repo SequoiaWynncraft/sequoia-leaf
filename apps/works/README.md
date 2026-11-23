@@ -18,11 +18,11 @@ from the layout (`layout.ts`) and what it remembers of a piece between frames (`
 arrays by tile too. Things, kinds, plots and goals are numbers throughout, as the rules number them;
 names are used only on the wire (the rules write and read it: `writeCommand`, `readView`,
 `readNotes`, `readAnswer`) and where art and words are looked up, once, into lists by number
-(`art/items.ts`, `art/index.ts`, the rules' `ITEM_INFO` and `KIND_INFO`). The page shows tiers 0 and
-1 as the first design did; every grade is drawn as the first. One list says which kinds the page
-draws and builds (`DRAWN`, in `state.ts`), and the dock, the pick (`Q`) and the drawing read it: the
-Study, the cart stop and the sorter, which no tier shown yet builds, are not on it, so each is a plain
-post with nothing of a belt about it, and a card that says what it is. Nothing on the page writes to
+(`art/items.ts`, `art/index.ts`, the rules' `ITEM_INFO` and `KIND_INFO`). The page shows tiers 0 to
+3: grades, recipes that count, the Study and research, the sorter and the cart stop each come in with
+the goal that unlocks them, and a yard in tier 0 or 1 shows none of them. One list says which kinds
+the page draws and builds (`DRAWN`, in `state.ts`), and the dock, the pick (`Q`) and the drawing read
+it: every kind in the tables but the depot, which is drawn and never built. Nothing on the page writes to
 its yard but the rules: pieces in hand are drawn from a yard that shares everything with the real
 one but its own few arrays (`asIf`, in `layout.ts`), and the orders Leaf hung are put on the board
 by the rules' `hear`. A side table's row is read only through the rules' `holderOf` and `tunnelOf`.
@@ -171,10 +171,24 @@ trouble that has lasted wears a mark over its head, and so does a belt whose loa
 go. A splitter has a brass arrowhead on each way out that leads somewhere, and on a way that is shut
 a short bar across that edge, red at its ends and pale in the middle, so that it is told from every
 colour a line can be given. Pylons grow once they reach further, crates once they hold more, and the
-depot gains a flywheel once it gives more power. Every grade of a piece is drawn as the first, for
-now (the art for grades, rakes and barrows, brass and rollers among it, is kept for that). The depot
+depot gains a flywheel once it gives more power. The depot
 is the back of the workshop the town sees from the front: the same planks, stone foot, chimney and
 brass wheel.
+
+**Grades.** A grade is written as a numeral: "Belt II". A piece of the second grade wears brass
+(`art/machines.ts`, `art/belts.ts`): a belt runs on darker wood with a brass edge and chevron, a
+mill, a bench and a workshop have a brass band and plate, a tunnel a brass hood, a gatherer a rake,
+a Study a brass lectern. So that a whole line reads at the farthest zoom, where a fitting is a pixel
+or two, every piece above the first grade also has a small mark of muted brass in the top-left of
+its tile, one for II and two for III. The third grade is drawn as the second with its mark doubled:
+no goal of the slice unlocks it. `?sheet=grades` lays every graded piece out at each grade, and
+`review/gallery.ts` stands them in a yard of its own.
+
+**The later pieces.** The Study is a bookcase, a lectern and a lamp with a gnome scholar at it: he
+turns a page as a folio is studied, stands idle with nothing to study, and the lamp is out with no
+power. A sorter is a belt with a gate across it and a board that shows the thing it sends to its
+left; with nothing set the board is bare. A cart stop is a rail into a timbered hole: a cart rolls
+under with what was handed in and comes back empty. The two folios ride a belt as any thing does.
 
 **Building.** With a mouse: pick a tool (the dock, or a number key) and a ghost of it follows the
 pointer, with corners in gold where it can go and in coral, with the reason, where it cannot;
@@ -183,7 +197,11 @@ the button is let go; a run that ends beside the depot turns to face it. What is
 and why it cannot go, its price, a tunnel's far mouth, a run, the pieces held with Select as they
 would stand) is kept while the pointer stays on its tile, and worked out again for the same tile when
 the yard or the Coins to hand change under it (`keepAim`, asked each frame and by each press): a key,
-a card's button, an undo or Leaf's yard taken. `R` turns, `E` is the
+a card's button, an undo or Leaf's yard taken. A kind that the yard may build above the first grade
+shows a button for each grade in the line over the dock, with its numeral and its price, the one in
+hand lit; `G` steps through them, and the choice is kept for that kind between visits
+(`works.screen.v1`). Set down over a piece of its kind of a lower grade, the piece in hand raises it for the difference (it takes the way that piece faces, so a line raised a piece at a time is not turned), and the aim says so; over one of a higher grade it only turns it, and never
+lowers it. A run of belt dragged along belts of a lower grade raises them. `R` turns, `E` is the
 spade, a right-click takes away, `Q` takes up the tool from the thing pointed at, `Z` undoes, `Esc`
 puts away. `M` is the map (with an area marked, `M` moves it) and `I` what the yard makes and needs. `C` is the brush (with an area marked, `C` copies it): with it in hand the line over the dock shows six colours and none, and
 a click on a belt (or a drag across the yard) gives its whole line the one chosen. With nothing in hand a drag moves the view, the wheel zooms, and a click asks about a
@@ -211,13 +229,20 @@ or kept piece has the colour it had, and the ghost shows it. With nothing
 marked the line shows the yard's blueprints, as many places as it has unlocked, each a small picture of its layout with its size
 and its price now; pressing one puts it in hand as a copy is. Save asks which place, and a kept one
 asks to be pressed again before it is replaced; a blueprint in hand has a bin, which asks too.
-`Z` undoes a move, a copy or a removal as one step, and a splitter's way shut or opened.
+A copy or a blueprint stands its pieces at the grades it holds, so set down over the same pieces at
+another grade it is sent, as the rules would raise or lower them. Once the yard may raise an area,
+the line has Upgrade with what the rules ask for the whole of it (`upgradePrice`): pressed twice, it
+raises every marked piece to the highest grade the yard may build, all of them or none, and where it
+cannot the rules' reason is said.
+`Z` undoes a move, a copy, a removal, a piece raised or an area raised as one step, to the grades
+there were, and a splitter's way shut or opened.
 
 **Asking.** Everything in the yard is a card in the kit's one card system (`card.ts`, registered
 in `ui/card.ts`). A card is its print: what it shows of the yard and the purse, as plain values
 (`ui/prints.ts`), drawn by `ui/cards.ts`, which reaches no yard (its buttons are the page's tools,
 handed in). The card that is up is drawn again exactly when its print differs, so it shows nothing it
-is not kept by; the panels and the top bar's parts are kept the same way (`shows`, in `ui/parts.ts`). Resting the mouse on a
+is not kept by; the panels and the top bar's parts are kept the same way (`shows`, in `ui/parts.ts`).
+A card is named by a reference (`ui/refs.ts`). Resting the mouse on a
 thing shows its card, clicking pins it, and a tap (or a
 finger kept on it, with a tool in hand) pins it as a sheet along the bottom, with the yard moved
 so the thing stays in view above it. A thing named inside a card opens its own card in its place,
@@ -228,31 +253,69 @@ with a back arrow.
   it goes into, what orders and the depot pay for one, and the orders on the board still asking
   for it with how many they are owed. One from the ground says where it comes from instead, and
   which plots have it.
-- _A machine_ (in the dock, a node's unlocks, a recipe): what it does, what it can make, its draw, pace,
-  price and key. One standing in the yard adds what it is doing and holds, and what can be done:
-  pin a recipe, tip out, shut a crate, turn, take up another, take away. A splitter's card has its
-  three ways out round its picture, as they lie in the yard: each says Open, Shut, or No belt (open,
-  with nothing to take from it), and a press shuts or opens it. A visitor sees them and has nothing
-  to press. The depot's card says that each thing that arrives pays 1% of its worth, and its
-  buttons open the orders, the projects, and what the yard makes and needs.
+- _A machine_ (in the dock, a goal's unlocks, a recipe): what it does, what it can make, its draw, pace,
+  price and key; at a grade above the first ("Belt II"), what that grade does more and costs. Its
+  name says its grade once the yard may build the kind higher. One standing in the yard adds what it
+  is doing and holds, and what can be done: pin a recipe, tip out, shut a crate, turn, take up
+  another, take away, and raise it a grade where it stands ("Raise to II", with the price). A
+  splitter's card has its three ways out round its picture, as they lie in the yard: each says Open,
+  Shut, or No belt (open, with nothing to take from it), and a press shuts or opens it. A sorter's
+  card chooses the thing it sends left as a machine's recipe is chosen; a cart stop's says how many
+  stand of how many may; a Study's names what is being studied and opens research. A visitor sees
+  them and has nothing to press. The depot's card says that each thing that arrives pays 1% of its
+  worth, and its buttons open the tier's screen and what the yard makes and needs.
 - _A plot, an order_: what it holds or wants, every thing and machine in it a thing. Land that is
   not the yard's is a plot's card, and sells itself from it.
-- _A node_ (a lesson, a project or a commission; the node in hand is `order:story`): who asks and
-  what they say, what it wants and has been given, what it unlocks, and for a project that may be
-  taken, a button that takes it in hand.
+- _A goal_ (a lesson, a project, a commission or a piece of research; the node in hand is
+  `order:story`): who asks and what they say (research says what it is, in the sentences of what it
+  unlocks), what it wants and has been given, what it still waits on, what it unlocks and leaves in
+  town, and what may be done with it: a project taken in hand, research put in the line or taken out.
+- _What a goal unlocks_ that is not a piece, a thing or a plot: a tool with its picture from the
+  dock, a number as it will be with the picture of what it changes ("A crate holds 128 items, up
+  from 32."), the next tier, and what a finished goal leaves in town.
 
-The orders panel's lines, the depot's books and the projects are built from the kit's `thing`.
+**Numbers.** From the moment the yard may make a recipe that takes more than 1 of a part, a card
+says what its piece does a minute, from the rules' planner (`ui/numbers.ts`): "Makes 30 hampers a
+minute.", "Needs 60 planks a minute: 1.2 mills, or 0.8 at II.", what a gatherer gathers, a Study
+studies and a belt carries. What is wrong and what to do about it stays above them. Until then no
+card says one, and a recipe's parts show a count only where it is more than 1.
+
+**A goal, wherever it is shown.** One module lays out a goal's head (its picture in a slot, then its
+name) and each list on it (`ui/goal.ts`): Wants, Needs, Unlocks, Leaves in town. A list is a label on
+a line of its own and a row for each thing: its picture in a slot of one width, its name, and at the
+right edge what is counted (a bar and `8 / 12`, a word or two, the button that begins it, or
+nothing). Every head on a screen begins at one left edge, in a card, on paper or in the list of those done. Every row is a thing with a card: what is unlocked is shown, not named. What a goal waits
+on is each a thing with how it stands (known, being studied with its bar, in the line, not begun),
+and the first that can be begun carries the button that begins it, so no screen ends in a sentence.
+The tier's screen, Orders, the corner, the sheet for a goal finished, research and a goal's own card
+all call it; its styles are one marked block of `index.html`; and a test (`ui/goal.test.ts`) holds
+the rest of the page to laying no such row out by hand. What a goal unlocks is the rules' list of it
+(`unlockedBy`): nothing on the page reads a field of an `Unlocks`, and the same test holds it to
+that. How goals stand is read from the yard in one place (`ui/standing.ts`). A picture for every
+item, kind, tool, number and goal is walked from the tables by `ui/pictures.test.ts`.
+
+The depot's books are built from the kit's `thing`.
 
 **The yard's books.** Always in view: the purse, power as drawn and given with a bar, and the
 node in hand: its kind ("Lesson 2 of 4", "Tier 1 project", "Tier 1 commission"), who asks, and what
 it wants and has been given. Lessons come into hand by themselves, and after the last of a tier its
 commission. Panels: the orders (the node in hand, and the board's standing orders with swap and
-hand over), the projects, and the yard's sheet (below), which is the depot's panel. The power
-plaque opens one more, which says where the power comes from and where it goes. Projects, and its
-button, are there only once tier 1 is open: it lists the projects and the commission that may be
-taken up now, each with what it wants, what it has been given and what it unlocks, and a button that
-takes it in hand (the one in hand is marked); a commission that is not ready yet, with what it still
-needs; and then those done. "Top yards" (`ui/board.ts`) reads Leaf's board for the Works when it
+hand over), the tier's own screen, research, and the yard's sheet (below), which is the depot's
+panel. The power plaque opens one more, which says where the power comes from and where it goes.
+
+The tier's screen (`ui/tier.ts`, `P`), and its button, are there only once tier 1 is open. It is
+called by the tier ("Tier 2: The stream"; the names are the rules' `content/tiers.ts`). Top to
+bottom: the tier's commission as a paper, with who asks and what they say and its lists; from the
+tier that has research, a row that says how much of it is known and opens it; the projects not done,
+each a head and its lists with the button that takes it (the one in hand is marked); and those done,
+a line each: picture and name. Research (`ui/research.ts`, `L`) is there once the yard may build a
+Study: what is being studied, with each folio it wants and the pace the Studies give it (or why none
+is at work); the rest of the line, up to 4 in all, each with a button that takes it out; what may be
+studied, as the small tree it is, one that waits on another hanging off it; and what is known. Under
+the node in hand a slim bar says what is being studied and how far it has come, once a Study stands;
+pressed, it opens research. On a phone the tier's screen and research are full sheets.
+
+"Top yards" (`ui/board.ts`) reads Leaf's board for the Works when it
 opens and each minute while it is open: the twenty yards that have earned the most Coins, each
 owner with their face and name as "Who is about" shows them (the kit's `faceFor`), and the
 member's own row lit, or after a divider when they are not among the twenty.
@@ -311,8 +374,9 @@ power and the list of trouble (whose rows are cards to press) are all it.
 
 **Moments.** The node in hand filled: the yard's own gnome carries a crate out of the depot and
 through the gate, Coins fly to the purse, and a notice says what was paid, what it unlocked (each
-new piece, tool, recipe and plot for sale with what it is for), what it left in the town, and the
-node now in hand. A standing order filled: a gnome waddles to the gate and waits (Pipwick in his
+new piece, tool, recipe, number and plot for sale, as the same lists a goal has anywhere), that the
+next tier is open, what it left in the town, and the node now in hand. Research known: a notice of
+the same kind, with what is studied next. A standing order filled: a gnome waddles to the gate and waits (Pipwick in his
 blue hat for his own orders, one of the town's gnomes for anybody else's, saying whom it is for);
 handing over (from the panel, or by tapping him) sends the crate across, pays, and he carries it
 off over his head. Whoever walks about the yard is one of the yard's gnomes (`actors.ts`), drawn
@@ -320,13 +384,18 @@ from the gatherer's pictures with a two-step waddle. A plot bought: the
 cleared ground opens out from its signpost and the undergrowth falls away. Coming back after five
 minutes or more: Leaf's yard carries what Leaf counted while its owner was away (how long it worked,
 the Coins it earned, what the depot took in), and a letter on paper says so (the five things taken
-in most, and the orders waiting to be handed over); putting it away pays the till into the purse.
+in most, the orders waiting to be handed over, and what the Studies made known meanwhile, by the
+rules' `knownSince`); putting it away pays the till into the purse.
 
 **Teaching.** `teach.ts` looks at the yard and says what the next small thing to try is, and where,
 keyed on the lesson in hand: the first gatherer, the mill, the belt, the first planks arriving (the
 first lesson); a pylon towards the ore (the second); a bench (the third). After that it speaks up
 once each for the board, for Select when the yard has it and first holds more than 60 pieces, for a
-shortage of power, and for a jammed machine.
+shortage of power, and for a jammed machine. Each idea of tiers 2 and 3 has one nudge, said beside
+the part of the interface it is about: the tier's button, once there is a tier's screen; a machine's
+numbers, the first time a card is opened once the yard counts; the grade buttons, the first time a
+kind with more than one grade is in hand; the Study in the dock, until one stands; and the research
+button, until something is studied.
 It has no screen in it and is tested.
 
 **In the town.** Inside the town's frame the page says `ready` once it has drawn, `leave` from the
@@ -351,12 +420,16 @@ clockwork crab is made. Opened alone it plays just the same.
 | `teach.ts`                        | the next nudge, worked out from the yard                                              |
 | `events.ts`, `actors.ts`, `fx.ts` | the yard's moments; who walks about; sparks, dust, smoke and rising words             |
 | `sound.ts`                        | the yard's own sounds, and its working murmur                                         |
-| `ui/card.ts`                      | every thing, machine, tile, plot, node and order as a kit card, kept by print         |
+| `ui/card.ts`, `ui/refs.ts`        | every thing in the yard as a kit card, kept by print; the names cards go by           |
 | `ui/prints.ts`, `ui/cards.ts`     | what each card prints of the yard and the purse; each card drawn from that            |
-| `ui/*.ts`                         | the purse and notices, the top bar, the dock, panels, the letter                      |
+| `ui/numbers.ts`                   | what a card says a piece makes, needs, gathers, studies or carries a minute           |
+| `ui/goal.ts`, `ui/standing.ts`    | a goal's head and lists, laid out in one place; how goals stand in the yard           |
+| `ui/tier.ts`, `ui/research.ts`    | the tier's own screen; research, and its slim bar in the corner                       |
 | `ui/views.ts`, `ui/table.ts`      | the yard's sheet (map, trouble, makes and needs); the one table of numbers            |
-| `sheet.ts`, `sheets.ts`           | the art laid out with names: `?sheet=machines`, `?sheet=items`                        |
+| `ui/*.ts`                         | the purse and notices, the top bar, the dock, panels, the letter                      |
+| `sheet.ts`, `sheets.ts`           | the art laid out with names: `?sheet=machines`, `?sheet=items`, `?sheet=grades`       |
 | `review/bench.ts`                 | the page with a generated yard of its own, for timing a frame of a large one          |
+| `review/gallery.ts`               | the page with a yard of every graded piece at each grade, working and not             |
 
 ## Looking at it from outside
 
@@ -365,16 +438,19 @@ stages a moment in the yard on the play server on this machine (`apps/api/test/p
 `POST /test/play/works`) and takes it: `{ yard: "new" }` or one of the yards the rules' test yards
 build with commands (`staged` in `packages/factory/test/yards.ts`): `"small"` (the first two
 lessons done), `"short"` (the last lesson in hand, short of power), `"mid"` (every node of tiers 0 and 1 done,
-tier 2 open, the board up, plots bought, a painted line and a splitter), `"large"` (every node of
-tiers 0 to 2 done, and the generator's pieces on every plot the slice sells); each a yard the rules
+tier 2 open, the board up, plots bought, a painted line and a splitter), `"hall"` (every node of tiers 0 to 2 done, the scholars' hall among them: tier 3 just open, and no Study yet), `"study"` (tier 3 open: a line that makes
+Timber folios, a Study at work, one piece of research known and four in the line), `"large"` (every
+node of tiers 0 to 2 done, and the generator's pieces on every plot the slice sells); each a yard the rules
 could have made, every goal finished and paid by them; `{ away: minutes }`, its owner away that long
 and the yard run every tick meanwhile; `{ fill: n }`, the nth standing order filled; `{ feed: true }`,
 what the node in hand still wants sent to the depot, so that Leaf finishes it as in play (the page
-takes Leaf's yard after, so the moment is not shown); `{ text: "..." }`,
+takes Leaf's yard after, so the moment is not shown); `{ feed: { but: { hamper: 3 } } }`, the same
+less so many of the things named, so that the yard's own line finishes it on the page and the moment
+is shown; `{ text: "..." }`,
 any yard as its kept text. A step within the same yard keeps the lessons taken. `hold(true)` stops the screen
 running the yard on, and `hold(true, lead, at)` shows it `lead` of the way into its next tick with
 the screen's clock at `at` seconds, so a picture can be taken twice the same; `skip(seconds)` moves
-only the screen. `pick(tool)`, `aim(x, y)`, `tap(x, y)`, `drag(x0, y0, x1, y1)` with `drop()`,
+only the screen. `pick(tool)`, `grade(n)` (the grade the kind in hand is built at), `aim(x, y)`, `tap(x, y)`, `drag(x0, y0, x1, y1)` with `drop()`,
 `confirm()`, `build`, `remove` and `plot(id)` act as a member would, sending to Leaf, and `act(command)`
 does any command as the wire has it, read as Leaf reads one (`readCommand`), through `doNow`
 (`after(command)` does the same and then the frame after it, and says what each took, by part); kinds,
@@ -384,9 +460,10 @@ in hand too. `open(panel)`, `card(x, y)` and `close()`
 show things; `look(x, y)` and `zoom(by)` move the view; `taught(ids)` says which lessons are already
 taken. `page(x, y)` is where a tile is on the page, `rider(x, y)` what is riding a belt there,
 `where(kind)` where a kind of thing stands, `trouble()` the tiles of the pieces in trouble as the
-yard's sheet counts them, and `state()` a summary (among it the node in hand, the
-goals done, the tier, `differences`, and `reads`, how many times the copy has become Leaf's yard as
-read, the opening included).
+yard's sheet counts them, and `state()` a summary (among it the node in hand, the goals done, the
+tier, the grade in hand, the research line and how far the first of it has come, how many Studies and
+cart stops stand, the nudge and the part it is said beside, `differences`, and `reads`, how many times
+the copy has become Leaf's yard as read, the opening included).
 
 **How long a frame takes.** `works.bench(frames, hz)` does that many frames' work one after another,
 as if the screen showed `hz` of them a second (60 unless said), and gives back what one took:
@@ -408,7 +485,10 @@ Leaf (`S.alone`): it is the page's entry with that file in place of `src/main.ts
 `bun build bench.html --outdir <site>/works-bench`, and opened at
 `/play/works-bench/bench.html?pieces=5500`. Commands there (`act`, `after`) are done to that yard by
 the rules and sent nowhere, and its member has Coins enough for anything: `after` is what a tap costs
-on it, a frame after a real command.
+on it, a frame after a real command. `review/gallery.ts` is built and opened the same way
+(`/play/works-gallery/gallery.html`): a yard of its own with every graded piece at grades I to III,
+each way round, in the light and in the dark, sorters set and not, a Study and a cart stop. No goal
+of the slice unlocks the third grade, so each piece is built by the rules and its grade set on it.
 
 With `?meter` in the address, a corner of the page says, each second: the frames a second the
 screen reaches, the longest frame, and the same parts as milliseconds a frame. There `until free`

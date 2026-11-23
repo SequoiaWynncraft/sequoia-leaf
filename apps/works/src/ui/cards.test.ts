@@ -11,14 +11,27 @@ import {
   ALL_ITEMS,
   ALL_KINDS,
   at,
+  BELT,
   BENCH,
   build,
   create,
   DEPOT,
+  goal,
+  isGraded,
   item,
   plot,
   power,
   setRecipe,
+  setSort,
+  SORTER,
+  START,
+  STOP,
+  STUDY,
+  study,
+  TOOLS,
+  unlocked,
+  unlockedBy,
+  upgradePrice,
   type Yard,
 } from "@sequoia-leaf/factory";
 import { fromLeaf } from "@sequoia-leaf/kit/purse.ts";
@@ -26,6 +39,7 @@ import { fromLeaf } from "@sequoia-leaf/kit/purse.ts";
 import { draws, S } from "../state.ts";
 import { cardKey, itemRef, machineRef, nodeRef, orderRef, plotRef, tileRef } from "./card.ts";
 import { printOf } from "./prints.ts";
+import { giftRef, tierRef, toolRef, unlockRef } from "./refs.ts";
 
 /** A bench told to make tools, waiting for its planks and ingots, and `others` more benches drawing power near the depot. */
 function benches(others: number): Yard {
@@ -86,6 +100,12 @@ describe("a card", () => {
       ...ALL_GOALS.map(nodeRef),
       orderRef("story"),
       ...y.board.map((_, slot) => orderRef(slot)),
+      // A kind at each grade above the first, and everything a new yard has or a goal unlocks or leaves.
+      ...ALL_KINDS.filter(isGraded).flatMap((k) => [machineRef(k, 2), machineRef(k, 3)]),
+      ...[...unlocked(START), ...ALL_GOALS.flatMap((g) => unlockedBy(g))].map(unlockRef),
+      ...TOOLS.map(toolRef),
+      ...[0, 1, 2, 3, 4].map(tierRef),
+      ...ALL_GOALS.map(giftRef),
     ];
     let printed = 0;
     for (const ref of refs) {
@@ -97,14 +117,177 @@ describe("a card", () => {
     expect(printed).toBeGreaterThan(100);
   });
 
-  test("is drawn by a module that reaches no yard: it imports nothing of the page's that holds one", async () => {
-    const text = await Bun.file(new URL("./cards.ts", import.meta.url).pathname).text();
-    const from = [...text.matchAll(/^import(?! type)[^;]*? from "([^"]+)";/gms)].map((m) => m[1] ?? "");
-    expect(from.filter((f) => f.startsWith(".")).toSorted((a, b) => a.localeCompare(b))).toEqual([
-      "../art/belts.ts",
-      "../sound.ts",
-      "./parts.ts",
+  test("is drawn by modules that reach no yard: none imports anything of the page's that holds one", async () => {
+    // What draws a card (`cards.ts`), the lists of a goal on it (`goal.ts`) and the names cards go by (`refs.ts`).
+    const drawing: Record<string, string[]> = {
+      "./cards.ts": ["../art/belts.ts", "../sound.ts", "./goal.ts", "./parts.ts", "./refs.ts"],
+      "./goal.ts": ["./parts.ts", "./refs.ts"],
+      "./refs.ts": [],
+    };
+    const texts = await Promise.all(
+      Object.keys(drawing).map((file) => Bun.file(new URL(file, import.meta.url).pathname).text()),
+    );
+    Object.entries(drawing).forEach(([file, may], k) => {
+      const text = texts[k] ?? "";
+      const from = [...text.matchAll(/^import(?! type)[^;]*? from "([^"]+)";/gms)].map((m) => m[1] ?? "");
+      expect([file, from.filter((f) => f.startsWith(".")).toSorted((a, b) => a.localeCompare(b))]).toEqual([file, may]);
+      expect(text).not.toMatch(/\bS\.|coins\(/);
+    });
+  });
+});
+
+/** A yard of a tier with a belt near the depot, and a bench told to make hampers where the yard may make them, and tools before. */
+function counted(tier: number): Yard {
+  const y = create({ seed: 5, tier });
+  build(y, BENCH, 20, 15, 0, Infinity);
+  setRecipe(y, 20, 15, item(tier >= 2 ? "hamper" : "tool"));
+  build(y, BELT, 22, 15, 0, Infinity);
+  return y;
+}
+
+describe("the cards of tiers 2 and 3", () => {
+  test("say numbers only from the first recipe that takes more than 1 of a part: a tier 1 yard's cards print none", () => {
+    S.world = counted(1);
+    expect(printOf(tileRef(at(S.world, 20, 15)))).toMatchObject({ numbers: [], perMinute: 30 });
+    expect(printOf(tileRef(at(S.world, 22, 15)))).toMatchObject({ numbers: [], machine: { numbers: [] } });
+    for (const k of ALL_KINDS) expect(printOf(machineRef(k))).toMatchObject({ numbers: [], graded: false, grade: 1 });
+    S.world = counted(2);
+    // What it makes, and what it needs of each part with how many mills that is: from the rules' planner.
+    expect(printOf(tileRef(at(S.world, 20, 15)))).toMatchObject({
+      numbers: [
+        "Makes 30 hampers a minute.",
+        "Needs 60 planks a minute: 1.2 mills.",
+        "Needs 30 pots a minute: 0.6 mills.",
+      ],
+    });
+    expect(printOf(machineRef(BELT))).toMatchObject({ numbers: ["Carries up to 150 items a minute."] });
+    // Once the yard may build mills higher, each part says how many that is at the highest grade too;
+    // and a piece of the second grade says its own numbers.
+    const y = counted(4);
+    build(y, BENCH, 20, 17, 0, Infinity, { grade: 2 });
+    setRecipe(y, 20, 17, item("hamper"));
+    build(y, BELT, 22, 17, 0, Infinity, { grade: 2 });
+    build(y, STUDY, 24, 15, 0, Infinity);
+    S.world = y;
+    expect(printOf(tileRef(at(y, 20, 15)))).toMatchObject({
+      numbers: [
+        "Makes 30 hampers a minute.",
+        "Needs 60 planks a minute: 1.2 mills, or 0.8 at II.",
+        "Needs 30 pots a minute: 0.6 mills, or 0.4 at II.",
+      ],
+    });
+    expect(printOf(tileRef(at(y, 20, 17)))).toMatchObject({
+      numbers: [
+        "Makes 45 hampers a minute.",
+        "Needs 90 planks a minute: 1.8 mills, or 1.2 at II.",
+        "Needs 45 pots a minute: 0.9 mills, or 0.6 at II.",
+      ],
+    });
+    expect(printOf(tileRef(at(y, 22, 17)))).toMatchObject({ numbers: ["Carries up to 200 items a minute."] });
+    expect(printOf(tileRef(at(y, 24, 15)))).toMatchObject({ numbers: ["Studies 12 folios a minute."] });
+  });
+
+  test("name a kind by its grade once the yard may build it higher, and offer to raise a piece for what the rules ask", () => {
+    // Tier 2 has no second grade yet: a belt is a belt, with nothing to raise it to.
+    S.world = counted(2);
+    const belt = tileRef(at(S.world, 22, 15));
+    expect(printOf(belt)).toMatchObject({ raise: null, machine: { grade: 1, graded: false } });
+    expect(printOf(machineRef(BELT, 2))).toMatchObject({ grade: 2, graded: true, open: false, price: 3, spare: 0 });
+    S.world = counted(3);
+    // The same price a marked area would be raised for; and the Coins to hand say whether they cover it.
+    const cost = upgradePrice(S.world, [at(S.world, 22, 15)]);
+    fromLeaf(cost - 1);
+    const short = cardKey(belt);
+    expect(printOf(belt)).toMatchObject({ raise: { to: 2, cost, enough: false }, machine: { grade: 1, graded: true } });
+    fromLeaf(cost);
+    expect(printOf(belt)).toMatchObject({ raise: { to: 2, cost, enough: true } });
+    expect(cardKey(belt)).not.toBe(short);
+    expect(printOf(machineRef(BELT, 2))).toMatchObject({ grade: 2, open: true, numbers: [] });
+    // A bench has one grade until research gives it another: plain "Bench", and nothing to raise.
+    expect(printOf(tileRef(at(S.world, 20, 15)))).toMatchObject({ raise: null, machine: { graded: false } });
+    fromLeaf(0);
+  });
+
+  test("of a sorter, a cart stop and a Study print what each is told and how it stands", () => {
+    const y = create({ seed: 5, tier: 4 });
+    build(y, SORTER, 20, 15, 0, Infinity);
+    build(y, STOP, 22, 15, 0, Infinity);
+    build(y, STUDY, 24, 15, 0, Infinity);
+    S.world = y;
+    const sorter = tileRef(at(y, 20, 15));
+    const unset = cardKey(sorter);
+    expect(printOf(sorter)).toMatchObject({ set: null });
+    // It may be told any thing the yard can make: planks among them.
+    expect(printOf(sorter)).toMatchObject({ sorts: expect.arrayContaining([item("plank"), item("tool")]) });
+    setSort(y, 20, 15, item("plank"));
+    expect(printOf(sorter)).toMatchObject({ set: item("plank") });
+    expect(cardKey(sorter)).not.toBe(unset);
+    // One cart stop may stand, and one does.
+    expect(printOf(tileRef(at(y, 22, 15)))).toMatchObject({ machine: { stops: [1, y.open.stops] } });
+    expect(printOf(machineRef(STOP))).toMatchObject({ stops: [1, y.open.stops] });
+    expect(printOf(tileRef(at(y, 24, 15)))).toMatchObject({ studying: null, research: true });
+  });
+
+  test("of a goal print how each thing it waits on stands, and what may be done with research now", () => {
+    const y = create({ seed: 5, tier: 3 });
+    build(y, STUDY, 20, 15, 0, Infinity);
+    S.world = y;
+    const [workshop, tooling] = [goal("workshop"), goal("tooling")];
+    // Second-tier machines waits on the workshop: it may not be studied, and says how the workshop stands.
+    expect(printOf(nodeRef(tooling))).toMatchObject({
+      study: null,
+      needs: [{ goal: workshop, stands: "not begun" }],
+      studied: [0, 0],
+    });
+    expect(printOf(nodeRef(workshop))).toMatchObject({ study: "in", may: false, needs: [] });
+    const before = cardKey(nodeRef(tooling));
+    study(y, workshop);
+    expect(printOf(nodeRef(workshop))).toMatchObject({ study: "out" });
+    expect(printOf(nodeRef(tooling))).toMatchObject({
+      needs: [{ goal: workshop, stands: "being studied" }],
+      studied: [0, 150],
+    });
+    expect(printOf(tileRef(at(y, 20, 15)))).toMatchObject({ studying: workshop, research: true });
+    // With research's screen the one open, no card offers it: its button would shut the screen.
+    S.panel = "research";
+    expect([printOf(nodeRef(workshop)), printOf(tileRef(at(y, 20, 15)))]).toMatchObject([
+      { research: false },
+      { research: false },
     ]);
-    expect(text).not.toMatch(/\bS\.|coins\(/);
+    S.panel = null;
+    // A folio studied changes what the card of the one that waits is kept by.
+    const got = y.got[workshop];
+    if (!got) throw new Error("nothing is being studied");
+    got[item("timber")] = 30;
+    expect(printOf(nodeRef(tooling))).toMatchObject({ studied: [30, 150] });
+    expect(cardKey(nodeRef(tooling))).not.toBe(before);
+    // The commission waits on three pieces of research: each is a thing with how it stands.
+    expect(printOf(nodeRef(goal("lanterns")))).toMatchObject({
+      may: false,
+      study: null,
+      needs: [
+        { goal: goal("oilpress"), stands: "not begun" },
+        { goal: workshop, stands: "being studied" },
+        { goal: goal("brassfolio"), stands: "not begun" },
+      ],
+    });
+  });
+
+  test("of a number, a tool, a tier and what a goal leaves are the rules' own: a number says what it was before", () => {
+    S.world = create({ seed: 5, tier: 3 });
+    expect(printOf("perk:crate.128")).toMatchObject({
+      unlock: { is: "number", of: "crate", to: 128, was: 32, says: "A crate holds 128 items, up from 32." },
+    });
+    expect(printOf("perk:blueprints.3.400")).toMatchObject({ unlock: { is: "blueprints", count: 3, pieces: 400 } });
+    expect(printOf("perk:board")).toMatchObject({ unlock: { is: "board" } });
+    expect([printOf("perk:nonsense.3"), printOf("perk:crate"), printOf("tool:axe")]).toEqual([null, null, null]);
+    expect(printOf(toolRef("paint"))).toEqual({ card: "tool", tool: "paint" });
+    // A tier is spoken of by its name only once it is open.
+    expect([printOf(tierRef(3)), printOf(tierRef(4))]).toEqual([
+      { card: "tier", tier: 3, open: true },
+      { card: "tier", tier: 4, open: false },
+    ]);
+    expect(printOf(giftRef(goal("hall")))).toEqual({ card: "gift", goal: goal("hall") });
+    expect(printOf(giftRef(goal("workshop")))).toBeNull();
   });
 });
