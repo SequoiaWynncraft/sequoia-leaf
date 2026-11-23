@@ -61,7 +61,7 @@ import { thingRef } from "./cards.ts";
 import { drawPicture, drawProp, drawWords, type Picture, sizeBuffers } from "./draw.ts";
 import { clearFlights, flights, fling, stepFlights } from "./flights.ts";
 import { bit, burst, float, flutter, puff, sparkle, updateFx } from "./fx.ts";
-import { type Actor, after, changed, forgetLater, G, hooks, show, stepLater } from "./game.ts";
+import { type Actor, after, changed, cue, forgetLater, G, hooks, show, stepCues, stepLater, today } from "./game.ts";
 import { CELL, makeGround } from "./grid.ts";
 import { paintTrunk } from "./ground.ts";
 import { guild, type Happening } from "./guild.ts";
@@ -715,7 +715,6 @@ export function makeCamp(
     const t = folk(visit.who);
     const lines = AT_CAMP[visit.who];
     const a = makeFolk(t, TRAIL_END.x, TRAIL_END.y);
-    a.mode = "led";
     a.doing = "call";
     a.alpha = 0;
     a.side = -1;
@@ -843,30 +842,35 @@ export function makeCamp(
     });
   }
 
-  /** The guild's moments, as they reach a camp: a line in the feed, something beyond the trees, and whoever is here answering. */
+  /**
+   * The guild's moments, as they reach a camp: a line in the feed, something beyond the trees, and
+   * whoever is here answering, as each begins by Leaf's clock (`cue`, as in town).
+   */
   function hear(h: Happening): void {
     if (G.where !== "camp") return;
     switch (h.kind) {
-      case "party": {
-        guild.say(h, hooks.feed);
-        sfx.fanfare();
-        const x = clamp(G.cam.x + G.view.w * (0.25 + Math.random() * 0.5), 30, CW - 30);
-        const col = G.raidsToday % sprites.lanterns.length;
-        lanterns.push({ x, y: campHedge(x, seed) + 8, life: 0, col, over: false });
-        // Where the far trees are out of sight, one that has drifted this way goes up over the camp.
-        if (G.cam.y > campHedge(x, seed) - 20)
-          lanterns.push({ x, y: G.cam.y + G.view.h * 0.62, life: 0, col, over: true });
-        cheer();
+      case "party":
+        cue(h.at, () => {
+          guild.say(h, hooks.feed);
+          sfx.fanfare();
+          const x = clamp(G.cam.x + G.view.w * (0.25 + Math.random() * 0.5), 30, CW - 30);
+          const col = today("party").n % sprites.lanterns.length;
+          lanterns.push({ x, y: campHedge(x, seed) + 8, life: 0, col, over: false });
+          // Where the far trees are out of sight, one that has drifted this way goes up over the camp.
+          if (G.cam.y > campHedge(x, seed) - 20)
+            lanterns.push({ x, y: G.cam.y + G.view.h * 0.62, life: 0, col, over: true });
+          cheer();
+        });
         return;
-      }
-      case "war": {
-        guild.say(h, hooks.feed);
-        sfx.fanfare();
-        const cabin = lives.find((l) => l.thing.id === "cabin");
-        if (cabin) burst(cabin.prop.x + 32, cabin.prop.y - 74, 18, [GOLD[1], SKY[4], CREAM, SKY[5]], 52);
-        cheer();
+      case "war":
+        cue(h.at, () => {
+          guild.say(h, hooks.feed);
+          sfx.fanfare();
+          const cabin = lives.find((l) => l.thing.id === "cabin");
+          if (cabin) burst(cabin.prop.x + 32, cabin.prop.y - 74, 18, [GOLD[1], SKY[4], CREAM, SKY[5]], 52);
+          cheer();
+        });
         return;
-      }
       case "reached":
       case "milestone": {
         guild.say(h, hooks.feed);
@@ -1516,6 +1520,7 @@ export function makeCamp(
       for (const l of gateLights) l.boost = Math.max(0, l.boost - dt * 1.4);
       stepFlights(dt);
       stepLater();
+      stepCues();
       if (G.home) guild.step(dt);
       updateFx(dt);
 

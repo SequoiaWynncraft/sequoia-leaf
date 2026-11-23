@@ -479,7 +479,13 @@ same table, of three types only, with what they paid cut out:
 
 Each is `{ "id", "type", "created_at", "player": { "id", "username" }, "data" }`.
 `GET /v1/game/guild/events` lists the newest 50, or with `?after=<id>` up to 200
-after that id. The stream behaves exactly as the member's own does, from where
+after that id. With the newest 50 come two things the town shows that no list of
+events can say, as of the same moment: `today`, `{ "from", "raids", "wars" }`,
+how many raids and wars the guild finished in the UTC day that began at `from`,
+by when each happened, each once however many members it paid; and `last_war`,
+`{ "territory", "occurred_at" }`, the last territory fought at by when the war
+happened (of two at one moment, the one whose name sorts later), or null. Both
+count only what Leaf paid for, which is what the events tell of. The stream behaves exactly as the member's own does, from where
 it starts to when it closes, and counts toward the same six. All open guild
 streams are fed by one look at the database every two seconds, not one each.
 Raid party members' events share a `detail` and an `occurred_at`.

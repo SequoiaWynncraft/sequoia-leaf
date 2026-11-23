@@ -9,6 +9,7 @@ import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { member } from "@sequoia-leaf/kit/live.ts";
 import { bake, type Body, type Look, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { clamp, type Ctx, dist, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { boardAt, SET_OUT } from "@sequoia-leaf/town/clock.ts";
 import { FOLK, folk, KEEPER } from "@sequoia-leaf/town/folk.ts";
 import { BOX_FULL, roomInBox } from "@sequoia-leaf/town/mail.ts";
 
@@ -36,11 +37,11 @@ import {
 import { apart, ease, stood, stoodAt } from "./apart.ts";
 import type { CampArt } from "./campart.ts";
 import { drawPicture, drawWords, type Picture, sizeBuffers } from "./draw.ts";
-import { beginEvents, stepEvents } from "./events.ts";
+import { beginEvents, cheered, stepEvents } from "./events.ts";
 import { flights, stepFlights } from "./flights.ts";
 import { initFolkArt } from "./folkart.ts";
 import { updateFx } from "./fx.ts";
-import { type Actor, after, changed, G, hooks, type PanelId, show } from "./game.ts";
+import { type Actor, after, changed, G, hooks, type PanelId, SEED, show } from "./game.ts";
 import { type GameId, isGame, worksWaiting } from "./games.ts";
 import { GROUND, NEAR, paintBackdrop, paintGround, paintNear, SKYLINE } from "./ground.ts";
 import { guild } from "./guild.ts";
@@ -76,6 +77,8 @@ import {
   drawGlows,
   drawStrings,
   drawWater,
+  flown,
+  hung,
   lastTouches,
   lightTable,
   openDoor,
@@ -179,8 +182,12 @@ export interface Town extends Scene {
     who(): { name: string; x: number; y: number; doing: string }[];
     /** The crabs by their numbers, where each is by Leaf's clock this moment, and whether it is running off. */
     crabs(): { n: number; x: number; y: number; gone: boolean }[];
-    /** Real members in town just now, visiting or dozing, and where each is. */
-    visitors(): { name: string; x: number; y: number; dozing: boolean }[];
+    /** Real members in town, visiting, dozing or walking in with a raid party: where each is and what they are doing, by Leaf's clock this moment. */
+    visitors(): ReturnType<typeof members>;
+    /** The stump's board this moment: the hex each carved figure is on, and whether anybody is at it. */
+    board(): { on: readonly number[]; played: boolean };
+    /** What the guild's raid parties and wars have left: how many lanterns the day has, whose banner flies, and the last cheers played here, each by when (Leaf's clock). */
+    moments(): { lanterns: number; banner: string | null; cheered: { what: string; at: number }[] };
     /** Every member drawn this moment (the member, visitors, dozers, live players): who, where their feet are drawn, how tall, how opaque. */
     drawn(): { id: string; name: string; x: number; y: number; tall: number; seated: boolean; alpha: number }[];
     me(): Pt;
@@ -206,6 +213,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   // ---------- the place itself ----------
 
   G.now = leafNow();
+  hooks.deeds = () => guild.deeds();
   const ground = paintGround();
   buildTown(sprites, must(ground.getContext("2d"), "ground"));
   const standing = crabsStanding();
@@ -551,16 +559,15 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
     step(dt, steer) {
       G.t += dt;
-      G.now = leafNow();
       stepActor(player, dt);
       touch.step(dt, steer);
       // The room hears where the member is at once, from their own walking; nothing waits for it.
       tellRoom(player, dt, jumped);
       jumped = false;
       stepActor(cinfy, dt);
-      stepVisitors(dt);
       stepPlayers(dt);
       const walkers = [player, ...livePlayers()];
+      stepVisitors(dt, [...walkers, ...G.folk]);
       stepFolk(dt, walkers);
       standApart(dt);
       stepTown(dt, walkers);
@@ -758,7 +765,19 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         placeCrabs();
         return crabs.map((c) => ({ n: c.n, x: Math.round(c.x), y: Math.round(c.y), gone: c.bolt > 0 }));
       },
-      visitors: members,
+      visitors() {
+        G.now = leafNow();
+        stepVisitors(0, [player, ...livePlayers(), ...G.folk]);
+        return members();
+      },
+      board() {
+        G.now = leafNow();
+        return { on: table.played ? boardAt(SEED, G.now).on : SET_OUT, played: table.played };
+      },
+      moments() {
+        G.now = leafNow();
+        return { lanterns: hung(), banner: flown()?.land ?? null, cheered: [...cheered] };
+      },
       drawn: () =>
         everyone().flatMap((a) =>
           a.away || a.alpha <= 0.02
