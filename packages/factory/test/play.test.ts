@@ -230,11 +230,13 @@ describe("time away", () => {
     expect(F.encode(tended(1, 1e9))).toBe(one);
   });
 
-  test("it stands still once its owner has been away as long as it runs unwatched: 8 hours, and 12 with a night shift", () => {
+  test("it stands still once its owner has been away as long as it runs unwatched: as many hours as it has unlocked, more once more is", () => {
+    // What is open keeps the time the yard runs unwatched in ticks.
     const early = tended(20, 1e9, 3);
-    expect(early.tick - early.seen.tick).toBe(8 * 36_000);
+    expect(early.tick - early.seen.tick).toBe(early.open.away);
     const late = tended(20, 1e9);
-    expect(late.tick - late.seen.tick).toBe(12 * 36_000);
-    expect(F.awayOf(late)).toMatchObject({ seconds: 12 * 3600 });
+    expect(late.open.away).toBeGreaterThan(early.open.away);
+    expect(late.tick - late.seen.tick).toBe(late.open.away);
+    expect(F.awayOf(late)).toMatchObject({ seconds: late.open.away / 10 });
   });
 });
