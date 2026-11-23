@@ -20,23 +20,44 @@ const RAID: GameStats = { name: "The Little Raid", numbers: (p) => [{ label: "Ru
 const STATS = { works: WORKS, raid: RAID };
 
 describe("a person's card", () => {
-  test("shows the time played in all, then each game in the page's order, its name over its numbers and its time, from what Leaf answers", () => {
+  test("shows time AFK only from a minute, and time played from a second", () => {
+    const g = { placed: null, spent: 0 };
+    expect(
+      numbersOf({ name: "Wrenly", games: { works: { ...g, played: 1, afk: 59 } }, played: 1, afk: 59 }, STATS),
+    ).toEqual({
+      stats: [
+        { label: "Time played", value: "under 1 min" },
+        "The Works",
+        { label: "Time played", value: "under 1 min" },
+      ],
+    });
+  });
+
+  test("shows the time played and AFK in all, then each game in the page's order, its name over its numbers and its times, from what Leaf answers", () => {
     const said = readPerson(answer);
     expect(said).toEqual({
       name: "Alice",
       games: {
-        pulls: { placed: null, played: 60 },
-        raid: { placed: { place: 1, score: 0, also: { runs: 0, room: 0 } }, played: 0 },
-        town: { placed: { place: 1, score: 10, also: { greeted: 0, sightings: 0 } }, played: 180 },
-        works: { placed: { place: 2, score: 1840, also: { tier: 1 } }, played: 0 },
+        pulls: { placed: null, played: 60, afk: 0, spent: 0 },
+        raid: { placed: { place: 1, score: 0, also: { runs: 0, room: 0 } }, played: 0, afk: 0, spent: 0 },
+        town: { placed: { place: 1, score: 10, also: { greeted: 0, sightings: 0 } }, played: 180, afk: 120, spent: 25 },
+        works: { placed: { place: 2, score: 1840, also: { tier: 1 } }, played: 0, afk: 0, spent: 0 },
       },
       played: 240,
+      afk: 120,
     });
-    const TOWN: GameStats = { name: "Camp", numbers: (p) => [{ label: "Things set out", value: String(p.score) }] };
+    const TOWN: GameStats = {
+      name: "Camp",
+      numbers: (p, spent) => [
+        { label: "Things set out", value: String(p.score) },
+        { label: "Coins spent", value: String(spent) },
+      ],
+    };
     const PULLS: GameStats = { name: "Pulls", numbers: () => [{ label: "Pulled", value: "0" }] };
     expect(said && numbersOf(said, { ...STATS, town: TOWN, pulls: PULLS })).toEqual({
       stats: [
         { label: "Time played", value: "4 min" },
+        { label: "Time AFK", value: "2 min" },
         "The Works",
         { label: "Coins", value: "1840" },
         { label: "Place", value: "#2" },
@@ -44,7 +65,9 @@ describe("a person's card", () => {
         { label: "Runs", value: "0" },
         "Camp",
         { label: "Things set out", value: "10" },
+        { label: "Coins spent", value: "25" },
         { label: "Time played", value: "3 min" },
+        { label: "Time AFK", value: "2 min" },
         // Played, with no standing: its time alone.
         "Pulls",
         { label: "Time played", value: "1 min" },
@@ -52,20 +75,32 @@ describe("a person's card", () => {
     });
     // A game the page does not say is left out, but counts in all.
     expect(said && numbersOf(said, { raid: RAID })).toEqual({
-      stats: [{ label: "Time played", value: "4 min" }, "The Little Raid", { label: "Runs", value: "0" }],
+      stats: [
+        { label: "Time played", value: "4 min" },
+        { label: "Time AFK", value: "2 min" },
+        "The Little Raid",
+        { label: "Runs", value: "0" },
+      ],
     });
   });
 
   test("says so of somebody who has played nothing, and reads nothing from an answer that makes no sense", () => {
-    expect(numbersOf({ name: "Wrenly", games: {}, played: 0 }, STATS)).toEqual({
+    expect(numbersOf({ name: "Wrenly", games: {}, played: 0, afk: 0 }, STATS)).toEqual({
       blocks: [{ body: "Has not played yet." }],
     });
-    const works = { place: 1, score: 1, also: {}, played: 5 };
-    expect(readPerson({ name: "Wrenly", games: { works }, played: 5 })).not.toBeNull();
-    for (const games of [{ works: { ...works, score: "lots" } }, { works: { ...works, played: -1 } }, { works: {} }]) {
-      expect(readPerson({ name: "Wrenly", games, played: 5 })).toBeNull();
+    const works = { place: 1, score: 1, also: {}, played: 5, afk: 0, spent: 0 };
+    expect(readPerson({ name: "Wrenly", games: { works }, played: 5, afk: 0 })).not.toBeNull();
+    for (const games of [
+      { works: { ...works, score: "lots" } },
+      { works: { ...works, played: -1 } },
+      { works: { ...works, afk: undefined } },
+      { works: { ...works, spent: 1.5 } },
+      { works: {} },
+    ]) {
+      expect(readPerson({ name: "Wrenly", games, played: 5, afk: 0 })).toBeNull();
     }
-    expect(readPerson({ name: "Wrenly", games: { works } })).toBeNull();
+    expect(readPerson({ name: "Wrenly", games: { works }, afk: 0 })).toBeNull();
+    expect(readPerson({ name: "Wrenly", games: { works }, played: 5 })).toBeNull();
     expect(readPerson({ code: "no_such_player" })).toBeNull();
   });
 });

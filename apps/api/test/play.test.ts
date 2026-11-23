@@ -3,7 +3,7 @@ import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { type Game, leaf, MOST_COMMANDS, type PlayerId, playerId } from "@sequoia-leaf/core";
+import { type Game, leaf, type LeafFor, MOST_COMMANDS, type PlayerId, playerId } from "@sequoia-leaf/core";
 import {
   ALL_ITEMS,
   BELT,
@@ -33,6 +33,7 @@ import {
 import { staged as stagedYard } from "@sequoia-leaf/factory/test/yards.ts";
 import { PULLS } from "@sequoia-leaf/pulls";
 import {
+  isParty,
   planCommands,
   RAID,
   type RaidCommand,
@@ -51,7 +52,7 @@ import { knownAmong } from "../src/game/known.ts";
 import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
 import { GAMES, type Played, played } from "../src/play/games.ts";
-import { Play, TEND_AFTER } from "../src/play/service.ts";
+import { KEPT_BYTES, Play, TEND_AFTER } from "../src/play/service.ts";
 import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, IDLE_MS, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
 import { DAY, fakeBackend, fakeMojang, type Fakes, noNetwork, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
@@ -159,6 +160,23 @@ const entries = (player: PlayerId) =>
   );
 const stored = (player: PlayerId, game = "raid") =>
   services.query((sql) => sql`SELECT rev, state FROM play_state WHERE player_id = ${player} AND game = ${game}`);
+/** The pieces Leaf keeps of a player's, by game and slot, their data read back. */
+const keptOf = async (player: PlayerId) =>
+  Schema.decodeUnknownSync(
+    Schema.Array(
+      Schema.Struct({
+        game: Schema.String,
+        slot: Schema.String,
+        data: Schema.fromJsonString(Schema.Unknown),
+        at: Schema.Number,
+      }),
+    ),
+  )(
+    await services.query(
+      (sql) =>
+        sql`SELECT game, slot, data, updated_at AS at FROM play_kept WHERE player_id = ${player} ORDER BY game, slot`,
+    ),
+  );
 
 /** A shop where each lantern costs what the command says: a game that spends Coins, which the raid never does. */
 const SHOP: Game<{ bought: number }, { price: number }, { bought: number }, string> = {
@@ -849,7 +867,7 @@ describe("Leaf a command takes", () => {
     ]);
   });
 
-  it("is refused, changing nothing, for too little Leaf, for a guest, and while spending is off", async () => {
+  it("is refused, changing nothing, for too little Leaf and while spending is off", async () => {
     await spending();
     await raided(alice, 20);
     await opened();
@@ -858,13 +876,6 @@ describe("Leaf a command takes", () => {
     expect((await commanded([dear])).results).toEqual([{ id: dear.id, refused: "not_enough_leaf" }]);
     expect(await untouched(alice)).toEqual(before);
     expect(await services.account(alice)).toMatchObject({ balance: 20 });
-
-    // Carol is signed in but not in the guild: a guest has no Leaf to spend.
-    await opened(carol);
-    const guest = await untouched(carol);
-    const theirs = buyCloth("baize");
-    expect((await commanded([theirs], carol)).results).toEqual([{ id: theirs.id, refused: "leaf_closed" }]);
-    expect(await untouched(carol)).toEqual(guest);
 
     await app.dispose();
     start();
@@ -875,15 +886,34 @@ describe("Leaf a command takes", () => {
     expect((await commanded([shut])).results).toEqual([{ id: shut.id, refused: "leaf_closed" }]);
     expect(await untouched(alice)).toEqual(off);
   });
+
+  it("buys a guest a look with the Leaf they have, as it does a member", async () => {
+    await spending();
+    // Carol is signed in but not in the guild: a guest with no Leaf has too little.
+    await opened(carol);
+    const none = buyCloth("baize");
+    expect((await commanded([none], carol)).results).toEqual([{ id: none.id, refused: "not_enough_leaf" }]);
+    // Leaf she earned as a member, before she left the guild, is hers to spend.
+    await raided(carol, 12_000);
+    const theirs = buyCloth("baize");
+    const done = await commanded([theirs], carol);
+    expect(done.results).toEqual([{ id: theirs.id, notes: [{ t: "look", kind: "cloth", id: "baize" }] }]);
+    expect(await services.account(carol)).toMatchObject({ balance: 0 });
+    expect((await ledgerOf(carol)).map((e) => [e.kind, e.origin, e.key, e.delta])).toEqual([
+      ["earn", "raid", `raid:${carol}`, 12_000],
+      ["spend", "shop", `play:raid:${carol}:look:baize`, -12_000],
+    ]);
+  });
 });
 
 /**
  * A market whose every sale takes Leaf and pays Coins, each as the command says, with keys the
- * command names: a game that takes Leaf, which the raid does only for its looks.
+ * command names, for everyone or (`for`) for members: a game that takes Leaf, as the raid's looks
+ * and the pulls do.
  */
 const MARKET: Game<
   { bought: number },
-  { leaf: readonly number[]; keys: readonly string[]; pay: number },
+  { leaf: readonly number[]; keys: readonly string[]; pay: number; for: LeafFor },
   { bought: number },
   string
 > = {
@@ -896,7 +926,7 @@ const MARKET: Game<
   apply: (state, c) => ({
     state: { bought: state.bought + 1 },
     notes: ["sold"],
-    leaf: c.leaf.map((amount, i) => ({ amount, reason: "A stall", key: c.keys[i] ?? `stall:${i}` })),
+    leaf: c.leaf.map((amount, i) => ({ amount, reason: "A stall", key: c.keys[i] ?? `stall:${i}`, for: c.for })),
     coins: c.pay > 0 ? [{ amount: c.pay, reason: "A sale", key: `sale:${state.bought}` }] : [],
   }),
   command: (v) =>
@@ -910,15 +940,27 @@ const MARKET: Game<
     v.keys.every((k) => typeof k === "string") &&
     "pay" in v &&
     typeof v.pay === "number"
-      ? { leaf: v.leaf, keys: v.keys, pay: v.pay }
+      ? { leaf: v.leaf, keys: v.keys, pay: v.pay, for: "for" in v && v.for === "members" ? "members" : "everyone" }
       : null,
 };
 
 describe("a command's Leaf", () => {
   const market = played(MARKET);
-  const sold = (id: string, leafTaken: readonly number[], keys: readonly string[], pay = 0) =>
+  const sold = (
+    id: string,
+    leafTaken: readonly number[],
+    keys: readonly string[],
+    pay = 0,
+    {
+      player = alice,
+      guest = false,
+      for: forWhom = "everyone",
+    }: { player?: PlayerId; guest?: boolean; for?: LeafFor } = {},
+  ) =>
     services.run(
-      Play.use((play) => play.send({ playerId: alice, guest: false }, market, [{ id, leaf: leafTaken, keys, pay }])),
+      Play.use((play) =>
+        play.send({ playerId: player, guest }, market, [{ id, leaf: leafTaken, keys, pay, for: forWhom }]),
+      ),
     );
 
   it("is weighed with the Coins in the batch's transaction: taken and paid together, added up against the balance", async () => {
@@ -969,6 +1011,111 @@ describe("a command's Leaf", () => {
     }
     expect([await ledgerOf(alice), await entries(alice)]).toEqual(before);
     expect(await services.account(alice)).toMatchObject({ balance: 90 });
+  });
+
+  it("is a guest's to spend on what is for everyone, and refused members_only, taking nothing, on what is for members", async () => {
+    await spending();
+    // Leaf Carol earned as a member, before she left the guild.
+    await raided(carol, 100);
+    const asCarol = { player: carol, guest: true };
+    expect(await sold("g-1", [30], ["a"], 0, asCarol)).toMatchObject({ results: [{ id: "g-1", notes: ["sold"] }] });
+    expect(await services.account(carol)).toMatchObject({ balance: 70 });
+    const before = [await ledgerOf(carol), await entries(carol)];
+    expect(await sold("g-2", [20], ["b"], 500, { ...asCarol, for: "members" })).toMatchObject({
+      results: [{ id: "g-2", refused: "members_only" }],
+      view: { bought: 1 },
+    });
+    expect([await ledgerOf(carol), await entries(carol)]).toEqual(before);
+    expect(await services.account(carol)).toMatchObject({ balance: 70 });
+    // A member spends on the same.
+    await raided(alice, 100);
+    expect(await sold("m-1", [20], ["b"], 0, { for: "members" })).toMatchObject({
+      results: [{ id: "m-1", notes: ["sold"] }],
+    });
+    expect(await services.account(alice)).toMatchObject({ balance: 80 });
+  });
+});
+
+/** A game that asks Leaf to keep, in the slot each command names, the text it names. */
+const KEEPER: Game<{ bought: number }, { slot: string; text: string }, { bought: number }, string> = {
+  id: "town",
+  create: () => ({ bought: 0 }),
+  advance: (state) => state,
+  view: (state) => state,
+  decode: (text) => SHOP.decode(text),
+  encode: (state) => JSON.stringify(state),
+  apply: (state, kept) => ({
+    state: { bought: state.bought + 1 },
+    notes: ["kept"],
+    keep: [{ slot: kept.slot, data: kept.text }],
+  }),
+  command: (v) =>
+    typeof v === "object" &&
+    v !== null &&
+    "slot" in v &&
+    typeof v.slot === "string" &&
+    "text" in v &&
+    typeof v.text === "string"
+      ? { slot: v.slot, text: v.text }
+      : null,
+};
+
+/** The party Leaf decided the fight from, as the batch that fought was answered. */
+const fought = (answer: Awaited<ReturnType<typeof commanded>>) => answer.view.run?.fight?.setup.sides[0];
+
+describe("what a game keeps of a player's", () => {
+  it("is the board a member fought a room with, by trail and room; fought again, the room's board is the newer", async () => {
+    const first = await commanded(ided([{ do: "start", trail: 0 }, { do: "choose", option: 0 }, { do: "fight" }]));
+    expect(isParty(fought(first))).toBe(true);
+    expect(await keptOf(alice)).toEqual([{ game: "raid", slot: "board:0:0", data: fought(first), at: clock.now }]);
+    // A new run's first fight, in the same room.
+    const again = await commanded(
+      ided([{ do: "take" }, { do: "start", trail: 0 }, { do: "choose", option: 0 }, { do: "fight" }]),
+    );
+    expect(again.results.every((r) => "notes" in r)).toBe(true);
+    expect(await keptOf(alice)).toEqual([{ game: "raid", slot: "board:0:0", data: fought(again), at: clock.now }]);
+    // A guest's is not kept.
+    await commanded(ided([{ do: "start", trail: 0 }, { do: "choose", option: 0 }, { do: "fight" }]), carol);
+    expect(await keptOf(carol)).toEqual([]);
+  });
+
+  it("is nothing of a batch refused whole", async () => {
+    await opened();
+    const commands = [...ided([{ do: "start", trail: 0 }, { do: "choose", option: 0 }, { do: "fight" }]), { id: "x" }];
+    const refused = await send("POST", "/v1/game/play/raid", { commands });
+    expect([refused.status, await codeOf(refused)]).toEqual([400, "invalid_command"]);
+    expect(await keptOf(alice)).toEqual([]);
+  });
+
+  it("is let go when its slot is not one Leaf allows or its JSON is over 16 KiB, and the command stands", async () => {
+    const lines: unknown[] = [];
+    const capture = Logger.layer([
+      Logger.map(Logger.formatStructured, ({ annotations }) => void lines.push(annotations)),
+    ]);
+    const batch = await services.run(
+      Play.use((play) =>
+        play.send({ playerId: alice, guest: false }, played(KEEPER), [
+          // A string's JSON is the string in quotes, each "é" two bytes.
+          { id: "k-1", slot: "fits", text: "x".repeat(KEPT_BYTES - 2) },
+          { id: "k-2", slot: "wide", text: "é".repeat(KEPT_BYTES / 2) },
+          { id: "k-3", slot: "Not a slot", text: "" },
+          { id: "k-4", slot: "x".repeat(65), text: "" },
+          { id: "k-5", slot: "board:0:3", text: "older" },
+          { id: "k-6", slot: "board:0:3", text: "newer" },
+        ]),
+      ).pipe(Effect.provide(capture), Effect.provideService(References.MinimumLogLevel, "All")),
+    );
+    expect(batch).toMatchObject({ status: "done", rev: 1, view: { bought: 6 } });
+    expect(batch.status === "done" && batch.results.map((r) => ("notes" in r ? r.notes : r.refused))).toEqual(
+      Array.from({ length: 6 }, () => ["kept"]),
+    );
+    expect(await keptOf(alice)).toEqual([
+      { game: "town", slot: "board:0:3", data: "newer", at: clock.now },
+      { game: "town", slot: "fits", data: "x".repeat(KEPT_BYTES - 2), at: clock.now },
+    ]);
+    expect(lines.filter((a) => JSON.stringify(a).includes('"slot"'))).toEqual(
+      ["wide", "Not a slot", "x".repeat(65)].map((slot) => ({ player: alice, game: "town", slot })),
+    );
   });
 });
 
@@ -1223,8 +1370,9 @@ describe("the Works", () => {
     expect(await personOf(alice, bob)).toEqual({
       id: alice,
       name: "Alice",
-      games: { works: { place: 1, score: earned, also: { tier: 0 }, played: 120 } },
+      games: { works: { place: 1, score: earned, also: { tier: 0 }, played: 120, afk: 0, spent: 0 } },
       played: 120,
+      afk: 0,
     });
   });
 });
@@ -2277,11 +2425,19 @@ describe("a person's numbers", () => {
       id: bob,
       name: "Bob",
       games: {
-        raid: { place: 1, score: bosses, also: { runs: 1, room: Math.max(...view.almanac.best) }, played: seconds },
+        raid: {
+          place: 1,
+          score: bosses,
+          also: { runs: 1, room: Math.max(...view.almanac.best) },
+          played: seconds,
+          afk: 0,
+          spent: 0,
+        },
         // A standing from before Leaf counted time.
-        works: { place: 2, score: 500, also: { tier: 500 % 5 }, played: 0 },
+        works: { place: 2, score: 500, also: { tier: 500 % 5 }, played: 0, afk: 0, spent: 0 },
       },
       played: seconds,
+      afk: 0,
     });
   });
 
@@ -2290,11 +2446,12 @@ describe("a person's numbers", () => {
     expect(await personOf(stranger(4))).toEqual({
       id: stranger(4),
       name: "Someone",
-      games: { works: { place: 1, score: 0, also: { tier: 0 }, played: 0 } },
+      games: { works: { place: 1, score: 0, also: { tier: 0 }, played: 0, afk: 0, spent: 0 } },
       played: 0,
+      afk: 0,
     });
     // Carol, a guest, asks about herself before she has played.
-    expect(await personOf(carol, carol)).toEqual({ id: carol, name: "Someone", games: {}, played: 0 });
+    expect(await personOf(carol, carol)).toEqual({ id: carol, name: "Someone", games: {}, played: 0, afk: 0 });
   });
 
   it("are not given of a player Leaf does not know", async () => {
@@ -2307,13 +2464,20 @@ describe("a person's numbers", () => {
   });
 });
 
-/** Alice's time in each game, in milliseconds, as Leaf keeps it. */
-const playedMs = () =>
-  services.run(PlayStore.use((store) => store.playedOf(alice))).then((games) => Object.fromEntries(games));
-/** A call of Alice's to a game `after` milliseconds on: opening it. */
-async function openAfter(after: number, game = "raid") {
+/** Somebody's time played in each game, in milliseconds, as Leaf keeps it. */
+const playedMs = (player: PlayerId = alice) =>
+  services
+    .run(PlayStore.use((store) => store.playedOf(player)))
+    .then((games) => Object.fromEntries([...games].map(([game, time]) => [game, time.played])));
+/** Alice's time AFK in each game, in milliseconds, as Leaf keeps it. */
+const afkMs = () =>
+  services
+    .run(PlayStore.use((store) => store.playedOf(alice)))
+    .then((games) => Object.fromEntries([...games].map(([game, time]) => [game, time.afk])));
+/** A call of Alice's to a game `after` milliseconds on: opening it, saying she is AFK if `afk`. */
+async function openAfter(after: number, game = "raid", afk = false) {
   clock.now += after;
-  expect((await send("GET", `/v1/game/play/${game}`)).status).toBe(200);
+  expect((await send("GET", `/v1/game/play/${game}${afk ? "?afk=1" : ""}`)).status).toBe(200);
 }
 
 describe("time played", () => {
@@ -2337,6 +2501,77 @@ describe("time played", () => {
     expect(await playedMs()).toEqual({ raid: 2 * MINUTE + 100 + IDLE_MS + 30_000 });
   });
 
+  it("counts the time after a call that says its player is AFK as time AFK, until a call says they are back", async () => {
+    await openAfter(0);
+    // The minute before a call that says she is AFK she was not yet: it is time played.
+    await openAfter(MINUTE, "raid", true);
+    await openAfter(MINUTE, "raid", true);
+    // A batch that says nothing of it says she is back; the minute before it she was AFK.
+    clock.now += MINUTE;
+    await commanded(ided([{ do: "start", trail: 0 }]));
+    await openAfter(MINUTE);
+    expect(await playedMs()).toEqual({ raid: 2 * MINUTE });
+    expect(await afkMs()).toEqual({ raid: 2 * MINUTE + 100 });
+    // AFK for longer than a gap that counts is time away, as for playing.
+    await openAfter(0, "raid", true);
+    await openAfter(IDLE_MS + 1, "raid", true);
+    expect(await afkMs()).toEqual({ raid: 2 * MINUTE + 100 });
+    // Anything but afk=1 is not AFK: the minute after a call with it is time played.
+    clock.now += MINUTE;
+    expect((await send("POST", "/v1/game/play/raid?afk=yes", { commands: ided([{ do: "take" }]) })).status).toBe(200);
+    await openAfter(MINUTE);
+    expect(await playedMs()).toEqual({ raid: 3 * MINUTE });
+    expect(await afkMs()).toEqual({ raid: 3 * MINUTE + 100 });
+  });
+
+  it("counts a visit's word that the visitor is AFK for the visitor", async () => {
+    await send("GET", "/v1/game/play/works", undefined, bob);
+    await openAfter(0, "raid");
+    expect((await send("GET", `/v1/game/play/works/of/${bob}?afk=1`)).status).toBe(200);
+    clock.now += MINUTE;
+    expect((await send("GET", `/v1/game/play/works/of/${bob}?afk=1`)).status).toBe(200);
+    expect(await afkMs()).toEqual({ raid: 0, works: MINUTE });
+    expect(await playedMs()).toEqual({ raid: 0, works: 0 });
+  });
+
+  it("puts each game's time AFK and the Coins it has taken on the card, and all games' time AFK together", async () => {
+    await openAfter(0, "town");
+    await openAfter(MINUTE, "town", true);
+    await openAfter(2 * MINUTE, "town");
+    await openAfter(0, "raid", true);
+    await openAfter(MINUTE, "raid");
+    await services.run(
+      Coins.use((coins) =>
+        Effect.gen(function* () {
+          yield* coins.open(alice, clock.now);
+          yield* coins.post(
+            alice,
+            { amount: -120, reason: "A thing for the camp", game: "town", key: "buy:1" },
+            clock.now,
+          );
+          yield* coins.post(
+            alice,
+            { amount: -30, reason: "A thing for the camp", game: "town", key: "buy:2" },
+            clock.now,
+          );
+          // Coins paid in are not spent, whatever the game.
+          yield* coins.post(
+            alice,
+            { amount: 50, reason: "The chest", game: "town", key: "chest:1", free: true },
+            clock.now,
+          );
+        }),
+      ),
+    );
+    expect(await personOf(alice)).toEqual({
+      id: alice,
+      name: "Someone",
+      games: { raid: { played: 0, afk: 60, spent: 0 }, town: { played: 60, afk: 120, spent: 150 } },
+      played: 60,
+      afk: 180,
+    });
+  });
+
   it("is each game's apart, and all games' together on the card, in whole seconds; a game with time and no standing has its entry", async () => {
     await openAfter(0, "raid");
     await openAfter(10_000, "town");
@@ -2346,8 +2581,9 @@ describe("time played", () => {
     expect(await personOf(alice)).toEqual({
       id: alice,
       name: "Someone",
-      games: { raid: { played: 60 }, town: { played: 120 } },
+      games: { raid: { played: 60, afk: 0, spent: 0 }, town: { played: 120, afk: 0, spent: 0 } },
       played: 180,
+      afk: 0,
     });
   });
 
@@ -2360,15 +2596,16 @@ describe("time played", () => {
       expect((await visit(bob, "works")).status).toBe(200);
     }
     expect(await playedMs()).toEqual({ raid: 0, works: MINUTE });
-    expect(Object.fromEntries(await services.run(PlayStore.use((store) => store.playedOf(bob))))).toEqual({
+    expect(await playedMs(bob)).toEqual({
       works: 0,
     });
     // On her card, the raid she has opened and not played for a second is not listed.
     expect(await personOf(alice)).toEqual({
       id: alice,
       name: "Someone",
-      games: { works: { played: 60 } },
+      games: { works: { played: 60, afk: 0, spent: 0 } },
       played: 60,
+      afk: 0,
     });
   });
 
@@ -2419,7 +2656,7 @@ describe("time played", () => {
     clock.now += 2 * MINUTE + 1;
     await services.run(Play.use((play) => play.open(bobs, game)));
     expect(await visiting).toEqual(expect.objectContaining({ status: "open" }));
-    expect(Object.fromEntries(await services.run(PlayStore.use((store) => store.playedOf(bob))))).toEqual({
+    expect(await playedMs(bob)).toEqual({
       works: 3 * MINUTE + 1,
     });
   });
@@ -2432,13 +2669,13 @@ describe("time played", () => {
     start({
       play: (real) => ({
         ...real,
-        heard: (player, game, now) =>
+        heard: (...args) =>
           holding
             ? Effect.promise(() => gate.promise).pipe(
-                Effect.andThen(real.heard(player, game, now)),
+                Effect.andThen(real.heard(...args)),
                 Effect.andThen(Effect.sync(() => void (written = true))),
               )
-            : real.heard(player, game, now),
+            : real.heard(...args),
       }),
     });
     await keepMid();
@@ -2457,7 +2694,7 @@ describe("time played", () => {
     );
     gate.resolve();
     await until(() => written);
-    expect(Object.fromEntries(await services.run(PlayStore.use((store) => store.playedOf(bob))))).toEqual({
+    expect(await playedMs(bob)).toEqual({
       works: MINUTE,
     });
   });
@@ -2662,6 +2899,7 @@ describe("pulls", () => {
     await raided(alice, 25_000);
     const ten = tenPulls("p-1");
     const done = await pulled([ten]);
+    const at = clock.now;
     expect(done.results.map((r) => ("notes" in r ? r.notes.length : r.refused))).toEqual([10]);
     expect(await services.account(alice)).toEqual({ playerId: alice, balance: 15_000, xp: 25_000 });
     const spent = {
@@ -2677,9 +2915,24 @@ describe("pulls", () => {
     expect((await ledgerOf(alice)).slice(1)).toEqual([spent]);
     const have = PULLS.decode((await storedIn("pulls"))[0]?.state ?? "")?.have ?? {};
     expect(Object.values(have).reduce((sum, n) => sum + n, 0)).toBe(10);
+    // Kept by the batch that pulled, not again by the one sent again.
+    expect(await keptOf(alice)).toEqual([{ game: "pulls", slot: "have", data: have, at }]);
     expect(new Set((await awarded(alice)).map((a) => a.id))).toEqual(
       new Set(Object.keys(have).map((id) => `pull:${id}`)),
     );
+  });
+
+  it("take a guest's Leaf as they take a member's", async () => {
+    await spending();
+    await raided(carol, 10_000);
+    await send("GET", "/v1/game/play/pulls", undefined, carol);
+    expect((await pulled([tenPulls("g-1")], carol)).results).toMatchObject([{ id: "g-1", notes: expect.any(Array) }]);
+    expect(await services.account(carol)).toMatchObject({ balance: 0 });
+    expect((await ledgerOf(carol)).at(-1)).toMatchObject({
+      kind: "spend",
+      key: `play:pulls:${carol}:pull:0`,
+      delta: -10_000,
+    });
   });
 
   it("are refused, changing nothing, for too little Leaf and while spending is off", async () => {
@@ -2689,6 +2942,7 @@ describe("pulls", () => {
     const before = await untouched(alice, "pulls");
     expect((await pulled([tenPulls("p-1")])).results).toEqual([{ id: "p-1", refused: "not_enough_leaf" }]);
     expect(await untouched(alice, "pulls")).toEqual(before);
+    expect(await keptOf(alice)).toEqual([]);
 
     await app.dispose();
     start();
@@ -2697,6 +2951,7 @@ describe("pulls", () => {
     const off = await untouched(alice, "pulls");
     expect((await pulled([tenPulls("p-2")])).results).toEqual([{ id: "p-2", refused: "leaf_closed" }]);
     expect(await untouched(alice, "pulls")).toEqual(off);
+    expect(await keptOf(alice)).toEqual([]);
   });
 });
 

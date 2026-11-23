@@ -39,18 +39,15 @@ const brawl = (seed: number): FightSetup => ({
       ],
       { boons: ["secondwind"] },
     ),
-    partyOfFigures(
-      [
-        at("barrowgnome", 3, 0, 2),
-        at("glorp", 2, 0),
-        at("jay", 4, 0),
-        at("moth", 3, 2, 2, ["glowcap"]),
-        at("crab12", 2, 2),
-        at("cindernewt", 4, 1),
-        at("mossmote", 5, 2),
-      ],
-      { charms: ["mist"] },
-    ),
+    partyOfFigures([
+      at("barrowgnome", 3, 0, 2),
+      at("glorp", 2, 0),
+      at("jay", 4, 0, 1, ["mistcharm"]),
+      at("moth", 3, 2, 2, ["glowcap"]),
+      at("crab12", 2, 2),
+      at("cindernewt", 4, 1),
+      at("mossmote", 5, 2),
+    ]),
   ],
 });
 

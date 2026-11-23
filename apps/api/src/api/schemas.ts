@@ -110,8 +110,9 @@ export const GameMe = Schema.Struct({
   /** Their rank in the guild as the guild writes it, or null for a guest or a website admin who is not a member. */
   rank: Schema.NullOr(Schema.String),
   /**
-   * Whether they play as a guest: signed in, but not a member of the guild. A guest's Leaf and XP
-   * are 0, their level is a new member's, and their cursor is 0, whatever the ledger holds.
+   * Whether they play as a guest: signed in, but not a member of the guild. A guest's Leaf is the
+   * ledger's, as a member's is; their XP is 0, their level a new member's and their cursor 0,
+   * whatever the ledger holds.
    */
   guest: Schema.Boolean,
   leaf: Schema.Number,
@@ -232,20 +233,25 @@ export const Standings = Schema.Struct({
   you: Schema.NullOr(Place),
 });
 
+/** Somebody's time and Coins in a game: how long they have played it and had it open while AFK, in whole seconds, and the Coins it has taken from them. */
+const InGame = { played: Schema.Number, afk: Schema.Number, spent: Schema.Number };
+
 /**
  * Somebody, as their card shows them: their id, their name ("Someone" for one Leaf has no name for),
- * and each game they have a standing or time in, by game: how long they have played it, in whole
- * seconds (`played`), and with a standing, their place, score and numbers in it; and how long they
- * have played all games together.
+ * and each game they have a standing or time in, by game: how long they have played it and had it
+ * open while AFK, in whole seconds (`played`, `afk`), the Coins its commands have taken from them
+ * (`spent`), and with a standing, their place, score and numbers in it; and how long they have
+ * played all games together, and had them open while AFK.
  */
 export const Person = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   games: Schema.Record(
     Schema.String,
-    Schema.Union([Schema.Struct({ ...Place.fields, played: Schema.Number }), Schema.Struct({ played: Schema.Number })]),
+    Schema.Union([Schema.Struct({ ...Place.fields, ...InGame }), Schema.Struct(InGame)]),
   ),
   played: Schema.Number,
+  afk: Schema.Number,
 });
 
 /**

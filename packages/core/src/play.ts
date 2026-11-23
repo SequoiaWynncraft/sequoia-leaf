@@ -51,6 +51,16 @@ export interface CoinChange {
   readonly free?: true;
 }
 
+/**
+ * Who may spend Leaf on something: anyone signed in, guests too, or only the guild's members (and
+ * website admins). Every offer says which, so that nothing is members-only, or open to guests, by
+ * being left out.
+ */
+export type LeafFor = "everyone" | "members";
+
+/** Whether a player, a guest or not, may spend Leaf on something that is `forWhom`. */
+export const mayBuy = (forWhom: LeafFor, guest: boolean): boolean => forWhom === "everyone" || !guest;
+
 /** Leaf a command takes. No game ever pays Leaf in. */
 export interface LeafSpend {
   /** A whole number of Leaf, above 0. */
@@ -59,12 +69,26 @@ export interface LeafSpend {
   readonly reason: string;
   /** Unique among the game's spends for this player, such as `look:plum`. */
   readonly key: string;
+  /** Who may spend it: Leaf refuses a guest `members_only` for a spend that is `members`. */
+  readonly for: LeafFor;
 }
 
 /** Something worth remembering that a player did, for the `activity` table. */
 export interface Logged {
   readonly kind: string;
   readonly data: Readonly<Record<string, string | number | boolean>>;
+}
+
+/**
+ * A small piece of the player's for Leaf to keep apart from their state, where another player's
+ * game may later be given it (the board a member fought a room with). Leaf keeps one for each
+ * player, game and slot, the newest over any older, and sends none to any page.
+ */
+export interface Kept {
+  /** Which of the player's pieces in the game it is, such as `board:0:3`. */
+  readonly slot: string;
+  /** Plain data, kept as JSON. */
+  readonly data: unknown;
 }
 
 /** A command done: the state after it, and what happened, for the player's page to show. */
@@ -75,6 +99,8 @@ export interface Done<S, N> {
   readonly leaf?: readonly LeafSpend[];
   /** Things worth remembering that the player did (a run begun or ended, an order filled). */
   readonly log?: readonly Logged[];
+  /** Pieces of the player's for Leaf to keep, kept only if the command is. */
+  readonly keep?: readonly Kept[];
 }
 
 /** A whole number players are listed by, highest first, and a few more shown beside it. */

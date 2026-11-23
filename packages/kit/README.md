@@ -222,7 +222,8 @@ no Leaf, and the page shows `serverCard(line)` in its own words. With Leaf it as
   more if asked meanwhile): a game does when a command of its paid or took some, the town when a
   framed game closes and when its page comes back into view (`followCoins`). The town tells a game
   in its frame of a change to its Coins (`passCoins`, the shell's `{ town: "coins", coins }`), and a
-  game shows a change it worked out itself at once (`heardCoins`) until Leaf answers.
+  game shows a change it worked out itself at once (`heardCoins`) until Leaf answers. An answer
+  asked for before such a change is let go, since it may not hold it.
 - **Known as a guest** (`guest: true`: signed in, not in the guild). The game is live, as them,
   with no Leaf (`asGuest`): `leafShown()` is false, so no page shows a Leaf number, and every Leaf
   button's tip is "Leaf is earned by raiding with Sequoia." (`leafShut()`). `followLeaf` and
@@ -250,11 +251,13 @@ be read. It has been kept; tell the guild."), sending nothing again. A 404 `not_
 without the play service during a deploy, is "not yet": the call goes again each second for 30
 seconds (`NOT_YET`) before the page gives up for no server. As the page is hidden or put away,
 what Leaf has not answered goes in a request that outlives the page. Leaf counts the time played
-from the calls it hears, so a page says it is open: in view, a minute without a call reads the
-state (`STILL_HERE`); with nothing waiting as it is hidden or put away, the state is read; and it
-is read as the page comes back (`outside.wake`), but for a game answered short, which asks for its
-own reads. A visit says none of this, nor does a page while
-`away()` (the town, while a game is open over it).
+from the calls it hears, so a page says it is open: a minute without a call reads the state
+(`STILL_HERE`), hidden too; with nothing waiting as it is hidden or put away, the state is read; and
+it is read as the page comes back (`outside.wake`), but for a game answered short, which asks for
+its own reads. A visit says none of this, nor does a page while
+`away()` (the town, while a game is open over it). Every call says `afk=1` while the player is AFK
+(`outside.afk`: the page hidden, or nothing pressed, touched, scrolled or moved over on it for
+`AFK_AFTER`, 5 minutes), and Leaf counts the time after such a call as time AFK.
 `predict` is the copy after a command the shared rules can work out
 without Leaf, shown at once; each answer's state takes the copy's place (with what is still waiting
 worked out again on top), and `onState` tells the page when that is not what it was showing.

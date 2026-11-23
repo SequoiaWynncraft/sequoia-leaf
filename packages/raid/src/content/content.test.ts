@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { CASTS } from "../fight/abilities.ts";
 import { COLS, HOME_ROWS } from "../hex.ts";
+import type { Carrier } from "../party.ts";
 import { BOON_IDS, BOONS, boonText } from "./boons.ts";
 import {
   abilityText,
@@ -19,11 +20,16 @@ import {
 import {
   COMPONENT_IDS,
   COMPONENTS,
+  EMBLEM_IDS,
+  EMBLEMS,
   FINISHED,
   FINISHED_IDS,
   forge,
   holdItem,
   HOLDS,
+  type ItemId,
+  itemName,
+  itemQuip,
   itemStats,
   itemText,
 } from "./items.ts";
@@ -31,6 +37,8 @@ import { BOSS_ROOMS, ECONOMY, MAX_LEVEL, ROOMS, sellPrice, STALL_ODDS, TRAILS, w
 import { CALLINGS, KINS, stepFor, TRAIT_IDS, TRAITS, traitText } from "./traits.ts";
 
 const EVERYONE: readonly UnitKind[] = [...FIGURE_IDS, ...SUMMON_IDS, ...TROUBLE_IDS];
+/** A Worm (a Burrow and a Sneak) holding these. */
+const worm = (items: ItemId[]): Carrier => ({ kind: "worm", items });
 /** The mean health of a tier's figures. */
 const mean = (tier: 1 | 2 | 3 | 4 | 5): number => {
   const list = figuresOfTier(tier);
@@ -162,27 +170,56 @@ describe("items", () => {
     expect(new Set(names).size).toBe(15);
   });
   test("a second component forges with the first; a third thing takes a free place; a fourth is refused", () => {
-    const one = holdItem([], "thorn");
-    expect(one?.held).toEqual(["thorn"]);
-    const two = holdItem(one?.held ?? [], "plume");
-    expect(two?.held).toEqual(["wasptail"]);
-    expect(two?.forged).toBe("wasptail");
-    const three = holdItem(["wasptail", "stump"], "bark");
-    expect(three?.held).toEqual(["wasptail", "stump", "bark"]);
+    expect(holdItem(worm([]), "thorn")).toEqual({ held: ["thorn"], forged: null, with: null });
+    expect(holdItem(worm(["thorn"]), "plume")).toEqual({ held: ["wasptail"], forged: "wasptail", with: "thorn" });
+    expect(holdItem(worm(["wasptail", "stump"]), "bark")).toMatchObject({ held: ["wasptail", "stump", "bark"] });
     // Full of finished things: nothing more fits.
-    expect(holdItem(["wasptail", "stump", "hoard"], "bark")).toBeNull();
+    expect(holdItem(worm(["wasptail", "stump", "hoard"]), "bark")).toEqual({ refused: "hands_full" });
     // Full, but one is a loose component: another component still forges with it.
-    expect(holdItem(["wasptail", "stump", "bark"], "bark")?.held).toEqual(["wasptail", "stump", "stump"]);
-    expect(holdItem(["wasptail", "stump", "bark"], "hoard")).toBeNull();
+    expect(holdItem(worm(["wasptail", "stump", "bark"]), "bark")).toMatchObject({
+      held: ["wasptail", "stump", "stump"],
+    });
+    expect(holdItem(worm(["wasptail", "stump", "bark"]), "hoard")).toEqual({ refused: "hands_full" });
     expect(HOLDS).toBe(3);
+  });
+  test("an emblem takes a place of its own and never forges: components still pair up around it", () => {
+    expect(holdItem(worm([]), "crabcharm")).toEqual({ held: ["crabcharm"], forged: null, with: null });
+    expect(holdItem(worm(["crabcharm"]), "thorn")).toEqual({ held: ["crabcharm", "thorn"], forged: null, with: null });
+    expect(holdItem(worm(["crabcharm", "thorn"]), "plume")).toEqual({
+      held: ["crabcharm", "wasptail"],
+      forged: "wasptail",
+      with: "thorn",
+    });
+    expect(holdItem(worm(["thorn"]), "crabcharm")).toEqual({ held: ["thorn", "crabcharm"], forged: null, with: null });
+    expect(holdItem(worm(["crabcharm", "wasptail", "stump"]), "mistcharm")).toEqual({ refused: "hands_full" });
+    expect(holdItem(worm(["crabcharm", "wasptail", "thorn"]), "plume")).toMatchObject({
+      held: ["crabcharm", "wasptail", "wasptail"],
+    });
+  });
+  test("an emblem is refused by a figure that carries its kin already, by its own kin or the same emblem", () => {
+    expect(holdItem(worm([]), "burrowcharm")).toEqual({ refused: "already_kin" });
+    expect(holdItem(worm(["crabcharm"]), "crabcharm")).toEqual({ refused: "already_kin" });
+    // A Worm's calling is not a kin: any other emblem is held.
+    expect(holdItem(worm(["crabcharm"]), "feathercharm")).toMatchObject({ held: ["crabcharm", "feathercharm"] });
+    // Refused for the kin even with no place left.
+    expect(holdItem(worm(["wasptail", "stump", "hoard"]), "burrowcharm")).toEqual({ refused: "already_kin" });
+  });
+  test("an emblem adds no stats, and is named and quipped as the charm that gives it", () => {
+    for (const id of EMBLEM_IDS) {
+      expect(Object.values(itemStats(id)).every((n) => n === 0)).toBe(true);
+      expect(itemName(id)).toBe(BOONS[id].name);
+      expect(itemQuip(id)).toBe(BOONS[id].quip);
+      expect(itemText(id)).toContain(TRAITS[EMBLEMS[id]].name);
+    }
   });
 });
 
 describe("boons", () => {
-  test("there are about eighteen, with a charm for every kin", () => {
+  test("there are about eighteen, with a charm for every kin, each giving the emblem of its own id", () => {
     expect(BOON_IDS.length).toBeGreaterThanOrEqual(16);
     expect(BOON_IDS.length).toBeLessThanOrEqual(22);
-    for (const kin of KINS) expect(BOON_IDS.filter((id) => BOONS[id].charm === kin).length).toBe(1);
+    expect(BOON_IDS.filter((id) => BOONS[id].sort === "charm")).toEqual([...EMBLEM_IDS]);
+    for (const kin of KINS) expect(EMBLEM_IDS.filter((id) => EMBLEMS[id] === kin).length).toBe(1);
     for (const id of BOON_IDS) expect(boonText(id)).not.toContain("{");
   });
 });

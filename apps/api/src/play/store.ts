@@ -13,12 +13,18 @@ export const ACTIVITY_KEPT_MS = 180 * DAY_MS;
 /** How many are listed at the top of a game's board. */
 export const BOARD_MOST = 20;
 /**
- * The longest gap between a player's calls to a game that counts as playing it. A page open and in
- * view calls at least every 75 seconds (the kit's `STILL_HERE`, a minute, checked every 15
- * seconds), and a visit every 30; this is twice that and more, for a slow network. A longer gap is
- * time away.
+ * The longest gap between a player's calls to a game that counts as playing it, or as time AFK. A
+ * page open calls at least every 75 seconds (the kit's `STILL_HERE`, a minute, checked every 15
+ * seconds), and a visit every 30; this is twice that and more, for a slow network or a hidden tab
+ * the browser wakes once a minute. A longer gap is time away.
  */
 export const IDLE_MS = 3 * 60_000;
+
+/** How long a player has played a game, and had it open while AFK, in milliseconds. */
+export interface Time {
+  readonly played: number;
+  readonly afk: number;
+}
 
 /**
  * A player's state in a game, as stored: how many batches have changed it, the game's own text,
@@ -66,8 +72,9 @@ export interface Board {
  * are worth remembering (`activity`, up to 1,000 a player a UTC day, for 180 days), and how many of
  * each player's commands were done and refused each UTC day (`command_days`, for the staff's
  * report), where each player's state stands in a game with a board (`standings`), what each
- * player has won for good in any game (`awards`, never taken away), and how long each player has
- * played each game (`played`). Every method but `board` is meant to run inside the play service's
+ * player has won for good in any game (`awards`, never taken away), how long each player has
+ * played each game and had it open while AFK (`played`), and the pieces of a player's that a game asks to keep (`play_kept`,
+ * one for each slot). Every method but `board` is meant to run inside the play service's
  * transaction. A database failure is a defect.
  */
 export class PlayStore extends Context.Service<
@@ -139,13 +146,16 @@ export class PlayStore extends Context.Service<
     /** Keeps each of these the player does not hold yet, as won now. */
     readonly award: (playerId: PlayerId, ids: readonly string[], now: number) => Effect.Effect<void>;
     /**
-     * A call of the player's to a game at `now`: the time since their last one there is added to
-     * what they have played, if it is no more than `IDLE_MS`. The first adds nothing, and so does
-     * one at or before the last.
+     * A call of the player's to a game at `now`, which says whether they are AFK: the time since
+     * their last one there is added to what they have played, or to their time AFK if that last
+     * call said they were, if it is no more than `IDLE_MS`. The first adds nothing, and so does one
+     * at or before the last.
      */
-    readonly heard: (playerId: PlayerId, game: string, now: number) => Effect.Effect<void>;
-    /** How long a player has played each game, in milliseconds, by game. */
-    readonly playedOf: (playerId: PlayerId) => Effect.Effect<ReadonlyMap<string, number>>;
+    readonly heard: (playerId: PlayerId, game: string, now: number, afk: boolean) => Effect.Effect<void>;
+    /** How long a player has played each game, and had it open while AFK, in milliseconds, by game. */
+    readonly playedOf: (playerId: PlayerId) => Effect.Effect<ReadonlyMap<string, Time>>;
+    /** Keeps a piece of the player's in a game (`Done.keep`), its data as JSON, over the one in its slot. */
+    readonly keep: (playerId: PlayerId, game: string, slot: string, data: string, now: number) => Effect.Effect<void>;
   }
 >()("leaf/PlayStore") {
   static readonly layer = Layer.effect(
@@ -218,8 +228,9 @@ export class PlayStore extends Context.Service<
       });
       const playedOf = SqlSchema.findAll({
         Request: Schema.String,
-        Result: Schema.Struct({ game: Schema.String, ms: Schema.Int }),
-        execute: (playerId) => sql`SELECT game, ms FROM played WHERE player_id = ${playerId} ORDER BY game`,
+        Result: Schema.Struct({ game: Schema.String, played: Schema.Int, afk: Schema.Int }),
+        execute: (playerId) =>
+          sql`SELECT game, ms AS played, afk_ms AS afk FROM played WHERE player_id = ${playerId} ORDER BY game`,
       });
       return PlayStore.of({
         read: (playerId, game) => read({ playerId, game }).pipe(Effect.orDie),
@@ -313,18 +324,28 @@ export class PlayStore extends Context.Service<
               sql`INSERT INTO awards (player_id, id, at) VALUES (${playerId}, ${id}, ${now}) ON CONFLICT DO NOTHING`,
             { discard: true },
           ).pipe(Effect.orDie),
-        heard: (playerId, game, now) =>
+        // Each of SET's sides reads the row as it was: the gap goes where the last call said, and the
+        // newest call's word is kept for the next.
+        heard: (playerId, game, now, afk) =>
           sql`
-            INSERT INTO played (player_id, game, ms, seen_at) VALUES (${playerId}, ${game}, 0, ${now})
+            INSERT INTO played (player_id, game, ms, afk_ms, afk, seen_at)
+            VALUES (${playerId}, ${game}, 0, 0, ${afk ? 1 : 0}, ${now})
             ON CONFLICT (player_id, game) DO UPDATE SET
-              ms = ms + CASE WHEN excluded.seen_at - seen_at BETWEEN 1 AND ${IDLE_MS} THEN excluded.seen_at - seen_at ELSE 0 END,
+              ms = ms + CASE WHEN afk = 0 AND excluded.seen_at - seen_at BETWEEN 1 AND ${IDLE_MS} THEN excluded.seen_at - seen_at ELSE 0 END,
+              afk_ms = afk_ms + CASE WHEN afk = 1 AND excluded.seen_at - seen_at BETWEEN 1 AND ${IDLE_MS} THEN excluded.seen_at - seen_at ELSE 0 END,
+              afk = CASE WHEN excluded.seen_at > seen_at THEN excluded.afk ELSE afk END,
               seen_at = max(seen_at, excluded.seen_at)
           `.pipe(Effect.asVoid, Effect.orDie),
         playedOf: (playerId) =>
           playedOf(playerId).pipe(
-            Effect.map((rows) => new Map(rows.map((row) => [row.game, row.ms]))),
+            Effect.map((rows) => new Map(rows.map(({ game, ...time }) => [game, time]))),
             Effect.orDie,
           ),
+        keep: (playerId, game, slot, data, now) =>
+          sql`
+            INSERT INTO play_kept (player_id, game, slot, data, updated_at) VALUES (${playerId}, ${game}, ${slot}, ${data}, ${now})
+            ON CONFLICT (player_id, game, slot) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
+          `.pipe(Effect.asVoid, Effect.orDie),
       });
     }),
   );
