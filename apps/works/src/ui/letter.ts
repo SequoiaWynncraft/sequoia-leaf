@@ -1,11 +1,11 @@
 /**
  * The letter that says what the yard did while the member was away, as Leaf counted it (the
  * yard's `away`): how long it worked, the Coins it earned, what the depot took in most of, the
- * research that became known meanwhile (the rules' `knownSince`), and the orders waiting to be
- * handed over. It is read on paper, a line at a time; putting it away pays the till into the purse.
+ * lessons, projects and commissions finished meanwhile and the research that became known (the
+ * rules' `finishedSince` and `knownSince`), and the orders waiting to be handed over. It is read on paper, a line at a time; putting it away pays the till into the purse.
  */
 
-import { ALL_ITEMS, type Away, isFilled, knownSince, TICK_MS } from "@sequoia-leaf/factory";
+import { ALL_ITEMS, type Away, finishedSince, isFilled, knownSince, TICK_MS } from "@sequoia-leaf/factory";
 import { thing } from "@sequoia-leaf/kit/card.ts";
 import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
@@ -68,7 +68,10 @@ export function showLetter(away: Away, done: () => void): void {
     most.map((k) => thing(itemRef(k), { count: (away.made[k] ?? 0).toLocaleString("en-US") })),
   );
   if (lines.length === 0) line(icon("heart"), el("span", "k-grow", { text: "Nothing reached the depot." }));
-  // What the Studies made known while nobody watched: each a thing that says what it unlocked.
+  // What the yard finished while nobody watched, and what the Studies made known: each a thing that
+  // says what it unlocked.
+  const finished = goals("Finished", finishedSince(S.world));
+  if (finished) lines.push(el("div", "line", {}, el("hr"), finished.node));
   const known = goals("Became known", knownSince(S.world));
   if (known) lines.push(el("div", "line", {}, el("hr"), known.node));
   list(

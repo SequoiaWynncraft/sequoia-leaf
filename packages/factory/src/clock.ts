@@ -37,3 +37,5 @@ export function awayOf(y: Yard): Away | null {
  * also when it notes where the owner last saw the yard (`seen`), so the two are of one moment.
  */
 export const knownSince = (y: Yard): Goal[] => y.done.slice(y.told).filter((g) => !isNode(g));
+/** The nodes (lessons, projects, commissions) finished since the yard's owner was last there, as `knownSince` is the research. */
+export const finishedSince = (y: Yard): Goal[] => y.done.slice(y.told).filter(isNode);

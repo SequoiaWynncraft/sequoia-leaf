@@ -274,6 +274,16 @@ describe("a Study", () => {
     expect(F.knownSince(y)).toEqual([]);
   });
 
+  test("a node finished while the owner was away is told the same way, apart from research, until their next command", () => {
+    const y = F.create({ seed: 3 });
+    const planks = F.goal("planks");
+    expect(y.hand).toBe(planks);
+    F.giveGoal(y, planks, F.item("plank"), 12);
+    expect([F.finishedSince(y), F.knownSince(y)]).toEqual([[planks], []]);
+    must(y, { do: "collect" });
+    expect(F.finishedSince(y)).toEqual([]);
+  });
+
   test("a Study's pace is its grade's, at the share of power the yard has, and none in the dark", () => {
     const { y } = studies([[folio, 2]]);
     const i = F.at(y, 5, 7);
