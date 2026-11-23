@@ -176,7 +176,10 @@ function asks(y: F.Yard): (string | null)[] {
   return [
     () => ({ do: "paint", x: cx + 2, y: cy - 3, tint: 1 }),
     () => ({ do: "saveBlueprint", slot: 0, tiles: tiles() }),
-    () => ({ do: "stand", pieces: [{ kind: "belt", x: cx + 4, y: cy - 3, dir: 0, span: 0 }] }),
+    () => ({
+      do: "stand",
+      pieces: [4, 5].map((dx) => ({ kind: "belt", x: cx + dx, y: cy - 3, dir: 0, span: 0 })),
+    }),
     () => ({ do: "move", tiles: tiles(), turns: 0, x: cx + 2, y: cy - 4 }),
     () => ({ do: "clear", tiles: tiles() }),
   ].map((c) => refused(y, c()));
@@ -187,6 +190,15 @@ describe("tools", () => {
     expect(asks(F.create({ seed: 1 }))).toEqual([F.LOCKED, F.LOCKED, F.LOCKED, F.LOCKED, F.LOCKED]);
     // Paint, from the signs; Select, from the surveyor's chain; one blueprint, from the drawing board.
     expect(asks(F.create({ seed: 1, tier: 3 }))).toEqual([null, null, null, null, null]);
+  });
+
+  test("one piece stood again, as when a removal is undone, needs no tool; two need Select", () => {
+    const y = F.create({ seed: 1 });
+    const [cx, cy] = y.land.depot;
+    const belt = { kind: "belt", x: cx + 2, y: cy - 3, dir: 0, span: 0 };
+    must(y, { do: "stand", pieces: [belt] });
+    expect(y.kind[F.at(y, belt.x, belt.y)]).toBe(F.BELT);
+    expect(give(y, { do: "stand", pieces: [belt, { ...belt, x: belt.x + 1 }] })).toMatchObject({ refused: F.LOCKED });
   });
 
   test("a run of belt is belts and tunnels and nothing else: a mill does not read as a leg, and a leg's colour or setting is not laid", () => {
