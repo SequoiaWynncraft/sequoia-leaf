@@ -400,7 +400,11 @@ card says so and the town is not loaded.
   does everybody's picture of them when the room tells them. Nothing typed is sent.
 - **The connection.** While it is down, the town plays on; once it has been down two seconds a
   small "Reconnecting…" sits by the purse, so that a blip is not announced, and after five seconds
-  the others fade away until the room welcomes the page again. Told the
+  the others fade away until the room welcomes the page again. When Leaf restarts (a deploy) every
+  page is told to come back at once, and they come back within a second or two in no order: whoever
+  is not in the room yet when this page is welcomed into it stands where they were, in town as far
+  as everything else on the page goes, for up to five seconds (`REJOIN_FOR`), and is the same figure
+  when they are back, put where they are now; whoever is not back by then goes. Told the
   member opened the game live somewhere else, the kit's card "Playing somewhere else" says this
   page has let go of the town, with "Play here", which takes the room back; told their session has
   ended, the kit's "Signed out" card.

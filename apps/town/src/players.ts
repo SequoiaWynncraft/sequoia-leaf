@@ -99,8 +99,8 @@ const learn = (m: LiveMember): void => {
 /** What the page hears from the room: the company's, and the welcome ends any drop. */
 const ears: LiveEars = {
   ...company.ears,
-  welcome(you, name, roster) {
-    company.ears.welcome?.(you, name, roster);
+  welcome(you, name, roster, restarted) {
+    company.ears.welcome?.(you, name, roster, restarted);
     for (const m of roster) learn(m);
     downAt = null;
     showLink();
@@ -118,10 +118,14 @@ const ears: LiveEars = {
  */
 const alone = (): boolean => downAt !== null && performance.now() - downAt > ALONE_AFTER;
 
-/** Everybody in the room with the member, the member too, with their rank as the town shows it; null while the page is in no room. */
+/**
+ * Everybody in the room with the member, the member too, with their rank as the town shows it, and
+ * those awaited back after Leaf restarted, who stand where they were; null while the page is in no
+ * room.
+ */
 export function roomNow(): { id: string; name: string; rank: string | null }[] | null {
   if (!room || room.you() === null || alone()) return null;
-  return [...room.members().values()].map((m) => {
+  return [...room.members().values(), ...company.awaited().map((f) => f.who)].map((m) => {
     const rank = rankOf(m);
     return { id: m.player, name: m.name, rank: rank === "" ? null : rank };
   });

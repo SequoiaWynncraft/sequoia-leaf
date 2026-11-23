@@ -212,8 +212,12 @@ export type LiveStatus = "connecting" | "open" | "closed" | "replaced" | "signed
 
 /** What a page hears from its room. Every one is optional. */
 export interface LiveEars {
-  /** In the room (again, after a reconnect): who is there. Anybody heard of before and not in it has gone. */
-  welcome?(you: number, room: string, roster: readonly LiveMember[]): void;
+  /**
+   * In the room (again, after a reconnect): who is there. Anybody heard of before and not in it has
+   * gone; but `restarted` (the connection before it was closed because Leaf was restarting) they may
+   * only not be back yet, every page having been told to come back at the same moment.
+   */
+  welcome?(you: number, room: string, roster: readonly LiveMember[], restarted: boolean): void;
   joined?(m: LiveMember): void;
   left?(id: number): void;
   act?(id: number, kind: string, arg: string): void;
@@ -334,6 +338,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
   // Since the last welcome: when the connection went down, how many tries since, how many in a row
   // did not open, and when the last one began.
   let downSince: number | null = null;
+  /** Whether the last connection was closed because Leaf was restarting. */
+  let restarting = false;
   let tries = 0;
   let failed = 0;
   let lastTry = 0;
@@ -418,7 +424,9 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
         askAgain();
         // Nothing has been sent on this connection yet: whatever the player says next goes at once.
         sent = null;
-        ears.welcome?.(m.you, m.room, m.roster);
+        const restarted = restarting;
+        restarting = false;
+        ears.welcome?.(m.you, m.room, m.roster, restarted);
         // Said again, unless whoever heard the welcome has just said it: this room has not heard
         // from the player on this connection yet.
         if (motion && sent === null) want(motion);
@@ -491,6 +499,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
     watcher = stop(watcher);
     if (done) return;
     if (!reconnects(code)) return letGo(code === CLOSE.replaced ? "replaced" : "signedout");
+    // A try that did not open says nothing new of why the room was left.
+    if (l.open) restarting = code === CLOSE.restart;
     const now = outside.now();
     if (downSince === null) {
       downSince = now;
