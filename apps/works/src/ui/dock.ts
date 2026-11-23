@@ -27,6 +27,7 @@ import {
   toolHooks,
   undo,
 } from "../tools.ts";
+import { catchingUp } from "../yard.ts";
 import { machineRef } from "./card.ts";
 import { $, button, fitted, when, type YardIcon, yardIcon } from "./parts.ts";
 
@@ -134,6 +135,7 @@ function selectLine(f: boolean): { text: string; bad: boolean } {
 
 /** What the line over the dock says just now. */
 function handLine(): { text: string; bad: boolean } {
+  if (catchingUp()) return { text: "The yard is catching up with the guild's server.", bad: false };
   if (message && performance.now() < messageUntil) return { text: message, bad: true };
   const tool = S.tool;
   const f = S.finger;

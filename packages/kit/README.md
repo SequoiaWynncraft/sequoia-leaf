@@ -256,12 +256,12 @@ is read as the page comes back (`outside.wake`). A visit says none of this, nor 
 `predict` is the copy after a command the shared rules can work out
 without Leaf, shown at once; each answer's state takes the copy's place (with what is still waiting
 worked out again on top), and `onState` tells the page when that is not what it was showing.
-A game whose page keeps a copy of its own (the Works) is answered short (`reader.short`): a batch's
-answer is not the state, and `onAnswer` gives it to the page, with each command and its answer,
-before anything more is sent. `refresh(differs?)` asks for the state again in its turn: after the
-batch on its way and before those waiting, which wait for it, so the state it brings is Leaf's
-after every batch answered and before any waiting; asked again before it is answered, it gives the
-same one. `differs` is the tick at which the page found its copy not to be Leaf's, which Leaf logs. A command only Leaf can answer is shown when Leaf answers, and `makeHold()` is the one rule for
+`refresh()` asks for the state again, one question at a time; its answer is let go if a command
+was sent meanwhile, as that command's answer is newer. A game whose page keeps a copy of its own
+(the Works) is answered short (`reader.short`): a batch's answer is not the state, `onAnswer` gives
+it to the page with each command and its answer, and only a read takes the copy's place;
+`refresh(differs)` says the tick at which the page found its copy not to be Leaf's, which Leaf
+logs. A command only Leaf can answer is shown when Leaf answers, and `makeHold()` is the one rule for
 holding off meanwhile: its answer may change what a later command means, so nothing more is done
 until it comes, but a purchase may follow a purchase. `waitingLook(element, answer)` gives what was
 asked for the waiting look (`k-wait`) once Leaf has taken more than 150 ms.

@@ -13,16 +13,16 @@
  *   of Leaf's answer for it. Commands go to Leaf in order, one request at a time, as many as are
  *   waiting in each (up to 32); after a network failure, or Leaf having trouble or asking to slow
  *   down, the same request goes again with the same ids, so nothing is done twice.
- * - `refresh()` asks Leaf for the state again, in its turn: after the batch on its way, and before
- *   those waiting, which wait for it. Asked again meanwhile, it gives the one not yet answered. With
- *   `differs`, it tells Leaf the tick at which the page found its copy not to be Leaf's.
+ * - `refresh()` asks Leaf for the state again, one question at a time: asked again meanwhile, it
+ *   gives the one on its way. Its answer is let go if a command was sent meanwhile. With `differs`,
+ *   it tells Leaf the tick at which the page found its copy not to be Leaf's.
  * - `predict`, for a command the shared rules can work out without Leaf, gives the copy after it:
- *   it is shown at once. When Leaf answers with its state, Leaf's state takes the copy's place (with
- *   what is still waiting worked out again on top), and if that is not what the page was showing,
- *   the page is told so it can draw again (`onState`). A refused command is the game's to show.
+ *   it is shown at once. When Leaf answers, Leaf's state takes the copy's place (with what is still
+ *   waiting worked out again on top), and if that is not what the page was showing, the page is
+ *   told so it can draw again (`onState`). A refused command is the game's to show.
  * - A game whose page keeps a copy of its own with the same rules may be answered short
- *   (`PlayReader.short`, `Game.answer`): a batch's answer is then not the state, and only the page
- *   hears it (`onAnswer`), to tell whether its copy is still Leaf's; it asks for the state when not.
+ *   (`PlayReader.short`, `Game.answer`): a batch's answer is then not the state, and the page hears
+ *   it (`onAnswer`); only a read of the state (`refresh`) takes the copy's place.
  * - A state Leaf cannot read (`state_unreadable`) stops the page at once, with nothing sent again:
  *   the page shows the kit's card for it. During a deploy a call can reach the Leaf before this one,
  *   which has no such route (404 `not_found`): that is "not yet", tried again each second for 30
@@ -86,9 +86,9 @@ export interface Play<View, Command extends object, Note, Short = never> {
   /** Hears when the page cannot send any more: signed out, or Leaf will not take it. */
   onTrouble(fn: (why: Trouble) => void): () => void;
   /**
-   * Asks Leaf for the state again, in its turn: after the batch on its way, and before those waiting,
-   * which wait for it. Asked again before it is answered, it gives the same one. `differs` is the
-   * tick at which the page found its copy not to be Leaf's, for Leaf to log.
+   * Asks Leaf for the state again, when nothing is waiting for it: one question at a time, so asked
+   * again meanwhile it gives the one on its way. The answer is let go if a command was sent meanwhile.
+   * `differs` is the tick at which the page found its copy not to be Leaf's, for Leaf to log.
    */
   refresh(differs?: number): Promise<void>;
   /**
@@ -200,16 +200,17 @@ export async function openPlay<View, Command extends object, Note, Short = never
   let stopped = false;
   /** When the page last called Leaf, and whether it says nothing of itself (a visit, or a page put aside). */
   let calledAt = outside.now();
+  /** How many calls have set off: an answer to one that is no longer the last is out of date. */
+  let calls = 0;
   const call: typeof ask = (to, init) => {
     calledAt = outside.now();
+    calls++;
     return ask(to, init);
   };
   const quiet = (): boolean => visiting || options.away?.() === true;
   let pause = retry.first;
-  /** The read of the state asked for and not yet answered, if one is; whether it is on its way; and, until it goes, what goes with it. */
+  /** The question for the state again on its way, if one is. */
   let asking: Promise<void> | null = null;
-  let reading = false;
-  let wanted: { differs: number | undefined; done: () => void } | null = null;
   const hearers = new Set<(state: View, differs: boolean) => void>();
   const answerers = new Set<(answered: Answered<Command, Note, Short>) => void>();
   const troubled = new Set<(why: Trouble) => void>();
@@ -257,9 +258,6 @@ export async function openPlay<View, Command extends object, Note, Short = never
     flying = null;
     queue = [];
     for (const p of left) p.answer({ refused });
-    // A read not yet on its way never goes.
-    wanted?.done();
-    wanted = null;
   }
 
   function stop(why: Trouble): void {
@@ -268,12 +266,12 @@ export async function openPlay<View, Command extends object, Note, Short = never
     for (const fn of troubled) fn(why);
   }
 
-  /** Tells whoever hears answers, and then each command, what Leaf answered a batch (a read is none). */
+  /** Tells whoever hears answers, and then each command, what Leaf answered a batch. */
   function answered(
     batch: readonly Pending<View, Command, Note>[],
     answers: ReadonlyMap<string, Answer<Note>>,
     short?: Short,
-  ) {
+  ): void {
     if (batch.length === 0) return;
     const done = batch.map((p) => ({ p, answer: answers.get(p.id) ?? { refused: "unanswered" } }));
     for (const fn of answerers) fn({ done: done.map(({ p, answer }) => ({ command: p.command, answer })), short });
@@ -281,14 +279,13 @@ export async function openPlay<View, Command extends object, Note, Short = never
   }
 
   /**
-   * Takes Leaf's answer: its state replaces the copy, or for a game answered short, the page is told
-   * the answer; and each command hears what it did. False when the page is too old.
+   * Takes Leaf's answer: its state replaces the copy, or for a batch of a game answered short, the
+   * page hears Leaf's answer; and each command hears what it did. False when the page is too old.
    */
   function took(body: Record<string, unknown>, batch: readonly Pending<View, Command, Note>[]): boolean {
-    // A batch's answer for a game answered short; from a Leaf older than the page, the state after all.
-    const short = batch.length > 0 && reader.short ? reader.short(body.state) : null;
-    const view = short === null ? reader.view(body.state) : null;
-    if (short === null && view === null) {
+    const short = batch.length > 0 && reader.short !== undefined;
+    const view = short ? null : reader.view(body.state);
+    if (!short && view === null) {
       outside.reload();
       return false;
     }
@@ -309,7 +306,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
     if (typeof body.rev === "number") rev = body.rev;
     flying = null;
     if (view === null) {
-      answered(batch, answers, short ?? undefined);
+      answered(batch, answers, reader.short?.(body.state) ?? undefined);
       return true;
     }
     // What the page was showing, as it stands now: whatever the page did to it shows as a difference.
@@ -321,23 +318,8 @@ export async function openPlay<View, Command extends object, Note, Short = never
     return true;
   }
 
-  /** The read asked for (`refresh`), in its turn, and its state taken: nothing is sent meanwhile. */
-  async function readNow(asked: { differs: number | undefined; done: () => void }): Promise<void> {
-    wanted = null;
-    reading = true;
-    const reply = await call(asked.differs === undefined ? read : `${read}?differs=${asked.differs}`);
-    reading = false;
-    asking = null;
-    if (reply.status === 401) stop("signedout");
-    else if (!stopped && reply.status === 200 && isRecord(reply.body)) took({ ...reply.body, results: [] }, []);
-    asked.done();
-    void pump();
-  }
-
   async function pump(): Promise<void> {
-    if (stopped || flying !== null || reading) return;
-    if (wanted !== null) return readNow(wanted);
-    if (queue.length === 0) return;
+    if (stopped || flying !== null || queue.length === 0) return;
     const batch = fitting(queue);
     queue = queue.slice(batch.length);
     flying = batch;
@@ -369,6 +351,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
         // Leaf will not take these commands as they are; sending them again would not change that.
         flying = null;
         answered(batch, new Map(batch.map((p) => [p.id, { refused: "invalid_command" }])));
+        // A game answered short keeps no copy here to put right.
         if (!reader.short) {
           copy = rebuild();
           tell(true);
@@ -418,15 +401,23 @@ export async function openPlay<View, Command extends object, Note, Short = never
     void outside.fetch(path, { ...(left.length > 0 ? post : {}), credentials: "same-origin", keepalive: true });
   }
 
-  function refresh(differs?: number): Promise<void> {
-    if (stopped) return Promise.resolve();
-    if (wanted !== null && differs !== undefined) wanted.differs = differs;
-    if (asking === null) {
-      asking = new Promise<void>((done) => {
-        wanted = { differs, done };
-      });
-      void pump();
+  /** Leaf's state read again and taken, unless anything was sent meanwhile. */
+  async function readAgain(differs: number | undefined): Promise<void> {
+    const asked = call(differs === undefined ? read : `${read}?differs=${differs}`);
+    const mine = calls;
+    const reply = await asked;
+    if (reply.status === 401) return stop("signedout");
+    // A command sent and answered while this was on its way has told the page more than this has.
+    if (reply.status === 200 && isRecord(reply.body) && flying === null && queue.length === 0 && calls === mine) {
+      took({ ...reply.body, results: [] }, []);
     }
+  }
+
+  function refresh(differs?: number): Promise<void> {
+    if (stopped || flying !== null || queue.length > 0) return asking ?? Promise.resolve();
+    asking ??= readAgain(differs).finally(() => {
+      asking = null;
+    });
     return asking;
   }
 

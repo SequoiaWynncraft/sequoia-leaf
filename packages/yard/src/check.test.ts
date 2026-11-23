@@ -3,9 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { setOpen, setWay } from "./build.ts";
 import { check } from "./check.ts";
 import { awayOf } from "./clock.ts";
+import { ITEMS } from "./content/items.ts";
+import { KINDS } from "./content/machines.ts";
 import { create } from "./create.ts";
 import { put, steps, workingYard } from "./fixtures.ts";
-import { RIGHT } from "./grid.ts";
+import { DIRS, RIGHT } from "./grid.ts";
 import { saveBlueprint, within } from "./pieces.ts";
 import { load, save } from "./save.ts";
 import { blank, type Building, type World } from "./world.ts";
@@ -44,6 +46,27 @@ function first(w: World, kind: Building["kind"]): Building {
   return b;
 }
 const belt = (w: World): Building => first(w, "belt");
+/** The working yard of `yards`, run on a while. */
+const working = (): World => yards().find(([name]) => name === "working")?.[1] ?? create();
+
+const f64 = new Float64Array(1);
+const u64 = new BigUint64Array(f64.buffer);
+/** A number with one of its 64 bits turned over. */
+function flipped(x: number, bit: number): number {
+  f64[0] = x;
+  u64[0] = (u64[0] ?? 0n) ^ (1n << BigInt(bit));
+  return f64[0] ?? Number.NaN;
+}
+/** A thing by its number from 1, or null for 0; undefined for a number that is none. */
+const itemOf = (n: number) => (n === 0 ? null : ITEMS[n - 1]);
+const itemNo = (item: Building["item"]): number => (item === null ? 0 : ITEMS.indexOf(item) + 1);
+/** A field's setter that every number fits. */
+const always =
+  (set: (n: number) => void) =>
+  (n: number): boolean => {
+    set(n);
+    return true;
+  };
 
 describe("the check", () => {
   test("is the same for a yard and for the yard read back from its save, and for the page's copy of it", () => {
@@ -66,9 +89,117 @@ describe("the check", () => {
     }
   });
 
+  test("tells apart two yards alike but for two belts' progress, 0.5 and 0.75, swapped: any two belts", () => {
+    for (const [name, w] of yards()) {
+      const belts = w.cells.filter((c): c is Building => c?.kind === "belt");
+      for (const b of belts) b.item ??= "plank";
+      let alike = 0;
+      for (const [n, a] of belts.entries())
+        for (const b of belts.slice(n + 1)) {
+          [a.prog, b.prog] = [0.5, 0.75];
+          const one = check(w);
+          [a.prog, b.prog] = [0.75, 0.5];
+          if (check(w) === one) alike++;
+        }
+      expect([name, belts.length > 1, alike]).toEqual([name, true, 0]);
+    }
+  });
+
+  test("changes with each bit of each kind of field turned over", () => {
+    const w = working();
+    const carrier = w.cells.find((c) => c?.kind === "belt" && c.item !== null);
+    const mouth = w.cells.find((c) => c?.kind === "tunnel" && c.span > 0);
+    const [order] = w.board;
+    const [mill, boiler, crate, splitter] = (["mill", "boiler", "crate", "splitter"] as const).map((k) => first(w, k));
+    const print = w.blueprints[0];
+    if (!carrier || !mouth || !order || !mill || !boiler || !crate || !splitter || !print?.[0])
+      throw new Error("not all there");
+    crate.count = Math.max(1, crate.count);
+    const [piece, ...rest] = print;
+    // Fields that are numbers: each of their 64 bits.
+    const numbers: Record<string, [() => number, (v: number) => void]> = {
+      "the tick": [() => w.tick, (v) => void (w.tick = v)],
+      "the till": [() => w.till, (v) => void (w.till = v)],
+      "how far a thing is across its belt": [() => carrier.prog, (v) => void (carrier.prog = v)],
+      "a machine's work": [() => mill.work, (v) => void (mill.work = v)],
+      "a boiler's fuel": [() => boiler.fuel, (v) => void (boiler.fuel = v)],
+      "how many of a thing a crate holds": [() => crate.buf.stone ?? 0, (v) => void (crate.buf.stone = v)],
+      "how far a thing under a tunnel has come": [() => mouth.underProg[0] ?? 0, (v) => void (mouth.underProg[0] = v)],
+      "an order's filled count": [() => order.filled.plank ?? 0, (v) => void (order.filled.plank = v)],
+      "the pieces to hand": [() => w.spare.belt ?? 0, (v) => void (w.spare.belt = v)],
+      "what the depot has taken in": [() => w.depot.ore ?? 0, (v) => void (w.depot.ore = v)],
+      "the pace": [() => w.pace.ticks, (v) => void (w.pace.ticks = v)],
+    };
+    for (const [what, [get, set]] of Object.entries(numbers)) {
+      const was = get();
+      const from = was === 0 ? 0.375 : was;
+      set(from);
+      const before = check(w);
+      for (let bit = 0; bit < 64; bit++) {
+        set(flipped(from, bit));
+        expect([what, bit, check(w) === before]).toEqual([what, bit, false]);
+      }
+      set(was);
+    }
+    // Fields that are small whole numbers, or one of a list by its number: each bit of it.
+    const codes: Record<string, [number, () => number, (n: number) => boolean]> = {
+      "which way a piece faces": [2, () => carrier.dir, always((n) => void (carrier.dir = DIRS[n] ?? 0))],
+      "a splitter's turn": [2, () => splitter.turn, always((n) => void (splitter.turn = n))],
+      "a splitter's shut ways": [3, () => splitter.shut, always((n) => void (splitter.shut = n))],
+      "a colour": [3, () => carrier.tint, always((n) => void (carrier.tint = n))],
+      "a tunnel's span": [2, () => mouth.span, always((n) => void (mouth.span = n))],
+      "a crate shut": [1, () => Number(crate.open), always((n) => void (crate.open = n === 1))],
+      "a piece to hand": [1, () => Number(carrier.free), always((n) => void (carrier.free = n === 1))],
+      "a piece's kind": [
+        4,
+        () => KINDS.indexOf(carrier.kind) + 1,
+        (n) => {
+          const kind = KINDS[n - 1];
+          if (kind) carrier.kind = kind;
+          return kind !== undefined;
+        },
+      ],
+      "a blueprint piece's place": [
+        5,
+        () => piece?.x ?? 0,
+        (n) => {
+          if (piece) w.blueprints[0] = [{ ...piece, x: n }, ...rest];
+          return true;
+        },
+      ],
+    };
+    const items: Record<string, [() => Building["item"], (i: Building["item"]) => void]> = {
+      "what a belt carries": [() => carrier.item, (i) => void (carrier.item = i)],
+      "what a machine has made": [() => mill.out, (i) => void (mill.out = i)],
+      "what a machine is making": [() => mill.making, (i) => void (mill.making = i)],
+      "a machine's recipe": [() => mill.recipe, (i) => void (mill.recipe = i)],
+      "what is under a tunnel": [() => mouth.under[0] ?? null, (i) => void (mouth.under[0] = i)],
+    };
+    for (const [what, [get, set]] of Object.entries(items))
+      codes[what] = [
+        5,
+        () => itemNo(get()),
+        (n) => {
+          const item = itemOf(n);
+          if (item !== undefined) set(item);
+          return item !== undefined;
+        },
+      ];
+    for (const [what, [width, get, set]] of Object.entries(codes)) {
+      const was = get();
+      const before = check(w);
+      for (let bit = 0; bit < width; bit++) {
+        if (!set(was ^ (1 << bit))) continue;
+        expect([what, bit, check(w) === before]).toEqual([what, bit, false]);
+        set(was);
+      }
+      expect([what, check(w)]).toEqual([what, before]);
+    }
+  });
+
   test("differs for any one thing changed", () => {
-    const working = yards().find(([name]) => name === "working")?.[1] ?? create();
-    const before = check(working);
+    const yard = working();
+    const before = check(yard);
     const changes: Record<string, (w: World) => void> = {
       "one thing more on a belt": (w) => {
         const b = w.cells.find((c) => c?.kind === "belt" && c.item === null);
@@ -134,7 +265,7 @@ describe("the check", () => {
       "a blueprint": (w) => void (w.blueprints[0] = null),
     };
     for (const [what, change] of Object.entries(changes)) {
-      const w = again(working);
+      const w = again(yard);
       expect(check(w)).toBe(before);
       change(w);
       expect([what, check(w) === before]).toEqual([what, false]);
