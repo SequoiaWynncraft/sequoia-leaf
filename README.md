@@ -593,6 +593,16 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   `leaf_spent` for the staff's report. A key the ledger has seen is not taken
   again, and the command stands. A spend earns no XP and uses none of the
   Coins' room. The raid's `buyLook` is the one command that takes Leaf.
+- A command may ask Leaf to keep pieces of the player's apart from their
+  state (`Done.keep`: a slot's name and its data), for another player's game
+  to be given later. Each is kept in the batch's transaction if the command is
+  done, over the one in its slot before. A slot's name is up to 64 small
+  letters, digits and `_ . : -` (`SLOT`), and a piece at most 16 KiB of JSON
+  (`KEPT_BYTES`); one past either is not kept and is logged, and the command
+  stands. No page and no route is given them. Kept so far: the board a member
+  fought each room with (`board:<trail>:<room>`, the party the fight was
+  decided from), and how many of each prize a member has (`have`), after each
+  pull and exchange.
 - A stored state that does not read (a rules change that forgot an older
   version, say) answers both routes 409 `state_unreadable`: nothing is done,
   the state is kept as it is, and Leaf logs the player and the game. The page
@@ -634,7 +644,9 @@ milliseconds, and when Leaf last heard from them there (`seen_at`). Migration 24
 gave `play_state` `guest`, whether the player was a guest when it was last
 written (a state from before took it from where it stands, or else from the
 player as last seen), which whatever Leaf writes of it while they are away says
-too.
+too. Migration 26 made `play_kept` (a piece in each `player_id`, `game` and
+`slot`, its `data` as JSON) and gave each member who had pulled their `have`,
+from their stored pulls.
 
 **Coins** are a ledger like Leaf: a balance per player, changed only by an
 entry, each keyed by the fact it records (`<game>:<player>:<key>` for a

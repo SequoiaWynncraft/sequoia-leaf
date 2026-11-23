@@ -18,6 +18,7 @@ import {
   tableView,
 } from "./game.ts";
 import { payout } from "./outside.ts";
+import { isParty } from "./party.ts";
 import { pieces, summariseRun } from "./run.ts";
 import { RAID_STATS } from "./stats.ts";
 import { readNotes, readView } from "./wire.ts";
@@ -586,5 +587,28 @@ describe("awards", () => {
     state.almanac.bosses[0] = ["oldbramble", "bigcrab"];
     state.almanac.bosses[1] = ["oldbramble"];
     expect(RAID.awards?.(state)).toEqual(["trophy-oldbramble", "trophy-bigcrab"]);
+  });
+});
+
+describe("the board a member fought with", () => {
+  test("is left for Leaf to keep at each fight, by trail and room: the party the fight was decided from", () => {
+    const first = must(planned(started(5)), { do: "fight" });
+    const note = first.notes[0];
+    if (note?.t !== "fight") throw new Error("no fight note");
+    expect(first.keep).toEqual([{ slot: "board:0:0", data: note.setup.sides[0] }]);
+    expect(isParty(first.keep?.[0]?.data)).toBe(true);
+    expect(note.outcome).toEqual(resolveFight(note.setup));
+    const second = must(planned(must(first.state, { do: "take" }).state), { do: "fight" });
+    expect(second.keep).toEqual([{ slot: "board:0:1", data: second.state.run?.fight?.setup.sides[0] }]);
+    expect(isParty(second.keep?.[0]?.data)).toBe(true);
+  });
+  test("is not left by a refused command, by any other command, or by a guest's fight", () => {
+    const state = planned(started(5));
+    const fought = must(state, { do: "fight" });
+    expect(RAID.apply(fought.state, { do: "fight" }, ctx())).toEqual({ refused: "fighting" });
+    expect(must(fought.state, { do: "take" }).keep).toBeUndefined();
+    const guest = must(state, { do: "fight" }, { ...ctx(), player: { ...PLAYER, guest: true } });
+    expect(guest.notes[0]).toMatchObject({ t: "fight" });
+    expect(guest.keep).toBeUndefined();
   });
 });

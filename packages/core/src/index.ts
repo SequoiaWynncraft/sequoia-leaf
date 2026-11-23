@@ -147,6 +147,7 @@ export {
   type GameId,
   gameId,
   isRefused,
+  type Kept,
   type LeafSpend,
   type Logged,
   MOST_COMMANDS,
