@@ -17,6 +17,7 @@ import { type Emote, EMOTES } from "@sequoia-leaf/kit/emotes.ts";
 import { type LetGo, letGoCard, member, where } from "@sequoia-leaf/kit/live.ts";
 import {
   joinLive,
+  leafClock,
   type LiveEars,
   type LiveMember,
   type LiveRoom,
@@ -206,8 +207,8 @@ export function townOnStage(on: boolean): void {
 /** Whether the page is in the room just now (live, on the stage, and not let go of). */
 export const inRoom = (): boolean => room !== null;
 
-/** Leaf's clock now, as far as this page can tell; out of a room, the page's own. */
-export const leafNow = (): number => room?.serverNow() ?? Date.now();
+/** Leaf's clock now, as far as this page can tell: out of a room, as it last heard. */
+export const leafNow = (): number => room?.serverNow() ?? leafClock(Date.now());
 
 // ---------- each moment ----------
 

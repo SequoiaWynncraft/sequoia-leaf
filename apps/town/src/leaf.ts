@@ -163,7 +163,7 @@ export function doNow(command: TownCommand, now = Date.now()): Did | null {
   if (!guess) return null;
   if ("refused" in guess) return guess;
   void play.send(command, (copy) => {
-    const redone = predict(copy, command, Date.now());
+    const redone = predict(copy, command, now);
     return redone && "view" in redone ? redone.view : copy;
   });
   tell(false);
