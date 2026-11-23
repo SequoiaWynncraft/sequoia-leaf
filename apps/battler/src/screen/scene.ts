@@ -1,3 +1,4 @@
+import { drawBase, drawFigure, drawStars, framesOf } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The table's moving parts, drawn over the painted table every frame: the two halves of the board,
  * the hexes lit for a figure in the hand, whoever is across the table and whoever is watching, the
@@ -13,7 +14,6 @@ import { regularNamed, REGULARS, ROOMS } from "@sequoia-leaf/raid/content/rooms.
 import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 
 import { itemPic } from "./art/icons.ts";
-import { drawBase, drawFigure, drawStars, framesOf } from "./art/sprites.ts";
 import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
 import { drawFight, drawFightAir, fightHeldUnder, fightOn } from "./fightview.ts";
 import { burst, drawFlyers, drawFxOver, drawFxUnder, wordsFx } from "./fx.ts";

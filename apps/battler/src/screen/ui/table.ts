@@ -1,3 +1,4 @@
+import { portrait, portraitRoom } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The interface round the table, built from the kit's pieces: the purse and the track along the
  * top, the traits the party has, the rack of items, and the stall along the bottom with the acorns,
@@ -34,7 +35,6 @@ import {
 import { regularNamed } from "@sequoia-leaf/raid/content/rooms.ts";
 
 import { boonIcon, glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
-import { portrait, portraitRoom } from "../art/sprites.ts";
 import { rimTop, stumpOf } from "../art/table.ts";
 import { fightEvents, fightUnits } from "../fightview.ts";
 import type { Speed } from "../keep.ts";
