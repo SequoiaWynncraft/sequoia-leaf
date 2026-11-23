@@ -167,6 +167,21 @@ describe("time in each game", () => {
     expect(await timeIn()).toEqual([{ player_id: bob, game: "town", played: 0, afk: 3 * MINUTE }]);
   });
 
+  it("counts no batch Leaf refused for coming too fast as the player doing something", async () => {
+    await call("alice", "table");
+    const headers = { Authorization: "Bearer alice-token", "Content-Type": "application/json" };
+    const batch = (commands: readonly object[]) =>
+      app.request("/v1/game/play/raid", { method: "POST", headers, body: JSON.stringify({ player: alice, commands }) });
+    // Twenty batches at once, the most Leaf takes, each with nothing in it; the next is refused.
+    for (let n = 0; n < 20; n++) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      expect((await batch([])).status).toBe(200);
+    }
+    expect((await batch([{ id: "a-1", do: "start", trail: 0 }])).status).toBe(429);
+    const about = await app.request("/v1/game/presence", { headers: { Authorization: "Bearer alice-token" } });
+    expect(await about.json()).toMatchObject({ present: [{ username: "Alice", acted_at: null }] });
+  });
+
   it("counts a camp as the town's, the time up to a visit's close, and nothing for the silence before a silent one closes", async () => {
     await command("alice", "raid", [{ do: "start", trail: 0 }]);
     await stay("alice", "town", T0, 1);

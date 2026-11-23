@@ -820,11 +820,6 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             if (batch.status === "invalid") {
               return yield* new Invalid({ code: "invalid_command", message: batch.why });
             }
-            // Anything but what the page sends by itself is the player at the keys, done or refused.
-            if (payload.commands.some((command) => !played.chore(command))) {
-              // Back from being away: every page is told, so that nobody shows them away a moment longer.
-              if (yield* visits.acted(identity.playerId, yield* Clock.currentTimeMillis)) yield* presence.back;
-            }
             if (batch.status === "unreadable") {
               return yield* unreadable;
             }
@@ -833,6 +828,11 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
                 code: "slow_down",
                 message: "Commands are coming faster than Leaf takes them. Send them again in a moment",
               });
+            }
+            // In a batch Leaf took, anything but what the page sends by itself is the player at the keys, done or refused.
+            if (payload.commands.some((command) => !played.chore(command))) {
+              // Back from being away: every page is told, so that nobody shows them away a moment longer.
+              if (yield* visits.acted(identity.playerId, yield* Clock.currentTimeMillis)) yield* presence.back;
             }
             return HttpServerResponse.jsonUnsafe({
               rev: batch.rev,
