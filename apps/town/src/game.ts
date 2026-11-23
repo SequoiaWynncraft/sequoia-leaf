@@ -2,12 +2,13 @@
 
 import type { Body, Dir } from "@sequoia-leaf/kit/skin.ts";
 import type { Pt, Rect } from "@sequoia-leaf/kit/util.ts";
+import { seedOf } from "@sequoia-leaf/town/clock.ts";
 import type { Doing as FolkDoing, Townsperson } from "@sequoia-leaf/town/folk.ts";
 
 import type { FolkArt } from "./folkart.ts";
 import type { GameId } from "./games.ts";
 import type { Tone } from "./guild.ts";
-import type { PlaceId, Seat, Spot } from "./world.ts";
+import type { PlaceId, Seat } from "./world.ts";
 
 export type PanelId = PlaceId | "profile";
 /**
@@ -65,19 +66,23 @@ export interface Actor {
   sayFor: number;
   alpha: number;
   away: boolean;
-  /** The town's own run themselves unless something is leading them (`led`). */
-  mode: "idle" | "going" | "busy" | "led";
-  wait: number;
-  spot: Spot | null;
+  /** A visitor taking part in one of the guild's moments is `busy`; otherwise whoever draws them leads them (`led`). */
+  mode: "idle" | "busy" | "led";
   doing: Doing;
   greeted: number;
   /** Their name shows until this moment of the town's clock, whatever else: somebody who has just arrived. */
   named: number;
 }
 
+/** The town's live room, by name; and its seed, which with Leaf's clock (`G.now`) says what the town's own and the crabs do. */
+export const ROOM = "town";
+export const SEED = seedOf(ROOM);
+
 export interface Game {
   /** Seconds of town time. */
   t: number;
+  /** Leaf's clock as of this step, in milliseconds since 1970 (the page's own, out of a room): what the town's own and the crabs go by. */
+  now: number;
   player: Actor | null;
   cinfy: Actor | null;
   /** The town's own, about the town: the keepers and the creatures. */
@@ -107,6 +112,7 @@ export interface Game {
 
 export const G: Game = {
   t: 0,
+  now: 0,
   player: null,
   cinfy: null,
   folk: [],

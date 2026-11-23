@@ -9,12 +9,13 @@ import { ell, R } from "@sequoia-leaf/kit/pix.ts";
 import { hush, noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, lerp, type Pt, rng } from "@sequoia-leaf/kit/util.ts";
 import { LOST_CRAB } from "@sequoia-leaf/town/catalogue.ts";
+import { crabAt as crabByClock, hiding, stretchOf } from "@sequoia-leaf/town/clock.ts";
 import { waiting } from "@sequoia-leaf/town/mail.ts";
 
 import { goSit, onScreen } from "./actors.ts";
 import { unread } from "./board.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle } from "./fx.ts";
-import { type Actor, G, hooks } from "./game.ts";
+import { type Actor, G, hooks, SEED } from "./game.ts";
 import { GROUND, paintTrunk } from "./ground.ts";
 import { ask, doNow, mine, ok, town } from "./leaf.ts";
 import { flame, type Light, makeProp, type Prop, propUnder, type Standing } from "./props.ts";
@@ -147,17 +148,21 @@ export const table = {
 
 export interface Crab {
   n: number;
+  /** Its home, and where it is drawn. */
   hx: number;
   hy: number;
   x: number;
   y: number;
-  tx: number;
-  wait: number;
+  /** Shying from somebody's feet: how far from where the clock has it it is drawn, where it shies to, and until when (the town's clock). */
+  aside: number;
+  shyTo: number;
+  shyUntil: number;
+  moving: boolean;
   hop: number;
   clack: number;
   /** The one that is never at roll call: it hides about the town, and bolts when found. */
   lost: boolean;
-  hide: number;
+  /** How many seconds it has been running off; 0 while it is not. */
   bolt: number;
   z: number;
   /** Up on a rock: it never gets its feet wet. */
@@ -165,6 +170,11 @@ export interface Crab {
 }
 
 export const crabs: Crab[] = [];
+/** How fast a crab goes, in pixels a second; and for how many seconds one running off is seen. */
+const SCUTTLE = 12;
+const BOLT = 1.2;
+/** The missing crab was scared off: in which stretch of its hiding, and when by Leaf's clock. */
+let scared: { stretch: number; at: number } | null = null;
 
 /** Where each crab lives: x, y, and whether that is on top of a rock out in the water. */
 const CRAB_HOMES: readonly (readonly [number, number, number])[] = [
@@ -176,19 +186,6 @@ const CRAB_HOMES: readonly (readonly [number, number, number])[] = [
   [396, 328, 0],
   [404, 292, 1],
   [432, 284, 1],
-];
-
-/** Where the missing crab turns up: x, y, and what it sorts in front of. */
-const HIDES: readonly (readonly [number, number, number])[] = [
-  [198, 121, 161],
-  [122, 36, 121],
-  [108, 206, 249],
-  [256, 44, 99],
-  [352, 148, 201],
-  [272, 232, 241],
-  [468, 117, 135],
-  [130, 301, 313],
-  [404, 40, 119],
 ];
 
 const QUIPS = [
@@ -417,7 +414,10 @@ export function twinkleAll(): void {
 const stringAt = (wx: number, wy: number): Str | undefined =>
   strings.find((s) => s.bulbs.some((b) => dist(b.x, b.y, wx, wy) < 5));
 
-/** A crab hops and clacks; crab No. 7 bolts, and is counted only for the member who found it. */
+/**
+ * A crab hops and clacks. Crab No. 7 runs off from the member who found it, and is counted for
+ * them; for everybody else it is still where it hides, to be found by each of them in turn.
+ */
 function tapCrab(c: Crab, own: boolean): void {
   // Running off already: it runs on.
   if (c.bolt > 0) return;
@@ -428,16 +428,47 @@ function tapCrab(c: Crab, own: boolean): void {
     float(c.x, c.y - 12, `No. ${c.n}`, CREAM, 1.2);
     return;
   }
-  // Each page hides No. 7 in a place of its own, so somebody else's touch on theirs does not
-  // scare this one off from under the member's hand.
   if (!own) return;
-  // Counted once in five seconds, which Leaf keeps: it bolts either way.
-  if (ok(doNow({ do: "spotCrab" }))) {
+  // Counted once for each place it hides, which Leaf keeps, by Leaf's clock: it bolts either way.
+  if (ok(doNow({ do: "spotCrab" }, G.now))) {
     float(c.x, c.y - 14, QUIPS[town().sightings % QUIPS.length] ?? "", SKY[5], 2.2);
     hooks.feed(`You spotted crab No. ${c.n}. It got away.`, "coral");
   }
+  // Gone until it hides somewhere else, at the next stretch.
+  scared = { stretch: stretchOf(G.now), at: G.now };
   c.bolt = 0.01;
   puff(c.x, c.y, 5, EARTH[2]);
+}
+
+/**
+ * Puts every crab where Leaf's clock (`G.now`) has it, the same on every page: ambling about its
+ * home, and the missing one in its hiding place for this stretch. That one runs off when found
+ * (`scared`) and is gone for the rest of the stretch; left alone, it runs off as the stretch turns.
+ * `dt` seconds pass for a crab shying from somebody's feet.
+ */
+export function placeCrabs(dt = 0): void {
+  for (const c of crabs) {
+    if (c.lost) {
+      const h = hiding(SEED, G.now);
+      const found = scared?.stretch === h.stretch ? scared : null;
+      const leaving = !found && scared?.stretch !== h.stretch - 1 && h.since < BOLT * 1000;
+      const from = leaving ? h.was : h.at;
+      c.bolt = found ? Math.max(0.01, (G.now - found.at) / 1000) : leaving ? Math.max(0.01, h.since / 1000) : 0;
+      c.x = from.x + (from.x < 256 ? -1 : 1) * 90 * c.bolt;
+      c.y = from.y - 20 * c.bolt;
+      c.z = from.z;
+      continue;
+    }
+    const w = crabByClock(SEED, c.n, G.now);
+    const reach = c.perched ? 4 : 12;
+    const far = Math.abs(w.to - w.from) * reach;
+    const gone = Math.min(far, (SCUTTLE * (G.now - w.at)) / 1000);
+    const x = c.hx + w.from * reach + Math.sign(w.to - w.from) * gone;
+    const step = clamp((G.t < c.shyUntil ? c.shyTo - x : 0) - c.aside, -SCUTTLE * dt, SCUTTLE * dt);
+    c.aside += step;
+    c.moving = gone < far || step !== 0;
+    c.x = x + c.aside;
+  }
 }
 
 export function crabAt(wx: number, wy: number): Crab | null {
@@ -878,19 +909,19 @@ export function buildTown(s: Sprites, ground: Ctx): void {
       hy,
       x: hx,
       y: hy,
-      tx: hx,
-      wait: 1 + random() * 5,
+      aside: 0,
+      shyTo: hx,
+      shyUntil: 0,
+      moving: false,
       hop: 0,
       clack: 0,
       lost,
-      hide: 0,
       bolt: 0,
       z: hy + (rock ? 8 : 0),
       perched: rock === 1,
     });
   }
-  // Somewhere different every visit.
-  hideCrab(Math.floor(Math.random() * HIDES.length));
+  placeCrabs();
 
   // Glints on the pond.
   while (glints.length < 26) {
@@ -898,20 +929,6 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     const y = 262 + random() * 64;
     if (pondD(x, y) < -5) glints.push({ x: Math.round(x), y: Math.round(y), ph: random() * 6.28 });
   }
-}
-
-function hideCrab(i: number): void {
-  const c = crabs.find((k) => k.lost);
-  const h = HIDES[i % HIDES.length];
-  if (!c || !h) return;
-  c.hide = i % HIDES.length;
-  c.x = h[0];
-  c.y = h[1];
-  c.hx = h[0];
-  c.hy = h[1];
-  c.tx = h[0];
-  c.z = h[2];
-  c.bolt = 0;
 }
 
 function smoke(count: number): void {
@@ -949,9 +966,9 @@ function brushPast(walkers: readonly Actor[]): void {
       }
     }
     for (const c of crabs) {
-      if (c.lost || c.bolt > 0 || dist(c.x, c.y, p.x, p.y) > 18) continue;
-      c.tx = c.hx + (c.hx >= p.x ? 1 : -1) * (c.perched ? 2 : 9);
-      c.wait = 2.2;
+      if (c.lost || dist(c.x, c.y, p.x, p.y) > 18) continue;
+      c.shyTo = c.hx + (c.hx >= p.x ? 1 : -1) * (c.perched ? 2 : 9);
+      c.shyUntil = G.t + 2.2;
     }
   }
 }
@@ -1079,23 +1096,8 @@ export function stepTown(dt: number, walkers: readonly Actor[]): void {
   for (const c of crabs) {
     c.hop = Math.max(0, c.hop - dt);
     c.clack = Math.max(0, c.clack - dt);
-    if (c.bolt > 0) {
-      // Found: it runs for the trees, and turns up somewhere else in a while.
-      c.bolt += dt;
-      c.x += (c.x < 256 ? -1 : 1) * 90 * dt;
-      c.y -= 20 * dt;
-      if (c.bolt > 5) hideCrab(c.hide + 1 + Math.floor(Math.random() * 3));
-      continue;
-    }
-    if (c.lost) continue;
-    c.wait -= dt;
-    if (c.wait <= 0) {
-      c.wait = 2.5 + Math.random() * 6;
-      c.tx = c.hx + (Math.random() - 0.5) * (c.perched ? 4 : 12);
-    }
-    const d = c.tx - c.x;
-    if (Math.abs(d) > 0.3) c.x += Math.sign(d) * Math.min(Math.abs(d), 12 * dt);
   }
+  placeCrabs(dt);
 
   // The evening itself: a leaf coming down, fireflies over the pond and the garden, crickets.
   driftIn -= dt;
@@ -1313,7 +1315,7 @@ export function drawWater(g: Ctx, cx: number, cy: number): void {
 
 function crabPic(c: Crab): HTMLCanvasElement | null {
   if (!S) return null;
-  const moving = Math.abs(c.tx - c.x) > 0.3 || c.clack > 0 || c.bolt > 0;
+  const moving = c.moving || c.clack > 0 || c.bolt > 0;
   return (moving && Math.floor(G.t * 9) % 2 === 0 ? S.crab[1] : S.crab[0])?.c ?? null;
 }
 
@@ -1373,7 +1375,7 @@ function paintCrab(g: Ctx, c: Crab, cx: number, cy: number): void {
   const up = c.hop > 0 ? Math.abs(Math.sin((1 - c.hop / 0.3) * Math.PI)) * 4 : 0;
   // A crab in the water shows only its top half.
   const wet = !c.lost && !c.perched && pondD(c.x, c.y) < -3;
-  g.globalAlpha = c.bolt > 0 ? clamp(1 - c.bolt / 1.2, 0, 1) : 1;
+  g.globalAlpha = clamp(1 - c.bolt / BOLT, 0, 1);
   if (wet && up === 0)
     g.drawImage(pic, 0, 0, pic.width, 5, Math.round(c.x) - 5 - cx, Math.round(c.y) - 7 - cy, pic.width, 5);
   else g.drawImage(pic, Math.round(c.x) - 5 - cx, Math.round(c.y - up) - 7 - cy);

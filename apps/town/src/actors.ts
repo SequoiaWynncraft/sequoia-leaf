@@ -1,21 +1,23 @@
 /**
- * People: how anyone walks, hops, sits and speaks, and how the town's own (`folk.ts`) go about
- * their evening. A member is drawn from their skin; the town's own from their own sprites.
+ * People: how anyone walks, hops, sits and speaks, and how the town's own (`folk.ts`) are put
+ * where Leaf's clock has them (`clock.ts`). A member is drawn from their skin; the town's own from
+ * their own sprites.
  */
 
 import { EARTH } from "@sequoia-leaf/kit/palette.ts";
 import type { Body } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { dist, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
-import { type Errand as FolkErrand, ERRAND_LINES, type Townsperson } from "@sequoia-leaf/town/folk.ts";
+import { folkAt, type FolkNow, roll } from "@sequoia-leaf/town/clock.ts";
+import type { Townsperson } from "@sequoia-leaf/town/folk.ts";
 
 import { beside, crowds, type Placed } from "./apart.ts";
 import { folkArt } from "./folkart.ts";
 import { puff } from "./fx.ts";
-import { type Actor, G, type Who } from "./game.ts";
+import { type Actor, G, SEED, type Who } from "./game.ts";
 import type { Ground } from "./grid.ts";
 import type { Steer } from "./stage.ts";
-import { type Seat, SEATS, type Spot, SPOTS, STALL_BEHIND, STALL_FRONT_Y, STALL_TOP_Y, TOWN } from "./world.ts";
+import { type Seat, SEATS, STALL_BEHIND, STALL_FRONT_Y, STALL_TOP_Y, TOWN } from "./world.ts";
 
 export const HOP = 0.3;
 
@@ -49,8 +51,6 @@ function blank(who: Who, body: Body | null, x: number, y: number, you: boolean):
     alpha: 1,
     away: false,
     mode: "idle",
-    wait: Math.random() * 2,
-    spot: null,
     doing: "walk",
     greeted: -99,
     named: -99,
@@ -136,10 +136,8 @@ export function stand(a: Actor): void {
   a.seat = null;
 }
 
-/** Lets go of whatever spot or seat someone holds, so that somebody else may have it. */
+/** Lets go of whatever seat someone holds, so that somebody else may have it. */
 export function release(a: Actor): void {
-  if (a.spot) a.spot.taken = false;
-  a.spot = null;
   if (a.goal) a.goal.taken = false;
   a.goal = null;
   stand(a);
@@ -294,210 +292,122 @@ export function shove(a: Actor, dt: number, dx: number, dy: number, ground: Grou
   }
 }
 
-// ---------- the town's own, about their evening ----------
+// ---------- the town's own, by Leaf's clock ----------
 
-let chatterAt = 4;
 let greetAt = 0;
+/** The line the clock last had somebody say, by when it ends; the turn each last arrived on; until when a napper is kept awake. */
+let said = 0;
+const there = new WeakMap<Actor, number>();
+const roused = new WeakMap<Actor, number>();
 
-const rnd = (lo: number, hi: number): number => lo + Math.random() * (hi - lo);
-
-/** A free spot for an errand, kept for whoever takes it. */
-function takeSpot(a: Actor, errand: FolkErrand | "works" | "fire"): Spot | null {
-  const open = SPOTS.filter((s) => !s.taken && s.errand === errand);
-  if (open.length === 0) return null;
-  const s = pick(open, Math.random());
-  s.taken = true;
-  a.spot = s;
-  return s;
+/** The way between two of the town's spots along its paths, worked out once: the points walked through, the first where it starts. */
+const ways = new Map<string, readonly Pt[]>();
+function wayOf(from: Pt, to: Pt): readonly Pt[] {
+  const key = `${from.x},${from.y}>${to.x},${to.y}`;
+  const way = ways.get(key) ?? [from, ...TOWN.findPath(from, to, false)];
+  ways.set(key, way);
+  return way;
 }
 
-/** Sends one of the town's own to a spot to be busy there for a while. */
-function goTo(a: Actor, s: Spot, doing: Actor["doing"], stay: number): void {
-  a.mode = "going";
-  a.doing = "walk";
-  walkTo(a, s, () => {
-    a.dir = s.dir;
-    a.doing = doing;
-    a.mode = "busy";
-    a.wait = stay;
-  });
+/** Where somebody `far` pixels along a way is, and the point they are making for: none once they are at its end. */
+export function along(way: readonly Pt[], far: number): Pt & { next: Pt | null } {
+  let left = Math.max(0, far);
+  for (let i = 1; i < way.length; i++) {
+    const a = way[i - 1];
+    const b = way[i];
+    if (!a || !b) break;
+    const d = dist(a.x, a.y, b.x, b.y);
+    if (left < d) return { x: a.x + ((b.x - a.x) * left) / d, y: a.y + ((b.y - a.y) * left) / d, next: b };
+    left -= d;
+  }
+  const end = way.at(-1) ?? { x: 0, y: 0 };
+  return { x: end.x, y: end.y, next: null };
 }
 
-const ERRANDS: readonly FolkErrand[] = ["crabs", "board", "gate"];
-const errandOf = new WeakMap<Actor, number>();
+/** Where one of the town's own who gets about is at a moment of Leaf's clock: so far along the way between its two spots, at its pace. */
+export const walkAt = (now: FolkNow, speed: number, at: number): (Pt & { next: Pt | null }) | null =>
+  now.from && now.to ? along(wayOf(now.from, now.to), (speed * (at - now.at)) / 1000) : null;
 
-/** What one of the town's own does next, by its job. */
-function next(a: Actor): void {
+/**
+ * Puts one of the town's own where Leaf's clock (`G.now`) has it, doing and saying what the clock
+ * says (`folkAt`): the same on every page, whenever the page came. Asked again for the same
+ * moment, it changes nothing.
+ */
+export function byClock(a: Actor): void {
   const f = a.folk;
   if (!f) return;
-  release(a);
-  const job = f.t.job;
-  if (job === "errands") {
-    // Round the town: the crabs, the board, the gate, and round again.
-    const n = ((errandOf.get(a) ?? -1) + 1) % ERRANDS.length;
-    errandOf.set(a, n);
-    const errand = ERRANDS[n] ?? "crabs";
-    const s = takeSpot(a, errand);
-    if (s) goTo(a, s, errand, rnd(9, 15));
-    else a.wait = 2;
-    return;
+  const now = folkAt(SEED, f.t, G.now);
+  const p = walkAt(now, a.speed, G.now);
+  if (p) {
+    const before = a.walked;
+    a.moving = p.next !== null;
+    if (a.moving) a.walked += dist(a.x, a.y, p.x, p.y);
+    a.x = p.x;
+    a.y = p.y;
+    if (p.next) {
+      face(a, p.next.x, p.next.y);
+      footfall(a, before);
+    } else if (now.to && there.get(a) !== now.at) {
+      there.set(a, now.at);
+      a.dir = now.to.dir;
+    }
   }
-  if (job === "between") {
-    // The fire, then the Works' door, and back; curled up in the warm for a while at each.
-    const to = a.doing === "fire" || a.spot?.errand === "fire" ? "works" : "fire";
-    const s = takeSpot(a, to);
-    if (s) goTo(a, s, to, rnd(18, 28));
-    else a.wait = 3;
-    return;
-  }
-  // Everybody else stays where they are.
-  a.mode = "busy";
-  a.wait = rnd(8, 14);
+  const up = now.doing === "asleep" && G.t < (roused.get(a) ?? 0);
+  a.doing = a.moving ? "walk" : up ? "stall" : now.doing;
+  if (!now.say || now.say.until === said) return;
+  said = now.say.until;
+  if (G.home && !a.say) say(a, now.say.text, (now.say.until - G.now) / 1000);
 }
 
-/** Puts one of the town's own where its evening finds it: behind its counter or stall, by the fire, about its errands. */
-export function placeFolk(a: Actor, n: number): void {
+/** Puts one of the town's own at its post: behind its counter or stall, on its stump by the fire, or wherever the clock has it. */
+export function placeFolk(a: Actor): void {
   const f = a.folk;
   if (!f) return;
   const job = f.t.job;
-  a.mode = "busy";
-  a.wait = 3 + n * 1.7;
   if (job === "counter") {
     a.x = 104;
     a.y = 113;
     a.lift = 9;
-    a.mode = "led";
-    a.doing = "counter";
   } else if (job === "fire") {
-    // On a stump at the side, leaving the logs to those who sit facing the fire.
-    const seat =
-      SEATS.find((s) => s.at === "fire" && !s.taken && !s.yours && (s.dir === 1 || s.dir === 2)) ??
-      SEATS.find((s) => s.at === "fire" && !s.taken && !s.yours);
+    // On the stump at the fire's west side, leaving the logs to those who sit facing the fire.
+    const seat = SEATS.find((s) => s.at === "fire" && s.dir === 2);
     if (seat) {
       sit(a, seat);
       a.x = seat.x;
       a.y = seat.y;
       a.sat = -9;
     }
-    a.doing = "fire";
-    a.wait = 1e9;
-  } else if (job === "errands" || job === "between") {
-    const s = takeSpot(a, job === "errands" ? "crabs" : "fire");
-    if (s) {
-      a.x = s.x;
-      a.y = s.y;
-      a.dir = s.dir;
-      a.doing = job === "errands" ? "crabs" : "fire";
-    }
-  } else if (job !== "calls") {
-    const at = STALL_BEHIND[job.stall] ?? { x: 108, y: 238 };
-    a.x = at.x;
-    if (job.naps) {
-      // Curled up on the counter: in front of the stall, as high as its top.
-      a.y = STALL_FRONT_Y;
-      a.lift = STALL_FRONT_Y - STALL_TOP_Y;
-      a.doing = "asleep";
-    } else {
-      a.y = at.y;
-      a.lift = 2;
-      a.doing = "stall";
-    }
+  } else if (typeof job === "object") {
+    a.x = stallAt(job.stall).x;
+    // A napper is curled up on the counter: in front of the stall, as high as its top.
+    a.y = job.naps ? STALL_FRONT_Y : stallAt(job.stall).y;
+    a.lift = job.naps ? STALL_FRONT_Y - STALL_TOP_Y : 2;
     a.dir = 0;
-    a.wait = rnd(10, 20);
   }
-}
-
-/** What one of the town's own says while busy. */
-function chatter(a: Actor): string | null {
-  const f = a.folk;
-  if (!f) return null;
-  if (a.doing === "crabs" || a.doing === "board" || a.doing === "gate")
-    return pick(Math.random() < 0.75 ? ERRAND_LINES[a.doing] : f.t.chatter, Math.random());
-  return f.t.chatter.length > 0 ? pick(f.t.chatter, Math.random()) : null;
+  byClock(a);
 }
 
 /** Wakes one of the town's own that is asleep at its post, for a while. */
 export function rouse(a: Actor, secs = 8): void {
-  if (a.doing !== "asleep") return;
-  a.doing = "stall";
-  a.wait = secs;
+  if (a.doing === "asleep") roused.set(a, G.t + secs);
 }
 
-export function stepFolk(dt: number): void {
-  const p = G.player;
+/** A moment of the town's own: each where the clock has it, with a word for anybody walking by (`walkers`) from whoever is awake. */
+export function stepFolk(dt: number, walkers: readonly Actor[]): void {
   for (const a of G.folk) {
-    if (a.away) continue;
-    stepActor(a, dt);
     const f = a.folk;
-    if (!f) continue;
-    // A word for the player as they pass, from anybody awake.
-    if (
-      p &&
-      G.home &&
-      p.moving &&
-      !a.say &&
-      a.doing !== "asleep" &&
-      G.t > greetAt &&
-      G.t - a.greeted > 50 &&
-      dist(a.x, a.y, p.x, p.y) < 22 &&
-      a.mode !== "led"
-    ) {
-      greetAt = G.t + 5;
-      a.greeted = G.t;
-      if (!a.moving && !a.seat) face(a, p.x, p.y);
-      hop(a);
-      say(a, pick(f.t.greets, Math.random()), 2);
-    }
-    if (a.mode === "led") continue;
-    if (a.mode === "idle") {
-      a.wait -= dt;
-      if (a.wait <= 0) next(a);
-    } else if (a.mode === "busy") {
-      a.wait -= dt;
-      if (G.home && !a.say && a.doing !== "asleep" && G.t > chatterAt && Math.random() < dt * 0.5) {
-        const line = chatter(a);
-        if (line) {
-          chatterAt = G.t + 2.4 + Math.random() * 3.2;
-          say(a, line);
-        }
-      }
-      if (a.wait <= 0) {
-        if (typeof f.t.job === "object" && f.t.job.naps) {
-          // A cat on a stall: back to sleep, mostly.
-          a.doing = a.doing === "asleep" && Math.random() < 0.3 ? "stall" : "asleep";
-          a.wait = a.doing === "asleep" ? rnd(14, 26) : rnd(5, 9);
-        } else {
-          a.mode = "idle";
-          a.wait = 0.4 + Math.random() * 1.6;
-        }
-      }
-    }
+    if (!f || a.away) continue;
+    stepActor(a, dt);
+    byClock(a);
+    const p = walkers.find((w) => w.moving && !w.away && dist(a.x, a.y, w.x, w.y) < 22);
+    if (!p || !G.home || a.say || a.doing === "asleep" || G.t <= greetAt || G.t - a.greeted <= 50) continue;
+    greetAt = G.t + 5;
+    a.greeted = G.t;
+    if (!a.moving && !a.seat) face(a, p.x, p.y);
+    hop(a);
+    // The same word on every page: by the clock, in tens of seconds.
+    say(a, pick(f.t.greets, roll(SEED, G.now, Math.floor(G.now / 10_000))), 2);
   }
-}
-
-/** Calls one of the town's own over to the fire for a while, if it gets about and there is room: somebody stood a round. */
-export function callToFire(a: Actor): boolean {
-  const f = a.folk;
-  if (!f || a.mode === "led" || a.away || a.spot?.errand === "fire" || a.seat) return false;
-  if (f.t.job !== "errands" && f.t.job !== "between") return false;
-  release(a);
-  const s = takeSpot(a, "fire");
-  if (!s) return false;
-  goTo(a, s, "fire", rnd(20, 30));
-  return true;
-}
-
-/** Takes one of the town's own out of its own hands, for something the whole town is doing. */
-export function lead(a: Actor): void {
-  release(a);
-  a.path = [];
-  a.arrive = null;
-  a.mode = "led";
-}
-
-export function letGo(a: Actor): void {
-  a.mode = "idle";
-  a.wait = 0.6 + Math.random() * 2;
 }
 
 /** The town's own who are about and awake: those who answer a wave or a cheer. */
