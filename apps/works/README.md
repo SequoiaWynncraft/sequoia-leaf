@@ -124,7 +124,10 @@ add their own small pools.
 A frame draws the floor, then the belts and what rides on them, then everything that stands up,
 far to near (machines, the depot, redwoods, the fence and gate, undergrowth on land not yet bought,
 whoever is walking about), then the lines between pylons, the dusk, and last whatever is being
-pointed at or is about to be built. Only tiles on screen are looked at; every sprite is made once
+pointed at or is about to be built (`drawYard`, a layer at a time). Only tiles on screen are looked
+at for what is drawn, with a margin for what stands taller or leans wider than its tile; the lamps
+and fires are looked for by how far their light reaches (`lamps.ts`), so a pylon off screen still
+lights its reach on it, and no light comes and goes as the view moves. Every sprite is made once
 and kept; what is worked out from the yard's layout (belt shapes, lines, fences, signposts) is kept
 by what it reads (`layout.ts`): what stands on each tile (kind, way, span, shut ways, colour), the
 plots owned and the goals done, which say what is open. The rules count every change they make to a
