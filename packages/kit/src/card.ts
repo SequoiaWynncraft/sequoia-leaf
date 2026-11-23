@@ -64,8 +64,6 @@ export interface Entry {
   readonly count?: string;
   /** Something after the name: a price, how many are owed. */
   readonly note?: string | Node;
-  /** Too few of it: its name and count in coral, and these words on its tip (pointed at, or a long press). */
-  readonly short?: string;
   /** It is made with this: the line shows that thing's icon, an arrow, then this thing. */
   readonly from?: Ref;
   /** Not to be had yet, and how it opens: shown as a dark outline with these words. */
@@ -495,7 +493,7 @@ export function thing(
   const art = opts.icon ?? d?.icon ?? null;
   const t = el(
     "span",
-    `k-thing${opts.lit ? " lit" : ""}${opts.bare ? " bare" : ""}${opts.short ? " short" : ""}`,
+    `k-thing${opts.lit ? " lit" : ""}${opts.bare ? " bare" : ""}`,
     opts.bare ? { "aria-label": name } : {},
     art ? el("span", "k-thing-pic", {}, fit(art, 12)) : null,
     opts.bare ? null : el("span", "k-thing-name", { text: name }),
@@ -508,7 +506,6 @@ export function thing(
     opts.tag ? el("span", "k-info-tagged", { text: opts.tag }) : null,
   );
   link(t, ref);
-  if (opts.short) tip(t, name, opts.short);
   return t;
 }
 

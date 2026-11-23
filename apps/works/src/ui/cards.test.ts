@@ -19,6 +19,7 @@ import {
   goal,
   isGraded,
   item,
+  MILL,
   plot,
   power,
   setFirst,
@@ -135,7 +136,16 @@ describe("a card", () => {
   test("is drawn by modules that reach no yard: none imports anything of the page's that holds one", async () => {
     // What draws a card (`cards.ts`), the lists of a goal on it (`goal.ts`) and the names cards go by (`refs.ts`).
     const drawing: Record<string, string[]> = {
-      "./cards.ts": ["../art/belts.ts", "../art/machines.ts", "../sound.ts", "./goal.ts", "./parts.ts", "./refs.ts"],
+      "./cards.ts": [
+        "../art/belts.ts",
+        "../art/machines.ts",
+        "../sound.ts",
+        "./flow.ts",
+        "./goal.ts",
+        "./parts.ts",
+        "./refs.ts",
+      ],
+      "./flow.ts": ["./parts.ts", "./refs.ts"],
       "./goal.ts": ["./parts.ts", "./refs.ts"],
       "./refs.ts": [],
     };
@@ -161,23 +171,41 @@ function counted(tier: number): Yard {
 }
 
 describe("the cards of tiers 2 and 3", () => {
-  test("say numbers only from the first recipe that takes more than 1 of a part: a tier 1 yard's cards print none", () => {
+  test("draw a machine's recipe, and count it a minute only from the first recipe that takes more than 1 of a part", () => {
     S.world = counted(1);
-    expect(printOf(tileRef(at(S.world, 20, 15)))).toMatchObject({ numbers: [], perMinute: 30 });
-    expect(printOf(tileRef(at(S.world, 22, 15)))).toMatchObject({ numbers: [], machine: { numbers: [] } });
+    // Tools from a plank and an ingot, one of each: the parts and what it holds, and no numbers a minute.
+    expect(printOf(tileRef(at(S.world, 20, 15)))).toMatchObject({
+      numbers: [],
+      perMinute: 30,
+      flow: {
+        out: item("tool"),
+        perMinute: 30,
+        slow: false,
+        waiting: true,
+        parts: [
+          { item: item("plank"), need: 1, have: 0, perMinute: null, by: null },
+          { item: item("ingot"), need: 1, have: 0, perMinute: null, by: null },
+        ],
+      },
+    });
+    expect(printOf(tileRef(at(S.world, 22, 15)))).toMatchObject({ numbers: [], flow: null, machine: { numbers: [] } });
     for (const k of ALL_KINDS) expect(printOf(machineRef(k))).toMatchObject({ numbers: [], graded: false, grade: 1 });
     S.world = counted(2);
     // What it makes, and what it needs of each part with how many mills that is: from the rules' planner.
     expect(printOf(tileRef(at(S.world, 20, 15)))).toMatchObject({
-      numbers: [
-        "Makes 30 hampers a minute.",
-        "Needs 60 planks a minute: 1.2 mills.",
-        "Needs 30 pots a minute: 0.6 mills.",
-      ],
+      numbers: [],
+      flow: {
+        out: item("hamper"),
+        perMinute: 30,
+        parts: [
+          { item: item("plank"), need: 2, perMinute: 60, by: { kind: MILL, count: 1.2, top: null } },
+          { item: item("pot"), need: 1, perMinute: 30, by: { kind: MILL, count: 0.6, top: null } },
+        ],
+      },
     });
     expect(printOf(machineRef(BELT))).toMatchObject({ numbers: ["Carries up to 150 items a minute."] });
     // Once the yard may build mills higher, each part says how many that is at the highest grade too;
-    // and a piece of the second grade says its own numbers.
+    // and a piece of the second grade counts its own.
     const y = counted(4);
     build(y, BENCH, 20, 17, 0, Infinity, { grade: 2 });
     setRecipe(y, 20, 17, item("hamper"));
@@ -185,21 +213,25 @@ describe("the cards of tiers 2 and 3", () => {
     build(y, STUDY, 24, 15, 0, Infinity);
     S.world = y;
     expect(printOf(tileRef(at(y, 20, 15)))).toMatchObject({
-      numbers: [
-        "Makes 30 hampers a minute.",
-        "Needs 60 planks a minute: 1.2 mills, or 0.8 at II.",
-        "Needs 30 pots a minute: 0.6 mills, or 0.4 at II.",
-      ],
+      flow: {
+        perMinute: 30,
+        parts: [
+          { perMinute: 60, by: { kind: MILL, count: 1.2, top: { grade: 2, count: 0.8 } } },
+          { perMinute: 30, by: { kind: MILL, count: 0.6, top: { grade: 2, count: 0.4 } } },
+        ],
+      },
     });
     expect(printOf(tileRef(at(y, 20, 17)))).toMatchObject({
-      numbers: [
-        "Makes 45 hampers a minute.",
-        "Needs 90 planks a minute: 1.8 mills, or 1.2 at II.",
-        "Needs 45 pots a minute: 0.9 mills, or 0.6 at II.",
-      ],
+      flow: {
+        perMinute: 45,
+        parts: [
+          { perMinute: 90, by: { count: 1.8, top: { count: 1.2 } } },
+          { perMinute: 45, by: { count: 0.9, top: { count: 0.6 } } },
+        ],
+      },
     });
     expect(printOf(tileRef(at(y, 22, 17)))).toMatchObject({ numbers: ["Carries up to 200 items a minute."] });
-    expect(printOf(tileRef(at(y, 24, 15)))).toMatchObject({ numbers: ["Studies 12 folios a minute."] });
+    expect(printOf(tileRef(at(y, 24, 15)))).toMatchObject({ numbers: ["Studies 12 folios a minute."], flow: null });
   });
 
   test("name a kind by its grade once the yard may build it higher, and offer to raise a piece for what the rules ask", () => {

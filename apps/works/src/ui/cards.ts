@@ -93,7 +93,9 @@ import { beltTile } from "../art/belts.ts";
 import type { Art } from "../art/index.ts";
 import { FLAG_AT } from "../art/machines.ts";
 import { yardSfx } from "../sound.ts";
+import { flowNode } from "./flow.ts";
 import { type Given, leaves, type Listed, type Need, needs, some, unlocks, wantsGiven } from "./goal.ts";
+import type { Flow } from "./numbers.ts";
 import { fitted, partsWords, pic, type YardIcon, yardIcon } from "./parts.ts";
 import { itemRef, machineRef, nodeRef, pictureRef, plotRef } from "./refs.ts";
 
@@ -173,8 +175,8 @@ export interface StandingPrint {
   readonly count: number;
   /** What it makes or gathers, and how many a minute at the yard's pace now, as the card rounds it (null when none). */
   readonly making: Item | null;
-  /** What it makes one from: each part, how many one takes and how many it has. */
-  readonly parts: readonly { readonly item: Item; readonly need: number; readonly have: number }[];
+  /** A machine's recipe as its card draws it: what goes in, what comes out, and how many a minute. */
+  readonly flow: Flow | null;
   readonly gathering: Item | null;
   readonly perMinute: number | null;
   /** What it makes, needs, gathers, studies or carries a minute, in sentences (`numbers.ts`): none until the yard counts. */
@@ -492,29 +494,16 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
   if (m.later) return base;
   const { x, y } = p;
   const rows: Row[] = [];
-  if (p.holding.length > 0)
+  // A machine's parts are in its recipe's slots: what it holds besides is listed.
+  const holding = p.holding.filter(([t]) => !p.flow?.parts.some((part) => part.item === t));
+  if (holding.length > 0)
     rows.push({
       label: p.most !== null ? `Holds, of ${p.most}` : "Holds",
-      things: p.holding.map(([t, c]) => ({ ref: itemRef(t), count: `×${c}` })),
+      things: holding.map(([t, c]) => ({ ref: itemRef(t), count: `×${c}` })),
     });
-  // Once the card says what it makes a minute in a sentence, the row names the thing and no more.
+  const waits = p.flow?.waiting === true;
+  // Once the card says what it gathers a minute in a sentence, the row names the thing and no more.
   const per = p.numbers.length === 0 ? p.perMinute : null;
-  if (p.making !== null)
-    rows.push({
-      label: "Making",
-      things: [{ ref: itemRef(p.making), note: per !== null ? `up to ${per} a minute` : "" }],
-    });
-  // Waiting for its parts, the part it is short of is in coral, and its tip says by how many.
-  const waits = p.making !== null && (p.state === "waiting" || p.state === "starved");
-  if (p.parts.length > 0)
-    rows.push({
-      label: "Made from",
-      things: p.parts.map(({ item, need, have }) => ({
-        ref: itemRef(item),
-        count: `×${need}`,
-        ...(waits && have < need ? { short: `Short by ${need - have}. It has ${have} and needs ${need}.` } : {}),
-      })),
-    });
   if (p.gathering !== null)
     rows.push({
       label: "Gathering",
@@ -646,8 +635,8 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
   // every belt. What is wrong with one is the rules' to say.
   // What a machine waiting for its parts is short of is in its rows, not in a sentence.
   const said =
-    waits && p.making !== null
-      ? `Waiting to make ${many(p.making)}.`
+    waits && p.flow
+      ? `Waiting to make ${many(p.flow.out)}.`
       : p.trouble && p.line !== null
         ? p.line
         : k === STOP
@@ -665,6 +654,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
       ...spareBlocks(m),
       ...(k === DEPOT ? [{ body: `Each thing that arrives pays ${DEPOT_SHARE * 100}% of its worth.` }] : []),
       ...(advice ? [{ body: advice }] : []),
+      ...(p.flow ? [{ body: flowNode(art, p.flow) }] : []),
       ...lines(p.numbers),
       ...(p.ways ? [{ title: "Ways out", body: waysOf(art, p, p.ways, hands) }] : []),
     ],

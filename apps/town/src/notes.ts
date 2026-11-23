@@ -24,11 +24,22 @@ export interface Part {
 
 export const NOTES: readonly Note[] = [
   {
-    id: "works-made-from",
-    at: "2026-11-23T20:10Z",
-    title: "The Works: what a machine waits for",
+    id: "works-recipe",
+    at: "2026-11-23T20:20Z",
+    title: "The Works: a machine's recipe on its card",
     lines: [
-      "A machine's card lists what it makes each one from. While it waits, the parts it is short of are in red, and pointing at one (or a long press) says how many it needs.",
+      "A machine's card draws its recipe: each part in a slot with how many it holds, an arrow, and what it makes, with how many a minute under each.",
+      "A dot over a part for each one a make takes. While the machine waits, the parts it is short of are red.",
+    ],
+    more: [
+      {
+        head: "Under each part",
+        points: [
+          "How many it needs a minute, and the machines that make that many: a mill and 1.2 means 1.2 mills.",
+          "Once you can build that machine at a higher grade, how many of those it would take.",
+          "Point at a picture for its name, or tap it for its card.",
+        ],
+      },
     ],
   },
   {
