@@ -200,7 +200,9 @@ export function setGrade(grade: number): void {
   const tool = S.tool;
   if (!builds(tool) || !isGraded(tool) || grade < 1 || grade > highest(S.world.open, tool)) return;
   S.grades[tool] = grade;
-  // What is aimed, a finger's run and a drag are all at the grade in hand: each is worked out again.
+  // What is aimed, a finger's run and a drag are all at the grade in hand: each is worked out again,
+  // and a piece now raised where it is aimed lends the hand its facing, as one pointed at anew does.
+  faced = -1;
   keepAim(true);
   yardSfx.pick();
   toolHooks.changed();
