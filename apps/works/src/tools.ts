@@ -63,6 +63,7 @@ import { CREAM, GOLD, GREEN, SKY } from "@sequoia-leaf/kit/palette.ts";
 
 import { PAINTS, TILE } from "./art/belts.ts";
 import { float, flutter, puff, ring, sparkle } from "./fx.ts";
+import { aimOf, groupOf, type HandEvent, markOf, runOf, step, type Tile } from "./hand.ts";
 import { layout } from "./layout.ts";
 import { yardSfx } from "./sound.ts";
 import {
@@ -105,7 +106,7 @@ type Done =
   | { did: "took"; what: readonly Piece[] }
   | { did: "turned"; i: number; was: Dir }
   | { did: "way"; i: number; shut: number; first: number }
-  | { did: "painted"; lines: { i: number; was: number }[] }
+  | { did: "painted"; stroke: number; lines: readonly { i: number; was: number }[] }
   | { did: "moved"; tiles: number[]; turns: Dir; x: number; y: number };
 const done: Done[] = [];
 const remember = (d: Done): void => {
@@ -114,6 +115,11 @@ const remember = (d: Done): void => {
 };
 
 const W = (): number => S.world.land.w;
+
+/** Moves what is in hand (`hand.ts`): the one way anything here changes it. */
+const go = (e: HandEvent): void => {
+  S.hand = step(S.hand, e);
+};
 
 /**
  * Does something to the yard (on the page's copy at once, and on Leaf). The rules judge it then,
@@ -168,20 +174,11 @@ export function usable(tool: Tool): boolean {
 
 export function setTool(tool: Tool): void {
   if (!usable(tool)) return;
-  S.tool = tool;
-  S.aim = null;
-  S.run = null;
-  S.from = null;
-  letGo();
-  path = [];
-  faced = -1;
+  go({ do: "pick", tool });
   if (tool !== null) S.picked = -1;
   if (S.hover && tool !== null) aimAt(S.hover.x, S.hover.y);
   toolHooks.changed();
 }
-
-/** The tile the tool in hand last took its facing from. */
-let faced = -1;
 
 /**
  * The grade a kind in hand would stand at on a tile: the grade chosen for it, and over a piece of
@@ -204,7 +201,7 @@ export function setGrade(grade: number): void {
   S.grades[tool] = grade;
   // What is aimed, a finger's run and a drag are all at the grade in hand: each is worked out again,
   // and a piece now raised where it is aimed lends the hand its facing, as one pointed at anew does.
-  faced = -1;
+  if (S.hand.is === "build") go({ do: "aim", aim: S.hand.aim, faced: -1 });
   keepAim(true);
   yardSfx.pick();
   toolHooks.changed();
@@ -225,40 +222,51 @@ export function stepGrade(): void {
  */
 export function aimAt(x: number, y: number): void {
   const w = S.world;
-  const tool = S.tool;
-  if (tool === null) {
-    S.aim = null;
-    return;
-  }
-  if (tool === "select") {
-    aimGroup(x, y);
-    return;
-  }
-  const i = at(w, x, y);
-  const there = kindAt(w, x, y);
-  if (faced !== i) {
-    faced = i;
-    const over = there !== NONE && builds(tool) && (replaces(tool, there) || raisedOn(tool, i) !== undefined);
-    if (over && S.dir !== dirOf(i)) {
-      S.dir = dirOf(i);
-      toolHooks.changed();
+  const h = S.hand;
+  switch (h.is) {
+    case "idle":
+      return;
+    case "select":
+      if (h.stage.is === "holding") aimGroup(x, y);
+      return;
+    case "remove": {
+      const there = kindAt(w, x, y);
+      const why = there === NONE ? "Nothing to remove here" : there === DEPOT ? "The depot cannot be removed" : null;
+      go({ do: "aim", aim: aimed(x, y, why, 0) });
+      return;
+    }
+    case "paint":
+      go({ do: "aim", aim: aimed(x, y, lineOf(w, at(w, x, y)).length > 0 ? null : "Nothing to paint here", 0) });
+      return;
+    case "beltDrag":
+    case "beltTaps":
+      go({ do: "run", run: null, aim: buildAim(BELT, x, y) });
+      return;
+    case "build": {
+      const i = at(w, x, y);
+      const there = kindAt(w, x, y);
+      if (h.faced !== i) {
+        const over = there !== NONE && (replaces(h.kind, there) || raisedOn(h.kind, i) !== undefined);
+        if (over && S.dir !== dirOf(i)) {
+          S.dir = dirOf(i);
+          toolHooks.changed();
+        }
+      }
+      go({ do: "aim", aim: buildAim(h.kind, x, y), faced: i });
     }
   }
-  if (tool === "remove") {
-    const why = there === NONE ? "Nothing to remove here" : there === DEPOT ? "The depot cannot be removed" : null;
-    S.aim = aimed(x, y, why, 0);
-    return;
-  }
-  if (tool === "paint") {
-    S.aim = aimed(x, y, lineOf(w, at(w, x, y)).length > 0 ? null : "Nothing to paint here", 0);
-    return;
-  }
-  const exit = tool === TUNNEL ? tunnelExit(w, x, y, S.dir) : null;
-  const grade = gradeOn(tool, i);
-  const raises = raisedOn(tool, i);
-  const why = refusal(w, tool, x, y, coins(), S.dir, { grade });
-  S.aim = {
-    ...aimed(x, y, why, priceAt(w, tool, x, y, grade), exit ? at(w, exit.x, exit.y) : -1),
+}
+
+/** What would come of building a kind on a tile, facing the way the hand faces: why not, the price, the grade, what it raises, a tunnel's far mouth. */
+function buildAim(kind: Kind, x: number, y: number): Aim {
+  const w = S.world;
+  const i = at(w, x, y);
+  const exit = kind === TUNNEL ? tunnelExit(w, x, y, S.dir) : null;
+  const grade = gradeOn(kind, i);
+  const raises = raisedOn(kind, i);
+  const why = refusal(w, kind, x, y, coins(), S.dir, { grade });
+  return {
+    ...aimed(x, y, why, priceAt(w, kind, x, y, grade), exit ? at(w, exit.x, exit.y) : -1),
     grade,
     ...(raises === undefined ? {} : { raises }),
   };
@@ -274,15 +282,16 @@ export function aimAt(x: number, y: number): void {
  * again whatever: a grade chosen (`setGrade`) changes them and neither the yard nor the purse.
  */
 export function keepAim(again = false): void {
-  const a = S.aim;
-  const stale = (r: Reckoned): boolean => again || !fresh(r);
-  if (path.length > 1) {
-    if (S.run && stale(S.run)) reckon();
-  } else if (S.run && S.from) {
-    if (a && stale(S.run)) runTo(a.x, a.y);
-  } else if (a && stale(a)) {
-    if (S.from && S.tool === BELT) startAt(a.x, a.y);
-    else aimAt(a.x, a.y);
+  const h = S.hand;
+  const stale = (r: Reckoned | null): boolean => r !== null && (again || !fresh(r));
+  if (h.is === "beltDrag") {
+    if (stale(h.run ?? h.aim)) reckon(h.path);
+  } else if (h.is === "beltTaps") {
+    if (h.run && h.aim && stale(h.run)) runTo(h.aim.x, h.aim.y);
+    else if (!h.run && h.aim && stale(h.aim)) startAt(h.aim.x, h.aim.y);
+  } else {
+    const a = aimOf(h);
+    if (a && stale(a)) aimAt(a.x, a.y);
   }
 }
 
@@ -304,11 +313,12 @@ function landed(x: number, y: number, belt: boolean, n = 0, quiet = false): void
 
 /** Uses the tool in hand on a tile. Says whether anything was done. */
 export function place(x: number, y: number): boolean {
-  const tool = S.tool;
-  if (tool === null) return false;
-  if (tool === "remove") return takeAway(x, y);
-  if (tool === "paint") return paintAt(x, y);
-  if (tool === "select") return setDown();
+  const h = S.hand;
+  if (h.is === "idle") return false;
+  if (h.is === "remove") return takeAway(x, y);
+  if (h.is === "paint") return paintAt(x, y);
+  if (h.is === "select") return setDown();
+  const tool = h.is === "build" ? h.kind : BELT;
   const w = S.world;
   const i = at(w, x, y);
   const there = kindAt(w, x, y);
@@ -320,7 +330,7 @@ export function place(x: number, y: number): boolean {
   const cost = priceAt(w, tool, x, y, grade);
   const no = does({ do: "build", kind: tool, x, y, dir: S.dir, grade });
   if (no !== null) {
-    S.aim = aimed(x, y, no, 0);
+    go({ do: "aim", aim: aimed(x, y, no, 0) });
     yardSfx.no();
     toolHooks.changed();
     return false;
@@ -391,7 +401,7 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
   const did = doNow({ do: "remove", x, y });
   if ("refused" in did || !was) {
     if (!quiet) {
-      S.aim = aimed(x, y, "refused" in did ? did.why : null, 0);
+      go({ do: "aim", aim: aimed(x, y, "refused" in did ? did.why : null, 0) });
       yardSfx.no();
     }
     return false;
@@ -405,22 +415,25 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
   yardSfx.take();
   if (S.picked === i) S.picked = -1;
   // A piece taken out of a marked area is no longer marked.
-  remark();
-  if (S.mark?.pieces.length === 0) S.mark = null;
+  const m = remarked();
+  if (m) go({ do: "marked", mark: m.pieces.length > 0 ? m : null });
   toolHooks.changed();
   return true;
 }
 
-/** The lines the drag going on has coloured so far: they are undone together, and no other drag's with them. */
-let stroke: { i: number; was: number }[] | null = null;
+/** How many strokes of the brush there have been: each is undone as one. */
+let strokes = 0;
 
 /**
- * Colours the line through a tile with the colour on the brush. `more` is a drag going on: its
- * lines are undone together, and passing over what cannot be coloured says nothing.
+ * Colours the line through a tile with the colour on the brush. `more` is a drag going on (a stroke
+ * the hand still holds): its lines are undone together, and passing over what cannot be coloured
+ * says nothing. Without it, a tap or a press begins a stroke of its own (`pointer`), whether or not
+ * it colours anything where it lands. Nothing is coloured with the brush out of hand.
  */
-export function paintAt(x: number, y: number, more = false): boolean {
-  // A new press starts a stroke of its own, whether or not it colours anything where it lands.
-  if (!more) stroke = null;
+export function paintAt(x: number, y: number, more = false, pointer = -1): boolean {
+  if (S.hand.is !== "paint" || (more && S.hand.stroke === null)) return false;
+  if (!more) go({ do: "stroke", pointer, id: ++strokes });
+  const id = S.hand.is === "paint" ? (S.hand.stroke?.id ?? 0) : 0;
   const w = S.world;
   const i = at(w, x, y);
   const line = lineOf(w, i);
@@ -435,11 +448,11 @@ export function paintAt(x: number, y: number, more = false): boolean {
     }
     return false;
   }
-  if (stroke) stroke.push({ i, was });
-  else {
-    stroke = [{ i, was }];
-    remember({ did: "painted", lines: stroke });
-  }
+  // The stroke's lines are one entry: each line it colours is added to it.
+  const top = done.at(-1);
+  if (top?.did === "painted" && top.stroke === id)
+    done[done.length - 1] = { ...top, lines: [...top.lines, { i, was }] };
+  else remember({ did: "painted", stroke: id, lines: [{ i, was }] });
   const col = PAINTS[S.tint - 1]?.lit ?? DUST;
   for (const j of line.slice(0, 80)) puff((j % W()) * TILE + 8, Math.floor(j / W()) * TILE + 9, 1, col, 5);
   yardSfx.paint();
@@ -508,16 +521,20 @@ function asWays(i: number, shut: number, first: number): void {
 
 /** R: turns the thing in hand, or with nothing in hand the thing pointed at. */
 export function rotate(): void {
-  if (S.tool === null) {
+  const h = S.hand;
+  if (h.is === "idle") {
     const on = S.picked >= 0 ? xy(S.picked) : S.hover;
     if (on) turnAt(on.x, on.y);
     return;
   }
-  if (!builds(S.tool) && !S.group) return;
-  if (S.group) S.group.turns = RIGHT[S.group.turns];
-  else S.dir = RIGHT[S.dir];
+  if (h.is === "select") {
+    if (h.stage.is !== "holding") return;
+    const g = h.stage.group;
+    go({ do: "group", group: { ...g, turns: RIGHT[g.turns] }, aim: h.stage.aim });
+  } else if (h.is === "build" || h.is === "beltDrag" || h.is === "beltTaps") S.dir = RIGHT[S.dir];
+  else return;
   yardSfx.turn();
-  if (S.aim) aimAt(S.aim.x, S.aim.y);
+  keepAim(true);
   toolHooks.changed();
 }
 
@@ -612,10 +629,7 @@ export function undo(): boolean {
   } else doNow({ do: "turn", ...xy(last.i), dir: last.was });
   yardSfx.undo();
   // What was marked or in hand may be what was undone.
-  if (S.tool === "select") {
-    letGo();
-    S.aim = null;
-  }
+  if (S.hand.is === "select") go({ do: "pick", tool: "select" });
   keepAim();
   toolHooks.changed();
   return true;
@@ -623,18 +637,14 @@ export function undo(): boolean {
 
 // ---------- runs of belt ----------
 
-/** The tiles a drag has passed over, in order. */
-let path: { x: number; y: number }[] = [];
-
-const way = (a: { x: number; y: number }, b: { x: number; y: number }): Dir =>
-  b.x > a.x ? 0 : b.x < a.x ? 2 : b.y > a.y ? 1 : 3;
+const way = (a: Tile, b: Tile): Dir => (b.x > a.x ? 0 : b.x < a.x ? 2 : b.y > a.y ? 1 : 3);
 
 /**
- * Works out the run the drag so far would lay: a belt on every clear tile, each pointing at the
- * next, at the grade in hand; and along a belt that already runs that way at a lower grade, that
- * belt raised.
+ * Works out the run a drag over these tiles would lay: a belt on every clear tile, each pointing at
+ * the next, at the grade in hand; and along a belt that already runs that way at a lower grade, that
+ * belt raised. A drag over one tile is aimed as a single belt.
  */
-function reckon(): void {
+function reckon(path: readonly Tile[]): void {
   const w = S.world;
   const grade = gradeInHand(BELT);
   const legs: Leg[] = [];
@@ -659,13 +669,10 @@ function reckon(): void {
     // Anything else in the way is stepped over: the belt before it points into it.
   });
   const last = path.at(-1);
-  if (path.length > 1) {
-    S.run = runOf(legs, turns, bad);
-    if (last) S.aim = aimed(last.x, last.y, S.run.why, S.run.cost);
-  } else {
-    S.run = null;
-    if (last) aimAt(last.x, last.y);
-  }
+  if (path.length > 1 && last) {
+    const run = runFrom(legs, turns, bad);
+    go({ do: "run", run, aim: aimed(last.x, last.y, run.why, run.cost) });
+  } else if (last) go({ do: "run", run: null, aim: buildAim(BELT, last.x, last.y) });
   toolHooks.changed();
 }
 
@@ -673,22 +680,24 @@ function reckon(): void {
  * A run as it would be laid: its legs, the belt it turns where it starts, what it costs, and why it
  * cannot be (`bad`, a tile it cannot cross, or else what the rules say of the purse now).
  */
-function runOf(legs: Leg[], turns: Run["turns"], bad: string | null): Run {
+function runFrom(legs: Leg[], turns: Run["turns"], bad: string | null): Run {
   const pieces = legs.map(legPiece);
   const why = bad ?? standRefusal(S.world, pieces, coins());
   return { legs, turns, cost: priceOf(S.world, pieces), why, yard: S.world, rev: S.world.rev, coins: coins() };
 }
 
-/** A drag with the belt in hand begins on a tile. */
-export function runStart(x: number, y: number): void {
-  path = [{ x, y }];
-  reckon();
+/** A drag with the belt in hand begins on a tile, with a press (`pointer`). */
+export function runStart(x: number, y: number, pointer = 0): void {
+  go({ do: "drag", pointer, path: [{ x, y }] });
+  if (S.hand.is === "beltDrag") reckon(S.hand.path);
 }
 
 /** The drag has reached another tile: the run follows it a tile at a time, and shortens if it doubles back. */
-export function runOver(x: number, y: number): void {
-  const start = path.at(-1);
-  if (!start) return;
+export function runOver(x: number, y: number, pointer = 0): void {
+  const h = S.hand;
+  const start = h.is === "beltDrag" && h.pointer === pointer ? h.path.at(-1) : undefined;
+  if (h.is !== "beltDrag" || !start) return;
+  const path = [...h.path];
   let lx = start.x;
   let ly = start.y;
   for (let guard = 0; guard < 120 && (lx !== x || ly !== y); guard++) {
@@ -702,18 +711,20 @@ export function runOver(x: number, y: number): void {
     lx = nx;
     ly = ny;
   }
-  reckon();
+  go({ do: "drag", pointer, path });
+  reckon(path);
 }
 
 /** Whether a drag is laying a run. */
-export const running = (): boolean => path.length > 0;
+export const running = (): boolean => S.hand.is === "beltDrag";
 
 /** The drag is over: a single tile is a single belt; more is a run, laid all at once. */
-export function runEnd(): void {
-  const only = path.length === 1 ? path[0] : undefined;
-  path = [];
+export function runEnd(pointer = 0): void {
+  const h = S.hand;
+  if (h.is !== "beltDrag" || h.pointer !== pointer) return;
+  const only = h.path.length === 1 ? h.path[0] : undefined;
   if (only) {
-    S.run = null;
+    go({ do: "laid" });
     place(only.x, only.y);
     return;
   }
@@ -724,10 +735,8 @@ export function runEnd(): void {
 export function commitRun(): boolean {
   keepAim();
   const w = S.world;
-  const run = S.run;
-  S.run = null;
-  S.from = null;
-  path = [];
+  const run = runOf(S.hand);
+  go({ do: "laid" });
   if (!run) return false;
   if (run.why !== null || run.legs.length + run.turns.length === 0) {
     yardSfx.no();
@@ -782,14 +791,15 @@ export function commitRun(): boolean {
  * hands things on, or a splitter's way ahead.
  */
 export function tapBelt(x: number, y: number): void {
-  if (!S.from || (S.run === null && S.from.x === x && S.from.y === y)) {
-    if (S.from) {
-      // The same tile twice: one belt, the way the hand is pointing.
-      S.from = null;
-      place(x, y);
-      return;
-    }
-    S.from = { x, y };
+  const h = S.hand;
+  if (h.is === "beltTaps" && h.run === null && h.from.x === x && h.from.y === y) {
+    // The same tile twice: one belt, the way the hand is pointing.
+    go({ do: "from", from: null });
+    place(x, y);
+    return;
+  }
+  if (h.is !== "beltTaps") {
+    go({ do: "from", from: { x, y } });
     startAt(x, y);
     toolHooks.changed();
     return;
@@ -800,17 +810,17 @@ export function tapBelt(x: number, y: number): void {
 
 /** Where a finger's run starts, aimed: a clear tile as a belt would be, or a piece to start from, which stands as it is. */
 function startAt(x: number, y: number): void {
-  S.run = null;
-  aimAt(x, y);
-  if (kindAt(S.world, x, y) !== NONE) S.aim = aimed(x, y, null, 0);
+  const aim = kindAt(S.world, x, y) !== NONE ? aimed(x, y, null, 0) : buildAim(BELT, x, y);
+  go({ do: "run", run: null, aim });
 }
 
-/** The run from where a finger's run starts (`S.from`; on a piece, the tile ahead of it) to a tile: the shortest clear way. */
+/** The run from where a finger's run starts (on a piece, the tile ahead of it) to a tile: the shortest clear way. */
 function runTo(x: number, y: number): void {
   const w = S.world;
-  if (!S.from) return;
-  let sx = S.from.x;
-  let sy = S.from.y;
+  const h = S.hand;
+  if (h.is !== "beltTaps") return;
+  let sx = h.from.x;
+  let sy = h.from.y;
   if (kindAt(w, sx, sy) !== NONE) {
     const out = ahead(w, at(w, sx, sy));
     if (out >= 0) {
@@ -826,97 +836,115 @@ function runTo(x: number, y: number): void {
       ? { tunnel: true, x: lx, y: ly, dir, span: leg.span, grade: gradeInHand(TUNNEL) }
       : { tunnel: false, x: lx, y: ly, dir, grade: gradeInHand(BELT) };
   });
-  S.run = runOf(legs ?? [], [], legs ? null : "No free path for a belt from there to here");
-  S.aim = aimed(x, y, S.run.why, S.run.cost);
+  const run = runFrom(legs ?? [], [], legs ? null : "No free path for a belt from there to here");
+  go({ do: "run", run, aim: aimed(x, y, run.why, run.cost) });
 }
 
 /** The gold button: builds what is aimed, or lays the run that is showing. */
 export function confirm(): boolean {
-  if (S.run) return commitRun();
-  if (S.aim && S.tool !== null) {
-    S.from = null;
-    return place(S.aim.x, S.aim.y);
-  }
-  return false;
+  const h = S.hand;
+  if (runOf(h)) return commitRun();
+  const a = aimOf(h);
+  if (!a || h.is === "idle") return false;
+  // A finger's run with nowhere to go yet: one belt where it starts.
+  if (h.is === "beltTaps") go({ do: "from", from: null });
+  return place(a.x, a.y);
 }
 
-/**
- * Puts away what is being aimed; with nothing aimed, puts the tool away. With Select: the pieces
- * in hand, then the area marked, then the tool.
- */
+/** The mouse has left the yard: what it aimed at is let go. */
+export function unaim(): void {
+  go({ do: "aim", aim: null });
+}
+
+/** Escape: what is in hand steps back one stage (`hand.ts`). */
 export function cancel(): void {
-  if (S.group || S.saving || S.corner || S.mark) {
-    if (S.group) S.group = null;
-    else if (S.saving) S.saving = false;
-    else letGo();
-    S.aim = null;
-    toolHooks.changed();
-    return;
-  }
-  if (S.run || S.from || (S.aim && S.finger)) {
-    S.run = null;
-    S.from = null;
-    S.aim = null;
-    path = [];
-    toolHooks.changed();
-    return;
-  }
-  setTool(null);
+  go({ do: "back", finger: S.finger });
+  toolHooks.changed();
+}
+
+// ---------- a drag, as the hand has it ----------
+
+/**
+ * A press with something in hand, on a tile, by a pointer: the brush begins a stroke, the belt a
+ * run, Select an area (but with pieces held, which it sets down), and anything else is used there.
+ */
+export function press(x: number, y: number, pointer: number): void {
+  const h = S.hand;
+  if (h.is === "paint") paintAt(x, y, false, pointer);
+  else if (h.is === "build" && h.kind === BELT) runStart(x, y, pointer);
+  else if (h.is === "select" && h.stage.is !== "holding") {
+    markStart(x, y, pointer);
+    markOver(x, y, pointer);
+  } else place(x, y);
+}
+
+/** The press has reached another tile: whatever drag the hand holds for it goes on; any other does nothing. */
+export function dragOver(x: number, y: number, pointer: number): void {
+  const h = S.hand;
+  if (h.is === "beltDrag") runOver(x, y, pointer);
+  else if (h.is === "select" && h.stage.is === "marking" && h.stage.pointer === pointer) markOver(x, y, pointer);
+  else if (h.is === "paint" && h.stroke?.pointer === pointer) paintAt(x, y, true);
+}
+
+/** The press is let go: a run is laid, an area is marked, a stroke ends. */
+export function dragEnd(pointer: number): void {
+  const h = S.hand;
+  if (h.is === "beltDrag") runEnd(pointer);
+  else if (h.is === "select" && h.stage.is === "marking" && h.stage.pointer === pointer) markEnd();
+  else if (h.is === "paint" && h.stroke?.pointer === pointer) go({ do: "stroked" });
+}
+
+/** The press is lost (the window lost focus, the browser cancelled it): whatever drag the hand holds ends, and does nothing more. */
+export function dragLost(): void {
+  go({ do: "drop" });
+  toolHooks.changed();
 }
 
 // ---------- many pieces at once ----------
 
-/** Lets go of everything Select holds: the area marked, the pieces in hand. */
-function letGo(): void {
-  S.mark = null;
-  S.corner = null;
-  S.group = null;
-  S.saving = false;
-}
-
 /** Marks the pieces in the rectangle of tiles between two corners. */
-function markArea(a: { x: number; y: number }, b: { x: number; y: number }): void {
-  const w = S.world;
+function markArea(a: Tile, b: Tile): Mark {
   const [x0, x1] = [Math.min(a.x, b.x), Math.max(a.x, b.x)];
   const [y0, y1] = [Math.min(a.y, b.y), Math.max(a.y, b.y)];
-  markTiles({ x0, y0, x1, y1 }, within(w, x0, y0, x1, y1));
-  S.saving = false;
-  toolHooks.changed();
+  return markTiles({ x0, y0, x1, y1 }, within(S.world, x0, y0, x1, y1));
 }
 
-/** Marks afresh what stands on the marked tiles now: a piece of it may have been taken away, or changed from its card. */
-function remark(): void {
-  if (S.mark) markTiles(S.mark, S.mark.tiles);
+/** The area marked, marked afresh with what stands on its tiles now: a piece of it may have been taken away, or changed from its card. */
+function remarked(): Mark | null {
+  const m = markOf(S.hand);
+  return m ? markTiles(m, m.tiles) : null;
 }
 
 /** Marks what stands on some tiles, within a box: an area just marked, or one a piece has since been taken out of. */
-function markTiles(box: Pick<Mark, "x0" | "y0" | "x1" | "y1">, tiles: readonly number[]): void {
+function markTiles(box: Pick<Mark, "x0" | "y0" | "x1" | "y1">, tiles: readonly number[]): Mark {
   const w = S.world;
   const pieces = piecesAt(w, tiles);
   // What they cost: what taking them away gives back.
   const cost = pieces.reduce((sum, p) => sum + worthAt(w, at(w, p.x, p.y)), 0);
   const stood = tiles.filter((i) => w.kind[i] !== NONE);
-  S.mark = { x0: box.x0, y0: box.y0, x1: box.x1, y1: box.y1, tiles: stood, pieces, cost };
+  return { x0: box.x0, y0: box.y0, x1: box.x1, y1: box.y1, tiles: stood, pieces, cost };
 }
 
-/** One corner of an area: where a mouse's drag begins, or a finger's first tap. Whatever was marked is let go. */
-export function markStart(x: number, y: number): void {
-  S.mark = null;
-  S.saving = false;
-  S.corner = { x, y };
+/** One corner of an area: where a mouse's drag begins (`pointer`), or a finger's first tap. Whatever was marked is let go. */
+export function markStart(x: number, y: number, pointer: number | null = null): void {
+  go({ do: "corner", corner: { x, y }, pointer });
   toolHooks.changed();
 }
 
 /** The opposite corner, as far as the drag has come: the pieces between the two are marked. */
-export function markOver(x: number, y: number): void {
-  if (S.corner) markArea(S.corner, { x, y });
+export function markOver(x: number, y: number, _pointer: number | null = null): void {
+  const h = S.hand;
+  if (h.is !== "select" || h.stage.is !== "marking") return;
+  go({ do: "marking", mark: markArea(h.stage.corner, { x, y }) });
+  toolHooks.changed();
 }
 
 /** The area is marked: an area with no piece in it marks nothing. */
 export function markEnd(): void {
-  S.corner = null;
-  if (S.mark?.pieces.length === 0) S.mark = null;
-  if (S.mark) yardSfx.pick();
+  const m = markOf(S.hand);
+  const mark = m && m.pieces.length > 0 ? m : null;
+  go({ do: "marked", mark });
+  if (mark) yardSfx.pick();
   toolHooks.changed();
 }
 
@@ -932,13 +960,11 @@ export function piecesInHand(g: Pick<Group, "as" | "tiles">): Piece[] {
 
 /** Takes in hand the marked pieces, to move them or to stand a copy of them, or the blueprint kept in a place. */
 export function hold(as: Group["as"]): void {
-  remark();
-  const tiles = typeof as === "number" ? [] : (S.mark?.tiles ?? []);
+  if (S.hand.is !== "select") return;
+  const mark = remarked();
+  const tiles = typeof as === "number" ? [] : (mark?.tiles ?? []);
   if (piecesInHand({ as, tiles }).length === 0) return;
-  if (typeof as === "number") S.mark = null;
-  S.group = { as, tiles, turns: 0, at: [], why: [] };
-  S.saving = false;
-  S.aim = null;
+  go({ do: "hold", group: { as, tiles, turns: 0, at: [], why: [] }, mark: typeof as === "number" ? null : mark });
   if (S.hover) aimAt(S.hover.x, S.hover.y);
   yardSfx.pick();
   toolHooks.changed();
@@ -947,18 +973,19 @@ export function hold(as: Group["as"]): void {
 /** Works out where the pieces in hand would stand with the middle of their box on a tile, and whether each can. */
 function aimGroup(x: number, y: number): void {
   const w = S.world;
-  const g = S.group;
-  if (!g) {
-    S.aim = null;
-    return;
-  }
+  const g = groupOf(S.hand);
+  if (!g) return;
   const from = piecesInHand(g);
   const box = boxOf(placed(from, g.turns, 0, 0));
-  g.at = placed(from, g.turns, x - ((box.w - 1) >> 1), y - ((box.h - 1) >> 1));
+  const placedAt = placed(from, g.turns, x - ((box.w - 1) >> 1), y - ((box.h - 1) >> 1));
   const moving = g.as === "move";
-  g.why = refusals(w, g.at, moving ? tilesOf(w, from) : null);
-  const why = moving ? (g.why.find((r) => r !== null) ?? null) : standRefusal(w, g.at, coins(), g.why);
-  S.aim = aimed(x, y, why, moving ? 0 : priceOf(w, g.at));
+  const whys = refusals(w, placedAt, moving ? tilesOf(w, from) : null);
+  const why = moving ? (whys.find((r) => r !== null) ?? null) : standRefusal(w, placedAt, coins(), whys);
+  go({
+    do: "group",
+    group: { ...g, at: placedAt, why: whys },
+    aim: aimed(x, y, why, moving ? 0 : priceOf(w, placedAt)),
+  });
 }
 
 /** The quarter turns that undo so many. */
@@ -974,9 +1001,10 @@ const TURNS_BACK = [0, 3, 2, 1] as const;
 function setDown(): boolean {
   keepAim();
   const w = S.world;
-  const g = S.group;
-  const aim = S.aim;
-  if (!g || !aim) return false;
+  const h = S.hand;
+  if (h.is !== "select" || h.stage.is !== "holding" || !h.stage.aim) return false;
+  const g = h.stage.group;
+  const aim = h.stage.aim;
   const box = boxOf(g.at);
   const tiles = tilesOf(w, g.at);
   // What a copy would stand that is not there now, and the pieces some of it would take the place of.
@@ -1005,10 +1033,9 @@ function setDown(): boolean {
   }
   if (moving) {
     remember({ did: "moved", tiles, turns: TURNS_BACK[g.turns], x: was.x, y: was.y });
-    S.group = null;
-    S.aim = null;
     const [x1, y1] = [box.x + box.w - 1, box.y + box.h - 1];
-    S.mark = { x0: box.x, y0: box.y, x1, y1, tiles, pieces: g.at, cost: S.mark?.cost ?? 0 };
+    go({ do: "unhold" });
+    go({ do: "marked", mark: { x0: box.x, y0: box.y, x1, y1, tiles, pieces: g.at, cost: h.stage.mark?.cost ?? 0 } });
   } else {
     remember({ did: "built", cells: tilesOf(w, stood), turned: [], under, was: changed });
     paid(aim.x, aim.y, aim.cost);
@@ -1024,17 +1051,16 @@ function setDown(): boolean {
     }, n * 28);
   });
   // A copy stays in hand: under the mouse where it is, and for a finger until it is aimed again.
-  if (S.group && !S.finger) aimAt(aim.x, aim.y);
-  else S.aim = null;
+  if (groupOf(S.hand) && !S.finger) aimAt(aim.x, aim.y);
+  else go({ do: "aim", aim: null });
   toolHooks.changed();
   return true;
 }
 
 /** Takes away everything marked, at once. */
 export function clearMark(): boolean {
-  remark();
-  const m = S.mark;
-  if (!m || S.group) return false;
+  const m = remarked();
+  if (!m || groupOf(S.hand)) return false;
   const did = doNow({ do: "clear", tiles: m.tiles });
   if ("refused" in did) {
     yardSfx.no();
@@ -1046,7 +1072,7 @@ export function clearMark(): boolean {
   const refund = coinsOf(did);
   if (refund > 0) float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, `+${refund}`, GOLD[2], 1.2);
   yardSfx.take();
-  letGo();
+  go({ do: "marked", mark: null });
   S.picked = -1;
   toolHooks.changed();
   return true;
@@ -1054,7 +1080,8 @@ export function clearMark(): boolean {
 
 /** What raising everything marked to the highest grade the yard may build would cost: 0 where nothing marked can be raised. */
 export function upgradeCost(): number {
-  return S.mark && !S.group ? upgradePrice(S.world, S.mark.tiles) : 0;
+  const m = markOf(S.hand);
+  return m && !groupOf(S.hand) ? upgradePrice(S.world, m.tiles) : 0;
 }
 
 /**
@@ -1062,10 +1089,9 @@ export function upgradeCost(): number {
  * none, for the whole price. Says whether it did; the rules' reason is said when it could not.
  */
 export function upgradeMark(): boolean {
-  remark();
   const w = S.world;
-  const m = S.mark;
-  if (!m || S.group) return false;
+  const m = remarked();
+  if (!m || groupOf(S.hand)) return false;
   const was = m.pieces.filter((p) => isGraded(p.kind) && gradeOf(p.kind, p.grade) < highest(w.open, p.kind));
   const cost = upgradePrice(w, m.tiles);
   const no = does({ do: "upgrade", tiles: m.tiles });
@@ -1078,7 +1104,7 @@ export function upgradeMark(): boolean {
   for (const p of was.slice(0, 160)) sparkle(p.x * TILE + 8, p.y * TILE + 6, 2, 5);
   if (cost > 0) float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, `-${cost}`, GOLD[0], 1.2);
   yardSfx.ready();
-  remark();
+  go({ do: "marked", mark: remarked() });
   toolHooks.changed();
   return true;
 }
@@ -1086,21 +1112,23 @@ export function upgradeMark(): boolean {
 /** Save was pressed: the places are offered, unless the marked pieces cannot be a blueprint. */
 export function askSave(): void {
   // Whichever place it goes in, the pieces themselves must be ones a blueprint may hold.
-  const no = S.mark ? blueprintRefusal(S.world.open, 0, S.mark.pieces) : null;
+  const m = markOf(S.hand);
+  const no = m ? blueprintRefusal(S.world.open, 0, m.pieces) : null;
   if (no !== null) {
     yardSfx.no();
     toolHooks.said(`${no}.`);
     return;
   }
-  S.saving = !S.saving;
+  go({ do: "save" });
   toolHooks.changed();
 }
 
 /** Keeps the marked pieces as the blueprint in a place. They glint as it is taken down. */
 export function saveMark(slot: number): boolean {
-  const m = S.mark;
+  const h = S.hand;
+  const m = markOf(h);
   if (!m || does({ do: "saveBlueprint", slot, tiles: m.tiles }) !== null) return false;
-  S.saving = false;
+  if (h.is === "select" && h.stage.is === "saving") go({ do: "save" });
   for (const p of m.pieces.slice(0, 120)) sparkle(p.x * TILE + 8, p.y * TILE + 6, 2, 5);
   float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, "Blueprint saved", GOLD[2], 1.6);
   yardSfx.ready();
@@ -1111,8 +1139,7 @@ export function saveMark(slot: number): boolean {
 /** Throws away the blueprint in a place, and lets go of it if it was in hand. */
 export function dropBlueprint(slot: number): void {
   if ("refused" in doNow({ do: "deleteBlueprint", slot })) return;
-  if (S.group?.as === slot) S.group = null;
-  S.aim = null;
+  if (groupOf(S.hand)?.as === slot) go({ do: "unhold" });
   yardSfx.take();
   toolHooks.changed();
 }

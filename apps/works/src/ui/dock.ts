@@ -65,9 +65,9 @@ import {
   upgradeMark,
   usable,
 } from "../tools.ts";
-import { CATCHING_UP, catchingUp, yardReads } from "../yard.ts";
+import { CATCHING_UP, catchingUp } from "../yard.ts";
 import { machineRef } from "./card.ts";
-import { $, button, fitted, when, type YardIcon, yardIcon } from "./parts.ts";
+import { $, button, fitted, shows, when, type YardIcon, yardIcon } from "./parts.ts";
 
 /** The tools in the order they sit in the dock, which is also the order of the number keys: every kind this page draws. */
 export const TOOLS: readonly Kind[] = DRAWN;
@@ -259,31 +259,141 @@ function thumb(pieces: readonly Piece[]): HTMLCanvasElement {
   return shown(c, box.w > 14 || box.h > 10 ? 0.5 : box.w > 6 || box.h > 4 ? 1 : 2);
 }
 
+/** A blueprint's place as the line over the dock shows it: empty, or what is kept there and what standing it costs now. */
+type Place =
+  | { readonly slot: number; readonly kept: false }
+  | {
+      readonly slot: number;
+      readonly kept: true;
+      readonly w: number;
+      readonly h: number;
+      readonly cost: number;
+      readonly asking: boolean;
+      /** The kept bytes, summed, so that a blueprint kept again over another is drawn again. */
+      readonly sum: number;
+    };
+
+/** Everything the line over the dock shows, worked out from what is in hand, the yard and the purse: it is drawn again exactly when this differs. */
+interface HandPrint {
+  readonly line: { readonly text: string; readonly bad: boolean };
+  readonly building: boolean;
+  readonly finger: boolean;
+  /** The grades the kind in hand may be built at: the numeral's grade, the price of one, and whether it is the one chosen. */
+  readonly grades: readonly { readonly grade: number; readonly cost: number; readonly on: boolean }[];
+  readonly kind: Kind | null;
+  readonly gradesNudged: boolean;
+  /** The brush's colours, and the one on it. */
+  readonly tints: number | null;
+  /** The places for blueprints, while Select has nothing marked or Save is asking; with Save asking, whether a press keeps the marked pieces there. */
+  readonly places: readonly Place[];
+  readonly saving: boolean;
+  /** Move, Copy, Remove and Save, for an area marked; and Upgrade, with its price and whether it asks to be pressed again. */
+  readonly acting: boolean;
+  readonly save: boolean;
+  readonly upgrade: { readonly cost: number; readonly asking: boolean } | null;
+  readonly turn: boolean;
+  readonly undo: boolean;
+  /** A blueprint held, and whether its bin asks to be pressed again. */
+  readonly bin: { readonly slot: number; readonly asking: boolean } | null;
+  readonly cancel: boolean;
+  /** For a finger: the gold button, what it says, and whether what is aimed cannot go. */
+  readonly go: { readonly label: string; readonly bad: boolean } | null;
+}
+
+/** A quick sum of a blueprint's bytes. */
+function sumOf(bytes: Uint8Array): number {
+  let h = 0x811c9dc5;
+  for (const v of bytes) h = Math.imul(h ^ v, 0x01000193);
+  return h >>> 0;
+}
+
+function handPrint(): HandPrint {
+  const h = S.hand;
+  const tool = S.tool;
+  const f = S.finger;
+  const stage = h.is === "select" ? h.stage : null;
+  const acting = stage?.is === "marked";
+  const places: Place[] =
+    stage !== null && (stage.is === "empty" || stage.is === "saving")
+      ? Array.from({ length: S.world.open.blueprints }, (_, slot): Place => {
+          const kept = S.world.blueprints[slot];
+          if (!kept) return { slot, kept: false };
+          const pieces = piecesOf(kept);
+          const box = boxOf(pieces);
+          const key = `blueprint-${slot}`;
+          return {
+            slot,
+            kept: true,
+            w: box.w,
+            h: box.h,
+            cost: priceOf(S.world, pieces, true),
+            asking: asking(key),
+            sum: sumOf(kept),
+          };
+        })
+      : [];
+  const top = builds(tool) && isGraded(tool) ? highest(S.world.open, tool) : 1;
+  const grades =
+    builds(tool) && top > 1
+      ? Array.from({ length: top }, (_, k) => ({
+          grade: k + 1,
+          cost: costOf(S.world, tool, k + 1),
+          on: gradeInHand(tool) === k + 1,
+        }))
+      : [];
+  const raise = acting && locked(S.world.open, { use: "upgrade" }) === null ? upgradeCost() : 0;
+  const g = S.group;
+  const aiming = f && tool !== null && tool !== "paint" && (S.aim !== null || S.run !== null);
+  return {
+    line: handLine(),
+    building: tool !== null,
+    finger: f,
+    grades,
+    kind: builds(tool) ? tool : null,
+    gradesNudged: S.nudge?.part === "grades",
+    tints: tool === "paint" ? S.tint : null,
+    places,
+    saving: stage?.is === "saving",
+    acting,
+    save: acting && S.world.open.blueprints > 0,
+    upgrade: raise > 0 ? { cost: raise, asking: asking("upgrade") } : null,
+    turn: builds(tool) || g !== null,
+    undo: stage?.is !== "saving",
+    bin: typeof g?.as === "number" ? { slot: g.as, asking: asking(`delete-${g.as}`) } : null,
+    cancel: tool !== null,
+    go: aiming
+      ? {
+          label: tool === "remove" ? "Remove" : !S.run && S.aim?.raises !== undefined ? "Raise" : "Build",
+          bad: (S.run?.why ?? (S.run ? null : S.aim?.why)) != null,
+        }
+      : null,
+  };
+}
+
 /**
  * One of the yard's places for a blueprint. A kept one shows its layout, its size in tiles and what
  * it costs to stand now, and is taken in hand by pressing it. While Save is asking, pressing a
  * place keeps the marked pieces there: at once in an empty one, on a second press over a kept one.
  */
-function place(slot: number): HTMLElement {
-  const kept = S.world.blueprints[slot];
-  const key = `blueprint-${slot}`;
-  if (!kept)
-    return button(S.saving ? "wood sm" : "wood sm off", ["Empty"], () => {
+function placeButton(p: Place, saving: boolean): HTMLElement {
+  const { slot } = p;
+  if (!p.kept)
+    return button(saving ? "wood sm" : "wood sm off", ["Empty"], () => {
       if (S.saving) saveMark(slot);
     });
-  const print = piecesOf(kept);
-  const box = boxOf(print);
-  const cost = priceOf(S.world, print, true);
+  const key = `blueprint-${slot}`;
+  const kept = S.world.blueprints[slot];
   const facts = el(
     "span",
     "facts",
     {},
-    el("span", "", { text: `${box.w}x${box.h}` }),
-    el("span", cost === 0 ? "" : "k-gold", { text: cost === 0 ? "free" : cost.toLocaleString("en-US") }),
+    el("span", "", { text: `${p.w}x${p.h}` }),
+    el("span", p.cost === 0 ? "" : "k-gold", { text: p.cost === 0 ? "free" : p.cost.toLocaleString("en-US") }),
   );
-  return button(asking(key) ? "sm asking" : "wood sm print", asking(key) ? ["Replace?"] : [thumb(print), facts], () => {
+  const face = p.asking || !kept ? ["Replace?"] : [thumb(piecesOf(kept)), facts];
+  return button(p.asking ? "sm asking" : "wood sm print", face, () => {
     if (!S.saving) hold(slot);
-    else if (pressedTwice(key, buildHand)) saveMark(slot);
+    else if (pressedTwice(key, refreshDock)) saveMark(slot);
   });
 }
 
@@ -294,20 +404,11 @@ function action(name: string, key: string, on: () => void): HTMLElement {
   return b;
 }
 
-function buildHand(): void {
+/** The line over the dock, drawn from its print alone. */
+function drawHand(p: HandPrint): void {
   const hand = $("hand");
-  const tool = S.tool;
-  const line = handLine();
-  const aiming = S.finger && tool !== null && tool !== "paint" && (S.aim !== null || S.run !== null);
-  const kids: Node[] = [];
-  const g = S.group;
-  const marking = tool === "select" && !g;
-  /** The four actions on a marked area: with them the buttons sit closer, to fit a phone's width. */
-  const acting = marking && S.mark !== null && !S.saving;
-  // As many places for blueprints as the yard has unlocked, and none before.
-  if (marking && !S.corner && (S.saving || !S.mark))
-    kids.push(...Array.from({ length: S.world.open.blueprints }, (_, slot) => place(slot)));
-  else if (acting) {
+  const kids: Node[] = p.places.map((place) => placeButton(place, p.saving));
+  if (p.acting)
     kids.push(
       action("Move", "M", () => {
         hold("move");
@@ -316,36 +417,31 @@ function buildHand(): void {
         hold("copy");
       }),
       action("Remove", "Del", clearMark),
-      ...(S.world.open.blueprints > 0 ? [button("sm", ["Save"], askSave)] : []),
+      ...(p.save ? [button("sm", ["Save"], askSave)] : []),
     );
-  }
   // With "Upgrading an area" known, and something marked that can be raised: the whole price, asked twice.
-  const raise = acting && locked(S.world.open, { use: "upgrade" }) === null ? upgradeCost() : 0;
-  const upgrade =
-    raise > 0
-      ? button(
-          asking("upgrade") ? "sm asking" : "sm",
-          [asksAgain("upgrade", ["Upgrade", amount("coin", raise)], "Press again")],
-          () => {
-            if (pressedTwice("upgrade", buildHand)) upgradeMark();
-          },
-        )
-      : null;
+  const upgrade = p.upgrade
+    ? button(
+        p.upgrade.asking ? "sm asking" : "sm",
+        [asksAgain("upgrade", ["Upgrade", amount("coin", p.upgrade.cost)], "Press again")],
+        () => {
+          if (pressedTwice("upgrade", refreshDock)) upgradeMark();
+        },
+      )
+    : null;
   if (upgrade) upgrade.dataset.act = "upgrade";
   // The grades a kind in hand may be built at: the numeral and the price of one, the chosen one lit.
-  const top = builds(tool) && isGraded(tool) ? highest(S.world.open, tool) : 1;
+  const kind = p.kind;
   const grades =
-    builds(tool) && top > 1
-      ? Array.from({ length: top }, (_, k) => {
-          const grade = k + 1;
-          const cost = costOf(S.world, tool, grade);
-          const on = gradeInHand(tool) === grade;
+    kind === null
+      ? []
+      : p.grades.map(({ grade, cost, on }) => {
           const b = el(
             "button",
             `k-slot${on ? " lit" : ""}`,
             {
               type: "button",
-              "aria-label": `${KIND_INFO[tool]?.name ?? ""} ${numeral(grade)}`,
+              "aria-label": `${KIND_INFO[kind]?.name ?? ""} ${numeral(grade)}`,
               "aria-pressed": on ? "true" : "false",
               "data-grade": String(grade),
             },
@@ -356,53 +452,50 @@ function buildHand(): void {
             setGrade(grade);
           });
           // Pointing (or a finger kept on it) shows what that grade is.
-          link(b, machineRef(tool, grade), { acts: true });
+          link(b, machineRef(kind, grade), { acts: true });
           return b;
-        })
-      : [];
-  const turn = button("wood icon sm", [yardIcon("turn")], rotate);
-  tip(turn, "Rotate (R)", "With no tool picked, it rotates the piece you last pointed at.");
-  const back = button("wood icon sm undo", [yardIcon("undo")], () => {
-    undo();
-  });
-  tip(back, "Undo (Z)");
-  if (builds(tool) || g) kids.push(turn);
-  if (!S.saving) kids.push(back);
-  if (typeof g?.as === "number") {
-    const slot = g.as;
-    const key = `delete-${slot}`;
-    const bin = button(asking(key) ? "sm asking" : "wood icon sm", [asking(key) ? "Delete?" : yardIcon("bin")], () => {
-      if (pressedTwice(key, buildHand)) dropBlueprint(slot);
+        });
+  if (p.turn) {
+    const turn = button("wood icon sm", [yardIcon("turn")], rotate);
+    tip(turn, "Rotate (R)", "With no tool picked, it rotates the piece you last pointed at.");
+    kids.push(turn);
+  }
+  if (p.undo) {
+    const back = button("wood icon sm undo", [yardIcon("undo")], () => {
+      undo();
+    });
+    tip(back, "Undo (Z)");
+    kids.push(back);
+  }
+  if (p.bin) {
+    const { slot, asking: again } = p.bin;
+    const bin = button(again ? "sm asking" : "wood icon sm", [again ? "Delete?" : yardIcon("bin")], () => {
+      if (pressedTwice(`delete-${slot}`, refreshDock)) dropBlueprint(slot);
     });
     tip(bin, "Delete this blueprint");
     kids.push(bin);
   }
-  if (tool !== null) {
+  if (p.cancel) {
     const away = button("wood icon sm", [icon("close")], cancel);
     tip(away, "Cancel (Esc)");
     kids.push(away);
   }
-  if (aiming) {
-    const bad = (S.run?.why ?? (S.run ? null : S.aim?.why)) != null;
-    const raising = !S.run && S.aim?.raises !== undefined;
-    const go = button(
-      bad ? "sm off" : "sm",
-      [icon("check"), tool === "remove" ? "Remove" : raising ? "Raise" : "Build"],
-      () => {
+  if (p.go)
+    kids.push(
+      button(p.go.bad ? "sm off" : "sm", [icon("check"), p.go.label], () => {
         confirm();
-      },
+      }),
     );
-    kids.push(go);
-  }
   // The brush's colours: a piece of belt in each, and one with none.
   const tints =
-    tool === "paint"
-      ? [0, 1, 2, 3, 4, 5, 6].map((t) => {
+    p.tints === null
+      ? []
+      : [0, 1, 2, 3, 4, 5, 6].map((t) => {
           const name = PAINTS[t - 1]?.name ?? "No colour";
           const b = el(
             "button",
-            `k-slot${S.tint === t ? " lit" : ""}`,
-            { type: "button", "aria-label": name, "aria-pressed": S.tint === t ? "true" : "false" },
+            `k-slot${p.tints === t ? " lit" : ""}`,
+            { type: "button", "aria-label": name, "aria-pressed": p.tints === t ? "true" : "false" },
             fitted(bare(t), 10, 16),
           );
           b.addEventListener("click", () => {
@@ -411,16 +504,15 @@ function buildHand(): void {
           });
           tip(b, name);
           return b;
-        })
-      : [];
+        });
   hand.replaceChildren(
-    el("span", line.bad ? "say bad" : "say", { text: line.text }),
+    el("span", p.line.bad ? "say bad" : "say", { text: p.line.text }),
     ...(tints.length > 0 ? [el("div", "tints", {}, ...tints)] : []),
-    ...(grades.length > 0 ? [el("div", `grades${S.nudge?.part === "grades" ? " nudged" : ""}`, {}, ...grades)] : []),
+    ...(grades.length > 0 ? [el("div", `grades${p.gradesNudged ? " nudged" : ""}`, {}, ...grades)] : []),
     ...(upgrade ? [el("div", "acts", {}, upgrade)] : []),
-    el("div", acting ? "acts tight" : "acts", {}, ...kids),
+    el("div", p.acting ? "acts tight" : "acts", {}, ...kids),
   );
-  hand.classList.toggle("building", tool !== null);
+  hand.classList.toggle("building", p.building);
 }
 
 let dockKey: (() => void) | null = null;
@@ -436,21 +528,7 @@ export function initDock(art: Art): void {
       buildDock(art);
     },
   );
-  handKey = when(() => {
-    const l = handLine();
-    const tool = S.tool;
-    // With Select in hand, also what is marked or held, and (by the yard's own count of changes) the blueprints.
-    const select =
-      tool === "select"
-        ? `${S.mark !== null}|${S.corner !== null}|${S.group?.as}|${S.saving}|${yardReads()}.${S.world.rev}|${asking("upgrade")}`
-        : "";
-    // With a graded kind in hand, the grades it may be built at, the one chosen, and what one costs now.
-    const graded =
-      builds(tool) && isGraded(tool)
-        ? `${highest(S.world.open, tool)}|${gradeInHand(tool)}|${yardReads()}.${S.world.rev}`
-        : "";
-    return `${tool}|${S.tint}|${S.finger}|${S.aim !== null}|${S.run !== null}|${l.text}|${(S.run?.why ?? S.aim?.why) != null}|${select}|${graded}|${S.nudge?.part}`;
-  }, buildHand);
+  handKey = shows(handPrint, drawHand);
   toolHooks.changed = refreshDock;
   toolHooks.said = say;
   refreshDock();

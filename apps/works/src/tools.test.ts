@@ -40,13 +40,21 @@ import { asIf, layout } from "./layout.ts";
 import { DRAWN, draws, S } from "./state.ts";
 import {
   aimAt,
+  cancel,
   confirm,
+  dragEnd,
+  dragLost,
+  dragOver,
   hold,
   markEnd,
   markOver,
   markStart,
   pickFrom,
   place,
+  press,
+  running,
+  runOver,
+  runStart,
   setTool,
   tapBelt,
   usable,
@@ -322,5 +330,42 @@ describe("the page", () => {
       });
     }
     expect(reads).toEqual([]);
+  });
+});
+
+describe("a drag ends with what is in hand", () => {
+  test("a drag that goes on after the brush was put away (as the yard gives way to Leaf's) colours nothing", async () => {
+    const y = yardAt(2);
+    for (let x = 18; x < 22; x++) build(y, BELT, x, 13, 0, Infinity);
+    for (let x = 18; x < 22; x++) build(y, BELT, x, 16, 0, Infinity);
+    const fake = await opened(y);
+    setTool("paint");
+    S.tint = 3;
+    press(19, 13, 1);
+    expect(S.world.tint[at(S.world, 19, 13)]).toBe(3);
+    // The yard gives way to Leaf's: what is under way is put away, as Escape puts it away.
+    cancel();
+    dragOver(19, 16, 1);
+    expect(S.world.tint[at(S.world, 19, 16)]).toBe(0);
+    await until(() => fake.leaf.posts >= 1);
+    expect(sent(fake.leaf)).toEqual(["paint"]);
+  });
+
+  test("losing focus mid-drag lays no run, and the belt aims again where the mouse goes", async () => {
+    const fake = await opened(yardAt(2));
+    setTool(BELT);
+    runStart(18, 13, 1);
+    runOver(21, 13, 1);
+    expect([running(), S.run?.legs.length]).toEqual([true, 4]);
+    // What the window's blur does.
+    dragLost();
+    expect([running(), S.run, S.tool]).toEqual([false, null, BELT]);
+    // A let-go that comes after all lays nothing.
+    dragEnd(1);
+    S.hover = { x: 18, y: 14 };
+    aimAt(18, 14);
+    expect([S.aim?.x, S.aim?.y]).toEqual([18, 14]);
+    await Bun.sleep(5);
+    expect(fake.leaf.posts).toBe(0);
   });
 });

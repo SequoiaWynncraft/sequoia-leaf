@@ -20,6 +20,7 @@ import {
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./art/belts.ts";
+import { aimOf, groupOf, type Hand, IDLE, markOf, runOf, type Tile, toolOf } from "./hand.ts";
 import type { Nudge } from "./teach.ts";
 
 /**
@@ -152,7 +153,19 @@ export const S: {
    * half or a quarter.
    */
   view: { w: number; h: number; z: number; dpr: number };
-  tool: Tool;
+  /** What is in hand (`hand.ts`): the one value the tool, its aim, a run, a mark and the pieces held are read from. */
+  hand: Hand;
+  readonly tool: Tool;
+  readonly aim: Aim | null;
+  readonly run: Run | null;
+  /** A finger's run: the tile it starts from. */
+  readonly from: Tile | null;
+  /** With Select in hand: the area marked, the first corner of one being marked, the pieces held, and whether Save is asking where. */
+  readonly mark: Mark | null;
+  readonly corner: Tile | null;
+  readonly group: Group | null;
+  readonly saving: boolean;
+  /** The way a piece in hand faces. */
   dir: Dir;
   /** The grade each kind of piece is built at when it is in hand, by kind: 0 for one never chosen, which is the first (`gradeInHand`). */
   grades: Uint8Array;
@@ -162,16 +175,6 @@ export const S: {
   hover: { x: number; y: number } | null;
   /** The last touch was a finger, so building is aimed first and built on a second tap. */
   finger: boolean;
-  /** Where the next piece is aimed, and for a belt the run that would be laid. */
-  aim: Aim | null;
-  from: { x: number; y: number } | null;
-  run: Run | null;
-  /** With Select in hand: the area marked, the first corner of one being marked, and the pieces in hand. */
-  mark: Mark | null;
-  corner: { x: number; y: number } | null;
-  group: Group | null;
-  /** Save was pressed: the line over the dock is asking which place to keep the marked pieces in. */
-  saving: boolean;
   /** The tile whose card is open. */
   picked: number;
   /** Plots being cleared before the member's eyes: when each began, in screen seconds, and where from. */
@@ -188,19 +191,36 @@ export const S: {
   held: false,
   cam: { x: 0, y: 0 },
   view: { w: 320, h: 200, z: 4, dpr: 1 },
-  tool: null,
+  hand: IDLE,
+  get tool() {
+    return toolOf(S.hand);
+  },
+  get aim() {
+    return aimOf(S.hand);
+  },
+  get run() {
+    return runOf(S.hand);
+  },
+  get from() {
+    return S.hand.is === "beltTaps" ? S.hand.from : null;
+  },
+  get mark() {
+    return markOf(S.hand);
+  },
+  get corner() {
+    return S.hand.is === "select" && S.hand.stage.is === "marking" ? S.hand.stage.corner : null;
+  },
+  get group() {
+    return groupOf(S.hand);
+  },
+  get saving() {
+    return S.hand.is === "select" && S.hand.stage.is === "saving";
+  },
   dir: 0,
   grades: new Uint8Array(KIND_COUNT),
   tint: 1,
   hover: null,
   finger: false,
-  aim: null,
-  from: null,
-  run: null,
-  mark: null,
-  corner: null,
-  group: null,
-  saving: false,
   picked: -1,
   clearing: new Map(),
   panel: null,

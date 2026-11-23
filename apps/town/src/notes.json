@@ -8,7 +8,10 @@
       {
         "head": "Fixed",
         "points": [
-          "The tip to build a Study, or to choose research, is no longer lost when the letter about a time away opens."
+          "The tip to build a Study, or to choose research, is no longer lost when the letter about a time away opens.",
+          "Switching away mid-drag no longer leaves a run of belt stuck on screen.",
+          "A brush drag stops colouring when the yard catches up with the server.",
+          "A belt raised where it stands, a sorter's setting and a way put first now show at once."
         ]
       }
     ]
