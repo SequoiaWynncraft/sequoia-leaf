@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { isLeaf, parsePlayerId, REQUEST_KINDS, type RequestKind } from "@sequoia-leaf/core";
 import { Clock, Effect, Layer, Redacted } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
-import { HttpApiBuilder, HttpApiError } from "effect/http-api";
+import { HttpApiBuilder } from "effect/http-api";
 
 import { Backend, LeafApi, PurchaseBodyErrors } from "../api/api.ts";
 import { Invalid, PurchaseRefused, Unauthorized } from "../api/errors.ts";
@@ -11,6 +11,7 @@ import type * as Body from "../api/schemas.ts";
 import { AppConfig } from "../config.ts";
 import { Ledger } from "../ledger/store.ts";
 import { Purchases } from "../purchases/store.ts";
+import { payloadError } from "./routes/middleware.ts";
 
 /** What a purchase's key may be: made by the backend, unique among its purchases. */
 const KEY = /^[A-Za-z0-9_.:-]{1,100}$/;
@@ -50,19 +51,12 @@ export const BackendLive = Layer.effect(
 );
 
 /** A purchase whose body does not decode as `{ "player_id", "kind", "leaf" }` gets `invalid_purchase`. */
-export const PurchaseBodyErrorsLive = Layer.succeed(PurchaseBodyErrors)((httpEffect) =>
-  Effect.catchIf(
-    httpEffect,
-    (error) => HttpApiError.HttpApiSchemaError.is(error) && error.kind === "Payload",
-    () => Effect.fail(invalidPurchase),
-  ),
-);
-
 const invalidPurchase = new Invalid({
   code: "invalid_purchase",
   message:
     'Send a purchase as { "player_id": "<uuid>", "kind": "tome" or "aspect", "leaf": <whole number, 1 or more> }',
 });
+export const PurchaseBodyErrorsLive = Layer.succeed(PurchaseBodyErrors)(payloadError(invalidPurchase));
 const invalidKey = new Invalid({
   code: "invalid_key",
   message: "A purchase's key is 1 to 100 letters, digits and _ . : -",

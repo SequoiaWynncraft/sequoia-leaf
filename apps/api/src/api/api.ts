@@ -191,11 +191,11 @@ export class GameHelloApi extends HttpApiGroup.make("gameHello")
 
 const GameParams = { game: Schema.String };
 
-/**
- * What only the browser game uses, open to anyone signed in, members and guests alike, but for the
- * guild's own news. Its answers are recorded in `contracts/leaf-game-v1.json`.
- */
-export class GameApi extends HttpApiGroup.make("game")
+// What only the browser game uses, open to anyone signed in, members and guests alike, but for the
+// guild's own news, in five groups. Their answers are recorded in `contracts/leaf-game-v1.json`.
+
+/** The player as the game knows them, other people (faces, cards), the banners, and the guild's news. */
+export class GamePeopleApi extends HttpApiGroup.make("gamePeople")
   .add(
     HttpApiEndpoint.get("me", "/me", { success: GameMe }),
     HttpApiEndpoint.get("skin", "/skins/:uuid", {
@@ -213,12 +213,32 @@ export class GameApi extends HttpApiGroup.make("game")
       success: EventStream,
       error: [Invalid, MembersOnly],
     }),
+    HttpApiEndpoint.get("person", "/people/:player", {
+      params: { player: Schema.String },
+      success: Person,
+      error: Missing,
+    }),
+    HttpApiEndpoint.get("banners", "/banners", { success: Banners }),
+  )
+  .middleware(Player)
+  .prefix("/v1/game") {}
+
+/** Where in the game the player is, and who else is about. */
+export class GamePresenceApi extends HttpApiGroup.make("gamePresence")
+  .add(
     HttpApiEndpoint.put("presence", "/presence", {
       payload: PresenceBody,
       success: Present,
       error: Invalid,
     }).middleware(PresenceBodyErrors),
     HttpApiEndpoint.get("whoIsAbout", "/presence", { success: Present }),
+  )
+  .middleware(Player)
+  .prefix("/v1/game") {}
+
+/** The games Leaf plays: a player's state and commands, a visit, a board, and the routes of before. */
+export class GamePlayApi extends HttpApiGroup.make("gamePlay")
+  .add(
     // For a page left open since before the town moved onto Leaf, which still sends its save and its
     // Coins here: told it is not who it thinks it is, it loads itself again, and so becomes the page
     // that plays on Leaf. Both go in the change after this one.
@@ -247,17 +267,13 @@ export class GameApi extends HttpApiGroup.make("game")
       success: PlayShown,
       error: [Missing, StateUnreadable, SlowDown],
     }),
-    HttpApiEndpoint.get("person", "/people/:player", {
-      params: { player: Schema.String },
-      success: Person,
-      error: Missing,
-    }),
-    HttpApiEndpoint.get("tally", "/tally/:board/:period", {
-      params: { board: Schema.String, period: Schema.String },
-      success: Tally,
-      error: Missing,
-    }),
-    HttpApiEndpoint.get("banners", "/banners", { success: Banners }),
+  )
+  .middleware(Player)
+  .prefix("/v1/game") {}
+
+/** The guild's requests a member may pay Leaf for. */
+export class GameRequestsApi extends HttpApiGroup.make("gameRequests")
+  .add(
     HttpApiEndpoint.get("requests", "/requests", {
       success: Requests,
       error: [MembersOnly, RequestRefused, RequestsUnavailable],
@@ -267,6 +283,18 @@ export class GameApi extends HttpApiGroup.make("game")
       success: RequestMade,
       error: [Invalid, MembersOnly, RequestRefused, RequestsUnavailable, RequestUnknown],
     }).middleware(RequestBodyErrors),
+  )
+  .middleware(Player)
+  .prefix("/v1/game") {}
+
+/** The Tally's boards. */
+export class GameTallyApi extends HttpApiGroup.make("gameTally")
+  .add(
+    HttpApiEndpoint.get("tally", "/tally/:board/:period", {
+      params: { board: Schema.String, period: Schema.String },
+      success: Tally,
+      error: Missing,
+    }),
   )
   .middleware(Player)
   .prefix("/v1/game") {}
@@ -319,7 +347,11 @@ export class LeafApi extends HttpApi.make("sequoia-leaf")
   .add(RatesApi)
   .add(MeApi)
   .add(GameHelloApi)
-  .add(GameApi)
+  .add(GamePeopleApi)
+  .add(GamePresenceApi)
+  .add(GamePlayApi)
+  .add(GameRequestsApi)
+  .add(GameTallyApi)
   .add(GameAdminApi)
   .add(InternalApi)
   .middleware(BodyLimit)
