@@ -233,20 +233,25 @@ export const Standings = Schema.Struct({
   you: Schema.NullOr(Place),
 });
 
+/** Somebody's time and Coins in a game: how long they have played it and had it open while AFK, in whole seconds, and the Coins it has taken from them. */
+const InGame = { played: Schema.Number, afk: Schema.Number, spent: Schema.Number };
+
 /**
  * Somebody, as their card shows them: their id, their name ("Someone" for one Leaf has no name for),
- * and each game they have a standing or time in, by game: how long they have played it, in whole
- * seconds (`played`), and with a standing, their place, score and numbers in it; and how long they
- * have played all games together.
+ * and each game they have a standing or time in, by game: how long they have played it and had it
+ * open while AFK, in whole seconds (`played`, `afk`), the Coins its commands have taken from them
+ * (`spent`), and with a standing, their place, score and numbers in it; and how long they have
+ * played all games together, and had them open while AFK.
  */
 export const Person = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   games: Schema.Record(
     Schema.String,
-    Schema.Union([Schema.Struct({ ...Place.fields, played: Schema.Number }), Schema.Struct({ played: Schema.Number })]),
+    Schema.Union([Schema.Struct({ ...Place.fields, ...InGame }), Schema.Struct(InGame)]),
   ),
   played: Schema.Number,
+  afk: Schema.Number,
 });
 
 /**

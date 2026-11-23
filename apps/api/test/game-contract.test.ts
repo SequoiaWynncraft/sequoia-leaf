@@ -231,15 +231,19 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await app.request("/v1/game/play/works", { headers: { Authorization: "Bearer bob-token" } });
   await call("GET /v1/game/play/{game}/of/{player}", "GET", `/v1/game/play/works/of/${bob}`);
   await call("GET /v1/game/play/{game}/of/{player}, nothing to visit", "GET", `/v1/game/play/raid/of/${bob}`);
-  // Alice is still in town three minutes on, and has the pulls open a minute, which has no board.
-  for (const [after, game] of [
-    [3 * MINUTE, "town"],
-    [0, "pulls"],
-    [MINUTE, "pulls"],
+  // Alice is still in town three minutes on, and then AFK there two minutes; and has the pulls open
+  // a minute, which has no board.
+  for (const [after, game, afk] of [
+    [3 * MINUTE, "town", true],
+    [2 * MINUTE, "town", false],
+    [0, "pulls", false],
+    [MINUTE, "pulls", false],
   ] as const) {
     clock.now += after;
     // oxlint-disable-next-line no-await-in-loop -- one after another
-    await app.request(`/v1/game/play/${game}`, { headers: { Authorization: "Bearer alice-token" } });
+    await app.request(`/v1/game/play/${game}${afk ? "?afk=1" : ""}`, {
+      headers: { Authorization: "Bearer alice-token" },
+    });
   }
   await call("GET /v1/game/people/{player}", "GET", `/v1/game/people/${alice}`, undefined, "bob-token");
   clock.now = T0 + 25 * MINUTE;

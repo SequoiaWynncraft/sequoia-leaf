@@ -34,11 +34,13 @@
  * - As the page is hidden or put away, or the town closes the game, everything Leaf has not
  *   answered is sent at once in a request that outlives the page (`flush`), so the last thing done
  *   before leaving is not lost.
- * - Leaf counts the time played from the calls it hears, so a page says it is open: while it is in
- *   view, a minute without a call to Leaf reads the state (`STILL_HERE`); with nothing waiting as it
+ * - Leaf counts the time played from the calls it hears, so a page says it is open: a minute
+ *   without a call to Leaf reads the state (`STILL_HERE`), hidden too; with nothing waiting as it
  *   is hidden or put away, the state is read in a request that outlives it; and it is read as the
  *   page comes back (`outside.wake`), but for a game answered short, which asks for its own reads. A
  *   visit says none of this, nor does a page while `away()` (the town, while a game is open over it).
+ *   Every call says whether the player is AFK (`afk=1`, `outside.afk`), so a hidden page's minutes,
+ *   and those of one left alone, are time AFK and not time played.
  * - `waitingLook(element, answer)` gives what was asked for the kit's waiting look while Leaf takes
  *   more than a moment to answer.
  *
@@ -123,7 +125,7 @@ export interface NotYet {
 /** Each second, for 30 seconds. */
 export const NOT_YET: NotYet = { every: 1000, tries: 30 };
 
-/** How long a page in view goes without a call to Leaf before it reads its state, checked every quarter of it. */
+/** How long a page goes without a call to Leaf before it reads its state, checked every quarter of it. */
 export const STILL_HERE = 60_000;
 
 /** How long a request may go unanswered before it is let go as no answer: ten seconds. */
@@ -157,6 +159,8 @@ function pageName(): string {
 }
 
 const json = (v: unknown): string => JSON.stringify(v);
+/** A path to Leaf, saying `afk=1` when the player is AFK. */
+const saying = (path: string): string => (outside.afk() ? `${path}${path.includes("?") ? "&" : "?"}afk=1` : path);
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -223,7 +227,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
   let calledAt = outside.now();
   const call: typeof ask = (to, init) => {
     calledAt = outside.now();
-    return timed(to, init);
+    return timed(saying(to), init);
   };
   const quiet = (): boolean => visiting || options.away?.() === true;
   let pause = retry.first;
@@ -405,7 +409,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
     const left = fitting([...(flying ?? []), ...queue]);
     if (stopped || (left.length === 0 && quiet())) return;
     const post = { method: "POST", headers: { "Content-Type": "application/json" }, body: bodyOf(left) };
-    void outside.fetch(path, { ...(left.length > 0 ? post : {}), credentials: "same-origin", keepalive: true });
+    void outside.fetch(saying(path), { ...(left.length > 0 ? post : {}), credentials: "same-origin", keepalive: true });
   }
 
   /** Leaf's state read again and taken, unless anything was sent meanwhile. */
@@ -446,7 +450,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
       });
     if (typeof window !== "undefined")
       window.setInterval(() => {
-        if (!document.hidden && !quiet() && outside.now() - calledAt >= STILL_HERE) void refresh();
+        if (!quiet() && outside.now() - calledAt >= STILL_HERE) void refresh();
       }, STILL_HERE / 4);
   }
 

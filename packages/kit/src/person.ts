@@ -1,7 +1,7 @@
 /**
  * A person's card: somebody in a list ("Who is about", "Top yards") as the card shows them, their
- * face, their name and the line the list has for them, and under that how long they have played,
- * and their numbers in each game, as Leaf has them (`GET /v1/game/people/{id}`). A page registers
+ * face, their name and the line the list has for them, and under that how long they have played
+ * and been AFK, and their numbers in each game, as Leaf has them (`GET /v1/game/people/{id}`). A page registers
  * the kind once (`people`), says what a list knows of somebody (`known`) before it links a row to
  * `person:<id>`. A game's board, the lists of where people stand, is read here too (`readBoard`).
  *
@@ -15,16 +15,21 @@ import type { Placed } from "@sequoia-leaf/core";
 import { type Action, type Description, refresh, register, type Stat } from "./card.ts";
 import { ask, isRecord, outside } from "./net.ts";
 
-/** What a game says of somebody's standing in it: its name, and their numbers. */
+/** What a game says of somebody's standing in it: its name, and their numbers, given the Coins it has taken from them. */
 export interface GameStats {
   readonly name: string;
-  readonly numbers: (placed: Placed) => readonly Stat[];
+  readonly numbers: (placed: Placed, spent: number) => readonly Stat[];
 }
 
-/** Somebody in a game: where they stand, if they do, and how long they have played it, in seconds. */
+/**
+ * Somebody in a game: where they stand, if they do; how long they have played it, and had it open
+ * while AFK, in seconds; and the Coins it has taken from them.
+ */
 export interface InGame {
   readonly placed: Placed | null;
   readonly played: number;
+  readonly afk: number;
+  readonly spent: number;
 }
 
 /** Each game somebody stands in or has played, by game. */
@@ -78,25 +83,27 @@ export function readBoard(v: unknown): Board | null {
   return { top: top.filter((r) => r !== null), you };
 }
 
-/** What Leaf says of somebody: their name, their games, and how long they have played all games, in seconds. */
+/** What Leaf says of somebody: their name, their games, and how long they have played all games, and been AFK in them, in seconds. */
 export interface Said {
   readonly name: string;
   readonly games: Games;
   readonly played: number;
+  readonly afk: number;
 }
 
 function inGameOf(v: unknown): InGame | null {
-  if (!isRecord(v) || !whole(v.played)) return null;
+  if (!isRecord(v) || !whole(v.played) || !whole(v.afk) || !whole(v.spent)) return null;
   const placed = v.place === undefined ? null : placedOf(v);
-  return v.place !== undefined && placed === null ? null : { placed, played: v.played };
+  return v.place !== undefined && placed === null ? null : { placed, played: v.played, afk: v.afk, spent: v.spent };
 }
 
 /** What Leaf said of somebody, read back; null for an answer that makes no sense. */
 export function readPerson(v: unknown): Said | null {
-  if (!isRecord(v) || typeof v.name !== "string" || !isRecord(v.games) || !whole(v.played)) return null;
+  if (!isRecord(v) || typeof v.name !== "string" || !isRecord(v.games) || !whole(v.played) || !whole(v.afk))
+    return null;
   const games = Object.entries(v.games).map(([game, g]): [string, InGame | null] => [game, inGameOf(g)]);
   return games.every((g): g is [string, InGame] => g[1] !== null)
-    ? { name: v.name, games: Object.fromEntries(games), played: v.played }
+    ? { name: v.name, games: Object.fromEntries(games), played: v.played, afk: v.afk }
     : null;
 }
 
@@ -116,22 +123,26 @@ export function duration(seconds: number): string {
   return `${hours} h ${minutes % 60} min`;
 }
 
-/** "Time played", for a time above none. */
-const timeOf = (seconds: number): Stat[] => (seconds > 0 ? [{ label: "Time played", value: duration(seconds) }] : []);
+/** "Time played", for a time above none; "Time AFK", for a minute or more. */
+const timeOf = (t: { readonly played: number; readonly afk: number }): Stat[] => [
+  ...(t.played > 0 ? [{ label: "Time played", value: duration(t.played) }] : []),
+  ...(t.afk >= 60 ? [{ label: "Time AFK", value: duration(t.afk) }] : []),
+];
 
 /**
- * The card's numbers: how long somebody has played all games together; then for each game in
- * `stats` they stand in or have played, in that order, its name as a label, its numbers and how
- * long they have played it. For somebody with none of these, one line.
+ * The card's numbers: how long somebody has played all games together, and been AFK in them; then
+ * for each game in `stats` they stand in or have played, in that order, its name as a label, its
+ * numbers and how long they have played it and been AFK in it. For somebody with none of these,
+ * one line.
  */
 export function numbersOf(
   said: Said,
   stats: Readonly<Record<string, GameStats>>,
 ): Pick<Description, "stats" | "blocks"> {
-  const shown: (Stat | string)[] = timeOf(said.played);
+  const shown: (Stat | string)[] = timeOf(said);
   for (const [game, says] of Object.entries(stats)) {
     const g = said.games[game];
-    if (g) shown.push(says.name, ...(g.placed ? says.numbers(g.placed) : []), ...timeOf(g.played));
+    if (g) shown.push(says.name, ...(g.placed ? says.numbers(g.placed, g.spent) : []), ...timeOf(g));
   }
   return shown.length > 0 ? { stats: shown } : { blocks: [{ body: "Has not played yet." }] };
 }

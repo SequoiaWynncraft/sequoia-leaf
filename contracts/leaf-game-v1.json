@@ -1807,7 +1807,9 @@
       "name": "Alice",
       "games": {
         "pulls": {
-          "played": 60
+          "played": 60,
+          "afk": 0,
+          "spent": 0
         },
         "raid": {
           "place": 1,
@@ -1816,7 +1818,9 @@
             "runs": 0,
             "room": 0
           },
-          "played": 0
+          "played": 0,
+          "afk": 0,
+          "spent": 0
         },
         "town": {
           "place": 1,
@@ -1825,7 +1829,9 @@
             "greeted": 0,
             "sightings": 0
           },
-          "played": 180
+          "played": 180,
+          "afk": 120,
+          "spent": 25
         },
         "works": {
           "place": 2,
@@ -1833,10 +1839,13 @@
           "also": {
             "story": 3
           },
-          "played": 0
+          "played": 0,
+          "afk": 0,
+          "spent": 0
         }
       },
-      "played": 240
+      "played": 240,
+      "afk": 120
     }
   },
   "GET /v1/game/people/{player}, unknown": {

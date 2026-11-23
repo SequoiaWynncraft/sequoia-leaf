@@ -79,6 +79,7 @@ describe("the database", () => {
       { migration_id: 24, name: "play_guest" },
       { migration_id: 25, name: "wars_by_time" },
       { migration_id: 26, name: "play_kept" },
+      { migration_id: 27, name: "afk" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -140,7 +141,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 26 },
+      { latest: 27 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -161,6 +162,8 @@ describe("the database", () => {
         yield* sql`ALTER TABLE play_state DROP COLUMN guest`;
         yield* sql`DROP INDEX activities_wars`;
         yield* sql`DROP TABLE play_kept`;
+        yield* sql`ALTER TABLE played DROP COLUMN afk_ms`;
+        yield* sql`ALTER TABLE played DROP COLUMN afk`;
         yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 24`;
         for (const [player, game] of [
           [guest, "works"],
@@ -209,6 +212,8 @@ describe("the database", () => {
         // Back to before migration 26, with a member who has pulled, one who has only opened the
         // pulls, one who has only played the raid, and a guest.
         yield* sql`DROP TABLE play_kept`;
+        yield* sql`ALTER TABLE played DROP COLUMN afk_ms`;
+        yield* sql`ALTER TABLE played DROP COLUMN afk`;
         yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 26`;
         for (const [player, game, text, isGuest] of [
           [pulled, "pulls", state, 0],

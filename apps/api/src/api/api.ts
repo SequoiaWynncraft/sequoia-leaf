@@ -189,6 +189,8 @@ export class GameHelloApi extends HttpApiGroup.make("gameHello")
   .prefix("/v1/game") {}
 
 const GameParams = { game: Schema.String };
+/** A play call's word that its player is away from the keys: `afk=1`, from the kit's `afk.ts`. Anything else is not. */
+const AfkQuery = { afk: Schema.optional(Schema.String) };
 
 /**
  * What only the browser game uses, open to anyone signed in, members and guests alike, but for the
@@ -226,12 +228,13 @@ export class GameApi extends HttpApiGroup.make("game")
     HttpApiEndpoint.get("play", "/play/:game", {
       params: GameParams,
       // From a page that found its copy of the state not Leaf's: the tick it found it at.
-      query: { differs: Schema.optional(Schema.String) },
+      query: { differs: Schema.optional(Schema.String), ...AfkQuery },
       success: PlayShown,
       error: [Missing, StateUnreadable],
     }),
     HttpApiEndpoint.post("command", "/play/:game", {
       params: GameParams,
+      query: AfkQuery,
       payload: PlayBody,
       success: Played,
       error: [Invalid, Missing, NotYou, StateUnreadable, SlowDown],
@@ -243,6 +246,7 @@ export class GameApi extends HttpApiGroup.make("game")
     }),
     HttpApiEndpoint.get("visit", "/play/:game/of/:player", {
       params: { ...GameParams, player: Schema.String },
+      query: AfkQuery,
       success: PlayShown,
       error: [Missing, StateUnreadable, SlowDown],
     }),
