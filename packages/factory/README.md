@@ -20,6 +20,7 @@ page (`apps/works`) holds a copy and draws it; the town reads its standing's wor
 | keeping a yard, and the check                                                 | `src/codec.ts`, `src/bytes.ts`, `src/check.ts`                                |
 | the route for a run of belt and its legs; what a piece is doing               | `src/route.ts`; `src/status.ts` (`condition` decides, `status` words it)      |
 | what a machine or a line makes and needs a minute                             | `src/planner.ts`, and `plan.ts` for the table of the slice                    |
+| what a yard as it stands can make and needs a minute                          | `flow`, in `src/status.ts`                                                    |
 | the wire from the page's side: a command written, what Leaf sends read back   | `src/page.ts`                                                                 |
 | what the town is told: the postcard, the standing's words                     | `src/postcard.ts`, `src/stats.ts`                                             |
 | yards built with commands, for the tests and the play server's tours          | `test/yards.ts` (`delivering`, `generated`, `staged`)                         |
@@ -98,7 +99,6 @@ for their range.
 - **Reach** is in hundredths of a tile (`REACH`: a pylon 460), made longer by a whole percentage
   (`open.reach`: 100, 135 with "Taller pylons"), and read as a whole squared distance: a tile is in
   reach when the square of its distance is no more than the reach squared, rounded down.
-- **The pace** of what reaches the depot counts whole ticks, and halves them, rounded down, each hour.
 
 ## Recipes that count
 
@@ -249,6 +249,21 @@ sentence names (the part to tip out, what is waited for). `test/condition.test.t
 decision on yards built for it. Neither, nor `aim`, makes anything while the plumbing is worked out:
 they read a machine's recipes from it (`Wire.recipes`).
 
+`flow` adds up, for a yard as it stands, what its pieces can make of each thing a minute and what
+they need of each to do it: every gatherer, machine and Study power reaches, taken as working each
+tick the yard's power lets it (as `rate` takes one piece) and never waiting for a part or for room,
+so what it gives is a ceiling and not a count. A machine is counted for the recipe it is working
+toward (`aim`); one told nothing that holds nothing has none for the moment, and is counted for the
+recipe it was last counted for where the caller keeps that (a thing for each tile, which `flow` reads
+and writes). A Study needs the folios the research first in line still wants, in the shares it wants
+them; a boiler in reach, the deadfall it burns. It runs down the plumbing's lists and makes nothing.
+
+What reaches the depot is not measured by the rules: the depot's books (`y.depot`) are a running
+total for each thing, and a screen that wants "in the last minute" keeps a few of those totals and
+subtracts (the Works' page does, in `apps/works/src/arrivals.ts`). The rules used to keep a count of
+their own for it (`y.pace`), begun again at every change; it is gone from the yard, the tick, the
+codec and the check.
+
 `priceOf` with `bare` prices a set of pieces as if on clear ground: a blueprint or a copy before it
 is aimed anywhere.
 
@@ -330,7 +345,9 @@ something, the thing and its progress, then only the parts that are not as new (
 them, when above 1). A blueprint's piece is its kind, x, y and way, then only the parts it keeps.
 
 `decode` refuses whole a record of the wrong shape or version, and pieces' bytes cut short, left
-over, with a part it does not know or with a count past what the tables allow. Inside a good one it
+over, with a part it does not know or with a count past what the tables allow. A record kept while
+the rules still counted a pace has a `pace` field, which is passed over: it reads back as the same
+yard, with the same check, and is kept again without it. Inside a good one it
 gives back a yard play could have made (`vouch`), doing again through the rules what play does, and
 leaves out what it could not:
 
@@ -378,8 +395,8 @@ Measured beside them and printed: the first tick after a change, and a tick that
 
 One file for each part: whole numbers, counted recipes (and those of tiers 0 and 1, in yards of those
 tiers), grades, tiers and tools, research, the new pieces and blueprints, orders, the tables held together (every goal reachable, nothing wanted before it can be made, every
-folio cost payable by its tier, ids unique), the planner (and that a yard does what it says), the
-codec and the check, random play (a refusal changes nothing, a yard reads back as itself, every
+folio cost payable by its tier, ids unique), the planner (and that a yard does what it says), what a
+yard as it stands can make and needs (`flow`), the codec and the check, random play (a refusal changes nothing, a yard reads back as itself, every
 command and piece takes effect, what the page would write reads back as the command) and time away,
 how a piece stands (`condition`), the wire from the page's side, the staged yards, the budgets, and
 the pace script's parts (`test/pace.test.ts`: sizing lines, which lines a goal needs beyond what

@@ -84,7 +84,6 @@ function counted(y: F.Yard): { readonly yard: F.Yard; readonly reads: () => numb
     tunnels: wrapped(y.tunnels),
     land: wrapped(y.land),
     wire: y.wire && wrapped(y.wire),
-    pace: wrapped(y.pace),
     seen: wrapped(y.seen),
     board: y.board.map(wrapped),
   });

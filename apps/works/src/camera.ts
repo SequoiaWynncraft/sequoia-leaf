@@ -8,8 +8,8 @@ import { clamp, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import type { Ground } from "./art/ground.ts";
 import { corner, sizeBuffers } from "./scene.ts";
-import { S } from "./state.ts";
-import { markSize, natural, zoomFor } from "./zoom.ts";
+import { S, seenFrom } from "./state.ts";
+import { farSteps, markSize, natural, tilePx, zoomFor } from "./zoom.ts";
 
 /** How much of the screen the interface covers at each edge, in CSS pixels. */
 export const inset = { top: 0, bottom: 0, left: 0, right: 0 };
@@ -42,11 +42,30 @@ function bound(): void {
   S.cam.x = x1 < x0 ? (x0 + x1) / 2 : clamp(S.cam.x, x0, x1);
   S.cam.y = y1 < y0 ? (y0 + y1) / 2 : clamp(S.cam.y, y0, y1);
   if (!canvas) return;
-  // The picture lies over the part of the view that can have anything in it.
-  corner.x = clamp(ground.x - SPILL - Math.round(S.cam.x), 0, S.view.w - canvas.width);
-  corner.y = clamp(ground.y - SPILL - Math.round(S.cam.y), 0, S.view.h - canvas.height);
-  // Enlarged by the page, each of its pixels to `z` of the screen's: a whole number, on a screen of any pixel ratio.
-  canvas.style.transform = `translate(${corner.x / k}px, ${corner.y / k}px) scale(${1 / k})`;
+  // A step of the plan is drawn a screen pixel to each of the picture's, so the picture is that much smaller than the view.
+  const z = Math.min(1, S.view.z);
+  // The picture lies over the part of the view that can have anything in it: its corner on a whole pixel of the screen.
+  corner.x = clamp(ground.x - SPILL - seenFrom(S.cam.x), 0, Math.floor(S.view.w * z - canvas.width) / z);
+  corner.y = clamp(ground.y - SPILL - seenFrom(S.cam.y), 0, Math.floor(S.view.h * z - canvas.height) / z);
+  // Enlarged by the page, each of its pixels to a whole number of the screen's, on a screen of any pixel ratio.
+  canvas.style.transform = `translate(${corner.x / k}px, ${corner.y / k}px) scale(${1 / (k * z)})`;
+}
+
+/** How many tiles across and down the plots the yard owns reach, end to end. */
+function owned(): { w: number; h: number } {
+  const y = S.world;
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = 0;
+  let y1 = 0;
+  for (const plot of y.land.plots) {
+    if (!y.plots.includes(plot.plot)) continue;
+    x0 = Math.min(x0, plot.x);
+    y0 = Math.min(y0, plot.y);
+    x1 = Math.max(x1, plot.x + plot.w);
+    y1 = Math.max(y1, plot.y + plot.h);
+  }
+  return { w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) };
 }
 
 /** Fits the picture to the window, keeping the middle of the view where it was. */
@@ -58,10 +77,19 @@ export function resize(): void {
   const mx = S.cam.x + S.view.w / 2;
   const my = S.cam.y + S.view.h / 2;
   const base = natural(cw, ch);
-  const z = zoomFor(base, steps);
-  steps = z - base;
+  // The plan's steps are there only for a yard the window does not show whole, clear of the interface.
+  const yard = owned();
+  const clear = ch - (inset.top + inset.bottom) * dpr;
+  const step = zoomFor(base, steps, farSteps(yard.w, yard.h, cw, clear));
+  steps = step - base;
+  const z = tilePx(step) / 16;
   S.view = { w: Math.ceil(cw / z), h: Math.ceil(ch / z), z, dpr };
-  sizeBuffers(Math.min(S.view.w, ground.w + SPILL * 2), Math.min(S.view.h, ground.h + SPILL * 2), markSize(base, z));
+  const small = Math.min(1, z);
+  sizeBuffers(
+    Math.ceil(Math.min(S.view.w, ground.w + SPILL * 2) * small),
+    Math.ceil(Math.min(S.view.h, ground.h + SPILL * 2) * small),
+    markSize(base, z),
+  );
   S.cam.x = mx - S.view.w / 2;
   S.cam.y = my - S.view.h / 2;
   bound();

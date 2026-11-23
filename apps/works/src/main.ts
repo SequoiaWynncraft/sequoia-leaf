@@ -46,6 +46,7 @@ import { tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { stepFlights, stepWalkers } from "./actors.ts";
+import { noteArrivals } from "./arrivals.ts";
 import { TILE } from "./art/belts.ts";
 import { makeArt } from "./art/index.ts";
 import { ease, inset, inView, look, pan, resize, setCamera, setZoom, zoom, zoomSteps } from "./camera.ts";
@@ -80,6 +81,7 @@ import {
   stepClearing,
   takeAway,
 } from "./tools.ts";
+import { troubled } from "./trouble.ts";
 import { initBoard } from "./ui/board.ts";
 import { closeCard, followCards, initCard, openCard, refreshCard, riderAt } from "./ui/card.ts";
 import { initDock, refreshDock } from "./ui/dock.ts";
@@ -88,6 +90,7 @@ import { putAway, reading, showLetter } from "./ui/letter.ts";
 import { closeBanner, feed, initNotes, tickNotes } from "./ui/notes.ts";
 import { closePanel, initPanels, openPanel, panelHooks, type PanelId, refreshPanel } from "./ui/panels.ts";
 import { $ } from "./ui/parts.ts";
+import { viewHooks } from "./ui/views.ts";
 import {
   again,
   differences,
@@ -163,6 +166,8 @@ declare global {
       rider: (x: number, y: number) => string | null;
       /** The tiles where a kind of thing stands. */
       where: (kind: string) => Pt[];
+      /** The tiles of the pieces in trouble, as the yard's sheet counts them. */
+      trouble: () => Pt[];
       state: () => Record<string, unknown>;
     };
   }
@@ -287,6 +292,8 @@ async function boot(): Promise<void> {
     refreshAll();
   };
   inputHooks.letter = putAway;
+  // The yard's sheet goes to a place at once, so that a card can sit beside the piece there.
+  viewHooks.look = (x, y): void => look(x, y, true);
   followCards(pan);
 
   function fit(): void {
@@ -371,6 +378,8 @@ async function boot(): Promise<void> {
     S.t += dt;
     if (now !== null) {
       const news = runYard(now);
+      // What reached the depot is counted from its books, a row each second of the yard's clock.
+      noteArrivals(S.world);
       // Leaf worked the yard on while nobody watched: its letter says what it did, to its owner.
       if (S.world.away && !reading() && !S.visiting) showLetter(S.world.away, refreshAll);
       // What a visited yard does is its owner's news: the visitor's purse and town are not told.
@@ -665,6 +674,14 @@ async function boot(): Promise<void> {
       for (let i = 0; i < w.kind.length; i++)
         if (k !== null && w.kind[i] === k) out.push({ x: i % w.land.w, y: Math.floor(i / w.land.w) });
       return out;
+    },
+    trouble() {
+      const w = S.world;
+      const found = troubled(w, S.rev);
+      return Array.from(found.tiles.subarray(0, found.count), (i) => ({
+        x: i % w.land.w,
+        y: Math.floor(i / w.land.w),
+      }));
     },
     state() {
       const w = S.world;

@@ -19,6 +19,7 @@ import { doNow } from "../yard.ts";
 import { cardOf, type Hands, itemRef, plotRef, tileRef } from "./cards.ts";
 import { togglePanel } from "./panels.ts";
 import { printOf } from "./prints.ts";
+import { showView } from "./views.ts";
 
 export { itemRef, machineRef, nodeRef, orderRef, plotRef, tileRef } from "./cards.ts";
 
@@ -58,7 +59,12 @@ const HANDS: Hands = {
   way: (x, y, way) => void wayAt(x, y, way),
   buy: buyLand,
   take: (g) => void takeInHand(g),
-  panel: togglePanel,
+  // The depot's own panel is the third view of the yard's sheet, which the card would lie over: the card is put away.
+  panel: (id) => {
+    if (id !== "depot") return togglePanel(id);
+    close();
+    showView("needs");
+  },
 };
 
 /** Says what every kind of thing in the yard is: each card drawn from its print. */
