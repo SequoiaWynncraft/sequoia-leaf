@@ -1,0 +1,692 @@
+[
+  {
+    "id": "town-ways",
+    "at": "2026-11-24T23:59Z",
+    "title": "Fewer ways for the town to get stuck",
+    "lines": [
+      "Leaving a camp or the town just as you arrive now takes you back. Before, the page stopped until it was loaded again.",
+      "Going to a camp straight from the Works no longer has you walk back into town unseen."
+    ],
+    "more": [
+      {
+        "head": "Also fixed",
+        "points": [
+          "With your camp open on two pages, a thing set out on one is no longer moved or put away by the other in its place.",
+          "A caller leaving your camp goes, even if you set something down in their way."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "leaf-turns",
+    "at": "2026-11-23T23:43Z",
+    "title": "Rerolls and yards wait their turn",
+    "lines": [
+      "Rerolling a quest while Leaf is counting a raid you just did no longer swaps away a quest that raid finished.",
+      "When Leaf has many yards to bring up to date, your own commands in the Works no longer wait for all of them."
+    ]
+  },
+  {
+    "id": "raid-fixes",
+    "at": "2026-11-23T23:24Z",
+    "title": "The Little Raid: fixes",
+    "lines": [
+      "A fight shows the result that is paid, and a page left in a fight that another device finished goes on to the next room.",
+      "Bought bases stay under your figures in fights."
+    ],
+    "more": [
+      {
+        "head": "Fixed",
+        "points": [
+          "A page opened before an update could play a fight as won and then take health for a loss. It now shows only the result that is paid.",
+          "A fight in progress during an update is paid the result it had when you set out.",
+          "If another device took a room's takings while this one was still playing the fight, this page stopped after the fight with no way on. It now goes on to the next room.",
+          "Mossy bases and gilt rims are under your figures in fights too, not only while planning.",
+          "With a figure held by one finger, resting and lifting a second finger moved or sold it there. Only the finger holding it puts it down now.",
+          "The two regulars watching from the logs are different from one raid to the next, and the last boss walks in again each time you fight the last room again."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "tally",
+    "at": "2026-11-23T21:59Z",
+    "title": "The Tally: leaderboards for nearly everything",
+    "lines": [
+      "A new post between the Grove and the quest board, and on the dock: boards of who has done the most, for this week and for all time.",
+      "Tap anybody on a board to see their card."
+    ],
+    "more": [
+      {
+        "head": "The guild",
+        "points": [
+          "Guild raids, and each of the five raids. Wars, and defences: wars over a territory in Sequoia's claim.",
+          "Season rating, quests finished, Leaf earned (spending does not lower it), SEQ level and milestones."
+        ]
+      },
+      {
+        "head": "The Works and The Little Raid",
+        "points": [
+          "Top yards, highest tier, orders handed over and time in the Works.",
+          "Runs won, rooms fought, bosses beaten and time at the table."
+        ]
+      },
+      {
+        "head": "The town",
+        "points": [
+          "Time in town and camp, and dozing: time there AFK.",
+          "Crab No. 7 spotted, callers greeted at your camp, camps visited and visitors to your camp. A visit counts after 30 seconds.",
+          "Waves, things tapped, logs on the fire and roll calls. One wave counts every 30 seconds, a tap or a log every 5, a roll call every 10."
+        ]
+      },
+      {
+        "head": "How a board works",
+        "points": [
+          "The top 3 stand on the podium and places 4 to 10 are under it. Your own place is at the foot when you are not in the top 10.",
+          "A tie shares a place. A week starts on Monday at 00:00 UTC, as weekly quests do.",
+          "Nothing on a board can be bought with Leaf or Coins."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "town-presence",
+    "at": "2026-11-23T21:50Z",
+    "title": "Who is where, the same everywhere",
+    "lines": [
+      "Somebody away for 5 minutes or more sits down where they are and dozes off, and is up again the moment they do anything. Their card says for how long.",
+      "Somebody at the Works works at a crate beside them, at the raid table sits at the stump, and in the Grove stands at its stone. Their card says where they are."
+    ],
+    "more": [
+      {
+        "head": "Away",
+        "points": [
+          "Away is 5 minutes without moving, an emote, or anything done in a game: the same rule that counts your time AFK on your card.",
+          "Who is about and a person's card say it with the time: \"away for 20 minutes\"."
+        ]
+      },
+      {
+        "head": "Where people are",
+        "points": [
+          "Who is about, the number on its button, the people in town and every card now agree on where each person is, on every page.",
+          "Somebody who leaves town is listed where they went within a second, not up to 30 seconds later. Somebody who closes the game is listed as seen lately at once, not 90 seconds later.",
+          "Somebody in the Grove is listed in the Grove. They used to be listed as seen lately.",
+          "Everybody at the Works, the raid table or the Grove has a spot of their own there and stays in it, so nobody walks through anybody or the bench."
+        ]
+      },
+      {
+        "head": "Others walking about",
+        "points": [
+          "Others in town walk where they really walked, a little behind, and no longer overshoot a stop or a turn and step back on a slow connection.",
+          "Somebody whose game is hidden or stalled stops walking where they are, instead of walking on the spot.",
+          "When the game server restarts, everybody stays where they were while their game reconnects, instead of fading out and in."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "works-visit-live",
+    "at": "2026-11-23T21:22Z",
+    "title": "The Works: visits keep up",
+    "lines": [
+      "A yard you visit shows what its owner builds about half a second after they do it. It used to catch up every 30 seconds, all at once."
+    ]
+  },
+  {
+    "id": "works-splitter-grades",
+    "at": "2026-11-23T20:52Z",
+    "title": "The Works: grades for splitters, joiners and sorters",
+    "lines": [
+      "Splitters, joiners and sorters come in grades I to III, as belts do. Yours were raised to the highest belt grade your yard has unlocked, for free, so no line is slower.",
+      "Grade III now has a look of its own: iron and brass, where grade II is waxed wood and brass."
+    ],
+    "more": [
+      {
+        "head": "Splitters, joiners and sorters",
+        "points": [
+          "Grade I passes on up to 150 items a minute, grade II 200 and grade III 300, the same as belts.",
+          "One of a lower grade than the belts around it slows its line to its own pace.",
+          "Their grades unlock with the belts': grade II with Wax for the lines, grade III with Iron rollers for the lines.",
+          "Splitter and joiner cost 8, 24 and 64 Coins. Sorter: 12, 36 and 96.",
+          "Choose the grade in the dock, as for belts. It starts at I until you choose another."
+        ]
+      },
+      {
+        "head": "How each grade looks",
+        "points": [
+          "Grade I is plain wood. Grade II is waxed wood with brass trim.",
+          "Grade III is iron with brass: lines run on iron rollers between brass rails, machines have iron frames, tunnels iron hoods, and gatherers a wheelbarrow.",
+          "Grade II pieces have 1 brass stud in the corner and grade III 2, as before."
+        ]
+      },
+      {
+        "head": "Your yard",
+        "points": [
+          "Every splitter, joiner and sorter you had was raised to the highest belt grade your yard has unlocked, for free.",
+          "One saved in a blueprint was raised to the grade of the belts saved with it.",
+          "Wax for the belts is now called Wax for the lines, and Brass fittings for the belts is Iron rollers for the lines."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "works-recipe",
+    "at": "2026-11-23T20:20Z",
+    "title": "The Works: a machine's recipe on its card",
+    "lines": [
+      "A machine's card draws its recipe: each part in a slot with how many it holds, an arrow, and what it makes, with how many a minute under each.",
+      "A dot over a part for each one a make takes. While the machine waits, the parts it is short of are red."
+    ],
+    "more": [
+      {
+        "head": "Under each part",
+        "points": [
+          "How many it needs a minute, and the machines that make that many: a mill and 1.2 means 1.2 mills.",
+          "Once you can build that machine at a higher grade, how many of those it would take.",
+          "Point at a picture for its name, or tap it for its card."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "works-tier-3",
+    "at": "2026-11-23T18:45Z",
+    "title": "The Works: tier 3 takes longer",
+    "lines": [
+      "Lanterns for the great tree needs all 10 pieces of tier 3 research, not 3, and tier 3 research costs 1.5 times as many Timber folios.",
+      "Research you have finished stays finished. Research you are studying keeps the folios it has had."
+    ],
+    "more": [
+      {
+        "head": "Why",
+        "points": [
+          "Played through by the rules, tier 3 took about 1 hour 45 minutes. It is meant to take 4 to 5 hours. It now takes about 4 hours 15 minutes."
+        ]
+      },
+      {
+        "head": "Tier 3 research, in Timber folios",
+        "points": [
+          "The oil press: 90, was 60.",
+          "The workshop: 225, was 150.",
+          "A bigger flywheel: 300, was 200.",
+          "Second-tier machines: 600, was 400.",
+          "The sorter: 450, was 300.",
+          "A plan chest: 450, was 300.",
+          "The cart track: 600, was 400.",
+          "A night shift: 600, was 400.",
+          "Upgrading an area: 375, was 250.",
+          "The Brass folio: 1,350, was 900."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "works-gate",
+    "at": "2026-11-23T17:52Z",
+    "title": "The Works: tier 4",
+    "lines": [
+      "After the lanterns comes tier 4, The gate, and Windfall Hollow, the Far Seam and the Millpond go up for sale.",
+      "Its flags let a splitter put one way first, and up to 3 projects can wait in line after the one in hand."
+    ],
+    "more": [
+      {
+        "head": "Tier 4 projects, in any order",
+        "points": [
+          "Flags for the splitters: 200 tools and 200 frames. A splitter can put one of its ways first.",
+          "A longer culvert: 300 bricks and 200 gears. A tunnel runs under up to 5 tiles.",
+          "A second cart: 120 engines and 200 frames, after the cart track. 2 cart stops.",
+          "Brass fittings for the belts: 150 lanterns and 300 gears. Grade III belts, tunnels and gatherers.",
+          "Shelves for the plan chest: 300 frames and 200 glass, after the plan chest. 4 blueprints of up to 1,000 pieces."
+        ]
+      },
+      {
+        "head": "The commission",
+        "points": [
+          "Raid kits for the gate: 300 raid kits and 150 engines. It pays 8,000 Coins, stacks raid kits by the town's gate and opens tier 5, where more is being built."
+        ]
+      },
+      {
+        "head": "Tier 4 research, in Brass folios",
+        "points": [
+          "Third-tier machines: 300. Grade III mills, benches and workshops.",
+          "A heavier flywheel: 200. The depot makes 60 power, up from 40.",
+          "A second night shift: 250. Your yard runs for 16 hours after you leave, up from 12.",
+          "A second desk: 200. Grade II Studies."
+        ]
+      },
+      {
+        "head": "A way put first",
+        "points": [
+          "With the flags, pressing a way on a splitter's card goes Open, First, Shut. Only one way is first.",
+          "Things go the first way while it can take them. Only what it cannot take is shared among the other open ways.",
+          "In the yard, a small flag marks the way that is first."
+        ]
+      },
+      {
+        "head": "Projects in a line",
+        "points": [
+          "On the tier's screen, Next puts a project in the line, up to 3, and Take out takes it out again.",
+          "When the project in hand is finished, the first in the line that can be taken goes into hand. Under the project in hand, Then says which comes next."
+        ]
+      },
+      {
+        "head": "Also",
+        "points": [
+          "Back after time away, the letter names the projects, commissions and research finished while you were gone."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "works-tiers",
+    "at": "2026-11-23T16:05Z",
+    "title": "The Works, in tiers",
+    "lines": [
+      "The Works is played in tiers now. Each has projects, done in any order, and a commission that opens the next; from tier 3, a Study turns folios into research.",
+      "Your yard from before is at tier 0, 1 or 2, with its pieces where they stood. What its tier cannot have yet was paid back in Coins."
+    ],
+    "more": [
+      {
+        "head": "Tiers",
+        "points": [
+          "Tier 0, The lesson, is 4 short goals. Then come The home yard, The stream and The Study.",
+          "A project or a commission is paid in goods from the depot. Each unlocks something, and its card says what.",
+          "A commission opens the next tier and leaves something in town."
+        ]
+      },
+      {
+        "head": "Grades",
+        "points": [
+          "Belts, tunnels, gatherers and machines can be built at grade II and III, which work faster. A piece is upgraded where it stands."
+        ]
+      },
+      {
+        "head": "Research",
+        "points": [
+          "Tier 2's commission builds the scholars' hall. After it, your yard can make Timber folios and build Studies.",
+          "A Study takes in folios and studies one piece of research at a time. Up to 3 more wait in line.",
+          "Studies keep studying while you are away, as long as your yard runs."
+        ]
+      },
+      {
+        "head": "Your yard from before",
+        "points": [
+          "It is at tier 2 if it had filled 10 or more of the 20 story orders, tier 1 from 4, and tier 0 below that.",
+          "Pieces stand where they stood if your tier has them. A project of your tier is done if it unlocks a piece you already had.",
+          "Pieces your tier does not have yet, and land it does not sell yet, were paid back in Coins. Your Coins and your place on Top yards are kept.",
+          "Windfall Hollow, the Far Seam and the Millpond are sold again from tier 4."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "grove-quiet",
+    "at": "2026-11-23T11:26Z",
+    "title": "A quieter reveal",
+    "lines": [
+      "A prize revealed at the Grove shows its name, its rank and whether it is new. It no longer says how a 50/50 fell."
+    ]
+  },
+  {
+    "id": "figures-town-look",
+    "at": "2026-11-23T10:38Z",
+    "title": "The raid's characters, redrawn",
+    "lines": [
+      "The Little Raid's characters are drawn in the town's colours now. Its gnomes, crabs, cat, fox and Glorp are the town's own, only bigger."
+    ]
+  },
+  {
+    "id": "grove-hold",
+    "at": "2026-11-23T10:29Z",
+    "title": "Rare prizes wait for you",
+    "lines": [
+      "In 10 pulls at the Grove, a Dryad or better stays on screen until you press Next, tap the picture or press a key. Skip still goes past it.",
+      "The Prizes list opens on the prizes. The rules are behind the ? there."
+    ]
+  },
+  {
+    "id": "pull-characters",
+    "at": "2026-11-23T09:40Z",
+    "title": "Pulls give characters",
+    "lines": [
+      "A pull at the Grove now gives a character from The Little Raid for your camp. It goes into Storage; set it out and touch it.",
+      "Everything you won from earlier pulls is still yours."
+    ]
+  },
+  {
+    "id": "storage",
+    "at": "2026-11-23T08:50Z",
+    "title": "Storage",
+    "lines": [
+      "Everything you buy, win or take out of a letter goes into Storage. Nothing is placed in your camp for you.",
+      "At your camp, the hammer opens Storage. The number on it is how many new things are inside. Parcels that were waiting by your trail are there too."
+    ]
+  },
+  {
+    "id": "grove-full-screen",
+    "at": "2026-11-23T08:10Z",
+    "title": "The Grove fills the screen",
+    "lines": [
+      "The Grove's picture covers the whole window on every phone and screen. It was a small picture in the middle."
+    ]
+  },
+  {
+    "id": "banner-1-open",
+    "at": "2026-11-23T08:05Z",
+    "title": "The first banner is open",
+    "lines": ["It is at the Grove until 8 December (UTC). Its top prize is a member of the guild."]
+  },
+  {
+    "id": "one-town-2",
+    "at": "2026-11-23T02:12Z",
+    "title": "The same members, the same moments",
+    "lines": [
+      "Members at the Works or the raid table, members dozing, and the pieces on the stump's board are in the same place for everyone in town.",
+      "A raid party walks in, its lantern goes up and the town cheers at the same second for everyone. The tree has one lantern for each raid today (UTC), and the banner is the last territory fought at."
+    ]
+  },
+  {
+    "id": "works-away",
+    "at": "2026-11-23T01:16Z",
+    "title": "The Works keeps working while you are away",
+    "lines": [
+      "Your yard now really runs for up to 8 hours after you leave, and Top yards keeps up while you sleep.",
+      "Back after 5 minutes or more, the letter says exactly what it made: the Coins, what the depot took in, and the orders waiting."
+    ]
+  },
+  {
+    "id": "one-town",
+    "at": "2026-11-22T23:55Z",
+    "title": "Everyone sees the same town",
+    "lines": [
+      "Pipwick, Fika, Sootpaw and the crabs are in the same place doing the same thing for everyone in town.",
+      "Crab No. 7 hides in one place for 60 seconds, then in another. Everyone in town can find it there, once each: it runs off from whoever taps it."
+    ]
+  },
+  {
+    "id": "works-smoother",
+    "at": "2026-11-22T23:44Z",
+    "title": "The Works: zoom out further",
+    "lines": [
+      "The Works zooms out until the whole yard is on screen.",
+      "Large yards run smoother, most of all in Firefox."
+    ]
+  },
+  {
+    "id": "touches-seen",
+    "at": "2026-11-22T23:15Z",
+    "title": "Everyone sees what you tap",
+    "lines": [
+      "Tap a lamp post, a sign, a trunk, a mushroom, the water, a crab, the lights or the fire, and everyone in town sees it. They hear it too if it is on their screen.",
+      "Lamps, flowers and crabs stir when other players walk past them, not only you."
+    ]
+  },
+  {
+    "id": "the-grove",
+    "at": "2026-11-22T23:07Z",
+    "title": "The Grove: pulls",
+    "lines": [
+      "The Grove stands on the lawn between the Treasury and the market. A pull costs 1,000 Leaf and draws a prize: a thing for your camp or a look for the raid's table.",
+      "A free pull arrives every 24 hours. Prizes lists every prize and its chance, and the Seeds each pull gives buy a prize you choose."
+    ]
+  },
+  {
+    "id": "board-rerolls",
+    "at": "2026-11-22T22:52Z",
+    "title": "Quest board: kinds and rerolls",
+    "lines": [
+      "Each quest on the board says whether it is daily, weekly or timed and when it ends, and one you can finish with raids or wars shows both counts.",
+      "You can reroll a daily or weekly on the board too, as in the mod. One reroll of each per UTC day is free, then each costs 100 Leaf."
+    ]
+  },
+  {
+    "id": "time-played",
+    "at": "2026-11-22T22:41Z",
+    "title": "Time played",
+    "lines": [
+      "A person's card shows how long they have played each game, and all games together.",
+      "It counts from this update on. Play before it is not counted."
+    ]
+  },
+  {
+    "id": "nobody-inside",
+    "at": "2026-11-22T22:36Z",
+    "title": "Nobody inside anybody",
+    "lines": [
+      "After a reload, members at the Works or the raid table are already standing there. They no longer all walk in through the gate on top of each other.",
+      "Members walking the same way walk side by side, and whoever walks goes round whoever is standing. Tap a spot where someone stands or sits and you stop beside them."
+    ]
+  },
+  {
+    "id": "timber-and-shingle",
+    "at": "2026-11-22T22:20Z",
+    "title": "Timber and shingle",
+    "lines": [
+      "Panels have a timber frame with brass corners, tabs are wooden, notes hang on a nail and the signs along the top hang on ropes."
+    ]
+  },
+  {
+    "id": "gate-card",
+    "at": "2026-11-22T21:52Z",
+    "title": "The signpost to your camp",
+    "lines": [
+      "In town, the signpost and the gate now open your camp's card, with Go home on it. Walking on through the gate still goes straight there.",
+      "The Works' cat is called Fika."
+    ]
+  },
+  {
+    "id": "splitter-ways",
+    "at": "2026-11-22T21:45Z",
+    "title": "The Works: shut a splitter's way",
+    "lines": [
+      "A splitter's card shows its 3 ways out. Click or tap one to shut it or open it. A splitter sends no items to a shut way.",
+      "A splitter with 2 ways out now sends 1 item to each in turn. Before, one way got 2 of every 3."
+    ]
+  },
+  {
+    "id": "works-area",
+    "at": "2026-11-22T21:06Z",
+    "title": "The Works: Select and blueprints",
+    "lines": [
+      "The Works has a Select tool: mark out an area, then move, copy or remove every piece in it at once.",
+      "A yard keeps 3 blueprints. Save a marked area as one, and build it again anywhere for the price of its pieces."
+    ]
+  },
+  {
+    "id": "works-orders-list",
+    "at": "2026-11-22T21:00Z",
+    "title": "The Works: orders hold still",
+    "lines": [
+      "Filled side orders are listed first, with Hand over at the top of each. After you hand one over, the next filled order's button is in the same spot.",
+      "The list no longer jumps: a new order takes the last place. Swap asks you to press again if items were already delivered to the order."
+    ]
+  },
+  {
+    "id": "seen-in-town",
+    "at": "2026-11-22T20:25Z",
+    "title": "Easier to find people in town",
+    "lines": [
+      "Nobody waits behind the tree by the Works any more.",
+      "A tap finds someone walking more easily. Who is about keeps its order while it is open: new people go to the end, and people who left stay listed, dimmed."
+    ]
+  },
+  {
+    "id": "nothing-stuck",
+    "at": "2026-11-22T20:12Z",
+    "title": "Nothing stuck on the screen",
+    "lines": [
+      "A tip or card no longer stays on the screen when the panel under it changes.",
+      "The price signs in the Works stand clear of the fences, so no post goes through them."
+    ]
+  },
+  {
+    "id": "belt-colours",
+    "at": "2026-11-22T20:11Z",
+    "title": "The Works: belt colours",
+    "lines": [
+      "The Works has a Paint tool. Click a belt to colour its whole line, in one of six colours.",
+      "A belt laid from a coloured line takes its colour."
+    ]
+  },
+  {
+    "id": "treasury-requests",
+    "at": "2026-11-22T20:03Z",
+    "title": "Requests at the Treasury",
+    "lines": [
+      "The Treasury now sells a paid aspect request and a paid tome request, 3,000 Leaf each, for members with 7 days in the guild.",
+      "A paid request is served before the free ones. The free requests in Discord are as before."
+    ]
+  },
+  {
+    "id": "taps-land",
+    "at": "2026-11-22T19:55Z",
+    "title": "Taps that count",
+    "lines": [
+      "In The Little Raid, buying and levelling up happen as you tap, so you can place a figure straight after buying it. While a reroll, a pick or setting out waits on the guild's server, the stall dims and taps on it do nothing.",
+      "Every open card has a close button, and picking up a figure no longer opens its card over the board."
+    ]
+  },
+  {
+    "id": "fire-seen",
+    "at": "2026-11-22T19:54Z",
+    "title": "The campfire is shared",
+    "lines": [
+      "At the campfire, Add a log and the emotes are now seen by everyone in town, not only on your own screen.",
+      "Holding Space no longer saves up hops: a key held down is one press."
+    ]
+  },
+  {
+    "id": "one-face",
+    "at": "2026-11-22T19:47Z",
+    "title": "One font for the game",
+    "lines": [
+      "Names, numbers, labels and lists are now in the Minecraft font everywhere. Only sentences keep the plain font.",
+      "A person's card lists their numbers game by game, and no longer flickers when you first point at someone."
+    ]
+  },
+  {
+    "id": "visit-camps",
+    "at": "2026-11-22T19:35Z",
+    "title": "Visit other camps",
+    "lines": [
+      "Choose someone in Who is about and choose Visit camp, or pick a camp at your own camp's signpost.",
+      "You can walk around their camp. You cannot change anything."
+    ]
+  },
+  {
+    "id": "stand-apart",
+    "at": "2026-11-22T19:09Z",
+    "title": "Room to stand",
+    "lines": [
+      "If the page reloads within 10 minutes, you start where you stood, not at the gate.",
+      "Players standing on the same spot are drawn a step apart, so you can see and tap each one."
+    ]
+  },
+  {
+    "id": "works-splitters",
+    "at": "2026-11-22T19:02Z",
+    "title": "The Works: Splitters and buying",
+    "lines": [
+      "A Splitter or a Joiner can be set straight onto a belt. A Splitter shows an arrow only towards a side that takes items, and never sends an item to a side with no belt.",
+      "Buying a plot or a plan asks you to press again. A plot's card opens when you click the plot."
+    ]
+  },
+  {
+    "id": "camp-follows-you",
+    "at": "2026-11-22T18:03Z",
+    "title": "Your camp follows you",
+    "lines": [
+      "Leaf now keeps your camp, your mail and your trophies, so they are the same on every device.",
+      "Callers now come by Leaf's clock, whichever device you are on."
+    ]
+  },
+  {
+    "id": "new-look",
+    "at": "2026-11-22T17:43Z",
+    "title": "A new look",
+    "lines": [
+      "Panels, buttons and cards are redrawn so the thing that matters stands out, with a font that is easier to read."
+    ]
+  },
+  {
+    "id": "visit-yards",
+    "at": "2026-11-22T16:29Z",
+    "title": "Visit other yards",
+    "lines": [
+      "Choose someone in Who is about or in Top yards to see their card: what their yard has earned, and how far they are in The Little Raid.",
+      "Visit yard opens their yard. You can look around. You cannot change anything."
+    ]
+  },
+  {
+    "id": "works-plain-words",
+    "at": "2026-11-22T16:22Z",
+    "title": "Plainer words in the Works",
+    "lines": [
+      "The Works now uses the same plain words everywhere: place, rotate, remove, power made and power used. Standing orders are now called side orders.",
+      "The Splitter and the Joiner look different now. A Splitter shows three arrows out. A Joiner shows three arrows in and one out."
+    ]
+  },
+  {
+    "id": "top-yards",
+    "at": "2026-11-22T15:19Z",
+    "title": "Top yards in the Works",
+    "lines": [
+      "The cup button beside Orders lists the twenty yards that have earned the most Coins, with your own place.",
+      "A yard is listed once it has earned its first Coin on Leaf."
+    ]
+  },
+  {
+    "id": "works-follows-you",
+    "at": "2026-11-22T15:09Z",
+    "title": "The Works follows you",
+    "lines": [
+      "Leaf now keeps your yard, so it is the same on every device and works on while you are away.",
+      "Its Coins reach your purse about once a minute. Setting a clock forward earns nothing."
+    ]
+  },
+  {
+    "id": "seen-lately-everyone",
+    "at": "2026-11-22T15:05Z",
+    "title": "Who is about lists everyone who left",
+    "lines": [
+      "Seen lately now shows everybody who was in the game in the last day, not only those whose character stays in town.",
+      "Somebody who has just walked out shows there at once."
+    ]
+  },
+  {
+    "id": "lit-on-phones",
+    "at": "2026-11-22",
+    "title": "The town stays lit on phones",
+    "lines": ["On some phones the ground and the sky could go dark after switching apps. That is fixed."]
+  },
+  {
+    "id": "works-words",
+    "at": "2026-11-22",
+    "title": "Clearer words in the Works",
+    "lines": [
+      "Each piece now says plainly what it does.",
+      "A Joiner takes from each line in turn. A plain belt takes whichever item arrives first."
+    ]
+  },
+  {
+    "id": "raid-follows-you",
+    "at": "2026-11-22",
+    "title": "The Little Raid follows you",
+    "lines": ["Leaf now keeps your raid and your Coins, so they are the same on every device."]
+  },
+  {
+    "id": "tap-to-leave",
+    "at": "2026-11-22",
+    "title": "Leave your camp with a tap",
+    "lines": ["Tap the Town sign, or the path past the posts."]
+  },
+  {
+    "id": "quick-return",
+    "at": "2026-11-22",
+    "title": "Quicker to come back",
+    "lines": [
+      "After a drop the town is back in about a second.",
+      "The people button shows who is about and who was here lately."
+    ]
+  }
+]
