@@ -1,3 +1,5 @@
+import { PAL } from "@sequoia-leaf/figures/pal.ts";
+import { type BaseLook, drawBase, drawFigure } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The table, painted once for the size of the window and kept: the top of the great stump with its
  * rings, the clearing and the far trunks behind it, the cloth, the bench along its near edge, the
@@ -29,8 +31,6 @@ import {
   SLOPE,
   SLOT_W,
 } from "../geometry.ts";
-import { PAL } from "./pal.ts";
-import { type BaseLook, drawBase, drawFigure } from "./sprites.ts";
 
 const at = (ramp: readonly string[], i: number): string => ramp[clamp(Math.round(i), 0, ramp.length - 1)] ?? "#000000";
 const DEEP = ["#141f1c", "#19291f", "#1e3324"] as const;

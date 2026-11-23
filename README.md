@@ -95,6 +95,7 @@ and lets a game's command take Leaf (see the play service).
 | `apps/works`          | The Works, a game in the town.                                          |
 | `apps/battler`        | The Little Raid, a game in the town.                                    |
 | `packages/kit`        | What the town and its games share: look, sound and plumbing.            |
+| `packages/figures`    | The raid's figures as pictures, for the raid's page and the town's.     |
 | `Dockerfile`          | The production image, with the game's pages built into it.              |
 
 ## How Leaf is earned
