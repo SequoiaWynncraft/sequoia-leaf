@@ -44,25 +44,31 @@ export interface Listed {
   acted?: number | null;
 }
 
-/** Where somebody else is, by the one account of it. */
-export interface Where {
+/** Who somebody else is: their account, name, and rank as the town shows it (`GUEST` for a guest; null when nobody has said). */
+interface Someone {
   id: string;
   name: string;
-  /** Their rank as the town shows it, `GUEST` for a guest, or null when nobody has said. */
   rank: string | null;
-  /** In the game now, where they are; gone from it, where they were last. */
-  at: Place;
-  /** In the game now. */
-  here: boolean;
-  /** In the town's live room with the member: drawn there as they move. */
-  live: boolean;
-  /** Gone: when Leaf last saw them, in milliseconds since 1970; null for just now. Null while here. */
-  seen: number | null;
-  /** Gone: whether their character stays in town, dozing. */
-  stays: boolean;
-  /** Here: when they last did something, as far as anybody knows, in milliseconds since 1970; null for not yet. Null when gone. */
-  acted: number | null;
 }
+
+/**
+ * Where somebody else is, by the one account of it, in one of three states:
+ *
+ * - `live`: in the town's live room with the member, drawn there as they move;
+ * - `listed`: in the game, where Leaf's list says, out of the room;
+ * - `gone`: gone from the game, where they were last.
+ *
+ * In the game (`live` or `listed`), `acted` is when they last did something, as far as anybody
+ * knows, in milliseconds since 1970, or null for not yet. Gone, `seen` is when Leaf last saw them
+ * (null for just now) and `stays` whether their character stays in town, dozing.
+ */
+export type Where =
+  | (Someone & { state: "live"; at: "town"; acted: number | null })
+  | (Someone & { state: "listed"; at: Place; acted: number | null })
+  | (Someone & { state: "gone"; at: Place; seen: number | null; stays: boolean });
+
+/** Whether somebody is in the game now: in the room, or on Leaf's list as here. */
+export const inGame = (w: Where): w is Extract<Where, { state: "live" | "listed" }> => w.state !== "gone";
 
 /**
  * Everybody but the member (`me`), one record each by id, in order: the room's, then Leaf's list of
@@ -94,52 +100,25 @@ export function whereabouts(o: {
   };
   const put = (w: Where): void => {
     if (w.id === o.me || out.has(w.id)) return;
-    out.set(w.id, {
-      ...w,
-      rank: w.rank ?? o.ranks?.get(w.id) ?? null,
-      acted: w.here ? actedOf(w.id) : null,
-    });
+    const rank = w.rank ?? o.ranks?.get(w.id) ?? null;
+    out.set(w.id, w.state === "gone" ? { ...w, rank } : { ...w, rank, acted: actedOf(w.id) });
   };
   const gone = (p: Listed, seen: number | null, stays: boolean): Where => ({
+    state: "gone",
     id: p.id,
     name: p.name,
     rank: p.rank,
     at: p.at,
-    here: false,
-    live: false,
     seen,
     stays,
-    acted: null,
   });
 
-  for (const m of o.room ?? [])
-    put({
-      id: m.id,
-      name: m.name,
-      rank: m.rank,
-      at: "town",
-      here: true,
-      live: true,
-      seen: null,
-      stays: true,
-      acted: null,
-    });
+  for (const m of o.room ?? []) put({ state: "live", id: m.id, name: m.name, rank: m.rank, at: "town", acted: null });
   const leftJustNow: Listed[] = [];
   for (const p of o.present) {
     if (p.seen !== null && silentSince(p.seen, o.now, rules)) leftJustNow.push(p);
     else if (o.room !== null && p.at === "town") leftJustNow.push({ ...p, seen: null });
-    else
-      put({
-        id: p.id,
-        name: p.name,
-        rank: p.rank,
-        at: p.at,
-        here: true,
-        live: false,
-        seen: null,
-        stays: true,
-        acted: null,
-      });
+    else put({ state: "listed", id: p.id, name: p.name, rank: p.rank, at: p.at, acted: null });
   }
   // Gone, newest first, those who have only just left first of all; what Leaf says next of staying is
   // believed, until then they stay, as Leaf has anybody who never said.
@@ -160,12 +139,16 @@ export function whereabouts(o: {
 /** Whether a place is one of the games with a place in town to stand at: the Works, the stump, the Grove. */
 export const isStand = (at: Place): at is Stand => at === "works" || at === "table" || at === "grove";
 
-/** Those in one of the games, standing at it in town: here, not live, at most `most`, in the record's order. */
-export const standing = (all: ReadonlyMap<string, Where>, most: number): (Where & { at: Stand })[] =>
+/** Those in one of the games, standing at it in town: listed, at most `most`, in the record's order. */
+export const standing = (
+  all: ReadonlyMap<string, Where>,
+  most: number,
+): (Extract<Where, { state: "listed" }> & { at: Stand })[] =>
   [...all.values()]
     .flatMap((w) => {
+      if (w.state !== "listed") return [];
       const { at } = w;
-      return w.here && !w.live && isStand(at) ? [{ ...w, at }] : [];
+      return isStand(at) ? [{ ...w, at }] : [];
     })
     .slice(0, most);
 
@@ -176,10 +159,11 @@ export const standing = (all: ReadonlyMap<string, Where>, most: number): (Where 
 export const resters = (
   all: ReadonlyMap<string, Where>,
   most: number,
-): (Where & { at: "town" | Stand; seen: number })[] =>
+): (Extract<Where, { state: "gone" }> & { at: "town" | Stand; seen: number })[] =>
   [...all.values()]
     .flatMap((w) => {
+      if (w.state !== "gone") return [];
       const { at, seen } = w;
-      return !w.here && seen !== null && (at === "town" || isStand(at)) ? [{ ...w, at, seen }] : [];
+      return seen !== null && (at === "town" || isStand(at)) ? [{ ...w, at, seen }] : [];
     })
     .slice(0, most);

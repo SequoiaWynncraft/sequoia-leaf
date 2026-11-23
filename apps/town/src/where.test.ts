@@ -24,7 +24,7 @@ const all = (o: Partial<Parameters<typeof whereabouts>[0]>): ReadonlyMap<string,
 const said = (m: ReadonlyMap<string, Where>): string[] =>
   [...m.values()].map(
     (w) =>
-      `${w.id}: ${w.at}${w.live ? " live" : ""}${w.here ? "" : ` gone ${w.seen === null ? "just now" : `${(NOW - w.seen) / MIN} min`}${w.stays ? "" : " not staying"}`}`,
+      `${w.id}: ${w.at}${w.state === "live" ? " live" : ""}${w.state !== "gone" ? "" : ` gone ${w.seen === null ? "just now" : `${(NOW - w.seen) / MIN} min`}${w.stays ? "" : " not staying"}`}`,
   );
 
 describe("where everybody is", () => {

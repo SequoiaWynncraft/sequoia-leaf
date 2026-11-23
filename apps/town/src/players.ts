@@ -268,7 +268,7 @@ export function stepPlayers(dt: number): void {
     // Hops and words; a figure drawn from the room walks nowhere of its own accord.
     stepActor(a, dt);
     const w = all.get(f.who.player);
-    dress(f, w !== undefined && w.live && away(w.acted, now));
+    dress(f, w?.state === "live" && away(w.acted, now));
     if (a.moving) footfall(a, walked.get(f) ?? a.walked);
   }
   for (const f of came) f.own.a.named = G.t + NAMED_FOR;

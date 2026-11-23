@@ -20,7 +20,7 @@ import { away } from "@sequoia-leaf/core";
 import type { Place } from "@sequoia-leaf/kit/presence.ts";
 
 import { span } from "./letter.ts";
-import type { InRoom, Where } from "./where.ts";
+import { inGame, type InRoom, type Where } from "./where.ts";
 
 export type PartName = "In town" | "Elsewhere" | "Seen lately";
 
@@ -83,7 +83,7 @@ export const awayWords = (acted: number | null, now: number): string =>
  * somebody just about the town, or gone.
  */
 export function doingWords(w: Where, now: number): string[] {
-  if (!w.here) return [];
+  if (w.state === "gone") return [];
   return [...(w.at === "town" ? [] : [WHERE[w.at]]), ...(away(w.acted, now) ? [awayWords(w.acted, now)] : [])];
 }
 
@@ -116,13 +116,12 @@ export function whoIsAbout(o: { me: InRoom; all: ReadonlyMap<string, Where>; now
   const all = [...o.all.values()];
 
   put("In town", o.me, line(o.me.rank), true);
-  for (const w of all.filter((x) => x.here && x.at === "town").toSorted(byName))
-    put("In town", w, line(w.rank, ...doingWords(w, o.now)));
-  for (const w of all.filter((x) => x.here && x.at !== "town").toSorted(byName))
-    put("Elsewhere", w, line(w.rank, ...doingWords(w, o.now)));
+  const here = all.filter(inGame).toSorted(byName);
+  for (const w of here.filter((x) => x.at === "town")) put("In town", w, line(w.rank, ...doingWords(w, o.now)));
+  for (const w of here.filter((x) => x.at !== "town")) put("Elsewhere", w, line(w.rank, ...doingWords(w, o.now)));
   // In the order the record has them: whoever has only just left first, then newest first.
-  for (const w of all.filter((x) => !x.here))
-    put("Seen lately", w, line(w.rank, w.seen === null ? JUST_NOW : agoLine(w.seen, o.now)));
+  for (const w of all)
+    if (w.state === "gone") put("Seen lately", w, line(w.rank, w.seen === null ? JUST_NOW : agoLine(w.seen, o.now)));
 
   const count = [...rows.values()].filter((r) => r.part !== "Seen lately").length;
   return { rows, count, alone: count === 1 && rows.size === 1 };
