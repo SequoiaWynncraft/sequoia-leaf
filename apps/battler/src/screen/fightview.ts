@@ -1,4 +1,4 @@
-import { drawBase, drawFigure, drawStars, framesOf } from "@sequoia-leaf/figures/sprites.ts";
+import { beatAt, drawBase, drawFigure, drawStars, framesOf, hoverAt } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The fight, played on the table from the rules' own steps. The rules decide everything; this
  * turns each thing that happened into something seen on the board: figures walk, turn, lunge,
@@ -904,8 +904,8 @@ export function drawFight(g: Ctx, list: Standing[]): void {
     const shine = shineOf(u.kind, a.x, V.t);
     const x = Math.round(V.bx + a.x + dx);
     const y = Math.round(V.by + a.y + dy - back - lift - shine.hop);
-    const hover = frames.flies && fallen < 0 ? 2 + Math.round(Math.sin(V.t * 4 + a.phase * 6)) : 0;
-    const beat: 0 | 1 = Math.floor(V.t * 1.7 + a.phase * 2) % 2 === 0 ? 0 : 1;
+    const hover = fallen < 0 ? hoverAt(u.kind, V.t, a.phase) : 0;
+    const beat = beatAt(V.t, a.phase);
     list.push({
       x: a.x,
       y: a.y - back + (fallen >= 0 ? -6 : 0),

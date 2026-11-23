@@ -1,4 +1,4 @@
-import { drawBase, drawFigure, drawStars, framesOf } from "@sequoia-leaf/figures/sprites.ts";
+import { beatAt, drawBase, drawFigure, drawStars, framesOf, hoverAt } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The table's moving parts, drawn over the painted table every frame: the two halves of the board,
  * the hexes lit for a figure in the hand, whoever is across the table and whoever is watching, the
@@ -136,10 +136,6 @@ export function stepScene(dt: number): void {
 
 // ---------- drawing ----------
 
-function beatOf(phase: number): 0 | 1 {
-  return Math.floor(V.t * 1.7 + phase * 2) % 2 === 0 ? 0 : 1;
-}
-
 /** One of the party's own figures, where it stands or hops. */
 function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
   const f = framesOf(p.kind);
@@ -154,7 +150,7 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
   const sway = V.t < p.wiggleUntil ? Math.round(Math.sin(V.t * 24) * 1.5) : 0;
   const x = ox + p.x + sway;
   const y = oy + p.y - lift;
-  const hover = f.flies ? 2 + Math.round(Math.sin(V.t * 4 + p.phase * 6)) : 0;
+  const hover = hoverAt(p.kind, V.t, p.phase);
   return {
     x: p.x,
     y: p.y,
@@ -167,7 +163,7 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
       if (alpha < 1) g.globalAlpha = alpha;
       drawBase(g, p.kind, x, y, S.looks.bases);
       drawFigure(g, p.kind, x, y - 2 - hover, {
-        beat: beatOf(p.phase),
+        beat: beatAt(V.t, p.phase),
         left: p.facing,
         flash: pop >= 0 && pop < 0.09,
         lit: shine.lit,
@@ -210,14 +206,14 @@ function foeStanding(
   const x = V.bx + at.x;
   const y = V.by + at.y + FOOT - come.away - come.lift - shine.hop;
   const phase = (seat * 0.23) % 1;
-  const hover = f.flies ? 2 + Math.round(Math.sin(V.t * 4 + phase * 6)) : 0;
+  const hover = hoverAt(kind, V.t, phase);
   return {
     x: at.x,
     y: at.y + FOOT - come.away,
     draw: () => {
       if (shine.dim) g.globalAlpha = DIM;
       drawBase(g, kind, x, y);
-      drawFigure(g, kind, x, y - 2 - hover, { beat: beatOf(phase), left: true, lit: shine.lit });
+      drawFigure(g, kind, x, y - 2 - hover, { beat: beatAt(V.t, phase), left: true, lit: shine.lit });
       drawHeld(g, heldRow(items, at.x, heldTop(at.y + FOOT - come.away - come.lift - shine.hop, false)), V.bx, V.by);
       g.globalAlpha = 1;
     },

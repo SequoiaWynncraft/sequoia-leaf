@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "pull-characters",
+    at: "2026-11-23T09:40Z",
+    title: "Pulls give characters",
+    lines: [
+      "A pull at the Grove now gives a character from The Little Raid for your camp. It goes into Storage; set it out and touch it.",
+      "Everything you won from earlier pulls is still yours.",
+    ],
+  },
+  {
     id: "storage",
     at: "2026-11-23T08:50Z",
     title: "Storage",

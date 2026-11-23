@@ -269,6 +269,31 @@ describe("things won", () => {
     });
   });
 
+  test("a figure won in a pull goes into the tray once, however many copies are pulled, and is set out and rotated", () => {
+    const awards = ["pull:figure:greg", "pull:figure:nobody"];
+    const won = TOWN.advance(fresh(), ctx(T0, awards));
+    expect([won.camp.tray, won.camp.fresh, won.camp.earned]).toEqual([
+      { "figure-greg": 1 },
+      ["figure-greg"],
+      ["figure-greg"],
+    ]);
+    expect(won.camp.placed).toEqual(fresh().camp.placed);
+    // A second copy is the same award: looked at, set out or put away, it brings no second figure.
+    expect(TOWN.advance(won, ctx(T0, awards))).toBe(won);
+    const set = did(won, { do: "setOut", thing: "figure-greg", x: 30, y: 20, t: 0 }).state;
+    expect(TOWN.advance(set, ctx(T0, awards))).toBe(set);
+    const n = nOf(set, "figure-greg");
+    const turned = did(set, { do: "move", n, x: 30, y: 20, t: 1 }).state;
+    expect(turned.camp.placed.find((p) => p.n === n)).toMatchObject({ id: "figure-greg", t: 1 });
+    expect(refused(turned, { do: "toggle", n })).toBe("nothing_to_toggle");
+    const away = did(turned, { do: "putAway", n }).state;
+    expect(away.camp.tray).toEqual({ "figure-greg": 1 });
+    expect(TOWN.advance(away, ctx(T0, awards))).toBe(away);
+    // A visitor is shown it where it stands.
+    expect(TOWN.visit?.(turned, ctx()).camp.placed.find((p) => p.n === n)).toMatchObject({ id: "figure-greg", t: 1 });
+    expect(decodeTown(encodeTown(turned))).toEqual(turned);
+  });
+
   test("one more of a thing the member has 999 of is won, and not kept", () => {
     const s = fresh();
     s.camp.tray = { "model-crab": MOST_OWNED };
