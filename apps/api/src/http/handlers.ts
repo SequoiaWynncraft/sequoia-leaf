@@ -671,13 +671,14 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
           Effect.gen(function* () {
             const identity = yield* CurrentIdentity;
             if (isGuest(identity)) {
-              // A guest has no Leaf, XP or news of the guild's, and nothing is read for them: a
-              // former member's ledger is theirs again only when they are a member again.
+              // A guest has their Leaf, to spend on what is for everyone: what they earned as a
+              // member, or the staff gave them. They have no XP or news of the guild's.
+              const { balance } = yield* ledger.account(identity.playerId);
               return HttpServerResponse.jsonUnsafe({
                 player: { id: identity.playerId, username: identity.username },
                 rank: null,
                 guest: true,
-                leaf: 0,
+                leaf: balance,
                 xp: 0,
                 level: levelJson(0),
                 event_cursor: 0,

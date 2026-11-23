@@ -1322,7 +1322,7 @@
       }
     }
   },
-  "POST /v1/game/play/{game}, Leaf a guest cannot spend": {
+  "POST /v1/game/play/{game}, a guest with too little Leaf": {
     "request": {
       "method": "POST",
       "path": "/v1/game/play/raid",
@@ -1345,7 +1345,7 @@
       "results": [
         {
           "id": "v-1",
-          "refused": "leaf_closed"
+          "refused": "not_enough_leaf"
         }
       ],
       "state": {

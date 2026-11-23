@@ -432,10 +432,7 @@ describe("GET /v1/game/me", () => {
     });
   });
 
-  it("answers a guest with no Leaf, XP or cursor and a new member's level, reading nothing of the ledger, and their Coins", async () => {
-    // Carol was a member once: the ledger still holds her Leaf, and her news.
-    await paid(carol);
-    await raided(carol, 110);
+  it("answers a guest with their Leaf and Coins, but no XP or cursor and a new member's level, reading none of their news", async () => {
     const asked: string[] = [];
     const watched = testLeaf(
       clock,
@@ -454,6 +451,11 @@ describe("GET /v1/game/me", () => {
       },
     );
     const watchedApp = watched.app();
+    // Carol was a member once: the ledger still holds the Leaf and XP she earned then.
+    await watched.post(
+      { kind: "earn", playerId: carol, amount: leaf(110), source: "raid", idempotencyKey: `raid:0:${carol}` },
+      clock.now,
+    );
 
     const guest = await watchedApp.request("/v1/game/me", { headers: { Cookie: "seq_session=carol-token" } });
     const member = await watchedApp.request("/v1/game/me", { headers: { Cookie: "seq_session=alice-token" } });
@@ -465,15 +467,15 @@ describe("GET /v1/game/me", () => {
       player: { id: carol, username: "Carol" },
       rank: null,
       guest: true,
-      leaf: 0,
+      leaf: 110,
       xp: 0,
       level: { number: 1, xp_into_level: 0, xp_for_next_level: 1000 },
       event_cursor: 0,
       coins: 300,
     });
     expect(await member.json()).toMatchObject({ guest: false });
-    // Only the member's answer read the ledger and the news; and only the member's name is kept for the guild's news.
-    expect(asked).toEqual([`events ${alice}`, `ledger ${alice}`]);
+    // Only the member's answer read the news; and only the member's name is kept for the guild's news.
+    expect(asked).toEqual([`ledger ${carol}`, `events ${alice}`, `ledger ${alice}`]);
     expect(names).toEqual([{ username: "Alice" }]);
   });
 

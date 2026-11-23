@@ -7,7 +7,7 @@ import { portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { add, amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 import { refreshLeaf } from "@sequoia-leaf/kit/live.ts";
-import { balance, leafOpen, leafShown } from "@sequoia-leaf/kit/purse.ts";
+import { balance, LEAF_MEMBERS, leafFor, leafOpen } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { tipAt } from "@sequoia-leaf/kit/tip.ts";
 import {
@@ -507,8 +507,7 @@ function looks(): HTMLElement {
     bases: (tried.kind === "bases" ? baseOf(tried.id) : null) ?? S.looks.bases,
   };
   const body = el("div", "k-body k-scroll", {});
-  // A guest has no Leaf to show.
-  if (leafShown()) add(body, el("div", "k-row", {}, el("span", "k-grow"), amount("leaf", balance().leaf)));
+  add(body, el("div", "k-row", {}, el("span", "k-grow"), amount("leaf", balance().leaf)));
   add(body, el("div", "swatch", {}, figPic(paintSwatch(dressed.cloth, dressed.lantern, dressed.bases))));
   if (spec) {
     const mine = owns(S.looks, tried.kind, tried.id);
@@ -538,8 +537,9 @@ function looks(): HTMLElement {
             "Buy",
             amount("leaf", spec.leaf),
           );
-    // Where Leaf may not be spent (spending off, or a guest), the look is shown and its Buy button closed.
+    // With spending off, or for a guest a look for members, the look is shown and its Buy button closed.
     if (!on && !mine && !leafOpen()) closeLeaf(act, `${spec.leaf} Leaf`);
+    else if (!on && !mine && !leafFor(spec.for)) closeLeaf(act, `${spec.leaf} Leaf`, LEAF_MEMBERS);
     add(
       body,
       el(

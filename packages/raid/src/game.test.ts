@@ -301,7 +301,9 @@ describe("every command a player has", () => {
     const bought = must(state, { do: "buyLook", kind: "lantern", look: "jar" }, ctx(1));
     expect(bought.state.looks).toEqual({ cloth: "bare", lantern: "jar", bases: "plain", owned: ["jar"] });
     expect(bought.notes).toEqual([{ t: "look", kind: "lantern", id: "jar" }]);
-    expect(bought.leaf).toEqual([{ amount: 28_000, reason: "Raid table look: Jar of fireflies", key: "look:jar" }]);
+    expect(bought.leaf).toEqual([
+      { amount: 28_000, reason: "Raid table look: Jar of fireflies", key: "look:jar", for: "everyone" },
+    ]);
     expect(state.looks.owned).toEqual([]);
     expect(RAID.apply(bought.state, { do: "buyLook", kind: "lantern", look: "jar" }, ctx(1))).toEqual({
       refused: "owned",

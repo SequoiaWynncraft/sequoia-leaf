@@ -7,7 +7,7 @@
 
 import { add, el, icon as glyph, type IconName, replay, shown, when } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
-import { balance, type Currency, leafShown } from "@sequoia-leaf/kit/purse.ts";
+import { balance, type Currency } from "@sequoia-leaf/kit/purse.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
@@ -496,9 +496,7 @@ export function setStrip(host: { readonly id: string; readonly name: string } | 
 }
 
 export function initHud(): void {
-  // A guest has no Leaf, and the purse shows only their Coins.
-  if (leafShown())
-    counters.leaf = counter("leaf", "Leaf", "Earned with the guild in Wynncraft: raids, wars, quests and milestones.");
+  counters.leaf = counter("leaf", "Leaf", "Earned with the guild in Wynncraft: raids, wars, quests and milestones.");
   counters.coins = counter("coins", "Coins", "Earned in town: the Works, The Little Raid and Cinfy's chest.");
 
   const corner = $("corner");
