@@ -287,14 +287,19 @@ export function haste(f: Fight, target: Unit, percent: number, seconds: number, 
   target.hasteUntil = Math.max(target.hasteUntil, f.tick + ticks);
   emit(f, { t: "status", id: target.id, status: "haste", on: true, ticks, amount: target.hasteBy, by: by?.id ?? -1 });
 }
-/** Braces: takes a share less from every attack and ability for a while, and whoever attacks it up close is hurt. */
+/**
+ * Braces: takes a share less from every attack and ability for a while, and whoever attacks it up
+ * close is hurt. Braced again while it lasts (a Rock digging in during It Is A Rock), it keeps the
+ * stronger share and sting, until the later end.
+ */
 export function brace(f: Fight, target: Unit, percent: number, stub: number, seconds: number): void {
   if (!target.alive) return;
   const ticks = secs(seconds);
-  target.bracedBy = percent;
-  target.stub = stub;
-  target.bracedUntil = f.tick + ticks;
-  emit(f, { t: "status", id: target.id, status: "braced", on: true, ticks, amount: percent, by: target.id });
+  const running = target.bracedUntil > f.tick;
+  target.bracedBy = running ? Math.max(target.bracedBy, percent) : percent;
+  target.stub = running ? Math.max(target.stub, stub) : stub;
+  target.bracedUntil = Math.max(target.bracedUntil, f.tick + ticks);
+  emit(f, { t: "status", id: target.id, status: "braced", on: true, ticks, amount: target.bracedBy, by: target.id });
 }
 /** Goes where nothing can reach it for a while. */
 export function hide(f: Fight, u: Unit, ticks: number): void {
