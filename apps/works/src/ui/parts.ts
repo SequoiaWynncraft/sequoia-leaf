@@ -10,7 +10,7 @@ import {
   RECIPE,
   type Unlocks,
 } from "@sequoia-leaf/factory";
-import { add, el, shown } from "@sequoia-leaf/kit/dom.ts";
+import { add, el, shown, when } from "@sequoia-leaf/kit/dom.ts";
 import { INK } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
@@ -19,6 +19,21 @@ import type { Art } from "../art/index.ts";
 import { PAL } from "../art/pal.ts";
 
 export { when } from "@sequoia-leaf/kit/dom.ts";
+
+/**
+ * A part of the interface kept by what it prints: `print` works out every value it shows of the
+ * yard and the purse, as plain data, and `draw` draws it from that alone. It is drawn again exactly
+ * when the print differs, so no value it shows can be missing from what it is kept by.
+ */
+export function shows<P>(print: () => P, draw: (p: P) => void): () => void {
+  let p = print();
+  return when(
+    () => JSON.stringify((p = print())),
+    () => {
+      draw(p);
+    },
+  );
+}
 
 export type Kid = Node | string | null;
 
@@ -208,10 +223,8 @@ export function yardIcon(name: YardIcon, scale = 1): HTMLCanvasElement {
 }
 
 /** A thing's picture and how many, as one row of an order: "[plank] 8 / 12" with a bar between. */
-export function wantRows(art: Art, want: Counts, filled: Counts | null, leaf = false): HTMLElement[] {
-  return ALL_ITEMS.filter((k) => (want[k] ?? 0) > 0).map((k) => {
-    const have = Math.min(filled?.[k] ?? 0, want[k] ?? 0);
-    const n = want[k] ?? 1;
+export function wantRows(art: Art, wants: readonly (readonly [Item, number, number])[], leaf = false): HTMLElement[] {
+  return wants.map(([k, have, n]) => {
     const bar = el("i");
     bar.style.setProperty("--v", `${(have / n) * 100}%`);
     const row = el(

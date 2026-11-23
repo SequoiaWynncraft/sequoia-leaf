@@ -10,7 +10,7 @@ import { keptOrder, orderOf } from "./codec.ts";
 import type { Act, Command, Short, View } from "./game.ts";
 import { counting } from "./orders.ts";
 import type { Piece } from "./pieces.ts";
-import { type Leg, legKind } from "./route.ts";
+import { type Leg, legKind, legSpan } from "./route.ts";
 import { type Goal, goalNamed, GOALS, HOOKS_MOST, itemName, kindName, plotName } from "./tables.ts";
 import type { News, Standing, Yard } from "./yard.ts";
 
@@ -26,13 +26,13 @@ const named = (p: Piece): Record<string, unknown> => ({
   ...(p.recipe === undefined ? {} : { recipe: itemName(p.recipe) }),
 });
 
-/** A leg of a run as the wire names it: its kind, and nothing but what a leg holds. */
+/** A leg of a run as the wire names it: its kind, and nothing but what a leg holds; a belt's span, as a piece's, is 0. */
 const legOnWire = (l: Leg): Record<string, unknown> => ({
   kind: kindName(legKind(l)),
   x: l.x,
   y: l.y,
   dir: l.dir,
-  span: l.span,
+  span: legSpan(l),
   ...(l.grade === 1 ? {} : { grade: l.grade }),
 });
 

@@ -274,21 +274,25 @@ function heard({ done, short }: Answered<Sending, News, Heard>): void {
 
 /**
  * Does what the member did to the copy at once, with the shared rules, and sends it to Leaf with
- * the tick the copy stands at; whatever Coins it pays or takes show at once. The rules' refusal is
- * given back, and nothing is sent.
+ * the tick the copy stands at; whatever Coins it pays or takes show at once. The rules are asked
+ * with the purse as it is at this moment, so that whatever costs more Coins than there are is
+ * refused here, with their sentence, however long ago it was aimed: this is the one place a price
+ * is judged before it is sent. The rules' refusal is given back, and nothing is sent. A yard the
+ * page was handed by a review page of its own (`S.alone`) is done to in the same way, and sends nothing.
  */
 export function doNow(act: Act): ReturnType<typeof play> {
   if (S.visiting) return { refused: "visiting", why: "This yard is somebody else's" };
-  if (!leaf) return { refused: "closed", why: "The yard is not open" };
+  if (!leaf && !S.alone) return { refused: "closed", why: "The yard is not open" };
   if (taking !== null) return { refused: "catching_up", why: CATCHING_UP };
   const command: Command = { ...act, tick: S.world.tick };
-  const sending = writeCommand(command);
-  const done = play(S.world, command);
+  const done = play(S.world, command, balance().coins);
   if ("refused" in done) return done;
-  // The yard has changed: what is worked out from it and kept is worked out again.
+  // The yard has changed: what is worked out from it and kept is looked at again.
   S.rev++;
   const change = (done.coins ?? []).reduce((sum, c) => sum + c.amount, 0);
   if (change !== 0) heardCoins(balance().coins + change);
+  if (!leaf) return done;
+  const sending = writeCommand(command);
   if (act.do === "collect") collectedAt = performance.now();
   // A collection may pay what only Leaf knows of (a tab put away earns on Leaf, not on the copy).
   const paid = change !== 0 || act.do === "collect";

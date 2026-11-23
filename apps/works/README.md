@@ -42,7 +42,10 @@ cards, as the battler does. It keeps nothing of the game in the browser; only `w
 (the lessons taken, the zoom) stays.
 
 Everything the member does is done to the copy at once with the shared rules (`yard.ts`, `doNow`)
-and sent with the tick the copy stood at; a command the rules refuse is said so and not sent. With
+and sent with the tick the copy stood at; a command the rules refuse is said so and not sent. The
+rules are asked there with the purse as it is at that moment, so whatever costs more Coins than there
+are (a piece, a run, a copy, a blueprint, a put-back, a plot) is refused with their sentence however
+long ago it was aimed: `doNow` is the one place a price is judged before it is sent. With
 each command sent the page keeps the copy's tick and check just after it. Leaf answers a batch with
 its clock, its yard's tick and check after it, and the orders it hung in the last minute, not the
 yard (the rules' README; each order is passed over if the copy has it already). When Leaf did what the copy did, at the same tick, the checks are
@@ -105,10 +108,13 @@ A frame draws the floor, then the belts and what rides on them, then everything 
 far to near (machines, the depot, redwoods, the fence and gate, undergrowth on land not yet bought,
 whoever is walking about), then the lines between pylons, the dusk, and last whatever is being
 pointed at or is about to be built. Only tiles on screen are looked at; every sprite is made once
-and kept; what is worked out from the yard's layout (belt shapes, lines, fences, signposts) is
-worked out once for each change to the yard (`layout.ts`). A change is counted in one place,
-`yard.ts` (`S.rev`): a command done, a yard taken from Leaf, and a goal finished as the copy runs
-on, since that changes what is open (the plots for sale, a pylon's reach).
+and kept; what is worked out from the yard's layout (belt shapes, lines, fences, signposts) is kept
+by what it reads (`layout.ts`): what stands on each tile (kind, way, span, shut ways, colour), the
+plots owned and the goals done, which say what is open. A change is counted in one place, `yard.ts`
+(`S.rev`): a command done, a yard taken from Leaf, and a goal finished as the copy runs on. When it
+has moved the layout compares the yard with what it was worked out from, so the till collected, an
+order handed over or a node taken costs no layout, and Leaf's yard taken standing the same keeps it.
+The lines between pylons are kept while the pylons power reaches are the same.
 
 Most of a frame is what the last one showed, and a browser charges for each thing drawn, so
 `scene.ts` keeps what stays and draws what moved:
@@ -146,7 +152,11 @@ brass wheel.
 **Building.** With a mouse: pick a tool (the dock, or a number key) and a ghost of it follows the
 pointer, with corners in gold where it can go and in coral, with the reason, where it cannot;
 click to set it down. A drag with the belt lays a run that follows the pointer and is shown before
-the button is let go; a run that ends beside the depot turns to face it. `R` turns, `E` is the
+the button is let go; a run that ends beside the depot turns to face it. What is aimed (the piece
+and why it cannot go, its price, a tunnel's far mouth, a run, the pieces held with Select as they
+would stand) is kept while the pointer stays on its tile, and worked out again for the same tile when
+the yard or the Coins to hand change under it (`keepAim`, asked each frame and by each press): a key,
+a card's button, an undo or Leaf's yard taken. `R` turns, `E` is the
 spade, a right-click takes away, `Q` takes up the tool from the thing pointed at, `Z` undoes, `Esc`
 puts away. `C` is the brush (with an area marked, `C` copies it): with it in hand the line over the dock shows six colours and none, and
 a click on a belt (or a drag across the yard) gives its whole line the one chosen. With nothing in hand a drag moves the view, the wheel zooms, and a click asks about a
@@ -177,7 +187,11 @@ asks to be pressed again before it is replaced; a blueprint in hand has a bin, w
 `Z` undoes a move, a copy or a removal as one step, and a splitter's way shut or opened.
 
 **Asking.** Everything in the yard is a card in the kit's one card system (`card.ts`, registered
-in `ui/card.ts`): resting the mouse on a thing shows its card, clicking pins it, and a tap (or a
+in `ui/card.ts`). A card is its print: what it shows of the yard and the purse, as plain values
+(`ui/prints.ts`), drawn by `ui/cards.ts`, which reaches no yard (its buttons are the page's tools,
+handed in). The card that is up is drawn again exactly when its print differs, so it shows nothing it
+is not kept by; the panels and the top bar's parts are kept the same way (`shows`, in `ui/parts.ts`). Resting the mouse on a
+thing shows its card, clicking pins it, and a tap (or a
 finger kept on it, with a tool in hand) pins it as a sheet along the bottom, with the yard moved
 so the thing stays in view above it. A thing named inside a card opens its own card in its place,
 with a back arrow.
@@ -241,23 +255,24 @@ clockwork crab is made. Opened alone it plays just the same.
 
 ## How it is put together
 
-| File                              | What it holds                                                                |
-| --------------------------------- | ---------------------------------------------------------------------------- |
-| `main.ts`                         | the stage: opening the yard, the canvas, the loop, the handles for review    |
-| `state.ts`                        | what the screen's parts share: the yard, the view, the tool in hand          |
-| `yard.ts`                         | the yard on Leaf: the copy, commands, each frame's catching up, the Coins    |
-| `scene.ts`, `layout.ts`           | drawing a frame; what is worked out from the layout and kept                 |
-| `art/*.ts`                        | the art: ground, nature, belts, machines, things                             |
-| `camera.ts`, `input.ts`           | where the member is looking; mouse, keys and fingers                         |
-| `zoom.ts`                         | how far the view zooms, for the camera and for the zoom kept between visits  |
-| `tools.ts`                        | setting down, runs of belt, many pieces at once, undo, land, taking a node   |
-| `teach.ts`                        | the next nudge, worked out from the yard                                     |
-| `events.ts`, `actors.ts`, `fx.ts` | the yard's moments; who walks about; sparks, dust, smoke and rising words    |
-| `sound.ts`                        | the yard's own sounds, and its working murmur                                |
-| `ui/card.ts`                      | what every thing, machine, tile, plot, node and order says, as kit cards     |
-| `ui/*.ts`                         | the purse and notices, the top bar, the dock, panels, the letter             |
-| `sheet.ts`, `sheets.ts`           | the art laid out with names: `?sheet=machines`, `?sheet=items`               |
-| `review/bench.ts`                 | the page with a generated yard of its own, for timing a frame of a large one |
+| File                              | What it holds                                                                 |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| `main.ts`                         | the stage: opening the yard, the canvas, the loop, the handles for review     |
+| `state.ts`                        | what the screen's parts share: the yard, the view, the tool in hand           |
+| `yard.ts`                         | the yard on Leaf: the copy, commands, each frame's catching up, the Coins     |
+| `scene.ts`, `layout.ts`           | drawing a frame; what is worked out from the layout and kept                  |
+| `art/*.ts`                        | the art: ground, nature, belts, machines, things                              |
+| `camera.ts`, `input.ts`           | where the member is looking; mouse, keys and fingers                          |
+| `zoom.ts`                         | how far the view zooms, for the camera and for the zoom kept between visits   |
+| `tools.ts`                        | setting down, runs of belt, many pieces at once, undo, land, taking a node    |
+| `teach.ts`                        | the next nudge, worked out from the yard                                      |
+| `events.ts`, `actors.ts`, `fx.ts` | the yard's moments; who walks about; sparks, dust, smoke and rising words     |
+| `sound.ts`                        | the yard's own sounds, and its working murmur                                 |
+| `ui/card.ts`                      | every thing, machine, tile, plot, node and order as a kit card, kept by print |
+| `ui/prints.ts`, `ui/cards.ts`     | what each card prints of the yard and the purse; each card drawn from that    |
+| `ui/*.ts`                         | the purse and notices, the top bar, the dock, panels, the letter              |
+| `sheet.ts`, `sheets.ts`           | the art laid out with names: `?sheet=machines`, `?sheet=items`                |
+| `review/bench.ts`                 | the page with a generated yard of its own, for timing a frame of a large one  |
 
 ## Looking at it from outside
 
@@ -277,7 +292,8 @@ running the yard on, and `hold(true, lead, at)` shows it `lead` of the way into 
 the screen's clock at `at` seconds, so a picture can be taken twice the same; `skip(seconds)` moves
 only the screen. `pick(tool)`, `aim(x, y)`, `tap(x, y)`, `drag(x0, y0, x1, y1)` with `drop()`,
 `confirm()`, `build`, `remove` and `plot(id)` act as a member would, sending to Leaf, and `act(command)`
-does any command as the wire has it, read as Leaf reads one (`readCommand`), through `doNow`; kinds,
+does any command as the wire has it, read as Leaf reads one (`readCommand`), through `doNow`
+(`after(command)` does the same and then the frame after it, and says what each took, by part); kinds,
 plots and commands go by their names here, as on the wire;
 `finger(true)` makes the screen behave as for a touch, and `tap` is then a finger's tap, with Select
 in hand too. `open(panel)`, `card(x, y)` and `close()`
@@ -304,7 +320,9 @@ plots) cannot come from Leaf. `review/bench.ts` hands the page one of its own an
 Leaf (`S.alone`): it is the page's entry with that file in place of `src/main.ts`, built as
 `sed 's#./src/main.ts#./review/bench.ts#' index.html > bench.html` and
 `bun build bench.html --outdir <site>/works-bench`, and opened at
-`/play/works-bench/bench.html?pieces=5500`.
+`/play/works-bench/bench.html?pieces=5500`. Commands there (`act`, `after`) are done to that yard by
+the rules and sent nowhere, and its member has Coins enough for anything: `after` is what a tap costs
+on it, a frame after a real command.
 
 With `?meter` in the address, a corner of the page says, each second: the frames a second the
 screen reaches, the longest frame, and the same parts as milliseconds a frame. There `until free`

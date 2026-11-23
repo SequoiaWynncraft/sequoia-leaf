@@ -1,8 +1,9 @@
 /**
  * What the picture needs that is worked out from what stands where: the shape of every belt, the
  * lines between pylons, where the fence runs and the gate stands, which plots carry a signpost.
- * None of it changes until the yard does, so it is worked out once for each change and kept, in
- * flat lists of numbers like the yard's own: nothing is made for each piece. And the yard as it would
+ * None of it changes until what stands, the plots owned or what is open does, so it is worked out
+ * once for each such change and kept by exactly those (`layout`), in flat lists of numbers like the
+ * yard's own: nothing is made for each piece. And the yard as it would
  * be with the pieces in hand set down (`asIf`), for drawing them.
  */
 
@@ -46,6 +47,7 @@ export interface Sign {
 }
 
 export interface Layout {
+  /** The yard it was last found to stand for, and the yard's count of changes then. */
   yard: Yard;
   rev: number;
   /** The arms of every tile that carries, by tile (`Arms`); 0 for the rest. */
@@ -131,18 +133,35 @@ export function armsAt(y: Yard, i: number): Arms {
   return 0;
 }
 
+/**
+ * The lines last worked out, and what they were worked out from: the tiles of the pylons power
+ * reached, the depot, and how far a pylon reaches. A layout worked out again for a belt keeps them.
+ */
+let strung: { pylons: number[]; depot: string; reach: number; wires: Int32Array } | null = null;
+
 /** The lines power is carried on: from the depot to each pylon joined to it, each by its nearest joined neighbour. */
 function wires(y: Yard): Int32Array {
   const W = y.land.w;
+  const lit = litOf(y);
+  const pylons: number[] = [];
+  for (let i = 0; i < y.kind.length; i++) if (y.kind[i] === PYLON && lit[i] === 1) pylons.push(i);
+  const depot = y.land.depot.join();
+  const s = strung;
+  if (
+    s &&
+    s.reach === y.open.reach &&
+    s.depot === depot &&
+    s.pylons.length === pylons.length &&
+    s.pylons.every((i, n) => pylons[n] === i)
+  )
+    return s.wires;
   const tall = y.open.reach > 100;
   const link = squared(REACH.link, y.open.reach);
   const [cx, cy] = y.land.depot;
   const nodes: { x: number; y: number; at: Pt }[] = [
     { x: cx, y: cy, at: { x: cx * TILE + 8 - 14, y: (cy - 1) * TILE - 8 } },
   ];
-  const lit = litOf(y);
-  for (let i = 0; i < y.kind.length; i++) {
-    if (y.kind[i] !== PYLON || lit[i] !== 1) continue;
+  for (const i of pylons) {
     const x = i % W;
     const z = (i - x) / W;
     nodes.push({ x, y: z, at: pylonTop(x, z, tall) });
@@ -177,7 +196,8 @@ function wires(y: Yard): Int32Array {
     const to = nodes[j];
     if (from && to) out.push(from.at.x, from.at.y, to.at.x, to.at.y);
   }
-  return Int32Array.from(out);
+  strung = { pylons, depot, reach: y.open.reach, wires: Int32Array.from(out) };
+  return strung.wires;
 }
 
 function fences(y: Yard, owned: readonly boolean[], gateX: number, gateY: number): Int32Array {
@@ -240,9 +260,88 @@ function signs(y: Yard, owned: readonly boolean[]): Sign[] {
 
 let kept: Layout | null = null;
 
-/** The layout for the yard as it stands, worked out afresh only when the yard has changed. */
+/**
+ * What the kept layout was worked out from, and so all it is kept by: the land; what stands on each
+ * tile (its kind, its way, a tunnel's span, a splitter's shut ways, a line's colour, which the belts'
+ * picture is made by); the plots owned; and the goals done, from which the rules work out what is
+ * open (what is for sale, how far power reaches). Copies of the arrays read, kept and refilled.
+ */
+let basis: {
+  land: Yard["land"];
+  kind: Uint8Array;
+  dir: Uint8Array;
+  span: Int8Array;
+  shut: Uint8Array;
+  tint: Uint8Array;
+  plots: string;
+  done: string;
+} | null = null;
+
+function alike(a: Uint8Array | Int8Array, b: Uint8Array | Int8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+/** Whether the yard stands as the kept layout was worked out from, with the same plots and the same goals done. */
+function stands(y: Yard): boolean {
+  const b = basis;
+  return (
+    b !== null &&
+    b.land === y.land &&
+    alike(b.kind, y.kind) &&
+    alike(b.dir, y.dir) &&
+    alike(b.span, y.span) &&
+    alike(b.shut, y.shut) &&
+    alike(b.tint, y.tint) &&
+    b.plots === y.plots.join() &&
+    b.done === y.done.join()
+  );
+}
+
+/** Keeps what a layout was worked out from (`basis`), in the arrays kept before where they fit. */
+function keepBasis(y: Yard): void {
+  const n = y.kind.length;
+  const b =
+    basis?.kind.length === n
+      ? basis
+      : {
+          land: y.land,
+          kind: new Uint8Array(n),
+          dir: new Uint8Array(n),
+          span: new Int8Array(n),
+          shut: new Uint8Array(n),
+          tint: new Uint8Array(n),
+          plots: "",
+          done: "",
+        };
+  b.land = y.land;
+  b.kind.set(y.kind);
+  b.dir.set(y.dir);
+  b.span.set(y.span);
+  b.shut.set(y.shut);
+  b.tint.set(y.tint);
+  b.plots = y.plots.join();
+  b.done = y.done.join();
+  basis = b;
+}
+
+/**
+ * The layout for the yard as it stands. It is kept by what it is worked out from (`basis`), not by
+ * every command: when the yard's count of changes (`rev`, `S.rev`) has moved, the yard is compared
+ * with that, and the layout is worked out afresh only if something there differs. So the till
+ * collected, an order handed over or a node taken costs no layout; a piece built, turned, coloured or
+ * taken away, a plot bought or a goal done does. Leaf's yard taken in place of the copy keeps the
+ * layout too, when it stands the same.
+ */
 export function layout(y: Yard, rev: number): Layout {
   if (kept && kept.yard === y && kept.rev === rev) return kept;
+  if (kept && stands(y)) {
+    kept.yard = y;
+    kept.rev = rev;
+    return kept;
+  }
+  keepBasis(y);
   const owned = y.land.plots.map((p) => y.plots.includes(p.plot));
   // The gate stands where the path from the depot's door meets the yard's southern fence.
   const [cx, cy] = y.land.depot;

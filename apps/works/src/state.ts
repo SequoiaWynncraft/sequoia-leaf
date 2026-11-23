@@ -4,6 +4,7 @@
  */
 
 import {
+  DEPOT,
   type Dir,
   emptyYard,
   type Kind,
@@ -43,7 +44,9 @@ export const DRAWN: readonly Kind[] = (
 ).map(kind);
 const drawn = new Uint8Array(KIND_COUNT);
 for (const k of DRAWN) drawn[k] = 1;
-/** Whether this page draws and builds a kind of piece (`DRAWN`). */
+// The depot is drawn, and has its card, though nobody builds one: it is not in the dock.
+drawn[DEPOT] = 1;
+/** Whether this page draws a kind of piece: those it builds (`DRAWN`), and the depot. */
 export const draws = (k: number): boolean => drawn[k] === 1;
 
 /**
@@ -54,8 +57,21 @@ export type Tool = Kind | "remove" | "select" | "paint" | null;
 /** Whether a tool is something to build. */
 export const builds = (tool: Tool): tool is Kind => typeof tool === "number";
 
+/**
+ * What an aim or a run was worked out from, beside its tile, the tool and what is in hand: the
+ * yard's count of changes (`S.rev`) and the Coins to hand then, and what it costs. Of the purse it
+ * reads only whether the Coins cover the cost, and when they do not, by how much. When the yard has
+ * changed, or the Coins to hand have in a way it reads, it is worked out again for the same tile
+ * (`keepAim`, in `tools.ts`).
+ */
+export interface Reckoned {
+  rev: number;
+  coins: number;
+  cost: number;
+}
+
 /** A place being pointed at to build on, and what would come of it. */
-export interface Aim {
+export interface Aim extends Reckoned {
   x: number;
   y: number;
   /** Why it cannot go there, or nothing if it can. */
@@ -67,7 +83,7 @@ export interface Aim {
 }
 
 /** A run of belt shown before it is laid. */
-export interface Run {
+export interface Run extends Reckoned {
   legs: Leg[];
   /** Belts already standing that the run would turn, as tile and way. */
   turns: { x: number; y: number; dir: Dir }[];
@@ -114,8 +130,9 @@ export const S: {
   alone: boolean;
   /**
    * Counts every change to the yard that is not a tick's: a command done, a yard taken from Leaf, a
-   * goal finished (what is open changes with it). What is worked out from the yard and kept (the
-   * layout, the belts' picture) is kept until the next. Only `yard.ts` moves it.
+   * goal finished (what is open changes with it). What is worked out from the yard and kept (an aim,
+   * the layout) is looked at again when it moves, and worked out again if what it reads differs.
+   * Only `yard.ts` moves it.
    */
   rev: number;
   /** Seconds the screen has been running, and whether its clock is being stepped by hand from outside. */

@@ -26,30 +26,33 @@ import {
 import { ahead } from "./wire.ts";
 import type { Yard } from "./yard.ts";
 
-/**
- * A leg of a run of belt, and all a run carries: a belt or a tunnel; the tile, and which way it
- * goes; for a tunnel how far under (`span`: 0 for the tunnel standing there, raised or lowered); and
- * its grade. A leg has nothing to set: no colour, no recipe, no shut way. A run takes the colour of
- * the line it joins.
- */
-export interface Leg {
-  readonly tunnel: boolean;
+/** Where a leg of a run is laid, which way it goes, and its grade: what a leg of belt and a leg of tunnel both hold. */
+interface Laid {
   readonly x: number;
   readonly y: number;
   readonly dir: Dir;
-  readonly span: number;
   readonly grade: number;
 }
 
+/**
+ * A leg of a run of belt, and all a run carries: a belt or a tunnel, laid on a tile, going one way,
+ * at a grade. Only a tunnel goes under, so only a tunnel's leg says how far (`span`: 0 for the
+ * tunnel standing there, raised or lowered). A leg has nothing to set: no colour, no recipe, no shut
+ * way. A run takes the colour of the line it joins.
+ */
+export type Leg = (Laid & { readonly tunnel: false }) | (Laid & { readonly tunnel: true; readonly span: number });
+
 /** What a leg lays. */
 export const legKind = (l: Leg): Kind => (l.tunnel ? TUNNEL : BELT);
+/** How far under a leg goes: a tunnel's span, and none for a belt. */
+export const legSpan = (l: Leg): number => (l.tunnel ? l.span : 0);
 /** A leg as a piece to stand, made of nothing but what a leg holds. */
 export const legPiece = (l: Leg): Piece => ({
   kind: legKind(l),
   x: l.x,
   y: l.y,
   dir: l.dir,
-  span: l.tunnel ? l.span : 0,
+  span: legSpan(l),
   ...(l.grade > 1 ? { grade: l.grade } : {}),
 });
 
@@ -172,7 +175,7 @@ function search(
     const z = Math.floor(i / W);
     const span = dug[s] ?? -1;
     if (span < 0) {
-      if (s % 5 === 0) legs.push({ tunnel: false, x, y: z, dir, span: 0, grade: 1 });
+      if (s % 5 === 0) legs.push({ tunnel: false, x, y: z, dir, grade: 1 });
       const p = prev[s] ?? -1;
       if (p >= 0) dir = wayBetween(W, Math.floor(p / 5), i);
     } else {

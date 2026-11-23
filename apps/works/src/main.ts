@@ -70,6 +70,7 @@ import {
   buyLand,
   cancel,
   confirm,
+  keepAim,
   paintAt,
   place,
   runEnd,
@@ -141,6 +142,12 @@ declare global {
       paint: (x: number, y: number, tint: number) => boolean;
       /** Does any command, as the wire has it, as the member would, and says why it is refused, or null when done. */
       act: (command: Record<string, unknown>) => string | null;
+      /**
+       * Does a command as `act` does, then the frame after it, on the yard itself: what a tap costs.
+       * Says why it was refused, the milliseconds the command took (the rules, the interface told),
+       * and the frame's by part, as `bench` gives them.
+       */
+      after: (command: Record<string, unknown>) => { why: string | null; act: number; ms: Record<string, number> };
       drag: (x0: number, y0: number, x1: number, y1: number) => void;
       drop: () => void;
       confirm: () => boolean;
@@ -162,6 +169,8 @@ declare global {
 }
 
 function refreshAll(): void {
+  // What is aimed is said over the dock: of the yard as it is.
+  keepAim();
   refreshHud();
   refreshDock();
   refreshPanel();
@@ -393,6 +402,8 @@ async function boot(): Promise<void> {
   function draw(now: number): void {
     // A window carried to a screen with another pixel ratio is not always told it was resized.
     if ((window.devicePixelRatio || 1) !== S.view.dpr) fit();
+    // What is aimed is drawn of the yard as it is: worked out again if the yard or the purse has changed under it.
+    keepAim();
     const w = S.world;
     drawYard(art, { lead: S.held ? heldLead : leadAt(now), pace: power(w).pace });
     drawWords(ctx, wordPx, inset.top * S.view.dpr);
@@ -471,6 +482,15 @@ async function boot(): Promise<void> {
   requestAnimationFrame(frame);
 
   // ---------- handles for looking at it from outside ----------
+
+  /** Does a command as the wire has it, read as Leaf reads one, through `doNow`: why it was refused, or null. */
+  function act(command: Record<string, unknown>): string | null {
+    const read = readCommand({ ...command, tick: S.world.tick });
+    if (!read) return "That is not a command";
+    const done = doNow(read);
+    refreshAll();
+    return "refused" in done ? done.why : null;
+  }
 
   window.works = {
     async stage(...ops) {
@@ -588,12 +608,25 @@ async function boot(): Promise<void> {
       S.tint = tint;
       return paintAt(x, y);
     },
-    act(command) {
-      const read = readCommand({ ...command, tick: S.world.tick });
-      if (!read) return "That is not a command";
-      const done = doNow(read);
-      refreshAll();
-      return "refused" in done ? done.why : null;
+    act,
+    after(command) {
+      const was = spent.on;
+      const kept = spent.ms;
+      const begun = performance.now();
+      const why = act(command);
+      const acted = performance.now() - begun;
+      spent.on = true;
+      spent.ms = {};
+      lap();
+      advance(1 / 60, null);
+      lap("page");
+      draw(performance.now());
+      taken.drawImage(picture, 0, 0);
+      lap("flush");
+      const ms = spent.ms;
+      spent.on = was;
+      spent.ms = kept;
+      return { why, act: acted, ms };
     },
     drag(x0, y0, x1, y1) {
       runStart(x0, y0);
