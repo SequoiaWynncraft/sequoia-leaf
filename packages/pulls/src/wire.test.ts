@@ -33,7 +33,7 @@ test("a view and a pull's notes read back as Leaf made them, and nothing else re
 
 const sent = (headliner: unknown) => ({
   banners: [
-    { id: "banner-1", from: "2026-11-24T00:00:00.000Z", until: "2026-12-08T00:00:00.000Z", headliner },
+    { id: "banner-1", from: "2026-11-23T00:00:00.000Z", until: "2026-12-08T00:00:00.000Z", headliner },
     { id: "a-banner-these-rules-do-not-know", from: "", until: "", headliner: null },
   ],
 });
