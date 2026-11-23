@@ -158,7 +158,8 @@ export function onNews(art: Art, news: readonly News[]): void {
         p.gone = true;
       });
       sparkle(s.door.x, s.door.y - 14, 14, 10);
-      coinsFrom(toPage(s.door.x, s.door.y - 14), n.pay);
+      // A project pays nothing: no Coins fly for it.
+      if (n.pay > 0) coinsFrom(toPage(s.door.x, s.door.y - 14), n.pay);
       tell({ town: "news", text: gift ? gift.line : `The Works filled "${n.title}".`, tone: "gold" });
     } else if (n.kind === "filled") {
       yardSfx.ready();
