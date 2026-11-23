@@ -115,7 +115,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     recorded[name] = {
       request: body === undefined ? { method, path } : { method, path, body },
       status: response.status,
-      body: await response.json(),
+      body: withoutRules(await response.json()),
     };
   }
   await call("GET /v1/game/hello", "GET", "/v1/game/hello");
@@ -304,6 +304,16 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   );
   await app.dispose();
   return recorded;
+}
+
+/**
+ * An answer as the contract keeps it: without the version of the game's rules a play answer says
+ * (`rules`), which changes with every edit to them; `play.test.ts` holds that each answer says it.
+ * A page with no version to check is a page from before Leaf said it.
+ */
+function withoutRules(body: unknown): unknown {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return body;
+  return Object.fromEntries(Object.entries(body).filter(([key]) => key !== "rules"));
 }
 
 /** A field of a JSON object, or undefined when the value is not an object or lacks it. */

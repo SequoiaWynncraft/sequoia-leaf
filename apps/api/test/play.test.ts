@@ -1,9 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { type Game, leaf, type LeafFor, MOST_COMMANDS, type PlayerId, playerId } from "@sequoia-leaf/core";
+import {
+  type Game,
+  GAME_IDS,
+  leaf,
+  type LeafFor,
+  MOST_COMMANDS,
+  MOST_FLUSHED,
+  type PlayerId,
+  playerId,
+  rulesVersion,
+} from "@sequoia-leaf/core";
 import {
   ALL_ITEMS,
   BELT,
@@ -150,6 +160,16 @@ async function codeOf(response: Response): Promise<string> {
   return Schema.decodeUnknownSync(ErrorAnswer)(await response.json()).code;
 }
 
+/** When a player's state in a game was made: its generation, which its money keys are named for. */
+const bornOf = async (player: PlayerId, game: string): Promise<number> =>
+  Number(
+    Object(
+      (
+        await services.query((sql) => sql`SELECT born FROM play_state WHERE player_id = ${player} AND game = ${game}`)
+      )[0],
+    ).born,
+  );
+
 const coinsOf = async (player: PlayerId) =>
   Schema.decodeUnknownSync(Schema.Struct({ coins: Schema.Number }))(
     await (await send("GET", "/v1/game/me", undefined, player)).json(),
@@ -200,6 +220,45 @@ const SHOP: Game<{ bought: number }, { price: number }, { bought: number }, stri
   command: (v) =>
     typeof v === "object" && v !== null && "price" in v && typeof v.price === "number" ? { price: v.price } : null,
 };
+
+/** The version of the game's rules an answer says. */
+const rulesOf = async (response: Response): Promise<unknown> => Object(await response.json()).rules;
+
+describe("the rules' version", () => {
+  it("is said by every answer: the version of the game's rules Leaf plays it by, as the files it runs make it", async () => {
+    const root = join(import.meta.dir, "..", "..", "..");
+    const read = (path: string): string | null => {
+      try {
+        return readFileSync(join(root, path), "utf8");
+      } catch {
+        return null;
+      }
+    };
+    const raid = rulesVersion("raid", read);
+    expect(await rulesOf(await send("GET", "/v1/game/play/raid"))).toBe(raid);
+    expect(await rulesOf(await send("POST", "/v1/game/play/raid", { commands: rustles(1) }))).toBe(raid);
+    // A visit, to a game that may be visited.
+    expect(await rulesOf(await send("GET", "/v1/game/play/works"))).toBe(rulesVersion("works", read));
+    expect(await rulesOf(await send("GET", `/v1/game/play/works/of/${alice}`, undefined, bob))).toBe(
+      rulesVersion("works", read),
+    );
+    expect(new Set(GAME_IDS.map((game) => GAMES[game].rules)).size).toBe(GAME_IDS.length);
+  });
+});
+
+describe("a state made again", () => {
+  it("pays for what it buys again: a command's money keys name the state's generation, not only the count kept inside it", async () => {
+    const buy = (id: string) =>
+      services.run(Play.use((play) => play.send({ playerId: alice, guest: false }, played(SHOP), [{ id, price: 10 }])));
+    expect(await buy("l-1")).toMatchObject({ status: "done", results: [{ id: "l-1", notes: ["a lantern"] }] });
+    expect(await coinsOf(alice)).toBe(290);
+    // The staff take the state away, and it is made anew: its count of lanterns starts again.
+    await services.query((sql) => sql`DELETE FROM play_state WHERE player_id = ${alice} AND game = 'town'`);
+    clock.now += 1000;
+    expect(await buy("l-2")).toMatchObject({ status: "done", results: [{ id: "l-2", notes: ["a lantern"] }] });
+    expect(await coinsOf(alice)).toBe(280);
+  });
+});
 
 describe("a new player", () => {
   it("gets a new table, untouched, and 300 Coins, once", async () => {
@@ -266,7 +325,12 @@ describe("a whole run, played by commands through HTTP", () => {
     expect(await coinsOf(alice)).toBe(300 + paid);
     expect(await entries(alice)).toEqual([
       { amount: 300, reason: "Welcome to Guild Town", game: null, key: `welcome:${alice}` },
-      { amount: paid, reason: "The Little Raid", game: "raid", key: `raid:${alice}:run:1` },
+      {
+        amount: paid,
+        reason: "The Little Raid",
+        game: "raid",
+        key: `raid:${alice}:${await bornOf(alice, "raid")}:run:1`,
+      },
     ]);
     // The last batch sent again is answered the same, and pays nothing more.
     const repeat = await commanded(last);
@@ -475,7 +539,7 @@ describe("commands", () => {
           { id: "x-2", do: "rustle" },
         ],
       },
-      { commands: Array.from({ length: MOST_COMMANDS + 1 }, (_, i) => ({ id: `x-${i + 3}`, do: "rustle" })) },
+      { commands: Array.from({ length: MOST_FLUSHED + 1 }, (_, i) => ({ id: `x-${i + 3}`, do: "rustle" })) },
       { orders: [] },
       "not json",
       [],
@@ -580,6 +644,9 @@ describe("one player's game", () => {
   });
 });
 
+/** Commands to Alice's table, as they came. */
+const toRaid = (commands: readonly unknown[]) => send("POST", "/v1/game/play/raid", { commands });
+
 describe("the limits", () => {
   it("are ten batches a second, in bursts of twenty: more gets slow_down and does nothing", async () => {
     await opened();
@@ -622,6 +689,22 @@ describe("the limits", () => {
     expect(elsewhere).toEqual({ status: "slow" });
     // Another player has their own.
     expect((await post(rustles(MOST_COMMANDS), bob)).status).toBe(200);
+  });
+
+  it("take a page going away's one request of everything Leaf has not answered, up to 128, the commands answered before taking nothing of the allowance", async () => {
+    await opened();
+    clock.now += 100;
+    const first = rustles(MOST_COMMANDS);
+    expect((await toRaid(first)).status).toBe(200);
+    // The page goes with those 32 still unanswered on its side and 8 more: all 40 go, and only the 8 are new.
+    const all = [...first, ...rustles(8)];
+    const going = await toRaid(all);
+    expect(going.status).toBe(200);
+    const done = Schema.decodeUnknownSync(Answered)(await going.json());
+    expect(done.results.map((r) => r.id)).toEqual(all.map((c) => c.id));
+    clock.now += 60_000;
+    expect((await toRaid(rustles(MOST_FLUSHED))).status).toBe(429);
+    expect((await toRaid(rustles(MOST_FLUSHED + 1))).status).toBe(400);
   });
 
   it("read no body over 16 KiB", async () => {
@@ -673,8 +756,18 @@ describe("Coins", () => {
     expect(await coinsOf(alice)).toBe(0);
     expect(await entries(alice)).toEqual([
       { amount: 300, reason: "Welcome to Guild Town", game: null, key: `welcome:${alice}` },
-      { amount: -200, reason: "A lantern", game: "town", key: `town:${alice}:lantern:1` },
-      { amount: -100, reason: "A lantern", game: "town", key: `town:${alice}:lantern:2` },
+      {
+        amount: -200,
+        reason: "A lantern",
+        game: "town",
+        key: `town:${alice}:${await bornOf(alice, "town")}:lantern:1`,
+      },
+      {
+        amount: -100,
+        reason: "A lantern",
+        game: "town",
+        key: `town:${alice}:${await bornOf(alice, "town")}:lantern:2`,
+      },
     ]);
   });
 });
@@ -707,8 +800,8 @@ describe("what play pays", () => {
     expect(await sold("s-3", 50)).toBe(5300);
     expect(await entries(alice)).toEqual([
       { amount: 300, reason: "Welcome to Guild Town", game: null, key: `welcome:${alice}` },
-      { amount: 4000, reason: "A sale", game: "works", key: `works:${alice}:sale:1` },
-      { amount: 1000, reason: "A sale", game: "works", key: `works:${alice}:sale:2` },
+      { amount: 4000, reason: "A sale", game: "works", key: `works:${alice}:${await bornOf(alice, "works")}:sale:1` },
+      { amount: 1000, reason: "A sale", game: "works", key: `works:${alice}:${await bornOf(alice, "works")}:sale:2` },
     ]);
     // An hour on, the hour's room is back; the day's 20,000 still stands.
     for (const hour of [3, 5, 7]) {
@@ -780,8 +873,8 @@ describe("a command's Coins", () => {
     expect(await coinsOf(alice)).toBe(100);
     expect(await entries(alice)).toEqual([
       { amount: 300, reason: "Welcome to Guild Town", game: null, key: `welcome:${alice}` },
-      { amount: 500, reason: "The till", game: "works", key: `works:${alice}:till:0` },
-      { amount: -700, reason: "A price", game: "works", key: `works:${alice}:price:0` },
+      { amount: 500, reason: "The till", game: "works", key: `works:${alice}:${await bornOf(alice, "works")}:till:0` },
+      { amount: -700, reason: "A price", game: "works", key: `works:${alice}:${await bornOf(alice, "works")}:price:0` },
     ]);
   });
 
@@ -846,7 +939,7 @@ describe("Leaf a command takes", () => {
     const spent = {
       kind: "spend",
       origin: "shop",
-      key: `play:raid:${alice}:look:plum`,
+      key: `play:raid:${alice}:${await bornOf(alice, "raid")}:look:plum`,
       delta: -28_000,
       xp: 0,
       memo: "Raid table look: Dusk velvet",
@@ -902,7 +995,7 @@ describe("Leaf a command takes", () => {
     expect(await services.account(carol)).toMatchObject({ balance: 0 });
     expect((await ledgerOf(carol)).map((e) => [e.kind, e.origin, e.key, e.delta])).toEqual([
       ["earn", "raid", `raid:${carol}`, 12_000],
-      ["spend", "shop", `play:raid:${carol}:look:baize`, -12_000],
+      ["spend", "shop", `play:raid:${carol}:${await bornOf(carol, "raid")}:look:baize`, -12_000],
     ]);
   });
 });
@@ -987,8 +1080,8 @@ describe("a command's Leaf", () => {
     expect(await services.account(alice)).toMatchObject({ balance: 50 });
     expect((await ledgerOf(alice)).map((e) => [e.key, e.delta])).toEqual([
       [`raid:${alice}`, 100],
-      [`play:works:${alice}:a`, -30],
-      [`play:works:${alice}:b`, -20],
+      [`play:works:${alice}:${await bornOf(alice, "works")}:a`, -30],
+      [`play:works:${alice}:${await bornOf(alice, "works")}:b`, -20],
     ]);
   });
 
@@ -1344,7 +1437,7 @@ describe("the Works", () => {
         amount: (await coinsOf(alice)) - 300,
         reason: "Earned in the Works",
         game: "works",
-        key: `works:${alice}:bank:0`,
+        key: `works:${alice}:${await bornOf(alice, "works")}:bank:0`,
       },
     ]);
     expect(await services.query((sql) => sql`SELECT kind FROM activity WHERE game = 'works'`)).toEqual([
@@ -1683,7 +1776,7 @@ describe("a yard the Works' first design kept", () => {
     expect(yard.till).toBe(11_600 * MILLI);
     const collected = await send("POST", "/v1/game/play/works", { commands: [{ id: "f-1", do: "collect", tick }] });
     expect(collected.status).toBe(200);
-    // Paid in under the next name, after the two it had made.
+    // Paid in under the next name, after the two it had made: a state made before Leaf kept generations keeps its keys.
     expect((await entries(alice)).map((e) => [e.amount, e.key])).toEqual([
       [100, `works:${alice}:bank:0`],
       [100, `works:${alice}:bank:1`],
@@ -2409,8 +2502,9 @@ describe("Leaf tending the Works", () => {
     gate.resolve();
     const [owners, seen] = await Promise.all([opening, visiting]);
     expect(found).toEqual([false, false]);
-    expect(owners.status).toBe("open");
-    expect(seen).toEqual(owners);
+    // The visitor's own balances, not the owner's: Bob has no Coins account, and is shown the welcome.
+    if (owners.status !== "open") throw new Error(owners.status);
+    expect(seen).toEqual({ ...owners, purse: { coins: 300, leaf: 0, version: 0 } });
     // Kept once its line was empty, untouched.
     expect((await storedYard()).rev).toBe(0);
   });
@@ -2702,7 +2796,7 @@ describe("pulls", () => {
     const spent = {
       kind: "spend",
       origin: "shop",
-      key: `play:pulls:${alice}:pull:0`,
+      key: `play:pulls:${alice}:${await bornOf(alice, "pulls")}:pull:0`,
       delta: -10_000,
       xp: 0,
       memo: "Pulls: 10 in grove",
@@ -2727,7 +2821,7 @@ describe("pulls", () => {
     expect(await services.account(carol)).toMatchObject({ balance: 0 });
     expect((await ledgerOf(carol)).at(-1)).toMatchObject({
       kind: "spend",
-      key: `play:pulls:${carol}:pull:0`,
+      key: `play:pulls:${carol}:${await bornOf(carol, "pulls")}:pull:0`,
       delta: -10_000,
     });
   });

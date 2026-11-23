@@ -177,8 +177,13 @@ export interface Game<State, Command, View, Note, Short = never> {
 /** Whether a command's answer is a refusal. */
 export const isRefused = <S, N>(answer: Done<S, N> | Refused): answer is Refused => "refused" in answer;
 
-/** The most commands one batch may carry. */
+/** The most commands a page puts in one batch. */
 export const MOST_COMMANDS = 32;
+/**
+ * The most commands one request may carry: a page going away sends everything Leaf has not answered
+ * at once, in order, in one request that outlives it, since two such requests may arrive in either order.
+ */
+export const MOST_FLUSHED = 4 * MOST_COMMANDS;
 
 /** What a command's id may be: made by the browser, unique among the player's commands to a game. */
 export const COMMAND_ID = /^[A-Za-z0-9_.:-]{1,64}$/;

@@ -207,23 +207,20 @@ else. It asks `GET /v1/game/hello` on the page's own origin: anything but its an
 no Leaf, and the page shows `serverCard(line)` in its own words. With Leaf it asks
 `GET /v1/game/me`:
 
-- **Known.** The game is live, as that member. The purse's Leaf is the number the server gives
-  (`fromLedger`) and nothing else: a page never takes Leaf itself. Only a game's command on Leaf
-  takes Leaf: `leafOpen()` is true while hello's `leaf_spending` is (`leafSpending`) and the member
-  is not a guest, and a page offers such a command only then; after one, it asks for the Leaf
-  number again (`refreshLeaf`). Every other Leaf button is passed to `closeLeaf`, which always
-  shows it closed, with the tip "Leaf spending opens after the play-test." while spending is off
-  and "Leaf cannot be spent here yet." while it is on. A page that is the whole window listens to
-  the member's own events (`followLeaf`) and asks for the Leaf number again whenever one arrives;
-  the town asks too when a framed game closes.
-- **Coins**, for a member or a guest alike, are Leaf's Coins ledger's (`fromLeaf`, with
-  `/v1/game/me`'s `coins`), and nothing of them is kept in the browser. The games' commands pay and
-  take them on Leaf. `refreshCoins()` asks Leaf for the balance again (one question at a time, once
-  more if asked meanwhile): a game does when a command of its paid or took some, the town when a
-  framed game closes and when its page comes back into view (`followCoins`). The town tells a game
-  in its frame of a change to its Coins (`passCoins`, the shell's `{ town: "coins", coins }`), and a
-  game shows a change it worked out itself at once (`heardCoins`) until Leaf answers. An answer
-  asked for before such a change is let go, since it may not hold it.
+- **Known.** The game is live, as that member. The purse is Leaf's word and nothing else: its
+  `Balances` (Coins and Leaf as one moment of its ledgers had them, and that moment's version),
+  from `/v1/game/me` and from every play answer, of which the purse keeps the newest (`fromLeaf`);
+  a page never takes Leaf or Coins itself, and nothing of either is kept in the browser. Only a
+  game's command on Leaf takes Leaf: `leafOpen()` is true while hello's `leaf_spending` is
+  (`leafSpending`), and a page offers such a command only then. Every other Leaf button is passed
+  to `closeLeaf`, which always shows it closed, with the tip "Leaf spending opens after the
+  play-test." while spending is off and "Leaf cannot be spent here yet." while it is on. A page
+  that is the whole window listens to the member's own events (`followLeaf`) and asks Leaf again a
+  moment after any arrive, and as it comes back into view (`followPurse`). A command's answer
+  brings the purse with it, so nothing is asked after one. A game may show the Coins a command
+  pays or takes at once (`send`'s `coins`) until Leaf answers it; they go as that answer's word is
+  taken, so a purchase on its way is never shown undone, nor twice. The town and a game in its frame
+  each tell the other Leaf's newest word (`passPurse`, the shell's `{ town: "purse", purse }`).
 - **Known as a guest** (`guest: true`: signed in, not in the guild). The game is live, as them,
   with no Leaf (`asGuest`): `leafShown()` is false, so no page shows a Leaf number, and every Leaf
   button's tip is "Leaf is earned by raiding with Sequoia." (`leafShut()`). `followLeaf` and
@@ -238,19 +235,25 @@ The cards are `shutCard`: a `k-paper` with a title, a line and one button, in pl
 
 **Games Leaf owns** (`play.ts`). A game on Leaf's play service keeps nothing of itself in the
 browser: `openPlay(game, reader, { player })` fetches its state (`GET /v1/game/play/<game>`), read
-into the game's own types by `reader` (a page built for older rules than Leaf's loads again), and
+into the game's own types by `reader`, and an answer made by rules other than the page's own (each
+answer says their version, `rules`, which the page was built with too) loads the page again: once for
+each version of Leaf's within half a minute, so a deploy half done shows the "closed" card instead of
+going round. And
 `send(command, predict)` gives the command an id, queues it and returns at once, with a promise of
 Leaf's answer: what it did (the game's notes) or the code it was refused with. Commands go in
 order, one request at a time, as many as are waiting in each (up to 32), and after a network
 failure, or Leaf having trouble or asking to slow down, the same request goes again with the same
-ids, so nothing is done twice; a request unanswered after ten seconds (`DEADLINE`) is let go and
-counts as no answer. Each batch carries `player`, who the page believes it is; on
+ids, so nothing is done twice; a request unanswered by the kit's deadline (ten seconds, `net.ts`)
+is let go and counts as no answer. Each batch carries `player`, who the page believes it is; on
 `not_you` (signed in as somebody else since) nothing more is sent and the page loads again. A state
 Leaf cannot read (`state_unreadable`) stops the page with `unreadableCard()` ("Your game could not
 be read. It has been kept; tell the guild."), sending nothing again. A 404 `not_found`, from a Leaf
 without the play service during a deploy, is "not yet": the call goes again each second for 30
 seconds (`NOT_YET`) before the page gives up for no server. As the page is hidden or put away,
-what Leaf has not answered goes in a request that outlives the page. A page in view reads its state
+everything Leaf has not answered goes, in order, in one request that outlives the page.
+`close()` puts a play away: what is waiting is sent so, and answered `put_away`, and the play hears
+the page no more. Where its line to Leaf is (idle, reading, sending, waiting to send again,
+stopped) is one value, moved only by `stepLine`; a stop answers everything waiting with why. A page in view reads its state
 after a minute without a call (`STILL_HERE`), so its copy is never long behind Leaf's, and as it
 comes back (`outside.wake`), but for a game answered short, which asks for its own reads; a visit
 does neither, nor does a page while `away()` (the town, while a game is open over it). Leaf counts a

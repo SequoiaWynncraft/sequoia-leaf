@@ -1,6 +1,6 @@
 export { type AchievementAward, type AchievementRules, leafForAward, type PayingLadder } from "./achievements.ts";
 export { type Activity, type ActivityKind, RAID_KEYS, type RaidKey, raidKeyForName, RAIDS } from "./activity.ts";
-export { DAILY_CHEST, EARNINGS } from "./coins.ts";
+export { type Balances, DAILY_CHEST, EARNINGS, readBalances } from "./coins.ts";
 export { isLeaf, type Leaf, leaf, MAX_LEAF } from "./leaf.ts";
 export {
   type Account,
@@ -157,6 +157,7 @@ export {
   type Logged,
   mayBuy,
   MOST_COMMANDS,
+  MOST_FLUSHED,
   type Placed,
   playPath,
   type Refused,
@@ -189,3 +190,5 @@ export {
   type TallyUnit,
   TIMED,
 } from "./tally.ts";
+
+export { RULES_ENTRY, rulesVersion, rulesVersions } from "./version.ts";

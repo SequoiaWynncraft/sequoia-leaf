@@ -464,10 +464,11 @@ describe("the counters' first counts", () => {
       await before.query(
         (sql) => sql`INSERT INTO time_in (player_id, game, played_ms, afk_ms) VALUES (${bob}, 'town', 7200000, 60000)`,
       );
-      // Leaf as it was before the Tally: the counters' migration not yet run.
+      // Leaf as it was before the Tally: the counters' migration, and those after it, not yet run.
+      await before.query((sql) => sql`ALTER TABLE play_state DROP COLUMN born`);
       await before.query((sql) => sql`DROP TABLE tallies`);
       await before.query((sql) => sql`DROP TABLE camp_visits`);
-      await before.query((sql) => sql`DELETE FROM effect_sql_migrations WHERE migration_id = 30`);
+      await before.query((sql) => sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 30`);
       await before.dispose();
       const after = testLeaf(clock, fakeBackend().fetcher, { databasePath: file });
       const Tally = Schema.Struct({ playerId: Schema.String, stat: Schema.String, n: Schema.Number });

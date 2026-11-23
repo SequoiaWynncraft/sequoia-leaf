@@ -4,9 +4,9 @@
  * awaits `start()` before anything else. It asks the page's own server `GET /v1/game/hello`; no
  * answer, or anything but that answer, is no server. With a server it asks who the member is:
  *
- * - known: the game is live, as them, and the purse keeps the ledger's Leaf and Leaf's Coins;
- * - known as a guest (signed in, not in the guild): the game is live, as them, with the ledger's
- *   Leaf and Leaf's Coins, and the page asks nothing that is only for members (`/v1/me...`, the guild's news);
+ * - known: the game is live, as them, and the purse holds Leaf's word on their Leaf and Coins;
+ * - known as a guest (signed in, not in the guild): the game is live, as them, with Leaf's word on
+ *   their Leaf and Coins, and the page asks nothing that is only for members (`/v1/me...`, the guild's news);
  * - signed out: the whole window goes to the guild's sign-in and comes back, once; refused again
  *   within a minute, or in a frame, it says so on a card instead;
  * - not a member (a server that lets in only members), or the server is having trouble: a card says so.
@@ -14,22 +14,12 @@
  * The cards (`shutCard`) are the same on every page.
  */
 
-import { type Device, deviceForWidth } from "@sequoia-leaf/core";
+import { type Balances, type Device, deviceForWidth, readBalances } from "@sequoia-leaf/core";
 
 import { el } from "./dom.ts";
 import { ask, isRecord, listen, type Listening, outside } from "./net.ts";
 import type { Trouble } from "./play.ts";
-import {
-  asGuest,
-  balance,
-  coinsOnLeaf,
-  fromLeaf,
-  fromLedger,
-  heardCoins,
-  leafSpending,
-  refreshCoins,
-  watch,
-} from "./purse.ts";
+import { asGuest, fromLeaf, leafSpending, onLeaf, said, watch } from "./purse.ts";
 import { fromTown, inTown, leave, tell } from "./shell.ts";
 
 export interface Member {
@@ -81,12 +71,6 @@ export function readMember(v: unknown): Member | null {
   };
 }
 
-/** The member's Coins as `/v1/game/me` says them, or null for anything that does not say. */
-export function readCoins(v: unknown): number | null {
-  const coins = isRecord(v) ? num(v.coins) : null;
-  return coins === null ? null : Math.max(0, Math.floor(coins));
-}
-
 async function look(): Promise<Where> {
   const hello = await ask("/v1/game/hello");
   const signIn = hello.status === 200 && isRecord(hello.body) ? str(hello.body.sign_in) : null;
@@ -102,10 +86,9 @@ async function look(): Promise<Where> {
       // Nothing was remembered.
     }
     if (member.guest) asGuest();
-    fromLedger(member.leaf);
     leafSpending(isRecord(hello.body) && hello.body.leaf_spending === true);
-    // From here on the purse's Coins are Leaf's ledger's, guest or member.
-    fromLeaf(readCoins(me.body) ?? 0);
+    // From here on the purse is Leaf's word, guest or member.
+    fromLeaf(readBalances(me.body) ?? { coins: 0, leaf: member.leaf, version: 0 });
     signedInOn = deviceForWidth(outside.width());
     return { mode: "live", me: member, signIn };
   }
@@ -305,25 +288,30 @@ export function letGoCard(why: LetGo, signIn: string, again: () => void): () => 
 // ---------- the member's own news ----------
 
 /**
- * Asks Leaf for the player again, and the purse takes the Leaf the ledger gives them: after the
- * member's news, or a command that took Leaf. The player as Leaf has them, or null for no answer
- * or the made-up guild (nothing is asked).
+ * Asks Leaf for the player again, and the purse takes Leaf's word on their balances: after the
+ * member's news, or as the page comes back. The player as Leaf has them, or null for no answer or
+ * the made-up guild (nothing is asked). A game's own commands need none of this: every answer to
+ * one carries Leaf's word.
  */
 export async function refreshLeaf(): Promise<Member | null> {
   if (!member()) return null;
   const a = await ask("/v1/game/me");
   const m = a.status === 200 ? readMember(a.body) : null;
   if (!m) return null;
-  fromLedger(m.leaf);
+  const word = readBalances(a.body);
+  if (word) fromLeaf(word);
   return m;
 }
 
+/** How long after a piece of the member's news the purse asks Leaf again: a raid paid to a party comes as a handful at once. */
+const NEWS_SETTLES = 400;
+
 /**
- * Listens to what happens to the member and asks the ledger for their Leaf again whenever anything
- * does. `heard` is told each event, and `fresh` the member as the server has them after it. It
- * listens from the newest event when the member was first looked at (`cursor`), so anything paid
- * since, before the stream opened, is heard at once. A guest has no news of their own, and nothing
- * is listened to.
+ * Listens to what happens to the member and asks Leaf for their balances again a moment after
+ * anything does, once for whatever came in that moment. `heard` is told each event, and `fresh`
+ * the member as the server has them after it. It listens from the newest event when the member was
+ * first looked at (`cursor`), so anything paid since, before the stream opened, is heard at once. A
+ * guest has no news of their own, and nothing is listened to.
  */
 export function followLeaf(
   heard: (type: string, data: unknown, id: number) => void = () => undefined,
@@ -331,44 +319,52 @@ export function followLeaf(
 ): Listening {
   if (isGuest()) return { stop: () => undefined };
   const since = member()?.cursor;
-  // A raid paid out to a party arrives as a handful of events at once: one question covers them.
-  let asking = false;
-  async function again(): Promise<void> {
-    const m = await refreshLeaf();
-    asking = false;
-    if (m) fresh(m);
-  }
-  return listen(
+  /** The question due a moment after the first news not yet asked about. */
+  let soon: ReturnType<typeof setTimeout> | null = null;
+  const ears = listen(
     "/v1/me/events/stream",
     (e) => {
       heard(e.type, e.data, e.id);
-      if (asking) return;
-      asking = true;
-      setTimeout(() => void again(), 400);
+      soon ??= setTimeout(() => {
+        soon = null;
+        void refreshLeaf().then((m) => m && fresh(m));
+      }, NEWS_SETTLES);
     },
     since === undefined ? {} : { after: since },
   );
+  return {
+    stop() {
+      ears.stop();
+      if (soon !== null) clearTimeout(soon);
+    },
+  };
 }
 
 // ---------- the member's Leaf in a game in the town ----------
 
 /**
- * Keeps the member's Leaf and Coins up to date in a game for as long as it is open. A game takes
- * them once, as it starts. In the town's frame the town hears the member's news, and says each new
- * number the ledger gives (`passLeaf`), and each change to its Coins (`passCoins`); the purse takes
- * the Leaf as it takes a fresh read of the ledger, and the Coins as Leaf's. Opened on its own, the
- * game listens to the member's news itself, as the town does, and asks Leaf for the Coins whenever
- * it comes back into view (`followCoins`). Returns how to stop.
+ * Keeps the member's Leaf and Coins up to date in a game for as long as it is open. In the town's
+ * frame, the game and the town each say Leaf's word to the other whenever theirs is newer
+ * (`passPurse` in the town), and each takes the newer of the two. Opened on its own, the game
+ * listens to the member's news itself, as the town does, and asks Leaf for the purse whenever it
+ * comes back into view (`followPurse`). Returns how to stop.
  */
 export function keepLeaf(): () => void {
   if (inTown()) {
-    return fromTown((msg) => {
-      if (msg.town === "leaf" && member()) fromLedger(msg.leaf);
-      else if (msg.town === "coins" && member()) heardCoins(msg.coins);
+    const heard = fromTown((msg) => {
+      if (msg.town === "purse" && member()) fromLeaf(msg.purse);
     });
+    const saying = watch((_p, why) => {
+      const word = said();
+      if (why === "Leaf" && word) tell({ town: "purse", purse: word });
+    });
+    return () => {
+      heard();
+      saying();
+    };
   }
   if (!member()) return () => undefined;
-  const away = followCoins();
+  const away = followPurse();
   if (isGuest()) return away;
   const ears = followLeaf();
   return () => {
@@ -377,61 +373,45 @@ export function keepLeaf(): () => void {
   };
 }
 
-/** The page came back into view, or went out of it: back in view, the purse asks Leaf for the Coins. */
+/** The page came back into view, or went out of it: back in view, the purse asks Leaf again. */
 function inViewAgain(): void {
-  if (document.visibilityState === "visible") refreshCoins();
+  if (document.visibilityState === "visible") void refreshLeaf();
 }
 
 /**
- * On the guild's server, asks Leaf for the member's Coins whenever the page comes back into view:
- * another page of the game, or another device, may have earned or spent some meanwhile. Returns
- * how to stop.
+ * On the guild's server, asks Leaf for the member's balances whenever the page comes back into
+ * view: another page of the game, or another device, may have earned or spent some meanwhile.
+ * Returns how to stop.
  */
-export function followCoins(): () => void {
-  if (typeof document === "undefined" || !coinsOnLeaf()) return () => undefined;
+export function followPurse(): () => void {
+  if (typeof document === "undefined" || !onLeaf()) return () => undefined;
   document.addEventListener("visibilitychange", inViewAgain);
   return () => document.removeEventListener("visibilitychange", inViewAgain);
 }
 
-/** What `passLeaf` and `passCoins` give the town: say what is owed once the game is ready, and stop. */
+/** What `passPurse` gives the town: say Leaf's word once the game is ready, and stop. */
 export interface Passing {
   ready(): void;
   stop(): void;
 }
 
 /**
- * Passes each new number the purse holds of one kind to `say`, from when the game is ready: a change
- * while it is still opening waits for `ready()` and is said then.
+ * In the town, while a game is open in its frame: says Leaf's word on the member's balances to
+ * `say`, which tells the game, each time the purse takes a newer one; from when the game is ready,
+ * when the newest is said at once.
  */
-function pass(kind: "leaf" | "coins", say: (n: number) => void): Passing {
-  let n = balance()[kind];
-  let heard = false;
-  let owed = false;
-  const stop = watch((p) => {
-    if (p[kind] === n) return;
-    n = p[kind];
-    if (heard) say(n);
-    else owed = true;
+export function passPurse(say: (word: Balances) => void): Passing {
+  let ready = false;
+  const stop = watch((_p, why) => {
+    const word = said();
+    if (ready && why === "Leaf" && word) say(word);
   });
   return {
     ready() {
-      heard = true;
-      if (!owed) return;
-      owed = false;
-      say(n);
+      ready = true;
+      const word = said();
+      if (word) say(word);
     },
-    stop() {
-      stop();
-    },
+    stop,
   };
 }
-
-/**
- * In the town, while a game is open in its frame: passes each new Leaf the guild's ledger gives
- * the member to `say`, which tells the game. A game hears nothing until it is ready, so a change
- * while it is still opening waits for `ready()` and is said then.
- */
-export const passLeaf = (say: (leaf: number) => void): Passing => pass("leaf", say);
-
-/** In the town, while a game is open in its frame: passes each change to the town's Coins to `say`, as `passLeaf` does Leaf. */
-export const passCoins = (say: (coins: number) => void): Passing => pass("coins", say);

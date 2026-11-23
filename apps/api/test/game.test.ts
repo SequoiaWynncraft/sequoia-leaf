@@ -11,6 +11,7 @@ import { PRESENT_FOR_MS } from "../src/game/presence.ts";
 import { API_POLICY } from "../src/http/headers.ts";
 import { StreamTuning } from "../src/http/streams.ts";
 import { Ledger } from "../src/ledger/store.ts";
+import { Coins } from "../src/play/coins.ts";
 import type { questJson } from "../src/quests/json.ts";
 import {
   type Backend,
@@ -409,6 +410,9 @@ describe("who may use the game's routes", () => {
   });
 });
 
+/** The version `/v1/game/me` gives Alice's balances. */
+const version = async (): Promise<unknown> => Object(await (await get("/v1/game/me")).json()).version;
+
 describe("GET /v1/game/me", () => {
   it("shows the member with their rank, Leaf, XP, level, Coins and where their events are up to", async () => {
     await services.post(
@@ -429,7 +433,30 @@ describe("GET /v1/game/me", () => {
       level: { number: 2, xp_into_level: 300, xp_for_next_level: 1250 },
       event_cursor: 1,
       coins: 300,
+      version: 1,
     });
+  });
+
+  it("writes nothing: a player with no Coins account is shown the welcome it will open with, and none is opened", async () => {
+    const before = await services.query((sql) => sql`SELECT count(*) AS n FROM coins`);
+    expect(await (await get("/v1/game/me")).json()).toMatchObject({ coins: 300, leaf: 0, version: 0 });
+    expect(await services.query((sql) => sql`SELECT count(*) AS n FROM coins`)).toEqual(before);
+  });
+
+  it("gives a version that grows with each entry to either ledger, and is the same while neither changes", async () => {
+    const first = Number(await version());
+    expect(await version()).toBe(first);
+    await services.post(
+      { kind: "earn", playerId: alice, amount: leaf(50), source: "staff", idempotencyKey: "v-1" },
+      T0,
+    );
+    const second = Number(await version());
+    expect(second).toBeGreaterThan(first);
+    // Somebody else's entry is nothing to Alice's version.
+    await raided(bob, 220);
+    expect(await version()).toBe(second);
+    await services.run(Coins.use((coins) => coins.open(alice, T0)));
+    expect(Number(await version())).toBeGreaterThan(second);
   });
 
   it("answers a guest with their Leaf and Coins, but no XP or cursor and a new member's level, reading none of their news", async () => {
@@ -472,10 +499,11 @@ describe("GET /v1/game/me", () => {
       level: { number: 1, xp_into_level: 0, xp_for_next_level: 1000 },
       event_cursor: 0,
       coins: 300,
+      version: 1,
     });
     expect(await member.json()).toMatchObject({ guest: false });
-    // Only the member's answer read the news; and only the member's name is kept for the guild's news.
-    expect(asked).toEqual([`ledger ${carol}`, `events ${alice}`, `ledger ${alice}`]);
+    // Only the member's answer read the news and their XP; and only the member's name is kept for the guild's news.
+    expect(asked).toEqual([`events ${alice}`, `ledger ${alice}`]);
     expect(names).toEqual([{ username: "Alice" }]);
   });
 

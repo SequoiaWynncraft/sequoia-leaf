@@ -4,21 +4,23 @@
  * two speak through these few messages.
  */
 
+import { type Balances, readBalances } from "@sequoia-leaf/core";
+
 export type ToTown =
   /** Back to the town; with `camp`, on to that player's camp. */
   | { readonly town: "leave"; readonly camp?: string }
   /** Something worth a line in the town's feed. */
   | { readonly town: "news"; readonly text: string; readonly tone?: "gold" | "leaf" | "coral" | "rose" }
   /** The game is on screen and ready, so the town can stop covering for it. */
-  | { readonly town: "ready" };
+  | { readonly town: "ready" }
+  /** Leaf's newest word on the member's balances, as the game heard it (`purse.ts`). */
+  | { readonly town: "purse"; readonly purse: Balances };
 
 export type FromTown =
   /** The town is about to put the game away; save now. */
   | { readonly town: "closing" }
-  /** The guild's ledger says the member holds this much Leaf now (the town heard it from their news). */
-  | { readonly town: "leaf"; readonly leaf: number }
-  /** Leaf's Coins ledger says the member holds this many Coins now (the town's purse changed). */
-  | { readonly town: "coins"; readonly coins: number };
+  /** Leaf's newest word on the member's balances, as the town heard it (`purse.ts`). */
+  | { readonly town: "purse"; readonly purse: Balances };
 
 /** True when this page is running inside the town. */
 export const inTown = (): boolean => {
@@ -40,17 +42,14 @@ export function leave(camp?: string): void {
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
-/** Leaf, or Coins, as a ledger holds them: a whole number, never below nothing. */
-const isLeaf = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
 
 /** In a game: hear the town. Returns how to stop. */
 export function fromTown(fn: (msg: FromTown) => void): () => void {
   const on = (e: MessageEvent): void => {
     if (e.origin !== window.location.origin || !isRecord(e.data)) return;
-    const { town, leaf, coins } = e.data;
-    if (town === "closing") fn({ town: "closing" });
-    else if (town === "leaf" && isLeaf(leaf)) fn({ town: "leaf", leaf });
-    else if (town === "coins" && isLeaf(coins)) fn({ town: "coins", coins });
+    const purse = e.data.town === "purse" ? readBalances(e.data.purse) : null;
+    if (e.data.town === "closing") fn({ town: "closing" });
+    else if (purse) fn({ town: "purse", purse });
   };
   window.addEventListener("message", on);
   return () => window.removeEventListener("message", on);
@@ -68,7 +67,10 @@ export function fromGame(frame: HTMLIFrameElement, fn: (msg: ToTown) => void): (
     const d = e.data;
     if (d.town === "leave") fn(typeof d.camp === "string" ? { town: "leave", camp: d.camp } : { town: "leave" });
     else if (d.town === "ready") fn({ town: "ready" });
-    else if (d.town === "news" && typeof d.text === "string") {
+    else if (d.town === "purse") {
+      const purse = readBalances(d.purse);
+      if (purse) fn({ town: "purse", purse });
+    } else if (d.town === "news" && typeof d.text === "string") {
       const tone = d.tone === "leaf" || d.tone === "coral" || d.tone === "rose" || d.tone === "gold" ? d.tone : "gold";
       fn({ town: "news", text: d.text, tone });
     }

@@ -59,6 +59,10 @@ export interface Standin {
   clock: { now: number };
   /** The page comes back: visible again, focused, or back on the network. */
   wake(): void;
+  /** The page may be going: hidden, put away, or closed by the town. */
+  leave(): void;
+  /** How many are listening for the page coming back or going. */
+  hearing(): number;
   /** Puts the real world back. */
   done(): void;
 }
@@ -69,14 +73,16 @@ export interface Standin {
  */
 export function standin(
   routes: Record<string, Route | Reply>,
-  opts: { href?: string; top?: boolean; store?: MemoryStore; width?: number } = {},
+  opts: { href?: string; top?: boolean; store?: MemoryStore; width?: number; deadline?: number } = {},
 ): Standin {
   const store = opts.store ?? new MemoryStore();
+  const tab = new MemoryStore();
   const sent: Sent[] = [];
   const went: string[] = [];
   const reloaded = { count: 0 };
   const clock = { now: 1_800_000_000_000 };
   const woken = new Set<() => void>();
+  const leavers = new Set<() => void>();
   const done = pretend({
     async fetch(path, init = {}) {
       await Promise.resolve();
@@ -97,6 +103,7 @@ export function standin(
       });
     },
     store: () => store,
+    tab: () => tab,
     href: () => opts.href ?? "https://leaf.example/play/town/?x=1",
     top: () => opts.top ?? true,
     go: (url) => {
@@ -110,17 +117,28 @@ export function standin(
       throw new Error("No live connection in this test");
     },
     width: () => opts.width ?? 1280,
+    deadline: opts.deadline ?? 10_000,
     wake: (fn) => {
       woken.add(fn);
       return () => {
         woken.delete(fn);
       };
     },
+    leaving: (fn) => {
+      leavers.add(fn);
+      return () => {
+        leavers.delete(fn);
+      };
+    },
   });
   const wake = (): void => {
     for (const fn of woken) fn();
   };
-  return { store, sent, went, reloaded, clock, wake, done };
+  const leave = (): void => {
+    for (const fn of leavers) fn();
+  };
+  const hearing = (): number => woken.size + leavers.size;
+  return { store, sent, went, reloaded, clock, wake, leave, hearing, done };
 }
 
 /** The member `/v1/game/me` answers with in tests. */
@@ -133,6 +151,7 @@ export const TESTER = {
   level: { number: 7, xp_into_level: 230, xp_for_next_level: 1400 },
   event_cursor: 140,
   coins: 300,
+  version: 90,
 };
 
 /** A guest, as `/v1/game/me` answers for somebody signed in who is not in the guild: with Leaf they earned as a member. */
@@ -145,6 +164,7 @@ export const GUEST = {
   level: { number: 1, xp_into_level: 0, xp_for_next_level: 1000 },
   event_cursor: 0,
   coins: 300,
+  version: 12,
 };
 
 /**
@@ -166,6 +186,27 @@ export function membersOnly(asked: string[]): Record<string, Route> {
       "GET /v1/game/guild/events/stream",
     ].map((route) => [route, refuse]),
   );
+}
+
+/**
+ * A stream that stays open, for a route of server-sent events: each `open()` is a new connection's
+ * answer, and `say(text)` sends more on the newest one.
+ */
+export function keptOpen(): { open: () => Response; say: (text: string) => void } {
+  const encoder = new TextEncoder();
+  let newest: ReadableStreamDefaultController<Uint8Array> | null = null;
+  return {
+    open: () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(c) {
+            newest = c;
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "text/event-stream" } },
+      ),
+    say: (text) => newest?.enqueue(encoder.encode(text)),
+  };
 }
 
 export const HELLO = {

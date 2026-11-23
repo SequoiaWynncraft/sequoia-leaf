@@ -13,8 +13,8 @@
  */
 
 import { DAY_MS, utcDay } from "@sequoia-leaf/core";
-import { followCoins, followLeaf, type Member, member } from "@sequoia-leaf/kit/live.ts";
-import { ask, isRecord, listen, outside } from "@sequoia-leaf/kit/net.ts";
+import { followLeaf, followPurse, type Member, member } from "@sequoia-leaf/kit/live.ts";
+import { ask, type Backoff, backoff, isRecord, listen, outside } from "@sequoia-leaf/kit/net.ts";
 import {
   hearPresent,
   here as sayHere,
@@ -30,6 +30,9 @@ import { HOME, later } from "@sequoia-leaf/town/clock.ts";
 import type { AwayLine, Deeds, Goal, Guild, Happening, Me, Moment, Person, Quest, RoomSays, Tone } from "./guild.ts";
 import { type Line, lineFor, makePace } from "./news.ts";
 import { type Listed, resters, standing, whereabouts } from "./where.ts";
+
+/** How the guild's news is asked for again when Leaf did not answer: three seconds, doubling. */
+const NEWS_BACKOFF: Backoff = { first: 3000, most: 24_000, jitter: 0.25 };
 
 // ---------- who the member is ----------
 
@@ -508,8 +511,8 @@ export function makeLive(p: Prepared): Guild {
     hearPresent((seen, staying, gone) => {
       listed = { present: seen.map(listedHere), resting: staying.map(listedGone), gone: gone.map(listedGone) };
     });
-    // Back in view, the town asks Leaf for the Coins: a game or another device may have changed them.
-    followCoins();
+    // Back in view, the town asks Leaf for the purse: another device may have changed it.
+    followPurse();
     if (me.guest) return;
     followLeaf(
       (type, _data, id) => {
@@ -528,7 +531,7 @@ export function makeLive(p: Prepared): Guild {
       // trouble for one, is asked for again, a few times.
       for (let tries = 0; (a.status === 0 || a.status >= 500) && tries < 5; tries++) {
         // oxlint-disable-next-line no-await-in-loop -- waiting before trying again
-        await new Promise((again) => setTimeout(again, 3000));
+        await new Promise((again) => setTimeout(again, backoff(NEWS_BACKOFF, tries)));
         // oxlint-disable-next-line no-await-in-loop -- one try at a time
         a = await ask("/v1/game/guild/events");
       }

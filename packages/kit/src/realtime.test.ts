@@ -13,21 +13,25 @@ import {
 } from "@sequoia-leaf/core";
 
 import { restart, start } from "./live.ts";
-import { onWake, pretend } from "./net.ts";
+import { backoff, onWake, outside, pretend } from "./net.ts";
 import { here } from "./presence.ts";
 import { forgetLedger } from "./purse.ts";
 import {
   askWhy,
   ClockSync,
+  type Conn,
+  type ConnEvent,
+  firstConn,
   firstTry,
   joinLive,
+  LIVE_BACKOFF,
   type LiveRoom,
   type LiveStatus,
   Playout,
-  retryAfter,
   sendIn,
   silent,
   type Step,
+  stepConn,
   Track,
 } from "./realtime.ts";
 import { FakeSocket, HELLO, type Reply, type Standin, standin, TESTER } from "./standin.ts";
@@ -166,29 +170,20 @@ describe("sending the player's motion", () => {
 });
 
 describe("trying again", () => {
-  test("waits a quarter second, then half, then a second for thirty seconds, two for a minute, then five", () => {
-    const waits = (
-      [
-        [0, 0],
-        [1, 300],
-        [2, 900],
-        [20, 29_999],
-        [21, 30_000],
-        [40, 89_999],
-        [41, 90_000],
-        [99, 3_600_000],
-      ] as const
-    ).map(([tries, down]) => retryAfter(tries, down, 0));
-    expect(waits).toEqual([250, 500, 1000, 1000, 2000, 2000, 5000, 5000]);
-  });
-
-  test("each with up to a quarter more by chance", () => {
-    expect([retryAfter(0, 0, 1), retryAfter(2, 0, 0.5), retryAfter(9, 100_000, 1)]).toEqual([312.5, 1125, 6250]);
+  test("waits a quarter second, doubling to five seconds at most, each with up to a quarter more by chance", () => {
+    expect([0, 1, 2, 3, 4, 5, 40].map((tries) => backoff(LIVE_BACKOFF, tries, 0))).toEqual([
+      250, 500, 1000, 2000, 4000, 5000, 5000,
+    ]);
+    expect([backoff(LIVE_BACKOFF, 0, 1), backoff(LIVE_BACKOFF, 2, 0.5), backoff(LIVE_BACKOFF, 9, 1)]).toEqual([
+      312.5, 1125, 6250,
+    ]);
   });
 
   test("starts at half a second when Leaf said it is restarting", () => {
-    expect(retryAfter(firstTry(CLOSE.restart), 0, 0)).toBe(500);
-    expect([1006, CLOSE.done, CLOSE.policy].map((code) => retryAfter(firstTry(code), 0, 0))).toEqual([250, 250, 250]);
+    expect(backoff(LIVE_BACKOFF, firstTry(CLOSE.restart), 0)).toBe(500);
+    expect([1006, CLOSE.done, CLOSE.policy].map((code) => backoff(LIVE_BACKOFF, firstTry(code), 0))).toEqual([
+      250, 250, 250,
+    ]);
   });
 
   test("asks why after three tries in a row that did not open, and every fifth after", () => {
@@ -206,6 +201,118 @@ describe("trying again", () => {
     expect(silent(60_000, 120_000, 124_999)).toBe(false);
     expect(silent(60_000, 120_000, 125_000)).toBe(true);
     expect(silent(0, null, 60_000)).toBe(false);
+  });
+});
+
+/** A connection dropped, as its socket says. */
+const drop = (link: string, code: number, now = 5000): ConnEvent<string> => ({
+  do: "dropped",
+  link,
+  code,
+  now,
+  chance: 0,
+});
+
+describe("where the connection is", () => {
+  type C = Conn<string>;
+  const down = (over: Partial<Omit<Extract<C, { at: "down" }>, "at">> = {}): C => ({
+    at: "down",
+    shown: null,
+    tries: 0,
+    failed: 0,
+    restart: false,
+    lastTry: -Infinity,
+    retryAt: -Infinity,
+    ...over,
+  });
+  const on = (where: "connecting" | "open", over: Partial<Omit<Extract<C, { link: string }>, "at">> = {}): C => ({
+    at: where,
+    shown: null,
+    link: "a",
+    since: 1000,
+    tries: 0,
+    failed: 0,
+    restart: false,
+    ...over,
+  });
+
+  test.each<[string, C, ConnEvent<string>, C]>([
+    ["a try begins from down", firstConn(), { do: "try", link: "a", now: 1000 }, on("connecting")],
+    ["a try begins only from down", on("connecting"), { do: "try", link: "b", now: 1000 }, on("connecting")],
+    [
+      "the try opens: nothing has failed since",
+      on("connecting", { failed: 2 }),
+      { do: "opened", link: "a" },
+      on("open"),
+    ],
+    ["another connection opening is nothing", on("connecting"), { do: "opened", link: "b" }, on("connecting")],
+    [
+      "the welcome shows this connection, and its tries start again",
+      on("open", { tries: 4, restart: true }),
+      { do: "welcomed", link: "a" },
+      on("open", { shown: "a" }),
+    ],
+    [
+      "a welcomed connection dropped waits the first wait",
+      on("open", { shown: "a", since: 900 }),
+      drop("a", 1006),
+      down({ shown: "a", tries: 1, lastTry: 900, retryAt: 5250 }),
+    ],
+    [
+      "dropped as Leaf restarts, the first wait is the second, and the welcome will say so",
+      on("open", { shown: "a" }),
+      drop("a", CLOSE.restart),
+      down({ shown: "a", tries: 2, restart: true, lastTry: 1000, retryAt: 5500 }),
+    ],
+    [
+      "a try that did not open counts as failed, and waits longer",
+      on("connecting", { shown: "z", tries: 3, failed: 1, restart: true }),
+      drop("a", 1006),
+      down({ shown: "z", tries: 4, failed: 2, restart: true, lastTry: 1000, retryAt: 7000 }),
+    ],
+    [
+      "opened elsewhere: let go",
+      on("open", { shown: "a" }),
+      drop("a", CLOSE.replaced),
+      { at: "gone", why: "replaced" },
+    ],
+    ["signed out: let go", on("connecting"), drop("a", CLOSE.signedOut), { at: "gone", why: "signedout" }],
+    ["another connection dropping is nothing", on("open"), drop("b", 1006), on("open")],
+    [
+      "back while a try has been opening over a second: tried again at once",
+      on("connecting", { since: 1000 }),
+      { do: "wake", now: 2000 },
+      down({ failed: 1, lastTry: 1000, retryAt: 2000 }),
+    ],
+    ["back while a try has just begun: nothing", on("connecting"), { do: "wake", now: 1500 }, on("connecting")],
+    [
+      "back while down: the wait is cut to a second after the last try",
+      down({ lastTry: 1000, retryAt: 9000 }),
+      { do: "wake", now: 1200 },
+      down({ lastTry: 1000, retryAt: 2000 }),
+    ],
+    [
+      "back while down with a try due sooner: left as it is",
+      down({ lastTry: 1000, retryAt: 1500 }),
+      { do: "wake", now: 1200 },
+      down({ lastTry: 1000, retryAt: 1500 }),
+    ],
+    [
+      "Leaf says signed out while trying: let go",
+      down(),
+      { do: "letGo", why: "signedout" },
+      { at: "gone", why: "signedout" },
+    ],
+    ["Leaf says signed out while open: kept", on("open"), { do: "letGo", why: "signedout" }, on("open")],
+    ["the page closes it", on("open", { shown: "a" }), { do: "close" }, { at: "gone", why: "closed" }],
+    [
+      "nothing moves a connection let go of",
+      { at: "gone", why: "replaced" },
+      { do: "try", link: "a", now: 0 },
+      { at: "gone", why: "replaced" },
+    ],
+  ])("%s", (_name, from, event, to) => {
+    expect(stepConn(from, event)).toEqual(to);
   });
 });
 
@@ -582,9 +689,6 @@ async function settle(): Promise<void> {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 }
 
-/** The wait after a drop, by how long the connection has been down, before chance adds to it. */
-const baseWait = (since: number): number => (since < 30_000 ? 1000 : since < 90_000 ? 2000 : 5000);
-
 describe("coming back after a drop", () => {
   let world: Standin | null = null;
   let room: LiveRoom | null = null;
@@ -658,45 +762,20 @@ describe("coming back after a drop", () => {
     s.says(welcome(1, world?.clock.now ?? 0));
   }
 
-  test("tries again after a quarter second, then half, then every second, with up to a quarter more", async () => {
+  test("tries again after a quarter second, doubling to five seconds, with up to a quarter more, and from the start again after a welcome", async () => {
     await live();
     room = joinLive("town");
     welcomed(last());
     last().drop();
     const waits: number[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8; i++) {
       waits.push(nextTry());
       last().drop();
     }
-    const [a = 0, b = 0, ...rest] = waits;
-    expect(a).toBeGreaterThanOrEqual(250);
-    expect(a).toBeLessThanOrEqual(320);
-    expect(b).toBeGreaterThanOrEqual(500);
-    expect(b).toBeLessThanOrEqual(630);
-    for (const w of rest) {
-      expect(w).toBeGreaterThanOrEqual(1000);
-      expect(w).toBeLessThanOrEqual(1260);
+    for (const [tries, wait] of waits.entries()) {
+      expect(wait).toBeGreaterThanOrEqual(backoff(LIVE_BACKOFF, tries, 0));
+      expect(wait).toBeLessThanOrEqual(backoff(LIVE_BACKOFF, tries, 1) + 10);
     }
-  });
-
-  test("every two seconds after the first thirty, every five after ninety, and from the start again after a welcome", async () => {
-    const w = await live();
-    room = joinLive("town");
-    welcomed(last());
-    const down = w.clock.now;
-    last().drop();
-    const seen: [number, number][] = [];
-    while (w.clock.now - down < 120_000) {
-      const since = w.clock.now - down;
-      seen.push([since, nextTry()]);
-      last().drop();
-    }
-    for (const [since, wait] of seen.slice(2)) {
-      expect(wait).toBeGreaterThanOrEqual(baseWait(since));
-      expect(wait).toBeLessThanOrEqual(baseWait(since) * 1.25 + 10);
-    }
-    expect(seen.some(([since]) => since >= 90_000)).toBe(true);
-
     nextTry();
     welcomed(last());
     last().drop();
@@ -838,6 +917,33 @@ describe("coming back after a drop", () => {
     const had = made.length;
     pass(60_000);
     expect(made.length).toBe(had);
+  });
+
+  test("a try that does not open by the deadline is let go and tried again, and one still opening after a second goes again as the page comes back", async () => {
+    const seen: LiveStatus[] = [];
+    const w = await live();
+    room = joinLive("town", { status: (s) => seen.push(s) });
+    welcomed(last());
+    last().drop();
+    // A network that is up and passes nothing: the try never opens, nor closes.
+    nextTry();
+    const blackHoled = last();
+    pass(outside.deadline - 10);
+    expect([blackHoled.closed, made.length]).toEqual([null, 2]);
+    pass(10);
+    expect(blackHoled.closed).toBe(CLOSE.done);
+    expect(seen.at(-1)).toBe("closed");
+    expect(nextTry()).toBeLessThanOrEqual(1260);
+    // Coming back to the page while a try has been opening for over a second: it goes again at once.
+    const slow = last();
+    pass(1500);
+    const had = made.length;
+    w.wake();
+    expect([slow.closed, made.length]).toEqual([CLOSE.done, had + 1]);
+    // The old one closing late is nothing to the page.
+    slow.drop();
+    welcomed(last());
+    expect(seen.at(-1)).toBe("open");
   });
 
   test("a try that opened starts the count of tries that did not again", async () => {

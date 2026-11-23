@@ -3,20 +3,23 @@
  * running inside the town and the town itself always show the same numbers. Both are Leaf's, and
  * the purse only shows them:
  *
- * - **Leaf** is the guild's ledger's (`fromLedger`), and nothing else: a page never takes Leaf
- *   itself. A game's command on Leaf may take it, while Leaf says spending is on (`leafOpen`);
- *   every other Leaf button shows itself closed (`leafShut`). A guest, who is not in the guild
- *   (`asGuest`), has their Leaf as a member has, but may not spend it on what is for members only
- *   (`leafFor`), whose buttons say so (`LEAF_MEMBERS`).
- * - **Coins** are the Coins ledger's (`fromLeaf`, with what `/v1/game/me` says). A game's commands
- *   pay and take them on Leaf; the page then asks Leaf for the balance again (`refreshCoins`), or
- *   takes the number another page of the game heard (`heardCoins`), or a game shows the change it
- *   worked out itself until Leaf answers. Nothing of either is kept in the browser.
+ * - **Leaf's word** (`fromLeaf`) is its `Balances`: Coins and Leaf as one moment of its ledgers had
+ *   them, with that moment's version. Every play answer carries one, and so does `/v1/game/me`; of
+ *   two, the purse keeps the newer (the higher version) and nothing else, so an answer that comes
+ *   late never takes the purse back.
+ * - **On its way**: a game may show at once the Coins a command pays or takes (`play.ts`'s `send`,
+ *   which `owe`s them by the command's id) until Leaf answers it, when they go (`settle`) in the same
+ *   moment as the answer's word is taken: a purchase on its way is never shown undone, nor twice.
+ * - Leaf told some other way, with no version (a request or a reroll answers with the Leaf left:
+ *   `fromLedger`), is taken at once, and stands until a newer word.
+ *
+ * A game's command on Leaf may take Leaf while Leaf says spending is on (`leafOpen`); every other
+ * Leaf button shows itself closed (`leafShut`). A guest, who is not in the guild (`asGuest`), has
+ * their Leaf as a member has, but may not spend it on what is for members only (`leafFor`), whose
+ * buttons say so (`LEAF_MEMBERS`). Nothing of either is kept in the browser.
  */
 
-import { type LeafFor, mayBuy } from "@sequoia-leaf/core";
-
-import { ask, isRecord } from "./net.ts";
+import { type Balances, type LeafFor, mayBuy } from "@sequoia-leaf/core";
 
 export interface Purse {
   leaf: number;
@@ -25,29 +28,26 @@ export interface Purse {
 export type Currency = keyof Purse;
 
 const watchers = new Set<(p: Purse, why: string) => void>();
-let purse: Purse = { leaf: 0, coins: 0 };
-/** Whether the purse holds Leaf's numbers yet: until it does, Leaf is not asked anything. */
-let onLeaf = false;
+/** Leaf's newest word, once it has said one. */
+let word: Balances | null = null;
+/** The Coins each command still on its way is shown to pay (taking, below nothing), by its id. */
+const owed = new Map<string, number>();
 /** Whether the purse is a guest's, who may not spend Leaf on what is for members. */
 let guest = false;
 /** Whether Leaf says a game's command may take Leaf (`/v1/game/hello`'s `leaf_spending`). */
 let spending = false;
-/** Counts each start, so that an answer to an older question is let go. */
-let round = 0;
-/** Whether Leaf is being asked for the Coins, and whether it is to be asked again after. */
-let asking = false;
-let again = false;
-/** Counts each change to the Coins the purse is told of (`heardCoins`), so that an answer asked for before one is let go. */
-let told = 0;
 
-const whole = (v: unknown): number | null =>
-  typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null;
-
-function tell(why: string): void {
-  for (const fn of watchers) fn(purse, why);
+/** What the purse shows: Leaf's word, and the Coins of what is on its way. */
+export function balance(): Readonly<Purse> {
+  let coins = word?.coins ?? 0;
+  for (const n of owed.values()) coins += n;
+  return { leaf: word?.leaf ?? 0, coins: Math.max(0, coins) };
 }
 
-export const balance = (): Readonly<Purse> => purse;
+function tell(why: string): void {
+  const p = balance();
+  for (const fn of watchers) fn(p, why);
+}
 
 /** Calls `fn` whenever the purse changes. Returns how to stop. */
 export function watch(fn: (p: Readonly<Purse>, why: string) => void): () => void {
@@ -55,9 +55,42 @@ export function watch(fn: (p: Readonly<Purse>, why: string) => void): () => void
   return () => watchers.delete(fn);
 }
 
-/** The guild's ledger says the member holds this much Leaf. */
+/** Leaf's newest word, or null before it has said one. */
+export const said = (): Balances | null => word;
+
+/** Whether `b` is newer than Leaf's word the purse holds. */
+const newer = (b: Balances): boolean => word === null || b.version > word.version;
+
+/** Leaf's word: taken if it is newer than the one the purse holds. Says whether it was. */
+export function fromLeaf(b: Balances): boolean {
+  if (!newer(b)) return false;
+  word = b;
+  tell("Leaf");
+  return true;
+}
+
+/** Leaf answered commands (`ids`), with its word as of that answer (or none): what they owed goes as the word comes. */
+export function settle(ids: readonly string[], b: Balances | null): void {
+  let changed = false;
+  for (const id of ids) changed = owed.delete(id) || changed;
+  if (b !== null && newer(b)) {
+    word = b;
+    changed = true;
+  }
+  if (changed) tell("Leaf");
+}
+
+/** A command on its way (`id`) is shown to pay `coins` (taking, below nothing) until Leaf answers it. */
+export function owe(id: string, coins: number): void {
+  if (coins === 0 || word === null) return;
+  owed.set(id, coins);
+  tell("on its way");
+}
+
+/** Leaf says, with no version, that the member holds this much Leaf: taken until a newer word. */
 export function fromLedger(leaf: number): void {
-  purse = { ...purse, leaf: Math.max(0, Math.floor(leaf)) };
+  if (word === null) return;
+  word = { ...word, leaf: Math.max(0, Math.floor(leaf)) };
   tell("the guild's ledger");
 }
 
@@ -66,54 +99,8 @@ export function asGuest(): void {
   guest = true;
 }
 
-/** Leaf says the member holds this many Coins. From now on the purse's Coins are Leaf's. */
-export function fromLeaf(coins: number): void {
-  round++;
-  onLeaf = true;
-  asking = false;
-  again = false;
-  purse = { ...purse, coins: Math.max(0, Math.floor(coins)) };
-  tell("Leaf");
-}
-
-/** Asks Leaf for the member's Coins again: one question at a time, and once more if asked meanwhile. */
-export function refreshCoins(): void {
-  if (!onLeaf) return;
-  if (asking) {
-    again = true;
-    return;
-  }
-  asking = true;
-  void askCoins(round, told);
-}
-
-async function askCoins(mine: number, since: number): Promise<void> {
-  const answer = await ask("/v1/game/me");
-  if (mine !== round) return;
-  asking = false;
-  const coins = answer.status === 200 && isRecord(answer.body) ? whole(answer.body.coins) : null;
-  // Coins spent or paid after it was asked (a purchase shown at once, another page's number) may
-  // not be in the answer: it is let go, and the answer to that purchase asks again.
-  if (coins !== null && coins !== purse.coins && since === told) {
-    purse = { ...purse, coins };
-    tell("Leaf");
-  }
-  if (again) {
-    again = false;
-    refreshCoins();
-  }
-}
-
-/** Another page of the game (the town, to a game in its frame), or a game's own reckoning, says the Coins are now this. */
-export function heardCoins(coins: number): void {
-  if (!onLeaf) return;
-  told++;
-  purse = { ...purse, coins: Math.max(0, Math.floor(coins)) };
-  tell("the town");
-}
-
-/** Whether the purse holds Leaf's Coins. */
-export const coinsOnLeaf = (): boolean => onLeaf;
+/** Whether the purse holds Leaf's word. */
+export const onLeaf = (): boolean => word !== null;
 
 /** Leaf says whether a game's command may take Leaf. */
 export function leafSpending(on: boolean): void {
@@ -138,11 +125,8 @@ export const leafShut = (): string => (spending ? LEAF_NOT_HERE : LEAF_SHUT);
 
 /** Lets the ledgers go again (for tests). */
 export function forgetLedger(): void {
-  round++;
-  purse = { leaf: 0, coins: 0 };
-  onLeaf = false;
+  word = null;
+  owed.clear();
   guest = false;
   spending = false;
-  asking = false;
-  again = false;
 }

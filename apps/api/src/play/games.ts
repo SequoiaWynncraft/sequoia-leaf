@@ -9,6 +9,7 @@ import {
   type Logged,
   type Standing,
 } from "@sequoia-leaf/core";
+import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts" with { type: "macro" };
 import { FACTORY } from "@sequoia-leaf/factory/game.ts";
 import { PULLS } from "@sequoia-leaf/pulls";
 import { RAID } from "@sequoia-leaf/raid/game.ts";
@@ -62,6 +63,8 @@ export interface Held {
 /** A game as the play service handles it: in stored text and JSON, whatever the game's own types. */
 export interface Played {
   readonly id: GameId;
+  /** The version of its rules Leaf runs (core's `rulesVersion`), made as Leaf started: every answer says it, for the page to check its own. */
+  readonly rules: string;
   /** A new player's state, as the game stores it. */
   readonly create: (ctx: Ctx) => string;
   /** Whether a command reads as one of the game's. */
@@ -137,6 +140,7 @@ export function played<State, Command, View, Note, Short>(game: Game<State, Comm
   };
   return {
     id: game.id,
+    rules: RULES[game.id],
     create: (ctx) => game.encode(game.create(ctx)),
     reads: (command) => game.command(command) !== null,
     chore: (raw) => {
@@ -151,6 +155,9 @@ export function played<State, Command, View, Note, Short>(game: Game<State, Comm
     echoes: game.echo !== undefined,
   };
 }
+
+/** The version of each game's rules, read from the files Leaf runs as it starts. */
+const RULES = rulesVersions();
 
 /** The games on the play service. */
 export const GAMES: Readonly<Record<GameId, Played>> = {

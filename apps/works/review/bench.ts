@@ -27,5 +27,5 @@ const made = generate(makeLand(plots, plots, 7), pieces);
 for (let k = 0; k < 3000; k++) step(made.y);
 S.world = made.y;
 S.alone = true;
-fromLeaf(1_000_000_000);
+fromLeaf({ coins: 1_000_000_000, leaf: 0, version: 0 });
 await import("../src/main.ts");

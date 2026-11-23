@@ -432,16 +432,18 @@ made, and is not to be sent again. Leaf waits 30 seconds for it.
 and `GAME_LEAF_SPENDING`. A page that gets it knows it is on a live server.
 
 `GET /v1/game/me` answers `{ "player": { "id", "username" }, "rank", "guest",
-"leaf", "xp", "level", "event_cursor", "coins" }`. `rank` is the member's guild rank as
+"leaf", "xp", "level", "event_cursor", "coins", "version" }`. `rank` is the member's guild rank as
 the guild writes it, such as `Captain`, or null for a guest or a website admin
 who is not in the guild. `level` is as `/v1/me` has it. `event_cursor` is the id
 of the member's newest event, 0 when they have none, from which to read
 `/v1/me/events?after=` on their next visit. For a guest, `guest` is true,
-`leaf` and `xp` are 0, `level` is a new member's and `event_cursor` is 0, and
-nothing is read from the ledger or the events: a former member's old Leaf is
-not shown to them while they are a guest. `coins` is the player's Coins, guest
-or member (see [The play service](#the-play-service)); asking opens a new
-player's account with the welcome.
+`xp` is 0, `level` is a new member's and `event_cursor` is 0, and nothing is
+read from their events. `coins` is the player's Coins, guest or member (see
+[The play service](#the-play-service)): the welcome, 300, for a player with no
+account yet. `coins`, `leaf` and `version` are read in one statement, and the
+route writes nothing: `version` is the player's newest entry in each ledger,
+added, so of two answers the one with the higher version is the newer. Every
+answer of the play service carries the same three as `purse`.
 
 **The old saves.** Before the games were Leaf's, each page kept its game in
 the browser and copied it to a save per slot (`saves`, with earlier copies in
@@ -542,8 +544,15 @@ the game stirs into the stream its state keeps; the stream is never shown.
 The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Works (`packages/factory`), and
 `pulls` (`packages/pulls`).
 
-- `GET /v1/game/play/{game}` answers `{ "rev", "now", "state" }`: how many
-  batches have changed the state, Leaf's clock, and the game's view of it. A
+- `GET /v1/game/play/{game}` answers `{ "rev", "now", "state", "purse", "rules" }`:
+  how many batches have changed the state, Leaf's clock, the game's view of it,
+  the caller's `{ "coins", "leaf", "version" }` as `/v1/game/me` has them (a
+  batch's, as its transaction left them), so a page never asks for them again
+  after a command, and the version of the game's rules Leaf plays it by (core's
+  `rulesVersion`: a hash of every file the rules import, made by a macro,
+  `packages/core/build/rules.ts`, as Leaf starts and as a page is built). A page
+  built with other rules loads again rather than show what Leaf does not do.
+  Every answer below has the same five, a batch's `results` beside them. A
   player with no state yet gets a new one (and, if they have no Coins account
   yet, the welcome). Nothing is ever read from the old saves. `?differs=<tick>`
   is from a page that found its own copy not to be Leaf's state at that tick;
@@ -552,7 +561,10 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   `player` is the id the page believes it is (409 `not_you`, nothing done, when
   it is not the session's player, as for a page left open after someone else
   signed in; the kit's play client then sends nothing more and loads the page
-  again), and the commands are at most 32, each with an id the page made (up to 64 letters, digits and `_ . : -`),
+  again), and the commands are at most 128 (a page puts at most 32 in a batch;
+  going away, it sends everything Leaf has not answered in one request, since
+  two could arrive in either order), each with an id the page made (up to 64
+  letters, digits and `_ . : -`),
   unique in the batch, and answers `{ "rev", "now", "results", "state" }`:
   for each command in order `{ "id", "notes" }` (the game's own notes of what
   happened) or `{ "id", "refused": "<code>" }`, and the state after them all;
@@ -570,11 +582,12 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   goes up by one with each batch that changed anything, Leaf's own tending
   (below) among them.
 - 404 `no_such_game` for a game Leaf does not play; 400 `invalid_command` for a
-  body that is not commands, more than 32, a missing or repeated id, or a
+  body that is not commands, more than 128, a missing or repeated id, or a
   command that is not one of the game's (nothing is done); 413 as elsewhere;
   429 `slow_down` for a batch that would take one player past 10 batches a
   second (bursts of 20) or 10 commands a second (bursts of 40), across all
-  games: it is refused whole, and nothing is done.
+  games: it is refused whole, and nothing is done. A command answered before
+  counts for nothing of that.
 - A command's Coins are worked out in order, starting from the balance: each
   change it pays or takes is added in turn, and if the balance would go below
   nothing at any point the command is refused with `not_enough_coins` and
@@ -597,7 +610,8 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   `members_only`; when its spends come to more than the ledger's balance, with
   `not_enough_leaf`. Otherwise each spend is posted to the ledger
   in the batch's transaction, as a `spend` on the `shop` sink keyed
-  `play:<game>:<player>:<key>` with what it was for as its memo, and logged as
+  `play:<game>:<player>:<born>:<key>` (`<born>`, below) with what it was for
+  as its memo, and logged as
   `leaf_spent` for the staff's report. A key the ledger has seen is not taken
   again, and the command stands. A spend earns no XP and uses none of the
   Coins' room. The raid's `buyLook` and the pulls' `pull` take Leaf, both for
@@ -674,8 +688,13 @@ it; migration 28 put `time_in` in its place, counted from visits (below), and
 removed it.
 
 **Coins** are a ledger like Leaf: a balance per player, changed only by an
-entry, each keyed by the fact it records (`<game>:<player>:<key>` for a
-game's, such as `raid:<player>:run:7`) so that it is never made twice. A
+entry, each keyed by the fact it records (`<game>:<player>:<born>:<key>` for a
+game's, such as `raid:<player>:1795608000000:run:7`) so that it is never made
+twice. A game's key often counts something kept in its state, which starts
+again in a state made again (the staff taking away one that will not read), so
+`<born>`, when the state's row was made (`play_state.born`), goes before it; a
+state made before Leaf kept that (`born` 0) keeps its keys as they were,
+`<game>:<player>:<key>`. A
 trigger applies each entry to its balance, which can never go below zero, and
 entries are never changed or removed. A new player's account opens with 300,
 as one entry keyed `welcome:<player>`. They are the only Coins there are:
@@ -791,7 +810,7 @@ and each command is done at the tick the page's copy stood at when it was
 made. What the yard did since its owner's last command is counted from what it
 remembers of that moment, and shown to the page for its letter once that was
 five minutes ago or more. Its Coins are
-keyed `works:<player>:bank:<n>` by the yard's own count, and every one it pays
+keyed `works:<player>:<born>:bank:<n>` by the yard's own count, and every one it pays
 in is `free`: the till paid in before any price is taken and when the page
 collects it, and what a piece cost given back when it is taken away. A plot
 bought, a standing order handed over and each lesson, project and commission

@@ -10,8 +10,8 @@
 
 import { close as closeCard } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
-import { passCoins, passLeaf, refreshLeaf } from "@sequoia-leaf/kit/live.ts";
-import { refreshCoins } from "@sequoia-leaf/kit/purse.ts";
+import { passPurse } from "@sequoia-leaf/kit/live.ts";
+import { fromLeaf } from "@sequoia-leaf/kit/purse.ts";
 import { fromGame, toGame } from "@sequoia-leaf/kit/shell.ts";
 import { noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { must, type Pt } from "@sequoia-leaf/kit/util.ts";
@@ -110,11 +110,7 @@ export function goIn(game: Game, asks: Asks): Visit {
 
   function putAway(): void {
     stop();
-    leaf.stop();
-    coins.stop();
-    // The game may have earned or spent Coins of Leaf's, or spent Leaf: the town shows what Leaf holds now.
-    refreshCoins();
-    void refreshLeaf();
+    purse.stop();
     root.replaceChildren();
     root.hidden = true;
     root.classList.remove("dark");
@@ -144,24 +140,21 @@ export function goIn(game: Game, asks: Asks): Visit {
     }, SAVING);
   }
 
-  // The game took the member's Leaf and Coins as it opened; the town, which hears their news and
-  // whose own Coins change as it plays, says what changes.
-  const leaf = passLeaf((n) => {
-    toGame(frame, { town: "leaf", leaf: n });
-  });
-  const coins = passCoins((n) => {
-    toGame(frame, { town: "coins", coins: n });
+  // The game and the town each say Leaf's newest word on the member's balances to the other, as
+  // each hears it (the town from the member's news and its own answers, the game from its answers).
+  const purse = passPurse((word) => {
+    toGame(frame, { town: "purse", purse: word });
   });
   const stop = fromGame(frame, (msg) => {
     if (msg.town === "ready") {
       ready = true;
-      leaf.ready();
-      coins.ready();
+      purse.ready();
       open();
     } else if (msg.town === "leave") {
       onTo = msg.camp;
       leave();
-    } else asks.news(msg.text, msg.tone ?? "gold");
+    } else if (msg.town === "purse") fromLeaf(msg.purse);
+    else asks.news(msg.text, msg.tone ?? "gold");
   });
 
   // A page that is not there will never say it is ready: no need to stand at the door waiting.

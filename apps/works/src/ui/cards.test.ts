@@ -45,6 +45,11 @@ import { cardKey, itemRef, machineRef, nodeRef, orderRef, plotRef, tileRef } fro
 import { printOf } from "./prints.ts";
 import { giftRef, tierRef, toolRef, unlockRef } from "./refs.ts";
 
+/** How many words Leaf has said on the purse in these tests: each newer than the last. */
+let words = 0;
+/** Leaf says the member's Coins are now `coins`. */
+const coinsAre = (coins: number): boolean => fromLeaf({ coins, leaf: 0, version: ++words });
+
 /** A bench told to make tools, waiting for its planks and ingots, and `others` more benches drawing power near the depot. */
 function benches(others: number): Yard {
   const y = create({ seed: 5, tier: 2 });
@@ -94,13 +99,13 @@ describe("a card", () => {
   test("of a plot is kept by exactly how many Coins it still needs", () => {
     S.world = create({ seed: 5, tier: 3 });
     const ref = plotRef(plot("meadow"));
-    fromLeaf(280);
+    coinsAre(280);
     const key = cardKey(ref);
     expect(printOf(ref)).toMatchObject({ state: "for sale", price: 300, short: 20 });
-    fromLeaf(270);
+    coinsAre(270);
     expect(printOf(ref)).toMatchObject({ short: 30 });
     expect(cardKey(ref)).not.toBe(key);
-    fromLeaf(0);
+    coinsAre(0);
   });
 
   test("prints plain values only, read back as they are: every card of a yard with a piece of each kind it can stand", () => {
@@ -243,16 +248,16 @@ describe("the cards of tiers 2 and 3", () => {
     S.world = counted(3);
     // The same price a marked area would be raised for; and the Coins to hand say whether they cover it.
     const cost = upgradePrice(S.world, [at(S.world, 22, 15)]);
-    fromLeaf(cost - 1);
+    coinsAre(cost - 1);
     const short = cardKey(belt);
     expect(printOf(belt)).toMatchObject({ raise: { to: 2, cost, enough: false }, machine: { grade: 1, graded: true } });
-    fromLeaf(cost);
+    coinsAre(cost);
     expect(printOf(belt)).toMatchObject({ raise: { to: 2, cost, enough: true } });
     expect(cardKey(belt)).not.toBe(short);
     expect(printOf(machineRef(BELT, 2))).toMatchObject({ grade: 2, open: true, numbers: [] });
     // A bench has one grade until research gives it another: plain "Bench", and nothing to raise.
     expect(printOf(tileRef(at(S.world, 20, 15)))).toMatchObject({ raise: null, machine: { graded: false } });
-    fromLeaf(0);
+    coinsAre(0);
   });
 
   test("of a sorter, a cart stop and a Study print what each is told and how it stands", () => {

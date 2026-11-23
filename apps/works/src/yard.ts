@@ -75,7 +75,7 @@ import {
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
 import { type Answered, openPlay, type Play, type Trouble } from "@sequoia-leaf/kit/play.ts";
-import { balance, heardCoins, refreshCoins } from "@sequoia-leaf/kit/purse.ts";
+import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { joinVisit, type LiveRoom } from "@sequoia-leaf/kit/realtime.ts";
 
 import { S } from "./state.ts";
@@ -151,12 +151,11 @@ export function keepScreen(): void {
 /** A command as it goes to Leaf. */
 type Sending = Wired & { readonly tick: number };
 let leaf: Play<View, Sending, News, Heard> | null = null;
-/** A command sent and not answered yet: the copy's tick and check just after it was done, and whether it changed Coins. */
+/** A command sent and not answered yet: the copy's tick and check just after it was done. */
 interface Sent {
   readonly command: Sending;
   readonly tick: number;
   readonly check: number;
-  readonly paid: boolean;
 }
 /** Commands sent and not answered yet, oldest first. */
 let unanswered: Sent[] = [];
@@ -415,7 +414,6 @@ function heard({ done, short }: Answered<Sending, News, Heard>): void {
     const why = answer.refused === "not_enough_coins" ? "Not enough Coins" : "That could not be done after all";
     for (const fn of refusalHearers) fn(why);
   }
-  if (refused || mine.some((sent) => sent.paid)) refreshCoins();
   const last = mine.at(-1);
   if (taking === null && last) {
     // Leaf did just what the copy did, at the same tick: the checks are of the same moment.
@@ -446,15 +444,16 @@ export function doNow(act: Act): ReturnType<typeof play> {
   if ("refused" in done) return done;
   // The yard has changed: what is worked out from it and kept is looked at again.
   S.rev++;
-  const change = (done.coins ?? []).reduce((sum, c) => sum + c.amount, 0);
-  if (change !== 0) heardCoins(balance().coins + change);
   if (!leaf) return done;
   const sending = writeCommand(command);
   if (act.do === "collect") collectedAt = performance.now();
-  // A collection may pay what only Leaf knows of (a tab put away earns on Leaf, not on the copy).
-  const paid = change !== 0 || act.do === "collect";
-  unanswered.push({ command: sending, tick: S.world.tick, check: check(S.world), paid });
-  void leaf.send(sending);
+  unanswered.push({ command: sending, tick: S.world.tick, check: check(S.world) });
+  // What it pays or takes shows in the purse until Leaf answers, whose answer brings Leaf's word.
+  void leaf.send(
+    sending,
+    undefined,
+    (done.coins ?? []).reduce((sum, c) => sum + c.amount, 0),
+  );
   return done;
 }
 

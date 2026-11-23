@@ -23,9 +23,8 @@ import {
   upgradePrice,
   type Yard,
 } from "@sequoia-leaf/factory";
-import { fromLeaf } from "@sequoia-leaf/kit/purse.ts";
 
-import { act, ctx, type FakeLeaf, isRecord, opened, until, useFakeLeaf } from "./fake-leaf.ts";
+import { act, coinsAre, ctx, type FakeLeaf, isRecord, opened, until, useFakeLeaf } from "./fake-leaf.ts";
 import { gradeInHand, S } from "./state.ts";
 import {
   aimAt,
@@ -231,7 +230,7 @@ describe("a piece set down over one of its kind", () => {
     expect(raiseAt(20, 16)).toBe(false);
     expect(said).toEqual(["Not enough Coins."]);
     expect(grades([20], 16)).toEqual([1]);
-    fromLeaf(1000);
+    coinsAre(1000);
     expect(raiseAt(20, 16)).toBe(true);
     expect(grades([20], 16)).toEqual([2]);
     await inStep(fake, 1);
@@ -332,20 +331,20 @@ describe("many pieces at once", () => {
     expect([cost > 0, upgradeCost()]).toEqual([true, cost]);
     const before = encode(S.world);
     // Short by one Coin: none is raised, the rules say why, and nothing is sent.
-    fromLeaf(cost - 1);
+    coinsAre(cost - 1);
     expect(upgradeMark()).toBe(false);
     expect(said).toEqual(["Not enough Coins: 1 short."]);
     expect(encode(S.world)).toBe(before);
     await Bun.sleep(5);
     expect(sent(fake)).toEqual([]);
-    fromLeaf(cost);
+    coinsAre(cost);
     expect(upgradeMark()).toBe(true);
     // A crate has no grade: it stands as it stood.
     expect(grades([18, 19, 20, 21, 22], 13)).toEqual([2, 2, 2, 2, 0]);
     expect(upgradeCost()).toBe(0);
     await inStep(fake, 1);
     expect(sent(fake)).toEqual(["upgrade"]);
-    fromLeaf(0);
+    coinsAre(0);
     expect(undo()).toBe(true);
     expect(grades([18, 19, 20, 21, 22], 13)).toEqual([1, 1, 1, 1, 0]);
     await inStep(fake, 2);

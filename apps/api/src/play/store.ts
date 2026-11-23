@@ -24,13 +24,15 @@ export const BOARD_MOST = 20;
 
 /**
  * A player's state in a game, as stored: how many batches have changed it, the game's own text,
- * when it was last written, and whether the player was a guest when it was.
+ * when it was last written, whether the player was a guest when it was, and when it was made (its
+ * generation; 0 for one made before Leaf kept that).
  */
 const Stored = Schema.Struct({
   rev: Schema.Int,
   state: Schema.String,
   updatedAt: Schema.Int,
   guest: Schema.BooleanFromBit,
+  born: Schema.Int,
 });
 export type Stored = typeof Stored.Type;
 
@@ -82,7 +84,7 @@ export class PlayStore extends Context.Service<
       game: string,
       before: number,
     ) => Effect.Effect<readonly { readonly playerId: PlayerId; readonly rev: number }[]>;
-    /** Stores a new player's state, untouched (`rev` 0). Says whether it did: false when one was there already. */
+    /** Stores a new player's state, untouched (`rev` 0), made `now`. Says whether it did: false when one was there already. */
     readonly create: (
       playerId: PlayerId,
       game: string,
@@ -153,7 +155,7 @@ export class PlayStore extends Context.Service<
         Request: Schema.Struct({ playerId: Schema.String, game: Schema.String }),
         Result: Stored,
         execute: ({ playerId, game }) =>
-          sql`SELECT rev, state, updated_at AS updatedAt, guest FROM play_state WHERE player_id = ${playerId} AND game = ${game}`,
+          sql`SELECT rev, state, updated_at AS updatedAt, guest, born FROM play_state WHERE player_id = ${playerId} AND game = ${game}`,
       });
       const unwritten = SqlSchema.findAll({
         Request: Schema.Struct({ game: Schema.String, before: Schema.Int }),
@@ -218,8 +220,8 @@ export class PlayStore extends Context.Service<
         unwritten: (game, before) => unwritten({ game, before }).pipe(Effect.orDie),
         create: (playerId, game, state, guest, now) =>
           sql`
-            INSERT INTO play_state (player_id, game, rev, state, guest, updated_at)
-            VALUES (${playerId}, ${game}, 0, ${state}, ${guest ? 1 : 0}, ${now})
+            INSERT INTO play_state (player_id, game, rev, state, guest, updated_at, born)
+            VALUES (${playerId}, ${game}, 0, ${state}, ${guest ? 1 : 0}, ${now}, ${now})
             ON CONFLICT (player_id, game) DO NOTHING
             RETURNING rev
           `.pipe(
