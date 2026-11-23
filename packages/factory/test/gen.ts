@@ -62,9 +62,9 @@ export class Gen {
   stats = { groups: 0, failed: 0 };
   why = "";
 
-  constructor(land: F.Land, seed: number) {
-    // Every goal of the slice done: every kind, a crate of 128, taller pylons, the bigger flywheel.
-    this.y = F.create({ land, tier: 4, seed: 1758855484 });
+  /** On `start`, a yard of `land`, or one with every goal of the slice done: every kind, a crate of 128, taller pylons, the bigger flywheel. */
+  constructor(land: F.Land, seed: number, start?: F.Yard) {
+    this.y = start ?? F.create({ land, tier: 4, seed: 1758855484 });
     this.W = land.w;
     this.H = land.h;
     this.r = rng(seed);
@@ -147,8 +147,7 @@ export class Gen {
     const legs =
       F.route(this.y, this.xy(from), this.xy(to)) ?? F.route(this.y, this.xy(from), this.xy(to), { tunnels: false });
     if (!legs || legs.length === 0) return null;
-    const wire = legs.map((l) => ({ kind: F.kindName(l.kind), x: l.x, y: l.y, dir: l.dir, span: l.span }));
-    if (!this.cmd({ do: "lay", legs: wire })) return null;
+    if (!this.cmd(F.writeAct({ do: "lay", legs }))) return null;
     return legs.map((l) => this.idx(l.x, l.y));
   }
 
@@ -598,8 +597,18 @@ export class Gen {
  * A working yard of about `target` pieces on a land, and the commands that built it. `before` is
  * given the generator first: a land of many plots has its plots bought there.
  */
-export function generate(land: F.Land, target: number, seed = 1, before: (g: Gen) => void = () => undefined): Gen {
-  const g = new Gen(land, seed);
+/**
+ * A working yard of about `target` pieces on `land`, built by commands after `before`'s; on `start`
+ * if given (a yard of that land), building only what it may.
+ */
+export function generate(
+  land: F.Land,
+  target: number,
+  seed = 1,
+  before: (g: Gen) => void = () => undefined,
+  start?: F.Yard,
+): Gen {
+  const g = new Gen(land, seed, start);
   before(g);
   let turn = 0;
   let pieces = g.pieces();

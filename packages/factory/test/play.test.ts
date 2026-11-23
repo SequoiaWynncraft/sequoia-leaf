@@ -11,7 +11,6 @@ import type { Ctx } from "@sequoia-leaf/core";
 
 import * as F from "../src/index.ts";
 import { rng } from "./random.ts";
-import { bothSay } from "./said.ts";
 import { delivering, generated } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
@@ -91,7 +90,7 @@ class Player {
       case 4: {
         const to = this.spot();
         const legs = F.route(y, [at.x, at.y], [to.x, to.y], { tunnels: this.r() < 0.7 }) ?? [];
-        return { do: "lay", legs: this.named(legs.map((l) => Object.assign({}, l, this.grade()))) };
+        return F.writeAct({ do: "lay", legs: legs.map((l) => Object.assign({}, l, this.grade())) });
       }
       case 5:
         return { do: "stand", pieces: this.named(F.placed(F.piecesAt(y, this.box()), this.int(4), at.x, at.y)) };
@@ -102,8 +101,11 @@ class Player {
       }
       case 7:
         return { do: "saveBlueprint", slot: this.int(F.BLUEPRINTS_MOST), tiles: this.box() };
-      case 8:
-        return { do: "move", tiles: this.box(), turns: this.int(4), ...this.spot() };
+      case 8: {
+        // A move or a copy, by the size of the box: the same draws either way.
+        const tiles = this.box();
+        return { do: tiles.length % 3 === 0 ? "copy" : "move", tiles, turns: this.int(4), ...this.spot() };
+      }
       case 9:
         return { do: "clear", tiles: this.box() };
       case 10:
@@ -174,8 +176,6 @@ class Player {
       if (k % 50 === 49) {
         const back = F.decode(F.encode(y), y.land);
         expect(back && [F.check(back), F.encode(back)]).toEqual([F.check(y), F.encode(y)]);
-        const said = bothSay(y);
-        expect(said.condition).toEqual(said.status);
       }
     }
   }

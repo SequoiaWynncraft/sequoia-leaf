@@ -5,26 +5,8 @@
  * Leaf has no such route.
  */
 import type { PlayerId } from "@sequoia-leaf/core";
-import {
-  ALL_ITEMS,
-  at,
-  BELT,
-  build,
-  clockOf,
-  deliver,
-  type Dir,
-  DX,
-  DY,
-  FACTORY,
-  GOALS,
-  here,
-  type Item,
-  NONE,
-  remove,
-  stepTo,
-  type Yard,
-} from "@sequoia-leaf/factory";
-import { isStage, staged } from "@sequoia-leaf/factory/test/yards.ts";
+import { ALL_ITEMS, clockOf, deliver, FACTORY, GOALS, here, stepTo, type Yard } from "@sequoia-leaf/factory";
+import { fillHand, isStage, staged } from "@sequoia-leaf/factory/test/yards.ts";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
@@ -41,66 +23,15 @@ const tester = (now: number, seed: number) => ({
 });
 
 /**
- * What the node in hand still wants, laid ready to reach the depot, one thing at a time as play
- * would bring it: on straight runs of belt from each side of the depot, one thing to a tile, each
- * run stopping a tile short of the depot, so that nothing arrives until the page lays the last belt
- * of a run (`works.stage`'s callers do, as the member would). An empty belt on that last tile is
- * taken up, and empty belts further out are used again. The pieces to hand stay the player's.
- */
-function feed(y: Yard): void {
-  const g = y.hand;
-  const want = g === -1 ? undefined : GOALS[g]?.want;
-  if (g === -1 || !want) return;
-  const things: Item[] = [];
-  for (const n of ALL_ITEMS) for (let c = (want[n] ?? 0) - (y.got[g]?.[n] ?? 0); c > 0; c--) things.push(n);
-  const [cx, cy] = y.land.depot;
-  // The tiles beside the depot, each with the way into it.
-  const faces: { x: number; y: number; dir: Dir }[] = [];
-  for (const k of [-1, 0, 1])
-    faces.push(
-      { x: cx + k, y: cy - 2, dir: 1 },
-      { x: cx + k, y: cy + 2, dir: 3 },
-      { x: cx - 2, y: cy + k, dir: 0 },
-      { x: cx + 2, y: cy + k, dir: 2 },
-    );
-  const spare = y.spare[BELT] ?? 0;
-  const tile = (f: (typeof faces)[number], out: number): number =>
-    at(y, f.x - (DX[f.dir] ?? 0) * out, f.y - (DY[f.dir] ?? 0) * out);
-  /** An empty belt on a tile, facing a way: the one there, or one set down. */
-  const belt = (i: number, dir: Dir): boolean => {
-    if (i < 0) return false;
-    if (y.kind[i] === BELT && y.dir[i] === dir && y.item[i] === NONE) return true;
-    if (y.kind[i] !== NONE || !build(y, BELT, i % y.land.w, Math.floor(i / y.land.w), dir, Infinity).ok) return false;
-    y.free[i] = 0;
-    return true;
-  };
-  const open = faces.filter((f) => {
-    const i = tile(f, 0);
-    if (y.kind[i] === BELT && y.item[i] === NONE) remove(y, f.x, f.y);
-    return y.kind[i] === NONE;
-  });
-  for (let out = 1; out <= 6; out++)
-    for (const f of open) {
-      if (things.length === 0) break;
-      // Further out only behind one of these: a straight run into the depot.
-      const before = tile(f, out - 1);
-      if (out > 1 && (y.kind[before] !== BELT || y.dir[before] !== f.dir)) continue;
-      const i = tile(f, out);
-      if (!belt(i, f.dir)) continue;
-      y.item[i] = things.pop() ?? NONE;
-      y.prog[i] = 0;
-    }
-  y.spare[BELT] = spare;
-}
-
-/**
  * Does one staging step to a yard: `{ yard: "mid" }` puts a yard built by commands in its place
  * (`staged` in the rules' test yards: `"small"`, `"short"`, `"mid"`, `"large"`; or `"new"`, a new
  * one), and `{ text: "..." }` any yard as its kept text, counting its Coins on from the one it
  * replaces; `{ away: minutes }` has its owner leave it that long ago, and runs it every tick since as
  * Leaf would have; `{ fill: n }` sends the depot what the nth standing order still wants, and what
- * the node in hand wants of the same things first; `{ feed: true }` lays what the node in hand still
- * wants ready to reach the depot (`feed`).
+ * the node in hand wants of the same things first; `{ feed: true }` sends the depot what the node in
+ * hand still wants (`fillHand`), so that it is finished, paid and logged as in play. Each arrives
+ * through the rules' own function for a thing reaching the depot (`deliver`): a stage is a yard the
+ * rules could have made.
  */
 function step(y: Yard | null, op: Record<string, unknown>, now: number): Yard | null {
   const next =
@@ -124,7 +55,7 @@ function step(y: Yard | null, op: Record<string, unknown>, now: number): Yard | 
     y.at -= away * 60_000;
     FACTORY.advance(y, tester(now, 0));
   }
-  if (op.feed === true) feed(y);
+  if (op.feed === true) fillHand(y);
   const order = y.board[whole(op.fill, 3) ?? -1];
   const hand = y.hand === -1 ? null : GOALS[y.hand];
   const got = y.hand === -1 ? null : y.got[y.hand];

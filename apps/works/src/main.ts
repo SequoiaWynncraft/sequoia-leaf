@@ -56,7 +56,7 @@ import { layout } from "./layout.ts";
 import { drawWords, drawYard, lap, picture, spent, wipe } from "./scene.ts";
 import { sheets } from "./sheets.ts";
 import { murmur, yardSfx } from "./sound.ts";
-import { S, type Tool, toPage, touched } from "./state.ts";
+import { S, type Tool, toPage } from "./state.ts";
 /** A goal's id, as a script reads it; null for none. */
 const goalId = (g: number): string | null => GOALS[g]?.id ?? null;
 /** A tool as a script names it, as the page holds it; undefined for a name that is none. */
@@ -592,7 +592,6 @@ async function boot(): Promise<void> {
       const read = readCommand({ ...command, tick: S.world.tick });
       if (!read) return "That is not a command";
       const done = doNow(read);
-      touched();
       refreshAll();
       return "refused" in done ? done.why : null;
     },

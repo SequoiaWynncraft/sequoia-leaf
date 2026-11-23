@@ -81,10 +81,11 @@ import {
   enough,
   held,
   hold,
-  holds,
+  holderOf,
   put,
   reopen,
   type Standing,
+  tunnelOf,
   WARM,
   type Yard,
 } from "./yard.ts";
@@ -171,8 +172,8 @@ function packCells(y: Yard): Uint8Array {
     if (k === NONE || k === DEPOT) continue;
     o.varint(i - last - 1);
     last = i;
-    const r = y.row[i] ?? -1;
-    const holder = holds(k) && r >= 0;
+    const r = holderOf(y, i);
+    const holder = r >= 0;
     const span = y.span[i] ?? 0;
     let f = 0;
     if (holder && (h.count[r] ?? 0) > 0) f |= 2;
@@ -210,7 +211,7 @@ function packCells(y: Yard): Uint8Array {
     if (f & 64) o.byte(y.set[i] ?? NONE);
     if (f & 128) {
       o.byte(span + 8);
-      const tr = span > 0 ? (y.row[i] ?? 0) * SPAN_MOST : -1;
+      const tr = tunnelOf(y, i) * SPAN_MOST;
       for (let s = 0; s < span; s++) {
         o.byte(t.under[tr + s] ?? NONE);
         o.byte(t.along[tr + s] ?? 0);
@@ -517,8 +518,8 @@ function unpack(y: Yard, i: number, o: KeptPiece, studied: Goal | undefined): vo
     y.via[i] = whole(o.via, 4) ?? 0;
   }
   if (carries(k) && locked(y.open, { use: "paint" }) === null) y.tint[i] = whole(o.tint, TINTS) ?? 0;
-  const r = y.row[i] ?? -1;
-  if (holds(k) && r >= 0) {
+  const r = holderOf(y, i);
+  if (r >= 0) {
     const h = y.holders;
     const may = (n: number | undefined): n is Item =>
       n !== undefined && isItem(n) && RECIPE[n]?.by === k && locked(y.open, { make: n }) === null;
@@ -545,8 +546,9 @@ function unpack(y: Yard, i: number, o: KeptPiece, studied: Goal | undefined): vo
   if (k === SORTER && o.recipe !== undefined && isItem(o.recipe)) y.set[i] = o.recipe;
   if (k === SPLITTER) y.shut[i] = whole(o.ways, 7) ?? 0;
   const span = y.span[i] ?? 0;
-  if (span > 0 && o.under && o.along) {
-    const at = (y.row[i] ?? 0) * SPAN_MOST;
+  const t = tunnelOf(y, i);
+  if (t >= 0 && o.under && o.along) {
+    const at = t * SPAN_MOST;
     for (let s = 0; s < span; s++) {
       const n = o.under[s] ?? NONE;
       y.tunnels.under[at + s] = isItem(n) ? n : NONE;

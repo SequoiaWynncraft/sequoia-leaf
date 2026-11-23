@@ -5,11 +5,15 @@
  * - `delivering`: every goal of the slice done, three lines on the guild's land into the depot;
  * - `generated`: the scale study's generator on a land of 3 by 3 plots, about 1,000 pieces whose
  *   lines end in crates;
- * - `staged(name)`: a yard on the guild's land as play brings one there. `new`, as Leaf makes it;
- *   `small`, the first two lessons done by a line each of planks, ingots and bricks; `short`, a bench
- *   for tools too, and the last lesson in hand with the yard short of power; `mid`, the same lines in
- *   a yard at tier 2, with plots bought, a line painted and a splitter shutting a way to a crate;
- *   `large`, the generator's yard on every plot the slice sells, every goal of it done.
+ * - `staged(name)`: a yard on the guild's land as play brings one there, made by the rules alone:
+ *   built with commands, and every goal finished, paid and logged by the rules, by lines of its own
+ *   or by what a node wants arriving at the depot (`fillHand`). `new`, as Leaf makes it; `small`, the
+ *   first two lessons done by a line each of planks, ingots and bricks; `short`, a bench for tools
+ *   too, and the last lesson in hand with the yard short of power; `mid`, the same lines with every
+ *   node of tiers 0 and 1 done (tier 2 open), plots bought, a line painted and a splitter shutting
+ *   a way to a crate; `large`, every node of tiers 0 to 2 done (tier 3 open) and the generator's
+ *   pieces on every plot the slice sells, as far as a yard with no research known may build them.
+ *   Research is studied in a Study and does not arrive at the depot, so no stage has any known.
  */
 import * as F from "../src/index.ts";
 import { type Gen, generate } from "./gen.ts";
@@ -32,7 +36,7 @@ export function must(y: F.Yard, c: Rec): void {
 export function lay(y: F.Yard, from: readonly [number, number], to: readonly [number, number]): void {
   const legs = F.route(y, from, to);
   if (!legs) throw new Error(`no way from ${from.join(",")} to ${to.join(",")}`);
-  must(y, { do: "lay", legs: legs.map((l) => Object.assign({}, l, { kind: F.kindName(l.kind) })) });
+  must(y, F.writeAct({ do: "lay", legs }));
 }
 
 /**
@@ -67,6 +71,30 @@ export const generated = (): Gen => (small ??= generate(makeLand(3, 3, 7), 1000)
 export const STAGES = ["new", "small", "short", "mid", "large"] as const;
 export type Stage = (typeof STAGES)[number];
 export const isStage = (v: unknown): v is Stage => STAGES.some((s) => s === v);
+
+/**
+ * What the node in hand still wants, arriving at the depot through the rules' own function for a
+ * thing arriving there (`deliver`): it is finished, paid and logged as in play.
+ */
+export function fillHand(y: F.Yard): void {
+  const g = y.hand;
+  const want = g === -1 ? undefined : F.GOALS[g]?.want;
+  if (g === -1 || !want) return;
+  for (const n of F.ALL_ITEMS) F.deliver(y, n, (want[n] ?? 0) - (y.got[g]?.[n] ?? 0));
+}
+
+/** Every node of the tiers below `tier` finished as a player finishes them: each taken in hand (`take`) unless it comes by itself, and filled. */
+function finishBelow(y: F.Yard, tier: number): void {
+  const below = (g: F.Goal): boolean => F.isNode(g) && (F.GOALS[g]?.tier ?? tier) < tier;
+  for (let n = 0; n < F.NODE_COUNT; n++) {
+    if (y.hand === -1 || !below(y.hand)) {
+      const next = F.GOALS.findIndex((_, g) => F.isGoal(g) && below(g) && F.takeRefusal(y, g) === null);
+      if (next < 0) return;
+      must(y, { do: "take", node: F.GOALS[next]?.id });
+    }
+    fillHand(y);
+  }
+}
 
 /** Runs a yard on, a tick at a time, while the node in hand is one of `ids`, for at most `most` ticks. */
 function workOn(y: F.Yard, ids: readonly string[], most = 20_000): void {
@@ -111,14 +139,22 @@ export function staged(name: Stage, seed = 20_261_122): F.Yard {
 
 function built(name: Stage, seed: number): F.Yard {
   if (name === "large") {
+    const start = F.create({ seed });
+    finishBelow(start, 3);
     const plots = F.PLOT_IDS.filter((p) => p !== "yard");
-    const g = generate(F.LAND, 600, seed, (gen) => {
-      for (const plot of plots) gen.cmd({ do: "buyPlot", plot });
-    });
+    const g = generate(
+      F.LAND,
+      600,
+      seed,
+      (gen) => {
+        for (const plot of plots) gen.cmd({ do: "buyPlot", plot });
+      },
+      start,
+    );
     for (let k = 0; k < 3000; k++) F.step(g.y);
     return g.y;
   }
-  const y = F.create({ seed, tier: name === "mid" ? 2 : 0 });
+  const y = F.create({ seed });
   if (name === "new") return y;
   firstLines(y);
   workOn(y, ["planks", "ingots"]);
@@ -126,6 +162,7 @@ function built(name: Stage, seed: number): F.Yard {
   toolsLine(y);
   workOn(y, ["tools"]);
   if (name === "short") return y;
+  finishBelow(y, 2);
   for (const plot of ["meadow", "bank", "stream"]) must(y, { do: "buyPlot", plot });
   // The bricks' line splits at its second belt: its right way to a crate, its left way shut.
   must(y, { do: "build", kind: "splitter", x: 21, y: 21, dir: 0 });

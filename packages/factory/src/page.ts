@@ -2,14 +2,17 @@
  * The wire between Leaf and the page, from the page's side. Leaf reads a command off the wire with
  * `readCommand` (`game.ts`); the page writes one with `writeAct`, its inverse. What Leaf sends the
  * page is read back here: the yard as the page is given it (`readView`), what a command did
- * (`readNotes`), and Leaf's answer to a batch (`readAnswer`). On the wire things, kinds, plots and
- * goals go by their names; everywhere else they are numbers.
+ * (`readNotes`), and Leaf's answer to a batch (`readAnswer`), whose orders the page's copy hears
+ * (`hear`). On the wire things, kinds, plots and goals go by their names; everywhere else they are
+ * numbers.
  */
 import { keptOrder, orderOf } from "./codec.ts";
 import type { Act, Command, Short, View } from "./game.ts";
+import { counting } from "./orders.ts";
 import type { Piece } from "./pieces.ts";
+import { type Leg, legKind } from "./route.ts";
 import { type Goal, goalNamed, GOALS, HOOKS_MOST, itemName, kindName, plotName } from "./tables.ts";
-import type { News, Standing } from "./yard.ts";
+import type { News, Standing, Yard } from "./yard.ts";
 
 /** A command as it goes on the wire: what was done, with every thing, kind, plot and goal by its name. */
 export type Wired = { readonly do: Act["do"]; readonly [field: string]: unknown };
@@ -21,6 +24,16 @@ const named = (p: Piece): Record<string, unknown> => ({
   ...p,
   kind: kindName(p.kind),
   ...(p.recipe === undefined ? {} : { recipe: itemName(p.recipe) }),
+});
+
+/** A leg of a run as the wire names it: its kind, and nothing but what a leg holds. */
+const legOnWire = (l: Leg): Record<string, unknown> => ({
+  kind: kindName(legKind(l)),
+  x: l.x,
+  y: l.y,
+  dir: l.dir,
+  span: l.span,
+  ...(l.grade === 1 ? {} : { grade: l.grade }),
 });
 
 /** What goes on the wire for an act: `readCommand` reads it back, with its tick, as the same act. */
@@ -38,7 +51,7 @@ export function writeAct(a: Act): Wired {
     case "lay":
       return {
         do: a.do,
-        legs: a.legs.map(named),
+        legs: a.legs.map(legOnWire),
         ...(a.turn ? { turn: { x: a.turn.x, y: a.turn.y, dir: a.turn.dir } } : {}),
       };
     case "stand":
@@ -46,6 +59,7 @@ export function writeAct(a: Act): Wired {
     case "placeBlueprint":
       return { do: a.do, slot: a.slot, turns: a.turns, x: a.x, y: a.y };
     case "move":
+    case "copy":
       return { do: a.do, tiles: a.tiles, turns: a.turns, x: a.x, y: a.y };
     case "remove":
       return { do: a.do, x: a.x, y: a.y };
@@ -109,6 +123,23 @@ export function readAnswer(v: unknown): Heard | null {
   if (!Array.isArray(v.hung) || v.hung.length > HOOKS_MOST) return null;
   const hung = v.hung.map(orderOf).filter((o) => o !== null);
   return hung.length === v.hung.length ? { clock: v.clock, tick: v.tick, check: v.check, hung } : null;
+}
+
+/**
+ * Puts on a copy of a yard (the page's, which holds no seed and so hangs no order of its own) each
+ * order Leaf hung that is new to it, while it does not count yet. Says false when one was heard of
+ * after it began to count: the copy has missed what the depot gave it, and must take Leaf's yard.
+ * Order ids only go up (`serial`): one under the copy's serial it has had, and may since have swapped
+ * out or handed over, so it is passed over.
+ */
+export function hear(y: Yard, hung: readonly Standing[]): boolean {
+  for (const order of hung) {
+    if (order.id < y.serial) continue;
+    if (counting(order, y.tick)) return false;
+    y.board.push(order);
+    y.serial = order.id + 1;
+  }
+  return true;
 }
 
 /** One piece of a yard's news, read back. */

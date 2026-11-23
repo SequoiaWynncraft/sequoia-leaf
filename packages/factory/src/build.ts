@@ -31,7 +31,7 @@ import {
   TUNNEL,
   WHEEL,
 } from "./tables.ts";
-import { changed, enough, held, holds, place, take, tunnelRow, vacate, type Yard } from "./yard.ts";
+import { changed, enough, held, holderOf, holds, place, take, tunnelRow, vacate, type Yard } from "./yard.ts";
 
 /** What came of trying to spend Coins: what it cost, or why not, in plain words. */
 export type Spent = { readonly ok: true; readonly cost: number } | { readonly ok: false; readonly why: string };
@@ -237,7 +237,7 @@ export function setDown(y: Yard, k: Kind, x: number, z: number, d: Dir, coins: n
     const exit = tunnelExit(y, x, z, d, lay.span);
     if (exit) {
       y.span[i] = exit.span;
-      y.row[i] = tunnelRow(y, i);
+      tunnelRow(y, i);
       const far = at(y, exit.x, exit.y);
       place(y, far, TUNNEL, d, g);
       y.span[far] = -exit.span;
@@ -304,7 +304,7 @@ export function setRecipe(y: Yard, x: number, z: number, out: Item | null): stri
   const lock = out === null ? null : locked(y.open, { make: out });
   if (lock !== null) return lock;
   const h = y.holders;
-  const r = y.row[i] ?? 0;
+  const r = holderOf(y, i);
   y.set[i] = out ?? NONE;
   h.making[r] = NONE;
   h.work[r] = 0;
@@ -329,7 +329,7 @@ export function tipOut(y: Yard, x: number, z: number, only: Item | null = null):
   const i = at(y, x, z);
   if (i < 0 || !holds(y.kind[i] ?? NONE)) return 0;
   const h = y.holders;
-  const r = y.row[i] ?? 0;
+  const r = holderOf(y, i);
   if (h.count[r] === 0) return 0;
   let gone = 0;
   for (const n of ALL_ITEMS) {
@@ -355,7 +355,7 @@ export function tipOut(y: Yard, x: number, z: number, only: Item | null = null):
 export function setOpen(y: Yard, x: number, z: number, open: boolean): boolean {
   const i = at(y, x, z);
   if (i < 0 || y.kind[i] !== CRATE) return false;
-  const r = y.row[i] ?? 0;
+  const r = holderOf(y, i);
   if ((y.holders.open[r] === 1) !== open) {
     y.holders.open[r] = open ? 1 : 0;
     changed(y);

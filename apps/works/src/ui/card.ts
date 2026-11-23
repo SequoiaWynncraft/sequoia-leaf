@@ -32,6 +32,7 @@ import {
   type Goal,
   GOALS,
   held,
+  holderOf,
   isFilled,
   isGoal,
   isItem,
@@ -63,11 +64,8 @@ import {
   RECIPES_N,
   recipesFor,
   RIGHT,
-  SORTER,
   SPLITTER,
   status,
-  STOP,
-  STUDY,
   takes,
   TICKS,
   toward,
@@ -96,7 +94,7 @@ import { beltTile, TILE } from "../art/belts.ts";
 import type { Art } from "../art/index.ts";
 import { layout } from "../layout.ts";
 import { yardSfx } from "../sound.ts";
-import { S, toPage, touched } from "../state.ts";
+import { draws, S, toPage } from "../state.ts";
 import { buyLand, pickFrom, takeAway, takeInHand, turnAt, usable, wayAt } from "../tools.ts";
 import { coins, doNow } from "../yard.ts";
 import { KEYS, openTools } from "./dock.ts";
@@ -121,8 +119,8 @@ const secs = (ticks: number): string => `${Math.round(ticks) / 10}s`;
 const n = (v: number): string => v.toLocaleString("en-US", { maximumFractionDigits: 3 });
 const nameOf = (k: number): string => KIND_INFO[k]?.name ?? "";
 const many = (k: number): string => ITEM_INFO[k]?.many ?? "";
-/** The pieces of later tiers that have no art of their own yet: their cards say only what they are. */
-const later = (k: number): boolean => k === STUDY || k === STOP || k === SORTER;
+/** A kind this page does not draw (`DRAWN`: the Study, the cart stop, the sorter): its card says only what it is. */
+const later = (k: number): boolean => !draws(k);
 
 export const itemRef = (k: Item): string => `item:${k}`;
 export const machineRef = (k: Kind): string => `machine:${k}`;
@@ -316,7 +314,7 @@ function standingDesc(art: Art, i: number): Description | null {
   const st = status(w, i);
   const per = rate(w, i);
   const h = w.holders;
-  const r = w.row[i] ?? -1;
+  const r = holderOf(w, i);
   const rows: Row[] = [];
   const holding = r < 0 ? [] : ALL_ITEMS.filter((t) => held(h, r, t) > 0);
   if (holding.length > 0)
@@ -353,7 +351,6 @@ function standingDesc(art: Art, i: number): Description | null {
       on: () => {
         doNow({ do: "recipe", x, y, item: null });
         sfx.tap();
-        touched();
       },
     });
     for (const rec of recipesFor(w.open, k))
@@ -367,7 +364,6 @@ function standingDesc(art: Art, i: number): Description | null {
         on: () => {
           doNow({ do: "recipe", x, y, item: set === rec.out ? null : rec.out });
           sfx.tap();
-          touched();
         },
       });
   }
@@ -384,7 +380,6 @@ function standingDesc(art: Art, i: number): Description | null {
           : `It is full of ${many(spare)}, so the other item it needs cannot get in. Emptying them clears it. To stop this, bring each input in on its own belt.`,
       on: () => {
         if (!("refused" in doNow({ do: "tipOut", x, y, item: spare }))) yardSfx.take();
-        touched();
       },
     });
   if (k === CRATE) {
@@ -396,7 +391,6 @@ function standingDesc(art: Art, i: number): Description | null {
       on: () => {
         doNow({ do: "crate", x, y, open: !open });
         sfx.clack();
-        touched();
       },
     });
   }
@@ -655,7 +649,7 @@ export function cardKey(ref: string | null): string {
     const i = numberIn(ref.slice(5));
     const k = w.kind[i] ?? NONE;
     const st = k === NONE ? null : status(w, i);
-    const r = w.row[i] ?? -1;
+    const r = holderOf(w, i);
     const holds = r < 0 ? "" : ALL_ITEMS.map((t) => held(w.holders, r, t)).join("");
     const open = r < 0 ? "" : String(w.holders.open[r]);
     return `${ref}|${S.rev}|${k}|${st?.line}|${holds}|${w.set[i]}|${open}|${w.shut[i]}|${w.item[i]}|${Math.floor(coins() / 50)}`;

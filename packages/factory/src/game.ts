@@ -42,6 +42,7 @@ import { shortOf } from "./page.ts";
 import {
   blueprintAt,
   clear,
+  copyOf,
   deleteBlueprint,
   keptOf,
   move,
@@ -52,6 +53,7 @@ import {
   upgrade,
 } from "./pieces.ts";
 import { postcard } from "./postcard.ts";
+import { type Leg, legPiece } from "./route.ts";
 import {
   BELT,
   BLUEPRINTS_MOST,
@@ -88,10 +90,11 @@ interface At {
 /** Everything a player does to the yard, with things, kinds, plots and goals as numbers. */
 export type Act =
   | ({ readonly do: "build"; readonly kind: Kind; readonly dir: Dir; readonly grade: number } & At)
-  | { readonly do: "lay"; readonly legs: readonly Piece[]; readonly turn?: At & { readonly dir: Dir } }
+  | { readonly do: "lay"; readonly legs: readonly Leg[]; readonly turn?: At & { readonly dir: Dir } }
   | { readonly do: "stand"; readonly pieces: readonly Piece[] }
   | ({ readonly do: "placeBlueprint"; readonly slot: number; readonly turns: Dir } & At)
   | ({ readonly do: "move"; readonly tiles: readonly number[]; readonly turns: Dir } & At)
+  | ({ readonly do: "copy"; readonly tiles: readonly number[]; readonly turns: Dir } & At)
   | ({ readonly do: "remove" } & At)
   | { readonly do: "clear"; readonly tiles: readonly number[] }
   | { readonly do: "upgrade"; readonly tiles: readonly number[] }
@@ -159,6 +162,7 @@ export const REFUSED = {
   stand: "cannot_stand",
   placeBlueprint: "cannot_place_blueprint",
   move: "cannot_move",
+  copy: "cannot_copy",
   remove: "nothing_to_take_away",
   clear: "nothing_to_clear",
   upgrade: "cannot_upgrade",
@@ -253,6 +257,7 @@ const done = (coins: CoinChange[] = [], log: Logged[] = []): Did => ({ coins, lo
 const TOOL: Partial<Record<Command["do"], Lock>> = {
   paint: { use: "paint" },
   move: { use: "select" },
+  copy: { use: "select" },
   clear: { use: "select" },
   stand: { use: "select" },
   placeBlueprint: { use: "select" },
@@ -271,13 +276,23 @@ function act(y: Yard, c: Command): Did {
       const did = build(y, c.kind, c.x, c.y, c.dir, Infinity, { grade: c.grade });
       return did.ok ? done(priced(y, did.cost, REASON.build)) : no(c, did.why);
     }
-    case "lay":
+    case "lay": {
+      // A run stands its legs as pieces made of what a leg holds, and nothing else.
+      const did = stand(y, c.legs.map(legPiece), Infinity, true, c.turn);
+      return did.ok ? done(priced(y, did.cost, REASON.lay)) : no(c, did.why);
+    }
     case "stand":
-    case "placeBlueprint": {
-      const pieces = c.do === "stand" ? c.pieces : c.do === "lay" ? c.legs : blueprintAt(y, c.slot, c.turns, c.x, c.y);
-      if (!pieces) return no(c, "There is no blueprint there");
-      const did = stand(y, pieces, Infinity, c.do === "lay", c.do === "lay" ? c.turn : undefined);
-      return did.ok ? done(priced(y, did.cost, c.do === "lay" ? REASON.lay : REASON.build)) : no(c, did.why);
+    case "placeBlueprint":
+    case "copy": {
+      const pieces =
+        c.do === "stand"
+          ? c.pieces
+          : c.do === "copy"
+            ? copyOf(y, c.tiles, c.turns, c.x, c.y)
+            : blueprintAt(y, c.slot, c.turns, c.x, c.y);
+      if (!pieces) return no(c, c.do === "copy" ? "There is nothing here to copy" : "There is no blueprint there");
+      const did = stand(y, pieces, Infinity);
+      return did.ok ? done(priced(y, did.cost, REASON.build)) : no(c, did.why);
     }
     case "move": {
       const why = move(y, c.tiles, c.turns, c.x, c.y);
@@ -389,15 +404,20 @@ export function readPiece(v: unknown, mx = 255, my = 255): Piece | null {
   return { kind: k, x: v.x, y: v.y, dir: v.dir, span: v.span, ...keptOf({ ...v, recipe: recipe ?? undefined }, k) };
 }
 
-/** A leg of a run read off the wire: a belt or a tunnel, where it goes, which way, how far and at what grade, and nothing else. */
-function readLeg(v: unknown): Piece | null {
-  const p = readPiece(v);
-  if (!p || (p.kind !== BELT && p.kind !== TUNNEL)) return null;
-  const leg = { kind: p.kind, x: p.x, y: p.y, dir: p.dir, span: p.span };
-  return p.grade === undefined ? leg : { ...leg, grade: p.grade };
+/**
+ * A leg of a run read off the wire: a belt, or a tunnel; where it goes, which way, for a tunnel how
+ * far under, and at what grade. A belt that passes under is no leg; whatever else is on one is let be.
+ */
+export function readLeg(v: unknown): Leg | null {
+  if (!isRecord(v)) return null;
+  const k = kindNamed(v.kind);
+  if ((k !== BELT && k !== TUNNEL) || !isDir(v.dir) || !whole(v.x, 255) || !whole(v.y, 255)) return null;
+  if (!whole(v.span, k === TUNNEL ? SPAN_MOST : 0)) return null;
+  const grade = v.grade === undefined ? 1 : whole(v.grade, TOP) && v.grade >= 1 ? v.grade : null;
+  return grade === null ? null : { tunnel: k === TUNNEL, x: v.x, y: v.y, dir: v.dir, span: v.span, grade };
 }
 
-function listOf(v: unknown, most: number, read: (v: unknown) => Piece | null): Piece[] | null {
+function listOf<T>(v: unknown, most: number, read: (v: unknown) => T | null): T[] | null {
   if (!Array.isArray(v) || v.length > most) return null;
   const pieces = v.map(read).filter((p) => p !== null);
   return pieces.length === v.length ? pieces : null;
@@ -434,7 +454,8 @@ function what(v: Record<string, unknown>): Act | null {
     case "placeBlueprint":
       return spot && slot !== null && isDir(v.turns) ? { do: "placeBlueprint", slot, turns: v.turns, ...spot } : null;
     case "move":
-      return spot && tiles && isDir(v.turns) ? { do: "move", tiles, turns: v.turns, ...spot } : null;
+    case "copy":
+      return spot && tiles && isDir(v.turns) ? { do: v.do, tiles, turns: v.turns, ...spot } : null;
     case "remove":
       return spot && { do: "remove", ...spot };
     case "clear":

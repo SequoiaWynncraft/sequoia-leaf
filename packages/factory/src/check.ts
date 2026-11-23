@@ -20,7 +20,7 @@
  */
 import { counting } from "./orders.ts";
 import { ITEM_COUNT, NONE, SPAN_MOST } from "./tables.ts";
-import type { Counts, Yard } from "./yard.ts";
+import { type Counts, holderOf, tunnelOf, type Yard } from "./yard.ts";
 
 const f64 = new Float64Array(1);
 const u32 = new Uint32Array(f64.buffer);
@@ -113,13 +113,14 @@ export function check(y: Yard): number {
         (((y.span[i] ?? 0) + 8) << 16) |
         ((y.set[i] ?? 0) << 24),
     );
-    const r = y.row[i] ?? -1;
-    if (r < 0) continue;
-    if ((y.span[i] ?? 0) > 0) {
-      for (let s = r * SPAN_MOST; s < r * SPAN_MOST + SPAN_MOST; s++)
+    const t = tunnelOf(y, i);
+    if (t >= 0) {
+      for (let s = t * SPAN_MOST; s < t * SPAN_MOST + SPAN_MOST; s++)
         mix((ts.under[s] ?? 0) | ((ts.along[s] ?? 0) << 8));
       continue;
     }
+    const r = holderOf(y, i);
+    if (r < 0) continue;
     mix((hs.out[r] ?? 0) | ((hs.making[r] ?? 0) << 8) | ((hs.fuel[r] ?? 0) << 16) | ((hs.open[r] ?? 0) << 24));
     mix((hs.kinds[r] ?? 0) | ((hs.count[r] ?? 0) << 8));
     mix(hs.work[r] ?? 0);

@@ -4,6 +4,7 @@
  */
 import { at, digsUnder, type Dir, DX, DY } from "./build.ts";
 import { toward } from "./land.ts";
+import type { Piece } from "./pieces.ts";
 import {
   BELT,
   BENCH,
@@ -25,14 +26,32 @@ import {
 import { ahead } from "./wire.ts";
 import type { Yard } from "./yard.ts";
 
-/** One piece of a run: a belt on a tile, or a tunnel going in at one. */
+/**
+ * A leg of a run of belt, and all a run carries: a belt or a tunnel; the tile, and which way it
+ * goes; for a tunnel how far under (`span`: 0 for the tunnel standing there, raised or lowered); and
+ * its grade. A leg has nothing to set: no colour, no recipe, no shut way. A run takes the colour of
+ * the line it joins.
+ */
 export interface Leg {
-  readonly kind: Kind;
+  readonly tunnel: boolean;
   readonly x: number;
   readonly y: number;
   readonly dir: Dir;
   readonly span: number;
+  readonly grade: number;
 }
+
+/** What a leg lays. */
+export const legKind = (l: Leg): Kind => (l.tunnel ? TUNNEL : BELT);
+/** A leg as a piece to stand, made of nothing but what a leg holds. */
+export const legPiece = (l: Leg): Piece => ({
+  kind: legKind(l),
+  x: l.x,
+  y: l.y,
+  dir: l.dir,
+  span: l.tunnel ? l.span : 0,
+  ...(l.grade > 1 ? { grade: l.grade } : {}),
+});
 
 /** What a tunnel counts as in tiles of belt, beyond its own length, so a plain way round is taken when it is near as short. */
 const DIG = 4;
@@ -153,14 +172,14 @@ function search(
     const z = Math.floor(i / W);
     const span = dug[s] ?? -1;
     if (span < 0) {
-      if (s % 5 === 0) legs.push({ kind: BELT, x, y: z, dir, span: 0 });
+      if (s % 5 === 0) legs.push({ tunnel: false, x, y: z, dir, span: 0, grade: 1 });
       const p = prev[s] ?? -1;
       if (p >= 0) dir = wayBetween(W, Math.floor(p / 5), i);
     } else {
       // This tile is a tunnel's far mouth: the near mouth is `span + 1` tiles back.
       const d: Dir = s % 5 === 1 ? 0 : s % 5 === 2 ? 1 : s % 5 === 3 ? 2 : 3;
       const near = at(y, x - DX[d] * (span + 1), z - DY[d] * (span + 1));
-      legs.push({ kind: TUNNEL, x: x - DX[d] * (span + 1), y: z - DY[d] * (span + 1), dir: d, span });
+      legs.push({ tunnel: true, x: x - DX[d] * (span + 1), y: z - DY[d] * (span + 1), dir: d, span, grade: 1 });
       mouths.push(near);
       dir = d;
     }

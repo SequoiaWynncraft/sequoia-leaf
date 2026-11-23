@@ -29,6 +29,7 @@ import {
   GATHERER,
   GIVES,
   held as holds,
+  holderOf,
   isFilled,
   isItem,
   item as thing,
@@ -50,12 +51,9 @@ import {
   SPLITTER,
   START,
   STATES,
-  STOP,
-  STUDY,
   tilesOf,
   TROUBLE,
   TUNNEL,
-  tunnelExit,
   WHEEL,
   WORK,
   WORKSHOP,
@@ -74,8 +72,8 @@ import type { Art } from "./art/index.ts";
 import { DEPOT as DEPOT_ART } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
 import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
-import { armsAt, type Layout, layout, pylonTop } from "./layout.ts";
-import { builds, type Group, type Mark, S } from "./state.ts";
+import { armsAt, asIf, type Layout, layout, pylonTop } from "./layout.ts";
+import { builds, draws, type Group, type Mark, S } from "./state.ts";
 
 /** What the frame needs to know about the moment: how far into the next tick it is, and how the yard is going. */
 export interface Moment {
@@ -514,7 +512,7 @@ function piece(
   const c = real ? reading(y, i) : -1;
   const working = c >= 0 && c % TROUBLE === WORKING;
   const h = y.holders;
-  const r = real ? (y.row[i] ?? -1) : -1;
+  const r = real ? holderOf(y, i) : -1;
   const out = r >= 0 ? (h.out[r] ?? NONE) : NONE;
   const making = r >= 0 ? (h.making[r] ?? NONE) : NONE;
   const work = r >= 0 ? (h.work[r] ?? 0) : 0;
@@ -647,15 +645,12 @@ function piece(
       if (s) stand(s, cx, foot + 1, z - 2, a);
       break;
     }
-    // The pieces of later tiers have no art of their own yet: a plain post says one stands here.
-    case STUDY:
-    case STOP:
-    case SORTER:
+    default:
+      // What lies flat (belts, splitters, joiners) is drawn with the floor.
+      if (draws(k)) return;
+      // A kind this page does not draw (`DRAWN`: the Study, the cart stop, the sorter): a plain post says one stands here.
       stand(art.marker, cx, foot - 2, z, a);
       head = foot - 10;
-      break;
-    default:
-      return;
   }
   // The brass pointer on its way out, and whatever it is holding with nowhere to send it.
   const hands = k === GATHERER || k === MILL || k === BENCH || k === WORKSHOP || k === CRATE;
@@ -900,10 +895,11 @@ function marked(g: Ctx, w: Yard, m: Mark, cx: number, cy: number): void {
   g.setLineDash([]);
 }
 
-/** The pieces in hand, drawn once for each place they are aimed at and kept: `for` is the aim it was drawn for. */
-const held: { c: HTMLCanvasElement; g: Ctx; for: Group["at"] | null; lost: number } = {
+/** The pieces in hand, drawn once for each place they are aimed at and kept: `for` is the aim it was drawn for, and `rev` the yard's count of changes then. */
+const held: { c: HTMLCanvasElement; g: Ctx; for: Group["at"] | null; rev: number; lost: number } = {
   ...makeCanvas(1, 1, true),
   for: null,
+  rev: -1,
   lost: -1,
 };
 held.c.addEventListener("contextrestored", wipe);
@@ -911,15 +907,17 @@ held.c.addEventListener("contextrestored", wipe);
 const ROOM = { side: 8, top: 40, bottom: 8 } as const;
 
 /**
- * Draws the pieces in hand where they are aimed, as they would stand: belts joined to each other
- * and to the lines already there, machines as built. Gold lies over each piece that can go there
- * and coral over each that cannot. It is drawn afresh only when the aim moves to another tile, so
- * a frame costs one picture however many pieces are in hand.
+ * Draws the pieces in hand where they are aimed, as they would stand (`asIf`, the yard with them
+ * set down): belts joined to each other and to the lines already there, machines as built. Gold
+ * lies over each piece that can go there and coral over each that cannot. It is drawn afresh only
+ * when the aim moves to another tile or the yard changes, so a frame costs one picture however many
+ * pieces are in hand.
  */
 function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, cy: number): void {
   const box = boxOf(grp.at);
-  if (held.for !== grp.at || held.lost !== lost) {
+  if (held.for !== grp.at || held.rev !== S.rev || held.lost !== lost) {
     held.for = grp.at;
+    held.rev = S.rev;
     held.lost = lost;
     const tiles = tilesOf(w, grp.at);
     held.c.width = box.w * TILE + ROOM.side * 2;
@@ -930,48 +928,21 @@ function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, 
     const oy = ROOM.top - box.y * TILE;
     const mark = used;
     const before = lit;
-    // The yard as it would be: for a move without the pieces where they stand now, and with every
-    // piece in hand set down. What stands on those tiles is lifted for the drawing, and put back.
-    const moving = grp.as === "move" ? tilesOf(w, grp.pieces) : [];
-    const lifted = [...moving, ...tiles].filter((i) => i >= 0);
-    const was = lifted.map((i) => [w.kind[i] ?? NONE, w.dir[i] ?? 0, w.span[i] ?? 0, w.shut[i] ?? 0, w.tint[i] ?? 0]);
-    for (const i of moving) if (i >= 0) w.kind[i] = NONE;
+    const yard = asIf(w, grp);
     for (const p of grp.at) {
-      const [near = -1, far = -1] = tilesOf(w, [p]);
-      for (const [i, span] of [
-        [near, p.span],
-        [far, -p.span],
-      ]) {
-        if (i === undefined || span === undefined || i < 0) continue;
-        w.kind[i] = p.kind;
-        w.dir[i] = p.dir;
-        w.span[i] = span;
-        w.shut[i] = i === near ? (p.shut ?? 0) : 0;
-        w.tint[i] = p.tint ?? 0;
-      }
-    }
-    for (const p of grp.at) {
-      for (const i of tilesOf(w, [p])) {
+      for (const i of tilesOf(yard, [p])) {
         if (i < 0) continue;
-        const x = (i % w.land.w) * TILE + ox;
-        const top = Math.floor(i / w.land.w) * TILE + oy;
-        const k = w.kind[i] ?? NONE;
+        const x = (i % yard.land.w) * TILE + ox;
+        const top = Math.floor(i / yard.land.w) * TILE + oy;
+        const k = yard.kind[i] ?? NONE;
         const d = p.dir;
-        const a = armsAt(w, i);
-        if (a !== 0) h.drawImage(beltTile(a, d, 0, 0, w.tint[i] ?? 0), x, top);
+        const a = draws(k) ? armsAt(yard, i) : 0;
+        if (a !== 0) h.drawImage(beltTile(a, d, 0, 0, yard.tint[i] ?? 0), x, top);
         const over = k === SPLITTER ? art.m.splitter[d] : k === JOINER ? art.m.joiner[d] : undefined;
         if (over) h.drawImage(over, x, top);
-        piece(art, w, i, k, d, w.span[i] ?? 0, p.open ?? true, x, top, now, 1);
+        piece(art, yard, i, k, d, yard.span[i] ?? 0, p.open ?? true, x, top, now, 1);
       }
     }
-    lifted.forEach((i, n) => {
-      const [k = NONE, d = 0, span = 0, shut = 0, tint = 0] = was[n] ?? [];
-      w.kind[i] = k;
-      w.dir[i] = d;
-      w.span[i] = span;
-      w.shut[i] = shut;
-      w.tint[i] = tint;
-    });
     for (const d of listed.slice(mark, used).toSorted((p, q) => p.z - q.z)) h.drawImage(d.c, d.x - camX, d.y - camY);
     used = mark;
     lit = before;
@@ -1236,7 +1207,7 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
       const i = ty * land.w + tx;
       const k = w.kind[i] ?? NONE;
       if (k === NONE || k === DEPOT) continue;
-      const r = w.row[i] ?? -1;
+      const r = holderOf(w, i);
       const open = k !== CRATE || r < 0 || w.holders.open[r] === 1;
       piece(art, w, i, k, dirAt(w, i), w.span[i] ?? 0, open, tx * TILE - cx, ty * TILE - cy, now, 0);
     }
@@ -1332,7 +1303,7 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     if (w.kind[i] === NONE) continue;
     memOf(w, i);
     const n = w.item[i] ?? NONE;
-    const r = w.row[i] ?? -1;
+    const r = holderOf(w, i);
     const out = r >= 0 ? (w.holders.out[r] ?? NONE) : NONE;
     const has = n !== NONE ? n : out;
     const ready = n !== NONE ? (w.prog[i] ?? 0) / 8 + now.lead * along >= 0.85 : out !== NONE;
@@ -1448,13 +1419,15 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     for (const leg of S.run.legs) {
       const x = leg.x * TILE - cx;
       const y = leg.y * TILE - cy;
-      if (leg.kind === BELT) g.drawImage(beltTile(armsFor(leg.dir), leg.dir, step, tier), x, y);
+      if (!leg.tunnel) g.drawImage(beltTile(armsFor(leg.dir), leg.dir, step, tier), x, y);
       else {
-        const far = tunnelExit(w, leg.x, leg.y, leg.dir, leg.span);
+        // Its far mouth comes up `span + 1` tiles ahead.
+        const far = (leg.span + 1) * TILE;
         const near = art.m.hood[leg.dir];
         const out = art.m.hood[BACK[leg.dir]];
         if (near) g.drawImage(near.c, x + 8 - near.ax, y + TILE + 1 - near.ay);
-        if (far && out) g.drawImage(out.c, far.x * TILE - cx + 8 - out.ax, far.y * TILE - cy + TILE + 1 - out.ay);
+        if (out && leg.span > 0)
+          g.drawImage(out.c, x + DX[leg.dir] * far + 8 - out.ax, y + DY[leg.dir] * far + TILE + 1 - out.ay);
       }
     }
     for (const turn of S.run.turns)
@@ -1486,10 +1459,12 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
         g.globalAlpha = 1;
       }
       piece(art, w, S.aim.y * land.w + S.aim.x, tool, S.dir, 1, true, x, y, now, bad ? 0.5 : 0.8);
-      if (tool === TUNNEL) {
-        const far = tunnelExit(w, S.aim.x, S.aim.y, S.dir);
+      const far = S.aim.far ?? -1;
+      if (tool === TUNNEL && far >= 0) {
         const out = art.m.hood[BACK[S.dir]];
-        if (far && out) put(out.c, far.x * TILE - cx + 8 - out.ax, far.y * TILE - cy + TILE + 1 - out.ay, 0, 0.8);
+        const fx = far % land.w;
+        const fy = (far - fx) / land.w;
+        if (out) put(out.c, fx * TILE - cx + 8 - out.ax, fy * TILE - cy + TILE + 1 - out.ay, 0, 0.8);
       }
       for (let k = mark; k < used; k++) {
         const p = listed[k];
