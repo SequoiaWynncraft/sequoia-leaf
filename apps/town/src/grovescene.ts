@@ -8,7 +8,9 @@
  * as the window allows (`fit`) and stands in the middle of the window's foot; the stage and
  * whatever crosses the whole picture are drawn on from the frame to the window's edges. One
  * timeline: `paint` draws the whole picture for the time `t` alone (seconds since the pull was
- * answered), from nothing kept between frames. A person is the town's own walking figure (the
+ * answered), from nothing kept between frames. At a mid-tier or top prize among several the clock
+ * stands (`ticked`) until the player goes on, and what moves there moves by how long it has stood.
+ * A person is the town's own walking figure (the
  * kit's `bake`), drawn large and moved as the town moves it; a figure of the raid is the raid's own
  * picture of it, as the camp shows it.
  *
@@ -50,6 +52,7 @@ import {
   GROVE,
   type GroveState,
   groveState,
+  onward,
   RARITY_NAMES,
   refusedLine,
   type Reveal,
@@ -57,7 +60,10 @@ import {
   seedsOf,
   showing,
   takesCommand,
+  ticked,
   tierOf,
+  type Timeline,
+  timeline,
 } from "./pulls.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Scene, Stage } from "./stage.ts";
@@ -69,8 +75,7 @@ type Finish = "leaf" | "lantern" | "aurora";
 const FINISH = { filler: "leaf", mid: "lantern", top: "aurora" } as const;
 const RANK: Record<Finish, number> = { leaf: 0, lantern: 1, aurora: 2 };
 const STARS: Record<Finish, number> = { leaf: 1, lantern: 2, aurora: 3 };
-/** How long each reveal holds, by its finish; an aurora's begins with half a second of black. */
-const DUR: Record<Finish, number> = { leaf: 1.3, lantern: 1.9, aurora: 3.4 };
+/** An aurora's reveal begins with half a second of black. */
 const BLACK = 0.5;
 /** How long the build and the tell take, before the first reveal. */
 const TELL = 2.6;
@@ -94,12 +99,8 @@ interface Shown {
 }
 
 /** A ceremony: the prizes in the order Leaf drew them, and when each beat falls. */
-interface Show {
+interface Show extends Timeline {
   readonly list: readonly Shown[];
-  /** When the reveals begin: after the tell, or at once for a prize had for Seeds. */
-  readonly tell: number;
-  readonly starts: readonly number[];
-  readonly end: number;
   readonly best: Finish;
   /** The rarest of them, which stands at the front of the end picture. */
   readonly rarest: number;
@@ -1189,7 +1190,9 @@ export function makeGrove(
       const step = WALK[Math.floor((x - from) / K / 5) % 4] ?? 0;
       const pose = p.body ? (isLit ? 0 : step) : isLit ? beatAt(u - 0.35) : 0;
       const { spr, id } = standing(p, K, isLit ? 0 : 2, pose);
-      const up = isLit ? hopOf(u - 0.35, 10, f === "aurora" ? 2 : 1) : 0;
+      // a person the ceremony waits at goes on hopping now and then, as they do on the banner
+      const again = p.body ? hopOf(mod(u - 0.35, 4) - 3, 10) : 0;
+      const up = isLit ? Math.max(again, hopOf(u - 0.35, 10, f === "aurora" ? 2 : 1)) : 0;
       const [sx, sy] = footed(p, spr, K, x, pl.feet, up);
       ellipse(x, pl.feet - 2, half * 0.84, 5, INK);
       if (!isLit) {
@@ -1434,8 +1437,9 @@ export function makeGrove(
 
   /** The ceremony on show, or null on the banner. */
   let show: Show | null = null;
-  /** Seconds since the ceremony began, and how long the banner has been on. */
+  /** Seconds since the ceremony began, how long its clock has stood at a wait, and how long the banner has been on. */
   let t = 0;
+  let stood = 0;
   let idle = 0;
   let prevT = 0;
   let sounds: Beat[] = [];
@@ -1443,12 +1447,10 @@ export function makeGrove(
   type Part = { kind: "tell" } | { kind: "reveal"; i: number; u: number } | { kind: "end"; v: number };
   function partAt(s: Show, at: number): Part {
     if (at < s.tell) return { kind: "tell" };
-    const last = s.list.length - 1;
     for (const [i, p] of s.list.entries()) {
-      const start = s.starts[i] ?? 0;
       // One prize alone stays on show: its reveal is the end picture.
-      if (at < start + DUR[p.finish] || (i === last && last === 0))
-        return { kind: "reveal", i, u: at - start - (p.finish === "aurora" ? BLACK : 0) };
+      if (at < (s.starts[i + 1] ?? s.end) || s.list.length === 1)
+        return { kind: "reveal", i, u: at - (s.starts[i] ?? 0) - (p.finish === "aurora" ? BLACK : 0) };
     }
     return { kind: "end", v: at - s.end };
   }
@@ -1458,7 +1460,7 @@ export function makeGrove(
     else {
       const part = partAt(show, t);
       if (part.kind === "tell") drawTell(show, t);
-      else if (part.kind === "reveal") drawReveal(show, part.i, part.u);
+      else if (part.kind === "reveal") drawReveal(show, part.i, part.u + stood);
       else drawEnd(show, part.v);
     }
     screen2d.drawImage(whole, 0, 0, canvas.width, canvas.height);
@@ -1491,6 +1493,8 @@ export function makeGrove(
     ui.banner.hidden = s !== null && !dropping;
     ui.banner.style.transform = dropping ? `translateY(${dropped(t) * SCALE}px)` : "";
     ui.skip.hidden = s === null || dropping || t >= s.end;
+    ui.go.hidden = !s?.waits.includes(t);
+    ui.go.style.transform = `translateY(${r((1 - outBack(clamp01(stood / 0.3), 1.3)) * 50) * SCALE}px)`;
     const b = v - (many ? END_BUTTONS : 0.2);
     ui.end.hidden = s === null || b < 0;
     if (b >= 0) ui.end.style.transform = `translateY(${r((1 - outBack(clamp01(b / 0.3), 1.3)) * 50) * SCALE}px)`;
@@ -1511,15 +1515,12 @@ export function makeGrove(
   function begin(notes: readonly PullsNote[], repeat: 1 | 10 | null): void {
     if (notes.length === 0) return;
     const list = notes.map(shownOf);
-    const tell = repeat ? TELL : 0;
-    const starts: number[] = [];
-    let at = tell;
-    for (const p of list) {
-      starts.push(at);
-      at += DUR[p.finish];
-    }
+    const line = timeline(
+      list.map((p) => tierOf(p.note.rarity)),
+      repeat ? TELL : 0,
+    );
     const rarest = list.reduce((best, p, k) => (worth(p) >= worth(list[best] ?? p) ? k : best), 0);
-    show = { list, tell, starts, end: at, best: list[rarest]?.finish ?? "leaf", rarest };
+    show = { ...line, list, best: list[rarest]?.finish ?? "leaf", rarest };
     shownCache.clear();
     edgeCache.clear();
     sounds = beats(show);
@@ -1553,16 +1554,13 @@ export function makeGrove(
 
   function jump(to: number): void {
     t = to;
+    stood = 0;
     prevT = to - 0.0001;
   }
 
-  /** On to the next beat: past the tell, or to the next prize. */
+  /** On to the next beat: past the tell, or to the next prize, and so on from a prize the ceremony waits at. */
   function next(): void {
-    const s = show;
-    if (!s || t >= s.end) return;
-    if (t < s.tell) return jump(s.tell);
-    const part = partAt(s, t);
-    if (part.kind === "reveal") jump(s.starts[part.i + 1] ?? s.end);
+    if (show && t < show.end) jump(onward(show, t));
   }
 
   /** Back to town from the banner, the way the member came: night closes in, and lifts on the town. */
@@ -1605,7 +1603,9 @@ export function makeGrove(
     step(dt) {
       if (!play) return;
       if (show) {
-        t += dt;
+        const to = ticked(show, t, dt);
+        stood += t + dt - to;
+        t = to;
         // A jump of the clock is not played through: only what a step of ordinary length passes.
         if (t - prevT < 0.5) for (const [at, fn] of sounds) if (at > prevT && at <= t) fn();
         prevT = t;
@@ -1650,6 +1650,7 @@ export function makeGrove(
         t: Math.round(t * 1000) / 1000,
         tell: show?.tell,
         starts: show?.starts,
+        waits: show?.waits,
         end: show?.end,
         prizes: show?.list.map((p) => [p.note.prize, p.note.rarity, p.note.have, p.note.fifty ?? ""]),
         pool,
