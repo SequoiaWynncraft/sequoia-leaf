@@ -208,7 +208,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     commands: [
       { id: "t-1", do: "welcome", cursor: null },
       { id: "t-2", do: "buy", stall: "lamps", thing: "rock" },
-      { id: "t-3", do: "looked", things: ["rock"] },
+      { id: "t-3", do: "looked", seen: { rock: 1 } },
       { id: "t-4", do: "setOut", thing: "rock", x: 30, y: 20, t: 0 },
     ],
   });

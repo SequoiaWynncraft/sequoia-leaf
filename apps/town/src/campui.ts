@@ -443,7 +443,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
     // The tray is open, so what is new in it has been looked at: Leaf is told, and it stays marked here.
     const fresh = Object.keys(mine().fresh);
     for (const id of fresh) marked.add(id);
-    if (fresh.length > 0) doNow({ do: "looked", things: fresh });
+    if (fresh.length > 0) doNow({ do: "looked", seen: mine().fresh });
     const held = s.held();
     hand.replaceChildren(
       ...(held

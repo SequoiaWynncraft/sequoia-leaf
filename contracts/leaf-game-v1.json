@@ -1563,7 +1563,9 @@
           {
             "id": "t-3",
             "do": "looked",
-            "things": ["rock"]
+            "seen": {
+              "rock": 1
+            }
           },
           {
             "id": "t-4",

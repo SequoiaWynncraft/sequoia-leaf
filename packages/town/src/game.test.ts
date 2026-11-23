@@ -323,9 +323,14 @@ describe("things in the camp", () => {
     s = did(s, { do: "setOut", thing: ware.thing, x: 30, y: 20, t: 0 }).state;
     expect([s.camp.tray, s.camp.fresh]).toEqual([{ "model-crab": 1, [ware.thing]: 1 }, { "model-crab": 1 }]);
     // Looked in: what the page showed as new is new no more, and what it had not shown yet stays new.
-    s = did(s, { do: "looked", things: [] }).state;
+    s = did(s, { do: "looked", seen: {} }).state;
     expect(newThings(s.camp)).toBe(1);
-    s = did(s, { do: "looked", things: ["model-crab"] }).state;
+    // One more of a thing shown as new arrives before Leaf hears the tray was looked in: it is new still.
+    s = did(s, { do: "looked", seen: { "model-crab": 1 } }).state;
+    s.camp.fresh["model-crab"] = 2;
+    s = did(s, { do: "looked", seen: { "model-crab": 1 } }).state;
+    expect(s.camp.fresh).toEqual({ "model-crab": 1 });
+    s = did(s, { do: "looked", seen: { "model-crab": 1 } }).state;
     expect([s.camp.tray, s.camp.fresh, newThings(s.camp)]).toEqual([{ "model-crab": 1, [ware.thing]: 1 }, {}, 0]);
     s = did(s, { do: "putAway", n: nOf(s, ware.thing) }).state;
     expect([s.camp.tray[ware.thing], s.camp.fresh]).toEqual([2, {}]);
@@ -522,7 +527,7 @@ describe("the page's copy", () => {
     const commands: TownCommand[] = [
       { do: "setOut", thing: "stump", x: 33, y: 20, t: 0 },
       { do: "takePresent", letter: "w-1" },
-      { do: "looked", things: ["stump"] },
+      { do: "looked", seen: { stump: 1 } },
       { do: "move", n: stump, x: 30, y: 33, t: 0 },
       { do: "toggle", n: lantern },
       { do: "putAway", n: stump },
