@@ -95,6 +95,8 @@ export interface Standing {
   readonly want: Tally;
   readonly pay: number;
   filled: Tally;
+  /** The tick it counts from: until then it hangs on the board and the depot gives it nothing (`counts`). */
+  readonly starts: number;
 }
 
 /**
@@ -190,7 +192,7 @@ export interface World {
   /** How many story orders are done, and what has come in toward the one in hand. */
   story: number;
   filled: Tally;
-  /** The standing orders, how many the board has ever shown, how many were filled, and the tick a swap is next free. */
+  /** The standing orders in the order they were hung, how many the board has ever shown, how many were filled, and the tick a swap is next free. */
   board: Standing[];
   serial: number;
   done: number;

@@ -76,6 +76,7 @@ describe("the database", () => {
       { migration_id: 22, name: "banner_people" },
       { migration_id: 23, name: "played" },
       { migration_id: 24, name: "play_guest" },
+      { migration_id: 25, name: "wars_by_time" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -125,6 +126,7 @@ describe("the database", () => {
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;
         }
+        yield* sql`DROP INDEX activities_wars`;
       }),
     );
 
@@ -135,7 +137,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 24 },
+      { latest: 25 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -154,7 +156,8 @@ describe("the database", () => {
         // Back to before migration 24 (after 23, `played`), with a guest on a board, a guest last seen,
         // and a player never seen.
         yield* sql`ALTER TABLE play_state DROP COLUMN guest`;
-        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id = 24`;
+        yield* sql`DROP INDEX activities_wars`;
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 24`;
         for (const [player, game] of [
           [guest, "works"],
           [guest, "town"],

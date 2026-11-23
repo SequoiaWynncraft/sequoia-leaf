@@ -8,7 +8,7 @@ import { EARTH } from "@sequoia-leaf/kit/palette.ts";
 import type { Body } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { dist, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
-import { folkAt, type FolkNow, roll } from "@sequoia-leaf/town/clock.ts";
+import { folkAt, roll, type Walk } from "@sequoia-leaf/town/clock.ts";
 import type { Townsperson } from "@sequoia-leaf/town/folk.ts";
 
 import { beside, crowds, type Placed } from "./apart.ts";
@@ -50,7 +50,6 @@ function blank(who: Who, body: Body | null, x: number, y: number, you: boolean):
     sayFor: 0,
     alpha: 1,
     away: false,
-    mode: "idle",
     doing: "walk",
     greeted: -99,
     named: -99,
@@ -101,12 +100,15 @@ export function say(a: Actor, text: string, secs = 2.8): void {
 }
 
 /**
- * Somebody hops, `times` in a row. Hops are not saved up: asked again while still hopping, they
- * finish the hops already owed (or these, if these are more) and stop.
+ * Somebody hops, `times` in a row, the first begun `late` seconds ago: hops timed by Leaf's clock
+ * are as far along on a page that plays them a moment after. Hops are not saved up: asked again
+ * while still hopping, they finish the hops already owed (or these, if these are more) and stop.
  */
-export function hop(a: Actor, times = 1): void {
-  if (a.hop <= 0) a.hop = HOP;
-  a.hops = Math.max(a.hops, times - 1);
+export function hop(a: Actor, times = 1, late = 0): void {
+  const done = Math.floor(Math.max(0, late) / HOP);
+  if (done >= times) return;
+  if (a.hop <= 0) a.hop = (done + 1) * HOP - Math.max(0, late);
+  a.hops = Math.max(a.hops, times - 1 - done);
 }
 
 export function face(a: Actor, x: number, y: number): void {
@@ -152,10 +154,10 @@ export function peopleOn(ground: Ground, people: () => readonly Actor[]): void {
 /** Whether somebody is standing or sitting still where they can be seen: not walking, gone or faded out. */
 export const isStill = (a: Actor): boolean => !a.away && !a.moving && a.alpha > 0.02;
 
-/** Everybody standing or sitting still on a ground but `a`, where they are drawn. */
-function stillOn(ground: Ground, a: Actor | null): Placed[] {
+/** Everybody standing or sitting still on a ground but `a`, where they are drawn; with `awake`, but for members dozing. */
+function stillOn(ground: Ground, a: Actor | null, awake = false): Placed[] {
   return (peopleOf.get(ground)?.() ?? []).flatMap((o) =>
-    o !== a && isStill(o) ? [{ ...feet(o), tall: headOf(o) }] : [],
+    o !== a && isStill(o) && !(awake && o.dozing !== null) ? [{ ...feet(o), tall: headOf(o) }] : [],
   );
 }
 
@@ -168,10 +170,17 @@ export function stopAt(a: Actor, to: Pt, ground: Ground = TOWN): Pt {
   return beside({ ...at, tall: headOf(a) }, stillOn(ground, a), (p) => ground.clearLine(at, p));
 }
 
-/** Whether a seat is free for `a`: nobody else has it, and nobody but `a` stands or sits where its sitter would be. */
+/**
+ * Whether a seat is free for `a`: nobody else has it, and nobody awake but `a` stands or sits where
+ * its sitter would be. A member dozing on it has it only until somebody awake sits there, and then
+ * dozes on the next (`visitors.ts`).
+ */
 export const seatFree = (s: Seat, a: Actor | null): boolean =>
   (!s.taken || a?.goal === s) &&
-  stillOn(TOWN, a).every((o) => !crowds(o, { x: s.x, y: s.y, tall: tallOf(true, s.dir) }));
+  stillOn(TOWN, a, true).every((o) => !crowds(o, { x: s.x, y: s.y, tall: tallOf(true, s.dir) }));
+
+/** Whether somebody sits on one of the town's seats: another player's seat is their own, where the town's is. */
+export const sitsOn = (a: Actor, s: Seat): boolean => a.seat !== null && dist(a.seat.x, a.seat.y, s.x, s.y) <= 2;
 
 /** The last point of each walk `walkTo` sets out on, looked at again on the way there (`stepActor`). */
 const ends = new WeakSet<Pt>();
@@ -201,8 +210,8 @@ export function footfall(a: Actor, before: number, ground: Ground = TOWN): void 
     puff(a.x, a.y, 2, EARTH[2], 5);
 }
 
-/** A moment of anyone's time: finishing a hop, a sentence, a stretch of the way. */
-export function stepActor(a: Actor, dt: number, ground: Ground = TOWN): void {
+/** What is passing on a figure, whatever puts it where it is: a hop, a line said. */
+export function stepPassing(a: Actor, dt: number): void {
   if (a.sayFor > 0) {
     a.sayFor -= dt;
     if (a.sayFor <= 0) a.say = "";
@@ -214,6 +223,11 @@ export function stepActor(a: Actor, dt: number, ground: Ground = TOWN): void {
       a.hop = HOP;
     }
   }
+}
+
+/** A moment of anyone's time: finishing a hop, a sentence, a stretch of the way. */
+export function stepActor(a: Actor, dt: number, ground: Ground = TOWN): void {
+  stepPassing(a, dt);
   a.moving = false;
   if (a.hold > 0) {
     a.hold -= dt;
@@ -295,7 +309,7 @@ export function shove(a: Actor, dt: number, dx: number, dy: number, ground: Grou
 // ---------- the town's own, by Leaf's clock ----------
 
 let greetAt = 0;
-/** The line the clock last had somebody say, by when it ends; the turn each last arrived on; until when a napper is kept awake. */
+/** The line the clock last had somebody say, by when it ends; the walk each last arrived by, by when it began; until when a napper is kept awake. */
 let said = 0;
 const there = new WeakMap<Actor, number>();
 const roused = new WeakMap<Actor, number>();
@@ -324,9 +338,30 @@ export function along(way: readonly Pt[], far: number): Pt & { next: Pt | null }
   return { x: end.x, y: end.y, next: null };
 }
 
-/** Where one of the town's own who gets about is at a moment of Leaf's clock: so far along the way between its two spots, at its pace. */
-export const walkAt = (now: FolkNow, speed: number, at: number): (Pt & { next: Pt | null }) | null =>
-  now.from && now.to ? along(wayOf(now.from, now.to), (speed * (at - now.at)) / 1000) : null;
+/** Where somebody on a walk is at a moment of Leaf's clock: so far along the way between its two spots, at their pace. */
+export const walkAt = (w: Walk, speed: number, at: number): Pt & { next: Pt | null } =>
+  along(wayOf(w.from, w.to), (speed * (at - w.at)) / 1000);
+
+/**
+ * Puts somebody where a walk has them by Leaf's clock (`G.now`), at their pace: on the way, or at
+ * its end, facing as its spot has them (once: they may be turned after). Says whether they are there.
+ */
+export function onWalk(a: Actor, w: Walk): boolean {
+  const p = walkAt(w, a.speed, G.now);
+  const before = a.walked;
+  a.moving = p.next !== null;
+  if (a.moving) a.walked += dist(a.x, a.y, p.x, p.y);
+  a.x = p.x;
+  a.y = p.y;
+  if (p.next) {
+    face(a, p.next.x, p.next.y);
+    footfall(a, before);
+  } else if (there.get(a) !== w.at) {
+    there.set(a, w.at);
+    a.dir = w.to.dir;
+  }
+  return !a.moving;
+}
 
 /**
  * Puts one of the town's own where Leaf's clock (`G.now`) has it, doing and saying what the clock
@@ -337,21 +372,7 @@ export function byClock(a: Actor): void {
   const f = a.folk;
   if (!f) return;
   const now = folkAt(SEED, f.t, G.now);
-  const p = walkAt(now, a.speed, G.now);
-  if (p) {
-    const before = a.walked;
-    a.moving = p.next !== null;
-    if (a.moving) a.walked += dist(a.x, a.y, p.x, p.y);
-    a.x = p.x;
-    a.y = p.y;
-    if (p.next) {
-      face(a, p.next.x, p.next.y);
-      footfall(a, before);
-    } else if (now.to && there.get(a) !== now.at) {
-      there.set(a, now.at);
-      a.dir = now.to.dir;
-    }
-  }
+  if (now.from && now.to) onWalk(a, { from: now.from, to: now.to, at: now.at });
   const up = now.doing === "asleep" && G.t < (roused.get(a) ?? 0);
   a.doing = a.moving ? "walk" : up ? "stall" : now.doing;
   if (!now.say || now.say.until === said) return;
@@ -415,13 +436,13 @@ export function inTown(): Actor[] {
   return G.folk.filter((a) => !a.away && a.doing !== "asleep");
 }
 
-/** Everyone about hops, and a few of them say so in their own way. */
-export function cheerAll(): void {
+/** Everyone about hops, and a few of them say so in their own way: the same few and the same words on every page, by when the cheer is (`at`, Leaf's clock). */
+export function cheerAll(at: number): void {
   const about = [...inTown(), ...(G.cinfy ? [G.cinfy] : [])];
   about.forEach((a, i) => {
-    hop(a, 2 + (i % 2));
+    hop(a, 2 + (i % 2), (G.now - at) / 1000);
     const cheers = a.folk?.t.cheers;
-    if (cheers && (i % 3 === 0 || Math.random() < 0.25)) say(a, pick(cheers, Math.random()), 2.4);
+    if (cheers && (i % 3 === 0 || roll(SEED, at, i) < 0.25)) say(a, pick(cheers, roll(SEED, at, i, 1)), 2.4);
   });
 }
 

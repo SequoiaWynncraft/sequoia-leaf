@@ -93,7 +93,7 @@ export interface Refused {
   readonly refused: string;
 }
 
-export interface Game<State, Command, View, Note> {
+export interface Game<State, Command, View, Note, Short = never> {
   readonly id: GameId;
   /** A new player's state. */
   create(ctx: Ctx): State;
@@ -114,6 +114,13 @@ export interface Game<State, Command, View, Note> {
   apply(state: State, command: Command, ctx: Ctx): Done<State, Note> | Refused;
   /** What the player's browser is given: the state without anything that tells the future. */
   view(state: State, ctx: Ctx): View;
+  /**
+   * For a game whose page runs the same rules on a copy of its own: what a batch of commands is
+   * answered with in place of `view`. Only what the page cannot work out for itself, and enough for
+   * it to tell whether its copy is still the state Leaf has; when it is not, the page asks for the
+   * state again. A game without it is answered with `view`.
+   */
+  answer?(state: State, ctx: Ctx): Short;
   /** What a visitor is given of somebody's state (`ctx.player` is the visitor); a game without it cannot be visited. */
   visit?(state: State, ctx: Ctx): View;
   /** Reads stored text back, of this or an older version, or null for nonsense. */

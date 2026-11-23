@@ -1,97 +1,45 @@
 /**
  * The guild's moments, staged in the town: real members home from a raid hang a lantern in the
  * tree, a war raises the banner, a level or a milestone is a line in the feed and a flourish over
- * whoever it is. What happens and to whom comes from `guild.ts`, and so do the feed's lines and
- * when they are said; this is only the staging, which never waits on a line. The town's own cheer
- * along.
+ * whoever it is. Where everything is at any moment of one follows from the moment's own time by
+ * Leaf's clock (the walk in `visitors.ts`, the lantern and the banner in `town.ts`), so a page
+ * that comes in the middle joins it there; here is only what is heard and seen once, each at its
+ * own time (`cue`): the fanfare, the cheer, the feed's line. The town's own cheer along.
  */
 
 import { GOLD } from "@sequoia-leaf/kit/palette.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
-import { clamp } from "@sequoia-leaf/kit/util.ts";
+import { clamp, dist } from "@sequoia-leaf/kit/util.ts";
+import { BY_TREE, HOME } from "@sequoia-leaf/town/clock.ts";
 
-import { cheerAll, hop, walkTo } from "./actors.ts";
+import { cheerAll, hop } from "./actors.ts";
 import { float, sparkle } from "./fx.ts";
-import { after, G, hooks, stepLater } from "./game.ts";
+import { type Actor, cue, G, hooks, stepCues, stepLater } from "./game.ts";
 import { guild, type Happening, type Person } from "./guild.ts";
-import { hangLantern, raiseBanner } from "./town.ts";
-import { done, figure, GATE, visitorOf } from "./visitors.ts";
-import { MUSTER } from "./world.ts";
+import { crownBanner, flown, hangs, landLantern } from "./town.ts";
+import { visitorOf } from "./visitors.ts";
 
-function land(name: string, h: Happening): void {
-  raiseBanner(name);
-  G.lands++;
-  sfx.fanfare();
-  guild.say(h, hooks.feed);
-  after(0.7, () => {
-    cheerAll();
-  });
-  // Whoever fought for it and is in town is pleased about it.
-  if (h.kind === "war")
-    for (const p of h.who) {
-      const a = visitorOf(p);
-      if (a) hop(a, 3);
-    }
-}
+/** The cheers played, for `window.town`. */
+export const cheered: { what: string; at: number }[] = [];
 
-/**
- * Real members home from a raid together: they walk in through the gate (whoever is in town
- * already comes over), the first of them hangs a lantern in the tree, and the town cheers. Then
- * they go back to where they were, or out through the gate again if they were only passing.
- */
-function partyHome(who: readonly Person[], h: Happening): void {
-  G.raidsToday++;
-  // Whoever is dozing in town sleeps through it.
-  const party = who
-    .filter((p) => !p.you)
-    .flatMap((p) => figure(p) ?? [])
-    .slice(0, MUSTER.length);
-  let cheered = false;
-  const home = (): void => {
-    if (cheered) return;
-    cheered = true;
-    sfx.fanfare();
-    guild.say(h, hooks.feed);
-    cheerAll();
-    for (const a of party) hop(a, 3);
-    const leader = party[0];
-    if (!leader) {
-      hangLantern({ x: 344, y: 206 });
-      return;
-    }
-    after(1.3, () => {
-      for (const a of party.slice(1)) done(a);
-      walkTo(leader, { x: 340, y: 216 }, () => {
-        leader.dir = 2;
-        hangLantern({ x: leader.x + 4, y: leader.y - 10 });
-        hop(leader, 2);
-        after(1.6, () => {
-          done(leader);
-        });
-      });
-    });
-  };
-  if (party.length === 0) {
-    home();
-    return;
+/** Somebody's figure in town, if they have one and are awake: the member's own, a visitor's, another player's. */
+const inTownAs = (p: Person): Actor | null => (p.you ? G.player : visitorOf(p));
+
+/** The town cheers one of the guild's moments, and whoever of it is in town is pleased about it: their hops timed from the cheer (`at`). */
+function cheer(h: Extract<Happening, { at: number }>, at: number): void {
+  cheerAll(at);
+  for (const p of h.who) {
+    const a = inTownAs(p);
+    if (a) hop(a, 3, (G.now - at) / 1000);
   }
-  party.forEach((a, i) => {
-    // Somebody passing comes in out of the dark beyond the gate.
-    if (a.alpha < 0.5) {
-      a.x = GATE.x - 7 + (i % 2) * 13;
-      a.y = GATE.y;
-    }
-    after(i * 0.35, () => {
-      walkTo(a, MUSTER[i] ?? { x: 256, y: 116 }, i === 0 ? home : null);
-    });
-  });
-  after(7, home);
+  cheered.push({ what: h.kind === "party" ? h.raid : h.land, at });
+  if (cheered.length > 20) cheered.shift();
 }
 
 /** A real member reached a level or a milestone: a line in the feed (if it tells it), and a flourish if they are in town. */
 function realNews(who: Person, h: Happening): void {
   guild.say(h, hooks.feed);
-  const a = who.you ? G.player : visitorOf(who);
+  const a = inTownAs(who);
   if (!a || a.away) return;
   sfx.levelUp();
   sparkle(a.x, a.y - 10, 20, 7);
@@ -99,37 +47,38 @@ function realNews(who: Person, h: Happening): void {
   hop(a, 3);
 }
 
-/**
- * The same moments while the member is away at a camp: nothing is staged, but the town is as they
- * will expect to find it. The party is gone, or back with its lantern hung; the banner is up.
- */
-function quietly(h: Happening): void {
-  switch (h.kind) {
-    case "party":
-      G.raidsToday++;
-      hangLantern({ x: 344, y: 206 });
-      return;
-    case "war":
-      raiseBanner(h.land);
-      G.lands++;
-      return;
-    case "reached":
-    case "milestone":
-  }
-}
-
+/** One of the guild's moments begins, or is under way: what of it is played once is set for its time. */
 function stage(h: Happening): void {
-  if (G.where !== "town") {
-    quietly(h);
-    return;
-  }
+  if (G.where !== "town") return;
   switch (h.kind) {
-    case "war":
-      land(h.land, h);
+    case "war": {
+      const { at } = h;
+      cue(at, () => {
+        sfx.fanfare();
+        guild.say(h, hooks.feed);
+      });
+      cue(at + 700, () => cheer(h, at + 700));
+      cue(flown(at)?.full ?? at, crownBanner);
       return;
-    case "party":
-      partyHome(h.who, h);
+    }
+    case "party": {
+      const at = h.at + HOME.cheer;
+      cue(at, () => {
+        sfx.fanfare();
+        guild.say(h, hooks.feed);
+        cheer(h, at);
+      });
+      // The lantern goes up with a pop from whoever of them stands by the tree, and lands 0.9 seconds on.
+      const hang = h.at + HOME.hang;
+      cue(hang, () => {
+        if (!hangs(hang)) return;
+        sfx.pop();
+        for (const a of h.who.flatMap((p) => inTownAs(p) ?? []))
+          if (dist(a.x, a.y, BY_TREE.x, BY_TREE.y) < 2) hop(a, 2);
+      });
+      cue(hang + 900, () => landLantern(hang));
       return;
+    }
     case "reached":
     case "milestone":
       realNews(h.who, h);
@@ -137,7 +86,7 @@ function stage(h: Happening): void {
 }
 
 let hearing = false;
-/** The evening begins: from now on the town shows what the guild says is happening. */
+/** The evening begins: from now on the town plays what the guild says is happening. */
 export function beginEvents(): void {
   if (hearing) return;
   hearing = true;
@@ -146,6 +95,7 @@ export function beginEvents(): void {
 
 export function stepEvents(): void {
   stepLater();
+  stepCues();
   // Whoever is in the gateway is half in the dark beyond it.
   const all = G.player ? [G.player, ...G.folk, ...G.visitors] : [...G.folk, ...G.visitors];
   for (const a of all) {
