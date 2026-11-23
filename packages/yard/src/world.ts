@@ -244,7 +244,11 @@ export function reopen(w: World): void {
     rates.slots = Math.max(rates.slots, e.slots ?? 0);
   }
   w.open = { kinds, plots, plans, board };
-  if (rates.reach !== w.rates.reach) w.power = null;
+  // Power reaches other tiles now, and who is in reach is part of the plumbing.
+  if (rates.reach !== w.rates.reach) {
+    w.power = null;
+    w.wire = null;
+  }
   w.rates = rates;
 }
 
