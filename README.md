@@ -624,14 +624,18 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
 - Each call a player makes to a game (an opening, a batch not refused whole,
   a visit, for the visitor) adds the time since their last call to that game
   to how long they have played it, when that is at most 3 minutes
-  (`IDLE_MS`; a page in view calls at least every 75 seconds); a longer gap
-  adds nothing. Leaf's own tending (below) is not a call. It is written as the
-  call arrives, with that moment, before the call waits for anything, and by
-  Leaf itself, so that the caller going away cannot stop it: one that waits in
-  a line (below) counts from when it came. `GET /v1/game/people/{player}` answers `{ "id", "name",
-"games", "played" }`: for each game they stand in or have played a second
-  of, `played` in whole seconds and, with a standing, its `place`, `score`
-  and `also`; and `played` for all games together.
+  (`IDLE_MS`; an open page calls at least every 75 seconds); a longer gap
+  adds nothing. A call with `?afk=1` says its player is away from the keys
+  (the page hidden, or nothing done on it for 5 minutes): the time after it,
+  up to the next call, is time AFK instead. Leaf's own tending (below) is not a
+  call. It is written as the call arrives, with that moment, before the call
+  waits for anything, and by Leaf itself, so that the caller going away cannot
+  stop it: one that waits in a line (below) counts from when it came.
+  `GET /v1/game/people/{player}` answers `{ "id", "name", "games", "played",
+"afk" }`: for each game they stand in or have had open a second, `played`
+  and `afk` in whole seconds, `spent` (the Coins its commands have taken from
+  them, from the Coins ledger) and, with a standing, its `place`, `score` and
+  `also`; and `played` and `afk` for all games together.
 
 Tables (migration 17): `play_state` (a player's state in a game, with its
 `rev`; 0 is a state nothing has been done to), `play_commands` (each command's

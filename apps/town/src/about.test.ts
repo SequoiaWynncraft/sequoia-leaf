@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { agoLine, ALONE, held, type InRoom, whoIsAbout } from "./about.ts";
+import { agoLine, ALONE, held, type InRoom, partsOf, whoIsAbout } from "./about.ts";
 import type { Mate } from "./guild.ts";
 import { GUEST, toAbout } from "./live.ts";
 
@@ -22,7 +22,7 @@ const mate = (
 });
 /** Each part's title, and each of its rows as "name: line" (with "(you)" for the member). */
 const shown = (a: ReturnType<typeof whoIsAbout>): [string, string[]][] =>
-  a.parts.map((p) => [p.title, p.rows.map((r) => `${r.name}: ${r.line}${r.you ? " (you)" : ""}`)]);
+  partsOf(a).map((p) => [p.title, p.rows.map((r) => `${r.name}: ${r.line}${r.you ? " (you)" : ""}`)]);
 
 describe("who is about", () => {
   test("in town: everybody in the room, the member first and marked; then the rest by name", () => {
@@ -113,7 +113,7 @@ describe("who is about", () => {
       resting: [],
       now: NOW,
     });
-    expect(someoneAway.parts.map((p) => p.title)).toEqual(["In town", "Elsewhere"]);
+    expect(partsOf(someoneAway).map((p) => p.title)).toEqual(["In town", "Elsewhere"]);
     expect(someoneAway.alone).toBe(false);
   });
 
@@ -199,7 +199,7 @@ const about = (room: InRoom[], present: Mate[] = []): ReturnType<typeof whoIsAbo
   whoIsAbout({ me: ME, room, present, resting: [], now: NOW });
 /** Each part's title and its rows' names, with "(gone)" for those no longer in it. */
 const names = (a: ReturnType<typeof whoIsAbout>): [string, string[]][] =>
-  a.parts.map((p) => [p.title, p.rows.map((r) => `${r.name}${r.gone ? " (gone)" : ""}`)]);
+  partsOf(a).map((p) => [p.title, p.rows.map((r) => `${r.name}${r.gone ? " (gone)" : ""}`)]);
 
 describe("the panel while it stays open", () => {
   test("its order holds: somebody arriving goes to the end of their part, not where their name sorts", () => {
@@ -221,14 +221,50 @@ describe("the panel while it stays open", () => {
     expect(names(held(left, opened))).toEqual(names(opened));
   });
 
-  test("somebody who goes from town into the Works is gone from the one part and at the end of the other", () => {
+  test("somebody who goes from town into the Works stays where they were, dimmed, saying where they are now, and is listed once", () => {
     const works = [mate("Wrenly", "Wrenly", "works")];
     const opened = about(inRoom("Birchwood", "Nettlebrook"), works);
     const went = about(inRoom("Nettlebrook"), [...works, mate("Birchwood", "Birchwood", "works")]);
-    expect(names(held(opened, went))).toEqual([
-      ["In town", ["Tester", "Birchwood (gone)", "Nettlebrook"]],
-      ["Elsewhere", ["Wrenly", "Birchwood"]],
+    expect(shown(held(opened, went))).toEqual([
+      ["In town", ["Tester: Strategist (you)", "Birchwood: at the Works", "Nettlebrook: "]],
+      ["Elsewhere", ["Wrenly: at the Works"]],
     ]);
+    expect(names(held(opened, went))[0]?.[1]).toContain("Birchwood (gone)");
+  });
+
+  test("somebody who walks out of the room stays in town, dimmed, as just gone, and is not listed again as seen lately", () => {
+    const opened = about(inRoom("Glacade"));
+    // Out of the room, while the guild's lists still have them in town.
+    const left = about(inRoom(), [mate("Glacade", "Glacade", "town", GUEST)]);
+    expect(names(left)).toEqual([
+      ["In town", ["Tester"]],
+      ["Seen lately", ["Glacade"]],
+    ]);
+    expect(shown(held(opened, left))).toEqual([
+      ["In town", ["Tester: Strategist (you)", `Glacade: ${GUEST} · just now`]],
+    ]);
+    // And somebody seen lately who comes back into town stays where they were, saying so.
+    const back = held(left, opened);
+    expect(shown(back)).toEqual([
+      ["In town", ["Tester: Strategist (you)"]],
+      ["Seen lately", ["Glacade: in town"]],
+    ]);
+  });
+
+  test("nobody is listed twice, however the panel's lists change while it is open", () => {
+    const steps = [
+      about(inRoom("A", "B"), [mate("C", "C", "works")]),
+      about(inRoom("B"), [mate("A", "A", "town"), mate("C", "C", "works")]),
+      about(inRoom("C"), [mate("A", "A", "table"), mate("B", "B", "camp")]),
+      about(inRoom("A", "B", "C")),
+      about(inRoom()),
+    ];
+    let shownNow = steps[0] ?? about(inRoom());
+    for (const step of steps) {
+      shownNow = held(shownNow, step);
+      const ids = partsOf(shownNow).flatMap((p) => p.rows.map((r) => r.id));
+      expect(new Set(ids).size).toBe(ids.length);
+    }
   });
 
   test("the count is of who is about now; and it says nobody is about only if nobody was when it opened", () => {
