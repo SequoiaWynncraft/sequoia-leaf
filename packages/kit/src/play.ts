@@ -49,9 +49,10 @@
  * Every request reaches Leaf through `net.ts`, which the tests stand in for.
  */
 
-import { type GameId, MOST_COMMANDS, MOST_FLUSHED, playPath, visitPath } from "@sequoia-leaf/core";
+import { type GameId, MOST_COMMANDS, MOST_FLUSHED, playPath, readBalances, visitPath } from "@sequoia-leaf/core";
 
 import { ask, type Backoff, backoff, isRecord, outside } from "./net.ts";
+import { fromLeaf, owe, settle } from "./purse.ts";
 
 /** Reads what Leaf sends into the game's own types; null for anything these rules could not have made. */
 export interface PlayReader<View, Note, Short = never> {
@@ -82,8 +83,11 @@ export interface Play<View, Command extends object, Note, Short = never> {
   readonly state: View;
   /** How many batches had changed the state when Leaf last answered. */
   readonly rev: number;
-  /** Sends a command. Returns at once; the promise is Leaf's answer for it. */
-  send(command: Command, predict?: (copy: View) => View): Promise<Answer<Note>>;
+  /**
+   * Sends a command. Returns at once; the promise is Leaf's answer for it. `coins`, the Coins the
+   * page has worked out it pays (taking, below nothing), are shown in the purse until Leaf answers.
+   */
+  send(command: Command, predict?: (copy: View) => View, coins?: number): Promise<Answer<Note>>;
   /** Whether anything sent has not been answered yet. */
   waiting(): boolean;
   /** Hears each time Leaf's state takes the copy's place; `differs` when it is not what the page was showing. */
@@ -294,6 +298,8 @@ export async function openPlay<View, Command extends object, Note, Short = never
     outside.reload();
     return { trouble: "closed" };
   }
+  const opening = readBalances(first.body.purse);
+  if (opening) fromLeaf(opening);
   const retry = options.retry ?? RETRY;
   const name = pageName();
   let made = 0;
@@ -364,15 +370,22 @@ export async function openPlay<View, Command extends object, Note, Short = never
       answers.set(r.id, { notes });
     }
     if (typeof body.rev === "number") rev = body.rev;
+    // Leaf's word on the purse as of the answer, taken as what the batch was shown to owe goes.
+    const word = readBalances(body.purse);
+    const ids = batch.map((p) => p.id);
     if (view === null) {
       const said = reader.short?.(body.state) ?? undefined;
-      return () => answered(batch, answers, said);
+      return () => {
+        settle(ids, word);
+        answered(batch, answers, said);
+      };
     }
     // What the page was showing, as it stands now: whatever the page did to it shows as a difference.
     const shown = json(copy);
     base = view;
     copy = rebuild(behind);
     return () => {
+      settle(ids, word);
       answered(batch, answers);
       tell(json(copy) !== shown);
     };
@@ -402,7 +415,12 @@ export async function openPlay<View, Command extends object, Note, Short = never
   function stopped(was: Line<P>, why: Stopped): void {
     if (timer !== null) clearTimeout(timer);
     unhear();
-    for (const p of unanswered(was)) p.answer({ refused: why });
+    const left = unanswered(was);
+    settle(
+      left.map((p) => p.id),
+      null,
+    );
+    for (const p of left) p.answer({ refused: why });
     if (why === "not_you" || why === "outdated") outside.reload();
     else if (why !== "put_away") for (const fn of troubled) fn(why);
   }
@@ -429,6 +447,10 @@ export async function openPlay<View, Command extends object, Note, Short = never
       // A game answered short keeps no copy here to put right.
       if (!reader.short) copy = rebuild(behind);
       return move({ do: "answered" }, () => {
+        settle(
+          batch.map((p) => p.id),
+          null,
+        );
         answered(batch, new Map(batch.map((p) => [p.id, { refused: "invalid_command" }])));
         if (!reader.short) tell(true);
       });
@@ -509,7 +531,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
     get rev() {
       return rev;
     },
-    send(command, predict) {
+    send(command, predict, coins = 0) {
       return new Promise<Answer<Note>>((answer) => {
         // A visitor changes nothing: nothing is queued, so nothing is ever sent or flushed.
         if (visiting) return answer({ refused: "visiting" });
@@ -518,6 +540,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
         const size = json(command).length + ID_ROOM;
         const pending: P = { id, command, predict, size, answer };
         copy = predicted(pending, copy);
+        owe(id, coins);
         move({ do: "send", p: pending });
       });
     },

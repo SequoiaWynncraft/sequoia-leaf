@@ -671,31 +671,26 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
     const sql = yield* SqlClient.SqlClient;
     const requests = guildRequests(yield* HttpClient.HttpClient, (yield* AppConfig).backendUrl);
 
-    /** The player's Coins, their account opened with the welcome if they have none yet. */
-    const coinsOf = (identity: Identity) =>
-      Effect.gen(function* () {
-        yield* coins.open(identity.playerId, yield* Clock.currentTimeMillis);
-        return yield* coins.balance(identity.playerId);
-      });
-
     return (
       handlers
         .handle("me", () =>
           Effect.gen(function* () {
             const identity = yield* CurrentIdentity;
+            // Read only: a player with no Coins account yet is shown the welcome it will open with.
             if (isGuest(identity)) {
               // A guest has their Leaf, to spend on what is for everyone: what they earned as a
               // member, or the staff gave them. They have no XP or news of the guild's.
-              const { balance } = yield* ledger.account(identity.playerId);
+              const { leaf, coins: held, version } = yield* coins.balances(identity.playerId);
               return HttpServerResponse.jsonUnsafe({
                 player: { id: identity.playerId, username: identity.username },
                 rank: null,
                 guest: true,
-                leaf: balance,
+                leaf,
                 xp: 0,
                 level: levelJson(0),
                 event_cursor: 0,
-                coins: yield* coinsOf(identity),
+                coins: held,
+                version,
               } satisfies typeof Body.GameMe.Type);
             }
             // The backend vouches for the name, so the guild's news can show it.
@@ -705,16 +700,18 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             // balance and after the cursor, and the game asks again for nothing; read the other way
             // round, it would be under the cursor and missing from the balance, and never asked for.
             const cursor = yield* events.latestIdOf(identity.playerId);
-            const account = yield* ledger.account(identity.playerId);
+            const { xp } = yield* ledger.account(identity.playerId);
+            const { leaf, coins: held, version } = yield* coins.balances(identity.playerId);
             return HttpServerResponse.jsonUnsafe({
               player: { id: identity.playerId, username: identity.username },
               rank: identity.guildRank,
               guest: false,
-              leaf: account.balance,
-              xp: account.xp,
-              level: levelJson(account.xp),
+              leaf,
+              xp,
+              level: levelJson(xp),
               event_cursor: cursor,
-              coins: yield* coinsOf(identity),
+              coins: held,
+              version,
             } satisfies typeof Body.GameMe.Type);
           }),
         )
@@ -806,6 +803,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               rev: shown.rev,
               now: iso(shown.now),
               state: shown.view,
+              purse: shown.purse,
             } satisfies typeof Body.PlayShown.Type);
           }),
         )
@@ -841,6 +839,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               now: iso(batch.now),
               results: batch.results,
               state: batch.view,
+              purse: batch.purse,
             } satisfies typeof Body.Played.Type);
           }),
         )
@@ -875,6 +874,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               rev: shown.rev,
               now: iso(shown.now),
               state: shown.view,
+              purse: shown.purse,
             } satisfies typeof Body.PlayShown.Type);
           }),
         )

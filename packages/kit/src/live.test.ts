@@ -1,30 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import {
-  followLeaf,
-  isGuest,
-  keepLeaf,
-  passCoins,
-  passLeaf,
-  readCoins,
-  readMember,
-  refreshLeaf,
-  restart,
-  start,
-  where,
-} from "./live.ts";
+import { type Balances, readBalances } from "@sequoia-leaf/core";
+
+import { followLeaf, isGuest, keepLeaf, passPurse, readMember, refreshLeaf, restart, start, where } from "./live.ts";
 import { isRecord, type Listening } from "./net.ts";
-import {
-  balance,
-  forgetLedger,
-  fromLedger,
-  heardCoins,
-  LEAF_NOT_HERE,
-  LEAF_SHUT,
-  leafFor,
-  leafOpen,
-  leafShut,
-} from "./purse.ts";
+import { balance, forgetLedger, fromLeaf, LEAF_NOT_HERE, LEAF_SHUT, leafFor, leafOpen, leafShut } from "./purse.ts";
 import {
   GUEST,
   HELLO,
@@ -117,8 +97,8 @@ describe("finding out where the game is", () => {
       level: { number: 1, into: 0, next: 1000 },
       cursor: 0,
     });
-    expect(readCoins(isRecord(r) ? r.body : null)).toBe(300);
-    expect(readCoins({ coins: "lots" })).toBeNull();
+    expect(readBalances(isRecord(r) ? r.body : null)).toEqual({ coins: 300, leaf: 0, version: 0 });
+    expect(readBalances({ coins: "lots", leaf: 0, version: 1 })).toBeNull();
   });
 
   test("it asks once per page", async () => {
@@ -203,7 +183,7 @@ describe("following the member's Leaf", () => {
   test("Leaf paid between the first look and the stream opening is heard at once, and the purse fetched again", async () => {
     const raid = { id: 141, type: "leaf_earned", data: { source: "raid", leaf: 110, xp: 110 } };
     // The member as first looked at (newest event 140), and as they are by the time anything listens.
-    const now = { ...TESTER, leaf: TESTER.leaf + 110, event_cursor: 141 };
+    const now = { ...TESTER, leaf: TESTER.leaf + 110, event_cursor: 141, version: TESTER.version + 1 };
     let asked = 0;
     world = standin({
       "GET /v1/game/hello": HELLO,
@@ -231,7 +211,7 @@ describe("following the member's Leaf", () => {
           asked++;
           if (asked === 1) return { status: 200, body: TESTER };
           if (asked === 2) return new Promise<never>(() => undefined);
-          return { status: 200, body: { ...TESTER, leaf: 2700 } };
+          return { status: 200, body: { ...TESTER, leaf: 2700, version: TESTER.version + 1 } };
         },
         "GET /v1/me/events/stream": stream.open,
       },
@@ -252,98 +232,75 @@ const ORIGIN = "https://leaf.example";
 
 /**
  * Stands in for a game's page in the town's frame: a window whose parent is the town, on the same
- * origin, that hears messages. Returns how the town says something to it.
+ * origin, that hears messages. Returns how the town says something to it, and what the game said
+ * to the town.
  */
-function aFramedPage(): (data: unknown) => void {
-  const town = { location: { origin: ORIGIN }, postMessage: (): void => undefined };
+function aFramedPage(): { say: (data: unknown) => void; told: unknown[] } {
+  const told: unknown[] = [];
+  const town = { location: { origin: ORIGIN }, postMessage: (msg: unknown): void => void told.push(msg) };
   const win = Object.assign(new EventTarget(), { location: { origin: ORIGIN }, parent: town });
   Object.defineProperty(globalThis, "window", { value: win, configurable: true });
   page = () => {
     Reflect.deleteProperty(globalThis, "window");
   };
-  return (data) => {
-    win.dispatchEvent(new MessageEvent("message", { data, origin: ORIGIN }));
+  return {
+    say: (data) => {
+      win.dispatchEvent(new MessageEvent("message", { data, origin: ORIGIN }));
+    },
+    told,
   };
 }
 
-describe("the member's Coins on the guild's server", () => {
-  test("start from what /v1/game/me says, a guest's as a member's, and nothing is kept in the browser", async () => {
+/** Leaf's word, `by` versions on from the tester's. */
+const word = (by: number, over: Partial<Balances> = {}): Balances => ({
+  coins: TESTER.coins,
+  leaf: TESTER.leaf,
+  version: TESTER.version + by,
+  ...over,
+});
+
+describe("the member's purse on the guild's server", () => {
+  test("starts from what /v1/game/me says, a guest's as a member's, and nothing is kept in the browser", async () => {
     world = standin({
       "GET /v1/game/hello": HELLO,
       "GET /v1/game/me": { status: 200, body: { ...GUEST, coins: 812 } },
     });
     await start();
-    expect(balance().coins).toBe(812);
+    expect(balance()).toEqual({ coins: 812, leaf: GUEST.leaf });
     expect(world.store.length).toBe(0);
   });
 
-  test("in the town's frame, the town's word about Coins is taken while nothing of the game's is on its way", async () => {
+  test("in the town's frame, the town's word is taken when it is newer, and the game says its own newer word to the town", async () => {
     world = live({ status: 200, body: TESTER }, { top: false });
     await start();
     const town = aFramedPage();
     const stop = keepLeaf();
-    town({ town: "coins", coins: 420 });
-    expect(balance().coins).toBe(420);
-    for (const coins of [-1, 3.5, "9", null]) town({ town: "coins", coins });
-    expect(balance().coins).toBe(420);
-    stop();
-  });
-
-  test("the town says each change to its Coins to a game once it is ready", async () => {
-    world = live({ status: 200, body: TESTER });
-    await start();
-    const said: number[] = [];
-    const coins = passCoins((n) => said.push(n));
-    heardCoins(340);
-    expect(said).toEqual([]);
-    coins.ready();
-    expect(said).toEqual([340]);
-    coins.stop();
-    heardCoins(380);
-    expect(said).toEqual([340]);
-  });
-});
-
-describe("the member's Leaf in a game in the town's frame", () => {
-  test("the town's word is taken as a fresh read of the ledger", async () => {
-    world = live({ status: 200, body: TESTER }, { top: false });
-    await start();
-    const town = aFramedPage();
-    const stop = keepLeaf();
-    expect(balance().leaf).toBe(2450);
-    town({ town: "leaf", leaf: 2560 });
-    expect(balance().leaf).toBe(2560);
+    town.say({ town: "purse", purse: word(2, { coins: 420, leaf: 2560 }) });
+    expect(balance()).toEqual({ coins: 420, leaf: 2560 });
+    // Older, or not Leaf's word at all: nothing.
+    for (const purse of [word(1, { coins: 5 }), { coins: -1, leaf: 0, version: 99 }, { coins: 3.5 }, "9", null]) {
+      town.say({ town: "purse", purse });
+    }
+    town.say({ town: "coins", coins: 7 });
+    expect(balance()).toEqual({ coins: 420, leaf: 2560 });
+    // The game's own answers bring newer words: the town is told.
+    fromLeaf(word(3, { coins: 400 }));
+    expect(town.told.at(-1)).toEqual({ town: "purse", purse: word(3, { coins: 400 }) });
     // In the frame the town listens to the member's news, so the game does not.
     expect(world.sent.map((s) => s.path)).toEqual(["/v1/game/hello", "/v1/game/me"]);
     stop();
-    town({ town: "leaf", leaf: 2700 });
-    expect(balance().leaf).toBe(2560);
+    town.say({ town: "purse", purse: word(4, { coins: 1 }) });
+    expect(balance().coins).toBe(400);
   });
 
-  test("nothing but a whole number of Leaf, none below nothing, is taken", async () => {
-    world = live({ status: 200, body: TESTER }, { top: false });
-    await start();
-    const town = aFramedPage();
-    const stop = keepLeaf();
-    for (const leaf of [-1, 2600.5, "2600", Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, null, undefined, [2600]]) {
-      town({ town: "leaf", leaf });
-    }
-    town({ town: "leaf" });
-    town({ town: "purse", leaf: 2600 });
-    expect(balance().leaf).toBe(2450);
-    town({ town: "leaf", leaf: 0 });
-    expect(balance().leaf).toBe(0);
-    stop();
-  });
-
-  test("without Leaf, the town's word about Leaf is not taken", async () => {
+  test("without Leaf, the town's word is not taken", async () => {
     world = standin({ "GET /v1/game/hello": "offline" }, { top: false });
     await start();
     const town = aFramedPage();
     const stop = keepLeaf();
-    const before = balance().leaf;
-    town({ town: "leaf", leaf: before + 500 });
-    expect(balance().leaf).toBe(before);
+    const before = balance();
+    town.say({ town: "purse", purse: word(5, { leaf: 99_999 }) });
+    expect(balance()).toEqual(before);
     stop();
   });
 
@@ -360,26 +317,24 @@ describe("the member's Leaf in a game in the town's frame", () => {
     stop();
   });
 
-  test("the town says each new Leaf the ledger gives, once the game is ready to hear it", async () => {
+  test("the town says Leaf's word to a game once it is ready, and each newer one after", async () => {
     world = live({ status: 200, body: TESTER });
     await start();
-    const said: number[] = [];
-    const leaf = passLeaf((n) => said.push(n));
+    const passed: Balances[] = [];
+    const purse = passPurse((w) => passed.push(w));
     // Paid while the game is still opening: said when it is ready, and only the newest.
-    fromLedger(2500);
-    fromLedger(2560);
-    expect(said).toEqual([]);
-    leaf.ready();
-    expect(said).toEqual([2560]);
-    // The same Leaf again, or Coins, is nothing to say.
-    fromLedger(2560);
-    heardCoins(40);
-    expect(said).toEqual([2560]);
-    fromLedger(2670);
-    expect(said).toEqual([2560, 2670]);
-    leaf.stop();
-    fromLedger(2800);
-    expect(said).toEqual([2560, 2670]);
+    fromLeaf(word(1, { leaf: 2500 }));
+    fromLeaf(word(2, { leaf: 2560 }));
+    expect(passed).toEqual([]);
+    purse.ready();
+    expect(passed).toEqual([word(2, { leaf: 2560 })]);
+    // An older word is nothing to say.
+    fromLeaf(word(1, { leaf: 2500 }));
+    fromLeaf(word(3, { leaf: 2670 }));
+    expect(passed).toEqual([word(2, { leaf: 2560 }), word(3, { leaf: 2670 })]);
+    purse.stop();
+    fromLeaf(word(4));
+    expect(passed).toHaveLength(2);
   });
 });
 
@@ -428,14 +383,14 @@ describe("against what Leaf really answers", () => {
     // `closeLeaf` closes every Leaf button beside the ledger; a page passes it one with a command only while `leafOpen()` is false.
     expect([leafOpen(), leafShut()]).toEqual([true, LEAF_NOT_HERE]);
     const passed: number[] = [];
-    const leaf = passLeaf((n) => passed.push(n));
-    leaf.ready();
+    const purse = passPurse((w) => passed.push(w.leaf));
+    purse.ready();
     const before = balance().leaf;
     expect(await refreshLeaf()).toMatchObject({ name: "Alice", leaf: before - 28_000 });
     expect(balance().leaf).toBe(before - 28_000);
-    // The town still passes the ledger's number on to a game in its frame.
-    expect(passed).toEqual([before - 28_000]);
-    leaf.stop();
+    // The town still passes Leaf's word on to a game in its frame.
+    expect(passed).toEqual([before, before - 28_000]);
+    purse.stop();
   });
 });
 

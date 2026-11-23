@@ -1,4 +1,4 @@
-import { DAY_MS, EARNINGS, type PlayerId, utcDay } from "@sequoia-leaf/core";
+import { type Balances, DAY_MS, EARNINGS, type PlayerId, utcDay } from "@sequoia-leaf/core";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
@@ -56,6 +56,13 @@ export class Coins extends Context.Service<
     readonly room: (playerId: PlayerId, now: number) => Effect.Effect<number>;
     /** The Coins each game's commands have taken from the player, by game: none for a game that has taken none. */
     readonly spentOf: (playerId: PlayerId) => Effect.Effect<ReadonlyMap<string, number>>;
+    /**
+     * The player's Coins (the welcome, for a player with no account yet) and Leaf, as one moment of
+     * both ledgers has them, read in one statement and writing nothing; and that moment's version:
+     * the newest entry of the player's in each ledger, added, which only grows, as both are
+     * append-only and their ids are never used again.
+     */
+    readonly balances: (playerId: PlayerId) => Effect.Effect<Balances>;
   }
 >()("leaf/Coins") {
   static readonly layer = Layer.effect(
@@ -90,6 +97,16 @@ export class Coins extends Context.Service<
           SELECT game, -sum(amount) AS spent FROM coin_entries
           WHERE player_id = ${playerId} AND amount < 0 AND game IS NOT NULL
           GROUP BY game ORDER BY game
+        `,
+      });
+      const balances = SqlSchema.findOne({
+        Request: Schema.String,
+        Result: Schema.Struct({ coins: Schema.Int, leaf: Schema.Int, version: Schema.Int }),
+        execute: (playerId) => sql`
+          SELECT coalesce((SELECT balance FROM coins WHERE player_id = ${playerId}), ${WELCOME_COINS}) AS coins,
+                 coalesce((SELECT balance FROM accounts WHERE player_id = ${playerId}), 0) AS leaf,
+                 coalesce((SELECT max(id) FROM coin_entries WHERE player_id = ${playerId}), 0)
+                   + coalesce((SELECT max(id) FROM ledger_entries WHERE player_id = ${playerId}), 0) AS version
         `,
       });
       const insert = (playerId: PlayerId, entry: CoinEntry, now: number) => sql`
@@ -142,6 +159,7 @@ export class Coins extends Context.Service<
             Effect.map((rows) => new Map(rows.map((row) => [row.game, row.spent]))),
             Effect.orDie,
           ),
+        balances: (playerId) => balances(playerId).pipe(Effect.orDie),
       });
     }),
   );

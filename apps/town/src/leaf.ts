@@ -27,7 +27,6 @@ import { pageCard, troubleCard as kitTroubleCard, where } from "@sequoia-leaf/ki
 import { outside } from "@sequoia-leaf/kit/net.ts";
 import { askPerson } from "@sequoia-leaf/kit/person.ts";
 import { makeHold, openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/kit/play.ts";
-import { refreshCoins } from "@sequoia-leaf/kit/purse.ts";
 import { predict, readNotes, readView, type TownCommand, type TownNote, type TownView } from "@sequoia-leaf/town";
 import { type Camp, WHY_NOT } from "@sequoia-leaf/town/camp.ts";
 
@@ -172,7 +171,7 @@ export function doNow(command: TownCommand, now = Date.now()): Did | null {
 
 /**
  * Sends a command only Leaf can answer, and gives what it did when Leaf answers; `waiting` shows the
- * kit's waiting look meanwhile. What it paid or took is asked of Leaf for the purse. Null, with
+ * kit's waiting look meanwhile. What it paid or took comes in the purse with the answer. Null, with
  * nothing sent, for one held off while Leaf answers another. In a visit, refused.
  */
 export async function ask(command: TownCommand, waiting: Element | null = null): Promise<Did | null> {
@@ -181,7 +180,6 @@ export async function ask(command: TownCommand, waiting: Element | null = null):
   const steady = command.do === "buy";
   if (!play || hold.held(steady)) return null;
   const answer = await hold.until(steady, waitingLook(waiting, play.send(command)));
-  if (command.do === "buy" || command.do === "openChest") refreshCoins();
   tell(false);
   return answer;
 }

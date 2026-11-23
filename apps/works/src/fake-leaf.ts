@@ -18,7 +18,7 @@ import {
   refusal,
   type Yard,
 } from "@sequoia-leaf/factory";
-import { fromLeaf } from "@sequoia-leaf/kit/purse.ts";
+import { forgetLedger, fromLeaf } from "@sequoia-leaf/kit/purse.ts";
 import { type Reply, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 
 import { S } from "./state.ts";
@@ -61,6 +61,9 @@ export const ctx = (): Ctx => ({
 export function fakeLeaf(yard: Yard = WORKS.create(ctx())) {
   const leaf = {
     yard,
+    /** The member's Coins, as Leaf's ledger of them has them, and the version of its last word on them. */
+    coins: 0,
+    version: 0,
     posts: 0,
     answers: Infinity,
     reads: [] as string[],
@@ -69,6 +72,8 @@ export function fakeLeaf(yard: Yard = WORKS.create(ctx())) {
     ms: 0,
   };
   const now = (): Ctx => ({ ...ctx(), now: ctx().now + leaf.ms });
+  /** Leaf's word on the purse, as each answer carries it. */
+  const purse = () => ({ coins: Math.max(0, leaf.coins), leaf: 0, version: ++leaf.version });
   const shown = (): unknown => WORKS.view(leaf.yard, now());
   /** Does a command (as the wire names it) as Leaf would, from another page of the member's. */
   const elsewhere = (c: Record<string, unknown>): void => {
@@ -85,24 +90,36 @@ export function fakeLeaf(yard: Yard = WORKS.create(ctx())) {
       const id = isRecord(c) && typeof c.id === "string" ? c.id : "";
       const command = WORKS.command(c);
       const done = command ? WORKS.apply(leaf.yard, command, now()) : { refused: "invalid" };
-      return "refused" in done ? { id, refused: done.refused } : { id, notes: done.notes };
+      if ("refused" in done) return { id, refused: done.refused };
+      for (const change of done.coins ?? []) leaf.coins += change.amount;
+      return { id, notes: done.notes };
     });
-    return { status: 200, body: { rev: leaf.posts, now: "x", results, state: WORKS.answer?.(leaf.yard, now()) } };
+    const state = WORKS.answer?.(leaf.yard, now());
+    return { status: 200, body: { rev: leaf.posts, now: "x", results, state, purse: purse() } };
   };
   const routes = {
     "GET /v1/game/play/works": (sent: Sent): Reply => {
       leaf.reads.push(sent.path);
       leaf.calls.push("read");
-      return { status: 200, body: { rev: 0, now: "x", state: shown() } };
+      return { status: 200, body: { rev: 0, now: "x", state: shown(), purse: purse() } };
     },
     "POST /v1/game/play/works": post,
   };
-  return { leaf, routes, elsewhere };
+  return { leaf, routes, elsewhere, purse };
 }
 export type FakeLeaf = ReturnType<typeof fakeLeaf>;
 
 /** The kit's stand-in network the page is on, while a test has one. */
 export const net: { world: Standin | null } = { world: null };
+/** The stand-in Leaf the page opened, while a test has one. */
+let current: FakeLeaf | null = null;
+
+/** The member's Coins on the stand-in Leaf are now `coins`, and the page is told so with Leaf's word. */
+export function coinsAre(coins: number): void {
+  if (!current) throw new Error("no stand-in Leaf is open");
+  current.leaf.coins = coins;
+  fromLeaf(current.purse());
+}
 
 /** Holds the page's clock still for each test, so the yard runs on only when a test says, and lets everything go after it. */
 export function useFakeLeaf(): void {
@@ -113,6 +130,8 @@ export function useFakeLeaf(): void {
   afterEach(() => {
     net.world?.done();
     net.world = null;
+    current = null;
+    forgetLedger();
     letGo();
     performance.now = clock;
     Reflect.deleteProperty(globalThis, "window");
@@ -145,9 +164,10 @@ export function clear(n: number): { x: number; y: number }[] {
  */
 export async function opened(yard?: Yard, coins = 0): Promise<FakeLeaf> {
   const fake = fakeLeaf(yard);
+  fake.leaf.coins = coins;
+  current = fake;
   net.world = standin(fake.routes);
   expect(await openYard("p", () => undefined)).toBeNull();
-  fromLeaf(coins);
   if (!("window" in globalThis))
     Object.defineProperty(globalThis, "window", { value: { setTimeout: () => 0 }, configurable: true });
   return fake;

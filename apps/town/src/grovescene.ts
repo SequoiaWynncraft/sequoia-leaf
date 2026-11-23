@@ -19,7 +19,7 @@
  */
 
 import { beatAt } from "@sequoia-leaf/figures/sprites.ts";
-import { member, refreshLeaf } from "@sequoia-leaf/kit/live.ts";
+import { member } from "@sequoia-leaf/kit/live.ts";
 import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
 import { CORAL, CREAM, EARTH, GOLD, GREEN, INK, LEAF, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { ell, rgb } from "@sequoia-leaf/kit/pix.ts";
@@ -1538,7 +1538,6 @@ export function makeGrove(
     if (repeat) sfx.tap();
     const answer = await waitingLook(button, leaf.send(command));
     sent = false;
-    if (command.do === "pull" && command.with === "leaf") void refreshLeaf();
     settle();
     if ("refused" in answer) {
       sfx.no();

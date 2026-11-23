@@ -14,6 +14,7 @@ import {
   STILL_HERE,
   waitingLook,
 } from "./play.ts";
+import { balance, forgetLedger } from "./purse.ts";
 import { type Reply, type Route, type Sent, type Standin, standin } from "./standin.ts";
 
 /** What Leaf's game routes really answer, from the contract its own tests write. */
@@ -88,6 +89,7 @@ let world: Standin | null = null;
 afterEach(() => {
   world?.done();
   world = null;
+  forgetLedger();
 });
 
 async function opened(routes: Record<string, Route>): Promise<Play<Count, Add, string>> {
@@ -695,6 +697,32 @@ describe("where a play's line is", () => {
     ],
   ])("%s", (_name, from, event, to) => {
     expect(stepLine(from, event)).toEqual(to);
+  });
+});
+
+describe("the purse", () => {
+  test("takes Leaf's word from the opening and each answer; a command's own Coins show at once, and go as Leaf answers it", async () => {
+    let coins = 100;
+    let version = 1;
+    const purse = () => ({ coins, leaf: 5, version });
+    const play = await opened({
+      "GET /v1/game/play/raid": () => ({ status: 200, body: { rev: 0, now: "x", state: { n: 0 }, purse: purse() } }),
+      "POST /v1/game/play/raid": (sent) => {
+        const commands = isRecord(sent.body) && Array.isArray(sent.body.commands) ? sent.body.commands : [];
+        const results = commands.map((c) => ({ id: isRecord(c) ? c.id : "?", notes: [] }));
+        coins -= 30 * commands.length;
+        version++;
+        return { status: 200, body: { rev: 1, now: "x", results, state: { n: 0 }, purse: purse() } };
+      },
+    });
+    expect(balance()).toEqual({ coins: 100, leaf: 5 });
+    const first = play.send({ do: "add", by: 1 }, undefined, -30);
+    const second = play.send({ do: "add", by: 2 }, undefined, -30);
+    expect(balance().coins).toBe(40);
+    await first;
+    expect(balance().coins).toBe(40);
+    await second;
+    expect([balance().coins, coins]).toEqual([40, 40]);
   });
 });
 

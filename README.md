@@ -432,16 +432,18 @@ made, and is not to be sent again. Leaf waits 30 seconds for it.
 and `GAME_LEAF_SPENDING`. A page that gets it knows it is on a live server.
 
 `GET /v1/game/me` answers `{ "player": { "id", "username" }, "rank", "guest",
-"leaf", "xp", "level", "event_cursor", "coins" }`. `rank` is the member's guild rank as
+"leaf", "xp", "level", "event_cursor", "coins", "version" }`. `rank` is the member's guild rank as
 the guild writes it, such as `Captain`, or null for a guest or a website admin
 who is not in the guild. `level` is as `/v1/me` has it. `event_cursor` is the id
 of the member's newest event, 0 when they have none, from which to read
 `/v1/me/events?after=` on their next visit. For a guest, `guest` is true,
-`leaf` and `xp` are 0, `level` is a new member's and `event_cursor` is 0, and
-nothing is read from the ledger or the events: a former member's old Leaf is
-not shown to them while they are a guest. `coins` is the player's Coins, guest
-or member (see [The play service](#the-play-service)); asking opens a new
-player's account with the welcome.
+`xp` is 0, `level` is a new member's and `event_cursor` is 0, and nothing is
+read from their events. `coins` is the player's Coins, guest or member (see
+[The play service](#the-play-service)): the welcome, 300, for a player with no
+account yet. `coins`, `leaf` and `version` are read in one statement, and the
+route writes nothing: `version` is the player's newest entry in each ledger,
+added, so of two answers the one with the higher version is the newer. Every
+answer of the play service carries the same three as `purse`.
 
 **The old saves.** Before the games were Leaf's, each page kept its game in
 the browser and copied it to a save per slot (`saves`, with earlier copies in
@@ -542,8 +544,11 @@ the game stirs into the stream its state keeps; the stream is never shown.
 The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Works (`packages/factory`), and
 `pulls` (`packages/pulls`).
 
-- `GET /v1/game/play/{game}` answers `{ "rev", "now", "state" }`: how many
-  batches have changed the state, Leaf's clock, and the game's view of it. A
+- `GET /v1/game/play/{game}` answers `{ "rev", "now", "state", "purse" }`: how
+  many batches have changed the state, Leaf's clock, the game's view of it,
+  and the caller's `{ "coins", "leaf", "version" }` as `/v1/game/me` has them
+  (a batch's, as its transaction left them), so a page never asks for them
+  again after a command. A
   player with no state yet gets a new one (and, if they have no Coins account
   yet, the welcome). Nothing is ever read from the old saves. `?differs=<tick>`
   is from a page that found its own copy not to be Leaf's state at that tick;

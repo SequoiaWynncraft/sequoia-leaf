@@ -122,6 +122,8 @@ export const GameMe = Schema.Struct({
   event_cursor: Schema.Number,
   /** Their Coins, as Leaf's ledger of them holds them. A new player's open at 300. */
   coins: Schema.Number,
+  /** The version of `coins` and `leaf` (`Purse.version`): of two answers, the higher is the newer. */
+  version: Schema.Number,
 });
 
 /** A skin sheet, the 64 by 64 PNG Minecraft wraps around a character. */
@@ -183,6 +185,12 @@ export const Present = Schema.Struct({
   gone: Schema.Array(Seen),
 });
 
+/**
+ * The caller's Coins and Leaf as one moment of Leaf's ledgers had them, and that moment's version,
+ * which grows with every entry to either: of two, the higher is the newer.
+ */
+export const Purse = Schema.Struct({ coins: Schema.Number, leaf: Schema.Number, version: Schema.Number });
+
 /** A player's state in a game, as their page is given it. */
 export const PlayShown = Schema.Struct({
   /** How many batches of commands have changed it. */
@@ -191,6 +199,8 @@ export const PlayShown = Schema.Struct({
   now: Time,
   /** The game's view of it: everything the page draws from, and nothing that tells the future. */
   state: Schema.Unknown,
+  /** The caller's balances as they stood when it was answered: for a batch, as it left them. */
+  purse: Purse,
 });
 
 /**

@@ -2436,8 +2436,9 @@ describe("Leaf tending the Works", () => {
     gate.resolve();
     const [owners, seen] = await Promise.all([opening, visiting]);
     expect(found).toEqual([false, false]);
-    expect(owners.status).toBe("open");
-    expect(seen).toEqual(owners);
+    // The visitor's own balances, not the owner's: Bob has no Coins account, and is shown the welcome.
+    if (owners.status !== "open") throw new Error(owners.status);
+    expect(seen).toEqual({ ...owners, purse: { coins: 300, leaf: 0, version: 0 } });
     // Kept once its line was empty, untouched.
     expect((await storedYard()).rev).toBe(0);
   });

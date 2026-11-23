@@ -6,7 +6,6 @@ import { portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
  */
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { add, amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
-import { refreshLeaf } from "@sequoia-leaf/kit/live.ts";
 import { balance, LEAF_MEMBERS, leafFor, leafOpen } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { tipAt } from "@sequoia-leaf/kit/tip.ts";
@@ -478,8 +477,8 @@ function howto(): HTMLElement {
 const wearing = (kind: LookKind): LookId => wornOf(S.looks, kind);
 /**
  * Puts a look on the table (`look`), or buys it with Leaf and puts it there (`buyLook`): Leaf keeps
- * which are worn and owned. After a buy the purse asks Leaf for the member's Leaf. A refusal is said
- * at the button, since the page covers the table's own line.
+ * which are worn and owned; its answer brings the purse Leaf's word on the member's Leaf. A refusal
+ * is said at the button, since the page covers the table's own line.
  */
 async function wear(c: Extract<RaidCommand, { do: "look" | "buyLook" }>, button: EventTarget | null): Promise<void> {
   const at = button instanceof HTMLElement ? button : null;
@@ -492,10 +491,7 @@ async function wear(c: Extract<RaidCommand, { do: "look" | "buyLook" }>, button:
   if (!did?.ok) return;
   dress(S.looks.cloth, S.looks.lantern);
   renderPages(true);
-  if (c.do !== "buyLook") return;
-  snd.buy();
-  await refreshLeaf();
-  renderPages(true);
+  if (c.do === "buyLook") snd.buy();
 }
 
 function looks(): HTMLElement {

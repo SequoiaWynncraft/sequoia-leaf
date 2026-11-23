@@ -16,10 +16,8 @@ fromTown((msg) => {
   const heard = document.getElementById("heard");
   if (heard)
     heard.textContent =
-      msg.town === "leaf"
-        ? `The town said: ${msg.leaf} Leaf.`
-        : msg.town === "coins"
-          ? `The town said: ${msg.coins} Coins.`
-          : "The town said: closing.";
+      msg.town === "purse"
+        ? `The town said: ${msg.purse.leaf} Leaf, ${msg.purse.coins} Coins.`
+        : "The town said: closing.";
 });
 if (!new URLSearchParams(location.search).has("silent")) tell({ town: "ready" });

@@ -11,7 +11,6 @@ import { refresh, settle } from "@sequoia-leaf/kit/card.ts";
 import { keepLeaf, serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
-import { refreshCoins } from "@sequoia-leaf/kit/purse.ts";
 import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { isMuted, setMuted } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
@@ -45,7 +44,7 @@ import { showSheet } from "./screen/sheet.ts";
 import { onSignal } from "./screen/signals.ts";
 import { snd } from "./screen/sounds.ts";
 import * as stage from "./screen/stage.ts";
-import { onChange, onEnded, onHeld, onMoved, onNotes, onRefused, openTable, S } from "./screen/state.ts";
+import { onChange, onHeld, onMoved, onNotes, onRefused, openTable, S } from "./screen/state.ts";
 import { registerCards } from "./screen/ui/cards.ts";
 import { closeSheet, onCarry, placeSheet, registerFought, sheetUp, toggleLastFight } from "./screen/ui/fightsheet.ts";
 import { openLight } from "./screen/ui/lit.ts";
@@ -161,8 +160,6 @@ async function boot(): Promise<void> {
   });
   // A tap or a drag while Leaf answers a rustle, a pick, setting out or the takings does nothing, and says so.
   onHeld(() => snd.no());
-  // A run that ended paid its Coins on Leaf: the purse asks Leaf what it holds now, and shows it.
-  onEnded(refreshCoins);
   // Leaf's table is not what this page was showing (the member played on another page): take it.
   onMoved(rejoin);
   onSignal("acorn", acornLanded);

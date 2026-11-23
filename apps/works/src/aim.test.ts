@@ -20,9 +20,8 @@ import {
   TUNNEL,
   type Yard,
 } from "@sequoia-leaf/factory";
-import { fromLeaf } from "@sequoia-leaf/kit/purse.ts";
 
-import { act, ctx, type FakeLeaf, opened, until, useFakeLeaf } from "./fake-leaf.ts";
+import { act, coinsAre, ctx, type FakeLeaf, opened, until, useFakeLeaf } from "./fake-leaf.ts";
 import { S } from "./state.ts";
 import {
   aimAt,
@@ -115,17 +114,17 @@ describe("an aim", () => {
     const covered = S.aim;
     expect(covered?.why).toBeNull();
     // More Coins (the till earning) change nothing it says: it is kept as it was.
-    fromLeaf(1500);
+    coinsAre(1500);
     keepAim();
     expect(S.aim).toBe(covered);
     const cost = covered?.cost ?? 0;
-    fromLeaf(cost - 10);
+    coinsAre(cost - 10);
     keepAim();
     expect(S.aim?.why).toBe("Not enough Coins: 10 short");
-    fromLeaf(cost - 5);
+    coinsAre(cost - 5);
     keepAim();
     expect(S.aim?.why).toBe("Not enough Coins: 5 short");
-    fromLeaf(cost);
+    coinsAre(cost);
     keepAim();
     expect(S.aim?.why).toBeNull();
   });
@@ -239,7 +238,7 @@ describe("whatever costs Coins", () => {
       const cost = S.run?.cost ?? S.aim?.cost ?? 0;
       expect(S.run?.why ?? S.aim?.why ?? null).toBeNull();
       const kept = encode(S.world);
-      fromLeaf(0);
+      coinsAre(0);
       expect(send()).toBe(false);
       expect([...said, S.aim?.why].some((s) => s?.startsWith(why(cost)))).toBe(true);
       expect(encode(S.world)).toBe(kept);
@@ -254,7 +253,7 @@ describe("whatever costs Coins", () => {
     expect(takeAway(18, 13)).toBe(true);
     await until(() => fake.leaf.posts >= 2);
     fake.leaf.commands = [];
-    fromLeaf(0);
+    coinsAre(0);
     const price = priceAt(S.world, CRATE, 18, 13);
     undo();
     expect(said).toEqual([`Cannot undo: not enough coins: ${price} short.`]);

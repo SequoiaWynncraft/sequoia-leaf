@@ -149,6 +149,7 @@ export const TESTER = {
   level: { number: 7, xp_into_level: 230, xp_for_next_level: 1400 },
   event_cursor: 140,
   coins: 300,
+  version: 90,
 };
 
 /** A guest, as `/v1/game/me` answers for somebody signed in who is not in the guild: with Leaf they earned as a member. */
@@ -161,6 +162,7 @@ export const GUEST = {
   level: { number: 1, xp_into_level: 0, xp_for_next_level: 1000 },
   event_cursor: 0,
   coins: 300,
+  version: 12,
 };
 
 /**

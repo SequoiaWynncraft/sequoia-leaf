@@ -1,4 +1,5 @@
 import {
+  type Balances,
   type CoinChange,
   COMMAND_ID,
   type Ctx,
@@ -134,11 +135,16 @@ const readKept = Schema.decodeUnknownSync(Schema.fromJsonString(Kept));
 const keptOf = (result: Result): string =>
   JSON.stringify("refused" in result ? { refused: result.refused } : { notes: result.notes });
 
-/** A player's state in a game as their page is given it: how many batches changed it, Leaf's clock, and the view. */
+/**
+ * A player's state in a game as their page is given it: how many batches changed it, Leaf's clock,
+ * the view, and the caller's balances as they stood when it was answered (for a batch, as its
+ * transaction left them).
+ */
 export interface Shown {
   readonly rev: number;
   readonly now: number;
   readonly view: unknown;
+  readonly purse: Balances;
 }
 
 /** A player's state opened for their page, or none: the one stored does not read. */
@@ -532,7 +538,7 @@ export class Play extends Context.Service<
           const changed = text !== copy.text;
           const standing = changed ? game.standing() : null;
           const won = changed ? game.awards().filter((id) => !awards.includes(id)) : [];
-          const rev = yield* sql
+          const { rev, purse } = yield* sql
             .withTransaction(
               Effect.gen(function* () {
                 // What is stored first: the copy is kept over the `rev` it came from, or as the first state.
@@ -576,7 +582,8 @@ export class Play extends Context.Service<
                 // Counted for the staff's report: each command done or refused now, not those answered from before.
                 const refused = answers.filter((a) => "refused" in a.result).length;
                 yield* store.count(player, answers.length - refused, refused, at);
-                return next;
+                // The balances as the batch leaves them, for the page: no other answer is needed.
+                return { rev: next, purse: yield* coins.balances(player) };
               }),
             )
             .pipe(Effect.catchTag("SqlError", Effect.die));
@@ -587,7 +594,7 @@ export class Play extends Context.Service<
             const did = { t: "did", rev, did: echoes, after: view() } satisfies ToClient;
             watchers.tell(visitors, JSON.stringify(did));
           }
-          return { now: at, rev, results, view };
+          return { now: at, rev, results, view, purse };
         });
 
       /** Writes the job's copy if it leaves its line empty with the copy unsaved, as a batch of no commands from its owner keeps it. */
@@ -676,10 +683,11 @@ export class Play extends Context.Service<
               const room = yield* coins.room(playing.playerId, job.at);
               const ctx = (seed: number): Ctx => ctxOf(playing, job.at, seed, room, got.awards);
               const seed = yield* dice;
+              const purse = yield* coins.balances(playing.playerId);
               return (): Opening => {
                 const view = got.copy.held.open(ctx(seed)).view(ctx(0));
                 // A new state not yet stored, a batch behind it in the line, is one nothing has been done to.
-                return { status: "open", rev: got.copy.rev ?? 0, now: job.at, view };
+                return { status: "open", rev: got.copy.rev ?? 0, now: job.at, view, purse };
               };
             }),
           ).pipe(
@@ -728,10 +736,11 @@ export class Play extends Context.Service<
                 // Nothing is earned by a visit: the call may pay none.
                 const ctx = (seed: number): Ctx => ctxOf(caller, job.at, seed, 0, got.awards);
                 const seed = yield* dice;
+                const purse = yield* coins.balances(caller.playerId);
                 return (): Visiting => {
                   const { visit } = got.copy.held.open(ctx(seed));
                   if (visit === null) return { status: "nothing" };
-                  return { status: "open", rev: got.copy.rev ?? 0, now: job.at, view: visit(ctx(0)) };
+                  return { status: "open", rev: got.copy.rev ?? 0, now: job.at, view: visit(ctx(0)), purse };
                 };
               }),
             );

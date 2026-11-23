@@ -13,7 +13,7 @@
  */
 
 import { DAY_MS, utcDay } from "@sequoia-leaf/core";
-import { followCoins, followLeaf, type Member, member } from "@sequoia-leaf/kit/live.ts";
+import { followLeaf, followPurse, type Member, member } from "@sequoia-leaf/kit/live.ts";
 import { ask, isRecord, listen, outside } from "@sequoia-leaf/kit/net.ts";
 import {
   hearPresent,
@@ -508,8 +508,8 @@ export function makeLive(p: Prepared): Guild {
     hearPresent((seen, staying, gone) => {
       listed = { present: seen.map(listedHere), resting: staying.map(listedGone), gone: gone.map(listedGone) };
     });
-    // Back in view, the town asks Leaf for the Coins: a game or another device may have changed them.
-    followCoins();
+    // Back in view, the town asks Leaf for the purse: another device may have changed it.
+    followPurse();
     if (me.guest) return;
     followLeaf(
       (type, _data, id) => {
