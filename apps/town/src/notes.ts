@@ -14,6 +14,14 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "figures-town-look",
+    at: "2026-11-23T10:38Z",
+    title: "The raid's characters, redrawn",
+    lines: [
+      "The Little Raid's characters are drawn in the town's colours now. Its gnomes, crabs, cat, fox and Glorp are the town's own, only bigger.",
+    ],
+  },
+  {
     id: "grove-hold",
     at: "2026-11-23T10:29Z",
     title: "Rare prizes wait for you",
