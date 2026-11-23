@@ -3,25 +3,27 @@
  * machine works out what to make from what it holds as today's does; where a recipe takes 2 of a
  * part, a machine keeps 4 recipes' worth of each part by it, takes no more of one it has enough of,
  * and waits for the one it is short of. A recipe not unlocked is never set, never made, and its parts
- * are not taken in for it.
+ * are not taken in for it. How many of a part a recipe takes is read from the recipe.
  */
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
+import { fill, idOf, learn } from "./goals.ts";
 import { bareLand } from "./land.ts";
 import { give, must } from "./yards.ts";
 
 /**
  * A small yard, every goal of the tiers below `tier` done, with a machine of `kind` on (2, 4) facing
  * east, out of the depot's reach: it takes things in, and works only once it is given power (`power`).
- * A yard of tier 1 has made the market's crates first, so that crates can offer the machine things.
+ * A yard of tier 1 has done the node that unlocks the crate first, so that crates can offer the machine things.
  */
 function machine(kind: F.Kind, tier = 4): { y: F.Yard; i: number; r: number } {
   const y = F.create({ land: bareLand(13, 9, [], [9, 4]), tier, seed: 1 });
   if (y.open.kinds[F.CRATE] === 0) {
-    must(y, { do: "take", node: "crates" });
-    F.deliver(y, F.item("plank"), 60);
-    F.deliver(y, F.item("frame"), 30);
+    const crates = F.ALL_GOALS.find((g) => F.GOALS[g]?.unlocks.kinds?.includes("crate"));
+    if (crates === undefined) throw new Error("nothing unlocks the crate");
+    if (y.hand !== crates) must(y, { do: "take", node: idOf(crates) });
+    fill(y);
   }
   expect(F.build(y, kind, 2, 4, 0, Infinity).ok).toBe(true);
   const i = F.at(y, 2, 4);
@@ -52,6 +54,9 @@ const deadfall = F.item("deadfall");
 const plank = F.item("plank");
 const pot = F.item("pot");
 const ingot = F.item("ingot");
+const hamper = F.RECIPE[F.item("hamper")];
+/** How many of a part a hamper takes, from its recipe. */
+const need = (n: F.Item): number => (hamper ? F.needOf(hamper, n) : 0);
 
 describe("in tiers 0 and 1, where every count is 1", () => {
   test("every recipe a yard of tier 0 or 1 may make takes one of each part", () => {
@@ -102,37 +107,42 @@ describe("a recipe not unlocked", () => {
     F.put(y.holders, r, resin);
     power(y);
     expect(made(y, r)).toBeNull();
-    must(y, { do: "study", research: "oilpress" });
-    F.giveGoal(y, F.goal("oilpress"), F.item("timber"), 30);
+    const press = F.ALL_GOALS.find((g) => F.GOALS[g]?.unlocks.recipes?.includes("oil"));
+    if (press === undefined) throw new Error("nothing unlocks lamp oil");
+    learn(y, press);
     expect(made(y, r)).toBe(oil);
     expect(offer(y, resin, 9)).toBe(F.BUFFER);
     expect(F.setRecipe(y, 2, 4, oil)).toBeNull();
   });
 });
 
-describe("where a recipe takes 2 of a part", () => {
-  test("a bench told to make hampers keeps 8 planks and 4 pots, and takes 2 planks and 1 pot for each", () => {
+describe("where a recipe takes more than 1 of a part", () => {
+  test("a bench told to make hampers keeps 4 hampers' worth of each part, and takes for each what the recipe counts", () => {
+    expect(need(plank)).toBeGreaterThan(1);
     const { y, r } = machine(F.BENCH);
     expect(F.setRecipe(y, 2, 4, F.item("hamper"))).toBeNull();
-    expect(offer(y, plank, 20)).toBe(8);
-    expect(offer(y, pot, 20)).toBe(4);
+    expect(offer(y, plank, 20)).toBe(F.BUFFER * need(plank));
+    expect(offer(y, pot, 20)).toBe(F.BUFFER * need(pot));
     power(y);
     expect(made(y, r)).toBe(F.item("hamper"));
-    expect([F.held(y.holders, r, plank), F.held(y.holders, r, pot)]).toEqual([6, 3]);
+    expect([F.held(y.holders, r, plank), F.held(y.holders, r, pot)]).toEqual([
+      (F.BUFFER - 1) * need(plank),
+      (F.BUFFER - 1) * need(pot),
+    ]);
   });
 
   test("full of the part it has enough of, it says which to tip out and which it waits for", () => {
     const { y, i } = machine(F.BENCH);
     expect(F.setRecipe(y, 2, 4, F.item("hamper"))).toBeNull();
-    expect(offer(y, plank, 8)).toBe(8);
+    expect(offer(y, plank, F.BUFFER * need(plank))).toBe(F.BUFFER * need(plank));
     power(y);
     expect(F.status(y, i)).toMatchObject({ state: "starved", spare: plank, missing: [pot] });
   });
 
-  test("with nothing set, a bench holding one plank waits for a second before it makes a hamper", () => {
+  test("with nothing set, a bench holding fewer planks than a hamper takes waits for the rest before it makes one", () => {
     const { y, i, r } = machine(F.BENCH);
-    expect(offer(y, pot, 1)).toBe(1);
-    expect(offer(y, plank, 1)).toBe(1);
+    expect(offer(y, pot, need(pot))).toBe(need(pot));
+    expect(offer(y, plank, need(plank) - 1)).toBe(need(plank) - 1);
     power(y);
     for (let k = 0; k < 100; k++) F.step(y);
     expect(y.holders.out[r]).toBe(F.NONE);
@@ -143,11 +153,12 @@ describe("where a recipe takes 2 of a part", () => {
 
   test("tipping out the part it has enough of, or setting a recipe, is the way out of a jam", () => {
     const { y } = machine(F.BENCH);
+    const full = F.BUFFER * need(plank);
     expect(F.setRecipe(y, 2, 4, F.item("hamper"))).toBeNull();
-    expect(offer(y, plank, 8)).toBe(8);
+    expect(offer(y, plank, full)).toBe(full);
     expect(offer(y, plank, 1)).toBe(0);
-    expect(F.tipOut(y, 2, 4, plank)).toBe(8);
-    expect(offer(y, plank, 8)).toBe(8);
+    expect(F.tipOut(y, 2, 4, plank)).toBe(full);
+    expect(offer(y, plank, full)).toBe(full);
     // Told to make tools instead, an ingot is taken and a pot is not.
     expect(F.setRecipe(y, 2, 4, F.item("tool"))).toBeNull();
     expect(offer(y, pot, 1)).toBe(0);
@@ -155,15 +166,18 @@ describe("where a recipe takes 2 of a part", () => {
   });
 
   test("told to make something else, a full machine tips out what it holds beyond 4 of the new recipe's batches", () => {
+    const tool = F.RECIPE[F.item("tool")];
+    const forTools = F.BUFFER * (tool ? F.needOf(tool, plank) : 0);
+    const full = F.BUFFER * need(plank);
     const { y, r } = machine(F.BENCH);
     expect(F.setRecipe(y, 2, 4, F.item("hamper"))).toBeNull();
-    expect([offer(y, plank, 8), offer(y, pot, 4)]).toEqual([8, 4]);
+    expect([offer(y, plank, full), offer(y, pot, F.BUFFER * need(pot))]).toEqual([full, F.BUFFER * need(pot)]);
     expect(F.setRecipe(y, 2, 4, F.item("tool"))).toBeNull();
-    expect([F.held(y.holders, r, plank), F.held(y.holders, r, pot)]).toEqual([4, 0]);
-    // Told nothing, it keeps what any recipe it may make keeps: planks for a hamper, 8.
+    expect([F.held(y.holders, r, plank), F.held(y.holders, r, pot)]).toEqual([Math.min(full, forTools), 0]);
+    // Told nothing, it keeps what any recipe it may make keeps: planks for a hamper.
     expect(F.setRecipe(y, 2, 4, F.item("hamper"))).toBeNull();
-    expect(offer(y, plank, 8)).toBe(4);
+    expect(offer(y, plank, full)).toBe(full - Math.min(full, forTools));
     expect(F.setRecipe(y, 2, 4, null)).toBeNull();
-    expect(F.held(y.holders, r, plank)).toBe(8);
+    expect(F.held(y.holders, r, plank)).toBe(full);
   });
 });
