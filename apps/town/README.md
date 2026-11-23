@@ -245,7 +245,12 @@ The Grove (the standing stone among young redwoods, west of the quest board) is 
 pulls are made. A tap on it, its E prompt and its dock button open its card ("Go in", and whose
 banner is open until when); walking on into it goes straight in. Night closes in as on the way to
 the camp, and lifts on the Grove's own picture, which takes the whole page; "Back to town" or
-Escape goes back the same way. The pulls are Leaf's (`@sequoia-leaf/pulls`): the page reads them on
+Escape goes back the same way. The picture is composed for a frame (640 by 360 art pixels, or 360 by
+640 in an upright window) shown as large as the window allows, in the middle of the window's foot;
+the clearing is painted on from the frame to the window's edges, and "Back to town", the Leaf,
+Skip and the pools are at the window's top. An art pixel is seldom a whole number of device pixels, so the
+picture is drawn enlarged by the next whole number up and the browser brings it down smoothly
+(`fit` in `grovescene.ts`). The pulls are Leaf's (`@sequoia-leaf/pulls`): the page reads them on
 each way in, draws Leaf's view, and sends `pull` and `exchange`. Who headlines the banners is asked
 on each way in while Leaf has named nobody, and the pulls again when a banner is due to open or end.
 

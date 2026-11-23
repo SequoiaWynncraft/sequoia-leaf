@@ -14,6 +14,14 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "grove-full-screen",
+    at: "2026-11-23T08:10Z",
+    title: "The Grove fills the screen",
+    lines: [
+      "The Grove's picture covers the whole window on every phone and screen. It was a small picture in the middle.",
+    ],
+  },
+  {
     id: "banner-1-open",
     at: "2026-11-23T08:05Z",
     title: "The first banner is open",
