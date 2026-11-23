@@ -302,7 +302,8 @@ opened the game live elsewhere, or their session ended, it lets go (`status("rep
 `"signedout"`) and shows nobody any more. Each
 connection learns the room afresh (who is there, their tracks, Leaf's clock), and its picture
 replaces the old one only at its welcome, so nothing of one connection is mixed with another's.
-`ears` hear the roster on each `welcome`, who `joined` and `left`, and each `act` (one of core's
+`ears` hear the roster on each `welcome` (saying whether it follows Leaf restarting, 1012, when
+whoever is missing may only not be back yet), who `joined` and `left`, and each `act` (one of core's
 `ACTS`). The page says where its player is with `move(step, jumped)` as often as it likes: it goes
 at most 20 times a second and only when it changed; starting, stopping and a jump at once, even
 with a move waiting its turn (`sendIn`), and the last change always. Each frame the page asks
