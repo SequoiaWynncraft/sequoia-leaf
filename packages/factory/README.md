@@ -23,12 +23,14 @@ page (`apps/works`) holds a copy and draws it; the town reads its standing's wor
 | the wire from the page's side: a command written, what Leaf sends read back   | `src/page.ts`                                                                 |
 | what the town is told: the postcard, the standing's words                     | `src/postcard.ts`, `src/stats.ts`                                             |
 | yards built with commands, for the tests and the play server's tours          | `test/yards.ts` (`delivering`, `generated`, `staged`)                         |
+| how long the slice takes a player                                             | `pace.ts` (its settings), then `pace/`                                        |
 | what it costs                                                                 | `bench.ts`, and `test/budgets.test.ts` for the budgets                        |
 
 ```sh
 bun test       # every rule, the tables and the budgets (about 15 seconds)
 bun bench.ts   # times and sizes of generated yards of about 6,000 and 10,000 pieces
 bun plan.ts    # the planner's table for every thing the slice can make
+bun pace.ts    # tiers 0 to 3 played as a careful player would, and how long each goal took (about 3 seconds)
 ```
 
 ## The yard
@@ -249,6 +251,67 @@ machine needs of each part a minute (`needs`), how many of the piece before it e
 tree takes of each piece (`bill`). Every piece is taken as working every tick. `plan.ts` prints, for
 every thing the slice can make, one machine's output a minute and the line that feeds one flat out.
 
+## How long the slice takes
+
+`bun pace.ts` plays tiers 0 to 3 from a new yard to the last goal of tier 3 (the commission and
+every piece of research), by the rules: every change is a command off the wire given with `play`
+at the yard's tick, and the yard runs on, tick by tick, meanwhile. It prints a row for each goal in
+the order done, a row for each tier beside the time the design means it to take, and a line for the
+slice; `--json` gives the same as data, `--seed N` plays another land's orders, `--folios N` builds
+the Studies for N folios a minute (24, two Studies, unless said). `--seeds 1-12` plays each of those
+seeds and prints, for each tier, the least, the middle and the most minutes, building and waiting
+(for Coins and for deliveries together) of the seeds that finished it, and names any seed that
+stopped short. The same seed and settings give the same table, to the tick. A run takes about 4
+seconds; twelve seeds, about 40.
+
+Each row's time runs from when the player turned to the goal (for research, from when it began to be
+studied) to when it was done, split into building (setting pieces down, laying belts, buying plots,
+working lines out, reading), waiting for Coins and waiting for deliveries or folios. A row also has
+the pieces standing, the Coins the player has, the power drawn and given, and what was bought for it.
+A tier runs from when it opened to when its commission was done and the next opened. Research of a
+tier still being studied then is marked (`~ after:`), not counted in the tier, and summed on a line
+of its own: the folios it still wanted, and the minutes it then took at this pace.
+
+The player is one careful, ordinary player. Everything it decides by is at the top of `pace.ts`:
+
+- **The order of goals**: lessons in theirs, then each tier's projects in the table's order and its
+  commission; research in its table's order, each as soon as it may be studied, the line kept full.
+- **Lines.** For the node in hand it asks the planner for the lines that would bring each thing it
+  still wants in the tier's minutes (`MINUTES`), less what standing lines already bring the depot
+  (`pace/needs.ts`), and builds those. It keeps everything it builds. Every line ends in the depot.
+  Once the splitter is unlocked, a machine's part is split off a standing line of it where one has
+  enough to spare; otherwise it gets a line of its own straight in (`pace/builder.ts`, which works
+  each line out on a copy of the yard, with the router, before the player builds it). A line that
+  will not fit at the pace wanted is built at half that pace, and half again, down to one a minute,
+  and the player waits the longer.
+- **What it believes standing lines bring** is what it reads off the yard once its new lines have
+  filled (`pace/measure.ts`: a copy run on three minutes, then read over five), as a player reads the
+  pace on the page; while that is short of the pace the goal wants, it builds again, up to three
+  times. The builder's own booking of a split (half of what the line has left) is only its estimate
+  for choosing where to split; a split laid above an earlier one takes half of all that passes and
+  leaves the earlier one less, and what is read says so.
+- **Research**: once the Study is unlocked, Studies and their folio lines for `FOLIOS` a minute.
+- **Policy**: new pieces at the highest grade unlocked up to `GRADES`; a boiler (or a waterwheel, when
+  short by no more than one gives) whenever the yard would draw more than it gives; a plot only when
+  the land has too little of what a line gathers or no room for it; any filled order handed over,
+  and an order that would take more than `SWAP` minutes swapped when a swap is free; never building
+  for an order. The till is collected once a minute, as the page does. It starts with `PURSE` Coins.
+- **A person's time** (`HANDS`): seconds for each piece set down, each run of belt and each tile of it,
+  each plot bought, each line worked out, each node or piece of research read, each order handed over.
+
+What it does not do, so that a real player may be faster or slower: it lays lines out greedily, each
+fitted into what is left, and never moves or removes a piece; it does not raise standing pieces to
+a higher grade; it uses no crate, sorter, cart stop, Paint or blueprint.
+
+**Where it stops short.** Laid out greedily, the depot's plot fills with tier 0 and 1 and becomes
+a wall between the other plots and the depot, and every line of tier 2 and 3 from another plot must
+cross it. With what it believes true, the player now plays tiers 0 to 2 and stops at the first
+Study's line of Timber folios; believing the builder's booking it went further only because it built
+less than the goals wanted. No rule on this layout fixed that for the tables in a range (see the
+second pass of the brief); it needs a planned layout: the ground of supply belts kept from where a
+thing is gathered to where it is used, machines standing beside the belts they draw from, and ways
+across the depot's plot kept free before tier 1 fills it.
+
 ## Keeping a yard
 
 `encode` writes a JSON record of the yard's numbers, goals and orders, with its pieces packed into
@@ -309,8 +372,13 @@ tiers), grades, tiers and tools, research, the new pieces and blueprints, orders
 folio cost payable by its tier, ids unique), the planner (and that a yard does what it says), the
 codec and the check, random play (a refusal changes nothing, a yard reads back as itself, every
 command and piece takes effect, what the page would write reads back as the command) and time away,
-how a piece stands (`condition`), the wire from the page's side, the staged yards, and the budgets.
-`test/yards.ts` builds the
+how a piece stands (`condition`), the wire from the page's side, the staged yards, the budgets, and
+the pace script's parts (`test/pace.test.ts`: sizing lines, which lines a goal needs beyond what
+stands, that a line laid out delivers what it is booked for, that what the player reads off the yard
+is what arrives, that a play repeats to the tick, and what the table makes of one play and of
+several). `test/goals.ts` reads from the tables the goals a test needs (the research with nothing
+needed first, what a node wants and pays, a commission's needs), so that no test names a count from
+the tables and changing one breaks none. `test/yards.ts` builds the
 yards they share with commands off the wire, and the yards the play server on a developer's machine
 stages for the tours (`staged`: `new`, `small`, `short`, `mid`, `large`), which the package exports as
 `@sequoia-leaf/factory/test/yards.ts`. A stage is a yard the rules could have made: built by
