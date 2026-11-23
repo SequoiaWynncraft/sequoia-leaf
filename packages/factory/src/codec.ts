@@ -59,16 +59,17 @@ import {
   NONE,
   type Open,
   openOf,
+  PACE,
   plotName,
   plotNamed,
   ready,
   RECIPE,
-  RECIPES_N,
   SORTER,
   SPAN_MOST,
   SPLITTER,
   STUDY,
   TUNNEL,
+  WORK,
 } from "./tables.ts";
 import { PACE_WINDOW } from "./tick.ts";
 import { carries } from "./wire.ts";
@@ -93,8 +94,6 @@ export const VERSION = 6;
 
 /** The parts a piece's bytes may say follow, a bit each. */
 const PARTS = 0x3ffe;
-/** The most work a gatherer or machine carries toward its next piece, in half-ticks. */
-const WORK_MOST = Math.max(TICKS.gather, TICKS.study, ...RECIPES_N.map((r) => r.ticks)) * 2;
 /** The most of one thing any piece holds: a crate as large as it grows. */
 const HOLDS_MOST = Math.max(
   FUEL,
@@ -437,10 +436,15 @@ function blueprint(open: Open, slot: number, v: KeptPrint | null | undefined): U
   return blueprintRefusal(open, slot, pieces) === null ? packPieces(placed(pieces, 0, 0, 0)) : null;
 }
 
-/** A kept standing order at a tick: hung no later than an order hung then would count, and holding nothing before it counts. */
-function standing(v: unknown, tick: number): Standing | null {
+/**
+ * A kept standing order at a tick: hung no later than an order hung then would count, and holding
+ * nothing before it counts. Orders are hung at the end of the board with the next id, so its id is
+ * past `after`, the id of the order before it, and below `serial`, the count of orders ever hung.
+ */
+function standing(v: unknown, tick: number, after: number, serial: number): Standing | null {
   if (!isRec(v)) return null;
-  const id = whole(v.id, 1e9);
+  const id = whole(v.id, serial - 1);
+  if (id !== null && id <= after) return null;
   const title = words(v.title);
   const from = words(v.from);
   const line = words(v.line);
@@ -473,12 +477,25 @@ function mostHeld(y: Yard, i: number, n: number): number {
 }
 
 /**
+ * What a piece's work toward what it is making stays below: what that takes; with nothing being made,
+ * what a tick at the top pace can leave over once a thing is done.
+ */
+const workFor = (k: number, making: number): number =>
+  k === GATHERER
+    ? WORK.gather
+    : making === NONE
+      ? Math.max(...PACE)
+      : k === STUDY
+        ? WORK.study
+        : (RECIPE[making]?.work ?? 0);
+
+/**
  * Puts a kept piece's parts back onto the piece new-built where it stood, each only as the rules let
  * it be: a colour where the yard may paint; a machine told to make, holding, making and having made
  * only what it may make (`locked`), and no more than it keeps; a Study at work on a folio it holds for
- * the research being studied.
+ * `studied`, the research its work was for; work only toward what is being made (`workFor`).
  */
-function unpack(y: Yard, i: number, o: KeptPiece): void {
+function unpack(y: Yard, i: number, o: KeptPiece, studied: Goal | undefined): void {
   const k = y.kind[i] ?? NONE;
   const makes = isMaker(k);
   if (carries(k) && o.item !== undefined && isItem(o.item)) {
@@ -502,12 +519,12 @@ function unpack(y: Yard, i: number, o: KeptPiece): void {
     h.idle[r] = 0;
     const out = o.out !== undefined && isItem(o.out) ? o.out : null;
     if (out !== null && (k === CRATE || (k === GATHERER && isRaw(out)) || (makes && may(out)))) h.out[r] = out;
-    const studied = y.line[0];
-    if (makes || k === GATHERER || (k === STUDY && studied !== undefined)) h.work[r] = whole(o.work, WORK_MOST) ?? 0;
     const m = o.making;
     if (makes && m !== undefined && keeps(y, i).some((rec) => rec.out === m && enough(h, r, rec))) h.making[r] = m;
     const wanted = studied !== undefined && m !== undefined && isFolio(m) && (GOALS[studied]?.want[m] ?? 0) > 0;
     if (k === STUDY && wanted && held(h, r, m) > 0) h.making[r] = m;
+    if (makes || k === GATHERER || (k === STUDY && studied !== undefined))
+      h.work[r] = whole(o.work, workFor(k, h.making[r] ?? NONE) - 1) ?? 0;
     if (k === CRATE) h.open[r] = o.closed === true ? 0 : 1;
     if (k === BOILER) h.fuel[r] = whole(o.fuel, TICKS.burn) ?? 0;
   }
@@ -583,7 +600,7 @@ export function vouch(
   reopen(y);
   y.told = Math.min(told, y.done.length);
   for (const o of raw.board) {
-    const order = standing(o, tick);
+    const order = standing(o, tick, y.board.at(-1)?.id ?? -1, serial);
     if (order && y.open.board && y.board.length < y.open.hooks) y.board.push(order);
   }
   // The node in hand and the line of research, each only if it could be taken up now; then what each
@@ -592,7 +609,8 @@ export function vouch(
   y.got = GOALS.map(() => null);
   const hand = goalNamed(raw.hand);
   hold(y, hand !== null && isNode(hand) && ready(y.open, hand) ? hand : nextHand(y.open));
-  for (const id of Array.isArray(raw.line) ? raw.line : []) {
+  const line: unknown[] = Array.isArray(raw.line) ? raw.line : [];
+  for (const id of line) {
     const g = goalNamed(id);
     if (g !== null) study(y, g);
   }
@@ -602,6 +620,9 @@ export function vouch(
     y.got[g] ??= counts();
     for (const n of ALL_ITEMS) giveGoal(y, g, n, given[n] ?? 0);
   }
+  // The Studies' work was for the research first in the line as kept: it is kept only while that is
+  // still first, as play drops it when another comes first (`begin`).
+  const studied = y.line[0] !== undefined && y.line[0] === goalNamed(line[0]) ? y.line[0] : undefined;
   y.blueprints = Array.from({ length: BLUEPRINTS_MOST }, (_, k) => blueprint(y.open, k, prints[k]));
 
   // Plots in the order they were bought, each only if it could have been bought then.
@@ -640,7 +661,7 @@ export function vouch(
     if (i !== null && y.kind[i] === TUNNEL && (y.span[i] ?? 0) < 0 && y.span[i] === o.span && y.dir[i] === o.dir)
       kept.push([i, o]);
   }
-  for (const [i, o] of kept) unpack(y, i, o);
+  for (const [i, o] of kept) unpack(y, i, o, studied);
 
   fillBoard(y);
   const pace = isRec(raw.pace) ? raw.pace : {};

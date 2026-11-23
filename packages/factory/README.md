@@ -179,7 +179,9 @@ a yard back.
   is charged the price `priceOf` gives it.
 - **Standing pieces** (`stand`) is for a copy or an undone removal, at most 160 a command; a colour
   in it needs Paint, and what a piece is set to its own unlock. A blueprint is set down by naming its
-  place, its corner and its turns (`placeBlueprint`), all or none, whatever its size.
+  place, its corner and its turns (`placeBlueprint`), all or none, whatever its size. A tunnel named
+  with its span over a tunnel must be that tunnel, going in on its tile that way that far, and is
+  raised or lowered; two pieces of one set on one tile, as a kept blueprint might hold, are refused.
 
 ## Pieces new to this design
 
@@ -225,11 +227,13 @@ leaves out what it could not:
   the line of research only where each could be taken up;
 - what each goal that could have been given anything was given, given again through `giveGoal`, so
   that one given all it wants is finished as in play (it pays, and Leaf logs it);
-- each order only with the tick it counts from, no later than one hung now would; one that does not
-  count yet holds nothing;
+- each order only with the tick it counts from, no later than one hung now would, and with an id
+  past the one before it and below the count of orders ever hung (`serial`); one that does not count
+  yet holds nothing;
 - each piece built again through `build`; what it is set to, its colour, what it holds, makes and has
-  made only as `locked` lets the yard, a machine no more than it keeps; a Study's work and folio only
-  while research it wants is being studied;
+  made only as `locked` lets the yard, a machine no more than it keeps; work only toward what is being
+  made, below what that takes; a Study's work and folio only while the research they were for is
+  still first in the line;
 - each blueprint only in a place the yard has, holding pieces, grades and settings it may build.
 
 `check` is one pass over the yard into 32 bits, for Leaf and the page to compare their copies:

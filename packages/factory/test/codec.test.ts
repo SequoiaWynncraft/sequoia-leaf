@@ -175,6 +175,46 @@ describe("what could not have come about by playing is left out", () => {
   });
 });
 
+describe("work is kept only toward what is being made", () => {
+  test("a mill's work on lamp oil read back without the oil press goes with the oil, never toward a plank; a gatherer's past one gather is dropped", () => {
+    const y = F.create({ land: bareLand(13, 9, [[6, 6, "deadfall"]], [9, 4]), tier: 4, seed: 1 });
+    must(y, { do: "build", kind: "mill", x: 6, y: 4, dir: 2 });
+    must(y, { do: "build", kind: "gatherer", x: 6, y: 6, dir: 2 });
+    const mill = F.at(y, 6, 4);
+    const m = y.row[mill] ?? -1;
+    F.put(y.holders, m, F.item("resin"));
+    for (let k = 0; k < 10; k++) F.step(y);
+    expect([y.holders.making[m], y.holders.work[m]]).toEqual([F.item("oil"), 20]);
+    // A plank's deadfall arrives while the oil is pressed.
+    F.put(y.holders, m, F.item("deadfall"));
+    const rec = record(F.encode(y));
+    const done = Array.isArray(rec.done) ? rec.done.filter((id) => id !== "oilpress") : [];
+    const back = F.decode(JSON.stringify({ ...rec, done }), y.land);
+    if (!back) throw new Error("the yard does not read back");
+    const r = back.row[mill] ?? -1;
+    expect([back.holders.making[r], back.holders.work[r], F.held(back.holders, r, F.item("deadfall"))]).toEqual([
+      F.NONE,
+      0,
+      1,
+    ]);
+    for (let k = 0; k < 11; k++) F.step(back);
+    expect(back.holders.out[r]).toBe(F.NONE);
+    F.step(back);
+    expect(back.holders.out[r]).toBe(F.item("plank"));
+    // A gatherer kept with one gather's work or more.
+    const g = y.row[F.at(y, 6, 6)] ?? -1;
+    for (const [work, kept] of [
+      [F.WORK.gather - 1, F.WORK.gather - 1],
+      [F.WORK.gather, 0],
+    ] as const) {
+      y.holders.out[g] = F.NONE;
+      y.holders.work[g] = work;
+      const read = F.decode(F.encode(y), y.land);
+      expect(read?.holders.work[read.row[F.at(read, 6, 6)] ?? -1]).toBe(kept);
+    }
+  });
+});
+
 /** What the check leaves out, by path: everything else in a yard must change the check when it changes. */
 const LEFT_OUT = new Set([
   // Only Leaf holds and moves them: the seed and the orders ever hung, its clock's moment, the letter.

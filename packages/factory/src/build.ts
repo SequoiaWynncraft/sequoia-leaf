@@ -71,7 +71,10 @@ function ground(y: Yard, x: number, z: number): string | null {
   return null;
 }
 
-/** How a piece is to be set down beyond its kind, tile and way: its grade (1 if not said), and a tunnel's span (if not said, the nearest it can come up at). */
+/**
+ * How a piece is to be set down beyond its kind, tile and way: its grade (1 if not said), and a
+ * tunnel's span (if not said, the nearest it can come up at; over a tunnel, if said, that tunnel's).
+ */
 export interface Lay {
   readonly grade?: number;
   readonly span?: number;
@@ -160,8 +163,11 @@ export function refusal(
   const there = y.kind[i] ?? NONE;
   if (there === DEPOT) return "The depot stands here";
   if (there === k) {
-    // Laid over one of its kind, a piece turns it and raises or lowers it to its grade; a tunnel only raises or lowers.
-    if (k === TUNNEL && y.grade[i] === g) return "Something is here already";
+    // Laid over one of its kind, a piece turns it and raises or lowers it to its grade; a tunnel only
+    // raises or lowers, and one asked for with its span (as a blueprint or a copy asks) only the
+    // tunnel going in here, that way, that far.
+    const other = (lay.span ?? 0) > 0 && (y.span[i] !== lay.span || y.dir[i] !== d);
+    if (k === TUNNEL && (y.grade[i] === g || other)) return "Something is here already";
   } else {
     if (there !== NONE && !replaces(k, there)) return "Something is here already";
     if (k === GATHERER && y.land.deposit[i] === NONE) return "A gatherer must be placed on a deposit";

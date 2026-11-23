@@ -16,6 +16,8 @@ import { give, must } from "./yards.ts";
 const timber = F.item("timber");
 const brass = F.item("brass");
 const got = (y: F.Yard, id: string): number => y.got[F.goal(id)]?.[timber] ?? 0;
+/** The line of research, by id. */
+const ids = (y: F.Yard): string[] => y.line.map((g) => F.GOALS[g]?.id ?? "");
 
 /** A yard at tier 3 (every node below done, no research) on a bare land, with Studies by the depot holding what is asked. */
 function studies(...hold: readonly (readonly [F.Item, number])[][]): { y: F.Yard; rows: number[] } {
@@ -129,6 +131,55 @@ describe("a Study", () => {
     expect(got(y, "workshop")).toBe(1);
     expect(rows.reduce((sum, r) => sum + F.held(y.holders, r, timber), 0)).toBe(0);
     expect(F.drain(y)).toContainEqual({ kind: "done", goal: "oilpress", title: "The oil press", pay: 0 });
+  });
+
+  test("read back with a line play could not have made, keeps only what play could study, and its work and folio only while the research they were for is first: never lost to it, never given to another; read twice, the same yard", () => {
+    const { y, rows } = studies([[timber, 3]]);
+    must(y, { do: "study", research: "workshop" });
+    must(y, { do: "study", research: "oilpress" });
+    run(y, 30);
+    const rec: unknown = JSON.parse(F.encode(y));
+    if (typeof rec !== "object" || rec === null || !("done" in rec) || !Array.isArray(rec.done))
+      throw new Error("not a kept yard");
+    const r = rows[0] ?? -1;
+    expect([y.holders.work[r], y.holders.making[r]]).toEqual([60, timber]);
+    const known = [...rec.done, "bigcrates"];
+    /** The yard read back with a line (and some research known), the same both times and once more from itself. */
+    const read = (line: readonly string[], more: Record<string, unknown> = {}): F.Yard => {
+      const text = JSON.stringify({ ...rec, done: known, line, ...more });
+      const back = F.decode(text, y.land);
+      const again = F.decode(text, y.land);
+      if (!back || !again) throw new Error("the yard does not read back");
+      expect([F.encode(again), F.check(again)]).toEqual([F.encode(back), F.check(back)]);
+      const itself = F.decode(F.encode(back), y.land);
+      expect(itself && [F.encode(itself), F.check(itself)]).toEqual([F.encode(back), F.check(back)]);
+      return back;
+    };
+    const study = (b: F.Yard): number[] => [b.holders.work[r] ?? 0, b.holders.making[r] ?? F.NONE];
+    // Named twice, known, needing what is not known, and more than the line holds: left out, the first kept.
+    const kept = read(["workshop", "workshop", "bigcrates", "tooling", "oilpress", "sorter", "tallpylons", "flywheel"]);
+    expect(ids(kept)).toEqual(["workshop", "oilpress", "sorter", "tallpylons"]);
+    expect(study(kept)).toEqual([60, timber]);
+    run(kept, 20);
+    expect(got(kept, "workshop")).toBe(1);
+    // The research the work was for not first: not studiable, known, nothing, or finished as it is read.
+    for (const back of [
+      read(["tooling", "oilpress"]),
+      read(["bigcrates", "oilpress"]),
+      read(["nothing", "oilpress"]),
+      read(["workshop", "oilpress"], { got: { workshop: { timber: 60 } } }),
+    ]) {
+      expect(ids(back)).toEqual(["oilpress"]);
+      expect(study(back)).toEqual([0, F.NONE]);
+      run(back, 49);
+      expect(got(back, "oilpress")).toBe(0);
+      run(back, 1);
+      expect([got(back, "oilpress"), F.held(back.holders, r, timber)]).toEqual([1, 2]);
+    }
+    // Where research's tier is not open, none is studied.
+    const early = F.create({ tier: 2 });
+    const text: unknown = JSON.parse(F.encode(early));
+    expect(F.decode(JSON.stringify({ ...Object(text), line: ["oilpress", "workshop"] }))?.line).toEqual([]);
   });
 
   test("research goes on while the owner is away, and the line is kept", () => {
