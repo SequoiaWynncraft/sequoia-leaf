@@ -14,6 +14,7 @@ import {
   DAY_MS,
   type Done,
   type Game,
+  type Kept,
   LOGGED,
   type Logged,
   mix,
@@ -266,6 +267,9 @@ export function draw(c: Counters, headline: string | null, s: Stream): Drawn {
 type Answer = Done<Pulls, PullsNote> | Refused;
 const no = (refused: string): Refused => ({ refused });
 
+/** How many of each prize the player has, left for Leaf to keep by a command that changes it. */
+const keepHave = (s: Pulls): Kept[] => [{ slot: "have", data: s.have }];
+
 /** A copy to change, sharing nothing that changes. */
 const copy = (s: Pulls): Pulls => ({
   ...s,
@@ -304,7 +308,7 @@ function pull(state: Pulls, c: Extract<PullsCommand, { do: "pull" }>, ctx: Ctx):
     }
   }
   s.history = s.history.slice(-HISTORY);
-  return { state: s, notes, log, leaf: c.with === "leaf" ? [spend] : [] };
+  return { state: s, notes, log, leaf: c.with === "leaf" ? [spend] : [], keep: keepHave(s) };
 }
 
 function exchange(state: Pulls, prize: string): Answer {
@@ -316,7 +320,7 @@ function exchange(state: Pulls, prize: string): Answer {
   const s = copy(state);
   s.seeds -= price;
   s.have[prize] = 1;
-  return { state: s, notes: [{ t: "exchange", prize, rarity, have: 1 }] };
+  return { state: s, notes: [{ t: "exchange", prize, rarity, have: 1 }], keep: keepHave(s) };
 }
 
 export const applyCommand = (state: Pulls, c: PullsCommand, ctx: Ctx): Answer =>
