@@ -3,7 +3,7 @@ import { afterEach, expect, test } from "bun:test";
 import type { Ctx } from "@sequoia-leaf/core";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import type { Answer } from "@sequoia-leaf/kit/play.ts";
-import { type Route, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
+import { type Reply, type Route, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 import { TOWN, type Town, type TownCommand, type TownNote, visitView } from "@sequoia-leaf/town";
 import { freeSpot } from "@sequoia-leaf/town/camp.ts";
 
@@ -131,22 +131,25 @@ test("the camp looked at is read again while the member is in it, and not once t
   ]);
 });
 
-test("a camp visited is read again as the page comes into its room, and not while the page is out of sight", async () => {
+test("a camp visited is read again as the page comes into its room, after any read already on its way, and not while the page is out of sight", async () => {
+  const late = Promise.withResolvers<Reply>();
+  let reads = 0;
+  const camp = { status: 200, body: { rev: 4, now: "x", state: visitView(theirs) } };
   const w = standin({
     "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: own } },
-    "GET /v1/game/play/town/of/bob": { status: 200, body: { rev: 4, now: "x", state: visitView(theirs) } },
+    // The second read of Bob's camp left before the room's welcome, and comes back after it.
+    "GET /v1/game/play/town/of/bob": () => (++reads === 2 ? late.promise : camp),
   });
   world = w;
   await openTown("me", () => undefined);
   const bob = await openCamp("bob", "Bob");
   if (typeof bob === "string") throw new Error(bob);
   lookAt(bob);
-  await campEntered();
-  expect(w.sent.map((s) => s.path)).toEqual([
-    "/v1/game/play/town",
-    "/v1/game/play/town/of/bob",
-    "/v1/game/play/town/of/bob",
-  ]);
+  const before = lookAgain(true);
+  const entered = campEntered();
+  late.resolve(camp);
+  await Promise.all([before, entered]);
+  expect(reads).toBe(3);
   // Out of sight, the page reads it as it comes back instead.
   Object.defineProperty(globalThis, "document", { value: { hidden: true }, configurable: true });
   try {
@@ -155,7 +158,7 @@ test("a camp visited is read again as the page comes into its room, and not whil
   } finally {
     Reflect.deleteProperty(globalThis, "document");
   }
-  expect(w.sent).toHaveLength(3);
+  expect(reads).toBe(3);
 });
 
 test("a camp there is nothing of is the trouble nothing; a name already known is not asked", async () => {

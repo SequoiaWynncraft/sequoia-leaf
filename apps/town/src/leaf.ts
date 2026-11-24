@@ -148,9 +148,13 @@ export async function campChanged(rev: number): Promise<void> {
 /**
  * The page has come into the room of a camp (`welcome`), after walking there or after a drop: a
  * camp being visited is read again, for whatever the owner changed before the room could say so.
+ * A read already on its way may have left before then, so it is waited for and the camp read after it.
  */
 export async function campEntered(): Promise<void> {
-  if (looked && !hidden()) await looked.play.refresh();
+  const at = looked;
+  if (!at || hidden()) return;
+  await at.play.refresh();
+  if (looked === at) await at.play.refresh();
 }
 
 /** Shows a camp opened (`openCamp`); with null, the member's own again. The camp shown before is put away. */
