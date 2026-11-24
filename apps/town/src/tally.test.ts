@@ -125,18 +125,18 @@ describe("the board the panel shows", () => {
       const life = scope();
       const drawn: string[] = [];
       const heard: string[] = [];
-      let again: (() => void) | null = null;
+      const offers: (() => void)[] = [];
       const boards = tallyBoards(life, new Map(), {
         ask: async (path) => (path.includes("level") ? null : boardOf("raids")),
         draw(shown) {
           drawn.push(`${shown.of.id} ${shown.at}`);
-          if (shown.at === "unread") again = shown.again;
+          if (shown.at === "unread") offers.push(shown.again);
           return shown.at === "board" ? [[140, () => heard.push("note")]] : [];
         },
       });
       boards.show(LEVEL, "all");
       await Promise.resolve();
-      again?.();
+      offers[0]?.();
       await Promise.resolve();
       boards.show(RAIDS, "week");
       await Promise.resolve();
