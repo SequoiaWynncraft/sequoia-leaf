@@ -1,5 +1,14 @@
 [
   {
+    "id": "camp-visits",
+    "at": "2026-11-24T14:00Z",
+    "title": "Every camp on the signpost",
+    "lines": [
+      "Every camp is on the signpost now, and you can find one by name. From somebody's camp you can go straight on to the next.",
+      "Like a camp with the heart beside its name. Your mailbox shows who likes yours."
+    ]
+  },
+  {
     "id": "town-no-walking-ghosts",
     "at": "2026-11-24T13:55Z",
     "title": "Nobody walks around town who is not here",

@@ -26,6 +26,7 @@ import { leafClock } from "@sequoia-leaf/kit/realtime.ts";
 import { lookFor, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { HOME, later } from "@sequoia-leaf/town/clock.ts";
 
+import { hooks } from "./game.ts";
 import type {
   AwayLine,
   Count,
@@ -40,7 +41,7 @@ import type {
   RoomSays,
   Tone,
 } from "./guild.ts";
-import { type Line, lineFor, makePace } from "./news.ts";
+import { likedLine, type Line, lineFor, makePace } from "./news.ts";
 import { type Listed, resters, standing, type Where, whereabouts } from "./where.ts";
 
 /** How the guild's news is asked for again when Leaf did not answer: three seconds, doubling. */
@@ -538,10 +539,12 @@ export function makeLive(p: Prepared): Guild {
     followPurse();
     if (me.guest) return;
     followLeaf(
-      (type, _data, id) => {
+      (type, event, id) => {
         // Told here as it happened, so the next letter does not tell it again.
         told = Math.max(told, id);
         if (type === "leaf_earned" || type === "quest_completed" || type === "quest_rerolled") void fetchBoard();
+        const liked = type === "camp_liked" ? likedLine(event) : null;
+        if (liked) pace.add({ line: liked, feed: hooks.feed }, outside.now());
       },
       (fresh) => {
         me = fresh;
@@ -657,12 +660,8 @@ export function makeLive(p: Prepared): Guild {
     followRoom(says) {
       room = says;
     },
-    here(place) {
-      sayHere(place);
-    },
-    stay(on) {
-      sayStay(on);
-    },
+    here: sayHere,
+    stay: sayStay,
     told: () => told,
   };
 }

@@ -50,7 +50,9 @@ export type PlayerEvent =
         xp: number;
         earned_at: string;
       };
-    };
+    }
+  /** Somebody liked the player's camp, the first time they ever did: who, named as they were then. */
+  | { readonly type: "camp_liked"; readonly data: { by: { id: string; username: string } } };
 
 /** An event as stored: its place in the player's history, and its details as the JSON text that was written. */
 const StoredEvent = Schema.Struct({ id: Schema.Int, type: Schema.String, data: Schema.String, createdAt: Schema.Int });

@@ -497,27 +497,57 @@ export const hammerAt = (): Pt => centre(hammer ?? $("corner"));
 
 let strip: (() => void) | null = null;
 
-/** Under the top bar at somebody else's camp: their face, whose camp it is, and the way to the member's own; `null` puts it away. */
-export function setStrip(host: { readonly id: string; readonly name: string } | null, home: () => void): void {
+/** A button of the strip: its picture and its name, which on a narrow screen is said by its tip alone. */
+export function wayButton(picture: "home" | "back", name: string, does: () => void): HTMLButtonElement {
+  const b = button(`wood sm way-${picture}`, [glyph(picture), el("span", "t", { text: name })], does);
+  b.setAttribute("aria-label", name);
+  tip(b, name);
+  return b;
+}
+
+/** The buttons a camp gives the strip, and what keeps them as they should show (called as the strip is). */
+export interface StripWays {
+  readonly els: readonly HTMLElement[];
+  readonly follow: () => void;
+}
+
+/**
+ * Under the top bar at somebody else's camp: their face, whose camp it is, the buttons the camp
+ * gives (`ways`), and the way to the member's own; `null` puts it away. Only the face, and what
+ * `ways` follows, are drawn again, as they change, so a button keeps the keyboard.
+ */
+export function setStrip(
+  host: { readonly id: string; readonly name: string } | null,
+  home: () => void,
+  ways: StripWays = { els: [], follow: () => undefined },
+): void {
   const at = $("visit");
   at.hidden = host === null;
-  strip =
+  const face = el("span", "k-thing-pic");
+  if (host)
+    at.replaceChildren(
+      el(
+        "div",
+        "k-plaque",
+        {},
+        face,
+        el("b", "k-name", { text: `${host.name}'s camp` }),
+        ...ways.els,
+        wayButton("home", "My camp", home),
+      ),
+    );
+  const faces =
     host &&
     when(
       () => String(facesCame()),
-      () => {
-        at.replaceChildren(
-          el(
-            "div",
-            "k-plaque",
-            {},
-            el("span", "k-thing-pic", {}, pic(faceFor(host.id, host.name, true), 2)),
-            el("b", "k-name", { text: `${host.name}'s camp` }),
-            button("wood sm", ["My camp"], home),
-          ),
-        );
-      },
+      () => face.replaceChildren(pic(faceFor(host.id, host.name, true), 2)),
     );
+  strip =
+    faces &&
+    ((): void => {
+      faces();
+      ways.follow();
+    });
   strip?.();
 }
 

@@ -480,6 +480,7 @@ describe("the counters' first counts", () => {
       await before.query((sql) => sql`ALTER TABLE play_state DROP COLUMN born`);
       await before.query((sql) => sql`DROP TABLE tallies`);
       await before.query((sql) => sql`DROP TABLE camp_visits`);
+      await before.query((sql) => sql`DROP TABLE camp_likes`);
       await before.query((sql) => sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 30`);
       await before.dispose();
       const after = testLeaf(clock, fakeBackend().fetcher, { databasePath: file });

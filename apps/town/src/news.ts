@@ -4,6 +4,8 @@
  * server's event does.
  */
 
+import { isRecord } from "@sequoia-leaf/kit/net.ts";
+
 import type { Happening, Person, Tone } from "./guild.ts";
 
 /** A line for the feed, and its colour. */
@@ -45,6 +47,12 @@ export function lineFor(h: Happening): Line | null {
     case "milestone":
       return [`${one(h.who)} reached a milestone: ${h.label}.`, "gold"];
   }
+}
+
+/** The feed's line for somebody liking the member's camp, from its event as the member's stream sends it (`camp_liked`); null for one that does not read. */
+export function likedLine(event: unknown): Line | null {
+  const by = isRecord(event) && isRecord(event.data) && isRecord(event.data.by) ? event.data.by.username : null;
+  return typeof by === "string" && by !== "" ? [`${by} likes your camp.`, "rose"] : null;
 }
 
 /** The least time between two of the guild's news's lines, in milliseconds. */

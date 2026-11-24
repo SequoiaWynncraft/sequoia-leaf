@@ -1,30 +1,25 @@
 /**
- * The camp's own part of the interface: the cabin (the member's own things), the mailbox, the
- * signpost (to town, and to everybody else's camp), and the tray (a player reads "Storage"):
- * everything the member has that is not set out, by kind, which the hammer opens. At somebody
- * else's camp there is only the signpost, home or to town, and the strip that says whose camp it
- * is. The purse, the feed and the panel's frame are shared with the town (`hud.ts`).
+ * The camp's own part of the interface: the cabin (the member's own things), the mailbox
+ * (`mailbox.ts`), the signpost (`signpost.ts`: home, town and every camp), and the tray (a player
+ * reads "Storage"): everything the member has that is not set out, by kind, which the hammer opens.
+ * At somebody else's camp there is only the signpost, and the strip that says whose camp it is,
+ * with its likes and the way on to the next camp. The purse, the feed and the panel's frame are
+ * shared with the town (`hud.ts`).
  */
 
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon as glyph, shown } from "@sequoia-leaf/kit/dom.ts";
-import { folkName } from "@sequoia-leaf/kit/mark.ts";
-import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
-import { readBoard, type Row } from "@sequoia-leaf/kit/person.ts";
 import { fly } from "@sequoia-leaf/kit/pursebar.ts";
-import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
+import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { COSY, KIND, type PetId, PETS, petsOf, trayList } from "@sequoia-leaf/town/camp.ts";
-import { folkNamed } from "@sequoia-leaf/town/folk.ts";
-import { tidied } from "@sequoia-leaf/town/mail.ts";
 import { KIND_NAMES, KINDS, thingOf, THINGS } from "@sequoia-leaf/town/things.ts";
 
 import { type CampArt, type CampIcon, campIcon, pictureOf } from "./campart.ts";
 import type { CampScene } from "./campscene.ts";
 import { thingRef } from "./cards.ts";
-import { folkArt } from "./folkart.ts";
 import { G, hooks, toPage } from "./game.ts";
 import { guild } from "./guild.ts";
 import {
@@ -32,11 +27,9 @@ import {
   button,
   centre,
   closePanel,
-  hammerAt,
   levelBar,
   openPanel,
   pic,
-  refreshPanel,
   setDock,
   setFace,
   setHammer,
@@ -46,9 +39,11 @@ import {
   slot,
   when,
 } from "./hud.ts";
-import { doNow, mine, ok, refusal, town, visiting } from "./leaf.ts";
+import { doNow, mine, town, visiting } from "./leaf.ts";
+import { mailbox } from "./mailbox.ts";
 import { MY_PETS, PET_ABOUT, PET_CHOICE } from "./pets.ts";
-import { openPanel as openTownPanel, thingSlot } from "./ui.ts";
+import { copyLink, signpost, stripWays } from "./signpost.ts";
+import { openPanel as openTownPanel } from "./ui.ts";
 
 export type CampPanel = "cabin" | "mailbox" | "signpost" | "choose";
 
@@ -78,16 +73,6 @@ const ICONS: Readonly<Record<CampPanel, CampIcon>> = {
   choose: "home",
 };
 
-/** Whoever wrote a letter, if it is one of the town's own: its own picture. */
-function face(name: string): HTMLCanvasElement | null {
-  const t = folkNamed(name);
-  return t ? pic(folkArt(t).face, 1) : null;
-}
-
-/** A name on a letter: one of the town's own with its mark. */
-const signed = (name: string): HTMLElement =>
-  folkNamed(name) ? folkName(name, "k-pix k-grow") : el("b", "k-grow", { text: name });
-
 /** How far along one of the counters a pet moves in for is. */
 const upTo = (have: number, need: number): string => (have >= need ? "Done" : `${have} / ${need}`);
 
@@ -99,69 +84,6 @@ function handButton(picture: "turn" | "tray", name: string, key: string, does: (
   return b;
 }
 
-/** The most camps the signpost lists. */
-const CAMPS_LISTED = 12;
-
-/** A row of the signpost: somewhere to go, and the button that goes there. */
-function way(name: string, art: HTMLCanvasElement, go: () => void, line = ""): HTMLElement {
-  return el(
-    "div",
-    "k-card",
-    {},
-    slot(art, 20),
-    el("div", "k-grow", {}, name, line === "" ? null : el("div", "k-d", { text: line })),
-    button("sm", ["Go"], () => {
-      closePanel();
-      go();
-    }),
-  );
-}
-
-// ---------- the signpost ----------
-
-/** Home (at somebody else's camp) and town; and at the member's own, the camps on the town's board. */
-function signpost(body: HTMLElement): (() => void) | null {
-  const host = visiting();
-  if (host)
-    body.append(
-      way("Home", shown(campIcon("home"), 1), () => {
-        hooks.go({ to: "camp" });
-      }),
-    );
-  body.append(
-    way("Town", shown(campIcon("town"), 1), () => {
-      hooks.go({ to: "town" });
-    }),
-  );
-  if (host) return null;
-  const list = el("div", "k-col");
-  body.append(list);
-  let camps: readonly Row[] = [];
-  void (async () => {
-    const a = await askLeaf("/v1/game/play/town/standings");
-    const board = a.status === 200 ? readBoard(a.body) : null;
-    camps = board ? board.top.filter((r) => !r.you).slice(0, CAMPS_LISTED) : [];
-    refreshPanel();
-  })();
-  return when(
-    () => `${facesCame()}|${camps.map((r) => `${r.id}/${r.score}`).join()}`,
-    () => {
-      list.replaceChildren(
-        ...camps.map((r) =>
-          way(
-            r.name,
-            pic(faceFor(r.id, r.name, true), 2),
-            () => {
-              hooks.go({ to: "camp", of: r.id, name: r.name });
-            },
-            `${r.score} things set out`,
-          ),
-        ),
-      );
-    },
-  );
-}
-
 export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): void } {
   let scene: CampScene | null = null;
   const at = (): CampScene => {
@@ -171,7 +93,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
 
   // ---------- the cabin: the member's own things ----------
 
-  function cabin(body: HTMLElement): () => void {
+  function cabin(body: HTMLElement, life: Scope): () => void {
     const me = guild.me();
     const p = G.player;
     const portrait = makeCanvas(12, 24);
@@ -217,6 +139,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
       ),
       me.week.length === 0 ? "" : sheet("This week", me.week),
       stayRow,
+      copyLink(life),
       el("div", "k-label", { text: "Trophy shelf" }),
       shelf,
       el("div", "k-label", { text: "Who lives here" }),
@@ -284,78 +207,6 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
     };
   }
 
-  // ---------- the mailbox ----------
-
-  function mailbox(body: HTMLElement): () => void {
-    // What had not been read when the box was opened is marked new this once; opening it is reading it.
-    const fresh = new Set(
-      mine()
-        .letters.filter((l) => !l.read)
-        .map((l) => l.id),
-    );
-    if (fresh.size > 0) doNow({ do: "readMail" });
-    const list = el("div", "k-col");
-    body.append(list);
-    return when(
-      () =>
-        mine()
-          .letters.map((l) => `${l.id}${l.taken ? "t" : ""}`)
-          .join(),
-      () => {
-        const camp = mine();
-        if (camp.letters.length === 0) {
-          list.replaceChildren(el("div", "k-d", { text: "No letters. The flag goes up when one arrives." }));
-          return;
-        }
-        const rows: Node[] = camp.letters.toReversed().map((l) => {
-          const gift = thingOf(l.gift);
-          const paper = el(
-            "div",
-            "k-paper note",
-            {},
-            el(
-              "div",
-              "k-row",
-              {},
-              face(l.from),
-              signed(l.from),
-              fresh.has(l.id) ? el("span", "k-chip lit", { text: "New" }) : null,
-            ),
-            el("div", "k-read", { text: l.text }),
-          );
-          if (gift && !l.taken) {
-            // Out of the letter and into the tray: it is seen going to the hammer, which opens it.
-            const take = button("sm", [glyph("gift"), "Take it"], (b) => {
-              const did = doNow({ do: "takePresent", letter: l.id });
-              if (!ok(did)) {
-                if (did) hooks.feed(refusal(did.refused), "coral");
-                return;
-              }
-              sfx.pop();
-              const sprite = pictureOf(art, gift.id, 0, 0);
-              if (sprite) fly(() => pic(sprite.c, 2), centre(b), hammerAt(), 1);
-              refreshPanel();
-            });
-            paper.append(
-              el("hr"),
-              el("div", "k-row", {}, thingSlot(art, gift.id, 26), el("span", "k-grow", { text: gift.name }), take),
-            );
-          } else if (gift) paper.append(el("div", "k-dim", { text: `With it: ${gift.name.toLowerCase()}. Taken.` }));
-          return paper;
-        });
-        if (tidied(camp.letters).length < camp.letters.length)
-          rows.push(
-            button("wood sm", ["Clear old letters"], () => {
-              if (doNow({ do: "clearLetters" }) === null) return;
-              sfx.paper();
-              refreshPanel();
-            }),
-          );
-        list.replaceChildren(...rows);
-      },
-    );
-  }
-
   function choose(body: HTMLElement): null {
     body.append(
       el("div", "k-read", { text: "Three small faces look round the cabin door. One of them would like to stay." }),
@@ -387,9 +238,9 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
     at().choose(kind);
   }
 
-  const BUILD: Readonly<Record<CampPanel, (body: HTMLElement) => (() => void) | null>> = {
+  const BUILD: Readonly<Record<CampPanel, (body: HTMLElement, life: Scope) => (() => void) | null>> = {
     cabin,
-    mailbox,
+    mailbox: (body) => mailbox(art, body),
     signpost,
     choose,
   };
@@ -521,10 +372,10 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
           ? [
               place("cabin", "Cabin", "What you have won, and who lives here.", "cabin"),
               place("mailbox", "Mailbox", "Letters and presents from townsfolk.", "mailbox"),
-              place("signpost", "Signpost", "The way to town.", "signpost"),
+              place("signpost", "Signpost", "The way to town, and to every camp.", "signpost"),
               trail("Town", "town"),
             ]
-          : [place("signpost", "Signpost", "Home, or town.", "signpost"), trail("Home", "home")],
+          : [place("signpost", "Signpost", "Home, town, and every camp.", "signpost"), trail("Home", "home")],
       );
       setFace(() => {
         if (!home) {
@@ -540,9 +391,13 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
             }
           : null,
       );
-      setStrip(host, () => {
-        hooks.go({ to: "camp" });
-      });
+      setStrip(
+        host,
+        () => {
+          hooks.go({ to: "camp" });
+        },
+        host ? stripWays(host) : undefined,
+      );
       tray.hidden = true;
       document.body.classList.remove("decorating");
       setHammerNew(home ? mine().fresh.length : 0);

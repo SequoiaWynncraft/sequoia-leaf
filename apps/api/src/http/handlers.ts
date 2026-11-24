@@ -5,6 +5,7 @@ import { HttpApiBuilder } from "effect/http-api";
 import { LeafApi } from "../api/api.ts";
 import { BackendLive, InternalHandlers, PurchaseBodyErrorsLive } from "./internal.ts";
 import { GameAdminHandlers } from "./routes/admin.ts";
+import { GameCampsHandlers } from "./routes/camps.ts";
 import { MeHandlers } from "./routes/me.ts";
 import {
   BodyLimitLive,
@@ -40,6 +41,7 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     GamePeopleHandlers,
     GamePresenceHandlers,
     GamePlayHandlers,
+    GameCampsHandlers,
     GameRequestsHandlers,
     GameTallyHandlers,
     GameAdminHandlers,

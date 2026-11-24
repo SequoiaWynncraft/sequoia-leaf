@@ -503,7 +503,7 @@ async function boot(): Promise<void> {
   town.onStage("on");
   keepTold({
     home: () => G.home,
-    inCamp: () => placeOf(screen) === "camp",
+    inCamp: () => screen.at !== "dusk" && placeOf(screen) === "camp",
     // In the Grove the member is playing the pulls, as in a game opened over the town.
     inGame: () => inGame(screen) || placeOf(screen) === "grove",
     cursor: () => guild.told(),

@@ -250,6 +250,7 @@ export const TALLY_BOARDS: readonly [TallyBoard, ...TallyBoard[]] = [
     unit: "count",
     week: true,
   },
+  { id: "likes", group: "town", name: "Camp likes", unit: "count", week: false },
 ];
 
 /** A board by its id, or undefined for none. */

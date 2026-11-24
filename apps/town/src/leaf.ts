@@ -240,10 +240,15 @@ export async function again(): Promise<void> {
   await leaf?.refresh();
 }
 
+/** Reads the camp the member is in (`inCamp`) again: the one looked at in a visit, else their own town; nothing elsewhere. */
+export async function lookAgain(inCamp: boolean): Promise<void> {
+  if (inCamp) await (looked ? looked.play.refresh() : again());
+}
+
 interface Told {
   /** Whether the arrival letter has been put away. */
   readonly home: () => boolean;
-  /** Whether the member is in their own camp. */
+  /** Whether the member is in a camp, theirs or somebody's, and not walking off from it. */
   readonly inCamp: () => boolean;
   /** Whether a game is open over the town. */
   readonly inGame: () => boolean;
@@ -264,20 +269,17 @@ function goingAway(): void {
 }
 
 /**
- * Keeps Leaf told while the page is open: every half minute, while `inCamp()` (the member's own),
- * the town is asked for; every five minutes while in view, and as the page is put away, the member
- * is said to be `here`. In a visit nothing is told, and the camp looked at is read every half
- * minute, and as the tab comes back. While `inGame()`, neither is done.
+ * Keeps Leaf told while the page is open: every half minute, while `inCamp()`, the camp is read: the
+ * town at the member's own, the camp looked at in a visit, which is read as the tab comes back too.
+ * A camp being walked off from is read no more, so that a stay in the next counts from its first
+ * read (`Tallies.visited`). Every five minutes while in view, and as the page is put away, the member
+ * is said to be `here`; in a visit, nothing is told. While `inGame()`, neither is done.
  */
 export function keepTold(o: Told): void {
   if (typeof window === "undefined") return;
   told = o;
-  const look = (): void => {
-    if (looked) void looked.play.refresh();
-    else if (o.inCamp()) void again();
-  };
   window.setInterval(() => {
-    if (!document.hidden && !o.inGame()) look();
+    if (!document.hidden && !o.inGame()) void lookAgain(o.inCamp());
   }, LOOK_EVERY);
   window.setInterval(() => {
     if (!document.hidden && !o.inGame()) here();

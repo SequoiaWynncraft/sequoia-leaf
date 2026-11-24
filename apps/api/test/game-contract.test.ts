@@ -215,6 +215,21 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     );
   }
   await call("GET /v1/game/play/{game}/standings", "GET", "/v1/game/play/works/standings");
+  // The camps: Bob's and the guest's made, Alice likes Bob's and the guest likes hers; the list as
+  // Alice is shown it; who likes hers; her own refused; and her like of Bob's taken back.
+  for (const token of ["bob-token", "visitor-token"]) {
+    // oxlint-disable-next-line no-await-in-loop -- one after another
+    await app.request("/v1/game/play/town", { headers: { Authorization: `Bearer ${token}` } });
+  }
+  await call("PUT /v1/game/camps/{player}/like", "PUT", `/v1/game/camps/${bob}/like`);
+  await app.request(`/v1/game/camps/${alice}/like`, {
+    method: "PUT",
+    headers: { Authorization: "Bearer visitor-token" },
+  });
+  await call("GET /v1/game/camps", "GET", "/v1/game/camps");
+  await call("GET /v1/game/camps/visitors", "GET", "/v1/game/camps/visitors");
+  await call("PUT /v1/game/camps/{player}/like, own camp", "PUT", `/v1/game/camps/${alice}/like`);
+  await call("DELETE /v1/game/camps/{player}/like", "DELETE", `/v1/game/camps/${bob}/like`);
   // The Tally: this week's guild raids, the SEQ levels, and a week asked of a board kept for all time only.
   await call("GET /v1/game/tally/{board}/{period}", "GET", "/v1/game/tally/raids/week");
   await call("GET /v1/game/tally/{board}/{period}, all time", "GET", "/v1/game/tally/level/all");

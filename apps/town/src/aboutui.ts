@@ -71,9 +71,11 @@ const keyOf = (a: About): string =>
     .map((p) => `${p.title}|${p.rows.map(rowKey).join("|")}`)
     .join("|");
 
-/** One line of the panel, standing for whoever it is: choosing it shows their card. */
-function rowOf(r: AboutRow): HTMLElement {
-  const face = faceOf(r);
+/** One line of a list of people, standing for whoever it is, with their face: choosing it shows their card. */
+export function personRow(
+  r: Pick<AboutRow, "id" | "name" | "line" | "you" | "gone">,
+  face: HTMLCanvasElement,
+): HTMLElement {
   const b = el(
     "button",
     r.gone ? "k-thing about-row gone" : "k-thing about-row",
@@ -106,7 +108,7 @@ function fill(list: HTMLElement, a: About): void {
     return;
   }
   const row = (r: AboutRow): HTMLElement => {
-    const b = was.get(rowKey(r)) ?? rowOf(r);
+    const b = was.get(rowKey(r)) ?? personRow(r, faceOf(r));
     rows.set(rowKey(r), b);
     return b;
   };

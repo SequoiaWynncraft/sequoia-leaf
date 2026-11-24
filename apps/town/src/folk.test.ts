@@ -45,7 +45,8 @@ const MEMBERS_ONLY: Readonly<Record<string, string>> = {
   "apps/town/src/campart.ts": "the size of a member's figure, for a banner's statue",
   "apps/town/src/statues.ts":
     "a banner's statue, carved from its member's own skin, or their made-up look until it loads",
-  "apps/town/src/campui.ts": "the faces of the camps' owners at the signpost, members and guests alone",
+  "apps/town/src/signpost.ts": "the faces of the camps' owners at the signpost, members and guests alone",
+  "apps/town/src/mailbox.ts": "the faces of a camp's visitors in its mailbox, members and guests alone",
   "apps/town/src/hud.ts": "the face of the owner of a camp visited, a member or a guest",
   "apps/town/src/live.ts": "where each player's own skin is served",
   "apps/works/src/ui/board.ts": "the faces of the yards' owners on Top yards, members and guests alone",
