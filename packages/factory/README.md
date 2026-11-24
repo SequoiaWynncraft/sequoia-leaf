@@ -30,9 +30,10 @@ page (`apps/works`) holds a copy and draws it; the town reads its standing's wor
 | that a change to the tick leaves every yard as it was, to the bit             | `test/replays.ts` (`bun test/replays.ts --write` writes the record again)     |
 
 ```sh
-bun test       # every rule, the tables, the budgets and the record of the tick (about 40 seconds)
+bun test       # every rule, the tables, the budgets and the record of the tick (about 50 seconds)
 bun bench.ts   # times and sizes of generated yards of about 6,000 and 10,000 pieces, then hours of work
-bun bench.ts --hours   # ms of work an hour of the yard's time, for each staged yard and save
+bun bench.ts --hours   # ms of work an hour of the yard's time for each staged yard and save, and lines that never wait
+bun bench.ts --hours --lines   # lines that never wait alone: three of 41 belts from full crates into the depot
 bun plan.ts    # the planner's table for every thing the slice can make
 bun pace.ts    # tiers 0 to 3 played as a careful player would, and how long each goal took (about 3 seconds)
 ```
@@ -481,8 +482,9 @@ command and piece takes effect, what the page would write reads back as the comm
 how a piece stands (`condition`), the wire from the page's side, the staged yards, the budgets, the
 record of the tick (`test/replays.ts`: every staged yard, every save, the delivering, generated and
 junctions yards, random play and the largest yard tended in slices, each run on for hours with the
-kept yard digested every minute and held to `replays.json`, which the tick before any change to how
-fast it runs wrote), and
+kept yard digested every tick of its first minute and every minute after, and held to
+`replays.json`, which the tick before any change to how fast it runs wrote), a yard kept between
+ticks against the same yard read afresh, tick for tick (`test/fresh.test.ts`), and
 the pace script's parts (`test/pace.test.ts`: sizing lines, which lines a goal needs beyond what
 stands, that a line laid out delivers what it is booked for, that a line that fits nowhere takes up
 only the old line in its way, that what the player reads off the yard is what arrives, the order it

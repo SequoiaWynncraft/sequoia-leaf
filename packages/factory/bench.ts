@@ -1,5 +1,5 @@
 /**
- * What a yard costs: `bun bench.ts [--short] [--hours]`.
+ * What a yard costs: `bun bench.ts [--short] [--hours] [--lines]`.
  *
  * Yards made by the scale study's generator with commands: about 6,000 pieces on 112 by 84, and
  * about 10,000 on 160 by 120. Each is run 3,000 ticks first, as a yard in play would be kept.
@@ -7,15 +7,17 @@
  *
  * Then the work of catching a yard up, as Leaf does for one its owner left: each staged yard, the
  * generated yard of about 1,000 pieces, and each save run on for eight hours of ticks, in
- * milliseconds of work for each hour of the yard's time, the best of three. `--hours` prints that
- * table alone.
+ * milliseconds of work for each hour of the yard's time, the best of three. And lines that never
+ * wait: three of 41 belts each, from crates full of planks into the depot, in milliseconds for 1,500
+ * ticks of twenty copies, the median of nine. `--hours` prints those two tables alone, `--lines` the
+ * last alone.
  */
 import { heapStats } from "bun:jsc";
 
 import * as F from "./src/index.ts";
 import { generate } from "./test/gen.ts";
-import { makeLand } from "./test/land.ts";
-import { generated, saved, SAVES, staged, STAGES } from "./test/yards.ts";
+import { bareLand, makeLand } from "./test/land.ts";
+import { generated, must, saved, SAVES, staged, STAGES } from "./test/yards.ts";
 
 const now = (): number => Bun.nanoseconds() / 1e6;
 /** The median time of `f`, run for about `ms` and at least `least` times after a warm-up. */
@@ -106,5 +108,38 @@ function hours(): void {
   for (const [name, y] of yards) console.log(`| ${name} | ${pieces(y)} | ${fmt(perHour(y))} |`);
 }
 
+/** Three lines of 41 belts into the depot, each from a crate full of planks, which none of them empties in 1,500 ticks. */
+function flowing(): F.Yard {
+  const y = F.create({ land: bareLand(56, 15, [], [50, 7]), tier: 5, seed: 1 });
+  for (const z of [6, 7, 8]) {
+    must(y, { do: "build", kind: "crate", x: 7, y: z, dir: 0 });
+    for (let x = 8; x <= 48; x++) must(y, { do: "build", kind: "belt", x, y: z, dir: 0 });
+    const crate = F.holderOf(y, F.at(y, 7, z));
+    for (let k = 0; k < y.open.crate; k++) F.put(y.holders, crate, F.item("plank"));
+  }
+  return y;
+}
+
+/** The work of 1,500 ticks of the flowing lines on twenty copies of them, the median of nine such runs. */
+function lines(): void {
+  const y = flowing();
+  const text = F.encode(y);
+  const times: number[] = [];
+  let came = 0;
+  for (let run = 0; run < 9; run++) {
+    const copies = Array.from({ length: 20 }, () => F.decode(text, y.land) ?? y);
+    const t = now();
+    for (const copy of copies) for (let k = 0; k < 1500; k++) F.step(copy);
+    times.push(now() - t);
+    came = copies[0]?.depot[F.item("plank")] ?? 0;
+  }
+  console.log("| lines that never wait | ms for 1,500 ticks of 20 copies | planks in, each |");
+  console.log("| --- | ---: | ---: |");
+  console.log(
+    `| three of 41 belts from full crates | ${fmt(times.toSorted((p, q) => p - q)[4] ?? Number.NaN)} | ${came} |`,
+  );
+}
+
 if (!process.argv.includes("--hours")) sizes();
-hours();
+if (!process.argv.includes("--lines")) hours();
+lines();

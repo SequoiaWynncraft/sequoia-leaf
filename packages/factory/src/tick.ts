@@ -556,15 +556,17 @@ const takesTurns = (y: Yard, to: number): boolean =>
 
 /**
  * The tile at `i` may have room for more, or for another thing: the tiles that may hand to it stop
- * waiting. They are the tiles beside it, and for a tunnel's far mouth, its way-in mouth.
+ * waiting. They are the tiles beside it, and for a tunnel's far mouth, its way-in mouth. Each side is
+ * woken without asking first whether it is on the map, which every hand-off would pay for: past the
+ * end of a row is a tile at the other end of the next, which at worst tries again for nothing, and
+ * past the top or bottom row is outside the array, where writing does nothing.
  */
 function roomBeside(y: Yard, i: number, waiting: Uint8Array): void {
-  const { edge, w } = y.land;
-  const off = edge[i] ?? 15;
-  if ((off & 1) === 0) waiting[i + 1] = 0;
-  if ((off & 2) === 0) waiting[i + w] = 0;
-  if ((off & 4) === 0) waiting[i - 1] = 0;
-  if ((off & 8) === 0) waiting[i - w] = 0;
+  const w = y.land.w;
+  waiting[i + 1] = 0;
+  waiting[i - 1] = 0;
+  waiting[i + w] = 0;
+  waiting[i - w] = 0;
   if (y.kind[i] === TUNNEL && (y.span[i] ?? 0) < 0) {
     const mouth = otherMouth(y, i);
     if (mouth >= 0) waiting[mouth] = 0;
