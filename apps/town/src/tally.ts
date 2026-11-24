@@ -13,7 +13,7 @@ import { duration } from "@sequoia-leaf/kit/person.ts";
 /** Kept in the browser once the member has opened the Tally. */
 export const SEEN = "town.tally.seen";
 
-/** Whether the member has yet to open the Tally: the post in town carries a mark until then. */
+/** Whether the member has yet to open the Tally: its board in town carries a mark until then. */
 export const tallyNew = (): boolean => keptText(SEEN) !== "1";
 
 /** The member opens the Tally: says whether it is the first time. */

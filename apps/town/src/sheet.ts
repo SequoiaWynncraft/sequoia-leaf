@@ -10,6 +10,7 @@ import { KIND_NAMES, KINDS, THINGS } from "@sequoia-leaf/town/things.ts";
 import { type CampArt, campIcon } from "./campart.ts";
 import { paintBackdrop, paintGround, paintNear, paintTrunk } from "./ground.ts";
 import { icon, type Sprite, type Sprites } from "./sprites.ts";
+import { tallyBoard } from "./tallyart.ts";
 import { PLACES } from "./world.ts";
 
 /** The art, with the members' figures (`bodies`) and the town's own in every picture (`folk`). */
@@ -81,7 +82,7 @@ export function showSheet(s: Sprites, bodies: readonly Body[], folk: readonly Sp
             ...bodies.flatMap((b) => b.frames.flat()),
             ...folk,
           ]
-        : [s.treasury, s.counter, s.works, s.gate, s.board, ...s.stalls, s.tree, s.greatStump];
+        : [s.treasury, s.counter, s.works, s.gate, s.board, tallyBoard(), ...s.stalls, s.tree, s.greatStump];
     for (const sp of groups) put(sp);
   }
   c.style.cssText = `position:fixed;left:0;top:0;width:${c.width * zoom}px;height:${c.height * zoom}px;image-rendering:pixelated;z-index:99`;

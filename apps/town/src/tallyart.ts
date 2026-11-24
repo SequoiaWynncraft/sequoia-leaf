@@ -1,58 +1,52 @@
 /**
- * The Tally's pictures: the carved post in town where the town keeps count, and the three plinths
- * of a board's podium. Drawn once, in the town's own timber, brass and shingles.
+ * The Tally's pictures: its board in town, built as the quest board is, and the three plinths of a
+ * board's podium in its panel. Drawn once, in the town's own timber, brass and shingles.
  */
 
 import { BARK, CREAM, GOLD, INK, SKY, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined, R } from "@sequoia-leaf/kit/pix.ts";
-import { type Ctx, makeCanvas } from "@sequoia-leaf/kit/util.ts";
+import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
-import { PAL, shingles, spr, type Sprite } from "./sprites.ts";
+import { BOARD_H, BOARD_W, noticeBoard, PAL, PAPER_EDGE, spr, type Sprite } from "./sprites.ts";
 
-/** Five carved into wood the old way: four strokes and one across them. A group that is not finished has its strokes alone. */
-function notches(g: Ctx, x: number, y: number, strokes: number): void {
-  for (let i = 0; i < Math.min(4, strokes); i++) {
-    R(g, x + i * 2, y, 1, 6, BARK[0]);
-    R(g, x + i * 2 + 1, y + 1, 1, 5, BARK[4]);
-  }
-  if (strokes < 5) return;
-  for (let i = 0; i < 8; i++) R(g, x - 1 + i, y + 5 - Math.floor(i * 0.75), 1, 1, BARK[0]);
-}
+/** A medal's rim and face, by place. */
+const MEDALS: Readonly<Record<1 | 2 | 3, readonly [string, string]>> = {
+  1: [GOLD[0], GOLD[2]],
+  2: [STONE[1], STONE[3]],
+  3: [BARK[3], GOLD[0]],
+};
+
+/** The top three's papers, left to right, standing on one line as a podium: where each begins and its place. */
+const PAPERS: readonly { place: 1 | 2 | 3; x: number; y: number }[] = [
+  { place: 2, x: 5, y: 16 },
+  { place: 1, x: 17, y: 13 },
+  { place: 3, x: 29, y: 19 },
+];
+const PAPER_W = 10;
+/** The row under the papers' lower edges. */
+const PAPERS_FOOT = 29;
 
 /**
- * The Tally: a squared timber post under a shingle cap, on a footing of stones, with the town's
- * count carved down its face (three fives and a five still being cut) and a tag on a peg.
+ * The Tally: a notice board like the quest board, with the top three pinned to it as a podium,
+ * the first in the middle and tallest. Each paper has its medal (gold, silver, bronze) and a name.
  */
-export function tallyPost(): Sprite {
-  const { c, g } = makeCanvas(26, 52);
-  // The footing.
-  R(g, 4, 46, 18, 6, STONE[1]);
-  R(g, 4, 46, 18, 1, STONE[3]);
-  R(g, 5, 49, 7, 1, STONE[0]);
-  R(g, 14, 48, 6, 1, STONE[0]);
-  // The post: a lit edge, its face, a shadowed side.
-  R(g, 7, 9, 12, 38, BARK[1]);
-  R(g, 7, 9, 1, 38, BARK[3]);
-  R(g, 8, 12, 9, 33, BARK[2]);
-  R(g, 17, 9, 2, 38, BARK[0]);
-  notches(g, 9, 15, 5);
-  notches(g, 9, 23, 5);
-  notches(g, 9, 31, 5);
-  notches(g, 9, 39, 2);
-  // A brass band under the cap.
-  R(g, 6, 10, 14, 2, GOLD[0]);
-  R(g, 6, 10, 14, 1, GOLD[1]);
-  // The cap, as the quest board's roof.
-  shingles(g, 1, 1, 24, 9, (r) => Math.round((9 - r) * 0.35), [SKY[0], SKY[1], SKY[2], SKY[3]], 11);
-  R(g, 4, 0, 18, 1, BARK[3]);
-  // A peg and the tag hung on it, with the town's gold dot.
-  R(g, 19, 19, 3, 1, BARK[3]);
-  R(g, 21, 20, 1, 2, BARK[0]);
-  R(g, 19, 22, 6, 7, BARK[3]);
-  R(g, 19, 22, 6, 1, BARK[4]);
-  R(g, 21, 24, 2, 2, GOLD[1]);
-  R(g, 19, 28, 6, 1, BARK[1]);
-  return spr(c, 13, 52);
+export function tallyBoard(): Sprite {
+  const { c, g } = makeCanvas(BOARD_W, BOARD_H);
+  noticeBoard(g, 11);
+  for (const { place, x, y } of PAPERS) {
+    R(g, x, y, PAPER_W, PAPERS_FOOT - y, CREAM);
+    R(g, x, PAPERS_FOOT - 1, PAPER_W, 1, PAPER_EDGE);
+    R(g, x + PAPER_W / 2, y, 1, 1, SKY[5]);
+    const [rim, face] = MEDALS[place];
+    const mx = x + 3;
+    const my = y + 2;
+    R(g, mx + 1, my, 2, 4, rim);
+    R(g, mx, my + 1, 4, 2, rim);
+    R(g, mx + 1, my + 1, 2, 2, face);
+    for (let k = 0; my + 5 + k * 2 < PAPERS_FOOT - 2; k++)
+      R(g, x + 2, my + 5 + k * 2, PAPER_W - 4 - (k % 2) * 2, 1, BARK[4]);
+  }
+  return spr(c, BOARD_W / 2, BOARD_H);
 }
 
 /** The figures 1 to 3, carved into a plinth's plate. */

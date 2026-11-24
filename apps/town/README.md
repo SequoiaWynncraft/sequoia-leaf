@@ -51,9 +51,10 @@ says so.
   at a time. The board shows a "!" while there is news the member has
   not opened; the id of the newest note they opened is kept in the browser under `town.notes.seen`. The panel opens on "News" while there is unread news, and on
   the quests otherwise.
-- **The Tally** (`tally.ts`, `tallyui.ts`, `tallyart.ts`, `tally.css`). A carved post on the lawn
-  between the Grove and the quest board, where the town keeps count: Leaf's leaderboards
-  (`GET /v1/game/tally/{board}/{period}`; the boards are `TALLY_BOARDS` in core). Its panel lists
+- **The Tally** (`tally.ts`, `tallyui.ts`, `tallyart.ts`, `tally.css`). A board built as the quest
+  board is (`noticeBoard` in `sprites.ts`) with the top three pinned to it as a podium, on the lawn
+  between the fire and the pond, across the fire from the quest board. There the town keeps count:
+  Leaf's leaderboards (`GET /v1/game/tally/{board}/{period}`; the boards are `TALLY_BOARDS` in core). Its panel lists
   the boards by group (the guild, the Works, The Little Raid, the town) beside the board chosen, or,
   where the panel is narrow, behind "Boards". A board is for this week or all time (tabs; a board
   kept for all time only has the one): the top three stand on plinths, each face as the town draws
@@ -62,7 +63,7 @@ says so.
   pinned at the foot when they are on the board but not in its top ten. A tie shares a place;
   guests are marked "Guest". Choosing anybody shows their card. A board is read when chosen and each
   minute while it stays open; it rises as it comes, a note a place. Until the member first opens
-  the Tally the post carries a mark (`town.tally.seen` in the browser), and the first time, first
+  the Tally its board carries a mark (`town.tally.seen` in the browser), and the first time, first
   place lands with a fanfare.
 - **The market.** Three stalls sell things for a camp, for Coins: lamps and oddments (kept by
   Sootpaw, asleep on the counter until somebody shops), seats, rugs and flags (Bramblewick), and
