@@ -126,13 +126,15 @@ export function tip(target: HTMLElement, title: Words, text?: Words): void {
     const t = said(title);
     target.setAttribute("aria-label", words && words !== t ? `${t} ${words}` : t);
   };
+  // Its tip names it where it has no name of its own: it only explains itself, or shows only a picture.
+  const named = !acts || (!target.hasAttribute("aria-label") && !target.textContent?.trim());
   if (!acts) {
     target.setAttribute("role", "button");
     if (target.tabIndex < 0) target.tabIndex = 0;
-    name();
   }
+  if (named) name();
   const beside = (): void => {
-    if (!acts) name();
+    if (named) name();
     const r = target.getBoundingClientRect();
     tipAt({ x: r.left, y: r.top, w: r.width, h: r.height }, said(title), said(text), target);
   };
@@ -199,4 +201,22 @@ export function tip(target: HTMLElement, title: Words, text?: Words): void {
       toggle();
       byKey = owner === target;
     });
+}
+
+/**
+ * A button showing only a picture, which cannot be made without a name: `name` is what a screen
+ * reader says, and the title of its tip when it has `line` (the words under the title, "" for
+ * none). A picture whose meaning is plain (close, back) needs no tip. `look` is the kit's button
+ * classes after `k-btn icon` ("wood sm").
+ */
+export function iconButton(
+  look: string,
+  art: Node,
+  name: string,
+  on: (e: Event) => void,
+  line?: string,
+): HTMLButtonElement {
+  const b = el("button", `k-btn icon ${look}`.trim(), { type: "button", "aria-label": name, onclick: on }, art);
+  if (line !== undefined) tip(b, name, line);
+  return b;
 }

@@ -18,7 +18,7 @@
  */
 import { layer } from "./dialog.ts";
 import { add, asking, asksAgain, el, icon, pressedTwice, unheld } from "./dom.ts";
-import { goesWith, LONG_PRESS, tip, tipAt, tipOff } from "./tip.ts";
+import { goesWith, iconButton, LONG_PRESS, tip, tipAt, tipOff } from "./tip.ts";
 
 /** A thing, named as `"kind:id"`: `"item:gear"`, `"figure:barrow-gnome"`, `"trait:ember"`. */
 export type Ref = string;
@@ -591,23 +591,11 @@ function drawCard(d: Description, o: Open): HTMLElement {
     tabindex: o.pinned ? -1 : null,
   });
   const backBtn =
-    o.stack.length > 1
-      ? el(
-          "button",
-          "k-btn plum icon sm k-info-back",
-          { type: "button", "aria-label": "Back", onclick: () => deck.back() },
-          icon("back"),
-        )
-      : null;
+    o.stack.length > 1 ? iconButton("plum sm k-info-back", icon("back"), "Back", () => deck.back()) : null;
   // A passing card keeps the close button's room, unseen, so that pinning it moves nothing: a name
   // that fitted two lines beside no button would take three beside one.
   const closeBtn = o.pinned
-    ? el(
-        "button",
-        "k-btn wood icon sm k-info-x",
-        { type: "button", "aria-label": "Close", onclick: () => deck.close() },
-        icon("close"),
-      )
+    ? iconButton("wood sm k-info-x", icon("close"), "Close", () => deck.close())
     : el("span", "k-btn wood icon sm k-info-x unseen", { "aria-hidden": "true" }, icon("close"));
   for (const part of partsOf(d, o.pinned)) {
     if (part === "head") {
