@@ -1,4 +1,4 @@
-import { describe, expect, jest, test } from "bun:test";
+import { describe, expect, jest, spyOn, test } from "bun:test";
 
 import {
   ALL_ITEMS,
@@ -39,6 +39,7 @@ import {
   until,
   useFakeLeaf,
 } from "../test/fake-leaf.ts";
+import { yardSfx } from "./sound.ts";
 import { S } from "./state.ts";
 import { cancel, place, setTool, toolHooks, undo } from "./tools.ts";
 import { letters } from "./ui/letter.ts";
@@ -406,19 +407,27 @@ describe("the yard, on Leaf", () => {
     expect(letter.putAway()).toBe(false);
   });
 
-  test("a letter shown while the one before it fades is not put away by that fading, nor sounds its lines", async () => {
+  test("a letter shown while the one before it fades is not put away by that fading, and sounds only its own lines", async () => {
     await opened();
     const { letter: part } = page();
     jest.useFakeTimers();
+    const start = Date.now();
+    const sounded: number[] = [];
+    const sound = spyOn(yardSfx, "letter").mockImplementation(() => void sounded.push(Date.now() - start));
     try {
       const letter = letters(scope());
       const away = { seconds: 600, coins: 0, made: counts() };
       letter.show(away, () => undefined);
+      jest.advanceTimersByTime(100);
       letter.putAway();
       letter.show(away, () => undefined);
       jest.advanceTimersByTime(2000);
       expect([letter.reading(), part.hidden, part.listening]).toEqual([true, false, 1]);
+      // Its lines come 380 ms after it shows and 280 ms apart; the first letter's, 100 ms earlier, never.
+      expect(sounded.length).toBeGreaterThan(0);
+      expect(sounded).toEqual(sounded.map((_, i) => 100 + 380 + i * 280));
     } finally {
+      sound.mockRestore();
       jest.useRealTimers();
     }
   });
