@@ -115,4 +115,24 @@ export const ASKS: Partial<Record<ItemName, readonly Ask[]>> = {
       line: "Cinfy keeps the guild's books in brass folios, so they cannot be lost. Cinfy has lost two.",
     },
   ],
+  pipe: [
+    { from: "The gnomes", line: "The gnomes have found out that a pipe makes a noise if you shout down it." },
+    { from: "Fika", line: "Fika's sink drains into Fika's kitchen. Fika would like it to drain somewhere else." },
+  ],
+  firework: [
+    { from: "The raid parties", line: "A party back from a raid wants something to go off that is not them." },
+    { from: "Pipwick", line: "Pipwick wants one firework, to see what it does, and a great many more to be sure." },
+  ],
+  spyglass: [
+    { from: "The gate", line: "The lookouts on the gate can see the ridge. They would like to see what is on it." },
+    { from: "Greg", line: "Greg has heard there are shiny lumps on the moon." },
+  ],
+  clock: [
+    { from: "Tindra", line: "Tindra wants to know how late it is. Tindra suspects very." },
+    { from: "The scholars", line: "The scholars keep losing track of time. They would like to lose it more exactly." },
+  ],
+  orrery: [
+    { from: "The scholars", line: "The scholars want the sky on a table, where they can reach it." },
+    { from: "Glorp", line: "Glorp would like the moon. Glorp has been told it comes in a smaller size." },
+  ],
 };

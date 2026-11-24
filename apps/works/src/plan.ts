@@ -89,6 +89,11 @@ const HUE: Readonly<Record<ItemName, string>> = {
   crab: SKY[5],
   timber: "#bfa98a",
   brass: "#e0b05a",
+  pipe: "#9a94a3",
+  firework: CLAY[0],
+  spyglass: WATER[1],
+  clock: SKY[3],
+  orrery: GREEN[2],
 };
 const HUES = ALL_ITEMS.map((n) => HUE[itemName(n)]);
 

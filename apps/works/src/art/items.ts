@@ -48,6 +48,26 @@ export const ROWS: Readonly<Record<ItemName, readonly string[]>> = {
   // The Timber folio is bound in bark with a leaf on its cover, the Brass folio in brass with a boss.
   timber: ["bNNNNN.", "bNNlNNc", "bNlGlNc", "bNNlNNc", "bNNNNNc", "bCCCCrc", ".....r."],
   brass: ["oyyyyy.", "oyyYyyc", "oyYwYyc", "oyyYyyc", "oyyyyyc", "bCCCCrc", ".....r."],
+  // A length of iron pipe with a brass collar at each end.
+  pipe: [".y....y.", "tYtttYts", "SySSSySs", "soshsosh", ".o....o."],
+  // A clay rocket on its stick, a spark off its tip.
+  firework: ["Y...w", "..q..", ".qrR.", ".wwR.", ".rRQ.", ".RRQ.", "..N..", "..N.."],
+  // A brass spyglass drawn out, its lens to the right.
+  spyglass: ["......YYU", "...YYYyyU", "YYYyyyyyU", "oooyyyooU", "...oooooU"],
+  // A round clock in a brass rim, its hands at three.
+  clock: ["..yyy..", ".ycxcy.", "ycwxwcy", "ycwxxxy", "ycwwwCy", ".yCcCo.", "..ooo.."],
+  // A brass ring round the sun on a stand, a world on the ring and one beyond it.
+  orrery: [
+    "..l......",
+    "...oyyyo.",
+    ".oy..u..y",
+    "y..YwY..y",
+    "y..YYY..y",
+    ".yo...oy.",
+    "..oyyyo..",
+    "....o....",
+    "..ooooo..",
+  ],
 };
 
 /** Each thing's picture with its dark edge, for a belt or a card. */

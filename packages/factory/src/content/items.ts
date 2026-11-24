@@ -1,8 +1,11 @@
 /**
  * Everything the yard gathers and makes. Six things come from the ground, six are worked once,
  * six are put together, and five are goods the guild asks for by name; two are folios, which the
- * Study turns into research. Nothing here fells a living tree: wood is deadfall, picked up off the
- * forest floor.
+ * Study turns into research. Tier 4's long works add five more, none of them made with a lantern:
+ * pipes and fireworks, spyglasses and clocks, and the orrery made of them. Nothing here fells a
+ * living tree: wood is deadfall, picked up off the forest floor.
+ *
+ * A new thing goes at the end of the list: a thing riding a belt is kept by its place in it.
  */
 
 export const RAW = ["deadfall", "stone", "ore", "clay", "sand", "resin"] as const;
@@ -29,6 +32,11 @@ export const ITEMS = [
   "crab",
   "timber",
   "brass",
+  "pipe",
+  "firework",
+  "spyglass",
+  "clock",
+  "orrery",
 ] as const;
 export type ItemName = (typeof ITEMS)[number];
 
@@ -73,4 +81,9 @@ export const ITEM: Record<ItemName, ItemInfo> = {
   crab: { name: "Clockwork crab", many: "clockwork crabs", step: 4, worth: 20 },
   timber: { name: "Timber folio", many: "Timber folios", step: 3, worth: 3, folio: true },
   brass: { name: "Brass folio", many: "Brass folios", step: 3, worth: 6, folio: true },
+  pipe: { name: "Pipe", many: "pipes", step: 2, worth: 1 },
+  firework: { name: "Firework", many: "fireworks", step: 2, worth: 1 },
+  spyglass: { name: "Spyglass", many: "spyglasses", step: 3, worth: 3 },
+  clock: { name: "Clock", many: "clocks", step: 3, worth: 4 },
+  orrery: { name: "Orrery", many: "orreries", step: 4, worth: 30 },
 };
