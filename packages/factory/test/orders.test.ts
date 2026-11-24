@@ -97,6 +97,19 @@ describe("what the board asks for", () => {
     expect(early.board.map((o) => o.id)).toEqual(before);
   });
 
+  test("beacons, clockwork crabs and orreries, once a project that wants them is done or in hand", () => {
+    const y = F.create({ seed: 7, tier: 5 });
+    // Every plot owned, so that everything those are made of lies in the yard.
+    y.plots = F.PLOT_IDS.flatMap((id) => F.plotNamed(id) ?? []);
+    const may = new Set(F.askable(y).map((k) => F.itemName(k)));
+    for (const k of ["beacon", "crab", "orrery", "clock", "spyglass", "pipe", "firework"] as const)
+      expect(may.has(k)).toBe(true);
+    const orders = Array.from({ length: 400 }, () => F.fresh(y, 11));
+    for (const k of ["beacon", "crab", "orrery"] as const)
+      expect(orders.some((o) => (o.want[F.item(k)] ?? 0) > 0)).toBe(true);
+    expect(orders.filter((o) => o.line === "").map((o) => o.title)).toEqual([]);
+  });
+
   test("folios, once research is known, each with a line of its own; no order is left without one", () => {
     const y = F.create({ seed: 7, tier: 4 });
     // Every plot owned, so that what a Brass folio is made of lies in the yard.

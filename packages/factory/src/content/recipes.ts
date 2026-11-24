@@ -38,4 +38,11 @@ export const RECIPES: readonly RecipeInfo[] = [
   { out: "crab", from: { engine: 1, shell: 1, lantern: 1 }, by: "workshop", ticks: 80 },
   { out: "timber", from: { frame: 1, pot: 1 }, by: "bench", ticks: 30 },
   { out: "brass", from: { gear: 1, lantern: 1, ingot: 1 }, by: "workshop", ticks: 40 },
+  // Tier 4's long works. Each is after every older recipe of its machine, so that a machine fed for
+  // an older one goes on making it.
+  { out: "pipe", from: { ingot: 2, oil: 1 }, by: "bench", ticks: 20 },
+  { out: "firework", from: { pot: 1, oil: 1 }, by: "bench", ticks: 20 },
+  { out: "spyglass", from: { pipe: 1, glass: 2 }, by: "bench", ticks: 30 },
+  { out: "clock", from: { gear: 2, frame: 1, glass: 1 }, by: "workshop", ticks: 40 },
+  { out: "orrery", from: { clock: 2, spyglass: 1, brass: 1 }, by: "workshop", ticks: 80 },
 ];

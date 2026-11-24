@@ -369,11 +369,12 @@ describe("a splitter with a way put first", () => {
     // The left way first, while its crate has room: all of it.
     expect(splitting(60, 400, 1).got()).toEqual([0, 60, 0]);
     // Its crate full (and one more on its belt), the rest goes ahead and right in turn; nothing is lost.
-    const { y, got } = splitting(200, 1200, 1);
+    const things = yard(5).open.crate + 72;
+    const { y, got } = splitting(things, things * 6, 1);
     const [ahead, left, right] = got();
     expect(left).toBe(y.open.crate);
     expect(y.item[F.at(y, 4, 3)]).toBe(plank);
-    expect(ahead + right).toBe(200 - left - 1);
+    expect(ahead + right).toBe(things - left - 1);
     expect(Math.abs(ahead - right)).toBeLessThanOrEqual(1);
   });
 

@@ -146,8 +146,17 @@ class Player {
         return { do: "collect" };
       case 23:
         return { do: "first", way: this.pick([null, 0, 1, 2, 3]), ...this.of(F.SPLITTER) };
-      case 24:
-        return { do: this.r() < 0.7 ? "queue" : "unqueue", node: this.pick([...F.NODES.map((n) => n.id), "nap"]) };
+      case 24: {
+        const any = [...F.NODES.map((n) => n.id), "nap"];
+        // Mostly a node that may go in line, as a player picks one; now and then any, or none.
+        if (this.r() < 0.7) {
+          const may = F.NODES.filter((n) => F.queueRefusal(y, F.goal(n.id)) === null).map((n) => n.id);
+          return { do: "queue", node: this.pick(may.length > 0 && this.r() < 0.8 ? may : any) };
+        }
+        // Mostly a node that is in line, as a player takes one out; now and then any, or none.
+        const lined = y.queue.flatMap((g) => F.GOALS[g]?.id ?? []);
+        return { do: "unqueue", node: this.pick(lined.length > 0 && this.r() < 0.8 ? lined : any) };
+      }
       default:
         return (
           this.pick<Rec>([
