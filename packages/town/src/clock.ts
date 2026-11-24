@@ -10,7 +10,7 @@
  * moments (a raid party home, a war), each from its own time. Where a member busy at one of the
  * games is drawn is the town page's (`apps/town/src/spots.ts`).
  */
-import { DAY_MS, mix, utcDay } from "@sequoia-leaf/core";
+import { mix, utcDay } from "@sequoia-leaf/core";
 
 import { type Doing, type Errand, ERRAND_LINES, FOLK, type Townsperson } from "./folk.ts";
 
@@ -240,22 +240,18 @@ export function hiding(seed: number, now: number): { stretch: number; since: num
 /** A game a member can be in that has a place in town to stand at. */
 export type Stand = "works" | "table" | "grove";
 
-/** In and out of town: the gateway, in the dark. */
-export const GATE: Spot = spot(256, 84, 0);
-
 /**
  * How long after Leaf last saw a member they stay on their feet where they were, in milliseconds.
  * Leaf lists them as gone 90 seconds after, and every page asks who is about every 30, so by now
- * every page knows: all see them sit down to doze, or go, at the same moment. And for how long
- * after that somebody going out through the gate is still on the way.
+ * every page knows: all see them doze on their seat, or go, at the same moment.
  */
 export const SITS_AFTER = 120_000;
-export const GOES_FOR = 15_000;
 
-/** A seat, as far as who dozes on it goes: what it is by, which way its sitter faces, and whether it is left for the member. */
+/** A seat, as far as who dozes on it goes: where it is, what it is by, and whether it is left for the member. */
 export interface SeatFor {
+  x: number;
+  y: number;
   at: "fire" | "bench" | "works" | "table";
-  dir: number;
   yours?: boolean;
 }
 
@@ -267,14 +263,19 @@ const SEATS_FOR: Readonly<Record<"town" | Stand, readonly SeatFor["at"][]>> = {
   works: ["works", "fire", "bench"],
 };
 
-/** Seats facing us first, so that whoever dozes there is seen to; then side on; then with their back to us. */
-const facing = (s: SeatFor): number => (s.dir === 0 ? 0 : s.dir === 3 ? 2 : 1);
+/** How much a member wants a seat, by their account and where it is: lower is wanted more, the same every time, and different for each. */
+const want = (id: string, s: SeatFor): number => mix(mix(seedOf(id), s.x), s.y);
+/** Of some seats, the one a member wants most. */
+const most = <S extends SeatFor>(id: string, seats: readonly S[]): S | undefined =>
+  seats.toSorted((a, b) => want(id, a) - want(id, b) || a.x - b.x || a.y - b.y).at(0);
 
 /**
- * The seat each member who dozes has, by their account, of the seats nobody awake sits on
- * (`free`, in the town's own order): whoever has been gone longest chooses first (of two gone
- * together, by account), and takes the first seat left for where they were. Never a seat left for
- * the member; whoever finds none has none.
+ * The seat each member who dozes has, by their account, of the seats nobody awake sits on (`free`,
+ * in any order), never one left for the member. Each has a seat of their own, the one they want most
+ * of those they may have (`SEATS_FOR`, `want`), unless somebody gone longer wants it too (of two
+ * gone together, by account); then whoever has none takes, gone longest first, the one they want
+ * most of the first kind left for where they were. So somebody coming or going moves nobody on a
+ * seat of their own, only somebody who took one that was left; whoever finds none left has none.
  */
 export function dozing<S extends SeatFor>(
   resting: readonly { id: string; at: "town" | Stand; seen: number }[],
@@ -282,13 +283,27 @@ export function dozing<S extends SeatFor>(
 ): Map<string, S> {
   const left = free.filter((s) => !s.yours);
   const out = new Map<string, S>();
-  for (const r of resting.toSorted((a, b) => a.seen - b.seen || (a.id < b.id ? -1 : 1))) {
+  const order = resting.toSorted((a, b) => a.seen - b.seen || (a.id < b.id ? -1 : 1));
+  for (const r of order) {
+    const own = most(
+      r.id,
+      left.filter((s) => SEATS_FOR[r.at].includes(s.at)),
+    );
+    if (!own || [...out.values()].includes(own)) continue;
+    out.set(r.id, own);
+  }
+  for (const r of order) {
+    if (out.has(r.id)) continue;
+    const taken = new Set(out.values());
     const seat = SEATS_FOR[r.at]
-      .flatMap((kind) => left.filter((s) => s.at === kind).toSorted((a, b) => facing(a) - facing(b)))
-      .at(0);
-    if (!seat) continue;
-    left.splice(left.indexOf(seat), 1);
-    out.set(r.id, seat);
+      .map((kind) =>
+        most(
+          r.id,
+          left.filter((s) => s.at === kind && !taken.has(s)),
+        ),
+      )
+      .find((s) => s !== undefined);
+    if (seat) out.set(r.id, seat);
   }
   return out;
 }
@@ -361,35 +376,11 @@ export function boardAt(
 // ---------- the guild's moments ----------
 
 /**
- * A raid party's homecoming, in milliseconds after it begins: each walks in through the gate
- * `apart` after the one before, the town cheers at `cheer`, at `part` the first goes on to the
- * lantern tree and the others stay 3 to 6 seconds more and go, the lantern goes up at `hang`, the
- * first stays `stay` and 3 to 6 seconds more and goes, and at `over` nobody of it is left. The
- * walks fit a member's pace, 32 pixels a second.
+ * A raid party home, in milliseconds after the town begins to stage it: the town cheers at `cheer`
+ * and the feed names them, a lantern goes up in the tree at `hang`, and at `over` it is over.
+ * Nobody walks in for it: whoever of the party is drawn in town is pleased where they are.
  */
-export const HOME = { apart: 350, cheer: 1500, part: 2800, hang: 8500, stay: 1600, over: 23_000 } as const;
-
-/** Where a raid party musters before the gate, each from their own side of the gateway; and where the first hangs the lantern, facing the tree. */
-export const MUSTER: readonly Spot[] = [spot(240, 112, 0), spot(272, 113, 0), spot(250, 125, 0), spot(265, 127, 0)];
-export const BY_TREE = spot(340, 216, 2);
-
-/**
- * The walk the `i`th of a raid party home since `at` is on at a moment: in through the gate to
- * their place before it, then (the first) to the lantern tree, then out again. Null once it is over.
- */
-export function homecoming(seed: number, at: number, i: number, now: number): Walk | null {
-  const muster = MUSTER[i];
-  if (!muster || now >= at + HOME.over) return null;
-  const linger = 3000 + 3000 * roll(seed, at, at % DAY_MS, i);
-  const walks: Walk[] = [{ from: spot(GATE.x - 7 + (i % 2) * 13, GATE.y + 1, 0), to: muster, at: at + i * HOME.apart }];
-  if (i === 0)
-    walks.push(
-      { from: muster, to: BY_TREE, at: at + HOME.part },
-      { from: BY_TREE, to: GATE, at: at + HOME.hang + HOME.stay + linger },
-    );
-  else walks.push({ from: muster, to: GATE, at: at + HOME.part + linger });
-  return walks.findLast((w) => w.at <= now) ?? walks[0] ?? null;
-}
+export const HOME = { cheer: 1500, hang: 8500, over: 23_000 } as const;
 
 /**
  * What the town has staged of a day's raids or wars at a moment: how many (`n`), and when each of

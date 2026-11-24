@@ -109,33 +109,17 @@ describe("seats", () => {
     expect(s.taken).toBe(false);
   });
 
-  test("a seat somebody dozes on is the member's to take: tapped, they walk there and sit on it", () => {
+  test("a seat somebody dozes on is not the member's to take: tapped, they sit on another by the fire", () => {
     const s = seatAt(248, 201);
     dozer("Fernhollow", s);
     const me = member("Tester", 256, 170, true);
     G.player = me;
-    expect(seatFree(s, me)).toBe(true);
+    expect(seatFree(s, me)).toBe(false);
     expect(goSit(s)).toBe(true);
-    expect(me.goal).toBe(s);
+    expect(me.goal).not.toBe(s);
     run(4);
-    expect(me.seat).toBe(s);
-  });
-
-  test("a seat a member has set off for is still theirs if somebody is given it to doze on meanwhile", () => {
-    const s = seatAt(248, 236);
-    const a = member("Quillon", 248, 290);
-    let sat: Seat | null | undefined;
-    goToSeat(
-      a,
-      s,
-      () => null,
-      (got) => (sat = got),
-    );
-    run(0.3);
-    dozer("Fernhollow", s);
-    run(4);
-    expect(sat).toBe(s);
-    expect(a.seat).toBe(s);
+    expect(me.seat?.at).toBe("fire");
+    expect(me.seat).not.toBe(s);
   });
 });
 

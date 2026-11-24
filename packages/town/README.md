@@ -111,21 +111,22 @@ and nothing is kept: any page, and Leaf, gets the same answer for the same momen
 
 What follows from what Leaf said is here too, as functions of that and the clock:
 
-- `dozing(resting, free)`: the seat of each member who dozes, of the seats nobody awake sits on:
-  whoever has been gone longest chooses first, the first seat left for where they were, never one
-  left for the member. `SITS_AFTER` (120 seconds after Leaf last saw them) is when a member gone
-  from a game sits down, or goes. `zAt` is when a dozer last breathed out a "z" (one every 2
-  seconds, up to 0.8 late). Where a member busy at one of the games is drawn, a spot of their own,
-  is the town page's (`apps/town/src/spots.ts`).
-- `homecoming(seed, at, i, now)`: the walk the `i`th of a raid party home since `at` is on: in
-  through the gate, the first on to the lantern tree, and out again, to the timetable `HOME`.
+- `dozing(resting, free)`: the seat of each member who dozes, of the seats nobody awake sits on,
+  never one left for the member. Each has a seat of their own, the one their account wants most of
+  those for where they were, unless somebody gone longer wants it too; whoever has none then takes
+  what is left, gone longest first. So somebody coming or going moves nobody on a seat of their
+  own. `SITS_AFTER` (120 seconds after Leaf last saw them) is when a member gone from a game is on
+  their seat, or goes. `zAt` is when a dozer last breathed out a "z" (one every 2 seconds, up to
+  0.8 late). Where a member busy at one of the games is drawn, a spot of their own, is the town
+  page's (`apps/town/src/spots.ts`). Members never walk: only the town's own do.
+- `HOME`: a raid party home's timetable: the cheer, the lantern going up, the end.
 - `bannerAt(wars, now)`: whose banner flies and how far up the pole: the last war's by when each
   happened (`later`), of those the town has begun to stage.
 - `stagedBy(count, whens, now)`: how many of a day's raids or wars the town has staged: Leaf's
   count of the day, less those still to come.
 
-The page walks the way between two spots at the figure's pace; its test checks that every walk
-fits its turn on the town's ground.
+The page walks the town's own the way between two spots at their pace; its test checks that every
+walk fits its turn on the town's ground.
 
 ## The arrival letter
 

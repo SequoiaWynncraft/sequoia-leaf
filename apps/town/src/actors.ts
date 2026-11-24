@@ -176,10 +176,10 @@ export function peopleOn(ground: Ground, people: () => readonly Actor[]): void {
 /** Whether somebody is standing or sitting still where they can be seen: not walking, gone or faded out. */
 export const isStill = (a: Actor): boolean => !a.away && !a.moving && a.alpha > 0.02;
 
-/** Everybody standing or sitting still on a ground but `a`, where they are drawn; with `awake`, but for members dozing. */
-function stillOn(ground: Ground, a: Actor | null, awake = false): Placed[] {
+/** Everybody standing or sitting still on a ground but `a`, where they are drawn, members dozing too. */
+function stillOn(ground: Ground, a: Actor | null): Placed[] {
   return (peopleOf.get(ground)?.() ?? []).flatMap((o) =>
-    o !== a && isStill(o) && !(awake && o.dozing !== null) ? [{ ...feet(o), tall: headOf(o) }] : [],
+    o !== a && isStill(o) ? [{ ...feet(o), tall: headOf(o) }] : [],
   );
 }
 
@@ -193,13 +193,12 @@ export function stopAt(a: Actor, to: Pt, ground: Ground = TOWN): Pt {
 }
 
 /**
- * Whether a seat is free for `a`: nobody else has it, and nobody awake but `a` stands or sits where
- * its sitter would be. A member dozing on it has it only until somebody awake sits there, and then
- * dozes on the next (`visitors.ts`).
+ * Whether a seat is free for `a`: nobody else has it, and nobody but `a` stands or sits where its
+ * sitter would be, a member dozing there included: a dozer keeps their seat (`visitors.ts`).
  */
 export const seatFree = (s: Seat, a: Actor | null, ground: Ground = TOWN): boolean =>
   (!s.taken || a?.goal === s) &&
-  stillOn(ground, a, true).every((o) => !crowds(o, { x: s.x, y: s.y, tall: tallOf(true, s.dir) }));
+  stillOn(ground, a).every((o) => !crowds(o, { x: s.x, y: s.y, tall: tallOf(true, s.dir) }));
 
 /** Whether somebody sits on one of the town's seats: another player's seat is their own, where the town's is. */
 export const sitsOn = (a: Actor, s: Seat): boolean => a.seat !== null && dist(a.seat.x, a.seat.y, s.x, s.y) <= 2;

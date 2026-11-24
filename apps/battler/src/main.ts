@@ -65,6 +65,16 @@ function sendCard(): void {
   post("raid", card);
 }
 
+/**
+ * The town is closing the table: it says where the member is from here, so the table says nothing
+ * more of it (in case it would come after); a pick in hand is put down, and the town has its card.
+ */
+function closing(): void {
+  here(null);
+  unpick();
+  sendCard();
+}
+
 /** Sets out from the front page, which goes once Leaf has laid the run out. */
 async function setOutOn(trail: number): Promise<void> {
   if (await startNew(trail)) showPage(null);
@@ -188,9 +198,7 @@ async function boot(): Promise<void> {
   stage.layout();
 
   fromTown((msg) => {
-    if (msg.town !== "closing") return;
-    unpick();
-    sendCard();
+    if (msg.town === "closing") closing();
   });
   sendCard();
   here("table");

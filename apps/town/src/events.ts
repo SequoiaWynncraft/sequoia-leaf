@@ -1,16 +1,17 @@
 /**
- * The guild's moments, staged in the town: real members home from a raid hang a lantern in the
- * tree, a war raises the banner, a level or a milestone is a line in the feed and a flourish over
- * whoever it is. Where everything is at any moment of one follows from the moment's own time by
- * Leaf's clock (the walk in `visitors.ts`, the lantern and the banner in `town.ts`), so a page
- * that comes in the middle joins it there; here is only what is heard and seen once, each at its
- * own time (`cue`): the fanfare, the cheer, the feed's line. The town's own cheer along.
+ * The guild's moments, staged in the town: a raid party home puts a lantern in the tree, a war
+ * raises the banner, a level or a milestone is a line in the feed and a flourish over whoever it is.
+ * Nobody walks in for any of it: whoever of it is drawn in town (the member, a player live, a
+ * visitor at one of the games) is pleased where they are. Where everything is at any moment of one
+ * follows from the moment's own time by Leaf's clock (the lantern and the banner in `town.ts`), so
+ * a page that comes in the middle joins it there; here is only what is heard and seen once, each at
+ * its own time (`cue`): the fanfare, the cheer, the feed's line. The town's own cheer along.
  */
 
 import { GOLD } from "@sequoia-leaf/kit/palette.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
-import { clamp, dist } from "@sequoia-leaf/kit/util.ts";
-import { BY_TREE, HOME } from "@sequoia-leaf/town/clock.ts";
+import { clamp } from "@sequoia-leaf/kit/util.ts";
+import { HOME } from "@sequoia-leaf/town/clock.ts";
 
 import { cheerAll, hop } from "./actors.ts";
 import { float, sparkle } from "./fx.ts";
@@ -68,13 +69,10 @@ function stage(h: Happening): void {
         guild.say(h, hooks.feed);
         cheer(h, at);
       });
-      // The lantern goes up with a pop from whoever of them stands by the tree, and lands 0.9 seconds on.
+      // The lantern goes up with a pop, and lands 0.9 seconds on.
       const hang = h.at + HOME.hang;
       cue(hang, () => {
-        if (!hangs(hang)) return;
-        sfx.pop();
-        for (const a of h.who.flatMap((p) => inTownAs(p) ?? []))
-          if (dist(a.x, a.y, BY_TREE.x, BY_TREE.y) < 2) hop(a, 2);
+        if (hangs(hang)) sfx.pop();
       });
       cue(hang + 900, () => landLantern(hang));
       return;
@@ -97,8 +95,8 @@ export function stepEvents(): void {
   stepLater();
   stepCues();
   // Whoever is in the gateway is half in the dark beyond it (the member in the Works' doorway, in
-  // the doorway's: the town sets it after).
-  const all = G.player ? [G.player, ...G.folk, ...G.visitors] : [...G.folk, ...G.visitors];
+  // the doorway's: the town sets it after). Members visiting never are: they fade by themselves (`visitors.ts`).
+  const all = G.player ? [G.player, ...G.folk] : [...G.folk];
   for (const a of all) {
     if (a.away) continue;
     a.alpha = a.y < 98 ? clamp((a.y - 84) / 12, 0, 1) : 1;

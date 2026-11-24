@@ -1,5 +1,24 @@
 [
   {
+    "id": "town-no-walking-ghosts",
+    "at": "TBD",
+    "title": "Nobody walks around town who is not here",
+    "lines": [
+      "Members who are in a game, asleep or gone no longer walk around town. They fade in and out where they are."
+    ],
+    "more": [
+      {
+        "head": "Changed",
+        "points": [
+          "A raid party no longer walks in through the gate. The town still cheers, the lantern still goes up, and party members who are in town cheer where they are.",
+          "Someone who leaves a game stands at their spot for 2 minutes, then fades out. If their character stays in town and a seat is free, they fade in asleep on it.",
+          "Sleepers stay on their seats when someone else sits down. You can no longer sit on someone who is asleep.",
+          "With a game open on one device and the town open on another, you count as in the game until you leave it."
+        ]
+      }
+    ]
+  },
+  {
     "id": "works-sorter-sides",
     "at": "2026-11-24T13:00Z",
     "title": "The Works: sorters can send right",

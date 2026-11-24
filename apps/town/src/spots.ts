@@ -45,13 +45,6 @@ export const MIDDLE: Readonly<Record<Stand, Pt>> = {
   grove: { x: 104, y: 180 },
 };
 
-/** Where whoever comes to a place, from nowhere the page saw, comes from: the Works' door, the way along to the stump, the Grove's stone. */
-export const WAY_IN: Readonly<Record<Stand, Pt>> = {
-  works: { x: 375, y: 132 },
-  table: { x: 414, y: 207 },
-  grove: { x: 104, y: 192 },
-};
-
 /** At the stump a member sits; at the Works and before the stone they stand. Past the spots laid by hand, everybody stands. */
 export const sits = (at: Stand, n: number): boolean => at === "table" && n < LAID.table.length;
 
@@ -247,7 +240,6 @@ export interface Pose {
   x: number;
   y: number;
   dir: Spot["dir"];
-  walking: boolean;
   seated: boolean;
   dozing: boolean;
   work: Work | null;
@@ -255,26 +247,13 @@ export interface Pose {
 
 /**
  * How somebody at a place (`at`) is at a moment (`now`, Leaf's clock), with their spot (`spot`, the
- * `n`th of the place's): on the way to it (`way`, where their one walk there has them, if it is not
- * over), awake whatever Leaf says of them, so that nobody walks dozing; else at it and nowhere else,
- * dozing there, sat down facing us, if they are away (Leaf's rule); else busy there: at the stump
- * sitting over the board, at the Works at work at their crate, before the stone standing facing it.
+ * `n`th of the place's): at it and nowhere else, never on the way to it; dozing there, sat down
+ * facing us, if they are away (Leaf's rule); else busy there: at the stump sitting over the board,
+ * at the Works at work at their crate, before the stone standing facing it.
  */
-export function poseAt(o: {
-  id: string;
-  at: Stand;
-  spot: Spot;
-  n: number;
-  away: boolean;
-  now: number;
-  way: (Pt & { next: Pt | null }) | null;
-}): Pose {
+export function poseAt(o: { id: string; at: Stand; spot: Spot; n: number; away: boolean; now: number }): Pose {
   const { spot: s } = o;
-  if (o.way?.next) {
-    const { x, y, next } = o.way;
-    return { x, y, dir: facing({ x, y }, next), walking: true, seated: false, dozing: false, work: null };
-  }
-  const at = { x: s.x, y: s.y, walking: false };
+  const at = { x: s.x, y: s.y };
   if (o.away) return { ...at, dir: 0, seated: true, dozing: true, work: null };
   if (o.at === "works") {
     const work = atWork(o.id, s, o.now);

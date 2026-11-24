@@ -249,6 +249,49 @@ describe("visits from the presence calls", () => {
     ]);
   });
 
+  it("keeps a player in the game their page calls from while a town room on another page says the town; a call moves them", async () => {
+    // Alice has the Works open, and the town open on her phone, whose room says so now and then.
+    const inTown = { playerId: alice, username: "Alice", guest: false, device: null };
+    const room = (at: number) => services.run(Visits.use((v) => v.inRoom([inTown], "town", at)));
+    await call("alice", "works");
+    await room(T0 + 10 * SECOND);
+    clock.now = T0 + 30 * SECOND;
+    await call("alice", "works");
+    await room(T0 + 40 * SECOND);
+    expect(await visits()).toMatchObject([{ place: "works", source: "call", entered_at: T0, left_at: null }]);
+    const about = await services.run(Visits.use((v) => v.about(T0 + 41 * SECOND)));
+    expect(about.present.map((p) => p.place)).toEqual(["works"]);
+
+    // Out of the Works, the town's page says so itself, at once.
+    clock.now = T0 + 50 * SECOND;
+    await call("alice", "town");
+    expect(await visits()).toMatchObject([
+      { place: "works", left_at: T0 + 50 * SECOND },
+      { place: "town", source: "call", entered_at: T0 + 50 * SECOND, left_at: null },
+    ]);
+  });
+
+  it("lets a town room have a player whose game's page has gone silent, and one in their camp at once", async () => {
+    const inTown = { playerId: alice, username: "Alice", guest: false, device: null };
+    await call("alice", "works");
+    // 90 seconds on, the Works' visit is closed at its last call, and the room has her.
+    await services.run(Visits.use((v) => v.inRoom([inTown], "town", T0 + 90 * SECOND)));
+    expect(await visits()).toMatchObject([
+      { place: "works", left_at: T0 },
+      { place: "town", source: "room", entered_at: T0 + 90 * SECOND, left_at: null },
+    ]);
+    // A camp is the town's own page, not a game: the room takes her from it.
+    clock.now = T0 + 100 * SECOND;
+    await call("alice", "camp");
+    await services.run(Visits.use((v) => v.inRoom([inTown], "town", T0 + 110 * SECOND)));
+    expect((await visits()).map((v) => [v.place, v.left_at])).toEqual([
+      ["works", T0],
+      ["town", T0 + 100 * SECOND],
+      ["camp", T0 + 110 * SECOND],
+      ["town", null],
+    ]);
+  });
+
   it("closes the visit in one place when the player comes to another, in the same session", async () => {
     await call("alice", "camp");
     clock.now = T0 + 40 * SECOND;

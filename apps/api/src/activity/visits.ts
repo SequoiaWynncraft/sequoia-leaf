@@ -45,6 +45,24 @@ const OpenVisit = Schema.Struct({
 });
 type OpenVisit = typeof OpenVisit.Type;
 
+/**
+ * Whether an open visit is in one of the games (the Works, the raid table: a page of its own) and
+ * was said by that page's calls: while it is open, a live room the player is in on another page
+ * (another tab, another device) does not move them, so that they are in one place, the game's. The
+ * town's own page says where they are itself as they come out of a game, which moves them at once,
+ * and a game's page left silent closes after 90 seconds as any visit does.
+ */
+const inGame = (v: { place: string; source: Source }): boolean =>
+  v.source === "call" && (GAME_AT[v.place] ?? "town") !== "town";
+
+/**
+ * Whether word that a player is at `place` now, from `source`, leaves their open visit (`v`) where
+ * it is: word older than what Leaf has heard of them since moves nobody, and nor does a live room
+ * another page of theirs is in while they play a game (`inGame`).
+ */
+const staysPut = (v: OpenVisit, place: string, source: Source, now: number): boolean =>
+  v.place !== place && (v.heardAt > now || (source === "room" && inGame(v)));
+
 /** A player counts as here this long after Leaf last heard of them in a place, unless they left it: 90 seconds (`VISIT_RULES.silentMs`). */
 export const PRESENT_FOR_MS = VISIT_RULES.silentMs;
 /** The most players listed as here in one answer: those heard of most lately. */
@@ -362,13 +380,13 @@ export class Visits extends Context.Service<
        * A player is at `place` now: their open visit there is heard of again, by this Leaf (and is
        * the room's, if this is the room), with their name and whether a guest as they are now; or
        * the one they have elsewhere closes and one opens here, unless Leaf heard of them there
-       * later than `now`. Says whether who is about changed.
+       * later than `now`, or a room says so while they play a game (`staysPut`). Says whether who is
+       * about changed.
        */
       const arrive = (who: Visitor, place: string, source: Source, now: number) =>
         Effect.gen(function* () {
           const current = yield* openOf(who.playerId);
-          // Word older than what Leaf has heard since moves nobody.
-          if (Option.isSome(current) && current.value.place !== place && current.value.heardAt > now) return false;
+          if (Option.isSome(current) && staysPut(current.value, place, source, now)) return false;
           if (Option.isSome(current) && current.value.place === place) {
             const kept = source === "room" ? "room" : current.value.source;
             const guest = who.guest ? 1 : 0;
