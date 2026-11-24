@@ -783,19 +783,20 @@ that fails is logged (`Tending the <game> state of <player> failed`), and the
 others are tended all the same. Leaf stopped with jobs waiting has written
 nothing of them: every state is as last stored, only behind, and the next Leaf
 runs it on from there. A sweep whose tends have all ended logs `tended`: how
-many states, and how long they took. On the development machine, tending the
-largest kept yard (228 pieces) takes 9.5 ms of work two and a half minutes
-behind and 0.9 s eight hours behind, so half a core keeps about 7,900 such
-yards up; its owner opening it eight hours behind, on a Leaf just started,
-waits about 2 s. The load test (`apps/api/test/load/`, under Live) ran Leaf
+many states, and how long they took. On the development machine, running the
+largest staged yard (516 pieces) on takes 59 ms of work for each hour of its
+time (`bun packages/factory/bench.ts --hours`): about 2.5 ms two and a half
+minutes behind and 0.5 s eight hours behind, so half a core of running on keeps
+about 30,000 such yards up; its owner opening it eight hours behind, on a Leaf
+just started, waits about 0.8 s. The load test (`apps/api/test/load/`, under Live) ran Leaf
 limited to four cores and 16 GB, as the server is, with 300 players walking
 about the town and twenty owners' pages each sending a batch of one to eight
 commands a second: the batches took 3.3 ms at the median, 14 ms at the 95th
 percentile and 22 ms at the 99th, and fifty visits to one of those yards at once
-were answered within 24 ms. Tending fifty of the largest yards eight hours behind
-took 273 s, 2.2 s of work each; meanwhile fifty visits to one of them waited
-6.9 s for it to be brought up, and a batch to another yard waited as long behind
-them.
+were answered within 24 ms. Run again without the limit, tending fifty of the
+largest yards eight hours behind took 34 s at one core, 0.54 s of work each;
+meanwhile fifty visits to one of them waited 0.77 s for it to be brought up, and
+the owners' commands were answered within 27 ms at the 99th percentile.
 
 **The town and the camp** keep the camp (what stands where, each thing by an
 id of its own, the tray of things not set out, the letters, the pets),

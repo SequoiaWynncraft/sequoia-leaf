@@ -530,7 +530,7 @@ function sendOut(y: Yard, i: number, r: number, wire: Wire): void {
 
 // ---------- waiting ----------
 
-/** The tiles that wait, every one forgotten if a command has changed the yard since they were last. */
+/** The tiles that wait: none, if a command has changed the yard since they were last forgotten. */
 function waitingOf(y: Yard, wire: Wire): Uint8Array {
   if (wire.waitingFrom !== y.rev) {
     wire.waiting.fill(0);
