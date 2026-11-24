@@ -37,6 +37,9 @@ export function heldAgain(e: Pick<KeyboardEvent, "repeat" | "code">): boolean {
 /** The keys that press a button with the keyboard on it. */
 const PRESSES: ReadonlySet<string> = new Set(["Enter", "NumpadEnter", "Space"]);
 
+/** Whether a key, by its place, presses a button that has the keyboard: Enter and Space do. */
+export const pressesButtons = (code: string): boolean => PRESSES.has(code);
+
 /**
  * The keys down now that press a button, each by the press that put it down: to ask later whether
  * any is down still (`stillHeld`). Any other key held (Shift, a walking key) presses nothing.

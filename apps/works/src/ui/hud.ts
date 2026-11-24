@@ -18,6 +18,7 @@ import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 
+import { WORKS_KEYS, type WorksAction } from "../keymap.ts";
 import { S } from "../state.ts";
 import { collect, keepScreen } from "../yard.ts";
 import { nodeKind, wantsShort } from "./goal.ts";
@@ -129,27 +130,33 @@ function tracker(): () => void {
 
 function bookButtons(): () => void {
   const host = $("books");
-  const make = (id: PanelId, art: YardIcon, title: (tier: number) => string, key: string, about?: () => string) => {
+  const make = (
+    id: PanelId,
+    art: YardIcon,
+    title: (tier: number) => string,
+    act: WorksAction,
+    about?: () => string,
+  ) => {
     const b = iconButton("wood pip", yardIcon(art), title(S.world.open.tier), () => {
       togglePanel(id);
     });
     b.dataset.book = id;
-    tip(b, () => `${title(S.world.open.tier)} (${key})`, about);
+    tip(b, () => `${title(S.world.open.tier)} (${WORKS_KEYS.name(act)})`, about);
     books.set(id, b);
     titles.set(id, title);
     if (!S.visiting || id === "board") host.append(b);
     return b;
   };
-  const ordersBtn = make("orders", "orders", () => "Orders", "O");
-  make("board", "board", () => "Top yards", "T");
-  const tierBtn = make("tier", "projects", tierName, "P");
-  const researchBtn = make("research", "research", () => "Research", "L");
-  const depotBtn = make("depot", "depot", () => "The depot", "I");
+  const ordersBtn = make("orders", "orders", () => "Orders", "orders");
+  make("board", "board", () => "Top yards", "board");
+  const tierBtn = make("tier", "projects", tierName, "tier");
+  const researchBtn = make("research", "research", () => "Research", "research");
+  const depotBtn = make("depot", "depot", () => "The depot", "depot");
   // The same sheet once the yard owns a second plot, with its map and its list of trouble: the yard's button.
   const yardBtn = iconButton("wood pip bad", yardIcon("map"), "The yard", () => {
     togglePanel("depot");
   });
-  tip(yardBtn, "The yard (M)");
+  tip(yardBtn, () => `The yard (${WORKS_KEYS.name("move")})`);
   if (!S.visiting) host.append(yardBtn);
   return shows(
     () => ({

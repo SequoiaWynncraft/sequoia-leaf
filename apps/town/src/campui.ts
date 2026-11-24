@@ -39,6 +39,7 @@ import {
   slot,
   when,
 } from "./hud.ts";
+import { TOWN_KEYS, type TownAction } from "./keymap.ts";
 import { doNow, mine, town, visiting } from "./leaf.ts";
 import { mailbox } from "./mailbox.ts";
 import { MY_PETS, PET_ABOUT, PET_CHOICE } from "./pets.ts";
@@ -77,10 +78,10 @@ const ICONS: Readonly<Record<CampPanel, CampIcon>> = {
 const upTo = (have: number, need: number): string => (have >= need ? "Done" : `${have} / ${need}`);
 
 /** A button for the thing in hand: on a phone its picture alone, so its name and key are said by its tip too. */
-function handButton(picture: "turn" | "tray", name: string, key: string, does: () => void): HTMLButtonElement {
+function handButton(picture: "turn" | "tray", name: string, act: TownAction, does: () => void): HTMLButtonElement {
   const b = button("wood sm", [glyph(picture), el("span", "t", { text: name })], does);
   b.setAttribute("aria-label", name);
-  tip(b, name, `Key: ${key}`);
+  tip(b, name, () => `Key: ${TOWN_KEYS.name(act)}`);
   return b;
 }
 
@@ -308,8 +309,8 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
       ...(held
         ? [
             el("span", "k-gold name", { text: held.name }),
-            ...(held.turns ? [handButton("turn", "Rotate", "R", () => s.turn())] : []),
-            ...(held.stays ? [] : [handButton("tray", "Put away", "Delete", () => s.stow())]),
+            ...(held.turns ? [handButton("turn", "Rotate", "rotate", () => s.turn())] : []),
+            ...(held.stays ? [] : [handButton("tray", "Put away", "stow", () => s.stow())]),
           ]
         : [el("span", "k-title", { text: "Storage" })]),
     );

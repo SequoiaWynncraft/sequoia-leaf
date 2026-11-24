@@ -18,7 +18,9 @@
  * - `["finger", "down" | "move" | "up", "expr"]` does the same with a finger instead of the mouse;
  * - `["key", "1"]` presses a key as a person does (a letter, `" "`, or a key by its name, such as
  *   `"Escape"` or `"Enter"`; Enter and Space press a focused button); `["hold", "Enter", ms]` holds
- *   one down for `ms`, as a person does: the browser says it again every 33 ms until it comes up;
+ *   one down for `ms`, as a person does: the browser says it again every 33 ms until it comes up.
+ *   Either takes the key's place last, for a keyboard other than a US one: `["key", "q", "KeyA"]` is
+ *   AZERTY's Q;
  *   `["eval", "expr"]` prints an expression's value;
  * - `["media", "prefers-reduced-motion", "reduce"]` has the page see a media feature so (`""` for as
  *   the machine has it);
@@ -43,18 +45,19 @@ type Step =
   | ["downAt" | "moveAt" | "upAt", string]
   | ["finger", "down" | "move" | "up", string]
   | ["click", string]
-  | ["key", string]
-  | ["hold", string, number]
+  | ["key", string, string?]
+  | ["hold", string, number, string?]
   | ["shot", string]
   | ["audit", string?]
   | ["media", string, string]
   | ["eval", string];
 
-/** A key going down as a keyboard sends it: what it types, if anything, and where it sits (a US keyboard's place for a letter or digit). */
-function keyDown(key: string): { type: string; key: string; code: string; text: string } {
+/** A key going down as a keyboard sends it: what it types, if anything, and where it sits (`at`, else a US keyboard's place for a letter or digit). */
+function keyDown(key: string, at?: string): { type: string; key: string; code: string; text: string } {
   const text = key === "Enter" ? "\r" : key.length === 1 ? key : "";
   const code =
-    key === " " ? "Space" : /^[a-z]$/i.test(key) ? `Key${key.toUpperCase()}` : /^\d$/.test(key) ? `Digit${key}` : key;
+    at ??
+    (key === " " ? "Space" : /^[a-z]$/i.test(key) ? `Key${key.toUpperCase()}` : /^\d$/.test(key) ? `Digit${key}` : key);
   return { type: text ? "keyDown" : "rawKeyDown", key, code, text };
 }
 
@@ -68,7 +71,9 @@ function isStep(v: unknown): v is Step {
   if (kind === "tap" || kind === "down" || kind === "move" || kind === "up")
     return typeof a === "number" && typeof b === "number";
   if (kind === "wait") return typeof a === "number";
-  if (kind === "hold") return typeof a === "string" && typeof b === "number";
+  if (kind === "hold")
+    return typeof a === "string" && typeof b === "number" && (c === undefined || typeof c === "string");
+  if (kind === "key") return typeof a === "string" && (b === undefined || typeof b === "string");
   if (kind === "finger") return (a === "down" || a === "move" || a === "up") && typeof b === "string";
   if (kind === "audit") return a === undefined || typeof a === "string";
   if (kind === "media") return typeof a === "string" && typeof b === "string";
@@ -257,14 +262,14 @@ async function run(step: Step): Promise<void> {
     }
     case "key": {
       // A key that types something (a letter, Space, Enter) sends it too, and every key its place, as a keyboard does.
-      const down = keyDown(step[1]);
+      const down = keyDown(step[1], step[2]);
       await send("Input.dispatchKeyEvent", down);
       await send("Input.dispatchKeyEvent", { type: "keyUp", key: down.key, code: down.code });
       return;
     }
     case "hold": {
-      const [, key, ms] = step;
-      const down = keyDown(key);
+      const [, key, ms, at] = step;
+      const down = keyDown(key, at);
       const { code } = down;
       await send("Input.dispatchKeyEvent", down);
       for (let held = 33; held < ms; held += 33) {

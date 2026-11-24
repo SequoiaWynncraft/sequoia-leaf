@@ -3,23 +3,14 @@
  * The table is played with the pointer and a finger, so its keys are few.
  */
 import { heldAgain } from "@sequoia-leaf/kit/keys.ts";
-import { type KeyShelf, type Menu, settingsMenu } from "@sequoia-leaf/kit/menu.ts";
+import { type Menu, settingsMenu } from "@sequoia-leaf/kit/menu.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 
 import { handHooks, letGoHand } from "./hand.ts";
+import { RAID_KEYS } from "./keymap.ts";
 import { RAID_SOUNDS } from "./sounds.ts";
 import { sheetUp } from "./ui/fightsheet.ts";
 import { pageOver, showPage } from "./ui/pages.ts";
-
-const KEYS: readonly KeyShelf[] = [
-  {
-    name: "At the table",
-    lines: [
-      { keys: ["Tab", "Enter"], does: "Go from button to button, and press one" },
-      { keys: ["Escape"], does: "Put down, put away, or this menu" },
-    ],
-  },
-];
 
 /**
  * Makes the table's menu, for as long as `scope` stands: while it is up the table takes no presses,
@@ -32,7 +23,7 @@ export function startSettings(scope: Scope, lookBack: () => void): Menu {
   const menu = settingsMenu(
     {
       sounds: [{ name: "The Little Raid", sounds: RAID_SOUNDS }],
-      keys: KEYS,
+      keys: RAID_KEYS,
       opened: (open) => {
         if (open) letGoHand();
       },
@@ -41,7 +32,7 @@ export function startSettings(scope: Scope, lookBack: () => void): Menu {
   );
   handHooks.paused = () => menu.isOpen;
   scope.on(window, "keydown", (e) => {
-    if (e.key !== "Escape" || e.defaultPrevented || menu.isOpen || heldAgain(e)) return;
+    if (RAID_KEYS.of(e)?.id !== "back" || e.defaultPrevented || menu.isOpen || heldAgain(e)) return;
     if (pageOver()) showPage(null);
     else if (sheetUp() === "again") lookBack();
     else if (!letGoHand()) menu.open();

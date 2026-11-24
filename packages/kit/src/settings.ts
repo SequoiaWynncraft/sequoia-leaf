@@ -1,6 +1,6 @@
 /**
- * The player's settings for how this device plays: how loud, whether the sound is off, and which
- * kinds of sound are switched off. They are kept in this browser (`keep.ts`), so the town and every
+ * The player's settings for how this device plays: how loud, whether the sound is off, which kinds
+ * of sound are switched off, and which keyboard they have. They are kept in this browser (`keep.ts`), so the town and every
  * game on this device share them, and an open page hears another page's change at once through the
  * browser's `storage` event: the town, a game in its frame, another tab. None of it is the player's
  * game; that is Leaf's.
@@ -16,6 +16,7 @@ export const SETTING_KEYS = {
   volume: "leaf.settings.volume.v1",
   muted: "town.muted",
   quiet: "leaf.settings.quiet.v1",
+  keyboard: "leaf.settings.keyboard.v1",
 } as const;
 
 /** The loudest the volume goes, and where it starts: as loud as the games have always been. */
@@ -32,6 +33,8 @@ export interface Settings {
   readonly muted: boolean;
   /** The kinds of sound switched off, by id (`sound.ts`). */
   readonly quiet: ReadonlySet<string>;
+  /** The keyboard the player chose, by its id (`keyboard.ts` says which there are); none until they have. */
+  readonly keyboard: string | null;
 }
 
 /** A volume as kept, or `LOUDEST` for none or anything else. */
@@ -57,11 +60,13 @@ const read = (): Settings => ({
   volume: readVolume(keptText(SETTING_KEYS.volume)),
   muted: keptText(SETTING_KEYS.muted) === "1",
   quiet: readQuiet(keptText(SETTING_KEYS.quiet)),
+  keyboard: keptText(SETTING_KEYS.keyboard),
 });
 
 const same = (a: Settings, b: Settings): boolean =>
   a.volume === b.volume &&
   a.muted === b.muted &&
+  a.keyboard === b.keyboard &&
   a.quiet.size === b.quiet.size &&
   [...a.quiet].every((id) => b.quiet.has(id));
 
@@ -90,6 +95,13 @@ class Store {
     if (muted === this.#now.muted) return;
     this.#set({ ...this.#now, muted });
     keepText(SETTING_KEYS.muted, muted ? "1" : "0");
+  }
+
+  /** Keeps the keyboard the player has, by its id. */
+  setKeyboard(id: string): void {
+    if (id === this.#now.keyboard) return;
+    this.#set({ ...this.#now, keyboard: id });
+    keepText(SETTING_KEYS.keyboard, id);
   }
 
   /** Switches one kind of sound (by its id) on or off. */

@@ -1549,14 +1549,48 @@ button.k-info-chip:hover .k-chip {
   font: var(--f-ui);
   color: var(--k-cream);
 }
-/* A key that moves you on this keyboard does nothing else here: its line says so. */
-.k-settings-key.taken :is(.k-cap, .k-settings-does) {
-  opacity: 0.55;
+/* The keyboard the player has, over the keys: its name, and the list it is chosen from. */
+.k-settings-keyboard {
+  padding-block: calc(var(--u) * 4);
 }
-.k-settings-taken {
-  display: block;
-  font: var(--f-small);
-  color: var(--k-dim);
+.k-settings-keyboard > .k-name {
+  flex: 1;
+  min-width: 0;
+}
+/* The keys under it are rows of the page, spaced as the page spaces them. */
+.k-settings-keys {
+  display: contents;
+}
+/* A list to choose from: its choice in a groove sunk into the board, an arrow at its end. The browser opens its own list from it. */
+.k-select-box {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.k-select {
+  appearance: none;
+  min-width: calc(var(--u) * 72);
+  min-height: calc(var(--u) * 18);
+  box-sizing: border-box;
+  padding: 0 calc(var(--u) * 18) 0 calc(var(--u) * 5);
+  border: calc(var(--u) * 2) solid transparent;
+  border-image: var(--k-f-groove) 2 fill / calc(var(--u) * 2);
+  background: none;
+  font: var(--f-name);
+  color: var(--k-cream);
+  cursor: pointer;
+}
+.k-select:hover {
+  filter: brightness(1.2);
+}
+.k-select option {
+  background: var(--k-plum);
+  color: var(--k-cream);
+}
+.k-select-box > .k-i {
+  position: absolute;
+  right: calc(var(--u) * 5);
+  pointer-events: none;
 }
 /* A key as it is printed on a keyboard: a parchment cap, its letter in ink. */
 .k-cap {

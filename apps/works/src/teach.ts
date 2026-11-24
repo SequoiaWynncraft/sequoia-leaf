@@ -46,6 +46,8 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 
+import { WORKS_KEYS } from "./keymap.ts";
+
 export interface Nudge {
   /** Which lesson this is; one that has been taken is not given again. */
   id: string;
@@ -217,7 +219,7 @@ export function nudge(
   if (!told("grades") && at.hand !== null && isGraded(at.hand) && highest(w.open, at.hand) > 1)
     return {
       id: "grades",
-      text: finger ? "Choose the grade to build here." : "Choose the grade to build here, or press G.",
+      text: `Choose the grade to build here${finger ? "" : `, or press ${WORKS_KEYS.name("grade")}`}.`,
       x: cx,
       y: cy - 1,
       tool: null,

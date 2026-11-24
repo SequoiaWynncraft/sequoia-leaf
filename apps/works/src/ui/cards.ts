@@ -189,8 +189,11 @@ export interface StandingPrint extends SorterPrint {
   readonly open: boolean;
   /** For the depot: the tier whose screen is there, or nothing. */
   readonly tier: number | null;
-  /** Whether it can be picked up as the tool in hand (Another). */
-  readonly another: boolean;
+  /**
+   * What the keys of its buttons are called on the player's keyboard (`keymap.ts`): Another's only
+   * where it can be picked up as the tool in hand.
+   */
+  readonly keys: { readonly rotate: string; readonly flip: string; readonly another: string | null };
   /** What taking it away gives back, and whether it was one of the pieces to hand. */
   readonly refund: number;
   readonly free: boolean;
@@ -547,12 +550,12 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
       });
     // What takes things in from every side and hands none on has no way to face.
     if (k !== TUNNEL && k !== PYLON && k !== WHEEL && k !== BOILER && k !== STUDY && k !== STOP)
-      actions.push({ label: "Rotate", hint: "Rotate (R)", on: () => hands.turn(x, y) });
-    if (k === SORTER) actions.push({ label: "Flip", hint: "Flip (X)", on: () => hands.flip(x, y) });
-    if (p.another)
+      actions.push({ label: "Rotate", hint: `Rotate (${p.keys.rotate})`, on: () => hands.turn(x, y) });
+    if (k === SORTER) actions.push({ label: "Flip", hint: `Flip (${p.keys.flip})`, on: () => hands.flip(x, y) });
+    if (p.keys.another !== null)
       actions.push({
         label: "Another",
-        hint: "Another (Q)",
+        hint: `Another (${p.keys.another})`,
         about: `Picks the ${nameOf(k).toLowerCase()} as your tool, facing the same way.`,
         on: () => hands.another(x, y),
       });

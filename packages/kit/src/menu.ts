@@ -6,7 +6,8 @@
  *
  * - Sound: the volume, sound on or off, and each kind of sound switched on or off on its own (the
  *   page's own kinds under its name, then those every game shares), each with a button to hear it.
- * - Keys: what each key does on this page.
+ * - Keys: which keyboard the player has, and what each key does on this page, named as that
+ *   keyboard prints it (`keyboard.ts`).
  * - Whatever tabs a page adds of its own (`MenuOf.tabs`).
  *
  * What it changes is the player's settings on this device (`settings.ts`), which every open page
@@ -15,6 +16,7 @@
  */
 import { dialog } from "./dialog.ts";
 import { el, icon } from "./dom.ts";
+import { keyboard, type KeyList, layoutOf, LAYOUTS, nameOf } from "./keyboard.ts";
 import type { Scope } from "./scope.ts";
 import { LOUDEST, type Settings, settings } from "./settings.ts";
 import { sample, sfx, SHARED_SOUNDS, type SoundKind, unlock } from "./sound.ts";
@@ -24,22 +26,6 @@ import { tip } from "./tip.ts";
 export interface SoundShelf {
   readonly name: string;
   readonly sounds: readonly SoundKind[];
-}
-
-/**
- * One line of the Keys tab: its keys and what they do. A key is a key's place on the keyboard as
- * `KeyboardEvent.code` names it (`KeyW`), shown as this keyboard prints it where the browser can
- * say; a letter it types ("R"); or words for one ("Esc", "1 to 9").
- */
-export interface KeyLine {
-  readonly keys: readonly string[];
-  readonly does: string;
-}
-
-/** Lines of the Keys tab under one heading. */
-export interface KeyShelf {
-  readonly name: string;
-  readonly lines: readonly KeyLine[];
 }
 
 /**
@@ -56,10 +42,8 @@ export interface MenuTab {
 export interface MenuOf {
   /** The page's own kinds of sound, by heading. The kinds every game shares come after them. */
   readonly sounds: readonly SoundShelf[];
-  /** The page's keys, by heading; with none, there is no Keys tab. */
-  readonly keys: readonly KeyShelf[];
-  /** The keys that move about on the page, by their place (`KeyW`): a letter printed on one of them here is taken. */
-  readonly moves?: readonly string[];
+  /** The page's keymap: the Keys tab is drawn from it. */
+  readonly keys: KeyList;
   /** Tabs of the page's own, after Sound and Keys. */
   readonly tabs?: readonly MenuTab[];
   /** Told as the menu opens (true) and is put away (false): the page lets go of held keys and takes no play while it is open. */
@@ -78,53 +62,6 @@ export interface Menu {
 
 /** How often the volume slider sounds a tick while it is dragged, at most: often enough to hear the level, not a rattle. */
 const TICK_MS = 160;
-
-/** Words for a key's place where the browser cannot say how this keyboard prints it. */
-const KEY_WORDS: Readonly<Record<string, string>> = {
-  Escape: "Esc",
-  Space: "Space",
-  Enter: "Enter",
-  Delete: "Del",
-  ArrowUp: "Up",
-  ArrowDown: "Down",
-  ArrowLeft: "Left",
-  ArrowRight: "Right",
-};
-
-/** How this keyboard prints each key, by its place; empty where the browser cannot say. */
-type Printed = ReadonlyMap<string, string>;
-
-/** How a key is shown: its letter on this keyboard where `printed` has it, else from its place's name, else as given. */
-function keyName(key: string, printed: Printed): string {
-  const own = printed.get(key);
-  if (own) return own.toUpperCase();
-  const word = KEY_WORDS[key];
-  if (word) return word;
-  const letter = /^Key([A-Z])$/.exec(key)?.[1] ?? /^Digit(\d)$/.exec(key)?.[1];
-  return letter ?? key;
-}
-
-const isIterable = (v: unknown): v is Iterable<unknown> =>
-  typeof v === "object" && v !== null && typeof Reflect.get(v, Symbol.iterator) === "function";
-
-/** How this keyboard prints each key, where the browser can say (Chromium can, as a map-like; others cannot). */
-async function printedKeys(): Promise<Printed> {
-  const none = new Map<string, string>();
-  const board: unknown = Reflect.get(navigator, "keyboard");
-  if (typeof board !== "object" || board === null) return none;
-  const ask: unknown = Reflect.get(board, "getLayoutMap");
-  if (typeof ask !== "function") return none;
-  try {
-    const map: unknown = await Reflect.apply(ask, board, []);
-    if (!isIterable(map)) return none;
-    const pairs = [...map].filter(
-      (e): e is [string, string] => Array.isArray(e) && typeof e[0] === "string" && typeof e[1] === "string",
-    );
-    return new Map(pairs);
-  } catch {
-    return none;
-  }
-}
 
 /** A switch: on or off, said as `name`, changed by a press. Gives back how to show it as it now is. */
 function toggle(name: string, on: () => boolean, flip: (on: boolean) => void): [HTMLButtonElement, () => void] {
@@ -173,26 +110,41 @@ const shelf = (name: string, rows: readonly HTMLElement[]): HTMLElement[] => [
   el("ul", "k-settings-list", {}, ...rows),
 ];
 
-/**
- * A line of the Keys tab: its keys as printed on this keyboard, and what they do. A line whose keys
- * are all letters this keyboard prints on the keys that move about (`moving`) is taken here: those
- * keys move instead, and the line says so.
- */
-function keyRow(line: KeyLine, printed: Printed, moving: ReadonlySet<string>): HTMLElement {
-  const taken = line.keys.every((k) => /^[A-Z]$/.test(k) && moving.has(k));
-  return el(
+/** A line of the Keys tab: its keys, as this keyboard names them, and what they do. */
+const keyRow = (line: { readonly does: string; readonly keys: readonly string[] }): HTMLElement =>
+  el(
     "li",
-    `k-settings-key${taken ? " taken" : ""}`,
+    "k-settings-key",
     {},
-    el("span", "k-settings-caps", {}, ...line.keys.map((k) => el("kbd", "k-cap", { text: keyName(k, printed) }))),
-    el(
-      "span",
-      "k-settings-does",
-      {},
-      line.does,
-      taken ? el("span", "k-settings-taken", { text: "That key moves you on this keyboard." }) : null,
-    ),
+    el("span", "k-settings-caps", {}, ...line.keys.map((k) => el("kbd", "k-cap", { text: k }))),
+    el("span", "k-settings-does", { text: line.does }),
   );
+
+/** The Keys tab's first row: which keyboard the player has, chosen from a list. Gives back how to show it as it now is. */
+function keyboardRow(): [HTMLElement, () => void] {
+  const pick = el(
+    "select",
+    "k-select",
+    {
+      onchange: () => {
+        const chosen = layoutOf(pick.value);
+        if (chosen) keyboard.choose(chosen);
+      },
+    },
+    ...LAYOUTS.map((l) => el("option", "", { value: l.id, text: l.name })),
+  );
+  const row = el(
+    "label",
+    "k-card k-settings-keyboard",
+    {},
+    el("span", "k-name", { text: "Keyboard" }),
+    el("span", "k-select-box", {}, pick, icon("down")),
+  );
+  const paint = (): void => {
+    pick.value = keyboard.layout;
+  };
+  paint();
+  return [row, paint];
 }
 
 /** The menu as a page has it: its panel over a page made still, its tabs, the tab shown, and what is held while it is open. */
@@ -215,13 +167,12 @@ class SettingsMenu implements Menu {
   /** While open: what lets go of the menu's layer (`dialog`). */
   #put: (() => void) | null = null;
   #lastTick = 0;
-  #printed: Printed = new Map();
 
   constructor(of: MenuOf, scope: Scope) {
     this.#of = of;
     this.#tabsOf = [
       { id: "sound", name: "Sound", draw: (keep) => this.#soundPage(keep) },
-      ...(of.keys.length > 0 ? [{ id: "keys", name: "Keys", draw: () => this.#keysPage() }] : []),
+      { id: "keys", name: "Keys", draw: (keep) => this.#keysPage(keep) },
       ...(of.tabs ?? []),
     ];
     this.#at = "sound";
@@ -255,13 +206,6 @@ class SettingsMenu implements Menu {
     scope.on(window, "pagehide", () => {
       this.close();
     });
-    void this.#readKeys();
-  }
-
-  /** Learns how this keyboard prints its keys, where the browser can say, and shows them if the Keys tab is up. */
-  async #readKeys(): Promise<void> {
-    this.#printed = await printedKeys();
-    if (this.#put && this.#at === "keys") this.#draw();
   }
 
   gear(): HTMLElement {
@@ -279,7 +223,7 @@ class SettingsMenu implements Menu {
       },
       icon("gear"),
     );
-    tip(gear, "Settings (Esc)");
+    tip(gear, () => `Settings (${nameOf("Escape")})`);
     this.#gears.add(gear);
     return gear;
   }
@@ -433,15 +377,18 @@ class SettingsMenu implements Menu {
     return out;
   }
 
-  #keysPage(): HTMLElement[] {
-    const printed = this.#printed;
-    const moving = new Set((this.#of.moves ?? []).flatMap((code) => printed.get(code)?.toUpperCase() ?? []));
-    return this.#of.keys.flatMap((s) =>
-      shelf(
-        s.name,
-        s.lines.map((line) => keyRow(line, printed, moving)),
-      ),
-    );
+  /** The Keys tab: the keyboard, then the page's keys as it names them, both as the keyboard now is, whichever page chose it. */
+  #keysPage(keep: (stop: () => void) => void): HTMLElement[] {
+    const [board, paintBoard] = keyboardRow();
+    const lines = el("div", "k-settings-keys");
+    const paint = (): void => {
+      paintBoard();
+      lines.replaceChildren(...this.#of.keys.shelves().flatMap((s) => shelf(s.name, s.lines.map(keyRow))));
+      this.#cue();
+    };
+    paint();
+    keep(keyboard.listen(paint));
+    return [board, lines];
   }
 
   /** The volume: the speaker that turns the sound off and on, the slider, and the level as a number. Gives back how to show it as the settings now are. */
