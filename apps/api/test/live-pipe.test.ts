@@ -37,6 +37,7 @@ const writerHeldBy = (written: Written, open: Deferred.Deferred<void>): Socket.W
 const settle = Effect.repeat(Effect.yieldNow, { times: 20 });
 
 const binary = (first: number) => new Uint8Array([first, 0, 0]);
+const always = () => true;
 
 describe("a connection's pipe", () => {
   it("writes what it is sent in the order sent, texts and binary frames alike, and closes after them", async () => {
@@ -95,7 +96,7 @@ describe("a connection's pipe", () => {
     expect(written.at(-1)).toBe(`close ${CLOSE.policy} too far behind`);
   });
 
-  it("writes a frame from a fiber there and then when nothing waits, and behind whatever does", async () => {
+  it("writes a frame from a fiber there and then when nothing waits, and behind whatever does, never waiting itself", async () => {
     const written: Written = [];
     await Effect.runPromise(
       Effect.scoped(
@@ -103,25 +104,62 @@ describe("a connection's pipe", () => {
           const open = yield* Deferred.make<void>();
           const pipe = yield* Pipe.make(writerHeldBy(written, open), LIVE_VERSION);
           yield* Effect.forkScoped(pipe.pump());
-          // A text in the line, taken and its write held: a snapshot written meanwhile waits behind it.
+          // A text in the line, taken and its write held: a snapshot written meanwhile goes behind
+          // it, and the fiber writing it goes on.
           pipe.send("joined");
           yield* settle;
-          yield* pipe.write(binary(2));
+          yield* pipe.writeIf(always, binary(2));
           expect(written).toEqual([]);
           yield* Deferred.succeed(open, undefined);
           yield* settle;
           expect(written).toEqual(["joined", 2]);
           // Nothing waiting: written by the fiber writing it, before the pump has had a turn.
-          yield* pipe.write(binary(3));
+          yield* pipe.writeIf(always, binary(3));
           expect(written).toEqual(["joined", 2, 3]);
           pipe.close(CLOSE.done, "done");
-          yield* pipe.write(binary(4));
+          yield* pipe.writeIf(always, binary(4));
           yield* settle;
         }),
       ),
     );
 
     expect(written).toEqual(["joined", 2, 3, `close ${CLOSE.done} done`]);
+  });
+
+  it("writes a frame no longer for the page not at all, and one being written before anything sent meanwhile", async () => {
+    const written: Written = [];
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const open = yield* Deferred.make<void>();
+          // The first snapshot's write is held: the socket takes a while over it.
+          const writer: Socket.Writer = {
+            write: (frame) =>
+              frame instanceof Uint8Array && frame[0] === 2
+                ? Effect.andThen(
+                    Deferred.await(open),
+                    Effect.sync(() => void written.push(said(frame))),
+                  )
+                : Effect.sync(() => void written.push(said(frame))),
+            writeAll: (frames) => Effect.sync(() => void written.push(...frames.map(said))),
+          };
+          const pipe = yield* Pipe.make(writer, LIVE_VERSION);
+          yield* Effect.forkScoped(pipe.pump());
+          yield* pipe.writeIf(() => false, binary(1));
+          const writing = yield* Effect.forkScoped(pipe.writeIf(always, binary(2)));
+          yield* settle;
+          // Sent while the snapshot is being written (the page's next room's welcome): after it.
+          pipe.send("welcome");
+          yield* settle;
+          expect(written).toEqual([]);
+          yield* Deferred.succeed(open, undefined);
+          yield* Fiber.join(writing);
+          yield* settle;
+        }),
+      ),
+    );
+
+    expect(written).toEqual([2, "welcome"]);
   });
 
   it(`counts a frame written from a fiber behind others as waiting, and closes past ${MOST_WAITING}`, async () => {
@@ -134,9 +172,9 @@ describe("a connection's pipe", () => {
           yield* Effect.forkScoped(pipe.pump());
           pipe.send("first");
           yield* settle;
-          for (let i = 1; i < MOST_WAITING; i++) yield* pipe.write(binary(2));
+          for (let i = 1; i < MOST_WAITING; i++) yield* pipe.writeIf(always, binary(2));
           expect(pipe.closedWith).toBeNull();
-          yield* pipe.write(binary(9));
+          yield* pipe.writeIf(always, binary(9));
           return pipe;
         }),
       ),

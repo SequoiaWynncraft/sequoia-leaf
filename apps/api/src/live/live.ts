@@ -34,10 +34,20 @@ import { AppConfig, LIVE_MOST_PLAYERS } from "../config.ts";
 import { Tallies } from "../tally/store.ts";
 import { AboutTold, CHANGES_FROM } from "./about.ts";
 import { type Census, LiveCounts, type LiveLine, reportLive } from "./counts.ts";
-import { graceOver, handedOver, handsOver, linked, NO_LINK, type Stop, stopped, unlinked } from "./lifecycle.ts";
+import {
+  type Grace,
+  graceRunsOut,
+  handedOver,
+  handsOver,
+  linked,
+  NO_LINK,
+  type Stop,
+  stopped,
+  unlinked,
+} from "./lifecycle.ts";
 import { Pipe } from "./pipe.ts";
 import { NOWHERE, Player } from "./player.ts";
-import { type Room, Rooms } from "./room.ts";
+import { type Room, Rooms, type Snapshot } from "./room.ts";
 import { Watchers } from "./watchers.ts";
 
 /**
@@ -309,7 +319,7 @@ export class Live extends Context.Service<
           if (!inPlace(p)) continue;
           const frame = p.speaks >= CHANGES_FROM ? frames.changed : frames.whole;
           p.send(frame);
-          counts.sent("about", frame.length);
+          counts.sent("about", 1, frame.length);
         }
       });
       yield* Effect.forkScoped(Effect.forever(quietly("live about", Effect.provideService(tellAbout, Visits, visits))));
@@ -333,7 +343,7 @@ export class Live extends Context.Service<
         const whole = about.whole();
         if (whole === null || !inPlace(p) || p.speaks < CHANGES_FROM) return;
         p.send(whole);
-        counts.sent("about", whole.length);
+        counts.sent("about", 1, whole.length);
       };
 
       /**
@@ -433,48 +443,44 @@ export class Live extends Context.Service<
       // ---- time ----
 
       /**
-       * A room's snapshot written to everybody in it, from the fiber this runs in. Whoever has left
-       * the room by the time their turn comes is passed over: the fiber may let others run between
-       * one write and the next, and a page in another room by then must never hear this one's.
+       * A room's snapshot written to everybody it was made for, from the fiber this runs in, each on
+       * the connection they had then, and only if it is still for them as their connection is held
+       * for it (`Room.reaches`): the fiber may let others run between one write and the next, and a
+       * page in another room by then, or on another connection, must never hear this one's.
        */
-      const tellRoom = (room: Room, frame: Uint8Array) =>
-        Effect.forEach(
-          [...room.occupants.values()],
-          (o) =>
-            Effect.suspend(() => {
-              if (!room.has(o)) return Effect.void;
-              counts.sent("motion", frame.byteLength);
-              return o.outbox.write(frame);
-            }),
-          { discard: true },
-        );
+      const tellRoom = (room: Room, snapshot: Snapshot) => {
+        counts.sent("motion", snapshot.to.length, snapshot.frame.byteLength * snapshot.to.length);
+        return Effect.forEach(snapshot.to, (r) => r.connection.writeIf(() => room.reaches(r), snapshot.frame), {
+          discard: true,
+        });
+      };
 
       // Every tick, each room with work (`Room`): anybody shown walking whose game has gone quiet
       // stops, and what changed goes to everyone in it.
       const flush = Effect.flatMap(Clock.currentTimeMillis, (now) =>
         Effect.suspend(() => {
           tick++;
-          const told: [Room, Uint8Array][] = [];
+          const told: [Room, Snapshot][] = [];
           for (const room of rooms.busy()) {
-            const frame = room.flush(tick, now);
-            if (frame) told.push([room, frame]);
+            const snapshot = room.flush(tick, now);
+            if (snapshot) told.push([room, snapshot]);
           }
           counts.ticked(told.length);
-          return Effect.forEach(told, ([room, frame]) => tellRoom(room, frame), { discard: true });
+          return Effect.forEach(told, ([room, snapshot]) => tellRoom(room, snapshot), { discard: true });
         }),
       );
       yield* Effect.forkScoped(Effect.repeat(flush, Schedule.fixed(TICK)));
 
       /**
-       * A player's grace, begun as their connection went: once it is over, if they are in it still
-       * (no connection of theirs has come back, nor dropped and begun a grace of its own), they
-       * leave their room, and have no connection.
+       * A player's grace period, begun as their connection went, runs out once `graceMs` has passed:
+       * if they are in it still (`graceRunsOut`), they leave their room, last seen now, and have no
+       * connection.
        */
-      const graceEnds = (p: Player) =>
+      const graceEnds = (p: Player, grace: Grace) =>
         Effect.sleep(Duration.millis(tuning.graceMs)).pipe(
           Effect.andThen(Clock.currentTimeMillis),
           Effect.map((now) => {
-            if (!graceOver(p.link, now, tuning.graceMs)) return;
+            if (!graceRunsOut(p.link, grace)) return;
             p.link = NO_LINK;
             leave(p, now);
           }),
@@ -550,10 +556,10 @@ export class Live extends Context.Service<
                 counts.closed(pipe.closedWith !== null ? "leaf" : clean ? "page" : "drop");
                 const after = unlinked(p.link, pipe, pipe.closedWith === CLOSE.signedOut, now, clean);
                 if (after === null) return Effect.void;
-                p.link = after.link;
-                if (after.leaves) return Effect.sync(() => leave(p, now));
+                p.link = after;
+                if (after.state !== "grace") return Effect.sync(() => leave(p, now));
                 if (p.place.at === "room") p.place.room.halt(p.place.occupant.member.id);
-                return Effect.asVoid(Effect.forkIn(graceEnds(p), lives));
+                return Effect.asVoid(Effect.forkIn(graceEnds(p, after.grace), lives));
               }),
             ),
           );

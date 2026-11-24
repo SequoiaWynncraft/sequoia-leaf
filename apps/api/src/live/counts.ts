@@ -80,10 +80,10 @@ export class LiveCounts {
     this.totals.roomsFlushed += roomsFlushed;
   }
 
-  /** A frame of a kind given to a player's connection, of `size` bytes. */
-  sent(kind: Sent, size: number): void {
-    this.totals.sent[kind].frames++;
-    this.totals.sent[kind].bytes += size;
+  /** Frames of a kind given to players' connections, and their bytes together. */
+  sent(kind: Sent, frames: number, bytes: number): void {
+    this.totals.sent[kind].frames += frames;
+    this.totals.sent[kind].bytes += bytes;
   }
 
   /** An opening turned away before its upgrade, by the code it was refused with. */

@@ -13,6 +13,7 @@ import {
   visitRoom,
 } from "@sequoia-leaf/core";
 
+import { ABOUT_ASK_AGAIN } from "./about.ts";
 import { restart, start } from "./live.ts";
 import { backoff, onWake, outside, pretend } from "./net.ts";
 import { Playout, Track } from "./playout.ts";
@@ -378,6 +379,8 @@ describe("where the connection is", () => {
 });
 
 const ALICE = { id: 2, player: "a", name: "Alice", rank: "Captain", guest: false };
+/** A change to who is about, numbered `v`, that changes nothing but when the lists were made. */
+const change = (v: number): ToClient => ({ t: "aboutChanged", v, at: `2026-11-25T10:00:0${v % 10}.000Z`, lists: {} });
 /** Somebody on Leaf's lists of who is about, at a place. */
 const listed = (id: string, place: string) => ({
   id,
@@ -636,6 +639,48 @@ describe("a live room", () => {
 
     expect(lists).toEqual([["Bo town"], ["Al works", "Bo camp"], [], ["Cy town"]]);
     expect(s.texts().filter((m) => m["t"] === "about")).toEqual([{ t: "about" }]);
+  });
+
+  test("asks again for all of who is about while changes go on not following, at most every few seconds", async () => {
+    const w = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: TESTER },
+      "GET /v1/game/presence": { status: 200, body: { at: "2026-11-25T09:00:00.000Z", present: [], resting: [] } },
+      "PUT /v1/game/presence": { status: 200, body: { at: "2026-11-25T09:00:00.000Z", present: [], resting: [] } },
+    });
+    world = w;
+    await start();
+    undo = pretend({
+      socket: (url) => {
+        const s = new FakeSocket(url);
+        sockets.push(s);
+        return s;
+      },
+    });
+    room = joinLive("town");
+    here("town");
+    await Bun.sleep(10);
+    const s = socket(0);
+    s.open();
+    s.says(welcome(1, w.clock.now));
+    const asks = () => s.texts().filter((m) => m["t"] === "about").length;
+    s.says({ t: "about", v: 4, who: { at: "2026-11-25T10:00:00.000Z", present: [], resting: [], gone: [] } });
+    // A number missed: all of them asked for. Leaf may not have taken the ask (the page sent too
+    // much a moment ago): the changes still do not follow, and a few seconds on, it asks again.
+    s.says(change(6));
+    w.clock.now += 1000;
+    s.says(change(7));
+    const early = asks();
+    w.clock.now += ABOUT_ASK_AGAIN;
+    s.says(change(8));
+    const again = asks();
+    // Given all of them: what follows is taken, and nothing more is asked.
+    s.says({ t: "about", v: 8, who: { at: "2026-11-25T10:00:08.000Z", present: [], resting: [], gone: [] } });
+    w.clock.now += ABOUT_ASK_AGAIN;
+    s.says(change(9));
+    here(null);
+
+    expect([early, again, asks()]).toEqual([1, 2, 2]);
   });
 
   test("sends a stop or a jump at once, even with a move still waiting its turn", async () => {

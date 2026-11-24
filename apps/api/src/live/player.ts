@@ -1,5 +1,4 @@
 import { type Device, LIVE_VERSION } from "@sequoia-leaf/core";
-import { Effect } from "effect";
 
 import { Allowance } from "../allowance.ts";
 import type { Identity } from "../api/api.ts";
@@ -82,9 +81,9 @@ export class Player {
     this.pipe?.send(frame);
   }
 
-  /** Writes a frame to whichever connection they have as it runs, or to none. */
-  write(frame: Uint8Array): Effect.Effect<void> {
-    return Effect.suspend(() => this.pipe?.write(frame) ?? Effect.void);
+  /** Their connection now, for a room's snapshot (`Outbox`). */
+  connection(): Pipe | null {
+    return this.pipe;
   }
 
   /** Whether nothing is left of them: no connection, opening, open or in its grace, no place, and nothing owed on any allowance. */

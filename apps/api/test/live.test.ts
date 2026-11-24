@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 
 import {
   applyAbout,
+  campRoom,
   CLOSE,
   encodeMove,
   Flag,
@@ -11,10 +12,11 @@ import {
   livePath,
   type Motion,
   playerId,
+  readToClient,
   readWho,
   type Who,
 } from "@sequoia-leaf/core";
-import { Deferred, type Duration, Effect, Fiber, Redacted, Schema } from "effect";
+import { Deferred, type Duration, Effect, Fiber, Queue, Redacted, Schedule, Schema } from "effect";
 import { Socket } from "effect/socket";
 
 import { Live, type LiveTuning, TICK } from "../src/live/live.ts";
@@ -42,8 +44,11 @@ let services: ReturnType<typeof testLeaf> | null = null;
 let server: Awaited<ReturnType<ReturnType<typeof testLeaf>["serve"]>> | null = null;
 const open: LiveClient[] = [];
 
-/** Leaf on a free port, with Live tuned as the test needs, on its test clock or the real one. */
-async function start(live: Partial<LiveTuning> = {}, real = false): Promise<string> {
+/**
+ * Leaf on a free port, with Live tuned as the test needs: on its test clock, the real one, or
+ * (`hand`) `clock.now` as the test sets it, with waits that really pass.
+ */
+async function start(live: Partial<LiveTuning> = {}, real: boolean | "hand" = false): Promise<string> {
   const fake = fakeBackend({
     "alice-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
     "bob-token": () => Response.json(sessionOf(bob, "Bob", "RECRUIT")),
@@ -52,7 +57,7 @@ async function start(live: Partial<LiveTuning> = {}, real = false): Promise<stri
     "alice-2-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
   });
   backend = fake.backend;
-  services = testLeaf(real ? realClock : clock, fake.fetcher, {}, { live, testClock: !real });
+  services = testLeaf(real === true ? realClock : clock, fake.fetcher, {}, { live, testClock: real === false });
   server = await services.serve();
   return server.origin;
 }
@@ -106,6 +111,14 @@ async function closedThrough(connected = 0, turns = 10_000): Promise<void> {
   if (turns === 0) throw new Error("a connection never closed");
   await new Promise((resolve) => setImmediate(resolve));
   return closedThrough(connected, turns - 1);
+}
+
+/** Waits until `done()` says so, looked at again each turn of the event loop. */
+async function turnsUntil(done: () => boolean, turns = 10_000): Promise<void> {
+  if (done()) return;
+  if (turns === 0) throw new Error("it never came");
+  await new Promise((resolve) => setImmediate(resolve));
+  return turnsUntil(done, turns - 1);
 }
 
 /** `n` connections of Alice's, one after another, each dropping as the network drops it: openings that hand nothing over. */
@@ -211,7 +224,9 @@ describe("opening a live connection", () => {
     await pass(50);
     await tick();
 
-    expect(await census()).toMatchObject({ connected: 0, rooms: {} });
+    const counted1 = await census();
+    expect(counted1).toMatchObject({ connected: 0 });
+    expect(counted1?.rooms).toEqual({});
     expect(await refused(LIVE, { Authorization: "Bearer alice-token" })).toEqual([429, "slow_down"]);
   });
 
@@ -533,6 +548,27 @@ describe("a player, whatever their connection", () => {
     expect(await census()).toMatchObject({ connected: 1, rooms: { "town/1": 1 } });
   });
 
+  it("leaves at the end of their grace, however Leaf's clock goes meanwhile", async () => {
+    await start({ graceMs: 100 }, "hand");
+    const a = await connect(page("alice"));
+    await a.welcome();
+    a.drop();
+    await closedThrough();
+    // The machine's clock is set back across the end of the grace, and put right after it.
+    try {
+      clock.now = T0 - 60_000;
+      await Bun.sleep(200);
+      clock.now = T0 + 60_000;
+      await Bun.sleep(1100);
+    } finally {
+      clock.now = T0;
+    }
+
+    const counted2 = await census();
+    expect(counted2).toMatchObject({ connected: 0 });
+    expect(counted2?.rooms).toEqual({});
+  });
+
   it("is gone at once, the connection closed as signed out, when their session ends", async () => {
     await start({ recheckMs: 100 });
     const b = await connect(page("bob"));
@@ -828,7 +864,9 @@ describe("where players are, from the room", () => {
 
     const gone = await rowsWhen((r) => (r[0]?.seen_at ?? 0) >= first + 150);
     expect(gone.map((row) => row.place)).toEqual(["town"]);
-    expect(await census()).toMatchObject({ connected: 0, rooms: {} });
+    const counted3 = await census();
+    expect(counted3).toMatchObject({ connected: 0 });
+    expect(counted3?.rooms).toEqual({});
   });
 });
 
@@ -875,7 +913,9 @@ describe("opening a connection", () => {
     await pending;
     // Nothing is left of her: she is forgotten within the second.
     await pass("1 second");
-    expect(await census()).toMatchObject({ players: 0, connected: 0, rooms: {} });
+    const counted4 = await census();
+    expect(counted4).toMatchObject({ players: 0, connected: 0 });
+    expect(counted4?.rooms).toEqual({});
   });
 
   it("shows a player as they are now when a new connection of theirs takes over", async () => {
@@ -958,6 +998,57 @@ const alicesIdentity = {
 };
 const signedIn = Effect.succeed(true);
 
+describe("a room's snapshot", () => {
+  it("never reaches a page after the welcome of the room it went to next, however long its socket takes", async () => {
+    await start();
+    const written: (string | Uint8Array)[] = [];
+    const incoming = await Effect.runPromise(Queue.unbounded<string | Uint8Array>());
+    const live = await services?.run(Live.use((service) => Effect.succeed(service)));
+    if (!live) throw new Error("no Live");
+    const campWelcomed = () => written.some((w) => typeof w === "string" && w.includes(`"${campRoom(alice)}/1"`));
+    // Other fibers have their turns while this one waits, until the camp's welcome is written, or 200 turns.
+    const meanwhile = Effect.repeat(Effect.andThen(Effect.yieldNow, Effect.sync(campWelcomed)), {
+      until: (done) => done,
+      schedule: Schedule.recurs(200),
+    });
+    let slow = true;
+    // Alice's socket: what she sends comes from `incoming`; the first snapshot it is written takes
+    // a while, and her page goes to her camp meanwhile, as a page may at any moment.
+    const socket = Socket.make({
+      reader: Effect.succeed({ pull: Queue.takeAll(incoming), upgrade: () => Effect.void }),
+      writer: Effect.succeed({
+        write: (chunk) => {
+          if (typeof chunk === "string" || Socket.isCloseEvent(chunk) || !slow) {
+            return Effect.sync(() => void (Socket.isCloseEvent(chunk) || written.push(chunk)));
+          }
+          slow = false;
+          Queue.offerUnsafe(incoming, JSON.stringify({ t: "join", room: campRoom(alice) }));
+          return Effect.andThen(
+            meanwhile,
+            Effect.sync(() => void written.push(chunk)),
+          );
+        },
+        writeAll: (chunks) => Effect.sync(() => void written.push(...chunks)),
+      }),
+    });
+    // Served until the test's Leaf stops, which ends it.
+    void services
+      ?.run(Effect.scoped(live.open(alicesIdentity, "town", Effect.succeed(socket), signedIn)))
+      .catch(() => undefined);
+    // In the town, and walking.
+    await turnsUntil(() => written.some((w) => typeof w === "string" && w.includes('"town/1"')));
+    Queue.offerUnsafe(incoming, encodeMove(1, at(100, 100)));
+    await tick();
+    await turnsUntil(campWelcomed);
+    await tick();
+
+    const said = written.map((w) => (typeof w === "string" ? readToClient(w) : "snapshot"));
+    const campWelcome = said.findIndex((m) => m !== "snapshot" && m?.t === "welcome" && m.room.startsWith("camp:"));
+    expect(campWelcome).toBeGreaterThan(0);
+    expect(said.slice(campWelcome).includes("snapshot")).toBe(false);
+  });
+});
+
 describe("an open interrupted while its socket opens", () => {
   it("lets go of the player's place, however it was interrupted", async () => {
     await start();
@@ -1014,6 +1105,8 @@ describe("when Leaf stops", () => {
     expect(outcome?.late).toBe("stopping");
     expect(outcome?.slow).toBe("served");
     expect(written).toEqual([new Socket.CloseEvent(CLOSE.restart, "restart")]);
-    expect(outcome?.census).toMatchObject({ connected: 0, rooms: {} });
+    const counted5 = outcome?.census;
+    expect(counted5).toMatchObject({ connected: 0 });
+    expect(counted5?.rooms).toEqual({});
   });
 });
