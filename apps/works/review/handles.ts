@@ -159,7 +159,6 @@ export function installHandles(p: Page): void {
       closeCard();
       closePanel();
       setTool(null);
-      S.picked = -1;
       S.clearing.clear();
       // A yard put in place of another starts its lessons as a new one does, or with them taken; a
       // step within the same yard (a time away, an order filled, a feed) leaves what has been taught.

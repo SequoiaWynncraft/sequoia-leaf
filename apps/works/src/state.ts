@@ -17,6 +17,7 @@ import {
   type Plot,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { shown } from "@sequoia-leaf/kit/card.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./art/belts.ts";
@@ -129,6 +130,13 @@ export interface Group {
   why: (string | null)[];
 }
 
+/** The tile whose card is pinned open, as the kit's cards have it: the one source of what the yard marks. -1 for none. */
+function pinnedTile(): number {
+  const card = shown();
+  const id = card?.pinned && card.ref.startsWith("tile:") ? card.ref.slice(5) : "";
+  return /^\d+$/.test(id) ? Number(id) : -1;
+}
+
 export const S: {
   /** The page's copy of Leaf's yard (`yard.ts`), as the rules hold it: flat arrays, read where it is drawn and decided. */
   world: Yard;
@@ -175,8 +183,8 @@ export const S: {
   hover: { x: number; y: number } | null;
   /** The last touch was a finger, so building is aimed first and built on a second tap. */
   finger: boolean;
-  /** The tile whose card is open. */
-  picked: number;
+  /** The tile whose card is pinned open (the kit's pinned card is the one source of it), or -1. */
+  readonly picked: number;
   /** Plots being cleared before the member's eyes: when each began, in screen seconds, and where from. */
   clearing: Map<Plot, { at: number; x: number; y: number }>;
   /** Which panel is open. */
@@ -221,7 +229,9 @@ export const S: {
   tint: 1,
   hover: null,
   finger: false,
-  picked: -1,
+  get picked() {
+    return pinnedTile();
+  },
   clearing: new Map(),
   panel: null,
   nudge: null,

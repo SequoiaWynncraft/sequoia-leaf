@@ -18,23 +18,23 @@ bun test                         # the screen's own questions, the yard on a sta
 
 ## What to read for which work
 
-| Work on                                     | Read                                                                            |
-| ------------------------------------------- | ------------------------------------------------------------------------------- |
-| opening, the loop, the canvas               | `main.ts`                                                                       |
-| the yard on Leaf: commands, catching up     | `yard.ts`, `sync.ts` (the link and the room as values), `test/fake-leaf.ts`     |
-| a visit (`?of=<player>`)                    | `yard.ts` (`Follow`), `visit.test.ts`                                           |
-| what is in hand, drags, Escape              | `hand.ts` (one value, one `step`), `tools.ts`, `input.ts`                       |
-| building, runs, Select, blueprints, undo    | `tools.ts` (`doNow`, in `yard.ts`, is the one place a price is judged)          |
-| the line over the dock, the dock            | `ui/dock.ts` (a print of the hand)                                              |
-| drawing a frame                             | `scene.ts` (`drawYard`, a layer at a time), `lamps.ts`, `layout.ts`, `art/*.ts` |
-| the far steps and the map                   | `plan.ts`, `far.ts`, `zoom.ts`, `camera.ts`                                     |
-| cards                                       | `ui/card.ts`, `ui/refs.ts`, `ui/prints.ts` (what a card prints), `ui/cards.ts`  |
-| a goal anywhere, the tier's screen          | `ui/goal.ts`, `ui/standing.ts`, `ui/tier.ts`, `ui/research.ts`                  |
-| the yard's sheet: map, trouble, makes/needs | `ui/views.ts`, `ui/table.ts`, `trouble.ts`, `flows.ts`, `arrivals.ts`           |
-| numbers a minute on a card                  | `ui/numbers.ts`                                                                 |
-| lessons and nudges                          | `teach.ts` (`nudge`, and `stepLessons` for when one is taken)                   |
-| moments, walkers, sparks, sounds            | `events.ts`, `actors.ts`, `fx.ts`, `sound.ts`                                   |
-| the letter, the top bar, notices, panels    | `ui/letter.ts`, `ui/hud.ts`, `ui/notes.ts`, `ui/panels.ts`, `ui/board.ts`       |
+| Work on                                     | Read                                                                             |
+| ------------------------------------------- | -------------------------------------------------------------------------------- |
+| opening, the loop, the canvas               | `main.ts`                                                                        |
+| the yard on Leaf: commands, catching up     | `yard.ts`, `sync.ts` (the link and the room as values), `test/fake-leaf.ts`      |
+| a visit (`?of=<player>`)                    | `yard.ts` (`Follow`), `visit.test.ts`                                            |
+| what is in hand, drags, Escape              | `hand.ts` (one value, one `step`), `tools.ts`, `input.ts`                        |
+| building, runs, Select, blueprints, undo    | `tools.ts`, `undos.ts`; `doNow` (`yard.ts`) is the one place a price is judged   |
+| the line over the dock, the dock            | `ui/dock.ts` (a print of the hand)                                               |
+| drawing a frame                             | `scene.ts` (`drawYard`, a layer at a time), `lamps.ts`, `layout.ts`, `art/*.ts`  |
+| the far steps and the map                   | `plan.ts`, `far.ts`, `zoom.ts`, `camera.ts`                                      |
+| cards                                       | `ui/card.ts`, `ui/refs.ts`, `ui/prints.ts` (what a card prints), `ui/cards.ts`   |
+| a goal anywhere, the tier's screen          | `ui/goal.ts`, `ui/standing.ts`, `ui/tier.ts`, `ui/research.ts`                   |
+| the yard's sheet: map, trouble, makes/needs | `ui/views.ts`, `ui/table.ts`, `trouble.ts`, `walk.ts`, `flows.ts`, `arrivals.ts` |
+| numbers a minute on a card                  | `ui/numbers.ts`                                                                  |
+| lessons and nudges                          | `teach.ts` (`nudge`, and `stepLessons` for when one is taken)                    |
+| moments, walkers, sparks, sounds            | `events.ts`, `actors.ts`, `fx.ts`, `sound.ts`                                    |
+| the letter, the top bar, notices, panels    | `ui/letter.ts`, `ui/hud.ts`, `ui/notes.ts`, `ui/panels.ts`, `ui/board.ts`        |
 
 ## What must hold
 
@@ -57,7 +57,12 @@ bun test                         # the screen's own questions, the yard on a sta
 - **What is in hand is one value** (`hand.ts`), moved only by `step`. A drag belongs to the hand
   variant that began it, so it ends whenever the hand moves on: a put-away, a lost press, a blur.
   Escape steps back one stage of whatever is in hand.
-- **Undo undoes only what Leaf did**, and only while what it touched stands as it was just after.
+- **Undo undoes only what Leaf did** (`undos.ts`, one value), and only while what it touched stands
+  as it was just after. Pressed before Leaf has answered, it waits for Leaf, then undoes or says why not.
+- **The mouse points at what is under it now** (`input.ts`): worked out again when the yard moves
+  under it, and resting on nothing while it moves, so no card comes up for what passes beneath.
+- **The kit's pinned card is the one source of the tile the yard marks** (`S.picked` reads it). Taking
+  up a tool closes it, and so does taking away what it is about.
 - **Prices are judged in one place:** `doNow`, with the purse as it is at that moment.
 - **A part of the interface shows only what its print holds** (`shows`, in `ui/parts.ts`): cards,
   panels, the top bar and the line over the dock are drawn again exactly when their print differs.

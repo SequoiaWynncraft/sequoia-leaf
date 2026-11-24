@@ -59,6 +59,7 @@ import {
   within,
   worthAt,
 } from "@sequoia-leaf/factory";
+import { close as closeCards } from "@sequoia-leaf/kit/card.ts";
 import { CREAM, GOLD, GREEN, SKY } from "@sequoia-leaf/kit/palette.ts";
 
 import { PAINTS, TILE } from "./art/belts.ts";
@@ -78,7 +79,8 @@ import {
   S,
   type Tool,
 } from "./state.ts";
-import { coins, type Did, doNow, onTake } from "./yard.ts";
+import { CHANGED, due, type Entry, type UndoEvent, type Undos, undoStep } from "./undos.ts";
+import { coins, type Did, doNow, onTake, takesCommands } from "./yard.ts";
 
 const DUST = "#cbb894";
 
@@ -109,21 +111,16 @@ type Done =
   | { did: "painted"; stroke: number; lines: readonly { i: number; was: number }[] }
   | { did: "moved"; tiles: number[]; turns: Dir; x: number; y: number };
 
-/**
- * Something done, kept to be undone: what to undo, its number, the tiles it touched and what stood
- * on them just after it was done (`after`). It is undone only while they stand so, and only once
- * Leaf has done each of its commands too; one Leaf turned down is let go, never undone.
- */
-interface Undoable {
-  readonly done: Done;
-  readonly id: number;
-  readonly tiles: readonly number[];
-  readonly after: readonly Piece[];
-}
-/** What may be undone, oldest first; and how many commands of each Leaf has still to answer, by number. */
-let undoable: Undoable[] = [];
-const unanswered = new Map<number, number>();
+/** What may be undone (`undos.ts`), each as what it did. */
+let undos: Undos<Done> = [];
 let undone = 0;
+
+/** Moves what may be undone, and says on the line over the dock what came of it, if anything. */
+function moveUndos(e: UndoEvent<Done>): void {
+  const s = undoStep(undos, e);
+  undos = s.undos;
+  if (s.said !== null) toolHooks.said(s.said);
+}
 
 /** The tiles something done touched: what it built, turned, raised, took away, coloured or moved. */
 function touched(d: Done): number[] {
@@ -160,44 +157,31 @@ const alike = (a: Piece | undefined, b: Piece | undefined): boolean =>
   a.first === b.first;
 
 /** Whether what was done still stands as it was just after: what undoing it would put back is what it changed. */
-function holds(u: Undoable): boolean {
+function holds(u: Entry<Done>): boolean {
   const now = piecesAt(S.world, u.tiles);
   return now.length === u.after.length && now.every((p, k) => alike(p, u.after[k]));
 }
 
-/** Waits for Leaf's word on a command of an entry: done, it is one fewer to wait for; turned down, the entry is let go. */
-function awaitLeaf(id: number, did: Did): void {
-  unanswered.set(id, (unanswered.get(id) ?? 0) + 1);
-  const taken = "refused" in did ? Promise.resolve(false) : did.taken;
-  void taken.then(answered(id));
+/** Hears Leaf's word on a command of an entry (`did`, as `doNow` gave it), and undoes what is due once it has come. */
+async function awaitLeaf(id: number, did: Did): Promise<void> {
+  const yes = "refused" in did ? false : await did.taken;
+  moveUndos({ do: "heard", id, yes });
+  settle();
 }
-
-/** Hears Leaf's word on one of an entry's commands. */
-const answered =
-  (id: number) =>
-  (yes: boolean): boolean => {
-    const left = (unanswered.get(id) ?? 1) - 1;
-    if (left > 0) unanswered.set(id, left);
-    else unanswered.delete(id);
-    if (!yes) {
-      undoable = undoable.filter((u) => u.id !== id);
-      unanswered.delete(id);
-    }
-    return yes;
-  };
 
 /** Keeps something just done (`did`, as `doNow` gave it) to be undone. */
 function remember(d: Done, did: Did): void {
   const id = ++undone;
   const tiles = touched(d);
-  undoable.push({ done: d, id, tiles, after: piecesAt(S.world, tiles) });
-  if (undoable.length > 60) undoable.shift();
-  awaitLeaf(id, did);
+  moveUndos({ do: "keep", entry: { done: d, id, tiles, after: piecesAt(S.world, tiles) } });
+  void awaitLeaf(id, did);
 }
 
-// When the copy becomes Leaf's yard, what no longer stands as it was done is let go.
+// When the copy becomes Leaf's yard, what no longer stands as it was done is let go, and what Undo
+// was pressed for while the yard was being taken is undone if it is due.
 onTake(() => {
-  undoable = undoable.filter(holds);
+  moveUndos({ do: "took", holds });
+  settle();
 });
 
 const W = (): number => S.world.land.w;
@@ -261,7 +245,8 @@ export function usable(tool: Tool): boolean {
 export function setTool(tool: Tool): void {
   if (!usable(tool)) return;
   go({ do: "pick", tool });
-  if (tool !== null) S.picked = -1;
+  // Taking up a tool closes the card pinned open.
+  if (tool !== null) closeCards();
   if (S.hover && tool !== null) aimAt(S.hover.x, S.hover.y);
   toolHooks.changed();
 }
@@ -499,7 +484,8 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
   const refund = coinsOf(did);
   if (refund > 0) float(px, py - 10, `+${refund}`, GOLD[2], 1);
   yardSfx.take();
-  if (S.picked === i) S.picked = -1;
+  // The card of what was taken away has nothing to be about.
+  if (S.picked === i) closeCards();
   // A piece taken out of a marked area is no longer marked.
   const m = remarked();
   if (m) go({ do: "marked", mark: m.pieces.length > 0 ? m : null });
@@ -535,12 +521,12 @@ export function paintAt(x: number, y: number, more = false, pointer = -1): boole
     return false;
   }
   // The stroke's lines are one entry: each line it colours is added to it, and waited on with it.
-  const top = undoable.at(-1);
+  const top = undos.at(-1);
   if (top?.done.did === "painted" && top.done.stroke === id) {
     const lines = [...top.done.lines, { i, was }];
     const tiles = lines.map((l) => l.i);
-    undoable[undoable.length - 1] = { ...top, done: { ...top.done, lines }, tiles, after: piecesAt(w, tiles) };
-    awaitLeaf(top.id, did);
+    moveUndos({ do: "grow", entry: { done: { ...top.done, lines }, id: top.id, tiles, after: piecesAt(w, tiles) } });
+    void awaitLeaf(top.id, did);
   } else remember({ did: "painted", stroke: id, lines: [{ i, was }] }, did);
   const col = PAINTS[S.tint - 1]?.lit ?? DUST;
   for (const j of line.slice(0, 80)) puff((j % W()) * TILE + 8, Math.floor(j / W()) * TILE + 9, 1, col, 5);
@@ -693,26 +679,32 @@ function asTheyWere(was: readonly Piece[]): void {
 }
 
 /**
- * Undoes the last thing done to the yard, if it still can be: once Leaf has done it too, and while
- * what it touched stands as it was just after.
+ * Undo pressed: for the last thing done not yet pressed for. It is undone once Leaf has done it too
+ * (at once, if it has), while what it touched stands as it was just after. Gives back whether
+ * anything was undone, or waits for Leaf to be.
  */
 export function undo(): boolean {
+  moveUndos({ do: "press" });
+  return settle() > 0 || undos.some((u) => u.asked);
+}
+
+/** Undoes what Undo was pressed for and Leaf has done, the last first, while the yard takes commands. Gives back how many were undone. */
+function settle(): number {
+  let n = 0;
+  for (let u = due(undos); u && takesCommands(); u = due(undos)) {
+    moveUndos({ do: "undone", id: u.id });
+    if (!holds(u)) toolHooks.said(CHANGED);
+    else {
+      undoNow(u.done);
+      n++;
+    }
+  }
+  return n;
+}
+
+/** Undoes something done, as it stands as it was just after. */
+function undoNow(last: Done): void {
   const w = S.world;
-  const top = undoable.at(-1);
-  if (!top) {
-    toolHooks.said("Nothing to undo.");
-    return false;
-  }
-  if (unanswered.has(top.id)) {
-    toolHooks.said("Not yet: the guild's server has not answered.");
-    return false;
-  }
-  undoable.pop();
-  if (!holds(top)) {
-    toolHooks.said("Cannot undo: it has changed since.");
-    return false;
-  }
-  const last = top.done;
   if (last.did === "built") {
     const cells = last.cells.filter((i) => w.kind[i] !== NONE);
     // Many pieces go as one with Select; without it, one at a time, as the spade takes them.
@@ -736,7 +728,6 @@ export function undo(): boolean {
   if (S.hand.is === "select") go({ do: "pick", tool: "select" });
   keepAim();
   toolHooks.changed();
-  return true;
 }
 
 // ---------- runs of belt ----------
@@ -1177,7 +1168,7 @@ export function clearMark(): boolean {
   if (refund > 0) float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, `+${refund}`, GOLD[2], 1.2);
   yardSfx.take();
   go({ do: "marked", mark: null });
-  S.picked = -1;
+  if (m.tiles.includes(S.picked)) closeCards();
   toolHooks.changed();
   return true;
 }

@@ -34,6 +34,7 @@ import {
   SPLITTER,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { deck } from "@sequoia-leaf/kit/card.ts";
 
 import { act, clear, ctx, kindAt, kindOn, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { asIf, layout } from "./layout.ts";
@@ -56,7 +57,9 @@ import {
   runOver,
   runStart,
   setTool,
+  takeAway,
   tapBelt,
+  toolHooks,
   undo,
   usable,
 } from "./tools.ts";
@@ -388,19 +391,71 @@ describe("undo, as Leaf did things", () => {
     expect(sent(fake.leaf).filter((c) => c === "clear" || c === "remove")).toEqual([]);
   });
 
-  test("undoes nothing Leaf has not done yet, and once it has, what it did", async () => {
+  test("pressed before Leaf has answered, waits for Leaf, and once Leaf has done it, undoes it", async () => {
     const fake = await opened(yardAt(2), 100);
     const [a] = clear(1);
     if (!a) throw new Error("no room");
     setTool(BELT);
     expect(place(a.x, a.y)).toBe(true);
-    // Not answered yet: nothing is undone.
+    const said: string[] = [];
+    toolHooks.said = (text) => void said.push(text);
+    // Leaf has not answered: the belt stands until it has.
+    expect(undo()).toBe(true);
+    expect(kindAt(a)).toBe("belt");
+    await until(() => fake.leaf.commands.length >= 2);
+    await Bun.sleep(2);
+    expect([kindAt(a), kindOn(fake.leaf.yard, a), sent(fake.leaf), said]).toEqual([
+      undefined,
+      undefined,
+      ["build", "remove"],
+      [],
+    ]);
+  });
+
+  test("pressed twice before Leaf has answered, undoes the last two, the last first", async () => {
+    const fake = await opened(yardAt(2), 100);
+    const tiles = clear(40);
+    const [a, b] = [tiles[0], tiles.at(-1)];
+    if (!a || !b) throw new Error("no room");
+    setTool(BELT);
+    expect(place(a.x, a.y)).toBe(true);
+    expect(place(b.x, b.y)).toBe(true);
+    expect([undo(), undo()]).toEqual([true, true]);
+    await until(() => fake.leaf.commands.length >= 4);
+    await Bun.sleep(2);
+    expect([kindAt(a), kindAt(b), kindOn(fake.leaf.yard, a), kindOn(fake.leaf.yard, b)]).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    expect(fake.leaf.commands.slice(2)).toMatchObject([
+      { do: "remove", ...b },
+      { do: "remove", ...a },
+    ]);
+    // Nothing is left to press for.
     expect(undo()).toBe(false);
+  });
+
+  test("pressed for what Leaf then turns down, says nothing was done to undo, and undoes nothing older", async () => {
+    const fake = await opened(yardAt(2), 100);
+    const tiles = clear(40);
+    const [a, b] = [tiles[0], tiles.at(-1)];
+    if (!a || !b) throw new Error("no room");
+    setTool(BELT);
+    expect(place(a.x, a.y)).toBe(true);
     await until(() => fake.leaf.posts >= 1);
     await Bun.sleep(2);
+    // Another page of the member's builds a mill where this page still shows nothing, and this page builds a belt there.
+    fake.elsewhere({ do: "build", kind: "mill", ...b, dir: 0 });
+    expect(place(b.x, b.y)).toBe(true);
+    const said: string[] = [];
+    toolHooks.said = (text) => void said.push(text);
     expect(undo()).toBe(true);
-    await until(() => fake.leaf.posts >= 2);
-    expect([kindAt(a), kindOn(fake.leaf.yard, a)]).toEqual([undefined, undefined]);
+    await until(() => kindAt(b) === "mill");
+    await Bun.sleep(5);
+    expect(said).toContain("Nothing to undo: the guild's server did not do it.");
+    expect([kindAt(a), kindOn(fake.leaf.yard, a), sent(fake.leaf)]).toEqual(["belt", "belt", ["build", "build"]]);
   });
 
   test("lets go of what no longer stands as it was done, when Leaf's yard is taken", async () => {
@@ -419,5 +474,37 @@ describe("undo, as Leaf did things", () => {
     expect(undo()).toBe(false);
     await Bun.sleep(5);
     expect([kindAt(a), sent(fake.leaf)]).toEqual(["mill", ["build"]]);
+  });
+});
+
+/** Pins the card of a tile, as a click on it does. */
+const pin = (i: number): void => {
+  deck.open = { stack: [`tile:${i}`], pinned: true, via: "mouse", at: {}, from: {}, side: false, preview: false };
+};
+
+describe("the pinned card", () => {
+  test("is the one source of what the yard marks: taking up a tool closes it, and nothing is marked", async () => {
+    const y = yardAt(2);
+    build(y, BELT, 18, 13, 0, Infinity);
+    await opened(y);
+    const i = at(S.world, 18, 13);
+    pin(i);
+    expect(S.picked).toBe(i);
+    setTool(BELT);
+    expect([deck.open, S.picked]).toEqual([null, -1]);
+  });
+
+  test("closes when the piece it is about is taken away, or cleared with an area", async () => {
+    const y = yardAt(3);
+    for (let x = 18; x < 21; x++) build(y, BELT, x, 13, 0, Infinity);
+    await opened(y);
+    pin(at(S.world, 18, 13));
+    expect(takeAway(18, 13)).toBe(true);
+    expect([deck.open, S.picked]).toEqual([null, -1]);
+    pin(at(S.world, 19, 13));
+    // Another piece taken away leaves it be.
+    expect(takeAway(20, 13)).toBe(true);
+    expect(S.picked).toBe(at(S.world, 19, 13));
+    deck.close();
   });
 });

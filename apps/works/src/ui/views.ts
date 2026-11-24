@@ -34,7 +34,8 @@ import { aMinute, flowRows, said, SHORT, yardFlows } from "../flows.ts";
 import { layout } from "../layout.ts";
 import { alarm, layPlan, makePlan, paintPlan, type Plan } from "../plan.ts";
 import { S, seenFrom } from "../state.ts";
-import { type Group, troubled, troubleGroups } from "../trouble.ts";
+import { troubled, troubleGroups } from "../trouble.ts";
+import { NOT_WALKING, type Walk, walkAt, type WalkEvent, walkStep } from "../walk.ts";
 import { itemRef, openCard, plotRef, tileRef } from "./card.ts";
 import { closePanel, openPanel, refreshPanel } from "./panels.ts";
 import { $, fitted, yardIcon } from "./parts.ts";
@@ -86,41 +87,56 @@ function goTo(i: number, card: boolean): void {
 
 // ---------- walking a group ----------
 
-/** The group being walked, by what is wrong, and the tile of the piece the member is at. */
-let walk: { title: string; tile: number } | null = null;
+/** The walk (`walk.ts`): the one value the bar and the page's look follow. */
+let walking: Walk = NOT_WALKING;
+/** The bar, made the first time a walk begins. */
 let bar: {
   el: HTMLElement;
   title: HTMLElement;
   at: HTMLElement;
 } | null = null;
 
-const groupOf = (title: string): Group | undefined => troubleGroups(S.world).find((g) => g.title === title);
+const tilesOf = (title: string): readonly number[] | null =>
+  troubleGroups(S.world).find((g) => g.title === title)?.tiles ?? null;
 
-function endWalk(): void {
-  walk = null;
-  if (bar) bar.el.hidden = true;
-  document.body.classList.remove("walking");
+/** Where the bar sits now: at the head of the panel beside the yard; on a phone, under the top row, where the sheet was. None while the panel is shut. */
+const barHome = (): HTMLElement | null =>
+  narrow() ? $("walk") : document.querySelector<HTMLElement>("#panel .walk-slot");
+
+/** Moves the walk, and brings the bar and the page's look into line with it; a walk at a new piece goes there, with its card. */
+function walk(e: WalkEvent): void {
+  const was = walking;
+  walking = walkStep(walking, e);
+  const w = walking;
+  if (w.is === "walking" && (was.is !== "walking" || was.tile !== w.tile)) {
+    if (was.is === "walking") sfx.tap();
+    goTo(w.tile, true);
+  }
+  showWalk();
 }
 
-/** Goes back or on along the group; from a piece that is no longer in trouble, to the nearest still in it that way. */
-function stepWalk(by: number): void {
-  const g = walk ? groupOf(walk.title) : undefined;
-  if (!walk || !g) return endWalk();
-  const tiles = g.tiles;
-  const at = tiles.indexOf(walk.tile);
-  const here = walk.tile;
-  const next =
-    at >= 0
-      ? tiles[(at + by + tiles.length) % tiles.length]
-      : by > 0
-        ? (tiles.find((t) => t > here) ?? tiles[0])
-        : (tiles.findLast((t) => t < here) ?? tiles.at(-1));
-  if (next === undefined) return endWalk();
-  walk.tile = next;
-  sfx.tap();
-  goTo(next, true);
-  refreshWalk();
+/** The bar as the walk has it: what is wrong and which of how many, or hidden. */
+function showWalk(): void {
+  const w = walking;
+  const home = barHome();
+  const tiles = w.is === "walking" ? tilesOf(w.title) : null;
+  document.body.classList.toggle("walking", w.is === "walking");
+  if (w.is !== "walking" || !home || !tiles) {
+    if (bar) bar.el.hidden = true;
+    return;
+  }
+  bar ??= makeBar();
+  if (bar.el.parentElement !== home) home.append(bar.el);
+  const where = walkAt(w.tile, tiles);
+  if (bar.title.textContent !== w.title) bar.title.textContent = w.title;
+  if (bar.at.textContent !== where) bar.at.textContent = where;
+  bar.el.hidden = false;
 }
+
+/** Back or on along the group, as it is now. */
+const stepWalk = (by: 1 | -1): void => {
+  walk({ do: "step", by, tiles: walking.is === "walking" ? tilesOf(walking.title) : null });
+};
 
 /** One of the bar's buttons: a picture, and what it is called for whoever cannot see it. */
 function press(label: string, kid: Node, on: () => void): HTMLElement {
@@ -142,40 +158,23 @@ function makeBar(): NonNullable<typeof bar> {
     at,
     press("Back", icon("back"), () => stepWalk(-1)),
     press("On", on, () => stepWalk(1)),
-    press("Stop", icon("close"), endWalk),
+    press("Stop", icon("close"), () => walk({ do: "stop" })),
   );
   return { el: made, title, at };
 }
 
 /** A group was pressed: its first piece, with its card, and the bar to walk the rest. On a phone the sheet gives way to the bar. */
 function startWalk(title: string): void {
-  const first = groupOf(title)?.tiles[0];
-  if (first === undefined) return;
-  walk = { title, tile: first };
+  const tiles = tilesOf(title);
+  if (!tiles) return;
   if (narrow()) closePanel();
-  goTo(first, true);
-  refreshWalk();
+  walk({ do: "start", title, tiles });
 }
 
-/**
- * The walking bar, brought up to date: where it sits (at the head of the panel beside the yard; on a
- * phone, under the top row, where the sheet was), what is wrong, and which of how many. Its group
- * mended, or the panel it sits in closed, it goes.
- */
+/** The walk looked at again (each refresh of the screen): its group mended, or the panel it sits in shut, it ends. */
 export function refreshWalk(): void {
-  if (!walk) return;
-  const g = groupOf(walk.title);
-  const home = narrow() ? $("walk") : document.querySelector<HTMLElement>("#panel .walk-slot");
-  if (!g || !home) return endWalk();
-  bar ??= makeBar();
-  if (bar.el.parentElement !== home) home.append(bar.el);
-  const at = g.tiles.indexOf(walk.tile);
-  const n = g.tiles.length;
-  const where = at >= 0 ? `${at + 1} of ${n}` : `${n} left`;
-  if (bar.title.textContent !== g.title) bar.title.textContent = g.title;
-  if (bar.at.textContent !== where) bar.at.textContent = where;
-  bar.el.hidden = false;
-  document.body.classList.add("walking");
+  if (walking.is !== "walking") return;
+  walk({ do: "look", tiles: tilesOf(walking.title), shown: barHome() !== null });
 }
 
 // ---------- the map ----------

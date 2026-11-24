@@ -223,7 +223,7 @@ let putAway = (): void => undefined;
 /** Hears each time the copy becomes Leaf's yard as read. */
 const takeHearers: (() => void)[] = [];
 
-/** Hears each time the copy becomes Leaf's yard as read: what was worked out of the copy before may no longer hold. */
+/** Hears each time the copy becomes Leaf's yard as read, once the link has it: what was worked out of the copy before may no longer hold. */
 export const onTake = (fn: () => void): void => void takeHearers.push(fn);
 
 /**
@@ -276,6 +276,7 @@ export async function openYard(player: string, trouble: (why: Trouble) => void):
   opened.onAnswer(heard);
   collectedAt = performance.now();
   if (!take()) return "closed";
+  heardTake();
   listen(S.visiting?.id ?? player);
   return null;
 }
@@ -378,8 +379,15 @@ function unlike(f: Follow): false {
 
 /** Leaf's yard was read (asked for, or by the kit of itself, `sync.ts`): the copy becomes it. */
 function read(): void {
-  if (take()) go({ do: "took" });
+  if (!take()) return;
+  go({ do: "took" });
+  heardTake();
 }
+
+/** Tells whatever hears it that the copy is Leaf's yard as read, once the link has taken it. */
+const heardTake = (): void => {
+  for (const fn of takeHearers) fn();
+};
 
 /** The copy becomes Leaf's yard, run on to the tick already shown. False when Leaf's rules are newer than the page's. */
 function take(): boolean {
@@ -404,7 +412,6 @@ function take(): boolean {
   shown = Math.max(shown, yard.tick);
   S.world = yard;
   reads++;
-  for (const fn of takeHearers) fn();
   seen = Math.max(seen, rev);
   // What the yard as read has of what a visit was told is let go; none of the rest is begun.
   if (follow) {
@@ -492,6 +499,17 @@ function heard({ done, short }: Answered<Sending, News, Heard>): void {
   ask(performance.now());
 }
 
+/** Why nothing the member does is done to the yard now: in a visit, while Leaf's yard is being taken, or with the yard not open. Null when it is. */
+function notNow(): Turned | null {
+  if (S.visiting) return { refused: "visiting", why: "This yard is somebody else's" };
+  if (link.is === "givingWay") return { refused: "catching_up", why: CATCHING_UP };
+  if (link.is !== "inStep" && !S.alone) return { refused: "closed", why: "The yard is not open" };
+  return null;
+}
+
+/** Whether what the member does is done to the yard now: `doNow` refuses nothing for where the link is. */
+export const takesCommands = (): boolean => notNow() === null;
+
 /**
  * Does what the member did to the copy at once, with the shared rules, and sends it to Leaf with
  * the tick the copy stands at; whatever Coins it pays or takes show at once. The rules are asked
@@ -501,9 +519,8 @@ function heard({ done, short }: Answered<Sending, News, Heard>): void {
  * page was handed by a review page of its own (`S.alone`) is done to in the same way, and sends nothing.
  */
 export function doNow(act: Act): Did {
-  if (S.visiting) return { refused: "visiting", why: "This yard is somebody else's" };
-  if (link.is === "givingWay") return { refused: "catching_up", why: CATCHING_UP };
-  if (link.is !== "inStep" && !S.alone) return { refused: "closed", why: "The yard is not open" };
+  const no = notNow();
+  if (no) return no;
   const command: Command = { ...act, tick: S.world.tick };
   const done = play(S.world, command, balance().coins);
   if ("refused" in done) return done;
