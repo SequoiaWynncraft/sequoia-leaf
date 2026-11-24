@@ -12,10 +12,22 @@ export const TOWN_SOUND = {
   doors: "town.doors",
 } as const;
 
+/** A purr's two breaths: when each starts, its beats, the hiss's pitch, and how loud at its fullest. */
+const PURR = [
+  { at: 0, beats: 13, freq: 170, vol: 0.9 },
+  { at: 0.6, beats: 10, freq: 210, vol: 0.65 },
+] as const;
+
 export const csfx = {
+  /**
+   * A purr: a breath out and a breath in, each a low hiss beating 25 times a second and swelling and
+   * fading with the breath. The band is narrow, so the gain is high.
+   */
   purr(): void {
     if (!heard(TOWN_SOUND.pets)) return;
-    for (let i = 0; i < 6; i++) tone(58 + (i % 2) * 6, 0.09, { vol: 0.09, type: "sawtooth", at: i * 0.085 });
+    for (const b of PURR)
+      for (let i = 0; i < b.beats; i++)
+        noise(0.05, b.freq, { vol: b.vol * Math.sin((Math.PI * (i + 0.5)) / b.beats), q: 3, at: b.at + i * 0.04 });
   },
   yip(): void {
     if (!heard(TOWN_SOUND.pets)) return;
