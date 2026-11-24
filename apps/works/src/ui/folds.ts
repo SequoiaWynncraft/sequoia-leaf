@@ -1,7 +1,7 @@
 /**
  * Folds on the tier's and the research screens: the list of those done and the list of research
- * known, shut at first, each under a label that opens it; and each goal's card, open at first, with
- * a button at the end of its head that folds it to the head. What the player chose is kept on this
+ * known, shut at first, and the list of projects, open at first, each under a label that folds it;
+ * and each goal's card, open at first, with a button at the end of its head that folds it to the head. What the player chose is kept on this
  * device under `FOLDS`, beside the screen's other settings: a view, so nothing of it goes to Leaf.
  *
  * A fold is drawn from the kept choices on every drawing, so it stands as the player left it when
@@ -17,28 +17,31 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { head } from "./goal.ts";
 import { iconButton } from "./parts.ts";
 
-/** What folds: the list of those done, the list of research known, or a goal's card. */
-export type Fold = "done" | "known" | Goal;
-type List = "done" | "known";
+/** The lists that fold, and whether each is open at first. */
+const LISTS = { done: false, known: false, projects: true } as const;
+type List = keyof typeof LISTS;
+/** What folds: one of the lists, or a goal's card. */
+export type Fold = List | Goal;
+
+const isList = (k: string): k is List => k in LISTS;
 
 /** Where the choices are kept. */
 export const FOLDS = "works.folds.v1";
 
 /** The choices made, as kept: each list's by its name, each card's by its goal's id; `true` is open. */
 interface Choices {
-  done?: boolean;
-  known?: boolean;
+  lists: Partial<Record<List, boolean>>;
   goals: Record<string, boolean>;
 }
 
 /** The choices kept on this device. Text missing or not read is no choice; a choice that does not read is left out alone. */
 function kept(): Choices {
-  const out: Choices = { goals: {} };
+  const out: Choices = { lists: {}, goals: {} };
   try {
     const raw: unknown = JSON.parse(keptText(FOLDS) ?? "null");
     if (!isRecord(raw)) return out;
-    if (typeof raw.done === "boolean") out.done = raw.done;
-    if (typeof raw.known === "boolean") out.known = raw.known;
+    for (const [list, open] of Object.entries(raw))
+      if (isList(list) && typeof open === "boolean") out.lists[list] = open;
     if (isRecord(raw.goals))
       for (const [id, open] of Object.entries(raw.goals)) if (typeof open === "boolean") out.goals[id] = open;
   } catch {
@@ -49,18 +52,18 @@ function kept(): Choices {
 
 const idOf = (g: Goal): string => GOALS[g]?.id ?? "";
 
-/** Whether a fold is open: as the player left it, or else a list shut and a card open. */
+/** Whether a fold is open: as the player left it, or else as `LISTS` says for a list, and open for a card. */
 export function opened(f: Fold): boolean {
   const c = kept();
-  return typeof f === "number" ? (c.goals[idOf(f)] ?? true) : (c[f] ?? false);
+  return typeof f === "number" ? (c.goals[idOf(f)] ?? true) : (c.lists[f] ?? LISTS[f]);
 }
 
-/** Keeps a choice made, beside those made before. */
+/** Keeps a choice made, beside those made before: the lists' by name, as they have always been kept, and the cards' under `goals`. */
 export function keepFold(f: Fold, open: boolean): void {
   const c = kept();
   if (typeof f === "number") c.goals[idOf(f)] = open;
-  else c[f] = open;
-  keepText(FOLDS, JSON.stringify(c));
+  else c.lists[f] = open;
+  keepText(FOLDS, JSON.stringify({ ...c.lists, goals: c.goals }));
 }
 
 /**

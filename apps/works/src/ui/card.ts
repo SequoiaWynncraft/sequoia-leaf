@@ -7,7 +7,7 @@
  *
  * Pointing at a thing on the yard says what it is; clicking or tapping pins its card.
  */
-import { at, carries, isItem, NONE } from "@sequoia-leaf/factory";
+import { at, boxOf, carries, isItem, NONE, piecesAt } from "@sequoia-leaf/factory";
 import { close, pick, refresh, register, shown, watch } from "@sequoia-leaf/kit/card.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
@@ -16,7 +16,20 @@ import type { Art } from "../art/index.ts";
 import { buyLand, takeInHand } from "../plots.ts";
 import { yardSfx } from "../sound.ts";
 import { S, toPage } from "../state.ts";
-import { flipAt, pickFrom, raiseAt, takeAway, toolHooks, turnAt, wayAt } from "../tools.ts";
+import {
+  flipAt,
+  hold,
+  markOver,
+  markStart,
+  pickFrom,
+  raiseAt,
+  setTool,
+  takeAway,
+  toolHooks,
+  turnAt,
+  usable,
+  wayAt,
+} from "../tools.ts";
 import { doNow } from "../yard.ts";
 import { cardOf, type Hands } from "./cards.ts";
 import { togglePanel } from "./panels.ts";
@@ -50,12 +63,27 @@ export function riderAt(x: number, y: number): string | null {
   return i >= 0 && carries(w.kind[i] ?? NONE) && isItem(carried) ? itemRef(carried) : null;
 }
 
+/**
+ * Takes the piece on a tile in hand to move it, as the member would with Select: the piece marked
+ * alone, then Move. Nothing, before Select is open.
+ */
+export function moveFrom(x: number, y: number): void {
+  const pieces = piecesAt(S.world, [at(S.world, x, y)]);
+  if (pieces.length === 0 || !usable("select")) return;
+  const box = boxOf(pieces);
+  setTool("select");
+  markStart(box.x, box.y);
+  markOver(box.x + box.w - 1, box.y + box.h - 1);
+  hold("move");
+}
+
 /** What a card's buttons do: the page's own tools. */
 const HANDS: Hands = {
   act: (a) => !("refused" in doNow(a)),
   turn: (x, y) => void turnAt(x, y),
   flip: (x, y) => void flipAt(x, y),
   another: (x, y) => void pickFrom(x, y),
+  move: moveFrom,
   remove: (x, y) => void takeAway(x, y),
   raise: (x, y) => void raiseAt(x, y),
   way: (x, y, way) => void wayAt(x, y, way),

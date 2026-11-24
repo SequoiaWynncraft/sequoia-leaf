@@ -63,7 +63,7 @@ import {
   undo,
   usable,
 } from "./tools.ts";
-import { tileRef } from "./ui/card.ts";
+import { moveFrom, tileRef } from "./ui/card.ts";
 import { printOf } from "./ui/prints.ts";
 import { again, differences, doNow, runYard } from "./yard.ts";
 
@@ -133,6 +133,36 @@ describe("Select's copy", () => {
     if (S.group) S.group.turns = 1;
     aimAt(26, 15);
     expect(S.group?.at).toEqual(placed(piecesAt(S.world, S.group?.tiles ?? []), 1, 26, 14));
+  });
+});
+
+describe("a piece's card's Move", () => {
+  test("takes that piece alone in hand, and setting it down moves it, done alike on the page and on Leaf", async () => {
+    const y = yardAt(3);
+    for (let x = 18; x < 21; x++) build(y, BELT, x, 13, 0, Infinity);
+    build(y, kind("crate"), 21, 13, 0, Infinity);
+    const fake = await opened(y, 10_000);
+    const w = S.world;
+    expect(printOf(tileRef(at(w, 21, 13)))).toMatchObject({ card: "standing", move: true });
+    // On a tile with nothing standing, it takes nothing up.
+    const hand = S.hand;
+    moveFrom(24, 15);
+    expect(S.hand).toBe(hand);
+    moveFrom(21, 13);
+    expect(S.group?.as).toBe("move");
+    expect(piecesAt(w, S.group?.tiles ?? []).map((p) => [p.kind, p.x, p.y])).toEqual([[kind("crate"), 21, 13]]);
+    aimAt(25, 15);
+    expect(S.aim?.why).toBeNull();
+    expect(place(25, 15)).toBe(true);
+    expect([kindAt({ x: 21, y: 13 }), kindAt({ x: 25, y: 15 }), kindAt({ x: 20, y: 13 })]).toEqual([
+      undefined,
+      "crate",
+      "belt",
+    ]);
+    await until(() => fake.leaf.posts >= 1);
+    await Bun.sleep(5);
+    expect(sent(fake.leaf)).toEqual(["move"]);
+    expect([differences(), encode(S.world)]).toEqual([0, encode({ ...fake.leaf.yard, seed: null })]);
   });
 });
 

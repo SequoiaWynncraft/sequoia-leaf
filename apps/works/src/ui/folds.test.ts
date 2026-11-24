@@ -21,10 +21,11 @@ const CRATES = goal("crates");
 /** How the lists and two cards stand: Done, Known, the boiler's card, the crates' card. */
 const standing = (): boolean[] => [opened("done"), opened("known"), opened(BOILER), opened(CRATES)];
 
-test("with nothing kept, Done and Known are shut and every card is open", () => {
+test("with nothing kept, Done and Known are shut, Projects is open and every card is open", () => {
   world = standin({});
   expect(opened("done")).toBe(false);
   expect(opened("known")).toBe(false);
+  expect(opened("projects")).toBe(true);
   expect(ALL_GOALS.filter((g) => !opened(g))).toEqual([]);
 });
 
@@ -62,6 +63,14 @@ test("kept text that does not read gives the first look; a choice that reads bes
     known: true,
     goals: { boiler: false, crates: false },
   });
+});
+
+test("Projects folds as a whole and stays so, kept beside the other lists' choices", () => {
+  world = standin({});
+  keepFold("projects", false);
+  keepFold("done", true);
+  expect([opened("projects"), ...standing()]).toEqual([false, true, false, true, true]);
+  expect(JSON.parse(world.store.getItem(FOLDS) ?? "null")).toEqual({ projects: false, done: true, goals: {} });
 });
 
 test("a card's choice folds that card alone", () => {

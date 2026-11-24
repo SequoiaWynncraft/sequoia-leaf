@@ -66,19 +66,18 @@ import { usable } from "../tools.ts";
 import { coins } from "../yard.ts";
 import type {
   GiftPrint,
-  GroundPrint,
   ItemPrint,
   MachinePrint,
   Named,
   NodePrint,
   OrderPrint,
-  PlotPrint,
   Print,
   StandingPrint,
   TierPrint,
 } from "./cards.ts";
 import { openTools } from "./dock.ts";
 import { givenIn } from "./goal.ts";
+import type { GroundPrint, PlotPrint } from "./land.ts";
 import { flowOf, kindNumbers, numbersOf, saysNumbers } from "./numbers.ts";
 import { orderRef } from "./refs.ts";
 import type { WaysPrint } from "./splitter.ts";
@@ -204,6 +203,7 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     open: r < 0 || h.open[r] === 1,
     tier: tierOpen() ? w.open.tier : null,
     keys: buttonKeys(k),
+    move: usable("select"),
     refund: worthAt(w, i),
     free: w.free[i] === 1,
     ways: k === SPLITTER ? waysPrint(i) : null,

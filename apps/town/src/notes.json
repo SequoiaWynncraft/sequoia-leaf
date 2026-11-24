@@ -1,5 +1,14 @@
 [
   {
+    "id": "works-card-move",
+    "at": "2026-11-24T21:58Z",
+    "title": "The Works: Move from a piece's card",
+    "lines": [
+      "A piece's card has a Move button. It takes that piece in hand to set down somewhere else, without picking Select first.",
+      "The Projects list on the tier's screen folds under its label, as Done does."
+    ]
+  },
+  {
     "id": "items-per-minute",
     "at": "2026-11-24T21:36Z",
     "title": "The Items list and the depot's picture",
