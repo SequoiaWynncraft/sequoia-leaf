@@ -44,16 +44,22 @@ export class Pipe implements Connection {
   readonly speaks: number;
   private readonly out: Queue.Queue<Frame>;
   private readonly writer: Socket.Writer;
+  /** Told the bytes of each binary frame it takes, every one a room's snapshot: motion sent (`LiveCounts`). */
+  private readonly motion: (bytes: number) => void;
 
-  constructor(out: Queue.Queue<Frame>, writer: Socket.Writer, speaks: number) {
+  constructor(out: Queue.Queue<Frame>, writer: Socket.Writer, speaks: number, motion: (bytes: number) => void) {
     this.out = out;
     this.writer = writer;
     this.speaks = speaks;
+    this.motion = motion;
   }
 
-  /** A pipe writing to `writer`, for a page that speaks version `speaks` of the wire, with its line of frames waiting. */
-  static make(writer: Socket.Writer, speaks: number): Effect.Effect<Pipe> {
-    return Effect.map(Queue.unbounded<Frame>(), (out) => new Pipe(out, writer, speaks));
+  /**
+   * A pipe writing to `writer`, for a page that speaks version `speaks` of the wire, with its line
+   * of frames waiting, telling `motion` of each snapshot it takes.
+   */
+  static make(writer: Socket.Writer, speaks: number, motion: (bytes: number) => void): Effect.Effect<Pipe> {
+    return Effect.map(Queue.unbounded<Frame>(), (out) => new Pipe(out, writer, speaks, motion));
   }
 
   get closed(): boolean {
@@ -70,22 +76,25 @@ export class Pipe implements Connection {
     }
     this.waiting++;
     Queue.offerUnsafe(this.out, frame);
+    if (typeof frame !== "string") this.motion(frame.byteLength);
     return true;
   }
 
   /**
-   * Writes a frame from the fiber this runs in, if `still()` says it is still for this connection.
-   * With the socket free, it is held: `still()` is asked and the frame put in the line behind what
-   * waits in one step, or, with nothing waiting, written there and then, before anything sent
-   * after the asking, which waits in the line for the socket. With the socket held by another,
-   * `still()` is asked and the frame put in the line in one step, behind what that one is writing:
-   * whoever writes never waits for a connection. A write that fails is a socket already gone, which
-   * its reader hears of too: the frame is lost with it.
+   * Writes from the fiber this runs in what `take()` says to write, if anything, so that nothing is
+   * written to the page between its saying and the writing. With the socket free, it is held:
+   * `take()` is asked and the frame put in the line behind what waits in one step, or, with nothing
+   * waiting, written there and then, before anything sent after the asking, which waits in the line
+   * for the socket. With the socket held by another, `take()` is asked and the frame put in the line
+   * in one step, behind what that one is writing: whoever writes never waits for a connection. A
+   * frame written there and then counts as sent once the socket has taken it; a write that fails is
+   * a socket already gone, which its reader hears of too, and the frame is lost with it.
    */
-  writeIf(still: () => boolean, frame: Uint8Array, tally: Tally): Effect.Effect<void> {
+  writeIf(take: () => Uint8Array | null, tally: Tally): Effect.Effect<void> {
     const held = Effect.suspend(() => {
-      // Asked, and put in the line or counted as written, in this one step.
-      if (this.closed || !still()) {
+      // Asked, and put in the line or written next, in this one step.
+      const frame = this.closed ? null : take();
+      if (frame === null) {
         tally.passed++;
         return Effect.void;
       }
@@ -93,13 +102,16 @@ export class Pipe implements Connection {
         this.queue(frame, tally);
         return Effect.void;
       }
-      tally.direct++;
-      tally.bytes += frame.byteLength;
-      return Effect.ignore(this.writer.write(frame));
+      const sent = Effect.sync(() => {
+        tally.direct++;
+        this.motion(frame.byteLength);
+      });
+      return Effect.ignore(Effect.andThen(this.writer.write(frame), sent));
     });
     const inLine = Effect.sync(() => {
-      if (still()) this.queue(frame, tally);
-      else tally.passed++;
+      const frame = this.closed ? null : take();
+      if (frame === null) tally.passed++;
+      else this.queue(frame, tally);
     });
     return Effect.flatMap(this.socket.withPermitsIfAvailable(1)(held), (wrote) =>
       Option.isSome(wrote) ? Effect.void : inLine,
@@ -108,9 +120,8 @@ export class Pipe implements Connection {
 
   /** A frame put in the line (`send`), counted as `writeIf` counts it. */
   private queue(frame: Uint8Array, tally: Tally): void {
-    if (!this.send(frame)) return void tally.passed++;
-    tally.queued++;
-    tally.bytes += frame.byteLength;
+    if (this.send(frame)) tally.queued++;
+    else tally.passed++;
   }
 
   /** Closes it after whatever is waiting, saying why by the code. */

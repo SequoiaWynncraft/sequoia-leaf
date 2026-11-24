@@ -12,35 +12,34 @@ import type { Effect } from "effect";
 
 /**
  * What became of the frames written at a tick, counted as each is (`Connection.writeIf`): written
- * there and then (`direct`), put in a connection's line behind what was waiting (`queued`), or not
- * for the page any more (`passed`); and the bytes of those written or put in line.
+ * there and then (`direct`, once the socket took it), put in a connection's line behind what was
+ * waiting (`queued`), or not for the page any more (`passed`).
  */
 export interface Tally {
   direct: number;
   queued: number;
   passed: number;
-  bytes: number;
 }
 
-export const noTally = (): Tally => ({ direct: 0, queued: 0, passed: 0, bytes: 0 });
+export const noTally = (): Tally => ({ direct: 0, queued: 0, passed: 0 });
 
 /** A way through to somebody's page, as it is when a snapshot is made for them. */
 export interface Connection {
   /**
-   * Writes a frame from the fiber this runs in, if `still()` says, when its turn comes, that it is
-   * still for this page: nothing is written to the page between asking and writing. What became of
-   * it is counted in `tally`, in the step that decides it.
+   * Writes from the fiber this runs in what `take()` says to write when its turn comes, if
+   * anything: nothing is written to the page between its saying and the writing. What became of
+   * it is counted in `tally`.
    */
-  writeIf(still: () => boolean, frame: Uint8Array, tally: Tally): Effect.Effect<void>;
+  writeIf(take: () => Uint8Array | null, tally: Tally): Effect.Effect<void>;
 }
 
 /**
  * Where a room sends what it has to say to one of the people in it: the player. `send` puts a
- * frame in line on whichever connection they have now; `connection` is that connection, if any,
- * for a snapshot written to it at the tick.
+ * frame in line on whichever connection they have now, and says whether one took it;
+ * `connection` is that connection, if any, for a snapshot written to it at the tick.
  */
 export interface Outbox {
-  send(frame: string | Uint8Array): void;
+  send(frame: string | Uint8Array): boolean;
   connection(): Connection | null;
 }
 
@@ -58,10 +57,62 @@ interface Recipient {
   readonly connection: Connection;
 }
 
-/** A room's snapshot at a tick, and everybody it is for, each by the connection they had then. */
-export interface Snapshot {
-  readonly frame: Uint8Array;
+/** Somebody a snapshot shows, and their motion as it shows it. */
+interface Shows {
+  readonly occupant: Occupant;
+  readonly entry: Entry;
+}
+
+/**
+ * A room's snapshot at a tick, and everybody it is for, each by the connection they had then. Each
+ * is told it as the room is when their turn comes (`for`): nobody who has left since is told it,
+ * and it shows nobody who has left since, whose leaving everybody still to be told has heard
+ * first. Its frame is made again, once, whenever somebody has left the room since it was last made.
+ * Nobody who came in since is in it, either way: they were not in the room when it was made.
+ */
+export class Snapshot {
   readonly to: readonly Recipient[];
+  private readonly room: Room;
+  private readonly tick: number;
+  private readonly time: number;
+  private shows: readonly Shows[];
+  private frame: Uint8Array;
+  /** How many had left the room (`Room.departed`) when `frame` was made. */
+  private departed: number;
+
+  constructor(room: Room, tick: number, time: number, shows: readonly Shows[], to: readonly Recipient[]) {
+    this.room = room;
+    this.tick = tick;
+    this.time = time;
+    this.shows = shows;
+    this.to = to;
+    this.frame = encodeSnapshot(
+      tick,
+      time,
+      shows.map((s) => s.entry),
+    );
+    this.departed = room.departed;
+  }
+
+  /**
+   * What to write to `r` now: the room's motion as it was at the tick, but for anybody who has left
+   * since; or nothing, when it is no longer for them (they have left the room, even to come back in
+   * as another, or their page has a new connection, which the room greeted afresh), or nobody it
+   * showed is still there.
+   */
+  for(r: Recipient): Uint8Array | null {
+    if (!this.room.has(r.occupant) || r.occupant.outbox.connection() !== r.connection) return null;
+    if (this.departed !== this.room.departed) {
+      this.shows = this.shows.filter((s) => this.room.has(s.occupant));
+      this.frame = encodeSnapshot(
+        this.tick,
+        this.time,
+        this.shows.map((s) => s.entry),
+      );
+      this.departed = this.room.departed;
+    }
+    return this.shows.length === 0 ? null : this.frame;
+  }
 }
 
 /**
@@ -181,6 +232,8 @@ export class Room {
   readonly kindName: string;
   readonly kind: RoomKind;
   private lastId = 0;
+  /** How many have left the room since it opened, for a snapshot being told to see that somebody has (`Snapshot.for`). */
+  departed = 0;
   /** The rooms with work at the next tick, this one among them while it has any. */
   private readonly busy: Set<Room>;
 
@@ -223,6 +276,7 @@ export class Room {
   /** Lets somebody go, and tells everyone else. */
   leave(id: number): void {
     if (!this.occupants.delete(id)) return;
+    this.departed++;
     this.others(id, text({ t: "left", id }));
   }
 
@@ -272,18 +326,18 @@ export class Room {
    * its player (a hidden tab) never leaves them walking on the spot for everybody else (their next
    * move walks them on); then the motion that changed since the last tick goes in one snapshot for
    * everyone in the room with a connection, each by the one they have now, or null if none did.
-   * Everybody counts as told it from now: it is for whoever writes it to them (`reaches`). Once
-   * nobody is left walking, the room has no work until a change.
+   * Everybody counts as told it from now: it is for whoever writes it to them (`Snapshot.for`).
+   * Once nobody is left walking, the room has no work until a change.
    */
   flush(tick: number, time: number): Snapshot | null {
-    const changed: Entry[] = [];
+    const changed: Shows[] = [];
     let walking = false;
     for (const o of this.occupants.values()) {
       if (o.shown.state !== "seen") continue;
       let shown = o.shown;
       if (time - shown.movedAt >= QUIET_MS) shown = stood(shown);
       if (shown.changed) {
-        changed.push(entryOf(o, shown));
+        changed.push({ occupant: o, entry: entryOf(o, shown) });
         shown = { ...shown, changed: false };
       }
       o.shown = shown;
@@ -296,21 +350,12 @@ export class Room {
       const connection = occupant.outbox.connection();
       if (connection) to.push({ occupant, connection });
     }
-    return { frame: encodeSnapshot(tick, time, changed), to };
+    return new Snapshot(this, tick, time, changed, to);
   }
 
   /** Whether somebody is in the room still, as this occupant: not gone, nor gone and come back in as another. */
   has(o: Occupant): boolean {
     return this.occupants.get(o.member.id) === o;
-  }
-
-  /**
-   * Whether a snapshot of this room is still for somebody it was made for: they are in it still, as
-   * the same occupant, on the same connection. One who has gone to another room, even on the same
-   * connection, or whose page has a new connection (which the room greeted afresh), is not.
-   */
-  reaches(r: Recipient): boolean {
-    return this.has(r.occupant) && r.occupant.outbox.connection() === r.connection;
   }
 
   /** Everybody seen, as a snapshot carries them. */

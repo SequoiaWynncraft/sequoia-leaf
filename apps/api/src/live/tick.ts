@@ -2,7 +2,7 @@ import { SERVER_HZ } from "@sequoia-leaf/core";
 import { Clock, Context, Duration, Effect, Schedule, type Scope } from "effect";
 
 import type { LiveCounts } from "./counts.ts";
-import { noTally, type Room, type Rooms, type Snapshot, type Tally } from "./room.ts";
+import { noTally, type Rooms, type Snapshot, type Tally } from "./room.ts";
 
 /**
  * How long a tick is: `SERVER_HZ` a second, to the whole millisecond. A fixed schedule measures its
@@ -30,21 +30,26 @@ export const LiveMeter = Context.Reference<((times: TickTimes) => void) | null>(
 
 /**
  * A room's snapshot written to everybody it was made for, from the fiber this runs in, each on the
- * connection they had then, and only if it is still for them as their connection is held for it
- * (`Room.reaches`): the fiber may let others run between one write and the next, and a page in
- * another room by then, or on another connection, must never hear this one's. What became of each
- * is counted in `tally`.
+ * connection they had then, as the room is when their turn comes (`Snapshot.for`): the fiber may
+ * let others run between one write and the next, and a page in another room by then, or on another
+ * connection, must never hear this one's, nor anybody hear of somebody they were told has left.
+ * What became of each is counted in `tally`; says whether anybody was sent it.
  */
-const tellRoom = (room: Room, snapshot: Snapshot, tally: Tally) =>
-  Effect.forEach(snapshot.to, (r) => r.connection.writeIf(() => room.reaches(r), snapshot.frame, tally), {
-    discard: true,
+const tellRoom = (snapshot: Snapshot, tally: Tally): Effect.Effect<boolean> =>
+  Effect.suspend(() => {
+    const before = tally.direct + tally.queued;
+    const writes = Effect.forEach(snapshot.to, (r) => r.connection.writeIf(() => snapshot.for(r), tally), {
+      discard: true,
+    });
+    return Effect.map(writes, () => tally.direct + tally.queued > before);
   });
 
 /**
  * Live's tick, every `TICK` for as long as the scope lasts: each room with work (`Rooms.busy`)
  * stops anybody shown walking whose game has gone quiet, and what changed goes to everyone in it,
- * written by this fiber; the snapshots written or put in line are counted as sent. What each tick
- * took goes to the `LiveMeter`, if anybody is told, and is not timed otherwise.
+ * written by this fiber (each pipe counts what it takes as motion sent); a room counts as told once
+ * somebody in it was sent its snapshot. What each tick took goes to the `LiveMeter`, if anybody is
+ * told, and is not timed otherwise.
  */
 export const ticking = (rooms: Rooms, counts: LiveCounts): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
@@ -57,23 +62,25 @@ export const ticking = (rooms: Rooms, counts: LiveCounts): Effect.Effect<void, n
     const flush = Effect.flatMap(Clock.currentTimeMillis, (now) =>
       Effect.suspend(() => {
         tick++;
-        const told: [Room, Snapshot][] = [];
+        const snapshots: Snapshot[] = [];
         for (const room of rooms.busy()) {
           const snapshot = room.flush(tick, now);
-          if (snapshot) told.push([room, snapshot]);
+          if (snapshot) snapshots.push(snapshot);
         }
-        counts.ticked(told.length);
         const tally = noTally();
-        const writes = Effect.forEach(told, ([room, snapshot]) => tellRoom(room, snapshot, tally), { discard: true });
-        const sent = Effect.sync(() => counts.sent("motion", tally.direct + tally.queued, tally.bytes));
-        if (meter === null) return Effect.andThen(writes, sent);
+        const writes = Effect.map(
+          Effect.forEach(snapshots, (snapshot) => tellRoom(snapshot, tally)),
+          (told) => told.filter(Boolean).length,
+        );
+        const counted = Effect.map(writes, (told) => {
+          counts.ticked(told);
+          return told;
+        });
+        if (meter === null) return Effect.asVoid(counted);
         const began = millis();
         const late = tickBegan === null ? 0 : began - tickBegan - Duration.toMillis(TICK);
         tickBegan = began;
-        return writes.pipe(
-          Effect.andThen(sent),
-          Effect.andThen(Effect.sync(() => meter({ late, writing: millis() - began, rooms: told.length, ...tally }))),
-        );
+        return Effect.map(counted, (told) => meter({ late, writing: millis() - began, rooms: told, ...tally }));
       }),
     );
     yield* Effect.forkScoped(Effect.repeat(flush, Schedule.fixed(TICK)));

@@ -201,8 +201,10 @@ const all: Walker[] = Array.from({ length: walkers }, (_, n) => ({
   x: (n * 37) % 512,
   dx: 64 / CLIENT_HZ,
 }));
+/** Walkers out of the room for a second, by number, so that none is taken out again meanwhile; none of them walks. */
+const out = new Set<number>();
 const step = (w: Walker) => {
-  if (w.client === null) return;
+  if (w.client === null || out.has(w.n)) return;
   w.x += w.dx;
   if (w.x < 0 || w.x > 512) w.dx = -w.dx;
   const seq = w.client.move({
@@ -227,8 +229,6 @@ const joining = setInterval(() => {
     void connect(w);
   }
 }, 1000);
-/** Walkers out of the room for a second, by number, so that none is taken out again meanwhile. */
-const out = new Set<number>();
 const churning = setInterval(() => {
   for (let i = 0; i < churn; i++) {
     const w = all[Math.floor(Math.random() * all.length)];

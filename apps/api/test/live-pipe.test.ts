@@ -52,7 +52,8 @@ async function everyInterleaving(race: (budget: number, k: number) => Promise<vo
 const settle = Effect.repeat(Effect.yieldNow, { times: 20 });
 
 const binary = (first: number) => new Uint8Array([first, 0, 0]);
-const always = () => true;
+/** Counts no motion: the tests here count what the socket is written. */
+const noMotion = () => undefined;
 
 describe("a connection's pipe", () => {
   it("writes what it is sent in the order sent, texts and binary frames alike, and closes after them", async () => {
@@ -62,7 +63,7 @@ describe("a connection's pipe", () => {
         Effect.gen(function* () {
           const open = yield* Deferred.make<void>();
           yield* Deferred.succeed(open, undefined);
-          const pipe = yield* Pipe.make(writerHeldBy(written, open), LIVE_VERSION);
+          const pipe = yield* Pipe.make(writerHeldBy(written, open), LIVE_VERSION, noMotion);
           yield* Effect.forkScoped(pipe.pump());
           pipe.send("welcome");
           pipe.send(binary(2));
@@ -85,7 +86,7 @@ describe("a connection's pipe", () => {
       Effect.scoped(
         Effect.gen(function* () {
           const open = yield* Deferred.make<void>();
-          const pipe = yield* Pipe.make(writerHeldBy(written, open), LIVE_VERSION);
+          const pipe = yield* Pipe.make(writerHeldBy(written, open), LIVE_VERSION, noMotion);
           const pump = yield* Effect.forkScoped(pipe.pump());
           // The first frame is taken, and its write held: the socket takes nothing more for now. It
           // waits unwritten with the rest.
@@ -117,22 +118,22 @@ describe("a connection's pipe", () => {
       Effect.scoped(
         Effect.gen(function* () {
           const open = yield* Deferred.make<void>();
-          const pipe = yield* Pipe.make(writerHeldBy(written, open), LIVE_VERSION);
+          const pipe = yield* Pipe.make(writerHeldBy(written, open), LIVE_VERSION, noMotion);
           yield* Effect.forkScoped(pipe.pump());
           // A text in the line, taken and its write held: a snapshot written meanwhile goes behind
           // it, and the fiber writing it goes on.
           pipe.send("joined");
           yield* settle;
-          yield* pipe.writeIf(always, binary(2), noTally());
+          yield* pipe.writeIf(() => binary(2), noTally());
           expect(written).toEqual([]);
           yield* Deferred.succeed(open, undefined);
           yield* settle;
           expect(written).toEqual(["joined", 2]);
           // Nothing waiting: written by the fiber writing it, before the pump has had a turn.
-          yield* pipe.writeIf(always, binary(3), noTally());
+          yield* pipe.writeIf(() => binary(3), noTally());
           expect(written).toEqual(["joined", 2, 3]);
           pipe.close(CLOSE.done, "done");
-          yield* pipe.writeIf(always, binary(4), noTally());
+          yield* pipe.writeIf(() => binary(4), noTally());
           yield* settle;
         }),
       ),
@@ -158,10 +159,10 @@ describe("a connection's pipe", () => {
                 : Effect.sync(() => void written.push(said(frame))),
             writeAll: (frames) => Effect.sync(() => void written.push(...frames.map(said))),
           };
-          const pipe = yield* Pipe.make(writer, LIVE_VERSION);
+          const pipe = yield* Pipe.make(writer, LIVE_VERSION, noMotion);
           yield* Effect.forkScoped(pipe.pump());
-          yield* pipe.writeIf(() => false, binary(1), noTally());
-          const writing = yield* Effect.forkScoped(pipe.writeIf(always, binary(2), noTally()));
+          yield* pipe.writeIf(() => null, noTally());
+          const writing = yield* Effect.forkScoped(pipe.writeIf(() => binary(2), noTally()));
           yield* settle;
           // Sent while the snapshot is being written (the page's next room's welcome): after it.
           pipe.send("welcome");
@@ -183,13 +184,13 @@ describe("a connection's pipe", () => {
       Effect.scoped(
         Effect.gen(function* () {
           const open = yield* Deferred.make<void>();
-          const pipe = yield* Pipe.make(writerHeldBy(written, open), LIVE_VERSION);
+          const pipe = yield* Pipe.make(writerHeldBy(written, open), LIVE_VERSION, noMotion);
           yield* Effect.forkScoped(pipe.pump());
           pipe.send("first");
           yield* settle;
-          for (let i = 1; i < MOST_WAITING; i++) yield* pipe.writeIf(always, binary(2), noTally());
+          for (let i = 1; i < MOST_WAITING; i++) yield* pipe.writeIf(() => binary(2), noTally());
           expect(pipe.closedWith).toBeNull();
-          yield* pipe.writeIf(always, binary(9), noTally());
+          yield* pipe.writeIf(() => binary(9), noTally());
           return pipe;
         }),
       ),
@@ -211,7 +212,7 @@ describe("a connection's pipe", () => {
                 write: (frame) => Effect.sync(() => void written.push(said(frame))),
                 writeAll: (frames) => Effect.sync(() => void written.push(...frames.map(said))),
               };
-              const pipe = yield* Pipe.make(writer, LIVE_VERSION);
+              const pipe = yield* Pipe.make(writer, LIVE_VERSION, noMotion);
               // Something waits in the line, and nothing holds the socket.
               pipe.send("joined");
               let inTown = true;
@@ -228,7 +229,7 @@ describe("a connection's pipe", () => {
                 Deferred.doneUnsafe(looked, Effect.void);
                 return inTown;
               };
-              yield* Fiber.join(yield* Effect.forkScoped(pipe.writeIf(still, binary(2), noTally())));
+              yield* Fiber.join(yield* Effect.forkScoped(pipe.writeIf(() => (still() ? binary(2) : null), noTally())));
               yield* Fiber.join(page);
               yield* Effect.forkScoped(pipe.pump());
               yield* settle;
@@ -254,7 +255,7 @@ describe("a connection's pipe", () => {
                 write: (frame) => Effect.sync(() => void written.push(said(frame))),
                 writeAll: (frames) => Effect.sync(() => void written.push(...frames.map(said))),
               };
-              const pipe = yield* Pipe.make(writer, LIVE_VERSION);
+              const pipe = yield* Pipe.make(writer, LIVE_VERSION, noMotion);
               pipe.send("a");
               pipe.send("b");
               yield* Effect.forkScoped(pipe.pump());
@@ -279,7 +280,7 @@ describe("a connection's pipe", () => {
         Effect.gen(function* () {
           const open = yield* Deferred.make<void>();
           yield* Deferred.succeed(open, undefined);
-          const pipe = yield* Pipe.make(writerHeldBy(written, open), LIVE_VERSION);
+          const pipe = yield* Pipe.make(writerHeldBy(written, open), LIVE_VERSION, noMotion);
           pipe.send("waiting");
           yield* pipe.closeNow(CLOSE.restart, "restart");
           pipe.send("after");

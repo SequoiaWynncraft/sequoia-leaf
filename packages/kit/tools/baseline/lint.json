@@ -167,7 +167,7 @@
     "packages/factory/src/check.ts": 104,
     "packages/factory/src/route.ts": 103,
     "packages/kit/src/play.ts": 264,
-    "packages/kit/src/realtime.ts": 227,
+    "packages/kit/src/realtime.ts": 220,
     "packages/raid/src/fight/core.ts": 100,
     "packages/raid/src/wire.ts": 115,
     "packages/town/src/game.ts": 112

@@ -14,6 +14,7 @@ import {
   Room,
   Rooms,
   type Shown,
+  type Snapshot,
 } from "../src/live/room.ts";
 
 /** Where the room shows somebody, or null before their first move. */
@@ -26,9 +27,10 @@ function inbox() {
   const texts: ToClient[] = [];
   const frames: Uint8Array[] = [];
   const connection: Connection = {
-    writeIf: (still, frame, tally) =>
+    writeIf: (take, tally) =>
       Effect.sync(() => {
-        if (!still()) return void tally.passed++;
+        const frame = take();
+        if (frame === null) return void tally.passed++;
         frames.push(frame);
         tally.direct++;
       }),
@@ -43,6 +45,7 @@ function inbox() {
           const m = readToClient(frame);
           if (m) texts.push(m);
         }
+        return true;
       },
       connection: () => connection,
     },
@@ -53,9 +56,18 @@ function inbox() {
 function tick(room: Room, n: number, time: number): boolean {
   const snapshot = room.flush(n, time);
   if (snapshot === null) return false;
-  for (const r of snapshot.to) Effect.runSync(r.connection.writeIf(() => room.reaches(r), snapshot.frame, noTally()));
+  for (const r of snapshot.to) Effect.runSync(r.connection.writeIf(() => snapshot.for(r), noTally()));
   return true;
 }
+
+/** What a snapshot says to the first it is for, decoded. */
+const shownTo = (snapshot: Snapshot | null) => {
+  const first = snapshot?.to[0];
+  const frame = first ? snapshot?.for(first) : null;
+  return frame ? decodeSnapshot(frame) : null;
+};
+/** Whose motion a snapshot's frame shows, by their ids. */
+const idsIn = (frame: Uint8Array | null) => decodeSnapshot(frame ?? new Uint8Array())?.entries.map((e) => e.id);
 
 const TOWN = { width: 512, height: 352, capacity: 3, speed: 160 };
 const person = (name: string, guest = false) => ({ player: `id-${name}`, name, rank: guest ? null : "Captain", guest });
@@ -313,11 +325,35 @@ describe("a room", () => {
     // Carol leaves; Bob's page has a new connection, which the room greets afresh.
     room.leave(carol.member.id);
     bobs = inbox().outbox.connection();
-    expect(snapshot?.to.map((r) => room.reaches(r))).toEqual([true, false, false]);
+    expect(snapshot?.to.map((r) => snapshot.for(r) !== null)).toEqual([true, false, false]);
     // Somebody whose page has no connection now (in their grace) is not one it is made for.
     bobs = null;
     room.move(alice.member.id, 2, at(12, 10), 10);
     expect(room.flush(2, 10)?.to.map((r) => r.occupant.member.name)).toEqual(["Alice"]);
+  });
+
+  it("shows nobody it was made before the leaving of to anybody told after, and everybody else to all", () => {
+    const room = new Room("town", 1, { ...TOWN, capacity: 5 });
+    room.join(person("Alice"), inbox().outbox, 0, 30, 1);
+    const bob = room.join(person("Bob"), inbox().outbox, 0, 30, 1);
+    const carol = room.join(person("Carol"), inbox().outbox, 0, 30, 1);
+    room.move(bob.member.id, 1, at(10, 10), 0);
+    room.move(carol.member.id, 1, at(20, 10), 0);
+    const snapshot = room.flush(1, 0);
+    const [toAlice, toBob, toCarol] = snapshot?.to ?? [];
+    if (!snapshot || !toAlice || !toBob || !toCarol) throw new Error("not for all three");
+    // Carol is told it as it was made; then Bob leaves, and somebody comes in.
+    expect(idsIn(snapshot.for(toCarol))).toEqual([bob.member.id, carol.member.id]);
+    room.leave(bob.member.id);
+    room.join(person("Dave"), inbox().outbox, 0, 30, 1);
+
+    // Alice, told after Bob's leaving, is told Carol's move and nothing of Bob's; the frame is made
+    // again once, for everybody still to be told; Bob is told nothing, and Dave is not one it is for.
+    const toAliceNow = snapshot.for(toAlice);
+    expect(idsIn(toAliceNow)).toEqual([carol.member.id]);
+    expect(snapshot.for(toAlice)).toBe(toAliceNow);
+    expect(snapshot.for(toBob)).toBeNull();
+    expect(snapshot.to.map((r) => r.occupant.member.name)).toEqual(["Alice", "Bob", "Carol"]);
   });
 
   it("knows somebody as in it only while they are, not once gone nor gone and back in as another", () => {
@@ -400,16 +436,14 @@ describe("the rooms", () => {
     expect(town.flush(3, 166)).toBeNull();
     expect(rooms.busy()).toEqual([town]);
     const stood = town.flush(4, 100 + QUIET_MS);
-    expect(decodeSnapshot(stood?.frame ?? new Uint8Array())?.entries.map((e) => [e.id, e.flags])).toEqual([
-      [bob.member.id, 0],
-    ]);
+    expect(shownTo(stood)?.entries.map((e) => [e.id, e.flags])).toEqual([[bob.member.id, 0]]);
     expect(rooms.busy()).toEqual([]);
 
     // A halt of somebody walking is work; of somebody standing, none.
     town.move(bob.member.id, 2, at(21, 20, Flag.Moving), 2000);
     town.flush(5, 2000);
     town.halt(bob.member.id);
-    expect(decodeSnapshot(town.flush(6, 2010)?.frame ?? new Uint8Array())?.entries.map((e) => e.flags)).toEqual([0]);
+    expect(shownTo(town.flush(6, 2010))?.entries.map((e) => e.flags)).toEqual([0]);
     town.halt(bob.member.id);
     expect(rooms.busy()).toEqual([]);
 

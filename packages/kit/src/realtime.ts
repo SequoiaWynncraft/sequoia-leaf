@@ -401,11 +401,17 @@ export function roomState(c: Conn<unknown>, now: number): RoomState {
   return c.downSince === null ? { at: "joining" } : { at: "down", ms: now - c.downSince };
 }
 
+/**
+ * Somebody in the room as one connection heard of them (by its welcome, or `joined`), with their
+ * motion as it came: nobody's motion is kept apart from them, to outlive their leaving.
+ */
+type Person = LiveMember & { readonly track: Track };
+const person = (m: LiveMember): Person => ({ ...m, track: new Track() });
+
 /** What one connection knows of the room. Made afresh for each, and shown only once its welcome came. */
 interface Link {
   readonly socket: LiveSocket;
-  readonly people: Map<number, LiveMember>;
-  readonly tracks: Map<number, Track>;
+  readonly people: Map<number, Person>;
   clock: ClockSync | null;
   /** When to draw others, from when this connection's snapshots came. */
   playout: Playout;
@@ -434,11 +440,10 @@ const current = (c: Conn<Link>): Link | null => (c.at === "connecting" || c.at =
 function roomSaid(l: Link, m: ToClient, ears: LiveEars): void {
   switch (m.t) {
     case "joined":
-      l.people.set(m.member.id, m.member);
+      l.people.set(m.member.id, person(m.member));
       return ears.joined?.(m.member);
     case "left":
       l.people.delete(m.id);
-      l.tracks.delete(m.id);
       return ears.left?.(m.id);
     case "act":
       return ears.act?.(m.id, m.kind, m.arg);
@@ -605,9 +610,8 @@ export function joinLive(first: string, ears: LiveEars = {}): LiveRoom {
     l.clock = new ClockSync(m.time, outside.now());
     l.playout = new Playout();
     l.people.clear();
-    l.tracks.clear();
     l.about.forget();
-    for (const r of m.roster) l.people.set(r.id, r);
+    for (const r of m.roster) l.people.set(r.id, person(r));
     inRoom(room);
     // Whoever came or went while the page was not in the room, Leaf's list says now.
     askAgain();
@@ -633,12 +637,8 @@ export function joinLive(first: string, ears: LiveEars = {}): LiveRoom {
     const snap = decodeSnapshot(new Uint8Array(data));
     if (!snap) return;
     l.playout.heard(snap.time, outside.now());
-    for (const entry of snap.entries) {
-      if (entry.id === l.you) continue;
-      let track = l.tracks.get(entry.id);
-      if (!track) l.tracks.set(entry.id, (track = new Track()));
-      track.add(snap.time, entry);
-    }
+    // Only of those the page knows to be here: of anybody else (somebody it was told has left), nothing is kept.
+    for (const entry of snap.entries) if (entry.id !== l.you) l.people.get(entry.id)?.track.add(snap.time, entry);
   }
 
   /**
@@ -677,7 +677,6 @@ export function joinLive(first: string, ears: LiveEars = {}): LiveRoom {
     const l: Link = {
       socket: outside.socket(liveUrl(room)),
       people: new Map(),
-      tracks: new Map(),
       clock: null,
       playout: new Playout(),
       you: null,
@@ -722,7 +721,7 @@ export function joinLive(first: string, ears: LiveEars = {}): LiveRoom {
     sample(id) {
       const l = shown();
       const time = l?.playout.time(outside.now()) ?? null;
-      return time === null ? null : (l?.tracks.get(id)?.at(time) ?? null);
+      return time === null ? null : (l?.people.get(id)?.track.at(time) ?? null);
     },
     serverNow() {
       const clock = shown()?.clock;

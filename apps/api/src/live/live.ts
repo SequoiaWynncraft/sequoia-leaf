@@ -159,6 +159,22 @@ const quietly = (what: string, effect: Effect.Effect<void>) =>
  * second.
  */
 const FAREWELL_WAIT = Duration.millis(200);
+/**
+ * How long Leaf's farewell waits for every connection's close to be written. Each is written as soon
+ * as its socket is free, at once on Bun's; past this, Leaf stops without the rest, within the two
+ * seconds its whole stop has.
+ */
+const FAREWELL_CLOSE = Duration.seconds(1);
+
+/**
+ * Every connection's close at once, each as soon as its socket is free; and none waited for past
+ * `FAREWELL_CLOSE`, should a socket ever take its time over a write.
+ */
+const closeAll = (players: readonly Player[]): Effect.Effect<void> =>
+  Effect.forEach(players, (p) => p.pipe?.closeNow(CLOSE.restart, "restart") ?? Effect.void, {
+    concurrency: "unbounded",
+    discard: true,
+  }).pipe(Effect.timeout(FAREWELL_CLOSE), Effect.ignore);
 
 /** The longest text frame Leaf reads, in UTF-16 code units (as JavaScript counts a string's length). Every message the game sends is far shorter. */
 const MOST_TEXT = 512;
@@ -516,7 +532,9 @@ export class Live extends Context.Service<
       ) =>
         Effect.gen(function* () {
           const socket = yield* Effect.orDie(upgrade);
-          const pipe = yield* Pipe.make(yield* socket.writer, page.speaks ?? LIVE_VERSION);
+          const pipe = yield* Pipe.make(yield* socket.writer, page.speaks ?? LIVE_VERSION, (bytes) =>
+            counts.sent("motion", 1, bytes),
+          );
           // Whatever ends this connection, this decides what becomes of the player, and only while it
           // is still theirs: signed out, they leave at once; otherwise they wait out their grace.
           yield* Effect.addFinalizer(() =>
@@ -646,9 +664,7 @@ export class Live extends Context.Service<
           Queue.offerUnsafe(whereabouts, { kind: "farewell", at: yield* Clock.currentTimeMillis, done });
           yield* Deferred.await(done).pipe(Effect.timeout(FAREWELL_WAIT), Effect.ignore);
         }
-        yield* Effect.forEach([...players.values()], (p) => p.pipe?.closeNow(CLOSE.restart, "restart") ?? Effect.void, {
-          discard: true,
-        });
+        yield* closeAll([...players.values()]);
       });
 
       return Live.of({

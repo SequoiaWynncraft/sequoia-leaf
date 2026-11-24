@@ -101,6 +101,73 @@ describe("a change to who is about", () => {
   });
 });
 
+/**
+ * The most of `before`'s people `after` can keep in their order, by the table `listChange` once
+ * filled whole (the longest sequence of ids common to both): what its changes are held to.
+ */
+function mostKept(before: readonly Row[], after: readonly Row[]): number {
+  let next = Array.from({ length: after.length + 1 }, () => 0);
+  for (let i = before.length - 1; i >= 0; i--) {
+    const here = Array.from({ length: after.length + 1 }, () => 0);
+    for (let j = after.length - 1; j >= 0; j--)
+      here[j] = before[i]?.id === after[j]?.id ? (next[j + 1] ?? 0) + 1 : Math.max(next[j] ?? 0, here[j + 1] ?? 0);
+    next = here;
+  }
+  return next[0] ?? 0;
+}
+
+describe("how one list became the next", () => {
+  test("keeps as many in their order as the whole table did, and makes the new list exactly", () => {
+    const stream: Stream = { rng: 20261125 };
+    const people = Array.from({ length: 40 }, (_, i) => `p${i}`);
+    const list = (): Row[] =>
+      shuffled(stream, people)
+        .slice(0, below(stream, people.length + 1))
+        .map((id) => row(id));
+    // People come, go, change and move, a few or many at once.
+    const changedFrom = (rows: readonly Row[]): Row[] => {
+      const out = rows
+        .filter(() => chance(stream) > 0.2)
+        .map((r) => (chance(stream) < 0.2 ? row(r.id, { acted_at: `t${below(stream, 3)}` }) : r));
+      for (const r of list())
+        if (chance(stream) < 0.1 && !out.some((o) => o.id === r.id)) out.splice(below(stream, out.length + 1), 0, r);
+      for (let moves = below(stream, 4); moves > 0 && out.length > 1; moves--)
+        out.splice(below(stream, out.length), 0, ...out.splice(below(stream, out.length), 1));
+      return out;
+    };
+    for (let n = 0; n < 500; n++) {
+      const before = list();
+      const after = n % 5 === 0 ? list() : changedFrom(before);
+      const change = listChange(before, after);
+      const added = change?.add?.length ?? 0;
+
+      expect(applyList(before, change)).toEqual(after);
+      expect([after.length - added, before.length - (change?.drop?.length ?? 0) + added]).toEqual([
+        mostKept(before, after),
+        after.length,
+      ]);
+    }
+  });
+
+  test("of 2,000 people, takes a step or a few a person, however the list changed", () => {
+    const people = Array.from({ length: 2000 }, (_, i) => row(`p${i}`));
+    const first = people[0] ?? row("p0");
+    const lists = [
+      people.map((r, i) => (i === 1000 ? row(r.id, { acted_at: "now" }) : r)),
+      [...people.slice(1, 1500), first, ...people.slice(1500)],
+      people.toReversed(),
+      shuffled({ rng: 7 }, people),
+    ];
+    const began = performance.now();
+    const changes = lists.map((after) => listChange(people, after));
+    // About 3 ms on a quiet machine; the whole table took about 120.
+    expect(performance.now() - began).toBeLessThan(50);
+    expect(changes[0]).toEqual({ put: [{ acted_at: "now", id: "p1000" }] });
+    expect(changes[1]).toEqual({ drop: ["p0"], add: [[1499, first]] });
+    expect(changes.map((change) => applyList(people, change))).toEqual(lists);
+  });
+});
+
 describe("a change made from other lists", () => {
   const base = [row("a"), row("b")];
 

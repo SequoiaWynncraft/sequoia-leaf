@@ -501,6 +501,27 @@ describe("a live room", () => {
     expect(heard).toEqual(["welcome 1 town/1 1", "joined Alice", "act 2 emote wave", "left 2"]);
   });
 
+  test("keeps the motion only of those it knows are here: none of somebody it was told has left, all of the rest", async () => {
+    const w = await live();
+    room = joinLive("town");
+    const s = socket(0);
+    s.open();
+    const now = w.clock.now;
+    s.says(welcome(1, now, [{ ...ALICE, id: 1 }, ALICE, { ...ALICE, id: 3, name: "Bea" }]));
+    s.says({ t: "left", id: 2 });
+    // A snapshot made before Alice left, or of somebody the page never heard of, comes after.
+    s.sends(
+      encodeSnapshot(1, now - 100, [
+        { id: 2, seq: 1, ...at(5, 5) },
+        { id: 3, seq: 1, ...at(7, 7) },
+        { id: 4, seq: 1, ...at(9, 9) },
+      ]),
+    );
+
+    expect([...room.members().keys()]).toEqual([1, 3]);
+    expect([room.sample(2), room.sample(4), room.sample(3)?.x]).toEqual([null, null, 7]);
+  });
+
   test("in a visit's room, hears each batch Leaf did to the state visited, from its welcome on", async () => {
     const w = await live();
     const heard: unknown[] = [];

@@ -4,6 +4,7 @@ import {
   applyAbout,
   campRoom,
   CLOSE,
+  decodeSnapshot,
   encodeMove,
   Flag,
   LIVE_OLDEST,
@@ -14,7 +15,6 @@ import {
   playerId,
   readToClient,
   readWho,
-  type Who,
 } from "@sequoia-leaf/core";
 import { Deferred, type Duration, Effect, Fiber, Queue, Redacted, Schedule, Schema } from "effect";
 import { Socket } from "effect/socket";
@@ -92,6 +92,8 @@ async function connect(sent: Opening): Promise<LiveClient> {
 }
 
 const census = () => services?.run(Live.use((live) => live.census));
+/** Whether the town's first room has `n` in it now. */
+const townHas = async (n: number) => (await census())?.rooms["town/1"] === n;
 
 /** Leaf's clock moved on, with whatever fell due meanwhile done up to its next wait. */
 const pass = (duration: Duration.Input) => services?.adjust(duration) ?? Promise.resolve();
@@ -125,6 +127,14 @@ async function closedThrough(connected = 0, turns = 10_000): Promise<void> {
   if (turns === 0) throw new Error("a connection never closed");
   await new Promise((resolve) => setImmediate(resolve));
   return closedThrough(connected, turns - 1);
+}
+
+/** Waits until `done()` says so, looked at again every 20 ms of the machine's time, for at most `ms` of it. */
+async function within(ms: number, done: () => Promise<boolean>, by = performance.now() + ms): Promise<void> {
+  if (await done()) return;
+  if (performance.now() >= by) throw new Error(`not within ${ms} ms`);
+  await Bun.sleep(20);
+  return within(ms, done, by);
 }
 
 /** Every fiber of Leaf's that can go on has, as far as many turns of the event loop show. */
@@ -571,19 +581,16 @@ describe("a player, whatever their connection", () => {
     await a.welcome();
     a.drop();
     await closedThrough();
-    // The machine's clock is set back across the end of the grace, and put right after it.
+    // The machine's clock is set back a minute, before the grace began, and stays there: the grace
+    // ends on its own time all the same.
     try {
       clock.now = T0 - 60_000;
-      await Bun.sleep(200);
-      clock.now = T0 + 60_000;
-      await Bun.sleep(1100);
+      await within(1000, async () => (await census())?.rooms["town/1"] === undefined);
+      const counted2 = await census();
+      expect([clock.now, counted2?.connected, counted2?.rooms]).toEqual([T0 - 60_000, 0, {}]);
     } finally {
       clock.now = T0;
     }
-
-    const counted2 = await census();
-    expect(counted2).toMatchObject({ connected: 0 });
-    expect(counted2?.rooms).toEqual({});
   });
 
   it("is gone at once, the connection closed as signed out, when their session ends", async () => {
@@ -798,8 +805,10 @@ describe("where players are, from the room", () => {
     await pass(GATHER);
     // The first lists told are all of them, to both, numbered.
     const first = await now.next("about");
-    let made = { v: first.v ?? 0, who: readWho(first.who) };
-    expect((await old.next("about")).who).toEqual(made.who);
+    const firstWho = readWho(first.who);
+    if (firstWho === null) throw new Error("not the lists");
+    let made = { v: first.v ?? 0, who: firstWho };
+    expect(readWho((await old.next("about")).who)).toEqual(made.who);
 
     const changes = [
       () => sayHere("carol-token", "works"),
@@ -817,10 +826,13 @@ describe("where players are, from the room", () => {
       // oxlint-disable-next-line no-await-in-loop -- as version 2 hears it
       const whole = await old.next("about");
       expect(changed.v).toBe(made.v + 1);
-      const before: Who | null = made.who;
-      made = { v: changed.v, who: before === null ? null : applyAbout(before, changed) };
-      expect(made.who).toEqual(readWho(whole.who));
+      const next = applyAbout(made.who, changed);
+      const heard = readWho(whole.who);
+      // Both made into lists, so that two that are not cannot pass for the same.
+      if (next === null || heard === null) throw new Error("a change that did not fit, or not the lists");
+      expect(next).toEqual(heard);
       expect(whole.v).toBe(changed.v);
+      made = { v: changed.v, who: next };
     }
     // Somebody coming in now is given the lists as they stand, numbered as the last change.
     const late = await connect(page("carol"));
@@ -855,9 +867,18 @@ describe("where players are, from the room", () => {
     await a.welcome();
     await rowsWhen((r) => r.length === 1);
     await pass(GATHER);
-    const told = await a.next("about");
+    const told = readWho((await a.next("about")).who);
+    // Carol's game says she is at the Works, and the page misses what changed.
+    expect((await sayHere("carol-token", "works")).status).toBe(200);
+    await pass(GATHER);
+    const missed = await a.next("aboutChanged");
     a.send({ t: "about" });
-    expect(await a.next("about")).toEqual(told);
+    const given = await a.next("about");
+
+    // All of the lists as they are now, numbered as the change it missed.
+    const now = told === null ? null : applyAbout(told, missed);
+    expect(now?.present.map((r) => r.id)).toHaveLength(2);
+    expect([given.v, readWho(given.who)]).toEqual([missed.v, now]);
     // Out of every room, nothing is given.
     a.send({ t: "leave" });
     a.send({ t: "about" });
@@ -1105,9 +1126,14 @@ async function everyTurn(race: (k: number) => Promise<void>, live: Partial<LiveT
   }
 }
 
-/** `k` turns of other fibers, and then `effect`. */
-const after = <A>(k: number, effect: Effect.Effect<A>) =>
-  Effect.andThen(Effect.repeat(Effect.yieldNow, { times: k }), effect);
+/** Exactly `k` turns of other fibers (none for 0), and then `effect`. */
+const after = <A, E, R>(k: number, effect: Effect.Effect<A, E, R>) =>
+  Effect.andThen(
+    Effect.gen(function* () {
+      for (let turn = 0; turn < k; turn++) yield* Effect.yieldNow;
+    }),
+    effect,
+  );
 
 describe("one step that nothing comes between", () => {
   it("keeps a player's new connection in the room, however their old one, signed out, closes beside it", async () => {
@@ -1155,12 +1181,7 @@ describe("one step that nothing comes between", () => {
         if (!live) throw new Error("no Live");
         const opening = (who: ReturnType<typeof someone>, turns: number) =>
           services?.run(
-            Effect.scoped(
-              Effect.andThen(
-                Effect.repeat(Effect.yieldNow, { times: turns }),
-                live.open(who, "town", Effect.succeed(standInSocket([])), signedIn),
-              ),
-            ),
+            Effect.scoped(after(turns, live.open(who, "town", Effect.succeed(standInSocket([])), signedIn))),
           );
         // The two let in are served until the test's Leaf stops; the one turned away answers at once.
         const answers: string[] = [];
@@ -1182,6 +1203,76 @@ describe("one step that nothing comes between", () => {
 });
 
 describe("a room's snapshot", () => {
+  it("tells nobody of somebody who has left since it was made, and everybody of everybody else", async () => {
+    await start();
+    const live = await services?.run(Live.use((service) => Effect.succeed(service)));
+    if (!live) throw new Error("no Live");
+    const serve = (who: ReturnType<typeof someone>, socket: Socket.Socket) =>
+      void services
+        ?.run(Effect.scoped(live.open(who, "town", Effect.succeed(socket), signedIn)))
+        .catch(() => undefined);
+    const bobIn = await Effect.runPromise(Queue.unbounded<string | Uint8Array>());
+    const carolIn = await Effect.runPromise(Queue.unbounded<string | Uint8Array>());
+    const aliceIn = await Effect.runPromise(Queue.unbounded<string | Uint8Array>());
+    const carols: (string | Uint8Array)[] = [];
+    const bobs: (string | Uint8Array)[] = [];
+    const alices: (string | Uint8Array)[] = [];
+    // Carol is the first the snapshot goes to, and her socket takes a while over it: meanwhile Bob
+    // leaves the room, and Alice, still to be told, hears that he has.
+    let paused = false;
+    const carolsSocket = Socket.make({
+      reader: Effect.succeed({
+        pull: Effect.map(Queue.take(carolIn), (frame) => [frame] as const),
+        upgrade: () => Effect.void,
+      }),
+      writer: Effect.succeed({
+        write: (chunk) => {
+          if (typeof chunk === "string" || Socket.isCloseEvent(chunk) || paused)
+            return Effect.sync(() => void (Socket.isCloseEvent(chunk) || carols.push(chunk)));
+          paused = true;
+          Queue.offerUnsafe(bobIn, JSON.stringify({ t: "leave" }));
+          return Effect.andThen(
+            Effect.repeat(
+              Effect.andThen(
+                Effect.yieldNow,
+                Effect.promise(() => townHas(2)),
+              ),
+              {
+                until: (gone) => gone,
+                schedule: Schedule.recurs(200),
+              },
+            ),
+            Effect.sync(() => void carols.push(chunk)),
+          );
+        },
+        writeAll: (chunks) => Effect.sync(() => void carols.push(...chunks)),
+      }),
+    });
+    serve(someone(carol, "Carol"), carolsSocket);
+    await turnsUntil(() => carols.length > 0);
+    serve(someone(bob, "Bob"), drivenSocket(bobIn, bobs));
+    await turnsUntil(() => bobs.length > 0);
+    serve(alicesIdentity, drivenSocket(aliceIn, alices));
+    await turnsUntil(() => alices.length > 0);
+    const welcome = readToClient(String(alices[0]));
+    const idOf = (name: string) =>
+      welcome?.t === "welcome" ? welcome.roster.find((m) => m.name === name)?.id : undefined;
+    // Carol and Bob walk; the tick's snapshot is made with both, for all three.
+    Queue.offerUnsafe(carolIn, encodeMove(1, at(100, 100)));
+    Queue.offerUnsafe(bobIn, encodeMove(1, at(200, 100)));
+    await turnsUntil(() => false, 50).catch(() => undefined);
+    await tick();
+    await turnsUntil(() => alices.some((w) => typeof w !== "string"));
+
+    const said = alices.map((w) =>
+      typeof w === "string" ? readToClient(w)?.t : decodeSnapshot(w)?.entries.map((e) => e.id),
+    );
+    const left = said.indexOf("left");
+    expect(left).toBeGreaterThan(0);
+    // After Bob's leaving, Alice is told Carol's move, and nothing of Bob's.
+    expect(said.slice(left + 1).filter(Array.isArray)).toEqual([[idOf("Carol")]]);
+  });
+
   it("never reaches a page after the welcome of the room it went to next, however long its socket takes", async () => {
     await start();
     const written: (string | Uint8Array)[] = [];
@@ -1255,6 +1346,34 @@ describe("an open interrupted while its socket opens", () => {
 });
 
 describe("when Leaf stops", () => {
+  it("says farewell within a second, however long a socket takes over its close", async () => {
+    await start();
+    const live = await services?.run(Live.use((service) => Effect.succeed(service)));
+    if (!live) throw new Error("no Live");
+    // A socket that takes every frame but its close, which it never finishes writing.
+    const stuck = Socket.make({
+      reader: Effect.succeed({ pull: Effect.never, upgrade: () => Effect.void }),
+      writer: Effect.succeed({
+        write: (chunk) => (Socket.isCloseEvent(chunk) ? Effect.never : Effect.void),
+        writeAll: () => Effect.void,
+      }),
+    });
+    for (const [who, socket] of [
+      [alicesIdentity, stuck],
+      [someone(bob, "Bob"), standInSocket([])],
+    ] as const)
+      void services
+        ?.run(Effect.scoped(live.open(who, "town", Effect.succeed(socket), signedIn)))
+        .catch(() => undefined);
+    await closedThrough(2);
+    let said = false;
+    void services?.run(live.farewell).then(() => (said = true));
+    await pass("1200 millis");
+    await turnsUntil(() => said);
+
+    expect(said).toBe(true);
+  });
+
   it("closes every connection as restarting, for the game to come back", async () => {
     await start();
     const a = await connect(page("alice"));

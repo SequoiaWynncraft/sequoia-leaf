@@ -40,26 +40,43 @@ export interface AboutChange {
 }
 
 /**
- * Which of `before`'s ids and `after`'s, by position, are the same people in the same order: as
- * many as can be (the longest sequence common to both), so that as few as can be are dropped and
- * added again.
+ * Which of `before`'s rows and `after`'s, by position, are the same people in the same order: as
+ * many as can be, so that as few as can be are dropped and added again. Nobody is in a list twice
+ * (`applyList` takes no list that has), so these are the longest run of `after`'s people whose
+ * places in `before` only go up. It is found in one pass (patience sorting): each person ends the
+ * shortest run they can lengthen, found by halving, unless they lengthen the longest, which is
+ * looked at first; so a list in the same order as before takes one step a person.
  */
 function kept(before: readonly Row[], after: readonly Row[]): Map<number, number> {
-  const n = before.length;
-  const width = after.length + 1;
-  // How many can be kept of `before` from `i` on and `after` from `j` on, at `i * width + j`.
-  const longest = Array.from({ length: (n + 1) * width }, () => 0);
-  const most = (i: number, j: number): number => longest[i * width + j] ?? 0;
-  const same = (i: number, j: number): boolean => before[i]?.id === after[j]?.id;
-  for (let i = n - 1; i >= 0; i--)
-    for (let j = after.length - 1; j >= 0; j--)
-      longest[i * width + j] = same(i, j) ? most(i + 1, j + 1) + 1 : Math.max(most(i + 1, j), most(i, j + 1));
-  // Each kept position of `after`, with its position in `before`.
+  const was = new Map<string, number>();
+  for (const [i, row] of before.entries()) if (!was.has(row.id)) was.set(row.id, i);
+  // `after`'s people who were in `before`, each with their position in both.
+  const both: { readonly j: number; readonly i: number }[] = [];
+  for (const [j, row] of after.entries()) {
+    const i = was.get(row.id);
+    if (i !== undefined) both.push({ j, i });
+  }
+  // `ends[k]`: of the runs of k + 1 so far, the one ending lowest in `before`, by its last (in `both`);
+  // `back[n]`: the one before `both[n]` in the run it ends.
+  const ends: number[] = [];
+  const back: number[] = [];
+  const placeOf = (n: number | undefined): number => (n === undefined ? -1 : (both[n]?.i ?? -1));
+  for (const [n, { i }] of both.entries()) {
+    let low = placeOf(ends.at(-1)) < i ? ends.length : 0;
+    let high = ends.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (placeOf(ends[mid]) < i) low = mid + 1;
+      else high = mid;
+    }
+    back[n] = ends[low - 1] ?? -1;
+    ends[low] = n;
+  }
+  // The longest run, from its end back.
   const pairs = new Map<number, number>();
-  for (let i = 0, j = 0; i < n && j < after.length;) {
-    if (same(i, j)) pairs.set(j++, i++);
-    else if (most(i + 1, j) >= most(i, j + 1)) i++;
-    else j++;
+  for (let n = ends.at(-1) ?? -1; n >= 0; n = back[n] ?? -1) {
+    const pair = both[n];
+    if (pair) pairs.set(pair.j, pair.i);
   }
   return pairs;
 }
