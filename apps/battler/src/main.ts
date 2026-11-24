@@ -11,6 +11,7 @@ import { refresh, settle } from "@sequoia-leaf/kit/card.ts";
 import { keepLeaf, serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
+import { failedToOpen, watchPage } from "@sequoia-leaf/kit/report.ts";
 import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { isMuted, setMuted } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
@@ -72,6 +73,7 @@ async function setOutOn(trail: number): Promise<void> {
 async function boot(): Promise<void> {
   await fontsReady();
   // Who the member is, and then the table as Leaf has it. Without Leaf there is no table.
+  watchPage("battler");
   const where = await start();
   if (where.mode === "shut") {
     shutCard(where.why, where.signIn);
@@ -85,6 +87,7 @@ async function boot(): Promise<void> {
   const card = (why: Parameters<typeof troubleCard>[0]): void => troubleCard(why, signIn, NEEDS_LEAF);
   const trouble = await openTable(me.id, card);
   if (trouble) {
+    failedToOpen(trouble);
     card(trouble);
     return;
   }

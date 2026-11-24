@@ -21,6 +21,7 @@ import { askPerson } from "@sequoia-leaf/kit/person.ts";
 import type { Trouble } from "@sequoia-leaf/kit/play.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
+import { failedToOpen, watchPage } from "@sequoia-leaf/kit/report.ts";
 import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { must, type Pt } from "@sequoia-leaf/kit/util.ts";
@@ -143,6 +144,7 @@ function sendCard(): void {
 
 /** Who the member is, once the yard is open from Leaf; or nothing, with the card that says why it is not. */
 async function opened(params: URLSearchParams): Promise<{ id: string } | null> {
+  watchPage("works");
   const where = await start();
   if (where.mode === "shut") {
     shutCard(where.why, where.signIn);
@@ -163,6 +165,7 @@ async function opened(params: URLSearchParams): Promise<{ id: string } | null> {
   // In a visit, the owner's name is asked of Leaf meanwhile.
   const [trouble, owner] = await Promise.all([openYard(me.id, card), S.visiting && askPerson(S.visiting.id)]);
   if (trouble) {
+    failedToOpen(trouble);
     card(trouble);
     return null;
   }
