@@ -133,7 +133,11 @@ export function tip(target: HTMLElement, title: Words, text?: Words): void {
     target.setAttribute("role", "button");
     if (target.tabIndex < 0) target.tabIndex = 0;
   }
-  if (named) name();
+  if (named) {
+    name();
+    // Its words change (a purse's count): its name changes with them, as the words on screen do.
+    new MutationObserver(name).observe(target, { childList: true, characterData: true, subtree: true });
+  }
   const beside = (): void => {
     if (named) name();
     const r = target.getBoundingClientRect();

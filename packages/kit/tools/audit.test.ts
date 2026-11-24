@@ -145,7 +145,8 @@ const FIXTURE = `<!doctype html>
   <div id="scrim" class="k-scrim"><div id="notice">Notice</div></div>
 </body></html>`;
 
-test.skipIf(!Bun.which("chromium"))(
+// A real Chromium is asked for by name (`LEAF_BROWSER_TESTS=1`): one on the PATH need not start (CI's does not).
+test.skipIf(process.env["LEAF_BROWSER_TESTS"] !== "1")(
   "the audit finds each fault on a page in Chromium, and nothing done right",
   async () => {
     const dir = `${process.env["TMPDIR"] ?? `${homedir()}/.cache`}/kit-audit-test-${process.pid}`;

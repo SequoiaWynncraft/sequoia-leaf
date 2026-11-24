@@ -182,8 +182,9 @@ function card(title: string, line: string, word: string, go: (away: () => void) 
   );
   const scrim = el("div", `k-scrim ${scrimLook}`.trim(), {}, paper);
   document.body.append(scrim);
-  button.focus();
+  // A layer first, so that what had the focus before the notice is what has it back after.
   const done = dialog(paper, head, null);
+  button.focus();
   const away = (): void => {
     scrim.remove();
     done();

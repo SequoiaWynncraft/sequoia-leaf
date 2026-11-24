@@ -109,8 +109,6 @@ const browser = Bun.spawn(
     // that moves comes 1 to 2 seconds late, and reads as a long press.
     "--disable-gpu-vsync",
     "--disable-frame-rate-limit",
-    // CI's Ubuntu runners forbid the user namespaces Chromium's sandbox is made of; the page is our own.
-    ...(process.env["CI"] ? ["--no-sandbox"] : []),
     "about:blank",
   ],
   { stdout: "ignore", stderr: "pipe", env: { ...process.env, XDG_CONFIG_HOME: `${home}/config` } },
