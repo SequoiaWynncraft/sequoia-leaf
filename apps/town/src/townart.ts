@@ -1,26 +1,30 @@
 /**
- * The town as it is drawn: built once from the sprites as the page loads (`buildTown`: the houses,
- * the stalls, the trees, everything standing, each with its touch from `town.ts`), and the parts
- * that move drawn each frame over it (the Works' door and belt, the fire, the banner, the lanterns
- * in the tree, the water, the strings of lights, the crabs). What the town does is `town.ts`.
+ * The town as it is drawn: built once from the map's pieces as the page loads (`buildTown`: the
+ * houses, the stalls, the trees, everything standing, each with its touch from `town.ts`), and the
+ * parts that move drawn each frame over it (the Works' door and belt, the fire, the banner, the
+ * lanterns in the tree, the water, the strings of lights, the crabs). Where everything stands is the
+ * map's (`@sequoia-leaf/town/map`); what the town does is `town.ts`.
  */
 
-import { DAILY_CHEST } from "@sequoia-leaf/core";
+import { DAILY_CHEST, type Thing } from "@sequoia-leaf/core";
 import { BARK, CREAM, GOLD, INK, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { ell, R } from "@sequoia-leaf/kit/pix.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
-import { clamp, type Ctx, dist, lerp } from "@sequoia-leaf/kit/util.ts";
+import { clamp, type Ctx, lerp, type Rect, rng } from "@sequoia-leaf/kit/util.ts";
 import { LOST_CRAB } from "@sequoia-leaf/town/catalogue.ts";
 import { BOARD, boardAt, seedOf, SET_OUT } from "@sequoia-leaf/town/clock.ts";
 import { waiting } from "@sequoia-leaf/town/mail.ts";
+import { type FlatKind, isFlat, type StandingKind } from "@sequoia-leaf/town/map/kinds.ts";
+import { CRAB_HOMES, GLINTS, KEEPERS, LIGHTS, type Piece, PIECES, pondD, SHADOWS } from "@sequoia-leaf/town/map/map.ts";
+import type { PlaceId } from "@sequoia-leaf/town/map/rows.ts";
 
 import { unread } from "./board.ts";
 import { flutter } from "./fx.ts";
 import { G, SEED, today } from "./game.ts";
-import { GROUND, paintTrunk } from "./ground.ts";
+import { GROUND, paintTrunk, TRUNKS, trunkTall } from "./ground.ts";
 import { mine } from "./leaf.ts";
-import { flame, type Light, type Standing } from "./props.ts";
-import type { Sprites } from "./sprites.ts";
+import { flame, type Light, type Prop, type Standing } from "./props.ts";
+import type { Sprite, Sprites } from "./sprites.ts";
 import { tallyNew } from "./tally.ts";
 import { tallyBoard } from "./tallyart.ts";
 import {
@@ -32,7 +36,6 @@ import {
   BULBS,
   chest,
   type Crab,
-  CRAB_HOMES,
   crabs,
   door,
   doorLights,
@@ -48,7 +51,6 @@ import {
   lights,
   nudge,
   placeCrabs,
-  random,
   ringBell,
   RISE,
   SLOTS,
@@ -69,116 +71,144 @@ import {
   tipOf,
   tree,
 } from "./town.ts";
-import { BUILDINGS, GROVE, pondD, POSTS, STALL_FEET, TALLY, TRUNKS, trunkTall, WORKS_BENCH } from "./world.ts";
 
 let S: Sprites | null = null;
 
 // ---------- building it ----------
 
-function shadow(g: Ctx, x: number, y: number, rx: number, ry: number): void {
-  ell(g, x - GROUND.x, y - GROUND.y, rx, ry, "rgba(20,10,28,0.3)");
+/**
+ * What the page makes of a kind of piece that stands: what a touch on it is called (core's
+ * `THINGS`), its picture (none for one drawn wholly by `extra`), where it sorts among the people
+ * from its foot (`z`), the box a touch finds it in where that is not its picture (`hit`, from its
+ * anchor), whether it hops when touched, the place whose door it is part of, what it says to
+ * whoever points at it, what it does when touched, and anything drawn over it each frame.
+ */
+interface Part {
+  thing: Thing;
+  sprite: (s: Sprites, p: Piece) => Sprite | null;
+  z?: number;
+  hit?: Rect;
+  hops?: true;
+  place?: PlaceId;
+  tip?: readonly [string, string];
+  tap?: (q: Prop, x: number, y: number, own: boolean, p: Piece) => void;
+  extra?: (g: Ctx, sx: number, sy: number) => void;
 }
 
-export function buildTown(s: Sprites, ground: Ctx): void {
-  S = s;
+const PETALS = [SKY[4], CREAM, GOLD[1]] as const;
+const SHADE = "rgba(20,10,28,0.3)";
+/** How wide each look of a shop's strip of shade is: the Treasury's, the Works'. */
+const SHADE_W = [96, 104] as const;
 
-  // The enormous trunks: four across the back, two down each side.
-  for (const t of TRUNKS) add("trunk", paintTrunk(t.hw, trunkTall(t), t.seed, 250), t.x, t.y, { tap: tapTrunk });
+/** A "!" bobbing over a piece, at `dx`, `dy` from its foot, while `when` says so. */
+const bang =
+  (dx: number, dy: number, when: () => boolean) =>
+  (g: Ctx, sx: number, sy: number): void => {
+    if (!S || !when()) return;
+    g.drawImage(S.bang.c, sx + dx, sy + dy + Math.round(Math.sin(G.t * 4) * 1.5));
+  };
 
-  // Treasury, with its counter a separate piece in front of where Cinfy stands.
-  const TREASURY = tipOf("treasury");
-  add("treasury", s.treasury, BUILDINGS.treasury.x, BUILDINGS.treasury.y, {
-    z: 110,
+/** A stall's number in the catalogue, by its piece. */
+const stallOf = (p: Piece): number => KEEPERS.stalls.findIndex((k) => k.piece === p.id);
+
+/** A trunk, painted from its foot to well past the top of the map. */
+const trunkPicture = (_s: Sprites, p: Piece): Sprite | null => {
+  const t = TRUNKS[p.look];
+  return t ? paintTrunk(t.hw, trunkTall(p.y), t.seed, 250) : null;
+};
+
+const TREASURY = tipOf("treasury");
+const CAMP = tipOf("camp");
+const seat = (pic: (s: Sprites) => Sprite): Part => ({ thing: "seat", sprite: pic, tap: tapSeat });
+
+/** Every kind that stands, and what the page makes of it. */
+const PARTS: Readonly<Record<StandingKind, Part>> = {
+  trunk: { thing: "trunk", sprite: trunkPicture, tap: tapTrunk },
+  treasury: { thing: "treasury", sprite: (s) => s.treasury, z: -10, place: "treasury", tap: nudge, tip: TREASURY },
+  counter: {
+    thing: "counter",
+    sprite: (s) => s.counter,
     place: "treasury",
-    tap: nudge,
     tip: TREASURY,
-  });
-  add("counter", s.counter, 81, 120, {
-    place: "treasury",
-    tip: TREASURY,
-    tap: (p) => {
-      ringBell();
-      nudge(p);
+    tap: (q) => {
+      ringBell(q);
+      nudge(q);
     },
-  });
-  light(104, 104, 44, 0.95);
-  light(71, 94, 20, 0.7);
-  light(136, 94, 20, 0.7);
-  add("chest", null, 160, 121, {
-    hit: { x: 152, y: 107, w: 16, h: 15 },
+  },
+  chest: {
+    thing: "chest",
+    sprite: () => null,
+    hit: { x: -8, y: -14, w: 16, h: 15 },
     tap: tapChest,
     hops: true,
     tip: ["Cinfy's chest", `Tap it for ${DAILY_CHEST} Coins, once a day. The day starts at 00:00 UTC.`],
     extra: (g, sx, sy) => {
-      const pic = G.t < chest.openUntil ? s.chestOpen : s.chest;
+      if (!S) return;
+      const pic = G.t < chest.openUntil ? S.chestOpen : S.chest;
       g.drawImage(pic.c, sx - pic.ax, sy - pic.ay);
     },
-  });
-  add("barrel", s.barrel, 62, 124, { tap: tapStone, hops: true });
-  add("barrel", s.barrel, 51, 122, { tap: tapStone, hops: true });
-
-  // The Works: the shop, the belt out front, and the pile the belt feeds.
-  add("works", s.works, BUILDINGS.works.x, BUILDINGS.works.y, {
-    z: 118,
+  },
+  barrel: { thing: "barrel", sprite: (s) => s.barrel, tap: tapStone, hops: true },
+  works: {
+    thing: "works",
+    sprite: (s) => s.works,
+    z: -2,
     place: "works",
     tip: tipOf("works"),
-    tap: (p) => {
+    tap: (q) => {
       smoke(8);
       sfx.clank();
-      nudge(p);
+      nudge(q);
     },
     extra: drawDoor,
-  });
-  doorLights.door = light(372, 106, 40, 1);
-  light(430, 90, 20, 0.7);
-  add("belt", null, 402, 134, {
-    hit: { x: 400, y: 112, w: 60, h: 22 },
+  },
+  belt: {
+    thing: "belt",
+    sprite: () => null,
+    hit: { x: -2, y: -22, w: 60, h: 22 },
     tip: ["The belt", "Planks out of the Works. Tap to hurry it."],
-    tap: (p) => {
-      nudge(p);
+    tap: (q) => {
+      nudge(q);
       belt.boost = 2.5;
       sfx.clank();
     },
     extra: drawBelt,
-  });
-  add("pile", s.pile, 458, 135, {
+  },
+  pile: {
+    thing: "pile",
+    sprite: (s) => s.pile,
     tip: ["Crates", ""],
-    tap: (p) => {
-      nudge(p);
+    tap: (q) => {
+      nudge(q);
       sfx.knock();
     },
     hops: true,
     extra: (g, sx, sy) => {
-      for (let i = 0; i < belt.fresh; i++) g.drawImage(s.box.c, sx + 2 + (i % 2) * 8, sy - 26 - Math.floor(i / 2) * 6);
+      const box = S?.box;
+      if (!box) return;
+      for (let i = 0; i < belt.fresh; i++) g.drawImage(box.c, sx + 2 + (i % 2) * 8, sy - 26 - Math.floor(i / 2) * 6);
     },
-  });
-
-  // The gate out to the member's own camp, and the signpost that says so.
-  const CAMP = tipOf("camp");
-  add("gate", s.gate, BUILDINGS.gate.x, BUILDINGS.gate.y, { place: "camp", tap: nudge, tip: CAMP });
-  light(237, 65, 24, 0.9);
-  light(275, 65, 24, 0.9);
-  light(256, 84, 34, 0.85); // the last of the sun, coming up the path
-  add("signpost", s.signpost, 291, 106, {
+  },
+  gate: { thing: "gate", sprite: (s) => s.gate, place: "camp", tap: nudge, tip: CAMP },
+  // Something is waiting at the camp: a letter, or a new thing in the tray.
+  signpost: {
+    thing: "signpost",
+    sprite: (s) => s.signpost,
     place: "camp",
     tap: nudge,
     hops: true,
     tip: CAMP,
-    // Something is waiting at the camp: a letter, or a new thing in the tray.
-    extra: (g, sx, sy) => {
-      if (mine().fresh.length === 0 && waiting(mine().letters) === 0) return;
-      const bob = Math.round(Math.sin(G.t * 4) * 1.5);
-      g.drawImage(s.bang.c, sx - 1, sy - 37 + bob);
-    },
-  });
-
-  // The Grove: a light hangs over its stone, where the pulls are made.
-  add("grove", s.grove, GROVE.x, GROVE.y, {
+    extra: bang(-1, -37, () => mine().fresh.length > 0 || waiting(mine().letters) > 0),
+  },
+  // A light hangs over the stone, where the pulls are made.
+  grove: {
+    thing: "grove",
+    sprite: (s) => s.grove,
     place: "grove",
     tip: tipOf("grove"),
-    tap: (p) => {
+    tap: (q) => {
       sfx.twinkle();
-      nudge(p);
+      nudge(q);
     },
     extra: (g, sx, sy) => {
       const y = sy - 26 + Math.round(Math.sin(G.t * 2.2) * 1.5);
@@ -186,248 +216,188 @@ export function buildTown(s: Sprites, ground: Ctx): void {
       R(g, sx, y - 2, 1, 5, GOLD[2]);
       R(g, sx, y, 1, 1, CREAM);
     },
-  });
-  light(GROVE.x, GROVE.y - 26, 30, 0.9);
-
-  add("board", s.board, 176, 160, {
+  },
+  // A quest is ready to claim, or there is news the member has not opened.
+  "quest-board": {
+    thing: "board",
+    sprite: (s) => s.board,
     place: "quests",
     tip: tipOf("quests"),
-    tap: (p) => {
-      flutter(198, 140, 5, [CREAM, GOLD[2]], 12, 20);
+    tap: (q) => {
+      flutter(q.x + 22, q.y - 20, 5, [CREAM, GOLD[2]], 12, 20);
       sfx.paper();
-      nudge(p);
+      nudge(q);
     },
-    // A quest is ready to claim, or there is news the member has not opened.
-    extra: (g, sx, sy) => {
-      if (!unread()) return;
-      const bob = Math.round(Math.sin(G.t * 4) * 1.5);
-      g.drawImage(s.bang.c, sx + 20, sy - 56 + bob);
-    },
-  });
+    extra: bang(20, -56, unread),
+  },
   // The Tally, where the town keeps count: a mark over it until the member has looked.
-  add("board", tallyBoard(), TALLY.x, TALLY.y, {
+  tally: {
+    thing: "board",
+    sprite: () => tallyBoard(),
     place: "tally",
     tip: tipOf("tally"),
-    tap: (p) => {
+    tap: (q) => {
       sfx.knock();
-      nudge(p);
+      nudge(q);
     },
-    extra: (g, sx, sy) => {
-      if (!tallyNew()) return;
-      const bob = Math.round(Math.sin(G.t * 4) * 1.5);
-      g.drawImage(s.bang.c, sx - 2, sy - 56 + bob);
-    },
-  });
-  add("pole", s.pole, banner.x, banner.y, {
+    extra: bang(-2, -56, tallyNew),
+  },
+  "banner-pole": {
+    thing: "pole",
+    sprite: (s) => s.pole,
     tap: tapPole,
     extra: drawBanner,
     tip: ["Banner pole", "A banner goes up when the guild captures a territory."],
-  });
-
-  STALL_FEET.forEach(({ x, y }, i) => {
-    const st = s.stalls[i];
-    if (!st) return;
-    add("stall", st, x, y, {
-      place: "market",
-      tip: tipOf("market"),
-      tap: (p, _x, _y, own) => {
-        sfx.pluck(2 + i * 2);
-        if (own) G.stall = i;
-        nudge(p);
-      },
-    });
-    light(x + 12, y - 24, 34, 0.9);
-    shadow(ground, x + 20, y + 1, 22, 3);
-  });
-
-  POSTS.forEach((p) => {
-    const l = light(p.x + 8, p.y - 26, 36, 0.9);
-    lamps.set(add("post", s.post, p.x, p.y, { tap: (q) => tapPost(q, l) }), l);
-    shadow(ground, p.x + 1, p.y, 5, 2);
-    if (dist(p.x, p.y, table.x, table.y) < 40) doorLights.table = l;
-  });
-
-  // The great stump with the guild's board game cut into it, and two logs to sit on.
-  add("table", s.greatStump, table.x, table.y, {
+  },
+  stall: {
+    thing: "stall",
+    sprite: (s, p) => s.stalls[p.look] ?? null,
+    place: "market",
+    tip: tipOf("market"),
+    tap: (q, _x, _y, own, p) => {
+      sfx.pluck(2 + stallOf(p) * 2);
+      if (own) G.stall = stallOf(p);
+      nudge(q);
+    },
+  },
+  post: {
+    thing: "post",
+    sprite: (s) => s.post,
+    tap: (q) => {
+      const l = lamps.get(q);
+      if (l) tapPost(q, l);
+    },
+  },
+  "great-stump": {
+    thing: "table",
+    sprite: (s) => s.greatStump,
     place: "table",
     tap: tapTable,
     extra: drawPieces,
     tip: tipOf("table"),
-  });
-  shadow(ground, table.x, table.y + 1, 24, 4);
-  for (const x of [431, 457]) {
-    add("seat", s.shortLog, x, 217, { tap: tapSeat });
-    shadow(ground, x, 218, 8, 2);
-  }
-
-  add("tree", s.tree, tree.x, tree.y, {
+  },
+  "short-log": seat((s) => s.shortLog),
+  "lantern-tree": {
+    thing: "tree",
+    sprite: (s) => s.tree,
     tap: tapTree,
     extra: drawTreeLanterns,
     tip: ["Lantern tree", "One lantern for every raid today."],
-  });
-  shadow(ground, tree.x, tree.y + 2, 24, 6);
-
-  // The fire and its seats.
-  add("fire", s.fireRing, 256, 217, {
+  },
+  fire: {
+    thing: "fire",
+    sprite: (s) => s.fireRing,
     place: "fire",
     tip: tipOf("fire"),
-    tap: (p) => {
+    tap: (q) => {
       flare();
-      nudge(p);
+      nudge(q);
     },
-    hit: { x: 244, y: 196, w: 24, h: 24 },
+    hit: { x: -12, y: -21, w: 24, h: 24 },
     extra: drawFire,
+  },
+  log: seat((s) => s.log),
+  stump: seat((s) => s.stump),
+  bench: seat((s) => s.bench),
+  mushroom: {
+    thing: "mushroom",
+    sprite: (s, p) => (p.look === 1 ? s.mushroom : s.mushlet),
+    tap: tapMushroom,
+    hops: true,
+  },
+  flower: {
+    thing: "flower",
+    sprite: (s, p) => s.flowers[p.look] ?? null,
+    tap: (q, _x, _y, _own, p) => tapFlower(q, PETALS[p.look] ?? CREAM),
+    hops: true,
+  },
+  bush: { thing: "bush", sprite: (s, p) => s.bushes[p.look] ?? null, tap: tapLeafy },
+  fern: { thing: "fern", sprite: (s, p) => s.ferns[p.look] ?? null, tap: tapLeafy },
+  rock: { thing: "rock", sprite: (s, p) => s.rocks[p.look] ?? null, tap: tapStone, hops: true },
+  reeds: { thing: "reeds", sprite: (s) => s.reeds, tap: tapLeafy },
+};
+
+/** Every kind painted on the ground, and how; the pond's middle is only a point to fix things to. */
+const FLATS: Readonly<Record<FlatKind, (g: Ctx, s: Sprites, p: Piece) => void>> = {
+  lily(g, s, p) {
+    const pic = p.look === 1 ? s.lilyBloom : s.lily;
+    g.drawImage(pic.c, p.x - pic.ax - GROUND.x, p.y - pic.ay - GROUND.y);
+  },
+  shade(g, _s, p) {
+    g.fillStyle = SHADE;
+    g.fillRect(p.x - GROUND.x, p.y - GROUND.y, SHADE_W[p.look] ?? 0, 3);
+  },
+  pond: () => undefined,
+};
+
+/** A piece that stands, as a prop: its part's picture, touch and the rest, put at the piece's anchor. */
+function propOf(s: Sprites, part: Part, p: Piece): Prop {
+  const { tap, hit } = part;
+  return add(part.thing, part.sprite(s, p), p.x, p.y, {
+    z: p.y + (part.z ?? 0),
+    place: part.place ?? null,
+    tip: part.tip ?? null,
+    hops: part.hops ?? false,
+    extra: part.extra ?? null,
+    tap: tap ? (q, x, y, own) => tap(q, x, y, own, p) : null,
+    ...(hit ? { hit: { x: p.x + hit.x, y: p.y + hit.y, w: hit.w, h: hit.h } } : {}),
   });
-  add("seat", s.log, 256, 200, { tap: tapSeat });
-  add("seat", s.log, 256, 240, { tap: tapSeat });
-  add("seat", s.stump, 220, 216, { tap: tapSeat });
-  add("seat", s.stump, 292, 216, { tap: tapSeat });
-  add("seat", s.bench, 120, 312, { tap: tapSeat });
-  add("seat", s.bench, WORKS_BENCH.x, WORKS_BENCH.y, { tap: tapSeat });
-  shadow(ground, 256, 201, 18, 3);
-  shadow(ground, 256, 241, 18, 3);
-  shadow(ground, 120, 313, 15, 2);
-  shadow(ground, WORKS_BENCH.x, WORKS_BENCH.y + 1, 15, 2);
+}
 
-  // The garden, the pond's edge, and green things round the clearing.
-  for (const [x, y, big] of [
-    [46, 312, 1],
-    [56, 322, 0],
-    [38, 324, 0],
-    [72, 332, 1],
-    [476, 220, 0],
-    [150, 106, 0],
-  ] as const) {
-    add("mushroom", big ? s.mushroom : s.mushlet, x, y, { tap: tapMushroom, hops: true });
-    shadow(ground, x, y, big ? 5 : 3, 1.5);
-  }
-  const PETALS = [SKY[4], CREAM, GOLD[1]] as const;
-  const patch = (x: number, y: number, kind: number): void => {
-    for (const [dx, dy, k] of [
-      [0, 0, 0],
-      [6, 3, 1],
-      [-5, 4, 2],
-      [2, 8, 0],
-      [11, -1, 2],
-    ] as const) {
-      const which = (kind + k) % 3;
-      const pic = s.flowers[which];
-      if (pic) add("flower", pic, x + dx, y + dy, { tap: (p) => tapFlower(p, PETALS[which] ?? CREAM), hops: true });
+/**
+ * The town, from the map: a prop for each piece that stands, in the map's order, with the lights it
+ * gives (the fire's flame is `fireLight`, which flickers with it); then every shadow, and what is
+ * painted on the ground; then the crabs at home and the glints on the pond.
+ */
+export function buildTown(s: Sprites, ground: Ctx): void {
+  S = s;
+  const named = new Map<string, Light>();
+  for (const p of PIECES) {
+    if (isFlat(p.kind)) continue;
+    const prop = propOf(s, PARTS[p.kind], p);
+    // The fire's flame is `fireLight`; each other light flickers by its own id, so that adding or moving a row changes no other lamp.
+    for (const l of LIGHTS.filter((q) => q.piece === p.id && q.name !== "flame")) {
+      const lit = light(l.x, l.y, l.r, l.power, (seedOf(l.id) / 2 ** 32) * 6.28);
+      if (l.name === "lamp") lamps.set(prop, lit);
+      if (l.name) named.set(l.id, lit);
     }
-  };
-  for (const [x, y, k] of [
-    [84, 304, 0],
-    [146, 328, 1],
-    [234, 170, 2],
-    [44, 140, 1],
-    [326, 172, 0],
-    [470, 158, 2],
-    [470, 240, 1],
-    [300, 316, 0],
-    [356, 334, 2],
-    [40, 196, 0],
-    [128, 210, 2],
-    [214, 328, 1],
-  ] as const)
-    patch(x, y, k);
-  for (const [x, y, k] of [
-    [46, 158, 1],
-    [404, 172, 0],
-    [476, 176, 2],
-    [286, 334, 1],
-    [58, 206, 2],
-    [330, 296, 2],
-    [176, 216, 2],
-  ] as const) {
-    const pic = s.bushes[k];
-    if (!pic) continue;
-    add("bush", pic, x, y, { tap: tapLeafy });
-    shadow(ground, x, y, pic.c.width / 2 - 1, 2);
   }
-  for (const [x, y, k] of [
-    [64, 128, 1],
-    [162, 100, 0],
-    [230, 104, 2],
-    [348, 102, 0],
-    [42, 214, 1],
-    [50, 340, 1],
-    [468, 244, 0],
-    [462, 336, 1],
-    [140, 340, 2],
-    [240, 338, 0],
-    [330, 340, 1],
-    [476, 150, 2],
-    [34, 268, 0],
-  ] as const) {
-    const pic = s.ferns[k];
-    if (pic) add("fern", pic, x, y, { tap: tapLeafy });
-  }
-  for (const [x, y, k] of [
-    [340, 292, 0],
-    [464, 302, 2],
-    [432, 322, 1],
-    [382, 326, 1],
-    [404, 297, 1],
-    [432, 289, 1],
-    [312, 182, 1],
-  ] as const) {
-    const pic = s.rocks[k];
-    if (pic) add("rock", pic, x, y, { tap: tapStone, hops: true });
-  }
-  for (const [x, y] of [
-    [348, 302],
-    [456, 296],
-    [422, 320],
-    [376, 322],
-    [364, 276],
-  ] as const)
-    add("reeds", s.reeds, x, y, { tap: tapLeafy });
-  // Lily pads lie on the water, so they are painted on the ground rather than stood up.
-  for (const [x, y, bloom] of [
-    [390, 288, 0],
-    [418, 304, 1],
-    [444, 280, 0],
-    [372, 308, 1],
-    [410, 278, 0],
-    [424, 300, 0],
-  ] as const) {
-    const pic = bloom ? s.lilyBloom : s.lily;
-    ground.drawImage(pic.c, x - pic.ax - GROUND.x, y - pic.ay - GROUND.y);
-  }
-  // A strip of shade where the shops meet the ground.
-  ground.fillStyle = "rgba(20,10,28,0.3)";
-  ground.fillRect(56 - GROUND.x, 120 - GROUND.y, 96, 3);
-  ground.fillRect(344 - GROUND.x, 120 - GROUND.y, 104, 3);
+  doorLights.door = named.get("works:door") ?? null;
+  doorLights.table = named.get("post-stump:lamp") ?? null;
+  for (const sh of SHADOWS) ell(ground, sh.x - GROUND.x, sh.y - GROUND.y, sh.rx, sh.ry, SHADE);
+  for (const p of PIECES) if (isFlat(p.kind)) FLATS[p.kind](ground, s, p);
 
-  // Crabs: eight at home round the pond, and the one that is never there.
+  // Crabs: eight at home round the pond, and the one that is never there (and has no home).
   let home = 0;
   for (let n = 1; n <= 9; n++) {
     const lost = n === LOST_CRAB;
-    const [hx, hy, rock] = lost ? [0, 0, 0] : (CRAB_HOMES[home++] ?? [400, 300, 0]);
+    const at = (lost ? null : CRAB_HOMES[home++]) ?? { x: 0, y: 0, perched: false };
     crabs.push({
       n,
-      hx,
-      hy,
-      x: hx,
-      y: hy,
+      hx: at.x,
+      hy: at.y,
+      x: at.x,
+      y: at.y,
       aside: 0,
-      shyTo: hx,
+      shyTo: at.x,
       shyUntil: 0,
       moving: false,
       hop: 0,
       clack: 0,
       lost,
       bolt: 0,
-      z: hy + (rock ? 8 : 0),
-      perched: rock === 1,
+      z: at.y + (at.perched ? 8 : 0),
+      perched: at.perched,
     });
   }
   placeCrabs();
 
-  // Glints on the pond.
-  while (glints.length < 26) {
-    const x = 338 + random() * 126;
-    const y = 262 + random() * 64;
+  // Glints on the pond, from a stream of their own, looked for a fixed number of times: a glint box
+  // off the water leaves it plain.
+  const random = rng(20261120);
+  for (let tries = 0; glints.length < 26 && tries < 1000; tries++) {
+    const x = GLINTS.x + random() * GLINTS.w;
+    const y = GLINTS.y + random() * GLINTS.h;
     if (pondD(x, y) < -5) glints.push({ x: Math.round(x), y: Math.round(y), ph: random() * 6.28 });
   }
 }

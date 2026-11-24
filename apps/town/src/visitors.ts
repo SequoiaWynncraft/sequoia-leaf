@@ -26,17 +26,18 @@ import { BARK, CREAM, LEAF, PAPER, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { bake, type Body, lookFor, paintSkin, SIT, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { type Ctx, makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
-import { dozing, SITS_AFTER, type Spot, type Stand, zAt } from "@sequoia-leaf/town/clock.ts";
+import { dozing, SITS_AFTER, zAt } from "@sequoia-leaf/town/clock.ts";
+import { piece, type Spot, TOWN } from "@sequoia-leaf/town/map/map.ts";
+import type { Stand } from "@sequoia-leaf/town/map/rows.ts";
 
 import { feet, makeActor, onScreen, putAs, sitsOn, stepPassing } from "./actors.ts";
 import { bit, float } from "./fx.ts";
-import { type Actor, G, SEED } from "./game.ts";
+import { type Actor, G, type Seat, SEATS, SEED } from "./game.ts";
 import { guild, type Person } from "./guild.ts";
 import { VISITORS_MOST } from "./live.ts";
 import { crate, type Standing } from "./props.ts";
 import { type Box, clearOf, crateAt, further, keepClear, LAID, makeSpots, meet, poseAt, strings } from "./spots.ts";
 import { props } from "./town.ts";
-import { GROVE, type Seat, SEATS, TOWN } from "./world.ts";
 
 /** How long somebody takes to fade in or out, in seconds. */
 export const FADE = 0.5;
@@ -225,8 +226,9 @@ function stoneLight(): void {
   const k = Math.floor(G.now / MOTE_MS);
   if (k === mote) return;
   mote = k;
-  if (!onScreen(GROVE.x, GROVE.y)) return;
-  bit({ x: GROVE.x - 2 + (k % 5), y: GROVE.y - 10, vx: 0, vy: -9, drag: 0.3, ttl: 1.9, col: LEAF, glow: true });
+  const stone = piece("grove");
+  if (!onScreen(stone.x, stone.y)) return;
+  bit({ x: stone.x - 2 + (k % 5), y: stone.y - 10, vx: 0, vy: -9, drag: 0.3, ttl: 1.9, col: LEAF, glow: true });
 }
 
 /** Asleep on a seat since the game last saw them (`seen`): eyes closed, a "z" now and then; sitting already, never seen to sit down. */

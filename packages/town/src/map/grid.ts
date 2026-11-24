@@ -6,7 +6,7 @@
  * the next square's.
  */
 
-import { clamp, type Pt } from "@sequoia-leaf/core";
+import { clamp, type Pt, vnoise } from "@sequoia-leaf/core";
 
 /** The side of one square, in art pixels. */
 export const CELL = 8;
@@ -38,6 +38,24 @@ export interface Ground {
   readonly findPath: (from: Pt, to: Pt, straight: boolean) => Pt[];
   /** How far outside trodden earth a point is (negative: on a path). */
   readonly pathD: (x: number, y: number) => number;
+}
+
+/** A stretch of trodden earth: from one point to another, and half its width. */
+export type Trodden = readonly [x1: number, y1: number, x2: number, y2: number, half: number];
+
+function segD(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = dx * dx + dy * dy;
+  const t = len === 0 ? 0 : clamp(((px - x1) * dx + (py - y1) * dy) / len, 0, 1);
+  return Math.hypot(px - (x1 + dx * t), py - (y1 + dy * t));
+}
+
+/** How far outside trodden earth a point is (negative: on it), with a ragged edge: the town's paths, and a camp's worn earth. */
+export function troddenD(paths: readonly Trodden[], x: number, y: number): number {
+  let d = 999;
+  for (const [x1, y1, x2, y2, hw] of paths) d = Math.min(d, segD(x, y, x1, y1, x2, y2) - hw);
+  return d + (vnoise(x / 9, y / 9, 5) - 0.5) * 7;
 }
 
 /** The squares, without the ways of asking about them. */

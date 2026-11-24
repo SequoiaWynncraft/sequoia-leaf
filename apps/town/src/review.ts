@@ -8,6 +8,7 @@ import type { Emote } from "@sequoia-leaf/kit/emotes.ts";
 import { balance } from "@sequoia-leaf/kit/purse.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 import { boardAt, SET_OUT } from "@sequoia-leaf/town/clock.ts";
+import type { PlaceId } from "@sequoia-leaf/town/map/rows.ts";
 
 import { openAbout } from "./aboutui.ts";
 import { byClock, feet, headOf } from "./actors.ts";
@@ -25,7 +26,6 @@ import { crabs, flown, hung, lastTouches, placeCrabs, table } from "./town.ts";
 import type { Town } from "./townscene.ts";
 import { dismissArrival, openPanel } from "./ui.ts";
 import { members, spotsNow, stepVisitors } from "./visitors.ts";
-import type { PlaceId } from "./world.ts";
 
 declare global {
   interface Window {

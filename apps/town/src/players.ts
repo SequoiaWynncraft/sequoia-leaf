@@ -41,11 +41,12 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { zAt } from "@sequoia-leaf/town/clock.ts";
 import type { Ground } from "@sequoia-leaf/town/map/grid.ts";
+import { TOWN } from "@sequoia-leaf/town/map/map.ts";
 
 import { cardLine } from "./about.ts";
 import { face, feet, footfall, headOf, hop, makeActor, onScreen, putAs, say, stepActor } from "./actors.ts";
 import { emoteOver, float } from "./fx.ts";
-import { type Actor, G, hooks, ROOM, SEED, toPage } from "./game.ts";
+import { type Actor, G, hooks, ROOM, type Seat, SEED, toPage } from "./game.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, showCard } from "./hud.ts";
 import { campChanged, campEntered, visiting } from "./leaf.ts";
@@ -65,7 +66,6 @@ import type { Place } from "./screen.ts";
 import { touchThing } from "./town.ts";
 import { dozy, followLive } from "./visitors.ts";
 import { inGame, type Where } from "./where.ts";
-import { type Seat, TOWN } from "./world.ts";
 
 /** After this many milliseconds with the connection down, the others fade away and the town plays on alone. */
 const ALONE_AFTER = 5000;

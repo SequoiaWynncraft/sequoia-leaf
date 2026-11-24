@@ -10,6 +10,8 @@ import { bake, type Body, type Look, paintSkin } from "@sequoia-leaf/kit/skin.ts
 import { clamp, type Ctx, dist, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { FOLK, folk, KEEPER } from "@sequoia-leaf/town/folk.ts";
 import { BOX_FULL, roomInBox } from "@sequoia-leaf/town/mail.ts";
+import { BOUNDS, KEEPERS, piece, place, PLACES, pondD, TOWN, TRAIL } from "@sequoia-leaf/town/map/map.ts";
+import type { PlaceId } from "@sequoia-leaf/town/map/rows.ts";
 
 import { initAbout } from "./aboutui.ts";
 import {
@@ -37,7 +39,7 @@ import { drawPicture, drawWords, type Picture, sizeBuffers } from "./draw.ts";
 import { beginEvents, stepEvents } from "./events.ts";
 import { initFolkArt } from "./folkart.ts";
 import { updateFx } from "./fx.ts";
-import { type Actor, after, changed, G, hooks, show } from "./game.ts";
+import { type Actor, after, changed, G, hooks, SEATS, show } from "./game.ts";
 import { type GameId, isGame, worksWaiting } from "./games.ts";
 import { GROUND, NEAR, paintBackdrop, paintGround, paintNear, SKYLINE } from "./ground.ts";
 import { guild } from "./guild.ts";
@@ -67,22 +69,25 @@ import { crabAt, lightTable, openDoor, props, stepTown, table, thingName, touchT
 import { allLights, buildTown, crabsStanding, drawGlows, drawStrings, drawWater } from "./townart.ts";
 import { initUI, openPanel, showArrival, townDock } from "./ui.ts";
 import { isVisitor, stepVisitors, worksTools } from "./visitors.ts";
-import { H, place, type PlaceId, PLACES, pondD, SEATS, TOWN, W } from "./world.ts";
 
-/** Where the view closes in when the member goes into each game, and where they stand to go in. */
+const WORKS = piece("works");
+const FIRE = piece("fire");
+const GATE = piece("gate");
+
+/** Where the view closes in when the member goes into each game: the Works' doorway, the stump's board. */
 const DOORWAY: Readonly<Record<GameId, Pt>> = {
-  works: { x: 373, y: 104 },
+  works: { x: WORKS.x + 29, y: WORKS.y - 16 },
   table: { x: table.x, y: table.y - 19 },
 };
 /** The Works' threshold: the member fades into the dark between its stand and here. */
-const THRESHOLD = 121;
+const THRESHOLD = WORKS.y + 1;
 const STROLL = 64;
 const STEP_IN = 15;
 
 const bodyOf = (look: Look): Body => bake(paintSkin(look));
 
 /** How far the camera may go: the town, a little of the forest above it, and a strip below. */
-const BOUNDS = { w: W, top: -72, bottom: H + 24 } as const;
+const CAMERA = { left: BOUNDS.x, w: BOUNDS.w, top: BOUNDS.y - 72, bottom: BOUNDS.y + BOUNDS.h + 24 } as const;
 /** Where in this tab the town keeps where the member stood, for the next page (`stoodAt`). */
 const STOOD = "town.stood.v1";
 
@@ -105,8 +110,8 @@ function locate(a: Actor): void {
  */
 function inView(p: Pt, focus: Pt): boolean {
   const { w: vw, h: vh } = G.view;
-  const { w, top, bottom } = BOUNDS;
-  const x = vw > w ? (w - vw) / 2 : clamp(focus.x - vw / 2, 0, w - vw);
+  const { left, w, top, bottom } = CAMERA;
+  const x = vw > w ? left + (w - vw) / 2 : clamp(focus.x - vw / 2, left, left + w - vw);
   const y = vh > bottom - top ? top + (bottom - top - vh) / 2 : clamp(focus.y - vh / 2, top, bottom - vh);
   return p.x > x + 10 && p.x < x + vw - 10 && p.y > y + 16 && p.y < y + vh - 28;
 }
@@ -161,17 +166,17 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   // ---------- who is here ----------
 
   const me = guild.me();
-  const player = makeActor(me, bodyOf(me.look), 256, 85, true);
+  const player = makeActor(me, bodyOf(me.look), TRAIL.out.x, TRAIL.out.y, true);
   player.id = member()?.id ?? "";
   player.alpha = 0;
   G.player = player;
   // The town's own: drawn as themselves, each where its evening finds it.
   initFolkArt(campArt);
-  const cinfy = makeFolk(folk("cinfy"), 104, 113);
+  const cinfy = makeFolk(folk("cinfy"), KEEPERS.counter.x, KEEPERS.counter.y);
   placeFolk(cinfy);
   G.cinfy = cinfy;
   G.folk = FOLK.filter((t) => t.job !== "counter" && t.job !== "calls").map((t) => {
-    const a = makeFolk(t, 256, 216);
+    const a = makeFolk(t, FIRE.x, FIRE.y);
     placeFolk(a);
     return a;
   });
@@ -339,7 +344,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
    * being at it; at the pond, anywhere along the shore; at the stump, sitting at it.
    */
   const AT: Partial<Record<PlaceId, (m: Actor) => boolean>> = {
-    fire: (m) => m.seat?.at === "fire" || dist(m.x, m.y, 256, 214) < 30,
+    fire: (m) => m.seat?.at === "fire" || dist(m.x, m.y, FIRE.x, FIRE.y - 3) < 30,
     pond: (m) => pondD(m.x, m.y) < 13,
     table: (m) => m.seat?.at === "table",
   };
@@ -348,7 +353,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     return Object.assign({}, pl, {
       reach: pl.id === "fire" ? 10 : 22,
       // The way through the gate, and on up the trail beyond it.
-      box: pl.id === "camp" ? { x: 242, y: 72, w: 28, h: 28 } : undefined,
+      box: pl.id === "camp" ? { x: GATE.x - 14, y: GATE.y - 26, w: 28, h: 28 } : undefined,
       at: AT[pl.id],
       use: () => openPanel(pl.id),
       enter: game
@@ -386,11 +391,11 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   /** The member is back from a camp: they walk in through the gate, and the town's own buttons are put back. */
   function cameFromCamp(): void {
     halt();
-    putAt(256, 84);
+    putAt(TRAIL.out.x, TRAIL.out.y);
     player.dir = 0;
     player.alpha = 0;
     player.say = "";
-    walkTo(player, { x: 256, y: 128 }, () => {
+    walkTo(player, TRAIL.back, () => {
       player.dir = 0;
     });
     townDock();
@@ -398,8 +403,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     setHammer(null);
     // Whoever of the town's own is nearest the gate looks up.
     const nearest = G.folk
-      .filter((a) => !a.away && !a.seat && a.doing !== "asleep" && dist(a.x, a.y, 256, 128) < 90)
-      .toSorted((a, b) => dist(a.x, a.y, 256, 128) - dist(b.x, b.y, 256, 128))[0];
+      .filter((a) => !a.away && !a.seat && a.doing !== "asleep" && dist(a.x, a.y, TRAIL.back.x, TRAIL.back.y) < 90)
+      .toSorted((a, b) => dist(a.x, a.y, TRAIL.back.x, TRAIL.back.y) - dist(b.x, b.y, TRAIL.back.x, TRAIL.back.y))[0];
     if (nearest)
       after(0.9, () => {
         if (!nearest.moving) face(nearest, player.x, player.y);
@@ -411,7 +416,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   const town: Town = {
     backdrop: { sky: pic.sky, near: pic.near },
     goIn,
-    bounds: BOUNDS,
+    bounds: CAMERA,
 
     resize(w, h) {
       sizeBuffers(w, h);
@@ -500,7 +505,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       closePanel();
       closeCard();
       // Out through the gate and up the trail beyond it; for anywhere else, night falls where the member stands.
-      return to === "camp" ? [...wayTo(player, { x: 256, y: 100 }), { x: 256, y: 84 }] : [];
+      return to === "camp" ? [...wayTo(player, TRAIL.way), { ...TRAIL.out }] : [];
     },
     // Night falls from about where the gate's stand is.
     nightFrom: 46,
@@ -520,7 +525,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         stage.snap();
       } else
         after(0.35, () => {
-          walkTo(player, { x: 256, y: 152 }, () => {
+          walkTo(player, TRAIL.in, () => {
             player.dir = 0;
           });
         });

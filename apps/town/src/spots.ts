@@ -9,10 +9,11 @@
  */
 
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
-import { seedOf, type Spot, SPOTS as FOLK_SPOTS, type Stand } from "@sequoia-leaf/town/clock.ts";
+import { seedOf } from "@sequoia-leaf/town/clock.ts";
+import { BUSY, ERRANDS, piece, piecesOf, place, RESTS, type Spot, STRINGS } from "@sequoia-leaf/town/map/map.ts";
+import type { Stand } from "@sequoia-leaf/town/map/rows.ts";
 
-import { STRINGS, wire } from "./strings.ts";
-import { place, POSTS, SEATS } from "./world.ts";
+import { wire } from "./strings.ts";
 
 /** A box on the town's ground, in its pixels: its left and top, and how wide and tall. */
 export interface Box {
@@ -24,25 +25,11 @@ export interface Box {
 
 const spot = (x: number, y: number, dir: Spot["dir"]): Spot => ({ x, y, dir });
 
-/**
- * The spots of each place laid by hand, the first wanted most. At the Works, along its front and by
- * the crate pile, side on, each with room for a crate on the side they face, and none on the bench,
- * in the doorway or where the town's own stand at the door; at the stump, sitting round it over the
- * board, none on the logs (the member's and the dozers' seats) and one behind the board, where the
- * string of lights only just clears a head; before the Grove's stone, facing it, either side of
- * where the member stands to go in.
- */
+/** The spots of each place laid by hand, the first wanted most: the map's (`busy`). */
 export const LAID: Readonly<Record<Stand, readonly Spot[]>> = {
-  works: [spot(451, 139, 2), spot(466, 151, 1), spot(408, 138, 1), spot(391, 153, 2), spot(407, 160, 1)],
-  table: [spot(444, 205, 3), spot(448, 171, 0), spot(415, 193, 2), spot(472, 193, 1)],
-  grove: [spot(92, 197, 3), spot(116, 197, 3), spot(79, 195, 2), spot(129, 195, 1)],
-};
-
-/** Where each place is, for the spots past those laid by hand to face, and to be nearest to: the Works' pile, the stump's board, the Grove's stone. */
-export const MIDDLE: Readonly<Record<Stand, Pt>> = {
-  works: { x: 430, y: 145 },
-  table: { x: 444, y: 185 },
-  grove: { x: 104, y: 180 },
+  works: BUSY.works.spots,
+  table: BUSY.table.spots,
+  grove: BUSY.grove.spots,
 };
 
 /** At the stump a member sits; at the Works and before the stone they stand. Past the spots laid by hand, everybody stands. */
@@ -82,15 +69,17 @@ export const meet = (a: Box, b: Box, gap = 0): boolean =>
  */
 export function keepClear(): Box[] {
   const stands = (["works", "grove"] as const).map((id) => place(id).stand);
+  const works = piece("works");
   return [
-    ...SEATS.flatMap((s) => [
+    ...RESTS.flatMap((s) => [
       box(s.x - 5, s.y - TALL.front, ACROSS, TALL.front),
       box(s.from.x - 5, s.from.y - 4, ACROSS, 5),
     ]),
-    ...Object.values(FOLK_SPOTS).flatMap((ss) => ss.map((s) => box(s.x - 5, s.y - 14, ACROSS, 14))),
+    ...Object.values(ERRANDS).flatMap((ss) => ss.map((s) => box(s.x - 5, s.y - 14, ACROSS, 14))),
     ...stands.map((p) => box(p.x - 6, p.y - TALL.stands, 12, TALL.stands + 2)),
-    box(362, 116, 24, 26),
-    ...POSTS.map((p) => box(p.x - 3, p.y - 42, 14, 42)),
+    // The Works' doorway.
+    box(works.x + 18, works.y - 4, 24, 26),
+    ...piecesOf("post").map((p) => box(p.x - 3, p.y - 42, 14, 42)),
   ];
 }
 
@@ -138,15 +127,15 @@ export const APART = 2;
  * A place's spots: those laid by hand, then further ones a step out, `most` in all if the ground
  * allows. A spot further out stands on ground somebody can stand on (`open`), and what it takes up
  * (`footprint`, standing) is on top of nothing that is not to be stood on (`clear`) and of nobody at
- * any spot before it; of those, the nearest to the place itself (`MIDDLE`) comes first. At the Works
- * the crate is on the side away from the middle if there is room, else the other; elsewhere they
- * face the place.
+ * any spot before it; of those, the nearest to the place's middle (the map's `busy`) comes first. At
+ * the Works the crate is on the side away from the middle if there is room, else the other;
+ * elsewhere they face the place.
  */
 export function further(at: Stand, most: number, open: (p: Pt) => boolean, clear: (b: Box) => boolean): Spot[] {
   const laid = LAID[at];
   const out = [...laid];
   const taken = laid.flatMap((s, n) => footprint(at, s, sits(at, n)));
-  const mid = MIDDLE[at];
+  const mid = BUSY[at].middle;
   const near = (p: Pt): number => Math.min(...laid.map((s) => Math.hypot(s.x - p.x, s.y - p.y)));
   const xs = laid.map((s) => s.x);
   const ys = laid.map((s) => s.y);

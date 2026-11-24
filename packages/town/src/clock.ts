@@ -13,6 +13,10 @@
 import { mix, utcDay } from "@sequoia-leaf/core";
 
 import { type Doing, type Errand, ERRAND_LINES, FOLK, type Townsperson } from "./folk.ts";
+import type { SeatAt } from "./map/kinds.ts";
+import { ERRANDS, type Hide, HIDES, type Spot } from "./map/map.ts";
+import type { Post, Stand } from "./map/rows.ts";
+import { STRETCH, stretchOf } from "./stretch.ts";
 
 /** A room's seed: its name as a number. */
 export function seedOf(room: string): number {
@@ -58,14 +62,6 @@ function turns(seed: number, secs: readonly number[], sway: number) {
 
 // ---------- the town's own ----------
 
-/** Somewhere one of the town's own goes to be busy: where it stands, and which way it faces (0 towards us, 1 left, 2 right, 3 away). */
-export interface Spot {
-  x: number;
-  y: number;
-  dir: 0 | 1 | 2 | 3;
-}
-const spot = (x: number, y: number, dir: Spot["dir"]): Spot => ({ x, y, dir });
-
 /** A walk from one spot to another, begun at a moment of Leaf's clock. */
 export interface Walk {
   from: Spot;
@@ -73,23 +69,13 @@ export interface Walk {
   at: number;
 }
 
-type Post = Errand | "works" | "fire";
-
-/** Where each errand is run, the Works' doorstep and the fire's edge: each turn there is at one of them. */
-export const SPOTS: Readonly<Record<Post, readonly Spot[]>> = {
-  crabs: [spot(404, 254, 0), spot(340, 277, 2)],
-  board: [spot(188, 166, 3), spot(208, 167, 3)],
-  gate: [spot(240, 112, 0)],
-  works: [spot(387, 126, 0), spot(398, 131, 1)],
-  fire: [spot(284, 226, 1), spot(230, 230, 2)],
-};
-
 /**
- * The rounds of those who get about: where each turn goes, the seconds it has for the walk there
- * (a gnome goes 22 pixels a second and a cat 26, along the town's paths) and the seconds stayed;
- * and how many seconds late a turn may begin.
+ * The rounds of those who get about: where each turn goes (each turn there is at one of its spots,
+ * the map's `ERRANDS`), the seconds it has for the walk there (at its pace, `PACE`, along the
+ * town's paths: the map's checks hold every walk to it) and the seconds stayed; and how many
+ * seconds late a turn may begin.
  */
-const ROUNDS: Readonly<
+export const ROUNDS: Readonly<
   Record<"errands" | "between", { sway: number; legs: readonly { to: Post; walk: number; stay: number }[] }>
 > = {
   errands: {
@@ -140,7 +126,7 @@ function about(seed: number, t: Townsperson, now: number): Omit<FolkNow, "say"> 
       sway,
     );
     const n = r.at(now);
-    const at = (k: number): Spot => drawn(SPOTS[nth(legs, k).to], r.dice(k, 1));
+    const at = (k: number): Spot => drawn(ERRANDS[nth(legs, k).to], r.dice(k, 1));
     const leg = nth(legs, n);
     return {
       from: at(n - 1),
@@ -196,30 +182,6 @@ export function crabAt(seed: number, n: number, now: number): { from: number; to
   return { from: r.dice(k - 1, 1) - 0.5, to: r.dice(k, 1) - 0.5, at: r.begins(k) };
 }
 
-/** How long the missing crab hides in one place, in milliseconds. */
-export const STRETCH = 60_000;
-/** Which stretch of the missing crab's hiding a moment is in: a member's sighting counts once in each. */
-export const stretchOf = (now: number): number => Math.floor(now / STRETCH);
-
-/** Somewhere the missing crab hides: where, and how far down the town it is sorted among what stands there. */
-export interface Hide {
-  x: number;
-  y: number;
-  z: number;
-}
-const hide = (x: number, y: number, z: number): Hide => ({ x, y, z });
-const HIDES: readonly Hide[] = [
-  hide(198, 121, 161),
-  hide(122, 36, 121),
-  hide(108, 206, 249),
-  hide(256, 44, 99),
-  hide(352, 148, 201),
-  hide(272, 232, 241),
-  hide(468, 117, 135),
-  hide(130, 301, 313),
-  hide(404, 40, 119),
-];
-
 /**
  * Where the missing crab hides at a moment: which stretch it is, how long into it, the place for
  * this stretch and the place for the one before, never the same two: even stretches take the
@@ -237,9 +199,6 @@ export function hiding(seed: number, now: number): { stretch: number; since: num
 
 // ---------- members in the games, and gone from them ----------
 
-/** A game a member can be in that has a place in town to stand at. */
-export type Stand = "works" | "table" | "grove";
-
 /**
  * How long after Leaf last saw a member they stay on their feet where they were, in milliseconds.
  * Leaf lists them as gone 90 seconds after, and every page asks who is about every 30, so by now
@@ -251,7 +210,7 @@ export const SITS_AFTER = 120_000;
 export interface SeatFor {
   x: number;
   y: number;
-  at: "fire" | "bench" | "works" | "table";
+  at: SeatAt;
   yours?: boolean;
 }
 

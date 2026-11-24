@@ -9,7 +9,7 @@
 
 import type { Look } from "@sequoia-leaf/kit/skin.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
-import type { Stand } from "@sequoia-leaf/town/clock.ts";
+import type { Stand } from "@sequoia-leaf/town/map/rows.ts";
 
 import { makeLive, prepared } from "./live.ts";
 import type { InRoom, Where } from "./where.ts";

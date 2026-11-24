@@ -12,6 +12,7 @@ import { GOLD } from "@sequoia-leaf/kit/palette.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp } from "@sequoia-leaf/kit/util.ts";
 import { HOME } from "@sequoia-leaf/town/clock.ts";
+import { piece, TRAIL } from "@sequoia-leaf/town/map/map.ts";
 
 import { cheerAll, hop } from "./actors.ts";
 import { float, sparkle } from "./fx.ts";
@@ -97,8 +98,9 @@ export function stepEvents(): void {
   // Whoever is in the gateway is half in the dark beyond it (the member in the Works' doorway, in
   // the doorway's: the town sets it after). Members visiting never are: they fade by themselves (`visitors.ts`).
   const all = G.player ? [G.player, ...G.folk] : [...G.folk];
+  const gate = piece("gate");
   for (const a of all) {
     if (a.away) continue;
-    a.alpha = a.y < 98 ? clamp((a.y - 84) / 12, 0, 1) : 1;
+    a.alpha = a.y < gate.y ? clamp((a.y - TRAIL.out.y) / 12, 0, 1) : 1;
   }
 }

@@ -4,8 +4,7 @@ import { makeGround } from "@sequoia-leaf/town/map/grid.ts";
 
 import { makeActor, seatFree } from "./actors.ts";
 import { makeApart } from "./crowd.ts";
-import type { Actor } from "./game.ts";
-import type { Seat } from "./world.ts";
+import type { Actor, Seat } from "./game.ts";
 
 test("whoever a place draws apart is who its seats are kept from: in a camp, the players live in it too", () => {
   const ground = makeGround(16, 16, () => 9);

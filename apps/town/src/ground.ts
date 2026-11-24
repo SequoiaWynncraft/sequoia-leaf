@@ -6,16 +6,21 @@
 import { BARK, CREAM, EARTH, GOLD, GREEN, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { paint, R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, hash, makeCanvas, vnoise } from "@sequoia-leaf/kit/util.ts";
+import { BOUNDS, gateway, hedgeY, pathD, piece, pondD } from "@sequoia-leaf/town/map/map.ts";
 
-import { gateway, H, hedgeY, pathD, pondD, W } from "./world.ts";
+/** The town's edges, in its pixels. */
+const LEFT = BOUNDS.x;
+const RIGHT = BOUNDS.x + BOUNDS.w;
+const TOP = BOUNDS.y;
+const FOOT = BOUNDS.y + BOUNDS.h;
 
 const at = (ramp: readonly string[], i: number): string => ramp[clamp(Math.round(i), 0, ramp.length - 1)] ?? "#000000";
 
 /** Deep forest floor, where nobody walks. */
 export const DEEP = ["#141f1c", "#19291f", "#1e3324"] as const;
 
-/** Where the floor's picture sits in the world. */
-export const GROUND = { x: -72, y: 48, w: 656, h: 376 };
+/** Where the floor's picture sits in the world: the town, and the forest floor a way out from it. */
+export const GROUND = { x: LEFT - 72, y: TOP + 48, w: BOUNDS.w + 144, h: BOUNDS.h + 24 };
 
 export function paintGround(): HTMLCanvasElement {
   return paint(GROUND.w, GROUND.h, (px, py) => {
@@ -29,7 +34,7 @@ export function paintGround(): HTMLCanvasElement {
       if (y < top + 3) return GOLD[1];
       if (y < top + 7) return EARTH[2];
     } else if (y < top + 5) return at(DEEP, (y - top) / 3 + hash(x >> 1, y, 71) * 0.8);
-    if (x < 0 || x >= W || y > H + 10) return at(DEEP, vnoise(x / 12, y / 9, 72) * 2.4);
+    if (x < LEFT || x >= RIGHT || y > FOOT + 10) return at(DEEP, vnoise(x / 12, y / 9, 72) * 2.4);
 
     const pd = pondD(x, y);
     if (pd < 0) {
@@ -55,7 +60,7 @@ export function paintGround(): HTMLCanvasElement {
     // that ring the clearing.
     const n = vnoise(x / 34, y / 13, 3);
     let idx = n > 0.7 ? 3 : n < 0.27 ? 1 : 2;
-    const edge = Math.min(x - 30, W - 30 - x, (y - 80) * 1.4, (H - 14 - y) * 1.2);
+    const edge = Math.min(x - LEFT - 30, RIGHT - 30 - x, (y - TOP - 80) * 1.4, (FOOT - 14 - y) * 1.2);
     if (edge < 6 + vnoise(x / 26, y / 20, 8) * 44) idx -= 1;
     if (td < 1.6) idx -= 1;
     idx = clamp(idx, 0, 3);
@@ -74,8 +79,13 @@ export function paintGround(): HTMLCanvasElement {
 
 // ---------- the sunset ----------
 
-/** The backdrop's picture; its row `horizon` belongs at world height `SKYLINE.worldY`. */
-export const SKYLINE = { w: 760, h: 300, horizon: 252, worldX: -124, worldY: 86, sunX: 380 };
+const GATE = piece("gate");
+
+/**
+ * The backdrop's picture, the sun at `sunX` across it: it hangs with the sun behind the gate, its row
+ * `horizon` at world height `SKYLINE.worldY`.
+ */
+export const SKYLINE = { w: 760, h: 300, horizon: 252, worldX: GATE.x - 380, worldY: GATE.y - 12, sunX: 380 };
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 const dither = (x: number, y: number): number => ((BAYER[(y & 3) * 4 + (x & 3)] ?? 0) + 0.5) / 16;
@@ -155,6 +165,21 @@ export function trunkHalf(hw: number, height: number, seed: number, y: number): 
   return hw + flare * clamp((y - (height - rootH)) / rootH, 0, 1) ** 2.6 + Math.sin(y * 0.021 + seed) * 1.4;
 }
 
+/** The great trunks round the clearing, by their look in the map: half their width above the roots, and their bark's seed. */
+export const TRUNKS: readonly { hw: number; seed: number }[] = [
+  { hw: 44, seed: 1 },
+  { hw: 26, seed: 2 },
+  { hw: 26, seed: 3 },
+  { hw: 44, seed: 4 },
+  { hw: 40, seed: 5 },
+  { hw: 40, seed: 6 },
+  { hw: 44, seed: 7 },
+  { hw: 46, seed: 8 },
+];
+
+/** How tall a trunk's picture is, by the y of its foot: from there to well past the top of the map. */
+export const trunkTall = (y: number): number => y + 210;
+
 /**
  * A redwood trunk seen from its foot upwards: round, deeply furrowed, spreading into roots.
  * `dim` is how many rows from the top are lost in the canopy's shade; `above` more rows of it
@@ -216,7 +241,7 @@ export function drawFern(g: Ctx, bx: number, by: number, size: number, cols: rea
 }
 
 /** The dark ferns along the near edge, drawn over everything that walks. */
-export const NEAR = { x: -72, y: 318, w: 656, h: 106 };
+export const NEAR = { x: LEFT - 72, y: FOOT - 34, w: BOUNDS.w + 144, h: 106 };
 
 export function paintNear(): HTMLCanvasElement {
   const { c, g } = makeCanvas(NEAR.w, NEAR.h);
@@ -225,12 +250,12 @@ export function paintNear(): HTMLCanvasElement {
   floor.addColorStop(1, "rgba(20,31,28,1)");
   g.fillStyle = floor;
   g.fillRect(0, 30, NEAR.w, NEAR.h - 30);
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < Math.ceil(NEAR.w / 22); i++) {
     const x = 6 + i * 22 + Math.round((hash(i, 2, 84) - 0.5) * 10);
     const tall = 20 + hash(i, 3, 85) * 12;
     drawFern(g, x, 56 + Math.round(hash(i, 4, 86) * 8), tall, [DEEP[1], DEEP[2]], 100 + i);
   }
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < Math.ceil(NEAR.w / 34); i++) {
     const x = i * 34 + Math.round(hash(i, 5, 87) * 16);
     drawFern(g, x, 78 + Math.round(hash(i, 6, 88) * 6), 26 + hash(i, 7, 89) * 10, [DEEP[0], DEEP[1]], 200 + i);
   }

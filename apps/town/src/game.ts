@@ -5,14 +5,42 @@ import type { Body, Dir } from "@sequoia-leaf/kit/skin.ts";
 import type { Pt, Rect } from "@sequoia-leaf/kit/util.ts";
 import { seedOf, stagedBy } from "@sequoia-leaf/town/clock.ts";
 import type { Doing as FolkDoing, Townsperson } from "@sequoia-leaf/town/folk.ts";
+import type { SeatAt } from "@sequoia-leaf/town/map/kinds.ts";
+import { RESTS } from "@sequoia-leaf/town/map/map.ts";
+import type { PlaceId } from "@sequoia-leaf/town/map/rows.ts";
 
 import type { FolkArt } from "./folkart.ts";
 import type { GameId } from "./games.ts";
 import type { Deeds, Moment, Tone } from "./guild.ts";
 import type { Place } from "./screen.ts";
-import type { PlaceId, Seat } from "./world.ts";
 
 export type PanelId = PlaceId | "profile";
+
+/** Somewhere to sit, as the page keeps it: in town one of the map's rest spots (a camp makes its own). */
+export interface Seat {
+  /** Where the sitter is drawn, and which way they face. */
+  x: number;
+  y: number;
+  dir: Dir;
+  /** The clear spot they step up from. */
+  from: Pt;
+  /** By the fire, on the garden bench or the bench by the Works' door, or at the stump. */
+  at: SeatAt;
+  taken: boolean;
+  /** Left for the member: nobody else sits there. */
+  yours?: boolean;
+}
+
+/** The town's seats: the map's rest spots, in its order. */
+export const SEATS: Seat[] = RESTS.map((r) => ({
+  x: r.x,
+  y: r.y,
+  dir: r.dir,
+  from: { ...r.from },
+  at: r.at,
+  taken: false,
+  yours: r.yours,
+}));
 /**
  * What somebody is about: what one of the town's own is doing (`folk.ts`), or for a member where
  * they are (about the town, by the Works, at the stump, before the Grove's stone, at home in a camp).

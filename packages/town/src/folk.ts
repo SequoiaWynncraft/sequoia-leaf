@@ -10,6 +10,9 @@
 /** Which of the town's own sprites somebody is drawn as. */
 export type FolkKind = "gnome" | "cat" | "glorp" | "fox";
 
+/** How fast each walks, in the town's pixels a second: a gnome with its two-step waddle, a glorp slower still. */
+export const PACE: Readonly<Record<FolkKind, number>> = { gnome: 22, cat: 26, glorp: 18, fox: 26 };
+
 export type FolkId = "cinfy" | "sootpaw" | "bramblewick" | "tindra" | "pipwick" | "mossback" | "embertoe" | "fox";
 
 /** What somebody does with their evening in town. */

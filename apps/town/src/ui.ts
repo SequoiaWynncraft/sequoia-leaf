@@ -20,6 +20,7 @@ import { owned } from "@sequoia-leaf/town/camp.ts";
 import { LOST_CRAB, STALLS, type Stock } from "@sequoia-leaf/town/catalogue.ts";
 import { folk, folkNamed, KEEPER } from "@sequoia-leaf/town/folk.ts";
 import { waiting } from "@sequoia-leaf/town/mail.ts";
+import { place, PLACES } from "@sequoia-leaf/town/map/map.ts";
 import { thingOf } from "@sequoia-leaf/town/things.ts";
 
 import { goSit, hop, inTown, rouse, say, sitters, stop } from "./actors.ts";
@@ -55,7 +56,6 @@ import { emote, EMOTE_NAMES } from "./players.ts";
 import { icon, type Sprites } from "./sprites.ts";
 import { tallyPanel } from "./tallyui.ts";
 import { LOG, thingName, touchThing } from "./town.ts";
-import { place, PLACES } from "./world.ts";
 
 let S: Sprites | null = null;
 let ART: CampArt | null = null;

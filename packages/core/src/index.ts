@@ -202,4 +202,4 @@ export {
   TIMED,
 } from "./tally.ts";
 
-export { RULES_ENTRY, rulesVersion, rulesVersions } from "./version.ts";
+export { RULES_ENTRY, rulesModules, rulesVersion, rulesVersions } from "./version.ts";

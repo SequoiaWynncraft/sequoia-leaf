@@ -22,7 +22,7 @@
 
 import { silentSince, VISIT_RULES, type VisitRules } from "@sequoia-leaf/core";
 import type { Place } from "@sequoia-leaf/kit/presence.ts";
-import type { Stand } from "@sequoia-leaf/town/clock.ts";
+import type { Stand } from "@sequoia-leaf/town/map/rows.ts";
 
 /** Somebody in the town's live room with the member: their account, name, and rank as the town shows it. */
 export interface InRoom {

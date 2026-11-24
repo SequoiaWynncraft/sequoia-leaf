@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { DAY_MS, isAct, readToClient } from "@sequoia-leaf/core";
-import { hiding, STRETCH, stretchOf } from "@sequoia-leaf/town/clock.ts";
+import { hiding } from "@sequoia-leaf/town/clock.ts";
+import { STRINGS } from "@sequoia-leaf/town/map/map.ts";
+import { STRETCH, stretchOf } from "@sequoia-leaf/town/stretch.ts";
 
 import { G, hooks, SEED } from "./game.ts";
 import { makeProp, type Prop, propUnder } from "./props.ts";
-import { STRINGS, wire } from "./strings.ts";
+import { wire } from "./strings.ts";
 import { type Crab, crabAt, crabs, lastTouches, placeCrabs, props, thingName, touchedBy, touchThing } from "./town.ts";
 
 /** A crab that has been running off this many seconds is no longer seen. */

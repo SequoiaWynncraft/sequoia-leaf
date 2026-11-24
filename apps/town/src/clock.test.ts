@@ -5,11 +5,10 @@ import { EVERY } from "@sequoia-leaf/kit/presence.ts";
 import { dist } from "@sequoia-leaf/kit/util.ts";
 import { folkAt, SITS_AFTER } from "@sequoia-leaf/town/clock.ts";
 import { folk } from "@sequoia-leaf/town/folk.ts";
+import { TOWN } from "@sequoia-leaf/town/map/map.ts";
 
 import { walkAt } from "./actors.ts";
 import { SEED } from "./game.ts";
-import { LAID } from "./spots.ts";
-import { TOWN } from "./world.ts";
 
 /** Noon to noon, so that the UTC day turns in the middle. */
 const T0 = Date.UTC(2026, 10, 25, 12);
@@ -49,10 +48,5 @@ describe("the town's own on the town's ground, by Leaf's clock", () => {
 describe("members on the town's ground, by Leaf's clock", () => {
   test("every page has asked who is about between Leaf listing somebody as gone, at 90 seconds, and their dozing or going", () => {
     expect(SITS_AFTER - EVERY).toBe(90_000);
-  });
-
-  test("every spot laid by hand at the games is open ground", () => {
-    for (const stand of [...LAID.works, ...LAID.table, ...LAID.grove])
-      expect(TOWN.footBlocked(stand.x, stand.y)).toBe(false);
   });
 });
