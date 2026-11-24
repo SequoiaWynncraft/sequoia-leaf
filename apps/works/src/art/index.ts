@@ -207,11 +207,41 @@ function headsOn(m: Machines, ways: readonly number[]): HTMLCanvasElement {
   return c;
 }
 
-/** What a kind's picture is put together from: the machines' art, the things', and a sorter's top. */
+/**
+ * The depot typed out for a slot, 22 pixels square with its edge: the whole building as the yard has
+ * it (the purple roof with the Works' wheel, the chimney, the lit window, the order board, the open
+ * door's warm light with a crate in it), small. The yard's picture is 54 pixels by 66, and a slot cut
+ * from it showed only some of its roof.
+ */
+export const DEPOT_PIC = [
+  "............SSSSSS..",
+  "............hhhhhh..",
+  "..nnnnnnnnnnnssshn..",
+  "..bbbbbbbbbbbssshb..",
+  "..ZvvvoVoVVVVhhhhV..",
+  "..ZVVoooooVVVssshV..",
+  "..ZVooyYyooVVssshV..",
+  "..ZZZoYxYoZZZssshZ..",
+  ".zzzooyYyoovvhhhhzz.",
+  ".zzzZoooooZzzSSShzz.",
+  ".zzzZzozozZzzzzzZzz.",
+  "ZZZZZZZZZZZZZZZZZZZZ",
+  "nbnnbnnnbnnnbnnnbnnb",
+  "nbxxxxnnbSSnbnxxxxnb",
+  "nbxYYxnnSSSSbnxNNxnb",
+  "nbxyyxnSSDDSSnxNNxnb",
+  "nbxxxxSSoooDSSxxxxnb",
+  "ssshttSDnnnDDSShtttt",
+  "ssshSSSryyyyrSshSSSS",
+  "ssshSSSryYYyrSshSSSS",
+];
+
+/** What a kind's picture is put together from: the machines' art, the things', a sorter's top, and the depot's picture for a slot. */
 interface Parts {
   readonly m: Machines;
   readonly item: ItemArt;
   readonly sorter: Art["sorter"];
+  readonly depot: HTMLCanvasElement;
 }
 
 /**
@@ -257,7 +287,7 @@ export const KIND_PIC: Readonly<Record<KindName, (p: Parts, grade: number, carry
   pylon: ({ m }) => must(m.pylon[0]?.[2], "pylon").c,
   wheel: ({ m }) => must(m.wheel[0], "wheel").c,
   boiler: ({ m }) => must(m.boiler[1], "boiler").c,
-  depot: ({ m }) => m.depot.c,
+  depot: ({ depot }) => depot,
   study: ({ m }, grade) => must(m.study[lookOf(grade)]?.[2], "study").c,
   stop: ({ m }) => must(m.stop[0], "stop").c,
   sorter: ({ m, sorter }, grade, carrying) => meeting(m, arms(2, 0, 1, 2), sorter(0, carrying), grade),
@@ -298,6 +328,6 @@ export function makeArt(land: Land): Art {
     sign: signMaker(),
     sorter,
     waysIn: meeting(m, arms(2, 2, 1, 1), headsOn(m, [0, 2]), 1),
-    icon: icons({ m, item, sorter }),
+    icon: icons({ m, item, sorter, depot: bm(DEPOT_PIC, 0, 0).c }),
   };
 }

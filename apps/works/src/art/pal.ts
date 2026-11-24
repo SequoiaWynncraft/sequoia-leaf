@@ -38,6 +38,7 @@ export const PAL: Readonly<Record<string, string>> = {
   v: SKY[3],
   V: SKY[2],
   z: SKY[1],
+  Z: SKY[0],
   g: GREEN[2],
   G: GREEN[3],
   l: GREEN[4],

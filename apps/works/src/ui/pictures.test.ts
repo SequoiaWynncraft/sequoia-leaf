@@ -24,8 +24,9 @@ import {
   unlockedBy,
 } from "@sequoia-leaf/factory";
 
-import { KIND_PIC } from "../art/index.ts";
+import { DEPOT_PIC, KIND_PIC } from "../art/index.ts";
 import { ROWS } from "../art/items.ts";
+import { PAL } from "../art/pal.ts";
 import { PERK_ART, TOOL_ICON } from "./cards.ts";
 import { pictureRef, unlockRef } from "./refs.ts";
 
@@ -68,6 +69,14 @@ describe("a picture for everything a screen shows", () => {
   test("every kind of piece, the depot too", () => {
     expect(new Set(ALL_KINDS.map(kindName)).size).toBe(ALL_KINDS.length);
     for (const k of ALL_KINDS) expect([kindName(k), typeof KIND_PIC[kindName(k)]]).toEqual([kindName(k), "function"]);
+  });
+
+  test("the depot's picture for a card is whole in the card's slot: 20 pixels square and its edge, every letter a colour", () => {
+    expect(DEPOT_PIC.length).toBe(20);
+    for (const row of DEPOT_PIC) {
+      expect(row.length).toBe(20);
+      for (const letter of row) expect([letter, letter === "." || PAL[letter] !== undefined]).toEqual([letter, true]);
+    }
   });
 
   test("every tool, and every number a goal may raise", () => {
