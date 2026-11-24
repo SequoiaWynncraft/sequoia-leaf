@@ -39,6 +39,7 @@ export {
   PAGES,
 } from "./page-errors.ts";
 export { parsePlayerId, type PlayerId, playerId } from "./player.ts";
+export { clamp, hash, type Pt, type Rect, vnoise } from "./plane.ts";
 export { below, chance, draw32, mix, pick, shuffled, type Stream, weighted } from "./rng.ts";
 export type { Postcard } from "./postcard.ts";
 export {
