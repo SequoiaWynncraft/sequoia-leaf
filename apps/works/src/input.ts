@@ -75,14 +75,33 @@ const downs = new Map<number, Down>();
 let pinch: { d: number; cx: number; cy: number } | null = null;
 let pressTimer = 0;
 
+/** Where the mouse is on the page while it is over the yard: what it is over is worked out again as the yard moves under it. */
+let mouse: { x: number; y: number } | null = null;
+/** The view as it stood at the last frame: the yard's pixel at the page's corner, and how many of the yard's pixels to one of the page's. */
+const view = { x: Number.NaN, y: Number.NaN, k: Number.NaN };
+/** Whether the view moved at the last frame. */
+let viewMoving = false;
+
 /**
  * What the mouse is on says what it is, after a moment: something riding a belt, or else the tile.
- * Land not bought yet says nothing until it is clicked: the mouse crosses a great deal of it.
+ * Land not bought yet says nothing until it is clicked: the mouse crosses a great deal of it. While
+ * the yard moves under the mouse it rests on nothing, so nothing that passes beneath says what it is.
  */
 function pointAt(tx: number, ty: number): void {
-  const ref = S.tool === null && downs.size === 0 ? (riderAt(tx, ty) ?? refAt(tx, ty)) : null;
+  const ref = S.tool === null && downs.size === 0 && !viewMoving ? (riderAt(tx, ty) ?? refAt(tx, ty)) : null;
   const b = tileBox(tx, ty);
   point(ref?.startsWith("plot:") ? null : ref, b.x, b.y, b.w, b.h);
+}
+
+/** The mouse is over a tile, having moved there or had the yard move under it: the hand aims there, and what is there is pointed at. */
+function hoverOn(t: { x: number; y: number }): void {
+  if (S.hover && S.hover.x === t.x && S.hover.y === t.y) return;
+  S.hover = t;
+  if (S.hand.is !== "idle" && !running()) {
+    aimAt(t.x, t.y);
+    refreshDock();
+  }
+  pointAt(t.x, t.y);
 }
 
 /** A tap or click on a tile with nothing in hand: ask about what is there. */
@@ -150,7 +169,10 @@ function lift(e: PointerEvent): void {
   } else if (d.doing === "pan" && !d.moved && e.button === 0) ask(t.x, t.y, e.clientX, e.clientY);
 }
 
-export function initInput(canvas: HTMLCanvasElement): void {
+/** What input uses of the yard's canvas: its events, holding a press, and marking it for the cards. */
+export type InputSurface = Pick<HTMLCanvasElement, "addEventListener" | "setPointerCapture" | "dataset">;
+
+export function initInput(canvas: InputSurface): void {
   document.addEventListener("pointerdown", unlock, true);
 
   // A press on the yard is read here: the cards do not put themselves away for it.
@@ -164,6 +186,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
       if (finger) S.hover = null;
       refreshDock();
     }
+    if (finger) mouse = null;
     const t = tileAt(e.clientX, e.clientY);
     const d: Down = {
       id: e.pointerId,
@@ -221,14 +244,8 @@ export function initInput(canvas: HTMLCanvasElement): void {
     const d = downs.get(e.pointerId);
     const t = tileAt(e.clientX, e.clientY);
     if (e.pointerType === "mouse") {
-      if (!S.hover || S.hover.x !== t.x || S.hover.y !== t.y) {
-        S.hover = t;
-        if (S.hand.is !== "idle" && !running()) {
-          aimAt(t.x, t.y);
-          refreshDock();
-        }
-        pointAt(t.x, t.y);
-      }
+      mouse = { x: e.clientX, y: e.clientY };
+      hoverOn(t);
     }
     if (!d) return;
     const dx = e.clientX - d.x;
@@ -271,6 +288,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
   canvas.addEventListener("touchend", (e) => e.preventDefault());
   canvas.addEventListener("pointerleave", (e) => {
     if (e.pointerType !== "mouse") return;
+    mouse = null;
     S.hover = null;
     if (!running() && !S.finger && S.hand.is !== "idle") unaim();
     point(null, 0, 0);
@@ -351,9 +369,30 @@ export function initInput(canvas: HTMLCanvasElement): void {
   });
 }
 
-/** Each frame: the keys that move the view. */
+/** Each frame: the keys that move the view, and what the mouse is over once the view has moved for the frame. */
 export function stepInput(dt: number): void {
   const dx = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
   const dy = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
   if (dx !== 0 || dy !== 0) pan(-dx * dt * 620, -dy * dt * 620);
+  followView();
+}
+
+/**
+ * The view moved this frame (the keys, a drag, an eased look, a zoom): the yard moved under a mouse
+ * over it, so the tile it is over is worked out again, and it rests on nothing. The first frame the
+ * view stands still again, what is under the mouse then is pointed at, and its card may follow.
+ */
+function followView(): void {
+  const k = S.view.dpr / S.view.z;
+  const moved = S.cam.x !== view.x || S.cam.y !== view.y || k !== view.k;
+  const stopped = viewMoving && !moved;
+  view.x = S.cam.x;
+  view.y = S.cam.y;
+  view.k = k;
+  viewMoving = moved;
+  if (!mouse) return;
+  if (moved) {
+    point(null, 0, 0);
+    hoverOn(tileAt(mouse.x, mouse.y));
+  } else if (stopped && S.hover) pointAt(S.hover.x, S.hover.y);
 }

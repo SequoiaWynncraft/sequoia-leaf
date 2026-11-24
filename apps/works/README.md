@@ -59,6 +59,8 @@ bun test                         # the screen's own questions, the yard on a sta
   Escape steps back one stage of whatever is in hand.
 - **Undo undoes only what Leaf did** (`undos.ts`, one value), and only while what it touched stands
   as it was just after. Pressed before Leaf has answered, it waits for Leaf, then undoes or says why not.
+- **The mouse points at what is under it now** (`input.ts`): worked out again when the yard moves
+  under it, and resting on nothing while it moves, so no card comes up for what passes beneath.
 - **The kit's pinned card is the one source of the tile the yard marks** (`S.picked` reads it). Taking
   up a tool closes it, and so does taking away what it is about.
 - **Prices are judged in one place:** `doNow`, with the purse as it is at that moment.

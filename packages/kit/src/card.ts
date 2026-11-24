@@ -923,7 +923,7 @@ export const canvasCard: object = CANVAS;
  * Marks a canvas (or any element) whose game does its own hit-testing: a press on it does not put
  * the card away by itself, since the game says with `pick` what the press meant.
  */
-export function surface(target: HTMLElement): void {
+export function surface(target: Pick<HTMLElement, "dataset">): void {
   target.dataset.cards = "";
 }
 
