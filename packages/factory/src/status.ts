@@ -78,6 +78,8 @@ export interface Status {
   readonly spare?: Item;
   /** What a machine is waiting for. */
   readonly missing?: readonly Item[];
+  /** What it holds with nowhere to send it. */
+  readonly stuck?: Item;
 }
 
 const many = (n: Item): string => ITEM_INFO[n]?.many ?? "";
@@ -364,7 +366,7 @@ function words(y: Yard, i: number, state: State): Words {
       return { line: state === "carrying" ? `${under} thing${under === 1 ? "" : "s"} under the ground.` : "Empty." };
     }
     if (state === "carrying") return { line: `Carrying ${many(n)}.` };
-    if (state === "blocked") return { line: nowhere(y, i, n) };
+    if (state === "blocked") return { line: nowhere(y, i, n), stuck: n };
     return { line: `${cap(many(n))} waiting to move on.` };
   }
   if (state === "unpowered") return { line: "No power here. Place a pylon near it." };
@@ -379,7 +381,9 @@ function words(y: Yard, i: number, state: State): Words {
   }
   const out = asItem(h.out[r] ?? NONE);
   if (out !== null)
-    return { line: state === "blocked" ? nowhere(y, i, out) : `Waiting: no room ahead for its ${many(out)}.` };
+    return state === "blocked"
+      ? { line: nowhere(y, i, out), stuck: out }
+      : { line: `Waiting: no room ahead for its ${many(out)}.` };
   if (k === GATHERER) {
     const what = asItem(y.land.deposit[i] ?? NONE);
     return { line: `Gathering ${what === null ? "nothing" : many(what)}${slow}.` };

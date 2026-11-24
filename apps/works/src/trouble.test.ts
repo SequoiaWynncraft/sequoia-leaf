@@ -124,6 +124,14 @@ describe("what is wrong, in groups", () => {
     expect(groups.reduce((n, g) => n + g.tiles.length, 0)).toBe(troubled(y).count);
   });
 
+  test("a group with nowhere to send what it holds names that thing, for the picture of a belt to carry", () => {
+    const y = yard();
+    must(y, { do: "build", kind: "gatherer", x: 3, y: 6, dir: 0 });
+    must(y, { do: "build", kind: "belt", x: 4, y: 6, dir: 0 });
+    for (let k = 0; k < 80; k++) step(y);
+    expect(troubleGroups(y).map((g) => [g.title, g.stuck])).toEqual([["Nowhere to send its deadfall", deadfall]]);
+  });
+
   test("a bench full of one part and waiting for another is a group by both; with a line to send to, a gatherer is in no group", () => {
     const y = yard();
     must(y, { do: "build", kind: "gatherer", x: 3, y: 4, dir: 0 });

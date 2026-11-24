@@ -7,6 +7,7 @@ import {
   ALL_KINDS,
   type Dir,
   isItem,
+  type Item,
   item as thing,
   ITEM_COUNT,
   type Kind,
@@ -61,7 +62,7 @@ export interface Art {
   /** A splitter taking things in from behind and from its left, for the card of what lets it. */
   waysIn: HTMLCanvasElement;
   /** A machine's picture for a button or a card, as it stands at a grade (the first, unless said). */
-  icon: (kind: Kind, grade?: number) => HTMLCanvasElement;
+  icon: (kind: Kind, grade?: number, carrying?: Item) => HTMLCanvasElement;
 }
 
 const WILD = [DEEP[1], DEEP[2], GREEN[0], GREEN[1], GREEN[2]];
@@ -218,13 +219,14 @@ interface Parts {
  * kind in the tables has its entry, or this does not build; `pictures.test.ts` walks the tables
  * against it too.
  */
-export const KIND_PIC: Readonly<Record<KindName, (p: Parts, grade: number) => HTMLCanvasElement>> = {
-  // A belt is known by what rides on it. At the first grade its button has lighter slats than the yard's.
-  belt: ({ item }, grade) => {
+export const KIND_PIC: Readonly<Record<KindName, (p: Parts, grade: number, carrying: Item) => HTMLCanvasElement>> = {
+  // A belt is known by what rides on it: a plank, unless it is pictured carrying something of its own.
+  // At the first grade its button has lighter slats than the yard's.
+  belt: ({ item }, grade, carrying) => {
     const { c, g } = makeCanvas(16, 16);
     g.drawImage(grade >= 2 ? beltTile(arms(2, 0, 1, 0), 0, 5, woodOf(grade), 0, marksOf(grade)) : bare(), 0, 0);
-    const plank = item(thing("plank"));
-    g.drawImage(plank, 8 - (plank.width >> 1), 7 - (plank.height >> 1));
+    const on = item(carrying);
+    g.drawImage(on, 8 - (on.width >> 1), 7 - (on.height >> 1));
     return c;
   },
   // A gatherer in his grade's hat; of the second grade with his rake stood beside him, of the third his wheelbarrow too.
@@ -258,14 +260,14 @@ export const KIND_PIC: Readonly<Record<KindName, (p: Parts, grade: number) => HT
   depot: ({ m }) => m.depot.c,
   study: ({ m }, grade) => must(m.study[lookOf(grade)]?.[2], "study").c,
   stop: ({ m }) => must(m.stop[0], "stop").c,
-  sorter: ({ m, sorter }, grade) => meeting(m, arms(2, 0, 1, 2), sorter(0, thing("plank")), grade),
+  sorter: ({ m, sorter }, grade, carrying) => meeting(m, arms(2, 0, 1, 2), sorter(0, carrying), grade),
 };
 
 /** A copy of each kind's picture, for a button or a card. */
 function icons(parts: Parts): Art["icon"] {
   const made = ALL_KINDS.map((k) => KIND_PIC[kindName(k)]);
-  return (kind, grade = 1) => {
-    const src = must(made[kind], "a kind's picture")(parts, grade);
+  return (kind, grade = 1, carrying = thing("plank")) => {
+    const src = must(made[kind], "a kind's picture")(parts, grade, carrying);
     const { c, g } = makeCanvas(src.width, src.height);
     g.drawImage(src, 0, 0);
     return c;

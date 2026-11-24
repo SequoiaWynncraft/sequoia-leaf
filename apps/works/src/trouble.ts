@@ -14,7 +14,17 @@
  * listed, and of the pieces in trouble when the list is read (`troubleGroups`), never of every piece.
  */
 
-import { condition, isKind, type Kind, NONE, STATES, status, TROUBLE, type Yard } from "@sequoia-leaf/factory";
+import {
+  condition,
+  isKind,
+  type Item,
+  type Kind,
+  NONE,
+  STATES,
+  status,
+  TROUBLE,
+  type Yard,
+} from "@sequoia-leaf/factory";
 
 /** Ticks trouble must have lasted to be listed, and ticks a listed piece must have been out of it to be dropped. */
 const LASTS = 15;
@@ -120,11 +130,16 @@ export function troubled(y: Yard): Found {
   return f;
 }
 
-/** Pieces with the same thing wrong: what it is, in the rules' words, their tiles in the order of the tiles, and their kinds. */
+/**
+ * Pieces with the same thing wrong: what it is, in the rules' words, their tiles in the order of the
+ * tiles, their kinds, and what they hold with nowhere to send it, if that is what is wrong (the
+ * title names it), for a belt's picture to carry.
+ */
 export interface Group {
   readonly title: string;
   readonly tiles: readonly number[];
   readonly kinds: readonly Kind[];
+  readonly stuck: Item | null;
 }
 
 let grouped: { turn: number; groups: readonly Group[] } | null = null;
@@ -136,7 +151,7 @@ let grouped: { turn: number; groups: readonly Group[] } | null = null;
 export function troubleGroups(y: Yard): readonly Group[] {
   const f = troubled(y);
   if (grouped?.turn === f.turn) return grouped.groups;
-  const by = new Map<string, { title: string; tiles: number[]; kinds: Kind[] }>();
+  const by = new Map<string, { title: string; tiles: number[]; kinds: Kind[]; stuck: Item | null }>();
   for (let c = 0; c < f.count; c++) {
     const i = f.tiles[c] ?? 0;
     const k = y.kind[i] ?? NONE;
@@ -144,7 +159,7 @@ export function troubleGroups(y: Yard): readonly Group[] {
     if (condition(y, i) >= TROUBLE) f.said.set(i, titleOf(y, i));
     const title = f.said.get(i) ?? "";
     let group = by.get(title);
-    if (!group) by.set(title, (group = { title, tiles: [], kinds: [] }));
+    if (!group) by.set(title, (group = { title, tiles: [], kinds: [], stuck: status(y, i)?.stuck ?? null }));
     group.tiles.push(i);
     if (isKind(k) && !group.kinds.includes(k)) group.kinds.push(k);
   }
