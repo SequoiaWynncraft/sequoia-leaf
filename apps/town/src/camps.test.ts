@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
+import { type Reply, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 
 import { type Camp, camps, fetchCamps, inOrder, like, named, nextAfter, readCamps } from "./camps.ts";
 import { likedLine } from "./news.ts";
@@ -88,17 +88,14 @@ describe("the signpost's camps", () => {
 
   test("keep a like Leaf answered over a list it was asked for before the like", async () => {
     const before = { camps: [{ id: "bo", name: "Bo", guest: false, set_out: 3, likes: 1, liked: false }] };
-    let answerList = (): void => undefined;
+    const list = Promise.withResolvers<Reply>();
     world = standin({
-      "GET /v1/game/camps": () =>
-        new Promise((done) => {
-          answerList = () => done({ status: 200, body: before });
-        }),
+      "GET /v1/game/camps": () => list.promise,
       "PUT /v1/game/camps/bo/like": { status: 200, body: { likes: 2, liked: true } },
     });
     const listed = fetchCamps();
     await like("bo", true);
-    answerList();
+    list.resolve({ status: 200, body: before });
     await listed;
     expect(camps()).toEqual([{ id: "bo", name: "Bo", guest: false, setOut: 3, likes: 2, liked: true }]);
     // A list asked for after the like is Leaf's word again.
