@@ -9,6 +9,8 @@ import { freeSpot } from "@sequoia-leaf/town/camp.ts";
 
 import {
   ask,
+  campChanged,
+  campEntered,
   doNow,
   lookAgain,
   lookAt,
@@ -127,6 +129,33 @@ test("the camp looked at is read again while the member is in it, and not once t
     "/v1/game/play/town/of/carol",
     "/v1/game/play/town/of/carol",
   ]);
+});
+
+test("a camp visited is read again as the page comes into its room, and not while the page is out of sight", async () => {
+  const w = standin({
+    "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: own } },
+    "GET /v1/game/play/town/of/bob": { status: 200, body: { rev: 4, now: "x", state: visitView(theirs) } },
+  });
+  world = w;
+  await openTown("me", () => undefined);
+  const bob = await openCamp("bob", "Bob");
+  if (typeof bob === "string") throw new Error(bob);
+  lookAt(bob);
+  await campEntered();
+  expect(w.sent.map((s) => s.path)).toEqual([
+    "/v1/game/play/town",
+    "/v1/game/play/town/of/bob",
+    "/v1/game/play/town/of/bob",
+  ]);
+  // Out of sight, the page reads it as it comes back instead.
+  Object.defineProperty(globalThis, "document", { value: { hidden: true }, configurable: true });
+  try {
+    await campEntered();
+    await campChanged(9);
+  } finally {
+    Reflect.deleteProperty(globalThis, "document");
+  }
+  expect(w.sent).toHaveLength(3);
 });
 
 test("a camp there is nothing of is the trouble nothing; a name already known is not asked", async () => {

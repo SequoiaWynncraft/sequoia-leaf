@@ -131,15 +131,26 @@ export async function openCamp(id: string, name?: string): Promise<Looked | Trou
   return { id, name: name ?? said?.name ?? "Someone", play: opened };
 }
 
+/** Whether the page is out of sight: a camp visited is read again as it comes back, not before. */
+const hidden = (): boolean => typeof document !== "undefined" && document.hidden;
+
 /**
  * Leaf says the owner has changed the camp the member is visiting, as it kept it at `rev` (the camp's
  * room hears it): it is read again at once, and once more if the read was one on its way before then.
  */
 export async function campChanged(rev: number): Promise<void> {
   const at = looked;
-  if (!at || at.play.rev >= rev) return;
+  if (!at || at.play.rev >= rev || hidden()) return;
   await at.play.refresh();
   if (looked === at && at.play.rev < rev) await at.play.refresh();
+}
+
+/**
+ * The page has come into the room of a camp (`welcome`), after walking there or after a drop: a
+ * camp being visited is read again, for whatever the owner changed before the room could say so.
+ */
+export async function campEntered(): Promise<void> {
+  if (looked && !hidden()) await looked.play.refresh();
 }
 
 /** Shows a camp opened (`openCamp`); with null, the member's own again. The camp shown before is put away. */

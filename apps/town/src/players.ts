@@ -48,7 +48,7 @@ import { type Actor, G, hooks, ROOM, SEED, toPage } from "./game.ts";
 import type { Ground } from "./grid.ts";
 import { guild } from "./guild.ts";
 import { showCard } from "./hud.ts";
-import { campChanged, visiting } from "./leaf.ts";
+import { campChanged, campEntered, visiting } from "./leaf.ts";
 import { GUEST, rankName } from "./live.ts";
 import {
   Company,
@@ -145,6 +145,7 @@ const ears: LiveEars = {
     company.ears.welcome?.(you, name, roster, restarted);
     for (const m of roster) learn(m);
     showLink();
+    if (name.startsWith("camp:")) void campEntered();
   },
   joined(m) {
     company.ears.joined?.(m);
