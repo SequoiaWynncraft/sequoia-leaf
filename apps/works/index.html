@@ -573,7 +573,8 @@
         width: calc(var(--u) * 2);
       }
       /* As wide as the tools under it, and as tall as a row of grades: what it says wraps inside it, so
-         the line never changes size with its words, and its buttons stay where they are. */
+         the line never changes size with its words, and its buttons stay where they are. Buttons that
+         leave its words too little room go to a row of their own, as on a phone. */
       #hand {
         position: fixed;
         z-index: 6;
@@ -584,6 +585,8 @@
         min-width: max(var(--dockw, 0px), calc(var(--u) * 300));
         bottom: calc(var(--bottom) + var(--dockh, 0px) + var(--u) * 2);
         display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
         align-items: center;
         gap: calc(var(--u) * 3);
         padding: var(--u) calc(var(--u) * 2) var(--u) calc(var(--u) * 4);
@@ -1096,10 +1099,6 @@
         /* Two even rows once the tools no longer fit in one. */
         #dock {
           max-width: calc(var(--per) * (var(--slot) + var(--u)) + var(--u) * 11);
-        }
-        #hand {
-          flex-wrap: wrap;
-          justify-content: flex-end;
         }
         #hand .say {
           flex: 1 1 11em;
