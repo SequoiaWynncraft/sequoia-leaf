@@ -1168,10 +1168,7 @@ b.dmg.true {
   body[data-mode="fight"] #foe {
     visibility: hidden;
   }
-  /* The plate over whoever is across stops short of the rack, on one line: what they brought gives way first. */
-  #foe:has(.brought) {
-    max-width: calc(100vw - var(--u) * 56);
-  }
+  /* The plate over whoever is across stays on one line (placeFoe keeps it clear of the rack): what they brought gives way first. */
   #foe .brought > :last-child {
     min-width: 0;
     overflow: hidden;

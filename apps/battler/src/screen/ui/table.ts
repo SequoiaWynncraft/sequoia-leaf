@@ -543,13 +543,16 @@ export function placeFoe(): void {
     // Beside whoever is sitting across the table.
     foe.style.left = `${Math.round((cx + 16) * px)}px`;
     foe.style.top = `${Math.round(Math.max((rimTop(p) - 16) * px, under))}px`;
-    foe.style.translate = "none";
+    foe.style.maxWidth = "";
     return;
   }
-  // On a narrow window: over their head, in the last of the sky.
-  foe.style.left = `${Math.round(cx * px)}px`;
+  // On a narrow window: over their head, in the last of the sky, and clear of the rack along the right.
+  const rack = byId("rack")?.getBoundingClientRect();
+  const right = (rack && rack.width > 0 ? rack.left : window.innerWidth) - 8;
+  foe.style.maxWidth = `${right - 8}px`;
+  const w = foe.offsetWidth;
+  foe.style.left = `${Math.round(Math.max(8, Math.min(cx * px - w / 2, right - w)))}px`;
   foe.style.top = `${Math.round(Math.max((rimTop(p) - 44) * px, under))}px`;
-  foe.style.translate = "-50% 0";
 }
 
 /** Draws the interface again from the run. */
