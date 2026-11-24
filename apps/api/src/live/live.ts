@@ -68,14 +68,25 @@ export interface LiveTuning {
   readonly presenceMs: number;
 }
 
-export const LiveTuning = Context.Reference<LiveTuning>("leaf/LiveTuning", {
-  defaultValue: () => ({ recheckMs: 30_000, graceMs: 10_000, mostPlayers: LIVE_MOST_PLAYERS, presenceMs: 30_000 }),
-});
+/** Live's tuning when nothing says otherwise. */
+export const LIVE_TUNING: LiveTuning = {
+  recheckMs: 30_000,
+  graceMs: 10_000,
+  mostPlayers: LIVE_MOST_PLAYERS,
+  presenceMs: 30_000,
+};
+
+export const LiveTuning = Context.Reference<LiveTuning>("leaf/LiveTuning", { defaultValue: () => LIVE_TUNING });
 
 /** Live's tuning as Leaf runs it: the defaults, but for how many players it holds, which is a setting (`LIVE_MOST_PLAYERS`). */
 export const LiveTuned = Layer.effect(
   LiveTuning,
-  AppConfig.useSync((settings) => ({ ...LiveTuning.defaultValue(), mostPlayers: settings.liveMostPlayers })),
+  AppConfig.useSync(({ liveMostPlayers }): LiveTuning => ({
+    recheckMs: LIVE_TUNING.recheckMs,
+    graceMs: LIVE_TUNING.graceMs,
+    mostPlayers: liveMostPlayers,
+    presenceMs: LIVE_TUNING.presenceMs,
+  })),
 );
 
 /** How often Live forgets the players of whom nothing is left (`Player.gone`). */

@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { ConfigProvider, Effect, Exit, Layer, Redacted } from "effect";
 
 import { AppConfig, LIVE_MOST_PLAYERS } from "../src/config.ts";
-import { LiveTuned, LiveTuning } from "../src/live/live.ts";
+import { LIVE_TUNING, LiveTuned, LiveTuning } from "../src/live/live.ts";
 import { readSettings, testConfig } from "./support.ts";
 
 const bucket = {
@@ -55,7 +55,12 @@ describe("settings", () => {
         LiveTuned.pipe(Layer.provide(Layer.succeed(AppConfig)(testConfig({ liveMostPlayers: 7 })))),
       ),
     );
-    expect(tuned).toEqual({ ...LiveTuning.defaultValue(), mostPlayers: 7 });
+    expect([tuned.mostPlayers, tuned.recheckMs, tuned.graceMs, tuned.presenceMs]).toEqual([
+      7,
+      LIVE_TUNING.recheckMs,
+      LIVE_TUNING.graceMs,
+      LIVE_TUNING.presenceMs,
+    ]);
   });
 
   it("serves metrics where LEAF_METRICS_BIND says, and refuses anything that is not host:port", () => {

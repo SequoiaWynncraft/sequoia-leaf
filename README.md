@@ -1126,15 +1126,36 @@ has one in thirty join anew each second, has owners' pages send commands, visits
 yards in bursts and has Leaf tend fifty yards eight hours behind. It times every
 move from its sender to each other player in the room receiving it (not to the
 screen), every command and every visit; Leaf says how long its event loop was
-held, where the play service's time went, its CPU and its memory. On the
-development machine, 300 players: 18.6 ms at the median, 34 ms at the 95th
-percentile and 37 ms at the 99th, the event loop held 3.6 ms at the 99th, 31% of
-one core and 212 MiB; while Leaf tended the fifty yards, 37 ms at the 99th and
-113 ms at worst. Measured on the
-screen, with `play.ts --crowd 6` and two pages as two members on the same
-machine, one walking about the town and the other read every 100 ms for 24
-seconds: the second draws the first where the first said it was 125 to 135 ms
-before, and so at most 10 of the town's pixels behind it at the town's walk.
+held, where the play service's time went, its CPU and its memory, and what
+the players were sent a second each. `drive.ts` can also have walkers leave the
+room and come back (`churn`), and several drivers can share the walkers (`from`)
+when one is too slow to time them all. On the development machine, walking
+about the town once all are in, with twenty owners' pages sending commands,
+timed by drivers of at most 1,000 walkers each:
+
+| Players | Leaf's CPU, of one core | Moves seen, median and 99th percentile | Event loop held, 99th percentile |  Memory |
+| ------: | ----------------------: | -------------------------------------: | -------------------------------: | ------: |
+|     300 |                     14% |                           19 and 35 ms |                           1.8 ms | 208 MiB |
+|   1,000 |                     25% |                           22 and 38 ms |                           3.3 ms | 287 MiB |
+|   2,000 |                     58% |                           26 and 64 ms |                           6.6 ms | 398 MiB |
+|   3,000 |                     86% |                          40 and 137 ms |                            16 ms | 538 MiB |
+
+Each player is sent about 14 KB a second, nearly all of it motion. Of who is
+about, with 40 players and one leaving the room and coming back each second,
+1.2 KB a second each (all of the lists at each change came to 6.5 KB); with
+1,000, who outnumber the 50 the lists hold, and ten coming and going a second,
+4.4 KB (8.7 KB). Two thousand is where `LIVE_MOST_PLAYERS` stops by default:
+a little over half a core, which leaves the rest of the one Leaf process (the
+play service, the routes) room. When everybody comes in at once, as after a
+deploy, the slowest moves of those seconds take longer: at 2,000, 113 ms at the
+99th percentile and 253 ms at worst. Of the CPU at 1,000, a third is Bun
+writing the frames to the sockets, one write a player a tick, and a quarter
+Effect's runtime, mostly the fiber that reads each connection; Live's own code
+is a tenth. Measured on the screen, with `play.ts --crowd 6` and two pages as
+two members on the same machine, one walking about the town and the other read
+every 100 ms for 24 seconds: the second draws the first where the first said it
+was 125 to 135 ms before, and so at most 10 of the town's pixels behind it at
+the town's walk.
 
 ## The game's pages
 
