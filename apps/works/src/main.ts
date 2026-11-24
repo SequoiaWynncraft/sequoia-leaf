@@ -79,6 +79,8 @@ function measure(): void {
   inset.bottom = S.visiting ? 0 : Math.max(0, window.innerHeight - hand.top);
   document.documentElement.style.setProperty("--toph", `${Math.round(top.bottom)}px`);
   document.documentElement.style.setProperty("--dockh", `${Math.round(dock.height)}px`);
+  // The line over the dock is as wide as it: unrounded, so that their edges meet.
+  document.documentElement.style.setProperty("--dockw", `${dock.width}px`);
   // A card's sheet stops above the dock.
   const floor = dock.height > 0 ? window.innerHeight - dock.top : 0;
   document.documentElement.style.setProperty("--sheet-floor", `${Math.round(floor)}px`);
