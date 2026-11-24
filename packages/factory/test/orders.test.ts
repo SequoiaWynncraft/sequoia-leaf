@@ -37,6 +37,45 @@ describe("the size of a standing order", () => {
   });
 });
 
+/** What each of many fresh orders on a yard wants, by name. */
+const asked = (y: F.Yard, n = 120): string[][] =>
+  Array.from({ length: n }, () => {
+    const o = F.fresh(y, 11);
+    return F.ALL_ITEMS.filter((k) => (o.want[k] ?? 0) > 0).map((k) => F.itemName(k));
+  });
+
+describe("what the board asks for", () => {
+  const raw: readonly string[] = F.RAW;
+
+  test("from tier 2, never a thing straight off the ground, first or second; tiers 0 and 1 may ask for one", () => {
+    const early = asked(F.create({ seed: 7, tier: 1 })).flat();
+    expect(early.some((k) => raw.includes(k))).toBe(true);
+    for (const tier of [2, 3, 4]) {
+      const late = asked(F.create({ seed: 7, tier }));
+      expect(late.some((o) => o.length === 2)).toBe(true);
+      expect(late.flat().filter((k) => raw.includes(k))).toEqual([]);
+    }
+  });
+
+  test("with nothing but things off the ground to ask for, it asks for those, as it always has", () => {
+    const y = F.create({ seed: 7, tier: 2 });
+    // No machine may be built: the yard can make nothing, only gather.
+    const machines = new Set<number>([F.MILL, F.BENCH, F.WORKSHOP]);
+    y.open = { ...y.open, kinds: y.open.kinds.map((g, k) => (machines.has(k) ? 0 : g)) };
+    expect(asked(y, 20).every((o) => o.length > 0 && o.every((k) => raw.includes(k)))).toBe(true);
+  });
+
+  test("folios, once research is known, each with a line of its own; no order is left without one", () => {
+    const y = F.create({ seed: 7, tier: 4 });
+    // Every plot owned, so that what a Brass folio is made of lies in the yard.
+    y.plots = F.PLOT_IDS.flatMap((id) => F.plotNamed(id) ?? []);
+    const orders = Array.from({ length: 400 }, () => F.fresh(y, 11));
+    expect(orders.some((o) => (o.want[F.item("brass")] ?? 0) > 0)).toBe(true);
+    expect(orders.filter((o) => o.line === "").map((o) => o.title)).toEqual([]);
+    for (const k of ["timber", "brass"] as const) expect(F.ASKS[k]?.length).toBe(2);
+  });
+});
+
 describe("an order hung", () => {
   test("goes at the end of the board, and counts only from 50 ticks after: until then the depot gives it nothing and the check leaves it out", () => {
     const y = F.create({ seed: 3, tier: 4 });
