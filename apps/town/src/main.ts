@@ -39,6 +39,7 @@ import { guild } from "./guild.ts";
 import { closeCard, closePanel, covered, hush, initHud, tickHud } from "./hud.ts";
 import { TOWN_KEYS } from "./keymap.ts";
 import { here, keepTold, onTown, openCamp, town as kept, troubleCard, visiting } from "./leaf.ts";
+import { showMapSheet } from "./mapsheet.ts";
 import { leafNow, onStage } from "./players.ts";
 import { lookFromOutside } from "./review.ts";
 import { darkOf, inGame, mayAct, next, openOf, type Place, placeOf, takesWalk } from "./screen.ts";
@@ -73,11 +74,10 @@ async function boot(): Promise<void> {
     // The member and a few others in made-up looks; the town's own as themselves.
     const looks = [guild.me().look, ...["Quillfeather", "Fernwhistle", "Wrenly", "Bramblewick"].map(lookFor)];
     for (const id of ["purse", "corner", "dock", "feed"]) document.getElementById(id)?.remove();
+    const part = new URLSearchParams(location.search).get("sheet");
+    if (part === "map") return showMapSheet(sprites);
     const campArt = makeCampArt(sprites);
-    if (new URLSearchParams(location.search).get("sheet") === "camp") {
-      showCampSheet(campArt);
-      return;
-    }
+    if (part === "camp") return showCampSheet(campArt);
     initFolkArt(campArt);
     const folk = FOLK.flatMap((t) => {
       const a = folkArt(t);

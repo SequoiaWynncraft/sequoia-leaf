@@ -661,6 +661,14 @@ for the pulls again.
 `?sheet=big`, `?sheet=small`, `?sheet=ground` and `?sheet=sky` show the town's art on its own, and
 `?sheet=camp` every camp thing with its name. `?zoom=2` draws a place smaller, to see more of it.
 
+`?sheet=map` (`mapsheet.ts`) is the town's layout, labelled, for whoever edits the map: the town by
+day, three screen pixels to each of its own, with a faint line every square, the blocked squares in
+red, every piece's id at its anchor (a group's first by its id, the rest by their number in it),
+each seat as a dot with a line the way its sitter faces, coloured by who rests there and ringed
+where it is the member's, each place's stand as a square with its id and its prompt as a diamond,
+the busy spots at the games as triangles pointing the way they face, the spots of the town's own as
+crosses, and a line under it saying so.
+
 The step lists in `review/` drive the tours the screenshots came from, with the driver in
 `packages/kit/tools/drive.ts`, against Leaf on this machine, from the repository's root:
 
