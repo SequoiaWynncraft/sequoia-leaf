@@ -1,12 +1,12 @@
 import { DEFAULT_RULES, RULE_CHANGES } from "@sequoia-leaf/core";
-import { Cause, Clock, type Duration, Effect, Layer, Schedule } from "effect";
+import { Cause, Clock, type Duration, Effect, Layer, Match, Option, Ref, Schedule } from "effect";
 
 import { runAchievementSync } from "./achievements/run.ts";
 import { Visits } from "./activity/visits.ts";
 import { announce } from "./announce/publish.ts";
 import { rateCard } from "./announce/rate-card.ts";
-import { bucketOffsite, lastCopied, offsiteCopier } from "./backup/offsite.ts";
-import { listSnapshots, snapshotIfDue } from "./backup/snapshot.ts";
+import { copiedLast, type CopyFailed, copyNewest, Offsite, RETRY } from "./backup/offsite.ts";
+import { snapshotIfDue, snapshotsIn } from "./backup/snapshot.ts";
 import { AppConfig } from "./config.ts";
 import { runCreditSync } from "./earning/run.ts";
 import { payMissedLevels } from "./levels/pay.ts";
@@ -60,7 +60,8 @@ export const scheduledSync = <E, R>(
 /** Snapshots the database every six hours. A run is one that took one; it last succeeded when the newest was taken. */
 const snapshots = Effect.gen(function* () {
   const { backupDirectory } = yield* AppConfig;
-  const newest = listSnapshots(backupDirectory).at(-1);
+  // Unreadable, the directory is said so by the first run.
+  const newest = (yield* Effect.orElseSucceed(snapshotsIn(backupDirectory), () => [])).at(-1);
   if (newest !== undefined) yield* jobSucceededAt("snapshot", newest.takenAt);
   return step(
     "snapshot",
@@ -74,28 +75,61 @@ const snapshots = Effect.gen(function* () {
   );
 });
 
-/** Copies the newest snapshot off the server once, when a bucket is configured. */
-const offsiteCopies = Effect.gen(function* () {
-  const { offsite, backupDirectory } = yield* AppConfig;
-  if (offsite === undefined) {
-    return Effect.void;
-  }
-  const copyOffsite = offsiteCopier(bucketOffsite(offsite), backupDirectory);
-  // It last succeeded when the snapshot copied last was taken.
-  const copied = listSnapshots(backupDirectory).find((one) => one.name === lastCopied(backupDirectory));
-  if (copied !== undefined) yield* jobSucceededAt("snapshot_offsite", copied.takenAt);
-  return step(
-    "snapshot_offsite",
-    "Copying a snapshot off the server (it is tried again in ten minutes)",
-    Effect.gen(function* () {
-      const now = yield* Clock.currentTimeMillis;
-      const name = yield* Effect.tryPromise(() => copyOffsite(now));
-      if (name === undefined) return "idle";
-      yield* Effect.logInfo("snapshot_copied_offsite").pipe(Effect.annotateLogs({ name }));
-      return "done";
-    }),
-  );
-});
+/**
+ * Copies the newest snapshot off the server (`Offsite`), each minute, on one fiber. A failed attempt
+ * (the snapshots unreadable, the bucket not taking one, or the record of it not kept) is logged
+ * with why and when a copy last succeeded, and counted; the whole attempt is made again after
+ * `RETRY`, and the minutes wait meanwhile, so no two copies ever run at once. As Leaf starts, the
+ * copy last succeeded when the snapshot copied last was taken.
+ */
+export const OffsiteCopies = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const { backupDirectory } = yield* AppConfig;
+    // Unreadable, the record is said so by the first attempt.
+    const copied = yield* Effect.orElseSucceed(copiedLast(backupDirectory), () => Option.none());
+    if (Option.isSome(copied)) yield* jobSucceededAt("snapshot_offsite", copied.value.takenAt);
+    const lastSuccess = yield* Ref.make(Option.map(copied, (snapshot) => snapshot.takenAt));
+    const failed = (error: CopyFailed) =>
+      Effect.gen(function* () {
+        const last = yield* Ref.get(lastSuccess);
+        yield* Effect.logError(
+          "Copying a snapshot off the server failed (it is tried again in ten minutes)",
+          error,
+        ).pipe(
+          Effect.annotateLogs({
+            reason: Match.valueTags(error, {
+              SnapshotsUnreadable: () => "snapshots_unreadable",
+              UploadFailed: () => "upload_failed",
+              MarkerFailed: () => "record_not_written",
+            }),
+            last_copied_at: Option.getOrNull(Option.map(last, (at) => new Date(at).toISOString())),
+          }),
+        );
+        yield* jobRun("snapshot_offsite", "failed");
+      });
+    yield* everyMinute(
+      step(
+        "snapshot_offsite",
+        "Copying a snapshot off the server",
+        copyNewest(backupDirectory).pipe(
+          Effect.tapError(failed),
+          Effect.retry(RETRY),
+          Effect.flatMap(
+            Option.match({
+              onNone: () => Effect.succeed<JobRun>("idle"),
+              onSome: ({ name }) =>
+                Effect.gen(function* () {
+                  yield* Ref.set(lastSuccess, Option.some(yield* Clock.currentTimeMillis));
+                  yield* Effect.logInfo("snapshot_copied_offsite").pipe(Effect.annotateLogs({ name }));
+                  return "done" as const;
+                }),
+            }),
+          ),
+        ),
+      ),
+    );
+  }),
+);
 
 /** Closes the visits gone silent, so that what is kept of sessions and players is as of the minute. */
 const silentVisits = step(
@@ -131,16 +165,23 @@ const everyMinute = <R>(job: Effect.Effect<void, never, R>, after: Duration.Inpu
  * games' states, each on its own. An offsite copy can take minutes; the syncs, the deep sync at minute 17, and snapshots carry
  * on meanwhile.
  */
-export const EveryMinute = Layer.effectDiscard(
-  Effect.gen(function* () {
-    yield* everyMinute(scheduledSync("credit", runCreditSync));
-    yield* everyMinute(scheduledSync("achievement", runAchievementSync));
-    yield* everyMinute(yield* snapshots);
-    yield* everyMinute(yield* offsiteCopies);
-    yield* everyMinute(silentVisits);
-    // A minute after Leaf starts: one starting beside one stopping, as in a deploy, does not tend against it.
-    yield* everyMinute(tending, "1 minute");
-  }),
+export const EveryMinute = Layer.merge(
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      yield* everyMinute(scheduledSync("credit", runCreditSync));
+      yield* everyMinute(scheduledSync("achievement", runAchievementSync));
+      yield* everyMinute(yield* snapshots);
+      yield* everyMinute(silentVisits);
+      // A minute after Leaf starts: one starting beside one stopping, as in a deploy, does not tend against it.
+      yield* everyMinute(tending, "1 minute");
+    }),
+  ),
+  // Offsite copies while a bucket is set.
+  Layer.unwrap(
+    AppConfig.useSync(({ offsite }) =>
+      offsite === undefined ? Layer.empty : OffsiteCopies.pipe(Layer.provide(Offsite.bucket(offsite))),
+    ),
+  ),
 );
 
 /**

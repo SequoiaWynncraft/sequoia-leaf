@@ -8,10 +8,10 @@ import { leaf, playerId } from "@sequoia-leaf/core";
 import { Effect } from "effect";
 
 import {
-  listSnapshots,
   SNAPSHOT_INTERVAL_MS,
   snapshotIfDue,
   SNAPSHOTS_KEPT,
+  snapshotsIn,
   takeSnapshot,
 } from "../src/backup/snapshot.ts";
 import { noNetwork, rejection, testLeaf } from "./support.ts";
@@ -42,8 +42,8 @@ function snapshotWhenDue(backups: string, now: number) {
   return server.run(snapshotIfDue(backups, now));
 }
 
-function names(): string[] {
-  return listSnapshots(join(directory, "backups")).map((snapshot) => snapshot.name);
+async function names(): Promise<string[]> {
+  return (await server.run(snapshotsIn(join(directory, "backups")))).map((snapshot) => snapshot.name);
 }
 
 describe("snapshots", () => {
@@ -53,7 +53,7 @@ describe("snapshots", () => {
     await inMemory.dispose();
 
     expect(String(refused)).toContain("A database in memory has no file to copy");
-    expect(names()).toEqual([]);
+    expect(await names()).toEqual([]);
   });
 
   it("writes a database file that holds what the live one held at that moment", async () => {
@@ -76,7 +76,7 @@ describe("snapshots", () => {
     expect(await snapshotWhenDue(backups, T0 + SNAPSHOT_INTERVAL_MS - 1)).toBeUndefined();
     expect(await snapshotWhenDue(backups, T0 + SNAPSHOT_INTERVAL_MS)).toBeDefined();
 
-    expect(names()).toEqual(["leaf-2026-11-16T13-00-00Z.db", "leaf-2026-11-16T19-00-00Z.db"]);
+    expect(await names()).toEqual(["leaf-2026-11-16T13-00-00Z.db", "leaf-2026-11-16T19-00-00Z.db"]);
   });
 
   it("does not count a copy that was cut short, and deletes it once it is clearly abandoned", async () => {
@@ -97,6 +97,16 @@ describe("snapshots", () => {
     ]);
   });
 
+  it("are none while there is no directory yet, and a directory that cannot be read is said so, with no snapshot taken", async () => {
+    expect(await names()).toEqual([]);
+    const notADirectory = join(directory, "a file");
+    writeFileSync(notADirectory, "not a directory");
+    const read = await server.run(Effect.flip(snapshotsIn(notADirectory)));
+    expect(read).toMatchObject({ _tag: "SnapshotsUnreadable", directory: notADirectory });
+    const due = await server.run(Effect.flip(snapshotIfDue(notADirectory, T0)));
+    expect(due).toMatchObject({ _tag: "SnapshotsUnreadable" });
+  });
+
   it("keeps the newest snapshots and leaves other files alone", async () => {
     const backups = join(directory, "backups");
     await server.run(
@@ -110,9 +120,10 @@ describe("snapshots", () => {
 
     await snapshotAt(backups, T0 + 100 * HOUR);
 
-    expect(names()).toHaveLength(SNAPSHOTS_KEPT);
-    expect(names()[0]).toBe("leaf-2026-11-16T16-00-00Z.db");
-    expect(names().at(-1)).toBe("leaf-2026-11-20T17-00-00Z.db");
+    const kept = await names();
+    expect(kept).toHaveLength(SNAPSHOTS_KEPT);
+    expect(kept[0]).toBe("leaf-2026-11-16T16-00-00Z.db");
+    expect(kept.at(-1)).toBe("leaf-2026-11-20T17-00-00Z.db");
     expect(Bun.file(join(backups, "notes.txt")).size).toBeGreaterThan(0);
   });
 });

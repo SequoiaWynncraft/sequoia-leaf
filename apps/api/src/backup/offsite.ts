@@ -1,16 +1,20 @@
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { S3Client } from "bun";
-import { Redacted } from "effect";
+import { Context, Effect, FileSystem, Layer, Option, Redacted, Schedule, Schema } from "effect";
 
-import { listSnapshots } from "./snapshot.ts";
+import { type Snapshot, snapshotsIn, type SnapshotsUnreadable } from "./snapshot.ts";
 
-/** Somewhere off the server that snapshots are copied to. */
-export interface Offsite {
-  /** Copies a local file there under this name, replacing anything already under it. */
-  upload(name: string, path: string): Promise<void>;
-}
+/** The bucket did not take a snapshot. */
+export class UploadFailed extends Schema.TaggedError<UploadFailed>()("UploadFailed", {
+  snapshot: Schema.String,
+  cause: Schema.Defect(),
+}) {}
+
+/** The record of which snapshot was copied last could not be read, or written after a copy. */
+export class MarkerFailed extends Schema.TaggedError<MarkerFailed>()("MarkerFailed", {
+  cause: Schema.Defect(),
+}) {}
 
 /** An S3-compatible bucket, such as Cloudflare R2. */
 export interface BucketConfig {
@@ -21,70 +25,92 @@ export interface BucketConfig {
   readonly secretAccessKey: Redacted.Redacted;
 }
 
-export function bucketOffsite(config: BucketConfig): Offsite {
-  const client = new S3Client({ ...config, secretAccessKey: Redacted.value(config.secretAccessKey), region: "auto" });
-  return {
-    async upload(name, path) {
-      await client.write(name, Bun.file(path), { type: "application/vnd.sqlite3" });
-    },
-  };
+/** Somewhere off the server that snapshots are copied to. */
+export class Offsite extends Context.Service<
+  Offsite,
+  {
+    /** Copies a local file there under this name, replacing anything already under it. */
+    readonly upload: (name: string, path: string) => Effect.Effect<void, UploadFailed>;
+  }
+>()("leaf/backup/Offsite") {
+  /**
+   * An S3-compatible bucket. Bun's client cannot be stopped mid-upload: an interrupted upload may
+   * still finish, but nothing after it runs, so the copy is not recorded and is made again.
+   */
+  static readonly bucket = (config: BucketConfig) =>
+    Layer.sync(Offsite, () => {
+      const client = new S3Client({
+        ...config,
+        secretAccessKey: Redacted.value(config.secretAccessKey),
+        region: "auto",
+      });
+      return Offsite.of({
+        upload: (name, path) =>
+          Effect.tryPromise({
+            try: () => client.write(name, Bun.file(path), { type: "application/vnd.sqlite3" }),
+            catch: (cause) => new UploadFailed({ snapshot: name, cause }),
+          }).pipe(Effect.asVoid),
+      });
+    });
 }
 
-/** After a failed copy, the next attempt waits this long. */
-export const RETRY_MS = 10 * 60_000;
+/** After a failed attempt the whole attempt is made again this long after, until one succeeds. */
+export const RETRY = Schedule.spaced("10 minutes");
 
 /** Holds the name of the newest snapshot copied off the server. It does not look like a snapshot, so it is never pruned. */
 const COPIED = "offsite-copied";
 
 /** The name of the snapshot last copied off the server, if any has been. */
-export function lastCopied(directory: string): string | undefined {
-  try {
-    return readFileSync(join(directory, COPIED), "utf8");
-  } catch {
-    return undefined;
-  }
-}
+const lastCopied = (directory: string) =>
+  FileSystem.FileSystem.use((fs) => fs.readFileString(join(directory, COPIED))).pipe(
+    Effect.map(Option.some),
+    Effect.catchReason("PlatformError", "NotFound", () => Effect.succeedNone),
+    Effect.mapError((cause) => new MarkerFailed({ cause })),
+  );
 
 /**
- * Returns a task that copies the newest snapshot off the server once. Run it
- * every minute: it does nothing until a new snapshot appears, and after a
- * failure it waits `RETRY_MS` before trying again. It returns the name of the
- * snapshot it copied, or undefined when it copied none, and throws when a
- * copy fails.
- *
- * Only the newest snapshot is copied. One that was replaced by a newer one
- * before it could be copied is skipped, since the newer one holds everything
- * it held. The bucket deletes old copies by itself.
+ * Records `name` as the snapshot copied last. It is written under another name and renamed, so the
+ * record is never half written; that other file is the scope's, and is gone however it ends.
  */
-export function offsiteCopier(offsite: Offsite, directory: string): (now: number) => Promise<string | undefined> {
-  let failedAt = Number.NEGATIVE_INFINITY;
-  let copying = false;
-  return async (now) => {
-    const newest = listSnapshots(directory).at(-1);
-    if (newest === undefined || copying || now - failedAt < RETRY_MS) {
-      return undefined;
-    }
-    // Set before the first wait, so a run that starts meanwhile sees it.
-    copying = true;
-    try {
+const markCopied = (directory: string, name: string) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
       const marker = join(directory, COPIED);
-      const copied = Bun.file(marker);
-      if ((await copied.exists()) && (await copied.text()) === newest.name) {
-        return undefined;
-      }
-      try {
-        await offsite.upload(newest.name, join(directory, newest.name));
-      } catch (error) {
-        failedAt = now;
-        throw error;
-      }
-      // Written under another name and renamed, so the marker is never half written.
-      const unfinished = `${marker}.${crypto.randomUUID()}.partial`;
-      writeFileSync(unfinished, newest.name);
-      renameSync(unfinished, marker);
-      return newest.name;
-    } finally {
-      copying = false;
-    }
-  };
-}
+      const unfinished = yield* Effect.acquireRelease(
+        Effect.sync(() => `${marker}.${crypto.randomUUID()}.partial`),
+        (path) => Effect.ignore(fs.remove(path, { force: true })),
+      );
+      yield* fs.writeFileString(unfinished, name);
+      yield* fs.rename(unfinished, marker);
+    }),
+  ).pipe(Effect.mapError((cause) => new MarkerFailed({ cause })));
+
+/** The snapshot copied last, of those still in the directory, if any is. */
+export const copiedLast = (directory: string) =>
+  Effect.gen(function* () {
+    const name = yield* lastCopied(directory);
+    const snapshots = yield* snapshotsIn(directory);
+    return Option.flatMap(name, (copied) => Option.fromUndefinedOr(snapshots.find((one) => one.name === copied)));
+  });
+
+/**
+ * One attempt at copying the newest snapshot off the server: the snapshot copied, or none when
+ * there is none or the newest was copied already. Only the newest is copied: one replaced by a
+ * newer one before it could be copied is skipped, since the newer one holds everything it held. The
+ * bucket deletes old copies by itself.
+ */
+export const copyNewest = (
+  directory: string,
+): Effect.Effect<Option.Option<Snapshot>, CopyFailed, Offsite | FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const newest = (yield* snapshotsIn(directory)).at(-1);
+    if (newest === undefined) return Option.none();
+    if (Option.contains(yield* lastCopied(directory), newest.name)) return Option.none();
+    yield* Offsite.use((offsite) => offsite.upload(newest.name, join(directory, newest.name)));
+    yield* markCopied(directory, newest.name);
+    return Option.some(newest);
+  });
+
+/** Why an attempt failed: the snapshots could not be read, the bucket did not take one, or the record of it was not kept. */
+export type CopyFailed = SnapshotsUnreadable | UploadFailed | MarkerFailed;

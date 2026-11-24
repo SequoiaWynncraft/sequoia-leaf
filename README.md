@@ -1461,10 +1461,16 @@ in Coolify, copy the snapshot over `/data/leaf.db`, delete `leaf.db-wal` and
 `leaf.db-shm` beside it, and start the app.
 
 When the four `BACKUP_S3_*` variables are set, each new snapshot is also
-copied off the server to that bucket. A failed copy is tried again ten minutes
-later. Only the newest snapshot is copied, so if the bucket is unreachable for
-longer than six hours, the snapshots taken meanwhile are skipped, apart from
-the last. Leaf never deletes anything in the bucket; give it a rule that
+copied off the server to that bucket (`apps/api/src/backup/offsite.ts`), and
+the name of the one copied last is kept beside them in `offsite-copied`. A
+failed attempt, whether the snapshots could not be read, the bucket did not take
+one, or `offsite-copied` could not be written, is logged as an `ERROR` with its
+`reason` (`snapshots_unreadable`, `upload_failed` or `record_not_written`) and
+`last_copied_at`, counted as a failure of `snapshot_offsite`, and
+the whole attempt is made again ten minutes later. No directory yet is no
+snapshot, not a failure. Only the newest snapshot is copied, so if the bucket is
+unreachable for longer than six hours, the snapshots taken meanwhile are
+skipped, apart from the last. Leaf never deletes anything in the bucket; give it a rule that
 deletes old copies. The local snapshots protect against a bad deploy, the
 copies against losing the server.
 
