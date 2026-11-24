@@ -175,11 +175,15 @@ export function allReached(placed: readonly Spot[]): boolean {
 /** Why a thing may not go somewhere, or that it may. */
 export type Verdict = "ok" | "off" | "trail" | "taken" | "shut" | "full";
 
+/** The things a camp cannot do without, by name, as a list: "cabin, mailbox or signpost". */
+const ROOTED = THINGS.filter((t) => t.rooted).map((t) => t.name.toLowerCase());
+const rooted = `${ROOTED.slice(0, -1).join(", ")}${ROOTED.length > 1 ? " or " : ""}${ROOTED.at(-1) ?? ""}`;
+
 export const WHY_NOT: Readonly<Record<Exclude<Verdict, "ok">, string>> = {
   off: "Not in the trees.",
   trail: "The trail stays clear.",
   taken: "Something is there already.",
-  shut: "That would shut something in.",
+  shut: `That would block the way to the ${rooted}.`,
   full: "The camp is full. Put something away first.",
 };
 

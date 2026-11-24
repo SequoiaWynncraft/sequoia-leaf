@@ -15,6 +15,7 @@ import {
   taken,
   trayList,
   turned,
+  WHY_NOT,
 } from "./camp.ts";
 import { isThing, thingOf, THINGS, turnsOf } from "./things.ts";
 
@@ -27,6 +28,11 @@ const add = (camp: Camp, id: string, x: number, y: number): number => {
 };
 
 describe("setting things down", () => {
+  test("a placing refused for blocking the way says what the way must stay open to, by name", () => {
+    expect(WHY_NOT.shut).toBe("That would block the way to the cabin, mailbox or signpost.");
+    for (const t of THINGS.filter((x) => x.rooted)) expect(WHY_NOT.shut).toContain(t.name.toLowerCase());
+  });
+
   test("nothing goes on top of another thing, in the trees, or on the trail", () => {
     const camp = fresh();
     const fire = at(camp, "fire-ring");

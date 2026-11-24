@@ -13,6 +13,7 @@ import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
 import { readBoard, type Row } from "@sequoia-leaf/kit/person.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
+import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { COSY, KIND, type PetId, PETS, petsOf, trayList } from "@sequoia-leaf/town/camp.ts";
 import { folkNamed } from "@sequoia-leaf/town/folk.ts";
@@ -32,6 +33,7 @@ import {
   closePanel,
   fly,
   hammerAt,
+  levelBar,
   openPanel,
   pic,
   refreshPanel,
@@ -40,6 +42,7 @@ import {
   setHammer,
   setHammerNew,
   setStrip,
+  sheet,
   slot,
   when,
 } from "./hud.ts";
@@ -84,6 +87,17 @@ function face(name: string): HTMLCanvasElement | null {
 /** A name on a letter: one of the town's own with its mark. */
 const signed = (name: string): HTMLElement =>
   folkNamed(name) ? folkName(name, "k-pix k-grow") : el("b", "k-grow", { text: name });
+
+/** How far along one of the counters a pet moves in for is. */
+const upTo = (have: number, need: number): string => (have >= need ? "Done" : `${have} / ${need}`);
+
+/** A button for the thing in hand: on a phone its picture alone, so its name and key are said by its tip too. */
+function handButton(picture: "turn" | "tray", name: string, key: string, does: () => void): HTMLButtonElement {
+  const b = button("wood sm", [glyph(picture), el("span", "t", { text: name })], does);
+  b.setAttribute("aria-label", name);
+  tip(b, name, `Key: ${key}`);
+  return b;
+}
 
 /** The most camps the signpost lists. */
 const CAMPS_LISTED = 12;
@@ -163,8 +177,6 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
     const portrait = makeCanvas(12, 24);
     const frame = p?.body?.frames[0]?.[0];
     if (frame) portrait.g.drawImage(frame, 0, 0);
-    const xp = el("i");
-    xp.style.setProperty("--v", `${Math.min(100, (me.xp / me.next) * 100)}%`);
     const living = el("div", "k-col");
     const shelf = el("div", "k-wrap");
     // Whether the member's character stays in town, dozing, for a day after they go.
@@ -199,11 +211,11 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
           "k-grow k-col",
           {},
           el("div", "k-title big", { text: me.name }),
-          el("div", "k-dim", { text: `${me.rank} of the guild, level ${me.level}` }),
-          el("div", "k-bar", {}, xp),
-          me.week.length === 0 ? null : el("div", "k-dim", { text: `This week: ${me.week.join(", ")}` }),
+          el("div", "k-dim", { text: `${me.rank} of the guild` }),
+          ...levelBar(me),
         ),
       ),
+      me.week.length === 0 ? "" : sheet("This week", me.week),
       stayRow,
       el("div", "k-label", { text: "Trophy shelf" }),
       shelf,
@@ -242,19 +254,15 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
         });
         if (here.length === 0) rows.push(el("div", "k-dim", { text: "Nobody yet." }));
         else if (here.length < PETS.length) {
-          const cosy = camp.placed.length >= COSY;
-          const kind = camp.greeted >= KIND;
           rows.push(
-            el("div", "k-d", {
-              text: `One more moves in when ${COSY} things are placed in your camp, and one more when you have greeted ${KIND} townsfolk.`,
-            }),
+            sheet("One more moves in for each", [
+              ["Things set out", upTo(camp.placed.length, COSY)],
+              ["Callers greeted", upTo(camp.greeted, KIND)],
+            ]),
           );
-          if (!cosy) rows.push(el("div", "k-dim", { text: `Things placed: ${camp.placed.length} of ${COSY}.` }));
-          if (!kind)
+          if (camp.greeted < KIND)
             rows.push(
-              el("div", "k-d", {
-                text: `Townsfolk greeted: ${Math.min(camp.greeted, KIND)} of ${KIND}. When somebody from town drops by your camp, tap them.`,
-              }),
+              el("div", "k-d", { text: "When somebody from town drops by your camp, tap them to greet them." }),
             );
         }
         living.replaceChildren(...rows);
@@ -350,7 +358,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
 
   function choose(body: HTMLElement): null {
     body.append(
-      el("div", "", { text: "Three small faces look round the cabin door. One of them would like to stay." }),
+      el("div", "k-read", { text: "Three small faces look round the cabin door. One of them would like to stay." }),
     );
     for (const kind of PETS) {
       const sit = art.pets(kind, 0).sit[0];
@@ -449,20 +457,8 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
       ...(held
         ? [
             el("span", "k-gold name", { text: held.name }),
-            ...(held.turns
-              ? [
-                  button("wood sm", [glyph("turn"), el("span", "t", { text: "Rotate" })], () => {
-                    s.turn();
-                  }),
-                ]
-              : []),
-            ...(held.stays
-              ? []
-              : [
-                  button("wood sm", [glyph("tray"), el("span", "t", { text: "Put away" })], () => {
-                    s.stow();
-                  }),
-                ]),
+            ...(held.turns ? [handButton("turn", "Rotate", "R", () => s.turn())] : []),
+            ...(held.stays ? [] : [handButton("tray", "Put away", "Delete", () => s.stow())]),
           ]
         : [el("span", "k-title", { text: "Storage" })]),
     );

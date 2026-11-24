@@ -40,10 +40,11 @@ says so.
   for the place they are standing at is lit.
 - **The quest board.** Two tabs: the quests, and "News", the ten newest notes on what has changed
   in the game (`notes.json`, newest first). Every quest Leaf sends (`GET /v1/me/quests`), open and
-  just finished, is a note; the panel scrolls when they do not fit. An open quest says its kind as
-  the mod names them (Daily, Weekly, Timed, Endless) and when it ends, in the member's own time,
-  and has a bar and count for each way to finish it Leaf sends (raids or wars, side by side). One
-  Leaf lets the member swap has a Reroll button with what it costs (`reroll_leaf`): a free one
+  just finished, is a note; the panel scrolls when they do not fit. A quest says what it asks with
+  the Leaf it pays beside it, and has a bar and count for each way to finish it Leaf sends (raids
+  or wars, side by side). At its foot an open quest says its kind as the mod names them (Daily,
+  Weekly, Timed, Endless) and when it ends, in the member's own time, and one Leaf lets the member
+  swap has a Reroll button there with what it costs (`reroll_leaf`): a free one
   goes at once, one that costs Leaf asks to be pressed again. `POST /v1/me/quests/{id}/reroll`
   sends the cost shown; the new quest takes the old one's place from Leaf's answer and the purse
   shows the Leaf left, or the note says why Leaf refused, in Leaf's words. One reroll is on its way

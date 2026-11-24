@@ -6,7 +6,7 @@
 
 import { type RequestKind, REQUESTS } from "@sequoia-leaf/core";
 import { link } from "@sequoia-leaf/kit/card.ts";
-import { asking, asksAgain, el, icon as glyph, pressedTwice, replay, shown } from "@sequoia-leaf/kit/dom.ts";
+import { amount, asking, asksAgain, el, icon as glyph, pressedTwice, replay, shown } from "@sequoia-leaf/kit/dom.ts";
 import { type Emote, EMOTES } from "@sequoia-leaf/kit/emotes.ts";
 import { isGuest } from "@sequoia-leaf/kit/live.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
@@ -37,11 +37,13 @@ import {
   dockAt,
   faceOf,
   fly,
+  levelBar,
   nameOf,
   openPanel as openHudPanel,
   pic,
   purseAt,
   setDock,
+  sheet,
   slot,
   when,
 } from "./hud.ts";
@@ -108,7 +110,15 @@ function treasury(body: HTMLElement): null {
   const line = el("span", "", { text: KEEPER.hello });
   const face = slot(G.cinfy ? faceOf(G.cinfy, 3) : null, 28);
   face.classList.add("nod");
-  body.append(el("div", "k-row", {}, face, el("div", "k-say left k-grow", {}, folkName(keeper.name, "k-pix"), line)));
+  body.append(
+    el("div", "k-row", {}, face, el("div", "k-say left k-grow", {}, folkName(keeper.name, "k-pix"), line)),
+    // Said once for both: what paying does, or for a guest why there is nothing to pay.
+    el("div", "k-d", {
+      text: isGuest()
+        ? "For guild members with 7 days in the guild."
+        : "A paid request is served before the free ones.",
+    }),
+  );
   const reason = el("textarea", "k-field", {
     maxLength: 1000,
     rows: 2,
@@ -131,14 +141,7 @@ function treasury(body: HTMLElement): null {
       "k-card",
       {},
       slot(art, 28),
-      el(
-        "div",
-        "k-grow k-col",
-        {},
-        el("span", "k-pix", { text: REQUESTS[kind] }),
-        el("div", "k-d", { text: "A paid request is served before the free ones." }),
-        under,
-      ),
+      el("div", "k-grow k-col", {}, el("span", "k-pix", { text: REQUESTS[kind] }), under),
       side,
     );
     body.append(card);
@@ -242,8 +245,7 @@ function treasury(body: HTMLElement): null {
     }
     draw();
   };
-  if (isGuest()) body.append(el("div", "k-d", { text: "For guild members with 7 days in the guild." }));
-  else void look();
+  if (!isGuest()) void look();
   return null;
 }
 
@@ -254,7 +256,7 @@ function quests(body: HTMLElement): () => void {
   const note = guild.boardNote();
   if (note !== null) {
     // Somebody quests are not for: one note says why, and nothing on the board moves.
-    body.replaceChildren(el("div", "k-paper quest", {}, el("div", "", { text: note })));
+    body.replaceChildren(el("div", "k-paper quest", {}, el("div", "k-read", { text: note })));
     return () => undefined;
   }
   return redrawn(
@@ -265,15 +267,15 @@ function quests(body: HTMLElement): () => void {
 
 /**
  * A note for each quest on the board, in place of whatever was there; gives back how to bring them
- * up to date. An open quest says its kind and when it ends, shows a bar for each way to finish it,
- * and has a reroll button when it can be rerolled.
+ * up to date. A quest says what it asks and what it pays, shows a bar for each way to finish it,
+ * and at its foot when it ends and, when it can be rerolled, the reroll.
  */
 function notes(body: HTMLElement): () => void {
   body.replaceChildren();
   const parts = guild.quests().map((first) => {
-    const kind = el("div", "k-label");
+    const pay = el("span");
     const ways = el("div", "ways");
-    const count = el("span", "k-grow");
+    const kind = el("span", "k-grow k-dim");
     const side = el("span", "k-row");
     const said = el("div", "k-read k-coral", { hidden: true });
     let bars: { fill: HTMLElement; count: HTMLElement }[] = [];
@@ -281,10 +283,9 @@ function notes(body: HTMLElement): () => void {
       "div",
       "k-paper quest",
       {},
-      el("div", "", { text: first.title }),
-      kind,
+      el("div", "k-row head", {}, el("div", "k-grow", { text: first.title }), pay),
       ways,
-      el("div", "k-row", {}, count, side),
+      el("div", "k-row foot", {}, kind, side),
       said,
     );
     body.append(note);
@@ -313,25 +314,22 @@ function notes(body: HTMLElement): () => void {
       }
     };
     const update = when(
-      () => JSON.stringify([now().goals, now().reroll, asking(key)]),
+      () => JSON.stringify([now().goals, now().reward, now().reroll, asking(key)]),
       () => {
         const q = now();
         // A quest pays by itself the moment it is finished.
         const paid = q.goals.some((g) => g.have >= g.need);
-        kind.textContent = kindLine(q, outside.now());
-        kind.hidden = paid;
+        pay.replaceChildren(amount("leaf", leafText(q.reward)));
+        kind.textContent = paid ? "" : kindLine(q, outside.now());
         if (bars.length !== q.goals.length) {
-          // Each way to finish it under its own bar, side by side; one way's count goes beside the Leaf.
+          // Each way to finish it, its bar and its count; "or" between them.
           bars = q.goals.map(() => ({ fill: el("i"), count: el("span", "k-dim") }));
-          const apart = bars.length > 1;
-          ways.classList.toggle("apart", apart);
           ways.replaceChildren(
             ...bars.flatMap((b, i) => [
               ...(i > 0 ? [el("span", "k-label", { text: "or" })] : []),
-              el("div", "k-col k-grow", {}, el("div", "k-bar leaf", {}, b.fill), apart ? b.count : null),
+              el("div", "k-col k-grow", {}, el("div", "k-bar leaf", {}, b.fill), b.count),
             ]),
           );
-          count.replaceChildren(apart ? "" : (bars[0]?.count ?? ""));
         }
         q.goals.forEach((g, i) => {
           const bar = bars[i];
@@ -340,10 +338,8 @@ function notes(body: HTMLElement): () => void {
           bar.count.textContent = `${g.have} / ${g.need} ${g.unit}`;
         });
         note.classList.toggle("done", paid);
-        const prize = el("span", "k-chip", {}, el("span", "k-cur leaf", {}, glyph("leaf"), q.reward));
         const cost = q.reroll;
         side.replaceChildren(
-          prize,
           paid
             ? el("span", "k-chip lit", {}, glyph("check"), "Paid")
             : cost === null
@@ -408,19 +404,16 @@ function fullNotes(parts: readonly Part[]): HTMLElement[] {
 function board(body: HTMLElement): () => void {
   const list = el("div", "k-col");
   let update: (() => void) | null = null;
-  const { row, show } = tabs(
-    TABS.map((label) => ({ label })),
-    (i) => {
-      if (TABS[i] === "News") {
-        readNews();
-        update = null;
-        newsTab(list);
-      } else {
-        update = quests(list);
-        update();
-      }
-    },
-  );
+  const { row, show } = tabs(TABS, (i) => {
+    if (TABS[i] === "News") {
+      readNews();
+      update = null;
+      newsTab(list);
+    } else {
+      update = quests(list);
+      update();
+    }
+  });
   body.append(row, list);
   show(TABS.indexOf(openingTab()));
   return () => {
@@ -431,10 +424,7 @@ function board(body: HTMLElement): () => void {
 // ---------- tabs ----------
 
 /** Tabs along the top of a panel, one lit at a time: tapping one, or `show`, lights it and opens what it is for. */
-function tabs(
-  each: readonly { label: string; tip?: readonly [string, string] }[],
-  open: (i: number) => void,
-): { row: HTMLElement; show: (i: number) => void } {
+function tabs(labels: readonly string[], open: (i: number) => void): { row: HTMLElement; show: (i: number) => void } {
   const row = el("div", "k-tabs", { role: "tablist" });
   const show = (i: number): void => {
     [...row.children].forEach((tab, k) => {
@@ -442,13 +432,12 @@ function tabs(
     });
     open(i);
   };
-  each.forEach(({ label, tip: about }, i) => {
+  labels.forEach((label, i) => {
     const tab = button("sm", [label], () => {
       sfx.tap();
       show(i);
     });
     tab.setAttribute("role", "tab");
-    if (about) tip(tab, ...about);
     row.append(tab);
   });
   return { row, show };
@@ -457,23 +446,22 @@ function tabs(
 // ---------- camp things, wherever they are sold ----------
 
 /**
- * A row for one camp thing and the button that buys it (`buy`). Nothing sells out: the row says how
- * many the member has.
+ * A row for one camp thing and the button that buys it (`buy`): its picture, its name, how many the
+ * member has (nothing sells out) and its price. What it is like is on its card, from its picture or name.
  */
 function shopRow(body: HTMLElement, s: Stock, buy: HTMLElement): () => void {
   const thing = thingOf(s.thing);
   if (!thing || !ART) return () => undefined;
   const art = ART;
   const have = el("div", "k-dim");
-  // The picture and the name explain the thing (its card); the button buys it.
   const picture = thingSlot(art, thing.id);
   link(picture, thingRef(thing.id));
   const row = el(
     "div",
-    "k-card",
+    "k-card ware",
     {},
     picture,
-    el("div", "k-grow", {}, named(thing.name, thingRef(thing.id)), el("div", "k-d", { text: thing.about }), have),
+    el("div", "k-grow", {}, named(thing.name, thingRef(thing.id)), have),
     buy,
   );
   body.append(row);
@@ -481,7 +469,7 @@ function shopRow(body: HTMLElement, s: Stock, buy: HTMLElement): () => void {
     () => String(owned(mine(), thing.id)),
     () => {
       const n = owned(mine(), thing.id);
-      have.textContent = n > 0 ? `You have ${n === 1 ? "one" : n}.` : "";
+      have.textContent = n > 0 ? `You have ${n}` : "";
       have.classList.toggle("k-gold", n > 0);
     },
   );
@@ -549,11 +537,9 @@ function market(body: HTMLElement): () => void {
     );
     for (const f of rows) f();
   };
+  // Each tab is its stall's first word; the keeper's bubble under them says the whole name.
   const { row, show } = tabs(
-    stalls.map((stall) => ({
-      label: stall.name.split(/[ ,]/)[0] ?? stall.name,
-      tip: [stall.name, `Kept by ${stall.by}.`],
-    })),
+    stalls.map((stall) => stall.name.split(/[ ,]/)[0] ?? stall.name),
     pickStall,
   );
   body.append(row, el("div", "k-row", {}, face, el("div", "k-say left k-grow", {}, line)), list);
@@ -574,8 +560,8 @@ function doorCard(id: "works" | "table"): (body: HTMLElement) => null {
     });
     go.dataset.first = "";
     body.append(
-      el("div", "k-row", {}, slot(shown(icon(id), 2), 34), el("div", "k-grow", { text: game.about })),
-      el("div", "k-paper", {}, el("div", "", { text: game.waiting() })),
+      el("div", "k-row", {}, slot(shown(icon(id), 2), 34), el("div", "k-grow k-read", { text: game.about })),
+      el("div", "k-paper", {}, el("div", "k-read", { text: game.waiting() })),
       go,
     );
     return null;
@@ -607,7 +593,6 @@ function fireside(body: HTMLElement): () => void {
         if (G.player) nearby(G.player, ["toasty", "ooh"], 90);
       }),
     ),
-    el("div", "k-label", { text: "Say it" }),
     el(
       "div",
       "k-wrap",
@@ -723,8 +708,7 @@ function pond(body: HTMLElement): () => void {
 
 // ---------- your camp, and you ----------
 
-const COUNT = ["No", "One", "Two", "Three", "Four", "Five", "Six"] as const;
-const many = (n: number, one: string, more: string): string => `${COUNT[n] ?? n} ${n === 1 ? one : more}`;
+const many = (n: number, one: string, more: string): string => `${n} ${n === 1 ? one : more}`;
 
 /** What is waiting at the camp, in a line, for the card at the gate. */
 export function campWaiting(): string {
@@ -739,7 +723,7 @@ export function campWaiting(): string {
 }
 
 function campCard(body: HTMLElement): () => void {
-  const news = el("div");
+  const news = el("div", "k-read");
   const go = button("wide", ["Go home"], () => {
     hooks.go({ to: "camp" });
   });
@@ -750,7 +734,7 @@ function campCard(body: HTMLElement): () => void {
       "k-row",
       {},
       slot(shown(icon("camp"), 2), 34),
-      el("div", "k-grow", { text: "Your own clearing, a little way into the trees." }),
+      el("div", "k-grow k-read", { text: "Your own clearing, a little way into the trees." }),
     ),
     el("div", "k-paper", {}, news),
     go,
@@ -761,13 +745,19 @@ function campCard(body: HTMLElement): () => void {
 }
 
 function groveCard(body: HTMLElement): () => void {
-  const open = el("div", "k-paper", { hidden: true });
+  const open = el("div", "k-paper k-read", { hidden: true });
   const go = button("wide", ["Go in"], () => {
     hooks.go({ to: "grove" });
   });
   go.dataset.first = "";
   body.append(
-    el("div", "k-row", {}, slot(shown(icon("grove"), 2), 34), el("div", "k-grow", { text: place("grove").about })),
+    el(
+      "div",
+      "k-row",
+      {},
+      slot(shown(icon("grove"), 2), 34),
+      el("div", "k-grow k-read", { text: place("grove").about }),
+    ),
     open,
     go,
   );
@@ -787,8 +777,6 @@ function profile(body: HTMLElement): null {
   const portrait = makeCanvas(12, 24);
   const frame = p?.body?.frames[0]?.[0];
   if (frame) portrait.g.drawImage(frame, 0, 0);
-  const xp = el("i");
-  xp.style.setProperty("--v", `${Math.min(100, (me.xp / me.next) * 100)}%`);
   body.append(
     el(
       "div",
@@ -801,41 +789,22 @@ function profile(body: HTMLElement): null {
         {},
         el("div", "k-title big", { text: me.name }),
         el("div", "k-dim", { text: `${me.rank} of the guild` }),
-        el("div", "k-bar", {}, xp),
-        el("div", "k-dim", { text: `Level ${me.level}` }),
+        ...levelBar(me),
       ),
     ),
-    // A guest has no place among the guild's ranks, and no week with it to tell.
-    ...(me.ranks.length === 0
-      ? []
-      : [
-          el(
-            "div",
-            "k-wrap",
-            {},
-            ...me.ranks.map((r) => {
-              const chip = el("span", r === me.rank ? "k-chip lit" : "k-chip", { text: r, tabindex: 0 });
-              if (r === me.rank)
-                tip(chip, r, `${me.xp.toLocaleString("en")} of ${me.next.toLocaleString("en")} XP to the next level.`);
-              return chip;
-            }),
-          ),
-        ]),
-    ...(me.week.length === 0
-      ? []
-      : [
-          el(
-            "div",
-            "k-card",
-            {},
-            el("div", "k-grow", {}, "This week", el("div", "k-dim", { text: me.week.join(", ") })),
-          ),
-        ]),
+    // A guest has no week with the guild to tell.
+    ...(me.week.length === 0 ? [] : [sheet("This week", me.week)]),
     el(
       "div",
       "k-card",
       {},
-      el("div", "k-grow", {}, "Your things", el("div", "k-d", { text: "What you have won is in your cabin." })),
+      el(
+        "div",
+        "k-grow",
+        {},
+        "Your things",
+        el("div", "k-d", { text: "Everything you win or buy goes to Storage at your camp." }),
+      ),
       button("wood sm", ["Go home"], () => {
         hooks.go({ to: "camp" });
       }),

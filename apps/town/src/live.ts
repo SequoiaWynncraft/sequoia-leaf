@@ -26,7 +26,20 @@ import { leafClock } from "@sequoia-leaf/kit/realtime.ts";
 import { lookFor, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { HOME, later } from "@sequoia-leaf/town/clock.ts";
 
-import type { AwayLine, Deeds, Goal, Guild, Happening, Me, Moment, Person, Quest, RoomSays, Tone } from "./guild.ts";
+import type {
+  AwayLine,
+  Count,
+  Deeds,
+  Goal,
+  Guild,
+  Happening,
+  Me,
+  Moment,
+  Person,
+  Quest,
+  RoomSays,
+  Tone,
+} from "./guild.ts";
 import { type Line, lineFor, makePace } from "./news.ts";
 import { type Listed, resters, standing, type Where, whereabouts } from "./where.ts";
 
@@ -205,22 +218,22 @@ export function letterLines(events: readonly Ev[]): AwayLine[] {
 const WEEK = 7 * 24 * 3_600_000;
 
 /**
- * What the member did with the guild this week, as a few short counts, from their newest news. If
- * that does not reach back a whole week, the counts say "or more".
+ * What the member did with the guild this week, from their newest news: raids, wars and quests,
+ * each a line of a sheet. If that news does not reach back a whole week, each number has a "+".
  */
-export function weekOf(events: readonly Ev[], now: number, asked = 50): string[] {
+export function weekOf(events: readonly Ev[], now: number, asked = 50): Count[] {
   const since = now - WEEK;
   const recent = events.filter((e) => e.at >= since);
   const whole = events.length < asked || events.some((e) => e.at < since);
   const more = whole ? "" : "+";
-  const raids = recent.filter((e) => e.type === "leaf_earned" && e.data.source === "raid").length;
-  const wars = recent.filter((e) => e.type === "leaf_earned" && e.data.source === "war").length;
+  const earned = (source: string): number =>
+    recent.filter((e) => e.type === "leaf_earned" && e.data.source === source).length;
   const quests = recent.filter((e) => e.type === "quest_completed").length;
-  const out: string[] = [];
-  if (raids > 0) out.push(`${raids}${more} raid${raids === 1 && !more ? "" : "s"}`);
-  if (wars > 0) out.push(`${wars}${more} war${wars === 1 && !more ? "" : "s"}`);
-  if (quests > 0) out.push(`${quests}${more} quest${quests === 1 && !more ? "" : "s"}`);
-  return out.length > 0 ? out : ["a quiet one so far"];
+  return [
+    ["Raids", `${earned("raid")}${more}`],
+    ["Wars", `${earned("war")}${more}`],
+    ["Quests", `${quests}${more}`],
+  ];
 }
 
 /**
@@ -399,7 +412,7 @@ export interface Prepared {
   first: boolean;
   /** Where the letter leaves the member's news told up to. */
   mark: number;
-  week: string[];
+  week: Count[];
 }
 
 let ready: Prepared | null = null;
@@ -574,8 +587,7 @@ export function makeLive(p: Prepared): Guild {
         xp: me.level.into,
         next: Math.max(1, me.level.next),
         skin: skinOf(me.id),
-        // A guest has no place among the ranks, and no week with the guild to show.
-        ranks: me.guest ? [] : RANKS.map(capital),
+        // A guest has no week with the guild to show.
         week: me.guest ? [] : p.week,
       };
     },

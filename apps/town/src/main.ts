@@ -335,7 +335,8 @@ async function boot(): Promise<void> {
       return;
     }
     if (k === "escape") {
-      scene().back();
+      // A card that took this Escape (the kit's says so) was the one layer it puts away.
+      if (!e.defaultPrevented) scene().back();
       return;
     }
     if (scene().key(k)) {

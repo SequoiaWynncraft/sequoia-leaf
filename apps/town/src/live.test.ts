@@ -192,10 +192,22 @@ describe("the arrival letter, live", () => {
 
   test("the week counts what the member's newest news reaches back to", () => {
     const now = Date.parse("2026-11-26T00:00:00.000Z");
-    expect(weekOf(events, now)).toEqual(["15 raids", "2 wars", "2 quests"]);
+    expect(weekOf(events, now)).toEqual([
+      ["Raids", "15"],
+      ["Wars", "2"],
+      ["Quests", "2"],
+    ]);
     const fifty = Array.from({ length: 50 }, (_, i) => ({ ...raid(i, "Tester"), at: now - 1000 }));
-    expect(weekOf(fifty, now)).toEqual(["50+ raids"]);
-    expect(weekOf([], now)).toEqual(["a quiet one so far"]);
+    expect(weekOf(fifty, now)).toEqual([
+      ["Raids", "50+"],
+      ["Wars", "0+"],
+      ["Quests", "0+"],
+    ]);
+    expect(weekOf([], now)).toEqual([
+      ["Raids", "0"],
+      ["Wars", "0"],
+      ["Quests", "0"],
+    ]);
   });
 });
 
@@ -923,7 +935,7 @@ describe("a guest's town", () => {
   test("their purse has the ledger's Leaf and Coins, and they are a Guest where a member has a rank", async () => {
     const guild = await guestTown([]);
     expect(balance()).toEqual({ leaf: GUEST.leaf, coins: GUEST.coins });
-    expect(guild.me()).toMatchObject({ name: "Wanderer", rank: "Guest", level: 1, ranks: [], week: [] });
+    expect(guild.me()).toMatchObject({ name: "Wanderer", rank: "Guest", level: 1, week: [] });
   });
 
   test("their quest board is one note saying quests are for members", async () => {
