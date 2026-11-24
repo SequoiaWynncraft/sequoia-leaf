@@ -766,6 +766,18 @@ body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
   text-align: center;
   padding: var(--u) calc(var(--u) * 5);
 }
+#picks .foot {
+  justify-content: center;
+  gap: calc(var(--u) * 3);
+}
+/* The cards put down: the table is in view, and the title and Show wait at the top. */
+#picks.down {
+  top: calc(var(--top) + var(--k-hang) + var(--u) * 26);
+  translate: -50% 0;
+}
+#picks.down :is(.cards, #redraw) {
+  display: none;
+}
 #picks .cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1296,10 +1308,14 @@ b.dmg.true {
     min-height: 0;
   }
 
-  #picks {
+  #picks,
+  #picks.down {
     top: calc(var(--top) + var(--u) * 46);
     translate: -50% 0;
     gap: calc(var(--u) * 2);
+  }
+  #pickhide {
+    min-height: calc(var(--u) * 20);
   }
   #picks .cards {
     grid-template-columns: minmax(0, 1fr);
