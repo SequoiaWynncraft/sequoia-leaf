@@ -109,10 +109,14 @@ const browser = Bun.spawn(
     // that moves comes 1 to 2 seconds late, and reads as a long press.
     "--disable-gpu-vsync",
     "--disable-frame-rate-limit",
+    // CI's Ubuntu runners forbid the user namespaces Chromium's sandbox is made of; the page is our own.
+    ...(process.env["CI"] ? ["--no-sandbox"] : []),
     "about:blank",
   ],
-  { stdout: "ignore", stderr: "ignore", env: { ...process.env, XDG_CONFIG_HOME: `${home}/config` } },
+  { stdout: "ignore", stderr: "pipe", env: { ...process.env, XDG_CONFIG_HOME: `${home}/config` } },
 );
+/** What Chromium has said on its way up, shown if it never opens. */
+const said = new Response(browser.stderr).text();
 // However the run ends, the browser does not outlive it.
 process.on("exit", () => {
   browser.kill();
@@ -126,7 +130,11 @@ async function target(tries = 80): Promise<string> {
     if (isRecord(info) && typeof info.webSocketDebuggerUrl === "string") return info.webSocketDebuggerUrl;
     throw new Error("no socket address");
   } catch (e) {
-    if (tries <= 0) throw e;
+    if (tries <= 0) {
+      browser.kill();
+      console.error((await said).slice(-2000));
+      throw e;
+    }
     await Bun.sleep(100);
     return target(tries - 1);
   }
