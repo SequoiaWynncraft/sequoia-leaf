@@ -23,9 +23,11 @@
  * narrow the recipes it keeps parts for and so make room for more of another part. A tunnel's
  * way-in mouth waits while it is full under the ground behind a far mouth with no room, until that
  * far mouth hands on (`passUnder`). Nothing else in a tick changes what a waiting tile holds or
- * whether the tiles it hands to have room; a change from outside the tick works the plumbing out
- * again, or is a command, and either forgets every waiting tile. A thing refused by a tile whose
- * ways in take turns does not wait (`refused`).
+ * whether the tiles it hands to have room but a goal finished in it, which may let a crate hold more:
+ * that lets the plumbing go (`changed`), and every waiting tile with it, at once, so no tile later in
+ * the tick is passed over. A change from outside the tick works the plumbing out again, or is a
+ * command, and either forgets every waiting tile. A thing refused by a tile whose ways in take turns
+ * does not wait (`refused`).
  *
  * This is the hot path: it loops over the plumbing's lists, which hold only tiles where something
  * stands, and makes no arrays, objects, closures or strings (but for the rare order filled).

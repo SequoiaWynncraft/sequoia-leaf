@@ -13,7 +13,7 @@ import { describe, expect, test } from "bun:test";
 import * as F from "../src/index.ts";
 import { fill } from "./goals.ts";
 import { bareLand } from "./land.ts";
-import { give, must } from "./yards.ts";
+import { cratesOpening, give, must } from "./yards.ts";
 
 const plank = F.item("plank");
 const brick = F.item("brick");
@@ -726,6 +726,17 @@ describe("a full crate", () => {
       F.NONE,
       plank,
     ]);
+  });
+});
+
+describe("a goal finished in a tick", () => {
+  test("opens bigger crates to the rest of that tick: a full crate takes the next thing in at once", () => {
+    const { y, crate, behind } = cratesOpening();
+    expect(y.open.crate).toBe(32);
+    run(y, 1);
+    expect([y.item[behind], F.held(y.holders, crate, plank)]).toEqual([plank, 32]);
+    run(y, 1);
+    expect([y.open.crate, y.item[behind], F.held(y.holders, crate, plank)]).toEqual([128, F.NONE, 33]);
   });
 });
 

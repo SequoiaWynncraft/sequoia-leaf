@@ -314,13 +314,14 @@ export function emptyYard(land: Land, tier = 0): Yard {
 }
 
 /**
- * Works out again what is open, from the goals done. The depot's power, and how far power reaches,
- * may have changed with it, so power and the plumbing are worked out again when next read.
+ * Works out again what is open, from the goals done. The depot's power, how far power reaches, how
+ * much a crate holds and what a machine may make may have changed with it, so power and the plumbing
+ * are worked out again when next read (`changed`).
  */
 export function reopen(y: Yard): void {
   y.open = openOf(y.done);
   y.powered = false;
-  y.wire = null;
+  changed(y);
   y.rev++;
 }
 
@@ -330,8 +331,14 @@ export function hold(y: Yard, g: Goal | -1): void {
   if (g >= 0) y.got[g] ??= counts();
 }
 
-/** Marks the yard as changed: its plumbing is worked out afresh. */
+/**
+ * Marks the yard as changed: its plumbing is worked out afresh when next read. Every tile waiting in
+ * the plumbing let go stops waiting at once: a tick under way, when a goal finished in it reopens
+ * what is open (a crate may hold more), goes on with the plumbing it read, and passes no later tile
+ * over that may now have room (`tick.ts`).
+ */
 export function changed(y: Yard): void {
+  y.wire?.waiting.fill(0);
   y.wire = null;
 }
 

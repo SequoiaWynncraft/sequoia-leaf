@@ -2,9 +2,10 @@
  * Yards run on for hours, and a digest of each at every step on the way: the record the tick's
  * results are held to, to the bit (`replays.test.ts`). A replay is a yard the tests make (every
  * staged yard, every save, the delivering and generated yards, random play from several starts, and
- * the largest staged yard tended in slices as Leaf tends it) run on for hours. Every minute of its
- * ticks, or after every command, what it is is digested: the yard as kept (`encode`), the news since
- * the last digest, and its power. The digests are gathered into a line an hour, or fifty commands.
+ * the largest staged yard tended in slices as Leaf tends it) run on for hours. After every tick of
+ * the first minute of a run, every minute after, or after every command, what it is is digested: the
+ * yard as kept (`encode`), the news since the last digest, and its power. The digests are gathered
+ * into a line an hour, or fifty commands.
  *
  * `bun test/replays.ts --write` writes the record again from the tick as it stands. A change to the
  * rules changes the record, and says so; a change only to how fast the tick runs leaves it as it is.
@@ -16,7 +17,7 @@ import type { Ctx } from "@sequoia-leaf/core";
 import * as F from "../src/index.ts";
 import { boardFilled, Player } from "./player.ts";
 import { rng } from "./random.ts";
-import { delivering, generated, junctions, must, saved, SAVES, staged, STAGES } from "./yards.ts";
+import { delivering, generated, JUNCTION_HOURS, junctions, must, saved, SAVES, staged, STAGES } from "./yards.ts";
 
 const MINUTE = 600;
 const HOUR = 60 * MINUTE;
@@ -39,12 +40,16 @@ class Digest {
   }
 }
 
-/** Runs a yard on `hours` hours of ticks, digested every minute, a line an hour. */
+/**
+ * Runs a yard on `hours` hours of ticks, digested after every tick of the first minute, where a
+ * difference that heals within a tick or two would not last until the minute's digest, and after
+ * every minute; a line an hour.
+ */
 function hours(y: F.Yard, d: Digest, n = HOURS): void {
   for (let h = 0; h < n; h++) {
-    for (let m = 0; m < 60; m++) {
-      for (let k = 0; k < MINUTE; k++) F.step(y);
-      d.add(y);
+    for (let t = 1; t <= HOUR; t++) {
+      F.step(y);
+      if ((h === 0 && t <= MINUTE) || t % MINUTE === 0) d.add(y);
     }
     d.line();
   }
@@ -63,37 +68,6 @@ function played(start: () => F.Yard, seed: number, n = 300): (d: Digest) => void
     hours(y, d, 2);
   };
 }
-
-type Rec = Record<string, unknown>;
-/**
- * What the junctions yard's owner does at the start of each hour: shuts the ore's crate, so the
- * splitter's first way fills and backs up; shuts the planks' crate, so the sorter, the joiner and
- * everything behind them stand; empties it, so they run until it is full again; opens both, puts no
- * way first and turns the splitter's way in back out, so the ore from the north stands; turns the
- * sorter to its left, where nothing takes, and lays a belt there; tells the mill to make planks and
- * the sorter to send stone aside; and takes a belt of the joiner's away.
- */
-const JUNCTION_HOURS: readonly (readonly Rec[])[] = [
-  [],
-  [{ do: "crate", x: 28, y: 15, open: false }],
-  [{ do: "crate", x: 21, y: 22, open: false }],
-  [{ do: "tipOut", x: 21, y: 22, item: null }],
-  [
-    { do: "crate", x: 21, y: 22, open: true },
-    { do: "crate", x: 28, y: 15, open: true },
-    { do: "first", x: 28, y: 13, way: null },
-    { do: "wayIn", x: 28, y: 13, way: 2, on: false },
-  ],
-  [
-    { do: "side", x: 21, y: 21, right: false },
-    { do: "build", kind: "belt", x: 21, y: 20, dir: 0 },
-  ],
-  [
-    { do: "recipe", x: 19, y: 20, item: "plank" },
-    { do: "sort", x: 21, y: 21, item: "stone" },
-  ],
-  [{ do: "remove", x: 19, y: 22 }],
-];
 
 /** The junctions yard run on for eight hours, its owner's commands at the start of each, digested every minute. */
 function junctionsRun(d: Digest): void {
