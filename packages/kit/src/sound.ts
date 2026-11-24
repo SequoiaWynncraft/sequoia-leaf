@@ -11,8 +11,15 @@ import { type Settings, settings } from "./settings.ts";
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let hiss: AudioBuffer | null = null;
-/** Inside `hush`, nothing plays; inside `sample`, a kind switched off plays all the same. */
-const playing = { hushed: false, sampling: false };
+/**
+ * Inside `hush`, nothing plays; inside `sample`, a kind switched off plays all the same; inside
+ * `within`, every sound is of that kind too (`kind`).
+ */
+const playing: { hushed: boolean; sampling: boolean; kind: string | null } = {
+  hushed: false,
+  sampling: false,
+  kind: null,
+};
 
 /** How loud the games have always been, at the top of the volume. */
 const FULL = 0.5;
@@ -86,8 +93,24 @@ export function sample(f: () => void): void {
   }
 }
 
+/**
+ * Does `f`, its sounds of the kind `kind` as well as their own: while that kind is off, none of them
+ * is heard, and whatever else `f` does (a picture, a move) goes on. For a place that plays its own
+ * tones and hiss among what it draws.
+ */
+export function within(kind: string, f: () => void): void {
+  const was = playing.kind;
+  playing.kind = kind;
+  try {
+    f();
+  } finally {
+    playing.kind = was;
+  }
+}
+
 /** Whether a tone or a hiss would be heard now. */
-const silent = (): boolean => playing.hushed || gainOf(settings.now) === 0;
+const silent = (): boolean =>
+  playing.hushed || gainOf(settings.now) === 0 || (playing.kind !== null && !heard(playing.kind));
 
 export interface Tone {
   type?: OscillatorType;

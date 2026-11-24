@@ -17,7 +17,7 @@
 import { CREAM, GOLD, GREEN, SKY, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import type { Dir } from "@sequoia-leaf/kit/skin.ts";
-import { sfx, tone } from "@sequoia-leaf/kit/sound.ts";
+import { sfx, within } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, pick, type Pt, rng } from "@sequoia-leaf/kit/util.ts";
 import type { Visit } from "@sequoia-leaf/town";
 import {
@@ -57,7 +57,7 @@ import {
   troddenD,
   wornPaths,
 } from "./campground.ts";
-import { csfx } from "./campsfx.ts";
+import { csfx, TOWN_SOUND } from "./campsfx.ts";
 import { extraOf, lightOf, type Live, stateOf, stepLive, touch as touchThing, type TouchWorld } from "./camptouch.ts";
 import { type CampUi } from "./campui.ts";
 import { thingRef } from "./cards.ts";
@@ -288,9 +288,8 @@ export function makeCamp(
       tip: [thing.name, thing.about],
       ref: thingRef(thing.id),
       place: p.id,
-      tap: (_p, wx, wy) => {
-        touchThing(me, world, wx, wy);
-      },
+      // What a touch plays is of the kind Things you touch, whatever it draws besides.
+      tap: (_p, wx, wy) => within(TOWN_SOUND.touch, () => touchThing(me, world, wx, wy)),
     });
     me.glow = null;
     me.prop.extra = extraOf(me, world);
@@ -970,7 +969,7 @@ export function makeCamp(
     h.moved = true;
     const placed = layout();
     h.ok = canPlace(placed, p.id, x, y, h.t, placed.indexOf(p));
-    tone(h.ok === "ok" ? 620 : 300, 0.02, { vol: 0.035, type: "sine" });
+    csfx.carry(h.ok === "ok");
     showHeld();
   }
 

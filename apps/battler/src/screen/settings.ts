@@ -1,8 +1,8 @@
-import { heldAgain } from "@sequoia-leaf/kit/keys.ts";
 /**
  * The table's settings menu (`menu.ts` in the kit): the table's own kinds of sound, and its keys.
  * The table is played with the pointer and a finger, so its keys are few.
  */
+import { heldAgain } from "@sequoia-leaf/kit/keys.ts";
 import { type KeyShelf, type Menu, settingsMenu } from "@sequoia-leaf/kit/menu.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 
@@ -24,8 +24,9 @@ const KEYS: readonly KeyShelf[] = [
 /**
  * Makes the table's menu, for as long as `scope` stands: while it is up the table takes no presses,
  * and what the hand held is put down as it opens. And what Escape does at the table, one thing a
- * press unless a card took it first: a page over the table goes, else the last fight's sheet looked
- * back at (`lookBack` puts it away), else what the hand holds; with none of those, the menu opens.
+ * press (held down, it does nothing more) unless a card took it first: a page over the table goes,
+ * else the last fight's sheet looked back at (`lookBack` puts it away), else what the hand holds;
+ * with none of those, the menu opens.
  */
 export function startSettings(scope: Scope, lookBack: () => void): Menu {
   const menu = settingsMenu(
@@ -40,10 +41,10 @@ export function startSettings(scope: Scope, lookBack: () => void): Menu {
   );
   handHooks.paused = () => menu.isOpen;
   scope.on(window, "keydown", (e) => {
-    if (e.key !== "Escape" || e.defaultPrevented || menu.isOpen) return;
+    if (e.key !== "Escape" || e.defaultPrevented || menu.isOpen || heldAgain(e)) return;
     if (pageOver()) showPage(null);
     else if (sheetUp() === "again") lookBack();
-    else if (!letGoHand() && !heldAgain(e)) menu.open();
+    else if (!letGoHand()) menu.open();
   });
   return menu;
 }

@@ -6,7 +6,15 @@
  * notes it rises to. No page in it: `tallyui.ts` draws it.
  */
 
-import { type Period, TALLY_KEPT_MS, type TallyBoard, tallyPath, type TallyUnit } from "@sequoia-leaf/core";
+import {
+  type Period,
+  TALLY_KEPT_MS,
+  type TallyBoard,
+  tallyPath,
+  type TallyUnit,
+  utcWeekStart,
+  WEEK_MS,
+} from "@sequoia-leaf/core";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { duration } from "@sequoia-leaf/kit/person.ts";
@@ -79,6 +87,17 @@ export function scoreText(unit: TallyUnit, score: number): string {
   if (unit === "time") return duration(score);
   if (unit === "level") return `Level ${score}`;
   return score.toLocaleString("en-US");
+}
+
+/**
+ * When the week's boards start again, in the reader's own time: "Weekly reset: Monday at 01:00".
+ * Weeks start on Mondays at midnight UTC, as Leaf counts them. `zone` is for the tests.
+ */
+export function weeklyReset(now: number, zone?: string): string {
+  const at = utcWeekStart(now) + WEEK_MS;
+  const as = (o: Intl.DateTimeFormatOptions): string =>
+    new Intl.DateTimeFormat("en-GB", { ...o, timeZone: zone }).format(at);
+  return `Weekly reset: ${as({ weekday: "long" })} at ${as({ hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}`;
 }
 
 /** A board laid out: up to three on the podium, the rest of the top under it, and the member's own place when it is not among them. */

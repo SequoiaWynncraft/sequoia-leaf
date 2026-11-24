@@ -1251,9 +1251,9 @@ button.k-info-chip:hover .k-chip {
   box-sizing: border-box;
   background: #0b0710cc;
 }
-/* Over everything a page has, for a live room it has let go of: the page goes on beneath it. */
+/* Over everything a page has, the settings menu too, for a live room it has let go of: the page goes on beneath it. */
 .k-scrim.k-let-go {
-  z-index: 50;
+  z-index: 96;
 }
 /* The card a page shows instead of itself when it will not open: a title, a line, one button. */
 .k-shut {
@@ -1363,6 +1363,7 @@ button.k-info-chip:hover .k-chip {
   display: flex;
   flex-direction: column;
   width: min(calc(var(--u) * 230), 100%);
+  min-width: 0;
   /* One height for every tab, so that changing tab never moves the panel. */
   height: min(calc(100dvh - var(--u) * 16), calc(var(--u) * 330));
   box-sizing: border-box;
@@ -1382,6 +1383,25 @@ button.k-info-chip:hover .k-chip {
   flex-direction: column;
   gap: calc(var(--u) * 3);
   padding: calc(var(--u) * 4) calc(var(--u) * 5) calc(var(--u) * 5);
+}
+.k-settings-page:focus-visible {
+  outline: var(--u) solid var(--k-gold);
+  outline-offset: calc(var(--u) * -2);
+}
+/* More below what shows: the foot of the page darkens, so the list does not seem to end there. */
+.k-settings-page::after {
+  content: "";
+  position: sticky;
+  bottom: calc(var(--u) * -5);
+  flex: none;
+  height: calc(var(--u) * 16);
+  margin-top: calc(var(--u) * -16);
+  background: linear-gradient(transparent, var(--k-plum));
+  pointer-events: none;
+  opacity: 0;
+}
+.k-settings-page.more::after {
+  opacity: 1;
 }
 /* A heading over a list: the game's name, or Every game, in gold on its rule. */
 .k-settings-shelf {
@@ -1441,7 +1461,7 @@ button.k-info-chip:hover .k-chip {
     linear-gradient(var(--k-gold) 0 0) 0 0 / var(--v, 100%) 100% no-repeat padding-box, var(--k-deep) padding-box;
   appearance: none;
   flex: 1;
-  min-width: calc(var(--u) * 40);
+  min-width: calc(var(--u) * 20);
   height: calc(var(--u) * 14);
   margin: 0;
   background: none;
@@ -1529,6 +1549,15 @@ button.k-info-chip:hover .k-chip {
   font: var(--f-ui);
   color: var(--k-cream);
 }
+/* A key that moves you on this keyboard does nothing else here: its line says so. */
+.k-settings-key.taken :is(.k-cap, .k-settings-does) {
+  opacity: 0.55;
+}
+.k-settings-taken {
+  display: block;
+  font: var(--f-small);
+  color: var(--k-dim);
+}
 /* A key as it is printed on a keyboard: a parchment cap, its letter in ink. */
 .k-cap {
   display: inline-flex;
@@ -1554,6 +1583,7 @@ button.k-info-chip:hover .k-chip {
     padding: calc(var(--u) * 3);
   }
   .k-settings-key {
-    grid-template-columns: calc(var(--u) * 62) minmax(0, 1fr);
+    /* Room for four keys in a row: W, A, S and D. */
+    grid-template-columns: calc(var(--u) * 70) minmax(0, 1fr);
   }
 }

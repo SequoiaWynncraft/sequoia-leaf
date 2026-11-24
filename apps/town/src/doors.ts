@@ -13,9 +13,10 @@ import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { passPurse } from "@sequoia-leaf/kit/live.ts";
 import { fromLeaf } from "@sequoia-leaf/kit/purse.ts";
 import { fromGame, toGame } from "@sequoia-leaf/kit/shell.ts";
-import { noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
+import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { must, type Pt } from "@sequoia-leaf/kit/util.ts";
 
+import { csfx } from "./campsfx.ts";
 import { type Game, READY_WAIT } from "./games.ts";
 import type { Tone } from "./guild.ts";
 
@@ -130,7 +131,7 @@ export function goIn(game: Game, asks: Asks): Visit {
     }
     const at = spot;
     window.setTimeout(() => {
-      noise(0.14, 380, { vol: 0.08, slide: 0.6, q: 2 });
+      csfx.doorShut();
       const shrink = frame.animate([{ clipPath: clip(reach(at), at) }, { clipPath: clip(0, at) }], {
         duration: CLOSING,
         easing: "cubic-bezier(0.6, 0, 0.8, 1)",
@@ -172,8 +173,7 @@ export function goIn(game: Game, asks: Asks): Visit {
         signIn = window.setTimeout(() => {
           if (state !== "knocking") return;
           sign.hidden = false;
-          tone(196, 0.05, { vol: 0.08, type: "square" });
-          tone(196, 0.05, { vol: 0.08, type: "square", at: 0.16 });
+          csfx.knockKnock();
         }, 500);
     },
     leave,

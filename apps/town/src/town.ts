@@ -11,6 +11,7 @@ import { clamp, dist, type Pt, rng } from "@sequoia-leaf/kit/util.ts";
 import { bannerAt, boardAt, crabAt as crabByClock, hiding, HOME, stretchOf } from "@sequoia-leaf/town/clock.ts";
 
 import { goSit, onScreen, sitsOn } from "./actors.ts";
+import { csfx } from "./campsfx.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { type Actor, G, hooks, SEED, today } from "./game.ts";
 import { ask, doNow, ok, town } from "./leaf.ts";
@@ -333,8 +334,7 @@ export function tapPole(): void {
 /** A knock on the stump: every carved figure jumps. */
 export function tapTable(p: Prop): void {
   table.jumpAt = G.t;
-  noise(0.03, 1900, { vol: 0.1, q: 5 });
-  tone(330, 0.07, { vol: 0.08, type: "square" });
+  csfx.knock();
   nudge(p);
 }
 
@@ -342,8 +342,7 @@ export function tapTable(p: Prop): void {
 export function openDoor(open: boolean): void {
   door.goal = open ? 1 : 0;
   if (!open) return;
-  noise(0.18, 420, { vol: 0.1, slide: 0.5, q: 2 });
-  tone(98, 0.16, { vol: 0.14, type: "sine", slide: 0.7, at: 0.12 });
+  csfx.door();
   smoke(5);
 }
 

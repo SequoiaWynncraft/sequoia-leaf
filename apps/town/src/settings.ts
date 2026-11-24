@@ -38,6 +38,7 @@ export const startSettings = (scope: Scope, letGo: () => void): Menu =>
     {
       sounds: [{ name: "The camps", sounds: CAMP_SOUNDS }],
       keys: KEYS,
+      moves: ["KeyW", "KeyA", "KeyS", "KeyD"],
       opened: (open) => {
         if (open) letGo();
       },

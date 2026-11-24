@@ -28,7 +28,7 @@ const KEYS: readonly KeyShelf[] = [
       { keys: ["Q"], does: "Pick the piece pointed at" },
       { keys: ["E"], does: "Remove" },
       { keys: ["C"], does: "Paint a line" },
-      { keys: ["Z"], does: "Undo" },
+      { keys: ["Ctrl", "Z"], does: "Undo" },
     ],
   },
   {
@@ -63,6 +63,7 @@ export function startSettings(scope: Scope): Menu {
     {
       sounds: [{ name: "The Works", sounds: WORKS_SOUNDS }],
       keys: KEYS,
+      moves: ["KeyW", "KeyA", "KeyS", "KeyD"],
       opened: (open) => {
         if (open) letGoKeys();
       },

@@ -383,27 +383,27 @@ export function initInput(canvas: InputSurface): void {
 }
 
 /**
- * Escape (or Enter, `enter`) for the yard, once no card took it: the letter put away, else the hand,
- * the card, the panel or the notice, one a press; with none of those, Escape opens the settings menu,
- * unless it is a held Escape that has just put something away.
+ * Escape (or Enter, `enter`) for the yard, once no card took it: what is uppermost put away, the
+ * letter, else the card, the panel, the hand or the notice, one a press, and a key held down does
+ * nothing more; with none of those, Escape opens the settings menu.
  */
 function escape(e: KeyboardEvent, enter: boolean): void {
   // The card that was up has taken this Escape.
-  if (e.defaultPrevented) return;
+  if (e.defaultPrevented || heldAgain(e)) return;
   if (inputHooks.letter()) {
     e.preventDefault();
     return;
   }
   if (enter) return;
-  if (S.hand.is !== "idle") cancel();
-  else if (shown()) closeCard();
+  if (shown()) closeCard();
   else if (S.panel) closePanel();
-  else if (!closeBanner() && !heldAgain(e)) inputHooks.settings();
+  else if (S.hand.is !== "idle") cancel();
+  else if (!closeBanner()) inputHooks.settings();
 }
 
-/** A key held with Ctrl (or Cmd): Z undoes, as it does everywhere. */
+/** A key held with Ctrl (or Cmd): Z undoes, as it does everywhere; with Shift too it does nothing yet. */
 function undoKey(e: KeyboardEvent, k: string): void {
-  if (k !== "z" || e.altKey || S.visiting) return;
+  if (k !== "z" || e.altKey || e.shiftKey || S.visiting) return;
   e.preventDefault();
   undo();
 }

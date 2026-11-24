@@ -1,18 +1,20 @@
-import { dialog } from "./dialog.ts";
 /**
  * The settings menu, the same in the town and in every game: opened from the gear in a page's
  * corner, or with Escape when there is nothing else for Escape to put away (the page decides that,
- * and calls `open`). It is a panel over a dimmed page, with a tab for each part:
+ * and calls `open`). It is a panel over the page, which is dimmed and still while it is up: nothing
+ * behind it can be pressed, focused or read out (`inert`). It has a tab for each part:
  *
  * - Sound: the volume, sound on or off, and each kind of sound switched on or off on its own (the
  *   page's own kinds under its name, then those every game shares), each with a button to hear it.
  * - Keys: what each key does on this page.
+ * - Whatever tabs a page adds of its own (`MenuOf.tabs`).
  *
  * What it changes is the player's settings on this device (`settings.ts`), which every open page
- * follows at once. A page builds its menu once, at the start (`settingsMenu`), and gives it its own
- * kinds of sound and keys; the menu grows by tabs, and a page may add its own later.
+ * follows at once; what the menu shows follows them too, whichever page changed them. A page builds
+ * its menu once, at the start (`settingsMenu`).
  */
-import { add, el, icon } from "./dom.ts";
+import { dialog } from "./dialog.ts";
+import { el, icon } from "./dom.ts";
 import type { Scope } from "./scope.ts";
 import { LOUDEST, type Settings, settings } from "./settings.ts";
 import { sample, sfx, SHARED_SOUNDS, type SoundKind, unlock } from "./sound.ts";
@@ -27,7 +29,7 @@ export interface SoundShelf {
 /**
  * One line of the Keys tab: its keys and what they do. A key is a key's place on the keyboard as
  * `KeyboardEvent.code` names it (`KeyW`), shown as this keyboard prints it where the browser can
- * say, or words for one ("Esc", "1 to 9").
+ * say; a letter it types ("R"); or words for one ("Esc", "1 to 9").
  */
 export interface KeyLine {
   readonly keys: readonly string[];
@@ -40,12 +42,26 @@ export interface KeyShelf {
   readonly lines: readonly KeyLine[];
 }
 
+/**
+ * A tab of the menu: its name, and what it shows, drawn each time it is chosen. `keep` holds what
+ * the drawing listens to (a settings listener), let go of when it is drawn again or put away.
+ */
+export interface MenuTab {
+  readonly id: string;
+  readonly name: string;
+  readonly draw: (keep: (stop: () => void) => void) => readonly HTMLElement[];
+}
+
 /** What a page tells its menu. */
 export interface MenuOf {
   /** The page's own kinds of sound, by heading. The kinds every game shares come after them. */
   readonly sounds: readonly SoundShelf[];
-  /** The page's keys, by heading. */
+  /** The page's keys, by heading; with none, there is no Keys tab. */
   readonly keys: readonly KeyShelf[];
+  /** The keys that move about on the page, by their place (`KeyW`): a letter printed on one of them here is taken. */
+  readonly moves?: readonly string[];
+  /** Tabs of the page's own, after Sound and Keys. */
+  readonly tabs?: readonly MenuTab[];
   /** Told as the menu opens (true) and is put away (false): the page lets go of held keys and takes no play while it is open. */
   readonly opened?: (open: boolean) => void;
 }
@@ -54,17 +70,11 @@ export interface MenuOf {
 export interface Menu {
   /** A gear for a corner of the page: it opens the menu, and puts it away. A page may have one on each of its screens. */
   gear(): HTMLElement;
-  open(tab?: Tab): void;
+  /** Opens the menu, at the tab of this id (`sound`, `keys`, or a page's own), or where it was last. */
+  open(tab?: string): void;
   close(): void;
   readonly isOpen: boolean;
 }
-
-export type Tab = "sound" | "keys";
-
-const TABS: readonly { readonly tab: Tab; readonly name: string }[] = [
-  { tab: "sound", name: "Sound" },
-  { tab: "keys", name: "Keys" },
-];
 
 /** How often the volume slider sounds a tick while it is dragged, at most: often enough to hear the level, not a rattle. */
 const TICK_MS = 160;
@@ -81,9 +91,12 @@ const KEY_WORDS: Readonly<Record<string, string>> = {
   ArrowRight: "Right",
 };
 
+/** How this keyboard prints each key, by its place; empty where the browser cannot say. */
+type Printed = ReadonlyMap<string, string>;
+
 /** How a key is shown: its letter on this keyboard where `printed` has it, else from its place's name, else as given. */
-function keyName(key: string, printed: ReadonlyMap<string, string> | null): string {
-  const own = printed?.get(key);
+function keyName(key: string, printed: Printed): string {
+  const own = printed.get(key);
   if (own) return own.toUpperCase();
   const word = KEY_WORDS[key];
   if (word) return word;
@@ -91,38 +104,45 @@ function keyName(key: string, printed: ReadonlyMap<string, string> | null): stri
   return letter ?? key;
 }
 
-/** How this keyboard prints each key, where the browser can say (Chromium can; others cannot). */
-async function printedKeys(): Promise<ReadonlyMap<string, string> | null> {
+const isIterable = (v: unknown): v is Iterable<unknown> =>
+  typeof v === "object" && v !== null && typeof Reflect.get(v, Symbol.iterator) === "function";
+
+/** How this keyboard prints each key, where the browser can say (Chromium can, as a map-like; others cannot). */
+async function printedKeys(): Promise<Printed> {
+  const none = new Map<string, string>();
   const board: unknown = Reflect.get(navigator, "keyboard");
-  if (typeof board !== "object" || board === null) return null;
+  if (typeof board !== "object" || board === null) return none;
   const ask: unknown = Reflect.get(board, "getLayoutMap");
-  if (typeof ask !== "function") return null;
+  if (typeof ask !== "function") return none;
   try {
     const map: unknown = await Reflect.apply(ask, board, []);
-    if (!(map instanceof Map)) return null;
-    return new Map([...map].filter((e): e is [string, string] => typeof e[0] === "string" && typeof e[1] === "string"));
+    if (!isIterable(map)) return none;
+    const pairs = [...map].filter(
+      (e): e is [string, string] => Array.isArray(e) && typeof e[0] === "string" && typeof e[1] === "string",
+    );
+    return new Map(pairs);
   } catch {
-    return null;
+    return none;
   }
 }
 
-/** A switch: on or off, said as `name`, changed by a press. */
-function toggle(name: string, on: () => boolean, flip: (on: boolean) => void): HTMLButtonElement {
+/** A switch: on or off, said as `name`, changed by a press. Gives back how to show it as it now is. */
+function toggle(name: string, on: () => boolean, flip: (on: boolean) => void): [HTMLButtonElement, () => void] {
   const b = el("button", "k-switch", {
     type: "button",
     role: "switch",
     "aria-label": name,
-    "aria-checked": String(on()),
-    onclick: () => {
-      flip(!on());
-      b.setAttribute("aria-checked", String(on()));
-    },
+    onclick: () => flip(!on()),
   });
-  return b;
+  const paint = (): void => {
+    b.setAttribute("aria-checked", String(on()));
+  };
+  paint();
+  return [b, paint];
 }
 
-/** A row of the Sound tab for one kind of sound: a button to hear it, its name, and its switch. */
-function soundRow(kind: SoundKind): HTMLElement {
+/** A row of the Sound tab for one kind of sound: a button to hear it, its name, and its switch. Gives back how to show it as the settings now are. */
+function soundRow(kind: SoundKind): [HTMLElement, () => void] {
   const hear = el(
     "button",
     "k-btn wood icon sm",
@@ -137,14 +157,14 @@ function soundRow(kind: SoundKind): HTMLElement {
     icon("play"),
   );
   const on = (): boolean => !settings.now.quiet.has(kind.id);
-  const row = el("li", "k-card k-settings-sound");
-  const sw = toggle(kind.name, on, (next) => {
-    settings.setHeard(kind.id, next);
-    row.classList.toggle("off", !next);
-  });
-  row.classList.toggle("off", !on());
-  add(row, hear, el("span", "k-name", { text: kind.name }), sw);
-  return row;
+  const [sw, paintSwitch] = toggle(kind.name, on, (next) => settings.setHeard(kind.id, next));
+  const row = el("li", "k-card k-settings-sound", {}, hear, el("span", "k-name", { text: kind.name }), sw);
+  const paint = (): void => {
+    paintSwitch();
+    row.classList.toggle("off", !on());
+  };
+  paint();
+  return [row, paint];
 }
 
 /** A heading on its brass rule, and the rows under it. */
@@ -153,36 +173,58 @@ const shelf = (name: string, rows: readonly HTMLElement[]): HTMLElement[] => [
   el("ul", "k-settings-list", {}, ...rows),
 ];
 
-/** A line of the Keys tab: its keys as printed on this keyboard (`printed`, where known), and what they do. */
-const keyRow = (line: KeyLine, printed: ReadonlyMap<string, string> | null): HTMLElement =>
-  el(
+/**
+ * A line of the Keys tab: its keys as printed on this keyboard, and what they do. A line whose keys
+ * are all letters this keyboard prints on the keys that move about (`moving`) is taken here: those
+ * keys move instead, and the line says so.
+ */
+function keyRow(line: KeyLine, printed: Printed, moving: ReadonlySet<string>): HTMLElement {
+  const taken = line.keys.every((k) => /^[A-Z]$/.test(k) && moving.has(k));
+  return el(
     "li",
-    "k-settings-key",
+    `k-settings-key${taken ? " taken" : ""}`,
     {},
     el("span", "k-settings-caps", {}, ...line.keys.map((k) => el("kbd", "k-cap", { text: keyName(k, printed) }))),
-    el("span", "k-settings-does", { text: line.does }),
+    el(
+      "span",
+      "k-settings-does",
+      {},
+      line.does,
+      taken ? el("span", "k-settings-taken", { text: "That key moves you on this keyboard." }) : null,
+    ),
   );
+}
 
-/** The menu as a page has it: its panel over a dimmed page, the tab shown, and what is held while it is open. */
+/** The menu as a page has it: its panel over a page made still, its tabs, the tab shown, and what is held while it is open. */
 class SettingsMenu implements Menu {
   readonly #of: MenuOf;
+  readonly #tabsOf: readonly MenuTab[];
   /** The gears made for the page (`gear`): each says whether the menu is open. */
   readonly #gears = new Set<HTMLElement>();
   readonly #scrim = el("div", "k-scrim k-settings-scrim", { hidden: true });
   readonly #title = el("h2", "k-title", { text: "Settings" });
   readonly #tabs = el("div", "k-tabs", { role: "tablist", "aria-label": "Settings" });
-  readonly #page = el("div", "k-settings-page k-scroll", { role: "tabpanel" });
+  // The page can take the keyboard, so a tab of nothing to press (Keys) can still be scrolled with it.
+  readonly #page = el("div", "k-settings-page k-scroll", { role: "tabpanel", tabindex: "0" });
   readonly #panel: HTMLElement;
-  /** Listeners of the rows drawn for the tab shown, let go of as it is drawn again or the menu is put away. */
+  /** Listeners of the tab shown, let go of as it is drawn again or the menu is put away. */
   readonly #drops: (() => void)[] = [];
-  #at: Tab = "sound";
+  /** What the menu made still behind it as it opened, to wake again as it is put away. */
+  readonly #stilled: Element[] = [];
+  #at: string;
   /** While open: what lets go of the menu's layer (`dialog`). */
   #put: (() => void) | null = null;
   #lastTick = 0;
-  #printed: ReadonlyMap<string, string> | null = null;
+  #printed: Printed = new Map();
 
   constructor(of: MenuOf, scope: Scope) {
     this.#of = of;
+    this.#tabsOf = [
+      { id: "sound", name: "Sound", draw: (keep) => this.#soundPage(keep) },
+      ...(of.keys.length > 0 ? [{ id: "keys", name: "Keys", draw: () => this.#keysPage() }] : []),
+      ...(of.tabs ?? []),
+    ];
+    this.#at = "sound";
     const shut = el("button", "k-btn coral icon", { type: "button", "aria-label": "Close" }, icon("close"));
     this.#panel = el(
       "section",
@@ -204,6 +246,12 @@ class SettingsMenu implements Menu {
     scope.on(this.#tabs, "keydown", (e) => {
       this.#stepTab(e);
     });
+    // The shade at the foot comes and goes as the tab scrolls, and as the window changes size.
+    const cue = (): void => {
+      this.#cue();
+    };
+    scope.on(this.#page, "scroll", cue);
+    scope.on(window, "resize", cue);
     scope.on(window, "pagehide", () => {
       this.close();
     });
@@ -248,12 +296,13 @@ class SettingsMenu implements Menu {
     return this.#put !== null;
   }
 
-  open(tab: Tab = this.#at): void {
+  open(tab: string = this.#at): void {
     if (this.#put) {
       this.#choose(tab);
       return;
     }
-    this.#at = tab;
+    this.#at = this.#tabsOf.some((t) => t.id === tab) ? tab : "sound";
+    this.#still(true);
     this.#draw();
     this.#scrim.hidden = false;
     // The panel rises each time it opens.
@@ -264,6 +313,7 @@ class SettingsMenu implements Menu {
       this.close();
     });
     this.#tellGears(true);
+    this.#cue();
     sfx.open();
     this.#of.opened?.(true);
   }
@@ -275,9 +325,28 @@ class SettingsMenu implements Menu {
     this.#letGo();
     this.#scrim.hidden = true;
     this.#tellGears(false);
+    // Awake again before the focus goes back to what had it.
+    this.#still(false);
     done();
     sfx.close();
     this.#of.opened?.(false);
+  }
+
+  /**
+   * Makes everything on the page but the menu still (`inert`), or wakes what it made still: nothing
+   * behind the menu can be pressed, take the keyboard or be read out while it is up. What is put on
+   * the page while it is up, a notice that must be answered, is not made still.
+   */
+  #still(on: boolean): void {
+    if (!on) {
+      for (const node of this.#stilled.splice(0)) node.removeAttribute("inert");
+      return;
+    }
+    for (const node of document.body.children)
+      if (node !== this.#scrim && !node.hasAttribute("inert")) {
+        node.setAttribute("inert", "");
+        this.#stilled.push(node);
+      }
   }
 
   #letGo(): void {
@@ -287,34 +356,36 @@ class SettingsMenu implements Menu {
   #draw(): void {
     this.#letGo();
     this.#tabs.replaceChildren(
-      ...TABS.map(({ tab, name }) =>
+      ...this.#tabsOf.map(({ id, name }) =>
         el(
           "button",
           "k-btn",
           {
             type: "button",
             role: "tab",
-            id: `k-settings-tab-${tab}`,
-            "aria-selected": String(tab === this.#at),
-            tabindex: tab === this.#at ? "0" : "-1",
+            id: `k-settings-tab-${id}`,
+            "aria-selected": String(id === this.#at),
+            tabindex: id === this.#at ? "0" : "-1",
             onclick: () => {
-              this.#choose(tab);
+              this.#choose(id);
             },
           },
           name,
         ),
       ),
     );
-    this.#page.setAttribute("aria-labelledby", `k-settings-tab-${this.#at}`);
-    this.#page.replaceChildren(...(this.#at === "sound" ? this.#soundPage() : this.#keysPage()));
+    const tab = this.#tabsOf.find((t) => t.id === this.#at) ?? this.#tabsOf[0];
+    this.#page.setAttribute("aria-labelledby", `k-settings-tab-${tab?.id ?? ""}`);
+    this.#page.replaceChildren(...(tab?.draw((stop) => this.#drops.push(stop)) ?? []));
   }
 
-  #choose(tab: Tab): void {
-    if (tab === this.#at) return;
+  #choose(tab: string): void {
+    if (tab === this.#at || !this.#tabsOf.some((t) => t.id === tab)) return;
     this.#at = tab;
     sfx.tap();
     this.#draw();
     this.#page.scrollTop = 0;
+    this.#cue();
     document.getElementById(`k-settings-tab-${tab}`)?.focus();
   }
 
@@ -324,30 +395,57 @@ class SettingsMenu implements Menu {
     const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
     if (step === 0) return;
     e.preventDefault();
-    const i = TABS.findIndex((t) => t.tab === this.#at);
-    const next = TABS[(i + step + TABS.length) % TABS.length];
-    if (next) this.#choose(next.tab);
+    const tabs = this.#tabsOf;
+    const i = tabs.findIndex((t) => t.id === this.#at);
+    const next = tabs[(i + step + tabs.length) % tabs.length];
+    if (next) this.#choose(next.id);
   }
 
-  #soundPage(): HTMLElement[] {
-    return [
-      this.#volumeRow(),
-      ...this.#of.sounds.flatMap((s) => shelf(s.name, s.sounds.map(soundRow))),
-      ...shelf("Every game", SHARED_SOUNDS.map(soundRow)),
+  /** Whether there is more of the tab below what shows: a shade over the foot of the page says so. */
+  #cue(): void {
+    const p = this.#page;
+    p.classList.toggle("more", p.scrollTop + p.clientHeight < p.scrollHeight - 2);
+  }
+
+  /** The Sound tab: the volume, then the page's kinds of sound and those every game shares, all shown as the settings now are, whichever page changes them. */
+  #soundPage(keep: (stop: () => void) => void): HTMLElement[] {
+    const [volume, paintVolume] = this.#volumeRow();
+    const rows: [HTMLElement, () => void][] = [];
+    const shelfOf = (name: string, kinds: readonly SoundKind[]): HTMLElement[] => {
+      const made = kinds.map(soundRow);
+      rows.push(...made);
+      return shelf(
+        name,
+        made.map(([row]) => row),
+      );
+    };
+    const out = [
+      volume,
+      ...this.#of.sounds.flatMap((s) => shelfOf(s.name, s.sounds)),
+      ...shelfOf("Every game", SHARED_SOUNDS),
     ];
+    keep(
+      settings.listen((now) => {
+        paintVolume(now);
+        for (const [, paint] of rows) paint();
+      }),
+    );
+    return out;
   }
 
   #keysPage(): HTMLElement[] {
+    const printed = this.#printed;
+    const moving = new Set((this.#of.moves ?? []).flatMap((code) => printed.get(code)?.toUpperCase() ?? []));
     return this.#of.keys.flatMap((s) =>
       shelf(
         s.name,
-        s.lines.map((line) => keyRow(line, this.#printed)),
+        s.lines.map((line) => keyRow(line, printed, moving)),
       ),
     );
   }
 
-  /** The volume: the speaker that turns the sound off and on, the slider, and the level as a number. */
-  #volumeRow(): HTMLElement {
+  /** The volume: the speaker that turns the sound off and on, the slider, and the level as a number. Gives back how to show it as the settings now are. */
+  #volumeRow(): [HTMLElement, (now: Settings) => void] {
     const speaker = el("button", "k-btn wood icon", {
       type: "button",
       "aria-label": "Sound on",
@@ -384,13 +482,13 @@ class SettingsMenu implements Menu {
       speaker.setAttribute("aria-pressed", String(!now.muted));
       slider.style.setProperty("--v", `${now.volume}%`);
       slider.setAttribute("aria-valuetext", now.muted ? `${now.volume}%, sound off` : `${now.volume}%`);
-      if (document.activeElement !== slider) slider.value = String(now.volume);
+      // Whoever moved it, the slider stands where the volume is: a key pressed on it moves on from there.
+      if (slider.valueAsNumber !== now.volume) slider.value = String(now.volume);
       shown.textContent = now.muted ? "Off" : `${now.volume}%`;
       row.classList.toggle("muted", now.muted);
     };
     paint(settings.now);
-    this.#drops.push(settings.listen(paint));
-    return row;
+    return [row, paint];
   }
 
   /** A tick as the volume slider moves, so the level is heard: no more often than `TICK_MS`. */
