@@ -4,7 +4,7 @@
  * file that breaks each.
  */
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -31,6 +31,107 @@ describe("the ratchet", () => {
     expect(lowered(baseline, { "raw-browser": { "a.ts": 2, "b.ts": 5, "c.ts": 1 } })).toEqual({
       "raw-browser": { "a.ts": 2, "b.ts": 1 },
     });
+  });
+});
+
+/**
+ * A repository of its own, with the ratchet and a check that holds the counts it is given to the
+ * `x` baseline, and a main branch whose baseline is `{ r: { f: 1 } }`. Runs the check with only
+ * the environment it is given, as a developer's machine or GitHub's CI would.
+ */
+function repo() {
+  const dir = mkdtempSync(join(tmpdir(), "leaf-ratchet-"));
+  const tools = join(dir, "tools");
+  const git = (...args: string[]): string => {
+    const out = Bun.spawnSync(
+      ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...args],
+      { cwd: dir, stdout: "pipe", stderr: "pipe" },
+    );
+    if (out.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${out.stderr.toString()}`);
+    return out.stdout.toString().trim();
+  };
+  const baseline = (counts: object): void => {
+    mkdirSync(join(tools, "baseline"), { recursive: true });
+    writeFileSync(join(tools, "baseline", "x.json"), JSON.stringify(counts));
+    git("add", "-A");
+    git("commit", "-qm", "baseline");
+  };
+  mkdirSync(tools);
+  copyFileSync(join(import.meta.dir, "ratchet.ts"), join(tools, "ratchet.ts"));
+  writeFileSync(
+    join(tools, "check.ts"),
+    'import { hold } from "./ratchet.ts";\nprocess.exit(hold("x", JSON.parse(process.env.NOW ?? "{}"), "check") ? 0 : 1);\n',
+  );
+  git("init", "-qb", "main");
+  baseline({ r: { f: 1 } });
+  /** Runs the check on counts found now, in an environment of only `env`: says whether it passed, and what it said. */
+  const check = (now: object, env: Record<string, string> = {}): [boolean, string] => {
+    const out = Bun.spawnSync([process.execPath, join(tools, "check.ts")], {
+      cwd: dir,
+      env: { PATH: process.env.PATH ?? "", HOME: dir, NOW: JSON.stringify(now), ...env },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    return [out.exitCode === 0, out.stderr.toString()];
+  };
+  return { dir, git, baseline, check, done: () => rmSync(dir, { recursive: true, force: true }) };
+}
+describe("the ratchet's baseline, held to the base branch's", () => {
+  const CI = { GITHUB_ACTIONS: "true" };
+
+  test("a branch that raises a count or adds a key beside a new hit fails; one that lowers passes", () => {
+    const r = repo();
+    try {
+      r.git("update-ref", "refs/remotes/origin/main", "main");
+      r.git("checkout", "-qb", "change");
+      r.baseline({ r: { f: 2 } });
+      const [raised, said] = r.check({ r: { f: 2 } });
+      expect([raised, said]).toEqual([
+        false,
+        expect.stringContaining("raised in the baseline: r f, 2 (the base branch has 1)"),
+      ]);
+      r.baseline({ r: { f: 1, g: 1 } });
+      expect(r.check({ r: { f: 1, g: 1 } })[0]).toBe(false);
+      r.baseline({});
+      expect(r.check({})[0]).toBe(true);
+    } finally {
+      r.done();
+    }
+  });
+
+  test("on main itself passes; a baseline the base has none of is starting", () => {
+    const r = repo();
+    try {
+      r.git("update-ref", "refs/remotes/origin/main", "main");
+      expect(r.check({ r: { f: 1 } }, CI)[0]).toBe(true);
+      r.git("checkout", "-qb", "change");
+      r.git("rm", "-q", "tools/baseline/x.json");
+      r.git("commit", "-qm", "none");
+      r.git("update-ref", "refs/remotes/origin/main", "change");
+      r.git("checkout", "-qb", "start");
+      r.baseline({ r: { f: 5 } });
+      expect(r.check({ r: { f: 5 } }, CI)[0]).toBe(true);
+    } finally {
+      r.done();
+    }
+  });
+
+  test("in a pull request's CI run, held to the merge commit's first parent; with no base, CI fails and elsewhere it warns", () => {
+    const r = repo();
+    try {
+      r.git("checkout", "-qb", "change");
+      r.baseline({ r: { f: 3 } });
+      r.git("checkout", "-q", "main");
+      r.git("merge", "-q", "--no-ff", "-m", "merge", "change");
+      const pull = { ...CI, GITHUB_BASE_REF: "main" };
+      expect(r.check({ r: { f: 3 } }, pull)[0]).toBe(false);
+      // No origin/main here, and not a pull request's run: nothing to hold the baseline to.
+      expect(r.check({ r: { f: 3 } }, CI)).toEqual([false, expect.stringContaining("CI fails without it")]);
+      expect(r.check({ r: { f: 3 } })[0]).toBe(true);
+      expect(r.check({ r: { f: 3 } }, { ...CI, ACT: "true" })[0]).toBe(true);
+    } finally {
+      r.done();
+    }
   });
 });
 

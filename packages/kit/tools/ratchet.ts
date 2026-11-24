@@ -10,9 +10,19 @@
  *
  * With no baseline file the check fails, so that deleting one cannot pass it; `--start` writes one
  * with what it finds: that is how a ratchet starts.
+ *
+ * The baseline itself is held to the base branch's, so that a change cannot raise its own: a key the
+ * base's baseline does not have, or a count above it, fails. The base is where HEAD left
+ * origin/main, and on main itself HEAD; in a pull request's run on GitHub, where HEAD is the merge
+ * commit, it is the merge's first parent (the checkout fetches two commits deep for it). A
+ * baseline the base has no file of is starting, and is held to nothing. Where the base cannot be
+ * read, CI fails, and a run anywhere else only warns.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
+/** Whether this is CI on GitHub, not a run of it on a developer's machine (`act`, `bun run ci`). */
+const IN_CI = process.env.GITHUB_ACTIONS === "true" && process.env.ACT === undefined;
 
 /** Counts by group and key: a rule's hits by file, say. */
 export type Counts = Record<string, Record<string, number>>;
@@ -93,9 +103,8 @@ export function hold(name: string, now: Counts, command: string): boolean {
     console.log(`Started the ${name} baseline with what there is now: ${path}`);
     return true;
   }
-  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
-  if (!isCounts(parsed)) throw new Error(`${path} is not counts by group and key`);
-  let baseline = parsed;
+  let baseline = countsIn(readFileSync(path, "utf8"), path);
+  if (!heldToBase(name, baseline)) return false;
   if (process.argv.includes("--lower")) {
     baseline = lowered(baseline, now);
     write(baseline);
@@ -110,6 +119,45 @@ export function hold(name: string, now: Counts, command: string): boolean {
     console.error(`Fix what is new or more above: ${path} only goes down, and \`${command} --lower\` never raises it.`);
   if (better.length > 0) console.error(`Fewer than the baseline: lower it with \`${command} --lower\` and commit it.`);
   return worse.length === 0 && better.length === 0;
+}
+
+/** Runs git in this folder. */
+const git = (...args: string[]) =>
+  Bun.spawnSync(["git", ...args], { cwd: import.meta.dir, stdout: "pipe", stderr: "pipe" });
+
+/** The base's baseline of `name`: its counts, "starting" where the base has no file of it, or null where there is no base to read. */
+function atBase(name: string): Counts | "starting" | null {
+  const against = process.env.GITHUB_BASE_REF && process.env.ACT === undefined ? "HEAD^1" : "origin/main";
+  const base = git("merge-base", "HEAD", against);
+  if (base.exitCode !== 0) return null;
+  const file = `${base.stdout.toString().trim()}:./baseline/${name}.json`;
+  const shown = git("show", file);
+  return shown.exitCode === 0 ? countsIn(shown.stdout.toString(), file) : "starting";
+}
+
+/** Whether the baseline adds no key to the base's and raises no count of it, saying what it adds or raises. */
+function heldToBase(name: string, baseline: Counts): boolean {
+  const base = atBase(name);
+  if (base === "starting") return true;
+  if (base === null) {
+    const said = `Cannot read the base branch's ${name} baseline (no merge-base with origin/main)`;
+    if (IN_CI) console.error(`${said}: CI fails without it.`);
+    else console.warn(`${said}: not held to it. Fetch origin/main to hold it.`);
+    return !IN_CI;
+  }
+  const { worse } = compare(base, baseline);
+  for (const c of worse)
+    console.error(`raised in the baseline: ${c.group} ${c.key}, ${c.now} (the base branch has ${c.was})`);
+  if (worse.length > 0)
+    console.error(`The ${name} baseline only goes down: put back the base branch's counts and fix what is new.`);
+  return worse.length === 0;
+}
+
+/** Counts from a baseline's text; `where` names it, should it not be counts. */
+function countsIn(text: string, where: string): Counts {
+  const parsed: unknown = JSON.parse(text);
+  if (!isCounts(parsed)) throw new Error(`${where} is not counts by group and key`);
+  return parsed;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
