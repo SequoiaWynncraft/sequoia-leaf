@@ -1,7 +1,13 @@
 [
   {
+    "id": "works-orders-handed",
+    "at": "2026-11-24T22:06Z",
+    "title": "The Works: your orders handed over",
+    "lines": ["Orders in the Works says how many side orders you have handed over, under the orders on the board."]
+  },
+  {
     "id": "works-card-move",
-    "at": "2026-11-24T21:58Z",
+    "at": "2026-11-24T21:51Z",
     "title": "The Works: Move from a piece's card",
     "lines": [
       "A piece's card has a Move button. It takes that piece in hand to set down somewhere else, without picking Select first.",

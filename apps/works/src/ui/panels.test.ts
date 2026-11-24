@@ -8,6 +8,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   ALL_GOALS,
+  ALL_ITEMS,
   build,
   create,
   type Goal,
@@ -16,9 +17,11 @@ import {
   isNode,
   item,
   LINE,
+  ORDER_WAITS,
   play,
   power,
   reopen,
+  step,
   STUDY,
   study,
   TIERS,
@@ -65,6 +68,19 @@ describe("a panel is kept by what it prints", () => {
     y.tick += 600;
     expect(why()[0]).not.toBe(JSON.parse(now).orders[0].why);
     expect(JSON.stringify(ordersPrint())).not.toBe(now);
+  });
+
+  test("the orders: how many side orders the yard has handed over, counted by the rules as each goes", () => {
+    const y = create({ seed: 3, tier: 4 });
+    S.world = y;
+    expect(ordersPrint().handed).toBe(0);
+    const first = y.board[0];
+    if (!first) throw new Error("no board");
+    for (const n of ALL_ITEMS) first.filled[n] = first.want[n] ?? 0;
+    for (let k = 0; k < ORDER_WAITS; k++) step(y);
+    const did = play(y, { do: "handOver", order: first.id, tick: y.tick });
+    if ("refused" in did) throw new Error(did.why);
+    expect(ordersPrint().handed).toBe(1);
   });
 
   test("power: more than one of a kind is spelt as it is said", () => {

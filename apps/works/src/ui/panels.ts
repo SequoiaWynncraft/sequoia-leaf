@@ -132,6 +132,8 @@ export function ordersPrint(): {
   readonly board: boolean;
   readonly hooks: number;
   readonly orders: readonly OrderLine[];
+  /** How many side orders the yard has handed over, ever: as the Tally's board in town counts them. */
+  readonly handed: number;
 } {
   const w = S.world;
   return {
@@ -150,8 +152,23 @@ export function ordersPrint(): {
       counting: counting(s, w.tick),
       why: swapRefusal(w, s.id),
     })),
+    handed: w.handed,
   };
 }
+
+/**
+ * What closes the side orders, once there are any: a place for each order Leaf has yet to hang (the
+ * order takes that place), then how many the yard has handed over.
+ */
+const boardEnd = (p: ReturnType<typeof ordersPrint>): HTMLElement[] =>
+  p.board
+    ? [
+        ...Array.from({ length: Math.max(0, p.hooks - p.orders.length) }, () =>
+          el("div", "k-card order waiting", {}, el("div", "k-dim", { text: "A new order is on its way." })),
+        ),
+        el("div", "k-d", { text: `Orders handed over: ${p.handed.toLocaleString("en-US")}` }),
+      ]
+    : [];
 
 function orders(_art: Art, body: HTMLElement): () => void {
   let live: Listed[] = [];
@@ -249,10 +266,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
         ),
       );
     }
-    // A place on the board Leaf has yet to hang an order in: last, and the order takes this place.
-    if (p.board)
-      for (let n = p.orders.length; n < p.hooks; n++)
-        kids.push(el("div", "k-card order waiting", {}, el("div", "k-dim", { text: "A new order is on its way." })));
+    kids.push(...boardEnd(p));
     // A list shorter than it is scrolled would slide down: it keeps that much room at its end.
     const top = body.scrollTop;
     const need = top + body.clientHeight;
