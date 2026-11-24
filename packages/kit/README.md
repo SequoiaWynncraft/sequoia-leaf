@@ -129,6 +129,7 @@ picture file.
 | `signs.ts`    | A speech bubble and a key prompt drawn on a canvas, and breaking words into lines                   |
 | `tip.ts`      | Tips: `tip(el, title, text)` shows a one-line hint on hover, focus and long press                   |
 | `card.ts`     | Cards: how anything in any game says what it is (below)                                             |
+| `dialog.ts`   | What opens over the page (a panel, a pinned card, a notice): `dialog(node, title, close)` (below)   |
 | `mark.ts`     | The mark of the town's own: a name in leaf green after the acorn, on a page or a canvas             |
 | `skin.ts`     | A walking figure and a face from a block-game skin sheet, or from a made-up look                    |
 | `sound.ts`    | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all                    |
@@ -154,6 +155,13 @@ A button that spends asks to be pressed again (`pressedTwice(key, redraw)`, draw
 `asksAgain`). The second press must be a new one: a key that was down at the first and has not come
 up since (a held Enter saying itself again, `keys.ts`) does not make it. `unask()` stops the button
 waiting at once, as four seconds left alone do.
+
+**What opens over the page** (`dialog.ts`). A page's panel calls `dialog(panel, titleElement, close)`
+as it opens and the function it returns once it has closed: the panel is a dialog named by its
+title, the focus goes into it, Tab goes round inside it, Escape calls `close`, and as it goes the
+focus goes back to where it was, if the keyboard was the last used in it. Layers stack: Escape puts
+away the newest only, and the page's own keys never hear that Escape. A pinned card is a layer
+(`layer`), and so is the kit's notice (`close` null: Escape does nothing; it must be answered).
 
 `tools/drive.ts` drives a built page in headless Chromium and takes screenshots; its header says how.
 Its `audit` step (`tools/audit.ts`) lists what keeps a player from reading or reaching the page as

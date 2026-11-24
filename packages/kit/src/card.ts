@@ -16,6 +16,7 @@
  *
  * The rules of that (`Deck`, `partsOf`) touch no page and are tested; the rest draws them.
  */
+import { layer } from "./dialog.ts";
 import { add, asking, asksAgain, el, icon, pressedTwice, unheld } from "./dom.ts";
 import { goesWith, LONG_PRESS, tip, tipAt, tipOff } from "./tip.ts";
 
@@ -689,6 +690,12 @@ function drawCard(d: Description, o: Open): HTMLElement {
 
 /** The card last drawn, to tell a card drawn again from a new one. */
 let drawn: Open | null = null;
+/** A pinned card is a layer over the page (`dialog.ts`): Escape puts it away, and Tab stays in it. */
+let pinnedLayer: (() => void) | null = null;
+const unpin = (): void => {
+  pinnedLayer?.();
+  pinnedLayer = null;
+};
 
 const view: View = {
   render(o, d) {
@@ -699,6 +706,7 @@ const view: View = {
     if (!o || !d) {
       was?.remove();
       corner = null;
+      unpin();
       return;
     }
     const card = drawCard(d, o);
@@ -732,7 +740,15 @@ const view: View = {
       };
       card.style.transform = `translate(${corner.x}px, ${corner.y}px)`;
     } else if (spot) place(card, spot, o.side);
-    if (o.pinned && o.via === "key" && !(prev?.pinned && same)) card.focus({ preventScroll: true });
+    // A card newly pinned is a new layer, which gives the focus back to where it was before this card.
+    const fresh = !(prev?.pinned && same);
+    if (!o.pinned || fresh) unpin();
+    if (o.pinned)
+      pinnedLayer ??= layer(
+        () => node,
+        () => deck.close(),
+      );
+    if (o.pinned && o.via === "key" && fresh) card.focus({ preventScroll: true });
   },
 };
 

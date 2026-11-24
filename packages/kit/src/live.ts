@@ -16,6 +16,7 @@
 
 import { type Balances, type Device, deviceForWidth, readBalances } from "@sequoia-leaf/core";
 
+import { dialog } from "./dialog.ts";
 import { el } from "./dom.ts";
 import { ask, isRecord, listen, type Listening, outside } from "./net.ts";
 import type { Trouble } from "./play.ts";
@@ -164,20 +165,31 @@ const CARDS: Readonly<Record<Exclude<Shut, "signin">, readonly [string, string, 
   closed: ["Just a moment", "The guild's books are closed for a moment. Try again.", "Try again"],
 };
 
-/** Puts a card over the page: a title, a line (if not empty) and one button. */
-function card(title: string, line: string, word: string, go: () => void): void {
+/**
+ * Puts a notice over the page that must be answered: a title, a line (if not empty) and one button,
+ * which does `go` (given how to take the notice away). Returns how to take it away.
+ */
+function card(title: string, line: string, word: string, go: (away: () => void) => void, scrimLook = ""): () => void {
   const button = el("button", "k-btn wide", { type: "button" }, word);
-  button.addEventListener("click", go);
+  const head = el("h1", "k-title big", { text: title });
   const paper = el(
     "section",
     "k-paper k-rise k-shut",
-    { role: "alertdialog", "aria-label": title },
-    el("h1", "k-title big", { text: title }),
+    { role: "alertdialog" },
+    head,
     line === "" ? null : el("p", "", { text: line }),
     button,
   );
-  document.body.append(el("div", "k-scrim", {}, paper));
+  const scrim = el("div", `k-scrim ${scrimLook}`.trim(), {}, paper);
+  document.body.append(scrim);
   button.focus();
+  const done = dialog(paper, head, null);
+  const away = (): void => {
+    scrim.remove();
+    done();
+  };
+  button.addEventListener("click", () => go(away));
+  return away;
 }
 
 /**
@@ -262,27 +274,17 @@ export const LET_GO: Readonly<Record<LetGo, readonly [string, string, string]>> 
  */
 export function letGoCard(why: LetGo, signIn: string, again: () => void): () => void {
   const [title, line, word] = LET_GO[why];
-  const go = el("button", "k-btn wide", { type: "button" }, word);
-  const paper = el(
-    "section",
-    "k-paper k-rise k-shut",
-    { role: "alertdialog", "aria-label": title },
-    el("h1", "k-title big", { text: title }),
-    el("p", "", { text: line }),
-    go,
+  return card(
+    title,
+    line,
+    word,
+    (away) => {
+      if (why === "signedout") return goSignIn(signIn);
+      away();
+      again();
+    },
+    "k-let-go",
   );
-  const scrim = el("div", "k-scrim k-let-go", {}, paper);
-  const away = (): void => {
-    scrim.remove();
-  };
-  go.addEventListener("click", () => {
-    if (why === "signedout") return goSignIn(signIn);
-    away();
-    again();
-  });
-  document.body.append(scrim);
-  go.focus();
-  return away;
 }
 
 // ---------- the member's own news ----------
