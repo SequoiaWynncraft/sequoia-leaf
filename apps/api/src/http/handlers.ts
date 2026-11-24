@@ -25,7 +25,7 @@ import { GameReportsHandlers } from "./routes/reports.ts";
 import { GameRequestsHandlers } from "./routes/requests.ts";
 import { GameHelloHandlers, RatesHandlers, SystemHandlers } from "./routes/system.ts";
 import { GameTallyHandlers } from "./routes/tally.ts";
-import { GuildFeed, OpenStreams } from "./streams.ts";
+import { EventTail, GuildFeed, OpenStreams } from "./streams.ts";
 
 /**
  * The API's routes and the implementations of its middleware, with the event streams they hold open,
@@ -47,7 +47,7 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     GameAdminHandlers,
     InternalHandlers,
   ]),
-  Layer.provide(GuildFeed.layer),
+  Layer.provide(GuildFeed.layer.pipe(Layer.provideMerge(EventTail.layer))),
   Layer.provideMerge(OpenStreams.layer),
   Layer.provide([
     SessionLive,

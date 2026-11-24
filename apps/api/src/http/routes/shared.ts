@@ -1,5 +1,5 @@
 import { DAY_MS, DEFAULT_RULES, gameId, levelForXp, type Quest, type QuestSlot, rerollCost } from "@sequoia-leaf/core";
-import { Duration, Effect, Ref, Schedule, Schema, Stream } from "effect";
+import { Effect, Schema, type Stream } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 
 import { CurrentIdentity, type Identity, isGuest } from "../../api/api.ts";
@@ -53,33 +53,6 @@ export function levelJson(xp: number) {
 }
 
 export const invalidAfter = new Invalid({ code: "invalid_after", message: "after must be an event id" });
-
-/** One look for what happened after a position: the frames to send, and the position to look from next. */
-export interface Look {
-  readonly frames: string;
-  readonly position: number;
-}
-
-/**
- * The frames found by looking for what happened after a position every
- * `pollMs`, starting at once. It looks in the database rather than being told,
- * so it also sees events written by another process: during a deploy the old
- * and the new container run side by side.
- */
-export const polled = (look: (after: number) => Effect.Effect<Look>, from: number, pollMs: number) =>
-  Stream.unwrap(
-    Effect.gen(function* () {
-      const position = yield* Ref.make(from);
-      const next = Effect.gen(function* () {
-        const found = yield* look(yield* Ref.get(position));
-        yield* Ref.set(position, found.position);
-        return found.frames;
-      });
-      return Stream.fromEffectSchedule(next, Schedule.spaced(Duration.millis(pollMs))).pipe(
-        Stream.filter((frames) => frames !== ""),
-      );
-    }),
-  );
 
 /**
  * Answers a request for an event stream. A client that reconnects sends the

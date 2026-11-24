@@ -23,7 +23,7 @@ import { Coins } from "../../play/coins.ts";
 import { questJson } from "../../quests/json.ts";
 import { rerollQuestFor } from "../../quests/reroll.ts";
 import { Quests } from "../../quests/store.ts";
-import { OpenStreams, sseFrame, StreamTuning } from "../streams.ts";
+import { EventTail, OpenStreams } from "../streams.ts";
 import {
   EVENT_PAGE,
   eventId,
@@ -32,7 +32,6 @@ import {
   iso,
   LATEST_EVENTS,
   levelJson,
-  polled,
   questOnOffer,
   RECENTLY_COMPLETED_MS,
   REFUSALS,
@@ -46,7 +45,7 @@ export const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
     const credits = yield* Credits;
     const events = yield* Events;
     const streams = yield* OpenStreams;
-    const { pollMs } = yield* StreamTuning;
+    const tail = yield* EventTail;
     return (
       handlers
         .handle("account", () =>
@@ -155,19 +154,7 @@ export const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
         // a client that sends none gets only what happens from now on.
         .handle("stream", ({ query }) =>
           Effect.flatMap(CurrentIdentity, ({ playerId }) =>
-            eventStreamFrom(events, streams, query.after, (from) =>
-              polled(
-                (after) =>
-                  events.after(playerId, after, EVENT_PAGE).pipe(
-                    Effect.map((found) => ({
-                      frames: found.map((event) => sseFrame(event.id, event.type, eventJsonText(event))).join(""),
-                      position: found.at(-1)?.id ?? after,
-                    })),
-                  ),
-                from,
-                pollMs,
-              ),
-            ),
+            eventStreamFrom(events, streams, query.after, (from) => tail.own(playerId, from)),
           ),
         )
     );

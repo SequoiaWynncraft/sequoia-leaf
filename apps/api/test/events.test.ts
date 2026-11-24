@@ -278,4 +278,131 @@ describe("GET /v1/me/events/stream", () => {
 
     expect(response.status).toBe(400);
   });
+
+  it("sends a reconnecting client more than a page of what it missed, in order, each once", async () => {
+    for (let n = 1; n <= 250; n++) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      await earned(n % 3 === 0 ? bob : alice, n);
+    }
+
+    const text = await readUntil(await get("/v1/me/events/stream", { "Last-Event-ID": "0" }), '"leaf":250,');
+
+    const ids = [...text.matchAll(/^id: (\d+)$/gm)].map((m) => Number(m[1]));
+    expect(ids).toEqual([0, ...Array.from({ length: 250 }, (_, k) => k + 1).filter((n) => n % 3 !== 0)]);
+  });
+});
+
+/**
+ * Leaf whose next read of Alice's events after the position it is armed with (`arm`) writes
+ * another of hers: after the read (it was not there to be read), or before (it is read as it is
+ * written).
+ */
+function writingWhileRead(when: "after" | "before") {
+  const armed = { at: -1 };
+  const own = testLeaf(
+    clock,
+    backend,
+    {},
+    {
+      events: (real) => ({
+        ...real,
+        after: (player, afterId, limit) => {
+          if (player !== alice || afterId !== armed.at) return real.after(player, afterId, limit);
+          armed.at = -1;
+          const write = real.insert(alice, { type: "level_up", data: { level: 9, leaf: 9 } }, clock.now);
+          return when === "after"
+            ? Effect.flatMap(real.after(player, afterId, limit), (found) => Effect.as(write, found))
+            : Effect.andThen(write, real.after(player, afterId, limit));
+        },
+      }),
+    },
+  );
+  const served = own.app(Layer.succeed(StreamTuning)({ pollMs: 5, heartbeatMs: 20, maxMs: 300 }));
+  return { own, served, arm: (at: number) => void (armed.at = at) };
+}
+/** Writes a level up of Alice's, as setup. */
+const written = (own: ReturnType<typeof testLeaf>, n: number) =>
+  own.run(Events.use((events) => events.insert(alice, { type: "level_up", data: { level: n, leaf: n } }, clock.now)));
+/** The ids a stream's text gives, in order. */
+const ids = (text: string) => [...text.matchAll(/^id: (\d+)$/gm)].map((m) => Number(m[1]));
+
+describe("a stream across reconnects", () => {
+  for (const when of ["after", "before"] as const) {
+    it(`sends each event once, one written just ${when} a reconnecting stream reads what it missed among them`, async () => {
+      const { own, served: theirs, arm } = writingWhileRead(when);
+      try {
+        await written(own, 1);
+        await written(own, 2);
+        const first = await readUntil(
+          await theirs.request("/v1/me/events/stream?after=0", { headers: { Authorization: "Bearer alice-token" } }),
+          '"level":2,',
+        );
+        // The client saw up to 2; a third is written while it is away, and the fourth as it comes back.
+        await written(own, 3);
+        arm(2);
+        const again = await theirs.request("/v1/me/events/stream", {
+          headers: { Authorization: "Bearer alice-token", "Last-Event-ID": "2" },
+        });
+        const second = await readUntil(again, '"level":3,', '"level":9,');
+
+        expect(ids(first)).toEqual([0, 1, 2]);
+        expect(ids(second)).toEqual([2, 3, 4]);
+      } finally {
+        await theirs.dispose();
+        await own.dispose();
+      }
+    });
+  }
+});
+
+describe("event streams together", () => {
+  it("read the events table once a look however many are open, and each one's missed events once as it opens", async () => {
+    const reads = { missed: 0, looks: 0 };
+    const own = testLeaf(
+      clock,
+      backend,
+      {},
+      {
+        testClock: true,
+        events: (real) => ({
+          ...real,
+          after: (...args) =>
+            Effect.andThen(
+              Effect.sync(() => (reads.missed += 1)),
+              real.after(...args),
+            ),
+          allAfter: (...args) =>
+            Effect.andThen(
+              Effect.sync(() => (reads.looks += 1)),
+              real.allAfter(...args),
+            ),
+        }),
+      },
+    );
+    const theirs = own.app(Layer.succeed(StreamTuning)({ pollMs: 5, heartbeatMs: 60_000, maxMs: 60_000 }));
+    const readers: { cancel: () => Promise<void> }[] = [];
+    try {
+      for (let n = 0; n < 4; n++) {
+        // oxlint-disable-next-line no-await-in-loop -- opened one after another
+        const response = await theirs.request("/v1/me/events/stream?after=0", {
+          headers: { Authorization: "Bearer alice-token" },
+        });
+        const reader = response.body?.getReader();
+        if (reader === undefined) throw new Error("The response has no body");
+        // oxlint-disable-next-line no-await-in-loop -- its first frame, as it opens
+        await reader.read();
+        readers.push(reader);
+      }
+      await own.adjust("0 millis");
+      const opening = { ...reads };
+      await own.adjust("20 millis");
+
+      expect(opening.missed).toBe(4);
+      expect(reads).toEqual({ missed: 4, looks: opening.looks + 4 });
+    } finally {
+      await Promise.all(readers.map((reader) => reader.cancel()));
+      await theirs.dispose();
+      await own.dispose();
+    }
+  });
 });

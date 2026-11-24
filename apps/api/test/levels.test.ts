@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 
 import { DEFAULT_RULES, leaf, type LedgerEntry, type PlayerId, playerId, type Rules } from "@sequoia-leaf/core";
+import { Effect } from "effect";
 
 import { type CreditSource, syncCredits } from "../src/earning/sync.ts";
 import { Events } from "../src/events/store.ts";
 import { Ledger } from "../src/ledger/store.ts";
 import { payLevels, payMissedLevels } from "../src/levels/pay.ts";
-import { feed, MINUTE, noNetwork, raid, testLeaf } from "./support.ts";
+import { feed, MINUTE, noNetwork, raid, rejection, testLeaf } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const bob = playerId("00000000-0000-4000-8000-00000000000b");
@@ -146,6 +147,93 @@ describe("Leaf for levels", () => {
       [`level:${alice}:2`, 100, 0],
     ]);
     expect(await ledger.account(alice)).toMatchObject({ balance: 1000 + 100, xp: 1000 });
+  });
+
+  it("finishes at the next start a check stopped halfway, paying each level once", async () => {
+    const players = Array.from({ length: 250 }, (_, n) =>
+      playerId(`00000000-0000-4000-8000-${String(n).padStart(12, "0")}`),
+    );
+    const stopAt = players[180];
+    const stopping = { on: true };
+    const own = testLeaf(
+      { now: T0 },
+      noNetwork,
+      {},
+      {
+        ledger: (real) => ({
+          ...real,
+          account: (player) =>
+            stopping.on && player === stopAt ? Effect.die(new Error("Leaf stops here")) : real.account(player),
+        }),
+      },
+    );
+    try {
+      for (const [n, player] of players.entries()) {
+        // oxlint-disable-next-line no-await-in-loop -- one after another
+        await own.post(
+          { kind: "earn", playerId: player, amount: leaf(1000), source: "raid", idempotencyKey: `r${n}` },
+          T0,
+        );
+      }
+
+      const stopped = await rejection(own.run(payMissedLevels(rules.levels, T0)));
+      stopping.on = false;
+      const finished = await own.run(payMissedLevels(rules.levels, T0 + MINUTE));
+      const again = await own.run(payMissedLevels(rules.levels, T0 + 2 * MINUTE));
+
+      expect(String(stopped)).toContain("Leaf stops here");
+      const paid = await own.query<{ n: number; leaf: number }>(
+        (sql) => sql`SELECT count(*) AS n, sum(balance_delta) AS leaf FROM ledger_entries WHERE origin = 'level'`,
+      );
+      expect(paid).toEqual([{ n: 250, leaf: 250 * 100 }]);
+      expect(finished.leaf).toBeGreaterThan(0);
+      expect(again).toEqual({ players: 0, leaf: 0 });
+    } finally {
+      await own.dispose();
+    }
+  });
+
+  it("checks every account again when the level rules change, and pays what the new ones owe", async () => {
+    await earnedBefore(alice, 2300, "raid:old:a");
+    const unpaid = { ...rules.levels, firstLevelLeaf: 0, leafGrowthPerLevel: 0 };
+    expect(await ledger.run(payMissedLevels(unpaid, T0))).toEqual({ players: 0, leaf: 0 });
+
+    expect(await ledger.run(payMissedLevels(rules.levels, T0 + MINUTE))).toEqual({ players: 1, leaf: 225 });
+  });
+
+  it("checks at a start only the accounts whose XP or level payouts changed since the last check", async () => {
+    const asked: string[] = [];
+    const own = testLeaf(
+      { now: T0 },
+      noNetwork,
+      {},
+      {
+        ledger: (real) => ({
+          ...real,
+          account: (player) =>
+            Effect.andThen(
+              Effect.sync(() => asked.push(player)),
+              real.account(player),
+            ),
+        }),
+      },
+    );
+    try {
+      await own.post({ kind: "earn", playerId: alice, amount: leaf(2300), source: "raid", idempotencyKey: "a" }, T0);
+      await own.post({ kind: "earn", playerId: bob, amount: leaf(500), source: "raid", idempotencyKey: "b" }, T0);
+      await own.run(payMissedLevels(rules.levels, T0));
+      // Alice's level payouts are new since that check: she is looked at once more, and owes nothing.
+      await own.run(payMissedLevels(rules.levels, T0 + MINUTE));
+      asked.length = 0;
+
+      expect(await own.run(payMissedLevels(rules.levels, T0 + 2 * MINUTE))).toEqual({ players: 0, leaf: 0 });
+      expect(asked).toEqual([]);
+      await own.post({ kind: "earn", playerId: bob, amount: leaf(600), source: "raid", idempotencyKey: "b2" }, T0);
+      expect(await own.run(payMissedLevels(rules.levels, T0 + 3 * MINUTE))).toEqual({ players: 1, leaf: 100 });
+      expect(asked).toEqual([bob]);
+    } finally {
+      await own.dispose();
+    }
   });
 
   it("does not pay a level twice while its payout stands, even when XP fell below it and came back", async () => {

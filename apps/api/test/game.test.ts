@@ -5,7 +5,7 @@ import { SITS_AFTER } from "@sequoia-leaf/town/clock.ts";
 import { Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
-import { PRESENT_FOR_MS } from "../src/activity/visits.ts";
+import { PRESENT_FOR_MS } from "../src/activity/here.ts";
 import { runCreditSync } from "../src/earning/run.ts";
 import { Events, type PlayerEvent } from "../src/events/store.ts";
 import { API_POLICY } from "../src/http/headers.ts";

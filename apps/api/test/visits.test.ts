@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { type PlayerId, playerId } from "@sequoia-leaf/core";
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 
+import { hereFrom } from "../src/activity/here.ts";
 import { Visits } from "../src/activity/visits.ts";
 import { type Backend, DAY, fakeBackend, HOUR, MINUTE, sessionOf, testLeaf } from "./support.ts";
 
@@ -292,6 +293,68 @@ describe("visits from the presence calls", () => {
     ]);
   });
 
+  it("closes a visit gone silent at its last call when the page calls again from the same place, and opens another", async () => {
+    await call("alice", "town");
+    clock.now = T0 + 30 * SECOND;
+    await call("alice", "town");
+    // Ninety seconds after her last call, her page calls again: the silence is no time in town.
+    clock.now = T0 + 120 * SECOND;
+    await call("alice", "town");
+
+    expect(await visits()).toMatchObject([
+      { place: "town", entered_at: T0, left_at: T0 + 30 * SECOND, seconds: 30 },
+      { place: "town", entered_at: T0 + 120 * SECOND, left_at: null },
+    ]);
+    expect(await timeIn()).toEqual([{ player_id: alice, game: "town", played: 0, afk: 30 * SECOND }]);
+  });
+
+  it("closes a room's visit gone silent at the last time it was heard of, when the player leaves the room after", async () => {
+    const inTown = { playerId: alice, username: "Alice", guest: false, device: null };
+    await services.run(Visits.use((v) => v.inRoom([inTown], "town", T0)));
+    await services.run(Visits.use((v) => v.leftRoom(alice, "town", T0 + 100 * SECOND)));
+
+    expect(await visits()).toMatchObject([{ place: "town", source: "room", left_at: T0, seconds: 0 }]);
+  });
+
+  it("closes a visit gone silent at its last call when Leaf stops, and the others then", async () => {
+    await call("alice", "town");
+    clock.now = T0 + 60 * SECOND;
+    await call("bob", "works");
+    await services.run(Visits.use((v) => v.closeAll(T0 + 100 * SECOND)));
+
+    expect((await visits()).map((v) => [v.player_id, v.left_at])).toEqual([
+      [alice, T0],
+      [bob, T0 + 100 * SECOND],
+    ]);
+  });
+
+  it("hears a room's word of many players at once as it would each alone, a game's player staying in the game", async () => {
+    const many = Array.from({ length: 250 }, (_, n) => ({
+      playerId: playerId(`20000000-0000-0000-0000-${String(n).padStart(12, "0")}`),
+      username: `Member${n}`,
+      guest: false,
+      device: null,
+    }));
+    // One of them has the Works open, which says so; the room has them in town on another page.
+    const gamer = many[137];
+    if (gamer === undefined) throw new Error("No player 137");
+    await services.run(Visits.use((v) => v.called(gamer, "works", null, T0)));
+    await services.run(Visits.use((v) => v.inRoom(many, "town", T0)));
+    await services.run(Visits.use((v) => v.inRoom(many, "town", T0 + 30 * SECOND)));
+
+    const open = await services.query(
+      (sql) => sql`SELECT place, heard_at, count(*) AS n FROM visits WHERE left_at IS NULL GROUP BY 1, 2 ORDER BY 1`,
+    );
+    expect(open).toEqual([
+      { place: "town", heard_at: T0 + 30 * SECOND, n: 249 },
+      { place: "works", heard_at: T0, n: 1 },
+    ]);
+    const time = await services.query(
+      (sql) => sql`SELECT game, count(*) AS n, sum(played_ms) AS played, sum(afk_ms) AS afk FROM time_in GROUP BY 1`,
+    );
+    expect(time).toEqual([{ game: "town", n: 249, played: 0, afk: 249 * 30 * SECOND }]);
+  });
+
   it("closes the visit in one place when the player comes to another, in the same session", async () => {
     await call("alice", "camp");
     clock.now = T0 + 40 * SECOND;
@@ -371,17 +434,80 @@ describe("visits from the presence calls", () => {
     ]);
   });
 
-  it("removes visits and sessions that ended 180 days ago when a new visit is written, and keeps the players", async () => {
+  it("removes in the minute's upkeep the visits and sessions that ended 180 days ago, and keeps the players", async () => {
     clock.now = T0 - 181 * DAY;
     await call("bob", "camp");
     clock.now = T0 - 179 * DAY;
     await call("carol", "camp");
     clock.now = T0;
     await call("alice", "town");
+    const written = (await visits()).map((v) => v.player_id);
+    await services.run(Visits.use((v) => v.removeOld(T0)));
 
+    expect(written).toEqual([bob, carol, alice]);
     expect((await visits()).map((v) => v.player_id)).toEqual([carol, alice]);
     expect((await sessions()).map((s) => s.player_id)).toEqual([carol, alice]);
     expect((await playersSeen()).map((p) => p.player_id)).toEqual([alice, bob, carol]);
+  });
+
+  it("removes at most 1,000 old visits and 1,000 old sessions a minute, the oldest first", async () => {
+    // 1,200 sittings of one visit each, ended 200 days ago, a second apart.
+    await services.query((sql) =>
+      Effect.forEach(
+        Array.from({ length: 1200 }, (_, n) => n),
+        (n) =>
+          Effect.gen(function* () {
+            const ended = T0 - 200 * DAY + n * SECOND;
+            const [session] = yield* sql<{ id: number }>`
+            INSERT INTO sessions (player_id, guest, started_at, ended_at) VALUES (${bob}, 0, ${ended}, ${ended}) RETURNING id
+          `;
+            yield* sql`
+            INSERT INTO visits (session_id, player_id, guest, place, source, entered_at, heard_at, left_at, instance)
+            VALUES (${session?.id ?? 0}, ${bob}, 0, 'town', 'call', ${ended}, ${ended}, ${ended}, 'earlier')
+          `;
+          }),
+      ).pipe(Effect.as([])),
+    );
+    const left = () =>
+      services.query(
+        (sql) => sql`SELECT (SELECT count(*) FROM visits) AS visits, (SELECT count(*) FROM sessions) AS sessions`,
+      );
+
+    await services.run(Visits.use((v) => v.removeOld(T0)));
+    const once = await left();
+    await services.run(Visits.use((v) => v.removeOld(T0 + MINUTE)));
+
+    expect(once).toEqual([{ visits: 200, sessions: 200 }]);
+    expect(await left()).toEqual([{ visits: 0, sessions: 0 }]);
+  });
+
+  it("closes at most a hundred visits gone silent before each write, the longest silent first, and the rest in the minute's upkeep", async () => {
+    const many = Array.from({ length: 250 }, (_, n) => ({
+      playerId: playerId(`20000000-0000-0000-0000-${String(n).padStart(12, "0")}`),
+      username: `Member${n}`,
+      guest: false,
+      device: null,
+    }));
+    // Each comes into the town's room a tenth of a second after the one before, and none is heard of again.
+    for (const [n, who] of many.entries()) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      await services.run(Visits.use((v) => v.inRoom([who], "town", T0 + n * 100)));
+    }
+    clock.now = T0 + HOUR;
+    await call("alice", "town");
+    const afterWrite = await services.query(
+      (sql) =>
+        sql`SELECT count(*) AS n, max(left_at) AS last FROM visits WHERE player_id <> ${alice} AND left_at IS NOT NULL`,
+    );
+    await services.run(Visits.use((v) => v.closeSilent(T0 + HOUR)));
+
+    expect(afterWrite).toEqual([{ n: 100, last: T0 + 99 * 100 }]);
+    expect(
+      await services.query(
+        (sql) =>
+          sql`SELECT count(*) AS n FROM visits WHERE player_id <> ${alice} AND left_at = heard_at AND seconds = 0`,
+      ),
+    ).toEqual([{ n: 250 }]);
   });
 
   it("takes a device only as phone or desktop", async () => {
@@ -393,6 +519,129 @@ describe("visits from the presence calls", () => {
 
     expect(response.status).toBe(400);
     expect(await visits()).toEqual([]);
+  });
+});
+
+/** A die that falls the same way every run: a whole number from 0 up to `n`. */
+function die(seed: number) {
+  let state = seed;
+  return (n: number) => {
+    state = (state * 1_103_515_245 + 12_345) % 2_147_483_648;
+    return state % n;
+  };
+}
+
+/**
+ * `players` players, each with one to four visits over the last 26 hours as of `T0`, whole minutes
+ * apart so that some are seen at the same moment, and names that repeat: some newest visits are
+ * open (heard of in the last few minutes), some closed as they moved on, some closed silent.
+ */
+async function history(players: number) {
+  const roll = die(7);
+  await services.query((sql) =>
+    Effect.forEach(
+      Array.from({ length: players }, (_, n) => n),
+      (n) =>
+        Effect.gen(function* () {
+          const id = `60000000-0000-0000-0000-${String(n).padStart(12, "0")}`;
+          const guest = roll(4) === 0 ? 1 : 0;
+          const [session] = yield* sql<{ id: number }>`
+          INSERT INTO sessions (player_id, guest, started_at) VALUES (${id}, ${guest}, ${T0 - DAY}) RETURNING id
+        `;
+          let at = T0 - 26 * HOUR + roll(20 * 60) * MINUTE;
+          const count = 1 + roll(4);
+          for (let k = 0; k < count; k++) {
+            const last = k === count - 1;
+            const open = last && roll(2) === 0;
+            const heard = open ? T0 - roll(6) * 30 * SECOND : at + roll(30) * MINUTE;
+            const left = open ? null : heard + roll(2) * MINUTE;
+            const place = ["town", "works", "camp", "table"][roll(4)] ?? "town";
+            yield* sql`
+            INSERT INTO visits (session_id, player_id, guest, place, source, entered_at, heard_at, left_at, instance)
+            VALUES (${session?.id ?? 0}, ${id}, ${guest}, ${place}, 'call', ${Math.min(at, heard)}, ${heard}, ${left}, 'earlier')
+          `;
+            at = (left ?? heard) + roll(3 * 60) * MINUTE;
+          }
+          yield* sql`
+          INSERT INTO players_seen (player_id, name, guest, first_seen_at, last_seen_at, stay)
+          VALUES (${id}, ${`P${n % 40}`}, ${guest}, ${T0 - DAY}, ${T0}, ${roll(3) === 0 ? 0 : 1})
+        `;
+        }),
+    ).pipe(Effect.as([])),
+  );
+}
+
+/** Each player's newest visit of the day before `now`, read from every visit of the day, as Leaf first did. */
+const Newest = Schema.Struct({
+  playerId: Schema.String,
+  username: Schema.String,
+  place: Schema.String,
+  guest: Schema.BooleanFromBit,
+  heardAt: Schema.Number,
+  leftAt: Schema.NullOr(Schema.Number),
+  stay: Schema.BooleanFromBit,
+});
+const newestOfTheDay = async (now: number) =>
+  Schema.decodeUnknownSync(Schema.Array(Newest))(
+    await services.query(
+      (sql) => sql`
+        SELECT v.player_id AS playerId, p.name AS username, v.place, v.guest, v.heard_at AS heardAt,
+               v.left_at AS leftAt, p.stay
+        FROM visits AS v JOIN players_seen AS p ON p.player_id = v.player_id
+        WHERE v.id IN (SELECT max(id) FROM visits WHERE heard_at >= ${now - DAY} GROUP BY player_id)
+      `,
+    ),
+  );
+
+/** Who is about, as Bob's page is given it now. */
+async function lists() {
+  const response = await app.request("/v1/game/presence", { headers: { Authorization: "Bearer bob-token" } });
+  const body: unknown = await response.json();
+  return body;
+}
+
+describe("who is about, as every page is given it", () => {
+  it("is read once a second for everybody: a page heard of again within it shows the time it was heard before", async () => {
+    await call("alice", "town");
+    clock.now = T0 + 500;
+    await call("alice", "town");
+    const within = await lists();
+    clock.now = T0 + SECOND;
+    const after = await lists();
+
+    expect(within).toMatchObject({ at: iso(T0), present: [{ username: "Alice", seen_at: iso(T0) }] });
+    expect(after).toMatchObject({ at: iso(T0 + SECOND), present: [{ username: "Alice", seen_at: iso(T0 + 500) }] });
+  });
+
+  it("is read again at once after a change: somebody comes, moves, or says otherwise about staying", async () => {
+    await call("alice", "town");
+    clock.now = T0 + 100;
+    await call("bob", "works");
+    const came = await lists();
+    clock.now = T0 + 200;
+    await call("alice", "camp");
+    const moved = await lists();
+
+    expect(came).toMatchObject({ at: iso(T0 + 100), present: [{ username: "Alice" }, { username: "Bob" }] });
+    expect(moved).toMatchObject({
+      at: iso(T0 + 200),
+      present: [{ username: "Alice", place: "camp" }, { username: "Bob" }],
+    });
+  });
+});
+
+describe("who is about", () => {
+  it("is what each player's newest visit of the day says, as every visit of the day would have it", async () => {
+    await history(300);
+
+    for (const now of [T0, T0 + 45 * SECOND, T0 + 2 * MINUTE, T0 + 2 * HOUR]) {
+      // oxlint-disable-next-line no-await-in-loop -- one moment after another
+      const about = await services.run(Visits.use((v) => v.about(now)));
+      // oxlint-disable-next-line no-await-in-loop -- one moment after another
+      const expected = hereFrom(await newestOfTheDay(now), now);
+      expect(about).toEqual(expected);
+      expect(expected.present.length + expected.resting.length + expected.gone.length).toBeGreaterThan(40);
+    }
   });
 });
 

@@ -473,7 +473,13 @@ describe("the counters' first counts", () => {
           ) STRICT
         `,
       );
-      await before.query((sql) => sql`DROP INDEX visits_by_heard`);
+      for (const trigger of ["visits_opened", "visits_heard", "players_seen_stay", "players_seen_first"]) {
+        // oxlint-disable-next-line no-await-in-loop -- one after another
+        await before.query((sql) => sql`DROP TRIGGER ${sql(trigger)}`);
+      }
+      await before.query((sql) => sql`DROP TABLE last_visits`);
+      await before.query((sql) => sql`DROP INDEX visits_open_by_heard`);
+      await before.query((sql) => sql`DROP TABLE level_checks`);
       await before.query((sql) => sql`ALTER TABLE players_seen DROP COLUMN stay`);
       await before.query((sql) => sql`DROP INDEX play_state_due`);
       await before.query((sql) => sql`ALTER TABLE play_state DROP COLUMN due_at`);
