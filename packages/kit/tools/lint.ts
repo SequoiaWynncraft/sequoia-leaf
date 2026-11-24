@@ -16,11 +16,21 @@ const root = join(import.meta.dir, "..", "..", "..");
 /** The rules held to the baseline, by the names oxlint gives them. */
 const HELD = new Set(["raw-browser", "module-let", "max-lines", "max-lines-per-function", "complexity"]);
 
-/** The rules held by size, which oxlint gives as the first number in its message ("too many lines (667)"). */
-const SIZED = new Set(["max-lines", "max-lines-per-function", "complexity"]);
+/** The rules held by size, and where oxlint's message gives the size ("too many lines (667)", "a complexity of 16"). */
+const SIZED: Readonly<Record<string, RegExp>> = {
+  "max-lines": /too many lines \((\d+)\)/,
+  "max-lines-per-function": /too many lines \((\d+)\)/,
+  complexity: /complexity of (\d+)\./,
+};
 
-/** How much a hit weighs: its size for a size rule, else one. */
-const weight = (rule: string, message: string): number => (SIZED.has(rule) ? Number(/\d+/.exec(message)?.[0] ?? 1) : 1);
+/** How much a hit weighs: its size for a size rule, else one. A size message it cannot read stops the lint. */
+function weight(rule: string, message: string): number {
+  const sized = SIZED[rule];
+  if (sized === undefined) return 1;
+  const size = sized.exec(message)?.[1];
+  if (size === undefined) throw new Error(`No size in oxlint's ${rule} message: ${message}`);
+  return Number(size);
+}
 
 interface Diagnostic {
   readonly code: string;
