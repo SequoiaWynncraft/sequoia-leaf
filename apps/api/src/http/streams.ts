@@ -1,13 +1,13 @@
 import type { PlayerId } from "@sequoia-leaf/core";
 import {
+  Cause,
   Context,
   Deferred,
   Duration,
   Effect,
   Layer,
   Option,
-  PubSub,
-  RcMap,
+  Queue,
   RcRef,
   Ref,
   Schedule,
@@ -15,7 +15,7 @@ import {
   Stream,
 } from "effect";
 
-import { eventJsonText, Events, type StoredEvent } from "../events/store.ts";
+import { eventJsonText, Events, type PlayersEvent, type StoredEvent } from "../events/store.ts";
 import { GUILD_EVENT_TYPES, type GuildEvent, guildEvents } from "../game/guild.ts";
 import { PlayerNames } from "../game/names.ts";
 import { EVENT_PAGE } from "./routes/shared.ts";
@@ -63,8 +63,8 @@ export class OpenStreams extends Context.Service<
      * A member's stream of `frames` as server-sent events from position `from`:
      * first a frame with only that id, so a client whose stream ends before any
      * event still knows where to resume, then the frames with a comment between
-     * them now and then. It closes after `maxMs`, when the member opens too
-     * many others, or when Leaf stops (`end`).
+     * them now and then. It closes once the frames end, after `maxMs`, when the
+     * member opens too many others, or when Leaf stops (`end`).
      */
     readonly open: <E, R>(
       playerId: PlayerId,
@@ -122,7 +122,8 @@ export class OpenStreams extends Context.Service<
           Stream.unwrap(
             Effect.map(counted(playerId), (closed) =>
               Stream.make(`id: ${from}\nretry: 3000\n\n`).pipe(
-                Stream.concat(Stream.merge(frames, keepAlive)),
+                // Ends with its frames: a stream whose events end, or fail, closes at once, and its client reconnects.
+                Stream.concat(Stream.merge(frames, keepAlive, { haltStrategy: "left" })),
                 Stream.interruptWhen(Effect.sleep(Duration.millis(tuning.maxMs))),
                 Stream.interruptWhen(Deferred.await(closed)),
                 Stream.interruptWhen(Deferred.await(stopping)),
@@ -178,8 +179,14 @@ export const caughtUp = (
     ),
   );
 
-/** The most events the tail reads in one look; one that reads this many looks again at once. */
+/** The most events a look of a tail reads; one that reads this many looks again at once. */
 const TAIL_PAGE = 200;
+
+/**
+ * The most pages a stream may have waiting for it to send. One that falls further behind is ended
+ * after those: its client reconnects, and reads what it missed from the database.
+ */
+const BEHIND_MOST = 32;
 
 /** A player's events as their own stream sends them. */
 const ownFrames = (found: readonly StoredEvent[], position: number): Framed => ({
@@ -187,71 +194,85 @@ const ownFrames = (found: readonly StoredEvent[], position: number): Framed => (
   position,
 });
 
-/** The tail while any stream follows it: who hears each player's events and the guild's, and what is done once it stops. */
-interface Tail {
-  readonly own: RcMap.RcMap<PlayerId, PubSub.PubSub<Framed>>;
-  readonly guild: PubSub.PubSub<Framed>;
-  readonly ended: Deferred.Deferred<void>;
-}
+/** The guild's events as its streams send them. */
+const guildFrames = (shown: readonly GuildEvent[], position: number): Framed => ({
+  frames: shown.map((event) => ({ id: event.id, frame: sseFrame(event.id, event.type, event.json) })),
+  position,
+});
+
+/** An open stream's queue of the pages it has yet to send; it ends once the stream is too far behind. */
+type Ear = Queue.Queue<Framed, Cause.Done>;
 
 /**
- * The tail, looking from the newest event as it starts: each look reads every event after the last
- * (`TAIL_PAGE` at a time), makes each event's frame once, and tells it to the streams of its player
- * that are open (`own`), and the guild's events, as the guild sees them, to the guild's streams.
+ * The open streams that hear a tail, by whose events they hear (`K`: a player, or the guild): each
+ * stream with a queue of its own, so that a slow one holds up nobody else.
  */
-const startTail = (events: Events["Service"], names: PlayerNames["Service"], pollMs: number) =>
+const hearing = <K>() => {
+  const ears = new Map<K, Set<Ear>>();
+  return {
+    /** A stream's pages from now on, while it is open. */
+    listen: (key: K) =>
+      Effect.acquireRelease(Queue.bounded<Framed, Cause.Done>(BEHIND_MOST), (ear) =>
+        Effect.sync(() => {
+          const theirs = ears.get(key);
+          theirs?.delete(ear);
+          if (theirs?.size === 0) ears.delete(key);
+        }),
+      ).pipe(
+        Effect.tap((ear) => Effect.sync(() => ears.set(key, (ears.get(key) ?? new Set<Ear>()).add(ear)))),
+        Effect.map((ear) => Stream.fromQueue(ear)),
+      ),
+    /** Whether any stream hears `key`'s events. */
+    heard: (key: K) => ears.has(key),
+    /** Gives a page to every stream that hears `key`'s events; one with `BEHIND_MOST` waiting is ended instead, after those. */
+    hand: (key: K, page: Framed) =>
+      Effect.sync(() => {
+        for (const ear of ears.get(key) ?? []) if (!Queue.offerUnsafe(ear, page)) Queue.endUnsafe(ear);
+      }),
+  };
+};
+
+/**
+ * Looks at the events table every `pollMs` while it runs, from the newest event as it begins, at
+ * every event after the last look (`TAIL_PAGE` at a time, and again at once while a look comes back
+ * full), and hands what each look found on (`tell`), with how far it read. A look that fails is
+ * logged and made again from where the last one ended, so `tell` may be given events again: a
+ * stream sends each once (`caughtUp`).
+ */
+const looking = (
+  events: Events["Service"],
+  pollMs: number,
+  tell: (found: readonly PlayersEvent[], to: number) => Effect.Effect<void>,
+) =>
   Effect.gen(function* () {
-    const own = yield* RcMap.make<PlayerId, PubSub.PubSub<Framed>, never, Scope.Scope>({
-      lookup: () => Effect.acquireRelease(PubSub.unbounded<Framed>(), PubSub.shutdown),
-    });
-    const guild = yield* Effect.acquireRelease(PubSub.unbounded<Framed>(), PubSub.shutdown);
-    const ended = yield* Deferred.make<void>();
     const position = yield* Ref.make(yield* events.latestId);
-    const tellOwn = (playerId: PlayerId, framed: Framed) =>
-      Effect.scoped(
-        Effect.flatMap(RcMap.getOption(own, playerId), (heard) =>
-          Option.isSome(heard) ? Effect.asVoid(PubSub.publish(heard.value, framed)) : Effect.void,
-        ),
-      );
     const look = Effect.gen(function* () {
       const after = yield* Ref.get(position);
       const found = yield* events.allAfter(after, TAIL_PAGE);
       const to = found.at(-1)?.id ?? after;
+      if (found.length > 0) yield* tell(found, to);
       yield* Ref.set(position, to);
-      for (const [playerId, theirs] of Map.groupBy(found, (event) => event.playerId)) {
-        yield* tellOwn(playerId, ownFrames(theirs, to));
-      }
-      const guildsOwn = found.filter((event) => GUILD_EVENT_TYPES.some((type) => type === event.type));
-      const shown = guildEvents(guildsOwn, yield* names.of(guildsOwn.map((event) => event.playerId)));
-      if (shown.length > 0) {
-        const frames = shown.map((event) => ({ id: event.id, frame: sseFrame(event.id, event.type, event.json) }));
-        yield* PubSub.publish(guild, { frames, position: to });
-      }
       return found.length === TAIL_PAGE;
     });
     yield* look.pipe(
       Effect.repeat({ while: (full) => full }),
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.interrupt
+          : Effect.logError("A look for new events failed; the next looks again from where the last ended", cause),
+      ),
       Effect.repeat(Schedule.spaced(Duration.millis(pollMs))),
-      Effect.tapDefect((defect) => Effect.logError("The event streams stopped looking for events", defect)),
-      Effect.ensuring(Deferred.succeed(ended, undefined)),
       Effect.forkScoped,
     );
-    return { own, guild, ended } satisfies Tail;
   });
 
-/** What a stream hears of the tail's pages, from now until the tail stops. */
-const heard = (pages: PubSub.PubSub<Framed>, ended: Deferred.Deferred<void>) =>
-  Effect.map(PubSub.subscribe(pages), (subscription) =>
-    Stream.fromSubscription(subscription).pipe(Stream.interruptWhen(Deferred.await(ended))),
-  );
-
 /**
- * The tail of the events table, read once for every open event stream: one look every `pollMs`
- * while any stream is open, at every event written since the last, each event's frame made once
- * and told to the open streams it belongs to. It finds new events by looking in the database, not
- * by being told, so it also sees events written by another process: during a deploy the old and
- * the new container run side by side. Should a look fail, every open stream ends, and its client
- * reconnects.
+ * The tails of the events table that the open event streams hear, each read once for all of its
+ * streams, while any is open: one for members' own events, and one for the guild's, which names
+ * whom each is of before its streams hear it, so that no member's own event ever waits on a name.
+ * Each finds new events by looking in the database every `pollMs`, not by being told, so it also
+ * sees events written by another process: during a deploy the old and the new container run side
+ * by side.
  */
 export class EventTail extends Context.Service<
   EventTail,
@@ -268,8 +289,35 @@ export class EventTail extends Context.Service<
       const events = yield* Events;
       const names = yield* PlayerNames;
       const { pollMs } = yield* StreamTuning;
-      // It starts with the first stream and stops with the last.
-      const tail = yield* RcRef.make({ acquire: startTail(events, names, pollMs) });
+      // Each starts with its first stream and stops with its last.
+      const own = yield* RcRef.make({
+        acquire: Effect.gen(function* () {
+          const streams = hearing<PlayerId>();
+          yield* looking(events, pollMs, (found, to) =>
+            Effect.forEach(
+              Map.groupBy(found, (event) => event.playerId),
+              ([playerId, theirs]) =>
+                streams.heard(playerId) ? streams.hand(playerId, ownFrames(theirs, to)) : Effect.void,
+              { discard: true },
+            ),
+          );
+          return streams;
+        }),
+      });
+      const guild = yield* RcRef.make({
+        acquire: Effect.gen(function* () {
+          const streams = hearing<"guild">();
+          yield* looking(events, pollMs, (found, to) =>
+            Effect.gen(function* () {
+              const theirs = found.filter((event) => GUILD_EVENT_TYPES.some((type) => type === event.type));
+              if (theirs.length === 0) return;
+              const shown = guildEvents(theirs, yield* names.of(theirs.map((event) => event.playerId)));
+              if (shown.length > 0) yield* streams.hand("guild", guildFrames(shown, to));
+            }),
+          );
+          return streams;
+        }),
+      });
       const missed = (playerId: PlayerId) => (position: number) =>
         Effect.map(events.after(playerId, position, EVENT_PAGE), (found) => ({
           ...ownFrames(found, found.at(-1)?.id ?? position),
@@ -279,11 +327,11 @@ export class EventTail extends Context.Service<
         own: (playerId, from) =>
           Stream.unwrap(
             Effect.gen(function* () {
-              const { own, ended } = yield* RcRef.get(tail);
-              return caughtUp(from, missed(playerId), yield* heard(yield* RcMap.get(own, playerId), ended));
+              const live = yield* (yield* RcRef.get(own)).listen(playerId);
+              return caughtUp(from, missed(playerId), live);
             }),
           ),
-        guild: Effect.flatMap(RcRef.get(tail), ({ guild, ended }) => heard(guild, ended)),
+        guild: Effect.flatMap(RcRef.get(guild), (streams) => streams.listen("guild")),
       });
     }),
   );
@@ -323,11 +371,7 @@ export class GuildFeed extends Context.Service<
           return { shown, position: found.at(-1)?.id ?? position, full: found.length === GUILD_EVENT_PAGE };
         });
       const missed = (position: number) =>
-        Effect.map(after(position), (page) => ({
-          frames: page.shown.map((event) => ({ id: event.id, frame: sseFrame(event.id, event.type, event.json) })),
-          position: page.position,
-          full: page.full,
-        }));
+        Effect.map(after(position), (page) => ({ ...guildFrames(page.shown, page.position), full: page.full }));
 
       return GuildFeed.of({
         after,

@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import { DEFAULT_RULES, type PlayerId, playerId, type Rules } from "@sequoia-leaf/core";
-import { Effect, Layer } from "effect";
+import { DEFAULT_RULES, leaf, type PlayerId, playerId, type Rules } from "@sequoia-leaf/core";
+import { Effect, Layer, Stream } from "effect";
 
 import { syncCredits } from "../src/earning/sync.ts";
 import { Events } from "../src/events/store.ts";
-import { StreamTuning } from "../src/http/streams.ts";
+import { OpenStreams, StreamTuning } from "../src/http/streams.ts";
 import { MINUTE, raid, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
@@ -401,6 +401,187 @@ describe("event streams together", () => {
       expect(reads).toEqual({ missed: 4, looks: opening.looks + 4 });
     } finally {
       await Promise.all(readers.map((reader) => reader.cancel()));
+      await theirs.dispose();
+      await own.dispose();
+    }
+  });
+});
+
+/** Alice's event as Leaf writes it, in `own`. */
+const levelOf = (own: ReturnType<typeof testLeaf>, n: number) =>
+  own.run(Events.use((events) => events.insert(alice, { type: "level_up", data: { level: n, leaf: n } }, clock.now)));
+
+/** All a stream sends until it ends; fails if it sends nothing for half a second meanwhile. */
+async function untilEnded(reader: { read(): Promise<{ done: boolean; value?: Uint8Array }> }): Promise<string> {
+  const decoder = new TextDecoder();
+  let text = "";
+  /* oxlint-disable no-await-in-loop -- chunks arrive one after another */
+  for (;;) {
+    const read = await Promise.race([reader.read(), Bun.sleep(500).then(() => "quiet" as const)]);
+    if (read === "quiet") throw new Error(`The stream went quiet without ending. It sent: ${text}`);
+    if (read.done) return text;
+    text += decoder.decode(read.value, { stream: true });
+  }
+  /* oxlint-enable no-await-in-loop */
+}
+
+describe("a stream when something goes wrong", () => {
+  it("still tells a stream what happens after a look at the events failed once", async () => {
+    const failing = { once: true };
+    const own = testLeaf(
+      clock,
+      backend,
+      {},
+      {
+        events: (real) => ({
+          ...real,
+          allAfter: (afterId, limit) =>
+            failing.once
+              ? Effect.andThen(
+                  Effect.sync(() => (failing.once = false)),
+                  Effect.die(new Error("the database is busy")),
+                )
+              : real.allAfter(afterId, limit),
+        }),
+      },
+    );
+    const theirs = own.app(Layer.succeed(StreamTuning)({ pollMs: 5, heartbeatMs: 20, maxMs: 2000 }));
+    try {
+      const response = await theirs.request("/v1/me/events/stream", {
+        headers: { Authorization: "Bearer alice-token" },
+      });
+      const reader = response.body?.getReader();
+      if (reader === undefined) throw new Error("The response has no body");
+      await reader.read();
+      await Bun.sleep(30);
+      await levelOf(own, 7);
+      const decoder = new TextDecoder();
+      let text = "";
+      /* oxlint-disable no-await-in-loop -- chunks arrive one after another */
+      while (!text.includes('"level":7')) {
+        const read = await reader.read();
+        if (read.done) throw new Error(`The stream ended before the event. It sent: ${text}`);
+        text += decoder.decode(read.value, { stream: true });
+      }
+      /* oxlint-enable no-await-in-loop */
+      await reader.cancel();
+
+      expect(failing.once).toBe(false);
+      expect(text).toContain("event: level_up\n");
+    } finally {
+      await theirs.dispose();
+      await own.dispose();
+    }
+  });
+
+  it("ends a stream as soon as its events end, so that its client reconnects at once", async () => {
+    const text = await Effect.runPromise(
+      Effect.gen(function* () {
+        const streams = yield* OpenStreams;
+        const sent = yield* Stream.runCollect(
+          streams.open(alice, 0, Stream.make("event: x\n\n")).pipe(Stream.decodeText),
+        );
+        return sent.join("");
+      }).pipe(
+        Effect.provide(OpenStreams.layer),
+        Effect.provideService(StreamTuning, { pollMs: 5, heartbeatMs: 20, maxMs: 300 }),
+      ),
+    );
+
+    expect(text).toBe("id: 0\nretry: 3000\n\nevent: x\n\n");
+  });
+
+  it("ends a stream that falls more than 32 looks behind, and sends what it missed when it reconnects", async () => {
+    const own = testLeaf(clock, backend, {}, { testClock: true });
+    const theirs = own.app(Layer.succeed(StreamTuning)({ pollMs: 5, heartbeatMs: 60_000, maxMs: 600_000 }));
+    try {
+      const response = await theirs.request("/v1/me/events/stream", {
+        headers: { Authorization: "Bearer alice-token" },
+      });
+      const reader = response.body?.getReader();
+      if (reader === undefined) throw new Error("The response has no body");
+      await reader.read();
+      await own.adjust("0 millis");
+      // Two hundred events, each found by a look of its own, while the client reads nothing.
+      for (let n = 1; n <= 200; n++) {
+        // oxlint-disable-next-line no-await-in-loop -- one look after another
+        await levelOf(own, n);
+        // oxlint-disable-next-line no-await-in-loop -- one look after another
+        await own.adjust("5 millis");
+      }
+      const behind = ids(await untilEnded(reader));
+      const last = behind.at(-1) ?? 0;
+      const again = await theirs.request("/v1/me/events/stream", {
+        headers: { Authorization: "Bearer alice-token", "Last-Event-ID": String(last) },
+      });
+      const reader2 = again.body?.getReader();
+      if (reader2 === undefined) throw new Error("The response has no body");
+      const caught = { text: "" };
+      const decoder = new TextDecoder();
+      /* oxlint-disable no-await-in-loop -- chunks arrive one after another */
+      while (!caught.text.includes('"level":200,')) {
+        await own.adjust("5 millis");
+        const read = await reader2.read();
+        if (read.done) throw new Error(`The stream ended. It sent: ${caught.text}`);
+        caught.text += decoder.decode(read.value, { stream: true });
+      }
+      /* oxlint-enable no-await-in-loop */
+      await reader2.cancel();
+
+      expect(last).toBeLessThan(200);
+      expect(behind).toEqual(Array.from({ length: last }, (_, k) => k + 1));
+      expect(ids(caught.text)).toEqual([last, ...Array.from({ length: 200 - last }, (_, k) => last + k + 1)]);
+    } finally {
+      await theirs.dispose();
+      await own.dispose();
+    }
+  });
+
+  it("tells a member their own events while the guild's names cannot be had", async () => {
+    const own = testLeaf(clock, backend, {}, { mojang: { profile: () => Effect.never, texture: () => Effect.never } });
+    const theirs = own.app(Layer.succeed(StreamTuning)({ pollMs: 5, heartbeatMs: 20, maxMs: 2000 }));
+    try {
+      const headers = { Authorization: "Bearer alice-token" };
+      const guild = await theirs.request("/v1/game/guild/events/stream", { headers });
+      const mine = (await theirs.request("/v1/me/events/stream", { headers })).body?.getReader();
+      if (mine === undefined) throw new Error("The response has no body");
+      // Her stream has caught up, and hears only the look from here on.
+      await mine.read();
+      await Bun.sleep(30);
+      // Bob's raid is the guild's to see, and nobody can name him, whom Leaf knows; Alice's level comes after it is looked at.
+      await own.post(
+        { kind: "earn", playerId: bob, amount: leaf(5), source: "raid", idempotencyKey: "bob" },
+        clock.now,
+      );
+      await own.run(
+        Events.use((events) =>
+          events.insert(
+            bob,
+            {
+              type: "leaf_earned",
+              data: { source: "raid", leaf: 5, xp: 5, detail: "TNA", occurred_at: "2026-11-04T12:00:00.000Z" },
+            },
+            clock.now,
+          ),
+        ),
+      );
+      await Bun.sleep(30);
+      await levelOf(own, 3);
+
+      const decoder = new TextDecoder();
+      let text = "";
+      /* oxlint-disable no-await-in-loop -- chunks arrive one after another */
+      while (!text.includes('"level":3,')) {
+        const read = await mine.read();
+        if (read.done) throw new Error(`The stream ended before her event. It sent: ${text}`);
+        text += decoder.decode(read.value, { stream: true });
+      }
+      /* oxlint-enable no-await-in-loop */
+      await mine.cancel();
+      await guild.body?.cancel();
+
+      expect(text).toContain("event: level_up\n");
+    } finally {
       await theirs.dispose();
       await own.dispose();
     }
