@@ -35,9 +35,40 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 37: no newest visit kept for each player, and visits indexed by when they were last heard of. */
+/** Undoes migration 38: no camp kept on visits, and the triggers as migration 37 made them. */
+const beforeVisitCamps = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    yield* sql`DROP TRIGGER visits_opened`;
+    yield* sql`DROP TRIGGER visits_heard`;
+    yield* sql`ALTER TABLE last_visits DROP COLUMN camp_owner`;
+    yield* sql`ALTER TABLE visits DROP COLUMN camp_owner`;
+    yield* sql`
+      CREATE TRIGGER visits_opened
+      AFTER INSERT ON visits
+      BEGIN
+        INSERT INTO last_visits (player_id, visit_id, place, guest, heard_at, left_at, stay)
+        VALUES (NEW.player_id, NEW.id, NEW.place, NEW.guest, NEW.heard_at, NEW.left_at,
+                coalesce((SELECT stay FROM players_seen WHERE player_id = NEW.player_id), 1))
+        ON CONFLICT (player_id) DO UPDATE SET
+          visit_id = excluded.visit_id, place = excluded.place, guest = excluded.guest,
+          heard_at = excluded.heard_at, left_at = excluded.left_at
+        WHERE excluded.visit_id > last_visits.visit_id;
+      END
+    `;
+    yield* sql`
+      CREATE TRIGGER visits_heard
+      AFTER UPDATE OF place, guest, heard_at, left_at ON visits
+      BEGIN
+        UPDATE last_visits SET place = NEW.place, guest = NEW.guest, heard_at = NEW.heard_at, left_at = NEW.left_at
+        WHERE player_id = NEW.player_id AND visit_id = NEW.id;
+      END
+    `;
+  });
+
+/** Undoes migrations 38 and 37: no newest visit kept for each player, and visits indexed by when they were last heard of. */
 const beforeLastVisits = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
+    yield* beforeVisitCamps(sql);
     for (const trigger of [
       "visits_opened",
       "visits_heard",
@@ -52,14 +83,14 @@ const beforeLastVisits = (sql: SqlClient.SqlClient) =>
     yield* sql`CREATE INDEX visits_by_heard ON visits (heard_at)`;
   });
 
-/** Undoes migrations 37 and 36: and no check for missed levels kept. */
+/** Undoes migrations 38 to 36: and no check for missed levels kept. */
 const beforeLevelChecks = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
     yield* beforeLastVisits(sql);
     yield* sql`DROP TABLE level_checks`;
   });
 
-/** Undoes migrations 37 to 34: no likes of camps kept, and `presence` back, empty, as migrations 12 to 29 left it. */
+/** Undoes migrations 38 to 34: no likes of camps kept, and `presence` back, empty, as migrations 12 to 29 left it. */
 const beforeDropPresence = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
     yield* beforeLevelChecks(sql);
@@ -184,6 +215,7 @@ describe("the database", () => {
       { migration_id: 35, name: "camp_likes" },
       { migration_id: 36, name: "level_checks" },
       { migration_id: 37, name: "last_visits" },
+      { migration_id: 38, name: "visit_camps" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -249,7 +281,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 37 },
+      { latest: 38 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -483,6 +515,55 @@ describe("the database", () => {
     ).toEqual([
       { player_id: alice2, place: "town", guest: 0, heard_at: 8, left_at: null, stay: 1 },
       { player_id: bob2, place: "works", guest: 1, heard_at: 7, left_at: 9, stay: 0 },
+    ]);
+  });
+
+  it("keeps whose camp a visit to a camp is in, on its player's newest visit too, and none on visits from before", async () => {
+    const path = join(directory, "leaf.db");
+    const [alice2, bob2] = ["a", "b"].map((n) => `00000000-0000-4000-8000-00000000000${n}`);
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // Back to before migration 38: Alice at a camp, whose not kept.
+        yield* beforeVisitCamps(sql);
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 38`;
+        yield* sql`INSERT INTO sessions (id, player_id, guest, started_at) VALUES (1, ${alice2}, 0, 1), (2, ${bob2}, 0, 1)`;
+        yield* sql`
+          INSERT INTO visits (session_id, player_id, guest, place, source, entered_at, heard_at, instance)
+          VALUES (1, ${alice2}, 0, 'camp', 'call', 1, 5, 'old')
+        `;
+      }),
+    );
+    const refused = await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // Bob at Alice's camp, heard of again, and then gone.
+        yield* sql`
+          INSERT INTO visits (session_id, player_id, guest, place, camp_owner, source, entered_at, heard_at, instance)
+          VALUES (2, ${bob2}, 0, 'camp', ${alice2}, 'call', 6, 6, 'new')
+        `;
+        yield* sql`UPDATE visits SET heard_at = 7, left_at = 8 WHERE player_id = ${bob2}`;
+        // Whose camp, anywhere but at a camp, is refused.
+        return yield* Effect.flip(
+          sql`
+            INSERT INTO visits (session_id, player_id, guest, place, camp_owner, source, entered_at, heard_at, instance)
+            VALUES (2, ${bob2}, 0, 'town', ${alice2}, 'call', 9, 9, 'new')
+          `,
+        );
+      }),
+    );
+
+    expect(Bun.inspect(refused)).toContain("CHECK constraint failed");
+    expect(
+      await query(
+        path,
+        (sql) => sql`SELECT player_id, place, camp_owner, heard_at, left_at FROM last_visits ORDER BY 1`,
+      ),
+    ).toEqual([
+      { player_id: alice2, place: "camp", camp_owner: null, heard_at: 5, left_at: null },
+      { player_id: bob2, place: "camp", camp_owner: alice2, heard_at: 7, left_at: 8 },
     ]);
   });
 

@@ -252,7 +252,7 @@ describe("visits from the presence calls", () => {
     ]);
     const about = await services.run(Visits.use((v) => v.about(T0 + 21 * SECOND)));
     expect(about.present).toEqual([
-      { playerId: alice, username: "Alice", place: "works", guest: false, seenAt: T0 + 20 * SECOND },
+      { playerId: alice, username: "Alice", place: "works", camp: null, guest: false, seenAt: T0 + 20 * SECOND },
     ]);
   });
 
@@ -311,7 +311,10 @@ describe("visits from the presence calls", () => {
   // other Leaf then stops at 31 seconds. Their one stay was 30 seconds, and stays so.
   for (const [said, word] of [
     ["the room they left", (v: Visits["Service"]) => v.inRoom([inTownAlice], "town", T0 + 10 * SECOND)],
-    ["a page in another place", (v: Visits["Service"]) => v.called(inTownAlice, "camp", null, T0 + 10 * SECOND)],
+    [
+      "a page in another place",
+      (v: Visits["Service"]) => v.called(inTownAlice, { place: "camp", camp: null }, null, T0 + 10 * SECOND),
+    ],
   ] as const) {
     it(`opens no visit on word from ${said} older than when the player last left`, async () => {
       const directory = mkdtempSync(join(tmpdir(), "leaf-visits-"));
@@ -427,7 +430,7 @@ describe("visits from the presence calls", () => {
     // One of them has the Works open, which says so; the room has them in town on another page.
     const gamer = many[137];
     if (gamer === undefined) throw new Error("No player 137");
-    await services.run(Visits.use((v) => v.called(gamer, "works", null, T0)));
+    await services.run(Visits.use((v) => v.called(gamer, { place: "works", camp: null }, null, T0)));
     await services.run(Visits.use((v) => v.inRoom(many, "town", T0)));
     await services.run(Visits.use((v) => v.inRoom(many, "town", T0 + 30 * SECOND)));
 
@@ -623,6 +626,128 @@ describe("visits from the presence calls", () => {
   });
 });
 
+/** The code of an error answer's body. */
+const codeOf = (body: unknown): unknown =>
+  typeof body === "object" && body !== null ? Object.getOwnPropertyDescriptor(body, "code")?.value : undefined;
+
+/** A player's page saying where they are, with whatever else it sends, at the clock's time: Leaf's answer. */
+async function say(who: Who, body: object) {
+  const response = await app.request("/v1/game/presence", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${who}-token`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const answer: unknown = await response.json();
+  return { status: response.status, body: answer };
+}
+
+/** A player opens the town, so that Leaf keeps their camp. */
+async function openTown(who: Who) {
+  const response = await app.request("/v1/game/play/town", { headers: { Authorization: `Bearer ${who}-token` } });
+  expect(response.status).toBe(200);
+}
+
+/** Each visit's place and whose camp, in order. */
+const campsOfVisits = () =>
+  services.query<{ place: string; camp_owner: string | null }>(
+    (sql) => sql`SELECT place, camp_owner FROM visits ORDER BY id`,
+  );
+
+/** A row of who is about, as a page is given it. */
+const AboutRow = Schema.Struct({
+  id: Schema.String,
+  place: Schema.String,
+  camp_owner: Schema.optionalKey(Schema.String),
+  camp_owner_name: Schema.optionalKey(Schema.String),
+});
+const AboutLists = Schema.Struct({
+  present: Schema.Array(AboutRow),
+  resting: Schema.Array(AboutRow),
+  gone: Schema.Array(AboutRow),
+});
+
+describe("whose camp", () => {
+  it("is taken only at a camp, and only of a camp Leaf has or the caller's own; anything else is refused whole", async () => {
+    await openTown("bob");
+    const refused = [
+      await say("alice", { place: "town", camp_owner: bob }),
+      await say("alice", { place: "camp", camp_owner: "not-a-uuid" }),
+      // Carol has never opened the town: she has no camp.
+      await say("alice", { place: "camp", camp_owner: carol }),
+    ];
+    const unread = await say("alice", { place: "camp", camp_owner: 7 });
+
+    expect(refused.map((r) => [r.status, codeOf(r.body)])).toEqual([
+      [400, "invalid_camp"],
+      [400, "invalid_camp"],
+      [400, "invalid_camp"],
+    ]);
+    expect([unread.status, codeOf(unread.body)]).toEqual([400, "invalid_place"]);
+    expect(await visits()).toEqual([]);
+
+    // Her own camp, before Leaf keeps it; Bob's; and a camp without saying whose, as a page from before did.
+    clock.now = T0 + 10 * SECOND;
+    expect((await say("alice", { place: "camp", camp_owner: alice })).status).toBe(200);
+    clock.now = T0 + 20 * SECOND;
+    expect((await say("alice", { place: "camp", camp_owner: bob.toUpperCase() })).status).toBe(200);
+    clock.now = T0 + 30 * SECOND;
+    expect((await say("alice", { place: "camp" })).status).toBe(200);
+    expect(await campsOfVisits()).toEqual([
+      { place: "camp", camp_owner: alice },
+      { place: "camp", camp_owner: bob },
+      { place: "camp", camp_owner: null },
+    ]);
+  });
+
+  it("moves a player from one camp to another as from one place to another, and counts every camp's time as the camp's", async () => {
+    await openTown("bob");
+    await openTown("carol");
+    await say("alice", { place: "camp", camp_owner: alice });
+    clock.now = T0 + 30 * SECOND;
+    await say("alice", { place: "camp", camp_owner: bob });
+    // Heard of again at Bob's: the same visit.
+    clock.now = T0 + 60 * SECOND;
+    await say("alice", { place: "camp", camp_owner: bob });
+    clock.now = T0 + 90 * SECOND;
+    await say("alice", { place: "camp", camp_owner: carol });
+    clock.now = T0 + 120 * SECOND;
+    await say("alice", { place: "town" });
+
+    expect(await visits()).toMatchObject([
+      { place: "camp", entered_at: T0, left_at: T0 + 30 * SECOND, seconds: 30, session_id: 1 },
+      { place: "camp", entered_at: T0 + 30 * SECOND, left_at: T0 + 90 * SECOND, seconds: 60, session_id: 1 },
+      { place: "camp", entered_at: T0 + 90 * SECOND, left_at: T0 + 120 * SECOND, seconds: 30, session_id: 1 },
+      { place: "town", entered_at: T0 + 120 * SECOND, left_at: null, session_id: 1 },
+    ]);
+    expect((await campsOfVisits()).map((v) => v.camp_owner)).toEqual([alice, bob, carol, null]);
+    expect((await sessions()).map((s) => s.places)).toEqual([{ camp: 120 }]);
+    const [time] = await timeIn();
+    expect(time).toMatchObject({ player_id: alice, game: "town" });
+    expect(Number(time?.played) + Number(time?.afk)).toBe(120 * SECOND);
+  });
+
+  it("is on each row of every list whose place is a camp, with the owner's name, and on no other", async () => {
+    await openTown("alice");
+    await openTown("bob");
+    // Dave at his own camp and Carol at Bob's, who would rather not stay; both go silent.
+    await say("dave", { place: "camp", camp_owner: dave });
+    await say("carol", { place: "camp", camp_owner: bob, stay: false });
+    clock.now = T0 + 2 * MINUTE;
+    await say("bob", { place: "works" });
+    const { body } = await say("alice", { place: "camp", camp_owner: bob });
+
+    // Strictly: nothing of a camp on a row anywhere else, not even empty.
+    expect(Schema.decodeUnknownSync(AboutLists)(body)).toStrictEqual({
+      present: [
+        { id: alice, place: "camp", camp_owner: bob, camp_owner_name: "Bob" },
+        { id: bob, place: "works" },
+      ],
+      resting: [{ id: dave, place: "camp", camp_owner: dave, camp_owner_name: "Dave" }],
+      gone: [{ id: carol, place: "camp", camp_owner: bob, camp_owner_name: "Bob" }],
+    });
+  });
+});
+
 /** A die that falls the same way every run: a whole number from 0 up to `n` (mulberry32, in exact 32-bit steps). */
 function die(seed: number) {
   let state = seed >>> 0;
@@ -634,19 +759,29 @@ function die(seed: number) {
   };
 }
 
-/** One visit as `history` writes it. */
+/** One visit as `history` writes it: at a camp, whose, or none said. */
 interface Stay {
   readonly place: string;
+  readonly camp: string | null;
   readonly entered: number;
   readonly heard: number;
   readonly left: number | null;
 }
 
+/** Whose camps visits to camps are in: two players', one Leaf has never seen, or none said. */
+const CAMPS = [
+  "60000000-0000-0000-0000-000000000001",
+  "60000000-0000-0000-0000-000000000002",
+  "80000000-0000-0000-0000-000000000009",
+  null,
+];
+
 /**
  * One to four visits of a player over the last 26 hours as of `T0`, whole minutes apart so that some
  * are seen at the same moment: the newest open (heard of in the last few minutes) or closed, some
  * closed as they moved on, some silent at the last time they were heard of, and now and then one
- * closed before it was last heard of (as Leaf's farewell may, racing a page's call).
+ * closed before it was last heard of (as Leaf's farewell may, racing a page's call). At a camp, in
+ * one of `CAMPS`.
  */
 function staysOf(roll: (n: number) => number): Stay[] {
   const stays: Stay[] = [];
@@ -657,7 +792,8 @@ function staysOf(roll: (n: number) => number): Stay[] {
     const heard = open ? T0 - roll(6) * 30 * SECOND : at + roll(30) * MINUTE;
     const left = open ? null : heard + (roll(4) - 1) * MINUTE;
     const entered = Math.min(at, heard, left ?? heard);
-    stays.push({ place: ["town", "works", "camp", "table"][roll(4)] ?? "town", entered, heard, left });
+    const place = ["town", "works", "camp", "table"][roll(4)] ?? "town";
+    stays.push({ place, camp: place === "camp" ? (CAMPS[roll(4)] ?? null) : null, entered, heard, left });
     at = Math.max(left ?? heard, heard) + roll(3 * 60) * MINUTE;
   }
   return stays;
@@ -683,7 +819,15 @@ async function history(players: number) {
       name: `Edge${stays}`,
       guest: 0,
       stay: stays,
-      stays: [{ place: "town", entered: T0 - DAY - HOUR, heard: T0 - DAY + 30 * SECOND, left: T0 - DAY - 30 * SECOND }],
+      stays: [
+        {
+          place: "town",
+          camp: null,
+          entered: T0 - DAY - HOUR,
+          heard: T0 - DAY + 30 * SECOND,
+          left: T0 - DAY - 30 * SECOND,
+        },
+      ],
     })),
   ];
   await services.query((sql) =>
@@ -694,8 +838,9 @@ async function history(players: number) {
         `;
         for (const v of p.stays) {
           yield* sql`
-            INSERT INTO visits (session_id, player_id, guest, place, source, entered_at, heard_at, left_at, instance)
-            VALUES (${session?.id ?? 0}, ${p.id}, ${p.guest}, ${v.place}, 'call', ${v.entered}, ${v.heard}, ${v.left}, 'earlier')
+            INSERT INTO visits (session_id, player_id, guest, place, camp_owner, source, entered_at, heard_at, left_at, instance)
+            VALUES (${session?.id ?? 0}, ${p.id}, ${p.guest}, ${v.place}, ${v.camp}, 'call', ${v.entered}, ${v.heard},
+                    ${v.left}, 'earlier')
           `;
         }
         yield* sql`
@@ -707,14 +852,26 @@ async function history(players: number) {
   );
 }
 
-/** What `history` wrote, as counts: players with more than one visit, newest visits open and closed, who stay and who do not, and visits closed before they were last heard of. */
+/**
+ * What `history` wrote, as counts: players with more than one visit, newest visits open and closed,
+ * and in somebody's camp, who stay and who do not, and visits closed before they were last heard of.
+ */
 const mix = async () =>
-  services.query<{ several: number; open: number; closed: number; stay: number; go: number; early: number }>(
+  services.query<{
+    several: number;
+    open: number;
+    closed: number;
+    camps: number;
+    stay: number;
+    go: number;
+    early: number;
+  }>(
     (sql) => sql`
       SELECT
         (SELECT count(*) FROM (SELECT player_id FROM visits GROUP BY player_id HAVING count(*) > 1)) AS several,
         (SELECT count(*) FROM last_visits WHERE left_at IS NULL) AS open,
         (SELECT count(*) FROM last_visits WHERE left_at IS NOT NULL) AS closed,
+        (SELECT count(*) FROM last_visits WHERE camp_owner IS NOT NULL) AS camps,
         (SELECT count(*) FROM players_seen WHERE stay = 1) AS stay,
         (SELECT count(*) FROM players_seen WHERE stay = 0) AS go,
         (SELECT count(*) FROM visits WHERE left_at < heard_at) AS early
@@ -726,6 +883,8 @@ const Newest = Schema.Struct({
   playerId: Schema.String,
   username: Schema.String,
   place: Schema.String,
+  campOwner: Schema.NullOr(Schema.String),
+  campOwnerName: Schema.NullOr(Schema.String),
   guest: Schema.BooleanFromBit,
   heardAt: Schema.Number,
   leftAt: Schema.NullOr(Schema.Number),
@@ -735,9 +894,10 @@ const newestOfTheDay = async (now: number) =>
   Schema.decodeUnknownSync(Schema.Array(Newest))(
     await services.query(
       (sql) => sql`
-        SELECT v.player_id AS playerId, p.name AS username, v.place, v.guest, v.heard_at AS heardAt,
-               v.left_at AS leftAt, p.stay
+        SELECT v.player_id AS playerId, p.name AS username, v.place, v.camp_owner AS campOwner, o.name AS campOwnerName,
+               v.guest, v.heard_at AS heardAt, v.left_at AS leftAt, p.stay
         FROM visits AS v JOIN players_seen AS p ON p.player_id = v.player_id
+          LEFT JOIN players_seen AS o ON o.player_id = v.camp_owner
         WHERE v.id IN (SELECT max(id) FROM visits WHERE heard_at >= ${now - DAY} GROUP BY player_id)
       `,
     ),
@@ -802,6 +962,7 @@ describe("who is about", () => {
 
       expect(counts?.several ?? 0).toBeGreaterThan(players / 3);
       expect(counts?.early ?? 0).toBeGreaterThan(2);
+      expect(counts?.camps ?? 0).toBeGreaterThan(players / 20);
       expect(Math.min(counts?.open ?? 0, counts?.closed ?? 0, counts?.stay ?? 0, counts?.go ?? 0)).toBeGreaterThan(
         players / 10,
       );

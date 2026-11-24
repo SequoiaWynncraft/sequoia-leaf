@@ -9,11 +9,21 @@ export const PRESENT_MOST = 50;
 /** The most listed as gone in one answer, of those who stay and of those who do not. */
 export const RESTING_MOST = 24;
 
-/** Somebody on Leaf's list of who is about: where they are, or were last, and when Leaf last heard of them there. */
+/** Whose camp somebody is at: the owner's player id, and their name as Leaf last heard it. */
+export interface CampOwner {
+  readonly playerId: string;
+  readonly name: string;
+}
+
+/**
+ * Somebody on Leaf's list of who is about: where they are, or were last (at a camp, whose, when
+ * their page said; null anywhere else), and when Leaf last heard of them there.
+ */
 export interface Seen {
   readonly playerId: string;
   readonly username: string;
   readonly place: string;
+  readonly camp: CampOwner | null;
   readonly guest: boolean;
   readonly seenAt: number;
 }
@@ -34,17 +44,24 @@ const Latest = Schema.Struct({
   playerId: Schema.String,
   username: Schema.String,
   place: Schema.String,
+  campOwner: Schema.NullOr(Schema.String),
+  campOwnerName: Schema.NullOr(Schema.String),
   guest: Schema.BooleanFromBit,
   heardAt: Schema.Int,
   leftAt: Schema.NullOr(Schema.Int),
   stay: Schema.BooleanFromBit,
 });
 
+/** Whose camp a visit is in: at a camp its page named, the owner, named as Leaf last heard them ("Someone" for one it never has). */
+const campOf = (v: typeof Latest.Type): CampOwner | null =>
+  v.place === "camp" && v.campOwner !== null ? { playerId: v.campOwner, name: v.campOwnerName ?? "Someone" } : null;
+
 /** Somebody on the lists, from their newest visit: last seen when it closed, or was last heard of. */
 const seen = (v: typeof Latest.Type): Seen => ({
   playerId: v.playerId,
   username: v.username,
   place: v.place,
+  camp: campOf(v),
   guest: v.guest,
   seenAt: v.leftAt ?? v.heardAt,
 });
@@ -118,11 +135,16 @@ export const readHere = (sql: SqlClient.SqlClient) => {
     );
 };
 
-/** The first `most` newest visits `where` picks, with who they are: newest heard of first, or newest closed first. */
+/**
+ * The first `most` newest visits `where` picks, with who they are, and at a camp whose: newest heard
+ * of first, or newest closed first.
+ */
 const newest = (sql: SqlClient.SqlClient, where: Statement.Fragment, by: "heard" | "left", most: number) => sql`
   SELECT * FROM (
-    SELECT l.player_id AS playerId, p.name AS username, l.place, l.guest, l.heard_at AS heardAt, l.left_at AS leftAt, l.stay
+    SELECT l.player_id AS playerId, p.name AS username, l.place, l.camp_owner AS campOwner, o.name AS campOwnerName,
+           l.guest, l.heard_at AS heardAt, l.left_at AS leftAt, l.stay
     FROM last_visits AS l JOIN players_seen AS p ON p.player_id = l.player_id
+      LEFT JOIN players_seen AS o ON o.player_id = l.camp_owner
     WHERE ${where}
     ORDER BY ${sql.literal(by === "heard" ? "l.heard_at" : "l.left_at")} DESC, l.player_id LIMIT ${most}
   )

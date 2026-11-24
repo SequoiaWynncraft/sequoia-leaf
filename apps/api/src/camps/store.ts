@@ -75,6 +75,8 @@ export class Camps extends Context.Service<
     readonly list: (caller: PlayerId) => Effect.Effect<readonly Listed[]>;
     /** `liker`, named `name`, gives (`on`) or takes back a like of `owner`'s camp; its owner is told the first time ever. */
     readonly like: (liker: PlayerId, name: string, owner: PlayerId, on: boolean) => Effect.Effect<Liked>;
+    /** Whether `owner` has a camp: a town state Leaf keeps. */
+    readonly has: (owner: PlayerId) => Effect.Effect<boolean>;
     /** Who likes `owner`'s camp, newest first, and who stayed in it this UTC week, last stay first. */
     readonly visitors: (
       owner: PlayerId,
@@ -162,6 +164,7 @@ export class Camps extends Context.Service<
               }),
             );
           }).pipe(Effect.orDie),
+        has: (owner) => Effect.map(Effect.orDie(hasCamp(owner)), (found) => found.length > 0),
         visitors: (owner) =>
           Effect.gen(function* () {
             const week = utcWeekStart(yield* Clock.currentTimeMillis);

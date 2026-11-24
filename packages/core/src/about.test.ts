@@ -21,6 +21,14 @@ const row = (id: string, fields: Record<string, string | number | boolean | null
   ...fields,
 });
 
+/** Somebody's row at `owner`'s camp, with whose it is as Leaf names it; or in town, with nothing of a camp. */
+const atCamp = (r: Row, owner: string | null): Row => {
+  const { camp_owner: _owner, camp_owner_name: _name, ...rest } = r;
+  return owner === null
+    ? { ...rest, place: "town" }
+    : { ...rest, place: "camp", camp_owner: owner, camp_owner_name: owner.toUpperCase() };
+};
+
 const who = (at: string, present: Row[], resting: Row[] = [], gone: Row[] = []): Who => ({
   at,
   present,
@@ -78,22 +86,49 @@ describe("a change to who is about", () => {
     expect(applyList(before, listChange(before, after))).toEqual(after);
   });
 
+  test("says a change of camp as the camp's fields, and somebody leaving a camp as dropped and added again", () => {
+    const before = who("t1", [atCamp(row("a"), "b"), row("c"), atCamp(row("d"), "d")]);
+    const after = who("t2", [atCamp(row("a"), "c"), atCamp(row("c"), "c"), atCamp(row("d"), null)]);
+
+    expect(aboutChange(before, after).lists.present).toEqual({
+      drop: ["d"],
+      add: [[2, atCamp(row("d"), null)]],
+      put: [
+        { camp_owner: "c", camp_owner_name: "C", id: "a" },
+        { place: "camp", camp_owner: "c", camp_owner_name: "C", id: "c" },
+      ],
+    });
+    expect(sent(before, after)).toEqual(after);
+  });
+
   test("makes any lists into any others exactly, through any number of changes in a row", () => {
     const stream: Stream = { rng: 20261124 };
     const people = Array.from({ length: 70 }, (_, i) => `p${i}`);
     const list = (most: number): Row[] =>
       shuffled(stream, people)
         .slice(0, below(stream, most + 1))
-        .map((id) =>
-          row(id, {
+        .map((id) => {
+          const r = row(id, {
             place: chance(stream) < 0.8 ? "town" : "works",
             acted_at: chance(stream) < 0.5 ? null : `t${below(stream, 4)}`,
-          }),
-        );
+          });
+          return chance(stream) < 0.2 ? atCamp(r, `p${below(stream, 5)}`) : r;
+        });
     // Each next set of lists is mostly the last, with some people come, gone, moved or changed.
     const nudged = (rows: readonly Row[]): Row[] => {
       const out: Row[] = [];
-      for (const r of rows) if (chance(stream) > 0.1) out.push(chance(stream) < 0.2 ? { ...r, acted_at: "now" } : r);
+      // Some do something, and some go to another camp, or leave theirs for town.
+      for (const r of rows) {
+        if (chance(stream) <= 0.1) continue;
+        const roll = chance(stream);
+        out.push(
+          roll < 0.2
+            ? { ...r, acted_at: "now" }
+            : roll < 0.3
+              ? atCamp(r, roll < 0.25 ? `p${below(stream, 5)}` : null)
+              : r,
+        );
+      }
       for (const r of list(3)) if (!out.some((o) => o.id === r.id)) out.splice(below(stream, out.length + 1), 0, r);
       if (out.length > 1 && chance(stream) < 0.3) out.push(...out.splice(below(stream, out.length), 1));
       return out;

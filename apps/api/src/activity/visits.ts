@@ -30,11 +30,23 @@ export interface Visitor {
 /** How Leaf knows a player is somewhere: they are in a live room of the place, or their page said so. */
 type Source = "room" | "call";
 
+/**
+ * Where a player is: a place, and at a camp whose camp it is (`camp`, its owner's player id, as the
+ * camp list and the camps' rooms name a camp) when their page said; null anywhere else. Another
+ * camp is somewhere else, as another place is.
+ */
+export interface Spot {
+  readonly place: string;
+  readonly camp: PlayerId | null;
+}
+
 const OpenVisit = Schema.Struct({
   id: Schema.Int,
   sessionId: Schema.Int,
   playerId: PlayerUuid,
   place: Schema.String,
+  /** Whose camp, at a camp, if the page said. */
+  campOwner: Schema.NullOr(PlayerUuid),
   source: Schema.Literals(["room", "call"]),
   enteredAt: Schema.Int,
   heardAt: Schema.Int,
@@ -61,6 +73,9 @@ const inGame = (v: { place: string; source: Source }): boolean =>
  */
 const staysPut = (v: OpenVisit, place: string, source: Source): boolean =>
   v.place !== place && source === "room" && inGame(v);
+
+/** Whether an open visit is at `spot`: the same place, and the same camp or none. */
+const isAt = (v: OpenVisit, spot: Spot): boolean => v.place === spot.place && v.campOwner === spot.camp;
 
 /** A player's newest visit, open (`leftAt` null) or closed. */
 const NewestVisit = Schema.Struct({ ...OpenVisit.fields, leftAt: Schema.NullOr(Schema.Int) });
@@ -100,8 +115,8 @@ export interface Time {
   readonly afk: number;
 }
 
-const OPEN_COLUMNS = `id, session_id AS sessionId, player_id AS playerId, place, source, entered_at AS enteredAt,
-  heard_at AS heardAt, acted_at AS actedAt, instance`;
+const OPEN_COLUMNS = `id, session_id AS sessionId, player_id AS playerId, place, camp_owner AS campOwner, source,
+  entered_at AS enteredAt, heard_at AS heardAt, acted_at AS actedAt, instance`;
 
 /** What Visits reads, and the session it begins. */
 const statements = (sql: SqlClient.SqlClient, instance: string) => ({
@@ -233,10 +248,10 @@ const endOf = (visit: OpenVisit, now: number): number =>
   silentSince(visit.heardAt, now, VISIT_RULES) ? visit.heardAt : now;
 
 /**
- * Opens a visit for a player who has none open, who last did something at `actedAt`, in their
- * last session if it ended less than five minutes ago, or else in a new one.
+ * Opens a visit at `spot` for a player who has none open, who last did something at `actedAt`, in
+ * their last session if it ended less than five minutes ago, or else in a new one.
  */
-const open = (w: Writer, who: Visitor, place: string, source: Source, at: number, actedAt: number | null) =>
+const open = (w: Writer, who: Visitor, spot: Spot, source: Source, at: number, actedAt: number | null) =>
   Effect.gen(function* () {
     const guest = who.guest ? 1 : 0;
     const last = yield* w.rows.lastSession(who.playerId);
@@ -251,8 +266,9 @@ const open = (w: Writer, who: Visitor, place: string, source: Source, at: number
       ? joined.value.id
       : (yield* w.rows.beginSession({ playerId: who.playerId, guest: who.guest, at, device: who.device })).id;
     yield* w.sql`
-      INSERT INTO visits (session_id, player_id, guest, place, source, entered_at, heard_at, acted_at, instance)
-      VALUES (${sessionId}, ${who.playerId}, ${guest}, ${place}, ${source}, ${at}, ${at}, ${actedAt}, ${w.instance})
+      INSERT INTO visits (session_id, player_id, guest, place, camp_owner, source, entered_at, heard_at, acted_at, instance)
+      VALUES (${sessionId}, ${who.playerId}, ${guest}, ${spot.place}, ${spot.camp}, ${source}, ${at}, ${at}, ${actedAt},
+              ${w.instance})
     `;
     yield* w.sql`
       INSERT INTO players_seen (player_id, name, guest, first_seen_at, last_seen_at, sessions)
@@ -292,19 +308,19 @@ const standingAt = (w: Writer, playerId: string, now: number) =>
   });
 
 /**
- * A player is at `place` now: their open visit there is heard of again, by this Leaf (and is
- * the room's, if this is the room), with their name and whether a guest as they are now; or
- * the one they have elsewhere closes and one opens here; unless Leaf heard of them later than
- * `now` (`standingAt`), or a room says so while they play a game (`staysPut`). Says whether who
- * is about changed.
+ * A player is at `spot` now: their open visit there is heard of again, by this Leaf (and is the
+ * room's, if this is the room), with their name and whether a guest as they are now; or the one
+ * they have elsewhere (another place, or another camp) closes and one opens here; unless Leaf heard
+ * of them later than `now` (`standingAt`), or a room says so while they play a game (`staysPut`).
+ * Says whether who is about changed.
  */
-const arrive = (w: Writer, who: Visitor, place: string, source: Source, now: number) =>
+const arrive = (w: Writer, who: Visitor, spot: Spot, source: Source, now: number) =>
   Effect.gen(function* () {
     const standing = yield* standingAt(w, who.playerId, now);
     if (standing.at === "later") return false;
     const current = standing.at === "visit" ? Option.some(standing.visit) : Option.none<OpenVisit>();
-    if (Option.isSome(current) && staysPut(current.value, place, source)) return false;
-    if (Option.isSome(current) && current.value.place === place) {
+    if (Option.isSome(current) && staysPut(current.value, spot.place, source)) return false;
+    if (Option.isSome(current) && isAt(current.value, spot)) {
       const kept = source === "room" ? "room" : current.value.source;
       const guest = who.guest ? 1 : 0;
       yield* count(w, current.value, now);
@@ -322,7 +338,7 @@ const arrive = (w: Writer, who: Visitor, place: string, source: Source, now: num
     // What they last did goes with them: a Leaf that took over in a deploy knows it from their visit alone.
     const actedAt = Option.isSome(current) ? w.actedOf(current.value) : w.heardActed(who.playerId);
     if (Option.isSome(current)) yield* close(w, current.value, now);
-    yield* open(w, who, place, source, now, actedAt);
+    yield* open(w, who, spot, source, now, actedAt);
     return true;
   });
 
@@ -406,10 +422,10 @@ const closeInParts = <E>(w: Writer, which: Effect.Effect<readonly OpenVisit[], E
       Effect.asVoid,
     );
 
-/** A player's page said they are at `place` now, and whether they would stay (null: as they last said); says whether who is about changed. */
-const pageSaid = (w: Writer, who: Visitor, place: string, stay: boolean | null, now: number) =>
+/** A player's page said they are at `spot` now, and whether they would stay (null: as they last said); says whether who is about changed. */
+const pageSaid = (w: Writer, who: Visitor, spot: Spot, stay: boolean | null, now: number) =>
   Effect.gen(function* () {
-    const moved = yield* arrive(w, who, place, "call", now);
+    const moved = yield* arrive(w, who, spot, "call", now);
     if (stay === null) return moved;
     const said = yield* w.sql`
       UPDATE players_seen SET stay = ${stay ? 1 : 0} WHERE player_id = ${who.playerId} AND stay <> ${stay ? 1 : 0}
@@ -482,7 +498,8 @@ const sharedLists = (
  * there (`PUT /v1/game/presence`), and is heard of again while they stay: by the room every half
  * minute, and by each of the page's calls. It closes when they leave the room (or their grace runs
  * out), when they go somewhere else, or, not heard of for 90 seconds, at the last time it was. A
- * player has one open visit at most: coming somewhere closes the one anywhere else. Word of a
+ * player has one open visit at most: coming somewhere closes the one anywhere else. At a camp, a
+ * visit is in one camp, as the page says (`Spot`): going to another is coming somewhere else. Word of a
  * player older than the last Leaf heard of them (a room's, written late) moves them nowhere.
  *
  * Each player's newest visit is also where everybody else sees them (`about`, from `last_visits`,
@@ -500,8 +517,8 @@ const sharedLists = (
 export class Visits extends Context.Service<
   Visits,
   {
-    /** A player's page said they are at `place` now, and whether they would stay (null: as they last said). */
-    readonly called: (who: Visitor, place: string, stay: boolean | null, now: number) => Effect.Effect<void>;
+    /** A player's page said they are at `spot` now, and whether they would stay (null: as they last said). */
+    readonly called: (who: Visitor, spot: Spot, stay: boolean | null, now: number) => Effect.Effect<void>;
     /** Players are in a live room of `place` now: just come in, or still there. Written `AT_ONCE` players a transaction. */
     readonly inRoom: (who: readonly Visitor[], place: string, now: number) => Effect.Effect<void>;
     /** A player has left a live room of `place`. Nothing changes if Leaf has heard since that they are somewhere else. */
@@ -565,7 +582,7 @@ export class Visits extends Context.Service<
       };
       const about = readHere(sql);
       return Visits.of({
-        called: (who, place, stay, now) => write(w, pageSaid(w, who, place, stay, now), now),
+        called: (who, spot, stay, now) => write(w, pageSaid(w, who, spot, stay, now), now),
         inRoom: (who, place, now) =>
           Effect.forEach(
             Arr.chunksOf(who, AT_ONCE),
@@ -573,7 +590,7 @@ export class Visits extends Context.Service<
               write(
                 w,
                 Effect.map(
-                  Effect.forEach(some, (v) => arrive(w, v, place, "room", now)),
+                  Effect.forEach(some, (v) => arrive(w, v, { place, camp: null }, "room", now)),
                   (moved) => moved.some(Boolean),
                 ),
                 now,
