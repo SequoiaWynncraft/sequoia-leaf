@@ -1137,7 +1137,7 @@ timed by drivers of at most 1,000 walkers each:
 | ------: | ----------------------: | -------------------------------------: | -------------------------------: | ------: |
 |     300 |                     14% |                           19 and 35 ms |                           1.8 ms | 208 MiB |
 |   1,000 |                     25% |                           22 and 38 ms |                           3.3 ms | 287 MiB |
-|   2,000 |                     58% |                           26 and 64 ms |                           6.6 ms | 398 MiB |
+|   2,000 |                     50% |                           25 and 45 ms |                           3.9 ms | 390 MiB |
 |   3,000 |                     86% |                          40 and 137 ms |                            16 ms | 538 MiB |
 
 Each player is sent about 14 KB a second, nearly all of it motion. Of who is
