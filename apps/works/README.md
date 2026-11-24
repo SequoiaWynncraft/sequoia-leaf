@@ -18,23 +18,23 @@ bun test                         # the screen's own questions, the yard on a sta
 
 ## What to read for which work
 
-| Work on                                     | Read                                                                            |
-| ------------------------------------------- | ------------------------------------------------------------------------------- |
-| opening, the loop, the canvas               | `main.ts`                                                                       |
-| the yard on Leaf: commands, catching up     | `yard.ts`, `sync.ts` (the link and the room as values), `test/fake-leaf.ts`     |
-| a visit (`?of=<player>`)                    | `yard.ts` (`Follow`), `visit.test.ts`                                           |
-| what is in hand, drags, Escape              | `hand.ts` (one value, one `step`), `tools.ts`, `input.ts`                       |
-| building, runs, Select, blueprints, undo    | `tools.ts` (`doNow`, in `yard.ts`, is the one place a price is judged)          |
-| the line over the dock, the dock            | `ui/dock.ts` (a print of the hand)                                              |
-| drawing a frame                             | `scene.ts` (`drawYard`, a layer at a time), `lamps.ts`, `layout.ts`, `art/*.ts` |
-| the far steps and the map                   | `plan.ts`, `far.ts`, `zoom.ts`, `camera.ts`                                     |
-| cards                                       | `ui/card.ts`, `ui/refs.ts`, `ui/prints.ts` (what a card prints), `ui/cards.ts`  |
-| a goal anywhere, the tier's screen          | `ui/goal.ts`, `ui/standing.ts`, `ui/tier.ts`, `ui/research.ts`                  |
-| the yard's sheet: map, trouble, makes/needs | `ui/views.ts`, `ui/table.ts`, `trouble.ts`, `flows.ts`, `arrivals.ts`           |
-| numbers a minute on a card                  | `ui/numbers.ts`                                                                 |
-| lessons and nudges                          | `teach.ts` (`nudge`, and `stepLessons` for when one is taken)                   |
-| moments, walkers, sparks, sounds            | `events.ts`, `actors.ts`, `fx.ts`, `sound.ts`                                   |
-| the letter, the top bar, notices, panels    | `ui/letter.ts`, `ui/hud.ts`, `ui/notes.ts`, `ui/panels.ts`, `ui/board.ts`       |
+| Work on                                     | Read                                                                             |
+| ------------------------------------------- | -------------------------------------------------------------------------------- |
+| opening, the loop, the canvas               | `main.ts`                                                                        |
+| the yard on Leaf: commands, catching up     | `yard.ts`, `sync.ts` (the link and the room as values), `test/fake-leaf.ts`      |
+| a visit (`?of=<player>`)                    | `yard.ts` (`Follow`), `visit.test.ts`                                            |
+| what is in hand, drags, Escape              | `hand.ts` (one value, one `step`), `tools.ts`, `input.ts`                        |
+| building, runs, Select, blueprints, undo    | `tools.ts` (`doNow`, in `yard.ts`, is the one place a price is judged)           |
+| the line over the dock, the dock            | `ui/dock.ts` (a print of the hand)                                               |
+| drawing a frame                             | `scene.ts` (`drawYard`, a layer at a time), `lamps.ts`, `layout.ts`, `art/*.ts`  |
+| the far steps and the map                   | `plan.ts`, `far.ts`, `zoom.ts`, `camera.ts`                                      |
+| cards                                       | `ui/card.ts`, `ui/refs.ts`, `ui/prints.ts` (what a card prints), `ui/cards.ts`   |
+| a goal anywhere, the tier's screen          | `ui/goal.ts`, `ui/standing.ts`, `ui/tier.ts`, `ui/research.ts`                   |
+| the yard's sheet: map, trouble, makes/needs | `ui/views.ts`, `ui/table.ts`, `trouble.ts`, `walk.ts`, `flows.ts`, `arrivals.ts` |
+| numbers a minute on a card                  | `ui/numbers.ts`                                                                  |
+| lessons and nudges                          | `teach.ts` (`nudge`, and `stepLessons` for when one is taken)                    |
+| moments, walkers, sparks, sounds            | `events.ts`, `actors.ts`, `fx.ts`, `sound.ts`                                    |
+| the letter, the top bar, notices, panels    | `ui/letter.ts`, `ui/hud.ts`, `ui/notes.ts`, `ui/panels.ts`, `ui/board.ts`        |
 
 ## What must hold
 
