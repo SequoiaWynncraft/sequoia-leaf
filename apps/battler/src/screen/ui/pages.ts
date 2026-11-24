@@ -14,6 +14,8 @@ import {
   BOSS_IDS,
   clothOf,
   COMPONENT_IDS,
+  ECONOMY,
+  FIGHT,
   FIGURE_IDS,
   type FigureId,
   FIGURES,
@@ -453,13 +455,22 @@ const HOW: readonly (readonly [() => HTMLCanvasElement, string])[] = [
     () => glyph("book"),
     "Figures that share a kin or a calling switch a trait on. The chips say how far along each is.",
   ],
-  [() => glyph("swords"), "Set out, and they fight by themselves. You win the room if any of yours is left standing."],
+  [
+    () => glyph("swords"),
+    `Set out, and they fight by themselves. You win the room if any of yours is left standing. After ${FIGHT.dusk} s dusk hurts everyone: ${FIGHT.duskGrows}% of their health, ${FIGHT.duskGrows}% more each second. At ${FIGHT.cap} s it is a draw.`,
+  ],
   [
     () => traitIcon("bulwark"),
     "Each attacks the nearest enemy. Tanks count as 1 hex nearer, assassins as 1 hex further.",
   ],
-  [() => glyph("door"), "A lost room costs health. There are fifteen rooms, with a boss at the end of each wing."],
-  [() => glyph("pin"), "Every 10 acorns you keep earn 1 more each room. Hold keeps the stall as it is."],
+  [
+    () => glyph("door"),
+    `A lost room costs health. There are ${ROOM_COUNT} rooms, with a boss at the end of each wing.`,
+  ],
+  [
+    () => glyph("pin"),
+    `Every ${ECONOMY.interestPer} acorns you keep earn 1 more each room. Hold keeps the stall as it is.`,
+  ],
   [() => glyph("brush"), "Two components on one figure make an item. Drag one on, or tap it and tap the figure."],
   [() => glyph("help"), "Point at anything for its card; click or tap to keep it open. Names in a card open theirs."],
 ];
@@ -588,7 +599,7 @@ function summary(): HTMLElement | null {
   const ended = endedOf(S.screen);
   if (!ended) return null;
   const { run, summary: sum, paid, news } = ended;
-  const title = sum.ending === "won" ? "The raid is done." : sum.ending === "left" ? "Home early." : "Home again.";
+  const title = sum.ending === "won" ? "The raid is done." : sum.ending === "left" ? "Home early." : "Out of health.";
   const paper = el("section", "k-paper page k-rise summary", { role: "dialog", "aria-label": title });
   add(
     paper,
@@ -596,7 +607,7 @@ function summary(): HTMLElement | null {
     el("div", "", {
       text:
         sum.ending === "won"
-          ? "Fifteen rooms, and the crab nobody counted has been counted."
+          ? `${ROOM_COUNT} rooms, and the crab nobody counted has been counted.`
           : `${TRAILS[sum.trail]?.name ?? ""}: ${sum.cleared} room${sum.cleared === 1 ? "" : "s"} won, as far as room ${sum.reached}.`,
     }),
   );

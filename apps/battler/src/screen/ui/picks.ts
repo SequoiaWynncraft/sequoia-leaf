@@ -35,10 +35,11 @@ import { boonRef, figureRef, itemRef, makesLines, pic, rich, traitRef } from "./
 
 let key = "";
 
-const TITLES: Readonly<Record<Choice["kind"], readonly [string, string]>> = {
-  starter: ["Who sets out with you?", "One of these three. The rest you buy at the stall."],
-  component: ["Something from the room", "A component. Two on one figure make an item."],
-  boon: ["A boon", "One of these, for the rest of the raid."],
+/** A pick's title, and under it only what the cards cannot show. */
+const TITLES: Readonly<Record<Choice["kind"], readonly [string, string | null]>> = {
+  starter: ["Who sets out with you?", null],
+  component: ["Something from the room", "Two components on one figure make an item."],
+  boon: ["A boon", "For the rest of the raid."],
 };
 
 /** A picture on a pick that explains itself when pointed at; a tap on it chooses, as anywhere on the card. */
@@ -178,7 +179,13 @@ export function renderPicks(): void {
     card.setAttribute("aria-label", option);
     cards.append(card);
   });
-  const head = el("div", "k-plaque head", {}, el("b", "k-title", { text: title }), el("span", "k-d", { text: under }));
+  const head = el(
+    "div",
+    "k-plaque head",
+    {},
+    el("b", "k-title", { text: title }),
+    under ? el("span", "k-d", { text: under }) : null,
+  );
   box.replaceChildren(head, cards);
   if (choice.kind === "boon") {
     const again = el(

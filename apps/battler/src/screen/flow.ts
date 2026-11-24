@@ -293,7 +293,7 @@ function count(note: RaidNote, at: number, levels: boolean): number {
     {
       if (levels) return at;
       later(at, () => {
-        sheetTaking("Experience", el("b", "k-leafy", { text: `+${note.gained}` }));
+        sheetTaking("XP", el("b", "k-leafy", { text: `+${note.gained}` }));
         snd.xp();
       });
       return at + 0.25;

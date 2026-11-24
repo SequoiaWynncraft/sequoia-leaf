@@ -75,6 +75,9 @@ const traitSteps = new TraitWatch();
 
 const byId = (id: string): HTMLElement | null => document.getElementById(id);
 
+/** An amount of acorns in words, for a control's name. */
+const acornsSaid = (n: number): string => `${n} acorn${n === 1 ? "" : "s"}`;
+
 /** Builds everything round the table, once. */
 export function buildTable(a: Asks): void {
   asks = a;
@@ -135,11 +138,12 @@ export function buildTable(a: Asks): void {
   const levelUp = el(
     "button",
     "k-btn wood",
-    { id: "levelup", type: "button", onclick: a.levelUp },
+    { id: "levelup", type: "button", "aria-label": `Buy XP, ${acornsSaid(ECONOMY.xpCost)}`, onclick: a.levelUp },
     pic(glyph("up")),
+    el("span", "wide-only", { text: "Buy XP" }),
     acorns(ECONOMY.xpCost),
   );
-  tip(levelUp, "Level up", () => `${ECONOMY.xpCost} acorns for ${ECONOMY.xpBought} experience.`);
+  tip(levelUp, "Buy XP", () => `${ECONOMY.xpBought} XP for ${ECONOMY.xpCost} acorns.`);
   const setOut = el(
     "button",
     "k-btn",
@@ -417,7 +421,7 @@ function renderPurseSide(run: RunView): void {
   node.replaceChildren(
     el("span", "count", {}, el("span", "k-cur big", {}, icon("acorn"), String(n)), mark),
     piles,
-    el("span", "k-dim interest", { text: held > 0 ? `+${held} a room` : `${s.per - (n % s.per)} to save` }),
+    el("span", "k-dim interest", { text: held > 0 ? `+${held} a room` : `+1 at ${s.per}` }),
   );
   node.dataset.n = String(n);
   if (was !== undefined && Number(was) < n) replay(node, "k-bump");

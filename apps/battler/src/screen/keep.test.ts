@@ -18,7 +18,7 @@ describe("what the table keeps in the browser", () => {
   test("only how fast fights are watched and the nudges given, as they were saved", () => {
     const prefs = newPrefs();
     prefs.speed = 4;
-    prefs.taught = ["pick", "buy"];
+    prefs.taught = ["buy", "setout"];
     expect(loadPrefs(savePrefs(prefs))).toEqual(prefs);
     expect(Object.keys(prefs).toSorted()).toEqual(["speed", "taught"]);
   });
@@ -37,9 +37,9 @@ describe("what the table keeps in the browser", () => {
       owned: ["plum", "jar", "gilt"],
       speed: 2,
       trail: 2,
-      taught: ["pick"],
+      taught: ["buy"],
     });
-    expect(loadPrefs(old)).toEqual({ speed: 2, taught: ["pick"] });
+    expect(loadPrefs(old)).toEqual({ speed: 2, taught: ["buy"] });
   });
 
   test("text that is not this version's prefs starts over", () => {
@@ -54,12 +54,15 @@ describe("what the table keeps in the browser", () => {
   test("each part that makes no sense is put back to a new member's, and nudges without repeats or nonsense", () => {
     expect(loadPrefs(kept({ speed: 3, taught: "yes" }))).toEqual(newPrefs());
     expect(loadPrefs(kept({ speed: 2 })).speed).toBe(2);
-    expect(loadPrefs(kept({ taught: ["pick", "pick", 4, "buy", "x".repeat(80)] })).taught).toEqual(["pick", "buy"]);
+    expect(loadPrefs(kept({ taught: ["setout", "setout", 4, "buy", "x".repeat(80)] })).taught).toEqual([
+      "setout",
+      "buy",
+    ]);
   });
 
   test("they are written into the browser, and read back", () => {
     world = standin({});
-    const prefs = { speed: 2 as const, taught: ["pick"] };
+    const prefs = { speed: 2 as const, taught: ["buy"] };
     keepPrefs(prefs);
     expect(readPrefs()).toEqual(prefs);
   });

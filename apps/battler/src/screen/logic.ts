@@ -236,11 +236,11 @@ export class TraitWatch {
 // ---------- teaching by doing ----------
 
 /** The first-time nudges, in the order a new member meets them. */
-export const NUDGES = ["pick", "buy", "setout", "watch", "field", "three", "item", "trait", "save", "rustle"] as const;
+export const NUDGES = ["buy", "setout", "watch", "field", "three", "item", "trait", "save", "rustle"] as const;
 export type NudgeId = (typeof NUDGES)[number];
 
 /** What the table is doing, as far as a nudge cares. */
-export type Doing = "pick" | "plan" | "fight" | "other";
+export type Doing = "plan" | "fight" | "other";
 
 /**
  * The one nudge to show now, if any: the earliest not yet given whose moment has come. Each is a
@@ -248,10 +248,8 @@ export type Doing = "pick" | "plan" | "fight" | "other";
  */
 export function nudgeFor(run: RunView, doing: Doing, taught: readonly string[]): NudgeId | null {
   const fresh = (id: NudgeId): boolean => !taught.includes(id);
-  const choice = picksOf(run)[0];
-  if (doing === "pick") return choice?.kind === "starter" && fresh("pick") ? "pick" : null;
   if (doing === "fight") return fresh("watch") ? "watch" : null;
-  if (doing !== "plan" || choice) return null;
+  if (doing !== "plan" || picksOf(run).length > 0) return null;
   const owned = pieces(run);
   const benched = run.bench.some((p) => p !== null);
   const affordable = run.stall.some((_, i) => canBuy(run, i));
