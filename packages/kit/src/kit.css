@@ -126,9 +126,19 @@
 [hidden] {
   display: none !important;
 }
-:focus-visible {
-  outline: var(--u) solid var(--k-gold-lt);
-  outline-offset: var(--u);
+/*
+ * Where the keyboard is: a cream band round the control with an ink edge outside it, so it reads on
+ * dark plum and timber (the cream) and on paper (the ink), in grey too, and is never taken for the
+ * gold of a thing chosen. Only for the keyboard: a press with the mouse or a finger shows nothing.
+ */
+:is(button, a, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: var(--u) solid var(--k-ink);
+  outline-offset: calc(var(--u) * 2);
+  box-shadow: 0 0 0 calc(var(--u) * 2) var(--k-cream);
+}
+/* A dialog or a card given the focus to hold it, not to be pressed, shows no ring. */
+[tabindex="-1"]:focus {
+  outline: none;
 }
 canvas.k-px,
 img.k-px {
@@ -592,9 +602,6 @@ button.k-slot:hover {
   /* A long card on a short window scrolls inside itself; none is taller than the window. */
   max-height: calc(100vh - 8px);
   overflow-y: auto;
-}
-.k-info:focus {
-  outline: none;
 }
 /*
  * Asked for with a finger: a sheet along the bottom, the whole width, above the game's own bar
