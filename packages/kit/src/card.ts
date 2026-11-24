@@ -777,7 +777,13 @@ export interface LinkOpts {
 export function link(target: HTMLElement, ref: Ref, opts: LinkOpts = {}): void {
   target.dataset.ref = ref;
   target.classList.add("k-link");
-  if (!target.matches("button, a, input, select, [tabindex]")) target.tabIndex = 0;
+  // Something that is not a control already becomes a button, which a picture alone names by its thing.
+  if (!target.matches("button, a[href], input, select, textarea, summary")) {
+    if (!target.hasAttribute("role")) target.setAttribute("role", "button");
+    if (!target.hasAttribute("tabindex")) target.tabIndex = 0;
+    if (!target.textContent?.trim() && !target.hasAttribute("aria-label"))
+      target.setAttribute("aria-label", deck.describe(ref)?.name ?? ref);
+  }
   let timer = 0;
   let press = 0;
   let swallow = false;
