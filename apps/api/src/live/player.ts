@@ -76,9 +76,9 @@ export class Player {
     return this.pipe?.speaks ?? LIVE_VERSION;
   }
 
-  /** The room's outbox for this player: whichever connection they have now, or none. */
-  send(frame: string | Uint8Array): void {
-    this.pipe?.send(frame);
+  /** The room's outbox for this player: whichever connection they have now, or none; says whether one took the frame. */
+  send(frame: string | Uint8Array): boolean {
+    return this.pipe?.send(frame) ?? false;
   }
 
   /** Their connection now, for a room's snapshot (`Outbox`). */

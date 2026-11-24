@@ -108,6 +108,13 @@ const ABOUT_GATHER = Duration.millis(200);
 
 export { LiveMeter, TICK, type TickTimes } from "./tick.ts";
 
+/** Asks about a session every so often, and ends once it says the session has ended. */
+const watch = (session: Effect.Effect<boolean>, every: Duration.Duration): Effect.Effect<void> =>
+  Effect.sleep(every).pipe(
+    Effect.andThen(session),
+    Effect.flatMap((ok) => (ok ? watch(session, every) : Effect.void)),
+  );
+
 /** Where a player's presence says they are while they are in a room of a kind, if it is one of the game's places. */
 const placeOf = (kindName: string): string | null => PLACES.find((p) => p === kindName) ?? null;
 
@@ -181,10 +188,16 @@ const readText = Schema.decodeUnknownOption(ToServerJson);
 
 const say = (m: ToClient): string => JSON.stringify(m);
 
-export type { LiveLine } from "./counts.ts";
-
 /** What came of a player's asking to open a connection: served until it closed, or turned away. */
-export type Opened = "served" | "full" | "busy" | "stopping";
+export type Opened = "served" | Turned;
+/** Why a player's opening was turned away: Leaf is stopping, is full, or they open too often. */
+type Turned = "full" | "busy" | "stopping";
+/** A player's connection, open and theirs, to be served. */
+interface Attached {
+  readonly socket: Socket.Socket;
+  readonly pipe: Pipe;
+  readonly p: Player;
+}
 
 /** What a page opening a connection says of itself: what it is on, and the version of the wire it speaks. */
 export interface Page {
@@ -313,8 +326,7 @@ export class Live extends Context.Service<
         for (const p of players.values()) {
           if (!inPlace(p)) continue;
           const frame = p.speaks >= CHANGES_FROM ? frames.changed : frames.whole;
-          p.send(frame);
-          counts.sent("about", 1, frame.length);
+          if (p.send(frame)) counts.sent("about", 1, frame.length);
         }
       });
       yield* Effect.forkScoped(Effect.forever(quietly("live about", Effect.provideService(tellAbout, Visits, visits))));
@@ -337,8 +349,7 @@ export class Live extends Context.Service<
       const tellAllAbout = (p: Player): void => {
         const whole = about.whole();
         if (whole === null || !inPlace(p) || p.speaks < CHANGES_FROM) return;
-        p.send(whole);
-        counts.sent("about", 1, whole.length);
+        if (p.send(whole)) counts.sent("about", 1, whole.length);
       };
 
       /**
@@ -410,7 +421,7 @@ export class Live extends Context.Service<
         const m = message.value;
         switch (m.t) {
           case "ping":
-            return p.send(say({ t: "pong", c: m.c, s: now }));
+            return void p.send(say({ t: "pong", c: m.c, s: now }));
           case "about":
             return tellAllAbout(p);
           case "join":
@@ -429,7 +440,7 @@ export class Live extends Context.Service<
           return strike(p, now);
         }
         if (!p.acts.take(now)) return strike(p, now);
-        if (p.place.at !== "room") return p.send(say({ t: "error", code: "not_in_room" }));
+        if (p.place.at !== "room") return void p.send(say({ t: "error", code: "not_in_room" }));
         acted(p, now);
         Queue.offerUnsafe(whereabouts, { kind: "act", playerId: p.identity.playerId, act: kind, arg, at: now });
         p.place.room.act(p.place.occupant.member.id, kind, arg);
@@ -491,13 +502,6 @@ export class Live extends Context.Service<
 
       // ---- connections ----
 
-      /** Asks about the session every `recheckMs`, and ends once it says the session has ended. */
-      const watch = (session: Effect.Effect<boolean>): Effect.Effect<void> =>
-        Effect.sleep(Duration.millis(tuning.recheckMs)).pipe(
-          Effect.andThen(session),
-          Effect.flatMap((ok) => (ok ? watch(session) : Effect.void)),
-        );
-
       /**
        * Opens a player's connection and makes it theirs, in one step once the socket is open: it
        * takes over from any other of theirs, carries who they are now, and puts them in the room,
@@ -508,12 +512,11 @@ export class Live extends Context.Service<
         identity: Identity,
         kindName: string,
         upgrade: Effect.Effect<Socket.Socket, unknown>,
-        device: Device | null,
-        speaks: number,
+        page: Page,
       ) =>
         Effect.gen(function* () {
           const socket = yield* Effect.orDie(upgrade);
-          const pipe = yield* Pipe.make(yield* socket.writer, speaks);
+          const pipe = yield* Pipe.make(yield* socket.writer, page.speaks ?? LIVE_VERSION);
           // Whatever ends this connection, this decides what becomes of the player, and only while it
           // is still theirs: signed out, they leave at once; otherwise they wait out their grace.
           yield* Effect.addFinalizer(() =>
@@ -524,8 +527,13 @@ export class Live extends Context.Service<
                 counts.closed(pipe.closedWith !== null ? "leaf" : clean ? "page" : "drop");
                 const after = unlinked(p.link, pipe, pipe.closedWith === CLOSE.signedOut, now, clean);
                 if (after === null) return Effect.void;
+                // The link and what it means for the room change in this one step: a connection of
+                // theirs that opens next finds them either still here or already gone, never between.
                 p.link = after;
-                if (after.state !== "grace") return Effect.sync(() => leave(p, now));
+                if (after.state !== "grace") {
+                  leave(p, now);
+                  return Effect.void;
+                }
                 if (p.place.at === "room") p.place.room.halt(p.place.occupant.member.id);
                 return Effect.asVoid(Effect.forkIn(graceEnds(p, after.grace), lives));
               }),
@@ -543,11 +551,11 @@ export class Live extends Context.Service<
           replaced?.close(CLOSE.replaced, "replaced");
           p.link = link;
           p.identity = identity;
-          p.device = device;
+          p.device = page.device ?? null;
           if (p.place.at === "room") p.place.room.reconnected(p.place.occupant.member.id);
           enter(p, kindName, now);
           counts.opened();
-          return { socket, pipe };
+          return { socket, pipe, p } satisfies Attached;
         });
 
       /** Serves an open connection: what goes out, the session's watch, and what comes in. */
@@ -557,7 +565,7 @@ export class Live extends Context.Service<
           // The connection lasts only as long as the session: once it has ended, this connection closes.
           yield* Effect.forkScoped(
             Effect.andThen(
-              watch(session),
+              watch(session, Duration.millis(tuning.recheckMs)),
               Effect.sync(() => pipe.close(CLOSE.signedOut, "signed out")),
             ),
           );
@@ -590,34 +598,43 @@ export class Live extends Context.Service<
       ) =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
-          if (stop !== "running") return "stopping" as const;
-          // Looked for, counted and taken in one step, with nothing in between: no two can both
-          // take the last place.
-          const id = identity.playerId;
-          const known = players.get(id);
-          if (!known && players.size >= tuning.mostPlayers) return "full" as const;
-          const p = known ?? new Player(identity, now);
-          players.set(id, p);
-          // The player going from one of their pages to another is charged as that, not as an opening.
-          if (handsOver(p.link, now, HANDOFF_MS) && p.handoffs.take(now)) {
-            p.link = handedOver(p.link);
-            counts.handedOver();
-          } else if (!p.opens.take(now)) return "busy" as const;
-          // Held while the socket opens, however long it takes, and let go once it is theirs or never
-          // opened: taking it and promising to let it go are one step that nothing can come between.
-          const attached = yield* Effect.acquireUseRelease(
-            Effect.sync(() => {
-              p.opening++;
-            }),
-            () => attach(p, identity, kindName, upgrade, page.device ?? null, page.speaks ?? LIVE_VERSION),
-            () =>
+          // The player's place is held while the socket opens, however long it takes, and let go
+          // once it is theirs or never opened: deciding, taking it and promising to let it go are
+          // one step that nothing can come between.
+          const admitted = yield* Effect.acquireUseRelease(
+            Effect.sync(() => admit(identity, now)),
+            (a): Effect.Effect<Turned | Attached | null, never, Scope.Scope> =>
+              a instanceof Player ? attach(a, identity, kindName, upgrade, page) : Effect.succeed(a),
+            (a) =>
               Effect.sync(() => {
-                p.opening--;
+                if (a instanceof Player) a.opening--;
               }),
           );
-          if (attached) yield* serve(attached.socket, attached.pipe, p, session);
+          if (typeof admitted === "string") return admitted;
+          if (admitted) yield* serve(admitted.socket, admitted.pipe, admitted.p, session);
           return "served" as const;
         });
+
+      /**
+       * Whether a player may open a connection now, and if so, their place among the players, held
+       * (`opening`) for the socket to open: looked for, counted and taken in one step, so that no
+       * two can both take the last place. Turned away while Leaf stops, past `mostPlayers`, or for
+       * opening too often; going from one of their pages to another is charged as that.
+       */
+      const admit = (identity: Identity, now: number): Player | Turned => {
+        if (stop !== "running") return "stopping";
+        const id = identity.playerId;
+        const known = players.get(id);
+        if (!known && players.size >= tuning.mostPlayers) return "full";
+        const p = known ?? new Player(identity, now);
+        players.set(id, p);
+        if (handsOver(p.link, now, HANDOFF_MS) && p.handoffs.take(now)) {
+          p.link = handedOver(p.link);
+          counts.handedOver();
+        } else if (!p.opens.take(now)) return "busy";
+        p.opening++;
+        return p;
+      };
 
       // Every open visit is closed first, after everything said before it, so that none a player
       // opens in the next Leaf, once their connection here has closed, is closed with them.

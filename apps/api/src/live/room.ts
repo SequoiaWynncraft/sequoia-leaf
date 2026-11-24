@@ -11,18 +11,27 @@ import {
 import type { Effect } from "effect";
 
 /**
- * What became of a frame written to a connection: written there and then (`direct`), put in the
- * connection's line behind what was waiting (`queued`), or not for the page any more (`passed`).
+ * What became of the frames written at a tick, counted as each is (`Connection.writeIf`): written
+ * there and then (`direct`), put in a connection's line behind what was waiting (`queued`), or not
+ * for the page any more (`passed`); and the bytes of those written or put in line.
  */
-export type Written = "direct" | "queued" | "passed";
+export interface Tally {
+  direct: number;
+  queued: number;
+  passed: number;
+  bytes: number;
+}
+
+export const noTally = (): Tally => ({ direct: 0, queued: 0, passed: 0, bytes: 0 });
 
 /** A way through to somebody's page, as it is when a snapshot is made for them. */
 export interface Connection {
   /**
    * Writes a frame from the fiber this runs in, if `still()` says, when its turn comes, that it is
-   * still for this page: nothing is written to the page between asking and writing.
+   * still for this page: nothing is written to the page between asking and writing. What became of
+   * it is counted in `tally`, in the step that decides it.
    */
-  writeIf(still: () => boolean, frame: Uint8Array): Effect.Effect<Written>;
+  writeIf(still: () => boolean, frame: Uint8Array, tally: Tally): Effect.Effect<void>;
 }
 
 /**
@@ -44,7 +53,7 @@ export interface Occupant {
 }
 
 /** Somebody a snapshot is for, with the connection they had when it was made. */
-export interface Recipient {
+interface Recipient {
   readonly occupant: Occupant;
   readonly connection: Connection;
 }

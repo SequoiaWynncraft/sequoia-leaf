@@ -114,6 +114,12 @@ export interface Fakes {
   readonly dice?: SecureRandom.SecureRandom["Service"];
   /** Leaf's own warnings and errors, printed as production prints them (the play server's `--log`). Without it Leaf logs nothing. */
   readonly log?: boolean;
+  /**
+   * How many of Effect's steps a fiber takes before it lets others have a turn. One has every fiber
+   * let the others run between any two of its steps, as Effect may: a test of what must happen in
+   * one step (a check and the act it guards) fails at the first split.
+   */
+  readonly stepsBeforeYield?: number;
   /** Told what each of Live's ticks took (`LiveMeter`), for the load test. */
   readonly liveMeter?: (times: TickTimes) => void;
   /** Told where each of the play service's jobs spent its time (`PlayMeter`), for the load test. */
@@ -252,7 +258,10 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
   const layer = Layer.merge(
     Layer.mergeAll(playing, credits).pipe(Layer.provideMerge(between.pipe(Layer.provideMerge(stores)))),
     live,
-  ).pipe(Layer.provideMerge(Watchers.layer));
+  ).pipe(
+    Layer.provideMerge(Watchers.layer),
+    Layer.provideMerge(Layer.succeed(References.MaxOpsBeforeYield)(fakes.stepsBeforeYield ?? 2048)),
+  );
   // Layers built through the same memo map are built once, so `run` and `app` see the same database.
   const memoMap = Layer.makeMemoMapUnsafe();
   const runtime = ManagedRuntime.make(layer, { memoMap });

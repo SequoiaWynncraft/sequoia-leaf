@@ -2,7 +2,7 @@ import { CLOSE } from "@sequoia-leaf/core";
 import { Effect, Option, Queue, Semaphore } from "effect";
 import { Socket } from "effect/socket";
 
-import type { Connection, Written } from "./room.ts";
+import type { Connection, Tally } from "./room.ts";
 
 /** How many frames may wait to go to one connection before it is taken to be stuck and closed. */
 export const MOST_WAITING = 1024;
@@ -16,6 +16,10 @@ type Frame = string | Uint8Array | Socket.CloseEvent;
  * there and then, with no hop to the connection's, unless anything sent before it is still
  * waiting, when it waits behind it. It is only a way through; everything about the player is on
  * the `Player`.
+ *
+ * The socket's writer must not suspend a write: the tick writes every player's snapshot one after
+ * another, and a write that waited would hold up everybody's. Bun's sends in the step it runs
+ * (`ServerWebSocket.sendBinary`), and closes a socket a megabyte behind itself (`LIVE_SOCKETS`).
  */
 export class Pipe implements Connection {
   /** The code it was closed with, once Leaf closed it. */
@@ -28,10 +32,12 @@ export class Pipe implements Connection {
    * frame overtakes one sent before it.
    */
   private waiting = 0;
+  /** Whether Leaf closed it at once (`closeNow`): nothing more is written to it, not even what waits. */
+  private cut = false;
   /**
-   * The socket, held by whoever writes to it, one at a time: `pump` for what waits in the line, or
-   * `writeIf`. What one has decided to write goes out before anything the other writes, however
-   * the runtime takes turns between fibers, and however long the socket takes over a write.
+   * The socket, held by whoever writes to it, one at a time: `pump` for what waits in the line,
+   * `writeIf`, or `closeNow`. What one has decided to write goes out before anything the others
+   * write, however the runtime takes turns between fibers.
    */
   private readonly socket = Semaphore.makeUnsafe(1);
   /** The version of the wire its page speaks (core's `LIVE_VERSION` when it opened, or an older one Leaf still speaks). */
@@ -54,40 +60,57 @@ export class Pipe implements Connection {
     return this.closedWith !== null;
   }
 
-  /** Puts a frame in the line, for `pump` to write. */
-  send(frame: string | Uint8Array): void {
-    if (this.closed) return;
+  /** Puts a frame in the line, for `pump` to write; says whether it did (not on a connection closed, or closing as stuck). */
+  send(frame: string | Uint8Array): boolean {
+    if (this.closed) return false;
     // The socket takes frames as fast as they come; a backlog this long means it is stuck.
-    if (this.waiting >= MOST_WAITING) return this.close(CLOSE.policy, "too far behind");
+    if (this.waiting >= MOST_WAITING) {
+      this.close(CLOSE.policy, "too far behind");
+      return false;
+    }
     this.waiting++;
     Queue.offerUnsafe(this.out, frame);
+    return true;
   }
 
   /**
-   * Writes a frame from the fiber this runs in, if `still()` says it is still for this connection,
-   * so that nothing is written to the page between asking and writing. With the socket free, it is
-   * held while asked and written: there and then when nothing sent before it is waiting, in the
-   * line behind what is otherwise. With the socket held by `pump`, the frame is asked and put in the
-   * line in one step, behind what the pump is writing: whoever writes never waits for a connection.
-   * A write that fails is a socket already gone, which its reader hears of too: the frame is lost
-   * with it.
+   * Writes a frame from the fiber this runs in, if `still()` says it is still for this connection.
+   * With the socket free, it is held: `still()` is asked and the frame put in the line behind what
+   * waits in one step, or, with nothing waiting, written there and then, before anything sent
+   * after the asking, which waits in the line for the socket. With the socket held by another,
+   * `still()` is asked and the frame put in the line in one step, behind what that one is writing:
+   * whoever writes never waits for a connection. A write that fails is a socket already gone, which
+   * its reader hears of too: the frame is lost with it.
    */
-  writeIf(still: () => boolean, frame: Uint8Array): Effect.Effect<Written> {
-    const held = Effect.suspend((): Effect.Effect<Written> => {
-      if (this.closed || !still()) return Effect.succeed("passed");
-      if (this.waiting > 0) return Effect.sync(() => this.queue(frame));
-      return Effect.as(Effect.ignore(this.writer.write(frame)), "direct");
+  writeIf(still: () => boolean, frame: Uint8Array, tally: Tally): Effect.Effect<void> {
+    const held = Effect.suspend(() => {
+      // Asked, and put in the line or counted as written, in this one step.
+      if (this.closed || !still()) {
+        tally.passed++;
+        return Effect.void;
+      }
+      if (this.waiting > 0) {
+        this.queue(frame, tally);
+        return Effect.void;
+      }
+      tally.direct++;
+      tally.bytes += frame.byteLength;
+      return Effect.ignore(this.writer.write(frame));
     });
-    const inLine = Effect.sync((): Written => (still() ? this.queue(frame) : "passed"));
+    const inLine = Effect.sync(() => {
+      if (still()) this.queue(frame, tally);
+      else tally.passed++;
+    });
     return Effect.flatMap(this.socket.withPermitsIfAvailable(1)(held), (wrote) =>
-      Option.isSome(wrote) ? Effect.succeed(wrote.value) : inLine,
+      Option.isSome(wrote) ? Effect.void : inLine,
     );
   }
 
-  /** A frame put in the line (`send`), as `writeIf` says of it. */
-  private queue(frame: Uint8Array): Written {
-    this.send(frame);
-    return "queued";
+  /** A frame put in the line (`send`), counted as `writeIf` counts it. */
+  private queue(frame: Uint8Array, tally: Tally): void {
+    if (!this.send(frame)) return void tally.passed++;
+    tally.queued++;
+    tally.bytes += frame.byteLength;
   }
 
   /** Closes it after whatever is waiting, saying why by the code. */
@@ -104,7 +127,7 @@ export class Pipe implements Connection {
       Effect.flatMap(Queue.takeAll(this.out), (frames) =>
         this.socket.withPermits(1)(
           Effect.andThen(
-            Effect.forEach(frames, (frame) => this.writer.write(frame), { discard: true }),
+            Effect.forEach(frames, (frame) => (this.cut ? Effect.void : this.writer.write(frame)), { discard: true }),
             Effect.sync(() => {
               this.waiting -= frames.length;
             }),
@@ -114,10 +137,19 @@ export class Pipe implements Connection {
     );
   }
 
-  /** Closes it at once, ahead of anything waiting: Leaf is stopping, and there is no time to wait. */
+  /**
+   * Closes it at once, ahead of anything waiting: Leaf is stopping, and there is no time to wait.
+   * Holding the socket, it is cut off and its close written, and nothing after: not what waits in
+   * the line, nor what `pump` took from it and had not written.
+   */
   closeNow(code: number, reason: string): Effect.Effect<void> {
-    if (this.closed) return Effect.void;
-    this.closedWith = code;
-    return Effect.ignore(this.writer.write(new Socket.CloseEvent(code, reason)));
+    return this.socket.withPermits(1)(
+      Effect.suspend(() => {
+        if (this.closed) return Effect.void;
+        this.closedWith = code;
+        this.cut = true;
+        return Effect.ignore(this.writer.write(new Socket.CloseEvent(code, reason)));
+      }),
+    );
   }
 }

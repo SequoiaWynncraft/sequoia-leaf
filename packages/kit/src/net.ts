@@ -52,6 +52,11 @@ export interface Outside {
   /** Loads the page again. */
   reload(): void;
   now(): number;
+  /**
+   * Milliseconds on a clock that only goes forward (`performance.now()`): for how long since
+   * something, which a wall clock set back or forward meanwhile would get wrong; never for when.
+   */
+  elapsed(): number;
   /** Opens a WebSocket to an address. */
   socket(url: string): LiveSocket;
   /** How wide the window is, in CSS pixels (0 where there is none). */
@@ -133,6 +138,7 @@ export const outside: Outside = {
     location.reload();
   },
   now: () => Date.now(),
+  elapsed: () => performance.now(),
   socket: (url) => new WebSocket(url),
   width: () => (typeof innerWidth === "number" ? innerWidth : 0),
   wake: onWake,

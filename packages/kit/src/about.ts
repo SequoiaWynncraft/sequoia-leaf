@@ -12,7 +12,7 @@ import { applyAbout, readWho, type ToClient, type Who } from "@sequoia-leaf/core
 import { outside } from "./net.ts";
 
 /** Where what is heard goes: lists to show, as Leaf sends them whole, and asking Leaf for all of them. */
-export interface AboutEars {
+interface AboutEars {
   show(who: unknown): void;
   ask(): void;
 }
@@ -23,7 +23,7 @@ export const ABOUT_ASK_AGAIN = 5000;
 export class AboutHeard {
   /** The lists as last made, and their number; none until Leaf gives all of them, or after a change that did not follow. */
   private lists: { readonly v: number; readonly who: Who } | null = null;
-  /** When Leaf was last asked for all of the lists (this page's clock), while it has not given them; null when it has not been asked. */
+  /** When Leaf was last asked for all of the lists (`outside.elapsed`), while it has not given them; null when it has not been asked. */
   private askedAt: number | null = null;
   private readonly ears: AboutEars;
 
@@ -47,7 +47,7 @@ export class AboutHeard {
       return this.ears.show(next);
     }
     this.lists = null;
-    const now = outside.now();
+    const now = outside.elapsed();
     if (this.askedAt !== null && now - this.askedAt < ABOUT_ASK_AGAIN) return;
     this.askedAt = now;
     this.ears.ask();

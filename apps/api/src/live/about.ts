@@ -4,7 +4,7 @@ import { aboutChange, type ToClient, type Who } from "@sequoia-leaf/core";
 export const CHANGES_FROM = 3;
 
 /** The frames for one change to who is about: all of the lists, numbered, and what changed in them. */
-export interface AboutFrames {
+interface AboutFrames {
   /** All of the lists, numbered (`about`): for a page of a version before `CHANGES_FROM`. */
   readonly whole: string;
   /**

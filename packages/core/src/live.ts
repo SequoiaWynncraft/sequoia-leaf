@@ -307,12 +307,12 @@ export type ToClient =
   | { t: "act"; id: number; kind: string; arg: string }
   | { t: "pong"; c: number; s: number }
   /**
-   * Leaf's lists of who is about (`who`, as `GET /v1/game/presence` answers it). To a page of
-   * version 3, as it comes into a room of the game's places, and again when it asks, numbered (`v`):
-   * each change after is numbered one more (`aboutChanged`). To a page of version 2, at every change
-   * to who is where (somebody came into the game, went, or is somewhere else in it), not numbered.
-   * From a Leaf that sends no list, the page asks for it. A page from before it was told ignores
-   * it, as it ignores anything it does not know.
+   * Leaf's lists of who is about (`who`, as `GET /v1/game/presence` answers it), numbered (`v`). To
+   * a page of version 3, as it comes into a room of the game's places, and again when it asks: each
+   * change after is numbered one more (`aboutChanged`). To a page of version 2, at every change to
+   * who is where (somebody came into the game, went, or is somewhere else in it), the same frame,
+   * whose number it does not read. From a Leaf that sends no list, the page asks for it. A page from
+   * before it was told ignores it, as it ignores anything it does not know.
    */
   | { t: "about"; who?: unknown; v?: number }
   /**

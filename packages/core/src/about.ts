@@ -18,7 +18,7 @@ export interface Who {
 }
 
 /** The lists, by name. */
-export const ABOUT_LISTS = ["present", "resting", "gone"] as const;
+const ABOUT_LISTS = ["present", "resting", "gone"] as const;
 type ListName = (typeof ABOUT_LISTS)[number];
 
 /**
@@ -27,7 +27,7 @@ type ListName = (typeof ABOUT_LISTS)[number];
  * with only those fields (`put`). Those who stayed keep their order: somebody who moved in the list
  * is dropped and added again.
  */
-export interface ListChange {
+interface ListChange {
   readonly drop?: readonly string[];
   readonly add?: readonly (readonly [number, Row])[];
   readonly put?: readonly Row[];

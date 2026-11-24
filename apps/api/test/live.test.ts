@@ -46,9 +46,14 @@ const open: LiveClient[] = [];
 
 /**
  * Leaf on a free port, with Live tuned as the test needs: on its test clock, the real one, or
- * (`hand`) `clock.now` as the test sets it, with waits that really pass.
+ * (`hand`) `clock.now` as the test sets it, with waits that really pass; and with every fiber
+ * taking `stepsBeforeYield` steps of Effect's before the others have a turn, if given.
  */
-async function start(live: Partial<LiveTuning> = {}, real: boolean | "hand" = false): Promise<string> {
+async function start(
+  live: Partial<LiveTuning> = {},
+  real: boolean | "hand" = false,
+  stepsBeforeYield?: number,
+): Promise<string> {
   const fake = fakeBackend({
     "alice-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
     "bob-token": () => Response.json(sessionOf(bob, "Bob", "RECRUIT")),
@@ -57,7 +62,16 @@ async function start(live: Partial<LiveTuning> = {}, real: boolean | "hand" = fa
     "alice-2-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
   });
   backend = fake.backend;
-  services = testLeaf(real === true ? realClock : clock, fake.fetcher, {}, { live, testClock: real === false });
+  services = testLeaf(
+    real === true ? realClock : clock,
+    fake.fetcher,
+    {},
+    {
+      live,
+      testClock: real === false,
+      ...(stepsBeforeYield === undefined ? {} : { stepsBeforeYield }),
+    },
+  );
   server = await services.serve();
   return server.origin;
 }
@@ -112,6 +126,9 @@ async function closedThrough(connected = 0, turns = 10_000): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve));
   return closedThrough(connected, turns - 1);
 }
+
+/** Every fiber of Leaf's that can go on has, as far as many turns of the event loop show. */
+const settledLive = () => new Promise((resolve) => setTimeout(resolve, 30));
 
 /** Waits until `done()` says so, looked at again each turn of the event loop. */
 async function turnsUntil(done: () => boolean, turns = 10_000): Promise<void> {
@@ -812,6 +829,26 @@ describe("where players are, from the room", () => {
     expect([given.v, readWho(given.who)]).toEqual([made.v, made.who]);
   });
 
+  it("counts as sent only the frames a connection took: none for a player in their grace", async () => {
+    await start();
+    const a = await connect(page("alice"));
+    await a.welcome();
+    const b = await connect(page("bob"));
+    await b.welcome();
+    await rowsWhen((r) => r.length === 2);
+    await pass(GATHER);
+    await settled(a);
+    b.drop();
+    await closedThrough(1);
+    const before = await aboutFramesSent();
+    // Carol's game says she is at the Works: Alice is told, and Bob, waiting out his grace, is not.
+    expect((await sayHere("carol-token", "works")).status).toBe(200);
+    await pass(GATHER);
+    await a.next("aboutChanged");
+
+    expect((await aboutFramesSent()) - before).toBe(1);
+  });
+
   it("gives a page all of who is about again when it asks, having missed a change", async () => {
     await start();
     const a = await connect(page("alice"));
@@ -997,6 +1034,152 @@ const alicesIdentity = {
   session: Redacted.make("alice"),
 };
 const signedIn = Effect.succeed(true);
+
+/** How many frames of who is about Leaf has counted as sent (`leaf_live_frames_sent_total`). */
+async function aboutFramesSent(): Promise<number> {
+  const text = (await services?.metrics()) ?? "";
+  return Number(/^leaf_live_frames_sent_total\{kind="about"\} (\S+)$/m.exec(text)?.[1] ?? 0);
+}
+
+/** Somebody signed in, as Alice is but for who they are. */
+const someone = (id: typeof alice, username: string) => ({ ...alicesIdentity, playerId: id, username });
+
+/** A socket's reader's end, as when the page has closed it. */
+const ENDED = "ended";
+/**
+ * A socket standing in for Bun's, for a test that drives it: what the page sends comes from
+ * `incoming` (`ENDED`, and the socket is closed), and what Leaf writes is kept in `written`. A close
+ * Leaf writes ends it, as Bun's does, and is told to `closing`.
+ */
+function drivenSocket(
+  incoming: Queue.Queue<string | Uint8Array>,
+  written: (string | Uint8Array)[],
+  closing: () => void = () => undefined,
+): Socket.Socket {
+  return Socket.make({
+    reader: Effect.succeed({
+      pull: Effect.flatMap(Queue.take(incoming), (frame) =>
+        frame === ENDED
+          ? Effect.fail(new Socket.SocketError({ reason: new Socket.SocketCloseError({ code: CLOSE.done }) }))
+          : Effect.succeed([frame] as const),
+      ),
+      upgrade: () => Effect.void,
+    }),
+    writer: Effect.succeed({
+      write: (chunk) =>
+        Effect.sync(() => {
+          if (!Socket.isCloseEvent(chunk)) return void written.push(chunk);
+          Queue.offerUnsafe(incoming, ENDED);
+          closing();
+        }),
+      writeAll: (chunks) => Effect.sync(() => void written.push(...chunks)),
+    }),
+  });
+}
+
+/** The sweep's turns: a check and its act split by any of the first this many turns of other fibers is found. */
+const TURNS = 40;
+
+/**
+ * Runs a race once for each number of turns, from none to `TURNS`, that its other side waits
+ * (`k`), on a Leaf whose fibers each take one, and then two, of Effect's steps before letting the
+ * others have a turn: where Effect may let another fiber run falls on a different step for each,
+ * so whichever step of one side the other's act falls between, some run finds it.
+ */
+async function everyTurn(race: (k: number) => Promise<void>, live: Partial<LiveTuning> = {}): Promise<void> {
+  for (let run = 0; run <= 2 * TURNS + 1; run++) {
+    const k = run % (TURNS + 1);
+    // oxlint-disable-next-line no-await-in-loop -- one Leaf after another
+    await start(live, false, run <= TURNS ? 1 : 2);
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- one Leaf after another
+      await race(k);
+    } finally {
+      // oxlint-disable-next-line no-await-in-loop -- one Leaf after another
+      await server?.close();
+      // oxlint-disable-next-line no-await-in-loop -- one Leaf after another
+      await services?.dispose();
+      server = null;
+      services = null;
+    }
+  }
+}
+
+/** `k` turns of other fibers, and then `effect`. */
+const after = <A>(k: number, effect: Effect.Effect<A>) =>
+  Effect.andThen(Effect.repeat(Effect.yieldNow, { times: k }), effect);
+
+describe("one step that nothing comes between", () => {
+  it("keeps a player's new connection in the room, however their old one, signed out, closes beside it", async () => {
+    await everyTurn(
+      async (k) => {
+        const live = await services?.run(Live.use((service) => Effect.succeed(service)));
+        if (!live) throw new Error("no Live");
+        const oldIn = await Effect.runPromise(Queue.unbounded<string | Uint8Array>());
+        const oldOut: (string | Uint8Array)[] = [];
+        const go = await Effect.runPromise(Deferred.make<void>());
+        // Her old connection's session has ended, as Leaf finds when it asks: from then it closes,
+        // and her new connection's socket opens `k` turns on.
+        const ended = Effect.sync(() => {
+          void Effect.runFork(after(k, Deferred.succeed(go, undefined)));
+          return false;
+        });
+        const oldSocket = Effect.succeed(drivenSocket(oldIn, oldOut));
+        void services?.run(Effect.scoped(live.open(alicesIdentity, "town", oldSocket, ended))).catch(() => undefined);
+        await turnsUntil(() => oldOut.length > 0);
+        const newIn = await Effect.runPromise(Queue.unbounded<string | Uint8Array>());
+        const newOut: (string | Uint8Array)[] = [];
+        const newSocket = Effect.andThen(Deferred.await(go), Effect.succeed(drivenSocket(newIn, newOut)));
+        void services
+          ?.run(Effect.scoped(live.open(alicesIdentity, "town", newSocket, signedIn)))
+          .catch(() => undefined);
+        await pass(100);
+        await turnsUntil(() => newOut.length > 0);
+        await settledLive();
+
+        const now = await census();
+        expect([k, now?.rooms, now?.connected]).toEqual([k, { "town/1": 1 }, 1]);
+        // And she can move there: her move comes back in the room's next snapshot.
+        Queue.offerUnsafe(newIn, encodeMove(1, at(100, 100)));
+        await tick();
+        await turnsUntil(() => newOut.some((w) => typeof w !== "string"));
+      },
+      { recheckMs: 100 },
+    );
+  });
+
+  it("never lets in more players than it holds, however their openings take turns", async () => {
+    await everyTurn(
+      async (k) => {
+        const live = await services?.run(Live.use((service) => Effect.succeed(service)));
+        if (!live) throw new Error("no Live");
+        const opening = (who: ReturnType<typeof someone>, turns: number) =>
+          services?.run(
+            Effect.scoped(
+              Effect.andThen(
+                Effect.repeat(Effect.yieldNow, { times: turns }),
+                live.open(who, "town", Effect.succeed(standInSocket([])), signedIn),
+              ),
+            ),
+          );
+        // The two let in are served until the test's Leaf stops; the one turned away answers at once.
+        const answers: string[] = [];
+        const turns = { Alice: 0, Bob: k, Carol: 0 };
+        for (const [username, id] of [
+          ["Alice", alice],
+          ["Bob", bob],
+          ["Carol", carol],
+        ] as const)
+          void opening(someone(id, username), turns[username])
+            ?.then((answer) => answers.push(answer))
+            .catch(() => undefined);
+        await turnsUntil(() => answers.length > 0);
+        expect([k, answers, (await census())?.players]).toEqual([k, ["full"], 2]);
+      },
+      { mostPlayers: 2 },
+    );
+  });
+});
 
 describe("a room's snapshot", () => {
   it("never reaches a page after the welcome of the room it went to next, however long its socket takes", async () => {

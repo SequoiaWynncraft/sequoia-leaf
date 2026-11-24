@@ -641,7 +641,7 @@ describe("a live room", () => {
     expect(s.texts().filter((m) => m["t"] === "about")).toEqual([{ t: "about" }]);
   });
 
-  test("asks again for all of who is about while changes go on not following, at most every few seconds", async () => {
+  test("asks again for all of who is about while changes go on not following, every few seconds, whatever the machine's clock says", async () => {
     const w = standin({
       "GET /v1/game/hello": HELLO,
       "GET /v1/game/me": { status: 200, body: TESTER },
@@ -668,15 +668,17 @@ describe("a live room", () => {
     // A number missed: all of them asked for. Leaf may not have taken the ask (the page sent too
     // much a moment ago): the changes still do not follow, and a few seconds on, it asks again.
     s.says(change(6));
-    w.clock.now += 1000;
+    w.clock.elapsed += 1000;
     s.says(change(7));
     const early = asks();
-    w.clock.now += ABOUT_ASK_AGAIN;
+    // The machine's clock is set back meanwhile: how long since the last ask is not.
+    w.clock.now -= 3_600_000;
+    w.clock.elapsed += ABOUT_ASK_AGAIN;
     s.says(change(8));
     const again = asks();
     // Given all of them: what follows is taken, and nothing more is asked.
     s.says({ t: "about", v: 8, who: { at: "2026-11-25T10:00:08.000Z", present: [], resting: [], gone: [] } });
-    w.clock.now += ABOUT_ASK_AGAIN;
+    w.clock.elapsed += ABOUT_ASK_AGAIN;
     s.says(change(9));
     here(null);
 

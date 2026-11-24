@@ -7,13 +7,13 @@ import {
   type Connection,
   halted,
   moved,
+  noTally,
   type Occupant,
   QUIET_MS,
   reconnected,
   Room,
   Rooms,
   type Shown,
-  type Written,
 } from "../src/live/room.ts";
 
 /** Where the room shows somebody, or null before their first move. */
@@ -26,11 +26,11 @@ function inbox() {
   const texts: ToClient[] = [];
   const frames: Uint8Array[] = [];
   const connection: Connection = {
-    writeIf: (still, frame) =>
-      Effect.sync((): Written => {
-        if (!still()) return "passed";
+    writeIf: (still, frame, tally) =>
+      Effect.sync(() => {
+        if (!still()) return void tally.passed++;
         frames.push(frame);
-        return "direct";
+        tally.direct++;
       }),
   };
   return {
@@ -53,7 +53,7 @@ function inbox() {
 function tick(room: Room, n: number, time: number): boolean {
   const snapshot = room.flush(n, time);
   if (snapshot === null) return false;
-  for (const r of snapshot.to) Effect.runSync(r.connection.writeIf(() => room.reaches(r), snapshot.frame));
+  for (const r of snapshot.to) Effect.runSync(r.connection.writeIf(() => room.reaches(r), snapshot.frame, noTally()));
   return true;
 }
 
