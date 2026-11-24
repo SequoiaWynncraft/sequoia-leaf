@@ -46,6 +46,9 @@ const asked = (y: F.Yard, n = 120): string[][] =>
 
 describe("what the board asks for", () => {
   const raw: readonly string[] = F.RAW;
+  /** Whether an order asks only for things straight off the ground. */
+  const ground = (o: F.Standing): boolean =>
+    F.ALL_ITEMS.every((k) => (o.want[k] ?? 0) === 0 || raw.includes(F.itemName(k)));
 
   test("from tier 2, never a thing straight off the ground, first or second; tiers 0 and 1 may ask for one", () => {
     const early = asked(F.create({ seed: 7, tier: 1 })).flat();
@@ -63,6 +66,35 @@ describe("what the board asks for", () => {
     const machines = new Set<number>([F.MILL, F.BENCH, F.WORKSHOP]);
     y.open = { ...y.open, kinds: y.open.kinds.map((g, k) => (machines.has(k) ? 0 : g)) };
     expect(asked(y, 20).every((o) => o.length > 0 && o.every((k) => raw.includes(k)))).toBe(true);
+  });
+
+  test("from tier 2, an order hung before that asks only for things off the ground is taken down for a fresh one, unless it is filled", () => {
+    const y = F.create({ seed: 7, tier: 3 });
+    const resin = F.item("resin");
+    const hung = (filled: boolean): F.Standing => {
+      const o = F.fresh(y, 7);
+      for (const k of F.ALL_ITEMS) o.want[k] = 0;
+      o.want[resin] = 470;
+      o.filled[resin] = filled ? 470 : 3;
+      return o;
+    };
+    expect(y.board.length).toBeGreaterThan(2);
+    const kept = y.board.slice(0, -2);
+    y.board = [...kept, hung(false), hung(true)];
+    const filled = y.board.at(-1);
+    F.fillBoard(y);
+    expect(y.board.length).toBe(kept.length + 2);
+    expect(y.board.filter((o) => ground(o))).toEqual(filled ? [filled] : []);
+    expect(y.board.slice(0, kept.length)).toEqual(kept);
+    // Tier 1 asks for things off the ground still: its orders stay as they hang.
+    const early = F.create({ seed: 7, tier: 1 });
+    const first = early.board[0];
+    if (!first) throw new Error("tier 1 has its board up");
+    for (const k of F.ALL_ITEMS) first.want[k] = 0;
+    first.want[F.item("deadfall")] = 40;
+    const before = early.board.map((o) => o.id);
+    F.fillBoard(early);
+    expect(early.board.map((o) => o.id)).toEqual(before);
   });
 
   test("folios, once research is known, each with a line of its own; no order is left without one", () => {
@@ -164,6 +196,24 @@ describe("an order hung", () => {
       // Read back twice, the same yard.
       expect(F.encode(F.decode(text, y.land) ?? y)).toBe(F.encode(F.decode(text, y.land) ?? y));
     }
+  });
+
+  test("an old order for things off the ground comes down on the page's copy as on Leaf's, and the page hears what Leaf hung instead", () => {
+    const leaf = F.create({ seed: 3, tier: 1 });
+    const old = leaf.board[0];
+    if (!old) throw new Error("no board");
+    for (const k of F.ALL_ITEMS) old.want[k] = 0;
+    old.want[F.item("deadfall")] = 40;
+    const page = F.decode(F.encode(leaf, { seed: false }), leaf.land);
+    if (!page) throw new Error("no copy");
+    // Tier 2 opens on both, as finishing tier 1's commission opens it; each fills its board.
+    for (const y of [leaf, page]) {
+      y.open = { ...y.open, tier: 2 };
+      F.fillBoard(y);
+    }
+    expect(page.board.map((o) => o.id)).not.toContain(old.id);
+    expect(F.hear(page, leaf.board)).toBe(true);
+    expect(page.board.map((o) => o.id)).toEqual(leaf.board.map((o) => o.id));
   });
 
   test("a yard with no seed, as the page's copy is, hangs none", () => {

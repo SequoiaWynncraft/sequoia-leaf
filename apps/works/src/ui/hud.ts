@@ -75,12 +75,15 @@ function powerPlaque(): () => void {
  * The box in the corner: the node in hand, what it wants (each a picture, a bar and a count) and what
  * comes into hand after it; pressed, it opens Orders. With nothing in hand it says what comes next in
  * the tier screen's words (the goal waited on, with its lock; projects to take; or everything done),
- * and pressed, it opens the tier's screen, where that is.
+ * and pressed, it opens the tier's screen, where that is. Orders filled and waiting to be handed over
+ * are counted on the small line over its title, and while there are any, pressed, it opens Orders.
  */
 function tracker(): () => void {
   const host = $("track");
   host.addEventListener("click", () => {
-    togglePanel(S.world.hand === -1 && tierOpen() ? "tier" : "orders");
+    const w = S.world;
+    const ready = w.board.some((s) => isFilled(s.want, s.filled));
+    togglePanel(w.hand === -1 && !ready && tierOpen() ? "tier" : "orders");
   });
   // Pointing (or a finger kept on it) shows the card of the node in hand, or of the goal waited on.
   link(host, orderRef("story"), { acts: true });
@@ -106,7 +109,7 @@ function tracker(): () => void {
           "div",
           "k-row",
           {},
-          el("span", "k-label k-grow", { text: label }),
+          label === "" ? null : el("span", "k-label k-grow", { text: label }),
           p.ready > 0 ? el("span", "k-chip lit", { text: `${p.ready} to hand over` }) : null,
         ),
         el("div", "", { text: said?.title ?? GOALS[p.hand]?.title ?? "" }),
