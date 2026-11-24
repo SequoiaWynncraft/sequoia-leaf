@@ -7,6 +7,8 @@
  * In the sentences, `{name}` is filled from the trait's numbers for the step in question. Each step
  * is said twice: `text` in the guild's voice, for the almanac, and `short` for a card on the table.
  */
+import { FIGHT } from "./rooms.ts";
+
 export const KINS = ["ember", "moss", "mist", "burrow", "feather", "crab", "gnome"] as const;
 export type KinId = (typeof KINS)[number];
 export const CALLINGS = ["bulwark", "fang", "slinger", "sage", "mender", "sneak"] as const;
@@ -150,16 +152,17 @@ export const TRAITS = {
     steps: [2, 4, 6],
     gist: "Fights up close.",
     text: [
-      "Fangs gain {attack}% attack and {crit}% crit chance. A crit does 50% more damage.",
-      "Fangs gain {attack}% attack and {crit}% crit chance. A crit does 50% more damage.",
-      "Fangs gain {attack}% attack and {crit}% crit chance. A crit does 50% more damage.",
+      "Fangs gain {attack}% attack and {crit}% crit chance. A crit does {hard}% more damage.",
+      "Fangs gain {attack}% attack and {crit}% crit chance. A crit does {hard}% more damage.",
+      "Fangs gain {attack}% attack and {crit}% crit chance. A crit does {hard}% more damage.",
     ],
     short: [
       "+{attack}% attack, +{crit}% crit chance.",
       "+{attack}% attack, +{crit}% crit chance.",
       "+{attack}% attack, +{crit}% crit chance.",
     ],
-    n: { attack: [12, 25, 45], crit: [10, 15, 30] },
+    // How much more a crit does is the fight's own number.
+    n: { attack: [12, 25, 45], crit: [10, 15, 30], hard: [FIGHT.hard, FIGHT.hard, FIGHT.hard] },
   },
   slinger: {
     name: "Slinger",

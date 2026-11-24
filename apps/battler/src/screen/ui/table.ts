@@ -19,6 +19,7 @@ import {
   type FigureId,
   FIGURES,
   type ItemId,
+  itemName,
   MAX_LEVEL,
   picksOf,
   pieces,
@@ -26,6 +27,7 @@ import {
   ROOMS,
   type RunView,
   rustleCost,
+  STALL_ODDS,
   tally,
   topStep,
   type TraitId,
@@ -75,12 +77,24 @@ const traitSteps = new TraitWatch();
 
 const byId = (id: string): HTMLElement | null => document.getElementById(id);
 
+/** An amount of acorns in words, for a control's name. */
+const acornsSaid = (n: number): string => `${n} acorn${n === 1 ? "" : "s"}`;
+
 /** Builds everything round the table, once. */
 export function buildTable(a: Asks): void {
   asks = a;
   const hud = el("div", "", { id: "hud" });
   const purse = el("div", "k-plaque hung", { id: "purse" });
   const track = el("div", "k-plaque hung", { id: "track" });
+  // One stop for the keyboard (the room you are in); the arrows walk along the rest.
+  track.addEventListener("keydown", (e) => {
+    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    const pips = [...track.querySelectorAll<HTMLElement>(".pip")];
+    const next = pips[pips.findIndex((p) => p === document.activeElement) + step];
+    if (step === 0 || !next) return;
+    e.preventDefault();
+    next.focus();
+  });
   const resolve = el("button", "k-plaque hung", { id: "resolve", type: "button" });
   tip(
     resolve,
@@ -123,7 +137,7 @@ export function buildTable(a: Asks): void {
   const hold = el(
     "button",
     "k-btn wood",
-    { id: "holdbtn", type: "button", onclick: a.hold },
+    { id: "holdbtn", type: "button", "aria-label": "Hold the stall", onclick: a.hold },
     pic(glyph("pin")),
     el("span", "wide-only", { text: "Hold" }),
   );
@@ -135,11 +149,12 @@ export function buildTable(a: Asks): void {
   const levelUp = el(
     "button",
     "k-btn wood",
-    { id: "levelup", type: "button", onclick: a.levelUp },
+    { id: "levelup", type: "button", "aria-label": `Buy XP, ${acornsSaid(ECONOMY.xpCost)}`, onclick: a.levelUp },
     pic(glyph("up")),
+    el("span", "wide-only", { text: "Buy XP" }),
     acorns(ECONOMY.xpCost),
   );
-  tip(levelUp, "Level up", () => `${ECONOMY.xpCost} acorns for ${ECONOMY.xpBought} experience.`);
+  tip(levelUp, "Buy XP", () => `${ECONOMY.xpBought} XP for ${ECONOMY.xpCost} acorns.`);
   const setOut = el(
     "button",
     "k-btn",
@@ -193,7 +208,8 @@ export function buildTable(a: Asks): void {
       "div",
       "",
       { id: "bottom" },
-      el("div", "", { id: "says" }),
+      // The one polite live region: a refusal or a line of news is read out once.
+      el("div", "", { id: "says", role: "status", "aria-atomic": "false" }),
       el("div", "", { id: "traits" }),
       el("div", "k-panel", { id: "shop" }, plan, fightbar, el("div", "k-over", { id: "sellhint" })),
     ),
@@ -214,7 +230,7 @@ export function toast(text: string, tone: "coral" | "gold" | "leaf" = "coral"): 
   const says = byId("says");
   if (!says) return;
   while (says.children.length > 2) says.firstElementChild?.remove();
-  const line = el("div", `k-toast ${tone === "gold" ? "" : tone}`.trim(), { text, role: "status" });
+  const line = el("div", `k-toast ${tone === "gold" ? "" : tone}`.trim(), { text });
   says.append(line);
   window.setTimeout(() => line.remove(), 2200);
 }
@@ -233,9 +249,10 @@ function renderTrack(run: RunView): void {
     const pip = el(
       "button",
       `k-slot pip ${room.kind} ${here && !(record?.result === "win") ? "here lit" : state}${i > 0 && ROOMS[i - 1]?.wing !== room.wing ? " wing" : ""}`.trim(),
-      { type: "button", "aria-label": `Room ${i + 1}` },
+      { type: "button", "aria-label": `Room ${i + 1}${state ? `, ${state}` : ""}` },
       pic(roomIcon(room.kind)),
     );
+    pip.tabIndex = here ? 0 : -1;
     link(pip, `room:${i}`);
     track.append(pip);
   });
@@ -247,6 +264,7 @@ function renderResolve(run: RunView): void {
   const n = shownCounts(S.screen, run).resolve;
   const was = node.dataset.n;
   node.replaceChildren(icon("heart"), el("b", n <= 5 ? "k-coral" : "", { text: String(n) }));
+  node.setAttribute("aria-label", `Health ${n}`);
   node.dataset.n = String(n);
   if (was !== undefined && was !== String(n)) replay(node, "k-bump");
 }
@@ -286,6 +304,8 @@ function renderTraits(run: RunView): void {
     const chip = chipFor(state.trait);
     chip.classList.toggle("lit", state.step > 0);
     chip.classList.toggle("top", top);
+    // On a phone the chip shows no name: it is said all the same.
+    chip.setAttribute("aria-label", `${spec.name} ${state.count}/${next}`);
     chip.replaceChildren(
       pic(traitIcon(state.trait)),
       el("b", "", { text: `${state.count}/${next}` }),
@@ -312,7 +332,7 @@ function renderRack(run: RunView): void {
       const slot = el(
         "button",
         "k-slot item",
-        { type: "button", "data-item": at, "aria-label": item },
+        { type: "button", "data-item": at, "aria-label": itemName(item) },
         pic(itemIcon(item)),
       );
       // Tapping an item picks it up to give it; a finger kept on it asks what it is.
@@ -370,7 +390,7 @@ function renderStall(run: RunView): void {
     const card = el(
       "button",
       `k-card offer t${spec.tier}${canBuy(run, i) ? "" : " cant"}${have >= 2 ? " lit" : ""}`,
-      { type: "button", "data-offer": i, "aria-label": `${spec.name}, ${price} acorns` },
+      { type: "button", "data-offer": i, "aria-label": `${spec.name}, ${acornsSaid(price)}` },
       el("div", "art", { style: `height: calc(var(--u) * ${portraitRoom()} * var(--fs))` }, figPic(portrait(kind))),
       el("div", "name", { text: spec.name }),
       el(
@@ -417,8 +437,9 @@ function renderPurseSide(run: RunView): void {
   node.replaceChildren(
     el("span", "count", {}, el("span", "k-cur big", {}, icon("acorn"), String(n)), mark),
     piles,
-    el("span", "k-dim interest", { text: held > 0 ? `+${held} a room` : `${s.per - (n % s.per)} to save` }),
+    el("span", "k-dim interest", { text: held > 0 ? `+${held} a room` : `+1 at ${s.per}` }),
   );
+  node.setAttribute("aria-label", acornsSaid(n));
   node.dataset.n = String(n);
   if (was !== undefined && Number(was) < n) replay(node, "k-bump");
 
@@ -432,12 +453,21 @@ function renderPurseSide(run: RunView): void {
     el("i", "", { style: `--v:${need > 0 ? Math.round((xp / need) * 100) : 100}%` }),
   );
   const wasLv = level.dataset.n;
+  // What a reroll can bring at this level, each tier in its colour, cheapest first.
+  const odds = STALL_ODDS[Math.min(lv, STALL_ODDS.length) - 1] ?? [];
   level.replaceChildren(
     el("b", "", { text: `Level ${lv}` }),
     bar,
     el("span", "k-dim", { text: need > 0 ? `${xp}/${need}` : "top" }),
     el("span", "k-dim fielded", {}, pic(glyph("figure")), `${fielded(run)}/${fieldCap(run)}`),
+    el(
+      "span",
+      "odds",
+      {},
+      ...odds.flatMap((share, i) => (share > 0 ? [el("span", `t${i + 1}`, { text: `${share}%` })] : [])),
+    ),
   );
+  level.setAttribute("aria-label", need > 0 ? `Level ${lv}, ${xp}/${need} XP` : `Level ${lv}`);
   level.dataset.n = String(lv);
   if (wasLv !== undefined && Number(wasLv) < lv) replay(level, "k-bump");
 }
@@ -467,6 +497,7 @@ function renderActs(run: RunView): void {
     el("span", "wide-only", { text: "Reroll" }),
     cost === 0 ? el("span", "", { text: free }) : acorns(cost),
   );
+  rustle.setAttribute("aria-label", `Reroll, ${cost === 0 ? free.toLowerCase() : acornsSaid(cost)}`);
   rustle.classList.toggle("off", run.acorns < cost);
   hold.setAttribute("aria-pressed", String(run.held));
   hold.classList.toggle("down", run.held);
@@ -512,13 +543,16 @@ export function placeFoe(): void {
     // Beside whoever is sitting across the table.
     foe.style.left = `${Math.round((cx + 16) * px)}px`;
     foe.style.top = `${Math.round(Math.max((rimTop(p) - 16) * px, under))}px`;
-    foe.style.translate = "none";
+    foe.style.maxWidth = "";
     return;
   }
-  // On a narrow window: over their head, in the last of the sky.
-  foe.style.left = `${Math.round(cx * px)}px`;
+  // On a narrow window: over their head, in the last of the sky, and clear of the rack along the right.
+  const rack = byId("rack")?.getBoundingClientRect();
+  const right = (rack && rack.width > 0 ? rack.left : window.innerWidth) - 8;
+  foe.style.maxWidth = `${right - 8}px`;
+  const w = foe.offsetWidth;
+  foe.style.left = `${Math.round(Math.max(8, Math.min(cx * px - w / 2, right - w)))}px`;
   foe.style.top = `${Math.round(Math.max((rimTop(p) - 44) * px, under))}px`;
-  foe.style.translate = "-50% 0";
 }
 
 /** Draws the interface again from the run. */
@@ -526,13 +560,20 @@ export function renderTable(): void {
   document.body.dataset.mode = S.screen.at;
   const sound = byId("sound");
   const muted = isMuted() ? "mute" : "sound";
-  if (sound) face(sound, muted, icon(muted));
+  if (sound) {
+    face(sound, muted, icon(muted));
+    sound.setAttribute("aria-pressed", String(!isMuted()));
+  }
   const run = S.run;
   document.body.classList.toggle("no-run", !run);
   if ((!run || S.screen.at === "front" || S.screen.at === "over") && (light.kept !== null || light.pointed !== null))
     forgetLight();
   if (!run) return;
-  document.body.dataset.picking = picksOf(run).length > 0 && S.screen.at === "plan" ? "yes" : "no";
+  const picking = picksOf(run).length > 0 && S.screen.at === "plan";
+  document.body.dataset.picking = picking ? "yes" : "no";
+  // While a pick waits, the stall can do nothing: the keyboard passes it by too.
+  const plan = byId("plan");
+  if (plan) plan.inert = picking;
   renderTrack(run);
   const last = byId("lastfight");
   if (last) last.hidden = S.screen.at !== "plan" || run.last === null || picksOf(run).length > 0;

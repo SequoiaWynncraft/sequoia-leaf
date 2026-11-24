@@ -179,6 +179,13 @@ body[data-picking="yes"] #foe {
 .k-chip.trait.top {
   border-image-source: var(--k-f-chip-lit);
 }
+/* Under its first step a trait is off: dim words and a dim badge, so it never looks brighter than one that is on. */
+.k-chip.trait:not(.lit) {
+  color: var(--k-faint);
+}
+.k-chip.trait:not(.lit) > canvas {
+  opacity: 0.55;
+}
 .trait.woke {
   animation: woke 0.7s;
 }
@@ -414,6 +421,28 @@ body[data-picking="yes"] #foe {
   display: inline-flex;
   align-items: center;
   gap: var(--u);
+}
+/* What a reroll can bring at this level: each tier's share in that tier's colour, cheapest first. */
+#level > .odds {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: calc(var(--u) * 3);
+  font: var(--f-small);
+}
+.odds > .t1 {
+  color: var(--k-tier-1);
+}
+.odds > .t2 {
+  color: var(--k-tier-2);
+}
+.odds > .t3 {
+  color: var(--k-tier-3);
+}
+.odds > .t4 {
+  color: var(--k-tier-4);
+}
+.odds > .t5 {
+  color: var(--k-tier-5);
 }
 .k-cur.big {
   font: var(--f-head);
@@ -698,6 +727,16 @@ body.dragging,
 body.dragging * {
   cursor: grabbing !important;
 }
+/* Asked for less motion: nothing bobs, pokes or flashes on its own; the figures still move as the fight goes. */
+@media (prefers-reduced-motion: reduce) {
+  .pip.here,
+  .offer .have.ready,
+  .offer.thop,
+  .trait.woke,
+  #nudge .hand {
+    animation: none;
+  }
+}
 body:is([data-mode="front"], [data-mode="over"]) :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door),
 body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
   visibility: hidden;
@@ -726,6 +765,18 @@ body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
   align-items: center;
   text-align: center;
   padding: var(--u) calc(var(--u) * 5);
+}
+#picks .foot {
+  justify-content: center;
+  gap: calc(var(--u) * 3);
+}
+/* The cards put down: the table is in view, and the title and Show wait at the top. */
+#picks.down {
+  top: calc(var(--top) + var(--k-hang) + var(--u) * 26);
+  translate: -50% 0;
+}
+#picks.down :is(.cards, #redraw) {
+  display: none;
 }
 #picks .cards {
   display: grid;
@@ -1078,20 +1129,23 @@ b.dmg.true {
     order: 5;
     margin-inline: auto;
   }
+  /* Every trait in view: badge and count only (the card has the name), in as many rows as it takes. */
   #traits {
     position: static;
-    flex-direction: row;
+    flex-flow: row wrap;
     align-items: center;
     max-height: none;
-    overflow: auto hidden;
+    overflow: visible;
     padding: var(--u);
-    min-height: calc(var(--u) * 16);
+  }
+  /* A phone's chip is its badge with the count under it, so that eight fit on a row. */
+  .k-chip.trait {
+    grid-auto-flow: row;
+    justify-items: center;
+    padding: var(--u) calc(var(--u) * 2);
   }
   .trait .name {
     display: none;
-  }
-  .trait.lit .name {
-    display: inline;
   }
   #rack {
     top: calc(var(--top) + var(--u) * 48);
@@ -1099,10 +1153,26 @@ b.dmg.true {
   #rack .k-plaque {
     grid-template-columns: auto;
   }
+  /* Big enough for a finger, here and in the corner. */
   #rack .item,
   #rack .boon {
-    width: calc(var(--u) * 15);
-    height: calc(var(--u) * 15);
+    width: calc(var(--u) * 20);
+    height: calc(var(--u) * 20);
+  }
+  #corner > .k-btn,
+  #lastfight {
+    min-width: calc(var(--u) * 20);
+    min-height: calc(var(--u) * 20);
+  }
+  /* In a fight on a phone the plate would hide the far row: it goes until planning. */
+  body[data-mode="fight"] #foe {
+    visibility: hidden;
+  }
+  /* The plate over whoever is across stays on one line (placeFoe keeps it clear of the rack): what they brought gives way first. */
+  #foe .brought > :last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   #plan {
     grid-template-columns: 1fr 1fr 1fr auto;
@@ -1143,6 +1213,7 @@ b.dmg.true {
     width: calc(var(--u) * 24);
   }
   #level .fielded,
+  #level .odds,
   #acorns .interest {
     display: none;
   }
@@ -1232,15 +1303,16 @@ b.dmg.true {
   }
   .fs-aside .takings {
     min-height: 0;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: var(--u) calc(var(--u) * 4);
   }
 
-  #picks {
+  #picks,
+  #picks.down {
     top: calc(var(--top) + var(--u) * 46);
     translate: -50% 0;
     gap: calc(var(--u) * 2);
+  }
+  #pickhide {
+    min-height: calc(var(--u) * 20);
   }
   #picks .cards {
     grid-template-columns: minmax(0, 1fr);

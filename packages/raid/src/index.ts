@@ -50,7 +50,7 @@ export {
   traitShort,
   traitText,
 } from "./content/traits.ts";
-export { drawName, drawTip, GOOD_WITH, type Role, roleLine, ROLES, type Three } from "./content/advice.ts";
+export { drawName, drawReach, drawTip, GOOD_WITH, type Role, roleLine, ROLES, type Three } from "./content/advice.ts";
 export {
   carriedTraits,
   carries,

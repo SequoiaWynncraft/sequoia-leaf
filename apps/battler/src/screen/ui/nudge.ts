@@ -5,7 +5,7 @@
  * Which nudges have been given is kept with the prefs.
  */
 import { el, unit } from "@sequoia-leaf/kit/dom.ts";
-import { fielded, picksOf, pieces, type RunView } from "@sequoia-leaf/raid";
+import { fielded, pieces, type RunView } from "@sequoia-leaf/raid";
 
 import { glyph } from "../art/icons.ts";
 import { fightOn } from "../fightview.ts";
@@ -18,7 +18,6 @@ import { pic } from "./cards.ts";
 import { pageUp } from "./pages.ts";
 
 const LINES: Readonly<Record<NudgeId, string>> = {
-  pick: "Pick who sets out with you.",
   buy: "Buy a figure: tap it.",
   setout: "One may fight for now. Set out.",
   watch: "They fight by themselves. Hurry them, or skip, down here.",
@@ -41,8 +40,6 @@ const teach = (id: NudgeId): void => {
 /** Whether the thing a nudge asks for has been done. */
 function done(id: NudgeId, run: RunView): boolean {
   switch (id) {
-    case "pick":
-      return pieces(run).length > 0;
     case "buy":
       return pieces(run).length > 1;
     case "setout":
@@ -67,8 +64,6 @@ const of = (sel: string): DOMRect | null => document.querySelector(sel)?.getBoun
 /** The box on the page a nudge points at. */
 function target(id: NudgeId, run: RunView): DOMRect | null {
   switch (id) {
-    case "pick":
-      return of("#picks");
     case "buy": {
       const at = run.stall.findIndex((_, i) => canBuy(run, i));
       return of(`[data-offer="${at}"]`);
@@ -154,13 +149,7 @@ export function renderNudge(): void {
     }
   }
   if (learnt) prefsChanged();
-  const doing: Doing = fightOn()
-    ? "fight"
-    : picksOf(run).length > 0
-      ? "pick"
-      : S.screen.at === "plan"
-        ? "plan"
-        : "other";
+  const doing: Doing = fightOn() ? "fight" : S.screen.at === "plan" ? "plan" : "other";
   const id = nudgeFor(run, doing, S.prefs.taught);
   if (!id) {
     now = null;

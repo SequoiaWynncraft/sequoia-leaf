@@ -59,8 +59,8 @@ export const BOONS: Record<BoonId, BoonSpec> = {
   quickstudy: {
     name: "Quick Study",
     sort: "purse",
-    text: "Every room teaches {xp} experience instead of 2.",
-    short: "{xp} experience a room, not 2.",
+    text: "Every room gives {xp} XP instead of 2.",
+    short: "{xp} XP a room, not 2.",
     n: { xp: 4 },
     quip: "Was paying attention after all.",
   },

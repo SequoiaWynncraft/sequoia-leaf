@@ -31,6 +31,7 @@ import {
   type ComponentId,
   drawName,
   drawOf,
+  drawReach,
   drawTip,
   ECONOMY,
   EMBLEMS,
@@ -140,8 +141,6 @@ export function rich(text: string, cls = "short"): HTMLElement {
 
 /** An amount of acorns with their sign. */
 export const acorns = (n: number | string): HTMLElement => el("span", "k-cur", {}, icon("acorn"), String(n));
-
-const tierName = ["", "one acorn", "two acorns", "three acorns", "four acorns", "five acorns"];
 
 // ---------- references ----------
 
@@ -342,8 +341,7 @@ export function traitDesc(id: TraitId, run: RunView | null, lore = false): Descr
   // A calling that draws says so first, whatever its step.
   const draw = traitDraw(id);
   const draws = drawName(draw);
-  if (draws)
-    blocks.unshift({ body: rich(`${draws}: enemies pick them as if a hex ${draw > 0 ? "nearer" : "further"}.`) });
+  if (draws) blocks.unshift({ body: rich(`${draws}: enemies pick them as if ${drawReach(draw)}.`) });
   if (lore) spec.steps.forEach((need, i) => blocks.push({ title: `${need}`, body: traitText(id, i + 1) }));
   return {
     name: spec.name,
@@ -448,20 +446,14 @@ function roomDesc(index: number, run: RunView): Description | null {
         ? `${opening(run.foe.who)} ${run.foe.title}.`
         : `${run.foe.who}${run.foe.title ? `: ${run.foe.title}` : ""}.`,
     );
+  const lose = `Lose: 1 of ${ECONOMY.componentsLost}.`;
   if (record) lines.push(record.result === "win" ? "Won." : record.result === "loss" ? "Lost." : "A draw.");
-  else if (room.kind === "spar")
-    lines.push("A regular's party. It pays the same, won or lost, but a win pays an acorn more.");
-  else if (room.kind === "trouble")
-    lines.push(
-      `The forest's own. Win for a pick of ${ECONOMY.componentsWon} components; lose and it is ${ECONOMY.componentsLost}.`,
-    );
-  else
-    lines.push(
-      index === ROOMS.length - 1
-        ? "The last room. It is fought until it is won, or the party goes home."
-        : "Beat it for two picks of components, and a boon either way.",
-    );
-  if (ECONOMY.boonRooms.some((r) => r === index) && room.kind !== "boss") lines.push("A boon is offered after it.");
+  else if (room.kind === "spar") lines.push("A regular's party. It gives no components.");
+  else if (room.kind === "trouble") lines.push(`Win: pick 1 of ${ECONOMY.componentsWon} components. ${lose}`);
+  else if (index === ROOMS.length - 1)
+    lines.push("The last room. It is fought again until it is won or health runs out.");
+  else lines.push(`Win: pick 1 of ${ECONOMY.componentsWon} components, twice. ${lose}`);
+  if (ECONOMY.boonRooms.some((r) => r === index)) lines.push("A boon after it, won or lost.");
   return {
     name: `Room ${index + 1}`,
     icon: roomIcon(room.kind),
@@ -492,20 +484,15 @@ function purseDesc(run: RunView): Description {
   };
 }
 
-/** The level: how many may be fielded, and what the stall offers at it. */
+/** The level: how many may be fielded, how XP comes, and what the stall offers at it, a tier a line. */
 function levelDesc(run: RunView): Description {
-  const odds = STALL_ODDS[Math.min(run.level, STALL_ODDS.length) - 1] ?? STALL_ODDS[0] ?? [100, 0, 0, 0, 0];
-  const parts = odds.flatMap((share, i) => (share > 0 ? [`${tierName[i + 1] ?? ""} ${share}%`] : []));
+  const odds = STALL_ODDS[Math.min(run.level, STALL_ODDS.length) - 1] ?? [];
   return {
     name: `Level ${run.level}`,
     icon: glyph("acorn"),
     tag: "How many figures you may field.",
-    blocks: [
-      {
-        body: `${ECONOMY.xpCost} acorns buy ${ECONOMY.xpBought} experience; every room gives ${ECONOMY.xpRoom} for nothing.`,
-      },
-      { title: "The stall offers", body: parts.join(", ") },
-    ],
+    stats: odds.flatMap((share, i) => (share > 0 ? [{ label: `${i + 1}-acorn figures`, value: `${share}%` }] : [])),
+    blocks: [{ body: `${ECONOMY.xpBought} XP for ${ECONOMY.xpCost} acorns. Every room gives ${ECONOMY.xpRoom} XP.` }],
   };
 }
 

@@ -34,10 +34,12 @@ export function drawName(draw: number): string | null {
   if (draw < 0) return draw === -1 ? "Avoids fire" : `Avoids fire ×${-draw}`;
   return draw === 1 ? "Draws fire" : `Draws fire ×${draw}`;
 }
-const HEXES = ["", "one hex", "two hexes", "three hexes"];
+/** How far a draw moves a figure in its enemies' eyes, as a number: "1 hex nearer", "2 hexes further". */
+export const drawReach = (draw: number): string =>
+  `${Math.abs(draw)} ${Math.abs(draw) === 1 ? "hex" : "hexes"} ${draw > 0 ? "nearer" : "further"}`;
 /** What a draw means, in a sentence, for the chip's tip. */
 export const drawTip = (draw: number): string =>
-  `Enemies pick their target as if this figure stood ${HEXES[Math.abs(draw)] ?? `${Math.abs(draw)} hexes`} ${draw > 0 ? "nearer" : "further"}.`;
+  `Enemies pick their target as if this figure stood ${drawReach(draw)}.`;
 
 /** The line a card shows under a figure's name: `Tank · front row · draws fire`. */
 export function roleLine(calling: CallingId): string {

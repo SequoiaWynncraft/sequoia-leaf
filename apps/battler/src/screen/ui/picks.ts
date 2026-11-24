@@ -5,7 +5,7 @@ import { portrait } from "@sequoia-leaf/figures/sprites.ts";
  * until the pick is made, so the cards sit over the board.
  */
 import { link, thing } from "@sequoia-leaf/kit/card.ts";
-import { add, el } from "@sequoia-leaf/kit/dom.ts";
+import { add, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import {
   abilityShort,
   type BoonId,
@@ -35,10 +35,11 @@ import { boonRef, figureRef, itemRef, makesLines, pic, rich, traitRef } from "./
 
 let key = "";
 
-const TITLES: Readonly<Record<Choice["kind"], readonly [string, string]>> = {
-  starter: ["Who sets out with you?", "One of these three. The rest you buy at the stall."],
-  component: ["Something from the room", "A component. Two on one figure make an item."],
-  boon: ["A boon", "One of these, for the rest of the raid."],
+/** A pick's title, and under it only what the cards cannot show. */
+const TITLES: Readonly<Record<Choice["kind"], readonly [string, string | null]>> = {
+  starter: ["Who sets out with you?", null],
+  component: ["Something from the room", "Two components on one figure make an item."],
+  boon: ["A boon", "For the rest of the raid."],
 };
 
 /** A picture on a pick that explains itself when pointed at; a tap on it chooses, as anywhere on the card. */
@@ -145,6 +146,20 @@ async function take(index: number, card: HTMLElement): Promise<void> {
   }
 }
 
+/** Puts the cards down to look at the table, or picks them up again; the pick still waits either way. */
+function hideButton(box: HTMLElement): HTMLElement {
+  const button = el("button", "k-btn blue sm", { type: "button", id: "pickhide" });
+  const face = (down: boolean): void => button.replaceChildren(icon(down ? "up" : "down"), down ? "Show" : "Hide");
+  face(false);
+  button.addEventListener("click", () => {
+    const down = !box.classList.contains("down");
+    box.classList.toggle("down", down);
+    face(down);
+    snd.tap();
+  });
+  return button;
+}
+
 /** Shows the pick that is waiting, or puts the cards away. */
 export function renderPicks(): void {
   const box = document.getElementById("picks");
@@ -165,33 +180,41 @@ export function renderPicks(): void {
   if (now === key) return;
   key = now;
   box.hidden = false;
+  box.classList.remove("down");
   box.dataset.kind = choice.kind;
   const [title, under] = TITLES[choice.kind];
   const cards = el("div", "cards", {});
-  choice.options.forEach((option, i) => {
+  choice.options.forEach((_, i) => {
     const card = el("button", "k-card pick k-rise", { type: "button", "data-pick": i });
     card.style.animationDelay = `${i * 70}ms`;
     if (choice.kind === "starter") add(card, ...starterCard(choice.options[i] ?? "rock"));
     else if (choice.kind === "component") add(card, ...componentCard(run, choice.options[i] ?? "thorn"));
     else add(card, ...boonCardParts(choice.options[i] ?? "windfall"));
     card.addEventListener("click", () => void take(i, card));
-    card.setAttribute("aria-label", option);
+    // Named by what it is; the links inside it stay stops, so a keyboard can read what each is before choosing.
+    card.setAttribute("aria-label", card.querySelector(".k-gold")?.textContent ?? "");
     cards.append(card);
   });
-  const head = el("div", "k-plaque head", {}, el("b", "k-title", { text: title }), el("span", "k-d", { text: under }));
-  box.replaceChildren(head, cards);
-  if (choice.kind === "boon") {
-    const again = el(
-      "button",
-      `k-btn wood sm${choice.redraws > 0 ? "" : " off"}`,
-      {
-        type: "button",
-        id: "redraw",
-        onclick: (e: Event) => void redrawn(e.currentTarget instanceof Element ? e.currentTarget : null),
-      },
-      choice.redraws > 0 ? "Show three others" : "No more to show",
-    );
-    box.append(again);
-  }
+  const head = el(
+    "div",
+    "k-plaque head",
+    {},
+    el("b", "k-title", { text: title }),
+    under ? el("span", "k-d", { text: under }) : null,
+  );
+  const again =
+    choice.kind === "boon"
+      ? el(
+          "button",
+          `k-btn wood sm${choice.redraws > 0 ? "" : " off"}`,
+          {
+            type: "button",
+            id: "redraw",
+            onclick: (e: Event) => void redrawn(e.currentTarget instanceof Element ? e.currentTarget : null),
+          },
+          choice.redraws > 0 ? "Show three others" : "No more to show",
+        )
+      : null;
+  box.replaceChildren(head, cards, el("div", "k-row foot", {}, again, hideButton(box)));
   snd.card();
 }

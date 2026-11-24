@@ -258,11 +258,10 @@ describe("a trait switching on", () => {
 const all = (...ids: NudgeId[]): string[] => ids;
 
 describe("teaching by doing", () => {
-  test("first, the pick", () => {
+  test("nothing while the first figure is picked: the pick asks for itself", () => {
     const run = startRun(5);
-    expect(nudgeFor(run, "pick", [])).toBe("pick");
-    expect(nudgeFor(run, "pick", all("pick"))).toBeNull();
     expect(nudgeFor(run, "plan", [])).toBeNull();
+    expect(nudgeFor(run, "other", [])).toBeNull();
   });
   test("then buying, while only the starter is owned and something can be paid for", () => {
     const run = begun();
@@ -329,7 +328,7 @@ describe("teaching by doing", () => {
     expect(nudgeFor(run, "plan", [])).toBeNull();
     run.stage = { phase: "plan", picks: [] };
     expect(
-      nudgeFor(run, "plan", all("pick", "buy", "setout", "watch", "field", "three", "item", "trait", "save", "rustle")),
+      nudgeFor(run, "plan", all("buy", "setout", "watch", "field", "three", "item", "trait", "save", "rustle")),
     ).toBeNull();
   });
 });

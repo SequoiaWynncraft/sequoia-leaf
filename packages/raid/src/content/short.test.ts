@@ -94,9 +94,9 @@ describe("advice for the cards", () => {
     expect(drawName(1)).toBe("Draws fire");
     expect(drawName(2)).toBe("Draws fire ×2");
     expect(drawName(-1)).toBe("Avoids fire");
-    expect(drawTip(1)).toBe("Enemies pick their target as if this figure stood one hex nearer.");
-    expect(drawTip(2)).toBe("Enemies pick their target as if this figure stood two hexes nearer.");
-    expect(drawTip(-1)).toBe("Enemies pick their target as if this figure stood one hex further.");
+    expect(drawTip(1)).toBe("Enemies pick their target as if this figure stood 1 hex nearer.");
+    expect(drawTip(2)).toBe("Enemies pick their target as if this figure stood 2 hexes nearer.");
+    expect(drawTip(-1)).toBe("Enemies pick their target as if this figure stood 1 hex further.");
   });
   test("every figure is good with three different finished items", () => {
     for (const id of FIGURE_IDS) {

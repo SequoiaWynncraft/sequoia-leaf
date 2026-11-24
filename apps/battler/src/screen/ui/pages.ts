@@ -14,6 +14,8 @@ import {
   BOSS_IDS,
   clothOf,
   COMPONENT_IDS,
+  ECONOMY,
+  FIGHT,
   FIGURE_IDS,
   type FigureId,
   FIGURES,
@@ -68,17 +70,34 @@ let tab = "figures";
 /** The look being tried on in the looks page, before it is bought or worn. */
 let trying: { kind: LookKind; id: LookId } | null = null;
 let sureHome = false;
+/** What had the keyboard when a page was opened over the table: it has it back when the page goes. */
+let opener: HTMLElement | null = null;
 
 export function openPages(a: PageAsks): void {
   asks = a;
+  // Escape puts away a page opened over the table, unless a card took it first; taken, it goes no further.
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || e.defaultPrevented || !extra) return;
+    e.preventDefault();
+    showPage(null);
+  });
 }
-/** Opens a page over the table. */
+/** Opens a page over the table, with the keyboard in it; or puts it away, giving the keyboard back. */
 export function showPage(id: PageId | null): void {
+  if (id && !extra) opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   extra = id;
   sureHome = false;
   if (id) snd.open();
   else snd.close();
   renderPages(true);
+  if (id) {
+    document.querySelector<HTMLElement>("#modal:not([hidden]) button")?.focus({ preventScroll: true });
+    return;
+  }
+  // The front page is drawn again as a page over it goes: its button of the same id has the keyboard then.
+  const back = opener?.isConnected ? opener : opener?.id ? document.getElementById(opener.id) : null;
+  back?.focus({ preventScroll: true });
+  opener = null;
 }
 export const pageUp = (): PageId | null =>
   extra ?? (S.screen.at === "front" ? "front" : S.screen.at === "over" ? "summary" : null);
@@ -453,13 +472,22 @@ const HOW: readonly (readonly [() => HTMLCanvasElement, string])[] = [
     () => glyph("book"),
     "Figures that share a kin or a calling switch a trait on. The chips say how far along each is.",
   ],
-  [() => glyph("swords"), "Set out, and they fight by themselves. You win the room if any of yours is left standing."],
+  [
+    () => glyph("swords"),
+    `Set out, and they fight by themselves. You win the room if any of yours is left standing. After ${FIGHT.dusk} s dusk hurts everyone: ${FIGHT.duskGrows}% of their health, ${FIGHT.duskGrows}% more each second. At ${FIGHT.cap} s it is a draw.`,
+  ],
   [
     () => traitIcon("bulwark"),
     "Each attacks the nearest enemy. Tanks count as 1 hex nearer, assassins as 1 hex further.",
   ],
-  [() => glyph("door"), "A lost room costs health. There are fifteen rooms, with a boss at the end of each wing."],
-  [() => glyph("pin"), "Every 10 acorns you keep earn 1 more each room. Hold keeps the stall as it is."],
+  [
+    () => glyph("door"),
+    `A lost room costs health. There are ${ROOM_COUNT} rooms, with a boss at the end of each wing.`,
+  ],
+  [
+    () => glyph("pin"),
+    `Every ${ECONOMY.interestPer} acorns you keep earn 1 more each room. Hold keeps the stall as it is.`,
+  ],
   [() => glyph("brush"), "Two components on one figure make an item. Drag one on, or tap it and tap the figure."],
   [() => glyph("help"), "Point at anything for its card; click or tap to keep it open. Names in a card open theirs."],
 ];
@@ -588,7 +616,7 @@ function summary(): HTMLElement | null {
   const ended = endedOf(S.screen);
   if (!ended) return null;
   const { run, summary: sum, paid, news } = ended;
-  const title = sum.ending === "won" ? "The raid is done." : sum.ending === "left" ? "Home early." : "Home again.";
+  const title = sum.ending === "won" ? "The raid is done." : sum.ending === "left" ? "Home early." : "Out of health.";
   const paper = el("section", "k-paper page k-rise summary", { role: "dialog", "aria-label": title });
   add(
     paper,
@@ -596,7 +624,7 @@ function summary(): HTMLElement | null {
     el("div", "", {
       text:
         sum.ending === "won"
-          ? "Fifteen rooms, and the crab nobody counted has been counted."
+          ? `${ROOM_COUNT} rooms, and the crab nobody counted has been counted.`
           : `${TRAILS[sum.trail]?.name ?? ""}: ${sum.cleared} room${sum.cleared === 1 ? "" : "s"} won, as far as room ${sum.reached}.`,
     }),
   );
@@ -688,6 +716,11 @@ export function renderPages(force = false): void {
   const key = `${id}:${S.runs}:${S.run?.room ?? 0}:${endedOf(S.screen) ? 1 : 0}`;
   if (!force && key === shownKey) return;
   shownKey = key;
+  // While a page is opened over the table, the table behind it cannot be reached.
+  for (const part of ["hud", "bottom", "rack", "picks"]) {
+    const node = document.getElementById(part);
+    if (node) node.inert = extra !== null;
+  }
   if (!id) {
     box.hidden = true;
     box.replaceChildren();
@@ -708,9 +741,30 @@ export function renderPages(force = false): void {
     return;
   }
   if (force) node.classList.remove("k-rise");
+  // Drawn again (a tab, a look tried on), the page keeps the keyboard where it was.
+  const before = controlKeys(box);
+  const was = before.find(([b]) => b === document.activeElement)?.[1];
   box.hidden = false;
   box.dataset.page = id;
   box.replaceChildren(node);
+  if (was !== undefined)
+    controlKeys(box)
+      .find(([, k]) => k === was)?.[0]
+      .focus({ preventScroll: true });
+}
+
+/**
+ * Which control each button in a page is, the same when the page is drawn again with a button more or
+ * fewer: its id, else its name, else its words, and which of the buttons so called it is.
+ */
+function controlKeys(box: HTMLElement): [HTMLButtonElement, string][] {
+  const seen = new Map<string, number>();
+  return [...box.querySelectorAll("button")].map((b) => {
+    const name = b.id || b.getAttribute("aria-label") || (b.textContent ?? "");
+    const n = seen.get(name) ?? 0;
+    seen.set(name, n + 1);
+    return [b, `${name}#${n}`];
+  });
 }
 
 /** A touch outside a page that can be closed closes it. */
