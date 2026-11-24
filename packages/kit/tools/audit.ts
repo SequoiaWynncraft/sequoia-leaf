@@ -380,6 +380,8 @@ function collect(page: typeof PAGE): Facts {
     const was = document.activeElement;
     const rings = found.map(({ el, tab }) => {
       if (!tab) return null;
+      // Seen unfocused first, even if it has the focus now.
+      if (document.activeElement === el) el.blur();
       const before = look(el);
       const ringBefore = page.outlined(el);
       el.focus({ preventScroll: true, focusVisible: true });
