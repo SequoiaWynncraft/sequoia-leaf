@@ -198,6 +198,24 @@ describe("an order hung", () => {
     }
   });
 
+  test("an old order for things off the ground comes down on the page's copy as on Leaf's, and the page hears what Leaf hung instead", () => {
+    const leaf = F.create({ seed: 3, tier: 1 });
+    const old = leaf.board[0];
+    if (!old) throw new Error("no board");
+    for (const k of F.ALL_ITEMS) old.want[k] = 0;
+    old.want[F.item("deadfall")] = 40;
+    const page = F.decode(F.encode(leaf, { seed: false }), leaf.land);
+    if (!page) throw new Error("no copy");
+    // Tier 2 opens on both, as finishing tier 1's commission opens it; each fills its board.
+    for (const y of [leaf, page]) {
+      y.open = { ...y.open, tier: 2 };
+      F.fillBoard(y);
+    }
+    expect(page.board.map((o) => o.id)).not.toContain(old.id);
+    expect(F.hear(page, leaf.board)).toBe(true);
+    expect(page.board.map((o) => o.id)).toEqual(leaf.board.map((o) => o.id));
+  });
+
   test("a yard with no seed, as the page's copy is, hangs none", () => {
     const y = F.create({ seed: 3, tier: 4 });
     for (let k = 0; k < F.ORDER_WAITS; k++) F.step(y);
