@@ -25,6 +25,7 @@ describe("settings", () => {
   it("falls back to what local development needs", () => {
     expect(readSettings({})).toEqual({
       port: 3000,
+      metrics: { hostname: "0.0.0.0", port: 9095 },
       databasePath: "data/leaf.db",
       backupDirectory: "data/backups",
       backendUrl: "https://api.seqwawa.com",
@@ -38,6 +39,17 @@ describe("settings", () => {
       gameSignInUrl: "https://api.seqwawa.com/auth/web/start?return_to=",
       gameLeafSpending: false,
     });
+  });
+
+  it("serves metrics where LEAF_METRICS_BIND says, and refuses anything that is not host:port", () => {
+    expect(readSettings({ LEAF_METRICS_BIND: "127.0.0.1:4401" }).metrics).toEqual({
+      hostname: "127.0.0.1",
+      port: 4401,
+    });
+    expect(readSettings({ LEAF_METRICS_BIND: "[::]:9095" }).metrics).toEqual({ hostname: "::", port: 9095 });
+    for (const bad of ["9095", "0.0.0.0", "0.0.0.0:70000", "http://0.0.0.0:9095"]) {
+      expect(() => readSettings({ LEAF_METRICS_BIND: bad })).toThrow();
+    }
   });
 
   it("treats a variable set to nothing as left out", () => {

@@ -14,7 +14,21 @@ import {
   type ToClient,
   visitRoom,
 } from "@sequoia-leaf/core";
-import { Clock, Context, Data, Deferred, Effect, Exit, Fiber, Latch, Layer, Option, Schema } from "effect";
+import {
+  Cause,
+  Clock,
+  Context,
+  Data,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Latch,
+  Layer,
+  Metric,
+  Option,
+  Schema,
+} from "effect";
 import { SecureRandom } from "effect/crypto";
 import { SqlClient } from "effect/sql";
 
@@ -22,6 +36,7 @@ import { Allowances } from "../allowance.ts";
 import { AppConfig } from "../config.ts";
 import { Ledger } from "../ledger/store.ts";
 import { Watchers } from "../live/watchers.ts";
+import { type CommandOutcome, type JobPhase, playCommands, playJobSeconds } from "../metrics.ts";
 import { type CoinEntry, Coins } from "./coins.ts";
 import { Copies } from "./copies.ts";
 import type { Attempt, Held, Played } from "./games.ts";
@@ -102,8 +117,13 @@ interface Job {
   /** The moment it arrived, read once, as it took its place; and on the monotonic clock, in nanoseconds. */
   readonly at: number;
   readonly arrived: bigint;
-  /** Where its time has gone so far, in nanoseconds: waiting (for its turn, then for slices) and in SQLite. */
+  /**
+   * Where its time has gone so far, in nanoseconds: waiting (for its turn, then for slices), running
+   * the state on in its slices, reading and writing the state's text, and in SQLite.
+   */
   waited: bigint;
+  simulated: bigint;
+  coded: bigint;
   sqlite: bigint;
   /** All but a batch: its caller has gone while it waited, and it is never done. */
   gone: boolean;
@@ -284,6 +304,10 @@ const standsStill = (held: Held, player: PlayerId, guest: boolean) =>
 const failed = (player: PlayerId, game: string, defect: unknown) =>
   Effect.annotateLogs(Effect.logError(`Tending the ${game} state of ${player} failed`, defect), { player, game });
 
+/** Counts `n` play commands of a game by what became of them. */
+const outcome = (game: string, what: CommandOutcome, n: number) =>
+  n === 0 ? Effect.void : Metric.update(playCommands({ game, outcome: what }), n);
+
 /** The commands of a batch with their ids, or why the batch is not one. */
 function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] | string {
   if (commands.length > MOST_FLUSHED) {
@@ -431,6 +455,7 @@ export class Play extends Context.Service<
             const began = nanos();
             ask.job.waited += began - ask.asked;
             const ran = yield* Effect.exit(Effect.sync(() => ask.work(() => nanos() - began < SLICE_NS)));
+            ask.job.simulated += nanos() - began;
             Deferred.doneUnsafe(ask.done, ran);
             // One turn of the thread: whatever waits for it runs before the next slice; with nothing
             // waiting, the next comes at once.
@@ -448,18 +473,40 @@ export class Play extends Context.Service<
             Effect.sync(() => void (job.sqlite += nanos() - began)),
           );
         });
-      /** Tells the meter, if there is one, where a job's time went. */
+      /** Does `make` for a job, its time counted as the job's reading or writing the state's text. */
+      const coded = <A>(job: Job, make: () => A): A => {
+        const began = nanos();
+        try {
+          return make();
+        } finally {
+          job.coded += nanos() - began;
+        }
+      };
+      /** Counts where a job's time went (`leaf_play_job_seconds`), and tells the meter, if there is one. */
       const measured = (job: Job) =>
-        Effect.sync(() => {
-          if (meter === null) return;
+        Effect.suspend(() => {
           const total = nanos() - job.arrived;
-          meter({
-            game: job.lane.played.id,
+          const game = job.lane.played.id;
+          const phases: Record<JobPhase, bigint> = {
+            queue: job.waited,
+            simulation: job.simulated,
+            codec: job.coded,
+            sqlite: job.sqlite,
+            other: total - job.waited - job.simulated - job.coded - job.sqlite,
+          };
+          meter?.({
+            game,
             kind: job.kind,
             waited: msOf(job.waited),
             sqlite: msOf(job.sqlite),
             worked: msOf(total - job.waited - job.sqlite),
           });
+          return Effect.forEach(
+            Object.entries(phases),
+            ([phase, ns]) =>
+              Metric.update(playJobSeconds({ game, kind: job.kind, phase }), Math.max(0, Number(ns)) / 1e9),
+            { discard: true },
+          );
         });
 
       /** Runs `work` for a job when its slice comes, and says what it said: whether there is further to go. */
@@ -491,13 +538,14 @@ export class Play extends Context.Service<
             if (lane.copy !== undefined || maker === null) return lane.copy;
             // The player's Coins open with the welcome as their first state is made.
             yield* coins.open(player, at);
-            const text = played.create(ctxOf(maker, at, yield* dice, 0, yield* store.awards(player)));
-            const held = played.read(text);
+            const ctx = ctxOf(maker, at, yield* dice, 0, yield* store.awards(player));
+            const text = coded(job, () => played.create(ctx));
+            const held = coded(job, () => played.read(text));
             return held && (lane.copy = { rev: null, text, guest: maker.guest, born: null, at, held, unsaved: true });
           }
           lane.copy = undefined;
           const { rev, state, guest, born, dueAt } = found.value;
-          const held = played.read(state);
+          const held = coded(job, () => played.read(state));
           if (held === null) {
             yield* Effect.logError(
               `The ${played.id} state stored for ${player} does not read; it is kept as it is`,
@@ -624,7 +672,7 @@ export class Play extends Context.Service<
             results.push(result);
             answers.push({ id, result });
           }
-          const text = game.text();
+          const text = coded(job, () => game.text());
           const changed = text !== copy.text;
           const standing = changed ? game.standing() : null;
           const won = changed ? game.awards().filter((id) => !awards.includes(id)) : [];
@@ -681,6 +729,9 @@ export class Play extends Context.Service<
             ),
           ).pipe(Effect.catchTag("SqlError", Effect.die));
           Object.assign(copy, { rev, text, guest: playing.guest, born, unsaved: false });
+          const refusedNow = answers.filter((a) => "refused" in a.result).length;
+          yield* outcome(played.id, "taken", answers.length - refusedNow);
+          yield* outcome(played.id, "refused", refusedNow);
           let answered: unknown;
           const view = () => (answered ??= game.answer(ctx(0, room)));
           if (visitors !== null && echoes !== null && echoes.length > 0) {
@@ -743,6 +794,8 @@ export class Play extends Context.Service<
             at: clock.currentTimeMillisUnsafe(),
             arrived: nanos(),
             waited: 0n,
+            simulated: 0n,
+            coded: 0n,
             sqlite: 0n,
             gone: false,
             run: Effect.suspend(() => {
@@ -812,7 +865,10 @@ export class Play extends Context.Service<
         send: (playing, played, commands) =>
           Effect.gen(function* () {
             const sent = sentOf(played, commands);
-            if (typeof sent === "string") return { status: "invalid", why: sent } satisfies Batch;
+            if (typeof sent === "string") {
+              yield* outcome(played.id, "invalid", commands.length);
+              return { status: "invalid", why: sent } satisfies Batch;
+            }
             // A batch that would take the player past either allowance is refused whole. A command
             // answered before changes nothing, and takes nothing of it: a page going away sends again
             // what may have come already.
@@ -820,13 +876,17 @@ export class Play extends Context.Service<
             for (const { id } of sent)
               if (Option.isNone(yield* store.answered(playing.playerId, played.id, id))) fresh++;
             if (!pace.take(playing.playerId, yield* Clock.currentTimeMillis, [1, fresh])) {
+              yield* outcome(played.id, "slow", sent.length);
               return { status: "slow" } satisfies Batch;
             }
             // The same commands sent again while their batch is still in its line (its page's wait ran out) wait for its answer.
             const same = `${keyOf(playing.playerId, played)} ${sent.map((one) => one.id).join(" ")}`;
             const inLine = sent.length > 0 ? sending.get(same) : undefined;
             if (inLine !== undefined) return yield* Deferred.await(inLine);
-            return yield* ask(
+            // Its commands taken and refused are counted as its transaction keeps them; those of a batch
+            // that could not be done, as failed.
+            const failing = outcome(played.id, "failed", sent.length);
+            const answered = yield* ask(
               "batch",
               playing.playerId,
               played,
@@ -838,7 +898,9 @@ export class Play extends Context.Service<
                   return (): Batch => ({ status: "done", ...done, view: done.view() });
                 }),
               sent.length > 0 ? { answers: sending, key: same } : undefined,
-            );
+            ).pipe(Effect.onError((cause) => (Cause.hasInterruptsOnly(cause) ? Effect.void : failing)));
+            if (answered.status === "unreadable") yield* failing;
+            return answered;
           }),
         visit: (player, played, caller) =>
           Effect.gen(function* () {

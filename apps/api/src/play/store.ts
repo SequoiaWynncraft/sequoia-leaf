@@ -85,6 +85,8 @@ export class PlayStore extends Context.Service<
     readonly revOf: (playerId: PlayerId, game: string) => Effect.Effect<Option.Option<number>>;
     /** The players whose state in a game was due a tend before `now`, the longest due first. */
     readonly due: (game: string, now: number) => Effect.Effect<readonly PlayerId[]>;
+    /** For each game with a state due a tend, when the one due longest was due: how far behind Leaf's tending is. */
+    readonly firstDue: Effect.Effect<ReadonlyMap<string, number>>;
     /** Says a state stored at `rev` stands still: it is due no tend until it is written again. */
     readonly rest: (playerId: PlayerId, game: string, rev: number) => Effect.Effect<void>;
     /**
@@ -181,6 +183,12 @@ export class PlayStore extends Context.Service<
           SELECT player_id AS playerId FROM play_state WHERE game = ${game} AND due_at < ${now} ORDER BY due_at
         `,
       });
+      const firstDue = SqlSchema.findAll({
+        Request: Schema.Void,
+        Result: Schema.Struct({ game: Schema.String, dueAt: Schema.Int }),
+        execute: () =>
+          sql`SELECT game, MIN(due_at) AS dueAt FROM play_state WHERE due_at IS NOT NULL GROUP BY game ORDER BY game`,
+      });
       const answered = SqlSchema.findOneOption({
         Request: Schema.Struct({ playerId: Schema.String, game: Schema.String, commandId: Schema.String }),
         Result: Answered,
@@ -241,6 +249,10 @@ export class PlayStore extends Context.Service<
             Effect.map((rows) => rows.map((row) => row.playerId)),
             Effect.orDie,
           ),
+        firstDue: firstDue(undefined).pipe(
+          Effect.map((rows) => new Map(rows.map((row) => [row.game, row.dueAt]))),
+          Effect.orDie,
+        ),
         rest: (playerId, game, rev) =>
           sql`UPDATE play_state SET due_at = NULL WHERE player_id = ${playerId} AND game = ${game} AND rev = ${rev}`.pipe(
             Effect.asVoid,

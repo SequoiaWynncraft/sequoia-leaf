@@ -1,9 +1,10 @@
 import { BunRuntime } from "@effect/platform-bun";
-import { Cause, Effect, Exit, Layer, Logger, References, Runtime } from "effect";
+import { Cause, Effect, Exit, Layer, Logger, Metric, References, Runtime } from "effect";
 
 import { serveLeaf, Services } from "./app.ts";
 import { AppConfig } from "./config.ts";
 import { EveryMinute, Startup } from "./jobs.ts";
+import { MetricsListener, RuntimeMetrics } from "./metrics.ts";
 import { Stop } from "./stop.ts";
 
 const Server = Layer.unwrap(
@@ -21,6 +22,8 @@ const Server = Layer.unwrap(
 // log back in. Should that take over two seconds, the process exits anyway.
 Layer.mergeAll(
   Startup,
+  MetricsListener,
+  RuntimeMetrics,
   Stop.begins("server").pipe(
     Layer.provideMerge(Server),
     Layer.provideMerge(Stop.begins("scheduled_work")),
@@ -30,6 +33,8 @@ Layer.mergeAll(
   Layer.provide(Stop.begins("services").pipe(Layer.provideMerge(Services))),
   Layer.provide(Stop.layer({ deadline: "2 seconds", overdue: Effect.sync(() => process.exit(1)) })),
   Layer.provide(Logger.layer([Logger.consoleJson])),
+  // Leaf's own metrics, which `/metrics` on the metrics listener serves.
+  Layer.provide(Layer.succeed(Metric.MetricRegistry)(new Map())),
   // Nothing collects traces, so spans would only cost time on every request.
   Layer.provide(Layer.succeed(References.TracerEnabled)(false)),
   Layer.launch,

@@ -10,6 +10,7 @@ import {
   Layer,
   Logger,
   ManagedRuntime,
+  Metric,
   Option,
   Redacted,
   References,
@@ -29,6 +30,7 @@ import { LeafInstance } from "../src/instance.ts";
 import { Ledger } from "../src/ledger/store.ts";
 import { Live, LiveTuning } from "../src/live/live.ts";
 import { Watchers } from "../src/live/watchers.ts";
+import { MetricsListener, metricsText, RuntimeMetrics } from "../src/metrics.ts";
 import { type JobTimes, Play, PlayMeter } from "../src/play/service.ts";
 import { PlayStore } from "../src/play/store.ts";
 
@@ -103,7 +105,12 @@ export interface Fakes {
   readonly log?: boolean;
   /** Told where each of the play service's jobs spent its time (`PlayMeter`), for the load test. */
   readonly meter?: (times: JobTimes) => void;
+  /** Where Leaf's warnings and errors go, as the JSON logger would write them, for tests that read them. */
+  readonly logged?: LogLine[];
 }
+
+/** A line Leaf logged, as the JSON logger writes it. */
+export type LogLine = typeof Logger.formatStructured extends Logger.Logger<unknown, infer Line> ? Line : never;
 
 /** Dice that fall the same way every time from the same seed: a counter, mixed (for tests and play only). */
 export function steadyDice(seed: number): SecureRandom.SecureRandom["Service"] {
@@ -168,9 +175,18 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     Layer.succeed(PlayMeter)(fakes.meter ?? null),
     BunServices.layer,
     fakes.dice === undefined ? SecureRandom.layerWebCrypto : Layer.succeed(SecureRandom.SecureRandom)(fakes.dice),
-    fakes.log === true
-      ? Layer.mergeAll(Logger.layer([Logger.consoleJson]), Layer.succeed(References.MinimumLogLevel)("Warn"))
+    fakes.log === true || fakes.logged !== undefined
+      ? Layer.mergeAll(
+          Logger.layer(
+            fakes.logged === undefined
+              ? [Logger.consoleJson]
+              : [Logger.map(Logger.formatStructured, (line) => void fakes.logged?.push(line))],
+          ),
+          Layer.succeed(References.MinimumLogLevel)("Warn"),
+        )
       : Layer.succeed(References.MinimumLogLevel)("None"),
+    // Each Leaf counts on its own.
+    Layer.succeed(Metric.MetricRegistry)(new Map()),
   );
   const stores = Stores.pipe(Layer.provideMerge(databaseAt(configured.databasePath)), Layer.provideMerge(outside));
   // The real stores, or whatever the test puts in between; everything built on top sees the same.
@@ -218,6 +234,8 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     /** Runs SQL against the database directly, as a script would. */
     query: <A>(statement: (sql: SqlClient.SqlClient) => Effect.Effect<ReadonlyArray<A>, unknown>) =>
       runtime.runPromise(SqlClient.SqlClient.use(statement)),
+    /** Leaf's metrics, as Prometheus reads them from its metrics listener. */
+    metrics: () => runtime.runPromise(metricsText),
     /** Closes the database. */
     dispose: () => runtime.dispose(),
     /** The HTTP API, answering a standard Request with a standard Response, without opening a port. */
@@ -232,6 +250,14 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
         handle: (request: Request) => handler(request),
         request: (path: string, init: RequestInit = {}) => handler(new Request(`http://leaf.test${path}`, init)),
       };
+    },
+    /** Leaf's metrics listener, where the settings' `metrics` say, with the process's figures, as production starts it. */
+    listen: async () => {
+      const listener = ManagedRuntime.make(Layer.merge(MetricsListener, RuntimeMetrics).pipe(Layer.provide(layer)), {
+        memoMap,
+      });
+      await listener.runPromise(Effect.void);
+      return { close: () => listener.dispose() };
     },
     /**
      * Leaf on a real port of this machine, served by Bun as in production, live connections and

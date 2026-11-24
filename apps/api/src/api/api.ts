@@ -39,6 +39,7 @@ import {
   Health,
   Hello,
   Me,
+  PageErrorBody,
   Person,
   PlayBody,
   Played,
@@ -150,6 +151,14 @@ export class RequestBodyErrors extends HttpApiMiddleware.Service<RequestBodyErro
   error: Invalid,
 }) {}
 
+/** Answers a page's report of its failure whose body is not one with `invalid_report`. */
+export class PageErrorBodyErrors extends HttpApiMiddleware.Service<PageErrorBodyErrors>()(
+  "leaf/api/PageErrorBodyErrors",
+  {
+    error: Invalid,
+  },
+) {}
+
 /** Answers a presence whose body is not `{ "place" }` with one of the places with `invalid_place`. */
 export class PresenceBodyErrors extends HttpApiMiddleware.Service<PresenceBodyErrors>()("leaf/api/PresenceBodyErrors", {
   error: Invalid,
@@ -187,6 +196,19 @@ export class MeApi extends HttpApiGroup.make("me")
 /** The one game route open to anyone: the game asks it to learn whether it is on a live server. */
 export class GameHelloApi extends HttpApiGroup.make("gameHello")
   .add(HttpApiEndpoint.get("hello", "/hello", { success: Hello }))
+  .prefix("/v1/game") {}
+
+/**
+ * A page telling Leaf it failed (`PAGE_ERRORS_PATH`), from Leaf's own pages only, signed in or not: a
+ * page that could not sign in says so too. Always answered 204, whether it was kept or let go of.
+ */
+export class GameReportsApi extends HttpApiGroup.make("gameReports")
+  .add(
+    HttpApiEndpoint.post("pageError", "/page-errors", {
+      payload: PageErrorBody,
+      error: [Invalid, BadOrigin],
+    }).middleware(PageErrorBodyErrors),
+  )
   .prefix("/v1/game") {}
 
 const GameParams = { game: Schema.String };
@@ -347,6 +369,7 @@ export class LeafApi extends HttpApi.make("sequoia-leaf")
   .add(RatesApi)
   .add(MeApi)
   .add(GameHelloApi)
+  .add(GameReportsApi)
   .add(GamePeopleApi)
   .add(GamePresenceApi)
   .add(GamePlayApi)
