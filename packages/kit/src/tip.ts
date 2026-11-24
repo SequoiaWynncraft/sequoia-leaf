@@ -1,7 +1,11 @@
 /**
  * Tips: what a thing is, said in a `k-tip` beside it. A tip shows while the mouse rests on its
- * owner, while the owner has the keyboard's attention, and after a long press with a finger (which
- * then does not count as a tap). One tip is on the page at a time.
+ * owner and while the owner has the keyboard's attention. With a finger, a tap shows it on a thing
+ * that does nothing else when tapped, and a long press on one that does (the tap that ends the
+ * press then does nothing); a tap anywhere else, a second tap on it, or Escape puts it away. One
+ * tip is on the page at a time, and while it shows, its owner is described by it
+ * (`aria-describedby`). A thing that only explains itself is made a button, named by its title and
+ * its words, so Tab reaches it and a screen reader says what it is.
  */
 import { add, el } from "./dom.ts";
 
@@ -17,6 +21,8 @@ export interface TipSpot {
 
 /** How long a finger must rest before its tip shows. */
 export const LONG_PRESS = 450;
+/** The one tip's id, by which its owner is described while it shows. */
+const ID = "k-tip";
 
 let box: HTMLElement | null = null;
 let owner: object | null = null;
@@ -30,7 +36,7 @@ const said = (w: Words | undefined): string => (typeof w === "function" ? w() : 
 export function tipAt(spot: TipSpot, title: string, text = "", by: object | null = null): void {
   tipOff();
   if (!title && !text) return;
-  const node = el("div", "k-tip k-float", { role: "tooltip" });
+  const node = el("div", "k-tip k-float", { role: "tooltip", id: ID });
   if (title) add(node, el("b", "k-name", { text: title }));
   if (text) add(node, el("div", "k-dim", { text }));
   document.body.append(node);
@@ -42,11 +48,14 @@ export function tipAt(spot: TipSpot, title: string, text = "", by: object | null
   node.style.transform = `translate(${x}px, ${y}px)`;
   box = node;
   owner = by;
+  if (by instanceof Element) by.setAttribute("aria-describedby", ID);
 }
 
 /** Puts the tip away; with `by`, only if it is that owner's tip. */
 export function tipOff(by: object | null = null): void {
   if (by && owner !== by) return;
+  if (owner instanceof Element && owner.getAttribute("aria-describedby") === ID)
+    owner.removeAttribute("aria-describedby");
   box?.remove();
   box = null;
   owner = null;
@@ -85,6 +94,17 @@ if (typeof window !== "undefined") {
     },
     true,
   );
+  // A press anywhere but on the tip's owner puts the tip away.
+  window.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (box && !(owner instanceof Element && e.target instanceof Node && owner.contains(e.target))) tipOff();
+    },
+    true,
+  );
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") tipOff();
+  });
   new MutationObserver(() => {
     sweep(null);
   }).observe(document.documentElement, { childList: true, subtree: true });
@@ -93,42 +113,62 @@ if (typeof window !== "undefined") {
 /** Whose tip is showing, if any. */
 export const tipOwner = (): object | null => owner;
 
-function beside(target: HTMLElement, title: Words, text: Words | undefined): void {
-  const r = target.getBoundingClientRect();
-  tipAt({ x: r.left, y: r.top, w: r.width, h: r.height }, said(title), said(text), target);
-}
-
 /**
  * Gives an element a tip. `title` is the thing's name and `text` a line about it; either may be a
  * function, asked each time the tip shows.
  */
 export function tip(target: HTMLElement, title: Words, text?: Words): void {
+  // Whether a tap does something of its own (a button, a thing whose card it opens), or only asks what it is.
+  const acts = target.matches("button, a[href], input, select, textarea, summary, [role], [data-ref]");
+  /** Named by its title and its words, as they are now: "Leaf 1,200". */
+  const name = (): void => {
+    const words = target.textContent?.trim() ?? "";
+    const t = said(title);
+    target.setAttribute("aria-label", words && words !== t ? `${t} ${words}` : t);
+  };
+  if (!acts) {
+    target.setAttribute("role", "button");
+    if (target.tabIndex < 0) target.tabIndex = 0;
+    name();
+  }
+  const beside = (): void => {
+    if (!acts) name();
+    const r = target.getBoundingClientRect();
+    tipAt({ x: r.left, y: r.top, w: r.width, h: r.height }, said(title), said(text), target);
+  };
+  const toggle = (): void => {
+    if (owner === target) tipOff(target);
+    else beside();
+  };
   let press = 0;
   let swallow = false;
+  let finger = false;
   target.addEventListener("pointerenter", (e) => {
-    if (e.pointerType === "mouse") beside(target, title, text);
+    if (e.pointerType === "mouse") beside();
   });
-  target.addEventListener("pointerleave", () => {
-    tipOff(target);
+  target.addEventListener("pointerleave", (e) => {
+    if (e.pointerType === "mouse") tipOff(target);
   });
   target.addEventListener("focus", () => {
     if (!target.matches(":focus-visible")) return;
-    beside(target, title, text);
+    beside();
     byKey = true;
   });
   target.addEventListener("blur", () => {
     tipOff(target);
   });
   target.addEventListener("pointerdown", (e) => {
-    if (e.pointerType === "mouse") {
+    finger = e.pointerType !== "mouse";
+    if (!finger) {
       tipOff(target);
       return;
     }
     swallow = false;
     window.clearTimeout(press);
+    if (!acts) return;
     press = window.setTimeout(() => {
       swallow = true;
-      beside(target, title, text);
+      beside();
       hideAt = performance.now() + 2200;
       window.setTimeout(() => {
         if (hideAt > 0 && performance.now() >= hideAt) tipOff(target);
@@ -140,15 +180,23 @@ export function tip(target: HTMLElement, title: Words, text?: Words): void {
   };
   target.addEventListener("pointerup", lift);
   target.addEventListener("pointercancel", lift);
-  // The tap that ends a long press was asking what the thing is, not using it.
   target.addEventListener(
     "click",
     (e) => {
-      if (!swallow) return;
-      swallow = false;
-      e.stopPropagation();
-      e.preventDefault();
+      // The tap that ends a long press was asking what the thing is, not using it.
+      if (swallow) {
+        swallow = false;
+        e.stopPropagation();
+        e.preventDefault();
+      } else if (!acts && finger) toggle();
     },
     true,
   );
+  if (!acts)
+    target.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      toggle();
+      byKey = owner === target;
+    });
 }
