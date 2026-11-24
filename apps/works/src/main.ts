@@ -10,175 +10,47 @@
  * with nothing to act with, no lessons or letters, and nothing told to the town. Opened by a review
  * page with a yard of its own (`S.alone`, `review/bench.ts`), it opens nothing from Leaf.
  *
- * The handles on `window.works` are for scripts from outside, and name kinds, plots and commands
- * as the wire does: a command given to `act` is read as Leaf reads one (`readCommand`).
+ * A review page works it from outside through its `Page` (`review/handles.ts` puts `window.works`
+ * on it); nothing here reaches `review/`.
  */
 
-import {
-  ALL_ITEMS,
-  check,
-  decode,
-  type Dir,
-  encode,
-  GOALS,
-  ITEM_INFO,
-  kindName,
-  kindNamed,
-  LAND,
-  MILLI,
-  NONE,
-  PIECE_BYTES,
-  plotNamed,
-  postcard,
-  power,
-  readCommand,
-  stepTo,
-  stops,
-  STUDY,
-} from "@sequoia-leaf/factory";
+import { ALL_ITEMS, ITEM_INFO, postcard, power } from "@sequoia-leaf/factory";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { keepLeaf, pageCard, serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
 import { askPerson } from "@sequoia-leaf/kit/person.ts";
 import type { Trouble } from "@sequoia-leaf/kit/play.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
-import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
-import { tipOff } from "@sequoia-leaf/kit/tip.ts";
-import { makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { must, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { stepFlights, stepWalkers } from "./actors.ts";
 import { noteArrivals } from "./arrivals.ts";
 import { TILE } from "./art/belts.ts";
 import { makeArt } from "./art/index.ts";
-import { ease, inset, inView, look, pan, resize, setCamera, setZoom, zoom, zoomSteps } from "./camera.ts";
-import { callers, capstones, forget, handOver, onNews } from "./events.ts";
+import { ease, inset, inView, look, pan, resize, setCamera, setZoom, zoomSteps } from "./camera.ts";
+import { callers, capstones, handOver, onNews } from "./events.ts";
 import { updateFx } from "./fx.ts";
-import { fingerTap, initInput, inputHooks, stepInput } from "./input.ts";
-import { layout } from "./layout.ts";
+import { initInput, inputHooks, stepInput } from "./input.ts";
 import { drawWords, drawYard, lap, picture, spent, wipe } from "./scene.ts";
-import { sheets } from "./sheets.ts";
 import { murmur, yardSfx } from "./sound.ts";
-import { builds, gradeInHand, S, type Tool, toPage } from "./state.ts";
-/** A goal's id, as a script reads it; null for none. */
-const goalId = (g: number): string | null => GOALS[g]?.id ?? null;
-/** A tool as a script names it, as the page holds it; undefined for a name that is none. */
-function toolNamed(name: Named): Tool | undefined {
-  if (name === null || name === "remove" || name === "select" || name === "paint") return name;
-  return kindNamed(name) ?? undefined;
-}
-import { type Nudge, nudge } from "./teach.ts";
-import {
-  aimAt,
-  buyLand,
-  cancel,
-  confirm,
-  keepAim,
-  paintAt,
-  place,
-  runEnd,
-  runOver,
-  runStart,
-  setGrade,
-  setTool,
-  stepClearing,
-  takeAway,
-} from "./tools.ts";
-import { troubled } from "./trouble.ts";
+import { builds, S } from "./state.ts";
+import { NO_LESSONS, type Nudge, stepLessons } from "./teach.ts";
+import { cancel, keepAim, stepClearing } from "./tools.ts";
 import { initBoard } from "./ui/board.ts";
-import { closeCard, followCards, initCard, openCard, refreshCard, riderAt } from "./ui/card.ts";
+import { followCards, initCard, refreshCard } from "./ui/card.ts";
 import { initDock, refreshDock } from "./ui/dock.ts";
 import { initHud, myYard, refreshHud } from "./ui/hud.ts";
 import { putAway, reading, showLetter } from "./ui/letter.ts";
-import { closeBanner, feed, initNotes, tickNotes } from "./ui/notes.ts";
-import { closePanel, initPanels, openPanel, panelHooks, type PanelId, refreshPanel } from "./ui/panels.ts";
+import { feed, initNotes, tickNotes } from "./ui/notes.ts";
+import { initPanels, panelHooks, refreshPanel } from "./ui/panels.ts";
 import { $ } from "./ui/parts.ts";
 import { viewHooks } from "./ui/views.ts";
-import {
-  again,
-  differences,
-  doNow,
-  gate,
-  keepScreen,
-  leadAt,
-  onRefused,
-  openYard,
-  runYard,
-  screen,
-  visitFollowing,
-  yardReads,
-} from "./yard.ts";
+import { gate, keepScreen, leadAt, onRefused, openYard, runYard, screen } from "./yard.ts";
 
 /** What the page says where no Leaf answers: the yard is the guild's server's. */
 const NEEDS_LEAF = "The Works needs the guild's server.";
-
-/** A moment staged in the yard by the play server on a developer's machine (`apps/api/test/play.ts`), for the tours. */
-type Staged =
-  | { yard: "small" | "short" | "mid" | "hall" | "study" | "large" | "new" }
-  | { text: string }
-  | { away: number }
-  | { fill: number }
-  | { feed: true | { but: Record<string, number> } };
-/** A tool as a script names it: a kind of piece by its name, the spade, Select, the brush, or nothing. */
-type Named = string | null;
-
-declare global {
-  interface Window {
-    /** Handles for looking at the yard from outside: stage a moment on the test Leaf, open things, act as a player would. */
-    works?: {
-      stage: (...ops: Staged[]) => Promise<void>;
-      /**
-       * Stops the screen running the yard on, and shows it so far (`lead`, 0 to 1) into its next
-       * tick; with `at`, the screen's own clock stands at that many seconds, so a picture can be
-       * taken twice the same.
-       */
-      hold: (on: boolean, lead?: number, at?: number) => void;
-      skip: (seconds: number) => void;
-      /**
-       * Does so many frames' work one after another, as if the screen showed `hz` of them a second,
-       * and says what one took: milliseconds by part, the picture's size in the yard's pixels, and
-       * how many pieces are on it. The yard is run that far ahead of Leaf, and waits there for it.
-       */
-      bench: (frames: number, hz?: number) => { ms: Record<string, number>; picture: Pt; pieces: number };
-      pick: (tool: Named, dir?: Dir) => void;
-      /** Chooses the grade the kind in hand is built at, as its button over the toolbar does. */
-      grade: (grade: number) => void;
-      finger: (on: boolean) => void;
-      aim: (x: number, y: number) => void;
-      tap: (x: number, y: number) => void;
-      build: (kind: string, x: number, y: number, dir?: Dir) => boolean;
-      remove: (x: number, y: number) => boolean;
-      paint: (x: number, y: number, tint: number) => boolean;
-      /** Does any command, as the wire has it, as the member would, and says why it is refused, or null when done. */
-      act: (command: Record<string, unknown>) => string | null;
-      /**
-       * Does a command as `act` does, then the frame after it, on the yard itself: what a tap costs.
-       * Says why it was refused, the milliseconds the command took (the rules, the interface told),
-       * and the frame's by part, as `bench` gives them.
-       */
-      after: (command: Record<string, unknown>) => { why: string | null; act: number; ms: Record<string, number> };
-      drag: (x0: number, y0: number, x1: number, y1: number) => void;
-      drop: () => void;
-      confirm: () => boolean;
-      open: (panel: PanelId) => void;
-      close: () => void;
-      card: (x: number, y: number) => boolean;
-      look: (x: number, y: number) => void;
-      zoom: (by: number) => void;
-      plot: (id: string) => boolean;
-      taught: (ids: string[]) => void;
-      page: (x: number, y: number) => Pt;
-      /** What is riding a belt on a tile, as a card's reference, if anything. */
-      rider: (x: number, y: number) => string | null;
-      /** The tiles where a kind of thing stands. */
-      where: (kind: string) => Pt[];
-      /** The tiles of the pieces in trouble, as the yard's sheet counts them. */
-      trouble: () => Pt[];
-      state: () => Record<string, unknown>;
-    };
-  }
-}
 
 function refreshAll(): void {
   // What is aimed is said over the dock: of the yard as it is.
@@ -298,18 +170,13 @@ async function opened(params: URLSearchParams): Promise<{ id: string } | null> {
   return me;
 }
 
-async function boot(): Promise<void> {
+async function boot(): Promise<Page | null> {
   await fontsReady();
-  // Every sprite on sheets: a picture of the art, which needs no yard.
   const params = new URLSearchParams(location.search);
-  if (params.has("sheet")) {
-    sheets(makeArt(LAND), params.get("sheet") ?? "");
-    return;
-  }
   // Who the member is, and then the yard as Leaf has it. Without Leaf there is no yard, unless a
   // review page handed one in.
   const me = S.alone ? { id: "" } : await opened(params);
-  if (!me) return;
+  if (!me) return null;
   const art = makeArt(S.world.land);
 
   // The yard's picture, shown small and enlarged by the page; over it, the words, which also take every press.
@@ -320,7 +187,7 @@ async function boot(): Promise<void> {
   canvas.addEventListener("contextrestored", wipe);
   let wordPx = 2;
 
-  // While Leaf's yard is being taken, what is under way is put away and no press or key goes on.
+  // While Leaf's yard is being what is under way is put away and no press or key goes on.
   gate(cancel);
   initNotes();
   initPanels(art);
@@ -385,52 +252,29 @@ async function boot(): Promise<void> {
     }
   }
 
-  /** The nudge showing, since when, and the last one the camera was turned towards. */
+  /** When the lessons were last moved on, and where they stand (`teach.ts`). */
   let nudgeAt = 0;
-  let shown = "";
-  let since = 0;
-  /** A lesson learnt by doing that is said beside the interface: taken once what it asked for is done. */
-  let doing = "";
+  let lessons = NO_LESSONS;
   function nudges(): void {
     if (S.t < nudgeAt) return;
     nudgeAt = S.t + 0.4;
-    const looking = { picked: S.picked, hand: builds(S.tool) ? S.tool : null };
-    const n = reading() || S.visiting ? null : nudge(S.world, new Set(screen.taught), S.finger, looking);
-    if (doing !== "" && n?.id !== doing) {
-      // It was asked for and is no longer: done, and not said again.
-      screen.taught.push(doing);
-      doing = "";
-    }
-    if (!n) {
-      S.nudge = null;
-      S.nudgeTool = null;
-      S.nudgePart = null;
-      shown = "";
-      coach(null);
-      return;
-    }
-    if (n.id !== shown) {
-      shown = n.id;
-      since = S.t;
-      // The first lessons bring the place they are about into view.
-      if (n.lasting && S.world.done.length === 0 && !inView(n.x * TILE + 8, n.y * TILE + 8))
-        look(n.x * TILE + 8, n.y * TILE - 8);
-    }
-    // A lesson that is not learnt by doing is said for a while, and then counts as taken.
-    if (!n.lasting && S.t - since > 14) {
-      screen.taught.push(n.id);
-      return;
-    }
-    if (n.lasting && n.part !== undefined) doing = n.id;
+    const step = stepLessons(lessons, S.world, new Set(screen.taught), {
+      t: S.t,
+      hidden: reading() || S.visiting !== null,
+      finger: S.finger,
+      looking: { picked: S.picked, hand: builds(S.tool) ? S.tool : null },
+    });
+    lessons = step.lessons;
+    screen.taught.push(...step.taken);
+    const n = step.show;
+    S.nudge = n;
+    // The first lessons bring the place they are about into view.
+    if (n && step.fresh && n.lasting && S.world.done.length === 0 && !inView(n.x * TILE + 8, n.y * TILE + 8))
+      look(n.x * TILE + 8, n.y * TILE - 8);
     // About a part of the interface, it is said beside that part; about a tile, over the tile.
-    S.nudge = n.part === undefined ? { x: n.x, y: n.y, text: n.text, id: n.id } : null;
-    S.nudgeTool = n.tool;
-    S.nudgePart = n.part === "tier" || n.part === "research" || n.part === "grades" ? n.part : null;
-    coach(n.part === undefined ? null : n);
+    coach(n?.part === undefined ? null : n);
   }
 
-  /** A single pixel to take the picture onto, for `bench`. */
-  const taken = makeCanvas(1, 1).g;
   let slow = 0;
   /** How far into its next tick a yard held still is shown. */
   let heldLead = 0;
@@ -552,245 +396,47 @@ async function boot(): Promise<void> {
   refreshAll();
   requestAnimationFrame(frame);
 
-  // ---------- handles for looking at it from outside ----------
-
-  /** Does a command as the wire has it, read as Leaf reads one, through `doNow`: why it was refused, or null. */
-  function act(command: Record<string, unknown>): string | null {
-    const read = readCommand({ ...command, tick: S.world.tick });
-    if (!read) return "That is not a command";
-    const done = doNow(read);
-    refreshAll();
-    return "refused" in done ? done.why : null;
-  }
-
-  window.works = {
-    async stage(...ops) {
-      await fetch("/test/play/works", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stage: ops }),
-      });
-      await again();
-      advance(0, performance.now());
-      forget();
-      tipOff();
-      $("feed").replaceChildren();
-      closeBanner();
-      closeCard();
-      closePanel();
-      setTool(null);
-      S.picked = -1;
-      S.clearing.clear();
-      heard = Float64Array.from(S.world.depot);
-      // A yard put in place of another starts its lessons as a new one does, or with them taken; a
-      // step within the same yard (a time away, an order filled, a feed) leaves what has been taught.
-      if (ops.some((op) => "yard" in op || "text" in op))
-        screen.taught = ops.some((op) => "yard" in op && op.yard === "new")
-          ? []
-          : ["planks", "pylon", "bench", "board", "select", "short", "starved"];
-      shown = "";
-      doing = "";
-      nudgeAt = 0;
-      look(home().x, home().y, true);
-      refreshAll();
-    },
+  return {
+    advance,
+    draw,
+    refresh: refreshAll,
     hold(on, lead = 0, at) {
       S.held = on;
       heldLead = lead;
       if (at !== undefined) S.t = at;
     },
-    skip(seconds) {
-      for (let k = 0; k < seconds * 30; k++) advance(1 / 30, null);
-      refreshAll();
+    get lead() {
+      return heldLead;
     },
-    bench(frames, hz = 60) {
-      const was = spent.on;
-      const kept = spent.ms;
-      spent.on = true;
-      spent.ms = {};
-      // A copy of the yard with a clock of its own: every run begins alike, and the yard itself,
-      // and its keeping time with Leaf, are as they were afterwards.
-      const yard = S.world;
-      const held = S.held;
-      const lead = heldLead;
-      S.world = decode(encode(yard), yard.land) ?? yard;
-      S.held = true;
-      for (let k = 0; k < frames; k++) {
-        lap();
-        const ticks = (k * 10) / hz;
-        stepTo(S.world, yard.tick + Math.floor(ticks));
-        heldLead = ticks % 1;
-        advance(1 / hz, null);
-        lap("page");
-        draw(0);
-        // A browser may put off the drawing it was asked for: taking the picture makes it do it now.
-        taken.drawImage(picture, 0, 0);
-        lap("flush");
-      }
-      const ms = Object.fromEntries(Object.entries(spent.ms).map(([part, sum]) => [part, sum / frames]));
-      spent.on = was;
-      spent.ms = kept;
-      const { land, kind } = S.world;
-      const x0 = S.cam.x / TILE;
-      const y0 = S.cam.y / TILE;
-      let pieces = 0;
-      for (let i = 0; i < kind.length; i++) {
-        const x = i % land.w;
-        const y = Math.floor(i / land.w);
-        if (kind[i] !== NONE && x + 1 > x0 && x < x0 + S.view.w / TILE && y + 1 > y0 && y < y0 + S.view.h / TILE)
-          pieces++;
-      }
-      S.world = yard;
-      S.held = held;
-      heldLead = lead;
-      S.rev++;
-      return { ms, picture: { x: picture.width, y: picture.height }, pieces };
-    },
-    pick(name, dir) {
-      if (dir !== undefined) S.dir = dir;
-      const tool = toolNamed(name);
-      if (tool !== undefined) setTool(tool);
-    },
-    grade: setGrade,
-    finger(on) {
-      S.finger = on;
-      if (on) S.hover = null;
-      refreshDock();
-    },
-    aim(x, y) {
-      S.hover = S.finger ? null : { x, y };
-      aimAt(x, y);
-      refreshDock();
-    },
-    tap(x, y) {
-      if (S.tool === null) openCard(x, y);
-      else fingerTap(x, y);
-      refreshDock();
-    },
-    build(name, x, y, dir = 0) {
-      const tool = toolNamed(name);
-      if (tool === undefined || tool === null) return false;
-      S.dir = dir;
-      setTool(tool);
-      const ok = place(x, y);
-      setTool(null);
-      return ok;
-    },
-    remove: (x, y) => takeAway(x, y),
-    paint(x, y, tint) {
-      S.tint = tint;
-      return paintAt(x, y);
-    },
-    act,
-    after(command) {
-      const was = spent.on;
-      const kept = spent.ms;
-      const begun = performance.now();
-      const why = act(command);
-      const acted = performance.now() - begun;
-      spent.on = true;
-      spent.ms = {};
-      lap();
-      advance(1 / 60, null);
-      lap("page");
-      draw(performance.now());
-      taken.drawImage(picture, 0, 0);
-      lap("flush");
-      const ms = spent.ms;
-      spent.on = was;
-      spent.ms = kept;
-      return { why, act: acted, ms };
-    },
-    drag(x0, y0, x1, y1) {
-      runStart(x0, y0);
-      runOver(x1, y1);
-    },
-    drop: runEnd,
-    confirm,
-    open: openPanel,
-    close() {
-      closePanel();
-      closeCard();
-    },
-    card: openCard,
-    look(x, y) {
-      look(x * TILE + 8, y * TILE + 8, true);
-    },
-    zoom(by) {
-      zoom(by, window.innerWidth / 2, window.innerHeight / 2);
-    },
-    plot(id) {
-      const p = plotNamed(id);
-      return p !== null && buyLand(p);
-    },
-    taught(ids) {
-      screen.taught = ids;
+    restaged(lessonsTaken) {
+      heard = Float64Array.from(S.world.depot);
+      if (lessonsTaken) screen.taught = lessonsTaken;
+      lessons = NO_LESSONS;
       nudgeAt = 0;
     },
-    rider: riderAt,
-    page(x, y) {
-      return toPage(x * TILE + 8, y * TILE + 8);
-    },
-    where(name) {
-      const w = S.world;
-      const k = kindNamed(name);
-      const out: Pt[] = [];
-      for (let i = 0; i < w.kind.length; i++)
-        if (k !== null && w.kind[i] === k) out.push({ x: i % w.land.w, y: Math.floor(i / w.land.w) });
-      return out;
-    },
-    trouble() {
-      const w = S.world;
-      const found = troubled(w, S.rev);
-      return Array.from(found.tiles.subarray(0, found.count), (i) => ({
-        x: i % w.land.w,
-        y: Math.floor(i / w.land.w),
-      }));
-    },
-    state() {
-      const w = S.world;
-      return {
-        coins: balance().coins,
-        leaf: balance().leaf,
-        tick: w.tick,
-        till: w.till / MILLI,
-        board: w.board.map((o) => o.id),
-        hand: goalId(w.hand),
-        done: w.done.map(goalId),
-        tier: w.open.tier,
-        built: layout(w, S.rev).built,
-        painted: w.kind.reduce((n, k, i) => n + (k !== NONE && (w.tint[i] ?? 0) > 0 ? 1 : 0), 0),
-        nudge: S.nudge?.id ?? (shown === "" ? null : shown),
-        nudgeAt: S.nudge ? { x: S.nudge.x, y: S.nudge.y } : null,
-        nudgePart: S.nudgePart,
-        taught: screen.taught,
-        tool: typeof S.tool === "number" ? kindName(S.tool) : S.tool,
-        grade: builds(S.tool) ? gradeInHand(S.tool) : null,
-        line: w.line.map(goalId),
-        studied:
-          w.line[0] === undefined
-            ? null
-            : Object.fromEntries(Object.entries(w.got[w.line[0]] ?? {}).filter(([, n]) => n > 0)),
-        studies: w.kind.reduce((n, k) => n + (k === STUDY ? 1 : 0), 0),
-        stops: stops(w),
-        aim: S.aim,
-        run: S.run ? { legs: S.run.legs.length, cost: S.run.cost, why: S.run.why } : null,
-        mark: S.mark ? { pieces: S.mark.pieces.length, cost: S.mark.cost } : null,
-        group: S.group
-          ? { as: S.group.as, turns: S.group.turns, bad: S.group.why.filter((r) => r !== null).length }
-          : null,
-        blueprints: w.blueprints.map((b) => (b ? b.length / PIECE_BYTES : 0)),
-        panel: S.panel,
-        picked: S.picked,
-        power: power(w),
-        z: S.view.z,
-        differences: differences(),
-        reads: yardReads(),
-        check: check(w),
-        visit: S.visiting ? visitFollowing() : null,
-      };
-    },
+    nudged: () => lessons.said?.id ?? null,
   };
 }
 
-void boot();
+/**
+ * The page, once it is open: what a review page (`review/`) works it with from outside. Nothing in
+ * this folder reaches any review page.
+ */
+export interface Page {
+  /** A moment of the screen: with `now`, the page's clock, the yard is run on to Leaf's tick too. */
+  advance(dt: number, now: number | null): void;
+  draw(now: number): void;
+  /** Everything over the yard brought up to date. */
+  refresh(): void;
+  /** Stops the screen running the yard on, showing it `lead` of the way into its next tick, the screen's clock at `at`. */
+  hold(on: boolean, lead?: number, at?: number): void;
+  /** How far into its next tick a yard held still is shown. */
+  readonly lead: number;
+  /** A yard was put in place of the copy from outside: the depot's sounds and the lessons begin again from it (with these taken). */
+  restaged(lessonsTaken: string[] | null): void;
+  /** The nudge being said, by its id. */
+  nudged(): string | null;
+}
+
+/** The page as it opens: its `Page`, or nothing when it did not open (no Leaf, signed out, a visit to nobody). */
+export const page: Promise<Page | null> = boot();

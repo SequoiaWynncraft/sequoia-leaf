@@ -1,9 +1,16 @@
 /**
  * Keeping a yard, and reading it back. The yard is written as a small JSON record of its numbers,
  * goals and orders, with its pieces packed into bytes (`cells`, base64) and each of its
- * blueprints the same (`packPrint`). Reading gives back a yard it can vouch for or nothing at all: a
- * record of the wrong shape or version is refused whole; inside a good one, whatever could not have
- * come about by playing is left out, by doing again through the rules what play does (`vouch`).
+ * blueprints the same (`packPrint`). Reading is by shape first: a record of the wrong shape or
+ * version is refused whole, and nothing else is. Inside a good one, every piece is built again through
+ * the rules (`vouch`), and anything that depends on today's tuning (how much a piece holds, how far a
+ * tunnel goes, which goals, plots and grades open when) is clamped or carried, never a reason to
+ * refuse the yard; nothing a player has is lost. Goals done, plots owned, orders on the board,
+ * blueprints and line colours are carried as kept. A piece that cannot stand at the grade it was kept
+ * at stands at the highest grade the yard may build of its kind, and one that cannot stand at all
+ * (land it is not on, ground it cannot work, a kind not opened) is paid back into the till at today's
+ * price for the grade it was kept at; one of the pieces to hand goes back to hand. What a machine is
+ * told to make, and the way a splitter puts first, are kept only where the yard may set them.
  *
  * The pieces' bytes are how many pieces there are (varint), then each piece in tile order: the tiles
  * since the last piece less one (varint); a byte of its kind (low four bits), its way (two bits),
@@ -17,8 +24,10 @@
  *   4096 a splitter's ways (byte: its shut ways and the way it puts first, `packWays`)   8192 a grade above 1 (byte)
  *
  * Bytes that are not pieces are refused whole: bytes cut short or left over, a part this version
- * does not know, and any count past what the tables allow (more pieces than tiles, more kinds of
- * thing than there are, more of one thing than any piece holds, a tunnel longer than tunnels go). *
+ * does not know, more pieces than the land has tiles, and counts no yard could have (more than 255
+ * kinds of thing held, more than a million of one). What today's tables allow is no part of the
+ * shape: a thing they do not have is let go, more of one than a piece holds is clamped as it is put
+ * back, and a tunnel longer than tunnels go is a piece that cannot stand. *
  * A yard kept by the Works' first design (version 3, its pieces a list) is brought over as far as is
  * cheap (`fromFirst`): it is a new yard at the tier its story had reached. One kept by version 6
  * reads as this version's, but for the grades it did not keep (`UNGRADED`).
@@ -26,30 +35,18 @@
 import { build, isDir, keeps, plotState, refusal } from "./build.ts";
 import { fromBase64, Reader, toBase64, Writer } from "./bytes.ts";
 import { here } from "./clock.ts";
-import { BLUEPRINT, FUEL, STUDY_HOLDS, TICKS } from "./content/machines.ts";
+import { FUEL, STUDY_HOLDS, TICKS } from "./content/machines.ts";
 import { NODES } from "./content/nodes.ts";
 import { LAND, type Land } from "./land.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
-import {
-  blueprintRefusal,
-  keptOf,
-  packPieces,
-  packWays,
-  type Piece,
-  piecesOf,
-  placed,
-  TINTS,
-  unpackWays,
-} from "./pieces.ts";
+import { keptOf, packPieces, packWays, type Piece, piecesOf, placed, TINTS, unpackWays } from "./pieces.ts";
 import {
   ALL_GOALS,
   ALL_ITEMS,
-  ALL_KINDS,
   BELT,
   BLUEPRINTS_MOST,
   BOILER,
   CRATE,
-  CRATE_MOST,
   DEADFALL,
   DEPOT,
   GATHERER,
@@ -66,18 +63,14 @@ import {
   isNode,
   isRaw,
   type Item,
-  ITEM_COUNT,
   itemName,
   itemNamed,
   JOINER,
   kindNamed,
   locked,
-  MADE_BY,
   MILLI,
   nextHand,
   NONE,
-  type Open,
-  openOf,
   PACE,
   plotName,
   plotNamed,
@@ -128,13 +121,9 @@ const regraded = (k: number, grade: number | undefined, ungraded: boolean, top: 
 
 /** The parts a piece's bytes may say follow, a bit each. */
 const PARTS = 0x3ffe;
-/** The most of one thing any piece holds: a crate as large as it grows. */
-const HOLDS_MOST = Math.max(
-  FUEL,
-  STUDY_HOLDS,
-  CRATE_MOST,
-  ...ALL_KINDS.flatMap((k) => ALL_ITEMS.map((n) => holdsMost(MADE_BY[k] ?? [], n))),
-);
+/** The most kinds of thing, and of one thing, a piece's bytes may say it holds: past these the bytes are no yard's. */
+const KINDS_MOST = 255;
+const MANY_MOST = 1_000_000;
 /** A goal's id, as kept. */
 const goalId = (g: Goal): string => GOALS[g]?.id ?? "";
 
@@ -401,12 +390,12 @@ function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
     if (f > PARTS || (f & ~PARTS) !== 0) return null;
     if (f & 2) {
       const kinds = r.varint();
-      if (kinds > ITEM_COUNT) return null;
+      if (kinds > KINDS_MOST) return null;
       const pairs: [number, number][] = [];
       for (let k = 0; k < kinds; k++) {
         const thing = r.byte();
         const many = r.varint();
-        if (many > HOLDS_MOST) return null;
+        if (many > MANY_MOST) return null;
         pairs.push([thing, many]);
       }
       p.held = pairs;
@@ -418,7 +407,6 @@ function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
     if (f & 64) p.recipe = r.byte();
     if (f & 128) {
       p.span = r.byte() - 8;
-      if (p.span < -SPAN_MOST || p.span > SPAN_MOST) return null;
       const under: number[] = [];
       const along: number[] = [];
       for (let s = 0; s < p.span; s++) {
@@ -442,22 +430,28 @@ function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
 
 /**
  * Stands each kept piece again through the rules, as play would build it, and gives it the parts it
- * was kept with: everything but the far mouths of tunnels, which come with their near mouths. Says
- * which pieces could not stand (far mouths aside). A splitter, joiner or sorter kept with no grade
- * by a version that gave them none (`ungraded`) stands at the highest grade the yard may build of its kind.
+ * was kept with: everything but the far mouths of tunnels, which come with their near mouths. A
+ * splitter, joiner or sorter kept with no grade by a version that gave them none (`ungraded`) stands
+ * at the highest grade the yard may build of its kind. One that cannot stand at the grade it was kept
+ * at stands at the highest the yard may build, if it can there. Gives back what is owed for the rest,
+ * in thousandths of a Coin: the difference for each piece stood at a lower grade, and for each that
+ * could not stand at all, today's price at the grade it was kept at (but for one of the pieces to
+ * hand, which goes back to hand).
  */
-function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined, ungraded: boolean): KeptPiece[] {
+function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined, ungraded: boolean): number {
   const kept: [number, KeptPiece][] = [];
   const far: KeptPiece[] = [];
-  const left: KeptPiece[] = [];
+  let owed = 0;
   const { land } = y;
   const tiles = land.w * land.h;
+  const paidFor = (o: KeptPiece): number =>
+    o.free === true || !isKind(o.kind) ? 0 : price(o.kind, Math.max(1, o.grade ?? 1)) * MILLI;
   for (const o of pieces) {
     const i = whole(o.tile, tiles - 1);
     const k = o.kind;
     const d = o.dir;
     if (i === null || !isKind(k) || !isDir(d)) {
-      left.push(o);
+      owed += paidFor(o);
       continue;
     }
     const span = o.span ?? 0;
@@ -467,19 +461,27 @@ function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined,
     }
     const x = i % land.w;
     const z = (i - x) / land.w;
-    const grade = regraded(k, o.grade, ungraded, () => highest(y.open, k));
-    const lay = k === TUNNEL ? { span, grade } : { grade };
-    if (y.kind[i] !== NONE || refusal(y, k, x, z, Infinity, d, lay) !== null) {
-      left.push(o);
+    const kept1 = regraded(k, o.grade, ungraded, () => highest(y.open, k));
+    const may = (grade: number): boolean =>
+      y.kind[i] === NONE && refusal(y, k, x, z, Infinity, d, k === TUNNEL ? { span, grade } : { grade }) === null;
+    const top = Math.min(kept1, Math.max(1, highest(y.open, k)));
+    const grade = may(kept1) ? kept1 : top < kept1 && may(top) ? top : null;
+    if (grade === null) {
+      owed += paidFor(o);
       continue;
     }
     // Only a piece kept as one the yard had to hand takes the place of one: the rest were paid for.
     const spare = y.spare[k] ?? 0;
     if (o.free !== true) y.spare[k] = 0;
-    const did = build(y, k, x, z, d, Infinity, lay);
+    const did = build(y, k, x, z, d, Infinity, k === TUNNEL ? { span, grade } : { grade });
     if (o.free !== true) y.spare[k] = spare;
-    if (did.ok) kept.push([i, o]);
-    else left.push(o);
+    if (!did.ok) {
+      owed += paidFor(o);
+      continue;
+    }
+    kept.push([i, o]);
+    // Stood lower than it was kept at: the difference, as today's prices have it.
+    if (grade < kept1 && o.free !== true) owed += (price(k, kept1) - price(k, grade)) * MILLI;
   }
   for (const o of far) {
     const i = whole(o.tile, tiles - 1);
@@ -487,7 +489,7 @@ function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined,
       kept.push([i, o]);
   }
   for (const [i, o] of kept) unpack(y, i, o, studied);
-  return left;
+  return owed;
 }
 
 /** The version of the yards the Works' first design kept. */
@@ -551,8 +553,7 @@ function fromFirst(raw: Rec, land: Land): Yard | null {
   y.told = y.done.length;
   if (y.hand !== -1 && y.done.includes(y.hand)) hold(y, nextHand(y.open));
   // Its pieces where they stood, as far as the tier lets them stand; each that cannot is paid back.
-  for (const o of stand(y, pieces, undefined, true))
-    if (o.free !== true && !(o.kind === TUNNEL && (o.span ?? 0) < 0)) y.till += price(o.kind, 1) * MILLI;
+  y.till += stand(y, pieces, undefined, true);
   // What the till holds was not earned while away.
   y.seen = here(y);
   fillBoard(y);
@@ -611,11 +612,12 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
 }
 
 /**
- * A kept blueprint read back: real pieces the yard may keep in it, in the place it is kept in, or
- * nothing. A splitter, joiner or sorter kept in it with no grade by a version that gave them none
- * (`ungraded`) is at the highest grade of the belts and tunnels it is kept with.
+ * A kept blueprint read back as it was kept: its pieces, each of a real kind and way, or nothing.
+ * Whether the yard may set it down now is the rules' to say when it does. A splitter, joiner or
+ * sorter kept in it with no grade by a version that gave them none (`ungraded`) is at the highest
+ * grade of the belts and tunnels it is kept with.
  */
-function blueprint(open: Open, slot: number, v: KeptPrint | null | undefined, ungraded: boolean): Uint8Array | null {
+function blueprint(v: KeptPrint | null | undefined, ungraded: boolean): Uint8Array | null {
   if (!v) return null;
   const line = (): number =>
     Math.max(1, ...v.flatMap((p) => (p.kind === BELT || p.kind === TUNNEL ? [p.grade ?? 1] : [])));
@@ -623,8 +625,7 @@ function blueprint(open: Open, slot: number, v: KeptPrint | null | undefined, un
   for (const { kind: k, x, y: z, dir: d, span, recipe, open: lets, tint, ways, grade: kept } of v) {
     const grade = regraded(k, kept, ungraded, line);
     if (!isKind(k) || k === DEPOT || !isDir(d)) return null;
-    if (whole(x, BLUEPRINT.w - 1) === null || whole(z, BLUEPRINT.h - 1) === null || whole(span, SPAN_MOST) === null)
-      return null;
+    if (whole(x, 255) === null || whole(z, 255) === null || whole(span, 255) === null) return null;
     pieces.push({
       kind: k,
       x,
@@ -634,7 +635,7 @@ function blueprint(open: Open, slot: number, v: KeptPrint | null | undefined, un
       ...keptOf({ recipe, open: lets ? undefined : false, tint, ...unpackWays(ways), grade }, k),
     });
   }
-  return blueprintRefusal(open, slot, pieces) === null ? packPieces(placed(pieces, 0, 0, 0)) : null;
+  return pieces.length > 0 ? packPieces(placed(pieces, 0, 0, 0)) : null;
 }
 
 /** A standing order as it is kept, and as Leaf's answer to a batch carries it: what it wants and has had, by name. */
@@ -656,7 +657,7 @@ export function orderOf(v: unknown): Standing | null {
   const starts = whole(v.starts, 1e13);
   const asked = ALL_ITEMS.filter((n) => (want[n] ?? 0) > 0).length;
   if (id === null || title === null || from === null || line === null || pay === null || starts === null) return null;
-  if (asked < 1 || asked > 2) return null;
+  if (asked < 1) return null;
   const filled = untally(v.filled, 1e6);
   for (const n of ALL_ITEMS) filled[n] = Math.min(filled[n] ?? 0, want[n] ?? 0);
   return { id, title, from, line, want, pay, filled, starts };
@@ -717,7 +718,7 @@ function unpack(y: Yard, i: number, o: KeptPiece, studied: Goal | undefined): vo
     y.prog[i] = whole(o.prog, 16) ?? 0;
     y.via[i] = whole(o.via, 4) ?? 0;
   }
-  if (carries(k) && locked(y.open, { use: "paint" }) === null) y.tint[i] = whole(o.tint, TINTS) ?? 0;
+  if (carries(k)) y.tint[i] = whole(o.tint, TINTS) ?? 0;
   const r = holderOf(y, i);
   if (r >= 0) {
     const h = y.holders;
@@ -764,8 +765,8 @@ function unpack(y: Yard, i: number, o: KeptPiece, studied: Goal | undefined): vo
 
 /**
  * A yard from a kept record: its numbers as JSON gives them, its pieces, and its blueprints' pieces.
- * Everything is checked, and every piece built again through the rules, so what comes back is a
- * yard that could have come about by playing.
+ * Every field's shape is checked, and every piece built again through the rules; what depends on
+ * today's tuning is clamped or carried, and what cannot stand is paid back.
  */
 export function vouch(
   raw: Rec,
@@ -779,7 +780,7 @@ export function vouch(
   const at = whole(raw.at, 8.64e15);
   const till = whole(raw.till, 1e12);
   const bank = whole(raw.bank, 1e12);
-  const told = whole(raw.told, GOALS.length);
+  const told = whole(raw.told, 1e9);
   const serial = whole(raw.serial, 1e9);
   const handed = whole(raw.handed, 1e9);
   const swapAt = whole(raw.swapAt, 1e13);
@@ -810,18 +811,16 @@ export function vouch(
   Object.assign(y, { serial, handed, swapAt, sold, paid, board: [] });
   y.depot = untally(raw.depot, 1e12);
 
-  // Goals in the order they were done, each only if it could have been done then.
+  // Goals in the order they were done, each that today's tables have.
   for (const id of raw.done) {
     const g = goalNamed(id);
-    if (g === null || !ready(y.open, g)) continue;
-    y.done.push(g);
-    y.open = openOf(y.done);
+    if (g !== null && !y.done.includes(g)) y.done.push(g);
   }
   reopen(y);
   y.told = Math.min(told, y.done.length);
   for (const o of raw.board) {
     const order = standing(o, tick, y.board.at(-1)?.id ?? -1, serial);
-    if (order && y.open.board && y.board.length < y.open.hooks) y.board.push(order);
+    if (order) y.board.push(order);
   }
   // The node in hand and the line of research, each only if it could be taken up now; then what each
   // goal that could have been given anything was given, given again as play gives it, so that a goal
@@ -841,7 +840,7 @@ export function vouch(
     if (g !== null) study(y, g);
   }
   const got = isRec(raw.got) ? raw.got : {};
-  for (const g of ALL_GOALS.filter((h) => ready(y.open, h) && isRec(got[GOALS[h]?.id ?? ""]))) {
+  for (const g of ALL_GOALS.filter((h) => !y.done.includes(h) && isRec(got[GOALS[h]?.id ?? ""]))) {
     const given = untally(got[GOALS[g]?.id ?? ""], 1e6);
     y.got[g] ??= counts();
     for (const n of ALL_ITEMS) giveGoal(y, g, n, given[n] ?? 0);
@@ -850,15 +849,15 @@ export function vouch(
   // still first, as play drops it when another comes first (`begin`).
   const studied = y.line[0] !== undefined && y.line[0] === goalNamed(line[0]) ? y.line[0] : undefined;
   const ungraded = raw.v === UNGRADED;
-  y.blueprints = Array.from({ length: BLUEPRINTS_MOST }, (_, k) => blueprint(y.open, k, prints[k], ungraded));
+  y.blueprints = Array.from({ length: BLUEPRINTS_MOST }, (_, k) => blueprint(prints[k], ungraded));
 
-  // Plots in the order they were bought, each only if it could have been bought then.
+  // Plots in the order they were bought, each that the land has.
   for (const name of raw.plots) {
     const p = plotNamed(name);
-    if (p !== null && plotState(y, p).state === "for sale") y.plots.push(p);
+    if (p !== null && !y.plots.includes(p) && land.plots.some((q) => q.plot === p)) y.plots.push(p);
   }
 
-  stand(y, pieces, studied, ungraded);
+  y.till += stand(y, pieces, studied, ungraded);
 
   fillBoard(y);
   // A yard kept before it knew its owner's last command is taken as last seen at its last tick.

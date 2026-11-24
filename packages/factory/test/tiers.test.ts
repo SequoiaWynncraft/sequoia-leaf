@@ -345,7 +345,7 @@ describe("tools", () => {
 });
 
 describe("keeping goals", () => {
-  test("a yard read back has the same goals done, the same node in hand and what each was given; a goal that could not have been done then is left out", () => {
+  test("a yard read back has the same goals done, the same node in hand and what each was given; goals done out of today's order are carried", () => {
     const y = F.create({ seed: 1, tier: 1 });
     must(y, { do: "take", node: "crates" });
     F.deliver(y, F.item("plank"), 7);
@@ -353,10 +353,11 @@ describe("keeping goals", () => {
     expect(back && [back.done, back.hand, back.got[F.goal("crates")]?.[F.item("plank")]]).toEqual([y.done, y.hand, 7]);
     const rec: unknown = JSON.parse(F.encode(y));
     if (typeof rec !== "object" || rec === null) throw new Error("not a record");
-    // The hall before tier 2 opens, and a lesson out of its order, are left out.
-    const bad = F.decode(JSON.stringify({ ...rec, done: ["hall", "gears", "planks"] }));
-    expect(bad?.done.map((g) => F.GOALS[g]?.id)).toEqual(["planks"]);
-    expect(bad && id(bad)).toBe("ingots");
+    // The hall before tier 2 opens, and a lesson out of its order, are carried as kept: what opens
+    // a goal is today's tuning, and a goal done is the member's. One today's tables do not have is let go.
+    const odd = F.decode(JSON.stringify({ ...rec, done: ["hall", "gears", "planks", "nothing"] }));
+    expect(odd?.done.map((g) => F.GOALS[g]?.id)).toEqual(["hall", "gears", "planks"]);
+    expect(odd && id(odd)).toBe("ingots");
   });
 
   test("a node read back given all it wants, or more, is finished by the rule that finishes one in play: done, paid, logged, and the next in hand", () => {

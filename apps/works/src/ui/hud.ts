@@ -151,7 +151,7 @@ function bookButtons(): () => void {
       // Looked for at most once a second, and not at all in a yard of one plot or in a visit.
       wrong: S.visiting ? 0 : wrongCount(),
       panel: S.panel,
-      nudged: S.nudgePart,
+      nudged: S.nudge?.part ?? null,
     }),
     (p) => {
       set(ordersBtn, p.ready > 0 ? String(p.ready) : null);

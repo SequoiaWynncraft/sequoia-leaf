@@ -24,13 +24,13 @@ let aimed = new Uint8Array(0);
 
 /**
  * What the pieces standing in the yard can make of each thing a minute, and need of each (the rules'
- * `flow`), as of this second of the yard's clock and this count of its changes (`rev`).
+ * `flow`), as of this second of the yard's clock and the rules' count of its changes (`y.rev`).
  */
-export function yardFlows(y: Yard, rev: number): { readonly made: Float64Array; readonly needed: Float64Array } {
+export function yardFlows(y: Yard): { readonly made: Float64Array; readonly needed: Float64Array } {
   const second = Math.floor(y.tick / 10);
-  if (kept.yard === y && kept.rev === rev && kept.second === second) return kept;
+  if (kept.yard === y && kept.rev === y.rev && kept.second === second) return kept;
   kept.yard = y;
-  kept.rev = rev;
+  kept.rev = y.rev;
   kept.second = second;
   if (aimed.length !== y.kind.length) aimed = new Uint8Array(y.kind.length).fill(NONE);
   kept.made.fill(0);

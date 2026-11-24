@@ -151,7 +151,7 @@ function waysPrint(i: number): WaysPrint {
   const dir = isDir(d) ? d : 0;
   const sides = [dir, LEFT[dir], RIGHT[dir]];
   return {
-    arms: layout(w, S.rev).arms[i] ?? 0,
+    arms: layout(w).arms[i] ?? 0,
     dir,
     tint: w.tint[i] ?? 0,
     shut: sides.map((_, n) => (((w.shut[i] ?? 0) >> n) & 1) === 1),

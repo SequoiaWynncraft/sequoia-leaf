@@ -333,7 +333,8 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * `SecureRandom`. A visitor (`visit`) is shown somebody's state, and is given nothing of theirs.
  * Everybody in the state's visit room (`visitRoom`, `Watchers`) is told each batch once it is kept,
  * for a game that echoes its commands (`Game.echo`): the live wire's `did`, with each command kept,
- * in order, as the game echoes it, the stored `rev` after the batch, and the batch's answer. With
+ * in order, as the game echoes it, and each one's id as its page gave it (so the owner's own page
+ * knows its own), the stored `rev` after the batch, and the batch's answer. With
  * nobody there, nothing is made for them.
  *
  * Everything asked of one player's state in one game (an open, a visit, a batch, Leaf's own tend)
@@ -557,6 +558,8 @@ export class Play extends Context.Service<
           // Everybody visiting the state hears what the batch did, if anybody does: each command kept, as the game echoes it.
           const visitors = played.echoes ? visitRoom(played.id, player) : null;
           const echoes: unknown[] | null = visitors !== null && watchers.heard(visitors) ? [] : null;
+          // And each one's id, as the page that sent it gave it.
+          const echoed: string[] = [];
           const dropped = `A ${played.id} command left a piece Leaf does not keep`;
           /**
            * A command the rules did, refused `leaf_closed`, `members_only`, `not_enough_leaf` (its spends whose keys the
@@ -580,7 +583,10 @@ export class Play extends Context.Service<
               const amounts = payable(did.coins, balance, room);
               if (amounts === null) return { id, refused: "not_enough_coins" };
               did.keep();
-              echoes?.push(did.echo());
+              if (echoes) {
+                echoes.push(did.echo());
+                echoed.push(id);
+              }
               taken.push(...spends);
               for (const { amount, reason } of spends)
                 logs.push({ kind: LOGGED.leafSpent, data: { leaf: amount, reason } });
@@ -678,7 +684,7 @@ export class Play extends Context.Service<
           let answered: unknown;
           const view = () => (answered ??= game.answer(ctx(0, room)));
           if (visitors !== null && echoes !== null && echoes.length > 0) {
-            const did = { t: "did", rev, did: echoes, after: view() } satisfies ToClient;
+            const did = { t: "did", rev, did: echoes, after: view(), ids: echoed } satisfies ToClient;
             watchers.tell(visitors, JSON.stringify(did));
           }
           return { now: at, rev, results, view, purse };

@@ -1,0 +1,42 @@
+{
+  "text": "{\"v\":7,\"seed\":20261122,\"tick\":254627,\"charge\":0,\"at\":0,\"till\":1664,\"bank\":45,\"told\":28,\"seen\":{\"tick\":254627,\"till\":1664,\"depot\":{\"plank\":17231,\"brick\":16953,\"ingot\":17044,\"pot\":200,\"glass\":700,\"tool\":12828,\"gear\":190,\"frame\":670,\"hamper\":380,\"shell\":100,\"lantern\":400,\"engine\":60,\"pole\":60,\"brass\":60}},\"plots\":[\"yard\",\"meadow\",\"bank\",\"stream\"],\"done\":[\"planks\",\"ingots\",\"tools\",\"gears\",\"banners\",\"boiler\",\"crates\",\"culvert\",\"signs\",\"hall\",\"stew\",\"chain\",\"drawing\",\"wax\",\"rakes\",\"windows\",\"shells\",\"oilpress\",\"workshop\",\"flywheel\",\"tooling\",\"sorter\",\"planchest\",\"carttrack\",\"nightshift\",\"upgrading\",\"brassfolio\",\"lanterns\"],\"hand\":\"kits\",\"line\":[],\"got\":{\"kits\":{}},\"board\":[{\"id\":0,\"title\":\"Engines for the Treasury\",\"from\":\"The Treasury\",\"line\":\"The vault's winch gave out again. Cinfy has been looking at it and sighing.\",\"want\":{\"engine\":55},\"pay\":170,\"filled\":{},\"starts\":760},{\"id\":1,\"title\":\"Tools for Pipwick\",\"from\":\"Pipwick\",\"line\":\"Pipwick borrowed a hammer, and now nobody can find Pipwick's hammer.\",\"want\":{\"tool\":110},\"pay\":120,\"filled\":{\"tool\":110},\"starts\":760},{\"id\":2,\"title\":\"Frames for the market stalls\",\"from\":\"The market stalls\",\"line\":\"New stalls for market day. The old ones have been leaning on each other.\",\"want\":{\"frame\":120},\"pay\":110,\"filled\":{},\"starts\":760}],\"serial\":3,\"handed\":0,\"swapAt\":0,\"depot\":{\"plank\":17231,\"brick\":16953,\"ingot\":17044,\"pot\":200,\"glass\":700,\"tool\":12828,\"gear\":190,\"frame\":670,\"hamper\":380,\"shell\":100,\"lantern\":400,\"engine\":60,\"pole\":60,\"brass\":60},\"sold\":311664,\"paid\":10500000,\"cells\":\"Q9wEEACiGgECAQIIAKEIAiVABigAkxoCBgQIAQQMACAAIAAgACAApaAgAgQAIABgCEAmAQCyBgEABAYAAAAAAAAAUAwwAVAIRgGQgAgAohoBAgEGCAChCAYkgYgIBgCCmggBAAEGBgCAgBgCAMAGNIAYAgCQgBgCABABEAAJANAIRIAIJZEEAASQgBgCABABEAGQgAgk0AYYgAgAogYBAAQGB+AIEoAIAKCACACggAghjQIBFxQACQFQBkgss0YCCQQOBBcXAGAOGABgDhgAo0YCBgQHBA4OKoEEAwCCBgEDBAkAcAk4AnAHKAUwBYuCBAEACAIjsgYBAQQHAIEIBgCCGgEBAQYHAICACADFBzSgIAECAAAAMAOLggQBAAgCAKEEAACxBAAjsQQBA5gGAQd/By0J\"}",
+  "read": {
+    "pieces": 67,
+    "done": [
+      "planks",
+      "ingots",
+      "tools",
+      "gears",
+      "banners",
+      "boiler",
+      "crates",
+      "culvert",
+      "signs",
+      "hall",
+      "stew",
+      "chain",
+      "drawing",
+      "wax",
+      "rakes",
+      "windows",
+      "shells",
+      "oilpress",
+      "workshop",
+      "flywheel",
+      "tooling",
+      "sorter",
+      "planchest",
+      "carttrack",
+      "nightshift",
+      "upgrading",
+      "brassfolio",
+      "lanterns"
+    ],
+    "plots": ["yard", "meadow", "bank", "stream"],
+    "sold": 311664,
+    "paid": 10500000,
+    "bank": 45,
+    "till": 1664,
+    "blueprints": 0
+  }
+}

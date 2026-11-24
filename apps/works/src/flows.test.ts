@@ -36,7 +36,7 @@ describe("makes and needs", () => {
 
   test("what the yard can make is the rules' reckoning of what stands, kept for a second of the yard's clock", () => {
     const y = delivering();
-    const first = yardFlows(y, 0);
+    const first = yardFlows(y);
     const sawing = RECIPE[plank];
     if (!sawing) throw new Error("no plank recipe");
     // The delivering yard has one mill, sawing.
@@ -44,9 +44,10 @@ describe("makes and needs", () => {
     expect(first.needed[item("deadfall")]).toBe(makes(MILL, 1, sawing));
     // Asked again in the same second it is the same reckoning; a second on, or after a change, it is worked out again.
     const before = Array.from(first.made);
-    expect(Array.from(yardFlows(y, 0).made)).toEqual(before);
+    expect(Array.from(yardFlows(y).made)).toEqual(before);
     for (let k = 0; k < 10; k++) step(y);
-    expect(Array.from(yardFlows(y, 0).made)).toEqual(before);
-    expect(Array.from(yardFlows(y, 1).made)).toEqual(before);
+    expect(Array.from(yardFlows(y).made)).toEqual(before);
+    y.rev++;
+    expect(Array.from(yardFlows(y).made)).toEqual(before);
   });
 });

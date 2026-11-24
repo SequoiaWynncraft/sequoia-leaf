@@ -1,105 +1,18 @@
 /**
  * The wire between Leaf and the page, from the page's side. Leaf reads a command off the wire with
- * `readCommand` (`game.ts`); the page writes one with `writeAct`, its inverse. What Leaf sends the
+ * `readCommand` (`game.ts`); the page writes one with `writeCommand`, its inverse, from the commands'
+ * table (`commands.ts`). What Leaf sends the
  * page is read back here: the yard as the page is given it (`readView`), what a command did
  * (`readNotes`), and Leaf's answer to a batch (`readAnswer`), whose orders the page's copy hears
  * (`hear`). On the wire things, kinds, plots and goals go by their names; everywhere else they are
  * numbers.
  */
 import { keptOrder, orderOf } from "./codec.ts";
-import type { Act, Command, Short, View } from "./game.ts";
+import { type Wired, writeAct } from "./commands.ts";
+import type { Command, Short, View } from "./game.ts";
 import { counting } from "./orders.ts";
-import type { Piece } from "./pieces.ts";
-import { type Leg, legKind, legSpan } from "./route.ts";
-import { type Goal, goalNamed, GOALS, HOOKS_MOST, itemName, kindName, plotName } from "./tables.ts";
+import { goalNamed, HOOKS_MOST } from "./tables.ts";
 import type { News, Standing, Yard } from "./yard.ts";
-
-/** A command as it goes on the wire: what was done, with every thing, kind, plot and goal by its name. */
-export type Wired = { readonly do: Act["do"]; readonly [field: string]: unknown };
-
-const goalId = (g: Goal): string => GOALS[g]?.id ?? "";
-
-/** A piece as the wire names it: its kind, and what it is set to make. */
-const named = (p: Piece): Record<string, unknown> => ({
-  ...p,
-  kind: kindName(p.kind),
-  ...(p.recipe === undefined ? {} : { recipe: itemName(p.recipe) }),
-});
-
-/** A leg of a run as the wire names it: its kind, and nothing but what a leg holds; a belt's span, as a piece's, is 0. */
-const legOnWire = (l: Leg): Record<string, unknown> => ({
-  kind: kindName(legKind(l)),
-  x: l.x,
-  y: l.y,
-  dir: l.dir,
-  span: legSpan(l),
-  ...(l.grade === 1 ? {} : { grade: l.grade }),
-});
-
-/** What goes on the wire for an act: `readCommand` reads it back, with its tick, as the same act. */
-export function writeAct(a: Act): Wired {
-  switch (a.do) {
-    case "build":
-      return {
-        do: a.do,
-        kind: kindName(a.kind),
-        x: a.x,
-        y: a.y,
-        dir: a.dir,
-        ...(a.grade === 1 ? {} : { grade: a.grade }),
-      };
-    case "lay":
-      return {
-        do: a.do,
-        legs: a.legs.map(legOnWire),
-        ...(a.turn ? { turn: { x: a.turn.x, y: a.turn.y, dir: a.turn.dir } } : {}),
-      };
-    case "stand":
-      return { do: a.do, pieces: a.pieces.map(named) };
-    case "placeBlueprint":
-      return { do: a.do, slot: a.slot, turns: a.turns, x: a.x, y: a.y };
-    case "move":
-    case "copy":
-      return { do: a.do, tiles: a.tiles, turns: a.turns, x: a.x, y: a.y };
-    case "remove":
-      return { do: a.do, x: a.x, y: a.y };
-    case "clear":
-    case "upgrade":
-      return { do: a.do, tiles: a.tiles };
-    case "saveBlueprint":
-      return { do: a.do, slot: a.slot, tiles: a.tiles };
-    case "deleteBlueprint":
-      return { do: a.do, slot: a.slot };
-    case "turn":
-      return { do: a.do, dir: a.dir, x: a.x, y: a.y };
-    case "paint":
-      return { do: a.do, tint: a.tint, x: a.x, y: a.y };
-    case "recipe":
-    case "sort":
-    case "tipOut":
-      return { do: a.do, item: a.item === null ? null : itemName(a.item), x: a.x, y: a.y };
-    case "crate":
-      return { do: a.do, open: a.open, x: a.x, y: a.y };
-    case "way":
-      return { do: a.do, way: a.way, open: a.open, x: a.x, y: a.y };
-    case "first":
-      return { do: a.do, way: a.way, x: a.x, y: a.y };
-    case "buyPlot":
-      return { do: a.do, plot: plotName(a.plot) };
-    case "take":
-    case "queue":
-    case "unqueue":
-      return { do: a.do, node: goalId(a.node) };
-    case "study":
-    case "unstudy":
-      return { do: a.do, research: goalId(a.research) };
-    case "swap":
-    case "handOver":
-      return { do: a.do, order: a.order };
-    case "collect":
-      return { do: a.do };
-  }
-}
 
 /** A command as it goes on the wire, with the tick the page's copy stood at. */
 export const writeCommand = (c: Command): Wired & { readonly tick: number } => ({ ...writeAct(c), tick: c.tick });

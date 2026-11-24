@@ -29,7 +29,7 @@ import type { Ctx } from "@sequoia-leaf/kit/util.ts";
 import { PAINTS, TILE } from "./art/belts.ts";
 import type { Layout } from "./layout.ts";
 import { alarm, blockColour, layPlan, makePlan, paintPlan, type Plan } from "./plan.ts";
-import { builds, type Group, S, seenFrom } from "./state.ts";
+import { builds, type Group, S, seenFrom, tileNudge } from "./state.ts";
 import { troubled } from "./trouble.ts";
 
 /** A plan for each size a step is drawn at, made when first gone out to. */
@@ -69,14 +69,7 @@ const wantsPower = (kind: Kind): boolean => (DRAW[kind] ?? 0) > 0 || (GIVES[kind
  * corner is in the view, in the yard's pixels (the camera says). Gives the corner of the land on the
  * picture, for the marks.
  */
-export function drawPlan(
-  g: Ctx,
-  y: Yard,
-  L: Layout,
-  rev: number,
-  cornerX: number,
-  cornerY: number,
-): readonly [number, number] {
+export function drawPlan(g: Ctx, y: Yard, L: Layout, cornerX: number, cornerY: number): readonly [number, number] {
   const z = S.view.z;
   const P = Math.round(TILE * z);
   let plan = plans.get(P);
@@ -84,7 +77,7 @@ export function drawPlan(
   const dx = -Math.round((seenFrom(S.cam.x) + cornerX) * z);
   const dy = -Math.round((seenFrom(S.cam.y) + cornerY) * z);
   g.clearRect(0, 0, g.canvas.width, g.canvas.height);
-  paintPlan(plan, y, L, rev);
+  paintPlan(plan, y, L);
   layPlan(g, plan, y, dx, dy);
   return [dx, dy];
 }
@@ -93,7 +86,7 @@ export function drawPlan(
  * Over the plan: a mark on each piece in trouble, and what is being pointed at or is about to be
  * built, as the picture near shows them, each as a box of its tiles.
  */
-export function drawPlanMarks(g: Ctx, y: Yard, rev: number, dx: number, dy: number): void {
+export function drawPlanMarks(g: Ctx, y: Yard, dx: number, dy: number): void {
   const z = S.view.z;
   const P = Math.round(TILE * z);
   const { land } = y;
@@ -101,7 +94,7 @@ export function drawPlanMarks(g: Ctx, y: Yard, rev: number, dx: number, dy: numb
   const X = (i: number): number => dx + (i % W) * P;
   const Y = (i: number): number => dy + Math.floor(i / W) * P;
 
-  const wrong = troubled(y, rev);
+  const wrong = troubled(y);
   for (let c = 0; c < wrong.count; c++) {
     const i = wrong.tiles[c] ?? 0;
     alarm(g, P, i % W, Math.floor(i / W), dx, dy, S.t);
@@ -201,9 +194,10 @@ export function drawPlanMarks(g: Ctx, y: Yard, rev: number, dx: number, dy: numb
       box(g, x, top, P, P, bad ? CORAL : CREAM, true);
     }
   }
-  if (S.nudge) {
+  const nudged = tileNudge();
+  if (nudged) {
     // The place a nudge is about.
-    box(g, dx + S.nudge.x * P, dy + S.nudge.y * P, P, P, INK, false);
-    box(g, dx + S.nudge.x * P - 1, dy + S.nudge.y * P - 1, P + 2, P + 2, GOLD[2], true);
+    box(g, dx + nudged.x * P, dy + nudged.y * P, P, P, INK, false);
+    box(g, dx + nudged.x * P - 1, dy + nudged.y * P - 1, P + 2, P + 2, GOLD[2], true);
   }
 }

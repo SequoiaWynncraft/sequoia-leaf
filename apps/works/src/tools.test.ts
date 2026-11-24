@@ -8,7 +8,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  ALL_GOALS,
   ALL_KINDS,
   at,
   BELT,
@@ -22,7 +21,6 @@ import {
   goal,
   GOALS,
   holderOf,
-  isNode,
   item,
   kind,
   MILLI,
@@ -34,24 +32,32 @@ import {
   put,
   SORTER,
   SPLITTER,
-  takeRefusal,
   type Yard,
 } from "@sequoia-leaf/factory";
 
-import { act, ctx, kindAt, opened, until, useFakeLeaf } from "./fake-leaf.ts";
+import { act, clear, ctx, kindAt, kindOn, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { asIf, layout } from "./layout.ts";
 import { DRAWN, draws, S } from "./state.ts";
 import {
   aimAt,
+  cancel,
   confirm,
+  dragEnd,
+  dragLost,
+  dragOver,
   hold,
   markEnd,
   markOver,
   markStart,
   pickFrom,
   place,
+  press,
+  running,
+  runOver,
+  runStart,
   setTool,
   tapBelt,
+  undo,
   usable,
 } from "./tools.ts";
 import { tileRef } from "./ui/card.ts";
@@ -168,7 +174,7 @@ describe("what is worked out from the yard and kept", () => {
     expect(GOALS[y.hand]?.id).toBe("gears");
     await opened(y);
     const meadow = plot("meadow");
-    const signed = (): boolean => layout(S.world, S.rev).signs.some((s) => s.plot.plot === meadow);
+    const signed = (): boolean => layout(S.world).signs.some((s) => s.plot.plot === meadow);
     expect(signed()).toBe(false);
     // The last gear reaches the depot as the copy runs on.
     deliver(S.world, item("gear"), 1);
@@ -181,35 +187,48 @@ describe("what is worked out from the yard and kept", () => {
     const y = yardAt(2);
     for (let x = 18; x < 22; x++) build(y, BELT, x, 13, 0, Infinity);
     await opened(y);
-    const before = layout(S.world, S.rev);
+    const before = layout(S.world);
     expect("refused" in doNow(act({ do: "paint", x: 19, y: 13, tint: 3 }))).toBe(false);
-    expect(layout(S.world, S.rev)).not.toBe(before);
+    expect(layout(S.world)).not.toBe(before);
   });
 
-  test("is kept through commands that change nothing that stands, and when Leaf's yard is taken standing the same", async () => {
+  test("is worked out again for every change the rules count, and kept while the yard only runs on", async () => {
     const y = yardAt(2);
     for (let x = 18; x < 22; x++) build(y, BELT, x, 13, 0, Infinity);
     y.till = 3 * MILLI;
     const fake = await opened(y);
-    const before = layout(S.world, S.rev);
-    const project = ALL_GOALS.find(
-      (g) => isNode(g) && GOALS[g]?.kind === "project" && takeRefusal(S.world, g) === null,
-    );
-    if (project === undefined) throw new Error("no project to take");
-    for (const c of [{ do: "collect" }, { do: "take", node: GOALS[project]?.id }]) {
-      const rev = S.rev;
-      expect("refused" in doNow(act(c))).toBe(false);
-      expect(S.rev).toBe(rev + 1);
-      expect(layout(S.world, S.rev)).toBe(before);
-    }
+    const before = layout(S.world);
+    runYard(performance.now() + 300);
+    expect(layout(S.world)).toBe(before);
+    const rev = S.world.rev;
+    expect("refused" in doNow(act({ do: "collect" }))).toBe(false);
+    expect(S.world.rev).toBe(rev + 1);
+    expect(layout(S.world)).not.toBe(before);
+    // Leaf's yard taken is another yard.
+    const kept = layout(S.world);
     await until(() => fake.leaf.posts >= 1);
     await again();
     expect(differences()).toBe(0);
-    expect(layout(S.world, S.rev)).toBe(before);
-    expect(layout(S.world, S.rev).yard).toBe(S.world);
-    // A piece built is a change to what stands.
-    expect("refused" in doNow(act({ do: "build", kind: "belt", x: 22, y: 13, dir: 0 }))).toBe(false);
-    expect(layout(S.world, S.rev)).not.toBe(before);
+    expect(layout(S.world)).not.toBe(kept);
+    expect(layout(S.world).yard).toBe(S.world);
+  });
+
+  test("is worked out again when a piece is raised where it stands, a sorter is set, or a way is put first", async () => {
+    const y = yardAt(5);
+    build(y, BELT, 18, 13, 0, Infinity);
+    build(y, SORTER, 19, 13, 0, Infinity);
+    build(y, SPLITTER, 20, 13, 0, Infinity);
+    build(y, BELT, 21, 13, 0, Infinity);
+    await opened(y, 100_000);
+    for (const c of [
+      { do: "build", kind: "belt", x: 18, y: 13, dir: 0, grade: 2 },
+      { do: "sort", x: 19, y: 13, item: "plank" },
+      { do: "first", x: 20, y: 13, way: 0 },
+    ]) {
+      const before = layout(S.world);
+      expect(doNow(act(c))).not.toHaveProperty("refused");
+      expect(layout(S.world)).not.toBe(before);
+    }
   });
 });
 
@@ -228,11 +247,11 @@ describe("the kinds this page draws", () => {
     setTool(null);
     expect(pickFrom(18, 13)).toBe(true);
     expect(S.tool).toBe(SORTER);
-    const L = layout(S.world, S.rev);
+    const L = layout(S.world);
     expect([(L.arms[at(S.world, 18, 13)] ?? 0) > 0, (L.arms[at(S.world, 19, 13)] ?? 0) > 0]).toEqual([true, true]);
     // A piece that hands into a cart stop is one whose things reach the depot: the stop is told which.
     expect("refused" in doNow(act({ do: "build", kind: "stop", x: 20, y: 13, dir: 0 }))).toBe(false);
-    const after = layout(S.world, S.rev);
+    const after = layout(S.world);
     const n = after.intoDepot.indexOf(at(S.world, 19, 13));
     expect([n >= 0, after.intoStop[n]]).toEqual([true, at(S.world, 20, 13)]);
   });
@@ -312,5 +331,93 @@ describe("the page", () => {
       });
     }
     expect(reads).toEqual([]);
+  });
+});
+
+describe("a drag ends with what is in hand", () => {
+  test("a drag that goes on after the brush was put away (as the yard gives way to Leaf's) colours nothing", async () => {
+    const y = yardAt(2);
+    for (let x = 18; x < 22; x++) build(y, BELT, x, 13, 0, Infinity);
+    for (let x = 18; x < 22; x++) build(y, BELT, x, 16, 0, Infinity);
+    const fake = await opened(y);
+    setTool("paint");
+    S.tint = 3;
+    press(19, 13, 1);
+    expect(S.world.tint[at(S.world, 19, 13)]).toBe(3);
+    // The yard gives way to Leaf's: what is under way is put away, as Escape puts it away.
+    cancel();
+    dragOver(19, 16, 1);
+    expect(S.world.tint[at(S.world, 19, 16)]).toBe(0);
+    await until(() => fake.leaf.posts >= 1);
+    expect(sent(fake.leaf)).toEqual(["paint"]);
+  });
+
+  test("losing focus mid-drag lays no run, and the belt aims again where the mouse goes", async () => {
+    const fake = await opened(yardAt(2));
+    setTool(BELT);
+    runStart(18, 13, 1);
+    runOver(21, 13, 1);
+    expect([running(), S.run?.legs.length]).toEqual([true, 4]);
+    // What the window's blur does.
+    dragLost();
+    expect([running(), S.run, S.tool]).toEqual([false, null, BELT]);
+    // A let-go that comes after all lays nothing.
+    dragEnd(1);
+    S.hover = { x: 18, y: 14 };
+    aimAt(18, 14);
+    expect([S.aim?.x, S.aim?.y]).toEqual([18, 14]);
+    await Bun.sleep(5);
+    expect(fake.leaf.posts).toBe(0);
+  });
+});
+
+describe("undo, as Leaf did things", () => {
+  test("leaves alone a piece another page built, where Leaf turned this page's own piece down", async () => {
+    const fake = await opened(yardAt(2), 100);
+    const [a] = clear(1);
+    if (!a) throw new Error("no room");
+    // Another page of the member's builds a mill on a tile this page still shows empty.
+    fake.elsewhere({ do: "build", kind: "mill", ...a, dir: 0 });
+    setTool(BELT);
+    expect(place(a.x, a.y)).toBe(true);
+    // Leaf turns the belt down, and the page takes Leaf's yard, mill and all.
+    await until(() => kindAt(a) === "mill");
+    undo();
+    await Bun.sleep(5);
+    expect([kindAt(a), kindOn(fake.leaf.yard, a)]).toEqual(["mill", "mill"]);
+    expect(sent(fake.leaf).filter((c) => c === "clear" || c === "remove")).toEqual([]);
+  });
+
+  test("undoes nothing Leaf has not done yet, and once it has, what it did", async () => {
+    const fake = await opened(yardAt(2), 100);
+    const [a] = clear(1);
+    if (!a) throw new Error("no room");
+    setTool(BELT);
+    expect(place(a.x, a.y)).toBe(true);
+    // Not answered yet: nothing is undone.
+    expect(undo()).toBe(false);
+    await until(() => fake.leaf.posts >= 1);
+    await Bun.sleep(2);
+    expect(undo()).toBe(true);
+    await until(() => fake.leaf.posts >= 2);
+    expect([kindAt(a), kindOn(fake.leaf.yard, a)]).toEqual([undefined, undefined]);
+  });
+
+  test("lets go of what no longer stands as it was done, when Leaf's yard is taken", async () => {
+    const fake = await opened(yardAt(2), 100);
+    const [a] = clear(1);
+    if (!a) throw new Error("no room");
+    setTool(BELT);
+    expect(place(a.x, a.y)).toBe(true);
+    await until(() => fake.leaf.posts >= 1);
+    await Bun.sleep(2);
+    // Another page takes that belt away and puts a mill there; this page takes Leaf's yard.
+    fake.elsewhere({ do: "remove", ...a });
+    fake.elsewhere({ do: "build", kind: "mill", ...a, dir: 0 });
+    await again();
+    expect(kindAt(a)).toBe("mill");
+    expect(undo()).toBe(false);
+    await Bun.sleep(5);
+    expect([kindAt(a), sent(fake.leaf)]).toEqual(["mill", ["build"]]);
   });
 });

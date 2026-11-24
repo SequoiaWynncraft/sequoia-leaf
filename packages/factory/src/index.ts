@@ -6,6 +6,18 @@ export * from "./build.ts";
 export { fromBase64, toBase64 } from "./bytes.ts";
 export { check } from "./check.ts";
 export * from "./clock.ts";
+export {
+  type Act,
+  type ActOf,
+  COMMANDS,
+  LOCKED,
+  readLeg,
+  readPiece,
+  REFUSED,
+  type Turned,
+  type Wired,
+  writeAct,
+} from "./commands.ts";
 export * from "./content/asks.ts";
 export * from "./content/items.ts";
 export * from "./content/machines.ts";

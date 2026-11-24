@@ -21,8 +21,8 @@ import {
 import { forgetLedger, fromLeaf } from "@sequoia-leaf/kit/purse.ts";
 import { type Reply, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 
-import { S } from "./state.ts";
-import { letGo, openYard } from "./yard.ts";
+import { S } from "../src/state.ts";
+import { letGo, openYard } from "../src/yard.ts";
 
 /** What Leaf tells the game about each call. */
 export type Ctx = Parameters<typeof WORKS.apply>[2];

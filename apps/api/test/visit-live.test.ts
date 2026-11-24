@@ -142,6 +142,8 @@ describe("a visit's room", () => {
     const did = await bobs.next("did");
     // The three commands done, in order, at the ticks Leaf did them; not the one it refused.
     expect(did.did.map((c) => readCommand(c)?.do)).toEqual(["build", "build", "lay"]);
+    // Each with its id as the owner's page gave it, so that page knows its own.
+    expect(did.ids).toEqual([`${alice}-1`, `${alice}-2`, `${alice}-3`]);
     expect(did.rev).toBe(answered.rev);
     expect(did.rev).toBeGreaterThan(visited.rev);
     // With Leaf's answer to the batch, as the owner's page was given it.

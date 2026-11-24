@@ -75,8 +75,9 @@ import { DEPOT as DEPOT_ART, FLAG_AT, gathererHat, lookOf } from "./art/machines
 import type { Sprite } from "./art/pal.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
 import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
+import { lampsIn } from "./lamps.ts";
 import { armsAt, asIf, type Layout, layout, pylonTop } from "./layout.ts";
-import { builds, draws, type Group, handGrade, type Mark, S, seenFrom } from "./state.ts";
+import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, tileNudge } from "./state.ts";
 
 /** What the frame needs to know about the moment: how far into the next tick it is, and how the yard is going. */
 export interface Moment {
@@ -571,7 +572,6 @@ function piece(
       stand(s, cx, foot, z, a);
       head = foot - s.c.height + 2;
       if (working && face === KILN) {
-        light(cx, foot - 6, 22, 0.8);
         if (S.t > (mem.puffAt[i] ?? 0)) {
           mem.puffAt[i] = S.t + 0.5 + hash(i, Math.floor(S.t), 3) * 0.4;
           smoke(cx + 4 + seenX, foot - 19 + seenY, "#9a82a8");
@@ -601,7 +601,6 @@ function piece(
       if (!s) break;
       stand(s, cx, foot, z, a);
       head = foot - 25;
-      if (working) light(cx - 3, foot - 10, 18, 0.7);
       break;
     }
     case CRATE: {
@@ -617,11 +616,6 @@ function piece(
       const s = m.pylon[tall ? 1 : 0]?.[real ? level : 2];
       if (s) stand(s, cx, foot, z, a);
       head = foot - (tall ? 34 : 26);
-      if (real && powered) {
-        const reach = ((REACH.pylon * y.open.reach) / 10_000) * TILE;
-        light(cx, top + 8, reach * 1.2, lamp(now.pace), true);
-        light(cx + 5, foot - (tall ? 24 : 16), 14, 0.5 * now.pace);
-      }
       break;
     }
     case WHEEL: {
@@ -643,7 +637,6 @@ function piece(
       if (s) stand(s, cx, foot, z, a);
       head = foot - 23;
       if (burning) {
-        light(cx - 2, foot - 4, 24, 0.85);
         if (S.t > (mem.puffAt[i] ?? 0)) {
           mem.puffAt[i] = S.t + 0.3 + hash(i, Math.floor(S.t * 3), 5) * 0.3;
           smoke(cx + 5 + seenX, foot - 24 + seenY, "#cdb6d8");
@@ -664,7 +657,6 @@ function piece(
       if (!s) break;
       stand(s, cx, foot, z, a);
       head = foot - 24;
-      if (real && powered) light(cx - 4, foot - 13, 15, 0.6);
       break;
     }
     case STOP: {
@@ -728,9 +720,6 @@ function grown(s: Sprite): Sprite {
   }
   return made;
 }
-
-/** How bright the lamps burn: full while there is power for everything, and visibly lower when there is not. */
-const lamp = (pace: number): number => 0.3 + 0.7 * pace * pace;
 
 function pixelRing(g: Ctx, x: number, y: number, rx: number, ry: number, col: string, gap = 1): void {
   const n = Math.max(8, Math.round((rx + ry) * 1.6));
@@ -946,10 +935,18 @@ function marked(g: Ctx, w: Yard, m: Mark, cx: number, cy: number): void {
   g.setLineDash([]);
 }
 
-/** The pieces in hand, drawn once for each place they are aimed at and kept: `for` is the aim it was drawn for, and `rev` the yard's count of changes then. */
-const held: { c: HTMLCanvasElement; g: Ctx; for: Group["at"] | null; rev: number; lost: number } = {
+/** The pieces in hand, drawn once for each place they are aimed at and kept: `for` is the aim it was drawn for, of that yard at that count of its changes. */
+const held: {
+  c: HTMLCanvasElement;
+  g: Ctx;
+  for: Group["at"] | null;
+  yard: Yard | null;
+  rev: number;
+  lost: number;
+} = {
   ...makeCanvas(1, 1, true),
   for: null,
+  yard: null,
   rev: -1,
   lost: -1,
 };
@@ -966,9 +963,10 @@ const ROOM = { side: 8, top: 40, bottom: 8 } as const;
  */
 function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, cy: number): void {
   const box = boxOf(grp.at);
-  if (held.for !== grp.at || held.rev !== S.rev || held.lost !== lost) {
+  if (held.for !== grp.at || held.yard !== w || held.rev !== w.rev || held.lost !== lost) {
     held.for = grp.at;
-    held.rev = S.rev;
+    held.yard = w;
+    held.rev = w.rev;
     held.lost = lost;
     const tiles = tilesOf(w, grp.at);
     held.c.width = box.w * TILE + ROOM.side * 2;
@@ -1163,7 +1161,41 @@ const lapping: { pic: HTMLCanvasElement; x: number; y: number; w: number; h: num
 /** Whether a tool is one that the reach of power matters to. */
 const wantsPower = (kind: Kind): boolean => (DRAW[kind] ?? 0) > 0 || (GIVES[kind] ?? 0) > 0 || kind === PYLON;
 
-/** The whole yard as it is this moment, small. */
+/**
+ * What every layer of a frame reads: the yard and its layout, the picture, where the camera is (the
+ * picture's corner in the yard, to the pixel), and the tiles whose pieces may show in it: those in
+ * view, and one more round each side (two below) for what stands taller or leans wider than its tile.
+ */
+interface Frame {
+  readonly art: Art;
+  readonly now: Moment;
+  readonly g: Ctx;
+  readonly W: number;
+  readonly H: number;
+  readonly cx: number;
+  readonly cy: number;
+  readonly w: Yard;
+  readonly L: Layout;
+  readonly tx0: number;
+  readonly ty0: number;
+  readonly tx1: number;
+  readonly ty1: number;
+  /** How far along its march each grade's belts are (a belt, splitter, joiner or sorter of each grade marches at its own pace). */
+  readonly steps: readonly number[];
+}
+
+/** The depot's foot and middle, in the picture. */
+const depotAt = (f: Frame): { dx: number; dfoot: number } => ({
+  dx: f.w.land.depot[0] * TILE + 8 - f.cx,
+  dfoot: (f.w.land.depot[1] + 2) * TILE - f.cy,
+});
+
+/**
+ * The whole yard as it is this moment, small, a layer at a time: the floor, what lies flat and rides
+ * on it, everything that stands up, the lamps cut out of the dusk, and last what is being pointed at
+ * or is about to be built. Each layer draws only what can show in the picture, judged by how far
+ * what it draws reaches.
+ */
 export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
   const g = buf.g;
   const W = buf.c.width;
@@ -1173,22 +1205,53 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
   const cx = (camX = Math.round(S.cam.x) + corner.x);
   const cy = (camY = Math.round(S.cam.y) + corner.y);
   const w = S.world;
-  const L: Layout = layout(w, S.rev);
+  const L: Layout = layout(w);
   if (S.view.z < 1) {
     // Further out than a screen pixel for each of the yard's, the yard is its plan (`far.ts`).
-    const [dx, dy] = drawPlan(g, w, L, S.rev, corner.x, corner.y);
+    const [dx, dy] = drawPlan(g, w, L, corner.x, corner.y);
     lap("plan");
-    drawPlanMarks(g, w, S.rev, dx, dy);
+    drawPlanMarks(g, w, dx, dy);
     lap("marks");
     return buf.c;
   }
   if (w !== drawn) carry(w);
   const { land } = w;
-  const gr = art.ground;
   used = 0;
   lit = 0;
+  const f: Frame = {
+    art,
+    now,
+    g,
+    W,
+    H,
+    cx,
+    cy,
+    w,
+    L,
+    tx0: Math.max(0, Math.floor(cx / TILE) - 1),
+    ty0: Math.max(0, Math.floor(cy / TILE) - 1),
+    tx1: Math.min(land.w - 1, Math.ceil((cx + W) / TILE) + 1),
+    ty1: Math.min(land.h - 1, Math.ceil((cy + H) / TILE) + 2),
+    steps: ALONG.map((along) => Math.floor((w.tick + now.lead) * along * TILE) % STEPS),
+  };
+  floorLayer(f);
+  lap("floor");
+  flatLayer(f);
+  lap("belts");
+  standingLayer(f);
+  lap("standing");
+  lampLayer(f);
+  lap("dusk");
+  marksLayer(f);
+  lap("marks");
+  return buf.c;
+}
 
-  // ---------- the floor: the forest's everywhere, and the yard's own over it where the land is the yard's ----------
+/** The floor: the forest's everywhere, the yard's own over it where the land is the yard's, the stream's glints and the rings things land with. */
+function floorLayer(f: Frame): void {
+  const { g, W, H, cx, cy, L, tx0, ty0, tx1, ty1 } = f;
+  const { land } = f.w;
+  const gr = f.art.ground;
   if (cx < gr.x || cy < gr.y || cx + W > gr.x + gr.w || cy + H > gr.y + gr.h) {
     g.fillStyle = BEYOND;
     g.fillRect(0, 0, W, H);
@@ -1209,11 +1272,6 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
       g.restore();
     }
 
-  const tx0 = Math.max(0, Math.floor(cx / TILE) - 1);
-  const ty0 = Math.max(0, Math.floor(cy / TILE) - 1);
-  const tx1 = Math.min(land.w - 1, Math.ceil((cx + W) / TILE) + 1);
-  const ty1 = Math.min(land.h - 1, Math.ceil((cy + H) / TILE) + 2);
-
   for (let ty = ty0; ty <= ty1; ty++)
     for (let tx = tx0; tx <= tx1; tx++)
       if (land.water[ty * land.w + tx] === 1) glint(g, land, tx, ty, tx * TILE - cx, ty * TILE - cy, S.t);
@@ -1224,11 +1282,12 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     pixelRing(g, r.x - cx, r.y - cy, 2 + r.r * k, (2 + r.r * k) * 0.55, r.col);
   }
   g.globalAlpha = 1;
+}
 
-  lap("floor");
-  // ---------- belts, lying flat, and what rides on them ----------
-  // A belt of each grade marches at its own pace, in its own wood, and so does a splitter, joiner or sorter.
-  const steps = ALONG.map((along) => Math.floor((w.tick + now.lead) * along * TILE) % STEPS);
+/** What lies flat: every belt laid in one go for each shape, what rides on them, the arrowheads, joiners' tops and sorters' boards over those, and each idle splitter's vane. */
+function flatLayer(f: Frame): void {
+  const { art, now, g, cx, cy, w, L, tx0, ty0, tx1, ty1, steps } = f;
+  const { land } = w;
   const step = steps[1] ?? 0;
   // Each kind in one go: its tile, at this step of the march, fills every tile of that kind.
   const flat = laidOf(L, art);
@@ -1296,9 +1355,13 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     const v = art.m.vane[sendWay(w, i, a)];
     if (v) g.drawImage(v, tx * TILE - cx + 5, ty * TILE - cy + 5);
   }
+}
 
-  lap("belts");
-  // ---------- everything that stands up ----------
+/** Everything that stands up, far to near, on the kept picture mended where it changed; then what hops into the depot, the lines between pylons and the bits that fly. */
+function standingLayer(f: Frame): void {
+  const { art, now, g, W, H, cx, cy, w, L, tx0, ty0, tx1, ty1 } = f;
+  const { land } = w;
+  const gr = art.ground;
   for (let ty = ty0; ty <= ty1; ty++)
     for (let tx = tx0; tx <= tx1; tx++) {
       const i = ty * land.w + tx;
@@ -1310,8 +1373,7 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     }
 
   // The depot, with whatever it wears.
-  const dx = land.depot[0] * TILE + 8 - cx;
-  const dfoot = (land.depot[1] + 2) * TILE - cy;
+  const { dx, dfoot } = depotAt(f);
   const dz = dfoot + cy - 1;
   const ds = art.m.depot;
   const dl = dx - ds.ax;
@@ -1335,27 +1397,22 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
       if (fly) put(fly, dl + DEPOT_ART.fly.x - 6, dt + DEPOT_ART.fly.y - 6, dz + 0.1);
     }
   }
-  const reach = (REACH.depot / 100) * TILE;
-  light(dx, dfoot - 24, reach * 1.2, lamp(now.pace), true);
-  light(dx, dfoot - 6, 34, 0.9);
-
   for (const tr of art.trunks) {
     const x = tr.x - cx;
     const y = tr.y - cy;
     if (x < -40 || x > W + 40 || y < -4 || y > H + 80) continue;
     stand(tr.s, x, y, tr.y);
   }
-  for (let f = 0; f + 2 < L.fences.length; f += 3) {
-    const fx = L.fences[f] ?? 0;
-    const fy = L.fences[f + 1] ?? 0;
-    const across = L.fences[f + 2] === 1;
+  for (let n = 0; n + 2 < L.fences.length; n += 3) {
+    const fx = L.fences[n] ?? 0;
+    const fy = L.fences[n + 1] ?? 0;
+    const across = L.fences[n + 2] === 1;
     const x = fx - cx;
     const y = fy - cy;
     if (x < -20 || x > W + 4 || y < -20 || y > H + 12) continue;
     stand(across ? art.m.fenceAcross : art.m.fenceDown, x, y, fy + (across ? 0.5 : TILE - 0.5));
   }
   stand(art.m.gate, L.gate.x - cx, L.gate.y - cy + 1, L.gate.y + 1);
-  light(L.gate.x - 6 - cx, L.gate.y - 14 - cy, 26, 0.75);
   // A sign is drawn at the foot of its tile, in front of any undergrowth on the same tile.
   for (const sign of L.signs) stand(art.sign(sign.plot.price), sign.x - cx, sign.y - cy, sign.y + 2);
 
@@ -1446,9 +1503,24 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     R(g, Math.round(b.x) - cx, Math.round(b.y) - cy, b.size, b.size, b.col);
   }
   g.globalAlpha = 1;
+}
 
-  lap("standing");
-  // ---------- dusk, and the light cut out of it ----------
+/** Every lamp and fire whose light reaches the picture (`lamps.ts`), wherever the pieces that hold them are. */
+function lamps(f: Frame): void {
+  const { w, L, cx, cy, W, H, now } = f;
+  const working = (i: number): boolean => reading(w, i) % TROUBLE === WORKING;
+  const kiln = (i: number): boolean => {
+    const r = holderOf(w, i);
+    return r >= 0 && faceOf(w, i, r) === KILN;
+  };
+  for (const l of lampsIn(w, L.gate, { x: cx, y: cy, w: W, h: H }, now.pace, working, kiln))
+    light(l.x - cx, l.y - cy, l.r, l.power, l.reach);
+}
+
+/** Dusk over everything, with every lamp and fire cut out of it; their warm glow; then the bits that glow. */
+function lampLayer(f: Frame): void {
+  const { g, W, H, cx, cy } = f;
+  lamps(f);
   const d = dusk.g;
   d.globalCompositeOperation = "copy";
   d.globalAlpha = 1;
@@ -1483,10 +1555,15 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     R(g, Math.round(b.x) - cx, Math.round(b.y) - cy, b.size, b.size, b.col);
   }
   g.globalAlpha = 1;
+}
 
-  lap("dusk");
-  // ---------- what is being pointed at, and what is about to be built ----------
+/** What is being pointed at, and what is about to be built: where power reaches, the picked and pointed-at pieces, the area marked, a run, the piece or pieces in hand, and the place a nudge is about. */
+function marksLayer(f: Frame): void {
+  const { art, now, g, cx, cy, w, tx0, ty0, tx1, ty1, steps } = f;
+  const { land } = w;
+  const step = steps[1] ?? 0;
   const tool = S.tool;
+  const { dx, dfoot } = depotAt(f);
   if (builds(tool) && wantsPower(tool)) {
     // Where power reaches, edged in gold dots, while placing something that it matters to.
     g.fillStyle = GOLD[1];
@@ -1564,7 +1641,6 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
       if (S.group) inHand(g, art, w, S.group, now, cx, cy);
     } else if (!S.run) {
       const mark = used;
-      const before = lit;
       // At the grade it would stand at: the one in hand, or the higher one of a piece of its kind it would only turn.
       const grade = S.aim.grade ?? handGrade();
       if (tool === BELT || tool === SPLITTER || tool === JOINER || tool === TUNNEL || tool === SORTER) {
@@ -1607,7 +1683,6 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
       }
       g.globalAlpha = 1;
       used = mark;
-      lit = before;
       if (tool === PYLON) {
         const ring = ((REACH.pylon * w.open.reach) / 10_000) * TILE;
         pixelRing(g, x + 8, y + 8, ring, ring, bad ? CORAL : GOLD[2], 2);
@@ -1615,16 +1690,15 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
       corners(g, x, y, TILE, TILE, bad ? CORAL : GOLD[2], true);
     }
   }
-  if (S.nudge) {
+  const nudged = tileNudge();
+  if (nudged) {
     // The place a nudge is about: a gold ring that breathes.
-    const x = S.nudge.x * TILE + 8 - cx;
-    const y = S.nudge.y * TILE + 8 - cy;
+    const x = nudged.x * TILE + 8 - cx;
+    const y = nudged.y * TILE + 8 - cy;
     const r = 9 + Math.sin(S.t * 5) * 1.5;
     pixelRing(g, x, y, r, r, GOLD[2]);
     pixelRing(g, x, y, r + 1, r + 1, GOLD[0], 2);
   }
-  lap("marks");
-  return buf.c;
 }
 
 /** The way a splitter sends its next thing: the first, from the one whose turn it is, that leads somewhere. */
@@ -1724,10 +1798,11 @@ export function drawWords(ctx: Ctx, px: number, clear: number): void {
   }
 
   // A nudge keeps quiet while the member is being told why something cannot go where they pointed.
-  if (S.nudge && !(why && S.tool !== null)) {
-    const { text } = S.nudge;
-    const hx = Math.round((S.nudge.x * TILE + 8 - cx) * z);
-    const hy = Math.round((S.nudge.y * TILE - 6 - cy) * z);
+  const nudged = tileNudge();
+  if (nudged && !(why && S.tool !== null)) {
+    const { text } = nudged;
+    const hx = Math.round((nudged.x * TILE + 8 - cx) * z);
+    const hy = Math.round((nudged.y * TILE - 6 - cy) * z);
     const bob = Math.round(Math.sin(S.t * 3)) * px;
     key += `|${text}|${hx},${hy},${bob},${clear}`;
     todo.push(() => {

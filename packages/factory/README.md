@@ -411,26 +411,32 @@ each in the yard reads back at the highest grade the yard may build of its kind,
 line goes slower than it went; each in a blueprint, at the highest grade of the belts and tunnels
 kept with it. Kept again, the yard is this version's.
 
-`decode` refuses whole a record of the wrong shape or version, and pieces' bytes cut short, left
-over, with a part it does not know or with a count past what the tables allow. A record kept while
-the rules still counted a pace has a `pace` field, which is passed over: it reads back as the same
-yard, with the same check, and is kept again without it. Inside a good one it
-gives back a yard play could have made (`vouch`), doing again through the rules what play does, and
-leaves out what it could not:
+`decode` reads shape-first. It refuses whole a record of the wrong shape or version, and pieces'
+bytes cut short, left over, with a part it does not know, more pieces than the land has tiles, or a
+count no yard could have; nothing else. A record kept while the rules still counted a pace has a
+`pace` field, which is passed over: it reads back as the same yard, with the same check, and is
+kept again without it. Inside a good one, what depends on today's tuning is clamped or carried,
+never a reason to refuse the yard, and nothing a player has is lost (`vouch`):
 
-- the goals done, in their order, only where each could have been done then; the node in hand, the
-  nodes in line after it (none in a yard kept before there was a line) and the line of research only
-  where each could be taken up;
-- what each goal that could have been given anything was given, given again through `giveGoal`, so
-  that one given all it wants is finished as in play (it pays, and Leaf logs it);
-- each order only with the tick it counts from, no later than one hung now would, and with an id
-  past the one before it and below the count of orders ever hung (`serial`); one that does not count
-  yet holds nothing;
-- each piece built again through `build`; what it is set to, its colour, what it holds, makes and has
-  made only as `locked` lets the yard (and a way put first only where it lets one, and only an open
-  way), a machine no more than it keeps; work only toward what is being made, below what that takes;
-  a Study's work and folio only while the research they were for is still first in the line;
-- each blueprint only in a place the yard has, holding pieces, grades and settings it may build.
+- the goals done, in their order, each that today's tables have, whatever opens it today; the node
+  in hand, the nodes in line after it (none in a yard kept before there was a line) and the line of
+  research only where each could be taken up now;
+- what each goal not done was given, given again through `giveGoal`, so that one given all it wants
+  is finished as in play (it pays, and Leaf logs it);
+- the plots owned that the land has; each order with the tick it counts from, no later than one hung
+  now would, and an id past the one before it and below the count of orders ever hung (`serial`),
+  however many the board holds today; one that does not count yet holds nothing;
+- each piece built again through `build`, at the grade it was kept at, or where the yard may not
+  build that one, at the highest it may (the difference paid back into the till); one that cannot
+  stand at all is paid back at today's price for its grade, and one of the pieces to hand goes back
+  to hand; its colour as kept; what it is set to, holds, makes and has made only as `locked` lets the
+  yard (and a way put first only where it lets one, and only an open way), a machine no more than it
+  keeps; work only toward what is being made, below what that takes; a Study's work and folio only
+  while the research they were for is still first in the line;
+- each blueprint as kept, whatever it holds: the rules say whether it may be set down when it is.
+
+`test/saves/` holds yards as each version kept them (7, 6 and the first design's 3), written once;
+`test/saves.test.ts` holds each to reading, with what it read when it was kept.
 
 `check` is one pass over the yard into 32 bits, for Leaf and the page to compare their copies:
 everything `decode` keeps of the rules' state, each number that may pass 32 bits by both its halves.

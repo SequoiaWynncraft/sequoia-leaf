@@ -13,28 +13,30 @@ import { LONG_PRESS } from "@sequoia-leaf/kit/tip.ts";
 
 import { pan, zoom } from "./camera.ts";
 import { callerAt } from "./events.ts";
+import { aimOf } from "./hand.ts";
 import { S, tileAt, toYard } from "./state.ts";
 import {
   aimAt,
   cancel,
   clearMark,
   confirm,
+  dragEnd,
+  dragLost,
+  dragOver,
   hold,
   markEnd,
   markOver,
   markStart,
   paintAt,
   pickFrom,
-  place,
+  press,
   rotate,
-  runEnd,
   running,
-  runOver,
-  runStart,
   setTool,
   stepGrade,
   takeAway,
   tapBelt,
+  unaim,
   undo,
 } from "./tools.ts";
 import { closeCard, openCard, refAt, riderAt, tileBox } from "./ui/card.ts";
@@ -60,8 +62,12 @@ interface Down {
   sx: number;
   sy: number;
   moved: boolean;
-  /** What this press is doing: moving the view, laying a run, marking out an area, taking things away, colouring lines, or nothing yet. */
-  doing: "pan" | "run" | "mark" | "take" | "paint" | "none";
+  /**
+   * What this press is doing: moving the view, taking things away (the spade, or the right button),
+   * or whatever the hand holds a drag for (a run of belt, a stroke of the brush, an area being
+   * marked: `hand.ts`, which ends with the hand), or nothing yet.
+   */
+  doing: "pan" | "take" | "hand" | "none";
   finger: boolean;
   last: { x: number; y: number };
 }
@@ -96,24 +102,26 @@ function ask(tx: number, ty: number, pageX: number, pageY: number): void {
 
 /** A finger's tap with a tool in hand: aim first, build on the second tap of the same tile. Paint goes on at the first. */
 export function fingerTap(tx: number, ty: number): void {
-  if (S.tool === BELT) {
+  const h = S.hand;
+  if ((h.is === "build" && h.kind === BELT) || h.is === "beltTaps") {
     tapBelt(tx, ty);
     return;
   }
-  if (S.tool === "paint") {
+  if (h.is === "paint") {
     paintAt(tx, ty);
     return;
   }
-  if (S.tool === "select" && !S.group) {
+  if (h.is === "select" && h.stage.is !== "holding") {
     // One corner, then the opposite one.
-    if (!S.corner) markStart(tx, ty);
+    if (h.stage.is !== "marking") markStart(tx, ty);
     else {
       markOver(tx, ty);
       markEnd();
     }
     return;
   }
-  if (S.aim && S.aim.x === tx && S.aim.y === ty) {
+  const a = aimOf(h);
+  if (a && a.x === tx && a.y === ty) {
     confirm();
     return;
   }
@@ -131,13 +139,15 @@ function lift(e: PointerEvent): void {
   const t = tileAt(e.clientX, e.clientY);
   if (d.finger) {
     if (d.moved || e.type === "pointercancel") return;
-    if (S.tool === null) ask(t.x, t.y, e.clientX, e.clientY);
+    if (S.hand.is === "idle") ask(t.x, t.y, e.clientX, e.clientY);
     else fingerTap(t.x, t.y);
     return;
   }
-  if (d.doing === "run") runEnd();
-  else if (d.doing === "mark") markEnd();
-  else if (d.doing === "pan" && !d.moved && e.button === 0) ask(t.x, t.y, e.clientX, e.clientY);
+  // A press the browser cancelled ends its drag without doing anything; let go, it finishes it.
+  if (d.doing === "hand") {
+    if (e.type === "pointercancel") dragLost();
+    else dragEnd(d.id);
+  } else if (d.doing === "pan" && !d.moved && e.button === 0) ask(t.x, t.y, e.clientX, e.clientY);
 }
 
 export function initInput(canvas: HTMLCanvasElement): void {
@@ -194,24 +204,17 @@ export function initInput(canvas: HTMLCanvasElement): void {
       }
       return;
     }
-    if (e.button === 1 || S.tool === null) {
+    if (e.button === 1 || S.hand.is === "idle") {
       d.doing = "pan";
       return;
     }
-    if (S.tool === "remove") {
+    if (S.hand.is === "remove") {
       d.doing = "take";
       takeAway(t.x, t.y);
-    } else if (S.tool === "paint") {
-      d.doing = "paint";
-      paintAt(t.x, t.y);
-    } else if (S.tool === BELT) {
-      d.doing = "run";
-      runStart(t.x, t.y);
-    } else if (S.tool === "select" && !S.group) {
-      d.doing = "mark";
-      markStart(t.x, t.y);
-      markOver(t.x, t.y);
-    } else place(t.x, t.y);
+      return;
+    }
+    d.doing = "hand";
+    press(t.x, t.y, e.pointerId);
   });
 
   canvas.addEventListener("pointermove", (e) => {
@@ -220,7 +223,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
     if (e.pointerType === "mouse") {
       if (!S.hover || S.hover.x !== t.x || S.hover.y !== t.y) {
         S.hover = t;
-        if (S.tool !== null && !running()) {
+        if (S.hand.is !== "idle" && !running()) {
           aimAt(t.x, t.y);
           refreshDock();
         }
@@ -254,11 +257,10 @@ export function initInput(canvas: HTMLCanvasElement): void {
       if (d.moved) pan(dx, dy);
       return;
     }
+    const fresh = t.x !== d.last.x || t.y !== d.last.y;
     if (d.doing === "pan" && d.moved) pan(dx, dy);
-    else if (d.doing === "run") runOver(t.x, t.y);
-    else if (d.doing === "mark") markOver(t.x, t.y);
-    else if (d.doing === "take" && (t.x !== d.last.x || t.y !== d.last.y)) takeAway(t.x, t.y, true);
-    else if (d.doing === "paint" && (t.x !== d.last.x || t.y !== d.last.y)) paintAt(t.x, t.y, true);
+    else if (d.doing === "take" && fresh) takeAway(t.x, t.y, true);
+    else if (d.doing === "hand" && fresh) dragOver(t.x, t.y, d.id);
     d.last = t;
   });
 
@@ -270,7 +272,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
   canvas.addEventListener("pointerleave", (e) => {
     if (e.pointerType !== "mouse") return;
     S.hover = null;
-    if (!running() && !S.finger) S.aim = null;
+    if (!running() && !S.finger && S.hand.is !== "idle") unaim();
     point(null, 0, 0);
   });
   canvas.addEventListener(
@@ -294,7 +296,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
         return;
       }
       if (k === "enter") return;
-      if (S.tool !== null) cancel();
+      if (S.hand.is !== "idle") cancel();
       else if (shown()) closeCard();
       else if (S.panel) closePanel();
       else closeBanner();
@@ -344,6 +346,8 @@ export function initInput(canvas: HTMLCanvasElement): void {
     keys.clear();
     downs.clear();
     pinch = null;
+    // Every press is lost with the focus, and the drag the hand held for one with it.
+    dragLost();
   });
 }
 

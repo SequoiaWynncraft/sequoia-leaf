@@ -25,6 +25,7 @@ import * as F from "@sequoia-leaf/factory";
 import { bareLand } from "@sequoia-leaf/factory/test/land.ts";
 
 import { S } from "../src/state.ts";
+import { installHandles } from "./handles.ts";
 
 const GRADES = [1, 2, 3] as const;
 const WAYS = [0, 1, 2, 3] as const;
@@ -190,4 +191,6 @@ F.changed(y);
 y.powered = false;
 S.world = y;
 S.alone = true;
-await import("../src/main.ts");
+const { page } = await import("../src/main.ts");
+const opened = await page;
+if (opened) installHandles(opened);

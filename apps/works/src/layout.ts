@@ -1,9 +1,9 @@
 /**
  * What the picture needs that is worked out from what stands where: the shape of every belt, the
  * lines between pylons, where the fence runs and the gate stands, which plots carry a signpost.
- * None of it changes until what stands, the plots owned or what is open does, so it is worked out
- * once for each such change and kept by exactly those (`layout`), in flat lists of numbers like the
- * yard's own: nothing is made for each piece. And the yard as it would
+ * None of it changes until the rules change the yard, so it is worked out once for each change they
+ * count (`y.rev`) and kept by it (`layout`), in flat lists of numbers like the yard's own: nothing is
+ * made for each piece. And the yard as it would
  * be with the pieces in hand set down (`asIf`), for drawing them.
  */
 
@@ -49,9 +49,9 @@ export interface Sign {
 }
 
 export interface Layout {
-  /** The yard it was last found to stand for, and the yard's count of changes then. */
-  yard: Yard;
-  rev: number;
+  /** The yard it was worked out for, and the yard's count of changes then. */
+  readonly yard: Yard;
+  readonly rev: number;
   /** The arms of every tile that carries, by tile (`Arms`); 0 for the rest. */
   arms: Uint8Array;
   /** Tiles that hand straight to the depot, or to a cart stop, which is the depot's too. */
@@ -266,87 +266,11 @@ function signs(y: Yard, owned: readonly boolean[]): Sign[] {
 let kept: Layout | null = null;
 
 /**
- * What the kept layout was worked out from, and so all it is kept by: the land; what stands on each
- * tile (its kind, its way, a tunnel's span, a splitter's shut ways, a line's colour, which the belts'
- * picture is made by); the plots owned; and the goals done, from which the rules work out what is
- * open (what is for sale, how far power reaches). Copies of the arrays read, kept and refilled.
+ * The layout for the yard as it stands, worked out once for each change the rules count (`y.rev`:
+ * a command done, a goal finished) and for each yard taken, and kept by exactly those.
  */
-let basis: {
-  land: Yard["land"];
-  kind: Uint8Array;
-  dir: Uint8Array;
-  span: Int8Array;
-  shut: Uint8Array;
-  tint: Uint8Array;
-  plots: string;
-  done: string;
-} | null = null;
-
-function alike(a: Uint8Array | Int8Array, b: Uint8Array | Int8Array): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
-
-/** Whether the yard stands as the kept layout was worked out from, with the same plots and the same goals done. */
-function stands(y: Yard): boolean {
-  const b = basis;
-  return (
-    b !== null &&
-    b.land === y.land &&
-    alike(b.kind, y.kind) &&
-    alike(b.dir, y.dir) &&
-    alike(b.span, y.span) &&
-    alike(b.shut, y.shut) &&
-    alike(b.tint, y.tint) &&
-    b.plots === y.plots.join() &&
-    b.done === y.done.join()
-  );
-}
-
-/** Keeps what a layout was worked out from (`basis`), in the arrays kept before where they fit. */
-function keepBasis(y: Yard): void {
-  const n = y.kind.length;
-  const b =
-    basis?.kind.length === n
-      ? basis
-      : {
-          land: y.land,
-          kind: new Uint8Array(n),
-          dir: new Uint8Array(n),
-          span: new Int8Array(n),
-          shut: new Uint8Array(n),
-          tint: new Uint8Array(n),
-          plots: "",
-          done: "",
-        };
-  b.land = y.land;
-  b.kind.set(y.kind);
-  b.dir.set(y.dir);
-  b.span.set(y.span);
-  b.shut.set(y.shut);
-  b.tint.set(y.tint);
-  b.plots = y.plots.join();
-  b.done = y.done.join();
-  basis = b;
-}
-
-/**
- * The layout for the yard as it stands. It is kept by what it is worked out from (`basis`), not by
- * every command: when the yard's count of changes (`rev`, `S.rev`) has moved, the yard is compared
- * with that, and the layout is worked out afresh only if something there differs. So the till
- * collected, an order handed over or a node taken costs no layout; a piece built, turned, coloured or
- * taken away, a plot bought or a goal done does. Leaf's yard taken in place of the copy keeps the
- * layout too, when it stands the same.
- */
-export function layout(y: Yard, rev: number): Layout {
-  if (kept && kept.yard === y && kept.rev === rev) return kept;
-  if (kept && stands(y)) {
-    kept.yard = y;
-    kept.rev = rev;
-    return kept;
-  }
-  keepBasis(y);
+export function layout(y: Yard): Layout {
+  if (kept && kept.yard === y && kept.rev === y.rev) return kept;
   const owned = y.land.plots.map((p) => y.plots.includes(p.plot));
   // The gate stands where the path from the depot's door meets the yard's southern fence.
   const [cx, cy] = y.land.depot;
@@ -373,7 +297,7 @@ export function layout(y: Yard, rev: number): Layout {
   }
   kept = {
     yard: y,
-    rev,
+    rev: y.rev,
     arms,
     intoDepot,
     intoStop,

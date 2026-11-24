@@ -92,6 +92,8 @@ export interface Play<View, Command extends object, Note, Short = never> {
   send(command: Command, predict?: (copy: View) => View, coins?: number): Promise<Answer<Note>>;
   /** Whether anything sent has not been answered yet. */
   waiting(): boolean;
+  /** Whether a command's id is one this page gave (as Leaf tells a room each command's id: core's `did`). */
+  owns(id: string): boolean;
   /** Hears each time Leaf's state takes the copy's place; `differs` when it is not what the page was showing. */
   onState(fn: (state: View, differs: boolean) => void): () => void;
   /** Hears each batch Leaf answers, before anything more is sent. */
@@ -591,6 +593,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
       });
     },
     waiting: () => line.at === "sending" || line.at === "waiting",
+    owns: (id) => id.startsWith(`${name}-`),
     onState(fn) {
       hearers.add(fn);
       return () => hearers.delete(fn);

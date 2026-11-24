@@ -35,7 +35,7 @@ const THANKS = [
 /** The depot's doorstep and the two sides of the gate, in the yard's pixels. */
 function spots(): { door: Pt; inside: Pt; outside: Pt; away: Pt } {
   const w = S.world;
-  const L = layout(w, S.rev);
+  const L = layout(w);
   const door = { x: w.land.depot[0] * TILE + 8, y: (w.land.depot[1] + 2) * TILE + 3 };
   return {
     door,

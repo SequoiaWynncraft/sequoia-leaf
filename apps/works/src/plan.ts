@@ -11,7 +11,7 @@
  * colour along its length, not a dot for each thing on it.
  *
  * A plan keeps what it drew, as one number for each tile, and paints again only the tiles whose
- * number has changed: when what stands changes (`S.rev`, as the layout is kept), and once for each
+ * number has changed: when the rules change the yard (`y.rev`, as the layout is kept), and once for each
  * second of the yard's clock for what the lines carry. It is used for the map (`ui/views.ts`), at
  * 3 pixels to a tile, and for the two steps the camera goes furthest out to (`far.ts`), at 8 and 4.
  */
@@ -197,7 +197,7 @@ function hand(s: Seen, y: Yard, i: number, to: number): void {
  * has changed (`rev`) or the yard's clock has reached another second, the slower things, after which
  * the plans compare what they drew with what there is.
  */
-function look(y: Yard, rev: number): Seen {
+function look(y: Yard): Seen {
   const n = y.kind.length;
   if (seen?.land !== y.land)
     seen = {
@@ -224,7 +224,7 @@ function look(y: Yard, rev: number): Seen {
       s.age[i] = 0;
     }
   const second = Math.floor(y.tick / 10);
-  const stands = s.rev !== rev || s.yard !== y;
+  const stands = s.rev !== y.rev || s.yard !== y;
   if (!stands && s.second === second) return s;
   if (stands) lie(s, y);
   // A second of the yard's clock: what has not been seen for a minute is forgotten.
@@ -246,7 +246,7 @@ function look(y: Yard, rev: number): Seen {
       else hand(s, y, i, nextOf(y, i));
     }
   s.yard = y;
-  s.rev = rev;
+  s.rev = y.rev;
   s.second = second;
   s.turn++;
   return s;
@@ -256,7 +256,7 @@ function look(y: Yard, rev: number): Seen {
  * The thing the line through a tile was last seen carrying, or `NONE`: looked at as a plan looks
  * (`rev` is the yard's count of changes). A plan paints a line this colour.
  */
-export const carriedAt = (y: Yard, rev: number, i: number): number => look(y, rev).carried[i] ?? NONE;
+export const carriedAt = (y: Yard, i: number): number => look(y).carried[i] ?? NONE;
 
 // ---------- a plan ----------
 
@@ -447,8 +447,8 @@ function tile(g: Ctx, P: number, x: number, y: number, n: number): void {
  * belts' arms) and `rev` its count of changes, as the layout is kept. Whatever the yard's size it
  * compares a number for each tile at most once a second, and paints only the tiles that differ.
  */
-export function paintPlan(p: Plan, y: Yard, L: Layout, rev: number): HTMLCanvasElement {
-  const s = look(y, rev);
+export function paintPlan(p: Plan, y: Yard, L: Layout): HTMLCanvasElement {
+  const s = look(y);
   const { land } = y;
   const n = y.kind.length;
   if (p.land !== land || p.c.width !== land.w * p.px || p.c.height !== land.h * p.px) {

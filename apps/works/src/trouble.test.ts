@@ -9,15 +9,15 @@ import { forgetTrouble, troubled, troubleGroups } from "./trouble.ts";
 const deadfall = item("deadfall");
 
 /** The tiles listed as in trouble, as (x, y). */
-const listed = (y: Yard, rev = 0): string[] => {
-  const f = troubled(y, rev);
+const listed = (y: Yard): string[] => {
+  const f = troubled(y);
   return Array.from(f.tiles.subarray(0, f.count), (i) => `${i % y.land.w},${Math.floor(i / y.land.w)}`);
 };
 /** Runs a yard on so many ticks, looking for trouble after each, as the screen does. */
-function watch(y: Yard, ticks: number, rev = 0): void {
+function watch(y: Yard, ticks: number): void {
   for (let k = 0; k < ticks; k++) {
     step(y);
-    troubled(y, rev);
+    troubled(y);
   }
 }
 
@@ -51,11 +51,11 @@ describe("the pieces in trouble", () => {
     expect(listed(y)).toEqual(["0,4"]);
     // A boiler with nothing to burn, built while the yard is watched: listed 15 ticks on.
     must(y, { do: "build", kind: "boiler", x: 9, y: 7, dir: 0 });
-    expect(listed(y, 1)).toEqual(["0,4"]);
-    watch(y, 14, 1);
-    expect(listed(y, 1)).toEqual(["0,4"]);
-    watch(y, 6, 1);
-    expect(listed(y, 1)).toEqual(["0,4", "9,7"]);
+    expect(listed(y)).toEqual(["0,4"]);
+    watch(y, 14);
+    expect(listed(y)).toEqual(["0,4"]);
+    watch(y, 6);
+    expect(listed(y)).toEqual(["0,4", "9,7"]);
   });
 
   test("a piece that goes in and out of trouble every few seconds stays listed; six seconds out of it, it is dropped", () => {
@@ -84,20 +84,21 @@ describe("the pieces in trouble", () => {
     expect(listed(y)).toEqual(["0,4"]);
     // A pylon within the depot's reach, whose light reaches the gatherer.
     must(y, { do: "build", kind: "pylon", x: 3, y: 4, dir: 0 });
-    expect(listed(y, 1)).toEqual([]);
+    expect(listed(y)).toEqual([]);
   });
 
   test("the yard is looked at once for each second of its clock, and when what stands has changed", () => {
     const y = yard();
     must(y, { do: "build", kind: "boiler", x: 9, y: 7, dir: 0 });
-    const turn = troubled(y, 0).turn;
+    const turn = troubled(y).turn;
     // The same second, asked again and again: nothing is looked at.
-    for (let k = 0; k < 5; k++) expect(troubled(y, 0).turn).toBe(turn);
+    for (let k = 0; k < 5; k++) expect(troubled(y).turn).toBe(turn);
     while (y.tick % 10 !== 9) step(y);
-    expect(troubled(y, 0).turn).toBe(turn);
+    expect(troubled(y).turn).toBe(turn);
     step(y);
-    expect(troubled(y, 0).turn).toBe(turn + 1);
-    expect(troubled(y, 1).turn).toBe(turn + 2);
+    expect(troubled(y).turn).toBe(turn + 1);
+    y.rev++;
+    expect(troubled(y).turn).toBe(turn + 2);
   });
 });
 
@@ -112,7 +113,7 @@ describe("what is wrong, in groups", () => {
     must(y, { do: "build", kind: "gatherer", x: 3, y: 6, dir: 0 });
     // The gatherer in reach gathers one thing, and has nowhere to put it.
     for (let k = 0; k < 40; k++) step(y);
-    const groups = troubleGroups(y, 0);
+    const groups = troubleGroups(y);
     expect(groups.map((g) => [g.title, g.tiles.length])).toEqual([
       ["No power here", 3],
       ["Nowhere to send its deadfall", 1],
@@ -120,7 +121,7 @@ describe("what is wrong, in groups", () => {
     ]);
     expect(groups[0]?.kinds.length).toBe(2);
     // The list's pieces are the count's.
-    expect(groups.reduce((n, g) => n + g.tiles.length, 0)).toBe(troubled(y, 0).count);
+    expect(groups.reduce((n, g) => n + g.tiles.length, 0)).toBe(troubled(y).count);
   });
 
   test("a bench full of one part and waiting for another is a group by both; with a line to send to, a gatherer is in no group", () => {
@@ -132,6 +133,6 @@ describe("what is wrong, in groups", () => {
     const row = y.row[at(y, 9, 7)] ?? -1;
     for (let n = 0; n < 4; n++) put(y.holders, row, item("plank"));
     for (let k = 0; k < 40; k++) step(y);
-    expect(troubleGroups(y, 0).map((g) => g.title)).toEqual(["Full of planks and waiting for ingots"]);
+    expect(troubleGroups(y).map((g) => g.title)).toEqual(["Full of planks and waiting for ingots"]);
   });
 });

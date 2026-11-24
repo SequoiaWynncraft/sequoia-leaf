@@ -1,8 +1,8 @@
 /**
  * Keeping a yard: `decode(encode(yard))` is the same yard with the same check; packed bytes that
- * are not pieces are refused whole, cut short at any byte or with a count past the tables; what could
- * not have come about by playing is left out; and the check changes with every part of a yard but
- * what it names as left out.
+ * are not pieces are refused whole, cut short at any byte or with a count no yard could have; what
+ * today's rules would not have, read back, is clamped, carried or paid back (`saves.test.ts` has
+ * the rest); and the check changes with every part of a yard but what it names as left out.
  */
 import { describe, expect, test } from "bun:test";
 
@@ -176,7 +176,7 @@ describe("decode refuses whole", () => {
     expect(F.decode(withCells(good, bytes))).not.toBeNull();
   });
 
-  test("a count past what the tables allow: more kinds of thing than there are, more of one than any piece holds, a tunnel too long, more pieces than tiles, a part unknown", () => {
+  test("a count no yard could have: more pieces than tiles, pairs short of the count, a part unknown; what today's tables allow is no part of the shape", () => {
     const good = F.encode(F.create({ seed: 1 }));
     // One crate on tile 5 holding `kinds` things, `many` of each, with as many pairs as `given` says.
     const crate = (kinds: number, given = kinds, many = 1): number[] => [
@@ -188,10 +188,11 @@ describe("decode refuses whole", () => {
       ...Array.from({ length: given }, (_, n) => [n, ...varint(many)]).flat(),
     ];
     expect(F.decode(withCells(good, crate(F.ITEM_COUNT)))).not.toBeNull();
-    expect(F.decode(withCells(good, crate(F.ITEM_COUNT + 1)))).toBeNull();
+    // A thing today's tables do not have, and more of one than a crate holds today, read (and are let go, or clamped).
+    expect(F.decode(withCells(good, crate(F.ITEM_COUNT + 1)))).not.toBeNull();
     expect(F.decode(withCells(good, crate(F.ITEM_COUNT + 1, F.ITEM_COUNT)))).toBeNull();
     expect(F.decode(withCells(good, crate(1, 1, F.CRATE_MOST)))).not.toBeNull();
-    expect(F.decode(withCells(good, crate(1, 1, F.CRATE_MOST + 1)))).toBeNull();
+    expect(F.decode(withCells(good, crate(1, 1, F.CRATE_MOST + 1)))).not.toBeNull();
     // A tunnel's way-in mouth passing under as many tiles as any tunnel may, under one more, and a far mouth one more back.
     const tunnel = (span: number): number[] => [
       1,
@@ -202,8 +203,9 @@ describe("decode refuses whole", () => {
       ...Array<number>(Math.max(0, span) * 2).fill(0),
     ];
     expect(F.decode(withCells(good, tunnel(F.SPAN_MOST)))).not.toBeNull();
-    expect(F.decode(withCells(good, tunnel(F.SPAN_MOST + 1)))).toBeNull();
-    expect(F.decode(withCells(good, tunnel(-(F.SPAN_MOST + 1))))).toBeNull();
+    // Longer than tunnels go today: it reads, and cannot stand.
+    expect(F.decode(withCells(good, tunnel(F.SPAN_MOST + 1)))).not.toBeNull();
+    expect(F.decode(withCells(good, tunnel(-(F.SPAN_MOST + 1))))).not.toBeNull();
     // More pieces than the land has tiles.
     expect(F.decode(withCells(good, varint(F.LAND.w * F.LAND.h + 1)))).toBeNull();
     // A part this version does not know: the lowest bit, and the one past the highest.
@@ -212,8 +214,8 @@ describe("decode refuses whole", () => {
   });
 });
 
-describe("what could not have come about by playing is left out", () => {
-  test("a piece where it may not stand, a plot not for sale, an order asking for three things", () => {
+describe("what today's rules would not have, read back", () => {
+  test("a piece where it may not stand is paid back, a plot today's tier does not sell is carried, an order out of its sequence is let go", () => {
     const y = delivering();
     const good = F.encode(y);
     // A gatherer on the first tile, which has no deposit and is not the yard's land; and one on
@@ -228,11 +230,14 @@ describe("what could not have come about by playing is left out", () => {
     const back = F.decode(F.encode(y));
     if (!back) throw new Error("the yard does not read");
     expect([back.kind[0], back.kind[bare]]).toEqual([F.NONE, F.NONE]);
+    expect(back.till).toBe(y.till + 2 * F.price(F.GATHERER, 1) * F.MILLI);
+    expect(back.plots).toContain(F.plot("pond"));
+    // Its id is past the count of orders ever hung: no order of the yard's.
     expect(back.board.some((o) => o.id === 99)).toBe(false);
-    expect(F.encode(back)).toBe(good);
+    expect(record(F.encode(back)).cells).toBe(record(good).cells);
   });
 
-  test("a setting, a colour or a blueprint the yard may not have: a mill told to make lamp oil and a painted belt, without the oil press and Paint", () => {
+  test("a setting the yard may not make is let go; a colour and a blueprint without Paint and blueprints are carried", () => {
     const y = F.create({ land: bareLand(13, 9, [], [9, 4]), tier: 4, seed: 1 });
     must(y, { do: "build", kind: "mill", x: 2, y: 2, dir: 0 });
     must(y, { do: "recipe", x: 2, y: 2, item: "oil" });
@@ -246,9 +251,9 @@ describe("what could not have come about by playing is left out", () => {
     expect([back.kind[F.at(back, 2, 2)], back.set[F.at(back, 2, 2)], back.tint[F.at(back, 3, 2)]]).toEqual([
       F.MILL,
       F.NONE,
-      0,
+      4,
     ]);
-    expect(back.blueprints[0]).toBeNull();
+    expect(back.blueprints[0]).toEqual(y.blueprints[0]);
     expect(F.decode(F.encode(y), y.land)?.blueprints[0]).not.toBeNull();
   });
 });
@@ -300,8 +305,9 @@ const LEFT_OUT = new Set([
   "serial",
   "at",
   "away",
-  // News no screen has taken yet.
+  // News no screen has taken yet, and the count of changes a screen keys what it works out on.
   "news",
+  "rev",
   // Shared by every yard on it, and never kept.
   "land",
   // Worked out again from the rest: what is open, power, the plumbing, idle notes.

@@ -287,9 +287,11 @@ export type ToClient =
   /**
    * In a visit's room: a batch of commands Leaf has just done to the state visited, as it kept them.
    * `rev` is the state's stored revision after the batch, `did` each command done, in order, as the
-   * game writes it (`Game.echo`), and `after` the game's answer to the batch (`Game.answer`).
+   * game writes it (`Game.echo`), `after` the game's answer to the batch (`Game.answer`), and `ids`
+   * each of those commands' ids as the page that sent them gave them, so that the owner's own page
+   * knows its own.
    */
-  | { t: "did"; rev: number; did: unknown[]; after: unknown };
+  | { t: "did"; rev: number; did: unknown[]; after: unknown; ids?: string[] };
 
 /**
  * What a kind of room is: how far it reaches, how many fit in one copy of it before another is
@@ -383,10 +385,11 @@ export function readToClient(text: string): ToClient | null {
       const code = ERRORS.find((c) => c === v.code);
       return code ? { t: "error", code } : null;
     }
-    case "did":
-      return num(v.rev) && Array.isArray(v.did) && "after" in v
-        ? { t: "did", rev: v.rev, did: v.did, after: v.after }
-        : null;
+    case "did": {
+      if (!num(v.rev) || !Array.isArray(v.did) || !("after" in v)) return null;
+      const ids = Array.isArray(v.ids) && v.ids.every(str) ? v.ids.filter(str) : undefined;
+      return { t: "did", rev: v.rev, did: v.did, after: v.after, ...(ids ? { ids } : {}) };
+    }
     default:
       return null;
   }

@@ -20,6 +20,8 @@ import {
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./art/belts.ts";
+import { aimOf, groupOf, type Hand, IDLE, markOf, runOf, type Tile, toolOf } from "./hand.ts";
+import type { Nudge } from "./teach.ts";
 
 /**
  * The kinds of piece this page draws and builds, in the order they sit in the dock (which is also
@@ -62,13 +64,14 @@ export type Tool = Kind | "remove" | "select" | "paint" | null;
 export const builds = (tool: Tool): tool is Kind => typeof tool === "number";
 
 /**
- * What an aim or a run was worked out from, beside its tile, the tool and what is in hand: the
- * yard's count of changes (`S.rev`) and the Coins to hand then, and what it costs. Of the purse it
- * reads only whether the Coins cover the cost, and when they do not, by how much. When the yard has
- * changed, or the Coins to hand have in a way it reads, it is worked out again for the same tile
- * (`keepAim`, in `tools.ts`).
+ * What an aim or a run was worked out from, beside its tile, the tool and what is in hand: the yard
+ * and the rules' count of its changes then (`y.rev`), the Coins to hand then, and what it costs. Of
+ * the purse it reads only whether the Coins cover the cost, and when they do not, by how much. When
+ * the yard has changed, or the Coins to hand have in a way it reads, it is worked out again for the
+ * same tile (`keepAim`, in `tools.ts`).
  */
 export interface Reckoned {
+  yard: Yard;
   rev: number;
   coins: number;
   cost: number;
@@ -139,13 +142,6 @@ export const S: {
    * Leaf: nothing is opened, sent or kept, and the yard is not run on but by `works.bench`.
    */
   alone: boolean;
-  /**
-   * Counts every change to the yard that is not a tick's: a command done, a yard taken from Leaf, a
-   * goal finished (what is open changes with it). What is worked out from the yard and kept (an aim,
-   * the layout) is looked at again when it moves, and worked out again if what it reads differs.
-   * Only `yard.ts` moves it.
-   */
-  rev: number;
   /** Seconds the screen has been running, and whether its clock is being stepped by hand from outside. */
   t: number;
   held: boolean;
@@ -157,7 +153,19 @@ export const S: {
    * half or a quarter.
    */
   view: { w: number; h: number; z: number; dpr: number };
-  tool: Tool;
+  /** What is in hand (`hand.ts`): the one value the tool, its aim, a run, a mark and the pieces held are read from. */
+  hand: Hand;
+  readonly tool: Tool;
+  readonly aim: Aim | null;
+  readonly run: Run | null;
+  /** A finger's run: the tile it starts from. */
+  readonly from: Tile | null;
+  /** With Select in hand: the area marked, the first corner of one being marked, the pieces held, and whether Save is asking where. */
+  readonly mark: Mark | null;
+  readonly corner: Tile | null;
+  readonly group: Group | null;
+  readonly saving: boolean;
+  /** The way a piece in hand faces. */
   dir: Dir;
   /** The grade each kind of piece is built at when it is in hand, by kind: 0 for one never chosen, which is the first (`gradeInHand`). */
   grades: Uint8Array;
@@ -167,56 +175,60 @@ export const S: {
   hover: { x: number; y: number } | null;
   /** The last touch was a finger, so building is aimed first and built on a second tap. */
   finger: boolean;
-  /** Where the next piece is aimed, and for a belt the run that would be laid. */
-  aim: Aim | null;
-  from: { x: number; y: number } | null;
-  run: Run | null;
-  /** With Select in hand: the area marked, the first corner of one being marked, and the pieces in hand. */
-  mark: Mark | null;
-  corner: { x: number; y: number } | null;
-  group: Group | null;
-  /** Save was pressed: the line over the dock is asking which place to keep the marked pieces in. */
-  saving: boolean;
   /** The tile whose card is open. */
   picked: number;
   /** Plots being cleared before the member's eyes: when each began, in screen seconds, and where from. */
   clearing: Map<Plot, { at: number; x: number; y: number }>;
   /** Which panel is open. */
   panel: string | null;
-  /** The tile a nudge is pointing at, and what it says; and the tool it wants picked up. */
-  nudge: { x: number; y: number; text: string; id: string } | null;
-  nudgeTool: Tool;
-  /** The part of the interface a nudge is about, which it is said beside: a book's button, or the grades over the dock. */
-  nudgePart: "tier" | "research" | "grades" | null;
+  /** The nudge being said (`teach.ts`): over its tile, or beside the part of the interface it is about. */
+  nudge: Nudge | null;
 } = {
   world: emptyYard(LAND),
   visiting: null,
   alone: false,
-  rev: 0,
   t: 0,
   held: false,
   cam: { x: 0, y: 0 },
   view: { w: 320, h: 200, z: 4, dpr: 1 },
-  tool: null,
+  hand: IDLE,
+  get tool() {
+    return toolOf(S.hand);
+  },
+  get aim() {
+    return aimOf(S.hand);
+  },
+  get run() {
+    return runOf(S.hand);
+  },
+  get from() {
+    return S.hand.is === "beltTaps" ? S.hand.from : null;
+  },
+  get mark() {
+    return markOf(S.hand);
+  },
+  get corner() {
+    return S.hand.is === "select" && S.hand.stage.is === "marking" ? S.hand.stage.corner : null;
+  },
+  get group() {
+    return groupOf(S.hand);
+  },
+  get saving() {
+    return S.hand.is === "select" && S.hand.stage.is === "saving";
+  },
   dir: 0,
   grades: new Uint8Array(KIND_COUNT),
   tint: 1,
   hover: null,
   finger: false,
-  aim: null,
-  from: null,
-  run: null,
-  mark: null,
-  corner: null,
-  group: null,
-  saving: false,
   picked: -1,
   clearing: new Map(),
   panel: null,
   nudge: null,
-  nudgeTool: null,
-  nudgePart: null,
 };
+
+/** The nudge being said over a tile of the yard, if the one being said is. */
+export const tileNudge = (): Nudge | null => (S.nudge?.part === undefined ? S.nudge : null);
 
 /**
  * The grade a kind of piece is built at when it is in hand: the one chosen for it, no higher than
