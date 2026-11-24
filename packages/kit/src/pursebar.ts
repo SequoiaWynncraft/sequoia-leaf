@@ -4,7 +4,7 @@
  * little pictures that travel across the page when something is paid or earned. And `closeLeaf`,
  * for a Leaf button that may not take Leaf.
  */
-import { el, icon, type IconName, replay } from "./dom.ts";
+import { el, icon, type IconName, replay, say } from "./dom.ts";
 import { balance, type Currency, leafShut } from "./purse.ts";
 import { sfx } from "./sound.ts";
 import { tip, tipAt } from "./tip.ts";
@@ -126,6 +126,7 @@ export function closeLeaf(b: HTMLElement, title = "Leaf", why = leafShut()): boo
       e.stopImmediatePropagation();
       e.preventDefault();
       sfx.no();
+      say(why);
       replay(b, "shake");
       const r = b.getBoundingClientRect();
       tipAt({ x: r.left, y: r.top, w: r.width, h: r.height }, title, why, b);

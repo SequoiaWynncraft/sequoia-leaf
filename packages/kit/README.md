@@ -134,7 +134,7 @@ picture file.
 | `mark.ts`     | The mark of the town's own: a name in leaf green after the acorn, on a page or a canvas             |
 | `skin.ts`     | A walking figure and a face from a block-game skin sheet, or from a made-up look                    |
 | `sound.ts`    | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all                    |
-| `dom.ts`      | `el`, `icon`, `amount`, `when` (draws a part again only when it changes) and a few more             |
+| `dom.ts`      | `el`, `icon`, `amount`, `when` (draws a part again only when it changes), `say` and a few more      |
 | `purse.ts`    | Leaf and Coins, shared by every page of the game: both Leaf's, only shown                           |
 | `pursebar.ts` | The purse as a page shows it, its numbers rolling; things that fly across it; a closed Leaf button  |
 | `shell.ts`    | How a game that is a place in the town and the town speak to each other                             |

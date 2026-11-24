@@ -203,6 +203,22 @@ export function unask(): void {
   redraw();
 }
 
+let region: HTMLElement | null = null;
+
+/**
+ * Tells a screen reader something the player must notice (a press refused, an order filled), in
+ * the page's one polite live region; nothing is shown. Not for what changes every moment.
+ */
+export function say(text: string): void {
+  if (!region?.isConnected) region = document.body.appendChild(el("div", "k-said", { role: "status" }));
+  const to = region;
+  // Emptied first and filled a moment later, so the same words said twice are heard twice.
+  to.textContent = "";
+  setTimeout(() => {
+    to.textContent = text;
+  }, 50);
+}
+
 /** One interface unit in CSS pixels, as the stylesheet has it now. */
 export function unit(): number {
   const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--u"));

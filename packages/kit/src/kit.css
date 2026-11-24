@@ -1273,6 +1273,15 @@ button.k-info-chip:hover .k-chip {
     opacity: 0;
   }
 }
+/* What is said to a screen reader and not shown (`say` in dom.ts). */
+.k-said {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .k-row {
   display: flex;
   align-items: center;
