@@ -87,7 +87,7 @@ and lets a game's command take Leaf (see the play service).
 | `packages/core`       | The rules of the game as pure functions and types. No I/O.                    |
 | `packages/raid`       | The Little Raid's rules, which Leaf and the battler's page share.             |
 | `packages/factory`    | The Works' rules on flat data, no screen in them; Leaf and the page use them. |
-| `packages/town`       | The town's and the camp's rules and catalogue; the town page uses them.       |
+| `packages/town`       | The town's and the camp's rules and catalogue, and the town's map, as data.   |
 | `packages/pulls`      | The pulls' rules: prizes, banners, odds and Seeds.                            |
 | `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs.                 |
 | `apps/api/migrations` | The database schema, as Effect migrations applied in order at start.          |
