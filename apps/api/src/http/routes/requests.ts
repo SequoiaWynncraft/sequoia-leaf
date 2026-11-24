@@ -1,16 +1,15 @@
-import { type RequestKind } from "@sequoia-leaf/core";
+import { PURSE_HEADER, type RequestKind } from "@sequoia-leaf/core";
 import { Effect } from "effect";
-import { HttpClient, HttpServerResponse } from "effect/http";
-import { HttpApiBuilder } from "effect/http-api";
+import { HttpClient } from "effect/http";
+import { HttpApiBuilder, HttpApiSchema } from "effect/http-api";
 
 import { LeafApi } from "../../api/api.ts";
 import { Invalid, RequestRefused, RequestsUnavailable, RequestUnknown } from "../../api/errors.ts";
-import type * as Body from "../../api/schemas.ts";
 import { guildRequests, notEnoughLeaf } from "../../backend/requests.ts";
 import { AppConfig } from "../../config.ts";
 import { Ledger } from "../../ledger/store.ts";
 import { Coins } from "../../play/coins.ts";
-import { purseBeside, requestsFor } from "./shared.ts";
+import { requestsFor } from "./shared.ts";
 
 export const GameRequestsHandlers = HttpApiBuilder.group(LeafApi, "gameRequests", (handlers) =>
   Effect.gen(function* () {
@@ -42,10 +41,10 @@ export const GameRequestsHandlers = HttpApiBuilder.group(LeafApi, "gameRequests"
                 why_not: looked.whyNot ?? (balance < price ? notEnoughLeaf(kind, price, balance) : null),
               };
             };
-            return HttpServerResponse.jsonUnsafe({
+            return {
               aspect: offer("aspect"),
               tome: offer("tome"),
-            } satisfies typeof Body.Requests.Type);
+            };
           }),
         )
         // One bought with the member's Leaf. The backend charges it through Leaf's own purchase route
@@ -75,15 +74,10 @@ export const GameRequestsHandlers = HttpApiBuilder.group(LeafApi, "gameRequests"
               return yield* new RequestsUnavailable({ code: "requests_unavailable", message: made.message });
             }
             const purse = yield* coins.balances(identity.playerId);
-            return HttpServerResponse.jsonUnsafe(
-              {
-                type: payload.type,
-                position: made.position,
-                leaf_paid: made.paid,
-                leaf: purse.leaf,
-              } satisfies typeof Body.RequestMade.Type,
-              purseBeside(purse),
-            );
+            return HttpApiSchema.withHeaders({
+              body: { type: payload.type, position: made.position, leaf_paid: made.paid, leaf: purse.leaf },
+              headers: { [PURSE_HEADER]: purse },
+            });
           }),
         )
     );

@@ -6,6 +6,7 @@ import {
   PAGE_ERROR_MESSAGE,
   PAGE_ERROR_STACK,
   PAGES,
+  PURSE_HEADER,
   REQUEST_KINDS,
 } from "@sequoia-leaf/core";
 import { Schema } from "effect";
@@ -215,6 +216,13 @@ export const Present = Schema.Struct({
  * which grows with every entry to either: of two, the higher is the newer.
  */
 export const Purse = Schema.Struct({ coins: Schema.Number, leaf: Schema.Number, version: Schema.Number });
+
+/**
+ * Leaf's word on the player's purse beside an answer that moved their Leaf outside the play service,
+ * read after it, as JSON in `Leaf-Purse`: the page's purse takes it as newer than anything asked
+ * before, so an answer on its way from before the spend cannot take it back.
+ */
+export const PurseBeside = { [PURSE_HEADER]: Schema.fromJsonString(Purse) };
 
 /** A player's state in a game, as their page is given it. */
 export const PlayShown = Schema.Struct({

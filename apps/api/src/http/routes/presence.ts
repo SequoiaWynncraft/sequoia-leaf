@@ -1,5 +1,4 @@
 import { Clock, Effect } from "effect";
-import { HttpServerResponse } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 
 import { whoIsAbout } from "../../activity/about.ts";
@@ -23,13 +22,13 @@ export const GamePresenceHandlers = HttpApiBuilder.group(LeafApi, "gamePresence"
               payload.stay ?? null,
               now,
             );
-            return HttpServerResponse.jsonUnsafe(yield* whoIsAbout(now));
+            return yield* whoIsAbout(now);
           }),
         )
         // The same lists, writing nothing: for a page in a live room, where the room keeps the player's place.
         .handle("whoIsAbout", () =>
           Effect.gen(function* () {
-            return HttpServerResponse.jsonUnsafe(yield* whoIsAbout(yield* Clock.currentTimeMillis));
+            return yield* whoIsAbout(yield* Clock.currentTimeMillis);
           }),
         )
     );

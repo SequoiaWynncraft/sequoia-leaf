@@ -1,14 +1,4 @@
-import {
-  type Balances,
-  DAY_MS,
-  DEFAULT_RULES,
-  gameId,
-  levelForXp,
-  PURSE_HEADER,
-  type Quest,
-  type QuestSlot,
-  rerollCost,
-} from "@sequoia-leaf/core";
+import { DAY_MS, DEFAULT_RULES, gameId, levelForXp, type Quest, type QuestSlot, rerollCost } from "@sequoia-leaf/core";
 import { Duration, Effect, Ref, Schedule, Schema, Stream } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 
@@ -138,13 +128,6 @@ export const seconds = (ms: number): number => Math.floor(ms / 1000);
 
 /** A row of `banner_people`: a banner, and the player who is its headliner. */
 export const BannerPerson = Schema.Struct({ banner: Schema.String, playerId: Schema.String });
-
-/**
- * Leaf's word on the player's balances beside an answer that moved their Leaf outside the play
- * service (`PURSE_HEADER`), read after it: the page's purse takes it as newer than anything asked
- * before, so an answer on its way from before the spend cannot take it back.
- */
-export const purseBeside = (purse: Balances) => ({ headers: { [PURSE_HEADER.toLowerCase()]: JSON.stringify(purse) } });
 
 /** Who calls a game, as the play service needs to know them. */
 export const playingOf = (identity: Identity): Playing => ({ playerId: identity.playerId, guest: isGuest(identity) });

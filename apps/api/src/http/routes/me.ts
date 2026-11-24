@@ -4,6 +4,7 @@ import {
   nextDailyChargeAt,
   nextTimedWindowAt,
   openQuestBook,
+  PURSE_HEADER,
   QUEST_SLOTS,
   type QuestSlot,
   refreshQuests,
@@ -11,11 +12,10 @@ import {
 } from "@sequoia-leaf/core";
 import { Clock, Effect } from "effect";
 import { HttpServerResponse } from "effect/http";
-import { HttpApiBuilder } from "effect/http-api";
+import { HttpApiBuilder, HttpApiSchema } from "effect/http-api";
 
 import { CurrentIdentity, LeafApi } from "../../api/api.ts";
 import { Invalid, Refused } from "../../api/errors.ts";
-import type * as Body from "../../api/schemas.ts";
 import { Credits } from "../../earning/run.ts";
 import { eventJsonText, Events } from "../../events/store.ts";
 import { Ledger } from "../../ledger/store.ts";
@@ -33,7 +33,6 @@ import {
   LATEST_EVENTS,
   levelJson,
   polled,
-  purseBeside,
   questOnOffer,
   RECENTLY_COMPLETED_MS,
   REFUSALS,
@@ -54,12 +53,12 @@ export const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
           Effect.gen(function* () {
             const identity = yield* CurrentIdentity;
             const account = yield* ledger.account(identity.playerId);
-            return HttpServerResponse.jsonUnsafe({
+            return {
               player: { id: identity.playerId, username: identity.username },
               leaf: account.balance,
               xp: account.xp,
               level: levelJson(account.xp),
-            } satisfies typeof Body.Me.Type);
+            };
           }),
         )
         .handle("quests", ({ query }) =>
@@ -78,7 +77,7 @@ export const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
             const nextCharge = nextDailyChargeAt(book, DEFAULT_RULES.quests);
             const timedRules = DEFAULT_RULES.quests.timed;
             const window = timedRules === undefined ? undefined : timedWindowAt(now, timedRules);
-            return HttpServerResponse.jsonUnsafe({
+            return {
               daily: {
                 charges: book.dailyCharges,
                 charge_cap: DEFAULT_RULES.quests.dailyChargeCap,
@@ -93,7 +92,7 @@ export const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
                     },
               quests: currentQuests(book, now).map((quest) => questOnOffer(quest, rerolls)),
               recently_completed: completed.map(questJson),
-            } satisfies typeof Body.Quests.Type);
+            };
           }),
         )
         // Swaps a quest in progress for another. The id is the one `/quests` gave,
@@ -122,14 +121,14 @@ export const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
                 if (result.status === "refused") {
                   return yield* new Refused({ code: result.reason, message: REFUSALS[result.reason] });
                 }
-                return HttpServerResponse.jsonUnsafe(
-                  {
+                return HttpApiSchema.withHeaders({
+                  body: {
                     leaf: result.balance,
                     spent: result.spent,
                     quest: questOnOffer(result.quest, yield* quests.rerollsOnDay(playerId, now)),
-                  } satisfies typeof Body.Rerolled.Type,
-                  purseBeside(yield* coins.balances(playerId)),
-                );
+                  },
+                  headers: { [PURSE_HEADER]: yield* coins.balances(playerId) },
+                });
               }),
             );
           }),

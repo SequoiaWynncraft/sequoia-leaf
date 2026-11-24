@@ -8,7 +8,6 @@ import { SqlClient } from "effect/sql";
 import { Visits } from "../../activity/visits.ts";
 import { CurrentIdentity, isGuest, LeafApi } from "../../api/api.ts";
 import { Invalid, Missing } from "../../api/errors.ts";
-import type * as Body from "../../api/schemas.ts";
 import { Events } from "../../events/store.ts";
 import { GUILD_EVENT_TYPES, guildDay, guildEvents } from "../../game/guild.ts";
 import { knownAmong } from "../../game/known.ts";
@@ -54,7 +53,7 @@ export const GamePeopleHandlers = HttpApiBuilder.group(LeafApi, "gamePeople", (h
               // A guest has their Leaf, to spend on what is for everyone: what they earned as a
               // member, or the staff gave them. They have no XP or news of the guild's.
               const { leaf, coins: held, version } = yield* coins.balances(identity.playerId);
-              return HttpServerResponse.jsonUnsafe({
+              return {
                 player: { id: identity.playerId, username: identity.username },
                 rank: null,
                 guest: true,
@@ -64,7 +63,7 @@ export const GamePeopleHandlers = HttpApiBuilder.group(LeafApi, "gamePeople", (h
                 event_cursor: 0,
                 coins: held,
                 version,
-              } satisfies typeof Body.GameMe.Type);
+              };
             }
             // The backend vouches for the name, so the guild's news can show it.
             yield* names.remember(identity.playerId, identity.username, yield* Clock.currentTimeMillis);
@@ -75,7 +74,7 @@ export const GamePeopleHandlers = HttpApiBuilder.group(LeafApi, "gamePeople", (h
             const cursor = yield* events.latestIdOf(identity.playerId);
             const { xp } = yield* ledger.account(identity.playerId);
             const { leaf, coins: held, version } = yield* coins.balances(identity.playerId);
-            return HttpServerResponse.jsonUnsafe({
+            return {
               player: { id: identity.playerId, username: identity.username },
               rank: identity.guildRank,
               guest: false,
@@ -85,7 +84,7 @@ export const GamePeopleHandlers = HttpApiBuilder.group(LeafApi, "gamePeople", (h
               event_cursor: cursor,
               coins: held,
               version,
-            } satisfies typeof Body.GameMe.Type);
+            };
           }),
         )
         .handle("skin", ({ params }) =>
@@ -153,7 +152,7 @@ export const GamePeopleHandlers = HttpApiBuilder.group(LeafApi, "gamePeople", (h
               .map(([game]) => game);
             const games = [...new Set([...standings.keys(), ...timed])].toSorted();
             const all = (of: "played" | "afk") => seconds([...times.values()].reduce((sum, time) => sum + time[of], 0));
-            return HttpServerResponse.jsonUnsafe({
+            return {
               id: player,
               name: named.get(player) ?? "Someone",
               games: Object.fromEntries(
@@ -169,7 +168,7 @@ export const GamePeopleHandlers = HttpApiBuilder.group(LeafApi, "gamePeople", (h
               ),
               played: all("played"),
               afk: all("afk"),
-            } satisfies typeof Body.Person.Type);
+            };
           }),
         )
         // Every pull banner and its headliner, named as the boards name players.
@@ -187,7 +186,7 @@ export const GamePeopleHandlers = HttpApiBuilder.group(LeafApi, "gamePeople", (h
               }),
             );
             const named = yield* names.of([...people.values()]);
-            return HttpServerResponse.jsonUnsafe({
+            return {
               banners: BANNERS.map(({ id, from, until }) => {
                 const person = people.get(id);
                 return {
@@ -197,7 +196,7 @@ export const GamePeopleHandlers = HttpApiBuilder.group(LeafApi, "gamePeople", (h
                   headliner: person === undefined ? null : { id: person, name: named.get(person) ?? "Someone" },
                 };
               }),
-            } satisfies typeof Body.Banners.Type);
+            };
           }),
         )
     );

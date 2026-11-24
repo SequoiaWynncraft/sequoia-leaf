@@ -51,6 +51,7 @@ import {
   PurchaseBody,
   PurchaseCancelled,
   Purchased,
+  PurseBeside,
   Quests,
   Rates,
   RequestBody,
@@ -174,7 +175,12 @@ export class SystemApi extends HttpApiGroup.make("system", { topLevel: true }).a
 
 /** What Leaf pays and costs, open to anyone: the website's guide to Leaf reads it. */
 export class RatesApi extends HttpApiGroup.make("rates")
-  .add(HttpApiEndpoint.get("rates", "/rates", { success: Rates }))
+  .add(
+    HttpApiEndpoint.get("rates", "/rates", {
+      // The same until the next deploy: kept five minutes.
+      success: HttpApiSchema.WithHeaders(Rates, { "cache-control": Schema.String }),
+    }),
+  )
   .prefix("/v1") {}
 
 export class MeApi extends HttpApiGroup.make("me")
@@ -184,7 +190,7 @@ export class MeApi extends HttpApiGroup.make("me")
     HttpApiEndpoint.post("reroll", "/quests/:id/reroll", {
       params: { id: Schema.String },
       payload: RerollBody,
-      success: Rerolled,
+      success: HttpApiSchema.WithHeaders(Rerolled, PurseBeside),
       error: [Invalid, Refused],
     }).middleware(RerollBodyErrors),
     HttpApiEndpoint.get("events", "/events", { query: EventPosition, success: Events, error: Invalid }),
@@ -297,7 +303,7 @@ export class GameRequestsApi extends HttpApiGroup.make("gameRequests")
     }),
     HttpApiEndpoint.post("request", "/requests", {
       payload: RequestBody,
-      success: RequestMade,
+      success: HttpApiSchema.WithHeaders(RequestMade, PurseBeside),
       error: [Invalid, MembersOnly, RequestRefused, RequestsUnavailable, RequestUnknown],
     }).middleware(RequestBodyErrors),
   )
