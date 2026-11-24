@@ -277,24 +277,20 @@ function collect(page: typeof PAGE): Facts {
   const force = document.createElement("style");
   force.textContent = "*, *::before, *::after { pointer-events: auto !important; }";
   document.head.append(force);
-  const inView = (r: DOMRect): boolean =>
-    r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < W && r.top < H;
-  /** The part of a box in the window. */
-  const boxOf = (r: DOMRect): Box => {
-    const [x, y] = [Math.max(0, r.left), Math.max(0, r.top)];
-    return {
-      x: Math.round(x),
-      y: Math.round(y),
-      w: Math.round(Math.min(W, r.right) - x),
-      h: Math.round(Math.min(H, r.bottom) - y),
-    };
-  };
-  const seen = (el: Element, r: DOMRect): boolean => {
-    const hit = document.elementFromPoint(
-      Math.min(W - 1, Math.max(0, r.left + r.width / 2)),
-      Math.min(H - 1, Math.max(0, r.top + r.height / 2)),
-    );
-    return hit !== null && (el.contains(hit) || hit.contains(el));
+  /** The part of an element's box that can be seen: in the window and in whatever it scrolls in; null for none. */
+  const shown = (el: Element, r: DOMRect): Box | null => {
+    let [l, t, rt, b] = [Math.max(0, r.left), Math.max(0, r.top), Math.min(W, r.right), Math.min(H, r.bottom)];
+    for (let a = el.parentElement; a; a = a.parentElement) {
+      const cs = getComputedStyle(a);
+      if (cs.overflowX === "visible" && cs.overflowY === "visible") continue;
+      const c = a.getBoundingClientRect();
+      [l, t, rt, b] = [Math.max(l, c.left), Math.max(t, c.top), Math.min(rt, c.right), Math.min(b, c.bottom)];
+    }
+    if (rt - l < 1 || b - t < 1) return null;
+    // On top there, too: nothing covers it.
+    const hit = document.elementFromPoint((l + rt) / 2, (t + b) / 2);
+    if (hit === null || !(el.contains(hit) || hit.contains(el))) return null;
+    return { x: Math.round(l), y: Math.round(t), w: Math.round(rt - l), h: Math.round(b - t) };
   };
   try {
     const runs = new Map<Element, { text: string[]; boxes: Box[] }>();
@@ -306,11 +302,11 @@ function collect(page: typeof PAGE): Facts {
       if (getComputedStyle(el).visibility !== "visible") continue;
       const range = document.createRange();
       range.selectNodeContents(n);
-      const rects = [...range.getClientRects()].filter((r) => inView(r) && seen(el, r));
-      if (rects.length === 0) continue;
+      const boxes = [...range.getClientRects()].flatMap((r) => shown(el, r) ?? []);
+      if (boxes.length === 0) continue;
       const run = runs.get(el) ?? { text: [], boxes: [] };
       run.text.push(text);
-      run.boxes.push(...rects.slice(0, 3).map(boxOf));
+      run.boxes.push(...boxes.slice(0, 3));
       runs.set(el, run);
     }
     const words: Words[] = [];
@@ -338,8 +334,8 @@ function collect(page: typeof PAGE): Facts {
     const found: { el: HTMLElement; box: Box; tab: boolean }[] = [];
     for (const el of document.body.querySelectorAll("*")) {
       if (!(el instanceof HTMLElement) || el.closest("[inert]")) continue;
-      const r = el.getBoundingClientRect();
-      if (!inView(r) || getComputedStyle(el).visibility !== "visible" || !seen(el, r)) continue;
+      const box = getComputedStyle(el).visibility === "visible" ? shown(el, el.getBoundingClientRect()) : null;
+      if (!box) continue;
       const tab = page.reach(el);
       if (!tab) {
         // Looks pressable: the top of what has the pointing hand, and no part of something Tab reaches.
@@ -349,7 +345,7 @@ function collect(page: typeof PAGE): Facts {
         for (let a = up; a && !part; a = a.parentElement) part = page.reach(a);
         if (part || [...el.querySelectorAll("*")].some(page.reach)) continue;
       }
-      found.push({ el, box: boxOf(r), tab });
+      found.push({ el, box, tab });
     }
 
     // How each looks focused by the keyboard, against how it looks now.
