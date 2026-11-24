@@ -107,5 +107,22 @@ describe("a slot of the Keys tab waiting for a key", () => {
     noKeysHeld();
     waiter.key(press("Enter", "Enter"));
     expect(keys.keysOf("rotate")).toEqual(["Enter"]);
+    // Held on after going in the slot, it presses nothing (not the slot's button, to wait again).
+    expect(waiter.key(press("Enter", "Enter", null, true))).toEqual({ taken: true, prevent: true });
+    noKeysHeld();
+    expect(waiter.key(press("Enter", "Enter")).taken).toBe(false);
+  });
+
+  test("a walking key with Shift is said not to do, and the slot waits on", () => {
+    const keys = townKeys("shifted");
+    const waiter = new Waiter(keys);
+    const slot = { id: "up", nth: 0, does: "Walk up", was: "W" };
+    waiter.wait(slot);
+    expect(waiter.key(press("KeyR", "R", "shift"))).toEqual({
+      taken: true,
+      prevent: true,
+      say: { text: "Shift+R can't be used for Walk up.", bad: true },
+    });
+    expect([waiter.slot, keys.keysOf("up"), keys.keysOf("rotate")]).toEqual([slot, ["KeyW", "ArrowUp"], ["KeyR"]]);
   });
 });

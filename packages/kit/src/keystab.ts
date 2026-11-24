@@ -57,6 +57,8 @@ const movedSays = (moved: readonly Moved[]): string =>
 export class Waiter {
   readonly #keys: KeyList;
   #slot: Waiting | null = null;
+  /** The place of the key last put in a slot, while it may still be held: said again, it presses nothing (not the cap it went in). */
+  #put: string | null = null;
 
   constructor(keys: KeyList) {
     this.#keys = keys;
@@ -78,6 +80,8 @@ export class Waiter {
   }
 
   key(e: Pick<KeyboardEvent, "code" | "key" | "shiftKey" | "ctrlKey" | "metaKey" | "altKey" | "repeat">): Heard {
+    if (this.#put !== null && e.code === this.#put && heldAgain(e)) return { taken: true, prevent: true };
+    this.#put = null;
     const slot = this.#slot;
     if (!slot) return { taken: false, prevent: false };
     // A key still held from before (the Enter that pressed the cap) saying itself again: no key for the slot.
@@ -91,8 +95,15 @@ export class Waiter {
         prevent: !e.ctrlKey && !e.metaKey && !e.altKey,
         say: { text: `${got.name} can't be used.`, bad: true },
       };
+    if (got.is === "key" && !this.#keys.fits(slot.id, got.bind))
+      return {
+        taken: true,
+        prevent: true,
+        say: { text: `${bindName(got.bind)} can't be used for ${slot.does}.`, bad: true },
+      };
     this.#slot = null;
     if (got.is === "keep") return { taken: true, prevent: true, say: { text: "", bad: false } };
+    this.#put = e.code;
     const moved = this.#keys.put(slot.id, slot.nth, got.bind);
     return { taken: true, prevent: true, say: { text: movedSays(moved), bad: false } };
   }
@@ -191,6 +202,15 @@ export class KeysTab {
     );
     const wait = this.#waiter.slot;
     if (wait && !root.querySelector(`[data-key="${capKey(wait.id, wait.nth)}"]`)) this.#waiter.stop();
+    // The slot waiting has another key now (changed on another page, or the keyboard is): the line says which Escape keeps.
+    const now =
+      wait &&
+      shelves
+        .flatMap((s) => s.lines)
+        .find((l) => l.id === wait.id)
+        ?.caps.find((c) => c.nth === wait.nth);
+    if (wait && this.#waiter.slot && now && now.name !== wait.was)
+      this.#say(this.#waiter.wait({ ...wait, was: now.name }));
     if (had === undefined) return;
     // A control gone (a line's reset, once it is reset): the focus goes to its line's first key, else the first key of all.
     const line = had.split(":")[1] ?? "";
@@ -230,9 +250,9 @@ export class KeysTab {
     );
   }
 
-  /** A key of a line: a button that waits for a key when it may be changed, else the key as it is. An empty slot shows a dash. */
+  /** A key of a line: a button that waits for a key when it may be changed, else the key as it is. An empty slot is a hollow. */
   #cap(line: KeyLine, cap: KeyCap): HTMLElement {
-    const text = cap.name ?? "—";
+    const text = cap.name ?? "";
     const empty = cap.name === null ? " empty" : "";
     if (cap.fixed) return el("kbd", `k-cap fixed${empty}`, { text });
     const wait = this.#waiter.slot;
@@ -243,9 +263,9 @@ export class KeysTab {
       {
         type: "button",
         "data-key": capKey(line.id, cap.nth),
-        "aria-label": `${line.does}: ${cap.name ?? "no key"}`,
+        "aria-label": `${cap.does}: ${cap.name ?? "no key"}`,
         onclick: () => {
-          this.#waitFor({ id: line.id, nth: cap.nth, does: line.does, was: cap.name }, b);
+          this.#waitFor({ id: line.id, nth: cap.nth, does: cap.does, was: cap.name }, b);
         },
       },
       text,

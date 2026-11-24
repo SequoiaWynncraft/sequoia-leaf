@@ -151,7 +151,10 @@ export function placeOf(e: Pick<KeyboardEvent, "code" | "key">): string {
 }
 
 /** Keys that never stand for a game's action: Escape is always Back and the settings menu, Tab moves between buttons, and Ctrl (or ⌘) with a letter is the operating system's way. */
-const isFixedBind = (bind: Bind): boolean => bind === "Escape" || bind === "Tab" || bind.startsWith("Ctrl+");
+const isFixedBind = (bind: Bind): boolean => {
+  const place = placeOfBind(bind);
+  return place === null || place === "Escape" || place === "Tab";
+};
 
 /** What a key pressed for a slot waiting for one is: a key to put there, nothing yet (Shift or another such key on its own), a refusal, or Escape, which keeps the key the slot had. */
 export type Caught =
@@ -273,6 +276,8 @@ export interface KeyAction {
   readonly held?: boolean;
   /** Its key held down does it again each time the browser repeats the key (zooming, undoing), where any other press is once. */
   readonly repeats?: boolean;
+  /** What each slot is, where each is a thing of its own, numbered from 1 ("Tool": Tool 1, Tool 2…); else every slot is the action. */
+  readonly each?: string;
 }
 
 /** What a key is for: an action, and which of its slots has the key (the first is 0). */
@@ -286,9 +291,11 @@ export interface Pressed<Id extends string> {
   readonly again: boolean;
 }
 
-/** A slot of a line of the Keys tab: which it is, what its key is called (none: it is empty), and whether it is one the player cannot change. */
+/** A slot of a line of the Keys tab: which it is, what it is for, what its key is called (none: it is empty), and whether it is one the player cannot change. */
 export interface KeyCap {
   readonly nth: number;
+  /** What the slot is for: the action's words, or its own (`KeyAction.each`): "Tool 3". */
+  readonly does: string;
   readonly name: string | null;
   readonly fixed: boolean;
 }
@@ -326,6 +333,8 @@ export interface KeyList {
    * changed for a slot that cannot be changed.
    */
   put(id: string, nth: number, bind: Bind): Moved[];
+  /** Whether a slot of an action may hold a key (a held one never takes Shift). */
+  fits(id: string, bind: Bind): boolean;
   /** Gives an action its keys as the game has them again, taking each from wherever it is now. Gives back where they were taken from. */
   reset(id: string): Moved[];
   /** Gives every action its keys as the game has them again. */
@@ -333,6 +342,8 @@ export interface KeyList {
 }
 
 type Slots = readonly (Bind | null)[];
+/** Slots as kept: a key, nothing, or the game's key if no choice of the player's has it (`undefined`). */
+type Kept = readonly (Bind | null | undefined)[];
 
 const sameSlots = (a: Slots | undefined, b: Slots | undefined): boolean =>
   a !== undefined && b !== undefined && a.length === b.length && a.every((bind, i) => bind === b[i]);
@@ -390,21 +401,25 @@ export class Keymap<Id extends string> implements KeyList {
     return this.#slots.get(id) ?? this.#defaults(id);
   }
 
-  /** A key as a slot of an action may hold it: none for a key no slot may hold, and without Shift for an action that is held. */
+  /** A key as a slot of an action may hold it: none for a key no slot may hold, nor with Shift for an action that is held (held keys are known by place alone). */
   #fit(id: Id, bind: unknown): Bind | null {
     if (!isBind(bind) || isFixedBind(bind)) return null;
-    if (this.#actions[id].held !== true) return bind;
-    const place = placeOfBind(bind);
-    return place === null || isFixedBind(place) ? null : place;
+    return this.#actions[id].held === true && bind.startsWith("Shift+") ? null : bind;
+  }
+
+  /** Whether a slot of an action may hold a key. */
+  fits(id: string, bind: Bind): boolean {
+    return this.#isId(id) && this.#fit(id, bind) !== null;
   }
 
   /**
    * The player's changes, as kept: each action's whole slots. An action the game does not have, or
-   * slots of another number than the action has, are let go; a slot that cannot be changed keeps
-   * the game's key, and one holding what no slot of it may hold, the game's key too.
+   * slots of another number than the action has, are let go; a slot that cannot be changed, or
+   * holding what no slot of it may hold, is the game's key if no choice of the player's has it
+   * (`undefined`, filled in by `#resolve`).
    */
-  #parse(text: string | null): Map<Id, Slots> {
-    const out = new Map<Id, Slots>();
+  #parse(text: string | null): Map<Id, Kept> {
+    const out = new Map<Id, Kept>();
     if (text === null) return out;
     let raw: unknown;
     try {
@@ -417,10 +432,10 @@ export class Keymap<Id extends string> implements KeyList {
       const kept: unknown = Object.hasOwn(raw, id) ? Reflect.get(raw, id) : undefined;
       const defaults = this.#defaults(id);
       if (!Array.isArray(kept) || kept.length !== defaults.length) continue;
-      const slots = defaults.map((game, nth): Bind | null => {
+      const slots = defaults.map((_, nth): Bind | null | undefined => {
         const slot: unknown = kept[nth];
-        if (this.fixed(id, nth)) return game;
-        return slot === null ? null : (this.#fit(id, slot) ?? game);
+        if (this.fixed(id, nth)) return undefined;
+        return slot === null ? null : (this.#fit(id, slot) ?? undefined);
       });
       out.set(id, slots);
     }
@@ -434,21 +449,23 @@ export class Keymap<Id extends string> implements KeyList {
    * have one twice (only something broken kept could), the first slot in the keymap's order has it.
    * The game's own keys are as it gives them: one it gives twice is its mistake, which `shared` shows.
    */
-  #resolve(changes: ReadonlyMap<Id, Slots>): Map<Id, Slots> {
+  #resolve(changes: ReadonlyMap<Id, Kept>): Map<Id, Slots> {
     const chosen = new Set<Bind>();
-    const once = (bind: Bind | null): Bind | null => {
-      if (bind === null || chosen.has(bind)) return null;
+    const once = (bind: Bind | null | undefined): Bind | null | undefined => {
+      if (bind === undefined || bind === null) return bind;
+      if (chosen.has(bind)) return null;
       chosen.add(bind);
       return bind;
     };
-    const out = new Map<Id, Slots>();
-    for (const id of this.#ids) {
-      const changed = changes.get(id);
-      if (changed) out.set(id, changed.map(once));
-    }
-    const free = (bind: Bind): Bind | null => (chosen.has(bind) ? null : bind);
-    for (const id of this.#ids) if (!out.has(id)) out.set(id, this.#defaults(id).map(free));
-    return new Map(this.#ids.map((id) => [id, out.get(id) ?? []]));
+    const picked = new Map(this.#ids.map((id) => [id, changes.get(id)?.map(once)]));
+    const free = (bind: Bind | undefined): Bind | null => (bind === undefined || chosen.has(bind) ? null : bind);
+    return new Map(
+      this.#ids.map((id) => {
+        const game = this.#defaults(id);
+        const mine = picked.get(id);
+        return [id, game.map((bind, nth) => (mine === undefined || mine[nth] === undefined ? free(bind) : mine[nth]))];
+      }),
+    );
   }
 
   #apply(slots: ReadonlyMap<Id, Slots>): void {
@@ -546,8 +563,13 @@ export class Keymap<Id extends string> implements KeyList {
   shelves(): KeyShelf[] {
     const shelves = new Map<string, KeyLine[]>();
     for (const id of this.#ids) {
-      const { shelf, does } = this.#actions[id];
-      const caps = this.names(id).map((name, nth) => ({ nth, name, fixed: this.fixed(id, nth) }));
+      const { shelf, does, each } = this.#actions[id];
+      const caps = this.names(id).map((name, nth) => ({
+        nth,
+        does: each === undefined ? does : `${each} ${nth + 1}`,
+        name,
+        fixed: this.fixed(id, nth),
+      }));
       const changed = !sameSlots(this.keysOf(id), this.#defaults(id));
       shelves.set(shelf, [...(shelves.get(shelf) ?? []), { id, does, caps, changed }]);
     }

@@ -12,6 +12,7 @@ export const WORKS_KEYS = keymap("works", {
   tool: {
     shelf: "Building",
     does: "Pick a tool, in toolbar order",
+    each: "Tool",
     keys: [
       "Digit1",
       "Digit2",

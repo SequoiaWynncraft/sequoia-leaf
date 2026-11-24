@@ -9,7 +9,7 @@
 import { at, BELT } from "@sequoia-leaf/factory";
 import { pick, point, shown, surface } from "@sequoia-leaf/kit/card.ts";
 import { placeOf } from "@sequoia-leaf/kit/keyboard.ts";
-import { heldAgain, typing } from "@sequoia-leaf/kit/keys.ts";
+import { forControl, heldAgain, typing } from "@sequoia-leaf/kit/keys.ts";
 import { LONG_PRESS } from "@sequoia-leaf/kit/press.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 
@@ -375,7 +375,8 @@ export function initInput(canvas: InputSurface): void {
 
   window.addEventListener("keydown", (e) => {
     unlock();
-    if (typing(e) || inputHooks.settingsUp()) return;
+    // Enter or Space on a button is the button's, whatever the player has put on them.
+    if (typing(e) || inputHooks.settingsUp() || forControl(e)) return;
     const act = WORKS_KEYS.of(e);
     // Enter, as Escape does, puts away the letter.
     if (act === undefined && e.key === "Enter") escape(e, true);

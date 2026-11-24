@@ -1650,7 +1650,7 @@ button.k-info-chip:hover .k-chip {
   font: var(--f-name);
   color: #2b1705;
 }
-/* A key the player may change: a cap that goes down under a press, ringed in gold while it waits for a key. */
+/* A key the player may change: a cap that goes down under a press, ringed in gold, blinking while it waits for a key (steady where less motion is asked for). */
 button.k-cap {
   background: none;
   cursor: pointer;
@@ -1666,16 +1666,24 @@ button.k-cap.waiting {
   outline: var(--u) solid var(--k-gold);
   outline-offset: var(--u);
 }
+button.k-cap.waiting {
+  animation: k-cap-wait 0.8s steps(1) infinite;
+}
+@keyframes k-cap-wait {
+  50% {
+    outline-color: transparent;
+  }
+}
 /* A key that cannot be changed lies flat, its foot pressed in. */
 .k-cap.fixed {
   border-bottom-width: calc(var(--u) * 2);
   border-image-width: calc(var(--u) * 2);
 }
-/* An empty slot: a hollow in the board, and a coral dash in it. */
+/* An empty slot: a hollow in the board, as wide as a key, with nothing in it. */
 .k-cap.empty {
+  min-width: calc(var(--u) * 11);
   border-width: calc(var(--u) * 2);
   border-image: var(--k-f-groove) 2 fill / calc(var(--u) * 2);
-  color: var(--k-coral);
 }
 
 /* On a phone the panel takes the width, and a row of the Keys tab puts its keys over its words. */

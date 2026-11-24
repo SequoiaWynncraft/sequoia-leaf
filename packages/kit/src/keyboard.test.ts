@@ -231,7 +231,7 @@ describe("the layout keys are named by", () => {
 const gameKeys = (game: string) =>
   keymap(game, {
     left: { shelf: "Walking", does: "Walk left", keys: ["KeyA", "ArrowLeft"], held: true },
-    tool: { shelf: "Building", does: "Pick a tool", keys: ["Digit1", "Digit2", "Minus"] },
+    tool: { shelf: "Building", does: "Pick a tool", keys: ["Digit1", "Digit2", "Minus"], each: "Tool" },
     rotate: { shelf: "Building", does: "Rotate", keys: ["KeyR"] },
     zoomOut: { shelf: "Looking", does: "Zoom out", keys: ["Shift+Minus"], repeats: true },
     undo: { shelf: "Building", does: "Undo", keys: ["Ctrl+z", "KeyZ"], repeats: true },
@@ -245,9 +245,18 @@ const forKey = (keys: ReturnType<typeof gameKeys>, e: ReturnType<typeof press>) 
   return at && { id: at.id, nth: at.nth };
 };
 
-/** The caps of a line of the Keys tab, named so; `fixed` says which cannot be changed. */
-const caps = (names: readonly (string | null)[], fixed: readonly boolean[] = []) =>
-  names.map((name, nth) => ({ nth, name, fixed: fixed[nth] ?? false }));
+/** The caps of a line of the Keys tab, for `does` (a function of the slot's number, for slots each of their own), named so; `fixed` says which cannot be changed. */
+const caps = (
+  does: string | ((nth: number) => string),
+  names: readonly (string | null)[],
+  fixed: readonly boolean[] = [],
+) =>
+  names.map((name, nth) => ({
+    nth,
+    does: typeof does === "string" ? does : does(nth),
+    name,
+    fixed: fixed[nth] ?? false,
+  }));
 
 describe("a keymap", () => {
   test("finds what a key is for by its place, whatever it types", () => {
@@ -302,17 +311,23 @@ describe("a keymap", () => {
       "Rotate (R)",
     ]);
     expect(keys.shelves()).toEqual([
-      { name: "Walking", lines: [{ id: "left", does: "Walk left", caps: caps(["Q", "Left"]), changed: false }] },
+      {
+        name: "Walking",
+        lines: [{ id: "left", does: "Walk left", caps: caps("Walk left", ["Q", "Left"]), changed: false }],
+      },
       {
         name: "Building",
         lines: [
-          { id: "tool", does: "Pick a tool", caps: caps(["1", "2", ")"]), changed: false },
-          { id: "rotate", does: "Rotate", caps: caps(["R"]), changed: false },
-          { id: "undo", does: "Undo", caps: caps(["Ctrl+Z", "W"], [true, false]), changed: false },
-          { id: "back", does: "Put away", caps: caps(["Esc"], [true]), changed: false },
+          { id: "tool", does: "Pick a tool", caps: caps((nth) => `Tool ${nth + 1}`, ["1", "2", ")"]), changed: false },
+          { id: "rotate", does: "Rotate", caps: caps("Rotate", ["R"]), changed: false },
+          { id: "undo", does: "Undo", caps: caps("Undo", ["Ctrl+Z", "W"], [true, false]), changed: false },
+          { id: "back", does: "Put away", caps: caps("Put away", ["Esc"], [true]), changed: false },
         ],
       },
-      { name: "Looking", lines: [{ id: "zoomOut", does: "Zoom out", caps: caps(["Shift+)"]), changed: false }] },
+      {
+        name: "Looking",
+        lines: [{ id: "zoomOut", does: "Zoom out", caps: caps("Zoom out", ["Shift+)"]), changed: false }],
+      },
     ]);
   });
 
@@ -377,7 +392,7 @@ describe("a keymap the player changes", () => {
     ]);
   });
 
-  test("never changes Escape, Ctrl with a letter, or a keymap of the browser's own; and keys walking without Shift", () => {
+  test("never changes Escape, Tab, Ctrl with a letter, or a keymap of the browser's own; and walking never takes Shift", () => {
     const keys = gameKeys("fixed");
     expect([keys.put("back", 0, "KeyB"), keys.put("undo", 0, "KeyQ"), keys.put("rotate", 0, "Escape")]).toEqual([
       [],
@@ -389,13 +404,19 @@ describe("a keymap the player changes", () => {
       [],
       [],
     ]);
+    expect([keys.put("rotate", 0, "Shift+Escape"), keys.put("rotate", 0, "Shift+Tab")]).toEqual([[], []]);
     expect([keys.keysOf("back"), keys.keysOf("undo"), keys.keysOf("rotate")]).toEqual([
       ["Escape"],
       ["Ctrl+z", "KeyZ"],
       ["KeyR"],
     ]);
-    keys.put("left", 0, "Shift+KeyI");
-    expect(keys.keysOf("left")).toEqual(["KeyI", "ArrowLeft"]);
+    // Held keys are known by their place alone: Shift+R would take plain R from Rotate.
+    expect([
+      keys.fits("left", "Shift+KeyR"),
+      keys.put("left", 0, "Shift+KeyR"),
+      keys.fits("rotate", "Shift+KeyR"),
+    ]).toEqual([false, [], true]);
+    expect([keys.keysOf("left"), keys.keysOf("rotate")]).toEqual([["KeyA", "ArrowLeft"], ["KeyR"]]);
     const table = fixedKeymap({ back: { shelf: "", does: "Back", keys: ["Tab", "ArrowLeft"] } });
     expect([table.changeable, table.put("back", 1, "KeyQ"), table.keysOf("back")]).toEqual([
       false,
@@ -434,7 +455,14 @@ describe("a keymap the player changes", () => {
       ["Escape"],
       [],
     ]);
-    expect(keptAs('{"left":[null,"Shift+KeyL"]}')).toEqual([[null, "KeyL"], ["Ctrl+z", "KeyZ"], ["Escape"], []]);
+    expect(keptAs('{"left":[null,"Shift+KeyL"]}')).toEqual([[null, "ArrowLeft"], ["Ctrl+z", "KeyZ"], ["Escape"], []]);
+    // Escape and Tab are no game's with Shift either.
+    expect(keptAs('{"undo":["Ctrl+z","Shift+Escape"],"left":["Shift+Tab","ArrowLeft"]}')).toEqual([
+      ["KeyA", "ArrowLeft"],
+      ["Ctrl+z", "KeyZ"],
+      ["Escape"],
+      [],
+    ]);
   });
 
   test("on loading, gives the player's keys first: a game's key the player put elsewhere leaves its own slot empty", () => {
@@ -452,6 +480,15 @@ describe("a keymap the player changes", () => {
     settings.reread();
     const twice = gameKeys("twice");
     expect([twice.keysOf("left"), twice.keysOf("rotate"), twice.shared()]).toEqual([["KeyQ", "ArrowLeft"], [null], []]);
+    // A slot kept broken is the game's key only where no key the player chose is it, whichever comes first.
+    world?.store.setItem(keysKey("broken"), JSON.stringify({ left: [{}, "ArrowLeft"], rotate: ["KeyA"] }));
+    settings.reread();
+    const broken = gameKeys("broken");
+    expect([broken.keysOf("left"), broken.keysOf("rotate"), broken.shared()]).toEqual([
+      [null, "ArrowLeft"],
+      ["KeyA"],
+      [],
+    ]);
   });
 
   test("never has a key in two slots, whatever the player does, and reads back as it was left", () => {
