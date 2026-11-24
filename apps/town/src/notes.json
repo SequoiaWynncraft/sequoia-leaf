@@ -7,7 +7,10 @@
     "more": [
       {
         "head": "Fixed",
-        "points": ["Taking up a tool closes the card you had pinned, and taking away a piece closes its card."]
+        "points": [
+          "Taking up a tool closes the card you had pinned, and taking away a piece closes its card.",
+          "Undo pressed straight after building waits for the guild's server, then undoes it."
+        ]
       }
     ]
   },

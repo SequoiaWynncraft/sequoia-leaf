@@ -24,7 +24,7 @@ bun test                         # the screen's own questions, the yard on a sta
 | the yard on Leaf: commands, catching up     | `yard.ts`, `sync.ts` (the link and the room as values), `test/fake-leaf.ts`      |
 | a visit (`?of=<player>`)                    | `yard.ts` (`Follow`), `visit.test.ts`                                            |
 | what is in hand, drags, Escape              | `hand.ts` (one value, one `step`), `tools.ts`, `input.ts`                        |
-| building, runs, Select, blueprints, undo    | `tools.ts` (`doNow`, in `yard.ts`, is the one place a price is judged)           |
+| building, runs, Select, blueprints, undo    | `tools.ts`, `undos.ts`; `doNow` (`yard.ts`) is the one place a price is judged   |
 | the line over the dock, the dock            | `ui/dock.ts` (a print of the hand)                                               |
 | drawing a frame                             | `scene.ts` (`drawYard`, a layer at a time), `lamps.ts`, `layout.ts`, `art/*.ts`  |
 | the far steps and the map                   | `plan.ts`, `far.ts`, `zoom.ts`, `camera.ts`                                      |
@@ -57,7 +57,8 @@ bun test                         # the screen's own questions, the yard on a sta
 - **What is in hand is one value** (`hand.ts`), moved only by `step`. A drag belongs to the hand
   variant that began it, so it ends whenever the hand moves on: a put-away, a lost press, a blur.
   Escape steps back one stage of whatever is in hand.
-- **Undo undoes only what Leaf did**, and only while what it touched stands as it was just after.
+- **Undo undoes only what Leaf did** (`undos.ts`, one value), and only while what it touched stands
+  as it was just after. Pressed before Leaf has answered, it waits for Leaf, then undoes or says why not.
 - **The kit's pinned card is the one source of the tile the yard marks** (`S.picked` reads it). Taking
   up a tool closes it, and so does taking away what it is about.
 - **Prices are judged in one place:** `doNow`, with the purse as it is at that moment.
