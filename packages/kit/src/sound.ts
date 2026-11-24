@@ -1,11 +1,13 @@
 /**
  * Small sounds, made on the spot from plain tones and hiss. Nothing plays until the first touch.
- * `sfx` is the set every game shares; a game adds its own from `tone` and `noise`.
+ * `sfx` is the set every game shares; a game adds its own from `tone` and `noise`, or a `recording`
+ * for what tones cannot make.
  *
  * How loud, and whether the sound is on, are the player's settings (`settings.ts`), shared by every
  * page. Each sound belongs to a kind the player can switch off on its own (`SoundKind`): a sound asks
  * `heard` with its kind's id before it plays. The menu lists the kinds (`menu.ts`).
  */
+import { outside } from "./net.ts";
 import { type Settings, settings } from "./settings.ts";
 
 let ctx: AudioContext | null = null;
@@ -51,6 +53,7 @@ export function unlock(): void {
     hiss = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = hiss.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    for (const held of recorded.values()) void load(held);
   }
   if (ctx.state === "suspended") void ctx.resume();
 }
@@ -164,6 +167,65 @@ export function noise(
   g.connect(master);
   src.start(t0, Math.random() * 0.5);
   src.stop(t0 + dur + 0.02);
+}
+
+/** A recorded sound, played through the volume and the kinds switched off as any other is. */
+export interface Recording {
+  /** Plays it, as loud as `vol`, and as fast as `rate` (its pitch goes with it). */
+  play(o?: { vol?: number; rate?: number }): void;
+}
+
+/** A recording's file, and its sound once fetched and decoded (`load`). */
+interface Held {
+  readonly file: string;
+  buffer: AudioBuffer | null;
+  loading: Promise<void> | null;
+}
+
+/** Every recording a page has, fetched and decoded as sound starts (`unlock`). */
+const recorded = new Map<string, Held>();
+/** Seconds a recording asked for before it was ready may still come and play: later, it would answer nothing. */
+const LATE = 0.4;
+
+/** Fetches and decodes a recording, once; a load that fails is tried again the next time it is asked for. */
+function load(held: Held): Promise<void> {
+  held.loading ??= (async () => {
+    const data = await (await outside.fetch(held.file)).arrayBuffer();
+    if (ctx) held.buffer = await ctx.decodeAudioData(data);
+  })().catch(() => {
+    held.loading = null;
+  });
+  return held.loading;
+}
+
+/** Plays a recording now, or, while it is still on its way, when it comes if that is soon (`LATE`). */
+async function playRecording(held: Held, o: { vol?: number; rate?: number }): Promise<void> {
+  const asked = ctx?.currentTime ?? 0;
+  if (!held.buffer) await load(held);
+  if (!held.buffer || !ctx || !master || ctx.currentTime - asked >= LATE) return;
+  const src = ctx.createBufferSource();
+  src.buffer = held.buffer;
+  src.playbackRate.value = o.rate ?? 1;
+  const g = ctx.createGain();
+  g.gain.value = o.vol ?? 0.2;
+  src.connect(g);
+  g.connect(master);
+  src.start();
+}
+
+/**
+ * A recorded sound the page ships, by its file (`import file from "./purr.mp3"`). It is fetched as
+ * sound starts; asked for before it is ready, it plays when it comes, if that is soon (`LATE`).
+ */
+export function recording(file: string): Recording {
+  const held = recorded.get(file) ?? { file, buffer: null, loading: null };
+  recorded.set(file, held);
+  if (ctx) void load(held);
+  return {
+    play(o = {}) {
+      if (ctx && !silent()) void playRecording(held, o);
+    },
+  };
 }
 
 /** A note some semitones above A. */
