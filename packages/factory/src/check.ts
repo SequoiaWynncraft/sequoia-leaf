@@ -19,6 +19,7 @@
  * change with it.
  */
 import { counting } from "./orders.ts";
+import { waysOn } from "./pieces.ts";
 import { ITEM_COUNT, NONE, SPAN_MOST } from "./tables.ts";
 import { type Counts, holderOf, tunnelOf, type Yard } from "./yard.ts";
 
@@ -99,6 +100,7 @@ export function check(y: Yard): number {
     mix(
       k |
         ((y.dir[i] ?? 0) << 4) |
+        ((y.free[i] ?? 0) << 6) |
         ((y.item[i] ?? 0) << 8) |
         ((y.prog[i] ?? 0) << 16) |
         ((y.via[i] ?? 0) << 24) |
@@ -107,9 +109,7 @@ export function check(y: Yard): number {
     mix(
       (y.tint[i] ?? 0) |
         ((y.turn[i] ?? 0) << 4) |
-        ((y.shut[i] ?? 0) << 8) |
-        ((y.free[i] ?? 0) << 12) |
-        ((y.first[i] ?? 0) << 13) |
+        (waysOn(y, i) << 8) |
         (((y.span[i] ?? 0) + 8) << 16) |
         ((y.set[i] ?? 0) << 24),
     );

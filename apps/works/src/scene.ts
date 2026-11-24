@@ -1708,7 +1708,8 @@ function sendWay(y: Yard, i: number, a: Arms): Dir {
   const out = firstSide(y, i);
   if (out !== null && armAt(a, out) === 2) return out;
   for (let k = 0; k < 3; k++) {
-    const turn = ((y.turn[i] ?? 0) + k) % 3;
+    // Its next way out is under its next way in (`tick.ts`).
+    const turn = (((y.turn[i] ?? 0) & 3) + k) % 3;
     const side = turn === 0 ? d : turn === 1 ? LEFT[d] : RIGHT[d];
     if (armAt(a, side) === 2) return side;
   }

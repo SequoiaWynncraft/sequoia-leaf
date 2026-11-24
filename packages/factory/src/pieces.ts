@@ -44,13 +44,11 @@ import {
   SORTER,
   SPLITTER,
   STOP,
+  TINTS,
   TOP,
   TUNNEL,
 } from "./tables.ts";
 import { changed, holderOf, PIECE_BYTES, tunnelOf, type Yard } from "./yard.ts";
-
-/** How many colours there are to give. */
-export const TINTS = 6;
 
 /** What a piece keeps when it is copied, moved or kept in a blueprint, besides what it is, where and which way: only what is not as new. */
 export interface Kept {
@@ -63,6 +61,8 @@ export interface Kept {
    * sorter, 2 where it sends the thing it is set to to its right; with none, it sends it left.
    */
   readonly first?: number;
+  /** For a splitter, its ways out turned to take things in, a bit each as `shut` has them: never a shut way, nor the way put first. */
+  readonly ins?: number;
   /** Its grade, when it is above 1. */
   readonly grade?: number;
 }
@@ -86,21 +86,48 @@ const shutAt = (shut: unknown, way: number): boolean => typeof shut === "number"
 
 /**
  * A splitter's ways as one byte, as a blueprint and a kept yard hold them: its shut ways a bit each,
- * and 8 times what it puts first, 1 + the way or 0 for none. A sorter's side is kept the same way.
+ * 8 times what it puts first (1 + the way, or 0 for none), and 32 times its ways in, a bit each. A
+ * sorter's side is kept as the way put first.
  */
-export const packWays = (shut: number, first: number): number => shut | (first << 3);
-/** A splitter's ways read back from their byte, as `keptOf` reads them: the shut ways, and the way put first or -1. */
-export const unpackWays = (b: number): { shut: number; first: number } => ({ shut: b & 7, first: (b >> 3) - 1 });
+export const packWays = (shut: number, first: number, ins = 0): number => shut | (first << 3) | (ins << 5);
+/** A splitter's ways read back from their byte, as `keptOf` reads them: the shut ways, the way put first or -1, and the ways in. */
+export const unpackWays = (b: number): { shut: number; first: number; ins: number } => ({
+  shut: b & 7,
+  first: ((b >> 3) & 3) - 1,
+  ins: b >> 5,
+});
 
 /**
- * What a record has of the way a piece keeps first, if it may keep it: a splitter's way put first,
- * never a shut one; a sorter's side, only where it is the right (2), the left being how one stands
- * unless told.
+ * What a record has of a piece's ways, if it may keep them: a splitter's shut ways, its ways in (none
+ * that is shut) and the way it puts first (none that is shut or in); a sorter's side, as the way it
+ * puts first, only where it is the right (2), the left being how one stands unless told.
  */
-const firstKept = (v: { readonly first?: unknown; readonly shut?: unknown }, k: Kind): Pick<Kept, "first"> =>
-  isWay(v.first) && (k === SPLITTER ? !shutAt(v.shut, v.first) : k === SORTER && v.first === 2)
-    ? { first: v.first }
-    : {};
+function waysKept(v: { readonly [K in keyof Kept]?: unknown }, k: Kind): Pick<Kept, "shut" | "first" | "ins"> {
+  if (k === SORTER) return v.first === 2 ? { first: 2 } : {};
+  if (k !== SPLITTER) return {};
+  const shut = upTo(v.shut, 7) ? v.shut : 0;
+  const ins = upTo(v.ins, 7) ? v.ins & ~shut : 0;
+  return {
+    ...(shut > 0 ? { shut } : {}),
+    ...(ins > 0 ? { ins } : {}),
+    ...(isWay(v.first) && !shutAt(shut | ins, v.first) ? { first: v.first } : {}),
+  };
+}
+
+/** A splitter's ways on a tile as one byte (`packWays`), or a sorter's side; 0 for any other piece. */
+export const waysOn = (y: Yard, i: number): number => packWays(y.shut[i] ?? 0, y.first[i] ?? 0, y.ins[i] ?? 0);
+
+/**
+ * Sets the ways a splitter or a sorter keeps (`waysKept`) on the tile it stands on, as far as the yard
+ * may have them: a splitter's way put first and its ways in once each is unlocked, a sorter's side
+ * always. Its shut ways are set whatever it kept.
+ */
+export function waysTo(y: Yard, i: number, k: Kind, kept: Kept): void {
+  y.shut[i] = kept.shut ?? 0;
+  if (kept.first !== undefined && (k === SORTER || locked(y.open, { first: true }) === null))
+    y.first[i] = kept.first + 1;
+  if (kept.ins !== undefined && locked(y.open, { ins: true }) === null) y.ins[i] = kept.ins;
+}
 
 /** What a record has of what a piece keeps, if that kind of piece may keep it. */
 export const keptOf = (v: { readonly [K in keyof Kept]?: unknown }, k: Kind): Kept => ({
@@ -109,8 +136,7 @@ export const keptOf = (v: { readonly [K in keyof Kept]?: unknown }, k: Kind): Ke
     : {}),
   ...(v.open === false && k === CRATE ? { open: v.open } : {}),
   ...(upTo(v.tint, TINTS) && tinted(k) ? { tint: v.tint } : {}),
-  ...(upTo(v.shut, 7) && k === SPLITTER ? { shut: v.shut } : {}),
-  ...firstKept(v, k),
+  ...waysKept(v, k),
   ...(upTo(v.grade, TOP) && v.grade > 1 && isGraded(k) ? { grade: v.grade } : {}),
 });
 
@@ -128,6 +154,7 @@ export function keptAt(y: Yard, i: number): Kept {
       tint: y.tint[i],
       shut: y.shut[i],
       first: (y.first[i] ?? 0) - 1,
+      ins: y.ins[i],
       grade: y.grade[i],
     },
     k,
@@ -227,13 +254,15 @@ export function priceOf(y: Yard, pieces: readonly Pick<Piece, "kind" | "x" | "y"
 
 /**
  * Why a yard may not have a piece as it is asked for, wherever it stands: its kind at its grade, what
- * it is set to, its colour, a splitter's way put first (a sorter's side needs nothing unlocked).
+ * it is set to, its colour, a splitter's way put first and its ways in (a sorter's side needs nothing
+ * unlocked).
  */
 export const pieceRefusal = (open: Open, p: Piece): string | null =>
   locked(open, { build: p.kind, grade: p.grade }) ??
   (p.recipe !== undefined && p.kind !== SORTER ? locked(open, { make: p.recipe }) : null) ??
   ((p.tint ?? 0) > 0 ? locked(open, { use: "paint" }) : null) ??
-  (p.first !== undefined && p.kind === SPLITTER ? locked(open, { first: true }) : null);
+  (p.first !== undefined && p.kind === SPLITTER ? locked(open, { first: true }) : null) ??
+  (p.ins === undefined ? null : locked(open, { ins: true }));
 
 /** The tiles setting a piece down changes: a piece of its kind standing there, both mouths of a tunnel, or else its own. */
 function claims(y: Yard, p: Piece): number[] {
@@ -319,8 +348,7 @@ export function stand(
     for (const i of did.laid) {
       // The colour it came with is of what stood there: a run is joined below, as a whole.
       y.tint[i] = kept.tint ?? 0;
-      if (kept.shut !== undefined) y.shut[i] = kept.shut;
-      if (kept.first !== undefined) y.first[i] = kept.first + 1;
+      waysTo(y, i, p.kind, kept);
       const r = holderOf(y, i);
       if (kept.recipe !== undefined) y.set[i] = kept.recipe;
       if (kept.open === false && r >= 0) y.holders.open[r] = 0;
@@ -342,6 +370,7 @@ const PARTS = [
   "turn",
   "shut",
   "first",
+  "ins",
   "set",
   "grade",
   "free",
@@ -431,7 +460,7 @@ export function packPieces(pieces: readonly Piece[]): Uint8Array {
         p.recipe ?? NONE,
         p.open === false ? 0 : 1,
         p.tint ?? 0,
-        packWays(p.shut ?? 0, (p.first ?? -1) + 1),
+        packWays(p.shut ?? 0, (p.first ?? -1) + 1, p.ins ?? 0),
         p.grade ?? 1,
       ],
       n * PIECE_BYTES,

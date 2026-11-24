@@ -20,6 +20,7 @@
  * stands, and makes no arrays, objects, closures or strings (but for the rare order filled).
  */
 import { BUFFER, FUEL, STUDY_HOLDS, TICKS } from "./content/machines.ts";
+import { toward } from "./land.ts";
 import { deliver, giveGoal } from "./orders.ts";
 import {
   BELT,
@@ -51,7 +52,7 @@ import {
   WORK,
   WORKSHOP,
 } from "./tables.ts";
-import { ahead, farMouth, nextOf, rewire, sortWay, wayIn, wayOut } from "./wire.ts";
+import { ahead, farMouth, nextOf, rewire, sortWay, WAY_TURN, wayIn, wayOut } from "./wire.ts";
 import { enough, holderOf, type Holders, put, take, tunnelOf, type Wire, type Yard } from "./yard.ts";
 
 const BURNS = (GIVES[BOILER] ?? 0) * HALF;
@@ -250,6 +251,47 @@ function wayInOn(y: Yard, to: number, side: number): number {
   return side === ((d + 2) & 3) ? 0 : side === ((d + 3) & 3) ? 1 : side === ((d + 1) & 3) ? 2 : -1;
 }
 
+/** A splitter's way in on each side, by how far round from ahead it is in quarter turns right: 1 ahead, 3 right, 0 behind, 2 left. */
+const SLOT_ON = [1, 3, 0, 2] as const;
+
+/**
+ * Which of its ways in is on the side `side` of a joiner (0 behind, 1 left, 2 right) or of a splitter
+ * (0 behind, then 1 + its way out turned in: 1 ahead, 2 left, 3 right), in the order they take turns.
+ */
+const slotOn = (y: Yard, to: number, side: number): number =>
+  y.kind[to] === JOINER ? wayInOn(y, to, side) : (SLOT_ON[(side - (y.dir[to] ?? 0)) & 3] ?? 0);
+
+/** The tile a joiner's or a splitter's way in `s` (as `slotOn` numbers them) takes from; -1 for a splitter's way that takes nothing in. */
+function slotTile(y: Yard, to: number, s: number): number {
+  if (y.kind[to] === JOINER || s === 0) return wayIn(y, to, s);
+  const way = s - 1;
+  return ((y.ins[to] ?? 0) >> way) & 1 ? toward(y.land, to, (y.dir[to] ?? 0) + (WAY_TURN[way] ?? 0)) : -1;
+}
+
+/**
+ * Whether a joiner, or a splitter with ways in, takes a thing in on its side `side` now. Its ways in
+ * take turns: it waits for whoever's turn it is, so long as they have something ready to give. A
+ * splitter that takes in from behind alone takes whatever comes. A splitter keeps its next way in
+ * over its next way out in `turn` (`(turn >> 2)`, `turn & 3`).
+ */
+function onTurn(y: Yard, to: number, side: number): boolean {
+  const joiner = y.kind[to] === JOINER;
+  if (!joiner && (y.ins[to] ?? 0) === 0) return true;
+  const slot = slotOn(y, to, side);
+  if (slot < 0) return false;
+  const ways = joiner ? 3 : 4;
+  const turn = joiner ? (y.turn[to] ?? 0) : (y.turn[to] ?? 0) >> 2;
+  for (let s = turn % ways; s !== slot; s = (s + 1) % ways) if (ready(y, slotTile(y, to, s), to)) return false;
+  return true;
+}
+
+/** Once a joiner, or a splitter with ways in, has taken a thing in on its side `side`, the turn is the next way in's. */
+function turnOn(y: Yard, to: number, side: number): void {
+  const next = slotOn(y, to, side) + 1;
+  if (y.kind[to] === JOINER) y.turn[to] = next % 3;
+  else if ((y.ins[to] ?? 0) !== 0) y.turn[to] = ((next % 4) << 2) | ((y.turn[to] ?? 0) & 3);
+}
+
 /**
  * Whether the tile at `to` will take the thing `n` handed to it from the tile beside it on its side
  * `side` (a way), by the plumbing: which sides each tile takes from, and what each machine may make.
@@ -258,15 +300,8 @@ function accepts(y: Yard, to: number, n: number, side: number, wire: Wire): bool
   if (to < 0 || (((wire.taken[to] ?? 0) >> side) & 1) === 0) return false;
   const k = y.kind[to];
   if (k === DEPOT || k === STOP) return true;
-  if (k === BELT || k === SPLITTER || k === TUNNEL || k === SORTER) return y.item[to] === NONE;
-  if (k === JOINER) {
-    if (y.item[to] !== NONE) return false;
-    const way = wayInOn(y, to, side);
-    if (way < 0) return false;
-    // It waits for whoever's turn it is, so long as they have something to give.
-    for (let w = y.turn[to] ?? 0; w !== way; w = (w + 1) % 3) if (ready(y, wayIn(y, to, w), to)) return false;
-    return true;
-  }
+  if (k === BELT || k === TUNNEL || k === SORTER) return y.item[to] === NONE;
+  if (k === JOINER || k === SPLITTER) return y.item[to] === NONE && onTurn(y, to, side);
   const h = y.holders;
   const r = holderOf(y, to);
   const have = h.stock[r * ITEM_COUNT + n] ?? 0;
@@ -306,10 +341,7 @@ function give(y: Yard, to: number, n: number, side: number, over: number): void 
     deliver(y, n, 1);
     return;
   }
-  if (k === JOINER) {
-    const way = wayInOn(y, to, side);
-    y.turn[to] = way + 1 > 2 ? 0 : way + 1;
-  }
+  if (k === JOINER || k === SPLITTER) turnOn(y, to, side);
   if (k === JOINER || k === BELT || k === SPLITTER || k === TUNNEL || k === SORTER) {
     y.item[to] = n;
     y.prog[to] = over;
@@ -375,11 +407,12 @@ function split(y: Yard, i: number, wire: Wire): void {
   if (n === NONE || (y.prog[i] ?? 0) < 8) return;
   const first = (y.first[i] ?? 0) - 1;
   if (first >= 0 && pass(y, i, n, first, wire)) return;
-  const turn = y.turn[i] ?? 0;
+  // Its next way out is under its next way in (`onTurn`).
+  const turn = (y.turn[i] ?? 0) & 3;
   for (let k = 0; k < 3; k++) {
     const way = (k + turn) % 3;
     if (way === first || !pass(y, i, n, way, wire)) continue;
-    y.turn[i] = (way + 1) % 3;
+    y.turn[i] = ((y.turn[i] ?? 0) & ~3) | ((way + 1) % 3);
     return;
   }
 }

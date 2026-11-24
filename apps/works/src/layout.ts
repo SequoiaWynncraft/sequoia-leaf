@@ -111,6 +111,25 @@ function feeds(y: Yard, from: number, to: number): boolean {
   return nextOf(y, from) === to && nextOf(y, to) !== from;
 }
 
+/**
+ * A splitter's arms, its ways out on the sides `ways` (ahead, left, right) and behind on `back`: a
+ * shut way wears its bar, and a way in is drawn as behind is, coming in. Of the rest, only the ways
+ * out that something takes things from; a splitter nothing takes from shows every way that is open.
+ */
+function splitterArms(y: Yard, i: number, ways: readonly number[], back: number): Arms {
+  let a = withArm(0, back, 1);
+  const shut = y.shut[i] ?? 0;
+  const ins = y.ins[i] ?? 0;
+  ways.forEach((side, n) => {
+    if ((shut >> n) & 1) a = withArm(a, side, 3);
+    else if ((ins >> n) & 1) a = withArm(a, side, 1);
+  });
+  const open = ways.filter((side) => armAt(a, side) === 0);
+  const led = open.filter((side) => feeds(y, i, toward(y.land, i, side)));
+  for (const side of led.length > 0 ? led : open) a = withArm(a, side, 2);
+  return a;
+}
+
 /** The arms of the piece on a tile that carries: for the yard as it stands, or with pieces in hand set into it. 0 for the rest. */
 export function armsAt(y: Yard, i: number): Arms {
   const k = y.kind[i] ?? NONE;
@@ -133,20 +152,7 @@ export function armsAt(y: Yard, i: number): Arms {
     }
     return a;
   }
-  if (k === SPLITTER) {
-    // A shut way wears its bar. Of the rest, only the ways out that something takes things from;
-    // a splitter nothing takes from shows every way that is open.
-    let a = withArm(0, back, 1);
-    const ways = [d, left, right];
-    const shut = y.shut[i] ?? 0;
-    ways.forEach((side, n) => {
-      if ((shut >> n) & 1) a = withArm(a, side, 3);
-    });
-    const open = ways.filter((side) => armAt(a, side) === 0);
-    const led = open.filter((side) => feeds(y, i, toward(y.land, i, side)));
-    for (const side of led.length > 0 ? led : open) a = withArm(a, side, 2);
-    return a;
-  }
+  if (k === SPLITTER) return splitterArms(y, i, [d, left, right], back);
   // A sorter takes in from behind and sends ahead, and the one thing it is set to, to its side.
   if (k === SORTER) return withArm(withArm(withArm(0, back, 1), d, 2), sortSide(y, i), 2);
   if (k === TUNNEL) return (y.span[i] ?? 0) > 0 ? withArm(0, back, 1) : withArm(0, d, 2);
@@ -333,6 +339,7 @@ let own: {
   dir: Uint8Array;
   span: Int8Array;
   shut: Uint8Array;
+  ins: Uint8Array;
   first: Uint8Array;
   tint: Uint8Array;
   grade: Uint8Array;
@@ -357,6 +364,7 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
       dir: new Uint8Array(n),
       span: new Int8Array(n),
       shut: new Uint8Array(n),
+      ins: new Uint8Array(n),
       first: new Uint8Array(n),
       tint: new Uint8Array(n),
       grade: new Uint8Array(n),
@@ -368,6 +376,7 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
   o.dir.set(y.dir);
   o.span.set(y.span);
   o.shut.set(y.shut);
+  o.ins.set(y.ins);
   o.first.set(y.first);
   o.tint.set(y.tint);
   o.grade.set(y.grade);
@@ -378,6 +387,7 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
     o.dir[i] = 0;
     o.span[i] = 0;
     o.shut[i] = 0;
+    o.ins[i] = 0;
     o.first[i] = 0;
     o.tint[i] = 0;
     o.grade[i] = 0;
@@ -397,6 +407,7 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
       o.dir[i] = p.dir;
       o.span[i] = span;
       o.shut[i] = i === near ? (p.shut ?? 0) : 0;
+      o.ins[i] = i === near ? (p.ins ?? 0) : 0;
       o.first[i] = i === near ? (p.first ?? -1) + 1 : 0;
       o.tint[i] = p.tint ?? 0;
       o.grade[i] = gradeOf(p.kind, p.grade);

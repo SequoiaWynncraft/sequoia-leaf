@@ -46,12 +46,27 @@ const right = (y: Yard, i: number): number => toward(y.land, i, (y.dir[i] ?? 0) 
  * every sorter sent before one could be set to the right.
  */
 export const sortWay = (y: Yard, i: number): 1 | 2 => (y.first[i] === 3 ? 2 : 1);
-/** The ways out a piece has shut, a bit each: a splitter's as they are set, and a sorter's the side it does not send to. */
-const shutWays = (y: Yard, i: number): number =>
-  y.kind[i] === SORTER ? (sortWay(y, i) === 1 ? 4 : 2) : (y.shut[i] ?? 0);
-/** A splitter's or a sorter's way out (0 ahead, 1 left, 2 right), or -1 where it is shut or off the map. */
+/**
+ * The ways out a piece sends nothing by, a bit each (1 ahead, 2 left, 4 right): a splitter's shut
+ * ways and its ways turned to take things in, and a sorter's the side it does not send to.
+ */
+export const closedWays = (y: Yard, i: number): number =>
+  y.kind[i] === SORTER ? (sortWay(y, i) === 1 ? 4 : 2) : (y.shut[i] ?? 0) | (y.ins[i] ?? 0);
+/** A splitter's or a sorter's way out (0 ahead, 1 left, 2 right), or -1 where it is closed or off the map. */
 export const wayOut = (y: Yard, i: number, way: number): number =>
-  (shutWays(y, i) >> way) & 1 ? -1 : way === 0 ? ahead(y, i) : way === 1 ? left(y, i) : right(y, i);
+  (closedWays(y, i) >> way) & 1 ? -1 : way === 0 ? ahead(y, i) : way === 1 ? left(y, i) : right(y, i);
+/** How far round from the way a piece faces each of its ways out is, in quarter turns right: ahead, left, right. */
+export const WAY_TURN = [0, 3, 1] as const;
+/** The sides a splitter takes things in by besides behind, a bit each as `sidesTaken` has them: its ways in. */
+function sidesIn(y: Yard, i: number): number {
+  const ins = y.ins[i] ?? 0;
+  const d = y.dir[i] ?? 0;
+  let sides = 0;
+  WAY_TURN.forEach((t, way) => {
+    if ((ins >> way) & 1) sides |= 1 << ((d + t) & 3);
+  });
+  return sides;
+}
 /** A joiner's way in (0 behind, 1 left, 2 right), or -1 off the map. */
 export const wayIn = (y: Yard, i: number, way: number): number =>
   way === 0 ? behind(y, i) : way === 1 ? left(y, i) : right(y, i);
@@ -83,14 +98,15 @@ const isWorker = (k: number): boolean => k === MILL || k === BENCH || k === WORK
 /**
  * The sides a piece takes things in from, a bit for each way (east 1, south 2, west 4, north 8),
  * whatever it holds just now: a belt, crate or joiner from all but the side it faces (two belts
- * facing each other pass nothing), a splitter, a sorter and a tunnel's way-in mouth only from behind,
- * the depot, a stop, mills, benches, workshops, boilers and Studies from every side, the rest from none.
+ * facing each other pass nothing), a splitter, a sorter and a tunnel's way-in mouth only from behind
+ * (a splitter by its ways in too), the depot, a stop, mills, benches, workshops, boilers and Studies from every side, the rest from none.
  */
 export function sidesTaken(y: Yard, i: number): number {
   const k = y.kind[i] ?? NONE;
   const d = y.dir[i] ?? 0;
   if (k === BELT || k === CRATE || k === JOINER) return 15 & ~(1 << d);
-  if (k === SPLITTER || k === SORTER || (k === TUNNEL && (y.span[i] ?? 0) > 0)) return 1 << ((d + 2) & 3);
+  if (k === SPLITTER || k === SORTER || (k === TUNNEL && (y.span[i] ?? 0) > 0))
+    return (1 << ((d + 2) & 3)) | sidesIn(y, i);
   return k === DEPOT || k === STOP || k === BOILER || k === STUDY || isWorker(k) ? 15 : 0;
 }
 

@@ -392,13 +392,15 @@ export function setOpen(y: Yard, x: number, z: number, open: boolean): boolean {
 
 /**
  * Shuts or opens one of a splitter's ways out: 0 for ahead, 1 for left, 2 for right. Shutting the
- * way it puts first puts none first. Says whether there was a splitter.
+ * way it puts first puts none first. A way it took things in by takes nothing in, opened or shut.
+ * Says whether there was a splitter.
  */
 export function setWay(y: Yard, x: number, z: number, way: number, open: boolean): boolean {
   const i = at(y, x, z);
   if (i < 0 || y.kind[i] !== SPLITTER || (way !== 0 && way !== 1 && way !== 2)) return false;
   const was = y.shut[i] ?? 0;
   const shut = open ? was & ~(1 << way) : was | (1 << way);
+  insTo(y, i, (y.ins[i] ?? 0) & ~(1 << way));
   if (was !== shut) {
     y.shut[i] = shut;
     if (!open && y.first[i] === way + 1) y.first[i] = 0;
@@ -416,8 +418,34 @@ export function setFirst(y: Yard, x: number, z: number, way: number | null): str
   const i = at(y, x, z);
   if (i < 0 || y.kind[i] !== SPLITTER) return "There is no splitter there";
   if (way !== null && ((y.shut[i] ?? 0) >> way) & 1) return "That way is shut";
+  if (way !== null && ((y.ins[i] ?? 0) >> way) & 1) return "That way takes things in";
   y.first[i] = way === null ? 0 : way + 1;
   return null;
+}
+
+/**
+ * Turns one of a splitter's ways out (0 ahead, 1 left, 2 right) to take things in, as it does from
+ * behind, or with `on` false back to sending them out. A way turned in is neither shut nor put first.
+ * Says whether there was a splitter.
+ */
+export function setIn(y: Yard, x: number, z: number, way: number, on: boolean): boolean {
+  const i = at(y, x, z);
+  if (i < 0 || y.kind[i] !== SPLITTER || (way !== 0 && way !== 1 && way !== 2)) return false;
+  const bit = 1 << way;
+  if (on) {
+    y.shut[i] = (y.shut[i] ?? 0) & ~bit;
+    if (y.first[i] === way + 1) y.first[i] = 0;
+  }
+  insTo(y, i, on ? (y.ins[i] ?? 0) | bit : (y.ins[i] ?? 0) & ~bit);
+  return true;
+}
+
+/** Sets a splitter's ways in; with none left, its next way in goes from `turn` too (`tick.ts`). Who takes from whom changes, so the plumbing is worked out again. */
+function insTo(y: Yard, i: number, ins: number): void {
+  if (y.ins[i] === ins) return;
+  y.ins[i] = ins;
+  if (ins === 0) y.turn[i] = (y.turn[i] ?? 0) & 3;
+  changed(y);
 }
 
 // ---------- land ----------

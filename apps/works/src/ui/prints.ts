@@ -75,12 +75,12 @@ import type {
   Print,
   StandingPrint,
   TierPrint,
-  WaysPrint,
 } from "./cards.ts";
 import { KEYS, openTools } from "./dock.ts";
 import { givenIn } from "./goal.ts";
 import { flowOf, kindNumbers, numbersOf, saysNumbers } from "./numbers.ts";
 import { orderRef } from "./refs.ts";
+import type { WaysPrint } from "./splitter.ts";
 import { given, givenTo, lockOf, needsOf, nextUp, researchOpen, tierOpen } from "./standing.ts";
 
 /** A number read back out of a reference, if it is a whole one. */
@@ -155,6 +155,7 @@ function waysPrint(i: number): WaysPrint {
     dir,
     tint: w.tint[i] ?? 0,
     shut: sides.map((_, n) => (((w.shut[i] ?? 0) >> n) & 1) === 1),
+    ins: sides.map((_, n) => (((w.ins[i] ?? 0) >> n) & 1) === 1),
     led: sides.map((side) => takes(w, toward(w.land, i, side), i)),
     first: (w.first[i] ?? 0) - 1,
   };
@@ -293,12 +294,14 @@ function orderPrint(slot: string): NodePrint | OrderPrint | null {
 }
 
 const NUMBERED = ["stops", "crate", "reach", "depot", "span", "away", "hooks"] as const;
+/** The unlocks that are one thing or none: the board, a splitter's flags and its ways in. */
+const FLAGGED = ["board", "first", "ins"] as const;
 
 /** The unlock a `perk:` reference names, as the rules make it. */
 function perkOf(id: string): Unlock | null {
   const [of = "", a = "", b = ""] = id.split(".");
-  if (of === "board") return unlocked({ board: true })[0] ?? null;
-  if (of === "first") return unlocked({ first: true })[0] ?? null;
+  const flag = FLAGGED.find((f) => f === of);
+  if (flag !== undefined) return unlocked({ [flag]: true })[0] ?? null;
   if (of === "blueprints" && numberIn(a) >= 0 && numberIn(b) >= 0)
     return unlocked({ blueprints: { count: numberIn(a), pieces: numberIn(b) } })[0] ?? null;
   const numbered = NUMBERED.find((f) => f === of);

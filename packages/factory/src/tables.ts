@@ -55,6 +55,9 @@ export const kind = (name: KindName): Kind => sure(kindNamed(name), name);
 export const plot = (name: PlotName): Plot => sure(plotNamed(name), name);
 export const goal = (id: string): Goal => sure(goalNamed(id), id);
 
+/** How many colours there are to give a line. */
+export const TINTS = 6;
+
 export const ITEM_COUNT = ITEMS.length;
 export const KIND_COUNT = KINDS.length;
 
@@ -278,8 +281,9 @@ export interface Open {
   readonly away: number;
   readonly hooks: number;
   readonly board: boolean;
-  /** Whether a splitter may put one of its ways first. */
+  /** Whether a splitter may put one of its ways first, and turn its ways out to take things in. */
   readonly first: boolean;
+  readonly ins: boolean;
 }
 
 /** A tool's bit in `Open.tools`. */
@@ -300,8 +304,6 @@ export function openOf(goals: readonly Goal[]): Open {
   const recipes = Uint8Array.from(ALL_ITEMS, (n) => (LOCKED.has(n) ? 0 : 1));
   let plots = 0;
   let tools = 0;
-  let board = false;
-  let first = false;
   const unlocks = [START, ...goals.flatMap((g) => GOALS[g]?.unlocks ?? [])];
   for (const u of unlocks) for (const k of u.kinds ?? []) kinds[kind(k)] = 1;
   for (const u of unlocks) {
@@ -314,8 +316,6 @@ export function openOf(goals: readonly Goal[]): Open {
     for (const r of u.recipes ?? []) recipes[item(r)] = 1;
     for (const p of u.plots ?? []) plots |= 1 << plot(p);
     for (const t of u.tools ?? []) tools |= toolBit(t);
-    if (u.board) board = true;
-    if (u.first) first = true;
   }
   const top = (f: (u: Unlocks) => number | undefined): number => Math.max(0, ...unlocks.map((u) => f(u) ?? 0));
   return {
@@ -334,8 +334,9 @@ export function openOf(goals: readonly Goal[]): Open {
     span: top((u) => u.span),
     away: top((u) => u.away) * 36_000,
     hooks: top((u) => u.hooks),
-    board,
-    first,
+    board: unlocks.some((u) => u.board === true),
+    first: unlocks.some((u) => u.first === true),
+    ins: unlocks.some((u) => u.ins === true),
   };
 }
 
@@ -348,8 +349,9 @@ export type Lock =
   /** Make a thing by its recipe: be told to make it, start it, take its parts in. */
   | { readonly make: Item }
   | { readonly use: Tool }
-  /** Put one of a splitter's ways first. */
+  /** Put one of a splitter's ways first, or turn one of its ways out to take things in. */
   | { readonly first: true }
+  | { readonly ins: true }
   /** Have this many cart stops standing. */
   | { readonly stops: number }
   /** Keep a blueprint in a place, of so many pieces in a box of so many tiles across and down. */
@@ -363,7 +365,7 @@ const kindWord = (k: Kind): string => (KIND_INFO[k]?.name ?? "").toLowerCase();
 /**
  * Why a yard may not do something yet, or nothing if it may: the one place that says which kinds of
  * piece it may build and to what grade, what its machines may make, which tools it may use, whether
- * a splitter may put a way first, and how many cart stops and blueprints it may have. Everything
+ * a splitter may put a way first or take things in by its ways out, and how many cart stops and blueprints it may have. Everything
  * that builds, sets, makes, takes in, keeps or reads a yard back asks it.
  */
 export function locked(open: Open, ask: Lock): string | null {
@@ -386,6 +388,7 @@ export function locked(open: Open, ask: Lock): string | null {
     return (open.tools & toolBit(ask.use)) === 0 ? `${TOOL_NAME[ask.use]} is not unlocked yet` : null;
   }
   if ("first" in ask) return open.first ? null : "Putting a way first is not unlocked yet";
+  if ("ins" in ask) return open.ins ? null : "Ways in for splitters are not unlocked yet";
   if ("stops" in ask)
     return ask.stops > open.stops ? `The yard may have ${open.stops} cart stop${open.stops === 1 ? "" : "s"}` : null;
   const { blueprint: slot, pieces = 0, w = 0, h = 0 } = ask;

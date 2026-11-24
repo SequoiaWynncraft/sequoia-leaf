@@ -139,6 +139,15 @@ export const RESEARCH: readonly ResearchInfo[] = [
     cost: { brass: 200 },
     unlocks: { grades: { study: 2 } },
   },
+  {
+    id: "waysin",
+    tier: 4,
+    name: "Ways in",
+    what: "A splitter's ahead, left or right can be set to In on its card. It takes items in there as well as from behind, in turn, and sends them out of its open ways.",
+    cost: { timber: 500, brass: 300 },
+    needs: ["flags"],
+    unlocks: { ins: true },
+  },
   // Tier 4's long works: the goods none of them made with a lantern, studied with both folios.
   {
     id: "pipework",

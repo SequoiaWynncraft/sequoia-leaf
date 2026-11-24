@@ -58,6 +58,8 @@ export interface Art {
    * with no thing (`NONE`), the board is bare.
    */
   sorter: (dir: Dir, item: number, right?: boolean) => HTMLCanvasElement;
+  /** A splitter taking things in from behind and from its left, for the card of what lets it. */
+  waysIn: HTMLCanvasElement;
   /** A machine's picture for a button or a card, as it stands at a grade (the first, unless said). */
   icon: (kind: Kind, grade?: number) => HTMLCanvasElement;
 }
@@ -283,6 +285,7 @@ export function makeArt(land: Land): Art {
     parcel: bm(["NNNNNNN", "NnnynnN", "nnnynnb", "nnnnnnb", "nbbbbbb"], 3, 5),
     sign: signMaker(),
     sorter,
+    waysIn: meeting(m, arms(2, 2, 1, 1), m.splitter[0], 1),
     icon: icons({ m, item, sorter }),
   };
 }

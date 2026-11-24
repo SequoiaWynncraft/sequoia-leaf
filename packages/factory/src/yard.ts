@@ -143,6 +143,12 @@ export interface Yard {
   readonly turn: Uint8Array;
   readonly shut: Uint8Array;
   readonly first: Uint8Array;
+  /**
+   * A splitter's ways out turned to take things in, a bit each as `shut` has them (1 ahead, 2 left,
+   * 4 right): never a shut way, nor the way it puts first. Things come in by these and from behind
+   * in turn, the next of them kept in `turn` over its next way out (`inTurn`).
+   */
+  readonly ins: Uint8Array;
   /** The one thing a machine is told to make, or `NONE`. */
   readonly set: Uint8Array;
   /** A piece's grade, 1 to 3, or 0 for a kind that has none. */
@@ -245,6 +251,7 @@ export function emptyYard(land: Land, tier = 0): Yard {
     tint: new Uint8Array(n),
     turn: new Uint8Array(n),
     shut: new Uint8Array(n),
+    ins: new Uint8Array(n),
     first: new Uint8Array(n),
     set: new Uint8Array(n).fill(NONE),
     grade: new Uint8Array(n),
@@ -468,6 +475,7 @@ export function vacate(y: Yard, i: number): void {
   y.turn[i] = 0;
   y.shut[i] = 0;
   y.first[i] = 0;
+  y.ins[i] = 0;
   y.set[i] = NONE;
   y.grade[i] = 0;
   y.free[i] = 0;

@@ -15,6 +15,7 @@ import {
   isDir,
   remove,
   setFirst,
+  setIn,
   setOpen,
   setRecipe,
   setSide,
@@ -60,7 +61,6 @@ import {
   type Piece,
   saveBlueprint,
   stand,
-  TINTS,
   upgrade,
 } from "./pieces.ts";
 import { type Leg, legPiece } from "./route.ts";
@@ -79,6 +79,7 @@ import {
   plotName,
   plotNamed,
   SORTER,
+  TINTS,
 } from "./tables.ts";
 import { collect, type Yard } from "./yard.ts";
 
@@ -104,6 +105,7 @@ interface Carries {
   crate: At & { readonly open: boolean };
   way: At & { readonly way: number; readonly open: boolean };
   first: At & { readonly way: number | null };
+  wayIn: At & { readonly way: number; readonly on: boolean };
   buyPlot: { readonly plot: Plot };
   take: { readonly node: Goal };
   queue: { readonly node: Goal };
@@ -391,6 +393,14 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
     read: (v, f) => (f.spot && (v.way === null || whole(v.way, 2)) ? { do: "first", way: v.way, ...f.spot } : null),
     write: (a) => ({ way: a.way, ...spot(a) }),
     act: (y, a, _coins, no) => doneUnless(setFirst(y, a.x, a.y, a.way), no),
+  },
+  wayIn: {
+    refused: "not_a_splitter",
+    lock: needs({ ins: true }),
+    read: (v, f) =>
+      f.spot && whole(v.way, 2) && typeof v.on === "boolean" ? { do: "wayIn", way: v.way, on: v.on, ...f.spot } : null,
+    write: (a) => ({ way: a.way, on: a.on, ...spot(a) }),
+    act: (y, a, _coins, no) => (setIn(y, a.x, a.y, a.way, a.on) ? done() : no("There is no splitter there")),
   },
   buyPlot: {
     refused: "plot_not_for_sale",
