@@ -105,6 +105,15 @@ describe("a long press", () => {
     expect(asked).toEqual(["asked"]);
   });
 
+  test("a second finger's press replaces the first, and lifted before it lasts asks nothing", () => {
+    const { thing, asked } = pressed();
+    thing.dispatchEvent(pointer("pointerdown", 1));
+    thing.dispatchEvent(pointer("pointerdown", 2));
+    thing.dispatchEvent(pointer("pointerup", 2));
+    jest.advanceTimersByTime(LONG_PRESS);
+    expect(asked).toEqual([]);
+  });
+
   test("is not begun by the mouse, and a new press forgets an old one's click", () => {
     const { thing, asked, click } = pressed();
     thing.dispatchEvent(pointer("pointerdown", 1, 0, 0, "mouse"));
