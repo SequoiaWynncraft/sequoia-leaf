@@ -47,7 +47,8 @@ import {
 } from "./lifecycle.ts";
 import { Pipe } from "./pipe.ts";
 import { NOWHERE, Player } from "./player.ts";
-import { type Room, Rooms, type Snapshot, type Written } from "./room.ts";
+import { Rooms } from "./room.ts";
+import { ticking } from "./tick.ts";
 import { Watchers } from "./watchers.ts";
 
 /**
@@ -99,38 +100,13 @@ export const LiveTuned = Layer.effect(
   })),
 );
 
-/**
- * What one of Live's ticks took, for the load test (`LiveMeter`): how much later than a tick after
- * the last it began (`late`), and how long from the first of its rooms' writes to the end of the
- * last (`writing`), in milliseconds; how many rooms sent a snapshot, and what became of each
- * snapshot written (`Written`).
- */
-export interface TickTimes {
-  readonly late: number;
-  readonly writing: number;
-  readonly rooms: number;
-  readonly direct: number;
-  readonly queued: number;
-  readonly passed: number;
-}
-
-/** Told what each tick took (`TickTimes`), for the load test; nobody is, unless given. */
-export const LiveMeter = Context.Reference<((times: TickTimes) => void) | null>("leaf/LiveMeter", {
-  defaultValue: () => null,
-});
-
 /** How often Live forgets the players of whom nothing is left (`Player.gone`). */
 const FORGET_EVERY = Duration.seconds(1);
 
 /** How long Live waits after a change to who is about before it tells the rooms, for the rest of a burst to come. */
 const ABOUT_GATHER = Duration.millis(200);
 
-/**
- * How long a tick is: `SERVER_HZ` a second, to the whole millisecond. A fixed schedule measures its
- * window by a clock in whole milliseconds, so with a fraction in the window its wait comes out under
- * a millisecond again and again at the window's end, which a test clock never moves past.
- */
-export const TICK = Duration.millis(Math.floor(1000 / SERVER_HZ));
+export { LiveMeter, TICK, type TickTimes } from "./tick.ts";
 
 /** Where a player's presence says they are while they are in a room of a kind, if it is one of the game's places. */
 const placeOf = (kindName: string): string | null => PLACES.find((p) => p === kindName) ?? null;
@@ -280,7 +256,6 @@ export class Live extends Context.Service<
       const rooms = new Rooms();
       const players = new Map<string, Player>();
       const counts = new LiveCounts();
-      let tick = 0;
       /** Leaf's stop: while it is not running, no connection is let in, and one still opening is told to come back. */
       let stop: Stop = "running";
 
@@ -462,58 +437,7 @@ export class Live extends Context.Service<
 
       // ---- time ----
 
-      /**
-       * A room's snapshot written to everybody it was made for, from the fiber this runs in, each on
-       * the connection they had then, and only if it is still for them as their connection is held
-       * for it (`Room.reaches`): the fiber may let others run between one write and the next, and a
-       * page in another room by then, or on another connection, must never hear this one's.
-       */
-      const tellRoom = (room: Room, snapshot: Snapshot, written: Record<Written, number>) => {
-        counts.sent("motion", snapshot.to.length, snapshot.frame.byteLength * snapshot.to.length);
-        return Effect.forEach(
-          snapshot.to,
-          (r) =>
-            Effect.map(
-              r.connection.writeIf(() => room.reaches(r), snapshot.frame),
-              (w) => void written[w]++,
-            ),
-          { discard: true },
-        );
-      };
-
-      const meter = yield* LiveMeter;
-      const clock = yield* Clock.Clock;
-      const millis = () => Number(clock.monotonicTimeNanosUnsafe()) / 1e6;
-      /** When the last tick began, by the clock that only goes forward. */
-      let tickBegan: number | null = null;
-
-      // Every tick, each room with work (`Room`): anybody shown walking whose game has gone quiet
-      // stops, and what changed goes to everyone in it.
-      const flush = Effect.flatMap(Clock.currentTimeMillis, (now) =>
-        Effect.suspend(() => {
-          const began = millis();
-          const late = tickBegan === null ? 0 : began - tickBegan - Duration.toMillis(TICK);
-          tickBegan = began;
-          tick++;
-          const told: [Room, Snapshot][] = [];
-          for (const room of rooms.busy()) {
-            const snapshot = room.flush(tick, now);
-            if (snapshot) told.push([room, snapshot]);
-          }
-          counts.ticked(told.length);
-          const written: Record<Written, number> = { direct: 0, queued: 0, passed: 0 };
-          const writing = millis();
-          const writes = Effect.forEach(told, ([room, snapshot]) => tellRoom(room, snapshot, written), {
-            discard: true,
-          });
-          if (meter === null) return writes;
-          return Effect.andThen(
-            writes,
-            Effect.sync(() => meter({ late, writing: millis() - writing, rooms: told.length, ...written })),
-          );
-        }),
-      );
-      yield* Effect.forkScoped(Effect.repeat(flush, Schedule.fixed(TICK)));
+      yield* ticking(rooms, counts);
 
       /**
        * A player's grace period, begun as their connection went, runs out once `graceMs` has passed:
