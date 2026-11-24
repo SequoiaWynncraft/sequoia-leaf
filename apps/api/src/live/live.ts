@@ -17,6 +17,7 @@ import {
   Duration,
   Effect,
   Layer,
+  Metric,
   Option,
   PubSub,
   Queue,
@@ -31,6 +32,7 @@ import { type Visitor, Visits } from "../activity/visits.ts";
 import { Allowance } from "../allowance.ts";
 import { type Identity, isGuest } from "../api/api.ts";
 import { PLACES } from "../api/schemas.ts";
+import { live as metrics, liveRefused, readOnAsk } from "../metrics.ts";
 import { Tallies } from "../tally/store.ts";
 import {
   graceOver,
@@ -293,6 +295,9 @@ interface Counts {
 
 const noCounts = (): Counts => ({ opened: 0, closed: 0, movesIn: 0, textsIn: 0, dropped: 0, refused: {} });
 
+/** How a connection closed: by its page itself (`CLOSED_BY_PAGE`), dropped (no closing at all), or by Leaf. */
+type Closed = "page" | "drop" | "leaf";
+
 /** The census of who is here now. */
 interface Census {
   readonly players: number;
@@ -365,6 +370,13 @@ export class Live extends Context.Service<
       const rooms = new Rooms();
       const players = new Map<string, Player>();
       let counts = noCounts();
+      // The same as the minute's counts, since Leaf started, for the metrics.
+      const totals = {
+        opened: 0,
+        closed: { page: 0, drop: 0, leaf: 0 } satisfies Record<Closed, number>,
+        dropped: 0,
+        handoffs: 0,
+      };
       let tick = 0;
       /** Leaf's stop: while it is not running, no connection is let in, and one still opening is told to come back. */
       let stop: Stop = "running";
@@ -482,6 +494,7 @@ export class Live extends Context.Service<
 
       const strike = (p: Player, now: number): void => {
         counts.dropped++;
+        totals.dropped++;
         if (!p.strikes.take(now)) p.pipe?.close(CLOSE.policy, "too much that could not be taken");
       };
 
@@ -574,9 +587,28 @@ export class Live extends Context.Service<
       });
 
       const refused = (code: string) =>
-        Effect.sync(() => {
-          counts.refused[code] = (counts.refused[code] ?? 0) + 1;
-        });
+        Effect.andThen(
+          Effect.sync(() => {
+            counts.refused[code] = (counts.refused[code] ?? 0) + 1;
+          }),
+          Metric.update(liveRefused({ reason: code }), 1),
+        );
+      // Who is here and what Live has done, read when the metrics are asked for.
+      yield* readOnAsk(
+        [
+          [metrics.players, () => players.size],
+          [metrics.connections, () => [...players.values()].filter((p) => p.link.state === "open").length],
+          [metrics.rooms, () => [...rooms.all()].length],
+        ],
+        [
+          [metrics.opened, () => totals.opened],
+          ...(["page", "drop", "leaf"] as const).map(
+            (how) => [metrics.closed({ how }), () => totals.closed[how]] as const,
+          ),
+          [metrics.framesDropped, () => totals.dropped],
+          [metrics.handoffs, () => totals.handoffs],
+        ],
+      );
       /** How many frames Leaf had told visits' rooms when the last line was written. */
       let toldBefore = watchers.told();
       const line = Effect.map(census, (now): LiveLine => ({
@@ -627,6 +659,7 @@ export class Live extends Context.Service<
                 counts.closed++;
                 // Closed by the page itself, done with it or going: what opens next may be its next page.
                 const clean = pipe.closedWith === null && pipe.closedBy !== null && CLOSED_BY_PAGE.has(pipe.closedBy);
+                totals.closed[pipe.closedWith !== null ? "leaf" : clean ? "page" : "drop"]++;
                 const after = unlinked(p.link, pipe, pipe.closedWith === CLOSE.signedOut, now, clean);
                 if (after === null) return;
                 p.link = after.link;
@@ -651,6 +684,7 @@ export class Live extends Context.Service<
           if (p.place.at === "room") p.place.room.reconnected(p.place.occupant.member.id);
           enter(p, kindName, now);
           counts.opened++;
+          totals.opened++;
           return { socket, pipe };
         });
 
@@ -702,8 +736,10 @@ export class Live extends Context.Service<
           const p = known ?? new Player(identity, now);
           players.set(id, p);
           // The player going from one of their pages to another is charged as that, not as an opening.
-          if (handsOver(p.link, now, HANDOFF_MS) && p.handoffs.take(now)) p.link = handedOver(p.link);
-          else if (!p.opens.take(now)) return "busy" as const;
+          if (handsOver(p.link, now, HANDOFF_MS) && p.handoffs.take(now)) {
+            p.link = handedOver(p.link);
+            totals.handoffs++;
+          } else if (!p.opens.take(now)) return "busy" as const;
           // Held while the socket opens, however long it takes, and let go once it is theirs or never
           // opened: taking it and promising to let it go are one step that nothing can come between.
           const attached = yield* Effect.acquireUseRelease(

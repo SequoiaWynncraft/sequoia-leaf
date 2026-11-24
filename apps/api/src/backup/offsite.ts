@@ -1,4 +1,4 @@
-import { renameSync, writeFileSync } from "node:fs";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { S3Client } from "bun";
@@ -35,6 +35,15 @@ export const RETRY_MS = 10 * 60_000;
 
 /** Holds the name of the newest snapshot copied off the server. It does not look like a snapshot, so it is never pruned. */
 const COPIED = "offsite-copied";
+
+/** The name of the snapshot last copied off the server, if any has been. */
+export function lastCopied(directory: string): string | undefined {
+  try {
+    return readFileSync(join(directory, COPIED), "utf8");
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Returns a task that copies the newest snapshot off the server once. Run it

@@ -31,6 +31,7 @@ import {
   type LiveRoom,
   type Step,
 } from "@sequoia-leaf/kit/realtime.ts";
+import { heardLive } from "@sequoia-leaf/kit/report.ts";
 import { bake, type Body, lookFor, paintSkin, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Pt } from "@sequoia-leaf/kit/util.ts";
@@ -79,6 +80,7 @@ const company = new Company<Drawn>(drawnOf, {
     touchThing(name, false);
   },
   status: (s) => {
+    heardLive(s);
     if (s === "replaced" || s === "signedout") letGoOf(s);
     showLink();
   },

@@ -63,6 +63,7 @@ export class Invalid extends Schema.Error<Invalid>("Invalid")(
     "invalid_reason",
     "invalid_purchase",
     "invalid_key",
+    "invalid_report",
   ),
   { httpApiStatus: 400 },
 ) {}

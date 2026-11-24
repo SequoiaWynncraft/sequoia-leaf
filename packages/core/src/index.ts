@@ -26,6 +26,18 @@ export {
   type SpendSink,
 } from "./ledger.ts";
 export { LOGGED } from "./logged.ts";
+export {
+  type Browser,
+  BROWSERS,
+  PAGE_ERROR_KINDS,
+  PAGE_ERROR_MESSAGE,
+  PAGE_ERROR_STACK,
+  type Page,
+  type PageError,
+  type PageErrorKind,
+  PAGE_ERRORS_PATH,
+  PAGES,
+} from "./page-errors.ts";
 export { parsePlayerId, type PlayerId, playerId } from "./player.ts";
 export { below, chance, draw32, mix, pick, shuffled, type Stream, weighted } from "./rng.ts";
 export type { Postcard } from "./postcard.ts";

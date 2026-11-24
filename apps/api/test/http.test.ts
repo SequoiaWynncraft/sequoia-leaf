@@ -94,6 +94,7 @@ describe("HTTP", () => {
       "/v1/game/guild/events/stream",
       "/v1/game/hello",
       "/v1/game/me",
+      "/v1/game/page-errors",
       "/v1/game/people/{player}",
       "/v1/game/play/{game}",
       "/v1/game/play/{game}/of/{player}",

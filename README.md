@@ -1404,6 +1404,59 @@ docker build --tag sequoia-leaf .
 docker run --publish 3000:3000 --volume leaf-data:/data --env BACKEND_INTERNAL_TOKEN=... sequoia-leaf
 ```
 
+## Monitoring
+
+Leaf is watched by Sequoia's monitoring stack (the `sequoia-monitor` repository):
+Prometheus reads its metrics, Loki keeps its log lines, a probe asks
+`https://leaf.seqwawa.com/healthz` from outside, and the `Leaf` dashboard in
+Grafana shows them together.
+
+**Metrics** are Prometheus text at `GET /metrics` on a listener of their own,
+`LEAF_METRICS_BIND` (`0.0.0.0:9095` by default; the backend's services use 9091
+to 9094). Nothing routes to it: the image does not publish the port and Traefik
+has no label for it, so only Prometheus, on Coolify's `coolify` network, reaches
+it as `sequoia-leaf:9095`. Leaf does not start if it cannot bind it; port 3000
+answers `/metrics` with 404. The series (no label holds a player, a yard or a
+path as it was asked):
+
+| Series                                                                                                           | Labels                                                                                                         | What                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `http_requests_total`, `http_request_duration_seconds`                                                           | `method`, `route` (the template; `unmatched` for none), `status`                                               | Each answer, to its head; Live's opening once, as 101 or its refusal                                                                                                                                                                                                 |
+| `background_job_runs_total`, `background_job_failures_total`, `background_job_last_success_timestamp_seconds`    | `name`                                                                                                         | `credit_sync`, `achievement_sync`, `snapshot`, `snapshot_offsite`, `silent_visits`, `tend_sweep`, `missed_levels`, `rate_card`. A run is one that did something or failed; the snapshot's and the offsite copy's last success are read from the files as Leaf starts |
+| `leaf_live_players`, `leaf_live_connections`, `leaf_live_rooms`                                                  |                                                                                                                | Who is in Live now                                                                                                                                                                                                                                                   |
+| `leaf_live_opened_total`, `leaf_live_closed_total`, `leaf_live_handoffs_total`, `leaf_live_frames_dropped_total` | `how` (`page`, `drop`, `leaf`) on closed                                                                       | Connections, and frames that could not be taken                                                                                                                                                                                                                      |
+| `leaf_live_refused_total`                                                                                        | `reason` (the code)                                                                                            | Openings turned away before their upgrade                                                                                                                                                                                                                            |
+| `leaf_play_commands_total`                                                                                       | `game`, `outcome` (`taken`, `refused`, `failed`, `slow`, `invalid`)                                            | Play commands; a rule's refusal is counted, never logged                                                                                                                                                                                                             |
+| `leaf_play_job_seconds`                                                                                          | `game`, `kind` (`open`, `visit`, `batch`, `tend`), `phase` (`queue`, `simulation`, `codec`, `sqlite`, `other`) | Where each play job's time went                                                                                                                                                                                                                                      |
+| `leaf_play_overdue_seconds`                                                                                      | `game`                                                                                                         | How long the state due a tend longest has been due                                                                                                                                                                                                                   |
+| `leaf_page_errors_total`, `leaf_page_errors_dropped_total`                                                       | `page`, `kind`; `limit`                                                                                        | Pages' reports of their failures, and those let go                                                                                                                                                                                                                   |
+| `leaf_event_loop_delay_{p50,p99,max}_seconds`                                                                    |                                                                                                                | The event loop's delay over the last 15 seconds                                                                                                                                                                                                                      |
+| `leaf_database_bytes`                                                                                            | `file` (`database`, `wal`)                                                                                     | The database's files                                                                                                                                                                                                                                                 |
+| `process_*`                                                                                                      |                                                                                                                | CPU, memory, threads and file descriptors, as the Rust services name them                                                                                                                                                                                            |
+
+**Log lines worth knowing**, besides those under [Deploying](#deploying): each is
+one JSON object, with `level` and `annotations`.
+
+- `http_error`: every 5xx answer, once, with `method`, `route`, `status`,
+  `code` and `ms`; an `ERROR` with the defect behind it in `cause` for a 500, a
+  `WARN` otherwise. Never a body, a cookie or a header.
+- `http_slow`: a `WARN` for any other answer that took over a second.
+- `live_refused`: a `WARN` for each Live opening turned away, with its `code`,
+  `status` and the `player` when known.
+- `page_error`: a `WARN` for each page's report (`POST /v1/game/page-errors`,
+  sent by the kit's `report.ts`): the `player` when signed in, `page`, `kind`
+  (`error`, `rejection`, `sign_in`, `no_server`, `first_read`, `reloads`,
+  `live`), the rules' `version`, `browser`, `message` and the first of the
+  `stack`, with no query strings. Leaf keeps ten a minute from a player (pages
+  not signed in share one such allowance) and sixty a minute in all.
+- `live`, once a minute, as above; `tended`, `credit_sync`, `snapshot`, and
+  each job's failure as an `ERROR` naming the job.
+
+In Grafana's Explore, on Loki, every line of Leaf's across deploys is
+`{app="sequoia-leaf-prod"} | json`; its warnings and errors are
+`{app="sequoia-leaf-prod", level=~"WARN|ERROR"}`, and one kind of line is, for
+example, `{app="sequoia-leaf-prod"} | json | message="page_error"`.
+
 ## Backups
 
 Every six hours the server writes a snapshot, a complete copy of the database

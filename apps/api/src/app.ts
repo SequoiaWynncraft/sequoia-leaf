@@ -15,6 +15,7 @@ import { PlayerNames } from "./game/names.ts";
 import { Skins } from "./game/skins.ts";
 import { ApiRoutes, NotFound } from "./http/handlers.ts";
 import { SafetyHeaders } from "./http/headers.ts";
+import { Observed } from "./http/observe.ts";
 import { Pages } from "./http/pages.ts";
 import { OpenStreams } from "./http/streams.ts";
 import { Ledger } from "./ledger/store.ts";
@@ -32,9 +33,12 @@ import { Tallies } from "./tally/store.ts";
  * Leaf's HTTP routes, the game's live connection, and the game's pages when there are any, with the
  * headers every answer carries. They need the services below.
  */
-export const Routes = Layer.mergeAll(ApiRoutes, LiveRoute, Pages, NotFound, SafetyHeaders).pipe(
-  Layer.provide(Identities.layer),
-);
+export const Routes = Layer.mergeAll(
+  // Each answered request is counted, and 5xx and slow ones logged; the live connection counts its own.
+  Layer.mergeAll(ApiRoutes, Pages, NotFound).pipe(Layer.provide(Observed.layer)),
+  LiveRoute,
+  SafetyHeaders,
+).pipe(Layer.provide(Identities.layer));
 
 /** Effect's router takes `/healthz/` for `/healthz` unless told otherwise; Leaf's routes are exact. */
 export const routerConfig = { ignoreTrailingSlash: false };

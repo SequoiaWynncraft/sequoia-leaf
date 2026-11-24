@@ -1,4 +1,13 @@
-import { DEVICES, ODD_KINDS, REQUEST_KINDS } from "@sequoia-leaf/core";
+import {
+  BROWSERS,
+  DEVICES,
+  ODD_KINDS,
+  PAGE_ERROR_KINDS,
+  PAGE_ERROR_MESSAGE,
+  PAGE_ERROR_STACK,
+  PAGES,
+  REQUEST_KINDS,
+} from "@sequoia-leaf/core";
 import { Schema } from "effect";
 import { HttpApiSchema } from "effect/http-api";
 
@@ -161,6 +170,20 @@ export const PresenceBody = Schema.Struct({
   place: Schema.Literals(PLACES),
   stay: Schema.optional(Schema.Boolean),
   device: Schema.optional(Schema.Literals(DEVICES)),
+});
+
+/**
+ * A page's report of its own failure (`PageError` in core): which page, what went wrong, the rules
+ * it was built with, the browser's family, and the message and the first of the stack, each cut
+ * short by the page.
+ */
+export const PageErrorBody = Schema.Struct({
+  page: Schema.Literals(PAGES),
+  kind: Schema.Literals(PAGE_ERROR_KINDS),
+  version: Schema.String.check(Schema.isMaxLength(64)),
+  browser: Schema.Literals(BROWSERS),
+  message: Schema.String.check(Schema.isMaxLength(PAGE_ERROR_MESSAGE)),
+  stack: Schema.String.check(Schema.isMaxLength(PAGE_ERROR_STACK)),
 });
 
 /** Somebody in the game, or gone from it in the last day, and when they were last seen. */

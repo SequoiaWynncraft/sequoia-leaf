@@ -1,8 +1,9 @@
 import { LIVE_PATH, LIVE_VERSION, readDevice, roomKind } from "@sequoia-leaf/core";
-import { Effect, Layer } from "effect";
+import { Clock, Effect, Layer } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
 import { BadOrigin, Unauthorized } from "../api/errors.ts";
+import { countRequest, since } from "../http/observe.ts";
 import { sessionChecks } from "../http/routes/middleware.ts";
 import { Live } from "./live.ts";
 
@@ -18,44 +19,66 @@ const answer = (status: number, code: string, message: string) =>
  * `unauthorized`, 403 `bad_origin`, 503 `identity_unavailable`; 400 `unsupported_version`,
  * `unknown_room` or `not_websocket`; 503 `live_full`, or `restarting` while Leaf stops; and 429
  * `slow_down` for a player who opens connections too often. Each refusal is counted, by its code,
- * for Live's log line.
+ * for Live's log line and its metrics, and logged as `live_refused` with the code and the player when
+ * known. The opening is counted as one request (`countRequest`): refused, with its status; let in, as
+ * 101 once its socket is open, however long it then stays.
  */
 export const LiveRoute = Layer.unwrap(
   Effect.gen(function* () {
     const checks = yield* sessionChecks;
     const live = yield* Live;
-    const refuse = (status: number, code: string, message: string) =>
-      Effect.as(live.refused(code), answer(status, code, message));
     const handler = Effect.gen(function* () {
-      const request = yield* HttpServerRequest.HttpServerRequest;
-      const query = new URL(request.url, "http://leaf").searchParams;
-      if (query.get("v") !== String(LIVE_VERSION)) {
-        return yield* refuse(400, "unsupported_version", `Leaf speaks version ${LIVE_VERSION} of the live connection`);
-      }
-      const kindName = query.get("room") ?? "";
-      if (roomKind(kindName) === undefined) return yield* refuse(400, "unknown_room", "There is no such room");
-      if (request.headers["upgrade"]?.toLowerCase() !== "websocket") {
-        return yield* refuse(400, "not_websocket", "Open this as a WebSocket");
-      }
-      const identity = yield* checks.upgrade;
-      // The session is asked about again as the connection goes on: it holds only while the session
-      // does. The backend being out of reach is not taken to mean it has ended.
-      const asked = yield* Effect.context<HttpServerRequest.HttpServerRequest | HttpServerRequest.ParsedSearchParams>();
-      const session = checks.upgrade.pipe(
-        Effect.map((again) => again.playerId === identity.playerId),
-        Effect.catch((e) => Effect.succeed(!(e instanceof Unauthorized))),
-        Effect.provideContext(asked),
+      const began = yield* Clock.clockWith((clock) => clock.monotonicTimeNanos);
+      const counted = (status: number) =>
+        Effect.flatMap(since(began), (seconds) => countRequest("GET", LIVE_PATH, status, seconds));
+      /** Who asked, once their session is known. */
+      let player: string | null = null;
+      const refuse = (status: number, code: string, message: string) =>
+        Effect.gen(function* () {
+          yield* live.refused(code);
+          yield* counted(status);
+          yield* Effect.logWarning("live_refused").pipe(Effect.annotateLogs({ code, status, player }));
+          return answer(status, code, message);
+        });
+      return yield* Effect.gen(function* () {
+        const request = yield* HttpServerRequest.HttpServerRequest;
+        const query = new URL(request.url, "http://leaf").searchParams;
+        if (query.get("v") !== String(LIVE_VERSION)) {
+          return yield* refuse(
+            400,
+            "unsupported_version",
+            `Leaf speaks version ${LIVE_VERSION} of the live connection`,
+          );
+        }
+        const kindName = query.get("room") ?? "";
+        if (roomKind(kindName) === undefined) return yield* refuse(400, "unknown_room", "There is no such room");
+        if (request.headers["upgrade"]?.toLowerCase() !== "websocket") {
+          return yield* refuse(400, "not_websocket", "Open this as a WebSocket");
+        }
+        const identity = yield* checks.upgrade;
+        player = identity.playerId;
+        // The session is asked about again as the connection goes on: it holds only while the session
+        // does. The backend being out of reach is not taken to mean it has ended.
+        const asked = yield* Effect.context<
+          HttpServerRequest.HttpServerRequest | HttpServerRequest.ParsedSearchParams
+        >();
+        const session = checks.upgrade.pipe(
+          Effect.map((again) => again.playerId === identity.playerId),
+          Effect.catch((e) => Effect.succeed(!(e instanceof Unauthorized))),
+          Effect.provideContext(asked),
+        );
+        const upgrade = Effect.tap(request.upgrade, () => counted(101));
+        const opened = yield* live.open(identity, kindName, upgrade, session, readDevice(query.get("device")));
+        if (opened === "full") return yield* refuse(503, "live_full", "Live is full just now. Try again shortly");
+        if (opened === "busy") return yield* refuse(429, "slow_down", "Opened too often. Try again in a little while");
+        if (opened === "stopping") return yield* refuse(503, "restarting", "Leaf is restarting. Try again in a moment");
+        return HttpServerResponse.empty();
+      }).pipe(
+        Effect.catch((e) =>
+          refuse(e instanceof Unauthorized ? 401 : e instanceof BadOrigin ? 403 : 503, e.code, e.message),
+        ),
       );
-      const opened = yield* live.open(identity, kindName, request.upgrade, session, readDevice(query.get("device")));
-      if (opened === "full") return yield* refuse(503, "live_full", "Live is full just now. Try again shortly");
-      if (opened === "busy") return yield* refuse(429, "slow_down", "Opened too often. Try again in a little while");
-      if (opened === "stopping") return yield* refuse(503, "restarting", "Leaf is restarting. Try again in a moment");
-      return HttpServerResponse.empty();
-    }).pipe(
-      Effect.catch((e) =>
-        refuse(e instanceof Unauthorized ? 401 : e instanceof BadOrigin ? 403 : 503, e.code, e.message),
-      ),
-    );
+    });
     return HttpRouter.add("GET", LIVE_PATH, handler);
   }),
 );

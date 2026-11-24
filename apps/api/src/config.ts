@@ -1,11 +1,32 @@
 import { dirname, join } from "node:path";
 
-import { Config, Context, Layer, Option, type Redacted, Schema } from "effect";
+import {
+  Config,
+  Context,
+  Effect,
+  Layer,
+  Option,
+  type Redacted,
+  Schema,
+  SchemaIssue,
+  SchemaTransformation,
+} from "effect";
 
 import type { BucketConfig } from "./backup/offsite.ts";
 
+/** Where a listener binds: a host and a port. */
+export interface Bind {
+  readonly hostname: string;
+  readonly port: number;
+}
+
 export interface Settings {
   readonly port: number;
+  /**
+   * Where Leaf serves its metrics, in Prometheus text at `/metrics`: a listener of its own that
+   * nothing routes to, so only Prometheus on the server's network reaches it.
+   */
+  readonly metrics: Bind;
   /** The SQLite file. In production it is on a volume that survives deploys. */
   readonly databasePath: string;
   /** Where snapshots of the database are written. */
@@ -61,6 +82,27 @@ const Origin = Schema.URL.check(
   ),
 );
 
+/**
+ * A `host:port` to bind, such as `0.0.0.0:9095`: a host of letters, digits, dots, dashes or colons
+ * (an IPv6 address in brackets), and a port from 0 to 65535 (0, any free one).
+ */
+const HostPort = Schema.String.pipe(
+  Schema.decodeTo(
+    Schema.Struct({ hostname: Schema.String, port: Schema.Int }),
+    SchemaTransformation.transformEffect<Bind, string>({
+      decode: (text, options) => {
+        const found = /^(\[[0-9a-fA-F:.]+\]|[A-Za-z0-9.-]+):(\d{1,5})$/.exec(text);
+        const host = found?.[1];
+        const port = Number(found?.[2]);
+        return host === undefined || port > 65535
+          ? Effect.fail(new SchemaIssue.InvalidValue({ expected: "host:port" }, text, options))
+          : Effect.succeed({ hostname: host.replace(/^\[|\]$/g, ""), port });
+      },
+      encode: ({ hostname, port }) => Effect.succeed(`${hostname.includes(":") ? `[${hostname}]` : hostname}:${port}`),
+    }),
+  ),
+);
+
 /** A variable that may be left out. One set to the empty string counts as left out. */
 const optional = <A>(config: Config.Config<A>) => config.pipe(Config.option, Config.map(Option.getOrUndefined));
 
@@ -71,6 +113,8 @@ const optional = <A>(config: Config.Config<A>) => config.pipe(Config.option, Con
  */
 export const settings: Config.Config<Settings> = Config.all({
   port: Config.Port("PORT").pipe(Config.withDefault(3000)),
+  // 9091 to 9094 are the backend's services'; nothing publishes this port or routes to it.
+  metrics: Config.schema(HostPort, "LEAF_METRICS_BIND").pipe(Config.withDefault({ hostname: "0.0.0.0", port: 9095 })),
   databasePath: Config.String("DATABASE_PATH").pipe(Config.withDefault("data/leaf.db")),
   backupDirectory: optional(Config.String("BACKUP_DIR")),
   backendUrl: Config.String("BACKEND_URL").pipe(Config.withDefault("https://api.seqwawa.com")),
@@ -106,6 +150,7 @@ export const settings: Config.Config<Settings> = Config.all({
     }).flatMap(([name, value]) => (value === undefined ? [] : [name]));
     return {
       port: read.port,
+      metrics: read.metrics,
       databasePath,
       backupDirectory: read.backupDirectory ?? join(dirname(databasePath), "backups"),
       backendUrl: read.backendUrl,

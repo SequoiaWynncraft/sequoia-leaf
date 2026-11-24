@@ -8,6 +8,7 @@ import { GameAdminHandlers } from "./routes/admin.ts";
 import { MeHandlers } from "./routes/me.ts";
 import {
   BodyLimitLive,
+  PageErrorBodyErrorsLive,
   PlayBodyErrorsLive,
   PlayerLive,
   PresenceBodyErrorsLive,
@@ -19,6 +20,7 @@ import {
 import { GamePeopleHandlers } from "./routes/people.ts";
 import { GamePlayHandlers } from "./routes/play.ts";
 import { GamePresenceHandlers } from "./routes/presence.ts";
+import { GameReportsHandlers } from "./routes/reports.ts";
 import { GameRequestsHandlers } from "./routes/requests.ts";
 import { GameHelloHandlers, RatesHandlers, SystemHandlers } from "./routes/system.ts";
 import { GameTallyHandlers } from "./routes/tally.ts";
@@ -34,6 +36,7 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     RatesHandlers,
     MeHandlers,
     GameHelloHandlers,
+    GameReportsHandlers,
     GamePeopleHandlers,
     GamePresenceHandlers,
     GamePlayHandlers,
@@ -51,6 +54,7 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     RerollBodyErrorsLive,
     PresenceBodyErrorsLive,
     PlayBodyErrorsLive,
+    PageErrorBodyErrorsLive,
     RequestBodyErrorsLive,
     BackendLive,
     PurchaseBodyErrorsLive,

@@ -9,11 +9,13 @@
  */
 
 import { serverCard, shutCard, start } from "@sequoia-leaf/kit/live.ts";
+import { failedToOpen, watchPage } from "@sequoia-leaf/kit/report.ts";
 
 import { NEEDS_LEAF, openTown, town, troubleCard } from "./leaf.ts";
 import { prepare } from "./live.ts";
 
 async function open(): Promise<void> {
+  watchPage("town");
   const where = await start();
   if (where.mode === "shut") {
     shutCard(where.why, where.signIn);
@@ -25,10 +27,12 @@ async function open(): Promise<void> {
   }
   const trouble = await openTown(where.me.id, troubleCard);
   if (trouble) {
+    failedToOpen(trouble);
     troubleCard(trouble);
     return;
   }
   if (!(await prepare(town().cursor))) {
+    failedToOpen("closed");
     shutCard("closed", where.signIn);
     return;
   }

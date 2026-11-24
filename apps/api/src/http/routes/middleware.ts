@@ -1,4 +1,4 @@
-import { ByteSize, Effect, Layer, Redacted } from "effect";
+import { ByteSize, Effect, Layer, Option, Redacted } from "effect";
 import { HttpServerError, HttpServerRequest } from "effect/http";
 import { HttpApiBuilder, HttpApiError, HttpApiSecurity } from "effect/http-api";
 
@@ -7,6 +7,7 @@ import {
   CurrentIdentity,
   type Identity,
   isGuest,
+  PageErrorBodyErrors,
   PlayBodyErrors,
   Player,
   PresenceBodyErrors,
@@ -27,6 +28,7 @@ import {
 } from "../../api/errors.ts";
 import { Identities } from "../../auth/session.ts";
 import { AppConfig } from "../../config.ts";
+import { RequestNote } from "../observe.ts";
 
 /** The largest body Leaf reads. */
 const MAX_BODY = ByteSize.kibibytes(16);
@@ -38,7 +40,7 @@ const SAFE_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD"]);
  * How many session cookies a `Cookie` header carries. A browser sends two
  * when another `seqwawa.com` site has set one of its own beside the website's.
  */
-function sessionCookies(header: string | undefined): number {
+export function sessionCookies(header: string | undefined): number {
   return (header ?? "").split(/[;,]/).filter((pair) => pair.split("=", 1)[0]?.trim() === SessionCookie.key).length;
 }
 
@@ -217,6 +219,16 @@ export const RequestBodyErrorsLive = Layer.succeed(RequestBodyErrors)(
   ),
 );
 
+/** A page's report of its failure whose body is not one gets `invalid_report`. */
+export const PageErrorBodyErrorsLive = Layer.succeed(PageErrorBodyErrors)(
+  payloadError(
+    new Invalid({
+      code: "invalid_report",
+      message: 'Send { "page", "kind", "version", "browser", "message", "stack" } as the kit\'s reporter does',
+    }),
+  ),
+);
+
 /** A batch whose body is not `{ "commands": [...] }` gets `invalid_command`. */
 export const PlayBodyErrorsLive = Layer.succeed(PlayBodyErrors)(
   payloadError(
@@ -245,11 +257,17 @@ export const BodyLimitLive = Layer.succeed(BodyLimit)((httpEffect) =>
   ),
 );
 
-/** Logs a defect, anything thrown rather than failed with a declared error, and answers `internal_error`. */
+/**
+ * Answers a defect, anything thrown rather than failed with a declared error, with `internal_error`;
+ * the request's log line says what it was (`http/observe.ts`), or, outside a request, it is logged here.
+ */
 export const UnexpectedLive = Layer.succeed(Unexpected)((httpEffect) =>
   Effect.catchDefect(httpEffect, (defect) =>
-    Effect.logError("An unexpected error answered 500", defect).pipe(
-      Effect.andThen(Effect.fail(new InternalError({ code: "internal_error", message: "Something went wrong" }))),
-    ),
+    Effect.gen(function* () {
+      const note = yield* RequestNote;
+      if (note === null) yield* Effect.logError("An unexpected error answered 500", defect);
+      else note.defect = Option.some(defect);
+      return yield* new InternalError({ code: "internal_error", message: "Something went wrong" });
+    }),
   ),
 );
