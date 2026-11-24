@@ -288,6 +288,28 @@ describe("sending commands", () => {
     expect(play.state).toEqual({ n: 40 });
   });
 
+  test("a flush that does not reach Leaf is not the page failing, and what it held is still sent if the page stays", async () => {
+    const { routes, leaf } = counterLeaf();
+    let away = 0;
+    const post = routes["POST /v1/game/play/raid"];
+    const play = await opened({
+      ...routes,
+      "POST /v1/game/play/raid": (sent) => (sent.keepalive ? (away++, "offline") : post(sent)),
+    });
+    const unhandled: unknown[] = [];
+    const hear = (why: unknown): void => void unhandled.push(why);
+    process.on("unhandledRejection", hear);
+    try {
+      const answers = [1, 2].map((by) => play.send({ do: "add", by }));
+      play.flush();
+      expect(await Promise.all(answers)).toEqual([{ notes: ["added 1"] }, { notes: ["added 2"] }]);
+      await Bun.sleep(2);
+      expect([away, unhandled, leaf.n]).toEqual([1, [], 3]);
+    } finally {
+      process.off("unhandledRejection", hear);
+    }
+  });
+
   test("a few long commands go in more than one request, and a body Leaf will not read is not sent for ever", async () => {
     const { routes, leaf } = counterLeaf();
     const play = await opened(routes);

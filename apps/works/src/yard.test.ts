@@ -41,7 +41,18 @@ import {
 import { S } from "./state.ts";
 import { cancel, place, setTool, toolHooks, undo } from "./tools.ts";
 import { reading, showLetter } from "./ui/letter.ts";
-import { again, CATCHING_UP, catchingUp, differences, doNow, gate, onRefused, openYard, runYard } from "./yard.ts";
+import {
+  again,
+  CATCHING_UP,
+  catchingUp,
+  differences,
+  doNow,
+  gate,
+  letGo,
+  onRefused,
+  openYard,
+  runYard,
+} from "./yard.ts";
 
 useFakeLeaf();
 
@@ -218,6 +229,20 @@ describe("the yard, on Leaf", () => {
     expect(fake.leaf.calls).toEqual(["read", "batch", "batch", "read"]);
     expect(WORKS.encode(S.world)).toBe(WORKS.encode({ ...fake.leaf.yard, seed: null }));
     expect(fake.leaf.yard.dir[at(fake.leaf.yard, b.x, b.y)]).toBe(1);
+  });
+
+  test("let go, the page sends nothing more: a command Leaf never answered does not reach the next Leaf there", async () => {
+    const fake = await opened();
+    fake.leaf.answers = 0;
+    doNow(act({ do: "collect" }));
+    await until(() => net.world?.sent.some((s) => s.method === "POST") ?? false);
+    letGo();
+    const next = fakeLeaf();
+    net.world?.done();
+    net.world = standin(next.routes);
+    // Past the first wait before a failed batch is sent again (`RETRY`, half a second and a quarter).
+    await Bun.sleep(700);
+    expect(next.leaf.calls).toEqual([]);
   });
 
   test("a command Leaf answers alike leaves the copy as it is: the same yard, not read again", async () => {
