@@ -248,7 +248,10 @@ export function tallyPanel(body: HTMLElement): () => void {
         tab.setAttribute("aria-selected", String(tab.dataset.period === p));
         tab.hidden = tab.dataset.period === "week" && !b.week;
       }
-      heading.replaceChildren(el("h3", "k-title", { text: b.name }), el("p", "k-d", { text: b.counts }));
+      heading.replaceChildren(
+        el("h3", "k-title", { text: b.name }),
+        ...(b.counts === undefined ? [] : [el("p", "k-d", { text: b.counts })]),
+      );
       const path = tallyPath(b.id, p);
       const got = answers.get(path)?.board;
       if (got === undefined) return;
