@@ -121,6 +121,8 @@ export type IconName =
   | "more"
   | "up"
   | "down"
+  | "show"
+  | "hide"
   | "wave"
   | "cheer"
   | "laugh";

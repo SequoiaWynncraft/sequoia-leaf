@@ -691,6 +691,27 @@ const ICONS: Readonly<Record<string, readonly string[]>> = {
   more: ["ww..ww..ww", "ww..ww..ww"],
   up: ["....ww....", "...wwww...", "..wwwwww..", ".wwwwwwww.", "wwwwwwwwww"],
   down: ["wwwwwwwwww", ".wwwwwwww.", "..wwwwww..", "...wwww...", "....ww...."],
+  // What a blue button does: an eye shows, an eye struck through hides.
+  show: [
+    "....wwww....",
+    "..wwwwwwww..",
+    ".wwwwkkwwww.",
+    "wwwwkkkkwwww",
+    ".wwwwkkwwww.",
+    "..wwwwwwww..",
+    "....wwww....",
+  ],
+  hide: [
+    "..........ww",
+    "....wwww.ww.",
+    "..wwwwwwkk..",
+    ".wwwwwwkkww.",
+    "wwwwwwkkwwww",
+    ".wwwwkkwwww.",
+    "..wwkkwwww..",
+    "...wkwww....",
+    "..ww........",
+  ],
   // The emotes besides the heart, drawn once for the page and the canvas alike (`emotes.ts`).
   wave: EMOTE_ART.wave,
   cheer: EMOTE_ART.cheer,
