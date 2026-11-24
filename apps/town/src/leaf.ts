@@ -20,7 +20,8 @@
  * A visit to somebody else's camp opens theirs beside the member's own (`openCamp`), as Leaf gives
  * a visitor it, and the camp on show is theirs (`shown()`) until the member leaves (`lookAt`). The
  * member's own town stays open meanwhile, but nothing is sent: `doNow` and `ask` refuse, and the
- * camp looked at is read again every half minute, and at once when the tab comes back.
+ * camp looked at is read again every half minute, at once when the tab comes back, and at once when
+ * its room hears the owner changed it (`campChanged`).
  */
 
 import { pageCard, troubleCard as kitTroubleCard, where } from "@sequoia-leaf/kit/live.ts";
@@ -128,6 +129,17 @@ export async function openCamp(id: string, name?: string): Promise<Looked | Trou
     if (looked?.play === opened) tell(differs);
   });
   return { id, name: name ?? said?.name ?? "Someone", play: opened };
+}
+
+/**
+ * Leaf says the owner has changed the camp the member is visiting, as it kept it at `rev` (the camp's
+ * room hears it): it is read again at once, and once more if the read was one on its way before then.
+ */
+export async function campChanged(rev: number): Promise<void> {
+  const at = looked;
+  if (!at || at.play.rev >= rev) return;
+  await at.play.refresh();
+  if (looked === at && at.play.rev < rev) await at.play.refresh();
 }
 
 /** Shows a camp opened (`openCamp`); with null, the member's own again. The camp shown before is put away. */

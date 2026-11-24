@@ -1,5 +1,13 @@
 [
   {
+    "id": "camp-live",
+    "at": "TBD",
+    "title": "Everybody in a camp, as in town",
+    "lines": [
+      "At a camp you see everybody else who is there, the owner too, walking and waving as they do. The owner sees you arrive, and what they set out or move shows for you at once."
+    ]
+  },
+  {
     "id": "camp-visits",
     "at": "2026-11-24T14:00Z",
     "title": "Every camp on the signpost",
@@ -39,13 +47,17 @@
     "id": "tally-board",
     "at": "2026-11-24T10:15Z",
     "title": "The Tally has moved",
-    "lines": ["The Tally is now a board like the quest board, on the lawn between the campfire and the crab pond."]
+    "lines": [
+      "The Tally is now a board like the quest board, on the lawn between the campfire and the crab pond."
+    ]
   },
   {
     "id": "works-long-works",
     "at": "2026-11-24T09:56Z",
     "title": "The Works: long works for tier 4",
-    "lines": ["Tier 4 has seven new projects for the long run. None of them is needed for the next tier."],
+    "lines": [
+      "Tier 4 has seven new projects for the long run. None of them is needed for the next tier."
+    ],
     "more": [
       {
         "head": "New",
@@ -109,7 +121,9 @@
     "id": "raid-clearer",
     "at": "2026-11-24T03:35Z",
     "title": "The Little Raid: a clearer table",
-    "lines": ["The stall, the traits and the cards at the stump say more plainly what they do."],
+    "lines": [
+      "The stall, the traits and the cards at the stump say more plainly what they do."
+    ],
     "more": [
       {
         "head": "At the stall",
@@ -134,7 +148,9 @@
     "id": "town-clearer",
     "at": "2026-11-24T03:32Z",
     "title": "Clearer town panels",
-    "lines": ["A quest's Leaf now sits by its title, so it no longer looks like the price of a reroll."],
+    "lines": [
+      "A quest's Leaf now sits by its title, so it no longer looks like the price of a reroll."
+    ],
     "more": [
       {
         "head": "Changed",
@@ -159,7 +175,9 @@
     "id": "works-steady-2",
     "at": "2026-11-24T00:51Z",
     "title": "The Works: more fixes",
-    "lines": ["A few more fixes in the Works."],
+    "lines": [
+      "A few more fixes in the Works."
+    ],
     "more": [
       {
         "head": "Fixed",
@@ -183,7 +201,9 @@
     "id": "works-steady",
     "at": "2026-11-24T00:13Z",
     "title": "The Works: fixes",
-    "lines": ["A handful of fixes in the Works."],
+    "lines": [
+      "A handful of fixes in the Works."
+    ],
     "more": [
       {
         "head": "Fixed",
@@ -584,7 +604,9 @@
     "id": "banner-1-open",
     "at": "2026-11-23T08:05Z",
     "title": "The first banner is open",
-    "lines": ["It is at the Grove until 8 December (UTC). Its top prize is a member of the guild."]
+    "lines": [
+      "It is at the Grove until 8 December (UTC). Its top prize is a member of the guild."
+    ]
   },
   {
     "id": "one-town-2",
@@ -867,7 +889,9 @@
     "id": "lit-on-phones",
     "at": "2026-11-22",
     "title": "The town stays lit on phones",
-    "lines": ["On some phones the ground and the sky could go dark after switching apps. That is fixed."]
+    "lines": [
+      "On some phones the ground and the sky could go dark after switching apps. That is fixed."
+    ]
   },
   {
     "id": "works-words",
@@ -882,13 +906,17 @@
     "id": "raid-follows-you",
     "at": "2026-11-22",
     "title": "The Little Raid follows you",
-    "lines": ["Leaf now keeps your raid and your Coins, so they are the same on every device."]
+    "lines": [
+      "Leaf now keeps your raid and your Coins, so they are the same on every device."
+    ]
   },
   {
     "id": "tap-to-leave",
     "at": "2026-11-22",
     "title": "Leave your camp with a tap",
-    "lines": ["Tap the Town sign, or the path past the posts."]
+    "lines": [
+      "Tap the Town sign, or the path past the posts."
+    ]
   },
   {
     "id": "quick-return",

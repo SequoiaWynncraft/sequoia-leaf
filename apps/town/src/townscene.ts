@@ -11,13 +11,11 @@ import { clamp, type Ctx, dist, must, pick, type Pt } from "@sequoia-leaf/kit/ut
 import { FOLK, folk, KEEPER } from "@sequoia-leaf/town/folk.ts";
 import { BOX_FULL, roomInBox } from "@sequoia-leaf/town/mail.ts";
 
-import { cardLine } from "./about.ts";
 import { initAbout } from "./aboutui.ts";
 import {
   face,
   freeSeat,
   goToSeat,
-  headOf,
   hop,
   makeActor,
   makeFolk,
@@ -33,8 +31,9 @@ import {
   walkTo,
   wayTo,
 } from "./actors.ts";
-import { apart, ease, stood, stoodAt } from "./apart.ts";
+import { stood, stoodAt } from "./apart.ts";
 import type { CampArt } from "./campart.ts";
+import { makeApart } from "./crowd.ts";
 import { drawPicture, drawWords, type Picture, sizeBuffers } from "./draw.ts";
 import { beginEvents, stepEvents } from "./events.ts";
 import { initFolkArt } from "./folkart.ts";
@@ -48,22 +47,18 @@ import { ask, mine, town as kept } from "./leaf.ts";
 import { compose } from "./letter.ts";
 import { inTownLine } from "./news.ts";
 import {
+  aboutLine,
   closeEmotes,
   emotesOpen,
-  inRoom,
-  isLivePlayer,
   knownRanks,
   leafNow,
   livePlayers,
-  openEmotes,
+  meetLive,
   othersInTown,
   roomNow,
   stepPlayers,
   stirred,
-  tellRoom,
-  townOnStage,
-  type TownStage,
-  waveAt,
+  touched,
 } from "./players.ts";
 import { type TownHandles, townHandles } from "./review.ts";
 import { placeOf } from "./screen.ts";
@@ -92,7 +87,6 @@ const bodyOf = (look: Look): Body => bake(paintSkin(look));
 const BOUNDS = { w: W, top: -72, bottom: H + 24 } as const;
 /** Where in this tab the town keeps where the member stood, for the next page (`stoodAt`). */
 const STOOD = "town.stood.v1";
-const HOME: Pt = { x: 0, y: 0 };
 
 /** How long somebody chosen in "Who is about" is shown where they are, in seconds. */
 export const FOUND_FOR = 3;
@@ -135,20 +129,9 @@ export interface Town extends Scene {
   readonly backdrop: { sky: HTMLCanvasElement; near: HTMLCanvasElement };
   /** Walks the member to a game's door and on through it (for the Works, to `of`'s yard, if given). */
   goIn(id: GameId, of?: string): void;
-  /**
-   * Where the stage has the town (`players.ts`): on it, in the town's live room; off it for a camp or
-   * the Grove, stepped out of the room on the same connection; under a game, with no room at all.
-   */
-  onStage(at: TownStage): void;
   /** The town's own handles for looking at it from outside (`review.ts`). */
   readonly handles: TownHandles;
 }
-
-/** Who a figure is, for `apart`: a member's account, or which of the town's own. */
-const whoIs = (a: Actor): string => (a.folk ? `folk:${a.folk.t.id}` : a.id);
-
-/** What somebody's card says they are about, under their rank, as everything else has it (`where.ts`). */
-const aboutLine = (who: Actor) => (): string => cardLine(guild.whereabouts().get(who.id), leafNow()) ?? "";
 
 export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town {
   // ---------- the place itself ----------
@@ -312,9 +295,6 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     });
   }
 
-  /** The member's own figure had its emotes up when the touch came. */
-  let plaque = false;
-
   /** Somebody in town is touched. */
   function meet(who: Actor): void {
     // Somebody dozing sleeps on; their card says who they are.
@@ -322,23 +302,9 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       showCard(who);
       return;
     }
-    // In the live room, the member's own figure offers its emotes; a second tap puts them away.
-    if (who.you && inRoom()) {
-      if (!plaque) openEmotes();
-      return;
-    }
-    // Another player, live: drawn where they really are, so they do not turn; their card has a wave.
-    if (isLivePlayer(who)) {
-      showCard(who, aboutLine(who), () => {
-        waveAt(who);
-      });
-      return;
-    }
+    // The member, or another player live here.
+    if (meetLive(who)) return;
     hop(who);
-    if (who.you) {
-      say(who, pick(["that's me", "hello, me", "o/"], Math.random()), 1.6);
-      return;
-    }
     // A member really here: they look round, and their card says who they are.
     if (isVisitor(who)) {
       if (!who.seat && !who.moving) face(who, player.x, player.y);
@@ -367,43 +333,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   /** Every member in town: the member, visitors and dozers, and live players. */
   const everyone = (): Actor[] => [player, ...G.visitors, ...livePlayers()];
-  /**
-   * Where each figure's feet were at the last step, and how fast they have been going, over about a
-   * tenth of a second: a live player's place, drawn from the room's samples, jitters from frame to frame.
-   */
-  const pace = new WeakMap<Actor, { x: number; y: number; vx: number; vy: number }>();
-  /** Faster than anybody walks, in pixels a second: put somewhere else, not walking there. */
-  const JUMP = 300;
-  /**
-   * Everybody on top of one another, members and the town's own, standing, sitting or walking the
-   * same way, is drawn apart (`apart`), stepping aside and back as they meet and part. A page
-   * spreads what it shows: two walking in line may be apart on one page and not on another, and on
-   * neither inside each other.
-   */
-  function standApart(dt: number): void {
-    if (dt <= 0) return;
-    const everybody = pic.people();
-    const k = Math.min(1, dt / 0.1);
-    const drawn = everybody.flatMap((a) => {
-      if (a.away || a.alpha <= 0.02) {
-        pace.delete(a);
-        return [];
-      }
-      const { x, y } = a.seat ?? a;
-      const was = pace.get(a);
-      const [rx, ry] = was ? [(x - was.x) / dt, (y - was.y) / dt] : [0, 0];
-      // Standing, only now in sight, or put somewhere else: not walking.
-      const walks = a.moving && Math.hypot(rx, ry) < JUMP;
-      const vx = was && walks ? was.vx + (rx - was.vx) * k : 0;
-      const vy = was && walks ? was.vy + (ry - was.vy) * k : 0;
-      pace.set(a, { x, y, vx, vy });
-      // One of the town's own at its post keeps its place, as whoever sits does.
-      const seated = a.seat !== null || (a.folk !== null && !a.moving);
-      return [{ id: whoIs(a), x, y, tall: headOf(a), seated, vx, vy }];
-    });
-    const to = apart(drawn);
-    for (const a of everybody) ease(a.aside, to.get(whoIs(a)) ?? HOME, dt);
-  }
+  /** Everybody on top of one another drawn apart (`crowd.ts`). */
+  const standApart = makeApart(() => pic.people());
 
   /**
    * The places, as doors: each opens its panel, and walking on into a game's doorway, up to its
@@ -483,7 +414,6 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   const town: Town = {
     backdrop: { sky: pic.sky, near: pic.near },
     goIn,
-    onStage: townOnStage,
     bounds: BOUNDS,
 
     resize(w, h) {
@@ -505,11 +435,10 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       G.t += dt;
       stepActor(player, dt);
       touch.step(dt, steer);
-      // The room hears where the member is at once, from their own walking; nothing waits for it.
-      tellRoom(player, dt, jumped);
+      // The room hears where the member is at once, and everybody else in it is drawn where they are.
+      stepPlayers(player, dt, jumped);
       jumped = false;
       stepActor(cinfy, dt);
-      stepPlayers(dt);
       const walkers = [player, ...livePlayers()];
       stepVisitors(dt, [...walkers, ...G.folk]);
       stepFolk(dt, walkers);
@@ -541,8 +470,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     },
 
     tap(x, y, finger) {
-      plaque = emotesOpen();
-      closeEmotes();
+      touched();
       return touch.tap(x, y, finger);
     },
     point: touch.point,

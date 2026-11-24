@@ -406,10 +406,15 @@ card says so and the town is not loaded.
   says how much Leaf anybody was paid (`news.ts` has every line). The feed takes these lines one at
   a time, twenty seconds apart, oldest first, and drops one that has waited five minutes; what
   happens in the world for them (the cheer, the lantern, the banner) does not wait.
-- **The town, live** (`players.ts`, its rules in `motion.ts`). While the town is on the stage the
-  page is in Leaf's live room `town` (the kit's `joinLive`), made once: in a camp or the Grove the
-  page steps out of it on the same connection (`away`) and back in on returning, opening nothing;
-  with a game open (a page of its own) the room is closed, and coming out opens it again. The member's figure moves from their own input at once, as
+- **The town and the camps, live** (`players.ts`, its rules in `motion.ts`). The page is in one of
+  Leaf's live rooms at a time, the one for the place on the stage (`liveAt`): `town` in town, and in
+  a camp that camp's own (`camp:<owner>`, the member's at home or anybody's they visit). The
+  connection is made once (the kit's `joinLive`): going from place to place goes from room to room
+  on it (`go`), the Grove steps out of every room, and nothing is opened again; with a game open (a
+  page of its own) the connection is closed, and coming out opens it again. In a camp, whoever
+  else is there is drawn as in town, with the camp's things, walking its ground, coming in off the
+  trail behind the great tree as the member does; when the owner changes the camp, Leaf tells its
+  room, and a visitor's page reads it again at once. The member's figure moves from their own input at once, as
   ever, and the room is told where it is as it goes: its feet, its speed, which way it faces,
   whether it walks or sits, and a jump whenever it is put somewhere without walking (back through
   the gate, out of the Works' doorway, `tp`). Everybody else in the room is drawn in their own
@@ -589,7 +594,8 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/guild.ts`, `src/live.ts`         | The questions asked of the guild, and the guild's server answering them                         |
 | `src/news.ts`                         | The feed's line for each of the guild's moments, and their pace                                 |
 | `src/visitors.ts`                     | Real members put where Leaf's list and clock have them: visiting, dozing, home from a raid      |
-| `src/players.ts`, `src/motion.ts`     | The town live: in the room, everybody else drawn from it, emotes; its rules                     |
+| `src/players.ts`, `src/motion.ts`     | The town and the camps live: in a room, everybody else drawn from it, emotes; its rules         |
+| `src/crowd.ts`                        | Everybody in a place on top of one another drawn apart, as they meet and part                   |
 | `src/apart.ts`                        | Back where the member stood after a reload; members on one spot drawn a step apart              |
 | `src/aboutui.ts`, `src/about.ts`      | Who is about: the button and its panel; who goes in which part, and the words                   |
 | `src/where.ts`                        | Where everybody else is, one record each, from the room and Leaf's list: what everything reads  |

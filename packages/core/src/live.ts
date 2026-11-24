@@ -12,7 +12,8 @@
  *   room, who is in it, clock pings, and actions (`ToServer`, `ToClient`).
  *
  * A visit's room (`visitRoom`) is still: everybody visiting one player's state, who hear what Leaf
- * does to it as it does it (`did`), and nothing of each other but who is there.
+ * does to it as it does it (`did`), and nothing of each other but who is there. A camp's room
+ * (`campRoom`) moves as the town's does, and hears when the owner changes the camp (`changed`).
  *
  * Why Leaf closes a connection is said by its close code alone (`CLOSE`).
  *
@@ -291,7 +292,12 @@ export type ToClient =
    * each of those commands' ids as the page that sent them gave them, so that the owner's own page
    * knows its own.
    */
-  | { t: "did"; rev: number; did: unknown[]; after: unknown; ids?: string[] };
+  | { t: "did"; rev: number; did: unknown[]; after: unknown; ids?: string[] }
+  /**
+   * In a camp's room: Leaf has kept a batch of the owner's that changed what a visitor is shown of
+   * the camp, and `rev` is the state's stored revision after it. A visitor's page reads the camp again.
+   */
+  | { t: "changed"; rev: number };
 
 /**
  * What a kind of room is: how far it reaches, how many fit in one copy of it before another is
@@ -321,9 +327,21 @@ export const visitRoom = (game: GameId, player: PlayerId): string => `visit:${ga
 const VISIT: RoomKind = { width: 0, height: 0, capacity: 1000, speed: 0, still: true };
 const VISIT_ROOM = /^visit:([a-z]{1,16}):(.{36})$/;
 
-/** The kind of room a name asks for, if there is one: one of `ROOMS`, or a visit's room. */
+/**
+ * A camp's room: everybody at one player's camp, its owner too, walking about it as the town's room
+ * has them (`camp:<uuid>`), one copy to a camp. Leaf tells them when the owner's camp changes (`changed`).
+ */
+export const campRoom = (player: PlayerId): string => `camp:${player}`;
+// The camp's 416 by 320 art pixels, and out past the trail's posts to where whoever comes in appears;
+// the town's pace.
+const CAMP: RoomKind = { width: 432, height: 320, capacity: 32, speed: 160 };
+const CAMP_ROOM = /^camp:(.{36})$/;
+
+/** The kind of room a name asks for, if there is one: one of `ROOMS`, a camp's room, or a visit's room. */
 export function roomKind(name: string): RoomKind | undefined {
   if (Object.hasOwn(ROOMS, name)) return ROOMS[name];
+  const [, owner] = CAMP_ROOM.exec(name) ?? [];
+  if (owner !== undefined) return parsePlayerId(owner) === owner ? CAMP : undefined;
   const visit = VISIT_ROOM.exec(name);
   if (visit === null) return undefined;
   const [, game = "", player = ""] = visit;
@@ -344,6 +362,15 @@ function readMember(v: unknown): LiveMember | null {
 
 const ERRORS = ["unknown_room", "not_in_room", "bad_act"] as const;
 
+/** A welcome, or null for anything that is not one. */
+function readWelcome(v: Record<string, unknown>): ToClient | null {
+  if (!num(v.v) || !num(v.you) || !str(v.room) || !num(v.hz) || !num(v.time) || !Array.isArray(v.roster)) return null;
+  const roster = v.roster.map(readMember);
+  if (roster.some((m) => m === null)) return null;
+  const { v: version, you, room, hz, time } = v;
+  return { t: "welcome", v: version, you, room, hz, time, roster: roster.filter((m) => m !== null) };
+}
+
 /** What Leaf sent as text, or null for anything that is not one of its messages. */
 export function readToClient(text: string): ToClient | null {
   let v: unknown;
@@ -354,21 +381,8 @@ export function readToClient(text: string): ToClient | null {
   }
   if (!record(v)) return null;
   switch (v.t) {
-    case "welcome": {
-      if (!num(v.v) || !num(v.you) || !str(v.room) || !num(v.hz) || !num(v.time) || !Array.isArray(v.roster))
-        return null;
-      const roster = v.roster.map(readMember);
-      if (roster.some((m) => m === null)) return null;
-      return {
-        t: "welcome",
-        v: v.v,
-        you: v.you,
-        room: v.room,
-        hz: v.hz,
-        time: v.time,
-        roster: roster.filter((m) => m !== null),
-      };
-    }
+    case "welcome":
+      return readWelcome(v);
     case "joined": {
       const member = readMember(v.member);
       return member ? { t: "joined", member } : null;
@@ -390,6 +404,8 @@ export function readToClient(text: string): ToClient | null {
       const ids = Array.isArray(v.ids) && v.ids.every(str) ? v.ids.filter(str) : undefined;
       return { t: "did", rev: v.rev, did: v.did, after: v.after, ...(ids ? { ids } : {}) };
     }
+    case "changed":
+      return num(v.rev) ? { t: "changed", rev: v.rev } : null;
     default:
       return null;
   }

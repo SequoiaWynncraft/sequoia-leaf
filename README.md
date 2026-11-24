@@ -991,7 +991,10 @@ nothing a player types, not even a word spelt out, reaches anybody else.
 **Rooms.** `ROOMS` in `packages/core/src/live.ts` lists the kinds, each with its
 size, how many fit in one copy and its pace (the town: 512 by 352, 32, 160). A player is put in
 the first copy with space, or a new one (`town/2`); a copy closes when its last
-player leaves. Rooms live in memory, in the one process.
+player leaves. Rooms live in memory, in the one process. Besides these, every
+player's camp is a kind of its own (`campRoom` in core: `camp:<player>`, 432 by
+320, 32, the town's pace), which anybody signed in may join, its owner too: a
+camp's room is made by the first to come in and goes with the last to leave.
 
 **Limits.** No frame over 4 KiB (Bun closes the connection, 1009). Text frames
 over 512 UTF-16 code units are not read. A player may send 30 moves a second (bursts of 40),
@@ -1032,7 +1035,11 @@ many openings were turned away before the upgrade, by code (`unauthorized: 3`).
 everybody visiting that player's state) is still: nobody's motion or actions
 there reach anybody, and it is no place, so nobody's presence is written for
 it. Whoever is in it hears what the play service tells it (`Watchers`): each
-batch Leaf keeps of that state, as above. What was done while a page was not in
+batch Leaf keeps of that state, as above. A camp's room moves as the town's
+does, and is no place either (each page there says where it is); whoever is in
+it hears `{ "t": "changed", "rev" }` once Leaf keeps a batch of the owner's that
+changes what a visitor is shown of the camp (where things stand, their state,
+the first pet), and nothing of any other; a visitor's page then reads the camp. What was done while a page was not in
 the room is never told, so the Works' visit reads the yard each time the room
 welcomes it. Going into a game, the town leaves its own room at once, before
 the game's page is made, since that page may go into a visit's room on the same
@@ -1060,8 +1067,8 @@ asks every 30 seconds: neither is a new `LIVE_VERSION`.
 at its pace: right for walking about together, never for anything that pays or
 wins. Fights
 and rewards will need commands Leaf checks and outcomes Leaf decides. A room is
-found by its kind; camps and tables will need copies addressed by who they
-belong to, as a visit's room is, and a moment the whole town sees (a pull at the
+found by its kind; tables will need copies addressed by who they
+belong to, as a camp's is, and a moment the whole town sees (a pull at the
 tree) will need to reach every copy of the town. One process holds every room; a second would need
 each copy owned by one of them. A change to the wire goes with a new
 `LIVE_VERSION`, and pages built for the old one need a way to load again.

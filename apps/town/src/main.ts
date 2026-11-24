@@ -39,7 +39,7 @@ import { makeGrove } from "./grovescene.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, covered, hush, initHud, tickHud } from "./hud.ts";
 import { here, keepTold, onTown, openCamp, town as kept, troubleCard, visiting } from "./leaf.ts";
-import { leafNow } from "./players.ts";
+import { leafNow, onStage } from "./players.ts";
 import { lookFromOutside } from "./review.ts";
 import { darkOf, inGame, mayAct, next, openOf, type Place, placeOf, takesWalk } from "./screen.ts";
 import { showCampSheet, showSheet } from "./sheet.ts";
@@ -204,11 +204,9 @@ async function boot(): Promise<void> {
       // here, and it says so as they go in and again as they come out.
       guild.here(at);
       if (game !== inGame(was)) here();
-      // The town's live room is only for while the town is on the stage. A camp or the Grove steps out
-      // of it on the same connection; a game closes it, being a page that may go live in a room of its
-      // own (a visit's), and a player is live on one connection at a time.
-      town.onStage(at === "town" ? "on" : game ? "shut" : "away");
     }
+    // The live room follows the place on the stage, and a camp's whose camp it is (`players.ts`).
+    onStage(at);
     if (now.at === "inside" && was.at !== "inside") {
       // The view has closed in: the game takes the page from here.
       keys.clear();
@@ -500,7 +498,7 @@ async function boot(): Promise<void> {
   });
   // Where the stage starts: the member is in town, and so in its live room.
   guild.here("town");
-  town.onStage("on");
+  onStage("town");
   keepTold({
     home: () => G.home,
     inCamp: () => screen.at !== "dusk" && placeOf(screen) === "camp",

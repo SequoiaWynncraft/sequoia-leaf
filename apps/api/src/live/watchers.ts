@@ -3,11 +3,11 @@ import { Context, Layer } from "effect";
 import type { Outbox } from "./room.ts";
 
 /**
- * Who hears what Leaf does to a state as it does it: everybody in a visit's room (`visitRoom`), by
- * the room's name. Live puts each of them here as they come into the room and takes them out as
- * they leave it; the play service tells them each batch it keeps of that state (`tell`), and makes
- * nothing to tell for a state nobody hears (`heard`). In memory, in this process, as Live's rooms
- * are.
+ * Who hears what Leaf does to a state as it does it: everybody in a room, by the room's kind (a
+ * visit's, `visitRoom`; a camp's, `campRoom`). Live puts each of them here as they come into the
+ * room and takes them out as they leave it; the play service tells them what each batch it keeps
+ * of that state did (`tell`), and makes nothing to tell for a state nobody hears (`heard`). In
+ * memory, in this process, as Live's rooms are.
  */
 export class Watchers extends Context.Service<
   Watchers,

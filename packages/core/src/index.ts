@@ -119,6 +119,7 @@ export {
 } from "./visits.ts";
 export {
   ACTS,
+  campRoom,
   CLIENT_HZ,
   CLOSE,
   isAct,

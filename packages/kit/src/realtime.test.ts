@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import {
+  campRoom,
   CLOSE,
   encodeSnapshot,
   Flag,
@@ -378,11 +379,11 @@ describe("where the connection is", () => {
 });
 
 const ALICE = { id: 2, player: "a", name: "Alice", rank: "Captain", guest: false };
-const welcome = (you: number, time: number, roster = [{ ...ALICE, id: you }]): ToClient => ({
+const welcome = (you: number, time: number, roster = [{ ...ALICE, id: you }], room = "town"): ToClient => ({
   t: "welcome",
   v: 1,
   you,
-  room: "town/1",
+  room: `${room}/1`,
   hz: 30,
   time,
   roster,
@@ -500,7 +501,7 @@ describe("a live room", () => {
     s.open();
     // Nothing heard before the welcome counts.
     s.says({ t: "did", rev: 3, did: [{ do: "collect", tick: 9 }], after: { tick: 9 } });
-    s.says(welcome(1, w.clock.now));
+    s.says(welcome(1, w.clock.now, undefined, visited));
     s.says({ t: "did", rev: 4, did: [{ do: "collect", tick: 10 }], after: { tick: 10 } });
     expect(heard).toEqual([{ rev: 4, did: [{ do: "collect", tick: 10 }], after: { tick: 10 } }]);
   });
@@ -725,7 +726,7 @@ describe("a live room", () => {
     s.says({ t: "joined", member: ALICE });
     expect(room.state()).toEqual({ at: "in" });
 
-    room.away(true);
+    room.go(null);
     expect(s.texts().at(-1)).toEqual({ t: "leave" });
     expect(room.state()).toEqual({ at: "away" });
     // Away, the page is in no room: nobody is shown, its moves go nowhere, and it says where the player is itself.
@@ -737,7 +738,7 @@ describe("a live room", () => {
     await Bun.sleep(10);
     expect(w.sent.filter((x) => x.path === "/v1/game/presence").map((x) => x.method)).toEqual(["PUT"]);
 
-    room.away(false);
+    room.go("town");
     expect(s.texts().at(-1)).toEqual({ t: "join", room: "town" });
     expect(room.state()).toEqual({ at: "joining" });
     s.says(welcome(4, w.clock.now));
@@ -755,17 +756,69 @@ describe("a live room", () => {
     await live();
     const heard: string[] = [];
     room = joinLive("town", { welcome: (you) => heard.push(`welcome ${you}`) });
-    room.away(true);
+    room.go(null);
     const s = socket(0);
     s.open();
     s.says(welcome(1, 0));
     expect(s.texts().map((m) => m.t)).toEqual(["ping", "leave"]);
     expect(room.state()).toEqual({ at: "away" });
     expect(heard).toEqual([]);
-    room.away(false);
+    room.go("town");
     expect(s.texts().at(-1)).toEqual({ t: "join", room: "town" });
     s.says(welcome(2, 0));
     expect(heard).toEqual(["welcome 2"]);
+  });
+
+  const camp = campRoom(playerId("10000000-0000-0000-0000-000000000002"));
+
+  test("goes from room to room on the one connection, showing nobody of the room left and nobody until the next welcome", async () => {
+    const w = await live();
+    const heard: string[] = [];
+    room = joinLive("town", {
+      welcome: (you, name) => heard.push(`welcome ${you} ${name}`),
+      joined: (m) => heard.push(`joined ${m.name}`),
+      changed: (rev) => heard.push(`changed ${rev}`),
+    });
+    const s = socket(0);
+    s.open();
+    s.says(welcome(1, w.clock.now));
+    s.says({ t: "joined", member: ALICE });
+    room.go(camp);
+    // Out of the town's room, and into the camp's.
+    expect(s.texts().slice(-2)).toEqual([{ t: "leave" }, { t: "join", room: camp }]);
+    expect([room.state(), room.members().size, room.you()]).toEqual([{ at: "joining" }, 0, null]);
+    // What the town's room says before the camp's welcome is the town's, and is not heard.
+    s.says({ t: "joined", member: { ...ALICE, id: 3, name: "Bea" } });
+    s.sends(encodeSnapshot(1, w.clock.now, [{ id: 2, seq: 1, ...at(5, 5) }]));
+    s.says(welcome(4, w.clock.now, [{ ...ALICE, id: 4 }], camp));
+    s.says({ t: "changed", rev: 7 });
+    expect(room.state()).toEqual({ at: "in" });
+    expect([...room.members().keys()]).toEqual([4]);
+    expect(heard).toEqual(["welcome 1 town/1", "joined Alice", `welcome 4 ${camp}/1`, "changed 7"]);
+    // Going where it is already is nothing.
+    room.go(camp);
+    expect(s.texts().filter((m) => m.t === "join")).toHaveLength(1);
+    expect(sockets).toHaveLength(1);
+  });
+
+  test("a welcome to a room the page asked to leave meanwhile is answered by asking for the one it wants", async () => {
+    const w = await live();
+    const heard: string[] = [];
+    room = joinLive("town", { welcome: (_you, name) => heard.push(name) });
+    room.go(camp);
+    const s = socket(0);
+    // Opened for the town, as the page wanted when it began.
+    expect(s.url).toBe(`wss://leaf.example${livePath("town")}&device=desktop`);
+    s.open();
+    s.says(welcome(1, w.clock.now));
+    expect(s.texts().at(-1)).toEqual({ t: "join", room: camp });
+    expect([room.state(), heard]).toEqual([{ at: "joining" }, []]);
+    s.says(welcome(2, w.clock.now, undefined, camp));
+    expect([room.state(), heard]).toEqual([{ at: "in" }, [`${camp}/1`]]);
+    // Dropped, it comes back into the room it is in.
+    s.drop();
+    await Bun.sleep(800);
+    expect(socket(1).url).toBe(`wss://leaf.example${livePath(camp)}&device=desktop`);
   });
 
   test("leaves and closes when the page is done with it, and sends nothing on a socket not yet open", async () => {

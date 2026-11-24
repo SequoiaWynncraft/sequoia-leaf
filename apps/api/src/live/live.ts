@@ -233,7 +233,7 @@ class Pipe {
  */
 class Player {
   identity: Identity;
-  /** Where they are: in no room, or in one as its occupant, hearing what Leaf tells it if it is still (`Watchers`). */
+  /** Where they are: in no room, or in one as its occupant, hearing what Leaf tells it (`Watchers`). */
   place: Place = NOWHERE;
   /** Their connection: none, open, or gone a moment ago, in their grace (`lifecycle.ts` moves it). */
   link: Link<Pipe> = NO_LINK;
@@ -281,10 +281,10 @@ class Player {
   }
 }
 
-/** Where a player is in Live: in no room, or in one as its occupant, with what stops them hearing a still room. */
+/** Where a player is in Live: in no room, or in one as its occupant, with what stops them hearing it. */
 type Place =
   | { readonly at: "none" }
-  | { readonly at: "room"; readonly room: Room; readonly occupant: Occupant; readonly hearing: (() => void) | null };
+  | { readonly at: "room"; readonly room: Room; readonly occupant: Occupant; readonly hearing: () => void };
 const NOWHERE: Place = { at: "none" };
 
 /**
@@ -332,9 +332,10 @@ export type Opened = "served" | "full" | "busy" | "stopping";
  * who is about now (`{ t: "about", who }`, the presence routes' answer), once for a burst of
  * changes within `ABOUT_GATHER`.
  *
- * A player in a visit's room (`visitRoom`: somebody's yard, from Top yards) hears what Leaf does to
- * the state they visit while they are in it, as the play service tells it (`Watchers`). A visit's
- * room is no place, so nobody's presence there is written.
+ * Everybody in a room hears what Leaf does there while they are in it, as the play service tells it
+ * (`Watchers`): in a visit's room (`visitRoom`: somebody's yard, from Top yards), each batch done to
+ * the state visited; in a camp's (`campRoom`), each that changed what a visitor sees of it. Neither
+ * is a place, so nobody's presence there is written: a page in a camp says where it is itself.
  */
 export class Live extends Context.Service<
   Live,
@@ -454,7 +455,7 @@ export class Live extends Context.Service<
         p.place = NOWHERE;
         if (was.at !== "room") return;
         const { room, occupant } = was;
-        was.hearing?.();
+        was.hearing();
         room.leave(occupant.member.id);
         rooms.tidy(room);
         const place = placeOf(room.kindName);
@@ -485,9 +486,7 @@ export class Live extends Context.Service<
         const room = rooms.place(kindName);
         if (!room) return;
         const occupant = room.join(who, p, now, SERVER_HZ, LIVE_VERSION);
-        // In a visit's room they hear what Leaf does to the state visited.
-        const hearing = room.kind.still === true ? watchers.hear(room.kindName, p) : null;
-        p.place = { at: "room", room, occupant, hearing };
+        p.place = { at: "room", room, occupant, hearing: watchers.hear(room.kindName, p) };
         const place = placeOf(kindName);
         if (place) Queue.offerUnsafe(whereabouts, { kind: "in", players: [inRoom(p)], place, at: now });
       };

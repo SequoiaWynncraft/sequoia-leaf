@@ -10,8 +10,6 @@ import {
   mayBuy,
   MOST_FLUSHED,
   type PlayerId,
-  type ToClient,
-  visitRoom,
 } from "@sequoia-leaf/core";
 import {
   Cause,
@@ -38,7 +36,7 @@ import { Watchers } from "../live/watchers.ts";
 import { type CommandOutcome, type JobPhase, playCommands, playJobSeconds } from "../metrics.ts";
 import { type CoinEntry, Coins } from "./coins.ts";
 import { Copies } from "./copies.ts";
-import type { Attempt, Held, Played } from "./games.ts";
+import { type Attempt, type Held, type Played, toRoom } from "./games.ts";
 import { nextSlice } from "./slices.ts";
 import { PlayStore } from "./store.ts";
 
@@ -335,10 +333,9 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * and their Coins open with the welcome as it is made. A stored state that will not read is left as
  * it is: the player and the game are logged, and nothing is done. Leaf's dice for each call come from
  * `SecureRandom`. A visitor (`visit`) is shown somebody's state, and is given nothing of theirs.
- * Everybody in the state's visit room (`visitRoom`, `Watchers`) is told each batch once it is kept,
- * for a game that echoes its commands (`Game.echo`): the live wire's `did`, with each command kept,
- * in order, as the game echoes it, and each one's id as its page gave it (so the owner's own page
- * knows its own), the stored `rev` after the batch, and the batch's answer. With
+ * Everybody in the room where the state is seen (`Played.room`: a visit's, a camp's; `Watchers`) is
+ * told each batch once it is kept (`toRoom`): for a game that echoes its commands (`Game.echo`),
+ * what it did (`did`); for any other, that it changed what a visitor is shown (`changed`). With
  * nobody there, nothing is made for them.
  *
  * Everything asked of one player's state in one game (an open, a visit, a batch, Leaf's own tend)
@@ -582,11 +579,8 @@ export class Play extends Context.Service<
           const entries: CoinEntry[] = [];
           const taken: Taken[] = [];
           const logs: Logged[] = [];
-          // Everybody visiting the state hears what the batch did, if anybody does: each command kept, as the game echoes it.
-          const visitors = played.echoes ? visitRoom(played.id, player) : null;
-          const echoes: unknown[] | null = visitors !== null && watchers.heard(visitors) ? [] : null;
-          // And each one's id, as the page that sent it gave it.
-          const echoed: string[] = [];
+          // Everybody where the state is seen hears what the batch did, if anybody is there.
+          const told = toRoom(played, player, game, ctx(0, room), watchers);
           /**
            * A command the rules did, refused `leaf_closed`, `members_only`, `not_enough_leaf` (its spends whose keys the
            * ledger and the batch have not seen, past the balance less what the batch took) or
@@ -609,10 +603,7 @@ export class Play extends Context.Service<
               const amounts = payable(did.coins, balance, room);
               if (amounts === null) return { id, refused: "not_enough_coins" };
               did.keep();
-              if (echoes) {
-                echoes.push(did.echo());
-                echoed.push(id);
-              }
+              told?.kept(id, did.echo);
               taken.push(...spends);
               for (const { amount, reason } of spends)
                 logs.push({ kind: LOGGED.leafSpent, data: { leaf: amount, reason } });
@@ -704,10 +695,7 @@ export class Play extends Context.Service<
           yield* outcome(played.id, "refused", refusedNow);
           let answered: unknown;
           const view = () => (answered ??= game.answer(ctx(0, room)));
-          if (visitors !== null && echoes !== null && echoes.length > 0) {
-            const did = { t: "did", rev, did: echoes, after: view(), ids: echoed } satisfies ToClient;
-            watchers.tell(visitors, JSON.stringify(did));
-          }
+          told?.tell(rev, view);
           return { now: at, rev, results, view, purse };
         });
 

@@ -1,17 +1,21 @@
 /**
- * Other players in town, live (on the guild's own server; with the made-up guild nobody is here).
- * While the town's scene is on the stage, the page is in Leaf's room `town` (`joinLive`): it tells
- * the room where the member's figure is, as it moves, and draws everybody else in the room exactly
- * where the room says they are, each in their own skin. They are never solid. The room is made once:
- * going to a camp or the Grove steps out of it on the same connection (`away`), and coming back
- * steps in again. Only a game closes it, being a page of its own with a connection of its own (a
- * player is live on one connection at a time), and coming out of it opens one again.
+ * Other players where the member is, live (on the guild's own server; with the made-up guild nobody
+ * is here): in town, and in a camp, the member's own or anybody's. The page is in one of Leaf's
+ * rooms at a time, the one for the place on the stage (`onStage`, by `motion.ts`'s `liveAt`): the
+ * town's, or the camp's own. It tells the room where the member's figure is, as it moves, and draws
+ * everybody else in the room exactly where the room says they are, each in their own skin, on the
+ * place's ground and as much of them as can be seen there (`stepPlayers`). They are never solid. The
+ * room is made once: going from place to place goes from room to room on the same connection, the
+ * Grove steps out of every room, and coming back steps in again. Only a game closes it, being a
+ * page of its own with a connection of its own (a player is live on one connection at a time), and
+ * coming out of it opens one again.
  *
- * Here too: telling the room of the member's touches on things in town (`town.ts`'s
- * `touchThing`) and playing everybody else's, the member's emotes (the plaque over their own
- * figure, and what everybody sees of them), the wave on a live player's card, the small
- * "Reconnecting…" once the connection has been down a couple of seconds, and the kit's cards for
- * a connection Leaf has let go of. The rules are in `motion.ts`.
+ * Here too: telling the town's room of the member's touches on things in town (`town.ts`'s
+ * `touchThing`) and playing everybody else's there, the member's emotes (the plaque over their own
+ * figure, and what everybody sees of them), a live player's card with its wave (`meetLive`), the
+ * small "Reconnecting…" once the connection has been down a couple of seconds, the kit's cards for
+ * a connection Leaf has let go of, and in a camp's room Leaf's word that the owner changed the camp
+ * (`leaf.ts`'s `campChanged`). The rules are in `motion.ts`.
  *
  * Somebody away (Leaf's rule, as everything else has it: `where.ts`) has sat down where they are and
  * nodded off: facing us unless they sat on a seat, eyes closed, a "z" now and then, the same moments
@@ -34,18 +38,34 @@ import {
 import { heardLive } from "@sequoia-leaf/kit/report.ts";
 import { bake, type Body, lookFor, paintSkin, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
-import { clamp, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { clamp, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { zAt } from "@sequoia-leaf/town/clock.ts";
 
-import { face, feet, footfall, headOf, hop, makeActor, onScreen, putAs, stepActor } from "./actors.ts";
+import { cardLine } from "./about.ts";
+import { face, feet, footfall, headOf, hop, makeActor, onScreen, putAs, say, stepActor } from "./actors.ts";
 import { emoteOver, float } from "./fx.ts";
 import { type Actor, G, hooks, ROOM, SEED, toPage } from "./game.ts";
+import type { Ground } from "./grid.ts";
 import { guild } from "./guild.ts";
+import { showCard } from "./hud.ts";
+import { campChanged, visiting } from "./leaf.ts";
 import { GUEST, rankName } from "./live.ts";
-import { Company, type Fellow, linkShown, NAMED_FOR, othersIn, stepOf } from "./motion.ts";
+import {
+  Company,
+  type Fellow,
+  linkShown,
+  type LiveAt,
+  liveAt,
+  NAMED_FOR,
+  othersIn,
+  sameLive,
+  stepOf,
+} from "./motion.ts";
+import type { Place } from "./screen.ts";
 import { touchThing } from "./town.ts";
 import { dozy, followLive } from "./visitors.ts";
-import type { Seat } from "./world.ts";
+import { inGame, type Where } from "./where.ts";
+import { type Seat, TOWN } from "./world.ts";
 
 /** After this many milliseconds with the connection down, the others fade away and the town plays on alone. */
 const ALONE_AFTER = 5000;
@@ -76,8 +96,9 @@ const company = new Company<Drawn>(drawnOf, {
   emote: (f, kind) => {
     express(f.own.a, kind);
   },
+  // Touches on things are the town's alone.
   touch: (name) => {
-    touchThing(name, false);
+    if (inTown()) touchThing(name, false);
   },
   status: (s) => {
     heardLive(s);
@@ -86,21 +107,19 @@ const company = new Company<Drawn>(drawnOf, {
   },
 });
 /**
- * The town's room: where the page stands with it is its own state (`room.state()`), down, away or let
+ * The page's room: where the page stands with it is its own state (`room.state()`), down, away or let
  * go of included. Let go of by Leaf, it is kept, shown as let go, until the member says to play here.
  */
 let room: LiveRoom | null = null;
-/** Where the stage has the town: on it (in the room), off it for a camp or the Grove (away), or under a game (no room). */
-let stage: TownStage = "shut";
-/** Where the member's feet were the last time the room was told, and what it was told, when. */
-let was: Pt | null = null;
-let told: { step: Step; at: number } | null = null;
-
-/** Where the stage has the town: on it, off it for a camp or the Grove, or under a game. */
-export type TownStage = "on" | "away" | "shut";
+/** Where the stage has the page live: in a room (the town's, a camp's), out of every room for the Grove, or under a game. */
+let stage: LiveAt = { at: "shut" };
+/** What the room was last told of the member: where their feet were, the step, and when. */
+let said: { was: Pt; step: Step; at: number } | null = null;
 
 /** Whether the game is live here, as somebody: only then is there a room. */
 const isLive = (): boolean => where().mode === "live" && member() !== null;
+/** Whether the page is live in the town's room (and not a camp's). */
+const inTown = (): boolean => stage.at === "room" && stage.room === ROOM;
 
 const rankOf = (m: LiveMember): string => (m.guest ? GUEST : m.rank === null ? "" : rankName(m.rank));
 
@@ -136,6 +155,9 @@ const ears: LiveEars = {
     if (f) stirred.set(f.who.player, leafNow());
     company.ears.act?.(id, kind, arg);
   },
+  changed(rev) {
+    void campChanged(rev);
+  },
 };
 
 /**
@@ -149,12 +171,12 @@ function alone(): boolean {
 }
 
 /**
- * Everybody in the room with the member, the member too, with their rank as the town shows it, and
- * those awaited back after Leaf restarted, who stand where they were; null while the page is in no
- * room.
+ * Everybody in the town's room with the member, the member too, with their rank as the town shows
+ * it, and those awaited back after Leaf restarted, who stand where they were; null while the page is
+ * in no room, or in a camp's.
  */
 export function roomNow(): { id: string; name: string; rank: string | null }[] | null {
-  if (!room || room.you() === null || alone()) return null;
+  if (!room || room.you() === null || alone() || !inTown()) return null;
   return [...room.members().values(), ...company.awaited().map((f) => f.who)].map((m) => {
     const rank = rankOf(m);
     return { id: m.player, name: m.name, rank: rank === "" ? null : rank };
@@ -199,36 +221,36 @@ function letGoOf(why: LetGo): void {
   letGoCard(why, w.mode === "live" ? w.signIn : "", () => {
     room = null;
     showLink();
-    if (stage === "on") enterRoom();
+    if (stage.at === "room") enterRoom(stage.room);
   });
 }
 
-/** Into the room: on the connection there is, or on a new one if there is none. The member's place is said again, which the room shows as a jump. */
-function enterRoom(): void {
+/** Into a room: on the connection there is, or on a new one if there is none. The member's place is said again, which the room shows as a jump. */
+function enterRoom(name: string): void {
   if (!isLive()) return;
-  was = null;
-  if (room) room.away(false);
-  else room = joinLive(ROOM, ears);
+  said = null;
+  if (room) room.go(name);
+  else room = joinLive(name, ears);
 }
 
 /**
- * Where the stage has the town now: on it, the page is in the room (unless Leaf let it go); off it
- * for a camp or the Grove, it steps out of the room and keeps the connection; under a game, it
- * closes the room. Off the stage, nobody else is drawn.
+ * The place on the stage now (null: under a game), and so the room the page is in (`liveAt`), for a
+ * camp the one of whoever's camp it is: in a room, the page is in it (unless Leaf let it go); out of
+ * every room for the Grove, it keeps the connection; under a game, it closes it. Whoever was drawn
+ * from the room before is gone at once, as the places change in the dark between them.
  */
-export function townOnStage(at: TownStage): void {
-  stage = at;
-  if (at === "on") {
-    enterRoom();
-    return;
-  }
-  if (at === "away") room?.away(true);
+export function onStage(place: Place | null): void {
+  const to = liveAt(place, visiting()?.id ?? member()?.id ?? "");
+  if (sameLive(to, stage)) return;
+  stage = to;
+  for (const f of company.clear()) f.own.a.away = true;
+  closeEmotes();
+  if (to.at === "room") enterRoom(to.room);
+  else if (to.at === "away") room?.go(null);
   else {
     room?.close();
     room = null;
   }
-  for (const f of company.clear()) f.own.a.away = true;
-  closeEmotes();
   showLink();
 }
 
@@ -243,38 +265,49 @@ export const leafNow = (): number => room?.serverNow() ?? leafClock(Date.now());
 
 // ---------- each moment ----------
 
-/** Tells the room where the member's figure is this moment, `jumped` when it was put there without walking. */
-export function tellRoom(a: Actor, dt: number, jumped: boolean): void {
-  if (!room) return;
-  const step = stepOf(a, jumped ? null : was, dt);
-  room.move(step, jumped);
-  was = { x: a.x, y: a.y };
-  told = { step, at: Date.now() };
+/** What a place lends whoever is drawn live in it: its ground, for their footfalls; and how much of somebody at a point can be seen there (behind the camp's great tree, nothing). */
+export interface LivePlace {
+  readonly ground: Ground;
+  readonly seen: (at: Pt) => number;
+}
+const IN_TOWN: LivePlace = { ground: TOWN, seen: () => 1 };
+
+/**
+ * A moment in a place (`at`, the town's unless said): the room hears where the member's figure is at
+ * once, from their own walking (`jumped` when they were put there without walking), and nothing
+ * waits for it; then everybody else is drawn where the room says they are now, and those who have
+ * gone fade away.
+ */
+export function stepPlayers(me: Actor, dt: number, jumped: boolean, at: LivePlace = IN_TOWN): void {
+  if (room) {
+    const step = stepOf(me, jumped ? null : (said?.was ?? null), dt);
+    room.move(step, jumped);
+    said = { was: { x: me.x, y: me.y }, step, at: Date.now() };
+  }
+  drawOthers(dt, at);
 }
 
-/** Draws everybody else where the room says they are now, and lets those who have gone fade away. */
-export function stepPlayers(dt: number): void {
-  // Down a while: the others go, and the town plays on alone until the room welcomes the page again.
+/** Whether somebody in the game by the one account (`where.ts`) is away by Leaf's rule. */
+const dozes = (w: Where | undefined, now: number): boolean => w !== undefined && inGame(w) && away(w.acted, now);
+
+function drawOthers(dt: number, at: LivePlace): void {
+  // Down a while: the others go, and the place plays on alone until the room welcomes the page again.
   if (alone()) company.goAll();
   if (room?.state().at === "down") showLink();
-  const walked = new Map(company.all().map((f) => [f, f.own.a.walked]));
-  const stood = new Map(company.all().map((f) => [f, { x: f.fig.x, y: f.fig.y, jump: f.fig.jump }]));
+  const before = new Map(company.all().map((f) => [f, { ...f.fig, walked: f.own.a.walked }]));
   const { came, went } = company.step((id) => room?.sample(id) ?? null, dt);
   const now = leafNow();
-  for (const f of company.all()) {
-    // A move somewhere, as the room tells it, is doing something: by Leaf's rule too.
-    const before = stood.get(f);
-    if (before && before.jump === f.fig.jump && (before.x !== f.fig.x || before.y !== f.fig.y))
-      stirred.set(f.who.player, now);
-  }
   const all = guild.whereabouts();
   for (const f of company.all()) {
+    const was = before.get(f);
+    // A move somewhere, as the room tells it, is doing something: by Leaf's rule too.
+    if (was && was.jump === f.fig.jump && (was.x !== f.fig.x || was.y !== f.fig.y)) stirred.set(f.who.player, now);
     const a = f.own.a;
     // Hops and words; a figure drawn from the room walks nowhere of its own accord.
     stepActor(a, dt);
-    const w = all.get(f.who.player);
-    dress(f, w?.state === "live" && away(w.acted, now));
-    if (a.moving) footfall(a, walked.get(f) ?? a.walked);
+    dress(f, dozes(all.get(f.who.player), now));
+    a.alpha *= at.seen(a);
+    if (a.moving) footfall(a, was?.walked ?? a.walked, at.ground);
   }
   for (const f of came) f.own.a.named = G.t + NAMED_FOR;
   for (const f of went) f.own.a.away = true;
@@ -315,17 +348,20 @@ function dress(f: Fellow<Drawn>, idle: boolean): void {
   if (a.alpha > 0.5 && onScreen(fig.x, fig.y)) float(fig.x + 4, fig.y - 20, "z", CREAM, 1.4);
 }
 
-/** Everybody else in town, live, as they are to be drawn. */
+/** Everybody else where the member is, live, as they are to be drawn. */
 export const livePlayers = (): Actor[] => company.all().map((f) => f.own.a);
 
-/** Whether somebody in town is another player, live. */
+/** Whether somebody where the member is is another player, live. */
 export const isLivePlayer = (a: Actor): boolean => company.all().some((f) => f.own.a === a);
 
 /** How many others are in the room, once it has said; null before it has welcomed the page. */
-export function othersInTown(): number | null {
+function othersHere(): number | null {
   const you = room?.you() ?? null;
   return room && you !== null && !alone() ? othersIn(room.members(), you) : null;
 }
+
+/** How many others are in town, once the town's room has said; null before, and out of it. */
+export const othersInTown = (): number | null => (inTown() ? othersHere() : null);
 
 // Real members drawn live, fading away too, are not visitors or dozers as well.
 followLive({
@@ -348,6 +384,25 @@ function express(a: Actor, kind: Emote): void {
 
 hooks.tell = (name) => room?.act("touch", name);
 
+/** What somebody's card says they are about, under their rank, as everything else has it (`where.ts`). */
+export const aboutLine = (who: Actor) => (): string => cardLine(guild.whereabouts().get(who.id), leafNow()) ?? "";
+
+/**
+ * Somebody touched, if it is the member or another player live here (says whether it was): in a room
+ * the member's own figure offers its emotes, a second tap putting them away (`touched`); out of one it
+ * hops and says so. Another player is drawn where they really are, so does not turn; their card has a wave.
+ */
+export function meetLive(who: Actor): boolean {
+  if (who.you && inRoom()) {
+    if (!plaqueWas) openEmotes();
+  } else if (who.you) {
+    hop(who);
+    say(who, pick(["that's me", "hello, me", "o/"], Math.random()), 1.6);
+  } else if (isLivePlayer(who)) showCard(who, aboutLine(who), () => waveAt(who));
+  else return false;
+  return true;
+}
+
 /** The member makes an emote, and everybody in the room sees them make it. */
 export function emote(kind: Emote): void {
   const p = G.player;
@@ -364,6 +419,14 @@ export function waveAt(a: Actor): void {
 }
 
 let plaque: HTMLElement | null = null;
+/** Whether the plaque was up when the last touch on the world came (`touched`). */
+let plaqueWas = false;
+
+/** A touch on the world: the plaque of emotes goes, and whether it was up is kept for `meetLive`. */
+export function touched(): void {
+  plaqueWas = plaque !== null;
+  closeEmotes();
+}
 
 /** The small plaque of emotes over the member's own figure, for choosing one. */
 export function openEmotes(): void {
@@ -405,8 +468,8 @@ function placeEmotes(): void {
 
 let link: HTMLElement | null = null;
 
-/** What the town shows of its room just now: nothing while the town is off the stage. */
-const shownNow = (): ReturnType<typeof linkShown> => (stage === "on" ? linkShown(room?.state() ?? null) : "none");
+/** What the page shows of its room just now: nothing while it is out of every room. */
+const shownNow = (): ReturnType<typeof linkShown> => (stage.at === "room" ? linkShown(room?.state() ?? null) : "none");
 
 /**
  * The small "Reconnecting…" under the purse, once the connection has been down a couple of seconds and
@@ -424,7 +487,7 @@ function showLink(): void {
 
 // ---------- looking at it from outside ----------
 
-/** For `window.town`: everybody else as they would be drawn this moment, what the room was last told of the member, and the connection. */
+/** For `window.town`: everybody else as they would be drawn this moment, what the room was last told of the member, and the connection and its room. */
 export const liveHandles = {
   players: (): {
     name: string;
@@ -453,12 +516,13 @@ export const liveHandles = {
           alpha: Math.round(f.fig.alpha * 100) / 100,
         };
       }),
-  told: (): { step: Step; at: number } | null => told,
+  told: (): { step: Step; at: number } | null => (said ? { step: said.step, at: said.at } : null),
   link: () => ({
     state: room?.state() ?? null,
+    room: stage.at === "room" ? stage.room : null,
     shown: shownNow(),
     you: room?.you() ?? null,
-    others: othersInTown(),
+    others: othersHere(),
     rtt: room?.rtt() ?? null,
   }),
 };

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { campRoom, playerId } from "@sequoia-leaf/core";
 import type { Emote } from "@sequoia-leaf/kit/emotes.ts";
 import { LET_GO, restart, start } from "@sequoia-leaf/kit/live.ts";
 import { forgetLedger } from "@sequoia-leaf/kit/purse.ts";
@@ -27,6 +28,7 @@ import {
   type Fellow,
   follow,
   linkShown,
+  liveAt,
   newFigure,
   NO_ID,
   othersIn,
@@ -34,6 +36,7 @@ import {
   Pose,
   QUIET_FOR,
   REJOIN_FOR,
+  sameLive,
   stepOf,
 } from "./motion.ts";
 import { inTownLine } from "./news.ts";
@@ -406,7 +409,7 @@ describe("the connection, shown", () => {
     again.says(welcome(1, clock.now, [me(1)]));
     expect(shown()).toBe("none");
     // Stepping out of the room on purpose is no drop: nothing is announced, however long.
-    room.away(true);
+    room.go(null);
     clock.now += 60_000;
     expect(shown()).toBe("none");
   });
@@ -426,5 +429,66 @@ describe("the connection, shown", () => {
     expect(statuses.at(-1)).toBe(card);
     expect(linkShown(room.state())).toBe(card);
     expect(LET_GO[card]).toEqual(words);
+  });
+});
+
+describe("the room for the place on the stage", () => {
+  const mine = playerId("10000000-0000-0000-0000-0000000000aa");
+  const theirs = playerId("10000000-0000-0000-0000-0000000000bb");
+
+  test("is the town's in town, a camp's own in a camp, none in the Grove, and no connection in a game", () => {
+    expect(liveAt("town", mine)).toEqual({ at: "room", room: "town" });
+    expect(liveAt("camp", mine)).toEqual({ at: "room", room: campRoom(mine) });
+    expect(liveAt("camp", theirs)).toEqual({ at: "room", room: campRoom(theirs) });
+    expect(liveAt("grove", mine)).toEqual({ at: "away" });
+    expect(liveAt(null, mine)).toEqual({ at: "shut" });
+    // A camp of nobody the page can name is no room.
+    expect(liveAt("camp", "")).toEqual({ at: "away" });
+    expect(sameLive(liveAt("camp", mine), liveAt("camp", mine))).toBe(true);
+    expect(sameLive(liveAt("camp", mine), liveAt("camp", theirs))).toBe(false);
+    expect(sameLive(liveAt("grove", mine), liveAt("grove", theirs))).toBe(true);
+  });
+
+  test("the town, two camps, the Grove and the town again are one connection, each room heard from its own welcome", async () => {
+    const world = await live();
+    const heard: string[] = [];
+    const room = joinLive("town", {
+      welcome: (_you, name, roster) => heard.push(`${name}: ${roster.map((m) => m.name).join(", ")}`),
+      joined: (m) => heard.push(`joined ${m.name}`),
+    });
+    rooms.push(room);
+    const s = socket(world, 0);
+    s.open();
+    const into = (name: string, roster: LiveMember[]): void => s.says({ ...welcome(1, 0, roster), room: `${name}/1` });
+    const go = (place: "town" | "camp" | "grove", owner: string): void => {
+      const to = liveAt(place, owner);
+      room.go(to.at === "room" ? to.room : null);
+    };
+    into("town", [me(1), ALICE]);
+    go("camp", mine);
+    // Alice is in town: heard after the page has left it, she is nobody here.
+    s.says({ t: "joined", member: BOB });
+    into(campRoom(mine), [me(1), BOB]);
+    go("camp", theirs);
+    into(campRoom(theirs), [me(1), ALICE, BOB]);
+    go("grove", theirs);
+    go("town", theirs);
+    into("town", [me(1)]);
+    expect(heard).toEqual([
+      "town/1: Tester, Alice",
+      `${campRoom(mine)}/1: Tester, Bob`,
+      `${campRoom(theirs)}/1: Tester, Alice, Bob`,
+      "town/1: Tester",
+    ]);
+    const said = s.texts().filter((m) => m.t === "join" || m.t === "leave");
+    expect(said).toEqual([
+      { t: "leave" },
+      { t: "join", room: campRoom(mine) },
+      { t: "leave" },
+      { t: "join", room: campRoom(theirs) },
+      { t: "leave" },
+      { t: "join", room: "town" },
+    ]);
+    expect(world.sockets).toHaveLength(1);
   });
 });
