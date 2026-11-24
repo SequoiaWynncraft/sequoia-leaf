@@ -2,8 +2,9 @@ import { describe, expect, it } from "bun:test";
 
 import { ConfigProvider, Effect, Exit, Layer, Redacted } from "effect";
 
-import { AppConfig } from "../src/config.ts";
-import { readSettings } from "./support.ts";
+import { AppConfig, LIVE_MOST_PLAYERS } from "../src/config.ts";
+import { LiveTuned, LiveTuning } from "../src/live/live.ts";
+import { readSettings, testConfig } from "./support.ts";
 
 const bucket = {
   BACKUP_S3_ENDPOINT: "https://example.r2.cloudflarestorage.com",
@@ -38,7 +39,23 @@ describe("settings", () => {
       publicDir: undefined,
       gameSignInUrl: "https://api.seqwawa.com/auth/web/start?return_to=",
       gameLeafSpending: false,
+      liveMostPlayers: LIVE_MOST_PLAYERS,
     });
+  });
+
+  it("holds as many players in Live as LIVE_MOST_PLAYERS says, and refuses anything but a whole number above 0", async () => {
+    expect(readSettings({ LIVE_MOST_PLAYERS: "2500" }).liveMostPlayers).toBe(2500);
+    for (const bad of ["0", "-5", "1.5", "lots"]) expect(() => readSettings({ LIVE_MOST_PLAYERS: bad })).toThrow();
+    // Live is given the number Leaf started with, and its other tuning as ever.
+    const tuned = await Effect.runPromise(
+      Effect.provide(
+        Effect.gen(function* () {
+          return yield* LiveTuning;
+        }),
+        LiveTuned.pipe(Layer.provide(Layer.succeed(AppConfig)(testConfig({ liveMostPlayers: 7 })))),
+      ),
+    );
+    expect(tuned).toEqual({ ...LiveTuning.defaultValue(), mostPlayers: 7 });
   });
 
   it("serves metrics where LEAF_METRICS_BIND says, and refuses anything that is not host:port", () => {

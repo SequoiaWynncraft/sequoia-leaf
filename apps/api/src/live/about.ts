@@ -7,7 +7,10 @@ export const CHANGES_FROM = 3;
 export interface AboutFrames {
   /** All of the lists, numbered (`about`): for a page of a version before `CHANGES_FROM`. */
   readonly whole: string;
-  /** What changed since the last lists told (`aboutChanged`), or all of them the first time: for any other. */
+  /**
+   * What changed since the last lists told (`aboutChanged`), for any other; or all of them, the
+   * first time, and whenever saying what changed would be longer.
+   */
   readonly changed: string;
 }
 
@@ -33,6 +36,7 @@ export class AboutTold {
     const v = (before?.v ?? 0) + 1;
     const whole = say({ t: "about", v, who });
     this.last = { v, who, whole };
-    return { whole, changed: before === null ? whole : say({ t: "aboutChanged", v, ...aboutChange(before.who, who) }) };
+    const changed = before === null ? whole : say({ t: "aboutChanged", v, ...aboutChange(before.who, who) });
+    return { whole, changed: changed.length < whole.length ? changed : whole };
   }
 }

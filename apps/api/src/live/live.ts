@@ -30,6 +30,7 @@ import { whoIsAbout } from "../activity/about.ts";
 import { type Visitor, Visits } from "../activity/visits.ts";
 import { type Identity, isGuest } from "../api/api.ts";
 import { PLACES } from "../api/schemas.ts";
+import { AppConfig, LIVE_MOST_PLAYERS } from "../config.ts";
 import { Tallies } from "../tally/store.ts";
 import { AboutTold, CHANGES_FROM } from "./about.ts";
 import { type Census, LiveCounts, type LiveLine, reportLive } from "./counts.ts";
@@ -68,8 +69,14 @@ export interface LiveTuning {
 }
 
 export const LiveTuning = Context.Reference<LiveTuning>("leaf/LiveTuning", {
-  defaultValue: () => ({ recheckMs: 30_000, graceMs: 10_000, mostPlayers: 1000, presenceMs: 30_000 }),
+  defaultValue: () => ({ recheckMs: 30_000, graceMs: 10_000, mostPlayers: LIVE_MOST_PLAYERS, presenceMs: 30_000 }),
 });
+
+/** Live's tuning as Leaf runs it: the defaults, but for how many players it holds, which is a setting (`LIVE_MOST_PLAYERS`). */
+export const LiveTuned = Layer.effect(
+  LiveTuning,
+  AppConfig.useSync((settings) => ({ ...LiveTuning.defaultValue(), mostPlayers: settings.liveMostPlayers })),
+);
 
 /** How often Live forgets the players of whom nothing is left (`Player.gone`). */
 const FORGET_EVERY = Duration.seconds(1);

@@ -288,6 +288,19 @@ describe("a room", () => {
     expect(room.size).toBe(1);
   });
 
+  it("knows somebody as in it only while they are, not once gone nor gone and back in as another", () => {
+    const room = new Room("town", 1, TOWN);
+    const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
+    expect(room.has(alice)).toBe(true);
+    room.leave(alice.member.id);
+    expect(room.has(alice)).toBe(false);
+    // Numbers wrap round: somebody else comes in with hers, and is not her.
+    for (let i = 0; i < 65_534; i++) room.leave(room.join(person("x"), inbox().outbox, 0, 30, 1).member.id);
+    const bob = room.join(person("Bob"), inbox().outbox, 0, 30, 1);
+    expect(bob.member.id).toBe(alice.member.id);
+    expect([room.has(alice), room.has(bob)]).toEqual([false, true]);
+  });
+
   it("numbers people counting up, never 0, wrapping and skipping anybody still there", () => {
     const room = new Room("town", 1, { ...TOWN, capacity: 5 });
     const first = room.join(person("A"), inbox().outbox, 0, 30, 1);

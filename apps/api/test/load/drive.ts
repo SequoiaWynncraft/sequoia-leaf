@@ -1,10 +1,13 @@
 /**
  * Loads a Leaf started with `leaf.ts`, from a process of its own, and says how it held up, as JSON:
  *
- *   bun apps/api/test/load/drive.ts <port> [walkers] [owners] [visitors] [seconds] [sweep] [churn]
+ *   bun apps/api/test/load/drive.ts <port> [walkers] [owners] [visitors] [seconds] [sweep] [churn] [from]
  *
  * (300 walkers, 20 owners, 50 visitors, 20 seconds, a sweep of at most 300 seconds and no churn by
- * default; `owners` as `leaf.ts` was given them.) It goes through three phases, each measured on its own:
+ * default; `owners` as `leaf.ts` was given them.) Its walkers are `w<from>` on (`w0` by default),
+ * so that several drivers can share the walkers between them when one process would be too slow to
+ * time them all: each times the moves of its own walkers only. It goes through three phases, each
+ * measured on its own:
  *
  * 1. `walk`: the walkers join over the first five seconds and walk about the town at the game's pace
  *    (`CLIENT_HZ` moves a second); each second, one in thirty connects again (joining the town
@@ -29,7 +32,7 @@ import { Schema } from "effect";
 import { LiveClient } from "../live-client.ts";
 import { coldId, ownerId, spread } from "./shared.ts";
 
-const [port, walkers, owners, visitors, seconds, sweepMost, churn] = [
+const [port, walkers, owners, visitors, seconds, sweepMost, churn, from] = [
   process.argv[2],
   process.argv[3] ?? 300,
   process.argv[4] ?? 20,
@@ -37,6 +40,7 @@ const [port, walkers, owners, visitors, seconds, sweepMost, churn] = [
   process.argv[6] ?? 20,
   process.argv[7] ?? 300,
   process.argv[8] ?? 0,
+  process.argv[9] ?? 0,
 ].map(Number);
 if (
   port === undefined ||
@@ -46,11 +50,12 @@ if (
   seconds === undefined ||
   sweepMost === undefined ||
   churn === undefined ||
-  ![port, walkers, owners, visitors, seconds, sweepMost, churn].every((n) => Number.isInteger(n) && n >= 0) ||
+  from === undefined ||
+  ![port, walkers, owners, visitors, seconds, sweepMost, churn, from].every((n) => Number.isInteger(n) && n >= 0) ||
   walkers < 2
 ) {
   console.error(
-    "Usage: bun apps/api/test/load/drive.ts <port> [walkers >= 2] [owners] [visitors] [seconds] [sweep] [churn]",
+    "Usage: bun apps/api/test/load/drive.ts <port> [walkers >= 2] [owners] [visitors] [seconds] [sweep] [churn] [from]",
   );
   process.exit(2);
 }
@@ -147,7 +152,7 @@ const seated = (w: Walker, welcome: { room: string; you: number }) => {
 
 /** Opens a walker's connection, and tries again in a few seconds if it does not open. */
 const connect = async (w: Walker): Promise<void> => {
-  const opened = await LiveClient.open(origin, { bearer: `w${w.n}` })
+  const opened = await LiveClient.open(origin, { bearer: `w${from + w.n}` })
     .then(async (client) => ({ client, welcome: await client.next("welcome", () => true, 5000) }))
     .catch(() => null);
   if (opened === null) {

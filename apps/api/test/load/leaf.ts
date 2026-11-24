@@ -4,7 +4,7 @@
  *   bun apps/api/test/load/leaf.ts <port> [owners] [cold]
  *
  * The real app on a database in memory, on the machine's clock, with the tests' stand-in backend
- * knowing a session for each of 1,000 walkers (`w<n>`, every fourth not in the guild), `owners`
+ * knowing a session for each of 3,000 walkers (`w<n>`, every fourth not in the guild), `owners`
  * members (20 by default) whose yard is the largest staged one, written a minute ago (`o<n>`), and
  * 200 who only visit (`v<n>`); and `cold` more such yards (50 by default), left eight hours ago,
  * that no page keeps up. To see it as the 4-core server would run it, start it in a scope of its own:

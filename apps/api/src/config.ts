@@ -62,7 +62,18 @@ export interface Settings {
   readonly gameSignInUrl: string;
   /** Whether the game may offer to spend Leaf. Only `/v1/game/hello` reads it, to tell the game. */
   readonly gameLeafSpending: boolean;
+  /**
+   * The most players Live holds at once, connected or in their grace; more are turned away
+   * (`live_full`) until some go. Read as Leaf starts: a new number takes a restart.
+   */
+  readonly liveMostPlayers: number;
 }
+
+/**
+ * How many players one Leaf carries in Live with room to spare, on the four cores production gives
+ * it, by the load test (the README's "How long it takes", under Live).
+ */
+export const LIVE_MOST_PLAYERS = 2000;
 
 /**
  * An origin, such as `https://leaf.seqwawa.com`: an http or https address with
@@ -135,6 +146,9 @@ export const settings: Config.Config<Settings> = Config.all({
     Config.withDefault("https://api.seqwawa.com/auth/web/start?return_to="),
   ),
   gameLeafSpending: Config.Boolean("GAME_LEAF_SPENDING").pipe(Config.withDefault(false)),
+  liveMostPlayers: Config.schema(Schema.Int.check(Schema.isGreaterThan(0)), "LIVE_MOST_PLAYERS").pipe(
+    Config.withDefault(LIVE_MOST_PLAYERS),
+  ),
 }).pipe(
   Config.map((read): Settings => {
     const { databasePath, endpoint, bucket, accessKeyId, secretAccessKey } = read;
@@ -163,6 +177,7 @@ export const settings: Config.Config<Settings> = Config.all({
       publicDir: read.publicDir,
       gameSignInUrl: read.gameSignInUrl,
       gameLeafSpending: read.gameLeafSpending,
+      liveMostPlayers: read.liveMostPlayers,
     };
   }),
 );
