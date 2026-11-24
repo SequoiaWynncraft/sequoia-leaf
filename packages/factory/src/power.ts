@@ -5,7 +5,7 @@
  */
 import { REACH } from "./content/machines.ts";
 import { PYLON } from "./tables.ts";
-import type { Yard } from "./yard.ts";
+import { changed, type Yard } from "./yard.ts";
 
 /**
  * A reach in hundredths of a tile, made `percent` per cent as far, as the whole number its square may
@@ -56,7 +56,7 @@ export function repower(y: Yard): Uint8Array {
     });
   }
   y.powered = true;
-  y.wire = null;
+  changed(y);
   return y.lit;
 }
 

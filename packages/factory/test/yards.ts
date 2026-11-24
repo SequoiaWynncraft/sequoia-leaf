@@ -5,6 +5,8 @@
  * - `delivering`: every goal of the slice done, three lines on the guild's land into the depot;
  * - `generated`: the scale study's generator on a land of 3 by 3 plots, about 1,000 pieces whose
  *   lines end in crates;
+ * - `junctions`: every kind of meeting of lines on the guild's land, with tier 4 done (see it);
+ * - `cratesOpening`: a goal finished in a tick lets a crate hold more while a belt waits on it;
  * - `staged(name)`: a yard on the guild's land as play brings one there, made by the rules alone:
  *   built with commands, and every goal finished, paid and logged by the rules, by lines of its own
  *   or by what a node wants arriving at the depot (`fillHand`). `new`, as Leaf makes it; `small`, the
@@ -22,9 +24,11 @@
  *   and does not arrive at the depot: only `study` and `gate` know any, and their Study studied it,
  *   a folio at a time, from the line that stands there.
  */
+import { readFileSync } from "node:fs";
+
 import * as F from "../src/index.ts";
 import { type Gen, generate } from "./gen.ts";
-import { makeLand } from "./land.ts";
+import { bareLand, makeLand } from "./land.ts";
 
 type Rec = Record<string, unknown>;
 
@@ -92,6 +96,150 @@ export function delivering(seed = 1): F.Yard {
 let small: Gen | null = null;
 /** A yard of about 1,000 pieces on 48 by 36 tiles, made once by the generator. */
 export const generated = (): Gen => (small ??= generate(makeLand(3, 3, 7), 1000));
+
+type Placed = readonly [F.KindName, number, number, F.Dir, number?];
+
+/**
+ * A yard of every kind of meeting of lines, on the guild's land with tier 4 done: planks (sawn from
+ * deadfall that comes through a tunnel) and stone from two gatherers taking turns at a joiner, then
+ * a sorter sending the planks to its right, into a crate and on to a cart stop, and the stone ahead
+ * to the depot; ore from behind and by a way in into a splitter that puts its left way, into a
+ * crate, first and sends the rest ahead into a joiner, which the crate's ore comes back round to; a
+ * bench on the Clay Bank fed more planks than pots (a splitter sends half the pots to a cart stop),
+ * which makes hampers and has room for more planks while it holds a pot; and a boiler fed deadfall.
+ */
+export function junctions(): F.Yard {
+  const y = F.create({ seed: 31, tier: 5 });
+  const pieces: Placed[] = [
+    ["gatherer", 19, 15, 1],
+    ["mill", 19, 20, 0],
+    ["belt", 20, 20, 1, 3],
+    ["gatherer", 18, 21, 0],
+    ["belt", 19, 21, 0, 2],
+    ["gatherer", 18, 22, 0],
+    ["belt", 19, 22, 0],
+    ["belt", 20, 22, 3],
+    ["joiner", 20, 21, 0],
+    ["sorter", 21, 21, 0],
+    ["crate", 21, 22, 1],
+    ["belt", 21, 23, 0],
+    ["stop", 22, 23, 0],
+    ["belt", 22, 21, 3, 3],
+    ["belt", 22, 20, 3, 3],
+    ["belt", 22, 19, 0, 3],
+    ["gatherer", 30, 13, 2],
+    ["belt", 29, 13, 2],
+    ["gatherer", 29, 12, 2],
+    ["belt", 28, 12, 1],
+    ["splitter", 28, 13, 2],
+    ["joiner", 27, 13, 2],
+    ["belt", 26, 13, 2],
+    ["belt", 25, 13, 1],
+    ["belt", 25, 14, 1],
+    ["belt", 25, 15, 1],
+    ["belt", 25, 16, 1],
+    ["belt", 28, 14, 1],
+    ["crate", 28, 15, 2],
+    ["belt", 27, 15, 3],
+    ["belt", 27, 14, 3],
+    ["pylon", 27, 12, 0],
+    ["pylon", 17, 20, 0],
+    ["gatherer", 19, 14, 0],
+    ["boiler", 20, 14, 0],
+    ["gatherer", 18, 16, 1, 3],
+    ["mill", 18, 17, 2, 3],
+    ["belt", 17, 17, 2, 3],
+    ["belt", 16, 17, 2, 3],
+    ["belt", 15, 17, 1, 3],
+    ["belt", 15, 18, 1, 3],
+    ["belt", 15, 19, 1, 3],
+    ["gatherer", 12, 20, 0],
+    ["mill", 13, 20, 0],
+    ["splitter", 14, 20, 0],
+    ["stop", 14, 19, 0],
+    ["bench", 15, 20, 1],
+    ["stop", 15, 21, 0],
+    ["pylon", 13, 18, 0],
+  ];
+  must(y, { do: "buyPlot", plot: "bank" });
+  for (const [kind, x, z, dir, grade] of pieces)
+    must(y, { do: "build", kind, x, y: z, dir, ...(grade === undefined ? {} : { grade }) });
+  must(y, { do: "stand", pieces: [{ kind: "tunnel", x: 19, y: 16, dir: 1, span: 2, grade: 2 }] });
+  must(y, { do: "sort", x: 21, y: 21, item: "plank" });
+  must(y, { do: "side", x: 21, y: 21, right: true });
+  must(y, { do: "wayIn", x: 28, y: 13, way: 2, on: true });
+  must(y, { do: "first", x: 28, y: 13, way: 1 });
+  return y;
+}
+
+/**
+ * What the junctions yard's owner does at the start of each hour: shuts the ore's crate, so the
+ * splitter's first way fills and backs up; shuts the planks' crate, so the sorter, the joiner and
+ * everything behind them stand; empties it, so they run until it is full again; opens both, puts no
+ * way first and turns the splitter's way in back out, so the ore from the north stands; turns the
+ * sorter to its left, where nothing takes, and lays a belt there; tells the mill to make planks and
+ * the sorter to send stone aside; and takes a belt of the joiner's away.
+ */
+export const JUNCTION_HOURS: readonly (readonly Rec[])[] = [
+  [],
+  [{ do: "crate", x: 28, y: 15, open: false }],
+  [{ do: "crate", x: 21, y: 22, open: false }],
+  [{ do: "tipOut", x: 21, y: 22, item: null }],
+  [
+    { do: "crate", x: 21, y: 22, open: true },
+    { do: "crate", x: 28, y: 15, open: true },
+    { do: "first", x: 28, y: 13, way: null },
+    { do: "wayIn", x: 28, y: 13, way: 2, on: false },
+  ],
+  [
+    { do: "side", x: 21, y: 21, right: false },
+    { do: "build", kind: "belt", x: 21, y: 20, dir: 0 },
+  ],
+  [
+    { do: "recipe", x: 19, y: 20, item: "plank" },
+    { do: "sort", x: 21, y: 21, item: "stone" },
+  ],
+  [{ do: "remove", x: 19, y: 22 }],
+];
+
+/**
+ * Bigger crates opened in the middle of a tick: a yard at tier 2, the shells' project in hand with 99
+ * of its 100 shells in, and a belt into the depot carrying the last, which crosses its tile at the
+ * second tick. A shut crate holds 32 planks, as many as a crate holds before the project, and the
+ * belt behind it a plank it cannot take. The belt into the depot hands on before the crate's belt
+ * does, each tick, so the crate may hold 128 by the time that belt is asked at the second.
+ */
+export function cratesOpening(): { y: F.Yard; crate: number; behind: number } {
+  const y = F.create({ land: bareLand(15, 9, [], [12, 4]), tier: 2, seed: 1 });
+  const shell = F.item("shell");
+  const plank = F.item("plank");
+  must(y, { do: "take", node: "shells" });
+  F.deliver(y, shell, 99);
+  must(y, { do: "build", kind: "belt", x: 10, y: 3, dir: 0 });
+  must(y, { do: "build", kind: "belt", x: 4, y: 6, dir: 0 });
+  must(y, { do: "build", kind: "crate", x: 5, y: 6, dir: 0 });
+  must(y, { do: "crate", x: 5, y: 6, open: false });
+  const [toDepot, behind, crate] = [F.at(y, 10, 3), F.at(y, 4, 6), F.holderOf(y, F.at(y, 5, 6))];
+  for (let k = 0; k < y.open.crate; k++) F.put(y.holders, crate, plank);
+  y.item[toDepot] = shell;
+  y.prog[toDepot] = 4;
+  y.item[behind] = plank;
+  y.prog[behind] = 8;
+  return { y, crate, behind };
+}
+
+/** The yards in `saves/`, as each version kept them (`saves.test.ts`). */
+export const SAVES = ["v7-small", "v7-mid", "v7-study", "v7-gate", "v6-mid", "v3-tier2"] as const;
+
+/** A save read, with its owner there at its last tick. */
+export function saved(name: (typeof SAVES)[number]): F.Yard {
+  const raw: unknown = JSON.parse(readFileSync(`${import.meta.dir}/saves/${name}.json`, "utf8"));
+  const text = typeof raw === "object" && raw !== null && "text" in raw ? raw.text : null;
+  const y = typeof text === "string" ? F.decode(text) : null;
+  if (!y) throw new Error(`${name} does not read`);
+  y.seen = F.here(y);
+  return y;
+}
 
 /** The names of the yards the play server stages. */
 export const STAGES = ["new", "small", "short", "mid", "hall", "study", "gate", "large"] as const;

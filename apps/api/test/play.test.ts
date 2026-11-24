@@ -1977,13 +1977,13 @@ describe("Leaf tending the Works", () => {
 
   it("shares one budget: a batch waits behind at most one slice of Leaf tending others at a time, and the tending goes on", async () => {
     const { game, run } = counted();
-    // Bob's and Carol's yards left eight hours ago, for Leaf to tend; Alice's two hours ago, for her page to bring up.
+    // Bob's and Carol's yards left eight hours ago, for Leaf to tend; Alice's six hours ago, for her page to bring up.
     clock.now -= 8 * HOUR;
     await keepMid(services, undefined, bob);
     await keepMid(services, undefined, carol);
-    clock.now += 6 * HOUR;
-    await keepMid();
     clock.now += 2 * HOUR;
+    await keepMid();
+    clock.now += 6 * HOUR;
     const tend = services.run(sweep([game]));
     await run.sliced(1);
     const before = run.slices.length;
@@ -2007,13 +2007,13 @@ describe("Leaf tending the Works", () => {
 
   it("goes round the yards catching up, so a command to a yard kept up waits for a slice of each, not all of theirs", async () => {
     const { game, run } = counted();
-    // Bob's, Carol's and Dave's yards left two hours ago, as after a deploy; Alice's a minute ago.
-    clock.now -= 2 * HOUR;
+    // Bob's, Carol's and Dave's yards left six hours ago, as after a deploy; Alice's a minute ago.
+    clock.now -= 6 * HOUR;
     for (const owner of [bob, carol, dave]) {
       // oxlint-disable-next-line no-await-in-loop -- one after another
       await keepMid(services, undefined, owner);
     }
-    clock.now += 2 * HOUR - MINUTE;
+    clock.now += 6 * HOUR - MINUTE;
     await keepMid();
     clock.now += MINUTE;
     // Their owners open them at once, and Alice's page sends a command once they are catching up.

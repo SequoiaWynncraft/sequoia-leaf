@@ -28,11 +28,12 @@ const ticks = (n: number): void => {
 const came = (): number => y.depot.reduce((a, b) => a + b, 0);
 // Warmed up, and then through a few collections: the compiler throws code away at a collection and
 // compiles it again, and what it compiles is counted as allocated, so a window that opens with a
-// collection measures that until it has settled. A tick that allocates allocates in every window.
+// collection measures that until it has settled. `step` holds no loop of its own, so the compiler's
+// last tier takes it up only after about 7,000 ticks. A tick that allocates allocates in every window.
 ticks(3000);
 for (let k = 0; k < 4; k++) {
   Bun.gc(true);
-  ticks(1000);
+  ticks(3000);
 }
 let news = 0;
 let depot = 0;

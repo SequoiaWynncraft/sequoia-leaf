@@ -110,6 +110,8 @@ export interface Wire {
   readonly order: Int32Array;
   /** Tiles that carry, tiles that work, and boilers within reach of power. */
   readonly carry: Int32Array;
+  /** Tunnels' way-in mouths, which carry things under the ground too. */
+  readonly mouths: Int32Array;
   readonly work: Int32Array;
   readonly boilers: Int32Array;
   /** For each tile, the sides it takes things in from, a bit each (`sidesTaken`). */
@@ -119,6 +121,14 @@ export interface Wire {
   /** Power always there (the depot and the waterwheels), and power drawn. */
   readonly steady: number;
   readonly demand: number;
+  /**
+   * 1 for each tile that waits: it holds a thing the tile it hands to has no room for, so handing
+   * on passes it over until a tile beside it may have room (`tick.ts`). Forgotten whenever the yard
+   * is changed other than by its ticks: with the plumbing, and after a command (`waitingFrom`).
+   */
+  readonly waiting: Uint8Array;
+  /** The yard's `rev` when `waiting` was last forgotten. */
+  waitingFrom: number;
 }
 
 /** A piece kept in a blueprint, 10 bytes: kind, x, y, way, span, recipe, open, tint, a splitter's ways or a sorter's side (`packWays`), grade. */
@@ -304,13 +314,14 @@ export function emptyYard(land: Land, tier = 0): Yard {
 }
 
 /**
- * Works out again what is open, from the goals done. The depot's power, and how far power reaches,
- * may have changed with it, so power and the plumbing are worked out again when next read.
+ * Works out again what is open, from the goals done. The depot's power, how far power reaches, how
+ * much a crate holds and what a machine may make may have changed with it, so power and the plumbing
+ * are worked out again when next read (`changed`).
  */
 export function reopen(y: Yard): void {
   y.open = openOf(y.done);
   y.powered = false;
-  y.wire = null;
+  changed(y);
   y.rev++;
 }
 
@@ -320,8 +331,14 @@ export function hold(y: Yard, g: Goal | -1): void {
   if (g >= 0) y.got[g] ??= counts();
 }
 
-/** Marks the yard as changed: its plumbing is worked out afresh. */
+/**
+ * Marks the yard as changed: its plumbing is worked out afresh when next read. Every tile waiting in
+ * the plumbing let go stops waiting at once: a tick under way, when a goal finished in it reopens
+ * what is open (a crate may hold more), goes on with the plumbing it read, and passes no later tile
+ * over that may now have room (`tick.ts`).
+ */
 export function changed(y: Yard): void {
+  y.wire?.waiting.fill(0);
   y.wire = null;
 }
 

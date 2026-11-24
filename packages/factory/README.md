@@ -27,10 +27,13 @@ page (`apps/works`) holds a copy and draws it; the town reads its standing's wor
 | yards built with commands, for the tests and the play server's tours          | `test/yards.ts` (`delivering`, `generated`, `staged`)                         |
 | how long the slice takes a player                                             | `pace.ts` (its settings), then `pace/`                                        |
 | what it costs                                                                 | `bench.ts`, and `test/budgets.test.ts` for the budgets                        |
+| that a change to the tick leaves every yard as it was, to the bit             | `test/replays.ts` (`bun test/replays.ts --write` writes the record again)     |
 
 ```sh
-bun test       # every rule, the tables and the budgets (about 15 seconds)
-bun bench.ts   # times and sizes of generated yards of about 6,000 and 10,000 pieces
+bun test       # every rule, the tables, the budgets and the record of the tick (about 50 seconds)
+bun bench.ts   # times and sizes of generated yards of about 6,000 and 10,000 pieces, then hours of work
+bun bench.ts --hours   # ms of work an hour of the yard's time for each staged yard and save, and lines that never wait
+bun bench.ts --hours --lines   # lines that never wait alone: three of 41 belts from full crates into the depot
 bun plan.ts    # the planner's table for every thing the slice can make
 bun pace.ts    # tiers 0 to 3 played as a careful player would, and how long each goal took (about 3 seconds)
 ```
@@ -69,10 +72,14 @@ it is read only through `holderOf` and `tunnelOf`, which give -1 for a kind with
 - **tunnels**, for each way-in mouth: `under` (thing, Uint8) and `along` (eighths, Uint8), three a row;
 - **blueprints**: each one's pieces as 10 bytes a piece (kept in fewer, below).
 
-The plumbing (`wire`) is worked out once after a change: four lists of tiles, sized by what
-stands (the order things are handed on in, the tiles that carry, the pieces that work, the boilers
-in reach), for each tile the sides it takes things in from, a bit each, and for each kind of machine
-the recipes it may make. A tick runs down those lists and nothing else, and makes nothing.
+The plumbing (`wire`) is worked out once after a change: five lists of tiles, sized by what
+stands (the order things are handed on in, the tiles that carry, tunnels' way-in mouths, the pieces
+that work, the boilers in reach), for each tile the sides it takes things in from, a bit each, and
+for each kind of machine the recipes it may make. A tick runs down those lists and nothing else, and
+makes nothing. Kept with the plumbing, a byte a tile says which tiles wait: each holds a thing the
+tile it hands to had no room for, and handing on passes it over until a tile beside it may have room
+(`src/tick.ts` says when). A full belt that cannot move costs a tick almost nothing; waiting is
+forgotten with the plumbing and after every command.
 
 Beside them, plain records: the clock, the till, the power put by, the goals (done, in the order
 they were done; the node in hand; the line of research; what each goal not done has been given),
@@ -472,7 +479,12 @@ tiers), grades, tiers and tools, research, the new pieces and blueprints, orders
 folio cost payable by its tier, ids unique), the planner (and that a yard does what it says), what a
 yard as it stands can make and needs (`flow`), the codec and the check, random play (a refusal changes nothing, a yard reads back as itself, every
 command and piece takes effect, what the page would write reads back as the command) and time away,
-how a piece stands (`condition`), the wire from the page's side, the staged yards, the budgets, and
+how a piece stands (`condition`), the wire from the page's side, the staged yards, the budgets, the
+record of the tick (`test/replays.ts`: every staged yard, every save, the delivering, generated and
+junctions yards, random play and the largest yard tended in slices, each run on for hours with the
+kept yard digested every tick of its first minute and every minute after, and held to
+`replays.json`, which the tick before any change to how fast it runs wrote), a yard kept between
+ticks against the same yard read afresh, tick for tick (`test/fresh.test.ts`), and
 the pace script's parts (`test/pace.test.ts`: sizing lines, which lines a goal needs beyond what
 stands, that a line laid out delivers what it is booked for, that a line that fits nowhere takes up
 only the old line in its way, that what the player reads off the yard is what arrives, the order it

@@ -2,7 +2,9 @@
  * The new pieces: a cart stop takes things from any side and they have reached the depot at once,
  * as many stops as the yard has unlocked; a sorter, in at the back, sends the one thing it is set to
  * out to its left, or flipped to its right, and everything else ahead, and with nothing set is a belt. A splitter with a way
- * put first sends everything that way while it takes it, and only the rest to its other ways. And a
+ * put first sends everything that way while it takes it, and only the rest to its other ways. A
+ * joiner lets the next thing in as soon as the one whose turn it was goes another way, and a full
+ * crate takes a thing in at the tick it lets one out. And a
  * blueprint, set down by naming its place: turned any way, it stands as turned, tunnels whole, all or
  * none.
  */
@@ -11,7 +13,7 @@ import { describe, expect, test } from "bun:test";
 import * as F from "../src/index.ts";
 import { fill } from "./goals.ts";
 import { bareLand } from "./land.ts";
-import { give, must } from "./yards.ts";
+import { cratesOpening, give, must } from "./yards.ts";
 
 const plank = F.item("plank");
 const brick = F.item("brick");
@@ -668,6 +670,73 @@ describe("a splitter with a way in", () => {
     const turnedIn = F.check(y);
     must(y, { do: "wayIn", x: 4, y: 4, way: 1, on: false });
     expect([turnedIn === plain, F.check(y)]).toEqual([false, plain]);
+  });
+});
+
+describe("a joiner", () => {
+  test("lets a thing in at the next tick once the thing whose turn it was goes another way", () => {
+    // A joiner at (6, 4) facing east, with a splitter behind it, whose turn it is, and a belt coming
+    // down into it from the north, each holding a plank across its tile. Neither is beside the crate
+    // south of the splitter, where the splitter sends its plank instead.
+    const y = yard(5);
+    must(y, { do: "build", kind: "joiner", x: 6, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "splitter", x: 5, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "belt", x: 6, y: 3, dir: 1 });
+    const right = sink(y, 5, 5);
+    sink(y, 7, 4);
+    const [joiner, splitter, belt] = [F.at(y, 6, 4), F.at(y, 5, 4), F.at(y, 6, 3)];
+    for (const i of [splitter, belt]) {
+      y.item[i] = plank;
+      y.prog[i] = 8;
+    }
+    // The joiner's next way in is behind it, and the splitter's next way out is its right.
+    y.turn[joiner] = 0;
+    y.turn[splitter] = 2;
+    run(y, 1);
+    expect([F.held(y.holders, right, plank), y.item[belt], y.item[joiner]]).toEqual([1, plank, F.NONE]);
+    run(y, 1);
+    expect([y.item[belt], y.item[joiner]]).toEqual([F.NONE, plank]);
+  });
+});
+
+describe("a full crate", () => {
+  test("takes the next thing in at the tick it lets one out", () => {
+    // A crate at (5, 4) facing east, full: 127 planks and one out to go, which the belt ahead of it
+    // has no room for until the plank on that belt has crossed it. A belt behind it holds a plank.
+    const y = yard(4);
+    must(y, { do: "build", kind: "crate", x: 5, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "belt", x: 4, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "belt", x: 6, y: 4, dir: 0 });
+    sink(y, 7, 4);
+    const [crate, behind, ahead] = [F.holderOf(y, F.at(y, 5, 4)), F.at(y, 4, 4), F.at(y, 6, 4)];
+    for (let k = 1; k < y.open.crate; k++) F.put(y.holders, crate, plank);
+    y.holders.out[crate] = plank;
+    y.item[behind] = plank;
+    y.prog[behind] = 8;
+    y.item[ahead] = plank;
+    y.prog[ahead] = 2;
+    run(y, 2);
+    expect([y.item[behind], y.holders.out[crate]]).toEqual([plank, plank]);
+    // The plank ahead crosses its belt and goes on: the crate lets its plank out onto it, and the
+    // belt behind hands its plank in at once.
+    run(y, 1);
+    expect([y.item[behind], F.held(y.holders, crate, plank), y.holders.out[crate], y.item[ahead]]).toEqual([
+      F.NONE,
+      y.open.crate,
+      F.NONE,
+      plank,
+    ]);
+  });
+});
+
+describe("a goal finished in a tick", () => {
+  test("opens bigger crates to the rest of that tick: a full crate takes the next thing in at once", () => {
+    const { y, crate, behind } = cratesOpening();
+    expect(y.open.crate).toBe(32);
+    run(y, 1);
+    expect([y.item[behind], F.held(y.holders, crate, plank)]).toEqual([plank, 32]);
+    run(y, 1);
+    expect([y.open.crate, y.item[behind], F.held(y.holders, crate, plank)]).toEqual([128, F.NONE, 33]);
   });
 });
 
