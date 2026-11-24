@@ -383,14 +383,17 @@ const spotOf = (at: Spot | object): Spot | null => {
   return isSpot(at) ? at : null;
 };
 
+/** Where a thing `size` long starts so it is inside `room`, as near `at` as it can be: its start first, if it cannot fit. */
+const within = (at: number, size: number, room: number): number => Math.max(4, Math.min(at, room - size - 4));
+
 /** Puts the card beside a box: above it where there is room, otherwise below, otherwise to a side. With `side`, to the right (or left) first. */
 function place(card: HTMLElement, spot: Spot, side: boolean): void {
   const r = card.getBoundingClientRect();
   const W = window.innerWidth;
   const H = window.innerHeight;
   const gap = 8;
-  const clampX = (x: number): number => Math.min(Math.max(4, x), W - r.width - 4);
-  const clampY = (y: number): number => Math.min(Math.max(4, y), H - r.height - 4);
+  const clampX = (x: number): number => within(x, r.width, W);
+  const clampY = (y: number): number => within(y, r.height, H);
   const right = spot.x + spot.w + gap;
   const left = spot.x - r.width - gap;
   let x: number;
@@ -723,8 +726,8 @@ const view: View = {
     } else if ((same || !spot) && corner) {
       const r = card.getBoundingClientRect();
       corner = {
-        x: Math.round(Math.min(Math.max(4, corner.x), window.innerWidth - r.width - 4)),
-        y: Math.round(Math.min(Math.max(4, corner.y), window.innerHeight - r.height - 4)),
+        x: Math.round(within(corner.x, r.width, window.innerWidth)),
+        y: Math.round(within(corner.y, r.height, window.innerHeight)),
       };
       card.style.transform = `translate(${corner.x}px, ${corner.y}px)`;
     } else if (spot) place(card, spot, o.side);
@@ -967,7 +970,8 @@ if (typeof window !== "undefined") {
   window.addEventListener("keydown", (e) => {
     // A pinned card is a layer, which has its Escape first (`dialog.ts`); this is for a passing one,
     // which holds no focus, so the focus stays where it is.
-    if (e.key !== "Escape" || (!deck.open && !deck.waiting())) return;
+    // One press puts away one thing: an Escape something before took is not this card's.
+    if (e.key !== "Escape" || e.defaultPrevented || (!deck.open && !deck.waiting())) return;
     // The card took this Escape: a page listening after it should not put anything else away too.
     e.preventDefault();
     deck.close();

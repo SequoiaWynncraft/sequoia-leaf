@@ -599,12 +599,13 @@ button.k-slot:hover {
   box-sizing: border-box;
   padding: calc(var(--u) * 4) calc(var(--u) * 5);
   font: var(--f-ui);
+  /* None is taller than the window: a long one shows its head and what fits, and scrolls once pinned. */
+  max-height: calc(100vh - 8px);
+  overflow: hidden;
 }
 .k-tip.k-info.pinned {
   z-index: 89;
   pointer-events: auto;
-  /* A long card on a short window scrolls inside itself; none is taller than the window. */
-  max-height: calc(100vh - 8px);
   overflow-y: auto;
 }
 /*
