@@ -848,22 +848,6 @@
         color: var(--k-faint);
       }
 
-      /* Asked for less motion: what only decorates holds still (the keeper's nod, the sign, a panel sliding in, the letter's lines, the bars making way for a game). */
-      @media (prefers-reduced-motion: reduce) {
-        .nod canvas,
-        .door-sign,
-        #panel.slide,
-        .letter .line.in {
-          animation: none;
-        }
-        #top,
-        #corner,
-        #dock,
-        #feed {
-          transition: none;
-        }
-      }
-
       @media (max-width: 1100px), (orientation: portrait) {
         #feed {
           bottom: calc(var(--dock) + var(--u) * 4);
@@ -944,6 +928,21 @@
         /* The bar's buttons are their pictures alone, so that the name of the thing in hand has room. */
         #tray .bar .t {
           display: none;
+        }
+      }
+      /* Asked for less motion: what only decorates holds still (the keeper's nod, the sign, a panel sliding in, the letter's lines, the bars making way for a game). */
+      @media (prefers-reduced-motion: reduce) {
+        .nod canvas,
+        .door-sign,
+        #panel.slide,
+        .letter .line.in {
+          animation: none;
+        }
+        #top,
+        #corner,
+        #dock,
+        #feed {
+          transition: none;
         }
       }
     </style>
