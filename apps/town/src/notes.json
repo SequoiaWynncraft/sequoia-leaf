@@ -14,7 +14,11 @@
           "Orders put what is wanted, the pay and the button first, and the asker's line last.",
           "From tier 2, side orders no longer ask for raw items such as resin or stone.",
           "Timber and Brass folios get side orders of their own.",
-          "Once every project is done, the Works says so, and that more tiers are coming."
+          "Once every project is done, the Works says so, and that more tiers are coming.",
+          "The letter about a time away lists what the depot took in one line each, with the number at the right.",
+          "The yard sheet's third tab is called Items, and the tabs fit on a phone.",
+          "Every button that is only a picture has a name for screen readers, and opening a panel puts the keyboard in it.",
+          "With reduced motion turned on, nudges no longer bob and panels no longer slide in."
         ]
       }
     ]
