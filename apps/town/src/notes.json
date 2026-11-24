@@ -1,7 +1,7 @@
 [
   {
     "id": "raid-clearer",
-    "at": "2026-11-24T23:59Z",
+    "at": "2026-11-24T03:20Z",
     "title": "The Little Raid: a clearer table",
     "lines": ["The stall, the traits and the cards at the stump say more plainly what they do."],
     "more": [
@@ -9,7 +9,7 @@
         "head": "At the stall",
         "points": [
           "The level-up button is now Buy XP: it buys 4 XP, which is not always a level.",
-          "The level shows what a reroll can bring at it, a share for each price.",
+          "The level box shows the stall's odds at your level.",
           "A trait that is not on yet looks dimmer than one that is."
         ]
       },
