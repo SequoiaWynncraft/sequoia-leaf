@@ -331,7 +331,8 @@ export function makeGroveUi(host: GroveHost) {
       const key = `seeds:${o.prize}`;
       const buy = button(
         `green sm${asking(key) ? " asking" : ""}${o.enough ? "" : " off"}`,
-        [asksAgain(key, [`${count(o.price)} Seeds`], "Exchange?")],
+        // One the Seeds do not reach is locked, so that it is not told from the others by its colour alone.
+        [asksAgain(key, [o.enough ? null : glyph("lock"), `${count(o.price)} Seeds`], "Exchange?")],
         (b) => {
           if (!o.enough) refused(b, "Not enough Seeds.");
           else if (pressedTwice(key, renderPanel)) host.exchange(o.prize, b);
