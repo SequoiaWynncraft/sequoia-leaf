@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 
-import { Cause, Duration, Effect, Redacted, Schema } from "effect";
+import { Cause, Duration, Effect, Option, Redacted, Schema } from "effect";
 import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
-import { SqlClient } from "effect/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 
 import type { Embed } from "./rate-card.ts";
 
@@ -19,6 +19,9 @@ const TIMEOUT = Duration.seconds(10);
 
 /** What Discord answers a webhook post made with `wait=true`: the message, of which Leaf keeps the id. */
 const Posted = Schema.Struct({ id: Schema.NonEmptyString });
+
+/** The message Leaf keeps saying something, as stored: Discord's id for it, and a digest of what it says. */
+const Kept = Schema.Struct({ messageId: Schema.NonEmptyString, digest: Schema.String });
 
 /** What a failed call to Discord says, without the request: its address carries the webhook's token. */
 function safely(error: HttpClientError.HttpClientError | Schema.SchemaError | Cause.TimeoutError): AnnouncementError {
@@ -71,21 +74,37 @@ export const announce = (name: string, webhook: Redacted.Redacted, embed: Embed,
       ON CONFLICT (name) DO UPDATE SET message_id = excluded.message_id, digest = excluded.digest, updated_at = excluded.updated_at
     `;
 
-    const [stored] = yield* sql<{ message_id: string; digest: string }>`
-      SELECT message_id, digest FROM announcements WHERE name = ${name}
-    `;
-    if (stored !== undefined) {
-      const message = `${base}/messages/${stored.message_id}`;
-      if (stored.digest === digest) {
-        if (yield* unlessGone(HttpClientRequest.get(message))) {
-          return "unchanged" satisfies Announced;
-        }
-      } else if (yield* unlessGone(HttpClientRequest.patch(message).pipe(HttpClientRequest.bodyJsonUnsafe(body)))) {
-        yield* save(stored.message_id);
-        return "edited" satisfies Announced;
-      }
-      // The message was deleted: post a new one.
+    const keptOf = SqlSchema.findOneOption({
+      Request: Schema.String,
+      Result: Kept,
+      execute: (named) => sql`SELECT message_id AS messageId, digest FROM announcements WHERE name = ${named}`,
+    });
+
+    /** What became of the message kept: left alone or edited, or none when there is none, or it was deleted. */
+    const kept = yield* keptOf(name).pipe(
+      Effect.orDie,
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.succeedNone,
+          onSome: ({ messageId, digest: says }) => {
+            const message = `${base}/messages/${messageId}`;
+            return says === digest
+              ? unlessGone(HttpClientRequest.get(message)).pipe(
+                  Effect.map((there) => (there ? Option.some<Announced>("unchanged") : Option.none())),
+                )
+              : unlessGone(HttpClientRequest.patch(message).pipe(HttpClientRequest.bodyJsonUnsafe(body))).pipe(
+                  Effect.flatMap((there) =>
+                    there ? Effect.as(save(messageId), Option.some<Announced>("edited")) : Effect.succeedNone,
+                  ),
+                );
+          },
+        }),
+      ),
+    );
+    if (Option.isSome(kept)) {
+      return kept.value;
     }
+    // None posted yet, or the one posted was deleted: post a new one.
 
     const posted = yield* HttpClientRequest.post(base, { urlParams: { wait: "true" } }).pipe(
       HttpClientRequest.bodyJsonUnsafe(body),
