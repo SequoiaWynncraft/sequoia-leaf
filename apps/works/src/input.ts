@@ -66,7 +66,7 @@ const held = new Set<string>();
 
 /** A key that moves the view, held until it comes up. */
 function moveView(e: KeyboardEvent): void {
-  held.add(placeOf(e.code));
+  held.add(placeOf(e));
   e.preventDefault();
 }
 
@@ -382,7 +382,7 @@ export function initInput(canvas: InputSurface): void {
     else if (act !== undefined && (!S.visiting || LOOKS.has(act.id))) DOES[act.id](e, act.nth);
   });
   window.addEventListener("keyup", (e) => {
-    held.delete(placeOf(e.code));
+    held.delete(placeOf(e));
   });
   window.addEventListener("blur", letGo);
 }

@@ -35,7 +35,7 @@ function use(e: KeyboardEvent, repeated: boolean, scene: Scene): void {
   }
   // A control has the keyboard: a button, or anything the kit made one (a tip's owner, a card link).
   const onButton = e.target instanceof HTMLElement && e.target.matches("button, [role='button'], a[href], summary");
-  const presses = pressesButtons(placeOf(e.code));
+  const presses = pressesButtons(placeOf(e));
   // A button that has the keyboard answers Enter and Space itself.
   if (!repeated && (!presses || !onButton)) scene.act();
   // Or Enter, and Enter held, would go on to press the first button of the card it has just opened.
@@ -65,10 +65,10 @@ export function listenKeys(scope: Scope, of: KeysOf): Set<string> {
     // Still held when the town woke, a key that walks walks on.
     if (!TOWN_KEYS.held(act)) return;
     e.preventDefault();
-    down.add(placeOf(e.code));
+    down.add(placeOf(e));
   });
   scope.on(window, "keyup", (e) => {
-    down.delete(placeOf(e.code));
+    down.delete(placeOf(e));
   });
   return down;
 }

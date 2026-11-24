@@ -62,7 +62,7 @@ export const LAYOUTS = [
   { id: "azerty", name: "AZERTY", prints: ")=AZERTYUIOPQSDFGHJKLWXCVBN," },
   { id: "dvorak", name: "Dvorak", prints: "[]',.PYFGCRLAOEUIDHTN;QJKXBM" },
   { id: "colemak", name: "Colemak", prints: "-=QWFPGJLUY;ARSTDHNEIZXCVBKM" },
-  { id: "colemak-dh", name: "Colemak-DH", prints: "-=QWFPBJLUY;ARSTGMNEIZXCDVKH" },
+  { id: "colemak-dh", name: "Colemak-DH", prints: "-=QWFPBJLUY;ARSTGMNEIXCDVZKH" },
   { id: "workman", name: "Workman", prints: "-=QDRWBJFUP;ASHTGYNEOZXMCVKL" },
 ] as const;
 
@@ -74,10 +74,14 @@ export const layoutOf = (id: string | null): Layout | null => LAYOUTS.find((l) =
 const isPlace = (code: string): code is Place =>
   isWorded(code) || /^Digit\d$/.test(code) || PLACES.some((place) => place === code);
 
-/** What a place is called on a layout: what it prints there, its digit, or its name in words. */
+/** Marks too small to tell apart on a key or in a line, named in words instead. */
+const MARKS: Readonly<Record<string, string>> = { ",": "Comma", ".": "Period", "'": "Quote", "´": "Accent" };
+
+/** What a place is called on a layout: what it prints there (a small mark in words), its digit, or its name in words. */
 export function nameOf(place: Place, layout: Layout = keyboard.layout): string {
   const at = PLACES.indexOf(place);
-  if (at >= 0) return LAYOUTS.find((l) => l.id === layout)?.prints[at] ?? place;
+  const printed = at >= 0 ? LAYOUTS.find((l) => l.id === layout)?.prints[at] : undefined;
+  if (printed !== undefined) return MARKS[printed] ?? printed;
   return isWorded(place) ? WORDS[place] : place.replace(/^Digit/, "");
 }
 
@@ -94,9 +98,17 @@ export function bindName(bind: Bind, layout: Layout = keyboard.layout): string {
   return `${bind.startsWith("Shift+") ? "Shift+" : ""}${nameOf(place, layout)}`;
 }
 
-/** Where a key that went down or up is, as keys are given: the number pad's digits and Enter are the main ones. */
-export const placeOf = (code: string): string =>
-  code === "NumpadEnter" ? "Enter" : code.replace(/^Numpad(\d)$/, "Digit$1");
+/**
+ * Where a key that went down or up is, as keys are given: the number pad's Enter is the main one,
+ * and its digits are the number row's, or with Num Lock off, the arrows they say they are.
+ */
+export function placeOf(e: Pick<KeyboardEvent, "code" | "key">): string {
+  if (e.code === "NumpadEnter") return "Enter";
+  const pad = /^Numpad(\d)$/.exec(e.code)?.[1];
+  if (pad === undefined) return e.code;
+  if (/^\d$/.test(e.key)) return `Digit${pad}`;
+  return e.key.startsWith("Arrow") ? e.key : e.code;
+}
 
 /**
  * The layout a map of what the keyboard prints at each place is (Chromium's layout map): the one
@@ -241,7 +253,7 @@ export class Keymap<Id extends string> implements KeyList {
   of(e: Pick<KeyboardEvent, "code" | "key" | "shiftKey" | "ctrlKey" | "metaKey" | "altKey">): Pressed<Id> | undefined {
     if (e.altKey) return undefined;
     if (e.ctrlKey || e.metaKey) return e.shiftKey ? undefined : this.#for.get(`Ctrl+${e.key.toLowerCase()}`);
-    const at = placeOf(e.code);
+    const at = placeOf(e);
     return (e.shiftKey ? this.#for.get(`Shift+${at}`) : undefined) ?? this.#for.get(at);
   }
 

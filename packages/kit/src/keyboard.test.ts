@@ -59,14 +59,22 @@ describe("the layouts", () => {
       "Z",
       "Q",
       "W",
-      ",",
+      "Comma",
       ")",
       "=",
     ]);
-    expect(named(["KeyY", "KeyZ", "Minus"], "qwertz")).toEqual(["Z", "Y", "ß"]);
-    expect(named(["KeyR", "KeyQ", "KeyE", "Minus", "Equal"], "dvorak")).toEqual(["P", "'", ".", "[", "]"]);
+    // Marks too small to tell apart are named in words.
+    expect(named(["KeyY", "KeyZ", "Minus", "Equal"], "qwertz")).toEqual(["Z", "Y", "ß", "Accent"]);
+    expect(named(["KeyR", "KeyQ", "KeyW", "KeyE", "Minus", "Equal"], "dvorak")).toEqual([
+      "P",
+      "Quote",
+      "Comma",
+      "Period",
+      "[",
+      "]",
+    ]);
     expect(named(["KeyE", "KeyR", "KeyS"], "colemak")).toEqual(["F", "P", "R"]);
-    expect(named(["KeyT", "KeyV", "KeyM"], "colemak-dh")).toEqual(["B", "D", "H"]);
+    expect(named(["KeyT", "KeyZ", "KeyC", "KeyB", "KeyM"], "colemak-dh")).toEqual(["B", "X", "D", "Z", "H"]);
     expect(named(["KeyW", "KeyD", "KeyC"], "workman")).toEqual(["D", "H", "M"]);
     // The number row is named by its digits on every one, and keys of words by their words.
     expect(LAYOUTS.map((l) => nameOf("Digit1", l.id))).toEqual(LAYOUTS.map(() => "1"));
@@ -178,7 +186,13 @@ describe("a keymap", () => {
     expect(keys.of(press("KeyQ", "a"))).toBeUndefined();
     expect(keys.of(press("Digit2", "é"))).toEqual({ id: "tool", nth: 1 });
     // The number pad's digits are the number row's.
-    expect([placeOf("Numpad2"), placeOf("NumpadEnter")]).toEqual(["Digit2", "Enter"]);
+    expect([
+      placeOf({ code: "Numpad2", key: "2" }),
+      placeOf({ code: "NumpadEnter", key: "Enter" }),
+      // With Num Lock off, the pad's digits are arrows, and say so.
+      placeOf({ code: "Numpad4", key: "ArrowLeft" }),
+      placeOf({ code: "KeyQ", key: "a" }),
+    ]).toEqual(["Digit2", "Enter", "ArrowLeft", "KeyQ"]);
     expect(keys.of(press("Numpad1", "1"))).toEqual({ id: "tool", nth: 0 });
   });
 
