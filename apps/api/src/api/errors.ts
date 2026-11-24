@@ -96,9 +96,9 @@ export class BodyTooLarge extends Schema.Error<BodyTooLarge>("BodyTooLarge")(ans
   httpApiStatus: 413,
 }) {}
 
-/** A reroll Leaf refuses, changing nothing. */
+/** A reroll Leaf refuses, or a like of the player's own camp, changing nothing. */
 export class Refused extends Schema.Error<Refused>("Refused")(
-  answer("not_current", "not_rerollable", "cost_changed", "insufficient_leaf"),
+  answer("not_current", "not_rerollable", "cost_changed", "insufficient_leaf", "own_camp"),
   { httpApiStatus: 409 },
 ) {}
 

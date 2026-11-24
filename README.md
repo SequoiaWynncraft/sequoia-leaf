@@ -367,6 +367,7 @@ only grows.
 | `quest_rerolled`   | The member swapped a quest. | `replaced` and `quest`, the old and the new, and `leaf`, what it cost                      |
 | `level_up`         | XP reached a new level.     | `level`, and `leaf`, what the levels reached paid                                          |
 | `achievement_paid` | A milestone paid Leaf.      | `award_id`, `ladder`, `milestone`, `tier`, `threshold`, `label`, `leaf`, `xp`, `earned_at` |
+| `camp_liked`       | Somebody liked their camp.  | `by`, `{ "id", "username" }`, the first time that person ever liked it                     |
 
 `detail` is the raid's name or the territory fought over. `occurred_at` is when
 the raid or war was played, which can be well before the event: a credit that
@@ -415,6 +416,9 @@ react to `quest_completed`.
 | `POST /v1/game/play/{game}`           | Does a batch of commands in that game, and answers what each did.     |
 | `GET /v1/game/play/{game}/standings`  | The game's board: the twenty highest, and the player's own place.     |
 | `GET /v1/game/tally/{board}/{period}` | A board of the Tally: its top ten, and the player's own place.        |
+| `GET /v1/game/camps`                  | Every camp: whose, the things set out, its likes, the player's own.   |
+| `GET /v1/game/camps/visitors`         | Who likes the player's camp, and who stayed in it this week.          |
+| `PUT /v1/game/camps/{player}/like`    | Likes their camp; `DELETE` takes the like back.                       |
 | `GET /v1/game/banners`                | Every pull banner, its dates, and its headliner's id and name.        |
 | `GET /v1/game/requests`               | The Treasury's aspect and tome requests: their price, or why not.     |
 | `POST /v1/game/requests`              | Buys one with Leaf, through the backend.                              |
@@ -836,6 +840,26 @@ a new yard at the tier its story had reached, its plots and the pieces that
 tier allows standing where they stood, what cannot stand yet paid back into
 its till, and its totals kept, so its place on the board holds.
 
+### Camps
+
+Every player's town state is a camp. `GET /v1/game/camps` answers `{ "camps": [{ "id", "name",
+"guest", "set_out", "likes", "liked" }] }`: the first 1,000 by things set out (`CAMPS_LISTED`),
+named as the boards name players, with how many like each and whether the caller does.
+
+A like is one row a person and camp (`camp_likes`, migration 35: when it was first given, when it
+was last given, and whether it stands), kept when it is taken back; the rule is `liking` in
+`packages/town/src/likes.ts`. `PUT /v1/game/camps/{player}/like` gives one and `DELETE` takes it
+back; both answer `{ "likes", "liked" }`, the camp's count and whether the caller likes it now.
+Giving one that stands, or taking back one that does not, changes nothing. One's own camp is 409
+`own_camp`, a player with no camp 404 `nothing_to_visit`, and an id that is not a UUID 400
+`invalid_uuid`. A player gives at most one a second, in bursts of five (429 `slow_down`). A like
+pays nothing. The first time a person ever likes a camp, its owner gets a `camp_liked` event in the
+same transaction; taking it back and giving it again tells nobody again.
+
+`GET /v1/game/camps/visitors` answers the caller's own camp's `{ "likes", "stays" }`, each
+`[{ "id", "name", "guest", "at" }]`: who likes it, by when they last gave it, newest first, and who
+stayed in it this UTC week (`camp_visits`, below), by their last stay; a hundred of each at most.
+
 ### The Tally
 
 The town's leaderboards. Each board ranks players by one number Leaf counts itself, for all time
@@ -866,6 +890,7 @@ in a row.
   last stayed): a stay is the visitor's page reading the same camp again 30 seconds or more after
   it first did (`STAY_MS`; a camp's page reads it every half minute), with no other camp between
   and no gap of 90 seconds; a player's own camp never counts.
+- **Camp likes** (`camp_likes`, above): the likes standing on each camp, for all time.
 
 `GET /v1/game/tally/{board}/{period}`, `period` being `week` or `all`, answers `{ "board",
 "period", "from", "top": [{ "place", "id", "name", "guest", "score", "you" }], "you" }`: `from` is

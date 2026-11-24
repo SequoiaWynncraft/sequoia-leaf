@@ -147,6 +147,9 @@ export const SOURCES: Readonly<Record<string, Source>> = {
   rolls: counter("rolls"),
   camps: stays("visitor_id"),
   visitors: stays("owner_id"),
+  likes: (sql) => sql`
+    SELECT owner_id AS playerId, count(*) AS value, max(at) AS at FROM camp_likes WHERE liked = 1 GROUP BY owner_id
+  `,
 };
 
 const Row = Schema.Struct({ playerId: PlayerUuid, value: Schema.Number, at: Schema.Number });

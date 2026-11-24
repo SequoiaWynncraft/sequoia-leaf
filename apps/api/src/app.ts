@@ -6,6 +6,7 @@ import { FetchHttpClient, HttpRouter } from "effect/http";
 import { ActivityReport } from "./activity/report.ts";
 import { Visits } from "./activity/visits.ts";
 import { Identities } from "./auth/session.ts";
+import { Camps } from "./camps/store.ts";
 import { AppConfig } from "./config.ts";
 import { Database } from "./db.ts";
 import { Credits } from "./earning/run.ts";
@@ -104,14 +105,13 @@ export const serveLeaf = (options: {
  * from whichever Mojang is.
  */
 export const Stores = Layer.mergeAll(
-  Events.layer,
   Quests.layer,
   ActivityReport.layer.pipe(Layer.provideMerge(Visits.layer)),
-  Layer.mergeAll(Skins.layer, Tallies.layer).pipe(Layer.provideMerge(PlayerNames.layer)),
+  Layer.mergeAll(Skins.layer, Tallies.layer, Camps.layer).pipe(Layer.provideMerge(PlayerNames.layer)),
   PlayStore.layer,
   Coins.layer,
   Purchases.layer,
-).pipe(Layer.provideMerge(Ledger.layer));
+).pipe(Layer.provideMerge(Events.layer), Layer.provideMerge(Ledger.layer));
 
 /**
  * What Leaf reaches outside its own code (its settings, its database, Mojang, the network, the

@@ -35,9 +35,10 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 34: `presence` back, empty, as migrations 12 to 29 left it. */
+/** Undoes migrations 35 and 34: no likes of camps kept, and `presence` back, empty, as migrations 12 to 29 left it. */
 const beforeDropPresence = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
+    yield* sql`DROP TABLE camp_likes`;
     yield* sql`
       CREATE TABLE presence (
         player_id TEXT    PRIMARY KEY,
@@ -155,6 +156,7 @@ describe("the database", () => {
       { migration_id: 32, name: "play_due" },
       { migration_id: 33, name: "about_from_visits" },
       { migration_id: 34, name: "drop_presence" },
+      { migration_id: 35, name: "camp_likes" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -203,6 +205,7 @@ describe("the database", () => {
           "time_in",
           "tallies",
           "camp_visits",
+          "camp_likes",
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;
         }
@@ -217,7 +220,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 34 },
+      { latest: 35 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);

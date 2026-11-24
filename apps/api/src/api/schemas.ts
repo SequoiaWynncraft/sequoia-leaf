@@ -323,6 +323,32 @@ export const Tally = Schema.Struct({
 });
 
 /**
+ * Every camp, the first thousand by things set out: whose (id, name as the boards name players,
+ * whether a guest), the things set out in it, its likes, and whether the caller likes it.
+ */
+export const Camps = Schema.Struct({
+  camps: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      guest: Schema.Boolean,
+      set_out: Schema.Number,
+      likes: Schema.Number,
+      liked: Schema.Boolean,
+    }),
+  ),
+});
+
+/** A camp's likes after a like given or taken back, and whether the caller likes it now. */
+export const CampLiked = Schema.Struct({ likes: Schema.Number, liked: Schema.Boolean });
+
+/** Somebody who likes a camp, or stayed in it, and when they last did. */
+const CampCaller = Schema.Struct({ id: Schema.String, name: Schema.String, guest: Schema.Boolean, at: Time });
+
+/** Who likes the caller's camp, newest first, and who stayed in it this UTC week, last stay first: a hundred of each at most. */
+export const CampVisitors = Schema.Struct({ likes: Schema.Array(CampCaller), stays: Schema.Array(CampCaller) });
+
+/**
  * Every pull banner, with its dates and its headliner: the member Leaf's `banner_people` names for
  * it, named as the boards name players ("Someone" for one Leaf has no name for), or null for none yet.
  */

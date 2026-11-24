@@ -1800,6 +1800,92 @@
       }
     }
   },
+  "PUT /v1/game/camps/{player}/like": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/camps/10000000-0000-0000-0000-000000000002/like"
+    },
+    "status": 200,
+    "body": {
+      "likes": 1,
+      "liked": true
+    }
+  },
+  "GET /v1/game/camps": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/camps"
+    },
+    "status": 200,
+    "body": {
+      "camps": [
+        {
+          "id": "10000000-0000-0000-0000-000000000001",
+          "name": "Alice",
+          "guest": false,
+          "set_out": 10,
+          "likes": 1,
+          "liked": false
+        },
+        {
+          "id": "10000000-0000-0000-0000-000000000002",
+          "name": "Bob",
+          "guest": false,
+          "set_out": 0,
+          "likes": 1,
+          "liked": true
+        },
+        {
+          "id": "10000000-0000-0000-0000-000000000003",
+          "name": "Visitor",
+          "guest": true,
+          "set_out": 0,
+          "likes": 0,
+          "liked": false
+        }
+      ]
+    }
+  },
+  "GET /v1/game/camps/visitors": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/camps/visitors"
+    },
+    "status": 200,
+    "body": {
+      "likes": [
+        {
+          "id": "10000000-0000-0000-0000-000000000003",
+          "name": "Visitor",
+          "guest": true,
+          "at": "2026-11-25T12:55:00.000Z"
+        }
+      ],
+      "stays": []
+    }
+  },
+  "PUT /v1/game/camps/{player}/like, own camp": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/camps/10000000-0000-0000-0000-000000000001/like"
+    },
+    "status": 409,
+    "body": {
+      "code": "own_camp",
+      "message": "That is your own camp"
+    }
+  },
+  "DELETE /v1/game/camps/{player}/like": {
+    "request": {
+      "method": "DELETE",
+      "path": "/v1/game/camps/10000000-0000-0000-0000-000000000002/like"
+    },
+    "status": 200,
+    "body": {
+      "likes": 0,
+      "liked": false
+    }
+  },
   "GET /v1/game/tally/{board}/{period}": {
     "request": {
       "method": "GET",

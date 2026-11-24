@@ -33,6 +33,9 @@ import {
 import {
   ActivityReport,
   Banners,
+  CampLiked,
+  Camps,
+  CampVisitors,
   Events,
   GameMe,
   GuildEvents,
@@ -220,7 +223,7 @@ export class GameReportsApi extends HttpApiGroup.make("gameReports")
 const GameParams = { game: Schema.String };
 
 // What only the browser game uses, open to anyone signed in, members and guests alike, but for the
-// guild's own news, in five groups. Their answers are recorded in `contracts/leaf-game-v1.json`.
+// guild's own news, in six groups. Their answers are recorded in `contracts/leaf-game-v1.json`.
 
 /** The player as the game knows them, other people (faces, cards), the banners, and the guild's news. */
 export class GamePeopleApi extends HttpApiGroup.make("gamePeople")
@@ -289,6 +292,27 @@ export class GamePlayApi extends HttpApiGroup.make("gamePlay")
       params: { ...GameParams, player: Schema.String },
       success: PlayShown,
       error: [Missing, StateUnreadable, SlowDown],
+    }),
+  )
+  .middleware(Player)
+  .prefix("/v1/game") {}
+
+const CampParams = { player: Schema.String };
+
+/** The camps: every one there is, likes given and taken back, and the caller's own camp's visitors. */
+export class GameCampsApi extends HttpApiGroup.make("gameCamps")
+  .add(
+    HttpApiEndpoint.get("camps", "/camps", { success: Camps }),
+    HttpApiEndpoint.get("visitors", "/camps/visitors", { success: CampVisitors }),
+    HttpApiEndpoint.put("like", "/camps/:player/like", {
+      params: CampParams,
+      success: CampLiked,
+      error: [Invalid, Missing, Refused, SlowDown],
+    }),
+    HttpApiEndpoint.delete("unlike", "/camps/:player/like", {
+      params: CampParams,
+      success: CampLiked,
+      error: [Invalid, Missing, Refused, SlowDown],
     }),
   )
   .middleware(Player)
@@ -374,6 +398,7 @@ export class LeafApi extends HttpApi.make("sequoia-leaf")
   .add(GamePeopleApi)
   .add(GamePresenceApi)
   .add(GamePlayApi)
+  .add(GameCampsApi)
   .add(GameRequestsApi)
   .add(GameTallyApi)
   .add(GameAdminApi)
