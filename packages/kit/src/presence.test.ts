@@ -4,6 +4,7 @@ import { restart, start } from "./live.ts";
 import { isRecord } from "./net.ts";
 import {
   askAgain,
+  askNow,
   forgetPresence,
   heardAbout,
   hearPresent,
@@ -169,6 +170,22 @@ describe("staying in town after going", () => {
       { place: "town", device: "desktop" },
       { place: "camp", device: "desktop" },
     ]);
+  });
+
+  test("asks Leaf who is about at once when a page is to count from it, saying where the member is as ever", async () => {
+    world = standin(routes);
+    await start();
+    here("camp", "b");
+    await Bun.sleep(10);
+    const heard: number[] = [];
+    const stop = hearPresent((present) => heard.push(present.length));
+    await askNow();
+    stop();
+    expect(said(world)).toEqual([
+      { place: "camp", camp_owner: "b", device: "desktop" },
+      { place: "camp", camp_owner: "b", device: "desktop" },
+    ]);
+    expect(heard).toEqual([0]);
   });
 
   test("the town's page says it as Leaf's town has it, at once when it changes, and with each saying after", async () => {

@@ -4,12 +4,13 @@
  * chosen, each with how many are there now); the strip's like and "Next camp" at somebody else's
  * camp; and the cabin's link to the member's camp. Leaf's list of camps (`camps.ts`) is asked for as
  * the signpost opens and as the member comes into somebody's camp. How many are at each is counted
- * from who is about (`atCamps`), as it changes.
+ * from who is about (`atCamps`), asked for afresh as the signpost opens, and as it changes after.
  */
 
 import { el, icon as glyph, replay, say, shown } from "@sequoia-leaf/kit/dom.ts";
 import { member } from "@sequoia-leaf/kit/live.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
+import { askNow } from "@sequoia-leaf/kit/presence.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
@@ -70,8 +71,8 @@ const goTo = (c: Camp): void => hooks.go({ to: "camp", of: c.id, name: c.name })
  * The signpost's panel: home and town, a field to find a camp by name, the orders, and every other
  * camp, in a list that scrolls. A camp's row is made once and brought up to date in place, so a
  * button that has the keyboard keeps it while faces, likes and who is there come. The order is
- * worked out as Leaf's list comes and when an order is chosen, and held while the panel stays open,
- * so that rows do not move under the member as people come and go.
+ * worked out once Leaf has answered with the camps and who is about, and when an order is chosen,
+ * and held while the panel stays open, so that rows do not move under the member as people come and go.
  */
 export function signpost(body: HTMLElement, life: Scope): () => void {
   const host = visiting();
@@ -98,7 +99,7 @@ export function signpost(body: HTMLElement, life: Scope): () => void {
     const row = had?.row ?? way(c.name, face, () => goTo(c), line);
     if (had) row.firstElementChild?.replaceChildren(face);
     rows.set(c.id, { row, line });
-    line.replaceChildren(glyph("heart"), counts(c), ...(here > 0 ? ["·"] : []), ...hereWords(here));
+    line.replaceChildren(glyph("heart"), here > 0 ? `${counts(c)} ·` : counts(c), ...hereWords(here));
     return row;
   };
   /** The list, as one line in place of camps. */
@@ -142,7 +143,8 @@ export function signpost(body: HTMLElement, life: Scope): () => void {
   life.on(find, "input", draw);
   sort();
   void (async () => {
-    read = (await fetchCamps()) === null ? "failed" : "read";
+    const [listed] = await Promise.all([fetchCamps(), askNow()]);
+    read = listed === null ? "failed" : "read";
     sort();
     list.classList.remove("k-wait");
     draw();

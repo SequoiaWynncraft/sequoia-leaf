@@ -198,6 +198,15 @@ export function askAgain(): void {
 }
 
 /**
+ * Asks Leaf who is about now, for a page about to count from it out of a room that tells it every
+ * change (the signpost at a camp, which otherwise hears it every half minute): done once the answer
+ * is heard, or none comes. Nothing without Leaf, or while the page is not where the member is.
+ */
+export function askNow(): Promise<void> {
+  return send(false, true);
+}
+
+/**
  * The room says who is about has changed (`about`), with Leaf's lists (`who`), or without them from
  * an older Leaf, when the page asks.
  */
