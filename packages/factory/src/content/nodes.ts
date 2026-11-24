@@ -45,6 +45,8 @@ export interface Unlocks {
   readonly board?: true;
   /** A splitter may put one of its ways first. */
   readonly first?: true;
+  /** A splitter may turn its ways out to take things in, as well as from behind. */
+  readonly ins?: true;
 }
 
 /** What a new yard has. */

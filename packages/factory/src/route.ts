@@ -23,7 +23,7 @@ import {
   TUNNEL,
   WORKSHOP,
 } from "./tables.ts";
-import { ahead } from "./wire.ts";
+import { ahead, takes as sideTakes } from "./wire.ts";
 import type { Yard } from "./yard.ts";
 
 /** Where a leg of a run is laid, which way it goes, and its grade: what a leg of belt and a leg of tunnel both hold. */
@@ -66,7 +66,7 @@ const DIRS: readonly Dir[] = [0, 1, 2, 3];
 function takesFrom(y: Yard, t: number, c: number, d: Dir): boolean {
   const k = y.kind[t] ?? NONE;
   if (k === DEPOT || k === STOP || k === STUDY) return true;
-  if (k === SPLITTER || k === SORTER) return d === y.dir[t];
+  if (k === SPLITTER || k === SORTER) return sideTakes(y, t, c);
   if (k === TUNNEL) return (y.span[t] ?? 0) > 0 && d === y.dir[t];
   if (k === BELT || k === JOINER || k === MILL || k === BENCH || k === WORKSHOP || k === CRATE || k === BOILER)
     return c !== ahead(y, t);

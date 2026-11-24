@@ -516,6 +516,161 @@ describe("a splitter with a way put first", () => {
   });
 });
 
+/**
+ * A splitter at (4, 4) facing east, its left way (north) turned to take things in unless `ins` is
+ * false: planks come down a belt from a crate behind it and bricks down a belt from a crate north of
+ * it, 30 each; what leaves goes ahead (east) and right (south) into shut crates. The yard, and what
+ * has come out so far as [planks, bricks].
+ */
+function merging(ins = true): { y: F.Yard; out: () => [number, number] } {
+  const y = yard(5);
+  must(y, { do: "build", kind: "splitter", x: 4, y: 4, dir: 0 });
+  if (ins) must(y, { do: "wayIn", x: 4, y: 4, way: 1, on: true });
+  must(y, { do: "build", kind: "belt", x: 3, y: 4, dir: 0 });
+  must(y, { do: "build", kind: "belt", x: 4, y: 3, dir: 1 });
+  must(y, { do: "build", kind: "belt", x: 5, y: 4, dir: 0 });
+  must(y, { do: "build", kind: "belt", x: 4, y: 5, dir: 1 });
+  const sinks = [sink(y, 6, 4), sink(y, 4, 6)];
+  source(y, 2, 4, 0, [[plank, 30]]);
+  source(y, 4, 2, 1, [[brick, 30]]);
+  const out = (): [number, number] => [
+    sinks.reduce((n, r) => n + F.held(y.holders, r, plank), 0),
+    sinks.reduce((n, r) => n + F.held(y.holders, r, brick), 0),
+  ];
+  return { y, out };
+}
+
+describe("a splitter with a way in", () => {
+  test("takes things in there as well as from behind, a way in at a time while both have something, and sends them out of its open ways", () => {
+    const { y, out } = merging();
+    // Both lines full: they take turns, so neither waits on the other for long.
+    for (const ticks of [40, 40, 40]) {
+      run(y, ticks);
+      const [planks, bricks] = out();
+      expect(planks + bricks).toBeGreaterThan(0);
+      expect(Math.abs(planks - bricks)).toBeLessThanOrEqual(1);
+    }
+    run(y, 400);
+    expect(out()).toEqual([30, 30]);
+    // Without it, the belt from the north points at a way out, and nothing comes in by it.
+    const before = merging(false);
+    run(before.y, 520);
+    expect(before.out()).toEqual([30, 0]);
+  });
+
+  test("is unlocked by research, after the flags; a way turned in is neither shut nor put first, sends nothing out, and opened or shut again takes nothing in", () => {
+    const early = yard(4);
+    must(early, { do: "build", kind: "splitter", x: 4, y: 4, dir: 0 });
+    expect(give(early, { do: "wayIn", x: 4, y: 4, way: 1, on: true })).toMatchObject({
+      refused: "locked",
+      why: "Ways in for splitters are not unlocked yet",
+    });
+    expect(F.GOALS[F.goal("waysin")]?.needs).toEqual([F.goal("flags")]);
+    const y = yard(5);
+    must(y, { do: "build", kind: "splitter", x: 4, y: 4, dir: 0 });
+    const i = F.at(y, 4, 4);
+    must(y, { do: "first", x: 4, y: 4, way: 1 });
+    must(y, { do: "way", x: 4, y: 4, way: 2, open: false });
+    must(y, { do: "wayIn", x: 4, y: 4, way: 1, on: true });
+    must(y, { do: "wayIn", x: 4, y: 4, way: 2, on: true });
+    expect([y.shut[i], y.ins[i], y.first[i]]).toEqual([0, 6, 0]);
+    expect([F.wayOut(y, i, 0), F.wayOut(y, i, 1), F.wayOut(y, i, 2)]).toEqual([F.at(y, 5, 4), -1, -1]);
+    expect(give(y, { do: "first", x: 4, y: 4, way: 2 })).toMatchObject({ why: "That way takes things in" });
+    expect(give(y, { do: "wayIn", x: 7, y: 7, way: 0, on: true })).toMatchObject({ refused: "not_a_splitter" });
+    must(y, { do: "way", x: 4, y: 4, way: 1, open: true });
+    must(y, { do: "way", x: 4, y: 4, way: 2, open: false });
+    expect([y.shut[i], y.ins[i], F.keptAt(y, i)]).toEqual([4, 0, { shut: 4 }]);
+  });
+
+  test("does not wait on a way in from a shut crate: a shut crate hands nothing on, whatever it has ready", () => {
+    const y = yard(5);
+    must(y, { do: "build", kind: "splitter", x: 4, y: 4, dir: 0 });
+    must(y, { do: "wayIn", x: 4, y: 4, way: 1, on: true });
+    must(y, { do: "build", kind: "belt", x: 3, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "belt", x: 5, y: 4, dir: 0 });
+    const ahead = sink(y, 6, 4);
+    source(y, 2, 4, 0, [[plank, 30]]);
+    // Bricks straight from a crate on the splitter's left, which is then shut with one ready to go.
+    source(y, 4, 3, 1, [[brick, 30]]);
+    run(y, 20);
+    must(y, { do: "crate", x: 4, y: 3, open: false });
+    run(y, 400);
+    expect(F.held(y.holders, ahead, plank)).toBe(30);
+  });
+
+  test("is reached by a run of belt from a side it takes things in by", () => {
+    const y = yard(5);
+    must(y, { do: "build", kind: "splitter", x: 4, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "belt", x: 3, y: 4, dir: 0 });
+    must(y, { do: "wayIn", x: 4, y: 4, way: 1, on: true });
+    expect(F.route(y, [4, 2], [4, 4])?.at(-1)).toMatchObject({ x: 4, y: 3, dir: 1 });
+  });
+
+  test("with every way shut or turned in is blocked, and says so", () => {
+    const empty = yard(5);
+    must(empty, { do: "build", kind: "splitter", x: 4, y: 4, dir: 0 });
+    for (const way of [0, 1, 2]) must(empty, { do: "wayIn", x: 4, y: 4, way, on: true });
+    expect(F.status(empty, F.at(empty, 4, 4))).toMatchObject({
+      state: "blocked",
+      line: "Every way out is shut or takes things in.",
+    });
+    const { y } = merging();
+    must(y, { do: "way", x: 4, y: 4, way: 0, open: false });
+    must(y, { do: "wayIn", x: 4, y: 4, way: 2, on: true });
+    run(y, 60);
+    expect(F.status(y, F.at(y, 4, 4))).toMatchObject({ state: "blocked", trouble: true });
+    expect(F.status(y, F.at(y, 4, 4))?.line).toContain("every way is shut or takes things in");
+  });
+
+  test("is kept: read back, in a blueprint and in a copy, each turned; a way in that is shut, or one put first that is in, is let go; read back where the yard may not have it, it is let go", () => {
+    const y = yard(5);
+    must(y, { do: "build", kind: "splitter", x: 4, y: 4, dir: 0 });
+    must(y, { do: "first", x: 4, y: 4, way: 1 });
+    must(y, { do: "way", x: 4, y: 4, way: 0, open: false });
+    must(y, { do: "wayIn", x: 4, y: 4, way: 2, on: true });
+    const i = F.at(y, 4, 4);
+    expect(F.keptAt(y, i)).toEqual({ shut: 1, first: 1, ins: 4 });
+    const back = F.decode(F.encode(y), y.land);
+    expect(back && [F.keptAt(back, i), F.check(back)]).toEqual([{ shut: 1, first: 1, ins: 4 }, F.check(y)]);
+    must(y, { do: "saveBlueprint", slot: 0, tiles: F.within(y, 4, 4, 4, 4) });
+    must(y, { do: "placeBlueprint", slot: 0, x: 10, y: 2, turns: 1 });
+    must(y, { do: "copy", tiles: F.within(y, 4, 4, 4, 4), x: 10, y: 6, turns: 2 });
+    expect([F.at(y, 10, 2), F.at(y, 10, 6)].map((t) => [y.dir[t], F.keptAt(y, t)])).toEqual([
+      [1, { shut: 1, first: 1, ins: 4 }],
+      [2, { shut: 1, first: 1, ins: 4 }],
+    ]);
+    const again = F.decode(F.encode(y), y.land);
+    expect(again?.blueprints[0] && F.piecesOf(again.blueprints[0])).toEqual([
+      { kind: F.SPLITTER, x: 0, y: 0, dir: 0, span: 0, shut: 1, first: 1, ins: 4 },
+    ]);
+    expect(F.keptOf({ shut: 2, ins: 6, first: 2 }, F.SPLITTER)).toEqual({ shut: 2, ins: 4 });
+    expect(F.keptOf({ ins: 4 }, F.BELT)).toEqual({});
+    // A yard that has not studied it: the splitter stands, its ways in let go, and a piece with one is refused.
+    const rec: unknown = JSON.parse(F.encode(y));
+    if (typeof rec !== "object" || rec === null) throw new Error("not a record");
+    const done = yard(4).done.map((g) => F.GOALS[g]?.id);
+    const early = F.decode(JSON.stringify({ ...rec, done }), y.land);
+    expect(early && [early.kind[i], early.ins[i], early.shut[i]]).toEqual([F.SPLITTER, 0, 1]);
+    const piece = { kind: "splitter", x: 7, y: 7, dir: 0, span: 0, ins: 2 };
+    if (early) expect(give(early, { do: "stand", pieces: [piece] })).toMatchObject({ refused: "cannot_stand" });
+  });
+
+  test("changes the check, and a splitter turned back to its ways out keeps the check it had, its next way in let go", () => {
+    const { y } = merging();
+    // Once it has taken things in by turns, its next way in is kept over its next way out; turned back, it goes.
+    run(y, 41);
+    const i = F.at(y, 4, 4);
+    expect((y.turn[i] ?? 0) >> 2).toBeGreaterThan(0);
+    must(y, { do: "wayIn", x: 4, y: 4, way: 1, on: false });
+    expect((y.turn[i] ?? 0) >> 2).toBe(0);
+    const plain = F.check(y);
+    must(y, { do: "wayIn", x: 4, y: 4, way: 1, on: true });
+    const turnedIn = F.check(y);
+    must(y, { do: "wayIn", x: 4, y: 4, way: 1, on: false });
+    expect([turnedIn === plain, F.check(y)]).toEqual([false, plain]);
+  });
+});
+
 describe("a run of belt", () => {
   test("turns the belt where it starts with it, and nothing but a belt", () => {
     const y = yard();

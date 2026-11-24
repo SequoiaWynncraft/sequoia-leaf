@@ -77,7 +77,22 @@ export type Unlock = Said &
       }
     | { readonly is: "board"; readonly hooks: number }
     | { readonly is: "first" }
+    | { readonly is: "ins" }
   );
+
+/** What a splitter's flags and its ways in each let it do, as their unlocks are listed. */
+const FLAGS = [
+  {
+    is: "first",
+    name: "First way",
+    says: "A splitter can put one of its ways first: items go that way while it can take them, and only the rest go to its other ways.",
+  },
+  {
+    is: "ins",
+    name: "Ways in",
+    says: "A splitter's ahead, left or right can be set to In on its card: it takes items in there as well as from behind, in turn, and sends them out of its other ways.",
+  },
+] as const;
 
 /** What each tool is called, and what it does. */
 export const TOOL_INFO: Readonly<Record<Tool, Said>> = {
@@ -263,12 +278,7 @@ export function unlocked(u: Unlocks): Unlock[] {
       says: `The guild hangs side orders on a board at the depot, ${n(hooks)} at a time.`,
     });
   }
-  if (u.first)
-    out.push({
-      is: "first",
-      name: "First way",
-      says: "A splitter can put one of its ways first: items go that way while it can take them, and only the rest go to its other ways.",
-    });
+  out.push(...FLAGS.filter((flag) => u[flag.is] === true));
   for (const name of u.plots ?? []) {
     const info = PLOTS.find((p) => p.id === name);
     const cost = info?.price ?? 0;

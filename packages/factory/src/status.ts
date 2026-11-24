@@ -41,7 +41,18 @@ import {
   WORK,
   WORKSHOP,
 } from "./tables.ts";
-import { ahead, behind, carries, nextOf, power, rewire, sortWay, wayIn, wayOut } from "./wire.ts";
+import {
+  ahead,
+  carries,
+  closedWays,
+  nextOf,
+  power,
+  rewire,
+  sortWay,
+  takes as takesFrom,
+  wayIn,
+  wayOut,
+} from "./wire.ts";
 import { type Counts, held, holderOf, tunnelOf, type Yard } from "./yard.ts";
 
 /** How a thing stands: doing its job, with nothing to do just now, or in trouble that will not mend itself. */
@@ -115,7 +126,7 @@ function takes(y: Yard, i: number, to: number, n: Item): boolean {
   const k = y.kind[to] ?? NONE;
   if (k === DEPOT || k === STOP || (k === STUDY && isFolio(n))) return true;
   if ((k === BELT || k === CRATE) && ahead(y, to) !== i) return true;
-  if ((k === SPLITTER || k === SORTER || (k === TUNNEL && (y.span[to] ?? 0) > 0)) && behind(y, to) === i) return true;
+  if ((k === SPLITTER || k === SORTER || (k === TUNNEL && (y.span[to] ?? 0) > 0)) && takesFrom(y, to, i)) return true;
   if (k === JOINER && (wayIn(y, to, 0) === i || wayIn(y, to, 1) === i || wayIn(y, to, 2) === i)) return true;
   const only = y.set[to] ?? NONE;
   if (isMaker(k))
@@ -238,8 +249,8 @@ export function condition(y: Yard, i: number): number {
   if (k === PYLON || k === WHEEL) return lit ? as("giving") : as("unpowered", true);
   if (carries(k)) {
     const n = y.item[i] ?? NONE;
-    // A splitter with every way shut can send nothing on, whether or not it holds anything yet.
-    if (k === SPLITTER && y.shut[i] === 7) return as("blocked", true);
+    // A splitter with every way shut, or taking things in, can send nothing on, whether or not it holds anything yet.
+    if (closedWays(y, i) === 7) return as("blocked", true);
     if (!isItem(n)) return underground(y, i) > 0 ? as("carrying") : as("idle");
     if ((y.prog[i] ?? 0) < 8) return as("carrying");
     return tunnelOf(y, i) >= 0 ? as("waiting") : stuckAs(y, i, n);
@@ -283,12 +294,21 @@ function underground(y: Yard, i: number): number {
 /** Why a thing held ready has nowhere to go, in words: what stands ahead never takes it, or nothing does. */
 function nowhere(y: Yard, i: number, n: Item): string {
   if (takenAhead(y, i, n) === "never") return `The piece it points at does not take ${many(n)}.`;
-  // Only a splitter has ways to shut.
+  // Only a splitter has ways to shut, or to take things in by.
   const shut = y.shut[i] ?? 0;
+  const closed = shut | (y.ins[i] ?? 0);
   const why =
-    shut === 7 ? "all 3 ways are shut" : `nothing is on ${shut ? "any way that is open" : "the tile it points at"}`;
+    closed === 7
+      ? shut === 7
+        ? "all 3 ways are shut"
+        : "every way is shut or takes things in"
+      : `nothing is on ${closed ? "any way that is open" : "the tile it points at"}`;
   return `Nowhere to send its ${many(n)}: ${why}.`;
 }
+
+/** What an empty splitter that can send nothing on says: every way shut, or some turned in too. */
+const blockedLine = (y: Yard, i: number): string =>
+  (y.ins[i] ?? 0) === 0 ? "All 3 ways out are shut." : "Every way out is shut or takes things in.";
 
 type Words = Omit<Status, "state" | "trouble">;
 
@@ -339,7 +359,7 @@ function words(y: Yard, i: number, state: State): Words {
   if (carries(k)) {
     const n = asItem(y.item[i] ?? NONE);
     if (n === null) {
-      if (state === "blocked") return { line: "All 3 ways out are shut." };
+      if (state === "blocked") return { line: blockedLine(y, i) };
       const under = underground(y, i);
       return { line: state === "carrying" ? `${under} thing${under === 1 ? "" : "s"} under the ground.` : "Empty." };
     }

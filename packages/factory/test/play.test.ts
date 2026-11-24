@@ -46,10 +46,10 @@ class Player {
     const i = this.r() < 0.8 ? this.pick(tiles) : undefined;
     return i === undefined ? this.spot() : { x: i % w, y: Math.floor(i / w) };
   }
-  /** A piece of some kind the yard may build, on a tile where it may stand, if one is found soon; else any. */
-  where(): Rec {
+  /** A piece of some kind the yard may build (or of `only`), on a tile where it may stand, if one is found soon; else any. */
+  where(only?: F.Kind): Rec {
     const y = this.y;
-    const kind = this.pick(F.ALL_KINDS.filter((k) => (y.open.kinds[k] ?? 0) > 0)) ?? F.BELT;
+    const kind = only ?? this.pick(F.ALL_KINDS.filter((k) => (y.open.kinds[k] ?? 0) > 0)) ?? F.BELT;
     for (let tries = 0; tries < 30; tries++) {
       const x = this.int(y.land.w);
       const z = this.int(y.land.h);
@@ -138,14 +138,28 @@ class Player {
         };
       case 15:
         return { do: "crate", open: this.r() < 0.5, ...this.of(F.CRATE) };
-      case 16:
-        return { do: "way", way: this.int(4), open: this.r() < 0.4, ...this.of(F.SPLITTER) };
+      case 16: {
+        // Opened or shut, or now and then turned to take things in, or back: the same draws either way.
+        const way = this.int(4);
+        const r = this.r();
+        if (r < 0.25) {
+          // A yard that may turn a splitter's ways in, with no splitter standing, builds one first.
+          if (y.open.ins && !y.kind.includes(F.SPLITTER)) return { do: "build", ...this.where(F.SPLITTER) };
+          return { do: "wayIn", way, on: r < 0.18, ...this.of(F.SPLITTER) };
+        }
+        return { do: "way", way, open: r < 0.55, ...this.of(F.SPLITTER) };
+      }
       case 17:
         return { do: "buyPlot", plot: this.pick([...F.PLOT_IDS, "moon"]) };
       case 18:
         return { do: "take", node: this.pick([...F.NODES.map((n) => n.id), "nap"]) };
-      case 19:
-        return { do: this.r() < 0.7 ? "study" : "unstudy", research: this.pick(F.RESEARCH.map((r) => r.id)) };
+      case 19: {
+        // Any research to study; mostly research in the line to take out, as a player takes one out.
+        const any = F.RESEARCH.map((r) => r.id);
+        if (this.r() < 0.7) return { do: "study", research: this.pick(any) };
+        const lined = y.line.flatMap((g) => F.GOALS[g]?.id ?? []);
+        return { do: "unstudy", research: this.pick(lined.length > 0 && this.r() < 0.8 ? lined : any) };
+      }
       case 20:
         return { do: "swap", order: this.pick(orders) ?? this.int(50) };
       case 21: {

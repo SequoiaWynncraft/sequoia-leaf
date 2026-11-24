@@ -15,7 +15,6 @@
 
 import {
   type Act,
-  ahead,
   at,
   BELT,
   blueprintRefusal,
@@ -79,6 +78,7 @@ import {
   type Tool,
 } from "./state.ts";
 import { CHANGED, due, type Entry, type UndoEvent, type Undos, undoStep } from "./undos.ts";
+import { runOut, stepWay, type Ways, waysAt, waysBack } from "./ways.ts";
 import { coins, type Did, doNow, onTake, takesCommands } from "./yard.ts";
 
 const DUST = "#cbb894";
@@ -93,8 +93,8 @@ export const toolHooks: { changed: () => void; said: (text: string) => void } = 
  * taken away, a thing turned or a sorter flipped (the way it faced, and where it was flipped,
  * `right`: whether it sent to its right), lines coloured (the tile each was coloured by, and the
  * colour that tile had), pieces moved as one (`tiles`: where they stand now, with the turns and the
- * corner that put them back), a splitter's way shut, opened or put first (its shut ways and the way
- * it put first, as they were).
+ * corner that put them back), a splitter's way shut, opened, put first or turned in (its ways, as
+ * they were).
  */
 type Done =
   | {
@@ -107,7 +107,7 @@ type Done =
   | { did: "raised"; was: readonly Piece[] }
   | { did: "took"; what: readonly Piece[] }
   | { did: "turned"; i: number; was: Dir; right?: boolean }
-  | { did: "way"; i: number; shut: number; first: number }
+  | { did: "way"; i: number; was: Ways }
   | { did: "painted"; stroke: number; lines: readonly { i: number; was: number }[] }
   | { did: "moved"; tiles: number[]; turns: Dir; x: number; y: number };
 
@@ -154,7 +154,8 @@ const alike = (a: Piece | undefined, b: Piece | undefined): boolean =>
   a.grade === b.grade &&
   a.tint === b.tint &&
   a.shut === b.shut &&
-  a.first === b.first;
+  a.first === b.first &&
+  a.ins === b.ins;
 
 /** Whether what was done still stands as it was just after: what undoing it would put back is what it changed. */
 function holds(u: Entry<Done>): boolean {
@@ -555,24 +556,19 @@ export function turnAt(x: number, y: number): boolean {
   return true;
 }
 
-/**
- * Moves one of the ways out of the splitter on a tile (0 ahead, 1 left, 2 right) on a step: an open
- * way is put first once the yard may put a way first, and shut before then; the way put first is
- * shut; a shut way is opened.
- */
+/** Moves one of the ways out of the splitter on a tile (0 ahead, 1 left, 2 right) on a step (`stepWay`). */
 export function wayAt(x: number, y: number, way: number): boolean {
   const w = S.world;
   const i = at(w, x, y);
-  const shut = (((w.shut[i] ?? 0) >> way) & 1) === 1;
-  const putFirst = !shut && w.first[i] !== way + 1 && locked(w.open, { first: true }) === null;
-  const act: Act = putFirst ? { do: "first", x, y, way } : { do: "way", x, y, way, open: shut };
-  const was = { shut: w.shut[i] ?? 0, first: w.first[i] ?? 0 };
+  const act = stepWay(w, i, x, y, way);
+  const was = waysAt(w, i);
   const did = i < 0 ? null : doNow(act);
   if (!did || "refused" in did) {
     yardSfx.no();
     return false;
   }
-  remember({ did: "way", i, ...was }, did);
+  remember({ did: "way", i, was }, did);
+  const putFirst = act.do === "first";
   // Dust where the bar drops across the way, or lifts off it; plum bits where a flag goes up.
   const dir = dirOf(i);
   const d = [dir, LEFT[dir], RIGHT[dir]][way] ?? dir;
@@ -581,22 +577,9 @@ export function wayAt(x: number, y: number, way: number): boolean {
   if (putFirst) flutter(ex, ey - 4, 4, [SKY[3], SKY[4]], 4, 14);
   else puff(ex, ey, 3, DUST, 5);
   if (putFirst) yardSfx.plan();
-  else if (shut) yardSfx.belt();
+  else if (act.do === "way" && act.open) yardSfx.belt();
   else yardSfx.turn();
   return true;
-}
-
-/** Gives the splitter on a tile the ways it had: each opened that was open, the way it put first, then each shut that was shut. */
-function asWays(i: number, shut: number, first: number): void {
-  const w = S.world;
-  const spot = xy(i);
-  for (let way = 0; way < 3; way++)
-    if (((shut >> way) & 1) === 0 && (((w.shut[i] ?? 0) >> way) & 1) === 1)
-      doNow({ do: "way", ...spot, way, open: true });
-  if (w.first[i] !== first) doNow({ do: "first", ...spot, way: first === 0 ? null : first - 1 });
-  for (let way = 0; way < 3; way++)
-    if (((shut >> way) & 1) === 1 && (((w.shut[i] ?? 0) >> way) & 1) === 0)
-      doNow({ do: "way", ...spot, way, open: false });
 }
 
 /** R: turns the thing in hand, or with nothing in hand the thing pointed at. */
@@ -774,7 +757,7 @@ function undoNow(last: Done): void {
   else if (last.did === "took") putBack(last.what);
   else if (last.did === "painted")
     for (const l of last.lines.toReversed()) doNow({ do: "paint", ...xy(l.i), tint: l.was });
-  else if (last.did === "way") asWays(last.i, last.shut, last.first);
+  else if (last.did === "way") waysBack(w, last.i, xy(last.i).x, xy(last.i).y, last.was, (a) => void doNow(a));
   else if (last.did === "moved") {
     const no = does({ do: "move", tiles: last.tiles, turns: last.turns, x: last.x, y: last.y });
     if (no !== null) cannotUndo(no);
@@ -938,8 +921,8 @@ export function commitRun(): boolean {
 /**
  * A tap with the belt in hand, for fingers: the first tap says where the run starts, the second
  * where it ends, and the shortest clear way between them is shown before it is laid. Tapping a
- * piece to start from begins the run on the tile ahead of it, the way it faces: where a machine
- * hands things on, or a splitter's way ahead.
+ * piece to start from begins the run where it hands things on (`runOut`): the tile ahead of a
+ * machine, a splitter's first way out that sends.
  */
 export function tapBelt(x: number, y: number): void {
   const h = S.hand;
@@ -973,7 +956,7 @@ function runTo(x: number, y: number): void {
   let sx = h.from.x;
   let sy = h.from.y;
   if (kindAt(w, sx, sy) !== NONE) {
-    const out = ahead(w, at(w, sx, sy));
+    const out = runOut(w, at(w, sx, sy));
     if (out >= 0) {
       sx = out % W();
       sy = Math.floor(out / W());

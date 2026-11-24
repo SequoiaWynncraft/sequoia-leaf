@@ -21,8 +21,8 @@
  *   4 out (byte)   8 work (varint)   16 making (byte)   32 turn (byte)   64 what it is set to (byte)
  *   128 span (byte, +8), and for a way-in mouth a thing (byte) and its progress (byte) for each tile under
  *   256 a shut crate   512 fuel (byte)   1024 one of the pieces to hand   2048 tint (byte)
- *   4096 a splitter's ways (byte: its shut ways and the way it puts first, `packWays`), or a sorter's right
- *        side (the same byte, as the way it puts first)   8192 a grade above 1 (byte)
+ *   4096 a splitter's ways (byte: its shut ways, the way it puts first and its ways in, `packWays`), or a
+ *        sorter's right side (the same byte, as the way it puts first)   8192 a grade above 1 (byte)
  *
  * Bytes that are not pieces are refused whole: bytes cut short or left over, a part this version
  * does not know, more pieces than the land has tiles, and counts no yard could have (more than 255
@@ -40,7 +40,7 @@ import { FUEL, STUDY_HOLDS, TICKS } from "./content/machines.ts";
 import { NODES } from "./content/nodes.ts";
 import { LAND, type Land } from "./land.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
-import { keptOf, packPieces, packWays, type Piece, piecesOf, placed, TINTS, unpackWays } from "./pieces.ts";
+import { keptOf, packPieces, packWays, type Piece, piecesOf, placed, unpackWays, waysOn, waysTo } from "./pieces.ts";
 import {
   ALL_GOALS,
   ALL_ITEMS,
@@ -82,6 +82,7 @@ import {
   SPAN_MOST,
   SPLITTER,
   STUDY,
+  TINTS,
   TUNNEL,
   WORK,
 } from "./tables.ts";
@@ -210,7 +211,7 @@ function packCells(y: Yard): Uint8Array {
     if (holder && h.fuel[r] !== 0) f |= 512;
     if (y.free[i] === 1) f |= 1024;
     if (y.tint[i] !== 0) f |= 2048;
-    if (y.shut[i] !== 0 || y.first[i] !== 0) f |= 4096;
+    if (waysOn(y, i) !== 0) f |= 4096;
     if ((y.grade[i] ?? 0) > 1) f |= 8192;
     const carrying = y.item[i] !== NONE;
     o.byte(k | ((y.dir[i] ?? 0) << 4) | (carrying ? 64 : 0) | (f === 0 ? 0 : 128));
@@ -242,7 +243,7 @@ function packCells(y: Yard): Uint8Array {
     }
     if (f & 512) o.byte(h.fuel[r] ?? 0);
     if (f & 2048) o.byte(y.tint[i] ?? 0);
-    if (f & 4096) o.byte(packWays(y.shut[i] ?? 0, y.first[i] ?? 0));
+    if (f & 4096) o.byte(waysOn(y, i));
     if (f & 8192) o.byte(y.grade[i] ?? 1);
   }
   return o.bytes();
@@ -260,7 +261,7 @@ function packPrint(b: Uint8Array): Uint8Array {
     o.byte(p.x);
     o.byte(p.y);
     const { span, tint = 0, recipe, grade = 1 } = p;
-    const ways = packWays(p.shut ?? 0, (p.first ?? -1) + 1);
+    const ways = packWays(p.shut ?? 0, (p.first ?? -1) + 1, p.ins ?? 0);
     o.byte(
       p.dir |
         (span > 0 ? 4 : 0) |
@@ -744,15 +745,14 @@ function unpack(y: Yard, i: number, o: KeptPiece, studied: Goal | undefined): vo
     if (k === CRATE) h.open[r] = o.closed === true ? 0 : 1;
     if (k === BOILER) h.fuel[r] = whole(o.fuel, TICKS.burn) ?? 0;
   }
-  if (k === SPLITTER || k === JOINER) y.turn[i] = whole(o.turn, 2) ?? 0;
+  // A joiner's next way in; a splitter's next way out, and over it its next way in (`tick.ts`).
+  if (k === SPLITTER || k === JOINER) y.turn[i] = whole(o.turn, k === SPLITTER ? 14 : 2) ?? 0;
   if (isKind(k)) {
-    // What a sorter is set to and its side, kept in the byte a splitter keeps its ways in: a
-    // splitter's shut ways, and the way it puts first where the yard may put one first and that way
-    // is open. `keptOf` keeps only what the kind may keep.
-    const { recipe, shut = 0, first } = keptOf({ ...unpackWays(whole(o.ways, 255) ?? 0), recipe: o.recipe }, k);
-    if (k === SORTER && recipe !== undefined) y.set[i] = recipe;
-    y.shut[i] = shut;
-    if (first !== undefined && (k === SORTER || locked(y.open, { first: true }) === null)) y.first[i] = first + 1;
+    // What a sorter is set to and its side, kept in the byte a splitter keeps its ways in, and a
+    // splitter's ways (`waysTo`). `keptOf` keeps only what the kind may keep.
+    const kept = keptOf({ ...unpackWays(whole(o.ways, 255) ?? 0), recipe: o.recipe }, k);
+    if (k === SORTER && kept.recipe !== undefined) y.set[i] = kept.recipe;
+    waysTo(y, i, k, kept);
   }
   const span = y.span[i] ?? 0;
   const t = tunnelOf(y, i);

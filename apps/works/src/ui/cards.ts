@@ -31,7 +31,6 @@ import {
   DEADFALL,
   DEPOT,
   DEPOT_SHARE,
-  type Dir,
   DRAW,
   DRAWN,
   GATHERER,
@@ -51,7 +50,6 @@ import {
   type Kind,
   kind as kindOf,
   KIND_INFO,
-  LEFT,
   MADE_BY,
   NODES,
   type Numbered,
@@ -61,7 +59,6 @@ import {
   PYLON,
   RECIPE,
   RECIPES_N,
-  RIGHT,
   SORTER,
   SPLITTER,
   STOP,
@@ -87,9 +84,7 @@ import {
 } from "@sequoia-leaf/kit/card.ts";
 import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
-import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
-import { beltTile, woodOf } from "../art/belts.ts";
 import type { Art } from "../art/index.ts";
 import { FLAG_AT } from "../art/machines.ts";
 import { yardSfx } from "../sound.ts";
@@ -107,9 +102,10 @@ import {
   wantsGiven,
 } from "./goal.ts";
 import type { Flow } from "./numbers.ts";
-import { fitted, partsWords, pic, type YardIcon, yardIcon } from "./parts.ts";
+import { fitted, partsWords, type YardIcon, yardIcon } from "./parts.ts";
 import { itemRef, machineRef, nodeRef, pictureRef, plotRef } from "./refs.ts";
 import { sorterActions, type SorterPrint, sorterRows } from "./sorter.ts";
+import { splitterWays, type WaysPrint } from "./splitter.ts";
 
 // ---------- prints: what each card shows of the yard and the purse ----------
 
@@ -157,17 +153,6 @@ export interface MachinePrint {
   readonly numbers: readonly string[];
   /** For a cart stop: how many stand, of how many may. */
   readonly stops: readonly [number, number] | null;
-}
-
-/** A splitter's three ways out as its card shows them: its picture's arms, way and colour, each way shut and led somewhere, and the way put first. */
-export interface WaysPrint {
-  readonly arms: number;
-  readonly dir: Dir;
-  readonly tint: number;
-  readonly shut: readonly boolean[];
-  readonly led: readonly boolean[];
-  /** The way put first (0 ahead, 1 left, 2 right), or -1. */
-  readonly first: number;
 }
 
 export interface StandingPrint extends SorterPrint {
@@ -459,52 +444,9 @@ function machineCard(art: Art, p: MachinePrint): Description {
   };
 }
 
-/** Where on a card each side of a splitter is, round its picture: east, south, west, north. */
-const SIDES = ["2 / 3", "3 / 2", "2 / 1", "1 / 2"] as const;
-
-/**
- * A splitter's three ways out round its picture, as they lie in the yard: each says whether it is
- * open, shut, open with nothing to take from it, or once the yard may put a way first, first, and
- * a press moves it on (open, first, shut, open; before, open and shut). The way put first wears its
- * flag in the picture. A visitor is shown the same, with nothing to press.
- */
-function waysOf(art: Art, p: StandingPrint, ways: WaysPrint, hands: Hands): HTMLElement {
-  const box = el("div", "ways");
-  const d = ways.dir;
-  // A copy: the tile is the belts' own in its grade's wood, kept for every splitter that looks the
-  // same, and the arrowheads, the grade's mark over them and the flag drawn on it here are this
-  // splitter's alone.
-  const grade = p.machine.grade;
-  const shared = beltTile(ways.arms, d, 5, woodOf(grade), ways.tint);
-  const { c: tile, g } = makeCanvas(shared.width, shared.height);
-  g.drawImage(shared, 0, 0);
-  [d, LEFT[d], RIGHT[d]].forEach((side, k) => {
-    const head = art.m.heads[k]?.[d];
-    if (head && ((ways.arms >> (side * 2)) & 3) === 2) g.drawImage(head, 0, 0);
-  });
-  const pip = art.m.pips[grade - 2];
-  if (pip) g.drawImage(pip, 0, 0);
-  [d, LEFT[d], RIGHT[d]].forEach((side, k) => {
-    const flag = art.m.pennant[side];
-    const at = FLAG_AT[side];
-    if (ways.first === k && flag && at) g?.drawImage(flag.c, at[0] - flag.ax, at[1] - flag.ay);
-    const shut = ways.shut[k] === true;
-    const led = ways.led[k] === true;
-    const state = shut ? "Shut" : ways.first === k ? "First" : led ? "Open" : "No belt";
-    // Seen, a button's place says which way it is; read out, its name has to.
-    const named = { "aria-label": `${["Ahead", "Left", "Right"][k]}: ${state}` };
-    const way = el(
-      p.visiting ? "span" : "button",
-      `k-btn ${shut ? "coral" : ways.first === k ? "" : led ? "green" : "slate"}`,
-      p.visiting ? named : { ...named, type: "button", onclick: () => hands.way(p.x, p.y, k) },
-      state,
-    );
-    way.style.gridArea = SIDES[side] ?? "";
-    box.append(way);
-  });
-  box.append(pic(tile, 3));
-  return box;
-}
+/** What a press on a way of a standing splitter does: moves it on a step. Nothing for a visitor. */
+const pressWay = (p: StandingPrint, hands: Hands): ((way: number) => void) | null =>
+  p.visiting ? null : (way) => hands.way(p.x, p.y, way);
 
 /** A machine standing in the yard: its kind's card, with what this one is doing and holds, and what can be done with it. */
 function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
@@ -652,7 +594,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
       ...(advice ? [{ body: advice }] : []),
       ...(p.flow ? [{ body: flowNode(art, p.flow) }] : []),
       ...lines(p.numbers),
-      ...(p.ways ? [{ title: "Ways out", body: waysOf(art, p, p.ways, hands) }] : []),
+      ...(p.ways ? [{ title: "Ways out", body: splitterWays(art, m.grade, p.ways, pressWay(p, hands)) }] : []),
     ],
     rows,
     actions: p.visiting ? [] : actions,
@@ -779,25 +721,27 @@ const orderCard = (p: OrderPrint): Description => ({
 export const TOOL_ICON: Readonly<Record<Tool, YardIcon>> = { paint: "brush", select: "select", upgrade: "upgrade" };
 
 /** The picture of what each kind of number changes. */
-export const PERK_ART: Readonly<Record<Numbered | "blueprints" | "board" | "first", (art: Art) => HTMLCanvasElement>> =
-  {
-    stops: (art) => art.icon(STOP),
-    crate: (art) => art.m.crate[1]?.[0]?.c ?? art.icon(CRATE),
-    reach: (art) => art.m.pylon[1]?.[2]?.c ?? art.icon(PYLON),
-    depot: (art) => art.m.fly[0] ?? art.icon(kindOf("depot")),
-    span: (art) => art.icon(TUNNEL),
-    away: () => yardIcon("moon"),
-    hooks: () => yardIcon("orders"),
-    blueprints: () => yardIcon("print"),
-    board: () => yardIcon("orders"),
-    first: (art) => {
-      const c = art.icon(SPLITTER);
-      const flag = art.m.pennant[0];
-      const [x, y] = FLAG_AT[0];
-      if (flag) c.getContext("2d")?.drawImage(flag.c, x - flag.ax, y - flag.ay);
-      return c;
-    },
-  };
+export const PERK_ART: Readonly<
+  Record<Numbered | "blueprints" | "board" | "first" | "ins", (art: Art) => HTMLCanvasElement>
+> = {
+  stops: (art) => art.icon(STOP),
+  crate: (art) => art.m.crate[1]?.[0]?.c ?? art.icon(CRATE),
+  reach: (art) => art.m.pylon[1]?.[2]?.c ?? art.icon(PYLON),
+  depot: (art) => art.m.fly[0] ?? art.icon(kindOf("depot")),
+  span: (art) => art.icon(TUNNEL),
+  away: () => yardIcon("moon"),
+  hooks: () => yardIcon("orders"),
+  blueprints: () => yardIcon("print"),
+  board: () => yardIcon("orders"),
+  first: (art) => {
+    const c = art.icon(SPLITTER);
+    const flag = art.m.pennant[0];
+    const [x, y] = FLAG_AT[0];
+    if (flag) c.getContext("2d")?.drawImage(flag.c, x - flag.ax, y - flag.ay);
+    return c;
+  },
+  ins: (art) => art.waysIn,
+};
 
 /** A tool a goal unlocks, with its picture from the dock. */
 const toolCard = (p: ToolPrint): Description => ({
@@ -809,7 +753,12 @@ const toolCard = (p: ToolPrint): Description => ({
 /** A number a goal raises, as it will be: the picture of what it changes, and the rules' sentence for it, which says what it was before. */
 function perkCard(art: Art, p: PerkPrint): Description | null {
   const u = p.unlock;
-  const of = u.is === "number" ? u.of : u.is === "blueprints" || u.is === "board" || u.is === "first" ? u.is : null;
+  const of =
+    u.is === "number"
+      ? u.of
+      : u.is === "blueprints" || u.is === "board" || u.is === "first" || u.is === "ins"
+        ? u.is
+        : null;
   if (of === null) return null;
   const shown = "amount" in u && u.amount !== undefined ? `${u.name} ${u.amount}` : u.name;
   return { name: shown, icon: PERK_ART[of](art), tag: u.says };
