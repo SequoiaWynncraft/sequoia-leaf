@@ -116,6 +116,11 @@ export class LiveClient {
     this.ws.close();
   }
 
+  /** The connection drops, as the network drops it: no closing handshake, which Leaf sees as 1006. */
+  drop(): void {
+    this.ws.terminate();
+  }
+
   /** The first text of this kind (that passes `which`) not yet taken, waiting for it if need be. */
   next<T extends ToClient["t"]>(t: T, which: (m: Of<T>) => boolean = () => true, ms = 2000): Promise<Of<T>> {
     const of = isOf(t);

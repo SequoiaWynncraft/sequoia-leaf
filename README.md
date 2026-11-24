@@ -913,7 +913,12 @@ upgrade it is refused as the API refuses: 401 `unauthorized`, 403 `bad_origin`,
 503 `identity_unavailable`, 400 `unsupported_version` (no `v`, or another),
 `unknown_room` (no `room`, or not one of `ROOMS`) or `not_websocket`; 429 `slow_down` for a player who opens connections too often
 (ten at once, then one every ten seconds, each counted); and 503 `live_full` past
-1000 players. A player's place among them is taken, and held, before the socket
+1000 players. An opening that hands the player over between their own pages is
+counted apart (ten at once, then one every two seconds, and past that as any
+other): one that takes over a connection of theirs that is open, or the first
+within five seconds of one their page closed itself (1000, 1001 or 1005), as the
+town closing its connection for a game's page, or a game's page put away. A drop
+(1006), a refused opening or one that never opened hands nothing over. A player's place among them is taken, and held, before the socket
 is opened, so that no two can take the last one. Once it is open, it becomes the
 player's connection and puts them in the room in one step: Leaf's `welcome` is
 the first thing it says, and nothing of any room reaches it before. A connection lasts only as long as its session: Leaf asks about it

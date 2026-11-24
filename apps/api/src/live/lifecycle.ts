@@ -5,12 +5,14 @@
 
 /**
  * A player's connection: none; open (this one, `pipe`); or gone since a moment (`since`), the
- * player waiting out their grace in their room for a connection to come back.
+ * player waiting out their grace in their room for a connection to come back. Gone because the page
+ * closed it itself (`handoff`), the next opening within a few seconds is the player going from one of
+ * their pages to another (`handsOver`), until an opening takes that up.
  */
 export type Link<P> =
   | { readonly state: "none" }
   | { readonly state: "open"; readonly pipe: P }
-  | { readonly state: "grace"; readonly since: number };
+  | { readonly state: "grace"; readonly since: number; readonly handoff: boolean };
 
 export const NO_LINK: Link<never> = { state: "none" };
 
@@ -20,19 +22,34 @@ export function linked<P>(link: Link<P>, pipe: P): { readonly link: Link<P>; rea
 }
 
 /**
- * A connection closed at `at`. Not the player's (another has taken over): nothing changes, and
- * null says so. Theirs, and they signed out: they leave their room at once. Otherwise their grace
- * begins, and they stand still where they are.
+ * A connection closed at `at`, by the page itself (`clean`: it was done with it, or went) or not (it
+ * dropped, or Leaf closed it). Not the player's (another has taken over): nothing changes, and null
+ * says so. Theirs, and they signed out: they leave their room at once. Otherwise their grace begins,
+ * and they stand still where they are.
  */
 export function unlinked<P>(
   link: Link<P>,
   pipe: P,
   signedOut: boolean,
   at: number,
+  clean: boolean,
 ): { readonly link: Link<P>; readonly leaves: boolean } | null {
   if (link.state !== "open" || link.pipe !== pipe) return null;
-  return signedOut ? { link: NO_LINK, leaves: true } : { link: { state: "grace", since: at }, leaves: false };
+  return signedOut
+    ? { link: NO_LINK, leaves: true }
+    : { link: { state: "grace", since: at, handoff: clean }, leaves: false };
 }
+
+/**
+ * Whether an opening at `now` hands the player over between their own pages: it takes over a
+ * connection of theirs that is open, or comes within `withinMs` of one their page closed itself. A
+ * drop, a refusal or an opening that failed is none.
+ */
+export const handsOver = <P>(link: Link<P>, now: number, withinMs: number): boolean =>
+  link.state === "open" || (link.state === "grace" && link.handoff && now - link.since <= withinMs);
+
+/** A page's clean close taken up by the opening it handed over to: the next opening is charged as any other. */
+export const handedOver = <P>(link: Link<P>): Link<P> => (link.state === "grace" ? { ...link, handoff: false } : link);
 
 /** Whether a player's grace has run out by `now`: they leave their room, and have no connection. */
 export const graceOver = <P>(link: Link<P>, now: number, graceMs: number): boolean =>

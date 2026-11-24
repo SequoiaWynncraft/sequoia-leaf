@@ -75,6 +75,30 @@ const at = (x: number, y: number, flags: number = Flag.Moving, jump = 0): Motion
   jump,
 });
 
+/** Waits until Leaf has no connection of anybody's open: the last one's close is through. */
+async function closedThrough(): Promise<void> {
+  for (let i = 0; i < 100; i++) {
+    // oxlint-disable-next-line no-await-in-loop -- looking again until it is so
+    if ((await census())?.connected === 0) return;
+    // oxlint-disable-next-line no-await-in-loop -- a moment between looks
+    await Bun.sleep(10);
+  }
+  throw new Error("a connection never closed");
+}
+
+/** `n` connections of Alice's, one after another, each dropping as the network drops it: openings that hand nothing over. */
+async function dropped(n: number): Promise<void> {
+  for (let i = 0; i < n; i++) {
+    // oxlint-disable-next-line no-await-in-loop -- one after another, each dropped before the next
+    const tab = await connect(page("alice"));
+    // oxlint-disable-next-line no-await-in-loop -- in the room before it drops
+    await tab.welcome();
+    tab.drop();
+    // oxlint-disable-next-line no-await-in-loop -- the drop through before the next opens
+    await closedThrough();
+  }
+}
+
 /** The answer to a request to open a live connection that is refused before it is upgraded. */
 async function refused(path: string, headers: Record<string, string>) {
   const response = await fetch(`${server?.origin ?? ""}${path}`, {
@@ -128,9 +152,8 @@ describe("opening a live connection", () => {
     await refused(LIVE, { Cookie: "seq_session=stale", Origin: ORIGIN });
     await refused(LIVE, { Cookie: "seq_session=alice-token" });
     await refused(livePath("hall"), { Authorization: "Bearer alice-token" });
-    const tabs = await Promise.all(Array.from({ length: 10 }, () => connect(page("alice"))));
+    await dropped(10);
     await refused(LIVE, { Authorization: "Bearer alice-token" });
-    for (const tab of tabs) tab.close();
 
     expect(await services?.run(Live.use((live) => live.line))).toMatchObject({
       opened: 10,
@@ -152,22 +175,83 @@ describe("opening a live connection", () => {
     expect((await byBearer.welcome()).roster.map((m) => m.name)).toEqual(["Alice", "Carol", "Bob"]);
   });
 
-  it("charges every connection a player opens, and turns them away past ten at once", async () => {
+  it("charges every connection a player opens that hands nothing over, and turns them away past ten at once", async () => {
     await start();
-    const tabs = await Promise.all(Array.from({ length: 10 }, () => connect(page("alice"))));
-    for (const tab of tabs) tab.close();
+    await dropped(10);
 
     expect(await refused(LIVE, { Authorization: "Bearer alice-token" })).toEqual([429, "slow_down"]);
   });
 
   it("keeps what a player owes after they have left, so that leaving refills nothing", async () => {
     await start({ graceMs: 50 });
-    const tabs = await Promise.all(Array.from({ length: 10 }, () => connect(page("alice"))));
-    await tabs.at(-1)?.welcome();
-    for (const tab of tabs) tab.close();
+    await dropped(10);
     await Bun.sleep(300);
 
     expect(await census()).toMatchObject({ connected: 0, rooms: {} });
+    expect(await refused(LIVE, { Authorization: "Bearer alice-token" })).toEqual([429, "slow_down"]);
+  });
+
+  // KIT-SERVER B2 and the Works since #157: going from the town to a game and back is one page of
+  // the player's closing its connection and the next opening one. Each spent an opening, and twenty
+  // in a hundred seconds ran out the allowance: a 429, "Reconnecting", and everybody gone.
+  it("hands a player over between their own pages without spending their openings: twenty, five seconds apart", async () => {
+    await start();
+    let tab = await connect(page("alice"));
+    await tab.welcome();
+    for (let i = 0; i < 20; i++) {
+      // To a game and back: the page going closes its connection, and then the next opens one; or
+      // the next opens first and takes over, as a frame put away goes a moment after.
+      if (i % 2 === 0) {
+        tab.close();
+        // oxlint-disable-next-line no-await-in-loop -- the close through, so that the next is no takeover
+        await closedThrough();
+      }
+      // oxlint-disable-next-line no-await-in-loop -- one page after another
+      const next = await connect(page("alice"));
+      // oxlint-disable-next-line no-await-in-loop -- in the room before the next hop
+      await next.welcome();
+      if (i % 2 === 1) tab.close();
+      tab = next;
+      ahead += 5000;
+    }
+    tab.drop();
+    await closedThrough();
+    // The openings proper are all there: ten that hand nothing over, and only then a 429.
+    await dropped(10);
+    expect(await refused(LIVE, { Authorization: "Bearer alice-token" })).toEqual([429, "slow_down"]);
+  });
+
+  it("keeps a storm of handoffs from being free: past ten at once, they are charged as openings", async () => {
+    await start();
+    let tab = await connect(page("alice"));
+    await tab.welcome();
+    // One opening proper, then each next page taking over at once: ten as handoffs, nine as openings.
+    for (let i = 0; i < 19; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- one page after another
+      const next = await connect(page("alice"));
+      // oxlint-disable-next-line no-await-in-loop -- in the room before the next
+      await next.welcome();
+      tab.close();
+      tab = next;
+    }
+    expect(await refused(LIVE, { Authorization: "Bearer alice-token" })).toEqual([429, "slow_down"]);
+  });
+
+  it("charges an opening long after the page closed its connection, and one after a drop, as any other", async () => {
+    await start();
+    // A page closing cleanly, and the next opening only after the few seconds a handoff has.
+    for (let i = 0; i < 5; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      const tab = await connect(page("alice"));
+      // oxlint-disable-next-line no-await-in-loop -- in the room before it closes
+      await tab.welcome();
+      tab.close();
+      // oxlint-disable-next-line no-await-in-loop -- the close through before the clock moves
+      await closedThrough();
+      ahead += 6000;
+    }
+    // Five charged, and three refilled over the half minute moved: eight that drop, and the next is refused.
+    await dropped(8);
     expect(await refused(LIVE, { Authorization: "Bearer alice-token" })).toEqual([429, "slow_down"]);
   });
 

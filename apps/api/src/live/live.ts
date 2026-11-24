@@ -32,7 +32,17 @@ import { Allowance } from "../allowance.ts";
 import { type Identity, isGuest } from "../api/api.ts";
 import { PLACES } from "../api/schemas.ts";
 import { Tallies } from "../tally/store.ts";
-import { graceOver, type Link, linked, NO_LINK, type Stop, stopped, unlinked } from "./lifecycle.ts";
+import {
+  graceOver,
+  handedOver,
+  handsOver,
+  type Link,
+  linked,
+  NO_LINK,
+  type Stop,
+  stopped,
+  unlinked,
+} from "./lifecycle.ts";
 import { type Occupant, type Room, Rooms } from "./room.ts";
 import { Watchers } from "./watchers.ts";
 
@@ -119,6 +129,19 @@ const MOVES = { rate: 30, burst: 40 } as const;
 const TEXTS = { rate: 8, burst: 20 } as const;
 const ACTS = { rate: 3, burst: 6 } as const;
 const OPENS = { rate: 0.1, burst: 10 } as const;
+/**
+ * Openings that hand a player over between their own pages (`handsOver`: the town and a game open in
+ * it, a reload): a few at once and one every two seconds, besides the openings proper. One past it
+ * is charged as an opening proper; openings that fail, are refused or drop never hand over.
+ */
+const HANDOFFS = { rate: 0.5, burst: 10 } as const;
+/** How soon after a page closed its connection itself an opening of the player's is taken as the next page. */
+const HANDOFF_MS = 5000;
+/**
+ * The codes a connection closed by its page itself ends with: done with it (1000), going (1001: a
+ * reload, a frame put away), or closed with no code given (1005). A drop has no closing at all (1006).
+ */
+const CLOSED_BY_PAGE: ReadonlySet<number> = new Set([CLOSE.done, 1001, 1005]);
 const STRIKES = { rate: 1, burst: 200 } as const;
 
 /** The most often a player's moves and acts are told to Leaf's count of their time (`Visits.acted`): it counts in half minutes. */
@@ -146,6 +169,8 @@ type Frame = string | Uint8Array | Socket.CloseEvent;
 class Pipe {
   /** The code it was closed with, once Leaf closed it. */
   closedWith: number | null = null;
+  /** The code the page closed it with, once it did (1006 for a connection that dropped). */
+  closedBy: number | null = null;
   private readonly out: Queue.Queue<Frame>;
   private readonly writer: Socket.Writer;
 
@@ -213,6 +238,7 @@ class Player {
   readonly texts: Allowance;
   readonly acts: Allowance;
   readonly opens: Allowance;
+  readonly handoffs: Allowance;
   readonly strikes: Allowance;
 
   constructor(identity: Identity, now: number) {
@@ -221,6 +247,7 @@ class Player {
     this.texts = new Allowance(TEXTS, now);
     this.acts = new Allowance(ACTS, now);
     this.opens = new Allowance(OPENS, now);
+    this.handoffs = new Allowance(HANDOFFS, now);
     this.strikes = new Allowance(STRIKES, now);
   }
 
@@ -240,7 +267,7 @@ class Player {
       this.opening === 0 &&
       this.link.state === "none" &&
       this.place.at === "none" &&
-      [this.moves, this.texts, this.acts, this.opens, this.strikes].every((a) => a.full(now))
+      [this.moves, this.texts, this.acts, this.opens, this.handoffs, this.strikes].every((a) => a.full(now))
     );
   }
 }
@@ -598,7 +625,9 @@ export class Live extends Context.Service<
             Effect.flatMap(Clock.currentTimeMillis, (now) =>
               Effect.sync(() => {
                 counts.closed++;
-                const after = unlinked(p.link, pipe, pipe.closedWith === CLOSE.signedOut, now);
+                // Closed by the page itself, done with it or going: what opens next may be its next page.
+                const clean = pipe.closedWith === null && pipe.closedBy !== null && CLOSED_BY_PAGE.has(pipe.closedBy);
+                const after = unlinked(p.link, pipe, pipe.closedWith === CLOSE.signedOut, now, clean);
                 if (after === null) return;
                 p.link = after.link;
                 if (after.leaves) return leave(p, now);
@@ -647,8 +676,12 @@ export class Live extends Context.Service<
             ),
           );
         }).pipe(
-          // The player closed it, or Leaf did.
-          Effect.catchTag("SocketError", () => Effect.void),
+          // The player closed it, or Leaf did, or it dropped: how the page closed it, if it did, is kept.
+          Effect.catchTag("SocketError", (e) =>
+            Effect.sync(() => {
+              if (e.reason instanceof Socket.SocketCloseError) pipe.closedBy = e.reason.code;
+            }),
+          ),
         );
 
       const open = (
@@ -668,7 +701,9 @@ export class Live extends Context.Service<
           if (!known && players.size >= tuning.mostPlayers) return "full" as const;
           const p = known ?? new Player(identity, now);
           players.set(id, p);
-          if (!p.opens.take(now)) return "busy" as const;
+          // The player going from one of their pages to another is charged as that, not as an opening.
+          if (handsOver(p.link, now, HANDOFF_MS) && p.handoffs.take(now)) p.link = handedOver(p.link);
+          else if (!p.opens.take(now)) return "busy" as const;
           // Held while the socket opens, however long it takes, and let go once it is theirs or never
           // opened: taking it and promising to let it go are one step that nothing can come between.
           const attached = yield* Effect.acquireUseRelease(
