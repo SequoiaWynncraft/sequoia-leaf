@@ -10,7 +10,7 @@ import { at, build, create, encode, SPLITTER, type Yard } from "@sequoia-leaf/fa
 import { ctx, type FakeLeaf, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { S } from "./state.ts";
 import { setTool, undo, wayAt } from "./tools.ts";
-import { stepWay, wayState } from "./ways.ts";
+import { runOut, stepWay, wayState } from "./ways.ts";
 import { differences } from "./yard.ts";
 
 useFakeLeaf();
@@ -59,6 +59,16 @@ describe("a splitter's ways on its card", () => {
     await undoTo(fake, ["first", "in", "open"]);
     await undoTo(fake, ["open", "in", "open"]);
     await undoTo(fake, ["open", "shut", "open"]);
+  });
+
+  test("a run of belt from a splitter begins on its first way out that sends, not one taking things in", () => {
+    const y = withSplitter(5);
+    const i = at(y, 20, 16);
+    expect(runOut(y, i)).toBe(at(y, 21, 16));
+    y.ins[i] = 1;
+    expect(runOut(y, i)).toBe(at(y, 20, 15));
+    y.shut[i] = 6;
+    expect(runOut(y, i)).toBe(-1);
   });
 
   test("before ways in are studied, a shut way opens; before a way may be put first, an open way shuts", () => {

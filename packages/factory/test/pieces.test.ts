@@ -582,7 +582,38 @@ describe("a splitter with a way in", () => {
     expect([y.shut[i], y.ins[i], F.keptAt(y, i)]).toEqual([4, 0, { shut: 4 }]);
   });
 
+  test("does not wait on a way in from a shut crate: a shut crate hands nothing on, whatever it has ready", () => {
+    const y = yard(5);
+    must(y, { do: "build", kind: "splitter", x: 4, y: 4, dir: 0 });
+    must(y, { do: "wayIn", x: 4, y: 4, way: 1, on: true });
+    must(y, { do: "build", kind: "belt", x: 3, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "belt", x: 5, y: 4, dir: 0 });
+    const ahead = sink(y, 6, 4);
+    source(y, 2, 4, 0, [[plank, 30]]);
+    // Bricks straight from a crate on the splitter's left, which is then shut with one ready to go.
+    source(y, 4, 3, 1, [[brick, 30]]);
+    run(y, 20);
+    must(y, { do: "crate", x: 4, y: 3, open: false });
+    run(y, 400);
+    expect(F.held(y.holders, ahead, plank)).toBe(30);
+  });
+
+  test("is reached by a run of belt from a side it takes things in by", () => {
+    const y = yard(5);
+    must(y, { do: "build", kind: "splitter", x: 4, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "belt", x: 3, y: 4, dir: 0 });
+    must(y, { do: "wayIn", x: 4, y: 4, way: 1, on: true });
+    expect(F.route(y, [4, 2], [4, 4])?.at(-1)).toMatchObject({ x: 4, y: 3, dir: 1 });
+  });
+
   test("with every way shut or turned in is blocked, and says so", () => {
+    const empty = yard(5);
+    must(empty, { do: "build", kind: "splitter", x: 4, y: 4, dir: 0 });
+    for (const way of [0, 1, 2]) must(empty, { do: "wayIn", x: 4, y: 4, way, on: true });
+    expect(F.status(empty, F.at(empty, 4, 4))).toMatchObject({
+      state: "blocked",
+      line: "Every way out is shut or takes things in.",
+    });
     const { y } = merging();
     must(y, { do: "way", x: 4, y: 4, way: 0, open: false });
     must(y, { do: "wayIn", x: 4, y: 4, way: 2, on: true });

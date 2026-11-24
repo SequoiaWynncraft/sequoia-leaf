@@ -241,8 +241,14 @@ function ready(y: Yard, i: number, to: number): boolean {
     );
   if (k === SORTER) return y.item[i] !== NONE && (y.prog[i] ?? 0) >= 8 && sortedTo(y, i) === to;
   if (k === GATHERER || k === MILL || k === BENCH || k === WORKSHOP || k === CRATE)
-    return nextOf(y, i) === to && y.holders.out[holderOf(y, i)] !== NONE;
+    return nextOf(y, i) === to && handsOn(y, i);
   return false;
+}
+
+/** Whether a gatherer, machine or crate has its finished piece out to hand on: a shut crate lets nothing out (`step`). */
+function handsOn(y: Yard, i: number): boolean {
+  const r = holderOf(y, i);
+  return y.holders.out[r] !== NONE && (y.kind[i] !== CRATE || y.holders.open[r] === 1);
 }
 
 /** Which of a joiner's ways in (0 behind, 1 left, 2 right) is on the side `side` of it, or -1 for ahead. */

@@ -196,6 +196,16 @@ function sorterTops(plain: ItemArt): Art["sorter"] {
   };
 }
 
+/** A splitter's top pointing east with its arrowheads on some of its ways out only (0 ahead, 1 left, 2 right). */
+function headsOn(m: Machines, ways: readonly number[]): HTMLCanvasElement {
+  const { c, g } = makeCanvas(TILE, TILE);
+  for (const way of ways) {
+    const head = m.heads[way]?.[0];
+    if (head) g.drawImage(head, 0, 0);
+  }
+  return c;
+}
+
 /** What a kind's picture is put together from: the machines' art, the things', and a sorter's top. */
 interface Parts {
   readonly m: Machines;
@@ -285,7 +295,7 @@ export function makeArt(land: Land): Art {
     parcel: bm(["NNNNNNN", "NnnynnN", "nnnynnb", "nnnnnnb", "nbbbbbb"], 3, 5),
     sign: signMaker(),
     sorter,
-    waysIn: meeting(m, arms(2, 2, 1, 1), m.splitter[0], 1),
+    waysIn: meeting(m, arms(2, 2, 1, 1), headsOn(m, [0, 2]), 1),
     icon: icons({ m, item, sorter }),
   };
 }

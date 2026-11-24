@@ -306,6 +306,10 @@ function nowhere(y: Yard, i: number, n: Item): string {
   return `Nowhere to send its ${many(n)}: ${why}.`;
 }
 
+/** What an empty splitter that can send nothing on says: every way shut, or some turned in too. */
+const blockedLine = (y: Yard, i: number): string =>
+  (y.ins[i] ?? 0) === 0 ? "All 3 ways out are shut." : "Every way out is shut or takes things in.";
+
 type Words = Omit<Status, "state" | "trouble">;
 
 /**
@@ -355,7 +359,7 @@ function words(y: Yard, i: number, state: State): Words {
   if (carries(k)) {
     const n = asItem(y.item[i] ?? NONE);
     if (n === null) {
-      if (state === "blocked") return { line: "All 3 ways out are shut." };
+      if (state === "blocked") return { line: blockedLine(y, i) };
       const under = underground(y, i);
       return { line: state === "carrying" ? `${under} thing${under === 1 ? "" : "s"} under the ground.` : "Empty." };
     }

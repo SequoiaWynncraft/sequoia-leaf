@@ -15,7 +15,6 @@
 
 import {
   type Act,
-  ahead,
   at,
   BELT,
   blueprintRefusal,
@@ -79,7 +78,7 @@ import {
   type Tool,
 } from "./state.ts";
 import { CHANGED, due, type Entry, type UndoEvent, type Undos, undoStep } from "./undos.ts";
-import { stepWay, type Ways, waysAt, waysBack } from "./ways.ts";
+import { runOut, stepWay, type Ways, waysAt, waysBack } from "./ways.ts";
 import { coins, type Did, doNow, onTake, takesCommands } from "./yard.ts";
 
 const DUST = "#cbb894";
@@ -922,8 +921,8 @@ export function commitRun(): boolean {
 /**
  * A tap with the belt in hand, for fingers: the first tap says where the run starts, the second
  * where it ends, and the shortest clear way between them is shown before it is laid. Tapping a
- * piece to start from begins the run on the tile ahead of it, the way it faces: where a machine
- * hands things on, or a splitter's way ahead.
+ * piece to start from begins the run where it hands things on (`runOut`): the tile ahead of a
+ * machine, a splitter's first way out that sends.
  */
 export function tapBelt(x: number, y: number): void {
   const h = S.hand;
@@ -957,7 +956,7 @@ function runTo(x: number, y: number): void {
   let sx = h.from.x;
   let sy = h.from.y;
   if (kindAt(w, sx, sy) !== NONE) {
-    const out = ahead(w, at(w, sx, sy));
+    const out = runOut(w, at(w, sx, sy));
     if (out >= 0) {
       sx = out % W();
       sy = Math.floor(out / W());
