@@ -75,8 +75,8 @@ export interface Outside {
   again: () => Promise<void>;
   /** Which place is on the stage, and how dark the walk between two has got (0 for not at all). */
   where: () => { where: "town" | "camp" | "grove"; dark: number };
-  /** The member's camp: go there, come back, and what `campscene.ts` offers besides. */
-  camp: CampScene["handles"] & { go: () => void };
+  /** A camp: go to the member's own, or to somebody's (`of`, their account), and what `campscene.ts` offers besides. */
+  camp: CampScene["handles"] & { go: (of?: string) => void };
   /** The Grove: go there, and what `grovescene.ts` offers besides. */
   grove: Grove["handles"] & { go: () => void };
   /** Everybody else in town live (on the guild's own server), as they would be drawn this moment. */
@@ -142,8 +142,8 @@ export function lookFromOutside(o: Lent): void {
     tap: o.tap,
     camp: {
       ...o.camp.handles,
-      go() {
-        o.go({ to: "camp" });
+      go(of) {
+        o.go(of === undefined ? { to: "camp" } : { to: "camp", of });
       },
     },
     grove: {
