@@ -125,6 +125,8 @@ const FIXTURE = `<!doctype html>
   button, #clicky { display: block; min-width: 44px; min-height: 44px; margin: 4px 0; }
   .pair button, #lone { display: inline-block; min-width: 0; min-height: 0; width: 24px; height: 24px; padding: 0; }
   #lone { margin: 30px; }
+  #reached { position: relative; display: inline-block; min-width: 0; min-height: 0; width: 24px; height: 24px; padding: 0; margin: 0 0 0 10px; }
+  #reached::after { content: ""; position: absolute; inset: -12px; }
   #scrim { position: absolute; right: 0; bottom: 0; }
 </style></head><body>
   <button id="bare"><i></i></button>
@@ -137,6 +139,7 @@ const FIXTURE = `<!doctype html>
   <p id="plain">Plain words</p>
   <div class="pair"><button id="left">A</button><button id="right">B</button></div>
   <button id="lone">C</button>
+  <div class="pair"><button id="reached">D</button><button id="buddy" style="width: 44px; height: 44px">E</button></div>
   <aside id="panel"><button aria-label="Close">x</button> A panel</aside>
   <div id="nameless" role="dialog">Nobody named this</div>
   <div id="scrim" class="k-scrim"><div id="notice">Notice</div></div>
@@ -168,7 +171,7 @@ test.skipIf(!Bun.which("chromium"))(
       expect(said("dialog", "aside#panel")).toBe(true);
       expect(said("dialog", "div#nameless")).toBe(true);
       expect(said("dialog", "div#notice")).toBe(true);
-      for (const fine of ["#ringed", "#plain", "#lone"]) expect(out).not.toContain(fine);
+      for (const fine of ["#ringed", "#plain", "#lone", "#reached"]) expect(out).not.toContain(fine);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

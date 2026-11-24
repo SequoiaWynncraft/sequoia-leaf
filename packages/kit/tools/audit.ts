@@ -263,7 +263,28 @@ function outlined(el: Element): boolean {
   );
 }
 
-const PAGE = { whoOf, reach, pointing, outlined };
+/** How far a control takes a press: its box, and a pseudo-element of its own laid past its edges. */
+function reachOf(el: HTMLElement, box: Box): Box {
+  const cs = getComputedStyle(el);
+  const r = el.getBoundingClientRect();
+  let [l, t, rt, b] = [box.x, box.y, box.x + box.w, box.y + box.h];
+  for (const pseudo of ["::before", "::after"]) {
+    const p = getComputedStyle(el, pseudo);
+    const [L, T, R, B] = [p.left, p.top, p.right, p.bottom].map(parseFloat);
+    if (cs.position === "static" || p.content === "none" || p.position !== "absolute" || p.pointerEvents === "none")
+      continue;
+    if (L === undefined || T === undefined || R === undefined || B === undefined || [L, T, R, B].some(Number.isNaN))
+      continue;
+    // Laid from inside its border.
+    l = Math.min(l, r.left + parseFloat(cs.borderLeftWidth) + L);
+    t = Math.min(t, r.top + parseFloat(cs.borderTopWidth) + T);
+    rt = Math.max(rt, r.right - parseFloat(cs.borderRightWidth) - R);
+    b = Math.max(b, r.bottom - parseFloat(cs.borderBottomWidth) - B);
+  }
+  return { x: Math.round(l), y: Math.round(t), w: Math.round(rt - l), h: Math.round(b - t) };
+}
+
+const PAGE = { whoOf, reach, pointing, outlined, reachOf };
 /** The helpers above as one object's source, for a page to be given. */
 const pageHelpers = `{ ${Object.entries(PAGE)
   .map(([k, f]) => `${k}: ${f.toString()}`)
@@ -275,7 +296,7 @@ function collect(page: typeof PAGE): Facts {
   const H = window.innerHeight;
   // While the page is read, everything is hit by a point, so that what is on top is what is seen.
   const force = document.createElement("style");
-  force.textContent = "*, *::before, *::after { pointer-events: auto !important; }";
+  force.textContent = "* { pointer-events: auto !important; }";
   document.head.append(force);
   /** The part of an element's box that can be seen: in the window and in whatever it scrolls in; null for none. */
   const shown = (el: Element, r: DOMRect): Box | null => {
@@ -345,7 +366,7 @@ function collect(page: typeof PAGE): Facts {
         for (let a = up; a && !part; a = a.parentElement) part = page.reach(a);
         if (part || [...el.querySelectorAll("*")].some(page.reach)) continue;
       }
-      found.push({ el, box, tab });
+      found.push({ el, box: page.reachOf(el, box), tab });
     }
 
     // How each looks focused by the keyboard, against how it looks now.

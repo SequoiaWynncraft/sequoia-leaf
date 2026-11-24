@@ -107,7 +107,8 @@ the window on two ropes and makes room for them above itself: `--k-hang` long (n
 screen), or `--hang` where a sign hangs under another. A sign that is a button dips when pressed.
 
 **A card** that is `lit` glows warm in a gold edge (owned, ready); the one `chosen` of several (or
-`aria-selected`, `aria-pressed`) has the gold doubled; `locked` lies flat and dark. A `div` with
+`aria-selected`, `aria-pressed`) has the gold doubled; `locked` lies flat and dark, and `done` lies flat with its
+pictures faded, its words as readable as any. An unlit chip's words are dim, below a lit one's gold. A `div` with
 `k-label` is a label over a group in a list and sits on a brass rule; a `span` is only small words.
 
 **A chip** that starts with a canvas (a trait's or a kind's own picture) wears it as a hexagon

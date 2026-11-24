@@ -452,8 +452,12 @@ button.k-card:hover {
 button.k-card:active {
   transform: translateY(var(--u));
 }
+/* Done, or not open: it lies flat and its pictures fade; its words stay as readable as any. */
 .k-card.done {
-  opacity: 0.6;
+  border-image-source: var(--k-f-card-locked);
+}
+.k-card.done :is(canvas, .k-i) {
+  opacity: 0.5;
 }
 .k-grow {
   flex: 1;
@@ -1155,7 +1159,8 @@ button.k-info-chip:hover .k-chip {
   border-image: var(--k-f-chip) 3 fill / calc(var(--u) * 3);
   font: var(--f-name);
   white-space: nowrap;
-  color: var(--k-cream);
+  /* Dimmer than a lit chip's gold, in grey too: a chip that is off never looks on. */
+  color: var(--k-dim);
 }
 .k-chip.lit {
   --c: var(--k-gold);
@@ -1293,5 +1298,17 @@ button.k-info-chip:hover .k-chip {
   }
   .k-plaque.hung::before {
     display: none;
+  }
+  /*
+   * A small button keeps its look and is 40 pixels to the finger: its reach goes two units past its
+   * edges (counted from inside its border, which is two units, three at the foot).
+   */
+  :where(.k-btn.sm) {
+    position: relative;
+  }
+  .k-btn.sm::after {
+    content: "";
+    position: absolute;
+    inset: calc(var(--u) * -4) calc(var(--u) * -4) calc(var(--u) * -5);
   }
 }
