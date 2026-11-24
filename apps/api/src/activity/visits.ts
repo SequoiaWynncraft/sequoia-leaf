@@ -69,10 +69,10 @@ const staysPut = (v: OpenVisit, place: string, source: Source, now: number): boo
  * no write of anybody else's waits for more. A visit's records come out the same whichever
  * transaction writes them: each player's are written in one.
  */
-export const AT_ONCE = 100;
+const AT_ONCE = 100;
 
 /** Each minute, at most this many visits, and as many sessions, that ended 180 days ago are removed. */
-export const REMOVED_AT_ONCE = 1000;
+const REMOVED_AT_ONCE = 1000;
 
 /**
  * How long who is about, as read for one who asks (`lists`), is given to everybody else who asks:
@@ -414,40 +414,38 @@ const leaveRoom = (w: Writer, playerId: string, place: string, now: number) =>
       : Effect.succeed(closed),
   );
 
+/** Lists as read, and how many changes had been told before they were. */
+type Read = Lists & { readonly told: number };
+
+/** Whether lists read as `last` may be given again at `now`, `changes` changes having been told: none since, and less than `ABOUT_FRESH_MS` after. */
+const stillFresh = (last: Read, now: number, changes: number) =>
+  last.told === changes && now >= last.at && now < last.at + ABOUT_FRESH_MS;
+
 /**
  * Who is about at `now` as everybody is given it (`Visits.lists`): read with `about` and
  * `lastActed`, and given again to whoever asks in the next `ABOUT_FRESH_MS`, unless a change has
  * been told since (`told`, counted before reading, so that one told meanwhile leaves them old).
  */
-const sharedLists = (w: Writer, acted: ReadonlyMap<string, number>, told: Ref.Ref<number>) =>
-  Effect.map(Ref.make(Option.none<Lists & { readonly told: number }>()), (read) => {
-    const about = readHere(w.sql);
-    return (now: number) =>
+const sharedLists = (
+  w: Writer,
+  about: (now: number) => Effect.Effect<Here>,
+  acted: ReadonlyMap<string, number>,
+  told: Ref.Ref<number>,
+) =>
+  Effect.map(
+    Ref.make(Option.none<Read>()),
+    (read) => (now: number) =>
       Effect.gen(function* () {
         const changes = yield* Ref.get(told);
         const last = yield* Ref.get(read);
-        if (
-          Option.isSome(last) &&
-          last.value.told === changes &&
-          now >= last.value.at &&
-          now < last.value.at + ABOUT_FRESH_MS
-        ) {
-          return last.value;
-        }
+        if (Option.isSome(last) && stillFresh(last.value, now, changes)) return last.value;
         const here = yield* about(now);
-        const lists = {
-          at: now,
-          here,
-          acted: yield* lastActed(
-            w,
-            acted,
-            here.present.map((p) => p.playerId),
-          ),
-        };
+        const players = here.present.map((p) => p.playerId);
+        const lists = { at: now, here, acted: yield* lastActed(w, acted, players) };
         yield* Ref.set(read, Option.some({ ...lists, told: changes }));
         return lists;
-      });
-  });
+      }),
+  );
 
 /**
  * Every stay of a player in one of the game's places (`visits`), the sittings they make up
@@ -546,6 +544,7 @@ export class Visits extends Context.Service<
               )
             : Effect.void,
       };
+      const about = readHere(sql);
       return Visits.of({
         called: (who, place, stay, now) => write(w, pageSaid(w, who, place, stay, now), now),
         inRoom: (who, place, now) =>
@@ -574,8 +573,8 @@ export class Visits extends Context.Service<
             // Back from being away: told to every page, so that nobody shows them away a moment longer.
             return w.tell(away(before ?? null, now, VISIT_RULES));
           }),
-        about: readHere(sql),
-        lists: yield* sharedLists(w, acted, told),
+        about,
+        lists: yield* sharedLists(w, about, acted, told),
         changes: PubSub.subscribe(news),
         lastActed: (playerIds) => lastActed(w, acted, playerIds),
         timeOf: (playerId) =>
