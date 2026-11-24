@@ -1147,8 +1147,13 @@ about, with 40 players and one leaving the room and coming back each second,
 4.4 KB (8.7 KB). Two thousand is where `LIVE_MOST_PLAYERS` stops by default:
 a little over half a core, which leaves the rest of the one Leaf process (the
 play service, the routes) room. When everybody comes in at once, as after a
-deploy, the slowest moves of those seconds take longer: at 2,000, 113 ms at the
-99th percentile and 253 ms at worst. Of the CPU at 1,000, a third is Bun
+deploy (2,000 over five seconds), the slowest moves of those seconds take longer:
+68 to 77 ms at the 99th percentile and 78 to 124 ms at worst (when each
+connection's own fiber wrote its frames, 57 to 81 and 70 to 101). A tick writes everybody's snapshots itself, about 10 ms of writes at
+2,000, and while players come in it lets their connections take turns between
+its writes, so that a tick's writes take up to 47 ms at the 99th percentile
+then. The load test's `join` phase measures it, with what each tick took
+(`LiveMeter`) and the driver's own lag. Of the CPU at 1,000, a third is Bun
 writing the frames to the sockets, one write a player a tick, and a quarter
 Effect's runtime, mostly the fiber that reads each connection; Live's own code
 is a tenth. Measured on the screen, with `play.ts --crowd 6` and two pages as
