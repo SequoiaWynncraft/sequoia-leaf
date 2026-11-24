@@ -568,17 +568,6 @@
           translate: 0 calc(var(--u) * -2);
         }
       }
-      /* Asked for less motion: nothing here bobs, blinks or slides in; a nudge's bubble still points. */
-      @media (prefers-reduced-motion: reduce) {
-        #dock button.new,
-        #dock button.nudged,
-        #books .nudged,
-        #hand .grades.nudged,
-        #panel.slide,
-        .letter .line.in {
-          animation: none;
-        }
-      }
       #dock .gap {
         width: calc(var(--u) * 2);
       }
@@ -1191,6 +1180,18 @@
         body.walking #track,
         body.walking #study {
           display: none;
+        }
+      }
+      /* Asked for less motion: nothing here bobs, blinks or slides in; a nudge's bubble still points. Last, so
+         that it wins over every rule above that sets an animation. */
+      @media (prefers-reduced-motion: reduce) {
+        #dock button.new,
+        #dock button.nudged,
+        #books .nudged,
+        #hand .grades.nudged,
+        #panel.slide,
+        .letter .line.in {
+          animation: none;
         }
       }
     </style>

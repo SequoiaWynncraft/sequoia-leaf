@@ -207,7 +207,7 @@ export const wantsOrder = (want: Wants, got: () => Counts | null): Listed | null
   listed(
     null,
     want.map(([k, of]): Line => ({ ref: itemRef(k), count: () => ({ have: got()?.[k] ?? 0, of }) })),
-    { names: false },
+    { names: false, links: true },
   );
 
 /** What opens a goal that is not open, as a count beside a lock: "9 research left". */
