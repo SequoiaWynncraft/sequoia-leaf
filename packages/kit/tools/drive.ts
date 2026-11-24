@@ -20,13 +20,19 @@
  *   `"Escape"` or `"Enter"`; Enter and Space press a focused button); `["hold", "Enter", ms]` holds
  *   one down for `ms`, as a person does: the browser says it again every 33 ms until it comes up;
  *   `["eval", "expr"]` prints an expression's value;
- * - `["shot", "name"]` saves a screenshot.
+ * - `["media", "prefers-reduced-motion", "reduce"]` has the page see a media feature so (`""` for as
+ *   the machine has it);
+ * - `["shot", "name"]` saves a screenshot;
+ * - `["audit"]` prints what keeps a player from reading or reaching the page as it is now
+ *   (`audit.ts`), and `["audit", "name"]` saves that as `<out-dir>/<name>.txt` too.
  *
  * Uses only Bun's own fetch and WebSocket.
  */
 
 import { mkdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
+
+import { audit } from "./audit.ts";
 
 type Step =
   | ["size", number, number, number?]
@@ -40,6 +46,8 @@ type Step =
   | ["key", string]
   | ["hold", string, number]
   | ["shot", string]
+  | ["audit", string?]
+  | ["media", string, string]
   | ["eval", string];
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
@@ -54,6 +62,8 @@ function isStep(v: unknown): v is Step {
   if (kind === "wait") return typeof a === "number";
   if (kind === "hold") return typeof a === "string" && typeof b === "number";
   if (kind === "finger") return (a === "down" || a === "move" || a === "up") && typeof b === "string";
+  if (kind === "audit") return a === undefined || typeof a === "string";
+  if (kind === "media") return typeof a === "string" && typeof b === "string";
   return (
     (kind === "key" ||
       kind === "shot" ||
@@ -101,8 +111,10 @@ const browser = Bun.spawn(
     "--disable-frame-rate-limit",
     "about:blank",
   ],
-  { stdout: "ignore", stderr: "ignore", env: { ...process.env, XDG_CONFIG_HOME: `${home}/config` } },
+  { stdout: "ignore", stderr: "pipe", env: { ...process.env, XDG_CONFIG_HOME: `${home}/config` } },
 );
+/** What Chromium has said on its way up, shown if it never opens. */
+const said = new Response(browser.stderr).text();
 // However the run ends, the browser does not outlive it.
 process.on("exit", () => {
   browser.kill();
@@ -116,7 +128,11 @@ async function target(tries = 80): Promise<string> {
     if (isRecord(info) && typeof info.webSocketDebuggerUrl === "string") return info.webSocketDebuggerUrl;
     throw new Error("no socket address");
   } catch (e) {
-    if (tries <= 0) throw e;
+    if (tries <= 0) {
+      browser.kill();
+      console.error((await said).slice(-2000));
+      throw e;
+    }
     await Bun.sleep(100);
     return target(tries - 1);
   }
@@ -251,6 +267,15 @@ async function run(step: Step): Promise<void> {
         await send("Input.dispatchKeyEvent", { ...down, autoRepeat: true });
       }
       await send("Input.dispatchKeyEvent", { type: "keyUp", key, code });
+      return;
+    }
+    case "media":
+      await send("Emulation.setEmulatedMedia", { features: [{ name: step[1], value: step[2] }] });
+      return;
+    case "audit": {
+      const lines = await audit(send);
+      console.log(lines.join("\n"));
+      if (step[1]) await Bun.write(`${outDir}/${step[1]}.txt`, `${lines.join("\n")}\n`);
       return;
     }
     case "eval": {

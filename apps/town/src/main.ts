@@ -313,10 +313,13 @@ async function boot(): Promise<void> {
     // Typed into a field (a tome's reason), a key is a letter, not a step or a press.
     if (screen.at === "inside" || typing(e)) return;
     const k = e.key.toLowerCase();
-    const onButton = e.target instanceof HTMLButtonElement;
+    // A control has the keyboard: a button, or anything the kit made one (a tip's owner, a card link).
+    const onButton = e.target instanceof HTMLElement && e.target.matches("button, [role='button'], a[href], summary");
     // A key held down is one press: only walking goes on while its key is held (`keys`).
     const repeated = heldAgain(e);
     if (k === "enter" || k === " " || k === "e") {
+      // Taken already (a tip opened by its key): it is not a press in the world as well.
+      if (e.defaultPrevented) return;
       if (!repeated && dismissArrival()) {
         e.preventDefault();
         return;

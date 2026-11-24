@@ -57,19 +57,23 @@
         <span class="k-cur"><i class="k-i k-i-coin"></i>1,532</span>
       </div>
       <div class="k-row">
-        <button class="k-btn wood icon"><i class="k-i k-i-sound"></i></button>
-        <button class="k-btn slate icon"><i class="k-i k-i-back"></i></button>
-        <button class="k-btn coral icon"><i class="k-i k-i-home"></i></button>
-        <button class="k-btn wood icon sm"><i class="k-i k-i-close"></i></button>
+        <button class="k-btn wood icon" aria-label="Sound"><i class="k-i k-i-sound"></i></button>
+        <button class="k-btn slate icon" aria-label="Back"><i class="k-i k-i-back"></i></button>
+        <button class="k-btn coral icon" aria-label="Home"><i class="k-i k-i-home"></i></button>
+        <button class="k-btn wood icon sm" aria-label="Close"><i class="k-i k-i-close"></i></button>
       </div>
       <div class="k-shelf k-row" style="padding: var(--u); gap: var(--u); align-self: flex-start">
-        <button class="k-slot" style="width: calc(var(--u) * 21); height: calc(var(--u) * 21)">
+        <button class="k-slot" aria-label="Acorns" style="width: calc(var(--u) * 21); height: calc(var(--u) * 21)">
           <i class="k-i k-i-acorn"></i>
         </button>
-        <button class="k-slot lit" style="width: calc(var(--u) * 21); height: calc(var(--u) * 21)">
+        <button
+          class="k-slot lit"
+          aria-label="Favourites"
+          style="width: calc(var(--u) * 21); height: calc(var(--u) * 21)"
+        >
           <i class="k-i k-i-star"></i>
         </button>
-        <button class="k-slot" style="width: calc(var(--u) * 21); height: calc(var(--u) * 21)">
+        <button class="k-slot" aria-label="Settings" style="width: calc(var(--u) * 21); height: calc(var(--u) * 21)">
           <i class="k-i k-i-gear"></i>
         </button>
       </div>
@@ -88,7 +92,8 @@
       </div>
       <div class="k-row">
         <i class="k-i k-i-hammer"></i><i class="k-i k-i-mail"></i><i class="k-i k-i-gift"></i
-        ><i class="k-i k-i-turn"></i><i class="k-i k-i-tray"></i><i class="k-i k-i-home"></i><i class="k-i k-i-paw"></i>
+        ><i class="k-i k-i-turn"></i><i class="k-i k-i-tray"></i><i class="k-i k-i-home"></i><i class="k-i k-i-paw"></i
+        ><i class="k-i k-i-show"></i><i class="k-i k-i-hide"></i>
       </div>
     </div>
 
@@ -96,7 +101,7 @@
       <header class="k-head">
         <i class="k-i k-i-coin"></i>
         <h2 class="k-title">Treasury</h2>
-        <button class="k-btn wood icon sm"><i class="k-i k-i-close"></i></button>
+        <button class="k-btn wood icon sm" aria-label="Close"><i class="k-i k-i-close"></i></button>
       </header>
       <div class="k-body">
         <div class="k-row" style="align-items: flex-end">
@@ -158,7 +163,7 @@
           <button class="k-btn" disabled>Locked</button>
           <button class="k-btn sm">Small</button>
           <button class="k-btn wood sm">Small</button>
-          <button class="k-btn slate icon sm"><i class="k-i k-i-more"></i></button>
+          <button class="k-btn slate icon sm" aria-label="More"><i class="k-i k-i-more"></i></button>
         </div>
         <button class="k-btn wide">Choose</button>
         <div class="k-label">A tag is flat</div>

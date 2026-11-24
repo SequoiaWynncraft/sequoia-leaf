@@ -1,5 +1,24 @@
 [
   {
+    "id": "kit-reach",
+    "at": "2026-11-24T03:55Z",
+    "title": "Easier to read and reach",
+    "lines": [
+      "On a phone, tap a thing to see what it is. Small buttons are easier to hit, and the town and the Little Raid can be zoomed."
+    ],
+    "more": [
+      {
+        "head": "Changed",
+        "points": [
+          "Tap the purse, a rank or anything else that only explains itself, and its tip opens. Tap anywhere else to close it.",
+          "Green buttons are a shade darker, so their numbers are easier to read.",
+          "With the keyboard, the control you are on has a cream ring with a dark edge, on paper too. Tab stays inside an open card, and Escape closes it and puts you back where you were.",
+          "If your device asks for less motion, menus no longer slide, shake or bounce."
+        ]
+      }
+    ]
+  },
+  {
     "id": "works-clearer",
     "at": "2026-11-24T03:45Z",
     "title": "The Works: clearer goals and orders",

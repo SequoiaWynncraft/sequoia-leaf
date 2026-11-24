@@ -4,7 +4,7 @@
  * little pictures that travel across the page when something is paid or earned. And `closeLeaf`,
  * for a Leaf button that may not take Leaf.
  */
-import { el, icon, type IconName, replay } from "./dom.ts";
+import { el, icon, type IconName, replay, say } from "./dom.ts";
 import { balance, type Currency, leafShut } from "./purse.ts";
 import { sfx } from "./sound.ts";
 import { tip, tipAt } from "./tip.ts";
@@ -75,9 +75,14 @@ export function purseBar(host: HTMLElement, coins: () => number = () => balance(
 
 /**
  * Little pictures that fly from one spot on the page to another: Leaf leaving the purse, Coins
- * arriving. `each` is called as each one lands.
+ * arriving. `each` is called as each one lands (at once, for a player who asked for less motion).
  */
 export function fly(what: IconName, from: Pt, to: Pt, count: number, each: ((i: number) => void) | null = null): void {
+  // Asked for less motion, they land at once.
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    for (let i = 0; i < count; i++) each?.(i);
+    return;
+  }
   for (let i = 0; i < count; i++) {
     const c = icon(what);
     c.style.cssText = "position:fixed;left:0;top:0;z-index:95;pointer-events:none";
@@ -121,6 +126,7 @@ export function closeLeaf(b: HTMLElement, title = "Leaf", why = leafShut()): boo
       e.stopImmediatePropagation();
       e.preventDefault();
       sfx.no();
+      say(why);
       replay(b, "shake");
       const r = b.getBoundingClientRect();
       tipAt({ x: r.left, y: r.top, w: r.width, h: r.height }, title, why, b);

@@ -16,8 +16,9 @@
  *
  * The rules of that (`Deck`, `partsOf`) touch no page and are tested; the rest draws them.
  */
+import { givingBack, layer } from "./dialog.ts";
 import { add, asking, asksAgain, el, icon, pressedTwice, unheld } from "./dom.ts";
-import { goesWith, LONG_PRESS, tip, tipAt, tipOff } from "./tip.ts";
+import { goesWith, iconButton, LONG_PRESS, tip, tipAt, tipOff } from "./tip.ts";
 
 /** A thing, named as `"kind:id"`: `"item:gear"`, `"figure:barrow-gnome"`, `"trait:ember"`. */
 export type Ref = string;
@@ -382,14 +383,17 @@ const spotOf = (at: Spot | object): Spot | null => {
   return isSpot(at) ? at : null;
 };
 
+/** Where a thing `size` long starts so it is inside `room`, as near `at` as it can be: its start first, if it cannot fit. */
+const within = (at: number, size: number, room: number): number => Math.max(4, Math.min(at, room - size - 4));
+
 /** Puts the card beside a box: above it where there is room, otherwise below, otherwise to a side. With `side`, to the right (or left) first. */
 function place(card: HTMLElement, spot: Spot, side: boolean): void {
   const r = card.getBoundingClientRect();
   const W = window.innerWidth;
   const H = window.innerHeight;
   const gap = 8;
-  const clampX = (x: number): number => Math.min(Math.max(4, x), W - r.width - 4);
-  const clampY = (y: number): number => Math.min(Math.max(4, y), H - r.height - 4);
+  const clampX = (x: number): number => within(x, r.width, W);
+  const clampY = (y: number): number => within(y, r.height, H);
   const right = spot.x + spot.w + gap;
   const left = spot.x - r.width - gap;
   let x: number;
@@ -590,23 +594,11 @@ function drawCard(d: Description, o: Open): HTMLElement {
     tabindex: o.pinned ? -1 : null,
   });
   const backBtn =
-    o.stack.length > 1
-      ? el(
-          "button",
-          "k-btn plum icon sm k-info-back",
-          { type: "button", "aria-label": "Back", onclick: () => deck.back() },
-          icon("back"),
-        )
-      : null;
+    o.stack.length > 1 ? iconButton("plum sm k-info-back", icon("back"), "Back", () => deck.back()) : null;
   // A passing card keeps the close button's room, unseen, so that pinning it moves nothing: a name
   // that fitted two lines beside no button would take three beside one.
   const closeBtn = o.pinned
-    ? el(
-        "button",
-        "k-btn wood icon sm k-info-x",
-        { type: "button", "aria-label": "Close", onclick: () => deck.close() },
-        icon("close"),
-      )
+    ? iconButton("wood sm k-info-x", icon("close"), "Close", () => deck.close())
     : el("span", "k-btn wood icon sm k-info-x unseen", { "aria-hidden": "true" }, icon("close"));
   for (const part of partsOf(d, o.pinned)) {
     if (part === "head") {
@@ -689,6 +681,12 @@ function drawCard(d: Description, o: Open): HTMLElement {
 
 /** The card last drawn, to tell a card drawn again from a new one. */
 let drawn: Open | null = null;
+/** A pinned card is a layer over the page (`dialog.ts`): Escape puts it away, and Tab stays in it. */
+let pinnedLayer: (() => void) | null = null;
+const unpin = (): void => {
+  pinnedLayer?.();
+  pinnedLayer = null;
+};
 
 const view: View = {
   render(o, d) {
@@ -699,6 +697,7 @@ const view: View = {
     if (!o || !d) {
       was?.remove();
       corner = null;
+      unpin();
       return;
     }
     const card = drawCard(d, o);
@@ -727,12 +726,20 @@ const view: View = {
     } else if ((same || !spot) && corner) {
       const r = card.getBoundingClientRect();
       corner = {
-        x: Math.round(Math.min(Math.max(4, corner.x), window.innerWidth - r.width - 4)),
-        y: Math.round(Math.min(Math.max(4, corner.y), window.innerHeight - r.height - 4)),
+        x: Math.round(within(corner.x, r.width, window.innerWidth)),
+        y: Math.round(within(corner.y, r.height, window.innerHeight)),
       };
       card.style.transform = `translate(${corner.x}px, ${corner.y}px)`;
     } else if (spot) place(card, spot, o.side);
-    if (o.pinned && o.via === "key" && !(prev?.pinned && same)) card.focus({ preventScroll: true });
+    // A card newly pinned is a new layer, which gives the focus back to where it was before this card.
+    const fresh = !(prev?.pinned && same);
+    if (!o.pinned || fresh) unpin();
+    if (o.pinned)
+      pinnedLayer ??= layer(
+        () => node,
+        () => deck.close(),
+      );
+    if (o.pinned && o.via === "key" && fresh) card.focus({ preventScroll: true });
   },
 };
 
@@ -777,7 +784,13 @@ export interface LinkOpts {
 export function link(target: HTMLElement, ref: Ref, opts: LinkOpts = {}): void {
   target.dataset.ref = ref;
   target.classList.add("k-link");
-  if (!target.matches("button, a, input, select, [tabindex]")) target.tabIndex = 0;
+  // Something that is not a control already becomes a button, which a picture alone names by its thing.
+  if (!target.matches("button, a[href], input, select, textarea, summary")) {
+    if (!target.hasAttribute("role")) target.setAttribute("role", "button");
+    if (!target.hasAttribute("tabindex")) target.tabIndex = 0;
+    if (!target.textContent?.trim() && !target.hasAttribute("aria-label"))
+      target.setAttribute("aria-label", deck.describe(ref)?.name ?? ref);
+  }
   let timer = 0;
   let press = 0;
   let swallow = false;
@@ -812,7 +825,7 @@ export function link(target: HTMLElement, ref: Ref, opts: LinkOpts = {}): void {
     deck.leave(target);
   });
   target.addEventListener("focus", () => {
-    if (!target.matches(":focus-visible") || inCard()) return;
+    if (!target.matches(":focus-visible") || inCard() || givingBack()) return;
     deck.point(ref);
     deck.rest(ref, target, "key", target, side);
   });
@@ -955,12 +968,13 @@ if (typeof window !== "undefined") {
     true,
   );
   window.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || (!deck.open && !deck.waiting())) return;
+    // A pinned card is a layer, which has its Escape first (`dialog.ts`); this is for a passing one,
+    // which holds no focus, so the focus stays where it is.
+    // One press puts away one thing: an Escape something before took is not this card's.
+    if (e.key !== "Escape" || e.defaultPrevented || (!deck.open && !deck.waiting())) return;
     // The card took this Escape: a page listening after it should not put anything else away too.
     e.preventDefault();
-    const from = deck.open?.from;
     deck.close();
-    if (from instanceof HTMLElement && from.isConnected) from.focus({ preventScroll: true });
   });
   window.addEventListener("resize", settle);
   // A passing card goes with the thing it was shown for, as a tip does: taken off the page (a pick chosen, a list drawn again) or left by the mouse.

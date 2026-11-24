@@ -453,7 +453,7 @@ function tab(t: Tones, rise: number, down: boolean): Grid {
 const TONES = {
   gold: { light: "#ffe082", face: "#f5ad35", foot: "#bf6e17" },
   blue: { light: "#7cc6ff", face: "#2f86e0", foot: "#1a4d99" },
-  green: { light: "#8ae583", face: "#3ea852", foot: "#216a34" },
+  green: { light: "#8ae583", face: "#389c4b", foot: "#216a34" },
   wood: { light: "#b97c48", face: "#84532f", foot: "#54301a" },
   coral: { light: "#f89785", face: "#d9584d", foot: "#98302f" },
   slate: { light: "#74679a", face: "#4b4163", foot: "#2b2440" },
@@ -691,6 +691,27 @@ const ICONS: Readonly<Record<string, readonly string[]>> = {
   more: ["ww..ww..ww", "ww..ww..ww"],
   up: ["....ww....", "...wwww...", "..wwwwww..", ".wwwwwwww.", "wwwwwwwwww"],
   down: ["wwwwwwwwww", ".wwwwwwww.", "..wwwwww..", "...wwww...", "....ww...."],
+  // What a blue button does: an eye shows, an eye struck through hides.
+  show: [
+    "....wwww....",
+    "..wwwwwwww..",
+    ".wwwwkkwwww.",
+    "wwwwkkkkwwww",
+    ".wwwwkkwwww.",
+    "..wwwwwwww..",
+    "....wwww....",
+  ],
+  hide: [
+    "..........ww",
+    "....wwww.ww.",
+    "..wwwwwwkk..",
+    ".wwwwwwkkww.",
+    "wwwwwwkkwwww",
+    ".wwwwkkwwww.",
+    "..wwkkwwww..",
+    "...wkwww....",
+    "..ww........",
+  ],
   // The emotes besides the heart, drawn once for the page and the canvas alike (`emotes.ts`).
   wave: EMOTE_ART.wave,
   cheer: EMOTE_ART.cheer,

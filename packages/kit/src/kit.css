@@ -126,9 +126,19 @@
 [hidden] {
   display: none !important;
 }
-:focus-visible {
-  outline: var(--u) solid var(--k-gold-lt);
-  outline-offset: var(--u);
+/*
+ * Where the keyboard is: a cream band round the control with an ink edge outside it, so it reads on
+ * dark plum and timber (the cream) and on paper (the ink), in grey too, and is never taken for the
+ * gold of a thing chosen. Only for the keyboard: a press with the mouse or a finger shows nothing.
+ */
+:is(button, a, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: var(--u) solid var(--k-ink);
+  outline-offset: calc(var(--u) * 2);
+  box-shadow: 0 0 0 calc(var(--u) * 2) var(--k-cream);
+}
+/* A dialog or a card given the focus to hold it, not to be pressed, shows no ring. */
+[tabindex="-1"]:focus {
+  outline: none;
 }
 canvas.k-px,
 img.k-px {
@@ -442,8 +452,12 @@ button.k-card:hover {
 button.k-card:active {
   transform: translateY(var(--u));
 }
+/* Done, or not open: it lies flat and its pictures fade; its words stay as readable as any. */
 .k-card.done {
-  opacity: 0.6;
+  border-image-source: var(--k-f-card-locked);
+}
+.k-card.done :is(canvas, .k-i) {
+  opacity: 0.5;
 }
 .k-grow {
   flex: 1;
@@ -585,16 +599,14 @@ button.k-slot:hover {
   box-sizing: border-box;
   padding: calc(var(--u) * 4) calc(var(--u) * 5);
   font: var(--f-ui);
+  /* None is taller than the window: a long one shows its head and what fits, and scrolls once pinned. */
+  max-height: calc(100vh - 8px);
+  overflow: hidden;
 }
 .k-tip.k-info.pinned {
   z-index: 89;
   pointer-events: auto;
-  /* A long card on a short window scrolls inside itself; none is taller than the window. */
-  max-height: calc(100vh - 8px);
   overflow-y: auto;
-}
-.k-info:focus {
-  outline: none;
 }
 /*
  * Asked for with a finger: a sheet along the bottom, the whole width, above the game's own bar
@@ -1148,7 +1160,8 @@ button.k-info-chip:hover .k-chip {
   border-image: var(--k-f-chip) 3 fill / calc(var(--u) * 3);
   font: var(--f-name);
   white-space: nowrap;
-  color: var(--k-cream);
+  /* Dimmer than a lit chip's gold, in grey too: a chip that is off never looks on. */
+  color: var(--k-dim);
 }
 .k-chip.lit {
   --c: var(--k-gold);
@@ -1260,6 +1273,15 @@ button.k-info-chip:hover .k-chip {
     opacity: 0;
   }
 }
+/* What is said to a screen reader and not shown (`say` in dom.ts). */
+.k-said {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .k-row {
   display: flex;
   align-items: center;
@@ -1286,5 +1308,35 @@ button.k-info-chip:hover .k-chip {
   }
   .k-plaque.hung::before {
     display: none;
+  }
+  /*
+   * A small button keeps its look and is 40 pixels to the finger: its reach goes two units past its
+   * edges (counted from inside its border, which is two units, three at the foot).
+   */
+  :where(.k-btn.sm) {
+    position: relative;
+  }
+  .k-btn.sm::after {
+    content: "";
+    position: absolute;
+    inset: calc(var(--u) * -4) calc(var(--u) * -4) calc(var(--u) * -5);
+  }
+}
+
+/*
+ * Asked for less motion (the system's setting): nothing in the interface of any page animates or
+ * eases, and the waiting look is a steady dim. What moves in the world, drawn on a canvas, moves on.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .k-wait {
+    filter: brightness(0.62) saturate(0.7);
   }
 }

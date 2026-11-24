@@ -107,7 +107,8 @@ the window on two ropes and makes room for them above itself: `--k-hang` long (n
 screen), or `--hang` where a sign hangs under another. A sign that is a button dips when pressed.
 
 **A card** that is `lit` glows warm in a gold edge (owned, ready); the one `chosen` of several (or
-`aria-selected`, `aria-pressed`) has the gold doubled; `locked` lies flat and dark. A `div` with
+`aria-selected`, `aria-pressed`) has the gold doubled; `locked` lies flat and dark, and `done` lies flat with its
+pictures faded, its words as readable as any. An unlit chip's words are dim, below a lit one's gold. A `div` with
 `k-label` is a label over a group in a list and sits on a brass rule; a `span` is only small words.
 
 **A chip** that starts with a canvas (a trait's or a kind's own picture) wears it as a hexagon
@@ -129,10 +130,11 @@ picture file.
 | `signs.ts`    | A speech bubble and a key prompt drawn on a canvas, and breaking words into lines                   |
 | `tip.ts`      | Tips: `tip(el, title, text)` shows a one-line hint on hover, focus and long press                   |
 | `card.ts`     | Cards: how anything in any game says what it is (below)                                             |
+| `dialog.ts`   | What opens over the page (a panel, a pinned card, a notice): `dialog(node, title, close)` (below)   |
 | `mark.ts`     | The mark of the town's own: a name in leaf green after the acorn, on a page or a canvas             |
 | `skin.ts`     | A walking figure and a face from a block-game skin sheet, or from a made-up look                    |
 | `sound.ts`    | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all                    |
-| `dom.ts`      | `el`, `icon`, `amount`, `when` (draws a part again only when it changes) and a few more             |
+| `dom.ts`      | `el`, `icon`, `amount`, `when` (draws a part again only when it changes), `say` and a few more      |
 | `purse.ts`    | Leaf and Coins, shared by every page of the game: both Leaf's, only shown                           |
 | `pursebar.ts` | The purse as a page shows it, its numbers rolling; things that fly across it; a closed Leaf button  |
 | `shell.ts`    | How a game that is a place in the town and the town speak to each other                             |
@@ -155,7 +157,17 @@ A button that spends asks to be pressed again (`pressedTwice(key, redraw)`, draw
 up since (a held Enter saying itself again, `keys.ts`) does not make it. `unask()` stops the button
 waiting at once, as four seconds left alone do.
 
+**What opens over the page** (`dialog.ts`). A page's panel calls `dialog(panel, titleElement, close)`
+as it opens and the function it returns once it has closed: the panel is a dialog named by its
+title, the focus goes into it, Tab goes round inside it, Escape calls `close`, and as it goes the
+focus goes back to where it was, if the keyboard was the last used in it. Layers stack: Escape puts
+away the newest only, and the page's own keys never hear that Escape. A pinned card is a layer
+(`layer`), and so is the kit's notice (`close` null: Escape does nothing; it must be answered).
+
 `tools/drive.ts` drives a built page in headless Chromium and takes screenshots; its header says how.
+Its `audit` step (`tools/audit.ts`) lists what keeps a player from reading or reaching the page as
+it is: controls with no name, no focus look or no way in by Tab, small words, words too faint for
+what is behind them, crowded small targets on a phone, and dialogs that are not one.
 `tools/pages.ts` (`bun run pages`, the end of `bun run verify`) builds every app's page as the image
 does: the Dockerfile's page stage copied by `.dockerignore` into a folder of its own, its production
 install and `bun build index.html --minify`, so a page that only builds here is found here.
