@@ -44,12 +44,12 @@ import { S } from "../state.ts";
 import { doNow } from "../yard.ts";
 import { board } from "./board.ts";
 import {
+  goalCard,
   leaves,
   type Listed,
   lockChip,
   type Need,
   needs,
-  paper,
   some,
   unlocks,
   type Wants,
@@ -162,7 +162,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
     const o = g === -1 ? undefined : GOALS[g];
     const kids: HTMLElement[] = [];
     if (g !== -1 && o) {
-      // The node in hand, on paper.
+      // The node in hand, picked out.
       const lists = some(
         wants(wantsIn(o.want), () => S.world.got[g] ?? null),
         needs(p.needs, { given, begin: beginButton }),
@@ -170,14 +170,14 @@ function orders(_art: Art, body: HTMLElement): () => void {
         leaves(g),
       );
       live.push(...lists);
-      kids.push(paper(g, o.pay > 0 ? el("span", "k-chip", {}, amount("coin", o.pay)) : null, lists));
+      kids.push(goalCard(g, o.pay > 0 ? el("span", "k-chip", {}, amount("coin", o.pay)) : null, lists));
     } else if (p.next) {
       // Nothing in hand: what comes next, as the corner says it, and the way to the tier's screen.
       const { label, title, line } = nextWords(p.next);
       kids.push(
         el(
           "div",
-          "k-paper goal",
+          "k-card lit goal",
           {},
           label ? el("div", "k-label", { text: label }) : null,
           el("div", "k-title", { text: title }),

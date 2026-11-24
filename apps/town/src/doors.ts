@@ -48,6 +48,17 @@ function reach(at: Pt): number {
   return Math.ceil(Math.hypot(Math.max(at.x, window.innerWidth - at.x), Math.max(at.y, window.innerHeight - at.y)));
 }
 
+/**
+ * Empties the door. The game's frame had the focus and takes it with it, so the town takes it back:
+ * without it the town would rest as if the member had gone (`pace.ts`) until their next press.
+ */
+function shutDoor(root: HTMLElement): void {
+  root.replaceChildren();
+  root.hidden = true;
+  root.classList.remove("dark");
+  window.focus();
+}
+
 /** Begins going into a game. The frame starts loading at once, out of sight, while the view closes in. */
 export function goIn(game: Game, asks: Asks): Visit {
   // A card pinned in town would sit over the game, out of reach of its keys and taps.
@@ -112,9 +123,7 @@ export function goIn(game: Game, asks: Asks): Visit {
   function putAway(): void {
     stop();
     purse.stop();
-    root.replaceChildren();
-    root.hidden = true;
-    root.classList.remove("dark");
+    shutDoor(root);
     asks.back(onTo);
   }
 

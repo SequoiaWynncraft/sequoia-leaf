@@ -14,6 +14,7 @@
 import { pick as pickCard, point } from "@sequoia-leaf/kit/card.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { member } from "@sequoia-leaf/kit/live.ts";
+import { paced } from "@sequoia-leaf/kit/pace.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { bake, lookFor, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
@@ -143,8 +144,7 @@ async function boot(): Promise<void> {
 
   /** Where the stage is (`screen.ts`): the town to begin with. Only `move` changes it. */
   let screen: Stood = { at: "playing", place: "town" };
-  /** The loop is asking for frames; and the clock is being stepped by hand from outside. */
-  let running = false;
+  /** The clock is being stepped by hand from outside. */
   let heldStill = false;
   /** Each command given, numbered: what Leaf answers for one is acted on only if no other has come since. */
   let asked = 0;
@@ -217,7 +217,7 @@ async function boot(): Promise<void> {
     }
     if (now.at === "opening" && was.at !== "opening") {
       scene().cameBack(now.game);
-      wake();
+      loop.wake();
     }
   }
 
@@ -430,16 +430,13 @@ async function boot(): Promise<void> {
     drawIris(ctx, x, y, far * open * open, G.view.z);
   }
 
-  let last = performance.now();
-  function frame(now: number): void {
+  /** A frame, as often as the kit paces them (`pace.ts`); none while a game is open over the town. */
+  function frame(_now: number, step: number): void {
     if (screen.at === "inside") {
-      running = false;
+      loop.stop();
       return;
     }
-    // The next frame is asked for first: a fault in this one is told to the console and the town goes on.
-    requestAnimationFrame(frame);
-    const dt = heldStill ? 0 : Math.min(0.05, Math.max(0, (now - last) / 1000));
-    last = now;
+    const dt = heldStill ? 0 : step;
     if (dt > 0) tick(dt);
     aim(false);
     pointing();
@@ -447,12 +444,7 @@ async function boot(): Promise<void> {
     stepAbout(dt);
     draw();
   }
-  function wake(): void {
-    if (running) return;
-    running = true;
-    last = performance.now();
-    requestAnimationFrame(frame);
-  }
+  const loop = paced(scope(), frame);
 
   resize();
   town.arrive();
@@ -472,7 +464,7 @@ async function boot(): Promise<void> {
     inGame: () => inGame(screen) || placeOf(screen) === "grove",
     cursor: () => guild.told(),
   });
-  wake();
+  loop.wake();
   const camped = new URLSearchParams(location.search).get("camp");
   const goAsked = (): void => {
     if (camped === null) return;

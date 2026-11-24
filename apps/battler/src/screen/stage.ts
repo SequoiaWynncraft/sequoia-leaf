@@ -9,6 +9,8 @@
  * The clock only moves in `tick`, so everything timed can be stepped by hand from outside.
  */
 import { unit } from "@sequoia-leaf/kit/dom.ts";
+import { paced } from "@sequoia-leaf/kit/pace.ts";
+import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
 import type { ClothId, LanternId } from "@sequoia-leaf/raid";
 
@@ -70,7 +72,6 @@ let look: { cloth: ClothId; lantern: LanternId } = { cloth: "bare", lantern: "ir
 let halves: { far: HTMLCanvasElement; near: HTMLCanvasElement } | null = null;
 let overWasDrawn = false;
 let stopped = false;
-let lastFrame = 0;
 
 /** The two halves of the board as pictures. */
 export function boardHalves(): { far: HTMLCanvasElement; near: HTMLCanvasElement } {
@@ -181,12 +182,10 @@ export function render(): void {
   overWasDrawn = drawn;
 }
 
-function frame(now: number): void {
-  const dt = stopped ? 0 : Math.min(0.05, Math.max(0, (now - lastFrame) / 1000));
-  lastFrame = now;
+function frame(_now: number, step: number): void {
+  const dt = stopped ? 0 : step;
   if (dt > 0) tick(dt);
   render();
-  requestAnimationFrame(frame);
 }
 
 /** Stops the clock (the table is still drawn), so that only `skip` moves it. */
@@ -232,6 +231,5 @@ export function open(h: Hooks): void {
     }).observe(bottom);
   }
   layout();
-  lastFrame = performance.now();
-  requestAnimationFrame(frame);
+  paced(scope(), frame).wake();
 }

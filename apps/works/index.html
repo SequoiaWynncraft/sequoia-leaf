@@ -237,9 +237,6 @@
         font: var(--f-ui);
         color: var(--k-cream);
       }
-      .k-paper .gl {
-        color: var(--k-ink);
-      }
       .gl-row {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
@@ -287,14 +284,8 @@
         white-space: nowrap;
         color: var(--k-dim);
       }
-      .k-paper .gl-note {
-        color: #7d6551;
-      }
       .gl-note.lit {
         color: var(--k-leaf);
-      }
-      .k-paper .gl-note.lit {
-        color: #2f6b24;
       }
       /*
        * In the corner a row is its picture, its bar and its count, with no name: the picture takes
@@ -363,11 +354,6 @@
         min-width: 0;
         overflow-wrap: break-word;
       }
-      /* On paper a name is in the paper's ink, as its titles are. */
-      .k-paper .gh-name {
-        color: #6a2a7c;
-        text-shadow: none;
-      }
       .gh-what.k-link:hover .gh-name {
         text-decoration: underline dotted var(--k-faint);
         text-underline-offset: calc(var(--u) * 1.5);
@@ -390,21 +376,21 @@
 
       /*
        * A goal on a screen: its head, then its lists, one under another. Every head on a screen begins
-       * at one left edge: a card's frame and padding come to 6 units, so a paper's thicker frame takes
-       * a unit less padding at its sides, and those done, which have no frame, are set in as far.
+       * at one left edge: a card's frame and padding come to 6 units, and those done, which have no
+       * frame, are set in as far. The one in hand is picked out in the card's gold edge (`lit`).
        */
-      .k-card.goal,
-      .k-paper.goal {
+      .k-card.goal {
         display: flex;
         flex-direction: column;
         align-items: stretch;
         gap: calc(var(--u) * 3);
       }
-      .k-paper.goal {
-        padding-inline: calc(var(--u) * 3);
+      /* What kind of goal it is and who asks, over its head, is not over a group: no rule after it. */
+      .k-card.goal > .k-label:first-child::after {
+        content: none;
       }
-      /* A lock and a button on a paper of their own are as wide as they need. */
-      .k-paper.goal > :is(.k-chip, .k-btn) {
+      /* A lock and a button on a card of their own are as wide as they need. */
+      .k-card.goal > :is(.k-chip, .k-btn) {
         align-self: flex-start;
       }
       /* Those done: a line each, with no frame of its own. */

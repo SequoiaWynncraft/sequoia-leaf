@@ -17,6 +17,7 @@
 import { ALL_ITEMS, ITEM_INFO, postcard, power } from "@sequoia-leaf/factory";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { keepLeaf, pageCard, serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
+import { paced } from "@sequoia-leaf/kit/pace.ts";
 import { askPerson } from "@sequoia-leaf/kit/person.ts";
 import type { Trouble } from "@sequoia-leaf/kit/play.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
@@ -346,12 +347,13 @@ async function boot(): Promise<Page | null> {
     after.port1.addEventListener("message", () => lap("until free"));
     after.port1.start();
   }
-  let metered = { at: performance.now(), frames: 0, longest: 0 };
-  function count(now: number, gap: number): void {
+  let metered = { at: performance.now(), frames: 0, longest: 0, last: performance.now() };
+  function count(now: number): void {
     if (!meter || !after) return;
     after.port2.postMessage(0);
     metered.frames++;
-    metered.longest = Math.max(metered.longest, gap);
+    metered.longest = Math.max(metered.longest, now - metered.last);
+    metered.last = now;
     if (now - metered.at < 1000) return;
     const { frames } = metered;
     meter.textContent = [
@@ -359,18 +361,14 @@ async function boot(): Promise<Page | null> {
       `longest ${metered.longest.toFixed(1)} ms`,
       ...Object.entries(spent.ms).map(([part, ms]) => `${part} ${(ms / frames).toFixed(2)}`),
     ].join("\n");
-    metered = { at: now, frames: 0, longest: 0 };
+    metered = { at: now, frames: 0, longest: 0, last: now };
     spent.ms = {};
   }
 
-  let last = performance.now();
   let told = false;
-  function frame(now: number): void {
-    // The next frame is asked for first: a fault in this one is told to the console and the yard goes on.
-    requestAnimationFrame(frame);
-    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
-    count(now, now - last);
-    last = now;
+  /** A frame, as often as the kit paces them (`pace.ts`): each the screen shows while the member is at the page, a few a second while not. */
+  function frame(now: number, dt: number): void {
+    count(now);
     lap();
     if (!S.held) advance(dt, now);
     lap("page");
@@ -404,7 +402,7 @@ async function boot(): Promise<Page | null> {
 
   callers();
   refreshAll();
-  requestAnimationFrame(frame);
+  paced(scope(), frame).wake();
 
   return {
     advance,

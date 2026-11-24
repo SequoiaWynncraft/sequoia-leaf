@@ -178,7 +178,7 @@ export function researchScreen(body: HTMLElement): () => void {
       kids.push(
         el(
           "div",
-          "k-paper goal",
+          "k-card lit goal",
           { "data-research": GOALS[first.goal]?.id ?? "" },
           head(first.goal, out(first.goal)),
           // What it is, in the sentence of the one thing it unlocks; several are shown as things below.
