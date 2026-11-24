@@ -593,7 +593,6 @@ function fireside(body: HTMLElement): () => void {
         if (G.player) nearby(G.player, ["toasty", "ooh"], 90);
       }),
     ),
-    el("div", "k-label", { text: "Say it" }),
     el(
       "div",
       "k-wrap",
@@ -709,8 +708,7 @@ function pond(body: HTMLElement): () => void {
 
 // ---------- your camp, and you ----------
 
-const COUNT = ["No", "One", "Two", "Three", "Four", "Five", "Six"] as const;
-const many = (n: number, one: string, more: string): string => `${COUNT[n] ?? n} ${n === 1 ? one : more}`;
+const many = (n: number, one: string, more: string): string => `${n} ${n === 1 ? one : more}`;
 
 /** What is waiting at the camp, in a line, for the card at the gate. */
 export function campWaiting(): string {

@@ -28,7 +28,7 @@ import { outside } from "@sequoia-leaf/kit/net.ts";
 import { askPerson } from "@sequoia-leaf/kit/person.ts";
 import { makeHold, openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/kit/play.ts";
 import { predict, readNotes, readView, type TownCommand, type TownNote, type TownView } from "@sequoia-leaf/town";
-import { type Camp, WHY_NOT } from "@sequoia-leaf/town/camp.ts";
+import { type Camp, MOST_OWNED, WHY_NOT } from "@sequoia-leaf/town/camp.ts";
 
 /** What a command did: its notes, or the code it was refused with. */
 export type Did = { notes: TownNote[] } | { refused: string };
@@ -39,7 +39,7 @@ export const ok = (did: Did | null): did is { notes: TownNote[] } => did !== nul
 /** What the page says of a refusal, where it says anything. */
 const WORDS: Readonly<Record<string, string>> = {
   ...WHY_NOT,
-  plenty: "You have plenty of those.",
+  plenty: `You have ${MOST_OWNED}, the most you can have.`,
   not_enough_coins: "Not enough Coins.",
 };
 export const refusal = (code: string): string => WORDS[code] ?? "That could not be done just now.";
