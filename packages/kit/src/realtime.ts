@@ -8,7 +8,10 @@
  * joins the room again, and says where the player is again (Leaf shows others that as a jump). A
  * try that has not opened by the kit's deadline is let go as one that did not open, and an open
  * connection that has gone silent is closed and opened again. Where the connection is, is one
- * value (`Conn`: down, connecting, open, gone), moved only by `stepConn`. Why a connection closed is
+ * value (`Conn`: down, connecting, open, gone), moved only by `stepConn`. A page may step out of its
+ * room and keep the connection (`away`): Leaf is told it left, and told again on any connection
+ * that comes back meanwhile; back, the page joins on the same connection and is welcomed, so going
+ * out and in opens nothing (Leaf allows a player only so many openings). Why a connection closed is
  * its close code alone (`CLOSE`): told the player opened the game live somewhere else, or that
  * their session ended, this page lets go. A browser cannot see why a connection would not open, so after a few tries
  * that did not, the page asks Leaf whether the player is still signed in, and lets go if not. With
@@ -247,9 +250,28 @@ export interface LiveRoom {
   serverNow(): number;
   /** The quickest round trip to Leaf lately, in milliseconds. */
   rtt(): number | null;
+  /**
+   * Steps out of the room, keeping the connection (`true`), or back into it: away, the page is in no
+   * room and shows nobody; back, it joins again on the same connection, and the welcome follows.
+   */
+  away(on: boolean): void;
+  /** Where the page stands with its room just now (`RoomState`). */
+  state(): RoomState;
   /** Leaves the room and closes the connection for good. */
   close(): void;
 }
+
+/**
+ * Where a page stands with its room, from its connection's one state (`Conn`): in it; away from it
+ * by its own choice; on its way in; lost by a drop `ms` milliseconds ago, and trying again; or let
+ * go of for good.
+ */
+export type RoomState =
+  | { readonly at: "in" }
+  | { readonly at: "away" }
+  | { readonly at: "joining" }
+  | { readonly at: "down"; readonly ms: number }
+  | { readonly at: "gone"; readonly why: Gone };
 
 // ---------- trying again ----------
 
@@ -306,19 +328,29 @@ export type Gone = LetGo | "closed";
 
 /**
  * Where a page's connection to its room is, and the one connection whose picture of the room is
- * shown (`shown`: the last welcomed, kept through a drop until the next welcome). `L` is a
- * connection; `tries` counts the tries since the last welcome (how long the next wait is),
- * `failed` the tries in a row that did not open (when to ask Leaf why), and `restart` whether the
- * last connection that opened was closed because Leaf was restarting.
+ * shown (`shown`: the last welcomed, kept through a drop until the next welcome, and none while the
+ * page is away). `L` is a connection; `tries` counts the tries since the last welcome (how long the
+ * next wait is), `failed` the tries in a row that did not open (when to ask Leaf why), `restart`
+ * whether the last connection that opened was closed because Leaf was restarting, `away` whether
+ * the page has stepped out of the room while keeping its connection, and `downSince` when the room
+ * was lost by a drop (the page's clock), until the next welcome.
  *
  * - `down`: no connection; the next try is due at `retryAt`, and the last began at `lastTry`.
  * - `connecting`: a try begun at `since`, not open yet; let go if it has not opened by the deadline.
- * - `open`: open, and in the room once Leaf's welcome came (`shown === link`).
+ *   Opening it is joining the room (the room is in its address).
+ * - `open`: open, and where it stands with the room (`room`): `joining` until Leaf's welcome; `in`
+ *   once welcomed (`shown === link`); `out` once it has told Leaf it left, while the page is away.
  * - `gone`: let go of for good; nothing is shown or tried any more.
  */
 export type Conn<L> =
   | ({ readonly at: "down"; readonly lastTry: number; readonly retryAt: number } & Counted<L>)
-  | ({ readonly at: "connecting" | "open"; readonly link: L; readonly since: number } & Counted<L>)
+  | ({ readonly at: "connecting"; readonly link: L; readonly since: number } & Counted<L>)
+  | ({
+      readonly at: "open";
+      readonly link: L;
+      readonly since: number;
+      readonly room: "joining" | "in" | "out";
+    } & Counted<L>)
   | { readonly at: "gone"; readonly why: Gone };
 
 /** What a connection not let go of carries from one place to the next. */
@@ -327,9 +359,14 @@ interface Counted<L> {
   readonly tries: number;
   readonly failed: number;
   readonly restart: boolean;
+  readonly away: boolean;
+  readonly downSince: number | null;
 }
 
-/** What moves a connection on: one try begun, opened, welcomed or dropped (a close code), the page back, Leaf's word, or the page's. */
+/**
+ * What moves a connection on: one try begun, opened, welcomed or dropped (a close code), the page
+ * back, Leaf's word, or the page's: stepping out of the room or back into it (`away`), or done.
+ */
 export type ConnEvent<L> =
   | { readonly do: "try"; readonly link: L; readonly now: number }
   | { readonly do: "opened"; readonly link: L }
@@ -337,6 +374,7 @@ export type ConnEvent<L> =
   | { readonly do: "dropped"; readonly link: L; readonly code: number; readonly now: number; readonly chance: number }
   | { readonly do: "wake"; readonly now: number }
   | { readonly do: "letGo"; readonly why: LetGo }
+  | { readonly do: "away"; readonly on: boolean }
   | { readonly do: "close" };
 
 /** A connection before its first try: due at once. */
@@ -346,6 +384,8 @@ export const firstConn = <L>(): Conn<L> => ({
   tries: 0,
   failed: 0,
   restart: false,
+  away: false,
+  downSince: null,
   lastTry: -Infinity,
   retryAt: -Infinity,
 });
@@ -361,6 +401,10 @@ export const firstConn = <L>(): Conn<L> => ({
  * - Back (`wake`), a try still opening after `SOONEST` is let go and tried again at once, and a
  *   wait is cut to `SOONEST` after the last try where that is sooner.
  * - Leaf's word that the player is signed out lets go, unless the connection is open.
+ * - Away, the page shows no room; an open connection in it steps out (`out`), and one still joining
+ *   steps out as its welcome comes. Back, an open connection out of the room joins it again
+ *   (`joining`); any other joins as it opens. A drop, or a try let go, is when the room was lost
+ *   (`downSince`), until a welcome.
  */
 export function stepConn<L>(c: Conn<L>, e: ConnEvent<L>): Conn<L> {
   if (c.at === "gone") return c;
@@ -369,15 +413,26 @@ export function stepConn<L>(c: Conn<L>, e: ConnEvent<L>): Conn<L> {
       return { at: "gone", why: "closed" };
     case "letGo":
       return c.at === "open" ? c : { at: "gone", why: e.why };
+    case "away": {
+      if (c.away === e.on) return c;
+      if (!e.on)
+        return c.at === "open" && c.room === "out" ? { ...c, away: false, room: "joining" } : { ...c, away: false };
+      return c.at === "open" && c.room === "in"
+        ? { ...c, away: true, shown: null, room: "out" }
+        : { ...c, away: true, shown: null };
+    }
     case "try": {
       if (c.at !== "down") return c;
-      const { shown, tries, failed, restart } = c;
-      return { at: "connecting", shown, link: e.link, since: e.now, tries, failed, restart };
+      const { shown, tries, failed, restart, away, downSince } = c;
+      return { at: "connecting", shown, link: e.link, since: e.now, tries, failed, restart, away, downSince };
     }
     case "opened":
-      return c.at === "connecting" && c.link === e.link ? { ...c, at: "open", failed: 0 } : c;
-    case "welcomed":
-      return c.at === "open" && c.link === e.link ? { ...c, shown: e.link, tries: 0, restart: false } : c;
+      return c.at === "connecting" && c.link === e.link ? { ...c, at: "open", failed: 0, room: "joining" } : c;
+    case "welcomed": {
+      if (c.at !== "open" || c.link !== e.link) return c;
+      const met = { tries: 0, restart: false, downSince: null };
+      return c.away ? { ...c, ...met, room: "out" } : { ...c, ...met, shown: e.link, room: "in" };
+    }
     case "dropped": {
       if (c.at === "down" || c.link !== e.link) return c;
       if (!reconnects(e.code)) return { at: "gone", why: e.code === CLOSE.replaced ? "replaced" : "signedout" };
@@ -389,20 +444,41 @@ export function stepConn<L>(c: Conn<L>, e: ConnEvent<L>): Conn<L> {
         tries: tries + 1,
         failed: opened ? 0 : c.failed + 1,
         restart: opened ? e.code === CLOSE.restart : c.restart,
+        away: c.away,
+        downSince: c.downSince ?? e.now,
         lastTry: c.since,
         retryAt: e.now + backoff(LIVE_BACKOFF, tries, e.chance),
       };
     }
     case "wake": {
       if (c.at === "connecting" && e.now - c.since >= SOONEST) {
-        const { shown, tries, failed, restart, since } = c;
-        return { at: "down", shown, tries, failed: failed + 1, restart, lastTry: since, retryAt: e.now };
+        const { shown, tries, failed, restart, away, since } = c;
+        const downSince = c.downSince ?? e.now;
+        return {
+          at: "down",
+          shown,
+          tries,
+          failed: failed + 1,
+          restart,
+          away,
+          downSince,
+          lastTry: since,
+          retryAt: e.now,
+        };
       }
       if (c.at !== "down") return c;
       const soonest = Math.max(e.now, c.lastTry + SOONEST);
       return soonest < c.retryAt ? { ...c, retryAt: soonest } : c;
     }
   }
+}
+
+/** Where a page stands with its room (`RoomState`), from its connection at a moment of the page's clock. */
+export function roomState(c: Conn<unknown>, now: number): RoomState {
+  if (c.at === "gone") return { at: "gone", why: c.why };
+  if (c.away) return { at: "away" };
+  if (c.at === "open" && c.room === "in") return { at: "in" };
+  return c.downSince === null ? { at: "joining" } : { at: "down", ms: now - c.downSince };
 }
 
 /** What one connection knows of the room. Made afresh for each, and shown only once its welcome came. */
@@ -428,7 +504,7 @@ const stop = (t: ReturnType<typeof setTimeout> | null): null => {
 };
 
 /** The connection open and in the room, if it is. */
-const inside = (c: Conn<Link>): Link | null => (c.at === "open" && c.shown === c.link ? c.link : null);
+const inside = (c: Conn<Link>): Link | null => (c.at === "open" && c.room === "in" ? c.link : null);
 /** The connection on its way or open now, if there is one. */
 const current = (c: Conn<Link>): Link | null => (c.at === "connecting" || c.at === "open" ? c.link : null);
 
@@ -512,18 +588,29 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
     const next = stepConn(was, e);
     if (next === was) return;
     conn = next;
-    if (next.at === "open" && was.at === "open") return; // welcomed: the welcome does the rest
+    // Out of the room by the page's choice: it says where the player is itself meanwhile.
+    if (next.at !== "gone" && was.at !== "gone" && next.away && !was.away) inRoom(null);
+    if (next.at === "open" && was.at === "open") {
+      // In and out of the room on the open connection, Leaf told each way; a welcome does the rest itself.
+      if (next.room === "out" && was.room !== "out") say(next.link, { t: "leave" });
+      if (next.room === "joining" && was.room === "out") say(next.link, { t: "join", room });
+      return;
+    }
     timer = stop(timer);
     if (next.at !== "open") pinger = stop(pinger);
     const now = outside.now();
     switch (next.at) {
       case "connecting":
-        // A try that has not opened by the deadline is let go, as one that did not open.
-        timer = setTimeout(() => {
-          next.link.socket.close(CLOSE.done, "late");
-          move({ do: "dropped", link: next.link, code: CLOSE.done, now: outside.now(), chance: Math.random() });
-        }, outside.deadline);
-        return status("connecting");
+        // A try that has not opened by the deadline (from when it began) is let go, as one that did not open.
+        timer = setTimeout(
+          () => {
+            next.link.socket.close(CLOSE.done, "late");
+            move({ do: "dropped", link: next.link, code: CLOSE.done, now: outside.now(), chance: Math.random() });
+          },
+          Math.max(0, next.since + outside.deadline - now),
+        );
+        if (was.at !== "connecting") status("connecting");
+        return;
       case "open":
         next.link.heard = now;
         ping(next.link, 0);
@@ -546,7 +633,7 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
         later = null;
         unwake();
         const l = current(was);
-        if (was.at === "open" && next.why === "closed") say(was.link, { t: "leave" });
+        if (was.at === "open" && was.room !== "out" && next.why === "closed") say(was.link, { t: "leave" });
         l?.socket.close(CLOSE.done, "bye");
         inRoom(null);
         if (next.why !== "closed") status(next.why);
@@ -564,6 +651,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
         if (conn.at !== "open" || conn.link !== l) return;
         const restarted = conn.restart;
         move({ do: "welcomed", link: l });
+        // Away, the welcome only answers the connection's opening, and the page has stepped out again.
+        if (inside(conn) !== l) return;
         l.you = m.you;
         l.clock = new ClockSync(m.time, outside.now());
         l.playout = new Playout();
@@ -709,6 +798,10 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       return leafClock(outside.now());
     },
     rtt: () => shown()?.clock?.rtt() ?? null,
+    away(on) {
+      move({ do: "away", on });
+    },
+    state: () => roomState(conn, outside.now()),
     close() {
       move({ do: "close" });
     },

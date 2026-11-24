@@ -296,7 +296,10 @@ is dropped. Everybody listed says when Leaf last saw them (`seen`).
 **Live** (`realtime.ts`). `joinLive(room, ears)` puts the player in one of Leaf's live rooms (the
 wire and the rooms are in `@sequoia-leaf/core`'s `live.ts`) and keeps them there: the connection
 is opened into the room (`livePath`, with the page's `device`), and after a drop it connects again
-and says where the player is again. It waits a quarter of a second, then half (half to begin with
+and says where the player is again. `away(true)` steps out of the room on the open connection (Leaf
+is sent `leave`, and again on any connection that comes back meanwhile), and `away(false)` joins
+again on it (`join`, then Leaf's welcome), so a page going out and in opens nothing; `state()` says
+where the page stands with its room: in, away, joining, down for how long, or let go. It waits a quarter of a second, then half (half to begin with
 when Leaf said it is restarting, 1012), then a second each time for the first thirty seconds, two
 for the next minute and five after that, each with up to a quarter more by chance (`retryAfter`).
 When the page is shown again, gains focus or the network comes back (`wake` in `net.ts`), a try
