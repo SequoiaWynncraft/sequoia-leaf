@@ -16,7 +16,7 @@ import { DOING, type Doing } from "@sequoia-leaf/town/folk.ts";
 
 import { hop, say } from "./actors.ts";
 import { type Actor, after, G, hooks, show, watch } from "./game.ts";
-import type { Tone } from "./guild.ts";
+import type { Count, Me, Tone } from "./guild.ts";
 import { span } from "./letter.ts";
 
 export { when };
@@ -62,6 +62,38 @@ export function button(cls: string, kids: readonly Kid[], on: (b: HTMLButtonElem
     on(b);
   });
   return b;
+}
+
+/** Numbers under a heading, as the kit's person card has them: the heading on a rule, then a line each, its number at the right. */
+export function sheet(title: string, rows: readonly Count[]): HTMLElement {
+  return el(
+    "div",
+    "k-info-stats listed",
+    {},
+    el("div", "k-info-over", { text: title }),
+    ...rows.map(([label, value]) =>
+      el("span", "k-info-stat", {}, el("span", "k-label", { text: label }), el("b", "", { text: value })),
+    ),
+  );
+}
+
+/** A number as the town writes it: 1,234. */
+const written = (v: number): string => v.toLocaleString("en-US");
+
+/** The member's level, how far through it they are, and its bar. */
+export function levelBar(me: Pick<Me, "level" | "xp" | "next">): HTMLElement[] {
+  const fill = el("i");
+  fill.style.setProperty("--v", `${Math.min(100, (me.xp / me.next) * 100)}%`);
+  return [
+    el(
+      "div",
+      "k-row",
+      {},
+      el("span", "k-grow", { text: `Level ${me.level}` }),
+      el("span", "k-dim", { text: `${written(me.xp)} / ${written(me.next)} XP` }),
+    ),
+    el("div", "k-bar", {}, fill),
+  ];
 }
 
 export const centre = (node: Element): Pt => {

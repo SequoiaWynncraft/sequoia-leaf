@@ -29,11 +29,12 @@ export interface Me extends Member {
   next: number;
   /** Where their own skin sheet is served, if it is. */
   skin: string;
-  /** The ranks of the guild, lowest first; `rank` is one of them. None for a guest, who has no rank. */
-  ranks: readonly string[];
-  /** What they have done with the guild this week, as a few short counts; nothing for a guest. */
-  week: readonly string[];
+  /** What they have done with the guild this week, a line of a sheet each; nothing for a guest. */
+  week: readonly Count[];
 }
+
+/** A line of a sheet: what is counted, and the number as it is written. */
+export type Count = readonly [label: string, value: string];
 
 /** One way to finish a quest, and how far along it is. */
 export interface Goal {

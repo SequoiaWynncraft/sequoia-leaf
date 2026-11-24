@@ -37,11 +37,13 @@ import {
   dockAt,
   faceOf,
   fly,
+  levelBar,
   nameOf,
   openPanel as openHudPanel,
   pic,
   purseAt,
   setDock,
+  sheet,
   slot,
   when,
 } from "./hud.ts";
@@ -787,8 +789,6 @@ function profile(body: HTMLElement): null {
   const portrait = makeCanvas(12, 24);
   const frame = p?.body?.frames[0]?.[0];
   if (frame) portrait.g.drawImage(frame, 0, 0);
-  const xp = el("i");
-  xp.style.setProperty("--v", `${Math.min(100, (me.xp / me.next) * 100)}%`);
   body.append(
     el(
       "div",
@@ -801,41 +801,22 @@ function profile(body: HTMLElement): null {
         {},
         el("div", "k-title big", { text: me.name }),
         el("div", "k-dim", { text: `${me.rank} of the guild` }),
-        el("div", "k-bar", {}, xp),
-        el("div", "k-dim", { text: `Level ${me.level}` }),
+        ...levelBar(me),
       ),
     ),
-    // A guest has no place among the guild's ranks, and no week with it to tell.
-    ...(me.ranks.length === 0
-      ? []
-      : [
-          el(
-            "div",
-            "k-wrap",
-            {},
-            ...me.ranks.map((r) => {
-              const chip = el("span", r === me.rank ? "k-chip lit" : "k-chip", { text: r, tabindex: 0 });
-              if (r === me.rank)
-                tip(chip, r, `${me.xp.toLocaleString("en")} of ${me.next.toLocaleString("en")} XP to the next level.`);
-              return chip;
-            }),
-          ),
-        ]),
-    ...(me.week.length === 0
-      ? []
-      : [
-          el(
-            "div",
-            "k-card",
-            {},
-            el("div", "k-grow", {}, "This week", el("div", "k-dim", { text: me.week.join(", ") })),
-          ),
-        ]),
+    // A guest has no week with the guild to tell.
+    ...(me.week.length === 0 ? [] : [sheet("This week", me.week)]),
     el(
       "div",
       "k-card",
       {},
-      el("div", "k-grow", {}, "Your things", el("div", "k-d", { text: "What you have won is in your cabin." })),
+      el(
+        "div",
+        "k-grow",
+        {},
+        "Your things",
+        el("div", "k-d", { text: "Everything you win or buy goes to Storage at your camp." }),
+      ),
       button("wood sm", ["Go home"], () => {
         hooks.go({ to: "camp" });
       }),
