@@ -14,17 +14,14 @@ import {
   type Period,
   TALLY_BOARDS,
   TALLY_GROUPS,
-  TALLY_KEPT_MS,
   type TallyBoard,
-  tallyPath,
   type TallyUnit,
 } from "@sequoia-leaf/core";
 import { link } from "@sequoia-leaf/kit/card.ts";
-import { amount, el, shown, when } from "@sequoia-leaf/kit/dom.ts";
+import { amount, el, shown } from "@sequoia-leaf/kit/dom.ts";
 import { member, where } from "@sequoia-leaf/kit/live.ts";
 import { ask } from "@sequoia-leaf/kit/net.ts";
 import { known } from "@sequoia-leaf/kit/person.ts";
-import { waitingLook } from "@sequoia-leaf/kit/play.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
@@ -32,7 +29,18 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { G } from "./game.ts";
 import { button, pic, slot } from "./hud.ts";
 import { knownRanks } from "./players.ts";
-import { type Board, laidOut, type Note, readBoard, rising, type Row, sawTally, scoreText } from "./tally.ts";
+import {
+  type Answer,
+  type Board,
+  laidOut,
+  type Note,
+  readBoard,
+  type Row,
+  sawTally,
+  scoreText,
+  type Shown,
+  tallyBoards,
+} from "./tally.ts";
 import { plinth } from "./tallyart.ts";
 
 /** Whether this is the member's first time at the Tally: first place has a fanfare. */
@@ -40,8 +48,8 @@ let firstTime = false;
 /** The board chosen and the span, while the page is open. */
 let chosen: TallyBoard = TALLY_BOARDS[0];
 let period: Period = "week";
-/** What Leaf answered for each board and span, and when: asked again once `TALLY_KEPT_MS` has passed. */
-const answers = new Map<string, { at: number; board: Board | "unread" }>();
+/** What Leaf answered for each board and span, and when, while the page is open (`tallyBoards`). */
+const answers = new Map<string, Answer>();
 
 /** The span a board is shown for: this week where it has one. */
 const spanOf = (b: TallyBoard): Period => (b.week ? period : "all");
@@ -168,12 +176,32 @@ function drawBoard(at: HTMLElement, board: Board, b: TallyBoard, rise: boolean):
   return notes.slice(3 - Math.min(3, podium.length));
 }
 
+/** Draws what the panel shows of a board: while Leaf is asked, the podium bare and waiting; gives back the notes of a board rising. */
+function drawShown(at: HTMLElement, s: Shown): readonly Note[] {
+  at.classList.toggle("k-wait", s.at === "asking");
+  if (s.at === "board") return drawBoard(at, s.board, s.of, s.rise);
+  at.replaceChildren(
+    ...(s.at === "asking"
+      ? [
+          el(
+            "div",
+            "tally-podium",
+            {},
+            spot(undefined, 2, s.of.unit),
+            spot(undefined, 1, s.of.unit),
+            spot(undefined, 3, s.of.unit),
+          ),
+        ]
+      : [el("div", "k-dim", { text: "The Tally could not be read." }), button("wood sm", ["Try again"], s.again)]),
+  );
+  return [];
+}
+
 // ---------- the panel ----------
 
 /** Fills the Tally's panel, for as long as `life` lasts; gives back how to keep it up to date. */
 export function tallyPanel(body: HTMLElement, life: Scope): () => void {
   firstTime = sawTally();
-  const podium = rising(life);
   const root = el("div", "tally");
   const list = el("nav", "tally-list", { "aria-label": "Boards" });
   const view = el("div", "tally-view");
@@ -189,26 +217,35 @@ export function tallyPanel(body: HTMLElement, life: Scope): () => void {
   root.append(list, view);
   body.append(root);
 
-  /** The answer for the chosen board and span: asked of Leaf now if it has none, or one older than a minute. */
-  let readFor: string | null = null;
-  const read = (): void => {
+  const boards = tallyBoards(life, answers, {
+    async ask(path) {
+      const a = await ask(path);
+      return a.status === 200 ? readBoard(a.body) : null;
+    },
+    draw: (s) => drawShown(board, s),
+  });
+  /** Shows the board chosen, for its span: marks it and its tab, names it, and draws it at once. */
+  const show = (): void => {
     const b = chosen;
-    const path = tallyPath(b.id, spanOf(b));
-    const had = answers.get(path);
-    if ((had && Date.now() - had.at < TALLY_KEPT_MS) || readFor === path) return;
-    readFor = path;
-    void (async () => {
-      const a = await waitingLook(board, ask(path));
-      answers.set(path, { at: Date.now(), board: (a.status === 200 ? readBoard(a.body) : null) ?? "unread" });
-      if (readFor === path) readFor = null;
-    })();
+    const p = spanOf(b);
+    for (const pick of list.querySelectorAll<HTMLElement>(".tally-choice"))
+      pick.setAttribute("aria-pressed", String(pick.dataset.board === b.id));
+    for (const tab of tabs.querySelectorAll<HTMLElement>("[data-period]")) {
+      tab.setAttribute("aria-selected", String(tab.dataset.period === p));
+      tab.hidden = tab.dataset.period === "week" && !b.week;
+    }
+    heading.replaceChildren(
+      el("h3", "k-title", { text: b.name }),
+      ...(b.counts === undefined ? [] : [el("p", "k-d", { text: b.counts })]),
+    );
+    boards.show(b, p);
   };
 
   const choose = (b: TallyBoard): void => {
     chosen = b;
     root.classList.remove("picking");
     sfx.paper();
-    read();
+    show();
   };
   for (const group of TALLY_GROUPS) {
     list.append(el("div", "k-label", { text: GROUP_NAMES[group] }));
@@ -223,7 +260,7 @@ export function tallyPanel(body: HTMLElement, life: Scope): () => void {
     const tab = button("sm", [label], () => {
       period = p;
       sfx.tap();
-      read();
+      show();
     });
     tab.setAttribute("role", "tab");
     tab.dataset.period = p;
@@ -231,49 +268,12 @@ export function tallyPanel(body: HTMLElement, life: Scope): () => void {
   };
   tabs.append(span("week", "This week"), span("all", "All time"));
 
-  /** What was last drawn, so that a board that has just come rises and one drawn again does not. */
-  let drawn: string | null = null;
-  const draw = when(
-    () => {
-      const path = tallyPath(chosen.id, spanOf(chosen));
-      return `${path}|${facesCame()}|${JSON.stringify(answers.get(path)?.board ?? null)}`;
-    },
-    () => {
-      const b = chosen;
-      const p = spanOf(b);
-      for (const pick of list.querySelectorAll<HTMLElement>(".tally-choice"))
-        pick.setAttribute("aria-pressed", String(pick.dataset.board === b.id));
-      for (const tab of tabs.querySelectorAll<HTMLElement>("[data-period]")) {
-        tab.setAttribute("aria-selected", String(tab.dataset.period === p));
-        tab.hidden = tab.dataset.period === "week" && !b.week;
-      }
-      heading.replaceChildren(
-        el("h3", "k-title", { text: b.name }),
-        ...(b.counts === undefined ? [] : [el("p", "k-d", { text: b.counts })]),
-      );
-      const path = tallyPath(b.id, p);
-      const got = answers.get(path)?.board;
-      if (got === undefined) return;
-      if (got === "unread") {
-        podium.still();
-        board.replaceChildren(
-          el("div", "k-dim", { text: "The Tally could not be read." }),
-          button("wood sm", ["Try again"], () => {
-            answers.delete(path);
-            read();
-          }),
-        );
-        return;
-      }
-      const fresh = drawn !== path;
-      const notes = drawBoard(board, got, b, fresh);
-      if (fresh) podium.rise(notes);
-      drawn = path;
-    },
-  );
-  read();
+  show();
+  let faces = facesCame();
   return () => {
-    read();
-    draw();
+    boards.again();
+    if (facesCame() === faces) return;
+    faces = facesCame();
+    boards.redraw();
   };
 }

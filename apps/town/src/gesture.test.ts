@@ -117,6 +117,21 @@ describe("a press on the world", () => {
     expect(told.at(-1)).toBe("cleared");
   });
 
+  test("a finger that moves off where it went down on a thing asks nothing, and still drags; a little wandering still asks", () => {
+    const moved = stage();
+    moved.canvas.dispatchEvent(pointer("pointerdown", 1, 10, 10));
+    moved.canvas.dispatchEvent(pointer("pointermove", 1, 90, 10));
+    moved.canvas.dispatchEvent(pointer("pointermove", 1, 12, 10));
+    jest.advanceTimersByTime(LONG_PRESS + CLEAR_MS);
+    moved.canvas.dispatchEvent(pointer("pointerup", 1, 12, 10));
+    expect(moved.told).toEqual(["down 10,10 finger", "drag 90,10", "drag 12,10", "release 12,10"]);
+    const still = stage();
+    still.canvas.dispatchEvent(pointer("pointerdown", 1, 10, 10));
+    still.canvas.dispatchEvent(pointer("pointermove", 1, 16, 14));
+    jest.advanceTimersByTime(LONG_PRESS);
+    expect(still.told.at(-1)).toBe("asked 10,10");
+  });
+
   test("lifted or let go of before it has rested, a press asks nothing", () => {
     const { told, canvas, press } = stage();
     canvas.dispatchEvent(pointer("pointerdown", 1, 10, 10));

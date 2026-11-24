@@ -5,18 +5,21 @@
  * the canvas lost, or let go of by the stage (the window left, a game gone into, another place), it
  * goes without being let go of anywhere (`cancel`): a drag cut short is put back, never set down.
  *
+ * Every press knows how far it has gone from where it went down. Once past `MOVES` it is moving for
+ * good: on bare ground it steers; on a thing it no longer asks, and drags as before.
+ *
  * A finger resting on a thing, not on bare ground, asks what it is (`asked`); the line that shows
  * goes by itself after `CLEAR_MS` (`cleared`), unless another long press puts up its own first, or
  * the place changes and takes it away.
  */
 import { LONG_PRESS } from "@sequoia-leaf/kit/press.ts";
-import type { Scope } from "@sequoia-leaf/kit/scope.ts";
+import type { Release, Scope } from "@sequoia-leaf/kit/scope.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 /** How long the line a long press puts up stays, in milliseconds. */
 export const CLEAR_MS = 2200;
-/** How far a finger on bare ground goes before it steers, in CSS pixels. */
-const STEERS = 10;
+/** How far a press goes from where it went down before it is moving, in CSS pixels. */
+const MOVES = 10;
 
 /** What a press on the world tells the stage, at points of the page. */
 export interface World {
@@ -34,19 +37,29 @@ export interface World {
   cleared(): void;
 }
 
-/** Where a finger on bare ground started, where it is, and whether it has gone far enough to steer. */
-interface Steer {
+/** Where a press went down, where it is, and whether it has gone far enough to be moving. */
+interface Track {
   readonly sx: number;
   readonly sy: number;
   x: number;
   y: number;
-  steering: boolean;
+  moving: boolean;
 }
 
-/** Nothing down; or one pointer down, with its scope, steering if it went down on bare ground. */
+/**
+ * Nothing down; or one pointer down, with its scope, whether it went down on bare ground, how far it
+ * has gone, and how to stop it asking (a finger on a thing waits to ask until it moves).
+ */
 type Press =
   | { readonly at: "up" }
-  | { readonly at: "down"; readonly pointer: number; readonly scope: Scope; readonly steer: Steer | null };
+  | {
+      readonly at: "down";
+      readonly pointer: number;
+      readonly scope: Scope;
+      readonly ground: boolean;
+      readonly track: Track;
+      readonly ask: Release;
+    };
 
 const UP: Press = { at: "up" };
 
@@ -85,24 +98,27 @@ export function worldPress(
     const y = e.clientY;
     const ground = world.down(x, y, finger);
     const scope = owner.child();
-    press = { at: "down", pointer: e.pointerId, scope, steer: ground ? { sx: x, sy: y, x, y, steering: false } : null };
+    const ask =
+      finger && !ground
+        ? scope.after(LONG_PRESS, () => {
+            line.close();
+            line = owner.child();
+            world.asked(x, y);
+            line.after(CLEAR_MS, () => world.cleared());
+          })
+        : () => undefined;
+    press = { at: "down", pointer: e.pointerId, scope, ground, track: { sx: x, sy: y, x, y, moving: false }, ask };
     canvas.setPointerCapture(e.pointerId);
-    if (finger && !ground)
-      scope.after(LONG_PRESS, () => {
-        line.close();
-        line = owner.child();
-        world.asked(x, y);
-        line.after(CLEAR_MS, () => world.cleared());
-      });
   });
   owner.on(canvas, "pointermove", (e) => {
     if (press.at !== "down" || e.pointerId !== press.pointer) return;
     world.drag(e.clientX, e.clientY);
-    const s = press.steer;
-    if (!s) return;
-    s.x = e.clientX;
-    s.y = e.clientY;
-    if (Math.hypot(s.x - s.sx, s.y - s.sy) > STEERS) s.steering = true;
+    const t = press.track;
+    t.x = e.clientX;
+    t.y = e.clientY;
+    if (t.moving || Math.hypot(t.x - t.sx, t.y - t.sy) <= MOVES) return;
+    t.moving = true;
+    press.ask();
   });
   owner.on(canvas, "pointerup", (e) => {
     if (ours(e)) end({ x: e.clientX, y: e.clientY });
@@ -114,7 +130,8 @@ export function worldPress(
   owner.on(canvas, "lostpointercapture", gone);
 
   return {
-    toward: () => (press.at === "down" && press.steer?.steering ? { x: press.steer.x, y: press.steer.y } : null),
+    toward: () =>
+      press.at === "down" && press.ground && press.track.moving ? { x: press.track.x, y: press.track.y } : null,
     letGo: () => end(null),
     newPlace() {
       end(null);
