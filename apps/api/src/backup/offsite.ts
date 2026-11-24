@@ -1,7 +1,7 @@
 import { join } from "node:path";
 
 import { S3Client } from "bun";
-import { Context, Effect, FileSystem, Layer, Option, Redacted, Schedule, Schema } from "effect";
+import { Context, Effect, FileSystem, Layer, Option, Redacted, Ref, Schedule, Schema } from "effect";
 
 import { type Snapshot, snapshotsIn, type SnapshotsUnreadable } from "./snapshot.ts";
 
@@ -13,6 +13,7 @@ export class UploadFailed extends Schema.TaggedError<UploadFailed>()("UploadFail
 
 /** The record of which snapshot was copied last could not be read, or written after a copy. */
 export class MarkerFailed extends Schema.TaggedError<MarkerFailed>()("MarkerFailed", {
+  doing: Schema.Literals(["reading", "writing"]),
   cause: Schema.Defect(),
 }) {}
 
@@ -65,7 +66,7 @@ const lastCopied = (directory: string) =>
   FileSystem.FileSystem.use((fs) => fs.readFileString(join(directory, COPIED))).pipe(
     Effect.map(Option.some),
     Effect.catchReason("PlatformError", "NotFound", () => Effect.succeedNone),
-    Effect.mapError((cause) => new MarkerFailed({ cause })),
+    Effect.mapError((cause) => new MarkerFailed({ doing: "reading", cause })),
   );
 
 /**
@@ -84,7 +85,7 @@ const markCopied = (directory: string, name: string) =>
       yield* fs.writeFileString(unfinished, name);
       yield* fs.rename(unfinished, marker);
     }),
-  ).pipe(Effect.mapError((cause) => new MarkerFailed({ cause })));
+  ).pipe(Effect.mapError((cause) => new MarkerFailed({ doing: "writing", cause })));
 
 /** The snapshot copied last, of those still in the directory, if any is. */
 export const copiedLast = (directory: string) =>
@@ -94,22 +95,36 @@ export const copiedLast = (directory: string) =>
     return Option.flatMap(name, (copied) => Option.fromUndefinedOr(snapshots.find((one) => one.name === copied)));
   });
 
+/** The newest snapshot, and whether this attempt finished copying it (`now`) or it was copied before. */
+export interface Copied {
+  readonly snapshot: Snapshot;
+  readonly now: boolean;
+}
+
 /**
- * One attempt at copying the newest snapshot off the server: the snapshot copied, or none when
- * there is none or the newest was copied already. Only the newest is copied: one replaced by a
- * newer one before it could be copied is skipped, since the newer one holds everything it held. The
- * bucket deletes old copies by itself.
+ * One attempt at copying the newest snapshot off the server: the newest, or none when there is
+ * none. Only the newest is copied: one replaced by a newer one before it could be copied is
+ * skipped, since the newer one holds everything it held. The bucket deletes old copies by itself.
+ *
+ * `taken` holds the name of the snapshot the bucket last took. One it took whose record could not
+ * be written is not uploaded again: the next attempt only writes the record, unless a newer
+ * snapshot has come meanwhile.
  */
 export const copyNewest = (
   directory: string,
-): Effect.Effect<Option.Option<Snapshot>, CopyFailed, Offsite | FileSystem.FileSystem> =>
+  taken: Ref.Ref<Option.Option<string>>,
+): Effect.Effect<Option.Option<Copied>, CopyFailed, Offsite | FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const newest = (yield* snapshotsIn(directory)).at(-1);
     if (newest === undefined) return Option.none();
-    if (Option.contains(yield* lastCopied(directory), newest.name)) return Option.none();
-    yield* Offsite.use((offsite) => offsite.upload(newest.name, join(directory, newest.name)));
+    if (Option.contains(yield* lastCopied(directory), newest.name))
+      return Option.some({ snapshot: newest, now: false });
+    if (!Option.contains(yield* Ref.get(taken), newest.name)) {
+      yield* Offsite.use((offsite) => offsite.upload(newest.name, join(directory, newest.name)));
+      yield* Ref.set(taken, Option.some(newest.name));
+    }
     yield* markCopied(directory, newest.name);
-    return Option.some(newest);
+    return Option.some({ snapshot: newest, now: true });
   });
 
 /** Why an attempt failed: the snapshots could not be read, the bucket did not take one, or the record of it was not kept. */

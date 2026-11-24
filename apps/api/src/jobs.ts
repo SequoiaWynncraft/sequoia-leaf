@@ -89,6 +89,8 @@ export const OffsiteCopies = Layer.effectDiscard(
     const copied = yield* Effect.orElseSucceed(copiedLast(backupDirectory), () => Option.none());
     if (Option.isSome(copied)) yield* jobSucceededAt("snapshot_offsite", copied.value.takenAt);
     const lastSuccess = yield* Ref.make(Option.map(copied, (snapshot) => snapshot.takenAt));
+    // The snapshot the bucket last took, so that one whose record failed is only recorded next time.
+    const taken = yield* Ref.make(Option.none<string>());
     const failed = (error: CopyFailed) =>
       Effect.gen(function* () {
         const last = yield* Ref.get(lastSuccess);
@@ -100,7 +102,7 @@ export const OffsiteCopies = Layer.effectDiscard(
             reason: Match.valueTags(error, {
               SnapshotsUnreadable: () => "snapshots_unreadable",
               UploadFailed: () => "upload_failed",
-              MarkerFailed: () => "record_not_written",
+              MarkerFailed: ({ doing }) => (doing === "reading" ? "record_not_read" : "record_not_written"),
             }),
             last_copied_at: Option.getOrNull(Option.map(last, (at) => new Date(at).toISOString())),
           }),
@@ -111,17 +113,25 @@ export const OffsiteCopies = Layer.effectDiscard(
       step(
         "snapshot_offsite",
         "Copying a snapshot off the server",
-        copyNewest(backupDirectory).pipe(
+        copyNewest(backupDirectory, taken).pipe(
           Effect.tapError(failed),
           Effect.retry(RETRY),
           Effect.flatMap(
             Option.match({
               onNone: () => Effect.succeed<JobRun>("idle"),
-              onSome: ({ name }) =>
+              onSome: ({ snapshot, now }) =>
                 Effect.gen(function* () {
-                  yield* Ref.set(lastSuccess, Option.some(yield* Clock.currentTimeMillis));
-                  yield* Effect.logInfo("snapshot_copied_offsite").pipe(Effect.annotateLogs({ name }));
-                  return "done" as const;
+                  if (now) {
+                    yield* Ref.set(lastSuccess, Option.some(yield* Clock.currentTimeMillis));
+                    yield* Effect.logInfo("snapshot_copied_offsite").pipe(Effect.annotateLogs({ name: snapshot.name }));
+                    return "done" as const;
+                  }
+                  // Copied before: Leaf that could not read its record as it started says now when.
+                  if (Option.isNone(yield* Ref.get(lastSuccess))) {
+                    yield* jobSucceededAt("snapshot_offsite", snapshot.takenAt);
+                    yield* Ref.set(lastSuccess, Option.some(snapshot.takenAt));
+                  }
+                  return "idle" as const;
                 }),
             }),
           ),

@@ -28,4 +28,10 @@ describe("keeping in the browser", () => {
     world.store.setItem("town.postcard.raid.v1", "nonsense");
     expect(read("raid")).toBeNull();
   });
+
+  test("a postcard still carries the empty trophies a town page opened before #172 asks for", () => {
+    world = standin({});
+    post("works", CARD);
+    expect(JSON.parse(world.store.getItem("town.postcard.works.v1") ?? "null")).toEqual({ ...CARD, trophies: [] });
+  });
 });

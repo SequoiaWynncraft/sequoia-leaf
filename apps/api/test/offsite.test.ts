@@ -15,6 +15,7 @@ import {
   Option,
   PlatformError,
   Redacted,
+  Ref,
   References,
   Scope,
 } from "effect";
@@ -234,7 +235,7 @@ describe("copying snapshots off the server", () => {
     expect(counted.series).toEqual([2, 1, (T0 + 10 * 60_000) / 1000]);
   });
 
-  it("after a copy whose record could not be written, says so, leaves no half-written record, and copies again only ten minutes later", async () => {
+  it("after a copy whose record could not be written, says so every ten minutes, leaves no half-written record, and only writes the record again, never uploading twice", async () => {
     const disk = memoryDisk();
     const bucket = stagedBucket();
     const { run, series, failures } = harness(disk, bucket);
@@ -245,20 +246,42 @@ describe("copying snapshots off the server", () => {
       Effect.gen(function* () {
         yield* job.start;
         const leftOver = [...disk.files.keys()].filter((path) => path.endsWith(".partial"));
-        yield* TestClock.adjust("9 minutes");
-        const meanwhile = [...bucket.uploaded];
+        yield* TestClock.adjust("59 minutes");
         disk.broken.delete("rename");
         yield* TestClock.adjust("1 minute");
-        return { leftOver, meanwhile, series: yield* series };
+        return { leftOver, series: yield* series };
       }),
     );
 
     expect(counted.leftOver).toEqual([]);
-    expect(counted.meanwhile).toEqual([FIRST]);
-    expect(bucket.uploaded).toEqual([FIRST, FIRST]);
+    expect(bucket.uploaded).toEqual([FIRST]);
     expect(disk.files.get(MARKER)).toBe(FIRST);
-    expect(failures()).toEqual([{ reason: "record_not_written", last_copied_at: null }]);
-    expect(counted.series).toEqual([2, 1, (T0 + 10 * 60_000) / 1000]);
+    expect(failures()).toEqual(
+      Array.from({ length: 6 }, () => ({ reason: "record_not_written", last_copied_at: null })),
+    );
+    expect(counted.series).toEqual([7, 6, (T0 + 60 * 60_000) / 1000]);
+  });
+
+  it("says when its record cannot be read as Leaf starts, and once it can, when the copy last succeeded, uploading nothing", async () => {
+    const disk = memoryDisk();
+    const bucket = stagedBucket();
+    const { run, series, failures } = harness(disk, bucket);
+    disk.snapshot(FIRST);
+    disk.files.set(MARKER, FIRST);
+    disk.broken.add("readFileString");
+
+    const counted = await run((job) =>
+      Effect.gen(function* () {
+        yield* job.start;
+        disk.broken.delete("readFileString");
+        yield* TestClock.adjust("10 minutes");
+        return yield* series;
+      }),
+    );
+
+    expect(bucket.started).toEqual([]);
+    expect(failures()).toEqual([{ reason: "record_not_read", last_copied_at: null }]);
+    expect(counted).toEqual([1, 1, T0 / 1000]);
   });
 
   it("says when the snapshots cannot be read, rather than taking that for there being none", async () => {
@@ -310,10 +333,12 @@ describe("the record of what was copied, on a real disk", () => {
     mkdirSync(backups);
     writeFileSync(join(backups, FIRST), "a database");
     const bucket = stagedBucket();
-    const copy = copyNewest(backups).pipe(Effect.provide(Layer.merge(bucket.layer, BunServices.layer)));
+    const taken = Effect.runSync(Ref.make(Option.none<string>()));
+    const copy = copyNewest(backups, taken).pipe(Effect.provide(Layer.merge(bucket.layer, BunServices.layer)));
+    const snapshot = { name: FIRST, takenAt: T0 };
 
-    expect(await Effect.runPromise(copy)).toEqual(Option.some({ name: FIRST, takenAt: T0 }));
-    expect(await Effect.runPromise(copy)).toEqual(Option.none());
+    expect(await Effect.runPromise(copy)).toEqual(Option.some({ snapshot, now: true }));
+    expect(await Effect.runPromise(copy)).toEqual(Option.some({ snapshot, now: false }));
     expect(bucket.uploaded).toEqual([FIRST]);
     expect(readdirSync(backups).toSorted()).toEqual([FIRST, "offsite-copied"]);
     expect(readFileSync(join(backups, "offsite-copied"), "utf8")).toBe(FIRST);

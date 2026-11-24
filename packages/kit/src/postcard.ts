@@ -15,7 +15,9 @@ const cardKey = (from: Sender): string => `town.postcard.${from}.v1`;
 
 /** Leaves a postcard. Where there is nowhere to leave it, the town says its usual line. */
 export function post(from: Sender, card: Postcard): void {
-  keepText(cardKey(from), JSON.stringify(card));
+  // A town page opened before #172 reads a card only with `trophies`, and its rules did not change,
+  // so it is not reloaded; the card keeps an empty list until Leaf sends the door its summaries.
+  keepText(cardKey(from), JSON.stringify({ ...card, trophies: [] }));
 }
 
 /** The latest postcard from a game, or null if it has never sent one (or sent nonsense). */
