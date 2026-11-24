@@ -1,5 +1,22 @@
 [
   {
+    "id": "background-frames",
+    "at": "2026-11-24T21:05Z",
+    "title": "Games in the background ask less of your computer",
+    "lines": [
+      "The town, the Works and The Little Raid now draw 20 frames a second while you are using another window, or after 2 minutes without a click, a key or a mouse move. A game left open beside Minecraft uses far less of your computer.",
+      "Moving the mouse over it, a click or a key returns it to full speed at once."
+    ],
+    "more": [
+      {
+        "head": "Changed",
+        "points": [
+          "In the Works, the project in hand, the tier's commission and the research being studied are on a dark card with a gold edge, not on paper."
+        ]
+      }
+    ]
+  },
+  {
     "id": "keyboards",
     "at": "2026-11-24T18:30Z",
     "title": "Choose your keyboard",
