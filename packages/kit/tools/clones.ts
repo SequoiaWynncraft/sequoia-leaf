@@ -19,9 +19,9 @@ import { count, type Counts, hold } from "./ratchet.ts";
 export const RUN = 70;
 
 const TOKEN =
-  /(\/\/[^\n]*|\/\*[\s\S]*?\*\/|\s+)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|[$A-Za-z_][$\w]*|\d+(?:\.\d+)?|=>|===|!==|==|!=|\.\.\.|\?\?|&&|\|\||\?\.|<=|>=|.)/g;
+  /(\/\/[^\n]*|\/\*[\s\S]*?\*\/|\s+)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|[$A-Za-z_][$\w]*|\d+(?:\.\d+)?|>>>=|(?:\*\*|<<|>>|&&|\|\||\?\?)=|===|!==|>>>|\.\.\.|=>|[-+*/%&|^<>=!]=|\+\+|--|\*\*|<<|>>|&&|\|\||\?\?|\?\.|.)/g;
 
-/** A source's tokens, without its comments and spacing. */
+/** A source's tokens, without its comments and spacing: an operator of more than one sign is one; a template literal, `${}` and all, is one too. */
 export function tokens(text: string): string[] {
   return [...text.matchAll(TOKEN)].flatMap((m) => (m[2] === undefined ? [] : [m[2]]));
 }

@@ -223,6 +223,21 @@ describe("the clone check", () => {
   test("reads tokens without comments or spacing", () => {
     expect(tokens("const a = 1; // one\n/* two */ a => a")).toEqual(["const", "a", "=", "1", ";", "a", "=>", "a"]);
   });
+  test("reads an operator of more than one sign as one token", () => {
+    expect(tokens("a += 1; b **= c ** 2; d ??= e >>> 1; f++; g &&= h << 1;")).toEqual(
+      ["a", "+=", "1", ";", "b", "**=", "c", "**", "2", ";", "d", "??=", "e", ">>>", "1", ";"].concat([
+        "f",
+        "++",
+        ";",
+        "g",
+        "&&=",
+        "h",
+        "<<",
+        "1",
+        ";",
+      ]),
+    );
+  });
   test("counts the runs two workspaces share, and none within one", () => {
     const copied = Array.from({ length: RUN + 4 }, (_, i) => `x${i}`).join(" + ");
     const found = shared(
