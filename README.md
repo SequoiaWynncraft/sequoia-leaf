@@ -556,7 +556,8 @@ or is back from being away); so a time that changes without a change, when
 somebody here was last heard of or last did something, may be a second old. A
 player in one of Live's rooms of the game's places (the town) is there by Live
 itself, as if their game had said so (below). Word of a player older than the
-last Leaf heard of them, such as a room's written late, moves them nowhere.
+last Leaf heard of them, such as a room's written late, moves them nowhere, and
+opens no visit after they left.
 `GET /v1/game/presence` answers the same lists and writes nothing, for a page in
 one of Live's rooms, which is told the lists whenever they change (`about`,
 below) and asks only when it comes into the room.

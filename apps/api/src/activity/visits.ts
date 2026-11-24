@@ -56,13 +56,14 @@ const inGame = (v: { place: string; source: Source }): boolean =>
   v.source === "call" && (GAME_AT[v.place] ?? "town") !== "town";
 
 /**
- * Whether word that a player is at `place` now, from `source`, leaves their open visit (`v`) as it
- * is: word older than what Leaf has heard of them since changes nothing, in that place or another
- * (in a deploy, a room's word the Leaf stopping wrote late would give it the visit back); and a
- * live room another page of theirs is in while they play a game (`inGame`) does not move them.
+ * Whether word that a player is at `place`, from `source`, leaves their open visit (`v`) where it
+ * is: a live room another page of theirs is in while they play a game (`inGame`) does not move them.
  */
-const staysPut = (v: OpenVisit, place: string, source: Source, now: number): boolean =>
-  v.heardAt > now || (v.place !== place && source === "room" && inGame(v));
+const staysPut = (v: OpenVisit, place: string, source: Source): boolean =>
+  v.place !== place && source === "room" && inGame(v);
+
+/** A player's newest visit, open (`leftAt` null) or closed. */
+const NewestVisit = Schema.Struct({ ...OpenVisit.fields, leftAt: Schema.NullOr(Schema.Int) });
 
 /**
  * The most visits one transaction writes or closes: a live room's word that everybody in it is
@@ -104,11 +105,14 @@ const OPEN_COLUMNS = `id, session_id AS sessionId, player_id AS playerId, place,
 
 /** What Visits reads, and the session it begins. */
 const statements = (sql: SqlClient.SqlClient, instance: string) => ({
-  openOf: SqlSchema.findOneOption({
+  /** A player's newest visit, open or closed, as `last_visits` names it. */
+  newestOf: SqlSchema.findOneOption({
     Request: Schema.String,
-    Result: OpenVisit,
-    execute: (playerId) =>
-      sql`SELECT ${sql.literal(OPEN_COLUMNS)} FROM visits WHERE player_id = ${playerId} AND left_at IS NULL`,
+    Result: NewestVisit,
+    execute: (playerId) => sql`
+      SELECT ${sql.literal(OPEN_COLUMNS)}, left_at AS leftAt FROM visits
+      WHERE id = (SELECT visit_id FROM last_visits WHERE player_id = ${playerId})
+    `,
   }),
   /**
    * Up to `most` open visits last heard of at `heard` or before, the longest silent first. Named
@@ -262,28 +266,44 @@ const open = (w: Writer, who: Visitor, place: string, source: Source, at: number
   });
 
 /**
- * A player's open visit at `now`, if they have one, and whether one was closed to find it: one
- * gone silent closes first, at the last time it was heard of, and leaves them none. So nobody is
- * heard of again in a visit gone silent, nor has its silence counted, however soon the visits gone
- * silent are closed for everybody else.
+ * Where Leaf has a player as word of them at `now` comes, from their newest visit: `later` when it
+ * was heard of, or closed, after `now`, so that the word is older than what Leaf has heard of them
+ * since and changes nothing (in a deploy, a room's word the Leaf stopping wrote late would give it
+ * the visit back, or open one after they left); else at their open visit, if they have one; else
+ * nowhere. An open visit gone silent closes first, at the last time it was heard of, and leaves
+ * them nowhere (`closed`): nobody is heard of again in a visit gone silent, nor has its silence
+ * counted, however soon the visits gone silent are closed for everybody else.
  */
-const openAt = (w: Writer, playerId: string, now: number) =>
-  Effect.flatMap(w.rows.openOf(playerId), (current) =>
-    Option.isSome(current) && silentSince(current.value.heardAt, now, VISIT_RULES)
-      ? Effect.as(close(w, current.value, current.value.heardAt), { visit: Option.none<OpenVisit>(), closed: true })
-      : Effect.succeed({ visit: current, closed: false }),
-  );
+type Standing =
+  | { readonly at: "later" }
+  | { readonly at: "visit"; readonly visit: OpenVisit }
+  | { readonly at: "nowhere"; readonly closed: boolean };
+
+const standingAt = (w: Writer, playerId: string, now: number) =>
+  Effect.flatMap(w.rows.newestOf(playerId), (newest) => {
+    if (Option.isNone(newest)) return Effect.succeed<Standing>({ at: "nowhere", closed: false });
+    const visit = newest.value;
+    if (Math.max(visit.heardAt, visit.leftAt ?? visit.heardAt) > now) return Effect.succeed<Standing>({ at: "later" });
+    if (visit.leftAt !== null) return Effect.succeed<Standing>({ at: "nowhere", closed: false });
+    if (silentSince(visit.heardAt, now, VISIT_RULES)) {
+      return Effect.as(close(w, visit, visit.heardAt), { at: "nowhere", closed: true } satisfies Standing);
+    }
+    return Effect.succeed<Standing>({ at: "visit", visit });
+  });
 
 /**
  * A player is at `place` now: their open visit there is heard of again, by this Leaf (and is
  * the room's, if this is the room), with their name and whether a guest as they are now; or
  * the one they have elsewhere closes and one opens here; unless Leaf heard of them later than
- * `now`, or a room says so while they play a game (`staysPut`). Says whether who is about changed.
+ * `now` (`standingAt`), or a room says so while they play a game (`staysPut`). Says whether who
+ * is about changed.
  */
 const arrive = (w: Writer, who: Visitor, place: string, source: Source, now: number) =>
   Effect.gen(function* () {
-    const current = (yield* openAt(w, who.playerId, now)).visit;
-    if (Option.isSome(current) && staysPut(current.value, place, source, now)) return false;
+    const standing = yield* standingAt(w, who.playerId, now);
+    if (standing.at === "later") return false;
+    const current = standing.at === "visit" ? Option.some(standing.visit) : Option.none<OpenVisit>();
+    if (Option.isSome(current) && staysPut(current.value, place, source)) return false;
     if (Option.isSome(current) && current.value.place === place) {
       const kept = source === "room" ? "room" : current.value.source;
       const guest = who.guest ? 1 : 0;
@@ -404,14 +424,13 @@ const pageSaid = (w: Writer, who: Visitor, place: string, stay: boolean | null, 
  * what Leaf has heard of them since. Says whether who is about changed.
  */
 const leaveRoom = (w: Writer, playerId: string, place: string, now: number) =>
-  Effect.flatMap(openAt(w, playerId, now), ({ visit, closed }) =>
-    Option.isSome(visit) &&
-    visit.value.place === place &&
-    visit.value.source === "room" &&
-    visit.value.instance === w.instance &&
-    visit.value.heardAt <= now
-      ? Effect.as(close(w, visit.value, now), true)
-      : Effect.succeed(closed),
+  Effect.flatMap(standingAt(w, playerId, now), (standing) =>
+    standing.at === "visit" &&
+    standing.visit.place === place &&
+    standing.visit.source === "room" &&
+    standing.visit.instance === w.instance
+      ? Effect.as(close(w, standing.visit, now), true)
+      : Effect.succeed(standing.at === "nowhere" && standing.closed),
   );
 
 /** Lists as read, and how many changes had been told before they were. */

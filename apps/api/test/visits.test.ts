@@ -44,6 +44,9 @@ afterEach(async () => {
 
 type Who = "alice" | "bob" | "carol" | "dave";
 
+/** Alice, as a room or her page has her. */
+const inTownAlice = { playerId: alice, username: "Alice", guest: false, device: null };
+
 /** A player's page saying where they are, at the clock's time. */
 async function call(who: Who, place: string, device?: string) {
   const response = await app.request("/v1/game/presence", {
@@ -302,6 +305,39 @@ describe("visits from the presence calls", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  // A player in one Leaf's town room leaves it at 30 seconds; word of them stamped 10 seconds, which
+  // the other Leaf had waiting, comes after, from the town's room or from a page in the camp; the
+  // other Leaf then stops at 31 seconds. Their one stay was 30 seconds, and stays so.
+  for (const [said, word] of [
+    ["the room they left", (v: Visits["Service"]) => v.inRoom([inTownAlice], "town", T0 + 10 * SECOND)],
+    ["a page in another place", (v: Visits["Service"]) => v.called(inTownAlice, "camp", null, T0 + 10 * SECOND)],
+  ] as const) {
+    it(`opens no visit on word from ${said} older than when the player last left`, async () => {
+      const directory = mkdtempSync(join(tmpdir(), "leaf-visits-"));
+      const databasePath = join(directory, "leaf.db");
+      const here = testLeaf(clock, noNetwork, { databasePath }, { instance: "here" });
+      const other = testLeaf(clock, noNetwork, { databasePath }, { instance: "other" });
+      try {
+        await here.run(Visits.use((v) => v.inRoom([inTownAlice], "town", T0)));
+        await here.run(Visits.use((v) => v.leftRoom(alice, "town", T0 + 30 * SECOND)));
+        await other.run(Visits.use(word));
+        await other.run(Visits.use((v) => v.closeAll(T0 + 31 * SECOND)));
+
+        expect(await here.query((sql) => sql`SELECT place, entered_at, left_at, seconds FROM visits`)).toEqual([
+          { place: "town", entered_at: T0, left_at: T0 + 30 * SECOND, seconds: 30 },
+        ]);
+        expect(await here.query((sql) => sql`SELECT seconds_total FROM players_seen`)).toEqual([{ seconds_total: 30 }]);
+        expect(await here.query((sql) => sql`SELECT game, played_ms + afk_ms AS ms FROM time_in`)).toEqual([
+          { game: "town", ms: 30 * SECOND },
+        ]);
+      } finally {
+        await here.dispose();
+        await other.dispose();
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+  }
 
   it("keeps a player in the game their page calls from while a town room on another page says the town; a call moves them", async () => {
     // Alice has the Works open, and the town open on her phone, whose room says so now and then.
