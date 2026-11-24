@@ -263,19 +263,6 @@ describe("Seeds", () => {
   });
 });
 
-describe("what a member has", () => {
-  it("is left for Leaf to keep, as it stands after each pull and exchange; a refused command leaves nothing", () => {
-    const ten = done(fresh(), pull("grove"));
-    expect(ten.keep).toEqual([{ slot: "have", data: ten.state.have }]);
-    expect(Object.values(ten.state.have).reduce((sum, n) => sum + n, 0)).toBe(10);
-    const one = done(ten.state, pull("banner-1", 1, "free"));
-    expect(one.keep).toEqual([{ slot: "have", data: one.state.have }]);
-    const bought = done({ ...one.state, seeds: 60, have: {} }, exchange("figure:badger"));
-    expect(bought.keep).toEqual([{ slot: "have", data: { "figure:badger": 1 } }]);
-    expect(PULLS.apply(bought.state, exchange("figure:badger"), ctx())).toEqual({ refused: "owned" });
-  });
-});
-
 describe("keeping it", () => {
   it("reads back what it wrote, keeps the last 200 pulls, and shows everything but the stream", () => {
     let s = fresh();

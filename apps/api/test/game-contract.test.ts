@@ -188,18 +188,6 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     "visitor-token",
   );
   await call("GET /v1/game/me, after a look bought", "GET", "/v1/game/me");
-  // A page left open since before the town moved onto Leaf is told to load itself again.
-  await call("PUT /v1/game/saves/{slot}, a page from before the town moved", "PUT", "/v1/game/saves/town", {
-    player: alice,
-    version: 1,
-    data: {},
-  });
-  await call("POST /v1/game/coins, a page from before the town moved", "POST", "/v1/game/coins", {
-    player: alice,
-    id: "old-1",
-    amount: 3,
-    reason: "chest",
-  });
   // The town on the play service: a new member's camp and the letter at the gate; the letter put
   // away, a thing bought at a stall, which is in the tray and new, the tray looked in, and the thing set out.
   await call("GET /v1/game/play/{game}, the town", "GET", "/v1/game/play/town");

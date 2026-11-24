@@ -42,6 +42,7 @@ export class LiveClient {
   private readonly ws: WebSocket;
   private readonly waiting = new Set<() => void>();
   private seq = 0;
+  private pings = 0;
 
   private constructor(ws: WebSocket) {
     this.ws = ws;
@@ -99,6 +100,17 @@ export class LiveClient {
     this.seq = (this.seq + 1) & 0xffff;
     this.ws.send(encodeMove(this.seq, motion));
     return this.seq;
+  }
+
+  /**
+   * Once Leaf has answered a ping: it has taken everything this connection sent before it, and this
+   * connection has everything Leaf sent it before the answer, so what has not come by then was not sent.
+   */
+  async settled(): Promise<void> {
+    this.pings += 1;
+    const c = this.pings;
+    this.send({ t: "ping", c });
+    await this.next("pong", (m) => m.c === c);
   }
 
   /** The welcome a connection opens with, or the next one. */

@@ -5,8 +5,6 @@
 export interface Postcard {
   /** What is waiting there, in a line, for the card on the game's door. */
   readonly waiting: string;
-  /** Things won or built there that a camp can show, by the game's own names for them. */
-  readonly trophies: readonly string[];
   /** Coins earned there and not yet collected. */
   readonly till: number;
 }

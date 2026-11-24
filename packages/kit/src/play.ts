@@ -25,10 +25,10 @@
  * - A game whose page keeps a copy of its own with the same rules may be answered short
  *   (`PlayReader.short`, `Game.answer`): a batch's answer is then not the state, and the page hears
  *   it (`onAnswer`); only a read of the state (`refresh`) takes the copy's place.
- * - During a deploy a call can reach the Leaf before this one, which has no such route (404
- *   `not_found`) or cannot read the state the new one wrote (409 `state_unreadable`): either is asked
- *   again each second for 30 seconds (`NOT_YET`), and only then stops the page, for no server or a
- *   state that does not read, with nothing sent again: the page shows the kit's card for it.
+ * - During a deploy a call can reach the Leaf before this one, which cannot read the state the new
+ *   one wrote (409 `state_unreadable`): it is asked again each second for 30 seconds (`NOT_YET`), and
+ *   only then stops the page, for a state that does not read, with nothing sent again: the page
+ *   shows the kit's card for it.
  * - Every request the page waits on is let go at the kit's deadline (`net.ts`), as if Leaf had not
  *   answered: a batch goes again with the same ids, as after any failure (`RETRY`).
  * - As the page is hidden or put away, or the town closes the game (`outside.leaving`), everything
@@ -75,10 +75,10 @@ export interface Answered<Command, Note, Short> {
 
 /**
  * Why the page cannot play on: signed out; Leaf will not have it (no answer, no such game, not let
- * in); no Leaf with the play service answered in time (`noserver`); the state Leaf keeps for the
- * player does not read (`unreadable`); or, for a visitor, there is nothing of the player's to visit.
+ * in); the state Leaf keeps for the player does not read (`unreadable`); or, for a visitor, there
+ * is nothing of the player's to visit.
  */
-export type Trouble = "signedout" | "closed" | "noserver" | "unreadable" | "nothing";
+export type Trouble = "signedout" | "closed" | "unreadable" | "nothing";
 
 export interface Play<View, Command extends object, Note, Short = never> {
   /** The copy to draw from: Leaf's state, with what is waiting for Leaf worked out on top. */
@@ -129,7 +129,7 @@ const ID_ROOM = 40;
 /** How a batch that failed is sent again: half a second, doubling to ten seconds. */
 export const RETRY: Backoff = { first: 500, most: 10_000, jitter: 0.25 };
 
-/** How the Leaf before this one, during a deploy (no play service yet, or a state it cannot read), is waited for: a try each `every` ms, `tries` times. */
+/** How the Leaf before this one, during a deploy (a state it cannot read), is waited for: a try each `every` ms, `tries` times. */
 export interface NotYet {
   every: number;
   tries: number;
@@ -168,9 +168,6 @@ function loadFor(game: GameId, theirs: string): boolean {
   return true;
 }
 
-/** Whether an answer is the 404 of a Leaf that has no play service yet, rather than one about the game. */
-const notYet = (reply: { status: number; body: unknown }): boolean =>
-  reply.status === 404 && isRecord(reply.body) && reply.body.code === "not_found";
 /** Whether an answer says the state Leaf keeps does not read. */
 const unreadable = (reply: { status: number; body: unknown }): boolean =>
   reply.status === 409 && isRecord(reply.body) && reply.body.code === "state_unreadable";
@@ -285,9 +282,9 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 
 /**
  * Opens a game on Leaf: its state as Leaf has it now, ready to send commands. Answers why not when
- * it cannot: `signedout`; `closed` for no answer, trouble, or a game Leaf does not play; `noserver`
- * when Leaf has had no play service for `notYet`; `unreadable` when the state it keeps has not read
- * for as long; `nothing` when there is nothing of `of`'s to visit.
+ * it cannot: `signedout`; `closed` for no answer, trouble, or a game Leaf does not play;
+ * `unreadable` when the state it keeps has not read for `notYet`; `nothing` when there is nothing of
+ * `of`'s to visit.
  */
 export async function openPlay<View, Command extends object, Note, Short = never>(
   game: GameId,
@@ -309,18 +306,17 @@ export async function openPlay<View, Command extends object, Note, Short = never
   const waitFor = options.notYet ?? NOT_YET;
   let line: Line<P> = { at: "idle" };
   /**
-   * Asks, and while Leaf answers "not yet" or that the state does not read (the Leaf before this one,
-   * during a deploy), asks the same again each `waitFor.every` ms, `waitFor.tries` times, until the page
+   * Asks, and while Leaf answers that the state does not read (the Leaf before this one, during a
+   * deploy), asks the same again each `waitFor.every` ms, `waitFor.tries` times, until the page
    * stops: the last answer.
    */
   async function patiently(asking: () => ReturnType<typeof ask>, tried = 0): ReturnType<typeof ask> {
     const reply = await asking();
-    if (tried >= waitFor.tries || !(notYet(reply) || unreadable(reply))) return reply;
+    if (tried >= waitFor.tries || !unreadable(reply)) return reply;
     await wait(waitFor.every);
     return line.at === "stopped" ? reply : patiently(asking, tried + 1);
   }
   const first = await patiently(() => ask(read));
-  if (notYet(first)) return { trouble: "noserver" };
   const end = endOf(first);
   if (end !== null) return { trouble: end };
   if (first.status !== 200 || !isRecord(first.body)) return { trouble: "closed" };
@@ -504,7 +500,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
       });
     }
     // Still so once waited for: the page says so, and sends nothing more.
-    if (unreadable(reply) || notYet(reply)) return move({ do: "stop", why: notYet(reply) ? "noserver" : "unreadable" });
+    if (unreadable(reply)) return move({ do: "stop", why: "unreadable" });
     if (reply.status === 403 || reply.status === 404) return move({ do: "stop", why: "closed" });
     // No answer, trouble, or too fast: the same batch again in a moment, with the same ids.
     move({ do: "failed" });

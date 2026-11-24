@@ -45,7 +45,6 @@ import { staged as stagedYard } from "@sequoia-leaf/factory/test/yards.ts";
 import { PULLS } from "@sequoia-leaf/pulls";
 import {
   foughtOf,
-  isParty,
   picksOf,
   planCommands,
   RAID,
@@ -65,7 +64,7 @@ import { knownAmong } from "../src/game/known.ts";
 import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
 import { GAMES, type Played, played } from "../src/play/games.ts";
-import { type JobTimes, KEPT_BYTES, Play, TEND_AFTER } from "../src/play/service.ts";
+import { type JobTimes, Play, TEND_AFTER } from "../src/play/service.ts";
 import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
 import { DAY, fakeBackend, fakeMojang, type Fakes, noNetwork, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
@@ -82,7 +81,21 @@ const clock = { now: T0 };
 let services: ReturnType<typeof testLeaf>;
 let app: ReturnType<(typeof services)["app"]>;
 
+/** Told as a batch of commands arrives at the play service, before it takes its place in its state's line. */
+let onBatch = () => {};
+/** Once the next batch has arrived and is in its state's line, behind whatever is there. */
+function nextBatch(): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  onBatch = resolve;
+  return promise;
+}
+const heard = (real: Play["Service"]): Play["Service"] => ({
+  ...real,
+  send: (playing, game, commands) => Effect.andThen(Effect.sync(onBatch), real.send(playing, game, commands)),
+});
+
 function start(fakes: Fakes = {}, config: Partial<Settings> = {}) {
+  onBatch = () => {};
   clock.now = T0;
   const fake = fakeBackend({
     "alice-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
@@ -91,7 +104,7 @@ function start(fakes: Fakes = {}, config: Partial<Settings> = {}) {
     // A website admin, the guild's staff, for the report of who played.
     "dave-token": () => Response.json({ ...sessionOf(dave, "Dave", null), website_admin: true }),
   });
-  services = testLeaf(clock, fake.fetcher, config, { dice: steadyDice(7), ...fakes });
+  services = testLeaf(clock, fake.fetcher, config, { dice: steadyDice(7), playing: heard, ...fakes });
   app = services.app();
 }
 
@@ -183,24 +196,6 @@ const entries = (player: PlayerId) =>
   );
 const stored = (player: PlayerId, game = "raid") =>
   services.query((sql) => sql`SELECT rev, state FROM play_state WHERE player_id = ${player} AND game = ${game}`);
-/** The pieces Leaf keeps of a player's, by game and slot, their data read back. */
-const keptOf = async (player: PlayerId) =>
-  Schema.decodeUnknownSync(
-    Schema.Array(
-      Schema.Struct({
-        game: Schema.String,
-        slot: Schema.String,
-        data: Schema.fromJsonString(Schema.Unknown),
-        at: Schema.Number,
-      }),
-    ),
-  )(
-    await services.query(
-      (sql) =>
-        sql`SELECT game, slot, data, updated_at AS at FROM play_kept WHERE player_id = ${player} ORDER BY game, slot`,
-    ),
-  );
-
 /** A shop where each lantern costs what the command says: a game that spends Coins, which the raid never does. */
 const SHOP: Game<{ bought: number }, { price: number }, { bought: number }, string> = {
   id: "town",
@@ -1151,92 +1146,6 @@ describe("a command's Leaf", () => {
   });
 });
 
-/** A game that asks Leaf to keep, in the slot each command names, the text it names. */
-const KEEPER: Game<{ bought: number }, { slot: string; text: string }, { bought: number }, string> = {
-  id: "town",
-  create: () => ({ bought: 0 }),
-  advance: (state) => state,
-  view: (state) => state,
-  decode: (text) => SHOP.decode(text),
-  encode: (state) => JSON.stringify(state),
-  apply: (state, kept) => ({
-    state: { bought: state.bought + 1 },
-    notes: ["kept"],
-    keep: [{ slot: kept.slot, data: kept.text }],
-  }),
-  command: (v) =>
-    typeof v === "object" &&
-    v !== null &&
-    "slot" in v &&
-    typeof v.slot === "string" &&
-    "text" in v &&
-    typeof v.text === "string"
-      ? { slot: v.slot, text: v.text }
-      : null,
-};
-
-/** The party Leaf decided the fight from, as the batch that fought was answered. */
-const fought = (answer: Awaited<ReturnType<typeof commanded>>) => {
-  const run = answer.view.run;
-  return run ? foughtOf(run)?.setup.sides[0] : undefined;
-};
-
-describe("what a game keeps of a player's", () => {
-  it("is the board a member fought a room with, by trail and room; fought again, the room's board is the newer", async () => {
-    const first = await commanded(ided([{ do: "start", trail: 0 }, { do: "choose", option: 0 }, { do: "fight" }]));
-    expect(isParty(fought(first))).toBe(true);
-    expect(await keptOf(alice)).toEqual([{ game: "raid", slot: "board:0:0", data: fought(first), at: clock.now }]);
-    // A new run's first fight, in the same room.
-    const again = await commanded(
-      ided([{ do: "take" }, { do: "start", trail: 0 }, { do: "choose", option: 0 }, { do: "fight" }]),
-    );
-    expect(again.results.every((r) => "notes" in r)).toBe(true);
-    expect(await keptOf(alice)).toEqual([{ game: "raid", slot: "board:0:0", data: fought(again), at: clock.now }]);
-    // A guest's is not kept.
-    await commanded(ided([{ do: "start", trail: 0 }, { do: "choose", option: 0 }, { do: "fight" }]), carol);
-    expect(await keptOf(carol)).toEqual([]);
-  });
-
-  it("is nothing of a batch refused whole", async () => {
-    await opened();
-    const commands = [...ided([{ do: "start", trail: 0 }, { do: "choose", option: 0 }, { do: "fight" }]), { id: "x" }];
-    const refused = await send("POST", "/v1/game/play/raid", { commands });
-    expect([refused.status, await codeOf(refused)]).toEqual([400, "invalid_command"]);
-    expect(await keptOf(alice)).toEqual([]);
-  });
-
-  it("is let go when its slot is not one Leaf allows or its JSON is over 16 KiB, and the command stands", async () => {
-    const lines: unknown[] = [];
-    const capture = Logger.layer([
-      Logger.map(Logger.formatStructured, ({ annotations }) => void lines.push(annotations)),
-    ]);
-    const batch = await services.run(
-      Play.use((play) =>
-        play.send({ playerId: alice, guest: false }, played(KEEPER), [
-          // A string's JSON is the string in quotes, each "é" two bytes.
-          { id: "k-1", slot: "fits", text: "x".repeat(KEPT_BYTES - 2) },
-          { id: "k-2", slot: "wide", text: "é".repeat(KEPT_BYTES / 2) },
-          { id: "k-3", slot: "Not a slot", text: "" },
-          { id: "k-4", slot: "x".repeat(65), text: "" },
-          { id: "k-5", slot: "board:0:3", text: "older" },
-          { id: "k-6", slot: "board:0:3", text: "newer" },
-        ]),
-      ).pipe(Effect.provide(capture), Effect.provideService(References.MinimumLogLevel, "All")),
-    );
-    expect(batch).toMatchObject({ status: "done", rev: 1, view: { bought: 6 } });
-    expect(batch.status === "done" && batch.results.map((r) => ("notes" in r ? r.notes : r.refused))).toEqual(
-      Array.from({ length: 6 }, () => ["kept"]),
-    );
-    expect(await keptOf(alice)).toEqual([
-      { game: "town", slot: "board:0:3", data: "newer", at: clock.now },
-      { game: "town", slot: "fits", data: "x".repeat(KEPT_BYTES - 2), at: clock.now },
-    ]);
-    expect(lines.filter((a) => JSON.stringify(a).includes('"slot"'))).toEqual(
-      ["wide", "Not a slot", "x".repeat(65)].map((slot) => ({ player: alice, game: "town", slot })),
-    );
-  });
-});
-
 const standings = () => services.query((sql) => sql`SELECT * FROM standings`);
 
 describe("a standing", () => {
@@ -1666,12 +1575,21 @@ const beltIn = (w: Yard): number => w.kind.indexOf(BELT);
  * themselves, and each visit it shows. A slice of a yard whose owner `fails` fails a hundred ticks in.
  */
 function counted(fails: (owner: string) => boolean = () => false) {
+  /** Who waits for how many slices to have run. */
+  const waiting: { readonly n: number; readonly resolve: () => void }[] = [];
   const run = {
     ticks: 0,
     advanced: 0,
     applied: 0,
     visits: 0,
     slices: [] as { owner: string; began: number; ended: number }[],
+    /** Once `n` slices have run. */
+    sliced: (n: number): Promise<void> => {
+      if (run.slices.length >= n) return Promise.resolve();
+      const { promise, resolve } = Promise.withResolvers<void>();
+      waiting.push({ n, resolve });
+      return promise;
+    },
   };
   const game = played({
     ...FACTORY,
@@ -1702,7 +1620,10 @@ function counted(fails: (owner: string) => boolean = () => false) {
           },
           c,
         ) ?? false;
-      if (ticks > 0) run.slices.push({ owner: ctx.player.id, began, ended: performance.now() });
+      if (ticks > 0) {
+        run.slices.push({ owner: ctx.player.id, began, ended: performance.now() });
+        for (const waiter of waiting) if (run.slices.length >= waiter.n) waiter.resolve();
+      }
       return further;
     },
     visit: (w, ctx) => {
@@ -1727,12 +1648,6 @@ async function longestHold(job: () => Promise<unknown>): Promise<number> {
     clearInterval(beat);
   }
   return Math.max(longest, performance.now() - last);
-}
-/** Waits until a condition holds, a millisecond at a time. */
-async function until(ok: () => boolean, tries = 5000): Promise<void> {
-  if (ok() || tries === 0) return;
-  await Bun.sleep(1);
-  await until(ok, tries - 1);
 }
 /** The first tick after the moment `from` at which a standing order fills, as a yard runs on from `text` with nobody there, and the order. */
 function nextFill(text: string, from: number) {
@@ -1901,11 +1816,12 @@ describe("Leaf tending the Works", () => {
     const tend = tending();
     await held;
     let answered = false;
+    const inLine = nextBatch();
     const sending = send("POST", "/v1/game/play/works", { commands: [{ id: "p-1", ...paint }] }).then((r) => {
       answered = true;
       return r;
     });
-    await Bun.sleep(20);
+    await inLine;
     expect(answered).toBe(false);
     release();
     await tend;
@@ -1923,13 +1839,9 @@ describe("Leaf tending the Works", () => {
     // Alice's page has sent the paint when Leaf's background tend comes to her yard: the tend waits.
     const sending = send("POST", "/v1/game/play/works", { commands: [{ id: "p-1", ...paint }] });
     await held;
-    let tended = false;
-    const tend = (async () => {
-      await tending();
-      tended = true;
-    })();
-    await Bun.sleep(20);
-    expect(tended).toBe(false);
+    // Once asked, the tend is in the yard's line, behind the paint; what it gives back waits for it.
+    const queued = await services.run(Play.use((play) => play.tend(Object.values(GAMES))));
+    const tend = services.run(queued);
     release();
     const painted = Schema.decodeUnknownSync(Answered)(await (await sending).json());
     expect(painted.results).toEqual([{ id: "p-1", notes: [] }]);
@@ -1988,7 +1900,7 @@ describe("Leaf tending the Works", () => {
     await keepMid();
     clock.now += 8 * HOUR;
     const visiting = services.run(Play.use((play) => play.visit(alice, game, { playerId: bob, guest: false })));
-    await until(() => run.slices.length > 0);
+    await run.sliced(1);
     // Set while a slice may be running: it runs once that slice ends, before the slice after.
     const timer = await new Promise<number>((resolve) => setTimeout(() => resolve(performance.now()), 0));
     const timed = run.slices.length;
@@ -2073,7 +1985,7 @@ describe("Leaf tending the Works", () => {
     await keepMid();
     clock.now += 2 * HOUR;
     const tend = services.run(sweep([game]));
-    await until(() => run.slices.length > 0);
+    await run.sliced(1);
     const before = run.slices.length;
     const sent = await services.run(
       Play.use((play) => play.send({ playerId: alice, guest: false }, game, [{ id: "w-1", do: "collect", tick: 0 }])),
@@ -2109,7 +2021,7 @@ describe("Leaf tending the Works", () => {
     const opens = [bob, carol, dave].map((owner) =>
       services.run(Play.use((play) => play.open({ playerId: owner, guest: false }, game))).then(() => void caughtUp++),
     );
-    await until(() => run.slices.length >= 3);
+    await run.sliced(3);
     const before = run.slices.length;
     const sent = await services.run(
       Play.use((play) => play.send({ playerId: alice, guest: false }, game, [{ id: "w-1", do: "collect", tick: 0 }])),
@@ -2284,15 +2196,17 @@ describe("Leaf tending the Works", () => {
     // Three visitors at a time keep Alice's yard asked for until the sweep has ended.
     const ended = { sweep: false };
     let visits = 0;
+    const fourth = Promise.withResolvers<void>();
     const visitor = async (): Promise<void> => {
       while (!ended.sweep) {
         const caller = { playerId: stranger(10 + (visits++ % 200)), guest: false };
+        if (visits === 4) fourth.resolve();
         // oxlint-disable-next-line no-await-in-loop -- one visit after another, as a page makes them
         await services.run(Play.use((play) => play.visit(alice, game, caller)));
       }
     };
     const visitors = [visitor(), visitor(), visitor()];
-    await until(() => visits > 3);
+    await fourth.promise;
     await services.run(sweep([game]));
     ended.sweep = true;
     await Promise.all(visitors);
@@ -2390,6 +2304,7 @@ describe("Leaf tending the Works", () => {
   it("answers a batch sent again while it is still in its line once, as a page whose wait timed out sends it", async () => {
     await app.dispose();
     const gate = Promise.withResolvers<void>();
+    const firstRead = Promise.withResolvers<void>();
     const batches: JobTimes[] = [];
     let reads = 0;
     start({
@@ -2397,9 +2312,16 @@ describe("Leaf tending the Works", () => {
       play: (real) => ({
         ...real,
         read: (player, game) =>
-          real
-            .read(player, game)
-            .pipe(Effect.tap(() => (++reads === 1 ? Effect.promise(() => gate.promise) : Effect.void))),
+          real.read(player, game).pipe(
+            Effect.tap(() =>
+              ++reads === 1
+                ? Effect.andThen(
+                    Effect.sync(firstRead.resolve),
+                    Effect.promise(() => gate.promise),
+                  )
+                : Effect.void,
+            ),
+          ),
       }),
       meter: (times) => void (times.kind === "batch" && batches.push(times)),
     });
@@ -2407,7 +2329,7 @@ describe("Leaf tending the Works", () => {
     const owner = { playerId: alice, guest: false };
     const commands = [{ id: "w-1", do: "collect", tick: 0 }];
     const first = services.run(Play.use((play) => play.send(owner, GAMES.works, commands)));
-    await until(() => reads === 1);
+    await firstRead.promise;
     const again = services.run(Play.use((play) => play.send(owner, GAMES.works, commands)));
     gate.resolve();
     const [answered, answeredAgain] = await Promise.all([first, again]);
@@ -2444,7 +2366,7 @@ describe("Leaf tending the Works", () => {
     clock.now += 20 * HOUR;
     const owner = { playerId: alice, guest: false };
     const tend = services.run(sweep([game]));
-    await until(() => run.ticks > 0);
+    await run.sliced(1);
     const opening = await services.run(Play.use((play) => play.open(owner, game)));
     await tend;
     expect(run.ticks).toBe(8 * 36_000);
@@ -2459,14 +2381,27 @@ describe("Leaf tending the Works", () => {
     const directory = join(tmpdir(), `leaf-tend-${crypto.randomUUID()}`);
     const path = `${directory}.db`;
     try {
-      const first = testLeaf(clock, noNetwork, { databasePath: path });
+      // Resolved when Leaf next reads a stored state.
+      let reading = Promise.withResolvers<void>();
+      const first = testLeaf(
+        clock,
+        noNetwork,
+        { databasePath: path },
+        {
+          play: (real) => ({
+            ...real,
+            read: (player, game) => Effect.tap(real.read(player, game), () => Effect.sync(() => reading.resolve())),
+          }),
+        },
+      );
       const kept = await keepMid(first);
       clock.now += 8 * HOUR;
-      // A deploy stops Leaf a moment into eight hours of the yard, a visit and a batch waiting behind
-      // it, and it stops at once.
+      // A deploy stops Leaf a moment into eight hours of the yard, once it has read it to run it on,
+      // a visit and a batch waiting behind it, and it stops at once.
       const owner = { playerId: alice, guest: false };
+      reading = Promise.withResolvers<void>();
       const cut = outcome(first.run(tendAll));
-      await Bun.sleep(100);
+      await reading.promise;
       const waiting = [
         outcome(first.run(Play.use((play) => play.visit(alice, GAMES.works, { playerId: bob, guest: false })))),
         outcome(first.run(Play.use((play) => play.send(owner, GAMES.works, [{ id: "w-1", do: "collect", tick: 0 }])))),
@@ -2644,6 +2579,7 @@ describe("Leaf tending the Works", () => {
   it("shows a visitor behind its owner's first open the yard that open made, before it is stored", async () => {
     await app.dispose();
     const gate = Promise.withResolvers<void>();
+    const looked = Promise.withResolvers<void>();
     // Whether a state was stored at each look: the open's, held, and the visit's behind it.
     const found: boolean[] = [];
     start({
@@ -2652,12 +2588,19 @@ describe("Leaf tending the Works", () => {
         revOf: (player, game) =>
           real.revOf(player, game).pipe(
             Effect.tap((state) => Effect.sync(() => void found.push(Option.isSome(state)))),
-            Effect.tap(() => (found.length === 1 ? Effect.promise(() => gate.promise) : Effect.void)),
+            Effect.tap(() =>
+              found.length === 1
+                ? Effect.andThen(
+                    Effect.sync(looked.resolve),
+                    Effect.promise(() => gate.promise),
+                  )
+                : Effect.void,
+            ),
           ),
       }),
     });
     const opening = services.run(Play.use((play) => play.open({ playerId: alice, guest: false }, GAMES.works)));
-    await until(() => found.length === 1);
+    await looked.promise;
     const visiting = services.run(Play.use((play) => play.visit(alice, GAMES.works, { playerId: bob, guest: false })));
     gate.resolve();
     const [owners, seen] = await Promise.all([opening, visiting]);
@@ -2951,7 +2894,6 @@ describe("pulls", () => {
     await raided(alice, 25_000);
     const ten = tenPulls("p-1");
     const done = await pulled([ten]);
-    const at = clock.now;
     expect(done.results.map((r) => ("notes" in r ? r.notes.length : r.refused))).toEqual([10]);
     expect(await services.account(alice)).toEqual({ playerId: alice, balance: 15_000, xp: 25_000 });
     const spent = {
@@ -2967,8 +2909,6 @@ describe("pulls", () => {
     expect((await ledgerOf(alice)).slice(1)).toEqual([spent]);
     const have = PULLS.decode((await storedIn("pulls"))[0]?.state ?? "")?.have ?? {};
     expect(Object.values(have).reduce((sum, n) => sum + n, 0)).toBe(10);
-    // Kept by the batch that pulled, not again by the one sent again.
-    expect(await keptOf(alice)).toEqual([{ game: "pulls", slot: "have", data: have, at }]);
     expect(new Set((await awarded(alice)).map((a) => a.id))).toEqual(
       new Set(Object.keys(have).map((id) => `pull:${id}`)),
     );
@@ -2994,7 +2934,6 @@ describe("pulls", () => {
     const before = await untouched(alice, "pulls");
     expect((await pulled([tenPulls("p-1")])).results).toEqual([{ id: "p-1", refused: "not_enough_leaf" }]);
     expect(await untouched(alice, "pulls")).toEqual(before);
-    expect(await keptOf(alice)).toEqual([]);
 
     await app.dispose();
     start();
@@ -3003,7 +2942,6 @@ describe("pulls", () => {
     const off = await untouched(alice, "pulls");
     expect((await pulled([tenPulls("p-2")])).results).toEqual([{ id: "p-2", refused: "leaf_closed" }]);
     expect(await untouched(alice, "pulls")).toEqual(off);
-    expect(await keptOf(alice)).toEqual([]);
   });
 });
 

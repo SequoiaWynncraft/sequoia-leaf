@@ -247,13 +247,11 @@ export function unreadableCard(): void {
 
 /**
  * Puts a game played on Leaf away behind the card for why it cannot go on (`play.ts`'s `Trouble`):
- * signed out or turned away, the state Leaf keeps not reading, or no Leaf with the play service
- * answering, which `line` says in the game's words. A game that can be visited says its own card
- * for nothing to visit (`pageCard`); any other is shown it as closed.
+ * signed out or turned away, or the state Leaf keeps not reading. A game that can be visited says
+ * its own card for nothing to visit (`pageCard`); any other is shown it as closed.
  */
-export function troubleCard(why: Trouble, signIn: string, line: string): void {
+export function troubleCard(why: Trouble, signIn: string): void {
   if (why === "unreadable") unreadableCard();
-  else if (why === "noserver") serverCard(line);
   else shutCard(why === "nothing" ? "closed" : why, signIn);
 }
 

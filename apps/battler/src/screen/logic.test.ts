@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  type BossId,
   buy,
   choose,
   type FigureId,
@@ -388,24 +387,15 @@ describe("what a card says about a figure", () => {
 });
 
 describe("the postcard for the town", () => {
-  test("a new member's table is set out, with nothing won and no till", () => {
-    expect(postcard(null, newAlmanac())).toEqual({
-      waiting: "The board is set out. One crab is uncounted.",
-      trophies: [],
-      till: 0,
-    });
+  test("a new member's table is set out, with no till", () => {
+    expect(postcard(null, newAlmanac())).toEqual({ waiting: "The board is set out. One crab is uncounted.", till: 0 });
   });
 
-  test("a raid under way says where it got to; every boss ever beaten is a trophy, once", () => {
+  test("a raid under way says where it got to", () => {
     const run = begun();
     run.room = 4;
-    const bosses: BossId[][] = [["oldbramble", "hoardmagpie"], ["oldbramble"], []];
-    const almanac = { ...newAlmanac(), runs: 3, bosses };
-    expect(postcard(run, almanac)).toEqual({
-      waiting: "A raid is under way: room 5, on The Easy Way.",
-      trophies: ["oldbramble", "hoardmagpie"],
-      till: 0,
-    });
+    const almanac = { ...newAlmanac(), runs: 3 };
+    expect(postcard(run, almanac)).toEqual({ waiting: "A raid is under way: room 5, on The Easy Way.", till: 0 });
     expect(postcard(null, almanac).waiting).toBe("The board is set out for another raid.");
   });
 });

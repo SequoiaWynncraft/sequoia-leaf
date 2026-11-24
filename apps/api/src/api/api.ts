@@ -51,6 +51,7 @@ import {
   PurchaseBody,
   PurchaseCancelled,
   Purchased,
+  PurseBeside,
   Quests,
   Rates,
   RequestBody,
@@ -174,7 +175,12 @@ export class SystemApi extends HttpApiGroup.make("system", { topLevel: true }).a
 
 /** What Leaf pays and costs, open to anyone: the website's guide to Leaf reads it. */
 export class RatesApi extends HttpApiGroup.make("rates")
-  .add(HttpApiEndpoint.get("rates", "/rates", { success: Rates }))
+  .add(
+    HttpApiEndpoint.get("rates", "/rates", {
+      // The same until the next deploy: kept five minutes.
+      success: HttpApiSchema.WithHeaders(Rates, { "cache-control": Schema.String }),
+    }),
+  )
   .prefix("/v1") {}
 
 export class MeApi extends HttpApiGroup.make("me")
@@ -184,7 +190,7 @@ export class MeApi extends HttpApiGroup.make("me")
     HttpApiEndpoint.post("reroll", "/quests/:id/reroll", {
       params: { id: Schema.String },
       payload: RerollBody,
-      success: Rerolled,
+      success: HttpApiSchema.WithHeaders(Rerolled, PurseBeside),
       error: [Invalid, Refused],
     }).middleware(RerollBodyErrors),
     HttpApiEndpoint.get("events", "/events", { query: EventPosition, success: Events, error: Invalid }),
@@ -258,14 +264,9 @@ export class GamePresenceApi extends HttpApiGroup.make("gamePresence")
   .middleware(Player)
   .prefix("/v1/game") {}
 
-/** The games Leaf plays: a player's state and commands, a visit, a board, and the routes of before. */
+/** The games Leaf plays: a player's state and commands, a visit and a board. */
 export class GamePlayApi extends HttpApiGroup.make("gamePlay")
   .add(
-    // For a page left open since before the town moved onto Leaf, which still sends its save and its
-    // Coins here: told it is not who it thinks it is, it loads itself again, and so becomes the page
-    // that plays on Leaf. Both go in the change after this one.
-    HttpApiEndpoint.put("oldSave", "/saves/:slot", { params: { slot: Schema.String }, error: NotYou }),
-    HttpApiEndpoint.post("oldCoins", "/coins", { error: NotYou }),
     HttpApiEndpoint.get("play", "/play/:game", {
       params: GameParams,
       // From a page that found its copy of the state not Leaf's: the tick it found it at.
@@ -302,7 +303,7 @@ export class GameRequestsApi extends HttpApiGroup.make("gameRequests")
     }),
     HttpApiEndpoint.post("request", "/requests", {
       payload: RequestBody,
-      success: RequestMade,
+      success: HttpApiSchema.WithHeaders(RequestMade, PurseBeside),
       error: [Invalid, MembersOnly, RequestRefused, RequestsUnavailable, RequestUnknown],
     }).middleware(RequestBodyErrors),
   )

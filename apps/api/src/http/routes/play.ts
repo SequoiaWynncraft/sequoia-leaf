@@ -1,12 +1,10 @@
 import { parsePlayerId } from "@sequoia-leaf/core";
 import { Clock, Effect, Option } from "effect";
-import { HttpServerResponse } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 
 import { Visits } from "../../activity/visits.ts";
 import { CurrentIdentity, LeafApi } from "../../api/api.ts";
 import { Invalid, Missing, SlowDown } from "../../api/errors.ts";
-import type * as Body from "../../api/schemas.ts";
 import { PlayerNames } from "../../game/names.ts";
 import { Play } from "../../play/service.ts";
 import { PlayStore } from "../../play/store.ts";
@@ -23,8 +21,6 @@ export const GamePlayHandlers = HttpApiBuilder.group(LeafApi, "gamePlay", (handl
 
     return (
       handlers
-        .handle("oldSave", () => Effect.fail(notYou))
-        .handle("oldCoins", () => Effect.fail(notYou))
         .handle("play", ({ params, query }) =>
           Effect.gen(function* () {
             const played = yield* playedGame(params.game);
@@ -35,13 +31,13 @@ export const GamePlayHandlers = HttpApiBuilder.group(LeafApi, "gamePlay", (handl
             if (shown.status === "unreadable") {
               return yield* unreadable;
             }
-            return HttpServerResponse.jsonUnsafe({
+            return {
               rev: shown.rev,
               now: iso(shown.now),
               state: shown.view,
               purse: shown.purse,
               rules: played.rules,
-            } satisfies typeof Body.PlayShown.Type);
+            };
           }),
         )
         // Commands, done in order in one transaction. A command whose id was seen before answers as
@@ -70,14 +66,14 @@ export const GamePlayHandlers = HttpApiBuilder.group(LeafApi, "gamePlay", (handl
             if (payload.commands.some((command) => !played.chore(command))) {
               yield* visits.acted(identity.playerId, yield* Clock.currentTimeMillis);
             }
-            return HttpServerResponse.jsonUnsafe({
+            return {
               rev: batch.rev,
               now: iso(batch.now),
               results: batch.results,
               state: batch.view,
               purse: batch.purse,
               rules: played.rules,
-            } satisfies typeof Body.Played.Type);
+            };
           }),
         )
         // A game's board, its players named as the guild's news names them.
@@ -87,7 +83,7 @@ export const GamePlayHandlers = HttpApiBuilder.group(LeafApi, "gamePlay", (handl
             const { playerId } = yield* CurrentIdentity;
             const board = yield* store.board(played.id, playerId);
             const named = yield* names.of(board.top.map((row) => row.playerId));
-            return HttpServerResponse.jsonUnsafe({
+            return {
               top: board.top.map((row) => ({
                 place: row.place,
                 id: row.playerId,
@@ -98,7 +94,7 @@ export const GamePlayHandlers = HttpApiBuilder.group(LeafApi, "gamePlay", (handl
                 you: row.playerId === playerId,
               })),
               you: Option.getOrNull(board.you),
-            } satisfies typeof Body.Standings.Type);
+            };
           }),
         )
         // Somebody's state as a visitor is given it: brought to now, and kept so as any job keeps a
@@ -128,13 +124,13 @@ export const GamePlayHandlers = HttpApiBuilder.group(LeafApi, "gamePlay", (handl
                 message: "Visits are coming faster than Leaf takes them. Ask again in a moment",
               });
             }
-            return HttpServerResponse.jsonUnsafe({
+            return {
               rev: shown.rev,
               now: iso(shown.now),
               state: shown.view,
               purse: shown.purse,
               rules: played.rules,
-            } satisfies typeof Body.PlayShown.Type);
+            };
           }),
         )
     );

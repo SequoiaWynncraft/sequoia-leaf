@@ -1,12 +1,10 @@
 import { DAY_MS, utcDay } from "@sequoia-leaf/core";
 import { Clock, Effect } from "effect";
-import { HttpServerResponse } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 
 import { ActivityReport } from "../../activity/report.ts";
 import { CurrentIdentity, LeafApi } from "../../api/api.ts";
 import { Invalid, StaffOnly } from "../../api/errors.ts";
-import type * as Body from "../../api/schemas.ts";
 import { iso } from "./shared.ts";
 
 /** How many UTC days the staff's report covers when not told, and at most. */
@@ -35,7 +33,7 @@ export const GameAdminHandlers = HttpApiBuilder.group(LeafApi, "gameAdmin", (han
         const days = Math.min(asked, REPORT_MOST_DAYS);
         const now = yield* Clock.currentTimeMillis;
         const r = yield* reports.report((utcDay(now) - days + 1) * DAY_MS, now);
-        return HttpServerResponse.jsonUnsafe({
+        return {
           now: iso(r.now),
           here: r.here.map((h) => ({
             id: h.playerId,
@@ -73,7 +71,7 @@ export const GameAdminHandlers = HttpApiBuilder.group(LeafApi, "gameAdmin", (han
             players: r.works.byStoryOrders.map((b) => ({ story_orders: b.storyOrders, players: b.players })),
           },
           odd: r.odd.map((o) => ({ id: o.playerId, name: o.name, rule: o.kind, at: iso(o.at), value: o.value })),
-        } satisfies typeof Body.ActivityReport.Type);
+        };
       }),
     );
   }),

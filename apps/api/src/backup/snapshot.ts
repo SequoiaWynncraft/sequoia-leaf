@@ -1,7 +1,7 @@
 import { mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-import { Effect, Stream } from "effect";
+import { Effect, FileSystem, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { AppConfig } from "../config.ts";
@@ -33,21 +33,32 @@ function takenAt(name: string): number | undefined {
   return Date.parse(`${date}T${time?.replaceAll("-", ":")}Z`);
 }
 
-/** The snapshots in a directory, oldest first. */
-export function listSnapshots(directory: string): { name: string; takenAt: number }[] {
-  let names: string[];
-  try {
-    names = readdirSync(directory);
-  } catch {
-    return [];
-  }
-  return names
-    .flatMap((name) => {
-      const at = takenAt(name);
-      return at === undefined ? [] : [{ name, takenAt: at }];
-    })
-    .toSorted((a, b) => a.takenAt - b.takenAt);
+/** A snapshot of the database: its file's name in the directory, and when it was taken. */
+export interface Snapshot {
+  readonly name: string;
+  readonly takenAt: number;
 }
+
+/** The directory of snapshots could not be read, for anything but its not being there yet. */
+export class SnapshotsUnreadable extends Schema.TaggedError<SnapshotsUnreadable>()("SnapshotsUnreadable", {
+  directory: Schema.String,
+  cause: Schema.Defect(),
+}) {}
+
+/** The snapshots in a directory, oldest first: none while there is no directory yet. */
+export const snapshotsIn = (directory: string): Effect.Effect<Snapshot[], SnapshotsUnreadable, FileSystem.FileSystem> =>
+  FileSystem.FileSystem.use((fs) => fs.readDirectory(directory)).pipe(
+    Effect.catchReason("PlatformError", "NotFound", () => Effect.succeed<string[]>([])),
+    Effect.mapError((cause) => new SnapshotsUnreadable({ directory, cause })),
+    Effect.map((names) =>
+      names
+        .flatMap((name) => {
+          const at = takenAt(name);
+          return at === undefined ? [] : [{ name, takenAt: at }];
+        })
+        .toSorted((a, b) => a.takenAt - b.takenAt),
+    ),
+  );
 
 /**
  * Writes a complete copy of the database, consistent as of one moment, to a
@@ -84,9 +95,9 @@ export const takeSnapshot = Effect.fn("takeSnapshot")(function* (directory: stri
     Effect.andThen(Effect.sync(() => renameSync(unfinished, path))),
     Effect.ensuring(Effect.sync(() => rmSync(unfinished, { force: true }))),
   );
+  yield* Effect.sync(() => removeAbandonedCopies(directory));
+  const snapshots = yield* snapshotsIn(directory);
   yield* Effect.sync(() => {
-    removeAbandonedCopies(directory);
-    const snapshots = listSnapshots(directory);
     for (const old of snapshots.slice(0, Math.max(0, snapshots.length - SNAPSHOTS_KEPT))) {
       rmSync(join(directory, old.name));
     }
@@ -107,9 +118,11 @@ function removeAbandonedCopies(directory: string): void {
 
 /** Takes a snapshot when there is none younger than the interval. Returns its path, or undefined when none was due. */
 export const snapshotIfDue = (directory: string, now: number) =>
-  Effect.suspend(() => {
-    const newest = listSnapshots(directory).at(-1);
-    return newest !== undefined && now - newest.takenAt < SNAPSHOT_INTERVAL_MS
-      ? Effect.succeed(undefined)
-      : takeSnapshot(directory, now);
-  });
+  snapshotsIn(directory).pipe(
+    Effect.flatMap((snapshots) => {
+      const newest = snapshots.at(-1);
+      return newest !== undefined && now - newest.takenAt < SNAPSHOT_INTERVAL_MS
+        ? Effect.succeed(undefined)
+        : takeSnapshot(directory, now);
+    }),
+  );

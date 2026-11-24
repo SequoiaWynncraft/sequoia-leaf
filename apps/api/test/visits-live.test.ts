@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { type Motion, playerId } from "@sequoia-leaf/core";
-import { Schema } from "effect";
+import { type Duration, Schema } from "effect";
 
-import type { LiveTuning } from "../src/live/live.ts";
+import { Live, type LiveTuning, TICK } from "../src/live/live.ts";
 import { LiveClient, type Opening } from "./live-client.ts";
 import { fakeBackend, sessionOf, testLeaf } from "./support.ts";
 
@@ -14,14 +14,9 @@ const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
 const ORIGIN = "https://leaf.seqwawa.com";
 
-// The real clock, which a test may move ahead: Live's tick and its waits keep time by it.
-let ahead = 0;
-const clock = {
-  get now() {
-    return Date.now() + ahead;
-  },
-  set now(_: number) {},
-};
+/** Where each Leaf's test clock starts: Live's ticks and waits pass only as a test moves them on (`pass`). */
+const T0 = Date.UTC(2026, 10, 25, 12);
+const clock = { now: T0 };
 type Served = Awaited<ReturnType<ReturnType<typeof testLeaf>["serve"]>>;
 let services: ReturnType<typeof testLeaf> | null = null;
 let server: Served | null = null;
@@ -38,7 +33,7 @@ const sessions = () =>
 
 /** Leaf on a free port, with Live tuned as the test needs. */
 async function start(live: Partial<LiveTuning> = {}): Promise<void> {
-  services = testLeaf(clock, sessions().fetcher, {}, { live });
+  services = testLeaf(clock, sessions().fetcher, {}, { live, testClock: true });
   server = await services.serve();
 }
 
@@ -46,15 +41,14 @@ async function start(live: Partial<LiveTuning> = {}): Promise<void> {
 async function deploying(): Promise<{ readonly old: Served; readonly next: Served }> {
   directory = mkdtempSync(join(tmpdir(), "leaf-visits-"));
   const databasePath = join(directory, "leaf.db");
-  services = testLeaf(clock, sessions().fetcher, { databasePath }, { instance: "old" });
+  services = testLeaf(clock, sessions().fetcher, { databasePath }, { instance: "old", testClock: true });
   server = await services.serve();
-  const next = testLeaf(clock, sessions().fetcher, { databasePath }, { instance: "new" });
+  const next = testLeaf(clock, sessions().fetcher, { databasePath }, { instance: "new", testClock: true });
   beside = { services: next, server: await next.serve() };
   return { old: server, next: beside.server };
 }
 
 afterEach(async () => {
-  ahead = 0;
   for (const c of open.splice(0)) c.close();
   await server?.close();
   await services?.dispose();
@@ -99,17 +93,28 @@ const visits = async (): Promise<readonly Visit[]> =>
         sql`SELECT player_id, place, source, entered_at, heard_at, left_at, seconds, session_id FROM visits ORDER BY id`,
     )) ?? [],
   );
-/** The visits once they pass `which`, waiting a little for Live to write them. */
-async function visitsWhen(which: (rows: readonly Visit[]) => boolean, ms = 2000): Promise<readonly Visit[]> {
-  const until = Date.now() + ms;
-  for (;;) {
-    // oxlint-disable-next-line no-await-in-loop -- looking again until Live has written
-    const now = await visits();
-    if (which(now)) return now;
-    if (Date.now() > until) throw new Error(`Waited ${ms} ms in vain: ${JSON.stringify(now)}`);
-    // oxlint-disable-next-line no-await-in-loop -- as above
-    await Bun.sleep(20);
-  }
+/**
+ * The visits once they pass `which`: Live writes them on a fiber of its own, which nothing answers
+ * for, so they are looked for again each turn of the event loop.
+ */
+async function visitsWhen(which: (rows: readonly Visit[]) => boolean, turns = 10_000): Promise<readonly Visit[]> {
+  const now = await visits();
+  if (which(now)) return now;
+  if (turns === 0) throw new Error(`Never written: ${JSON.stringify(now)}`);
+  await new Promise((resolve) => setImmediate(resolve));
+  return visitsWhen(which, turns - 1);
+}
+/** Every Leaf's clock moved on together, with whatever fell due meanwhile done up to its next wait. */
+async function pass(duration: Duration.Input): Promise<void> {
+  await services?.adjust(duration);
+  await beside?.services.adjust(duration);
+}
+/** Waits until Leaf has no connection open: the last close, which comes off the socket, is through. */
+async function closedThrough(turns = 10_000): Promise<void> {
+  if ((await services?.run(Live.use((live) => live.census)))?.connected === 0) return;
+  if (turns === 0) throw new Error("a connection never closed");
+  await new Promise((resolve) => setImmediate(resolve));
+  return closedThrough(turns - 1);
 }
 const closed = (v: Visit | undefined) => v !== undefined && v.left_at !== null;
 
@@ -120,7 +125,7 @@ describe("visits from the live rooms", () => {
     await a.welcome();
     const [came] = await visitsWhen((r) => r.length === 1);
     expect(came).toMatchObject({ player_id: alice, place: "town", source: "room", left_at: null });
-    ahead = 40_000;
+    await pass("40 seconds");
     a.send({ t: "leave" });
 
     const [went] = await visitsWhen((r) => closed(r[0]));
@@ -136,8 +141,11 @@ describe("visits from the live rooms", () => {
     const a = await connect({ bearer: "alice-token" });
     await a.welcome();
     await visitsWhen((r) => r.length === 1);
+    await pass("30 seconds");
     a.close();
-    ahead = 30_000;
+    await closedThrough();
+    await pass(150);
+    await pass(TICK);
 
     const [gone] = await visitsWhen((r) => closed(r[0]));
     expect(gone?.seconds).toBeGreaterThanOrEqual(30);
@@ -149,12 +157,16 @@ describe("visits from the live rooms", () => {
     const a = await connect({ bearer: "alice-token" });
     await a.welcome();
     await visitsWhen((r) => r.length === 1);
-    ahead = 20_000;
+    await pass("20 seconds");
     expect((await sayHere("alice-token", "works")).status).toBe(200);
     a.send({ t: "leave" });
-    await Bun.sleep(300);
+    // What Live writes is written in the order it happens: once Bob's coming in is, so is her leaving.
+    await a.settled();
+    const b = await connect({ bearer: "bob-token" });
+    await b.welcome();
+    await visitsWhen((r) => r.some((v) => v.player_id === bob));
 
-    const [town, works] = await visits();
+    const [town, works] = (await visits()).filter((v) => v.player_id === alice);
     expect(town).toMatchObject({ place: "town", source: "room" });
     expect(town?.seconds).toBeGreaterThanOrEqual(20);
     expect(works).toMatchObject({ place: "works", source: "call", left_at: null, session_id: town?.session_id });
@@ -163,7 +175,7 @@ describe("visits from the live rooms", () => {
   it("closes the visit a page's calls opened when the player comes into the room", async () => {
     await start();
     expect((await sayHere("bob-token", "camp")).status).toBe(200);
-    ahead = 10_000;
+    await pass("10 seconds");
     const b = await connect({ bearer: "bob-token" });
     await b.welcome();
 
@@ -178,7 +190,8 @@ describe("visits from the live rooms", () => {
     expect((await sayHere("bob-token", "town")).status).toBe(200);
     const b = await connect({ bearer: "bob-token" });
     await b.welcome();
-    await Bun.sleep(200);
+    // Once the room's word of him is written, the call's visit is the room's: one, and open.
+    await visitsWhen((r) => r[0]?.source === "room");
 
     expect(await visits()).toMatchObject([{ place: "town", source: "room", left_at: null }]);
   });
@@ -208,8 +221,8 @@ describe("time in the town's room", () => {
     a.move(standing(40, 10));
     b.move(standing(10, 10));
     b.move(standing(10, 10, 3));
-    await Bun.sleep(200);
-    ahead = 40_000;
+    await Promise.all([a.settled(), b.settled()]);
+    await pass("40 seconds");
     a.send({ t: "leave" });
     b.send({ t: "leave" });
     await visitsWhen((r) => r.length === 2 && r.every(closed));
@@ -232,8 +245,8 @@ describe("when Leaf stops", () => {
     await a.welcome();
     expect((await sayHere("bob-token", "camp")).status).toBe(200);
     await visitsWhen((r) => r.length === 2);
-    ahead = 50_000;
-    const stopping = Date.now() + ahead;
+    await pass("50 seconds");
+    const stopping = T0 + 50_000;
     await server?.close();
 
     const after = await visits();
@@ -261,7 +274,7 @@ describe("when Leaf stops", () => {
     expect((await sayHere("alice-token", "table", old)).status).toBe(200);
     // Then her page talks to the new Leaf, from the Works, for a minute.
     expect((await sayHere("alice-token", "works", next)).status).toBe(200);
-    ahead = 60_000;
+    await pass("60 seconds");
     expect((await sayHere("alice-token", "works", next)).status).toBe(200);
     expect(
       await services?.query(
@@ -277,12 +290,12 @@ describe("when Leaf stops", () => {
     await a.welcome();
     expect((await sayHere("bob-token", "camp", old)).status).toBe(200);
     const came = (await visitsWhen((r) => r.length === 2)).find((v) => v.player_id === alice);
-    ahead = 20_000;
+    await pass("20 seconds");
     // Alice's game comes into the new Leaf's town as well; Bob's page still talks to the old one.
     const again = await connect({ bearer: "alice-token" }, next);
     await again.welcome();
     await visitsWhen((r) => r.some((v) => v.player_id === alice && v.heard_at >= (came?.entered_at ?? 0) + 20_000));
-    ahead = 30_000;
+    await pass("10 seconds");
     await old.close();
 
     const after = await visits();

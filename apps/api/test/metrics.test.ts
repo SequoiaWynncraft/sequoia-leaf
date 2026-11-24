@@ -145,8 +145,14 @@ describe("Live", () => {
 
     client.close();
     await client.ended();
-    await Bun.sleep(50);
-    text = await leaf.metrics();
+    // The close comes off the socket and has nothing to answer: looked for each turn of the event loop.
+    const closedThrough = async (turns = 10_000): Promise<string> => {
+      const now = await leaf.metrics();
+      if (sample(now, "leaf_live_connections") === 0 || turns === 0) return now;
+      await new Promise((resolve) => setImmediate(resolve));
+      return closedThrough(turns - 1);
+    };
+    text = await closedThrough();
     expect(sample(text, "leaf_live_closed_total", { how: "page" })).toBe(1);
     expect(sample(text, "leaf_live_connections")).toBe(0);
   });

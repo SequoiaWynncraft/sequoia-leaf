@@ -10,7 +10,7 @@ afterEach(() => {
   world = null;
 });
 
-const CARD = { waiting: "A raid under way", trophies: ["a banner"], till: 12 };
+const CARD = { waiting: "A raid under way", till: 12 };
 
 describe("keeping in the browser", () => {
   test("a text is kept, read back and forgotten", () => {
@@ -27,5 +27,11 @@ describe("keeping in the browser", () => {
     expect(read("works")).toEqual(CARD);
     world.store.setItem("town.postcard.raid.v1", "nonsense");
     expect(read("raid")).toBeNull();
+  });
+
+  test("a postcard still carries the empty trophies a town page opened before #172 asks for", () => {
+    world = standin({});
+    post("works", CARD);
+    expect(JSON.parse(world.store.getItem("town.postcard.works.v1") ?? "null")).toEqual({ ...CARD, trophies: [] });
   });
 });

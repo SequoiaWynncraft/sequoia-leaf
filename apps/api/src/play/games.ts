@@ -4,7 +4,6 @@ import {
   type Game,
   type GameId,
   isRefused,
-  type Kept,
   type LeafSpend,
   type Logged,
   type Standing,
@@ -23,8 +22,6 @@ export type Attempt =
       readonly coins: readonly CoinChange[];
       readonly leaf: readonly LeafSpend[];
       readonly log: readonly Logged[];
-      /** What it asks Leaf to keep of the player's (`Done.keep`). */
-      readonly pieces: readonly Kept[];
       /** Makes the state the command left the open state. Until then, nothing has changed. */
       readonly keep: () => void;
       /** What a visitor's page is told of it (`Game.echo`): asked once it is kept, before the next command. */
@@ -115,7 +112,6 @@ export function played<State, Command, View, Note, Short>(game: Game<State, Comm
           coins: answer.coins ?? [],
           leaf: answer.leaf ?? [],
           log: answer.log ?? [],
-          pieces: answer.keep ?? [],
           keep: () => {
             state = answer.state;
             undo = null;

@@ -1,9 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { leaf, playerId, RAIDS } from "@sequoia-leaf/core";
+import { Effect, Fiber, Layer, Logger, References } from "effect";
+import { FetchHttpClient } from "effect/http";
+import { TestClock } from "effect/testing";
 
+import { Identities } from "../src/auth/session.ts";
+import { AppConfig } from "../src/config.ts";
 import { runCreditSync } from "../src/earning/run.ts";
-import { MINUTE, testLeaf } from "./support.ts";
+import { type LogLine, MINUTE, testConfig, testLeaf, unanswered } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 /** Wednesday 4 November 2026, 12:00 UTC. */
@@ -20,12 +25,14 @@ const member = {
 };
 
 /** What the stand-in backend answers, by bearer token and for the credit feed. */
-let sessions: Record<string, () => Response>;
+let sessions: Record<string, () => Response | Promise<Response>>;
 let credits: unknown;
 let backendCalls: string[];
 /** While set, the credit feed answers only once the test lets it (`holdFeed`). */
 let feedHeld: { readonly asked: () => void; readonly answer: Promise<void> } | null;
 const clock = { now: T0 };
+/** Leaf's warnings and errors. */
+let logged: LogLine[];
 let services: ReturnType<typeof testLeaf>;
 let app: ReturnType<(typeof services)["app"]>;
 
@@ -62,9 +69,13 @@ function holdFeed() {
   };
 }
 
-/** Whether a request answers within a moment: what it answered, or "waiting". */
-function soon(response: Promise<Response>): Promise<Response | "waiting"> {
-  return Promise.race([response, Bun.sleep(200).then((): "waiting" => "waiting")]);
+/** Told when a request asks for the feed to be brought in first (`Credits.fresh`), as it takes its turn. */
+let onFresh = () => {};
+/** Once the next request has taken its turn to bring the feed in: it waits for any run under way. */
+function nextInLine(): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  onFresh = resolve;
+  return promise;
 }
 
 function get(path: string, headers: Record<string, string> = { Authorization: "Bearer alice-token" }) {
@@ -77,9 +88,25 @@ beforeEach(() => {
   backendCalls = [];
   feedHeld = null;
   clock.now = T0;
-  services = testLeaf(clock, backend);
+  logged = [];
+  onFresh = () => {};
+  services = testLeaf(
+    clock,
+    backend,
+    {},
+    {
+      logged,
+      credits: (real) => ({ ...real, fresh: (then) => Effect.andThen(Effect.sync(onFresh), real.fresh(then)) }),
+    },
+  );
   app = services.app();
 });
+
+/** What Leaf logged where it could not ask the backend who a session is. */
+const unasked = () =>
+  logged
+    .filter((line) => line.message === "The backend could not say whose a session is")
+    .map((line) => line.annotations);
 
 afterEach(async () => {
   await app.dispose();
@@ -110,13 +137,58 @@ describe("signing in", () => {
     expect(await response.json()).toMatchObject({ code: "not_a_member" });
   });
 
-  it("says so when the backend cannot be asked, instead of calling the session invalid", async () => {
-    sessions["alice-token"] = () => new Response("down", { status: 502 });
+  it.each([
+    ["cannot be reached", () => Promise.reject(new Error("connection refused")), { reason: "unreachable" }],
+    ["answers 502", () => new Response("down", { status: 502 }), { reason: "unexpected_status", status: 502 }],
+    [
+      "answers what is not a session",
+      () => Response.json({ ...member, minecraft_uuid: 7 }),
+      { reason: "schema_mismatch" },
+    ],
+  ])(
+    "says so when the backend %s, rather than calling the session invalid; logs why; and asks again next time",
+    async (_, answer, why) => {
+      sessions["alice-token"] = answer;
 
-    const response = await get("/v1/me");
+      const response = await get("/v1/me");
 
-    expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({ code: "identity_unavailable" });
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({ code: "identity_unavailable" });
+      expect(unasked()).toEqual([{ route: "/auth/web/me", ...why }]);
+      // Not remembered: the next request asks again, at once.
+      sessions["alice-token"] = () => Response.json(member);
+      expect((await get("/v1/me")).status).toBe(200);
+    },
+  );
+
+  it("gives the backend three seconds to say, then says so and logs it as a timeout", async () => {
+    const lines: unknown[] = [];
+    const identities = Identities.layer.pipe(
+      Layer.provide(Layer.succeed(AppConfig)(testConfig())),
+      Layer.provide(FetchHttpClient.layer),
+      Layer.provide(
+        Layer.succeed(FetchHttpClient.Fetch)(Object.assign(unanswered, { preconnect: globalThis.fetch.preconnect })),
+      ),
+    );
+    const outcome = await Effect.runPromise(
+      Effect.gen(function* () {
+        const asking = yield* Effect.forkChild(Identities.use((service) => service.identify("alice-token")));
+        yield* TestClock.adjust("2999 millis");
+        const before = asking.pollUnsafe();
+        yield* TestClock.adjust("1 milli");
+        return { before, after: yield* Fiber.join(asking) };
+      }).pipe(
+        Effect.provide(identities),
+        Effect.provide(
+          Logger.layer([Logger.map(Logger.formatStructured, (line) => void lines.push(line.annotations))]),
+        ),
+        Effect.provideService(References.MinimumLogLevel, "All"),
+        Effect.provide(TestClock.layer()),
+      ),
+    );
+
+    expect(outcome).toEqual({ before: undefined, after: { status: "unavailable" } });
+    expect(lines).toEqual([{ route: "/auth/web/me", reason: "timeout" }]);
   });
 
   it("asks the backend once for several requests in the same minute", async () => {
@@ -480,8 +552,9 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     const refreshing = get("/v1/me/quests?sync=1");
     await feed.asked;
 
+    const inLine = nextInLine();
     const rerolling = reroll("daily:1");
-    expect(await soon(rerolling)).toBe("waiting");
+    await inLine;
     feed.answer();
 
     expect((await refreshing).status).toBe(200);
@@ -500,8 +573,9 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     const scheduled = services.run(runCreditSync("recent"));
     await feed.asked;
 
+    const inLine = nextInLine();
     const rerolling = reroll("daily:1");
-    expect(await soon(rerolling)).toBe("waiting");
+    await inLine;
     feed.answer();
 
     expect(await scheduled).toMatchObject({ status: "synced" });
@@ -517,8 +591,9 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     const first = get("/v1/me/quests?sync=1");
     await feed.asked;
 
+    const inLine = nextInLine();
     const second = get("/v1/me/quests?sync=1");
-    expect(await soon(second)).toBe("waiting");
+    await inLine;
     feed.answer();
 
     expect(await (await first).json()).toMatchObject({ recently_completed: [{ id: "daily:1" }] });

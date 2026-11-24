@@ -2,6 +2,7 @@ import { Cache, Context, Duration, Effect, Exit, Layer, Redacted, Schema } from 
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import type { Identity } from "../api/api.ts";
+import { askBackend, logFailure } from "../backend/failure.ts";
 import { AppConfig } from "../config.ts";
 import { PlayerUuid } from "../wire.ts";
 
@@ -53,17 +54,20 @@ export class Identities extends Context.Service<
             ),
           )
           .pipe(
-            Effect.flatMap((response): Effect.Effect<IdentityResult, unknown> => {
-              if (response.status === 401) {
-                return Effect.succeed({ status: "unauthorized" });
-              }
-              return HttpClientResponse.filterStatusOk(response).pipe(
-                Effect.flatMap(HttpClientResponse.schemaBodyJson(BackendIdentity)),
-                Effect.map((body) => toResult(token, body)),
-              );
-            }),
-            Effect.timeout(TIMEOUT),
-            Effect.catch(() => Effect.succeed<IdentityResult>({ status: "unavailable" })),
+            Effect.flatMap((response) =>
+              response.status === 401
+                ? Effect.succeed<IdentityResult>({ status: "unauthorized" })
+                : HttpClientResponse.filterStatusOk(response).pipe(
+                    Effect.flatMap(HttpClientResponse.schemaBodyJson(BackendIdentity)),
+                    Effect.map((body) => toResult(token, body)),
+                  ),
+            ),
+            askBackend("/auth/web/me", TIMEOUT),
+            Effect.catchTag("BackendFailure", (failure) =>
+              logFailure("The backend could not say whose a session is", failure).pipe(
+                Effect.as<IdentityResult>({ status: "unavailable" }),
+              ),
+            ),
           );
 
       const confirmed = yield* Cache.makeWith(ask, {

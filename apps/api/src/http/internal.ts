@@ -2,12 +2,11 @@ import { timingSafeEqual } from "node:crypto";
 
 import { isLeaf, parsePlayerId, REQUEST_KINDS, type RequestKind } from "@sequoia-leaf/core";
 import { Clock, Effect, Layer, Redacted } from "effect";
-import { HttpServerRequest, HttpServerResponse } from "effect/http";
+import { HttpServerRequest } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 
 import { Backend, LeafApi, PurchaseBodyErrors } from "../api/api.ts";
 import { Invalid, PurchaseRefused, Unauthorized } from "../api/errors.ts";
-import type * as Body from "../api/schemas.ts";
 import { AppConfig } from "../config.ts";
 import { Ledger } from "../ledger/store.ts";
 import { Purchases } from "../purchases/store.ts";
@@ -84,10 +83,10 @@ export const InternalHandlers = HttpApiBuilder.group(LeafApi, "internal", (handl
             return yield* invalidPlayer;
           }
           const { balance } = yield* ledger.account(playerId);
-          return HttpServerResponse.jsonUnsafe({
+          return {
             player_id: playerId,
             balance,
-          } satisfies typeof Body.PlayerLeaf.Type);
+          };
         }),
       )
       .handle("buy", ({ params, payload }) =>
@@ -104,11 +103,11 @@ export const InternalHandlers = HttpApiBuilder.group(LeafApi, "internal", (handl
           if (bought.status === "refused") {
             return yield* new PurchaseRefused({ code: bought.reason, message: REFUSED[bought.reason] });
           }
-          return HttpServerResponse.jsonUnsafe({
+          return {
             key: params.key,
             status: "paid",
             balance: bought.balance,
-          } satisfies typeof Body.Purchased.Type);
+          };
         }),
       )
       .handle("cancel", ({ params }) =>
@@ -117,10 +116,10 @@ export const InternalHandlers = HttpApiBuilder.group(LeafApi, "internal", (handl
             return yield* invalidKey;
           }
           const cancelled = yield* purchases.cancel(params.key, yield* Clock.currentTimeMillis);
-          return HttpServerResponse.jsonUnsafe({
+          return {
             key: params.key,
             status: cancelled.status,
-          } satisfies typeof Body.PurchaseCancelled.Type);
+          };
         }),
       );
   }),

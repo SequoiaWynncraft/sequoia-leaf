@@ -375,8 +375,7 @@ export const membersOf = (trait: TraitId): FigureId[] =>
 
 /**
  * The postcard the table leaves for the town (the kit's `postcard.ts`): a raid under way and where
- * it got to, or the board set out; and every boss ever beaten, for carved figures in the member's
- * camp. The table keeps no till.
+ * it got to, or the board set out. The table keeps no till.
  */
 export function postcard(run: RunView | null, almanac: Almanac): Postcard {
   const trail = run ? TRAILS[run.trail] : undefined;
@@ -386,7 +385,7 @@ export function postcard(run: RunView | null, almanac: Almanac): Postcard {
       : almanac.runs === 0
         ? "The board is set out. One crab is uncounted."
         : "The board is set out for another raid.";
-  return { waiting, trophies: [...new Set(almanac.bosses.flat())], till: 0 };
+  return { waiting, till: 0 };
 }
 
 /** A name at the start of a sentence or a line: "a Moth" is "A Moth" there. */

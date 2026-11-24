@@ -144,31 +144,13 @@ describe("opening a game on Leaf", () => {
     expect(troubles).toEqual(cases.map(([, trouble]) => ({ trouble })));
   });
 
-  test("a state Leaf still cannot read once waited for is said so, and the page does not load again", async () => {
+  test("a state Leaf still cannot read once waited for, each second for 30 seconds, is said so, and the page does not load again", async () => {
+    expect(NOT_YET).toEqual({ every: 1000, tries: 30 });
     world = standin({ "GET /v1/game/play/raid": { status: 409, body: { code: "state_unreadable", message: "Kept" } } });
     expect(await openPlay("raid", COUNTER, { player: "p", notYet: { every: 1, tries: 3 } })).toEqual({
       trouble: "unreadable",
     });
     expect(world.reloaded.count).toBe(0);
-    expect(world.sent).toHaveLength(4);
-  });
-
-  test("a Leaf without the play service yet (a deploy half done) is asked again each second, for 30 seconds", async () => {
-    expect(NOT_YET).toEqual({ every: 1000, tries: 30 });
-    const notYet = { status: 404, body: { code: "not_found", message: "No such route" } };
-    const { routes } = counterLeaf(4);
-    let old = 2;
-    world = standin({
-      "GET /v1/game/play/raid": () => (old-- > 0 ? notYet : routes["GET /v1/game/play/raid"]()),
-    });
-    const play = await openPlay<Count, Add, string>("raid", COUNTER, { player: "p", notYet: { every: 1, tries: 3 } });
-    expect("trouble" in play ? play.trouble : play.state).toEqual({ n: 4 });
-    expect(world.sent).toHaveLength(3);
-    world.done();
-    world = standin({ "GET /v1/game/play/raid": notYet });
-    expect(await openPlay("raid", COUNTER, { player: "p", notYet: { every: 1, tries: 3 } })).toEqual({
-      trouble: "noserver",
-    });
     expect(world.sent).toHaveLength(4);
   });
 
@@ -530,25 +512,6 @@ describe("sending commands", () => {
     const [a = "", b = ""] = [sent[6], sent[9]];
     expect(sent).toEqual(["GET", "GET", "GET", "GET", "GET", "GET", a, a, a, b, b, b]);
     expect(a).not.toEqual(b);
-  });
-
-  test("a batch that reaches a Leaf without the play service yet goes again in a moment, until it has given up for no server", async () => {
-    const { leaf, routes } = counterLeaf(0);
-    let old = 2;
-    const notYet = { status: 404, body: { code: "not_found", message: "No such route" } };
-    const play = await opened({
-      ...routes,
-      "POST /v1/game/play/raid": (sent) => (old-- > 0 ? notYet : routes["POST /v1/game/play/raid"](sent)),
-    });
-    expect(await play.send({ do: "add", by: 2 })).toEqual({ notes: ["added 2"] });
-    expect(leaf.n).toBe(2);
-    old = 99;
-    const troubles: string[] = [];
-    play.onTrouble((why) => troubles.push(why));
-    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "noserver" });
-    expect(troubles).toEqual(["noserver"]);
-    // The first try and three more.
-    expect(world?.sent.filter((s) => s.method === "POST")).toHaveLength(3 + 4);
   });
 
   test("asking for the state again when signed out tells the page so", async () => {

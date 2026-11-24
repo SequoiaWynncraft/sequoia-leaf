@@ -1,6 +1,8 @@
 import type { RequestKind } from "@sequoia-leaf/core";
 import { Duration, Effect, type Redacted, Schema } from "effect";
-import { type HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http";
+import { type HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+
+import { askBackend, type Asked, logFailure, UnexpectedStatus } from "./failure.ts";
 
 /**
  * The guild's requests (an aspect or a tome), as the backend's reward queue (`/api/reward-queue`)
@@ -93,16 +95,15 @@ export function guildRequests(client: HttpClient.HttpClient, backendUrl: string)
     /** Whether the member may pay Leaf for a request now, and what each costs. */
     look: (session: Redacted.Redacted): Effect.Effect<Looked> =>
       asMember(HttpClientRequest.get(new URL("/api/reward-queue/eligibility", backendUrl)), session).pipe(
-        Effect.flatMap((response): Effect.Effect<Looked, unknown> => {
+        Effect.flatMap((response): Effect.Effect<Looked, Asked> => {
           if (response.status >= 400 && response.status < 500) {
             const otherwise = response.status === 401 ? SIGN_IN : NOT_LINKED;
             return Effect.map(reasonOf(response, otherwise), (message) => ({ status: "refused", message }));
           }
           if (response.status !== 200) {
-            return Effect.succeed({ status: "unavailable" });
+            return Effect.fail(new UnexpectedStatus({ status: response.status }));
           }
-          return response.json.pipe(
-            Effect.flatMap(Schema.decodeUnknownEffect(Eligibility)),
+          return HttpClientResponse.schemaBodyJson(Eligibility)(response).pipe(
             Effect.map((e) => ({
               status: "ok",
               whyNot: e.leaf_eligible
@@ -114,9 +115,9 @@ export function guildRequests(client: HttpClient.HttpClient, backendUrl: string)
             })),
           );
         }),
-        Effect.timeout(LOOK_FOR),
-        Effect.catch((error) =>
-          Effect.logWarning(`The backend could not be asked about the guild's requests: ${whatOf(error)}`).pipe(
+        askBackend("/api/reward-queue/eligibility", LOOK_FOR),
+        Effect.catchTag("BackendFailure", (failure) =>
+          logFailure("The backend could not be asked about the guild's requests", failure).pipe(
             Effect.as<Looked>({ status: "unavailable" }),
           ),
         ),
@@ -130,7 +131,7 @@ export function guildRequests(client: HttpClient.HttpClient, backendUrl: string)
         ),
         session,
       ).pipe(
-        Effect.flatMap((response): Effect.Effect<Made, unknown> => {
+        Effect.flatMap((response): Effect.Effect<Made, Asked> => {
           // Nothing there to make it just now (503): nothing was made or taken, and it may be tried again.
           if (response.status === 503) {
             return Effect.map(reasonOf(response, BUSY), (message) => ({ status: "busy", message }));
@@ -146,25 +147,19 @@ export function guildRequests(client: HttpClient.HttpClient, backendUrl: string)
             return Effect.map(reasonOf(response, otherwise), (message) => ({ status: "refused", message }));
           }
           if (response.status !== 201) {
-            return Effect.fail(`answered ${response.status}`);
+            return Effect.fail(new UnexpectedStatus({ status: response.status }));
           }
-          return response.json.pipe(
-            Effect.flatMap(Schema.decodeUnknownEffect(Created)),
+          return HttpClientResponse.schemaBodyJson(Created)(response).pipe(
             Effect.map((created) => ({ status: "made", position: created.position, paid: created.leaf_paid })),
           );
         }),
-        Effect.timeout(MAKE_FOR),
-        Effect.catch((error) =>
-          Effect.logWarning(`Whether a ${kind} request was made is not known: ${whatOf(error)}`).pipe(
+        askBackend("/api/reward-queue/requests", MAKE_FOR),
+        Effect.catchTag("BackendFailure", (failure) =>
+          logFailure("Whether a request was made is not known", failure).pipe(
+            Effect.annotateLogs({ kind }),
             Effect.as<Made>({ status: "unknown" }),
           ),
         ),
       ),
   };
 }
-
-/**
- * What went wrong, for a log line: its message (a failed request's names its method and address),
- * never the request itself, which carries the member's session.
- */
-const whatOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));

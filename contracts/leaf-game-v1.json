@@ -1437,39 +1437,6 @@
       "version": 17
     }
   },
-  "PUT /v1/game/saves/{slot}, a page from before the town moved": {
-    "request": {
-      "method": "PUT",
-      "path": "/v1/game/saves/town",
-      "body": {
-        "player": "10000000-0000-0000-0000-000000000001",
-        "version": 1,
-        "data": {}
-      }
-    },
-    "status": 409,
-    "body": {
-      "code": "not_you",
-      "message": "This page is signed in as someone else now. Load it again"
-    }
-  },
-  "POST /v1/game/coins, a page from before the town moved": {
-    "request": {
-      "method": "POST",
-      "path": "/v1/game/coins",
-      "body": {
-        "player": "10000000-0000-0000-0000-000000000001",
-        "id": "old-1",
-        "amount": 3,
-        "reason": "chest"
-      }
-    },
-    "status": 409,
-    "body": {
-      "code": "not_you",
-      "message": "This page is signed in as someone else now. Load it again"
-    }
-  },
   "GET /v1/game/play/{game}, the town": {
     "request": {
       "method": "GET",

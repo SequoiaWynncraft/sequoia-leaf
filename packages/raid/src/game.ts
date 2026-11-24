@@ -405,12 +405,7 @@ function play(s: Table, c: RunCommand, ctx: Ctx): Answer {
     });
   }
   const coins = run.stage.phase === "over" ? finish(s, run, notes, log, ctx.room) : [];
-  // A member's party as the fight was decided from, left for others to meet on that trail, in that
-  // room (its place in `ROOMS`).
-  const party =
-    c.do === "fight" && !ctx.player.guest && run.stage.phase === "fight" ? run.stage.fight.setup.sides[0] : undefined;
-  if (!party) return { state: s, notes, coins, log };
-  return { state: s, notes, coins, log, keep: [{ slot: `board:${run.trail}:${run.room}`, data: party }] };
+  return { state: s, notes, coins, log };
 }
 
 /**

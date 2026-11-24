@@ -1,11 +1,9 @@
 import { PERIODS, tallyBoard } from "@sequoia-leaf/core";
 import { Effect } from "effect";
-import { HttpServerResponse } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 
 import { CurrentIdentity, LeafApi } from "../../api/api.ts";
 import { Missing } from "../../api/errors.ts";
-import type * as Body from "../../api/schemas.ts";
 import { Tallies } from "../../tally/store.ts";
 import { iso } from "./shared.ts";
 
@@ -25,7 +23,7 @@ export const GameTallyHandlers = HttpApiBuilder.group(LeafApi, "gameTally", (han
             }
             const { playerId } = yield* CurrentIdentity;
             const shown = yield* tallies.board(board, period, playerId);
-            return HttpServerResponse.jsonUnsafe({
+            return {
               board: board.id,
               period,
               from: shown.from === null ? null : iso(shown.from),
@@ -38,7 +36,7 @@ export const GameTallyHandlers = HttpApiBuilder.group(LeafApi, "gameTally", (han
                 you: row.playerId === playerId,
               })),
               you: shown.you,
-            } satisfies typeof Body.Tally.Type);
+            };
           }),
         )
     );

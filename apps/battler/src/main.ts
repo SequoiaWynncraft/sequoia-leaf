@@ -84,7 +84,7 @@ async function boot(): Promise<void> {
     return;
   }
   const { signIn, me } = where;
-  const card = (why: Parameters<typeof troubleCard>[0]): void => troubleCard(why, signIn, NEEDS_LEAF);
+  const card = (why: Parameters<typeof troubleCard>[0]): void => troubleCard(why, signIn);
   const trouble = await openTable(me.id, card);
   if (trouble) {
     failedToOpen(trouble);
