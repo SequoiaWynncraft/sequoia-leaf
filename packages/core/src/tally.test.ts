@@ -14,12 +14,12 @@ import {
 } from "./tally.ts";
 
 describe("the Tally's boards", () => {
-  it("each have an id of their own, a group, a name and one line saying what they count", () => {
+  it("each have an id of their own, a group, a name, and a line only where the name leaves something out", () => {
     expect(new Set(TALLY_BOARDS.map((b) => b.id)).size).toBe(TALLY_BOARDS.length);
     for (const b of TALLY_BOARDS) {
       expect(TALLY_GROUPS).toContain(b.group);
       expect(b.name.length).toBeGreaterThan(0);
-      expect(b.counts).toMatch(/^[A-Z].*\.$/);
+      if (b.counts !== undefined) expect(b.counts).toMatch(/^[A-Z].*\.$/);
     }
   });
 
@@ -36,7 +36,7 @@ describe("the Tally's boards", () => {
   });
 
   it("count nothing Leaf or Coins can buy", () => {
-    const words = TALLY_BOARDS.map((b) => `${b.name} ${b.counts}`.toLowerCase()).join(" ");
+    const words = TALLY_BOARDS.map((b) => `${b.name} ${b.counts ?? ""}`.toLowerCase()).join(" ");
     for (const bought of ["pull", "spent", "balance", "bought", "set out", "pieces"]) {
       expect(words).not.toContain(bought);
     }
