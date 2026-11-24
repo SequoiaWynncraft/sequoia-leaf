@@ -23,6 +23,23 @@ interface Layer {
 
 const layers: Layer[] = [];
 let made = 0;
+let quiet = false;
+
+/** Whether the focus is being given back (`giveBack`): nothing that shows itself on focus (a tip, a card) does. */
+export const givingBack = (): boolean => quiet;
+
+/**
+ * Puts the focus back on what had it, with nothing showing itself for that focus: a link given the
+ * focus back must not open its card again, nor a button show its tip.
+ */
+export function giveBack(to: HTMLElement): void {
+  quiet = true;
+  try {
+    to.focus({ preventScroll: true });
+  } finally {
+    quiet = false;
+  }
+}
 
 /** The things in an element Tab stops at, in order. */
 const stops = (node: HTMLElement): HTMLElement[] =>
@@ -41,7 +58,7 @@ export function layer(at: () => HTMLElement | null, close: (() => void) | null):
     layers.splice(i, 1);
     const now = document.activeElement;
     const lost = now === null || now === document.body || !now.isConnected || (at()?.contains(now) ?? false);
-    if (l.keyed && lost && l.back instanceof HTMLElement && l.back.isConnected) l.back.focus({ preventScroll: true });
+    if (l.keyed && lost && l.back instanceof HTMLElement && l.back.isConnected) giveBack(l.back);
   };
 }
 

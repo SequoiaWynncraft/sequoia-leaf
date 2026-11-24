@@ -16,7 +16,7 @@
  *
  * The rules of that (`Deck`, `partsOf`) touch no page and are tested; the rest draws them.
  */
-import { layer } from "./dialog.ts";
+import { givingBack, layer } from "./dialog.ts";
 import { add, asking, asksAgain, el, icon, pressedTwice, unheld } from "./dom.ts";
 import { goesWith, iconButton, LONG_PRESS, tip, tipAt, tipOff } from "./tip.ts";
 
@@ -822,7 +822,7 @@ export function link(target: HTMLElement, ref: Ref, opts: LinkOpts = {}): void {
     deck.leave(target);
   });
   target.addEventListener("focus", () => {
-    if (!target.matches(":focus-visible") || inCard()) return;
+    if (!target.matches(":focus-visible") || inCard() || givingBack()) return;
     deck.point(ref);
     deck.rest(ref, target, "key", target, side);
   });
@@ -965,12 +965,12 @@ if (typeof window !== "undefined") {
     true,
   );
   window.addEventListener("keydown", (e) => {
+    // A pinned card is a layer, which has its Escape first (`dialog.ts`); this is for a passing one,
+    // which holds no focus, so the focus stays where it is.
     if (e.key !== "Escape" || (!deck.open && !deck.waiting())) return;
     // The card took this Escape: a page listening after it should not put anything else away too.
     e.preventDefault();
-    const from = deck.open?.from;
     deck.close();
-    if (from instanceof HTMLElement && from.isConnected) from.focus({ preventScroll: true });
   });
   window.addEventListener("resize", settle);
   // A passing card goes with the thing it was shown for, as a tip does: taken off the page (a pick chosen, a list drawn again) or left by the mouse.

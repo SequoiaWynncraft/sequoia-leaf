@@ -7,6 +7,7 @@
  * (`aria-describedby`). A thing that only explains itself is made a button, named by its title and
  * its words, so Tab reaches it and a screen reader says what it is.
  */
+import { givingBack } from "./dialog.ts";
 import { add, el } from "./dom.ts";
 
 type Words = string | (() => string);
@@ -152,7 +153,7 @@ export function tip(target: HTMLElement, title: Words, text?: Words): void {
     if (e.pointerType === "mouse") tipOff(target);
   });
   target.addEventListener("focus", () => {
-    if (!target.matches(":focus-visible")) return;
+    if (!target.matches(":focus-visible") || givingBack()) return;
     beside();
     byKey = true;
   });
