@@ -9,7 +9,7 @@
  * place a strip that says whose yard it is.
  */
 
-import { GOALS, isFilled, NODES, power, TICK_MS, tierName } from "@sequoia-leaf/factory";
+import { GOALS, isFilled, power, TICK_MS, tierName } from "@sequoia-leaf/factory";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
@@ -20,13 +20,12 @@ import { tip } from "@sequoia-leaf/kit/tip.ts";
 
 import { S } from "../state.ts";
 import { collect, keepScreen } from "../yard.ts";
-import { wantsShort } from "./goal.ts";
-import { handLabel } from "./notes.ts";
+import { nodeKind, wantsShort } from "./goal.ts";
 import { openPanel, type PanelId, togglePanel } from "./panels.ts";
 import { $, button, pic, shows, when, type YardIcon, yardIcon } from "./parts.ts";
 import { orderRef } from "./refs.ts";
 import { studyStrip } from "./research.ts";
-import { givenTo, researchOpen, takeable, tierOpen } from "./standing.ts";
+import { givenTo, nextUp, nextWords, researchOpen, takeable, tierOpen } from "./standing.ts";
 import { hasViews, refreshWalk, wrongCount } from "./views.ts";
 
 const books = new Map<PanelId, HTMLElement>();
@@ -71,27 +70,34 @@ function powerPlaque(): () => void {
   );
 }
 
+/**
+ * The box in the corner: the node in hand, what it wants (each a picture, a bar and a count) and what
+ * comes into hand after it; pressed, it opens Orders. With nothing in hand it says what comes next in
+ * the tier screen's words (the goal waited on, with its lock; projects to take; or everything done),
+ * and pressed, it opens the tier's screen, where that is.
+ */
 function tracker(): () => void {
   const host = $("track");
   host.addEventListener("click", () => {
-    togglePanel("orders");
+    togglePanel(S.world.hand === -1 && tierOpen() ? "tier" : "orders");
   });
-  // Tapping opens the orders; pointing (or a finger kept on it) shows the order's card.
+  // Pointing (or a finger kept on it) shows the card of the node in hand, or of the goal waited on.
   link(host, orderRef("story"), { acts: true });
   return shows(
     () => {
       const w = S.world;
-      const o = w.hand === -1 ? undefined : GOALS[w.hand];
       return {
-        label: handLabel(),
-        from: w.hand === -1 ? null : (NODES[w.hand]?.from ?? null),
-        title: o?.title ?? null,
+        hand: w.hand,
+        next: w.hand === -1 ? nextUp() : null,
         ready: w.board.filter((s) => isFilled(s.want, s.filled)).length,
         wants: w.hand === -1 ? [] : givenTo(w.hand),
         after: GOALS[w.queue[0] ?? -1]?.title ?? null,
       };
     },
     (p) => {
+      const next = p.next;
+      const said = next ? nextWords(next) : null;
+      const label = p.hand === -1 ? (said?.label ?? "") : nodeKind(p.hand);
       // What it wants, by the one part that lays such rows out: here each a picture, a bar and a count.
       const wanted = wantsShort(p.wants);
       host.replaceChildren(
@@ -99,11 +105,18 @@ function tracker(): () => void {
           "div",
           "k-row",
           {},
-          el("span", "k-label k-grow", { text: p.from ? `${p.label} · ${p.from}` : p.label }),
+          el("span", "k-label k-grow", { text: label }),
           p.ready > 0 ? el("span", "k-chip lit", { text: `${p.ready} to hand over` }) : null,
         ),
-        el("div", "", { text: p.title ?? "No project in hand" }),
+        el("div", "", { text: said?.title ?? GOALS[p.hand]?.title ?? "" }),
         ...(wanted ? [wanted.node] : []),
+        ...(said === null
+          ? []
+          : [
+              next?.is === "locked"
+                ? el("span", "k-row", {}, icon("lock"), said.line)
+                : el("span", next?.is === "done" ? "k-d" : "k-label", { text: said.line }),
+            ]),
         ...(p.after === null ? [] : [el("span", "k-label then", { text: `Then: ${p.after}` })]),
       );
     },

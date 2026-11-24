@@ -18,7 +18,7 @@ import {
 } from "@sequoia-leaf/factory";
 
 import { S } from "../state.ts";
-import { type Begin, type Count, type Given, givenIn, type Need, type Stands } from "./goal.ts";
+import { type Begin, type Count, type Given, givenIn, type Need, nodeKind, type Stands } from "./goal.ts";
 
 /** Whether the tier has a screen of its own: from tier 1 on, and not in somebody else's yard. */
 export const tierOpen = (): boolean => S.world.open.tier >= 1 && S.visiting === null;
@@ -36,16 +36,43 @@ export const nodesOpen = (): Goal[] =>
 export const takeable = (): Goal[] => nodesOpen().filter((g) => g !== S.world.hand && ready(S.world.open, g));
 
 /**
- * What to do with nothing in hand, in a sentence: take a project, while the tiers open have one not
- * done; open the tier for its commission, while that waits on something first; or nothing more yet.
+ * What a goal waits on before anything counts toward it, as a count of what it needs first: "9
+ * research left", "1 project left"; nothing for a goal that is open or done.
  */
-export function whatNext(): string {
+export function lockOf(g: Goal): string | null {
   const w = S.world;
-  const tier = w.open.tier;
+  if (w.open.done[g] === 1 || ready(w.open, g)) return null;
+  const left = needsOf(g).filter((n) => n.stands !== "done" && n.stands !== "known");
+  if (left.length === 0) return "Not open yet";
+  const nodes = left.filter((n) => isNode(n.goal)).length;
+  const noun = nodes === 0 ? " research" : nodes < left.length ? "" : left.length === 1 ? " project" : " projects";
+  return `${left.length}${noun} left`;
+}
+
+/**
+ * What comes next with nothing in hand: projects to take, and how many; else the goal the tiers open
+ * wait on (the tier's commission first), with what opens it; else nothing, every project being done.
+ */
+export type Next =
+  | { readonly is: "take"; readonly count: number }
+  | { readonly is: "locked"; readonly goal: Goal; readonly lock: string }
+  | { readonly is: "done" };
+
+export function nextUp(): Next {
+  const w = S.world;
+  const count = takeable().length;
+  if (count > 0) return { is: "take", count };
   const open = nodesOpen().filter((g) => w.open.done[g] !== 1);
-  if (open.some((g) => GOALS[g]?.kind === "project")) return `Take a project in Tier ${tier}.`;
-  if (open.length > 0) return `Open Tier ${tier} for its commission and what it needs first.`;
-  return "More is being built.";
+  const goal = open.find((g) => GOALS[g]?.kind === "commission") ?? open[0];
+  const lock = goal === undefined ? null : lockOf(goal);
+  return goal === undefined || lock === null ? { is: "done" } : { is: "locked", goal, lock };
+}
+
+/** What comes next, in the words every screen says it in: a small line over a title, the title, and a line under it. */
+export function nextWords(n: Next): { readonly label: string; readonly title: string; readonly line: string } {
+  if (n.is === "take") return { label: `Tier ${S.world.open.tier}`, title: "Take a project", line: `${n.count} ready` };
+  if (n.is === "locked") return { label: `Next: ${nodeKind(n.goal)}`, title: GOALS[n.goal]?.title ?? "", line: n.lock };
+  return { label: "", title: "Every project is done", line: "More tiers are coming." };
 }
 
 /** The research of the tiers open, in the table's order. */

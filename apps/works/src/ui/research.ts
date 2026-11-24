@@ -17,7 +17,6 @@ import {
   LINE,
   litOf,
   rate,
-  ready,
   STATES,
   status,
   STUDY,
@@ -31,10 +30,10 @@ import { el } from "@sequoia-leaf/kit/dom.ts";
 import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
 import { doNow } from "../yard.ts";
-import { head, type Listed, type Need, needs, some, unlocks, type Wants, wants, wantsIn } from "./goal.ts";
+import { head, type Listed, lockChip, type Need, needs, some, unlocks, type Wants, wants, wantsIn } from "./goal.ts";
 import { $, button, fitted, shows } from "./parts.ts";
 import { itemRef } from "./refs.ts";
-import { given, needsOf, researchOf, studyStands } from "./standing.ts";
+import { given, lockOf, needsOf, researchOf, studyStands } from "./standing.ts";
 
 /** What the screen asks of the rest of the page: everything over the yard brought up to date. */
 export const researchHooks: { changed: () => void } = { changed: () => {} };
@@ -105,8 +104,8 @@ interface Open {
   readonly goal: Goal;
   /** Whether the rules would put it in the line now. */
   readonly may: boolean;
-  /** Whether it waits on research not yet known. */
-  readonly waiting: boolean;
+  /** While it waits on research not yet known, what is left before it opens: "1 research left". */
+  readonly lock: string | null;
   readonly wants: Wants;
   readonly needs: readonly Need[];
 }
@@ -136,7 +135,7 @@ export function researchPrint(): {
       .map((g) => ({
         goal: g,
         may: studyRefusal(w, g) === null,
-        waiting: !ready(w.open, g),
+        lock: lockOf(g),
         wants: wanted(g),
         needs: needsOf(g),
       })),
@@ -207,10 +206,10 @@ export function researchScreen(body: HTMLElement): () => void {
       });
       return el(
         "div",
-        `k-card goal plan${o.waiting ? " locked" : ""}`,
+        `k-card goal plan${o.lock === null ? "" : " locked"}`,
         { "data-research": GOALS[g]?.id ?? "" },
-        head(g, o.waiting ? null : study),
-        ...lists(wants(o.wants, got(g)), needs(o.needs, { given }), unlocks(g)),
+        head(g, o.lock === null ? study : lockChip(o.lock)),
+        ...lists(wants(o.wants, got(g), o.lock !== null), needs(o.needs, { given }), unlocks(g)),
       );
     };
     const branch = (o: Open): HTMLElement[] => {

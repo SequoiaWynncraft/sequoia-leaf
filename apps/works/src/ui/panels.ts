@@ -24,7 +24,6 @@ import {
   KIND_INFO,
   litOf,
   MILL,
-  NODES,
   power,
   STUDY,
   SWAP_EVERY,
@@ -44,11 +43,24 @@ import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
 import { doNow } from "../yard.ts";
 import { board } from "./board.ts";
-import { head, leaves, type Listed, type Need, needs, some, unlocks, type Wants, wants, wantsIn } from "./goal.ts";
-import { feed, handLabel } from "./notes.ts";
+import {
+  leaves,
+  type Listed,
+  lockChip,
+  type Need,
+  needs,
+  paper,
+  some,
+  unlocks,
+  type Wants,
+  wants,
+  wantsIn,
+  wantsOrder,
+} from "./goal.ts";
+import { feed } from "./notes.ts";
 import { $, button, shows, wantWords, yardIcon } from "./parts.ts";
 import { researchHooks, researchScreen } from "./research.ts";
-import { given, needsOf, researchOpen, tierOpen, whatNext } from "./standing.ts";
+import { given, needsOf, type Next, nextUp, nextWords, researchOpen, tierOpen } from "./standing.ts";
 import { beginButton, tierHooks, tierScreen } from "./tier.ts";
 import { sheet, sheetIcon, sheetTitle } from "./views.ts";
 
@@ -95,9 +107,8 @@ export function placed<T extends Placed>(places: readonly number[], hung: readon
   return [...(kept.length < places.length ? filledFirst(kept) : kept), ...filledFirst(fresh)];
 }
 
-/** An order of the board as the orders panel prints it: its words and pay, what it wants, whether it is filled or counts yet, and why it cannot be swapped now. */
+/** An order of the board as the orders panel prints it: its title, line and pay, what it wants, whether it is filled or counts yet, and why it cannot be swapped now. */
 interface OrderLine extends Placed {
-  readonly from: string;
   readonly title: string;
   readonly line: string;
   readonly pay: number;
@@ -111,14 +122,13 @@ export const plural = (name: string): string =>
   /[^aeiou]y$/.test(name) ? `${name.slice(0, -1)}ies` : /(?:ch|sh|s|x)$/.test(name) ? `${name}es` : `${name}s`;
 
 /**
- * What the orders panel prints: the node in hand, how it is spoken of and what it still waits on;
- * the tier, whose screen a node is taken in; whether the board is up and its places; and each order.
+ * What the orders panel prints: the node in hand and what it still waits on, or with nothing in hand
+ * what comes next; whether the board is up and its places; and each order.
  */
 export function ordersPrint(): {
   readonly hand: Goal | -1;
-  readonly label: string;
   readonly needs: readonly Need[];
-  readonly next: string;
+  readonly next: Next | null;
   readonly board: boolean;
   readonly hooks: number;
   readonly orders: readonly OrderLine[];
@@ -126,15 +136,13 @@ export function ordersPrint(): {
   const w = S.world;
   return {
     hand: w.hand,
-    label: handLabel(),
     needs: w.hand === -1 ? [] : needsOf(w.hand, true),
-    next: whatNext(),
+    next: w.hand === -1 ? nextUp() : null,
     board: w.open.board,
     hooks: w.open.hooks,
     orders: w.board.map((s) => ({
       id: s.id,
       full: isFilled(s.want, s.filled),
-      from: s.from,
       title: s.title,
       line: s.line,
       pay: s.pay,
@@ -152,10 +160,9 @@ function orders(_art: Art, body: HTMLElement): () => void {
     live = [];
     const g = p.hand;
     const o = g === -1 ? undefined : GOALS[g];
-    const node = g === -1 ? undefined : NODES[g];
     const kids: HTMLElement[] = [];
-    if (g !== -1 && o && node) {
-      // The node in hand, on paper: who asks and what they say, and its lists.
+    if (g !== -1 && o) {
+      // The node in hand, on paper.
       const lists = some(
         wants(wantsIn(o.want), () => S.world.got[g] ?? null),
         needs(p.needs, { given, begin: beginButton }),
@@ -163,39 +170,35 @@ function orders(_art: Art, body: HTMLElement): () => void {
         leaves(g),
       );
       live.push(...lists);
+      kids.push(paper(g, o.pay > 0 ? el("span", "k-chip", {}, amount("coin", o.pay)) : null, lists));
+    } else if (p.next) {
+      // Nothing in hand: what comes next, as the corner says it, and the way to the tier's screen.
+      const { label, title, line } = nextWords(p.next);
       kids.push(
         el(
           "div",
           "k-paper goal",
           {},
-          el("div", "k-label", { text: `${p.label} · from ${node.from}` }),
-          head(g, o.pay > 0 ? el("span", "k-chip", {}, amount("coin", o.pay)) : null),
-          el("div", "k-read k-dim", { text: node.say }),
-          ...lists.map((l) => l.node),
+          label ? el("div", "k-label", { text: label }) : null,
+          el("div", "k-title", { text: title }),
+          p.next.is === "locked" ? lockChip(line) : el("div", "k-d", { text: line }),
+          p.next.is === "done" || !tierOpen()
+            ? null
+            : button("sm", [`Open ${tierName(S.world.open.tier).split(":")[0] ?? ""}`], () => openPanel("tier")),
         ),
       );
-    } else
-      kids.push(
-        el(
-          "div",
-          "k-paper goal",
-          {},
-          el("div", "k-title", { text: "No project in hand" }),
-          el("div", "k-read k-dim", { text: p.next }),
-        ),
-      );
-    kids.push(el("div", "k-label", { text: "Side orders" }));
+    }
     if (!p.board && BOARD_AT !== undefined)
       kids.push(
         el("div", "k-d", {
-          text: `Unlock when you fill lesson ${LESSONS.indexOf(BOARD_AT) + 1}: ${GOALS[BOARD_AT]?.title}.`,
+          text: `Side orders open after lesson ${LESSONS.indexOf(BOARD_AT) + 1}: ${GOALS[BOARD_AT]?.title}.`,
         }),
       );
     const shown = placed(places, p.orders);
     places = shown.map((s) => s.id);
     for (const s of shown) {
       const filled = (): Counts | null => S.world.board.find((b) => b.id === s.id)?.filled ?? null;
-      const rows = wants(s.want, filled);
+      const rows = wantsOrder(s.want, filled);
       if (rows) live.push(rows);
       const ask = `swap:${s.id}`;
       const act = s.full
@@ -225,23 +228,24 @@ function orders(_art: Art, body: HTMLElement): () => void {
           "Swap",
           s.why ?? `Replaces this order with a new one. Free, once every ${(SWAP_EVERY * TICK_MS) / 60_000} minutes.`,
         );
-      // The button is in the card's first line, so it is in the same spot whatever the card's height.
+      // Its title names what it wants and who asks; what it pays and its button are on the title's
+      // line, so the button is in the same spot whatever the card's height; then what it wants, each
+      // a picture, a bar and a count; and last and quietest, the asker's line.
       kids.push(
         el(
           "div",
           // One Leaf has just hung is quiet until it counts.
           s.full ? "k-card order ready" : s.counting ? "k-card order" : "k-card order hung",
           { "data-order": s.id },
-          el("div", "from", {}, el("span", "k-label", { text: s.from }), el("span", "k-grow"), act),
           el(
             "div",
             "k-row",
             {},
-            el("div", "k-grow k-name", { text: s.title }),
-            el("span", "k-chip", {}, amount("coin", s.pay)),
+            el("div", "k-name", { text: s.title }),
+            el("span", "k-row", {}, amount("coin", s.pay), act),
           ),
-          el("div", "k-d", { text: s.line }),
           rows?.node ?? null,
+          el("div", "k-d", { text: s.line }),
         ),
       );
     }

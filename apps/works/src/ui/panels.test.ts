@@ -28,7 +28,7 @@ import { S } from "../state.ts";
 import type { Need } from "./goal.ts";
 import { ordersPrint, placed, plural, powerPrint } from "./panels.ts";
 import { researchPrint, stripPrint } from "./research.ts";
-import { researchOpen, takeable, tierOpen, whatNext } from "./standing.ts";
+import { lockOf, nextUp, nextWords, researchOpen, takeable, tierOpen } from "./standing.ts";
 import { tierPrint } from "./tier.ts";
 
 const order = (id: number, planks: number): { id: number; full: boolean } => ({ id, full: planks >= 10 });
@@ -214,25 +214,55 @@ describe("the tier's screen", () => {
     expect(tierPrint().research).toEqual({ known: 1, all: 10 });
   });
 
-  test("with nothing in hand, says what to do by what the tier holds: a project, the commission, or nothing yet", () => {
+  test("with nothing in hand, says what comes next: projects to take, the goal waited on and what opens it, or everything done", () => {
     const y = yardAt(2);
-    expect(whatNext()).toBe("Take a project in Tier 2.");
+    expect(nextWords(nextUp())).toEqual({
+      label: "Tier 2",
+      title: "Take a project",
+      line: `${takeable().length} ready`,
+    });
     yardAt(3);
-    expect(whatNext()).toBe("Open Tier 3 for its commission and what it needs first.");
+    // Tier 3 has only its commission, which waits on all ten of the tier's research.
+    expect(nextUp()).toEqual({ is: "locked", goal: goal("lanterns"), lock: "10 research left" });
+    expect(nextWords(nextUp())).toEqual({
+      label: "Next: Tier 3 commission",
+      title: "Lanterns for the great tree",
+      line: "10 research left",
+    });
     // Every goal of the slice done: the tier after the last is open, with nothing in it yet.
     y.done = [...ALL_GOALS];
     reopen(y);
     S.world = y;
-    expect([y.open.tier, whatNext()]).toEqual([TIERS.length, "More is being built."]);
+    expect([y.open.tier, nextWords(nextUp())]).toEqual([
+      TIERS.length,
+      { label: "", title: "Every project is done", line: "More tiers are coming." },
+    ]);
+  });
+
+  test("a goal that waits on another is locked, and says what is left as a count; one open or done is not", () => {
+    const y = yardAt(3);
+    expect(tierPrint().commission).toMatchObject({ take: false, lock: "10 research left" });
+    y.done = [...y.done, goal("oilpress"), goal("workshop")];
+    reopen(y);
+    expect(lockOf(goal("lanterns"))).toBe("8 research left");
+    // A project that waits on a project says so: the drawing board waits on the surveyor's chain.
+    const two = yardAt(2);
+    expect(lockOf(goal("drawing"))).toBe("1 project left");
+    two.done = [...two.done, goal("chain")];
+    reopen(two);
+    expect(lockOf(goal("drawing"))).toBeNull();
+    // Research that waits on research.
+    yardAt(3);
+    expect(lockOf(goal("tooling"))).toBe("1 research left");
   });
 
   test("the node in hand in Orders prints what it waits on the same way", () => {
     const y = yardAt(3);
-    // Nothing in hand, and tier 3 has no projects: Orders says where its commission is.
+    // Nothing in hand, and tier 3 has no projects: Orders says what comes next, as the corner does.
     expect(ordersPrint()).toMatchObject({
       hand: -1,
       needs: [],
-      next: "Open Tier 3 for its commission and what it needs first.",
+      next: { is: "locked", goal: goal("lanterns"), lock: "10 research left" },
     });
     y.hand = goal("lanterns");
     expect(waits(ordersPrint().needs)[0]).toBe("oilpress: not begun: build");
@@ -248,9 +278,9 @@ describe("research", () => {
     expect(p.todo.length).toBe(10);
     // Second-tier machines waits on the workshop: it may not be studied yet, and says what it waits on.
     const tooling = p.todo.find((o) => o.goal === goal("tooling"));
-    expect([tooling?.may, tooling?.waiting, waits(tooling?.needs ?? [])]).toEqual([
+    expect([tooling?.may, tooling?.lock, waits(tooling?.needs ?? [])]).toEqual([
       false,
-      true,
+      "1 research left",
       ["workshop: not begun"],
     ]);
     for (const g of ["workshop", "oilpress", "flywheel", "sorter"] as const) study(y, goal(g));
