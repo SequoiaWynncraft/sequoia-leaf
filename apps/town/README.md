@@ -374,13 +374,11 @@ card says so and the town is not loaded.
 - **The guild's news.** The town reads the guild's 50 newest events as it opens and listens from
   there. Members paid for the same raid at the same moment are one party, and it is staged from
   its own time by Leaf's clock, the same second on every page: it begins 6 seconds after Leaf wrote
-  the first of them down (Leaf's stream looks every 2, so every page has heard). Those of it with
-  no figure in town walk in through the gate, the first four of it each in their own place
-  (`homecoming`); the town cheers 1.5
-  seconds in and the feed names them and the raid; the first walks on to the lantern tree and a
-  lantern goes up 8.5 seconds in; then they go out again, and it is over at 23. Whoever of it is
-  in town already (live, at a game's door) hops where they are, and whoever dozes sleeps through
-  it. A page that opens in the middle puts everybody where they are by then, and plays only what
+  the first of them down (Leaf's stream looks every 2, so every page has heard). Nobody walks in
+  for it: the town cheers 1.5 seconds in and the feed names them and the raid, and a lantern goes
+  up in the tree 8.5 seconds in; it is over at 23 (`HOME`). Whoever of it is in town already (the
+  member, live, busy at one of the games) hops where they are, and whoever dozes sleeps through
+  it; nobody else of it is drawn. A page that opens in the middle puts everything where it is by then, and plays only what
   is still to come (`cue` in `game.ts`: what is seen or heard once is played at its moment of
   Leaf's clock, and not if the page was not there for it); one that opens after sees what it left.
   What it left is Leaf's to say, which has every event: with the newest events come how many
@@ -396,7 +394,7 @@ card says so and the town is not loaded.
   member's own always, anybody else's only at a multiple of five. The member is "You", and no line
   says how much Leaf anybody was paid (`news.ts` has every line). The feed takes these lines one at
   a time, twenty seconds apart, oldest first, and drops one that has waited five minutes; what
-  happens in the world for them (the party walking in, the lantern, the banner) does not wait.
+  happens in the world for them (the cheer, the lantern, the banner) does not wait.
 - **The town, live** (`players.ts`, its rules in `motion.ts`). While the town is on the stage the
   page is in Leaf's live room `town` (the kit's `joinLive`), made once: in a camp or the Grove the
   page steps out of it on the same connection (`away`) and back in on returning, opening nothing;
@@ -446,20 +444,28 @@ card says so and the town is not loaded.
   town stands: on open ground, on top of nobody's spot, seat or post and of no thing's foot, and
   behind nothing that would hide them. A member's spot is the one their account wants among those
   laid by hand, or the next free one, and they keep it for as long as they stay; nobody is given a
-  spot somebody has. Somebody the page saw elsewhere who goes to one of the games walks to their
-  spot once (from where they were drawn live, or the place's door) and stops there; anybody there
-  when the page first hears of them is there already, and Leaf's list says nothing of when anybody
-  came. Somebody drawn here whom the page then has nowhere (gone to their camp) walks off through
-  the gate once. They never speak, and their card has only their name and rank; a
-  guest's says "Guest". Up to twelve of the others, most recent first, doze on a seat
-  for where they were (a log at the fire for the town, the log at the stump for the table, the bench
-  by the Works' door for the Works, then whatever seat is left; never the member's own; nobody last
-  at their camp): eyes closed, a "z" drifting up every 2 seconds, never speaking or moving.
-  Whoever has been gone longest chooses first, and a seat a player or one of the town's own sits
-  on is passed over (`dozing`): a player may sit down where somebody dozes, and the dozer is on
-  the next seat in its order from then, on every page. A visitor who goes stays on their feet in their spot until 120 seconds after Leaf
-  last saw them (Leaf lists them as gone at 90, and by 120 every page has asked), then walks to
-  their seat to doze if they stay, and out through the gate if not, or if no seat is left.
+  spot somebody has. They never speak, and their card has only their name and rank; a guest's says
+  "Guest". Up to twelve of the others gone in the last day, most recent first, may doze on a seat (`dozing`): on
+  a log at the fire, on the garden bench or the bench by the Works' door, or at the stump for
+  somebody from the table; never the member's own, and nobody last at their camp. Each has a seat
+  of their own, the one their account wants most, unless somebody gone longer wants it too, and
+  whoever has none then takes a seat left over, gone longest first; so somebody coming or going
+  moves nobody on a seat of their own. Nobody awake sits down on a dozer (`seatFree`), and a seat a
+  player or one of the town's own sits on is passed over. Dozers have their eyes closed, a "z"
+  drifting up every 2 seconds, and never speak or move. A visitor who goes stays on their feet in
+  their spot until 120 seconds after Leaf last saw them (Leaf lists them as gone at 90, and by 120
+  every page has asked), and is then on their seat if they stay and have one, or gone.
+
+  **Nobody drawn from Leaf's list walks.** Only those who move their own figure (the member, the
+  players live in town) and the town's own do. Somebody comes by fading in where they are put (in
+  half a second, `FADE`), goes by fading out where they are, and is put somewhere else (from their
+  spot to their seat, from one seat to another) by fading out there and then in at the new place.
+  A list that changes often (somebody with the Works open on one page and the town on another) only
+  ever fades them, never walks them about. Leaf keeps somebody in one place too: while a game's
+  page of theirs keeps saying where they are, a town room on another of their pages does not take
+  them out of the game (`apps/api/src/activity/visits.ts`); the town's page says it itself as they
+  come out of a game, which moves them at once.
+
 - **Who is about** (`aboutui.ts`, its rules in `about.ts`). A small wooden button beside the purse
   (under it where the screen is too narrow) with two heads and how many are in the game now, the
   member too, opens a panel that lists them: **In town**, everybody in the live room with the

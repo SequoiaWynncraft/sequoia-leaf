@@ -383,10 +383,11 @@ async function boot(): Promise<Page | null> {
   // ---------- keeping, and the town ----------
 
   fromTown((msg) => {
-    if (msg.town === "closing") {
-      keepSettings();
-      sendCard();
-    }
+    if (msg.town !== "closing") return;
+    // The town says where the member is from here: nothing more from the yard, in case it would come after.
+    here(null);
+    keepSettings();
+    sendCard();
   });
   window.addEventListener("pagehide", keepSettings);
   if (!S.alone) {

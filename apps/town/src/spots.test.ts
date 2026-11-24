@@ -141,18 +141,10 @@ describe("what each is doing in their spot", () => {
       const s = LAID[at][1];
       if (!s) throw new Error(`no second spot at ${at}`);
       for (let now = T0; now < T0 + WORK_MS; now += 250) {
-        const p = poseAt({ id: id(7), at, spot: s, n: 1, away: true, now, way: null });
-        expect(p).toMatchObject({ x: s.x, y: s.y, dir: 0, seated: true, dozing: true, walking: false, work: null });
+        const p = poseAt({ id: id(7), at, spot: s, n: 1, away: true, now });
+        expect(p).toMatchObject({ x: s.x, y: s.y, dir: 0, seated: true, dozing: true, work: null });
       }
     }
-  });
-
-  test("nobody dozes on the way to their spot, away or not; there, they doze", () => {
-    const way = { x: 420, y: 150, next: { x: 430, y: 148 } };
-    const going = poseAt({ id: id(7), at: "works", spot, n: 0, away: true, now: T0, way });
-    expect(going).toMatchObject({ x: 420, y: 150, walking: true, dozing: false, seated: false });
-    const there = poseAt({ id: id(7), at: "works", spot, n: 0, away: true, now: T0, way: { ...way, next: null } });
-    expect(there).toMatchObject({ x: spot.x, y: spot.y, walking: false, dozing: true });
   });
 
   test("at the Works somebody works at their crate without leaving their spot: hammering, lifting it to look it over, setting it down", () => {
@@ -160,8 +152,8 @@ describe("what each is doing in their spot", () => {
     let blows = 0;
     let last = atWork(id(3), spot, T0).blow;
     for (let now = T0; now < T0 + 2 * WORK_MS; now += 50) {
-      const p = poseAt({ id: id(3), at: "works", spot, n: 0, away: false, now, way: null });
-      expect([p.x, p.y, p.walking, p.seated, p.dozing]).toEqual([spot.x, spot.y, false, false, false]);
+      const p = poseAt({ id: id(3), at: "works", spot, n: 0, away: false, now });
+      expect([p.x, p.y, p.seated, p.dozing]).toEqual([spot.x, spot.y, false, false]);
       const w = p.work;
       if (!w) throw new Error("not at work");
       // The hammer is out only while the crate is on the ground; held, they turn to us or stay as they were.
@@ -190,7 +182,7 @@ describe("what each is doing in their spot", () => {
 
   test("at the stump they sit over the board, before the stone they stand facing it", () => {
     LAID.table.forEach((s, n) => {
-      expect(poseAt({ id: id(5), at: "table", spot: s, n, away: false, now: T0, way: null })).toMatchObject({
+      expect(poseAt({ id: id(5), at: "table", spot: s, n, away: false, now: T0 })).toMatchObject({
         x: s.x,
         y: s.y,
         dir: s.dir,
@@ -198,7 +190,7 @@ describe("what each is doing in their spot", () => {
       });
     });
     for (const s of LAID.grove)
-      expect(poseAt({ id: id(5), at: "grove", spot: s, n: 0, away: false, now: T0, way: null })).toMatchObject({
+      expect(poseAt({ id: id(5), at: "grove", spot: s, n: 0, away: false, now: T0 })).toMatchObject({
         x: s.x,
         y: s.y,
         dir: s.dir,

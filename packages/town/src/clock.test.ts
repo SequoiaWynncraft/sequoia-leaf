@@ -11,9 +11,6 @@ import {
   folkAt,
   type FolkNow,
   hiding,
-  HOME,
-  homecoming,
-  MUSTER,
   seedOf,
   SET_OUT,
   stagedBy,
@@ -189,20 +186,27 @@ describe("the crabs by the clock", () => {
   });
 });
 
-const rester = (id: string, at: "town" | "works" | "table", seen: number) => ({ id, at, seen });
+const rester = (id: string, at: "town" | "works" | "table" | "grove", seen: number) => ({ id, at, seen });
 
 describe("members in the games and gone from them, by Leaf's list", () => {
   const SEATS = [
-    { n: 0, at: "fire", dir: 0 },
-    { n: 1, at: "fire", dir: 0, yours: true },
-    { n: 2, at: "fire", dir: 3 },
-    { n: 3, at: "fire", dir: 1 },
-    { n: 4, at: "bench", dir: 0 },
-    { n: 5, at: "works", dir: 0 },
-    { n: 6, at: "works", dir: 0 },
-    { n: 7, at: "table", dir: 3, yours: true },
-    { n: 8, at: "table", dir: 3 },
+    { n: 0, x: 248, y: 201, at: "fire" },
+    { n: 1, x: 264, y: 201, at: "fire", yours: true },
+    { n: 2, x: 248, y: 236, at: "fire" },
+    { n: 3, x: 221, y: 213, at: "fire" },
+    { n: 4, x: 114, y: 312, at: "bench" },
+    { n: 5, x: 422, y: 152, at: "works" },
+    { n: 6, x: 435, y: 152, at: "works" },
+    { n: 7, x: 431, y: 213, at: "table", yours: true },
+    { n: 8, x: 457, y: 213, at: "table" },
   ] as const;
+  /** The seats each may have, by where they were. */
+  const MAY: Readonly<Record<string, readonly string[]>> = {
+    town: ["fire", "bench", "works"],
+    grove: ["fire", "bench", "works"],
+    table: ["table", "fire", "bench"],
+    works: ["works", "fire", "bench"],
+  };
   const RESTING = [
     rester("fern", "town", T0 - 3 * 3_600_000),
     rester("quill", "works", T0 - 40 * 60_000),
@@ -211,27 +215,57 @@ describe("members in the games and gone from them, by Leaf's list", () => {
     rester("moss", "table", T0 - 10 * 60_000),
     rester("twin", "table", T0 - 10 * 60_000),
   ];
-  const seats = (free: readonly (typeof SEATS)[number][] = SEATS, resting = RESTING): Record<string, number> =>
-    Object.fromEntries([...dozing(resting, free)].map(([id, s]) => [id, s.n]));
+  const seats = (
+    free: readonly (typeof SEATS)[number][] = SEATS,
+    resting: readonly ReturnType<typeof rester>[] = RESTING,
+  ): Record<string, number> => Object.fromEntries([...dozing(resting, free)].map(([id, s]) => [id, s.n]));
 
-  test("each dozer has the first seat left for where they were, whoever has been gone longest first; never the member's", () => {
-    // The Works' bench holds two: the third from the Works has a log by the fire, side on, the logs facing us being taken or the member's.
-    expect(seats()).toEqual({ fern: 0, quill: 5, ash: 6, wren: 3, moss: 8, twin: 2 });
+  test("each dozer has a seat they may have for where they were, nobody shares one, and nobody has the member's", () => {
+    const got = seats();
+    expect(Object.keys(got).toSorted()).toEqual(RESTING.map((r) => r.id).toSorted());
+    expect(new Set(Object.values(got)).size).toBe(RESTING.length);
+    for (const r of RESTING) {
+      const s = SEATS.find((seat) => seat.n === got[r.id]);
+      expect(MAY[r.at]).toContain(s?.at ?? "none");
+      expect(s && "yours" in s).toBe(false);
+    }
   });
 
   test("the same seats whatever order Leaf's list and the town's seats come in", () => {
     const want = seats();
     for (let turn = 1; turn < RESTING.length; turn++) {
       const resting = [...RESTING.slice(turn), ...RESTING.slice(0, turn)].toReversed();
-      expect(seats(SEATS, resting)).toEqual(want);
+      expect(seats([...SEATS.slice(turn), ...SEATS.slice(0, turn)], resting)).toEqual(want);
     }
-    // Two gone at the same moment choose by account.
-    expect(seats(SEATS, [rester("b", "town", 5), rester("a", "town", 5)])).toEqual({ a: 0, b: 3 });
+    // Two gone at the same moment choose by account, whichever comes first.
+    const two = [rester("b", "town", 5), rester("a", "town", 5)];
+    expect(seats(SEATS, two)).toEqual(seats(SEATS, two.toReversed()));
+  });
+
+  test("the one gone longest keeps their seat whoever else comes or goes, and anybody else rarely moves", () => {
+    const places = ["town", "works", "table", "grove"] as const;
+    let list = Array.from({ length: 16 }, (_, k) => rester(`m${k}`, places[k % 4] ?? "town", T0 + k));
+    let next = 16;
+    let moved = 0;
+    const changes = 400;
+    for (let k = 0; k < changes; k++) {
+      const before = seats(SEATS, list);
+      const first = list[0]?.id ?? "";
+      // In turn: the one gone longest leaves, or one in the middle comes back to play; and somebody new is gone.
+      const out = k % 3 === 0 ? 0 : 1 + ((k * 7) % (list.length - 1));
+      const rest = list.filter((_, i) => i !== out);
+      list = [...rest, rester(`m${next}`, places[next % 4] ?? "town", T0 + next)];
+      next++;
+      const after = seats(SEATS, list);
+      if (out !== 0) expect(after[first]).toBe(before[first]);
+      for (const [id, n] of Object.entries(after)) if (id in before && before[id] !== n) moved++;
+    }
+    // Giving out the first seat left, in one order for all, moved three of them at each change.
+    expect(moved / changes).toBeLessThan(0.6);
   });
 
   test("a seat a player sits on is passed over, and whoever finds none left has none", () => {
-    // A player on the Works' bench: the second from the Works goes to the fire, and so on down.
-    expect(seats(SEATS.filter((s) => s.n !== 5))).toEqual({ fern: 0, quill: 6, ash: 3, wren: 2, moss: 8, twin: 4 });
+    expect(Object.values(seats(SEATS.filter((s) => s.n !== 5)))).not.toContain(5);
     // Only the member's own seats left: nobody dozes.
     expect(seats(SEATS.filter((s) => "yours" in s))).toEqual({});
     expect(seats(SEATS.filter((s) => s.at === "table"))).toEqual({ moss: 8 });
@@ -306,29 +340,6 @@ describe("the stump's board by the clock", () => {
 });
 
 describe("the guild's moments by the clock", () => {
-  test("each of a raid party sets out from where their last walk took them, and nobody of it is left once it is over", () => {
-    for (let i = 0; i < MUSTER.length; i++) {
-      const walks = [];
-      for (let now = T0 - 1000; now < T0 + HOME.over; now += 50) {
-        const w = homecoming(SEED, T0, i, now);
-        if (!w) throw new Error("gone before it is over");
-        if (walks.at(-1)?.at !== w.at) walks.push(w);
-      }
-      expect(walks[0]?.at).toBe(T0 + i * HOME.apart);
-      expect(walks[0]?.to).toBe(MUSTER[i]);
-      for (let k = 1; k < walks.length; k++) expect(walks[k]?.from).toEqual(walks[k - 1]?.to);
-      // The first goes by the tree; everybody ends out through the gate, 3 to 6 seconds after they might have gone.
-      expect(walks.length).toBe(i === 0 ? 3 : 2);
-      const out = walks.at(-1);
-      const free = i === 0 ? HOME.hang + HOME.stay : HOME.part;
-      expect((out?.at ?? 0) - T0 - free).toBeGreaterThanOrEqual(3000);
-      expect((out?.at ?? 0) - T0 - free).toBeLessThan(6000);
-      expect(homecoming(SEED, T0, i, T0 + 9000)).toEqual(homecoming(SEED, T0, i, T0 + 9000));
-      expect(homecoming(SEED, T0, i, T0 + HOME.over)).toBeNull();
-    }
-    expect(homecoming(SEED, T0, MUSTER.length, T0)).toBeNull();
-  });
-
   test("the first banner goes up; the next finds it flying, which dips, changes and goes up again", () => {
     const wars = [
       { at: T0, land: "Detlas", happened: T0 - 40_000 },

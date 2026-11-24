@@ -175,7 +175,7 @@ export interface TownHandles {
   who(): { name: string; x: number; y: number; doing: string }[];
   /** The crabs by their numbers, where each is by Leaf's clock this moment, and whether it is running off. */
   crabs(): { n: number; x: number; y: number; gone: boolean }[];
-  /** Real members in town, visiting, dozing or walking in with a raid party: where each is and what they are doing, by Leaf's clock this moment. */
+  /** Real members in town, visiting or dozing: where each is, what they are doing and how far faded in, by Leaf's clock this moment. */
   visitors(): ReturnType<typeof members>;
   /** Each of the games' spots in town for members busy at them: those laid by hand, then those further out. */
   spots(): ReturnType<typeof spotsNow>;
