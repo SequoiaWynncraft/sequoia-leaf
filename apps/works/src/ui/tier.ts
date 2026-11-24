@@ -245,12 +245,12 @@ export function tierScreen(body: HTMLElement): () => void {
       );
     }
     if (p.research) kids.push(...researchPart(p.research, keep));
-    if (p.projects.length > 0) kids.push(el("div", "k-label", { text: "Projects" }));
-    for (const g of p.projects) {
+    const cards = p.projects.map((g) => {
       const parts = lists(g).map((l) => l.node);
       const lit = p.hand === g.goal ? " lit" : g.lock === null ? "" : " locked";
-      kids.push(el("div", `k-card goal${lit}`, {}, foldedHead(g.goal, side(g, "Take"), parts), ...parts));
-    }
+      return el("div", `k-card goal${lit}`, {}, foldedHead(g.goal, side(g, "Take"), parts), ...parts);
+    });
+    if (cards.length > 0) kids.push(...foldedList("projects", "Projects", el("div", "goals-projects", {}, ...cards)));
     if (p.done.length > 0)
       kids.push(...foldedList("done", "Done", el("div", "goals-done", {}, ...p.done.map((g) => head(g)))));
     const top = body.scrollTop;

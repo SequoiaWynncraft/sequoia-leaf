@@ -1092,11 +1092,15 @@ export function piecesInHand(g: Pick<Group, "as" | "tiles">): Piece[] {
   return print ? piecesOf(print) : [];
 }
 
-/** Takes in hand the marked pieces, to move them or to stand a copy of them, or the blueprint kept in a place. */
-export function hold(as: Group["as"]): void {
+/**
+ * Takes in hand the marked pieces, to move them or to stand a copy of them, or the blueprint kept in
+ * a place. Given `only`, it takes the pieces on those tiles alone, with nothing marked: a card's
+ * Move, which takes a tunnel's two mouths and not what crosses over between them.
+ */
+export function hold(as: Group["as"], only?: readonly number[]): void {
   if (S.hand.is !== "select") return;
-  const mark = remarked();
-  const tiles = typeof as === "number" ? [] : (mark?.tiles ?? []);
+  const mark = only ? null : remarked();
+  const tiles = typeof as === "number" ? [] : (only ?? mark?.tiles ?? []);
   if (piecesInHand({ as, tiles }).length === 0) return;
   go({ do: "hold", group: { as, tiles, turns: 0, at: [], why: [] }, mark: typeof as === "number" ? null : mark });
   if (S.hover) aimAt(S.hover.x, S.hover.y);

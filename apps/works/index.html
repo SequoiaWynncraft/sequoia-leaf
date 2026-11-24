@@ -400,6 +400,12 @@
         align-self: flex-start;
       }
       /* Those done: a line each, with no frame of its own. */
+      /* The projects, folded under their label as one: as far apart as the screen's other parts. */
+      .goals-projects {
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 3);
+      }
       .goals-done {
         display: flex;
         flex-direction: column;

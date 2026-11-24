@@ -75,7 +75,6 @@ import {
 import {
   type Action,
   type Block,
-  close,
   describe,
   type Description,
   type Entry,
@@ -101,6 +100,7 @@ import {
   unlocks,
   wantsGiven,
 } from "./goal.ts";
+import { groundCard, type GroundPrint, plotCard, type PlotPrint } from "./land.ts";
 import type { Flow } from "./numbers.ts";
 import { fitted, partsWords, type YardIcon, yardIcon } from "./parts.ts";
 import { itemRef, machineRef, nodeRef, pictureRef, plotRef } from "./refs.ts";
@@ -194,33 +194,12 @@ export interface StandingPrint extends SorterPrint {
    * where it can be picked up as the tool in hand.
    */
   readonly keys: { readonly rotate: string; readonly flip: string; readonly another: string | null };
+  /** Whether it can be taken up to move: once Select is open. */
+  readonly move: boolean;
   /** What taking it away gives back, and whether it was one of the pieces to hand. */
   readonly refund: number;
   readonly free: boolean;
   readonly ways: WaysPrint | null;
-  readonly visiting: boolean;
-}
-
-/** A tile with nothing on it that has a card: the stream, or a redwood. */
-export interface GroundPrint {
-  readonly card: "ground";
-  readonly ground: "stream" | "redwood";
-}
-
-export interface PlotPrint {
-  readonly card: "plot";
-  readonly plot: Plot;
-  readonly name: string;
-  readonly why: string;
-  readonly price: number;
-  readonly state: "owned" | "for sale" | "not yet";
-  readonly not: string | null;
-  /** The stream runs through it. */
-  readonly bank: boolean;
-  /** What lies in its ground: each thing, and how many tiles. */
-  readonly ground: readonly (readonly [Item, number])[];
-  /** How many Coins more than there are it costs, or 0. */
-  readonly short: number;
   readonly visiting: boolean;
 }
 
@@ -300,6 +279,8 @@ export interface Hands {
   /** Flips a sorter to send to its other side. */
   flip(x: number, y: number): void;
   another(x: number, y: number): void;
+  /** Takes the piece in hand to set down somewhere else. */
+  move(x: number, y: number): void;
   remove(x: number, y: number): void;
   /** Raises the piece on a tile to the next grade, where it stands. */
   raise(x: number, y: number): void;
@@ -451,6 +432,26 @@ function machineCard(art: Art, p: MachinePrint): Description {
 const pressWay = (p: StandingPrint, hands: Hands): ((way: number) => void) | null =>
   p.visiting ? null : (way) => hands.way(p.x, p.y, way);
 
+/** What takes a standing piece up: as the tool in hand, facing the same way (Another), or itself, to set down elsewhere (Move). */
+function takeUp(p: StandingPrint, hands: Hands): Action[] {
+  const { x, y } = p;
+  const another = p.keys.another;
+  const name = nameOf(p.machine.kind).toLowerCase();
+  return [
+    ...(another === null
+      ? []
+      : [
+          {
+            label: "Another",
+            hint: `Another (${another})`,
+            about: `Picks the ${name} as your tool, facing the same way.`,
+            on: () => hands.another(x, y),
+          },
+        ]),
+    ...(p.move ? [{ label: "Move", on: () => hands.move(x, y) }] : []),
+  ];
+}
+
 /** A machine standing in the yard: its kind's card, with what this one is doing and holds, and what can be done with it. */
 function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
   const m = p.machine;
@@ -552,13 +553,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
     if (k !== TUNNEL && k !== PYLON && k !== WHEEL && k !== BOILER && k !== STUDY && k !== STOP)
       actions.push({ label: "Rotate", hint: `Rotate (${p.keys.rotate})`, on: () => hands.turn(x, y) });
     if (k === SORTER) actions.push({ label: "Flip", hint: `Flip (${p.keys.flip})`, on: () => hands.flip(x, y) });
-    if (p.keys.another !== null)
-      actions.push({
-        label: "Another",
-        hint: `Another (${p.keys.another})`,
-        about: `Picks the ${nameOf(k).toLowerCase()} as your tool, facing the same way.`,
-        on: () => hands.another(x, y),
-      });
+    actions.push(...takeUp(p, hands));
     actions.push({
       label: "Remove",
       look: "coral sm",
@@ -601,57 +596,6 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
     ],
     rows,
     actions: p.visiting ? [] : actions,
-  };
-}
-
-const groundCard = (p: GroundPrint): Description =>
-  p.ground === "stream"
-    ? {
-        name: "The stream",
-        tag: "Nothing can be built on it. A waterwheel beside it makes power, and a tunnel can go under it.",
-      }
-    : { name: "A redwood", tag: "Nothing can be built on it. Belts go round it, or under it by tunnel." };
-
-/** What a button that buys says once it has been pressed: the second press buys. */
-const AGAIN = "Press again to buy";
-
-function plotCard(p: PlotPrint, hands: Hands): Description {
-  const enough = p.short === 0;
-  const blocks: Block[] = [
-    ...(p.bank ? [{ body: "The stream runs through it. A waterwheel must be beside the stream." }] : []),
-    ...(p.state === "not yet" ? [{ body: `${p.not ?? "Not for sale yet"}.` }] : []),
-    ...(p.state === "for sale" && !enough ? [{ body: `You need ${p.short.toLocaleString("en-US")} more Coins.` }] : []),
-  ];
-  return {
-    name: p.name,
-    icon: icon("star"),
-    tag: p.why,
-    aside:
-      p.state === "owned"
-        ? el("span", "k-chip lit", {}, icon("check"), "Yours")
-        : amount("coin", p.price.toLocaleString("en-US")),
-    blocks,
-    rows: [
-      {
-        label: "In the ground",
-        things: p.ground.map(([raw, tiles]) => ({ ref: itemRef(raw), note: `${tiles} tiles` })),
-      },
-    ],
-    actions:
-      p.state === "for sale" && !p.visiting
-        ? [
-            {
-              label: `Buy for ${p.price.toLocaleString("en-US")}`,
-              look: enough ? "sm wide" : "sm wide off",
-              icon: icon("coin"),
-              ...(enough ? { ask: AGAIN } : {}),
-              on: () => {
-                // Bought, the card has nothing more to offer: it is put away, so it does not sit over the new land.
-                if (hands.buy(p.plot)) close();
-              },
-            },
-          ]
-        : [],
   };
 }
 
@@ -792,7 +736,7 @@ export function cardOf(art: Art, p: Print, hands: Hands): Description | null {
     case "ground":
       return groundCard(p);
     case "plot":
-      return plotCard(p, hands);
+      return plotCard(p, (plot) => hands.buy(plot));
     case "node":
       return nodeCard(p, hands);
     case "order":
