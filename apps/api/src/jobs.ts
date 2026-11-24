@@ -9,7 +9,7 @@ import { copiedLast, type CopyFailed, copyNewest, Offsite, RETRY } from "./backu
 import { snapshotIfDue, snapshotsIn } from "./backup/snapshot.ts";
 import { AppConfig } from "./config.ts";
 import { runCreditSync } from "./earning/run.ts";
-import { payMissedLevels } from "./levels/pay.ts";
+import { payMissedLevels } from "./levels/check.ts";
 import { type JobRun, jobRun, jobSucceededAt } from "./metrics.ts";
 import { GAMES } from "./play/games.ts";
 import { Play } from "./play/service.ts";

@@ -4,7 +4,9 @@ import { SqlClient } from "effect/sql";
 // Where the check for levels reached and not paid for (`payMissedLevels`, at each start) is up to:
 // one row, for the level rules it checks against, as JSON. `checked_to` is the ledger entry every
 // account has been checked as of. A check under way covers the entries after it up to
-// `checking_to`, and has checked every player up to `checked_player`, in id order.
+// `checking_to`, and has checked every player up to `checked_player`, in id order. `run` numbers
+// the check that holds the row: each check that begins takes the next, and writes the row only
+// while it is still its own.
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   yield* sql`
@@ -13,7 +15,8 @@ export default Effect.gen(function* () {
       rules          TEXT    NOT NULL,
       checked_to     INTEGER NOT NULL,
       checking_to    INTEGER,
-      checked_player TEXT
+      checked_player TEXT,
+      run            INTEGER NOT NULL
     ) STRICT
   `;
 });
