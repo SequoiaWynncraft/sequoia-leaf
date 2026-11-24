@@ -59,6 +59,7 @@ import {
   within,
   worthAt,
 } from "@sequoia-leaf/factory";
+import { close as closeCards } from "@sequoia-leaf/kit/card.ts";
 import { CREAM, GOLD, GREEN, SKY } from "@sequoia-leaf/kit/palette.ts";
 
 import { PAINTS, TILE } from "./art/belts.ts";
@@ -261,7 +262,8 @@ export function usable(tool: Tool): boolean {
 export function setTool(tool: Tool): void {
   if (!usable(tool)) return;
   go({ do: "pick", tool });
-  if (tool !== null) S.picked = -1;
+  // Taking up a tool closes the card pinned open.
+  if (tool !== null) closeCards();
   if (S.hover && tool !== null) aimAt(S.hover.x, S.hover.y);
   toolHooks.changed();
 }
@@ -499,7 +501,8 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
   const refund = coinsOf(did);
   if (refund > 0) float(px, py - 10, `+${refund}`, GOLD[2], 1);
   yardSfx.take();
-  if (S.picked === i) S.picked = -1;
+  // The card of what was taken away has nothing to be about.
+  if (S.picked === i) closeCards();
   // A piece taken out of a marked area is no longer marked.
   const m = remarked();
   if (m) go({ do: "marked", mark: m.pieces.length > 0 ? m : null });
@@ -1177,7 +1180,7 @@ export function clearMark(): boolean {
   if (refund > 0) float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, `+${refund}`, GOLD[2], 1.2);
   yardSfx.take();
   go({ do: "marked", mark: null });
-  S.picked = -1;
+  if (m.tiles.includes(S.picked)) closeCards();
   toolHooks.changed();
   return true;
 }

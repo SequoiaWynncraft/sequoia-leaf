@@ -34,6 +34,7 @@ import {
   SPLITTER,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { deck } from "@sequoia-leaf/kit/card.ts";
 
 import { act, clear, ctx, kindAt, kindOn, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { asIf, layout } from "./layout.ts";
@@ -56,6 +57,7 @@ import {
   runOver,
   runStart,
   setTool,
+  takeAway,
   tapBelt,
   undo,
   usable,
@@ -419,5 +421,37 @@ describe("undo, as Leaf did things", () => {
     expect(undo()).toBe(false);
     await Bun.sleep(5);
     expect([kindAt(a), sent(fake.leaf)]).toEqual(["mill", ["build"]]);
+  });
+});
+
+/** Pins the card of a tile, as a click on it does. */
+const pin = (i: number): void => {
+  deck.open = { stack: [`tile:${i}`], pinned: true, via: "mouse", at: {}, from: {}, side: false, preview: false };
+};
+
+describe("the pinned card", () => {
+  test("is the one source of what the yard marks: taking up a tool closes it, and nothing is marked", async () => {
+    const y = yardAt(2);
+    build(y, BELT, 18, 13, 0, Infinity);
+    await opened(y);
+    const i = at(S.world, 18, 13);
+    pin(i);
+    expect(S.picked).toBe(i);
+    setTool(BELT);
+    expect([deck.open, S.picked]).toEqual([null, -1]);
+  });
+
+  test("closes when the piece it is about is taken away, or cleared with an area", async () => {
+    const y = yardAt(3);
+    for (let x = 18; x < 21; x++) build(y, BELT, x, 13, 0, Infinity);
+    await opened(y);
+    pin(at(S.world, 18, 13));
+    expect(takeAway(18, 13)).toBe(true);
+    expect([deck.open, S.picked]).toEqual([null, -1]);
+    pin(at(S.world, 19, 13));
+    // Another piece taken away leaves it be.
+    expect(takeAway(20, 13)).toBe(true);
+    expect(S.picked).toBe(at(S.world, 19, 13));
+    deck.close();
   });
 });

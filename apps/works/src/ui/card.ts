@@ -25,9 +25,6 @@ import { showView } from "./views.ts";
 
 export { itemRef, machineRef, nodeRef, orderRef, plotRef, tileRef } from "./refs.ts";
 
-/** A number read back out of a reference, if it is a whole one. */
-const numberIn = (id: string): number => (/^\d+$/.test(id) ? Number(id) : -1);
-
 // ---------- the yard's tiles ----------
 
 /** What a tile of the yard stands for: what is built on it, the land it is part of, or what lies in it. */
@@ -127,11 +124,13 @@ export function refreshCard(): void {
  * a sheet along the bottom (a finger's card) does not cover what it is about.
  */
 export function followCards(pan: (dx: number, dy: number) => void): void {
-  watch((_pointed, pinned) => {
-    const was = S.picked;
-    S.picked = pinned?.startsWith("tile:") ? numberIn(pinned.slice(5)) : -1;
-    if (S.picked < 0 || S.picked === was) return;
-    if (S.picked !== was) sfx.tap();
+  let was = -1;
+  watch(() => {
+    const now = S.picked;
+    if (now === was) return;
+    was = now;
+    if (now < 0) return;
+    sfx.tap();
     requestAnimationFrame(() => {
       const sheet = document.querySelector(".k-info.sheet");
       if (!sheet || S.picked < 0) return;

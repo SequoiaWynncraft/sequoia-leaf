@@ -58,6 +58,8 @@ bun test                         # the screen's own questions, the yard on a sta
   variant that began it, so it ends whenever the hand moves on: a put-away, a lost press, a blur.
   Escape steps back one stage of whatever is in hand.
 - **Undo undoes only what Leaf did**, and only while what it touched stands as it was just after.
+- **The kit's pinned card is the one source of the tile the yard marks** (`S.picked` reads it). Taking
+  up a tool closes it, and so does taking away what it is about.
 - **Prices are judged in one place:** `doNow`, with the purse as it is at that moment.
 - **A part of the interface shows only what its print holds** (`shows`, in `ui/parts.ts`): cards,
   panels, the top bar and the line over the dock are drawn again exactly when their print differs.
