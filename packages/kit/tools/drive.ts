@@ -50,6 +50,14 @@ type Step =
   | ["media", string, string]
   | ["eval", string];
 
+/** A key going down as a keyboard sends it: what it types, if anything, and where it sits (a US keyboard's place for a letter or digit). */
+function keyDown(key: string): { type: string; key: string; code: string; text: string } {
+  const text = key === "Enter" ? "\r" : key.length === 1 ? key : "";
+  const code =
+    key === " " ? "Space" : /^[a-z]$/i.test(key) ? `Key${key.toUpperCase()}` : /^\d$/.test(key) ? `Digit${key}` : key;
+  return { type: text ? "keyDown" : "rawKeyDown", key, code, text };
+}
+
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 
 function isStep(v: unknown): v is Step {
@@ -248,17 +256,16 @@ async function run(step: Step): Promise<void> {
       return tap(value.x, value.y);
     }
     case "key": {
-      // A key that types something (a letter, Space, Enter) sends it too, as a keyboard does.
-      const text = step[1] === "Enter" ? "\r" : step[1].length === 1 ? step[1] : "";
-      await send("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", key: step[1], text });
-      await send("Input.dispatchKeyEvent", { type: "keyUp", key: step[1] });
+      // A key that types something (a letter, Space, Enter) sends it too, and every key its place, as a keyboard does.
+      const down = keyDown(step[1]);
+      await send("Input.dispatchKeyEvent", down);
+      await send("Input.dispatchKeyEvent", { type: "keyUp", key: down.key, code: down.code });
       return;
     }
     case "hold": {
       const [, key, ms] = step;
-      const text = key === "Enter" ? "\r" : key.length === 1 ? key : "";
-      const code = key === " " ? "Space" : key.length === 1 ? `Key${key.toUpperCase()}` : key;
-      const down = { type: text ? "keyDown" : "rawKeyDown", key, code, text };
+      const down = keyDown(key);
+      const { code } = down;
       await send("Input.dispatchKeyEvent", down);
       for (let held = 33; held < ms; held += 33) {
         // oxlint-disable-next-line no-await-in-loop -- one repeat after another, as a held key makes them

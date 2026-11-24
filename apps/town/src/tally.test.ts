@@ -4,7 +4,16 @@ import type { TallyBoard } from "@sequoia-leaf/core";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 
-import { type Answer, type Board, laidOut, readBoard, scoreText, tallyBoards, type TallyPage } from "./tally.ts";
+import {
+  type Answer,
+  type Board,
+  laidOut,
+  readBoard,
+  scoreText,
+  tallyBoards,
+  type TallyPage,
+  weeklyReset,
+} from "./tally.ts";
 
 const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
 const answer = (name: string): unknown => (isRecord(GAME) && isRecord(GAME[name]) ? GAME[name].body : null);
@@ -180,5 +189,16 @@ describe("the board the panel shows", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe("the week of a board", () => {
+  test("starts again on Monday at midnight UTC, told in the reader's own time", () => {
+    // A Tuesday afternoon, UTC.
+    const now = Date.UTC(2026, 10, 24, 15, 0);
+    expect(weeklyReset(now, "UTC")).toBe("Weekly reset: Monday at 00:00");
+    expect(weeklyReset(now, "Europe/Stockholm")).toBe("Weekly reset: Monday at 01:00");
+    expect(weeklyReset(now, "America/New_York")).toBe("Weekly reset: Sunday at 19:00");
+    expect(weeklyReset(now, "Asia/Kolkata")).toBe("Weekly reset: Monday at 05:30");
   });
 });

@@ -10,7 +10,7 @@ import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { balance, type Currency } from "@sequoia-leaf/kit/purse.ts";
 import { type Scope, scope } from "@sequoia-leaf/kit/scope.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
-import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
+import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { DOING, type Doing } from "@sequoia-leaf/town/folk.ts";
@@ -333,10 +333,12 @@ function keep(): void {
   cardUntil = performance.now() + 7000;
 }
 
-export function closeCard(): void {
-  if (!show.card) return;
+/** Puts away the card of whoever was tapped. Says whether one was up. */
+export function closeCard(): boolean {
+  if (!show.card) return false;
   show.card = null;
   $("card").hidden = true;
+  return true;
 }
 
 /** What one of the town's own is doing, in a line for its card. */
@@ -551,7 +553,8 @@ export function setStrip(
   strip?.();
 }
 
-export function initHud(): void {
+/** Builds the town's interface; `gear` (the settings menu's, `settings.ts`) goes in its corner. */
+export function initHud(gear: HTMLElement): void {
   counters.leaf = counter("leaf", "Leaf", "Earned with the guild in Wynncraft: raids, wars, quests and milestones.");
   counters.coins = counter("coins", "Coins", "Earned in town: the Works, The Little Raid and Cinfy's chest.");
 
@@ -566,19 +569,7 @@ export function initHud(): void {
     faceDoes();
   });
   tip(faceButton, "You");
-  const mute = el("button", "k-btn wood icon", { type: "button", "aria-label": "Sound" });
-  const drawMute = (): void => {
-    mute.replaceChildren(glyph(isMuted() ? "mute" : "sound"));
-    mute.setAttribute("aria-pressed", String(!isMuted()));
-  };
-  mute.addEventListener("click", () => {
-    setMuted(!isMuted());
-    drawMute();
-    sfx.tap();
-  });
-  tip(mute, "Sound");
-  drawMute();
-  corner.append(hammer, faceButton, mute);
+  corner.append(hammer, faceButton, gear);
   refreshFace();
 
   hooks.feed = feed;

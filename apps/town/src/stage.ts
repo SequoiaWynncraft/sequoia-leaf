@@ -60,8 +60,8 @@ export interface Scene {
   point(at: Pt | null): Hover | null;
   /** The key for "use what I am standing at". */
   act(): void;
-  /** The key for "put this away". */
-  back(): void;
+  /** The key for "put this away". Says whether there was anything to put away. */
+  back(): boolean;
   /** Any other key, in lower case. Says whether the scene had a use for it. */
   key(k: string): boolean;
   /** A finger or the mouse, still down, has moved to a point in the scene. */

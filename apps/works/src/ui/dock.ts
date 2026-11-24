@@ -74,6 +74,8 @@ import { $, button, fitted, iconButton, shows, when, type YardIcon, yardIcon } f
 /** The tools in the order they sit in the dock, which is also the order of the number keys: every kind this page draws. */
 export const TOOLS: readonly Kind[] = DRAWN;
 export const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="];
+/** Where those keys sit, whatever each prints: unshifted, AZERTY's number row prints & é " ' and so on. */
+const KEY_PLACES = [...KEYS.slice(0, 10).map((n) => `Digit${n}`), "Minus", "Equal"];
 
 /** The tools the yard may build, in dock order. */
 export const openTools = (): Kind[] => TOOLS.filter(usable);
@@ -567,8 +569,9 @@ export function say(text: string): void {
   handKey?.();
 }
 
-/** The tool a number key picks. */
-export function toolForKey(key: string): Tool | undefined {
-  const n = KEYS.indexOf(key);
+/** The tool a number key picks: by where it sits in the number row, else by what it prints (the number pad's). */
+export function toolForKey(e: Pick<KeyboardEvent, "code" | "key">): Tool | undefined {
+  const at = KEY_PLACES.indexOf(e.code);
+  const n = at >= 0 ? at : KEYS.indexOf(e.key);
   return n < 0 ? undefined : openTools()[n];
 }

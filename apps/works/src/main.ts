@@ -49,6 +49,7 @@ import { letters } from "./ui/letter.ts";
 import { feed, initNotes, tickNotes } from "./ui/notes.ts";
 import { initPanels, panelHooks, refreshPanel } from "./ui/panels.ts";
 import { $ } from "./ui/parts.ts";
+import { startSettings } from "./ui/settings.ts";
 import { viewHooks } from "./ui/views.ts";
 import { gate, keepScreen, leadAt, onRefused, openYard, runYard, screen } from "./yard.ts";
 
@@ -200,7 +201,7 @@ async function boot(): Promise<Page | null> {
   initPanels(art);
   initBoard(me.id);
   initCard(art);
-  initHud();
+  initHud(startSettings(scope()).gear());
   initDock(art);
   initInput(canvas);
   panelHooks.handOver = (order): void => {

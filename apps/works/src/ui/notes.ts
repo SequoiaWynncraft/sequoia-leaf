@@ -51,9 +51,13 @@ export function feed(text: string, tone: Tone = "gold"): void {
 
 let bannerTimer = 0;
 
-export function closeBanner(): void {
+/** Puts the notice away. Says whether there was one up to put away. */
+export function closeBanner(): boolean {
   window.clearTimeout(bannerTimer);
-  $("banner").hidden = true;
+  const notice = $("banner");
+  const up = !notice.hidden;
+  notice.hidden = true;
+  return up;
 }
 
 /** The head of the notice for a goal finished, by what it was. */

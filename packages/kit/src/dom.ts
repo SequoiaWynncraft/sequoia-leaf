@@ -110,6 +110,7 @@ export type IconName =
   | "star"
   | "heart"
   | "gear"
+  | "play"
   | "hammer"
   | "mail"
   | "gift"

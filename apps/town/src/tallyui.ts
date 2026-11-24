@@ -40,6 +40,7 @@ import {
   scoreText,
   type Shown,
   tallyBoards,
+  weeklyReset,
 } from "./tally.ts";
 import { plinth } from "./tallyart.ts";
 
@@ -237,6 +238,7 @@ export function tallyPanel(body: HTMLElement, life: Scope): () => void {
     heading.replaceChildren(
       el("h3", "k-title", { text: b.name }),
       ...(b.counts === undefined ? [] : [el("p", "k-d", { text: b.counts })]),
+      ...(p === "week" ? [el("p", "k-dim", { text: weeklyReset(Date.now()) })] : []),
     );
     boards.show(b, p);
   };

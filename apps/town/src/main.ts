@@ -13,7 +13,6 @@
 
 import { pick as pickCard, point } from "@sequoia-leaf/kit/card.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
-import { heldAgain, typing } from "@sequoia-leaf/kit/keys.ts";
 import { member } from "@sequoia-leaf/kit/live.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { bake, lookFor, paintSkin } from "@sequoia-leaf/kit/skin.ts";
@@ -42,12 +41,13 @@ import { here, keepTold, onTown, openCamp, town as kept, troubleCard, visiting }
 import { leafNow, onStage } from "./players.ts";
 import { lookFromOutside } from "./review.ts";
 import { darkOf, inGame, mayAct, next, openOf, type Place, placeOf, takesWalk } from "./screen.ts";
+import { startSettings } from "./settings.ts";
 import { showCampSheet, showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
 import type { Bound, Hover, Scene, Stage, Steer, Stood } from "./stage.ts";
 import { nameStatues } from "./statues.ts";
+import { listenKeys } from "./townkeys.ts";
 import { makeTown } from "./townscene.ts";
-import { dismissArrival } from "./ui.ts";
 
 /** How long the pointer rests on a thing before its tip shows, in milliseconds. */
 const REST = 400;
@@ -171,7 +171,8 @@ async function boot(): Promise<void> {
     },
   };
 
-  initHud();
+  const menu = startSettings(scope(), () => letGo());
+  initHud(menu.gear());
   const art = makeCampArt(sprites);
   void nameStatues(art);
   const town = makeTown(sprites, art, stage);
@@ -299,60 +300,24 @@ async function boot(): Promise<void> {
 
   // ---------- keys and fingers ----------
 
-  const keys = new Set<string>();
+  const keys = listenKeys(scope(), {
+    away: () => screen.at === "inside" || menu.isOpen,
+    mayAct: () => stage.mayAct(),
+    scene,
+    settings: () => {
+      menu.open();
+    },
+  });
   let mouse: Pt | null = null;
   /** What the pointer is resting on, since when, and whether its tip is up. */
   let rest: { hover: Hover; since: number; shown: boolean } | null = null;
   const TIP = {};
-
-  window.addEventListener("keydown", (e) => {
-    unlock();
-    // Typed into a field (a tome's reason), a key is a letter, not a step or a press.
-    if (screen.at === "inside" || typing(e)) return;
-    const k = e.key.toLowerCase();
-    // A control has the keyboard: a button, or anything the kit made one (a tip's owner, a card link).
-    const onButton = e.target instanceof HTMLElement && e.target.matches("button, [role='button'], a[href], summary");
-    // A key held down is one press: only walking goes on while its key is held (`keys`).
-    const repeated = heldAgain(e);
-    if (k === "enter" || k === " " || k === "e") {
-      // Taken already (a tip opened by its key): it is not a press in the world as well.
-      if (e.defaultPrevented) return;
-      if (!repeated && dismissArrival()) {
-        e.preventDefault();
-        return;
-      }
-      // A button that has the keyboard answers Enter and Space itself.
-      if (!repeated && (k === "e" || !onButton)) scene().act();
-      // Or Enter, and Enter held, would go on to press the first button of the card it has just opened.
-      if (k !== "e" && (!onButton || repeated)) e.preventDefault();
-      return;
-    }
-    if (!stage.mayAct()) return;
-    if (repeated) {
-      if (k.startsWith("arrow")) e.preventDefault();
-      // Still held when the town woke: the member walks on.
-      keys.add(k);
-      return;
-    }
-    if (k === "escape") {
-      // A card that took this Escape (the kit's says so) was the one layer it puts away.
-      if (!e.defaultPrevented) scene().back();
-      return;
-    }
-    if (scene().key(k)) {
-      e.preventDefault();
-      return;
-    }
-    if (k.startsWith("arrow")) e.preventDefault();
-    keys.add(k);
-  });
-  window.addEventListener("keyup", (e) => {
-    keys.delete(e.key.toLowerCase());
-  });
-  window.addEventListener("blur", () => {
+  /** Lets go of every key and press held: the window has lost the keyboard, or the settings menu is up. */
+  const letGo = (): void => {
     keys.clear();
     press.letGo();
-  });
+  };
+  window.addEventListener("blur", letGo);
   document.addEventListener("pointerdown", unlock, true);
 
   /** What a thing is: its card, for a camp thing; a line, for anything else. */

@@ -9,7 +9,6 @@ import { link } from "@sequoia-leaf/kit/card.ts";
 import { add, amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { balance, watch } from "@sequoia-leaf/kit/purse.ts";
-import { isMuted } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import {
   BOONS,
@@ -59,7 +58,8 @@ export interface Asks {
   speed: (s: Speed) => void;
   skipFight: () => void;
   help: () => void;
-  sound: () => void;
+  /** A gear for the settings menu. */
+  gear: () => HTMLElement;
   frontPage: () => void;
   /** Opens the last fight's sheet again, or puts it away. */
   lastFight: () => void;
@@ -109,13 +109,8 @@ export function buildTable(a: Asks): void {
     pic(glyph("help")),
   );
   tip(help, "How to play");
-  const sound = el("button", "k-btn wood icon sm", {
-    id: "sound",
-    type: "button",
-    "aria-label": "Sound",
-    onclick: a.sound,
-  });
-  tip(sound, "Sound");
+  const sound = a.gear();
+  sound.classList.add("sm");
   const door = el(
     "button",
     "k-btn wood icon sm",
@@ -558,12 +553,6 @@ export function placeFoe(): void {
 /** Draws the interface again from the run. */
 export function renderTable(): void {
   document.body.dataset.mode = S.screen.at;
-  const sound = byId("sound");
-  const muted = isMuted() ? "mute" : "sound";
-  if (sound) {
-    face(sound, muted, icon(muted));
-    sound.setAttribute("aria-pressed", String(!isMuted()));
-  }
   const run = S.run;
   document.body.classList.toggle("no-run", !run);
   if ((!run || S.screen.at === "front" || S.screen.at === "over") && (light.kept !== null || light.pointed !== null))
