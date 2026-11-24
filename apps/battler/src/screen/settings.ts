@@ -2,21 +2,15 @@
  * The table's settings menu (`menu.ts` in the kit): the table's own kinds of sound, and its keys.
  * The table is played with the pointer and a finger, so its keys are few.
  */
-import { keymap } from "@sequoia-leaf/kit/keyboard.ts";
 import { heldAgain } from "@sequoia-leaf/kit/keys.ts";
 import { type Menu, settingsMenu } from "@sequoia-leaf/kit/menu.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 
 import { handHooks, letGoHand } from "./hand.ts";
+import { RAID_KEYS } from "./keymap.ts";
 import { RAID_SOUNDS } from "./sounds.ts";
 import { sheetUp } from "./ui/fightsheet.ts";
 import { pageOver, showPage } from "./ui/pages.ts";
-
-/** The table's keys (`keyboard.ts` in the kit). Tab and Enter are the browser's own: the table reads only Escape. */
-export const RAID_KEYS = keymap({
-  buttons: { shelf: "At the table", does: "Go from button to button, and press one", keys: ["Tab", "Enter"] },
-  back: { shelf: "At the table", does: "Put down, put away, or this menu", keys: ["Escape"] },
-});
 
 /**
  * Makes the table's menu, for as long as `scope` stands: while it is up the table takes no presses,

@@ -6,11 +6,13 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import { BELT } from "@sequoia-leaf/factory";
+import { BELT, build, create } from "@sequoia-leaf/factory";
 import { deck } from "@sequoia-leaf/kit/card.ts";
+import { keyboard } from "@sequoia-leaf/kit/keyboard.ts";
 
 import { opened, useFakeLeaf } from "../test/fake-leaf.ts";
 import { aimOf } from "./hand.ts";
+import { WORKS_KEYS } from "./keymap.ts";
 import { S, toPage } from "./state.ts";
 import { setTool } from "./tools.ts";
 import { refAt } from "./ui/card.ts";
@@ -98,5 +100,68 @@ describe("the mouse over the yard", () => {
     pan(-(b.x - a.x) * 16 * (S.view.z / S.view.dpr), 0);
     stepInput(1 / 60);
     expect(aimOf(S.hand)).toMatchObject(b);
+  });
+});
+
+/** A key as a keyboard sends it: where it is, what it types there, and whether Shift is held. */
+const sent = (code: string, typed: string, shiftKey = false) => ({
+  code,
+  key: typed,
+  shiftKey,
+  ctrlKey: false,
+  metaKey: false,
+  altKey: false,
+});
+/** A key going down, or up, on the page. */
+const key = (kind: "keydown" | "keyup", code: string, typed: string, shift = false): void => {
+  window.dispatchEvent(Object.assign(new Event(kind), sent(code, typed, shift)));
+};
+
+describe("the keys", () => {
+  test("no two of the Works' actions share a key", () => {
+    expect(WORKS_KEYS.shared()).toEqual([]);
+  });
+
+  test("on AZERTY go by their place: its Q, where QWERTY has A, moves the view left; its A picks the piece pointed at", async () => {
+    const y = create({ seed: 5, tier: 1 });
+    build(y, BELT, 18, 13, 0, Infinity);
+    await opened(y);
+    setTool(null);
+    canvasPage();
+    keyboard.choose("azerty");
+    try {
+      // Room to move left: the view starts at the yard's edge.
+      pan(-400, 0);
+      const from = S.cam.x;
+      key("keydown", "KeyA", "q");
+      stepInput(0.1);
+      key("keyup", "KeyA", "q");
+      stepInput(0.1);
+      const moved = S.cam.x;
+      stepInput(0.1);
+      expect([moved < from, S.cam.x]).toEqual([true, moved]);
+      S.hover = { x: 18, y: 13 };
+      key("keydown", "KeyQ", "a");
+      expect(S.tool).toBe(BELT);
+      // And named as AZERTY prints them, in the Keys tab and in every hint.
+      expect([WORKS_KEYS.name("left"), WORKS_KEYS.name("another")]).toEqual(["Q", "A"]);
+    } finally {
+      keyboard.choose("qwerty");
+    }
+  });
+
+  test("Minus and Equal pick the eleventh and twelfth tools; with Shift, they zoom; the number pad's + and - zoom too", () => {
+    const of = (code: string, typed: string, shift = false): unknown => WORKS_KEYS.of(sent(code, typed, shift))?.id;
+    expect([of("Minus", "-"), of("Equal", "="), of("Minus", "_", true), of("Equal", "+", true)]).toEqual([
+      "tool",
+      "tool",
+      "zoomOut",
+      "zoomIn",
+    ]);
+    expect([of("NumpadAdd", "+"), of("NumpadSubtract", "-"), WORKS_KEYS.of(sent("Equal", "="))?.nth]).toEqual([
+      "zoomIn",
+      "zoomOut",
+      11,
+    ]);
   });
 });
