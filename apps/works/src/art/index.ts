@@ -15,6 +15,7 @@ import {
   type Land,
   LEFT,
   NONE,
+  RIGHT,
 } from "@sequoia-leaf/factory";
 import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
@@ -52,10 +53,11 @@ export interface Art {
   parcel: Sprite;
   sign: (price: number) => Sprite;
   /**
-   * What lies over a sorter's tile, facing a way: its gate, and the board that shows the thing it
-   * sends to its left; with no thing (`NONE`), the board is bare.
+   * What lies over a sorter's tile, facing a way: its gate, the arrowhead on the side it sends to
+   * (its right with `right`, else its left), and the board that shows the thing it sends there;
+   * with no thing (`NONE`), the board is bare.
    */
-  sorter: (dir: Dir, item: number) => HTMLCanvasElement;
+  sorter: (dir: Dir, item: number, right?: boolean) => HTMLCanvasElement;
   /** A machine's picture for a button or a card, as it stands at a grade (the first, unless said). */
   icon: (kind: Kind, grade?: number) => HTMLCanvasElement;
 }
@@ -152,21 +154,21 @@ const meeting = (m: Machines, a: Arms, top: HTMLCanvasElement | undefined, grade
 
 /**
  * What lies over a sorter pointing east: a framed board across the belt, things passing under it,
- * and an arrowhead on the way out to its left, in brass once it is set to a thing. Turned for the
- * other ways, with the thing on the board the right way up whichever way it points.
+ * and an arrowhead on the way out to its side (left, or right), in brass once it is set to a thing.
+ * Turned for the other ways, with the thing on the board the right way up whichever way it points.
  */
 function sorterTops(plain: ItemArt): Art["sorter"] {
   const made = new Map<number, HTMLCanvasElement>();
-  return (dir, item) => {
-    const key = dir * (ITEM_COUNT + 1) + (isItem(item) ? item : ITEM_COUNT);
+  return (dir, item, right = false) => {
+    const key = ((right ? 4 : 0) + dir) * (ITEM_COUNT + 1) + (isItem(item) ? item : ITEM_COUNT);
     const had = made.get(key);
     if (had) return had;
     const set = isItem(item);
     const { c, g } = makeCanvas(TILE, TILE);
-    // The arrowhead, on the edge things leave by to the left: drawn pointing north, and turned.
+    // The arrowhead, on the edge things leave by to its side: drawn pointing north, and turned.
     g.save();
     g.translate(8, 8);
-    g.rotate(((LEFT[dir] + 1) * Math.PI) / 2);
+    g.rotate((((right ? RIGHT : LEFT)[dir] + 1) * Math.PI) / 2);
     g.translate(-8, -8);
     const [dark, body] = set ? [GOLD[0], GOLD[1]] : [BARK[1], BARK[2]];
     R(g, 4, 2, 8, 1, INK);

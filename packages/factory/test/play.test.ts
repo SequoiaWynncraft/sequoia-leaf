@@ -103,7 +103,13 @@ class Player {
       case 7:
         return { do: "saveBlueprint", slot: this.int(F.BLUEPRINTS_MOST), tiles: this.box() };
       case 8: {
-        // A move or a copy, by the size of the box: the same draws either way.
+        // Now and then a copy of one piece onto ground where a piece may stand, which a box at
+        // random seldom finds; else a move or a copy, by the size of the box: the same draws either way.
+        if (this.r() < 0.15) {
+          const from = this.spot();
+          const to = this.where();
+          return { do: "copy", tiles: F.within(y, from.x, from.y, from.x, from.y), turns: 0, x: to.x, y: to.y };
+        }
         const tiles = this.box();
         return { do: tiles.length % 3 === 0 ? "copy" : "move", tiles, turns: this.int(4), ...this.spot() };
       }
@@ -118,8 +124,12 @@ class Player {
         const made = (F.MADE_BY[y.kind[F.at(y, m.x, m.y)] ?? F.NONE] ?? []).map((r) => F.itemName(r.out));
         return { do: "recipe", item: this.r() < 0.1 ? null : this.pick(this.r() < 0.7 ? made : things), ...m };
       }
-      case 13:
-        return { do: "sort", item: this.r() < 0.2 ? null : this.pick(things), ...this.of(F.SORTER) };
+      case 13: {
+        // Set to a thing, or to none; now and then flipped to one side or the other.
+        const r = this.r();
+        if (r < 0.25) return { do: "side", right: r < 0.15, ...this.of(F.SORTER) };
+        return { do: "sort", item: r < 0.4 ? null : this.pick(things), ...this.of(F.SORTER) };
+      }
       case 14:
         return {
           do: "tipOut",

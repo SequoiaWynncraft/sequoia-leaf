@@ -173,8 +173,9 @@ export const S: {
   readonly corner: Tile | null;
   readonly group: Group | null;
   readonly saving: boolean;
-  /** The way a piece in hand faces. */
+  /** The way a piece in hand faces, and for a sorter, whether it sends the thing it is set to to its right. */
   dir: Dir;
+  right: boolean;
   /** The grade each kind of piece is built at when it is in hand, by kind: 0 for one never chosen, which is the first (`gradeInHand`). */
   grades: Uint8Array;
   /** The colour on the brush, 1 to 6, or 0 to take colour off: kept while the page is open. */
@@ -225,6 +226,7 @@ export const S: {
     return S.hand.is === "select" && S.hand.stage.is === "saving";
   },
   dir: 0,
+  right: false,
   grades: new Uint8Array(KIND_COUNT),
   tint: 1,
   hover: null,

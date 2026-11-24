@@ -24,7 +24,6 @@ import {
   type Dir,
   DX,
   DY,
-  type Goal,
   gradeOf,
   highest,
   isGraded,
@@ -42,7 +41,6 @@ import {
   piecesAt,
   piecesOf,
   placed,
-  type Plot,
   priceAt,
   priceOf,
   refusal,
@@ -50,6 +48,7 @@ import {
   replaces,
   RIGHT,
   route,
+  SORTER,
   STAND_MOST,
   standRefusal,
   tilesOf,
@@ -60,12 +59,12 @@ import {
   worthAt,
 } from "@sequoia-leaf/factory";
 import { close as closeCards } from "@sequoia-leaf/kit/card.ts";
-import { CREAM, GOLD, GREEN, SKY } from "@sequoia-leaf/kit/palette.ts";
+import { CREAM, GOLD, SKY } from "@sequoia-leaf/kit/palette.ts";
 
 import { PAINTS, TILE } from "./art/belts.ts";
 import { float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { aimOf, groupOf, type HandEvent, markOf, runOf, step, type Tile } from "./hand.ts";
-import { layout } from "./layout.ts";
+import { keepsRight, sendsRight } from "./layout.ts";
 import { yardSfx } from "./sound.ts";
 import {
   type Aim,
@@ -91,10 +90,11 @@ export const toolHooks: { changed: () => void; said: (text: string) => void } = 
  * Something done that can be undone: things built (`under`: the piece one of them took the place
  * of; `was`: pieces of the same kind that stood where some were set down, as they stood, which the
  * setting down turned, raised or lowered), pieces raised where they stand (as they stood), things
- * taken away, a thing turned, lines coloured (the tile each was coloured by, and the colour that tile
- * had), pieces moved as one (`tiles`: where they stand now, with the turns and the corner that put
- * them back), a splitter's way shut, opened or put first (its shut ways and the way it put first, as
- * they were).
+ * taken away, a thing turned or a sorter flipped (the way it faced, and where it was flipped,
+ * `right`: whether it sent to its right), lines coloured (the tile each was coloured by, and the
+ * colour that tile had), pieces moved as one (`tiles`: where they stand now, with the turns and the
+ * corner that put them back), a splitter's way shut, opened or put first (its shut ways and the way
+ * it put first, as they were).
  */
 type Done =
   | {
@@ -106,7 +106,7 @@ type Done =
     }
   | { did: "raised"; was: readonly Piece[] }
   | { did: "took"; what: readonly Piece[] }
-  | { did: "turned"; i: number; was: Dir }
+  | { did: "turned"; i: number; was: Dir; right?: boolean }
   | { did: "way"; i: number; shut: number; first: number }
   | { did: "painted"; stroke: number; lines: readonly { i: number; was: number }[] }
   | { did: "moved"; tiles: number[]; turns: Dir; x: number; y: number };
@@ -322,6 +322,7 @@ export function aimAt(x: number, y: number): void {
           S.dir = dirOf(i);
           toolHooks.changed();
         }
+        sideOver(h.kind, i);
       }
       go({ do: "aim", aim: buildAim(h.kind, x, y), faced: i });
     }
@@ -394,12 +395,13 @@ export function place(x: number, y: number): boolean {
   const i = at(w, x, y);
   const there = kindAt(w, x, y);
   const was = there === NONE ? undefined : dirOf(i);
+  const wasRight = sendsRight(w, i);
   const under = there !== NONE && replaces(tool, there) ? standing(i) : null;
   const grade = gradeOn(tool, i);
   // Over a piece of its kind of a lower grade: that piece, as it stands, to put back.
   const raised = raisedOn(tool, i) === undefined ? null : standing(i);
   const cost = priceAt(w, tool, x, y, grade);
-  const did = doNow({ do: "build", kind: tool, x, y, dir: S.dir, grade });
+  const did = doNow({ do: "build", kind: tool, x, y, dir: S.dir, grade, ...sideInHand(tool) });
   if ("refused" in did) {
     go({ do: "aim", aim: aimed(x, y, did.why, 0) });
     yardSfx.no();
@@ -410,8 +412,9 @@ export function place(x: number, y: number): boolean {
     remember({ did: "raised", was: [raised] }, did);
     lifted(x, y, cost);
   } else if (there !== NONE && !under) {
-    if (was !== undefined && was !== S.dir) {
-      remember({ did: "turned", i, was }, did);
+    const turned = was === undefined ? null : turnedFrom(i, was, wasRight);
+    if (turned) {
+      remember(turned, did);
       yardSfx.turn();
     }
   } else {
@@ -615,12 +618,65 @@ export function rotate(): void {
   toolHooks.changed();
 }
 
-/** Takes up the tool for whatever stands on a tile, facing the way it faces, at its grade. */
+/** What a sorter in hand is built with: the side it sends to. Nothing for any other kind. */
+const sideInHand = (tool: Kind): { right?: boolean } => (tool === SORTER ? { right: S.right } : {});
+
+/** A sorter in hand, brought over a sorter, sends to that one's side, as it faces its way, until it is flipped. */
+function sideOver(tool: Kind, i: number): void {
+  if (tool !== SORTER || S.world.kind[i] !== SORTER || S.right === sendsRight(S.world, i)) return;
+  S.right = !S.right;
+  toolHooks.changed();
+}
+
+/** What building over a piece of its kind changed that can be undone: the way it faced, and a sorter's side (`right`, as it was). */
+function turnedFrom(i: number, was: Dir, right: boolean): Done | null {
+  const flipped = sendsRight(S.world, i) !== right;
+  return was !== dirOf(i) || flipped ? { did: "turned", i, was, ...(flipped ? { right } : {}) } : null;
+}
+
+/** Turns a thing back the way it faced, and flips a sorter back to the side it sent to. */
+function unturn(d: { readonly i: number; readonly was: Dir; readonly right?: boolean }): void {
+  if (dirOf(d.i) !== d.was) doNow({ do: "turn", ...xy(d.i), dir: d.was });
+  if (d.right !== undefined) doNow({ do: "side", ...xy(d.i), right: d.right });
+}
+
+/** X: flips the sorter in hand to send to its other side, or with nothing in hand the sorter pointed at. */
+export function flip(): void {
+  const h = S.hand;
+  if (h.is === "idle") {
+    const on = S.picked >= 0 ? xy(S.picked) : S.hover;
+    if (on) flipAt(on.x, on.y);
+    return;
+  }
+  if (h.is !== "build" || h.kind !== SORTER) return;
+  S.right = !S.right;
+  yardSfx.turn();
+  keepAim(true);
+  toolHooks.changed();
+}
+
+/** Flips the sorter on a tile to send the thing it is set to to its other side. Says whether it did. */
+export function flipAt(x: number, y: number): boolean {
+  const i = at(S.world, x, y);
+  if (kindAt(S.world, x, y) !== SORTER) {
+    yardSfx.no();
+    return false;
+  }
+  const was = sendsRight(S.world, i);
+  const did = doNow({ do: "side", x, y, right: !was });
+  if ("refused" in did) return false;
+  remember({ did: "turned", i, was: dirOf(i), right: was }, did);
+  yardSfx.turn();
+  return true;
+}
+
+/** Takes up the tool for whatever stands on a tile, facing the way it faces (a sorter to its side too), at its grade. */
 export function pickFrom(x: number, y: number): boolean {
   const k = kindAt(S.world, x, y);
   if (k === NONE || k === DEPOT || !isKind(k) || !usable(k)) return false;
   const i = at(S.world, x, y);
   S.dir = dirOf(i);
+  if (k === SORTER) S.right = sendsRight(S.world, i);
   if (isGraded(k)) S.grades[k] = S.world.grade[i] ?? 1;
   setTool(k);
   yardSfx.pick();
@@ -722,7 +778,7 @@ function undoNow(last: Done): void {
   else if (last.did === "moved") {
     const no = does({ do: "move", tiles: last.tiles, turns: last.turns, x: last.x, y: last.y });
     if (no !== null) cannotUndo(no);
-  } else doNow({ do: "turn", ...xy(last.i), dir: last.was });
+  } else unturn(last);
   yardSfx.undo();
   // What was marked or in hand may be what was undone.
   if (S.hand.is === "select") go({ do: "pick", tool: "select" });
@@ -1105,11 +1161,12 @@ function setDown(): boolean {
   // What a copy would stand that is not there now, and the pieces some of it would take the place of.
   const stood = g.at.filter((p) => kindAt(w, p.x, p.y) !== p.kind);
   const under = stood.flatMap((p) => standing(at(w, p.x, p.y)) ?? []);
-  // Pieces of the same kind already standing there that the rules would turn, raise or lower: as they stand now.
+  // Pieces of the same kind already standing there that the rules would turn (a sorter to another
+  // side too), raise or lower: as they stand now.
   const changed = g.at.flatMap((p) => {
     const i = at(w, p.x, p.y);
     if (kindAt(w, p.x, p.y) !== p.kind) return [];
-    const turns = p.kind !== TUNNEL && dirOf(i) !== p.dir;
+    const turns = (p.kind !== TUNNEL && dirOf(i) !== p.dir) || sendsRight(w, i) !== keepsRight(p);
     return turns || gradeOf(p.kind, p.grade) !== (w.grade[i] ?? 0) ? (standing(i) ?? []) : [];
   });
   const moving = g.as === "move";
@@ -1237,58 +1294,4 @@ export function dropBlueprint(slot: number): void {
   if (groupOf(S.hand)?.as === slot) go({ do: "unhold" });
   yardSfx.take();
   toolHooks.changed();
-}
-
-// ---------- land, and the node in hand ----------
-
-/** Buys a plot: the undergrowth comes down from its signpost outwards, before the member's eyes. */
-export function buyLand(id: Plot): boolean {
-  const w = S.world;
-  const plot = w.land.plots.find((p) => p.plot === id);
-  const sign = layout(w).signs.find((s) => s.plot.plot === id);
-  const no = plot ? does({ do: "buyPlot", plot: id }) : "There is no such plot";
-  if (!plot || no !== null) {
-    yardSfx.no();
-    toolHooks.said(`${no}.`);
-    return false;
-  }
-  const from = sign ?? { x: (plot.x + plot.w / 2) * TILE, y: (plot.y + plot.h / 2) * TILE };
-  S.clearing.set(id, { at: S.t, x: from.x, y: from.y });
-  yardSfx.clear();
-  float(from.x, from.y - 20, plot.name, GOLD[2], 2.4);
-  return true;
-}
-
-/** Each frame: leaves fly where the undergrowth is coming down, and a cleared plot is done with. */
-export function stepClearing(): void {
-  const w = S.world;
-  for (const [id, c] of S.clearing) {
-    const plot = w.land.plots.find((p) => p.plot === id);
-    const r = (S.t - c.at) * 260;
-    if (!plot || r > 420) {
-      S.clearing.delete(id);
-      continue;
-    }
-    for (let k = 0; k < 3; k++) {
-      const a = Math.random() * Math.PI * 2;
-      const x = c.x + Math.cos(a) * r;
-      const y = c.y + Math.sin(a) * r;
-      if (x < plot.x * TILE || y < plot.y * TILE || x > (plot.x + plot.w) * TILE || y > (plot.y + plot.h) * TILE)
-        continue;
-      flutter(x, y, 2, [GREEN[2], GREEN[3], GREEN[1]], 6, 26);
-    }
-  }
-}
-
-/** Takes a project, or the commission, in hand: what reaches the depot goes to it first. Says why not, or nothing. */
-export function takeInHand(g: Goal): string | null {
-  const no = does({ do: "take", node: g });
-  if (no !== null) {
-    yardSfx.no();
-    toolHooks.said(`${no}.`);
-    return no;
-  }
-  yardSfx.plan();
-  toolHooks.changed();
-  return null;
 }

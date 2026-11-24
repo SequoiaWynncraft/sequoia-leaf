@@ -41,7 +41,7 @@ import {
   WORK,
   WORKSHOP,
 } from "./tables.ts";
-import { ahead, behind, carries, nextOf, power, rewire, wayIn, wayOut } from "./wire.ts";
+import { ahead, behind, carries, nextOf, power, rewire, sortWay, wayIn, wayOut } from "./wire.ts";
 import { type Counts, held, holderOf, tunnelOf, type Yard } from "./yard.ts";
 
 /** How a thing stands: doing its job, with nothing to do just now, or in trouble that will not mend itself. */
@@ -129,7 +129,12 @@ function takenAhead(y: Yard, i: number, n: Item): "yes" | "nothing" | "never" {
   const ways = k0 === SPLITTER ? 3 : 1;
   let found: "nothing" | "never" = "nothing";
   for (let w = 0; w < ways; w++) {
-    const to = k0 === SPLITTER ? wayOut(y, i, w) : k0 === SORTER ? wayOut(y, i, n === y.set[i] ? 1 : 0) : nextOf(y, i);
+    const to =
+      k0 === SPLITTER
+        ? wayOut(y, i, w)
+        : k0 === SORTER
+          ? wayOut(y, i, n === y.set[i] ? sortWay(y, i) : 0)
+          : nextOf(y, i);
     if (to < 0 || (y.kind[to] ?? NONE) === NONE) continue;
     found = "never";
     if (takes(y, i, to, n)) return "yes";

@@ -13,9 +13,10 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
 import { TILE } from "../art/belts.ts";
 import type { Art } from "../art/index.ts";
+import { buyLand, takeInHand } from "../plots.ts";
 import { yardSfx } from "../sound.ts";
 import { S, toPage } from "../state.ts";
-import { buyLand, pickFrom, raiseAt, takeAway, takeInHand, toolHooks, turnAt, wayAt } from "../tools.ts";
+import { flipAt, pickFrom, raiseAt, takeAway, toolHooks, turnAt, wayAt } from "../tools.ts";
 import { doNow } from "../yard.ts";
 import { cardOf, type Hands } from "./cards.ts";
 import { togglePanel } from "./panels.ts";
@@ -53,6 +54,7 @@ export function riderAt(x: number, y: number): string | null {
 const HANDS: Hands = {
   act: (a) => !("refused" in doNow(a)),
   turn: (x, y) => void turnAt(x, y),
+  flip: (x, y) => void flipAt(x, y),
   another: (x, y) => void pickFrom(x, y),
   remove: (x, y) => void takeAway(x, y),
   raise: (x, y) => void raiseAt(x, y),

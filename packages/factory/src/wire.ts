@@ -40,9 +40,18 @@ export const behind = (y: Yard, i: number): number => toward(y.land, i, (y.dir[i
 const left = (y: Yard, i: number): number => toward(y.land, i, (y.dir[i] ?? 0) + 3);
 const right = (y: Yard, i: number): number => toward(y.land, i, (y.dir[i] ?? 0) + 1);
 
+/**
+ * The way a sorter sends the thing it is set to: 1, to its left, or 2, to its right. It is kept as
+ * a splitter keeps the way it puts first, 1 + the way, but only 3 is kept: 0 is the left, the way
+ * every sorter sent before one could be set to the right.
+ */
+export const sortWay = (y: Yard, i: number): 1 | 2 => (y.first[i] === 3 ? 2 : 1);
+/** The ways out a piece has shut, a bit each: a splitter's as they are set, and a sorter's the side it does not send to. */
+const shutWays = (y: Yard, i: number): number =>
+  y.kind[i] === SORTER ? (sortWay(y, i) === 1 ? 4 : 2) : (y.shut[i] ?? 0);
 /** A splitter's or a sorter's way out (0 ahead, 1 left, 2 right), or -1 where it is shut or off the map. */
 export const wayOut = (y: Yard, i: number, way: number): number =>
-  ((y.shut[i] ?? 0) >> way) & 1 ? -1 : way === 0 ? ahead(y, i) : way === 1 ? left(y, i) : right(y, i);
+  (shutWays(y, i) >> way) & 1 ? -1 : way === 0 ? ahead(y, i) : way === 1 ? left(y, i) : right(y, i);
 /** A joiner's way in (0 behind, 1 left, 2 right), or -1 off the map. */
 export const wayIn = (y: Yard, i: number, way: number): number =>
   way === 0 ? behind(y, i) : way === 1 ? left(y, i) : right(y, i);
@@ -67,8 +76,8 @@ export function nextOf(y: Yard, i: number): number {
 /** Whether a kind carries things across its tile, and whether it is a machine that makes things. */
 export const carries = (k: number): k is Kind =>
   k === BELT || k === SPLITTER || k === JOINER || k === TUNNEL || k === SORTER;
-/** How many ways out a piece with ways has: a splitter 3, a sorter 2 (ahead and left). */
-export const waysOf = (k: number): number => (k === SPLITTER ? 3 : k === SORTER ? 2 : 0);
+/** How many ways out a piece with ways has: a splitter's and a sorter's are ahead, left and right (a sorter's other side shut). */
+export const waysOf = (k: number): number => (k === SPLITTER || k === SORTER ? 3 : 0);
 const isWorker = (k: number): boolean => k === MILL || k === BENCH || k === WORKSHOP;
 
 /**

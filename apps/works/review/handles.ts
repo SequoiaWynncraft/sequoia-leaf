@@ -32,11 +32,11 @@ import { forget } from "../src/events.ts";
 import { fingerTap } from "../src/input.ts";
 import { layout } from "../src/layout.ts";
 import type { Page } from "../src/main.ts";
+import { buyLand } from "../src/plots.ts";
 import { lap, picture, spent } from "../src/scene.ts";
 import { builds, gradeInHand, S, type Tool, toPage } from "../src/state.ts";
 import {
   aimAt,
-  buyLand,
   confirm,
   paintAt,
   place,

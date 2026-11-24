@@ -58,7 +58,7 @@ export const RESEARCH: readonly ResearchInfo[] = [
     id: "sorter",
     tier: 3,
     name: "The sorter",
-    what: "Unlocks the sorter, which sends one item to its left and the rest straight on.",
+    what: "Unlocks the sorter, which sends one item to its left or right and the rest straight on.",
     cost: { timber: 450 },
     unlocks: { kinds: ["sorter"] },
   },

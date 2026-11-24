@@ -129,7 +129,7 @@ export const KIND: Record<KindName, KindInfo> = {
     cost: 12,
     draw: 0,
     gives: 0,
-    what: "Takes items in from behind. The one item it is set to goes out to its left; everything else goes straight on.",
+    what: "Takes items in from behind. The one item it is set to goes out to its left, or to its right once flipped; everything else goes straight on. While the belt an item goes to is full, the sorter waits.",
   },
 };
 

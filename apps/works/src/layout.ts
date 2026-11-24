@@ -12,12 +12,15 @@ import {
   BELT,
   BOILER,
   DEPOT,
+  type Dir,
   gradeOf,
+  isDir,
   JOINER,
   LEFT,
   litOf,
   nextOf,
   NONE,
+  type Piece,
   piecesAt,
   plotState,
   type Plotted,
@@ -25,6 +28,7 @@ import {
   REACH,
   RIGHT,
   SORTER,
+  sortWay,
   SPLITTER,
   squared,
   STOP,
@@ -77,8 +81,20 @@ export const pylonTop = (x: number, y: number, tall: boolean): Pt => ({
   y: (y + 1) * TILE - (tall ? 33 : 25),
 });
 
-/** The ways a splitter (3) or a sorter (2, ahead and left) sends things. */
-const waysOf = (k: number): number => (k === SPLITTER ? 3 : k === SORTER ? 2 : 0);
+/** Whether the piece on a tile is a sorter that sends the thing it is set to to its right. */
+export const sendsRight = (y: Yard, i: number): boolean => y.kind[i] === SORTER && sortWay(y, i) === 2;
+
+/** Whether a piece, as kept or in hand, is a sorter that sends the thing it is set to to its right. */
+export const keepsRight = (p: Piece): boolean => p.kind === SORTER && p.first === 2;
+
+/** The side of its tile a sorter sends the thing it is set to out by: its left, or its right. */
+export function sortSide(y: Yard, i: number): Dir {
+  const d = y.dir[i] ?? 0;
+  return (sendsRight(y, i) ? RIGHT : LEFT)[isDir(d) ? d : 0];
+}
+
+/** The ways a splitter or a sorter sends things: ahead, left and right (`wayOut` says which are shut). */
+const waysOf = (k: number): number => (k === SPLITTER || k === SORTER ? 3 : 0);
 
 /** Whether the piece on `from` hands things to the tile `to`, as the belts are drawn. */
 function feeds(y: Yard, from: number, to: number): boolean {
@@ -131,8 +147,8 @@ export function armsAt(y: Yard, i: number): Arms {
     for (const side of led.length > 0 ? led : open) a = withArm(a, side, 2);
     return a;
   }
-  // A sorter takes in from behind and sends ahead, and the one thing it is set to, to its left.
-  if (k === SORTER) return withArm(withArm(withArm(0, back, 1), d, 2), left, 2);
+  // A sorter takes in from behind and sends ahead, and the one thing it is set to, to its side.
+  if (k === SORTER) return withArm(withArm(withArm(0, back, 1), d, 2), sortSide(y, i), 2);
   if (k === TUNNEL) return (y.span[i] ?? 0) > 0 ? withArm(0, back, 1) : withArm(0, d, 2);
   return 0;
 }
