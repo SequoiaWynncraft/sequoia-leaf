@@ -4,7 +4,7 @@
 # Leaf's play service), and the raid's figures, which the raid's page and the
 # town's draw (packages/figures). Each build is plain files, so only
 # /app/public goes on to the image.
-FROM docker.io/oven/bun:1.4.4-slim AS pages
+FROM docker.io/oven/bun:1.4.5-slim AS pages
 
 WORKDIR /app
 
@@ -35,7 +35,7 @@ RUN for app in town works battler; do \
       (cd "apps/$app" && bun build index.html --outdir "/app/public/$app" --minify) || exit 1; \
     done
 
-FROM docker.io/oven/bun:1.4.4-slim
+FROM docker.io/oven/bun:1.4.5-slim
 
 WORKDIR /app
 

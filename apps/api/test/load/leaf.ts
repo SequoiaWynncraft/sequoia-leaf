@@ -9,7 +9,7 @@
  * 200 who only visit (`v<n>`); and `cold` more such yards (50 by default), left eight hours ago,
  * that no page keeps up. To see it as the 4-core server would run it, start it in a scope of its own:
  *
- *   systemd-run --user --scope -p CPUQuota=400% -p MemoryMax=16G mise x bun@1.4.4 -- bun apps/api/test/load/leaf.ts 4400
+ *   systemd-run --user --scope -p CPUQuota=400% -p MemoryMax=16G mise x bun@1.4.5 -- bun apps/api/test/load/leaf.ts 4400
  *
  * Beside Leaf's routes, for the driver:
  * - `POST /load/phase?name=<name>` ends the phase under way and begins another.
