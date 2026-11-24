@@ -1,8 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, jest, test } from "bun:test";
 
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
+import { scope } from "@sequoia-leaf/kit/scope.ts";
 
-import { laidOut, readBoard, scoreText } from "./tally.ts";
+import { laidOut, readBoard, rising, scoreText } from "./tally.ts";
 
 const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
 const answer = (name: string): unknown => (isRecord(GAME) && isRecord(GAME[name]) ? GAME[name].body : null);
@@ -57,5 +58,35 @@ describe("a board of the Tally", () => {
     });
     expect(on.own).toBeNull();
     expect(on.rest).toEqual([]);
+  });
+});
+
+describe("a board rising", () => {
+  test("sounds its notes while it stays, and none once another board is drawn in its place or the panel shuts", () => {
+    jest.useFakeTimers();
+    try {
+      const life = scope();
+      const heard: string[] = [];
+      const podium = rising(life);
+      const note = (word: string) => () => void heard.push(word);
+      podium.rise([
+        [140, note("third")],
+        [300, note("second")],
+        [480, note("first")],
+      ]);
+      jest.advanceTimersByTime(200);
+      // Another board is chosen before the first one's second and first have landed.
+      podium.rise([[480, note("other first")]]);
+      jest.advanceTimersByTime(1000);
+      expect(heard).toEqual(["third", "other first"]);
+      podium.rise([[140, note("again")]]);
+      podium.still();
+      podium.rise([[140, note("last")]]);
+      life.close();
+      jest.advanceTimersByTime(1000);
+      expect(heard).toEqual(["third", "other first"]);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

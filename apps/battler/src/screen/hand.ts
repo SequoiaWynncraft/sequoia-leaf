@@ -11,8 +11,8 @@ import { framesOf } from "@sequoia-leaf/figures/sprites.ts";
  * lets go of; `scene.ts` draws the marks worked out from it (`handMarks`).
  */
 import { canvasCard, close, hold, onCard, pick as pickCard, point, show, surface } from "@sequoia-leaf/kit/card.ts";
+import { LONG_PRESS } from "@sequoia-leaf/kit/press.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
-import { LONG_PRESS } from "@sequoia-leaf/kit/tip.ts";
 import { pieceAt, type RunView, sellValue, type Spot } from "@sequoia-leaf/raid";
 
 import { unitUnder } from "./fightview.ts";

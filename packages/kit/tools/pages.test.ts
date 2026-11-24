@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { ignoring, pageSources, repository } from "./pages.ts";
 
@@ -29,39 +29,4 @@ describe("the image's page stage", () => {
     expect(sources).toContain("packages/kit");
     expect(sources).not.toContain("apps/api");
   });
-});
-
-/** Every file under a folder, as paths from the repository's root. */
-function files(dir: string): string[] {
-  return readdirSync(dir).flatMap((name) => {
-    const path = join(dir, name);
-    if (name === "node_modules") return [];
-    return statSync(path).isDirectory() ? files(path) : [relative(repository, path)];
-  });
-}
-/** What a file imports, or a page loads: every specifier in it. */
-const specifiers = (text: string): string[] =>
-  [...text.matchAll(/(?:\bfrom\s+|\bimport\s*\(\s*|\bimport\s+|\bsrc=|\bhref=)["']([^"']+)["']/g)].flatMap((m) =>
-    m[1] === undefined ? [] : [m[1]],
-  );
-
-test("what ships never imports from a review/ folder: no file of any app's or package's src, nor an app's page", () => {
-  const roots = ["apps", "packages"].flatMap((top) =>
-    readdirSync(join(repository, top)).map((name) => join(repository, top, name)),
-  );
-  const shipped: string[] = [];
-  for (const dir of roots) {
-    if (statSync(join(dir, "src"), { throwIfNoEntry: false })?.isDirectory()) shipped.push(...files(join(dir, "src")));
-    if (statSync(join(dir, "index.html"), { throwIfNoEntry: false }))
-      shipped.push(relative(repository, join(dir, "index.html")));
-  }
-  expect(shipped.length).toBeGreaterThan(100);
-  const wrong = shipped.flatMap((path) =>
-    /\.(ts|html|css)$/.test(path)
-      ? specifiers(readFileSync(join(repository, path), "utf8"))
-          .filter((spec) => /(^|\/)review\//.test(spec))
-          .map((spec) => `${path}: ${spec}`)
-      : [],
-  );
-  expect(wrong).toEqual([]);
 });

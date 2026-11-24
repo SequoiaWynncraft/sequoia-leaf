@@ -477,6 +477,7 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
     },
     drag: () => undefined,
     release: () => undefined,
+    cancel: () => undefined,
     cameBack: () => undefined,
     handles: {
       state: () => ({

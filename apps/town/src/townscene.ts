@@ -560,6 +560,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     key: () => false,
     drag: () => undefined,
     release: () => undefined,
+    cancel: () => undefined,
 
     cameBack(id) {
       doorTo({ game: id, phase: "out" });

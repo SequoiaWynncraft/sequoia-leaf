@@ -73,18 +73,22 @@ export function purseBar(host: HTMLElement, coins: () => number = () => balance(
   };
 }
 
+/** What flies: a kit icon, or a picture of the page's own, made for each one. */
+export type Flier = IconName | (() => HTMLElement);
+
 /**
  * Little pictures that fly from one spot on the page to another: Leaf leaving the purse, Coins
- * arriving. `each` is called as each one lands (at once, for a player who asked for less motion).
+ * arriving, a thing going to where it is kept. `each` is called as each one lands (at once, with
+ * nothing drawn, for a player who asked for less motion).
  */
-export function fly(what: IconName, from: Pt, to: Pt, count: number, each: ((i: number) => void) | null = null): void {
+export function fly(what: Flier, from: Pt, to: Pt, count: number, each: ((i: number) => void) | null = null): void {
   // Asked for less motion, they land at once.
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     for (let i = 0; i < count; i++) each?.(i);
     return;
   }
   for (let i = 0; i < count; i++) {
-    const c = icon(what);
+    const c = typeof what === "string" ? icon(what) : what();
     c.style.cssText = "position:fixed;left:0;top:0;z-index:95;pointer-events:none";
     document.body.append(c);
     const half = c.getBoundingClientRect().width / 2;

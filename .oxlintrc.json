@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "unicorn", "oxc", "import", "promise"],
+  "jsPlugins": ["./packages/kit/tools/lint-rules.mjs"],
   "categories": {
     "correctness": "error",
     "suspicious": "error",
@@ -13,6 +14,49 @@
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error",
     "typescript/no-non-null-assertion": "error",
-    "typescript/switch-exhaustiveness-check": "error"
-  }
+    "typescript/switch-exhaustiveness-check": "error",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": ["react", "preact", "solid-js", "vue"],
+        "patterns": ["react/**", "preact/**", "solid-js/**", "vue/**"]
+      }
+    ],
+    "leaf/hook-framework": "error",
+    "leaf/raw-browser": "error",
+    "leaf/module-let": "error"
+  },
+  "overrides": [
+    {
+      "files": ["apps/*/src/**", "apps/api/migrations/**", "packages/*/src/**"],
+      "excludeFiles": ["**/*.test.ts", "packages/kit/src/standin.ts", "packages/raid/src/testkit.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 500, "skipBlankLines": true, "skipComments": true }],
+        "max-lines-per-function": ["error", { "max": 90, "skipBlankLines": true, "skipComments": true }],
+        "complexity": ["error", { "max": 15 }]
+      }
+    },
+    {
+      "files": [
+        "**/*.test.ts",
+        "**/test/**",
+        "**/review/**",
+        "**/tools/**",
+        "packages/kit/src/standin.ts",
+        "packages/raid/src/testkit.ts",
+        "packages/factory/*.ts",
+        "packages/factory/pace/**"
+      ],
+      "rules": {
+        "leaf/raw-browser": "off",
+        "leaf/module-let": "off"
+      }
+    },
+    {
+      "files": ["packages/kit/src/scope.ts"],
+      "rules": {
+        "leaf/raw-browser": "off"
+      }
+    }
+  ]
 }

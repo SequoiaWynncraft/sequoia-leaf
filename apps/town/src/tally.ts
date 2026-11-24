@@ -2,13 +2,15 @@
  * The Tally as the page has it: a board as Leaf sends it (`GET /v1/game/tally/{board}/{period}`),
  * read back; how a board writes its score; and how a board is laid out: the top three on the
  * podium, the rest of the ten under it, and the member's own place at the foot when they are not
- * among them; and whether the member has opened it yet. No page in it: `tallyui.ts` draws it.
+ * among them; whether the member has opened it yet; and the notes a board rises to. No page in it:
+ * `tallyui.ts` draws it.
  */
 
 import type { Period, TallyUnit } from "@sequoia-leaf/core";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { duration } from "@sequoia-leaf/kit/person.ts";
+import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 
 /** Kept in the browser once the member has opened the Tally. */
 export const SEEN = "town.tally.seen";
@@ -85,5 +87,27 @@ export function laidOut(board: Board): { podium: readonly Row[]; rest: readonly 
     podium: board.top.slice(0, 3),
     rest: board.top.slice(3),
     own: board.top.some((r) => r.you) ? null : board.you,
+  };
+}
+
+/** A note as a board rises: when, in milliseconds from the start, and what it plays. */
+export type Note = readonly [ms: number, play: () => void];
+
+/**
+ * The notes of a board rising, held by the board that rose: another board drawn in its place
+ * (`rise` again, or `still` for one that does not rise), or the panel shutting (`life`), stops them.
+ */
+export function rising(life: Scope): { rise(notes: readonly Note[]): void; still(): void } {
+  let risen = life.child();
+  const still = (): void => {
+    risen.close();
+    risen = life.child();
+  };
+  return {
+    rise(notes) {
+      still();
+      for (const [ms, play] of notes) risen.after(ms, play);
+    },
+    still,
   };
 }

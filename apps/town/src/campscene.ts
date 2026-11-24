@@ -95,7 +95,8 @@ interface Hold {
   y: number;
   t: number;
   ok: Verdict;
-  dragging: boolean;
+  /** While it is dragged, where it stood when taken hold of: it goes back there if the drag is cut short. */
+  drag: { readonly x: number; readonly y: number; readonly t: number } | null;
   /** Where on the thing it was taken hold of, from its foot. */
   grab: Pt;
   moved: boolean;
@@ -911,9 +912,9 @@ export function makeCamp(
     if (!at) return;
     const sprite = pictureOf(art, l.thing.id, h.t, stateOf(l)) ?? l.prop.sprite;
     l.prop.x = at.x;
-    l.prop.y = at.y - (h.dragging ? 3 : 0);
+    l.prop.y = at.y - (h.drag ? 3 : 0);
     l.prop.sprite = l.thing.id === "cabin" ? l.prop.sprite : sprite;
-    l.prop.z = h.dragging ? 1e5 : l.thing.flat ? -1 : at.y;
+    l.prop.z = h.drag ? 1e5 : l.thing.flat ? -1 : at.y;
     const s = l.prop.sprite;
     if (s) l.prop.hit = { x: l.prop.x - s.ax, y: l.prop.y - s.ay, w: s.c.width, h: s.c.height };
     if (l.light) {
@@ -928,7 +929,7 @@ export function makeCamp(
   function pickUp(n: number, grab: Pt): void {
     const p = placedAt(n);
     if (!p) return;
-    grip({ n, x: p.x, y: p.y, t: p.t, ok: "ok", dragging: true, grab, moved: false });
+    grip({ n, x: p.x, y: p.y, t: p.t, ok: "ok", drag: { x: p.x, y: p.y, t: p.t }, grab, moved: false });
     csfx.lift();
     showHeld();
     ui.tray();
@@ -938,7 +939,7 @@ export function makeCamp(
     const h = hand();
     const p = h ? placedAt(h.n) : null;
     const thing = p ? thingOf(p.id) : null;
-    if (!h || !p || !thing || !h.dragging) return;
+    if (!h || !p || !thing || !h.drag) return;
     const [w, d] = footprint(thing, h.t);
     const fx = at.x - h.grab.x;
     const fy = at.y - h.grab.y;
@@ -959,8 +960,8 @@ export function makeCamp(
     const h = hand();
     const p = h ? placedAt(h.n) : null;
     if (!h || !p) return;
-    const was = h.dragging;
-    h.dragging = false;
+    const was = h.drag !== null;
+    h.drag = null;
     // Just set out, and not numbered by Leaf yet: it is held where it was let go, and moved there
     // once it is (`numberedAs`).
     if (h.n < 0) {
@@ -1100,7 +1101,7 @@ export function makeCamp(
       return;
     }
     h.n = n;
-    if (!h.dragging && h.moved) settle();
+    if (!h.drag && h.moved) settle();
     ui.tray();
   }
 
@@ -1134,7 +1135,7 @@ export function makeCamp(
     const where = placedAt(n);
     grip(
       where
-        ? { n, x: where.x, y: where.y, t: where.t, ok: "ok", dragging: false, grab: { x: 0, y: 0 }, moved: false }
+        ? { n, x: where.x, y: where.y, t: where.t, ok: "ok", drag: null, grab: { x: 0, y: 0 }, moved: false }
         : null,
     );
     const at = where ? footOf(where) : null;
@@ -1245,7 +1246,7 @@ export function makeCamp(
       const l = h ? liveAt(h.n) : null;
       if (decor() && h && l) {
         const [w, d] = footprint(l.thing, h.t);
-        if (h.dragging)
+        if (h.drag)
           for (let y = h.y - 3; y <= h.y + d + 2; y++)
             for (let x = h.x - 4; x <= h.x + w + 3; x++) {
               if (!walkable(x, y)) continue;
@@ -1262,7 +1263,7 @@ export function makeCamp(
               (h.x + x) * CELL - cx,
               (h.y + y) * CELL - cy,
               h.ok === "ok" ? "#c9ef9a" : SKY[5],
-              h.dragging ? 0.5 : 0.28,
+              h.drag ? 0.5 : 0.28,
             );
       }
       for (const p of flats) drawProp(g, p, cx, cy);
@@ -1338,7 +1339,7 @@ export function makeCamp(
       G.t += dt;
       const p = player();
       stepActor(p, dt, ground);
-      touch.step(dt, hand()?.dragging ? null : steer);
+      touch.step(dt, hand()?.drag ? null : steer);
       for (const a of guests) stepActor(a, dt, ground);
       // Whoever is out past the posts is behind the great tree, and then gone.
       for (const a of everybody()) a.alpha = clamp((CW + 12 - a.x) / 6, 0, 1);
@@ -1384,7 +1385,7 @@ export function makeCamp(
       }
 
       // Something dragged near an edge of the view pushes the view along: of as much of it as the tray leaves.
-      if (hand()?.dragging && lastDrag) {
+      if (hand()?.drag && lastDrag) {
         const tray = covered();
         const fx = (lastDrag.x - G.cam.x) / G.view.w;
         const fy = (lastDrag.y - G.cam.y) / (tray?.under ? (tray.top * G.view.dpr) / G.view.z : G.view.h);
@@ -1431,15 +1432,30 @@ export function makeCamp(
 
     release(_at, over) {
       lastDrag = null;
-      if (!hand()?.dragging) return;
+      if (!hand()?.drag) return;
       if (over?.closest("#tray")) stow();
       else settle();
+    },
+
+    cancel() {
+      lastDrag = null;
+      const h = hand();
+      if (!h?.drag) return;
+      // Let go of nowhere: it goes back where it was taken hold of, and nothing is done.
+      h.x = h.drag.x;
+      h.y = h.drag.y;
+      h.t = h.drag.t;
+      h.ok = "ok";
+      h.moved = false;
+      h.drag = null;
+      rebuild();
+      ui.tray();
     },
 
     point(at) {
       if (!decor() || !at || !awake()) return touch.point(at);
       // The thing in hand has its own corners.
-      const n = hand()?.dragging ? null : thingAt(at.x, at.y);
+      const n = hand()?.drag ? null : thingAt(at.x, at.y);
       const l = n !== null && n !== hand()?.n ? liveAt(n) : null;
       const h: Hover | null = l?.prop.hit
         ? { box: l.prop.hit, tip: [l.thing.name, ""], ref: thingRef(l.thing.id) }

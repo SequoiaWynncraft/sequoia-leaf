@@ -12,6 +12,7 @@ import { isGuest } from "@sequoia-leaf/kit/live.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { ask as askLeaf, isRecord, outside } from "@sequoia-leaf/kit/net.ts";
 import { waitingLook } from "@sequoia-leaf/kit/play.ts";
+import { fly } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { dist, makeCanvas, pick } from "@sequoia-leaf/kit/util.ts";
@@ -36,10 +37,10 @@ import {
   closePanel,
   dockAt,
   faceOf,
-  fly,
   levelBar,
   nameOf,
   openPanel as openHudPanel,
+  type PanelSpec,
   pic,
   purseAt,
   setDock,
@@ -497,7 +498,7 @@ function stallButton(stall: string, s: Stock, sold: () => void): HTMLElement {
       sfx.buy();
       fly("coin", purseAt("coins"), centre(me), Math.min(7, 2 + Math.floor(s.price / 40)));
       sold();
-      if (sprite) fly(sprite.c, centre(me), dockAt("camp"), 1);
+      if (sprite) fly(() => pic(sprite.c, 2), centre(me), dockAt("camp"), 1);
       if (G.player) hop(G.player);
     })();
   });
@@ -815,7 +816,7 @@ function profile(body: HTMLElement): null {
 
 // ---------- panels ----------
 
-const BUILD: Record<PanelId, (body: HTMLElement) => (() => void) | null> = {
+const BUILD: Record<PanelId, PanelSpec["build"]> = {
   treasury,
   grove: groveCard,
   quests: board,

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, jest, test } from "bun:test";
 
 import {
   ALL_ITEMS,
@@ -22,7 +22,8 @@ import {
 import { staged } from "@sequoia-leaf/factory/test/yards.ts";
 import type { Trouble } from "@sequoia-leaf/kit/play.ts";
 import { balance } from "@sequoia-leaf/kit/purse.ts";
-import { type Reply, type Sent, standin } from "@sequoia-leaf/kit/standin.ts";
+import { scope } from "@sequoia-leaf/kit/scope.ts";
+import { Listened, type Reply, type Sent, standin } from "@sequoia-leaf/kit/standin.ts";
 
 import {
   act,
@@ -40,7 +41,7 @@ import {
 } from "../test/fake-leaf.ts";
 import { S } from "./state.ts";
 import { cancel, place, setTool, toolHooks, undo } from "./tools.ts";
-import { reading, showLetter } from "./ui/letter.ts";
+import { letters } from "./ui/letter.ts";
 import {
   again,
   CATCHING_UP,
@@ -97,8 +98,8 @@ function holding(fake: FakeLeaf, route: keyof FakeLeaf["routes"]) {
   return held;
 }
 
-/** Just enough of an element for the letter: it hears what reaches it, and holds nothing. */
-class Part extends EventTarget {
+/** Just enough of an element for the letter: it hears what reaches it, counts who listens, and holds nothing. */
+class Part extends Listened {
   className = "";
   textContent = "";
   hidden = true;
@@ -376,21 +377,50 @@ describe("the yard, on Leaf", () => {
     const [a] = clear(1);
     if (!a) throw new Error("no room");
     const held = holding(fake, "GET /v1/game/play/works");
-    const { window: win, letter } = page();
+    const { window: win, letter: part } = page();
     // A press goes on from the window down to the letter, unless the gate stops it.
-    win.addEventListener("click", () => letter.dispatchEvent(new Event("click")));
-    showLetter({ seconds: 600, coins: 0, made: counts() }, () => undefined);
+    win.addEventListener("click", () => part.dispatchEvent(new Event("click")));
+    const letter = letters(scope());
+    letter.show({ seconds: 600, coins: 0, made: counts() }, () => undefined);
     S.world.till += 5;
     doNow(act({ do: "build", kind: "belt", dir: 0, ...a }));
     await until(() => held.length >= 1);
     win.dispatchEvent(new Event("click"));
-    expect([reading(), fake.leaf.posts]).toEqual([true, 1]);
+    expect([letter.reading(), fake.leaf.posts]).toEqual([true, 1]);
     held.shift()?.();
     await until(() => !catchingUp(1000 + 1100));
     win.dispatchEvent(new Event("click"));
-    expect(reading()).toBe(false);
+    expect(letter.reading()).toBe(false);
     await until(() => fake.leaf.posts >= 2);
     expect(fake.leaf.commands.map((c) => isRecord(c) && c.do)).toEqual(["build", "collect"]);
+  });
+
+  test("the letter put away by a key takes its click off the page with it", async () => {
+    await opened();
+    const { letter: part } = page();
+    const letter = letters(scope());
+    letter.show({ seconds: 600, coins: 0, made: counts() }, () => undefined);
+    expect(part.listening).toBe(1);
+    expect(letter.putAway()).toBe(true);
+    expect([letter.reading(), part.listening]).toEqual([false, 0]);
+    expect(letter.putAway()).toBe(false);
+  });
+
+  test("a letter shown while the one before it fades is not put away by that fading, nor sounds its lines", async () => {
+    await opened();
+    const { letter: part } = page();
+    jest.useFakeTimers();
+    try {
+      const letter = letters(scope());
+      const away = { seconds: 600, coins: 0, made: counts() };
+      letter.show(away, () => undefined);
+      letter.putAway();
+      letter.show(away, () => undefined);
+      jest.advanceTimersByTime(2000);
+      expect([letter.reading(), part.hidden, part.listening]).toEqual([true, false, 1]);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test("a yard staged from outside is taken once what is in flight is answered, from a read set off after the staging", async () => {

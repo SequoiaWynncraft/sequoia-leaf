@@ -9,9 +9,12 @@
     "packages/*"
   ],
   "scripts": {
-    "verify": "bun fmt --check && bun run lint && bun check --build && bun run test && bun run pages",
+    "verify": "bun fmt --check && bun run lint && bun check --build && bun run test && bun run imports && bun run clones && bun run budget && bun run pages",
     "ci": "DOCKER_HOST=${DOCKER_HOST:-unix://$(test -w /var/run/docker.sock && echo /var/run/docker.sock || echo $XDG_RUNTIME_DIR/podman/podman.sock)} act pull_request --workflows .github/workflows/ci.yml --platform ubuntu-24.04=docker.io/catthehacker/ubuntu:act-24.04 --pull=false --action-offline-mode --container-options=--init --rm",
-    "lint": "oxlint --type-aware --deny-warnings",
+    "lint": "bun packages/kit/tools/lint.ts",
+    "imports": "bun packages/kit/tools/imports.ts",
+    "clones": "bun packages/kit/tools/clones.ts",
+    "budget": "bun packages/kit/tools/budget.ts",
     "pages": "bun packages/kit/tools/pages.ts",
     "test": "bun run --filter '*' test --timeout=20000",
     "dev": "bun run --filter @sequoia-leaf/api dev",

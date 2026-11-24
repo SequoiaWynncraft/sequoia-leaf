@@ -25,17 +25,16 @@ import { member, where } from "@sequoia-leaf/kit/live.ts";
 import { ask } from "@sequoia-leaf/kit/net.ts";
 import { known } from "@sequoia-leaf/kit/person.ts";
 import { waitingLook } from "@sequoia-leaf/kit/play.ts";
+import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
 import { G } from "./game.ts";
 import { button, pic, slot } from "./hud.ts";
 import { knownRanks } from "./players.ts";
-import { type Board, laidOut, readBoard, type Row, sawTally, scoreText } from "./tally.ts";
+import { type Board, laidOut, type Note, readBoard, rising, type Row, sawTally, scoreText } from "./tally.ts";
 import { plinth } from "./tallyart.ts";
 
-/** The panel's name, as `G.panel` has it while it is open. */
-const TALLY = "tally";
 /** Whether this is the member's first time at the Tally: first place has a fanfare. */
 let firstTime = false;
 /** The board chosen and the span, while the page is open. */
@@ -132,8 +131,11 @@ function ownPlace(board: Board, unit: TallyUnit): HTMLElement | null {
   return el("div", "tally-own", {}, line({ ...place, id: me.id, name: me.name, guest: me.guest, you: true }, unit, 0));
 }
 
-/** Draws a board: the podium, the places under it and the member's own. A board just come rises, with a note a place. */
-function drawBoard(at: HTMLElement, board: Board, b: TallyBoard, rise: boolean): void {
+/**
+ * Draws a board: the podium, the places under it and the member's own. A board just come rises;
+ * gives back its notes, one a place.
+ */
+function drawBoard(at: HTMLElement, board: Board, b: TallyBoard, rise: boolean): readonly Note[] {
   const { podium, rest } = laidOut(board);
   const stage = el(
     "div",
@@ -154,27 +156,24 @@ function drawBoard(at: HTMLElement, board: Board, b: TallyBoard, rise: boolean):
         : null
       : ownPlace(board, b.unit);
   at.replaceChildren(stage, ...(empty ? [empty] : []), rows, ...(foot ? [foot] : []));
-  if (!rise) return;
+  if (!rise) return [];
   // Third, second, then first: a note as each lands; the first board of the first visit, a fanfare.
   const fanfare = firstTime;
   firstTime = false;
-  const notes: readonly (readonly [number, () => void])[] = [
+  const notes: readonly Note[] = [
     [140, () => sfx.pluck(3)],
     [300, () => sfx.pluck(5)],
     [480, () => (fanfare ? sfx.fanfare() : sfx.twinkle())],
   ];
-  for (const [ms, play] of notes.slice(3 - Math.min(3, podium.length))) {
-    setTimeout(() => {
-      if (G.panel === TALLY) play();
-    }, ms);
-  }
+  return notes.slice(3 - Math.min(3, podium.length));
 }
 
 // ---------- the panel ----------
 
-/** Fills the Tally's panel; gives back how to keep it up to date. */
-export function tallyPanel(body: HTMLElement): () => void {
+/** Fills the Tally's panel, for as long as `life` lasts; gives back how to keep it up to date. */
+export function tallyPanel(body: HTMLElement, life: Scope): () => void {
   firstTime = sawTally();
+  const podium = rising(life);
   const root = el("div", "tally");
   const list = el("nav", "tally-list", { "aria-label": "Boards" });
   const view = el("div", "tally-view");
@@ -256,6 +255,7 @@ export function tallyPanel(body: HTMLElement): () => void {
       const got = answers.get(path)?.board;
       if (got === undefined) return;
       if (got === "unread") {
+        podium.still();
         board.replaceChildren(
           el("div", "k-dim", { text: "The Tally could not be read." }),
           button("wood sm", ["Try again"], () => {
@@ -265,7 +265,9 @@ export function tallyPanel(body: HTMLElement): () => void {
         );
         return;
       }
-      drawBoard(board, got, b, drawn !== path);
+      const fresh = drawn !== path;
+      const notes = drawBoard(board, got, b, fresh);
+      if (fresh) podium.rise(notes);
       drawn = path;
     },
   );

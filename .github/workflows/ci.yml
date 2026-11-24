@@ -88,6 +88,14 @@ jobs:
       - name: Test
         if: *code
         run: bun run test
+      # Who imports whom, and what is copied between workspaces, held to their baselines; then how
+      # much each page and the API reach, which fails nothing.
+      - name: Imports and copies
+        if: *code
+        run: bun run imports && bun run clones
+      - name: Read set
+        if: *code
+        run: bun run budget
       # The image's own health check asks /healthz, which reads the database. It is asked every
       # second, not every 5 or 10: Docker reads the start interval, podman the interval. The
       # container and image are removed by id, so nothing else on a developer's machine is touched.
