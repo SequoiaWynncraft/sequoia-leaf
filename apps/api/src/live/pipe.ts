@@ -2,7 +2,7 @@ import { CLOSE } from "@sequoia-leaf/core";
 import { Effect, Option, Queue, Semaphore } from "effect";
 import { Socket } from "effect/socket";
 
-import type { Connection } from "./room.ts";
+import type { Connection, Written } from "./room.ts";
 
 /** How many frames may wait to go to one connection before it is taken to be stuck and closed. */
 export const MOST_WAITING = 1024;
@@ -72,18 +72,22 @@ export class Pipe implements Connection {
    * A write that fails is a socket already gone, which its reader hears of too: the frame is lost
    * with it.
    */
-  writeIf(still: () => boolean, frame: Uint8Array): Effect.Effect<void> {
-    const held = Effect.suspend(() => {
-      if (this.closed || !still()) return Effect.void;
-      if (this.waiting > 0) return Effect.sync(() => this.send(frame));
-      return Effect.ignore(this.writer.write(frame));
+  writeIf(still: () => boolean, frame: Uint8Array): Effect.Effect<Written> {
+    const held = Effect.suspend((): Effect.Effect<Written> => {
+      if (this.closed || !still()) return Effect.succeed("passed");
+      if (this.waiting > 0) return Effect.sync(() => this.queue(frame));
+      return Effect.as(Effect.ignore(this.writer.write(frame)), "direct");
     });
-    const inLine = Effect.sync(() => {
-      if (still()) this.send(frame);
-    });
+    const inLine = Effect.sync((): Written => (still() ? this.queue(frame) : "passed"));
     return Effect.flatMap(this.socket.withPermitsIfAvailable(1)(held), (wrote) =>
-      Option.isSome(wrote) ? Effect.void : inLine,
+      Option.isSome(wrote) ? Effect.succeed(wrote.value) : inLine,
     );
+  }
+
+  /** A frame put in the line (`send`), as `writeIf` says of it. */
+  private queue(frame: Uint8Array): Written {
+    this.send(frame);
+    return "queued";
   }
 
   /** Closes it after whatever is waiting, saying why by the code. */

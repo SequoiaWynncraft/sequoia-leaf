@@ -6,16 +6,17 @@
  * (300 walkers, 20 owners, 50 visitors, 20 seconds, a sweep of at most 300 seconds and no churn by
  * default; `owners` as `leaf.ts` was given them.) Its walkers are `w<from>` on (`w0` by default),
  * so that several drivers can share the walkers between them when one process would be too slow to
- * time them all: each times the moves of its own walkers only. It goes through three phases, each
+ * time them all: each times the moves of its own walkers only. It goes through four phases, each
  * measured on its own:
  *
- * 1. `walk`: the walkers join over the first five seconds and walk about the town at the game's pace
- *    (`CLIENT_HZ` moves a second); each second, one in thirty connects again (joining the town
+ * 1. `join`: the walkers join over five seconds, as after a deploy, each walking as soon as it is
+ *    in, and three seconds more.
+ * 2. `walk`: the walkers walk about the town at the game's pace (`CLIENT_HZ` moves a second); each second, one in thirty connects again (joining the town
  *    anew), and `churn` walkers leave the room and join it again a second later, each of which
  *    changes who is about; and each owner's page sends a batch of one to eight commands to their
  *    yard every second.
- * 2. `visits`: the same, with `visitors` players visiting the first owner's yard at once as it begins.
- * 3. `sweep`: the same, with Leaf tending the cold yards meanwhile, from the phase's beginning until
+ * 3. `visits`: the same, with `visitors` players visiting the first owner's yard at once as it begins.
+ * 4. `sweep`: the same, with Leaf tending the cold yards meanwhile, from the phase's beginning until
  *    it is done or `sweep` seconds have passed; and as it begins, `visitors` players visit one of
  *    those yards at once, which Leaf must bring eight hours on first.
  *
@@ -24,8 +25,12 @@
  * is counted too, in bytes a walker a second: motion (binary) and text, and of the text the words of
  * who is about. Leaf's own measures (the
  * event loop's delay, where the play service's jobs spent their time, CPU, memory, how far behind
- * the yard longest unwritten was) come from its `/load/report`.
+ * the yard longest unwritten was, and what Live's ticks took) come from its `/load/report`; and the
+ * driver says how long its own event loop was held, since a driver too slow to keep up shows its
+ * own delays as Leaf's.
  */
+import { monitorEventLoopDelay } from "node:perf_hooks";
+
 import { CLIENT_HZ, Flag, playPath, visitPath } from "@sequoia-leaf/core";
 import { Schema } from "effect";
 
@@ -74,6 +79,10 @@ let phaseBegan = 0;
 /** What the walkers had been sent when the phase began (`received`). */
 let receivedBefore = { binary: 0, text: 0 };
 const phases: { name: string; [measure: string]: unknown }[] = [];
+/** How long this process's own event loop was held, read and begun again with each phase. */
+const lag = monitorEventLoopDelay({ resolution: 5 });
+lag.enable();
+const ms = (ns: number) => Number((ns / 1e6).toFixed(1));
 const begin = async (name: string) => {
   await fetch(`${origin}/load/phase?name=${name}`, { method: "POST" });
   moves = [];
@@ -85,6 +94,7 @@ const begin = async (name: string) => {
   aboutBytes = 0;
   receivedBefore = received();
   phaseBegan = performance.now();
+  lag.reset();
 };
 const end = (name: string, more: Record<string, unknown> = {}) => {
   const now = received();
@@ -92,6 +102,7 @@ const end = (name: string, more: Record<string, unknown> = {}) => {
   phases.push({
     name,
     moves_seen_ms: spread(moves),
+    driver_event_loop_ms: { p50: ms(lag.percentile(50)), p99: ms(lag.percentile(99)), max: ms(lag.max) },
     received_bytes_per_walker_s: {
       motion: perWalkerS(now.binary - receivedBefore.binary),
       text: perWalkerS(now.text - receivedBefore.text),
@@ -282,11 +293,14 @@ const visitBurst = (owner: string, many: number, times: number[]) =>
     }),
   );
 
-await begin("walk");
-// Joining over the first five seconds.
+await begin("join");
 for (const [i, w] of all.entries()) {
   setTimeout(() => void connect(w), (i * 5000) / walkers);
 }
+await Bun.sleep(8000);
+end("join", { walkers_connected: all.filter((w) => w.client !== null).length });
+
+await begin("walk");
 await Bun.sleep(seconds * 1000);
 end("walk", { walkers_connected: all.filter((w) => w.client !== null).length });
 

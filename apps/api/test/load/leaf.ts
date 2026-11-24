@@ -32,6 +32,7 @@ import { Effect, Layer, Schema } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { SqlClient, SqlSchema } from "effect/sql";
 
+import type { TickTimes } from "../../src/live/live.ts";
 import { GAMES } from "../../src/play/games.ts";
 import { type JobTimes, Play } from "../../src/play/service.ts";
 import { fakeBackend, sessionOf, testLeaf } from "../support.ts";
@@ -71,6 +72,7 @@ class Phase {
   readonly cpu = process.cpuUsage();
   readonly loop = monitorEventLoopDelay({ resolution: 5 });
   readonly jobs: JobTimes[] = [];
+  readonly ticks: TickTimes[] = [];
   rss = 0;
   /** How far behind the yard longest unwritten was, in seconds, each second. */
   readonly behind: number[] = [];
@@ -110,6 +112,17 @@ class Phase {
         ]),
       ),
       cpu_of_one_core: `${(((cpu.user + cpu.system) / 1e6 / seconds) * 100).toFixed(0)}%`,
+      live_ticks: {
+        n: this.ticks.length,
+        late_ms: spread(this.ticks.map((t) => t.late)),
+        writing_ms: spread(this.ticks.map((t) => t.writing)),
+        rooms: spread(this.ticks.map((t) => t.rooms)),
+        written: {
+          direct: this.ticks.reduce((n, t) => n + t.direct, 0),
+          queued: this.ticks.reduce((n, t) => n + t.queued, 0),
+          passed: this.ticks.reduce((n, t) => n + t.passed, 0),
+        },
+      },
       rss_mib_most: Math.round(this.rss / 1024 / 1024),
       yard_behind_s: {
         first: this.behind[0] ?? null,
@@ -131,7 +144,11 @@ const leaf = testLeaf(
   },
   fetcher,
   {},
-  { meter: (times) => phase.jobs.push(times), ...(mostPlayers === undefined ? {} : { live: { mostPlayers } }) },
+  {
+    meter: (times) => phase.jobs.push(times),
+    liveMeter: (times) => phase.ticks.push(times),
+    ...(mostPlayers === undefined ? {} : { live: { mostPlayers } }),
+  },
 );
 
 // The yards: the owners' written a minute ago, and the cold ones eight hours ago, each as if its

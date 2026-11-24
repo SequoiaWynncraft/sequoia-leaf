@@ -47,7 +47,7 @@ import {
 } from "./lifecycle.ts";
 import { Pipe } from "./pipe.ts";
 import { NOWHERE, Player } from "./player.ts";
-import { type Room, Rooms, type Snapshot } from "./room.ts";
+import { type Room, Rooms, type Snapshot, type Written } from "./room.ts";
 import { Watchers } from "./watchers.ts";
 
 /**
@@ -98,6 +98,26 @@ export const LiveTuned = Layer.effect(
     presenceMs: LIVE_TUNING.presenceMs,
   })),
 );
+
+/**
+ * What one of Live's ticks took, for the load test (`LiveMeter`): how much later than a tick after
+ * the last it began (`late`), and how long from the first of its rooms' writes to the end of the
+ * last (`writing`), in milliseconds; how many rooms sent a snapshot, and what became of each
+ * snapshot written (`Written`).
+ */
+export interface TickTimes {
+  readonly late: number;
+  readonly writing: number;
+  readonly rooms: number;
+  readonly direct: number;
+  readonly queued: number;
+  readonly passed: number;
+}
+
+/** Told what each tick took (`TickTimes`), for the load test; nobody is, unless given. */
+export const LiveMeter = Context.Reference<((times: TickTimes) => void) | null>("leaf/LiveMeter", {
+  defaultValue: () => null,
+});
 
 /** How often Live forgets the players of whom nothing is left (`Player.gone`). */
 const FORGET_EVERY = Duration.seconds(1);
@@ -448,17 +468,32 @@ export class Live extends Context.Service<
        * for it (`Room.reaches`): the fiber may let others run between one write and the next, and a
        * page in another room by then, or on another connection, must never hear this one's.
        */
-      const tellRoom = (room: Room, snapshot: Snapshot) => {
+      const tellRoom = (room: Room, snapshot: Snapshot, written: Record<Written, number>) => {
         counts.sent("motion", snapshot.to.length, snapshot.frame.byteLength * snapshot.to.length);
-        return Effect.forEach(snapshot.to, (r) => r.connection.writeIf(() => room.reaches(r), snapshot.frame), {
-          discard: true,
-        });
+        return Effect.forEach(
+          snapshot.to,
+          (r) =>
+            Effect.map(
+              r.connection.writeIf(() => room.reaches(r), snapshot.frame),
+              (w) => void written[w]++,
+            ),
+          { discard: true },
+        );
       };
+
+      const meter = yield* LiveMeter;
+      const clock = yield* Clock.Clock;
+      const millis = () => Number(clock.monotonicTimeNanosUnsafe()) / 1e6;
+      /** When the last tick began, by the clock that only goes forward. */
+      let tickBegan: number | null = null;
 
       // Every tick, each room with work (`Room`): anybody shown walking whose game has gone quiet
       // stops, and what changed goes to everyone in it.
       const flush = Effect.flatMap(Clock.currentTimeMillis, (now) =>
         Effect.suspend(() => {
+          const began = millis();
+          const late = tickBegan === null ? 0 : began - tickBegan - Duration.toMillis(TICK);
+          tickBegan = began;
           tick++;
           const told: [Room, Snapshot][] = [];
           for (const room of rooms.busy()) {
@@ -466,7 +501,16 @@ export class Live extends Context.Service<
             if (snapshot) told.push([room, snapshot]);
           }
           counts.ticked(told.length);
-          return Effect.forEach(told, ([room, snapshot]) => tellRoom(room, snapshot), { discard: true });
+          const written: Record<Written, number> = { direct: 0, queued: 0, passed: 0 };
+          const writing = millis();
+          const writes = Effect.forEach(told, ([room, snapshot]) => tellRoom(room, snapshot, written), {
+            discard: true,
+          });
+          if (meter === null) return writes;
+          return Effect.andThen(
+            writes,
+            Effect.sync(() => meter({ late, writing: millis() - writing, rooms: told.length, ...written })),
+          );
         }),
       );
       yield* Effect.forkScoped(Effect.repeat(flush, Schedule.fixed(TICK)));

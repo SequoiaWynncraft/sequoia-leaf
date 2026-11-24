@@ -10,13 +10,19 @@ import {
 } from "@sequoia-leaf/core";
 import type { Effect } from "effect";
 
+/**
+ * What became of a frame written to a connection: written there and then (`direct`), put in the
+ * connection's line behind what was waiting (`queued`), or not for the page any more (`passed`).
+ */
+export type Written = "direct" | "queued" | "passed";
+
 /** A way through to somebody's page, as it is when a snapshot is made for them. */
 export interface Connection {
   /**
    * Writes a frame from the fiber this runs in, if `still()` says, when its turn comes, that it is
    * still for this page: nothing is written to the page between asking and writing.
    */
-  writeIf(still: () => boolean, frame: Uint8Array): Effect.Effect<void>;
+  writeIf(still: () => boolean, frame: Uint8Array): Effect.Effect<Written>;
 }
 
 /**

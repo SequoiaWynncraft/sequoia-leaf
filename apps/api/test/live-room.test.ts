@@ -13,6 +13,7 @@ import {
   Room,
   Rooms,
   type Shown,
+  type Written,
 } from "../src/live/room.ts";
 
 /** Where the room shows somebody, or null before their first move. */
@@ -24,10 +25,12 @@ const seqOf = (o: Occupant) => (o.shown.state === "seen" ? o.shown.seq : null);
 function inbox() {
   const texts: ToClient[] = [];
   const frames: Uint8Array[] = [];
-  const connection = {
-    writeIf: (still: () => boolean, frame: Uint8Array) =>
-      Effect.sync(() => {
-        if (still()) frames.push(frame);
+  const connection: Connection = {
+    writeIf: (still, frame) =>
+      Effect.sync((): Written => {
+        if (!still()) return "passed";
+        frames.push(frame);
+        return "direct";
       }),
   };
   return {

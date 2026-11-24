@@ -29,7 +29,7 @@ import { Events } from "../src/events/store.ts";
 import { Mojang, MojangError, type MojangProfile } from "../src/game/mojang.ts";
 import { LeafInstance } from "../src/instance.ts";
 import { Ledger } from "../src/ledger/store.ts";
-import { Live, LiveTuning } from "../src/live/live.ts";
+import { Live, LiveMeter, LiveTuning, type TickTimes } from "../src/live/live.ts";
 import { Watchers } from "../src/live/watchers.ts";
 import { MetricsListener, metricsText, RuntimeMetrics } from "../src/metrics.ts";
 import { type JobTimes, Play, PlayMeter } from "../src/play/service.ts";
@@ -114,6 +114,8 @@ export interface Fakes {
   readonly dice?: SecureRandom.SecureRandom["Service"];
   /** Leaf's own warnings and errors, printed as production prints them (the play server's `--log`). Without it Leaf logs nothing. */
   readonly log?: boolean;
+  /** Told what each of Live's ticks took (`LiveMeter`), for the load test. */
+  readonly liveMeter?: (times: TickTimes) => void;
   /** Told where each of the play service's jobs spent its time (`PlayMeter`), for the load test. */
   readonly meter?: (times: JobTimes) => void;
   /** Where Leaf's warnings and errors go, as the JSON logger would write them, for tests that read them. */
@@ -236,6 +238,7 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
         presenceMs: fakes.live?.presenceMs ?? LiveTuning.defaultValue().presenceMs,
       }),
     ),
+    Layer.provide(Layer.succeed(LiveMeter)(fakes.liveMeter ?? null)),
   );
   // Who hears what Leaf does to a state: the play service tells them, Live puts them there.
   const credits = Layer.effect(
