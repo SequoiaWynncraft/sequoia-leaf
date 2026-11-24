@@ -191,9 +191,8 @@ export function renderPicks(): void {
     else if (choice.kind === "component") add(card, ...componentCard(run, choice.options[i] ?? "thorn"));
     else add(card, ...boonCardParts(choice.options[i] ?? "windfall"));
     card.addEventListener("click", () => void take(i, card));
-    // Named by what it is; what is inside it still explains itself to the mouse, but is not a stop for the keyboard.
+    // Named by what it is; the links inside it stay stops, so a keyboard can read what each is before choosing.
     card.setAttribute("aria-label", card.querySelector(".k-gold")?.textContent ?? "");
-    for (const inside of card.querySelectorAll<HTMLElement>(".k-link")) inside.tabIndex = -1;
     cards.append(card);
   });
   const head = el(

@@ -75,9 +75,11 @@ let opener: HTMLElement | null = null;
 
 export function openPages(a: PageAsks): void {
   asks = a;
-  // Escape puts away a page opened over the table, unless a card took it first.
+  // Escape puts away a page opened over the table, unless a card took it first; taken, it goes no further.
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !e.defaultPrevented && extra) showPage(null);
+    if (e.key !== "Escape" || e.defaultPrevented || !extra) return;
+    e.preventDefault();
+    showPage(null);
   });
 }
 /** Opens a page over the table, with the keyboard in it; or puts it away, giving the keyboard back. */
@@ -740,11 +742,29 @@ export function renderPages(force = false): void {
   }
   if (force) node.classList.remove("k-rise");
   // Drawn again (a tab, a look tried on), the page keeps the keyboard where it was.
-  const was = [...box.querySelectorAll("button")].findIndex((b) => b === document.activeElement);
+  const before = controlKeys(box);
+  const was = before.find(([b]) => b === document.activeElement)?.[1];
   box.hidden = false;
   box.dataset.page = id;
   box.replaceChildren(node);
-  if (was >= 0) box.querySelectorAll("button")[was]?.focus({ preventScroll: true });
+  if (was !== undefined)
+    controlKeys(box)
+      .find(([, k]) => k === was)?.[0]
+      .focus({ preventScroll: true });
+}
+
+/**
+ * Which control each button in a page is, the same when the page is drawn again with a button more or
+ * fewer: its id, else its name, else its words, and which of the buttons so called it is.
+ */
+function controlKeys(box: HTMLElement): [HTMLButtonElement, string][] {
+  const seen = new Map<string, number>();
+  return [...box.querySelectorAll("button")].map((b) => {
+    const name = b.id || b.getAttribute("aria-label") || (b.textContent ?? "");
+    const n = seen.get(name) ?? 0;
+    seen.set(name, n + 1);
+    return [b, `${name}#${n}`];
+  });
 }
 
 /** A touch outside a page that can be closed closes it. */

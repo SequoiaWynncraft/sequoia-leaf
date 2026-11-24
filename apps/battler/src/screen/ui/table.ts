@@ -209,7 +209,7 @@ export function buildTable(a: Asks): void {
       "",
       { id: "bottom" },
       // The one polite live region: a refusal or a line of news is read out once.
-      el("div", "", { id: "says", role: "status" }),
+      el("div", "", { id: "says", role: "status", "aria-atomic": "false" }),
       el("div", "", { id: "traits" }),
       el("div", "k-panel", { id: "shop" }, plan, fightbar, el("div", "k-over", { id: "sellhint" })),
     ),

@@ -107,9 +107,6 @@ async function boot(): Promise<void> {
     lastFight: lookBack,
     traitOn,
   });
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !e.defaultPrevented && sheetUp() === "again") lookBack();
-  });
   openPages({
     carryOn: () => {
       showPage(null);
@@ -118,6 +115,10 @@ async function boot(): Promise<void> {
     start: (trail) => void setOutOn(trail),
     goHome: () => void goHome(),
     leave: leaveTable,
+  });
+  // After the pages' own: Escape puts away one layer, a page over the table before the fight sheet under it.
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !e.defaultPrevented && sheetUp() === "again") lookBack();
   });
   document.getElementById("modal")?.addEventListener("click", pagesClick);
 
