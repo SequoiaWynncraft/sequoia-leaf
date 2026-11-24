@@ -8,6 +8,7 @@
 
 import { at, BELT } from "@sequoia-leaf/factory";
 import { pick, point, shown, surface } from "@sequoia-leaf/kit/card.ts";
+import { heldAgain } from "@sequoia-leaf/kit/keys.ts";
 import { LONG_PRESS } from "@sequoia-leaf/kit/press.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 
@@ -52,7 +53,19 @@ export const inputHooks: {
   caller: (order: number) => void;
   /** Escape or Enter while the letter is up. */
   letter: () => boolean;
-} = { caller: () => {}, letter: () => false };
+  /** Escape with nothing else to put away: the settings menu. */
+  settings: () => void;
+  /** Whether the settings menu is up: the yard takes no keys while it is. */
+  settingsUp: () => boolean;
+} = { caller: () => {}, letter: () => false, settings: () => {}, settingsUp: () => false };
+
+/** The keys that move the view are where W, A, S and D sit on a keyboard, whatever it prints on them: by place (`code`), not by letter. */
+const MOVES: ReadonlyMap<string, string> = new Map([
+  ["KeyW", "w"],
+  ["KeyA", "a"],
+  ["KeyS", "s"],
+  ["KeyD", "d"],
+]);
 
 const keys = new Set<string>();
 
@@ -323,25 +336,16 @@ export function initInput(canvas: InputSurface): void {
 
   window.addEventListener("keydown", (e) => {
     unlock();
-    if (e.target instanceof HTMLInputElement) return;
+    if (e.target instanceof HTMLInputElement || inputHooks.settingsUp()) return;
     const k = e.key.toLowerCase();
     if (k === "escape" || k === "enter") {
-      // The card that was up has taken this Escape.
-      if (e.defaultPrevented) return;
-      if (inputHooks.letter()) {
-        e.preventDefault();
-        return;
-      }
-      if (k === "enter") return;
-      if (S.hand.is !== "idle") cancel();
-      else if (shown()) closeCard();
-      else if (S.panel) closePanel();
-      else closeBanner();
+      escape(e, k === "enter");
       return;
     }
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return undoKey(e, k);
+    if (moveKey(e)) return;
     // A visitor changes nothing: only the keys that look about work.
-    if (S.visiting && !/^(t|\+|=|_|arrow\w+|[wasd])$/.test(k)) return;
+    if (S.visiting && !/^(t|\+|=|_|arrow\w+)$/.test(k)) return;
     const picked = toolForKey(e.key);
     if (picked !== undefined) {
       setTool(S.tool === picked ? null : picked);
@@ -361,13 +365,13 @@ export function initInput(canvas: InputSurface): void {
       if (on) pickFrom(on.x, on.y);
     } else if (k === "+" || k === "=") zoom(1, window.innerWidth / 2, window.innerHeight / 2);
     else if (k === "_") zoom(-1, window.innerWidth / 2, window.innerHeight / 2);
-    else if (k.startsWith("arrow") || k === "w" || k === "a" || k === "s" || k === "d") {
+    else if (k.startsWith("arrow")) {
       keys.add(k);
       e.preventDefault();
     }
   });
   window.addEventListener("keyup", (e) => {
-    keys.delete(e.key.toLowerCase());
+    keys.delete(MOVES.get(e.code) ?? e.key.toLowerCase());
   });
   window.addEventListener("blur", () => {
     keys.clear();
@@ -376,6 +380,46 @@ export function initInput(canvas: InputSurface): void {
     // Every press is lost with the focus, and the drag the hand held for one with it.
     dragLost();
   });
+}
+
+/**
+ * Escape (or Enter, `enter`) for the yard, once no card took it: the letter put away, else the hand,
+ * the card, the panel or the notice, one a press; with none of those, Escape opens the settings menu,
+ * unless it is a held Escape that has just put something away.
+ */
+function escape(e: KeyboardEvent, enter: boolean): void {
+  // The card that was up has taken this Escape.
+  if (e.defaultPrevented) return;
+  if (inputHooks.letter()) {
+    e.preventDefault();
+    return;
+  }
+  if (enter) return;
+  if (S.hand.is !== "idle") cancel();
+  else if (shown()) closeCard();
+  else if (S.panel) closePanel();
+  else if (!closeBanner() && !heldAgain(e)) inputHooks.settings();
+}
+
+/** A key held with Ctrl (or Cmd): Z undoes, as it does everywhere. */
+function undoKey(e: KeyboardEvent, k: string): void {
+  if (k !== "z" || e.altKey || S.visiting) return;
+  e.preventDefault();
+  undo();
+}
+
+/** A key that moves the view by its place on the keyboard (`MOVES`), held until it comes up. Says whether it was one. */
+function moveKey(e: KeyboardEvent): boolean {
+  const move = MOVES.get(e.code);
+  if (move === undefined) return false;
+  keys.add(move);
+  e.preventDefault();
+  return true;
+}
+
+/** Lets go of the keys held down to move the view: the settings menu has come up over the yard. */
+export function letGoKeys(): void {
+  keys.clear();
 }
 
 /** Each frame: the keys that move the view, and what the mouse is over once the view has moved for the frame. */

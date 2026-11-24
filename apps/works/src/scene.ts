@@ -78,6 +78,7 @@ import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
 import { lampsIn } from "./lamps.ts";
 import { armsAt, asIf, type Layout, layout, pylonTop, sendsRight, sortSide } from "./layout.ts";
 import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, tileNudge } from "./state.ts";
+import { cameFrom, dirAt, hooded } from "./tiles.ts";
 
 /** What the frame needs to know about the moment: how far into the next tick it is, and how the yard is going. */
 export interface Moment {
@@ -1136,11 +1137,6 @@ function laidOf(L: Layout, art: Art): NonNullable<typeof laid> {
   }
   return (laid = made);
 }
-/** The way the piece on a tile faces. */
-const dirAt = (y: Yard, i: number): Dir => {
-  const d = y.dir[i] ?? 0;
-  return d === 1 ? 1 : d === 2 ? 2 : d === 3 ? 3 : 0;
-};
 /** The side of its tile a splitter's way put first leaves by, or null for none. */
 function firstSide(y: Yard, i: number): Dir | null {
   const d = dirAt(y, i);
@@ -1310,12 +1306,12 @@ function flatLayer(f: Frame): void {
       const y = ty * TILE - cy;
       const k = w.kind[i] ?? NONE;
       const d = dirAt(w, i);
-      const via = w.via[i] ?? 0;
       const prog8 = w.prog[i] ?? 0;
       // In from the side it was handed over on, out the way the tile sends it.
-      const from = via > 0 ? (via - 1) & 3 : BACK[d];
+      const from = cameFrom(w, i);
       const to: number = k === SPLITTER ? sendWay(w, i, a) : k === SORTER && n === w.set[i] ? sortSide(w, i) : d;
       const prog = Math.min(1, prog8 / 8 + (prog8 < 8 ? now.lead * alongAt(w, i) : 0));
+      if (hooded(w, i, prog)) continue;
       const pic = art.item(n);
       const left = x + Math.round(ride(from, to, prog, false)) - (pic.width >> 1);
       const top = y + Math.round(ride(from, to, prog, true)) - (pic.height >> 1) - 1;

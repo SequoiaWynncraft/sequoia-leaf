@@ -44,8 +44,9 @@ test("no rule sets its own face, size or weight: every text is one of the kit's 
  */
 test("nothing written on paper is in the gold of a dark panel", async () => {
   const css = (await Bun.file(`${import.meta.dir}/kit.css`).text()).replace(/\/\*[\s\S]*?\*\//g, "");
+  // A long selector the formatter has put over two lines is still one selector.
   const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selectors = "", body = ""]) => ({
-    selectors: selectors.trim(),
+    selectors: selectors.trim().replace(/\s+/g, " "),
     body,
   }));
   // What is written in ink on paper: the list of plain classes, and any rule of its own.

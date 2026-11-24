@@ -47,7 +47,7 @@ import { emoteOver, float } from "./fx.ts";
 import { type Actor, G, hooks, ROOM, SEED, toPage } from "./game.ts";
 import type { Ground } from "./grid.ts";
 import { guild } from "./guild.ts";
-import { showCard } from "./hud.ts";
+import { closeCard, closePanel, showCard } from "./hud.ts";
 import { campChanged, campEntered, visiting } from "./leaf.ts";
 import { GUEST, rankName } from "./live.ts";
 import {
@@ -527,3 +527,15 @@ export const liveHandles = {
     rtt: room?.rtt() ?? null,
   }),
 };
+
+/**
+ * Puts away the newest of what is up over a scene: the emotes, a panel, what the scene has of its
+ * own (`own`, which says whether it put anything away), then the card of whoever was tapped. Says
+ * whether anything was put away: with nothing, Escape is the settings menu.
+ */
+export function putAway(own: () => boolean = () => false): boolean {
+  if (emotesOpen()) closeEmotes();
+  else if (G.panel) closePanel();
+  else if (!own()) return closeCard();
+  return true;
+}

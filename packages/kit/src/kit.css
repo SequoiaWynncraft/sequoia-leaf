@@ -521,7 +521,8 @@ button.k-slot:hover {
  * or is dark itself wherever it stands (a card, a chip): `type.test.ts` holds it to that. The
  * first rule lists plain classes only, so that the green of Leaf under it still wins.
  */
-:is(.k-paper, .k-say) :is(.k-cur, .k-gold, .k-thing-count):not(.k-chip *, .k-btn *) {
+:is(.k-paper, .k-say)
+  :is(.k-cur, .k-gold, .k-thing-count, .k-settings-percent, .k-settings-shelf):not(.k-chip *, .k-btn *) {
   color: #96560a;
 }
 :is(.k-paper, .k-say) :is(.k-cur.leaf, .k-leafy, .k-folk):not(.k-chip *, .k-btn *) {
@@ -1349,5 +1350,210 @@ button.k-info-chip:hover .k-chip {
   }
   .k-wait {
     filter: brightness(0.62) saturate(0.7);
+  }
+}
+
+/* ---------- the settings menu (`menu.ts`) ---------- */
+
+/* Over everything a page has, its teaching notes too: the page goes on, dimmed, beneath it. */
+.k-settings-scrim {
+  z-index: 92;
+}
+.k-settings {
+  display: flex;
+  flex-direction: column;
+  width: min(calc(var(--u) * 230), 100%);
+  /* One height for every tab, so that changing tab never moves the panel. */
+  height: min(calc(100dvh - var(--u) * 16), calc(var(--u) * 330));
+  box-sizing: border-box;
+}
+/* The gear before the title, as it is in the corner it was opened from. */
+.k-settings-mark {
+  display: inline-flex;
+  filter: drop-shadow(0 var(--u) 0 var(--k-ink));
+}
+.k-settings > .k-tabs {
+  padding: calc(var(--u) * 4) calc(var(--u) * 5) 0;
+}
+.k-settings-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 3);
+  padding: calc(var(--u) * 4) calc(var(--u) * 5) calc(var(--u) * 5);
+}
+/* A heading over a list: the game's name, or Every game, in gold on its rule. */
+.k-settings-shelf {
+  margin-top: calc(var(--u) * 4);
+  font: var(--f-name);
+  color: var(--k-gold);
+  text-shadow: 0 var(--u) 0 var(--k-ink);
+}
+.k-settings-list {
+  display: grid;
+  gap: calc(var(--u) * 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* A kind of sound: hear it, its name, its switch. Switched off, its name dims and its button stays. */
+.k-settings-sound {
+  padding-block: calc(var(--u) * 2);
+}
+.k-settings-sound > .k-name {
+  flex: 1;
+  min-width: 0;
+}
+.k-settings-sound.off > .k-name {
+  color: var(--k-faint);
+}
+/* The volume: the speaker, the slider under its name, the level. Muted, the slider greys and the level says Off. */
+.k-settings-volume {
+  padding-block: calc(var(--u) * 4);
+}
+.k-settings-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 5);
+}
+.k-settings-percent {
+  min-width: calc(var(--u) * 24);
+  font: var(--f-name);
+  text-align: right;
+  color: var(--k-gold);
+  text-shadow: 0 var(--u) 0 var(--k-ink);
+}
+.k-settings-volume.muted :is(.k-slider, .k-settings-percent) {
+  filter: grayscale(1) brightness(0.75);
+}
+
+/*
+ * A slider: a groove sunk into the board, gold to where it is set (`--v`, from the page), and a brass
+ * peg to drag. Chromium and Firefox each name the groove and the peg in their own way.
+ */
+.k-slider {
+  --groove:
+    linear-gradient(var(--k-gold-lt) 0 0) 0 0 / var(--v, 100%) var(--u) no-repeat padding-box,
+    linear-gradient(var(--k-gold-dk) 0 0) 0 100% / var(--v, 100%) var(--u) no-repeat padding-box,
+    linear-gradient(var(--k-gold) 0 0) 0 0 / var(--v, 100%) 100% no-repeat padding-box, var(--k-deep) padding-box;
+  appearance: none;
+  flex: 1;
+  min-width: calc(var(--u) * 40);
+  height: calc(var(--u) * 14);
+  margin: 0;
+  background: none;
+  cursor: pointer;
+}
+.k-slider::-webkit-slider-runnable-track {
+  box-sizing: border-box;
+  height: calc(var(--u) * 8);
+  border: calc(var(--u) * 2) solid transparent;
+  border-image: var(--k-f-groove) 2 / calc(var(--u) * 2);
+  background: var(--groove);
+}
+.k-slider::-moz-range-track {
+  box-sizing: border-box;
+  height: calc(var(--u) * 8);
+  border: calc(var(--u) * 2) solid transparent;
+  border-image: var(--k-f-groove) 2 / calc(var(--u) * 2);
+  background: var(--groove);
+}
+.k-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: calc(var(--u) * 10);
+  height: calc(var(--u) * 12);
+  margin-top: calc(var(--u) * -4);
+  border: 0;
+  background: var(--k-f-knob) 0 0 / 100% 100%;
+  image-rendering: pixelated;
+}
+.k-slider::-moz-range-thumb {
+  width: calc(var(--u) * 10);
+  height: calc(var(--u) * 12);
+  border: 0;
+  border-radius: 0;
+  background: var(--k-f-knob) 0 0 / 100% 100%;
+  image-rendering: pixelated;
+}
+.k-slider:hover::-webkit-slider-thumb {
+  filter: brightness(1.12);
+}
+.k-slider:hover::-moz-range-thumb {
+  filter: brightness(1.12);
+}
+.k-slider:active::-webkit-slider-thumb {
+  translate: 0 var(--u);
+}
+.k-slider:active::-moz-range-thumb {
+  translate: 0 var(--u);
+}
+
+/* A switch: a block in a well, wood at the left while off, gold at the right while on. */
+.k-switch {
+  flex: none;
+  width: calc(var(--u) * 26);
+  height: calc(var(--u) * 14);
+  padding: 0;
+  border: 0;
+  background: var(--k-f-switch-off) 0 0 / 100% 100%;
+  image-rendering: pixelated;
+  cursor: pointer;
+}
+.k-switch[aria-checked="true"] {
+  background-image: var(--k-f-switch-on);
+}
+.k-switch:hover {
+  filter: brightness(1.12);
+}
+.k-switch:active {
+  translate: 0 var(--u);
+}
+
+/* The Keys tab: each line its keys, as caps, and what they do, the words of every line in one column. */
+.k-settings-key {
+  display: grid;
+  grid-template-columns: calc(var(--u) * 84) minmax(0, 1fr);
+  align-items: center;
+  gap: calc(var(--u) * 5);
+  padding: calc(var(--u) * 2);
+}
+.k-settings-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 2);
+}
+.k-settings-does {
+  font: var(--f-ui);
+  color: var(--k-cream);
+}
+/* A key as it is printed on a keyboard: a parchment cap, its letter in ink. */
+.k-cap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--u) * 9);
+  min-height: calc(var(--u) * 13);
+  box-sizing: border-box;
+  padding: 0 calc(var(--u) * 2);
+  border: solid transparent;
+  border-width: calc(var(--u) * 2) calc(var(--u) * 2) calc(var(--u) * 5);
+  border-image: var(--k-f-cap) 2 2 5 fill / calc(var(--u) * 2) calc(var(--u) * 2) calc(var(--u) * 5);
+  font: var(--f-name);
+  color: #2b1705;
+}
+
+/* On a phone the panel takes the width, and a row of the Keys tab puts its keys over its words. */
+@media (max-width: 760px), (max-height: 500px) {
+  .k-settings-scrim {
+    padding: calc(var(--u) * 3);
+  }
+  .k-settings-page {
+    padding: calc(var(--u) * 3);
+  }
+  .k-settings-key {
+    grid-template-columns: calc(var(--u) * 62) minmax(0, 1fr);
   }
 }

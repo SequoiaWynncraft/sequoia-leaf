@@ -460,6 +460,69 @@ const TONES = {
   off: { light: "#453c5c", face: "#332b47", foot: "#221c33" },
 } satisfies Readonly<Record<string, Tones>>;
 
+// ---------- settings: a slider, a switch, a key ----------
+
+/** The groove a slider runs in, sunk into the panel: its top edge in shade and its bottom catching the light. */
+const groove = (): Grid => ringed(8, 8, [INKED, ["#06040a", LINE]], WELL, 1);
+
+/** A slider's knob: a brass peg with a notch down it, standing on the groove with a hard shadow under it. */
+const knob = (): Grid =>
+  shadowed(
+    rows(
+      [
+        ".kkkkkkkk.",
+        "kiiiiiiiyk",
+        "kiyyyyyyok",
+        "kiyykkyyok",
+        "kiyykkyyok",
+        "kiyykkyyok",
+        "kiyykkyyok",
+        "kiyyyyyyok",
+        "kyoooooook",
+        ".kkkkkkkk.",
+      ],
+      { k: INK, i: GOLD[3], y: GOLD[1], o: GOLD[0] },
+    ),
+  );
+
+/** Where the lamps of a switch that is on are lit, in the well left of its block. */
+const LAMPS = [
+  [4, 6],
+  [5, 6],
+  [4, 7],
+  [5, 7],
+  [7, 6],
+  [8, 6],
+  [7, 7],
+  [8, 7],
+] as const;
+
+/**
+ * A switch: a well with a block in it, at the left in wood while it is off, at the right in gold
+ * while it is on, with the well behind it green and its lamps lit. The block has a lit top, a
+ * darker foot and a grip of two grooves down its middle.
+ */
+function toggle(on: boolean): Grid {
+  const g = ringed(26, 14, [INKED, ["#06040a", on ? "#3b7340" : LINE]], on ? "#1e4a26" : WELL, 2);
+  if (on) for (const [x, y] of LAMPS) put(g, x, y, GREEN[4]);
+  const t = on ? TONES.gold : TONES.wood;
+  const block = ringed(11, 12, [INKED, [t.light, t.foot]], t.face, 1);
+  for (let y = 3; y < 9; y++) {
+    put(block, 4, y, t.foot);
+    put(block, 6, y, t.foot);
+  }
+  const at = on ? 14 : 1;
+  block.forEach((row, y) =>
+    row.forEach((c, x) => {
+      if (c) put(g, at + x, 1 + y, c);
+    }),
+  );
+  return g;
+}
+
+/** A key as it is printed on a keyboard: a parchment cap with a lit top and a deep foot. */
+const cap = (): Grid => button({ light: CREAM, face: PAPER[1], foot: PAPER[0] }, false);
+
 /** The little tail under a speech bubble. */
 const tail = (): Grid => rows(["kwwwwk", ".kwwk.", "..kk.."], { k: INK, w: CREAM });
 
@@ -618,6 +681,7 @@ const ICONS: Readonly<Record<string, readonly string[]>> = {
     ".yy.yyyy.yy.",
     "....yyyy....",
   ],
+  play: ["ww......", "wwww....", "wwwwww..", "wwwwwwww", "wwwwww..", "wwww....", "ww......"],
   hammer: [
     "..ssssss..",
     ".stttttts.",
@@ -774,6 +838,11 @@ const frames: Readonly<Record<string, Grid>> = {
   "tab-down": tab(TONES.wood, 0, true),
   hex: hex(0, INK),
   "hex-in": hex(1, "#1a1128"),
+  groove: groove(),
+  knob: knob(),
+  "switch-off": toggle(false),
+  "switch-on": toggle(true),
+  cap: cap(),
 };
 for (const [name, g] of Object.entries(frames)) lines.push(`  --k-f-${name}: ${url(g)};`);
 for (const [name, t] of Object.entries(TONES)) {

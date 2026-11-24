@@ -463,12 +463,13 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
     tap: () => false,
     point: () => null,
     act: next,
+    // The Grove keeps Escape for itself: it always puts away, goes on, or leaves.
     back() {
-      const now = state();
       if (ui.panelOpen()) ui.closePanel();
-      else if (now === "banner") leave();
-      else if (now === "ceremony") next();
+      else if (state() === "banner") leave();
+      else if (state() === "ceremony") next();
       else done();
+      return true;
     },
     key(k) {
       if (k !== "arrowright" || !show) return false;

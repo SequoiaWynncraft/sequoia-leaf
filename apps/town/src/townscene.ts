@@ -47,13 +47,12 @@ import { compose } from "./letter.ts";
 import { inTownLine } from "./news.ts";
 import {
   aboutLine,
-  closeEmotes,
-  emotesOpen,
   knownRanks,
   leafNow,
   livePlayers,
   meetLive,
   othersInTown,
+  putAway,
   roomNow,
   stepPlayers,
   stirred,
@@ -477,11 +476,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       else touch.act();
     },
 
-    back() {
-      if (emotesOpen()) closeEmotes();
-      else if (G.panel) closePanel();
-      else closeCard();
-    },
+    back: () => putAway(),
 
     key: () => false,
     drag: () => undefined,

@@ -395,22 +395,32 @@ function cancel(id?: number): void {
   if (carrying) unpick();
 }
 
+/** Puts down whatever is picked or carried, as Escape does (`main.ts`). Says whether there was anything. */
+export function letGoHand(): boolean {
+  const held = gesture.at !== "idle" || presses.size > 0;
+  cancel();
+  unpick();
+  return held;
+}
+
+/** What the hand asks of the page: whether it is paused (the settings menu is up over the table). */
+export const handHooks: { paused: () => boolean } = { paused: () => false };
+
 /** Starts listening to the mouse and to fingers. */
 export function openHand(view: HTMLCanvasElement): void {
   canvas = view;
   // A press on the table is the hand's to read: the cards do not put themselves away for it.
   surface(view);
-  window.addEventListener("pointerdown", down);
+  // While the settings menu is up, a press on it is not the table's.
+  window.addEventListener("pointerdown", (e) => {
+    if (!handHooks.paused()) down(e);
+  });
   window.addEventListener("pointermove", moveTo);
   window.addEventListener("pointerup", up);
   window.addEventListener("pointercancel", (e) => cancel(e.pointerId));
   window.addEventListener("blur", () => cancel());
-  window.addEventListener("keydown", (e) => {
+  window.addEventListener("keydown", () => {
     unlock();
-    if (e.key === "Escape") {
-      cancel();
-      unpick();
-    }
   });
   // An offer is a button too: the keyboard buys it.
   document.addEventListener("click", (e) => {

@@ -60,6 +60,8 @@ export interface PageAsks {
   start: (trail: number) => void;
   goHome: () => void;
   leave: () => void;
+  /** A gear for the settings menu, on the pages that cover the table and have no close of their own. */
+  gear: () => HTMLElement;
 }
 
 let asks: PageAsks | null = null;
@@ -75,13 +77,9 @@ let opener: HTMLElement | null = null;
 
 export function openPages(a: PageAsks): void {
   asks = a;
-  // Escape puts away a page opened over the table, unless a card took it first; taken, it goes no further.
-  window.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || e.defaultPrevented || !extra) return;
-    e.preventDefault();
-    showPage(null);
-  });
 }
+/** Whether a page is open over the one the table shows by itself: Escape puts it away (`settings.ts`). */
+export const pageOver = (): boolean => extra !== null;
 /** Opens a page over the table, with the keyboard in it; or puts it away, giving the keyboard back. */
 export function showPage(id: PageId | null): void {
   if (id && !extra) opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -115,7 +113,7 @@ function panel(title: string, sign: HTMLElement | null, body: HTMLElement, withC
     "section",
     `k-panel page k-rise ${cls}`.trim(),
     { role: "dialog", "aria-label": title },
-    el("header", "k-head", {}, sign, el("h1", "k-title", { text: title }), withClose ? close() : null),
+    el("header", "k-head", {}, sign, el("h1", "k-title", { text: title }), withClose ? close() : asks?.gear()),
     body,
   );
 }

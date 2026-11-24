@@ -15,7 +15,7 @@ import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
 import { leave } from "@sequoia-leaf/kit/shell.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
-import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
+import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 
 import { S } from "../state.ts";
@@ -190,7 +190,8 @@ export function toTown(camp?: string): void {
   leave(camp);
 }
 
-function corner(): void {
+/** The corner: back to town, and the gear for the settings menu (`settings.ts`). */
+function corner(gear: HTMLElement): void {
   const host = $("corner");
   const back = iconButton("wood", yardIcon("town"), "Back to town", () => {
     toTown();
@@ -200,19 +201,7 @@ function corner(): void {
     "Back to town",
     () => `The yard keeps working for up to ${(S.world.open.away * TICK_MS) / 3_600_000} hours while you are away.`,
   );
-  // A toggle: pressed while there is sound.
-  const mute = iconButton("wood", icon("sound"), "Sound", () => {
-    setMuted(!isMuted());
-    draw();
-    sfx.tap();
-  });
-  const draw = (): void => {
-    mute.replaceChildren(icon(isMuted() ? "mute" : "sound"));
-    mute.setAttribute("aria-pressed", String(!isMuted()));
-  };
-  tip(mute, "Sound");
-  draw();
-  host.append(back, mute);
+  host.append(back, gear);
 }
 
 /** Opens the member's own yard, from a visit. */
@@ -237,11 +226,11 @@ function visitStrip(who: { readonly id: string; readonly name: string }): () => 
 
 let parts: (() => void)[] = [];
 
-export function initHud(): void {
+export function initHud(gear: HTMLElement): void {
   parts = S.visiting
     ? [visitStrip(S.visiting), bookButtons()]
     : [powerPlaque(), tracker(), studyStrip(() => openPanel("research")), bookButtons()];
-  corner();
+  corner(gear);
 }
 
 export function refreshHud(): void {

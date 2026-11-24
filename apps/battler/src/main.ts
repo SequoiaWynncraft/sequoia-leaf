@@ -12,8 +12,8 @@ import { keepLeaf, serverCard, shutCard, start, troubleCard } from "@sequoia-lea
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
 import { failedToOpen, watchPage } from "@sequoia-leaf/kit/report.ts";
+import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
-import { isMuted, setMuted } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
 import { FIGURES } from "@sequoia-leaf/raid";
@@ -40,11 +40,12 @@ import { openHand, unpick } from "./screen/hand.ts";
 import { postcard } from "./screen/logic.ts";
 import { hearNotes, stepPawns, syncPawns } from "./screen/pawns.ts";
 import { drawOver, drawScene, stepScene, wordsScene } from "./screen/scene.ts";
+import { startSettings } from "./screen/settings.ts";
 import { snd } from "./screen/sounds.ts";
 import * as stage from "./screen/stage.ts";
 import { onChange, onHeld, onNotes, onRefused, openTable, S } from "./screen/state.ts";
 import { registerCards } from "./screen/ui/cards.ts";
-import { onCarry, placeSheet, registerFought, sheetUp } from "./screen/ui/fightsheet.ts";
+import { onCarry, placeSheet, registerFought } from "./screen/ui/fightsheet.ts";
 import { openLight } from "./screen/ui/lit.ts";
 import { renderNudge, stepNudge } from "./screen/ui/nudge.ts";
 import { openPages, pagesClick, renderPages, showPage } from "./screen/ui/pages.ts";
@@ -101,6 +102,7 @@ async function boot(): Promise<void> {
     card(trouble);
     return;
   }
+  const menu = startSettings(scope(), lookBack);
   registerCards();
   registerFought();
   onCarry(carryOn, lookBack);
@@ -112,10 +114,7 @@ async function boot(): Promise<void> {
     speed: doSpeed,
     skipFight: doSkip,
     help: () => showPage("howto"),
-    sound: () => {
-      setMuted(!isMuted());
-      renderTable();
-    },
+    gear: () => menu.gear(),
     frontPage: toFront,
     lastFight: lookBack,
     traitOn,
@@ -128,10 +127,7 @@ async function boot(): Promise<void> {
     start: (trail) => void setOutOn(trail),
     goHome: () => void goHome(),
     leave: leaveTable,
-  });
-  // After the pages' own: Escape puts away one layer, a page over the table before the fight sheet under it.
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !e.defaultPrevented && sheetUp() === "again") lookBack();
+    gear: () => menu.gear(),
   });
   document.getElementById("modal")?.addEventListener("click", pagesClick);
 

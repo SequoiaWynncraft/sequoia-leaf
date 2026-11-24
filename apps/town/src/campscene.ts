@@ -84,7 +84,7 @@ import {
   visiting,
 } from "./leaf.ts";
 import { comeTo, makePet, MY_PETS, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
-import { closeEmotes, emotesOpen, livePlayers, meetLive, stepPlayers, touched } from "./players.ts";
+import { livePlayers, meetLive, putAway, stepPlayers, touched } from "./players.ts";
 import { type Light, makeProp, type Prop, propUnder } from "./props.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Hover, Scene, Stage } from "./stage.ts";
@@ -894,6 +894,13 @@ export function makeCamp(
     if (decorating) decorating.hand = h;
   }
 
+  /** Escape while decorating: decorating stops. Says whether it was decorating. */
+  function stopDecorating(): boolean {
+    if (!decor()) return false;
+    decorate(false);
+    return true;
+  }
+
   function decorate(on: boolean): void {
     if (decor() === on || (on && visiting())) return;
     if (on) {
@@ -1478,12 +1485,7 @@ export function makeCamp(
     },
     act: () => (decor() ? turn() : touch.act()),
 
-    back() {
-      if (emotesOpen()) closeEmotes();
-      else if (G.panel) closePanel();
-      else if (decor()) decorate(false);
-      else closeCard();
-    },
+    back: () => putAway(stopDecorating),
 
     key(k) {
       if (!decor()) return false;

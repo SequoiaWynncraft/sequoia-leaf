@@ -14,7 +14,6 @@ import {
   DEPOT,
   type Dir,
   gradeOf,
-  isDir,
   JOINER,
   LEFT,
   litOf,
@@ -44,6 +43,7 @@ import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { armAt, type Arms, TILE, withArm } from "./art/belts.ts";
 import { draws, type Group } from "./state.ts";
+import { dirAt } from "./tiles.ts";
 
 export interface Sign {
   plot: Plotted;
@@ -88,10 +88,7 @@ export const sendsRight = (y: Yard, i: number): boolean => y.kind[i] === SORTER 
 export const keepsRight = (p: Piece): boolean => p.kind === SORTER && p.first === 2;
 
 /** The side of its tile a sorter sends the thing it is set to out by: its left, or its right. */
-export function sortSide(y: Yard, i: number): Dir {
-  const d = y.dir[i] ?? 0;
-  return (sendsRight(y, i) ? RIGHT : LEFT)[isDir(d) ? d : 0];
-}
+export const sortSide = (y: Yard, i: number): Dir => (sendsRight(y, i) ? RIGHT : LEFT)[dirAt(y, i)];
 
 /** The ways a splitter or a sorter sends things: ahead, left and right (`wayOut` says which are shut). */
 const waysOf = (k: number): number => (k === SPLITTER || k === SORTER ? 3 : 0);
