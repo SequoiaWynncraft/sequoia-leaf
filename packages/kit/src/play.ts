@@ -536,19 +536,23 @@ export async function openPlay<View, Command extends object, Note, Short = never
   /**
    * Everything Leaf has not answered, in order and with the ids it has, in one request that outlives
    * the page (as many as Leaf takes in one: `MOST_FLUSHED`, `FLUSH_BYTES`). Leaf does each command
-   * once; if the page stays after all, they go again in turn and are answered as before.
+   * once; if the page stays after all, they go again in turn and are answered as before. So a flush
+   * that does not reach Leaf (a phone off the network as it is put away) loses nothing the line still
+   * has, and is not the page failing.
    */
   function flush(): void {
     const left = unanswered(line);
     const n = fitting(left, MOST_FLUSHED, FLUSH_BYTES);
     if (n === 0) return;
-    void outside.fetch(path, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: bodyOf(left.slice(0, n)),
-      keepalive: true,
-    });
+    outside
+      .fetch(path, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: bodyOf(left.slice(0, n)),
+        keepalive: true,
+      })
+      .catch(() => undefined);
   }
 
   // What the play hears of the page, let go of as it stops.
