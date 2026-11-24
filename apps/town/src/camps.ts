@@ -28,8 +28,25 @@ export interface Visitor {
 export const ORDERS = { liked: "Most liked", set: "Most set out" } as const;
 export type Order = keyof typeof ORDERS;
 
-/** What the page holds: the camps as Leaf last listed them, and the order last chosen. */
-const held: { camps: readonly Camp[]; order: Order } = { camps: [], order: "liked" };
+/**
+ * What the page holds: the camps as Leaf last listed them, and the order last chosen. Each question
+ * to Leaf (a list, a like) is numbered as it is sent (`asked`), and each camp is held as the answer
+ * to the last one sent that told of it (`told`): a list asked for before a like, and answered after
+ * it, does not undo it.
+ */
+const held: { camps: readonly Camp[]; order: Order; asked: number; told: Map<string, number> } = {
+  camps: [],
+  order: "liked",
+  asked: 0,
+  told: new Map(),
+};
+
+/** A camp as the answer to question `n` tells of it: as held, if a later question has told of it since. */
+function take(c: Camp, n: number): Camp {
+  if ((held.told.get(c.id) ?? 0) > n) return held.camps.find((h) => h.id === c.id) ?? c;
+  held.told.set(c.id, n);
+  return c;
+}
 
 /** The camps as Leaf last listed them. */
 export const camps = (): readonly Camp[] => held.camps;
@@ -86,14 +103,16 @@ export function nextAfter(list: readonly Camp[], o: Order, at: string, me: strin
 
 /** Asks Leaf for the camps, and holds them; null when Leaf did not answer with them. */
 export async function fetchCamps(): Promise<readonly Camp[] | null> {
+  const n = ++held.asked;
   const a = await ask("/v1/game/camps");
   const read = a.status === 200 ? readCamps(a.body) : null;
-  if (read) held.camps = read;
-  return read;
+  if (read) held.camps = read.map((c) => take(c, n));
+  return read && held.camps;
 }
 
 /** Gives (`on`) or takes back the member's like of `id`'s camp: the camp as Leaf answers, or what Leaf said, or null for no answer. */
 export async function like(id: string, on: boolean): Promise<Camp | string | null> {
+  const n = ++held.asked;
   const a = await ask(`/v1/game/camps/${encodeURIComponent(id)}/like`, { method: on ? "PUT" : "DELETE" });
   const body = isRecord(a.body) ? a.body : {};
   const likes = num(body.likes);
@@ -107,8 +126,9 @@ export async function like(id: string, on: boolean): Promise<Camp | string | nul
     likes,
     liked: body.liked === true,
   };
-  held.camps = was ? held.camps.map((c) => (c.id === id ? now : c)) : [...held.camps, now];
-  return now;
+  const kept = take(now, n);
+  held.camps = was ? held.camps.map((c) => (c.id === id ? kept : c)) : [...held.camps, kept];
+  return kept;
 }
 
 function readVisitors(v: unknown): Visitor[] {

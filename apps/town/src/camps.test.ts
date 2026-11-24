@@ -86,6 +86,28 @@ describe("the signpost's camps", () => {
     expect(await like("me", true)).toBe("That is your own camp");
   });
 
+  test("keep a like Leaf answered over a list it was asked for before the like", async () => {
+    const before = { camps: [{ id: "bo", name: "Bo", guest: false, set_out: 3, likes: 1, liked: false }] };
+    let answerList = (): void => undefined;
+    world = standin({
+      "GET /v1/game/camps": () =>
+        new Promise((done) => {
+          answerList = () => done({ status: 200, body: before });
+        }),
+      "PUT /v1/game/camps/bo/like": { status: 200, body: { likes: 2, liked: true } },
+    });
+    const listed = fetchCamps();
+    await like("bo", true);
+    answerList();
+    await listed;
+    expect(camps()).toEqual([{ id: "bo", name: "Bo", guest: false, setOut: 3, likes: 2, liked: true }]);
+    // A list asked for after the like is Leaf's word again.
+    world.done();
+    world = standin({ "GET /v1/game/camps": { status: 200, body: before } });
+    await fetchCamps();
+    expect(camps()).toEqual([{ id: "bo", name: "Bo", guest: false, setOut: 3, likes: 1, liked: false }]);
+  });
+
   test("tell the owner, in a line of the feed, who liked their camp", () => {
     expect(likedLine(event({ id: "x", username: "Mossback" }))).toEqual(["Mossback likes your camp.", "rose"]);
     expect(likedLine(event({ id: "x" }))).toBeNull();
