@@ -1,5 +1,33 @@
 [
   {
+    "id": "rebind-keys",
+    "at": "TBD",
+    "title": "Put any action on the keys you like",
+    "lines": [
+      "In Settings, under Keys, click a key, or press Enter on it, then press the key you want in its place. Escape keeps the key it had.",
+      "A key does one thing: put on a new action, it leaves its old one, which has an empty slot until you give it another key."
+    ],
+    "more": [
+      {
+        "head": "New",
+        "points": [
+          "A line you have changed has a Reset button, and Reset all keys at the bottom puts every key back.",
+          "Every key of the main block can be used, named as your keyboard prints it, so an AZERTY M or a Dvorak S can be used too.",
+          "Escape, Tab, Ctrl shortcuts and The Little Raid's keys stay as they are. Walking and moving the view can't use Shift.",
+          "Your keys are kept on this device, and every open page of the game changes with them at once."
+        ]
+      },
+      {
+        "head": "Fixed",
+        "points": [
+          "Holding a key now does its action once. In the Works, holding R or E no longer rotates or removes over and over; moving the view, zooming and undoing still go on while held.",
+          "A tip already on screen now changes when you choose another keyboard in another window.",
+          "Enter or Space on a focused button only presses the button, whatever action you put on them."
+        ]
+      }
+    ]
+  },
+  {
     "id": "works-orders-handed",
     "at": "2026-11-24T22:06Z",
     "title": "The Works: your orders handed over",
