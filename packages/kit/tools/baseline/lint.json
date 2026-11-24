@@ -1,6 +1,5 @@
 {
   "complexity": {
-    "apps/api/src/live/live.ts": 16,
     "apps/api/src/play/service.ts": 54,
     "apps/battler/src/screen/art/table.ts": 75,
     "apps/battler/src/screen/fightview.ts": 171,
@@ -77,7 +76,7 @@
     "packages/kit/src/card.ts": 96,
     "packages/kit/src/live.ts": 20,
     "packages/kit/src/play.ts": 48,
-    "packages/kit/src/realtime.ts": 85,
+    "packages/kit/src/realtime.ts": 82,
     "packages/kit/src/skin.ts": 49,
     "packages/pulls/src/game.ts": 21,
     "packages/raid/src/bot.ts": 22,
@@ -93,7 +92,6 @@
     "packages/town/src/game.ts": 97
   },
   "max-lines": {
-    "apps/api/src/live/live.ts": 556,
     "apps/api/src/play/service.ts": 641,
     "apps/battler/src/screen/fightview.ts": 899,
     "apps/battler/src/screen/ui/pages.ts": 707,
@@ -113,7 +111,6 @@
     "apps/works/src/ui/cards.ts": 602,
     "packages/factory/src/codec.ts": 692,
     "packages/kit/src/card.ts": 747,
-    "packages/kit/src/realtime.ts": 531,
     "packages/raid/src/content/figures.ts": 1010,
     "packages/raid/src/fight/core.ts": 529,
     "packages/raid/src/fight/engine.ts": 567,
@@ -126,7 +123,7 @@
     "apps/api/src/http/routes/me.ts": 223,
     "apps/api/src/http/routes/people.ts": 309,
     "apps/api/src/http/routes/play.ts": 229,
-    "apps/api/src/live/live.ts": 336,
+    "apps/api/src/live/live.ts": 335,
     "apps/api/src/play/coins.ts": 95,
     "apps/api/src/play/service.ts": 677,
     "apps/api/src/play/store.ts": 187,
@@ -170,7 +167,7 @@
     "packages/factory/src/check.ts": 104,
     "packages/factory/src/route.ts": 103,
     "packages/kit/src/play.ts": 264,
-    "packages/kit/src/realtime.ts": 244,
+    "packages/kit/src/realtime.ts": 227,
     "packages/raid/src/fight/core.ts": 100,
     "packages/raid/src/wire.ts": 115,
     "packages/town/src/game.ts": 112

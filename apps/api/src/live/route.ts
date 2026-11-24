@@ -1,4 +1,4 @@
-import { LIVE_PATH, LIVE_VERSION, readDevice, roomKind } from "@sequoia-leaf/core";
+import { LIVE_OLDEST, LIVE_PATH, LIVE_VERSION, readDevice, roomKind } from "@sequoia-leaf/core";
 import { Clock, Effect, Layer } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
@@ -43,11 +43,12 @@ export const LiveRoute = Layer.unwrap(
       return yield* Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest;
         const query = new URL(request.url, "http://leaf").searchParams;
-        if (query.get("v") !== String(LIVE_VERSION)) {
+        const speaks = Number(query.get("v"));
+        if (!Number.isInteger(speaks) || speaks < LIVE_OLDEST || speaks > LIVE_VERSION) {
           return yield* refuse(
             400,
             "unsupported_version",
-            `Leaf speaks version ${LIVE_VERSION} of the live connection`,
+            `Leaf speaks versions ${LIVE_OLDEST} to ${LIVE_VERSION} of the live connection`,
           );
         }
         const kindName = query.get("room") ?? "";
@@ -68,7 +69,10 @@ export const LiveRoute = Layer.unwrap(
           Effect.provideContext(asked),
         );
         const upgrade = Effect.tap(request.upgrade, () => counted(101));
-        const opened = yield* live.open(identity, kindName, upgrade, session, readDevice(query.get("device")));
+        const opened = yield* live.open(identity, kindName, upgrade, session, {
+          device: readDevice(query.get("device")),
+          speaks,
+        });
         if (opened === "full") return yield* refuse(503, "live_full", "Live is full just now. Try again shortly");
         if (opened === "busy") return yield* refuse(429, "slow_down", "Opened too often. Try again in a little while");
         if (opened === "stopping") return yield* refuse(503, "restarting", "Leaf is restarting. Try again in a moment");

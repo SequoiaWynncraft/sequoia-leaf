@@ -6,6 +6,7 @@
 import {
   decodeSnapshot,
   encodeMove,
+  LIVE_PATH,
   livePath,
   type Motion,
   readToClient,
@@ -20,6 +21,8 @@ export interface Opening {
   readonly origin?: string;
   /** What the page says it is on, as `&device=` in the address. */
   readonly device?: string;
+  /** The version of the wire the page speaks, if not the newest: a page loaded before Leaf spoke it. */
+  readonly speaks?: number;
 }
 
 type Of<T extends ToClient["t"]> = Extract<ToClient, { t: T }>;
@@ -39,6 +42,8 @@ export class LiveClient {
   closed: { code: number; reason: string } | null = null;
   /** Told each snapshot as it arrives, with when (`performance.now()`). */
   onSnapshot: (snapshot: Snapshot, at: number) => void = () => undefined;
+  /** How much has arrived: binary frames' bytes, and text frames' characters (their bytes, as Leaf's text is ASCII but for names). */
+  readonly received = { binary: 0, text: 0 };
   private readonly ws: WebSocket;
   private readonly waiting = new Set<() => void>();
   private seq = 0;
@@ -49,12 +54,14 @@ export class LiveClient {
     ws.binaryType = "arraybuffer";
     ws.addEventListener("message", (e: MessageEvent) => {
       if (typeof e.data === "string") {
+        this.received.text += e.data.length;
         const m = readToClient(e.data);
         if (m) {
           this.texts.push(m);
           this.arrived.push(m.t);
         }
       } else if (e.data instanceof ArrayBuffer) {
+        this.received.binary += e.data.byteLength;
         this.arrived.push("snapshot");
         const snapshot = decodeSnapshot(new Uint8Array(e.data));
         const at = performance.now();
@@ -73,7 +80,8 @@ export class LiveClient {
 
   /** Opens a connection into a room on Leaf at `origin` (`http://127.0.0.1:4000`), resolving once it is open. */
   static open(origin: string, sent: Opening, room = "town"): Promise<LiveClient> {
-    const path = livePath(room);
+    const path =
+      sent.speaks === undefined ? livePath(room) : `${LIVE_PATH}?v=${sent.speaks}&room=${encodeURIComponent(room)}`;
     const headers: Record<string, string> = {};
     if (sent.cookie !== undefined) headers["Cookie"] = `seq_session=${sent.cookie}`;
     if (sent.bearer !== undefined) headers["Authorization"] = `Bearer ${sent.bearer}`;

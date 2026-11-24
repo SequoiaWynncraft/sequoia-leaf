@@ -8,10 +8,16 @@ import {
   roomKind,
   type ToClient,
 } from "@sequoia-leaf/core";
+import type { Effect } from "effect";
 
-/** Where a room sends what it has to say to one of the people in it: the player, whichever connection they have now. */
+/**
+ * Where a room sends what it has to say to one of the people in it: the player, whichever
+ * connection they have now. `send` puts a frame in line from plain code; `write` writes one from
+ * the fiber it runs in (a room's snapshot at its tick), in the same order as everything sent.
+ */
 export interface Outbox {
   send(frame: string | Uint8Array): void;
+  write(frame: Uint8Array): Effect.Effect<void>;
 }
 
 /** Somebody in a room: who they are, their latest motion, and whether it has changed since the room last said. */
@@ -101,15 +107,20 @@ export function moved(
   };
 }
 
-/** Somebody shown walking stops where they are, and everybody is to be told; anybody else stays as they are. */
-export const halted = (shown: Shown): Shown =>
-  shown.state === "seen" && (shown.motion.flags & Flag.Moving) !== 0
+type Seen = Extract<Shown, { state: "seen" }>;
+
+/** Somebody seen walking stops where they are, and everybody is to be told; standing, they stay as they are. */
+const stood = (shown: Seen): Seen =>
+  (shown.motion.flags & Flag.Moving) !== 0
     ? {
         ...shown,
         motion: { ...shown.motion, vx: 0, vy: 0, flags: shown.motion.flags & ~Flag.Moving },
         changed: true,
       }
     : shown;
+
+/** Somebody shown walking stops where they are, and everybody is to be told; anybody else stays as they are. */
+export const halted = (shown: Shown): Shown => (shown.state === "seen" ? stood(shown) : shown);
 
 /** Somebody's game has a new connection: whatever it counts its jumps from, its first move is one. */
 export const reconnected = (shown: Shown): Shown => (shown.state === "seen" ? { ...shown, heard: null } : shown);
@@ -121,8 +132,13 @@ export const told = (shown: Shown): Shown =>
 /**
  * One copy of a room: who is in it and where. It is plain state, changed by one thing at a time, and
  * says what it has to say through each occupant's outbox: who came and went and what they did, as
- * it happens, and everyone's changed motion once a tick (`flush`), made once for all of them. In a
- * still room (a visit's) it says only who came and went.
+ * it happens; and once a tick it makes everyone's changed motion into one snapshot for all of them
+ * (`flush`), which Live writes to each. In a still room (a visit's) it says only who came and went.
+ *
+ * A room has work at a tick only while somebody's motion has changed since the last, or somebody is
+ * shown walking (who stops once their game goes quiet). It is on its rooms' list of those (`busy`)
+ * from the change that gives it work until the tick that finds none left, and the tick goes through
+ * those rooms alone: a room of people standing, and a still room, cost nothing.
  */
 export class Room {
   readonly occupants = new Map<number, Occupant>();
@@ -132,11 +148,14 @@ export class Room {
   readonly kindName: string;
   readonly kind: RoomKind;
   private lastId = 0;
+  /** The rooms with work at the next tick, this one among them while it has any. */
+  private readonly busy: Set<Room>;
 
-  constructor(kindName: string, copy: number, kind: RoomKind) {
+  constructor(kindName: string, copy: number, kind: RoomKind, busy: Set<Room> = new Set()) {
     this.kindName = kindName;
     this.name = `${kindName}/${copy}`;
     this.kind = kind;
+    this.busy = busy;
   }
 
   get size(): number {
@@ -190,6 +209,7 @@ export class Room {
     if (!o || this.kind.still === true) return false;
     const next = moved(o.shown, seq, m, time, this.kind);
     o.shown = next.shown;
+    this.busy.add(this);
     return next.went;
   }
 
@@ -199,20 +219,12 @@ export class Room {
     if (o) o.shown = reconnected(o.shown);
   }
 
-  /**
-   * Everybody shown walking whose game has sent no move for `QUIET_MS` by `time` stops where they
-   * are, as `halt` stops them: a page that has stopped drawing its player (a hidden tab) never leaves
-   * them walking on the spot for everybody else. Their next move walks them on.
-   */
-  quiet(time: number): void {
-    for (const o of this.occupants.values())
-      if (o.shown.state === "seen" && time - o.shown.movedAt >= QUIET_MS) o.shown = halted(o.shown);
-  }
-
   /** Somebody has stopped where they are, as when their connection drops: everyone sees them stand. */
   halt(id: number): void {
     const o = this.occupants.get(id);
-    if (o) o.shown = halted(o.shown);
+    if (!o) return;
+    o.shown = halted(o.shown);
+    if (o.shown.state === "seen" && o.shown.changed) this.busy.add(this);
   }
 
   /** Tells everyone else what somebody did; in a still room, nobody. */
@@ -221,22 +233,41 @@ export class Room {
     this.others(id, text({ t: "act", id, kind, arg }));
   }
 
-  /** Sends everyone the motion that changed since the last tick, if any did, in one snapshot made once. */
-  flush(tick: number, time: number): boolean {
-    const changed = this.entries((shown) => shown.changed);
-    if (changed.length === 0) return false;
-    for (const o of this.occupants.values()) o.shown = told(o.shown);
-    const frame = encodeSnapshot(tick, time, changed);
-    for (const o of this.occupants.values()) o.outbox.send(frame);
-    return true;
+  /**
+   * The room's tick at `time`: first, everybody shown walking whose game has sent no move for
+   * `QUIET_MS` stops where they are, as `halt` stops them, so that a page that has stopped drawing
+   * its player (a hidden tab) never leaves them walking on the spot for everybody else (their next
+   * move walks them on); then the motion that changed since the last tick goes in one snapshot for
+   * everyone in the room, or null if none did. Everybody counts as told it from now: it is for
+   * whoever writes it to them. Once nobody is left walking, the room has no work until a change.
+   */
+  flush(tick: number, time: number): Uint8Array | null {
+    const changed: Entry[] = [];
+    let walking = false;
+    for (const o of this.occupants.values()) {
+      if (o.shown.state !== "seen") continue;
+      let shown = o.shown;
+      if (time - shown.movedAt >= QUIET_MS) shown = stood(shown);
+      if (shown.changed) {
+        changed.push(entryOf(o, shown));
+        shown = { ...shown, changed: false };
+      }
+      o.shown = shown;
+      if ((shown.motion.flags & Flag.Moving) !== 0) walking = true;
+    }
+    if (!walking) this.busy.delete(this);
+    return changed.length === 0 ? null : encodeSnapshot(tick, time, changed);
   }
 
-  private entries(which: (shown: Extract<Shown, { state: "seen" }>) => boolean): Entry[] {
+  /** Whether somebody is in the room still, as this occupant: not gone, nor gone and come back in as another. */
+  has(o: Occupant): boolean {
+    return this.occupants.get(o.member.id) === o;
+  }
+
+  private entries(which: (shown: Seen) => boolean): Entry[] {
     const out: Entry[] = [];
-    for (const o of this.occupants.values()) {
-      if (o.shown.state !== "seen" || !which(o.shown)) continue;
-      out.push({ id: o.member.id, seq: o.shown.seq, ...o.shown.motion });
-    }
+    for (const o of this.occupants.values())
+      if (o.shown.state === "seen" && which(o.shown)) out.push(entryOf(o, o.shown));
     return out;
   }
 
@@ -255,12 +286,17 @@ export class Room {
 
 const text = (message: ToClient): string => JSON.stringify(message);
 
+/** Somebody's motion as a snapshot carries it. */
+const entryOf = (o: Occupant, shown: Seen): Entry => ({ id: o.member.id, seq: shown.seq, ...shown.motion });
+
 /**
  * Every copy of every room. A player asks for a kind of room and is put in the first copy with
  * space, or a new one; a copy is closed when its last player leaves, and its number used again.
  */
 export class Rooms {
   private readonly byKind = new Map<string, Room[]>();
+  /** The rooms with work at the next tick (`Room`). */
+  private readonly working = new Set<Room>();
 
   /** A copy of the room of this kind with space for one more, opened if need be; none for a kind there is not. */
   place(kindName: string): Room | undefined {
@@ -272,7 +308,7 @@ export class Rooms {
     const taken = new Set(copies.map((room) => room.name));
     let n = 1;
     while (taken.has(`${kindName}/${n}`)) n++;
-    const room = new Room(kindName, n, kind);
+    const room = new Room(kindName, n, kind, this.working);
     this.byKind.set(
       kindName,
       [...copies, room].toSorted((a, b) => a.name.localeCompare(b.name, "en", { numeric: true })),
@@ -283,6 +319,7 @@ export class Rooms {
   /** Closes a copy nobody is in. */
   tidy(room: Room): void {
     if (room.size > 0) return;
+    this.working.delete(room);
     const left = (this.byKind.get(room.kindName) ?? []).filter((r) => r !== room);
     if (left.length > 0) this.byKind.set(room.kindName, left);
     else this.byKind.delete(room.kindName);
@@ -290,5 +327,10 @@ export class Rooms {
 
   *all(): Iterable<Room> {
     for (const copies of this.byKind.values()) yield* copies;
+  }
+
+  /** The rooms with work at this tick, as they are when it begins: each is off the list once its tick finds none left. */
+  busy(): readonly Room[] {
+    return [...this.working];
   }
 }

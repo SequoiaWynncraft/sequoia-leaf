@@ -19,6 +19,9 @@
  *   service's jobs spent their time (`PlayMeter`), the CPU used, the most memory held, and how far
  *   behind the yard longest unwritten was, sampled each second.
  *
+ * `LIVE_MOST_PLAYERS` in the environment sets how many players Live holds at once, as it does for
+ * Leaf itself, so that more walkers than that can be let in to see what they cost.
+ *
  * SIGTERM or Ctrl-C stops it.
  */
 import { monitorEventLoopDelay } from "node:perf_hooks";
@@ -37,7 +40,13 @@ import { coldId, lookerId, LOOKERS, ownerId, spread, walkerId, WALKERS } from ".
 const port = Number(process.argv[2]);
 const owners = Number(process.argv[3] ?? 20);
 const cold = Number(process.argv[4] ?? 50);
-if (!Number.isInteger(port) || ![owners, cold].every((n) => Number.isInteger(n) && n >= 0)) {
+const mostPlayers =
+  process.env["LIVE_MOST_PLAYERS"] === undefined ? undefined : Number(process.env["LIVE_MOST_PLAYERS"]);
+if (
+  !Number.isInteger(port) ||
+  ![owners, cold].every((n) => Number.isInteger(n) && n >= 0) ||
+  (mostPlayers !== undefined && !Number.isInteger(mostPlayers))
+) {
   console.error("Usage: bun apps/api/test/load/leaf.ts <port> [owners] [cold]");
   process.exit(2);
 }
@@ -122,7 +131,7 @@ const leaf = testLeaf(
   },
   fetcher,
   {},
-  { meter: (times) => phase.jobs.push(times) },
+  { meter: (times) => phase.jobs.push(times), ...(mostPlayers === undefined ? {} : { live: { mostPlayers } }) },
 );
 
 // The yards: the owners' written a minute ago, and the cold ones eight hours ago, each as if its

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { decodeSnapshot, Flag, type Motion, readToClient, type ToClient } from "@sequoia-leaf/core";
+import { Effect } from "effect";
 
 import {
   halted,
@@ -34,8 +35,17 @@ function inbox() {
           if (m) texts.push(m);
         }
       },
+      write: (frame: Uint8Array) => Effect.sync(() => void frames.push(frame)),
     },
   };
+}
+
+/** One of the room's ticks: its snapshot, if anything moved, written to everybody in it as Live writes it. Says whether there was one. */
+function tick(room: Room, n: number, time: number): boolean {
+  const frame = room.flush(n, time);
+  if (frame === null) return false;
+  for (const o of room.occupants.values()) Effect.runSync(o.outbox.write(frame));
+  return true;
 }
 
 const TOWN = { width: 512, height: 352, capacity: 3, speed: 160 };
@@ -91,13 +101,13 @@ describe("a room", () => {
     const b = inbox();
     const alice = room.join(person("Alice"), a.outbox, 0, 30, 1);
     const bob = room.join(person("Bob"), b.outbox, 0, 30, 1);
-    room.move(alice.member.id, 1, at(10, 10), 0);
-    room.move(alice.member.id, 2, at(12, 10, Flag.Moving), 0);
+    room.move(alice.member.id, 1, at(10, 10), 5000);
+    room.move(alice.member.id, 2, at(12, 10, Flag.Moving), 5000);
 
-    expect(room.flush(1, 5000)).toBe(true);
-    expect(room.flush(2, 5033)).toBe(false);
+    expect(tick(room, 1, 5000)).toBe(true);
+    expect(tick(room, 2, 5033)).toBe(false);
     room.move(bob.member.id, 1, at(300, 200), 0);
-    room.flush(3, 5066);
+    tick(room, 3, 5066);
 
     expect(a.frames.length).toBe(2);
     expect(a.frames[0]).toBe(b.frames[0]);
@@ -197,7 +207,7 @@ describe("a room", () => {
     room.join(person("Bob"), a.outbox, 0, 30, 1);
     room.move(alice.member.id, 1, at(400, 300, 0, 1), 0);
     room.move(alice.member.id, 2, at(401, 300, Flag.Moving, 1), 0);
-    room.flush(1, 0);
+    tick(room, 1, 0);
 
     expect(decodeSnapshot(a.frames.at(-1) ?? new Uint8Array())?.entries.map((e) => [e.x, e.jump])).toEqual([[401, 1]]);
   });
@@ -226,12 +236,12 @@ describe("a room", () => {
     const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
     room.join(person("Bob"), b.outbox, 0, 30, 1);
     room.move(alice.member.id, 1, { ...at(50, 60, Flag.Moving | 4), vx: 30 }, 0);
-    room.flush(1, 0);
+    tick(room, 1, 0);
     room.halt(alice.member.id);
-    room.flush(2, 0);
+    tick(room, 2, 0);
     room.halt(alice.member.id);
 
-    expect(room.flush(3, 0)).toBe(false);
+    expect(tick(room, 3, 0)).toBe(false);
     expect(decodeSnapshot(b.frames.at(-1) ?? new Uint8Array())?.entries.map((e) => [e.x, e.vx, e.flags])).toEqual([
       [50, 0, 4],
     ]);
@@ -245,21 +255,18 @@ describe("a room", () => {
     // Alice walks right, twenty moves a second, and her tab is hidden after the last.
     for (let i = 0; i <= 10; i++)
       room.move(alice.member.id, i + 1, { ...at(50 + i * 3, 60, Flag.Moving), vx: 64 }, i * 50);
-    room.flush(1, 500);
+    tick(room, 1, 500);
     const shown = () => decodeSnapshot(b.frames.at(-1) ?? new Uint8Array())?.entries.map((e) => [e.x, e.vx, e.flags]);
     expect(shown()).toEqual([[80, 64, Flag.Moving]]);
 
     // Still walking a moment after her last move: a move may be a little late.
-    room.quiet(500 + QUIET_MS - 1);
-    expect(room.flush(2, 500 + QUIET_MS - 1)).toBe(false);
-    room.quiet(500 + QUIET_MS);
-    room.flush(3, 500 + QUIET_MS);
+    expect(tick(room, 2, 500 + QUIET_MS - 1)).toBe(false);
+    tick(room, 3, 500 + QUIET_MS);
     expect(shown()).toEqual([[80, 0, 0]]);
     // Standing, she stays as she is, however long it is quiet; her next move walks her on.
-    room.quiet(60_000);
-    expect(room.flush(4, 60_000)).toBe(false);
+    expect(tick(room, 4, 60_000)).toBe(false);
     room.move(alice.member.id, 20, { ...at(83, 60, Flag.Moving), vx: 64 }, 60_010);
-    room.flush(5, 60_010);
+    tick(room, 5, 60_010);
     expect(shown()).toEqual([[83, 64, Flag.Moving]]);
   });
 
@@ -321,6 +328,52 @@ describe("the rooms", () => {
     expect(more.slice(0, 26).every((n) => n === "town/3")).toBe(true);
     expect(more.at(-1)).toBe("town/1");
     expect([...rooms.all()].map((r) => r.name)).toEqual(["town/1", "town/2", "town/3"]);
+  });
+
+  it("has work at a tick only for a room where motion changed or somebody is shown walking", () => {
+    const rooms = new Rooms();
+    const town = rooms.place("town");
+    const visit = rooms.place("visit:works:10000000-0000-0000-0000-000000000001");
+    if (!town || !visit) throw new Error("no rooms");
+    const alice = town.join(person("Alice"), inbox().outbox, 0, 30, 1);
+    const bob = town.join(person("Bob"), inbox().outbox, 0, 30, 1);
+    const looker = visit.join(person("Carol"), inbox().outbox, 0, 30, 1);
+    // Come in, nobody has moved: no work anywhere. Nothing moves in a still room.
+    expect(rooms.busy()).toEqual([]);
+    visit.move(looker.member.id, 1, at(5, 5, Flag.Moving), 0);
+    expect(rooms.busy()).toEqual([]);
+
+    // A step that stands Alice still is told at the next tick, and then the town has none.
+    town.move(alice.member.id, 1, at(10, 10), 0);
+    expect(rooms.busy()).toEqual([town]);
+    expect(town.flush(1, 0)).not.toBeNull();
+    expect(rooms.busy()).toEqual([]);
+
+    // Bob walking keeps it on the list, told or not, until his game goes quiet and he is stood still.
+    town.move(bob.member.id, 1, at(20, 20, Flag.Moving), 100);
+    expect(town.flush(2, 133)).not.toBeNull();
+    expect(town.flush(3, 166)).toBeNull();
+    expect(rooms.busy()).toEqual([town]);
+    const stood = town.flush(4, 100 + QUIET_MS);
+    expect(decodeSnapshot(stood ?? new Uint8Array())?.entries.map((e) => [e.id, e.flags])).toEqual([
+      [bob.member.id, 0],
+    ]);
+    expect(rooms.busy()).toEqual([]);
+
+    // A halt of somebody walking is work; of somebody standing, none.
+    town.move(bob.member.id, 2, at(21, 20, Flag.Moving), 2000);
+    town.flush(5, 2000);
+    town.halt(bob.member.id);
+    expect(decodeSnapshot(town.flush(6, 2010) ?? new Uint8Array())?.entries.map((e) => e.flags)).toEqual([0]);
+    town.halt(bob.member.id);
+    expect(rooms.busy()).toEqual([]);
+
+    // A room closed with somebody walking in it is off the list.
+    town.move(bob.member.id, 3, at(22, 20, Flag.Moving), 3000);
+    town.leave(alice.member.id);
+    town.leave(bob.member.id);
+    rooms.tidy(town);
+    expect(rooms.busy()).toEqual([]);
   });
 
   it("has no room of a kind there is not", () => {

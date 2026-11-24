@@ -2,7 +2,7 @@
 import { type PlayerId, playerId } from "@sequoia-leaf/core";
 
 /** How many walkers and lookers the stand-in backend has sessions for. */
-export const WALKERS = 1000;
+export const WALKERS = 3000;
 export const LOOKERS = 200;
 
 const id = (prefix: string, i: number): PlayerId => playerId(`${prefix}-0000-4000-8000-${String(i).padStart(12, "0")}`);

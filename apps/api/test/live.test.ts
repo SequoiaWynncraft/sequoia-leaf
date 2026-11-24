@@ -1,6 +1,19 @@
 import { afterEach, describe, expect, it } from "bun:test";
 
-import { CLOSE, encodeMove, Flag, LIVE_PATH, LIVE_VERSION, livePath, type Motion, playerId } from "@sequoia-leaf/core";
+import {
+  applyAbout,
+  CLOSE,
+  encodeMove,
+  Flag,
+  LIVE_OLDEST,
+  LIVE_PATH,
+  LIVE_VERSION,
+  livePath,
+  type Motion,
+  playerId,
+  readWho,
+  type Who,
+} from "@sequoia-leaf/core";
 import { Deferred, type Duration, Effect, Fiber, Redacted, Schema } from "effect";
 import { Socket } from "effect/socket";
 
@@ -571,6 +584,8 @@ async function rowsWhen(which: (rows: readonly Row[]) => boolean, turns = 10_000
 }
 /** How long Live gathers changes to who is about before it tells the rooms. */
 const GATHER = 200;
+/** What a page was told of who is about that it has not taken yet: all of it, or a change. */
+const toldAbout = (c: LiveClient) => c.texts.filter((m) => m.t === "about" || m.t === "aboutChanged");
 /** A player's page saying where they are, as `PUT /v1/game/presence`. */
 const sayHere = (token: string, place: string, stay?: boolean) =>
   fetch(`${server?.origin ?? ""}/v1/game/presence`, {
@@ -683,24 +698,26 @@ describe("where players are, from the room", () => {
     a.texts.length = 0;
     const b = await connect(page("bob"));
     await b.welcome();
-    // Bob coming in is a change: Alice hears of it, and so does Bob, once for the burst.
+    // Bob is given all of who is about as he comes in; Bob coming in is a change, and Alice hears of
+    // it, and so does Bob, once for the burst.
+    await b.next("about");
     await rowsWhen((r) => r.length === 2);
     await pass(GATHER);
-    await a.next("about");
-    await b.next("about");
+    await a.next("aboutChanged");
+    await b.next("aboutChanged");
     await pass(GATHER);
     await settled(a, b);
-    expect([...a.texts, ...b.texts].filter((m) => m.t === "about")).toEqual([]);
+    expect([...toldAbout(a), ...toldAbout(b)]).toEqual([]);
 
     // Carol's game says she is at the Works: a change; saying it again is not.
     expect((await sayHere("carol-token", "works")).status).toBe(200);
     await pass(GATHER);
-    await a.next("about");
-    await b.next("about");
+    await a.next("aboutChanged");
+    await b.next("aboutChanged");
     expect((await sayHere("carol-token", "works")).status).toBe(200);
     await pass(GATHER);
     await settled(a);
-    expect(a.texts.filter((m) => m.t === "about")).toEqual([]);
+    expect(toldAbout(a)).toEqual([]);
 
     // Bob leaves the room: Leaf's list says so, and then Alice hears it.
     b.send({ t: "leave" });
@@ -715,7 +732,64 @@ describe("where players are, from the room", () => {
       resting: [{ username: "Bob" }],
     });
     await pass(GATHER);
-    await a.next("about");
+    await a.next("aboutChanged");
+  });
+
+  it("tells a page of either version the same lists: what changed to version 3, all of them to version 2", async () => {
+    await start();
+    const old = await connect({ ...page("alice"), speaks: LIVE_OLDEST });
+    expect((await old.welcome()).v).toBe(LIVE_OLDEST);
+    const now = await connect(page("bob"));
+    expect((await now.welcome()).v).toBe(LIVE_VERSION);
+    await rowsWhen((r) => r.length === 2);
+    await pass(GATHER);
+    // The first lists told are all of them, to both, numbered.
+    const first = await now.next("about");
+    let made = { v: first.v ?? 0, who: readWho(first.who) };
+    expect((await old.next("about")).who).toEqual(made.who);
+
+    const changes = [
+      () => sayHere("carol-token", "works"),
+      () => sayHere("carol-token", "camp", false),
+      () => sayHere("alice-2-token", "works"),
+      () => sayHere("carol-token", "town", true),
+    ];
+    for (const change of changes) {
+      // oxlint-disable-next-line no-await-in-loop -- one change after another, each told
+      expect((await change()).status).toBe(200);
+      // oxlint-disable-next-line no-await-in-loop -- told once the burst is gathered
+      await pass(GATHER);
+      // oxlint-disable-next-line no-await-in-loop -- as version 3 hears it
+      const changed = await now.next("aboutChanged");
+      // oxlint-disable-next-line no-await-in-loop -- as version 2 hears it
+      const whole = await old.next("about");
+      expect(changed.v).toBe(made.v + 1);
+      const before: Who | null = made.who;
+      made = { v: changed.v, who: before === null ? null : applyAbout(before, changed) };
+      expect(made.who).toEqual(readWho(whole.who));
+      expect(whole.v).toBe(changed.v);
+    }
+    // Somebody coming in now is given the lists as they stand, numbered as the last change.
+    const late = await connect(page("carol"));
+    await late.welcome();
+    const given = await late.next("about");
+    expect([given.v, readWho(given.who)]).toEqual([made.v, made.who]);
+  });
+
+  it("gives a page all of who is about again when it asks, having missed a change", async () => {
+    await start();
+    const a = await connect(page("alice"));
+    await a.welcome();
+    await rowsWhen((r) => r.length === 1);
+    await pass(GATHER);
+    const told = await a.next("about");
+    a.send({ t: "about" });
+    expect(await a.next("about")).toEqual(told);
+    // Out of every room, nothing is given.
+    a.send({ t: "leave" });
+    a.send({ t: "about" });
+    await settled(a);
+    expect(toldAbout(a)).toEqual([]);
   });
 
   it("tells everybody in every room when somebody away does something again, and not at every move", async () => {
@@ -734,12 +808,12 @@ describe("where players are, from the room", () => {
     b.move(at(110, 100));
     await settled(b);
     await pass(GATHER);
-    await a.next("about");
+    await a.next("aboutChanged");
     b.move(at(120, 100));
     await settled(b);
     await pass(GATHER);
     await settled(a);
-    expect(a.texts.filter((m) => m.t === "about")).toEqual([]);
+    expect(toldAbout(a)).toEqual([]);
   });
 
   it("writes them gone at the end of their grace when the connection drops", async () => {
@@ -799,7 +873,8 @@ describe("opening a connection", () => {
 
     await Effect.runPromise(Deferred.fail(opening, new Error("never opened")));
     await pending;
-    await tick();
+    // Nothing is left of her: she is forgotten within the second.
+    await pass("1 second");
     expect(await census()).toMatchObject({ players: 0, connected: 0, rooms: {} });
   });
 
