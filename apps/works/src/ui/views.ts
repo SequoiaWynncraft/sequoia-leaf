@@ -18,7 +18,17 @@
  * for the view that is up.
  */
 
-import { isNode, type Kind, MILLI, NODE_COUNT, NONE, plotState, power, type Yard } from "@sequoia-leaf/factory";
+import {
+  isNode,
+  type Item,
+  type Kind,
+  MILLI,
+  NODE_COUNT,
+  NONE,
+  plotState,
+  power,
+  type Yard,
+} from "@sequoia-leaf/factory";
 import { pick, shown as cardShown, thing } from "@sequoia-leaf/kit/card.ts";
 import { el, icon, unit } from "@sequoia-leaf/kit/dom.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
@@ -348,14 +358,14 @@ function troubleView(art: Art, host: HTMLElement): () => void {
   const list = table("", ["Pieces"], { cards: true });
   const none = el("div", "k-dim");
   host.append(short.el, list.el, none);
-  /** What is wrong, and the kinds of piece it is wrong with, as pictures. */
-  const head = (title: string, kinds: readonly Kind[]): Node =>
+  /** What is wrong, and the kinds of piece it is wrong with, as pictures: a belt carrying what is stuck on it. */
+  const head = (title: string, kinds: readonly Kind[], stuck: Item | null): Node =>
     el(
       "span",
       "wrong",
       {},
       el("span", "k-grow", { text: title }),
-      el("span", "kinds", {}, ...kinds.slice(0, 4).map((k) => fitted(art.icon(k), 12, 12))),
+      el("span", "kinds", {}, ...kinds.slice(0, 4).map((k) => fitted(art.icon(k, 1, stuck ?? undefined), 12, 12))),
     );
   return () => {
     const y = S.world;
@@ -382,7 +392,7 @@ function troubleView(art: Art, host: HTMLElement): () => void {
       groups.map((g): Line => ({
         // Its pictures are built once for a row: a group that gains a kind of piece is a new row.
         key: `${g.title}|${g.kinds.join()}`,
-        head: () => head(g.title, g.kinds),
+        head: () => head(g.title, g.kinds, g.stuck),
         cells: [String(g.tiles.length)],
         on: () => startWalk(g.title),
       })),

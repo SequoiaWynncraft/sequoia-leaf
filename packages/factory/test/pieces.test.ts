@@ -672,6 +672,20 @@ describe("a splitter with a way in", () => {
 });
 
 describe("a run of belt", () => {
+  test("ending on bare ground is stuck with what it carries, and says what that is", () => {
+    const y = yard();
+    const ingot = F.item("ingot");
+    source(y, 3, 4, 0, [[ingot, 2]]);
+    must(y, { do: "build", kind: "belt", x: 4, y: 4, dir: 0 });
+    run(y, 60);
+    expect(F.status(y, F.at(y, 4, 4))).toMatchObject({
+      state: "blocked",
+      trouble: true,
+      line: "Nowhere to send its ingots: nothing is on the tile it points at.",
+      stuck: ingot,
+    });
+  });
+
   test("turns the belt where it starts with it, and nothing but a belt", () => {
     const y = yard();
     must(y, { do: "build", kind: "belt", x: 4, y: 4, dir: 0 });
