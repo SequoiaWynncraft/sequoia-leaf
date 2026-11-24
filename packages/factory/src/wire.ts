@@ -32,7 +32,7 @@ import {
   WHEEL,
   WORKSHOP,
 } from "./tables.ts";
-import { holderOf, type Wire, type Yard } from "./yard.ts";
+import { holderOf, tunnelOf, type Wire, type Yard } from "./yard.ts";
 
 /** The tile ahead of a piece, behind it, and to its left and right; -1 off the map. */
 export const ahead = (y: Yard, i: number): number => toward(y.land, i, y.dir[i] ?? 0);
@@ -146,6 +146,7 @@ export function rewire(y: Yard): Wire {
     order: handingOrder(y),
     taken,
     carry: Int32Array.from(carry),
+    mouths: Int32Array.from(carry.filter((i) => tunnelOf(y, i) >= 0)),
     work: Int32Array.from(work),
     boilers: Int32Array.from(boilers),
     recipes: ALL_KINDS.map((k) => recipesFor(y.open, k)),

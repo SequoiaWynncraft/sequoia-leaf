@@ -72,7 +72,7 @@
     "packages/factory/src/route.ts": 68,
     "packages/factory/src/status.ts": 167,
     "packages/factory/src/tables.ts": 48,
-    "packages/factory/src/tick.ts": 141,
+    "packages/factory/src/tick.ts": 126,
     "packages/factory/src/unlocks.ts": 42,
     "packages/factory/src/wire.ts": 39,
     "packages/kit/src/card.ts": 96,

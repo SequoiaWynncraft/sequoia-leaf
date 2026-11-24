@@ -20,14 +20,17 @@
  * (`Wire.waiting`), and handing on passes it over: tried again, it would be refused again, and
  * nothing would change. It waits until a tile beside it may have room (`roomBeside`): something
  * handed on from it, taken from what it holds, or given to it, for a thing given to a machine may
- * narrow the recipes it keeps parts for and so make room for more of another part. Nothing else in
- * a tick changes what a waiting tile holds or whether the tiles it hands to have room; a change
- * from outside the tick works the plumbing out again, or is a command, and either forgets every
- * waiting tile. A thing refused by a tile whose ways in take turns does not wait (`refused`).
+ * narrow the recipes it keeps parts for and so make room for more of another part. A tunnel's
+ * way-in mouth waits while it is full under the ground behind a far mouth with no room, until that
+ * far mouth hands on (`passUnder`). Nothing else in a tick changes what a waiting tile holds or
+ * whether the tiles it hands to have room; a change from outside the tick works the plumbing out
+ * again, or is a command, and either forgets every waiting tile. A thing refused by a tile whose
+ * ways in take turns does not wait (`refused`).
  *
  * This is the hot path: it loops over the plumbing's lists, which hold only tiles where something
  * stands, and makes no arrays, objects, closures or strings (but for the rare order filled).
  */
+import { otherMouth } from "./build.ts";
 import { BUFFER, FUEL, STUDY_HOLDS, TICKS } from "./content/machines.ts";
 import { toward } from "./land.ts";
 import { deliver, giveGoal } from "./orders.ts";
@@ -74,6 +77,7 @@ export function step(y: Yard): void {
   y.tick++;
   const works = power(y, wire, waiting);
   carry(y, wire);
+  carryUnder(y, wire);
   if (works) work(y, wire, waiting);
   handOn(y, wire, waiting);
 }
@@ -106,20 +110,27 @@ function power(y: Yard, wire: Wire, waiting: Uint8Array): boolean {
   return works;
 }
 
-/** Things on belts and under the ground move along, in eighths of a tile, each at its own grade's pace. */
+/** Things on belts, splitters, joiners, sorters and tunnel mouths move along, in eighths of a tile, each at its own grade's pace. */
 function carry(y: Yard, wire: Wire): void {
-  const { item, prog, span, grade } = y;
+  const { item, prog, grade } = y;
   const carriers = wire.carry;
-  const under = y.tunnels.under;
-  const below = y.tunnels.along;
   for (let c = 0; c < carriers.length; c++) {
     const i = carriers[c] ?? 0;
+    if (item[i] !== NONE && (prog[i] ?? 0) < 8) prog[i] = (prog[i] ?? 0) + (PACE[grade[i] ?? 0] ?? 0);
+  }
+}
+
+/** Things under the ground move along each tile a tunnel passes under, at the tunnel's pace. */
+function carryUnder(y: Yard, wire: Wire): void {
+  const { span, grade } = y;
+  const under = y.tunnels.under;
+  const below = y.tunnels.along;
+  const mouths = wire.mouths;
+  for (let c = 0; c < mouths.length; c++) {
+    const i = mouths[c] ?? 0;
     const along = PACE[grade[i] ?? 0] ?? 0;
-    if (item[i] !== NONE && (prog[i] ?? 0) < 8) prog[i] = (prog[i] ?? 0) + along;
-    const t = tunnelOf(y, i);
-    if (t < 0) continue;
+    const at = tunnelOf(y, i) * SPAN_MOST;
     const s = span[i] ?? 0;
-    const at = t * SPAN_MOST;
     for (let k = at; k < at + s; k++) if (under[k] !== NONE && (below[k] ?? 0) < 8) below[k] = (below[k] ?? 0) + along;
   }
 }
@@ -433,6 +444,18 @@ function passUnder(y: Yard, i: number, waiting: Uint8Array): void {
     y.via[i] = 0;
     roomBeside(y, i, waiting);
   }
+  if (jammed(y, i, at, last)) waiting[i] = 1;
+}
+
+/**
+ * Whether a tunnel is full under the ground, everything across its tile, behind its own far mouth:
+ * nothing in it moved, as the far mouth had no room, and nothing will until that mouth hands on
+ * (`roomBeside`), whatever comes in at the way-in mouth meanwhile.
+ */
+function jammed(y: Yard, i: number, at: number, last: number): boolean {
+  const { under, along } = y.tunnels;
+  for (let k = at; k <= last; k++) if (under[k] === NONE || (along[k] ?? 0) < 8) return false;
+  return otherMouth(y, farMouth(y, i)) === i;
 }
 
 /** A belt, joiner or tunnel's far mouth hands on the thing it carries, which has crossed the tile. */
@@ -529,7 +552,10 @@ function refused(y: Yard, i: number, to: number, wire: Wire): void {
 const takesTurns = (y: Yard, to: number): boolean =>
   to >= 0 && (y.kind[to] === JOINER || (y.kind[to] === SPLITTER && (y.ins[to] ?? 0) !== 0));
 
-/** The tile at `i` may have room for more, or for another thing: the tiles beside it, which are all that may hand to it, stop waiting. */
+/**
+ * The tile at `i` may have room for more, or for another thing: the tiles that may hand to it stop
+ * waiting. They are the tiles beside it, and for a tunnel's far mouth, its way-in mouth.
+ */
 function roomBeside(y: Yard, i: number, waiting: Uint8Array): void {
   const { edge, w } = y.land;
   const off = edge[i] ?? 15;
@@ -537,4 +563,8 @@ function roomBeside(y: Yard, i: number, waiting: Uint8Array): void {
   if ((off & 2) === 0) waiting[i + w] = 0;
   if ((off & 4) === 0) waiting[i - 1] = 0;
   if ((off & 8) === 0) waiting[i - w] = 0;
+  if (y.kind[i] === TUNNEL && (y.span[i] ?? 0) < 0) {
+    const mouth = otherMouth(y, i);
+    if (mouth >= 0) waiting[mouth] = 0;
+  }
 }

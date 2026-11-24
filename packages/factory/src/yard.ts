@@ -110,6 +110,8 @@ export interface Wire {
   readonly order: Int32Array;
   /** Tiles that carry, tiles that work, and boilers within reach of power. */
   readonly carry: Int32Array;
+  /** Tunnels' way-in mouths, which carry things under the ground too. */
+  readonly mouths: Int32Array;
   readonly work: Int32Array;
   readonly boilers: Int32Array;
   /** For each tile, the sides it takes things in from, a bit each (`sidesTaken`). */
