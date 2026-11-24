@@ -81,7 +81,7 @@ import { KEYS, openTools } from "./dock.ts";
 import { givenIn } from "./goal.ts";
 import { flowOf, kindNumbers, numbersOf, saysNumbers } from "./numbers.ts";
 import { orderRef } from "./refs.ts";
-import { given, givenTo, needsOf, researchOpen, tierOpen } from "./standing.ts";
+import { given, givenTo, lockOf, needsOf, nextUp, researchOpen, tierOpen } from "./standing.ts";
 
 /** A number read back out of a reference, if it is a whole one. */
 const numberIn = (id: string): number => (/^\d+$/.test(id) ? Number(id) : -1);
@@ -263,6 +263,7 @@ function nodePrint(g: Goal): NodePrint | null {
     may: node && !done && !inHand && info.kind !== "lesson" && ready(w.open, g),
     study: node || done ? null : lined ? "out" : ready(w.open, g) && w.line.length < LINE ? "in" : null,
     research: researchOpen() && S.panel !== "research",
+    lock: lockOf(g),
     wants: givenTo(g),
     needs,
     studied: [far.have, far.of],
@@ -272,7 +273,11 @@ function nodePrint(g: Goal): NodePrint | null {
 
 function orderPrint(slot: string): NodePrint | OrderPrint | null {
   const w = S.world;
-  if (slot === "story") return w.hand === -1 ? null : nodePrint(w.hand);
+  if (slot === "story") {
+    // With nothing in hand, the goal the corner names as waited on.
+    const next = w.hand === -1 ? nextUp() : null;
+    return w.hand !== -1 ? nodePrint(w.hand) : next?.is === "locked" ? nodePrint(next.goal) : null;
+  }
   const o = w.board[numberIn(slot)];
   if (!o) return null;
   return {

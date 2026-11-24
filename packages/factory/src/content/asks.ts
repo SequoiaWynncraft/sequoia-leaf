@@ -10,7 +10,7 @@ export interface Ask {
   readonly line: string;
 }
 
-/** Folios are never asked for. */
+/** Folios too: once the research that wants them is known, an order is what a folio line is for. */
 export const ASKS: Partial<Record<ItemName, readonly Ask[]>> = {
   deadfall: [
     { from: "The campfire", line: "The fire is down to its last log and somebody has started a long story." },
@@ -103,5 +103,16 @@ export const ASKS: Partial<Record<ItemName, readonly Ask[]>> = {
   crab: [
     { from: "The crab pond", line: "Roll call came up one short again. A clockwork crab would help. It will not." },
     { from: "Crab #7", line: "Crab #7 would like a friend who also does not turn up to things." },
+  ],
+  timber: [
+    { from: "The scholars", line: "The gnomes in the hall have run out of folios to write their questions in." },
+    { from: "Pipwick", line: "Pipwick is pressing a leaf from every tree in the forest. Each leaf gets a folio." },
+  ],
+  brass: [
+    { from: "The scholars", line: "The scholars keep their best answers in brass. They have two, and room for more." },
+    {
+      from: "The Treasury",
+      line: "Cinfy keeps the guild's books in brass folios, so they cannot be lost. Cinfy has lost two.",
+    },
   ],
 };

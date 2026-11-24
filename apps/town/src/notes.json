@@ -1,7 +1,31 @@
 [
   {
+    "id": "works-clearer",
+    "at": "2026-11-24T03:45Z",
+    "title": "The Works: clearer goals and orders",
+    "lines": [
+      "A commission or project that is not open yet now shows a lock and how much is left before it opens, and nothing counts toward it until then."
+    ],
+    "more": [
+      {
+        "head": "Changed",
+        "points": [
+          "With nothing in hand, the box in the corner says what comes next and opens the tier when tapped.",
+          "Orders put what is wanted, the pay and the button first, and the asker's line last.",
+          "From tier 2, side orders no longer ask for raw items such as resin or stone.",
+          "Side orders for Timber and Brass folios now say who wants them and why.",
+          "Once every project is done, the Works says so, and that more tiers are coming.",
+          "The letter about a time away lists what the depot took in one line each, with the number at the right.",
+          "The yard sheet's third tab is called Items, and the tabs fit on a phone.",
+          "Every button that is only a picture has a name for screen readers, and opening a panel puts the keyboard in it.",
+          "With reduced motion turned on, nudges no longer bob and panels no longer slide in."
+        ]
+      }
+    ]
+  },
+  {
     "id": "raid-clearer",
-    "at": "2026-11-24T04:10Z",
+    "at": "2026-11-24T03:35Z",
     "title": "The Little Raid: a clearer table",
     "lines": ["The stall, the traits and the cards at the stump say more plainly what they do."],
     "more": [
@@ -26,7 +50,7 @@
   },
   {
     "id": "town-clearer",
-    "at": "2026-11-24T03:40Z",
+    "at": "2026-11-24T03:32Z",
     "title": "Clearer town panels",
     "lines": ["A quest's Leaf now sits by its title, so it no longer looks like the price of a reroll."],
     "more": [

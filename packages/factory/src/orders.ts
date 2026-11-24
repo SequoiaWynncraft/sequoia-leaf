@@ -301,7 +301,10 @@ const step = (k: Item): number => ITEM_INFO[k]?.step ?? 0;
 export function fresh(y: Yard, seed: number): Standing {
   const id = y.serial++;
   const roll = dice(Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) + Math.imul(id + 1, 0xc2b2ae35));
-  const pool = askable(y);
+  // From tier 2 the board asks for nothing straight off the ground, unless that is all it could ask for.
+  const all = askable(y);
+  const made = y.open.tier >= 2 ? all.filter((k) => step(k) > 0) : all;
+  const pool = made.length > 0 ? made : all;
   const taken = new Uint8Array(ITEM_COUNT);
   for (const o of y.board) for (const k of ALL_ITEMS) if ((o.want[k] ?? 0) > 0) taken[k] = 1;
   // Things from deeper in the yard are asked for more often, and what is already on the board less.

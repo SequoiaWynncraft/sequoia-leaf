@@ -6,11 +6,10 @@ import { fly, type PurseBar, purseBar } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
-import { S } from "../state.ts";
 import { coins } from "../yard.ts";
 import { head, leaves, some, unlocks } from "./goal.ts";
-import { $, button, pic, wantWords } from "./parts.ts";
-import { whatNext } from "./standing.ts";
+import { $, button, iconButton, pic, wantWords } from "./parts.ts";
+import { nextUp, nextWords } from "./standing.ts";
 
 let bar: PurseBar | null = null;
 
@@ -72,24 +71,13 @@ export function banner(done: Goal, next: Goal | null): void {
   const info = GOALS[done];
   if (!info) return;
   const node = isNode(done) ? NODES[done] : undefined;
-  const close = el(
-    "button",
-    "k-btn wood icon sm",
-    { type: "button", "aria-label": "Close", onclick: closeBanner },
-    icon("close"),
-  );
+  const close = iconButton("wood sm", icon("close"), "Close", closeBanner);
   const then = next === null ? undefined : GOALS[next];
   const from = next === null ? undefined : NODES[next]?.from;
   const says = node
     ? then && from
       ? el("div", "k-say", {}, el("b", "", { text: `Next, from ${from}` }), `${then.title}: ${wantWords(then.want)}.`)
-      : el(
-          "div",
-          "k-say",
-          {},
-          el("b", "", { text: "The guild" }),
-          `Nothing is in hand. ${whatNext()} Side orders keep coming.`,
-        )
+      : el("div", "k-say", {}, el("b", "", { text: "Next" }), nextLine())
     : el(
         "div",
         "k-say",
@@ -124,16 +112,10 @@ export function banner(done: Goal, next: Goal | null): void {
   sfx.open();
 }
 
-/** How many lessons there are, and the place of each among them. */
-const LESSONS = GOALS.flatMap((g, n) => (g.kind === "lesson" ? [n] : []));
-
-/** The node in hand, in words for a label: "Lesson 2 of 4", "Tier 1 project", "Tier 1 commission"; or the tier, with nothing in hand. */
-export function handLabel(): string {
-  const w = S.world;
-  const info = w.hand === -1 ? undefined : GOALS[w.hand];
-  if (!info) return `Tier ${w.open.tier}`;
-  if (info.kind === "lesson") return `Lesson ${LESSONS.indexOf(w.hand) + 1} of ${LESSONS.length}`;
-  return `Tier ${info.tier} ${info.kind}`;
+/** With nothing in hand, what comes next in the corner's words, as one line: "Take a project. 3 ready." */
+function nextLine(): string {
+  const { title, line } = nextWords(nextUp());
+  return `${title}. ${line.endsWith(".") ? line : `${line}.`}`;
 }
 
 export { pic };

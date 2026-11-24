@@ -2,7 +2,9 @@
  * The tier's own screen: its commission, as a paper; from the tier that has research, the way to it;
  * its projects, each with what it wants and what it unlocks; and those done, a line each. Every
  * goal on it is laid out by `goal.ts`: one head, and its lists. Nothing is said of a tier not yet
- * open but that the commission opens it. While a node is in hand, one that may be taken can be put
+ * open but that the commission opens it. A goal that waits on another is locked: a lock and what is
+ * left before it opens at its head, and what it wants behind a lock, with no bar, since nothing
+ * counts toward it yet. With every project done, it says so. While a node is in hand, one that may be taken can be put
  * in line after it (Next); one in the line shows its place after the hand ("2nd") and Take out.
  *
  * The screen always leads on: a goal that waits on another shows what it needs as things with how
@@ -11,21 +13,22 @@
  * It is kept by what it prints (`tierPrint`, `shows`); its bars are asked of the yard at every
  * refresh, so a thing delivered moves a bar and builds nothing again.
  */
-import { type Goal, GOALS, NODES, QUEUE, ready, STUDY } from "@sequoia-leaf/factory";
+import { type Goal, GOALS, QUEUE, ready, STUDY } from "@sequoia-leaf/factory";
 import { el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 
 import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
 import { setTool, takeInHand } from "../tools.ts";
 import { doNow } from "../yard.ts";
-import { nodeKind } from "./cards.ts";
 import {
   type Begin,
   head,
   leaves,
   type Listed,
+  lockChip,
   type Need,
   needs,
+  paper,
   some,
   unlocks,
   type Wants,
@@ -34,7 +37,7 @@ import {
 } from "./goal.ts";
 import { feed } from "./notes.ts";
 import { button, shows, yardIcon } from "./parts.ts";
-import { given, needsOf, nodesOpen, researchOf } from "./standing.ts";
+import { given, lockOf, needsOf, nextWords, nodesOpen, researchOf } from "./standing.ts";
 
 /** What the screen asks of the rest of the page. */
 export const tierHooks: {
@@ -84,10 +87,11 @@ export function beginButton(g: Goal, how: Begin): HTMLElement {
   });
 }
 
-/** A goal on the screen, as printed: whether it may be taken in hand, what it wants, and what it still waits on. */
+/** A goal on the screen, as printed: whether it may be taken in hand, what opens it while it is not open, what it wants, and what it still waits on. */
 interface Shown {
   readonly goal: Goal;
   readonly take: boolean;
+  readonly lock: string | null;
   readonly wants: Wants;
   readonly needs: readonly Need[];
 }
@@ -111,6 +115,7 @@ export function tierPrint(): {
   const shown = (g: Goal): Shown => ({
     goal: g,
     take: ready(w.open, g),
+    lock: lockOf(g),
     wants: wantsIn(GOALS[g]?.want ?? new Float64Array(0)),
     needs: needsOf(g, true),
   });
@@ -141,23 +146,24 @@ export function tierScreen(body: HTMLElement): () => void {
     live = [];
     const kids: HTMLElement[] = [];
     /** A goal's lists, kept so that their bars are brought up to date between drawings. */
-    const lists = ({ goal: g, wants: want, needs: waits }: Shown): HTMLElement[] => {
+    const lists = ({ goal: g, wants: want, needs: waits, lock }: Shown): Listed[] => {
       const made = some(
-        wants(want, () => S.world.got[g] ?? null),
+        wants(want, () => S.world.got[g] ?? null, lock !== null),
         needs(waits, { given, begin: beginButton }),
         unlocks(g),
         leaves(g),
       );
       live.push(...made);
-      return made.map((l) => l.node);
+      return made;
     };
     /**
      * What stands at the right of a goal's head: that it is in hand; its place in the line, with the
      * button that takes it out; the buttons that put it in the line (while a node is in hand) and take
-     * it; or nothing while it waits on another.
+     * it; or while it waits on another, a lock and what opens it.
      */
-    const side = ({ goal: g, take: may }: Shown, label: string): HTMLElement | null => {
+    const side = ({ goal: g, take: may, lock }: Shown, label: string): HTMLElement | null => {
       if (p.hand === g) return el("span", "k-chip lit", {}, icon("check"), "In hand");
+      if (lock !== null) return lockChip(lock);
       const at = p.queue.indexOf(g);
       if (at >= 0)
         return el(
@@ -180,18 +186,14 @@ export function tierScreen(body: HTMLElement): () => void {
       );
     };
     const c = p.commission;
-    if (c)
+    if (c) kids.push(paper(c.goal, side(c, "Take in hand"), lists(c)));
+    // Every project of the tiers open is done, and there is no next tier yet: it says so, first.
+    else if (p.projects.length === 0) {
+      const end = nextWords({ is: "done" });
       kids.push(
-        el(
-          "div",
-          "k-paper goal",
-          {},
-          el("div", "k-label", { text: `${nodeKind(c.goal)} · from ${NODES[c.goal]?.from ?? ""}` }),
-          head(c.goal, side(c, "Take in hand")),
-          el("div", "k-read k-dim", { text: NODES[c.goal]?.say ?? "" }),
-          ...lists(c),
-        ),
+        el("div", "k-paper goal", {}, el("div", "k-title", { text: end.title }), el("div", "k-d", { text: end.line })),
       );
+    }
     if (p.research)
       kids.push(
         el(
@@ -205,11 +207,16 @@ export function tierScreen(body: HTMLElement): () => void {
     if (p.projects.length > 0) kids.push(el("div", "k-label", { text: "Projects" }));
     for (const g of p.projects)
       kids.push(
-        el("div", `k-card goal${p.hand === g.goal ? " lit" : ""}`, {}, head(g.goal, side(g, "Take")), ...lists(g)),
+        el(
+          "div",
+          `k-card goal${p.hand === g.goal ? " lit" : g.lock === null ? "" : " locked"}`,
+          {},
+          head(g.goal, side(g, "Take")),
+          ...lists(g).map((l) => l.node),
+        ),
       );
     if (p.done.length > 0)
       kids.push(el("div", "k-label", { text: "Done" }), el("div", "goals-done", {}, ...p.done.map((g) => head(g))));
-    if (kids.length === 0) kids.push(el("div", "k-d", { text: "More is being built." }));
     const top = body.scrollTop;
     body.replaceChildren(...kids);
     body.scrollTop = top;

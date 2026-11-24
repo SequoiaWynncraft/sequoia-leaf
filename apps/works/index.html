@@ -323,18 +323,21 @@
       }
       /* A goal's head: its picture in a slot, a gap, its name; and at the right what is done with it. */
       .gh {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
+        display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        column-gap: calc(var(--u) * 4);
+        justify-content: flex-end;
+        gap: calc(var(--u) * 2) calc(var(--u) * 4);
       }
-      /* A head with two buttons, or a place in the line and a button, has them on a line under its name. */
-      .gh:has(> .k-row) {
-        grid-template-columns: minmax(0, 1fr);
-        row-gap: calc(var(--u) * 2);
+      /*
+       * What is at the right goes on a line under the name where the name would be left narrower than
+       * this; and always for two buttons, or a place in the line and a button.
+       */
+      .gh-what {
+        flex: 1 1 calc(var(--u) * 80);
       }
-      .gh > .k-row {
-        justify-self: end;
+      .gh:has(> .k-row) .gh-what {
+        flex-basis: 100%;
       }
       .gh-what {
         display: grid;
@@ -362,13 +365,17 @@
         text-decoration: underline dotted var(--k-faint);
         text-underline-offset: calc(var(--u) * 1.5);
       }
-      /* Research that waits on another lies flat (the kit's `locked`), its name and picture quieter. */
-      .plan.locked .gh-what {
+      /*
+       * A goal that waits on another lies flat (the kit's `locked`), its name and picture quieter; what
+       * it wants is behind a lock, quieter too, with the number wanted and no bar.
+       */
+      .goal.locked .gh-what,
+      .gl-row.locked .gl-what {
         opacity: 0.7;
       }
-      /* On a phone, in a screen of its own, a row is tall enough for a finger. */
+      /* On a phone, in a panel, a row is tall enough for a finger. */
       @media (max-width: 760px), (orientation: portrait) {
-        #panel.full .gl-row {
+        #panel .gl-row {
           min-height: calc(var(--u) * 20);
         }
       }
@@ -388,6 +395,10 @@
       }
       .k-paper.goal {
         padding-inline: calc(var(--u) * 3);
+      }
+      /* A lock and a button on a paper of their own are as wide as they need. */
+      .k-paper.goal > :is(.k-chip, .k-btn) {
+        align-self: flex-start;
       }
       /* Those done: a line each, with no frame of its own. */
       .goals-done {
@@ -830,10 +841,13 @@
         align-items: stretch;
         gap: calc(var(--u) * 2);
       }
-      .order .from {
-        display: flex;
-        align-items: baseline;
-        gap: calc(var(--u) * 3);
+      /* What it pays and its button go under the title where the title would be left narrower than this. */
+      .order > .k-row {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      .order > .k-row > .k-name {
+        flex: 1 0 calc(var(--u) * 90);
       }
       .k-card.order.ready {
         border-image-source: var(--k-f-card-lit);
@@ -1168,6 +1182,18 @@
           display: none;
         }
       }
+      /* Asked for less motion: nothing here bobs, blinks or slides in; a nudge's bubble still points. Last, so
+         that it wins over every rule above that sets an animation. */
+      @media (prefers-reduced-motion: reduce) {
+        #dock button.new,
+        #dock button.nudged,
+        #books .nudged,
+        #hand .grades.nudged,
+        #panel.slide,
+        .letter .line.in {
+          animation: none;
+        }
+      }
     </style>
   </head>
   <body>
@@ -1185,7 +1211,7 @@
     <div id="feed" aria-live="polite"></div>
     <div id="hand" class="k-tip"></div>
     <nav id="dock" class="k-shelf" aria-label="Tools"></nav>
-    <aside id="panel" class="k-panel" hidden></aside>
+    <aside id="panel" class="k-panel" role="dialog" aria-labelledby="panel-title" hidden></aside>
     <div id="banner" class="k-panel" hidden></div>
     <div id="coach" class="k-say" hidden></div>
     <div id="letter" hidden></div>

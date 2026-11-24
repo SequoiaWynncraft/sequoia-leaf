@@ -8,9 +8,12 @@
  * the right edge what is counted of it (a bar and `8 / 12`, or a few words, or the button that
  * begins it, or nothing). A long name wraps inside its own column and nothing else moves. Each row
  * is a thing that explains itself: its picture and name are its card's, and pointing at it or
- * tapping it shows the card. Everything on the page that shows a goal calls these (the tier's
- * screen, Orders, the corner, the sheet for a goal finished, research, a goal's own card), and a
- * test (`goal.test.ts`) holds the rest of the page to laying none out by hand.
+ * tapping it shows the card. What a goal wants has no label: it is the rows with bars under its
+ * head. A goal that is not open shows each thing it wants behind a lock, with the number wanted and
+ * no bar, for nothing counts toward it yet, and what opens it as a count beside a lock (`lockChip`).
+ * Everything on the page that shows a goal calls these (the tier's screen, Orders, the corner, the
+ * sheet for a goal finished, research, a goal's own card), and a test (`goal.test.ts`) holds the
+ * rest of the page to laying none out by hand.
  *
  * Like `cards.ts`, this draws and reaches no yard: what it shows of one is handed in, as printed
  * values or as a way to ask (a bar kept up to date between drawings). What a goal unlocks is the
@@ -29,7 +32,7 @@ import {
   unlockedBy,
 } from "@sequoia-leaf/factory";
 import { describe, link } from "@sequoia-leaf/kit/card.ts";
-import { el } from "@sequoia-leaf/kit/dom.ts";
+import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 
 import { fitted, pic } from "./parts.ts";
 import { giftRef, itemRef, nodeRef, pictureRef, tierRef, unlockRef } from "./refs.ts";
@@ -75,6 +78,8 @@ interface Line {
   readonly read?: boolean;
   /** Reached, done or known: picked out. */
   readonly lit?: boolean;
+  /** Or the number wanted behind a lock, with no bar: the goal is not open, and nothing counts toward it yet. */
+  readonly locked?: number;
 }
 
 /** A list on the page, and the way to bring its counts up to date without building it again. */
@@ -84,11 +89,16 @@ export interface Listed {
 }
 
 /**
- * A label and its rows of things. With no label (the corner, whose own first line says what the rows
- * are of) there is none; with `names` off (the corner again, where a row is its picture, its bar and
- * its count) a row has no name and is not a link, for it sits inside something that is pressed.
+ * A label and its rows of things. With no label (what a goal wants, the first rows under its head)
+ * there is none; with `names` off (the corner and an order, where a row is its picture, its bar and
+ * its count) a row has no name, and with `links` off it is not a link either, for it sits inside
+ * something that is pressed (the corner).
  */
-function list(label: string | null, lines: readonly Line[], opts: { readonly names?: boolean } = {}): Listed {
+function list(
+  label: string | null,
+  lines: readonly Line[],
+  opts: { readonly names?: boolean; readonly links?: boolean } = {},
+): Listed {
   const names = opts.names ?? true;
   const live: (() => void)[] = [];
   const rows = lines.map((line) => {
@@ -101,24 +111,25 @@ function list(label: string | null, lines: readonly Line[], opts: { readonly nam
       el("span", "gl-pic", {}, pictureOf(line.ref, SLOT.row)),
       names ? el("span", line.read ? "gl-name k-read" : "gl-name", { text: name }) : null,
     );
-    if (names) link(what, line.ref);
+    if (opts.links ?? names) link(what, line.ref);
     const end = el("span", "gl-end");
     const count = line.count;
-    if (count) {
+    if (line.locked !== undefined) end.append(icon("lock"), el("span", "gl-n", { text: num(line.locked) }));
+    else if (count) {
       const fill = el("i");
       const bar = el("div", "k-bar", {}, fill);
-      const n = el("span", "gl-n");
-      end.append(bar, n);
+      const counted = el("span", "gl-n");
+      end.append(bar, counted);
       live.push(() => {
         const { have, of } = count();
         const got = Math.min(have, of);
         fill.style.setProperty("--v", `${of > 0 ? (got / of) * 100 : 0}%`);
-        n.textContent = `${got.toLocaleString("en-US")} / ${of.toLocaleString("en-US")}`;
+        counted.textContent = `${num(got)} / ${num(of)}`;
         bar.classList.toggle("leaf", got >= of);
       });
     } else if (line.act) end.append(line.act);
     else if (line.note) end.append(el("span", line.lit ? "gl-note lit" : "gl-note", { text: line.note }));
-    return el("div", line.lit ? "gl-row lit" : "gl-row", {}, what, end);
+    return el("div", `gl-row${line.lit ? " lit" : ""}${line.locked === undefined ? "" : " locked"}`, {}, what, end);
   });
   const update = (): void => {
     for (const f of live) f();
@@ -136,9 +147,15 @@ function list(label: string | null, lines: readonly Line[], opts: { readonly nam
   };
 }
 
+/** A number as a list shows it: "1,200". */
+const num = (v: number): string => v.toLocaleString("en-US");
+
 /** A list, or nothing where it would have no rows. */
-const listed = (label: string | null, lines: readonly Line[], names = true): Listed | null =>
-  lines.length === 0 ? null : list(label, lines, { names });
+const listed = (
+  label: string | null,
+  lines: readonly Line[],
+  opts: { readonly names?: boolean; readonly links?: boolean } = {},
+): Listed | null => (lines.length === 0 ? null : list(label, lines, opts));
 /** The lists that have rows, of those asked for. */
 export const some = (...lists: readonly (Listed | null)[]): Listed[] => lists.flatMap((l) => (l ? [l] : []));
 
@@ -157,24 +174,44 @@ export const givenIn = (want: Counts, got: Counts | null): Given =>
   wantsIn(want).map(([k, of]) => [k, Math.min(got?.[k] ?? 0, of), of] as const);
 
 /**
- * What an order or a goal wants, each thing with a bar that is kept up to date: `got` is asked each
- * time the list is brought up to date, so the bars are never behind the yard and the list is not
- * built again for a thing delivered.
+ * What a goal wants, each thing with a bar that is kept up to date: `got` is asked each time the
+ * list is brought up to date, so the bars are never behind the yard and the list is not built again
+ * for a thing delivered. It has no label: the rows with bars under a goal's head are what it wants.
+ * A goal that is not open (`locked`) shows each thing with a lock and the number wanted, and no bar.
  */
-export const wants = (want: Wants, got: () => Counts | null): Listed | null =>
+export const wants = (want: Wants, got: () => Counts | null, locked = false): Listed | null =>
   listed(
-    "Wants",
-    want.map(([k, of]): Line => ({ ref: itemRef(k), count: () => ({ have: got()?.[k] ?? 0, of }) })),
+    null,
+    want.map(([k, of]): Line =>
+      locked ? { ref: itemRef(k), locked: of } : { ref: itemRef(k), count: () => ({ have: got()?.[k] ?? 0, of }) },
+    ),
   );
 
-const givenLines = (given: Given): Line[] =>
-  given.map(([k, have, of]): Line => ({ ref: itemRef(k), count: () => ({ have, of }) }));
+const givenLines = (given: Given, locked = false): Line[] =>
+  given.map(([k, have, of]): Line =>
+    locked ? { ref: itemRef(k), locked: of } : { ref: itemRef(k), count: () => ({ have, of }) },
+  );
 
 /** The same from what a card prints: as many as had come when it was printed. */
-export const wantsGiven = (given: Given): Listed | null => listed("Wants", givenLines(given));
+export const wantsGiven = (given: Given, locked = false): Listed | null => listed(null, givenLines(given, locked));
 
-/** The same in the corner: no label, and each row its picture, its bar and its count. */
-export const wantsShort = (given: Given): Listed | null => listed(null, givenLines(given), false);
+/** The same in the corner: each row its picture, its bar and its count, and nothing in it pressed. */
+export const wantsShort = (given: Given): Listed | null =>
+  listed(null, givenLines(given), { names: false, links: false });
+
+/**
+ * What an order wants, kept up to date as `wants` is: each row its picture, its bar and its count, for
+ * the order's title names the things. The picture shows the thing's card.
+ */
+export const wantsOrder = (want: Wants, got: () => Counts | null): Listed | null =>
+  listed(
+    null,
+    want.map(([k, of]): Line => ({ ref: itemRef(k), count: () => ({ have: got()?.[k] ?? 0, of }) })),
+    { names: false, links: true },
+  );
+
+/** What opens a goal that is not open, as a count beside a lock: "9 research left". */
+export const lockChip = (words: string): HTMLElement => el("span", "k-chip", {}, icon("lock"), words);
 
 // ---------- what a goal needs first ----------
 
@@ -244,6 +281,13 @@ export function leaves(g: Goal): Listed | null {
   return gift ? listed("Leaves in town", [{ ref: giftRef(g), name: gift.line, read: true }]) : null;
 }
 
+/** Things as rows under a label, each its picture, its name and a number at the right: what the depot took in while away. */
+export const counted = (label: string, these: readonly (readonly [ref: string, note: string])[]): Listed | null =>
+  listed(
+    label,
+    these.map(([ref, note]): Line => ({ ref, note })),
+  );
+
 /** Goals as rows under a label, each its picture and its name: the research that became known while away. */
 export const goals = (label: string, these: readonly Goal[]): Listed | null =>
   listed(
@@ -269,4 +313,30 @@ export function head(g: Goal, side: Node | null = null): HTMLElement {
   );
   link(what, nodeRef(g));
   return el("div", "gh", { "data-goal": info?.id ?? "" }, what, side);
+}
+
+/** How a node is spoken of: "Lesson 2 of 4", "Tier 1 project", "Tier 1 commission". */
+export function nodeKind(g: Goal): string {
+  const info = GOALS[g];
+  if (!info) return "";
+  if (info.kind !== "lesson") return `Tier ${info.tier} ${info.kind}`;
+  const lessons = GOALS.flatMap((o, k) => (o.kind === "lesson" ? [k] : []));
+  return `Lesson ${lessons.indexOf(g) + 1} of ${lessons.length}`;
+}
+
+/**
+ * A node on paper, as the tier's screen shows its commission and Orders the node in hand: what kind
+ * of node it is and who asks, small; its head; its lists; and last and quietest, what they say.
+ */
+export function paper(g: Goal, side: Node | null, lists: readonly Listed[]): HTMLElement {
+  const node = NODES[g];
+  return el(
+    "div",
+    "k-paper goal",
+    {},
+    el("div", "k-label", { text: node ? `${nodeKind(g)} · from ${node.from}` : nodeKind(g) }),
+    head(g, side),
+    ...lists.map((l) => l.node),
+    node ? el("div", "k-d", { text: node.say }) : null,
+  );
 }

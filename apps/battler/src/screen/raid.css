@@ -727,16 +727,6 @@ body.dragging,
 body.dragging * {
   cursor: grabbing !important;
 }
-/* Asked for less motion: nothing bobs, pokes or flashes on its own; the figures still move as the fight goes. */
-@media (prefers-reduced-motion: reduce) {
-  .pip.here,
-  .offer .have.ready,
-  .offer.thop,
-  .trait.woke,
-  #nudge .hand {
-    animation: none;
-  }
-}
 body:is([data-mode="front"], [data-mode="over"]) :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door),
 body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
   visibility: hidden;
@@ -1354,5 +1344,15 @@ b.dmg.true {
   }
   .swatch {
     --fs: 2;
+  }
+}
+/* Asked for less motion: nothing bobs, pokes or flashes on its own; the figures still move as the fight goes. */
+@media (prefers-reduced-motion: reduce) {
+  .pip.here,
+  .offer .have.ready,
+  .offer.thop,
+  .trait.woke,
+  #nudge .hand {
+    animation: none;
   }
 }

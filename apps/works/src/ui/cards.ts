@@ -94,7 +94,18 @@ import type { Art } from "../art/index.ts";
 import { FLAG_AT } from "../art/machines.ts";
 import { yardSfx } from "../sound.ts";
 import { flowNode } from "./flow.ts";
-import { type Given, leaves, type Listed, type Need, needs, some, unlocks, wantsGiven } from "./goal.ts";
+import {
+  type Given,
+  leaves,
+  type Listed,
+  lockChip,
+  type Need,
+  needs,
+  nodeKind,
+  some,
+  unlocks,
+  wantsGiven,
+} from "./goal.ts";
 import type { Flow } from "./numbers.ts";
 import { fitted, partsWords, pic, type YardIcon, yardIcon } from "./parts.ts";
 import { itemRef, machineRef, nodeRef, pictureRef, plotRef } from "./refs.ts";
@@ -238,6 +249,8 @@ export interface NodePrint {
   readonly study: "out" | "in" | null;
   /** Whether research's screen is there to open: not while it is the one open, as the button opens and shuts it. */
   readonly research: boolean;
+  /** While it is not open, what is left before it opens: "9 research left". */
+  readonly lock: string | null;
   /** What it wants and has been given: each thing, how many have come, of how many. */
   readonly wants: Given;
   /** What it still waits on, each with how it stands; and how far the one being studied has come, of how far. */
@@ -599,7 +612,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
     actions.push(
       { label: "Orders", on: () => hands.panel("orders") },
       ...(p.tier !== null ? [{ label: `Tier ${p.tier}`, on: () => hands.panel("tier") }] : []),
-      { label: "Makes and needs", on: () => hands.panel("depot") },
+      { label: "Items", on: () => hands.panel("depot") },
     );
   } else {
     if (k === STUDY && p.research) actions.push({ label: "Research", on: () => hands.panel("research") });
@@ -720,15 +733,6 @@ function plotCard(p: PlotPrint, hands: Hands): Description {
   };
 }
 
-/** How a node is spoken of: "Lesson 2 of 4", "Tier 1 project", "Tier 1 commission". */
-export function nodeKind(g: Goal): string {
-  const info = GOALS[g];
-  if (!info) return "";
-  if (info.kind !== "lesson") return `Tier ${info.tier} ${info.kind}`;
-  const lessons = GOALS.flatMap((o, k) => (o.kind === "lesson" ? [k] : []));
-  return `Lesson ${lessons.indexOf(g) + 1} of ${lessons.length}`;
-}
-
 /** A goal's picture: that of the thing that stands for it, or a note for a goal with nothing to show. */
 function goalPic(g: Goal): Node {
   const ref = pictureRef(g);
@@ -768,8 +772,15 @@ function nodeCard(p: NodePrint, hands: Hands): Description | null {
         ? [{ body: node ? "Done." : "Known." }]
         : p.inHand
           ? [{ body: "In hand: what reaches the depot goes to it first." }]
-          : []),
-      ...listBlocks(wantsGiven(p.wants), needs(p.needs, { given: () => ({ have, of }) }), unlocks(g), leaves(g)),
+          : p.lock === null
+            ? []
+            : [{ body: lockChip(p.lock) }]),
+      ...listBlocks(
+        wantsGiven(p.wants, p.lock !== null),
+        needs(p.needs, { given: () => ({ have, of }) }),
+        unlocks(g),
+        leaves(g),
+      ),
     ],
     actions: p.visiting ? [] : actions,
   };
