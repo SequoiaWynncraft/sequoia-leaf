@@ -6,7 +6,16 @@ import { FetchHttpClient, HttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
 
 import { guildRequests } from "../src/backend/requests.ts";
-import { type Backend, fakeBackend, type Queued, rewardQueue, sessionOf, testLeaf } from "./support.ts";
+import {
+  type Backend,
+  fakeBackend,
+  type LogLine,
+  type Queued,
+  rewardQueue,
+  sessionOf,
+  testLeaf,
+  unanswered,
+} from "./support.ts";
 
 /**
  * The Treasury's guild requests (`/v1/game/requests`): Leaf asks the backend's reward queue as the
@@ -27,6 +36,10 @@ let backend: Backend;
 let queued: Queued;
 /** What the backend was sent under `/api`, in order: where, with which session and version, and the body. */
 let asked: { url: string; session: string | null; version: string | null; body: unknown }[];
+/** Leaf's warnings and errors. */
+let logged: LogLine[];
+/** What Leaf logged, with this message, of a backend that gave it no answer it could use. */
+const warned = (message: string) => logged.filter((line) => line.message === message).map((line) => line.annotations);
 
 /** Notes down what the backend was sent. */
 async function note(request: Request): Promise<void> {
@@ -42,7 +55,8 @@ beforeEach(async () => {
     "visitor-token": () => Response.json(sessionOf(visitor, "Visitor", null)),
   });
   backend = fake.backend;
-  services = testLeaf(clock, fake.fetcher);
+  logged = [];
+  services = testLeaf(clock, fake.fetcher, {}, { logged });
   app = services.app();
   const queue = rewardQueue("alice-token", alice, (path, init) => app.request(path, init));
   queued = queue.queued;
@@ -128,22 +142,22 @@ describe("what the Treasury offers", () => {
     });
   });
 
-  it("says the requests could not be reached when the backend does not answer", async () => {
-    for (const answer of [
-      () => Promise.reject(new Error("connection refused")),
-      () => new Response("oops", { status: 500 }),
-      () => Response.json({ eligible: true }),
-    ]) {
-      backend.api = answer;
-      // oxlint-disable-next-line no-await-in-loop -- one after another
-      expect(await call("GET")).toEqual({
-        status: 503,
-        body: {
-          code: "requests_unavailable",
-          message: "The guild's requests could not be reached. Try again in a moment.",
-        },
-      });
-    }
+  it.each([
+    ["cannot be reached", () => Promise.reject(new Error("connection refused")), { reason: "unreachable" }],
+    ["answers 500", () => new Response("oops", { status: 500 }), { reason: "unexpected_status", status: 500 }],
+    ["answers what it does not send", () => Response.json({ eligible: true }), { reason: "schema_mismatch" }],
+  ])("says the requests could not be reached when the backend %s, and logs why", async (_, answer, why) => {
+    backend.api = answer;
+    expect(await call("GET")).toEqual({
+      status: 503,
+      body: {
+        code: "requests_unavailable",
+        message: "The guild's requests could not be reached. Try again in a moment.",
+      },
+    });
+    expect(warned("The backend could not be asked about the guild's requests")).toEqual([
+      { route: "/api/reward-queue/eligibility", ...why },
+    ]);
   });
 });
 
@@ -222,24 +236,23 @@ describe("buying a request", () => {
     });
   });
 
-  it("says it cannot tell when the answer is lost, and does not send it again", async () => {
-    for (const answer of [
-      () => Promise.reject(new Error("connection reset")),
-      () => new Response("Bad Gateway", { status: 502 }),
-      () => new Response("not json", { status: 201 }),
-    ]) {
-      asked = [];
-      backend.api = async (request) => {
-        await note(request);
-        return answer();
-      };
-      // oxlint-disable-next-line no-await-in-loop -- one after another
-      expect(await call("POST", { type: "aspect" })).toEqual({
-        status: 504,
-        body: { code: "request_unknown", message: LOST },
-      });
-      expect(asked).toHaveLength(1);
-    }
+  it.each([
+    ["is cut off", () => Promise.reject(new Error("connection reset")), { reason: "unreachable" }],
+    ["is a 502", () => new Response("Bad Gateway", { status: 502 }), { reason: "unexpected_status", status: 502 }],
+    ["is not what the backend sends", () => new Response("not json", { status: 201 }), { reason: "schema_mismatch" }],
+  ])("says it cannot tell when the answer %s, logs why, and does not send it again", async (_, answer, why) => {
+    backend.api = async (request) => {
+      await note(request);
+      return answer();
+    };
+    expect(await call("POST", { type: "aspect" })).toEqual({
+      status: 504,
+      body: { code: "request_unknown", message: LOST },
+    });
+    expect(asked).toHaveLength(1);
+    expect(warned("Whether a request was made is not known")).toEqual([
+      { route: "/api/reward-queue/requests", ...why, kind: "aspect" },
+    ]);
   });
 
   it("is for members: a guest's page never reaches the backend", async () => {
@@ -263,18 +276,12 @@ function eligibility() {
   };
 }
 
-/** An answer that never comes, until the request is given up. */
-const never = (_input: string | URL | Request, init?: RequestInit) =>
-  new Promise<Response>((_resolve, reject) => {
-    init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
-  });
-
 /** The relay alone, asking through `fetch`, with what it logs written down in `lines`. */
-function relay(fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>, lines: string[]) {
+function relay(fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>, lines: LogLine[]) {
   const fetched = Layer.succeed(FetchHttpClient.Fetch)(
     Object.assign(fetch, { preconnect: globalThis.fetch.preconnect }),
   );
-  const writer = Logger.make((options) => void lines.push(`${String(options.message)} ${String(options.cause)}`));
+  const writer = Logger.map(Logger.formatStructured, (line) => void lines.push(line));
   return <A>(use: (requests: ReturnType<typeof guildRequests>) => Effect.Effect<A>) =>
     Effect.gen(function* () {
       return yield* use(guildRequests(yield* HttpClient.HttpClient, "https://backend.test"));
@@ -289,20 +296,21 @@ describe("the relay", () => {
   const session = Redacted.make("secret-session-token");
 
   it("never writes the member's session in a log", async () => {
-    const lines: string[] = [];
+    const lines: LogLine[] = [];
     const ask = relay(() => Promise.reject(new Error("connection reset")), lines);
     const looked = await Effect.runPromise(ask((r) => r.look(session)));
     const made = await Effect.runPromise(ask((r) => r.make(session, "aspect", null)));
 
     expect([looked, made]).toEqual([{ status: "unavailable" }, { status: "unknown" }]);
     expect(lines.length).toBeGreaterThan(0);
-    expect(lines.join("\n")).not.toContain("secret-session-token");
+    expect(JSON.stringify(lines)).not.toContain("secret-session-token");
   });
 
-  it("waits longer than the backend waits for Leaf, twice over, before giving up", async () => {
+  it("waits longer than the backend waits for Leaf, twice over, before giving up, and logs it as a timeout", async () => {
+    const lines: LogLine[] = [];
     const outcome = await Effect.runPromise(
       Effect.gen(function* () {
-        const making = yield* Effect.forkChild(relay(never, [])((r) => r.make(session, "aspect", null)));
+        const making = yield* Effect.forkChild(relay(unanswered, lines)((r) => r.make(session, "aspect", null)));
         yield* TestClock.adjust("20 seconds");
         const after20 = making.pollUnsafe();
         yield* TestClock.adjust("11 seconds");
@@ -310,5 +318,8 @@ describe("the relay", () => {
       }).pipe(Effect.provide(TestClock.layer())),
     );
     expect(outcome).toEqual({ after20: undefined, after31: { status: "unknown" } });
+    expect(lines.map((line) => line.annotations)).toEqual([
+      { route: "/api/reward-queue/requests", reason: "timeout", kind: "aspect" },
+    ]);
   });
 });

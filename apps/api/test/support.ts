@@ -49,6 +49,12 @@ export type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
 /** A network that answers nothing, for tests that make no calls. */
 export const noNetwork: Fetcher = () => Promise.reject(new Error("No network in this test"));
 
+/** A `fetch` whose answer never comes, until the request is given up. */
+export const unanswered = (_input: string | URL | Request, init?: RequestInit) =>
+  new Promise<Response>((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+  });
+
 /** A raid `player` took part in, as the credit feed reports it. */
 export function raid(id: number, player: PlayerId, occurredAt: number, seasonRating = 110): Activity {
   return {
