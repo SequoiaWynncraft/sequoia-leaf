@@ -30,6 +30,8 @@ export interface PetLive extends Standing {
   dir: 1 | -1;
   /** Seconds of being pleased left, after a touch. */
   joy: number;
+  /** Seconds until it answers a touch aloud again: touches in a row do not pile its sound up. */
+  voice: number;
   phase: number;
   alpha: number;
 }
@@ -63,6 +65,7 @@ export function makePet(kind: PetId, name: string, art: PetArt, at: Pt): PetLive
     wait: 1 + Math.random() * 3,
     dir: Math.random() < 0.5 ? 1 : -1,
     joy: 0,
+    voice: 0,
     phase: Math.random() * 6,
     alpha: 1,
     get z(): number {
@@ -133,7 +136,8 @@ export function comeTo(p: PetLive, to: Pt, w: PetWorld): void {
 
 export function stepPet(p: PetLive, dt: number, w: PetWorld): void {
   p.phase += dt;
-  if (p.joy > 0) p.joy -= dt;
+  p.joy = Math.max(0, p.joy - dt);
+  p.voice = Math.max(0, p.voice - dt);
   if (p.state === "sleep") {
     p.wait -= dt;
     if (Math.floor(p.phase / 1.8) !== Math.floor((p.phase - dt) / 1.8) && onScreen(p.x, p.y))
@@ -193,23 +197,29 @@ export function petAt(pets: readonly PetLive[], wx: number, wy: number): PetLive
   return null;
 }
 
-/** A pet is touched, and answers: it is pleased, in its own way, and says so. */
+/** How each kind answers a touch: its sound, and what it does, said after its name. */
+const ANSWERS: Readonly<Record<PetId, { readonly sound: () => void; readonly does: string }>> = {
+  cat: { sound: () => csfx.purr(), does: "purrs." },
+  fox: { sound: () => csfx.yip(), does: "does a small happy spin." },
+  glorp: { sound: () => csfx.blob(), does: "wobbles, delighted." },
+};
+/** Seconds a pet's answer lasts: as long as its line is up. */
+const ANSWER_TIME = 1.8;
+
+/**
+ * A pet is touched: it is pleased each time, and answers in its own way, aloud and in a line, unless
+ * it is still answering the touch before.
+ */
 export function pleased(p: PetLive): void {
   p.joy = 1.1;
   if (p.state === "sleep") {
     p.state = "sit";
     p.wait = 3;
   }
+  if (p.kind === "fox") p.dir = p.dir > 0 ? -1 : 1;
   float(p.x, p.y - 12, "\u2665", SKY[5], 1.2);
-  if (p.kind === "cat") {
-    csfx.purr();
-    float(p.x, p.y - 20, `${p.name} purrs.`, CREAM, 1.8);
-  } else if (p.kind === "fox") {
-    csfx.yip();
-    p.dir = p.dir > 0 ? -1 : 1;
-    float(p.x, p.y - 20, `${p.name} does a small happy spin.`, CREAM, 1.8);
-  } else {
-    csfx.blob();
-    float(p.x, p.y - 20, `${p.name} wobbles, delighted.`, CREAM, 1.8);
-  }
+  if (p.voice > 0) return;
+  p.voice = ANSWER_TIME;
+  ANSWERS[p.kind].sound();
+  float(p.x, p.y - 20, `${p.name} ${ANSWERS[p.kind].does}`, CREAM, ANSWER_TIME);
 }
