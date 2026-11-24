@@ -20,6 +20,7 @@ import {
   litOf,
   nextOf,
   NONE,
+  type Piece,
   piecesAt,
   plotState,
   type Plotted,
@@ -82,6 +83,9 @@ export const pylonTop = (x: number, y: number, tall: boolean): Pt => ({
 
 /** Whether the piece on a tile is a sorter that sends the thing it is set to to its right. */
 export const sendsRight = (y: Yard, i: number): boolean => y.kind[i] === SORTER && sortWay(y, i) === 2;
+
+/** Whether a piece, as kept or in hand, is a sorter that sends the thing it is set to to its right. */
+export const keepsRight = (p: Piece): boolean => p.kind === SORTER && p.first === 2;
 
 /** The side of its tile a sorter sends the thing it is set to out by: its left, or its right. */
 export function sortSide(y: Yard, i: number): Dir {

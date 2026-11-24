@@ -64,7 +64,7 @@ import { CREAM, GOLD, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { PAINTS, TILE } from "./art/belts.ts";
 import { float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { aimOf, groupOf, type HandEvent, markOf, runOf, step, type Tile } from "./hand.ts";
-import { sendsRight } from "./layout.ts";
+import { keepsRight, sendsRight } from "./layout.ts";
 import { yardSfx } from "./sound.ts";
 import {
   type Aim,
@@ -1161,11 +1161,12 @@ function setDown(): boolean {
   // What a copy would stand that is not there now, and the pieces some of it would take the place of.
   const stood = g.at.filter((p) => kindAt(w, p.x, p.y) !== p.kind);
   const under = stood.flatMap((p) => standing(at(w, p.x, p.y)) ?? []);
-  // Pieces of the same kind already standing there that the rules would turn, raise or lower: as they stand now.
+  // Pieces of the same kind already standing there that the rules would turn (a sorter to another
+  // side too), raise or lower: as they stand now.
   const changed = g.at.flatMap((p) => {
     const i = at(w, p.x, p.y);
     if (kindAt(w, p.x, p.y) !== p.kind) return [];
-    const turns = p.kind !== TUNNEL && dirOf(i) !== p.dir;
+    const turns = (p.kind !== TUNNEL && dirOf(i) !== p.dir) || sendsRight(w, i) !== keepsRight(p);
     return turns || gradeOf(p.kind, p.grade) !== (w.grade[i] ?? 0) ? (standing(i) ?? []) : [];
   });
   const moving = g.as === "move";

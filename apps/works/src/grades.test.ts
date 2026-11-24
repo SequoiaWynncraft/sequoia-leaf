@@ -65,6 +65,8 @@ function yardAt(tier: number): Yard {
 }
 
 /** The grades of the pieces on some tiles of a row, west to east. */
+/** The side the sorter at (18, z) sends to: 1 its left, 2 its right. */
+const sideAt = (z: number): number => sortWay(S.world, at(S.world, 18, z));
 const grades = (xs: readonly number[], z: number): number[] => xs.map((x) => S.world.grade[at(S.world, x, z)] ?? 0);
 /** What was sent to Leaf, by what each command does. */
 const sent = (fake: FakeLeaf): unknown[] => fake.leaf.commands.map((c) => (isRecord(c) ? c.do : null));
@@ -337,6 +339,23 @@ describe("many pieces at once", () => {
     expect(grades([18, 19], 13)).toEqual([2, 2]);
     await inStep(fake, 2);
     expect(sent(fake)).toEqual(["copy", "stand"]);
+  });
+
+  test("a copy stood over sorters that differ only in their side is sent, as the rules would flip them, and undone to the sides they had", async () => {
+    const y = yardAt(4);
+    build(y, SORTER, 18, 13, 0, Infinity, { right: true });
+    build(y, SORTER, 18, 16, 0, Infinity);
+    const fake = await opened(y, 1000);
+    mark(18, 13, 18, 13);
+    hold("copy");
+    aimAt(18, 16);
+    expect(place(18, 16)).toBe(true);
+    expect([sideAt(13), sideAt(16)]).toEqual([2, 2]);
+    await inStep(fake, 1);
+    expect(sent(fake)).toEqual(["copy"]);
+    expect(undo()).toBe(true);
+    expect([sideAt(13), sideAt(16)]).toEqual([2, 1]);
+    await inStep(fake, 2);
   });
 
   test("a marked area is raised to the highest grade the yard may build for the rules' whole price, or not at all; undo puts every grade back", async () => {
