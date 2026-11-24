@@ -1,5 +1,25 @@
 [
   {
+    "id": "works-clearer",
+    "at": "2026-11-24T23:59Z",
+    "title": "The Works: clearer goals and orders",
+    "lines": [
+      "A commission or project that is not open yet now shows a lock and how much is left before it opens, and nothing counts toward it until then."
+    ],
+    "more": [
+      {
+        "head": "Changed",
+        "points": [
+          "With nothing in hand, the box in the corner says what comes next and opens the tier when tapped.",
+          "Orders put what is wanted, the pay and the button first, and the asker's line last.",
+          "From tier 2, side orders no longer ask for raw items such as resin or stone.",
+          "Timber and Brass folios get side orders of their own.",
+          "Once every project is done, the Works says so, and that more tiers are coming."
+        ]
+      }
+    ]
+  },
+  {
     "id": "raid-clearer",
     "at": "2026-11-24T04:10Z",
     "title": "The Little Raid: a clearer table",
