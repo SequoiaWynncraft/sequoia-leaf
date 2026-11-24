@@ -1,7 +1,7 @@
 [
   {
     "id": "town-clearer",
-    "at": "2026-11-24T23:59Z",
+    "at": "2026-11-24T03:40Z",
     "title": "Clearer town panels",
     "lines": ["A quest's Leaf now sits by its title, so it no longer looks like the price of a reroll."],
     "more": [
