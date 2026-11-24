@@ -20,13 +20,17 @@
  *   `"Escape"` or `"Enter"`; Enter and Space press a focused button); `["hold", "Enter", ms]` holds
  *   one down for `ms`, as a person does: the browser says it again every 33 ms until it comes up;
  *   `["eval", "expr"]` prints an expression's value;
- * - `["shot", "name"]` saves a screenshot.
+ * - `["shot", "name"]` saves a screenshot;
+ * - `["audit"]` prints what keeps a player from reading or reaching the page as it is now
+ *   (`audit.ts`), and `["audit", "name"]` saves that as `<out-dir>/<name>.txt` too.
  *
  * Uses only Bun's own fetch and WebSocket.
  */
 
 import { mkdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
+
+import { audit } from "./audit.ts";
 
 type Step =
   | ["size", number, number, number?]
@@ -40,6 +44,7 @@ type Step =
   | ["key", string]
   | ["hold", string, number]
   | ["shot", string]
+  | ["audit", string?]
   | ["eval", string];
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
@@ -54,6 +59,7 @@ function isStep(v: unknown): v is Step {
   if (kind === "wait") return typeof a === "number";
   if (kind === "hold") return typeof a === "string" && typeof b === "number";
   if (kind === "finger") return (a === "down" || a === "move" || a === "up") && typeof b === "string";
+  if (kind === "audit") return a === undefined || typeof a === "string";
   return (
     (kind === "key" ||
       kind === "shot" ||
@@ -251,6 +257,12 @@ async function run(step: Step): Promise<void> {
         await send("Input.dispatchKeyEvent", { ...down, autoRepeat: true });
       }
       await send("Input.dispatchKeyEvent", { type: "keyUp", key, code });
+      return;
+    }
+    case "audit": {
+      const lines = await audit(send);
+      console.log(lines.join("\n"));
+      if (step[1]) await Bun.write(`${outDir}/${step[1]}.txt`, `${lines.join("\n")}\n`);
       return;
     }
     case "eval": {
