@@ -458,7 +458,7 @@ function shopRow(body: HTMLElement, s: Stock, buy: HTMLElement): () => void {
   link(picture, thingRef(thing.id));
   const row = el(
     "div",
-    "k-card",
+    "k-card ware",
     {},
     picture,
     el("div", "k-grow", {}, named(thing.name, thingRef(thing.id)), have),

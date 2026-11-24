@@ -922,6 +922,14 @@
         #panel .k-card > .k-btn {
           margin-left: auto;
         }
+        /* A ware's price stays beside it, so that more of the stall shows: its name wraps instead. */
+        #panel .k-card.ware {
+          flex-wrap: nowrap;
+        }
+        #panel .k-card.ware > .k-grow {
+          flex-basis: 0;
+          min-width: 0;
+        }
         #purse {
           gap: calc(var(--u) * 4);
         }
