@@ -309,7 +309,7 @@ export function sheets(art: Art, which: string): void {
     { name: named("wheel"), pics: pics(m.wheel) },
     { name: `${named("boiler")}: cold, and burning`, pics: pics(m.boiler) },
     { name: "The yard", pics: [], head: true },
-    { name: named("depot"), pics: [m.depot.c] },
+    { name: `${named("depot")}, and as a card shows it`, pics: [m.depot.c, art.icon(kind("depot"))] },
     { name: "its flywheel, the shift's flag", pics: [...m.fly.slice(0, 2), ...pics(m.flag)] },
     { name: "the gate", pics: [m.gate.c] },
     { name: "fence", pics: [m.fenceAcross.c, m.fenceDown.c] },

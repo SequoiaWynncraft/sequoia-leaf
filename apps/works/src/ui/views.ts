@@ -406,7 +406,7 @@ function troubleView(art: Art, host: HTMLElement): () => void {
 const coins = (thousandths: number): string => Math.floor(thousandths / MILLI).toLocaleString("en-US");
 
 function needsView(_art: Art, host: HTMLElement): () => void {
-  const things = table("A minute", ["Can make", "Can use", "Reached the depot"]);
+  const things = table("Items", ["Can make", "Can use", "Reached the depot"], { unit: "/min" });
   const none = el("div", "k-dim", { text: "Nothing is made yet." });
   const over = el("div", "k-s k-dim");
   const totals = table("In total", [""], { wide: 60 });

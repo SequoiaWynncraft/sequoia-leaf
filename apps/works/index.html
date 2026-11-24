@@ -778,15 +778,15 @@
       }
 
       /*
-       * A table of numbers (`ui/table.ts`): what a row is about takes the room there is, and each
-       * number has a column of one width, right-aligned under its name. A row shares the table's
-       * columns, so every row lines up with the head.
+       * A table of numbers (`ui/table.ts`): what a row is about takes the room that is left, and each
+       * number has a column at least `--col` wide and as wide as its widest number, right-aligned
+       * under its name. A row shares the table's columns, so every row lines up with the head.
        */
       .tbl {
         --col: calc(var(--u) * 30);
         flex: none;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) repeat(var(--cols), var(--col));
+        grid-template-columns: minmax(0, 1fr) repeat(var(--cols), minmax(var(--col), max-content));
         gap: calc(var(--u) * 2) calc(var(--u) * 3);
       }
       .tbl > .tbl-head,
@@ -800,16 +800,23 @@
       .tbl[hidden] {
         display: none;
       }
-      .tbl-head {
+      .tbl > .tbl-head {
         align-items: end;
         font: var(--f-small);
         color: var(--k-dim);
       }
+      /* A column's name wraps in the width its numbers give it, and never widens the column. */
       .tbl-head > * {
         text-align: right;
+        contain: inline-size;
       }
       .tbl-head > :first-child {
         text-align: left;
+      }
+      /* The unit, on a line of its own under the name, so every column's sits just over its numbers. */
+      .tbl-unit {
+        display: block;
+        color: var(--k-faint);
       }
       .tbl .num {
         font: var(--f-name);
@@ -830,6 +837,19 @@
         display: flex;
         flex-direction: column;
         gap: var(--u);
+      }
+      /*
+       * Where a word of some name would run under the numbers (`ui/table.ts` says so), every name has
+       * a line of its own, and its numbers go on the line under it, under their columns' names.
+       */
+      .tbl.stacked > .tbl-row {
+        row-gap: var(--u);
+      }
+      .tbl.stacked > .tbl-row > .tbl-what {
+        grid-column: 1 / -1;
+      }
+      .tbl.stacked > .tbl-row > .tbl-what + * {
+        grid-column-start: 2;
       }
       .tbl-note {
         font: var(--f-small);
