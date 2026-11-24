@@ -18,6 +18,7 @@ import {
   MILL,
   priceAt,
   SORTER,
+  sortWay,
   SPLITTER,
   TUNNEL,
   upgradePrice,
@@ -28,6 +29,7 @@ import { act, coinsAre, ctx, type FakeLeaf, isRecord, opened, until, useFakeLeaf
 import { gradeInHand, S } from "./state.ts";
 import {
   aimAt,
+  flip,
   hold,
   markEnd,
   markOver,
@@ -57,6 +59,7 @@ function yardAt(tier: number): Yard {
   S.finger = false;
   S.grades.fill(0);
   S.dir = 0;
+  S.right = false;
   setTool(null);
   return y;
 }
@@ -182,6 +185,23 @@ describe("a piece set down over one of its kind", () => {
     expect(fake.leaf.commands.at(-1)).toMatchObject({ do: "build", kind: "belt", x: 20, y: 16, grade: 2 });
     expect(undo()).toBe(true);
     expect(grades([20], 16)).toEqual([1]);
+    await inStep(fake, 2);
+  });
+
+  test("a sorter raised and flipped at once is undone to the grade and the side it had", async () => {
+    const y = yardAt(4);
+    build(y, SORTER, 20, 16, 0, Infinity);
+    const fake = await opened(y, 1000);
+    const i = at(y, 20, 16);
+    setTool(SORTER);
+    setGrade(2);
+    aimAt(20, 16);
+    flip();
+    expect(place(20, 16)).toBe(true);
+    expect([S.world.grade[i], sortWay(S.world, i)]).toEqual([2, 2]);
+    await inStep(fake, 1);
+    expect(undo()).toBe(true);
+    expect([S.world.grade[i], sortWay(S.world, i)]).toEqual([1, 1]);
     await inStep(fake, 2);
   });
 

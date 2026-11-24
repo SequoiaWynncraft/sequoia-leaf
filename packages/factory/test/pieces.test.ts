@@ -364,6 +364,11 @@ describe("a sorter", () => {
     expect([y.dir[i], F.sortWay(y, i)]).toEqual([1, 2]);
     must(y, { do: "build", kind: "sorter", x: 4, y: 4, dir: 1, right: false });
     expect([F.sortWay(y, i), F.keptAt(y, i)]).toEqual([1, {}]);
+    // Stood again over a sorter, as undoing puts one back, it takes the piece's side as it takes its way.
+    must(y, { do: "stand", pieces: [{ kind: "sorter", x: 4, y: 4, dir: 2, span: 0, first: 2 }] });
+    expect([y.dir[i], F.sortWay(y, i)]).toEqual([2, 2]);
+    must(y, { do: "stand", pieces: [{ kind: "sorter", x: 4, y: 4, dir: 2, span: 0 }] });
+    expect(F.sortWay(y, i)).toBe(1);
     // Only the right is kept: the left is how a sorter stands unless told, and a splitter's ways are its own.
     expect(F.keptOf({ first: 1 }, F.SORTER)).toEqual({});
     expect(F.keptOf({ first: 2, shut: 1 }, F.SORTER)).toEqual({ first: 2 });

@@ -11,6 +11,7 @@ import {
   DY,
   isDir,
   kindAt,
+  type Lay,
   otherMouth,
   priceAt,
   type Refund,
@@ -286,6 +287,13 @@ export function standRefusal(
 }
 
 /**
+ * How `stand` sets a piece down: as it is asked for, and a sorter to the side it keeps (its left
+ * unless it keeps the right), over a sorter as well as new: a sorter's side, like its way, is how it
+ * stands, so a piece stood again where one of its kind stands puts both back.
+ */
+const laidAs = (p: Piece): Lay => (p.kind === SORTER ? { ...p, right: p.first === 2 } : p);
+
+/**
  * Stands a set of pieces, all of them or none, and says what it cost. One that is new keeps what it
  * was asked to and nothing else. With `joins`, as a run is laid, a new belt or tunnel asked for no
  * colour takes the colour of the line it joins. `bend` is a belt already standing where a run starts, turned to meet it.
@@ -304,7 +312,7 @@ export function stand(
   let cost = 0;
   const laid: number[] = [];
   for (const p of pieces) {
-    const did = setDown(y, p.kind, p.x, p.y, p.dir, Infinity, p);
+    const did = setDown(y, p.kind, p.x, p.y, p.dir, Infinity, laidAs(p));
     if (!did.ok) continue;
     cost += did.cost;
     const kept = keptOf(p, p.kind);
