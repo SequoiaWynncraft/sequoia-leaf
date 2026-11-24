@@ -235,6 +235,15 @@
       .quest.done {
         opacity: 0.65;
       }
+      /* What a quest asks beside what it pays; at its foot when it ends, and the reroll at the right. */
+      .quest .head {
+        align-items: flex-start;
+      }
+      .quest .foot {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        row-gap: var(--u);
+      }
       /* Each way to finish a quest, its bar over its count, side by side. */
       .quest .ways {
         display: flex;
@@ -872,19 +881,19 @@
           animation-name: slide-up;
         }
         /* Too narrow for two ways side by side: each on a line of its own, its bar and then its count. */
-        .quest .ways.apart {
+        .quest .ways {
           display: grid;
           grid-template-columns: 1fr auto;
           align-items: center;
           gap: var(--u) calc(var(--u) * 3);
         }
-        .quest .ways.apart > .k-col {
+        .quest .ways > .k-col {
           display: contents;
         }
-        .quest .ways.apart > .k-label {
+        .quest .ways > .k-label {
           grid-column: 1 / -1;
         }
-        .quest .ways.apart .k-dim {
+        .quest .ways .k-dim {
           white-space: nowrap;
         }
         /* A row's button goes under its words where there is no room for a whole name beside it. */
