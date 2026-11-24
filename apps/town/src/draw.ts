@@ -17,6 +17,7 @@ import { clamp, type Ctx, dist, lerp, makeCanvas, type Pt } from "@sequoia-leaf/
 import { feet, headOf, HOP, onScreen } from "./actors.ts";
 import { bits, emoted, floaters, rings } from "./fx.ts";
 import { type Actor, G, show } from "./game.ts";
+import { TOWN_KEYS } from "./keymap.ts";
 import { crate, type Light, type Prop, type Standing } from "./props.ts";
 
 /**
@@ -511,7 +512,7 @@ export function drawWords(ctx: Ctx, px: number, people: readonly Actor[]): void 
 
   // The soft prompt by a place the member is standing at. Names and speech keep clear of it.
   const pl = show.promptT > 0.02 ? show.prompt : null;
-  const key = show.touch ? "Tap" : "E";
+  const key = show.touch ? "Tap" : TOWN_KEYS.name("use");
   const sign: Box | null = pl
     ? (() => {
         const size = promptSize(ctx, key, pl.name, px);

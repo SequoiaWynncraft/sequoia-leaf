@@ -37,6 +37,7 @@ import { worldPress } from "./gesture.ts";
 import { makeGrove } from "./grovescene.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, covered, hush, initHud, tickHud } from "./hud.ts";
+import { TOWN_KEYS } from "./keymap.ts";
 import { here, keepTold, onTown, openCamp, town as kept, troubleCard, visiting } from "./leaf.ts";
 import { leafNow, onStage } from "./players.ts";
 import { lookFromOutside } from "./review.ts";
@@ -374,8 +375,8 @@ async function boot(): Promise<void> {
   window.addEventListener("resize", resize);
 
   function steering(): Steer {
-    const dx = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
-    const dy = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
+    const dx = (TOWN_KEYS.isDown(keys, "right") ? 1 : 0) - (TOWN_KEYS.isDown(keys, "left") ? 1 : 0);
+    const dy = (TOWN_KEYS.isDown(keys, "down") ? 1 : 0) - (TOWN_KEYS.isDown(keys, "up") ? 1 : 0);
     const toward = press.toward();
     return { dx, dy, toward: toward ? toWorld(toward.x, toward.y) : null };
   }

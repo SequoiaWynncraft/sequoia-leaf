@@ -47,7 +47,8 @@ import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { PAINTS } from "../art/belts.ts";
 import { type Art, bare } from "../art/index.ts";
-import { builds, DRAWN, gradeInHand, S, type Tool } from "../state.ts";
+import { WORKS_KEYS, type WorksAction } from "../keymap.ts";
+import { builds, DRAWN, gradeInHand, S } from "../state.ts";
 import {
   askSave,
   cancel,
@@ -71,11 +72,8 @@ import { CATCHING_UP, catchingUp } from "../yard.ts";
 import { machineRef } from "./card.ts";
 import { $, button, fitted, iconButton, shows, when, type YardIcon, yardIcon } from "./parts.ts";
 
-/** The tools in the order they sit in the dock, which is also the order of the number keys: every kind this page draws. */
+/** The tools in the order they sit in the dock, which is also the order of their keys (`tool` in `keymap.ts`): every kind this page draws. */
 export const TOOLS: readonly Kind[] = DRAWN;
-export const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="];
-/** Where those keys sit, whatever each prints: unshifted, AZERTY's number row prints & é " ' and so on. */
-const KEY_PLACES = [...KEYS.slice(0, 10).map((n) => `Digit${n}`), "Minus", "Equal"];
 
 /** The tools the yard may build, in dock order. */
 export const openTools = (): Kind[] => TOOLS.filter(usable);
@@ -123,12 +121,12 @@ function slotFor(art: Art, k: Kind, fresh: boolean): HTMLElement {
   return b;
 }
 
-/** The slot of a tool that builds nothing: Select, the spade, the brush. `key` is its key, `more` the rest of its tip. */
+/** The slot of a tool that builds nothing: Select, the spade, the brush. Its tip names the key of `act`, and says `more`. */
 function plain(
   tool: "select" | "remove" | "paint",
   name: string,
   pic: YardIcon,
-  key: string,
+  act: WorksAction,
   more?: string,
   fresh = false,
 ): HTMLElement {
@@ -142,7 +140,7 @@ function plain(
   b.addEventListener("click", () => {
     setTool(S.tool === tool ? null : tool);
   });
-  tip(b, `${name} (${key})`, more);
+  tip(b, () => `${name} (${WORKS_KEYS.name(act)})`, more);
   return b;
 }
 
@@ -161,14 +159,14 @@ function buildDock(art: Art): void {
             "select",
             "Select",
             "select",
-            "F",
+            "select",
             "Mark out an area to move, copy, remove or save as a blueprint.",
             fresh("select"),
           ),
         ]
       : []),
-    plain("remove", "Remove", "spade", "E", "Right-click does the same."),
-    ...(usable("paint") ? [plain("paint", "Paint", "brush", "C", undefined, fresh("paint"))] : []),
+    plain("remove", "Remove", "spade", "remove", "Right-click does the same."),
+    ...(usable("paint") ? [plain("paint", "Paint", "brush", "paint", undefined, fresh("paint"))] : []),
   ];
   dock.replaceChildren(...kids, ...others);
   // On a narrow screen, more than eight tools go in two even rows.
@@ -188,7 +186,7 @@ function selectLine(f: boolean): { text: string; bad: boolean } {
       ? "Move"
       : `${g.as === "copy" ? "Copy" : "Blueprint"}, ${price(S.aim?.cost ?? priceOf(S.world, piecesInHand(g), true))}`;
     if (f) return { text: S.aim ? `${what}. Tap again, or Build.` : `${what}: tap where it goes.`, bad: false };
-    return { text: `${what}: click to place it. R rotates it.`, bad: false };
+    return { text: `${what}: click to place it. ${WORKS_KEYS.name("rotate")} rotates it.`, bad: false };
   }
   if (S.saving) return { text: "Save it in which place?", bad: false };
   const m = S.mark;
@@ -230,11 +228,12 @@ function handLine(): { text: string; bad: boolean } {
     return { text: f ? `${what} Tap again, or Raise.` : `${what} Click to raise it.`, bad: false };
   }
   if (tool === BELT) {
-    if (!f) return { text: "Belt: drag to place a line. R rotates it.", bad: false };
+    if (!f) return { text: `Belt: drag to place a line. ${WORKS_KEYS.name("rotate")} rotates it.`, bad: false };
     return { text: S.from ? "Now tap where it ends." : "Tap where the line starts.", bad: false };
   }
   if (f) return { text: S.aim ? "Tap again, or Build." : `${name}: tap where it goes.`, bad: false };
-  return { text: `${name}: click to place it. R rotates it${tool === SORTER ? ", X flips it" : ""}.`, bad: false };
+  const flips = tool === SORTER ? `, ${WORKS_KEYS.name("flip")} flips it` : "";
+  return { text: `${name}: click to place it. ${WORKS_KEYS.name("rotate")} rotates it${flips}.`, bad: false };
 }
 
 const DOT = new Map<number, string>([
@@ -404,10 +403,10 @@ function placeButton(p: Place, saving: boolean): HTMLElement {
   });
 }
 
-/** One of the things done to a marked area, with its key in its tip. */
-function action(name: string, key: string, on: () => void): HTMLElement {
+/** One of the things done to a marked area, with its key (of `act`) in its tip. */
+function action(name: string, act: WorksAction, on: () => void): HTMLElement {
   const b = button(name === "Remove" ? "coral sm" : "sm", [name], on);
-  tip(b, `${name} (${key})`);
+  tip(b, () => `${name} (${WORKS_KEYS.name(act)})`);
   return b;
 }
 
@@ -416,12 +415,16 @@ function turning(p: HandPrint): HTMLElement[] {
   const out: HTMLElement[] = [];
   if (p.turn) {
     const turn = iconButton("wood sm", yardIcon("turn"), "Rotate", rotate);
-    tip(turn, "Rotate (R)", "With no tool picked, it rotates the piece you last pointed at.");
+    tip(
+      turn,
+      () => `Rotate (${WORKS_KEYS.name("rotate")})`,
+      "With no tool picked, it rotates the piece you last pointed at.",
+    );
     out.push(turn);
   }
   if (p.flip) {
     const over = iconButton("wood sm", yardIcon("flip"), "Flip", flip);
-    tip(over, "Flip (X)", "Sends the sorter's item out of its other side.");
+    tip(over, () => `Flip (${WORKS_KEYS.name("flip")})`, "Sends the sorter's item out of its other side.");
     out.push(over);
   }
   return out;
@@ -433,13 +436,13 @@ function drawHand(p: HandPrint): void {
   const kids: Node[] = p.places.map((place) => placeButton(place, p.saving));
   if (p.acting)
     kids.push(
-      action("Move", "M", () => {
+      action("Move", "move", () => {
         hold("move");
       }),
-      action("Copy", "C", () => {
+      action("Copy", "paint", () => {
         hold("copy");
       }),
-      action("Remove", "Del", clearMark),
+      action("Remove", "clear", clearMark),
       ...(p.save ? [button("sm", ["Save"], askSave)] : []),
     );
   // With "Upgrading an area" known, and something marked that can be raised: the whole price, asked twice.
@@ -483,7 +486,7 @@ function drawHand(p: HandPrint): void {
     const back = iconButton("wood sm undo", yardIcon("undo"), "Undo", () => {
       undo();
     });
-    tip(back, "Undo (Z)");
+    tip(back, () => `Undo (${WORKS_KEYS.name("undo")})`);
     kids.push(back);
   }
   if (p.bin) {
@@ -499,7 +502,7 @@ function drawHand(p: HandPrint): void {
   }
   if (p.cancel) {
     const away = iconButton("wood sm", icon("close"), "Cancel", cancel);
-    tip(away, "Cancel (Esc)");
+    tip(away, () => `Cancel (${WORKS_KEYS.name("back")})`);
     kids.push(away);
   }
   if (p.go)
@@ -567,11 +570,4 @@ export function say(text: string): void {
   message = text;
   messageUntil = performance.now() + 2600;
   handKey?.();
-}
-
-/** The tool a number key picks: by where it sits in the number row, else by what it prints (the number pad's). */
-export function toolForKey(e: Pick<KeyboardEvent, "code" | "key">): Tool | undefined {
-  const at = KEY_PLACES.indexOf(e.code);
-  const n = at >= 0 ? at : KEYS.indexOf(e.key);
-  return n < 0 ? undefined : openTools()[n];
 }

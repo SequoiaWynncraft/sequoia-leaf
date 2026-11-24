@@ -1486,10 +1486,10 @@ export function makeCamp(
 
     back: () => putAway(stopDecorating),
 
-    key(k) {
+    key(act) {
       if (!decor()) return false;
-      if (k === "r") turn();
-      else if (k === "delete" || k === "backspace") stow();
+      if (act === "rotate") turn();
+      else if (act === "stow") stow();
       else return false;
       return true;
     },

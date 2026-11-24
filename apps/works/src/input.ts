@@ -8,6 +8,7 @@
 
 import { at, BELT } from "@sequoia-leaf/factory";
 import { pick, point, shown, surface } from "@sequoia-leaf/kit/card.ts";
+import { placeOf } from "@sequoia-leaf/kit/keyboard.ts";
 import { heldAgain } from "@sequoia-leaf/kit/keys.ts";
 import { LONG_PRESS } from "@sequoia-leaf/kit/press.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
@@ -15,6 +16,7 @@ import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { pan, zoom } from "./camera.ts";
 import { callerAt } from "./events.ts";
 import { aimOf } from "./hand.ts";
+import { WORKS_KEYS, type WorksAction } from "./keymap.ts";
 import { S, tileAt, toYard } from "./state.ts";
 import {
   aimAt,
@@ -42,7 +44,7 @@ import {
   undo,
 } from "./tools.ts";
 import { closeCard, openCard, refAt, riderAt, tileBox } from "./ui/card.ts";
-import { refreshDock, toolForKey } from "./ui/dock.ts";
+import { openTools, refreshDock } from "./ui/dock.ts";
 import { closeBanner } from "./ui/notes.ts";
 import { closePanel, togglePanel } from "./ui/panels.ts";
 import { hasViews, toggleView } from "./ui/views.ts";
@@ -59,33 +61,70 @@ export const inputHooks: {
   settingsUp: () => boolean;
 } = { caller: () => {}, letter: () => false, settings: () => {}, settingsUp: () => false };
 
-/** The keys that move the view are where W, A, S and D sit on a keyboard, whatever it prints on them: by place (`code`), not by letter. */
-const MOVES: ReadonlyMap<string, string> = new Map([
-  ["KeyW", "w"],
-  ["KeyA", "a"],
-  ["KeyS", "s"],
-  ["KeyD", "d"],
-]);
+/** The places of the keys held down that move the view (`WORKS_KEYS.isDown`). */
+const held = new Set<string>();
 
-const keys = new Set<string>();
+/** A key that moves the view, held until it comes up. */
+function moveView(e: KeyboardEvent): void {
+  held.add(placeOf(e.code));
+  e.preventDefault();
+}
 
-/** The keys that do one thing, whatever is marked or in hand: each key, as `KeyboardEvent.key` has it in lower case. */
-const PRESSES = new Map<string, () => void>([
-  ["r", rotate],
-  // X flips a sorter to send to its other side.
-  ["x", flip],
-  // G steps through the grades the kind in hand may be built at.
-  ["g", stepGrade],
-  ["e", () => setTool(S.tool === "remove" ? null : "remove")],
-  ["f", () => setTool(S.tool === "select" ? null : "select")],
-  ["delete", clearMark],
-  ["z", undo],
-  ["o", () => togglePanel("orders")],
-  ["t", () => togglePanel("board")],
-  ["p", () => togglePanel("tier")],
-  ["l", () => togglePanel("research")],
-  ["i", () => toggleView("needs")],
-]);
+const zoomBy = (step: number): void => {
+  zoom(step, window.innerWidth / 2, window.innerHeight / 2);
+};
+
+/** The piece pointed at, or else the one last picked, is the tool in hand. */
+function another(): void {
+  const on =
+    S.hover ?? (S.picked >= 0 ? { x: S.picked % S.world.land.w, y: Math.floor(S.picked / S.world.land.w) } : null);
+  if (on) pickFrom(on.x, on.y);
+}
+
+/** What each action does: given the key, and which of the action's keys it is. */
+const DOES: Readonly<Record<WorksAction, (e: KeyboardEvent, nth: number) => void>> = {
+  up: moveView,
+  left: moveView,
+  down: moveView,
+  right: moveView,
+  zoomIn: () => zoomBy(1),
+  zoomOut: () => zoomBy(-1),
+  tool: (_, nth) => {
+    const picked = openTools()[nth];
+    if (picked !== undefined) setTool(S.tool === picked ? null : picked);
+  },
+  rotate,
+  // A sorter sends to its other side.
+  flip,
+  // Through the grades the kind in hand may be built at.
+  grade: stepGrade,
+  another,
+  remove: () => setTool(S.tool === "remove" ? null : "remove"),
+  undo: (e) => {
+    e.preventDefault();
+    undo();
+  },
+  select: () => setTool(S.tool === "select" ? null : "select"),
+  // With nothing marked, the map, once the yard has one.
+  move: () => {
+    if (S.mark && !S.group) hold("move");
+    else if (hasViews()) toggleView("map");
+  },
+  paint: () => {
+    if (S.mark && !S.group) hold("copy");
+    else setTool(S.tool === "paint" ? null : "paint");
+  },
+  clear: clearMark,
+  orders: () => togglePanel("orders"),
+  board: () => togglePanel("board"),
+  tier: () => togglePanel("tier"),
+  research: () => togglePanel("research"),
+  depot: () => toggleView("needs"),
+  back: (e) => escape(e, false),
+};
+
+/** What a visitor may do, who changes nothing: look about, and at the top yards. */
+const LOOKS: ReadonlySet<WorksAction> = new Set(["up", "left", "down", "right", "zoomIn", "zoomOut", "board", "back"]);
 
 interface Down {
   id: number;
@@ -337,41 +376,13 @@ export function initInput(canvas: InputSurface): void {
   window.addEventListener("keydown", (e) => {
     unlock();
     if (e.target instanceof HTMLInputElement || inputHooks.settingsUp()) return;
-    const k = e.key.toLowerCase();
-    if (k === "escape" || k === "enter") {
-      escape(e, k === "enter");
-      return;
-    }
-    if (e.ctrlKey || e.metaKey || e.altKey) return undoKey(e, k);
-    if (moveKey(e)) return;
-    // A visitor changes nothing: only the keys that look about work.
-    if (S.visiting && !/^(t|\+|=|_|arrow\w+)$/.test(k)) return;
-    const picked = toolForKey(e);
-    if (picked !== undefined) {
-      setTool(S.tool === picked ? null : picked);
-      return;
-    }
-    const pressed = PRESSES.get(k);
-    if (pressed) pressed();
-    else if (k === "m" && S.mark && !S.group) hold("move");
-    // With nothing marked, M is the map, once the yard has one.
-    else if (k === "m" && hasViews()) toggleView("map");
-    // C copies a marked area; with none marked it is the brush.
-    else if (k === "c" && S.mark && !S.group) hold("copy");
-    else if (k === "c") setTool(S.tool === "paint" ? null : "paint");
-    else if (k === "q") {
-      const on =
-        S.hover ?? (S.picked >= 0 ? { x: S.picked % S.world.land.w, y: Math.floor(S.picked / S.world.land.w) } : null);
-      if (on) pickFrom(on.x, on.y);
-    } else if (k === "+" || k === "=") zoom(1, window.innerWidth / 2, window.innerHeight / 2);
-    else if (k === "_") zoom(-1, window.innerWidth / 2, window.innerHeight / 2);
-    else if (k.startsWith("arrow")) {
-      keys.add(k);
-      e.preventDefault();
-    }
+    const act = WORKS_KEYS.of(e);
+    // Enter, as Escape does, puts away the letter.
+    if (act === undefined && e.key === "Enter") escape(e, true);
+    else if (act !== undefined && (!S.visiting || LOOKS.has(act.id))) DOES[act.id](e, act.nth);
   });
   window.addEventListener("keyup", (e) => {
-    keys.delete(MOVES.get(e.code) ?? e.key.toLowerCase());
+    held.delete(placeOf(e.code));
   });
   window.addEventListener("blur", letGo);
 }
@@ -395,28 +406,12 @@ function escape(e: KeyboardEvent, enter: boolean): void {
   else if (!closeBanner()) inputHooks.settings();
 }
 
-/** A key held with Ctrl (or Cmd): Z undoes, as it does everywhere; with Shift too it does nothing yet. */
-function undoKey(e: KeyboardEvent, k: string): void {
-  if (k !== "z" || e.altKey || e.shiftKey || S.visiting) return;
-  e.preventDefault();
-  undo();
-}
-
-/** A key that moves the view by its place on the keyboard (`MOVES`), held until it comes up. Says whether it was one. */
-function moveKey(e: KeyboardEvent): boolean {
-  const move = MOVES.get(e.code);
-  if (move === undefined) return false;
-  keys.add(move);
-  e.preventDefault();
-  return true;
-}
-
 /**
  * Lets go of every key and press held: the window has lost the focus, or the settings menu has come
  * up over the yard. A press lost so does nothing more, and the drag the hand held for one ends.
  */
 export function letGo(): void {
-  keys.clear();
+  held.clear();
   downs.clear();
   pinch = null;
   // A finger's long press waiting to ask what it is on finds its press gone, and asks nothing.
@@ -425,8 +420,8 @@ export function letGo(): void {
 
 /** Each frame: the keys that move the view, and what the mouse is over once the view has moved for the frame. */
 export function stepInput(dt: number): void {
-  const dx = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
-  const dy = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
+  const dx = (WORKS_KEYS.isDown(held, "right") ? 1 : 0) - (WORKS_KEYS.isDown(held, "left") ? 1 : 0);
+  const dy = (WORKS_KEYS.isDown(held, "down") ? 1 : 0) - (WORKS_KEYS.isDown(held, "up") ? 1 : 0);
   if (dx !== 0 || dy !== 0) pan(-dx * dt * 620, -dy * dt * 620);
   followView();
 }

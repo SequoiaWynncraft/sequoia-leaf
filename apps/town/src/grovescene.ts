@@ -471,8 +471,8 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
       else done();
       return true;
     },
-    key(k) {
-      if (k !== "arrowright" || !show) return false;
+    key(act) {
+      if (act !== "right" || !show) return false;
       next();
       return true;
     },

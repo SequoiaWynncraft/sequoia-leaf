@@ -12,6 +12,7 @@ import type { Ctx, Pt, Rect } from "@sequoia-leaf/kit/util.ts";
 
 import type { Visit } from "./doors.ts";
 import type { GameId } from "./games.ts";
+import type { TownAction } from "./keymap.ts";
 import type { Looked } from "./leaf.ts";
 import type { Place, Screen } from "./screen.ts";
 
@@ -62,8 +63,8 @@ export interface Scene {
   act(): void;
   /** The key for "put this away". Says whether there was anything to put away. */
   back(): boolean;
-  /** Any other key, in lower case. Says whether the scene had a use for it. */
-  key(k: string): boolean;
+  /** Any other key, by what it is for (`keymap.ts`). Says whether the scene had a use for it. */
+  key(act: TownAction): boolean;
   /** A finger or the mouse, still down, has moved to a point in the scene. */
   drag(at: Pt): void;
   /** It has been lifted, at a point in the scene and over this part of the page. */

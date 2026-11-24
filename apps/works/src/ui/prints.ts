@@ -59,6 +59,7 @@ import {
   worthAt,
 } from "@sequoia-leaf/factory";
 
+import { WORKS_KEYS } from "../keymap.ts";
 import { layout, sendsRight } from "../layout.ts";
 import { draws, S } from "../state.ts";
 import { usable } from "../tools.ts";
@@ -76,7 +77,7 @@ import type {
   StandingPrint,
   TierPrint,
 } from "./cards.ts";
-import { KEYS, openTools } from "./dock.ts";
+import { openTools } from "./dock.ts";
 import { givenIn } from "./goal.ts";
 import { flowOf, kindNumbers, numbersOf, saysNumbers } from "./numbers.ts";
 import { orderRef } from "./refs.ts";
@@ -125,7 +126,7 @@ function itemPrint(k: Item): ItemPrint {
 /** A kind of piece at a grade: the first, unless the card names a higher or the piece stands at one. */
 function machinePrint(k: Kind, grade = 1): MachinePrint {
   const w = S.world;
-  const key = S.visiting ? undefined : KEYS[openTools().indexOf(k)];
+  const key = S.visiting ? undefined : WORKS_KEYS.names("tool")[openTools().indexOf(k)];
   return {
     card: "machine",
     kind: k,
@@ -202,13 +203,20 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     raise: raise === null ? null : { to: grade + 1, cost: raise, enough: coins() >= raise },
     open: r < 0 || h.open[r] === 1,
     tier: tierOpen() ? w.open.tier : null,
-    another: usable(k),
+    keys: buttonKeys(k),
     refund: worthAt(w, i),
     free: w.free[i] === 1,
     ways: k === SPLITTER ? waysPrint(i) : null,
     visiting: S.visiting !== null,
   };
 }
+
+/** What the keys of a standing piece's buttons are called: Another's only where it can be picked up. */
+const buttonKeys = (k: Kind): StandingPrint["keys"] => ({
+  rotate: WORKS_KEYS.name("rotate"),
+  flip: WORKS_KEYS.name("flip"),
+  another: usable(k) ? WORKS_KEYS.name("another") : null,
+});
 
 function tilePrint(i: number): StandingPrint | GroundPrint | null {
   const w = S.world;
