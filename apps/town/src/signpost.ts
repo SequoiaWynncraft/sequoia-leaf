@@ -17,6 +17,7 @@ import { campIcon } from "./campart.ts";
 import {
   type Camp,
   camps,
+  campsVersion,
   choose,
   fetchCamps,
   inOrder,
@@ -28,7 +29,7 @@ import {
   ORDERS,
 } from "./camps.ts";
 import { hooks } from "./game.ts";
-import { button, closePanel, pic, slot, wayButton, when } from "./hud.ts";
+import { button, closePanel, pic, slot, type StripWays, wayButton, when } from "./hud.ts";
 import { visiting } from "./leaf.ts";
 
 /** The member's own id. */
@@ -133,8 +134,8 @@ async function goNext(at: string): Promise<void> {
   else hooks.feed("There is no other camp yet.", "coral");
 }
 
-/** The strip's buttons at somebody else's camp: its likes, which the member gives or takes back, and the next camp along. */
-export function stripWays(host: { readonly id: string }): HTMLElement[] {
+/** The strip's buttons at somebody else's camp: its likes, which the member gives or takes back, and the next camp along; drawn as the camps held change. */
+export function stripWays(host: { readonly id: string }): StripWays {
   const heart = glyph("heart");
   const count = el("span");
   let busy = false;
@@ -160,14 +161,12 @@ export function stripWays(host: { readonly id: string }): HTMLElement[] {
       sfx.twinkle();
       replay(heart, "k-bump");
     } else sfx.tap();
-    draw();
+    follow();
   }
-  draw();
-  void (async () => {
-    await fetchCamps();
-    draw();
-  })();
-  return [likes, wayButton("back", "Next camp", () => void goNext(host.id))];
+  const follow = when(() => String(campsVersion()), draw);
+  follow();
+  void fetchCamps().then(follow);
+  return { els: [likes, wayButton("back", "Next camp", () => void goNext(host.id))], follow };
 }
 
 /** "Copy link to my camp": the page's address that opens on the member's camp, for pasting in chat; "Link copied" for a moment after. */

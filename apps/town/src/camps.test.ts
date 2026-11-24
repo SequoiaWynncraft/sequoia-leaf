@@ -86,23 +86,48 @@ describe("the signpost's camps", () => {
     expect(await like("me", true)).toBe("That is your own camp");
   });
 
-  test("keep a like Leaf answered over a list it was asked for before the like", async () => {
-    const before = { camps: [{ id: "bo", name: "Bo", guest: false, set_out: 3, likes: 1, liked: false }] };
+  test("keep a like Leaf answered over a list it was asked for before the like, and the list's word on the rest", async () => {
+    // A camp the page has not listed yet (opened by its link), liked while the first list is on its way.
+    const before = { camps: [{ id: "cy", name: "Cy", guest: true, set_out: 7, likes: 1, liked: false }] };
     const list = Promise.withResolvers<Reply>();
     world = standin({
       "GET /v1/game/camps": () => list.promise,
-      "PUT /v1/game/camps/bo/like": { status: 200, body: { likes: 2, liked: true } },
+      "PUT /v1/game/camps/cy/like": { status: 200, body: { likes: 2, liked: true } },
     });
     const listed = fetchCamps();
-    await like("bo", true);
+    await like("cy", true);
     list.resolve({ status: 200, body: before });
     await listed;
-    expect(camps()).toEqual([{ id: "bo", name: "Bo", guest: false, setOut: 3, likes: 2, liked: true }]);
+    expect(camps()).toEqual([{ id: "cy", name: "Cy", guest: true, setOut: 7, likes: 2, liked: true }]);
     // A list asked for after the like is Leaf's word again.
     world.done();
     world = standin({ "GET /v1/game/camps": { status: 200, body: before } });
     await fetchCamps();
-    expect(camps()).toEqual([{ id: "bo", name: "Bo", guest: false, setOut: 3, likes: 1, liked: false }]);
+    expect(camps()).toEqual([{ id: "cy", name: "Cy", guest: true, setOut: 7, likes: 1, liked: false }]);
+  });
+
+  test("keep a like over a list asked for while the like was on its way, which Leaf may have read before it", async () => {
+    const before = { camps: [{ id: "di", name: "Di", guest: false, set_out: 5, likes: 0, liked: false }] };
+    world = standin({ "GET /v1/game/camps": { status: 200, body: before } });
+    await fetchCamps();
+    world.done();
+    const put = Promise.withResolvers<Reply>();
+    const list = Promise.withResolvers<Reply>();
+    world = standin({ "GET /v1/game/camps": () => list.promise, "PUT /v1/game/camps/di/like": () => put.promise });
+    const liking = like("di", true);
+    const listed = fetchCamps();
+    put.resolve({ status: 200, body: { likes: 1, liked: true } });
+    await liking;
+    list.resolve({ status: 200, body: before });
+    await listed;
+    expect(camps().find((c) => c.id === "di")).toEqual({
+      id: "di",
+      name: "Di",
+      guest: false,
+      setOut: 5,
+      likes: 1,
+      liked: true,
+    });
   });
 
   test("tell the owner, in a line of the feed, who liked their camp", () => {

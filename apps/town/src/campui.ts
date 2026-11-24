@@ -396,7 +396,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
         () => {
           hooks.go({ to: "camp" });
         },
-        host ? stripWays(host) : [],
+        host ? stripWays(host) : undefined,
       );
       tray.hidden = true;
       document.body.classList.remove("decorating");

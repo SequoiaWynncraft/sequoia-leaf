@@ -505,15 +505,21 @@ export function wayButton(picture: "home" | "back", name: string, does: () => vo
   return b;
 }
 
+/** The buttons a camp gives the strip, and what keeps them as they should show (called as the strip is). */
+export interface StripWays {
+  readonly els: readonly HTMLElement[];
+  readonly follow: () => void;
+}
+
 /**
  * Under the top bar at somebody else's camp: their face, whose camp it is, the buttons the camp
- * gives (`ways`), and the way to the member's own; `null` puts it away. Only the face is drawn
- * again, as it comes, so a button keeps the keyboard.
+ * gives (`ways`), and the way to the member's own; `null` puts it away. Only the face, and what
+ * `ways` follows, are drawn again, as they change, so a button keeps the keyboard.
  */
 export function setStrip(
   host: { readonly id: string; readonly name: string } | null,
   home: () => void,
-  ways: readonly HTMLElement[] = [],
+  ways: StripWays = { els: [], follow: () => undefined },
 ): void {
   const at = $("visit");
   at.hidden = host === null;
@@ -526,16 +532,22 @@ export function setStrip(
         {},
         face,
         el("b", "k-name", { text: `${host.name}'s camp` }),
-        ...ways,
+        ...ways.els,
         wayButton("home", "My camp", home),
       ),
     );
-  strip =
+  const faces =
     host &&
     when(
       () => String(facesCame()),
       () => face.replaceChildren(pic(faceFor(host.id, host.name, true), 2)),
     );
+  strip =
+    faces &&
+    ((): void => {
+      faces();
+      ways.follow();
+    });
   strip?.();
 }
 

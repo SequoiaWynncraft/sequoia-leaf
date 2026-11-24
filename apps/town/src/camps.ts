@@ -29,27 +29,37 @@ export const ORDERS = { liked: "Most liked", set: "Most set out" } as const;
 export type Order = keyof typeof ORDERS;
 
 /**
- * What the page holds: the camps as Leaf last listed them, and the order last chosen. Each question
- * to Leaf (a list, a like) is numbered as it is sent (`asked`), and each camp is held as the answer
- * to the last one sent that told of it (`told`): a list asked for before a like, and answered after
- * it, does not undo it.
+ * What the page holds: the camps as Leaf last listed them, the order last chosen, and how far its
+ * word on each camp's likes goes. A list is numbered as it is asked for, and Leaf's answer to a
+ * like as it comes (`asked`); a camp's likes, and whether the member likes it, are held from the
+ * like answered last, unless a list was asked for after that answer (`told`). So a list asked for
+ * before a like was answered (which Leaf may have read before it kept the like) does not undo it.
+ * Only a list tells the rest (whose, the things set out). `version` counts every change.
  */
-const held: { camps: readonly Camp[]; order: Order; asked: number; told: Map<string, number> } = {
+const held: { camps: readonly Camp[]; order: Order; asked: number; told: Map<string, number>; version: number } = {
   camps: [],
   order: "liked",
   asked: 0,
   told: new Map(),
+  version: 0,
 };
 
-/** A camp as the answer to question `n` tells of it: as held, if a later question has told of it since. */
+/** A camp as the list asked for as `n` tells of it, with its likes as held if a like was answered since. */
 function take(c: Camp, n: number): Camp {
-  if ((held.told.get(c.id) ?? 0) > n) return held.camps.find((h) => h.id === c.id) ?? c;
-  held.told.set(c.id, n);
-  return c;
+  const later = (held.told.get(c.id) ?? 0) > n ? held.camps.find((h) => h.id === c.id) : undefined;
+  return later ? { ...c, likes: later.likes, liked: later.liked } : c;
+}
+
+/** Holds `list` as the camps: a change the page's parts follow (`campsVersion`). */
+function holdCamps(list: readonly Camp[]): void {
+  held.camps = list;
+  held.version += 1;
 }
 
 /** The camps as Leaf last listed them. */
 export const camps = (): readonly Camp[] => held.camps;
+/** A number that changes whenever the camps held do. */
+export const campsVersion = (): number => held.version;
 /** The order last chosen at the signpost. */
 export const order = (): Order => held.order;
 export function choose(o: Order): void {
@@ -106,13 +116,12 @@ export async function fetchCamps(): Promise<readonly Camp[] | null> {
   const n = ++held.asked;
   const a = await ask("/v1/game/camps");
   const read = a.status === 200 ? readCamps(a.body) : null;
-  if (read) held.camps = read.map((c) => take(c, n));
+  if (read) holdCamps(read.map((c) => take(c, n)));
   return read && held.camps;
 }
 
 /** Gives (`on`) or takes back the member's like of `id`'s camp: the camp as Leaf answers, or what Leaf said, or null for no answer. */
 export async function like(id: string, on: boolean): Promise<Camp | string | null> {
-  const n = ++held.asked;
   const a = await ask(`/v1/game/camps/${encodeURIComponent(id)}/like`, { method: on ? "PUT" : "DELETE" });
   const body = isRecord(a.body) ? a.body : {};
   const likes = num(body.likes);
@@ -126,9 +135,9 @@ export async function like(id: string, on: boolean): Promise<Camp | string | nul
     likes,
     liked: body.liked === true,
   };
-  const kept = take(now, n);
-  held.camps = was ? held.camps.map((c) => (c.id === id ? kept : c)) : [...held.camps, kept];
-  return kept;
+  held.told.set(id, ++held.asked);
+  holdCamps(was ? held.camps.map((c) => (c.id === id ? now : c)) : [...held.camps, now]);
+  return now;
 }
 
 function readVisitors(v: unknown): Visitor[] {
