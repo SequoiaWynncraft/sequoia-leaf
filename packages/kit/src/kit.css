@@ -1312,3 +1312,21 @@ button.k-info-chip:hover .k-chip {
     inset: calc(var(--u) * -4) calc(var(--u) * -4) calc(var(--u) * -5);
   }
 }
+
+/*
+ * Asked for less motion (the system's setting): nothing in the interface of any page animates or
+ * eases, and the waiting look is a steady dim. What moves in the world, drawn on a canvas, moves on.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .k-wait {
+    filter: brightness(0.62) saturate(0.7);
+  }
+}

@@ -75,9 +75,14 @@ export function purseBar(host: HTMLElement, coins: () => number = () => balance(
 
 /**
  * Little pictures that fly from one spot on the page to another: Leaf leaving the purse, Coins
- * arriving. `each` is called as each one lands.
+ * arriving. `each` is called as each one lands (at once, for a player who asked for less motion).
  */
 export function fly(what: IconName, from: Pt, to: Pt, count: number, each: ((i: number) => void) | null = null): void {
+  // Asked for less motion, they land at once.
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    for (let i = 0; i < count; i++) each?.(i);
+    return;
+  }
   for (let i = 0; i < count; i++) {
     const c = icon(what);
     c.style.cssText = "position:fixed;left:0;top:0;z-index:95;pointer-events:none";
