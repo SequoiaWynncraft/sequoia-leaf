@@ -236,7 +236,10 @@ describe("the cards of tiers 2 and 3", () => {
       },
     });
     expect(printOf(tileRef(at(y, 22, 17)))).toMatchObject({ numbers: ["Carries up to 200 items a minute."] });
-    expect(printOf(tileRef(at(y, 24, 15)))).toMatchObject({ numbers: ["Studies 12 folios a minute."], flow: null });
+    expect(printOf(tileRef(at(y, 24, 15)))).toMatchObject({
+      numbers: ["Studies up to 12 folios a minute."],
+      flow: null,
+    });
   });
 
   test("name a kind by its grade once the yard may build it higher, and offer to raise a piece for what the rules ask", () => {

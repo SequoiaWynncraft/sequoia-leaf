@@ -68,7 +68,7 @@ export function numbersOf(w: Yard, i: number): string[] {
     const raw = w.land.deposit[i] ?? NONE;
     return isItem(raw) ? [`Gathers ${things(makes(GATHERER, grade, null) * share, raw)} a minute${short}.`] : [];
   }
-  if (k === STUDY) return [`Studies ${n(makes(STUDY, grade, null) * share)} folios a minute${short}.`];
+  if (k === STUDY) return [`Studies up to ${n(makes(STUDY, grade, null) * share)} folios a minute${short}.`];
   if (carries(k)) return kindNumbers(k, grade);
   return [];
 }

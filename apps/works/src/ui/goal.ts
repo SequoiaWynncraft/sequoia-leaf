@@ -281,6 +281,13 @@ export function leaves(g: Goal): Listed | null {
   return gift ? listed("Leaves in town", [{ ref: giftRef(g), name: gift.line, read: true }]) : null;
 }
 
+/** Things as rows under a label, each its picture, its name and a number at the right: what the depot took in while away. */
+export const counted = (label: string, these: readonly (readonly [ref: string, note: string])[]): Listed | null =>
+  listed(
+    label,
+    these.map(([ref, note]): Line => ({ ref, note })),
+  );
+
 /** Goals as rows under a label, each its picture and its name: the research that became known while away. */
 export const goals = (label: string, these: readonly Goal[]): Listed | null =>
   listed(

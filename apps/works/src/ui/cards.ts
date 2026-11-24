@@ -612,7 +612,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
     actions.push(
       { label: "Orders", on: () => hands.panel("orders") },
       ...(p.tier !== null ? [{ label: `Tier ${p.tier}`, on: () => hands.panel("tier") }] : []),
-      { label: "Makes and needs", on: () => hands.panel("depot") },
+      { label: "Items", on: () => hands.panel("depot") },
     );
   } else {
     if (k === STUDY && p.research) actions.push({ label: "Research", on: () => hands.panel("research") });

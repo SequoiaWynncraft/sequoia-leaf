@@ -9,7 +9,7 @@
  * - **Trouble**: the pieces in trouble (`trouble.ts`) in groups by what is wrong, the largest first.
  *   A tap on a group goes to its first piece and opens its card, and a bar stays while the member
  *   walks the group: what is wrong, which of how many, back and on, and a way out.
- * - **Makes and needs**: for each thing, at most how many the yard's pieces can make and can use a
+ * - **Items**: for each thing, at most how many the yard's pieces can make and can use a
  *   minute (the rules' `flow`), and what reached the depot in the last minute, counted
  *   (`arrivals.ts`); what they can use more of than they can make first, with by how many. Then the
  *   yard's totals.
@@ -43,7 +43,7 @@ import { type Line, table } from "./table.ts";
 
 export type View = "map" | "trouble" | "needs";
 const VIEWS: readonly View[] = ["map", "trouble", "needs"];
-const NAMES: Readonly<Record<View, string>> = { map: "Map", trouble: "Trouble", needs: "Makes and needs" };
+const NAMES: Readonly<Record<View, string>> = { map: "Map", trouble: "Trouble", needs: "Items" };
 
 /** Where the view last used is kept, beside the screen's other settings. */
 const KEPT = "works.view.v1";
@@ -346,7 +346,7 @@ function mapView(_art: Art, host: HTMLElement): () => void {
 function troubleView(art: Art, host: HTMLElement): () => void {
   const short = table("Power", ["Used", "Made", "Speed"]);
   const list = table("", ["Pieces"], { cards: true });
-  const none = el("div", "k-dim", { text: "Nothing is wrong." });
+  const none = el("div", "k-dim");
   host.append(short.el, list.el, none);
   /** What is wrong, and the kinds of piece it is wrong with, as pictures. */
   const head = (title: string, kinds: readonly Kind[]): Node =>
@@ -376,6 +376,8 @@ function troubleView(art: Art, host: HTMLElement): () => void {
     const groups = troubleGroups(y);
     list.el.hidden = groups.length === 0;
     none.hidden = groups.length > 0;
+    // Short of power is trouble too, in the row above: then it is only the pieces that are fine.
+    none.textContent = p.pace < 1 ? "No piece is in trouble." : "Nothing is wrong.";
     list.set(
       groups.map((g): Line => ({
         // Its pictures are built once for a row: a group that gains a kind of piece is a new row.

@@ -6,15 +6,14 @@
  */
 
 import { ALL_ITEMS, type Away, finishedSince, isFilled, knownSince, TICK_MS } from "@sequoia-leaf/factory";
-import { thing } from "@sequoia-leaf/kit/card.ts";
-import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
 import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
 import { collect } from "../yard.ts";
 import { itemRef, orderRef } from "./card.ts";
-import { goals } from "./goal.ts";
+import { counted, goals, type Listed } from "./goal.ts";
 import { coinsFrom } from "./notes.ts";
 import { $, centre } from "./parts.ts";
 
@@ -47,12 +46,9 @@ export function showLetter(away: Away, done: () => void): void {
   const line = (...kids: (Node | string | null)[]): void => {
     lines.push(el("div", "line", {}, el("hr"), el("div", "k-row", {}, ...kids)));
   };
-  /** A line of things under a small word saying what they are. */
-  const list = (label: string, things: readonly HTMLElement[]): void => {
-    if (things.length > 0)
-      lines.push(
-        el("div", "line", {}, el("hr"), el("div", "k-label", { text: label }), el("div", "k-wrap", {}, ...things)),
-      );
+  /** A list of things under a small word saying what they are, one a line. */
+  const list = (made: Listed | null): void => {
+    if (made) lines.push(el("div", "line", {}, el("hr"), made.node));
   };
   if (away.coins > 0)
     line(
@@ -64,22 +60,22 @@ export function showLetter(away: Away, done: () => void): void {
     .toSorted((a, b) => (away.made[b] ?? 0) - (away.made[a] ?? 0))
     .slice(0, 5);
   list(
-    "The depot took in",
-    most.map((k) => thing(itemRef(k), { count: (away.made[k] ?? 0).toLocaleString("en-US") })),
+    counted(
+      "The depot took in",
+      most.map((k) => [itemRef(k), (away.made[k] ?? 0).toLocaleString("en-US")] as const),
+    ),
   );
   if (lines.length === 0) line(icon("heart"), el("span", "k-grow", { text: "Nothing reached the depot." }));
   // What the yard finished while nobody watched, and what the Studies made known: each a thing that
   // says what it unlocked.
-  const finished = goals("Finished", finishedSince(S.world));
-  if (finished) lines.push(el("div", "line", {}, el("hr"), finished.node));
-  const known = goals("Became known", knownSince(S.world));
-  if (known) lines.push(el("div", "line", {}, el("hr"), known.node));
+  list(goals("Finished", finishedSince(S.world)));
+  list(goals("Became known", knownSince(S.world)));
   list(
-    "To hand over",
-    S.world.board.flatMap((o, slot) =>
-      isFilled(o.want, o.filled)
-        ? [thing(orderRef(slot), { note: amount("coin", o.pay.toLocaleString("en-US")) })]
-        : [],
+    counted(
+      "To hand over",
+      S.world.board.flatMap((o, slot) =>
+        isFilled(o.want, o.filled) ? [[orderRef(slot), `${o.pay.toLocaleString("en-US")} Coins`] as const] : [],
+      ),
     ),
   );
   const mostMs = S.world.open.away * TICK_MS;
