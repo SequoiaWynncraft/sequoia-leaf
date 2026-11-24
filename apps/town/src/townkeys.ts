@@ -49,16 +49,16 @@ export function listenKeys(scope: Scope, of: KeysOf): Set<string> {
     unlock();
     // Typed into a field (a tome's reason), a key is a letter, not a step or a press.
     if (of.away() || typing(e)) return;
-    const act = TOWN_KEYS.of(e)?.id;
-    const repeated = heldAgain(e);
-    if (act === "use") return use(e, repeated, of.scene());
-    if (act === undefined || !of.mayAct()) return;
+    const pressed = TOWN_KEYS.of(e);
+    if (pressed?.id === "use") return use(e, heldAgain(e), of.scene());
+    if (pressed === undefined || !of.mayAct()) return;
+    const act = pressed.id;
     // A card that took this Escape (the kit's says so) was the one layer it puts away.
     if (act === "back") {
-      if (!repeated && !e.defaultPrevented && !of.scene().back()) of.settings();
+      if (!pressed.again && !e.defaultPrevented && !of.scene().back()) of.settings();
       return;
     }
-    if (!repeated && of.scene().key(act)) {
+    if (!pressed.again && of.scene().key(act)) {
       e.preventDefault();
       return;
     }

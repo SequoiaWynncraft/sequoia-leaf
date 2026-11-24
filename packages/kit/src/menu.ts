@@ -7,20 +7,22 @@
  * - Sound: the volume, sound on or off, and each kind of sound switched on or off on its own (the
  *   page's own kinds under its name, then those every game shares), each with a button to hear it.
  * - Keys: which keyboard the player has, and what each key does on this page, named as that
- *   keyboard prints it (`keyboard.ts`).
+ *   keyboard prints it (`keyboard.ts`); the player may put another key in any slot but a few
+ *   (`keystab.ts`).
  * - Whatever tabs a page adds of its own (`MenuOf.tabs`).
  *
  * What it changes is the player's settings on this device (`settings.ts`), which every open page
- * follows at once; what the menu shows follows them too, whichever page changed them. A page builds
- * its menu once, at the start (`settingsMenu`).
+ * follows at once; what the menu shows follows them too, whichever page changed them, and so does a
+ * tip that is up, which may name a key. A page builds its menu once, at the start (`settingsMenu`).
  */
 import { dialog } from "./dialog.ts";
 import { el, icon } from "./dom.ts";
-import { keyboard, type KeyList, layoutOf, LAYOUTS, nameOf } from "./keyboard.ts";
+import { type KeyList, nameOf } from "./keyboard.ts";
+import { KeysTab, shelf } from "./keystab.ts";
 import type { Scope } from "./scope.ts";
 import { LOUDEST, type Settings, settings } from "./settings.ts";
 import { sample, sfx, SHARED_SOUNDS, type SoundKind, unlock } from "./sound.ts";
-import { tip } from "./tip.ts";
+import { retip, tip } from "./tip.ts";
 
 /** Kinds of sound under one heading in the menu. */
 export interface SoundShelf {
@@ -104,49 +106,6 @@ function soundRow(kind: SoundKind): [HTMLElement, () => void] {
   return [row, paint];
 }
 
-/** A heading on its brass rule, and the rows under it. */
-const shelf = (name: string, rows: readonly HTMLElement[]): HTMLElement[] => [
-  el("div", "k-label k-settings-shelf", { text: name }),
-  el("ul", "k-settings-list", {}, ...rows),
-];
-
-/** A line of the Keys tab: its keys, as this keyboard names them, and what they do. */
-const keyRow = (line: { readonly does: string; readonly keys: readonly string[] }): HTMLElement =>
-  el(
-    "li",
-    "k-settings-key",
-    {},
-    el("span", "k-settings-caps", {}, ...line.keys.map((k) => el("kbd", "k-cap", { text: k }))),
-    el("span", "k-settings-does", { text: line.does }),
-  );
-
-/** The Keys tab's first row: which keyboard the player has, chosen from a list. Gives back how to show it as it now is. */
-function keyboardRow(): [HTMLElement, () => void] {
-  const pick = el(
-    "select",
-    "k-select",
-    {
-      onchange: () => {
-        const chosen = layoutOf(pick.value);
-        if (chosen) keyboard.choose(chosen);
-      },
-    },
-    ...LAYOUTS.map((l) => el("option", "", { value: l.id, text: l.name })),
-  );
-  const row = el(
-    "label",
-    "k-card k-settings-keyboard",
-    {},
-    el("span", "k-name", { text: "Keyboard" }),
-    el("span", "k-select-box", {}, pick, icon("down")),
-  );
-  const paint = (): void => {
-    pick.value = keyboard.layout;
-  };
-  paint();
-  return [row, paint];
-}
-
 /** The menu as a page has it: its panel over a page made still, its tabs, the tab shown, and what is held while it is open. */
 class SettingsMenu implements Menu {
   readonly #of: MenuOf;
@@ -158,6 +117,7 @@ class SettingsMenu implements Menu {
   readonly #tabs = el("div", "k-tabs", { role: "tablist", "aria-label": "Settings" });
   // The page can take the keyboard, so a tab of nothing to press (Keys) can still be scrolled with it.
   readonly #page = el("div", "k-settings-page k-scroll", { role: "tabpanel", tabindex: "0" });
+  readonly #keys: KeysTab;
   readonly #panel: HTMLElement;
   /** Listeners of the tab shown, let go of as it is drawn again or the menu is put away. */
   readonly #drops: (() => void)[] = [];
@@ -170,9 +130,12 @@ class SettingsMenu implements Menu {
 
   constructor(of: MenuOf, scope: Scope) {
     this.#of = of;
+    this.#keys = new KeysTab(of.keys, () => {
+      this.#cue();
+    });
     this.#tabsOf = [
       { id: "sound", name: "Sound", draw: (keep) => this.#soundPage(keep) },
-      { id: "keys", name: "Keys", draw: (keep) => this.#keysPage(keep) },
+      { id: "keys", name: "Keys", draw: (keep) => this.#keys.draw(keep) },
       ...(of.tabs ?? []),
     ];
     this.#at = "sound";
@@ -183,6 +146,7 @@ class SettingsMenu implements Menu {
       {},
       el("header", "k-head", {}, el("span", "k-settings-mark", {}, icon("gear")), this.#title, shut),
       this.#tabs,
+      this.#keys.line,
       this.#page,
     );
     this.#scrim.append(this.#panel);
@@ -194,6 +158,17 @@ class SettingsMenu implements Menu {
     scope.on(this.#scrim, "pointerdown", (e) => {
       if (e.target === this.#scrim) this.close();
     });
+    // A press anywhere but on the slot waiting for a key stops it waiting, before it does what it does.
+    scope.on(
+      window,
+      "pointerdown",
+      (e) => {
+        this.#keys.pressed(e.target);
+      },
+      { capture: true },
+    );
+    // A tip that is up names its key as it now is.
+    scope.hold(of.keys.listen(retip));
     scope.on(this.#tabs, "keydown", (e) => {
       this.#stepTab(e);
     });
@@ -253,9 +228,14 @@ class SettingsMenu implements Menu {
     this.#panel.classList.remove("k-rise");
     void this.#panel.offsetWidth;
     this.#panel.classList.add("k-rise");
-    this.#put = dialog(this.#panel, this.#title, () => {
-      this.close();
-    });
+    this.#put = dialog(
+      this.#panel,
+      this.#title,
+      () => {
+        this.close();
+      },
+      (e) => this.#keys.take(e),
+    );
     this.#tellGears(true);
     this.#cue();
     sfx.open();
@@ -319,6 +299,7 @@ class SettingsMenu implements Menu {
       ),
     );
     const tab = this.#tabsOf.find((t) => t.id === this.#at) ?? this.#tabsOf[0];
+    this.#keys.line.hidden = tab?.id !== "keys" || !this.#of.keys.changeable;
     this.#page.setAttribute("aria-labelledby", `k-settings-tab-${tab?.id ?? ""}`);
     this.#page.replaceChildren(...(tab?.draw((stop) => this.#drops.push(stop)) ?? []));
   }
@@ -375,20 +356,6 @@ class SettingsMenu implements Menu {
       }),
     );
     return out;
-  }
-
-  /** The Keys tab: the keyboard, then the page's keys as it names them, both as the keyboard now is, whichever page chose it. */
-  #keysPage(keep: (stop: () => void) => void): HTMLElement[] {
-    const [board, paintBoard] = keyboardRow();
-    const lines = el("div", "k-settings-keys");
-    const paint = (): void => {
-      paintBoard();
-      lines.replaceChildren(...this.#of.keys.shelves().flatMap((s) => shelf(s.name, s.lines.map(keyRow))));
-      this.#cue();
-    };
-    paint();
-    keep(keyboard.listen(paint));
-    return [board, lines];
   }
 
   /** The volume: the speaker that turns the sound off and on, the slider, and the level as a number. Gives back how to show it as the settings now are. */

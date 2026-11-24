@@ -1,7 +1,7 @@
 /** What each key does in town, the same on every place of it (`keyboard.ts` in the kit). */
 import { type ActionOf, keymap } from "@sequoia-leaf/kit/keyboard.ts";
 
-export const TOWN_KEYS = keymap({
+export const TOWN_KEYS = keymap("town", {
   up: { shelf: "Walking", does: "Walk up", keys: ["KeyW", "ArrowUp"], held: true },
   left: { shelf: "Walking", does: "Walk left", keys: ["KeyA", "ArrowLeft"], held: true },
   down: { shelf: "Walking", does: "Walk down", keys: ["KeyS", "ArrowDown"], held: true },

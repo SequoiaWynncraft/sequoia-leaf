@@ -202,7 +202,7 @@ async function boot(): Promise<Page | null> {
   initPanels(art);
   initBoard(me.id);
   initCard(art);
-  initHud(startSettings(scope()).gear());
+  initHud(startSettings(scope(), refreshAll).gear());
   initDock(art);
   initInput(canvas);
   panelHooks.handOver = (order): void => {

@@ -379,7 +379,8 @@ export function initInput(canvas: InputSurface): void {
     const act = WORKS_KEYS.of(e);
     // Enter, as Escape does, puts away the letter.
     if (act === undefined && e.key === "Enter") escape(e, true);
-    else if (act !== undefined && (!S.visiting || LOOKS.has(act.id))) DOES[act.id](e, act.nth);
+    // A key held down rotates, removes or picks once: only moving the view, zooming and undoing go on.
+    else if (act !== undefined && !act.again && (!S.visiting || LOOKS.has(act.id))) DOES[act.id](e, act.nth);
   });
   window.addEventListener("keyup", (e) => {
     held.delete(placeOf(e));

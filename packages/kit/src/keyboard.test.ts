@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
   bindName,
+  caught,
+  fixedKeymap,
   keyboard,
   keymap,
   type Layout,
@@ -11,8 +13,9 @@ import {
   type Place,
   placeOf,
 } from "./keyboard.ts";
+import { noKeysHeld } from "./keys.ts";
 import { scope } from "./scope.ts";
-import { SETTING_KEYS, settings } from "./settings.ts";
+import { keysKey, SETTING_KEYS, settings } from "./settings.ts";
 import { type Standin, standin } from "./standin.ts";
 
 let world: Standin | null = null;
@@ -20,6 +23,7 @@ beforeEach(() => {
   world = standin({});
   settings.reread();
   keyboard.found(null);
+  noKeysHeld();
 });
 afterEach(() => {
   world?.done();
@@ -29,13 +33,14 @@ afterEach(() => {
 });
 
 /** A key going down as a keyboard sends it: its place, what it types, and the keys held with it. */
-const press = (code: string, key: string, held: "shift" | "ctrl" | "meta" | "alt" | null = null) => ({
+const press = (code: string, key: string, held: "shift" | "ctrl" | "meta" | "alt" | null = null, repeat = false) => ({
   code,
   key,
   shiftKey: held === "shift",
   ctrlKey: held === "ctrl",
   metaKey: held === "meta",
   altKey: held === "alt",
+  repeat,
 });
 
 const isLetterPlace = (p: string): p is Place => /^Key[A-Z]$/.test(p);
@@ -87,11 +92,50 @@ describe("the layouts", () => {
     ]);
   });
 
-  test("each prints at every place it names, and no letter twice", () => {
-    for (const { prints } of LAYOUTS) {
-      expect(prints.length).toBe(28);
-      const letters = prints.split("").filter((c) => /^[A-Z]$/.test(c));
-      expect(new Set(letters).size).toBe(letters.length);
+  test("name every key of the main block as XKB has it printed", () => {
+    const block: Place[] = [
+      "Backquote",
+      "BracketLeft",
+      "BracketRight",
+      "Semicolon",
+      "Quote",
+      "Backslash",
+      "IntlBackslash",
+      "Comma",
+      "Period",
+      "Slash",
+    ];
+    expect(named(block, "qwerty")).toEqual([
+      "Backtick",
+      "[",
+      "]",
+      "Semicolon",
+      "Quote",
+      "\\",
+      "<",
+      "Comma",
+      "Period",
+      "/",
+    ]);
+    expect(named(block, "qwertz")).toEqual(["^", "Ü", "+", "Ö", "Ä", "Hash", "<", "Comma", "Period", "-"]);
+    // AZERTY's M, and its marks along the bottom row.
+    expect(named(block, "azerty")).toEqual(["²", "^", "$", "M", "ù", "*", "<", "Semicolon", "Colon", "!"]);
+    // Dvorak's S, W, V and Z.
+    expect(named(block, "dvorak")).toEqual(["Backtick", "/", "=", "S", "-", "\\", "<", "W", "V", "Z"]);
+    // Colemak's and Workman's O and I, where QWERTY has its semicolon.
+    expect([nameOf("Semicolon", "colemak"), nameOf("KeyP", "colemak"), nameOf("Semicolon", "workman")]).toEqual([
+      "O",
+      "Semicolon",
+      "I",
+    ]);
+  });
+
+  test("each prints at every key of the main block, and no letter on two letter keys", () => {
+    for (const { id, prints } of LAYOUTS) {
+      expect(prints.map((row) => row.length)).toEqual([3, 12, 12, 11]);
+      // The key beside the left Shift may print a letter another key does too (Colemak-DH's Z, for keyboards without that key).
+      const onLetters = LETTERS.map((place) => nameOf(place, id)).filter((c) => /^[A-Z]$/.test(c));
+      expect(new Set(onLetters).size).toBe(onLetters.length);
     }
   });
 
@@ -107,7 +151,7 @@ describe("the layouts", () => {
 describe("the browser's word", () => {
   test("is matched to the layout of the list whose letters its keyboard prints", () => {
     for (const { id } of LAYOUTS) expect(layoutOfMap(mapOf(id))).toBe(id);
-    // As Chromium says a French keyboard, with its number row and the letter beside L: only the letters count.
+    // As Chromium says a French keyboard, with its number row and the letter beside L: only the letter keys count.
     const french = new Map([...mapOf("azerty"), ["Digit1", "&"], ["Semicolon", "m"], ["Minus", ")"]]);
     expect(layoutOfMap(french)).toBe("azerty");
     // A British keyboard prints its own signs, and QWERTY's letters.
@@ -120,6 +164,35 @@ describe("the browser's word", () => {
     expect(layoutOfMap(new Map([...mapOf("qwerty"), ["KeyQ", "f"], ["KeyW", "g"]]))).toBeNull();
   });
 });
+
+/** The browser's `storage` event, which another page's change raises on this one. */
+class Kept extends Event {
+  readonly key: string | null;
+  constructor(key: string | null) {
+    super("storage");
+    this.key = key;
+  }
+}
+
+/** A page that follows the settings other pages change, for the time of `fn`: it is given how another page keeps a text. */
+function following(fn: (elsewhere: (key: string, text: string | null) => void) => void): void {
+  const page = new EventTarget();
+  Object.defineProperty(globalThis, "window", { value: page, configurable: true });
+  Object.defineProperty(globalThis, "StorageEvent", { value: Kept, configurable: true });
+  const s = scope();
+  try {
+    settings.follow(s);
+    fn((key, text) => {
+      if (text === null) world?.store.removeItem(key);
+      else world?.store.setItem(key, text);
+      page.dispatchEvent(new Kept(key));
+    });
+  } finally {
+    s.close();
+    Reflect.deleteProperty(globalThis, "window");
+    Reflect.deleteProperty(globalThis, "StorageEvent");
+  }
+}
 
 describe("the layout keys are named by", () => {
   test("is QWERTY with no choice and no word from the browser; the browser's word, once said", () => {
@@ -137,32 +210,14 @@ describe("the layout keys are named by", () => {
   });
 
   test("follows a choice made on another page, told once to whoever listens", () => {
-    // The browser's `storage` event, which another page's change raises on this one.
-    class Kept extends Event {
-      readonly key: string | null;
-      constructor(key: string | null) {
-        super("storage");
-        this.key = key;
-      }
-    }
-    const page = new EventTarget();
-    Object.defineProperty(globalThis, "window", { value: page, configurable: true });
-    Object.defineProperty(globalThis, "StorageEvent", { value: Kept, configurable: true });
-    const s = scope();
-    try {
-      settings.follow(s);
+    following((elsewhere) => {
       const told: string[] = [];
       const stop = keyboard.listen(() => told.push(keyboard.layout));
-      world?.store.setItem(SETTING_KEYS.keyboard, "workman");
-      page.dispatchEvent(new Kept(SETTING_KEYS.keyboard));
-      page.dispatchEvent(new Kept(SETTING_KEYS.keyboard));
+      elsewhere(SETTING_KEYS.keyboard, "workman");
+      elsewhere(SETTING_KEYS.keyboard, "workman");
       stop();
       expect(told).toEqual(["workman"]);
-    } finally {
-      s.close();
-      Reflect.deleteProperty(globalThis, "window");
-      Reflect.deleteProperty(globalThis, "StorageEvent");
-    }
+    });
   });
 
   test("is QWERTY, or the browser's word, where what is kept names no layout", () => {
@@ -172,19 +227,35 @@ describe("the layout keys are named by", () => {
   });
 });
 
-describe("a keymap", () => {
-  const keys = keymap({
+/** A keymap as a game has one, its changes kept under `game`. */
+const gameKeys = (game: string) =>
+  keymap(game, {
     left: { shelf: "Walking", does: "Walk left", keys: ["KeyA", "ArrowLeft"], held: true },
     tool: { shelf: "Building", does: "Pick a tool", keys: ["Digit1", "Digit2", "Minus"] },
-    zoomOut: { shelf: "Looking", does: "Zoom out", keys: ["Shift+Minus"] },
-    undo: { shelf: "Building", does: "Undo", keys: ["Ctrl+z", "KeyZ"] },
+    rotate: { shelf: "Building", does: "Rotate", keys: ["KeyR"] },
+    zoomOut: { shelf: "Looking", does: "Zoom out", keys: ["Shift+Minus"], repeats: true },
+    undo: { shelf: "Building", does: "Undo", keys: ["Ctrl+z", "KeyZ"], repeats: true },
+    back: { shelf: "Building", does: "Put away", keys: ["Escape"] },
   });
 
+/** What a key is for, without whether it is held down said again. */
+const forKey = (keys: ReturnType<typeof gameKeys>, e: ReturnType<typeof press>) => {
+  const at = keys.of(e);
+  noKeysHeld();
+  return at && { id: at.id, nth: at.nth };
+};
+
+/** The caps of a line of the Keys tab, named so; `fixed` says which cannot be changed. */
+const caps = (names: readonly (string | null)[], fixed: readonly boolean[] = []) =>
+  names.map((name, nth) => ({ nth, name, fixed: fixed[nth] ?? false }));
+
+describe("a keymap", () => {
   test("finds what a key is for by its place, whatever it types", () => {
+    const keys = gameKeys("finds");
     // AZERTY's Q, where QWERTY has A: it walks left. Its A, where QWERTY has Q, is for nothing here.
-    expect(keys.of(press("KeyA", "q"))).toEqual({ id: "left", nth: 0 });
-    expect(keys.of(press("KeyQ", "a"))).toBeUndefined();
-    expect(keys.of(press("Digit2", "é"))).toEqual({ id: "tool", nth: 1 });
+    expect(forKey(keys, press("KeyA", "q"))).toEqual({ id: "left", nth: 0 });
+    expect(forKey(keys, press("KeyQ", "a"))).toBeUndefined();
+    expect(forKey(keys, press("Digit2", "é"))).toEqual({ id: "tool", nth: 1 });
     // The number pad's digits are the number row's.
     expect([
       placeOf({ code: "Numpad2", key: "2" }),
@@ -193,24 +264,27 @@ describe("a keymap", () => {
       placeOf({ code: "Numpad4", key: "ArrowLeft" }),
       placeOf({ code: "KeyQ", key: "a" }),
     ]).toEqual(["Digit2", "Enter", "ArrowLeft", "KeyQ"]);
-    expect(keys.of(press("Numpad1", "1"))).toEqual({ id: "tool", nth: 0 });
+    expect(forKey(keys, press("Numpad1", "1"))).toEqual({ id: "tool", nth: 0 });
   });
 
   test("with Shift, takes the place's key with Shift where it has one, else the key without", () => {
-    expect(keys.of(press("Minus", "_", "shift"))).toEqual({ id: "zoomOut", nth: 0 });
-    expect(keys.of(press("Minus", "-"))).toEqual({ id: "tool", nth: 2 });
-    expect(keys.of(press("KeyA", "A", "shift"))).toEqual({ id: "left", nth: 0 });
+    const keys = gameKeys("shift");
+    expect(forKey(keys, press("Minus", "_", "shift"))).toEqual({ id: "zoomOut", nth: 0 });
+    expect(forKey(keys, press("Minus", "-"))).toEqual({ id: "tool", nth: 2 });
+    expect(forKey(keys, press("KeyA", "A", "shift"))).toEqual({ id: "left", nth: 0 });
   });
 
   test("with Ctrl or ⌘ goes by the letter typed; with Alt, it is for nothing", () => {
+    const keys = gameKeys("ctrl");
     // AZERTY's Z is where QWERTY has W.
-    expect(keys.of(press("KeyW", "z", "ctrl"))).toEqual({ id: "undo", nth: 0 });
-    expect(keys.of(press("KeyZ", "z", "meta"))).toEqual({ id: "undo", nth: 0 });
-    expect(keys.of(press("KeyA", "a", "ctrl"))).toBeUndefined();
-    expect(keys.of(press("KeyA", "a", "alt"))).toBeUndefined();
+    expect(forKey(keys, press("KeyW", "z", "ctrl"))).toEqual({ id: "undo", nth: 0 });
+    expect(forKey(keys, press("KeyZ", "z", "meta"))).toEqual({ id: "undo", nth: 0 });
+    expect(forKey(keys, press("KeyA", "a", "ctrl"))).toBeUndefined();
+    expect(forKey(keys, press("KeyA", "a", "alt"))).toBeUndefined();
   });
 
   test("says which held actions are down, from the places held", () => {
+    const keys = gameKeys("held");
     expect([keys.isDown(new Set(["ArrowLeft"]), "left"), keys.isDown(new Set(["KeyQ"]), "left")]).toEqual([
       true,
       false,
@@ -218,28 +292,245 @@ describe("a keymap", () => {
   });
 
   test("names its keys, and draws its Keys tab, for the keyboard the player has", () => {
+    const keys = gameKeys("names");
     expect([keys.name("left"), keys.names("tool")]).toEqual(["A", ["1", "2", "-"]]);
     keyboard.choose("azerty");
-    expect([keys.name("left"), keys.name("zoomOut"), keys.name("undo")]).toEqual(["Q", "Shift+)", "Ctrl+Z"]);
+    expect([keys.name("left"), keys.name("zoomOut"), keys.name("undo"), keys.titled("Rotate", "rotate")]).toEqual([
+      "Q",
+      "Shift+)",
+      "Ctrl+Z",
+      "Rotate (R)",
+    ]);
     expect(keys.shelves()).toEqual([
-      { name: "Walking", lines: [{ does: "Walk left", keys: ["Q", "Left"] }] },
+      { name: "Walking", lines: [{ id: "left", does: "Walk left", caps: caps(["Q", "Left"]), changed: false }] },
       {
         name: "Building",
         lines: [
-          { does: "Pick a tool", keys: ["1", "2", ")"] },
-          { does: "Undo", keys: ["Ctrl+Z", "W"] },
+          { id: "tool", does: "Pick a tool", caps: caps(["1", "2", ")"]), changed: false },
+          { id: "rotate", does: "Rotate", caps: caps(["R"]), changed: false },
+          { id: "undo", does: "Undo", caps: caps(["Ctrl+Z", "W"], [true, false]), changed: false },
+          { id: "back", does: "Put away", caps: caps(["Esc"], [true]), changed: false },
         ],
       },
-      { name: "Looking", lines: [{ does: "Zoom out", keys: ["Shift+)"] }] },
+      { name: "Looking", lines: [{ id: "zoomOut", does: "Zoom out", caps: caps(["Shift+)"]), changed: false }] },
     ]);
   });
 
   test("tells which keys two of its actions share", () => {
-    expect(keys.shared()).toEqual([]);
-    const twice = keymap({
+    expect(gameKeys("shared").shared()).toEqual([]);
+    const twice = fixedKeymap({
       walk: { shelf: "", does: "", keys: ["KeyD"] },
       drop: { shelf: "", does: "", keys: ["Shift+KeyD", "KeyD"] },
     });
     expect(twice.shared()).toEqual(["KeyD"]);
+  });
+
+  test("held down, does again only what goes on while held: moving, and what repeats", () => {
+    const keys = gameKeys("again");
+    const again = (code: string, key: string, held: "shift" | "ctrl" | null = null): boolean[] => {
+      noKeysHeld();
+      // As the browser says it: once, then again with its word that it is a repeat; a browser that does not say so, again.
+      const said = [press(code, key, held), press(code, key, held, true), press(code, key, held)];
+      return said.map((e) => keys.of(e)?.again ?? false);
+    };
+    expect(again("KeyR", "r")).toEqual([false, true, true]);
+    expect(again("Digit1", "1")).toEqual([false, true, true]);
+    expect(again("KeyA", "a")).toEqual([false, false, false]);
+    expect(again("Minus", "_", "shift")).toEqual([false, false, false]);
+    expect(again("KeyZ", "z", "ctrl")).toEqual([false, false, false]);
+  });
+});
+
+/** A page opened with `text` kept for its keys: what it reads of some of them, and the keys it has twice. */
+function keptAs(text: string) {
+  world?.store.setItem(keysKey("read"), text);
+  settings.reread();
+  const keys = gameKeys("read");
+  return [keys.keysOf("left"), keys.keysOf("undo"), keys.keysOf("back"), keys.shared()];
+}
+
+describe("a keymap the player changes", () => {
+  test("puts a key where the player says, taking it from the slot it was in, which is left empty", () => {
+    const keys = gameKeys("put");
+    expect(keys.put("rotate", 0, "KeyA")).toEqual([{ bind: "KeyA", from: "Walk left" }]);
+    expect([keys.keysOf("rotate"), keys.keysOf("left"), keys.name("left")]).toEqual([
+      ["KeyA"],
+      [null, "ArrowLeft"],
+      "Left",
+    ]);
+    expect(forKey(keys, press("KeyA", "a"))).toEqual({ id: "rotate", nth: 0 });
+    expect(forKey(keys, press("KeyR", "r"))).toBeUndefined();
+    // From another slot of the same action, the same.
+    expect(keys.put("left", 0, "ArrowLeft")).toEqual([{ bind: "ArrowLeft", from: "Walk left" }]);
+    expect([keys.keysOf("left"), keys.name("left"), keys.shared()]).toEqual([["ArrowLeft", null], "Left", []]);
+    // A slot keeps its place when another of the action's is empty: the third tool is still the third.
+    expect(keys.put("left", 1, "Digit2")).toEqual([{ bind: "Digit2", from: "Pick a tool" }]);
+    expect([keys.names("tool"), forKey(keys, press("Minus", "-"))]).toEqual([["1", null, "-"], { id: "tool", nth: 2 }]);
+    // A key from nowhere takes nothing from anyone.
+    expect(keys.put("tool", 1, "KeyY")).toEqual([]);
+    // An action with no key at all says so in its line, and names none.
+    keys.put("tool", 0, "KeyA");
+    expect([keys.name("rotate"), keys.titled("Rotate", "rotate"), keys.names("rotate")]).toEqual([
+      null,
+      "Rotate",
+      [null],
+    ]);
+  });
+
+  test("never changes Escape, Ctrl with a letter, or a keymap of the browser's own; and keys walking without Shift", () => {
+    const keys = gameKeys("fixed");
+    expect([keys.put("back", 0, "KeyB"), keys.put("undo", 0, "KeyQ"), keys.put("rotate", 0, "Escape")]).toEqual([
+      [],
+      [],
+      [],
+    ]);
+    expect([keys.put("rotate", 0, "Tab"), keys.put("rotate", 0, "Ctrl+a"), keys.put("nothing", 0, "KeyQ")]).toEqual([
+      [],
+      [],
+      [],
+    ]);
+    expect([keys.keysOf("back"), keys.keysOf("undo"), keys.keysOf("rotate")]).toEqual([
+      ["Escape"],
+      ["Ctrl+z", "KeyZ"],
+      ["KeyR"],
+    ]);
+    keys.put("left", 0, "Shift+KeyI");
+    expect(keys.keysOf("left")).toEqual(["KeyI", "ArrowLeft"]);
+    const table = fixedKeymap({ back: { shelf: "", does: "Back", keys: ["Tab", "ArrowLeft"] } });
+    expect([table.changeable, table.put("back", 1, "KeyQ"), table.keysOf("back")]).toEqual([
+      false,
+      [],
+      ["Tab", "ArrowLeft"],
+    ]);
+  });
+
+  test("keeps only the actions changed, each whole, and nothing once all are reset", () => {
+    const keys = gameKeys("keep");
+    keys.put("rotate", 0, "KeyA");
+    expect(JSON.parse(world?.store.getItem(keysKey("keep")) ?? "null")).toEqual({
+      left: [null, "ArrowLeft"],
+      rotate: ["KeyA"],
+    });
+    // A line reset takes its keys back from wherever they went.
+    expect(keys.reset("left")).toEqual([{ bind: "KeyA", from: "Rotate" }]);
+    expect([keys.keysOf("left"), keys.keysOf("rotate")]).toEqual([["KeyA", "ArrowLeft"], [null]]);
+    keys.put("tool", 2, "KeyQ");
+    keys.resetAll();
+    expect([world?.store.getItem(keysKey("keep")), keys.keysOf("rotate"), keys.keysOf("tool")]).toEqual([
+      null,
+      ["KeyR"],
+      ["Digit1", "Digit2", "Minus"],
+    ]);
+  });
+
+  test("reads what is kept as its own, letting go of anything else, and never throws", () => {
+    const plain: ReturnType<typeof keptAs> = [["KeyA", "ArrowLeft"], ["Ctrl+z", "KeyZ"], ["Escape"], []];
+    for (const junk of ["not json", "[]", "7", "null", '{"nope":["KeyA"]}', '{"left":["KeyA"]}', '{"left":"KeyA"}'])
+      expect(keptAs(junk)).toEqual(plain);
+    // A slot holding what is not a key, or a key it may not have, keeps the game's; a slot that cannot change keeps its own.
+    expect(keptAs('{"left":[5,"Ctrl+a"],"undo":["KeyQ","Shift+KeyZ"],"back":["KeyB"]}')).toEqual([
+      ["KeyA", "ArrowLeft"],
+      ["Ctrl+z", "Shift+KeyZ"],
+      ["Escape"],
+      [],
+    ]);
+    expect(keptAs('{"left":[null,"Shift+KeyL"]}')).toEqual([[null, "KeyL"], ["Ctrl+z", "KeyZ"], ["Escape"], []]);
+  });
+
+  test("on loading, gives the player's keys first: a game's key the player put elsewhere leaves its own slot empty", () => {
+    // Kept before the game gave Rotate's key, R, to anything: the player had put R on the first tool.
+    world?.store.setItem(keysKey("load"), JSON.stringify({ tool: ["KeyR", "Digit2", "Minus"] }));
+    settings.reread();
+    const keys = gameKeys("load");
+    expect([keys.keysOf("tool"), keys.keysOf("rotate"), keys.shared()]).toEqual([
+      ["KeyR", "Digit2", "Minus"],
+      [null],
+      [],
+    ]);
+    // Something broken kept a key twice: the first slot in the keymap's order has it.
+    world?.store.setItem(keysKey("twice"), JSON.stringify({ rotate: ["KeyQ"], left: ["KeyQ", "ArrowLeft"] }));
+    settings.reread();
+    const twice = gameKeys("twice");
+    expect([twice.keysOf("left"), twice.keysOf("rotate"), twice.shared()]).toEqual([["KeyQ", "ArrowLeft"], [null], []]);
+  });
+
+  test("never has a key in two slots, whatever the player does, and reads back as it was left", () => {
+    const keys = gameKeys("loop");
+    const ids = ["left", "tool", "rotate", "zoomOut", "undo", "back"] as const;
+    const binds = [
+      "KeyA",
+      "KeyQ",
+      "KeyR",
+      "Digit1",
+      "Digit2",
+      "Minus",
+      "Shift+Minus",
+      "ArrowLeft",
+      "KeyZ",
+      "Enter",
+    ] as const;
+    // A small generator of its own, so that every run is the same run.
+    let seed = 7;
+    const next = (n: number): number => {
+      seed = (seed * 1103515245 + 12345) % 2 ** 31;
+      return seed % n;
+    };
+    for (let step = 0; step < 600; step++) {
+      const id = ids[next(ids.length)] ?? "left";
+      const roll = next(20);
+      if (roll === 0) keys.resetAll();
+      else if (roll < 3) keys.reset(id);
+      else keys.put(id, next(3), binds[next(binds.length)] ?? "KeyA");
+      expect(keys.shared()).toEqual([]);
+    }
+    // A page opened now reads the same keys.
+    const again = gameKeys("loop");
+    expect(ids.map((id) => again.keysOf(id))).toEqual(ids.map((id) => keys.keysOf(id)));
+  });
+
+  test("follows the keys another page changes, and its keyboard, telling whoever listens", () => {
+    const keys = gameKeys("follow");
+    following((elsewhere) => {
+      const told: (string | null)[] = [];
+      const stop = keys.listen(() => told.push(keys.name("rotate")));
+      elsewhere(keysKey("follow"), JSON.stringify({ rotate: ["KeyY"] }));
+      expect([keys.name("rotate"), keys.titled("Rotate", "rotate")]).toEqual(["Y", "Rotate (Y)"]);
+      elsewhere(SETTING_KEYS.keyboard, "qwertz");
+      expect(keys.name("rotate")).toBe("Z");
+      // Another game's keys are not this one's.
+      elsewhere(keysKey("elsewhere"), JSON.stringify({ rotate: ["KeyU"] }));
+      elsewhere(keysKey("follow"), null);
+      stop();
+      expect([told, keys.name("rotate")]).toEqual([["Y", "Z", "R"], "R"]);
+    });
+  });
+});
+
+describe("a key pressed for a slot waiting for one", () => {
+  test("is the key, with Shift as pressed; Escape keeps the slot's; Shift alone waits; Tab and Ctrl, Alt or ⌘ with a key cannot be used", () => {
+    expect([caught(press("KeyI", "i")), caught(press("KeyI", "I", "shift")), caught(press("Numpad3", "3"))]).toEqual([
+      { is: "key", bind: "KeyI" },
+      { is: "key", bind: "Shift+KeyI" },
+      { is: "key", bind: "Digit3" },
+    ]);
+    expect([caught(press("Escape", "Escape")), caught(press("Escape", "Escape", "shift"))]).toEqual([
+      { is: "keep" },
+      { is: "keep" },
+    ]);
+    expect([caught(press("ShiftLeft", "Shift", "shift")), caught(press("ControlRight", "Control", "ctrl"))]).toEqual([
+      { is: "wait" },
+      { is: "wait" },
+    ]);
+    expect([
+      caught(press("Tab", "Tab")),
+      caught(press("KeyS", "s", "ctrl")),
+      caught(press("KeyS", "s", "alt")),
+      caught(press("F5", "F5")),
+    ]).toEqual([
+      { is: "refused", name: "Tab" },
+      { is: "refused", name: "Ctrl+S" },
+      { is: "refused", name: "Alt+S" },
+      { is: "refused", name: "F5" },
+    ]);
   });
 });

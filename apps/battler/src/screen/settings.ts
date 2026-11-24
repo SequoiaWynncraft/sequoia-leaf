@@ -2,7 +2,6 @@
  * The table's settings menu (`menu.ts` in the kit): the table's own kinds of sound, and its keys.
  * The table is played with the pointer and a finger, so its keys are few.
  */
-import { heldAgain } from "@sequoia-leaf/kit/keys.ts";
 import { type Menu, settingsMenu } from "@sequoia-leaf/kit/menu.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 
@@ -32,7 +31,8 @@ export function startSettings(scope: Scope, lookBack: () => void): Menu {
   );
   handHooks.paused = () => menu.isOpen;
   scope.on(window, "keydown", (e) => {
-    if (RAID_KEYS.of(e)?.id !== "back" || e.defaultPrevented || menu.isOpen || heldAgain(e)) return;
+    const pressed = RAID_KEYS.of(e);
+    if (pressed?.id !== "back" || pressed.again || e.defaultPrevented || menu.isOpen) return;
     if (pageOver()) showPage(null);
     else if (sheetUp() === "again") lookBack();
     else if (!letGoHand()) menu.open();

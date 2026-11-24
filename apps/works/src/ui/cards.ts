@@ -190,10 +190,10 @@ export interface StandingPrint extends SorterPrint {
   /** For the depot: the tier whose screen is there, or nothing. */
   readonly tier: number | null;
   /**
-   * What the keys of its buttons are called on the player's keyboard (`keymap.ts`): Another's only
-   * where it can be picked up as the tool in hand.
+   * The tips of its buttons, each with its key as the player's keyboard calls it where it has one
+   * (`keymap.ts`): Another's only where it can be picked up as the tool in hand.
    */
-  readonly keys: { readonly rotate: string; readonly flip: string; readonly another: string | null };
+  readonly hints: { readonly rotate: string; readonly flip: string; readonly another: string | null };
   /** Whether it can be taken up to move: once Select is open. */
   readonly move: boolean;
   /** What taking it away gives back, and whether it was one of the pieces to hand. */
@@ -435,7 +435,7 @@ const pressWay = (p: StandingPrint, hands: Hands): ((way: number) => void) | nul
 /** What takes a standing piece up: as the tool in hand, facing the same way (Another), or itself, to set down elsewhere (Move). */
 function takeUp(p: StandingPrint, hands: Hands): Action[] {
   const { x, y } = p;
-  const another = p.keys.another;
+  const another = p.hints.another;
   const name = nameOf(p.machine.kind).toLowerCase();
   return [
     ...(another === null
@@ -443,7 +443,7 @@ function takeUp(p: StandingPrint, hands: Hands): Action[] {
       : [
           {
             label: "Another",
-            hint: `Another (${another})`,
+            hint: another,
             about: `Picks the ${name} as your tool, facing the same way.`,
             on: () => hands.another(x, y),
           },
@@ -551,8 +551,8 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
       });
     // What takes things in from every side and hands none on has no way to face.
     if (k !== TUNNEL && k !== PYLON && k !== WHEEL && k !== BOILER && k !== STUDY && k !== STOP)
-      actions.push({ label: "Rotate", hint: `Rotate (${p.keys.rotate})`, on: () => hands.turn(x, y) });
-    if (k === SORTER) actions.push({ label: "Flip", hint: `Flip (${p.keys.flip})`, on: () => hands.flip(x, y) });
+      actions.push({ label: "Rotate", hint: p.hints.rotate, on: () => hands.turn(x, y) });
+    if (k === SORTER) actions.push({ label: "Flip", hint: p.hints.flip, on: () => hands.flip(x, y) });
     actions.push(...takeUp(p, hands));
     actions.push({
       label: "Remove",

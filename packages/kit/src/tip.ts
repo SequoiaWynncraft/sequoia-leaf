@@ -27,6 +27,8 @@ const ID = "k-tip";
 
 let box: HTMLElement | null = null;
 let owner: object | null = null;
+/** How each element given a tip (`tip`) shows it again, with its words as they are now. */
+const shows = new WeakMap<object, () => void>();
 /** The tip was shown for the keyboard's focus, so where the mouse goes does not matter to it. */
 let byKey = false;
 let hideAt = 0;
@@ -115,6 +117,19 @@ if (typeof window !== "undefined") {
 export const tipOwner = (): object | null => owner;
 
 /**
+ * Says the tip that is up again, with its words as they are now: a key it names has changed, or
+ * what the keyboard calls it. It stays as it was shown, for the keyboard's focus or a finger.
+ */
+export function retip(): void {
+  const show = owner === null ? undefined : shows.get(owner);
+  if (!show || (owner instanceof Element && !owner.isConnected)) return;
+  const [key, hide] = [byKey, hideAt];
+  show();
+  byKey = key;
+  hideAt = hide;
+}
+
+/**
  * Gives an element a tip. `title` is the thing's name and `text` a line about it; either may be a
  * function, asked each time the tip shows.
  */
@@ -143,6 +158,7 @@ export function tip(target: HTMLElement, title: Words, text?: Words): void {
     const r = target.getBoundingClientRect();
     tipAt({ x: r.left, y: r.top, w: r.width, h: r.height }, said(title), said(text), target);
   };
+  shows.set(target, beside);
   const toggle = (): void => {
     if (owner === target) tipOff(target);
     else beside();

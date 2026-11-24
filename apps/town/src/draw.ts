@@ -512,7 +512,8 @@ export function drawWords(ctx: Ctx, px: number, people: readonly Actor[]): void 
 
   // The soft prompt by a place the member is standing at. Names and speech keep clear of it.
   const pl = show.promptT > 0.02 ? show.prompt : null;
-  const key = show.touch ? "Tap" : TOWN_KEYS.name("use");
+  // With no key to use things, only what it is.
+  const key = show.touch ? "Tap" : (TOWN_KEYS.name("use") ?? "");
   const sign: Box | null = pl
     ? (() => {
         const size = promptSize(ctx, key, pl.name, px);
