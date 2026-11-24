@@ -8,8 +8,8 @@
 
 import { at, BELT } from "@sequoia-leaf/factory";
 import { pick, point, shown, surface } from "@sequoia-leaf/kit/card.ts";
+import { LONG_PRESS } from "@sequoia-leaf/kit/press.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
-import { LONG_PRESS } from "@sequoia-leaf/kit/tip.ts";
 
 import { pan, zoom } from "./camera.ts";
 import { callerAt } from "./events.ts";

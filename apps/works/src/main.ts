@@ -22,6 +22,7 @@ import type { Trouble } from "@sequoia-leaf/kit/play.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
 import { failedToOpen, watchPage } from "@sequoia-leaf/kit/report.ts";
+import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { must, type Pt } from "@sequoia-leaf/kit/util.ts";
@@ -43,7 +44,7 @@ import { initBoard } from "./ui/board.ts";
 import { followCards, initCard, refreshCard } from "./ui/card.ts";
 import { initDock, refreshDock } from "./ui/dock.ts";
 import { initHud, myYard, refreshHud } from "./ui/hud.ts";
-import { putAway, reading, showLetter } from "./ui/letter.ts";
+import { letters } from "./ui/letter.ts";
 import { feed, initNotes, tickNotes } from "./ui/notes.ts";
 import { initPanels, panelHooks, refreshPanel } from "./ui/panels.ts";
 import { $ } from "./ui/parts.ts";
@@ -210,7 +211,8 @@ async function boot(): Promise<Page | null> {
     handOver(order);
     refreshAll();
   };
-  inputHooks.letter = putAway;
+  const letter = letters(scope());
+  inputHooks.letter = () => letter.putAway();
   // The yard's sheet goes to a place at once, so that a card can sit beside the piece there.
   viewHooks.look = (x, y): void => look(x, y, true);
   followCards(pan);
@@ -265,7 +267,7 @@ async function boot(): Promise<Page | null> {
     nudgeAt = S.t + 0.4;
     const step = stepLessons(lessons, S.world, new Set(screen.taught), {
       t: S.t,
-      hidden: reading() || S.visiting !== null,
+      hidden: letter.reading() || S.visiting !== null,
       finger: S.finger,
       looking: { picked: S.picked, hand: builds(S.tool) ? S.tool : null },
     });
@@ -291,7 +293,7 @@ async function boot(): Promise<Page | null> {
       // What reached the depot is counted from its books, a row each second of the yard's clock.
       noteArrivals(S.world);
       // Leaf worked the yard on while nobody watched: its letter says what it did, to its owner.
-      if (S.world.away && !reading() && !S.visiting) showLetter(S.world.away, refreshAll);
+      if (S.world.away && !letter.reading() && !S.visiting) letter.show(S.world.away, refreshAll);
       // What a visited yard does is its owner's news: the visitor's purse and town are not told.
       if (news.length > 0 && !S.visiting) {
         onNews(news);

@@ -9,6 +9,8 @@
  */
 import { givingBack } from "./dialog.ts";
 import { add, el } from "./dom.ts";
+import { longPress } from "./press.ts";
+import { scope } from "./scope.ts";
 
 type Words = string | (() => string);
 
@@ -20,8 +22,6 @@ export interface TipSpot {
   readonly h: number;
 }
 
-/** How long a finger must rest before its tip shows. */
-export const LONG_PRESS = 450;
 /** The one tip's id, by which its owner is described while it shows. */
 const ID = "k-tip";
 
@@ -147,8 +147,6 @@ export function tip(target: HTMLElement, title: Words, text?: Words): void {
     if (owner === target) tipOff(target);
     else beside();
   };
-  let press = 0;
-  let swallow = false;
   let finger = false;
   target.addEventListener("pointerenter", (e) => {
     if (e.pointerType === "mouse") beside();
@@ -166,33 +164,26 @@ export function tip(target: HTMLElement, title: Words, text?: Words): void {
   });
   target.addEventListener("pointerdown", (e) => {
     finger = e.pointerType !== "mouse";
-    if (!finger) {
-      tipOff(target);
-      return;
-    }
-    swallow = false;
-    window.clearTimeout(press);
-    if (!acts) return;
-    press = window.setTimeout(() => {
-      swallow = true;
+    if (!finger) tipOff(target);
+  });
+  // A finger asks about a thing that acts by resting on it, and the tip goes by itself. Each press,
+  // and the wait for the tip to go, are held in a scope of the thing's own, which goes with it.
+  const own = scope();
+  const asked = longPress(own, target, {
+    starts: (e) => e.pointerType !== "mouse" && acts,
+    asked: () => {
       beside();
       hideAt = performance.now() + 2200;
-      window.setTimeout(() => {
+      own.after(2250, () => {
         if (hideAt > 0 && performance.now() >= hideAt) tipOff(target);
-      }, 2250);
-    }, LONG_PRESS);
+      });
+    },
   });
-  const lift = (): void => {
-    window.clearTimeout(press);
-  };
-  target.addEventListener("pointerup", lift);
-  target.addEventListener("pointercancel", lift);
   target.addEventListener(
     "click",
     (e) => {
       // The tap that ends a long press was asking what the thing is, not using it.
-      if (swallow) {
-        swallow = false;
+      if (asked(e)) {
         e.stopPropagation();
         e.preventDefault();
       } else if (!acts && finger) toggle();

@@ -7,6 +7,7 @@
 
 import { ALL_ITEMS, type Away, finishedSince, isFilled, knownSince, TICK_MS } from "@sequoia-leaf/factory";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
+import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
 import { yardSfx } from "../sound.ts";
@@ -27,19 +28,62 @@ function span(seconds: number): string {
   return hours && minutes ? `${hours} and ${minutes}` : hours || minutes;
 }
 
-let put: (() => void) | null = null;
+/** Where the letter is: put away; up and being read; or going, its paper fading. */
+type Letter =
+  | { readonly at: "hidden" }
+  | { readonly at: "reading"; readonly scope: Scope; readonly put: () => void }
+  | { readonly at: "fading"; readonly scope: Scope };
 
-/** Whether the letter is up. */
-export const reading = (): boolean => put !== null;
+const HIDDEN: Letter = { at: "hidden" };
 
-/** Puts the letter away, if it is up. Says whether it was. */
-export function putAway(): boolean {
-  if (!put) return false;
-  put();
-  return true;
+/** The page's letter: one at a time, each held in a scope of its own, which goes as it changes. */
+export interface Letters {
+  /** Whether the letter is up. */
+  reading(): boolean;
+  /** Puts the letter away, if it is up. Says whether it was. */
+  putAway(): boolean;
+  /** Shows the letter for what the yard did while the member was away; `done` once it is put away. */
+  show(away: Away, done: () => void): void;
 }
 
-export function showLetter(away: Away, done: () => void): void {
+export function letters(owner: Scope): Letters {
+  let letter: Letter = HIDDEN;
+  /** Every change of the letter goes through here: the letter it leaves lets go of all it held. */
+  const to = (next: Letter): void => {
+    if (letter.at !== "hidden" && letter !== next) letter.scope.close();
+    letter = next;
+  };
+  const putAway = (): boolean => {
+    if (letter.at !== "reading") return false;
+    const { put } = letter;
+    const root = $("letter");
+    const fading = owner.child();
+    to({ at: "fading", scope: fading });
+    root.classList.add("gone");
+    fading.after(350, () => {
+      root.hidden = true;
+      root.replaceChildren();
+      to(HIDDEN);
+    });
+    put();
+    return true;
+  };
+  return {
+    reading: () => letter.at === "reading",
+    putAway,
+    show(away, done) {
+      // A letter up or fading makes way first: its timers and its click go with it.
+      to(HIDDEN);
+      const scope = owner.child();
+      const put = write(scope, away, done);
+      scope.on($("letter"), "click", putAway);
+      to({ at: "reading", scope, put });
+    },
+  };
+}
+
+/** Writes the letter on the page, its lines coming one at a time while `scope` lasts; gives back what putting it away does. */
+function write(scope: Scope, away: Away, done: () => void): () => void {
   const root = $("letter");
   const coinArt = icon("coin");
   const lines: HTMLElement[] = [];
@@ -98,35 +142,19 @@ export function showLetter(away: Away, done: () => void): void {
   root.classList.remove("gone");
   root.hidden = false;
   lines.forEach((row, i) => {
-    setTimeout(
-      () => {
-        row.classList.add("in");
-        if (put) yardSfx.letter();
-      },
-      380 + i * 280,
-    );
+    scope.after(380 + i * 280, () => {
+      row.classList.add("in");
+      yardSfx.letter();
+    });
   });
-  put = (): void => {
-    put = null;
+  go.focus({ preventScroll: true });
+  return () => {
     for (const row of lines) row.classList.add("in");
     const from = centre(away.coins > 0 ? coinArt : paper);
-    root.classList.add("gone");
-    setTimeout(() => {
-      root.hidden = true;
-      root.replaceChildren();
-    }, 350);
     sfx.open();
     const paid = collect();
     const got = "refused" in paid ? 0 : (paid.coins ?? []).reduce((sum, c) => sum + c.amount, 0);
     if (got > 0) coinsFrom(from, got);
     done();
   };
-  root.addEventListener(
-    "click",
-    () => {
-      put?.();
-    },
-    { once: true },
-  );
-  go.focus({ preventScroll: true });
 }

@@ -2,13 +2,15 @@
  * The Tally as the page has it: a board as Leaf sends it (`GET /v1/game/tally/{board}/{period}`),
  * read back; how a board writes its score; and how a board is laid out: the top three on the
  * podium, the rest of the ten under it, and the member's own place at the foot when they are not
- * among them; and whether the member has opened it yet. No page in it: `tallyui.ts` draws it.
+ * among them; whether the member has opened it yet; and which board shows, asked of Leaf, with the
+ * notes it rises to. No page in it: `tallyui.ts` draws it.
  */
 
-import type { Period, TallyUnit } from "@sequoia-leaf/core";
+import { type Period, TALLY_KEPT_MS, type TallyBoard, tallyPath, type TallyUnit } from "@sequoia-leaf/core";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { duration } from "@sequoia-leaf/kit/person.ts";
+import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 
 /** Kept in the browser once the member has opened the Tally. */
 export const SEEN = "town.tally.seen";
@@ -85,5 +87,104 @@ export function laidOut(board: Board): { podium: readonly Row[]; rest: readonly 
     podium: board.top.slice(0, 3),
     rest: board.top.slice(3),
     own: board.top.some((r) => r.you) ? null : board.you,
+  };
+}
+
+/** A note as a board rises: when, in milliseconds from the start, and what it plays. */
+export type Note = readonly [ms: number, play: () => void];
+
+/** What Leaf answered for a board and span, and when: the board, or that it could not be read. */
+export interface Answer {
+  readonly at: number;
+  readonly board: Board | "unread";
+}
+
+/** What the panel shows of the board and span chosen: Leaf being asked, that it could not be read, or the board. */
+export type Shown =
+  | { readonly at: "asking"; readonly of: TallyBoard }
+  | { readonly at: "unread"; readonly of: TallyBoard; readonly again: () => void }
+  | { readonly at: "board"; readonly of: TallyBoard; readonly board: Board; readonly rise: boolean };
+
+/** What the boards need of the page: Leaf's board at a path (null for none it can read), and to draw what shows, giving back the notes of a board rising. */
+export interface TallyPage {
+  ask(path: string): Promise<Board | null>;
+  draw(shown: Shown): readonly Note[];
+}
+
+/** The board and span the panel shows. */
+export interface TallyBoards {
+  /** Shows a board for a span: at once, as its board if Leaf's answer is kept, or as being asked. */
+  show(of: TallyBoard, period: Period): void;
+  /** Asks Leaf again for the board shown, if its answer is older than `TALLY_KEPT_MS`. */
+  again(): void;
+  /** Draws the board shown again, without rising: the faces on it have come. */
+  redraw(): void;
+}
+
+/** A board and span shown, in a scope of its own: what it last drew (as JSON, the board or "unread"; none while asked), and whether a board has risen in it yet. */
+interface View {
+  readonly of: TallyBoard;
+  readonly path: string;
+  readonly scope: Scope;
+  drawn: string | undefined;
+  risen: boolean;
+}
+
+/**
+ * One board and span shown at a time, each in a scope of its own, held by `life` (the panel).
+ * Showing another closes the one before, and the notes of its rising with it, so nothing of it
+ * plays or draws after. An answer draws only in its own board's view, and only when it differs from
+ * what that view last drew; the first board a view draws rises. `answers` outlives the panel, so a
+ * board shown again shows at once, and an answer a shut panel asked for fills it but draws nothing.
+ */
+export function tallyBoards(life: Scope, answers: Map<string, Answer>, page: TallyPage): TallyBoards {
+  let view: View | null = null;
+  const asking = new Set<string>();
+  const shown = (): View | null => (view === null || view.scope.closed ? null : view);
+  const draw = (v: View): void => {
+    const got = answers.get(v.path)?.board;
+    v.drawn = JSON.stringify(got);
+    if (got === undefined) page.draw({ at: "asking", of: v.of });
+    else if (got === "unread") page.draw({ at: "unread", of: v.of, again: () => retry(v) });
+    else {
+      for (const [ms, play] of page.draw({ at: "board", of: v.of, board: got, rise: !v.risen }))
+        v.scope.after(ms, play);
+      v.risen = true;
+    }
+  };
+  const ask = async (v: View): Promise<void> => {
+    const had = answers.get(v.path);
+    if ((had && Date.now() - had.at < TALLY_KEPT_MS) || asking.has(v.path)) return;
+    asking.add(v.path);
+    const board = (await page.ask(v.path)) ?? "unread";
+    asking.delete(v.path);
+    answers.set(v.path, { at: Date.now(), board });
+    const now = shown();
+    if (now?.path === v.path && JSON.stringify(board) !== now.drawn) draw(now);
+  };
+  const retry = (v: View): void => {
+    if (shown() !== v) return;
+    answers.delete(v.path);
+    draw(v);
+    void ask(v);
+  };
+  return {
+    show(of, period) {
+      const path = tallyPath(of.id, period);
+      if (shown()?.path === path) return;
+      view?.scope.close();
+      const v: View = { of, path, scope: life.child(), drawn: undefined, risen: false };
+      view = v;
+      draw(v);
+      void ask(v);
+    },
+    again() {
+      const v = shown();
+      if (v) void ask(v);
+    },
+    redraw() {
+      const v = shown();
+      if (v) draw(v);
+    },
   };
 }

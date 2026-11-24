@@ -5,9 +5,10 @@
  * (`ui.ts`, `campui.ts`); everything here is the same for both.
  */
 
-import { add, el, icon as glyph, type IconName, replay, shown, when } from "@sequoia-leaf/kit/dom.ts";
+import { add, el, icon as glyph, replay, shown, when } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { balance, type Currency } from "@sequoia-leaf/kit/purse.ts";
+import { type Scope, scope } from "@sequoia-leaf/kit/scope.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
@@ -146,38 +147,6 @@ function roll(kind: Currency, dt: number): void {
   }
 }
 
-/** Little pictures that fly from one spot on the page to another: Leaf leaving the purse, Coins arriving. */
-export function fly(
-  what: IconName | HTMLCanvasElement,
-  from: Pt,
-  to: Pt,
-  count: number,
-  each: ((i: number) => void) | null = null,
-): void {
-  for (let i = 0; i < count; i++) {
-    const c = typeof what === "string" ? glyph(what) : pic(what, 2);
-    c.classList.add("fly");
-    document.body.append(c);
-    const half = c.getBoundingClientRect().width / 2;
-    const midX = (from.x + to.x) / 2 + (Math.random() - 0.5) * 90;
-    const midY = Math.min(from.y, to.y) - 24 - Math.random() * 46;
-    const tr = (x: number, y: number, s: number): string => `translate(${x - half}px, ${y - half}px) scale(${s})`;
-    const anim = c.animate(
-      [
-        { transform: tr(from.x, from.y, 0.5), opacity: 0 },
-        { transform: tr(from.x, from.y, 1.1), opacity: 1, offset: 0.12 },
-        { transform: tr(midX, midY, 1.3), opacity: 1, offset: 0.55 },
-        { transform: tr(to.x, to.y, 0.7), opacity: 1 },
-      ],
-      { duration: 640, delay: i * 75, easing: "ease-in-out", fill: "both" },
-    );
-    anim.addEventListener("finish", () => {
-      c.remove();
-      each?.(i);
-    });
-  }
-}
-
 // ---------- the guild feed ----------
 
 const waiting: (readonly [string, Tone])[] = [];
@@ -264,10 +233,11 @@ export interface PanelSpec {
   id: string;
   title: string;
   art: Node | null;
-  /** Fills the panel's body; gives back how to bring it up to date, if it ever needs it. */
-  build: (body: HTMLElement) => (() => void) | null;
-  /** Called when it is put away, however that happens. */
-  shut?: () => void;
+  /**
+   * Fills the panel's body, with a scope that closes as the panel is put away, however that happens;
+   * gives back how to bring it up to date, if it ever needs it.
+   */
+  build: (body: HTMLElement, life: Scope) => (() => void) | null;
 }
 
 let refresh: (() => void) | null = null;
@@ -291,7 +261,8 @@ export function openPanel(spec: PanelSpec): void {
   closeCard();
   tipOff();
   onShut?.();
-  onShut = spec.shut ?? null;
+  const life = scope();
+  onShut = () => life.close();
   G.panel = spec.id;
   p.dataset.panel = spec.id;
   p.hidden = true;
@@ -305,7 +276,7 @@ export function openPanel(spec: PanelSpec): void {
   p.append(el("header", "k-head", {}, spec.art, el("h2", "k-title", { id: "panel-title", text: spec.title }), x));
   const body = el("div", "k-body k-scroll");
   p.append(body);
-  refresh = spec.build(body);
+  refresh = spec.build(body, life);
   refresh?.();
   p.hidden = false;
   replay(p, "slide");

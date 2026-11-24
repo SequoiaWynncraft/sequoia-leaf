@@ -11,6 +11,7 @@ import { el, icon as glyph, shown } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
 import { readBoard, type Row } from "@sequoia-leaf/kit/person.ts";
+import { fly } from "@sequoia-leaf/kit/pursebar.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
@@ -31,7 +32,6 @@ import {
   button,
   centre,
   closePanel,
-  fly,
   hammerAt,
   levelBar,
   openPanel,
@@ -333,7 +333,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
               }
               sfx.pop();
               const sprite = pictureOf(art, gift.id, 0, 0);
-              if (sprite) fly(sprite.c, centre(b), hammerAt(), 1);
+              if (sprite) fly(() => pic(sprite.c, 2), centre(b), hammerAt(), 1);
               refreshPanel();
             });
             paper.append(
@@ -566,7 +566,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
     toTray(picture, from, id) {
       const to = traySlots.get(id) ?? list;
       to.scrollIntoView({ block: "nearest" });
-      fly(picture, toPage(from.x, from.y), centre(to), 1, drawTray);
+      fly(() => pic(picture, 2), toPage(from.x, from.y), centre(to), 1, drawTray);
     },
   };
 }

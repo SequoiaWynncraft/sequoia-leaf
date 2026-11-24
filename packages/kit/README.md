@@ -128,6 +128,8 @@ picture file.
 | `util.ts`     | Canvases, numbers, repeatable noise                                                                 |
 | `text.ts`     | Words on a canvas in the font                                                                       |
 | `signs.ts`    | A speech bubble and a key prompt drawn on a canvas, and breaking words into lines                   |
+| `scope.ts`    | What a page, a panel or a press holds of the browser, let go of together (below)                    |
+| `press.ts`    | A long press with a finger: resting on a thing asks what it is; cards and tips ask with it          |
 | `tip.ts`      | Tips: `tip(el, title, text)` shows a one-line hint on hover, focus and long press                   |
 | `card.ts`     | Cards: how anything in any game says what it is (below)                                             |
 | `dialog.ts`   | What opens over the page (a panel, a pinned card, a notice): `dialog(node, title, close)` (below)   |
@@ -164,6 +166,18 @@ focus goes back to where it was, if the keyboard was the last used in it. Layers
 away the newest only, and the page's own keys never hear that Escape. A pinned card is a layer
 (`layer`), and so is the kit's notice (`close` null: Escape does nothing; it must be answered).
 
+**Scopes** (`scope.ts`). Something that outlives what it was for acts on what came after it: a
+listener left on a button after its press, a timer that clears a newer hover, an old letter's fade
+that hides a new letter.
+So the browser's listeners, timers, frames, observers and sockets are asked of a scope: `on`,
+`after`, `every`, `frame`, `observe` (a node's changes, or its size) and `socket`, each giving back
+how to let go of it alone, and `child()` for a scope that closes with its parent and may close
+first. `close()` lets go of everything the scope still holds, its children's too, the newest first;
+closing twice is closing once, and a closed scope starts nothing. An owner holds one scope, and each
+thing that comes and goes under it (a press, a letter, a board rising, a panel) a child of it, so
+that what ends one ends all it held. `scope.ts` is the one file that may call those primitives
+itself (`bun run lint` holds that).
+
 `tools/drive.ts` drives a built page in headless Chromium and takes screenshots; its header says how.
 Its `audit` step (`tools/audit.ts`) lists what keeps a player from reading or reaching the page as
 it is: controls with no name, no focus look or no way in by Tab, small words, words too faint for
@@ -171,8 +185,25 @@ what is behind them, crowded small targets on a phone, and dialogs that are not 
 `tools/pages.ts` (`bun run pages`, the end of `bun run verify`) builds every app's page as the image
 does: the Dockerfile's page stage copied by `.dockerignore` into a folder of its own, its production
 install and `bun build index.html --minify`, so a page that only builds here is found here.
-`tools/pages.test.ts` holds that nothing that ships (an app's or a package's `src/`, an app's page)
-imports from a `review/` folder, which the image leaves out.
+
+**The guards** (in `bun run verify`, and CI). `bun run lint` is oxlint with `.oxlintrc.json`, whose
+own rules are in `tools/lint-rules.mjs`: the browser's primitives only through a scope, no `let` at
+the top of a module, no hook framework, and for what ships, files of at most 500 lines (blank lines
+and comments aside), functions of at most 90 and branching of at most 15. `bun run imports`
+(`tools/imports.ts`, on what `Bun.build` builds for each page and the API and what `bun check
+--explainFiles` lists for each TypeScript project, `tools/graph.ts`) fails a loop of imports a build
+waits on, an app importing another or the kit an app (types too), the games' rules importing the
+kit, the figures or an app or reading the DOM, and each import into review code a page or the API
+reaches, review code's own too, by build, with the whole way to it printed; a project TypeScript does
+not pass fails it too. `bun run clones` (`tools/clones.ts`) fails code copied between two apps or
+packages: a run of 70 tokens or more, comments and spacing aside. Where code today breaks those
+lines, each count is held to a baseline in `tools/baseline/` (`tools/ratchet.ts`): by file and rule,
+by import, or by pair of files sharing copied runs. Anything new or more fails, and so does anything
+fewer until the baseline is lowered with it (`bun run lint --lower`, and the same for the others),
+which never adds or raises a count; and a baseline above the base branch's (where the branch left
+origin/main, or in CI the merge commit's first parent) fails, so a change cannot raise its own. `bun
+run budget` (`tools/budget.ts`) prints how many lines of source Bun builds for each page and the
+API, by workspace, and fails nothing.
 
 ## Cards
 

@@ -68,6 +68,11 @@ export interface Scene {
   drag(at: Pt): void;
   /** It has been lifted, at a point in the scene and over this part of the page. */
   release(at: Pt, over: Element | null): void;
+  /**
+   * It went without being lifted (cancelled, its hold on the page lost, the window left): whatever
+   * it was dragging goes back where it was, and nothing is done.
+   */
+  cancel(): void;
   /** The member has come back out of a game. */
   cameBack(game: GameId): void;
   /**

@@ -1121,6 +1121,17 @@ button.k-info-chip:hover .k-chip {
     transform: scale(1.3) rotate(-8deg);
   }
 }
+/* A picture flying across the page (`fly`), carried at the size it was made, its own style untouched. */
+.k-flier {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 95;
+  pointer-events: none;
+}
+.k-flier > * {
+  display: block;
+}
 
 /* How far along something is: `<div class="k-bar"><i style="--v: 40%"></i></div>`. */
 .k-bar {

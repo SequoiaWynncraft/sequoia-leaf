@@ -73,24 +73,29 @@ export function purseBar(host: HTMLElement, coins: () => number = () => balance(
   };
 }
 
+/** What flies: a kit icon, or a picture of the page's own, made for each one. */
+export type Flier = IconName | (() => HTMLElement);
+
 /**
  * Little pictures that fly from one spot on the page to another: Leaf leaving the purse, Coins
- * arriving. `each` is called as each one lands (at once, for a player who asked for less motion).
+ * arriving, a thing going to where it is kept. `each` is called as each one lands (at once, with
+ * nothing drawn, for a player who asked for less motion).
  */
-export function fly(what: IconName, from: Pt, to: Pt, count: number, each: ((i: number) => void) | null = null): void {
+export function fly(what: Flier, from: Pt, to: Pt, count: number, each: ((i: number) => void) | null = null): void {
   // Asked for less motion, they land at once.
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     for (let i = 0; i < count; i++) each?.(i);
     return;
   }
   for (let i = 0; i < count; i++) {
-    const c = icon(what);
-    c.style.cssText = "position:fixed;left:0;top:0;z-index:95;pointer-events:none";
+    // Carried by a flier of its own, so the picture keeps the size it was made at.
+    const c = el("div", "k-flier", {}, typeof what === "string" ? icon(what) : what());
     document.body.append(c);
-    const half = c.getBoundingClientRect().width / 2;
+    const { width, height } = c.getBoundingClientRect();
     const midX = (from.x + to.x) / 2 + (Math.random() - 0.5) * 90;
     const midY = Math.min(from.y, to.y) - 24 - Math.random() * 46;
-    const tr = (x: number, y: number, s: number): string => `translate(${x - half}px, ${y - half}px) scale(${s})`;
+    const tr = (x: number, y: number, s: number): string =>
+      `translate(${x - width / 2}px, ${y - height / 2}px) scale(${s})`;
     const anim = c.animate(
       [
         { transform: tr(from.x, from.y, 0.5), opacity: 0 },

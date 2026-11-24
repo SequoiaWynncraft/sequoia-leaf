@@ -18,7 +18,9 @@
  */
 import { givingBack, layer } from "./dialog.ts";
 import { add, asking, asksAgain, el, icon, pressedTwice, unheld } from "./dom.ts";
-import { goesWith, iconButton, LONG_PRESS, tip, tipAt, tipOff } from "./tip.ts";
+import { longPress } from "./press.ts";
+import { scope } from "./scope.ts";
+import { goesWith, iconButton, tip, tipAt, tipOff } from "./tip.ts";
 
 /** A thing, named as `"kind:id"`: `"item:gear"`, `"figure:barrow-gnome"`, `"trait:ember"`. */
 export type Ref = string;
@@ -792,8 +794,6 @@ export function link(target: HTMLElement, ref: Ref, opts: LinkOpts = {}): void {
       target.setAttribute("aria-label", deck.describe(ref)?.name ?? ref);
   }
   let timer = 0;
-  let press = 0;
-  let swallow = false;
   const side = opts.side ?? false;
   const inCard = (): boolean => node?.contains(target) ?? false;
   /** A picture without its name, inside a card, says its name in a plain tip. */
@@ -839,35 +839,20 @@ export function link(target: HTMLElement, ref: Ref, opts: LinkOpts = {}): void {
     if (inCard()) deck.follow(ref);
     else deck.press(ref, target, "key", target, side);
   });
-  target.addEventListener("pointerdown", (e) => {
+  target.addEventListener("pointerdown", () => {
     window.clearTimeout(timer);
-    if (e.pointerType === "mouse" || !opts.acts || inCard()) return;
-    swallow = false;
-    window.clearTimeout(press);
-    const x = e.clientX;
-    const y = e.clientY;
-    const still = (m: PointerEvent): void => {
-      if (Math.hypot(m.clientX - x, m.clientY - y) > 9) window.clearTimeout(press);
-    };
-    target.addEventListener("pointermove", still);
-    press = window.setTimeout(() => {
-      target.removeEventListener("pointermove", still);
-      swallow = true;
-      deck.press(ref, target, "touch", target, side);
-    }, LONG_PRESS);
-    const lift = (): void => {
-      window.clearTimeout(press);
-      target.removeEventListener("pointermove", still);
-    };
-    target.addEventListener("pointerup", lift, { once: true });
-    target.addEventListener("pointercancel", lift, { once: true });
+  });
+  // A finger asks about a thing that acts by resting on it: its card is pinned. Each press is held
+  // in a scope of the thing's own, which goes with it.
+  const asked = longPress(scope(), target, {
+    starts: (e) => e.pointerType !== "mouse" && (opts.acts ?? false) && !inCard(),
+    asked: () => deck.press(ref, target, "touch", target, side),
   });
   target.addEventListener(
     "click",
     (e) => {
       // The tap that ends a long press was asking what the thing is, not using it.
-      if (swallow) {
-        swallow = false;
+      if (asked(e)) {
         e.stopPropagation();
         e.preventDefault();
         return;

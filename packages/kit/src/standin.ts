@@ -49,6 +49,19 @@ function unlessLetGo<T>(reply: T | Promise<T>, signal: AbortSignal | null | unde
   });
 }
 
+/** An event target that counts the listeners on it: for a test that what listened has let go. */
+export class Listened extends EventTarget {
+  listening = 0;
+  override addEventListener(...args: Parameters<EventTarget["addEventListener"]>): void {
+    super.addEventListener(...args);
+    this.listening++;
+  }
+  override removeEventListener(...args: Parameters<EventTarget["removeEventListener"]>): void {
+    super.removeEventListener(...args);
+    this.listening--;
+  }
+}
+
 export interface Standin {
   store: MemoryStore;
   sent: Sent[];

@@ -22,7 +22,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # The merge commit and the base branch it merges into, its first parent.
+          # The merge commit and the base branch it merges into, its first parent: what changed is
+          # told by it, and the lint's, imports' and copies' baselines are held to its (ratchet.ts).
           fetch-depth: 2
       # What the merge commit changes from the base branch is what the pull request changes. Under
       # act (`bun run ci`) there is no merge commit, and everything is checked.
@@ -88,6 +89,14 @@ jobs:
       - name: Test
         if: *code
         run: bun run test
+      # Who imports whom, and what is copied between workspaces, held to their baselines; then how
+      # much each page and the API reach, which fails nothing.
+      - name: Imports and copies
+        if: *code
+        run: bun run imports && bun run clones
+      - name: Read set
+        if: *code
+        run: bun run budget
       # The image's own health check asks /healthz, which reads the database. It is asked every
       # second, not every 5 or 10: Docker reads the start interval, podman the interval. The
       # container and image are removed by id, so nothing else on a developer's machine is touched.

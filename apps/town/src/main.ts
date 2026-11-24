@@ -15,10 +15,11 @@ import { pick as pickCard, point } from "@sequoia-leaf/kit/card.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { heldAgain, typing } from "@sequoia-leaf/kit/keys.ts";
 import { member } from "@sequoia-leaf/kit/live.ts";
+import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { bake, lookFor, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
-import { LONG_PRESS, tipAt, tipOff } from "@sequoia-leaf/kit/tip.ts";
+import { tipAt, tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { clamp, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { FOLK } from "@sequoia-leaf/town/folk.ts";
 
@@ -33,6 +34,7 @@ import { folkArt, initFolkArt } from "./folkart.ts";
 import { clearFx } from "./fx.ts";
 import { G, type Going, hooks, show, toPage } from "./game.ts";
 import { GAMES } from "./games.ts";
+import { worldPress } from "./gesture.ts";
 import { makeGrove } from "./grovescene.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, covered, hush, initHud, tickHud } from "./hud.ts";
@@ -210,7 +212,7 @@ async function boot(): Promise<void> {
     if (now.at === "inside" && was.at !== "inside") {
       // The view has closed in: the game takes the page from here.
       keys.clear();
-      held = null;
+      press.letGo();
       now.visit.arrived(toPage(now.door.x, now.door.y));
     }
     if (now.at === "opening" && was.at !== "opening") {
@@ -221,6 +223,8 @@ async function boot(): Promise<void> {
 
   /** The member sets off for another place, on the way the place they are leaving gives. */
   function setOff(off: Extract<Stood, { at: "dusk" }>): void {
+    // Whatever is held on the place being left goes back, and the line a long press put up goes with it.
+    press.newPlace();
     tipOff(TIP);
     const p = G.player;
     const way = scenes[off.from].wayOut(off.to.place);
@@ -230,7 +234,6 @@ async function boot(): Promise<void> {
   /** At the darkest moment of a walk: the place walked off from is put away, and the next put on. */
   function swap(off: Extract<Stood, { at: "dusk" }>): void {
     keys.clear();
-    held = null;
     closePanel();
     closeCard();
     clearFx();
@@ -299,14 +302,10 @@ async function boot(): Promise<void> {
   // ---------- keys and fingers ----------
 
   const keys = new Set<string>();
-  let held: { x: number; y: number; sx: number; sy: number; steer: boolean } | null = null;
-  /** A finger or the mouse is down on the world. */
-  let down = false;
   let mouse: Pt | null = null;
   /** What the pointer is resting on, since when, and whether its tip is up. */
   let rest: { hover: Hover; since: number; shown: boolean } | null = null;
   const TIP = {};
-  let pressed = 0;
 
   window.addEventListener("keydown", (e) => {
     unlock();
@@ -354,7 +353,7 @@ async function boot(): Promise<void> {
   });
   window.addEventListener("blur", () => {
     keys.clear();
-    held = null;
+    press.letGo();
   });
   document.addEventListener("pointerdown", unlock, true);
 
@@ -369,25 +368,25 @@ async function boot(): Promise<void> {
     if (h.tip) tipAt(box, h.tip[0], h.tip[1], TIP);
   }
 
-  canvas.addEventListener("pointerdown", (e) => {
-    tipOff(TIP);
-    window.clearTimeout(pressed);
-    const finger = e.pointerType !== "mouse";
-    const at = toWorld(e.clientX, e.clientY);
-    const groundTap = scene().tap(at.x, at.y, finger);
-    held = groundTap ? { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, steer: false } : null;
-    down = true;
-    canvas.setPointerCapture(e.pointerId);
+  // A finger or the mouse down on the world, one at a time (`gesture.ts`).
+  const press = worldPress(scope(), canvas, {
+    down(x, y, finger) {
+      tipOff(TIP);
+      const at = toWorld(x, y);
+      return scene().tap(at.x, at.y, finger);
+    },
+    drag: (x, y) => scene().drag(toWorld(x, y)),
+    release: (x, y) => scene().release(toWorld(x, y), document.elementFromPoint(x, y)),
+    cancel: () => scene().cancel(),
     // A finger kept on a thing asks what it is: a camp thing's card stays until put away, a line goes by itself.
-    if (finger && !groundTap)
-      pressed = window.setTimeout(() => {
-        const h = scene().point(at);
-        if (h) showTip(h, true);
-        window.setTimeout(() => {
-          tipOff(TIP);
-          scene().point(null);
-        }, 2200);
-      }, LONG_PRESS);
+    asked(x, y) {
+      const h = scene().point(toWorld(x, y));
+      if (h) showTip(h, true);
+    },
+    cleared() {
+      tipOff(TIP);
+      scene().point(null);
+    },
   });
   // A touch on the world is the world's: the click it ends in never lands on a panel that opened under it.
   let worldDown = false;
@@ -408,27 +407,14 @@ async function boot(): Promise<void> {
   });
   canvas.addEventListener("pointermove", (e) => {
     mouse = e.pointerType === "mouse" ? { x: e.clientX, y: e.clientY } : null;
-    if (down) scene().drag(toWorld(e.clientX, e.clientY));
-    if (!held) return;
-    held.x = e.clientX;
-    held.y = e.clientY;
-    if (!held.steer && Math.hypot(held.x - held.sx, held.y - held.sy) > 10) held.steer = true;
   });
-  const lift = (e: PointerEvent): void => {
-    held = null;
-    window.clearTimeout(pressed);
-    if (!down) return;
-    down = false;
-    scene().release(toWorld(e.clientX, e.clientY), document.elementFromPoint(e.clientX, e.clientY));
-  };
-  canvas.addEventListener("pointerup", lift);
-  canvas.addEventListener("pointercancel", lift);
   window.addEventListener("resize", resize);
 
   function steering(): Steer {
     const dx = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
     const dy = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
-    return { dx, dy, toward: held?.steer ? toWorld(held.x, held.y) : null };
+    const toward = press.toward();
+    return { dx, dy, toward: toward ? toWorld(toward.x, toward.y) : null };
   }
 
   /** The mouse resting on a thing marks it, and after a moment says what it is. */
