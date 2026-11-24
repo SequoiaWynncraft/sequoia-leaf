@@ -8,7 +8,7 @@ import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { coins } from "../yard.ts";
 import { head, leaves, some, unlocks } from "./goal.ts";
-import { $, button, pic, wantWords } from "./parts.ts";
+import { $, button, iconButton, pic, wantWords } from "./parts.ts";
 import { nextUp, nextWords } from "./standing.ts";
 
 let bar: PurseBar | null = null;
@@ -71,12 +71,7 @@ export function banner(done: Goal, next: Goal | null): void {
   const info = GOALS[done];
   if (!info) return;
   const node = isNode(done) ? NODES[done] : undefined;
-  const close = el(
-    "button",
-    "k-btn wood icon sm",
-    { type: "button", "aria-label": "Close", onclick: closeBanner },
-    icon("close"),
-  );
+  const close = iconButton("wood sm", icon("close"), "Close", closeBanner);
   const then = next === null ? undefined : GOALS[next];
   const from = next === null ? undefined : NODES[next]?.from;
   const says = node

@@ -38,7 +38,7 @@ import { troubled, troubleGroups } from "../trouble.ts";
 import { NOT_WALKING, type Walk, walkAt, type WalkEvent, walkStep } from "../walk.ts";
 import { itemRef, openCard, plotRef, tileRef } from "./card.ts";
 import { closePanel, openPanel, refreshPanel } from "./panels.ts";
-import { $, fitted, yardIcon } from "./parts.ts";
+import { $, fitted, iconButton, yardIcon } from "./parts.ts";
 import { type Line, table } from "./table.ts";
 
 export type View = "map" | "trouble" | "needs";
@@ -139,11 +139,7 @@ const stepWalk = (by: 1 | -1): void => {
 };
 
 /** One of the bar's buttons: a picture, and what it is called for whoever cannot see it. */
-function press(label: string, kid: Node, on: () => void): HTMLElement {
-  const b = el("button", "k-btn wood icon sm", { type: "button", "aria-label": label }, kid);
-  b.addEventListener("click", on);
-  return b;
-}
+const press = (label: string, kid: Node, on: () => void): HTMLElement => iconButton("wood sm", kid, label, on);
 
 function makeBar(): NonNullable<typeof bar> {
   const title = el("span", "k-grow walk-what");

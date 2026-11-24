@@ -22,7 +22,7 @@ import { S } from "../state.ts";
 import { collect, keepScreen } from "../yard.ts";
 import { nodeKind, wantsShort } from "./goal.ts";
 import { openPanel, type PanelId, togglePanel } from "./panels.ts";
-import { $, button, pic, shows, when, type YardIcon, yardIcon } from "./parts.ts";
+import { $, button, iconButton, pic, shows, when, type YardIcon, yardIcon } from "./parts.ts";
 import { orderRef } from "./refs.ts";
 import { studyStrip } from "./research.ts";
 import { givenTo, nextUp, nextWords, researchOpen, takeable, tierOpen } from "./standing.ts";
@@ -62,6 +62,7 @@ function powerPlaque(): () => void {
     (p) => {
       const short = p.pace < 100;
       nums.textContent = short ? `${p.demand} / ${p.supply} · ${p.pace}%` : `${p.demand} / ${p.supply}`;
+      host.setAttribute("aria-label", `Power ${nums.textContent}`);
       nums.classList.toggle("short", short);
       host.classList.toggle("short", short);
       bar.classList.toggle("coral", short);
@@ -126,10 +127,10 @@ function tracker(): () => void {
 function bookButtons(): () => void {
   const host = $("books");
   const make = (id: PanelId, art: YardIcon, title: (tier: number) => string, key: string, about?: () => string) => {
-    const b = el("button", "k-btn wood icon pip", { type: "button", "data-book": id }, yardIcon(art));
-    b.addEventListener("click", () => {
+    const b = iconButton("wood pip", yardIcon(art), title(S.world.open.tier), () => {
       togglePanel(id);
     });
+    b.dataset.book = id;
     tip(b, () => `${title(S.world.open.tier)} (${key})`, about);
     books.set(id, b);
     titles.set(id, title);
@@ -142,13 +143,7 @@ function bookButtons(): () => void {
   const researchBtn = make("research", "research", () => "Research", "L");
   const depotBtn = make("depot", "depot", () => "The depot", "I");
   // The same sheet once the yard owns a second plot, with its map and its list of trouble: the yard's button.
-  const yardBtn = el(
-    "button",
-    "k-btn wood icon pip bad",
-    { type: "button", "aria-label": "The yard" },
-    yardIcon("map"),
-  );
-  yardBtn.addEventListener("click", () => {
+  const yardBtn = iconButton("wood pip bad", yardIcon("map"), "The yard", () => {
     togglePanel("depot");
   });
   tip(yardBtn, "The yard (M)");
@@ -194,8 +189,7 @@ export function toTown(camp?: string): void {
 
 function corner(): void {
   const host = $("corner");
-  const back = el("button", "k-btn wood icon", { type: "button", "aria-label": "Back to town" }, yardIcon("town"));
-  back.addEventListener("click", () => {
+  const back = iconButton("wood", yardIcon("town"), "Back to town", () => {
     toTown();
   });
   tip(
@@ -203,15 +197,16 @@ function corner(): void {
     "Back to town",
     () => `The yard keeps working for up to ${(S.world.open.away * TICK_MS) / 3_600_000} hours while you are away.`,
   );
-  const mute = el("button", "k-btn wood icon", { type: "button", "aria-label": "Sound" });
-  const draw = (): void => {
-    mute.replaceChildren(icon(isMuted() ? "mute" : "sound"));
-  };
-  mute.addEventListener("click", () => {
+  // A toggle: pressed while there is sound.
+  const mute = iconButton("wood", icon("sound"), "Sound", () => {
     setMuted(!isMuted());
     draw();
     sfx.tap();
   });
+  const draw = (): void => {
+    mute.replaceChildren(icon(isMuted() ? "mute" : "sound"));
+    mute.setAttribute("aria-pressed", String(!isMuted()));
+  };
   tip(mute, "Sound");
   draw();
   host.append(back, mute);

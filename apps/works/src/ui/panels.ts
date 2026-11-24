@@ -58,7 +58,7 @@ import {
   wantsOrder,
 } from "./goal.ts";
 import { feed } from "./notes.ts";
-import { $, button, shows, wantWords, yardIcon } from "./parts.ts";
+import { $, button, iconButton, shows, wantWords, yardIcon } from "./parts.ts";
 import { researchHooks, researchScreen } from "./research.ts";
 import { given, needsOf, type Next, nextUp, nextWords, researchOpen, tierOpen } from "./standing.ts";
 import { beginButton, tierHooks, tierScreen } from "./tier.ts";
@@ -407,6 +407,8 @@ const FULL: ReadonlySet<PanelId> = new Set<PanelId>(["tier", "research"]);
 
 let refresh: (() => void) | null = null;
 let theArt: Art | null = null;
+/** The control the focus was on when the panel opened: it has the focus back when the panel shuts. */
+let opener: HTMLElement | null = null;
 
 export function initPanels(art: Art): void {
   theArt = art;
@@ -422,23 +424,21 @@ export function openPanel(id: PanelId): void {
   tipOff();
   S.panel = id;
   const p = $("panel");
+  // The control the focus is on, outside the panel; from inside one panel to another, the first's.
+  const from = document.activeElement;
+  if (from instanceof HTMLElement && from !== document.body && !p.contains(from)) opener = from;
   p.hidden = true;
   p.classList.toggle("full", FULL.has(id));
   p.replaceChildren();
   // Which panel it is, for the page's styles: the yard's sheet is a full sheet on a phone.
   p.dataset.panel = id;
-  const x = el(
-    "button",
-    "k-btn wood icon sm",
-    { type: "button", "aria-label": "Close", onclick: closePanel },
-    icon("close"),
-  );
+  const x = iconButton("wood sm", icon("close"), "Close", closePanel);
   // A title in two parts ("Tier 2: The stream") breaks between them where it must.
   const [first = "", ...rest] = TITLES[id]().split(": ");
   const title = el(
     "h2",
     "k-title",
-    {},
+    { id: "panel-title" },
     el("span", "", { text: rest.length > 0 ? `${first}:` : first }),
     ...(rest.length > 0 ? [" ", el("span", "", { text: rest.join(": ") })] : []),
   );
@@ -448,6 +448,9 @@ export function openPanel(id: PanelId): void {
   refresh = BUILD[id](theArt, body);
   refresh();
   p.hidden = false;
+  // The focus goes into the panel, so the next Tab is in it and not along the toolbar; the control it
+  // was on (the book's button, most often) has it back when the panel shuts.
+  x.focus({ preventScroll: true });
   replay(p, "slide");
   sfx.open();
   document.body.classList.add("panel-open");
@@ -457,8 +460,11 @@ export function openPanel(id: PanelId): void {
 export function closePanel(): void {
   if (!S.panel) return;
   S.panel = null;
+  const inside = $("panel").contains(document.activeElement);
   $("panel").hidden = true;
   $("panel").replaceChildren();
+  if (inside && opener?.isConnected) opener.focus({ preventScroll: true });
+  opener = null;
   refresh = null;
   tipOff();
   sfx.close();

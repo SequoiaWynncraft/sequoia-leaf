@@ -67,7 +67,7 @@ import {
 } from "../tools.ts";
 import { CATCHING_UP, catchingUp } from "../yard.ts";
 import { machineRef } from "./card.ts";
-import { $, button, fitted, shows, when, type YardIcon, yardIcon } from "./parts.ts";
+import { $, button, fitted, iconButton, shows, when, type YardIcon, yardIcon } from "./parts.ts";
 
 /** The tools in the order they sit in the dock, which is also the order of the number keys: every kind this page draws. */
 export const TOOLS: readonly Kind[] = DRAWN;
@@ -456,12 +456,12 @@ function drawHand(p: HandPrint): void {
           return b;
         });
   if (p.turn) {
-    const turn = button("wood icon sm", [yardIcon("turn")], rotate);
+    const turn = iconButton("wood sm", yardIcon("turn"), "Rotate", rotate);
     tip(turn, "Rotate (R)", "With no tool picked, it rotates the piece you last pointed at.");
     kids.push(turn);
   }
   if (p.undo) {
-    const back = button("wood icon sm undo", [yardIcon("undo")], () => {
+    const back = iconButton("wood sm undo", yardIcon("undo"), "Undo", () => {
       undo();
     });
     tip(back, "Undo (Z)");
@@ -469,14 +469,17 @@ function drawHand(p: HandPrint): void {
   }
   if (p.bin) {
     const { slot, asking: again } = p.bin;
-    const bin = button(again ? "sm asking" : "wood icon sm", [again ? "Delete?" : yardIcon("bin")], () => {
+    const drop = (): void => {
       if (pressedTwice(`delete-${slot}`, refreshDock)) dropBlueprint(slot);
-    });
+    };
+    const bin = again
+      ? button("sm asking", ["Delete?"], drop)
+      : iconButton("wood sm", yardIcon("bin"), "Delete this blueprint", drop);
     tip(bin, "Delete this blueprint");
     kids.push(bin);
   }
   if (p.cancel) {
-    const away = button("wood icon sm", [icon("close")], cancel);
+    const away = iconButton("wood sm", icon("close"), "Cancel", cancel);
     tip(away, "Cancel (Esc)");
     kids.push(away);
   }

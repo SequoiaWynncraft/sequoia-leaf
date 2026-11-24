@@ -63,6 +63,21 @@ export function button(cls: string, kids: readonly Kid[], on: (b: HTMLButtonElem
   return b;
 }
 
+/**
+ * A button that is only a picture, named for whoever cannot see the picture, in the words of its tip.
+ * Every such button on the page is made here (`named.test.ts`), so none is without a name.
+ */
+export function iconButton(
+  cls: string,
+  art: Node,
+  name: string,
+  on: (b: HTMLButtonElement) => void,
+): HTMLButtonElement {
+  const b = button(`icon ${cls}`, [art], on);
+  b.setAttribute("aria-label", name);
+  return b;
+}
+
 export const centre = (node: Element): Pt => {
   const r = node.getBoundingClientRect();
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
