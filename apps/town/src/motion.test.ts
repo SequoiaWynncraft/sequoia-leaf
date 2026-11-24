@@ -387,25 +387,27 @@ describe("an emote", () => {
 
 describe("the connection, shown", () => {
   test("says Reconnecting once it has been down two seconds, until the room welcomes the page again", async () => {
-    const { s, statuses, now, world } = await inTown();
-    let down: number | null = null;
-    const shown = (): string => linkShown(statuses.at(-1) ?? null, down);
+    const { s, room, now, world } = await inTown();
+    const clock = world.standin.clock;
+    const shown = (): string => linkShown(room.state());
     s.says(welcome(1, now, [me(1)]));
     expect(shown()).toBe("none");
     s.drop();
-    down = statuses.at(-1) === "closed" ? 0 : null;
     // A blip is not announced.
     expect(shown()).toBe("none");
-    down = 1999;
+    clock.now += QUIET_FOR - 1;
     expect(shown()).toBe("none");
-    down = QUIET_FOR;
+    clock.now += 1;
     expect(shown()).toBe("reconnecting");
     await Bun.sleep(400);
     const again = socket(world, 1);
     again.open();
     expect(shown()).toBe("reconnecting");
-    again.says(welcome(1, now, [me(1)]));
-    down = null;
+    again.says(welcome(1, clock.now, [me(1)]));
+    expect(shown()).toBe("none");
+    // Stepping out of the room on purpose is no drop: nothing is announced, however long.
+    room.away(true);
+    clock.now += 60_000;
     expect(shown()).toBe("none");
   });
 
@@ -417,12 +419,12 @@ describe("the connection, shown", () => {
       ["Signed out", "Sign in with the guild's website, and the gate will know you.", "Sign in"],
     ],
   ] as const)("closed with %d: the kit's card for it, and no Reconnecting", async (code, card, words) => {
-    const { s, statuses, now } = await inTown();
+    const { s, room, statuses, now } = await inTown();
     s.says(welcome(1, now, [me(1)]));
     s.drop(code);
 
     expect(statuses.at(-1)).toBe(card);
-    expect(linkShown(statuses.at(-1) ?? null, 0)).toBe(card);
+    expect(linkShown(room.state())).toBe(card);
     expect(LET_GO[card]).toEqual(words);
   });
 });

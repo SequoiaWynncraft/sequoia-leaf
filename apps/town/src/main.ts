@@ -202,9 +202,10 @@ async function boot(): Promise<void> {
       // here, and it says so as they go in and again as they come out.
       guild.here(at);
       if (game !== inGame(was)) here();
-      // The town's live room is only for while the town is on the stage: a game may go into a live
-      // room of its own (a visit's), and a player is live in one room at a time.
-      town.onStage(at === "town");
+      // The town's live room is only for while the town is on the stage. A camp or the Grove steps out
+      // of it on the same connection; a game closes it, being a page that may go live in a room of its
+      // own (a visit's), and a player is live on one connection at a time.
+      town.onStage(at === "town" ? "on" : game ? "shut" : "away");
     }
     if (now.at === "inside" && was.at !== "inside") {
       // The view has closed in: the game takes the page from here.
@@ -509,7 +510,7 @@ async function boot(): Promise<void> {
   });
   // Where the stage starts: the member is in town, and so in its live room.
   guild.here("town");
-  town.onStage(true);
+  town.onStage("on");
   keepTold({
     home: () => G.home,
     inCamp: () => placeOf(screen) === "camp",

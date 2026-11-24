@@ -396,8 +396,9 @@ card says so and the town is not loaded.
   a time, twenty seconds apart, oldest first, and drops one that has waited five minutes; what
   happens in the world for them (the party walking in, the lantern, the banner) does not wait.
 - **The town, live** (`players.ts`, its rules in `motion.ts`). While the town is on the stage the
-  page is in Leaf's live room `town` (the kit's `joinLive`); in the camp, or with a game open, it is
-  not, and coming back joins again. The member's figure moves from their own input at once, as
+  page is in Leaf's live room `town` (the kit's `joinLive`), made once: in a camp or the Grove the
+  page steps out of it on the same connection (`away`) and back in on returning, opening nothing;
+  with a game open (a page of its own) the room is closed, and coming out opens it again. The member's figure moves from their own input at once, as
   ever, and the room is told where it is as it goes: its feet, its speed, which way it faces,
   whether it walks or sits, and a jump whenever it is put somewhere without walking (back through
   the gate, out of the Works' doorway, `tp`). Everybody else in the room is drawn in their own

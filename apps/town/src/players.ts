@@ -2,8 +2,10 @@
  * Other players in town, live (on the guild's own server; with the made-up guild nobody is here).
  * While the town's scene is on the stage, the page is in Leaf's room `town` (`joinLive`): it tells
  * the room where the member's figure is, as it moves, and draws everybody else in the room exactly
- * where the room says they are, each in their own skin. They are never solid. Leaving the scene,
- * for the camp or into a game, leaves the room; coming back joins it again.
+ * where the room says they are, each in their own skin. They are never solid. The room is made once:
+ * going to a camp or the Grove steps out of it on the same connection (`away`), and coming back
+ * steps in again. Only a game closes it, being a page of its own with a connection of its own (a
+ * player is live on one connection at a time), and coming out of it opens one again.
  *
  * Here too: telling the room of the member's touches on things in town (`town.ts`'s
  * `touchThing`) and playing everybody else's, the member's emotes (the plaque over their own
@@ -27,7 +29,6 @@ import {
   type LiveEars,
   type LiveMember,
   type LiveRoom,
-  type LiveStatus,
   type Step,
 } from "@sequoia-leaf/kit/realtime.ts";
 import { bake, type Body, lookFor, paintSkin, skinOf } from "@sequoia-leaf/kit/skin.ts";
@@ -78,23 +79,23 @@ const company = new Company<Drawn>(drawnOf, {
     touchThing(name, false);
   },
   status: (s) => {
-    status = s;
-    if (s === "closed") downAt ??= performance.now();
     if (s === "replaced" || s === "signedout") letGoOf(s);
     showLink();
   },
 });
+/**
+ * The town's room: where the page stands with it is its own state (`room.state()`), down, away or let
+ * go of included. Let go of by Leaf, it is kept, shown as let go, until the member says to play here.
+ */
 let room: LiveRoom | null = null;
-let status: LiveStatus | null = null;
-/** The connection dropped and the room has not welcomed the page again yet; since when (`performance.now()`). */
-let downAt: number | null = null;
-/** The connection was let go of for good, and why: the page stays out of the room until told to play here. */
-let letGo: LetGo | null = null;
-/** Whether the town is on the stage, and so in the room. */
-let onStage = false;
+/** Where the stage has the town: on it (in the room), off it for a camp or the Grove (away), or under a game (no room). */
+let stage: TownStage = "shut";
 /** Where the member's feet were the last time the room was told, and what it was told, when. */
 let was: Pt | null = null;
 let told: { step: Step; at: number } | null = null;
+
+/** Where the stage has the town: on it, off it for a camp or the Grove, or under a game. */
+export type TownStage = "on" | "away" | "shut";
 
 /** Whether the game is live here, as somebody: only then is there a room. */
 const isLive = (): boolean => where().mode === "live" && member() !== null;
@@ -122,7 +123,6 @@ const ears: LiveEars = {
   welcome(you, name, roster, restarted) {
     company.ears.welcome?.(you, name, roster, restarted);
     for (const m of roster) learn(m);
-    downAt = null;
     showLink();
   },
   joined(m) {
@@ -141,7 +141,10 @@ const ears: LiveEars = {
  * here: the same moment everybody's figure goes (`ALONE_AFTER`). The room keeps its old roster
  * until its next welcome, so nothing may read it as current after this.
  */
-const alone = (): boolean => downAt !== null && performance.now() - downAt > ALONE_AFTER;
+function alone(): boolean {
+  const s = room?.state();
+  return s?.at === "down" && s.ms > ALONE_AFTER;
+}
 
 /**
  * Everybody in the room with the member, the member too, with their rank as the town shows it, and
@@ -186,52 +189,52 @@ function drawnOf(m: LiveMember): Drawn {
   return d;
 }
 
-/** The connection is let go of for good: everybody fades away, and the kit's card says why. */
+/** The connection is let go of for good: everybody fades away, and the kit's card says why; playing here starts a room afresh. */
 function letGoOf(why: LetGo): void {
-  letGo = why;
-  room = null;
-  downAt = null;
   company.goAll();
   closeEmotes();
   const w = where();
   letGoCard(why, w.mode === "live" ? w.signIn : "", () => {
-    letGo = null;
-    status = null;
+    room = null;
     showLink();
-    if (onStage) enterRoom();
+    if (stage === "on") enterRoom();
   });
 }
 
+/** Into the room: on the connection there is, or on a new one if there is none. The member's place is said again, which the room shows as a jump. */
 function enterRoom(): void {
-  if (room || letGo || !isLive()) return;
+  if (!isLive()) return;
   was = null;
-  status = null;
-  downAt = null;
-  room = joinLive(ROOM, ears);
+  if (room) room.away(false);
+  else room = joinLive(ROOM, ears);
 }
 
 /**
- * The town is on the stage, or off it: on, the page is in the room (unless the connection was let
- * go of), and the member's place is said again on the new connection, which the room shows as a
- * jump; off, it leaves the room and nobody else is drawn.
+ * Where the stage has the town now: on it, the page is in the room (unless Leaf let it go); off it
+ * for a camp or the Grove, it steps out of the room and keeps the connection; under a game, it
+ * closes the room. Off the stage, nobody else is drawn.
  */
-export function townOnStage(on: boolean): void {
-  onStage = on;
-  if (on) {
+export function townOnStage(at: TownStage): void {
+  stage = at;
+  if (at === "on") {
     enterRoom();
     return;
   }
-  room?.close();
-  room = null;
-  status = null;
-  downAt = null;
+  if (at === "away") room?.away(true);
+  else {
+    room?.close();
+    room = null;
+  }
   for (const f of company.clear()) f.own.a.away = true;
   closeEmotes();
   showLink();
 }
 
-/** Whether the page is in the room just now (live, on the stage, and not let go of). */
-export const inRoom = (): boolean => room !== null;
+/** Whether the page is in the room just now, or coming back to it (live, on the stage, and not let go of). */
+export function inRoom(): boolean {
+  const s = room?.state();
+  return s !== undefined && s.at !== "away" && s.at !== "gone";
+}
 
 /** Leaf's clock now, as far as this page can tell: out of a room, as it last heard. */
 export const leafNow = (): number => room?.serverNow() ?? leafClock(Date.now());
@@ -250,8 +253,8 @@ export function tellRoom(a: Actor, dt: number, jumped: boolean): void {
 /** Draws everybody else where the room says they are now, and lets those who have gone fade away. */
 export function stepPlayers(dt: number): void {
   // Down a while: the others go, and the town plays on alone until the room welcomes the page again.
-  if (downAt !== null && performance.now() - downAt > ALONE_AFTER) company.goAll();
-  if (downAt !== null) showLink();
+  if (alone()) company.goAll();
+  if (room?.state().at === "down") showLink();
   const walked = new Map(company.all().map((f) => [f, f.own.a.walked]));
   const stood = new Map(company.all().map((f) => [f, { x: f.fig.x, y: f.fig.y, jump: f.fig.jump }]));
   const { came, went } = company.step((id) => room?.sample(id) ?? null, dt);
@@ -400,15 +403,15 @@ function placeEmotes(): void {
 
 let link: HTMLElement | null = null;
 
-/** How long the connection has been down, in milliseconds; null while it is not. */
-const downFor = (): number | null => (downAt === null ? null : performance.now() - downAt);
+/** What the town shows of its room just now: nothing while the town is off the stage. */
+const shownNow = (): ReturnType<typeof linkShown> => (stage === "on" ? linkShown(room?.state() ?? null) : "none");
 
 /**
  * The small "Reconnecting…" under the purse, once the connection has been down a couple of seconds and
  * the page is not let go of. Looked at again each frame while it is down.
  */
 function showLink(): void {
-  const shown = onStage ? linkShown(status, downFor()) : "none";
+  const shown = shownNow();
   if (shown === "reconnecting" && !link) {
     link = el("div", "", { id: "link", role: "status" }, el("span", "k-plaque", {}, "Reconnecting…"));
     (document.getElementById("top") ?? document.body).append(link);
@@ -450,8 +453,8 @@ export const liveHandles = {
       }),
   told: (): { step: Step; at: number } | null => told,
   link: () => ({
-    status,
-    shown: onStage ? linkShown(status, downFor()) : "none",
+    state: room?.state() ?? null,
+    shown: shownNow(),
     you: room?.you() ?? null,
     others: othersInTown(),
     rtt: room?.rtt() ?? null,
