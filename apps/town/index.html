@@ -72,6 +72,42 @@
         box-sizing: border-box;
         padding: var(--u) calc(var(--u) * 3);
       }
+      /* Where the line is too narrow, the name gives way, never a button. */
+      #visit .k-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #visit :is(.k-btn, .k-thing-pic) {
+        flex: none;
+      }
+      /* "Next camp" points on: the kit's back arrow, turned round. */
+      #visit .way-back .k-i {
+        scale: -1 1;
+      }
+      /* Too narrow for the strip's words: its buttons are their pictures, named by their tips. */
+      @media (max-width: 560px) {
+        #visit .k-btn .t {
+          display: none;
+        }
+      }
+      /* The signpost's camps: a list of their own that scrolls, under the field that finds one. */
+      .camp-list {
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 3);
+        flex: 1 1 auto;
+        min-height: calc(var(--u) * 40);
+      }
+      #panel .k-body > .k-field {
+        flex: none;
+      }
+      .camp-counts {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--u) * 2);
+      }
       /* Who is about: a part for each, a row for each person, their face, name and rank. */
       .about {
         display: flex;

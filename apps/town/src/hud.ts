@@ -497,26 +497,44 @@ export const hammerAt = (): Pt => centre(hammer ?? $("corner"));
 
 let strip: (() => void) | null = null;
 
-/** Under the top bar at somebody else's camp: their face, whose camp it is, and the way to the member's own; `null` puts it away. */
-export function setStrip(host: { readonly id: string; readonly name: string } | null, home: () => void): void {
+/** A button of the strip: its picture and its name, which on a narrow screen is said by its tip alone. */
+export function wayButton(picture: "home" | "back", name: string, does: () => void): HTMLButtonElement {
+  const b = button(`wood sm way-${picture}`, [glyph(picture), el("span", "t", { text: name })], does);
+  b.setAttribute("aria-label", name);
+  tip(b, name);
+  return b;
+}
+
+/**
+ * Under the top bar at somebody else's camp: their face, whose camp it is, the buttons the camp
+ * gives (`ways`), and the way to the member's own; `null` puts it away. Only the face is drawn
+ * again, as it comes, so a button keeps the keyboard.
+ */
+export function setStrip(
+  host: { readonly id: string; readonly name: string } | null,
+  home: () => void,
+  ways: readonly HTMLElement[] = [],
+): void {
   const at = $("visit");
   at.hidden = host === null;
+  const face = el("span", "k-thing-pic");
+  if (host)
+    at.replaceChildren(
+      el(
+        "div",
+        "k-plaque",
+        {},
+        face,
+        el("b", "k-name", { text: `${host.name}'s camp` }),
+        ...ways,
+        wayButton("home", "My camp", home),
+      ),
+    );
   strip =
     host &&
     when(
       () => String(facesCame()),
-      () => {
-        at.replaceChildren(
-          el(
-            "div",
-            "k-plaque",
-            {},
-            el("span", "k-thing-pic", {}, pic(faceFor(host.id, host.name, true), 2)),
-            el("b", "k-name", { text: `${host.name}'s camp` }),
-            button("wood sm", ["My camp"], home),
-          ),
-        );
-      },
+      () => face.replaceChildren(pic(faceFor(host.id, host.name, true), 2)),
     );
   strip?.();
 }
