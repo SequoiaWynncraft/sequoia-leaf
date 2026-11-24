@@ -358,7 +358,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
 
   function choose(body: HTMLElement): null {
     body.append(
-      el("div", "", { text: "Three small faces look round the cabin door. One of them would like to stay." }),
+      el("div", "k-read", { text: "Three small faces look round the cabin door. One of them would like to stay." }),
     );
     for (const kind of PETS) {
       const sit = art.pets(kind, 0).sit[0];

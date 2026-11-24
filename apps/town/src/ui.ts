@@ -256,7 +256,7 @@ function quests(body: HTMLElement): () => void {
   const note = guild.boardNote();
   if (note !== null) {
     // Somebody quests are not for: one note says why, and nothing on the board moves.
-    body.replaceChildren(el("div", "k-paper quest", {}, el("div", "", { text: note })));
+    body.replaceChildren(el("div", "k-paper quest", {}, el("div", "k-read", { text: note })));
     return () => undefined;
   }
   return redrawn(
@@ -570,8 +570,8 @@ function doorCard(id: "works" | "table"): (body: HTMLElement) => null {
     });
     go.dataset.first = "";
     body.append(
-      el("div", "k-row", {}, slot(shown(icon(id), 2), 34), el("div", "k-grow", { text: game.about })),
-      el("div", "k-paper", {}, el("div", "", { text: game.waiting() })),
+      el("div", "k-row", {}, slot(shown(icon(id), 2), 34), el("div", "k-grow k-read", { text: game.about })),
+      el("div", "k-paper", {}, el("div", "k-read", { text: game.waiting() })),
       go,
     );
     return null;
@@ -735,7 +735,7 @@ export function campWaiting(): string {
 }
 
 function campCard(body: HTMLElement): () => void {
-  const news = el("div");
+  const news = el("div", "k-read");
   const go = button("wide", ["Go home"], () => {
     hooks.go({ to: "camp" });
   });
@@ -746,7 +746,7 @@ function campCard(body: HTMLElement): () => void {
       "k-row",
       {},
       slot(shown(icon("camp"), 2), 34),
-      el("div", "k-grow", { text: "Your own clearing, a little way into the trees." }),
+      el("div", "k-grow k-read", { text: "Your own clearing, a little way into the trees." }),
     ),
     el("div", "k-paper", {}, news),
     go,
@@ -757,13 +757,19 @@ function campCard(body: HTMLElement): () => void {
 }
 
 function groveCard(body: HTMLElement): () => void {
-  const open = el("div", "k-paper", { hidden: true });
+  const open = el("div", "k-paper k-read", { hidden: true });
   const go = button("wide", ["Go in"], () => {
     hooks.go({ to: "grove" });
   });
   go.dataset.first = "";
   body.append(
-    el("div", "k-row", {}, slot(shown(icon("grove"), 2), 34), el("div", "k-grow", { text: place("grove").about })),
+    el(
+      "div",
+      "k-row",
+      {},
+      slot(shown(icon("grove"), 2), 34),
+      el("div", "k-grow k-read", { text: place("grove").about }),
+    ),
     open,
     go,
   );
