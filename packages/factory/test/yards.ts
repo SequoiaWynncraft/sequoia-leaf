@@ -5,6 +5,7 @@
  * - `delivering`: every goal of the slice done, three lines on the guild's land into the depot;
  * - `generated`: the scale study's generator on a land of 3 by 3 plots, about 1,000 pieces whose
  *   lines end in crates;
+ * - `junctions`: every kind of meeting of lines on the guild's land, with tier 4 done (see it);
  * - `staged(name)`: a yard on the guild's land as play brings one there, made by the rules alone:
  *   built with commands, and every goal finished, paid and logged by the rules, by lines of its own
  *   or by what a node wants arriving at the depot (`fillHand`). `new`, as Leaf makes it; `small`, the
@@ -94,6 +95,66 @@ export function delivering(seed = 1): F.Yard {
 let small: Gen | null = null;
 /** A yard of about 1,000 pieces on 48 by 36 tiles, made once by the generator. */
 export const generated = (): Gen => (small ??= generate(makeLand(3, 3, 7), 1000));
+
+type Placed = readonly [F.KindName, number, number, F.Dir, number?];
+
+/**
+ * A yard of every kind of meeting of lines, on the guild's land with tier 4 done: planks (sawn from
+ * deadfall that comes through a tunnel) and stone from two gatherers taking turns at a joiner, then
+ * a sorter sending the planks to its right, into a crate and on to a cart stop, and the stone ahead
+ * to the depot; ore from behind and by a way in into a splitter that puts its left way, into a
+ * crate, first and sends the rest ahead to the depot; and a boiler fed deadfall.
+ */
+export function junctions(): F.Yard {
+  const y = F.create({ seed: 31, tier: 5 });
+  const pieces: Placed[] = [
+    ["gatherer", 19, 15, 1],
+    ["mill", 19, 20, 0],
+    ["belt", 20, 20, 1, 3],
+    ["gatherer", 18, 21, 0],
+    ["belt", 19, 21, 0, 2],
+    ["gatherer", 18, 22, 0],
+    ["belt", 19, 22, 0],
+    ["belt", 20, 22, 3],
+    ["joiner", 20, 21, 0],
+    ["sorter", 21, 21, 0],
+    ["crate", 21, 22, 1],
+    ["belt", 21, 23, 0],
+    ["stop", 22, 23, 0],
+    ["belt", 22, 21, 3, 3],
+    ["belt", 22, 20, 3, 3],
+    ["belt", 22, 19, 0, 3],
+    ["gatherer", 30, 13, 2],
+    ["belt", 29, 13, 2],
+    ["gatherer", 29, 12, 2],
+    ["belt", 28, 12, 1],
+    ["splitter", 28, 13, 2],
+    ["belt", 27, 13, 2],
+    ["belt", 26, 13, 2],
+    ["belt", 25, 13, 1],
+    ["belt", 25, 14, 1],
+    ["belt", 25, 15, 1],
+    ["belt", 25, 16, 1],
+    ["belt", 28, 14, 1],
+    ["crate", 28, 15, 2],
+    ["belt", 27, 15, 1],
+    ["belt", 27, 16, 1],
+    ["belt", 27, 17, 2],
+    ["belt", 26, 17, 2],
+    ["pylon", 27, 12, 0],
+    ["pylon", 17, 20, 0],
+    ["gatherer", 19, 14, 0],
+    ["boiler", 20, 14, 0],
+  ];
+  for (const [kind, x, z, dir, grade] of pieces)
+    must(y, { do: "build", kind, x, y: z, dir, ...(grade === undefined ? {} : { grade }) });
+  must(y, { do: "stand", pieces: [{ kind: "tunnel", x: 19, y: 16, dir: 1, span: 2, grade: 2 }] });
+  must(y, { do: "sort", x: 21, y: 21, item: "plank" });
+  must(y, { do: "side", x: 21, y: 21, right: true });
+  must(y, { do: "wayIn", x: 28, y: 13, way: 2, on: true });
+  must(y, { do: "first", x: 28, y: 13, way: 1 });
+  return y;
+}
 
 /** The yards in `saves/`, as each version kept them (`saves.test.ts`). */
 export const SAVES = ["v7-small", "v7-mid", "v7-study", "v7-gate", "v6-mid", "v3-tier2"] as const;

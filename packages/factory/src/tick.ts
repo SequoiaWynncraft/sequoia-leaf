@@ -16,6 +16,15 @@
  * A machine makes, and takes parts in for, only the recipes the plumbing says it may (`Wire.recipes`,
  * asked of `locked` when the plumbing is worked out).
  *
+ * A tile that could not hand on what it holds because the tile it hands to has no room waits
+ * (`Wire.waiting`), and handing on passes it over: tried again, it would be refused again, and
+ * nothing would change. It waits until a tile beside it may have room (`roomBeside`): something
+ * handed on from it, taken from what it holds, or given to it, for a thing given to a machine may
+ * narrow the recipes it keeps parts for and so make room for more of another part. Nothing else in
+ * a tick changes what a waiting tile holds or whether the tiles it hands to have room; a change
+ * from outside the tick works the plumbing out again, or is a command, and either forgets every
+ * waiting tile. A thing refused by a tile whose ways in take turns does not wait (`refused`).
+ *
  * This is the hot path: it loops over the plumbing's lists, which hold only tiles where something
  * stands, and makes no arrays, objects, closures or strings (but for the rare order filled).
  */
@@ -52,21 +61,29 @@ import {
   WORK,
   WORKSHOP,
 } from "./tables.ts";
-import { ahead, farMouth, nextOf, rewire, sortWay, WAY_TURN, wayIn, wayOut } from "./wire.ts";
+import { ahead, carries, farMouth, nextOf, rewire, sortWay, WAY_TURN, wayIn, wayOut } from "./wire.ts";
 import { enough, holderOf, type Holders, put, take, tunnelOf, type Wire, type Yard } from "./yard.ts";
 
 const BURNS = (GIVES[BOILER] ?? 0) * HALF;
 const NO_RECIPES: readonly Recipe[] = [];
-const NO_TILES = new Int32Array(0);
 
 /** Moves the whole yard on by one tick. */
 export function step(y: Yard): void {
   const wire = y.wire ?? rewire(y);
-  const { kind, item, prog, span } = y;
-  const h = y.holders;
+  const waiting = waitingOf(y, wire);
   y.tick++;
+  const works = power(y, wire, waiting);
+  carry(y, wire);
+  if (works) work(y, wire, waiting);
+  handOn(y, wire, waiting);
+}
 
-  // Power: boilers burn what they hold, and what there is is set against what is drawn.
+/**
+ * Power: boilers burn what they hold, and what there is is set against what is drawn. Says whether
+ * the gatherers and machines work this tick.
+ */
+function power(y: Yard, wire: Wire, waiting: Uint8Array): boolean {
+  const h = y.holders;
   let supply = wire.steady;
   const boilers = wire.boilers;
   for (let b = 0; b < boilers.length; b++) {
@@ -74,6 +91,7 @@ export function step(y: Yard): void {
     if ((h.fuel[r] ?? 0) <= 0 && (h.stock[r * ITEM_COUNT + DEADFALL] ?? 0) > 0) {
       take(h, r, DEADFALL);
       h.fuel[r] = TICKS.burn;
+      roomBeside(y, boilers[b] ?? 0, waiting);
     }
     if ((h.fuel[r] ?? 0) > 0) {
       h.fuel[r] = (h.fuel[r] ?? 1) - 1;
@@ -85,15 +103,17 @@ export function step(y: Yard): void {
   const store = y.charge + supply;
   const works = store >= demand;
   y.charge = supply >= demand ? 0 : works ? store - demand : store;
+  return works;
+}
 
-  // Work: things on belts move along (in eighths of a tile), gatherers gather, machines make, each
-  // at its own grade's pace.
-  const grade = y.grade;
-  const carry = wire.carry;
+/** Things on belts and under the ground move along, in eighths of a tile, each at its own grade's pace. */
+function carry(y: Yard, wire: Wire): void {
+  const { item, prog, span, grade } = y;
+  const carriers = wire.carry;
   const under = y.tunnels.under;
   const below = y.tunnels.along;
-  for (let c = 0; c < carry.length; c++) {
-    const i = carry[c] ?? 0;
+  for (let c = 0; c < carriers.length; c++) {
+    const i = carriers[c] ?? 0;
     const along = PACE[grade[i] ?? 0] ?? 0;
     if (item[i] !== NONE && (prog[i] ?? 0) < 8) prog[i] = (prog[i] ?? 0) + along;
     const t = tunnelOf(y, i);
@@ -102,14 +122,20 @@ export function step(y: Yard): void {
     const at = t * SPAN_MOST;
     for (let k = at; k < at + s; k++) if (under[k] !== NONE && (below[k] ?? 0) < 8) below[k] = (below[k] ?? 0) + along;
   }
-  const work = works ? wire.work : NO_TILES;
-  for (let c = 0; c < work.length; c++) {
-    const i = work[c] ?? 0;
+}
+
+/** Gatherers gather and machines make, each at its own grade's pace. */
+function work(y: Yard, wire: Wire, waiting: Uint8Array): void {
+  const { kind, grade } = y;
+  const h = y.holders;
+  const workers = wire.work;
+  for (let c = 0; c < workers.length; c++) {
+    const i = workers[c] ?? 0;
     const r = holderOf(y, i);
     const speed = PACE[grade[i] ?? 0] ?? 0;
     if (h.out[r] !== NONE) continue;
     if (kind[i] === STUDY) {
-      learn(y, r, speed);
+      learn(y, i, r, speed, waiting);
       continue;
     }
     if (kind[i] === GATHERER) {
@@ -137,44 +163,58 @@ export function step(y: Yard): void {
       for (let p = 0; p < recipe.from.length; p++) take(h, r, recipe.from[p] ?? NONE, recipe.need[p] ?? 1);
       h.out[r] = recipe.out;
       h.making[r] = NONE;
+      roomBeside(y, i, waiting);
     }
   }
+}
 
-  // Then hand things on.
+/**
+ * Every tile hands on what it has finished with, each after the tiles it hands to: but a tile that
+ * waits, and one with nothing finished. A tunnel's way-in mouth moves what is under the ground too.
+ */
+function handOn(y: Yard, wire: Wire, waiting: Uint8Array): void {
+  const { kind, item, prog, span } = y;
+  const h = y.holders;
   const order = wire.order;
   for (let o = 0; o < order.length; o++) {
     const i = order[o] ?? 0;
-    const k = kind[i];
-    if (k === TUNNEL) {
-      if ((span[i] ?? 0) > 0) passUnder(y, i);
+    if (waiting[i] === 1) continue;
+    const k = kind[i] ?? NONE;
+    if (k === TUNNEL && (span[i] ?? 0) > 0) passUnder(y, i, waiting);
+    else if (carries(k)) {
+      if (item[i] === NONE || (prog[i] ?? 0) < 8) continue;
+      if (k === SPLITTER) split(y, i, wire);
+      else if (k === SORTER) sort(y, i, wire);
       else carryOn(y, i, wire);
-    } else if (k === BELT || k === JOINER) carryOn(y, i, wire);
-    else if (k === SPLITTER) split(y, i, wire);
-    else if (k === SORTER) sort(y, i, wire);
-    else {
+    } else {
       const r = holderOf(y, i);
-      if (k === CRATE) {
-        if (h.open[r] === 0) continue;
-        if (h.out[r] === NONE && (h.count[r] ?? 0) > 0) {
-          // It lets out whatever it holds most of.
-          let most = NONE;
-          let mostHas = 0;
-          for (let n = 0; n < ITEM_COUNT; n++) {
-            const has = h.stock[r * ITEM_COUNT + n] ?? 0;
-            if (has > mostHas) {
-              most = n;
-              mostHas = has;
-            }
-          }
-          if (most !== NONE) {
-            take(h, r, most);
-            h.out[r] = most;
-          }
-        }
-      }
-      sendOut(y, i, r, wire);
+      if (k === CRATE) letOut(y, i, r, wire);
+      else if (h.out[r] !== NONE) sendOut(y, i, r, wire);
     }
   }
+}
+
+/** An open crate lets out whatever it holds most of, one at a time. */
+function letOut(y: Yard, i: number, r: number, wire: Wire): void {
+  const h = y.holders;
+  if (h.open[r] === 0) return;
+  if (h.out[r] === NONE && (h.count[r] ?? 0) > 0) {
+    let most = NONE;
+    let mostHas = 0;
+    for (let n = 0; n < ITEM_COUNT; n++) {
+      const has = h.stock[r * ITEM_COUNT + n] ?? 0;
+      if (has > mostHas) {
+        most = n;
+        mostHas = has;
+      }
+    }
+    if (most !== NONE) {
+      take(h, r, most);
+      h.out[r] = most;
+      roomBeside(y, i, wire.waiting);
+    }
+  }
+  if (h.out[r] !== NONE) sendOut(y, i, r, wire);
 }
 
 /**
@@ -182,7 +222,7 @@ export function step(y: Yard): void {
  * wants, and when it is done the folio goes toward the research. One the research has stopped wanting
  * meanwhile (another Study gave it the last) stays in the Study.
  */
-function learn(y: Yard, r: number, speed: number): void {
+function learn(y: Yard, i: number, r: number, speed: number, waiting: Uint8Array): void {
   const g = y.line[0];
   if (g === undefined) return;
   const h = y.holders;
@@ -200,7 +240,10 @@ function learn(y: Yard, r: number, speed: number): void {
   h.work[r] = (h.work[r] ?? 0) - WORK.study;
   const n = h.making[r] ?? NONE;
   h.making[r] = NONE;
-  if (giveGoal(y, g, n, 1) > 0) take(h, r, n);
+  if (giveGoal(y, g, n, 1) > 0) {
+    take(h, r, n);
+    roomBeside(y, i, waiting);
+  }
 }
 
 /** The first folio a Study holds that a piece of research still wants, or `NONE`. */
@@ -341,7 +384,7 @@ function accepts(y: Yard, to: number, n: number, side: number, wire: Wire): bool
  * Hands the thing `n` to the tile at `to` from the tile beside it on its side `side` (a way).
  * `over` is how far past the edge of its last tile it had already come, in eighths.
  */
-function give(y: Yard, to: number, n: number, side: number, over: number): void {
+function give(y: Yard, to: number, n: number, side: number, over: number, waiting: Uint8Array): void {
   const k = y.kind[to];
   if (k === DEPOT || k === STOP) {
     deliver(y, n, 1);
@@ -355,10 +398,11 @@ function give(y: Yard, to: number, n: number, side: number, over: number): void 
     return;
   }
   put(y.holders, holderOf(y, to), n);
+  roomBeside(y, to, waiting);
 }
 
 /** Moves what is under a tunnel along, and brings it up at the far mouth. */
-function passUnder(y: Yard, i: number): void {
+function passUnder(y: Yard, i: number, waiting: Uint8Array): void {
   const under = y.tunnels.under;
   const along = y.tunnels.along;
   const at = tunnelOf(y, i) * SPAN_MOST;
@@ -387,20 +431,14 @@ function passUnder(y: Yard, i: number): void {
     y.item[i] = NONE;
     y.prog[i] = 0;
     y.via[i] = 0;
+    roomBeside(y, i, waiting);
   }
 }
 
-/** A belt, joiner or tunnel's far mouth hands on the thing it carries once it has crossed the tile. */
+/** A belt, joiner or tunnel's far mouth hands on the thing it carries, which has crossed the tile. */
 function carryOn(y: Yard, i: number, wire: Wire): void {
-  const n = y.item[i] ?? NONE;
-  if (n === NONE || (y.prog[i] ?? 0) < 8) return;
   const to = ahead(y, i);
-  const side = ((y.dir[i] ?? 0) + 2) & 3;
-  if (!accepts(y, to, n, side, wire)) return;
-  give(y, to, n, side, (y.prog[i] ?? 8) - 8);
-  y.item[i] = NONE;
-  y.prog[i] = 0;
-  y.via[i] = 0;
+  if (!passTo(y, i, to, ((y.dir[i] ?? 0) + 2) & 3, wire)) refused(y, i, to, wire);
 }
 
 /**
@@ -409,50 +447,94 @@ function carryOn(y: Yard, i: number, wire: Wire): void {
  * otherwise to the others in turn.
  */
 function split(y: Yard, i: number, wire: Wire): void {
-  const n = y.item[i] ?? NONE;
-  if (n === NONE || (y.prog[i] ?? 0) < 8) return;
   const first = (y.first[i] ?? 0) - 1;
-  if (first >= 0 && pass(y, i, n, first, wire)) return;
+  if (first >= 0 && pass(y, i, first, wire)) return;
   // Its next way out is under its next way in (`onTurn`).
   const turn = (y.turn[i] ?? 0) & 3;
   for (let k = 0; k < 3; k++) {
     const way = (k + turn) % 3;
-    if (way === first || !pass(y, i, n, way, wire)) continue;
+    if (way === first || !pass(y, i, way, wire)) continue;
     y.turn[i] = ((y.turn[i] ?? 0) & ~3) | ((way + 1) % 3);
     return;
   }
+  // Refused every way it sends: it waits, unless one of them takes turns.
+  for (let way = 0; way < 3; way++) if (takesTurns(y, wayOut(y, i, way))) return;
+  wire.waiting[i] = 1;
 }
 
-/** Hands the thing `n` a splitter or sorter carries to its way out `way`, if the tile there takes it. Says whether it did. */
-function pass(y: Yard, i: number, n: number, way: number, wire: Wire): boolean {
-  const to = wayOut(y, i, way);
-  const side = ((y.dir[i] ?? 0) + (way === 0 ? 2 : way === 1 ? 1 : 3)) & 3;
-  if (!accepts(y, to, n, side, wire)) return false;
-  give(y, to, n, side, (y.prog[i] ?? 8) - 8);
-  y.item[i] = NONE;
-  y.prog[i] = 0;
-  y.via[i] = 0;
-  return true;
-}
+/** Hands what a splitter or sorter carries to its way out `way`, if the tile there takes it. Says whether it did. */
+const pass = (y: Yard, i: number, way: number, wire: Wire): boolean =>
+  passTo(y, i, wayOut(y, i, way), ((y.dir[i] ?? 0) + (way === 0 ? 2 : way === 1 ? 1 : 3)) & 3, wire);
 
 /** The way a sorter sends what it carries: the thing it is set to to its side (`sortWay`), anything else ahead. */
 const sortedWay = (y: Yard, i: number): number => (y.item[i] === y.set[i] ? sortWay(y, i) : 0);
 const sortedTo = (y: Yard, i: number): number => wayOut(y, i, sortedWay(y, i));
 
-/** A sorter hands on what it carries, once it has crossed the tile, the one way it goes, when the tile there takes it. */
+/** A sorter hands on what it carries, which has crossed the tile, the one way it goes, when the tile there takes it. */
 function sort(y: Yard, i: number, wire: Wire): void {
+  if (!pass(y, i, sortedWay(y, i), wire)) refused(y, i, sortedTo(y, i), wire);
+}
+
+/**
+ * Hands what the tile at `i` carries to the tile at `to`, which it comes into by its side `side`, if
+ * that tile takes it, with how far past the edge it had come. Says whether it did.
+ */
+function passTo(y: Yard, i: number, to: number, side: number, wire: Wire): boolean {
   const n = y.item[i] ?? NONE;
-  if (n !== NONE && (y.prog[i] ?? 0) >= 8) pass(y, i, n, sortedWay(y, i), wire);
+  if (!accepts(y, to, n, side, wire)) return false;
+  give(y, to, n, side, (y.prog[i] ?? 8) - 8, wire.waiting);
+  y.item[i] = NONE;
+  y.prog[i] = 0;
+  y.via[i] = 0;
+  roomBeside(y, i, wire.waiting);
+  return true;
 }
 
 /** A gatherer, machine or crate hands on its finished piece. */
 function sendOut(y: Yard, i: number, r: number, wire: Wire): void {
   const h = y.holders;
   const n = h.out[r] ?? NONE;
-  if (n === NONE) return;
   const to = ahead(y, i);
   const side = ((y.dir[i] ?? 0) + 2) & 3;
-  if (!accepts(y, to, n, side, wire)) return;
-  give(y, to, n, side, 0);
+  if (!accepts(y, to, n, side, wire)) {
+    refused(y, i, to, wire);
+    return;
+  }
+  give(y, to, n, side, 0, wire.waiting);
   h.out[r] = NONE;
+  roomBeside(y, i, wire.waiting);
+}
+
+// ---------- waiting ----------
+
+/** The tiles that wait, every one forgotten if a command has changed the yard since they were last. */
+function waitingOf(y: Yard, wire: Wire): Uint8Array {
+  if (wire.waitingFrom !== y.rev) {
+    wire.waiting.fill(0);
+    wire.waitingFrom = y.rev;
+  }
+  return wire.waiting;
+}
+
+/**
+ * The tile at `i` could not hand on what it holds to the tile at `to`, which had no room for it: it
+ * waits. Not at a tile whose ways in take turns, which may let it in once the thing whose turn it is
+ * goes another way, with nothing beside that tile changed; there it tries again each tick.
+ */
+function refused(y: Yard, i: number, to: number, wire: Wire): void {
+  if (!takesTurns(y, to)) wire.waiting[i] = 1;
+}
+
+/** Whether the tile at `to` lets things in by turns: a joiner, or a splitter with ways in. */
+const takesTurns = (y: Yard, to: number): boolean =>
+  to >= 0 && (y.kind[to] === JOINER || (y.kind[to] === SPLITTER && (y.ins[to] ?? 0) !== 0));
+
+/** The tile at `i` may have room for more, or for another thing: the tiles beside it, which are all that may hand to it, stop waiting. */
+function roomBeside(y: Yard, i: number, waiting: Uint8Array): void {
+  const { edge, w } = y.land;
+  const off = edge[i] ?? 15;
+  if ((off & 1) === 0) waiting[i + 1] = 0;
+  if ((off & 2) === 0) waiting[i + w] = 0;
+  if ((off & 4) === 0) waiting[i - 1] = 0;
+  if ((off & 8) === 0) waiting[i - w] = 0;
 }

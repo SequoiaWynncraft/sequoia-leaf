@@ -151,6 +151,8 @@ export function rewire(y: Yard): Wire {
     recipes: ALL_KINDS.map((k) => recipesFor(y.open, k)),
     steady,
     demand,
+    waiting: new Uint8Array(n),
+    waitingFrom: y.rev,
   };
   y.wire = wire;
   y.demand = demand;

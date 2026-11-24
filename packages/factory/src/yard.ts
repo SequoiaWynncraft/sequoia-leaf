@@ -119,6 +119,14 @@ export interface Wire {
   /** Power always there (the depot and the waterwheels), and power drawn. */
   readonly steady: number;
   readonly demand: number;
+  /**
+   * 1 for each tile that waits: it holds a thing the tile it hands to has no room for, so handing
+   * on passes it over until a tile beside it may have room (`tick.ts`). Forgotten whenever the yard
+   * is changed other than by its ticks: with the plumbing, and after a command (`waitingFrom`).
+   */
+  readonly waiting: Uint8Array;
+  /** The yard's `rev` when `waiting` was last forgotten. */
+  waitingFrom: number;
 }
 
 /** A piece kept in a blueprint, 10 bytes: kind, x, y, way, span, recipe, open, tint, a splitter's ways or a sorter's side (`packWays`), grade. */
