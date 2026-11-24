@@ -13,6 +13,7 @@ import {
   type LiveMember,
   type LiveStatus,
   type Motion,
+  type RoomState,
   type Step,
 } from "@sequoia-leaf/kit/realtime.ts";
 import type { Dir } from "@sequoia-leaf/kit/skin.ts";
@@ -143,13 +144,13 @@ export type LinkShown = "none" | "reconnecting" | "replaced" | "signedout";
 export const QUIET_FOR = 2000;
 
 /**
- * What the town shows for the connection's latest `status`: a card once it has let go for good;
- * otherwise "Reconnecting…" once it has been down `QUIET_FOR` (`down`, milliseconds since the drop,
- * null while it is not down), until the room welcomes the page again.
+ * What the town shows of where the page stands with its room (null: no room): a card once Leaf has
+ * let it go for good; otherwise "Reconnecting…" once the room has been lost to a drop for `QUIET_FOR`,
+ * until the room welcomes the page again.
  */
-export function linkShown(status: LiveStatus | null, down: number | null): LinkShown {
-  if (status === "replaced" || status === "signedout") return status;
-  return down !== null && down >= QUIET_FOR ? "reconnecting" : "none";
+export function linkShown(state: RoomState | null): LinkShown {
+  if (state?.at === "gone" && state.why !== "closed") return state.why;
+  return state?.at === "down" && state.ms >= QUIET_FOR ? "reconnecting" : "none";
 }
 
 // ---------- who is in the room ----------

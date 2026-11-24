@@ -28,6 +28,7 @@ import {
   type LiveRoom,
   type LiveStatus,
   Playout,
+  roomState,
   sendIn,
   silent,
   type Step,
@@ -215,26 +216,20 @@ const drop = (link: string, code: number, now = 5000): ConnEvent<string> => ({
 
 describe("where the connection is", () => {
   type C = Conn<string>;
+  const counted = { shown: null, tries: 0, failed: 0, restart: false, away: false, downSince: null };
   const down = (over: Partial<Omit<Extract<C, { at: "down" }>, "at">> = {}): C => ({
     at: "down",
-    shown: null,
-    tries: 0,
-    failed: 0,
-    restart: false,
+    ...counted,
     lastTry: -Infinity,
     retryAt: -Infinity,
     ...over,
   });
-  const on = (where: "connecting" | "open", over: Partial<Omit<Extract<C, { link: string }>, "at">> = {}): C => ({
-    at: where,
-    shown: null,
-    link: "a",
-    since: 1000,
-    tries: 0,
-    failed: 0,
-    restart: false,
-    ...over,
-  });
+  const on = (where: "connecting" | "open", over: Partial<Omit<Extract<C, { at: "open" }>, "at">> = {}): C => {
+    const { room = "joining", ...rest } = over;
+    return where === "open"
+      ? { at: "open", ...counted, link: "a", since: 1000, room, ...rest }
+      : { at: "connecting", ...counted, link: "a", since: 1000, ...rest };
+  };
 
   test.each<[string, C, ConnEvent<string>, C]>([
     ["a try begins from down", firstConn(), { do: "try", link: "a", now: 1000 }, on("connecting")],
@@ -247,28 +242,29 @@ describe("where the connection is", () => {
     ],
     ["another connection opening is nothing", on("connecting"), { do: "opened", link: "b" }, on("connecting")],
     [
-      "the welcome shows this connection, and its tries start again",
-      on("open", { tries: 4, restart: true }),
+      "the welcome shows this connection, in the room, and its tries start again",
+      on("open", { tries: 4, restart: true, downSince: 900 }),
       { do: "welcomed", link: "a" },
-      on("open", { shown: "a" }),
+      on("open", { shown: "a", room: "in" }),
     ],
     [
       "a welcomed connection dropped waits the first wait",
-      on("open", { shown: "a", since: 900 }),
+      on("open", { shown: "a", since: 900, room: "in" }),
       drop("a", 1006),
-      down({ shown: "a", tries: 1, lastTry: 900, retryAt: 5250 }),
+      down({ shown: "a", tries: 1, lastTry: 900, retryAt: 5250, downSince: 5000 }),
     ],
     [
       "dropped as Leaf restarts, the first wait is the second, and the welcome will say so",
-      on("open", { shown: "a" }),
+      on("open", { shown: "a", room: "in" }),
       drop("a", CLOSE.restart),
-      down({ shown: "a", tries: 2, restart: true, lastTry: 1000, retryAt: 5500 }),
+      down({ shown: "a", tries: 2, restart: true, lastTry: 1000, retryAt: 5500, downSince: 5000 }),
     ],
     [
       "a try that did not open counts as failed, and waits longer",
-      on("connecting", { shown: "z", tries: 3, failed: 1, restart: true }),
+      on("connecting", { shown: "z", tries: 3, failed: 1, restart: true, downSince: 4000 }),
       drop("a", 1006),
-      down({ shown: "z", tries: 4, failed: 2, restart: true, lastTry: 1000, retryAt: 7000 }),
+      // Lost since the first drop, not this one.
+      down({ shown: "z", tries: 4, failed: 2, restart: true, lastTry: 1000, retryAt: 7000, downSince: 4000 }),
     ],
     [
       "opened elsewhere: let go",
@@ -282,7 +278,7 @@ describe("where the connection is", () => {
       "back while a try has been opening over a second: tried again at once",
       on("connecting", { since: 1000 }),
       { do: "wake", now: 2000 },
-      down({ failed: 1, lastTry: 1000, retryAt: 2000 }),
+      down({ failed: 1, lastTry: 1000, retryAt: 2000, downSince: 2000 }),
     ],
     ["back while a try has just begun: nothing", on("connecting"), { do: "wake", now: 1500 }, on("connecting")],
     [
@@ -306,6 +302,60 @@ describe("where the connection is", () => {
     ["Leaf says signed out while open: kept", on("open"), { do: "letGo", why: "signedout" }, on("open")],
     ["the page closes it", on("open", { shown: "a" }), { do: "close" }, { at: "gone", why: "closed" }],
     [
+      "away from a room it is in: steps out, and shows nothing",
+      on("open", { shown: "a", room: "in" }),
+      { do: "away", on: true },
+      on("open", { away: true, room: "out" }),
+    ],
+    [
+      "away while still joining: stays joining, and steps out as the welcome comes",
+      on("open", { shown: "z" }),
+      { do: "away", on: true },
+      on("open", { away: true }),
+    ],
+    [
+      "welcomed while away: out of the room at once, and nothing is shown",
+      on("open", { away: true, downSince: 900 }),
+      { do: "welcomed", link: "a" },
+      on("open", { away: true, room: "out" }),
+    ],
+    [
+      "back from away on the open connection: joins again, and is in once welcomed",
+      on("open", { away: true, room: "out" }),
+      { do: "away", on: false },
+      on("open", { room: "joining" }),
+    ],
+    [
+      "back from away while still joining: the welcome to come puts it in",
+      on("open", { away: true }),
+      { do: "away", on: false },
+      on("open"),
+    ],
+    [
+      "away while down or connecting: carried to the next connection, which steps out as it is welcomed",
+      down({ shown: "a", downSince: 800 }),
+      { do: "away", on: true },
+      down({ away: true, downSince: 800 }),
+    ],
+    [
+      "a drop while away keeps the page away, and the connection comes back to step out again",
+      on("open", { away: true, room: "out" }),
+      drop("a", 1006),
+      down({ away: true, tries: 1, lastTry: 1000, retryAt: 5250, downSince: 5000 }),
+    ],
+    [
+      "a try opening carries the page's wish",
+      down({ away: true }),
+      { do: "try", link: "b", now: 1200 },
+      on("connecting", { away: true, since: 1200, link: "b" }),
+    ],
+    [
+      "asked to be where it is already: nothing",
+      on("open", { room: "in", shown: "a" }),
+      { do: "away", on: false },
+      on("open", { room: "in", shown: "a" }),
+    ],
+    [
       "nothing moves a connection let go of",
       { at: "gone", why: "replaced" },
       { do: "try", link: "a", now: 0 },
@@ -313,6 +363,17 @@ describe("where the connection is", () => {
     ],
   ])("%s", (_name, from, event, to) => {
     expect(stepConn(from, event)).toEqual(to);
+  });
+
+  test("what the page is told of its room, from where the connection is", () => {
+    expect(roomState(on("open", { room: "in", shown: "a" }), 9000)).toEqual({ at: "in" });
+    expect(roomState(on("open", { away: true, room: "out" }), 9000)).toEqual({ at: "away" });
+    expect(roomState(down({ away: true, downSince: 100 }), 9000)).toEqual({ at: "away" });
+    expect(roomState(on("connecting"), 9000)).toEqual({ at: "joining" });
+    expect(roomState(on("open"), 9000)).toEqual({ at: "joining" });
+    expect(roomState(down({ downSince: 6000 }), 9000)).toEqual({ at: "down", ms: 3000 });
+    expect(roomState(on("open", { downSince: 6000 }), 9000)).toEqual({ at: "down", ms: 3000 });
+    expect(roomState({ at: "gone", why: "replaced" }, 9000)).toEqual({ at: "gone", why: "replaced" });
   });
 });
 
@@ -638,6 +699,73 @@ describe("a live room", () => {
     s.drop(CLOSE.replaced);
 
     expect([room.members().size, room.sample(2), room.you()]).toEqual([0, null, null]);
+  });
+
+  test("steps out of the room and back in on the one connection: Leaf is told each way, and nothing is opened again", async () => {
+    const w = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: TESTER },
+      "GET /v1/game/presence": { status: 200, body: { present: [], resting: [] } },
+      "PUT /v1/game/presence": { status: 200, body: { present: [], resting: [] } },
+    });
+    world = w;
+    await start();
+    undo = pretend({
+      socket: (url) => {
+        const s = new FakeSocket(url);
+        sockets.push(s);
+        return s;
+      },
+    });
+    const heard: string[] = [];
+    room = joinLive("town", { welcome: (you) => heard.push(`welcome ${you}`) });
+    const s = socket(0);
+    s.open();
+    s.says(welcome(1, w.clock.now));
+    s.says({ t: "joined", member: ALICE });
+    expect(room.state()).toEqual({ at: "in" });
+
+    room.away(true);
+    expect(s.texts().at(-1)).toEqual({ t: "leave" });
+    expect(room.state()).toEqual({ at: "away" });
+    // Away, the page is in no room: nobody is shown, its moves go nowhere, and it says where the player is itself.
+    expect([room.you(), room.members().size]).toEqual([null, 0]);
+    const moves = s.moves().length;
+    room.move(step(3, 3, Flag.Moving));
+    expect(s.moves()).toHaveLength(moves);
+    here("town");
+    await Bun.sleep(10);
+    expect(w.sent.filter((x) => x.path === "/v1/game/presence").map((x) => x.method)).toEqual(["PUT"]);
+
+    room.away(false);
+    expect(s.texts().at(-1)).toEqual({ t: "join", room: "town" });
+    expect(room.state()).toEqual({ at: "joining" });
+    s.says(welcome(4, w.clock.now));
+    expect(room.state()).toEqual({ at: "in" });
+    expect(room.you()).toBe(4);
+    // In again: the player's place goes at once on the same connection.
+    expect(s.moves().length).toBeGreaterThan(moves);
+    expect(heard).toEqual(["welcome 1", "welcome 4"]);
+    expect(sockets).toHaveLength(1);
+    expect(s.closed).toBeNull();
+    here(null);
+  });
+
+  test("a connection welcomed while the page is away steps out at once, and the page hears no welcome", async () => {
+    await live();
+    const heard: string[] = [];
+    room = joinLive("town", { welcome: (you) => heard.push(`welcome ${you}`) });
+    room.away(true);
+    const s = socket(0);
+    s.open();
+    s.says(welcome(1, 0));
+    expect(s.texts().map((m) => m.t)).toEqual(["ping", "leave"]);
+    expect(room.state()).toEqual({ at: "away" });
+    expect(heard).toEqual([]);
+    room.away(false);
+    expect(s.texts().at(-1)).toEqual({ t: "join", room: "town" });
+    s.says(welcome(2, 0));
+    expect(heard).toEqual(["welcome 2"]);
   });
 
   test("leaves and closes when the page is done with it, and sends nothing on a socket not yet open", async () => {

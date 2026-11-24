@@ -62,6 +62,7 @@ import {
   stirred,
   tellRoom,
   townOnStage,
+  type TownStage,
   waveAt,
 } from "./players.ts";
 import { type TownHandles, townHandles } from "./review.ts";
@@ -135,10 +136,10 @@ export interface Town extends Scene {
   /** Walks the member to a game's door and on through it (for the Works, to `of`'s yard, if given). */
   goIn(id: GameId, of?: string): void;
   /**
-   * The town is on the stage, or off it (the camp, or a game open over it): only while it is on is
-   * the page in the town's live room.
+   * Where the stage has the town (`players.ts`): on it, in the town's live room; off it for a camp or
+   * the Grove, stepped out of the room on the same connection; under a game, with no room at all.
    */
-  onStage(on: boolean): void;
+  onStage(at: TownStage): void;
   /** The town's own handles for looking at it from outside (`review.ts`). */
   readonly handles: TownHandles;
 }

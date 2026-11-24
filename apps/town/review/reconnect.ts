@@ -101,10 +101,10 @@ const RECORD = `(() => {
   return "recording";
 })()`;
 
-/** Waits, inside the page, for the town's live connection to be open. */
+/** Waits, inside the page, for the town's live connection to be open and in the room. */
 const OPEN = `new Promise((resolve) => {
   const t = setInterval(() => {
-    if (window.town?.link().status === "open" && window.town.link().you !== null) { clearInterval(t); resolve("open"); }
+    if (window.town?.link().state?.at === "in" && window.town.link().you !== null) { clearInterval(t); resolve("open"); }
   }, 10);
 })`;
 
@@ -117,7 +117,7 @@ const ROUND = `new Promise((resolve) => {
   const from = log.length;
   let down = null;
   const t = setInterval(() => {
-    if (down === null && window.town.link().status !== "open") down = Date.now();
+    if (down === null && window.town.link().state?.at !== "in") down = Date.now();
     if (down === null) return;
     const tries = log.slice(from);
     const ok = tries.find((e) => e.welcomed !== null);
