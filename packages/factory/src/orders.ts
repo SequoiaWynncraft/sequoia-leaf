@@ -228,10 +228,20 @@ export function townGifts(y: Yard): { id: string; title: string; line: string }[
 
 // ---------- the board ----------
 
-/** Hangs orders on the board until it is full, once it is up. A yard with no seed hangs none. */
+/**
+ * Hangs orders on the board until it is full, once it is up. A yard with no seed hangs none. From
+ * tier 2 an order not yet filled that asks only for things straight off the ground, hung before the
+ * board stopped asking for those, is taken down and a fresh one hung, as `fresh` would draw today.
+ */
 export function fillBoard(y: Yard): void {
   const seed = y.seed;
   if (!y.open.board || seed === null) return;
+  if (y.open.tier >= 2 && askable(y).some((k) => step(k) > 0))
+    for (let slot = y.board.length - 1; slot >= 0; slot--) {
+      const o = y.board[slot];
+      if (o && !isFilled(o.want, o.filled) && ALL_ITEMS.every((k) => (o.want[k] ?? 0) === 0 || step(k) === 0))
+        rehang(y, slot);
+    }
   while (y.board.length < y.open.hooks) y.board.push(fresh(y, seed));
   if (y.news.length > 200) y.news.splice(0, y.news.length - 200);
 }

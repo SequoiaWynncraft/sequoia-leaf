@@ -155,6 +155,12 @@
       #track .k-label {
         flex: 1 0 auto;
       }
+      /* How many orders wait to be handed over: a tag on the small line over the title, as small as it. */
+      #track .k-chip {
+        min-height: calc(var(--u) * 9);
+        padding-inline: calc(var(--u) * 2);
+        font: var(--f-small);
+      }
       /* What comes into hand next, in one line. */
       #track .then {
         overflow: hidden;
