@@ -40,12 +40,12 @@ import { bake, type Body, lookFor, paintSkin, skinOf } from "@sequoia-leaf/kit/s
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { zAt } from "@sequoia-leaf/town/clock.ts";
+import type { Ground } from "@sequoia-leaf/town/map/grid.ts";
 
 import { cardLine } from "./about.ts";
 import { face, feet, footfall, headOf, hop, makeActor, onScreen, putAs, say, stepActor } from "./actors.ts";
 import { emoteOver, float } from "./fx.ts";
 import { type Actor, G, hooks, ROOM, SEED, toPage } from "./game.ts";
-import type { Ground } from "./grid.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, showCard } from "./hud.ts";
 import { campChanged, campEntered, visiting } from "./leaf.ts";

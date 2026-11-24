@@ -1,7 +1,8 @@
 import { beforeEach, expect, test } from "bun:test";
 
+import { makeGround } from "@sequoia-leaf/town/map/grid.ts";
+
 import { clearFx, floaters } from "./fx.ts";
-import { makeGround } from "./grid.ts";
 import { makePet, pleased, stepPet } from "./pets.ts";
 
 const NO_ART = { sit: [], walk: [], walkR: [], sleep: null, glad: null };

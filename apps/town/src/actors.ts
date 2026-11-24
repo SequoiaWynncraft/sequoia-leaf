@@ -10,12 +10,12 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { dist, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { folkAt, roll, type Walk } from "@sequoia-leaf/town/clock.ts";
 import type { Townsperson } from "@sequoia-leaf/town/folk.ts";
+import type { Ground } from "@sequoia-leaf/town/map/grid.ts";
 
 import { beside, crowds, type Placed } from "./apart.ts";
 import { folkArt } from "./folkart.ts";
 import { puff } from "./fx.ts";
 import { type Actor, G, type Move, SEED, type Who } from "./game.ts";
-import type { Ground } from "./grid.ts";
 import type { Steer } from "./stage.ts";
 import { type Seat, SEATS, STALL_BEHIND, STALL_FRONT_Y, STALL_TOP_Y, TOWN } from "./world.ts";
 

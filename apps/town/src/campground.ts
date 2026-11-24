@@ -9,8 +9,7 @@ import { EARTH, GREEN, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { paint } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, hash, type Pt, vnoise } from "@sequoia-leaf/kit/util.ts";
 import { CGH, CGW, TRAIL, YARD } from "@sequoia-leaf/town/camp.ts";
-
-import { CELL } from "./grid.ts";
+import { CELL } from "@sequoia-leaf/town/map/grid.ts";
 
 /** The clearing, in art pixels. */
 export const CW = CGW * CELL;

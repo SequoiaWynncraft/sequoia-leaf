@@ -11,11 +11,11 @@ import { GOLD } from "@sequoia-leaf/kit/palette.ts";
 import type { Dir } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, dist, must, type Pt, type Rect } from "@sequoia-leaf/kit/util.ts";
+import type { Ground } from "@sequoia-leaf/town/map/grid.ts";
 
 import { feet, headOf, hop, pushOf, shove, stop, walkTo } from "./actors.ts";
 import { ring } from "./fx.ts";
 import { type Actor, G, type Prompted, show } from "./game.ts";
-import type { Ground } from "./grid.ts";
 import { closeCard, closePanel } from "./hud.ts";
 import { type Prop, propUnder } from "./props.ts";
 import type { Hover, Steer } from "./stage.ts";

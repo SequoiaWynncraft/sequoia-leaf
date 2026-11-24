@@ -40,6 +40,7 @@ import {
 } from "@sequoia-leaf/town/camp.ts";
 import { AT_CAMP, folk } from "@sequoia-leaf/town/folk.ts";
 import { BOX_FULL, waiting } from "@sequoia-leaf/town/mail.ts";
+import { CELL, makeGround } from "@sequoia-leaf/town/map/grid.ts";
 import { footprint, thingOf, turnsOf } from "@sequoia-leaf/town/things.ts";
 
 import { face, hop, hopTo, makeFolk, say, stepActor, stop, walkAlong, walkTo, walkToSeat, wayTo } from "./actors.ts";
@@ -65,7 +66,6 @@ import { makeApart } from "./crowd.ts";
 import { drawPicture, drawProp, drawWords, type Picture, sizeBuffers } from "./draw.ts";
 import { bit, burst, float, flutter, puff, sparkle, updateFx } from "./fx.ts";
 import { type Actor, after, changed, cue, forgetLater, G, hooks, show, stepCues, stepLater, today } from "./game.ts";
-import { CELL, makeGround } from "./grid.ts";
 import { paintTrunk } from "./ground.ts";
 import { guild, type Happening } from "./guild.ts";
 import { closeCard, closePanel, covered, setStrip, showCard } from "./hud.ts";

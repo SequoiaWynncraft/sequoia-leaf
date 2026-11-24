@@ -47,4 +47,23 @@ describe("ground to walk on", () => {
     const way = g.findPath({ x: 12, y: 12 }, { x: 100, y: 12 }, false);
     expect(way.length).toBeGreaterThan(5);
   });
+
+  test("ground whose corner is left of and above 0 is walked round as anywhere else", () => {
+    // 20 squares across from -64, 12 down from -40: a wall down the middle with a gap at its foot.
+    const g = makeGround(20, 12, open, { x: -64, y: -40 });
+    g.fill(10, 0, 10, 8, 1);
+    expect(g.cellBlocked(10, 0)).toBe(true);
+    expect(g.footBlocked(10 * CELL - 64 + 4, -40 + 4)).toBe(true);
+    expect(g.footBlocked(-60, -30)).toBe(false);
+    const from = { x: -52, y: -28 };
+    const to = { x: 76, y: -28 };
+    for (const straight of [true, false]) {
+      const way = g.findPath(from, to, straight);
+      expect(way.at(-1)).toEqual(to);
+      for (const p of way) expect(g.footBlocked(p.x, p.y)).toBe(false);
+      expect(Math.max(...way.map((p) => p.y))).toBeGreaterThan(9 * CELL - 40);
+    }
+    // A point off the sheet comes back to the nearest clear square on it.
+    expect(g.nearestFree(-200, -200)).toEqual({ x: -60, y: -35 });
+  });
 });

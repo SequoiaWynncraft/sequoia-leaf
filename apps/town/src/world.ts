@@ -5,8 +5,7 @@
 
 import type { Dir } from "@sequoia-leaf/kit/skin.ts";
 import { clamp, type Pt, vnoise } from "@sequoia-leaf/kit/util.ts";
-
-import { CELL, type Ground, makeGround } from "./grid.ts";
+import { CELL, type Ground, makeGround } from "@sequoia-leaf/town/map/grid.ts";
 
 /** The walkable town, in art pixels. */
 export const W = 512;
