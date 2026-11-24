@@ -80,6 +80,8 @@ export class Events extends Context.Service<
     readonly latestId: Effect.Effect<number>;
     /** The id of a player's newest event, or 0 when they have none. */
     readonly latestIdOf: (playerId: PlayerId) => Effect.Effect<number>;
+    /** Every player's events after an event id, oldest first. */
+    readonly allAfter: (afterId: number, limit: number) => Effect.Effect<readonly PlayersEvent[]>;
     /** Every player's events of these types after an event id, oldest first. */
     readonly everyoneAfter: (
       types: readonly string[],
@@ -122,6 +124,14 @@ export class Events extends Context.Service<
         Result: Schema.Struct({ id: Schema.Int }),
         execute: (playerId) => sql`SELECT COALESCE(MAX(id), 0) AS id FROM events WHERE player_id = ${playerId}`,
       });
+      const allAfter = SqlSchema.findAll({
+        Request: Schema.Struct({ afterId: Schema.Int, limit: Schema.Int }),
+        Result: PlayersEvent,
+        execute: ({ afterId, limit }) => sql`
+          SELECT id, player_id AS playerId, type, data, created_at AS createdAt FROM events
+          WHERE id > ${afterId} ORDER BY id LIMIT ${limit}
+        `,
+      });
       const everyoneAfter = SqlSchema.findAll({
         Request: Schema.Struct({ types: Schema.Array(Schema.String), afterId: Schema.Int, limit: Schema.Int }),
         Result: PlayersEvent,
@@ -161,6 +171,7 @@ export class Events extends Context.Service<
             Effect.map(({ id }) => id),
             Effect.orDie,
           ),
+        allAfter: (afterId, limit) => allAfter({ afterId, limit }).pipe(Effect.orDie),
         everyoneAfter: (types, afterId, limit) => everyoneAfter({ types, afterId, limit }).pipe(Effect.orDie),
         everyoneLatest: (types, limit) =>
           everyoneLatest({ types, limit }).pipe(

@@ -1,10 +1,8 @@
 import { draftEntry, leaf, leafForLevel, levelForXp, type LevelRules, type PlayerId } from "@sequoia-leaf/core";
-import { Effect, Schema } from "effect";
-import { SqlClient, SqlSchema } from "effect/sql";
+import { Effect } from "effect";
 
 import { Events } from "../events/store.ts";
 import { Ledger } from "../ledger/store.ts";
-import { PlayerUuid } from "../wire.ts";
 
 /**
  * The key of a level's payout. The first time a player reaches a level it is
@@ -85,35 +83,4 @@ export const levelUp = Effect.fn("levelUp")(function* (
   const paid = yield* payLevels(playerId, rules, now);
   yield* Events.use((events) => events.insert(playerId, { type: "level_up", data: { level, leaf: paid } }, now));
   return paid;
-});
-
-/**
- * Pays every player for the levels they have reached and not been paid for,
- * such as the ones reached before levels paid Leaf. It writes no events: those
- * levels were announced when they were reached. Running it again changes
- * nothing.
- */
-export const payMissedLevels = Effect.fn("payMissedLevels")(function* (rules: LevelRules, now: number) {
-  const sql = yield* SqlClient.SqlClient;
-  const players = SqlSchema.findAll({
-    Request: Schema.Void,
-    Result: Schema.Struct({ playerId: PlayerUuid }),
-    execute: () => sql`SELECT player_id AS playerId FROM accounts ORDER BY player_id`,
-  });
-  return yield* sql
-    .withTransaction(
-      Effect.gen(function* () {
-        let paidPlayers = 0;
-        let total = 0;
-        for (const { playerId } of yield* players(undefined)) {
-          const paid = yield* payLevels(playerId, rules, now);
-          if (paid > 0) {
-            paidPlayers += 1;
-            total += paid;
-          }
-        }
-        return { players: paidPlayers, leaf: total };
-      }),
-    )
-    .pipe(Effect.orDie);
 });

@@ -400,6 +400,17 @@ react to `quest_completed`.
 - A stream carries a comment line every 20 seconds to keep the connection
   open. Ignore lines that start with `:`.
 
+Every open stream is fed by a look at the events table every two seconds while
+any is open, not one each: one look for members' own events, and one for the
+guild's, which names whom each is of before its streams hear it, so a member's
+own event never waits on a name. Each new event is read once and its frame made
+once, and sent to the streams it belongs to. A stream with 32 looks' events
+waiting to be sent, its client reading too slowly, is ended once it has sent
+them; it reconnects, and reads the rest from where it got to. A look that fails
+is logged and made again from where the last one ended. A stream ends as soon as
+its events end or fail, so its client reconnects at once. A reconnecting stream
+reads what it missed itself, then joins the look, and sends each event once.
+
 ### The game's routes
 
 | Route                                 | What it returns                                                       |
@@ -508,8 +519,8 @@ by when each happened, each once however many members it paid; and `last_war`,
 `{ "territory", "occurred_at" }`, the last territory fought at by when the war
 happened (of two at one moment, the one whose name sorts later), or null. Both
 count only what Leaf paid for, which is what the events tell of. The stream behaves exactly as the member's own does, from where
-it starts to when it closes, and counts toward the same six. All open guild
-streams are fed by one look at the database every two seconds, not one each.
+it starts to when it closes, and counts toward the same six, and is fed by the
+guild's look at the database.
 Raid party members' events share a `detail` and an `occurred_at`.
 
 A member's name is the one the backend gave when they last opened
@@ -536,10 +547,17 @@ open and was heard of in the last 90 seconds (`VISIT_RULES.silentMs`), the
 player included, in name order, each with `acted_at`; `resting` is the rest of
 those whose newest visit was heard of in the last day (closed, or silent), last
 seen when it closed, whose `stay` is true, newest first, at most 24, and `gone`
-the same of those whose `stay` is false. All of it is read in one statement. A
+the same of those whose `stay` is false. All of it is read in one statement,
+from each player's newest visit, which the database keeps, one row a player
+(`last_visits`), as visits are written. The lists are read at most once a second
+for everybody who asks, and again at once after this Leaf writes a change to
+them (somebody comes, goes, moves, says otherwise about staying, goes silent,
+or is back from being away); so a time that changes without a change, when
+somebody here was last heard of or last did something, may be a second old. A
 player in one of Live's rooms of the game's places (the town) is there by Live
 itself, as if their game had said so (below). Word of a player older than the
-last Leaf heard of them, such as a room's written late, moves them nowhere.
+last Leaf heard of them, such as a room's written late, moves them nowhere, and
+opens no visit after they left.
 `GET /v1/game/presence` answers the same lists and writes nothing, for a page in
 one of Live's rooms, which is told the lists whenever they change (`about`,
 below) and asks only when it comes into the room.
@@ -1234,10 +1252,13 @@ rules are `packages/core/src/visits.ts`; the store is `apps/api/src/activity`.
   service did and how many it refused, by the UTC day. One sent again and
   answered from before is not counted again.
 
-Visits and sessions that ended 180 days ago are removed whenever a visit is
-opened, and the things done 180 days ago whenever new ones are written (at
-most 1,000 of a player's are written a UTC day); players are kept for good. Every minute Leaf
-closes the visits gone silent, and so does a read of the report.
+Every minute Leaf closes the visits gone silent, and removes up to 1,000 of the
+visits, and as many of the sessions, that ended 180 days ago; the things done
+180 days ago are removed whenever new ones are written (at most 1,000 of a
+player's are written a UTC day); players are kept for good. Each write of
+visits closes up to 100 gone silent first, and a read of the report closes them
+all. A live room's word that everybody in it is still there is written 100
+players to a transaction, so that no other write waits for more.
 
 `GET /v1/game/admin/activity?days=<n>` lets in only a session the backend marks
 as a website admin, and refuses anyone else with 403 `staff_only`. It covers
@@ -1524,6 +1545,16 @@ name them:
   the party too. Members were paid the rest of their share
   (`raid:<completion>:<player>:guild-share`), and every earn of the 16 players who
   were never in Sequoia was reversed (`undo:<key>`).
+
+At each start Leaf pays the levels reached and not paid for (`missed_levels`).
+It looks only at the accounts with an entry since its last look that changed
+their XP or their level payouts, and at every such account once more when the
+level rules change; it records how far it got (`level_checks`) a hundred
+accounts at a time, so one stopped halfway goes on at the next start, and then
+on to the newest entry. Each check takes the record with a number of its own and
+writes it only while it is still its own, so two at once (in a deploy) never
+skip a payout. A correction run by hand is looked at the same way at the next
+start.
 
 ## License
 

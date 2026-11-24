@@ -9,7 +9,7 @@ import { copiedLast, type CopyFailed, copyNewest, Offsite, RETRY } from "./backu
 import { snapshotIfDue, snapshotsIn } from "./backup/snapshot.ts";
 import { AppConfig } from "./config.ts";
 import { runCreditSync } from "./earning/run.ts";
-import { payMissedLevels } from "./levels/pay.ts";
+import { payMissedLevels } from "./levels/check.ts";
 import { type JobRun, jobRun, jobSucceededAt } from "./metrics.ts";
 import { GAMES } from "./play/games.ts";
 import { Play } from "./play/service.ts";
@@ -141,13 +141,18 @@ export const OffsiteCopies = Layer.effectDiscard(
   }),
 );
 
-/** Closes the visits gone silent, so that what is kept of sessions and players is as of the minute. */
+/**
+ * Closes the visits gone silent, so that what is kept of sessions and players is as of the minute,
+ * and removes some of what has been kept 180 days (`Visits.removeOld`).
+ */
 const silentVisits = step(
   "silent_visits",
   "Closing silent visits",
   Effect.gen(function* () {
     const visits = yield* Visits;
-    yield* visits.closeSilent(yield* Clock.currentTimeMillis);
+    const now = yield* Clock.currentTimeMillis;
+    yield* visits.closeSilent(now);
+    yield* visits.removeOld(now);
     return "done" as const;
   }),
 );
@@ -209,7 +214,10 @@ const rateCardUpdate = Effect.gen(function* () {
   return "done";
 });
 
-/** Pays once at start the levels reached before levels paid Leaf, or left unpaid by a failed run, and says what runs. */
+/**
+ * Pays at start the levels reached and not paid for (`payMissedLevels`: those reached before levels
+ * paid Leaf, or with new level rules, or by an entry that did not pay them), and says what runs.
+ */
 export const Startup = Layer.effectDiscard(
   Effect.gen(function* () {
     const config = yield* AppConfig;

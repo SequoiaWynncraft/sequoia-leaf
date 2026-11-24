@@ -35,9 +35,34 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migrations 35 and 34: no likes of camps kept, and `presence` back, empty, as migrations 12 to 29 left it. */
+/** Undoes migration 37: no newest visit kept for each player, and visits indexed by when they were last heard of. */
+const beforeLastVisits = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    for (const trigger of [
+      "visits_opened",
+      "visits_heard",
+      "visits_removed",
+      "players_seen_stay",
+      "players_seen_first",
+    ]) {
+      yield* sql`DROP TRIGGER ${sql(trigger)}`;
+    }
+    yield* sql`DROP TABLE last_visits`;
+    yield* sql`DROP INDEX visits_open_by_heard`;
+    yield* sql`CREATE INDEX visits_by_heard ON visits (heard_at)`;
+  });
+
+/** Undoes migrations 37 and 36: and no check for missed levels kept. */
+const beforeLevelChecks = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    yield* beforeLastVisits(sql);
+    yield* sql`DROP TABLE level_checks`;
+  });
+
+/** Undoes migrations 37 to 34: no likes of camps kept, and `presence` back, empty, as migrations 12 to 29 left it. */
 const beforeDropPresence = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
+    yield* beforeLevelChecks(sql);
     yield* sql`DROP TABLE camp_likes`;
     yield* sql`
       CREATE TABLE presence (
@@ -157,6 +182,8 @@ describe("the database", () => {
       { migration_id: 33, name: "about_from_visits" },
       { migration_id: 34, name: "drop_presence" },
       { migration_id: 35, name: "camp_likes" },
+      { migration_id: 36, name: "level_checks" },
+      { migration_id: 37, name: "last_visits" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -206,6 +233,8 @@ describe("the database", () => {
           "tallies",
           "camp_visits",
           "camp_likes",
+          "level_checks",
+          "last_visits",
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;
         }
@@ -220,7 +249,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 35 },
+      { latest: 37 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -421,6 +450,39 @@ describe("the database", () => {
       { player: stays, stay: 1 },
       { player: goes, stay: 0 },
       { player: unsaid, stay: 1 },
+    ]);
+  });
+
+  it("keeps each player's newest visit, and whether they stay, from the visits they had", async () => {
+    const path = join(directory, "leaf.db");
+    const [alice2, bob2, carol2] = ["a", "b", "c"].map((n) => `00000000-0000-4000-8000-00000000000${n}`);
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // Back to before migration 37: Alice in town now after a camp, Bob gone who would rather not stay, Carol never seen.
+        yield* beforeLastVisits(sql);
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 37`;
+        yield* sql`INSERT INTO sessions (id, player_id, guest, started_at) VALUES (1, ${alice2}, 0, 1), (2, ${bob2}, 1, 1)`;
+        yield* sql`
+          INSERT INTO visits (session_id, player_id, guest, place, source, entered_at, heard_at, left_at, instance)
+          VALUES (1, ${alice2}, 0, 'camp', 'call', 1, 5, 6, 'old'), (2, ${bob2}, 1, 'works', 'room', 2, 7, 9, 'old'),
+                 (1, ${alice2}, 0, 'town', 'room', 6, 8, NULL, 'old')
+        `;
+        yield* sql`
+          INSERT INTO players_seen (player_id, name, guest, first_seen_at, last_seen_at, stay)
+          VALUES (${alice2}, 'A', 0, 1, 1, 1), (${bob2}, 'B', 1, 1, 1, 0), (${carol2}, 'C', 0, 1, 1, 1)
+        `;
+      }),
+    );
+    expect(
+      await query(
+        path,
+        (sql) => sql`SELECT player_id, place, guest, heard_at, left_at, stay FROM last_visits ORDER BY 1`,
+      ),
+    ).toEqual([
+      { player_id: alice2, place: "town", guest: 0, heard_at: 8, left_at: null, stay: 1 },
+      { player_id: bob2, place: "works", guest: 1, heard_at: 7, left_at: 9, stay: 0 },
     ]);
   });
 
