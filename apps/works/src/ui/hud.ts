@@ -26,7 +26,7 @@ import { openPanel, type PanelId, togglePanel } from "./panels.ts";
 import { $, button, iconButton, pic, shows, when, type YardIcon, yardIcon } from "./parts.ts";
 import { orderRef } from "./refs.ts";
 import { studyStrip } from "./research.ts";
-import { givenTo, nextUp, nextWords, researchOpen, takeable, tierOpen } from "./standing.ts";
+import { givenTo, nextUp, nextWords, researchOpen, studiable, takeable, tierOpen } from "./standing.ts";
 import { hasViews, refreshWalk, wrongCount } from "./views.ts";
 
 const books = new Map<PanelId, HTMLElement>();
@@ -128,6 +128,46 @@ function tracker(): () => void {
   );
 }
 
+/**
+ * What the books' buttons print: the counts on their corners (orders ready to hand over, projects
+ * that may be taken, research that may be put in the line, pieces in trouble), which are there, and
+ * which is open or nudged.
+ */
+export const booksPrint = () => ({
+  ready: S.world.board.filter((s) => isFilled(s.want, s.filled)).length,
+  open: takeable().length,
+  study: studiable().length,
+  // The tier's screen is there once there is more than lessons, and research once the Study may be built.
+  tier: tierOpen() ? S.world.open.tier : null,
+  research: researchOpen(),
+  yard: hasViews(),
+  // Looked for at most once a second, and not at all in a yard of one plot or in a visit.
+  wrong: S.visiting ? 0 : wrongCount(),
+  panel: S.panel,
+  nudged: S.nudge?.part ?? null,
+});
+
+/** A name with a count said after it in words: "Research, 7 to study"; with no count, the name alone. */
+const said = (name: string, n: number, words: string): string => (n > 0 ? `${name}, ${n} ${words}` : name);
+
+/**
+ * What each button with a count on its corner is called, the count said in words for whoever cannot
+ * see the corner: "Research, 7 to study"; with no count, its name alone.
+ */
+export function bookNames(
+  p: ReturnType<typeof booksPrint>,
+  title: (id: PanelId) => string,
+): Map<PanelId | "yard", string> {
+  return new Map<PanelId | "yard", string>([
+    ["orders", said(title("orders"), p.ready, "ready")],
+    ["board", title("board")],
+    ["tier", said(title("tier"), p.open, "to take")],
+    ["research", said(title("research"), p.study, "to study")],
+    ["depot", title("depot")],
+    ["yard", said("The yard", p.wrong, "in trouble")],
+  ]);
+}
+
 function bookButtons(): () => void {
   const host = $("books");
   const make = (
@@ -158,35 +198,24 @@ function bookButtons(): () => void {
   });
   tip(yardBtn, () => `The yard (${WORKS_KEYS.name("move")})`);
   if (!S.visiting) host.append(yardBtn);
-  return shows(
-    () => ({
-      ready: S.world.board.filter((s) => isFilled(s.want, s.filled)).length,
-      open: takeable().length,
-      // The tier's screen is there once there is more than lessons, and research once the Study may be built.
-      tier: tierOpen() ? S.world.open.tier : null,
-      research: researchOpen(),
-      yard: hasViews(),
-      // Looked for at most once a second, and not at all in a yard of one plot or in a visit.
-      wrong: S.visiting ? 0 : wrongCount(),
-      panel: S.panel,
-      nudged: S.nudge?.part ?? null,
-    }),
-    (p) => {
-      set(ordersBtn, p.ready > 0 ? String(p.ready) : null);
-      set(tierBtn, p.open > 0 ? String(p.open) : null);
-      tierBtn.hidden = p.tier === null;
-      researchBtn.hidden = !p.research;
-      depotBtn.hidden = p.yard;
-      yardBtn.hidden = !p.yard;
-      set(yardBtn, p.wrong > 0 ? String(p.wrong) : null);
-      for (const [id, b] of books) {
-        b.classList.toggle("down", p.panel === id);
-        b.classList.toggle("nudged", p.nudged === id && p.panel !== id);
-        b.setAttribute("aria-label", titles.get(id)?.(p.tier ?? 0) ?? "");
-      }
-      yardBtn.classList.toggle("down", p.panel === "depot");
-    },
-  );
+  return shows(booksPrint, (p) => {
+    set(ordersBtn, p.ready > 0 ? String(p.ready) : null);
+    set(tierBtn, p.open > 0 ? String(p.open) : null);
+    set(researchBtn, p.study > 0 ? String(p.study) : null);
+    tierBtn.hidden = p.tier === null;
+    researchBtn.hidden = !p.research;
+    depotBtn.hidden = p.yard;
+    yardBtn.hidden = !p.yard;
+    set(yardBtn, p.wrong > 0 ? String(p.wrong) : null);
+    const names = bookNames(p, (id) => titles.get(id)?.(p.tier ?? 0) ?? "");
+    for (const [id, b] of books) {
+      b.classList.toggle("down", p.panel === id);
+      b.classList.toggle("nudged", p.nudged === id && p.panel !== id);
+      b.setAttribute("aria-label", names.get(id) ?? "");
+    }
+    yardBtn.setAttribute("aria-label", names.get("yard") ?? "");
+    yardBtn.classList.toggle("down", p.panel === "depot");
+  });
 }
 
 /** Leaves for the town (with `camp`, on to that player's camp): what is in the till goes into the purse on the way out. */

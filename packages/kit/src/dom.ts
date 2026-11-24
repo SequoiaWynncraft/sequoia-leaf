@@ -122,6 +122,7 @@ export type IconName =
   | "more"
   | "up"
   | "down"
+  | "fold"
   | "show"
   | "hide"
   | "wave"

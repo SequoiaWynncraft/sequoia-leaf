@@ -300,9 +300,11 @@ export const goals = (label: string, these: readonly Goal[]): Listed | null =>
 /**
  * A goal's head: its picture in a slot, a gap, its name, and at the right what is to be done with it
  * (a button, a mark) or nothing. The picture and the name open the goal's card. Every head has this
- * one layout, so names begin at the same left edge from row to row whatever their length.
+ * one layout, so names begin at the same left edge from row to row whatever their length. A card
+ * that folds (`folds.ts`) has its fold after the side, the two together, so that where the head is
+ * narrow they go under the name together.
  */
-export function head(g: Goal, side: Node | null = null): HTMLElement {
+export function head(g: Goal, side: Node | null = null, fold: Node | null = null): HTMLElement {
   const info = GOALS[g];
   const what = el(
     "span",
@@ -312,7 +314,8 @@ export function head(g: Goal, side: Node | null = null): HTMLElement {
     el("span", "gh-name k-name", { text: info?.title ?? "" }),
   );
   link(what, nodeRef(g));
-  return el("div", "gh", { "data-goal": info?.id ?? "" }, what, side);
+  const end = fold === null ? side : el("span", "gh-side", {}, side, fold);
+  return el("div", "gh", { "data-goal": info?.id ?? "" }, what, end);
 }
 
 /** How a node is spoken of: "Lesson 2 of 4", "Tier 1 project", "Tier 1 commission". */

@@ -13,6 +13,7 @@ import {
   type Goal,
   goal,
   GOALS,
+  isNode,
   item,
   LINE,
   play,
@@ -26,9 +27,10 @@ import {
 
 import { S } from "../state.ts";
 import type { Need } from "./goal.ts";
+import { bookNames, booksPrint } from "./hud.ts";
 import { ordersPrint, placed, plural, powerPrint } from "./panels.ts";
 import { researchPrint, stripPrint } from "./research.ts";
-import { lockOf, nextUp, nextWords, researchOpen, takeable, tierOpen } from "./standing.ts";
+import { lockOf, nextUp, nextWords, researchOpen, studiable, takeable, tierOpen } from "./standing.ts";
 import { tierPrint } from "./tier.ts";
 
 const order = (id: number, planks: number): { id: number; full: boolean } => ({ id, full: planks >= 10 });
@@ -86,6 +88,9 @@ describe("a panel is kept by what it prints", () => {
   });
 });
 
+/** What the books' buttons are called now, each titled by its id. */
+const names = (): Map<string, string> => bookNames(booksPrint(), (id) => id);
+
 /** A yard of a tier, as the page's own (not a visit). */
 function yardAt(tier: number): Yard {
   const y = create({ seed: 5, tier });
@@ -98,6 +103,13 @@ const named = (goals: readonly Goal[]): string[] => goals.map((g) => GOALS[g]?.i
 /** What a goal waits on, each by its name, how it stands, and what begins it. */
 const waits = (needs: readonly Need[]): string[] =>
   needs.map((n) => [GOALS[n.goal]?.id, n.stands, ...(n.begin ? [n.begin] : [])].join(": "));
+
+/** The research as the tier's screen prints it, each goal by its name. */
+function section() {
+  const r = tierPrint().research;
+  const ready = r?.ready ? `${GOALS[r.ready.goal]?.id}: ${r.ready.begin}` : null;
+  return r && { known: r.known, all: r.all, studied: GOALS[r.studied?.goal ?? -1]?.id ?? null, ready };
+}
 
 describe("the tier's screen", () => {
   test("is there from tier 1 and research from the tier that has a Study, and neither in a visit", () => {
@@ -181,7 +193,7 @@ describe("the tier's screen", () => {
       "upgrading: not begun",
       "brassfolio: not begun",
     ]);
-    expect(tierPrint().research).toEqual({ known: 0, all: 10 });
+    expect(tierPrint().research).toMatchObject({ known: 0, all: 10 });
     build(y, STUDY, 20, 15, 0, Infinity);
     expect(waits(tierPrint().commission?.needs ?? [])[0]).toBe("oilpress: not begun: study");
     study(y, goal("oilpress"));
@@ -211,7 +223,7 @@ describe("the tier's screen", () => {
     y.done = [...y.done, goal("oilpress")];
     reopen(y);
     expect(waits(tierPrint().commission?.needs ?? [])[0]).toBe("oilpress: known");
-    expect(tierPrint().research).toEqual({ known: 1, all: 10 });
+    expect(tierPrint().research).toMatchObject({ known: 1, all: 10 });
   });
 
   test("with nothing in hand, says what comes next: projects to take, the goal waited on and what opens it, or everything done", () => {
@@ -254,6 +266,55 @@ describe("the tier's screen", () => {
     // Research that waits on research.
     yardAt(3);
     expect(lockOf(goal("tooling"))).toBe("1 research left");
+  });
+
+  test("shows research beside the projects: what is being studied, else the first that can be begun and how", () => {
+    const y = yardAt(3);
+    // Nothing is being studied and no Study stands: the first that can be begun leads to building one.
+    expect(section()).toEqual({ known: 0, all: 10, studied: null, ready: "oilpress: build" });
+    build(y, STUDY, 20, 15, 0, Infinity);
+    expect(section()).toEqual({ known: 0, all: 10, studied: null, ready: "oilpress: study" });
+    // Being studied: what it wants is printed as the research screen prints it, and a folio studied
+    // moves a bar and prints the same.
+    study(y, goal("workshop"));
+    study(y, goal("oilpress"));
+    expect(section()).toEqual({ known: 0, all: 10, studied: "workshop", ready: null });
+    expect(tierPrint().research?.studied).toEqual(researchPrint().first);
+    const before = JSON.stringify(tierPrint());
+    const got = y.got[goal("workshop")];
+    if (!got) throw new Error("nothing is being studied");
+    got[item("timber")] = 30;
+    expect(JSON.stringify(tierPrint())).toBe(before);
+    // Every piece known: the count, and nothing being studied or to begin.
+    y.line = [];
+    y.done = [...y.done, ...ALL_GOALS.filter((g) => !isNode(g) && (GOALS[g]?.tier ?? 0) <= 3)];
+    reopen(y);
+    expect(section()).toEqual({ known: 10, all: 10, studied: null, ready: null });
+  });
+
+  test("the Research button counts the research that may be put in the line now", () => {
+    const y = yardAt(3);
+    // Those that wait on no other research, for the line is empty.
+    const free = ["oilpress", "workshop", "flywheel", "sorter", "planchest", "carttrack", "nightshift"];
+    expect([named(studiable()), booksPrint().study]).toEqual([free, 7]);
+    // One known lets on what waits on it; one in the line is not counted again.
+    y.done = [...y.done, goal("workshop")];
+    reopen(y);
+    study(y, goal("oilpress"));
+    expect(named(studiable())).toEqual(["flywheel", "tooling", "sorter", "planchest", "carttrack", "nightshift"]);
+    // The line full: none may be put in it, and the button has no count.
+    for (const g of ["flywheel", "sorter", "planchest"] as const) study(y, goal(g));
+    expect(y.line.length).toBe(LINE);
+    expect([studiable(), booksPrint().study]).toEqual([[], 0]);
+  });
+
+  test("a button's count is in its name, for whoever cannot see the corner", () => {
+    const y = yardAt(3);
+    expect(names().get("research")).toBe("research, 7 to study");
+    for (const g of ["oilpress", "flywheel", "sorter", "planchest"] as const) study(y, goal(g));
+    // The line full: no count, so the name alone.
+    expect(names().get("research")).toBe("research");
+    expect(names().get("board")).toBe("board");
   });
 
   test("the node in hand in Orders prints what it waits on the same way", () => {

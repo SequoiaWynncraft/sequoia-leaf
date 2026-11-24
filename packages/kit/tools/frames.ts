@@ -755,6 +755,8 @@ const ICONS: Readonly<Record<string, readonly string[]>> = {
   more: ["ww..ww..ww", "ww..ww..ww"],
   up: ["....ww....", "...wwww...", "..wwwwww..", ".wwwwwwww.", "wwwwwwwwww"],
   down: ["wwwwwwwwww", ".wwwwwwww.", "..wwwwww..", "...wwww...", "....ww...."],
+  // What folds: an arrow at what it folds, right while shut; square, so that turned it points down while open (`kit.css`).
+  fold: [".w.....", ".ww....", ".www...", ".wwww..", ".www...", ".ww....", ".w....."],
   // What a blue button does: an eye shows, an eye struck through hides.
   show: [
     "....wwww....",
