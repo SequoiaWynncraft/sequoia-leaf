@@ -8,7 +8,8 @@
  *   that what was taken out cannot come back unseen. `--lower` writes it lowered: it never adds a
  *   key or raises a count, so a new hit is fixed, not written down.
  *
- * With no baseline file, the check writes one with what it finds: that is how a ratchet starts.
+ * With no baseline file the check fails, so that deleting one cannot pass it; `--start` writes one
+ * with what it finds: that is how a ratchet starts.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -84,6 +85,10 @@ export function hold(name: string, now: Counts, command: string): boolean {
   const path = join(import.meta.dir, "baseline", `${name}.json`);
   const write = (counts: Counts): void => writeFileSync(path, `${JSON.stringify(sorted(counts), null, 2)}\n`);
   if (!existsSync(path)) {
+    if (!process.argv.includes("--start")) {
+      console.error(`No ${name} baseline at ${path}: start one with \`${command} --start\` and commit it.`);
+      return false;
+    }
     write(now);
     console.log(`Started the ${name} baseline with what there is now: ${path}`);
     return true;
