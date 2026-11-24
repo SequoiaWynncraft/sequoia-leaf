@@ -8,6 +8,7 @@ import { Effect, Schema } from "effect";
 
 import { type Here, hereFrom } from "../src/activity/here.ts";
 import { Visits } from "../src/activity/visits.ts";
+import { PlayerUuid } from "../src/wire.ts";
 import { type Backend, DAY, fakeBackend, HOUR, MINUTE, noNetwork, sessionOf, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
@@ -746,6 +747,19 @@ describe("whose camp", () => {
       gone: [{ id: carol, place: "camp", camp_owner: bob, camp_owner_name: "Bob" }],
     });
   });
+
+  it("names a camp's owner as the camp list does, though Leaf has never been told where the owner is", async () => {
+    // Bob has opened the game (so Leaf keeps his name, as the camp list names him) and the town (so
+    // it keeps his camp), and his page has said nowhere yet.
+    expect((await app.request("/v1/game/me", { headers: { Authorization: "Bearer bob-token" } })).status).toBe(200);
+    await openTown("bob");
+    const { body } = await say("alice", { place: "camp", camp_owner: bob });
+    const listed = await app.request("/v1/game/camps", { headers: { Authorization: "Bearer alice-token" } });
+    expect(await listed.json()).toMatchObject({ camps: [{ id: bob, name: "Bob" }] });
+    expect(Schema.decodeUnknownSync(AboutLists)(body).present).toStrictEqual([
+      { id: alice, place: "camp", camp_owner: bob, camp_owner_name: "Bob" },
+    ]);
+  });
 });
 
 /** A die that falls the same way every run: a whole number from 0 up to `n` (mulberry32, in exact 32-bit steps). */
@@ -883,7 +897,7 @@ const Newest = Schema.Struct({
   playerId: Schema.String,
   username: Schema.String,
   place: Schema.String,
-  campOwner: Schema.NullOr(Schema.String),
+  campOwner: Schema.NullOr(PlayerUuid),
   campOwnerName: Schema.NullOr(Schema.String),
   guest: Schema.BooleanFromBit,
   heardAt: Schema.Number,

@@ -82,6 +82,8 @@ export function signpost(body: HTMLElement, life: Scope): () => void {
   const find = el("input", "k-field", { type: "search", placeholder: "Find a camp", "aria-label": "Find a camp" });
   const tabs = el("div", "k-tabs", { role: "tablist", "aria-label": "Order" });
   const list = el("div", "camp-list k-scroll k-wait");
+  // Until Leaf has answered, the rows may yet be put in order: none can be pressed.
+  list.inert = true;
   body.append(find, tabs, list);
   /** Whether Leaf has answered with the camps: not yet, yes, or it could not be read. */
   let read: "asking" | "read" | "failed" = "asking";
@@ -147,6 +149,7 @@ export function signpost(body: HTMLElement, life: Scope): () => void {
     read = listed === null ? "failed" : "read";
     sort();
     list.classList.remove("k-wait");
+    list.inert = false;
     draw();
   })();
   return draw;

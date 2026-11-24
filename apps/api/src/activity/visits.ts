@@ -14,10 +14,11 @@ import {
 import { Array as Arr, Context, Effect, Layer, Option, PubSub, Ref, Schema, type Scope } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
+import { PlayerNames } from "../game/names.ts";
 import { LeafInstance } from "../instance.ts";
 import { tally } from "../tally/store.ts";
 import { PlayerUuid } from "../wire.ts";
-import { type Here, readHere } from "./here.ts";
+import { campOwners, type Here, namedCamps, readHere } from "./here.ts";
 
 /** Somebody whose stay in a place Leaf records: who they are now, and what their page said it is on, if it did. */
 export interface Visitor {
@@ -580,7 +581,11 @@ export class Visits extends Context.Service<
               )
             : Effect.void,
       };
-      const about = readHere(sql);
+      const names = yield* PlayerNames;
+      const read = readHere(sql);
+      // Each camp's owner is named as the camp list names them (Leaf's names, else Mojang's), so the two agree.
+      const about = (now: number) =>
+        Effect.flatMap(read(now), (here) => Effect.map(names.of(campOwners(here)), (named) => namedCamps(here, named)));
       return Visits.of({
         called: (who, spot, stay, now) => write(w, pageSaid(w, who, spot, stay, now), now),
         inRoom: (who, place, now) =>
