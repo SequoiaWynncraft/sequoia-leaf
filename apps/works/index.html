@@ -373,9 +373,9 @@
       .gl-row.locked .gl-what {
         opacity: 0.7;
       }
-      /* On a phone, in a screen of its own, a row is tall enough for a finger. */
+      /* On a phone, in a panel, a row is tall enough for a finger. */
       @media (max-width: 760px), (orientation: portrait) {
-        #panel.full .gl-row {
+        #panel .gl-row {
           min-height: calc(var(--u) * 20);
         }
       }
@@ -566,6 +566,17 @@
         50% {
           filter: brightness(1.5);
           translate: 0 calc(var(--u) * -2);
+        }
+      }
+      /* Asked for less motion: nothing here bobs, blinks or slides in; a nudge's bubble still points. */
+      @media (prefers-reduced-motion: reduce) {
+        #dock button.new,
+        #dock button.nudged,
+        #books .nudged,
+        #hand .grades.nudged,
+        #panel.slide,
+        .letter .line.in {
+          animation: none;
         }
       }
       #dock .gap {
