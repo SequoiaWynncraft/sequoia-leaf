@@ -93,6 +93,31 @@ function panel() {
 }
 
 describe("the board the panel shows", () => {
+  test("a panel shut while Leaf is asked, and opened again, draws the board when its own answer comes", async () => {
+    const answers = new Map<string, Answer>();
+    const drawn: string[] = [];
+    const asked: ((b: Board | null) => void)[] = [];
+    const page: TallyPage = {
+      ask: () => new Promise((resolve) => asked.push(resolve)),
+      draw(shown) {
+        drawn.push(`${shown.of.id} ${shown.at}`);
+        return [];
+      },
+    };
+    const shut = scope();
+    tallyBoards(shut, answers, page).show(RAIDS, "week");
+    shut.close();
+    tallyBoards(scope(), answers, page).show(RAIDS, "week");
+    // Leaf answers both, the shut panel's first, with the same board.
+    const [shutAsked, openAsked] = asked;
+    shutAsked?.(boardOf("raids"));
+    await Promise.resolve();
+    openAsked?.(boardOf("raids"));
+    await Promise.resolve();
+    expect(asked).toHaveLength(2);
+    expect(drawn).toEqual(["raids asking", "raids asking", "raids board"]);
+  });
+
   test("another board chosen shows as asked at once, and the one before plays and draws nothing more", async () => {
     jest.useFakeTimers();
     try {

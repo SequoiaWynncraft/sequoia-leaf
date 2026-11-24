@@ -121,11 +121,12 @@ export interface TallyBoards {
   redraw(): void;
 }
 
-/** A board and span shown, in a scope of its own, and whether a board has risen in it yet. */
+/** A board and span shown, in a scope of its own: what it last drew (as JSON, the board or "unread"; none while asked), and whether a board has risen in it yet. */
 interface View {
   readonly of: TallyBoard;
   readonly path: string;
   readonly scope: Scope;
+  drawn: string | undefined;
   risen: boolean;
 }
 
@@ -133,8 +134,8 @@ interface View {
  * One board and span shown at a time, each in a scope of its own, held by `life` (the panel).
  * Showing another closes the one before, and the notes of its rising with it, so nothing of it
  * plays or draws after. An answer draws only in its own board's view, and only when it differs from
- * what was kept; the first board a view draws rises. `answers` outlives the panel, so a board shown
- * again shows at once.
+ * what that view last drew; the first board a view draws rises. `answers` outlives the panel, so a
+ * board shown again shows at once, and an answer a shut panel asked for fills it but draws nothing.
  */
 export function tallyBoards(life: Scope, answers: Map<string, Answer>, page: TallyPage): TallyBoards {
   let view: View | null = null;
@@ -142,6 +143,7 @@ export function tallyBoards(life: Scope, answers: Map<string, Answer>, page: Tal
   const shown = (): View | null => (view === null || view.scope.closed ? null : view);
   const draw = (v: View): void => {
     const got = answers.get(v.path)?.board;
+    v.drawn = JSON.stringify(got);
     if (got === undefined) page.draw({ at: "asking", of: v.of });
     else if (got === "unread") page.draw({ at: "unread", of: v.of, again: () => retry(v) });
     else {
@@ -156,10 +158,9 @@ export function tallyBoards(life: Scope, answers: Map<string, Answer>, page: Tal
     asking.add(v.path);
     const board = (await page.ask(v.path)) ?? "unread";
     asking.delete(v.path);
-    const was = JSON.stringify(answers.get(v.path)?.board);
     answers.set(v.path, { at: Date.now(), board });
     const now = shown();
-    if (now?.path === v.path && JSON.stringify(board) !== was) draw(now);
+    if (now?.path === v.path && JSON.stringify(board) !== now.drawn) draw(now);
   };
   const retry = (v: View): void => {
     if (shown() !== v) return;
@@ -172,7 +173,7 @@ export function tallyBoards(life: Scope, answers: Map<string, Answer>, page: Tal
       const path = tallyPath(of.id, period);
       if (shown()?.path === path) return;
       view?.scope.close();
-      const v: View = { of, path, scope: life.child(), risen: false };
+      const v: View = { of, path, scope: life.child(), drawn: undefined, risen: false };
       view = v;
       draw(v);
       void ask(v);
