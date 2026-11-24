@@ -103,7 +103,9 @@ type Placed = readonly [F.KindName, number, number, F.Dir, number?];
  * deadfall that comes through a tunnel) and stone from two gatherers taking turns at a joiner, then
  * a sorter sending the planks to its right, into a crate and on to a cart stop, and the stone ahead
  * to the depot; ore from behind and by a way in into a splitter that puts its left way, into a
- * crate, first and sends the rest ahead to the depot; and a boiler fed deadfall.
+ * crate, first and sends the rest ahead into a joiner, which the crate's ore comes back round to; a
+ * bench on the Clay Bank fed more planks than pots (a splitter sends half the pots to a cart stop),
+ * which makes hampers and has room for more planks while it holds a pot; and a boiler fed deadfall.
  */
 export function junctions(): F.Yard {
   const y = F.create({ seed: 31, tier: 5 });
@@ -129,7 +131,7 @@ export function junctions(): F.Yard {
     ["gatherer", 29, 12, 2],
     ["belt", 28, 12, 1],
     ["splitter", 28, 13, 2],
-    ["belt", 27, 13, 2],
+    ["joiner", 27, 13, 2],
     ["belt", 26, 13, 2],
     ["belt", 25, 13, 1],
     ["belt", 25, 14, 1],
@@ -137,15 +139,28 @@ export function junctions(): F.Yard {
     ["belt", 25, 16, 1],
     ["belt", 28, 14, 1],
     ["crate", 28, 15, 2],
-    ["belt", 27, 15, 1],
-    ["belt", 27, 16, 1],
-    ["belt", 27, 17, 2],
-    ["belt", 26, 17, 2],
+    ["belt", 27, 15, 3],
+    ["belt", 27, 14, 3],
     ["pylon", 27, 12, 0],
     ["pylon", 17, 20, 0],
     ["gatherer", 19, 14, 0],
     ["boiler", 20, 14, 0],
+    ["gatherer", 18, 16, 1, 3],
+    ["mill", 18, 17, 2, 3],
+    ["belt", 17, 17, 2, 3],
+    ["belt", 16, 17, 2, 3],
+    ["belt", 15, 17, 1, 3],
+    ["belt", 15, 18, 1, 3],
+    ["belt", 15, 19, 1, 3],
+    ["gatherer", 12, 20, 0],
+    ["mill", 13, 20, 0],
+    ["splitter", 14, 20, 0],
+    ["stop", 14, 19, 0],
+    ["bench", 15, 20, 1],
+    ["stop", 15, 21, 0],
+    ["pylon", 13, 18, 0],
   ];
+  must(y, { do: "buyPlot", plot: "bank" });
   for (const [kind, x, z, dir, grade] of pieces)
     must(y, { do: "build", kind, x, y: z, dir, ...(grade === undefined ? {} : { grade }) });
   must(y, { do: "stand", pieces: [{ kind: "tunnel", x: 19, y: 16, dir: 1, span: 2, grade: 2 }] });

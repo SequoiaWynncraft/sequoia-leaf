@@ -2,7 +2,8 @@
  * The new pieces: a cart stop takes things from any side and they have reached the depot at once,
  * as many stops as the yard has unlocked; a sorter, in at the back, sends the one thing it is set to
  * out to its left, or flipped to its right, and everything else ahead, and with nothing set is a belt. A splitter with a way
- * put first sends everything that way while it takes it, and only the rest to its other ways. And a
+ * put first sends everything that way while it takes it, and only the rest to its other ways. A
+ * joiner lets the next thing in as soon as the one whose turn it was goes another way. And a
  * blueprint, set down by naming its place: turned any way, it stands as turned, tunnels whole, all or
  * none.
  */
@@ -668,6 +669,32 @@ describe("a splitter with a way in", () => {
     const turnedIn = F.check(y);
     must(y, { do: "wayIn", x: 4, y: 4, way: 1, on: false });
     expect([turnedIn === plain, F.check(y)]).toEqual([false, plain]);
+  });
+});
+
+describe("a joiner", () => {
+  test("lets a thing in at the next tick once the thing whose turn it was goes another way", () => {
+    // A joiner at (6, 4) facing east, with a splitter behind it, whose turn it is, and a belt coming
+    // down into it from the north, each holding a plank across its tile. Neither is beside the crate
+    // south of the splitter, where the splitter sends its plank instead.
+    const y = yard(5);
+    must(y, { do: "build", kind: "joiner", x: 6, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "splitter", x: 5, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "belt", x: 6, y: 3, dir: 1 });
+    const right = sink(y, 5, 5);
+    sink(y, 7, 4);
+    const [joiner, splitter, belt] = [F.at(y, 6, 4), F.at(y, 5, 4), F.at(y, 6, 3)];
+    for (const i of [splitter, belt]) {
+      y.item[i] = plank;
+      y.prog[i] = 8;
+    }
+    // The joiner's next way in is behind it, and the splitter's next way out is its right.
+    y.turn[joiner] = 0;
+    y.turn[splitter] = 2;
+    run(y, 1);
+    expect([F.held(y.holders, right, plank), y.item[belt], y.item[joiner]]).toEqual([1, plank, F.NONE]);
+    run(y, 1);
+    expect([y.item[belt], y.item[joiner]]).toEqual([F.NONE, plank]);
   });
 });
 
