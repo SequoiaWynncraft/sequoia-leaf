@@ -13,7 +13,7 @@
           "A volume slider, and a button to turn the sound off and on. The same setting holds in every game and every open tab.",
           "Each kind of sound can be turned off on its own, with a button to hear it first: the machines at work in the Works, fights in The Little Raid, footsteps, coins and more.",
           "A list of every key in the game you are in.",
-          "Walking in town and moving the view in the Works use the keys where W, A, S and D sit, so they work on AZERTY, Dvorak and other layouts. Ctrl Z undoes in the Works.",
+          "Walking in town and moving the view in the Works use the keys where W, A, S and D sit, so they work on AZERTY, Dvorak and other layouts. The number keys pick Works tools on AZERTY too, without Shift. Ctrl Z undoes in the Works.",
           "The Tally's This week tab says when the week starts again, in your own time."
         ]
       },

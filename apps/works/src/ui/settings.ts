@@ -6,7 +6,7 @@
 import { type KeyShelf, type Menu, settingsMenu } from "@sequoia-leaf/kit/menu.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 
-import { inputHooks, letGoKeys } from "../input.ts";
+import { inputHooks, letGo } from "../input.ts";
 import { WORKS_SOUNDS } from "../sound.ts";
 
 const KEYS: readonly KeyShelf[] = [
@@ -56,7 +56,7 @@ const KEYS: readonly KeyShelf[] = [
 
 /**
  * Makes the Works' menu, for as long as `scope` stands: Escape with nothing else to put away opens it
- * (`inputHooks`), and while it is up the yard takes no keys and lets go of those held.
+ * (`inputHooks`), and while it is up the yard takes no keys, and lets go of the keys and presses held.
  */
 export function startSettings(scope: Scope): Menu {
   const menu = settingsMenu(
@@ -65,7 +65,7 @@ export function startSettings(scope: Scope): Menu {
       keys: KEYS,
       moves: ["KeyW", "KeyA", "KeyS", "KeyD"],
       opened: (open) => {
-        if (open) letGoKeys();
+        if (open) letGo();
       },
     },
     scope,

@@ -346,7 +346,7 @@ export function initInput(canvas: InputSurface): void {
     if (moveKey(e)) return;
     // A visitor changes nothing: only the keys that look about work.
     if (S.visiting && !/^(t|\+|=|_|arrow\w+)$/.test(k)) return;
-    const picked = toolForKey(e.key);
+    const picked = toolForKey(e);
     if (picked !== undefined) {
       setTool(S.tool === picked ? null : picked);
       return;
@@ -373,13 +373,7 @@ export function initInput(canvas: InputSurface): void {
   window.addEventListener("keyup", (e) => {
     keys.delete(MOVES.get(e.code) ?? e.key.toLowerCase());
   });
-  window.addEventListener("blur", () => {
-    keys.clear();
-    downs.clear();
-    pinch = null;
-    // Every press is lost with the focus, and the drag the hand held for one with it.
-    dragLost();
-  });
+  window.addEventListener("blur", letGo);
 }
 
 /**
@@ -417,9 +411,16 @@ function moveKey(e: KeyboardEvent): boolean {
   return true;
 }
 
-/** Lets go of the keys held down to move the view: the settings menu has come up over the yard. */
-export function letGoKeys(): void {
+/**
+ * Lets go of every key and press held: the window has lost the focus, or the settings menu has come
+ * up over the yard. A press lost so does nothing more, and the drag the hand held for one ends.
+ */
+export function letGo(): void {
   keys.clear();
+  downs.clear();
+  pinch = null;
+  // A finger's long press waiting to ask what it is on finds its press gone, and asks nothing.
+  dragLost();
 }
 
 /** Each frame: the keys that move the view, and what the mouse is over once the view has moved for the frame. */
