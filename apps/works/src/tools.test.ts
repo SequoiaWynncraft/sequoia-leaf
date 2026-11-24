@@ -164,6 +164,16 @@ describe("a piece's card's Move", () => {
     expect(sent(fake.leaf)).toEqual(["move"]);
     expect([differences(), encode(S.world)]).toEqual([0, encode({ ...fake.leaf.yard, seed: null })]);
   });
+
+  test("takes a tunnel's two mouths alone, and not the belts that cross over between them", async () => {
+    const y = yardAt(3);
+    expect(build(y, kind("tunnel"), 20, 16, 0, Infinity, { span: 2 }).ok).toBe(true);
+    for (let z = 15; z < 18; z++) expect(build(y, BELT, 21, z, 1, Infinity).ok).toBe(true);
+    await opened(y, 10_000);
+    moveFrom(20, 16);
+    expect(S.group?.as).toBe("move");
+    expect(piecesAt(S.world, S.group?.tiles ?? []).map((p) => p.kind)).toEqual([kind("tunnel")]);
+  });
 });
 
 describe("the belt tool, with a finger", () => {
