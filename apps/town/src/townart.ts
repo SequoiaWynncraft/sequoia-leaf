@@ -22,7 +22,7 @@ import { mine } from "./leaf.ts";
 import { flame, type Light, type Standing } from "./props.ts";
 import type { Sprites } from "./sprites.ts";
 import { tallyNew } from "./tally.ts";
-import { tallyPost } from "./tallyart.ts";
+import { tallyBoard } from "./tallyart.ts";
 import {
   add,
   banner,
@@ -205,7 +205,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     },
   });
   // The Tally, where the town keeps count: a mark over it until the member has looked.
-  add("board", tallyPost(), TALLY.x, TALLY.y, {
+  add("board", tallyBoard(), TALLY.x, TALLY.y, {
     place: "tally",
     tip: tipOf("tally"),
     tap: (p) => {
@@ -215,10 +215,9 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     extra: (g, sx, sy) => {
       if (!tallyNew()) return;
       const bob = Math.round(Math.sin(G.t * 4) * 1.5);
-      g.drawImage(s.bang.c, sx - 1, sy - 64 + bob);
+      g.drawImage(s.bang.c, sx - 2, sy - 56 + bob);
     },
   });
-  shadow(ground, TALLY.x, TALLY.y, 10, 2);
   add("pole", s.pole, banner.x, banner.y, {
     tap: tapPole,
     extra: drawBanner,

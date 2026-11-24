@@ -378,8 +378,18 @@ function signpost(): Sprite {
   return spr(c, 9, 26);
 }
 
-function board(): Sprite {
-  const { c, g } = makeCanvas(44, 42);
+/** How big a notice board's picture is: the quest board's and the Tally's. */
+export const BOARD_W = 44;
+export const BOARD_H = 42;
+
+/** A paper's lower edge on a board, a shade under cream. */
+export const PAPER_EDGE = "#cbb894";
+
+/**
+ * A notice board, as the quest board and the Tally both are: two posts, a face of three planks in
+ * a frame, and a roof of shingles (`seed` lays them). What is pinned to it is drawn after.
+ */
+export function noticeBoard(g: Ctx, seed: number): void {
   for (const x of [3, 38]) {
     R(g, x, 8, 3, 34, BARK[1]);
     R(g, x, 8, 1, 34, BARK[3]);
@@ -387,6 +397,12 @@ function board(): Sprite {
   R(g, 1, 10, 42, 22, BARK[1]);
   R(g, 3, 12, 38, 18, BARK[3]);
   for (const y of [17, 23]) R(g, 3, y, 38, 1, BARK[2]);
+  shingles(g, 0, 0, BOARD_W, 8, (r) => Math.round((8 - r) * 0.4), [SKY[0], SKY[1], SKY[2], SKY[3]], seed);
+}
+
+function board(): Sprite {
+  const { c, g } = makeCanvas(BOARD_W, BOARD_H);
+  noticeBoard(g, 7);
   for (const [x, y, w, h, tint] of [
     [5, 13, 9, 11, 0],
     [16, 13, 11, 8, 1],
@@ -394,15 +410,14 @@ function board(): Sprite {
     [17, 22, 9, 8, 0],
   ] as const) {
     R(g, x, y, w, h, tint ? GOLD[2] : CREAM);
-    R(g, x, y + h - 1, w, 1, "#cbb894");
+    R(g, x, y + h - 1, w, 1, PAPER_EDGE);
     for (let k = 0; k * 2 + 3 < h - 1; k++) R(g, x + 1, y + 3 + k * 2, w - 3 - ((k * 3) % 4), 1, BARK[4]);
     R(g, x + Math.floor(w / 2), y, 1, 1, SKY[5]);
   }
   R(g, 20, 14, 2, 4, SKY[5]);
   R(g, 20, 19, 2, 1, SKY[5]);
   R(g, 34, 21, 3, 3, SKY[5]);
-  shingles(g, 0, 0, 44, 8, (r) => Math.round((8 - r) * 0.4), [SKY[0], SKY[1], SKY[2], SKY[3]], 7);
-  return spr(c, 0, 42);
+  return spr(c, 0, BOARD_H);
 }
 
 const AWNINGS: readonly (readonly [string, string, string, string])[] = [

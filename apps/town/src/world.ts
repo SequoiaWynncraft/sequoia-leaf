@@ -28,6 +28,7 @@ const PATHS: readonly (readonly [number, number, number, number, number])[] = [
   [290, 236, 340, 247, 7], // east to the pond
   [340, 247, 382, 250, 7],
   [256, 256, 248, 296, 7], // south, round to the garden
+  [251, 290, 286, 302, 5], // off it to the Tally
   [248, 296, 200, 318, 7],
   [200, 318, 110, 322, 7],
   [104, 130, 104, 130, 14], // before the Treasury
@@ -96,8 +97,11 @@ export const GROVE: Pt = { x: 104, y: 180 };
 export type PlaceId =
   "treasury" | "grove" | "quests" | "tally" | "market" | "works" | "table" | "fire" | "pond" | "camp";
 
-/** The Tally's post, by its foot: on the lawn between the Grove and the quest board. */
-export const TALLY: Pt = { x: 152, y: 190 };
+/**
+ * The Tally's board, by the middle of its foot: on the lawn between the fire and the pond, across
+ * the fire from the quest board, with the lantern post by the pond path behind its right end.
+ */
+export const TALLY: Pt = { x: 286, y: 294 };
 
 export interface Place {
   id: PlaceId;
@@ -139,9 +143,9 @@ export const PLACES: readonly Place[] = [
     id: "tally",
     name: "The Tally",
     about: "Leaderboards: who has done the most.",
-    stand: { x: TALLY.x, y: TALLY.y + 13 },
+    stand: { x: TALLY.x, y: TALLY.y + 8 },
     face: 3,
-    prompt: { x: TALLY.x, y: TALLY.y - 60 },
+    prompt: { x: TALLY.x, y: TALLY.y - 44 },
   },
   {
     id: "market",
@@ -337,7 +341,7 @@ function build(): void {
   fill(58, 39, 63, 43, 1);
   fill(0, 42, GW - 1, 43, 1); // the ferns along the bottom
   fill(22, 19, 26, 19, 1); // quest board
-  fill(18, 23, 19, 23, 1); // the Tally
+  fill(33, 36, 38, 36, 1); // the Tally
   fill(12, 21, 13, 22, 1); // the Grove's standing stone
   fill(10, 22, 10, 22, 1); // and the young trees either side of it
   fill(15, 22, 15, 22, 1);

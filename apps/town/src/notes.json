@@ -1,5 +1,11 @@
 [
   {
+    "id": "tally-board",
+    "at": "2026-11-24T10:15Z",
+    "title": "The Tally has moved",
+    "lines": ["The Tally is now a board like the quest board, on the lawn between the campfire and the crab pond."]
+  },
+  {
     "id": "works-long-works",
     "at": "2026-11-24T09:56Z",
     "title": "The Works: long works for tier 4",
