@@ -272,15 +272,27 @@ export interface PanelSpec {
 
 let refresh: (() => void) | null = null;
 let onShut: (() => void) | null = null;
+/** The control the panel was opened from (a button of the dock or the corner), which has the focus back when it closes. */
+let opener: HTMLElement | null = null;
 
+/**
+ * Opens a panel in place of the one open. Opened from a control that has the focus, the focus goes
+ * into the panel (a door's way in, or else the panel itself, named by its title), so that Tab goes
+ * on through what is in it; opened by walking up to a place, the focus stays where it was.
+ */
 export function openPanel(spec: PanelSpec): void {
   if (G.panel === spec.id) return;
+  const p = $("panel");
+  // Read before the panel is emptied, which takes the focus off anything in it.
+  const from = document.activeElement;
+  // From inside the panel (one panel's button opening another), the focus stays in it, and so does the opener.
+  const inside = from !== null && p.contains(from);
+  const control = from instanceof HTMLElement && from !== document.body && !inside ? from : null;
   closeCard();
   tipOff();
   onShut?.();
   onShut = spec.shut ?? null;
   G.panel = spec.id;
-  const p = $("panel");
   p.dataset.panel = spec.id;
   p.hidden = true;
   p.replaceChildren();
@@ -290,7 +302,7 @@ export function openPanel(spec: PanelSpec): void {
     { type: "button", "aria-label": "Close", onclick: closePanel },
     glyph("close"),
   );
-  p.append(el("header", "k-head", {}, spec.art, el("h2", "k-title", { text: spec.title }), x));
+  p.append(el("header", "k-head", {}, spec.art, el("h2", "k-title", { id: "panel-title", text: spec.title }), x));
   const body = el("div", "k-body k-scroll");
   p.append(body);
   refresh = spec.build(body);
@@ -299,14 +311,22 @@ export function openPanel(spec: PanelSpec): void {
   replay(p, "slide");
   sfx.open();
   markDock();
-  body.querySelector<HTMLElement>(".k-btn.wide[data-first]")?.focus({ preventScroll: true });
+  opener = control ?? (inside ? opener : null);
+  const first = body.querySelector<HTMLElement>(".k-btn.wide[data-first]");
+  if (first) first.focus({ preventScroll: true });
+  else if (control || inside) p.focus({ preventScroll: true });
 }
 
 export function closePanel(): void {
   if (!G.panel) return;
   G.panel = null;
-  $("panel").hidden = true;
-  $("panel").replaceChildren();
+  const p = $("panel");
+  // The focus was in the panel: it goes back to what opened it.
+  const back = p.contains(document.activeElement) || document.activeElement === document.body ? opener : null;
+  opener = null;
+  p.hidden = true;
+  p.replaceChildren();
+  if (back?.isConnected) back.focus({ preventScroll: true });
   refresh = null;
   const shut = onShut;
   onShut = null;
@@ -548,6 +568,7 @@ export function initHud(): void {
   const mute = el("button", "k-btn wood icon", { type: "button", "aria-label": "Sound" });
   const drawMute = (): void => {
     mute.replaceChildren(glyph(isMuted() ? "mute" : "sound"));
+    mute.setAttribute("aria-pressed", String(!isMuted()));
   };
   mute.addEventListener("click", () => {
     setMuted(!isMuted());

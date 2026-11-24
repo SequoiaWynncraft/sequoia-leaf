@@ -13,6 +13,7 @@ import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
 import { readBoard, type Row } from "@sequoia-leaf/kit/person.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
+import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { COSY, KIND, type PetId, PETS, petsOf, trayList } from "@sequoia-leaf/town/camp.ts";
 import { folkNamed } from "@sequoia-leaf/town/folk.ts";
@@ -89,6 +90,14 @@ const signed = (name: string): HTMLElement =>
 
 /** How far along one of the counters a pet moves in for is. */
 const upTo = (have: number, need: number): string => (have >= need ? "Done" : `${have} / ${need}`);
+
+/** A button for the thing in hand: on a phone its picture alone, so its name and key are said by its tip too. */
+function handButton(picture: "turn" | "tray", name: string, key: string, does: () => void): HTMLButtonElement {
+  const b = button("wood sm", [glyph(picture), el("span", "t", { text: name })], does);
+  b.setAttribute("aria-label", name);
+  tip(b, name, `Key: ${key}`);
+  return b;
+}
 
 /** The most camps the signpost lists. */
 const CAMPS_LISTED = 12;
@@ -448,20 +457,8 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
       ...(held
         ? [
             el("span", "k-gold name", { text: held.name }),
-            ...(held.turns
-              ? [
-                  button("wood sm", [glyph("turn"), el("span", "t", { text: "Rotate" })], () => {
-                    s.turn();
-                  }),
-                ]
-              : []),
-            ...(held.stays
-              ? []
-              : [
-                  button("wood sm", [glyph("tray"), el("span", "t", { text: "Put away" })], () => {
-                    s.stow();
-                  }),
-                ]),
+            ...(held.turns ? [handButton("turn", "Rotate", "R", () => s.turn())] : []),
+            ...(held.stays ? [] : [handButton("tray", "Put away", "Delete", () => s.stow())]),
           ]
         : [el("span", "k-title", { text: "Storage" })]),
     );
