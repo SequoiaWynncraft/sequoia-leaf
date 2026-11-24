@@ -123,6 +123,22 @@ function beginOf(g: Goal): Begin | null {
   return studyRefusal(w, g) === null ? "study" : null;
 }
 
+/** The research that may be put in the line now: none while the line is full. */
+export const studiable = (): Goal[] => researchOf().filter((g) => studyRefusal(S.world, g) === null);
+
+/**
+ * The first piece of research, in the table's order, that is neither known nor in the line and can
+ * be begun now, and what begins it: where the tier's screen leads on while nothing is being studied.
+ */
+export function firstToStudy(): { readonly goal: Goal; readonly begin: Begin } | null {
+  const w = S.world;
+  for (const g of researchOf()) {
+    const begin = w.open.done[g] === 1 || w.line.includes(g) ? null : beginOf(g);
+    if (begin !== null) return { goal: g, begin };
+  }
+  return null;
+}
+
 /**
  * What a goal still waits on: everything it needs done or known first, each with how it stands, or
  * nothing once all of it is. With `lead`, the first of them that is not begun and can be begun now

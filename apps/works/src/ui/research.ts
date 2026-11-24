@@ -30,6 +30,7 @@ import { el } from "@sequoia-leaf/kit/dom.ts";
 import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
 import { doNow } from "../yard.ts";
+import { foldedHead, foldedList } from "./folds.ts";
 import { head, type Listed, lockChip, type Need, needs, some, unlocks, type Wants, wants, wantsIn } from "./goal.ts";
 import { $, button, fitted, shows } from "./parts.ts";
 import { itemRef } from "./refs.ts";
@@ -99,6 +100,21 @@ const got = (g: Goal) => (): Counts | null => S.world.got[g] ?? null;
 /** What a piece of research wants, as printed. */
 const wanted = (g: Goal): Wants => wantsIn(GOALS[g]?.want ?? new Float64Array(0));
 
+/** The piece of research being studied and what it wants, as printed: by the research screen and the tier's alike. */
+export interface Studied {
+  readonly goal: Goal;
+  readonly wants: Wants;
+}
+
+/** The piece of research being studied, the first in the line, as printed; null while the line is empty. */
+export function studiedNow(): Studied | null {
+  const g = S.world.line[0];
+  return g === undefined ? null : { goal: g, wants: wanted(g) };
+}
+
+/** Each folio the piece being studied wants, with a bar kept up to date: on the research screen and the tier's alike. */
+export const studiedWants = (s: Studied): Listed | null => wants(s.wants, got(s.goal));
+
 /** A piece of research that may be studied, or waits on another, as printed. */
 interface Open {
   readonly goal: Goal;
@@ -116,7 +132,7 @@ interface Open {
  * anything is left to know.
  */
 export function researchPrint(): {
-  readonly first: { readonly goal: Goal; readonly wants: Wants } | null;
+  readonly first: Studied | null;
   readonly next: readonly Goal[];
   readonly full: boolean;
   readonly todo: readonly Open[];
@@ -125,10 +141,9 @@ export function researchPrint(): {
 } {
   const w = S.world;
   const all = researchOf();
-  const [first, ...next] = w.line;
   return {
-    first: first === undefined ? null : { goal: first, wants: wanted(first) },
-    next,
+    first: studiedNow(),
+    next: w.line.slice(1),
     full: w.line.length >= LINE,
     todo: all
       .filter((g) => w.open.done[g] !== 1 && !w.line.includes(g))
@@ -183,7 +198,7 @@ export function researchScreen(body: HTMLElement): () => void {
           head(first.goal, out(first.goal)),
           // What it is, in the sentence of the one thing it unlocks; several are shown as things below.
           only && !more ? el("div", "k-read k-dim", { text: only.says }) : null,
-          ...lists(wants(first.wants, got(first.goal)), unlocks(first.goal)),
+          ...lists(studiedWants(first), unlocks(first.goal)),
           pace,
         ),
       );
@@ -204,12 +219,13 @@ export function researchScreen(body: HTMLElement): () => void {
         if (studyRefusal(S.world, g) === null) setStudied(g, true);
         else b.blur();
       });
+      const parts = lists(wants(o.wants, got(g), o.lock !== null), needs(o.needs, { given }), unlocks(g));
       return el(
         "div",
         `k-card goal plan${o.lock === null ? "" : " locked"}`,
         { "data-research": GOALS[g]?.id ?? "" },
-        head(g, o.lock === null ? study : lockChip(o.lock)),
-        ...lists(wants(o.wants, got(g), o.lock !== null), needs(o.needs, { given }), unlocks(g)),
+        foldedHead(g, o.lock === null ? study : lockChip(o.lock), parts),
+        ...parts,
       );
     };
     const branch = (o: Open): HTMLElement[] => {
@@ -220,7 +236,7 @@ export function researchScreen(body: HTMLElement): () => void {
     for (const o of p.todo) if (parent(o.goal) === undefined) kids.push(...branch(o));
     // 4. What is known.
     if (p.known.length > 0)
-      kids.push(el("div", "k-label", { text: "Known" }), el("div", "goals-done", {}, ...p.known.map((g) => head(g))));
+      kids.push(...foldedList("known", "Known", el("div", "goals-done", {}, ...p.known.map((g) => head(g)))));
     const top = body.scrollTop;
     body.replaceChildren(...kids);
     body.scrollTop = top;

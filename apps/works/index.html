@@ -334,8 +334,14 @@
       .gh-what {
         flex: 1 1 calc(var(--u) * 80);
       }
-      .gh:has(> .k-row) .gh-what {
+      .gh:has(> .k-row, > .gh-side > .k-row) .gh-what {
         flex-basis: 100%;
+      }
+      /* What is at the right and the button that folds the card after it: they stand together. */
+      .gh-side {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--u) * 4);
       }
       .gh-what {
         display: grid;
@@ -401,10 +407,15 @@
         padding-inline: calc(var(--u) * 6);
         opacity: 0.8;
       }
-      /* The way from the tier's screen to research. */
-      .k-card.to-research {
-        color: inherit;
-        font: var(--f-name);
+      /*
+       * The tier's research: while nothing is being studied, the line that says so, set in as far as a
+       * card's head; and the way to the research screen, at the right as a card's buttons are.
+       */
+      .research-idle {
+        padding-inline: calc(var(--u) * 6);
+      }
+      .k-btn.all-research {
+        align-self: flex-end;
       }
       /* A card's sentences, each on a line of its own. */
       .said {

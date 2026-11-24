@@ -1,6 +1,7 @@
 /**
- * The tier's own screen: its commission, picked out; from the tier that has research, the way to it;
- * its projects, each with what it wants and what it unlocks; and those done, a line each. Every
+ * The tier's own screen: its commission, picked out; from the tier that has research, its research
+ * (`researchPart`); its projects, each with what it wants and what it unlocks, each card folding to
+ * its head; and those done, a line each, folded under their label at first (`folds.ts`). Every
  * goal on it is laid out by `goal.ts`: one head, and its lists. Nothing is said of a tier not yet
  * open but that the commission opens it. A goal that waits on another is locked: a lock and what is
  * left before it opens at its head, and what it wants behind a lock, with no bar, since nothing
@@ -21,6 +22,7 @@ import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
 import { setTool } from "../tools.ts";
 import { doNow } from "../yard.ts";
+import { foldedHead, foldedList } from "./folds.ts";
 import {
   type Begin,
   goalCard,
@@ -37,8 +39,9 @@ import {
   wantsIn,
 } from "./goal.ts";
 import { feed } from "./notes.ts";
-import { button, shows, yardIcon } from "./parts.ts";
-import { given, lockOf, needsOf, nextWords, nodesOpen, researchOf } from "./standing.ts";
+import { button, shows } from "./parts.ts";
+import { type Studied, studiedNow, studiedWants } from "./research.ts";
+import { firstToStudy, given, lockOf, needsOf, nextWords, nodesOpen, researchOf } from "./standing.ts";
 
 /** What the screen asks of the rest of the page. */
 export const tierHooks: {
@@ -98,16 +101,28 @@ interface Shown {
 }
 
 /**
+ * The research of the tiers open, as the tier's screen prints it: how much of it is known, of how
+ * much; the piece being studied; and while nothing is, the first piece that can be begun, with what
+ * begins it.
+ */
+interface TierResearch {
+  readonly known: number;
+  readonly all: number;
+  readonly studied: Studied | null;
+  readonly ready: { readonly goal: Goal; readonly begin: Begin } | null;
+}
+
+/**
  * What the tier's screen prints: the tier, the node in hand and those in line after it; the tier's
- * commission, while it is not done; how much of the research of the tiers open is known, where there
- * is any; the projects not done, the tier's own first; and the projects and commissions done.
+ * commission, while it is not done; its research, where the tiers open have any; the projects not
+ * done, the tier's own first; and the projects and commissions done.
  */
 export function tierPrint(): {
   readonly tier: number;
   readonly hand: Goal | -1;
   readonly queue: readonly Goal[];
   readonly commission: Shown | null;
-  readonly research: { readonly known: number; readonly all: number } | null;
+  readonly research: TierResearch | null;
   readonly projects: readonly Shown[];
   readonly done: readonly Goal[];
 } {
@@ -124,13 +139,21 @@ export function tierPrint(): {
   const open = nodes.filter((g) => w.open.done[g] !== 1);
   const commission = open.find((g) => GOALS[g]?.kind === "commission" && GOALS[g]?.tier === tier);
   const research = researchOf();
+  const studied = studiedNow();
   return {
     tier,
     hand: w.hand,
     queue: [...w.queue],
     commission: commission === undefined ? null : shown(commission),
     research:
-      research.length > 0 ? { known: research.filter((g) => w.open.done[g] === 1).length, all: research.length } : null,
+      research.length === 0
+        ? null
+        : {
+            known: research.filter((g) => w.open.done[g] === 1).length,
+            all: research.length,
+            studied,
+            ready: studied === null ? firstToStudy() : null,
+          },
     // The tier's own projects first, then any of an earlier tier not yet done.
     projects: open
       .filter((g) => GOALS[g]?.kind === "project")
@@ -140,23 +163,49 @@ export function tierPrint(): {
   };
 }
 
+/**
+ * The tier's research, as a section like its projects: a label with how much is known; the piece
+ * being studied, with a bar for each folio it wants; or while nothing is, says so, with the first
+ * piece that can be begun and the button that begins it; and the way to the research screen. With
+ * everything known, the label and the way alone. It does not fold: it is what is being worked on.
+ * `keep` keeps its lists, for their bars to be brought up to date between drawings.
+ */
+function researchPart(r: TierResearch, keep: (made: Listed[]) => Listed[]): HTMLElement[] {
+  const label = el("div", "k-label", {}, "Research", el("span", "k-faint", { text: `${r.known} of ${r.all} known` }));
+  const all = button("wood sm all-research", ["All research"], () => tierHooks.research());
+  const { studied, ready: first } = r;
+  if (studied) return [label, researchCard(studied.goal, null, keep(some(studiedWants(studied)))), all];
+  if (r.known === r.all) return [label, all];
+  const idle = el("div", "k-dim research-idle", { text: "Nothing is being studied." });
+  const begin = first ? [researchCard(first.goal, beginButton(first.goal, first.begin), [])] : [];
+  return [label, idle, ...begin, all];
+}
+
+/** A piece of research on the tier's screen, as a card: its head, with `side` at its right, and its lists. */
+const researchCard = (g: Goal, side: HTMLElement | null, lists: readonly Listed[]): HTMLElement =>
+  el("div", "k-card goal", { "data-research": GOALS[g]?.id ?? "" }, head(g, side), ...lists.map((l) => l.node));
+
 /** The tier's screen, built into a panel's body. Gives the way to bring it up to date. */
 export function tierScreen(body: HTMLElement): () => void {
   let live: Listed[] = [];
   const draw = (p: ReturnType<typeof tierPrint>): void => {
     live = [];
     const kids: HTMLElement[] = [];
-    /** A goal's lists, kept so that their bars are brought up to date between drawings. */
-    const lists = ({ goal: g, wants: want, needs: waits, lock }: Shown): Listed[] => {
-      const made = some(
-        wants(want, () => S.world.got[g] ?? null, lock !== null),
-        needs(waits, { given, begin: beginButton }),
-        unlocks(g),
-        leaves(g),
-      );
+    /** Lists kept so that their bars are brought up to date between drawings. */
+    const keep = (made: Listed[]): Listed[] => {
       live.push(...made);
       return made;
     };
+    /** A goal's lists. */
+    const lists = ({ goal: g, wants: want, needs: waits, lock }: Shown): Listed[] =>
+      keep(
+        some(
+          wants(want, () => S.world.got[g] ?? null, lock !== null),
+          needs(waits, { given, begin: beginButton }),
+          unlocks(g),
+          leaves(g),
+        ),
+      );
     /**
      * What stands at the right of a goal's head: that it is in hand; its place in the line, with the
      * button that takes it out; the buttons that put it in the line (while a node is in hand) and take
@@ -195,29 +244,15 @@ export function tierScreen(body: HTMLElement): () => void {
         el("div", "k-card goal", {}, el("div", "k-title", { text: end.title }), el("div", "k-d", { text: end.line })),
       );
     }
-    if (p.research)
-      kids.push(
-        el(
-          "button",
-          "k-card to-research",
-          { type: "button", onclick: () => tierHooks.research() },
-          yardIcon("research"),
-          el("span", "k-grow", { text: `Research: ${p.research.known} of ${p.research.all} known` }),
-        ),
-      );
+    if (p.research) kids.push(...researchPart(p.research, keep));
     if (p.projects.length > 0) kids.push(el("div", "k-label", { text: "Projects" }));
-    for (const g of p.projects)
-      kids.push(
-        el(
-          "div",
-          `k-card goal${p.hand === g.goal ? " lit" : g.lock === null ? "" : " locked"}`,
-          {},
-          head(g.goal, side(g, "Take")),
-          ...lists(g).map((l) => l.node),
-        ),
-      );
+    for (const g of p.projects) {
+      const parts = lists(g).map((l) => l.node);
+      const lit = p.hand === g.goal ? " lit" : g.lock === null ? "" : " locked";
+      kids.push(el("div", `k-card goal${lit}`, {}, foldedHead(g.goal, side(g, "Take"), parts), ...parts));
+    }
     if (p.done.length > 0)
-      kids.push(el("div", "k-label", { text: "Done" }), el("div", "goals-done", {}, ...p.done.map((g) => head(g))));
+      kids.push(...foldedList("done", "Done", el("div", "goals-done", {}, ...p.done.map((g) => head(g)))));
     const top = body.scrollTop;
     body.replaceChildren(...kids);
     body.scrollTop = top;
