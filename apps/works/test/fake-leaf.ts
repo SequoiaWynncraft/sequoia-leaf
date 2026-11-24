@@ -128,11 +128,12 @@ export function useFakeLeaf(): void {
     performance.now = () => 1000;
   });
   afterEach(() => {
+    // The page first, so that what it sends as it is put away reaches this test's Leaf.
+    letGo();
     net.world?.done();
     net.world = null;
     current = null;
     forgetLedger();
-    letGo();
     performance.now = clock;
     Reflect.deleteProperty(globalThis, "window");
     Reflect.deleteProperty(globalThis, "document");

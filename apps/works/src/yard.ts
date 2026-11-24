@@ -631,8 +631,13 @@ export const visitFollowing = () =>
     ? { live: room.is === "live", hold: follow.hold, waiting: follow.told.length, upTo: follow.upTo, ...follow.counts }
     : null;
 
-/** Sends nothing more and forgets the yard (for tests). */
+/**
+ * Sends nothing more and forgets the yard (for tests). Leaf's play is put away with the link: a
+ * command it was still waiting to send again would otherwise go, a moment later, to whatever Leaf
+ * the next test stands in.
+ */
 export function letGo(): void {
+  leafOf(link)?.close();
   go({ do: "close" });
   found = 0;
   reads = 0;
