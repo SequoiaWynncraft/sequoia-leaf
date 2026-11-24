@@ -14,50 +14,13 @@
  */
 import { settings } from "./settings.ts";
 
-type Letter =
-  | "A"
-  | "B"
-  | "C"
-  | "D"
-  | "E"
-  | "F"
-  | "G"
-  | "H"
-  | "I"
-  | "J"
-  | "K"
-  | "L"
-  | "M"
-  | "N"
-  | "O"
-  | "P"
-  | "Q"
-  | "R"
-  | "S"
-  | "T"
-  | "U"
-  | "V"
-  | "W"
-  | "X"
-  | "Y"
-  | "Z";
-type Digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+/** Each character of a string, as a union of them. */
+type CharOf<S extends string> = S extends `${infer C}${infer Rest}` ? C | CharOf<Rest> : never;
+type Letter = CharOf<"ABCDEFGHIJKLMNOPQRSTUVWXYZ">;
+type Digit = CharOf<"0123456789">;
 
 /** The places a game may give a key to that are named in words, and those words. */
-type Worded =
-  | "Escape"
-  | "Enter"
-  | "Space"
-  | "Tab"
-  | "Delete"
-  | "Backspace"
-  | "ArrowUp"
-  | "ArrowDown"
-  | "ArrowLeft"
-  | "ArrowRight"
-  | "NumpadAdd"
-  | "NumpadSubtract";
-const WORDS: Readonly<Record<Worded, string>> = {
+const WORDS = {
   Escape: "Esc",
   Enter: "Enter",
   Space: "Space",
@@ -70,7 +33,8 @@ const WORDS: Readonly<Record<Worded, string>> = {
   ArrowRight: "Right",
   NumpadAdd: "Num +",
   NumpadSubtract: "Num -",
-};
+} as const;
+type Worded = keyof typeof WORDS;
 const isWorded = (code: string): code is Worded => Object.hasOwn(WORDS, code);
 
 /** A place on the keyboard a game may give a key to, as `KeyboardEvent.code` names it. */
