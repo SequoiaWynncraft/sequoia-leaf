@@ -1,8 +1,10 @@
 /**
  * What opens over the page and is put away again: a panel, a pinned card, a notice. Each is a
  * layer, the newest on top. While one is open, Tab goes round inside the newest, and Escape puts
- * away the newest only (none other hears that Escape: one layer a press). When one goes, the focus
- * goes back to where it was before it opened, if the keyboard was the last used in it.
+ * away the newest only (none other hears that Escape: one layer a press). A layer may take a key
+ * before any of that (`Layer.takes`): a slot of the settings menu's Keys tab waiting for a key.
+ * When one goes, the focus goes back to where it was before it opened, if the keyboard was the last
+ * used in it.
  *
  * `dialog(node, title, close)` makes an element such a layer and tells a screen reader it is a
  * dialog named by its title; `layer(at, close)` is the same without that, for a thing that names
@@ -19,6 +21,8 @@ interface Layer {
   readonly back: Element | null;
   /** The keyboard was the last used in it, so the focus goes back as it goes. */
   keyed: boolean;
+  /** Takes a key before Escape and Tab are the layer's, saying whether it did: then nothing else hears it. */
+  readonly takes: ((e: KeyboardEvent) => boolean) | null;
 }
 
 const layers: Layer[] = [];
@@ -49,8 +53,18 @@ const stops = (node: HTMLElement): HTMLElement[] =>
   );
 
 /** Something opens over the page. Returns what to call once it has been put away. */
-export function layer(at: () => HTMLElement | null, close: (() => void) | null): () => void {
-  const l: Layer = { at, close, back: typeof document === "undefined" ? null : document.activeElement, keyed: false };
+export function layer(
+  at: () => HTMLElement | null,
+  close: (() => void) | null,
+  takes: ((e: KeyboardEvent) => boolean) | null = null,
+): () => void {
+  const l: Layer = {
+    at,
+    close,
+    back: typeof document === "undefined" ? null : document.activeElement,
+    keyed: false,
+    takes,
+  };
   layers.push(l);
   return () => {
     const i = layers.indexOf(l);
@@ -65,16 +79,22 @@ export function layer(at: () => HTMLElement | null, close: (() => void) | null):
 /**
  * Makes `node` a dialog named by `title` (its title's element, or words), holds it as a layer, and
  * puts the focus in it unless it is there already. `close` is what Escape does (null: it must be
- * answered). Returns what to call once it has been put away.
+ * answered), and `takes` is asked for each key first (`Layer.takes`). Returns what to call once it
+ * has been put away.
  */
-export function dialog(node: HTMLElement, title: HTMLElement | string, close: (() => void) | null): () => void {
+export function dialog(
+  node: HTMLElement,
+  title: HTMLElement | string,
+  close: (() => void) | null,
+  takes: ((e: KeyboardEvent) => boolean) | null = null,
+): () => void {
   if (!node.hasAttribute("role")) node.setAttribute("role", "dialog");
   if (typeof title === "string") node.setAttribute("aria-label", title);
   else {
     if (!title.id) title.id = `k-dialog-${++made}`;
     node.setAttribute("aria-labelledby", title.id);
   }
-  const done = layer(() => node, close);
+  const done = layer(() => node, close, takes);
   if (!node.contains(document.activeElement)) {
     if (!node.hasAttribute("tabindex")) node.tabIndex = -1;
     node.focus({ preventScroll: true });
@@ -82,18 +102,38 @@ export function dialog(node: HTMLElement, title: HTMLElement | string, close: ((
   return done;
 }
 
+/** Tab, in a layer: from its last stop to its first (or with Shift, its first to its last), and in from outside it. */
+function goRound(e: KeyboardEvent, node: HTMLElement): void {
+  const all = stops(node);
+  const [first, last] = [all[0], all.at(-1)];
+  const at = document.activeElement;
+  const inside = at instanceof Node && node.contains(at);
+  if (!first || !last) {
+    e.preventDefault();
+    node.focus({ preventScroll: true });
+  } else if (!inside || (e.shiftKey ? at === first || at === node : at === last)) {
+    e.preventDefault();
+    (e.shiftKey ? last : first).focus({ preventScroll: true });
+  }
+}
+
 if (typeof window !== "undefined") {
   window.addEventListener("pointerdown", (e) => {
     const top = layers.at(-1);
     if (top && e.target instanceof Node && top.at()?.contains(e.target)) top.keyed = false;
   });
-  // Before the page's own keys: the newest layer has Escape and Tab first.
+  // Before the page's own keys: the newest layer has Escape and Tab first, unless it takes the key itself.
   window.addEventListener(
     "keydown",
     (e) => {
       const top = layers.at(-1);
       const node = top?.at();
       if (!top) return;
+      if (top.takes?.(e)) {
+        top.keyed = true;
+        e.stopImmediatePropagation();
+        return;
+      }
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -104,17 +144,7 @@ if (typeof window !== "undefined") {
       }
       if (node && e.target instanceof Node && node.contains(e.target)) top.keyed = true;
       if (e.key !== "Tab" || !node) return;
-      const all = stops(node);
-      const [first, last] = [all[0], all.at(-1)];
-      const at = document.activeElement;
-      const inside = at instanceof Node && node.contains(at);
-      if (!first || !last) {
-        e.preventDefault();
-        node.focus({ preventScroll: true });
-      } else if (!inside || (e.shiftKey ? at === first || at === node : at === last)) {
-        e.preventDefault();
-        (e.shiftKey ? last : first).focus({ preventScroll: true });
-      }
+      goRound(e, node);
       top.keyed = true;
     },
     true,

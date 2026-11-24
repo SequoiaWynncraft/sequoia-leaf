@@ -81,7 +81,10 @@ const upTo = (have: number, need: number): string => (have >= need ? "Done" : `$
 function handButton(picture: "turn" | "tray", name: string, act: TownAction, does: () => void): HTMLButtonElement {
   const b = button("wood sm", [glyph(picture), el("span", "t", { text: name })], does);
   b.setAttribute("aria-label", name);
-  tip(b, name, () => `Key: ${TOWN_KEYS.name(act)}`);
+  tip(b, name, () => {
+    const key = TOWN_KEYS.name(act);
+    return key === null ? "" : `Key: ${key}`;
+  });
   return b;
 }
 

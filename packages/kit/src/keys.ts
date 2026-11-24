@@ -40,6 +40,14 @@ const PRESSES: ReadonlySet<string> = new Set(["Enter", "NumpadEnter", "Space"]);
 /** Whether a key, by its place, presses a button that has the keyboard: Enter and Space do. */
 export const pressesButtons = (code: string): boolean => PRESSES.has(code);
 
+/** Whether a control has the keyboard: a button, or anything the kit made one (a tip's owner, a card link). */
+export const onControl = (e: Pick<Event, "target">): boolean =>
+  e.target instanceof HTMLElement && e.target.matches("button, [role='button'], a[href], summary, select");
+
+/** Whether a key is the control's that has the keyboard, not the game's: Enter or Space, which press it. */
+export const forControl = (e: Pick<KeyboardEvent, "code" | "target">): boolean =>
+  pressesButtons(e.code) && onControl(e);
+
 /**
  * The keys down now that press a button, each by the press that put it down: to ask later whether
  * any is down still (`stillHeld`). Any other key held (Shift, a walking key) presses nothing.

@@ -47,6 +47,11 @@ export class Scope {
     return off;
   }
 
+  /** Holds a listener of the page's own (a keymap's, the settings'), given as how to stop it: stopped as the scope closes. */
+  hold(stop: () => void): Release {
+    return this.#own(stop);
+  }
+
   /** A scope of its own that closes when this one does, and may close before it. */
   child(): Scope {
     const child = new Scope();

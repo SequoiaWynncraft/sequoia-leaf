@@ -4,11 +4,12 @@
  * nothing, so no card comes up for whatever passes beneath; once the yard stands still, what is under
  * the mouse then is pointed at, and a card for it may follow.
  */
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import { BELT, build, create } from "@sequoia-leaf/factory";
 import { deck } from "@sequoia-leaf/kit/card.ts";
 import { keyboard } from "@sequoia-leaf/kit/keyboard.ts";
+import { noKeysHeld } from "@sequoia-leaf/kit/keys.ts";
 
 import { opened, useFakeLeaf } from "../test/fake-leaf.ts";
 import { aimOf } from "./hand.ts";
@@ -16,12 +17,13 @@ import { WORKS_KEYS } from "./keymap.ts";
 import { S, toPage } from "./state.ts";
 import { setTool } from "./tools.ts";
 import { refAt } from "./ui/card.ts";
+import { openTools } from "./ui/dock.ts";
 
 // The camera's module draws onto canvases that are made as it loads (`scene.ts`): a document is there
 // first whose canvases take any drawing and keep none of it.
 const inert: () => unknown = new Proxy(() => inert, { get: () => inert, set: () => true });
 Object.defineProperty(globalThis, "document", { value: { createElement: () => inert }, configurable: true });
-const { pan } = await import("./camera.ts");
+const { pan, zoomSteps } = await import("./camera.ts");
 const { initInput, stepInput } = await import("./input.ts");
 
 useFakeLeaf();
@@ -70,6 +72,8 @@ function twoTiles(): { a: { x: number; y: number }; b: { x: number; y: number } 
   throw new Error("no deposit");
 }
 
+// Asking what a key is for notes it down (`heldAgain`); no page here lets it go.
+afterEach(noKeysHeld);
 describe("the mouse over the yard", () => {
   test("points at nothing while the yard moves under it, and once still, at what is under it then", async () => {
     await openedEmptyHanded();
@@ -103,18 +107,20 @@ describe("the mouse over the yard", () => {
   });
 });
 
-/** A key as a keyboard sends it: where it is, what it types there, and whether Shift is held. */
-const sent = (code: string, typed: string, shiftKey = false) => ({
+/** A key as a keyboard sends it: where it is, what it types there, whether Shift is held, and whether the browser says it is held down. */
+const sent = (code: string, typed: string, shiftKey = false, repeat = false) => ({
   code,
   key: typed,
   shiftKey,
   ctrlKey: false,
   metaKey: false,
   altKey: false,
+  repeat,
 });
-/** A key going down, or up, on the page. */
-const key = (kind: "keydown" | "keyup", code: string, typed: string, shift = false): void => {
-  window.dispatchEvent(Object.assign(new Event(kind), sent(code, typed, shift)));
+/** A key going down, or up, on the page. A key going up is let go of (`keys.ts`, which no page here listens for). */
+const key = (kind: "keydown" | "keyup", code: string, typed: string, shift = false, repeat = false): void => {
+  window.dispatchEvent(Object.assign(new Event(kind), sent(code, typed, shift, repeat)));
+  if (kind === "keyup") noKeysHeld();
 };
 
 describe("the keys", () => {
@@ -163,5 +169,48 @@ describe("the keys", () => {
       "zoomOut",
       11,
     ]);
+  });
+
+  test("a tool's key is its slot's: tool 3 put on Y is picked by Y, and tool 4 still by 4", async () => {
+    await openedEmptyHanded();
+    canvasPage();
+    const tools = openTools();
+    expect(tools.length).toBeGreaterThanOrEqual(4);
+    try {
+      WORKS_KEYS.put("tool", 2, "KeyY");
+      expect(WORKS_KEYS.names("tool").slice(0, 4)).toEqual(["1", "2", "Y", "4"]);
+      key("keydown", "KeyY", "y");
+      key("keyup", "KeyY", "y");
+      expect(S.tool).toBe(tools[2] ?? null);
+      key("keydown", "Digit4", "4");
+      key("keyup", "Digit4", "4");
+      expect(S.tool).toBe(tools[3] ?? null);
+      // Its old key, 3, picks nothing now.
+      key("keydown", "Digit3", "3");
+      key("keyup", "Digit3", "3");
+      expect(S.tool).toBe(tools[3] ?? null);
+    } finally {
+      WORKS_KEYS.resetAll();
+    }
+  });
+
+  test("held down, R rotates once; held, zoom goes on", async () => {
+    await openedEmptyHanded();
+    canvasPage();
+    setTool(BELT);
+    const dir = S.dir;
+    key("keydown", "KeyR", "r");
+    key("keydown", "KeyR", "r", false, true);
+    key("keydown", "KeyR", "r", false, true);
+    key("keyup", "KeyR", "r");
+    const turned = S.dir;
+    key("keydown", "KeyR", "r");
+    key("keyup", "KeyR", "r");
+    expect([turned !== dir, S.dir !== turned]).toEqual([true, true]);
+    const z = zoomSteps();
+    key("keydown", "Minus", "_", true);
+    key("keydown", "Minus", "_", true, true);
+    key("keyup", "Minus", "_", true);
+    expect(zoomSteps() - z).toBe(-2);
   });
 });

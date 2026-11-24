@@ -46,7 +46,7 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 
-import { WORKS_KEYS } from "./keymap.ts";
+import { WORKS_KEYS, type WorksAction } from "./keymap.ts";
 
 export interface Nudge {
   /** Which lesson this is; one that has been taken is not given again. */
@@ -106,6 +106,12 @@ const owned = (w: Yard, i: number): boolean => {
 /** Whether the yard may make a recipe that takes more than 1 of a part: from then on a card says numbers. */
 const counted = (w: Yard): boolean =>
   RECIPES_N.some((r) => r.need.some((n) => n > 1) && locked(w.open, { make: r.out }) === null);
+
+/** ", or press G", for an action's key; nothing, where the player has left it with none. */
+function orPress(act: WorksAction): string {
+  const key = WORKS_KEYS.name(act);
+  return key === null ? "" : `, or press ${key}`;
+}
 
 /**
  * The next thing worth saying, or nothing. `finger` words a lesson for taps rather than a mouse;
@@ -219,7 +225,7 @@ export function nudge(
   if (!told("grades") && at.hand !== null && isGraded(at.hand) && highest(w.open, at.hand) > 1)
     return {
       id: "grades",
-      text: `Choose the grade to build here${finger ? "" : `, or press ${WORKS_KEYS.name("grade")}`}.`,
+      text: `Choose the grade to build here${finger ? "" : orPress("grade")}.`,
       x: cx,
       y: cy - 1,
       tool: null,

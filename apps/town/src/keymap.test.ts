@@ -1,6 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import { keyboard } from "@sequoia-leaf/kit/keyboard.ts";
+import { noKeysHeld } from "@sequoia-leaf/kit/keys.ts";
 
 import { TOWN_KEYS } from "./keymap.ts";
 
@@ -12,11 +13,36 @@ const sent = (code: string, key: string) => ({
   ctrlKey: false,
   metaKey: false,
   altKey: false,
+  repeat: false,
 });
 
+// Asking what a key is for notes it down (`heldAgain`); no page here lets it go.
+afterEach(noKeysHeld);
 describe("the town's keys", () => {
-  test("no two actions share a key", () => {
+  test("no two actions share a key; Escape stays Back and the menu", () => {
     expect(TOWN_KEYS.shared()).toEqual([]);
+    expect([TOWN_KEYS.fixed("back", 0), TOWN_KEYS.put("back", 0, "KeyB"), TOWN_KEYS.keysOf("back")]).toEqual([
+      true,
+      [],
+      ["Escape"],
+    ]);
+  });
+
+  test("walk up put on I: I walks up, and W walks no more", () => {
+    try {
+      expect(TOWN_KEYS.put("up", 0, "KeyI")).toEqual([]);
+      expect([TOWN_KEYS.of(sent("KeyI", "i"))?.id, TOWN_KEYS.of(sent("KeyW", "w")), TOWN_KEYS.name("up")]).toEqual([
+        "up",
+        undefined,
+        "I",
+      ]);
+      expect([TOWN_KEYS.isDown(new Set(["KeyI"]), "up"), TOWN_KEYS.isDown(new Set(["KeyW"]), "up")]).toEqual([
+        true,
+        false,
+      ]);
+    } finally {
+      TOWN_KEYS.resetAll();
+    }
   });
 
   test("go by their place: on AZERTY, its Q (where QWERTY has A) walks left, and its A does nothing", () => {

@@ -1551,10 +1551,10 @@ button.k-info-chip:hover .k-chip {
   translate: 0 var(--u);
 }
 
-/* The Keys tab: each line its keys, as caps, and what they do, the words of every line in one column. */
+/* The Keys tab: each line its keys, as caps, what they do, the words of every line in one column, and a reset where the player changed them. */
 .k-settings-key {
   display: grid;
-  grid-template-columns: calc(var(--u) * 84) minmax(0, 1fr);
+  grid-template-columns: calc(var(--u) * 84) minmax(0, 1fr) auto;
   align-items: center;
   gap: calc(var(--u) * 5);
   padding: calc(var(--u) * 2);
@@ -1567,6 +1567,30 @@ button.k-info-chip:hover .k-chip {
 .k-settings-does {
   font: var(--f-ui);
   color: var(--k-cream);
+}
+/* A line with no key at all says so, in the warning's coral. */
+.k-settings-none {
+  color: var(--k-coral);
+}
+/* The line under the tabs on the Keys tab: what a slot waits for, and what a key pressed did; coral for a key that cannot be used. Two lines high, so the keys under it stay where they are as it speaks. */
+.k-settings-said {
+  min-height: calc(var(--t-m) * 2.4);
+  margin: 0;
+  padding: calc(var(--u) * 3) calc(var(--u) * 5) 0;
+  font: var(--f-ui);
+  color: var(--k-cream);
+}
+.k-settings-said.bad {
+  color: var(--k-coral);
+}
+/* The foot of the Keys tab: Reset all keys, and the question it asks. */
+.k-settings-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(var(--u) * 3);
+  margin-top: calc(var(--u) * 4);
 }
 /* The keyboard the player has, over the keys: its name, and the list it is chosen from. */
 .k-settings-keyboard {
@@ -1626,6 +1650,41 @@ button.k-info-chip:hover .k-chip {
   font: var(--f-name);
   color: #2b1705;
 }
+/* A key the player may change: a cap that goes down under a press, ringed in gold, blinking while it waits for a key (steady where less motion is asked for). */
+button.k-cap {
+  background: none;
+  cursor: pointer;
+}
+button.k-cap:hover {
+  filter: brightness(1.12);
+}
+button.k-cap:active {
+  translate: 0 var(--u);
+}
+button.k-cap:focus-visible,
+button.k-cap.waiting {
+  outline: var(--u) solid var(--k-gold);
+  outline-offset: var(--u);
+}
+button.k-cap.waiting {
+  animation: k-cap-wait 0.8s steps(1) infinite;
+}
+@keyframes k-cap-wait {
+  50% {
+    outline-color: transparent;
+  }
+}
+/* A key that cannot be changed lies flat, its foot pressed in. */
+.k-cap.fixed {
+  border-bottom-width: calc(var(--u) * 2);
+  border-image-width: calc(var(--u) * 2);
+}
+/* An empty slot: a hollow in the board, as wide as a key, with nothing in it. */
+.k-cap.empty {
+  min-width: calc(var(--u) * 11);
+  border-width: calc(var(--u) * 2);
+  border-image: var(--k-f-groove) 2 fill / calc(var(--u) * 2);
+}
 
 /* On a phone the panel takes the width, and a row of the Keys tab puts its keys over its words. */
 @media (max-width: 760px), (max-height: 500px) {
@@ -1637,6 +1696,6 @@ button.k-info-chip:hover .k-chip {
   }
   .k-settings-key {
     /* Room for four keys in a row: W, A, S and D. */
-    grid-template-columns: calc(var(--u) * 70) minmax(0, 1fr);
+    grid-template-columns: calc(var(--u) * 70) minmax(0, 1fr) auto;
   }
 }

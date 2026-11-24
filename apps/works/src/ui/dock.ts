@@ -47,7 +47,7 @@ import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { PAINTS } from "../art/belts.ts";
 import { type Art, bare } from "../art/index.ts";
-import { WORKS_KEYS, type WorksAction } from "../keymap.ts";
+import { turns, WORKS_KEYS, type WorksAction } from "../keymap.ts";
 import { builds, DRAWN, gradeInHand, S } from "../state.ts";
 import {
   askSave,
@@ -140,7 +140,7 @@ function plain(
   b.addEventListener("click", () => {
     setTool(S.tool === tool ? null : tool);
   });
-  tip(b, () => `${name} (${WORKS_KEYS.name(act)})`, more);
+  tip(b, () => WORKS_KEYS.titled(name, act), more);
   return b;
 }
 
@@ -186,7 +186,7 @@ function selectLine(f: boolean): { text: string; bad: boolean } {
       ? "Move"
       : `${g.as === "copy" ? "Copy" : "Blueprint"}, ${price(S.aim?.cost ?? priceOf(S.world, piecesInHand(g), true))}`;
     if (f) return { text: S.aim ? `${what}. Tap again, or Build.` : `${what}: tap where it goes.`, bad: false };
-    return { text: `${what}: click to place it. ${WORKS_KEYS.name("rotate")} rotates it.`, bad: false };
+    return { text: `${what}: click to place it.${turns()}`, bad: false };
   }
   if (S.saving) return { text: "Save it in which place?", bad: false };
   const m = S.mark;
@@ -228,12 +228,11 @@ function handLine(): { text: string; bad: boolean } {
     return { text: f ? `${what} Tap again, or Raise.` : `${what} Click to raise it.`, bad: false };
   }
   if (tool === BELT) {
-    if (!f) return { text: `Belt: drag to place a line. ${WORKS_KEYS.name("rotate")} rotates it.`, bad: false };
+    if (!f) return { text: `Belt: drag to place a line.${turns()}`, bad: false };
     return { text: S.from ? "Now tap where it ends." : "Tap where the line starts.", bad: false };
   }
   if (f) return { text: S.aim ? "Tap again, or Build." : `${name}: tap where it goes.`, bad: false };
-  const flips = tool === SORTER ? `, ${WORKS_KEYS.name("flip")} flips it` : "";
-  return { text: `${name}: click to place it. ${WORKS_KEYS.name("rotate")} rotates it${flips}.`, bad: false };
+  return { text: `${name}: click to place it.${turns(tool === SORTER)}`, bad: false };
 }
 
 const DOT = new Map<number, string>([
@@ -406,7 +405,7 @@ function placeButton(p: Place, saving: boolean): HTMLElement {
 /** One of the things done to a marked area, with its key (of `act`) in its tip. */
 function action(name: string, act: WorksAction, on: () => void): HTMLElement {
   const b = button(name === "Remove" ? "coral sm" : "sm", [name], on);
-  tip(b, () => `${name} (${WORKS_KEYS.name(act)})`);
+  tip(b, () => WORKS_KEYS.titled(name, act));
   return b;
 }
 
@@ -417,14 +416,14 @@ function turning(p: HandPrint): HTMLElement[] {
     const turn = iconButton("wood sm", yardIcon("turn"), "Rotate", rotate);
     tip(
       turn,
-      () => `Rotate (${WORKS_KEYS.name("rotate")})`,
+      () => WORKS_KEYS.titled("Rotate", "rotate"),
       "With no tool picked, it rotates the piece you last pointed at.",
     );
     out.push(turn);
   }
   if (p.flip) {
     const over = iconButton("wood sm", yardIcon("flip"), "Flip", flip);
-    tip(over, () => `Flip (${WORKS_KEYS.name("flip")})`, "Sends the sorter's item out of its other side.");
+    tip(over, () => WORKS_KEYS.titled("Flip", "flip"), "Sends the sorter's item out of its other side.");
     out.push(over);
   }
   return out;
@@ -486,7 +485,7 @@ function drawHand(p: HandPrint): void {
     const back = iconButton("wood sm undo", yardIcon("undo"), "Undo", () => {
       undo();
     });
-    tip(back, () => `Undo (${WORKS_KEYS.name("undo")})`);
+    tip(back, () => WORKS_KEYS.titled("Undo", "undo"));
     kids.push(back);
   }
   if (p.bin) {
@@ -502,7 +501,7 @@ function drawHand(p: HandPrint): void {
   }
   if (p.cancel) {
     const away = iconButton("wood sm", icon("close"), "Cancel", cancel);
-    tip(away, () => `Cancel (${WORKS_KEYS.name("back")})`);
+    tip(away, () => WORKS_KEYS.titled("Cancel", "back"));
     kids.push(away);
   }
   if (p.go)

@@ -1,9 +1,9 @@
 /**
  * The player's settings for how this device plays: how loud, whether the sound is off, which kinds
- * of sound are switched off, and which keyboard they have. They are kept in this browser (`keep.ts`), so the town and every
- * game on this device share them, and an open page hears another page's change at once through the
- * browser's `storage` event: the town, a game in its frame, another tab. None of it is the player's
- * game; that is Leaf's.
+ * of sound are switched off, which keyboard they have, and the keys they have changed in each game.
+ * They are kept in this browser (`keep.ts`), so the town and every game on this device share them,
+ * and an open page hears another page's change at once through the browser's `storage` event: the
+ * town, a game in its frame, another tab. None of it is the player's game; that is Leaf's.
  *
  * Each setting has a key of its own, so that one page moving the volume never undoes another page's
  * mute. Mute keeps the key it had before there was a volume (`town.muted`), so nobody's mute is lost.
@@ -18,6 +18,9 @@ export const SETTING_KEYS = {
   quiet: "leaf.settings.quiet.v1",
   keyboard: "leaf.settings.keyboard.v1",
 } as const;
+
+/** Where the keys a player changed in a game are kept, by the game's id (`keyboard.ts` reads them). */
+export const keysKey = (game: string): string => `leaf.settings.keys.${game}.v1`;
 
 /** The loudest the volume goes, and where it starts: as loud as the games have always been. */
 export const LOUDEST = 100;
@@ -35,6 +38,11 @@ export interface Settings {
   readonly quiet: ReadonlySet<string>;
   /** The keyboard the player chose, by its id (`keyboard.ts` says which there are); none until they have. */
   readonly keyboard: string | null;
+  /**
+   * The keys the player changed in each game this page has a keymap of, by the game's id, as they
+   * are kept: the game's keymap reads them (`keyboard.ts`), and lets go of anything that is not its own.
+   */
+  readonly keys: ReadonlyMap<string, string | null>;
 }
 
 /** A volume as kept, or `LOUDEST` for none or anything else. */
@@ -56,11 +64,13 @@ export function readQuiet(text: string | null): Set<string> {
   return new Set(ids.slice(0, QUIET_MOST));
 }
 
-const read = (): Settings => ({
+/** The settings as kept, with the keys of each of `games`. */
+const read = (games: Iterable<string>): Settings => ({
   volume: readVolume(keptText(SETTING_KEYS.volume)),
   muted: keptText(SETTING_KEYS.muted) === "1",
   quiet: readQuiet(keptText(SETTING_KEYS.quiet)),
   keyboard: keptText(SETTING_KEYS.keyboard),
+  keys: new Map([...games].map((game) => [game, keptText(keysKey(game))])),
 });
 
 const same = (a: Settings, b: Settings): boolean =>
@@ -68,14 +78,18 @@ const same = (a: Settings, b: Settings): boolean =>
   a.muted === b.muted &&
   a.keyboard === b.keyboard &&
   a.quiet.size === b.quiet.size &&
-  [...a.quiet].every((id) => b.quiet.has(id));
+  [...a.quiet].every((id) => b.quiet.has(id)) &&
+  a.keys.size === b.keys.size &&
+  [...a.keys].every(([game, text]) => b.keys.get(game) === text);
 
 /**
  * The settings of this page, kept and shared. A change made here is told to this page's listeners
  * at once and kept; one made on another page is heard once `follow` has been called.
  */
 class Store {
-  #now: Settings = read();
+  /** The games whose keys this page reads (`keysOf`). */
+  readonly #games = new Set<string>();
+  #now: Settings = read(this.#games);
   readonly #listeners = new Set<(now: Settings) => void>();
 
   /** The settings as they stand now. */
@@ -102,6 +116,23 @@ class Store {
     if (id === this.#now.keyboard) return;
     this.#set({ ...this.#now, keyboard: id });
     keepText(SETTING_KEYS.keyboard, id);
+  }
+
+  /** The keys the player changed in a game, as kept; from now on, a change to them is heard as any other setting's. */
+  keysOf(game: string): string | null {
+    if (!this.#games.has(game)) {
+      this.#games.add(game);
+      this.#now = { ...this.#now, keys: new Map([...this.#now.keys, [game, keptText(keysKey(game))]]) };
+    }
+    return this.#now.keys.get(game) ?? null;
+  }
+
+  /** Keeps the keys the player changed in a game, as its keymap writes them; `null` when none are changed. */
+  setKeys(game: string, text: string | null): void {
+    this.keysOf(game);
+    if (this.#now.keys.get(game) === text) return;
+    this.#set({ ...this.#now, keys: new Map([...this.#now.keys, [game, text]]) });
+    keepText(keysKey(game), text);
   }
 
   /** Switches one kind of sound (by its id) on or off. */
@@ -137,10 +168,10 @@ class Store {
    * nothing is kept again, nothing is played.
    */
   follow(scope: Scope): void {
-    const keys: ReadonlySet<string | null> = new Set([null, ...Object.values(SETTING_KEYS)]);
+    const keys: ReadonlySet<string> = new Set(Object.values(SETTING_KEYS));
     scope.on(window, "storage", (e) => {
       const key = e instanceof StorageEvent ? e.key : null;
-      if (key === null || keys.has(key)) this.reread();
+      if (key === null || keys.has(key) || [...this.#games].some((game) => keysKey(game) === key)) this.reread();
     });
     scope.on(window, "pageshow", () => {
       this.reread();
@@ -149,7 +180,7 @@ class Store {
 
   /** Reads the settings again from where they are kept, telling the listeners if they changed. */
   reread(): void {
-    const next = read();
+    const next = read(this.#games);
     if (!same(next, this.#now)) this.#set(next);
   }
 

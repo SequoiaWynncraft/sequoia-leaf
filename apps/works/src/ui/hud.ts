@@ -181,7 +181,7 @@ function bookButtons(): () => void {
       togglePanel(id);
     });
     b.dataset.book = id;
-    tip(b, () => `${title(S.world.open.tier)} (${WORKS_KEYS.name(act)})`, about);
+    tip(b, () => WORKS_KEYS.titled(title(S.world.open.tier), act), about);
     books.set(id, b);
     titles.set(id, title);
     if (!S.visiting || id === "board") host.append(b);
@@ -196,7 +196,7 @@ function bookButtons(): () => void {
   const yardBtn = iconButton("wood pip bad", yardIcon("map"), "The yard", () => {
     togglePanel("depot");
   });
-  tip(yardBtn, () => `The yard (${WORKS_KEYS.name("move")})`);
+  tip(yardBtn, () => WORKS_KEYS.titled("The yard", "move"));
   if (!S.visiting) host.append(yardBtn);
   return shows(booksPrint, (p) => {
     set(ordersBtn, p.ready > 0 ? String(p.ready) : null);

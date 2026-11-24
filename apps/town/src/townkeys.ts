@@ -5,7 +5,7 @@
  * walking goes on while its key is held.
  */
 import { placeOf } from "@sequoia-leaf/kit/keyboard.ts";
-import { heldAgain, pressesButtons, typing } from "@sequoia-leaf/kit/keys.ts";
+import { forControl, heldAgain, onControl, pressesButtons, typing } from "@sequoia-leaf/kit/keys.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 
@@ -33,8 +33,7 @@ function use(e: KeyboardEvent, repeated: boolean, scene: Scene): void {
     e.preventDefault();
     return;
   }
-  // A control has the keyboard: a button, or anything the kit made one (a tip's owner, a card link).
-  const onButton = e.target instanceof HTMLElement && e.target.matches("button, [role='button'], a[href], summary");
+  const onButton = onControl(e);
   const presses = pressesButtons(placeOf(e));
   // A button that has the keyboard answers Enter and Space itself.
   if (!repeated && (!presses || !onButton)) scene.act();
@@ -50,9 +49,11 @@ export function listenKeys(scope: Scope, of: KeysOf): Set<string> {
     // Typed into a field (a tome's reason), a key is a letter, not a step or a press.
     if (of.away() || typing(e)) return;
     const act = TOWN_KEYS.of(e)?.id;
+    // Said again while held: walking walks on, and nothing else is done again (not a Grove prize passed by a held Right).
     const repeated = heldAgain(e);
     if (act === "use") return use(e, repeated, of.scene());
-    if (act === undefined || !of.mayAct()) return;
+    // Enter or Space on a button is the button's, whatever else the player has put on them.
+    if (act === undefined || !of.mayAct() || forControl(e)) return;
     // A card that took this Escape (the kit's says so) was the one layer it puts away.
     if (act === "back") {
       if (!repeated && !e.defaultPrevented && !of.scene().back()) of.settings();

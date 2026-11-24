@@ -71,12 +71,13 @@ export function bubble(g: Ctx, lines: readonly string[], x: number, y: number, p
 
 /** How large a key prompt is. */
 export function promptSize(g: Ctx, key: string, label: string, px: number): Size {
-  return { w: widthOf(g, key, px, true) + widthOf(g, label, px, true) + 19 * px, h: 18 * px };
+  const cap = key === "" ? 0 : widthOf(g, key, px, true) + 9 * px;
+  return { w: cap + widthOf(g, label, px, true) + 10 * px, h: 18 * px };
 }
 
 /**
- * The key to press and what it does, on a dark plate in a wooden rim like a tip: `[E] Treasury`. Its top-left
- * corner goes at `x`, `y`.
+ * The key to press and what it does, on a dark plate in a wooden rim like a tip: `[E] Treasury`; with
+ * no key (""), what it is alone. Its top-left corner goes at `x`, `y`.
  */
 export function prompt(g: Ctx, key: string, label: string, x: number, y: number, px: number): void {
   const { w, h } = promptSize(g, key, label, px);
@@ -92,6 +93,10 @@ export function prompt(g: Ctx, key: string, label: string, x: number, y: number,
   r(1, 1, W - 3, 1, BARK[3]);
   r(1, 1, 1, H - 3, BARK[3]);
   r(2, 2, W - 4, H - 4, "#1f1226");
+  if (key === "") {
+    write(g, label, x + 5 * px, y + 5 * px, { px, bold: true, colour: GOLD[2], shadow: INK });
+    return;
+  }
   // The key, as a cap with a lip under it.
   const kw = widthOf(g, key, px, true) / px + 5;
   r(4, 3, kw, 12, INK);
