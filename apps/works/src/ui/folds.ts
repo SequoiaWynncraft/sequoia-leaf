@@ -70,7 +70,8 @@ export function keepFold(f: Fold, open: boolean): void {
  * Nothing else is touched, so nothing is built again and the scroll does not move.
  */
 function fold(b: HTMLElement, f: Fold, parts: readonly HTMLElement[], name?: (open: boolean) => string): () => void {
-  const key = typeof f === "number" ? idOf(f) : f;
+  // Lists and cards have ids of their own kinds, so a goal called "done" is never the list's.
+  const key = typeof f === "number" ? `goal-${idOf(f)}` : `list-${f}`;
   b.setAttribute("aria-controls", parts.map((p, i) => (p.id ||= `fold-${key}-${i}`)).join(" "));
   const set = (open: boolean): void => {
     for (const p of parts) p.hidden = !open;

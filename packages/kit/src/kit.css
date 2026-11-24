@@ -1348,6 +1348,10 @@ button.k-info-chip:hover .k-chip {
     position: absolute;
     inset: calc(var(--u) * -4) calc(var(--u) * -4) calc(var(--u) * -5);
   }
+  /* A label that folds is 40 pixels to the finger too, the whole width along its rule. */
+  button.k-label {
+    min-block-size: 40px;
+  }
 }
 
 /*

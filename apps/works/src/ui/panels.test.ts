@@ -27,7 +27,7 @@ import {
 
 import { S } from "../state.ts";
 import type { Need } from "./goal.ts";
-import { booksPrint } from "./hud.ts";
+import { bookNames, booksPrint } from "./hud.ts";
 import { ordersPrint, placed, plural, powerPrint } from "./panels.ts";
 import { researchPrint, stripPrint } from "./research.ts";
 import { lockOf, nextUp, nextWords, researchOpen, studiable, takeable, tierOpen } from "./standing.ts";
@@ -87,6 +87,9 @@ describe("a panel is kept by what it prints", () => {
     expect([power(y).pace < 1, Math.round(power(y).pace * 100), powerPrint().pace]).toEqual([true, 100, 99]);
   });
 });
+
+/** What the books' buttons are called now, each titled by its id. */
+const names = (): Map<string, string> => bookNames(booksPrint(), (id) => id);
 
 /** A yard of a tier, as the page's own (not a visit). */
 function yardAt(tier: number): Yard {
@@ -303,6 +306,15 @@ describe("the tier's screen", () => {
     for (const g of ["flywheel", "sorter", "planchest"] as const) study(y, goal(g));
     expect(y.line.length).toBe(LINE);
     expect([studiable(), booksPrint().study]).toEqual([[], 0]);
+  });
+
+  test("a button's count is in its name, for whoever cannot see the corner", () => {
+    const y = yardAt(3);
+    expect(names().get("research")).toBe("research, 7 to study");
+    for (const g of ["oilpress", "flywheel", "sorter", "planchest"] as const) study(y, goal(g));
+    // The line full: no count, so the name alone.
+    expect(names().get("research")).toBe("research");
+    expect(names().get("board")).toBe("board");
   });
 
   test("the node in hand in Orders prints what it waits on the same way", () => {

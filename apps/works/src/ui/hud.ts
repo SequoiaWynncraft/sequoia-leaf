@@ -147,6 +147,27 @@ export const booksPrint = () => ({
   nudged: S.nudge?.part ?? null,
 });
 
+/** A name with a count said after it in words: "Research, 7 to study"; with no count, the name alone. */
+const said = (name: string, n: number, words: string): string => (n > 0 ? `${name}, ${n} ${words}` : name);
+
+/**
+ * What each button with a count on its corner is called, the count said in words for whoever cannot
+ * see the corner: "Research, 7 to study"; with no count, its name alone.
+ */
+export function bookNames(
+  p: ReturnType<typeof booksPrint>,
+  title: (id: PanelId) => string,
+): Map<PanelId | "yard", string> {
+  return new Map<PanelId | "yard", string>([
+    ["orders", said(title("orders"), p.ready, "ready")],
+    ["board", title("board")],
+    ["tier", said(title("tier"), p.open, "to take")],
+    ["research", said(title("research"), p.study, "to study")],
+    ["depot", title("depot")],
+    ["yard", said("The yard", p.wrong, "in trouble")],
+  ]);
+}
+
 function bookButtons(): () => void {
   const host = $("books");
   const make = (
@@ -186,11 +207,13 @@ function bookButtons(): () => void {
     depotBtn.hidden = p.yard;
     yardBtn.hidden = !p.yard;
     set(yardBtn, p.wrong > 0 ? String(p.wrong) : null);
+    const names = bookNames(p, (id) => titles.get(id)?.(p.tier ?? 0) ?? "");
     for (const [id, b] of books) {
       b.classList.toggle("down", p.panel === id);
       b.classList.toggle("nudged", p.nudged === id && p.panel !== id);
-      b.setAttribute("aria-label", titles.get(id)?.(p.tier ?? 0) ?? "");
+      b.setAttribute("aria-label", names.get(id) ?? "");
     }
+    yardBtn.setAttribute("aria-label", names.get("yard") ?? "");
     yardBtn.classList.toggle("down", p.panel === "depot");
   });
 }
