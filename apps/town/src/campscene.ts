@@ -377,7 +377,7 @@ export function makeCamp(
   const everybody = (): Actor[] => (G.player ? [G.player, ...guests] : guests);
   /** Everybody drawn in the camp: those who are here, and the other players live in it. */
   const drawn = (): Actor[] => [...everybody(), ...livePlayers()];
-  const standApart = makeApart(drawn);
+  const standApart = makeApart(ground, drawn);
 
   /** Whether somebody has been shut off from the trail by what stands round them. */
   const cutOff = (a: Pt): boolean =>

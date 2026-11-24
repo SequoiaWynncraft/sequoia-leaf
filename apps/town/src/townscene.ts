@@ -19,7 +19,6 @@ import {
   hop,
   makeActor,
   makeFolk,
-  peopleOn,
   placeFolk,
   rouse,
   say,
@@ -169,8 +168,6 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   G.player = player;
   // The town's own: drawn as themselves, each where its evening finds it.
   initFolkArt(campArt);
-  // A walk anybody here is sent on ends beside whoever is standing or sitting there.
-  peopleOn(TOWN, () => pic.people());
   const cinfy = makeFolk(folk("cinfy"), 104, 113);
   placeFolk(cinfy);
   G.cinfy = cinfy;
@@ -334,7 +331,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   /** Every member in town: the member, visitors and dozers, and live players. */
   const everyone = (): Actor[] => [player, ...G.visitors, ...livePlayers()];
   /** Everybody on top of one another drawn apart (`crowd.ts`). */
-  const standApart = makeApart(() => pic.people());
+  // A walk anybody here is sent on ends beside whoever is standing or sitting there.
+  const standApart = makeApart(TOWN, () => pic.people());
 
   /**
    * The places, as doors: each opens its panel, and walking on into a game's doorway, up to its
