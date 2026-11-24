@@ -27,6 +27,7 @@ import {
   ROOMS,
   type RunView,
   rustleCost,
+  STALL_ODDS,
   tally,
   topStep,
   type TraitId,
@@ -452,11 +453,19 @@ function renderPurseSide(run: RunView): void {
     el("i", "", { style: `--v:${need > 0 ? Math.round((xp / need) * 100) : 100}%` }),
   );
   const wasLv = level.dataset.n;
+  // What a reroll can bring at this level, each tier in its colour, cheapest first.
+  const odds = STALL_ODDS[Math.min(lv, STALL_ODDS.length) - 1] ?? [];
   level.replaceChildren(
     el("b", "", { text: `Level ${lv}` }),
     bar,
     el("span", "k-dim", { text: need > 0 ? `${xp}/${need}` : "top" }),
     el("span", "k-dim fielded", {}, pic(glyph("figure")), `${fielded(run)}/${fieldCap(run)}`),
+    el(
+      "span",
+      "odds",
+      {},
+      ...odds.flatMap((share, i) => (share > 0 ? [el("span", `t${i + 1}`, { text: `${share}%` })] : [])),
+    ),
   );
   level.setAttribute("aria-label", need > 0 ? `Level ${lv}, ${xp}/${need} XP` : `Level ${lv}`);
   level.dataset.n = String(lv);
