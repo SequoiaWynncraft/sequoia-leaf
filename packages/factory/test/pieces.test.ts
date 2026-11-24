@@ -3,7 +3,8 @@
  * as many stops as the yard has unlocked; a sorter, in at the back, sends the one thing it is set to
  * out to its left, or flipped to its right, and everything else ahead, and with nothing set is a belt. A splitter with a way
  * put first sends everything that way while it takes it, and only the rest to its other ways. A
- * joiner lets the next thing in as soon as the one whose turn it was goes another way. And a
+ * joiner lets the next thing in as soon as the one whose turn it was goes another way, and a full
+ * crate takes a thing in at the tick it lets one out. And a
  * blueprint, set down by naming its place: turned any way, it stands as turned, tunnels whole, all or
  * none.
  */
@@ -695,6 +696,36 @@ describe("a joiner", () => {
     expect([F.held(y.holders, right, plank), y.item[belt], y.item[joiner]]).toEqual([1, plank, F.NONE]);
     run(y, 1);
     expect([y.item[belt], y.item[joiner]]).toEqual([F.NONE, plank]);
+  });
+});
+
+describe("a full crate", () => {
+  test("takes the next thing in at the tick it lets one out", () => {
+    // A crate at (5, 4) facing east, full: 127 planks and one out to go, which the belt ahead of it
+    // has no room for until the plank on that belt has crossed it. A belt behind it holds a plank.
+    const y = yard(4);
+    must(y, { do: "build", kind: "crate", x: 5, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "belt", x: 4, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "belt", x: 6, y: 4, dir: 0 });
+    sink(y, 7, 4);
+    const [crate, behind, ahead] = [F.holderOf(y, F.at(y, 5, 4)), F.at(y, 4, 4), F.at(y, 6, 4)];
+    for (let k = 1; k < y.open.crate; k++) F.put(y.holders, crate, plank);
+    y.holders.out[crate] = plank;
+    y.item[behind] = plank;
+    y.prog[behind] = 8;
+    y.item[ahead] = plank;
+    y.prog[ahead] = 2;
+    run(y, 2);
+    expect([y.item[behind], y.holders.out[crate]]).toEqual([plank, plank]);
+    // The plank ahead crosses its belt and goes on: the crate lets its plank out onto it, and the
+    // belt behind hands its plank in at once.
+    run(y, 1);
+    expect([y.item[behind], F.held(y.holders, crate, plank), y.holders.out[crate], y.item[ahead]]).toEqual([
+      F.NONE,
+      y.open.crate,
+      F.NONE,
+      plank,
+    ]);
   });
 });
 
