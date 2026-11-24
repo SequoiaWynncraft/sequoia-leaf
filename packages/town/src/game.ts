@@ -42,7 +42,6 @@ import {
   type Verdict,
 } from "./camp.ts";
 import { STALLS } from "./catalogue.ts";
-import { stretchOf } from "./clock.ts";
 import {
   type AwayCall,
   type Caller,
@@ -56,6 +55,7 @@ import {
   WHILE_AWAY,
 } from "./folk.ts";
 import { isLetter, type Letter, letter, post, tidied } from "./mail.ts";
+import { stretchOf } from "./stretch.ts";
 import { figureThing, isThing, thingOf, turnsOf } from "./things.ts";
 
 // ---------- the state ----------

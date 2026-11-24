@@ -9,8 +9,7 @@ import { EARTH, GREEN, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { paint } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, hash, type Pt, vnoise } from "@sequoia-leaf/kit/util.ts";
 import { CGH, CGW, TRAIL, YARD } from "@sequoia-leaf/town/camp.ts";
-
-import { CELL } from "./grid.ts";
+import { CELL, type Trodden, troddenD } from "@sequoia-leaf/town/map/grid.ts";
 
 /** The clearing, in art pixels. */
 export const CW = CGW * CELL;
@@ -27,24 +26,6 @@ export const TRAIL_IN: Pt = { x: (TRAIL.x0 + 1) * CELL, y: TRAIL_Y + 2 };
 
 const DEEP = ["#141f1c", "#19291f", "#1e3324"] as const;
 const at = (ramp: readonly string[], i: number): string => ramp[clamp(Math.round(i), 0, ramp.length - 1)] ?? "#000000";
-
-/** A stretch of trodden earth: from one point to another, and half its width. */
-export type Trodden = readonly [number, number, number, number, number];
-
-function segD(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const len = dx * dx + dy * dy;
-  const t = len === 0 ? 0 : clamp(((px - x1) * dx + (py - y1) * dy) / len, 0, 1);
-  return Math.hypot(px - (x1 + dx * t), py - (y1 + dy * t));
-}
-
-/** How far outside trodden earth a point is (negative: on it), with a ragged edge. */
-export function troddenD(paths: readonly Trodden[], x: number, y: number): number {
-  let d = 999;
-  for (const [x1, y1, x2, y2, hw] of paths) d = Math.min(d, segD(x, y, x1, y1, x2, y2) - hw);
-  return d + (vnoise(x / 9, y / 9, 5) - 0.5) * 7;
-}
 
 /**
  * The earth a camp's comings and goings have worn: in off the trail to the fire, a ring round it,

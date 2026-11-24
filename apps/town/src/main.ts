@@ -39,6 +39,7 @@ import { guild } from "./guild.ts";
 import { closeCard, closePanel, covered, hush, initHud, tickHud } from "./hud.ts";
 import { TOWN_KEYS } from "./keymap.ts";
 import { here, keepTold, onTown, openCamp, town as kept, troubleCard, visiting } from "./leaf.ts";
+import { showMapSheet } from "./mapsheet.ts";
 import { leafNow, onStage } from "./players.ts";
 import { lookFromOutside } from "./review.ts";
 import { darkOf, inGame, mayAct, next, openOf, type Place, placeOf, takesWalk } from "./screen.ts";
@@ -73,11 +74,10 @@ async function boot(): Promise<void> {
     // The member and a few others in made-up looks; the town's own as themselves.
     const looks = [guild.me().look, ...["Quillfeather", "Fernwhistle", "Wrenly", "Bramblewick"].map(lookFor)];
     for (const id of ["purse", "corner", "dock", "feed"]) document.getElementById(id)?.remove();
+    const part = new URLSearchParams(location.search).get("sheet");
+    if (part === "map") return showMapSheet(sprites);
     const campArt = makeCampArt(sprites);
-    if (new URLSearchParams(location.search).get("sheet") === "camp") {
-      showCampSheet(campArt);
-      return;
-    }
+    if (part === "camp") return showCampSheet(campArt);
     initFolkArt(campArt);
     const folk = FOLK.flatMap((t) => {
       const a = folkArt(t);
@@ -112,10 +112,10 @@ async function boot(): Promise<void> {
     }
     const on = scene();
     const at = on.focus();
-    const { w, top, bottom } = on.bounds;
+    const { left = 0, w, top, bottom } = on.bounds;
     let tx = at.x - fw / 2;
     let ty = at.y - fh / 2;
-    tx = vw > w + (vw - fw) ? (w - vw) / 2 : clamp(tx, 0, w - fw);
+    tx = vw > w + (vw - fw) ? left + (w - vw) / 2 : clamp(tx, left, left + w - fw);
     ty = fh > bottom - top ? top + (bottom - top - fh) / 2 : clamp(ty, top, bottom - fh);
     const ease = snap ? 1 : 0.12;
     G.cam.x += (tx - G.cam.x) * ease;

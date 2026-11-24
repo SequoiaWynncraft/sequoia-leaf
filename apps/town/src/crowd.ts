@@ -7,11 +7,11 @@
  */
 
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
+import type { Ground } from "@sequoia-leaf/town/map/grid.ts";
 
 import { headOf, peopleOn } from "./actors.ts";
 import { apart, ease } from "./apart.ts";
 import type { Actor } from "./game.ts";
-import type { Ground } from "./grid.ts";
 
 /** Faster than anybody walks, in pixels a second: put somewhere else, not walking there. */
 const JUMP = 300;

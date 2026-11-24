@@ -19,6 +19,12 @@ bun test
 | `mail.ts`      | The mailbox: twelve letters, and which make room for the next                                |
 | `camp.ts`      | What may stand where in a camp, turning, the tray, who lives there, the new camp, an old one |
 | `clock.ts`     | The town by the clock: the town's own, the crabs, members, the stump's board, the moments    |
+| `map/town.ts`  | The town as one table: its areas, its edges, and the spots fixed to pieces by what they are  |
+| `map/areas/`   | Each area of the town: its pieces, places, clearings and paths, a file each                  |
+| `map/rows.ts`  | The shape of the table: a row, a group, a place, an area                                     |
+| `map/kinds.ts` | Each kind of piece: the ground it blocks, where to rest on it, its lights, shadow and water  |
+| `map/map.ts`   | What follows from the table: the ground to walk on, seats, places, lights, spots, by id      |
+| `map/grid.ts`  | Ground to walk on, the town's and a camp's: which squares are blocked, the way round them    |
 | `game.ts`      | The state, the commands, what happens by itself, what the page is shown, keeping it          |
 | `stats.ts`     | What a person's card says of their camp                                                      |
 
@@ -85,6 +91,56 @@ No command answers with notes. `buy` takes the price (keyed `buy:<n>`) and `open
 greeted are logged (`town_bought`, `town_pet`, `town_crab`, `town_greeted` with who called); the
 Tally counts the last two.
 
+## The town's map
+
+The Guild Town is one table, `TOWN_MAP` in `map/town.ts`, put together from its areas, a file each
+in `map/areas/`: the north road (the Treasury, the gate, the Works), the square round the fire, the
+west (the Grove, the market), the east (the stump, the lantern tree, the pond) and the garden. The
+town grows by whole areas: a new area is a new file and its name in `areas`.
+
+An area holds its pieces, its places, the trodden earth round its pieces (`clearings`) and its paths,
+the straight stretches of trodden earth from one point of the town to another (or part of a piece,
+as the way in from the gate is the gate's). Each piece is a row: an id of its own, its kind, and its
+anchor (where its picture's foot goes, in the town's pixels from its top-left corner). A row that is
+part of another (`piece`: the Treasury's counter, chest and barrels, the Works' belt, pile and bench,
+the fire's logs and stumps) has its anchor from that one's, so moving the Treasury or the fire is
+one row; only one level deep. A seat also says which way its sitters face (`face`), who rests there (`at`,
+for the dozers) and which of its spots is the member's (`yours`); a piece of a kind with more than
+one look says which (`look`). Small things of one kind are a group, one row of points
+(`flowers-garden.0`, `.1` and so on); a group that belongs to a piece (the pond's lily pads, reeds
+and rocks) has its points from that piece's anchor. Everything else is fixed to a piece too, from its
+anchor, and always to a row, never to one of a group's (a crab perches on a rock that is a row): each place's stand and prompt, each clearing, and, in `town.ts` by what they are for, the
+busy spots at the games, the spots the town's own go to, the crabs' homes and where the missing one
+hides, the keepers', the trail through the gate, the glints and fireflies, and both ends of every
+string of lights. Only the town's edges are nobody's: the far trees over the shops, the walls of
+bark left and right and the ferns along the bottom (`walls`), and where the far hedge tops out.
+`map/rows.ts` is the shape of all of it.
+
+A kind (`map/kinds.ts`) says what every piece of it has: the ground it blocks (boxes from the
+anchor; a square is blocked where a box overlaps it), where somebody may rest on it for each way
+they face, the lights it gives, its shadow, and where a kind has them, its water (the pond), the way
+it opens through the walls and its gateway in the hedge (the gate). A look may have ground and a
+shadow of its own (each great trunk, each size of bush). How a kind is drawn and what it does when
+touched is the page's (`apps/town/src/townart.ts`, one entry for each kind). `map/map.ts` works out
+the rest once: the ground to walk on, every seat, place, light, shadow, string and spot where it is
+in town, and each piece by its id (`piece`). The page and `clock.ts` read all of it from there. The
+map is none of the town's rules (`game.ts` reads nothing of it), so moving a piece changes nothing a
+page and Leaf must agree on.
+
+### Adding or moving something in town
+
+1. Edit its row in its area's file in `map/areas/`: a new piece needs an id nothing else has. To move
+   a piece, change its `x` and `y`; whatever is fixed to it moves with it.
+2. Run `bun test` here. `map/table.test.ts` says what is wrong with the table as typed (an id used
+   twice, something fixed to what is no row, a part of a part, a seat without who rests there, a box
+   of no size), and `map/map.test.ts` what the change broke: a piece outside the town, two pieces on
+   one square, somewhere people stand that is blocked or cannot be reached from where they come in off
+   the trail, a pond too small for its glints, or a walk of the town's own longer than its round gives
+   it (then give that walk more seconds in `ROUNDS` in `clock.ts`).
+   The page's tests say when a string of lights no longer ends on something that could hold it.
+3. Look at it: open the town with `?sheet=map`, which draws the town with every square, the blocked
+   ones in red, each piece's id, the seats, the places and the spots.
+
 ## The town by the clock
 
 `clock.ts` answers, for a seed and a moment of Leaf's clock, where each of the town's own and each
@@ -95,13 +151,13 @@ and nothing is kept: any page, and Leaf, gets the same answer for the same momen
 - `folkAt(seed, who, now)`: where it set out from, where it is going, when it set out, what it
   does there, and the line it is saying. Pipwick goes round the crabs, the board and the gate
   (24, 24 and 17 seconds a turn, up to 3 late); Fika between the Works' door and the fire (32
-  seconds, up to 5 late); each turn is at one of the spots for it (`SPOTS`). Sootpaw naps in turns
+  seconds, up to 5 late); each turn is at one of the spots for it (the map's `ERRANDS`). Sootpaw naps in turns
   of 22 seconds (up to 6 late), and 3 naps in 10 end with 5 to 9 seconds awake. The rest keep to
   their posts. Every 4.5 seconds (up to 1.7 late) one of those at its post and awake says a line
   for 2.8 seconds.
 - `crabAt(seed, n, now)`: how far from home a crab was and is going, as shares of its reach, and
   when it set out: every 5.5 seconds, up to 3 late.
-- `hiding(seed, now)`: where the missing crab hides. One place for each 60 seconds (`STRETCH`),
+- `hiding(seed, now)`: where the missing crab hides (the map's `HIDES`). One place for each 60 seconds (`STRETCH`),
   never the same place twice running; `stretchOf(now)` is which 60 seconds, and `spotCrab` counts
   one sighting in each.
 - `boardAt(seed, now)`: the hex each of the five figures on the stump's board is on while

@@ -40,8 +40,8 @@ export interface Hover {
 }
 
 export interface Scene {
-  /** How far the camera may travel, in the scene's pixels: its width, and its top and bottom edges. */
-  readonly bounds: { readonly w: number; readonly top: number; readonly bottom: number };
+  /** How far the camera may travel, in the scene's pixels: its left edge (0 if not said), its width, and its top and bottom edges. */
+  readonly bounds: { readonly left?: number; readonly w: number; readonly top: number; readonly bottom: number };
   /** The picture is to be this many of the scene's pixels across and down. */
   resize(w: number, h: number): void;
   /** The point the camera keeps in view. */

@@ -5,13 +5,13 @@ import type { Body } from "@sequoia-leaf/kit/skin.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 import { PETS } from "@sequoia-leaf/town/camp.ts";
+import { PLACES } from "@sequoia-leaf/town/map/map.ts";
 import { KIND_NAMES, KINDS, THINGS } from "@sequoia-leaf/town/things.ts";
 
 import { type CampArt, campIcon } from "./campart.ts";
 import { paintBackdrop, paintGround, paintNear, paintTrunk } from "./ground.ts";
 import { icon, type Sprite, type Sprites } from "./sprites.ts";
 import { tallyBoard } from "./tallyart.ts";
-import { PLACES } from "./world.ts";
 
 /** The art, with the members' figures (`bodies`) and the town's own in every picture (`folk`). */
 export function showSheet(s: Sprites, bodies: readonly Body[], folk: readonly Sprite[]): void {

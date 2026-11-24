@@ -4,7 +4,6 @@ import { type Ctx, DAY_MS, type Done, LOGGED, type Refused } from "@sequoia-leaf
 
 import { canPlace, MOST_NEW, MOST_OWNED, MOST_PLACED, NEW_CAMP, store, YARD } from "./camp.ts";
 import { STALLS } from "./catalogue.ts";
-import { STRETCH, stretchOf } from "./clock.ts";
 import { CALLERS, folk, GIFTS } from "./folk.ts";
 import {
   CALLS,
@@ -21,6 +20,7 @@ import {
   townView,
 } from "./game.ts";
 import { BOX, letter } from "./mail.ts";
+import { STRETCH, stretchOf } from "./stretch.ts";
 import { THINGS } from "./things.ts";
 
 /** Wednesday 25 November 2026, 12:00 UTC. */

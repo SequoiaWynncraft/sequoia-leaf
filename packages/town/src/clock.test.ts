@@ -14,11 +14,10 @@ import {
   seedOf,
   SET_OUT,
   stagedBy,
-  STRETCH,
-  stretchOf,
   zAt,
 } from "./clock.ts";
 import { ERRAND_LINES, FOLK, folk } from "./folk.ts";
+import { STRETCH, stretchOf } from "./stretch.ts";
 
 const SEED = seedOf("town");
 /** Noon to noon, so that the UTC day turns in the middle. */

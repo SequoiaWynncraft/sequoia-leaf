@@ -7,12 +7,12 @@
 import { CREAM, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { type Ctx, dist, type Pt } from "@sequoia-leaf/kit/util.ts";
 import type { PetId } from "@sequoia-leaf/town/camp.ts";
+import type { Ground } from "@sequoia-leaf/town/map/grid.ts";
 
 import { onScreen } from "./actors.ts";
 import type { PetArt } from "./campart.ts";
 import { csfx } from "./campsfx.ts";
 import { float } from "./fx.ts";
-import type { Ground } from "./grid.ts";
 import type { Standing } from "./props.ts";
 
 export interface PetLive extends Standing {

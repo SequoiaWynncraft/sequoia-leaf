@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { seedOf, type Stand } from "@sequoia-leaf/town/clock.ts";
+import { seedOf } from "@sequoia-leaf/town/clock.ts";
+import { TOWN } from "@sequoia-leaf/town/map/map.ts";
+import type { Stand } from "@sequoia-leaf/town/map/rows.ts";
 
 import {
   atWork,
@@ -17,7 +19,6 @@ import {
   type Thing,
   WORK_MS,
 } from "./spots.ts";
-import { TOWN } from "./world.ts";
 
 /** Noon, by Leaf's clock. */
 const T0 = Date.UTC(2026, 10, 25, 12);

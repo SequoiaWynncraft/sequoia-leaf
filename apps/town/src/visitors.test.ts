@@ -4,15 +4,15 @@ import { restart, start } from "@sequoia-leaf/kit/live.ts";
 import { forgetLedger } from "@sequoia-leaf/kit/purse.ts";
 import { HELLO, type Standin, standin, TESTER } from "@sequoia-leaf/kit/standin.ts";
 import { dozing, HOME, SITS_AFTER } from "@sequoia-leaf/town/clock.ts";
+import { TOWN } from "@sequoia-leaf/town/map/map.ts";
 
 import { HOP, hop, makeActor, peopleOn, seatFree, sit, stop, walkToSeat } from "./actors.ts";
 import type * as Events from "./events.ts";
-import { type Actor, G } from "./game.ts";
+import { type Actor, G, SEATS } from "./game.ts";
 import type * as Guild from "./guild.ts";
 import type { Moment, Rester, Visitor } from "./guild.ts";
 import { prepare, unprepare } from "./live.ts";
 import type * as Visitors from "./visitors.ts";
-import { SEATS, TOWN } from "./world.ts";
 
 /** Noon, by Leaf's clock. */
 const T0 = Date.UTC(2026, 10, 25, 12);

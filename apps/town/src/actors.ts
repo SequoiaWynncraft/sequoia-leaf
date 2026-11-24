@@ -9,15 +9,15 @@ import type { Body } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { dist, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { folkAt, roll, type Walk } from "@sequoia-leaf/town/clock.ts";
-import type { Townsperson } from "@sequoia-leaf/town/folk.ts";
+import { PACE, type Townsperson } from "@sequoia-leaf/town/folk.ts";
+import type { Ground } from "@sequoia-leaf/town/map/grid.ts";
+import { KEEPERS, TOWN } from "@sequoia-leaf/town/map/map.ts";
 
 import { beside, crowds, type Placed } from "./apart.ts";
 import { folkArt } from "./folkart.ts";
 import { puff } from "./fx.ts";
-import { type Actor, G, type Move, SEED, type Who } from "./game.ts";
-import type { Ground } from "./grid.ts";
+import { type Actor, G, type Move, type Seat, SEATS, SEED, type Who } from "./game.ts";
 import type { Steer } from "./stage.ts";
-import { type Seat, SEATS, STALL_BEHIND, STALL_FRONT_Y, STALL_TOP_Y, TOWN } from "./world.ts";
 
 export const HOP = 0.3;
 
@@ -80,7 +80,7 @@ export function makeActor(who: Who, body: Body | null, x: number, y: number, you
 export function makeFolk(t: Townsperson, x: number, y: number): Actor {
   const a = blank({ name: t.name, rank: "", level: 0, voice: t.voice }, null, x, y, false);
   a.folk = { t, art: folkArt(t) };
-  a.speed = t.kind === "gnome" ? 22 : t.kind === "glorp" ? 18 : 26;
+  a.speed = PACE[t.kind];
   return a;
 }
 
@@ -477,10 +477,13 @@ export function placeFolk(a: Actor): void {
   const f = a.folk;
   if (!f) return;
   const job = f.t.job;
+  const keep = (at: Pt & { lift: number }): void => {
+    a.x = at.x;
+    a.y = at.y;
+    a.lift = at.lift;
+  };
   if (job === "counter") {
-    a.x = 104;
-    a.y = 113;
-    a.lift = 9;
+    keep(KEEPERS.counter);
   } else if (job === "fire") {
     // On the stump at the fire's west side, leaving the logs to those who sit facing the fire.
     const seat = SEATS.find((s) => s.at === "fire" && s.dir === 2);
@@ -491,10 +494,9 @@ export function placeFolk(a: Actor): void {
       a.sat = -9;
     }
   } else if (typeof job === "object") {
-    a.x = stallAt(job.stall).x;
     // A napper is curled up on the counter: in front of the stall, as high as its top.
-    a.y = job.naps ? STALL_FRONT_Y : stallAt(job.stall).y;
-    a.lift = job.naps ? STALL_FRONT_Y - STALL_TOP_Y : 2;
+    const stall = KEEPERS.stalls[job.stall];
+    if (stall) keep(job.naps ? stall.nap : stall.keeper);
     a.dir = 0;
   }
   byClock(a);
@@ -547,9 +549,6 @@ export function freeSeat(a: Actor, where: Seat["at"]): Seat | null {
   }
   return best;
 }
-
-/** The point a stall's keeper stands at, for whoever wants it. */
-export const stallAt = (n: number): Pt => STALL_BEHIND[n] ?? { x: 108, y: 238 };
 
 /**
  * Walks somebody to a seat to sit on it (`walkToSeat`); if somebody is there by then, on to the seat

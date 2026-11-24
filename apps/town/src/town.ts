@@ -7,23 +7,23 @@
 import { DAILY_CHEST, type Thing } from "@sequoia-leaf/core";
 import { BARK, CREAM, EARTH, GOLD, GREEN, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { hush, noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
-import { clamp, dist, type Pt, rng } from "@sequoia-leaf/kit/util.ts";
-import { bannerAt, boardAt, crabAt as crabByClock, hiding, HOME, stretchOf } from "@sequoia-leaf/town/clock.ts";
+import { clamp, dist, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { bannerAt, boardAt, crabAt as crabByClock, hiding, HOME } from "@sequoia-leaf/town/clock.ts";
+import { BOUNDS, FIREFLIES, hedgeY, lightOf, piece, place, pondD, STRINGS } from "@sequoia-leaf/town/map/map.ts";
+import type { PlaceId } from "@sequoia-leaf/town/map/rows.ts";
+import { stretchOf } from "@sequoia-leaf/town/stretch.ts";
 
 import { goSit, onScreen, sitsOn } from "./actors.ts";
 import { csfx } from "./campsfx.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle } from "./fx.ts";
-import { type Actor, G, hooks, SEED, today } from "./game.ts";
+import { type Actor, G, hooks, SEATS, SEED, today } from "./game.ts";
 import { ask, doNow, ok, town } from "./leaf.ts";
 import { type Light, makeProp, type Prop, propUnder } from "./props.ts";
 import type { Sprite } from "./sprites.ts";
-import { type Strand, STRINGS, wire } from "./strings.ts";
-import { hedgeY, place, type PlaceId, pondD, SEATS } from "./world.ts";
+import { wire } from "./strings.ts";
 
 export const props: Prop[] = [];
 export const lights: Light[] = [];
-
-export const random = rng(20261120);
 
 export function add(kind: Thing, sprite: Sprite | null, x: number, y: number, o: Partial<Prop> = {}): Prop {
   const p = makeProp(kind, sprite, x, y, o);
@@ -31,8 +31,9 @@ export function add(kind: Thing, sprite: Sprite | null, x: number, y: number, o:
   return p;
 }
 
-export function light(x: number, y: number, r: number, power = 1): Light {
-  const l = { x, y, r, power, boost: 0, phase: random() * 6.28 };
+/** A light that stays where it is, flickering at its own `phase`. */
+export function light(x: number, y: number, r: number, power: number, phase: number): Light {
+  const l = { x, y, r, power, boost: 0, phase };
   lights.push(l);
   return l;
 }
@@ -42,8 +43,17 @@ export function light(x: number, y: number, r: number, power = 1): Light {
 /** The lights over the Works' door and the stump, which glow up as the door opens and the lantern burns: found as the town is built (`townart.ts`). */
 export const doorLights: { door: Light | null; table: Light | null } = { door: null, table: null };
 
-export const fire = { x: 256, y: 212, boost: 0 };
-export const fireLight: Light = { x: 256, y: 206, r: 64, power: 1, boost: 0, phase: 0 };
+/** The pieces whose parts move: the fire, the Works (its chimney smokes), the crate pile, the pond, the stump. */
+const FIRE = piece("fire");
+const WORKS = piece("works");
+const PILE = piece("pile");
+const POND = piece("pond");
+const STUMP = piece("great-stump");
+
+/** The fire: the foot of its flames, and how high it is burning up. */
+export const fire = { x: FIRE.x, y: FIRE.y - 5, boost: 0 };
+const flame = lightOf("fire", "flame");
+export const fireLight: Light = { x: flame.x, y: flame.y, r: flame.r, power: flame.power, boost: 0, phase: 0 };
 
 export const belt = {
   off: 0,
@@ -63,7 +73,7 @@ export const BANNERS: readonly (readonly [string, string])[] = [
   [GREEN[3], GREEN[2]],
 ];
 
-export const banner = { x: 300, y: 152, flutter: 0 };
+export const banner = { x: piece("banner-pole").x, y: piece("banner-pole").y, flutter: 0 };
 
 /**
  * The banner by Leaf's clock (`now`): whose it is, how far up the pole and when it is at the top
@@ -80,7 +90,7 @@ export const flown = (now = G.now): ReturnType<typeof bannerAt> =>
   );
 
 /** The lantern tree, and where in it a lantern hangs, from the middle of its foot. */
-export const tree = { x: 352, y: 200, shakeAt: -9 };
+export const tree = { x: piece("lantern-tree").x, y: piece("lantern-tree").y, shakeAt: -9 };
 export const SLOTS: readonly Pt[] = [
   { x: -20, y: -37 },
   { x: -12, y: -31 },
@@ -122,7 +132,7 @@ export const door = { open: 0, goal: 0 };
  * for a knock (the town's clock), `moved` the move last heard, and `lit` rises when the member
  * sits down to play.
  */
-export const table = { x: 444, y: 200, played: false, jumpAt: -9, moved: 0, lit: 0, goal: 0 };
+export const table = { x: STUMP.x, y: STUMP.y, played: false, jumpAt: -9, moved: 0, lit: 0, goal: 0 };
 
 export interface Crab {
   n: number;
@@ -154,18 +164,6 @@ export const BOLT = 1.2;
 /** The missing crab was scared off: in which stretch of its hiding, and when by Leaf's clock. */
 let scared: { stretch: number; at: number } | null = null;
 
-/** Where each crab lives: x, y, and whether that is on top of a rock out in the water. */
-export const CRAB_HOMES: readonly (readonly [number, number, number])[] = [
-  [352, 285, 0],
-  [384, 266, 0],
-  [424, 261, 0],
-  [460, 285, 0],
-  [446, 314, 0],
-  [396, 328, 0],
-  [404, 292, 1],
-  [432, 284, 1],
-];
-
 const QUIPS = [
   "You almost had it.",
   "It was right there.",
@@ -189,14 +187,13 @@ interface Str {
 }
 export const BULBS = [GOLD[2], SKY[5], CREAM, SKY[4]] as const;
 
-/** A string of lights, with a bulb on every seventh pixel of its wire from the fourth. */
-function strung(s: Strand): Str {
-  const w = wire(s);
+/** A string of lights by its wire, with a bulb on every seventh pixel of it from the fourth. */
+function strung(w: Pt[]): Str {
   const bulbs = w.filter((_, i) => i % 7 === 3).map((p, k) => ({ x: p.x, y: p.y + 1, c: k % BULBS.length }));
   return { wire: w, bulbs, chase: -9 };
 }
 /** The strings of lights, slung between the shops, the gate, the posts and the great trunks. */
-export const strings: Str[] = STRINGS.map(strung);
+export const strings: Str[] = STRINGS.map((s) => strung(wire(s)));
 
 // ---------- what touching things does ----------
 
@@ -309,9 +306,10 @@ export function flare(): void {
   burst(fire.x, fire.y - 8, 16, [GOLD[1], SKY[5], CREAM], 46);
 }
 
-export function ringBell(): void {
+/** The bell on the counter rings. */
+export function ringBell(counter: Prop): void {
   sfx.ding();
-  sparkle(118, 104, 5, 3);
+  sparkle(counter.x + 37, counter.y - 16, 5, 3);
 }
 
 export function tapTree(p: Prop): void {
@@ -429,7 +427,7 @@ export function placeCrabs(dt = 0): void {
       const leaving = !found && scared?.stretch !== h.stretch - 1 && h.since < BOLT * 1000;
       const from = leaving ? h.was : h.at;
       c.bolt = found ? Math.max(0.01, (G.now - found.at) / 1000) : leaving ? Math.max(0.01, h.since / 1000) : 0;
-      c.x = from.x + (from.x < 256 ? -1 : 1) * 90 * c.bolt;
+      c.x = from.x + (from.x < BOUNDS.x + BOUNDS.w / 2 ? -1 : 1) * 90 * c.bolt;
       c.y = from.y - 20 * c.bolt;
       c.z = from.z;
       continue;
@@ -478,7 +476,7 @@ export interface Touched {
  */
 export function touchedBy(name: string): Touched | null {
   const [what = "", where = ""] = name.split(":");
-  if (what === "roll") return { x: 400, y: 290, play: rollCall };
+  if (what === "roll") return { x: POND.x, y: POND.y - 3, play: rollCall };
   const [x = NaN, y = NaN] = where.split(",").map(Number);
   const c = what === "crab" ? crabs.find((k) => k.n === x) : undefined;
   if (c) return { x: c.x, y: c.y, play: (own) => tapCrab(c, own) };
@@ -556,8 +554,9 @@ const calls: { at: number; n: number; own: boolean }[] = [];
 export function smoke(count: number): void {
   for (let i = 0; i < count; i++)
     bit({
-      x: 426 + (Math.random() - 0.5) * 6,
-      y: 20,
+      // Out of the chimney.
+      x: WORKS.x + 82 + (Math.random() - 0.5) * 6,
+      y: WORKS.y - 100,
       vx: 5 + Math.random() * 6,
       vy: -12 - Math.random() * 8,
       drag: 0.4,
@@ -647,8 +646,8 @@ export function stepTown(dt: number, walkers: readonly Actor[]): void {
       belt.fly = -1;
       // The pile is carted off to the depot when it is four high.
       belt.fresh = belt.fresh >= 4 ? 1 : belt.fresh + 1;
-      if (onScreen(466, 118)) {
-        puff(466, 118, 3, EARTH[2]);
+      if (onScreen(PILE.x + 8, PILE.y - 17)) {
+        puff(PILE.x + 8, PILE.y - 17, 3, EARTH[2]);
         if (G.home) sfx.pop();
       }
     }
@@ -674,7 +673,7 @@ export function stepTown(dt: number, walkers: readonly Actor[]): void {
     const loud = call.own || onScreen(c.x, c.y);
     if (c.lost) {
       if (loud) sfx.cricket();
-      float(400, 272, `No. ${c.n}?  ...`, SKY[5], 1.6);
+      float(POND.x, POND.y - 21, `No. ${c.n}?  ...`, SKY[5], 1.6);
     } else {
       c.hop = 0.3;
       c.clack = 0.35;
@@ -695,10 +694,10 @@ export function stepTown(dt: number, walkers: readonly Actor[]): void {
     if (Math.random() < 0.5) {
       flutter(G.cam.x + Math.random() * G.view.w, G.cam.y - 4, 1, [GOLD[0], GREEN[3], BARK[4]], 2, 0);
     } else {
-      const byPond = Math.random() < 0.6;
+      const over = FIREFLIES[Math.random() < 0.6 ? 0 : 1];
       bit({
-        x: byPond ? 342 + Math.random() * 120 : 40 + Math.random() * 120,
-        y: byPond ? 250 + Math.random() * 70 : 290 + Math.random() * 40,
+        x: over.x + Math.random() * over.w,
+        y: over.y + Math.random() * over.h,
         vx: (Math.random() - 0.5) * 8,
         vy: -3 - Math.random() * 4,
         ttl: 3 + Math.random() * 3,

@@ -574,11 +574,10 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/grovestage.ts`                   | The Grove's clearing, painted with the town's painters in three lights                          |
 | `src/groveui.ts`                      | The Grove's words and buttons, and its panel of prizes, Seeds and history                       |
 | `src/pulls.ts`                        | What the Grove says and counts: a prize's name, a reveal's words, the chances, the rules        |
-| `src/grid.ts`                         | Ground to walk on: which squares are solid, and the way round them                              |
-| `src/world.ts`                        | The town's map: paths, pond, what is solid, where places are                                    |
 | `src/leaf.ts`                         | The member's town and camp on Leaf: the copy, commands done at once or asked, keeping Leaf told |
 | `src/town.ts`, `src/camptouch.ts`     | What each thing does when touched, and the parts that move                                      |
-| `src/townart.ts`                      | The town built from its sprites, and its moving parts drawn each frame                          |
+| `src/townart.ts`                      | The town built from the map's pieces, what each kind is on the page, the moving parts drawn     |
+| `src/mapsheet.ts`                     | `?sheet=map`: the town's layout, labelled                                                       |
 | `src/props.ts`                        | Things that stand and can be touched                                                            |
 | `src/actors.ts`, `src/pets.ts`        | Walking, sitting, speaking; the town's own put where Leaf's clock has them; the pets            |
 | `src/folkart.ts`                      | How each of the town's own is drawn (never a skin)                                              |
@@ -610,7 +609,9 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 The catalogue of camp things (`things.ts`), what is for sale (`catalogue.ts`), the mailbox
 (`mail.ts`), the town's own (`folk.ts`), what goes by Leaf's clock (`clock.ts`), a
 camp's rules (`camp.ts`) and the town's commands (`game.ts`) are in `packages/town`, the rules Leaf plays the town by; the page imports them from
-there and works out with them what it shows at once. `grid.ts`, `letter.ts`, `games.ts`, `live.ts`,
+there and works out with them what it shows at once. So is the town's map (`map/`): where every
+piece stands and everything fixed to it, the ground to walk on (`map/grid.ts`, which the camps use
+too), and how to add or move something (that package's README). `letter.ts`, `games.ts`, `live.ts`,
 `news.ts`, `motion.ts`, `apart.ts`, `about.ts`, `where.ts` and `spots.ts` have no page in them, and tests beside them (`motion.test.ts`
 plays Leaf's side of a live connection with the kit's stand-in socket); `folk.test.ts` also reads
 every file of the three games to check that nothing but members is drawn from a skin,
@@ -660,6 +661,14 @@ for the pulls again.
 
 `?sheet=big`, `?sheet=small`, `?sheet=ground` and `?sheet=sky` show the town's art on its own, and
 `?sheet=camp` every camp thing with its name. `?zoom=2` draws a place smaller, to see more of it.
+
+`?sheet=map` (`mapsheet.ts`) is the town's layout, labelled, for whoever edits the map: the town by
+day, three screen pixels to each of its own, with a faint line every square, the blocked squares in
+red, every piece's id at its anchor (a group's first by its id, the rest by their number in it),
+each seat as a dot with a line the way its sitter faces, coloured by who rests there and ringed
+where it is the member's, each place's stand as a square with its id and its prompt as a diamond,
+the busy spots at the games as triangles pointing the way they face, the spots of the town's own as
+crosses, and a line under it saying so.
 
 The step lists in `review/` drive the tours the screenshots came from, with the driver in
 `packages/kit/tools/drive.ts`, against Leaf on this machine, from the repository's root:

@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
+import { STRINGS } from "@sequoia-leaf/town/map/map.ts";
 
-import { STRINGS, tieAt, wire } from "./strings.ts";
+import { tieAt, wire } from "./strings.ts";
 
 const at = (p: Pt): string => `${p.x},${p.y}`;
 

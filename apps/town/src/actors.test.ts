@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { dist } from "@sequoia-leaf/kit/util.ts";
+import { TOWN } from "@sequoia-leaf/town/map/map.ts";
 
 import {
   feet,
@@ -22,8 +23,7 @@ import {
   walkToSeat,
 } from "./actors.ts";
 import { crowds } from "./apart.ts";
-import { type Actor, G } from "./game.ts";
-import { type Seat, SEATS, TOWN } from "./world.ts";
+import { type Actor, G, type Seat, SEATS } from "./game.ts";
 
 let people: Actor[] = [];
 peopleOn(TOWN, () => people);

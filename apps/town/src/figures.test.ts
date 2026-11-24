@@ -3,9 +3,8 @@ import { expect, test } from "bun:test";
 import { artOf } from "@sequoia-leaf/figures/figures.ts";
 import { TOWNS_OWN } from "@sequoia-leaf/figures/pal.ts";
 import { FIGURE_IDS } from "@sequoia-leaf/raid/content/figures.ts";
+import { CELL } from "@sequoia-leaf/town/map/grid.ts";
 import { figureThing, thingOf } from "@sequoia-leaf/town/things.ts";
-
-import { CELL } from "./grid.ts";
 
 test("every figure of the raid has a thing for the camp and a picture no wider than the ground it takes", () => {
   const wrong = FIGURE_IDS.filter((id) => {

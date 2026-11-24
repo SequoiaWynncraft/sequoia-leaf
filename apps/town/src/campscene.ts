@@ -40,6 +40,7 @@ import {
 } from "@sequoia-leaf/town/camp.ts";
 import { AT_CAMP, folk } from "@sequoia-leaf/town/folk.ts";
 import { BOX_FULL, waiting } from "@sequoia-leaf/town/mail.ts";
+import { CELL, makeGround, type Trodden, troddenD } from "@sequoia-leaf/town/map/grid.ts";
 import { footprint, thingOf, turnsOf } from "@sequoia-leaf/town/things.ts";
 
 import { face, hop, hopTo, makeFolk, say, stepActor, stop, walkAlong, walkTo, walkToSeat, wayTo } from "./actors.ts";
@@ -53,8 +54,6 @@ import {
   TRAIL_END,
   TRAIL_IN,
   TRAIL_Y,
-  type Trodden,
-  troddenD,
   wornPaths,
 } from "./campground.ts";
 import { csfx, TOWN_SOUND } from "./campsfx.ts";
@@ -65,7 +64,7 @@ import { makeApart } from "./crowd.ts";
 import { drawPicture, drawProp, drawWords, type Picture, sizeBuffers } from "./draw.ts";
 import { bit, burst, float, flutter, puff, sparkle, updateFx } from "./fx.ts";
 import { type Actor, after, changed, cue, forgetLater, G, hooks, show, stepCues, stepLater, today } from "./game.ts";
-import { CELL, makeGround } from "./grid.ts";
+import type { Seat } from "./game.ts";
 import { paintTrunk } from "./ground.ts";
 import { guild, type Happening } from "./guild.ts";
 import { closeCard, closePanel, covered, setStrip, showCard } from "./hud.ts";
@@ -89,7 +88,6 @@ import { type Light, makeProp, type Prop, propUnder } from "./props.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Hover, Scene, Stage } from "./stage.ts";
 import { type Door, makeTouch } from "./touch.ts";
-import type { Seat } from "./world.ts";
 
 /** The camp's own places: things that open something when the member walks up to them. */
 export type CampPlace = "cabin" | "mailbox" | "signpost" | "trail";

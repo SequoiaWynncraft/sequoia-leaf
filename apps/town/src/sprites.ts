@@ -4,9 +4,9 @@ import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoi
 import { bitmap, ell, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, hash, makeCanvas, vnoise } from "@sequoia-leaf/kit/util.ts";
 import { BOARD } from "@sequoia-leaf/town/clock.ts";
+import type { PlaceId } from "@sequoia-leaf/town/map/rows.ts";
 
 import { drawFern } from "./ground.ts";
-import type { PlaceId } from "./world.ts";
 
 export interface Sprite {
   c: HTMLCanvasElement;
