@@ -129,6 +129,7 @@ picture file.
 | `text.ts`     | Words on a canvas in the font                                                                       |
 | `signs.ts`    | A speech bubble and a key prompt drawn on a canvas, and breaking words into lines                   |
 | `scope.ts`    | What a page, a panel or a press holds of the browser, let go of together (below)                    |
+| `pace.ts`     | A game's frames: each the screen shows while the member is at the page, 20 a second while not       |
 | `press.ts`    | A long press with a finger: resting on a thing asks what it is; cards and tips ask with it          |
 | `tip.ts`      | Tips: `tip(el, title, text)` shows a one-line hint on hover, focus and long press                   |
 | `card.ts`     | Cards: how anything in any game says what it is (below)                                             |

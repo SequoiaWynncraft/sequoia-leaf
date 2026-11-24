@@ -1,5 +1,5 @@
 /**
- * The tier's own screen: its commission, as a paper; from the tier that has research, the way to it;
+ * The tier's own screen: its commission, picked out; from the tier that has research, the way to it;
  * its projects, each with what it wants and what it unlocks; and those done, a line each. Every
  * goal on it is laid out by `goal.ts`: one head, and its lists. Nothing is said of a tier not yet
  * open but that the commission opens it. A goal that waits on another is locked: a lock and what is
@@ -23,13 +23,13 @@ import { setTool } from "../tools.ts";
 import { doNow } from "../yard.ts";
 import {
   type Begin,
+  goalCard,
   head,
   leaves,
   type Listed,
   lockChip,
   type Need,
   needs,
-  paper,
   some,
   unlocks,
   type Wants,
@@ -187,12 +187,12 @@ export function tierScreen(body: HTMLElement): () => void {
       );
     };
     const c = p.commission;
-    if (c) kids.push(paper(c.goal, side(c, "Take in hand"), lists(c)));
+    if (c) kids.push(goalCard(c.goal, side(c, "Take in hand"), lists(c)));
     // Every project of the tiers open is done, and there is no next tier yet: it says so, first.
     else if (p.projects.length === 0) {
       const end = nextWords({ is: "done" });
       kids.push(
-        el("div", "k-paper goal", {}, el("div", "k-title", { text: end.title }), el("div", "k-d", { text: end.line })),
+        el("div", "k-card goal", {}, el("div", "k-title", { text: end.title }), el("div", "k-d", { text: end.line })),
       );
     }
     if (p.research)

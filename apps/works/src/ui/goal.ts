@@ -325,14 +325,15 @@ export function nodeKind(g: Goal): string {
 }
 
 /**
- * A node on paper, as the tier's screen shows its commission and Orders the node in hand: what kind
- * of node it is and who asks, small; its head; its lists; and last and quietest, what they say.
+ * A node on a card picked out in gold, as the tier's screen shows its commission and Orders the node
+ * in hand: what kind of node it is and who asks, small; its head; its lists; and last and quietest,
+ * what they say.
  */
-export function paper(g: Goal, side: Node | null, lists: readonly Listed[]): HTMLElement {
+export function goalCard(g: Goal, side: Node | null, lists: readonly Listed[]): HTMLElement {
   const node = NODES[g];
   return el(
     "div",
-    "k-paper goal",
+    "k-card lit goal",
     {},
     el("div", "k-label", { text: node ? `${nodeKind(g)} · from ${node.from}` : nodeKind(g) }),
     head(g, side),
