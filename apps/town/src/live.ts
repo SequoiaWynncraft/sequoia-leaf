@@ -382,23 +382,21 @@ export const RESTING_MOST = 12;
 const listedRank = (guest: boolean, rank: string | null): string | null =>
   guest ? GUEST : rank === null ? null : rankName(rank);
 
-/** Somebody Leaf lists as in the game, as the town reads them (`where.ts`). */
-export const listedHere = (p: Present): Listed => ({
-  id: p.id,
-  name: p.name,
-  rank: listedRank(p.guest, p.rank),
-  at: p.place,
-  seen: p.seen,
-  acted: p.acted,
-});
-
-/** Somebody Leaf lists as gone, as the town reads them. */
-export const listedGone = (r: Resting): Listed => ({
+/** Somebody Leaf lists as gone, as the town reads them (`where.ts`); or in the game, as far as the two are read alike. */
+export const listedGone = (r: Resting | Present): Listed => ({
   id: r.id,
   name: r.name,
   rank: listedRank(r.guest, null),
   at: r.place,
+  camp: r.camp,
   seen: r.seen,
+});
+
+/** Somebody Leaf lists as in the game, as the town reads them: with their rank, and when they last did something. */
+export const listedHere = (p: Present): Listed => ({
+  ...listedGone(p),
+  rank: listedRank(p.guest, p.rank),
+  acted: p.acted,
 });
 
 // ---------- before the town opens ----------

@@ -187,8 +187,8 @@ export interface Guild {
   whereabouts(): ReadonlyMap<string, Where>;
   /** Hears who is in the town's live room from the page that keeps it (`players.ts`). */
   followRoom(says: RoomSays): void;
-  /** Where the member is: in town, at their camp, in the Grove, or (null) in a game over the town. */
-  here(place: "town" | "camp" | "grove" | null): void;
+  /** Where the member is: in town, at a camp (whose: `camp`, its owner's id), in the Grove, or (null) in a game over the town. */
+  here(place: "town" | "camp" | "grove" | null, camp?: string | null): void;
   /** Whether the member's own character stays in town, dozing, for a day after they go. */
   stay(on: boolean): void;
   /** How far the member's own news has been told, for Leaf's town to keep so that the next letter starts after it. */

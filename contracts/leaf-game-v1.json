@@ -452,9 +452,7 @@
         {
           "id": "10000000-0000-0000-0000-000000000002",
           "username": "Bob",
-          "place": "camp",
-          "camp_owner": "10000000-0000-0000-0000-000000000002",
-          "camp_owner_name": "Bob",
+          "place": "works",
           "guest": false,
           "seen_at": "2026-11-25T12:40:00.000Z"
         }
@@ -492,9 +490,7 @@
         {
           "id": "10000000-0000-0000-0000-000000000002",
           "username": "Bob",
-          "place": "camp",
-          "camp_owner": "10000000-0000-0000-0000-000000000002",
-          "camp_owner_name": "Bob",
+          "place": "works",
           "guest": false,
           "seen_at": "2026-11-25T12:40:00.000Z"
         }
@@ -535,9 +531,7 @@
         {
           "id": "10000000-0000-0000-0000-000000000002",
           "username": "Bob",
-          "place": "camp",
-          "camp_owner": "10000000-0000-0000-0000-000000000002",
-          "camp_owner_name": "Bob",
+          "place": "works",
           "guest": false,
           "seen_at": "2026-11-25T12:40:00.000Z"
         }
@@ -1928,9 +1922,7 @@
         {
           "id": "10000000-0000-0000-0000-000000000002",
           "username": "Bob",
-          "place": "camp",
-          "camp_owner": "10000000-0000-0000-0000-000000000002",
-          "camp_owner_name": "Bob",
+          "place": "works",
           "guest": false,
           "seen_at": "2026-11-25T12:40:00.000Z"
         }
@@ -2237,7 +2229,7 @@
           "sessions": 1,
           "seconds": 0,
           "places": {
-            "camp": 0
+            "works": 0
           },
           "done": []
         },

@@ -49,7 +49,7 @@ import { emoteOver, float } from "./fx.ts";
 import { type Actor, G, hooks, ROOM, type Seat, SEED, toPage } from "./game.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, showCard } from "./hud.ts";
-import { campChanged, campEntered, visiting } from "./leaf.ts";
+import { campChanged, campEntered, whoseCamp } from "./leaf.ts";
 import { GUEST, rankName } from "./live.ts";
 import {
   Company,
@@ -241,7 +241,7 @@ function enterRoom(name: string): void {
  * from the room before is gone at once, as the places change in the dark between them.
  */
 export function onStage(place: Place | null): void {
-  const to = liveAt(place, visiting()?.id ?? member()?.id ?? "");
+  const to = liveAt(place, whoseCamp());
   if (sameLive(to, stage)) return;
   stage = to;
   for (const f of company.clear()) f.own.a.away = true;
@@ -386,7 +386,8 @@ function express(a: Actor, kind: Emote): void {
 hooks.tell = (name) => room?.act("touch", name);
 
 /** What somebody's card says they are about, under their rank, as everything else has it (`where.ts`). */
-export const aboutLine = (who: Actor) => (): string => cardLine(guild.whereabouts().get(who.id), leafNow()) ?? "";
+export const aboutLine = (who: Actor) => (): string =>
+  cardLine(guild.whereabouts().get(who.id), leafNow(), member()?.id ?? "") ?? "";
 
 /**
  * Somebody touched, if it is the member or another player live here (says whether it was): in a room

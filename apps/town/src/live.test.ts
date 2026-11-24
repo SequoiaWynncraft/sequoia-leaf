@@ -831,16 +831,27 @@ describe("the live guild", () => {
 describe("who is here, and who is dozing", () => {
   test("Leaf's list as the town reads it: a guest is Guest, a member's rank the list says is the town's word for it", () => {
     expect(
-      listedHere({ id: "g", name: "Wanderer", place: "table", rank: null, guest: true, seen: 5, acted: 3 }),
-    ).toEqual({ id: "g", name: "Wanderer", rank: "Guest", at: "table", seen: 5, acted: 3 });
+      listedHere({ id: "g", name: "Wanderer", place: "table", camp: null, rank: null, guest: true, seen: 5, acted: 3 }),
+    ).toEqual({ id: "g", name: "Wanderer", rank: "Guest", at: "table", camp: null, seen: 5, acted: 3 });
+    const bobs = { id: "b", name: "Bob" };
     expect(
-      listedHere({ id: "a", name: "Alice", place: "works", rank: "chief", guest: false, seen: null, acted: null }),
-    ).toEqual({ id: "a", name: "Alice", rank: "Chief", at: "works", seen: null, acted: null });
-    expect(listedGone({ id: "h", name: "Drifter", place: "grove", seen: 5, guest: false })).toEqual({
+      listedHere({
+        id: "a",
+        name: "Alice",
+        place: "camp",
+        camp: bobs,
+        rank: "chief",
+        guest: false,
+        seen: null,
+        acted: null,
+      }),
+    ).toEqual({ id: "a", name: "Alice", rank: "Chief", at: "camp", camp: bobs, seen: null, acted: null });
+    expect(listedGone({ id: "h", name: "Drifter", place: "grove", camp: null, seen: 5, guest: false })).toEqual({
       id: "h",
       name: "Drifter",
       rank: null,
       at: "grove",
+      camp: null,
       seen: 5,
     });
   });

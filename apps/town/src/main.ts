@@ -39,7 +39,7 @@ import { makeGrove } from "./grovescene.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, covered, hush, initHud, tickHud } from "./hud.ts";
 import { TOWN_KEYS } from "./keymap.ts";
-import { here, keepTold, onTown, openCamp, town as kept, troubleCard, visiting } from "./leaf.ts";
+import { here, keepTold, onTown, openCamp, town as kept, troubleCard, visiting, whoseCamp } from "./leaf.ts";
 import { showMapSheet } from "./mapsheet.ts";
 import { leafNow, onStage } from "./players.ts";
 import { lookFromOutside } from "./review.ts";
@@ -201,12 +201,11 @@ async function boot(): Promise<void> {
     const game = inGame(now);
     if (game !== inGame(was)) hush(game);
     const at = game ? null : placeOf(now);
-    if (at !== (inGame(was) ? null : placeOf(was))) {
-      // In a game, the game says where the member is, and calls Leaf itself: the town's time stops
-      // here, and it says so as they go in and again as they come out.
-      guild.here(at);
-      if (game !== inGame(was)) here();
-    }
+    // Where the member is, and at a camp whose, told when it changes. In a game, the game says where
+    // the member is, and calls Leaf itself: the town's time stops here, and it says so as they go in
+    // and again as they come out.
+    guild.here(at, at === "camp" ? whoseCamp() : null);
+    if (game !== inGame(was)) here();
     // The live room follows the place on the stage, and a camp's whose camp it is (`players.ts`).
     onStage(at);
     if (now.at === "inside" && was.at !== "inside") {

@@ -17,6 +17,17 @@ import {
 import { forgetLedger } from "./purse.ts";
 import { HELLO, type Standin, standin, TESTER } from "./standin.ts";
 
+/** A row of Leaf's lists for Alice, with these fields. */
+const aliceRow = (fields: Record<string, unknown>) => ({
+  id: "a",
+  username: "Alice",
+  seen_at: "2026-11-25T10:00:00.000Z",
+  ...fields,
+});
+
+/** Bob's camp, as Leaf names it. */
+const BOBS = { id: "10000000-0000-0000-0000-000000000002", name: "Bob" };
+
 /** What Leaf's game routes really answer, from the contract its own tests write. */
 const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
 
@@ -28,6 +39,7 @@ describe("who is here", () => {
         id: "10000000-0000-0000-0000-000000000001",
         name: "Alice",
         place: "town",
+        camp: null,
         rank: null,
         guest: false,
         seen: Date.UTC(2026, 10, 25, 12, 55),
@@ -37,6 +49,7 @@ describe("who is here", () => {
         id: "10000000-0000-0000-0000-000000000003",
         name: "Visitor",
         place: "town",
+        camp: null,
         rank: null,
         guest: true,
         seen: Date.UTC(2026, 10, 25, 12, 55),
@@ -48,10 +61,33 @@ describe("who is here", () => {
         id: "10000000-0000-0000-0000-000000000002",
         name: "Bob",
         place: "works",
+        camp: null,
         seen: Date.UTC(2026, 10, 25, 12, 40),
         guest: false,
       },
     ]);
+  });
+
+  test("reads whose camp somebody is at, as Leaf really answers it", () => {
+    const r = isRecord(GAME) ? GAME["PUT /v1/game/presence, visiting a camp"] : null;
+    const body = isRecord(r) ? r.body : null;
+    expect(readPresent(body).map((p) => [p.name, p.place, p.camp])).toEqual([
+      ["Alice", "table", null],
+      ["Visitor", "camp", BOBS],
+    ]);
+  });
+
+  test("reads whose camp only at a camp, and only with its owner's id and name", () => {
+    const camps = readPresent({
+      present: [
+        aliceRow({ place: "camp", camp_owner: "b", camp_owner_name: "Bob" }),
+        aliceRow({ place: "town", camp_owner: "b", camp_owner_name: "Bob" }),
+        aliceRow({ place: "camp", camp_owner: "b" }),
+        aliceRow({ place: "camp", camp_owner: 7, camp_owner_name: "Bob" }),
+        aliceRow({ place: "camp" }),
+      ],
+    }).map((p) => p.camp);
+    expect(camps).toEqual([{ id: "b", name: "Bob" }, null, null, null, null]);
   });
 
   test("leaves out anybody resting who makes no sense", () => {
@@ -64,12 +100,12 @@ describe("who is here", () => {
           { id: "d", username: "Dan", place: "town" },
         ],
       }),
-    ).toEqual([{ id: "a", name: "Alice", place: "table", seen: Date.UTC(2026, 10, 25, 10), guest: false }]);
+    ).toEqual([{ id: "a", name: "Alice", place: "table", camp: null, seen: Date.UTC(2026, 10, 25, 10), guest: false }]);
     expect(readResting({ present: [] })).toEqual([]);
     // Those whose characters do not stay come in a list of their own, read the same way.
     expect(
       readResting({ gone: [{ id: "z", username: "Zed", place: "town", seen_at: "2026-11-25T10:00:00.000Z" }] }, "gone"),
-    ).toEqual([{ id: "z", name: "Zed", place: "town", seen: Date.UTC(2026, 10, 25, 10), guest: false }]);
+    ).toEqual([{ id: "z", name: "Zed", place: "town", camp: null, seen: Date.UTC(2026, 10, 25, 10), guest: false }]);
   });
 
   test("leaves out anybody who makes no sense", () => {
@@ -82,7 +118,9 @@ describe("who is here", () => {
           "nobody",
         ],
       }),
-    ).toEqual([{ id: "a", name: "Alice", place: "works", rank: "chief", guest: false, seen: null, acted: null }]);
+    ).toEqual([
+      { id: "a", name: "Alice", place: "works", camp: null, rank: "chief", guest: false, seen: null, acted: null },
+    ]);
     expect(readPresent(null)).toEqual([]);
   });
 });
@@ -111,6 +149,26 @@ describe("staying in town after going", () => {
     here("works");
     await Bun.sleep(10);
     expect(said(world)).toEqual([{ place: "works", device: "desktop" }]);
+  });
+
+  test("says whose camp at a camp, at once when it is another camp, and never anywhere else", async () => {
+    world = standin(routes);
+    await start();
+    here("camp", "b");
+    here("camp", "b");
+    await Bun.sleep(10);
+    here("camp", "c");
+    await Bun.sleep(10);
+    here("town", "c");
+    await Bun.sleep(10);
+    here("camp");
+    await Bun.sleep(10);
+    expect(said(world)).toEqual([
+      { place: "camp", camp_owner: "b", device: "desktop" },
+      { place: "camp", camp_owner: "c", device: "desktop" },
+      { place: "town", device: "desktop" },
+      { place: "camp", device: "desktop" },
+    ]);
   });
 
   test("the town's page says it as Leaf's town has it, at once when it changes, and with each saying after", async () => {

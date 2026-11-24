@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { Place } from "@sequoia-leaf/kit/presence.ts";
 
-import { type InRoom, type Listed, resters, standing, type Where, whereabouts } from "./where.ts";
+import { atCamps, type InRoom, type Listed, resters, standing, type Where, whereabouts } from "./where.ts";
 
 const NOW = Date.UTC(2026, 10, 25, 12);
 const MIN = 60_000;
@@ -16,7 +16,13 @@ const listed = (id: string, at: Place, seen: number | null = NOW, rank: string |
   name: id,
   rank,
   at,
+  camp: null,
   seen,
+});
+/** Somebody on Leaf's list at `owner`'s camp. */
+const camping = (id: string, owner: string | null, seen: number | null = NOW): Listed => ({
+  ...listed(id, "camp", seen),
+  camp: owner === null ? null : { id: owner, name: owner },
 });
 const all = (o: Partial<Parameters<typeof whereabouts>[0]>): ReadonlyMap<string, Where> =>
   whereabouts({ me: ME, room: null, present: [], resting: [], gone: [], now: NOW, ...o });
@@ -67,6 +73,52 @@ describe("where everybody is", () => {
   test("a rank the lists do not say is taken from what the page has learnt", () => {
     const m = all({ present: [listed("Quill", "works")], ranks: new Map([["Quill", "Chief"]]) });
     expect(m.get("Quill")?.rank).toBe("Chief");
+  });
+});
+
+describe("how many are at each camp", () => {
+  test("everybody in the game at it, the owner and visitors alike; nobody gone, and nobody at a camp Leaf does not name", () => {
+    const m = all({
+      room: room("Birch"),
+      // Quill, whom Leaf last saw there two minutes ago, has gone.
+      present: [
+        camping("Oak", "Oak"),
+        camping("Vale", "Oak"),
+        camping("Ash", null),
+        camping("Wren", ME),
+        camping("Quill", "Oak", NOW - 2 * MIN),
+      ],
+      resting: [camping("Fern", "Oak", NOW - 5 * MIN)],
+      gone: [camping("Rowan", "Oak", NOW - MIN)],
+    });
+    expect(atCamps(m, null)).toEqual(
+      new Map([
+        ["Oak", 2],
+        [ME, 1],
+      ]),
+    );
+  });
+
+  test("the member once, where the page has them, whatever Leaf's list said of them a moment ago", () => {
+    const m = all({ present: [camping(ME, "Oak"), camping("Vale", "Oak"), camping("Wren", "Elm")] });
+    expect(atCamps(m, "Oak")).toEqual(
+      new Map([
+        ["Oak", 2],
+        ["Elm", 1],
+      ]),
+    );
+    expect(atCamps(m, "Elm")).toEqual(
+      new Map([
+        ["Oak", 1],
+        ["Elm", 2],
+      ]),
+    );
+    expect(atCamps(m, null)).toEqual(
+      new Map([
+        ["Oak", 1],
+        ["Elm", 1],
+      ]),
+    );
   });
 });
 

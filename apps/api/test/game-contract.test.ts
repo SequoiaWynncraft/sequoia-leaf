@@ -130,11 +130,11 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("GET /v1/game/guild/events", "GET", "/v1/game/guild/events");
   await call("GET /v1/game/guild/events?after=", "GET", "/v1/game/guild/events?after=6");
   await call("GET /v1/game/guild/events, a guest", "GET", "/v1/game/guild/events", undefined, "visitor-token");
-  // Bob had the game open a while ago, at his camp, and his character stays in town, dozing.
+  // Bob had the game open a while ago, and his character stays in town, dozing.
   await app.request("/v1/game/presence", {
     method: "PUT",
     headers: { Authorization: "Bearer bob-token", "Content-Type": "application/json" },
-    body: JSON.stringify({ place: "camp", camp_owner: bob }),
+    body: JSON.stringify({ place: "works" }),
   });
   clock.now = T0 + 25 * MINUTE;
   // A guest is in town too.
@@ -230,7 +230,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("GET /v1/game/camps/visitors", "GET", "/v1/game/camps/visitors");
   await call("PUT /v1/game/camps/{player}/like, own camp", "PUT", `/v1/game/camps/${alice}/like`);
   await call("DELETE /v1/game/camps/{player}/like", "DELETE", `/v1/game/camps/${bob}/like`);
-  // The guest goes to Bob's camp, whose own character dozes in it; and whose camp, said in town, is refused.
+  // The guest goes to Bob's camp; and whose camp, said in town, is refused.
   const visiting = { place: "camp", camp_owner: bob };
   await call("PUT /v1/game/presence, visiting a camp", "PUT", "/v1/game/presence", visiting, "visitor-token");
   const refused = { place: "town", camp_owner: bob };

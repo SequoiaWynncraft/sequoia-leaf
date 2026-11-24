@@ -78,6 +78,9 @@ let looked: Looked | null = null;
 /** Whose camp the member is visiting, or null at their own (or in town): what each part of a visit asks. */
 export const visiting = (): Looked | null => looked;
 
+/** Whose camp a camp on the stage is, by its owner's id: the one visited, or else the member's own. */
+export const whoseCamp = (): string => looked?.id ?? me;
+
 /** The town as a camp shows it: in a visit, the camp looked at; else the member's own. */
 export const shown = (): TownView => looked?.play.state ?? town();
 
