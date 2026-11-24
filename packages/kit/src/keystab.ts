@@ -207,7 +207,7 @@ export class KeysTab {
     const reset = line.changed
       ? el(
           "button",
-          "k-btn sm",
+          "k-btn wood sm",
           {
             type: "button",
             "data-key": `reset:${line.id}`,
@@ -265,8 +265,9 @@ export class KeysTab {
           "div",
           "k-settings-foot",
           {},
-          button("Reset all keys", "all", "", () => {
+          button("Reset all keys", "all", "wood", () => {
             this.#stopWaiting();
+            this.#say("");
             this.#asking = true;
             this.#rows?.paint();
             this.#focus("no");
@@ -287,7 +288,7 @@ export class KeysTab {
         {},
         el("span", "k-name", { text: "Reset all keys?" }),
         button("Yes", "yes", "coral", () => answer(true)),
-        button("No", "no", "", () => answer(false)),
+        button("No", "no", "wood", () => answer(false)),
       ),
     ];
   }
