@@ -1,4 +1,5 @@
 import {
+  campRoom,
   type CoinChange,
   type Ctx,
   type Game,
@@ -6,7 +7,10 @@ import {
   isRefused,
   type LeafSpend,
   type Logged,
+  type PlayerId,
   type Standing,
+  type ToClient,
+  visitRoom,
 } from "@sequoia-leaf/core";
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts" with { type: "macro" };
 import { FACTORY } from "@sequoia-leaf/factory/game.ts";
@@ -74,6 +78,12 @@ export interface Played {
   readonly tends: boolean;
   /** Whether a visitor's page is told each command done (`Game.echo`). */
   readonly echoes: boolean;
+  /**
+   * The live room whose people see a player's state, if anybody can (a visit's, a camp's): Leaf tells
+   * it each batch it keeps of the state (`did`), or, for a game that does not echo, each that changed
+   * what a visitor is shown (`changed`).
+   */
+  readonly room: (player: PlayerId) => string | null;
 }
 
 /**
@@ -83,7 +93,10 @@ export interface Played {
  * goes on only from a state whose command was done. One the rules refuse leaves the state as the
  * rules left it, as running on to it alone would (`Game.apply`).
  */
-export function played<State, Command, View, Note, Short>(game: Game<State, Command, View, Note, Short>): Played {
+export function played<State, Command, View, Note, Short>(
+  game: Game<State, Command, View, Note, Short>,
+  room: (player: PlayerId) => string | null = () => null,
+): Played {
   const held = (decoded: State): Held => {
     let state = decoded;
     /** The state as it was before a command that has not been kept. */
@@ -149,6 +162,43 @@ export function played<State, Command, View, Note, Short>(game: Game<State, Comm
     },
     tends: game.tend !== undefined,
     echoes: game.echo !== undefined,
+    room,
+  };
+}
+
+/** Where Leaf tells the people in a room what was done there (`Watchers`). */
+interface Telling {
+  readonly heard: (room: string) => boolean;
+  readonly tell: (room: string, frame: string) => void;
+}
+
+/**
+ * What the people in the room where a player's state is seen hear of a batch done to it (`of`'s
+ * `room`), made only while anybody is there: for a game that echoes its commands, each
+ * command kept, in order, as the game echoes it, and each one's id as its page gave it (so the
+ * owner's own page knows its own), with the stored `rev` after the batch and the batch's answer
+ * (`did`); for any other, that what a visitor is shown of the state changed (`changed`), weighed
+ * on the state `game` before the batch and after it.
+ */
+export function toRoom(of: Played, player: PlayerId, game: Opened, ctx: Ctx, watchers: Telling) {
+  const room = of.room(player);
+  if (room === null || !watchers.heard(room)) return null;
+  const shown = (): string => JSON.stringify(game.visit?.(ctx) ?? null);
+  const before = of.echoes ? "" : shown();
+  const did: unknown[] = [];
+  const ids: string[] = [];
+  return {
+    kept(id: string, echo: () => unknown): void {
+      if (!of.echoes) return;
+      did.push(echo());
+      ids.push(id);
+    },
+    tell(rev: number, after: () => unknown): void {
+      const changed = !of.echoes && shown() !== before;
+      const told: ToClient | null =
+        did.length > 0 ? { t: "did", rev, did, after: after(), ids } : changed ? { t: "changed", rev } : null;
+      if (told) watchers.tell(room, JSON.stringify(told));
+    },
   };
 }
 
@@ -158,7 +208,7 @@ const RULES = rulesVersions();
 /** The games on the play service. */
 export const GAMES: Readonly<Record<GameId, Played>> = {
   raid: played(RAID),
-  works: played(FACTORY),
-  town: played(TOWN),
+  works: played(FACTORY, (player) => visitRoom("works", player)),
+  town: played(TOWN, campRoom),
   pulls: played(PULLS),
 };

@@ -8,10 +8,12 @@
  * joins the room again, and says where the player is again (Leaf shows others that as a jump). A
  * try that has not opened by the kit's deadline is let go as one that did not open, and an open
  * connection that has gone silent is closed and opened again. Where the connection is, is one
- * value (`Conn`: down, connecting, open, gone), moved only by `stepConn`. A page may step out of its
- * room and keep the connection (`away`): Leaf is told it left, and told again on any connection
- * that comes back meanwhile; back, the page joins on the same connection and is welcomed, so going
- * out and in opens nothing (Leaf allows a player only so many openings). Why a connection closed is
+ * value (`Conn`: down, connecting, open, gone), moved only by `stepConn`. A page goes from room to
+ * room on the one connection (`go`), and may step out of every room and keep it (`go(null)`): Leaf
+ * is told it left, and told again on any connection that comes back meanwhile; back, or into
+ * another room, the page joins on the same connection and is welcomed, so going about opens nothing
+ * (Leaf allows a player only so many openings). A welcome to a room the page has asked to leave
+ * meanwhile is answered by asking for the one it wants. Why a connection closed is
  * its close code alone (`CLOSE`): told the player opened the game live somewhere else, or that
  * their session ended, this page lets go. A browser cannot see why a connection would not open, so after a few tries
  * that did not, the page asks Leaf whether the player is still signed in, and lets go if not. With
@@ -20,9 +22,9 @@
  * What this page knows of the room starts at a welcome, each time: who is in it, where they have
  * been, and Leaf's clock. Nothing heard before a welcome counts, and a new connection's picture
  * replaces the old one only then, so nothing of one room, or one connection, is mixed with another's.
- * In a visit's room (core's `visitRoom`) it hears what Leaf does to the state visited (`did`); what
- * was done while it was not in the room is never told, so a page hears a welcome after a drop as the
- * moment to read the state again.
+ * In a visit's room (core's `visitRoom`) it hears what Leaf does to the state visited (`did`), and in
+ * a camp's (`campRoom`) when the owner changed it (`changed`); what was done while it was not in the
+ * room is never told, so a page hears a welcome after a drop as the moment to read the state again.
  *
  * What it does not do is draw anybody. A page asks it each frame where somebody is to be drawn
  * (`sample`): their motion `INTERP_MS` behind the newest snapshots as they reach this page
@@ -43,6 +45,7 @@ import {
   parsePlayerId,
   readToClient,
   reconnects,
+  type ToClient,
   type ToServer,
   visitRoom,
 } from "@sequoia-leaf/core";
@@ -228,6 +231,8 @@ export interface LiveEars {
   act?(id: number, kind: string, arg: string): void;
   /** In a visit's room: a batch of commands Leaf has just done to the state visited (core's `did`), with the commands' ids when Leaf sends them. */
   did?(rev: number, did: readonly unknown[], after: unknown, ids?: readonly string[]): void;
+  /** In a camp's room: the owner changed the camp, as Leaf kept it at `rev` (core's `changed`). */
+  changed?(rev: number): void;
   status?(s: LiveStatus): void;
 }
 
@@ -251,10 +256,11 @@ export interface LiveRoom {
   /** The quickest round trip to Leaf lately, in milliseconds. */
   rtt(): number | null;
   /**
-   * Steps out of the room, keeping the connection (`true`), or back into it: away, the page is in no
-   * room and shows nobody; back, it joins again on the same connection, and the welcome follows.
+   * Goes into a room of a kind (core's `ROOMS`, a camp's), or steps out of every room (`null`),
+   * keeping the connection: out, the page is in no room and shows nobody; into one, it joins on the
+   * same connection, and shows nobody until the welcome follows.
    */
-  away(on: boolean): void;
+  go(room: string | null): void;
   /** Where the page stands with its room just now (`RoomState`). */
   state(): RoomState;
   /** Leaves the room and closes the connection for good. */
@@ -513,7 +519,9 @@ const current = (c: Conn<Link>): Link | null => (c.at === "connecting" || c.at =
  * Where the connection is, is `conn` alone, moved only by `stepConn` (in `move`, which then does what
  * the new place asks: a socket's deadline, pings, a wait, a status for the page).
  */
-export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
+export function joinLive(first: string, ears: LiveEars = {}): LiveRoom {
+  /** The room the page wants to be in, or was last in while it is out of every room. */
+  let room = first;
   let conn: Conn<Link> = member() === null ? { at: "gone", why: "closed" } : firstConn();
   /** The wait of the place the connection is in: a try's deadline, the open one's watch, or the next try. */
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -628,9 +636,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
         return;
       }
       case "gone": {
-        for (const t of [pinger, later]) stop(t);
-        pinger = null;
-        later = null;
+        pinger = stop(pinger);
+        later = stop(later);
         unwake();
         const l = current(was);
         if (was.at === "open" && was.room !== "out" && next.why === "closed") say(was.link, { t: "leave" });
@@ -642,55 +649,54 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
     }
   }
 
+  /** A welcome, on a connection: to a room the page has asked to leave meanwhile, it asks for the one it wants. */
+  function welcomed(l: Link, m: Extract<ToClient, { t: "welcome" }>): void {
+    if (conn.at !== "open" || conn.link !== l) return;
+    // The room of the kind wanted, in a copy of its own (`town/1`).
+    if (!conn.away && m.room.split("/")[0] !== room) return say(l, { t: "join", room });
+    const restarted = conn.restart;
+    move({ do: "welcomed", link: l });
+    // Away, the welcome only answers the connection's opening, and the page has stepped out again.
+    if (inside(conn) !== l) return;
+    l.you = m.you;
+    l.clock = new ClockSync(m.time, outside.now());
+    l.playout = new Playout();
+    l.people.clear();
+    l.tracks.clear();
+    for (const r of m.roster) l.people.set(r.id, r);
+    inRoom(room);
+    // Whoever came or went while the page was not in the room, Leaf's list says now.
+    askAgain();
+    // Nothing has been sent on this connection yet: whatever the player says next goes at once.
+    sent = null;
+    ears.welcome?.(m.you, m.room, m.roster, restarted);
+    // Said again, unless whoever heard the welcome has just said it: this room has not heard
+    // from the player on this connection yet.
+    if (motion && sent === null) want(motion);
+  }
+
   function heard(l: Link, text: string): void {
     const m = readToClient(text);
-    if (!m) return;
-    const showing = shown() === l;
+    if (m?.t === "welcome") return welcomed(l, m);
+    if (m?.t === "pong") return l.clock?.add(m.c, m.s, outside.now());
+    // Before its welcome, and once the page has left the room it was welcomed into, nothing else counts.
+    if (!m || shown() !== l) return;
     switch (m.t) {
-      case "welcome": {
-        if (conn.at !== "open" || conn.link !== l) return;
-        const restarted = conn.restart;
-        move({ do: "welcomed", link: l });
-        // Away, the welcome only answers the connection's opening, and the page has stepped out again.
-        if (inside(conn) !== l) return;
-        l.you = m.you;
-        l.clock = new ClockSync(m.time, outside.now());
-        l.playout = new Playout();
-        l.people.clear();
-        l.tracks.clear();
-        for (const r of m.roster) l.people.set(r.id, r);
-        inRoom(room);
-        // Whoever came or went while the page was not in the room, Leaf's list says now.
-        askAgain();
-        // Nothing has been sent on this connection yet: whatever the player says next goes at once.
-        sent = null;
-        ears.welcome?.(m.you, m.room, m.roster, restarted);
-        // Said again, unless whoever heard the welcome has just said it: this room has not heard
-        // from the player on this connection yet.
-        if (motion && sent === null) want(motion);
-        return;
-      }
       case "joined":
         l.people.set(m.member.id, m.member);
-        if (showing) ears.joined?.(m.member);
-        return;
+        return ears.joined?.(m.member);
       case "left":
         l.people.delete(m.id);
         l.tracks.delete(m.id);
-        if (showing) ears.left?.(m.id);
-        return;
+        return ears.left?.(m.id);
       case "act":
-        if (showing) ears.act?.(m.id, m.kind, m.arg);
-        return;
+        return ears.act?.(m.id, m.kind, m.arg);
       case "did":
-        if (showing) ears.did?.(m.rev, m.did, m.after, m.ids);
-        return;
-      case "pong":
-        l.clock?.add(m.c, m.s, outside.now());
-        return;
+        return ears.did?.(m.rev, m.did, m.after, m.ids);
+      case "changed":
+        return ears.changed?.(m.rev);
       case "about":
-        if (showing) heardAbout(m.who);
-        return;
+        return heardAbout(m.who);
       case "error":
         return;
     }
@@ -798,8 +804,12 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       return leafClock(outside.now());
     },
     rtt: () => shown()?.clock?.rtt() ?? null,
-    away(on) {
-      move({ do: "away", on });
+    go(next) {
+      const moved = next !== null && next !== room;
+      room = next ?? room;
+      // Into another room: out of the one it is in, and into that.
+      if (moved) move({ do: "away", on: true });
+      move({ do: "away", on: next === null });
     },
     state: () => roomState(conn, outside.now()),
     close() {

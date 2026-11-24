@@ -8,6 +8,10 @@
  * It shows somebody else's camp the same way, in a visit (`leaf.ts`'s `visiting()`, which every
  * part that differs asks): laid out from Leaf's copy of theirs, their pet about, and nothing there
  * to act with (no cabin, mailbox, tray or decorating; only the signpost, home or to town).
+ *
+ * Whoever else is in the camp, its owner at home or anybody visiting, is there live, as in town
+ * (`players.ts`): drawn with the camp's things, walking its ground, hidden behind the great tree out
+ * past the trail's posts as the member is.
  */
 
 import { CREAM, GOLD, GREEN, SKY, STONE } from "@sequoia-leaf/kit/palette.ts";
@@ -57,6 +61,7 @@ import { csfx } from "./campsfx.ts";
 import { extraOf, lightOf, type Live, stateOf, stepLive, touch as touchThing, type TouchWorld } from "./camptouch.ts";
 import { type CampUi } from "./campui.ts";
 import { thingRef } from "./cards.ts";
+import { makeApart } from "./crowd.ts";
 import { drawPicture, drawProp, drawWords, type Picture, sizeBuffers } from "./draw.ts";
 import { bit, burst, float, flutter, puff, sparkle, updateFx } from "./fx.ts";
 import { type Actor, after, changed, cue, forgetLater, G, hooks, show, stepCues, stepLater, today } from "./game.ts";
@@ -79,6 +84,7 @@ import {
   visiting,
 } from "./leaf.ts";
 import { comeTo, makePet, MY_PETS, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
+import { closeEmotes, emotesOpen, livePlayers, meetLive, stepPlayers, touched } from "./players.ts";
 import { type Light, makeProp, type Prop, propUnder } from "./props.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Hover, Scene, Stage } from "./stage.ts";
@@ -188,6 +194,9 @@ function tile(g: Ctx, x: number, y: number, col: string, a: number): void {
   R(g, x + 1, y + 1, CELL - 2, CELL - 2, col);
   g.globalAlpha = 1;
 }
+
+/** How much of somebody can be seen: out past the posts, they are behind the great tree, and then gone. */
+const seen = (a: Pt): number => clamp((CW + 12 - a.x) / 6, 0, 1);
 
 /** Which way something held near an edge of the view pushes it: -1, 0 or 1. */
 const edgePush = (f: number): number => (f < 0.14 ? -1 : f > 0.86 ? 1 : 0);
@@ -366,6 +375,9 @@ export function makeCamp(
   }
 
   const everybody = (): Actor[] => (G.player ? [G.player, ...guests] : guests);
+  /** Everybody drawn in the camp: those who are here, and the other players live in it. */
+  const drawn = (): Actor[] => [...everybody(), ...livePlayers()];
+  const standApart = makeApart(ground, drawn);
 
   /** Whether somebody has been shut off from the trail by what stands round them. */
   const cutOff = (a: Pt): boolean =>
@@ -1166,11 +1178,8 @@ export function makeCamp(
 
   /** Somebody in the camp is touched. */
   function meet(who: Actor): void {
+    if (meetLive(who)) return;
     hop(who);
-    if (who.you) {
-      say(who, pick(["that's me", "hello, me", "o/"], Math.random()), 1.6);
-      return;
-    }
     if (!who.seat) face(who, player().x, player().y);
     who.hold = 2.4;
     if (who.folk) greeted(who);
@@ -1181,7 +1190,7 @@ export function makeCamp(
     ground,
     // While decorating, nothing is walked up to and used.
     doors: () => (decor() ? [] : spots),
-    people: everybody,
+    people: drawn,
     greet: meet,
     own(x, y) {
       const pet = petAt(pets, x, y);
@@ -1224,7 +1233,7 @@ export function makeCamp(
     nearAt: { x: -72, y: CH - 34 },
     props: [],
     others: () => pets,
-    people: everybody,
+    people: drawn,
     lights: () => [...lights],
     beyond(g, cx, cy) {
       for (const l of lanterns) {
@@ -1340,13 +1349,15 @@ export function makeCamp(
       const p = player();
       stepActor(p, dt, ground);
       touch.step(dt, hand()?.drag ? null : steer);
+      // The camp's room hears where the member is (a new room each camp: their first move is a jump).
+      stepPlayers(p, dt, false, { ground, seen });
       for (const a of guests) stepActor(a, dt, ground);
-      // Whoever is out past the posts is behind the great tree, and then gone.
-      for (const a of everybody()) a.alpha = clamp((CW + 12 - a.x) / 6, 0, 1);
+      for (const a of everybody()) a.alpha = seen(a);
+      standApart(dt);
       petWorld.member = G.dark < 0.5 ? { x: p.x, y: p.y } : null;
       for (const pet of pets) {
         stepPet(pet, dt, petWorld);
-        pet.alpha = clamp((CW + 12 - pet.x) / 6, 0, 1);
+        pet.alpha = seen(pet);
       }
       for (const l of lives) stepLive(l, world, dt);
       for (const l of gateLights) l.boost = Math.max(0, l.boost - dt * 1.4);
@@ -1401,11 +1412,12 @@ export function makeCamp(
 
     draw: () => drawPicture(pic),
     words(ctx: Ctx, px: number) {
-      drawWords(ctx, px, everybody());
+      drawWords(ctx, px, drawn());
     },
 
     tap(x, y, finger) {
       lastDrag = { x, y };
+      touched();
       if (!decor() || !awake()) return touch.tap(x, y, finger);
       // Decorating, a touch takes hold of a thing, or puts down what is in hand and walks.
       show.touch = finger;
@@ -1467,7 +1479,8 @@ export function makeCamp(
     act: () => (decor() ? turn() : touch.act()),
 
     back() {
-      if (G.panel) closePanel();
+      if (emotesOpen()) closeEmotes();
+      else if (G.panel) closePanel();
       else if (decor()) decorate(false);
       else closeCard();
     },
@@ -1527,12 +1540,8 @@ export function makeCamp(
     },
 
     handles: {
-      home() {
-        hooks.go({ to: "camp" });
-      },
-      town() {
-        hooks.go({ to: "town" });
-      },
+      home: () => hooks.go({ to: "camp" }),
+      town: () => hooks.go({ to: "town" }),
       walk: go,
       decorate,
       take: takeOut,
@@ -1571,9 +1580,7 @@ export function makeCamp(
         const p = pets[n];
         if (p) pleased(p);
       },
-      choose(kind) {
-        scene.choose(kind);
-      },
+      choose: (kind) => scene.choose(kind),
       owner: () => visiting()?.id ?? null,
       guests: () => guests.map((g) => g.who.name),
       greet(n) {

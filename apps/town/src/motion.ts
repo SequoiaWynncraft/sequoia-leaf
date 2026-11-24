@@ -1,11 +1,12 @@
 /**
- * The town, live: the rules with no page in them. What the member's figure tells the town's room
- * on Leaf (`stepOf`), how anybody else in the room is drawn from what it says of them (`Figure`,
- * `follow`), who is in the room and what each did, as the page hears it (`Company`), what is shown
- * while the connection is not right (`linkShown`), and how many are in town (`othersIn`).
- * `players.ts` is the page that uses them.
+ * The town and the camps, live: the rules with no page in them. Which of Leaf's rooms the page is in
+ * for the place on the stage (`liveAt`), what the member's figure tells it (`stepOf`), how anybody
+ * else in the room is drawn from what it says of them (`Figure`, `follow`), who is in the room and
+ * what each did, as the page hears it (`Company`), what is shown while the connection is not right
+ * (`linkShown`), and how many are in it (`othersIn`). `players.ts` is the page that uses them.
  */
 
+import { campRoom, parsePlayerId } from "@sequoia-leaf/core";
 import { type Emote, isEmote } from "@sequoia-leaf/kit/emotes.ts";
 import {
   Flag,
@@ -18,6 +19,29 @@ import {
 } from "@sequoia-leaf/kit/realtime.ts";
 import type { Dir } from "@sequoia-leaf/kit/skin.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
+
+import { ROOM } from "./game.ts";
+import type { Place } from "./screen.ts";
+
+/** Where the page is live: in a room, out of every room with the connection kept, or with no connection. */
+export type LiveAt = { readonly at: "room"; readonly room: string } | { readonly at: "away" } | { readonly at: "shut" };
+
+/**
+ * Which room the page is in for the place on the stage (`place`, null under a game): the town's in
+ * town; the camp's own in a camp, `owner`'s (the member's own at home, or anybody's); none in the
+ * Grove, keeping the connection; and no connection under a game, a page of its own that may go live
+ * itself, a player being live on one connection at a time.
+ */
+export function liveAt(place: Place | null, owner: string): LiveAt {
+  if (place === null) return { at: "shut" };
+  const camp = parsePlayerId(owner);
+  if (place === "town") return { at: "room", room: ROOM };
+  return place === "camp" && camp !== undefined ? { at: "room", room: campRoom(camp) } : { at: "away" };
+}
+
+/** Whether two of where the page is live are the same: the same room, or both away, or both shut. */
+export const sameLive = (a: LiveAt, b: LiveAt): boolean =>
+  a.at === "room" && b.at === "room" ? a.room === b.room : a.at === b.at;
 
 /** What a figure's `pose` tells the room: on foot, or sitting. */
 export const Pose = { Foot: 0, Sitting: 1 } as const;

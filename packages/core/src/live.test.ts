@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  campRoom,
   CLOSE,
   decodeMove,
   decodeSnapshot,
@@ -99,6 +100,21 @@ describe("rooms", () => {
     ])
       expect(roomKind(name)).toBeUndefined();
   });
+
+  test("a camp's room is one for each player's camp, moving at the town's pace, and only of a player there is", () => {
+    const owner = playerId("a0000000-0000-0000-0000-00000000000b");
+    expect(campRoom(owner)).toBe(`camp:${owner}`);
+    expect(roomKind(campRoom(owner))).toEqual({ width: 432, height: 320, capacity: 32, speed: 160 });
+    for (const name of [
+      "camp:a000000000000000000000000000000b",
+      `camp:${owner.toUpperCase()}`,
+      `camp:${owner}x`,
+      `camp:${owner}/1`,
+      "camp:",
+      "camp",
+    ])
+      expect(roomKind(name)).toBeUndefined();
+  });
 });
 
 describe("reading what Leaf says", () => {
@@ -123,6 +139,7 @@ describe("reading what Leaf says", () => {
       { t: "about", who: { at: "2026-11-24T12:00:00.000Z", present: [], resting: [], gone: [] } },
       { t: "error", code: "not_in_room" },
       { t: "did", rev: 4, did: [{ do: "collect", tick: 9 }], after: { tick: 9, check: 1 } },
+      { t: "changed", rev: 7 },
     ];
     for (const m of all) expect(readToClient(JSON.stringify(m))).toEqual(m);
   });
@@ -139,6 +156,8 @@ describe("reading what Leaf says", () => {
       JSON.stringify({ t: "did", rev: "4", did: [], after: null }),
       JSON.stringify({ t: "did", rev: 4, did: {}, after: null }),
       JSON.stringify({ t: "did", rev: 4, did: [] }),
+      JSON.stringify({ t: "changed" }),
+      JSON.stringify({ t: "changed", rev: "7" }),
     ])
       expect(readToClient(text)).toBeNull();
   });
