@@ -2,29 +2,39 @@
  * The repository's own lint rules, an oxlint JS plugin (`jsPlugins` in `.oxlintrc.json`):
  *
  * - `leaf/raw-browser`: the browser's listeners, timers, frames, observers and sockets are asked of
- *   a scope (`packages/kit/src/scope.ts`), which lets go of them with their owner;
+ *   a scope (`packages/kit/src/scope.ts`), which lets go of them with their owner. Any reference to
+ *   one at run time is a hit, called, passed or kept, read bare or off the global object, and so is
+ *   letting go of a timer or frame, which only the scope does; a name of the file's own is not;
  * - `leaf/module-let`: no `let` at the top of a module, where state has no owner;
  * - `leaf/hook-framework`: no hook framework loaded by `require` or a template `import()`, which
  *   `no-restricted-imports` does not see.
  */
 
 const hookFramework = /^(react|preact|solid-js|vue)(\/|$)/;
+/** The global object, by each name it goes by. */
 const globals = new Set(["window", "self", "globalThis", "global"]);
-const calls = new Set(["setTimeout", "setInterval", "requestAnimationFrame"]);
-const constructors = new Set(["MutationObserver", "ResizeObserver", "WebSocket"]);
+/** What only a scope may touch: listening, waiting, ticking, frames, observers and sockets, and letting go of a timer or frame. */
+const raw = new Set([
+  "addEventListener",
+  "removeEventListener",
+  "setTimeout",
+  "setInterval",
+  "requestAnimationFrame",
+  "MutationObserver",
+  "ResizeObserver",
+  "WebSocket",
+  "clearTimeout",
+  "clearInterval",
+  "cancelAnimationFrame",
+]);
+/** What every event target has, an element as much as the global object. */
+const listening = new Set(["addEventListener", "removeEventListener"]);
 
-/** The name a callee or member reads: `f`, `a.f`, `a["f"]`. */
+/** The name a member reads: `a.f`, `a["f"]`. */
 function nameOf(node) {
-  if (node.type === "Identifier") return node.name;
-  if (node.type !== "MemberExpression") return undefined;
   if (!node.computed) return node.property.name;
   return typeof node.property.value === "string" ? node.property.value : undefined;
 }
-
-/** A global read bare (`setTimeout`) or off the global object (`window.setTimeout`). */
-const global = (node) =>
-  node.type === "Identifier" ||
-  (node.type === "MemberExpression" && node.object.type === "Identifier" && globals.has(node.object.name));
 
 const moduleLet = {
   meta: { schema: [] },
@@ -65,25 +75,31 @@ const rawBrowser = {
   create(context) {
     const report = (node, name) =>
       context.report({ node, message: `Ask a scope for this (\`${name}\`): packages/kit/src/scope.ts.` });
+    /** Where the file reads the global object: each name of it that the file does not bind. */
+    const theGlobal = new Set();
     return {
-      CallExpression(node) {
-        const name = nameOf(node.callee);
-        if (name === "addEventListener" || (calls.has(name) && global(node.callee))) report(node.callee, name);
+      // What the file reads at run time and does not bind itself, so the browser's: not a type, not `typeof` in one.
+      // A global oxlint knows of (`globalThis`) is a variable of no definition; any other is read through.
+      Program(node) {
+        const global = context.sourceCode.getScope(node);
+        const known = global.variables.filter((v) => v.defs.length === 0).flatMap((v) => v.references);
+        for (const { identifier: id, isValueReference } of new Set([...global.through, ...known])) {
+          if (!isValueReference || id.parent.type === "TSTypeQuery" || id.parent.type === "TSQualifiedName") continue;
+          if (raw.has(id.name)) report(id, id.name);
+          else if (globals.has(id.name)) theGlobal.add(id);
+        }
       },
-      NewExpression(node) {
-        const name = nameOf(node.callee);
-        if (constructors.has(name) && global(node.callee)) report(node.callee, `new ${name}`);
-      },
-      // `addEventListener` taken as a value, or out of an object.
+      // `el.addEventListener`, off anything; `window.setTimeout`, `globalThis["WebSocket"]`, off the global object.
       MemberExpression(node) {
-        if (nameOf(node) !== "addEventListener") return;
-        if (node.parent.type === "CallExpression" && node.parent.callee === node) return;
-        report(node, "addEventListener");
+        const name = nameOf(node);
+        if (listening.has(name) || (raw.has(name) && theGlobal.has(node.object))) report(node, name);
       },
+      // `{ addEventListener } = el`, out of anything; `{ setTimeout } = window`, out of the global object.
       Property(node) {
         if (node.parent.type !== "ObjectPattern") return;
         const name = node.computed ? node.key.value : (node.key.name ?? node.key.value);
-        if (name === "addEventListener") report(node.key, name);
+        const from = node.parent.parent.init ?? node.parent.parent.right;
+        if (listening.has(name) || (raw.has(name) && theGlobal.has(from))) report(node.key, name);
       },
     };
   },

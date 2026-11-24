@@ -4,13 +4,14 @@
  * on a file that breaks each.
  */
 import { describe, expect, test } from "bun:test";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { RUN, shared, tokens } from "./clones.ts";
-import { type Graph, root } from "./graph.ts";
+import { built, entries, type Graph, root } from "./graph.ts";
 import { findings, loops } from "./imports.ts";
+import { isDiagnostics } from "./lint.ts";
 import { compare, lowered } from "./ratchet.ts";
 
 describe("the ratchet", () => {
@@ -165,15 +166,26 @@ function fixture(files: Record<string, string>, links: Record<string, string>): 
 
 const project = (include: string): string =>
   JSON.stringify({ extends: "../../tsconfig.base.json", include: [include] });
+/** A base for the projects, with `lib`, that passes TypeScript as the repository's does. */
+const base = (lib: readonly string[]): string =>
+  JSON.stringify({
+    compilerOptions: {
+      lib,
+      module: "preserve",
+      moduleResolution: "bundler",
+      types: [],
+      allowImportingTsExtensions: true,
+      noEmit: true,
+    },
+  });
 
 describe("the import check, on what Bun builds and checks", () => {
   test("finds review code reached through other files, resolved as the build resolves it, types imported in code, and the DOM a rule package inherits", async () => {
     const { at, done } = fixture(
       {
         // Every project has the DOM from the base, the rules' too.
-        "tsconfig.base.json": JSON.stringify({
-          compilerOptions: { lib: ["ES2024", "DOM"], module: "preserve", moduleResolution: "bundler", types: [] },
-        }),
+        "tsconfig.base.json": base(["ES2024", "DOM"]),
+        "apps/api/src/main.ts": "console.log(0);\n",
         "apps/town/tsconfig.json": project("src"),
         "apps/town/index.html": '<script type="module" src="./src/init.ts"></script>',
         "apps/town/src/init.ts": 'import "./extras.ts";\nimport { cond } from "@fx/cond";\nconsole.log(cond);\n',
@@ -204,8 +216,8 @@ describe("the import check, on what Bun builds and checks", () => {
       const { found, ways } = await findings(at);
       expect(found).toEqual({
         review: {
-          "apps/town/src/extras.ts -> apps/town/review/tour.ts": 1,
-          "packages/cond/browser.ts -> apps/town/review/tour.ts": 1,
+          "town: apps/town/src/extras.ts -> apps/town/review/tour.ts": 1,
+          "town: packages/cond/browser.ts -> apps/town/review/tour.ts": 1,
         },
         "app-to-app": { "apps/town/src/shapes.ts -> apps/works/src/shape.ts": 1 },
         "rule-package": { "packages/core reads lib.dom.d.ts": 1 },
@@ -216,6 +228,70 @@ describe("the import check, on what Bun builds and checks", () => {
     } finally {
       done();
     }
+  });
+
+  test("holds each build to the review code it reaches, and each import into it, review code's own too", async () => {
+    const { at, done } = fixture(
+      {
+        "apps/api/src/main.ts": "console.log(0);\n",
+        "apps/town/index.html": '<script type="module" src="./src/init.ts"></script>',
+        "apps/town/src/init.ts":
+          'import { tour } from "./review.ts";\nimport { play } from "../../../packages/raid/src/index.ts";\nconsole.log(tour, play);\n',
+        "apps/town/src/review.ts": 'import { step } from "../review/step.ts";\nexport const tour = step;\n',
+        "apps/town/review/step.ts": "export const step = 1;\n",
+        // Works ships the raid's bot through the barrel the town already reaches it by.
+        "apps/works/index.html": '<script type="module" src="./src/init.ts"></script>',
+        "apps/works/src/init.ts": 'import { play } from "../../../packages/raid/src/index.ts";\nconsole.log(play);\n',
+        "packages/raid/src/index.ts": 'export { bot as play } from "./bot.ts";\n',
+        "packages/raid/src/bot.ts": "export const bot = 2;\n",
+      },
+      {},
+    );
+    try {
+      expect((await findings(at)).found.review).toEqual({
+        "town: apps/town/src/init.ts -> apps/town/src/review.ts": 1,
+        "town: apps/town/src/review.ts -> apps/town/review/step.ts": 1,
+        "town: packages/raid/src/index.ts -> packages/raid/src/bot.ts": 1,
+        "works: packages/raid/src/index.ts -> packages/raid/src/bot.ts": 1,
+      });
+    } finally {
+      done();
+    }
+  });
+
+  test("fails on a project TypeScript does not pass, saying why", async () => {
+    const { at, done } = fixture(
+      {
+        "tsconfig.base.json": base(["ES2024"]),
+        "apps/api/src/main.ts": "export const main = 0;\n",
+        "apps/api/tsconfig.json": project("src"),
+        "apps/api/src/wrong.ts": 'export const n: number = "x";\n',
+      },
+      {},
+    );
+    try {
+      const failed = await findings(at).then(
+        () => "passed",
+        (e: unknown) => String(e),
+      );
+      expect(failed).toMatch(/apps\/api\/tsconfig\.json[\s\S]*TS2322/);
+    } finally {
+      done();
+    }
+  });
+});
+
+describe("the builds the import check and the read set read", () => {
+  test("are the three pages and the API, its migrations too, each reaching more than a handful of files", async () => {
+    const all = entries();
+    expect(all.map((e) => e.name)).toEqual(["battler", "town", "works", "api"]);
+    const migrations = readdirSync(join(root, "apps/api/migrations")).filter((f) => f.endsWith(".ts"));
+    expect(all.at(-1)?.from).toEqual([
+      "apps/api/src/main.ts",
+      ...migrations.toSorted().map((f) => `apps/api/migrations/${f}`),
+    ]);
+    const reached = await Promise.all(all.map(async (e): Promise<[string, number]> => [e.name, (await built(e)).size]));
+    expect(reached.filter(([, n]) => n <= 20)).toEqual([]);
   });
 });
 
@@ -255,48 +331,75 @@ describe("the clone check", () => {
   });
 });
 
+/** What the repository's own rules, and the restricted imports, say of `lines`, as oxlint finds it: each hit's line and rule. */
+function linted(lines: readonly string[]): string[] {
+  const dir = mkdtempSync(join(tmpdir(), "leaf-lint-"));
+  try {
+    const file = join(dir, "probe.ts");
+    writeFileSync(file, lines.join("\n"));
+    const run = Bun.spawnSync(
+      [join(root, "node_modules/.bin/oxlint"), "-c", join(root, ".oxlintrc.json"), "-f", "json", file],
+      { cwd: root, stdout: "pipe" },
+    );
+    const out: unknown = JSON.parse(run.stdout.toString());
+    if (!isDiagnostics(out)) throw new Error("oxlint said something other than its diagnostics");
+    return out.diagnostics
+      .filter((d) => d.code.startsWith("leaf(") || d.code.includes("restricted"))
+      .map((d) => `${d.labels[0]?.span.line ?? 0} ${d.code}`)
+      .toSorted((a, b) => Number.parseInt(a) - Number.parseInt(b) || (a < b ? -1 : a > b ? 1 : 0));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 describe("the repository's lint rules", () => {
   test("find raw browser operations, `let` at the top of a module, and hook frameworks", () => {
-    const dir = mkdtempSync(join(tmpdir(), "leaf-lint-"));
-    try {
-      const file = join(dir, "probe.ts");
-      writeFileSync(
-        file,
-        [
-          'import { useState } from "preact/hooks";',
-          "let top = 0;",
-          "export function f(): number { let inside = top; inside += 1; return inside; }",
-          'window.addEventListener("x", f);',
-          "setTimeout(f, 1);",
-          "const watch = new ResizeObserver(f);",
-          'const r: unknown = require("react");',
-          "console.log(useState, watch, r);",
-        ].join("\n"),
-      );
-      const run = Bun.spawnSync(
-        [join(root, "node_modules/.bin/oxlint"), "-c", join(root, ".oxlintrc.json"), "-f", "json", file],
-        {
-          cwd: root,
-          stdout: "pipe",
-        },
-      );
-      const out: unknown = JSON.parse(run.stdout.toString());
-      const said =
-        typeof out === "object" && out !== null && "diagnostics" in out && Array.isArray(out.diagnostics)
-          ? out.diagnostics.map((d: unknown) =>
-              typeof d === "object" && d !== null && "code" in d ? String(d.code) : "",
-            )
-          : [];
-      expect(said.filter((c: string) => c.startsWith("leaf(") || c.includes("restricted")).toSorted()).toEqual([
-        "eslint(no-restricted-imports)",
-        "leaf(hook-framework)",
-        "leaf(module-let)",
-        "leaf(raw-browser)",
-        "leaf(raw-browser)",
-        "leaf(raw-browser)",
-      ]);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    expect(
+      linted([
+        'import { useState } from "preact/hooks";',
+        "let top = 0;",
+        "export function f(): number { let inside = top; inside += 1; return inside; }",
+        'window.addEventListener("x", f);',
+        "setTimeout(f, 1);",
+        "const watch = new ResizeObserver(f);",
+        'const r: unknown = require("react");',
+        "console.log(useState, watch, r);",
+      ]),
+    ).toEqual([
+      "1 eslint(no-restricted-imports)",
+      "2 leaf(module-let)",
+      "4 leaf(raw-browser)",
+      "5 leaf(raw-browser)",
+      "6 leaf(raw-browser)",
+      "7 leaf(hook-framework)",
+    ]);
+  });
+
+  test("find a browser primitive taken as a value, and letting go of one, but not a name of its own or a type", () => {
+    expect(
+      linted([
+        "export const frame = new Promise<number>(requestAnimationFrame);",
+        "const raf = requestAnimationFrame;",
+        "export const later = (f: () => void): unknown => [raf(f), window.setTimeout, globalThis['setInterval']];",
+        "export const stop = (n: number): void => { clearTimeout(n); window.cancelAnimationFrame(n); clearInterval(n); };",
+        "export const off = (el: Element, f: () => void): void => el.removeEventListener('x', f);",
+        "const { setTimeout: wait } = window;",
+        "export function own(setTimeout: (f: () => void) => void, f: () => void): void { setTimeout(f); }",
+        "export const kept = (w: WebSocket): ReturnType<typeof setTimeout> | WebSocket => w;",
+        "export const sockets = [WebSocket, new self.WebSocket('ws://x')];",
+      ]),
+    ).toEqual([
+      "1 leaf(raw-browser)",
+      "2 leaf(raw-browser)",
+      "3 leaf(raw-browser)",
+      "3 leaf(raw-browser)",
+      "4 leaf(raw-browser)",
+      "4 leaf(raw-browser)",
+      "4 leaf(raw-browser)",
+      "5 leaf(raw-browser)",
+      "6 leaf(raw-browser)",
+      "9 leaf(raw-browser)",
+      "9 leaf(raw-browser)",
+    ]);
   });
 });

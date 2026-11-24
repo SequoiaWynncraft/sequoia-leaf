@@ -32,10 +32,15 @@ export interface Entry {
 
 const page = (p: string): Entry => ({ name: p.split("/")[1] ?? p, target: "browser", from: [p] });
 
+/** Each page, and the API, always: a build of no file fails, where a pattern that matches nothing would skip it unseen. */
 export function entries(at = root): Entry[] {
   const glob = (pattern: string): string[] => [...new Bun.Glob(pattern).scanSync({ cwd: at })].toSorted();
-  const api: Entry = { name: "api", target: "bun", from: glob("apps/api/{src/main,migrations/*}.ts") };
-  return [...glob("apps/*/index.html").map(page), ...(api.from.length > 0 ? [api] : [])];
+  const api: Entry = {
+    name: "api",
+    target: "bun",
+    from: ["apps/api/src/main.ts", ...glob("apps/api/migrations/*.ts")],
+  };
+  return [...glob("apps/*/index.html").map(page), api];
 }
 
 /** What an entry runs, as Bun builds it, its styles' pictures and fonts too. */
@@ -65,12 +70,17 @@ export interface Project {
 const FILE = /^[^\s<]\S*\.\w+$/;
 const BY = /^\s+(?:Imported|Referenced) via .* from file '([^']+)'/;
 
-/** What each workspace's TypeScript projects read. */
+/** What each workspace's TypeScript projects read; a project TypeScript does not pass fails, with what it said, as what it lists then is not to be trusted. */
 export function typed(at = root): Promise<Project[]> {
   const configs = [...new Bun.Glob("{apps,packages}/*/tsconfig*.json").scanSync({ cwd: at })].toSorted();
   return Promise.all(
     configs.map(async (config): Promise<Project> => {
-      const said = await Bun.$`${process.execPath} check -p ${config} --explainFiles`.cwd(at).quiet().nothrow().text();
+      const run = await Bun.$`${process.execPath} check -p ${config} --explainFiles`.cwd(at).quiet().nothrow();
+      const said = run.text();
+      if (run.exitCode !== 0) {
+        const errors = said.match(/^<error [\s\S]*?^<\/error>$/gm) ?? [said, run.stderr.toString()];
+        throw new Error(`bun check -p ${config} failed:\n${errors.join("\n")}`);
+      }
       const files: string[] = [];
       const edges: [string, string][] = [];
       let to: string | null = null;

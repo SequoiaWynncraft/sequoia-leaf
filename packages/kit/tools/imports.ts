@@ -7,7 +7,9 @@
  * - `rule-package`: the games' rules (core, factory, raid, town, pulls) import nothing of the kit, the
  *   figures or an app, and none of their projects reads the DOM;
  * - `review`: no page, and not the API, reaches review code: a `review/` folder, or `REVIEW_CODE`.
- *   Each is the import into it; a failing check prints the whole way from the entry to each.
+ *   Each is a build and an import into review code it reaches, through review code too, so a build
+ *   newly shipping review code another already does, or review code that imports more of it, is
+ *   new; a failing check prints the whole way from the entry to each.
  *
  * Imports of types count as imports. What is found is held to `baseline/imports.json`
  * (`ratchet.ts`), which holds only what the rebuilds will take out.
@@ -21,7 +23,8 @@ const RULES = ["core", "factory", "raid", "town", "pulls"].map((r) => `packages/
 /**
  * Review code that ships today: the town's handles for tours and the console, which `main.ts`
  * installs, and the raid's bot, which only the balance run and the battler's tour drive, exported
- * by the raid's barrel. The Town and Little Raid rebuilds take them out.
+ * by the raid's barrel and imported by `game.ts` for `planCommands` (the tour's), so that every
+ * build of the raid ships it, the API's too. The Town and Little Raid rebuilds take them out.
  */
 const REVIEW_CODE = new Set(["apps/town/src/review.ts", "packages/raid/src/bot.ts"]);
 
@@ -48,9 +51,9 @@ export function loops(g: Graph): string[][] {
   return [...new Map(groups.map((group) => [group.join(" "), group])).values()];
 }
 
-/** Each import into review code a build reaches, with the shortest way to it from an entry, through no review code. */
+/** Each import into review code a build reaches, review code's own too, with the shortest way to it from an entry. */
 function intoReview(g: Graph, from: readonly string[]): [string, string[]][] {
-  const before = walk(from, (f) => (g.get(f) ?? []).map((e) => e.to).filter((t) => !isReview(t)));
+  const before = walk(from, (f) => (g.get(f) ?? []).map((e) => e.to));
   const way = (f: string | null | undefined): string[] => (f ? [...way(before.get(f)), f] : []);
   const into = (f: string): string[] => (g.get(f) ?? []).map((e) => e.to).filter(isReview);
   return [...before.keys()].flatMap((f) => into(f).map((t): [string, string[]] => [`${f} -> ${t}`, [...way(f), t]]));
@@ -73,7 +76,7 @@ export async function findings(at = root): Promise<{ found: Counts; ways: string
     for (const group of loops(g)) mark("cycle", group.join(" "));
     for (const [from, edges] of g) for (const { to } of edges) judge(from, to);
     for (const [edge, way] of intoReview(g, entry.from)) {
-      mark("review", edge);
+      mark("review", `${entry.name}: ${edge}`);
       ways.push(`${entry.name}: ${way.join(" -> ")}`);
     }
   }

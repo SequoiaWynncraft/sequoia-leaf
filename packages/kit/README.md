@@ -193,8 +193,9 @@ and comments aside), functions of at most 90 and branching of at most 15. `bun r
 (`tools/imports.ts`, on what `Bun.build` builds for each page and the API and what `bun check
 --explainFiles` lists for each TypeScript project, `tools/graph.ts`) fails a loop of imports a build
 waits on, an app importing another or the kit an app (types too), the games' rules importing the
-kit, the figures or an app or reading the DOM, and any way from a page or the API into review code,
-which it prints whole. `bun run clones` (`tools/clones.ts`) fails code copied between two apps or
+kit, the figures or an app or reading the DOM, and each import into review code a page or the API
+reaches, review code's own too, by build, with the whole way to it printed; a project TypeScript does
+not pass fails it too. `bun run clones` (`tools/clones.ts`) fails code copied between two apps or
 packages: a run of 70 tokens or more, comments and spacing aside. Where code today breaks those
 lines, each count is held to a baseline in `tools/baseline/` (`tools/ratchet.ts`): by file and rule,
 by import, or by pair of files sharing copied runs. Anything new or more fails, and so does anything

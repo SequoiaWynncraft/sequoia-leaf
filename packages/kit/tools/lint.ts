@@ -40,7 +40,7 @@ interface Diagnostic {
   readonly labels: readonly { readonly span: { readonly line: number; readonly column: number } }[];
 }
 
-function isDiagnostics(x: unknown): x is { diagnostics: Diagnostic[] } {
+export function isDiagnostics(x: unknown): x is { diagnostics: Diagnostic[] } {
   return typeof x === "object" && x !== null && "diagnostics" in x && Array.isArray(x.diagnostics);
 }
 
