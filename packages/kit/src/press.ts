@@ -14,14 +14,27 @@ export const LONG_PRESS = 450;
 /** How far a resting finger may wander, in CSS pixels. */
 const STILL = 9;
 
-/** Where a press is: none; a finger down and resting; or a press that has asked, whose click is its own. */
+/** Where a press is: none; a finger down and resting; or a press that has asked, whose finger's click is its own. */
 type Press =
   | { readonly at: "idle" }
   | { readonly at: "held"; readonly pointer: number; readonly scope: Scope }
-  | { readonly at: "asked" };
+  | { readonly at: "asked"; readonly pointer: number };
 
 const IDLE: Press = { at: "idle" };
-const ASKED: Press = { at: "asked" };
+
+/**
+ * A click as a press reads it. One from the keyboard or a script has `detail` 0 in every browser;
+ * one from a pointer names it (`pointerId`) where the browser's click is a PointerEvent, and does
+ * not where it is still a MouseEvent (Safari).
+ */
+export interface Click {
+  readonly detail: number;
+  readonly pointerId?: number;
+}
+
+/** Whether a click is the one a pointer makes: a pointer's, and that pointer's where it says which. */
+const madeBy = (click: Click, pointer: number): boolean =>
+  click.detail > 0 && (click.pointerId === undefined || click.pointerId === pointer);
 
 /** What a press needs of its thing: its events, and whether it is on the page. */
 export type Pressable = EventTarget & { readonly isConnected: boolean };
@@ -35,9 +48,11 @@ export interface PressOpts {
 
 /**
  * Lets a finger ask about `target` by resting on it. Gives back, for the thing's own click handler,
- * whether the click now is the end of a press that asked (and so not the thing's to act on).
+ * whether a click is the one the finger that asked makes as it lifts (and so not the thing's to act
+ * on). A press that has asked keeps its finger until the next press, so that a click from the
+ * keyboard or another pointer, before the lift or after a cancel, is always the thing's.
  */
-export function longPress(owner: Scope, target: Pressable, opts: PressOpts): () => boolean {
+export function longPress(owner: Scope, target: Pressable, opts: PressOpts): (click: Click) => boolean {
   let press: Press = IDLE;
   /** Every change to the press goes through here: a press no longer held lets go of all it held. */
   const to = (now: Press): void => {
@@ -59,13 +74,13 @@ export function longPress(owner: Scope, target: Pressable, opts: PressOpts): () 
     });
     scope.on(target, "pointerup", lift);
     scope.on(target, "pointercancel", lift);
-    scope.after(LONG_PRESS, () => to(target.isConnected ? ASKED : IDLE));
+    scope.after(LONG_PRESS, () => to(target.isConnected ? { at: "asked", pointer: e.pointerId } : IDLE));
     return { at: "held", pointer: e.pointerId, scope };
   };
   owner.on(target, "pointerdown", (e) => to(opts.starts(e) ? hold(e) : IDLE));
-  return () => {
-    const asked = press.at === "asked";
-    if (asked) to(IDLE);
-    return asked;
+  return (click) => {
+    const itsOwn = press.at === "asked" && madeBy(click, press.pointer);
+    if (itsOwn) to(IDLE);
+    return itsOwn;
   };
 }

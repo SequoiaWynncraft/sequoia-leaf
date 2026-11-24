@@ -88,13 +88,14 @@ export function fly(what: Flier, from: Pt, to: Pt, count: number, each: ((i: num
     return;
   }
   for (let i = 0; i < count; i++) {
-    const c = typeof what === "string" ? icon(what) : what();
-    c.style.cssText = "position:fixed;left:0;top:0;z-index:95;pointer-events:none";
+    // Carried by a flier of its own, so the picture keeps the size it was made at.
+    const c = el("div", "k-flier", {}, typeof what === "string" ? icon(what) : what());
     document.body.append(c);
-    const half = c.getBoundingClientRect().width / 2;
+    const { width, height } = c.getBoundingClientRect();
     const midX = (from.x + to.x) / 2 + (Math.random() - 0.5) * 90;
     const midY = Math.min(from.y, to.y) - 24 - Math.random() * 46;
-    const tr = (x: number, y: number, s: number): string => `translate(${x - half}px, ${y - half}px) scale(${s})`;
+    const tr = (x: number, y: number, s: number): string =>
+      `translate(${x - width / 2}px, ${y - height / 2}px) scale(${s})`;
     const anim = c.animate(
       [
         { transform: tr(from.x, from.y, 0.5), opacity: 0 },

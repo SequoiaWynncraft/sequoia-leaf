@@ -24,6 +24,23 @@ describe("a scope", () => {
     expect(target.listening).toBe(0);
   });
 
+  test("each listener is its own: one function on one target in two scopes is heard by each until its own closes", () => {
+    const target = new EventTarget();
+    const [a, b] = [scope(), scope()];
+    let heard = 0;
+    const hear = (): void => void heard++;
+    a.on(target, "ping", hear);
+    b.on(target, "ping", hear);
+    target.dispatchEvent(new Event("ping"));
+    expect(heard).toBe(2);
+    a.close();
+    target.dispatchEvent(new Event("ping"));
+    expect(heard).toBe(3);
+    b.close();
+    target.dispatchEvent(new Event("ping"));
+    expect(heard).toBe(3);
+  });
+
   test("lets go of one thing at once with what registering it gave back, and of nothing else", () => {
     const target = new Listened();
     const s = scope();

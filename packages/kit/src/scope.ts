@@ -54,7 +54,11 @@ export class Scope {
     return child;
   }
 
-  /** Hears `kind` on `target` until let go of. */
+  /**
+   * Hears `kind` on `target` until let go of. Each call listens with a function of its own, so the
+   * same `fn` given twice, here or in another scope, is two listeners, and letting go of one leaves
+   * the other.
+   */
   on<K extends keyof GlobalEventHandlersEventMap>(
     target: EventTarget,
     kind: K,
@@ -64,8 +68,9 @@ export class Scope {
   on(target: EventTarget, kind: string, fn: (e: Event) => void, opts?: Listen): Release;
   on(target: EventTarget, kind: string, fn: (e: Event) => void, opts: Listen = {}): Release {
     if (this.closed) return nothing;
-    target.addEventListener(kind, fn, opts);
-    return this.#own(() => target.removeEventListener(kind, fn, opts));
+    const heard = (e: Event): void => fn(e);
+    target.addEventListener(kind, heard, opts);
+    return this.#own(() => target.removeEventListener(kind, heard, opts));
   }
 
   /** Runs `fn` once, `ms` from now. */

@@ -2,13 +2,24 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { fly } from "./pursebar.ts";
 
-/** A picture in flight: it is placed, measured, and animated, and its animation finishes when told. */
+/** A picture in flight, or what carries it: it is placed, measured, and animated, and its animation finishes when told. */
 class Flying extends EventTarget {
   readonly style = { cssText: "" };
   readonly classList = { add: (): void => undefined };
   readonly landed: EventTarget[] = [];
+  readonly kids: unknown[] = [];
+  className = "";
   removed = false;
-  getBoundingClientRect = () => ({ width: 16 });
+  readonly tag: string;
+  constructor(tag: string) {
+    super();
+    this.tag = tag;
+  }
+  appendChild<T>(kid: T): T {
+    this.kids.push(kid);
+    return kid;
+  }
+  getBoundingClientRect = () => ({ width: 64, height: 80 });
   animate(): EventTarget {
     const run = new EventTarget();
     this.landed.push(run);
@@ -25,8 +36,8 @@ function page(lessMotion: boolean): Flying[] {
   const win = { matchMedia: (q: string) => ({ matches: lessMotion && q === "(prefers-reduced-motion: reduce)" }) };
   const doc = {
     body: { append: (): void => undefined },
-    createElement: () => {
-      const f = new Flying();
+    createElement: (tag: string) => {
+      const f = new Flying(tag);
       made.push(f);
       return f;
     },
@@ -66,9 +77,25 @@ describe("things flying across the page", () => {
       2,
       (i) => landed.push(i),
     );
-    expect([made.length, landed]).toEqual([2, []]);
+    const pictures = made.filter((f) => f.tag === "canvas");
+    expect([pictures.length, landed]).toEqual([2, []]);
     for (const f of made) for (const run of f.landed) run.dispatchEvent(new Event("finish"));
     expect(landed).toEqual([0, 1]);
-    expect(made.every((f) => f.removed)).toBe(true);
+    expect(made.filter((f) => f.landed.length > 0).every((f) => f.removed)).toBe(true);
+  });
+
+  test("fly at the size the page made each picture: what places it in flight leaves its own style alone", () => {
+    const made = page(false);
+    fly(
+      () => {
+        const c = document.createElement("canvas");
+        c.style.cssText = "width: 64px; height: 80px;";
+        return c;
+      },
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      1,
+    );
+    expect(made.filter((f) => f.tag === "canvas").map((f) => f.style.cssText)).toEqual(["width: 64px; height: 80px;"]);
   });
 });

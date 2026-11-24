@@ -852,7 +852,7 @@ export function link(target: HTMLElement, ref: Ref, opts: LinkOpts = {}): void {
     "click",
     (e) => {
       // The tap that ends a long press was asking what the thing is, not using it.
-      if (asked()) {
+      if (asked(e)) {
         e.stopPropagation();
         e.preventDefault();
         return;

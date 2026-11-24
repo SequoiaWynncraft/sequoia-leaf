@@ -183,7 +183,7 @@ export function tip(target: HTMLElement, title: Words, text?: Words): void {
     "click",
     (e) => {
       // The tap that ends a long press was asking what the thing is, not using it.
-      if (asked()) {
+      if (asked(e)) {
         e.stopPropagation();
         e.preventDefault();
       } else if (!acts && finger) toggle();
