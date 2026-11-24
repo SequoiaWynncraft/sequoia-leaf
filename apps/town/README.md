@@ -225,8 +225,9 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   more comes out of Storage until something is put away.
 - **The cabin.** Walking up to its door opens the member's own things: their rank, level and week
   with the guild, a switch, "Leave my character in town when I go" (on until turned off, kept in
-  Leaf's town and said with where they are as `stay`), the trophies they have won, and who lives
-  with them and what would bring the next. In town the member's face in the
+  Leaf's town and said with where they are as `stay`), "Copy link to my camp" (the page's address
+  with `?camp=<their id>`, for pasting in chat; "Link copied" for two seconds), the trophies they
+  have won, and who lives with them and what would bring the next. In town the member's face in the
   corner shows the rank and the week and points here.
 - **The mailbox.** Notes and small presents from the town's own who came by while the member was
   away or in town, read as letters on paper. Its flag is up and it glows while there is a letter
@@ -234,7 +235,9 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   spot beside it. The town's signpost at the gate has a mark over it while something is waiting.
   It holds twelve letters, and makes room by throwing out the oldest already dealt with, then the
   oldest with nothing inside; a present is never thrown out, so while the box is full of presents
-  no more letters are left, and the feed says so.
+  no more letters are left, and the feed says so. Under the letters, its visitors
+  (`mailbox.ts`, `GET /v1/game/camps/visitors`): who likes the camp, newest first, and who stayed
+  in it this week, each with their face, opening their card.
 - **The town's own dropping by.** Leaf sends them: every 46 to 76 seconds Pipwick, Fika,
   Mossback or Orphion sets out for the camp and waits there (`visit`), until greeted or until
   the next one comes. While the member is in their camp the page asks Leaf for the town every half
@@ -242,9 +245,12 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   gnome standing, the others curled up) and says a thing or two now and then. Touching one greets
   it: it answers, and goes, by way of the mailbox when it brought a note or a present. One who goes
   because the next has come does the same; with the box full of presents the feed says so.
-- **The signpost.** The way back to town, and under it the camps on the town's board (`GET
-/v1/game/play/town/standings`), the member's own left out, at most 12: each owner's face and
-  name, how many things they have set out, and "Go". With no other camp there is no list.
+- **The signpost** (`signpost.ts`, the list in `camps.ts`). The same at every camp: Home (when
+  away), Town, then every camp Leaf lists (`GET /v1/game/camps`) but the member's own and the one
+  they stand in, each owner's face and name, its likes and things set out, and "Go". A field finds
+  camps by name as it is typed in, and two tabs order them: "Most liked" (the first time; a tie
+  goes to more set out, then the name) or "Most set out". The list scrolls on its own under them,
+  and a row is made once and brought up to date in place, so a button keeps the keyboard.
 - **Somebody else's camp.** Reached from that list, from "Visit camp" on a person's card (in Who
   is about, or in the Works' Top yards, which leaves for the town with `?camp=<player>`), or by
   opening the page with `?camp=<player>` (the member's own id opens their own). `leaf.ts` opens
@@ -253,8 +259,13 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   theirs: the same scene draws it, with their pets in a colour of their own and a roof of their
   own. Everything stands and answers a touch, and a thing's card opens; nothing can be changed:
   `doNow` and `ask` refuse, and there is no cabin, mailbox, Storage, caller or decorating. Under the
-  top bar a strip says whose camp it is, with "My camp"; the signpost offers Home and Town. Their
-  camp is read again every half minute, and as the tab comes back. Nothing to visit puts the page
+  top bar a strip says whose camp it is, with its likes (a heart and a count, pressed while the
+  member likes it, named "Like" or "Liked"), "Next camp" (the next in the signpost's order last
+  chosen, never the member's own, round from the last to the first) and "My camp"; under 560
+  pixels the last two are their pictures alone and the name gives way. "Go" and "Next camp" walk
+  straight on to the next camp. Their camp is read again every half minute, and as the tab comes
+  back, but not once the member is walking off from it. The first time anybody likes the member's
+  camp, the feed says so ("Mossback likes your camp."). Nothing to visit puts the page
   behind the kit's card, "No camp to visit", with "My camp".
 - **The guild, live.** The same moments reach a camp, as each begins by Leaf's clock (`cue`, as in
   town: none from before the page was there): a line in the feed, a paper lantern going up
@@ -570,6 +581,8 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/draw.ts`                         | Drawing a frame of any place; name plates and speech; the round hole a door closes to           |
 | `src/hud.ts`                          | The purse, corner, feed, dock, panel and cards, shared by both places                           |
 | `src/ui.ts`, `src/campui.ts`          | The town's panels and arrival letter; the camp's panels and Storage                             |
+| `src/signpost.ts`, `src/camps.ts`     | The ways between camps: the signpost, the strip's like and "Next camp"; Leaf's list of camps    |
+| `src/mailbox.ts`                      | The mailbox: the letters, and who likes the camp and stayed in it                               |
 | `src/cards.ts`                        | What camp things and stalls say about themselves, as kit cards                                  |
 | `src/doors.ts`                        | A game in a frame: opening it, hearing it, the note when it will not open                       |
 | `src/games.ts`                        | The games that are places, and what each says is waiting                                        |
