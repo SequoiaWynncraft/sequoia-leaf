@@ -161,7 +161,6 @@ export {
   type GameId,
   gameId,
   isRefused,
-  type Kept,
   type LeafFor,
   type LeafSpend,
   type Logged,

@@ -264,9 +264,9 @@ ids, so nothing is done twice; a request unanswered by the kit's deadline (ten s
 is let go and counts as no answer. Each batch carries `player`, who the page believes it is; on
 `not_you` (signed in as somebody else since) nothing more is sent and the page loads again. A state
 Leaf cannot read (`state_unreadable`) stops the page with `unreadableCard()` ("Your game could not
-be read. It has been kept; tell the guild."), sending nothing again. A 404 `not_found`, from a Leaf
-without the play service during a deploy, is "not yet": the call goes again each second for 30
-seconds (`NOT_YET`) before the page gives up for no server. As the page is hidden or put away,
+be read. It has been kept; tell the guild."), sending nothing again, once it has been asked again
+each second for 30 seconds (`NOT_YET`), as a Leaf before this one during a deploy answers it. As
+the page is hidden or put away,
 everything Leaf has not answered goes, in order, in one request that outlives the page.
 `close()` puts a play away: what is waiting is sent so, and answered `put_away`, and the play hears
 the page no more. Where its line to Leaf is (idle, reading, sending, waiting to send again,

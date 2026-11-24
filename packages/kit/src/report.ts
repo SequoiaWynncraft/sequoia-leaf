@@ -175,11 +175,10 @@ function countLoad(page: Page, reloaded: boolean): void {
 
 /**
  * The page could not open its game from Leaf (`play.ts`'s `Trouble`): said for Leaf answering
- * something else, no play service, or a state that does not read; not for being signed out or
- * having nothing to visit.
+ * something else, or a state that does not read; not for being signed out or having nothing to visit.
  */
 export function failedToOpen(trouble: Trouble): void {
-  if (trouble === "closed" || trouble === "noserver" || trouble === "unreadable") {
+  if (trouble === "closed" || trouble === "unreadable") {
     report("first_read", `Could not open the game: ${trouble}`);
   }
 }

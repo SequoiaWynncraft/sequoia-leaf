@@ -258,14 +258,9 @@ export class GamePresenceApi extends HttpApiGroup.make("gamePresence")
   .middleware(Player)
   .prefix("/v1/game") {}
 
-/** The games Leaf plays: a player's state and commands, a visit, a board, and the routes of before. */
+/** The games Leaf plays: a player's state and commands, a visit and a board. */
 export class GamePlayApi extends HttpApiGroup.make("gamePlay")
   .add(
-    // For a page left open since before the town moved onto Leaf, which still sends its save and its
-    // Coins here: told it is not who it thinks it is, it loads itself again, and so becomes the page
-    // that plays on Leaf. Both go in the change after this one.
-    HttpApiEndpoint.put("oldSave", "/saves/:slot", { params: { slot: Schema.String }, error: NotYou }),
-    HttpApiEndpoint.post("oldCoins", "/coins", { error: NotYou }),
     HttpApiEndpoint.get("play", "/play/:game", {
       params: GameParams,
       // From a page that found its copy of the state not Leaf's: the tick it found it at.

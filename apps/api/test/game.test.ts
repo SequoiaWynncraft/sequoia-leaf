@@ -605,30 +605,6 @@ describe("GET /v1/game/me", () => {
   });
 });
 
-describe("the old ways of saving", () => {
-  it("are gone, and nothing is written: reading a save answers 404, and a page from before, still sending its save or its Coins, is told not_you so that it loads itself again", async () => {
-    const answers = await Promise.all([
-      outcome("GET", "/v1/game/saves", alicesPage),
-      outcome("GET", "/v1/game/saves/town", alicesPage),
-      send("PUT", "/v1/game/saves/town", { ...alicesPage, body: { player: alice, version: 0, data: {} } }).then(
-        (r) => r.status,
-      ),
-      send("POST", "/v1/game/coins", {
-        ...alicesPage,
-        body: { player: alice, id: "a-1", amount: 3, reason: "daily_chest" },
-      }).then((r) => r.status),
-    ]);
-    expect(answers).toEqual([
-      ["GET", "/v1/game/saves", 404, "not_found"],
-      ["GET", "/v1/game/saves/town", 404, "not_found"],
-      409,
-      409,
-    ]);
-    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
-    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM coin_entries`)).toEqual([{ n: 0 }]);
-  });
-});
-
 /** A skin sheet's status and bytes, or its status and error code. */
 async function skin(uuid: string): Promise<[number, Uint8Array | string]> {
   const response = await get(`/v1/game/skins/${uuid}`);

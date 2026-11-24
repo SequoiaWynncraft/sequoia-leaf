@@ -1,7 +1,6 @@
 /**
  * The postcard the Works leaves for the town (the kit's `postcard.ts`): what is waiting in the yard,
- * in a line for the card on its door; the capstones it has ever made, for models in the member's
- * camp; and the Coins in its till.
+ * in a line for the card on its door, and the Coins in its till.
  */
 import type { Postcard } from "@sequoia-leaf/core";
 
@@ -11,6 +10,9 @@ import type { Yard } from "./yard.ts";
 
 /** The two things that take the whole yard, by the names the town knows them by. */
 export const CAPSTONES = ["crab", "beacon"] as const;
+
+/** The capstones the depot has ever taken in, for models in the member's camp (`Game.awards`). */
+export const capstonesMade = (y: Yard) => CAPSTONES.filter((k) => (y.depot[item(k)] ?? 0) > 0);
 
 export function postcard(y: Yard): Postcard {
   const filled = y.board.filter((o) => isFilled(o.want, o.filled)).length;
@@ -23,9 +25,5 @@ export function postcard(y: Yard): Postcard {
         : y.board.length > 0
           ? `${y.board.length} order${y.board.length === 1 ? " is" : "s are"} on the board.`
           : "The yard is quiet. Somebody should start it up.";
-  return {
-    waiting,
-    trophies: CAPSTONES.filter((k) => (y.depot[item(k)] ?? 0) > 0),
-    till: Math.max(0, Math.floor(y.till / MILLI)),
-  };
+  return { waiting, till: Math.max(0, Math.floor(y.till / MILLI)) };
 }

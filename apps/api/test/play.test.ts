@@ -45,7 +45,6 @@ import { staged as stagedYard } from "@sequoia-leaf/factory/test/yards.ts";
 import { PULLS } from "@sequoia-leaf/pulls";
 import {
   foughtOf,
-  isParty,
   picksOf,
   planCommands,
   RAID,
@@ -65,7 +64,7 @@ import { knownAmong } from "../src/game/known.ts";
 import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
 import { GAMES, type Played, played } from "../src/play/games.ts";
-import { type JobTimes, KEPT_BYTES, Play, TEND_AFTER } from "../src/play/service.ts";
+import { type JobTimes, Play, TEND_AFTER } from "../src/play/service.ts";
 import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
 import { DAY, fakeBackend, fakeMojang, type Fakes, noNetwork, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
@@ -183,24 +182,6 @@ const entries = (player: PlayerId) =>
   );
 const stored = (player: PlayerId, game = "raid") =>
   services.query((sql) => sql`SELECT rev, state FROM play_state WHERE player_id = ${player} AND game = ${game}`);
-/** The pieces Leaf keeps of a player's, by game and slot, their data read back. */
-const keptOf = async (player: PlayerId) =>
-  Schema.decodeUnknownSync(
-    Schema.Array(
-      Schema.Struct({
-        game: Schema.String,
-        slot: Schema.String,
-        data: Schema.fromJsonString(Schema.Unknown),
-        at: Schema.Number,
-      }),
-    ),
-  )(
-    await services.query(
-      (sql) =>
-        sql`SELECT game, slot, data, updated_at AS at FROM play_kept WHERE player_id = ${player} ORDER BY game, slot`,
-    ),
-  );
-
 /** A shop where each lantern costs what the command says: a game that spends Coins, which the raid never does. */
 const SHOP: Game<{ bought: number }, { price: number }, { bought: number }, string> = {
   id: "town",
@@ -1148,92 +1129,6 @@ describe("a command's Leaf", () => {
       results: [{ id: "m-1", notes: ["sold"] }],
     });
     expect(await services.account(alice)).toMatchObject({ balance: 80 });
-  });
-});
-
-/** A game that asks Leaf to keep, in the slot each command names, the text it names. */
-const KEEPER: Game<{ bought: number }, { slot: string; text: string }, { bought: number }, string> = {
-  id: "town",
-  create: () => ({ bought: 0 }),
-  advance: (state) => state,
-  view: (state) => state,
-  decode: (text) => SHOP.decode(text),
-  encode: (state) => JSON.stringify(state),
-  apply: (state, kept) => ({
-    state: { bought: state.bought + 1 },
-    notes: ["kept"],
-    keep: [{ slot: kept.slot, data: kept.text }],
-  }),
-  command: (v) =>
-    typeof v === "object" &&
-    v !== null &&
-    "slot" in v &&
-    typeof v.slot === "string" &&
-    "text" in v &&
-    typeof v.text === "string"
-      ? { slot: v.slot, text: v.text }
-      : null,
-};
-
-/** The party Leaf decided the fight from, as the batch that fought was answered. */
-const fought = (answer: Awaited<ReturnType<typeof commanded>>) => {
-  const run = answer.view.run;
-  return run ? foughtOf(run)?.setup.sides[0] : undefined;
-};
-
-describe("what a game keeps of a player's", () => {
-  it("is the board a member fought a room with, by trail and room; fought again, the room's board is the newer", async () => {
-    const first = await commanded(ided([{ do: "start", trail: 0 }, { do: "choose", option: 0 }, { do: "fight" }]));
-    expect(isParty(fought(first))).toBe(true);
-    expect(await keptOf(alice)).toEqual([{ game: "raid", slot: "board:0:0", data: fought(first), at: clock.now }]);
-    // A new run's first fight, in the same room.
-    const again = await commanded(
-      ided([{ do: "take" }, { do: "start", trail: 0 }, { do: "choose", option: 0 }, { do: "fight" }]),
-    );
-    expect(again.results.every((r) => "notes" in r)).toBe(true);
-    expect(await keptOf(alice)).toEqual([{ game: "raid", slot: "board:0:0", data: fought(again), at: clock.now }]);
-    // A guest's is not kept.
-    await commanded(ided([{ do: "start", trail: 0 }, { do: "choose", option: 0 }, { do: "fight" }]), carol);
-    expect(await keptOf(carol)).toEqual([]);
-  });
-
-  it("is nothing of a batch refused whole", async () => {
-    await opened();
-    const commands = [...ided([{ do: "start", trail: 0 }, { do: "choose", option: 0 }, { do: "fight" }]), { id: "x" }];
-    const refused = await send("POST", "/v1/game/play/raid", { commands });
-    expect([refused.status, await codeOf(refused)]).toEqual([400, "invalid_command"]);
-    expect(await keptOf(alice)).toEqual([]);
-  });
-
-  it("is let go when its slot is not one Leaf allows or its JSON is over 16 KiB, and the command stands", async () => {
-    const lines: unknown[] = [];
-    const capture = Logger.layer([
-      Logger.map(Logger.formatStructured, ({ annotations }) => void lines.push(annotations)),
-    ]);
-    const batch = await services.run(
-      Play.use((play) =>
-        play.send({ playerId: alice, guest: false }, played(KEEPER), [
-          // A string's JSON is the string in quotes, each "é" two bytes.
-          { id: "k-1", slot: "fits", text: "x".repeat(KEPT_BYTES - 2) },
-          { id: "k-2", slot: "wide", text: "é".repeat(KEPT_BYTES / 2) },
-          { id: "k-3", slot: "Not a slot", text: "" },
-          { id: "k-4", slot: "x".repeat(65), text: "" },
-          { id: "k-5", slot: "board:0:3", text: "older" },
-          { id: "k-6", slot: "board:0:3", text: "newer" },
-        ]),
-      ).pipe(Effect.provide(capture), Effect.provideService(References.MinimumLogLevel, "All")),
-    );
-    expect(batch).toMatchObject({ status: "done", rev: 1, view: { bought: 6 } });
-    expect(batch.status === "done" && batch.results.map((r) => ("notes" in r ? r.notes : r.refused))).toEqual(
-      Array.from({ length: 6 }, () => ["kept"]),
-    );
-    expect(await keptOf(alice)).toEqual([
-      { game: "town", slot: "board:0:3", data: "newer", at: clock.now },
-      { game: "town", slot: "fits", data: "x".repeat(KEPT_BYTES - 2), at: clock.now },
-    ]);
-    expect(lines.filter((a) => JSON.stringify(a).includes('"slot"'))).toEqual(
-      ["wide", "Not a slot", "x".repeat(65)].map((slot) => ({ player: alice, game: "town", slot })),
-    );
   });
 });
 
@@ -2951,7 +2846,6 @@ describe("pulls", () => {
     await raided(alice, 25_000);
     const ten = tenPulls("p-1");
     const done = await pulled([ten]);
-    const at = clock.now;
     expect(done.results.map((r) => ("notes" in r ? r.notes.length : r.refused))).toEqual([10]);
     expect(await services.account(alice)).toEqual({ playerId: alice, balance: 15_000, xp: 25_000 });
     const spent = {
@@ -2967,8 +2861,6 @@ describe("pulls", () => {
     expect((await ledgerOf(alice)).slice(1)).toEqual([spent]);
     const have = PULLS.decode((await storedIn("pulls"))[0]?.state ?? "")?.have ?? {};
     expect(Object.values(have).reduce((sum, n) => sum + n, 0)).toBe(10);
-    // Kept by the batch that pulled, not again by the one sent again.
-    expect(await keptOf(alice)).toEqual([{ game: "pulls", slot: "have", data: have, at }]);
     expect(new Set((await awarded(alice)).map((a) => a.id))).toEqual(
       new Set(Object.keys(have).map((id) => `pull:${id}`)),
     );
@@ -2994,7 +2886,6 @@ describe("pulls", () => {
     const before = await untouched(alice, "pulls");
     expect((await pulled([tenPulls("p-1")])).results).toEqual([{ id: "p-1", refused: "not_enough_leaf" }]);
     expect(await untouched(alice, "pulls")).toEqual(before);
-    expect(await keptOf(alice)).toEqual([]);
 
     await app.dispose();
     start();
@@ -3003,7 +2894,6 @@ describe("pulls", () => {
     const off = await untouched(alice, "pulls");
     expect((await pulled([tenPulls("p-2")])).results).toEqual([{ id: "p-2", refused: "leaf_closed" }]);
     expect(await untouched(alice, "pulls")).toEqual(off);
-    expect(await keptOf(alice)).toEqual([]);
   });
 });
 

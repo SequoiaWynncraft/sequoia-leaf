@@ -162,7 +162,7 @@ async function opened(params: URLSearchParams): Promise<{ id: string } | null> {
   document.body.classList.toggle("visiting", S.visiting !== null);
   const card = (why: Trouble): void => {
     if (why === "nothing") pageCard("No yard to visit", "They have not started one yet.", "My yard", myYard);
-    else troubleCard(why, signIn, NEEDS_LEAF);
+    else troubleCard(why, signIn);
   };
   // In a visit, the owner's name is asked of Leaf meanwhile.
   const [trouble, owner] = await Promise.all([openYard(me.id, card), S.visiting && askPerson(S.visiting.id)]);

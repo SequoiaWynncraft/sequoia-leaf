@@ -630,16 +630,6 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   again, and the command stands. A spend earns no XP and uses none of the
   Coins' room. The raid's `buyLook` and the pulls' `pull` take Leaf, both for
   everyone.
-- A command may ask Leaf to keep pieces of the player's apart from their
-  state (`Done.keep`: a slot's name and its data), for another player's game
-  to be given later. Each is kept in the batch's transaction if the command is
-  done, over the one in its slot before. A slot's name is up to 64 small
-  letters, digits and `_ . : -` (`SLOT`), and a piece at most 16 KiB of JSON
-  (`KEPT_BYTES`); one past either is not kept and is logged, and the command
-  stands. No page and no route is given them. Kept so far: the board a member
-  fought each room with (`board:<trail>:<room>`, the party the fight was
-  decided from), and how many of each prize a member has (`have`), after each
-  pull and exchange.
 - A stored state that does not read (a rules change that forgot an older
   version, say) answers both routes 409 `state_unreadable`: nothing is done,
   the state is kept as it is, and Leaf logs the player and the game. The page
@@ -697,7 +687,8 @@ written (a state from before took it from where it stands, or else from the
 player as last seen), which whatever Leaf writes of it while they are away says
 too. Migration 26 made `play_kept` (a piece in each `player_id`, `game` and
 `slot`, its `data` as JSON) and gave each member who had pulled their `have`,
-from their stored pulls. Migration 27 gave `played` time AFK, as pages said
+from their stored pulls; nothing read it, and nothing has written it since
+the raid's boards and the pulls' copies stopped. Migration 27 gave `played` time AFK, as pages said
 it; migration 28 put `time_in` in its place, counted from visits (below), and
 removed it.
 
@@ -839,9 +830,11 @@ keyed `works:<player>:<born>:bank:<n>` by the yard's own count, and every one it
 in is `free`: the till paid in before any price is taken and when the page
 collects it, and what a piece cost given back when it is taken away. A plot
 bought, a standing order handed over and each lesson, project and commission
-finished are logged. A yard kept by the first design's rules (`packages/yard`,
-now gone) does not read: Leaf logs it, keeps it as it is, answers its owner
-`state_unreadable`, and does not tend it.
+finished are logged. A yard kept by the first design's rules (version 3) is
+brought over as it is read (`fromFirst` in `packages/factory/src/codec.ts`):
+a new yard at the tier its story had reached, its plots and the pieces that
+tier allows standing where they stood, what cannot stand yet paid back into
+its till, and its totals kept, so its place on the board holds.
 
 ### The Tally
 

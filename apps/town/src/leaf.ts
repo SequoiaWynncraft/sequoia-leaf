@@ -136,7 +136,7 @@ export function lookAt(at: Looked | null): void {
   looked = at;
 }
 
-/** What the kit's card says where no Leaf with the play service answers. */
+/** What the kit's card says where no Leaf answers. */
 export const NEEDS_LEAF = "The town needs the guild's server.";
 
 /** Puts the town away behind the kit's card for why Leaf will not open it; for nothing to visit, with the way to the member's own camp. */
@@ -146,7 +146,7 @@ export function troubleCard(why: Trouble): void {
     pageCard("No camp to visit", "", "My camp", () => {
       outside.go(`?camp=${encodeURIComponent(me)}`);
     });
-  else kitTroubleCard(why, w.mode === "none" ? "" : w.signIn, NEEDS_LEAF);
+  else kitTroubleCard(why, w.mode === "none" ? "" : w.signIn);
 }
 
 /**

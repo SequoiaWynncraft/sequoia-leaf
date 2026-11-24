@@ -23,8 +23,6 @@ export const GamePlayHandlers = HttpApiBuilder.group(LeafApi, "gamePlay", (handl
 
     return (
       handlers
-        .handle("oldSave", () => Effect.fail(notYou))
-        .handle("oldCoins", () => Effect.fail(notYou))
         .handle("play", ({ params, query }) =>
           Effect.gen(function* () {
             const played = yield* playedGame(params.game);

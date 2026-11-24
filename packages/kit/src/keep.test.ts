@@ -10,7 +10,7 @@ afterEach(() => {
   world = null;
 });
 
-const CARD = { waiting: "A raid under way", trophies: ["a banner"], till: 12 };
+const CARD = { waiting: "A raid under way", till: 12 };
 
 describe("keeping in the browser", () => {
   test("a text is kept, read back and forgotten", () => {

@@ -23,15 +23,10 @@ export function read(from: Sender): Postcard | null {
   try {
     const raw: unknown = JSON.parse(keptText(cardKey(from)) ?? "null");
     if (typeof raw !== "object" || raw === null) return null;
-    if (!("waiting" in raw) || !("trophies" in raw) || !("till" in raw)) return null;
-    const { waiting, trophies, till } = raw;
-    if (typeof waiting !== "string" || typeof till !== "number" || !(till >= 0) || !Array.isArray(trophies))
-      return null;
-    return {
-      waiting: waiting.slice(0, 120),
-      trophies: trophies.filter((t): t is string => typeof t === "string").slice(0, 32),
-      till: Math.floor(till),
-    };
+    if (!("waiting" in raw) || !("till" in raw)) return null;
+    const { waiting, till } = raw;
+    if (typeof waiting !== "string" || typeof till !== "number" || !(till >= 0)) return null;
+    return { waiting: waiting.slice(0, 120), till: Math.floor(till) };
   } catch {
     return null;
   }

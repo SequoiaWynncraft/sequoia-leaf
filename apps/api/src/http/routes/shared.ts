@@ -118,7 +118,6 @@ export const eventStreamFrom = (
     });
   });
 
-/** Who is about, as the presence routes answer it. */
 /**
  * A write from a page that believes it is another player than the session's, such as one left open
  * after someone else signed in: nothing is done.
