@@ -240,6 +240,11 @@ export async function again(): Promise<void> {
   await leaf?.refresh();
 }
 
+/** Reads the camp the member is in (`inCamp`) again: the one looked at in a visit, else their own town; nothing elsewhere. */
+export async function lookAgain(inCamp: boolean): Promise<void> {
+  if (inCamp) await (looked ? looked.play.refresh() : again());
+}
+
 interface Told {
   /** Whether the arrival letter has been put away. */
   readonly home: () => boolean;
@@ -273,11 +278,8 @@ function goingAway(): void {
 export function keepTold(o: Told): void {
   if (typeof window === "undefined") return;
   told = o;
-  const look = (): void => {
-    if (o.inCamp()) void (looked ? looked.play.refresh() : again());
-  };
   window.setInterval(() => {
-    if (!document.hidden && !o.inGame()) look();
+    if (!document.hidden && !o.inGame()) void lookAgain(o.inCamp());
   }, LOOK_EVERY);
   window.setInterval(() => {
     if (!document.hidden && !o.inGame()) here();

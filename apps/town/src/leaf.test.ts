@@ -10,6 +10,7 @@ import { freeSpot } from "@sequoia-leaf/town/camp.ts";
 import {
   ask,
   doNow,
+  lookAgain,
   lookAt,
   numbered,
   ok,
@@ -99,6 +100,33 @@ test("a camp left is put away: its copy hears the page no more, and is read no m
   const asked = w.sent.length;
   await Promise.all([bob.play.refresh(), carol.play.refresh()]);
   expect(w.sent.length).toBe(asked);
+});
+
+test("the camp looked at is read again while the member is in it, and not once they are walking off from it", async () => {
+  const w = standin({
+    "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: own } },
+    "GET /v1/game/play/town/of/bob": { status: 200, body: { rev: 4, now: "x", state: visitView(theirs) } },
+    "GET /v1/game/play/town/of/carol": { status: 200, body: { rev: 2, now: "x", state: visitView(theirs) } },
+  });
+  world = w;
+  await openTown("me", () => undefined);
+  const bob = await openCamp("bob", "Bob");
+  if (typeof bob === "string") throw new Error(bob);
+  lookAt(bob);
+  await lookAgain(true);
+  // On the way to Carol's: hers is opened, Bob's still shown until the walk is over, and read no more.
+  const carol = await openCamp("carol", "Carol");
+  if (typeof carol === "string") throw new Error(carol);
+  await lookAgain(false);
+  lookAt(carol);
+  await lookAgain(true);
+  expect(w.sent.map((s) => s.path)).toEqual([
+    "/v1/game/play/town",
+    "/v1/game/play/town/of/bob",
+    "/v1/game/play/town/of/bob",
+    "/v1/game/play/town/of/carol",
+    "/v1/game/play/town/of/carol",
+  ]);
 });
 
 test("a camp there is nothing of is the trouble nothing; a name already known is not asked", async () => {
