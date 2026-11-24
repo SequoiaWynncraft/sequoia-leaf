@@ -76,12 +76,15 @@ function ground(y: Yard, x: number, z: number): string | null {
 }
 
 /**
- * How a piece is to be set down beyond its kind, tile and way: its grade (1 if not said), and a
- * tunnel's span (if not said, the nearest it can come up at; over a tunnel, if said, that tunnel's).
+ * How a piece is to be set down beyond its kind, tile and way: its grade (1 if not said), a
+ * tunnel's span (if not said, the nearest it can come up at; over a tunnel, if said, that tunnel's),
+ * and whether a sorter sends what it is set to its right (if not said, a new one sends it left and
+ * one set down over a sorter sends it as that one did).
  */
 export interface Lay {
   readonly grade?: number;
   readonly span?: number;
+  readonly right?: boolean;
 }
 
 /** What it costs to stand one more of a kind at a grade: its price, less grade 1's while the yard has one to hand (`spare`). */
@@ -189,7 +192,8 @@ export function refusal(
 
 /**
  * Builds something and says what it cost: over one of its kind it turns it and raises or lowers it
- * to the grade asked for, keeping what it holds, its colour and its settings; a splitter or a joiner
+ * to the grade asked for (a sorter to the side asked for too), keeping what it holds, its colour and
+ * its other settings; a splitter or a joiner
  * set down on a belt takes its place, keeping what the belt carried and its colour; a tunnel is both
  * mouths at once. A new belt or tunnel takes the colour of the line it joins (`join`).
  */
@@ -214,6 +218,7 @@ export function setDown(y: Yard, k: Kind, x: number, z: number, d: Dir, coins: n
     if (k !== TUNNEL) y.dir[i] = d;
     y.grade[i] = g;
     if (mouth >= 0) y.grade[mouth] = g;
+    sideAsLaid(y, i, k, lay);
     return { ok: true, cost, laid: [] };
   }
   // A replaced belt goes back as if taken away; what it carried and its colour stay.
@@ -221,6 +226,7 @@ export function setDown(y: Yard, k: Kind, x: number, z: number, d: Dir, coins: n
     there === NONE ? null : { item: y.item[i] ?? NONE, prog: y.prog[i] ?? 0, via: y.via[i] ?? 0, tint: y.tint[i] ?? 0 };
   if (there !== NONE && y.free[i] === 1) y.spare[there] = (y.spare[there] ?? 0) + 1;
   place(y, i, k, d, g);
+  sideAsLaid(y, i, k, lay);
   if ((y.spare[k] ?? 0) > 0) {
     // One of the pieces the yard has to hand.
     y.free[i] = 1;
@@ -315,13 +321,34 @@ export function setRecipe(y: Yard, x: number, z: number, out: Item | null): stri
   return null;
 }
 
-/** Sets the one thing a sorter sends to its left, or with nothing makes it a belt. Says whether there was a sorter. */
+/** Sets the one thing a sorter sends to its side, or with nothing makes it a belt. Says whether there was a sorter. */
 export function setSort(y: Yard, x: number, z: number, n: Item | null): boolean {
   const i = at(y, x, z);
   if (i < 0 || y.kind[i] !== SORTER) return false;
   y.set[i] = n ?? NONE;
   changed(y);
   return true;
+}
+
+/** Sets the side a sorter sends the thing it is set to: its right, or its left. Says whether there was a sorter. */
+export function setSide(y: Yard, x: number, z: number, toRight: boolean): boolean {
+  const i = at(y, x, z);
+  if (i < 0 || y.kind[i] !== SORTER) return false;
+  sideTo(y, i, toRight);
+  return true;
+}
+
+/** Sends what a sorter set down is set to to the side it was laid to (`Lay`), where that was said. */
+function sideAsLaid(y: Yard, i: number, k: Kind, lay: Lay): void {
+  if (k === SORTER && lay.right !== undefined) sideTo(y, i, lay.right);
+}
+
+/** Sends what the sorter on a tile is set to to its right or its left, kept as `sortWay` reads it. */
+function sideTo(y: Yard, i: number, toRight: boolean): void {
+  const first = toRight ? 3 : 0;
+  if (y.first[i] === first) return;
+  y.first[i] = first;
+  changed(y);
 }
 
 /** Empties what a machine, crate or boiler holds, all of it or one kind of thing. Says how many went. */

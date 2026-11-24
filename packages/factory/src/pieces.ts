@@ -57,7 +57,10 @@ export interface Kept {
   readonly open?: false;
   readonly tint?: number;
   readonly shut?: number;
-  /** For a splitter, the way it puts first: 0 ahead, 1 left, 2 right. Never a way it has shut. */
+  /**
+   * For a splitter, the way it puts first: 0 ahead, 1 left, 2 right. Never a way it has shut. For a
+   * sorter, 2 where it sends the thing it is set to to its right; with none, it sends it left.
+   */
   readonly first?: number;
   /** Its grade, when it is above 1. */
   readonly grade?: number;
@@ -82,11 +85,21 @@ const shutAt = (shut: unknown, way: number): boolean => typeof shut === "number"
 
 /**
  * A splitter's ways as one byte, as a blueprint and a kept yard hold them: its shut ways a bit each,
- * and 8 times what it puts first, 1 + the way or 0 for none.
+ * and 8 times what it puts first, 1 + the way or 0 for none. A sorter's side is kept the same way.
  */
 export const packWays = (shut: number, first: number): number => shut | (first << 3);
 /** A splitter's ways read back from their byte, as `keptOf` reads them: the shut ways, and the way put first or -1. */
 export const unpackWays = (b: number): { shut: number; first: number } => ({ shut: b & 7, first: (b >> 3) - 1 });
+
+/**
+ * What a record has of the way a piece keeps first, if it may keep it: a splitter's way put first,
+ * never a shut one; a sorter's side, only where it is the right (2), the left being how one stands
+ * unless told.
+ */
+const firstKept = (v: { readonly first?: unknown; readonly shut?: unknown }, k: Kind): Pick<Kept, "first"> =>
+  isWay(v.first) && (k === SPLITTER ? !shutAt(v.shut, v.first) : k === SORTER && v.first === 2)
+    ? { first: v.first }
+    : {};
 
 /** What a record has of what a piece keeps, if that kind of piece may keep it. */
 export const keptOf = (v: { readonly [K in keyof Kept]?: unknown }, k: Kind): Kept => ({
@@ -96,7 +109,7 @@ export const keptOf = (v: { readonly [K in keyof Kept]?: unknown }, k: Kind): Ke
   ...(v.open === false && k === CRATE ? { open: v.open } : {}),
   ...(upTo(v.tint, TINTS) && tinted(k) ? { tint: v.tint } : {}),
   ...(upTo(v.shut, 7) && k === SPLITTER ? { shut: v.shut } : {}),
-  ...(isWay(v.first) && k === SPLITTER && !shutAt(v.shut, v.first) ? { first: v.first } : {}),
+  ...firstKept(v, k),
   ...(upTo(v.grade, TOP) && v.grade > 1 && isGraded(k) ? { grade: v.grade } : {}),
 });
 
@@ -211,12 +224,15 @@ export function priceOf(y: Yard, pieces: readonly Pick<Piece, "kind" | "x" | "y"
   return cost;
 }
 
-/** Why a yard may not have a piece as it is asked for, wherever it stands: its kind at its grade, what it is set to, its colour, a way put first. */
+/**
+ * Why a yard may not have a piece as it is asked for, wherever it stands: its kind at its grade, what
+ * it is set to, its colour, a splitter's way put first (a sorter's side needs nothing unlocked).
+ */
 export const pieceRefusal = (open: Open, p: Piece): string | null =>
   locked(open, { build: p.kind, grade: p.grade }) ??
   (p.recipe !== undefined && p.kind !== SORTER ? locked(open, { make: p.recipe }) : null) ??
   ((p.tint ?? 0) > 0 ? locked(open, { use: "paint" }) : null) ??
-  (p.first === undefined ? null : locked(open, { first: true }));
+  (p.first !== undefined && p.kind === SPLITTER ? locked(open, { first: true }) : null);
 
 /** The tiles setting a piece down changes: a piece of its kind standing there, both mouths of a tunnel, or else its own. */
 function claims(y: Yard, p: Piece): number[] {

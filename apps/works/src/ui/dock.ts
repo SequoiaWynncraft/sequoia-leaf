@@ -31,6 +31,7 @@ import {
   piecesOf,
   priceOf,
   PYLON,
+  SORTER,
   STOP,
   stops,
   STUDY,
@@ -53,6 +54,7 @@ import {
   clearMark,
   confirm,
   dropBlueprint,
+  flip,
   hold,
   piecesInHand,
   rotate,
@@ -230,7 +232,7 @@ function handLine(): { text: string; bad: boolean } {
     return { text: S.from ? "Now tap where it ends." : "Tap where the line starts.", bad: false };
   }
   if (f) return { text: S.aim ? "Tap again, or Build." : `${name}: tap where it goes.`, bad: false };
-  return { text: `${name}: click to place it. R rotates it.`, bad: false };
+  return { text: `${name}: click to place it. R rotates it${tool === SORTER ? ", X flips it" : ""}.`, bad: false };
 }
 
 const DOT = new Map<number, string>([
@@ -292,6 +294,8 @@ interface HandPrint {
   readonly save: boolean;
   readonly upgrade: { readonly cost: number; readonly asking: boolean } | null;
   readonly turn: boolean;
+  /** Flip, for a sorter in hand. */
+  readonly flip: boolean;
   readonly undo: boolean;
   /** A blueprint held, and whether its bin asks to be pressed again. */
   readonly bin: { readonly slot: number; readonly asking: boolean } | null;
@@ -358,6 +362,7 @@ function handPrint(): HandPrint {
     save: acting && S.world.open.blueprints > 0,
     upgrade: raise > 0 ? { cost: raise, asking: asking("upgrade") } : null,
     turn: builds(tool) || g !== null,
+    flip: tool === SORTER,
     undo: stage?.is !== "saving",
     bin: typeof g?.as === "number" ? { slot: g.as, asking: asking(`delete-${g.as}`) } : null,
     cancel: tool !== null,
@@ -402,6 +407,22 @@ function action(name: string, key: string, on: () => void): HTMLElement {
   const b = button(name === "Remove" ? "coral sm" : "sm", [name], on);
   tip(b, `${name} (${key})`);
   return b;
+}
+
+/** Rotate, and for a sorter in hand Flip, each with its key in its tip. */
+function turning(p: HandPrint): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  if (p.turn) {
+    const turn = iconButton("wood sm", yardIcon("turn"), "Rotate", rotate);
+    tip(turn, "Rotate (R)", "With no tool picked, it rotates the piece you last pointed at.");
+    out.push(turn);
+  }
+  if (p.flip) {
+    const over = iconButton("wood sm", yardIcon("flip"), "Flip", flip);
+    tip(over, "Flip (X)", "Sends the sorter's item out of its other side.");
+    out.push(over);
+  }
+  return out;
 }
 
 /** The line over the dock, drawn from its print alone. */
@@ -455,11 +476,7 @@ function drawHand(p: HandPrint): void {
           link(b, machineRef(kind, grade), { acts: true });
           return b;
         });
-  if (p.turn) {
-    const turn = iconButton("wood sm", yardIcon("turn"), "Rotate", rotate);
-    tip(turn, "Rotate (R)", "With no tool picked, it rotates the piece you last pointed at.");
-    kids.push(turn);
-  }
+  kids.push(...turning(p));
   if (p.undo) {
     const back = iconButton("wood sm undo", yardIcon("undo"), "Undo", () => {
       undo();

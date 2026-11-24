@@ -139,7 +139,7 @@ describe("a card", () => {
   });
 
   test("is drawn by modules that reach no yard: none imports anything of the page's that holds one", async () => {
-    // What draws a card (`cards.ts`), the lists of a goal on it (`goal.ts`) and the names cards go by (`refs.ts`).
+    // What draws a card (`cards.ts`, a sorter's parts in `sorter.ts`), the lists of a goal on it (`goal.ts`) and the names cards go by (`refs.ts`).
     const drawing: Record<string, string[]> = {
       "./cards.ts": [
         "../art/belts.ts",
@@ -149,10 +149,12 @@ describe("a card", () => {
         "./goal.ts",
         "./parts.ts",
         "./refs.ts",
+        "./sorter.ts",
       ],
       "./flow.ts": ["./parts.ts", "./refs.ts"],
       "./goal.ts": ["./parts.ts", "./refs.ts"],
       "./refs.ts": [],
+      "./sorter.ts": ["./refs.ts"],
     };
     const texts = await Promise.all(
       Object.keys(drawing).map((file) => Bun.file(new URL(file, import.meta.url).pathname).text()),

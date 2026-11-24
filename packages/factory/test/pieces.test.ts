@@ -1,7 +1,7 @@
 /**
  * The new pieces: a cart stop takes things from any side and they have reached the depot at once,
  * as many stops as the yard has unlocked; a sorter, in at the back, sends the one thing it is set to
- * out to its left and everything else ahead, and with nothing set is a belt. A splitter with a way
+ * out to its left, or flipped to its right, and everything else ahead, and with nothing set is a belt. A splitter with a way
  * put first sends everything that way while it takes it, and only the rest to its other ways. And a
  * blueprint, set down by naming its place: turned any way, it stands as turned, tunnels whole, all or
  * none.
@@ -74,23 +74,33 @@ describe("a cart stop", () => {
   });
 });
 
-/** A sorter on (4, 4) facing east, fed from behind; what reaches the crates ahead and to its left. */
-function sorted(item: string | null): { ahead: number[]; left: number[] } {
+/**
+ * A sorter on (4, 4) facing east, fed from behind, with a belt out of each side; built to send to
+ * its right, or flipped there after, as `right` says. What reaches the crates ahead, to its left
+ * (north) and to its right (south).
+ */
+function sorted(
+  item: string | null,
+  right: "built" | "flipped" | null = null,
+): { ahead: number[]; left: number[]; right: number[] } {
   const y = yard();
-  must(y, { do: "build", kind: "sorter", x: 4, y: 4, dir: 0 });
+  must(y, { do: "build", kind: "sorter", x: 4, y: 4, dir: 0, ...(right === "built" ? { right: true } : {}) });
+  if (right === "flipped") must(y, { do: "side", x: 4, y: 4, right: true });
   if (item !== null) must(y, { do: "sort", x: 4, y: 4, item });
   must(y, { do: "build", kind: "belt", x: 3, y: 4, dir: 0 });
   must(y, { do: "build", kind: "belt", x: 5, y: 4, dir: 0 });
   must(y, { do: "build", kind: "belt", x: 4, y: 3, dir: 3 });
+  must(y, { do: "build", kind: "belt", x: 4, y: 5, dir: 1 });
   const ahead = sink(y, 6, 4);
   const left = sink(y, 4, 2);
+  const south = sink(y, 4, 6);
   source(y, 2, 4, 0, [
     [plank, 5],
     [brick, 4],
   ]);
   run(y, 200);
   const holds = (r: number): number[] => [F.held(y.holders, r, plank), F.held(y.holders, r, brick)];
-  return { ahead: holds(ahead), left: holds(left) };
+  return { ahead: holds(ahead), left: holds(left), right: holds(south) };
 }
 
 describe("a blueprint", () => {
@@ -312,12 +322,61 @@ describe("a blueprint holding tunnels", () => {
 
 describe("a sorter", () => {
   test("sends the one thing it is set to out to its left, and everything else ahead", () => {
-    expect(sorted("plank")).toEqual({ ahead: [0, 4], left: [5, 0] });
-    expect(sorted("brick")).toEqual({ ahead: [5, 0], left: [0, 4] });
+    expect(sorted("plank")).toEqual({ ahead: [0, 4], left: [5, 0], right: [0, 0] });
+    expect(sorted("brick")).toEqual({ ahead: [5, 0], left: [0, 4], right: [0, 0] });
   });
 
-  test("with nothing set it is a belt", () => {
-    expect(sorted(null)).toEqual({ ahead: [5, 4], left: [0, 0] });
+  test("flipped, built so or by its own command, sends it out to its right instead", () => {
+    expect(sorted("plank", "built")).toEqual({ ahead: [0, 4], left: [0, 0], right: [5, 0] });
+    expect(sorted("brick", "flipped")).toEqual({ ahead: [5, 0], left: [0, 0], right: [0, 4] });
+  });
+
+  test("with nothing set it is a belt, flipped or not", () => {
+    expect(sorted(null)).toEqual({ ahead: [5, 4], left: [0, 0], right: [0, 0] });
+    expect(sorted(null, "built")).toEqual({ ahead: [5, 4], left: [0, 0], right: [0, 0] });
+  });
+
+  test("keeps its side: read back, in a blueprint and in a copy, each turned; built over, it takes the side asked for, or with none keeps its own", () => {
+    const y = yard();
+    must(y, { do: "build", kind: "sorter", x: 4, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "belt", x: 7, y: 7, dir: 0 });
+    expect(give(y, { do: "side", x: 7, y: 7, right: true })).toMatchObject({
+      refused: "not_a_sorter",
+      why: "There is no sorter there",
+    });
+    must(y, { do: "side", x: 4, y: 4, right: true });
+    const i = F.at(y, 4, 4);
+    expect([F.sortWay(y, i), F.keptAt(y, i)]).toEqual([2, { first: 2 }]);
+    const back = F.decode(F.encode(y), y.land);
+    expect(back && [F.sortWay(back, i), F.check(back)]).toEqual([2, F.check(y)]);
+    must(y, { do: "saveBlueprint", slot: 0, tiles: F.within(y, 4, 4, 4, 4) });
+    must(y, { do: "placeBlueprint", slot: 0, x: 10, y: 2, turns: 1 });
+    must(y, { do: "copy", tiles: F.within(y, 4, 4, 4, 4), x: 10, y: 6, turns: 2 });
+    expect([F.at(y, 10, 2), F.at(y, 10, 6)].map((t) => [y.dir[t], F.sortWay(y, t)])).toEqual([
+      [1, 2],
+      [2, 2],
+    ]);
+    const again = F.decode(F.encode(y), y.land);
+    expect(again?.blueprints[0] && F.piecesOf(again.blueprints[0])).toEqual([
+      { kind: F.SORTER, x: 0, y: 0, dir: 0, span: 0, first: 2 },
+    ]);
+    must(y, { do: "build", kind: "sorter", x: 4, y: 4, dir: 1 });
+    expect([y.dir[i], F.sortWay(y, i)]).toEqual([1, 2]);
+    must(y, { do: "build", kind: "sorter", x: 4, y: 4, dir: 1, right: false });
+    expect([F.sortWay(y, i), F.keptAt(y, i)]).toEqual([1, {}]);
+    // Only the right is kept: the left is how a sorter stands unless told, and a splitter's ways are its own.
+    expect(F.keptOf({ first: 1 }, F.SORTER)).toEqual({});
+    expect(F.keptOf({ first: 2, shut: 1 }, F.SORTER)).toEqual({ first: 2 });
+  });
+
+  test("changes the check when flipped, and flipped back keeps the check it had", () => {
+    const y = yard();
+    must(y, { do: "build", kind: "sorter", x: 4, y: 4, dir: 0 });
+    const left = F.check(y);
+    must(y, { do: "side", x: 4, y: 4, right: true });
+    const right = F.check(y);
+    must(y, { do: "side", x: 4, y: 4, right: false });
+    expect([right === left, F.check(y)]).toEqual([false, left]);
   });
 
   test("takes things in only from behind; is set by its own command; keeps what it is set to when read back", () => {

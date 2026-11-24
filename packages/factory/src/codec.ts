@@ -21,7 +21,8 @@
  *   4 out (byte)   8 work (varint)   16 making (byte)   32 turn (byte)   64 what it is set to (byte)
  *   128 span (byte, +8), and for a way-in mouth a thing (byte) and its progress (byte) for each tile under
  *   256 a shut crate   512 fuel (byte)   1024 one of the pieces to hand   2048 tint (byte)
- *   4096 a splitter's ways (byte: its shut ways and the way it puts first, `packWays`)   8192 a grade above 1 (byte)
+ *   4096 a splitter's ways (byte: its shut ways and the way it puts first, `packWays`), or a sorter's right
+ *        side (the same byte, as the way it puts first)   8192 a grade above 1 (byte)
  *
  * Bytes that are not pieces are refused whole: bytes cut short or left over, a part this version
  * does not know, more pieces than the land has tiles, and counts no yard could have (more than 255
@@ -744,12 +745,14 @@ function unpack(y: Yard, i: number, o: KeptPiece, studied: Goal | undefined): vo
     if (k === BOILER) h.fuel[r] = whole(o.fuel, TICKS.burn) ?? 0;
   }
   if (k === SPLITTER || k === JOINER) y.turn[i] = whole(o.turn, 2) ?? 0;
-  if (k === SORTER && o.recipe !== undefined && isItem(o.recipe)) y.set[i] = o.recipe;
-  if (k === SPLITTER) {
-    // Its shut ways, and the way it puts first where the yard may put one first and that way is open.
-    const { shut = 0, first } = keptOf(unpackWays(whole(o.ways, 255) ?? 0), SPLITTER);
+  if (isKind(k)) {
+    // What a sorter is set to and its side, kept in the byte a splitter keeps its ways in: a
+    // splitter's shut ways, and the way it puts first where the yard may put one first and that way
+    // is open. `keptOf` keeps only what the kind may keep.
+    const { recipe, shut = 0, first } = keptOf({ ...unpackWays(whole(o.ways, 255) ?? 0), recipe: o.recipe }, k);
+    if (k === SORTER && recipe !== undefined) y.set[i] = recipe;
     y.shut[i] = shut;
-    if (first !== undefined && locked(y.open, { first: true }) === null) y.first[i] = first + 1;
+    if (first !== undefined && (k === SORTER || locked(y.open, { first: true }) === null)) y.first[i] = first + 1;
   }
   const span = y.span[i] ?? 0;
   const t = tunnelOf(y, i);

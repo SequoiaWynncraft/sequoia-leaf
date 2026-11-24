@@ -22,10 +22,10 @@ import {
 } from "@sequoia-leaf/factory";
 
 import { act, coinsAre, ctx, type FakeLeaf, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
+import { buyLand } from "./plots.ts";
 import { S } from "./state.ts";
 import {
   aimAt,
-  buyLand,
   confirm,
   hold,
   keepAim,

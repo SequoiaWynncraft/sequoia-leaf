@@ -17,13 +17,27 @@ import {
   setFirst,
   setOpen,
   setRecipe,
+  setSide,
   setSort,
   setWay,
   tipOut,
   turn,
 } from "./build.ts";
 import { STAND_MOST } from "./content/machines.ts";
-import { LAND } from "./land.ts";
+import {
+  type At,
+  type Fields,
+  fieldsOf,
+  gradeOf,
+  isRecord,
+  legOnWire,
+  listOf,
+  named,
+  readLeg,
+  readPiece,
+  TILES,
+  whole,
+} from "./fields.ts";
 import { paint } from "./lines.ts";
 import {
   claim,
@@ -42,7 +56,6 @@ import {
   clear,
   copyOf,
   deleteBlueprint,
-  keptOf,
   move,
   type Piece,
   saveBlueprint,
@@ -50,17 +63,13 @@ import {
   TINTS,
   upgrade,
 } from "./pieces.ts";
-import { type Leg, legKind, legPiece, legSpan } from "./route.ts";
+import { type Leg, legPiece } from "./route.ts";
 import {
-  BELT,
-  BLUEPRINTS_MOST,
-  DEPOT,
   type Goal,
   goalNamed,
   GOALS,
   type Item,
   itemName,
-  itemNamed,
   type Kind,
   kindName,
   kindNamed,
@@ -69,20 +78,13 @@ import {
   type Plot,
   plotName,
   plotNamed,
-  SPAN_MOST,
-  TOP,
-  TUNNEL,
+  SORTER,
 } from "./tables.ts";
 import { collect, type Yard } from "./yard.ts";
 
-interface At {
-  readonly x: number;
-  readonly y: number;
-}
-
 /** What each command carries, by its name. */
 interface Carries {
-  build: At & { readonly kind: Kind; readonly dir: Dir; readonly grade: number };
+  build: At & { readonly kind: Kind; readonly dir: Dir; readonly grade: number; readonly right?: boolean };
   lay: { readonly legs: readonly Leg[]; readonly turn?: At & { readonly dir: Dir } };
   stand: { readonly pieces: readonly Piece[] };
   placeBlueprint: At & { readonly slot: number; readonly turns: Dir };
@@ -97,6 +99,7 @@ interface Carries {
   paint: At & { readonly tint: number };
   recipe: At & { readonly item: Item | null };
   sort: At & { readonly item: Item | null };
+  side: At & { readonly right: boolean };
   tipOut: At & { readonly item: Item | null };
   crate: At & { readonly open: boolean };
   way: At & { readonly way: number; readonly open: boolean };
@@ -158,82 +161,7 @@ function priced(y: Yard, price: number, reason: string): CoinChange[] {
   return price > 0 ? [...paid, change(y, -price, reason, false)] : paid;
 }
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-const whole = (v: unknown, most: number): v is number =>
-  typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= most;
-/** The most tiles a command may name: every tile of the guild's land. */
-const TILES = LAND.w * LAND.h;
-/** A grade off the wire: 1 when it is not said. */
-const gradeOf = (v: unknown): number | null => (v === undefined ? 1 : whole(v, TOP) && v >= 1 ? v : null);
-
-/** A piece read off the wire (or out of a kept record), every field checked, on a tile up to (`mx`, `my`); or nothing. */
-export function readPiece(v: unknown, mx = 255, my = 255): Piece | null {
-  if (!isRecord(v)) return null;
-  const k = kindNamed(v.kind);
-  if (k === null || k === DEPOT || !isDir(v.dir)) return null;
-  if (!whole(v.x, mx) || !whole(v.y, my) || !whole(v.span, SPAN_MOST)) return null;
-  const recipe = itemNamed(v.recipe);
-  return { kind: k, x: v.x, y: v.y, dir: v.dir, span: v.span, ...keptOf({ ...v, recipe: recipe ?? undefined }, k) };
-}
-
-/**
- * A leg of a run read off the wire: a belt, or a tunnel; where it goes, which way, for a tunnel how
- * far under, and at what grade. A belt that passes under is no leg; whatever else is on one is let be.
- */
-export function readLeg(v: unknown): Leg | null {
-  if (!isRecord(v)) return null;
-  const k = kindNamed(v.kind);
-  if ((k !== BELT && k !== TUNNEL) || !isDir(v.dir) || !whole(v.x, 255) || !whole(v.y, 255)) return null;
-  if (!whole(v.span, k === TUNNEL ? SPAN_MOST : 0)) return null;
-  const grade = gradeOf(v.grade);
-  if (grade === null) return null;
-  const laid = { x: v.x, y: v.y, dir: v.dir, grade };
-  return k === TUNNEL ? { tunnel: true, ...laid, span: v.span } : { tunnel: false, ...laid };
-}
-
-function listOf<T>(v: unknown, most: number, read: (v: unknown) => T | null): T[] | null {
-  if (!Array.isArray(v) || v.length > most) return null;
-  const pieces = v.map(read).filter((p) => p !== null);
-  return pieces.length === v.length ? pieces : null;
-}
-
-/** The fields many commands share, read once off the wire: a tile, a thing (or null for none), tiles, and a blueprint's place. */
-interface Fields {
-  readonly spot: At | null;
-  readonly item: Item | null | undefined;
-  readonly tiles: readonly number[] | null;
-  readonly slot: number | null;
-}
-function fieldsOf(v: Record<string, unknown>): Fields {
-  return {
-    spot: whole(v.x, 255) && whole(v.y, 255) ? { x: v.x, y: v.y } : null,
-    item: v.item === null ? null : (itemNamed(v.item) ?? undefined),
-    tiles:
-      Array.isArray(v.tiles) && v.tiles.length <= TILES && v.tiles.every((t): t is number => whole(t, TILES - 1))
-        ? v.tiles
-        : null,
-    slot: whole(v.slot, BLUEPRINTS_MOST - 1) ? v.slot : null,
-  };
-}
-
 const goalId = (g: Goal): string => GOALS[g]?.id ?? "";
-
-/** A piece as the wire names it: its kind, and what it is set to make. */
-const named = (p: Piece): Record<string, unknown> => ({
-  ...p,
-  kind: kindName(p.kind),
-  ...(p.recipe === undefined ? {} : { recipe: itemName(p.recipe) }),
-});
-
-/** A leg of a run as the wire names it: its kind, and nothing but what a leg holds; a belt's span, as a piece's, is 0. */
-const legOnWire = (l: Leg): Record<string, unknown> => ({
-  kind: kindName(legKind(l)),
-  x: l.x,
-  y: l.y,
-  dir: l.dir,
-  span: legSpan(l),
-  ...(l.grade === 1 ? {} : { grade: l.grade }),
-});
 
 /** One command's entry in the table. */
 interface Spec<D extends Name> {
@@ -270,13 +198,24 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
     read: (v, f) => {
       const k = kindNamed(v.kind);
       const grade = gradeOf(v.grade);
+      // Which side a sorter sends to is said for a sorter alone, and kept as it is where it is not said.
+      const side = k === SORTER && typeof v.right === "boolean" ? { right: v.right } : {};
       return f.spot && k !== null && isDir(v.dir) && grade !== null
-        ? { do: "build", kind: k, dir: v.dir, grade, ...f.spot }
+        ? { do: "build", kind: k, dir: v.dir, grade, ...side, ...f.spot }
         : null;
     },
-    write: (a) => ({ kind: kindName(a.kind), ...spot(a), dir: a.dir, ...(a.grade === 1 ? {} : { grade: a.grade }) }),
+    write: (a) => ({
+      kind: kindName(a.kind),
+      ...spot(a),
+      dir: a.dir,
+      ...(a.grade === 1 ? {} : { grade: a.grade }),
+      ...(a.right === undefined ? {} : { right: a.right }),
+    }),
     act: (y, a, coins, no) => {
-      const did = build(y, a.kind, a.x, a.y, a.dir, coins, { grade: a.grade });
+      const did = build(y, a.kind, a.x, a.y, a.dir, coins, {
+        grade: a.grade,
+        ...(a.right === undefined ? {} : { right: a.right }),
+      });
       return did.ok ? done(priced(y, did.cost, REASON.build)) : no(did.why);
     },
   },
@@ -418,6 +357,12 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
     read: itemAt("sort"),
     write: writeItem,
     act: (y, a, _coins, no) => (setSort(y, a.x, a.y, a.item) ? done() : no("There is no sorter there")),
+  },
+  side: {
+    refused: "not_a_sorter",
+    read: (v, f) => (f.spot && typeof v.right === "boolean" ? { do: "side", right: v.right, ...f.spot } : null),
+    write: (a) => ({ right: a.right, ...spot(a) }),
+    act: (y, a, _coins, no) => (setSide(y, a.x, a.y, a.right) ? done() : no("There is no sorter there")),
   },
   tipOut: {
     refused: "nothing_to_tip_out",

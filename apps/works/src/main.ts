@@ -35,11 +35,12 @@ import { ease, inset, inView, look, pan, resize, setCamera, setZoom, zoomSteps }
 import { callers, capstones, handOver, onNews } from "./events.ts";
 import { updateFx } from "./fx.ts";
 import { initInput, inputHooks, stepInput } from "./input.ts";
+import { stepClearing } from "./plots.ts";
 import { drawWords, drawYard, lap, picture, spent, wipe } from "./scene.ts";
 import { murmur, yardSfx } from "./sound.ts";
 import { builds, S } from "./state.ts";
 import { NO_LESSONS, type Nudge, stepLessons } from "./teach.ts";
-import { cancel, keepAim, stepClearing } from "./tools.ts";
+import { cancel, keepAim } from "./tools.ts";
 import { initBoard } from "./ui/board.ts";
 import { followCards, initCard, refreshCard } from "./ui/card.ts";
 import { initDock, refreshDock } from "./ui/dock.ts";

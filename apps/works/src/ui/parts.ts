@@ -149,6 +149,18 @@ const ICONS = {
     "..w.......",
     "...wwww...",
   ],
+  // Flipping a sorter to its other side: two arrows, one each way.
+  flip: [
+    "...w......",
+    "..ww......",
+    ".wwwwwww..",
+    "..ww......",
+    "...w..w...",
+    "......ww..",
+    "..wwwwwww.",
+    "......ww..",
+    "......w...",
+  ],
   undo: [
     "...w......",
     "..ww......",

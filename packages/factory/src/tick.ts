@@ -51,7 +51,7 @@ import {
   WORK,
   WORKSHOP,
 } from "./tables.ts";
-import { ahead, farMouth, nextOf, rewire, wayIn, wayOut } from "./wire.ts";
+import { ahead, farMouth, nextOf, rewire, sortWay, wayIn, wayOut } from "./wire.ts";
 import { enough, holderOf, type Holders, put, take, tunnelOf, type Wire, type Yard } from "./yard.ts";
 
 const BURNS = (GIVES[BOILER] ?? 0) * HALF;
@@ -384,7 +384,7 @@ function split(y: Yard, i: number, wire: Wire): void {
   }
 }
 
-/** Hands the thing `n` a splitter carries to its way out `way`, if the tile there takes it. Says whether it did. */
+/** Hands the thing `n` a splitter or sorter carries to its way out `way`, if the tile there takes it. Says whether it did. */
 function pass(y: Yard, i: number, n: number, way: number, wire: Wire): boolean {
   const to = wayOut(y, i, way);
   const side = ((y.dir[i] ?? 0) + (way === 0 ? 2 : way === 1 ? 1 : 3)) & 3;
@@ -396,21 +396,14 @@ function pass(y: Yard, i: number, n: number, way: number, wire: Wire): boolean {
   return true;
 }
 
-/** Where a sorter sends what it carries: the thing it is set to to its left, anything else ahead. */
-const sortedTo = (y: Yard, i: number): number => wayOut(y, i, y.item[i] === y.set[i] ? 1 : 0);
+/** The way a sorter sends what it carries: the thing it is set to to its side (`sortWay`), anything else ahead. */
+const sortedWay = (y: Yard, i: number): number => (y.item[i] === y.set[i] ? sortWay(y, i) : 0);
+const sortedTo = (y: Yard, i: number): number => wayOut(y, i, sortedWay(y, i));
 
-/** A sorter hands on what it carries, once it has crossed the tile, the one way it goes. */
+/** A sorter hands on what it carries, once it has crossed the tile, the one way it goes, when the tile there takes it. */
 function sort(y: Yard, i: number, wire: Wire): void {
   const n = y.item[i] ?? NONE;
-  if (n === NONE || (y.prog[i] ?? 0) < 8) return;
-  const left = n === y.set[i];
-  const side = ((y.dir[i] ?? 0) + (left ? 1 : 2)) & 3;
-  const to = sortedTo(y, i);
-  if (!accepts(y, to, n, side, wire)) return;
-  give(y, to, n, side, (y.prog[i] ?? 8) - 8);
-  y.item[i] = NONE;
-  y.prog[i] = 0;
-  y.via[i] = 0;
+  if (n !== NONE && (y.prog[i] ?? 0) >= 8) pass(y, i, n, sortedWay(y, i), wire);
 }
 
 /** A gatherer, machine or crate hands on its finished piece. */

@@ -76,7 +76,7 @@ import type { Sprite } from "./art/pal.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
 import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
 import { lampsIn } from "./lamps.ts";
-import { armsAt, asIf, type Layout, layout, pylonTop } from "./layout.ts";
+import { armsAt, asIf, type Layout, layout, pylonTop, sendsRight, sortSide } from "./layout.ts";
 import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, tileNudge } from "./state.ts";
 
 /** What the frame needs to know about the moment: how far into the next tick it is, and how the yard is going. */
@@ -994,7 +994,7 @@ function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, 
             : k === JOINER
               ? art.m.joiner[d]
               : k === SORTER
-                ? art.sorter(d, yard.set[i] ?? NONE)
+                ? art.sorter(d, yard.set[i] ?? NONE, sendsRight(yard, i))
                 : undefined;
         if (over) h.drawImage(over, x, top);
         const pip = over ? art.m.pips[grade - 2] : undefined;
@@ -1126,7 +1126,7 @@ function laidOf(L: Layout, art: Art): NonNullable<typeof laid> {
       here(on);
     }
     if (k === JOINER) top(art.m.joiner[d]);
-    if (k === SORTER) top(art.sorter(d, y.set[i] ?? NONE));
+    if (k === SORTER) top(art.sorter(d, y.set[i] ?? NONE, sendsRight(y, i)));
     if (k !== SPLITTER) continue;
     made.splitters.push(i);
     // An arrowhead on each way out that leads somewhere.
@@ -1314,7 +1314,7 @@ function flatLayer(f: Frame): void {
       const prog8 = w.prog[i] ?? 0;
       // In from the side it was handed over on, out the way the tile sends it.
       const from = via > 0 ? (via - 1) & 3 : BACK[d];
-      const to: number = k === SPLITTER ? sendWay(w, i, a) : k === SORTER && n === w.set[i] ? LEFT[d] : d;
+      const to: number = k === SPLITTER ? sendWay(w, i, a) : k === SORTER && n === w.set[i] ? sortSide(w, i) : d;
       const prog = Math.min(1, prog8 / 8 + (prog8 < 8 ? now.lead * alongAt(w, i) : 0));
       const pic = art.item(n);
       const left = x + Math.round(ride(from, to, prog, false)) - (pic.width >> 1);
@@ -1467,8 +1467,8 @@ function standingLayer(f: Frame): void {
       const x = (i % land.w) * TILE + 8;
       const y = Math.floor(i / land.w) * TILE + 8;
       const stop = L.intoStop[n] ?? -1;
-      // A sorter sends the thing it is set to out to its left.
-      const way = w.kind[i] === SORTER && had === w.set[i] ? LEFT[dirAt(w, i)] : dirAt(w, i);
+      // A sorter sends the thing it is set to out to its side.
+      const way = w.kind[i] === SORTER && had === w.set[i] ? sortSide(w, i) : dirAt(w, i);
       hops.push({ pic: art.item(had), x: x + DX[way] * 8, y: y + DY[way] * 8, dx: DX[way], dy: DY[way], t: S.t });
       if (stop >= 0) {
         memOf(w, stop);
@@ -1651,7 +1651,7 @@ function marksLayer(f: Frame): void {
             : tool === TUNNEL
               ? tunnelArms(S.dir)
               : tool === SORTER
-                ? sortArms(S.dir)
+                ? sortArms(S.dir, S.right)
                 : armsFor(S.dir);
         g.drawImage(beltTile(a, S.dir, steps[grade] ?? step, woodOf(grade), 0, marksOf(grade)), x, y);
         const top =
@@ -1660,7 +1660,7 @@ function marksLayer(f: Frame): void {
             : tool === JOINER
               ? art.m.joiner[S.dir]
               : tool === SORTER
-                ? art.sorter(S.dir, NONE)
+                ? art.sorter(S.dir, NONE, S.right)
                 : undefined;
         if (top) g.drawImage(top, x, y);
         const pip = top ? art.m.pips[grade - 2] : undefined;
@@ -1715,10 +1715,10 @@ function sendWay(y: Yard, i: number, a: Arms): Dir {
   return d;
 }
 
-/** A straight belt's arms, pointing a way; a splitter's, every way out open; a sorter's, ahead and to its left; a tunnel's, in from behind. */
+/** A straight belt's arms, pointing a way; a splitter's, every way out open; a sorter's, ahead and to its side; a tunnel's, in from behind. */
 const armsFor = (dir: Dir): Arms => withArm(withArm(0, dir, 2), BACK[dir], 1);
 const splitArms = (dir: Dir): Arms => withArm(arms(2, 2, 2, 2), BACK[dir], 1);
-const sortArms = (dir: Dir): Arms => withArm(armsFor(dir), LEFT[dir], 2);
+const sortArms = (dir: Dir, right: boolean): Arms => withArm(armsFor(dir), (right ? RIGHT : LEFT)[dir], 2);
 const tunnelArms = (dir: Dir): Arms => withArm(0, BACK[dir], 1);
 
 /** How far across its tile a thing on the piece there moves in a tick, as the frame shows it between ticks: its grade's pace. */

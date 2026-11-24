@@ -121,7 +121,7 @@ export interface Wire {
   readonly demand: number;
 }
 
-/** A piece kept in a blueprint, 10 bytes: kind, x, y, way, span, recipe, open, tint, a splitter's ways (`packWays`), grade. */
+/** A piece kept in a blueprint, 10 bytes: kind, x, y, way, span, recipe, open, tint, a splitter's ways or a sorter's side (`packWays`), grade. */
 export const PIECE_BYTES = 10;
 
 export interface Yard {
@@ -136,7 +136,8 @@ export interface Yard {
   readonly via: Uint8Array;
   /**
    * A line's colour, 0 to 6; a splitter's next way out or a joiner's next way in; a splitter's shut
-   * ways, a bit each; and the way a splitter puts first, 1 + the way, or 0 for none.
+   * ways, a bit each; and the way a splitter puts first, 1 + the way, or 0 for none, or for a sorter
+   * 3 where it sends the thing it is set to to its right and 0 where to its left (`sortWay`).
    */
   readonly tint: Uint8Array;
   readonly turn: Uint8Array;

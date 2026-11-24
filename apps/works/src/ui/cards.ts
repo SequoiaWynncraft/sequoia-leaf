@@ -109,6 +109,7 @@ import {
 import type { Flow } from "./numbers.ts";
 import { fitted, partsWords, pic, type YardIcon, yardIcon } from "./parts.ts";
 import { itemRef, machineRef, nodeRef, pictureRef, plotRef } from "./refs.ts";
+import { sorterActions, type SorterPrint, sorterRows } from "./sorter.ts";
 
 // ---------- prints: what each card shows of the yard and the purse ----------
 
@@ -169,7 +170,7 @@ export interface WaysPrint {
   readonly first: number;
 }
 
-export interface StandingPrint {
+export interface StandingPrint extends SorterPrint {
   readonly card: "standing";
   readonly x: number;
   readonly y: number;
@@ -192,10 +193,8 @@ export interface StandingPrint {
   readonly perMinute: number | null;
   /** What it makes, needs, gathers, studies or carries a minute, in sentences (`numbers.ts`): none until the yard counts. */
   readonly numbers: readonly string[];
-  /** The one thing it is told to make, or a sorter to send left, or nothing. */
+  /** The one thing it is told to make, or a sorter to send to its side, or nothing. */
   readonly set: Item | null;
-  /** For a sorter: the things it may be told to send left. */
-  readonly sorts: readonly Item[];
   /** For a Study: the research being studied, and whether research's screen is there to open (not while it is the one open). */
   readonly studying: Goal | null;
   readonly research: boolean;
@@ -310,6 +309,8 @@ export interface Hands {
   /** Does a command (a recipe, a crate shut or opened, emptying), and says whether it was done. */
   act(a: Act): boolean;
   turn(x: number, y: number): void;
+  /** Flips a sorter to send to its other side. */
+  flip(x: number, y: number): void;
   another(x: number, y: number): void;
   remove(x: number, y: number): void;
   /** Raises the piece on a tile to the next grade, where it stands. */
@@ -529,35 +530,10 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
       things: [{ ref: itemRef(p.gathering), note: per !== null ? `${per} a minute` : "" }],
     });
   if (p.studying !== null) rows.push({ label: "Studying", things: [{ ref: nodeRef(p.studying) }] });
-  if (k === SORTER && p.set !== null) rows.push({ label: "Sends left", things: [{ ref: itemRef(p.set) }] });
+  if (k === SORTER) rows.push(...sorterRows(p));
   rows.push(...(base.rows ?? []));
 
-  const actions: Action[] = [];
-  if (k === SORTER) {
-    // The thing it sends left, chosen as a machine's recipe is.
-    const sort = (item: Item | null): void => {
-      hands.act({ do: "sort", x, y, item });
-      sfx.tap();
-    };
-    actions.push({
-      label: "Nothing",
-      look: "slot",
-      icon: icon("more"),
-      lit: p.set === null,
-      hint: "Nothing",
-      about: "With nothing set it is a belt.",
-      on: () => sort(null),
-    });
-    for (const t of p.sorts)
-      actions.push({
-        label: ITEM_INFO[t]?.name ?? "",
-        look: "slot",
-        icon: art.item(t),
-        lit: p.set === t,
-        hint: ITEM_INFO[t]?.name ?? "",
-        on: () => sort(p.set === t ? null : t),
-      });
-  }
+  const actions: Action[] = k === SORTER ? sorterActions(art, p, (item) => hands.act({ do: "sort", x, y, item })) : [];
   if (isMaker(k)) {
     actions.push({
       label: "Any recipe",
@@ -630,6 +606,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
     // What takes things in from every side and hands none on has no way to face.
     if (k !== TUNNEL && k !== PYLON && k !== WHEEL && k !== BOILER && k !== STUDY && k !== STOP)
       actions.push({ label: "Rotate", hint: "Rotate (R)", on: () => hands.turn(x, y) });
+    if (k === SORTER) actions.push({ label: "Flip", hint: "Flip (X)", on: () => hands.flip(x, y) });
     if (p.another)
       actions.push({
         label: "Another",

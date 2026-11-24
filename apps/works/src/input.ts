@@ -23,6 +23,7 @@ import {
   dragEnd,
   dragLost,
   dragOver,
+  flip,
   hold,
   markEnd,
   markOver,
@@ -54,6 +55,24 @@ export const inputHooks: {
 } = { caller: () => {}, letter: () => false };
 
 const keys = new Set<string>();
+
+/** The keys that do one thing, whatever is marked or in hand: each key, as `KeyboardEvent.key` has it in lower case. */
+const PRESSES = new Map<string, () => void>([
+  ["r", rotate],
+  // X flips a sorter to send to its other side.
+  ["x", flip],
+  // G steps through the grades the kind in hand may be built at.
+  ["g", stepGrade],
+  ["e", () => setTool(S.tool === "remove" ? null : "remove")],
+  ["f", () => setTool(S.tool === "select" ? null : "select")],
+  ["delete", clearMark],
+  ["z", undo],
+  ["o", () => togglePanel("orders")],
+  ["t", () => togglePanel("board")],
+  ["p", () => togglePanel("tier")],
+  ["l", () => togglePanel("research")],
+  ["i", () => toggleView("needs")],
+]);
 
 interface Down {
   id: number;
@@ -328,29 +347,19 @@ export function initInput(canvas: InputSurface): void {
       setTool(S.tool === picked ? null : picked);
       return;
     }
-    if (k === "r") rotate();
-    // G steps through the grades the kind in hand may be built at.
-    else if (k === "g") stepGrade();
-    else if (k === "e") setTool(S.tool === "remove" ? null : "remove");
-    else if (k === "f") setTool(S.tool === "select" ? null : "select");
+    const pressed = PRESSES.get(k);
+    if (pressed) pressed();
     else if (k === "m" && S.mark && !S.group) hold("move");
     // With nothing marked, M is the map, once the yard has one.
     else if (k === "m" && hasViews()) toggleView("map");
     // C copies a marked area; with none marked it is the brush.
     else if (k === "c" && S.mark && !S.group) hold("copy");
     else if (k === "c") setTool(S.tool === "paint" ? null : "paint");
-    else if (k === "delete") clearMark();
-    else if (k === "z") undo();
     else if (k === "q") {
       const on =
         S.hover ?? (S.picked >= 0 ? { x: S.picked % S.world.land.w, y: Math.floor(S.picked / S.world.land.w) } : null);
       if (on) pickFrom(on.x, on.y);
-    } else if (k === "o") togglePanel("orders");
-    else if (k === "t") togglePanel("board");
-    else if (k === "p") togglePanel("tier");
-    else if (k === "l") togglePanel("research");
-    else if (k === "i") toggleView("needs");
-    else if (k === "+" || k === "=") zoom(1, window.innerWidth / 2, window.innerHeight / 2);
+    } else if (k === "+" || k === "=") zoom(1, window.innerWidth / 2, window.innerHeight / 2);
     else if (k === "_") zoom(-1, window.innerWidth / 2, window.innerHeight / 2);
     else if (k.startsWith("arrow") || k === "w" || k === "a" || k === "s" || k === "d") {
       keys.add(k);

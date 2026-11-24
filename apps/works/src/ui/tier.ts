@@ -16,9 +16,10 @@
 import { type Goal, GOALS, QUEUE, ready, STUDY } from "@sequoia-leaf/factory";
 import { el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 
+import { takeInHand } from "../plots.ts";
 import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
-import { setTool, takeInHand } from "../tools.ts";
+import { setTool } from "../tools.ts";
 import { doNow } from "../yard.ts";
 import {
   type Begin,

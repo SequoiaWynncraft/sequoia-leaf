@@ -1,5 +1,13 @@
 [
   {
+    "id": "works-sorter-sides",
+    "at": "2026-11-24T13:00Z",
+    "title": "The Works: sorters can send right",
+    "lines": [
+      "A sorter can now send its item out of its right side as well as its left. Press X, or Flip on its card or in the toolbar, to change the side. Sorters already built still send left."
+    ]
+  },
+  {
     "id": "tally-board",
     "at": "2026-11-24T10:15Z",
     "title": "The Tally has moved",

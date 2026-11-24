@@ -59,7 +59,7 @@ import {
   worthAt,
 } from "@sequoia-leaf/factory";
 
-import { layout } from "../layout.ts";
+import { layout, sendsRight } from "../layout.ts";
 import { draws, S } from "../state.ts";
 import { usable } from "../tools.ts";
 import { coins } from "../yard.ts";
@@ -195,6 +195,7 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     numbers: saysNumbers(w) ? numbersOf(w, i) : [],
     set,
     sorts: can ? ALL_ITEMS.filter((t) => can.has(t) || (w.depot[t] ?? 0) > 0 || set === t) : [],
+    right: sendsRight(w, i),
     studying: k === STUDY ? (w.line[0] ?? null) : null,
     research: researchOpen() && S.panel !== "research",
     raise: raise === null ? null : { to: grade + 1, cost: raise, enough: coins() >= raise },

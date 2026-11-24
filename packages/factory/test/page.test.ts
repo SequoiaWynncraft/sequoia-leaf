@@ -22,6 +22,8 @@ describe("what the page writes for an act", () => {
   const acts: F.Act[] = [
     { do: "build", kind: F.MILL, x: 20, y: 15, dir: 2, grade: 1 },
     { do: "build", kind: F.GATHERER, x: 1, y: 2, dir: 3, grade: 2 },
+    { do: "build", kind: F.SORTER, x: 3, y: 2, dir: 1, grade: 1, right: true },
+    { do: "build", kind: F.SORTER, x: 3, y: 2, dir: 1, grade: 1, right: false },
     { do: "lay", legs: [leg, { tunnel: true, x: 4, y: 4, dir: 0, span: 2, grade: 2 }] },
     { do: "lay", legs: [leg], turn: { x: 3, y: 3, dir: 1 } },
     {
@@ -31,6 +33,7 @@ describe("what the page writes for an act", () => {
         { kind: F.CRATE, x: 2, y: 1, dir: 1, span: 0, open: false },
         { kind: F.SPLITTER, x: 3, y: 1, dir: 2, span: 0, tint: 4, shut: 5, first: 1 },
         { kind: F.SORTER, x: 4, y: 1, dir: 3, span: 0, recipe: F.item("plank") },
+        { kind: F.SORTER, x: 5, y: 1, dir: 0, span: 0, first: 2 },
       ],
     },
     { do: "placeBlueprint", slot: 1, turns: 3, x: 9, y: 8 },
@@ -47,6 +50,8 @@ describe("what the page writes for an act", () => {
     { do: "recipe", item: F.item("gear"), x: 4, y: 5 },
     { do: "recipe", item: null, x: 4, y: 5 },
     { do: "sort", item: F.item("pot"), x: 4, y: 5 },
+    { do: "side", right: true, x: 4, y: 5 },
+    { do: "side", right: false, x: 4, y: 5 },
     { do: "tipOut", item: null, x: 4, y: 5 },
     { do: "tipOut", item: F.DEADFALL, x: 4, y: 5 },
     { do: "crate", open: false, x: 6, y: 7 },
