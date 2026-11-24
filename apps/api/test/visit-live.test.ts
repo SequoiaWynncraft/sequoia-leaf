@@ -15,7 +15,7 @@ import {
 } from "@sequoia-leaf/factory";
 import { Effect, Schema } from "effect";
 
-import { Live } from "../src/live/live.ts";
+import { Live, TICK } from "../src/live/live.ts";
 import { Watchers } from "../src/live/watchers.ts";
 import { LiveClient } from "./live-client.ts";
 import { fakeBackend, sessionOf, testLeaf } from "./support.ts";
@@ -23,7 +23,7 @@ import { fakeBackend, sessionOf, testLeaf } from "./support.ts";
 /**
  * A visit's room: everybody visiting a player's yard hears each batch Leaf keeps of it as Leaf
  * keeps it (`did`), and a copy that does what they hear is Leaf's yard. Against Leaf on a real port,
- * with its live connections, on the real clock.
+ * with its live connections, on a test clock that moves only as a test moves it.
  */
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
@@ -33,13 +33,8 @@ const ORIGIN = "https://leaf.seqwawa.com";
 const TOKENS: Record<PlayerId, string> = { [alice]: "alice-token", [bob]: "bob-token", [carol]: "carol-token" };
 const token = (who: PlayerId): string => TOKENS[who] ?? "";
 
-// The real clock: Live's tick and its waits keep time by it.
-const clock = {
-  get now() {
-    return Date.now();
-  },
-  set now(_: number) {},
-};
+/** Where Leaf's test clock starts. */
+const clock = { now: Date.UTC(2026, 10, 25, 12) };
 let services: ReturnType<typeof testLeaf> | null = null;
 let server: Awaited<ReturnType<ReturnType<typeof testLeaf>["serve"]>> | null = null;
 const open: LiveClient[] = [];
@@ -51,7 +46,7 @@ async function start(): Promise<void> {
     "carol-token": () => Response.json(sessionOf(carol, "Carol", null)),
   });
   // A visitor whose connection closes leaves their room at once.
-  services = testLeaf(clock, fake.fetcher, {}, { live: { graceMs: 0 } });
+  services = testLeaf(clock, fake.fetcher, {}, { live: { graceMs: 0 }, testClock: true });
   server = await services.serve();
 }
 
@@ -126,6 +121,16 @@ function follow(copy: Yard, did: Did): { mine: number; leafs: number } {
   return { mine: check(copy), leafs: after.check };
 }
 
+/** One of Live's ticks, at which each room sends what moved in it. */
+const liveTick = () => services?.adjust(TICK) ?? Promise.resolve();
+/** Waits until Leaf has no connection open: the last close, which comes off the socket, is through. */
+async function closedThrough(turns = 10_000): Promise<void> {
+  if ((await services?.run(Live.use((live) => live.census)))?.connected === 0) return;
+  if (turns === 0) throw new Error("a connection never closed");
+  await new Promise((resolve) => setImmediate(resolve));
+  return closedThrough(turns - 1);
+}
+
 /** How many frames Leaf has told visits' rooms. */
 const told = async (): Promise<number> => (await services?.run(Watchers.use((w) => Effect.sync(w.told)))) ?? -1;
 
@@ -162,7 +167,7 @@ describe("a visit's room", () => {
     const carols = await yardOf(await call("GET", "/v1/game/play/works/of/" + carol, bob));
     expect(did.rev).toBeLessThanOrEqual(carols.rev);
     expect(did.did.map((c) => readCommand(c)?.do)).toEqual(["build", "build", "lay"]);
-    await Bun.sleep(100);
+    await bobs.settled();
     expect(bobs.texts.filter((m) => m.t === "did")).toEqual([]);
   });
 
@@ -182,7 +187,10 @@ describe("a visit's room", () => {
     expect(forHer.status).toBe(409);
     // A batch of his own is his own yard's, and nobody in hers is told of it.
     expect((await buildStarter(bob)).status).toBe(200);
-    await Bun.sleep(200);
+    // His wave and his move taken, a tick for anything moving to be sent, and all of it come to Carol.
+    await bobs.settled();
+    await liveTick();
+    await carols.settled();
     expect(carols.texts.filter((m) => m.t === "act" || m.t === "did")).toEqual([]);
     expect(carols.snapshots).toEqual([]);
     const after = await yardOf(await call("GET", `/v1/game/play/works/of/${alice}`, carol));
@@ -203,7 +211,8 @@ describe("a visit's room", () => {
     await bobs.next("did");
     expect(await told()).toBe(1);
     bobs.close();
-    await Bun.sleep(300);
+    await closedThrough();
+    await liveTick();
     expect((await services?.run(Live.use((live) => live.census)))?.rooms).toEqual({});
     expect((await collect("a-6")).status).toBe(200);
     expect(await told()).toBe(1);

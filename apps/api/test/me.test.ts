@@ -69,9 +69,13 @@ function holdFeed() {
   };
 }
 
-/** Whether a request answers within a moment: what it answered, or "waiting". */
-function soon(response: Promise<Response>): Promise<Response | "waiting"> {
-  return Promise.race([response, Bun.sleep(200).then((): "waiting" => "waiting")]);
+/** Told when a request asks for the feed to be brought in first (`Credits.fresh`), as it takes its turn. */
+let onFresh = () => {};
+/** Once the next request has taken its turn to bring the feed in: it waits for any run under way. */
+function nextInLine(): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  onFresh = resolve;
+  return promise;
 }
 
 function get(path: string, headers: Record<string, string> = { Authorization: "Bearer alice-token" }) {
@@ -85,7 +89,16 @@ beforeEach(() => {
   feedHeld = null;
   clock.now = T0;
   logged = [];
-  services = testLeaf(clock, backend, {}, { logged });
+  onFresh = () => {};
+  services = testLeaf(
+    clock,
+    backend,
+    {},
+    {
+      logged,
+      credits: (real) => ({ ...real, fresh: (then) => Effect.andThen(Effect.sync(onFresh), real.fresh(then)) }),
+    },
+  );
   app = services.app();
 });
 
@@ -539,8 +552,9 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     const refreshing = get("/v1/me/quests?sync=1");
     await feed.asked;
 
+    const inLine = nextInLine();
     const rerolling = reroll("daily:1");
-    expect(await soon(rerolling)).toBe("waiting");
+    await inLine;
     feed.answer();
 
     expect((await refreshing).status).toBe(200);
@@ -559,8 +573,9 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     const scheduled = services.run(runCreditSync("recent"));
     await feed.asked;
 
+    const inLine = nextInLine();
     const rerolling = reroll("daily:1");
-    expect(await soon(rerolling)).toBe("waiting");
+    await inLine;
     feed.answer();
 
     expect(await scheduled).toMatchObject({ status: "synced" });
@@ -576,8 +591,9 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     const first = get("/v1/me/quests?sync=1");
     await feed.asked;
 
+    const inLine = nextInLine();
     const second = get("/v1/me/quests?sync=1");
-    expect(await soon(second)).toBe("waiting");
+    await inLine;
     feed.answer();
 
     expect(await (await first).json()).toMatchObject({ recently_completed: [{ id: "daily:1" }] });

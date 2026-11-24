@@ -18,6 +18,7 @@ import {
 import { SecureRandom } from "effect/crypto";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import { SqlClient } from "effect/sql";
+import { TestClock as EffectTestClock } from "effect/testing";
 
 import { routerConfig, Routes, serveLeaf, Stores } from "../src/app.ts";
 import { AppConfig, type Settings, settings } from "../src/config.ts";
@@ -101,6 +102,10 @@ export interface Fakes {
   readonly events?: (real: Events["Service"]) => Events["Service"];
   /** Steps in between the play service and what it keeps, the same way. */
   readonly play?: (real: PlayStore["Service"]) => PlayStore["Service"];
+  /** Steps in between Leaf and its credit sync, the same way, such as to hear a request take its turn. */
+  readonly credits?: (real: Credits["Service"]) => Credits["Service"];
+  /** Steps in between the play service and what asks it for jobs, the same way, such as to hear a job arrive. */
+  readonly playing?: (real: Play["Service"]) => Play["Service"];
   /** Live's timings and sizes, for tests that cannot wait for the real ones. */
   readonly live?: Partial<LiveTuning>;
   /** Which Leaf process this is (`LeafInstance`). Each test Leaf is a process of its own unless given one. */
@@ -113,6 +118,12 @@ export interface Fakes {
   readonly meter?: (times: JobTimes) => void;
   /** Where Leaf's warnings and errors go, as the JSON logger would write them, for tests that read them. */
   readonly logged?: LogLine[];
+  /**
+   * Leaf's clock as Effect's test clock, from `clock.now` as Leaf starts: its waits (Live's ticks,
+   * a stream's beats, a session's recheck) pass only as the test moves it, with `adjust`. Without
+   * it, the hand-set clock tells the time and waits really pass.
+   */
+  readonly testClock?: boolean;
 }
 
 /** A line Leaf logged, as the JSON logger writes it. */
@@ -172,11 +183,15 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
       ),
     ),
   );
+  // Leaf's loops always have a wait due, so the test clock's warning that nobody moves it would be noise.
+  const testClock = EffectTestClock.layer({ warningDelay: "1 minute" }).pipe(
+    Layer.tap((built) => EffectTestClock.setTime(clock.now).pipe(Effect.provideContext(built))),
+  );
   const outside = Layer.mergeAll(
     Layer.succeed(AppConfig)(configured),
     fakes.mojang === undefined ? Mojang.layer.pipe(Layer.provideMerge(network)) : Layer.succeed(Mojang)(fakes.mojang),
     network,
-    handClock,
+    fakes.testClock === true ? testClock : handClock,
     Layer.succeed(LeafInstance)(fakes.instance ?? crypto.randomUUID()),
     Layer.succeed(PlayMeter)(fakes.meter ?? null),
     BunServices.layer,
@@ -223,8 +238,16 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     ),
   );
   // Who hears what Leaf does to a state: the play service tells them, Live puts them there.
+  const credits = Layer.effect(
+    Credits,
+    Credits.useSync((real) => fakes.credits?.(real) ?? real),
+  ).pipe(Layer.provide(Credits.layer));
+  const playing = Layer.effect(
+    Play,
+    Play.useSync((real) => fakes.playing?.(real) ?? real),
+  ).pipe(Layer.provide(Play.layer));
   const layer = Layer.merge(
-    Layer.mergeAll(Play.layer, Credits.layer).pipe(Layer.provideMerge(between.pipe(Layer.provideMerge(stores)))),
+    Layer.mergeAll(playing, credits).pipe(Layer.provideMerge(between.pipe(Layer.provideMerge(stores)))),
     live,
   ).pipe(Layer.provideMerge(Watchers.layer));
   // Layers built through the same memo map are built once, so `run` and `app` see the same database.
@@ -233,6 +256,8 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
   return {
     /** Runs an effect against this Leaf. */
     run: <A, E>(effect: Effect.Effect<A, E, Layer.Success<typeof layer>>): Promise<A> => runtime.runPromise(effect),
+    /** Moves Leaf's test clock (`Fakes.testClock`) on, and waits for whatever was due by then to have run up to its next wait. */
+    adjust: (duration: Duration.Input) => runtime.runPromise(EffectTestClock.adjust(duration)),
     /** A player's account, as the ledger has it now. */
     account: (playerId: PlayerId) => runtime.runPromise(Ledger.use((ledger) => ledger.account(playerId))),
     /** Posts one entry to the ledger, as setup for a test. */

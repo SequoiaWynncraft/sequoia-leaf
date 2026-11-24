@@ -1174,7 +1174,7 @@ describe("GET /v1/game/guild/events/stream", () => {
 
 /** What these tests read a stream with. */
 interface Reader {
-  read(): Promise<{ readonly done: boolean }>;
+  read(): Promise<{ readonly done: boolean; readonly value?: Uint8Array }>;
   cancel(): Promise<void>;
 }
 
@@ -1188,20 +1188,16 @@ async function opened(response: Response): Promise<Reader> {
   return reader;
 }
 
-/** Reads a stream to its end. */
-async function untilEnd(reader: Reader): Promise<"ended"> {
-  return (await reader.read()).done ? "ended" : untilEnd(reader);
-}
-
-/** Whether a stream ends within `ms` milliseconds. */
-function endsWithin(reader: Reader, ms: number): Promise<"ended" | "open"> {
-  return Promise.race([untilEnd(reader), Bun.sleep(ms).then(() => "open" as const)]);
+/** What a stream says next: its text, or "ended" once it has ended. */
+async function next(reader: Reader): Promise<string> {
+  const read = await reader.read();
+  return read.done ? "ended" : new TextDecoder().decode(read.value);
 }
 
 describe("open streams", () => {
   it("lets a member keep six open, their own and the guild's together, closing their oldest when a seventh opens", async () => {
-    // Streams that stay open for a minute unless closed.
-    const own = testLeaf(clock, fetcher, {}, { mojang: mojang.service });
+    // Streams that stay open for a minute unless closed, beating every 20 ms of a clock the test moves.
+    const own = testLeaf(clock, fetcher, {}, { mojang: mojang.service, testClock: true });
     const long = own.app(Layer.succeed(StreamTuning)({ pollMs: 5, heartbeatMs: 20, maxMs: 60_000 }));
     const open = async (path: string, token: string) =>
       opened(await long.request(path, { headers: { Authorization: `Bearer ${token}` } }));
@@ -1216,11 +1212,13 @@ describe("open streams", () => {
     const bobs = await open("/v1/game/guild/events/stream", "bob-token");
     const seventh = await open("/v1/me/events/stream", "alice-token");
 
-    expect(await endsWithin(first, 1_000)).toBe("ended");
+    // At the next beat, each stream still open says it is there; the oldest has ended.
+    await own.adjust("20 millis");
     const rest = [...kept, seventh, bobs];
-    expect(await Promise.all(rest.map((reader) => endsWithin(reader, 100)))).toEqual(rest.map(() => "open"));
+    expect(await Promise.all([first, ...rest].map(next))).toEqual(["ended", ...rest.map(() => ": keep-alive\n\n")]);
     await Promise.all(rest.map((reader) => reader.cancel()));
     await long.dispose();
+    await own.dispose();
   });
 });
 

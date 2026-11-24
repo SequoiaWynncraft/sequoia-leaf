@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from "bun:test";
 
 import { CLOSE, encodeMove, Flag, LIVE_PATH, LIVE_VERSION, livePath, type Motion, playerId } from "@sequoia-leaf/core";
-import { Deferred, Effect, Fiber, Redacted, Schema } from "effect";
+import { Deferred, type Duration, Effect, Fiber, Redacted, Schema } from "effect";
 import { Socket } from "effect/socket";
 
-import { Live, type LiveTuning } from "../src/live/live.ts";
+import { Live, type LiveTuning, TICK } from "../src/live/live.ts";
 import { LiveClient, type Opening } from "./live-client.ts";
 import { type Backend, fakeBackend, sessionOf, testLeaf } from "./support.ts";
 
@@ -14,11 +14,13 @@ const carol = playerId("10000000-0000-0000-0000-000000000003");
 const ORIGIN = "https://leaf.seqwawa.com";
 const LIVE = livePath("town");
 
-// The real clock, which a test may move ahead: Live's tick and its waits keep time by it.
-let ahead = 0;
-const clock = {
+/** Where Leaf's test clock starts: Live's ticks and waits pass only as a test moves it on (`pass`). */
+const T0 = Date.UTC(2026, 10, 25, 12);
+const clock = { now: T0 };
+/** The real clock, for the few tests whose point is how long something really takes. */
+const realClock = {
   get now() {
-    return Date.now() + ahead;
+    return Date.now();
   },
   set now(_: number) {},
 };
@@ -27,8 +29,8 @@ let services: ReturnType<typeof testLeaf> | null = null;
 let server: Awaited<ReturnType<ReturnType<typeof testLeaf>["serve"]>> | null = null;
 const open: LiveClient[] = [];
 
-/** Leaf on a free port, with Live tuned as the test needs. */
-async function start(live: Partial<LiveTuning> = {}): Promise<string> {
+/** Leaf on a free port, with Live tuned as the test needs, on its test clock or the real one. */
+async function start(live: Partial<LiveTuning> = {}, real = false): Promise<string> {
   const fake = fakeBackend({
     "alice-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
     "bob-token": () => Response.json(sessionOf(bob, "Bob", "RECRUIT")),
@@ -37,13 +39,12 @@ async function start(live: Partial<LiveTuning> = {}): Promise<string> {
     "alice-2-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
   });
   backend = fake.backend;
-  services = testLeaf(clock, fake.fetcher, {}, { live });
+  services = testLeaf(real ? realClock : clock, fake.fetcher, {}, { live, testClock: !real });
   server = await services.serve();
   return server.origin;
 }
 
 afterEach(async () => {
-  ahead = 0;
   for (const c of open.splice(0)) c.close();
   await server?.close();
   await services?.dispose();
@@ -60,6 +61,13 @@ async function connect(sent: Opening): Promise<LiveClient> {
 
 const census = () => services?.run(Live.use((live) => live.census));
 
+/** Leaf's clock moved on, with whatever fell due meanwhile done up to its next wait. */
+const pass = (duration: Duration.Input) => services?.adjust(duration) ?? Promise.resolve();
+/** One of Live's ticks, at which each room sends what moved in it. */
+const tick = () => pass(TICK);
+/** Each client's ping answered (`LiveClient.settled`). */
+const settled = (...clients: LiveClient[]) => Promise.all(clients.map((client) => client.settled()));
+
 const codeOf = async (response: Response) =>
   Schema.decodeUnknownSync(Schema.Struct({ code: Schema.String }))(await response.json()).code;
 
@@ -75,15 +83,16 @@ const at = (x: number, y: number, flags: number = Flag.Moving, jump = 0): Motion
   jump,
 });
 
-/** Waits until Leaf has no connection of anybody's open: the last one's close is through. */
-async function closedThrough(): Promise<void> {
-  for (let i = 0; i < 100; i++) {
-    // oxlint-disable-next-line no-await-in-loop -- looking again until it is so
-    if ((await census())?.connected === 0) return;
-    // oxlint-disable-next-line no-await-in-loop -- a moment between looks
-    await Bun.sleep(10);
-  }
-  throw new Error("a connection never closed");
+/**
+ * Waits until Leaf has `connected` connections open, none by default: the last one's close, which
+ * comes off the socket and has nothing to answer, is through. Looked for again each turn of the
+ * event loop.
+ */
+async function closedThrough(connected = 0, turns = 10_000): Promise<void> {
+  if ((await census())?.connected === connected) return;
+  if (turns === 0) throw new Error("a connection never closed");
+  await new Promise((resolve) => setImmediate(resolve));
+  return closedThrough(connected, turns - 1);
 }
 
 /** `n` connections of Alice's, one after another, each dropping as the network drops it: openings that hand nothing over. */
@@ -185,7 +194,9 @@ describe("opening a live connection", () => {
   it("keeps what a player owes after they have left, so that leaving refills nothing", async () => {
     await start({ graceMs: 50 });
     await dropped(10);
-    await Bun.sleep(300);
+    // Their grace over, and the tick after it.
+    await pass(50);
+    await tick();
 
     expect(await census()).toMatchObject({ connected: 0, rooms: {} });
     expect(await refused(LIVE, { Authorization: "Bearer alice-token" })).toEqual([429, "slow_down"]);
@@ -196,24 +207,25 @@ describe("opening a live connection", () => {
   // in a hundred seconds ran out the allowance: a 429, "Reconnecting", and everybody gone.
   it("hands a player over between their own pages without spending their openings: twenty, five seconds apart", async () => {
     await start();
-    let tab = await connect(page("alice"));
-    await tab.welcome();
-    for (let i = 0; i < 20; i++) {
-      // To a game and back: the page going closes its connection, and then the next opens one; or
-      // the next opens first and takes over, as a frame put away goes a moment after.
+    const first = await connect(page("alice"));
+    await first.welcome();
+    // To a game and back: the page going closes its connection, and then the next opens one; or
+    // the next opens first and takes over, as a frame put away goes a moment after. Each hop is
+    // five seconds after the last.
+    const hop = async (tab: LiveClient, i: number): Promise<LiveClient> => {
+      if (i === 20) return tab;
       if (i % 2 === 0) {
         tab.close();
-        // oxlint-disable-next-line no-await-in-loop -- the close through, so that the next is no takeover
+        // The close through, so that the next is no takeover.
         await closedThrough();
       }
-      // oxlint-disable-next-line no-await-in-loop -- one page after another
       const next = await connect(page("alice"));
-      // oxlint-disable-next-line no-await-in-loop -- in the room before the next hop
       await next.welcome();
       if (i % 2 === 1) tab.close();
-      tab = next;
-      ahead += 5000;
-    }
+      await pass("5 seconds");
+      return hop(next, i + 1);
+    };
+    const tab = await hop(first, 0);
     tab.drop();
     await closedThrough();
     // The openings proper are all there: ten that hand nothing over, and only then a 429.
@@ -240,16 +252,17 @@ describe("opening a live connection", () => {
   it("charges an opening long after the page closed its connection, and one after a drop, as any other", async () => {
     await start();
     // A page closing cleanly, and the next opening only after the few seconds a handoff has.
-    for (let i = 0; i < 5; i++) {
-      // oxlint-disable-next-line no-await-in-loop -- one after another
+    const closing = async (left: number): Promise<void> => {
+      if (left === 0) return;
       const tab = await connect(page("alice"));
-      // oxlint-disable-next-line no-await-in-loop -- in the room before it closes
       await tab.welcome();
       tab.close();
-      // oxlint-disable-next-line no-await-in-loop -- the close through before the clock moves
       await closedThrough();
-      ahead += 6000;
-    }
+      // A little over six seconds: three openings refilled over the five.
+      await pass("6100 millis");
+      return closing(left - 1);
+    };
+    await closing(5);
     // Five charged, and three refilled over the half minute moved: eight that drop, and the next is refused.
     await dropped(8);
     expect(await refused(LIVE, { Authorization: "Bearer alice-token" })).toEqual([429, "slow_down"]);
@@ -293,8 +306,9 @@ describe("a live room", () => {
     });
   });
 
+  // On the real clock: how long it really takes is the point.
   it("sends a player's motion to everybody in the room within a tick or two", async () => {
-    await start();
+    await start({}, true);
     const a = await connect(page("alice"));
     const b = await connect(page("bob"));
     await a.welcome();
@@ -315,6 +329,8 @@ describe("a live room", () => {
     const a = await connect(page("alice"));
     const { you } = await a.welcome();
     a.move({ ...at(-40, 1e6, 0), jump: 2 });
+    await settled(a);
+    await tick();
     await a.snapshot();
     const b = await connect(page("bob"));
     await b.welcome();
@@ -334,6 +350,7 @@ describe("a live room", () => {
 
     expect(await b.next("act")).toEqual({ t: "act", id: you, kind: "emote", arg: "wave" });
     expect(await a.next("error")).toEqual({ t: "error", code: "bad_act" });
+    await settled(b);
     expect(b.texts.filter((m) => m.t === "act")).toEqual([]);
   });
 
@@ -350,7 +367,8 @@ describe("a live room", () => {
     expect(await a.next("error")).toEqual({ t: "error", code: "bad_act" });
     // Six at once, then three a second: after the post, five of eight sent together pass.
     for (let i = 0; i < 8; i++) a.send({ t: "act", kind: "touch", arg: `crab:${i + 1}` });
-    await Bun.sleep(200);
+    await settled(a);
+    await settled(b);
     expect(b.texts.filter((m) => m.t === "act").map((m) => m.arg)).toEqual([
       "crab:1",
       "crab:2",
@@ -386,7 +404,7 @@ describe("a live room", () => {
 
     expect([again.room, again.you]).toEqual([first.room, first.you]);
     expect(again.roster.map((m) => m.name)).toEqual(["Alice", "Bob"]);
-    await Bun.sleep(100);
+    await settled(b);
     expect(b.texts.filter((m) => m.t === "joined" || m.t === "left")).toEqual([]);
     expect(await census()).toMatchObject({ players: 2, rooms: { "town/1": 2 } });
   });
@@ -421,7 +439,7 @@ describe("a player, whatever their connection", () => {
 
     expect((await first.ended()).code).toBe(CLOSE.replaced);
     expect(again.you).toBe(you);
-    await Bun.sleep(100);
+    await settled(...watchers);
     for (const w of watchers) expect(w.texts.filter((m) => m.t === "left")).toEqual([]);
     expect(await census()).toEqual({ players: 3, connected: 3, rooms: { "town/1": 3 } });
   });
@@ -433,10 +451,14 @@ describe("a player, whatever their connection", () => {
     const first = await connect(page("alice"));
     const { you } = await first.welcome();
     for (let i = 0; i < 30; i++) first.move(at(i, 10));
+    await settled(first);
+    await tick();
     const before = await b.snapshot((s) => s.entries.some((e) => e.id === you && e.x === 29));
     const second = await connect({ bearer: "alice-token" });
     await second.welcome();
     const seq = second.move(at(300, 200, 0));
+    await settled(second);
+    await tick();
 
     const after = await b.snapshot((s) => s.entries.some((e) => e.id === you && e.x === 300));
     const was = before.entries.find((e) => e.id === you);
@@ -455,8 +477,12 @@ describe("a player, whatever their connection", () => {
     await second.welcome();
     // The first device's session is revoked; the second's is not.
     backend.sessions["alice-token"] = () => Response.json({ error: "unauthorized" }, { status: 401 });
-    ahead = 61_000;
-    await Bun.sleep(300);
+    // Past the minute a confirmed session is remembered: the second's is asked about again, and
+    // its answer heard by the time each page's ping is answered.
+    const asked = backend.calls.length;
+    await pass("61 seconds");
+    expect(backend.calls.slice(asked)).toContain("/auth/web/me");
+    await settled(second, b);
 
     expect(second.closed).toBeNull();
     expect(b.texts.filter((m) => m.t === "left" && m.id === you)).toEqual([]);
@@ -471,8 +497,12 @@ describe("a player, whatever their connection", () => {
     const { you } = await a.welcome();
     await b.next("joined");
     a.move(at(100, 100, Flag.Moving));
+    await settled(a);
+    await tick();
     await b.snapshot((s) => s.entries.some((e) => e.id === you && e.flags === Flag.Moving));
     a.close();
+    await closedThrough(1);
+    await tick();
 
     // They are seen to stop, not to go.
     const stopped = await b.snapshot((s) => s.entries.some((e) => e.id === you));
@@ -480,8 +510,11 @@ describe("a player, whatever their connection", () => {
     const back = await connect(page("alice"));
     expect((await back.welcome()).you).toBe(you);
     back.close();
+    await closedThrough(1);
+    await pass(300);
+    await tick();
 
-    expect(await b.next("left", (m) => m.id === you, 2000)).toEqual({ t: "left", id: you });
+    expect(await b.next("left", (m) => m.id === you)).toEqual({ t: "left", id: you });
     expect(b.texts.filter((m) => m.t === "joined")).toEqual([]);
     // Alice's record stays a while yet, for what she owes on opening connections; she is in no room.
     expect(await census()).toMatchObject({ connected: 1, rooms: { "town/1": 1 } });
@@ -495,9 +528,10 @@ describe("a player, whatever their connection", () => {
     const { you } = await a.welcome();
     backend.sessions["alice-token"] = () => Response.json({ error: "unauthorized" }, { status: 401 });
     // A confirmed session is remembered for a minute; once that is up, it is asked about again.
-    await Bun.sleep(300);
+    await pass(300);
+    await settled(a);
     expect(a.closed).toBeNull();
-    ahead = 61_000;
+    await pass("61 seconds");
 
     expect((await a.ended()).code).toBe(CLOSE.signedOut);
     expect(await b.next("left", (m) => m.id === you)).toEqual({ t: "left", id: you });
@@ -510,6 +544,7 @@ interface Row {
   username: string;
   place: string;
   seen_at: number;
+  left_at: number | null;
   stay: number;
   guest: number;
 }
@@ -517,24 +552,25 @@ interface Row {
 const rows = () =>
   services?.query<Row>(
     (sql) => sql`
-      SELECT v.player_id, p.name AS username, v.place, coalesce(v.left_at, v.heard_at) AS seen_at, p.stay, v.guest
+      SELECT v.player_id, p.name AS username, v.place, coalesce(v.left_at, v.heard_at) AS seen_at, v.left_at, p.stay, v.guest
       FROM visits AS v JOIN players_seen AS p ON p.player_id = v.player_id
       WHERE v.id IN (SELECT max(id) FROM visits GROUP BY player_id)
       ORDER BY username
     `,
   ) ?? Promise.resolve([]);
-/** Where each player is once that passes `which`, waiting a little for Live to write it. */
-async function rowsWhen(which: (rows: readonly Row[]) => boolean, ms = 2000): Promise<readonly Row[]> {
-  const until = Date.now() + ms;
-  for (;;) {
-    // oxlint-disable-next-line no-await-in-loop -- looking again until Live has written
-    const now = await rows();
-    if (which(now)) return now;
-    if (Date.now() > until) throw new Error(`Waited ${ms} ms in vain: ${JSON.stringify(now)}`);
-    // oxlint-disable-next-line no-await-in-loop -- as above
-    await Bun.sleep(20);
-  }
+/**
+ * Where each player is once that passes `which`: Live writes it on a fiber of its own, which nothing
+ * answers for, so it is looked for again each turn of the event loop.
+ */
+async function rowsWhen(which: (rows: readonly Row[]) => boolean, turns = 10_000): Promise<readonly Row[]> {
+  const now = await rows();
+  if (which(now)) return now;
+  if (turns === 0) throw new Error(`Never written: ${JSON.stringify(now)}`);
+  await new Promise((resolve) => setImmediate(resolve));
+  return rowsWhen(which, turns - 1);
 }
+/** How long Live gathers changes to who is about before it tells the rooms. */
+const GATHER = 200;
 /** A player's page saying where they are, as `PUT /v1/game/presence`. */
 const sayHere = (token: string, place: string, stay?: boolean) =>
   fetch(`${server?.origin ?? ""}/v1/game/presence`, {
@@ -547,8 +583,8 @@ describe("where players are, from the room", () => {
   it("writes a player into the town as they come in, as their game would, keeping what they said about staying", async () => {
     await start();
     expect((await sayHere("alice-token", "camp", false)).status).toBe(200);
-    ahead = 60_000;
-    const from = Date.now() + ahead;
+    await pass("60 seconds");
+    const from = T0 + 60_000;
     const a = await connect(page("alice"));
     await a.welcome();
     const c = await connect(page("carol"));
@@ -577,7 +613,7 @@ describe("where players are, from the room", () => {
     const a = await connect(page("alice"));
     await a.welcome();
     const first = (await rowsWhen((r) => r.length === 1))[0]?.seen_at ?? 0;
-    ahead = 80_000;
+    await pass("80 seconds");
 
     const again = await rowsWhen((r) => (r[0]?.seen_at ?? 0) >= first + 80_000);
     expect(again.map((row) => row.place)).toEqual(["town"]);
@@ -590,8 +626,8 @@ describe("where players are, from the room", () => {
     const b = await connect(page("bob"));
     await b.welcome();
     await rowsWhen((r) => r.length === 2);
-    ahead = 40_000;
-    const left = Date.now() + ahead;
+    await pass("40 seconds");
+    const left = T0 + 40_000;
     // Alice's page leaves the room and closes; Bob's game says he has gone to the Works, then closes.
     a.send({ t: "leave" });
     a.close();
@@ -599,7 +635,10 @@ describe("where players are, from the room", () => {
     b.close();
 
     const after = await rowsWhen((r) => (r[0]?.seen_at ?? 0) >= left);
-    await Bun.sleep(300);
+    // Both closes through, their grace over, and what that wrote written.
+    await closedThrough();
+    await pass(100);
+    await tick();
     expect((await rows()).map((row) => [row.username, row.place])).toEqual([
       ["Alice", "town"],
       ["Bob", "works"],
@@ -612,8 +651,8 @@ describe("where players are, from the room", () => {
     const a = await connect(page("alice"));
     await a.welcome();
     await rowsWhen((r) => r.length === 1);
-    ahead = 20_000;
-    const left = Date.now() + ahead;
+    await pass("20 seconds");
+    const left = T0 + 20_000;
     a.send({ t: "leave" });
     await rowsWhen((r) => (r[0]?.seen_at ?? 0) >= left);
 
@@ -639,27 +678,33 @@ describe("where players are, from the room", () => {
     const a = await connect(page("alice"));
     await a.welcome();
     await rowsWhen((r) => r.length === 1);
-    await Bun.sleep(100);
+    await pass(GATHER);
+    await settled(a);
     a.texts.length = 0;
     const b = await connect(page("bob"));
     await b.welcome();
-    // Bob coming in is a change: Alice hears of it, and so does Bob.
+    // Bob coming in is a change: Alice hears of it, and so does Bob, once for the burst.
+    await rowsWhen((r) => r.length === 2);
+    await pass(GATHER);
     await a.next("about");
     await b.next("about");
-    await Bun.sleep(100);
+    await pass(GATHER);
+    await settled(a, b);
     expect([...a.texts, ...b.texts].filter((m) => m.t === "about")).toEqual([]);
 
     // Carol's game says she is at the Works: a change; saying it again is not.
     expect((await sayHere("carol-token", "works")).status).toBe(200);
+    await pass(GATHER);
     await a.next("about");
     await b.next("about");
     expect((await sayHere("carol-token", "works")).status).toBe(200);
-    await Bun.sleep(150);
+    await pass(GATHER);
+    await settled(a);
     expect(a.texts.filter((m) => m.t === "about")).toEqual([]);
 
-    // Bob leaves the room: Alice hears it, and Leaf's list says so by the time she does.
+    // Bob leaves the room: Leaf's list says so, and then Alice hears it.
     b.send({ t: "leave" });
-    await a.next("about");
+    await rowsWhen((r) => r.some((row) => row.username === "Bob" && row.left_at !== null));
     const now: unknown = await (
       await fetch(`${server?.origin ?? ""}/v1/game/presence`, {
         headers: { Authorization: "Bearer alice-token" },
@@ -669,6 +714,8 @@ describe("where players are, from the room", () => {
       present: [{ username: "Alice" }, { username: "Carol" }],
       resting: [{ username: "Bob" }],
     });
+    await pass(GATHER);
+    await a.next("about");
   });
 
   it("tells everybody in every room when somebody away does something again, and not at every move", async () => {
@@ -679,14 +726,19 @@ describe("where players are, from the room", () => {
     await b.welcome();
     b.move(at(100, 100, 0));
     await rowsWhen((r) => r.length === 2);
-    await Bun.sleep(150);
+    await pass(GATHER);
+    await settled(a, b);
     a.texts.length = 0;
 
     // Bob has done nothing Leaf heard of yet: away. His first move somewhere brings him back.
     b.move(at(110, 100));
+    await settled(b);
+    await pass(GATHER);
     await a.next("about");
     b.move(at(120, 100));
-    await Bun.sleep(150);
+    await settled(b);
+    await pass(GATHER);
+    await settled(a);
     expect(a.texts.filter((m) => m.t === "about")).toEqual([]);
   });
 
@@ -696,9 +748,11 @@ describe("where players are, from the room", () => {
     await a.welcome();
     const first = (await rowsWhen((r) => r.length === 1))[0]?.seen_at ?? 0;
     a.close();
-    ahead = 30_000;
+    await closedThrough();
+    await pass(150);
+    await tick();
 
-    const gone = await rowsWhen((r) => (r[0]?.seen_at ?? 0) >= first + 30_000);
+    const gone = await rowsWhen((r) => (r[0]?.seen_at ?? 0) >= first + 150);
     expect(gone.map((row) => row.place)).toEqual(["town"]);
     expect(await census()).toMatchObject({ connected: 0, rooms: {} });
   });
@@ -710,7 +764,9 @@ describe("opening a connection", () => {
     const b = await connect(page("bob"));
     const { you: bobsId } = await b.welcome();
     for (let i = 0; i < 30; i++) b.move(at(i, 0));
+    await settled(b);
     const a = await connect(page("alice"));
+    await tick();
     await b.snapshot((s) => s.entries.some((e) => e.id === bobsId && e.x === 29));
 
     expect(a.arrived.slice(0, 2)).toEqual(["welcome", "snapshot"]);
@@ -730,9 +786,8 @@ describe("opening a connection", () => {
         Effect.exit,
       ),
     );
-    await Bun.sleep(50);
-    ahead = 60_000;
-    await Bun.sleep(100);
+    expect(await census()).toMatchObject({ players: 1, connected: 0 });
+    await pass("60 seconds");
 
     expect(await census()).toMatchObject({ players: 1, connected: 0 });
     // Her place is held: nobody else gets it meanwhile.
@@ -744,7 +799,7 @@ describe("opening a connection", () => {
 
     await Effect.runPromise(Deferred.fail(opening, new Error("never opened")));
     await pending;
-    await Bun.sleep(100);
+    await tick();
     expect(await census()).toMatchObject({ players: 0, connected: 0, rooms: {} });
   });
 
@@ -790,6 +845,8 @@ describe("what a connection may send", () => {
     const { you } = await b.welcome();
     // Sixty at once: the first burst of forty is taken, the rest dropped.
     for (let seq = 1; seq <= 60; seq++) b.sendRaw(encodeMove(seq, at(seq, 10)));
+    await settled(b);
+    await tick();
     const seen = await a.snapshot((s) => s.entries.some((e) => e.id === you));
     expect(seen.entries.find((e) => e.id === you)?.seq).toBe(40);
 
@@ -836,12 +893,13 @@ describe("an open interrupted while its socket opens", () => {
         const fiber = yield* Effect.forkChild(
           Effect.scoped(live.open(alicesIdentity, "town", Deferred.await(opening), signedIn)),
         );
-        yield* Effect.sleep("50 millis");
+        // Opening, waiting for its socket.
+        yield* Effect.yieldNow;
         yield* Fiber.interrupt(fiber);
       }),
     );
-    ahead = 60_000;
-    await Bun.sleep(100);
+    // Long enough for her open's charge to refill, and nothing left of her.
+    await pass("60 seconds");
 
     expect(await census()).toEqual({ players: 0, connected: 0, rooms: {} });
   });
@@ -867,7 +925,8 @@ describe("when Leaf stops", () => {
         const slow = yield* Effect.forkChild(
           Effect.scoped(live.open(alicesIdentity, "town", Deferred.await(opening), signedIn)),
         );
-        yield* Effect.sleep("50 millis");
+        // Opening, waiting for its socket.
+        yield* Effect.yieldNow;
         yield* live.farewell;
         const late = yield* Effect.scoped(
           live.open({ ...alicesIdentity, playerId: bob, username: "Bob" }, "town", Deferred.await(opening), signedIn),

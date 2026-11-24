@@ -83,6 +83,13 @@ export const LiveTuning = Context.Reference<LiveTuning>("leaf/LiveTuning", {
 /** How long Live waits after a change to who is about before it tells the rooms, for the rest of a burst to come. */
 const ABOUT_GATHER = Duration.millis(200);
 
+/**
+ * How long a tick is: `SERVER_HZ` a second, to the whole millisecond. A fixed schedule measures its
+ * window by a clock in whole milliseconds, so with a fraction in the window its wait comes out under
+ * a millisecond again and again at the window's end, which a test clock never moves past.
+ */
+export const TICK = Duration.millis(Math.floor(1000 / SERVER_HZ));
+
 /** Where a player's presence says they are while they are in a room of a kind, if it is one of the game's places. */
 const placeOf = (kindName: string): string | null => PLACES.find((p) => p === kindName) ?? null;
 
@@ -430,8 +437,10 @@ export class Live extends Context.Service<
       // burst of changes. A visit's room is no place, and its pages show nobody about.
       const changed = yield* visits.changes;
       const tellAbout = Effect.gen(function* () {
-        yield* PubSub.take(changed);
+        yield* PubSub.takeAll(changed);
         yield* Effect.sleep(ABOUT_GATHER);
+        // The rest of the burst, heard meanwhile, is in what is read now: told once, not once a change.
+        yield* PubSub.takeUpTo(changed, Number.POSITIVE_INFINITY);
         const about = say({ t: "about", who: yield* whoIsAbout(yield* Clock.currentTimeMillis) });
         for (const room of rooms.all())
           if (placeOf(room.kindName)) for (const o of room.occupants.values()) o.outbox.send(about);
@@ -559,7 +568,7 @@ export class Live extends Context.Service<
           }
         }),
       );
-      yield* Effect.forkScoped(Effect.repeat(flush, Schedule.fixed(Duration.millis(1000 / SERVER_HZ))));
+      yield* Effect.forkScoped(Effect.repeat(flush, Schedule.fixed(TICK)));
 
       // Everybody in a room of one of the game's places is there still, as their game would say.
       const stillHere = Effect.flatMap(Clock.currentTimeMillis, (now) =>

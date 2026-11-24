@@ -939,8 +939,8 @@ once, not on the way, whenever it changes: the game counts its own player's
 whenever the game's count changes and at the first move of each new connection
 (which may count from anywhere). The other bits of
 `flags`, `facing` and `pose` are the game's, passed on as they come. Leaf sends
-a room's snapshot once a tick, only when somebody's motion changed, with only
-those who changed, made once and sent to everyone in the room.
+a room's snapshot once a tick (every 33 ms, `TICK`), only when somebody's motion
+changed, with only those who changed, made once and sent to everyone in the room.
 
 Text frames are JSON with a `t`:
 
