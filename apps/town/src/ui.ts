@@ -110,7 +110,15 @@ function treasury(body: HTMLElement): null {
   const line = el("span", "", { text: KEEPER.hello });
   const face = slot(G.cinfy ? faceOf(G.cinfy, 3) : null, 28);
   face.classList.add("nod");
-  body.append(el("div", "k-row", {}, face, el("div", "k-say left k-grow", {}, folkName(keeper.name, "k-pix"), line)));
+  body.append(
+    el("div", "k-row", {}, face, el("div", "k-say left k-grow", {}, folkName(keeper.name, "k-pix"), line)),
+    // Said once for both: what paying does, or for a guest why there is nothing to pay.
+    el("div", "k-d", {
+      text: isGuest()
+        ? "For guild members with 7 days in the guild."
+        : "A paid request is served before the free ones.",
+    }),
+  );
   const reason = el("textarea", "k-field", {
     maxLength: 1000,
     rows: 2,
@@ -133,14 +141,7 @@ function treasury(body: HTMLElement): null {
       "k-card",
       {},
       slot(art, 28),
-      el(
-        "div",
-        "k-grow k-col",
-        {},
-        el("span", "k-pix", { text: REQUESTS[kind] }),
-        el("div", "k-d", { text: "A paid request is served before the free ones." }),
-        under,
-      ),
+      el("div", "k-grow k-col", {}, el("span", "k-pix", { text: REQUESTS[kind] }), under),
       side,
     );
     body.append(card);
@@ -244,8 +245,7 @@ function treasury(body: HTMLElement): null {
     }
     draw();
   };
-  if (isGuest()) body.append(el("div", "k-d", { text: "For guild members with 7 days in the guild." }));
-  else void look();
+  if (!isGuest()) void look();
   return null;
 }
 
@@ -404,19 +404,16 @@ function fullNotes(parts: readonly Part[]): HTMLElement[] {
 function board(body: HTMLElement): () => void {
   const list = el("div", "k-col");
   let update: (() => void) | null = null;
-  const { row, show } = tabs(
-    TABS.map((label) => ({ label })),
-    (i) => {
-      if (TABS[i] === "News") {
-        readNews();
-        update = null;
-        newsTab(list);
-      } else {
-        update = quests(list);
-        update();
-      }
-    },
-  );
+  const { row, show } = tabs(TABS, (i) => {
+    if (TABS[i] === "News") {
+      readNews();
+      update = null;
+      newsTab(list);
+    } else {
+      update = quests(list);
+      update();
+    }
+  });
   body.append(row, list);
   show(TABS.indexOf(openingTab()));
   return () => {
@@ -427,10 +424,7 @@ function board(body: HTMLElement): () => void {
 // ---------- tabs ----------
 
 /** Tabs along the top of a panel, one lit at a time: tapping one, or `show`, lights it and opens what it is for. */
-function tabs(
-  each: readonly { label: string; tip?: readonly [string, string] }[],
-  open: (i: number) => void,
-): { row: HTMLElement; show: (i: number) => void } {
+function tabs(labels: readonly string[], open: (i: number) => void): { row: HTMLElement; show: (i: number) => void } {
   const row = el("div", "k-tabs", { role: "tablist" });
   const show = (i: number): void => {
     [...row.children].forEach((tab, k) => {
@@ -438,13 +432,12 @@ function tabs(
     });
     open(i);
   };
-  each.forEach(({ label, tip: about }, i) => {
+  labels.forEach((label, i) => {
     const tab = button("sm", [label], () => {
       sfx.tap();
       show(i);
     });
     tab.setAttribute("role", "tab");
-    if (about) tip(tab, ...about);
     row.append(tab);
   });
   return { row, show };
@@ -453,15 +446,14 @@ function tabs(
 // ---------- camp things, wherever they are sold ----------
 
 /**
- * A row for one camp thing and the button that buys it (`buy`). Nothing sells out: the row says how
- * many the member has.
+ * A row for one camp thing and the button that buys it (`buy`): its picture, its name, how many the
+ * member has (nothing sells out) and its price. What it is like is on its card, from its picture or name.
  */
 function shopRow(body: HTMLElement, s: Stock, buy: HTMLElement): () => void {
   const thing = thingOf(s.thing);
   if (!thing || !ART) return () => undefined;
   const art = ART;
   const have = el("div", "k-dim");
-  // The picture and the name explain the thing (its card); the button buys it.
   const picture = thingSlot(art, thing.id);
   link(picture, thingRef(thing.id));
   const row = el(
@@ -469,7 +461,7 @@ function shopRow(body: HTMLElement, s: Stock, buy: HTMLElement): () => void {
     "k-card",
     {},
     picture,
-    el("div", "k-grow", {}, named(thing.name, thingRef(thing.id)), el("div", "k-d", { text: thing.about }), have),
+    el("div", "k-grow", {}, named(thing.name, thingRef(thing.id)), have),
     buy,
   );
   body.append(row);
@@ -477,7 +469,7 @@ function shopRow(body: HTMLElement, s: Stock, buy: HTMLElement): () => void {
     () => String(owned(mine(), thing.id)),
     () => {
       const n = owned(mine(), thing.id);
-      have.textContent = n > 0 ? `You have ${n === 1 ? "one" : n}.` : "";
+      have.textContent = n > 0 ? `You have ${n}` : "";
       have.classList.toggle("k-gold", n > 0);
     },
   );
@@ -545,11 +537,9 @@ function market(body: HTMLElement): () => void {
     );
     for (const f of rows) f();
   };
+  // Each tab is its stall's first word; the keeper's bubble under them says the whole name.
   const { row, show } = tabs(
-    stalls.map((stall) => ({
-      label: stall.name.split(/[ ,]/)[0] ?? stall.name,
-      tip: [stall.name, `Kept by ${stall.by}.`],
-    })),
+    stalls.map((stall) => stall.name.split(/[ ,]/)[0] ?? stall.name),
     pickStall,
   );
   body.append(row, el("div", "k-row", {}, face, el("div", "k-say left k-grow", {}, line)), list);
