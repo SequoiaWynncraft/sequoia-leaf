@@ -10,7 +10,7 @@ import type { PetId } from "@sequoia-leaf/town/camp.ts";
 
 import { onScreen } from "./actors.ts";
 import type { PetArt } from "./campart.ts";
-import { csfx } from "./campsfx.ts";
+import { csfx, PURR_TIME } from "./campsfx.ts";
 import { float } from "./fx.ts";
 import type { Ground } from "./grid.ts";
 import type { Standing } from "./props.ts";
@@ -197,14 +197,15 @@ export function petAt(pets: readonly PetLive[], wx: number, wy: number): PetLive
   return null;
 }
 
-/** How each kind answers a touch: its sound, and what it does, said after its name. */
-const ANSWERS: Readonly<Record<PetId, { readonly sound: () => void; readonly does: string }>> = {
-  cat: { sound: () => csfx.purr(), does: "purrs." },
-  fox: { sound: () => csfx.yip(), does: "does a small happy spin." },
-  glorp: { sound: () => csfx.blob(), does: "wobbles, delighted." },
-};
-/** Seconds a pet's answer lasts: as long as its line is up. */
-const ANSWER_TIME = 1.8;
+/** How long a pet's line is up after it answers. */
+const LINE_TIME = 1.8;
+/** How each kind answers a touch: its sound, what it does, said after its name, and the seconds it takes. */
+const ANSWERS: Readonly<Record<PetId, { readonly sound: () => void; readonly does: string; readonly lasts: number }>> =
+  {
+    cat: { sound: () => csfx.purr(), does: "purrs.", lasts: PURR_TIME },
+    fox: { sound: () => csfx.yip(), does: "does a small happy spin.", lasts: LINE_TIME },
+    glorp: { sound: () => csfx.blob(), does: "wobbles, delighted.", lasts: LINE_TIME },
+  };
 
 /**
  * A pet is touched: it is pleased each time, and answers in its own way, aloud and in a line, unless
@@ -219,7 +220,8 @@ export function pleased(p: PetLive): void {
   if (p.kind === "fox") p.dir = p.dir > 0 ? -1 : 1;
   float(p.x, p.y - 12, "\u2665", SKY[5], 1.2);
   if (p.voice > 0) return;
-  p.voice = ANSWER_TIME;
-  ANSWERS[p.kind].sound();
-  float(p.x, p.y - 20, `${p.name} ${ANSWERS[p.kind].does}`, CREAM, ANSWER_TIME);
+  const answer = ANSWERS[p.kind];
+  p.voice = answer.lasts;
+  answer.sound();
+  float(p.x, p.y - 20, `${p.name} ${answer.does}`, CREAM, LINE_TIME);
 }

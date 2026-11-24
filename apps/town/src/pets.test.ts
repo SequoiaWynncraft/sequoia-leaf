@@ -1,5 +1,6 @@
 import { beforeEach, expect, test } from "bun:test";
 
+import { PURR_TIME } from "./campsfx.ts";
 import { clearFx, floaters } from "./fx.ts";
 import { makeGround } from "./grid.ts";
 import { makePet, pleased, stepPet } from "./pets.ts";
@@ -19,11 +20,11 @@ test("a pet touched again while it is still answering is pleased, but does not a
   expect(said("Erm purrs.")).toBe(1);
   expect(floaters.filter((f) => f.text === "♥")).toHaveLength(3);
 
-  // Once its answer is over, a touch is answered again.
-  stepPet(cat, 1, world);
+  // Once its purr is over, a touch is answered again.
+  stepPet(cat, PURR_TIME - 0.5, world);
   pleased(cat);
   expect(said("Erm purrs.")).toBe(1);
-  stepPet(cat, 1, world);
+  stepPet(cat, 0.5, world);
   pleased(cat);
   expect(said("Erm purrs.")).toBe(2);
 });

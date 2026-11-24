@@ -1,6 +1,8 @@
-/** The camp's own small sounds, made from the kit's tones and hiss. */
+/** The camp's own small sounds, made from the kit's tones and hiss, and a cat's purr, recorded. */
 
-import { heard, noise, note, penta, type SoundKind, tone } from "@sequoia-leaf/kit/sound.ts";
+import { heard, noise, note, penta, recording, type SoundKind, tone } from "@sequoia-leaf/kit/sound.ts";
+
+import purrFile from "./sounds/purr.mp3";
 
 /** The kinds of the town's and the camps' own sounds, by id: each one the player can switch off on its own. */
 export const TOWN_SOUND = {
@@ -12,22 +14,16 @@ export const TOWN_SOUND = {
   doors: "town.doors",
 } as const;
 
-/** A purr's two breaths: when each starts, its beats, the hiss's pitch, and how loud at its fullest. */
-const PURR = [
-  { at: 0, beats: 13, freq: 170, vol: 0.9 },
-  { at: 0.6, beats: 10, freq: 210, vol: 0.65 },
-] as const;
+/** A cat purring, one breath out and in: 2.84 s, a recording in the public domain (`sounds/NOTICE.txt`). */
+const PURR = recording(purrFile);
+/** Seconds a purr lasts at its slowest. */
+export const PURR_TIME = 3;
 
 export const csfx = {
-  /**
-   * A purr: a breath out and a breath in, each a low hiss beating 25 times a second and swelling and
-   * fading with the breath. The band is narrow, so the gain is high.
-   */
+  /** A purr, a little faster or slower each time (up to 6%), so that two are not the same. */
   purr(): void {
     if (!heard(TOWN_SOUND.pets)) return;
-    for (const b of PURR)
-      for (let i = 0; i < b.beats; i++)
-        noise(0.05, b.freq, { vol: b.vol * Math.sin((Math.PI * (i + 0.5)) / b.beats), q: 3, at: b.at + i * 0.04 });
+    PURR.play({ vol: 0.13, rate: 0.94 + Math.random() * 0.12 });
   },
   yip(): void {
     if (!heard(TOWN_SOUND.pets)) return;
