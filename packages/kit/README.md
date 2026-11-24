@@ -190,16 +190,19 @@ install and `bun build index.html --minify`, so a page that only builds here is 
 own rules are in `tools/lint-rules.mjs`: the browser's primitives only through a scope, no `let` at
 the top of a module, no hook framework, and for what ships, files of at most 500 lines (blank lines
 and comments aside), functions of at most 90 and branching of at most 15. `bun run imports`
-(`tools/imports.ts`, on the import graph of `tools/graph.ts`, resolved as Bun's bundler resolves it)
-fails a loop of runtime imports among what ships, an app importing another, the games' rules
-importing the kit, the figures or an app (or checked with the DOM), and anything that ships
-importing review code. `bun run clones` (`tools/clones.ts`) fails code copied between two apps or
+(`tools/imports.ts`, on what `Bun.build` builds for each page and the API and what `bun check
+--explainFiles` lists for each TypeScript project, `tools/graph.ts`) fails a loop of imports a build
+waits on, an app importing another or the kit an app (types too), the games' rules importing the
+kit, the figures or an app or reading the DOM, and any way from a page or the API into review code,
+which it prints whole. `bun run clones` (`tools/clones.ts`) fails code copied between two apps or
 packages: a run of 70 tokens or more, comments and spacing aside. Where code today breaks those
 lines, each count is held to a baseline in `tools/baseline/` (`tools/ratchet.ts`): by file and rule,
 by import, or by pair of files sharing copied runs. Anything new or more fails, and so does anything
 fewer until the baseline is lowered with it (`bun run lint --lower`, and the same for the others),
-which never adds or raises a count. `bun run budget` (`tools/budget.ts`) prints how many lines each
-page and the API reach by code that runs, by workspace, and fails nothing.
+which never adds or raises a count; and a baseline above the base branch's (where the branch left
+origin/main, or in CI the merge commit's first parent) fails, so a change cannot raise its own. `bun
+run budget` (`tools/budget.ts`) prints how many lines of source Bun builds for each page and the
+API, by workspace, and fails nothing.
 
 ## Cards
 

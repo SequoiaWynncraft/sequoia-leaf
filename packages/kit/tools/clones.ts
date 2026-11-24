@@ -12,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { root, tracked } from "./graph.ts";
+import { root } from "./graph.ts";
 import { count, type Counts, hold } from "./ratchet.ts";
 
 /** How many tokens a copied run has at least. */
@@ -24,6 +24,12 @@ const TOKEN =
 /** A source's tokens, without its comments and spacing. */
 export function tokens(text: string): string[] {
   return [...text.matchAll(TOKEN)].flatMap((m) => (m[2] === undefined ? [] : [m[2]]));
+}
+
+/** Every tracked file, from the root. */
+function tracked(): string[] {
+  const out = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root, stdout: "pipe" });
+  return out.stdout.toString().split("\0").filter(Boolean);
 }
 
 /** The workspace a file is in: `apps/town`, `packages/kit`. */

@@ -1,89 +1,90 @@
 /**
- * The repository's source as a graph, for the checks on it (`imports.ts`, `budget.ts`): every
- * tracked TypeScript file, page and style, and what each imports, resolved as Bun's bundler resolves
- * it, through each workspace package's `exports`. Only imports inside the repository are edges.
- *
- * An import is `runtime` when it is in the code that runs: Bun's own scanner drops imports of types
- * alone, as the bundler does. Imports of types are edges too, for the boundaries, which hold for
- * them as well.
+ * The repository as Bun's own tools read it (`imports.ts`, `budget.ts`): what a page or the API runs,
+ * from `Bun.build`'s metafile, resolved as the build resolves it, types gone (`built`); and what each
+ * TypeScript project reads, from `bun check --explainFiles` (tsc's), every file and library and who
+ * imports or references each, types too, comments not (`typed`). Paths are from the repository's
+ * root (`root`); only its own files, outside `node_modules`, are edges.
  */
-import { readFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 
-/** The repository's root folder. */
 export const root = join(import.meta.dir, "..", "..", "..");
 
+/** An import: the file imported, and whether its importer waits for it to run first (all but a dynamic `import()`). */
 export interface Edge {
-  /** The file imported, from the root. */
   readonly to: string;
-  /** Whether it is imported by code that runs, not for types alone. */
-  readonly runtime: boolean;
+  readonly eager: boolean;
+}
+/** Each file read, from the root, and what it imports. */
+export type Graph = Map<string, Edge[]>;
+
+/** A file of the repository at `at`, from a path from there; null for a library, or one outside it or in `node_modules`. */
+function inRepo(at: string, path: string): string | null {
+  const from = relative(at, resolve(at, path));
+  return /^\.\.|(^|\/)node_modules\/|:/.test(from) ? null : from;
 }
 
-/** Every tracked file, from the root. */
-export function tracked(): string[] {
-  const out = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root, stdout: "pipe" });
-  return out.stdout.toString().split("\0").filter(Boolean);
+/** What runs: a page, built for the browser, or the API (its `main.ts`, and the migrations its migrator reads from their folder), for Bun. */
+export interface Entry {
+  readonly name: string;
+  readonly target: "browser" | "bun";
+  readonly from: readonly string[];
 }
 
-const scanner = new Bun.Transpiler({ loader: "ts" });
-/** What an import or export declaration names, types too: a line that begins one, up to its `from "x"`. */
-const named = /^[ \t]*(?:import|export)\b[^;'"`]*?\bfrom\s*["']([^"']+)["']/gm;
-/** What a page loads, and what a style imports. */
-const loaded = /<(?:script|link)\b[^>]*\b(?:src|href)=["']([^"']+\.(?:ts|css))["']/g;
-const imported = /@import\s+(?:url\()?["']([^"']+)["']/g;
+const page = (p: string): Entry => ({ name: p.split("/")[1] ?? p, target: "browser", from: [p] });
 
-/** Where a specifier leads from a file, from the root; null for a package outside the repository or the runtime's own. */
-function resolve(file: string, spec: string): string | null {
-  let at: string;
-  try {
-    at = Bun.resolveSync(spec, join(root, dirname(file)));
-  } catch {
-    if (spec.startsWith(".") || spec.startsWith("@sequoia-leaf/")) throw new Error(`${file}: cannot resolve ${spec}`);
-    return null;
+export function entries(at = root): Entry[] {
+  const glob = (pattern: string): string[] => [...new Bun.Glob(pattern).scanSync({ cwd: at })].toSorted();
+  const api: Entry = { name: "api", target: "bun", from: glob("apps/api/{src/main,migrations/*}.ts") };
+  return [...glob("apps/*/index.html").map(page), ...(api.from.length > 0 ? [api] : [])];
+}
+
+/** What an entry runs, as Bun builds it, its styles' pictures and fonts too. */
+export async function built({ from, target }: Entry, at = root): Promise<Graph> {
+  const { metafile } = await Bun.build({ entrypoints: from.map((f) => join(at, f)), target, metafile: true });
+  if (metafile === undefined) throw new Error(`Bun gave no metafile for ${from.join(", ")}`);
+  const g: Graph = new Map();
+  for (const [file, { imports }] of Object.entries(metafile.inputs)) {
+    const path = inRepo(at, resolve(file));
+    const edges = imports.flatMap(({ path: to, kind }) => {
+      const where = inRepo(at, resolve(to));
+      return where === null ? [] : [{ to: where, eager: kind !== "dynamic-import" }];
+    });
+    if (path !== null) g.set(path, edges);
   }
-  const path = relative(root, at);
-  return path.startsWith("..") || path.split("/").includes("node_modules") || !at.startsWith("/") ? null : path;
+  return g;
 }
 
-/** What a file imports, as edges. */
-export function edgesOf(file: string): Edge[] {
-  const text = readFileSync(join(root, file), "utf8");
-  const edges = new Map<string, boolean>();
-  const add = (spec: string, runtime: boolean): void => {
-    const to = resolve(file, spec);
-    if (to !== null) edges.set(to, (edges.get(to) ?? false) || runtime);
-  };
-  if (file.endsWith(".html")) for (const m of text.matchAll(loaded)) add(m[1] ?? "", true);
-  else if (file.endsWith(".css")) for (const m of text.matchAll(imported)) add(m[1] ?? "", true);
-  else {
-    for (const i of scanner.scanImports(text)) add(i.path, true);
-    for (const m of text.matchAll(named)) add(m[1] ?? "", false);
-  }
-  return [...edges].map(([to, runtime]) => ({ to, runtime }));
+/** A TypeScript project: its config, the files it reads (libraries as `bundled:///libs/lib.dom.d.ts`), and each import or reference between the repository's files. */
+export interface Project {
+  readonly config: string;
+  readonly files: readonly string[];
+  readonly edges: readonly (readonly [from: string, to: string])[];
 }
 
-/** Whether a file is a test or only helps tests. */
-export const isTest = (file: string): boolean =>
-  file.endsWith(".test.ts") ||
-  file.split("/").includes("test") ||
-  file === "packages/kit/src/standin.ts" ||
-  file === "packages/raid/src/testkit.ts";
+/** A file `--explainFiles` lists; and a reason it gives, with the file that imports or references it. */
+const FILE = /^[^\s<]\S*\.\w+$/;
+const BY = /^\s+(?:Imported|Referenced) via .* from file '([^']+)'/;
 
-/** The graph of the source files, each with its edges. */
-export function graph(files: readonly string[] = tracked()): Map<string, Edge[]> {
-  const source = files.filter((f) => /^(apps|packages)\/.*\.(ts|css)$/.test(f) || /^apps\/[^/]+\/index\.html$/.test(f));
-  return new Map(source.map((f) => [f, edgesOf(f)]));
-}
-
-/** Everything a set of entries reaches by code that runs, the entries included. */
-export function reach(g: ReadonlyMap<string, readonly Edge[]>, entries: readonly string[]): Set<string> {
-  const seen = new Set<string>();
-  const todo = [...entries];
-  for (let f = todo.pop(); f !== undefined; f = todo.pop()) {
-    if (seen.has(f)) continue;
-    seen.add(f);
-    for (const e of g.get(f) ?? []) if (e.runtime) todo.push(e.to);
-  }
-  return seen;
+/** What each workspace's TypeScript projects read. */
+export function typed(at = root): Promise<Project[]> {
+  const configs = [...new Bun.Glob("{apps,packages}/*/tsconfig*.json").scanSync({ cwd: at })].toSorted();
+  return Promise.all(
+    configs.map(async (config): Promise<Project> => {
+      const said = await Bun.$`${process.execPath} check -p ${config} --explainFiles`.cwd(at).quiet().nothrow().text();
+      const files: string[] = [];
+      const edges: [string, string][] = [];
+      let to: string | null = null;
+      for (const line of said.split("\n")) {
+        if (FILE.test(line)) {
+          files.push(line);
+          to = inRepo(at, line);
+        }
+        const by = BY.exec(line)?.[1];
+        const from = by === undefined ? null : inRepo(at, by);
+        if (to !== null && from !== null) edges.push([from, to]);
+      }
+      if (files.length === 0) throw new Error(`bun check listed nothing for ${config}`);
+      return { config, files, edges };
+    }),
+  );
 }

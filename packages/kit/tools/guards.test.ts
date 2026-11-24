@@ -1,16 +1,16 @@
 /**
- * The guards: the ratchet that holds counts to a baseline, the loops the import check finds, the
- * runs the clone check counts as copied, and the repository's own lint rules, run by oxlint on a
- * file that breaks each.
+ * The guards: the ratchet that holds counts to a baseline, the import check on a repository of its
+ * own, the runs the clone check counts as copied, and the repository's own lint rules, run by oxlint
+ * on a file that breaks each.
  */
 import { describe, expect, test } from "bun:test";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { RUN, shared, tokens } from "./clones.ts";
-import { type Edge, root } from "./graph.ts";
-import { loops } from "./imports.ts";
+import { type Graph, root } from "./graph.ts";
+import { findings, loops } from "./imports.ts";
 import { compare, lowered } from "./ratchet.ts";
 
 describe("the ratchet", () => {
@@ -136,16 +136,86 @@ describe("the ratchet's baseline, held to the base branch's", () => {
 });
 
 describe("the import check's loops", () => {
-  const g = new Map<string, Edge[]>([
-    ["a", [{ to: "b", runtime: true }]],
-    ["b", [{ to: "a", runtime: true }]],
-    ["c", [{ to: "d", runtime: false }]],
-    ["d", [{ to: "c", runtime: true }]],
-    ["e", [{ to: "e", runtime: true }]],
-    ["f", [{ to: "a", runtime: true }]],
+  const g: Graph = new Map([
+    ["a", [{ to: "b", eager: true }]],
+    ["b", [{ to: "a", eager: true }]],
+    ["c", [{ to: "d", eager: false }]],
+    ["d", [{ to: "c", eager: true }]],
+    ["e", [{ to: "e", eager: true }]],
+    ["f", [{ to: "a", eager: true }]],
   ]);
-  test("are groups that import each other at runtime; an import of types alone closes none", () => {
-    expect(loops(g, new Set(g.keys()))).toEqual([["a", "b"], ["e"]]);
+  test("are groups that import each other eagerly; a dynamic import() closes none", () => {
+    expect(loops(g)).toEqual([["a", "b"], ["e"]]);
+  });
+});
+
+/** A repository of its own, of `files` (path to text), with `node_modules` linked to the packages named in `links`. */
+function fixture(files: Record<string, string>, links: Record<string, string>): { at: string; done: () => void } {
+  const at = mkdtempSync(join(tmpdir(), "leaf-imports-"));
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(at, path)), { recursive: true });
+    writeFileSync(join(at, path), text);
+  }
+  for (const [name, to] of Object.entries(links)) {
+    mkdirSync(dirname(join(at, "node_modules", name)), { recursive: true });
+    symlinkSync(join(at, to), join(at, "node_modules", name));
+  }
+  return { at, done: () => rmSync(at, { recursive: true, force: true }) };
+}
+
+const project = (include: string): string =>
+  JSON.stringify({ extends: "../../tsconfig.base.json", include: [include] });
+
+describe("the import check, on what Bun builds and checks", () => {
+  test("finds review code reached through other files, resolved as the build resolves it, types imported in code, and the DOM a rule package inherits", async () => {
+    const { at, done } = fixture(
+      {
+        // Every project has the DOM from the base, the rules' too.
+        "tsconfig.base.json": JSON.stringify({
+          compilerOptions: { lib: ["ES2024", "DOM"], module: "preserve", moduleResolution: "bundler", types: [] },
+        }),
+        "apps/town/tsconfig.json": project("src"),
+        "apps/town/index.html": '<script type="module" src="./src/init.ts"></script>',
+        "apps/town/src/init.ts": 'import "./extras.ts";\nimport { cond } from "@fx/cond";\nconsole.log(cond);\n',
+        "apps/town/src/extras.ts": 'import { tour } from "../review/tour.ts";\nconsole.log(tour);\n',
+        "apps/town/review/tour.ts": "export const tour = 1;\n",
+        "apps/town/src/shapes.ts": [
+          "/*",
+          ' import { other } from "../../works/src/other.ts";',
+          "*/",
+          'export type Shape = import("../../works/src/shape.ts").Shape;',
+        ].join("\n"),
+        "apps/works/tsconfig.json": project("src"),
+        "apps/works/src/shape.ts": "export interface Shape {\n  readonly n: number;\n}\n",
+        "apps/works/src/other.ts": "export const other = 1;\n",
+        "packages/cond/package.json": JSON.stringify({
+          name: "@fx/cond",
+          exports: { ".": { browser: "./browser.ts", default: "./bun.ts" } },
+        }),
+        "packages/cond/browser.ts":
+          'import { tour } from "../../apps/town/review/tour.ts";\nexport const cond = tour;\n',
+        "packages/cond/bun.ts": "export const cond = 0;\n",
+        "packages/core/tsconfig.json": project("src"),
+        "packages/core/src/rule.ts": "export const title = (): string => document.title;\n",
+      },
+      { "@fx/cond": "packages/cond" },
+    );
+    try {
+      const { found, ways } = await findings(at);
+      expect(found).toEqual({
+        review: {
+          "apps/town/src/extras.ts -> apps/town/review/tour.ts": 1,
+          "packages/cond/browser.ts -> apps/town/review/tour.ts": 1,
+        },
+        "app-to-app": { "apps/town/src/shapes.ts -> apps/works/src/shape.ts": 1 },
+        "rule-package": { "packages/core reads lib.dom.d.ts": 1 },
+      });
+      expect(ways).toContain(
+        "town: apps/town/index.html -> apps/town/src/init.ts -> apps/town/src/extras.ts -> apps/town/review/tour.ts",
+      );
+    } finally {
+      done();
+    }
   });
 });
 
