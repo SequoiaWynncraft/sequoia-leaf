@@ -778,15 +778,17 @@
       }
 
       /*
-       * A table of numbers (`ui/table.ts`): what a row is about takes the room that is left, and each
-       * number has a column at least `--col` wide and as wide as its widest number, right-aligned
-       * under its name. A row shares the table's columns, so every row lines up with the head.
+       * A table of numbers (`ui/table.ts`): what a row is about takes the room that is left, never
+       * less than its longest word, and each number has a column exactly as wide as its widest number
+       * (never under `--col`), right-aligned under its name. Neither gives way to the other: a table
+       * too wide for the sheet scrolls sideways in it. A row shares the table's columns, so every row
+       * lines up with the head.
        */
       .tbl {
         --col: calc(var(--u) * 30);
         flex: none;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) repeat(var(--cols), minmax(var(--col), max-content));
+        grid-template-columns: minmax(min-content, 1fr) repeat(var(--cols), max-content);
         gap: calc(var(--u) * 2) calc(var(--u) * 3);
       }
       .tbl > .tbl-head,
@@ -812,6 +814,10 @@
       }
       .tbl-head > :first-child {
         text-align: left;
+      }
+      .tbl:not(.cards) > .tbl-head > * + *,
+      .tbl:not(.cards) .num {
+        min-inline-size: var(--col);
       }
       /* The unit, on a line of its own under the name, so every column's sits just over its numbers. */
       .tbl-unit {
@@ -839,17 +845,37 @@
         gap: var(--u);
       }
       /*
-       * Where a word of some name would run under the numbers (`ui/table.ts` says so), every name has
-       * a line of its own, and its numbers go on the line under it, under their columns' names.
+       * A table that may stack (the Items table) gives each name a line of its own, and its numbers
+       * the line under it, where it is narrower than 17em (340 px at the usual size): there three
+       * columns of 3 figures leave a word like "Deadfall" too little room, while a 390 px phone's 342 px
+       * still has it. With a number of 5 characters or more (`long`: 1,000 and up) it stacks below
+       * 17.5em, so a 390 px phone stacks too and the desktop sheet's 360 px does not. The caption goes
+       * over the columns' names likewise, so the numbers have the whole width.
        */
-      .tbl.stacked > .tbl-row {
-        row-gap: var(--u);
+      .tbl.stack {
+        container: tbl / inline-size;
       }
-      .tbl.stacked > .tbl-row > .tbl-what {
-        grid-column: 1 / -1;
+      @container tbl (width < 17em) {
+        .tbl.stack > * {
+          row-gap: var(--u);
+        }
+        .tbl.stack > * > :first-child {
+          grid-column: 1 / -1;
+        }
+        .tbl.stack > * > :nth-child(2) {
+          grid-column-start: 2;
+        }
       }
-      .tbl.stacked > .tbl-row > .tbl-what + * {
-        grid-column-start: 2;
+      @container tbl (width < 17.5em) {
+        .tbl.long > * {
+          row-gap: var(--u);
+        }
+        .tbl.long > * > :first-child {
+          grid-column: 1 / -1;
+        }
+        .tbl.long > * > :nth-child(2) {
+          grid-column-start: 2;
+        }
       }
       .tbl-note {
         font: var(--f-small);
@@ -858,7 +884,13 @@
       .tbl-note:empty {
         display: none;
       }
-      /* Rows to be pressed are cards, tall enough for a finger; the head keeps to their inside edges. */
+      /*
+       * Rows to be pressed are cards, tall enough for a finger; the head keeps to their inside edges.
+       * Their columns are `--col` exactly, for a card's padding would widen a column sized by its numbers.
+       */
+      .tbl.cards {
+        grid-template-columns: minmax(0, 1fr) repeat(var(--cols), var(--col));
+      }
       .tbl.cards > .tbl-head {
         padding-inline: calc(var(--u) * 6);
       }
