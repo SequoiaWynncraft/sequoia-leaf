@@ -169,14 +169,16 @@ export function renderPicks(): void {
   box.dataset.kind = choice.kind;
   const [title, under] = TITLES[choice.kind];
   const cards = el("div", "cards", {});
-  choice.options.forEach((option, i) => {
+  choice.options.forEach((_, i) => {
     const card = el("button", "k-card pick k-rise", { type: "button", "data-pick": i });
     card.style.animationDelay = `${i * 70}ms`;
     if (choice.kind === "starter") add(card, ...starterCard(choice.options[i] ?? "rock"));
     else if (choice.kind === "component") add(card, ...componentCard(run, choice.options[i] ?? "thorn"));
     else add(card, ...boonCardParts(choice.options[i] ?? "windfall"));
     card.addEventListener("click", () => void take(i, card));
-    card.setAttribute("aria-label", option);
+    // Named by what it is; what is inside it still explains itself to the mouse, but is not a stop for the keyboard.
+    card.setAttribute("aria-label", card.querySelector(".k-gold")?.textContent ?? "");
+    for (const inside of card.querySelectorAll<HTMLElement>(".k-link")) inside.tabIndex = -1;
     cards.append(card);
   });
   const head = el(

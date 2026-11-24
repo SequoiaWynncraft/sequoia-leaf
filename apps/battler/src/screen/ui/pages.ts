@@ -70,17 +70,32 @@ let tab = "figures";
 /** The look being tried on in the looks page, before it is bought or worn. */
 let trying: { kind: LookKind; id: LookId } | null = null;
 let sureHome = false;
+/** What had the keyboard when a page was opened over the table: it has it back when the page goes. */
+let opener: HTMLElement | null = null;
 
 export function openPages(a: PageAsks): void {
   asks = a;
+  // Escape puts away a page opened over the table, unless a card took it first.
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !e.defaultPrevented && extra) showPage(null);
+  });
 }
-/** Opens a page over the table. */
+/** Opens a page over the table, with the keyboard in it; or puts it away, giving the keyboard back. */
 export function showPage(id: PageId | null): void {
+  if (id && !extra) opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   extra = id;
   sureHome = false;
   if (id) snd.open();
   else snd.close();
   renderPages(true);
+  if (id) {
+    document.querySelector<HTMLElement>("#modal:not([hidden]) button")?.focus({ preventScroll: true });
+    return;
+  }
+  // The front page is drawn again as a page over it goes: its button of the same id has the keyboard then.
+  const back = opener?.isConnected ? opener : opener?.id ? document.getElementById(opener.id) : null;
+  back?.focus({ preventScroll: true });
+  opener = null;
 }
 export const pageUp = (): PageId | null =>
   extra ?? (S.screen.at === "front" ? "front" : S.screen.at === "over" ? "summary" : null);
@@ -699,6 +714,11 @@ export function renderPages(force = false): void {
   const key = `${id}:${S.runs}:${S.run?.room ?? 0}:${endedOf(S.screen) ? 1 : 0}`;
   if (!force && key === shownKey) return;
   shownKey = key;
+  // While a page is opened over the table, the table behind it cannot be reached.
+  for (const part of ["hud", "bottom", "rack", "picks"]) {
+    const node = document.getElementById(part);
+    if (node) node.inert = extra !== null;
+  }
   if (!id) {
     box.hidden = true;
     box.replaceChildren();
@@ -719,9 +739,12 @@ export function renderPages(force = false): void {
     return;
   }
   if (force) node.classList.remove("k-rise");
+  // Drawn again (a tab, a look tried on), the page keeps the keyboard where it was.
+  const was = [...box.querySelectorAll("button")].findIndex((b) => b === document.activeElement);
   box.hidden = false;
   box.dataset.page = id;
   box.replaceChildren(node);
+  if (was >= 0) box.querySelectorAll("button")[was]?.focus({ preventScroll: true });
 }
 
 /** A touch outside a page that can be closed closes it. */

@@ -108,7 +108,7 @@ async function boot(): Promise<void> {
     traitOn,
   });
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && sheetUp() === "again") lookBack();
+    if (e.key === "Escape" && !e.defaultPrevented && sheetUp() === "again") lookBack();
   });
   openPages({
     carryOn: () => {
