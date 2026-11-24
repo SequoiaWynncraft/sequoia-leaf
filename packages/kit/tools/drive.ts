@@ -20,6 +20,8 @@
  *   `"Escape"` or `"Enter"`; Enter and Space press a focused button); `["hold", "Enter", ms]` holds
  *   one down for `ms`, as a person does: the browser says it again every 33 ms until it comes up;
  *   `["eval", "expr"]` prints an expression's value;
+ * - `["media", "prefers-reduced-motion", "reduce"]` has the page see a media feature so (`""` for as
+ *   the machine has it);
  * - `["shot", "name"]` saves a screenshot;
  * - `["audit"]` prints what keeps a player from reading or reaching the page as it is now
  *   (`audit.ts`), and `["audit", "name"]` saves that as `<out-dir>/<name>.txt` too.
@@ -45,6 +47,7 @@ type Step =
   | ["hold", string, number]
   | ["shot", string]
   | ["audit", string?]
+  | ["media", string, string]
   | ["eval", string];
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
@@ -60,6 +63,7 @@ function isStep(v: unknown): v is Step {
   if (kind === "hold") return typeof a === "string" && typeof b === "number";
   if (kind === "finger") return (a === "down" || a === "move" || a === "up") && typeof b === "string";
   if (kind === "audit") return a === undefined || typeof a === "string";
+  if (kind === "media") return typeof a === "string" && typeof b === "string";
   return (
     (kind === "key" ||
       kind === "shot" ||
@@ -259,6 +263,9 @@ async function run(step: Step): Promise<void> {
       await send("Input.dispatchKeyEvent", { type: "keyUp", key, code });
       return;
     }
+    case "media":
+      await send("Emulation.setEmulatedMedia", { features: [{ name: step[1], value: step[2] }] });
+      return;
     case "audit": {
       const lines = await audit(send);
       console.log(lines.join("\n"));
