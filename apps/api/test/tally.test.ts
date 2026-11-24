@@ -473,7 +473,13 @@ describe("the counters' first counts", () => {
           ) STRICT
         `,
       );
-      for (const trigger of ["visits_opened", "visits_heard", "players_seen_stay", "players_seen_first"]) {
+      for (const trigger of [
+        "visits_opened",
+        "visits_heard",
+        "visits_removed",
+        "players_seen_stay",
+        "players_seen_first",
+      ]) {
         // oxlint-disable-next-line no-await-in-loop -- one after another
         await before.query((sql) => sql`DROP TRIGGER ${sql(trigger)}`);
       }

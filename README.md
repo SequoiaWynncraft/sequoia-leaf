@@ -400,11 +400,16 @@ react to `quest_completed`.
 - A stream carries a comment line every 20 seconds to keep the connection
   open. Ignore lines that start with `:`.
 
-Every open stream, a member's own and the guild's, is fed by one look at the
-events table every two seconds while any is open, not one each: each new event
-is read once, its frame made once, and sent to the streams of its member (and,
-if the guild sees it, to the guild's). A reconnecting stream reads what it
-missed itself, then joins the look, and sends each event once.
+Every open stream is fed by a look at the events table every two seconds while
+any is open, not one each: one look for members' own events, and one for the
+guild's, which names whom each is of before its streams hear it, so a member's
+own event never waits on a name. Each new event is read once and its frame made
+once, and sent to the streams it belongs to. A stream with 32 looks' events
+waiting to be sent, its client reading too slowly, is ended once it has sent
+them; it reconnects, and reads the rest from where it got to. A look that fails
+is logged and made again from where the last one ended. A stream ends as soon as
+its events end or fail, so its client reconnects at once. A reconnecting stream
+reads what it missed itself, then joins the look, and sends each event once.
 
 ### The game's routes
 
@@ -515,7 +520,7 @@ by when each happened, each once however many members it paid; and `last_war`,
 happened (of two at one moment, the one whose name sorts later), or null. Both
 count only what Leaf paid for, which is what the events tell of. The stream behaves exactly as the member's own does, from where
 it starts to when it closes, and counts toward the same six, and is fed by the
-same look at the database.
+guild's look at the database.
 Raid party members' events share a `detail` and an `occurred_at`.
 
 A member's name is the one the backend gave when they last opened
@@ -1544,8 +1549,11 @@ At each start Leaf pays the levels reached and not paid for (`missed_levels`).
 It looks only at the accounts with an entry since its last look that changed
 their XP or their level payouts, and at every such account once more when the
 level rules change; it records how far it got (`level_checks`) a hundred
-accounts at a time, so one stopped halfway goes on at the next start. A
-correction run by hand is looked at the same way at the next start.
+accounts at a time, so one stopped halfway goes on at the next start, and then
+on to the newest entry. Each check takes the record with a number of its own and
+writes it only while it is still its own, so two at once (in a deploy) never
+skip a payout. A correction run by hand is looked at the same way at the next
+start.
 
 ## License
 

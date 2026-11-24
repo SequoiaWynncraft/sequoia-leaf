@@ -38,7 +38,13 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 /** Undoes migration 37: no newest visit kept for each player, and visits indexed by when they were last heard of. */
 const beforeLastVisits = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
-    for (const trigger of ["visits_opened", "visits_heard", "players_seen_stay", "players_seen_first"]) {
+    for (const trigger of [
+      "visits_opened",
+      "visits_heard",
+      "visits_removed",
+      "players_seen_stay",
+      "players_seen_first",
+    ]) {
       yield* sql`DROP TRIGGER ${sql(trigger)}`;
     }
     yield* sql`DROP TABLE last_visits`;

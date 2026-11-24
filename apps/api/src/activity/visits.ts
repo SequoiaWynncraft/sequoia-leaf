@@ -56,12 +56,13 @@ const inGame = (v: { place: string; source: Source }): boolean =>
   v.source === "call" && (GAME_AT[v.place] ?? "town") !== "town";
 
 /**
- * Whether word that a player is at `place` now, from `source`, leaves their open visit (`v`) where
- * it is: word older than what Leaf has heard of them since moves nobody, and nor does a live room
- * another page of theirs is in while they play a game (`inGame`).
+ * Whether word that a player is at `place` now, from `source`, leaves their open visit (`v`) as it
+ * is: word older than what Leaf has heard of them since changes nothing, in that place or another
+ * (in a deploy, a room's word the Leaf stopping wrote late would give it the visit back); and a
+ * live room another page of theirs is in while they play a game (`inGame`) does not move them.
  */
 const staysPut = (v: OpenVisit, place: string, source: Source, now: number): boolean =>
-  v.place !== place && (v.heardAt > now || (source === "room" && inGame(v)));
+  v.heardAt > now || (v.place !== place && source === "room" && inGame(v));
 
 /**
  * The most visits one transaction writes or closes: a live room's word that everybody in it is
@@ -276,9 +277,8 @@ const openAt = (w: Writer, playerId: string, now: number) =>
 /**
  * A player is at `place` now: their open visit there is heard of again, by this Leaf (and is
  * the room's, if this is the room), with their name and whether a guest as they are now; or
- * the one they have elsewhere closes and one opens here, unless Leaf heard of them there
- * later than `now`, or a room says so while they play a game (`staysPut`). Says whether who is
- * about changed.
+ * the one they have elsewhere closes and one opens here; unless Leaf heard of them later than
+ * `now`, or a room says so while they play a game (`staysPut`). Says whether who is about changed.
  */
 const arrive = (w: Writer, who: Visitor, place: string, source: Source, now: number) =>
   Effect.gen(function* () {
@@ -289,7 +289,7 @@ const arrive = (w: Writer, who: Visitor, place: string, source: Source, now: num
       const guest = who.guest ? 1 : 0;
       yield* count(w, current.value, now);
       yield* w.sql`
-        UPDATE visits SET heard_at = max(heard_at, ${now}), acted_at = ${w.actedOf(current.value)},
+        UPDATE visits SET heard_at = ${now}, acted_at = ${w.actedOf(current.value)},
           source = ${kept}, guest = ${guest}, instance = ${w.instance}
         WHERE id = ${current.value.id}
       `;

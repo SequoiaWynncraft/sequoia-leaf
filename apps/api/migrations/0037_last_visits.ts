@@ -5,10 +5,12 @@ import { SqlClient } from "effect/sql";
 // visits by player on every request; now the database keeps it, one row a player (`last_visits`),
 // as visits are written: triggers copy a visit's place, guest, heard and left times onto its
 // player's row when it is opened (if it is newer than the one there) and whenever those change,
+// remove the row with the visit it copies (180 days on, nothing is kept of where a player was),
 // and copy `players_seen.stay` onto it, so that every Leaf writing visits keeps it right, an older
 // one beside this one in a deploy included. Its indexes give the lists' few rows without reading
-// the rest: those open by when they were last heard of, and those closed by whether they stay and
-// when they left.
+// the rest: those open by when they were last heard of, and those closed (and those closed before
+// they were last heard of) by whether they stay and when they left. Those gone silent are found
+// among the open by when they were last heard of: each write closes a hundred, so few wait.
 //
 // Open visits get an index by when they were last heard of, for those gone silent. The index of
 // every visit by when it was last heard of, which only the grouping read, goes.
@@ -28,6 +30,10 @@ export default Effect.gen(function* () {
   yield* sql`CREATE INDEX last_visits_open ON last_visits (heard_at DESC, player_id) WHERE left_at IS NULL`;
   yield* sql`
     CREATE INDEX last_visits_closed ON last_visits (stay, left_at DESC, player_id) WHERE left_at IS NOT NULL
+  `;
+  // Those closed before they were last heard of (a close that raced a later call): few, if any.
+  yield* sql`
+    CREATE INDEX last_visits_closed_early ON last_visits (stay, left_at DESC, player_id) WHERE left_at < heard_at
   `;
   yield* sql`
     INSERT INTO last_visits (player_id, visit_id, place, guest, heard_at, left_at, stay)
@@ -55,6 +61,13 @@ export default Effect.gen(function* () {
     BEGIN
       UPDATE last_visits SET place = NEW.place, guest = NEW.guest, heard_at = NEW.heard_at, left_at = NEW.left_at
       WHERE player_id = NEW.player_id AND visit_id = NEW.id;
+    END
+  `;
+  yield* sql`
+    CREATE TRIGGER visits_removed
+    AFTER DELETE ON visits
+    BEGIN
+      DELETE FROM last_visits WHERE player_id = OLD.player_id AND visit_id = OLD.id;
     END
   `;
   yield* sql`
