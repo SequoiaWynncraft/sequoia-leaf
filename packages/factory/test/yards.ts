@@ -22,6 +22,8 @@
  *   and does not arrive at the depot: only `study` and `gate` know any, and their Study studied it,
  *   a folio at a time, from the line that stands there.
  */
+import { readFileSync } from "node:fs";
+
 import * as F from "../src/index.ts";
 import { type Gen, generate } from "./gen.ts";
 import { makeLand } from "./land.ts";
@@ -92,6 +94,19 @@ export function delivering(seed = 1): F.Yard {
 let small: Gen | null = null;
 /** A yard of about 1,000 pieces on 48 by 36 tiles, made once by the generator. */
 export const generated = (): Gen => (small ??= generate(makeLand(3, 3, 7), 1000));
+
+/** The yards in `saves/`, as each version kept them (`saves.test.ts`). */
+export const SAVES = ["v7-small", "v7-mid", "v7-study", "v7-gate", "v6-mid", "v3-tier2"] as const;
+
+/** A save read, with its owner there at its last tick. */
+export function saved(name: (typeof SAVES)[number]): F.Yard {
+  const raw: unknown = JSON.parse(readFileSync(`${import.meta.dir}/saves/${name}.json`, "utf8"));
+  const text = typeof raw === "object" && raw !== null && "text" in raw ? raw.text : null;
+  const y = typeof text === "string" ? F.decode(text) : null;
+  if (!y) throw new Error(`${name} does not read`);
+  y.seen = F.here(y);
+  return y;
+}
 
 /** The names of the yards the play server stages. */
 export const STAGES = ["new", "small", "short", "mid", "hall", "study", "gate", "large"] as const;

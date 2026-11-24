@@ -10,7 +10,7 @@
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
-import { staged } from "./yards.ts";
+import { SAVES, staged } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -33,7 +33,6 @@ interface Read {
 }
 const num = (v: unknown): number => (typeof v === "number" ? v : Number.NaN);
 const names = (v: unknown): string[] => (Array.isArray(v) ? v.filter((n) => typeof n === "string") : []);
-const SAVES = ["v7-small", "v7-mid", "v7-study", "v7-gate", "v6-mid", "v3-tier2"] as const;
 async function save(name: string): Promise<{ text: string; read: Read }> {
   const raw: unknown = await Bun.file(`${import.meta.dir}/saves/${name}.json`).json();
   const r = isRec(raw) && isRec(raw.read) ? raw.read : null;

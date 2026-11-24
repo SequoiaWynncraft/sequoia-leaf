@@ -1,0 +1,235 @@
+{
+  "staged new": [
+    "303ae721645a83cb",
+    "3e6f719cc288701c",
+    "2a45ddf7435e5fde",
+    "9ccf72c142d6a499",
+    "1902593871c95f22",
+    "8cafb11a98f82dff",
+    "d955810fe79693b2",
+    "55cfd9d6281e807e"
+  ],
+  "staged small": [
+    "92f2833a91b1fd00",
+    "d5f90501be9b30a8",
+    "2bde01929673c108",
+    "21368a2bae88deb0",
+    "67b517857afcca67",
+    "8ae17d9aa4f67c87",
+    "d61bd322212484a6",
+    "bdbaa43a15986122"
+  ],
+  "staged short": [
+    "82dce9c7d25cafe1",
+    "eb22964f26152e6e",
+    "10b9833d595e4b42",
+    "0d78094cd2e0fa10",
+    "7c5cf6361fb11259",
+    "5d074ef38a5c2e5e",
+    "b36f0402406d2a03",
+    "1db18c80bc040f52"
+  ],
+  "staged mid": [
+    "999027f8ccf3dee3",
+    "0d63e7202952da5b",
+    "f595a46ec6be360b",
+    "cf2067417e66379b",
+    "cc3b6829435ce5eb",
+    "ed14a3b978d6621a",
+    "2bbf2305f46522f6",
+    "e586a9d62ffb4f26"
+  ],
+  "staged hall": [
+    "f1e8cac66b14e6c1",
+    "9ea0d48572f5e85d",
+    "87da1362ad1092a8",
+    "50851d824eda7f3a",
+    "d3a322e1aef3f0f4",
+    "dc384758d903b703",
+    "83e3d2882f6bc389",
+    "c2f70407d1c3538b"
+  ],
+  "staged study": [
+    "3ad78bc332146b0c",
+    "506859f49389da0a",
+    "c93bbf77c854799b",
+    "957edaf511d72d53",
+    "b030f585d62757cc",
+    "e10d7e210f7bb193",
+    "825afee6d13f6389",
+    "16e72d9cd6a687c8"
+  ],
+  "staged gate": [
+    "d5dad60261ea3a94",
+    "448a1eba3bcb682c",
+    "a6cd7751d1a75d6f",
+    "c148b7854b7ff6a2",
+    "e002ba8ba4ee18cd",
+    "8ba217517864617c",
+    "758ac830ad5780ef",
+    "0f5d30b68657d8e2"
+  ],
+  "staged large": [
+    "91c38f2ba11008a5",
+    "1cda08ca850814d8",
+    "ca41394532982815",
+    "27a0582967658d11",
+    "64daed1d23f07b54",
+    "cb296022cc1bf32e",
+    "2b5cb6e7cbac0d4f",
+    "13412ef59e71d682"
+  ],
+  "save v7-small": [
+    "fe7bfaf834720723",
+    "d5f90501be9b30a8",
+    "2bde01929673c108",
+    "21368a2bae88deb0",
+    "67b517857afcca67",
+    "8ae17d9aa4f67c87",
+    "d61bd322212484a6",
+    "bdbaa43a15986122"
+  ],
+  "save v7-mid": [
+    "999027f8ccf3dee3",
+    "0d63e7202952da5b",
+    "f595a46ec6be360b",
+    "cf2067417e66379b",
+    "cc3b6829435ce5eb",
+    "ed14a3b978d6621a",
+    "2bbf2305f46522f6",
+    "e586a9d62ffb4f26"
+  ],
+  "save v7-study": [
+    "3ad78bc332146b0c",
+    "506859f49389da0a",
+    "c93bbf77c854799b",
+    "957edaf511d72d53",
+    "b030f585d62757cc",
+    "e10d7e210f7bb193",
+    "825afee6d13f6389",
+    "16e72d9cd6a687c8"
+  ],
+  "save v7-gate": [
+    "d5dad60261ea3a94",
+    "448a1eba3bcb682c",
+    "a6cd7751d1a75d6f",
+    "c148b7854b7ff6a2",
+    "e002ba8ba4ee18cd",
+    "8ba217517864617c",
+    "758ac830ad5780ef",
+    "0f5d30b68657d8e2"
+  ],
+  "save v6-mid": [
+    "999027f8ccf3dee3",
+    "0d63e7202952da5b",
+    "f595a46ec6be360b",
+    "cf2067417e66379b",
+    "cc3b6829435ce5eb",
+    "ed14a3b978d6621a",
+    "2bbf2305f46522f6",
+    "e586a9d62ffb4f26"
+  ],
+  "save v3-tier2": [
+    "a4d2d5575cbbdbcd",
+    "f1b573c91d94336d",
+    "1fe89b704beb1dcc",
+    "226f944b1820d85e",
+    "ec56c593f0427e60",
+    "9efbe754402dfc82",
+    "68e0da257d28e139",
+    "bdea3ca73f023220"
+  ],
+  "delivering": [
+    "193d33af63af40bb",
+    "f249aee233938f3f",
+    "b64d1068f8d72f15",
+    "c900223b07c3677c",
+    "ded69d6462e6a39b",
+    "013f265e48de475b",
+    "40381026f79f132b",
+    "49b86b314f4cf3fa"
+  ],
+  "generated": [
+    "25c6de49d2858075",
+    "6c418795a655aac2",
+    "f74734afbe6169d7",
+    "4c1cf33153c4cff4",
+    "c6d6b292657835c6",
+    "f861a27ae7645129",
+    "44973bd4edd0b861",
+    "b00924e2df0efc06"
+  ],
+  "junctions": [
+    "6bf9d0e33b98add4",
+    "b452fe467e12ed42",
+    "e0a197ef114b7848",
+    "5e6dda0c55dd8eb7",
+    "12917495ac20c115",
+    "2aced17586c48b37",
+    "93b033e090b3e636",
+    "d9f3e1114592826a"
+  ],
+  "random play, a new yard": [
+    "d28122f8489db43a",
+    "48360b035802d779",
+    "2ac15931fa74926e",
+    "8e465ff785dc3835",
+    "d1a53beceb13c731",
+    "6ba514854c4f6dee",
+    "fbf88cfb7ad964ee",
+    "2d726998658b3889"
+  ],
+  "random play, tier 3": [
+    "4225555c680c525f",
+    "accf3f372c6b3a81",
+    "10b3cc87101b6076",
+    "fa7a60556ab6326d",
+    "c11aae5b37bd03e0",
+    "4a3110b47b347c3b",
+    "130215045aad2671",
+    "e356e61e4fe7cb21"
+  ],
+  "random play, tier 4 done": [
+    "e78f8d2167f02426",
+    "b946c82357fdab14",
+    "a211663642741ed4",
+    "6ed68bd6b9369d5c",
+    "758ebff12122fc79",
+    "3eb29cf12a7c12b4",
+    "53ece1a97bea5485",
+    "7e0d4f09e1204395"
+  ],
+  "random play, the delivering yard with its board filled": [
+    "f46bb47e4e1fce9e",
+    "068a000d287f7872",
+    "499f846b470340e4",
+    "78a665e7a77611fc",
+    "4e1d3d08252d139c",
+    "ad06302b3d793264",
+    "9cf01120da01da9c",
+    "2f5a60aaa17e5961"
+  ],
+  "random play, the generated yard": [
+    "1d20af6b126118a4",
+    "2694f8a9045872f1",
+    "92ab6acd9092dfa1",
+    "12577547af81b20b",
+    "6f4af95e16cd664a",
+    "a9a8b8a10eda79f8",
+    "c489bf1b79f16032",
+    "f6fdeba630d93858"
+  ],
+  "the largest staged yard, tended in slices": [
+    "42815c267111149e",
+    "9cbfaec06ed0d6cf",
+    "21bc6c7a2cf738a7",
+    "f183b49487d8c709",
+    "b7326a806a35631b",
+    "3b4ebd53eb30e1a7",
+    "409b1b3b8009aeb6",
+    "5ea06cd8f72088ce",
+    "f3424c3378f859fe",
+    "9373913d5b165454",
+    "da39a3ee5e6b4b0d"
+  ]
+}

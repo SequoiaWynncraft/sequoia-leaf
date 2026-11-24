@@ -1,0 +1,224 @@
+/**
+ * Yards run on for hours, and a digest of each at every step on the way: the record the tick's
+ * results are held to, to the bit (`replays.test.ts`). A replay is a yard the tests make (every
+ * staged yard, every save, the delivering and generated yards, random play from several starts, and
+ * the largest staged yard tended in slices as Leaf tends it) run on for hours. Every minute of its
+ * ticks, or after every command, what it is is digested: the yard as kept (`encode`), the news since
+ * the last digest, and its power. The digests are gathered into a line an hour, or fifty commands.
+ *
+ * `bun test/replays.ts --write` writes the record again from the tick as it stands. A change to the
+ * rules changes the record, and says so; a change only to how fast the tick runs leaves it as it is.
+ */
+import { createHash, type Hash } from "node:crypto";
+
+import type { Ctx } from "@sequoia-leaf/core";
+
+import * as F from "../src/index.ts";
+import { boardFilled, Player } from "./player.ts";
+import { rng } from "./random.ts";
+import { delivering, generated, must, saved, SAVES, staged, STAGES } from "./yards.ts";
+
+const MINUTE = 600;
+const HOUR = 60 * MINUTE;
+/** How long each yard runs on for: as long as a yard runs unwatched at first. */
+const HOURS = 8;
+export const RECORD = `${import.meta.dir}/replays.json`;
+
+/** The digests of one replay, a line at a time. */
+class Digest {
+  readonly lines: string[] = [];
+  hash: Hash = createHash("sha1");
+  /** Takes in what the yard is now: as kept, its news since the last, and its power. */
+  add(y: F.Yard): void {
+    this.hash.update(`${F.encode(y)}\n${JSON.stringify(F.drain(y))}\n${y.supply}\n`);
+  }
+  /** Ends a line. */
+  line(): void {
+    this.lines.push(this.hash.digest("hex").slice(0, 16));
+    this.hash = createHash("sha1");
+  }
+}
+
+/** Runs a yard on `hours` hours of ticks, digested every minute, a line an hour. */
+function hours(y: F.Yard, d: Digest, n = HOURS): void {
+  for (let h = 0; h < n; h++) {
+    for (let m = 0; m < 60; m++) {
+      for (let k = 0; k < MINUTE; k++) F.step(y);
+      d.add(y);
+    }
+    d.line();
+  }
+}
+
+/** Random play from a yard: `n` commands, each digested, a line every fifty; then two hours. */
+function played(start: () => F.Yard, seed: number, n = 300): (d: Digest) => void {
+  return (d) => {
+    const y = start();
+    let k = 0;
+    new Player(y, seed, new Map()).play(n, (after) => {
+      d.add(after);
+      if (++k % 50 === 0) d.line();
+    });
+    if (k % 50 !== 0) d.line();
+    hours(y, d, 2);
+  };
+}
+
+type Rec = Record<string, unknown>;
+type Placed = readonly [F.KindName, number, number, F.Dir, number?];
+
+/**
+ * A yard of every kind of meeting of lines, on the guild's land with tier 4 done: planks (sawn from
+ * deadfall that comes through a tunnel) and stone from two gatherers taking turns at a joiner, then
+ * a sorter sending the planks to its right, into a crate and on to a cart stop, and the stone ahead
+ * to the depot; ore from behind and by a way in into a splitter that puts its left way, into a
+ * crate, first and sends the rest ahead to the depot; and a boiler fed deadfall.
+ */
+function junctions(): F.Yard {
+  const y = F.create({ seed: 31, tier: 5 });
+  const pieces: Placed[] = [
+    ["gatherer", 19, 15, 1],
+    ["mill", 19, 20, 0],
+    ["belt", 20, 20, 1, 3],
+    ["gatherer", 18, 21, 0],
+    ["belt", 19, 21, 0, 2],
+    ["gatherer", 18, 22, 0],
+    ["belt", 19, 22, 0],
+    ["belt", 20, 22, 3],
+    ["joiner", 20, 21, 0],
+    ["sorter", 21, 21, 0],
+    ["crate", 21, 22, 1],
+    ["belt", 21, 23, 0],
+    ["stop", 22, 23, 0],
+    ["belt", 22, 21, 3, 3],
+    ["belt", 22, 20, 3, 3],
+    ["belt", 22, 19, 0, 3],
+    ["gatherer", 30, 13, 2],
+    ["belt", 29, 13, 2],
+    ["gatherer", 29, 12, 2],
+    ["belt", 28, 12, 1],
+    ["splitter", 28, 13, 2],
+    ["belt", 27, 13, 2],
+    ["belt", 26, 13, 2],
+    ["belt", 25, 13, 1],
+    ["belt", 25, 14, 1],
+    ["belt", 25, 15, 1],
+    ["belt", 25, 16, 1],
+    ["belt", 28, 14, 1],
+    ["crate", 28, 15, 2],
+    ["belt", 27, 15, 1],
+    ["belt", 27, 16, 1],
+    ["belt", 27, 17, 2],
+    ["belt", 26, 17, 2],
+    ["pylon", 27, 12, 0],
+    ["pylon", 17, 20, 0],
+    ["gatherer", 19, 14, 0],
+    ["boiler", 20, 14, 0],
+  ];
+  for (const [kind, x, z, dir, grade] of pieces)
+    must(y, { do: "build", kind, x, y: z, dir, ...(grade === undefined ? {} : { grade }) });
+  must(y, { do: "stand", pieces: [{ kind: "tunnel", x: 19, y: 16, dir: 1, span: 2, grade: 2 }] });
+  must(y, { do: "sort", x: 21, y: 21, item: "plank" });
+  must(y, { do: "side", x: 21, y: 21, right: true });
+  must(y, { do: "wayIn", x: 28, y: 13, way: 2, on: true });
+  must(y, { do: "first", x: 28, y: 13, way: 1 });
+  return y;
+}
+
+/**
+ * What the junctions yard's owner does at the start of each hour: shuts the ore's crate, so the
+ * splitter's first way fills and backs up; shuts the planks' crate, so the sorter, the joiner and
+ * everything behind them stand; empties it, so they run until it is full again; opens both, puts no
+ * way first and turns the splitter's way in back out, so the ore from the north stands; turns the
+ * sorter to its left, where nothing takes, and lays a belt there; tells the mill to make planks and
+ * the sorter to send stone aside; and takes a belt of the joiner's away.
+ */
+const JUNCTION_HOURS: readonly (readonly Rec[])[] = [
+  [],
+  [{ do: "crate", x: 28, y: 15, open: false }],
+  [{ do: "crate", x: 21, y: 22, open: false }],
+  [{ do: "tipOut", x: 21, y: 22, item: null }],
+  [
+    { do: "crate", x: 21, y: 22, open: true },
+    { do: "crate", x: 28, y: 15, open: true },
+    { do: "first", x: 28, y: 13, way: null },
+    { do: "wayIn", x: 28, y: 13, way: 2, on: false },
+  ],
+  [
+    { do: "side", x: 21, y: 21, right: false },
+    { do: "build", kind: "belt", x: 21, y: 20, dir: 0 },
+  ],
+  [
+    { do: "recipe", x: 19, y: 20, item: "plank" },
+    { do: "sort", x: 21, y: 21, item: "stone" },
+  ],
+  [{ do: "remove", x: 19, y: 22 }],
+];
+
+/** The junctions yard run on for eight hours, its owner's commands at the start of each, digested every minute. */
+function junctionsRun(d: Digest): void {
+  const y = junctions();
+  for (const commands of JUNCTION_HOURS) {
+    for (const c of commands) must(y, c);
+    hours(y, d, 1);
+  }
+}
+
+/** A copy of the generated yard, which the tests share. */
+const generatedCopy = (): F.Yard => F.decode(F.encode(generated().y), generated().y.land) ?? F.create();
+
+const ctx = (now: number): Ctx => ({ now, player: { id: "p", guest: false }, seed: 9, room: 0, awards: [] });
+
+/**
+ * The largest staged yard tended as Leaf tends a yard nobody has open: every two minutes of Leaf's
+ * clock, run on in slices of any size until it has no further to go, for eight hours and a little
+ * past, where it stands still.
+ */
+function tended(d: Digest): void {
+  const y = staged("large");
+  const r = rng(7);
+  const start = 1_800_000_000_000;
+  y.at = start;
+  for (let now = start; now <= start + (HOURS + 1) * HOUR * F.TICK_MS; now += 2 * MINUTE * F.TICK_MS) {
+    for (let further = true; further;) {
+      let budget = 1 + Math.floor(r() * 5000);
+      further = F.FACTORY.tend?.(y, ctx(now), () => budget-- > 0) ?? false;
+    }
+    F.FACTORY.advance(y, ctx(now));
+    d.add(y);
+    if ((now - start) % (HOUR * F.TICK_MS) === 0) d.line();
+  }
+  d.line();
+}
+
+/** Every replay, by name. */
+export const REPLAYS: readonly (readonly [string, (d: Digest) => void])[] = [
+  ...STAGES.map((name) => [`staged ${name}`, (d: Digest) => hours(staged(name), d)] as const),
+  ...SAVES.map((name) => [`save ${name}`, (d: Digest) => hours(saved(name), d)] as const),
+  ["delivering", (d) => hours(delivering(), d)],
+  ["generated", (d) => hours(generatedCopy(), d)],
+  ["junctions", junctionsRun],
+  ["random play, a new yard", played(() => F.create({ seed: 11 }), 101)],
+  ["random play, tier 3", played(() => F.create({ seed: 13, tier: 3 }), 103)],
+  ["random play, tier 4 done", played(() => F.create({ seed: 14, tier: 5 }), 105)],
+  ["random play, the delivering yard with its board filled", played(boardFilled, 107)],
+  ["random play, the generated yard", played(generatedCopy, 109)],
+  ["the largest staged yard, tended in slices", tended],
+];
+
+/** The lines of digests one replay gives now. */
+export function replay(run: (d: Digest) => void): string[] {
+  const d = new Digest();
+  run(d);
+  return d.lines;
+}
+
+if (import.meta.main && process.argv.includes("--write")) {
+  const record: Record<string, string[]> = {};
+  for (const [name, run] of REPLAYS) {
+    const t = performance.now();
+    record[name] = replay(run);
+    console.log(`${name}: ${record[name].length} lines in ${((performance.now() - t) / 1000).toFixed(2)} s`);
+  }
+  await Bun.write(RECORD, `${JSON.stringify(record, null, 2)}\n`);
+}

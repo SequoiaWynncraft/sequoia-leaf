@@ -1,15 +1,21 @@
 /**
- * What a yard costs: `bun bench.ts [--short]`.
+ * What a yard costs: `bun bench.ts [--short] [--hours]`.
  *
  * Yards made by the scale study's generator with commands: about 6,000 pieces on 112 by 84, and
  * about 10,000 on 160 by 120. Each is run 3,000 ticks first, as a yard in play would be kept.
  * Times are medians, in milliseconds. Nothing is asserted here; the budgets are tests.
+ *
+ * Then the work of catching a yard up, as Leaf does for one its owner left: each staged yard, the
+ * generated yard of about 1,000 pieces, and each save run on for eight hours of ticks, in
+ * milliseconds of work for each hour of the yard's time, the best of three. `--hours` prints that
+ * table alone.
  */
 import { heapStats } from "bun:jsc";
 
 import * as F from "./src/index.ts";
 import { generate } from "./test/gen.ts";
 import { makeLand } from "./test/land.ts";
+import { generated, saved, SAVES, staged, STAGES } from "./test/yards.ts";
 
 const now = (): number => Bun.nanoseconds() / 1e6;
 /** The median time of `f`, run for about `ms` and at least `least` times after a warm-up. */
@@ -36,6 +42,7 @@ function heldBy(make: () => unknown, copies = 100): number {
   const grew = after.heapSize + after.extraMemorySize - (before.heapSize + before.extraMemorySize);
   return kept.length > 0 ? grew : 0;
 }
+const pieces = (y: F.Yard): number => y.kind.filter((k) => k !== F.NONE).length;
 
 function made(name: string, cols: number, rows: number, target: number): { name: string; y: F.Yard } {
   const t = now();
@@ -45,27 +52,59 @@ function made(name: string, cols: number, rows: number, target: number): { name:
   return { name, y: g.y };
 }
 
-const rows: string[][] = [];
-for (const { name, y } of [made("6000", 7, 7, 6000), made("10000", 10, 10, 10_000)]) {
-  const pieces = y.kind.filter((k) => k !== F.NONE).length;
-  const packed = F.encode(y);
-  rows.push([
-    name,
-    String(pieces),
-    fmt(median(() => F.step(y))),
-    fmt(median(() => F.decode(packed, y.land), 1500, 5)),
-    fmt(median(() => F.encode(y))),
-    fmt(median(() => F.check(y))),
-    String(packed.length),
-    String(F.bytesHeld(y)),
-    fmt(heldBy(() => F.decode(packed, y.land)) / 100 / 1e6),
-  ]);
-  if (name === "6000" && !process.argv.includes("--short")) {
-    const t = now();
-    for (let k = 0; k < 288_000; k++) F.step(y);
-    console.error(`eight hours (288,000 ticks) of the 6000 yard: ${fmt((now() - t) / 1000)} s`);
+function sizes(): void {
+  const rows: string[][] = [];
+  for (const { name, y } of [made("6000", 7, 7, 6000), made("10000", 10, 10, 10_000)]) {
+    const packed = F.encode(y);
+    rows.push([
+      name,
+      String(pieces(y)),
+      fmt(median(() => F.step(y))),
+      fmt(median(() => F.decode(packed, y.land), 1500, 5)),
+      fmt(median(() => F.encode(y))),
+      fmt(median(() => F.check(y))),
+      String(packed.length),
+      String(F.bytesHeld(y)),
+      fmt(heldBy(() => F.decode(packed, y.land)) / 100 / 1e6),
+    ]);
+    if (name === "6000" && !process.argv.includes("--short")) {
+      const t = now();
+      for (let k = 0; k < 288_000; k++) F.step(y);
+      console.error(`eight hours (288,000 ticks) of the 6000 yard: ${fmt((now() - t) / 1000)} s`);
+    }
   }
+  console.log("| yard | pieces | tick | decode | encode | check | kept, bytes | held, bytes | heap a yard, MB |");
+  console.log(`|${" ---: |".repeat(9)}`);
+  for (const r of rows) console.log(`| ${r.join(" | ")} |`);
 }
-console.log("| yard | pieces | tick | decode | encode | check | kept, bytes | held, bytes | heap a yard, MB |");
-console.log(`|${" ---: |".repeat(9)}`);
-for (const r of rows) console.log(`| ${r.join(" | ")} |`);
+
+const HOURS = 8;
+const HOUR = 36_000;
+
+/** The work of running a yard on for eight hours, in milliseconds an hour: the best of three runs, each on a copy of it. */
+function perHour(y: F.Yard): number {
+  const text = F.encode(y);
+  let best = Infinity;
+  for (let run = 0; run < 3; run++) {
+    const copy = F.decode(text, y.land);
+    if (!copy) throw new Error("the yard does not read back");
+    const t = now();
+    for (let k = 0; k < HOURS * HOUR; k++) F.step(copy);
+    best = Math.min(best, (now() - t) / HOURS);
+  }
+  return best;
+}
+
+function hours(): void {
+  const yards: [string, F.Yard][] = [
+    ...STAGES.map((s): [string, F.Yard] => [`staged ${s}`, staged(s)]),
+    ["generated", generated().y],
+    ...SAVES.map((s): [string, F.Yard] => [`save ${s}`, saved(s)]),
+  ];
+  console.log("| yard | pieces | ms an hour |");
+  console.log("| --- | ---: | ---: |");
+  for (const [name, y] of yards) console.log(`| ${name} | ${pieces(y)} | ${fmt(perHour(y))} |`);
+}
+
+if (!process.argv.includes("--hours")) sizes();
+hours();
