@@ -62,6 +62,9 @@ export function newAlmanac(): Almanac {
   };
 }
 
+/** The bosses beaten on any trail, each once: what the bosses beaten count, and what a trophy is carved of. */
+export const beatenBosses = (almanac: Almanac): ReadonlySet<BossId> => new Set(almanac.bosses.flat());
+
 /** Whether a trail has been cleared: its last boss beaten. */
 export const trailCleared = (almanac: Almanac, trail: number): boolean =>
   almanac.bosses[trail]?.includes("bigcrab") === true;

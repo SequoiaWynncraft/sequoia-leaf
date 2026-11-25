@@ -39,8 +39,11 @@ import {
   newCamp,
   type PetId,
   type Placed,
+  publicCamp,
+  readPets,
   store,
   type Verdict,
+  visitorsCamp,
 } from "./camp.ts";
 import { STALLS } from "./catalogue.ts";
 import {
@@ -113,13 +116,17 @@ export interface Arrival {
   mail: Letter[];
 }
 
+/** What the stored state and the page's view both hold: the state without its stream or when the next caller comes. */
+type Held = Omit<Town, "rng" | "nextCall" | "called">;
+
 /**
- * What the member's page is given: the state without its stream or when the next caller comes, the
- * arrival letter, and what each of their games tells the town, as Leaf keeps it with the game's
- * state (`doors`: `Ctx.postcards`), for the doors and the letter. The counter is shown, so that the
- * page gives a thing it sets down the id Leaf will give it.
+ * What the member's page is given: the state without its stream or when the next caller comes, who
+ * lives in the camp (`pets`: `publicCamp`'s), the arrival letter, and what each of their
+ * games tells the town, as Leaf keeps it with the game's state (`doors`: `Ctx.postcards`), for the
+ * doors and the letter. The counter is shown, so that the page gives a thing it sets down the id
+ * Leaf will give it.
  */
-export type TownView = Omit<Town, "rng" | "nextCall" | "called"> & { arrival: Arrival; doors: Ctx["postcards"] };
+export type TownView = Held & { pets: PetId[]; arrival: Arrival; doors: Ctx["postcards"] };
 
 // ---------- commands ----------
 
@@ -406,7 +413,7 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
 // ---------- what the page is shown ----------
 
 /** The state as the member's page is given it, but the arrival letter. Each field is named, so nothing new is shown by accident. */
-const shown = (s: Omit<Town, "rng" | "nextCall" | "called">): Omit<TownView, "arrival" | "doors"> => ({
+const shown = (s: Held): Omit<TownView, "arrival" | "doors"> => ({
   sightings: s.sightings,
   spotAt: s.spotAt,
   chestDay: s.chestDay,
@@ -417,6 +424,7 @@ const shown = (s: Omit<Town, "rng" | "nextCall" | "called">): Omit<TownView, "ar
   camp: s.camp,
   visit: s.visit,
   made: s.made,
+  pets: [...publicCamp(s.camp).pets],
 });
 
 export const townView = (s: Town, now: number, doors: Ctx["postcards"] = {}): TownView => ({
@@ -427,10 +435,10 @@ export const townView = (s: Town, now: number, doors: Ctx["postcards"] = {}): To
 });
 
 /**
- * What a visitor is given of somebody's camp: what stands there, each thing in its own state, and
- * the pet they chose; nothing else of theirs (no letters, tray or caller, every counter at
- * 0, an arrival letter that says nothing, none of their games' postcards), in the shape the page
- * draws a camp from.
+ * What a visitor is given of somebody's camp: its public part (`publicCamp`: the pet chosen, what
+ * stands there, each thing in its own state, and who lives there); nothing else of theirs (no
+ * letters, tray or caller, every counter at 0, an arrival letter that says nothing, none of their
+ * games' postcards), in the shape the page draws a camp from.
  */
 export const visitView = (s: Town): TownView => ({
   sightings: 0,
@@ -440,18 +448,10 @@ export const visitView = (s: Town): TownView => ({
   seenAt: 0,
   cursor: null,
   stay: false,
-  camp: {
-    first: s.camp.first,
-    placed: s.camp.placed.map((p) => ({ ...p })),
-    tray: {},
-    fresh: [],
-    looked: 0,
-    letters: [],
-    greeted: 0,
-    earned: [],
-  },
+  camp: visitorsCamp(s.camp),
   visit: null,
   made: 0,
+  pets: [...publicCamp(s.camp).pets],
   arrival: { first: false, newDay: false, away: 0, said: [], mail: [] },
   doors: {},
 });
@@ -472,7 +472,8 @@ export function predict(
   now: number,
 ): { view: TownView; notes: TownNote[] } | Refused | null {
   if (ASKED.has(c.do)) return null;
-  const { arrival, doors, ...rest } = view;
+  // Who lives there is worked out again from the camp the command leaves (`shown`).
+  const { arrival, doors, pets: _before, ...rest } = view;
   // Nothing done here draws from the stream, or reads when the next caller comes.
   const answer = apply({ ...rest, rng: 0, nextCall: 0, called: 0 }, c, { ...ON_THE_PAGE, now });
   if ("refused" in answer) return answer;
@@ -621,7 +622,7 @@ function visitOf(v: unknown): Visit | null {
 }
 
 /** What the stored state and the page's view both hold, every field's type checked; null if any does not read. */
-function heldIn(raw: Record<string, unknown>): Omit<TownView, "arrival" | "doors"> | null {
+function heldIn(raw: Record<string, unknown>): Held | null {
   const { sightings, spotAt, chestDay, welcomedDay, seenAt, stay, made } = raw;
   const cursor = cursorOf(raw.cursor);
   const camp = storedCamp(raw.camp);
@@ -669,8 +670,10 @@ export function readView(v: unknown): TownView | null {
   const mail = all(v.arrival.mail, (l) => (isLetter(l) ? l : null));
   if (!held || typeof first !== "boolean" || typeof newDay !== "boolean" || !whole(away, 0, TIME) || !said || !mail)
     return null;
+  // A Leaf from before `pets` sends none: they are the camp's as the view has it, as a page from then drew them.
+  const pets = v.pets === undefined ? [...publicCamp(held.camp).pets] : readPets(v.pets);
   // A Leaf from before the doors sends none: the town says its own lines.
-  return { ...held, arrival: { first, newDay, away, said, mail }, doors: readPostcards(v.doors) };
+  return pets && { ...held, pets, arrival: { first, newDay, away, said, mail }, doors: readPostcards(v.doors) };
 }
 
 /** What a command answered off the wire: nothing, or the number of a thing set out; null for anything else. */

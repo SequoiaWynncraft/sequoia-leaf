@@ -14,7 +14,7 @@ import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
-import { COSY, KIND, type PetId, PETS, petsOf, trayList } from "@sequoia-leaf/town/camp.ts";
+import { COSY, KIND, type PetId, PETS, trayList } from "@sequoia-leaf/town/camp.ts";
 import { KIND_NAMES, KINDS, thingOf, THINGS } from "@sequoia-leaf/town/things.ts";
 
 import { type CampArt, type CampIcon, campIcon, pictureOf } from "./campart.ts";
@@ -165,10 +165,10 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
       },
     );
     const drawLiving = when(
-      () => `${petsOf(mine()).join()}|${mine().placed.length}|${mine().greeted}`,
+      () => `${town().pets.join()}|${mine().placed.length}|${mine().greeted}`,
       () => {
         const camp = mine();
-        const here = petsOf(camp);
+        const here = town().pets;
         const rows: Node[] = here.map((kind) => {
           const sit = art.pets(kind, 0).sit[0];
           return el(

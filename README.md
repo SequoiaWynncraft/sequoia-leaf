@@ -660,8 +660,10 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   shows the kit's card for it and sends nothing more.
 - A game may have a board (`Game.standing`: a whole number players are listed
   by, and a few more shown beside it; the Works' is the Coins a yard has ever
-  earned, and its story orders done). A batch that changed the state writes
-  where it stands in the same transaction. `GET /v1/game/play/{game}/standings`
+  earned, and its story orders done; the Little Raid's, the different bosses
+  beaten, every trail together, reached as the last of their trophies was
+  first won). A batch that changed the state writes where
+  it stands in the same transaction. `GET /v1/game/play/{game}/standings`
   answers `{ "top": [{ "place", "id", "name", "guest", "score", "also", "you" }], "you" }`:
   the twenty highest scores above 0, a tie going to whoever reached it first;
   `place` is how many score higher, and one; names as the guild's news has
@@ -671,8 +673,9 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
 - `GET /v1/game/play/{game}/of/{player}` answers `{ "rev", "now", "state" }`
   as the owner's own read does, with what a visitor is given of somebody's
   state (`Game.visit`; the Works gives a visitor the yard as its owner's page
-  is given it). 404 `nothing_to_visit` for a game that cannot be visited or a
-  player with nothing there; it takes one of the visitor's batches of the
+  is given it; the town, what stands in the camp and who lives there, worked
+  out from the whole camp, and none of the owner's own). 404 `nothing_to_visit`
+  for a game that cannot be visited or a player with nothing there; it takes one of the visitor's batches of the
   allowance. Nothing of the visitor's is written, and the state run on is kept
   as after any job. A visitor sends no commands: a batch is always the
   caller's own state.
@@ -704,9 +707,26 @@ player's commands done and refused, by the UTC day). What commands log goes to
 `coin_entries` `earned`, 1 for an entry weighed against what a player may earn
 and 0 for one that is not. Migration 19 made `standings`, where each player's
 state in a game with a board stands; its `updated_at` is when the score was
-last reached. Migration 23 made `played`: each player's time in each game, in
-milliseconds, and when Leaf last heard from them there (`seen_at`). Migration 24
-gave `play_state` `guest`, whether the player was a guest when it was last
+last reached. Migration 42 gave `play_state` `stood`, the `rev` its standing
+was worked out from, which a batch writes with the state. Every minute, from
+a minute after it starts, Leaf works out again where each state stands whose
+`stood` is not its `rev` (`restand.ts`): a game's standing that came to count
+differently (migration 42 has every Little Raid table written so, since its
+standing summed each trail's bosses), a state a tool wrote, or one a Leaf from
+before, beside it in a deploy, wrote without it; a batch that changes such a
+state first does the same, and then writes its own. Only a standing that is
+there is put right: a state that stands nowhere (one nothing was done to, moved
+to another player as it was made) stays so. Put right, a standing was reached
+no later than its `updated_at` says, and for a score that counts awards
+(`Standing.counts`: the Little Raid's trophies), when the last of them was
+first won (`awards.at`), if Leaf kept that of each since the state was made
+(`born`). Awards are kept from migration 21 (22 November 2026): one won before
+was kept at its state's next change, later than it was won, which the stored
+time bounds; a state not changed since may have one with no time, and keeps the
+time stored. Moving a player's state to another (linking an account) keeps
+`stood` as it was, at the new `rev`. Migration 23 made `played`: each
+player's time in each game, in milliseconds, and when Leaf last heard from them
+there (`seen_at`). Migration 24 gave `play_state` `guest`, whether the player was a guest when it was last
 written (a state from before took it from where it stands, or else from the
 player as last seen), which whatever Leaf writes of it while they are away says
 too. Migration 26 made `play_kept` (a piece in each `player_id`, `game` and
@@ -1069,7 +1089,7 @@ batch Leaf keeps of that state, as above. A camp's room moves as the town's
 does, and is no place either (each page there says where it is); whoever is in
 it hears `{ "t": "changed", "rev" }` once Leaf keeps a batch of the owner's that
 changes what a visitor is shown of the camp (where things stand, their state,
-the first pet), and nothing of any other; a visitor's page then reads the camp. What was done while a page was not in
+who lives there), and nothing of any other; a visitor's page then reads the camp. What was done while a page was not in
 the room is never told, so the Works' visit reads the yard each time the room
 welcomes it. Going into a game, the town leaves its own room at once, before
 the game's page is made, since that page may go into a visit's room on the same
@@ -1520,7 +1540,7 @@ path as it was asked):
 | Series                                                                                                           | Labels                                                                                                         | What                                                                                                                                                                                                                                                                 |
 | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `http_requests_total`, `http_request_duration_seconds`                                                           | `method`, `route` (the template; `unmatched` for none), `status`                                               | Each answer, to its head; Live's opening once, as 101 or its refusal                                                                                                                                                                                                 |
-| `background_job_runs_total`, `background_job_failures_total`, `background_job_last_success_timestamp_seconds`    | `name`                                                                                                         | `credit_sync`, `achievement_sync`, `snapshot`, `snapshot_offsite`, `silent_visits`, `tend_sweep`, `missed_levels`, `rate_card`. A run is one that did something or failed; the snapshot's and the offsite copy's last success are read from the files as Leaf starts |
+| `background_job_runs_total`, `background_job_failures_total`, `background_job_last_success_timestamp_seconds`    | `name`                                                                                                         | `credit_sync`, `achievement_sync`, `snapshot`, `snapshot_offsite`, `silent_visits`, `tend_sweep`, `restand`, `missed_levels`, `rate_card`. A run did something, or failed; the snapshot's and the offsite copy's last success are read from the files as Leaf starts |
 | `leaf_live_players`, `leaf_live_connections`, `leaf_live_rooms`                                                  |                                                                                                                | Who is in Live now                                                                                                                                                                                                                                                   |
 | `leaf_live_opened_total`, `leaf_live_closed_total`, `leaf_live_handoffs_total`, `leaf_live_frames_dropped_total` | `how` (`page`, `drop`, `leaf`) on closed                                                                       | Connections, and frames that could not be taken                                                                                                                                                                                                                      |
 | `leaf_live_refused_total`                                                                                        | `reason` (the code)                                                                                            | Openings turned away before their upgrade                                                                                                                                                                                                                            |

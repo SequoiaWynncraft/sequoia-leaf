@@ -12,7 +12,7 @@ const said = (line: string): number => floaters.filter((f) => f.text === line).l
 beforeEach(clearFx);
 
 test("a pet touched again while it is still answering is pleased, but does not answer over itself", () => {
-  const cat = makePet("cat", "Erm", NO_ART, { x: 40, y: 40 });
+  const cat = makePet("cat", NO_ART, { x: 40, y: 40 });
   cat.wait = 99;
   pleased(cat);
   pleased(cat);

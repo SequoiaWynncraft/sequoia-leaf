@@ -17,6 +17,7 @@ import { FACTORY } from "@sequoia-leaf/factory/game.ts";
 import { PULLS } from "@sequoia-leaf/pulls";
 import { RAID } from "@sequoia-leaf/raid/game.ts";
 import { TOWN } from "@sequoia-leaf/town";
+import { Effect } from "effect";
 
 /** What one command came to, before Leaf keeps it: a refusal, or what it did and how to keep the state it left. */
 export type Attempt =
@@ -70,6 +71,13 @@ export interface Held {
    * stored: the batch that takes it keeps it, and one that fails lets go of the copy holding it.
    */
   readonly post: (written: boolean) => string | null;
+  /**
+   * Takes the postcard stored with it now (null: none) as the one stored, read again while it is
+   * still the state: a tool, or another Leaf, may have written another at the same `rev`.
+   */
+  readonly stored: (postcard: string | null) => void;
+  /** Where it stands among everyone's as it is, brought to no moment; null for a game with no board. */
+  readonly standing: () => Standing | null;
 }
 
 /** A game as the play service handles it: in stored text and JSON, whatever the game's own types. */
@@ -173,6 +181,10 @@ export function played<State, Command, View, Note, Short>(
         kept = postcard ?? kept;
         return postcard;
       },
+      stored: (postcard) => {
+        kept = postcard;
+      },
+      standing: opened.standing,
     };
   };
   return {
@@ -236,6 +248,14 @@ export function toRoom(of: Played, player: PlayerId, game: Opened, ctx: Ctx, wat
 export type Given = Pick<Ctx, "awards" | "postcards">;
 /** Nothing given: for Leaf's own running on, which is no call. */
 export const NOTHING_GIVEN: Given = { awards: [], postcards: {} };
+
+/** Logs a player's state stored in a game that does not read, at its `rev`, and what becomes of it (`so`). */
+export const unreadable = (game: string, player: PlayerId, rev: number, so: string) =>
+  Effect.annotateLogs(Effect.logError(`The ${game} state stored for ${player} does not read; ${so}`), {
+    player,
+    game,
+    rev,
+  });
 
 /** What Leaf tells a game about a call by `playing`. */
 export const ctxOf = (

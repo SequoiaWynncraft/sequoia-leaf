@@ -5,7 +5,7 @@ import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import type { Answer } from "@sequoia-leaf/kit/play.ts";
 import { type Reply, type Route, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 import { TOWN, type Town, type TownCommand, type TownNote, visitView } from "@sequoia-leaf/town";
-import { freeSpot } from "@sequoia-leaf/town/camp.ts";
+import { COSY, freeSpot, type PetId } from "@sequoia-leaf/town/camp.ts";
 
 import { GAMES, worksWaiting } from "./games.ts";
 import {
@@ -17,6 +17,7 @@ import {
   lookAt,
   numbered,
   ok,
+  onTown,
   openCamp,
   openTown,
   setOutAs,
@@ -25,6 +26,7 @@ import {
   visiting,
   waitingForLeaf,
 } from "./leaf.ts";
+import { keepPets, makePet } from "./pets.ts";
 
 const ctx = (seed: number): Ctx => ({
   now: Date.UTC(2026, 10, 25, 12),
@@ -39,6 +41,14 @@ const theirs = TOWN.create(ctx(2));
 theirs.camp.first = "cat";
 theirs.camp.placed.push({ n: theirs.made++, id: "well", x: 30, y: 30, t: 0, s: 0 });
 
+/** A pet new to a camp, drawn as nothing (the page's pictures are not made here), by the fire. */
+const come = (kind: PetId) =>
+  makePet(kind, { sit: [], walk: [], walkR: [], sleep: null, glad: null }, { x: 100, y: 100 });
+
+/** What Leaf sends a visitor of Alice's camp, as recorded from the real routes. */
+const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
+const aliceCamp = isRecord(GAME) ? GAME["GET /v1/game/play/{game}/of/{player}, a camp"] : undefined;
+
 let world: Standin | null = null;
 /** Until Leaf has answered everything sent, a turn of the page's clock at a time, for a while at most. */
 async function answeredAll(turns = 50): Promise<void> {
@@ -50,6 +60,70 @@ async function answeredAll(turns = 50): Promise<void> {
 afterEach(() => {
   lookAt(null);
   world?.done();
+});
+
+test("a camp visited shows who lives there as Leaf sends it, and nothing of the owner's count of callers", async () => {
+  if (!isRecord(aliceCamp)) throw new Error("the contract has no camp visit");
+  world = standin({
+    "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: own } },
+    "GET /v1/game/play/town/of/alice": { status: 200, body: aliceCamp["body"] },
+    "GET /v1/game/people/alice": { status: 200, body: { id: "alice", name: "Alice", games: {}, played: 0, afk: 0 } },
+  });
+  expect(await openTown("me", () => undefined)).toBeNull();
+  const looked = await openCamp("alice");
+  if (typeof looked === "string") throw new Error(looked);
+  lookAt(looked);
+  expect([shown().pets, shown().camp.greeted]).toEqual([["glorp"], 0]);
+});
+
+test("a visitor staying while the owner greets their third caller sees the pet that moves in, the pets there staying where they are", async () => {
+  // Bob's camp: the glorp he chose, two callers greeted, and the 24 things that bring a second pet.
+  const bobs = TOWN.create(ctx(3));
+  bobs.camp.first = "glorp";
+  bobs.camp.greeted = 2;
+  while (bobs.camp.placed.length < COSY)
+    bobs.camp.placed.push({ n: bobs.made, id: "stump", x: bobs.made++, y: 40, t: 0, s: 0 });
+  let rev = 4;
+  world = standin({
+    "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: own } },
+    "GET /v1/game/play/town/of/bob": () => ({ status: 200, body: { rev, now: "x", state: visitView(bobs) } }),
+  });
+  await openTown("me", () => undefined);
+  const bob = await openCamp("bob", "Bob");
+  if (typeof bob === "string") throw new Error(bob);
+  lookAt(bob);
+  // The pets drawn, kept as the camp scene keeps them on every change it hears.
+  let drawn = keepPets([], shown().pets, come);
+  let looking = true;
+  onTown(() => {
+    if (looking) drawn = keepPets(drawn, shown().pets, come);
+  });
+  const [glorp, cat] = drawn;
+  if (!glorp || !cat || cat.kind !== "cat") throw new Error(`drawn: ${drawn.map((p) => p.kind).join()}`);
+  // They have wandered off about the camp.
+  [glorp.x, cat.x] = [33, 66];
+  try {
+    // Bob greets his third caller; Leaf keeps the camp at rev 5, and the camp's room says so.
+    bobs.camp.greeted = 3;
+    rev = 5;
+    await campChanged(5);
+    expect(drawn.map((p) => [p.kind, p.x])).toEqual([
+      ["glorp", 33],
+      ["cat", 66],
+      ["fox", 100],
+    ]);
+    expect([drawn[0], drawn[1]]).toEqual([glorp, cat]);
+    // Bob puts one of his 24 things away: a pet goes, and nobody else moves.
+    bobs.camp.placed.pop();
+    rev = 6;
+    await campChanged(6);
+    expect(drawn.map((p) => [p.kind, p.x])).toEqual([
+      ["glorp", 33],
+      ["cat", 66],
+    ]);
+  } finally {
+    looking = false;
+  }
 });
 
 test("a camp visited is opened beside the member's own and shown, and nothing but reads is sent", async () => {

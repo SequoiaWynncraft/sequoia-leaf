@@ -95,6 +95,11 @@ export interface Done<S, N> {
 export interface Standing {
   readonly score: number;
   readonly also: Readonly<Record<string, number>>;
+  /**
+   * For a score that is a count of things won for good (`Game.awards`), those it counts, each once:
+   * it was reached when the last of them was first won, which Leaf keeps.
+   */
+  readonly counts?: readonly string[];
 }
 
 /** A standing with its place among everyone's: how many score higher, and one. */

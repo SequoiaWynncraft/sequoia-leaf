@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { type Ctx, DAY_MS, type Done, LOGGED, type Refused } from "@sequoia-leaf/core";
 
-import { canPlace, MOST_NEW, MOST_OWNED, MOST_PLACED, NEW_CAMP, store, YARD } from "./camp.ts";
+import { canPlace, COSY, MOST_NEW, MOST_OWNED, MOST_PLACED, NEW_CAMP, store, YARD } from "./camp.ts";
 import { STALLS } from "./catalogue.ts";
 import { CALLERS, folk, GIFTS } from "./folk.ts";
 import {
@@ -65,7 +65,7 @@ describe("a new member's town", () => {
     expect(TOWN.create({ ...ctx(), seed: 8 }).rng).not.toBe(s.rng);
   });
 
-  test("is shown without its stream or when the next caller comes, with the letter Leaf would post and the doors it keeps", () => {
+  test("is shown without its stream or when the next caller comes, with who lives there, the letter Leaf would post and the doors it keeps", () => {
     const view = TOWN.view(fresh(), ctx());
     expect(Object.keys(view).toSorted()).toEqual(
       [
@@ -79,6 +79,7 @@ describe("a new member's town", () => {
         "camp",
         "visit",
         "made",
+        "pets",
         "arrival",
         "doors",
       ].toSorted(),
@@ -584,6 +585,27 @@ describe("the page's copy", () => {
     expect(readView({ ...wire, later: { anything: 1 } })).toEqual(view);
   });
 
+  test("says who lives there through a guess that moves somebody in, and works it out from the camp of a view from a Leaf from before that", () => {
+    const s = lived();
+    s.camp.first = "cat";
+    const spots: { x: number; y: number }[] = [];
+    for (let y = YARD.y0 + 1; y <= YARD.y1; y += 2)
+      for (let x = YARD.x0 + 1; x < YARD.x1; x += 2)
+        if (canPlace(s.camp.placed, "rock", x, y, 0) === "ok") spots.push({ x, y });
+    for (const { x, y } of spots.slice(0, COSY - 1 - s.camp.placed.length))
+      s.camp.placed.push({ n: s.made++, id: "rock", x, y, t: 0, s: 0 });
+    const last = spots.at(-1) ?? { x: 0, y: 0 };
+    const view = TOWN.view(s, ctx());
+    expect(view.pets).toEqual(["cat"]);
+    // The thing that makes the camp cosy: the page's guess has Glorp move in, as Leaf will.
+    const guess = predict(view, { do: "setOut", thing: "rock", ...last, t: 0 }, T0);
+    expect(guess && "view" in guess ? guess.view.pets : null).toEqual(["cat", "glorp"]);
+    const wire: Record<string, unknown> = JSON.parse(JSON.stringify(view));
+    const before = Object.fromEntries(Object.entries(wire).filter(([key]) => key !== "pets"));
+    expect(readView(before)).toEqual(view);
+    expect([readView({ ...wire, pets: ["cat", "cat"] }), readView({ ...wire, pets: ["dog"] })]).toEqual([null, null]);
+  });
+
   test("comes to what Leaf comes to for every command the page works out itself, ids and all", () => {
     const s = lived();
     const stump = nOf(s, "stump");
@@ -640,7 +662,21 @@ describe("where a camp stands", () => {
 });
 
 describe("a visit", () => {
-  test("is what stands in the camp, each thing in its own state, and the pet, and none of the owner's own", () => {
+  test("shows who lives in the camp as its owner is shown them: Glorp, and Cat once three callers are greeted", () => {
+    let s = did(fresh(), { do: "choosePet", pet: "glorp" }).state;
+    for (let greeted = 0; greeted < 3; greeted++) {
+      while (!s.visit) s = TOWN.advance(s, ctx(s.nextCall));
+      s = did(s, { do: "greet", visit: s.visit.id }).state;
+    }
+    const seen = TOWN.visit?.(s, ctx());
+    expect(TOWN.view(s, ctx()).pets).toEqual(["glorp", "cat"]);
+    expect(seen?.pets).toEqual(["glorp", "cat"]);
+    // Off the wire, as the visitor's page reads it: who lives there, and not how many callers were greeted.
+    const read = readView(JSON.parse(JSON.stringify(seen)));
+    expect([read?.pets, read?.camp.greeted]).toEqual([["glorp", "cat"], 0]);
+  });
+
+  test("is what stands in the camp, each thing in its own state, and who lives there, and none of the owner's own", () => {
     const s = lived();
     s.camp.first = "fox";
     s.camp.earned = ["crab-statue"];
@@ -674,6 +710,7 @@ describe("a visit", () => {
       },
       visit: null,
       made: 0,
+      pets: ["fox"],
       arrival: { first: false, newDay: false, away: 0, said: [], mail: [] },
       doors: {},
     });

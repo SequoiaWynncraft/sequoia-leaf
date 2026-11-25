@@ -39,6 +39,7 @@ import {
 import { TRAIL_COUNT } from "./content/rooms.ts";
 import {
   type Almanac,
+  beatenBosses,
   newAlmanac,
   type News,
   type Payout,
@@ -567,6 +568,9 @@ export const newTable = (ctx: Pick<Ctx, "seed">): Table => ({
   looks: newLooks(),
 });
 
+/** A carved figure of each boss beaten, on any trail, once. */
+const trophies = (almanac: Almanac): string[] => [...beatenBosses(almanac)].map((boss) => `trophy-${boss}`);
+
 /** The Little Raid, for Leaf's play service. */
 export const RAID: Game<Table, RaidCommand, TableView, RaidNote> = {
   id: "raid",
@@ -577,13 +581,14 @@ export const RAID: Game<Table, RaidCommand, TableView, RaidNote> = {
   decode: decodeTable,
   encode: encodeTable,
   command: readCommand,
-  // The bosses beaten on every trail, the runs finished or abandoned, and the furthest room met on any trail.
-  standing: ({ almanac }) => ({
-    score: almanac.bosses.reduce((sum, beaten) => sum + beaten.length, 0),
-    also: { runs: almanac.runs, room: Math.max(0, ...almanac.best) },
-  }),
-  // A carved figure of each boss the almanac has beaten, for the member's camp.
-  awards: (state) => [...new Set(state.almanac.bosses.flat())].map((boss) => `trophy-${boss}`),
+  // The different bosses beaten, every trail together, reached as the last of their trophies was first
+  // won; the runs finished or abandoned, and the furthest room met on any trail.
+  standing: ({ almanac }) => {
+    const counts = trophies(almanac);
+    return { score: counts.length, also: { runs: almanac.runs, room: Math.max(0, ...almanac.best) }, counts };
+  },
+  // A carved figure of each boss beaten, for the member's camp.
+  awards: (state) => trophies(state.almanac),
   // A raid under way, or the board set out, for the town's door.
   postcard,
 };

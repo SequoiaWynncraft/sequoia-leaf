@@ -12,6 +12,7 @@ import { runCreditSync } from "./earning/run.ts";
 import { payMissedLevels } from "./levels/check.ts";
 import { type JobRun, jobRun, jobSucceededAt } from "./metrics.ts";
 import { GAMES } from "./play/games.ts";
+import { restandAll } from "./play/restand.ts";
 import { Play } from "./play/service.ts";
 import type { SyncMode, SyncResult } from "./sync/windowed.ts";
 
@@ -167,6 +168,9 @@ const tending = step(
   Play.use((play) => Effect.as(play.tend(Object.values(GAMES)), "done" as const)),
 );
 
+/** Works out again where each state stands whose standing was not worked out from it as stored. */
+const restanding = step("restand", "Working out where states stand", restandAll);
+
 /**
  * Runs a job at the start of every minute on its own fiber, so a slow run of one never holds up
  * another: the first at once, or once `after` has passed.
@@ -177,7 +181,7 @@ const everyMinute = <R>(job: Effect.Effect<void, never, R>, after: Duration.Inpu
 /**
  * What Leaf does every minute, for as long as it runs: the two feed syncs,
  * snapshots and offsite copies, closing silent visits, and from its second minute tending the
- * games' states, each on its own. An offsite copy can take minutes; the syncs, the deep sync at minute 17, and snapshots carry
+ * games' states and working out again where they stand, each on its own. An offsite copy can take minutes; the syncs, the deep sync at minute 17, and snapshots carry
  * on meanwhile.
  */
 export const EveryMinute = Layer.merge(
@@ -189,6 +193,8 @@ export const EveryMinute = Layer.merge(
       yield* everyMinute(silentVisits);
       // A minute after Leaf starts: one starting beside one stopping, as in a deploy, does not tend against it.
       yield* everyMinute(tending, "1 minute");
+      // As late: until then the one stopping finds its standings as it left them, and what it writes keeps when each was reached.
+      yield* everyMinute(restanding, "1 minute");
     }),
   ),
   // Offsite copies while a bucket is set.

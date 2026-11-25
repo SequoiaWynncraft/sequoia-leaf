@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { leaf, minecraftId, playerId } from "@sequoia-leaf/core";
+import { RAID } from "@sequoia-leaf/raid";
 import { Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
 import { readHere } from "../src/activity/here.ts";
+import { restandAll } from "../src/play/restand.ts";
 import { discordOf, fakeBackend, sessionOf, testLeaf } from "./support.ts";
 
 const Me = Schema.Struct({ player: Schema.Struct({ id: Schema.String }) });
@@ -356,6 +358,67 @@ describe("linking a Wynncraft account later", () => {
     expect(await leafs.query((sql) => sql`SELECT player_id AS id, slot, data FROM save_history`)).toEqual([
       { id: account, slot: "play:works", data: '{"older":true}' },
     ]);
+  });
+
+  it("moves a camp nothing was done to as it is: standing nowhere, and nothing for Leaf to work out again", async () => {
+    const token = await signInNuss();
+    // Nuss opens the town and goes before reading the welcome letter: the camp is made, and nothing is done to it.
+    const opened = await app.request("/v1/game/play/town", { headers: { Cookie: `__Host-leaf_session=${token}` } });
+    expect(opened.status).toBe(200);
+    const marked = () => leafs.query((sql) => sql`SELECT player_id AS id, rev, stood FROM play_state`);
+    const guestId = idOf((await meWith(`__Host-leaf_session=${token}`)).body);
+    expect(await marked()).toEqual([{ id: guestId, rev: 0, stood: 0 }]);
+    sequoiaSession("nuss-sequoia", account, "Nuss187");
+
+    await meWith(`seq_session=nuss-sequoia; __Host-leaf_session=${token}`);
+
+    expect(await marked()).toEqual([{ id: account, rev: 1, stood: 1 }]);
+    expect(await leafs.run(restandAll)).toBe("idle");
+    expect(await leafs.query((sql) => sql`SELECT * FROM standings`)).toEqual([]);
+  });
+
+  it("moves a state whose standing is still to be worked out again as it is, for Leaf to work out after", async () => {
+    const token = await signInNuss();
+    const guestId = idOf((await meWith(`__Host-leaf_session=${token}`)).body);
+    // A table a Leaf from before stood by its rules, at 6, which this one has yet to work out again.
+    const table = RAID.encode(
+      RAID.create({ now: T0, player: { id: guestId, guest: true }, seed: 1, room: 0, awards: [], postcards: {} }),
+    );
+    await leafs.query(
+      (sql) => sql`
+        INSERT INTO play_state (player_id, game, rev, state, updated_at, born) VALUES (${guestId}, 'raid', 3, ${table}, ${T0}, ${T0})
+      `,
+    );
+    await leafs.query(
+      (sql) => sql`
+        INSERT INTO standings (player_id, game, score, also, guest, updated_at) VALUES (${guestId}, 'raid', 6, '{}', 1, ${T0 - 1000})
+      `,
+    );
+    sequoiaSession("nuss-sequoia", account, "Nuss187");
+
+    await meWith(`seq_session=nuss-sequoia; __Host-leaf_session=${token}`);
+
+    expect(await leafs.query((sql) => sql`SELECT player_id AS id, rev, stood FROM play_state`)).toEqual([
+      { id: account, rev: 4, stood: null },
+    ]);
+    expect(await leafs.run(restandAll)).toBe("done");
+    expect(
+      await leafs.query(
+        (sql) => sql`SELECT player_id AS id, score, updated_at AS at FROM standings WHERE game = 'raid'`,
+      ),
+    ).toEqual([{ id: account, score: 0, at: T0 - 1000 }]);
+  });
+
+  it("leaves a state moved by a Leaf from before stand as it stood, though Leaf works it out again", async () => {
+    const token = await signInNuss();
+    await app.request("/v1/game/play/town", { headers: { Cookie: `__Host-leaf_session=${token}` } });
+    // A Leaf from before, beside this one in a deploy, moves the camp to the account's player, its `rev` past both.
+    await leafs.query((sql) => sql`UPDATE play_state SET player_id = ${account}, rev = rev + 1`);
+
+    expect(await leafs.run(restandAll)).toBe("done");
+
+    expect(await leafs.query((sql) => sql`SELECT rev, stood FROM play_state`)).toEqual([{ rev: 1, stood: 1 }]);
+    expect(await leafs.query((sql) => sql`SELECT * FROM standings`)).toEqual([]);
   });
 
   it("leaves another person's player theirs when the account has gone over to this Discord account", async () => {

@@ -28,7 +28,6 @@ import {
   CGW,
   freeSpot,
   type PetId,
-  petsOf,
   type Placed,
   standsBy,
   taken,
@@ -82,7 +81,7 @@ import {
   shown,
   visiting,
 } from "./leaf.ts";
-import { comeTo, makePet, MY_PETS, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
+import { comeTo, keepPets, makePet, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
 import { livePlayers, meetLive, putAway, stepPlayers, touched } from "./players.ts";
 import { type Light, makeProp, type Prop, propUnder } from "./props.ts";
 import type { Sprites } from "./sprites.ts";
@@ -609,10 +608,15 @@ export function makeCamp(
 
   // ---------- who is here ----------
 
-  function addPet(kind: PetId, name: string, hue: number, at: Pt): PetLive {
-    const p = makePet(kind, name, art.pets(kind, hue), ground.nearestFree(at.x, at.y));
-    pets.push(p);
-    return p;
+  function petOf(kind: PetId, hue: number, at: Pt): PetLive {
+    return makePet(kind, art.pets(kind, hue), ground.nearestFree(at.x, at.y));
+  }
+
+  /** The `i`th of those who live in the camp shown, somewhere about the fire: somebody else's in a colour of their own. */
+  function petAbout(kind: PetId, i: number): PetLive {
+    const host = visiting();
+    const fire = fireAt() ?? { x: CW / 2, y: TRAIL_Y };
+    return petOf(kind, host ? 1 + ((seed + i) % 3) : 0, about(fire, host ? 120 : 100));
   }
 
   /** Somewhere clear to stand about, not far from a point. */
@@ -807,18 +811,23 @@ export function makeCamp(
   }
   guild.hear(hear);
 
-  /** Somebody new moves in when the camp has earned it; they come in off the trail. */
-  function movingIn(): void {
-    if (visiting()) return;
-    for (const kind of petsOf(mine())) {
-      if (pets.some((p) => p.kind === kind)) continue;
-      const p = addPet(kind, MY_PETS[kind], 0, TRAIL_IN);
-      p.x = TRAIL_END.x;
-      p.y = TRAIL_END.y;
-      if (G.player) comeTo(p, G.player, petWorld);
-      hooks.feed(`${p.name} has moved in. ${PET_ABOUT[kind]}`, "leaf");
-      sfx.twinkle();
-    }
+  /** Somebody new in the member's own camp comes to them: the pet they chose, out of the cabin; one the camp earned, off the trail. */
+  function movesIn(kind: PetId): PetLive {
+    const chosen = shown().camp.first === kind;
+    const cabin = chosen ? lives.find((l) => l.thing.id === "cabin") : undefined;
+    const p = petOf(kind, 0, cabin ? { x: cabin.prop.x + 16, y: cabin.prop.y + 8 } : TRAIL_IN);
+    if (!chosen) [p.x, p.y] = [TRAIL_END.x, TRAIL_END.y];
+    if (G.player) comeTo(p, G.player, petWorld);
+    p.joy = chosen ? 1.2 : 0;
+    if (chosen) sparkle(p.x, p.y - 8, 12, 8);
+    hooks.feed(`${p.name} ${chosen ? "lives here now" : "has moved in"}. ${PET_ABOUT[kind]}`, "leaf");
+    sfx.twinkle();
+    return p;
+  }
+
+  /** The pets about the camp are those living in the camp shown, mine or a visit's: newcomers come, and whoever stays stays put. */
+  function petsHere(): void {
+    pets = keepPets(pets, shown().pets, (kind, i) => (visiting() ? petAbout(kind, i) : movesIn(kind)));
   }
 
   // ---------- coming in ----------
@@ -854,11 +863,11 @@ export function makeCamp(
     rebuild();
     stage.snap();
 
-    const fire = fireAt() ?? { x: CW / 2, y: TRAIL_Y };
     // The member's own come to meet them; somebody else's pets are about their camp, in a colour of their own.
-    petsOf(shown().camp).forEach((kind, i) => {
-      const pet = addPet(kind, MY_PETS[kind], host ? 1 + ((seed + i) % 3) : 0, about(fire, host ? 120 : 100));
+    pets = keepPets([], shown().pets, (kind, i) => {
+      const pet = petAbout(kind, i);
       if (!host) comeTo(pet, TRAIL_IN, petWorld);
+      return pet;
     });
     if (!host) {
       after(1.6, () => {
@@ -870,10 +879,11 @@ export function makeCamp(
     ui.arrived();
   }
 
-  /** Leaf's copy has changed: the camp is laid out from it again, and its caller comes or goes. */
+  /** Leaf's copy has changed: the camp is laid out from it again, its pets come or go, and its caller comes or goes. */
   onTown(() => {
     if (G.where !== "camp") return;
     rebuild();
+    petsHere();
     meetCaller();
     ui.tray();
     changed();
@@ -1396,7 +1406,7 @@ export function makeCamp(
             flutter: 1.6,
           });
         if (G.home && Math.random() < 0.3) sfx.cricket();
-        movingIn();
+        petsHere();
       }
 
       // Something dragged near an edge of the view pushes the view along: of as much of it as the tray leaves.
@@ -1526,17 +1536,8 @@ export function makeCamp(
     turn,
     stow,
 
-    choose(kind) {
-      if (!ok(doNow({ do: "choosePet", pet: kind }))) return;
-      const cabin = lives.find((l) => l.thing.id === "cabin");
-      const from = cabin ? { x: cabin.prop.x + 16, y: cabin.prop.y + 8 } : TRAIL_IN;
-      const pet = addPet(kind, MY_PETS[kind], 0, from);
-      comeTo(pet, player(), petWorld);
-      pet.joy = 1.2;
-      sfx.twinkle();
-      sparkle(pet.x, pet.y - 8, 12, 8);
-      hooks.feed(`${pet.name} lives here now. ${PET_ABOUT[kind]}`, "leaf");
-    },
+    // The pet chosen comes out of the cabin as the camp's copy has it (`movesIn`).
+    choose: (kind) => void doNow({ do: "choosePet", pet: kind }),
 
     handles: {
       home: () => hooks.go({ to: "camp" }),

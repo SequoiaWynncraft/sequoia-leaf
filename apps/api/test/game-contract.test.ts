@@ -189,7 +189,8 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   );
   await call("GET /v1/game/me, after a look bought", "GET", "/v1/game/me");
   // The town on the play service: a new member's camp and the letter at the gate; the letter put
-  // away, a thing bought at a stall, which is in the tray and new, the tray looked in, and the thing set out.
+  // away, a thing bought at a stall, which is in the tray and new, the tray looked in, the thing set
+  // out, and the pet chosen, who lives there.
   await call("GET /v1/game/play/{game}, the town", "GET", "/v1/game/play/town");
   await call("POST /v1/game/play/{game}, the town", "POST", "/v1/game/play/town", {
     player: alice,
@@ -198,6 +199,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
       { id: "t-2", do: "buy", stall: "lamps", thing: "rock" },
       { id: "t-3", do: "looked", through: 1 },
       { id: "t-4", do: "setOut", thing: "rock", x: 30, y: 20, t: 0 },
+      { id: "t-5", do: "choosePet", pet: "glorp" },
     ],
   });
   // The Works' board: Bob's yard, Alice's and the guest's, as the play service writes where each stands.
@@ -243,6 +245,14 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await app.request("/v1/game/play/works", { headers: { Authorization: "Bearer bob-token" } });
   await call("GET /v1/game/play/{game}/of/{player}", "GET", `/v1/game/play/works/of/${bob}`);
   await call("GET /v1/game/play/{game}/of/{player}, nothing to visit", "GET", `/v1/game/play/raid/of/${bob}`);
+  // Alice's camp, as Bob is given it in a visit.
+  await call(
+    "GET /v1/game/play/{game}/of/{player}, a camp",
+    "GET",
+    `/v1/game/play/town/of/${alice}`,
+    undefined,
+    "bob-token",
+  );
   // The pull banners: before Leaf has a headliner for the first, and once it has Bob.
   await call("GET /v1/game/banners, no headliner yet", "GET", "/v1/game/banners");
   await leaf.query((sql) => sql`INSERT INTO banner_people (banner, player_id) VALUES ('banner-1', ${bob})`);
