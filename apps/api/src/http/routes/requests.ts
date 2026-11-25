@@ -1,11 +1,11 @@
-import { PURSE_HEADER, type RequestKind } from "@sequoia-leaf/core";
+import { leTooDear, PURSE_HEADER } from "@sequoia-leaf/core";
 import { Effect } from "effect";
 import { HttpClient } from "effect/http";
 import { HttpApiBuilder, HttpApiSchema } from "effect/http-api";
 
 import { LeafApi } from "../../api/api.ts";
 import { Invalid, RequestRefused, RequestsUnavailable, RequestUnknown } from "../../api/errors.ts";
-import { guildRequests, notEnoughLeaf } from "../../backend/requests.ts";
+import { guildRequests, notEnoughLeaf, type Wanted } from "../../backend/requests.ts";
 import { AppConfig } from "../../config.ts";
 import { Ledger } from "../../ledger/store.ts";
 import { Coins } from "../../play/coins.ts";
@@ -34,32 +34,47 @@ export const GameRequestsHandlers = HttpApiBuilder.group(LeafApi, "gameRequests"
               return yield* new RequestRefused({ code: "request_refused", message: looked.message });
             }
             const { balance } = yield* ledger.account(identity.playerId);
-            const offer = (kind: RequestKind) => {
+            const offer = (kind: "aspect" | "tome") => {
               const price = looked.prices[kind];
               return {
                 price,
                 why_not: looked.whyNot ?? (balance < price ? notEnoughLeaf(kind, price, balance) : null),
               };
             };
+            const { le } = looked;
             return {
               aspect: offer("aspect"),
               tome: offer("tome"),
+              // LE only where the backend sells it; enough Leaf is enough for the fewest LE it sells.
+              ...(le === null
+                ? {}
+                : {
+                    le: {
+                      price: le.leafPerLe,
+                      minimum: le.minimum,
+                      why_not:
+                        looked.whyNot ??
+                        (balance < le.minimum * le.leafPerLe ? leTooDear(le.minimum, le, balance) : null),
+                    },
+                  }),
             };
           }),
         )
         // One bought with the member's Leaf. The backend charges it through Leaf's own purchase route
-        // before it answers, so nothing here holds the database while it waits.
+        // before it answers, so nothing here holds the database while it waits. How few LE it sells
+        // is the backend's to say, in its words.
         .handle("request", ({ payload }) =>
           Effect.gen(function* () {
             const identity = yield* requestsFor;
-            const reason = payload.type === "tome" ? (payload.reason ?? "").trim() : null;
-            if (reason !== null && (reason === "" || reason.length > 1000)) {
+            const wanted: Wanted =
+              payload.type === "tome" ? { type: "tome", reason: (payload.reason ?? "").trim() } : payload;
+            if (wanted.type === "tome" && (wanted.reason === "" || wanted.reason.length > 1000)) {
               return yield* new Invalid({
                 code: "invalid_reason",
                 message: "A tome request needs what the tome is for, 1 to 1,000 characters",
               });
             }
-            const made = yield* requests.make(identity.session, payload.type, reason);
+            const made = yield* requests.make(identity.session, wanted);
             if (made.status === "unknown") {
               return yield* new RequestUnknown({
                 code: "request_unknown",

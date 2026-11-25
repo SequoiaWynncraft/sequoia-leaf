@@ -78,15 +78,21 @@ says so.
   name pins it, a finger kept on a thing in the camp pins it as a sheet. People keep their own
   card (below), and the town's other things their one-line hint. What is bought is in the camp's
   Storage at once: its picture goes from the stall's button to the camp's button in the dock.
-- **The Treasury.** Cinfy sells the guild's two paid requests, an aspect request and a tome
-  request, for the Leaf the backend asks (3,000 each). The page asks Leaf
+- **The Treasury** (`treasury.ts`, what each row shows in `requests.ts`). Cinfy sells the guild's paid requests, an aspect request and a
+  tome request, for the Leaf the backend asks (3,000 each), and LE where the backend sells it (200
+  Leaf for 1 LE, at least 32 LE). The page asks Leaf
   (`GET /v1/game/requests`), which asks the backend as the member: each row has its price on a
   button, or in its place why the member cannot buy it, in the backend's words. The button asks to
   be pressed again before it buys; a tome's first press opens a field for what the tome is for.
+  LE's row has a field for how many beside its button, which says what that many cost, and a dim
+  line with the rate and the minimum; a number that is not whole, under the minimum or more than
+  the member's Leaf leaves the button dim, and pressing it says why under the row.
   `POST /v1/game/requests` buys it: the backend takes the Leaf from the guild's ledger, and the row
   says where the request stands in the queue and the purse shows the Leaf left. Refused, it says
-  why; with no answer, it says to check the queue in Discord, and does not send it again. A guest
-  sees the two rows without buttons and one line saying who they are for.
+  why (LE keeps its field and button, for another number); with no answer, it says to check the
+  queue in Discord, and does not send it again. Each answer to the GET replaces every row's offer:
+  a reason that no longer holds goes, and LE comes and goes as the backend sells it. A guest
+  sees the aspect and tome rows without buttons and one line saying who they are for.
 - **Doors into the games.** The Works and The Little Raid are games of their own. Each has a card
   that says what is waiting there and a button to go in; walking on into the Works' doorway, or
   sitting down on one of the logs at the stump, goes in without the card. The doors of the Works
@@ -585,6 +591,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/draw.ts`                         | Drawing a frame of any place; name plates and speech; the round hole a door closes to           |
 | `src/hud.ts`                          | The purse, corner, feed, dock, panel and cards, shared by both places                           |
 | `src/ui.ts`, `src/campui.ts`          | The town's panels and arrival letter; the camp's panels and Storage                             |
+| `src/treasury.ts`                     | The Treasury: the guild's requests and LE bought with Leaf; their pictures in `treasuryart.ts`  |
 | `src/signpost.ts`, `src/camps.ts`     | The ways between camps: the signpost, the strip's like and "Next camp"; Leaf's list of camps    |
 | `src/mailbox.ts`                      | The mailbox: the letters, and who likes the camp and stayed in it                               |
 | `src/cards.ts`                        | What camp things and stalls say about themselves, as kit cards                                  |

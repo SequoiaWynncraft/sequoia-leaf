@@ -275,12 +275,16 @@ export const PresenceBodyErrorsLive = Layer.succeed(PresenceBodyErrors)(
   ),
 );
 
-/** A guild request whose body is not `{ "type": "aspect" or "tome" }` (with `reason` a string if any) gets `invalid_request`. */
+/**
+ * A guild request whose body is not `{ "type": "aspect" }`, `{ "type": "tome" }` (with `reason` a
+ * string if any) or `{ "type": "le", "amount" }` (a whole number, 1 or more) gets `invalid_request`.
+ */
 export const RequestBodyErrorsLive = Layer.succeed(RequestBodyErrors)(
   payloadError(
     new Invalid({
       code: "invalid_request",
-      message: 'Send a request as { "type": "aspect" }, or { "type": "tome", "reason": "<what it is for>" }',
+      message:
+        'Send a request as { "type": "aspect" }, { "type": "tome", "reason": "<what it is for>" } or { "type": "le", "amount": <whole LE, 1 or more> }',
     }),
   ),
 );

@@ -1,7 +1,17 @@
 import { describe, expect, it } from "bun:test";
 
 import { leaf } from "./leaf.ts";
-import { draftEntry, InvalidPostingError, type LedgerEntry, sameDraft } from "./ledger.ts";
+import {
+  draftEntry,
+  InvalidPostingError,
+  type LedgerEntry,
+  leRateText,
+  leTooDear,
+  leTooFew,
+  REQUEST_KINDS,
+  REQUESTS,
+  sameDraft,
+} from "./ledger.ts";
 import { playerId } from "./player.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
@@ -152,5 +162,20 @@ describe("sameDraft", () => {
     });
 
     expect(sameDraft(first, changed)).toBe(false);
+  });
+});
+
+describe("the guild requests Leaf sells", () => {
+  it("sells each request it names, LE among them, under its ledger memo", () => {
+    expect(Object.keys(REQUESTS).toSorted()).toEqual(REQUEST_KINDS.toSorted());
+    expect(REQUESTS.le).toBe("LE payout");
+  });
+
+  it("says LE's rate, and why an amount is not bought, from the backend's numbers", () => {
+    const rate = { leafPerLe: 200, minimum: 32 };
+    expect(leRateText(rate)).toBe("200 Leaf for 1 LE, at least 32 LE.");
+    expect(leTooDear(32, rate, 1234)).toBe("32 LE costs 6,400 Leaf. You have 1,234.");
+    expect(leTooFew(rate)).toBe("Ask for at least 32 LE, in whole LE.");
+    expect(leRateText({ leafPerLe: 1500, minimum: 10 })).toBe("1,500 Leaf for 1 LE, at least 10 LE.");
   });
 });

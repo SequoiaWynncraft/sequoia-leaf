@@ -1,5 +1,6 @@
 import { type Leaf, MAX_LEAF } from "./leaf.ts";
 import type { PlayerId } from "./player.ts";
+import { whole } from "./say.ts";
 
 /** Where earned Leaf comes from. */
 export const EARN_SOURCES = ["raid", "war", "quest", "achievement", "level", "event", "staff"] as const;
@@ -11,11 +12,29 @@ export type SpendSink = (typeof SPEND_SINKS)[number];
 
 /**
  * The guild requests a member can buy with Leaf, through sequoia-backend, which runs their queues
- * and sets their price; each is named in the ledger as it is here.
+ * and sets their price; each is named in the ledger as it is here. `le` is LE (liquid emeralds)
+ * bought with Leaf, which the guild's staff pay out by hand in game.
  */
-export const REQUESTS = { tome: "Tome request", aspect: "Aspect request" } as const;
+export const REQUESTS = { tome: "Tome request", aspect: "Aspect request", le: "LE payout" } as const;
 export type RequestKind = keyof typeof REQUESTS;
-export const REQUEST_KINDS = ["tome", "aspect"] as const satisfies readonly RequestKind[];
+export const REQUEST_KINDS = ["tome", "aspect", "le"] as const satisfies readonly RequestKind[];
+
+/** LE as sequoia-backend sells it for Leaf: Leaf for 1 LE, and the fewest LE it sells at once. Both are the backend's. */
+export interface LeRate {
+  readonly leafPerLe: number;
+  readonly minimum: number;
+}
+
+/** What LE costs, in the Treasury's words: "200 Leaf for 1 LE, at least 32 LE." */
+export const leRateText = ({ leafPerLe, minimum }: LeRate): string =>
+  `${whole(leafPerLe)} Leaf for 1 LE, at least ${whole(minimum)} LE.`;
+
+/** Why `balance` Leaf does not buy `amount` LE, in the backend's words: "32 LE costs 6,400 Leaf. You have 1,234." */
+export const leTooDear = (amount: number, { leafPerLe }: LeRate, balance: number): string =>
+  `${whole(amount)} LE costs ${whole(amount * leafPerLe)} Leaf. You have ${whole(balance)}.`;
+
+/** Why an amount is not one the backend sells, in its words: "Ask for at least 32 LE, in whole LE." */
+export const leTooFew = ({ minimum }: LeRate): string => `Ask for at least ${whole(minimum)} LE, in whole LE.`;
 
 export type EntryOrigin = EarnSource | SpendSink;
 

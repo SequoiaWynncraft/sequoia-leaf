@@ -30,11 +30,12 @@ const spendKey = (key: string) => `purchase:${key}`;
 const refundKey = (key: string) => `purchase-refund:${key}`;
 
 /**
- * Guild requests sequoia-backend buys for members with their Leaf (a tome or an aspect request), each
- * by a key the backend makes for it. Buying the same key again answers as the first time did, and
- * changes nothing. A cancel refunds a paid purchase, and keeps a key not paid yet from ever being
- * paid, so the backend can give up on a purchase whose answer it never heard and know it was not
- * charged. Both are one transaction each. The spend is the ledger's, as `request`.
+ * Guild requests sequoia-backend buys for members with their Leaf (a tome or an aspect request, or LE
+ * at the price the backend works out for how many), each by a key the backend makes for it. Buying
+ * the same key again answers as the first time did, and changes nothing. A cancel refunds a paid
+ * purchase, and keeps a key not paid yet from ever being paid, so the backend can give up on a
+ * purchase whose answer it never heard and know it was not charged. Both are one transaction each.
+ * The spend is the ledger's, as `request`.
  */
 export class Purchases extends Context.Service<
   Purchases,

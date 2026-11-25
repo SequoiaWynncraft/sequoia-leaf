@@ -321,11 +321,12 @@ by `apps/api/test/purchases.test.ts` the same way; the backend's tests read its
 copy, `src/test/resources/contracts/leaf-internal-v1.json`, so copy it there
 when it changes.
 
-### sequoia-backend's routes: tome and aspect requests
+### sequoia-backend's routes: tome, aspect and LE requests
 
-Members buy tome and aspect requests with Leaf in the guild's request channel
-(and on the website). sequoia-backend runs those queues and sets their price;
-Leaf keeps the Leaf. These routes, under `/internal/v1`, are for the backend
+Members buy tome and aspect requests, and LE (liquid emeralds, which the staff
+pay out by hand in game), with Leaf in the guild's request channel (and on the
+website and at the town's Treasury). sequoia-backend runs those queues and sets
+their price; Leaf keeps the Leaf. These routes, under `/internal/v1`, are for the backend
 alone: they take the internal token the two already share
 (`BACKEND_INTERNAL_TOKEN`, the backend's `APP_INTERNAL_API_TOKEN`) as
 `Authorization: Bearer`, and only from the server's private network
@@ -338,12 +339,13 @@ always adds `X-Forwarded-For`, gets 401 `unauthorized`, token or not.
 | `PUT /internal/v1/purchases/{key}`       | Buys a request: `{ "player_id", "kind", "leaf" }`.             |
 | `DELETE /internal/v1/purchases/{key}`    | Cancels one: refunds it if paid, and keeps it from being paid. |
 
-- **Buying** takes `kind` `tome` or `aspect` and its price in Leaf, and answers
+- **Buying** takes `kind` `tome`, `aspect` or `le` and its price in Leaf (for
+  LE, the backend works it out from how many), and answers
   `{ "key", "status": "paid", "balance" }` with the balance after it. The key is
   the backend's own (1 to 100 letters, digits and `_ . : -`), one per request,
   and makes the purchase happen once: sent again, it answers as before and
   charges nothing. It is one `request` spend in the ledger, keyed
-  `purchase:<key>`, with "Tome request" or "Aspect request" as its memo. 409
+  `purchase:<key>`, with "Tome request", "Aspect request" or "LE payout" as its memo. 409
   `insufficient_leaf` when the balance does not cover it, `key_in_use` when the
   key was used for another purchase (another player, kind or price), and
   `purchase_cancelled` when it was cancelled; 400 `invalid_purchase` or
@@ -446,11 +448,16 @@ anything that is for everyone, but no XP, quests or news, and the guild's events
 The Treasury's routes ask sequoia-backend's reward queue (`/api/reward-queue`) as
 the member, with their own session and the website's mod version. A guest gets
 403 `members_only` and the backend is not asked. `GET /v1/game/requests` answers
-`{ "aspect": { "price", "why_not" }, "tome": { ... } }`, `why_not` null when the
-member may buy it now; the backend refusing them answers 409 `request_refused`,
-and the backend not answering 503 `requests_unavailable`. `POST /v1/game/requests`
-takes `{ "type": "aspect" }` or `{ "type": "tome", "reason" }` (1 to 1,000
-characters) and answers `{ "type", "position", "leaf_paid", "leaf" }`, with
+`{ "aspect": { "price", "why_not" }, "tome": { ... }, "le": { "price", "minimum", "why_not" } }`,
+`why_not` null when the member may buy it now. `le` is there only when the
+backend sells LE (a backend from before LE does not say): its `price` is Leaf for
+1 LE and `minimum` the fewest LE it sells, and its `why_not` says so when the
+member's Leaf does not cover the minimum. The backend refusing them answers 409
+`request_refused`, and the backend not answering 503 `requests_unavailable`.
+`POST /v1/game/requests` takes `{ "type": "aspect" }`, `{ "type": "tome", "reason" }`
+(1 to 1,000 characters) or `{ "type": "le", "amount" }` (whole LE, 1 or more;
+the backend refuses fewer than its minimum, in its words) and answers
+`{ "type", "position", "leaf_paid", "leaf" }`, with
 Leaf's word on the purse beside it in the header `Leaf-Purse`, as a reroll's;
 the backend charges the member through `PUT /internal/v1/purchases/{key}` before it
 answers. Refused, it answers 409 `request_refused` with the backend's reason and

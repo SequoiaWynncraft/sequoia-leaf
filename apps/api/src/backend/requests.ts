@@ -1,11 +1,11 @@
-import { type RequestKind, whole } from "@sequoia-leaf/core";
+import { type LeRate, type RequestKind, whole } from "@sequoia-leaf/core";
 import { Duration, Effect, type Redacted, Schema } from "effect";
 import { type HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import { askBackend, type Asked, logFailure, UnexpectedStatus } from "./failure.ts";
 
 /**
- * The guild's requests (an aspect or a tome), as the backend's reward queue (`/api/reward-queue`)
+ * The guild's requests (an aspect, a tome or LE), as the backend's reward queue (`/api/reward-queue`)
  * answers the member, asked with their own session: whether they may pay Leaf for one, and making
  * one. The backend decides and charges, by buying the request from Leaf's own
  * `/internal/v1/purchases`; here Leaf only asks and passes the answer on. Nothing here touches
@@ -26,13 +26,20 @@ const LOOK_FOR = Duration.seconds(10);
  */
 const MAKE_FOR = Duration.seconds(30);
 
-/** The parts of the backend's eligibility answer about paying Leaf. */
+/**
+ * The parts of the backend's eligibility answer about paying Leaf. A backend from before LE sends no
+ * `prices.le`: then the Treasury sells aspects and tomes, and no LE.
+ */
 const Eligibility = Schema.Struct({
   leaf_eligible: Schema.Boolean,
   in_guild: Schema.Boolean,
   in_guild_time_in_days: Schema.Number,
   required_days: Schema.Number,
-  prices: Schema.Struct({ aspect: Schema.Number, tome: Schema.Number }),
+  prices: Schema.Struct({
+    aspect: Schema.Number,
+    tome: Schema.Number,
+    le: Schema.optionalKey(Schema.Struct({ leaf_per_le: Schema.Number, minimum: Schema.Number })),
+  }),
 });
 
 /** The parts of the backend's answer to a request made that the member is told. */
@@ -42,10 +49,22 @@ const Created = Schema.Struct({ position: Schema.Number, leaf_paid: Schema.Numbe
 const Said = Schema.Struct({ message: Schema.NonEmptyString });
 
 export type Looked =
-  /** `whyNot` is why the member may not pay for either now, or null when they may. */
-  | { readonly status: "ok"; readonly whyNot: string | null; readonly prices: Readonly<Record<RequestKind, number>> }
+  | {
+      readonly status: "ok";
+      /** Why the member may not pay for any of them now, or null when they may. */
+      readonly whyNot: string | null;
+      readonly prices: { readonly aspect: number; readonly tome: number };
+      /** Null when the backend does not sell LE. */
+      readonly le: LeRate | null;
+    }
   | { readonly status: "refused"; readonly message: string }
   | { readonly status: "unavailable" };
+
+/** A request to make, as the backend takes it: a tome with what it is for, or so many LE. */
+export type Wanted =
+  | { readonly type: "aspect" }
+  | { readonly type: "tome"; readonly reason: string }
+  | { readonly type: "le"; readonly amount: number };
 
 export type Made =
   | { readonly status: "made"; readonly position: number; readonly paid: number }
@@ -62,9 +81,12 @@ const NOT_LINKED = "This queue requires a linked Minecraft account. Use /link wi
 const SIGN_IN = "Your session has expired. Sign in again";
 const BUSY = "The guild's server could not take the Leaf just now. No Leaf was taken. Try again in a minute.";
 
-/** Why a member with `balance` Leaf cannot pay `price` for a request, in the backend's words. */
-export const notEnoughLeaf = (kind: RequestKind, price: number, balance: number): string =>
+/** Why a member with `balance` Leaf cannot pay `price` for an aspect or a tome request, in the backend's words. */
+export const notEnoughLeaf = (kind: "aspect" | "tome", price: number, balance: number): string =>
   `${kind === "aspect" ? "An aspect" : "A tome"} request costs ${whole(price)} Leaf. You have ${whole(balance)}.`;
+
+/** A request's kind as the backend's words name it: "a pending LE request". */
+const NAMED: Readonly<Record<RequestKind, string>> = { aspect: "aspect", tome: "tome", le: "LE" };
 
 /**
  * The backend's reason for a refusal. Its errors' bodies may come without words (Spring leaves them
@@ -108,7 +130,9 @@ export function guildRequests(client: HttpClient.HttpClient, backendUrl: string)
                 : e.in_guild
                   ? `You need ${e.required_days} days in the guild. You have ${e.in_guild_time_in_days}.`
                   : NOT_A_MEMBER,
-              prices: e.prices,
+              prices: { aspect: e.prices.aspect, tome: e.prices.tome },
+              le:
+                e.prices.le === undefined ? null : { leafPerLe: e.prices.le.leaf_per_le, minimum: e.prices.le.minimum },
             })),
           );
         }),
@@ -121,10 +145,10 @@ export function guildRequests(client: HttpClient.HttpClient, backendUrl: string)
       ),
 
     /** Makes a request paid with Leaf: the backend charges the member, or says why not. */
-    make: (session: Redacted.Redacted, kind: RequestKind, reason: string | null): Effect.Effect<Made> =>
+    make: (session: Redacted.Redacted, wanted: Wanted): Effect.Effect<Made> =>
       asMember(
         HttpClientRequest.post(new URL("/api/reward-queue/requests", backendUrl)).pipe(
-          HttpClientRequest.bodyJsonUnsafe({ type: kind, ...(reason === null ? {} : { reason }), pay_with_leaf: true }),
+          HttpClientRequest.bodyJsonUnsafe({ ...wanted, pay_with_leaf: true }),
         ),
         session,
       ).pipe(
@@ -139,7 +163,7 @@ export function guildRequests(client: HttpClient.HttpClient, backendUrl: string)
               response.status === 401
                 ? SIGN_IN
                 : response.status === 409
-                  ? `You already have a pending ${kind} request in the queue.`
+                  ? `You already have a pending ${NAMED[wanted.type]} request in the queue.`
                   : "The request was not made. No Leaf was taken.";
             return Effect.map(reasonOf(response, otherwise), (message) => ({ status: "refused", message }));
           }
@@ -153,7 +177,7 @@ export function guildRequests(client: HttpClient.HttpClient, backendUrl: string)
         askBackend("/api/reward-queue/requests", MAKE_FOR),
         Effect.catchTag("BackendFailure", (failure) =>
           logFailure("Whether a request was made is not known", failure).pipe(
-            Effect.annotateLogs({ kind }),
+            Effect.annotateLogs({ kind: wanted.type }),
             Effect.as<Made>({ status: "unknown" }),
           ),
         ),

@@ -7,7 +7,7 @@ import { leaf, playerId } from "@sequoia-leaf/core";
 import { noNetwork, testLeaf } from "./support.ts";
 
 /**
- * sequoia-backend's routes: a member's Leaf, and the tome and aspect requests it buys for them.
+ * sequoia-backend's routes: a member's Leaf, and the tome, aspect and LE requests it buys for them.
  * `contracts/leaf-internal-v1.json` holds what they answer, from the real routes; sequoia-backend's
  * tests read its copy of it (`src/test/resources/contracts/leaf-internal-v1.json`). Changing what a
  * route sends fails the last test here until the file is written again with
@@ -147,19 +147,44 @@ describe("buying a request", () => {
     expect(await balance()).toBe(2000);
   });
 
+  it("buys LE at the price the backend works out, as an LE payout, and gives it all back when cancelled", async () => {
+    await services.post(
+      { kind: "earn", playerId: alice, amount: leaf(3000), source: "raid", idempotencyKey: "raid:2:alice" },
+      T0 - 1000,
+    );
+    expect(await buy("le-1", { player_id: alice, kind: "le", leaf: 6400 })).toEqual({
+      status: 200,
+      body: { key: "le-1", status: "paid", balance: 1600 },
+    });
+    expect(await cancel("le-1")).toEqual({ status: 200, body: { key: "le-1", status: "refunded" } });
+
+    expect(await balance()).toBe(8000);
+    expect(await entries()).toEqual([
+      { player: alice, kind: "spend", delta: -6400, origin: "request", key: "purchase:le-1", memo: "LE payout" },
+      { player: alice, kind: "reversal", delta: 6400, origin: "request", key: "purchase-refund:le-1", memo: null },
+    ]);
+  });
+
   it("refuses a purchase or a key that is not one", async () => {
     const answers = await Promise.all(
       [
         { player_id: "alice", kind: "tome", leaf: 3000 },
         { player_id: alice, kind: "emerald", leaf: 3000 },
+        { player_id: alice, kind: "LE", leaf: 6400 },
         { player_id: alice, kind: "tome", leaf: 0 },
-        { player_id: alice, kind: "tome", leaf: 2.5 },
+        { player_id: alice, kind: "le", leaf: 2.5 },
         { player_id: alice, kind: "tome" },
         "not json",
       ].map((body) => buy("k1", body)),
     );
-    expect(answers.map((a) => a.status)).toEqual([400, 400, 400, 400, 400, 400]);
-    for (const answer of answers) expect(answer.body).toMatchObject({ code: "invalid_purchase" });
+    expect(answers.map((a) => a.status)).toEqual([400, 400, 400, 400, 400, 400, 400]);
+    for (const answer of answers) {
+      expect(answer.body).toEqual({
+        code: "invalid_purchase",
+        message:
+          'Send a purchase as { "player_id": "<uuid>", "kind": "tome", "aspect" or "le", "leaf": <whole number, 1 or more> }',
+      });
+    }
     expect((await buy("a key with spaces")).body).toMatchObject({ code: "invalid_key" });
     expect(await balance()).toBe(5000);
   });
@@ -222,6 +247,16 @@ describe("the backend's contract", () => {
     const tome = { player_id: alice, kind: "tome", leaf: 3000 };
     await record("GET /internal/v1/players/{player}/leaf", "GET", `/internal/v1/players/${alice}/leaf`);
     await record("PUT /internal/v1/purchases/{key}", "PUT", "/internal/v1/purchases/request:1", tome);
+    // LE at 200 Leaf for 1 LE, the fewest the backend sells (32): Alice's raids since pay for it.
+    await services.post(
+      { kind: "earn", playerId: alice, amount: leaf(6400), source: "raid", idempotencyKey: "raid:2:alice" },
+      T0 - 1000,
+    );
+    await record("PUT /internal/v1/purchases/{key}, LE", "PUT", "/internal/v1/purchases/request:5", {
+      player_id: alice,
+      kind: "le",
+      leaf: 6400,
+    });
     await record("PUT /internal/v1/purchases/{key}, the same again", "PUT", "/internal/v1/purchases/request:1", tome);
     await record("PUT /internal/v1/purchases/{key}, not enough Leaf", "PUT", "/internal/v1/purchases/request:2", {
       player_id: alice,

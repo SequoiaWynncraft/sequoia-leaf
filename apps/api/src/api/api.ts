@@ -161,7 +161,7 @@ export class PlayBodyErrors extends HttpApiMiddleware.Service<PlayBodyErrors>()(
   error: Invalid,
 }) {}
 
-/** Answers a guild request whose body is not `{ "type": "aspect" or "tome" }` with `invalid_request`. */
+/** Answers a guild request whose body is not an aspect, a tome or so many LE (`RequestBody`) with `invalid_request`. */
 export class RequestBodyErrors extends HttpApiMiddleware.Service<RequestBodyErrors>()("leaf/api/RequestBodyErrors", {
   error: Invalid,
 }) {}
@@ -375,7 +375,7 @@ export class GameAdminApi extends HttpApiGroup.make("gameAdmin")
 const KeyParams = { key: Schema.String };
 
 /**
- * sequoia-backend's routes: a member's Leaf, and the guild requests (tomes, aspects) it buys for
+ * sequoia-backend's routes: a member's Leaf, and the guild requests (tomes, aspects, LE) it buys for
  * them with it, each by a key of the backend's. Not for browsers or the mod.
  */
 export class InternalApi extends HttpApiGroup.make("internal")

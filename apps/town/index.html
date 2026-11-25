@@ -856,7 +856,7 @@
       }
 
       /* What a tome request is for, typed at the Treasury, across its row. 16px at least, or a phone zooms in on it. */
-      .k-card:has(> .k-field) {
+      .k-card:has(> textarea.k-field) {
         flex-wrap: wrap;
       }
       .k-field {
@@ -875,6 +875,23 @@
       }
       .k-field::placeholder {
         color: var(--k-faint);
+      }
+      /* A row's dim line beside a field and a button breaks where it reads best: "200 Leaf for 1 LE," then "at least 32 LE." */
+      #panel .k-card .k-col > .k-d {
+        text-wrap: balance;
+      }
+      /* How many LE, typed beside its button: a few digits wide, without the browser's arrows. */
+      .k-field.many {
+        flex: none;
+        width: calc(var(--u) * 26);
+        padding-inline: calc(var(--u) * 2);
+        text-align: right;
+        appearance: textfield;
+      }
+      .k-field.many::-webkit-inner-spin-button,
+      .k-field.many::-webkit-outer-spin-button {
+        appearance: none;
+        margin: 0;
       }
 
       @media (max-width: 1100px), (orientation: portrait) {

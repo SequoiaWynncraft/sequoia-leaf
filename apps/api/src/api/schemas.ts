@@ -379,19 +379,27 @@ export const Banners = Schema.Struct({
 });
 
 /**
- * What the Treasury sells, a paid aspect request and a paid tome request: for each, its price in Leaf,
- * and why the member cannot buy it now, in the backend's words where it has them, or null when they can.
+ * What the Treasury sells, a paid aspect request, a paid tome request and, where the backend offers
+ * it, LE: for each, its price in Leaf (for LE, Leaf for 1 LE, and the fewest LE it sells), and why the
+ * member cannot buy it now, in the backend's words where it has them, or null when they can.
  */
 export const Requests = Schema.Struct({
   aspect: Schema.Struct({ price: Schema.Number, why_not: Schema.NullOr(Schema.String) }),
   tome: Schema.Struct({ price: Schema.Number, why_not: Schema.NullOr(Schema.String) }),
+  le: Schema.optionalKey(
+    Schema.Struct({ price: Schema.Number, minimum: Schema.Number, why_not: Schema.NullOr(Schema.String) }),
+  ),
 });
 
-/** A guild request to buy with Leaf: an aspect, or a tome with what it is for (`reason`, 1 to 1,000 characters). */
-export const RequestBody = Schema.Struct({
-  type: Schema.Literals(REQUEST_KINDS),
-  reason: Schema.optional(Schema.String),
-});
+/**
+ * A guild request to buy with Leaf: an aspect, a tome with what it is for (`reason`, 1 to 1,000
+ * characters), or so many LE (`amount`, whole and 1 or more; the backend says how few it sells).
+ */
+export const RequestBody = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("aspect") }),
+  Schema.Struct({ type: Schema.Literal("tome"), reason: Schema.optional(Schema.String) }),
+  Schema.Struct({ type: Schema.Literal("le"), amount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)) }),
+]);
 
 /** A request made: its place in its queue, what it cost, and the member's Leaf after it. */
 export const RequestMade = Schema.Struct({

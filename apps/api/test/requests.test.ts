@@ -88,11 +88,24 @@ async function call(method: string, body?: unknown, session = "alice-token") {
 
 const balance = async () => (await services.account(alice)).balance;
 
+/** Gives Alice `amount` more Leaf, from the guild's staff. */
+const grant = (amount: number) =>
+  services.post(
+    { kind: "earn", playerId: alice, amount: leaf(amount), source: "staff", idempotencyKey: `staff:grant:${amount}` },
+    T0,
+  );
+
 describe("what the Treasury offers", () => {
-  it("asks the backend as the member, and offers both at their price", async () => {
+  it("asks the backend as the member, and offers each at its price, LE at the backend's rate and minimum", async () => {
+    // 6,400 Leaf: just enough for the fewest LE the backend sells.
+    await grant(1400);
     expect(await call("GET")).toEqual({
       status: 200,
-      body: { aspect: { price: 3000, why_not: null }, tome: { price: 3000, why_not: null } },
+      body: {
+        aspect: { price: 3000, why_not: null },
+        tome: { price: 3000, why_not: null },
+        le: { price: 200, minimum: 32, why_not: null },
+      },
     });
     expect(asked).toEqual([
       {
@@ -110,13 +123,22 @@ describe("what the Treasury offers", () => {
     expect((await call("GET")).body).toEqual({
       aspect: { price: 3000, why_not: tenure },
       tome: { price: 3000, why_not: tenure },
+      le: { price: 200, minimum: 32, why_not: tenure },
     });
 
+    // Enough for an aspect or a tome, and not for 32 LE.
     queued.days = 30;
+    expect((await call("GET")).body).toMatchObject({
+      aspect: { why_not: null },
+      tome: { why_not: null },
+      le: { why_not: "32 LE costs 6,400 Leaf. You have 5,000." },
+    });
+
     await services.post({ kind: "spend", playerId: alice, amount: leaf(3800), sink: "shop", idempotencyKey: "s" }, T0);
     expect((await call("GET")).body).toEqual({
       aspect: { price: 3000, why_not: "An aspect request costs 3,000 Leaf. You have 1,200." },
       tome: { price: 3000, why_not: "A tome request costs 3,000 Leaf. You have 1,200." },
+      le: { price: 200, minimum: 32, why_not: "32 LE costs 6,400 Leaf. You have 1,200." },
     });
 
     backend.api = () =>
@@ -125,6 +147,15 @@ describe("what the Treasury offers", () => {
     expect((await call("GET")).body).toEqual({
       aspect: { price: 3000, why_not: notAMember },
       tome: { price: 3000, why_not: notAMember },
+    });
+  });
+
+  it("offers no LE where the backend's answer has none, as a backend from before LE answers", async () => {
+    await grant(10_000);
+    backend.api = () => Response.json(eligibility());
+    expect(await call("GET")).toEqual({
+      status: 200,
+      body: { aspect: { price: 3000, why_not: null }, tome: { price: 3000, why_not: null } },
     });
   });
 
@@ -199,6 +230,52 @@ describe("buying a request", () => {
 
     expect((await call("POST", { type: "tome", reason: "  For the war tower  " })).status).toBe(200);
     expect(asked.at(-1)?.body).toEqual({ type: "tome", reason: "For the war tower", pay_with_leaf: true });
+  });
+
+  it("sends how many LE, and the backend charges that many at its rate", async () => {
+    await grant(5000);
+    expect(await call("POST", { type: "le", amount: 40 })).toEqual({
+      status: 200,
+      body: { type: "le", position: 2, leaf_paid: 8000, leaf: 2000 },
+    });
+    expect(asked.at(-1)).toMatchObject({
+      session: "Bearer alice-token",
+      body: { type: "le", amount: 40, pay_with_leaf: true },
+    });
+    expect(await balance()).toBe(2000);
+  });
+
+  it("wants a whole number of LE, 1 or more, and leaves how few to the backend, in its words", async () => {
+    const answers = await Promise.all(
+      [{ type: "le", amount: 32.5 }, { type: "le", amount: 0 }, { type: "le", amount: "32" }, { type: "le" }].map(
+        (body) => call("POST", body),
+      ),
+    );
+    expect(answers.map((a) => a.status)).toEqual([400, 400, 400, 400]);
+    for (const answer of answers) {
+      expect(answer.body).toEqual({
+        code: "invalid_request",
+        message:
+          'Send a request as { "type": "aspect" }, { "type": "tome", "reason": "<what it is for>" } or { "type": "le", "amount": <whole LE, 1 or more> }',
+      });
+    }
+    expect(asked).toEqual([]);
+
+    expect(await call("POST", { type: "le", amount: 10 })).toEqual({
+      status: 409,
+      body: { code: "request_refused", message: "Ask for at least 32 LE, in whole LE." },
+    });
+    expect((await call("POST", { type: "le", amount: 40 })).body).toEqual({
+      code: "request_refused",
+      message: "40 LE costs 8,000 Leaf, and you don't have that much.",
+    });
+    expect(await balance()).toBe(5000);
+    // One waiting already, said with no words in the body: the backend's words for it.
+    backend.api = () => Response.json({ status: 409, error: "Conflict" }, { status: 409 });
+    expect((await call("POST", { type: "le", amount: 32 })).body).toEqual({
+      code: "request_refused",
+      message: "You already have a pending LE request in the queue.",
+    });
   });
 
   it("passes on each refusal, and takes nothing", async () => {
@@ -299,7 +376,7 @@ describe("the relay", () => {
     const lines: LogLine[] = [];
     const ask = relay(() => Promise.reject(new Error("connection reset")), lines);
     const looked = await Effect.runPromise(ask((r) => r.look(session)));
-    const made = await Effect.runPromise(ask((r) => r.make(session, "aspect", null)));
+    const made = await Effect.runPromise(ask((r) => r.make(session, { type: "aspect" })));
 
     expect([looked, made]).toEqual([{ status: "unavailable" }, { status: "unknown" }]);
     expect(lines.length).toBeGreaterThan(0);
@@ -310,7 +387,7 @@ describe("the relay", () => {
     const lines: LogLine[] = [];
     const outcome = await Effect.runPromise(
       Effect.gen(function* () {
-        const making = yield* Effect.forkChild(relay(unanswered, lines)((r) => r.make(session, "aspect", null)));
+        const making = yield* Effect.forkChild(relay(unanswered, lines)((r) => r.make(session, { type: "aspect" })));
         yield* TestClock.adjust("20 seconds");
         const after20 = making.pollUnsafe();
         yield* TestClock.adjust("11 seconds");

@@ -4,14 +4,12 @@
  * the camp (`hud.ts`). What a button does still lands in the town behind it.
  */
 
-import { type RequestKind, REQUESTS } from "@sequoia-leaf/core";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { dialog } from "@sequoia-leaf/kit/dialog.ts";
-import { amount, asking, asksAgain, el, icon as glyph, pressedTwice, replay, shown } from "@sequoia-leaf/kit/dom.ts";
+import { amount, asking, asksAgain, el, icon as glyph, replay, shown } from "@sequoia-leaf/kit/dom.ts";
 import { type Emote, EMOTES } from "@sequoia-leaf/kit/emotes.ts";
-import { isGuest } from "@sequoia-leaf/kit/live.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
-import { ask as askLeaf, isRecord, outside } from "@sequoia-leaf/kit/net.ts";
+import { outside } from "@sequoia-leaf/kit/net.ts";
 import { waitingLook } from "@sequoia-leaf/kit/play.ts";
 import { fly } from "@sequoia-leaf/kit/pursebar.ts";
 import { whole } from "@sequoia-leaf/kit/say.ts";
@@ -21,7 +19,7 @@ import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { dist, makeCanvas, pick } from "@sequoia-leaf/kit/util.ts";
 import { owned } from "@sequoia-leaf/town/camp.ts";
 import { LOST_CRAB, STALLS, type Stock } from "@sequoia-leaf/town/catalogue.ts";
-import { folk, folkNamed, KEEPER } from "@sequoia-leaf/town/folk.ts";
+import { folkNamed } from "@sequoia-leaf/town/folk.ts";
 import { waiting } from "@sequoia-leaf/town/mail.ts";
 import { place, PLACES } from "@sequoia-leaf/town/map/map.ts";
 import { thingOf } from "@sequoia-leaf/town/things.ts";
@@ -60,6 +58,7 @@ import { icon, type Sprites } from "./sprites.ts";
 import { tallyPanel } from "./tallyui.ts";
 import { LOG, thingName, touchThing } from "./town.ts";
 import { usesKey } from "./townkeys.ts";
+import { treasury } from "./treasury.ts";
 
 let S: Sprites | null = null;
 let ART: CampArt | null = null;
@@ -92,164 +91,6 @@ function nearby(p: Actor, words: readonly string[], reach = 70): void {
       say(a, words[k % words.length] ?? "ooh", 2.2);
     });
   }
-}
-
-// ---------- the Treasury ----------
-
-/** The guild's requests the Treasury sells, in the order it lists them. The backend makes them and takes the Leaf. */
-const KINDS: readonly RequestKind[] = ["aspect", "tome"];
-const LOST = "Could not tell whether the request went through. Check the queue in Discord before trying again.";
-const UNREACHED = "The guild's requests could not be reached. Try again in a moment.";
-
-/** A request's line where its button would be: why it cannot be bought, or what buying it did. */
-interface Said {
-  text: string;
-  tone: "k-gold" | "k-coral" | "k-dim";
-}
-
-function treasury(body: HTMLElement, life: Scope): null {
-  const keeper = folk("cinfy");
-  const line = el("span", "", { text: KEEPER.hello });
-  const face = slot(G.cinfy ? faceOf(G.cinfy, 3) : null, 28);
-  face.classList.add("nod");
-  body.append(
-    el("div", "k-row", {}, face, el("div", "k-say left k-grow", {}, folkName(keeper.name, "k-pix"), line)),
-    // Said once for both: what paying does, or for a guest why there is nothing to pay.
-    el("div", "k-d", {
-      text: isGuest()
-        ? "For guild members with 7 days in the guild."
-        : "A paid request is served before the free ones.",
-    }),
-  );
-  const reason = el("textarea", "k-field", {
-    maxLength: 1000,
-    rows: 2,
-    placeholder: "What is the tome for?",
-    "aria-label": "What is the tome for?",
-  });
-  /** What Leaf says each costs, while the member may buy it; what to say in place of its button otherwise. */
-  const price: Partial<Record<RequestKind, number>> = {};
-  const said: Partial<Record<RequestKind, Said>> = {};
-  /** Why the last try did not go through, when it may be tried again: said under the row, with its button still there. */
-  const again: Partial<Record<RequestKind, string>> = {};
-  let busy = false;
-  let writing = false;
-  const rows = KINDS.map((kind) => {
-    const side = el("div", "k-row");
-    const under = el("div", "k-col");
-    const art = S ? pic(kind === "tome" ? S.tome : S.aspect, 2) : glyph("star");
-    const card = el(
-      "div",
-      "k-card",
-      {},
-      slot(art, 28),
-      el("div", "k-grow k-col", {}, el("span", "k-pix", { text: REQUESTS[kind] }), under),
-      side,
-    );
-    body.append(card);
-    return { kind, card, side, under };
-  });
-  const draw = (): void => {
-    for (const { kind, card, side, under } of rows) {
-      const cost = price[kind];
-      const words = said[kind];
-      const spend = { on: `request:${kind}`, price: cost ?? 0 };
-      side.replaceChildren(
-        words || cost === undefined
-          ? ""
-          : button(
-              `leaf sm${asking(spend) ? " asking" : ""}`,
-              // A tome is not asked for twice: with what it is for written, its button says what pressing it does.
-              kind === "tome"
-                ? [writing ? "Buy" : null, glyph("leaf"), whole(cost)]
-                : [asksAgain(spend, [glyph("leaf"), whole(cost)], "Buy?")],
-              (b) => {
-                press(kind, b, cost);
-              },
-            ),
-      );
-      const note = words ?? (again[kind] === undefined ? null : { text: again[kind], tone: "k-coral" });
-      under.replaceChildren(note ? el("div", `k-read ${note.tone}`, { text: note.text }) : "");
-      if (kind === "tome" && writing && !words) card.append(reason);
-      else if (kind === "tome") reason.remove();
-    }
-  };
-  /** A request's button pressed, at the price it says (`cost`). */
-  const press = (kind: RequestKind, b: HTMLButtonElement, cost: number): void => {
-    if (busy) return;
-    if (kind === "tome" && (!writing || reason.value.trim() === "")) {
-      // A tome needs what it is for: the field first, then the button buys.
-      if (writing) replay(b, "shake");
-      writing = true;
-      draw();
-      reason.focus();
-      sfx.tap();
-      return;
-    }
-    sfx.tap();
-    // Writing what a tome is for and pressing "Buy 3,000" is asking enough; an aspect is asked once more.
-    if (kind === "tome" || pressedTwice(life, { on: `request:${kind}`, price: cost }, draw)) void buy(kind, b);
-  };
-  const look = async (): Promise<void> => {
-    const answer = await askLeaf("/v1/game/requests");
-    for (const kind of KINDS) {
-      const offer = answer.status === 200 && isRecord(answer.body) ? answer.body[kind] : null;
-      const message =
-        isRecord(answer.body) && typeof answer.body.message === "string" ? answer.body.message : UNREACHED;
-      if (isRecord(offer) && typeof offer.price === "number") {
-        price[kind] = offer.price;
-        if (typeof offer.why_not === "string") said[kind] ??= { text: offer.why_not, tone: "k-dim" };
-      } else said[kind] ??= { text: message, tone: "k-dim" };
-    }
-    draw();
-  };
-  const buy = async (kind: RequestKind, b: HTMLButtonElement): Promise<void> => {
-    busy = true;
-    delete again[kind];
-    const answer = await waitingLook(
-      b,
-      askLeaf("/v1/game/requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: kind, ...(kind === "tome" ? { reason: reason.value.trim() } : {}) }),
-      }),
-    );
-    busy = false;
-    const made = answer.status === 200 && isRecord(answer.body) ? answer.body : null;
-    if (
-      made &&
-      typeof made.position === "number" &&
-      typeof made.leaf_paid === "number" &&
-      typeof made.leaf === "number"
-    ) {
-      said[kind] = {
-        text: `Added your ${kind} request to the queue at position #${made.position}. ${whole(made.leaf_paid)} Leaf paid; you have ${whole(made.leaf)} left.`,
-        tone: "k-gold",
-      };
-      sfx.buy();
-      fly("leaf", purseAt("leaf"), centre(b), 5);
-      line.textContent = KEEPER.filed[0];
-      replay(face, "k-bump");
-      if (G.cinfy) {
-        hop(G.cinfy, 2);
-        say(G.cinfy, KEEPER.filed[1], 2.4);
-      }
-      // What the rest costs against the Leaf left.
-      void look();
-    } else {
-      // Refused, nothing was taken, and the backend says why; anything else may have gone through.
-      const message = isRecord(answer.body) ? answer.body.message : null;
-      const refused = answer.status >= 400 && answer.status < 500 && typeof message === "string";
-      // Nothing was taken and it may be tried again (the guild's server was busy): the button and what was written stay.
-      if (answer.status === 503 && typeof message === "string") again[kind] = message;
-      else said[kind] = { text: refused ? message : LOST, tone: "k-coral" };
-      sfx.no();
-      replay(b, "shake");
-    }
-    draw();
-  };
-  if (!isGuest()) void look();
-  return null;
 }
 
 // ---------- the quest board ----------
