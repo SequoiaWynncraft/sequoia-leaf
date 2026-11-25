@@ -9,9 +9,10 @@ import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
 import { generate } from "./gen.ts";
+import { bareLand } from "./land.ts";
 import { Player } from "./player.ts";
 import { rng } from "./random.ts";
-import { delivering, generated, give, junctions, must, saved } from "./yards.ts";
+import { delivering, generated, give, junctions, must, saved, staged } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 
@@ -56,8 +57,14 @@ const UNDONE: ReadonlySet<string> = new Set([
 const coinsOf = (did: ReturnType<typeof F.play>): number =>
   "refused" in did ? 0 : (did.coins ?? []).reduce((n, c) => n + (c.reason === "Earned in the Works" ? 0 : c.amount), 0);
 
-/** A yard as kept, but for the count of its Coins changes and what Undo would undo. */
-const kept = (y: F.Yard): string => F.encode({ ...y, bank: 0, history: [] });
+/** A yard as kept, but for the counts of its Coins changes and of entries kept, and what Undo would undo. */
+const kept = (y: F.Yard): string => F.encode({ ...y, bank: 0, history: [], entries: 0 });
+
+/** Says the yard is in the form reading it back gives: the same text, and the same check. */
+function readsBack(y: F.Yard): void {
+  const back = F.decode(F.encode(y), y.land);
+  expect(back && [F.encode(back), F.check(back)]).toEqual([F.encode(y), F.check(y)]);
+}
 
 /** Plays a command at the yard's tick with `purse` Coins to spend; one that does not read throws. */
 function play(y: F.Yard, c: Rec, purse = Infinity): ReturnType<typeof F.play> {
@@ -87,7 +94,8 @@ function standing(y: F.Yard): unknown {
  * Random play of commands with an Undo, each with a purse of just what it costs, or now and then
  * one Coin short of it first (refused, and nothing changed), and `ticks` between; then each undone,
  * newest first, each with just the Coins it takes back, or one short of them first. Says, for each
- * entry undone, that the yard is as it was before that command: `same` compares the two.
+ * entry undone, that the yard is as it was before that command: `same` compares the two. After every
+ * command and every Undo the yard reads back as itself (`readsBack`), and every entry kept is undone.
  */
 function undoneAll(
   start: F.Yard,
@@ -119,9 +127,11 @@ function undoneAll(
     const [top, length] = [y.history.at(-1)?.id, y.history.length];
     const did = play(y, c, price);
     if ("refused" in did || !copy) continue;
-    // A command that changed nothing keeps no entry.
+    readsBack(y);
+    // A command that changed nothing keeps no entry; none here is over the cap.
     if (y.history.at(-1)?.id !== top || y.history.length !== length)
       before.push({ yard: copy, coins: coinsOf(did), kind: String(c.do) });
+    expect(y.history.length).toBe(before.length);
     ticks(y, r);
   }
   let undone = 0;
@@ -133,7 +143,8 @@ function undoneAll(
     const free = undo(y, 0);
     const short = "refused" in free ? /^Not enough Coins: (\d+) short$/.exec(free.why) : null;
     const need = Number(short?.[1] ?? 0);
-    if ("refused" in free && !short) break;
+    // Refused for nothing but Coins, ever.
+    expect("refused" in free && !short ? free.why : null).toBeNull();
     if (short) {
       shorts++;
       const text = F.encode(y);
@@ -143,6 +154,7 @@ function undoneAll(
     const did = short ? undo(y, need) : free;
     expect(did).not.toHaveProperty("refused");
     if (!was) throw new Error("an entry with no command");
+    readsBack(y);
     same(y, was.yard);
     net += was.coins + coinsOf(did);
     kinds.add(was.kind);
@@ -166,9 +178,12 @@ describe("Undo", () => {
       const got = undoneAll(start, seed, (now, was) => {
         expect(kept(now)).toBe(kept(was));
         expect(Array.from(now.spare)).toEqual(Array.from(was.spare));
-        expect(F.check({ ...now, bank: 0, history: [] })).toBe(F.check({ ...was, bank: 0, history: [] }));
+        expect(F.check({ ...now, bank: 0, history: [], entries: 0 })).toBe(
+          F.check({ ...was, bank: 0, history: [], entries: 0 }),
+        );
       });
-      if (got.undone === got.done) expect(kept(start)).toBe(got.first);
+      expect(got.undone).toBe(got.done);
+      expect(kept(start)).toBe(got.first);
       undone += got.undone;
       short += got.short;
       for (const k of got.kinds) kinds.add(k);
@@ -444,5 +459,107 @@ describe("the history", () => {
     expect(F.piecesAt(g, all)).toEqual([]);
     expect(undo(g)).toEqual({ refused: "cannot_undo", why: "Cannot undo: that changed too much at once" });
     expect(give(g, { do: "undo", entry: g.history.at(-1)?.id })).toMatchObject({ refused: "cannot_undo" });
+  });
+});
+
+describe("an entry's id", () => {
+  test("names the action, not what it did: a stroke on two copies of the yard a tick apart is one entry on both, under one id", () => {
+    const page = laid();
+    const leaf = F.decode(F.encode(page), page.land);
+    if (!leaf) throw new Error("the yard does not read back");
+    const lines = [
+      ...new Set([...page.kind.keys()].filter((i) => page.kind[i] === F.BELT).map((i) => F.lineOf(page, i)[0] ?? i)),
+    ];
+    const xy = (i: number): Rec => ({ x: i % page.land.w, y: Math.floor(i / page.land.w) });
+    const [a = 0, b = 0] = lines;
+    // Leaf does each command a tick later than the page did: what the belts carry has moved on.
+    for (const [y, late] of [
+      [page, 0],
+      [leaf, 1],
+    ] as const) {
+      for (let t = 0; t < late; t++) F.step(y);
+      must(y, { do: "paint", tint: 3, ...xy(a) });
+    }
+    const id = page.history.at(-1)?.id;
+    expect(leaf.history.at(-1)?.id).toBe(id);
+    for (const y of [page, leaf]) must(y, { do: "paint", tint: 3, onto: id, ...xy(b) });
+    expect([page.history.length, leaf.history.length, leaf.history.at(-1)?.id]).toEqual([1, 1, id]);
+  });
+
+  test("a stale tab's Undo of a mill since undone and built again is refused: the mill built again stands", () => {
+    const y = F.create({ seed: 1 });
+    must(y, { do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
+    const stale = y.history.at(-1)?.id;
+    // Another tab undoes the mill and builds it again, the same mill on the same tile the same way.
+    expect(undo(y)).not.toHaveProperty("refused");
+    must(y, { do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
+    expect(y.history.at(-1)?.id).not.toBe(stale);
+    expect(play(y, { do: "undo", entry: stale })).toEqual({
+      refused: "cannot_undo",
+      why: "Cannot undo: that is no longer the last thing done",
+    });
+    expect(y.kind[F.at(y, 21, 15)]).toBe(F.MILL);
+  });
+
+  test("goes on counting when there is nothing left to undo, as read back: an entry never takes an id used before", () => {
+    const y = F.create({ seed: 1 });
+    must(y, { do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
+    undo(y);
+    const back = F.decode(F.encode(y), y.land);
+    if (!back) throw new Error("the yard does not read back");
+    expect([back.history, back.entries]).toEqual([[], 1]);
+    must(back, { do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
+    expect(back.history.at(-1)?.id).toBe(2);
+  });
+});
+
+describe("a stroke of the brush", () => {
+  test("over the cap stays one entry, under its id, that cannot be undone: no line of it is undone", () => {
+    const y = F.create({ land: bareLand(64, 64, [], [62, 62]), tier: 4, seed: 1 });
+    const rows = Array.from({ length: 30 }, (_, k) => 2 * k);
+    for (const z of rows) for (let x = 0; x < 56; x++) F.build(y, F.BELT, x, z, 0, Infinity);
+    must(y, { do: "paint", tint: 2, x: 0, y: 0 });
+    const id = y.history.at(-1)?.id;
+    for (const z of rows.slice(1)) must(y, { do: "paint", tint: 2, onto: id, x: 0, y: z });
+    expect([y.history.length, y.history.at(-1)?.id]).toEqual([1, id]);
+    expect(undo(y)).toEqual({ refused: "cannot_undo", why: "Cannot undo: that changed too much at once" });
+    expect(rows.every((z) => y.tint[F.at(y, 30, z)] === 2)).toBe(true);
+  });
+
+  test("undone sets back the colour alone: a splitter's next way out is as the yard left it", () => {
+    const y = junctions();
+    y.history = [];
+    const splitter = F.at(y, 28, 13);
+    must(y, { do: "paint", tint: 5, x: 28, y: 13 });
+    let ran = 0;
+    for (const turn = y.turn[splitter]; y.turn[splitter] === turn && ran < 600; ran++) F.step(y);
+    const turn = y.turn[splitter];
+    expect(ran).toBeLessThan(600);
+    expect(undo(y)).not.toHaveProperty("refused");
+    expect([y.tint[splitter], y.turn[splitter]]).toEqual([0, turn]);
+  });
+});
+
+describe("a piece stood again", () => {
+  test("gets back what it held, and its work only as the yard lets it be now: a Study's on research taken out of line is let go", () => {
+    const y = staged("study");
+    y.history = [];
+    const i = [...y.kind.keys()].find((t) => y.kind[t] === F.STUDY) ?? -1;
+    const r = (): number => F.holderOf(y, i);
+    for (let k = 0; k < 600 && (y.holders.work[r()] ?? 0) === 0; k++) F.step(y);
+    const folios = (): number => y.holders.count[r()] ?? 0;
+    const was = { folios: folios(), making: y.holders.making[r()], work: y.holders.work[r()] };
+    expect([was.making !== F.NONE, (was.work ?? 0) > 0]).toEqual([true, true]);
+    const xy = { x: i % y.land.w, y: Math.floor(i / y.land.w) };
+    // Taken away and undone at once, it is as it was, at work.
+    must(y, { do: "remove", ...xy });
+    undo(y);
+    expect({ folios: folios(), making: y.holders.making[r()], work: y.holders.work[r()] }).toEqual(was);
+    // Taken away, its research taken out of line, and undone: its folios, and no work.
+    must(y, { do: "remove", ...xy });
+    while (y.line.length > 0) must(y, { do: "unstudy", research: F.GOALS[y.line[0] ?? 0]?.id });
+    expect(undo(y)).not.toHaveProperty("refused");
+    expect([folios(), y.holders.making[r()], y.holders.work[r()]]).toEqual([was.folios, F.NONE, 0]);
+    readsBack(y);
   });
 });

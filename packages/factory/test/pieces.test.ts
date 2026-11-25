@@ -15,8 +15,8 @@ import { fill } from "./goals.ts";
 import { bareLand } from "./land.ts";
 import { cratesOpening, give, must } from "./yards.ts";
 
-/** The check of a yard but for what Undo would undo: a piece set back as it was leaves the history longer. */
-const checkOf = (y: F.Yard): number => F.check({ ...y, history: [] });
+/** The check of a yard but for what Undo would undo and its count: a piece set back as it was leaves the history longer. */
+const checkOf = (y: F.Yard): number => F.check({ ...y, history: [], entries: 0 });
 
 const plank = F.item("plank");
 const brick = F.item("brick");

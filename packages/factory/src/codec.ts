@@ -16,77 +16,44 @@
  * cheap (`fromFirst`): it is a new yard at the tier its story had reached. One kept by version 6
  * reads as this version's, but for the grades it did not keep (`UNGRADED`).
  */
-import { build, isDir, keeps, plotState, refusal } from "./build.ts";
+import { build, isDir, plotState, refusal } from "./build.ts";
 import { fromBase64, Reader, toBase64, Writer } from "./bytes.ts";
-import { type KeptPiece, packCells, unpackCells } from "./cells.ts";
+import { keptOnto, type KeptPiece, packCells, unpackCells } from "./cells.ts";
 import { here } from "./clock.ts";
-import { FUEL, STUDY_HOLDS, TICKS } from "./content/machines.ts";
 import { NODES } from "./content/nodes.ts";
 import { historyOf } from "./history.ts";
 import { LAND, type Land } from "./land.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
-import { keptOf, packPieces, packWays, type Piece, piecesOf, placed, unpackWays, waysTo } from "./pieces.ts";
+import { keptOf, packPieces, packWays, type Piece, piecesOf, placed, unpackWays } from "./pieces.ts";
 import {
   ALL_GOALS,
   ALL_ITEMS,
   BELT,
   BLUEPRINTS_MOST,
-  BOILER,
-  CRATE,
-  DEADFALL,
   DEPOT,
-  GATHERER,
   type Goal,
   goalNamed,
   GOALS,
   highest,
-  holdsMost,
-  isFolio,
   isGoal,
-  isItem,
   isKind,
-  isMaker,
   isNode,
-  isRaw,
-  type Item,
   itemName,
   itemNamed,
   JOINER,
   kindNamed,
-  locked,
   MILLI,
   nextHand,
   NONE,
-  PACE,
   plotName,
   plotNamed,
   price,
   ready,
-  RECIPE,
   SORTER,
-  SPAN_MOST,
   SPLITTER,
-  STUDY,
-  TINTS,
   TUNNEL,
-  WORK,
 } from "./tables.ts";
-import { carries } from "./wire.ts";
-import {
-  type Away,
-  type Counts,
-  counts,
-  emptyYard,
-  enough,
-  held,
-  hold,
-  holderOf,
-  put,
-  reopen,
-  type Standing,
-  tunnelOf,
-  type Yard,
-} from "./yard.ts";
+import { type Away, type Counts, counts, emptyYard, hold, reopen, type Standing, type Yard } from "./yard.ts";
 
 /** 7: whole numbers, grades (a splitter's, a joiner's and a sorter's too), goals and research. */
 export const VERSION = 7;
@@ -254,6 +221,7 @@ export function encode(y: Yard, keep: Keep = {}): string {
       ? { blueprints: y.blueprints.map((b) => b && toBase64(packPrint(b))) }
       : {}),
     ...(y.history.length > 0 ? { history: y.history.map((e) => toBase64(e.bytes)) } : {}),
+    ...(y.entries > 0 ? { entries: y.entries } : {}),
   });
 }
 
@@ -321,7 +289,7 @@ function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined,
     if (i !== null && y.kind[i] === TUNNEL && (y.span[i] ?? 0) < 0 && y.span[i] === o.span && y.dir[i] === o.dir)
       kept.push([i, o]);
   }
-  for (const [i, o] of kept) unpack(y, i, o, studied);
+  for (const [i, o] of kept) keptOnto(y, i, o, studied);
   return owed;
 }
 
@@ -515,88 +483,6 @@ function keptAway(v: unknown): Away | null {
   return seconds === null || coins === null ? null : { seconds, coins, made: untally(v.made, 1e12) };
 }
 
-/** How many of a thing the piece on a tile may hold: a machine, as many as it keeps for what it may make (`keeps`). */
-function mostHeld(y: Yard, i: number, n: number): number {
-  const k = y.kind[i] ?? NONE;
-  if (isMaker(k)) return holdsMost(keeps(y, i), n);
-  if (k === BOILER) return n === DEADFALL ? FUEL : 0;
-  if (k === STUDY) return isFolio(n) ? STUDY_HOLDS : 0;
-  return k === CRATE ? 1e6 : 0;
-}
-
-/**
- * What a piece's work toward what it is making stays below: what that takes; with nothing being made,
- * what a tick at the top pace can leave over once a thing is done.
- */
-const workFor = (k: number, making: number): number =>
-  k === GATHERER
-    ? WORK.gather
-    : making === NONE
-      ? Math.max(...PACE)
-      : k === STUDY
-        ? WORK.study
-        : (RECIPE[making]?.work ?? 0);
-
-/**
- * Puts a kept piece's parts back onto the piece new-built where it stood, each only as the rules let
- * it be: a colour where the yard may paint; a machine told to make, holding, making and having made
- * only what it may make (`locked`), and no more than it keeps; a Study at work on a folio it holds for
- * `studied`, the research its work was for; work only toward what is being made (`workFor`).
- */
-function unpack(y: Yard, i: number, o: KeptPiece, studied: Goal | undefined): void {
-  const k = y.kind[i] ?? NONE;
-  const makes = isMaker(k);
-  if (carries(k) && o.item !== undefined && isItem(o.item)) {
-    y.item[i] = o.item;
-    y.prog[i] = whole(o.prog, 16) ?? 0;
-    y.via[i] = whole(o.via, 4) ?? 0;
-  }
-  if (carries(k)) y.tint[i] = whole(o.tint, TINTS) ?? 0;
-  const r = holderOf(y, i);
-  if (r >= 0) {
-    const h = y.holders;
-    const may = (n: number | undefined): n is Item =>
-      n !== undefined && isItem(n) && RECIPE[n]?.by === k && locked(y.open, { make: n }) === null;
-    if (makes && may(o.recipe)) y.set[i] = o.recipe;
-    const room = k === CRATE ? y.open.crate : 1e6;
-    const has = counts();
-    for (const [n, c] of o.held ?? []) if (isItem(n) && (whole(c, 1e6) ?? 0) > 0) has[n] = c;
-    for (const n of ALL_ITEMS)
-      for (let c = Math.min(Math.floor(has[n] ?? 0), mostHeld(y, i, n)); c > 0 && (h.count[r] ?? 0) < room; c--)
-        put(h, r, n);
-    h.idle[r] = 0;
-    const out = o.out !== undefined && isItem(o.out) ? o.out : null;
-    if (out !== null && (k === CRATE || (k === GATHERER && isRaw(out)) || (makes && may(out)))) h.out[r] = out;
-    const m = o.making;
-    if (makes && m !== undefined && keeps(y, i).some((rec) => rec.out === m && enough(h, r, rec))) h.making[r] = m;
-    const wanted = studied !== undefined && m !== undefined && isFolio(m) && (GOALS[studied]?.want[m] ?? 0) > 0;
-    if (k === STUDY && wanted && held(h, r, m) > 0) h.making[r] = m;
-    if (makes || k === GATHERER || (k === STUDY && studied !== undefined))
-      h.work[r] = whole(o.work, workFor(k, h.making[r] ?? NONE) - 1) ?? 0;
-    if (k === CRATE) h.open[r] = o.closed === true ? 0 : 1;
-    if (k === BOILER) h.fuel[r] = whole(o.fuel, TICKS.burn) ?? 0;
-  }
-  // A joiner's next way in; a splitter's next way out, and over it its next way in (`tick.ts`).
-  if (k === SPLITTER || k === JOINER) y.turn[i] = whole(o.turn, k === SPLITTER ? 14 : 2) ?? 0;
-  if (isKind(k)) {
-    // What a sorter is set to and its side, kept in the byte a splitter keeps its ways in, and a
-    // splitter's ways (`waysTo`). `keptOf` keeps only what the kind may keep.
-    const kept = keptOf({ ...unpackWays(whole(o.ways, 255) ?? 0), recipe: o.recipe }, k);
-    if (k === SORTER && kept.recipe !== undefined) y.set[i] = kept.recipe;
-    waysTo(y, i, k, kept);
-  }
-  const span = y.span[i] ?? 0;
-  const t = tunnelOf(y, i);
-  if (t >= 0 && o.under && o.along) {
-    const at = t * SPAN_MOST;
-    for (let s = 0; s < span; s++) {
-      const n = o.under[s] ?? NONE;
-      y.tunnels.under[at + s] = isItem(n) ? n : NONE;
-      y.tunnels.along[at + s] = whole(o.along[s], 16) ?? 0;
-    }
-  }
-}
-
 /**
  * A yard from a kept record: its numbers as JSON gives them, its pieces, and its blueprints' pieces.
  * Every field's shape is checked, and every piece built again through the rules; what depends on
@@ -703,6 +589,8 @@ export function vouch(
   const history: unknown[] = Array.isArray(raw.history) ? raw.history : [];
   const entries = history.map((b) => (typeof b === "string" ? fromBase64(b) : null)).filter((b) => b !== null);
   y.history = entries.length === history.length ? historyOf(entries, land.w * land.h) : [];
+  // Entries are numbered by the count kept: never again below one kept, however it was kept.
+  y.entries = Math.max(whole(raw.entries, 1e12) ?? 0, y.history.at(-1)?.id ?? 0);
   y.news = [];
   return y;
 }

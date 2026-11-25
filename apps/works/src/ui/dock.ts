@@ -35,7 +35,7 @@ import { PAINTS } from "../art/belts.ts";
 import { type Art, bare } from "../art/index.ts";
 import type { Stage } from "../hand.ts";
 import { turns, WORKS_KEYS, type WorksAction } from "../keymap.ts";
-import { builds, DRAWN, gradeInHand, S } from "../state.ts";
+import { builds, DRAWN, gradeInHand, S, undoes } from "../state.ts";
 import {
   askSave,
   cancel,
@@ -326,9 +326,6 @@ function sumOf(bytes: Uint8Array): number {
   for (const v of bytes) h = Math.imul(h ^ v, 0x01000193);
   return h >>> 0;
 }
-
-/** Whether Undo shows: while the yard has something to undo, kept with it, so after a reload and on another device too; not while saving. */
-const undoes = (stage: Stage | null): boolean => stage?.is !== "saving" && S.world.history.length > 0;
 
 export function handPrint(): HandPrint {
   const h = S.hand;
