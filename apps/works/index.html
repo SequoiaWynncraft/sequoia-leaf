@@ -134,8 +134,8 @@
       }
 
       /*
-       * The order in hand, always in view: pressed, it opens Orders; the button at its side folds it to
-       * one line. It is in the top bar but hangs under it, out of its rows, but folded on a phone.
+       * The order in hand, always in view: pressed, it opens Orders; the button at its side folds it. It
+       * is in the top bar but hangs under it, out of its rows.
        */
       #track {
         position: fixed;
@@ -170,63 +170,22 @@
         flex-direction: column;
         gap: calc(var(--u) * 2);
       }
-      /* Folded: the title and what is left, in one line as tall as the button, and no research under it. */
-      #track .short {
-        min-height: calc(var(--u) * 16);
-        display: flex;
-        align-items: center;
-      }
-      /* The title asks for no room of its own: it has what the line has beside what is left. */
-      #track .short .name {
-        flex: 1;
-        min-width: 0;
-        container: title / inline-size;
-      }
-      #track .short .name > span {
-        display: block;
-        margin-right: calc(var(--u) * 3);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      /* Where too little of it would show, it is not shown (nor the gap after it), only said to a screen reader. */
-      @container title (width < 100px) {
-        #track .short .name > span {
-          position: absolute;
-          width: 1px;
-          height: 1px;
-          margin: 0;
-          clip-path: inset(50%);
-        }
-      }
       /*
-       * After the title, the orders ready to hand over, then what is left. Where both do not fit, what
-       * is left goes on to a second line, which is not shown. Alone, what is left keeps to one line where
-       * it can, and where the line is short of room takes two, as tall as the button.
+       * Folded, it is the square button in its place alone (`hud.ts`), in the top bar's row after the
+       * power, as the books' buttons are; and no research under it.
        */
-      #track .short > .tail {
-        flex: 0 1 auto;
-        min-width: min-content;
-        height: calc(var(--u) * 16);
-        display: flex;
-        flex-wrap: wrap;
-        column-gap: calc(var(--u) * 3);
-        overflow: hidden;
-        font: var(--f-small);
-      }
-      #track .short > .tail > * {
-        flex: 0 1 auto;
-        min-height: calc(var(--u) * 16);
-        display: flex;
-        align-items: center;
-      }
-      /* A lock stays beside its words. */
-      #track .short > .tail > .k-row {
-        flex-wrap: nowrap;
-      }
-      /* Folded, wider than open, so that more of the title shows. */
       #track:has(> .fold[aria-expanded="false"]) {
-        width: min(calc(var(--u) * 180), calc(100vw - var(--edge) * 2));
+        position: relative;
+        inset: auto;
+        width: auto;
+        padding: 0;
+        border: 0;
+        border-image: none;
+        margin-top: 0;
+      }
+      #track:has(> .fold[aria-expanded="false"])::before,
+      #track > .fold[aria-expanded="false"] {
+        display: none;
       }
       #top:has(> #track > .fold[aria-expanded="false"]) + #study {
         display: none;
@@ -239,7 +198,7 @@
       #track .k-label {
         flex: 1 0 auto;
       }
-      /* How many orders wait to be handed over: a tag on the small line over the title (and on the folded line), as small as it. */
+      /* How many orders wait to be handed over: a tag on the small line over the title, as small as it. */
       #track .k-chip {
         min-height: calc(var(--u) * 9);
         padding-inline: calc(var(--u) * 2);
@@ -1416,21 +1375,6 @@
         #study {
           width: min(calc(var(--u) * 132), calc(100vw - var(--edge) - var(--side)));
         }
-        /*
-         * Folded, the order in hand is a line of the top bar after the power, as tall as the purse, as
-         * wide as the row has room for: its title shows where some of it fits.
-         */
-        #track:has(> .fold[aria-expanded="false"]) {
-          position: relative;
-          inset: auto;
-          flex: 1 1 auto;
-          width: min-content;
-          padding-block: 0;
-          align-self: stretch;
-        }
-        #power {
-          align-self: stretch;
-        }
         /* A visit's strip too: My yard keeps its width, on a row of its own where the owner's name needs this one. */
         #visit {
           max-width: calc(100vw - var(--edge) - var(--side));
@@ -1512,21 +1456,6 @@
         #corner > * {
           order: -1;
         }
-        /* The power's bar under its numbers, so that the order's line has room beside it on the narrowest phone. */
-        #power {
-          display: grid;
-          grid-template-columns: auto auto;
-          gap: var(--u) calc(var(--u) * 3);
-          align-content: center;
-          padding: 0 calc(var(--u) * 2);
-        }
-        #power > :first-child {
-          grid-row: span 2;
-          align-self: center;
-        }
-        #power .k-bar {
-          width: auto;
-        }
         /* Ten million Leaf fits across the narrowest phone. */
         #purse {
           gap: calc(var(--u) * 3);
@@ -1568,10 +1497,6 @@
         body.walking #track,
         body.walking #study {
           display: none;
-        }
-        /* The order's folded line, where it is a row of its own, stops short of the books' column beside it. */
-        #track:has(> .fold[aria-expanded="false"]) {
-          max-width: calc(100vw - var(--edge) - var(--side));
         }
         /* The order in hand, open, stays above the line over the tools (`--handt`, measured): what does not fit scrolls. */
         #track .full {

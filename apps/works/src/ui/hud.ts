@@ -9,11 +9,10 @@
  * a visit, only "Top yards" of the books, and in the node's place a strip that says whose yard it is.
  */
 
-import { GOALS, isFilled, power, TICK_MS, tierName } from "@sequoia-leaf/factory";
+import { type Goal, GOALS, isFilled, power, TICK_MS, tierName } from "@sequoia-leaf/factory";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
-import { whole } from "@sequoia-leaf/kit/say.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { leave } from "@sequoia-leaf/kit/shell.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
@@ -24,7 +23,7 @@ import { WORKS_KEYS, type WorksAction } from "../keymap.ts";
 import { S } from "../state.ts";
 import { collect, keepScreen } from "../yard.ts";
 import { foldedCard } from "./folds.ts";
-import { type Given, nodeKind, wantsShort } from "./goal.ts";
+import { goalPicture, nodeKind, wantsShort } from "./goal.ts";
 import { openPanel, type PanelId, togglePanel } from "./panels.ts";
 import { $, button, iconButton, pic, shows, when, type YardIcon, yardIcon } from "./parts.ts";
 import { orderRef } from "./refs.ts";
@@ -75,23 +74,43 @@ function powerPlaque(): () => void {
   );
 }
 
-/** What is left of what a goal wants, summed over every thing it wants: "120 left". */
-function left(wants: Given): string {
-  const n = wants.reduce((sum, [, have, of]) => sum + of - have, 0);
-  return `${whole(n)} left`;
-}
-
-/** What the box in the corner prints: the node in hand, or what comes next; orders ready to hand over; what it wants, and what comes after it. */
-const trackPrint = () => {
+/**
+ * What the box in the corner prints: the node in hand, or what comes next; orders ready to hand over;
+ * a commission that may be taken (-1 for none); what it wants, and what comes after it.
+ */
+export const trackPrint = () => {
   const w = S.world;
+  const take: Goal | -1 = takeable().find((g) => GOALS[g]?.kind === "commission") ?? -1;
   return {
     hand: w.hand,
     next: w.hand === -1 ? nextUp() : null,
     ready: w.board.filter((s) => isFilled(s.want, s.filled)).length,
+    take,
     wants: w.hand === -1 ? [] : givenTo(w.hand),
     after: GOALS[w.queue[0] ?? -1]?.title ?? null,
   };
 };
+type TrackPrint = ReturnType<typeof trackPrint>;
+
+/**
+ * What the box in the corner folded prints, a square button: the goal whose picture it shows (the
+ * node in hand, else a commission that may be taken, else the goal waited on; -1 for none), its title,
+ * what there is to do, said after the title in its name and under it in its tip, and on its corner
+ * how many orders wait to be handed over, else "!" while a commission may be taken, else nothing.
+ */
+export function foldedPrint(p: TrackPrint): {
+  goal: Goal | -1;
+  title: string;
+  todo: string;
+  badge: string | null;
+} {
+  const lock = p.next?.is === "locked" ? p.next.goal : -1;
+  const goal = p.hand !== -1 ? p.hand : p.take !== -1 ? p.take : lock;
+  const title = GOALS[goal]?.title ?? (p.next ? nextWords(p.next).title : "");
+  const take = p.take === -1 ? null : p.take === goal ? "ready to take" : `${GOALS[p.take]?.title ?? ""} ready to take`;
+  const todo = [p.ready > 0 ? `${p.ready} to hand over` : null, take].filter((t) => t !== null).join(", ");
+  return { goal, title, todo, badge: p.ready > 0 ? String(p.ready) : p.take !== -1 ? "!" : null };
+}
 
 /** Pressed, the box in the corner opens Orders; with nothing in hand and no order ready, the tier's screen, where that is. */
 function openTracked(): void {
@@ -100,21 +119,19 @@ function openTracked(): void {
   togglePanel(w.hand === -1 && !ready && tierOpen() ? "tier" : "orders");
 }
 
-/** Orders filled and waiting to be handed over, as a tag: on the open card's small line, and on the folded line. */
-const readyTag = (ready: number): HTMLElement | null =>
-  ready > 0 ? el("span", "k-chip lit", { text: `${ready} to hand over` }) : null;
-
 /** The box in the corner open: what kind of goal it is (and orders ready), its title, what it wants, what comes next, and after it. */
-function fullTrack(
-  p: ReturnType<typeof trackPrint>,
-  said: ReturnType<typeof nextWords> | null,
-  title: string,
-): (HTMLElement | null)[] {
+function fullTrack(p: TrackPrint, said: ReturnType<typeof nextWords> | null, title: string): (HTMLElement | null)[] {
   const label = p.hand === -1 ? (said?.label ?? "") : nodeKind(p.hand);
   // What it wants, by the one part that lays such rows out: here each a picture, a bar and a count.
   const wanted = wantsShort(p.wants);
   return [
-    el("div", "k-row", {}, label === "" ? null : el("span", "k-label k-grow", { text: label }), readyTag(p.ready)),
+    el(
+      "div",
+      "k-row",
+      {},
+      label === "" ? null : el("span", "k-label k-grow", { text: label }),
+      p.ready > 0 ? el("span", "k-chip lit", { text: `${p.ready} to hand over` }) : null,
+    ),
     el("div", "", { text: title }),
     wanted?.node ?? null,
     said === null ? null : saidLine(p.next?.is, said.line),
@@ -128,50 +145,43 @@ function fullTrack(
  * the tier screen's words (the goal waited on, with its lock; projects to take; or everything done),
  * and pressed, it opens the tier's screen, where that is. Orders filled and waiting to be handed over
  * are counted on the small line over its title, and while there are any, pressed, it opens Orders.
- * A button at its side folds it to one line (`folds.ts`): its title, the orders ready to hand over
- * and what is left, the title given up first and what is left next where room is short
- * (`index.html`); and it hides the research under it. The choice is kept on the device. Until it is
- * made, the card is open, but on a short screen. On a phone the folded line sits in the top bar
- * after the power. Drawn again, only what is inside it changes, so whoever is on one of its buttons
- * stays there.
+ * A button at its side folds it (`folds.ts`) to a square button after the power in the top bar, as
+ * the books' buttons are (`foldedPrint`), which opens it again; and it hides the research under it.
+ * The choice is kept on the device. Until it is made, the card is open, but on a short screen. Drawn
+ * again, only what is inside it changes, so whoever is on one of its buttons stays there.
  */
 function tracker(): () => void {
   const full = el("div", "full");
-  const short = el("div", "short");
-  const go = el("button", "go", { type: "button", onclick: openTracked }, full, short);
+  const go = el("button", "go", { type: "button", onclick: openTracked }, full);
   let title = "";
+  let folded = foldedPrint(trackPrint());
   // On a short screen (a phone on its side) there is no room under the top bar for the card open:
   // it is folded until the player chooses, and turning the phone folds or opens it with it.
   const sideways = window.matchMedia("(max-height: 500px)");
   const fold = foldedCard(
     () => title,
-    full,
-    short,
+    go,
     $("study"),
     () => !sideways.matches,
   );
   scope().on(sideways, "change", fold.again);
-  $("track").append(go, fold.button);
+  $("track").append(go, fold.button, fold.tile);
   // Pointing (or a finger kept on it) shows the card of the node in hand, or of the goal waited on.
   link(go, orderRef("story"), { acts: true });
+  tip(
+    fold.tile,
+    () => folded.title,
+    () => folded.todo,
+  );
   return shows(trackPrint, (p) => {
     const said = p.next ? nextWords(p.next) : null;
     title = said?.title ?? GOALS[p.hand]?.title ?? "";
     full.replaceChildren(...fullTrack(p, said, title).filter((n) => n !== null));
-    // Folded: the title, in a box of its own that `index.html` leaves empty where too little of it
-    // fits; then the orders ready to hand over, and what is left of what it wants (or the line that
-    // says what comes next), which gives way to them where both do not fit.
-    const ready = readyTag(p.ready);
-    short.replaceChildren(
-      el("span", "name", {}, el("span", "", { text: title })),
-      el(
-        "span",
-        "tail",
-        {},
-        ready && el("span", "ready", {}, ready),
-        said === null ? el("span", "k-label", { text: left(p.wants) }) : saidLine(p.next?.is, said.line),
-      ),
-    );
+    // Folded: the goal's own picture (the Orders book's where it has none), and what there is to do on its corner.
+    folded = foldedPrint(p);
+    fold.tile.replaceChildren((folded.goal === -1 ? null : goalPicture(folded.goal, 16)) ?? yardIcon("orders"));
+    set(fold.tile, folded.badge);
+    fold.tile.setAttribute("aria-label", folded.todo === "" ? folded.title : `${folded.title}, ${folded.todo}`);
     fold.named();
   });
 }
