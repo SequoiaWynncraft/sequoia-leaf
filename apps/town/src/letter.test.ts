@@ -6,7 +6,7 @@ import { TOWN, type Town } from "@sequoia-leaf/town";
 
 import { worksWaiting } from "./games.ts";
 import type { AwayLine } from "./guild.ts";
-import { compose, span } from "./letter.ts";
+import { compose, notLinked, span } from "./letter.ts";
 
 const HOUR = 3_600_000;
 /** Wednesday 25 November 2026, 18:00 UTC. */
@@ -89,6 +89,23 @@ describe("the arrival letter", () => {
   test("no line while the till holds less than a Coin, or the member has no yard", () => {
     expect(worksWaiting(till(0))).toBeNull();
     expect(worksWaiting({})).toBeNull();
+  });
+
+  test("a member with no Wynncraft account linked is told its Leaf is kept, and nobody else is told anything", () => {
+    const asked = compose(
+      arrivalOf(back(7 * HOUR, NOW - 24 * HOUR)),
+      [raids],
+      [notLinked({ askLink: true }), worksWaiting(till(340))],
+    );
+    expect(asked.lines.map((x) => [x.art, x.text])).toContainEqual([
+      "leaf",
+      "Your Wynncraft account isn't linked. Its Leaf is kept until you link it.",
+    ]);
+    // It pays nothing, so it brings no letter of its own.
+    expect(compose(arrivalOf(back(2 * 60_000)), [], [notLinked({ askLink: true })]).show).toBe(false);
+    expect([notLinked({ askLink: false }), notLinked(null)]).toEqual([null, null]);
+    const linked = compose(arrivalOf(back(7 * HOUR, NOW - 24 * HOUR)), [raids], [notLinked({ askLink: false })]);
+    expect(linked.lines.some((x) => x.text.includes("linked"))).toBe(false);
   });
 
   test("time away, in plain words", () => {

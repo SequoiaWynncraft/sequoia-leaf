@@ -49,6 +49,8 @@ export interface Outside {
   top(): boolean;
   /** Leaves the page for another address. */
   go(url: string): void;
+  /** Leaves for another address with the whole window: out of the town's frame too, when the page is in it. */
+  away(url: string): void;
   /** Loads the page again. */
   reload(): void;
   now(): number;
@@ -133,6 +135,14 @@ export const outside: Outside = {
   top: isTop,
   go: (url) => {
     location.assign(url);
+  },
+  away: (url) => {
+    try {
+      (window.top ?? window).location.assign(url);
+    } catch {
+      // A frame of somebody else's page may not send it anywhere: the frame goes.
+      location.assign(url);
+    }
   },
   reload: () => {
     location.reload();

@@ -9,16 +9,20 @@
  * - Keys: which keyboard the player has, and what each key does on this page, named as that
  *   keyboard prints it (`keyboard.ts`); the player may put another key in any slot but a few
  *   (`keystab.ts`).
+ * - Account, where the page is live as somebody: how they signed in, whether a Wynncraft account is
+ *   linked, and signing out (`account.ts`).
  * - Whatever tabs a page adds of its own (`MenuOf.tabs`).
  *
  * What it changes is the player's settings on this device (`settings.ts`), which every open page
  * follows at once; what the menu shows follows them too, whichever page changed them, and so does a
  * tip that is up, which may name a key. A page builds its menu once, at the start (`settingsMenu`).
  */
+import { accountPage } from "./account.ts";
 import { dialog } from "./dialog.ts";
 import { el, icon } from "./dom.ts";
 import { type KeyList, nameOf } from "./keyboard.ts";
 import { KeysTab, shelf } from "./keystab.ts";
+import { where } from "./live.ts";
 import type { Scope } from "./scope.ts";
 import { LOUDEST, type Settings, settings } from "./settings.ts";
 import { sample, sfx, SHARED_SOUNDS, type SoundKind, unlock } from "./sound.ts";
@@ -46,7 +50,7 @@ export interface MenuOf {
   readonly sounds: readonly SoundShelf[];
   /** The page's keymap: the Keys tab is drawn from it. */
   readonly keys: KeyList;
-  /** Tabs of the page's own, after Sound and Keys. */
+  /** Tabs of the page's own, after Sound, Keys and Account. */
   readonly tabs?: readonly MenuTab[];
   /** Told as the menu opens (true) and is put away (false): the page lets go of held keys and takes no play while it is open. */
   readonly opened?: (open: boolean) => void;
@@ -56,7 +60,7 @@ export interface MenuOf {
 export interface Menu {
   /** A gear for a corner of the page: it opens the menu, and puts it away. A page may have one on each of its screens. */
   gear(): HTMLElement;
-  /** Opens the menu, at the tab of this id (`sound`, `keys`, or a page's own), or where it was last. */
+  /** Opens the menu, at the tab of this id (`sound`, `keys`, `account`, or a page's own), or where it was last. */
   open(tab?: string): void;
   close(): void;
   readonly isOpen: boolean;
@@ -133,9 +137,13 @@ class SettingsMenu implements Menu {
     this.#keys = new KeysTab(of.keys, () => {
       this.#cue();
     });
+    const w = where();
+    const account: MenuTab[] =
+      w.mode === "live" ? [{ id: "account", name: "Account", draw: () => accountPage(w.me, w.signIn) }] : [];
     this.#tabsOf = [
       { id: "sound", name: "Sound", draw: (keep) => this.#soundPage(keep) },
       { id: "keys", name: "Keys", draw: (keep) => this.#keys.draw(keep) },
+      ...account,
       ...(of.tabs ?? []),
     ];
     this.#at = "sound";

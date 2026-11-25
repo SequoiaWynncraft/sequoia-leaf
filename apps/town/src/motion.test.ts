@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { campRoom, playerId } from "@sequoia-leaf/core";
 import type { Emote } from "@sequoia-leaf/kit/emotes.ts";
-import { LET_GO, restart, start } from "@sequoia-leaf/kit/live.ts";
+import { letGoNotice, restart, start } from "@sequoia-leaf/kit/live.ts";
 import { forgetLedger } from "@sequoia-leaf/kit/purse.ts";
 import {
   Flag,
@@ -416,11 +416,7 @@ describe("the connection, shown", () => {
 
   test.each([
     [CLOSE.replaced, "replaced", ["Playing somewhere else", "This page has let go of the town.", "Play here"]],
-    [
-      CLOSE.signedOut,
-      "signedout",
-      ["Signed out", "Sign in with the guild's website, and the gate will know you.", "Sign in"],
-    ],
+    [CLOSE.signedOut, "signedout", ["Signed out", "", "Sign in with Discord"]],
   ] as const)("closed with %d: the kit's card for it, and no Reconnecting", async (code, card, words) => {
     const { s, room, statuses, now } = await inTown();
     s.says(welcome(1, now, [me(1)]));
@@ -428,7 +424,8 @@ describe("the connection, shown", () => {
 
     expect(statuses.at(-1)).toBe(card);
     expect(linkShown(room.state())).toBe(card);
-    expect(LET_GO[card]).toEqual(words);
+    const notice = letGoNotice(card, () => undefined);
+    expect([notice.title, notice.line, ...notice.buttons.map((b) => b.word)]).toEqual([...words]);
   });
 });
 

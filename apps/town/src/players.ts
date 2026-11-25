@@ -218,8 +218,7 @@ function drawnOf(m: LiveMember): Drawn {
 function letGoOf(why: LetGo): void {
   company.goAll();
   closeEmotes();
-  const w = where();
-  letGoCard(why, w.mode === "live" ? w.signIn : "", () => {
+  letGoCard(why, () => {
     room = null;
     showLink();
     if (stage.at === "room") enterRoom(stage.room);

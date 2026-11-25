@@ -24,7 +24,7 @@
  * its room hears the owner changed it (`campChanged`).
  */
 
-import { pageCard, troubleCard as kitTroubleCard, where } from "@sequoia-leaf/kit/live.ts";
+import { pageCard, troubleCard as kitTroubleCard } from "@sequoia-leaf/kit/live.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
 import { askPerson } from "@sequoia-leaf/kit/person.ts";
 import { makeHold, openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/kit/play.ts";
@@ -171,12 +171,11 @@ export const NEEDS_LEAF = "The town needs the guild's server.";
 
 /** Puts the town away behind the kit's card for why Leaf will not open it; for nothing to visit, with the way to the member's own camp. */
 export function troubleCard(why: Trouble): void {
-  const w = where();
   if (why === "nothing")
     pageCard("No camp to visit", "", "My camp", () => {
       outside.go(`?camp=${encodeURIComponent(me)}`);
     });
-  else kitTroubleCard(why, w.mode === "none" ? "" : w.signIn);
+  else kitTroubleCard(why);
 }
 
 /**

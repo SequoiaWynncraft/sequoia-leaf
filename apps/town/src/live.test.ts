@@ -963,6 +963,8 @@ describe("a guest's town", () => {
           leaf: 0,
           level: { number: 1, into: 0, next: 1 },
           cursor: 0,
+          signedInWith: "sequoia",
+          askLink: false,
         },
         quests: [],
         since: [],

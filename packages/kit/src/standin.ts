@@ -122,6 +122,9 @@ export function standin(
     go: (url) => {
       went.push(url);
     },
+    away: (url) => {
+      went.push(url);
+    },
     reload: () => {
       reloaded.count++;
     },

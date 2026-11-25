@@ -18,6 +18,15 @@ export interface Letter {
   lines: readonly AwayLine[];
 }
 
+/**
+ * The line for a member of the guild's Discord with no Minecraft account linked (`askLink`, from
+ * Leaf): the Leaf the guild paid that account is not theirs to see until they link it.
+ */
+export const notLinked = (me: { readonly askLink: boolean } | null): AwayLine | null =>
+  me?.askLink === true
+    ? { art: "leaf", text: "Your Wynncraft account isn't linked. Its Leaf is kept until you link it." }
+    : null;
+
 /** How long somebody was gone, in plain words. */
 export function span(minutes: number): string {
   if (minutes < 1) return "a moment";

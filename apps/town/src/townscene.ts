@@ -45,7 +45,7 @@ import { GROUND, NEAR, paintBackdrop, paintGround, paintNear, SKYLINE } from "./
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, refreshFace, setFace, setHammer, showCard } from "./hud.ts";
 import { ask, mine, town as kept } from "./leaf.ts";
-import { compose } from "./letter.ts";
+import { compose, notLinked } from "./letter.ts";
 import { inTownLine } from "./news.ts";
 import {
   aboutLine,
@@ -516,7 +516,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
     arrive() {
       const view = kept();
-      const letter = compose(view.arrival, guild.news(), [worksWaiting(view.doors)]);
+      const letter = compose(view.arrival, guild.news(), [notLinked(member()), worksWaiting(view.doors)]);
       // Loaded again in this tab a little after the last page: back where they stood. Otherwise in through the gate.
       const was = stoodAt(keptText(STOOD, "tab"), Date.now());
       if (was && !TOWN.footBlocked(was.x, was.y)) {

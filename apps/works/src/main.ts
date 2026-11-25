@@ -144,26 +144,28 @@ const keepSettings = (): void => {
   keepScreen();
 };
 
+/** The card for why the yard cannot go on; for nothing to visit, with the way to the member's own yard. */
+function card(why: Trouble): void {
+  if (why === "nothing") pageCard("No yard to visit", "They have not started one yet.", "My yard", myYard);
+  else troubleCard(why);
+}
+
 /** Who the member is, once the yard is open from Leaf; or nothing, with the card that says why it is not. */
 async function opened(params: URLSearchParams): Promise<{ id: string } | null> {
   watchPage("works");
   const where = await start();
   if (where.mode === "shut") {
-    shutCard(where.why, where.signIn);
+    shutCard(where.why);
     return null;
   }
   if (where.mode !== "live") {
     serverCard(NEEDS_LEAF);
     return null;
   }
-  const { signIn, me } = where;
+  const { me } = where;
   const of = params.get("of");
   if (of !== null && of !== me.id) S.visiting = { id: of, name: "Someone" };
   document.body.classList.toggle("visiting", S.visiting !== null);
-  const card = (why: Trouble): void => {
-    if (why === "nothing") pageCard("No yard to visit", "They have not started one yet.", "My yard", myYard);
-    else troubleCard(why, signIn);
-  };
   // In a visit, the owner's name is asked of Leaf meanwhile.
   const [trouble, owner] = await Promise.all([openYard(me.id, card), S.visiting && askPerson(S.visiting.id)]);
   if (trouble) {
