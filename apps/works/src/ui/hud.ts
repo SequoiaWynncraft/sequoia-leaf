@@ -103,14 +103,11 @@ function fullTrack(
   p: ReturnType<typeof trackPrint>,
   said: ReturnType<typeof nextWords> | null,
   title: string,
-): HTMLElement {
+): (HTMLElement | null)[] {
   const label = p.hand === -1 ? (said?.label ?? "") : nodeKind(p.hand);
   // What it wants, by the one part that lays such rows out: here each a picture, a bar and a count.
   const wanted = wantsShort(p.wants);
-  return el(
-    "div",
-    "full",
-    {},
+  return [
     el(
       "div",
       "k-row",
@@ -122,7 +119,7 @@ function fullTrack(
     wanted?.node ?? null,
     said === null ? null : saidLine(p.next?.is, said.line),
     p.after === null ? null : el("span", "k-label then", { text: `Then: ${p.after}` }),
-  );
+  ];
 }
 
 /**
@@ -132,28 +129,28 @@ function fullTrack(
  * and pressed, it opens the tier's screen, where that is. Orders filled and waiting to be handed over
  * are counted on the small line over its title, and while there are any, pressed, it opens Orders.
  * A button at its side folds it to one line, its title and what is left (`folds.ts`), and hides the
- * research under it: the choice is kept on the device.
+ * research under it: the choice is kept on the device. Drawn again, only what is inside it changes,
+ * so whoever is on one of its buttons stays there.
  */
 function tracker(): () => void {
-  const go = el("button", "go", { type: "button", onclick: openTracked });
-  $("track").append(go);
+  const full = el("div", "full");
+  const short = el("div", "short");
+  const go = el("button", "go", { type: "button", onclick: openTracked }, full, short);
+  let title = "";
+  const fold = foldedCard(() => title, full, short, $("study"));
+  $("track").append(go, fold.button);
   // Pointing (or a finger kept on it) shows the card of the node in hand, or of the goal waited on.
   link(go, orderRef("story"), { acts: true });
   return shows(trackPrint, (p) => {
     const said = p.next ? nextWords(p.next) : null;
-    const title = said?.title ?? GOALS[p.hand]?.title ?? "";
-    const full = fullTrack(p, said, title);
+    title = said?.title ?? GOALS[p.hand]?.title ?? "";
+    full.replaceChildren(...fullTrack(p, said, title).filter((n) => n !== null));
     // Folded: the title, and what is left of what it wants, or the line that says what comes next.
-    const short = el(
-      "div",
-      "short",
-      {},
+    short.replaceChildren(
       el("span", "name", { text: title }),
       said === null ? el("span", "k-label", { text: left(p.wants) }) : saidLine(p.next?.is, said.line),
     );
-    go.replaceChildren(full, short);
-    go.nextElementSibling?.remove();
-    go.after(foldedCard(title, full, short));
+    fold.named();
   });
 }
 

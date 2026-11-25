@@ -67,11 +67,18 @@ export function keepFold(f: Fold, open: boolean): void {
   keepText(FOLDS, JSON.stringify({ ...c.lists, goals: c.goals }));
 }
 
+/** What a fold does besides showing or hiding its parts. */
+interface Also {
+  /** Shown in the parts' place while they are folded, and hidden while they are open. */
+  readonly shut?: readonly HTMLElement[];
+  /** Hidden with the parts by the page's style (`index.html`) rather than here, each with an id of its own: only named as what the button folds. */
+  readonly styled?: readonly HTMLElement[];
+}
+
 /**
  * Makes `b` the fold of `parts`, which it names for whoever cannot see them: draws them from the kept
  * choice now, and gives what a press does: shows them if they were hidden or hides them, says so on
  * the button (in `name`'s words too, where the button is only a picture), keeps the choice and taps.
- * What is shown in their place while they are folded (`shut`) is hidden while they are open.
  * Nothing else is touched, so nothing is built again and the scroll does not move.
  */
 function fold(
@@ -79,11 +86,12 @@ function fold(
   f: Fold,
   parts: readonly HTMLElement[],
   name?: (open: boolean) => string,
-  shut: readonly HTMLElement[] = [],
+  { shut = [], styled = [] }: Also = {},
 ): () => void {
   // Lists and cards have ids of their own kinds, so a goal called "done" is never the list's.
   const key = typeof f === "number" ? `goal-${idOf(f)}` : `list-${f}`;
-  b.setAttribute("aria-controls", [...parts, ...shut].map((p, i) => (p.id ||= `fold-${key}-${i}`)).join(" "));
+  const ids = [...parts, ...shut].map((p, i) => (p.id ||= `fold-${key}-${i}`));
+  b.setAttribute("aria-controls", [...ids, ...styled.map((p) => p.id)].join(" "));
   const set = (open: boolean): void => {
     for (const p of parts) p.hidden = !open;
     for (const p of shut) p.hidden = open;
@@ -122,10 +130,20 @@ export function foldedHead(g: Goal, side: HTMLElement | null, parts: readonly HT
   return head(g, side, b);
 }
 
-/** The button that folds the card in the corner (`hud.ts`) to one line: `short`, in place of `full`. It is named for the card's title. */
-export function foldedCard(title: string, full: HTMLElement, short: HTMLElement): HTMLElement {
-  const name = (open: boolean): string => `${open ? "Hide" : "Show"} ${title}`;
+/**
+ * The button that folds the card in the corner (`hud.ts`) to one line, `short` shown in `full`'s
+ * place, and the research under the card (`under`) hidden with it by the page's style. It stays on
+ * the page while the card is drawn again, so that whoever is on it stays on it: `named` names it
+ * again for the card's title (`title`) as it is now.
+ */
+export function foldedCard(
+  title: () => string,
+  full: HTMLElement,
+  short: HTMLElement,
+  under: HTMLElement,
+): { button: HTMLElement; named: () => void } {
+  const name = (open: boolean): string => `${open ? "Hide" : "Show"} ${title()}`;
   const b = iconButton("wood sm fold", icon("fold"), name(true), () => press());
-  const press = fold(b, "track", [full], name, [short]);
-  return b;
+  const press = fold(b, "track", [full], name, { shut: [short], styled: [under] });
+  return { button: b, named: () => b.setAttribute("aria-label", name(b.getAttribute("aria-expanded") === "true")) };
 }

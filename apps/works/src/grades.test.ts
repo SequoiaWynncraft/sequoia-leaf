@@ -16,13 +16,16 @@ import {
   encode,
   goal,
   highest,
+  item,
   JOINER,
   MILL,
   priceAt,
+  refusal,
   reopen,
   SORTER,
   sortWay,
   SPLITTER,
+  STAND_MOST,
   TUNNEL,
   upgradePrice,
   within,
@@ -33,6 +36,7 @@ import { act, coinsAre, ctx, type FakeLeaf, isRecord, opened, until, useFakeLeaf
 import { gradeInHand, S } from "./state.ts";
 import {
   aimAt,
+  clearMark,
   flip,
   hold,
   markEnd,
@@ -439,6 +443,28 @@ describe("many pieces at once", () => {
     expect([...grades([18, 19, 20, 21, 22], 13), ...grades([18], 16)]).toEqual([1, 1, 1, 1, 0, 1]);
     await inStep(fake, 2);
     expect(sent(fake)).toEqual(["upgrade", "stand"]);
+  });
+
+  test("160 painted grade II sorters taken away are stood again by Undo in more than one stand, each fitting one request to Leaf", async () => {
+    const y = yardAt(4);
+    let n = 0;
+    for (let z = 0; z < y.land.h; z++)
+      for (let x = 0; x < y.land.w && n < STAND_MOST; x++) {
+        if (refusal(y, SORTER, x, z, Infinity) !== null) continue;
+        build(y, SORTER, x, z, 0, Infinity, { grade: 2 });
+        y.tint[at(y, x, z)] = 6;
+        y.set[at(y, x, z)] = item("brick");
+        n++;
+      }
+    const fake = await opened(y, 1_000_000);
+    mark(0, 0, S.world.land.w - 1, S.world.land.h - 1);
+    expect(S.mark?.pieces.length).toBe(STAND_MOST);
+    expect(clearMark()).toBe(true);
+    expect(undo()).toBe(true);
+    await until(() => fake.leaf.commands.length >= 3);
+    expect(sent(fake)).toEqual(["clear", "stand", "stand"]);
+    for (const c of fake.leaf.commands.slice(1)) expect(JSON.stringify(c).length + 40).toBeLessThanOrEqual(12_000);
+    await inStep(fake, 3);
   });
 
   test("Upgrade all is offered only with nothing marked, once Upgrading an area is known; a marked area has its own Upgrade", async () => {

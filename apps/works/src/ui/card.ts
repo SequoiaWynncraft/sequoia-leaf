@@ -110,26 +110,26 @@ export function tileBox(x: number, y: number): { x: number; y: number; w: number
   return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
 }
 
-/** Kept on this device once a card has been pinned from the yard: the line over the dock stops saying how (`dock.ts`). */
+/** Kept on this device once a card has been asked for from the yard: the line over the dock stops saying how (`dock.ts`). */
 const LEARNT = "works.card.v1";
-/** Whether a card has been pinned from the yard on this device. */
+/** Whether a card has been asked for from the yard on this device. */
 export const cardLearnt = (): boolean => keptText(LEARNT) !== null;
-/** Keeps on this device that a card has been pinned from the yard. */
-export function learnCard(): void {
-  if (!cardLearnt()) keepText(LEARNT, "1");
-}
 
-/** Pins the card for whatever is on a tile (or puts it away, if it was the one pinned). Gives whether one is up. */
-export function openCard(x: number, y: number): boolean {
-  const ref = refAt(x, y);
+/**
+ * Pins the card for what is on a tile (or puts it away, if it was the one pinned), and gives whether
+ * one is up: the one way the yard asks for a card, by a tap, a click or a finger kept on a tile. With
+ * `rider` (a finger kept on it), what rides a belt there is asked about first. Asking is kept as
+ * learnt on this device.
+ */
+export function openCard(x: number, y: number, rider = false): boolean {
+  const ref = (rider ? riderAt(x, y) : null) ?? refAt(x, y);
   if (!ref) {
     close();
     return false;
   }
+  if (!cardLearnt()) keepText(LEARNT, "1");
   const b = tileBox(x, y);
-  const up = pick(ref, b.x, b.y, b.w, b.h);
-  if (up) learnCard();
-  return up;
+  return pick(ref, b.x, b.y, b.w, b.h);
 }
 
 export function closeCard(): void {

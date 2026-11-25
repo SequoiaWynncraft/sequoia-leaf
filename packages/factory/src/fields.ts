@@ -3,6 +3,7 @@
  * checked, and the pieces and legs of a run read off it and written back onto it by name.
  */
 import { isDir } from "./build.ts";
+import { STAND_CHARS, STAND_MOST } from "./content/machines.ts";
 import { LAND } from "./land.ts";
 import { keptOf, type Piece } from "./pieces.ts";
 import { type Leg, legKind, legSpan } from "./route.ts";
@@ -101,3 +102,26 @@ export const legOnWire = (l: Leg): Record<string, unknown> => ({
   span: legSpan(l),
   ...(l.grade === 1 ? {} : { grade: l.grade }),
 });
+
+/**
+ * Pieces to stand, in order, in as few lots as each go in one `stand` command: no more than
+ * `STAND_MOST` pieces in a lot, and no more than `STAND_CHARS` characters of them on the wire. A
+ * piece alone is always a lot of its own.
+ */
+export function standLots(pieces: readonly Piece[]): Piece[][] {
+  const lots: Piece[][] = [];
+  let size = 0;
+  for (const p of pieces) {
+    // A piece on the wire, and the comma before it.
+    const n = JSON.stringify(named(p)).length + 1;
+    const lot = lots.at(-1);
+    if (lot && lot.length < STAND_MOST && size + n <= STAND_CHARS) {
+      lot.push(p);
+      size += n;
+    } else {
+      lots.push([p]);
+      size = n;
+    }
+  }
+  return lots;
+}

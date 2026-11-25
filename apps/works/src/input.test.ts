@@ -17,7 +17,7 @@ import { WORKS_KEYS } from "./keymap.ts";
 import { S, toPage } from "./state.ts";
 import { setTool } from "./tools.ts";
 import { refAt } from "./ui/card.ts";
-import { openTools } from "./ui/dock.ts";
+import { handPrint, openTools } from "./ui/dock.ts";
 
 // The camera's module draws onto canvases that are made as it loads (`scene.ts`): a document is there
 // first whose canvases take any drawing and keep none of it.
@@ -28,10 +28,13 @@ const { initInput, stepInput } = await import("./input.ts");
 
 useFakeLeaf();
 
-/** A page for the input to listen on: a window, a document and the yard's canvas. A card's moment never comes. */
-function canvasPage(): EventTarget {
+/**
+ * A page for the input to listen on: a window, a document and the yard's canvas. A card's moment
+ * never comes; what the page waits for is put in `waits`, for a test to run when it says.
+ */
+function canvasPage(waits: (() => void)[] = []): EventTarget {
   const win = Object.assign(new EventTarget(), {
-    setTimeout: () => 0,
+    setTimeout: (f: () => void) => waits.push(f),
     clearTimeout: () => {},
     innerWidth: 320,
     innerHeight: 200,
@@ -212,5 +215,30 @@ describe("the keys", () => {
     key("keydown", "Minus", "_", true, true);
     key("keyup", "Minus", "_", true);
     expect(zoomSteps() - z).toBe(-2);
+  });
+});
+
+describe("a finger", () => {
+  test("kept on a piece asks for its card as a tap does, and from then on the line does not say how", async () => {
+    await openedEmptyHanded();
+    S.finger = true;
+    const waits: (() => void)[] = [];
+    const canvas = canvasPage(waits);
+    expect(handPrint().line.text).toBe("Tap a piece for its card.");
+    const [x, y] = S.world.land.depot;
+    const p = toPage(x * 16 + 8, y * 16 + 8);
+    canvas.dispatchEvent(
+      Object.assign(new Event("pointerdown"), {
+        pointerId: 2,
+        pointerType: "touch",
+        button: 0,
+        clientX: p.x,
+        clientY: p.y,
+      }),
+    );
+    expect(handPrint().line.text).toBe("Tap a piece for its card.");
+    // The finger has rested on it long enough.
+    for (const wait of waits.splice(0)) wait();
+    expect(handPrint().line.text).toBe("");
   });
 });

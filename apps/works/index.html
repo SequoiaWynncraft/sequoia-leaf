@@ -1297,12 +1297,13 @@
         }
       }
       /*
-       * A phone, either way up (the kit's small screen, and the Works' tall one): the yard has the screen.
-       * The tools are one row that scrolls sideways, cut through a tool at its edge so that it plainly
-       * goes on; the yard's books are a column down the right side, under the way out; and the line over
-       * the tools takes no room while it has nothing to say, but for its buttons.
+       * A phone, either way up (the kit's small screen): the yard has the screen. The tools are one row
+       * that scrolls sideways, cut through a tool at its edge so that it plainly goes on; the yard's
+       * books are a column down the right side, under the top bar, which what hangs under the top bar
+       * leaves room for; and the line over the tools takes no room while it has nothing to say, but for
+       * its buttons.
        */
-      @media (max-width: 760px), (max-height: 500px), (orientation: portrait) {
+      @media (max-width: 760px), (max-height: 500px) {
         #dock {
           --slot: calc(var(--u) * 21);
           max-width: calc(100vw - var(--edge) * 2);
@@ -1326,12 +1327,21 @@
         #tools > button {
           flex: none;
         }
+        /* Under the top bar as it is laid out (`--toph`, measured), however many rows it wraps to. */
         #books {
           position: fixed;
-          top: calc(var(--top) + var(--u) * 23);
+          top: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
           right: var(--edge);
           flex-direction: column;
           margin: 0;
+        }
+        /* What hangs under the top bar stops short of the books' column: a button's width and a gap. */
+        #track,
+        #study {
+          width: min(calc(var(--u) * 132), calc(100vw - var(--edge) * 2 - var(--u) * 23));
+        }
+        #walk {
+          right: calc(var(--edge) + var(--u) * 23);
         }
         #corner {
           margin-left: auto;
