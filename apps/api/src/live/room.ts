@@ -12,8 +12,8 @@ import type { Effect } from "effect";
 
 /**
  * What became of the frames written at a tick, counted as each is (`Connection.writeIf`): written
- * there and then (`direct`, once the socket took it), put in a connection's line behind what was
- * waiting (`queued`), or not for the page any more (`passed`).
+ * there and then (`direct`, once the socket's writer has done the write), put in a connection's
+ * line behind what was waiting (`queued`), or not for the page any more (`passed`).
  */
 export interface Tally {
   direct: number;
@@ -49,12 +49,15 @@ export interface Occupant {
   readonly outbox: Outbox;
   /** What the room shows of them, moved only by `moved`, `halted`, `reconnected` and the room's tick. */
   shown: Shown;
+  /** How many times the room has greeted them (`greet`), each a welcome and all of its motion. */
+  greeted: number;
 }
 
-/** Somebody a snapshot is for, with the connection they had when it was made. */
+/** Somebody a snapshot is for, as they stood when it was made: on this connection, greeted so many times. */
 interface Recipient {
   readonly occupant: Occupant;
   readonly connection: Connection;
+  readonly greeted: number;
 }
 
 /** Somebody a snapshot shows, and their motion as it shows it. */
@@ -64,11 +67,25 @@ interface Shows {
 }
 
 /**
- * A room's snapshot at a tick, and everybody it is for, each by the connection they had then. Each
- * is told it as the room is when their turn comes (`for`): nobody who has left since is told it,
- * and it shows nobody who has left since, whose leaving everybody still to be told has heard
- * first. Its frame is made again, once, whenever somebody has left the room since it was last made.
- * Nobody who came in since is in it, either way: they were not in the room when it was made.
+ * A room's snapshot at a tick, and everybody it is for, each as their page stood with the room then
+ * (`Recipient`). Each is told it when their turn comes (`for`), which may be later: the tick lets
+ * others run between one write and the next, and meanwhile anything may have been sent to a page.
+ * Whatever was, the snapshot never says anything a page was told otherwise since it was made. Of
+ * every frame a room or Live puts on a page's connection:
+ *
+ * - A welcome (`greet`: in another room, in this one again, or on a new connection), and all of
+ *   the room's motion after it, newer than this: the page has begun again from that, and is told
+ *   nothing of this. This is the only other frame that says where anybody is.
+ * - `left`: whoever left is not shown. The frame is made again without them, once a leaving, and
+ *   everybody else's motion still goes, so nobody loses a move.
+ * - `joined`: nobody who came in since is in it, as they were not in the room when it was made; nor
+ *   is anybody it shows who left and whose number was given to somebody new, which is a leaving.
+ * - `act`, `did`, `changed`, `about`, `aboutChanged`, `error`, `pong`: none says where anybody is,
+ *   and it goes as it is.
+ * - A close: nothing is written after it (`Connection.writeIf`).
+ *
+ * The next snapshot comes only after this one has gone to everybody: one tick at a time. The room's
+ * tests keep this list whole: a new kind of frame does not compile there until it is placed.
  */
 export class Snapshot {
   readonly to: readonly Recipient[];
@@ -97,11 +114,13 @@ export class Snapshot {
   /**
    * What to write to `r` now: the room's motion as it was at the tick, but for anybody who has left
    * since; or nothing, when it is no longer for them (they have left the room, even to come back in
-   * as another, or their page has a new connection, which the room greeted afresh), or nobody it
-   * showed is still there.
+   * as another, or have been greeted since, on this connection or a new one), or nobody it showed
+   * is still there.
    */
   for(r: Recipient): Uint8Array | null {
-    if (!this.room.has(r.occupant) || r.occupant.outbox.connection() !== r.connection) return null;
+    const { occupant } = r;
+    if (!this.room.has(occupant) || occupant.outbox.connection() !== r.connection || occupant.greeted !== r.greeted)
+      return null;
     if (this.departed !== this.room.departed) {
       this.shows = this.shows.filter((s) => this.room.has(s.occupant));
       this.frame = encodeSnapshot(
@@ -255,7 +274,7 @@ export class Room {
   /** Lets somebody in, tells everyone else that they came, and greets them. Returns them. */
   join(who: Omit<LiveMember, "id">, outbox: Outbox, time: number, hz: number, version: number): Occupant {
     const id = this.freeId();
-    const occupant: Occupant = { member: { id, ...who }, outbox, shown: { state: "unseen" } };
+    const occupant: Occupant = { member: { id, ...who }, outbox, shown: { state: "unseen" }, greeted: 0 };
     this.occupants.set(id, occupant);
     this.others(id, text({ t: "joined", member: occupant.member }));
     this.greet(occupant, time, hz, version);
@@ -267,6 +286,7 @@ export class Room {
    * again whenever they connect again. Nobody else hears of it.
    */
   greet(o: Occupant, time: number, hz: number, version: number): void {
+    o.greeted++;
     const roster = [...this.occupants.values()].map((each) => each.member);
     o.outbox.send(text({ t: "welcome", v: version, you: o.member.id, room: this.name, hz, time, roster }));
     const everyone = this.entries();
@@ -348,7 +368,7 @@ export class Room {
     const to: Recipient[] = [];
     for (const occupant of this.occupants.values()) {
       const connection = occupant.outbox.connection();
-      if (connection) to.push({ occupant, connection });
+      if (connection) to.push({ occupant, connection, greeted: occupant.greeted });
     }
     return new Snapshot(this, tick, time, changed, to);
   }

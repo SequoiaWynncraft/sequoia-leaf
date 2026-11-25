@@ -9,7 +9,7 @@
 /** One line of a list: somebody, by their `id`, with fields that are each a plain value. */
 export type Row = Readonly<Record<string, string | number | boolean | null>> & { readonly id: string };
 
-/** Leaf's lists of who is about, and when it made them (`at`, a time as text). */
+/** Leaf's lists of who is about, and when it made them (`at`, a time as text). Nobody is in a list twice. */
 export interface Who {
   readonly at: string;
   readonly present: readonly Row[];
@@ -39,8 +39,12 @@ export interface AboutChange {
   readonly lists: Partial<Readonly<Record<ListName, ListChange>>>;
 }
 
+/** Whether a field of `before`'s is missing from `after`, which a change of fields cannot say. */
+const lostField = (before: Row, after: Row): boolean => Object.keys(before).some((key) => !Object.hasOwn(after, key));
+
 /**
- * Which of `before`'s rows and `after`'s, by position, are the same people in the same order: as
+ * Which of `before`'s rows and `after`'s, by position, are the same people in the same order, each
+ * with every field they had (one who lost a field is dropped and added again whatever happens): as
  * many as can be, so that as few as can be are dropped and added again. Nobody is in a list twice
  * (`applyList` takes no list that has), so these are the longest run of `after`'s people whose
  * places in `before` only go up. It is found in one pass (patience sorting): each person ends the
@@ -48,13 +52,13 @@ export interface AboutChange {
  * looked at first; so a list in the same order as before takes one step a person.
  */
 function kept(before: readonly Row[], after: readonly Row[]): Map<number, number> {
-  const was = new Map<string, number>();
-  for (const [i, row] of before.entries()) if (!was.has(row.id)) was.set(row.id, i);
-  // `after`'s people who were in `before`, each with their position in both.
+  const was = new Map<string, { readonly i: number; readonly row: Row }>();
+  for (const [i, row] of before.entries()) if (!was.has(row.id)) was.set(row.id, { i, row });
+  // `after`'s people who were in `before` with every field they had there, with their position in both.
   const both: { readonly j: number; readonly i: number }[] = [];
   for (const [j, row] of after.entries()) {
-    const i = was.get(row.id);
-    if (i !== undefined) both.push({ j, i });
+    const there = was.get(row.id);
+    if (there !== undefined && !lostField(there.row, row)) both.push({ j, i: there.i });
   }
   // `ends[k]`: of the runs of k + 1 so far, the one ending lowest in `before`, by its last (in `both`);
   // `back[n]`: the one before `both[n]` in the run it ends.
@@ -81,16 +85,13 @@ function kept(before: readonly Row[], after: readonly Row[]): Map<number, number
   return pairs;
 }
 
-/** Whether a field of `before`'s is missing from `after`, which a change of fields cannot say. */
-const lostField = (before: Row, after: Row): boolean => Object.keys(before).some((key) => !Object.hasOwn(after, key));
-
 /** The fields of `after` that are new or changed since `before`, with its id; null when none are. */
 function changedFields(before: Row, after: Row): Row | null {
   const fields = Object.entries(after).filter(([key, value]) => before[key] !== value);
   return fields.length === 0 ? null : { ...Object.fromEntries(fields), id: after.id };
 }
 
-/** How `before` became `after`, or undefined when it is the same list. */
+/** How `before` became `after`, each with nobody in it twice (as `readWho` reads them), or undefined when it is the same list. */
 export function listChange(before: readonly Row[], after: readonly Row[]): ListChange | undefined {
   const pairs = kept(before, after);
   const stays = new Set(pairs.values());
@@ -100,9 +101,8 @@ export function listChange(before: readonly Row[], after: readonly Row[]): ListC
   for (const [j, row] of after.entries()) {
     const i = pairs.get(j);
     const was = i === undefined ? undefined : before[i];
-    if (was === undefined || lostField(was, row)) {
-      // New to the list, or changed past what a change of fields can say: dropped, if there, and added.
-      if (was !== undefined) drop.push(row.id);
+    // New to the list, moved in it, or changed past what a change of fields can say: added (and dropped, if there).
+    if (was === undefined) {
       add.push([j, row]);
       continue;
     }
@@ -129,27 +129,46 @@ export function aboutChange(before: Who, after: Who): AboutChange {
 
 /**
  * A list with a change made to it, or null when the change does not fit it: it drops or changes
- * somebody not there, or adds somebody already there or at a place there is not. Such a change
- * was made from other lists than these, and the page asks for all of them again.
+ * somebody not there, or adds somebody already there, or at a place there is not or out of order.
+ * Such a change was made from other lists than these, and the page asks for all of them again. A
+ * list with somebody in it twice is none of Leaf's, and nothing fits it. One step a person.
  */
 export function applyList(before: readonly Row[], change: ListChange | undefined): Row[] | null {
-  if (change === undefined) return [...before];
   const ids = new Set(before.map((row) => row.id));
+  if (ids.size !== before.length) return null;
+  if (change === undefined) return [...before];
   const drop = new Set(change.drop ?? []);
   const put = new Map((change.put ?? []).map((row) => [row.id, row]));
   if ([...drop].some((id) => !ids.has(id))) return null;
   if ([...put.keys()].some((id) => !ids.has(id) || drop.has(id))) return null;
-  const list: Row[] = [];
+  const stayed: Row[] = [];
   for (const row of before) {
-    if (drop.has(row.id)) continue;
     const fields = put.get(row.id);
-    list.push(fields === undefined ? row : { ...row, ...fields });
+    if (drop.has(row.id)) ids.delete(row.id);
+    else stayed.push(fields === undefined ? row : { ...row, ...fields });
   }
-  for (const [at, row] of change.add ?? []) {
-    if (!Number.isInteger(at) || at < 0 || at > list.length || list.some((r) => r.id === row.id)) return null;
-    list.splice(at, 0, row);
+  return withAdded(stayed, change.add ?? [], ids);
+}
+
+/**
+ * Those who stayed, in their order, with each of `add` at its place in the list made, the places in
+ * order (as `listChange` gives them); null when a place is out of order or past the end, or
+ * somebody added is in the list already (`ids`, those who stayed, and each added as they are).
+ */
+function withAdded(stayed: readonly Row[], add: readonly (readonly [number, Row])[], ids: Set<string>): Row[] | null {
+  const list: Row[] = [];
+  let next = 0;
+  for (const [at, row] of add) {
+    if (!Number.isInteger(at) || at < list.length || ids.has(row.id)) return null;
+    while (list.length < at) {
+      const each = stayed[next++];
+      if (each === undefined) return null;
+      list.push(each);
+    }
+    list.push(row);
+    ids.add(row.id);
   }
-  return list;
+  return list.concat(stayed.slice(next));
 }
 
 /** The lists after a change, or null when it does not fit them (`applyList`). */
@@ -176,10 +195,13 @@ function readRow(v: unknown): Row | null {
   return { ...fields, id: v.id };
 }
 
+/** Rows, with nobody among them twice; or null for anything else. */
 function readRows(v: unknown): Row[] | null {
   if (!Array.isArray(v)) return null;
   const rows = v.map(readRow);
-  return rows.every((row) => row !== null) ? rows.filter((row) => row !== null) : null;
+  if (!rows.every((row) => row !== null)) return null;
+  const read = rows.filter((row) => row !== null);
+  return new Set(read.map((row) => row.id)).size === read.length ? read : null;
 }
 
 /** Leaf's lists, or null for anything that is not them. */

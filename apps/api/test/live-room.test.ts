@@ -60,6 +60,25 @@ function tick(room: Room, n: number, time: number): boolean {
   return true;
 }
 
+/**
+ * What a room's snapshot, still to be told to a page, does after each kind of frame the page may
+ * be sent meanwhile (`Snapshot`): goes to nobody greeted since (a welcome begins the page again),
+ * is made again without whoever left, or goes as it is. A new kind of frame does not compile until
+ * it is placed here.
+ */
+const AFTER: Record<ToClient["t"], "not told" | "without them" | "as it is"> = {
+  welcome: "not told",
+  left: "without them",
+  joined: "as it is",
+  act: "as it is",
+  did: "as it is",
+  changed: "as it is",
+  about: "as it is",
+  aboutChanged: "as it is",
+  error: "as it is",
+  pong: "as it is",
+};
+
 /** What a snapshot says to the first it is for, decoded. */
 const shownTo = (snapshot: Snapshot | null) => {
   const first = snapshot?.to[0];
@@ -354,6 +373,29 @@ describe("a room", () => {
     expect(snapshot.for(toAlice)).toBe(toAliceNow);
     expect(snapshot.for(toBob)).toBeNull();
     expect(snapshot.to.map((r) => r.occupant.member.name)).toEqual(["Alice", "Bob", "Carol"]);
+  });
+
+  it("has a rule for every kind of frame a page may be sent before a snapshot reaches it", () => {
+    // Only a welcome and a leaving say where anybody is; each has its test, this and the one before.
+    expect(Object.entries(AFTER).filter(([, rule]) => rule !== "as it is")).toEqual([
+      ["welcome", "not told"],
+      ["left", "without them"],
+    ]);
+  });
+
+  it("tells nothing to anybody greeted again since it was made, and all of it to everybody else", () => {
+    const room = new Room("town", 1, { ...TOWN, capacity: 5 });
+    const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
+    const bob = room.join(person("Bob"), inbox().outbox, 0, 30, 1);
+    room.move(bob.member.id, 1, at(10, 10), 0);
+    const snapshot = room.flush(1, 0);
+    const [toAlice, toBob] = snapshot?.to ?? [];
+    if (!snapshot || !toAlice || !toBob) throw new Error("not for both");
+    // Bob walks on, and Alice is greeted again where she is: her welcome shows Bob where he is now.
+    room.move(bob.member.id, 2, at(14, 10), 30);
+    room.greet(alice, 30, 30, 1);
+
+    expect([snapshot.for(toAlice), idsIn(snapshot.for(toBob))]).toEqual([null, [bob.member.id]]);
   });
 
   it("knows somebody as in it only while they are, not once gone nor gone and back in as another", () => {

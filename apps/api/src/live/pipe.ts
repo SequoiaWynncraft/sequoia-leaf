@@ -87,8 +87,9 @@ export class Pipe implements Connection {
    * waiting, written there and then, before anything sent after the asking, which waits in the line
    * for the socket. With the socket held by another, `take()` is asked and the frame put in the line
    * in one step, behind what that one is writing: whoever writes never waits for a connection. A
-   * frame written there and then counts as sent once the socket has taken it; a write that fails is
-   * a socket already gone, which its reader hears of too, and the frame is lost with it.
+   * frame written there and then counts as sent once the socket's writer has done the write (Bun's
+   * says nothing of a frame Bun dropped); a write that fails is a socket already gone, which its
+   * reader hears of too, and the frame is lost with it.
    */
   writeIf(take: () => Uint8Array | null, tally: Tally): Effect.Effect<void> {
     const held = Effect.suspend(() => {

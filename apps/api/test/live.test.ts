@@ -1273,6 +1273,73 @@ describe("a room's snapshot", () => {
     expect(said.slice(left + 1).filter(Array.isArray)).toEqual([[idOf("Carol")]]);
   });
 
+  it("tells a page greeted again in its room nothing from before its greeting, however long another's socket takes", async () => {
+    await start();
+    const live = await services?.run(Live.use((service) => Effect.succeed(service)));
+    if (!live) throw new Error("no Live");
+    const serve = (who: ReturnType<typeof someone>, socket: Socket.Socket) =>
+      void services
+        ?.run(Effect.scoped(live.open(who, "town", Effect.succeed(socket), signedIn)))
+        .catch(() => undefined);
+    const bobIn = await Effect.runPromise(Queue.unbounded<string | Uint8Array>());
+    const carolIn = await Effect.runPromise(Queue.unbounded<string | Uint8Array>());
+    const aliceIn = await Effect.runPromise(Queue.unbounded<string | Uint8Array>());
+    const carols: (string | Uint8Array)[] = [];
+    const bobs: (string | Uint8Array)[] = [];
+    const alices: (string | Uint8Array)[] = [];
+    const welcomes = () => alices.filter((w) => typeof w === "string" && readToClient(w)?.t === "welcome").length;
+    // Carol is the first the snapshot goes to, and her socket takes a while over it: meanwhile Bob
+    // walks on, and Alice's page asks for the town again, which greets her there again.
+    let paused = false;
+    const carolsSocket = Socket.make({
+      reader: Effect.succeed({
+        pull: Effect.map(Queue.take(carolIn), (frame) => [frame] as const),
+        upgrade: () => Effect.void,
+      }),
+      writer: Effect.succeed({
+        write: (chunk) => {
+          if (typeof chunk === "string" || Socket.isCloseEvent(chunk) || paused)
+            return Effect.sync(() => void (Socket.isCloseEvent(chunk) || carols.push(chunk)));
+          paused = true;
+          Queue.offerUnsafe(bobIn, encodeMove(2, at(205, 100)));
+          Queue.offerUnsafe(aliceIn, JSON.stringify({ t: "join", room: "town" }));
+          return Effect.andThen(
+            Effect.repeat(Effect.andThen(Effect.yieldNow, Effect.sync(welcomes)), {
+              until: (n) => n === 2,
+              schedule: Schedule.recurs(200),
+            }),
+            Effect.sync(() => void carols.push(chunk)),
+          );
+        },
+        writeAll: (chunks) => Effect.sync(() => void carols.push(...chunks)),
+      }),
+    });
+    serve(someone(carol, "Carol"), carolsSocket);
+    await turnsUntil(() => carols.length > 0);
+    serve(someone(bob, "Bob"), drivenSocket(bobIn, bobs));
+    await turnsUntil(() => bobs.length > 0);
+    serve(alicesIdentity, drivenSocket(aliceIn, alices));
+    await turnsUntil(() => alices.length > 0);
+    const welcome = readToClient(String(alices[0]));
+    const bobsId = welcome?.t === "welcome" ? welcome.roster.find((m) => m.name === "Bob")?.id : undefined;
+    // Carol and Bob walk; the tick's snapshot is made with Bob at 200, for all three.
+    Queue.offerUnsafe(carolIn, encodeMove(1, at(100, 100)));
+    Queue.offerUnsafe(bobIn, encodeMove(1, at(200, 100)));
+    await turnsUntil(() => false, 50).catch(() => undefined);
+    await tick();
+    await turnsUntil(() => carols.some((w) => typeof w !== "string"));
+    await turnsUntil(() => false, 50).catch(() => undefined);
+
+    // From her second welcome on, Alice is shown Bob where he is now, and never where he was before it.
+    const again = alices.findIndex((w, i) => i > 0 && typeof w === "string" && readToClient(w)?.t === "welcome");
+    const bobAt = alices
+      .slice(again)
+      .flatMap((w) => (typeof w === "string" ? [] : (decodeSnapshot(w)?.entries ?? [])))
+      .filter((e) => e.id === bobsId)
+      .map((e) => e.x);
+    expect([again > 0, bobAt]).toEqual([true, [205]]);
+  });
+
   it("never reaches a page after the welcome of the room it went to next, however long its socket takes", async () => {
     await start();
     const written: (string | Uint8Array)[] = [];
