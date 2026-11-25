@@ -51,7 +51,7 @@
     "apps/works/src/tools.ts": 111,
     "apps/works/src/trouble.ts": 26,
     "apps/works/src/ui/cards.ts": 117,
-    "apps/works/src/ui/dock.ts": 81,
+    "apps/works/src/ui/dock.ts": 65,
     "apps/works/src/ui/goal.ts": 16,
     "apps/works/src/ui/panels.ts": 31,
     "apps/works/src/ui/prints.ts": 56,

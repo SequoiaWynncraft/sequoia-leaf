@@ -56,7 +56,7 @@ import {
   upgradeCost,
   upgradeMark,
 } from "./tools.ts";
-import { handPrint } from "./ui/dock.ts";
+import { handPrint, pressUpgrade } from "./ui/dock.ts";
 import { differences, doNow } from "./yard.ts";
 
 useFakeLeaf();
@@ -468,6 +468,27 @@ describe("many pieces at once", () => {
     expect(sent(fake)).toEqual(["clear", "stand", "stand"]);
     for (const c of fake.leaf.commands.slice(1)) expect(JSON.stringify(c).length + 40).toBeLessThanOrEqual(12_000);
     await inStep(fake, 3);
+  });
+
+  test("Upgrade all is weighed against the Coins when pressed: short, it says by how much at once; Coins come in since it was drawn, it still asks to be pressed again", async () => {
+    const y = yardAt(4);
+    for (const x of [18, 19]) build(y, BELT, x, 13, 0, Infinity);
+    await opened(y, 0);
+    const said = listen();
+    setTool("select");
+    const cost = handPrint().upgrade?.cost ?? 0;
+    expect(cost).toBeGreaterThan(1);
+    coinsAre(cost - 1);
+    pressUpgrade(true);
+    expect(said).toEqual(["Not enough Coins: 1 short."]);
+    expect(handPrint().upgrade).toMatchObject({ asking: false });
+    // Drawn short, then the last Coin comes in before the dock is drawn again: one press only asks.
+    coinsAre(cost);
+    pressUpgrade(true);
+    expect(grades([18, 19], 13)).toEqual([1, 1]);
+    expect(handPrint().upgrade).toMatchObject({ asking: true, short: 0 });
+    pressUpgrade(true);
+    expect(grades([18, 19], 13)).toEqual([2, 2]);
   });
 
   test("Upgrade all is offered only with nothing marked, once Upgrading an area is known; a marked area has its own Upgrade", async () => {

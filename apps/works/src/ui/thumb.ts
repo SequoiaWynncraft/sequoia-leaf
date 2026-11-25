@@ -39,8 +39,10 @@ export function thumb(pieces: readonly Piece[]): HTMLCanvasElement {
   g.fillRect(0, 0, c.width, c.height);
   for (const p of pieces) {
     g.fillStyle = DOT.get(p.kind) ?? "#cbb894";
-    g.fillRect(p.x + 1, p.y + 1, 1, 1);
-    if (p.kind === TUNNEL) g.fillRect(p.x + 1 + DX[p.dir] * (p.span + 1), p.y + 1 + DY[p.dir] * (p.span + 1), 1, 1);
+    // Drawn from the box's corner, wherever the pieces were kept from.
+    const [x, y] = [p.x - box.x + 1, p.y - box.y + 1];
+    g.fillRect(x, y, 1, 1);
+    if (p.kind === TUNNEL) g.fillRect(x + DX[p.dir] * (p.span + 1), y + DY[p.dir] * (p.span + 1), 1, 1);
   }
   return shown(c, box.w > 14 || box.h > 10 ? 0.5 : box.w > 6 || box.h > 4 ? 1 : 2);
 }

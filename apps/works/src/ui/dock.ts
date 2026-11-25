@@ -299,6 +299,11 @@ function upgradeOf(stage: Stage | null): Upgrade | null {
     : null;
 }
 
+/** Upgrade (or Upgrade all) pressed, weighed against the purse now: short, the rules say by how much; else it asks twice. */
+export function pressUpgrade(all: boolean): void {
+  if (upgradeCost(all) > coins() || pressedTwice(all ? "upgrade-all" : "upgrade", refreshDock)) upgradeMark(all);
+}
+
 /**
  * Upgrade's button: the whole price, asked twice. Short of the price, it is drawn off, and pressed
  * it says how short (the rules' own sentence) at once, asking nothing.
@@ -308,9 +313,7 @@ function upgradeButton(u: Upgrade): HTMLElement {
   const b = button(
     u.short > 0 ? "sm off" : u.asking ? "sm asking" : "sm",
     [asksAgain(key, [u.all ? "Upgrade all" : "Upgrade", amount("coin", u.cost)], "Press again")],
-    () => {
-      if (u.short > 0 || pressedTwice(key, refreshDock)) upgradeMark(u.all);
-    },
+    () => pressUpgrade(u.all),
   );
   b.dataset.act = key;
   return b;
@@ -552,7 +555,7 @@ function drawHand(p: HandPrint): void {
     ...(upgrade ? [el("div", "acts", {}, upgrade)] : []),
     ...(kids.length > 0 ? [el("div", p.acting ? "acts tight" : "acts", {}, ...kids)] : []),
   );
-  const ends = el("div", p.acting ? "acts tight end" : "acts end", {}, ...endButtons(p));
+  const ends = el("div", "acts end", {}, ...endButtons(p));
   hand.replaceChildren(
     el("span", p.line.bad ? "say bad" : "say", { text: p.line.text }),
     el("div", "tail", {}, row, ends),
