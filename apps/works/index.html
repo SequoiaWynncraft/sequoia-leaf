@@ -655,8 +655,9 @@
         align-items: center;
         contain: inline-size;
       }
-      /* Its buttons, as one row: the line's own elsewhere, and on a short screen a row that scrolls (below). */
-      #hand > .row {
+      /* Its buttons: the line's own, but on a short screen (below), where those that come and go scroll and Undo and Cancel stay. */
+      #hand > .tail,
+      #hand .row {
         display: contents;
       }
       #hand .say.bad {
@@ -1440,23 +1441,30 @@
           text-overflow: ellipsis;
           line-height: calc(var(--u) * 20);
         }
-        #hand > .row {
+        /* Beside what it says where they fit, else on a row of their own: only the part that scrolls gives way. */
+        #hand > .tail {
           flex: 0 1 auto;
+          min-width: 0;
+          margin-left: auto;
           display: flex;
           align-items: center;
           gap: calc(var(--u) * 3);
+        }
+        #hand .row {
+          flex: 0 1 auto;
           min-width: 0;
+          display: flex;
+          align-items: center;
+          gap: calc(var(--u) * 3);
           overflow-x: auto;
           scrollbar-width: none;
           padding-block: calc(var(--u) * 3);
           margin-block: calc(var(--u) * -3);
         }
-        #hand > .row > * {
+        #hand .row > *,
+        #hand .tail > .end {
           flex: none;
           flex-wrap: nowrap;
-        }
-        #hand > .row > :first-child {
-          margin-left: auto;
         }
         /* The research being studied sits beside the order in hand, not under it: there is room across, not down. */
         #study {

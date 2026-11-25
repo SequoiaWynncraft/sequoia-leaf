@@ -1,7 +1,7 @@
 [
   {
     "id": "works-phone",
-    "at": "2026-11-25T14:04Z",
+    "at": "2026-11-25T14:22Z",
     "title": "The Works: more of the yard on a phone",
     "lines": [
       "On a phone the tools are one row you scroll sideways, and the yard's books are a column down the right side.",
@@ -24,8 +24,7 @@
       {
         "head": "Fixed",
         "points": [
-          "On a narrow phone, the blueprint places over the tools no longer run off the left edge of the screen.",
-          "An Undo that gives Coins back in one part and costs Coins in another no longer stops partway when you have enough for the whole. If an Undo can't be done, none of it is done, and it stays for you to try again."
+          "On a narrow phone, the blueprint places over the tools no longer run off the left edge of the screen."
         ]
       }
     ]

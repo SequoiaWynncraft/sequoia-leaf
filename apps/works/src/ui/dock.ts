@@ -54,7 +54,7 @@ import {
   upgradeMark,
   usable,
 } from "../tools.ts";
-import { CATCHING_UP, catchingUp } from "../yard.ts";
+import { CATCHING_UP, catchingUp, coins } from "../yard.ts";
 import { cardLearnt, machineRef } from "./card.ts";
 import { $, button, fitted, iconButton, shows, when, type YardIcon, yardIcon } from "./parts.ts";
 import { thumb } from "./thumb.ts";
@@ -282,6 +282,8 @@ interface Upgrade {
   readonly all: boolean;
   readonly cost: number;
   readonly asking: boolean;
+  /** How many Coins the purse is short of the price: 0 when it pays. */
+  readonly short: number;
 }
 
 /**
@@ -292,17 +294,22 @@ function upgradeOf(stage: Stage | null): Upgrade | null {
   const all = stage?.is === "empty";
   if ((!all && stage?.is !== "marked") || locked(S.world.open, { use: "upgrade" }) !== null) return null;
   const cost = upgradeCost(all);
-  return cost > 0 ? { all, cost, asking: asking(all ? "upgrade-all" : "upgrade") } : null;
+  return cost > 0
+    ? { all, cost, asking: asking(all ? "upgrade-all" : "upgrade"), short: Math.max(0, cost - coins()) }
+    : null;
 }
 
-/** Upgrade's button: the whole price, asked twice. */
+/**
+ * Upgrade's button: the whole price, asked twice. Short of the price, it is drawn off, and pressed
+ * it says how short (the rules' own sentence) at once, asking nothing.
+ */
 function upgradeButton(u: Upgrade): HTMLElement {
   const key = u.all ? "upgrade-all" : "upgrade";
   const b = button(
-    u.asking ? "sm asking" : "sm",
+    u.short > 0 ? "sm off" : u.asking ? "sm asking" : "sm",
     [asksAgain(key, [u.all ? "Upgrade all" : "Upgrade", amount("coin", u.cost)], "Press again")],
     () => {
-      if (pressedTwice(key, refreshDock)) upgradeMark(u.all);
+      if (u.short > 0 || pressedTwice(key, refreshDock)) upgradeMark(u.all);
     },
   );
   b.dataset.act = key;
@@ -451,8 +458,32 @@ const tintButtons = (on: number): HTMLElement[] =>
     return b;
   });
 
-/** How far a row that scrolls sideways is from its end: none for no row. */
-const endOf = (row: Element | null): number => (row ? row.scrollWidth - row.clientWidth - row.scrollLeft : 0);
+/** How far a row that scrolls sideways is scrolled: none for no row. */
+const startOf = (row: Element | null): number => row?.scrollLeft ?? 0;
+
+/** The buttons at the line's end, which never scroll away: Undo, Cancel, and for a finger the gold button. */
+function endButtons(p: HandPrint): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  if (p.undo) {
+    const back = iconButton("wood sm undo", yardIcon("undo"), "Undo", () => {
+      undo();
+    });
+    tip(back, () => WORKS_KEYS.titled("Undo", "undo"));
+    out.push(back);
+  }
+  if (p.cancel) {
+    const away = iconButton("wood sm", icon("close"), "Cancel", cancel);
+    tip(away, () => WORKS_KEYS.titled("Cancel", "back"));
+    out.push(away);
+  }
+  if (p.go)
+    out.push(
+      button(p.go.bad ? "sm off" : "sm", [icon("check"), p.go.label], () => {
+        confirm();
+      }),
+    );
+  return out;
+}
 
 /** The line over the dock, drawn from its print alone. */
 function drawHand(p: HandPrint): void {
@@ -496,13 +527,6 @@ function drawHand(p: HandPrint): void {
           return b;
         });
   kids.push(...turning(p));
-  if (p.undo) {
-    const back = iconButton("wood sm undo", yardIcon("undo"), "Undo", () => {
-      undo();
-    });
-    tip(back, () => WORKS_KEYS.titled("Undo", "undo"));
-    kids.push(back);
-  }
   if (p.bin) {
     const { slot, asking: again } = p.bin;
     const drop = (): void => {
@@ -514,22 +538,11 @@ function drawHand(p: HandPrint): void {
     tip(bin, "Delete this blueprint");
     kids.push(bin);
   }
-  if (p.cancel) {
-    const away = iconButton("wood sm", icon("close"), "Cancel", cancel);
-    tip(away, () => WORKS_KEYS.titled("Cancel", "back"));
-    kids.push(away);
-  }
-  if (p.go)
-    kids.push(
-      button(p.go.bad ? "sm off" : "sm", [icon("check"), p.go.label], () => {
-        confirm();
-      }),
-    );
   const tints = p.tints === null ? [] : tintButtons(p.tints);
-  // What it says, then its buttons in one row (`index.html`): on a short screen it scrolls sideways,
-  // and shows its end first, where Undo and Cancel are; drawn again, it stays as far from its end
-  // as the player scrolled it, so that a button asking to be pressed again stays where it was.
-  const fromEnd = endOf(hand.querySelector(".row"));
+  // What it says, then its buttons (`index.html`): on a short screen those that come and go scroll
+  // sideways from their start, and Undo and Cancel stay at the end. Drawn again, the row stays where
+  // the player scrolled it, so that a button asking to be pressed again stays where it was.
+  const scrolled = startOf(hand.querySelector(".row"));
   const row = el(
     "div",
     "row",
@@ -537,10 +550,14 @@ function drawHand(p: HandPrint): void {
     ...(tints.length > 0 ? [el("div", "tints", {}, ...tints)] : []),
     ...(grades.length > 0 ? [el("div", `grades${p.gradesNudged ? " nudged" : ""}`, {}, ...grades)] : []),
     ...(upgrade ? [el("div", "acts", {}, upgrade)] : []),
-    el("div", p.acting ? "acts tight" : "acts", {}, ...kids),
+    ...(kids.length > 0 ? [el("div", p.acting ? "acts tight" : "acts", {}, ...kids)] : []),
   );
-  hand.replaceChildren(el("span", p.line.bad ? "say bad" : "say", { text: p.line.text }), row);
-  row.scrollLeft = row.scrollWidth - row.clientWidth - fromEnd;
+  const ends = el("div", p.acting ? "acts tight end" : "acts end", {}, ...endButtons(p));
+  hand.replaceChildren(
+    el("span", p.line.bad ? "say bad" : "say", { text: p.line.text }),
+    el("div", "tail", {}, row, ends),
+  );
+  row.scrollLeft = scrolled;
   hand.classList.toggle("building", p.building);
 }
 

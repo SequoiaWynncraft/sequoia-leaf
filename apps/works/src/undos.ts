@@ -39,9 +39,7 @@ export type UndoEvent<D> =
   /** Leaf's yard was taken: what no longer stands as it was just after is let go. */
   | { readonly do: "took"; readonly holds: (e: Entry<D>) => boolean }
   /** An entry was taken off to be undone now (`due`). */
-  | { readonly do: "undone"; readonly id: number }
-  /** What was due could not be undone now, and none of it was: it stays, and no Undo is waiting, for it or for anything before it. */
-  | { readonly do: "stuck" };
+  | { readonly do: "undone"; readonly id: number };
 
 /** The value after an event, and what the line over the dock says of it, if anything. */
 export interface Stepped<D> {
@@ -82,8 +80,6 @@ export function undoStep<D>(s: Undos<D>, e: UndoEvent<D>): Stepped<D> {
     }
     case "undone":
       return same(s.filter((v) => v.id !== e.id));
-    case "stuck":
-      return same(s.map((v) => (v.asked ? { ...v, asked: false } : v)));
   }
 }
 
