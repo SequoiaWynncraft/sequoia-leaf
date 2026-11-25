@@ -502,11 +502,14 @@ export const takesCommands = (): boolean => notNow() === null;
  * refused here, with their sentence, however long ago it was aimed: this is the one place a price
  * is judged before it is sent. The rules' refusal is given back, and nothing is sent. A yard the
  * page was handed by a review page of its own (`S.alone`) is done to in the same way, and sends nothing.
+ * The command has its id before the rules do it, the one it is sent under: what Undo would undo is
+ * named by it, on the copy as on Leaf.
  */
 export function doNow(act: Act): Did {
   const no = notNow();
   if (no) return no;
-  const command: Command = { ...act, tick: S.world.tick };
+  const id = link.is === "inStep" ? link.leaf.id() : crypto.randomUUID();
+  const command: Command = { ...act, tick: S.world.tick, id };
   const done = play(S.world, command, balance().coins);
   if ("refused" in done) return done;
   // A review page's own yard (`S.alone`) sends nothing: what is done is all there is.
@@ -519,6 +522,7 @@ export function doNow(act: Act): Did {
     sending,
     undefined,
     (done.coins ?? []).reduce((sum, c) => sum + c.amount, 0),
+    id,
   );
   return done;
 }

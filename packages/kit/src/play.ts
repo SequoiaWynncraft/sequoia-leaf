@@ -9,7 +9,8 @@
  * - With `of`, it opens that player's state as a visitor is given it (`visitPath`): `send` is
  *   refused `visiting` at once and sends nothing, and `refresh` reads it again. Nothing to visit
  *   there (no such state, or a game that cannot be visited) is the trouble `nothing`.
- * - `send(command, predict)` gives the command an id, queues it, and returns at once, with a promise
+ * - `send(command, predict)` gives the command an id (or sends it under one `id()` gave, which a
+ *   page's own rules may need first: the Works names what Undo would undo by it), queues it, and returns at once, with a promise
  *   of Leaf's answer for it. Commands go to Leaf in order, one request at a time, as many as are
  *   waiting in each (up to 32); after a network failure, or Leaf having trouble or asking to slow
  *   down, the same request goes again with the same ids, so nothing is done twice.
@@ -89,7 +90,9 @@ export interface Play<View, Command extends object, Note, Short = never> {
    * Sends a command. Returns at once; the promise is Leaf's answer for it. `coins`, the Coins the
    * page has worked out it pays (taking, below nothing), are shown in the purse until Leaf answers.
    */
-  send(command: Command, predict?: (copy: View) => View, coins?: number): Promise<Answer<Note>>;
+  send(command: Command, predict?: (copy: View) => View, coins?: number, id?: string): Promise<Answer<Note>>;
+  /** A new id for a command this page sends, its own among the player's pages (`owns`): for `send`, which gives one when none is given. */
+  id(): string;
   /** Whether anything sent has not been answered yet. */
   waiting(): boolean;
   /** Whether a command's id is one this page gave (as Leaf tells a room each command's id: core's `did`). */
@@ -277,6 +280,13 @@ function pageName(): string {
   return [...bytes].map((b) => b.toString(36).padStart(2, "0")).join("");
 }
 
+/** Ids for this page's commands: its name (`pageName`), and a count. */
+function pageIds(): { readonly next: () => string; readonly owns: (id: string) => boolean } {
+  const name = pageName();
+  let made = 0;
+  return { next: () => `${name}-${++made}`, owns: (id) => id.startsWith(`${name}-`) };
+}
+
 const json = (v: unknown): string => JSON.stringify(v);
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -335,8 +345,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
   const opening = readBalances(first.body.purse);
   if (opening) fromLeaf(opening);
   const retry = options.retry ?? RETRY;
-  const name = pageName();
-  let made = 0;
+  const names = pageIds();
   /** Leaf's state as it last answered. */
   let base: View = opened;
   let rev = typeof first.body.rev === "number" ? first.body.rev : 0;
@@ -579,12 +588,13 @@ export async function openPlay<View, Command extends object, Note, Short = never
     get rev() {
       return rev;
     },
-    send(command, predict, coins = 0) {
+    id: names.next,
+    send(command, predict, coins = 0, given) {
       return new Promise<Answer<Note>>((answer) => {
         // A visitor changes nothing: nothing is queued, so nothing is ever sent or flushed.
         if (visiting) return answer({ refused: "visiting" });
         if (line.at === "stopped") return answer({ refused: line.why });
-        const id = `${name}-${++made}`;
+        const id = given ?? names.next();
         const size = json(command).length + ID_ROOM;
         const pending: P = { id, command, predict, size, answer };
         copy = predicted(pending, copy);
@@ -593,7 +603,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
       });
     },
     waiting: () => line.at === "sending" || line.at === "waiting",
-    owns: (id) => id.startsWith(`${name}-`),
+    owns: names.owns,
     onState(fn) {
       hearers.add(fn);
       return () => hearers.delete(fn);

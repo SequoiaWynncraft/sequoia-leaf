@@ -180,7 +180,7 @@ export class Player {
       }
       case 26:
         // Undo, mostly of what the yard would undo next; now and then of something else, as another tab would ask.
-        return { do: "undo", entry: this.r() < 0.9 ? (y.history.at(-1)?.id ?? 0) : this.int(1e6) };
+        return { do: "undo", entry: this.r() < 0.9 ? (y.history.at(-1)?.id ?? "") : `elsewhere-${this.int(1e6)}` };
       default:
         return (
           this.pick<Rec>([

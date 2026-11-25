@@ -221,7 +221,6 @@ export function encode(y: Yard, keep: Keep = {}): string {
       ? { blueprints: y.blueprints.map((b) => b && toBase64(packPrint(b))) }
       : {}),
     ...(y.history.length > 0 ? { history: y.history.map((e) => toBase64(e.bytes)) } : {}),
-    ...(y.entries > 0 ? { entries: y.entries } : {}),
   });
 }
 
@@ -589,8 +588,6 @@ export function vouch(
   const history: unknown[] = Array.isArray(raw.history) ? raw.history : [];
   const entries = history.map((b) => (typeof b === "string" ? fromBase64(b) : null)).filter((b) => b !== null);
   y.history = entries.length === history.length ? historyOf(entries, land.w * land.h) : [];
-  // Entries are numbered by the count kept: never again below one kept, however it was kept.
-  y.entries = Math.max(whole(raw.entries, 1e12) ?? 0, y.history.at(-1)?.id ?? 0);
   y.news = [];
   return y;
 }

@@ -1,40 +1,40 @@
 /**
  * Undo, done by the rules: the yard keeps, with it, what it takes to undo each of the last things
  * done to it (`Yard.history`, the newest last), so the page and Leaf undo the same thing as one
- * command (`{ do: "undo", entry }`, the newest entry by its id), all of it or none, and an Undo is
- * still there after a reload or on another device.
+ * command (`{ do: "undo", entry }`), all of it or none, and an Undo is still there after a reload or
+ * on another device.
  *
- * Each command with an Undo (`REACH`) keeps one entry, its exact inverse as the rules did it: the
- * tiles it changed; what stood on them before, whole (as `cells.ts` packs pieces: kind, way, grade,
- * colour, what it was set to, its ways, span, whether it was one of the pieces to hand); and the
- * Coins it moved, but for the till paid in with it. A stroke of the brush is many commands and one
- * entry: each after the first says the entry it adds to (`onto`).
+ * An entry is named by the command that made it: its id, the page's, unique among the player's
+ * commands to the Works, which Leaf answers it by. Page and Leaf both hand it to the rules (`play`),
+ * so a command Leaf turned down has no entry there, and an Undo naming it is refused. A stroke of the
+ * brush is many commands and one entry, named by its first: each after it says that name (`onto`).
  *
- * The history holds by construction. Undo takes the newest entry first; ticks change no piece, only
- * what pieces hold and carry; and every other command that changes a piece or the Coins (`FORGETS`)
- * forgets the whole history. A check of what the command left on its tiles (`sum`) still refuses an
- * entry that no longer matches the yard, which should never happen.
+ * Each command with an Undo (`REACH`) keeps one entry: the tiles it changed; what stood on them before,
+ * as the player set it and nothing the yard was doing (`Setting`: the settings `stand`, copies and
+ * blueprints keep, `keptAt`, with whether it was one of the pieces to hand); which of those settings
+ * it changed on each piece that still stands; and the Coins it moved, but for the till paid in.
  *
- * Undoing puts back what was there:
- * - a piece the command took away comes back as it stood, with what it held when it went, as that
- *   was nowhere since, and what it was doing as far as the yard lets it be now (`keptOnto`, as reading
- *   a yard back does): a Study's work on research no longer first in line is let go;
- * - a piece the command changed where it stands (turned, raised, coloured, its ways or side set, a
- *   belt a splitter or joiner was set down on, which kept what the belt carried) has back the settings
- *   the command changed, and only those, keeping what it holds, carries and is doing now;
- * - a piece the command set down is taken away, with whatever it holds now, as the spade takes it;
+ * The history holds by construction. Undo takes the newest entry first; ticks change no setting, only
+ * what pieces hold, carry and are doing; and every other command that changes a piece or the Coins
+ * (`FORGETS`) forgets the whole history. A check of what the command left on its tiles (`sum`) still
+ * refuses an entry that no longer matches the yard, which should never happen.
+ *
+ * Undo puts back what the player set, never what the yard was doing:
+ * - a piece the command changed where it stands (turned, raised, coloured, its ways or side set) has
+ *   back the settings the command changed, and only those, each as the command's own setter sets it,
+ *   so that what it holds, carries and is doing (a splitter's next way, beside its ways in) is its own;
+ * - a piece the command set down, or set in the place of another, is taken away, as the spade takes it;
+ * - a piece the command took away, or set another in the place of, is stood again as new, as `stand`
+ *   stands one: its settings, holding nothing, doing nothing; one of the pieces to hand as one;
  * - pieces moved are moved back as one, with what they hold now.
- * Whether a piece was one of those to hand goes back with it, exactly. The Coins go the other way:
- * what the command cost is given back, and what it gave back is taken.
+ * The Coins go the other way: what the command cost is given back, and what it gave back is taken.
  *
- * An entry's bytes: its id (a varint), what it is (a byte: 1 a move, 2 a stroke of the brush, 4 too
- * much to keep), the Coins it moved (a varint, zigzag), the check of its tiles after it (four bytes),
- * the tiles it changed that held nothing before (a count, then each as the tiles since the last less
- * one), for a move the turns and corner that move the pieces back (a byte each), which settings the
- * command changed on each piece that stood there (a count, then a varint each, a bit for each part as
- * `PARTS_SET` has them), and last what stood there before (`packKept`). Its id names the action, not
- * what it did: the yard's count of entries kept (`Yard.entries`) as the rules kept it, the same on the
- * page and on Leaf, which run the same commands in the same order. A stroke keeps its id as it grows.
+ * An entry's bytes: its id (a count, then a byte each), what it is (a byte: 1 a move, 2 a stroke of
+ * the brush, 4 too much to keep), the Coins it moved (a varint, zigzag), the check of its tiles after
+ * it (four bytes), the tiles it changed that held nothing before (a count, then each as the tiles
+ * since the last less one), for a move the turns and corner that move the pieces back (a byte each),
+ * which settings the command changed on each piece that stood there (a count, then a varint each,
+ * `SETTINGS`), and last what stood there (`packSettings`).
  *
  * At most `UNDO_MOST` entries and `UNDO_BYTES` bytes in all, the oldest let go first. A command
  * whose own entry is over that is still done, and kept, under its id, as one that cannot be undone;
@@ -42,16 +42,28 @@
  */
 import type { CoinChange } from "@sequoia-leaf/core";
 
-import { at, otherMouth, replaces, tunnelExit } from "./build.ts";
+import { at, type Dir, insTo, isDir, otherMouth, tunnelExit } from "./build.ts";
 import { Reader, Writer } from "./bytes.ts";
-import { keptOnto, type KeptPiece, keptPiece, packKept, unpackCells } from "./cells.ts";
 import type { Act, ActOf } from "./commands.ts";
 import { lineOf } from "./lines.ts";
-import { blueprintAt, boxOf, copyOf, move, piecesAt, tilesOf } from "./pieces.ts";
+import {
+  blueprintAt,
+  boxOf,
+  copyOf,
+  type Kept,
+  keptAt,
+  keptOf,
+  move,
+  packWays,
+  piecesAt,
+  stand,
+  tilesOf,
+  unpackWays,
+} from "./pieces.ts";
 import { REASON } from "./reasons.ts";
 import { legPiece } from "./route.ts";
-import { CRATE, DEPOT, gradeOf, isKind, NONE, TUNNEL } from "./tables.ts";
-import { changed, type Entry, holderOf, place, tunnelRow, vacate, type Yard } from "./yard.ts";
+import { CRATE, DEPOT, gradeOf, isKind, type Kind, NONE, TUNNEL } from "./tables.ts";
+import { changed, type Entry, holderOf, vacate, type Yard } from "./yard.ts";
 
 /** The most entries a yard keeps, and the most bytes they may come to in all. */
 export const UNDO_MOST = 20;
@@ -73,33 +85,142 @@ const UNDO_SAYS = {
   changed: "Cannot undo: it has changed since",
 } as const;
 
+/** A command's id, as Leaf takes one: up to 64 letters, digits and `_ . : -`; none for a test's. */
+export const isId = (v: unknown): v is string => typeof v === "string" && /^[\w.:-]{0,64}$/.test(v);
+
 type Name = Act["do"];
 
-/** The highest an entry's id goes. */
-export const ID_MOST = 1e12;
+/** How a piece stood on a tile: as the player set it (`keptAt`), and whether it was one of the pieces to hand. */
+interface Setting {
+  readonly tile: number;
+  readonly kind: Kind;
+  readonly dir: Dir;
+  /** For a tunnel's mouth, the tiles it passes under: positive at its way in, negative at its way out. */
+  readonly span: number;
+  readonly free: boolean;
+  readonly kept: Kept;
+}
 
 /** An entry read back from its bytes. */
 interface Undoing {
-  readonly id: number;
+  readonly id: string;
   readonly flags: number;
   /** The Coins the command moved to the player: below nothing for what it cost. */
   readonly coins: number;
   readonly sum: number;
   /** Every tile it changed, in order. */
   readonly tiles: readonly number[];
-  /** What stood on those of them that held something before, and the settings the command changed on each (`PARTS_SET`, a bit each). */
-  readonly was: readonly KeptPiece[];
+  /** How the pieces stood on those of them that held one before, and the settings the command changed on each (`SETTINGS`, a bit each). */
+  readonly was: readonly Setting[];
   readonly masks: readonly number[];
   /** For a move, the turns and the corner that move the pieces back. */
   readonly back: { readonly turns: number; readonly x: number; readonly y: number } | null;
 }
 
-/** A command about to be done: every tile it may change, in order, and what stood on them, with all it held. */
+/** A command about to be done: every tile it may change, in order, and how the pieces stood on them. */
 export interface Before {
   readonly tiles: readonly number[];
-  readonly was: ReadonlyMap<number, KeptPiece>;
+  readonly was: ReadonlyMap<number, Setting>;
   /** For a move, the turns and the corner that move the pieces back. */
   readonly back: Undoing["back"];
+}
+
+// ---------- settings ----------
+
+/** How the piece on a tile stands, as the player set it; null for none, or the depot. */
+function settingAt(y: Yard, i: number): Setting | null {
+  const k = y.kind[i] ?? NONE;
+  const d = y.dir[i] ?? 0;
+  if (!isKind(k) || k === DEPOT || !isDir(d)) return null;
+  return { tile: i, kind: k, dir: d, span: y.span[i] ?? 0, free: y.free[i] === 1, kept: keptAt(y, i) };
+}
+
+/**
+ * The settings a command may change on a piece where it stands, each as the yard holds it on a tile
+ * (`at`), as a kept piece has it (`of`), and set back as the command that changes it sets it (`to`):
+ * a splitter's ways in by `insTo`, as turning a way in or out does, so that its next way is its own.
+ */
+const SETTINGS: readonly {
+  readonly at: (y: Yard, i: number) => number;
+  readonly of: (s: Setting) => number;
+  readonly to: (y: Yard, i: number, v: number) => void;
+}[] = [
+  { at: (y, i) => y.dir[i] ?? 0, of: (s) => s.dir, to: (y, i, v) => (y.dir[i] = v) },
+  { at: (y, i) => y.grade[i] ?? 0, of: (s) => s.kept.grade ?? gradeOf(s.kind), to: (y, i, v) => (y.grade[i] = v) },
+  { at: (y, i) => y.tint[i] ?? 0, of: (s) => s.kept.tint ?? 0, to: (y, i, v) => (y.tint[i] = v) },
+  { at: (y, i) => y.set[i] ?? NONE, of: (s) => s.kept.recipe ?? NONE, to: (y, i, v) => (y.set[i] = v) },
+  { at: (y, i) => y.shut[i] ?? 0, of: (s) => s.kept.shut ?? 0, to: (y, i, v) => (y.shut[i] = v) },
+  { at: (y, i) => y.first[i] ?? 0, of: (s) => (s.kept.first ?? -1) + 1, to: (y, i, v) => (y.first[i] = v) },
+  { at: (y, i) => y.ins[i] ?? 0, of: (s) => s.kept.ins ?? 0, to: insTo },
+  {
+    at: (y, i) => (y.kind[i] === CRATE ? (y.holders.open[holderOf(y, i)] ?? 1) : 1),
+    of: (s) => (s.kept.open === false ? 0 : 1),
+    to: (y, i, v) => {
+      if (y.kind[i] === CRATE) y.holders.open[holderOf(y, i)] = v;
+    },
+  },
+];
+
+/** The settings of the piece on a tile that differ from how one stood (`s`), a bit each by its place in `SETTINGS`. */
+const changedOf = (y: Yard, s: Setting): number =>
+  SETTINGS.reduce((m, part, n) => (part.at(y, s.tile) === part.of(s) ? m : m | (1 << n)), 0);
+
+/** Whether the piece on a tile stands as one stood (or, with none, the tile is bare as it was). */
+function standsAs(y: Yard, i: number, s: Setting | undefined): boolean {
+  const now = settingAt(y, i);
+  if (!now || !s) return now === null && s === undefined;
+  return now.kind === s.kind && now.span === s.span && now.free === s.free && changedOf(y, s) === 0;
+}
+
+/** Writes how pieces stood (in tile order): each as the tiles since the last less one, then its kind, way and the settings it has. */
+function packSettings(o: Writer, was: readonly Setting[]): void {
+  o.varint(was.length);
+  let last = -1;
+  for (const s of was) {
+    o.varint(s.tile - last - 1);
+    last = s.tile;
+    const k = s.kept;
+    const ways = packWays(k.shut ?? 0, (k.first ?? -1) + 1, k.ins ?? 0);
+    const parts: readonly [number, number | undefined][] = [
+      [1, k.recipe],
+      [2, k.open === false ? 0 : undefined],
+      [4, k.tint],
+      [8, ways === 0 ? undefined : ways],
+      [16, k.grade],
+      [32, s.span === 0 ? undefined : s.span + 8],
+    ];
+    const f = parts.reduce((m, [bit, v]) => (v === undefined ? m : m | bit), 0);
+    o.byte(s.kind | (s.dir << 4) | (s.free ? 64 : 0) | (f === 0 ? 0 : 128));
+    if (f !== 0) o.byte(f);
+    for (const [, v] of parts) if (v !== undefined) o.byte(v);
+  }
+}
+
+/** One piece's settings read back, after its tile; null for bytes that are not a piece's. */
+function readSetting(r: Reader, tile: number): Setting | null {
+  const kd = r.byte();
+  const [kind, dir] = [kd & 15, (kd >> 4) & 3];
+  const f = kd & 128 ? r.byte() : 0;
+  const [recipe, closed, tint, ways, grade, span] = [1, 2, 4, 8, 16, 32].map((bit) => (f & bit ? r.byte() : undefined));
+  if (r.over || f > 63 || !isKind(kind) || kind === DEPOT || !isDir(dir)) return null;
+  const kept = keptOf(
+    { ...unpackWays(ways ?? 0), recipe, tint, grade, open: closed === undefined ? undefined : false },
+    kind,
+  );
+  return { tile, kind, dir, span: span === undefined ? 0 : span - 8, free: (kd & 64) !== 0, kept };
+}
+
+/** How pieces stood, read back, for a yard of so many tiles; null for bytes that are not pieces'. */
+function readSettings(r: Reader, tiles: number): Setting[] | null {
+  const n = r.varint();
+  const out: Setting[] = [];
+  for (let k = 0, tile = -1; k < Math.min(n, tiles) && !r.over; k++) {
+    tile += r.varint() + 1;
+    const s = tile < tiles ? readSetting(r, tile) : null;
+    if (!s) return null;
+    out.push(s);
+  }
+  return n > tiles || r.over || !r.done ? null : out;
 }
 
 // ---------- keeping ----------
@@ -151,59 +272,10 @@ export function before(y: Yard, a: Act): Before | null {
   // A tunnel's mouths go together; the depot never changes.
   const mouths = near.flatMap((i) => (i < 0 ? [] : [i, otherMouth(y, i)]));
   const tiles = [...new Set(mouths)].filter((i) => i >= 0 && y.kind[i] !== DEPOT).toSorted((i, j) => i - j);
-  const was = new Map(tiles.flatMap((i) => (y.kind[i] === NONE ? [] : [[i, keptPiece(y, i)] as const])));
+  const was = new Map(tiles.flatMap((i) => [settingAt(y, i) ?? []].flat().map((s) => [i, s] as const)));
   if (a.do !== "move") return { tiles, was, back: null };
   const box = boxOf(piecesAt(y, a.tiles));
   return { tiles, was, back: { turns: (4 - a.turns) & 3, x: box.x, y: box.y } };
-}
-
-/** A kept piece's parts in the order of the yard's arrays (`PARTS_SET`), as `vacate` leaves a tile with none. */
-function setOf(p: KeptPiece | undefined): number[] {
-  if (!p) return [NONE, 0, NONE, 0, 0, 0, 0, 0, 0, 0, NONE, 0, 0, 0];
-  const w = p.ways ?? 0;
-  const [item, prog, via] = [p.item ?? NONE, p.prog ?? 0, p.via ?? 0];
-  const [tint, turn, recipe, grade, span] = [
-    p.tint ?? 0,
-    p.turn ?? 0,
-    p.recipe ?? NONE,
-    p.grade ?? gradeOf(p.kind),
-    p.span ?? 0,
-  ];
-  return [p.kind, p.dir, item, prog, via, tint, turn, w & 7, (w >> 3) & 3, w >> 5, recipe, grade, p.free ? 1 : 0, span];
-}
-/** The arrays of a tile a command may change, in the order `setOf` gives them. */
-const PARTS_SET = [
-  "kind",
-  "dir",
-  "item",
-  "prog",
-  "via",
-  "tint",
-  "turn",
-  "shut",
-  "first",
-  "ins",
-  "set",
-  "grade",
-  "free",
-  "span",
-] as const;
-
-/** What a piece carries: never set back on one that stays, which carries what it carries now. */
-const CARRIED: ReadonlySet<string> = new Set(["item", "prog", "via"]);
-/** Every setting at once: for a piece stood again. */
-const ALL_SET = (1 << PARTS_SET.length) - 1;
-
-/** The settings of the piece on a tile that differ from a kept piece's, a bit each by its place in `PARTS_SET`. */
-function changedParts(y: Yard, p: KeptPiece): number {
-  const want = setOf(p);
-  return PARTS_SET.reduce((m, part, n) => (CARRIED.has(part) || y[part][p.tile] === want[n] ? m : m | (1 << n)), 0);
-}
-
-/** Whether the piece on a tile stands and carries as a kept piece (or, with none, as bare ground). */
-function standsAs(y: Yard, i: number, p: KeptPiece | undefined): boolean {
-  const want = setOf(p);
-  return PARTS_SET.every((part, n) => y[part][i] === want[n]);
 }
 
 /** 32 bits of how the pieces on some tiles stand: everything a command sets, nothing ticks change. */
@@ -221,38 +293,45 @@ function sumOf(y: Yard, tiles: readonly number[]): number {
   return h >>> 0;
 }
 
+/** Writes a command's id: its length, then a byte each. */
+function writeId(o: Writer, id: string): void {
+  o.varint(id.length);
+  for (let c = 0; c < id.length; c++) o.byte(id.charCodeAt(c));
+}
+/** Reads a command's id; null for bytes that are not one. */
+function readId(r: Reader): string | null {
+  const n = r.varint();
+  if (n > 64) return null;
+  const id = String.fromCharCode(...Array.from({ length: n }, () => r.byte()));
+  return !r.over && isId(id) ? id : null;
+}
+
 /** An entry, its id read from its first bytes. */
-const entry = (bytes: Uint8Array): Entry => ({ id: new Reader(bytes).varint(), bytes });
+const entry = (bytes: Uint8Array): Entry => ({ id: readId(new Reader(bytes)) ?? "", bytes });
 /** An entry that cannot be undone, under its id: a command's own entry over the cap, or a stroke's. */
-function overCap(id: number, flags: number): Entry {
+function overCap(id: string, flags: number): Entry {
   const o = new Writer();
-  o.varint(id);
+  writeId(o, id);
   o.byte(TOO_BIG | (flags & STROKE));
   return entry(o.bytes());
 }
 
-/** A kept piece without what its holder held and was doing: for one that stays, which keeps what it holds now. */
-const bare = ({ held: _h, out: _o, work: _w, making: _m, fuel: _f, ...p }: KeptPiece): KeptPiece => p;
-
-/** An entry's bytes, of the yard after its command (`y`); `was` is what stood on its tiles before. */
+/** An entry's bytes, of the yard after its command (`y`); `was` is how the pieces on its tiles stood before. */
 function written(y: Yard, u: Omit<Undoing, "sum" | "masks">): Uint8Array {
   const o = new Writer();
-  o.varint(u.id);
+  writeId(o, u.id);
   o.byte(u.flags);
   o.varint(u.coins < 0 ? -u.coins * 2 - 1 : u.coins * 2);
   const sum = sumOf(y, u.tiles);
   for (let k = 0; k < 4; k++) o.byte((sum >>> (8 * k)) & 255);
-  const had = new Set(u.was.map((p) => p.tile));
+  const had = new Set(u.was.map((s) => s.tile));
   const fresh = u.tiles.filter((i) => !had.has(i));
   o.varint(fresh.length);
   fresh.forEach((i, k) => o.varint(i - (fresh[k - 1] ?? -1) - 1));
   if (u.back) for (const v of [u.back.turns, u.back.x, u.back.y]) o.byte(v);
   o.varint(u.was.length);
-  for (const p of u.was) o.varint(changedParts(y, p));
-  // Only a piece taken away keeps what it held: one that still stands, or was moved, holds what it holds now.
-  const stays = (p: KeptPiece): boolean =>
-    u.back !== null || y.kind[p.tile] === p.kind || replaces(y.kind[p.tile] ?? NONE, p.kind);
-  for (const b of packKept(u.was.map((p) => (stays(p) ? bare(p) : p)))) o.byte(b);
+  for (const s of u.was) o.varint(changedOf(y, s));
+  packSettings(o, u.was);
   return o.bytes();
 }
 
@@ -264,7 +343,7 @@ function capped(history: readonly Entry[]): Entry[] {
   return out;
 }
 
-/** The stroke of the brush a command adds to: the newest entry, if it is a stroke's and the command says it (`onto`). */
+/** The stroke of the brush a command adds to: the newest entry, if it is a stroke's and the command names it (`onto`). */
 function strokeOf(y: Yard, a: Act): Undoing | null {
   const top = y.history.at(-1);
   if (a.do !== "paint" || a.onto === undefined || top?.id !== a.onto) return null;
@@ -272,19 +351,20 @@ function strokeOf(y: Yard, a: Act): Undoing | null {
   return u && (u.flags & STROKE) !== 0 ? u : null;
 }
 
-/** What a command done (`b` taken before it) changed, with the stroke it adds to: its entry, but for the check. */
+/** What a command done (`b` taken before it, `id` its id) changed, with the stroke it adds to: its entry, but for the check. */
 function undoing(
   y: Yard,
   b: Before,
+  id: string,
   stroke: Undoing | null,
   coins: number,
   paint: boolean,
 ): Omit<Undoing, "sum" | "masks"> {
   const done = b.back ? b.tiles : b.tiles.filter((i) => !standsAs(y, i, b.was.get(i)));
-  // What the stroke's lines were before it, over what this command found on them.
-  const was = new Map([...done.flatMap((i) => b.was.get(i) ?? []), ...(stroke?.was ?? [])].map((p) => [p.tile, p]));
+  // How the stroke's lines stood before it, over how this command found them.
+  const was = new Map([...done.flatMap((i) => b.was.get(i) ?? []), ...(stroke?.was ?? [])].map((s) => [s.tile, s]));
   return {
-    id: stroke?.id ?? y.entries + 1,
+    id: stroke?.id ?? id,
     flags: (b.back ? MOVED : 0) | (paint ? STROKE : 0),
     coins: (stroke?.coins ?? 0) + coins,
     tiles: [...new Set([...done, ...(stroke?.tiles ?? [])])].toSorted((i, j) => i - j),
@@ -294,12 +374,11 @@ function undoing(
 }
 
 /**
- * Keeps an entry for a command done (`a`, `b` taken before it), numbered by the yard's count, which
- * made `changes` to the Coins: the till paid in with them is not undone. A command with no Undo that
- * changes a piece or the Coins forgets them all. A stroke of the brush that says the newest entry
- * (`onto`) adds to it, under its id.
+ * Keeps an entry for a command done (`a`, its id `id`, `b` taken before it), which made `changes` to
+ * the Coins: the till paid in with them is not undone. A command with no Undo that changes a piece or
+ * the Coins forgets them all. A stroke of the brush that names the newest entry (`onto`) adds to it.
  */
-export function after(y: Yard, a: Act, b: Before | null, changes: readonly CoinChange[]): void {
+export function after(y: Yard, a: Act, b: Before | null, changes: readonly CoinChange[], id: string): void {
   if (!b) {
     if (FORGETS.has(a.do)) y.history = [];
     return;
@@ -308,11 +387,10 @@ export function after(y: Yard, a: Act, b: Before | null, changes: readonly CoinC
   // A stroke over the cap goes on as one that cannot be undone: no part of it is undone.
   if (stroke && stroke.flags & TOO_BIG) return;
   const coins = changes.reduce((n, c) => n + (c.reason === REASON.till ? 0 : c.amount), 0);
-  const u = undoing(y, b, stroke, coins, a.do === "paint");
+  const u = undoing(y, b, id, stroke, coins, a.do === "paint");
   if (u.tiles.length === 0 && u.coins === 0) return;
   const bytes = written(y, u);
   const kept = stroke ? y.history.slice(0, -1) : y.history;
-  y.entries = Math.max(y.entries, u.id);
   y.history = bytes.length > UNDO_BYTES ? [overCap(u.id, u.flags)] : capped([...kept, entry(bytes)]);
 }
 
@@ -329,36 +407,31 @@ function readTiles(r: Reader, tiles: number): number[] | null {
   return n > tiles || out.some((i) => i >= tiles) ? null : out;
 }
 
-/** What stood on an entry's tiles, read back: only pieces a yard may have. */
-function wasOf(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
-  const was = unpackCells(bytes, tiles);
-  return was && was.every((p) => isKind(p.kind) && p.kind !== DEPOT) ? was : null;
-}
-
 /** Settings changed, one for each piece that stood on an entry's tiles, after their count; null past `most`. */
 function readMasks(r: Reader, most: number): number[] | null {
   const n = r.varint();
   const out: number[] = [];
   for (let k = 0; k < Math.min(n, most) && !r.over; k++) out.push(r.varint());
-  return n > most || out.some((m) => m > ALL_SET) ? null : out;
+  return n > most || out.some((m) => m >= 1 << SETTINGS.length) ? null : out;
 }
 
-/** The rest of an entry's bytes, after its Coins and check: its tiles, the way back, the settings changed and what stood there. */
+/** The rest of an entry's bytes, after its Coins and check: its tiles, the way back, the settings changed and how the pieces stood. */
 function readBody(r: Reader, flags: number, tiles: number): Pick<Undoing, "tiles" | "was" | "masks" | "back"> | null {
   const fresh = readTiles(r, tiles);
   const back = flags & MOVED ? { turns: r.byte(), x: r.byte(), y: r.byte() } : null;
   const masks = readMasks(r, tiles);
-  const was = fresh && masks && !r.over && (back?.turns ?? 0) <= 3 ? wasOf(r.rest(), tiles) : null;
+  const was = fresh && masks && !r.over && (back?.turns ?? 0) <= 3 ? readSettings(r, tiles) : null;
   if (!fresh || !masks || !was || masks.length !== was.length) return null;
-  const all = [...new Set([...fresh, ...was.map((p) => p.tile)])].toSorted((i, j) => i - j);
+  const all = [...new Set([...fresh, ...was.map((s) => s.tile)])].toSorted((i, j) => i - j);
   return all.length === fresh.length + was.length ? { tiles: all, was, masks, back } : null;
 }
 
 /** An entry read back from its bytes, for a yard of so many tiles; null for bytes that are not an entry. */
 function readEntry(bytes: Uint8Array, tiles: number): Undoing | null {
   const r = new Reader(bytes);
-  const id = r.varint();
+  const id = readId(r);
   const flags = r.byte();
+  if (id === null) return null;
   if (flags & TOO_BIG) {
     const big = r.done && !r.over && (flags & ~(TOO_BIG | STROKE)) === 0;
     return big ? { id, flags, coins: 0, sum: 0, tiles: [], was: [], masks: [], back: null } : null;
@@ -370,20 +443,15 @@ function readEntry(bytes: Uint8Array, tiles: number): Undoing | null {
   return body && { id, flags, coins: zig % 2 === 1 ? -(zig + 1) / 2 : zig / 2, sum, ...body };
 }
 
-/**
- * A yard's history read back from what it kept, for a yard of so many tiles: each entry, the oldest
- * first, numbered in the order they were kept; or none at all if any is not one.
- */
+/** A yard's history read back from what it kept, for a yard of so many tiles: each entry, the oldest first; or none at all if any is not one. */
 export function historyOf(kept: readonly Uint8Array[], tiles: number): Entry[] {
-  const read = kept.map((b) => readEntry(b, tiles));
-  const inOrder = read.every((u, k) => u !== null && u.id > 0 && u.id > (read[k - 1]?.id ?? 0));
-  return inOrder ? capped(kept.map(entry)) : [];
+  return kept.every((b) => readEntry(b, tiles) !== null) ? capped(kept.map(entry)) : [];
 }
 
 // ---------- undoing ----------
 
-/** Why the newest entry, said to be `id`, cannot be undone with `coins` to spend; null if it can. */
-export function undoRefusal(y: Yard, id: number, coins: number): string | null {
+/** Why the newest entry, named `id`, cannot be undone with `coins` to spend; null if it can. */
+export function undoRefusal(y: Yard, id: string, coins: number): string | null {
   const top = y.history.at(-1);
   if (!top) return UNDO_SAYS.nothing;
   if (top.id !== id) return UNDO_SAYS.notLast;
@@ -395,81 +463,52 @@ export function undoRefusal(y: Yard, id: number, coins: number): string | null {
   return short > 0 ? `Not enough Coins: ${short} short` : null;
 }
 
-/** Counts the pieces to hand as the piece on a tile goes, and a kept one (`comes`) takes its place: as setting down and taking away count them. */
-function handBack(y: Yard, i: number, comes: KeptPiece | null): void {
+/** Takes away the piece on a tile, as the spade takes it: what it held goes, and one of the pieces to hand goes back to hand. */
+function takeAway(y: Yard, i: number): void {
   const k = y.kind[i] ?? NONE;
   if (y.free[i] === 1) y.spare[k] = (y.spare[k] ?? 0) + 1;
-  if (comes?.free === true) y.spare[comes.kind] = (y.spare[comes.kind] ?? 0) - 1;
+  vacate(y, i);
 }
 
 /**
- * Gives the piece on a tile the settings of a kept piece that `mask` names (a bit each, by its place in
- * `PARTS_SET`), the pieces to hand counted as it comes and goes.
+ * Stands a piece taken away again as new, as `stand` stands one (a tunnel by its way-in mouth, both
+ * mouths at once): its settings, holding nothing, doing nothing; one of the pieces to hand only if it
+ * was one.
  */
-function setBack(y: Yard, i: number, p: KeptPiece, mask: number): void {
-  handBack(y, i, p);
-  const want = setOf(p);
-  PARTS_SET.forEach((part, n) => {
-    if (mask & (1 << n)) y[part][i] = want[n] ?? 0;
-  });
+function standBack(y: Yard, s: Setting): void {
+  const had = y.spare[s.kind] ?? 0;
+  y.spare[s.kind] = s.free ? 1 : 0;
+  const { x, y: z } = { x: s.tile % y.land.w, y: Math.floor(s.tile / y.land.w) };
+  stand(y, [{ kind: s.kind, x, y: z, dir: s.dir, span: s.span, ...s.kept }], Infinity);
+  y.spare[s.kind] = s.free ? Math.max(0, had - 1) : had;
 }
 
 /**
- * Stands a piece taken away again on its bare tile: as it stood, with what it held when it went, and
- * what it was doing as far as the yard lets it be now, as reading a yard back does (`keptOnto`).
- */
-function standBack(y: Yard, i: number, p: KeptPiece): void {
-  if (!isKind(p.kind)) return;
-  place(y, i, p.kind, p.dir, p.grade ?? 1);
-  setBack(y, i, p, ALL_SET);
-  if ((p.span ?? 0) > 0) tunnelRow(y, i);
-  keptOnto(y, i, p, y.line[0]);
-}
-
-/**
- * Puts back what stood on an entry's tiles: each piece that still stands given back the settings the
- * command changed, the rest taken away, and what was taken away stood again.
+ * Puts back how the pieces on an entry's tiles stood: each that still stands has back the settings
+ * the command changed; the rest are taken away, and what was taken away is stood again as new.
  */
 function putBack(y: Yard, u: Undoing): void {
-  const was = new Map(u.was.map((p, k) => [p.tile, { p, mask: u.masks[k] ?? 0 }]));
-  const stays = (i: number): boolean => {
-    const p = was.get(i)?.p;
-    const k = y.kind[i] ?? NONE;
-    return p !== undefined && (k === p.kind || replaces(k, p.kind));
-  };
-  const gone = u.tiles.filter((i) => !stays(i));
-  for (const i of gone) {
-    handBack(y, i, null);
-    vacate(y, i);
-  }
-  for (const { p, mask } of was.values()) if (stays(p.tile)) setBack(y, p.tile, p, mask);
-  for (const i of gone) {
-    const p = was.get(i)?.p;
-    if (p) standBack(y, i, p);
+  const was = new Map(u.was.map((s, k) => [s.tile, { s, mask: u.masks[k] ?? 0 }]));
+  const stays = new Set(u.tiles.filter((i) => was.get(i)?.s.kind === y.kind[i]));
+  for (const i of u.tiles) if (!stays.has(i) && y.kind[i] !== NONE) takeAway(y, i);
+  for (const { s, mask } of was.values()) {
+    if (stays.has(s.tile)) SETTINGS.forEach((part, n) => mask & (1 << n) && part.to(y, s.tile, part.of(s)));
+    else if (s.span >= 0) standBack(y, s);
   }
 }
 
 /**
- * Undoes the newest entry, said to be `id`, with `coins` to spend: all of it or, refused, none.
- * Says the Coins it moves to the player: what the command cost, or less than nothing for what it gave.
+ * Undoes the newest entry, named `id`, with `coins` to spend: all of it or, refused, none. Says the
+ * Coins it moves to the player: what the command cost, or less than nothing for what it gave.
  */
-export function undo(y: Yard, id: number, coins: number): { ok: true; coins: number } | { ok: false; why: string } {
+export function undo(y: Yard, id: string, coins: number): { ok: true; coins: number } | { ok: false; why: string } {
   const why = undoRefusal(y, id, coins);
   const u = why === null ? readEntry(y.history.at(-1)?.bytes ?? new Uint8Array(), y.kind.length) : null;
   if (!u) return { ok: false, why: why ?? UNDO_SAYS.changed };
   if (u.back) {
     // The pieces moved, from where they stand now, as one: the move's own refusal leaves all as it was.
-    const no = move(
-      y,
-      u.tiles.filter((i) => y.kind[i] !== NONE),
-      u.back.turns,
-      u.back.x,
-      u.back.y,
-    );
-    if (no !== null) return { ok: false, why: UNDO_SAYS.changed };
-    // Moving forgets the side a thing came in from; still on its tile, it came in from where it did.
-    for (const p of u.was)
-      if (y.item[p.tile] === (p.item ?? NONE) && y.prog[p.tile] === (p.prog ?? 0)) y.via[p.tile] = p.via ?? 0;
+    const now = u.tiles.filter((i) => y.kind[i] !== NONE);
+    if (move(y, now, u.back.turns, u.back.x, u.back.y) !== null) return { ok: false, why: UNDO_SAYS.changed };
   } else putBack(y, u);
   y.history.pop();
   changed(y);

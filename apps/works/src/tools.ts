@@ -532,7 +532,7 @@ export function pickFrom(x: number, y: number): boolean {
  * undo it twice. The rules' reason is said when it is not done. Gives back whether it was.
  */
 export function undo(): boolean {
-  const did = doNow({ do: "undo", entry: S.world.history.at(-1)?.id ?? 0 });
+  const did = doNow({ do: "undo", entry: S.world.history.at(-1)?.id ?? "" });
   if (refused(did)) return false;
   yardSfx.undo();
   // What was marked or in hand may be what was undone.

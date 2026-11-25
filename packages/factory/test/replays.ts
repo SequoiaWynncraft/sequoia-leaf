@@ -31,11 +31,10 @@ class Digest {
   hash: Hash = createHash("sha1");
   /**
    * Takes in what the yard is now: as kept, its news since the last, and its power. What Undo would
-   * undo, and the count of its entries, are left out: they are no part of how the yard plays, and have
-   * tests of their own (`undo.test.ts`).
+   * undo is left out: it is no part of how the yard plays, and has tests of its own (`undo.test.ts`).
    */
   add(y: F.Yard): void {
-    this.hash.update(`${F.encode({ ...y, history: [], entries: 0 })}\n${JSON.stringify(F.drain(y))}\n${y.supply}\n`);
+    this.hash.update(`${F.encode({ ...y, history: [] })}\n${JSON.stringify(F.drain(y))}\n${y.supply}\n`);
   }
   /** Ends a line. */
   line(): void {

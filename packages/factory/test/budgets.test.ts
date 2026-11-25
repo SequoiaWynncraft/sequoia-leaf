@@ -11,7 +11,7 @@ import * as F from "../src/index.ts";
 import { reached } from "./calls.ts";
 import { type Gen, generate } from "./gen.ts";
 import { makeLand, widened } from "./land.ts";
-import { delivering } from "./yards.ts";
+import { delivering, staged } from "./yards.ts";
 
 const land = makeLand(7, 7, 7);
 let made: Gen | null = null;
@@ -240,6 +240,19 @@ describe("work in step with what stands", () => {
 });
 
 describe("time", () => {
+  test("the check of the largest staged yard, about 500 pieces, takes under 20 µs: the page takes one with every command", () => {
+    const y = staged("large");
+    const times: number[] = [];
+    for (let k = 0; k < 2001; k++) {
+      const t = Bun.nanoseconds();
+      F.check(y);
+      times.push((Bun.nanoseconds() - t) / 1e3);
+    }
+    const median = times.toSorted((p, q) => p - q)[1000] ?? Infinity;
+    console.log(`the check of ${pieces(y)} pieces: ${median.toFixed(1)} µs`);
+    expect(median).toBeLessThan(20);
+  });
+
   test("the median tick at about 6,000 pieces takes under 2 ms", () => {
     const y = running();
     const time = (before: () => void, n: number): number => {

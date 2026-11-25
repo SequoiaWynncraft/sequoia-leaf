@@ -1,9 +1,8 @@
 /**
  * Pieces as bytes: the yard's own (`codec.ts`, its `cells`), and what an Undo puts back
  * (`history.ts`), in one format. A piece is read off its tile as a kept piece first (`keptPiece`),
- * and kept pieces are what is written (`packKept`) and read back (`unpackCells`). A kept piece is put
- * back onto the piece stood where it was as the rules let it be now (`keptOnto`): by both reading a
- * yard back and Undo, so what Undo stands again is what the yard would read back as.
+ * and kept pieces are what is written (`packKept`) and read back (`unpackCells`). Reading a yard back
+ * puts a kept piece back onto the piece stood where it was as the rules let it be now (`keptOnto`).
  *
  * The pieces' bytes are how many pieces there are (varint), then each piece in tile order: the tiles
  * since the last piece less one (varint); a byte of its kind (low four bits), its way (two bits),

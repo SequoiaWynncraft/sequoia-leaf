@@ -1468,6 +1468,30 @@ describe("an Undo in the Works", () => {
     expect([await coinsOf(alice), await roomNow()]).toEqual([300, roomBefore]);
   });
 
+  it("names what it undoes by the command that did it: a page's Undo of its own build Leaf turned down is refused, and another page's build stands", async () => {
+    const opening = await send("GET", "/v1/game/play/works");
+    const { clock: tick } = yardOf(Schema.decodeUnknownSync(Shown)(await opening.json()).state);
+    const commands = (...cs: Record<string, unknown>[]) =>
+      send("POST", "/v1/game/play/works", { commands: cs.map((c) => Object.assign({ tick }, c)) }).then(
+        async (r) => Schema.decodeUnknownSync(Answered)(await r.json()).results,
+      );
+    // Page A builds a belt. Page B, not yet told of it, builds a mill there and presses Undo at once.
+    expect(await commands({ id: "a-1", do: "build", kind: "belt", x: 21, y: 15, dir: 0 })).toEqual([
+      { id: "a-1", notes: [] },
+    ]);
+    expect(
+      await commands(
+        { id: "b-1", do: "build", kind: "mill", x: 21, y: 15, dir: 0 },
+        { id: "b-2", do: "undo", entry: "b-1" },
+      ),
+    ).toEqual([
+      { id: "b-1", refused: "cannot_build" },
+      { id: "b-2", refused: "cannot_undo" },
+    ]);
+    const yard = await yardShown();
+    expect([yard.kind[21 + 15 * yard.land.w], yard.history.map((e) => e.id)]).toEqual([BELT, ["a-1"]]);
+  });
+
   it("is refused whole when another game has spent the Coins it would take back since: the yard and the ledger as they were", async () => {
     await works(millTaken);
     const gave = Number((await entries(alice)).at(-1)?.amount);
@@ -1494,7 +1518,7 @@ describe("a batch's answer", () => {
       commands: [{ id: "w-1", do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick }],
     });
     // The page's copy, with the same command done to it at the same tick.
-    const same = readCommand({ do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick });
+    const same = readCommand({ id: "w-1", do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick });
     if (!same) throw new Error("not a command");
     expect("refused" in playWorks(copy, same)).toBe(false);
     const { state } = Schema.decodeUnknownSync(Answered)(await built.json());
@@ -1645,7 +1669,8 @@ function painting(text: string) {
     tick: clockOf(w, clock.now),
   };
   const twin = FACTORY.advance(yardIn(text), ctxAt(clock.now));
-  const read = FACTORY.command(paint);
+  // Under the id each test sends it with: what Undo would undo is named by it.
+  const read = FACTORY.command({ id: "p-1", ...paint });
   if (!read) throw new Error("not a command");
   FACTORY.apply(twin, read, ctxAt(clock.now));
   return { paint, after: FACTORY.encode(twin) };

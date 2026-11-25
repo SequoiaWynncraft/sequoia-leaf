@@ -50,6 +50,7 @@ import {
   markEnd,
   markOver,
   markStart,
+  paintAt,
   pickFrom,
   place,
   press,
@@ -81,6 +82,8 @@ const holds = (i: number): readonly (readonly [number, number])[] => {
   const p = printOf(tileRef(i));
   return p?.card === "standing" ? p.holding : [];
 };
+/** The colour of the line through a tile of the page's copy. */
+const tint = (x: number, z: number): number => S.world.tint[x + z * S.world.land.w] ?? 0;
 /** The commands Leaf was sent, by what each did. */
 const sent = (leaf: { commands: unknown[] }): unknown[] =>
   leaf.commands.map((c) => (typeof c === "object" && c !== null && "do" in c ? c.do : null));
@@ -468,6 +471,29 @@ describe("Undo, done by the rules", () => {
       undefined,
       "belt",
       undefined,
+    ]);
+  });
+
+  test("a stroke whose entry is no longer the newest once the page takes Leaf's yard mid-drag begins an entry of its own with its next line", async () => {
+    const y = yardAt(4);
+    for (const z of [12, 14]) for (const x of [16, 17, 18]) build(y, BELT, x, z, 0, Infinity);
+    const fake = await opened(y, 100);
+    setTool("paint");
+    expect(paintAt(16, 12, false, 1)).toBe(true);
+    const stroke = S.world.history.at(-1)?.id ?? "";
+    await until(() => fake.leaf.posts >= 1);
+    // Another page of the member's does something, and this page takes Leaf's yard mid-drag.
+    fake.elsewhere({ do: "turn", x: 18, y: 14, dir: 1, id: "elsewhere-1" });
+    await again();
+    expect(S.world.history.map((e) => e.id)).toEqual([stroke, "elsewhere-1"]);
+    expect(paintAt(16, 14, true, 1)).toBe(true);
+    expect(S.world.history.length).toBe(3);
+    // One Undo undoes the line painted since: the other page's turn and the stroke's first line stand.
+    expect(undo()).toBe(true);
+    expect([tint(16, 12) > 0, tint(16, 14), S.world.history.map((e) => e.id)]).toEqual([
+      true,
+      0,
+      [stroke, "elsewhere-1"],
     ]);
   });
 

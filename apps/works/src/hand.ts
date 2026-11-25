@@ -53,7 +53,7 @@ export type Hand =
   | {
       readonly is: "paint";
       readonly aim: Aim | null;
-      readonly stroke: { readonly pointer: number; readonly id: number | null } | null;
+      readonly stroke: { readonly pointer: number; readonly id: string | null } | null;
     }
   | { readonly is: "select"; readonly stage: Stage };
 
@@ -74,7 +74,7 @@ export type HandEvent =
   /** A run or a belt was laid, or failed to be: the belt stays in hand, aimed at nothing. */
   | { readonly do: "laid" }
   /** A stroke of the brush begun by a press (`pointer`), or gone on, with the entry it adds to; or ended. */
-  | { readonly do: "stroke"; readonly pointer: number; readonly id: number | null }
+  | { readonly do: "stroke"; readonly pointer: number; readonly id: string | null }
   | { readonly do: "stroked" }
   /** Select: a first corner (a mouse's drag, `pointer`, or a finger's first tap), the area so far, and the area marked. */
   | { readonly do: "corner"; readonly corner: Tile; readonly pointer: number | null }

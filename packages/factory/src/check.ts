@@ -27,21 +27,37 @@ import { type Counts, holderOf, tunnelOf, type Yard } from "./yard.ts";
 const f64 = new Float64Array(1);
 const u32 = new Uint32Array(f64.buffer);
 
-/** The piece on a tile as two numbers: its kind, way, place among those to hand, what it carries and its grade; and its settings. */
-function pieceWords(y: Yard, i: number): [number, number] {
-  const at = (a: ArrayLike<number>): number => a[i] ?? 0;
-  const [kind, dir, free, item, prog, via, grade] = [y.kind, y.dir, y.free, y.item, y.prog, y.via, y.grade].map(at);
-  const [tint, turn, span, set] = [y.tint, y.turn, y.span, y.set].map(at);
-  return [
-    (kind ?? 0) |
-      ((dir ?? 0) << 4) |
-      ((free ?? 0) << 6) |
-      ((item ?? 0) << 8) |
-      ((prog ?? 0) << 16) |
-      ((via ?? 0) << 24) |
-      ((grade ?? 0) << 28),
-    (tint ?? 0) | ((turn ?? 0) << 4) | (waysOn(y, i) << 8) | (((span ?? 0) + 8) << 16) | ((set ?? 0) << 24),
-  ];
+/** The piece on a tile as a number: its kind, way, place among those to hand, what it carries and its grade. */
+const pieceWord = (y: Yard, i: number): number =>
+  (y.kind[i] ?? 0) |
+  ((y.dir[i] ?? 0) << 4) |
+  ((y.free[i] ?? 0) << 6) |
+  ((y.item[i] ?? 0) << 8) |
+  ((y.prog[i] ?? 0) << 16) |
+  ((y.via[i] ?? 0) << 24) |
+  ((y.grade[i] ?? 0) << 28);
+/** The settings of the piece on a tile as a number: its line's colour, its next way, its ways, its span and what it is set to. */
+const settingsWord = (y: Yard, i: number): number =>
+  (y.tint[i] ?? 0) |
+  ((y.turn[i] ?? 0) << 4) |
+  (waysOn(y, i) << 8) |
+  (((y.span[i] ?? 0) + 8) << 16) |
+  ((y.set[i] ?? 0) << 24);
+
+/**
+ * Mixes in the yard's kept bytes: each of its blueprints (or none), then what Undo would undo, how
+ * many entries and each one's bytes (its id among them); a byte at a time.
+ */
+function mixKept(y: Yard, mix: (v: number) => void): void {
+  for (const b of y.blueprints) {
+    mix(b === null ? -1 : b.length);
+    for (let k = 0; k < (b?.length ?? 0); k++) mix(b?.[k] ?? 0);
+  }
+  mix(y.history.length);
+  for (const { bytes } of y.history) {
+    mix(bytes.length);
+    for (let k = 0; k < bytes.length; k++) mix(bytes[k] ?? 0);
+  }
 }
 
 /** The yard in 32 bits. */
@@ -75,7 +91,6 @@ export function check(y: Yard): number {
   mix(y.charge);
   num(y.till);
   num(y.bank);
-  num(y.entries);
   mix(y.told);
   for (const g of y.done) mix(g);
   mix(-1);
@@ -98,8 +113,7 @@ export function check(y: Yard): number {
   tally(y.seen.depot);
   for (const p of y.plots) mix(p + 32);
   bytes(y.spare);
-  // The blueprints, always as many, and then each entry of what Undo would undo.
-  for (const b of [...y.blueprints, ...y.history.map((e) => e.bytes)]) bytes(b);
+  mixKept(y, mix);
   tally(y.depot);
   for (const o of y.board) {
     if (!counting(o, y.tick)) continue;
@@ -117,7 +131,8 @@ export function check(y: Yard): number {
     const k = kind[i] ?? NONE;
     if (k === NONE) continue;
     mix(i);
-    for (const word of pieceWords(y, i)) mix(word);
+    mix(pieceWord(y, i));
+    mix(settingsWord(y, i));
     const t = tunnelOf(y, i);
     if (t >= 0) {
       for (let s = t * SPAN_MOST; s < t * SPAN_MOST + SPAN_MOST; s++)

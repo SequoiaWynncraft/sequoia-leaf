@@ -55,7 +55,7 @@ describe("what the page writes for an act", () => {
     { do: "turn", dir: 3, x: 47, y: 0 },
     { do: "paint", tint: 6, x: 2, y: 2 },
     { do: "paint", tint: 0, x: 2, y: 2 },
-    { do: "paint", tint: 3, x: 2, y: 2, onto: 4_000_000_000 },
+    { do: "paint", tint: 3, x: 2, y: 2, onto: "0h5c3g4e0o0y-1" },
     { do: "recipe", item: F.item("gear"), x: 4, y: 5 },
     { do: "recipe", item: null, x: 4, y: 5 },
     { do: "sort", item: F.item("pot"), x: 4, y: 5 },
@@ -78,14 +78,25 @@ describe("what the page writes for an act", () => {
     { do: "swap", order: 12 },
     { do: "handOver", order: 3 },
     { do: "collect" },
-    { do: "undo", entry: 0 },
-    { do: "undo", entry: 4_294_967_295 },
+    { do: "undo", entry: "" },
+    { do: "undo", entry: "0h5c3g4e0o0y-2" },
   ];
 
   test("reads back off the wire as the same act, for every kind of act", () => {
     const kinds = new Set<string>(acts.map((a) => a.do));
     expect([...Object.keys(F.REFUSED), "collect"].filter((k) => !kinds.has(k))).toEqual([]);
     for (const a of acts) expect(readBack(a)).toEqual({ ...a, tick: 7 });
+    // With the id the page sends it under, which names what Undo would undo; an id Leaf would not take is no command.
+    const named = F.writeCommand({ do: "turn", dir: 1, x: 2, y: 3, tick: 7, id: "0h5c3g4e0o0y-3" });
+    expect(F.readCommand(JSON.parse(JSON.stringify(named)))).toEqual({
+      do: "turn",
+      dir: 1,
+      x: 2,
+      y: 3,
+      tick: 7,
+      id: "0h5c3g4e0o0y-3",
+    });
+    for (const id of ["x".repeat(65), "two words", 7]) expect(F.readCommand({ ...named, id })).toBeNull();
   });
 
   test("for a run of belt is a leg's kind, where, which way, how far under and its grade, and nothing else", () => {

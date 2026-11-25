@@ -15,7 +15,11 @@ import { goalNamed, HOOKS_MOST } from "./tables.ts";
 import type { News, Standing, Yard } from "./yard.ts";
 
 /** A command as it goes on the wire, with the tick the page's copy stood at. */
-export const writeCommand = (c: Command): Wired & { readonly tick: number } => ({ ...writeAct(c), tick: c.tick });
+export const writeCommand = (c: Command): Wired & { readonly tick: number } => ({
+  ...writeAct(c),
+  tick: c.tick,
+  ...(c.id === undefined ? {} : { id: c.id }),
+});
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const whole = (v: unknown, most: number): v is number =>

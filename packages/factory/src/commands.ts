@@ -39,7 +39,7 @@ import {
   TILES,
   whole,
 } from "./fields.ts";
-import { after, before, ID_MOST, undo } from "./history.ts";
+import { after, before, isId, undo } from "./history.ts";
 import { paint } from "./lines.ts";
 import {
   claim,
@@ -99,8 +99,8 @@ interface Carries {
   saveBlueprint: { readonly slot: number; readonly tiles: readonly number[] };
   deleteBlueprint: { readonly slot: number };
   turn: At & { readonly dir: Dir };
-  /** `onto`: the entry of the stroke this adds to, its newest (`history.ts`). */
-  paint: At & { readonly tint: number; readonly onto?: number };
+  /** `onto`: the stroke this adds to, by its first command's id: the newest entry (`history.ts`). */
+  paint: At & { readonly tint: number; readonly onto?: string };
   recipe: At & { readonly item: Item | null };
   sort: At & { readonly item: Item | null };
   side: At & { readonly right: boolean };
@@ -120,10 +120,10 @@ interface Carries {
   // Nothing: it pays the till in.
   collect: object;
   /**
-   * `entry`: the id of the newest entry, as the page shows it. On the wire `id` is each command's own
-   * in a batch, so the entry has a name of its own.
+   * `entry`: the newest entry, as the page shows it, by the id of the command that made it. On the
+   * wire `id` is each command's own, so the entry has a name of its own.
    */
-  undo: { readonly entry: number };
+  undo: { readonly entry: string };
 }
 type Name = keyof Carries;
 
@@ -342,7 +342,7 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
     refused: "nothing_to_paint",
     lock: needs({ use: "paint" }),
     read: (v, f) =>
-      f.spot && whole(v.tint, TINTS) && (v.onto === undefined || whole(v.onto, ID_MOST))
+      f.spot && whole(v.tint, TINTS) && (v.onto === undefined || isId(v.onto))
         ? { do: "paint", tint: v.tint, ...(v.onto === undefined ? {} : { onto: v.onto }), ...f.spot }
         : null,
     write: (a) => ({ tint: a.tint, ...spot(a), ...(a.onto === undefined ? {} : { onto: a.onto }) }),
@@ -490,7 +490,7 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
   },
   undo: {
     refused: "cannot_undo",
-    read: (v) => (whole(v.entry, ID_MOST) ? { do: "undo", entry: v.entry } : null),
+    read: (v) => (isId(v.entry) ? { do: "undo", entry: v.entry } : null),
     write: (a) => ({ entry: a.entry }),
     act: (y, a, coins, no) => {
       const did = undo(y, a.entry, coins);
@@ -529,13 +529,14 @@ function actOne<D extends Name>(y: Yard, a: ActOf<D>, coins: number): Did {
 }
 
 /**
- * Does a command to a yard already at its tick, with `coins` to spend. Nothing is changed unless it
- * is done; done, what Undo would need to undo it is kept, or the history forgotten (`history.ts`).
+ * Does a command (its id `id`) to a yard already at its tick, with `coins` to spend. Nothing is changed
+ * unless it is done; done, what Undo would need to undo it is kept under its id, or the history
+ * forgotten (`history.ts`).
  */
-export function act(y: Yard, a: Act, coins: number): Did {
+export function act(y: Yard, a: Act, coins: number, id = ""): Did {
   const was = before(y, a);
   const did = actOne(y, a, coins);
-  if (!("refused" in did)) after(y, a, was, did.coins);
+  if (!("refused" in did)) after(y, a, was, did.coins, id);
   return did;
 }
 
