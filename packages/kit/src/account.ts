@@ -38,15 +38,17 @@ export function accountRows(me: Member, signIn: string): AccountRow[] {
  * Signs the player out: Leaf ends its own session, and then the whole window goes to where the
  * player is signed out. Signed in on the guild's website, that is its sign-out, which comes back to
  * the town; with Discord alone, Leaf's session was all there was, and the page is loaded again (in
- * the town's frame, the town is). Says whether it went: with Discord alone, not unless Leaf answered.
+ * the town's frame, the town is). Says whether it went: not unless Leaf answered, either way.
  */
 export async function signOut(me: Member, signIn: string): Promise<boolean> {
   const ended = await ask("/v1/game/sign-out", { method: "POST" });
+  // A Leaf session left behind would sign them in again once the website's is gone, so nothing
+  // goes anywhere unless Leaf answered that it ended.
+  if (ended.status !== 204) return false;
   if (me.signedInWith === "sequoia") {
     outside.away(`${new URL(signIn).origin}/auth/web/logout?return_to=${encodeURIComponent(townAddress())}`);
     return true;
   }
-  if (ended.status !== 204) return false;
   if (outside.top()) outside.reload();
   else outside.away(townAddress());
   return true;

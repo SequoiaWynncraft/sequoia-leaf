@@ -83,4 +83,10 @@ describe("signing out", () => {
     ]);
     expect(world.reloaded.count).toBe(0);
   });
+
+  test("on the guild's website and no answer from Leaf: still signed in, so the website is not left either", async () => {
+    world = standin({ "POST /v1/game/sign-out": "offline" });
+    expect(await signOut(linked(), SIGN_IN)).toBe(false);
+    expect([world.reloaded.count, world.went]).toEqual([0, []]);
+  });
 });
