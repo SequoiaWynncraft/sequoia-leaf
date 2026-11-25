@@ -34,7 +34,7 @@ import {
 } from "@sequoia-leaf/factory";
 
 import { act, coinsAre, ctx, type FakeLeaf, isRecord, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
-import { gradeInHand, S } from "./state.ts";
+import { gradeInHand, S, toolHooks } from "./state.ts";
 import {
   aimAt,
   clearMark,
@@ -52,7 +52,6 @@ import {
   setGrade,
   setTool,
   stepGrade,
-  toolHooks,
   undo,
   upgradeCost,
   upgradeMark,

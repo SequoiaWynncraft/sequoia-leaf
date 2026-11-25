@@ -492,14 +492,19 @@ export function piecesOf(bytes: Uint8Array): Piece[] {
 export function saveBlueprint(y: Yard, slot: number, tiles: readonly number[]): string | null {
   const pieces = placed(piecesAt(y, tiles), 0, 0, 0);
   const why = blueprintRefusal(y.open, slot, pieces);
-  if (why === null) y.blueprints[slot] = packPieces(pieces);
+  if (why === null) y.blueprints[slot] = { pieces: packPieces(pieces), whole: false };
   return why;
 }
 
-/** The pieces of the blueprint in a place, turned `turns` quarter turns right with the corner of its box on (x, y); nothing if there is none. */
+/**
+ * The pieces of the blueprint in a place, turned `turns` quarter turns right with the corner of its
+ * box on (x, y); a plan of the whole yard's on the tiles they were kept on, however it is aimed;
+ * nothing if there is none.
+ */
 export function blueprintAt(y: Yard, slot: number, turns: number, x: number, z: number): Piece[] | null {
   const print = y.blueprints[slot];
-  return print ? placed(piecesOf(print), turns, x, z) : null;
+  if (!print) return null;
+  return print.whole ? piecesOf(print.pieces) : placed(piecesOf(print.pieces), turns, x, z);
 }
 
 /** Throws away the blueprint in a place. Says whether there was one. */

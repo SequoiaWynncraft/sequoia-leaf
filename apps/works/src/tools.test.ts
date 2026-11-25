@@ -38,7 +38,7 @@ import { deck } from "@sequoia-leaf/kit/card.ts";
 
 import { act, clear, ctx, kindAt, kindOn, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { asIf, layout } from "./layout.ts";
-import { DRAWN, draws, S } from "./state.ts";
+import { DRAWN, draws, S, toolHooks } from "./state.ts";
 import {
   aimAt,
   cancel,
@@ -60,7 +60,6 @@ import {
   setTool,
   takeAway,
   tapBelt,
-  toolHooks,
   undo,
   usable,
 } from "./tools.ts";

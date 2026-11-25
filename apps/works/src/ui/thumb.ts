@@ -7,6 +7,7 @@ import {
   DX,
   DY,
   GATHERER,
+  type Land,
   MILL,
   type Piece,
   PYLON,
@@ -31,12 +32,19 @@ const DOT = new Map<number, string>([
   [BOILER, WATER[3]],
 ]);
 
-/** A blueprint's layout as a small picture on dark, a dot to a tile: belts pale, gatherers green, machines gold, power blue. */
-export function thumb(pieces: readonly Piece[]): HTMLCanvasElement {
-  const box = boxOf(pieces);
+/**
+ * A blueprint's layout as a small picture on dark, a dot to a tile: belts pale, gatherers green,
+ * machines gold, power blue. A plan of the whole yard (`land`) is the whole land, the depot on it.
+ */
+export function thumb(pieces: readonly Piece[], land: Land | null = null): HTMLCanvasElement {
+  const box = land ? { x: 0, y: 0, w: land.w, h: land.h } : boxOf(pieces);
   const { c, g } = makeCanvas(box.w + 2, box.h + 2);
   g.fillStyle = INK;
   g.fillRect(0, 0, c.width, c.height);
+  if (land) {
+    g.fillStyle = GOLD[2];
+    g.fillRect(land.depot[0], land.depot[1], 3, 3);
+  }
   for (const p of pieces) {
     g.fillStyle = DOT.get(p.kind) ?? "#cbb894";
     // Drawn from the box's corner, wherever the pieces were kept from.

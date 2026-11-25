@@ -27,7 +27,8 @@ import {
 import { DEPOT_PIC, KIND_PIC } from "../art/index.ts";
 import { ROWS } from "../art/items.ts";
 import { PAL } from "../art/pal.ts";
-import { PERK_ART, TOOL_ICON } from "./cards.ts";
+import { PERK_ART } from "./cards.ts";
+import { TOOL_ICON } from "./parts.ts";
 import { pictureRef, unlockRef } from "./refs.ts";
 
 /** Whether a thing's rows are a picture: some rows, of one width, with something drawn on them. */

@@ -24,7 +24,7 @@ import {
 
 import { act, coinsAre, ctx, type FakeLeaf, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { buyLand } from "./plots.ts";
-import { S } from "./state.ts";
+import { S, toolHooks } from "./state.ts";
 import {
   aimAt,
   confirm,
@@ -38,7 +38,6 @@ import {
   setTool,
   takeAway,
   tapBelt,
-  toolHooks,
   undo,
 } from "./tools.ts";
 import { differences, doNow } from "./yard.ts";

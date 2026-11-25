@@ -12,7 +12,6 @@
 
 import {
   BELT,
-  boxOf,
   costOf,
   highest,
   isGraded,
@@ -20,7 +19,6 @@ import {
   KIND_INFO,
   locked,
   numeral,
-  piecesOf,
   priceOf,
   SORTER,
   STOP,
@@ -28,28 +26,34 @@ import {
 } from "@sequoia-leaf/factory";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { amount, asking, asksAgain, el, icon, pressedTwice } from "@sequoia-leaf/kit/dom.ts";
-import { coinsText, whole } from "@sequoia-leaf/kit/say.ts";
+import { coinsText } from "@sequoia-leaf/kit/say.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 
 import { PAINTS } from "../art/belts.ts";
 import { type Art, bare } from "../art/index.ts";
 import type { Stage } from "../hand.ts";
 import { turns, WORKS_KEYS, type WorksAction } from "../keymap.ts";
-import { builds, DRAWN, gradeInHand, S, undoes } from "../state.ts";
 import {
   askSave,
+  isWhole,
+  piecesInHand,
+  savingLine,
+  turnsInHand,
+  yardLine,
+  type YardPress,
+  yardPress,
+  yardSaveOffered,
+} from "../plans.ts";
+import { builds, DRAWN, gradeInHand, type Group, S, type Tool, toolHooks, undoes } from "../state.ts";
+import {
   cancel,
   clearMark,
   confirm,
-  dropBlueprint,
   flip,
   hold,
-  piecesInHand,
   rotate,
-  saveMark,
   setGrade,
   setTool,
-  toolHooks,
   undo,
   upgradeCost,
   upgradeMark,
@@ -58,7 +62,7 @@ import {
 import { CATCHING_UP, catchingUp, coins } from "../yard.ts";
 import { cardLearnt, machineRef } from "./card.ts";
 import { $, button, fitted, iconButton, shows, when, type YardIcon, yardIcon } from "./parts.ts";
-import { thumb } from "./thumb.ts";
+import { binButton, type Place, placeButton, placesOf, yardButtons } from "./places.ts";
 
 /** The tools in the order they sit in the dock, which is also the order of their keys (`tool` in `keymap.ts`): every kind this page draws. */
 export const TOOLS: readonly Kind[] = DRAWN;
@@ -174,19 +178,23 @@ function shownIn(row: HTMLElement, b: Element | null): void {
 
 const price = (n: number): string => (n === 0 ? "free" : coinsText(n));
 
+/** What the line says with pieces in hand: why they cannot go there, or what they are and how to set them down. */
+function groupLine(g: Group, f: boolean): { text: string; bad: boolean } {
+  if (S.aim?.why) return { text: S.aim.why, bad: true };
+  if (isWhole(g.as)) return { text: yardLine(g, S.aim), bad: false };
+  const moving = g.as === "move";
+  const what = moving
+    ? "Move"
+    : `${g.as === "copy" ? "Copy" : "Blueprint"}, ${price(S.aim?.cost ?? priceOf(S.world, piecesInHand(g), true))}`;
+  if (f) return { text: S.aim ? `${what}. Tap again, or Build.` : `${what}: tap where it goes.`, bad: false };
+  return { text: `${what}: click to place it.${turns()}`, bad: false };
+}
+
 /** What the line says with Select in hand: of the pieces in hand, of the area marked, or how to mark one. */
 function selectLine(f: boolean): { text: string; bad: boolean } {
   const g = S.group;
-  if (g) {
-    if (S.aim?.why) return { text: S.aim.why, bad: true };
-    const moving = g.as === "move";
-    const what = moving
-      ? "Move"
-      : `${g.as === "copy" ? "Copy" : "Blueprint"}, ${price(S.aim?.cost ?? priceOf(S.world, piecesInHand(g), true))}`;
-    if (f) return { text: S.aim ? `${what}. Tap again, or Build.` : `${what}: tap where it goes.`, bad: false };
-    return { text: `${what}: click to place it.${turns()}`, bad: false };
-  }
-  if (S.saving) return { text: "Save it in which place?", bad: false };
+  if (g) return groupLine(g, f);
+  if (S.saving) return { text: savingLine(), bad: false };
   const m = S.mark;
   if (m) return { text: `${m.pieces.length} piece${m.pieces.length === 1 ? "" : "s"}, ${price(m.cost)}`, bad: false };
   if (S.corner) return { text: "Now tap the opposite corner.", bad: false };
@@ -235,20 +243,6 @@ function handLine(): { text: string; bad: boolean } {
   return { text: `${name}: click to place it.${turns(tool === SORTER)}`, bad: false };
 }
 
-/** A blueprint's place as the line over the dock shows it: empty, or what is kept there and what standing it costs now. */
-type Place =
-  | { readonly slot: number; readonly kept: false }
-  | {
-      readonly slot: number;
-      readonly kept: true;
-      readonly w: number;
-      readonly h: number;
-      readonly cost: number;
-      readonly asking: boolean;
-      /** The kept bytes, summed, so that a blueprint kept again over another is drawn again. */
-      readonly sum: number;
-    };
-
 /** Everything the line over the dock shows, worked out from what is in hand, the yard and the purse: it is drawn again exactly when this differs. */
 interface HandPrint {
   readonly line: { readonly text: string; readonly bad: boolean };
@@ -260,9 +254,12 @@ interface HandPrint {
   readonly gradesNudged: boolean;
   /** The brush's colours, and the one on it. */
   readonly tints: number | null;
-  /** The places for blueprints, while Select has nothing marked or Save is asking; with Save asking, whether a press keeps the marked pieces there. */
+  /** The places for blueprints, while Select has nothing marked or Save is asking; with Save asking, whether a press keeps the marked pieces (or the whole yard) there. */
   readonly places: readonly Place[];
   readonly saving: boolean;
+  /** Save yard, with nothing marked once the yard may keep plans of the whole yard; Place, with one in hand. */
+  readonly saveYard: boolean;
+  readonly place: YardPress | null;
   /** Move, Copy, Remove and Save, for an area marked. */
   readonly acting: boolean;
   readonly save: boolean;
@@ -320,12 +317,9 @@ function upgradeButton(u: Upgrade): HTMLElement {
   return b;
 }
 
-/** A quick sum of a blueprint's bytes. */
-function sumOf(bytes: Uint8Array): number {
-  let h = 0x811c9dc5;
-  for (const v of bytes) h = Math.imul(h ^ v, 0x01000193);
-  return h >>> 0;
-}
+/** Whether a finger's gold button shows: something aimed, or a run shown, with a tool that builds or takes away; not for a plan of the whole yard, which has Place. */
+const fingerGoes = (f: boolean, tool: Tool): boolean =>
+  f && tool !== null && tool !== "paint" && (S.aim !== null || S.run !== null) && !isWhole(S.group?.as);
 
 export function handPrint(): HandPrint {
   const h = S.hand;
@@ -333,25 +327,6 @@ export function handPrint(): HandPrint {
   const f = S.finger;
   const stage = h.is === "select" ? h.stage : null;
   const acting = stage?.is === "marked";
-  const places: Place[] =
-    stage !== null && (stage.is === "empty" || stage.is === "saving")
-      ? Array.from({ length: S.world.open.blueprints }, (_, slot): Place => {
-          const kept = S.world.blueprints[slot];
-          if (!kept) return { slot, kept: false };
-          const pieces = piecesOf(kept);
-          const box = boxOf(pieces);
-          const key = `blueprint-${slot}`;
-          return {
-            slot,
-            kept: true,
-            w: box.w,
-            h: box.h,
-            cost: priceOf(S.world, pieces, true),
-            asking: asking(key),
-            sum: sumOf(kept),
-          };
-        })
-      : [];
   const top = builds(tool) && isGraded(tool) ? highest(S.world.open, tool) : 1;
   const grades =
     builds(tool) && top > 1
@@ -362,7 +337,7 @@ export function handPrint(): HandPrint {
         }))
       : [];
   const g = S.group;
-  const aiming = f && tool !== null && tool !== "paint" && (S.aim !== null || S.run !== null);
+  const aiming = fingerGoes(f, tool);
   return {
     line: handLine(),
     building: tool !== null,
@@ -371,12 +346,14 @@ export function handPrint(): HandPrint {
     kind: builds(tool) ? tool : null,
     gradesNudged: S.nudge?.part === "grades",
     tints: tool === "paint" ? S.tint : null,
-    places,
-    saving: stage?.is === "saving",
+    places: placesOf(stage),
+    saving: S.saving,
+    saveYard: yardSaveOffered(stage),
+    place: yardPress(),
     acting,
     save: acting && S.world.open.blueprints > 0,
     upgrade: upgradeOf(stage),
-    turn: builds(tool) || g !== null,
+    turn: builds(tool) || turnsInHand(g),
     flip: tool === SORTER,
     undo: undoes(stage),
     bin: typeof g?.as === "number" ? { slot: g.as, asking: asking(`delete-${g.as}`) } : null,
@@ -388,33 +365,6 @@ export function handPrint(): HandPrint {
         }
       : null,
   };
-}
-
-/**
- * One of the yard's places for a blueprint. A kept one shows its layout, its size in tiles and what
- * it costs to stand now, and is taken in hand by pressing it. While Save is asking, pressing a
- * place keeps the marked pieces there: at once in an empty one, on a second press over a kept one.
- */
-function placeButton(p: Place, saving: boolean): HTMLElement {
-  const { slot } = p;
-  if (!p.kept)
-    return button(saving ? "wood sm" : "wood sm off", ["Empty"], () => {
-      if (S.saving) saveMark(slot);
-    });
-  const key = `blueprint-${slot}`;
-  const kept = S.world.blueprints[slot];
-  const facts = el(
-    "span",
-    "facts",
-    {},
-    el("span", "", { text: `${p.w}x${p.h}` }),
-    el("span", p.cost === 0 ? "" : "k-gold", { text: p.cost === 0 ? "free" : whole(p.cost) }),
-  );
-  const face = p.asking || !kept ? ["Replace?"] : [thumb(piecesOf(kept)), facts];
-  return button(p.asking ? "sm asking" : "wood sm print", face, () => {
-    if (!S.saving) hold(slot);
-    else if (pressedTwice(key, refreshDock)) saveMark(slot);
-  });
 }
 
 /** One of the things done to a marked area, with its key (of `act`) in its tip. */
@@ -504,7 +454,7 @@ function drawHand(p: HandPrint): void {
       action("Remove", "clear", clearMark),
       ...(p.save ? [button("sm", ["Save"], askSave)] : []),
     );
-  const upgrade = p.upgrade ? upgradeButton(p.upgrade) : null;
+  const wide = [...(p.upgrade ? [upgradeButton(p.upgrade)] : []), ...yardButtons(p.saveYard, p.place)];
   // The grades a kind in hand may be built at: the numeral and the price of one, the chosen one lit.
   const kind = p.kind;
   const grades =
@@ -530,18 +480,7 @@ function drawHand(p: HandPrint): void {
           link(b, machineRef(kind, grade), { acts: true });
           return b;
         });
-  kids.push(...turning(p));
-  if (p.bin) {
-    const { slot, asking: again } = p.bin;
-    const drop = (): void => {
-      if (pressedTwice(`delete-${slot}`, refreshDock)) dropBlueprint(slot);
-    };
-    const bin = again
-      ? button("sm asking", ["Delete?"], drop)
-      : iconButton("wood sm", yardIcon("bin"), "Delete this blueprint", drop);
-    tip(bin, "Delete this blueprint");
-    kids.push(bin);
-  }
+  kids.push(...turning(p), ...binButton(p.bin));
   const tints = p.tints === null ? [] : tintButtons(p.tints);
   // What it says, then its buttons (`index.html`): on a short screen those that come and go scroll
   // sideways from their start, and Undo and Cancel stay at the end. Drawn again, the row stays where
@@ -553,7 +492,7 @@ function drawHand(p: HandPrint): void {
     {},
     ...(tints.length > 0 ? [el("div", "tints", {}, ...tints)] : []),
     ...(grades.length > 0 ? [el("div", `grades${p.gradesNudged ? " nudged" : ""}`, {}, ...grades)] : []),
-    ...(upgrade ? [el("div", "acts", {}, upgrade)] : []),
+    ...(wide.length > 0 ? [el("div", "acts", {}, ...wide)] : []),
     ...(kids.length > 0 ? [el("div", p.acting ? "acts tight" : "acts", {}, ...kids)] : []),
   );
   const ends = el("div", "acts end", {}, ...endButtons(p));

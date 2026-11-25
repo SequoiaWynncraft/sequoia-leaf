@@ -44,9 +44,12 @@
  * yard read under another stamp has none, alike on the page and on Leaf. What an entry would put back,
  * and what it would cost, were the rules' and the land's when it was made.
  *
- * At most `UNDO_MOST` entries and `UNDO_BYTES` bytes in all, the oldest let go first. A command
- * whose own entry is over that is still done, and kept, under its id, as one that cannot be undone;
- * a stroke over it goes on as one, so that no part of it is undone.
+ * An entry may be as large as `UNDO_ENTRY`: room for the largest thing a player can do at once, a
+ * plan of the whole yard put back over another yard on the guild's land, every tile of it changed
+ * (`test/whole.test.ts` measures it). At most `UNDO_MOST` entries and `UNDO_BYTES` bytes in all,
+ * room for two of those, the oldest let go first. A command whose own entry is over `UNDO_ENTRY`
+ * (on a land larger than the guild's) is still done, and kept, under its id, as one that cannot be
+ * undone; a stroke over it goes on as one, so that no part of it is undone.
  */
 import type { CoinChange } from "@sequoia-leaf/core";
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts" with { type: "macro" };
@@ -99,9 +102,10 @@ export function stampOf(land: Land): string {
   return stamp;
 }
 
-/** The most entries a yard keeps, and the most bytes they may come to in all. */
+/** The most entries a yard keeps; the most bytes one may take, and all of them together. */
 export const UNDO_MOST = 20;
-export const UNDO_BYTES = 4096;
+export const UNDO_ENTRY = 16 * 1024;
+export const UNDO_BYTES = 2 * UNDO_ENTRY;
 
 /** The commands that change a piece or the Coins with no Undo, which forget every entry. */
 const FORGETS: ReadonlySet<string> = new Set(["recipe", "sort", "crate", "buyPlot"]);
@@ -279,7 +283,11 @@ const REACH: { readonly [D in Name]?: (y: Yard, a: ActOf<D>) => readonly number[
   build: (y, a) => [tileOf(y, a), ...tunnelEnd(y, a)],
   lay: (y, a) => [...tilesOf(y, a.legs.map(legPiece)), ...(a.turn ? [tileOf(y, a.turn)] : [])],
   stand: (y, a) => tilesOf(y, a.pieces),
-  placeBlueprint: (y, a) => tilesOf(y, blueprintAt(y, a.slot, a.turns, a.x, a.y) ?? []),
+  // A plan of the whole yard may change every tile.
+  placeBlueprint: (y, a) =>
+    y.blueprints[a.slot]?.whole
+      ? Array.from({ length: y.kind.length }, (_, i) => i)
+      : tilesOf(y, blueprintAt(y, a.slot, a.turns, a.x, a.y) ?? []),
   move: (y, a) => [...inArea(y, a), ...tilesOf(y, copyOf(y, a.tiles, a.turns, a.x, a.y) ?? [])],
   copy: (y, a) => tilesOf(y, copyOf(y, a.tiles, a.turns, a.x, a.y) ?? []),
   remove: one,
@@ -425,7 +433,7 @@ export function after(y: Yard, a: Act, b: Before | null, changes: readonly CoinC
   if (u.tiles.length === 0 && u.coins === 0) return;
   const bytes = written(y, u);
   const kept = stroke ? y.history.slice(0, -1) : y.history;
-  y.history = bytes.length > UNDO_BYTES ? [overCap(u.id, u.flags)] : capped([...kept, entry(bytes)]);
+  y.history = bytes.length > UNDO_ENTRY ? [overCap(u.id, u.flags)] : capped([...kept, entry(bytes)]);
 }
 
 // ---------- reading ----------
@@ -540,7 +548,11 @@ function standBack(y: Yard, s: Setting): void {
  */
 function putBack(y: Yard, u: Undoing): void {
   const was = new Map(u.was.map((s, k) => [s.tile, { s, mask: u.masks[k] ?? 0 }]));
-  const stays = new Set(u.tiles.filter((i) => was.get(i)?.s.kind === y.kind[i]));
+  // The piece that stood there still stands: of its kind, a tunnel's mouth that far under, and one of
+  // the pieces to hand as it was. A plan of the whole yard put back may stand another in its place.
+  const still = (i: number, s: Setting | undefined): boolean =>
+    s !== undefined && s.kind === y.kind[i] && s.span === y.span[i] && s.free === (y.free[i] === 1);
+  const stays = new Set(u.tiles.filter((i) => still(i, was.get(i)?.s)));
   for (const i of u.tiles) if (!stays.has(i) && y.kind[i] !== NONE) takeAway(y, i);
   for (const { s, mask } of was.values()) {
     if (stays.has(s.tile)) SETTINGS.forEach((part, n) => mask & (1 << n) && part.to(y, s.tile, part.of(s)));

@@ -104,6 +104,10 @@ export const TOOL_INFO: Readonly<Record<Tool, Said>> = {
     name: "Upgrading an area",
     says: "Select raises every piece in a marked area to the highest grade the yard may build.",
   },
+  whole: {
+    name: "A plan of the whole yard",
+    says: "Select can save the whole yard as a blueprint, of every piece in it, and put it back where it was.",
+  },
 };
 
 /** Every `Unlocks` there is: what a new yard has, and what each goal gives. */

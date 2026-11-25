@@ -9,7 +9,8 @@ import type { ItemName, Wants } from "./items.ts";
 import type { KindName } from "./machines.ts";
 import type { PlotName } from "./plots.ts";
 
-export const TOOLS = ["paint", "select", "upgrade"] as const;
+/** `whole`: a blueprint of the whole yard, kept and put back with Select (`whole.ts`). */
+export const TOOLS = ["paint", "select", "upgrade", "whole"] as const;
 /** How many nodes may wait in line after the one in hand. */
 export const QUEUE = 3;
 export type Tool = (typeof TOOLS)[number];

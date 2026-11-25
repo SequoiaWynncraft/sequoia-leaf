@@ -1,6 +1,6 @@
 /** Small pieces the yard's interface is put together from: its own icons, and a few helpers over the kit's. */
 
-import { ALL_ITEMS, type Counts, type Item, ITEM_INFO, RECIPE } from "@sequoia-leaf/factory";
+import { ALL_ITEMS, type Counts, type Item, ITEM_INFO, RECIPE, type Tool } from "@sequoia-leaf/factory";
 import { add, el, shown, when } from "@sequoia-leaf/kit/dom.ts";
 import { INK } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
@@ -283,6 +283,14 @@ const ICONS = {
 } as const;
 
 export type YardIcon = keyof typeof ICONS;
+
+/** Each tool's picture: the one it has in the dock; a plan of the whole yard, a blueprint's. */
+export const TOOL_ICON: Readonly<Record<Tool, YardIcon>> = {
+  paint: "brush",
+  select: "select",
+  upgrade: "upgrade",
+  whole: "print",
+};
 
 const iconPics = new Map<YardIcon, HTMLCanvasElement>();
 

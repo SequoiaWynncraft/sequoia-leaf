@@ -40,8 +40,8 @@ import {
   useFakeLeaf,
 } from "../test/fake-leaf.ts";
 import { yardSfx } from "./sound.ts";
-import { S } from "./state.ts";
-import { cancel, place, setTool, toolHooks, undo } from "./tools.ts";
+import { S, toolHooks } from "./state.ts";
+import { cancel, place, setTool, undo } from "./tools.ts";
 import { letters } from "./ui/letter.ts";
 import {
   again,

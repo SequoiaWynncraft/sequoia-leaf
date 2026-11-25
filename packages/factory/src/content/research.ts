@@ -201,4 +201,14 @@ export const RESEARCH: readonly ResearchInfo[] = [
     needs: ["nightshift2", "roadridge"],
     unlocks: { away: 24 },
   },
+  // The most the game asks for any research: about 15 hours of a grade III line of each folio.
+  {
+    id: "wholeyard",
+    tier: 4,
+    name: "A plan of the whole yard",
+    what: "Select can save the whole yard as a blueprint, and put it back where it was.",
+    cost: { timber: 15000, brass: 15000 },
+    needs: ["shelves"],
+    unlocks: { tools: ["whole"] },
+  },
 ];

@@ -23,12 +23,16 @@ export interface Tile {
   readonly y: number;
 }
 
-/** Select's stages: nothing marked, an area being marked (from its first corner), an area marked, Save asking where, or pieces held. */
+/**
+ * Select's stages: nothing marked, an area being marked (from its first corner), an area marked, Save
+ * asking where to keep it, Save yard asking where to keep the whole yard, or pieces held.
+ */
 export type Stage =
   | { readonly is: "empty" }
   | { readonly is: "marking"; readonly corner: Tile; readonly mark: Mark | null; readonly pointer: number | null }
   | { readonly is: "marked"; readonly mark: Mark }
   | { readonly is: "saving"; readonly mark: Mark }
+  | { readonly is: "savingYard" }
   | { readonly is: "holding"; readonly group: Group; readonly mark: Mark | null; readonly aim: Aim | null };
 
 export type Hand =
@@ -80,8 +84,9 @@ export type HandEvent =
   | { readonly do: "corner"; readonly corner: Tile; readonly pointer: number | null }
   | { readonly do: "marking"; readonly mark: Mark | null }
   | { readonly do: "marked"; readonly mark: Mark | null }
-  /** Save pressed: the places are offered, or with it pressed again, put away. */
+  /** Save pressed: the places are offered, or with it pressed again, put away; Save yard, the same for the whole yard. */
   | { readonly do: "save" }
+  | { readonly do: "saveYard" }
   /** Pieces taken in hand (with the area they came from, for a move or a copy), or put down and let go. */
   | { readonly do: "hold"; readonly group: Group; readonly mark: Mark | null }
   | { readonly do: "group"; readonly group: Group; readonly aim: Aim | null }
@@ -118,9 +123,28 @@ function stageBack(s: Stage): Hand {
       return at({ is: "marked", mark: s.mark });
     case "marked":
     case "marking":
+    case "savingYard":
       return at({ is: "empty" });
     case "empty":
       return IDLE;
+  }
+}
+
+/** Escape, or the dock's cancel, with something in hand: a finger's aim is put away before the tool is; a mouse's follows the pointer. */
+function back(h: Hand, finger: boolean): Hand {
+  switch (h.is) {
+    case "idle":
+      return h;
+    case "beltDrag":
+    case "beltTaps":
+      return belt(h);
+    case "paint":
+      return h.stroke ? { ...h, stroke: null } : finger && h.aim ? { ...h, aim: null } : IDLE;
+    case "build":
+    case "remove":
+      return finger && h.aim ? { ...h, aim: null } : IDLE;
+    case "select":
+      return stageBack(h.stage);
   }
 }
 
@@ -133,21 +157,7 @@ export function step(h: Hand, e: HandEvent): Hand {
     case "pick":
       return taken(e.tool);
     case "back":
-      switch (h.is) {
-        case "idle":
-          return h;
-        case "beltDrag":
-        case "beltTaps":
-          return belt(h);
-        case "paint":
-          return h.stroke ? { ...h, stroke: null } : e.finger && h.aim ? { ...h, aim: null } : IDLE;
-        case "build":
-        case "remove":
-          return e.finger && h.aim ? { ...h, aim: null } : IDLE;
-        case "select":
-          return stageBack(h.stage);
-      }
-      return h;
+      return back(h, e.finger);
     case "drop":
       if (h.is === "beltDrag") return belt(h);
       if (h.is === "paint" && h.stroke) return { ...h, stroke: null };
@@ -193,6 +203,9 @@ export function step(h: Hand, e: HandEvent): Hand {
       if (h.stage.is === "marked") return at({ is: "saving", mark: h.stage.mark });
       if (h.stage.is === "saving") return at({ is: "marked", mark: h.stage.mark });
       return h;
+    case "saveYard":
+      if (h.is !== "select" || (h.stage.is !== "empty" && h.stage.is !== "savingYard")) return h;
+      return at(h.stage.is === "empty" ? { is: "savingYard" } : { is: "empty" });
     case "hold":
       return h.is === "select" ? at({ is: "holding", group: e.group, mark: e.mark, aim: null }) : h;
     case "group":
@@ -232,7 +245,7 @@ export function aimOf(h: Hand): Aim | null {
 export const runOf = (h: Hand): Run | null => (h.is === "beltDrag" || h.is === "beltTaps" ? h.run : null);
 
 /** The area marked with Select, or being marked, if one is. */
-export const markOf = (h: Hand): Mark | null => (h.is === "select" && h.stage.is !== "empty" ? h.stage.mark : null);
+export const markOf = (h: Hand): Mark | null => (h.is === "select" && "mark" in h.stage ? h.stage.mark : null);
 
 /** The pieces held with Select, if any are. */
 export const groupOf = (h: Hand): Group | null =>

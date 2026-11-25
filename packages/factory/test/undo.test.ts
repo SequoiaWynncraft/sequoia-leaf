@@ -527,7 +527,7 @@ describe("the history", () => {
     expect(F.encode(y)).toBe(text);
   });
 
-  test("keeps 20 entries at most and 4,096 bytes in all, the oldest let go first", () => {
+  test("keeps 20 entries at most and 32,768 bytes in all, the oldest let go first", () => {
     const y = F.create({ seed: 1, tier: 4 });
     must(y, { do: "build", kind: "splitter", x: 24, y: 12, dir: 0 });
     for (let k = 0; k < 30; k++) must(y, { do: "turn", x: 24, y: 12, dir: (k + 1) % 4 });
@@ -542,12 +542,14 @@ describe("the history", () => {
   });
 
   test("a command whose own entry is over the cap is done, and Undo then says it cannot undo that", () => {
-    // A yard of the guild's size laid with coloured belts, every one taken away at once.
-    const y = F.create({ land: bareLand(48, 36, [], [46, 34]), tier: 4, seed: 1 });
-    for (let z = 0; z < 32; z++)
-      for (let x = 0; x < 48; x++) if (F.build(y, F.BELT, x, z, 0, Infinity).ok) y.tint[F.at(y, x, z)] = 3;
+    // A yard of four times the guild's land laid with coloured belts, every one taken away at once:
+    // on the guild's land itself, every entry fits (`whole.test.ts`).
+    const y = F.create({ land: bareLand(96, 72, [], [94, 70]), tier: 4, seed: 1 });
+    for (let z = 0; z < 68; z++)
+      for (let x = 0; x < 96; x++) if (F.build(y, F.BELT, x, z, 0, Infinity).ok) y.tint[F.at(y, x, z)] = 3;
     const all = F.within(y, 0, 0, y.land.w, y.land.h);
-    must(y, { do: "clear", tiles: all, id: "big-1" });
+    // More tiles than the wire names on the guild's land: the command is given as the rules take it.
+    expect(F.play(y, { do: "clear", tiles: all, tick: y.tick, id: "big-1" })).not.toHaveProperty("refused");
     expect(F.piecesAt(y, all)).toEqual([]);
     expect(y.history.map((e) => e.id)).toEqual(["big-1"]);
     expect(undo(y)).toEqual({ refused: "cannot_undo", why: "Cannot undo: that changed too much at once" });
@@ -602,9 +604,9 @@ describe("an entry's name", () => {
 
 describe("a stroke of the brush", () => {
   test("over the cap stays one entry, under its name, that cannot be undone: no line of it is undone", () => {
-    const y = F.create({ land: bareLand(64, 64, [], [62, 62]), tier: 4, seed: 1 });
-    const rows = Array.from({ length: 30 }, (_, k) => 2 * k);
-    for (const z of rows) for (let x = 0; x < 56; x++) F.build(y, F.BELT, x, z, 0, Infinity);
+    const y = F.create({ land: bareLand(128, 128, [], [126, 126]), tier: 4, seed: 1 });
+    const rows = Array.from({ length: 60 }, (_, k) => 2 * k);
+    for (const z of rows) for (let x = 0; x < 120; x++) F.build(y, F.BELT, x, z, 0, Infinity);
     must(y, { do: "paint", tint: 2, x: 0, y: 0, id: "s-0" });
     rows.slice(1).forEach((z, k) => must(y, { do: "paint", tint: 2, onto: "s-0", x: 0, y: z, id: `s-${k + 1}` }));
     expect(y.history.map((e) => e.id)).toEqual(["s-0"]);

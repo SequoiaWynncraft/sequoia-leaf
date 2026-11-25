@@ -21,6 +21,7 @@ export {
   decode,
   encode,
   type Keep,
+  type KeptBlueprint,
   type KeptOrder,
   keptOrder,
   type KeptPrint,
@@ -29,7 +30,7 @@ export {
   vouch,
 } from "./codec.ts";
 export * from "./game.ts";
-export { UNDO_BYTES, UNDO_MOST } from "./history.ts";
+export { UNDO_BYTES, UNDO_ENTRY, UNDO_MOST } from "./history.ts";
 export * from "./land.ts";
 export { join, lineOf, paint } from "./lines.ts";
 export * from "./orders.ts";
@@ -43,5 +44,6 @@ export * from "./status.ts";
 export * from "./tables.ts";
 export { step } from "./tick.ts";
 export * from "./unlocks.ts";
+export { placeYard, saveYard, type YardPlan, yardPlan, yardRefusal } from "./whole.ts";
 export { ahead, carries, nextOf, power, rewire, sortWay, takes, wayOut } from "./wire.ts";
 export * from "./yard.ts";

@@ -362,7 +362,7 @@ describe("a sorter", () => {
       [2, 2],
     ]);
     const again = F.decode(F.encode(y), y.land);
-    expect(again?.blueprints[0] && F.piecesOf(again.blueprints[0])).toEqual([
+    expect(again?.blueprints[0] && F.piecesOf(again.blueprints[0].pieces)).toEqual([
       { kind: F.SORTER, x: 0, y: 0, dir: 0, span: 0, first: 2 },
     ]);
     must(y, { do: "build", kind: "sorter", x: 4, y: 4, dir: 1 });
@@ -497,7 +497,7 @@ describe("a splitter with a way put first", () => {
       [2, 3],
     ]);
     const again = F.decode(F.encode(y), y.land);
-    expect(again?.blueprints[0] && F.piecesOf(again.blueprints[0])).toEqual([
+    expect(again?.blueprints[0] && F.piecesOf(again.blueprints[0].pieces)).toEqual([
       { kind: F.SPLITTER, x: 0, y: 0, dir: 0, span: 0, first: 2 },
     ]);
     // Kept by a yard that has not unlocked it: the splitter stands, putting no way first.
@@ -645,7 +645,7 @@ describe("a splitter with a way in", () => {
       [2, { shut: 1, first: 1, ins: 4 }],
     ]);
     const again = F.decode(F.encode(y), y.land);
-    expect(again?.blueprints[0] && F.piecesOf(again.blueprints[0])).toEqual([
+    expect(again?.blueprints[0] && F.piecesOf(again.blueprints[0].pieces)).toEqual([
       { kind: F.SPLITTER, x: 0, y: 0, dir: 0, span: 0, shut: 1, first: 1, ins: 4 },
     ]);
     expect(F.keptOf({ shut: 2, ins: 6, first: 2 }, F.SPLITTER)).toEqual({ shut: 2, ins: 4 });

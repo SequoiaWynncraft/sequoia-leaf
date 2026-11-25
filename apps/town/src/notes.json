@@ -1,5 +1,32 @@
 [
   {
+    "id": "works-whole-yard-plan",
+    "at": "2026-11-25T17:45Z",
+    "title": "The Works: save the whole yard and put it back",
+    "lines": [
+      "New tier 4 research, A plan of the whole yard: with Select in hand and nothing marked, Save yard keeps every piece in your yard in one of your blueprint places.",
+      "Put it back to swap between layouts: what already stands as the plan has it stays, with what it holds, and everything else is taken up or built for the difference in Coins."
+    ],
+    "more": [
+      {
+        "head": "How it works",
+        "points": [
+          "The research needs the plan chest's shelves, and costs 15,000 Timber folios and 15,000 Brass folios.",
+          "A plan of the whole yard goes back where you saved it. It doesn't follow the pointer, and it can't be turned.",
+          "While you hold it, the line says how many pieces it builds and takes up. Place shows what it costs or gives back, and asks you to press it again.",
+          "If you're short of Coins, or a piece can't stand where the plan has it, nothing changes, and Place says why.",
+          "Undo takes the whole of it back."
+        ]
+      },
+      {
+        "head": "Changed",
+        "points": [
+          "Undo can now undo anything you do at once in your yard, however large, such as taking away the whole yard."
+        ]
+      }
+    ]
+  },
+  {
     "id": "works-undo",
     "at": "2026-11-25T17:09Z",
     "title": "The Works: Undo is kept with your yard",

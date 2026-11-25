@@ -351,7 +351,7 @@ export function installHandles(p: Page): void {
         group: S.group
           ? { as: S.group.as, turns: S.group.turns, bad: S.group.why.filter((r) => r !== null).length }
           : null,
-        blueprints: w.blueprints.map((b) => (b ? b.length / PIECE_BYTES : 0)),
+        blueprints: w.blueprints.map((b) => (b ? b.pieces.length / PIECE_BYTES : 0)),
         panel: S.panel,
         picked: S.picked,
         power: power(w),

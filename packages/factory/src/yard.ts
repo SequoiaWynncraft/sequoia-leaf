@@ -140,6 +140,16 @@ export interface Entry {
 /** A piece kept in a blueprint, 10 bytes: kind, x, y, way, span, recipe, open, tint, a splitter's ways or a sorter's side (`packWays`), grade. */
 export const PIECE_BYTES = 10;
 
+/**
+ * A blueprint: its pieces, `PIECE_BYTES` a piece, and whether it is a plan of the whole yard
+ * (`whole.ts`), whose pieces are kept on the tiles they stood on and go back there. Any other has its
+ * pieces from the corner of their box, and is set down wherever it is aimed.
+ */
+export interface Print {
+  readonly pieces: Uint8Array;
+  readonly whole: boolean;
+}
+
 export interface Yard {
   readonly land: Land;
   /** What stands on each tile (`NONE` for nothing), and which way it sends things. */
@@ -202,7 +212,7 @@ export interface Yard {
   plots: Plot[];
   /** The pieces to hand that are not standing, by kind. */
   readonly spare: Uint8Array;
-  blueprints: (Uint8Array | null)[];
+  blueprints: (Print | null)[];
   /**
    * The goals done, in the order they were done; the node in hand, or -1; the nodes waiting after it,
    * in the player's order; the research being studied and that waiting after it; and what each goal

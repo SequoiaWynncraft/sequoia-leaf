@@ -357,9 +357,14 @@ export type Lock =
   /** Keep a blueprint in a place, of so many pieces in a box of so many tiles across and down. */
   | { readonly blueprint: number; readonly pieces?: number; readonly w?: number; readonly h?: number };
 
-const TOOL_NAME: Readonly<Record<Tool, string>> = { paint: "Paint", select: "Select", upgrade: "Upgrading an area" };
-/** A tool used with another: an area is raised with Select. */
-const TOOL_WITH: Partial<Record<Tool, Tool>> = { upgrade: "select" };
+const TOOL_NAME: Readonly<Record<Tool, string>> = {
+  paint: "Paint",
+  select: "Select",
+  upgrade: "Upgrading an area",
+  whole: "A plan of the whole yard",
+};
+/** A tool used with another: an area is raised, and the whole yard kept, with Select. */
+const TOOL_WITH: Partial<Record<Tool, Tool>> = { upgrade: "select", whole: "select" };
 const kindWord = (k: Kind): string => (KIND_INFO[k]?.name ?? "").toLowerCase();
 
 /**

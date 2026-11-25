@@ -130,6 +130,9 @@ export interface Group {
   why: (string | null)[];
 }
 
+/** Called whenever the tool in hand, or what it is aimed at, changes, and to say something: the interface listens (`dock.ts`). */
+export const toolHooks: { changed: () => void; said: (text: string) => void } = { changed: () => {}, said: () => {} };
+
 /** The tile whose card is pinned open, as the kit's cards have it: the one source of what the yard marks. -1 for none. */
 function pinnedTile(): number {
   const card = shown();
@@ -168,7 +171,7 @@ export const S: {
   readonly run: Run | null;
   /** A finger's run: the tile it starts from. */
   readonly from: Tile | null;
-  /** With Select in hand: the area marked, the first corner of one being marked, the pieces held, and whether Save is asking where. */
+  /** With Select in hand: the area marked, the first corner of one being marked, the pieces held, and whether Save (or Save yard) is asking where. */
   readonly mark: Mark | null;
   readonly corner: Tile | null;
   readonly group: Group | null;
@@ -223,7 +226,7 @@ export const S: {
     return groupOf(S.hand);
   },
   get saving() {
-    return S.hand.is === "select" && S.hand.stage.is === "saving";
+    return S.hand.is === "select" && (S.hand.stage.is === "saving" || S.hand.stage.is === "savingYard");
   },
   dir: 0,
   right: false,
@@ -281,4 +284,5 @@ export function tileAt(pageX: number, pageY: number): { x: number; y: number } {
 export const mid = (x: number, y: number): Pt => ({ x: x * TILE + TILE / 2, y: y * TILE + TILE / 2 });
 
 /** Whether Undo shows: while the yard has something to undo, kept with it, so after a reload and on another device too; not while saving. */
-export const undoes = (stage: Stage | null): boolean => stage?.is !== "saving" && S.world.history.length > 0;
+export const undoes = (stage: Stage | null): boolean =>
+  stage?.is !== "saving" && stage?.is !== "savingYard" && S.world.history.length > 0;

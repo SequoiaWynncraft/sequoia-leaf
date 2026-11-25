@@ -345,8 +345,8 @@ let own: {
 } | null = null;
 
 /**
- * The yard as it would be with the pieces in hand set down where they are aimed, and for a move
- * gone from where they stand: for drawing them as they would stand, belts joined to each other and
+ * The yard as it would be with the pieces in hand set down where they are aimed, and for a move gone
+ * from where they stand (for a plan of the whole yard, the pieces it takes up gone): for drawing them as they would stand, belts joined to each other and
  * to the lines already there. It shares everything with the real yard but the arrays a drawing
  * changes (what stands where, which way, a tunnel's span, a splitter's ways, a colour, a grade,
  * what a sorter is set to, and the rows, none for a piece in hand), which are its own, kept and
@@ -391,7 +391,8 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
     o.set[i] = NONE;
     o.row[i] = -1;
   };
-  if (grp.as === "move") for (const i of tilesOf(y, piecesAt(y, grp.tiles))) if (i >= 0) empty(i);
+  // A copy's tiles are what it copies, and stay; a blueprint's are none, but a plan of the whole yard's, which it takes up.
+  if (grp.as !== "copy") for (const i of tilesOf(y, piecesAt(y, grp.tiles))) if (i >= 0) empty(i);
   for (const p of grp.at) {
     const [near = -1, far = -1] = tilesOf(y, [p]);
     for (const [i, span] of [

@@ -15,6 +15,7 @@ page (`apps/works`) holds a copy and draws it; the town reads its standing's wor
 | what a yard holds, and its side tables                                        | `src/yard.ts`, then `src/land.ts`                                             |
 | one tick                                                                      | `src/tick.ts`, `src/wire.ts` (who hands to whom), `src/power.ts`              |
 | building, raising, removing, turning, setting pieces, plots                   | `src/build.ts`; many pieces at once: `src/pieces.ts`; colours: `src/lines.ts` |
+| a plan of the whole yard: kept, and put back over the yard                    | `src/whole.ts`                                                                |
 | the node in hand, the line of research, the board                             | `src/orders.ts`, `src/clock.ts`                                               |
 | Leaf's game: commands, Coins, time, the view and the answer                   | `src/game.ts`                                                                 |
 | keeping a yard, and the check                                                 | `src/codec.ts`, `src/bytes.ts`, `src/check.ts`                                |
@@ -197,7 +198,8 @@ a yard back.
 
 - **Tools.** A command of a tool the yard has not unlocked is refused with the code `locked`: `paint`
   (Paint); `move`, `copy`, `clear`, `placeBlueprint` and a `stand` of two pieces or more (Select);
-  `saveBlueprint` (any blueprints); `upgrade` (Upgrading an area, and Select). A single piece
+  `saveBlueprint` (any blueprints); `upgrade` (Upgrading an area, and Select); `saveYard` (A plan of
+  the whole yard, and Select), and a plan of the whole yard put back needs it too. A single piece
   (`build`, or a `stand` of one: a removal undone) and a run of belt (`lay`) never are.
 - **A run of belt** (`lay`) is made of legs (`Leg`, in `route.ts`): a belt or a tunnel, its tile and
   way, and its grade; only a tunnel's leg says how far under (`span`: 0 for the tunnel standing there,
@@ -218,6 +220,17 @@ a yard back.
   none, whatever its size. A tunnel named with its span over a tunnel must be that tunnel, going in
   on its tile that way that far, and is raised or lowered; two pieces of one set on one tile, as a
   kept blueprint might hold, are refused.
+- **A plan of the whole yard** (`whole.ts`, the tier 4 research of that name, the most the game asks
+  for any: about 15 hours of grade III lines of each folio) keeps every piece in the yard
+  (`saveYard`), on the tiles each stood on, whatever their number or the land they cover, in one of
+  the yard's places for blueprints. Set down (`placeBlueprint`, whose corner and turns it does not
+  read), it goes back where it was taken and makes the yard its layout, all or none (`yardPlan`,
+  `placeYard`): a piece that stands as the plan has it stays, with what it holds and is doing; every
+  other is taken up, and every piece of the plan not standing is stood, each priced as the rules
+  price it (one taken up gives back what it cost, and one of the pieces to hand goes back to hand; one
+  stood costs its price, less one to hand while the yard has one). It is refused whole for any piece
+  that cannot stand, with its reason, and for Coins short of the net price, with how many for the
+  whole. Undo takes it back as one entry (`history.ts`).
 
 - **Coins.** The yard keeps no purse: Leaf plays a command (`FACTORY.apply`) with none, and its
   ledger refuses a price the member's Coins do not cover. The page plays the same command on its copy
@@ -440,7 +453,8 @@ never a reason to refuse the yard, and nothing a player has is lost (`vouch`):
   yard (and a way put first only where it lets one, and only an open way), a machine no more than it
   keeps; work only toward what is being made, below what that takes; a Study's work and folio only
   while the research they were for is still first in the line;
-- each blueprint as kept, whatever it holds: the rules say whether it may be set down when it is.
+- each blueprint as kept, whatever it holds: the rules say whether it may be set down when it is. A
+  plan of the whole yard is kept as `{ "whole": ... }` among them, its pieces on their own tiles.
 
 `test/saves/` holds yards as each version kept them (7, 6 and the first design's 3), written once;
 `test/saves.test.ts` holds each to reading, with what it read when it was kept.

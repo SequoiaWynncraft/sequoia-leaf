@@ -17,7 +17,6 @@ import {
   type Act,
   at,
   BELT,
-  blueprintRefusal,
   boxOf,
   DEPOT,
   type Dir,
@@ -38,7 +37,6 @@ import {
   otherMouth,
   type Piece,
   piecesAt,
-  piecesOf,
   placed,
   priceAt,
   priceOf,
@@ -63,6 +61,7 @@ import { PAINTS, TILE } from "./art/belts.ts";
 import { float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { aimOf, groupOf, type HandEvent, markOf, runOf, step, type Tile } from "./hand.ts";
 import { keepsRight, sendsRight } from "./layout.ts";
+import { aimYard, isWhole, piecesInHand, pressYard } from "./plans.ts";
 import { yardSfx } from "./sound.ts";
 import {
   type Aim,
@@ -75,14 +74,12 @@ import {
   type Run,
   S,
   type Tool,
+  toolHooks,
 } from "./state.ts";
 import { runOut, stepWay } from "./ways.ts";
 import { coins, type Did, doNow } from "./yard.ts";
 
 const DUST = "#cbb894";
-
-/** Called whenever the tool in hand, or what it is aimed at, changes: the interface listens. */
-export const toolHooks: { changed: () => void; said: (text: string) => void } = { changed: () => {}, said: () => {} };
 
 /** Whether the rules refused something done (`did`, as `doNow` gave it): if so, it is said why, with its sound. */
 function refused(did: Did): boolean {
@@ -99,15 +96,6 @@ const go = (e: HandEvent): void => {
   S.hand = step(S.hand, e);
 };
 
-/**
- * Does something to the yard (on the page's copy at once, and on Leaf). The rules judge it then,
- * with the purse as it is (`doNow`), whatever was worked out when it was aimed. Gives back the rules'
- * reason it was not done, or null.
- */
-function does(act: Act): string | null {
-  const did = doNow(act);
-  return "refused" in did ? did.why : null;
-}
 /** An aim at a tile: why it cannot be, what it costs, and for a tunnel its far mouth; of the yard and the purse as they are now. */
 const aimed = (x: number, y: number, why: string | null, cost: number, far = -1): Aim => ({
   x,
@@ -744,9 +732,9 @@ export function confirm(): boolean {
   return place(a.x, a.y);
 }
 
-/** The mouse has left the yard: what it aimed at is let go. */
+/** The mouse has left the yard: what it aimed at is let go; but a plan of the whole yard, which is aimed wherever the pointer is. */
 export function unaim(): void {
-  go({ do: "aim", aim: null });
+  if (!isWhole(S.group?.as)) go({ do: "aim", aim: null });
 }
 
 /** Escape: what is in hand steps back one stage (`hand.ts`). */
@@ -842,16 +830,6 @@ export function markEnd(): void {
 }
 
 /**
- * The pieces in hand as they stand now, at no place yet: a blueprint's, or what stands on the tiles
- * taken up (a move or a copy sets down what stands there, as the rules do).
- */
-export function piecesInHand(g: Pick<Group, "as" | "tiles">): Piece[] {
-  if (typeof g.as !== "number") return piecesAt(S.world, g.tiles);
-  const print = S.world.blueprints[g.as];
-  return print ? piecesOf(print) : [];
-}
-
-/**
  * Takes in hand the marked pieces, to move them or to stand a copy of them, or the blueprint kept in
  * a place. Given `only`, it takes the pieces on those tiles alone, with nothing marked: a card's
  * Move, which takes a tunnel's two mouths and not what crosses over between them.
@@ -862,7 +840,8 @@ export function hold(as: Group["as"], only?: readonly number[]): void {
   const tiles = typeof as === "number" ? [] : (only ?? mark?.tiles ?? []);
   if (piecesInHand({ as, tiles }).length === 0) return;
   go({ do: "hold", group: { as, tiles, turns: 0, at: [], why: [] }, mark: typeof as === "number" ? null : mark });
-  if (S.hover) aimAt(S.hover.x, S.hover.y);
+  // A plan of the whole yard is aimed at once: it goes back where it was, wherever the pointer is.
+  if (S.hover || isWhole(as)) aimAt(S.hover?.x ?? 0, S.hover?.y ?? 0);
   yardSfx.pick();
   toolHooks.changed();
 }
@@ -872,6 +851,7 @@ function aimGroup(x: number, y: number): void {
   const w = S.world;
   const g = groupOf(S.hand);
   if (!g) return;
+  if (isWhole(g.as)) return go(aimYard(g));
   const from = piecesInHand(g);
   const box = boxOf(placed(from, g.turns, 0, 0));
   const placedAt = placed(from, g.turns, x - ((box.w - 1) >> 1), y - ((box.h - 1) >> 1));
@@ -894,6 +874,7 @@ function aimGroup(x: number, y: number): void {
  */
 function setDown(): boolean {
   keepAim();
+  if (isWhole(S.group?.as)) return pressYard();
   const w = S.world;
   const h = S.hand;
   if (h.is !== "select" || h.stage.is !== "holding" || !h.stage.aim) return false;
@@ -925,9 +906,18 @@ function setDown(): boolean {
     go({ do: "unhold" });
     go({ do: "marked", mark: { x0: box.x, y0: box.y, x1, y1, tiles, pieces: g.at, cost: h.stage.mark?.cost ?? 0 } });
   } else paid(aim.x, aim.y, aim.cost);
-  // The pieces land in a wave out from the pointer, each ring of it with one sound.
+  landWave(g.at, aim);
+  // A copy stays in hand: under the mouse where it is, and for a finger until it is aimed again.
+  if (groupOf(S.hand) && !S.finger) aimAt(aim.x, aim.y);
+  else go({ do: "aim", aim: null });
+  toolHooks.changed();
+  return true;
+}
+
+/** Pieces set down land in a wave out from where they were aimed, each ring of it with one sound. */
+function landWave(pieces: readonly Piece[], aim: Tile): void {
   const wave: Piece[][] = [];
-  for (const p of g.at) (wave[Math.min(14, Math.round(Math.hypot(p.x - aim.x, p.y - aim.y)))] ??= []).push(p);
+  for (const p of pieces) (wave[Math.min(14, Math.round(Math.hypot(p.x - aim.x, p.y - aim.y)))] ??= []).push(p);
   wave.forEach((these, n) => {
     window.setTimeout(() => {
       these.forEach((p, k) => {
@@ -935,11 +925,6 @@ function setDown(): boolean {
       });
     }, n * 28);
   });
-  // A copy stays in hand: under the mouse where it is, and for a finger until it is aimed again.
-  if (groupOf(S.hand) && !S.finger) aimAt(aim.x, aim.y);
-  else go({ do: "aim", aim: null });
-  toolHooks.changed();
-  return true;
 }
 
 /** Takes away everything marked, at once. */
@@ -990,39 +975,4 @@ export function upgradeMark(all = false): boolean {
   go({ do: "marked", mark: remarked() });
   toolHooks.changed();
   return true;
-}
-
-/** Save was pressed: the places are offered, unless the marked pieces cannot be a blueprint. */
-export function askSave(): void {
-  // Whichever place it goes in, the pieces themselves must be ones a blueprint may hold.
-  const m = markOf(S.hand);
-  const no = m ? blueprintRefusal(S.world.open, 0, m.pieces) : null;
-  if (no !== null) {
-    yardSfx.no();
-    toolHooks.said(`${no}.`);
-    return;
-  }
-  go({ do: "save" });
-  toolHooks.changed();
-}
-
-/** Keeps the marked pieces as the blueprint in a place. They glint as it is taken down. */
-export function saveMark(slot: number): boolean {
-  const h = S.hand;
-  const m = markOf(h);
-  if (!m || does({ do: "saveBlueprint", slot, tiles: m.tiles }) !== null) return false;
-  if (h.is === "select" && h.stage.is === "saving") go({ do: "save" });
-  for (const p of m.pieces.slice(0, 120)) sparkle(p.x * TILE + 8, p.y * TILE + 6, 2, 5);
-  float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, "Blueprint saved", GOLD[2], 1.6);
-  yardSfx.ready();
-  toolHooks.changed();
-  return true;
-}
-
-/** Throws away the blueprint in a place, and lets go of it if it was in hand. */
-export function dropBlueprint(slot: number): void {
-  if ("refused" in doNow({ do: "deleteBlueprint", slot })) return;
-  if (groupOf(S.hand)?.as === slot) go({ do: "unhold" });
-  yardSfx.take();
-  toolHooks.changed();
 }
