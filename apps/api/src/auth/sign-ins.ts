@@ -9,8 +9,16 @@ import { DiscordId, PlayerUuid } from "../wire.ts";
 
 /** How long a Leaf session lasts, in milliseconds. */
 export const SIGN_IN_MS = 30 * DAY_MS;
-/** The cookie a Leaf session is kept in. The website's session is `seq_session`. */
-export const LEAF_SESSION_COOKIE = "leaf_session";
+/**
+ * The cookies Leaf sets: its session, and the nonce of a sign-in on its way. Served over HTTPS they
+ * are `__Host-` cookies, which only Leaf's own host can set, so another `seqwawa.com` site cannot
+ * plant one (the website's session, `seq_session`, is the website's).
+ */
+export const leafCookies = (publicOrigin: string) => {
+  const secure = publicOrigin.startsWith("https:");
+  const prefix = secure ? "__Host-" : "";
+  return { secure, session: `${prefix}leaf_session`, nonce: `${prefix}leaf_signin` };
+};
 
 /** Who a Leaf session is, for a player who signed in with Discord alone. */
 export interface SignedIn {

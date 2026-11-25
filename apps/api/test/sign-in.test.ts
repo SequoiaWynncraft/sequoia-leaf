@@ -59,14 +59,14 @@ async function begin(): Promise<{ location: URL; nonce: string; returnTo: string
   expect(started.status).toBe(302);
   const location = new URL(started.headers.get("location") ?? "");
   const returnTo = location.searchParams.get("return_to") ?? "";
-  const nonce = valueOf(setCookies(started).get("leaf_signin"));
+  const nonce = valueOf(setCookies(started).get("__Host-leaf_signin"));
   return { location, nonce, returnTo };
 }
 
 /** Comes back from Discord with a one-time code, as the backend sends an account with no Minecraft account. */
 async function comeBack(code: string, returnTo: string, nonce: string) {
   const back = new URL(`${returnTo}&leaf_discord=${code}`);
-  return app.request(`${back.pathname}${back.search}`, { headers: { Cookie: `leaf_signin=${nonce}` } });
+  return app.request(`${back.pathname}${back.search}`, { headers: { Cookie: `__Host-leaf_signin=${nonce}` } });
 }
 
 /** Signs Nuss in with Discord alone: their Leaf session's token. */
@@ -74,7 +74,7 @@ async function signInNuss(member: boolean | null = false): Promise<string> {
   const { nonce, returnTo } = await begin();
   backend.proofs["code-1"] = proof(returnTo, member);
   const response = await comeBack("code-1", returnTo, nonce);
-  return valueOf(setCookies(response).get("leaf_session"));
+  return valueOf(setCookies(response).get("__Host-leaf_session"));
 }
 
 const meWith = async (cookie: string) => {
@@ -82,6 +82,13 @@ const meWith = async (cookie: string) => {
   const body: unknown = await response.json();
   return { status: response.status, body };
 };
+
+/** Where a sign-in begun for `to` says it will come back to. */
+async function comesBackTo(to: string): Promise<string | null> {
+  const started = await app.request(`/v1/game/sign-in?to=${encodeURIComponent(to)}`);
+  const returnTo = new URL(started.headers.get("location") ?? "").searchParams.get("return_to") ?? "";
+  return new URL(returnTo).searchParams.get("to");
+}
 
 describe("signing in with Discord", () => {
   it("sends the browser to the guild's sign-in, letting a Discord account with no Minecraft account through", async () => {
@@ -103,7 +110,7 @@ describe("signing in with Discord", () => {
   it("makes a player of a Discord account with no Minecraft account, named by its username, as a guest", async () => {
     const token = await signInNuss();
 
-    const me = await meWith(`leaf_session=${token}`);
+    const me = await meWith(`__Host-leaf_session=${token}`);
 
     expect(me.status).toBe(200);
     expect(me.body).toMatchObject({
@@ -119,14 +126,14 @@ describe("signing in with Discord", () => {
   });
 
   it("signs the same Discord account in as the same player next time", async () => {
-    const first = await meWith(`leaf_session=${await signInNuss()}`);
-    const second = await meWith(`leaf_session=${await signInNuss()}`);
+    const first = await meWith(`__Host-leaf_session=${await signInNuss()}`);
+    const second = await meWith(`__Host-leaf_session=${await signInNuss()}`);
 
     expect(idOf(second.body)).toBe(idOf(first.body));
   });
 
   it("asks a member of the guild's Discord with no account linked to link one", async () => {
-    const me = await meWith(`leaf_session=${await signInNuss(true)}`);
+    const me = await meWith(`__Host-leaf_session=${await signInNuss(true)}`);
 
     expect(me.body).toMatchObject({ ask_link: true, guest: true });
   });
@@ -139,7 +146,7 @@ describe("signing in with Discord", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("/play/town/");
-    expect(setCookies(response).get("leaf_session")).toBeUndefined();
+    expect(setCookies(response).get("__Host-leaf_session")).toBeUndefined();
     expect(await leafs.query((sql) => sql`SELECT count(*) AS n FROM sign_ins`)).toEqual([{ n: 0 }]);
   });
 
@@ -155,16 +162,41 @@ describe("signing in with Discord", () => {
     expect(backend.calls.some((path) => path.startsWith("/internal/leaf/"))).toBe(false);
   });
 
+  it("comes back to the page with its query, and to the town for anywhere but the game's pages", async () => {
+    expect(await comesBackTo("/play/works/?of=someone")).toBe("/play/works/?of=someone");
+    expect(await comesBackTo("//evil.example/play/")).toBe("/play/town/");
+    expect(await comesBackTo("/play/../admin")).toBe("/play/town/");
+  });
+
+  it("signs a Leaf session in as whoever its Discord account is now", async () => {
+    const token = await signInNuss();
+    const other = playerId("00000000-0000-4000-8000-0000000000c1");
+    await leafs.query(
+      (sql) => sql`UPDATE logins SET player_id = ${other} WHERE kind = 'discord' AND external_id = ${NUSS_DISCORD}`,
+    );
+
+    expect(idOf((await meWith(`__Host-leaf_session=${token}`)).body)).toBe(other);
+  });
+
+  it("lets a Leaf session in beside a website session the website has ended", async () => {
+    const token = await signInNuss();
+
+    const me = await meWith(`seq_session=ended-elsewhere; __Host-leaf_session=${token}`);
+
+    expect(me.status).toBe(200);
+    expect(me.body).toMatchObject({ signed_in_with: "discord" });
+  });
+
   it("ends the session on signing out from Leaf's own page", async () => {
     const token = await signInNuss();
 
     const out = await app.request("/v1/game/sign-out", {
       method: "POST",
-      headers: { Cookie: `leaf_session=${token}`, Origin: ORIGIN },
+      headers: { Cookie: `__Host-leaf_session=${token}`, Origin: ORIGIN },
     });
 
     expect(out.status).toBe(204);
-    expect((await meWith(`leaf_session=${token}`)).status).toBe(401);
+    expect((await meWith(`__Host-leaf_session=${token}`)).status).toBe(401);
   });
 });
 
@@ -179,7 +211,7 @@ describe("linking a Wynncraft account later", () => {
 
   it("takes what the Discord player played into the account's player, with the Leaf the guild paid it", async () => {
     const token = await signInNuss(true);
-    const guestId = idOf((await meWith(`leaf_session=${token}`)).body);
+    const guestId = idOf((await meWith(`__Host-leaf_session=${token}`)).body);
     await leafs.query(
       (sql) => sql`
         INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${guestId}, 'works', 4, '{}', ${T0})
@@ -192,7 +224,7 @@ describe("linking a Wynncraft account later", () => {
     );
     sequoiaSession("nuss-sequoia", account, "Nuss187");
 
-    const me = await meWith(`seq_session=nuss-sequoia; leaf_session=${token}`);
+    const me = await meWith(`seq_session=nuss-sequoia; __Host-leaf_session=${token}`);
 
     expect(me.body).toMatchObject({
       player: { id: account, username: "Nuss187" },
@@ -207,12 +239,49 @@ describe("linking a Wynncraft account later", () => {
       { from: guestId, into: account, account },
     ]);
     // Their Discord account now signs in as the account's player, with Leaf's own session too.
-    expect((await meWith(`leaf_session=${token}`)).body).toMatchObject({ player: { id: account } });
+    expect((await meWith(`__Host-leaf_session=${token}`)).body).toMatchObject({ player: { id: account } });
+  });
+
+  it("brings the Discord player's Coins and open visit along, as Coins and visits always move", async () => {
+    const token = await signInNuss();
+    const guestId = idOf((await meWith(`__Host-leaf_session=${token}`)).body);
+    await leafs.query(
+      (sql) => sql`
+        INSERT INTO coin_entries (player_id, amount, reason, game, key, at, earned)
+        VALUES (${guestId}, 300, 'welcome', NULL, ${`welcome:${guestId}`}, ${T0}, 1)
+      `,
+    );
+    for (const player of [guestId, account]) {
+      // oxlint-disable-next-line no-await-in-loop -- one after the other, so the ids follow
+      await leafs.query(
+        (sql) => sql`
+          INSERT INTO sessions (player_id, guest, started_at) VALUES (${player}, 0, ${T0});
+        `,
+      );
+      // oxlint-disable-next-line no-await-in-loop -- one after the other, so the ids follow
+      await leafs.query(
+        (sql) => sql`
+          INSERT INTO visits (session_id, player_id, guest, place, source, entered_at, heard_at, instance)
+          SELECT max(id), ${player}, 0, 'town', 'room', ${T0}, ${T0 + 1000}, 'here' FROM sessions
+        `,
+      );
+    }
+    sequoiaSession("nuss-sequoia", account, "Nuss187");
+
+    const me = await meWith(`seq_session=nuss-sequoia`);
+
+    expect(me.status).toBe(200);
+    expect(me.body).toMatchObject({ coins: 300 });
+    expect(
+      await leafs.query(
+        (sql) => sql`SELECT count(*) AS n FROM visits WHERE player_id = ${account} AND left_at IS NULL`,
+      ),
+    ).toEqual([{ n: 1 }]);
   });
 
   it("keeps the newer of two states of one game, and the other in save history", async () => {
     const token = await signInNuss();
-    const guestId = idOf((await meWith(`leaf_session=${token}`)).body);
+    const guestId = idOf((await meWith(`__Host-leaf_session=${token}`)).body);
     await leafs.query(
       (sql) => sql`
         INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES
@@ -224,8 +293,9 @@ describe("linking a Wynncraft account later", () => {
 
     await meWith(`seq_session=nuss-sequoia`);
 
-    expect(await leafs.query((sql) => sql`SELECT player_id AS id, state FROM play_state`)).toEqual([
-      { id: account, state: '{"newer":true}' },
+    // Past both revisions, so no copy of either is taken for it.
+    expect(await leafs.query((sql) => sql`SELECT player_id AS id, rev, state FROM play_state`)).toEqual([
+      { id: account, rev: 10, state: '{"newer":true}' },
     ]);
     expect(await leafs.query((sql) => sql`SELECT player_id AS id, slot, data FROM save_history`)).toEqual([
       { id: account, slot: "play:works", data: '{"older":true}' },

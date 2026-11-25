@@ -160,13 +160,13 @@ describe("finding out where the game is", () => {
     const gate = shutNotice("signedout");
     expect(words(gate)).toEqual(["Guild Town", "", "Sign in with Discord"]);
     press(gate, "Sign in with Discord");
-    expect(world.went).toEqual(["/v1/game/sign-in?to=%2Fplay%2Ftown%2F"]);
+    expect(world.went).toEqual(["/v1/game/sign-in?to=%2Fplay%2Ftown%2F%3Fx%3D1"]);
   });
 
-  test("the gate comes back to the page it is on, whichever game that is", () => {
+  test("the gate comes back to the page it is on, whichever game that is, with whose it is", () => {
     world = live({ status: 401 }, { href: "https://leaf.example/play/works/?of=someone#top" });
     press(shutNotice("signedout"), "Sign in with Discord");
-    expect(world.went).toEqual(["/v1/game/sign-in?to=%2Fplay%2Fworks%2F"]);
+    expect(world.went).toEqual(["/v1/game/sign-in?to=%2Fplay%2Fworks%2F%3Fof%3Dsomeone"]);
   });
 
   test("401 in the town's frame: signed out, with the way back to town and nowhere else to go", async () => {

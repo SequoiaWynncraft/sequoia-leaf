@@ -10,15 +10,13 @@ import {
 } from "effect/http";
 import { SqlClient } from "effect/sql";
 
-import { LEAF_SESSION_COOKIE, SIGN_IN_MS, SignIns } from "../auth/sign-ins.ts";
+import { leafCookies, SIGN_IN_MS, SignIns } from "../auth/sign-ins.ts";
 import { askBackend, logFailure } from "../backend/failure.ts";
 import { AppConfig } from "../config.ts";
 import { discordPlayer } from "../players/link.ts";
 import type { Logins } from "../players/logins.ts";
 import { DiscordId } from "../wire.ts";
 
-/** The cookie that ties a sign-in's return to the browser that began it. */
-const NONCE_COOKIE = "leaf_signin";
 /** How long a sign-in may take, from leaving for Discord to coming back, in seconds. */
 const NONCE_SECONDS = 600;
 const REDEEM_WITHIN = Duration.seconds(3);
@@ -45,7 +43,13 @@ export function cookieOf(header: string | undefined, name: string): string {
   return "";
 }
 
-const pageOf = (to: string | null): string => (to !== null && PAGE.test(to) && !to.includes("//") ? to : HOME);
+/** The page a sign-in comes back to, with its query (`?of=`, `?camp=`): one of the game's own, or the town. */
+const pageOf = (to: string | null, origin: string): string => {
+  const page = to === null || !to.startsWith("/") ? null : URL.parse(to, origin);
+  return page !== null && page.origin === origin && PAGE.test(page.pathname) && !page.pathname.includes("//")
+    ? `${page.pathname}${page.search}`
+    : HOME;
+};
 
 /**
  * Signing in with Discord, for everyone. `GET /v1/game/sign-in?to=<page>` sends the browser to the
@@ -70,7 +74,7 @@ const back = (to: string, cookies: readonly Cookie[], secure: boolean) =>
             secure,
             maxAge: Duration.seconds(seconds),
           })
-        : HttpServerResponse.expireCookieUnsafe(response, name, { path: "/" }),
+        : HttpServerResponse.expireCookieUnsafe(response, name, { path: "/", secure }),
     HttpServerResponse.redirect(to, { status: 302, headers: { "cache-control": "no-store" } }),
   );
 
@@ -99,29 +103,30 @@ const redeem = Effect.fnUntraced(function* (code: string) {
 /** `GET /v1/game/sign-in`: off to the guild's sign-in, with a nonce for the way back. */
 const begin = Effect.gen(function* () {
   const { gameSignInUrl, publicOrigin } = yield* AppConfig;
+  const cookies = leafCookies(publicOrigin);
   const request = yield* HttpServerRequest.HttpServerRequest;
-  const to = pageOf(new URL(request.url, publicOrigin).searchParams.get("to"));
+  const to = pageOf(new URL(request.url, publicOrigin).searchParams.get("to"), publicOrigin);
   const nonce = Buffer.from(yield* (yield* SecureRandom.SecureRandom).randomBytes(18)).toString("base64url");
   const returnTo = `${publicOrigin}/v1/game/sign-in/back?to=${encodeURIComponent(to)}&n=${nonce}`;
   return back(
     `${gameSignInUrl}${encodeURIComponent(returnTo)}&allow_unlinked=true`,
-    [[NONCE_COOKIE, nonce, NONCE_SECONDS]],
-    publicOrigin.startsWith("https:"),
+    [[cookies.nonce, nonce, NONCE_SECONDS]],
+    cookies.secure,
   );
 });
 
 /** `GET /v1/game/sign-in/back`: back from Discord, with a proof to redeem or none. */
 const cameBack = Effect.gen(function* () {
   const { publicOrigin } = yield* AppConfig;
-  const secure = publicOrigin.startsWith("https:");
+  const { secure, session, nonce: nonceCookie } = leafCookies(publicOrigin);
   const request = yield* HttpServerRequest.HttpServerRequest;
   const query = new URL(request.url, publicOrigin).searchParams;
-  const to = pageOf(query.get("to"));
-  const forgetNonce: Cookie = [NONCE_COOKIE, "", 0];
+  const to = pageOf(query.get("to"), publicOrigin);
+  const forgetNonce: Cookie = [nonceCookie, "", 0];
   const code = query.get("leaf_discord");
   // Signed in to the website (a member with an account linked), or not signed in: back to the page.
   if (code === null) return back(to, [forgetNonce], secure);
-  const nonce = cookieOf(request.headers["cookie"], NONCE_COOKIE);
+  const nonce = cookieOf(request.headers["cookie"], nonceCookie);
   const proof = Option.getOrUndefined(yield* redeem(code));
   const returned = proof === undefined ? null : URL.parse(proof.return_to);
   // The proof must have been asked for by this browser, for this page, from Leaf.
@@ -141,7 +146,7 @@ const cameBack = Effect.gen(function* () {
     { playerId, discord: proof.discord_id, name: proof.username, member: proof.sequoia_member },
     now,
   );
-  return back(to, [forgetNonce, [LEAF_SESSION_COOKIE, token, SIGN_IN_MS / 1000]], secure);
+  return back(to, [forgetNonce, [session, token, SIGN_IN_MS / 1000]], secure);
 });
 
 /** `POST /v1/game/sign-out`, from Leaf's own pages: ends the Leaf session. */
@@ -154,10 +159,12 @@ const signOut = Effect.gen(function* () {
       { status: 403 },
     );
   }
-  const token = cookieOf(request.headers["cookie"], LEAF_SESSION_COOKIE);
+  const { secure, session } = leafCookies(publicOrigin);
+  const token = cookieOf(request.headers["cookie"], session);
   if (token !== "") yield* (yield* SignIns).end(token);
-  return HttpServerResponse.expireCookieUnsafe(HttpServerResponse.empty({ status: 204 }), LEAF_SESSION_COOKIE, {
+  return HttpServerResponse.expireCookieUnsafe(HttpServerResponse.empty({ status: 204 }), session, {
     path: "/",
+    secure,
   });
 });
 

@@ -108,7 +108,9 @@ const backTo = (): string => (outside.top() ? outside.href() : townAddress());
  * use it, with or without a Minecraft account linked.
  */
 export function signInWithDiscord(): void {
-  outside.away(`/v1/game/sign-in?to=${encodeURIComponent(new URL(backTo()).pathname)}`);
+  // With its query: a link to somebody's camp (`?camp=`) or yard (`?of=`) comes back to it signed in.
+  const page = new URL(backTo());
+  outside.away(`/v1/game/sign-in?to=${encodeURIComponent(page.pathname + page.search)}`);
 }
 
 /**

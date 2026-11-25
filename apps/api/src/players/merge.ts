@@ -5,8 +5,7 @@ import { SqlClient, SqlSchema } from "effect/sql";
 /** What a merge did with each game's state: moved over, kept beside the other's, or given up for it. */
 export type GameMoved = "moved" | "newer" | "older";
 
-const Game = Schema.Struct({ game: Schema.String, updatedAt: Schema.Int });
-const Slot = Schema.Struct({ slot: Schema.String, updatedAt: Schema.Int });
+const Game = Schema.Struct({ game: Schema.String, rev: Schema.Int, updatedAt: Schema.Int });
 const Count = Schema.Struct({ n: Schema.Int });
 
 /**
@@ -39,8 +38,7 @@ export const mergeInto = Effect.fnUntraced(function* (
   }
 
   const games = yield* moveGames(sql, from, into, now);
-  yield* moveSaves(sql, from, into, now);
-  yield* addUp(sql, from, into);
+  yield* addUp(sql, from, into, now);
   yield* moveLikes(sql, from, into);
   yield* moveHistory(sql, from, into);
   yield* sql`
@@ -54,23 +52,17 @@ const gamesOf = (sql: SqlClient.SqlClient, player: PlayerId) =>
   SqlSchema.findAll({
     Request: Schema.String,
     Result: Game,
-    execute: (id) => sql`SELECT game, updated_at AS updatedAt FROM play_state WHERE player_id = ${id}`,
-  })(player);
-
-const slotsOf = (sql: SqlClient.SqlClient, player: PlayerId) =>
-  SqlSchema.findAll({
-    Request: Schema.String,
-    Result: Slot,
-    execute: (id) => sql`SELECT slot, updated_at AS updatedAt FROM saves WHERE player_id = ${id}`,
+    execute: (id) => sql`SELECT game, rev, updated_at AS updatedAt FROM play_state WHERE player_id = ${id}`,
   })(player);
 
 /** Each game's state: moved over, or, where both have one, the newer kept and the other put in save history. */
 const moveGames = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId, now: number) =>
   Effect.gen(function* () {
     const games: Record<string, GameMoved> = {};
-    const theirs = new Map((yield* gamesOf(sql, into)).map((g) => [g.game, g.updatedAt]));
-    for (const { game, updatedAt } of yield* gamesOf(sql, from)) {
-      const other = theirs.get(game);
+    const theirs = new Map((yield* gamesOf(sql, into)).map((g) => [g.game, g]));
+    for (const { game, rev, updatedAt } of yield* gamesOf(sql, from)) {
+      const theirsOf = theirs.get(game);
+      const other = theirsOf?.updatedAt;
       const keepFrom = other === undefined || updatedAt > other;
       games[game] = other === undefined ? "moved" : keepFrom ? "newer" : "older";
       if (other !== undefined) {
@@ -78,8 +70,13 @@ const moveGames = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId, now
       }
       if (keepFrom) {
         // The postcard goes with the state it was made from; the state is made due, so Leaf writes it again.
+        // Its revision passes both players' so that no copy of either, kept anywhere, is taken for it.
+        const next = Math.max(rev, theirsOf?.rev ?? 0) + 1;
         yield* sql`DELETE FROM play_postcards WHERE player_id = ${from} AND game = ${game}`;
-        yield* sql`UPDATE play_state SET player_id = ${into}, due_at = ${now} WHERE player_id = ${from} AND game = ${game}`;
+        yield* sql`
+          UPDATE play_state SET player_id = ${into}, rev = ${next}, due_at = ${now}
+          WHERE player_id = ${from} AND game = ${game}
+        `;
         for (const table of ["play_commands", "play_kept", "standings"]) {
           yield* sql`UPDATE ${sql(table)} SET player_id = ${into} WHERE player_id = ${from} AND game = ${game}`;
         }
@@ -88,36 +85,24 @@ const moveGames = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId, now
     return games;
   });
 
-/** Saves from before the games kept states: the same, slot by slot. */
-const moveSaves = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId, now: number) =>
+/**
+ * Coins, counters, time and awards add up. Coins move as Coins always do, by entries (they are
+ * append-only): one out of `from`, one into `into`, each named for this merge, earned by neither.
+ */
+const addUp = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId, now: number) =>
   Effect.gen(function* () {
-    const slots = new Map((yield* slotsOf(sql, into)).map((s) => [s.slot, s.updatedAt]));
-    for (const { slot, updatedAt } of yield* slotsOf(sql, from)) {
-      const other = slots.get(slot);
-      const loser = other === undefined ? null : updatedAt > other ? into : from;
-      if (loser !== null) {
-        yield* sql`
-          INSERT INTO save_history (player_id, slot, kind, version, data, saved_at, kept_at)
-          SELECT ${into}, slot, 'earlier', version, data, updated_at, ${now} FROM saves
-          WHERE player_id = ${loser} AND slot = ${slot}
-        `;
-        yield* sql`DELETE FROM saves WHERE player_id = ${loser} AND slot = ${slot}`;
-      }
-      if (loser !== from) {
-        yield* sql`UPDATE saves SET player_id = ${into} WHERE player_id = ${from} AND slot = ${slot}`;
-      }
+    const held = yield* SqlSchema.findAll({
+      Request: Schema.String,
+      Result: Schema.Struct({ balance: Schema.Int }),
+      execute: (id) => sql`SELECT balance FROM coins WHERE player_id = ${id} AND balance > 0`,
+    })(from);
+    for (const { balance } of held) {
+      yield* sql`
+        INSERT INTO coin_entries (player_id, amount, reason, game, key, at, earned) VALUES
+          (${from}, ${-balance}, 'moved', NULL, ${`moved:${from}:out`}, ${now}, 0),
+          (${into}, ${balance}, 'moved', NULL, ${`moved:${from}:in`}, ${now}, 0)
+      `;
     }
-  });
-
-/** Coins, counters, time and awards add up. */
-const addUp = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId) =>
-  Effect.gen(function* () {
-    yield* sql`
-      INSERT INTO coins (player_id, balance) SELECT ${into}, balance FROM coins WHERE player_id = ${from}
-      ON CONFLICT (player_id) DO UPDATE SET balance = balance + excluded.balance
-    `;
-    yield* sql`DELETE FROM coins WHERE player_id = ${from}`;
-    yield* sql`UPDATE coin_entries SET player_id = ${into} WHERE player_id = ${from}`;
     yield* sql`
       INSERT INTO command_days (player_id, day, done, refused)
       SELECT ${into}, day, done, refused FROM command_days WHERE player_id = ${from}
@@ -164,6 +149,8 @@ const moveLikes = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId) =>
 /** Their history moves whole; `into`'s name and skin, its account's, stay. */
 const moveHistory = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId) =>
   Effect.gen(function* () {
+    // One open visit a player: theirs closes where it was last heard of, as a page gone quiet would.
+    yield* sql`UPDATE visits SET left_at = heard_at WHERE player_id = ${from} AND left_at IS NULL`;
     for (const table of ["events", "activity", "sessions", "visits", "banner_people", "sign_ins"]) {
       yield* sql`UPDATE ${sql(table)} SET player_id = ${into} WHERE player_id = ${from}`;
     }
