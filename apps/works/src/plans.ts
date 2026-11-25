@@ -20,7 +20,7 @@ import {
   yardPlan,
   yardRefusal,
 } from "@sequoia-leaf/factory";
-import { asking, pressedTwice, type Spend } from "@sequoia-leaf/kit/dom.ts";
+import { asking, type Spend, tappedTwice } from "@sequoia-leaf/kit/dom.ts";
 import { GOLD } from "@sequoia-leaf/kit/palette.ts";
 import { coinsText, whole } from "@sequoia-leaf/kit/say.ts";
 
@@ -41,7 +41,7 @@ export function digest(values: ArrayLike<number>): number {
 }
 
 /**
- * A press that waits for a second (`pressedTwice`) is named by exactly what it confirms (`pressKey`):
+ * A press that waits for a second (`pressedTwice`, or `tappedTwice` for Place) is named by exactly what it confirms (`pressKey`):
  * a blueprint's place by its number and what is kept there; Save over a kept place by what it keeps
  * there too (the area marked, or the whole yard).
  */
@@ -146,7 +146,8 @@ export function pressYard(): boolean {
   const aim = S.aim;
   if (!g || typeof g.as !== "number" || !aim) return false;
   if (aim.why !== null) return no(aim.why);
-  if (!pressedTwice(handSession(), placeKey(g.as, aim.cost), toolHooks.changed)) return false;
+  // Pressed on the dock's Place, or by a tap on the yard: two in a row.
+  if (!tappedTwice(handSession(), placeKey(g.as, aim.cost), toolHooks.changed)) return false;
   const up = piecesAt(S.world, g.tiles);
   const did = doNow({ do: "placeBlueprint", slot: g.as, turns: 0, x: 0, y: 0 });
   if ("refused" in did) return no(did.why);

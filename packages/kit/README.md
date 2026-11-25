@@ -156,12 +156,19 @@ nothing is drawn again under a held mouse button: `when` waits for its next call
 lifts, and `unheld(fn)` (which `refresh()` uses) for the tick after the click.
 
 A button that spends asks to be pressed again (`pressedTwice(life, spend, redraw)`, drawn with
-`asking(spend)` and `asksAgain`). `spend` names what the press is for and the price its button says
-(`{ on, price }`): a press for another thing, or at a price changed since, only asks. `life` is what
-the player is looking at while it waits, the tab on show, the card on top or what the hand holds
-(`Scope.turns` gives one for each): leaving it ends the wait. The second press must be a new one: a
-key that was down at the first and has not come up since (a held Enter saying itself again,
-`keys.ts`) does not make it. `unask()` stops the button waiting at once, as four seconds left alone do.
+`asking(spend)` and `asksAgain`). The kit holds the rule, not the callers: the second press must be
+the very next press on the page (a pointer going down, or Enter or Space; Tab is not a press), on a
+button that shows the question `asksAgain` drew for the same spend, on the page and not hidden.
+Any other press first, and once it is over the button is drawn as it was. A press on a button that
+does not show the question is a first press, so a wait the player cannot see never spends.
+`spend` names what the press is for and the price its button says (`{ on, price }`): a press for
+another thing, or at a price changed since, only asks. `life` is what the player is looking at
+while it waits, the tab on show, the card on top or what the hand holds (`Scope.turns` gives one
+for each): leaving it ends the wait. A held key saying itself again is still the first press
+(`keys.ts`). `tappedTwice` is the same for a spend a game also takes two taps in a row for off the
+page's buttons (the Works' yard). `unask()` stops the button waiting at once, as four seconds left
+alone do, and the keyboard on it stays on the button drawn in its place. The kit hears each press
+first (`heard`); tests press with `press()` (`standin.ts`), on `aPage()` to press on buttons.
 
 **What opens over the page** (`dialog.ts`). A page's panel calls `dialog(panel, titleElement, close)`
 as it opens and the function it returns once it has closed: the panel is a dialog named by its

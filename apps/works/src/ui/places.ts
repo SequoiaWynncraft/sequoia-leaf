@@ -78,16 +78,21 @@ export function placeButton(p: Place, saving: boolean): HTMLElement {
   return b;
 }
 
-/** A place with a blueprint kept in it: pressed, it is taken in hand, or while Save asks, kept over on a second press. */
+/**
+ * A place with a blueprint kept in it: pressed, it is taken in hand, or while Save asks, kept over on
+ * a second press. What it keeps over is named as it is pressed (the yard may have changed since it
+ * was drawn), and the question is drawn for the same name.
+ */
 function keptButton(p: Extract<Place, { kept: true }>): HTMLElement {
   const { slot } = p;
-  const key = saveKey(slot);
   const kept = S.world.blueprints[slot];
   const face =
-    p.asking || !kept ? ["Replace?"] : [thumb(piecesOf(kept.pieces), p.whole ? S.world.land : null), factsOf(p)];
+    p.asking || !kept
+      ? [asksAgain(saveKey(slot), [], "Replace?")]
+      : [thumb(piecesOf(kept.pieces), p.whole ? S.world.land : null), factsOf(p)];
   return button(p.asking ? "sm asking" : "wood sm print", face, () => {
     if (!S.saving) hold(slot);
-    else if (pressedTwice(handSession(), key, toolHooks.changed)) saveIn(slot);
+    else if (pressedTwice(handSession(), saveKey(slot), toolHooks.changed)) saveIn(slot);
   });
 }
 
@@ -106,7 +111,7 @@ export function binButton(bin: { readonly slot: number; readonly asking: boolean
     if (pressedTwice(handSession(), deleteKey(slot), toolHooks.changed)) dropBlueprint(slot);
   };
   const b = again
-    ? button("sm asking", ["Delete?"], drop)
+    ? button("sm asking", [asksAgain(deleteKey(slot), [], "Delete?")], drop)
     : iconButton("wood sm", yardIcon("bin"), "Delete this blueprint", drop);
   tip(b, "Delete this blueprint");
   return [b];

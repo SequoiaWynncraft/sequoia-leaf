@@ -26,6 +26,7 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 import { asking, pressedTwice } from "@sequoia-leaf/kit/dom.ts";
+import { press } from "@sequoia-leaf/kit/standin.ts";
 
 import { clear, ctx, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { heldBox } from "./held.ts";
@@ -107,15 +108,6 @@ describe("Save yard", () => {
     await Bun.sleep(5);
     expect(sent(fake.leaf)).toEqual(["saveYard"]);
     expect(fake.leaf.yard.blueprints[2]).toEqual(S.world.blueprints[2]);
-    console.log(
-      "DBG",
-      fake.leaf.reads.length,
-      S.tool,
-      check(S.world),
-      check(fake.leaf.yard),
-      S.world.tick,
-      fake.leaf.yard.tick,
-    );
   });
 });
 
@@ -159,9 +151,11 @@ describe("a plan of the whole yard in hand", () => {
     const before = settings(S.world);
     setTool("select");
     hold(0);
+    press();
     expect(confirm()).toBe(false);
     expect(handPrint().place?.asking).toBe(true);
     expect(settings(S.world)).not.toBe(saved);
+    press();
     expect(confirm()).toBe(true);
     expect([settings(S.world), S.group, handPrint().place]).toEqual([saved, null, null]);
     await until(() => fake.leaf.posts >= 1);
@@ -199,6 +193,7 @@ describe("a plan of the whole yard in hand", () => {
     });
     expect(handPrint().line).toEqual({ text: `Not enough Coins: ${short} short`, bad: true });
     const before = encode(S.world);
+    press();
     expect(confirm()).toBe(false);
     expect([said, handPrint().place?.asking, encode(S.world)]).toEqual([
       [`Not enough Coins: ${short} short.`],
@@ -223,13 +218,16 @@ describe("a press that waits for a second", () => {
     const was = settings(S.world);
     setTool("select");
     hold(0);
+    press();
     expect([confirm(), handPrint().place?.asking]).toEqual([false, true]);
     cancel();
     hold(1);
     expect(handPrint().place?.asking).toBe(false);
+    press();
     expect([confirm(), handPrint().place?.asking]).toEqual([false, true]);
     cancel();
     hold(1);
+    press();
     expect([handPrint().place?.asking, confirm()]).toEqual([false, false]);
     expect([settings(S.world), sent(fake.leaf)]).toEqual([was, []]);
   });
@@ -244,6 +242,7 @@ describe("a press that waits for a second", () => {
     askSave();
     const area = saveKey(1);
     expect(area.on).toMatch(/:area:\d+@\d+$/);
+    press();
     expect([pressedTwice(handSession(), area, () => {}), asking(area)]).toEqual([false, true]);
     // Save put away: what it waited for goes with it.
     cancel();
@@ -252,6 +251,7 @@ describe("a press that waits for a second", () => {
     askSaveYard();
     const all = saveKey(1);
     expect(all).not.toEqual(area);
+    press();
     expect(pressedTwice(handSession(), all, () => {})).toBe(false);
   });
 });
@@ -262,10 +262,12 @@ describe("a press that waits for a second, when the yard changes", () => {
     setTool("select");
     expect(takeAway(28, 20)).toBe(true);
     const price = handPrint().upgrade?.cost ?? 0;
+    press();
     pressUpgrade(true);
     expect(handPrint().upgrade?.asking).toBe(true);
     expect(undo()).toBe(true);
     expect([handPrint().upgrade?.asking, (handPrint().upgrade?.cost ?? 0) > price]).toEqual([false, true]);
+    press();
     pressUpgrade(true);
     expect(handPrint().upgrade?.asking).toBe(true);
     await until(() => fake.leaf.posts >= 2);
@@ -281,10 +283,12 @@ describe("a press that waits for a second, when the yard changes", () => {
     markEnd();
     askSave();
     const kept = S.world.blueprints[1];
+    press();
     expect(pressedTwice(handSession(), saveKey(1), () => {})).toBe(false);
     const [spot] = clear(1);
     if (!spot) throw new Error("no clear ground");
     expect(doNow({ do: "build", kind: BELT, dir: 0, grade: 1, ...spot })).not.toHaveProperty("refused");
+    press();
     expect([asking(saveKey(1)), pressedTwice(handSession(), saveKey(1), () => {}), S.world.blueprints[1]]).toEqual([
       false,
       false,
@@ -300,8 +304,10 @@ describe("a plan of the whole yard in hand, by a finger", () => {
     S.finger = true;
     setTool("select");
     hold(0);
+    press();
     fingerTap(3, 3);
     expect([handPrint().place?.asking, settings(S.world) === saved]).toEqual([true, false]);
+    press();
     fingerTap(40, 30);
     expect(settings(S.world)).toBe(saved);
   });

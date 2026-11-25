@@ -73,6 +73,10 @@ const HANDS: Hands = {
   raise: (x, y) => void raiseAt(x, y),
   way: (x, y, way) => void wayAt(x, y, way),
   buy: buyLand,
+  refuse: (why) => {
+    yardSfx.no();
+    toolHooks.said(`${why}.`);
+  },
   take: (g) => void takeInHand(g),
   // The rules say why a piece of research cannot go in the line, on the line over the dock.
   study: (g, into) => {

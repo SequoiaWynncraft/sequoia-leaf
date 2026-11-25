@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { type Action, Deck, type Description, type Open, partsOf, type View } from "./card.ts";
+import { press } from "./standin.ts";
 
 /** A deck with a view that only writes down what it was asked to draw. */
 function table(): { deck: Deck; drawn: (string | null)[]; last: () => Open | null } {
@@ -270,40 +271,45 @@ function plotTable(): ReturnType<typeof table> {
   return t;
 }
 const redraw = (): void => undefined;
+/** A press on an action of the card on show: whether it goes ahead (`Deck.confirms`). */
+const confirmed = (deck: Deck, a: Action, again: () => void): boolean => {
+  press();
+  return deck.confirms(a, again);
+};
 
 describe("an action that asks to be pressed again", () => {
   test("goes ahead on its second press while its card stays up, drawn again or not", () => {
     const { deck } = plotTable();
     deck.press("plot:meadow", spot, "mouse", A);
-    expect(deck.confirms(BUY, redraw)).toBe(false);
+    expect(confirmed(deck, BUY, redraw)).toBe(false);
     deck.refresh();
-    expect(deck.confirms(BUY, redraw)).toBe(true);
+    expect(confirmed(deck, BUY, redraw)).toBe(true);
     // One that does not ask goes at once; on a passing card, one that asks never does.
-    expect(deck.confirms({ label: "Take away", on: () => {} }, redraw)).toBe(true);
+    expect(confirmed(deck, { label: "Take away", on: () => {} }, redraw)).toBe(true);
     deck.close();
     deck.rest("plot:meadow", spot, "mouse", A);
-    expect([deck.confirms(BUY, redraw), deck.confirms(BUY, redraw)]).toEqual([false, false]);
+    expect([confirmed(deck, BUY, redraw), confirmed(deck, BUY, redraw)]).toEqual([false, false]);
   });
 
   test("asks again once its card has followed something in it and come back", () => {
     const { deck } = plotTable();
     deck.press("plot:meadow", spot, "mouse", A);
-    expect(deck.confirms(BUY, redraw)).toBe(false);
+    expect(confirmed(deck, BUY, redraw)).toBe(false);
     expect(deck.follow("item:ingot")).toBe(true);
     expect(deck.back()).toBe(true);
-    expect(deck.confirms(BUY, redraw)).toBe(false);
-    expect(deck.confirms(BUY, redraw)).toBe(true);
+    expect(confirmed(deck, BUY, redraw)).toBe(false);
+    expect(confirmed(deck, BUY, redraw)).toBe(true);
   });
 
   test("asks again once its card has been put away and pinned again, or its price has changed", () => {
     const { deck } = plotTable();
     deck.press("plot:meadow", spot, "mouse", A);
-    expect(deck.confirms(BUY, redraw)).toBe(false);
+    expect(confirmed(deck, BUY, redraw)).toBe(false);
     deck.close();
     deck.press("plot:meadow", spot, "mouse", A);
-    expect(deck.confirms(BUY, redraw)).toBe(false);
-    expect(deck.confirms({ ...BUY, ask: { again: "Press again to buy", price: 320 } }, redraw)).toBe(false);
-    expect(deck.confirms(BUY, redraw)).toBe(false);
-    expect(deck.confirms(BUY, redraw)).toBe(true);
+    expect(confirmed(deck, BUY, redraw)).toBe(false);
+    expect(confirmed(deck, { ...BUY, ask: { again: "Press again to buy", price: 320 } }, redraw)).toBe(false);
+    expect(confirmed(deck, BUY, redraw)).toBe(false);
+    expect(confirmed(deck, BUY, redraw)).toBe(true);
   });
 });

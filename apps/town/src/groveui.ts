@@ -130,6 +130,40 @@ function history(host: GroveHost, body: HTMLElement): void {
     );
 }
 
+/**
+ * The button for `n` pulls: its price in Leaf, asked for twice (`confirm`) and only for the pool it
+ * was drawn for. One pull is a free pull while one waits. With too little Leaf, or Leaf closed, it is
+ * shut and says why. There is one at a time for each count, on the banner or at a ceremony's end,
+ * and drawn again, free or paid, the button for the same count keeps the keyboard.
+ */
+function pullButton(host: GroveHost, n: 1 | 10, confirm: (spend: Spend) => boolean): HTMLElement {
+  const waiting = host.view().free.waiting;
+  const free = n === 1 && waiting > 0;
+  const pool = host.pool();
+  const spend = pullSpend(pool, n);
+  const b = free
+    ? button(
+        "leaf grove-pull",
+        [el("span", "", { text: "Free pull" }), el("span", "k-sub", { text: `${waiting} waiting` })],
+        (pressed) => {
+          host.pull(1, "free", pressed);
+        },
+      )
+    : button(
+        `leaf grove-pull${asking(spend) ? " asking" : ""}`,
+        [asksAgain(spend, [el("span", "", { text: `Pull ${n}` }), amount("leaf", whole(spend.price))], "Pull?")],
+        (pressed) => {
+          sfx.tap();
+          // Drawn for one pool, it never spends in another: a banner may have ended under the pointer.
+          if (host.pool() === pool && confirm(spend)) host.pull(n, "leaf", pressed);
+        },
+      );
+  b.dataset.keep = `pull:${n}`;
+  const why = free ? null : cannotPull(n, balance().leaf, leafOpen(), leafShut());
+  if (why) closeLeaf(b, "Leaf", why);
+  return b;
+}
+
 export function makeGroveUi(host: GroveHost) {
   /** What the Grove's words and buttons hold for as long as the page stands. */
   const lasting = scope();
@@ -176,37 +210,8 @@ export function makeGroveUi(host: GroveHost) {
   /** What the last ceremony was for, so that its end picture offers the same again. */
   let again: 1 | 10 | null = null;
 
-  /**
-   * The button for `n` pulls: its price in Leaf, asked for twice. One pull is a free pull while one
-   * waits. With too little Leaf, or Leaf closed, it is shut and says why. There is one at a time for
-   * each count: on the banner, or at a ceremony's end.
-   */
-  function pullButton(n: 1 | 10): HTMLElement {
-    const waiting = host.view().free.waiting;
-    if (n === 1 && waiting > 0)
-      return button(
-        "leaf grove-pull",
-        [el("span", "", { text: "Free pull" }), el("span", "k-sub", { text: `${waiting} waiting` })],
-        (b) => {
-          host.pull(1, "free", b);
-        },
-      );
-    const pool = host.pool();
-    const spend = pullSpend(pool, n);
-    const b = button(
-      `leaf grove-pull${asking(spend) ? " asking" : ""}`,
-      [asksAgain(spend, [el("span", "", { text: `Pull ${n}` }), amount("leaf", whole(spend.price))], "Pull?")],
-      (pressed) => {
-        sfx.tap();
-        // Drawn for one pool, it never spends in another: a banner may have ended under the pointer.
-        if (host.pool() === pool && pressedTwice(showing(seen()), spend, render)) host.pull(n, "leaf", pressed);
-      },
-    );
-    b.dataset.keep = `pull:${n}`;
-    const why = cannotPull(n, balance().leaf, leafOpen(), leafShut());
-    if (why) closeLeaf(b, "Leaf", why);
-    return b;
-  }
+  /** The button for `n` pulls, asked for twice while the Grove shows the same thing (`showing`). */
+  const pull = (n: 1 | 10): HTMLElement => pullButton(host, n, (spend) => pressedTwice(showing(seen()), spend, render));
 
   function renderBanner(): void {
     const v = host.view();
@@ -258,7 +263,7 @@ export function makeGroveUi(host: GroveHost) {
           }),
         ),
         ...(next ? [el("div", "k-read k-over", { text: next })] : []),
-        ...(atEnd() ? [] : [el("div", "k-row grove-pulls", {}, pullButton(1), pullButton(10))]),
+        ...(atEnd() ? [] : [el("div", "k-row grove-pulls", {}, pull(1), pull(10))]),
         ...(shut ? [el("div", "k-read k-over", { text: shut })] : []),
       ),
     );
@@ -271,7 +276,7 @@ export function makeGroveUi(host: GroveHost) {
       host.done();
     });
     done.dataset.keep = "done";
-    keepingFocus(end, () => end.replaceChildren(...(again && atEnd() ? [pullButton(again)] : []), done));
+    keepingFocus(end, () => end.replaceChildren(...(again && atEnd() ? [pull(again)] : []), done));
   }
 
   // ---------- the panel ----------

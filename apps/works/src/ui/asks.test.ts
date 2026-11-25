@@ -10,16 +10,20 @@ import { expect, test } from "bun:test";
 
 import { ALL_ITEMS, at, BELT, build, create, plot, type Yard } from "@sequoia-leaf/factory";
 import { Deck } from "@sequoia-leaf/kit/card.ts";
-import { pressedTwice } from "@sequoia-leaf/kit/dom.ts";
+import { el, pressedTwice } from "@sequoia-leaf/kit/dom.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
+import { aPage, press } from "@sequoia-leaf/kit/standin.ts";
 
-import { ctx, type FakeLeaf, isRecord, opened, useFakeLeaf } from "../../test/fake-leaf.ts";
+import { clear, coinsAre, ctx, type FakeLeaf, isRecord, opened, useFakeLeaf } from "../../test/fake-leaf.ts";
 import { askSave, deleteKey, saveIn } from "../plans.ts";
-import { handSession, S } from "../state.ts";
+import { buyLand } from "../plots.ts";
+import { handSession, S, toolHooks } from "../state.ts";
 import { cancel, hold, markEnd, markOver, markStart, setTool } from "../tools.ts";
+import { doNow } from "../yard.ts";
 import { handPrint, pressUpgrade } from "./dock.ts";
-import { plotCard } from "./land.ts";
+import { AGAIN, plotCard } from "./land.ts";
 import { swapPressed } from "./panels.ts";
+import { placeButton } from "./places.ts";
 import { printOf } from "./prints.ts";
 import { itemRef, plotRef } from "./refs.ts";
 
@@ -52,14 +56,17 @@ test("Upgrade pressed once over one area, then pressed over another, only asks: 
   for (const x of [18, 19, 20]) build(y, BELT, x, 13, 0, Infinity);
   const fake = await opened(y, 100_000);
   mark(18, 13, 18, 13);
+  press();
   pressUpgrade(false);
   expect(handPrint().upgrade).toMatchObject({ asking: true });
   // Two other belts marked within the four seconds: the button is theirs, at their price, and asks afresh.
   mark(19, 13, 20, 13);
   expect(handPrint().upgrade).toMatchObject({ asking: false });
+  press();
   pressUpgrade(false);
   expect(grades([18, 19, 20], 13)).toEqual([1, 1, 1]);
   expect(handPrint().upgrade).toMatchObject({ asking: true });
+  press();
   pressUpgrade(false);
   expect(grades([18, 19, 20], 13)).toEqual([1, 2, 2]);
   await Bun.sleep(5);
@@ -71,11 +78,14 @@ test("Upgrade asked over an area, marked again over the same area after another,
   for (const x of [18, 19]) build(y, BELT, x, 13, 0, Infinity);
   await opened(y, 100_000);
   mark(18, 13, 18, 13);
+  press();
   pressUpgrade(false);
   mark(19, 13, 19, 13);
   mark(18, 13, 18, 13);
+  press();
   pressUpgrade(false);
   expect(grades([18, 19], 13)).toEqual([1, 1]);
+  press();
   pressUpgrade(false);
   expect(grades([18, 19], 13)).toEqual([2, 1]);
 });
@@ -97,6 +107,7 @@ test("Delete asked on a blueprint in hand, put down and taken up again, asks aga
   setTool("select");
   hold(0);
   expect(S.group?.as).toBe(0);
+  press();
   expect(pressedTwice(handSession(), deleteKey(0), redraw)).toBe(false);
   expect(handPrint().bin).toMatchObject({ asking: true });
   // Put down (Escape), and taken up again from its place.
@@ -104,7 +115,9 @@ test("Delete asked on a blueprint in hand, put down and taken up again, asks aga
   expect(S.group).toBeNull();
   hold(0);
   expect(handPrint().bin).toMatchObject({ slot: 0, asking: false });
+  press();
   expect(pressedTwice(handSession(), deleteKey(0), redraw)).toBe(false);
+  press();
   expect(pressedTwice(handSession(), deleteKey(0), redraw)).toBe(true);
 });
 
@@ -114,19 +127,24 @@ test("Swap on an order given something asks while its panel is open: shut and op
   const order = y.board[0];
   if (!order) throw new Error("no board");
   // Given nothing, it goes at once.
+  press();
   expect(swapPressed(scope(), order.id, redraw)).toBe(true);
   const first = ALL_ITEMS.find((n) => (order.want[n] ?? 0) > 1);
   if (first === undefined) throw new Error("an order that wants nothing");
   order.filled[first] = 1;
   const panel = scope();
+  press();
   expect(swapPressed(panel, order.id, redraw)).toBe(false);
   // The panel shut, and opened again within the four seconds.
   panel.close();
   const reopened = scope();
+  press();
   expect(swapPressed(reopened, order.id, redraw)).toBe(false);
   // More given between the presses: what a swap loses has changed, and it asks again.
   order.filled[first] = 2;
+  press();
   expect(swapPressed(reopened, order.id, redraw)).toBe(false);
+  press();
   expect(swapPressed(reopened, order.id, redraw)).toBe(true);
 });
 
@@ -147,7 +165,7 @@ test("Buy on a plot's card, pressed once, asks again after the card follows what
   // Its card, drawn once on a page that holds nothing.
   const doc = { createElement: () => new Part(), createTextNode: () => new Part() };
   Object.defineProperty(globalThis, "document", { value: doc, configurable: true });
-  const card = plotCard(print, () => true);
+  const card = plotCard(print, { buy: () => true, refuse: () => undefined });
   Reflect.deleteProperty(globalThis, "document");
   const [buy] = card.actions ?? [];
   const [inGround] = print.ground;
@@ -157,12 +175,81 @@ test("Buy on a plot's card, pressed once, asks again after the card follows what
   deck.register("plot", () => card);
   deck.register("item", (id) => ({ name: id }));
   deck.press(ref, {}, "mouse", {});
+  press();
   expect(deck.confirms(buy, redraw)).toBe(false);
   // Following one of its "In the ground" links, then Back.
   expect(deck.follow(itemRef(inGround[0]))).toBe(true);
   expect(deck.back()).toBe(true);
+  press();
   expect(deck.confirms(buy, redraw)).toBe(false);
   // Drawn again where it is (the Coins came in), it is the same card: the second press buys.
   deck.refresh();
+  press();
   expect(deck.confirms(buy, redraw)).toBe(true);
+});
+
+test("Buy drawn short buys nothing, even with the last Coin come in while it is pressed: it says why", async () => {
+  await opened(yardAt(3), 0);
+  const meadow = plot("meadow");
+  const print = printOf(plotRef(meadow));
+  if (print?.card !== "plot") throw new Error("no plot card");
+  expect(print.short).toBeGreaterThan(0);
+  const page = aPage();
+  const refused: string[] = [];
+  const card = plotCard(print, { buy: buyLand, refuse: (why) => void refused.push(why) });
+  const [buy] = card.actions ?? [];
+  if (!buy) throw new Error("a plot for sale with nothing to buy it");
+  // The till pays out the last Coins before the press on the dim button ends.
+  coinsAre(print.price);
+  buy.on(el("button"));
+  expect([S.world.plots.includes(meadow), refused]).toEqual([false, ["Not enough Coins"]]);
+  // Drawn again with the Coins, its Buy asks to be pressed again.
+  const again = printOf(plotRef(meadow));
+  if (again?.card !== "plot") throw new Error("no plot card");
+  expect(plotCard(again, { buy: buyLand, refuse: () => undefined }).actions?.[0]?.ask).toEqual({
+    again: AGAIN,
+    price: print.price,
+  });
+  page.done();
+});
+
+/** A press on a button, and the click it makes. */
+const pressOn = (b: HTMLElement): void => {
+  press(b);
+  b.dispatchEvent(new Event("click"));
+};
+
+test("Save over a kept place, the yard changed while the places are up: a press shows Replace?, and only a press on it keeps", async () => {
+  await withBlueprint();
+  const was = S.world.blueprints[0];
+  mark(18, 13, 19, 13);
+  askSave();
+  const page = aPage();
+  let shown: HTMLElement = el("button");
+  // The dock draws the place again whenever what the hand holds or the yard asks changes; kept, Save is done.
+  const draw = (): void => {
+    const [place] = handPrint().places;
+    shown = place ? placeButton(place, true) : el("button");
+    page.body.replaceChildren(shown);
+  };
+  const wasChanged = toolHooks.changed;
+  toolHooks.changed = draw;
+  try {
+    draw();
+    const before = shown;
+    // The till is collected: the yard moves on a step while the place is up, drawn as it was.
+    const [spot] = clear(1);
+    if (!spot) throw new Error("no clear ground");
+    expect(doNow({ do: "build", kind: BELT, dir: 0, grade: 1, ...spot })).not.toHaveProperty("refused");
+    pressOn(before);
+    expect([S.world.blueprints[0], handPrint().places[0]]).toMatchObject([was, { asking: true }]);
+    // The place pressed twice as it was drawn: the second press is on a button that never said Replace?.
+    pressOn(before);
+    expect(S.world.blueprints[0]).toBe(was);
+    pressOn(shown);
+    expect(S.world.blueprints[0]).not.toBe(was);
+  } finally {
+    toolHooks.changed = wasChanged;
+    page.done();
+  }
 });

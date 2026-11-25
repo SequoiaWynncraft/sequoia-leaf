@@ -100,7 +100,7 @@ import {
   unlocks,
   wantsGiven,
 } from "./goal.ts";
-import { groundCard, type GroundPrint, plotCard, type PlotPrint } from "./land.ts";
+import { groundCard, type GroundPrint, plotCard, type PlotHands, type PlotPrint } from "./land.ts";
 import type { Flow } from "./numbers.ts";
 import { fitted, partsWords, TOOL_ICON, yardIcon } from "./parts.ts";
 import { itemRef, machineRef, nodeRef, pictureRef, plotRef } from "./refs.ts";
@@ -272,7 +272,7 @@ export type Print =
   | GiftPrint;
 
 /** What a card's buttons do: the page's own tools, handed in, so that drawing a card reaches no yard. */
-export interface Hands {
+export interface Hands extends PlotHands {
   /** Does a command (a recipe, a crate shut or opened, emptying), and says whether it was done. */
   act(a: Act): boolean;
   turn(x: number, y: number): void;
@@ -285,7 +285,6 @@ export interface Hands {
   /** Raises the piece on a tile to the next grade, where it stands. */
   raise(x: number, y: number): void;
   way(x: number, y: number, way: number): void;
-  buy(plot: Plot): boolean;
   take(g: Goal): void;
   /** Puts a piece of research in the line, or takes it out. */
   study(g: Goal, into: boolean): void;
@@ -724,7 +723,7 @@ export function cardOf(art: Art, p: Print, hands: Hands): Description | null {
     case "ground":
       return groundCard(p);
     case "plot":
-      return plotCard(p, (plot) => hands.buy(plot));
+      return plotCard(p, hands);
     case "node":
       return nodeCard(p, hands);
     case "order":
