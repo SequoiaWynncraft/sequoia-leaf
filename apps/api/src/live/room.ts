@@ -85,7 +85,8 @@ interface Shows {
  * - A close: nothing is written after it (`Connection.writeIf`).
  *
  * The next snapshot comes only after this one has gone to everybody: one tick at a time. The room's
- * tests keep this list whole: a new kind of frame does not compile there until it is placed.
+ * tests keep the text frames whole: a new kind (`ToClient`) does not compile there until it is
+ * placed. Binary frames are kept whole by hand: only `greet` and the tick's snapshot send any.
  */
 export class Snapshot {
   readonly to: readonly Recipient[];
