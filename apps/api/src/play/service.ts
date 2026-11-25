@@ -82,12 +82,15 @@ class Lost extends Data.TaggedError("Lost") {}
 /** A player's state in a game as its lane holds it in memory. */
 interface Copy {
   /**
-   * The stored `rev` it came from (null for a new state, stored by the first write), the text
-   * stored at it, whether its player was a guest then, and when the stored state was made (its
-   * generation: null for a new one, made as its first write is).
+   * The stored `rev` it came from (null for a new state, stored by the first write), the text stored
+   * at it and its standing by today's rules, read before the copy is run on: what a stored standing
+   * is put right to (`store.stand`), not what running on has since made of it. Then whether its
+   * player was a guest then, and when the stored state was made (its generation: null for a new
+   * one, made as its first write is).
    */
   rev: number | null;
   text: string;
+  stood?: ReturnType<Held["standing"]>;
   guest: boolean;
   born: number | null;
   /** The moment it has been brought to. */
@@ -290,21 +293,15 @@ const outcome = (game: string, what: CommandOutcome, n: number) =>
 
 /** The commands of a batch with their ids, or why the batch is not one. */
 function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] | string {
-  if (commands.length > MOST_FLUSHED) {
-    return `A batch holds at most ${MOST_FLUSHED} commands`;
-  }
+  if (commands.length > MOST_FLUSHED) return `A batch holds at most ${MOST_FLUSHED} commands`;
   const sent: Sent[] = [];
   for (const command of commands) {
     if (!isRecord(command) || typeof command.id !== "string" || !COMMAND_ID.test(command.id)) {
       return "Every command needs an id of its own: up to 64 letters, digits and _ . : -";
     }
     const { id } = command;
-    if (sent.some((other) => other.id === id)) {
-      return "Two commands in the batch have the same id";
-    }
-    if (!played.reads(command)) {
-      return `Command ${id} is not one of the game's`;
-    }
+    if (sent.some((other) => other.id === id)) return "Two commands in the batch have the same id";
+    if (!played.reads(command)) return `Command ${id} is not one of the game's`;
     sent.push({ id, command });
   }
   return sent;
@@ -526,13 +523,13 @@ export class Play extends Context.Service<
             return held && (lane.copy = { rev: null, text, guest: maker.guest, born: null, at, held, unsaved: true });
           }
           lane.copy = undefined;
-          const { rev, state, guest, born, dueAt, postcard } = found.value;
-          const held = coded(job, () => played.read(state, postcard));
+          const { rev, state: text, guest, born, dueAt, postcard } = found.value;
+          const held = coded(job, () => played.read(text, postcard));
           if (held === null) yield* unreadable(played.id, player, rev, "it is kept as it is");
           // A state stored due that rests (`rests`), or does not read, is due none until it is written again.
           if (dueAt !== null && (held === null || rests(held, player, guest)))
             yield* inSqlite(job, store.rest(player, played.id, rev, held !== null));
-          return held && (lane.copy = { rev, text: state, guest, born, at, held, unsaved: false });
+          return held && (lane.copy = { rev, text, guest, born, at, held, unsaved: false, stood: held.standing() });
         });
 
       /** Runs the job's copy on to its moment, or to where `command` is done, a slice at a time while there is further to go. */
@@ -574,7 +571,7 @@ export class Play extends Context.Service<
           let leaf: number | null = null;
           let { coins: balance, room } = against;
           const ctx = (roll: number, left: number): Ctx => ctxOf(playing, at, roll, left, given);
-          const stood = copy.held.standing();
+          const stood = copy.stood ?? null;
           const game = copy.held.open(ctx(seed, room));
           const results: Result[] = [];
           const answers: { readonly id: string; readonly result: Result }[] = [];
@@ -692,7 +689,8 @@ export class Play extends Context.Service<
               }),
             ),
           ).pipe(Effect.catchTag("SqlError", Effect.die));
-          Object.assign(copy, { rev, text, guest: playing.guest, born, unsaved: false });
+          // A write with no standing leaves the one stored before it, so the copy keeps that.
+          Object.assign(copy, { rev, text, guest: playing.guest, born, unsaved: false, stood: standing ?? stood });
           yield* outcome(played.id, "taken", answers.length - refused);
           yield* outcome(played.id, "refused", refused);
           let answered: unknown;

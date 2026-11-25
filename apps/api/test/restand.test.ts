@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { type Ctx, playerId } from "@sequoia-leaf/core";
+import { FACTORY } from "@sequoia-leaf/factory/game.ts";
+import { staged } from "@sequoia-leaf/factory/test/yards.ts";
 import { RAID, recordRun, type RunSummary, type Table } from "@sequoia-leaf/raid";
 import { Schema } from "effect";
 
@@ -229,4 +231,40 @@ describe("where a state stands, worked out again", () => {
     ]);
     expect(await restand()).toBe("idle");
   });
+  for (const asked of ["collect", "open"] as const)
+    it(`puts a yard a Leaf from before wrote right to what was stored, so Coins made since it was read are reached now (${asked})`, async () => {
+      const yard = staged("mid");
+      yard.at = clock.now;
+      const score = FACTORY.standing?.(yard)?.score;
+      if (score === undefined) throw new Error("the Works keeps no standing");
+      // Kept at revision 4 by a Leaf from before, which leaves its standing marked as of revision 3.
+      await leaf.query(
+        (sql) => sql`
+          INSERT INTO play_state (player_id, game, rev, stood, state, updated_at, born, due_at)
+          VALUES (${alice}, 'works', 4, 3, ${FACTORY.encode(yard)}, ${clock.now}, ${MADE}, ${clock.now})
+        `,
+      );
+      await leaf.query(
+        (sql) => sql`
+          INSERT INTO standings (player_id, game, score, also, guest, updated_at)
+          VALUES (${alice}, 'works', ${score}, '{}', 0, ${clock.now})
+        `,
+      );
+      // Ten minutes on, the yard has made more Coins by the time its owner collects or opens it.
+      clock.now += 10 * 60_000;
+      const who = { playerId: alice, guest: false };
+      if (asked === "collect")
+        await leaf.run(
+          Play.use((p) => p.send(who, GAMES.works, [{ id: "collect-1", do: "collect", tick: yard.tick }])),
+        );
+      else await leaf.run(Play.use((p) => p.open(who, GAMES.works)));
+      const [now] = Schema.decodeUnknownSync(Schema.Array(Stood))(
+        await leaf.query(
+          (sql) =>
+            sql`SELECT score, also, updated_at AS updatedAt FROM standings WHERE player_id = ${alice} AND game = 'works'`,
+        ),
+      );
+      expect(now?.score).toBeGreaterThan(score);
+      expect(now?.updatedAt).toBe(clock.now);
+    });
 });
