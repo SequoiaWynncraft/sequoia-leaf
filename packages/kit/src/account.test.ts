@@ -45,6 +45,14 @@ describe("the Account tab's rows", () => {
     ]);
   });
 
+  test("signed in with Discord and linked since, in another browser: Linked, with nothing to press", () => {
+    const since = memberOf({ ...GUEST, signed_in_with: "discord", linked: true, ask_link: false });
+    expect(accountRows(since, SIGN_IN)).toEqual([
+      { name: "Signed in with", value: "Discord" },
+      { name: "Wynncraft account", value: "Linked" },
+    ]);
+  });
+
   test("in a game in the town's frame, Link account takes the whole window and comes back to the town", () => {
     world = standin({}, { top: false, href: "https://leaf.example/play/works/" });
     accountRows(discord(), SIGN_IN)[1]?.act?.go();

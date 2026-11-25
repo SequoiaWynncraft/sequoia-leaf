@@ -34,6 +34,7 @@
       "coins": 300,
       "version": 15,
       "signed_in_with": "sequoia",
+      "linked": true,
       "ask_link": false
     }
   },
@@ -72,6 +73,7 @@
       "coins": 300,
       "version": 0,
       "signed_in_with": "sequoia",
+      "linked": true,
       "ask_link": false
     }
   },
@@ -1440,6 +1442,7 @@
       "coins": 300,
       "version": 17,
       "signed_in_with": "sequoia",
+      "linked": true,
       "ask_link": false
     }
   },

@@ -88,6 +88,7 @@ describe("finding out where the game is", () => {
         level: { number: 7, into: 230, next: 1400 },
         cursor: 140,
         signedInWith: "sequoia",
+        linked: true,
         askLink: false,
       },
     });
@@ -121,6 +122,7 @@ describe("finding out where the game is", () => {
       level: { number: 1, into: 0, next: 1000 },
       cursor: 0,
       signedInWith: "sequoia",
+      linked: true,
       askLink: false,
     });
     expect(readBalances(isRecord(r) ? r.body : null)).toEqual({ coins: 300, leaf: 0, version: 0 });
@@ -141,7 +143,13 @@ describe("finding out where the game is", () => {
     });
     expect(readMember({ ...GUEST, signed_in_with: "discord", ask_link: false })).toMatchObject({
       signedInWith: "discord",
+      linked: false,
       askLink: false,
+    });
+    // Linked since, in another browser: a Discord sign-in, linked.
+    expect(readMember({ ...GUEST, signed_in_with: "discord", linked: true, ask_link: false })).toMatchObject({
+      signedInWith: "discord",
+      linked: true,
     });
     expect(readMember({ ...TESTER, signed_in_with: "sequoia", ask_link: false })).toMatchObject({
       signedInWith: "sequoia",

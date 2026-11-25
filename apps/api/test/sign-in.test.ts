@@ -414,7 +414,7 @@ describe("linking a Wynncraft account later", () => {
     sequoiaSession("nuss-sequoia", account, "Nuss187");
     await meWith(`seq_session=nuss-sequoia`);
 
-    expect((await meWith(`__Host-leaf_session=${token}`)).body).toMatchObject({ ask_link: false });
+    expect((await meWith(`__Host-leaf_session=${token}`)).body).toMatchObject({ linked: true, ask_link: false });
   });
 
   it("follows a member's new primary account, as Leaf always has, without taking one account's player into another's", async () => {

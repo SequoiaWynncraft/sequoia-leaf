@@ -435,6 +435,7 @@ describe("GET /v1/game/me", () => {
       coins: 300,
       version: 1,
       signed_in_with: "sequoia",
+      linked: true,
       ask_link: false,
     });
   });
@@ -503,6 +504,7 @@ describe("GET /v1/game/me", () => {
       coins: 300,
       version: 1,
       signed_in_with: "sequoia",
+      linked: true,
       ask_link: false,
     });
     expect(await member.json()).toMatchObject({ guest: false });

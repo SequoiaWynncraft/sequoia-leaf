@@ -19,13 +19,11 @@ export interface AccountRow {
 
 /** The tab's rows for a player; `signIn` is the guild's sign-in (hello's). */
 export function accountRows(me: Member, signIn: string): AccountRow[] {
-  if (me.signedInWith === "sequoia")
-    return [
-      { name: "Signed in with", value: "Sequoia" },
-      { name: "Wynncraft account", value: "Linked" },
-    ];
+  const signedIn = { name: "Signed in with", value: me.signedInWith === "sequoia" ? "Sequoia" : "Discord" };
+  // Linked is what the player is now: linked in another browser, a Discord sign-in is linked too.
+  if (me.linked) return [signedIn, { name: "Wynncraft account", value: "Linked" }];
   return [
-    { name: "Signed in with", value: "Discord" },
+    signedIn,
     {
       name: "Wynncraft account",
       value: "Not linked",

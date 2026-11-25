@@ -126,6 +126,7 @@ function toResult(token: string, body: typeof BackendIdentity.Type, playerId: Pl
       minecraft: body.minecraft_uuid,
       discord: discordOf(body),
       via: "sequoia",
+      linked: true,
       askLink: false,
       username: body.minecraft_username,
       guildRank: typeof rank === "string" && rank !== "" ? rank : null,

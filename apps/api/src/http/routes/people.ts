@@ -60,6 +60,7 @@ const gameMe = ({
         coins: held,
         version,
         signed_in_with: identity.via,
+        linked: identity.linked,
         ask_link: identity.askLink,
       };
     }
@@ -83,6 +84,7 @@ const gameMe = ({
       coins: held,
       version,
       signed_in_with: identity.via,
+      linked: identity.linked,
       ask_link: identity.askLink,
     };
   });

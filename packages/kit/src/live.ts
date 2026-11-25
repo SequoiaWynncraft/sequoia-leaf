@@ -40,6 +40,8 @@ export interface Member {
   cursor: number;
   /** How they signed in: on the guild's website, with a Minecraft account linked, or with Discord alone. */
   signedInWith: "sequoia" | "discord";
+  /** Whether they have a Minecraft account now, however they signed in: one may have been linked since. */
+  linked: boolean;
   /** Whether to ask them to link a Minecraft account: a member of the guild's Discord with none linked. */
   askLink: boolean;
 }
@@ -73,6 +75,7 @@ export function readMember(v: unknown): Member | null {
     level: { number: level, into, next },
     cursor: Math.max(0, num(v.event_cursor) ?? 0),
     signedInWith: v.signed_in_with === "discord" ? "discord" : "sequoia",
+    linked: v.linked === true || v.signed_in_with !== "discord",
     askLink: v.ask_link === true,
   };
 }

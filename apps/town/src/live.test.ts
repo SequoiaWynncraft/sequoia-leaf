@@ -936,7 +936,12 @@ describe("a guest's town", () => {
     const asked: string[] = [];
     const guild = await guestTown(asked);
     expect(asked).toEqual([]);
-    expect(world?.sent.map((s) => s.path)).toEqual(["/v1/game/hello", "/v1/game/me", "/v1/game/presence"]);
+    // Their own town's state is a guest's too, and is asked for when the page gets to it.
+    expect(world?.sent.map((s) => s.path).filter((path) => path !== "/v1/game/play/town")).toEqual([
+      "/v1/game/hello",
+      "/v1/game/me",
+      "/v1/game/presence",
+    ]);
     // Others in town, members and guests, are there all the same.
     expect(guild.visitors()).toEqual([
       { id: "g-2", name: "Drifter", rank: "Guest", at: "table", skin: "/v1/game/skins/g-2", acted: null },
@@ -964,6 +969,7 @@ describe("a guest's town", () => {
           level: { number: 1, into: 0, next: 1 },
           cursor: 0,
           signedInWith: "sequoia",
+          linked: true,
           askLink: false,
         },
         quests: [],

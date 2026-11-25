@@ -68,6 +68,7 @@ const leafSessions = (signIns: SignIns["Service"], logins: Logins["Service"], pu
       return yield* new Unauthorized({ code: "unauthorized", message: "Your session has expired. Sign in again" });
     }
     const playerId = now.value;
+    const linked = (yield* logins.minecraftOf([playerId])).has(playerId);
     const identity: Identity = {
       playerId,
       minecraft: null,
@@ -77,8 +78,9 @@ const leafSessions = (signIns: SignIns["Service"], logins: Logins["Service"], pu
       admin: false,
       session: Redacted.make(token),
       via: "discord",
+      linked,
       // Asked only while the player they are now has no Minecraft account: linked in another browser, not asked.
-      askLink: member === true && (yield* logins.discordOnly(playerId)),
+      askLink: member === true && !linked,
     };
     return identity;
   });
