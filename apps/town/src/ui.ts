@@ -6,6 +6,7 @@
 
 import { type RequestKind, REQUESTS } from "@sequoia-leaf/core";
 import { link } from "@sequoia-leaf/kit/card.ts";
+import { dialog } from "@sequoia-leaf/kit/dialog.ts";
 import { amount, asking, asksAgain, el, icon as glyph, pressedTwice, replay, shown } from "@sequoia-leaf/kit/dom.ts";
 import { type Emote, EMOTES } from "@sequoia-leaf/kit/emotes.ts";
 import { isGuest } from "@sequoia-leaf/kit/live.ts";
@@ -14,6 +15,7 @@ import { ask as askLeaf, isRecord, outside } from "@sequoia-leaf/kit/net.ts";
 import { waitingLook } from "@sequoia-leaf/kit/play.ts";
 import { fly } from "@sequoia-leaf/kit/pursebar.ts";
 import { whole } from "@sequoia-leaf/kit/say.ts";
+import { type Scope, scope } from "@sequoia-leaf/kit/scope.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { dist, makeCanvas, pick } from "@sequoia-leaf/kit/util.ts";
@@ -25,7 +27,7 @@ import { place, PLACES } from "@sequoia-leaf/town/map/map.ts";
 import { thingOf } from "@sequoia-leaf/town/things.ts";
 
 import { goSit, hop, inTown, rouse, say, sitters, stop } from "./actors.ts";
-import { kindLine, noteWhen, openingTab, readNews, redrawn, TABS } from "./board.ts";
+import { kindLine, noteWhen, openingTab, type QuestBoard, questBoard, redrawn, rerollSpend, TABS } from "./board.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import { named, registerCards, thingRef } from "./cards.ts";
 import { folkArt } from "./folkart.ts";
@@ -57,6 +59,7 @@ import { emote, EMOTE_NAMES } from "./players.ts";
 import { icon, type Sprites } from "./sprites.ts";
 import { tallyPanel } from "./tallyui.ts";
 import { LOG, thingName, touchThing } from "./town.ts";
+import { usesKey } from "./townkeys.ts";
 
 let S: Sprites | null = null;
 let ART: CampArt | null = null;
@@ -104,7 +107,7 @@ interface Said {
   tone: "k-gold" | "k-coral" | "k-dim";
 }
 
-function treasury(body: HTMLElement): null {
+function treasury(body: HTMLElement, life: Scope): null {
   const keeper = folk("cinfy");
   const line = el("span", "", { text: KEEPER.hello });
   const face = slot(G.cinfy ? faceOf(G.cinfy, 3) : null, 28);
@@ -150,18 +153,18 @@ function treasury(body: HTMLElement): null {
     for (const { kind, card, side, under } of rows) {
       const cost = price[kind];
       const words = said[kind];
-      const key = `request:${kind}`;
+      const spend = { on: `request:${kind}`, price: cost ?? 0 };
       side.replaceChildren(
         words || cost === undefined
           ? ""
           : button(
-              `leaf sm${asking(key) ? " asking" : ""}`,
+              `leaf sm${asking(spend) ? " asking" : ""}`,
               // A tome is not asked for twice: with what it is for written, its button says what pressing it does.
               kind === "tome"
                 ? [writing ? "Buy" : null, glyph("leaf"), whole(cost)]
-                : [asksAgain(key, [glyph("leaf"), whole(cost)], "Buy?")],
+                : [asksAgain(spend, [glyph("leaf"), whole(cost)], "Buy?")],
               (b) => {
-                press(kind, b);
+                press(kind, b, cost);
               },
             ),
       );
@@ -171,7 +174,8 @@ function treasury(body: HTMLElement): null {
       else if (kind === "tome") reason.remove();
     }
   };
-  const press = (kind: RequestKind, b: HTMLButtonElement): void => {
+  /** A request's button pressed, at the price it says (`cost`). */
+  const press = (kind: RequestKind, b: HTMLButtonElement, cost: number): void => {
     if (busy) return;
     if (kind === "tome" && (!writing || reason.value.trim() === "")) {
       // A tome needs what it is for: the field first, then the button buys.
@@ -184,7 +188,7 @@ function treasury(body: HTMLElement): null {
     }
     sfx.tap();
     // Writing what a tome is for and pressing "Buy 3,000" is asking enough; an aspect is asked once more.
-    if (kind === "tome" || pressedTwice(`request:${kind}`, draw)) void buy(kind, b);
+    if (kind === "tome" || pressedTwice(life, { on: `request:${kind}`, price: cost }, draw)) void buy(kind, b);
   };
   const look = async (): Promise<void> => {
     const answer = await askLeaf("/v1/game/requests");
@@ -251,7 +255,7 @@ function treasury(body: HTMLElement): null {
 // ---------- the quest board ----------
 
 /** The quest board's quests: drawn whole again whenever they are no longer the ones it shows. */
-function quests(body: HTMLElement): () => void {
+function quests(body: HTMLElement, on: QuestBoard): () => void {
   const note = guild.boardNote();
   if (note !== null) {
     // Somebody quests are not for: one note says why, and nothing on the board moves.
@@ -260,7 +264,7 @@ function quests(body: HTMLElement): () => void {
   }
   return redrawn(
     () => guild.quests().map((q) => q.id),
-    () => notes(body),
+    () => notes(body, on),
   );
 }
 
@@ -269,7 +273,7 @@ function quests(body: HTMLElement): () => void {
  * up to date. A quest says what it asks and what it pays, shows a bar for each way to finish it,
  * and at its foot when it ends and, when it can be rerolled, the reroll.
  */
-function notes(body: HTMLElement): () => void {
+function notes(body: HTMLElement, on: QuestBoard): () => void {
   body.replaceChildren();
   const parts = guild.quests().map((first) => {
     const pay = el("span");
@@ -289,14 +293,15 @@ function notes(body: HTMLElement): () => void {
     );
     body.append(note);
     const now = (): Quest => guild.quests().find((q) => q.id === first.id) ?? first;
-    const key = `reroll:${first.id}`;
+    /** What a paid reroll of it spends, at its price now. */
+    const spend = () => rerollSpend(first.id, now().reroll ?? 0);
     const press = async (b: HTMLButtonElement): Promise<void> => {
       const cost = now().reroll;
       if (cost === null) return;
       said.hidden = true;
       sfx.tap();
       // A free reroll goes at once; one that costs Leaf is asked once more.
-      if (cost > 0 && !pressedTwice(key, update)) return;
+      if (!on.reroll(now(), update)) return;
       const did = await waitingLook(b, guild.reroll(first.id, cost));
       if (!did) return;
       if ("said" in did) {
@@ -313,7 +318,7 @@ function notes(body: HTMLElement): () => void {
       }
     };
     const update = when(
-      () => JSON.stringify([now().goals, now().reward, now().reroll, asking(key)]),
+      () => JSON.stringify([now().goals, now().reward, now().reroll, asking(spend())]),
       () => {
         const q = now();
         // A quest pays by itself the moment it is finished.
@@ -344,8 +349,8 @@ function notes(body: HTMLElement): () => void {
             : cost === null
               ? ""
               : button(
-                  `sm ${cost > 0 ? "leaf" : "wood"}${asking(key) ? " asking" : ""}`,
-                  cost > 0 ? [asksAgain(key, ["Reroll", glyph("leaf"), whole(cost)], "Reroll?")] : ["Reroll"],
+                  `sm ${cost > 0 ? "leaf" : "wood"}${asking(spend()) ? " asking" : ""}`,
+                  cost > 0 ? [asksAgain(spend(), ["Reroll", glyph("leaf"), whole(cost)], "Reroll?")] : ["Reroll"],
                   (b) => void press(b),
                 ),
         );
@@ -400,18 +405,16 @@ function fullNotes(parts: readonly Part[]): HTMLElement[] {
 }
 
 /** The quest board: its quests on one tab, and on the other what has changed in the game. */
-function board(body: HTMLElement): () => void {
+function board(body: HTMLElement, life: Scope): () => void {
   const list = el("div", "k-col");
+  const on = questBoard(life);
   let update: (() => void) | null = null;
   const { row, show } = tabs(TABS, (i) => {
-    if (TABS[i] === "News") {
-      readNews();
-      update = null;
-      newsTab(list);
-    } else {
-      update = quests(list);
-      update();
-    }
+    on.show(TABS[i] ?? "Quests");
+    // News is drawn once; the quests are brought up to date for as long as they are on show.
+    update = TABS[i] === "News" ? null : quests(list, on);
+    if (update) update();
+    else newsTab(list);
   });
   body.append(row, list);
   show(TABS.indexOf(openingTab()));
@@ -855,16 +858,18 @@ function lineArt(l: AwayLine): Node {
   return faces.length > 0 ? el("span", "k-row faces", {}, ...faces) : glyph("heart");
 }
 
-/** The letter that meets the member at the gate. What the guild's ledger has already paid is only shown. */
+/**
+ * The letter that meets the member at the gate. What the guild's ledger has already paid is only
+ * shown. It is a layer over the page as the others are (`dialog.ts`): the keyboard is on its button,
+ * and Escape puts it away, as does a press anywhere on it or the use key. Each of those is the
+ * letter's only while it is the newest layer: with a notice over it, a key is the notice's.
+ */
 export function showArrival(letter: Letter, done: () => void): void {
+  /** What the letter holds while it is up: its lines' timers, its layer and its press. */
+  const life = scope();
   const root = $("arrival");
-  const paper = el(
-    "div",
-    "k-paper k-rise letter",
-    { role: "dialog", "aria-label": letter.title },
-    el("h1", "k-title big", { text: letter.title }),
-    el("div", "k-dim", { text: letter.sub }),
-  );
+  const title = el("h1", "k-title big", { text: letter.title });
+  const paper = el("div", "k-paper k-rise letter", {}, title, el("div", "k-dim", { text: letter.sub }));
   const rows: HTMLElement[] = [];
   for (const l of letter.lines) {
     const art = lineArt(l);
@@ -887,32 +892,30 @@ export function showArrival(letter: Letter, done: () => void): void {
   }
   // The lines arrive one at a time.
   rows.forEach((row, i) => {
-    setTimeout(
-      () => {
-        row.classList.add("in");
-        if (!arrived) return;
-        sfx.paper();
-      },
-      420 + i * 300,
-    );
+    life.after(420 + i * 300, () => {
+      row.classList.add("in");
+      sfx.paper();
+    });
   });
   const go = el("button", "k-btn wide", { type: "button", text: "Into town" });
   paper.append(el("hr"), go);
   root.append(paper);
   root.hidden = false;
-  arrived = (): void => {
+  const putAway = (): void => {
     arrived = null;
+    life.close();
     for (const row of rows) row.classList.add("in");
     root.classList.add("gone");
-    setTimeout(() => {
+    scope().after(400, () => {
       root.remove();
-    }, 400);
+    });
     sfx.open();
     done();
   };
-  root.addEventListener("click", () => {
-    arrived?.();
-  });
+  life.hold(dialog(paper, title, putAway, usesKey(putAway)));
+  go.focus({ preventScroll: true });
+  life.on(root, "click", putAway);
+  arrived = putAway;
 }
 
 export function dismissArrival(): boolean {

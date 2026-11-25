@@ -41,9 +41,19 @@ export const groundCard = (p: GroundPrint): Description =>
     : { name: "A redwood", tag: "Nothing can be built on it. Belts go round it, or under it by tunnel." };
 
 /** What a button that buys says once it has been pressed: the second press buys. */
-const AGAIN = "Press again to buy";
+export const AGAIN = "Press again to buy";
 
-export function plotCard(p: PlotPrint, buy: (plot: Plot) => boolean): Description {
+/** What a plot's card does: buys the plot, and says why a button will not do what it says, with its sound. */
+export interface PlotHands {
+  buy(plot: Plot): boolean;
+  refuse(why: string): void;
+}
+
+/**
+ * A plot's card. Its Buy, drawn with enough Coins, asks to be pressed again and buys; drawn short,
+ * it buys nothing whatever comes in while it is pressed, and says why.
+ */
+export function plotCard(p: PlotPrint, hands: PlotHands): Description {
   const enough = p.short === 0;
   const blocks: Block[] = [
     ...(p.bank ? [{ body: "The stream runs through it. A waterwheel must be beside the stream." }] : []),
@@ -69,11 +79,15 @@ export function plotCard(p: PlotPrint, buy: (plot: Plot) => boolean): Descriptio
               label: `Buy for ${whole(p.price)}`,
               look: enough ? "sm wide" : "sm wide off",
               icon: icon("coin"),
-              ...(enough ? { ask: AGAIN } : {}),
-              on: () => {
-                // Bought, the card has nothing more to offer: it is put away, so it does not sit over the new land.
-                if (buy(p.plot)) close();
-              },
+              ...(enough
+                ? {
+                    ask: { again: AGAIN, price: p.price },
+                    on: () => {
+                      // Bought, the card has nothing more to offer: it is put away, so it does not sit over the new land.
+                      if (hands.buy(p.plot)) close();
+                    },
+                  }
+                : { on: () => hands.refuse("Not enough Coins") }),
             },
           ]
         : [],

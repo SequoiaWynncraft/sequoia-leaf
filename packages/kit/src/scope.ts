@@ -60,6 +60,22 @@ export class Scope {
   }
 
   /**
+   * Children for one thing at a time: the tab on show, the card on top, what the hand is doing.
+   * Each call names the thing on show now; while it is the same as the last (`Object.is`), the same
+   * child is given back, and for anything else that child closes and a new one opens. Whoever tells
+   * it of every change (a tab leaving, a panel shutting) has the thing's own scope from it.
+   */
+  turns(): (now: unknown) => Scope {
+    let shown: { readonly what: unknown; readonly scope: Scope } | null = null;
+    return (now) => {
+      if (shown && !shown.scope.closed && Object.is(shown.what, now)) return shown.scope;
+      shown?.scope.close();
+      shown = { what: now, scope: this.child() };
+      return shown.scope;
+    };
+  }
+
+  /**
    * Hears `kind` on `target` until let go of. Each call listens with a function of its own, so the
    * same `fn` given twice, here or in another scope, is two listeners, and letting go of one leaves
    * the other.

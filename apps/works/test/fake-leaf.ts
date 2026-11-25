@@ -122,10 +122,15 @@ export function coinsAre(coins: number): void {
   fromLeaf(current.purse());
 }
 
-/** Holds the page's clock still for each test, so the yard runs on only when a test says, and lets everything go after it. */
+/**
+ * Holds the page's clock still for each test, so the yard runs on only when a test says, and lets
+ * everything go after it. Each test starts with no word on the purse, whatever a test of another
+ * file left: the stand-in Leaf's first word is never taken for an old one.
+ */
 export function useFakeLeaf(): void {
   const clock = performance.now.bind(performance);
   beforeEach(() => {
+    forgetLedger();
     performance.now = () => 1000;
   });
   afterEach(() => {

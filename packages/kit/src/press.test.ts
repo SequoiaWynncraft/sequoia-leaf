@@ -4,9 +4,12 @@ import { type Click, LONG_PRESS, longPress } from "./press.ts";
 import { scope } from "./scope.ts";
 import { Listened } from "./standin.ts";
 
-/** A thing on the page to press, which counts the listeners on it. */
+/** A thing on the page to press, 40 by 20 CSS pixels at the window's corner, which counts the listeners on it. */
 class Thing extends Listened {
   isConnected = true;
+  getBoundingClientRect(): { left: number; top: number; right: number; bottom: number } {
+    return { left: 0, top: 0, right: 40, bottom: 20 };
+  }
 }
 
 const pointer = (type: string, pointerId: number, x = 0, y = 0, pointerType = "touch"): Event =>
@@ -124,6 +127,37 @@ describe("a long press", () => {
     // The finger slid off and no click came; the mouse presses next, and its click is the thing's.
     thing.dispatchEvent(pointer("pointerdown", 2, 0, 0, "mouse"));
     expect(click(tap(2))).toBe(false);
+  });
+
+  test("held by fingers that each move off the thing before it lasts, asks nothing (the Grove's Skip)", () => {
+    const thing = new Thing();
+    const asked: string[] = [];
+    longPress(scope(), thing, { starts: () => true, asked: () => asked.push("asked") });
+    const resting = thing.listening;
+    for (const kind of ["touch", "mouse"]) {
+      thing.dispatchEvent(pointer("pointerdown", 1, 0, 0, kind));
+      thing.dispatchEvent(pointer("pointerdown", 2, 0, 0, kind));
+      thing.dispatchEvent(pointer("pointerleave", 1));
+      thing.dispatchEvent(pointer("pointerleave", 2));
+      jest.advanceTimersByTime(LONG_PRESS * 2);
+      expect(thing.listening).toBe(resting);
+    }
+    expect(asked).toEqual([]);
+  });
+
+  test("held by a finger the thing has captured, that slides a little way off it, asks nothing (the Grove's Skip)", () => {
+    // Down one pixel in from the right edge; a finger's pointer is the thing's until it lifts, so it
+    // hears the move and no leave comes. Six pixels is resting, by distance, but it is off the thing.
+    const { thing, asked } = pressed();
+    thing.dispatchEvent(pointer("pointerdown", 1, 39, 10));
+    thing.dispatchEvent(pointer("pointermove", 1, 45, 10));
+    jest.advanceTimersByTime(LONG_PRESS);
+    expect(asked).toEqual([]);
+    // Still on it, the same little wander rests.
+    thing.dispatchEvent(pointer("pointerdown", 1, 39, 10));
+    thing.dispatchEvent(pointer("pointermove", 1, 33, 10));
+    jest.advanceTimersByTime(LONG_PRESS);
+    expect(asked).toEqual(["asked"]);
   });
 
   test("ends with its owner, which takes everything off the thing", () => {

@@ -43,15 +43,25 @@ export function tipAt(spot: TipSpot, title: string, text = "", by: object | null
   if (title) add(node, el("b", "k-name", { text: title }));
   if (text) add(node, el("div", "k-dim", { text }));
   document.body.append(node);
+  putBeside(node, spot);
+  box = node;
+  owner = by;
+  if (by instanceof Element) by.setAttribute("aria-describedby", ID);
+}
+
+/** Puts a tip beside a spot: above it where there is room, otherwise below, and inside the window. */
+function putBeside(node: HTMLElement, spot: TipSpot): void {
   const r = node.getBoundingClientRect();
   const gap = 6;
   const x = Math.round(Math.min(Math.max(4, spot.x + spot.w / 2 - r.width / 2), window.innerWidth - r.width - 4));
   const above = spot.y - r.height - gap;
   const y = Math.round(above >= 4 ? above : Math.min(spot.y + spot.h + gap, window.innerHeight - r.height - 4));
   node.style.transform = `translate(${x}px, ${y}px)`;
-  box = node;
-  owner = by;
-  if (by instanceof Element) by.setAttribute("aria-describedby", ID);
+}
+
+/** The tip `by` put up goes with its spot, which has moved (a thing walking, the view moving); any other is left. */
+export function tipTo(spot: TipSpot, by: object): void {
+  if (box && owner === by) putBeside(box, spot);
 }
 
 /** Puts the tip away; with `by`, only if it is that owner's tip. */

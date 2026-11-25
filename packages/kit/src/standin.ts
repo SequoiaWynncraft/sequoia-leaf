@@ -6,6 +6,7 @@
 
 import { CLOSE, decodeMove, encodeSnapshot, type Entry, type ToClient } from "@sequoia-leaf/core";
 
+import { heard } from "./dom.ts";
 import { isRecord, type LiveSocket, pretend, type Store } from "./net.ts";
 
 export { CLOSE };
@@ -314,4 +315,156 @@ export function liveSockets(): { sockets: FakeSocket[]; done: () => void } {
     },
   });
   return { sockets, done };
+}
+
+// ---------- a page to press on ----------
+
+/**
+ * The player presses: a pointer goes down on `on`, or on a test's page that has none, on nothing in
+ * particular. A button that spends is done only on the press after the one that asked (`pressedTwice`).
+ */
+export const press = (on: EventTarget | null = null): void => heard({ is: "down", on });
+
+/** The selectors a stand-in element matches: a tag (`button`), a role (`[role='button']`), a link (`a[href]`). */
+const matchesOne = (e: Part, one: string): boolean =>
+  one === e.localName ||
+  (one === "[role='button']" && e.getAttribute("role") === "button") ||
+  (one === "a[href]" && e.localName === "a" && e.getAttribute("href") !== null);
+
+/** A canvas's drawing on the stand-in page: it takes anything and keeps none of it. */
+const inert: () => unknown = new Proxy(() => inert, { get: () => inert, set: () => true });
+
+/**
+ * An element of the stand-in page, as `el` makes one: its classes, attributes and children, what
+ * holds it, whether it is on the page (under the page's body), and whether it can be seen (neither
+ * it nor anything holding it hidden, by `hidden` or the kit's `hid`). A canvas draws nothing.
+ */
+export class Part extends EventTarget {
+  readonly localName: string;
+  readonly attrs = new Map<string, string>();
+  readonly kids: Part[] = [];
+  holder: Part | null = null;
+  className = "";
+  textContent = "";
+  hidden = false;
+  readonly dataset: Record<string, string> = {};
+  readonly style = { setProperty: (): void => undefined };
+  readonly classList = {
+    add: (name: string): void => {
+      if (!this.className.split(" ").includes(name)) this.className = `${this.className} ${name}`.trim();
+    },
+  };
+  readonly #root: boolean;
+  constructor(tag: string, root = false) {
+    super();
+    this.localName = tag;
+    this.#root = root;
+  }
+  setAttribute(name: string, value: string): void {
+    this.attrs.set(name, value);
+  }
+  getAttribute(name: string): string | null {
+    return this.attrs.get(name) ?? null;
+  }
+  appendChild<T>(kid: T): T {
+    if (kid instanceof Part) {
+      kid.remove();
+      kid.holder = this;
+      this.kids.push(kid);
+    }
+    return kid;
+  }
+  append(...kids: unknown[]): void {
+    for (const kid of kids) this.appendChild(kid);
+  }
+  replaceChildren(...kids: unknown[]): void {
+    for (const kid of this.kids.splice(0)) kid.holder = null;
+    this.append(...kids);
+  }
+  remove(): void {
+    const from = this.holder;
+    if (!from) return;
+    from.kids.splice(from.kids.indexOf(this), 1);
+    this.holder = null;
+  }
+  /** It, and each that holds it, out to the page. */
+  *#out(): Generator<Part> {
+    yield this;
+    if (this.holder) yield* this.holder.#out();
+  }
+  get isConnected(): boolean {
+    return [...this.#out()].some((at) => at.#root);
+  }
+  contains(other: unknown): boolean {
+    return other instanceof Part && [...other.#out()].includes(this);
+  }
+  matches(selector: string): boolean {
+    return selector.split(",").some((one) => matchesOne(this, one.trim()));
+  }
+  /** Everything it holds, at any depth. */
+  *#within(): Generator<Part> {
+    for (const kid of this.kids) {
+      yield kid;
+      yield* kid.#within();
+    }
+  }
+  /** What it holds with a class (`.name`): the only selector the stand-in page looks for within. */
+  querySelectorAll(selector: string): Part[] {
+    const name = selector.replace(/^\./, "");
+    return [...this.#within()].filter((at) => at.className.split(" ").includes(name));
+  }
+  closest(selector: string): Part | null {
+    return [...this.#out()].find((at) => at.matches(selector)) ?? null;
+  }
+  checkVisibility(): boolean {
+    const hidden = (at: Part): boolean =>
+      at.hidden || at.attrs.has("hidden") || at.className.split(" ").includes("hid");
+    return this.isConnected && ![...this.#out()].some(hidden);
+  }
+  getClientRects(): unknown[] {
+    return this.checkVisibility() ? [{}] : [];
+  }
+  focus(): void {
+    page.focused = this;
+  }
+  getContext(): unknown {
+    return inert;
+  }
+}
+
+/** The stand-in page's one keyboard: the element that has it. */
+const page: { focused: Part | null } = { focused: null };
+
+/** The globals a page has that the stand-in page stands in for, by name. */
+const PAGE_GLOBALS = ["document", "Element", "HTMLElement", "HTMLButtonElement"] as const;
+
+/**
+ * Stands in for a page the kit draws on and a player presses on: `el` makes `Part`s, and `body`
+ * is the page (what is under it is on it). `done` puts the real world back.
+ */
+export function aPage(): { body: Part; done: () => void } {
+  const body = new Part("body", true);
+  page.focused = null;
+  const doc = {
+    body,
+    createElement: (tag: string) => new Part(tag),
+    createTextNode: (text: string) => Object.assign(new Part("#text"), { textContent: text }),
+    get activeElement(): Part | null {
+      return page.focused;
+    },
+    querySelector: (): null => null,
+  };
+  const values: Record<(typeof PAGE_GLOBALS)[number], unknown> = {
+    document: doc,
+    Element: Part,
+    HTMLElement: Part,
+    HTMLButtonElement: Part,
+  };
+  for (const name of PAGE_GLOBALS) Object.defineProperty(globalThis, name, { value: values[name], configurable: true });
+  return {
+    body,
+    done: () => {
+      for (const name of PAGE_GLOBALS) Reflect.deleteProperty(globalThis, name);
+    },
+  };
 }

@@ -17,7 +17,7 @@
  * The rules of that (`Deck`, `partsOf`) touch no page and are tested; the rest draws them.
  */
 import { givingBack, layer } from "./dialog.ts";
-import { add, asking, asksAgain, el, icon, pressedTwice, unheld } from "./dom.ts";
+import { add, asking, asksAgain, el, icon, pressedTwice, type Spend, unheld } from "./dom.ts";
 import { longPress } from "./press.ts";
 import { scope } from "./scope.ts";
 import { goesWith, iconButton, tip, tipAt, tipOff } from "./tip.ts";
@@ -97,8 +97,12 @@ export interface Action {
   /** A tip on it. */
   readonly hint?: string;
   readonly about?: string;
-  /** For what spends: the first press only changes the button's words to these, and a second press does it. */
-  readonly ask?: string;
+  /**
+   * For what spends: its price, as `after` shows it, and the words its button says once pressed.
+   * The first press only changes the button's words to `again`; a second press does it, while the
+   * card stays on show at that price (`Deck.confirms`).
+   */
+  readonly ask?: { readonly again: string; readonly price: number };
   readonly on: (button: HTMLButtonElement) => void;
 }
 
@@ -176,6 +180,9 @@ export function partsOf(
   return parts;
 }
 
+/** What an action that asks spends on: that action of that card, at its price. */
+const actionSpend = (card: Ref, a: Action): Spend => ({ on: `${card}|${a.label ?? ""}`, price: a.ask?.price ?? 0 });
+
 /**
  * The rules of the cards, with no page in them: what is registered, which card is up and how it
  * got there, what is pointed at, and whether cards are held shut.
@@ -190,6 +197,8 @@ export class Deck {
   #told: string = "|";
   /** Whoever asked for a card whose description is still coming, and whether to pin it. */
   #awaited: { from: object; pinned: boolean } | null = null;
+  /** What the card on show holds while it is the one on show (`confirms`): a scope for each pinned card drawn, kept while it is drawn again. */
+  readonly #entries = scope().turns();
 
   constructor(view: View) {
     this.view = view;
@@ -229,8 +238,21 @@ export class Deck {
 
   #set(open: Open | null, description: Description | null): void {
     this.open = open;
+    // Another card on show (followed to, gone back to, pinned anew, put away): what the last held goes.
+    this.#entries(open?.pinned ? open : null);
     this.view.render(open, description);
     this.#tell();
+  }
+
+  /**
+   * An action of the card on show was pressed: whether it goes ahead. One that does not ask, at
+   * once; one that asks (`Action.ask`), on its second press for the same price while this very
+   * card is on show, pinned, and nothing has been followed to, gone back from or put away since.
+   * Drawn again with what it says changed (`refresh`), it is still the same card.
+   */
+  confirms(a: Action, redraw: () => void): boolean {
+    const life = this.open?.pinned ? this.#entries(this.open) : null;
+    return !a.ask || (life !== null && pressedTwice(life, actionSpend(this.shown() ?? "", a), redraw));
   }
 
   /**
@@ -320,12 +342,9 @@ export class Deck {
     if (!o || o.stack.length < 2) return false;
     const stack = o.stack.slice(0, -1);
     const d = this.describe(stack.at(-1) ?? "");
-    if (!d) {
-      this.#set(null, null);
-      return false;
-    }
-    this.#set({ ...o, stack }, d);
-    return true;
+    // The card before is gone (the thing is no more): the card is put away.
+    this.#set(d ? { ...o, stack } : null, d);
+    return d !== null;
   }
 
   /** Shows what dropping the thing in hand would do, while cards are otherwise held shut. */
@@ -561,24 +580,20 @@ function entryOf(e: Entry, look: Row["look"]): HTMLElement {
 
 function actionOf(a: Action, card: Ref): HTMLElement {
   const slot = a.look === "slot";
-  const key = `${card}|${a.label}`;
-  const ask = a.ask !== undefined && asking(key) ? a.ask : null;
+  const spend = actionSpend(card, a);
+  const ask = a.ask !== undefined && asking(spend) ? a.ask.again : null;
+  const face = slot ? [a.icon ? fit(a.icon, 12) : null] : [a.icon ?? null, a.label || null, a.after ?? null];
   const b = el(
     "button",
     slot
       ? `k-slot k-info-pin${a.lit ? " lit" : ""}`
       : `k-btn ${a.look ?? "wood sm"}${a.off ? " off" : ""}${ask ? " asking" : ""}`,
-    { type: "button", "aria-label": a.label && slot ? a.label : null },
-    ...(a.ask !== undefined && !slot
-      ? [asksAgain(key, [a.icon ?? null, a.label || null, a.after ?? null], a.ask)]
-      : [
-          a.icon && !ask ? (slot ? fit(a.icon, 12) : a.icon) : null,
-          ask ?? (a.label && !slot ? a.label : null),
-          slot || ask ? null : (a.after ?? null),
-        ]),
+    { type: "button", "aria-label": a.label && slot ? (ask ?? a.label) : null },
+    // One that asks shows its question through the kit (`asksAgain`), in a slot as on a button.
+    ...(a.ask === undefined ? face : [asksAgain(spend, face, a.ask.again)]),
   );
   b.addEventListener("click", () => {
-    if (a.ask !== undefined && !pressedTwice(key, () => deck.refresh())) return;
+    if (!deck.confirms(a, refresh)) return;
     a.on(b);
     // Done or refused, the button no longer asks.
     if (a.ask !== undefined) deck.refresh();
@@ -683,7 +698,7 @@ function drawCard(d: Description, o: Open): HTMLElement {
 
 /** The card last drawn, to tell a card drawn again from a new one. */
 let drawn: Open | null = null;
-/** A pinned card is a layer over the page (`dialog.ts`): Escape puts it away, and Tab stays in it. */
+/** The pinned card's layer over the page (`dialog.ts`), where Escape puts it away and Tab stays in it: how to let go of it, while one is up. */
 let pinnedLayer: (() => void) | null = null;
 const unpin = (): void => {
   pinnedLayer?.();
@@ -736,11 +751,7 @@ const view: View = {
     // A card newly pinned is a new layer, which gives the focus back to where it was before this card.
     const fresh = !(prev?.pinned && same);
     if (!o.pinned || fresh) unpin();
-    if (o.pinned)
-      pinnedLayer ??= layer(
-        () => node,
-        () => deck.close(),
-      );
+    if (o.pinned) pinnedLayer ??= layer(() => node, close);
     if (o.pinned && o.via === "key" && fresh) card.focus({ preventScroll: true });
   },
 };

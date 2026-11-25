@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 
 import { pressedTwice } from "@sequoia-leaf/kit/dom.ts";
+import { scope } from "@sequoia-leaf/kit/scope.ts";
+import { press } from "@sequoia-leaf/kit/standin.ts";
 import { BANNERS, draw, EARLIER, headliner, PRIZES, type Rarity, RATES } from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
 
@@ -17,7 +19,7 @@ import {
   percent,
   pityLine,
   prizeName,
-  pullKey,
+  pullSpend,
   RARITY_NAMES,
   revealOf,
   rules,
@@ -242,10 +244,15 @@ test("one prize alone stays on show as it did, and ten fillers never wait", () =
 
 const redraw = (): void => undefined;
 test("a pull asked for in one pool is not confirmed by pressing it in another", () => {
-  expect(pressedTwice(pullKey(banner.id, 10), redraw)).toBe(false);
-  expect(pressedTwice(pullKey("grove", 10), redraw)).toBe(false);
-  expect(pressedTwice(pullKey("grove", 1), redraw)).toBe(false);
-  expect(pressedTwice(pullKey("grove", 1), redraw)).toBe(true);
+  const grove = scope();
+  const pressed = (pool: string, n: 1 | 10): boolean => {
+    press();
+    return pressedTwice(grove, pullSpend(pool, n), redraw);
+  };
+  expect(pressed(banner.id, 10)).toBe(false);
+  expect(pressed("grove", 10)).toBe(false);
+  expect(pressed("grove", 1)).toBe(false);
+  expect(pressed("grove", 1)).toBe(true);
 });
 
 test("a pull that cannot be paid for says why, in the kit's words for closed Leaf or for too little", () => {

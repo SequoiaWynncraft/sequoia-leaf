@@ -26,11 +26,12 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 import { asking, pressedTwice } from "@sequoia-leaf/kit/dom.ts";
+import { press } from "@sequoia-leaf/kit/standin.ts";
 
 import { clear, ctx, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { heldBox } from "./held.ts";
 import { askSave, askSaveYard, saveIn, saveKey } from "./plans.ts";
-import { S, toolHooks } from "./state.ts";
+import { handSession, S, toolHooks } from "./state.ts";
 import { aimAt, cancel, confirm, hold, markEnd, markOver, markStart, setTool, takeAway, unaim, undo } from "./tools.ts";
 import { handPrint, pressUpgrade } from "./ui/dock.ts";
 import { differences, doNow } from "./yard.ts";
@@ -107,15 +108,6 @@ describe("Save yard", () => {
     await Bun.sleep(5);
     expect(sent(fake.leaf)).toEqual(["saveYard"]);
     expect(fake.leaf.yard.blueprints[2]).toEqual(S.world.blueprints[2]);
-    console.log(
-      "DBG",
-      fake.leaf.reads.length,
-      S.tool,
-      check(S.world),
-      check(fake.leaf.yard),
-      S.world.tick,
-      fake.leaf.yard.tick,
-    );
   });
 });
 
@@ -147,7 +139,7 @@ describe("a plan of the whole yard in hand", () => {
     // A crate stood (20), a bench taken up (40): it gives back 20.
     expect([print.line, print.place, print.turn, print.go]).toEqual([
       { text: "Whole yard: 1 to build, 1 to take up, gives back 20 Coins.", bad: false },
-      { key: expect.any(String), cost: -20, asking: false, bad: false },
+      { spend: { on: expect.any(String), price: -20 }, cost: -20, asking: false, bad: false },
       false,
       null,
     ]);
@@ -159,9 +151,11 @@ describe("a plan of the whole yard in hand", () => {
     const before = settings(S.world);
     setTool("select");
     hold(0);
+    press();
     expect(confirm()).toBe(false);
     expect(handPrint().place?.asking).toBe(true);
     expect(settings(S.world)).not.toBe(saved);
+    press();
     expect(confirm()).toBe(true);
     expect([settings(S.world), S.group, handPrint().place]).toEqual([saved, null, null]);
     await until(() => fake.leaf.posts >= 1);
@@ -191,9 +185,15 @@ describe("a plan of the whole yard in hand", () => {
     setTool("select");
     hold(0);
     const short = 20 - Math.floor(S.world.till / MILLI);
-    expect(handPrint().place).toEqual({ key: expect.any(String), cost: 20, asking: false, bad: true });
+    expect(handPrint().place).toEqual({
+      spend: { on: expect.any(String), price: 20 },
+      cost: 20,
+      asking: false,
+      bad: true,
+    });
     expect(handPrint().line).toEqual({ text: `Not enough Coins: ${short} short`, bad: true });
     const before = encode(S.world);
+    press();
     expect(confirm()).toBe(false);
     expect([said, handPrint().place?.asking, encode(S.world)]).toEqual([
       [`Not enough Coins: ${short} short.`],
@@ -218,13 +218,16 @@ describe("a press that waits for a second", () => {
     const was = settings(S.world);
     setTool("select");
     hold(0);
+    press();
     expect([confirm(), handPrint().place?.asking]).toEqual([false, true]);
     cancel();
     hold(1);
     expect(handPrint().place?.asking).toBe(false);
+    press();
     expect([confirm(), handPrint().place?.asking]).toEqual([false, true]);
     cancel();
     hold(1);
+    press();
     expect([handPrint().place?.asking, confirm()]).toEqual([false, false]);
     expect([settings(S.world), sent(fake.leaf)]).toEqual([was, []]);
   });
@@ -238,16 +241,18 @@ describe("a press that waits for a second", () => {
     markEnd();
     askSave();
     const area = saveKey(1);
-    expect(area).toMatch(/:area:\d+@\d+$/);
-    expect([pressedTwice(area, () => {}), asking(area)]).toEqual([false, true]);
+    expect(area.on).toMatch(/:area:\d+@\d+$/);
+    press();
+    expect([pressedTwice(handSession(), area, () => {}), asking(area)]).toEqual([false, true]);
     // Save put away: what it waited for goes with it.
     cancel();
     expect(asking(area)).toBe(false);
     cancel();
     askSaveYard();
     const all = saveKey(1);
-    expect(all).not.toBe(area);
-    expect(pressedTwice(all, () => {})).toBe(false);
+    expect(all).not.toEqual(area);
+    press();
+    expect(pressedTwice(handSession(), all, () => {})).toBe(false);
   });
 });
 
@@ -257,10 +262,12 @@ describe("a press that waits for a second, when the yard changes", () => {
     setTool("select");
     expect(takeAway(28, 20)).toBe(true);
     const price = handPrint().upgrade?.cost ?? 0;
+    press();
     pressUpgrade(true);
     expect(handPrint().upgrade?.asking).toBe(true);
     expect(undo()).toBe(true);
     expect([handPrint().upgrade?.asking, (handPrint().upgrade?.cost ?? 0) > price]).toEqual([false, true]);
+    press();
     pressUpgrade(true);
     expect(handPrint().upgrade?.asking).toBe(true);
     await until(() => fake.leaf.posts >= 2);
@@ -276,11 +283,13 @@ describe("a press that waits for a second, when the yard changes", () => {
     markEnd();
     askSave();
     const kept = S.world.blueprints[1];
-    expect(pressedTwice(saveKey(1), () => {})).toBe(false);
+    press();
+    expect(pressedTwice(handSession(), saveKey(1), () => {})).toBe(false);
     const [spot] = clear(1);
     if (!spot) throw new Error("no clear ground");
     expect(doNow({ do: "build", kind: BELT, dir: 0, grade: 1, ...spot })).not.toHaveProperty("refused");
-    expect([asking(saveKey(1)), pressedTwice(saveKey(1), () => {}), S.world.blueprints[1]]).toEqual([
+    press();
+    expect([asking(saveKey(1)), pressedTwice(handSession(), saveKey(1), () => {}), S.world.blueprints[1]]).toEqual([
       false,
       false,
       kept,
@@ -295,8 +304,10 @@ describe("a plan of the whole yard in hand, by a finger", () => {
     S.finger = true;
     setTool("select");
     hold(0);
+    press();
     fingerTap(3, 3);
     expect([handPrint().place?.asking, settings(S.world) === saved]).toEqual([true, false]);
+    press();
     fingerTap(40, 30);
     expect(settings(S.world)).toBe(saved);
   });

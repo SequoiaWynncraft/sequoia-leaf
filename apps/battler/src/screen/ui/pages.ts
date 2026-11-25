@@ -5,6 +5,7 @@ import { portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
  * at a time.
  */
 import { link } from "@sequoia-leaf/kit/card.ts";
+import { type Choice, choices } from "@sequoia-leaf/kit/choices.ts";
 import { add, amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 import { balance, LEAF_MEMBERS, leafFor, leafOpen } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
@@ -68,7 +69,7 @@ let asks: PageAsks | null = null;
 /** A page opened on top of whichever the table would show by itself. */
 let extra: PageId | null = null;
 let shownKey = "";
-let tab = "figures";
+let tab: AlmanacTab = "figures";
 /** The look being tried on in the looks page, before it is bought or worn. */
 let trying: { kind: LookKind; id: LookId } | null = null;
 let sureHome = false;
@@ -325,34 +326,30 @@ function figureTile(id: FigureId): HTMLElement {
   return tile;
 }
 
+type AlmanacTab = "figures" | "traits" | "items" | "raids";
+const ALMANAC: readonly Choice<AlmanacTab>[] = [
+  { id: "figures", name: "Figures" },
+  { id: "traits", name: "Traits" },
+  { id: "items", name: "Items" },
+  { id: "raids", name: "Raids" },
+];
+
 function almanac(): HTMLElement {
   const a = S.almanac;
-  const tabs = el("div", "k-tabs", { role: "tablist" });
-  for (const [id, name] of [
-    ["figures", "Figures"],
-    ["traits", "Traits"],
-    ["items", "Items"],
-    ["raids", "Raids"],
-  ] as const) {
-    tabs.append(
-      el(
-        "button",
-        "k-btn sm",
-        {
-          type: "button",
-          role: "tab",
-          "aria-selected": String(tab === id),
-          onclick: () => {
-            tab = id;
-            snd.tap();
-            renderPages(true);
-          },
-        },
-        name,
-      ),
-    );
-  }
   const page = el("div", "leaf k-scroll", {});
+  // Drawn again on a choice: the page keeps the keyboard on the tab chosen, by its id (`renderPages`).
+  const tabs = choices(ALMANAC, {
+    kind: "tabs",
+    name: "Almanac",
+    chosen: tab,
+    look: "sm",
+    page,
+    choose: (id) => {
+      tab = id;
+      snd.tap();
+      renderPages(true);
+    },
+  });
   if (tab === "figures") {
     add(
       page,
@@ -454,7 +451,7 @@ function almanac(): HTMLElement {
       );
     }
   }
-  return panel("The almanac", pic(glyph("book")), el("div", "k-body", {}, tabs, page), true, "wide");
+  return panel("The almanac", pic(glyph("book")), el("div", "k-body", {}, tabs.el, page), true, "wide");
 }
 
 // ---------- how to play ----------

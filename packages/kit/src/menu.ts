@@ -18,6 +18,7 @@
  * tip that is up, which may name a key. A page builds its menu once, at the start (`settingsMenu`).
  */
 import { accountPage } from "./account.ts";
+import { type Choices, choices } from "./choices.ts";
 import { dialog } from "./dialog.ts";
 import { el, icon } from "./dom.ts";
 import { type KeyList, nameOf } from "./keyboard.ts";
@@ -118,9 +119,9 @@ class SettingsMenu implements Menu {
   readonly #gears = new Set<HTMLElement>();
   readonly #scrim = el("div", "k-scrim k-settings-scrim", { hidden: true });
   readonly #title = el("h2", "k-title", { text: "Settings" });
-  readonly #tabs = el("div", "k-tabs", { role: "tablist", "aria-label": "Settings" });
   // The page can take the keyboard, so a tab of nothing to press (Keys) can still be scrolled with it.
-  readonly #page = el("div", "k-settings-page k-scroll", { role: "tabpanel", tabindex: "0" });
+  readonly #page = el("div", "k-settings-page k-scroll", { tabindex: "0" });
+  readonly #tabs: Choices<string>;
   readonly #keys: KeysTab;
   readonly #panel: HTMLElement;
   /** Listeners of the tab shown, let go of as it is drawn again or the menu is put away. */
@@ -147,13 +148,22 @@ class SettingsMenu implements Menu {
       ...(of.tabs ?? []),
     ];
     this.#at = "sound";
+    this.#tabs = choices(this.#tabsOf, {
+      kind: "tabs",
+      name: "Settings",
+      chosen: this.#at,
+      page: this.#page,
+      choose: (id) => {
+        this.#choose(id);
+      },
+    });
     const shut = el("button", "k-btn coral icon", { type: "button", "aria-label": "Close" }, icon("close"));
     this.#panel = el(
       "section",
       "k-panel k-settings",
       {},
       el("header", "k-head", {}, el("span", "k-settings-mark", {}, icon("gear")), this.#title, shut),
-      this.#tabs,
+      this.#tabs.el,
       this.#keys.line,
       this.#page,
     );
@@ -177,9 +187,6 @@ class SettingsMenu implements Menu {
     );
     // A tip that is up names its key as it now is.
     scope.hold(of.keys.listen(retip));
-    scope.on(this.#tabs, "keydown", (e) => {
-      this.#stepTab(e);
-    });
     // The shade at the foot comes and goes as the tab scrolls, and as the window changes size.
     const cue = (): void => {
       this.#cue();
@@ -287,31 +294,13 @@ class SettingsMenu implements Menu {
 
   #draw(): void {
     this.#letGo();
-    this.#tabs.replaceChildren(
-      ...this.#tabsOf.map(({ id, name }) =>
-        el(
-          "button",
-          "k-btn",
-          {
-            type: "button",
-            role: "tab",
-            id: `k-settings-tab-${id}`,
-            "aria-selected": String(id === this.#at),
-            tabindex: id === this.#at ? "0" : "-1",
-            onclick: () => {
-              this.#choose(id);
-            },
-          },
-          name,
-        ),
-      ),
-    );
+    this.#tabs.select(this.#at);
     const tab = this.#tabsOf.find((t) => t.id === this.#at) ?? this.#tabsOf[0];
     this.#keys.line.hidden = tab?.id !== "keys" || !this.#of.keys.changeable;
-    this.#page.setAttribute("aria-labelledby", `k-settings-tab-${tab?.id ?? ""}`);
     this.#page.replaceChildren(...(tab?.draw((stop) => this.#drops.push(stop)) ?? []));
   }
 
+  /** Another tab is chosen (from its row, `choices.ts`, or by `open`): drawn, from its top. */
   #choose(tab: string): void {
     if (tab === this.#at || !this.#tabsOf.some((t) => t.id === tab)) return;
     this.#at = tab;
@@ -319,19 +308,6 @@ class SettingsMenu implements Menu {
     this.#draw();
     this.#page.scrollTop = 0;
     this.#cue();
-    document.getElementById(`k-settings-tab-${tab}`)?.focus();
-  }
-
-  /** Left and right go from tab to tab, as a row of tabs does. */
-  #stepTab(e: Event): void {
-    if (!(e instanceof KeyboardEvent)) return;
-    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-    if (step === 0) return;
-    e.preventDefault();
-    const tabs = this.#tabsOf;
-    const i = tabs.findIndex((t) => t.id === this.#at);
-    const next = tabs[(i + step + tabs.length) % tabs.length];
-    if (next) this.#choose(next.id);
   }
 
   /** Whether there is more of the tab below what shows: a shade over the foot of the page says so. */

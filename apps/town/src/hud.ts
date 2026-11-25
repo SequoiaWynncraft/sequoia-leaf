@@ -5,15 +5,16 @@
  * (`ui.ts`, `campui.ts`); everything here is the same for both.
  */
 
-import { add, el, icon as glyph, replay, shown, when } from "@sequoia-leaf/kit/dom.ts";
+import { $, add, el, icon as glyph, pic, replay, shown, when } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
-import { balance, type Currency } from "@sequoia-leaf/kit/purse.ts";
+import type { Currency } from "@sequoia-leaf/kit/purse.ts";
+import { type PurseBar, purseBar } from "@sequoia-leaf/kit/pursebar.ts";
 import { whole } from "@sequoia-leaf/kit/say.ts";
 import { type Scope, scope } from "@sequoia-leaf/kit/scope.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
-import { makeCanvas, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { DOING, type Doing } from "@sequoia-leaf/town/folk.ts";
 
 import { hop, say } from "./actors.ts";
@@ -21,18 +22,9 @@ import { type Actor, after, G, hooks, show, watch } from "./game.ts";
 import type { Count, Me, Tone } from "./guild.ts";
 import { span } from "./letter.ts";
 
-export { when };
+export { $, pic, when };
 
 export type Kid = Node | string | null;
-
-export const $ = (id: string): HTMLElement => must(document.getElementById(id), id);
-
-/** A copy of a small picture, shown `scale` interface units to each of its pixels. */
-export function pic(src: HTMLCanvasElement, scale = 1): HTMLCanvasElement {
-  const { c, g } = makeCanvas(src.width, src.height);
-  g.drawImage(src, 0, 0);
-  return shown(c, scale);
-}
 
 /**
  * Somebody's face for a card, a chip or a letter, `scale` units to each of a member's face pixels:
@@ -102,48 +94,11 @@ export const centre = (node: Element): Pt => {
 
 // ---------- the purse ----------
 
-interface Counter {
-  num: HTMLElement;
-  art: HTMLElement;
-  shown: number;
-}
-const counters: Partial<Record<Currency, Counter>> = {};
-let tickAt = 0;
+/** The purse as every page shows it (`pursebar.ts`), once the interface is built. */
+let purse: PurseBar | null = null;
 
-function counter(kind: Currency, title: string, about: string): Counter {
-  const art = glyph(kind === "leaf" ? "leaf" : "coin");
-  const num = el("span", "", { text: balance()[kind] });
-  const box = el("span", kind === "leaf" ? "k-cur leaf" : "k-cur", { tabindex: 0 }, art, num);
-  $("purse").append(box);
-  tip(box, title, about);
-  return { num, art, shown: balance()[kind] };
-}
-
-export function purseAt(kind: Currency): Pt {
-  const c = counters[kind];
-  return c ? centre(c.art) : { x: 30, y: 30 };
-}
-
-export function bump(kind: Currency): void {
-  const c = counters[kind];
-  if (c) replay(c.art, "k-bump");
-}
-
-function roll(kind: Currency, dt: number): void {
-  const c = counters[kind];
-  if (!c) return;
-  const real = balance()[kind];
-  if (c.shown === real) return;
-  const d = real - c.shown;
-  c.shown += Math.sign(d) * Math.min(Math.abs(d), Math.max(1, Math.ceil(Math.abs(d) * dt * 5)));
-  c.num.textContent = String(c.shown);
-  const now = performance.now();
-  if (d > 0 && now > tickAt) {
-    tickAt = now + 70;
-    if (kind === "leaf") sfx.leaf(c.shown);
-    else sfx.coin(c.shown);
-  }
-}
+/** Where a currency's icon is in the purse, for things to fly to and from. */
+export const purseAt = (kind: Currency): Pt => purse?.at(kind) ?? { x: 30, y: 30 };
 
 // ---------- the guild feed ----------
 
@@ -553,8 +508,12 @@ export function setStrip(
 
 /** Builds the town's interface; `gear` (the settings menu's, `settings.ts`) goes in its corner. */
 export function initHud(gear: HTMLElement): void {
-  counters.leaf = counter("leaf", "Leaf", "Earned with the guild in Wynncraft: raids, wars, quests and milestones.");
-  counters.coins = counter("coins", "Coins", "Earned in town: the Works, The Little Raid and Cinfy's chest.");
+  purse = purseBar($("purse"), {
+    about: {
+      leaf: "Earned with the guild in Wynncraft: raids, wars, quests and milestones.",
+      coins: "Earned in town: the Works, The Little Raid and Cinfy's chest.",
+    },
+  });
 
   const corner = $("corner");
   hammer = el("button", "k-btn wood icon", { type: "button", "aria-label": "Decorate", hidden: true }, glyph("hammer"));
@@ -582,8 +541,7 @@ let slow = 0;
 let litFor: string | null = null;
 
 export function tickHud(dt: number): void {
-  roll("leaf", dt);
-  roll("coins", dt);
+  purse?.tick(dt);
   const lit = `${G.panel}/${G.near}`;
   if (lit !== litFor) {
     litFor = lit;

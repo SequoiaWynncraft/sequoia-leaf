@@ -379,7 +379,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     },
     ownAt(x, y) {
       const crab = crabAt(x, y);
-      return crab ? { box: { x: crab.x - 6, y: crab.y - 8, w: 12, h: 9 }, tip: null } : null;
+      return crab ? { id: `crab:${crab.n}`, box: { x: crab.x - 6, y: crab.y - 8, w: 12, h: 9 }, tip: null } : null;
     },
     props: () => props,
     touch: (p, x, y) => void touchThing(thingName(p.kind, x, y)),

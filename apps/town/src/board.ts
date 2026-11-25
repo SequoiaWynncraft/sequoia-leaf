@@ -8,7 +8,9 @@
  * opened, which the browser keeps under `town.notes.seen`.
  */
 
+import { pressedTwice, type Spend } from "@sequoia-leaf/kit/dom.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
+import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 
 import type { Quest } from "./guild.ts";
 import { NOTES } from "./notes.ts";
@@ -49,6 +51,38 @@ export const TABS = ["Quests", "News"] as const;
 
 /** The tab the board opens on: News while there is news unread, and Quests otherwise. */
 export const openingTab = (): (typeof TABS)[number] => (unread() ? "News" : "Quests");
+
+/** What a paid reroll spends on: that quest, at the price its button says. */
+export const rerollSpend = (id: string, cost: number): Spend => ({ on: `reroll:${id}`, price: cost });
+
+/** The quest board while it is open: see `questBoard`. */
+export interface QuestBoard {
+  show(to: (typeof TABS)[number]): void;
+  reroll(q: Pick<Quest, "id" | "reroll">, redraw: () => void): boolean;
+}
+
+/**
+ * The board while it is open (`life`): the tab on show, and what that tab holds while it is on
+ * show. `show` turns to a tab (opening News reads it). `reroll` says whether a press on a quest's
+ * Reroll goes ahead: a free one at once; one that costs Leaf on its second press, for that quest at
+ * that price, while Quests stays on show. Turned to News and back, the next press only asks.
+ */
+export function questBoard(life: Scope): QuestBoard {
+  const onShow = life.turns();
+  let tab: (typeof TABS)[number] = openingTab();
+  return {
+    show(to: (typeof TABS)[number]): void {
+      tab = to;
+      onShow(to);
+      if (to === "News") readNews();
+    },
+    reroll(q: Pick<Quest, "id" | "reroll">, redraw: () => void): boolean {
+      const cost = q.reroll;
+      if (cost === null) return false;
+      return cost === 0 || pressedTwice(onShow(tab), rerollSpend(q.id, cost), redraw);
+    },
+  };
+}
 
 /** What each kind of quest is called, by Leaf's slot, as the mod calls them. */
 const KINDS: Readonly<Record<string, string>> = {
