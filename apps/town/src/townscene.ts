@@ -515,8 +515,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     },
 
     arrive() {
-      const { arrival } = kept();
-      const letter = compose(arrival, guild.news(), [worksWaiting()]);
+      const view = kept();
+      const letter = compose(view.arrival, guild.news(), [worksWaiting(view.doors)]);
       // Loaded again in this tab a little after the last page: back where they stood. Otherwise in through the gate.
       const was = stoodAt(keptText(STOOD, "tab"), Date.now());
       if (was && !TOWN.footBlocked(was.x, was.y)) {
@@ -535,7 +535,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         void (async () => {
           await ask({ do: "welcome", cursor: guild.told() });
           // Only a box full of presents turns a letter away.
-          if (arrival.mail.length > 0 && !roomInBox(mine().letters)) hooks.feed(BOX_FULL, "coral");
+          if (view.arrival.mail.length > 0 && !roomInBox(mine().letters)) hooks.feed(BOX_FULL, "coral");
         })();
         G.home = true;
         beginEvents();

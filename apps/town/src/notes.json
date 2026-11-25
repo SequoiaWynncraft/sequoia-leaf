@@ -1,10 +1,11 @@
 [
   {
     "id": "letter-works-coins",
-    "at": "2026-11-25T11:22Z",
-    "title": "The welcome letter's Works line",
+    "at": "2026-11-25T11:55Z",
+    "title": "The welcome letter counts your Works' Coins",
     "lines": [
-      "The welcome letter now says \"Your Works has Coins waiting. Go in to collect them.\" It gives no number: the one it gave was what this device last saw, often far less than your yard had made since."
+      "The welcome letter now says how many Coins your Works made while you were away, and that going in collects them.",
+      "That number, and what the doors to the Works and The Little Raid say is waiting, are now the same on every device."
     ]
   },
   {

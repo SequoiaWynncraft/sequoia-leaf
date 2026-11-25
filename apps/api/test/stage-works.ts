@@ -20,6 +20,7 @@ const tester = (now: number, seed: number) => ({
   seed,
   room: 0,
   awards: [],
+  postcards: {},
 });
 
 /**

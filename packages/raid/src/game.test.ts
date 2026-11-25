@@ -37,6 +37,7 @@ const ctx = (seed = (rolls += 0x9e3779b1) >>> 0): Ctx => ({
   seed,
   room: 1e9,
   awards: [],
+  postcards: {},
 });
 
 type Answer = Done<Table, RaidNote> | Refused;

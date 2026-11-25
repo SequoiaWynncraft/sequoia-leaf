@@ -1,6 +1,8 @@
 /**
- * The postcard the Works leaves for the town (the kit's `postcard.ts`): what is waiting in the yard,
- * in a line for the card on its door, and the Coins in its till.
+ * The yard's postcard for the town (`Game.postcard`), which Leaf keeps with the yard: what is
+ * waiting in the yard, in a line for the card on its door, and the whole Coins in its till. Leaf
+ * runs the yard on while its owner is away, so the till is what it has earned since they last
+ * collected, as of Leaf's last run of it.
  */
 import type { Postcard } from "@sequoia-leaf/core";
 

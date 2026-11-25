@@ -12,6 +12,7 @@ const ctx: Ctx = {
   seed: 7,
   room: 0,
   awards: [],
+  postcards: {},
 };
 const wire = (v: unknown): unknown => JSON.parse(JSON.stringify(v));
 const banner: Banner = BANNERS[0] ?? { id: "", from: 0, until: 0 };

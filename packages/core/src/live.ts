@@ -29,7 +29,7 @@
  */
 
 import { type AboutChange, readAboutChange } from "./about.ts";
-import { type GameId, gameId } from "./play.ts";
+import { type GameId, gameId } from "./games.ts";
 import { parsePlayerId, type PlayerId } from "./player.ts";
 
 export const LIVE_PATH = "/v1/game/live";

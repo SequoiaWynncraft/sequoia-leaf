@@ -244,7 +244,14 @@ describe("a Study", () => {
     const at = 1_800_000_000_000;
     y.at = at;
     y.seen = F.here(y);
-    const ctx: Ctx = { now: at + 3600 * 1000, player: { id: "p", guest: false }, seed: 1, room: 0, awards: [] };
+    const ctx: Ctx = {
+      now: at + 3600 * 1000,
+      player: { id: "p", guest: false },
+      seed: 1,
+      room: 0,
+      awards: [],
+      postcards: {},
+    };
     F.FACTORY.advance(y, ctx);
     expect(given(y, big)).toBe(2 * n);
     const back = F.decode(F.encode(y), y.land);
@@ -262,7 +269,14 @@ describe("a Study", () => {
     const at = 1_800_000_000_000;
     y.at = at;
     y.seen = F.here(y);
-    const ctx: Ctx = { now: at + 3600 * 1000, player: { id: "p", guest: false }, seed: 1, room: 0, awards: [] };
+    const ctx: Ctx = {
+      now: at + 3600 * 1000,
+      player: { id: "p", guest: false },
+      seed: 1,
+      room: 0,
+      awards: [],
+      postcards: {},
+    };
     F.FACTORY.advance(y, ctx);
     expect(y.open.done[first]).toBe(1);
     expect(F.knownSince(y)).toEqual([first]);

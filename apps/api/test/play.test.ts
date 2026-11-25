@@ -25,6 +25,7 @@ import {
   FACTORY,
   GATHERER,
   GOALS,
+  here,
   isFilled,
   item,
   itemName,
@@ -1483,7 +1484,14 @@ describe("a batch's answer", () => {
 });
 
 /** Leaf's call to a game at a moment of its clock, as Alice's. */
-const ctxAt = (now: number) => ({ now, player: { id: alice, guest: false }, seed: 0, room: 0, awards: [] });
+const ctxAt = (now: number) => ({
+  now,
+  player: { id: alice, guest: false },
+  seed: 0,
+  room: 0,
+  awards: [],
+  postcards: {},
+});
 /** Leaf's sweep of these games' states, and the wait for every tend it put in a line to end. */
 const sweep = (games: readonly Played[]) => Play.use((play) => Effect.flatten(play.tend(games)));
 /** Leaf tending every game's states. */
@@ -2785,6 +2793,80 @@ function townOf(state: unknown): TownView {
 const townNow = async () =>
   townOf(Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/town")).json()).state);
 const nOf = (view: TownView, id: string) => view.camp.placed.find((p) => p.id === id)?.n ?? -1;
+
+/** What Leaf keeps of what each of a player's states tells the town, by game. */
+async function postcardsOf(player: PlayerId = alice) {
+  const rows = await services.query<{ game: string; postcard: string }>(
+    (sql) => sql`SELECT game, postcard FROM play_postcards WHERE player_id = ${player} ORDER BY game`,
+  );
+  return Object.fromEntries(rows.map((kept): [string, unknown] => [kept.game, JSON.parse(kept.postcard)]));
+}
+/** What a yard, kept as `text`, tells the town. */
+function cardOf(text: string) {
+  const card = FACTORY.postcard?.(yardIn(text));
+  if (!card) throw new Error("the Works writes no postcard");
+  return card;
+}
+/** What Alice's yard as Leaf stores it tells the town. */
+const yardCard = async () => cardOf((await storedYard()).state);
+
+describe("what each state tells the town", () => {
+  const MINUTE = 60_000;
+
+  it("is written with the state, by her commands and by Leaf's runs while she is away, and her town is given it", async () => {
+    await keepMid();
+    const { clock: tick } = yardOf(
+      Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json()).state,
+    );
+    await send("POST", "/v1/game/play/works", { commands: [{ id: "w-1", do: "collect", tick }] });
+    const collected = await yardCard();
+    expect(collected?.till).toBe(0);
+    expect(await postcardsOf()).toEqual({ works: collected });
+    // An hour away: Leaf runs the yard on by itself, its till grows, and its postcard with it, in the same write.
+    clock.now += 60 * MINUTE;
+    await tending();
+    const away = await yardCard();
+    expect(away?.till).toBeGreaterThan(0);
+    expect(await postcardsOf()).toEqual({ works: away });
+    // Her town is given it as it opens and with each batch, for the letter and the door; a visitor to her camp is not.
+    expect((await townNow()).doors).toEqual({ works: away });
+    expect((await townDid([{ id: "t-1", do: "readMail" }])).view.doors).toEqual({ works: away });
+    const seen = Schema.decodeUnknownSync(Shown)(await (await visit(alice, "town", bob)).json()).state;
+    expect(townOf(seen).doors).toEqual({});
+  });
+
+  it("is written by Leaf's sweep for a state stored before Leaf kept postcards, which then stands still again", async () => {
+    // A yard run on to where it stands still since its owner left it, and a table, as stored before
+    // postcards, then made due by `0039_play_postcards`.
+    const kept = await keepMid(services, (w) => {
+      w.seen = here(w);
+      stepTo(w, w.tick + w.open.away);
+    });
+    const table = RAID.encode(RAID.create(ctxAt(clock.now)));
+    await services.query(
+      (sql) => sql`
+        INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${alice}, 'raid', 1, ${table}, ${clock.now})
+      `,
+    );
+    await services.query((sql) => sql`UPDATE play_state SET due_at = ${clock.now} WHERE player_id = ${alice}`);
+    expect(await postcardsOf()).toEqual({});
+    clock.now += MINUTE;
+    await tending();
+    // What each says as it was stored: the yard's eight hours of Coins, and the table set out.
+    const works = cardOf(kept);
+    expect(works.till).toBe(Math.floor(yardIn(kept).till / MILLI));
+    expect(works.till).toBeGreaterThan(0);
+    expect(await postcardsOf()).toEqual({
+      raid: { waiting: "The board is set out. One crab is uncounted.", till: 0 },
+      works,
+    });
+    expect(await yardCard()).toEqual(works);
+    const due = await services.query<{ dueAt: number | null }>(
+      (sql) => sql`SELECT due_at AS dueAt FROM play_state WHERE player_id = ${alice} ORDER BY game`,
+    );
+    expect(due).toEqual([{ dueAt: null }, { dueAt: null }]);
+  });
+});
 
 describe("the town, played by commands through HTTP", () => {
   it("opens a new member's camp, welcomes them, sells into the tray, sets out, moves and puts away by id, and pays the chest once a day", async () => {

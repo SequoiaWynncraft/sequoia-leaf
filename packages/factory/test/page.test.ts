@@ -11,7 +11,14 @@ import type { Ctx } from "@sequoia-leaf/core";
 import * as F from "../src/index.ts";
 import { delivering, must } from "./yards.ts";
 
-const ctx = (now: number): Ctx => ({ now, player: { id: "p", guest: false }, seed: 9, room: 1e9, awards: [] });
+const ctx = (now: number): Ctx => ({
+  now,
+  player: { id: "p", guest: false },
+  seed: 9,
+  room: 1e9,
+  awards: [],
+  postcards: {},
+});
 const at0 = 1_800_000_000_000;
 /** An act read back as Leaf reads it: through JSON, with its tick. */
 const readBack = (a: F.Act, tick = 7): F.Command | null =>

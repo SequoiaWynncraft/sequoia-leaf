@@ -36,7 +36,7 @@ import { Watchers } from "../live/watchers.ts";
 import { type CommandOutcome, type JobPhase, playCommands, playJobSeconds } from "../metrics.ts";
 import { type CoinEntry, Coins } from "./coins.ts";
 import { Copies } from "./copies.ts";
-import { type Attempt, type Held, type Played, toRoom } from "./games.ts";
+import { type Attempt, ctxOf, type Given, type Held, NOTHING_GIVEN, type Played, toRoom } from "./games.ts";
 import { nextSlice } from "./slices.ts";
 import { PlayStore } from "./store.ts";
 
@@ -228,15 +228,6 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 /** Which state of which player's a lane is of. */
 const keyOf = (player: PlayerId, played: Played) => `${played.id}:${player}`;
 
-/** What Leaf tells a game about a call. */
-const ctxOf = (playing: Playing, now: number, seed: number, room: number, awards: readonly string[]): Ctx => ({
-  now,
-  player: { id: playing.playerId, guest: playing.guest },
-  seed,
-  room,
-  awards,
-});
-
 /**
  * What each of a command's Coins changes comes to, worked out in order from the balance: one that
  * pays in is cut to what the player may still earn (`room`) unless it is `free`. Null when the
@@ -279,7 +270,7 @@ const sum = (spends: readonly Taken[]) => spends.reduce((all, spend) => all + sp
 
 /** Whether a state stands still: would never go on by itself, however long. */
 const standsStill = (held: Held, player: PlayerId, guest: boolean) =>
-  !held.run(ctxOf({ playerId: player, guest }, Infinity, 0, 0, []), () => false);
+  !held.run(ctxOf({ playerId: player, guest }, Infinity, 0, 0, NOTHING_GIVEN), () => false);
 
 /** A tend that failed, logged (whose, and of which game) as the sweep's tends are waited for: the others go on. */
 const failed = (player: PlayerId, game: string, defect: unknown) =>
@@ -315,11 +306,13 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * Leaf's play service: it owns each player's state in each game. A player's page opens a game
  * (`open`), and sends commands (`send`); Leaf does them in order with the game's rules, and keeps a
  * batch in one transaction: the state, and for a game with a board where it stands, the Coins each
- * command paid or took, what it logged, each command's answer, and what the state shows the player
- * has won for good (`Game.awards`), which every game is told on every call. A batch is answered
- * with each command's answer and the game's answer to it (`Game.answer`), or for a game without one
- * its view; an opening and a visit always with the view. A command whose id
- * was seen before answers as it did then and changes nothing; one whose Coins changes, added to the
+ * command paid or took, what it logged, each command's answer, what the state shows the player
+ * has won for good (`Game.awards`), which every game is told on every call, and what the state
+ * tells the town (`Game.postcard`), whenever that is not what is stored: the owner's own opens and
+ * batches of the game that shows the doors (`Played.showsDoors`, the town) are told the player's,
+ * read by their key, and no other call is. A batch is answered with each command's answer and the
+ * game's answer to it (`Game.answer`), or for a game without one its view; an opening and a visit
+ * always with the view. A command whose id was seen before answers as it did then and changes nothing; one whose Coins changes, added to the
  * balance in order, would take it below nothing at any point is refused with `not_enough_coins`;
  * one that pays is done whatever the player has earned, and paid only as far as they may still earn
  * (`Coins.room`, which each game is told, so that it says what was really paid), but for a change
@@ -347,9 +340,9 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * batch's commands is done to it in order, once it is run on to where the command is done, and
  * weighed against the balances as they stood before; and then a transaction checks and writes: the
  * stored `rev` first, then those balances, then what the batch did. The copy is written by a batch,
- * and whenever a job leaves the line empty with the copy unsaved, as a batch of no commands; nothing
- * else writes it. What is stored having moved on (`Lost`), nothing is written, and the job is done
- * again from it, `TRIES` times in all. Anything going wrong drops the copy. A batch is done whatever
+ * and whenever a job leaves the line empty with the copy unsaved or its postcard not the one stored,
+ * as a batch of no commands; nothing else writes it. What is stored having moved on (`Lost`),
+ * nothing is written, and the job is done again from it, `TRIES` times in all. Anything going wrong drops the copy. A batch is done whatever
  * becomes of its request; any other job whose caller has gone while it waited is never done.
  *
  * One slice of running states on (`SLICE_NS`) runs at a time, then one turn of the thread, so that
@@ -359,7 +352,8 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * command for all of its catching up; Leaf's own tends take one slice, the first tend's, after
  * each `TEND_WAITS` of those. Leaf puts a tend in the line of each state of a game that tends its
  * states that is due one (`due_at`: `TEND_AFTER` after it was written, never while it stands
- * still), but those with one in line, and waits for none; each reads nothing until its first turn.
+ * still), and of a game that writes postcards made due by hand (a state stored before its postcard
+ * was), but those with one in line, and waits for none; each reads nothing until its first turn.
  */
 export class Play extends Context.Service<
   Play,
@@ -515,14 +509,14 @@ export class Play extends Context.Service<
             if (lane.copy !== undefined || maker === null) return lane.copy;
             // The player's Coins open with the welcome as their first state is made.
             yield* coins.open(player, at);
-            const ctx = ctxOf(maker, at, yield* dice, 0, yield* store.awards(player));
+            const ctx = ctxOf(maker, at, yield* dice, 0, yield* store.given(player, false));
             const text = coded(job, () => played.create(ctx));
-            const held = coded(job, () => played.read(text));
+            const held = coded(job, () => played.read(text, null));
             return held && (lane.copy = { rev: null, text, guest: maker.guest, born: null, at, held, unsaved: true });
           }
           lane.copy = undefined;
-          const { rev, state, guest, born, dueAt } = found.value;
-          const held = coded(job, () => played.read(state));
+          const { rev, state, guest, born, dueAt, postcard } = found.value;
+          const held = coded(job, () => played.read(state, postcard));
           if (held === null) {
             yield* Effect.logError(
               `The ${played.id} state stored for ${player} does not read; it is kept as it is`,
@@ -536,10 +530,10 @@ export class Play extends Context.Service<
         });
 
       /** Runs the job's copy on to its moment, or to where `command` is done, a slice at a time while there is further to go. */
-      const runOn = (job: Job, copy: Copy, awards: readonly string[], command?: unknown) =>
+      const runOn = (job: Job, copy: Copy, given: Given, command?: unknown) =>
         Effect.gen(function* () {
           // Running on is no call: it gets no dice.
-          const ctx = ctxOf({ playerId: job.lane.player, guest: copy.guest }, copy.at, 0, 0, awards);
+          const ctx = ctxOf({ playerId: job.lane.player, guest: copy.guest }, copy.at, 0, 0, given);
           if (!copy.held.run(ctx, () => false, command)) return;
           copy.unsaved = true;
           for (let more = true; more;) more = yield* slice(job, (time) => copy.held.run(ctx, time, command));
@@ -550,10 +544,11 @@ export class Play extends Context.Service<
         Effect.gen(function* () {
           const copy = yield* copyOf(job, maker);
           if (!copy) return copy;
-          const awards = yield* store.awards(job.lane.player);
+          // The owner's own open of the town is given their postcards as well; a batch reads them itself.
+          const given = yield* store.given(job.lane.player, job.kind === "open" && job.lane.played.showsDoors);
           copy.at = job.at;
-          yield* runOn(job, copy, awards);
-          return { copy, awards };
+          yield* runOn(job, copy, given);
+          return { copy, given };
         });
 
       /**
@@ -567,12 +562,12 @@ export class Play extends Context.Service<
           const { at } = copy;
           // The state's generation: a new one is made, by this batch's transaction, at `at`.
           const born = copy.born ?? at;
-          const awards = yield* store.awards(player);
+          const given = yield* store.given(player, played.showsDoors);
           const against = { coins: yield* coins.balance(player), room: yield* coins.room(player, at) };
           // The ledger's balance, read once a command takes Leaf.
           let leaf: number | null = null;
           let { coins: balance, room } = against;
-          const ctx = (roll: number, left: number): Ctx => ctxOf(playing, at, roll, left, awards);
+          const ctx = (roll: number, left: number): Ctx => ctxOf(playing, at, roll, left, given);
           const game = copy.held.open(ctx(seed, room));
           const results: Result[] = [];
           const answers: { readonly id: string; readonly result: Result }[] = [];
@@ -627,7 +622,7 @@ export class Play extends Context.Service<
               results.push({ id, ...readKept(before.value) });
               continue;
             }
-            yield* runOn(job, copy, awards, command);
+            yield* runOn(job, copy, given, command);
             const attempt = game.attempt(command, ctx(yield* dice, room));
             // A command refused, by the rules or for Leaf or Coins, is not done at all.
             const result = "refused" in attempt ? { id, refused: attempt.refused } : yield* weigh(id, attempt);
@@ -637,9 +632,11 @@ export class Play extends Context.Service<
           const text = coded(job, () => game.text());
           const changed = text !== copy.text;
           const standing = changed ? game.standing() : null;
-          const won = changed ? game.awards().filter((id) => !awards.includes(id)) : [];
+          const won = changed ? game.awards().filter((id) => !given.awards.includes(id)) : [];
           // A state that goes on by itself is Leaf's to tend once no page has kept it up for a while.
           const dueAt = played.tends && !standsStill(copy.held, player, playing.guest) ? at + TEND_AFTER : null;
+          // Counted for the staff's report and the metrics: each command done or refused now, not those answered from before.
+          const refused = answers.filter((a) => "refused" in a.result).length;
           const { rev, purse } = yield* inSqlite(
             job,
             sql.withTransaction(
@@ -665,6 +662,8 @@ export class Play extends Context.Service<
                   if (standing !== null) yield* store.stand(player, played.id, standing, playing.guest, at);
                   yield* store.award(player, won, at);
                 }
+                // What the state tells the town, kept with it whenever it is not what is stored.
+                yield* store.post(player, played.id, copy.held.post());
                 for (const { id, result } of answers) {
                   // An answer kept for it already: another Leaf did it at this `rev`.
                   if (!(yield* store.answer(player, played.id, id, next, keptOf(result)))) return yield* new Lost();
@@ -681,8 +680,6 @@ export class Play extends Context.Service<
                 }
                 for (const entry of entries) yield* coins.post(player, entry, at);
                 yield* store.log(player, played.id, logs, at);
-                // Counted for the staff's report: each command done or refused now, not those answered from before.
-                const refused = answers.filter((a) => "refused" in a.result).length;
                 yield* store.count(player, answers.length - refused, refused, at);
                 // The balances as the batch leaves them, for the page: no other answer is needed.
                 return { rev: next, purse: yield* coins.balances(player) };
@@ -690,21 +687,23 @@ export class Play extends Context.Service<
             ),
           ).pipe(Effect.catchTag("SqlError", Effect.die));
           Object.assign(copy, { rev, text, guest: playing.guest, born, unsaved: false });
-          const refusedNow = answers.filter((a) => "refused" in a.result).length;
-          yield* outcome(played.id, "taken", answers.length - refusedNow);
-          yield* outcome(played.id, "refused", refusedNow);
+          yield* outcome(played.id, "taken", answers.length - refused);
+          yield* outcome(played.id, "refused", refused);
           let answered: unknown;
           const view = () => (answered ??= game.answer(ctx(0, room)));
           told?.tell(rev, view);
           return { now: at, rev, results, view, purse };
         });
 
-      /** Writes the job's copy if it leaves its line empty with the copy unsaved, as a batch of no commands from its owner keeps it. */
+      /**
+       * Writes the job's copy if it leaves its line empty with the copy unsaved, or with a postcard
+       * that is not the one stored (`unposted`), as a batch of no commands from its owner keeps it.
+       */
       const settle = (job: Job) =>
         Effect.suspend(() => {
           const { jobs, copy, player } = job.lane;
           // Leaf keeping a copy is no call: it gets no dice.
-          return jobs.length > 1 || copy?.unsaved !== true
+          return jobs.length > 1 || !copy || (!copy.unsaved && copy.held.unposted() === null)
             ? Effect.void
             : Effect.asVoid(batch(job, copy, { playerId: player, guest: copy.guest }, [], 0));
         });
@@ -799,7 +798,7 @@ export class Play extends Context.Service<
               const got = yield* brought(job, playing);
               if (!got) return (): Opening => ({ status: "unreadable" });
               const room = yield* coins.room(playing.playerId, job.at);
-              const ctx = (seed: number): Ctx => ctxOf(playing, job.at, seed, room, got.awards);
+              const ctx = (seed: number): Ctx => ctxOf(playing, job.at, seed, room, got.given);
               const seed = yield* dice;
               const purse = yield* coins.balances(playing.playerId);
               return (): Opening => {
@@ -870,7 +869,7 @@ export class Play extends Context.Service<
                 const got = yield* brought(job, null);
                 if (!got) return (): Visiting => ({ status: got === null ? "unreadable" : "nothing" });
                 // Nothing is earned by a visit: the call may pay none.
-                const ctx = (seed: number): Ctx => ctxOf(caller, job.at, seed, 0, got.awards);
+                const ctx = (seed: number): Ctx => ctxOf(caller, job.at, seed, 0, got.given);
                 const seed = yield* dice;
                 const purse = yield* coins.balances(caller.playerId);
                 return (): Visiting => {
@@ -886,7 +885,8 @@ export class Play extends Context.Service<
             const began = yield* Clock.currentTimeMillis;
             const ends: Effect.Effect<void>[] = [];
             for (const played of games) {
-              if (!played.tends) continue;
+              // A game whose states stand still is due only to have a postcard written (`0039_play_postcards`).
+              if (!played.tends && !played.posts) continue;
               for (const player of yield* store.due(played.id, began)) {
                 if (lanes.get(keyOf(player, played))?.jobs.some((job) => job.kind === "tend")) continue;
                 const tended = yield* line("tend", player, played, tending);

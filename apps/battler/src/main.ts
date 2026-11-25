@@ -9,7 +9,6 @@
  */
 import { refresh, settle } from "@sequoia-leaf/kit/card.ts";
 import { keepLeaf, serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
-import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
 import { failedToOpen, watchPage } from "@sequoia-leaf/kit/report.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
@@ -37,7 +36,6 @@ import {
 } from "./screen/flow.ts";
 import { stepFx } from "./screen/fx.ts";
 import { openHand, unpick } from "./screen/hand.ts";
-import { postcard } from "./screen/logic.ts";
 import { hearNotes, stepPawns, syncPawns } from "./screen/pawns.ts";
 import { drawOver, drawScene, stepScene, wordsScene } from "./screen/scene.ts";
 import { startSettings } from "./screen/settings.ts";
@@ -55,25 +53,13 @@ import { buildTable, placeFoe, renderTable, stepTable, toast, wakeChip } from ".
 /** What the page says where no Leaf answers: the table is the guild's server's. */
 const NEEDS_LEAF = "The table needs the guild's server.";
 
-/** What the town was last told about the table, so that it is told only what has changed. */
-let carded = "";
-/** Leaves the town a postcard about the table, if anything on it has changed. */
-function sendCard(): void {
-  const card = postcard(S.run, S.almanac);
-  const text = JSON.stringify(card);
-  if (text === carded) return;
-  carded = text;
-  post("raid", card);
-}
-
 /**
  * The town is closing the table: it says where the member is from here, so the table says nothing
- * more of it (in case it would come after); a pick in hand is put down, and the town has its card.
+ * more of it (in case it would come after); and a pick in hand is put down.
  */
 function closing(): void {
   here(null);
   unpick();
-  sendCard();
 }
 
 /** Sets out from the front page, which goes once Leaf has laid the run out. */
@@ -148,7 +134,6 @@ async function boot(): Promise<void> {
   });
   onChange(() => {
     if (S.screen.at === "plan") syncPawns(S.run);
-    sendCard();
     renderTable();
     renderPicks();
     renderPages();
@@ -196,7 +181,6 @@ async function boot(): Promise<void> {
   fromTown((msg) => {
     if (msg.town === "closing") closing();
   });
-  sendCard();
   here("table");
   // In the town, the town says when the member's Leaf changes; opened on its own, the table listens itself.
   keepLeaf();

@@ -47,6 +47,7 @@ import {
   recordRun,
   trailOpen,
 } from "./outside.ts";
+import { postcard } from "./postcard.ts";
 import {
   abandon,
   beginFight,
@@ -583,4 +584,6 @@ export const RAID: Game<Table, RaidCommand, TableView, RaidNote> = {
   }),
   // A carved figure of each boss the almanac has beaten, for the member's camp.
   awards: (state) => [...new Set(state.almanac.bosses.flat())].map((boss) => `trophy-${boss}`),
+  // A raid under way, or the board set out, for the town's door.
+  postcard,
 };

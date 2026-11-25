@@ -33,6 +33,7 @@ const ctx = (now = T0, awards: readonly string[] = []): Ctx => ({
   seed: 7,
   room: 1e9,
   awards,
+  postcards: {},
 });
 const fresh = (): Town => TOWN.create(ctx());
 
@@ -64,7 +65,7 @@ describe("a new member's town", () => {
     expect(TOWN.create({ ...ctx(), seed: 8 }).rng).not.toBe(s.rng);
   });
 
-  test("is shown without its stream or when the next caller comes, and with the letter Leaf would post", () => {
+  test("is shown without its stream or when the next caller comes, with the letter Leaf would post and the doors it keeps", () => {
     const view = TOWN.view(fresh(), ctx());
     expect(Object.keys(view).toSorted()).toEqual(
       [
@@ -79,6 +80,7 @@ describe("a new member's town", () => {
         "visit",
         "made",
         "arrival",
+        "doors",
       ].toSorted(),
     );
     expect(view.arrival).toMatchObject({
@@ -560,6 +562,28 @@ describe("the page's copy", () => {
     ]);
   });
 
+  test("carries the doors Leaf gave it through every guess, reads none from a Leaf from before them, and passes over what it does not know", () => {
+    const doors = {
+      works: { waiting: "An order is filled and waiting at the gate.", till: 240 },
+      raid: { waiting: "The board is set out for another raid.", till: 0 },
+    };
+    const view = TOWN.view(lived(), { ...ctx(), postcards: doors });
+    expect(view.doors).toEqual(doors);
+    const wire: Record<string, unknown> = JSON.parse(JSON.stringify(view));
+    expect(readView(wire)).toEqual(view);
+    // Only Leaf says what the games tell the town: a guess keeps what it last said.
+    const guess = predict(view, { do: "readMail" }, T0);
+    expect(guess && "view" in guess ? guess.view.doors : null).toEqual(doors);
+    // A Leaf from before the doors sends none; a postcard that is not one is left out.
+    const before = Object.fromEntries(Object.entries(wire).filter(([key]) => key !== "doors"));
+    expect(readView(before)).toEqual({ ...view, doors: {} });
+    expect(readView({ ...wire, doors: { works: { waiting: 3, till: -1 }, raid: doors.raid } })?.doors).toEqual({
+      raid: doors.raid,
+    });
+    // What a later Leaf adds is passed over, as a page from before the doors passes over them.
+    expect(readView({ ...wire, later: { anything: 1 } })).toEqual(view);
+  });
+
   test("comes to what Leaf comes to for every command the page works out itself, ids and all", () => {
     const s = lived();
     const stump = nOf(s, "stump");
@@ -628,7 +652,8 @@ describe("a visit", () => {
     expect(s.visit).not.toBeNull();
     expect([s.camp.letters.length, s.camp.fresh, s.camp.tray]).toEqual([1, ["rock"], { stump: 1, rock: 1 }]);
     const before = encodeTown(s);
-    const seen = TOWN.visit?.(s, ctx()) ?? null;
+    // Given postcards (Leaf gives a visit none), a visit shows none of them either.
+    const seen = TOWN.visit?.(s, { ...ctx(), postcards: { works: { waiting: "Quiet.", till: 240 } } }) ?? null;
     expect(seen).toEqual({
       sightings: 0,
       spotAt: 0,
@@ -650,6 +675,7 @@ describe("a visit", () => {
       visit: null,
       made: 0,
       arrival: { first: false, newDay: false, away: 0, said: [], mail: [] },
+      doors: {},
     });
     expect(seen?.camp.placed.find((p) => p.id === "lantern-post")?.s).toBe(1);
     expect(encodeTown(s)).toBe(before);

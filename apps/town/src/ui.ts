@@ -562,7 +562,7 @@ function doorCard(id: "works" | "table"): (body: HTMLElement) => null {
     go.dataset.first = "";
     body.append(
       el("div", "k-row", {}, slot(shown(icon(id), 2), 34), el("div", "k-grow k-read", { text: game.about })),
-      el("div", "k-paper", {}, el("div", "k-read", { text: game.waiting() })),
+      el("div", "k-paper", {}, el("div", "k-read", { text: game.waiting(town().doors) })),
       go,
     );
     return null;

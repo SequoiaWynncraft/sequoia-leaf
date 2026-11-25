@@ -10,7 +10,14 @@ import { compose, span } from "./letter.ts";
 const HOUR = 3_600_000;
 /** Wednesday 25 November 2026, 18:00 UTC. */
 const NOW = Date.UTC(2026, 10, 25, 18);
-const ctx = (now = NOW): Ctx => ({ now, player: { id: "p", guest: false }, seed: 3, room: 0, awards: [] });
+const ctx = (now = NOW): Ctx => ({
+  now,
+  player: { id: "p", guest: false },
+  seed: 3,
+  room: 0,
+  awards: [],
+  postcards: {},
+});
 
 /** The arrival Leaf shows a town at `now`. */
 const arrivalOf = (s: Town, now = NOW) => TOWN.view(s, ctx(now)).arrival;
@@ -22,6 +29,10 @@ function back(ago: number, welcomed = NOW - ago): Town {
   return s;
 }
 const raids: AwayLine = { art: "leaf", text: "3 raids with the guild", got: 240 };
+/** The town's doors as Leaf gives them, with so many whole Coins in the Works' till. */
+const till = (coins: number) => ({
+  works: { waiting: "The yard is quiet. Somebody should start it up.", till: coins },
+});
 
 describe("the arrival letter", () => {
   test("a first visit is welcomed, with what Tindra left, and the crab still missing", () => {
@@ -46,16 +57,23 @@ describe("the arrival letter", () => {
   });
 
   test("the member's news comes first, then the town's own, then what is waiting, and the crab last", () => {
-    const l = compose(arrivalOf(back(7 * HOUR, NOW - 24 * HOUR)), [raids], [worksWaiting(340)]);
+    const l = compose(arrivalOf(back(7 * HOUR, NOW - 24 * HOUR)), [raids], [worksWaiting(till(340))]);
     expect(l.lines.map((x) => x.art)).toEqual(["leaf", "folk", "coin", "crab"]);
   });
 
-  test("Coins in the Works are mentioned, with no number, and not paid: going in collects them", () => {
-    const line: AwayLine = { art: "coin", text: "Your Works has Coins waiting. Go in to collect them." };
-    expect(worksWaiting(0)).toBeNull();
-    // The postcard's number is what this browser last saw, not what the yard has made since: it is not shown.
-    expect(worksWaiting(1)).toEqual(line);
-    expect(worksWaiting(340)).toEqual(line);
+  test("the Works' till as Leaf keeps it is mentioned and not paid: going in collects it", () => {
+    expect(worksWaiting(till(1))).toEqual({
+      art: "coin",
+      text: "Your Works made 1 Coin while you were away. Go in to collect it.",
+    });
+    expect(worksWaiting(till(1240))?.text).toBe(
+      "Your Works made 1,240 Coins while you were away. Go in to collect them.",
+    );
+  });
+
+  test("no line while the till holds less than a Coin, or the member has no yard", () => {
+    expect(worksWaiting(till(0))).toBeNull();
+    expect(worksWaiting({})).toBeNull();
   });
 
   test("time away, in plain words", () => {

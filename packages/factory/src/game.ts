@@ -13,7 +13,7 @@ import { type Act, act, readAct, type Turned } from "./commands.ts";
 import { LAND, type Land } from "./land.ts";
 import { fillBoard, ORDER_TOLD, ORDER_WAITS } from "./orders.ts";
 import { shortOf, writeCommand } from "./page.ts";
-import { capstonesMade } from "./postcard.ts";
+import { capstonesMade, postcard } from "./postcard.ts";
 import { GOALS, isNode, MILLI } from "./tables.ts";
 import { step } from "./tick.ts";
 import { drain, emptyYard, type News, type Standing, type Yard } from "./yard.ts";
@@ -169,4 +169,6 @@ export const FACTORY: Game<Yard, Command, View, News, Short> = {
   standing: (y) => ({ score: Math.floor((y.sold + y.paid) / MILLI), also: { tier: y.open.tier } }),
   // A model of each capstone the depot has taken in, for the member's camp.
   awards: (y) => capstonesMade(y).map((k) => `model-${k}`),
+  // What is waiting at the gate and the Coins in the till, for the town's door and its letter.
+  postcard,
 };

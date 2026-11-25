@@ -7,6 +7,7 @@ import { type Reply, type Route, type Standin, standin } from "@sequoia-leaf/kit
 import { TOWN, type Town, type TownCommand, type TownNote, visitView } from "@sequoia-leaf/town";
 import { freeSpot } from "@sequoia-leaf/town/camp.ts";
 
+import { GAMES, worksWaiting } from "./games.ts";
 import {
   ask,
   campChanged,
@@ -31,6 +32,7 @@ const ctx = (seed: number): Ctx => ({
   seed,
   room: 0,
   awards: [],
+  postcards: {},
 });
 const own = TOWN.view(TOWN.create(ctx(1)), ctx(1));
 const theirs = TOWN.create(ctx(2));
@@ -249,4 +251,29 @@ test("a thing set out is named by the number Leaf gives it, not the one the page
   expect(leaf.town().camp.placed.filter((p) => p.id === "stump")).toHaveLength(2);
   expect(leaf.town().camp.placed.map((p) => p.id)).not.toContain("gnome");
   expect(leaf.town().camp.tray["gnome"]).toBe(1);
+});
+
+test("the doors and the letter say what Leaf keeps of each game, never what a page left in this browser", async () => {
+  const doors = { works: { waiting: "An order is filled and waiting at the gate.", till: 240 } };
+  const state = TOWN.view(TOWN.create(ctx(1)), { ...ctx(1), postcards: doors });
+  const w = standin({ "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state } } });
+  world = w;
+  // What a Works page from before this left in the browser: the till as that page last saw it.
+  w.store.setItem("town.postcard.works.v1", JSON.stringify({ waiting: "The yard is quiet.", till: 3, trophies: [] }));
+  expect(await openTown("me", () => undefined)).toBeNull();
+  expect(town().doors).toEqual(doors);
+  expect(worksWaiting(town().doors)?.text).toBe(
+    "Your Works made 240 Coins while you were away. Go in to collect them.",
+  );
+  expect(GAMES.works.waiting(town().doors)).toBe("An order is filled and waiting at the gate.");
+  expect(GAMES.table.waiting(town().doors)).toBe("The board is set out. One crab is uncounted.");
+});
+
+test("a town from a Leaf from before the doors opens with none: the town's own lines, and nothing of Coins", async () => {
+  const before = Object.fromEntries(Object.entries(own).filter(([key]) => key !== "doors"));
+  world = standin({ "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: before } } });
+  expect(await openTown("me", () => undefined)).toBeNull();
+  expect(town().doors).toEqual({});
+  expect(worksWaiting(town().doors)).toBeNull();
+  expect(GAMES.works.waiting(town().doors)).toBe("The yard is quiet. Somebody should start it up.");
 });

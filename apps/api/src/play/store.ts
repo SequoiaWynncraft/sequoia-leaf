@@ -1,8 +1,13 @@
 import {
   DAY_MS,
+  type GameId,
+  gameId,
   type Logged,
+  NO_POSTCARDS,
   type Placed,
   type PlayerId,
+  type Postcard,
+  type Postcards,
   type Standing,
   talliedFrom,
   utcDay,
@@ -12,6 +17,7 @@ import { SqlClient, SqlSchema } from "effect/sql";
 
 import { tally } from "../tally/store.ts";
 import { PlayerUuid } from "../wire.ts";
+import type { Given } from "./games.ts";
 
 /** How many of each player's newest commands to each game have their answers kept, so that one sent again is answered the same. */
 export const ANSWERS_KEPT = 256;
@@ -25,8 +31,9 @@ export const BOARD_MOST = 20;
 /**
  * A player's state in a game, as stored: how many batches have changed it, the game's own text,
  * when it was last written, whether the player was a guest when it was, when it was made (its
- * generation; 0 for one made before Leaf kept that), and when Leaf is next to tend it (null: never,
- * as for a state standing still or of a game that does not go on by itself).
+ * generation; 0 for one made before Leaf kept that), when Leaf is next to have it in hand (null:
+ * never, as for a state standing still or of a game that does not go on by itself), and the
+ * postcard kept with it, as JSON (null: none yet).
  */
 const Stored = Schema.Struct({
   rev: Schema.Int,
@@ -35,10 +42,15 @@ const Stored = Schema.Struct({
   guest: Schema.BooleanFromBit,
   born: Schema.Int,
   dueAt: Schema.NullOr(Schema.Int),
+  postcard: Schema.NullOr(Schema.String),
 });
 export type Stored = typeof Stored.Type;
 
 const Answered = Schema.Struct({ result: Schema.String });
+
+/** A postcard as kept (`Game.postcard`), read back from its JSON. */
+const KeptPostcard = Schema.fromJsonString(Schema.Struct({ waiting: Schema.String, till: Schema.Int }));
+const readPostcard = Schema.decodeUnknownOption(KeptPostcard);
 
 /** An activity as stored, for reading back. */
 const Activity = Schema.Struct({
@@ -66,14 +78,64 @@ export interface Board {
   readonly you: Option.Option<Placed>;
 }
 
+/** The postcards kept for a player that read, of games Leaf plays, by game. */
+function postcardsRead(rows: readonly { readonly game: string; readonly postcard: string }[]): Postcards {
+  const kept: Partial<Record<GameId, Postcard>> = {};
+  for (const row of rows) {
+    const game = gameId(row.game);
+    const card = readPostcard(row.postcard);
+    if (game !== undefined && Option.isSome(card)) kept[game] = card.value;
+  }
+  return kept;
+}
+
+/**
+ * What every call of a player's is told (`Given`), and how it is kept: what they have won for good
+ * (`awards`, never taken away) and what each of their states tells the town (`play_postcards`,
+ * kept with the state in the play service's transaction, and read back by the player's key).
+ */
+function givenIn(sql: SqlClient.SqlClient) {
+  const awards = SqlSchema.findAll({
+    Request: Schema.String,
+    Result: Schema.Struct({ id: Schema.String }),
+    execute: (playerId) => sql`SELECT id FROM awards WHERE player_id = ${playerId} ORDER BY at, id`,
+  });
+  const postcards = SqlSchema.findAll({
+    Request: Schema.String,
+    Result: Schema.Struct({ game: Schema.String, postcard: Schema.String }),
+    execute: (playerId) => sql`SELECT game, postcard FROM play_postcards WHERE player_id = ${playerId}`,
+  });
+  return {
+    given: (playerId: PlayerId, withPostcards: boolean): Effect.Effect<Given> =>
+      Effect.all({
+        awards: Effect.map(awards(playerId), (rows) => rows.map((row) => row.id)),
+        postcards: withPostcards ? Effect.map(postcards(playerId), postcardsRead) : Effect.succeed(NO_POSTCARDS),
+      }).pipe(Effect.orDie),
+    award: (playerId: PlayerId, ids: readonly string[], now: number): Effect.Effect<void> =>
+      Effect.forEach(
+        ids,
+        (id) => sql`INSERT INTO awards (player_id, id, at) VALUES (${playerId}, ${id}, ${now}) ON CONFLICT DO NOTHING`,
+        { discard: true },
+      ).pipe(Effect.orDie),
+    post: (playerId: PlayerId, game: GameId, postcard: string | null): Effect.Effect<void> =>
+      postcard === null
+        ? Effect.void
+        : sql`
+            INSERT INTO play_postcards (player_id, game, postcard) VALUES (${playerId}, ${game}, ${postcard})
+            ON CONFLICT (player_id, game) DO UPDATE SET postcard = excluded.postcard
+          `.pipe(Effect.asVoid, Effect.orDie),
+  };
+}
+
 /**
  * What the play service keeps: each player's state in each game (`play_state`), what each command
  * answered (`play_commands`, each player's newest 256 to each game), the things players did that
  * are worth remembering (`activity`, up to 1,000 a player a UTC day, for 180 days), and how many of
  * each player's commands were done and refused each UTC day (`command_days`, for the staff's
  * report), where each player's state stands in a game with a board (`standings`), what each
- * player has won for good in any game (`awards`, never taken away). Every method but `board` is
- * meant to run inside the play service's transaction. A database failure is a defect.
+ * player has won for good in any game (`awards`, never taken away), and what each state tells the
+ * town (`play_postcards`). Every method but `board` is meant to run inside the play service's
+ * transaction. A database failure is a defect.
  */
 export class PlayStore extends Context.Service<
   PlayStore,
@@ -151,10 +213,16 @@ export class PlayStore extends Context.Service<
     readonly board: (game: string, playerId: PlayerId) => Effect.Effect<Board>;
     /** Where a player stands in each game they have a standing in, by game, each place worked out as `board`'s own. */
     readonly standingsOf: (playerId: PlayerId) => Effect.Effect<ReadonlyMap<string, Placed>>;
-    /** Everything a player has won for good, in the order Leaf first saw it. */
-    readonly awards: (playerId: PlayerId) => Effect.Effect<readonly string[]>;
+    /**
+     * What every call of the player's is told (`Given`): everything they have won for good, in the
+     * order Leaf first saw it; and with `postcards`, the postcard kept for each of their games that
+     * has one (one that does not read is left out), or else none.
+     */
+    readonly given: (playerId: PlayerId, postcards: boolean) => Effect.Effect<Given>;
     /** Keeps each of these the player does not hold yet, as won now. */
     readonly award: (playerId: PlayerId, ids: readonly string[], now: number) => Effect.Effect<void>;
+    /** Keeps what the player's state in a game tells the town (`Game.postcard`, as JSON), over what was kept; null keeps it as it is. */
+    readonly post: (playerId: PlayerId, game: GameId, postcard: string | null) => Effect.Effect<void>;
   }
 >()("leaf/PlayStore") {
   static readonly layer = Layer.effect(
@@ -165,7 +233,10 @@ export class PlayStore extends Context.Service<
         Request: Schema.Struct({ playerId: Schema.String, game: Schema.String }),
         Result: Stored,
         execute: ({ playerId, game }) =>
-          sql`SELECT rev, state, updated_at AS updatedAt, guest, born, due_at AS dueAt FROM play_state WHERE player_id = ${playerId} AND game = ${game}`,
+          sql`
+            SELECT s.rev, s.state, s.updated_at AS updatedAt, s.guest, s.born, s.due_at AS dueAt, p.postcard FROM play_state AS s
+            LEFT JOIN play_postcards AS p USING (player_id, game) WHERE player_id = ${playerId} AND game = ${game}
+          `,
       });
       const revOf = SqlSchema.findOneOption({
         Request: Schema.Struct({ playerId: Schema.String, game: Schema.String }),
@@ -232,11 +303,7 @@ export class PlayStore extends Context.Service<
           SELECT game, ${place} AS place, score, also FROM standings AS s WHERE player_id = ${playerId} ORDER BY game
         `,
       });
-      const awards = SqlSchema.findAll({
-        Request: Schema.String,
-        Result: Schema.Struct({ id: Schema.String }),
-        execute: (playerId) => sql`SELECT id FROM awards WHERE player_id = ${playerId} ORDER BY at, id`,
-      });
+
       return PlayStore.of({
         read: (playerId, game) => read({ playerId, game }).pipe(Effect.orDie),
         revOf: (playerId, game) =>
@@ -334,18 +401,7 @@ export class PlayStore extends Context.Service<
             Effect.map((rows) => new Map(rows.map(({ game, ...placed }) => [game, placed]))),
             Effect.orDie,
           ),
-        awards: (playerId) =>
-          awards(playerId).pipe(
-            Effect.map((rows) => rows.map((row) => row.id)),
-            Effect.orDie,
-          ),
-        award: (playerId, ids, now) =>
-          Effect.forEach(
-            ids,
-            (id) =>
-              sql`INSERT INTO awards (player_id, id, at) VALUES (${playerId}, ${id}, ${now}) ON CONFLICT DO NOTHING`,
-            { discard: true },
-          ).pipe(Effect.orDie),
+        ...givenIn(sql),
       });
     }),
   );

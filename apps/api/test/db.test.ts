@@ -35,9 +35,13 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 38: no camp kept on visits, and the triggers as migration 37 made them. */
+/** Undoes migration 39: no postcards kept (the states it made due stay due, as Leaf's sweep would leave them). */
+const beforePlayPostcards = (sql: SqlClient.SqlClient) => sql`DROP TABLE play_postcards`;
+
+/** Undoes migrations 39 and 38: no camp kept on visits, and the triggers as migration 37 made them. */
 const beforeVisitCamps = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
+    yield* beforePlayPostcards(sql);
     yield* sql`DROP TRIGGER visits_opened`;
     yield* sql`DROP TRIGGER visits_heard`;
     yield* sql`ALTER TABLE last_visits DROP COLUMN camp_owner`;
@@ -65,7 +69,7 @@ const beforeVisitCamps = (sql: SqlClient.SqlClient) =>
     `;
   });
 
-/** Undoes migrations 38 and 37: no newest visit kept for each player, and visits indexed by when they were last heard of. */
+/** Undoes migrations 39 to 37: no newest visit kept for each player, and visits indexed by when they were last heard of. */
 const beforeLastVisits = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
     yield* beforeVisitCamps(sql);
@@ -83,14 +87,14 @@ const beforeLastVisits = (sql: SqlClient.SqlClient) =>
     yield* sql`CREATE INDEX visits_by_heard ON visits (heard_at)`;
   });
 
-/** Undoes migrations 38 to 36: and no check for missed levels kept. */
+/** Undoes migrations 39 to 36: and no check for missed levels kept. */
 const beforeLevelChecks = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
     yield* beforeLastVisits(sql);
     yield* sql`DROP TABLE level_checks`;
   });
 
-/** Undoes migrations 38 to 34: no likes of camps kept, and `presence` back, empty, as migrations 12 to 29 left it. */
+/** Undoes migrations 39 to 34: no likes of camps kept, and `presence` back, empty, as migrations 12 to 29 left it. */
 const beforeDropPresence = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
     yield* beforeLevelChecks(sql);
@@ -216,6 +220,7 @@ describe("the database", () => {
       { migration_id: 36, name: "level_checks" },
       { migration_id: 37, name: "last_visits" },
       { migration_id: 38, name: "visit_camps" },
+      { migration_id: 39, name: "play_postcards" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -267,6 +272,7 @@ describe("the database", () => {
           "camp_likes",
           "level_checks",
           "last_visits",
+          "play_postcards",
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;
         }
@@ -281,7 +287,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 38 },
+      { latest: 39 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -341,6 +347,7 @@ describe("the database", () => {
       seed: 7,
       room: 0,
       awards: [],
+      postcards: {},
     };
     const have = { "figure:greg": 2, "headliner:banner-1": 1 };
     // With a ware of the Treasury's, retired: let go of as the game reads the state.
@@ -565,6 +572,41 @@ describe("the database", () => {
       { player_id: alice2, place: "camp", camp_owner: null, heard_at: 5, left_at: null },
       { player_id: bob2, place: "camp", camp_owner: alice2, heard_at: 7, left_at: 8 },
     ]);
+  });
+
+  it("has each yard and table standing still due once, for Leaf to write its postcard, and no other state", async () => {
+    const path = join(directory, "leaf.db");
+    const [still, running] = ["a", "b"].map((n) => `00000000-0000-4000-8000-00000000000${n}`);
+    const migrated = Date.now();
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // Back to before migration 39: a yard standing still, a yard due a tend, a table and a camp.
+        yield* beforePlayPostcards(sql);
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 39`;
+        yield* sql`
+          INSERT INTO play_state (player_id, game, rev, state, updated_at, due_at) VALUES
+            (${still}, 'works', 3, '{}', 1, NULL), (${running}, 'works', 3, '{}', 1, 5),
+            (${still}, 'raid', 3, '{}', 1, NULL), (${still}, 'town', 3, '{}', 1, NULL)
+        `;
+      }),
+    );
+    expect(
+      await query(
+        path,
+        (sql) => sql`
+          SELECT game, CASE WHEN due_at >= ${migrated} THEN 'now' ELSE due_at END AS due
+          FROM play_state ORDER BY game, player_id
+        `,
+      ),
+    ).toEqual([
+      { game: "raid", due: "now" },
+      { game: "town", due: null },
+      { game: "works", due: "now" },
+      { game: "works", due: 5 },
+    ]);
+    expect(await query(path, (sql) => sql`SELECT * FROM play_postcards`)).toEqual([]);
   });
 
   it("enforces foreign keys, which SQLite leaves off unless asked", async () => {
