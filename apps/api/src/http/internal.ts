@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 
-import { isLeaf, parsePlayerId, REQUEST_KINDS, type RequestKind } from "@sequoia-leaf/core";
+import { isLeaf, parseMinecraftId, REQUEST_KINDS, type RequestKind } from "@sequoia-leaf/core";
 import { Clock, Effect, Layer, Redacted } from "effect";
 import { HttpServerRequest } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
@@ -9,6 +9,7 @@ import { Backend, LeafApi, PurchaseBodyErrors } from "../api/api.ts";
 import { Invalid, PurchaseRefused, Unauthorized } from "../api/errors.ts";
 import { AppConfig } from "../config.ts";
 import { Ledger } from "../ledger/store.ts";
+import { Logins } from "../players/logins.ts";
 import { Purchases } from "../purchases/store.ts";
 import { payloadError } from "./routes/middleware.ts";
 
@@ -75,16 +76,17 @@ export const InternalHandlers = HttpApiBuilder.group(LeafApi, "internal", (handl
   Effect.gen(function* () {
     const ledger = yield* Ledger;
     const purchases = yield* Purchases;
+    const logins = yield* Logins;
     return handlers
       .handle("leaf", ({ params }) =>
         Effect.gen(function* () {
-          const playerId = parsePlayerId(params.player);
-          if (playerId === undefined) {
+          const account = parseMinecraftId(params.player);
+          if (account === undefined) {
             return yield* invalidPlayer;
           }
-          const { balance } = yield* ledger.account(playerId);
+          const { balance } = yield* ledger.account(yield* logins.player(account));
           return {
-            player_id: playerId,
+            player_id: account,
             balance,
           };
         }),
@@ -94,12 +96,13 @@ export const InternalHandlers = HttpApiBuilder.group(LeafApi, "internal", (handl
           if (!KEY.test(params.key)) {
             return yield* invalidKey;
           }
-          const playerId = parsePlayerId(payload.player_id);
+          const account = parseMinecraftId(payload.player_id);
           const { kind, leaf: price } = payload;
-          if (playerId === undefined || !isKind(kind) || !isLeaf(price)) {
+          if (account === undefined || !isKind(kind) || !isLeaf(price)) {
             return yield* invalidPurchase;
           }
-          const bought = yield* purchases.buy(params.key, playerId, kind, price, yield* Clock.currentTimeMillis);
+          const now = yield* Clock.currentTimeMillis;
+          const bought = yield* purchases.buy(params.key, yield* logins.player(account), kind, price, now);
           if (bought.status === "refused") {
             return yield* new PurchaseRefused({ code: bought.reason, message: REFUSED[bought.reason] });
           }

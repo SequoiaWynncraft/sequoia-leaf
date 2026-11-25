@@ -1,4 +1,4 @@
-import type { PlayerId } from "./player.ts";
+import type { MinecraftId, PlayerId } from "./player.ts";
 
 /** An achievement milestone a player reached, as Sierra reports it. */
 export interface AchievementAward {
@@ -49,6 +49,15 @@ export interface PayingLadder {
 }
 
 /** The Leaf a milestone pays: 0 when its ladder or its milestone does not pay. */
+/** A milestone a Minecraft account reached, as Sierra reports it, before Leaf knows its player. */
+export type ReportedAward = Omit<AchievementAward, "playerId"> & { readonly account: MinecraftId };
+
+/** What a reported award is as the award of `playerId`, the player its account signs in as. */
+export function awardOf(reported: ReportedAward, playerId: PlayerId): AchievementAward {
+  const { account: _account, ...award } = reported;
+  return { ...award, playerId };
+}
+
 export function leafForAward(award: AchievementAward, rules: AchievementRules): number {
   if (award.milestoneId === null) {
     return 0;

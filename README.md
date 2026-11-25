@@ -480,8 +480,9 @@ the browser and copied it to a save per slot (`saves`, with earlier copies in
 bringing the last of them over (see [Moving over](#moving-over)), and a later
 migration drops them.
 
-**Skins.** `GET /v1/game/skins/{uuid}` takes a Minecraft UUID with or without
-dashes, or gets 400 `invalid_uuid`. It serves only the skins of players Leaf
+**Skins.** `GET /v1/game/skins/{uuid}` takes a player's id with or without
+dashes, or gets 400 `invalid_uuid`, and serves the skin of the Minecraft account
+their name and skin come from (`Logins`). It serves only the skins of players Leaf
 knows: the player asking, anyone with an account in the ledger, and anyone
 whose game said where they were in the last day, guests too (see Presence). Any other
 player gets 404 `no_skin`, and Mojang is not asked about them.
@@ -1365,8 +1366,12 @@ afresh. That tool is deleted too.
    real-world event, such as one raid completion for one player, so a retry or
    a repeated report can never pay twice.
 4. **Leaf is a whole number.** Use the `Leaf` type for amounts.
-5. **A player is a Minecraft UUID.** Use `PlayerId`. Usernames and Discord IDs
-   can change; never use them as keys.
+5. **A player is Leaf's `PlayerId`, and an account is a login.** A player who
+   first came with a Minecraft account has that account's UUID; one who came
+   with Discord alone has a random one. A Minecraft UUID from outside (a
+   session, a feed, the backend) is a `MinecraftId`, and `Logins` says which
+   player it signs in as: never use one as a player. Usernames are attributes;
+   never key on them.
 6. **Numbers that tune the game are data, not code.** Rates, prices and odds
    live in one place, not as literals scattered through handlers.
 7. **Error responses are `{ "code", "message" }`.** Clients branch on `code`.

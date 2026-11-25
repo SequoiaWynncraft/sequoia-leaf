@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 
-import { type Activity, DEFAULT_RULES, type PlayerId, playerId } from "@sequoia-leaf/core";
+import { DEFAULT_RULES, minecraftId, type PlayerId, playerId, type ReportedActivity } from "@sequoia-leaf/core";
 import { Effect } from "effect";
 
 import { type CreditSource, RECENT_OVERLAP_MS, SETTLE_MS, syncCredits, type SyncMode } from "../src/earning/sync.ts";
@@ -17,11 +17,11 @@ beforeEach(() => {
   leaf = testLeaf({ now: T0 }, noNetwork);
 });
 
-function war(id: number, player: PlayerId, occurredAt: number, warPoints: number, inClaim?: boolean): Activity {
-  const activity: Activity = {
+function war(id: number, player: PlayerId, occurredAt: number, warPoints: number, inClaim?: boolean): ReportedActivity {
+  const activity: ReportedActivity = {
     kind: "war",
     sourceKey: `war:${id}:${player}`,
-    playerId: player,
+    account: minecraftId(player),
     occurredAt,
     seasonRating: 60,
     territory: "Detlas",
@@ -31,7 +31,7 @@ function war(id: number, player: PlayerId, occurredAt: number, warPoints: number
 }
 
 /** A feed that answers a window with the activities inside it, and remembers what it was asked. */
-function feed(activities: Activity[]): { source: CreditSource; windows: [number, number][] } {
+function feed(activities: ReportedActivity[]): { source: CreditSource; windows: [number, number][] } {
   const windows: [number, number][] = [];
   const source: CreditSource = (from, to) =>
     Effect.sync(() => {
@@ -180,7 +180,7 @@ describe("syncCredits", () => {
   });
 
   it("picks up a credit that appears late on the deep run, but not on a recent one", async () => {
-    const activities: Activity[] = [];
+    const activities: ReportedActivity[] = [];
     const { source } = feed(activities);
     await sync(source, T0);
     await sync(source, T0 + 3 * HOUR);

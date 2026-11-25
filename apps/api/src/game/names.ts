@@ -2,6 +2,7 @@ import { DAY_MS, type PlayerId } from "@sequoia-leaf/core";
 import { Cache, Clock, Context, Duration, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
+import { Logins } from "../players/logins.ts";
 import { knownAmong, UNASKED_KEPT_MS } from "./known.ts";
 import { Mojang } from "./mojang.ts";
 
@@ -38,6 +39,7 @@ export class PlayerNames extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const mojang = yield* Mojang;
+      const logins = yield* Logins;
       const remember = (playerId: PlayerId, username: string, now: number) =>
         Effect.gen(function* () {
           // Returns the row only when it was written: a new name, or a changed one.
@@ -55,8 +57,13 @@ export class PlayerNames extends Context.Service<
         }).pipe(Effect.orDie);
       // Several streams that see the same new player at once ask Mojang once.
       const asked = yield* Cache.makeWith(
+        // A player with no Minecraft account has no name at Mojang: theirs is the one they gave Leaf.
         (playerId: PlayerId) =>
-          mojang.profile(playerId).pipe(
+          logins.minecraftOf([playerId]).pipe(
+            Effect.flatMap((accounts) => {
+              const account = accounts.get(playerId);
+              return account === undefined ? Effect.succeedNone : mojang.profile(account);
+            }),
             Effect.tap((profile) =>
               Option.match(profile, {
                 onNone: () => Effect.void,

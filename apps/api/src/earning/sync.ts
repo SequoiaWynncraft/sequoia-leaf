@@ -1,13 +1,16 @@
 import {
   type Activity,
+  activityOf,
   applyActivityToQuests,
   draftEntry,
   leaf,
   leafForActivity,
   openQuestBook,
+  ownPlayer,
   type PlayerId,
   type Quest,
   type QuestSlot,
+  type ReportedActivity,
   type Rules,
 } from "@sequoia-leaf/core";
 import { Effect, Schema } from "effect";
@@ -16,12 +19,16 @@ import { SqlClient, SqlSchema } from "effect/sql";
 import { Events } from "../events/store.ts";
 import { Ledger } from "../ledger/store.ts";
 import { levelOf, levelUp } from "../levels/pay.ts";
+import { Logins } from "../players/logins.ts";
 import { questJson } from "../quests/json.ts";
 import { Quests } from "../quests/store.ts";
 import { type SyncMode, windowedSync } from "../sync/windowed.ts";
 
-/** Reads what players did during [from, to), in milliseconds since the Unix epoch. */
-export type CreditSource<E = never, R = never> = (from: number, to: number) => Effect.Effect<readonly Activity[], E, R>;
+/** Reads what Minecraft accounts did during [from, to), in milliseconds since the Unix epoch. */
+export type CreditSource<E = never, R = never> = (
+  from: number,
+  to: number,
+) => Effect.Effect<readonly ReportedActivity[], E, R>;
 
 export { DEEP_LOOKBACK_MS, RECENT_OVERLAP_MS, SETTLE_MS, type SyncMode, type SyncResult } from "../sync/windowed.ts";
 
@@ -35,8 +42,12 @@ export { DEEP_LOOKBACK_MS, RECENT_OVERLAP_MS, SETTLE_MS, type SyncMode, type Syn
 export const syncCredits = <E, R>(source: CreditSource<E, R>, rules: Rules, now: number, mode: SyncMode) =>
   windowedSync("credits", now, mode, source, (reported, from, to) =>
     Effect.gen(function* () {
+      const fresh = yield* newActivities(reported, from, to);
+      const players = yield* (yield* Logins).players(fresh.map((activity) => activity.account));
       const byPlayer = new Map<PlayerId, Activity[]>();
-      for (const activity of yield* newActivities(reported, from, to)) {
+      for (const activity of fresh.map((done) =>
+        activityOf(done, players.get(done.account) ?? ownPlayer(done.account)),
+      )) {
         const mine = byPlayer.get(activity.playerId);
         if (mine === undefined) {
           byPlayer.set(activity.playerId, [activity]);
@@ -124,7 +135,7 @@ const recordPlayer = Effect.fnUntraced(function* (
 });
 
 /** The activities in [from, to) that are not recorded yet, oldest first, each source key once. */
-const newActivities = Effect.fnUntraced(function* (activities: readonly Activity[], from: number, to: number) {
+const newActivities = Effect.fnUntraced(function* (activities: readonly ReportedActivity[], from: number, to: number) {
   const sql = yield* SqlClient.SqlClient;
   const recordedKeys = SqlSchema.findAll({
     Request: Schema.Struct({ from: Schema.Int, to: Schema.Int }),
@@ -133,7 +144,7 @@ const newActivities = Effect.fnUntraced(function* (activities: readonly Activity
       sql`SELECT source_key AS sourceKey FROM activities WHERE occurred_at >= ${window.from} AND occurred_at < ${window.to}`,
   });
   const recorded = new Set((yield* recordedKeys({ from, to }).pipe(Effect.orDie)).map((row) => row.sourceKey));
-  const unique = new Map<string, Activity>();
+  const unique = new Map<string, ReportedActivity>();
   for (const activity of activities) {
     const inWindow = activity.occurredAt >= from && activity.occurredAt < to;
     if (inWindow && !recorded.has(activity.sourceKey)) {

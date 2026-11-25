@@ -8,6 +8,7 @@ import { TestClock } from "effect/testing";
 import { Identities } from "../src/auth/session.ts";
 import { AppConfig } from "../src/config.ts";
 import { runCreditSync } from "../src/earning/run.ts";
+import { Logins } from "../src/players/logins.ts";
 import { type LogLine, MINUTE, testConfig, testLeaf, unanswered } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
@@ -164,6 +165,18 @@ describe("signing in", () => {
   it("gives the backend three seconds to say, then says so and logs it as a timeout", async () => {
     const lines: unknown[] = [];
     const identities = Identities.layer.pipe(
+      // The backend never answers, so no player is looked up.
+      Layer.provide(
+        Layer.succeed(Logins)(
+          Logins.of({
+            player: () => Effect.die("not asked"),
+            players: () => Effect.die("not asked"),
+            minecraftOf: () => Effect.die("not asked"),
+            discordPlayer: () => Effect.die("not asked"),
+            linkDiscord: () => Effect.die("not asked"),
+          }),
+        ),
+      ),
       Layer.provide(Layer.succeed(AppConfig)(testConfig())),
       Layer.provide(FetchHttpClient.layer),
       Layer.provide(

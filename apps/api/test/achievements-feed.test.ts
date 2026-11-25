@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { playerId } from "@sequoia-leaf/core";
+import { minecraftId } from "@sequoia-leaf/core";
 import { Redacted } from "effect";
 
 import { readAwards } from "../src/achievements/feed.ts";
@@ -10,7 +10,7 @@ import { type Fetcher, rejection, testLeaf } from "./support.ts";
 const config = { baseUrl: "http://sierra.test:8082", token: Redacted.make("secret-token") };
 const FROM = Date.parse("2026-11-02T00:00:00.000Z");
 const TO = Date.parse("2026-11-02T00:05:00.000Z");
-const ALICE = playerId("10000000-0000-0000-0000-000000000001");
+const ALICE = minecraftId("10000000-0000-0000-0000-000000000001");
 
 function answering(body: unknown, status = 200): { fetcher: Fetcher; calls: { url: string; init: RequestInit }[] } {
   const calls: { url: string; init: RequestInit }[] = [];
@@ -56,7 +56,7 @@ describe("readAwards", () => {
     expect(await read(fetcher)).toEqual([
       {
         awardId: `${ALICE}:raid:TNA:5`,
-        playerId: ALICE,
+        account: ALICE,
         ladder: "raid:TNA",
         milestoneId: "diamond",
         tier: "diamond",

@@ -1,7 +1,7 @@
 import { deflateSync } from "node:zlib";
 
 import { BunServices } from "@effect/platform-bun";
-import type { Activity, PlayerId, Posting } from "@sequoia-leaf/core";
+import { minecraftId, type PlayerId, type Posting, type ReportedActivity } from "@sequoia-leaf/core";
 import {
   Clock,
   ConfigProvider,
@@ -56,12 +56,12 @@ export const unanswered = (_input: string | URL | Request, init?: RequestInit) =
     init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
   });
 
-/** A raid `player` took part in, as the credit feed reports it. */
-export function raid(id: number, player: PlayerId, occurredAt: number, seasonRating = 110): Activity {
+/** A raid `player`'s own Minecraft account took part in, as the credit feed reports it. */
+export function raid(id: number, player: PlayerId, occurredAt: number, seasonRating = 110): ReportedActivity {
   return {
     kind: "raid",
     sourceKey: `raid:${id}:${player}`,
-    playerId: player,
+    account: minecraftId(player),
     occurredAt,
     seasonRating,
     raid: "tna",
@@ -70,7 +70,7 @@ export function raid(id: number, player: PlayerId, occurredAt: number, seasonRat
 }
 
 /** A credit feed that answers each window with the activities inside it. */
-export function feed(activities: readonly Activity[]): CreditSource {
+export function feed(activities: readonly ReportedActivity[]): CreditSource {
   return (from, to) =>
     Effect.succeed(activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to));
 }
@@ -337,9 +337,16 @@ export async function rejection(promise: Promise<unknown>): Promise<unknown> {
 }
 
 /** A member's session as the backend's `/auth/web/me` describes it. `rank` null is someone not in the guild. */
-export function sessionOf(player: PlayerId, username: string, rank: string | null = "CAPTAIN") {
+/** A Discord id of the player's own, made from their UUID: each player in a test has one. */
+export function discordOf(player: string): string {
+  return `1${BigInt(`0x${player.replaceAll("-", "").slice(-15)}`)
+    .toString()
+    .padStart(18, "0")}`;
+}
+
+export function sessionOf(player: string, username: string, rank: string | null = "CAPTAIN") {
   return {
-    discord_id: "1",
+    discord_id: discordOf(player),
     discord_username: username.toLowerCase(),
     minecraft_uuid: player,
     minecraft_username: username,

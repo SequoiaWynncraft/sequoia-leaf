@@ -1,4 +1,4 @@
-import type { PlayerId } from "./player.ts";
+import type { MinecraftId, PlayerId } from "./player.ts";
 
 /** The guild raids, by the short names the guild uses for them. */
 export const RAIDS = {
@@ -20,11 +20,11 @@ export function raidKeyForName(name: string): RaidKey | undefined {
 
 interface ActivityBase {
   /**
-   * Identifies this player's part in this event, such as `raid:4812:<player id>`.
+   * Identifies this account's part in this event, such as `raid:4812:<Minecraft UUID>`: the
+   * account's, not its player's, so that it names the same fact whichever player the account is.
    * Recording the same key twice records the activity once.
    */
   readonly sourceKey: string;
-  readonly playerId: PlayerId;
   /** When the event happened, in milliseconds since the Unix epoch. */
   readonly occurredAt: number;
   /**
@@ -35,26 +35,40 @@ interface ActivityBase {
   readonly seasonRating: number;
 }
 
+/** One thing someone (`Who`: a player, or a Minecraft account) did that the game can reward or count. */
+type ActivityOf<Who> =
+  | (ActivityBase &
+      Who & {
+        readonly kind: "raid";
+        /** The raid's short name, or undefined when it is not in `RAIDS`. */
+        readonly raid: RaidKey | undefined;
+        /** The raid's full name as the backend reports it. */
+        readonly raidName: string;
+      })
+  | (ActivityBase &
+      Who & {
+        readonly kind: "war";
+        readonly territory: string;
+        /** The participant's share of the war, as scored by the backend. */
+        readonly warPoints: number;
+        /**
+         * Whether the territory was in Sequoia's claim when the war was won: the
+         * guild taking back its own ground, which members call defending. Left out
+         * when the backend does not know.
+         */
+        readonly inClaim?: boolean;
+      });
+
 /** One thing a player did that the game can reward or count toward a quest. */
-export type Activity =
-  | (ActivityBase & {
-      readonly kind: "raid";
-      /** The raid's short name, or undefined when it is not in `RAIDS`. */
-      readonly raid: RaidKey | undefined;
-      /** The raid's full name as the backend reports it. */
-      readonly raidName: string;
-    })
-  | (ActivityBase & {
-      readonly kind: "war";
-      readonly territory: string;
-      /** The participant's share of the war, as scored by the backend. */
-      readonly warPoints: number;
-      /**
-       * Whether the territory was in Sequoia's claim when the war was won: the
-       * guild taking back its own ground, which members call defending. Left out
-       * when the backend does not know.
-       */
-      readonly inClaim?: boolean;
-    });
+export type Activity = ActivityOf<{ readonly playerId: PlayerId }>;
+
+/** One thing a Minecraft account did, as the guild's feed reports it, before Leaf knows its player. */
+export type ReportedActivity = ActivityOf<{ readonly account: MinecraftId }>;
+
+/** What a reported activity is as the doing of `playerId`, the player its account signs in as. */
+export function activityOf(reported: ReportedActivity, playerId: PlayerId): Activity {
+  const { account: _account, ...done } = reported;
+  return { ...done, playerId };
+}
 
 export type ActivityKind = Activity["kind"];

@@ -1,4 +1,4 @@
-import type { PlayerId } from "@sequoia-leaf/core";
+import type { MinecraftId } from "@sequoia-leaf/core";
 import { Context, Duration, Effect, Layer, Option, Schema, Stream } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 
@@ -44,8 +44,8 @@ const Textures = Schema.StringFromBase64.pipe(
 export class Mojang extends Context.Service<
   Mojang,
   {
-    /** A player's profile, or none when Mojang knows no such player. */
-    readonly profile: (playerId: PlayerId) => Effect.Effect<Option.Option<MojangProfile>, MojangError>;
+    /** A Minecraft account's profile, or none when Mojang knows no such account. */
+    readonly profile: (account: MinecraftId) => Effect.Effect<Option.Option<MojangProfile>, MojangError>;
     /** The bytes at a skin address Leaf has checked, failing past `MAX_SKIN_BYTES`. */
     readonly texture: (address: URL) => Effect.Effect<Uint8Array, MojangError>;
   }
@@ -56,8 +56,8 @@ export class Mojang extends Context.Service<
     Effect.gen(function* () {
       const client = yield* HttpClient.HttpClient;
       return Mojang.of({
-        profile: (playerId) =>
-          client.get(`${SESSION_SERVER}/session/minecraft/profile/${playerId.replaceAll("-", "")}`).pipe(
+        profile: (account) =>
+          client.get(`${SESSION_SERVER}/session/minecraft/profile/${account.replaceAll("-", "")}`).pipe(
             Effect.flatMap((response) =>
               // Mojang answers a UUID that is no one's with no content.
               response.status === 204 || response.status === 404
