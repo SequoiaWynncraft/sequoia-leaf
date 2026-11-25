@@ -15,7 +15,7 @@ const Count = Schema.Struct({ n: Schema.Int });
  * Leaf (only a Minecraft account earns any), so nothing moves through the ledger; one that had some
  * is left as it is, and null is answered. Each game's state
  * moves over; where both have one, the one played last stays and the other is kept in save history,
- * for staff to bring back. Counters and time add up; likes, stays, events and visits move; `into`'s
+ * for staff to bring back. Coins, counters and time add up; likes, stays and events move; `into`'s
  * name and skin stay. The merge is recorded in `merges`. Run it in the transaction that links the
  * account. A database failure is a defect.
  */
@@ -88,15 +88,19 @@ const moveGames = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId, now
 /**
  * Coins, counters, time and awards add up. Coins move as Coins always do, by entries (they are
  * append-only): one out of `from`, one into `into`, each named for this merge, earned by neither.
+ * `from`'s Coins account opens `into`'s, so the welcome `from` had is not given twice.
  */
 const addUp = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId, now: number) =>
   Effect.gen(function* () {
     const held = yield* SqlSchema.findAll({
       Request: Schema.String,
       Result: Schema.Struct({ balance: Schema.Int }),
-      execute: (id) => sql`SELECT balance FROM coins WHERE player_id = ${id} AND balance > 0`,
+      execute: (id) => sql`SELECT balance FROM coins WHERE player_id = ${id}`,
     })(from);
-    for (const { balance } of held) {
+    if (held.length > 0) {
+      yield* sql`INSERT OR IGNORE INTO coins (player_id, balance) VALUES (${into}, 0)`;
+    }
+    for (const { balance } of held.filter((h) => h.balance > 0)) {
       yield* sql`
         INSERT INTO coin_entries (player_id, amount, reason, game, key, at, earned) VALUES
           (${from}, ${-balance}, 'moved', NULL, ${`moved:${from}:out`}, ${now}, 0),
@@ -146,39 +150,20 @@ const moveLikes = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId) =>
     }
   });
 
-/** Their history moves whole; `into`'s name and skin, its account's, stay. */
+/**
+ * What players see of their past moves: their events, banners, and their Leaf sessions. Their
+ * visits stay as they were, a record of who was where for the staff: a page still open as `from`
+ * goes on as it is until it signs in again. `into`'s name, its account's, stays.
+ */
 const moveHistory = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId) =>
   Effect.gen(function* () {
-    // One open visit a player: theirs closes where it was last heard of, as a page gone quiet would.
-    yield* sql`UPDATE visits SET left_at = heard_at WHERE player_id = ${from} AND left_at IS NULL`;
-    for (const table of ["events", "activity", "sessions", "visits", "banner_people", "sign_ins"]) {
+    for (const table of ["events", "banner_people", "sign_ins"]) {
       yield* sql`UPDATE ${sql(table)} SET player_id = ${into} WHERE player_id = ${from}`;
     }
+    // Somebody at `from`'s camp is at `into`'s, where that camp now is.
     yield* sql`UPDATE visits SET camp_owner = ${into} WHERE camp_owner = ${from}`;
     yield* sql`UPDATE last_visits SET camp_owner = ${into} WHERE camp_owner = ${from}`;
-    yield* sql`
-      INSERT INTO last_visits (player_id, visit_id, place, guest, heard_at, left_at, stay, camp_owner)
-      SELECT ${into}, visit_id, place, guest, heard_at, left_at, stay, camp_owner FROM last_visits WHERE player_id = ${from}
-      ON CONFLICT (player_id) DO UPDATE SET
-        visit_id = excluded.visit_id, place = excluded.place, guest = excluded.guest, heard_at = excluded.heard_at,
-        left_at = excluded.left_at, camp_owner = excluded.camp_owner
-      WHERE excluded.visit_id > last_visits.visit_id
-    `;
-    yield* sql`DELETE FROM last_visits WHERE player_id = ${from}`;
-    yield* sql`
-      INSERT INTO players_seen (player_id, name, guest, first_seen_at, last_seen_at, seconds_total, sessions, stay)
-      SELECT ${into}, name, guest, first_seen_at, last_seen_at, seconds_total, sessions, stay
-      FROM players_seen WHERE player_id = ${from}
-      ON CONFLICT (player_id) DO UPDATE SET
-        first_seen_at = min(first_seen_at, excluded.first_seen_at),
-        last_seen_at = max(last_seen_at, excluded.last_seen_at),
-        seconds_total = seconds_total + excluded.seconds_total,
-        sessions = sessions + excluded.sessions
-    `;
-    // `into`'s name and skin are its account's; `from`'s were their Discord name and Leaf's figure.
-    for (const table of ["players_seen", "player_names", "skins"]) {
-      yield* sql`DELETE FROM ${sql(table)} WHERE player_id = ${from}`;
-    }
+    yield* sql`DELETE FROM player_names WHERE player_id = ${from}`;
   });
 
 /** Drops `player`'s state of `game`, keeping it in `keeper`'s save history so staff can bring it back. */

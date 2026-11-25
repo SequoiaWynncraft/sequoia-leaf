@@ -242,7 +242,7 @@ describe("linking a Wynncraft account later", () => {
     expect((await meWith(`__Host-leaf_session=${token}`)).body).toMatchObject({ player: { id: account } });
   });
 
-  it("brings the Discord player's Coins and open visit along, as Coins and visits always move", async () => {
+  it("brings the Discord player's Coins along, and leaves both players' open visits as they are", async () => {
     const token = await signInNuss();
     const guestId = idOf((await meWith(`__Host-leaf_session=${token}`)).body);
     await leafs.query(
@@ -273,10 +273,23 @@ describe("linking a Wynncraft account later", () => {
     expect(me.status).toBe(200);
     expect(me.body).toMatchObject({ coins: 300 });
     expect(
-      await leafs.query(
-        (sql) => sql`SELECT count(*) AS n FROM visits WHERE player_id = ${account} AND left_at IS NULL`,
-      ),
-    ).toEqual([{ n: 1 }]);
+      await leafs.query((sql) => sql`SELECT player_id AS id FROM visits WHERE left_at IS NULL ORDER BY id`),
+    ).toEqual([{ id: account }, { id: guestId }].toSorted((a, b) => a.id.localeCompare(b.id)));
+  });
+
+  it("does not welcome a Discord player who spent every Coin a second time", async () => {
+    const token = await signInNuss();
+    const guestId = idOf((await meWith(`__Host-leaf_session=${token}`)).body);
+    await leafs.query(
+      (sql) => sql`
+        INSERT INTO coin_entries (player_id, amount, reason, game, key, at, earned) VALUES
+          (${guestId}, 300, 'welcome', NULL, ${`welcome:${guestId}`}, ${T0}, 1),
+          (${guestId}, -300, 'shop', 'works', ${`spent:${guestId}`}, ${T0}, 1)
+      `,
+    );
+    sequoiaSession("nuss-sequoia", account, "Nuss187");
+
+    expect((await meWith(`seq_session=nuss-sequoia`)).body).toMatchObject({ coins: 0 });
   });
 
   it("keeps the newer of two states of one game, and the other in save history", async () => {
