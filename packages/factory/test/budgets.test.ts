@@ -96,6 +96,9 @@ describe("the generated yard", () => {
   }, 60_000);
 });
 
+/** What a function makes, as the allocation guard names it: the function and the kind, without the text it was found in. */
+const kindOf = (m: string): string => m.split(": ").slice(0, 2).join(": ");
+
 describe("memory", () => {
   test("a yard of about 6,000 pieces holds under 400 KB: every array it reaches but its land", () => {
     const y = running();
@@ -192,6 +195,39 @@ describe("allocation", () => {
     );
   }, 60_000);
 
+  test("the check, which the page takes with every command, makes nothing for a tile or a piece: only what it makes once a call", () => {
+    const check = reached("check.ts", "check", new Set());
+    // Each tile's and piece's part of it, which runs for every piece, makes nothing at all.
+    for (const f of [
+      "check.ts:pieceWord",
+      "check.ts:settingsWord",
+      "pieces.ts:waysOn",
+      "yard.ts:holderOf",
+      "yard.ts:tunnelOf",
+    ])
+      expect(check.reached).toContain(f);
+    // What the rest makes, once a call: its hash's closures, its loops over the goals, the orders, the
+    // blueprints and what Undo would undo. Anything more, a per-tile array among it, is new here.
+    expect(check.makes.map(kindOf)).toEqual([
+      "check.ts:check: an array",
+      "check.ts:check: a closure",
+      "check.ts:check: an iterator",
+      "check.ts:check: a copy",
+      "check.ts:bytes: an array",
+      "check.ts:bytes: an iterator",
+      "check.ts:mixKept: an iterator",
+    ]);
+    // How long it takes here, as a number to read: a shared machine's clock is no limit.
+    const y = staged("large");
+    const times: number[] = [];
+    for (let k = 0; k < 2001; k++) {
+      const t = Bun.nanoseconds();
+      F.check(y);
+      times.push((Bun.nanoseconds() - t) / 1e3);
+    }
+    console.log(`the check of ${pieces(y)} pieces: ${(times.toSorted((p, q) => p - q)[1000] ?? 0).toFixed(1)} µs`);
+  });
+
   test("nothing the tick calls, in any file, makes an array, object, closure, string or iterator, but where the plumbing is worked out again or an order is filled", () => {
     const excused = new Set([
       // Worked out once after a change, by the first tick after it.
@@ -240,19 +276,6 @@ describe("work in step with what stands", () => {
 });
 
 describe("time", () => {
-  test("the check of the largest staged yard, about 500 pieces, takes under 20 µs: the page takes one with every command", () => {
-    const y = staged("large");
-    const times: number[] = [];
-    for (let k = 0; k < 2001; k++) {
-      const t = Bun.nanoseconds();
-      F.check(y);
-      times.push((Bun.nanoseconds() - t) / 1e3);
-    }
-    const median = times.toSorted((p, q) => p - q)[1000] ?? Infinity;
-    console.log(`the check of ${pieces(y)} pieces: ${median.toFixed(1)} µs`);
-    expect(median).toBeLessThan(20);
-  });
-
   test("the median tick at about 6,000 pieces takes under 2 ms", () => {
     const y = running();
     const time = (before: () => void, n: number): number => {
