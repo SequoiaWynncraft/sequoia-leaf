@@ -1,7 +1,7 @@
 import { deflateSync } from "node:zlib";
 
 import { BunServices } from "@effect/platform-bun";
-import { minecraftId, type PlayerId, type Posting, type ReportedActivity } from "@sequoia-leaf/core";
+import { minecraftId, type PlayerId, type Posting, type ReportedActivity, whole } from "@sequoia-leaf/core";
 import {
   Clock,
   ConfigProvider,
@@ -425,16 +425,19 @@ export interface Queued {
   days: number;
   /** The kinds the member has a request waiting for. */
   readonly waiting: Set<string>;
-  /** Paid requests ahead of the member's next one in its queue. */
+  /** Paid requests ahead of the member's next one in each kind's queue. */
   ahead: number;
 }
+
+/** LE as the stand-in reward queue sells it, as the backend's config has it: 200 Leaf for 1 LE, at least 32. */
+export const LE_OFFER = { leaf_per_le: 200, minimum: 32 } as const;
 
 /**
  * A stand-in for the backend's reward queue (`/api/reward-queue`) for one member, signed in as
  * `token`, as `Backend.api`: it says whether they may pay Leaf for a request as the backend does, and
  * makes one as the backend does, by buying it from Leaf's own purchase route (`leaf`, as the backend
- * reaches it) before it answers, and cancelling it there when Leaf refuses. Its refusals carry the
- * backend's words.
+ * reaches it) before it answers, and cancelling it there when Leaf refuses. Aspects and tomes cost
+ * 3,000 Leaf each, and LE as `LE_OFFER` says. Its refusals carry the backend's words.
  */
 export function rewardQueue(
   token: string,
@@ -461,17 +464,28 @@ export function rewardQueue(
         in_guild: true,
         leaf_eligible: queued.days >= 7,
         leaf_balance: null,
-        prices: { tome: PRICE, aspect: PRICE },
+        prices: { tome: PRICE, aspect: PRICE, le: LE_OFFER },
       });
     }
     if (path !== "/api/reward-queue/requests" || request.method !== "POST") {
       return no(404, "Not found");
     }
     const body: unknown = await request.json();
-    const type = typeof body === "object" && body !== null && "type" in body ? body.type : null;
-    if (type !== "aspect" && type !== "tome") {
+    const read = (key: string): unknown =>
+      typeof body === "object" && body !== null ? Object.getOwnPropertyDescriptor(body, key)?.value : undefined;
+    const type = read("type");
+    if (type !== "aspect" && type !== "tome" && type !== "le") {
       return no(400, `Unknown reward queue type: ${String(type)}`);
     }
+    const amount = read("amount");
+    if (type === "le" && (typeof amount !== "number" || !Number.isInteger(amount) || amount < LE_OFFER.minimum)) {
+      return no(400, `Ask for at least ${whole(LE_OFFER.minimum)} LE, in whole LE.`);
+    }
+    if (type === "le" && read("pay_with_leaf") !== true) {
+      return no(400, "LE is paid for with Leaf.");
+    }
+    const le = typeof amount === "number" && type === "le" ? amount : null;
+    const price = le === null ? PRICE : le * LE_OFFER.leaf_per_le;
     if (queued.days < 7) {
       return no(403, "You need at least 7 days in the guild to use this queue.");
     }
@@ -483,18 +497,17 @@ export function rewardQueue(
     const bought = await leaf(`/internal/v1/purchases/${key}`, {
       method: "PUT",
       headers: internal,
-      body: JSON.stringify({ player_id: player, kind: type, leaf: PRICE }),
+      body: JSON.stringify({ player_id: player, kind: type, leaf: price }),
     });
     const paid: unknown = await bought.json();
     if (bought.status !== 200 || typeof paid !== "object" || paid === null || !("balance" in paid)) {
       await leaf(`/internal/v1/purchases/${key}`, { method: "DELETE", headers: internal });
-      const kind = type === "aspect" ? "An aspect" : "A tome";
-      return no(403, `${kind} request costs 3,000 Leaf, and you don't have that much.`);
+      const what = le === null ? (type === "aspect" ? "An aspect request" : "A tome request") : `${whole(le)} LE`;
+      return no(403, `${what} costs ${whole(price)} Leaf, and you don't have that much.`);
     }
     queued.waiting.add(type);
-    queued.ahead += 1;
     return Response.json(
-      { request_id: 7, type, position: queued.ahead, leaf_paid: PRICE, leaf_balance: paid.balance },
+      { request_id: 7, type, position: queued.ahead + 1, leaf_paid: price, leaf_balance: paid.balance, amount: le },
       { status: 201 },
     );
   };

@@ -54,7 +54,7 @@ export const BackendLive = Layer.effect(
 const invalidPurchase = new Invalid({
   code: "invalid_purchase",
   message:
-    'Send a purchase as { "player_id": "<uuid>", "kind": "tome" or "aspect", "leaf": <whole number, 1 or more> }',
+    'Send a purchase as { "player_id": "<uuid>", "kind": "tome", "aspect" or "le", "leaf": <whole number, 1 or more> }',
 });
 export const PurchaseBodyErrorsLive = Layer.succeed(PurchaseBodyErrors)(payloadError(invalidPurchase));
 const invalidKey = new Invalid({

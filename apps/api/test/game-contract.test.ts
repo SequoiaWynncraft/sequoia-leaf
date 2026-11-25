@@ -299,12 +299,18 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("GET /v1/game/people/{player}", "GET", `/v1/game/people/${alice}`, undefined, "bob-token");
   clock.now = T0 + 25 * MINUTE;
   await call("GET /v1/game/people/{player}, unknown", "GET", "/v1/game/people/20000000-0000-0000-0000-000000000009");
-  // The Treasury: a tome request bought (the backend charges it through Leaf), the same again, and a guest.
+  // The Treasury: what it sells (LE beyond her Leaf for now), a tome request bought (the backend
+  // charges it through Leaf), the same again, 40 LE once the staff grant her more, and a guest.
   backend.api = rewardQueue("alice-token", alice, (path, init) => app.request(path, init)).api;
   await call("GET /v1/game/requests", "GET", "/v1/game/requests");
   const tome = { type: "tome", reason: "For the war tower" };
   await call("POST /v1/game/requests", "POST", "/v1/game/requests", tome);
   await call("POST /v1/game/requests, refused", "POST", "/v1/game/requests", tome);
+  await leaf.post(
+    { kind: "earn", playerId: alice, amount: leafOf(8000), source: "staff", idempotencyKey: "staff:le" },
+    clock.now,
+  );
+  await call("POST /v1/game/requests, LE", "POST", "/v1/game/requests", { type: "le", amount: 40 });
   await call("GET /v1/game/requests, a guest", "GET", "/v1/game/requests", undefined, "visitor-token");
   // A batch in the Works, answered short: Bob sets a gatherer down at the tick his page was given.
   const works = await app.request("/v1/game/play/works", { headers: { Authorization: "Bearer bob-token" } });

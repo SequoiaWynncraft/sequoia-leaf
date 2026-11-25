@@ -1,5 +1,14 @@
 [
   {
+    "id": "le-for-leaf",
+    "at": "2026-11-25T22:27Z",
+    "title": "LE for Leaf",
+    "lines": [
+      "Members with 7 days in the guild can now turn Leaf into LE: 200 Leaf for 1 LE, at least 32 LE.",
+      "Ask at the Treasury, or with the LE with Leaf button in the request channel on Discord. Staff pay it in game. A denied request gives all its Leaf back."
+    ]
+  },
+  {
     "id": "page-drift",
     "at": "2026-11-25T18:25Z",
     "title": "Buttons that ask to be pressed again",

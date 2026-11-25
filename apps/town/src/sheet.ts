@@ -1,5 +1,6 @@
 /** A contact sheet of the art, for looking at it large while drawing it: open the page with `?sheet`. */
 
+import { REQUEST_KINDS } from "@sequoia-leaf/core";
 import { CREAM, GOLD, GREEN } from "@sequoia-leaf/kit/palette.ts";
 import type { Body } from "@sequoia-leaf/kit/skin.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
@@ -12,6 +13,7 @@ import { type CampArt, campIcon } from "./campart.ts";
 import { paintBackdrop, paintGround, paintNear, paintTrunk } from "./ground.ts";
 import { icon, type Sprite, type Sprites } from "./sprites.ts";
 import { tallyBoard } from "./tallyart.ts";
+import { requestArt } from "./treasuryart.ts";
 
 /** The art, with the members' figures (`bodies`) and the town's own in every picture (`folk`). */
 export function showSheet(s: Sprites, bodies: readonly Body[], folk: readonly Sprite[]): void {
@@ -69,8 +71,7 @@ export function showSheet(s: Sprites, bodies: readonly Body[], folk: readonly Sp
             s.lilyBloom,
             ...s.crab,
             s.bang,
-            s.tome,
-            s.aspect,
+            ...REQUEST_KINDS.map(requestArt),
             ...s.lanterns,
             ...s.bushes,
             ...s.rocks,

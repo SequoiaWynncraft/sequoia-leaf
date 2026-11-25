@@ -2524,6 +2524,11 @@
       "tome": {
         "price": 3000,
         "why_not": null
+      },
+      "le": {
+        "price": 200,
+        "minimum": 32,
+        "why_not": "32 LE costs 6,400 Leaf. You have 4,163."
       }
     }
   },
@@ -2557,6 +2562,23 @@
     "body": {
       "code": "request_refused",
       "message": "You already have a pending tome request in the queue."
+    }
+  },
+  "POST /v1/game/requests, LE": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/requests",
+      "body": {
+        "type": "le",
+        "amount": 40
+      }
+    },
+    "status": 200,
+    "body": {
+      "type": "le",
+      "position": 2,
+      "leaf_paid": 8000,
+      "leaf": 1163
     }
   },
   "GET /v1/game/requests, a guest": {

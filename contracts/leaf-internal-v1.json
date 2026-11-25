@@ -27,6 +27,23 @@
       "balance": 2000
     }
   },
+  "PUT /internal/v1/purchases/{key}, LE": {
+    "request": {
+      "method": "PUT",
+      "path": "/internal/v1/purchases/request:5",
+      "body": {
+        "player_id": "10000000-0000-0000-0000-000000000001",
+        "kind": "le",
+        "leaf": 6400
+      }
+    },
+    "status": 200,
+    "body": {
+      "key": "request:5",
+      "status": "paid",
+      "balance": 2000
+    }
+  },
   "PUT /internal/v1/purchases/{key}, the same again": {
     "request": {
       "method": "PUT",
@@ -110,7 +127,7 @@
     "status": 400,
     "body": {
       "code": "invalid_purchase",
-      "message": "Send a purchase as { \"player_id\": \"<uuid>\", \"kind\": \"tome\" or \"aspect\", \"leaf\": <whole number, 1 or more> }"
+      "message": "Send a purchase as { \"player_id\": \"<uuid>\", \"kind\": \"tome\", \"aspect\" or \"le\", \"leaf\": <whole number, 1 or more> }"
     }
   }
 }
