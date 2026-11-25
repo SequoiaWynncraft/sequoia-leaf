@@ -20,9 +20,7 @@
       },
       {
         "head": "Changed",
-        "points": [
-          "Undo can now undo anything you do at once in your yard, however large, such as taking away the whole yard."
-        ]
+        "points": ["Undo can take back a whole-yard placement, or clearing, in one step."]
       }
     ]
   },

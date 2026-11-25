@@ -17,18 +17,28 @@ import {
   piecesAt,
   play,
   readCommand,
+  refusal,
   reopen,
   route,
+  WORKSHOP,
   writeAct,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { asking, pressedTwice } from "@sequoia-leaf/kit/dom.ts";
 
 import { ctx, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
-import { askSaveYard, saveIn } from "./plans.ts";
+import { heldBox } from "./held.ts";
+import { askSave, askSaveYard, saveIn, saveKey } from "./plans.ts";
 import { S, toolHooks } from "./state.ts";
-import { aimAt, confirm, hold, setTool, unaim, undo } from "./tools.ts";
+import { aimAt, cancel, confirm, hold, markEnd, markOver, markStart, setTool, unaim, undo } from "./tools.ts";
 import { handPrint } from "./ui/dock.ts";
 import { differences } from "./yard.ts";
+
+// The input's module reaches the scene, which makes canvases as it loads: a document is there first
+// whose canvases take any drawing and keep none of it, as `input.test.ts` has it.
+const inert: () => unknown = new Proxy(() => inert, { get: () => inert, set: () => true });
+Object.defineProperty(globalThis, "document", { value: { createElement: () => inert }, configurable: true });
+const { fingerTap } = await import("./input.ts");
 
 useFakeLeaf();
 
@@ -136,7 +146,7 @@ describe("a plan of the whole yard in hand", () => {
     // A crate stood (20), a bench taken up (40): it gives back 20.
     expect([print.line, print.place, print.turn, print.go]).toEqual([
       { text: "Whole yard: 1 to build, 1 to take up, gives back 20 Coins.", bad: false },
-      { cost: -20, asking: false, bad: false },
+      { key: expect.any(String), cost: -20, asking: false, bad: false },
       false,
       null,
     ]);
@@ -180,7 +190,7 @@ describe("a plan of the whole yard in hand", () => {
     setTool("select");
     hold(0);
     const short = 20 - Math.floor(S.world.till / MILLI);
-    expect(handPrint().place).toEqual({ cost: 20, asking: false, bad: true });
+    expect(handPrint().place).toEqual({ key: expect.any(String), cost: 20, asking: false, bad: true });
     expect(handPrint().line).toEqual({ text: `Not enough Coins: ${short} short`, bad: true });
     const before = encode(S.world);
     expect(confirm()).toBe(false);
@@ -189,5 +199,93 @@ describe("a plan of the whole yard in hand", () => {
       false,
       before,
     ]);
+  });
+});
+
+/** The yard with a plan of it kept in place 0, changed and kept again in place 1, then changed once more. */
+function twoPlans(): Yard {
+  const { y } = changed();
+  must(y, { do: "saveYard", slot: 1 });
+  must(y, { do: "remove", x: 30, y: 14 });
+  y.history = [];
+  return y;
+}
+
+describe("a press that waits for a second", () => {
+  test("is for one plan: Place pressed on one, put down, and another taken up, the other asks; and so does the same one taken up again", async () => {
+    const fake = await opened(twoPlans(), 1000);
+    const was = settings(S.world);
+    setTool("select");
+    hold(0);
+    expect([confirm(), handPrint().place?.asking]).toEqual([false, true]);
+    cancel();
+    hold(1);
+    expect(handPrint().place?.asking).toBe(false);
+    expect([confirm(), handPrint().place?.asking]).toEqual([false, true]);
+    cancel();
+    hold(1);
+    expect([handPrint().place?.asking, confirm()]).toEqual([false, false]);
+    expect([settings(S.world), sent(fake.leaf)]).toEqual([was, []]);
+  });
+
+  test("Save over a kept place is for what it keeps: asked for a marked area and let go, it asks again for the whole yard", async () => {
+    await opened(twoPlans(), 1000);
+    setTool("select");
+    // The mill's line: a gatherer, a mill and a belt.
+    markStart(27, 19);
+    markOver(30, 22);
+    markEnd();
+    askSave();
+    const area = saveKey(1);
+    expect(area).toMatch(/:area:\d+$/);
+    expect([pressedTwice(area, () => {}), asking(area)]).toEqual([false, true]);
+    // Save put away: what it waited for goes with it.
+    cancel();
+    expect(asking(area)).toBe(false);
+    cancel();
+    askSaveYard();
+    const all = saveKey(1);
+    expect(all).not.toBe(area);
+    expect(pressedTwice(all, () => {})).toBe(false);
+  });
+});
+
+describe("a plan of the whole yard in hand, by a finger", () => {
+  test("is pressed by a tap anywhere on the yard: the first asks, the second puts it back", async () => {
+    const { y, saved } = changed();
+    await opened(y, 1000);
+    S.finger = true;
+    setTool("select");
+    hold(0);
+    fingerTap(3, 3);
+    expect([handPrint().place?.asking, settings(S.world) === saved]).toEqual([true, false]);
+    fingerTap(40, 30);
+    expect(settings(S.world)).toBe(saved);
+  });
+});
+
+describe("what a plan of the whole yard in hand would take up", () => {
+  test("is in its picture: the box it is drawn in covers every piece it takes up, however far from what it stands", async () => {
+    const { y } = changed();
+    const t =
+      [...y.kind.keys()].find((i) => refusal(y, WORKSHOP, i % y.land.w, Math.floor(i / y.land.w), Infinity) === null) ??
+      0;
+    const far = { x: t % y.land.w, y: Math.floor(t / y.land.w) };
+    must(y, { do: "build", kind: "workshop", dir: 0, ...far });
+    y.history = [];
+    await opened(y, 1000);
+    setTool("select");
+    hold(0);
+    const g = S.group;
+    if (!g) throw new Error("nothing in hand");
+    expect(piecesAt(S.world, g.tiles).map((p) => [kindName(p.kind), p.x, p.y])).toEqual(
+      expect.arrayContaining([
+        ["bench", 30, 14],
+        ["workshop", far.x, far.y],
+      ]),
+    );
+    const box = heldBox(S.world, g);
+    const inBox = (x: number, z: number): boolean => x >= box.x && x < box.x + box.w && z >= box.y && z < box.y + box.h;
+    expect([inBox(30, 14), inBox(far.x, far.y), inBox(29, 14)]).toEqual([true, true, true]);
   });
 });

@@ -35,6 +35,8 @@ import type { Stage } from "../hand.ts";
 import { turns, WORKS_KEYS, type WorksAction } from "../keymap.ts";
 import {
   askSave,
+  deleteKey,
+  digest,
   isWhole,
   piecesInHand,
   savingLine,
@@ -292,14 +294,15 @@ function upgradeOf(stage: Stage | null): Upgrade | null {
   const all = stage?.is === "empty";
   if ((!all && stage?.is !== "marked") || locked(S.world.open, { use: "upgrade" }) !== null) return null;
   const cost = upgradeCost(all);
-  return cost > 0
-    ? { all, cost, asking: asking(all ? "upgrade-all" : "upgrade"), short: Math.max(0, cost - coins()) }
-    : null;
+  return cost > 0 ? { all, cost, asking: asking(upgradeKey(all)), short: Math.max(0, cost - coins()) } : null;
 }
+
+/** Upgrade's press waiting for a second, named by what it raises: the whole yard, or the area marked. */
+const upgradeKey = (all: boolean): string => (all ? "upgrade-all" : `upgrade:${digest(S.mark?.tiles ?? [])}`);
 
 /** Upgrade (or Upgrade all) pressed, weighed against the purse now: short, the rules say by how much; else it asks twice. */
 export function pressUpgrade(all: boolean): void {
-  if (upgradeCost(all) > coins() || pressedTwice(all ? "upgrade-all" : "upgrade", refreshDock)) upgradeMark(all);
+  if (upgradeCost(all) > coins() || pressedTwice(upgradeKey(all), refreshDock)) upgradeMark(all);
 }
 
 /**
@@ -307,13 +310,13 @@ export function pressUpgrade(all: boolean): void {
  * it says how short (the rules' own sentence) at once, asking nothing.
  */
 function upgradeButton(u: Upgrade): HTMLElement {
-  const key = u.all ? "upgrade-all" : "upgrade";
+  const key = upgradeKey(u.all);
   const b = button(
     u.short > 0 ? "sm off" : u.asking ? "sm asking" : "sm",
     [asksAgain(key, [u.all ? "Upgrade all" : "Upgrade", amount("coin", u.cost)], "Press again")],
     () => pressUpgrade(u.all),
   );
-  b.dataset.act = key;
+  b.dataset.act = u.all ? "upgrade-all" : "upgrade";
   return b;
 }
 
@@ -356,7 +359,7 @@ export function handPrint(): HandPrint {
     turn: builds(tool) || turnsInHand(g),
     flip: tool === SORTER,
     undo: undoes(stage),
-    bin: typeof g?.as === "number" ? { slot: g.as, asking: asking(`delete-${g.as}`) } : null,
+    bin: typeof g?.as === "number" ? { slot: g.as, asking: asking(deleteKey(g.as)) } : null,
     cancel: tool !== null,
     go: aiming
       ? {

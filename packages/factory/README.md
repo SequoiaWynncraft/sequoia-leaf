@@ -61,6 +61,7 @@ nothing:
 | `span`  | Int8  | a tunnel's tiles under: positive at the way-in mouth, negative at the other                               |
 | `row`   | Int32 | the piece's row in a side table, or -1: read only by `holderOf`, `tunnelOf`                               |
 | `lit`   | Uint8 | 1 where power reaches                                                                                     |
+| `made`  | Uint8 | how many times the tile has been cleared, round from 255 to 0: never kept, read by Undo                   |
 
 Side tables have a row for each piece that needs one, kept packed (a removed row takes the last),
 and grow by half when full. `row` holds a holder's row for some kinds and a tunnel's for another, so

@@ -295,6 +295,23 @@ describe("putting a plan of the whole yard back", () => {
 });
 
 describe("Undo of a plan of the whole yard put back", () => {
+  test("stands again new a piece the placement took up, however like it what was stood in its place: a crate refilled is put back empty", () => {
+    const y = lines();
+    const crate = { x: 29, y: 14 };
+    const held = (): number => y.holders.count[F.holderOf(y, F.at(y, crate.x, crate.y))] ?? 0;
+    // Kept shut in the plan, then opened: the plan takes the open crate up and stands a shut one.
+    must(y, { do: "crate", open: false, ...crate });
+    must(y, { do: "saveYard", slot: 0 });
+    must(y, { do: "crate", open: true, ...crate });
+    for (let k = 0; k < 600 && held() > 0; k++) F.step(y);
+    const before = settings(y);
+    must(y, { ...place(0), id: "w-1" });
+    for (let k = 0; k < 6000 && held() < 40; k++) F.step(y);
+    expect(held()).toBeGreaterThanOrEqual(40);
+    must(y, { do: "undo", entry: "w-1" });
+    expect([settings(y), held()]).toEqual([before, 0]);
+  });
+
   test("is one entry, and puts the yard back as it was, the Coins the other way", () => {
     const y = lines();
     must(y, { do: "saveYard", slot: 1 });

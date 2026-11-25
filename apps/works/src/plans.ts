@@ -26,19 +26,43 @@ import { coinsText, whole } from "@sequoia-leaf/kit/say.ts";
 
 import { TILE } from "./art/belts.ts";
 import { float, puff, sparkle } from "./fx.ts";
-import { groupOf, type HandEvent, markOf, type Stage, step } from "./hand.ts";
+import { groupOf, type HandEvent, markOf, type Stage } from "./hand.ts";
 import { yardSfx } from "./sound.ts";
-import { type Aim, type Group, S, toolHooks } from "./state.ts";
+import { type Aim, type Group, moveHand, S, toolHooks } from "./state.ts";
 import { coins, doNow } from "./yard.ts";
 
 const DUST = "#cbb894";
-/** The press Place waits for a second of. */
-export const PLACE = "place-yard";
 
-/** Moves what is in hand (`hand.ts`). */
-const go = (e: HandEvent): void => {
-  S.hand = step(S.hand, e);
+/** 32 bits of some numbers: a blueprint's bytes, the tiles of an area marked. */
+export function digest(values: ArrayLike<number>): number {
+  let h = 0x811c9dc5;
+  for (let k = 0; k < values.length; k++) h = Math.imul(h ^ (values[k] ?? 0), 0x01000193);
+  return h >>> 0;
+}
+
+/**
+ * A press that waits for a second (`pressedTwice`) is named by exactly what it confirms, so that a
+ * second press never confirms something else: a blueprint's place by its number and what is kept
+ * there; Save over a kept place by what it keeps there (the area marked, or the whole yard).
+ */
+const printKey = (slot: number): string => {
+  const p = S.world.blueprints[slot];
+  return p ? `${slot}:${p.whole ? "yard" : "area"}:${digest(p.pieces)}` : `${slot}:none`;
 };
+/** Place, putting the plan of the whole yard in a place back. */
+export const placeKey = (slot: number): string => `place:${printKey(slot)}`;
+/** The bin, throwing the blueprint in a place away. */
+export const deleteKey = (slot: number): string => `delete:${printKey(slot)}`;
+/** A kept place pressed while Save or Save yard asks where: keeping what it asks about over what is kept there. */
+export function saveKey(slot: number): string {
+  const h = S.hand;
+  const m = markOf(h);
+  const what = h.is === "select" && h.stage.is === "savingYard" ? "yard" : m ? `area:${digest(m.tiles)}` : "none";
+  return `save:${printKey(slot)}:${what}`;
+}
+
+/** Moves what is in hand (`moveHand`). */
+const go = moveHand;
 
 /** Says why the rules would not, with its sound. */
 function no(why: string): false {
@@ -96,6 +120,8 @@ export function yardLine(g: Group, aim: Aim | null): string {
 
 /** Place, with a plan of the whole yard in hand: its price, whether it asks to be pressed again, and whether it cannot be put back. */
 export interface YardPress {
+  /** What its press waiting for a second is named (`placeKey`). */
+  readonly key: string;
   readonly cost: number;
   readonly asking: boolean;
   readonly bad: boolean;
@@ -103,8 +129,9 @@ export interface YardPress {
 export function yardPress(): YardPress | null {
   const g = groupOf(S.hand);
   const aim = S.aim;
-  if (!g || !aim || !isWhole(g.as)) return null;
-  return { cost: aim.cost, asking: asking(PLACE), bad: aim.why !== null };
+  if (!g || !aim || typeof g.as !== "number" || !isWhole(g.as)) return null;
+  const key = placeKey(g.as);
+  return { key, cost: aim.cost, asking: asking(key), bad: aim.why !== null };
 }
 
 /** What Place says beside its Coins: what it costs, or gives back. */
@@ -119,7 +146,7 @@ export function pressYard(): boolean {
   const aim = S.aim;
   if (!g || typeof g.as !== "number" || !aim) return false;
   if (aim.why !== null) return no(aim.why);
-  if (!pressedTwice(PLACE, toolHooks.changed)) return false;
+  if (!pressedTwice(placeKey(g.as), toolHooks.changed)) return false;
   const up = piecesAt(S.world, g.tiles);
   const did = doNow({ do: "placeBlueprint", slot: g.as, turns: 0, x: 0, y: 0 });
   if ("refused" in did) return no(did.why);

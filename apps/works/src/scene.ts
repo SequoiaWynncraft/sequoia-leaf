@@ -18,7 +18,6 @@ import {
   BELT,
   BENCH,
   BOILER,
-  boxOf,
   condition,
   CRATE,
   DEPOT,
@@ -75,6 +74,7 @@ import { DEPOT as DEPOT_ART, FLAG_AT, gathererHat, lookOf } from "./art/machines
 import type { Sprite } from "./art/pal.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
 import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
+import { heldBox, heldMarks } from "./held.ts";
 import { lampsIn } from "./lamps.ts";
 import { armsAt, asIf, type Layout, layout, pylonTop, sendsRight, sortSide } from "./layout.ts";
 import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, tileNudge } from "./state.ts";
@@ -963,13 +963,12 @@ const ROOM = { side: 8, top: 40, bottom: 8 } as const;
  * pieces are in hand.
  */
 function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, cy: number): void {
-  const box = boxOf(grp.at);
+  const box = heldBox(w, grp);
   if (held.for !== grp.at || held.yard !== w || held.rev !== w.rev || held.lost !== lost) {
     held.for = grp.at;
     held.yard = w;
     held.rev = w.rev;
     held.lost = lost;
-    const tiles = tilesOf(w, grp.at);
     held.c.width = box.w * TILE + ROOM.side * 2;
     held.c.height = box.h * TILE + ROOM.top + ROOM.bottom;
     const h = held.g;
@@ -1006,24 +1005,8 @@ function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, 
     for (const d of listed.slice(mark, used).toSorted((p, q) => p.z - q.z)) h.drawImage(d.c, d.x - camX, d.y - camY);
     used = mark;
     lit = before;
-    // Gold over each piece that can go and coral over each that cannot, with a line where the pieces end.
-    const own = new Set(tiles);
-    const W = w.land.w;
-    grp.at.forEach((p, k) => {
-      const ok = grp.why[k] === null;
-      for (const i of tilesOf(w, [p])) {
-        if (i < 0) continue;
-        const x = (i % W) * TILE + ox;
-        const y = Math.floor(i / W) * TILE + oy;
-        h.fillStyle = ok ? "rgba(255,196,84,0.34)" : "rgba(238,92,74,0.62)";
-        h.fillRect(x, y, TILE, TILE);
-        h.fillStyle = ok ? GOLD[2] : CORAL;
-        if (!own.has(i - W)) h.fillRect(x, y, TILE, 1);
-        if (!own.has(i + W)) h.fillRect(x, y + TILE - 1, TILE, 1);
-        if (i % W === 0 || !own.has(i - 1)) h.fillRect(x, y, 1, TILE);
-        if (i % W === W - 1 || !own.has(i + 1)) h.fillRect(x + TILE - 1, y, 1, TILE);
-      }
-    });
+    // Gold over each piece that can go and coral over each that cannot; coral corners over what it takes up.
+    heldMarks(h, w, grp, ox, oy);
   }
   g.globalAlpha = 0.88;
   g.drawImage(held.c, box.x * TILE - ROOM.side - cx, box.y * TILE - ROOM.top - cy);

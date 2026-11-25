@@ -18,10 +18,23 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 import { shown } from "@sequoia-leaf/kit/card.ts";
+import { unask } from "@sequoia-leaf/kit/dom.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./art/belts.ts";
-import { aimOf, groupOf, type Hand, IDLE, markOf, runOf, type Stage, type Tile, toolOf } from "./hand.ts";
+import {
+  aimOf,
+  groupOf,
+  type Hand,
+  type HandEvent,
+  IDLE,
+  markOf,
+  runOf,
+  type Stage,
+  step,
+  type Tile,
+  toolOf,
+} from "./hand.ts";
 import type { Nudge } from "./teach.ts";
 
 /**
@@ -128,6 +141,21 @@ export interface Group {
   /** Where it is aimed (`S.aim`): the pieces as they would stand, and why each cannot. */
   at: Piece[];
   why: (string | null)[];
+}
+
+/** What is held, as a press waiting to be pressed again is for it: the tool, Select's stage, and the pieces or blueprint held. */
+const heldOf = (h: Hand): string =>
+  `${String(toolOf(h))}:${h.is === "select" ? `${h.stage.is}:${String(groupOf(h)?.as ?? "")}` : ""}`;
+
+/**
+ * Moves what is in hand (`hand.ts`): the one way anything changes it. A press waiting to be pressed
+ * again (`pressedTwice`) is let go when what is held changes (another tool, stage or blueprint, or
+ * none), so that no second press confirms what the first was not for.
+ */
+export function moveHand(e: HandEvent): void {
+  const was = heldOf(S.hand);
+  S.hand = step(S.hand, e);
+  if (heldOf(S.hand) !== was) unask();
 }
 
 /** Called whenever the tool in hand, or what it is aimed at, changes, and to say something: the interface listens (`dock.ts`). */

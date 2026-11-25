@@ -12,7 +12,7 @@ import { generate } from "./gen.ts";
 import { bareLand } from "./land.ts";
 import { Player } from "./player.ts";
 import { rng } from "./random.ts";
-import { delivering, give, junctions, must, saved, staged } from "./yards.ts";
+import { delivering, give, junctions, lay, must, saved, staged } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 
@@ -31,6 +31,23 @@ function large(): F.Yard {
   };
   const y = generate(F.LAND, 600, 20_261_122, buy, F.create({ seed: 20_261_122, tier: 4 })).y;
   y.history = [];
+  return y;
+}
+
+/** The delivering yard's lines laid in a yard with every goal done: a plan of the whole yard may be kept, and put back. */
+function knowing(seed: number): F.Yard {
+  const y = F.create({ seed, tier: 5 });
+  const depot = y.land.depot;
+  must(y, { do: "build", kind: "gatherer", x: 19, y: 15, dir: 0 });
+  lay(y, [20, 15], depot);
+  must(y, { do: "build", kind: "gatherer", x: 29, y: 21, dir: 3 });
+  must(y, { do: "build", kind: "mill", x: 29, y: 20, dir: 2 });
+  lay(y, [28, 20], depot);
+  must(y, { do: "build", kind: "pylon", x: 27, y: 15, dir: 0 });
+  must(y, { do: "build", kind: "gatherer", x: 30, y: 14, dir: 2 });
+  must(y, { do: "build", kind: "crate", x: 29, y: 14, dir: 2 });
+  lay(y, [28, 14], depot);
+  for (let k = 0; k < 600; k++) F.step(y);
   return y;
 }
 
@@ -114,7 +131,7 @@ function isNew(y: F.Yard, i: number): boolean {
  * carries, holds and is doing what one did before, but for the side a thing came in from, which
  * moving forgets.
  */
-function ranOn(was: F.Yard, now: F.Yard, moved: boolean): void {
+function ranOn(was: F.Yard, now: F.Yard, moved: boolean, took: ReadonlySet<number>): void {
   const tiles = [...now.kind.keys()];
   if (moved) {
     const carried = (y: F.Yard): string[] =>
@@ -125,12 +142,14 @@ function ranOn(was: F.Yard, now: F.Yard, moved: boolean): void {
     expect(carried(now)).toEqual(carried(was));
     return;
   }
-  for (const i of tiles.filter((t) => now.kind[t] === was.kind[t])) {
+  // Exactly the pieces the command took up are stood again, each new, however like what stood in their place.
+  const remade = tiles.filter((t) => now.made[t] !== was.made[t] && now.kind[t] !== F.NONE);
+  expect(remade).toEqual([...took].toSorted((p, q) => p - q));
+  for (const i of remade) expect([i, isNew(now, i)]).toEqual([i, true]);
+  for (const i of tiles.filter((t) => now.kind[t] === was.kind[t] && !took.has(t))) {
     const cursor = (now.ins[i] ?? 0) !== 0 && (was.ins[i] ?? 0) !== 0;
     expect([i, running(now, i, cursor)]).toEqual([i, running(was, i, cursor)]);
   }
-  for (const i of tiles.filter((t) => now.kind[t] !== was.kind[t] && now.kind[t] !== F.NONE))
-    expect([i, isNew(now, i)]).toEqual([i, true]);
 }
 
 /**
@@ -152,11 +171,12 @@ function undoneAll(
   y.history = [];
   const r = rng(seed);
   const p = new Player(y, seed, new Map());
-  // Blueprints kept of what stands, to be set down.
+  // Blueprints kept of what stands, to be set down; and where the yard may, a plan of all of it.
   for (const slot of [0, 1, 2]) give(y, { do: "saveBlueprint", slot, tiles: p.box() });
+  give(y, { do: "saveYard", slot: 3 });
   y.seen = F.here(y);
   const first = settings(y);
-  const done: { stood: string; coins: number; kind: string }[] = [];
+  const done: { stood: string; coins: number; kind: string; took: Set<number> }[] = [];
   for (let k = 0; k < 600 && done.length < 18; k++) {
     const c: Rec = { ...p.command(), id: `c-${seed}-${k}` };
     if (!UNDONE.has(String(c.do)) || !F.readCommand({ tick: y.tick, ...c })) continue;
@@ -168,19 +188,25 @@ function undoneAll(
     }
     const stood = settings(y);
     const length = y.history.length;
+    // What the command takes up, it clears the tile of (`made`): whatever it stands there in its place.
+    const made = Uint8Array.from(y.made);
+    const had = [...y.kind.keys()].filter((i) => F.isKind(y.kind[i] ?? F.NONE) && y.kind[i] !== F.DEPOT);
     const did = play(y, c, price);
     if ("refused" in did) continue;
     readsBack(y);
+    const took = new Set(had.filter((i) => y.made[i] !== made[i]));
     // A command that changed nothing keeps no entry; none here is over the cap.
-    if (y.history.at(-1)?.id === c.id) done.push({ stood, coins: coinsOf(did), kind: String(c.do) });
+    if (y.history.at(-1)?.id === c.id) done.push({ stood, coins: coinsOf(did), kind: String(c.do), took });
     expect([y.history.length, y.history.length - length]).toEqual([done.length, y.history.at(-1)?.id === c.id ? 1 : 0]);
     ticks(y, r);
   }
   let short = 0;
   const kinds = new Set<string>();
   for (const was of done.toReversed()) {
-    const copy = F.decode(F.encode(y), y.land);
-    if (!copy) throw new Error("the yard does not read back");
+    const before = F.decode(F.encode(y), y.land);
+    if (!before) throw new Error("the yard does not read back");
+    // A copy read back stands every piece anew: what each tile was cleared to so far is this yard's own.
+    before.made.set(y.made);
     const free = undo(y, 0);
     const shortBy = "refused" in free ? /^Not enough Coins: (\d+) short$/.exec(free.why) : null;
     // Refused for nothing but Coins, ever.
@@ -197,7 +223,7 @@ function undoneAll(
     expect(settings(y)).toBe(was.stood);
     // Each Undo moves back just what its own command moved.
     expect([was.kind, coinsOf(did)]).toEqual([was.kind, 0 - was.coins]);
-    ranOn(copy, y, was.kind === "move");
+    ranOn(before, y, was.kind === "move", was.took);
     kinds.add(was.kind);
   }
   expect([y.history.length, settings(y)]).toEqual([0, first]);
@@ -209,11 +235,13 @@ describe("Undo", () => {
     let undone = 0;
     let short = 0;
     const kinds = new Set<string>();
-    for (let seed = 1; seed <= 18; seed++) {
-      // Pieces to hand, some standing and some not: a yard begun, one with its lines laid, and one
-      // with every kind of meeting of lines (splitters, sorters, joiners, tunnels).
-      const start = [F.create({ seed, tier: 4 }), delivering(seed), junctions()][seed % 3] ?? delivering(seed);
-      if (seed % 3 === 0) must(start, { do: "build", kind: "gatherer", x: 19, y: 15, dir: 0 });
+    for (let seed = 1; seed <= 24; seed++) {
+      // Pieces to hand, some standing and some not: a yard begun, one with its lines laid, one with
+      // every kind of meeting of lines (splitters, sorters, joiners, tunnels), and one with its lines
+      // laid that may put a plan of the whole yard back.
+      const start =
+        [F.create({ seed, tier: 4 }), delivering(seed), junctions(), knowing(seed)][seed % 4] ?? delivering(seed);
+      if (seed % 4 === 0) must(start, { do: "build", kind: "gatherer", x: 19, y: 15, dir: 0 });
       const got = undoneAll(start, seed);
       undone += got.undone;
       short += got.short;

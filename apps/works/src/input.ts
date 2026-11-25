@@ -17,6 +17,7 @@ import { pan, zoom } from "./camera.ts";
 import { callerAt } from "./events.ts";
 import { aimOf } from "./hand.ts";
 import { WORKS_KEYS, type WorksAction } from "./keymap.ts";
+import { isWhole } from "./plans.ts";
 import { S, tileAt, toYard } from "./state.ts";
 import {
   aimAt,
@@ -210,8 +211,9 @@ export function fingerTap(tx: number, ty: number): void {
     }
     return;
   }
+  // A second tap where it is aimed sets it down; a plan of the whole yard is aimed at the whole yard.
   const a = aimOf(h);
-  if (a && a.x === tx && a.y === ty) {
+  if (a && ((a.x === tx && a.y === ty) || isWhole(S.group?.as))) {
     confirm();
     return;
   }

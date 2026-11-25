@@ -59,7 +59,7 @@ import { CREAM, GOLD, SKY } from "@sequoia-leaf/kit/palette.ts";
 
 import { PAINTS, TILE } from "./art/belts.ts";
 import { float, flutter, puff, ring, sparkle } from "./fx.ts";
-import { aimOf, groupOf, type HandEvent, markOf, runOf, step, type Tile } from "./hand.ts";
+import { aimOf, groupOf, markOf, runOf, type Tile } from "./hand.ts";
 import { keepsRight, sendsRight } from "./layout.ts";
 import { aimYard, isWhole, piecesInHand, pressYard } from "./plans.ts";
 import { yardSfx } from "./sound.ts";
@@ -70,6 +70,7 @@ import {
   gradeInHand,
   type Group,
   type Mark,
+  moveHand,
   type Reckoned,
   type Run,
   S,
@@ -91,10 +92,8 @@ function refused(did: Did): boolean {
 
 const W = (): number => S.world.land.w;
 
-/** Moves what is in hand (`hand.ts`): the one way anything here changes it. */
-const go = (e: HandEvent): void => {
-  S.hand = step(S.hand, e);
-};
+/** Moves what is in hand (`moveHand`). */
+const go = moveHand;
 
 /** An aim at a tile: why it cannot be, what it costs, and for a tunnel its far mouth; of the yard and the purse as they are now. */
 const aimed = (x: number, y: number, why: string | null, cost: number, far = -1): Aim => ({

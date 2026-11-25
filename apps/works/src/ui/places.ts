@@ -10,7 +10,16 @@ import { whole } from "@sequoia-leaf/kit/say.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 
 import type { Stage } from "../hand.ts";
-import { askSaveYard, dropBlueprint, PLACE, pressWords, saveIn, type YardPress } from "../plans.ts";
+import {
+  askSaveYard,
+  deleteKey,
+  digest,
+  dropBlueprint,
+  pressWords,
+  saveIn,
+  saveKey,
+  type YardPress,
+} from "../plans.ts";
 import { S, toolHooks } from "../state.ts";
 import { confirm, hold } from "../tools.ts";
 import { button, iconButton, yardIcon } from "./parts.ts";
@@ -32,13 +41,6 @@ export type Place =
       readonly sum: number;
     };
 
-/** A quick sum of a blueprint's bytes. */
-function sumOf(bytes: Uint8Array): number {
-  let h = 0x811c9dc5;
-  for (const v of bytes) h = Math.imul(h ^ v, 0x01000193);
-  return h >>> 0;
-}
-
 /** The places for blueprints, while Select has nothing marked or Save (or Save yard) is asking. */
 export function placesOf(stage: Stage | null): Place[] {
   if (stage?.is !== "empty" && stage?.is !== "saving" && stage?.is !== "savingYard") return [];
@@ -54,8 +56,8 @@ export function placesOf(stage: Stage | null): Place[] {
       w: box.w,
       h: box.h,
       cost: kept.whole ? 0 : priceOf(S.world, pieces, true),
-      asking: asking(`blueprint-${slot}`),
-      sum: sumOf(kept.pieces),
+      asking: asking(saveKey(slot)),
+      sum: digest(kept.pieces),
     };
   });
 }
@@ -79,7 +81,7 @@ export function placeButton(p: Place, saving: boolean): HTMLElement {
 /** A place with a blueprint kept in it: pressed, it is taken in hand, or while Save asks, kept over on a second press. */
 function keptButton(p: Extract<Place, { kept: true }>): HTMLElement {
   const { slot } = p;
-  const key = `blueprint-${slot}`;
+  const key = saveKey(slot);
   const kept = S.world.blueprints[slot];
   const face =
     p.asking || !kept ? ["Replace?"] : [thumb(piecesOf(kept.pieces), p.whole ? S.world.land : null), factsOf(p)];
@@ -101,7 +103,7 @@ export function binButton(bin: { readonly slot: number; readonly asking: boolean
   if (!bin) return [];
   const { slot, asking: again } = bin;
   const drop = (): void => {
-    if (pressedTwice(`delete-${slot}`, toolHooks.changed)) dropBlueprint(slot);
+    if (pressedTwice(deleteKey(slot), toolHooks.changed)) dropBlueprint(slot);
   };
   const b = again
     ? button("sm asking", ["Delete?"], drop)
@@ -121,9 +123,9 @@ export function yardButtons(saveYard: boolean, place: YardPress | null): HTMLEle
   if (!place) return out;
   const label = ["Place", ...(place.cost === 0 ? [] : [amount("coin", pressWords(place.cost))])];
   const style = place.bad ? "sm off" : place.asking ? "sm asking" : "sm";
-  const b = button(style, [asksAgain(PLACE, label, "Press again")], () => {
+  const b = button(style, [asksAgain(place.key, label, "Press again")], () => {
     confirm();
   });
-  b.dataset.act = PLACE;
+  b.dataset.act = "place-yard";
   return [...out, b];
 }
