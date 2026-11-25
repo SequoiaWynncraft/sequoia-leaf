@@ -275,6 +275,8 @@ describe("linking a Wynncraft account later", () => {
     expect(
       await leafs.query((sql) => sql`SELECT player_id AS id FROM visits WHERE left_at IS NULL ORDER BY id`),
     ).toEqual([{ id: account }, { id: guestId }].toSorted((a, b) => a.id.localeCompare(b.id)));
+    // Nobody sees them twice in town.
+    expect(await leafs.query((sql) => sql`SELECT player_id AS id FROM last_visits`)).toEqual([{ id: account }]);
   });
 
   it("does not welcome a Discord player who spent every Coin a second time", async () => {

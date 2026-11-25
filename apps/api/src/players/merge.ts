@@ -108,11 +108,6 @@ const addUp = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId, now: nu
       `;
     }
     yield* sql`
-      INSERT INTO command_days (player_id, day, done, refused)
-      SELECT ${into}, day, done, refused FROM command_days WHERE player_id = ${from}
-      ON CONFLICT (player_id, day) DO UPDATE SET done = done + excluded.done, refused = refused + excluded.refused
-    `;
-    yield* sql`
       INSERT INTO time_in (player_id, game, played_ms, afk_ms)
       SELECT ${into}, game, played_ms, afk_ms FROM time_in WHERE player_id = ${from}
       ON CONFLICT (player_id, game) DO UPDATE
@@ -132,7 +127,7 @@ const addUp = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId, now: nu
         at = max(at, excluded.at)
     `;
     yield* sql`INSERT OR IGNORE INTO awards (player_id, id, at) SELECT ${into}, id, at FROM awards WHERE player_id = ${from}`;
-    for (const table of ["command_days", "time_in", "tallies", "awards"]) {
+    for (const table of ["time_in", "tallies", "awards"]) {
       yield* sql`DELETE FROM ${sql(table)} WHERE player_id = ${from}`;
     }
   });
@@ -152,8 +147,8 @@ const moveLikes = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId) =>
 
 /**
  * What players see of their past moves: their events, banners, and their Leaf sessions. Their
- * visits stay as they were, a record of who was where for the staff: a page still open as `from`
- * goes on as it is until it signs in again. `into`'s name, its account's, stays.
+ * visits and the day's commands stay as they were, the staff's record of who did what where.
+ * `into`'s name, its account's, stays.
  */
 const moveHistory = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId) =>
   Effect.gen(function* () {
@@ -164,6 +159,9 @@ const moveHistory = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId) =
     yield* sql`UPDATE visits SET camp_owner = ${into} WHERE camp_owner = ${from}`;
     yield* sql`UPDATE last_visits SET camp_owner = ${into} WHERE camp_owner = ${from}`;
     yield* sql`DELETE FROM player_names WHERE player_id = ${from}`;
+    // Out of who is about: one person is not shown twice. Their visits stay; a page still open as
+    // `from` is not listed, and is let go when it signs in again.
+    yield* sql`DELETE FROM last_visits WHERE player_id = ${from}`;
   });
 
 /** Drops `player`'s state of `game`, keeping it in `keeper`'s save history so staff can bring it back. */
