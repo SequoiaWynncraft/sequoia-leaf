@@ -66,7 +66,7 @@
     "packages/factory/src/codec.ts": 152,
     "packages/factory/src/orders.ts": 19,
     "packages/factory/src/pieces.ts": 16,
-    "packages/factory/src/route.ts": 51,
+    "packages/factory/src/route.ts": 48,
     "packages/factory/src/status.ts": 132,
     "packages/factory/src/tables.ts": 48,
     "packages/factory/src/tick.ts": 121,

@@ -120,6 +120,18 @@ describe("a panel is kept by what it prints", () => {
     ]);
   });
 
+  test("power: a mill in the dark says nothing of what one draws, and none in reach says only how many are dark", () => {
+    const y = create({ seed: 5, tier: 4 });
+    millsInReach(y, 1, 1);
+    millsInDark(y, 1, 2);
+    S.world = y;
+    expect(mills()).toEqual({ kind: MILL, about: "1 in reach, 1 in the dark, 3 each", drawn: 3 });
+    const dark = create({ seed: 5, tier: 4 });
+    millsInDark(dark, 2, 2);
+    S.world = dark;
+    expect(mills()).toEqual({ kind: MILL, about: "2 in the dark", drawn: 0 });
+  });
+
   test("power: the book, the bar over the yard and the trouble view say the same speed, rounded down", () => {
     const y = create({ seed: 5, tier: 4 });
     // Nine mills of grade II in reach draw 40.5 of the 40 made: 98.77%.
@@ -134,16 +146,18 @@ describe("a panel is kept by what it prints", () => {
 const mills = (): unknown => powerPrint().draws.find((d) => d.kind === MILL);
 
 /** Builds `n` mills of a grade where power reaches, each on the first tile that takes one; where they stand. */
-function millsInReach(y: Yard, n: number, grade: number): { x: number; y: number }[] {
+function millsInReach(y: Yard, n: number, grade: number, reached = true): { x: number; y: number }[] {
   const lit = litOf(y);
   const out: { x: number; y: number }[] = [];
   for (let i = 0; i < y.kind.length && out.length < n; i++) {
     const at = { x: i % y.land.w, y: Math.floor(i / y.land.w) };
-    if (y.kind[i] === NONE && lit[i] === 1 && build(y, MILL, at.x, at.y, 0, Infinity, { grade }).ok) out.push(at);
+    if (y.kind[i] === NONE && (lit[i] === 1) === reached && build(y, MILL, at.x, at.y, 0, Infinity, { grade }).ok)
+      out.push(at);
   }
   if (out.length < n) throw new Error("no room for the mills");
   return out;
 }
+const millsInDark = (y: Yard, n: number, grade: number): unknown => millsInReach(y, n, grade, false);
 
 /** What the books' buttons are called now, each titled by its id. */
 const names = (): Map<string, string> => bookNames(booksPrint(), (id) => id);

@@ -338,7 +338,8 @@ function tally(y: Yard): Tally {
     counts[k] = of(counts, k) + 1;
     if (k === WHEEL && reached && besideWater(y.land, i)) t.turning++;
     const d = drawnAt(k, y.grade[i] ?? 0);
-    if (reached) t.drawn[k] = of(t.drawn, k) + d;
+    if (!reached) continue;
+    t.drawn[k] = of(t.drawn, k) + d;
     if (d > 0) widen(t, k, d);
   }
   return t;

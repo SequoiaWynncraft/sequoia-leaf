@@ -137,6 +137,23 @@ export function lastRecipe(y: Yard, i: number): Recipe | null {
 }
 
 /**
+ * A yard read afresh (`into`) takes what each machine last began from the copy it replaces (`from`):
+ * no save keeps it, so without this a machine holding nothing for a moment would be counted for
+ * nothing after every read. Only where the same kind of machine still stands, and has begun nothing
+ * since; one taken away on the page already has none to give.
+ */
+export function keepLast(from: Yard, into: Yard): void {
+  if (from.kind.length !== into.kind.length) return;
+  for (let i = 0; i < into.kind.length; i++) {
+    const k = into.kind[i] ?? NONE;
+    if (!isMaker(k) || from.kind[i] !== k) continue;
+    const [was, now] = [holderOf(from, i), holderOf(into, i)];
+    if (was < 0 || now < 0 || (into.holders.last[now] ?? NONE) !== NONE) continue;
+    into.holders.last[now] = from.holders.last[was] ?? NONE;
+  }
+}
+
+/**
  * What a gatherer, a machine or a Study does a minute (the planner's `makes`), as every screen says
  * it: what it turns out (or a Study takes in) at full power, for what it is making (`aim`, or the
  * recipe given); the share of ticks it works, none where power does not reach and else the yard's

@@ -71,6 +71,16 @@ describe("the power summary", () => {
     expect(s.demand).toBe(F.power(y).demand);
   });
 
+  test("says what one in reach draws from those in reach only: one in the dark draws nothing, whatever its grade", () => {
+    const y = F.create({ seed: 5, tier: 4 });
+    millAt(y, false, 2);
+    const dark = F.powerSummary(y).draws.find((d) => d.kind === F.MILL);
+    expect(dark).toEqual({ kind: F.MILL, lit: 0, dark: 1, drawn: 0, each: [0, 0] });
+    millAt(y, true, 1);
+    const mixed = F.powerSummary(y).draws.find((d) => d.kind === F.MILL);
+    expect(mixed).toEqual({ kind: F.MILL, lit: 1, dark: 1, drawn: 3, each: [3, 3] });
+  });
+
   test("says what the depot and the waterwheels give and the boilers burning, which adds up to the power made", () => {
     const y = delivering();
     const s = F.powerSummary(y);
@@ -106,5 +116,27 @@ describe("a machine's last recipe", () => {
     must(y, { do: "remove", x: 29, y: 20 });
     must(y, { do: "build", kind: "mill", x: 29, y: 20, dir: 2 });
     expect(F.lastRecipe(y, mill)).toBeNull();
+  });
+
+  test("is not kept in a save, so a yard read afresh takes it from the copy it replaces, where the same machine still stands", () => {
+    const y = delivering();
+    const mill = F.at(y, 29, 20);
+    for (let k = 0; k < 600 && F.aim(y, mill) !== null; k++) F.step(y);
+    expect(F.lastRecipe(y, mill)).toBe(sawing);
+    const read = (): F.Yard => {
+      const fresh = F.decode(F.encode(y), y.land);
+      if (!fresh) throw new Error("the yard did not read back");
+      return fresh;
+    };
+    expect(F.lastRecipe(read(), mill)).toBeNull();
+    const kept = read();
+    F.keepLast(y, kept);
+    expect(F.lastRecipe(kept, mill)).toBe(sawing);
+    // A bench where the mill stood, in the yard as read, takes nothing of the mill's.
+    const other = read();
+    must(other, { do: "remove", x: 29, y: 20 });
+    must(other, { do: "build", kind: "bench", x: 29, y: 20, dir: 2 });
+    F.keepLast(y, other);
+    expect(F.lastRecipe(other, mill)).toBeNull();
   });
 });

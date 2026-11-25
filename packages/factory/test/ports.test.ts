@@ -22,6 +22,38 @@ describe("a run of belt laid with two taps", () => {
     expect(F.route(y, [5, 4], [4, 4])).toEqual([{ tunnel: false, x: 5, y: 4, dir: 2, grade: 1 }]);
   });
 
+  test("into a mill from further off leaves the tile ahead of it free, so what it makes still has a way out", () => {
+    const y = yard();
+    must(y, { do: "build", kind: "mill", x: 7, y: 4, dir: 0 });
+    must(y, { do: "recipe", x: 7, y: 4, item: "plank" });
+    expect(F.litOf(y)[F.at(y, 7, 4)]).toBe(1);
+    const legs = F.route(y, [9, 4], [7, 4]);
+    if (!legs) throw new Error("no way");
+    expect(legs.some((l) => l.x === 8 && l.y === 4)).toBe(false);
+    // Laid, with a belt from the mill's front to a crate, the deadfall fed in comes out as planks.
+    must(y, F.writeAct({ do: "lay", legs }));
+    must(y, { do: "build", kind: "crate", x: 10, y: 4, dir: 2 });
+    must(y, { do: "build", kind: "belt", x: 8, y: 4, dir: 3 });
+    must(y, { do: "build", kind: "crate", x: 8, y: 3, dir: 3 });
+    const [from, to] = [y.row[F.at(y, 10, 4)] ?? -1, y.row[F.at(y, 8, 3)] ?? -1];
+    for (let k = 0; k < 4; k++) F.put(y.holders, from, deadfall);
+    for (let k = 0; k < 2000; k++) F.step(y);
+    expect([F.held(y.holders, from, deadfall), F.held(y.holders, to, deadfall)]).toEqual([0, 0]);
+    expect(F.held(y.holders, to, plank)).toBeGreaterThan(0);
+  });
+
+  test("into a mill whose other sides are all taken ends on the tile ahead of it, as that is the only way in", () => {
+    const y = yard();
+    must(y, { do: "build", kind: "mill", x: 4, y: 4, dir: 0 });
+    for (const [x, z] of [
+      [3, 4],
+      [4, 3],
+      [4, 5],
+    ] as const)
+      must(y, { do: "build", kind: "crate", x, y: z, dir: 0 });
+    expect(F.route(y, [7, 4], [4, 4])?.at(-1)).toMatchObject({ x: 5, y: 4, dir: 2 });
+  });
+
   test("from the tile ahead of a boiler into the boiler is one belt facing it", () => {
     const y = yard();
     must(y, { do: "build", kind: "boiler", x: 4, y: 7, dir: 0 });

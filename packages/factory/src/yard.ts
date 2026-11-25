@@ -53,7 +53,7 @@ export interface Holders {
   /**
    * What a machine last began to make, or `NONE` before it has begun anything (`lastRecipe`). It is
    * the piece's, so it goes when the piece is taken away; it is neither kept in a save nor checked,
-   * so a yard read afresh has none until each machine begins again.
+   * so a page carries it over to a yard it reads afresh (`keepLast`).
    */
   last: Uint8Array;
   /** The work done on the next piece, in half-ticks (`tick.ts`). */

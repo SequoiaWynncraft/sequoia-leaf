@@ -315,9 +315,13 @@ export function powerPrint(): {
     draws: s.draws.map((d) => {
       const [least, most] = d.each;
       const each = least === most ? num(least) : `${num(least)} to ${num(most)}`;
+      // What one draws is said of those in reach only: one in the dark draws nothing.
       return {
         kind: d.kind,
-        about: `${d.lit} in reach${d.dark ? `, ${d.dark} in the dark` : ""}, ${each} each`,
+        about:
+          d.lit === 0
+            ? `${d.dark} in the dark`
+            : `${d.lit} in reach${d.dark ? `, ${d.dark} in the dark` : ""}, ${each} each`,
         drawn: d.drawn,
       };
     }),

@@ -59,6 +59,7 @@ import {
   hear,
   type Heard,
   isGraded,
+  keepLast,
   kindName,
   kindNamed,
   LEAD,
@@ -395,6 +396,7 @@ function take(): boolean {
   stepTo(yard, shown);
   drain(yard);
   shown = Math.max(shown, yard.tick);
+  keepLast(S.world, yard);
   S.world = yard;
   reads++;
   seen = Math.max(seen, rev);
