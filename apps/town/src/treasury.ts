@@ -217,7 +217,7 @@ function keeperAt(body: HTMLElement): { line: HTMLElement; face: HTMLElement } {
     el("div", "k-d", {
       text: isGuest()
         ? "For guild members with 7 days in the guild."
-        : "A paid request is served before the free ones.",
+        : "A paid request is an extra, on top of a free one, and is served before the free ones.",
     }),
   );
   return { line, face };
