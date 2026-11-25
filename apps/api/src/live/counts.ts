@@ -145,6 +145,8 @@ export const reportLive = (
       if (said.players === 0 && said.opened === 0 && Object.keys(said.refused).length === 0) return Effect.void;
       return Effect.logInfo("live").pipe(Effect.annotateLogs({ ...said }));
     });
-    yield* Effect.forkScoped(Effect.repeat(report, Schedule.spaced(Duration.minutes(1))));
+    // A minute after Live starts and every minute after. Not at once: a reporter that ran late would
+    // empty a minute the first openings had already been counted in.
+    yield* Effect.forkScoped(Effect.repeat(Effect.delay(report, Duration.minutes(1)), Schedule.forever));
     return line;
   });
