@@ -36,7 +36,7 @@ import { Watchers } from "../live/watchers.ts";
 import { type CommandOutcome, type JobPhase, playCommands, playJobSeconds } from "../metrics.ts";
 import { type CoinEntry, Coins } from "./coins.ts";
 import { Copies } from "./copies.ts";
-import { type Attempt, ctxOf, type Given, type Held, NOTHING_GIVEN, type Played, toRoom } from "./games.ts";
+import { type Attempt, ctxOf, type Given, type Held, NOTHING_GIVEN, type Played, toRoom, unreadable } from "./games.ts";
 import { nextSlice } from "./slices.ts";
 import { PlayStore } from "./store.ts";
 
@@ -507,9 +507,12 @@ export class Play extends Context.Service<
         Effect.gen(function* () {
           const { lane, at } = job;
           const { player, played } = lane;
-          // While the stored `rev` is the copy's own, the copy is the state: nothing more is read.
-          const storedAt = yield* inSqlite(job, store.revOf(player, played.id));
-          if (Option.isSome(storedAt) && lane.copy?.rev === storedAt.value) return lane.copy;
+          // While the stored `rev` is the copy's own, the copy is the state; its postcard is taken as stored (`Held.stored`).
+          const storedAt = yield* inSqlite(job, store.storedAt(player, played.id));
+          if (Option.isSome(storedAt) && lane.copy?.rev === storedAt.value.rev) {
+            lane.copy.held.stored(storedAt.value.postcard);
+            return lane.copy;
+          }
           const found = Option.isNone(storedAt) ? Option.none() : yield* inSqlite(job, store.read(player, played.id));
           if (Option.isNone(found)) {
             // Nothing stored: only a new copy, not yet stored, still stands, whoever asks.
@@ -525,15 +528,10 @@ export class Play extends Context.Service<
           lane.copy = undefined;
           const { rev, state, guest, born, dueAt, postcard } = found.value;
           const held = coded(job, () => played.read(state, postcard));
-          if (held === null) {
-            yield* Effect.logError(
-              `The ${played.id} state stored for ${player} does not read; it is kept as it is`,
-            ).pipe(Effect.annotateLogs({ player, game: played.id, rev }));
-          }
+          if (held === null) yield* unreadable(played.id, player, rev, "it is kept as it is");
           // A state stored due that rests (`rests`), or does not read, is due none until it is written again.
-          if (dueAt !== null && (held === null || rests(held, player, guest))) {
+          if (dueAt !== null && (held === null || rests(held, player, guest)))
             yield* inSqlite(job, store.rest(player, played.id, rev, held !== null));
-          }
           return held && (lane.copy = { rev, text: state, guest, born, at, held, unsaved: false });
         });
 
@@ -576,6 +574,7 @@ export class Play extends Context.Service<
           let leaf: number | null = null;
           let { coins: balance, room } = against;
           const ctx = (roll: number, left: number): Ctx => ctxOf(playing, at, roll, left, given);
+          const stood = copy.held.standing();
           const game = copy.held.open(ctx(seed, room));
           const results: Result[] = [];
           const answers: { readonly id: string; readonly result: Result }[] = [];
@@ -600,9 +599,8 @@ export class Play extends Context.Service<
                 if (!taken.some((t) => t.key === spend.key) && !(yield* ledger.isRecorded(spend.key)))
                   spends.push(spend);
               }
-              if (spends.length > 0 && sum(spends) + sum(taken) > (leaf ??= (yield* ledger.account(player)).balance)) {
+              if (spends.length > 0 && sum(spends) + sum(taken) > (leaf ??= (yield* ledger.account(player)).balance))
                 return { id, refused: "not_enough_leaf" };
-              }
               const amounts = payable(did.coins, balance, room);
               if (amounts === null) return { id, refused: "not_enough_coins" };
               did.keep();
@@ -666,8 +664,8 @@ export class Play extends Context.Service<
                 }
                 const next = (copy.rev ?? 0) + (changed ? 1 : 0);
                 if (changed) {
+                  yield* store.stand(player, played.id, copy.rev, stood, standing, playing.guest, at);
                   yield* store.write(player, played.id, text, playing.guest, at, dueAt);
-                  if (standing !== null) yield* store.stand(player, played.id, standing, playing.guest, at);
                   yield* store.award(player, won, at);
                 }
                 // What the state tells the town, kept with it whenever it is not what is stored.

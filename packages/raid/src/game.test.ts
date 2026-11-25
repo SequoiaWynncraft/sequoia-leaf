@@ -406,10 +406,11 @@ describe("a whole run, played by commands", () => {
     expect(state.almanac.runs).toBe(1);
     expect(state.almanac.best[0]).toBe(ended.summary.reached);
     // Where the table stands, for the player's card: the bosses beaten, the runs done, the furthest room.
-    expect(RAID.standing?.(RAID.create(ctx(42)))).toEqual({ score: 0, also: { runs: 0, room: 0 } });
+    expect(RAID.standing?.(RAID.create(ctx(42)))).toEqual({ score: 0, also: { runs: 0, room: 0 }, counts: [] });
     expect(RAID.standing?.(state)).toEqual({
       score: beatenBosses(state.almanac).size,
       also: { runs: 1, room: ended.summary.reached },
+      counts: [...beatenBosses(state.almanac)].map((boss) => `trophy-${boss}`),
     });
   });
 });
@@ -717,8 +718,10 @@ describe("bosses beaten", () => {
       state.almanac = recordRun(state.almanac, run).almanac;
     }
     expect(beatenBosses(state.almanac)).toEqual(new Set(["oldbramble", "hoardmagpie", "bigcrab"]));
-    expect(RAID.standing?.(state)?.score).toBe(3);
-    expect(RAID.awards?.(state)).toEqual(["trophy-oldbramble", "trophy-hoardmagpie", "trophy-bigcrab"]);
+    // The score counts the three trophies, reached as the last of them was first won.
+    const trophies = ["trophy-oldbramble", "trophy-hoardmagpie", "trophy-bigcrab"];
+    expect([RAID.standing?.(state)?.score, RAID.standing?.(state)?.counts]).toEqual([3, trophies]);
+    expect(RAID.awards?.(state)).toEqual(trophies);
     expect([trailCleared(state.almanac, 0), trailCleared(state.almanac, 1), trailOpen(state.almanac, 2)]).toEqual([
       true,
       true,

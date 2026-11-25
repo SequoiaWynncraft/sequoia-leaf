@@ -53,10 +53,11 @@ export const PET_CHOICE: Readonly<Record<PetId, string>> = {
 
 const SPEED: Readonly<Record<PetId, number>> = { glorp: 26, cat: 24, fox: 40 };
 
-export function makePet(kind: PetId, name: string, art: PetArt, at: Pt): PetLive {
+/** A pet, by the name the member's own of its kind has (`MY_PETS`). */
+export function makePet(kind: PetId, art: PetArt, at: Pt): PetLive {
   const p: PetLive = {
     kind,
-    name,
+    name: MY_PETS[kind],
     art,
     x: at.x,
     y: at.y,
@@ -76,6 +77,20 @@ export function makePet(kind: PetId, name: string, art: PetArt, at: Pt): PetLive
     },
   };
   return p;
+}
+
+/**
+ * The pets about a camp as the camp has them (`here`, by id), from those drawn: one no longer there
+ * goes, and each who stays is the same one, where it is; one new to it is made by `come` (given its
+ * place among `here`) and joins them.
+ */
+export function keepPets(
+  drawn: readonly PetLive[],
+  here: readonly PetId[],
+  come: (kind: PetId, i: number) => PetLive,
+): PetLive[] {
+  const staying = drawn.filter((p) => here.includes(p.kind));
+  return [...staying, ...here.flatMap((kind, i) => (staying.some((p) => p.kind === kind) ? [] : [come(kind, i)]))];
 }
 
 function paintPet(g: Ctx, p: PetLive, cx: number, cy: number): void {

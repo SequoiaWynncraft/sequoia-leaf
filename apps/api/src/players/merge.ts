@@ -70,11 +70,14 @@ const moveGames = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId, now
       }
       if (keepFrom) {
         // The postcard goes with the state it was made from; the state is made due, so Leaf writes it again.
-        // Its revision passes both players' so that no copy of either, kept anywhere, is taken for it.
+        // Its revision passes both players' so that no copy of either, kept anywhere, is taken for it. Where
+        // it stands moves with it as it stood: worked out from it (`stood`) at the new revision if it was at
+        // the old, and still to be worked out again if it was not.
         const next = Math.max(rev, theirsOf?.rev ?? 0) + 1;
         yield* sql`DELETE FROM play_postcards WHERE player_id = ${from} AND game = ${game}`;
         yield* sql`
-          UPDATE play_state SET player_id = ${into}, rev = ${next}, due_at = ${now}
+          UPDATE play_state SET player_id = ${into}, rev = ${next}, due_at = ${now},
+            stood = CASE WHEN stood IS rev THEN ${next} ELSE stood END
           WHERE player_id = ${from} AND game = ${game}
         `;
         for (const table of ["play_commands", "play_kept", "standings"]) {

@@ -661,7 +661,8 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
 - A game may have a board (`Game.standing`: a whole number players are listed
   by, and a few more shown beside it; the Works' is the Coins a yard has ever
   earned, and its story orders done; the Little Raid's, the different bosses
-  beaten, every trail together). A batch that changed the state writes where
+  beaten, every trail together, reached as the last of their trophies was
+  first won). A batch that changed the state writes where
   it stands in the same transaction. `GET /v1/game/play/{game}/standings`
   answers `{ "top": [{ "place", "id", "name", "guest", "score", "also", "you" }], "you" }`:
   the twenty highest scores above 0, a tie going to whoever reached it first;
@@ -712,8 +713,18 @@ a minute after it starts, Leaf works out again where each state stands whose
 `stood` is not its `rev` (`restand.ts`): a game's standing that came to count
 differently (migration 42 has every Little Raid table written so, since its
 standing summed each trail's bosses), a state a tool wrote, or one a Leaf from
-before, beside it in a deploy, wrote without it. Worked out again from the same
-state, a standing keeps its `updated_at`. Migration 23 made `played`: each
+before, beside it in a deploy, wrote without it; a batch that changes such a
+state first does the same, and then writes its own. Only a standing that is
+there is put right: a state that stands nowhere (one nothing was done to, moved
+to another player as it was made) stays so. Put right, a standing was reached
+no later than its `updated_at` says, and for a score that counts awards
+(`Standing.counts`: the Little Raid's trophies), when the last of them was
+first won (`awards.at`), if Leaf kept that of each since the state was made
+(`born`). Awards are kept from migration 21 (22 November 2026): one won before
+was kept at its state's next change, later than it was won, which the stored
+time bounds; a state not changed since may have one with no time, and keeps the
+time stored. Moving a player's state to another (linking an account) keeps
+`stood` as it was, at the new `rev`. Migration 23 made `played`: each
 player's time in each game, in milliseconds, and when Leaf last heard from them
 there (`seen_at`). Migration 24 gave `play_state` `guest`, whether the player was a guest when it was last
 written (a state from before took it from where it stands, or else from the

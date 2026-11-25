@@ -1191,7 +1191,9 @@ describe("a standing", () => {
 
 /** Writes where a player's yard stands, as the play service would have at `at`. */
 const stand = (player: PlayerId, score: number, at: number, guest = false) =>
-  services.run(PlayStore.use((store) => store.stand(player, "works", { score, also: { tier: score % 5 } }, guest, at)));
+  services.run(
+    PlayStore.use((store) => store.stand(player, "works", null, null, { score, also: { tier: score % 5 } }, guest, at)),
+  );
 const named = (player: PlayerId, name: string) =>
   services.run(PlayerNames.use((names) => names.remember(player, name, clock.now)));
 const boardOf = async (game = "works", player: PlayerId = alice) => {
@@ -2744,8 +2746,8 @@ describe("Leaf tending the Works", () => {
     start({
       play: (real) => ({
         ...real,
-        revOf: (player, game) =>
-          real.revOf(player, game).pipe(
+        storedAt: (player, game) =>
+          real.storedAt(player, game).pipe(
             Effect.tap((state) => Effect.sync(() => void found.push(Option.isSome(state)))),
             Effect.tap(() =>
               found.length === 1
@@ -3108,6 +3110,14 @@ describe("what each state tells the town", () => {
     await keepTable(null);
     await refusedCard(1, { waiting: "Ready.", till: -1 });
     await refusedCard(2, { waiting: "a".repeat(161), till: 0 });
+  });
+
+  it("that the town would not read is written again by the sweep while Leaf still holds the table, at the same rev", async () => {
+    await keepTable(null);
+    // Her table opened: Leaf writes its postcard and holds the table as kept, at rev 1.
+    expect((await send("GET", "/v1/game/play/raid")).status).toBe(200);
+    expect(await postcardsOf()).toEqual({ raid: TABLE_SET_OUT });
+    await refusedCard(1, { waiting: "Ready.", till: -1 });
   });
 
   it("is made due by the town only as the town saw it: a state put right meanwhile, at the same rev, is left be", async () => {
