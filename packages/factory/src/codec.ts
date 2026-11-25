@@ -21,7 +21,7 @@ import { fromBase64, Reader, toBase64, Writer } from "./bytes.ts";
 import { keptOnto, type KeptPiece, packCells, unpackCells } from "./cells.ts";
 import { here } from "./clock.ts";
 import { NODES } from "./content/nodes.ts";
-import { historyOf } from "./history.ts";
+import { historyOf, stampOf } from "./history.ts";
 import { LAND, type Land } from "./land.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
 import { keptOf, packPieces, packWays, type Piece, piecesOf, placed, unpackWays } from "./pieces.ts";
@@ -220,7 +220,7 @@ export function encode(y: Yard, keep: Keep = {}): string {
     ...(y.blueprints.some((b) => b !== null)
       ? { blueprints: y.blueprints.map((b) => b && toBase64(packPrint(b))) }
       : {}),
-    ...(y.history.length > 0 ? { history: y.history.map((e) => toBase64(e.bytes)) } : {}),
+    ...(y.history.length > 0 ? { history: y.history.map((e) => toBase64(e.bytes)), stamp: stampOf(y.land) } : {}),
   });
 }
 
@@ -584,10 +584,8 @@ export function vouch(
   const last = whole(seen.tick, tick);
   const had = whole(seen.till, 1e12);
   y.seen = last === null || had === null ? here(y) : { tick: last, till: had, depot: untally(seen.depot, 1e12) };
-  // What Undo would undo, every entry as it was kept, or none; a yard kept before it had them has none.
-  const history: unknown[] = Array.isArray(raw.history) ? raw.history : [];
-  const entries = history.map((b) => (typeof b === "string" ? fromBase64(b) : null)).filter((b) => b !== null);
-  y.history = entries.length === history.length ? historyOf(entries, land.w * land.h) : [];
+  // What Undo would undo, as kept: none for a yard kept before it had any, or under other rules or another land.
+  y.history = historyOf(raw.history, raw.stamp, land);
   y.news = [];
   return y;
 }

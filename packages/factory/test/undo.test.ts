@@ -471,6 +471,40 @@ describe("the history", () => {
     expect(F.decode(JSON.stringify(raw), y.land)?.history).toEqual([]);
   });
 
+  test("never outlives its land: read on a map where a mill taken away would stand on the stream, there is nothing to undo, and nothing changes", () => {
+    const land = bareLand(15, 9, [], [12, 4]);
+    const y = F.create({ land, tier: 4, seed: 1 });
+    must(y, { do: "build", kind: "mill", x: 4, y: 4, dir: 0 });
+    must(y, { do: "build", kind: "mill", x: 6, y: 4, dir: 0 });
+    must(y, { do: "remove", x: 6, y: 4 });
+    // The same map, but the stream runs where the mill stood.
+    const water = land.water.slice();
+    water[F.at(y, 6, 4)] = 1;
+    const other: F.Land = { ...land, water };
+    const back = F.decode(F.encode(y), other);
+    if (!back) throw new Error("the yard does not read back");
+    expect(back.history).toEqual([]);
+    const text = F.encode(back);
+    expect(undo(back)).toEqual({ refused: "cannot_undo", why: "Nothing to undo" });
+    expect([F.encode(back), back.kind[F.at(back, 6, 4)]]).toEqual([text, F.NONE]);
+    // On its own map, the same yard keeps its history.
+    expect(F.decode(F.encode(y), land)?.history).toEqual(y.history);
+  });
+
+  test("never outlives its rules: kept under other rules (a starter allowance since lowered), there is nothing to undo, and nothing changes", () => {
+    const y = F.create({ seed: 1 });
+    must(y, { do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
+    must(y, { do: "remove", x: 21, y: 15 });
+    expect(y.history.length).toBe(2);
+    const rec: Rec = JSON.parse(F.encode(y));
+    expect(typeof rec.stamp).toBe("string");
+    const back = F.decode(JSON.stringify({ ...rec, stamp: `elsewhere.${String(rec.stamp).split(".")[1]}` }), y.land);
+    if (!back) throw new Error("the yard does not read back");
+    const text = F.encode(back);
+    expect([back.history, undo(back)]).toEqual([[], { refused: "cannot_undo", why: "Nothing to undo" }]);
+    expect([F.encode(back), back.kind[F.at(back, 21, 15)], back.spare[F.MILL]]).toEqual([text, F.NONE, 1]);
+  });
+
   test("is undone newest first: an Undo naming another entry than the newest, as another tab would send, is refused", () => {
     const y = laid();
     must(y, { do: "turn", x: 29, y: 20, dir: 1, id: "n-1" });

@@ -8,7 +8,7 @@ import { rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import * as F from "../src/index.ts";
-import { reached } from "./calls.ts";
+import { loopIn, makes, reached } from "./calls.ts";
 import { type Gen, generate } from "./gen.ts";
 import { makeLand, widened } from "./land.ts";
 import { delivering, staged } from "./yards.ts";
@@ -206,6 +206,9 @@ describe("allocation", () => {
       "yard.ts:tunnelOf",
     ])
       expect(check.reached).toContain(f);
+    // And the loop over the tiles, read on its own: nothing in it makes anything, for any tile.
+    const tiles = loopIn("check.ts", "check", "kind.length");
+    expect([tiles.includes("pieceWord"), makes(tiles)]).toEqual([true, []]);
     // What the rest makes, once a call: its hash's closures, its loops over the goals, the orders, the
     // blueprints and what Undo would undo. Anything more, a per-tile array among it, is new here.
     expect(check.makes.map(kindOf)).toEqual([

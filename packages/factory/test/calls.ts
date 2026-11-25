@@ -92,7 +92,7 @@ export function makes(body: string): string[] {
   // A bracket a value is taken apart into (`const a = 1, { b } = y`) makes nothing.
   const literal = (open: number): boolean => !/^\s*=(?![=>])/.test(body.slice(close(body, open)));
   first("new", /\bnew\b/g);
-  first("an array", /(?:[=(,:?&|]|\breturn|=>)\s*\[/g, literal);
+  first("an array", /(?:[=(,:?&|]|\breturn|\bof|=>)\s*\[/g, literal);
   first("an object", /(?:[=(,:?&|]|\breturn)\s*\{/g, literal);
   first("a closure", /=>|\bfunction\b/g);
   first("a string", /["'`]/g);
@@ -104,6 +104,21 @@ export function makes(body: string): string[] {
   );
   first("a built-in that makes one", /\b(?:Array|Object|String|Map|Set|Symbol|JSON|Promise|Error)\b(?!\.is)/g);
   return found;
+}
+
+/**
+ * The body of the first loop in a function (`file`, `name`) whose head says `has`: for a guard on
+ * what runs for every tile or piece, which `makes` reads on its own. Empty for none.
+ */
+export function loopIn(file: string, name: string, has: string): string {
+  const body = sources().get(file)?.bodies.get(name) ?? "";
+  for (const m of body.matchAll(/\bfor\s*\(/g)) {
+    const from = (m.index ?? 0) + m[0].length - 1;
+    const head = body.slice(from, close(body, from));
+    const open = body.indexOf("{", from + head.length);
+    if (head.includes(has) && open >= 0) return body.slice(open, close(body, open));
+  }
+  return "";
 }
 
 /**

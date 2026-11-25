@@ -39,15 +39,22 @@
  * which settings the command changed on each piece that stood there (a count, then a varint each,
  * `SETTINGS`), and last what stood there (`packSettings`).
  *
+ * The history never outlives the rules or the land it was made under: it is kept stamped with both
+ * (`stampOf`: the rules' version, as the page and Leaf compare it, and the land's own bytes), and a
+ * yard read under another stamp has none, alike on the page and on Leaf. What an entry would put back,
+ * and what it would cost, were the rules' and the land's when it was made.
+ *
  * At most `UNDO_MOST` entries and `UNDO_BYTES` bytes in all, the oldest let go first. A command
  * whose own entry is over that is still done, and kept, under its id, as one that cannot be undone;
  * a stroke over it goes on as one, so that no part of it is undone.
  */
 import type { CoinChange } from "@sequoia-leaf/core";
+import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts" with { type: "macro" };
 
 import { at, type Dir, insTo, isDir, otherMouth, tunnelExit } from "./build.ts";
-import { Reader, Writer } from "./bytes.ts";
+import { fromBase64, Reader, Writer } from "./bytes.ts";
 import type { Act, ActOf } from "./commands.ts";
+import type { Land } from "./land.ts";
 import { lineOf } from "./lines.ts";
 import {
   blueprintAt,
@@ -66,6 +73,31 @@ import { REASON } from "./reasons.ts";
 import { legPiece } from "./route.ts";
 import { CRATE, DEPOT, gradeOf, isKind, type Kind, NONE, TUNNEL } from "./tables.ts";
 import { changed, type Entry, holderOf, place, tunnelRow, vacate, type Yard } from "./yard.ts";
+
+/** The version of the Works' rules this was built with: the one the page and Leaf compare. */
+const RULES = rulesVersions().works;
+
+/** Each land's stamp, worked out once. */
+const STAMPS = new WeakMap<Land, string>();
+
+/**
+ * What a yard's history is made under: the rules' version and 32 bits of the land (its size, its
+ * ground, water, redwoods and plots, and the depot). A yard read under another has no history.
+ */
+export function stampOf(land: Land): string {
+  const known = STAMPS.get(land);
+  if (known !== undefined) return known;
+  let h = 0x811c9dc5 | 0;
+  const mix = (v: number): void => {
+    h = Math.imul(h ^ v, 0x01000193);
+  };
+  for (const v of [land.w, land.h, ...land.depot]) mix(v);
+  for (const a of [land.deposit, land.water, land.trunk, land.plot]) for (let i = 0; i < a.length; i++) mix(a[i] ?? 0);
+  for (const p of land.plots) for (const v of [p.plot, p.price, p.x, p.y, p.w, p.h]) mix(v);
+  const stamp = `${RULES}.${(h >>> 0).toString(36)}`;
+  STAMPS.set(land, stamp);
+  return stamp;
+}
 
 /** The most entries a yard keeps, and the most bytes they may come to in all. */
 export const UNDO_MOST = 20;
@@ -445,9 +477,19 @@ function readEntry(bytes: Uint8Array, tiles: number): Undoing | null {
   return body && { id, flags, coins: zig % 2 === 1 ? -(zig + 1) / 2 : zig / 2, sum, ...body };
 }
 
-/** A yard's history read back from what it kept, for a yard of so many tiles: each entry, the oldest first; or none at all if any is not one. */
-export function historyOf(kept: readonly Uint8Array[], tiles: number): Entry[] {
-  return kept.every((b) => readEntry(b, tiles) !== null) ? capped(kept.map(entry)) : [];
+/**
+ * A yard's history read back from what it kept (each entry as base64, the oldest first) and the
+ * stamp it was kept under, on its land: each entry; or none at all for any that is not one, or for a
+ * history kept under other rules or another land (`stampOf`), or none kept.
+ */
+export function historyOf(kept: unknown, stamp: unknown, land: Land): Entry[] {
+  if (!Array.isArray(kept) || stamp !== stampOf(land)) return [];
+  const tiles = land.w * land.h;
+  const read = kept.flatMap((b) => {
+    const bytes = typeof b === "string" ? fromBase64(b) : null;
+    return bytes && readEntry(bytes, tiles) ? [entry(bytes)] : [];
+  });
+  return read.length === kept.length ? capped(read) : [];
 }
 
 // ---------- undoing ----------
