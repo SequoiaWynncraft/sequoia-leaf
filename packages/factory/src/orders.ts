@@ -357,6 +357,8 @@ function titled(items: readonly Item[], from: string): string {
 
 /** Where an order hangs on the board, by its id, or -1. */
 const slotOf = (y: Yard, id: number): number => y.board.findIndex((o) => o.id === id);
+/** The order on the board with an id, wherever it hangs; nothing once it has been taken down. */
+export const orderAt = (y: Yard, id: number): Standing | undefined => y.board.find((o) => o.id === id);
 
 /** Hands a filled standing order that counts over, by its id: it pays into the till and a fresh order takes its place. */
 export function claim(y: Yard, id: number): number | null {
@@ -373,7 +375,7 @@ export function claim(y: Yard, id: number): number | null {
 
 /** Why an order on the board, by its id, cannot be swapped just now, or nothing if it can. */
 export function swapRefusal(y: Yard, id: number): string | null {
-  const order = y.board[slotOf(y, id)];
+  const order = orderAt(y, id);
   if (!order) return "There is no such order";
   if (isFilled(order.want, order.filled)) return "That order is filled. Hand it over instead";
   if (y.tick < y.swapAt) {

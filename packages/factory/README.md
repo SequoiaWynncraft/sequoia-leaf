@@ -69,15 +69,19 @@ it is read only through `holderOf` and `tunnelOf`, which give -1 for a kind with
 (`test/condition.test.ts` holds every file of the rules to it):
 
 - **holders**, for gatherers, mills, benches, workshops, crates, boilers and Studies: `out`,
-  `making` (things, Uint8), `work` (Uint16, half-ticks), `idle`, `open`, `fuel`, `kinds` (Uint8),
-  `count` (Uint16), and `stock`, how many of each thing (Uint16, 25 a row);
+  `making`, `last` (things, Uint8: `last` is what a machine last began, for a screen, neither kept
+  nor checked), `work` (Uint16, half-ticks), `idle`, `open`, `fuel`, `kinds` (Uint8), `count`
+  (Uint16), and `stock`, how many of each thing (Uint16, 25 a row);
 - **tunnels**, for each way-in mouth: `under` (thing, Uint8) and `along` (eighths, Uint8), three a row;
 - **blueprints**: each one's pieces as 10 bytes a piece (kept in fewer, below).
 
 The plumbing (`wire`) is worked out once after a change: five lists of tiles, sized by what
 stands (the order things are handed on in, the tiles that carry, tunnels' way-in mouths, the pieces
 that work, the boilers in reach), for each tile the sides it takes things in from, a bit each, and
-for each kind of machine the recipes it may make. A tick runs down those lists and nothing else, and
+for each kind of machine the recipes it may make. Which sides a piece takes things in from is
+`takes`, read alike by the tick (through those bits), a piece's status and the router; whether it
+takes a particular thing is `wants`, and whether it has room for it now is the tick's alone, so a full
+belt is still joined. A tick runs down those lists and nothing else, and
 makes nothing. Kept with the plumbing, a byte a tile says which tiles wait: each holds a thing the
 tile it hands to had no room for, and handing on passes it over until a tile beside it may have room
 (`src/tick.ts` says when). A full belt that cannot move costs a tick almost nothing; waiting is
@@ -101,7 +105,10 @@ for their range.
 - **Belts** move `PACE[grade]` eighths of a tile a tick: a tile in 4, 3 or 2 ticks; so do tunnels,
   splitters, joiners and sorters, each at its own grade.
 - **Power** is counted in halves: a piece draws its kind's power once for each half its grade draws
-  (2, 3, 4), and the depot, waterwheels and boilers give 2 halves for each power.
+  (2, 3, 4: `drawnAt`), and the depot, waterwheels and boilers give 2 halves for each power. Every
+  screen reads power from `power` (with `speed`, the whole per cent machines work at, rounded down),
+  `powerSummary` (each kind in reach and in the dark, and what it draws) and `machineRate` (one
+  piece: at full power, now, and what it draws now).
 - **A shortage of power** is a store (`charge`). Each tick the power there is goes into it, and when
   it holds all that is drawn it is spent and every gatherer, machine and Study works that tick; when
   it does not, none does. With 5 power of every 8 drawn they work 5 ticks in 8, exactly; what is left
@@ -181,7 +188,7 @@ nothing unlocks is known from the start; a new yard has `START`.
   out, or known), every Study's work is dropped; tipping out a folio drops it only if it is the one
   being worked on. Known, the research unlocks, and the next in line begins. `knownSince` is the
   research that became known since the yard's owner was last there, for the letter about a time
-  away; `rate` gives a Study's folios a minute at the yard's pace, as it gives a machine's.
+  away; `machineRate` gives a Study's folios a minute at the yard's pace, as it gives a machine's.
 - **Finishing** either kind of goal is one function (`finish`): it is done, what it unlocks is open,
   a node pays and the next comes into hand, research lets the next begin, and the yard has news of
   it. Leaf logs each node finished.
@@ -309,11 +316,11 @@ they read a machine's recipes from it (`Wire.recipes`).
 
 `flow` adds up, for a yard as it stands, what its pieces can make of each thing a minute and what
 they need of each to do it: every gatherer, machine and Study power reaches, taken as working each
-tick the yard's power lets it (as `rate` takes one piece) and never waiting for a part or for room,
-so what it gives is a ceiling and not a count. A machine is counted for the recipe it is working
-toward (`aim`); one told nothing that holds nothing has none for the moment, and is counted for the
-recipe it was last counted for where the caller keeps that (a thing for each tile, which `flow` reads
-and writes). A Study needs the folios the research first in line still wants, in the shares it wants
+tick the yard's power lets it (as `machineRate` takes one piece) and never waiting for a part or for
+room, so what it gives is a ceiling and not a count. A machine is counted for the recipe it is
+working toward (`aim`); one told nothing that holds nothing has none for the moment, and is counted
+for the recipe it last began (`lastRecipe`, kept on its row in `holders`, so it goes when the piece is
+taken away). A Study needs the folios the research first in line still wants, in the shares it wants
 them; a boiler in reach, the deadfall it burns. It runs down the plumbing's lists and makes nothing.
 
 What reaches the depot is not measured by the rules: the depot's books (`y.depot`) are a running

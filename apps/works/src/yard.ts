@@ -59,6 +59,7 @@ import {
   hear,
   type Heard,
   isGraded,
+  keepLast,
   kindName,
   kindNamed,
   LEAD,
@@ -396,6 +397,7 @@ function take(): boolean {
   stepTo(yard, shown);
   drain(yard);
   shown = Math.max(shown, yard.tick);
+  keepLast(S.world, yard);
   S.world = yard;
   // A press waiting for a second was for the yard it was shown on (`pressKey`).
   unask();

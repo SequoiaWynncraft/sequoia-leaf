@@ -14,8 +14,7 @@ import { TIERS } from "./content/tiers.ts";
 import { carried, makes } from "./planner.ts";
 import {
   BELT,
-  DRAW,
-  DRAWN,
+  drawnAt,
   GATHERER,
   type Goal,
   GOALS,
@@ -143,7 +142,7 @@ export function recipeSays(out: Item): string {
 export function gradeSays(k: Kind, grade: number): string {
   const cost = `${k === BELT ? "A tile costs" : "Costs"} ${coinsText(price(k, grade))}.`;
   if (carries(k)) return `Carries up to ${perMinute(carried(grade), "items")}${upFrom(carried(grade - 1))}. ${cost}`;
-  const draw = (g: number): number => ((DRAW[k] ?? 0) * (DRAWN[g] ?? HALF)) / HALF;
+  const draw = (g: number): number => drawnAt(k, g) / HALF;
   const power = `draws ${num(draw(grade))} power${upFrom(draw(grade - 1))}`;
   if (k === GATHERER)
     return `Gathers ${perMinute(makes(k, grade, null), "items")}${upFrom(makes(k, grade - 1, null))}, and ${power}. ${cost}`;

@@ -33,14 +33,15 @@ import {
   LEFT,
   LINE,
   locked,
+  machineRate,
   makeable,
   NODES,
   NONE,
+  orderAt,
   type Plot,
   plotState,
   price,
   priceAt,
-  rate,
   ready,
   RECIPE,
   recipesFor,
@@ -102,10 +103,10 @@ function itemPrint(k: Item): ItemPrint {
       note: `${whole(owed(hand.want, got))} owed`,
       tag: "in hand",
     });
-  w.board.forEach((o, slot) => {
+  for (const o of w.board) {
     const left = owed(o.want, o.filled);
-    if (left > 0) asked.push({ ref: orderRef(slot), name: o.title, note: `${whole(left)} owed` });
-  });
+    if (left > 0) asked.push({ ref: orderRef(o.id), name: o.title, note: `${whole(left)} owed` });
+  }
   const found: [Plot, number, boolean][] = [];
   // A thing from the ground says where it lies.
   if (!RECIPE[k] && isRaw(k)) {
@@ -165,7 +166,7 @@ function standingPrint(i: number, k: Kind): StandingPrint {
   const x = i % w.land.w;
   const y = Math.floor(i / w.land.w);
   const st = status(w, i);
-  const per = rate(w, i);
+  const rate = machineRate(w, i);
   const h = w.holders;
   const r = holderOf(w, i);
   const making = aim(w, i);
@@ -191,7 +192,8 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     making: making ? making.out : null,
     flow: flowOf(w, i, saysNumbers(w)),
     gathering: k === GATHERER ? asItem(w.land.deposit[i] ?? NONE) : null,
-    perMinute: per > 0 ? perMinute(per) : null,
+    // What it makes now, said even when that is none: where power does not reach, 0 /min.
+    perMinute: rate.nominal > 0 ? perMinute(rate.effective) : null,
     numbers: saysNumbers(w) ? numbersOf(w, i) : [],
     set,
     sorts: can ? ALL_ITEMS.filter((t) => can.has(t) || (w.depot[t] ?? 0) > 0 || set === t) : [],
@@ -280,14 +282,15 @@ function nodePrint(g: Goal): NodePrint | null {
   };
 }
 
-function orderPrint(slot: string): NodePrint | OrderPrint | null {
+/** A side order's card, by the order's id, or the node in hand's (`story`); nothing for an order no longer on the board. */
+function orderPrint(id: string): NodePrint | OrderPrint | null {
   const w = S.world;
-  if (slot === "story") {
+  if (id === "story") {
     // With nothing in hand, the goal the corner names as waited on.
     const next = w.hand === -1 ? nextUp() : null;
     return w.hand !== -1 ? nodePrint(w.hand) : next?.is === "locked" ? nodePrint(next.goal) : null;
   }
-  const o = w.board[numberIn(slot)];
+  const o = orderAt(w, numberIn(id));
   if (!o) return null;
   return {
     card: "order",

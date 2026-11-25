@@ -34,6 +34,7 @@ import { el, icon, unit } from "@sequoia-leaf/kit/dom.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import { PER_MINUTE, perMinute, whole } from "@sequoia-leaf/kit/say.ts";
+import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
@@ -48,6 +49,7 @@ import { S, seenFrom } from "../state.ts";
 import { troubled, troubleGroups } from "../trouble.ts";
 import { NOT_WALKING, type Walk, walkAt, type WalkEvent, walkStep } from "../walk.ts";
 import { itemRef, openCard, plotRef, tileRef } from "./card.ts";
+import { mapPress } from "./mappress.ts";
 import { closePanel, openPanel, refreshPanel } from "./panels.ts";
 import { $, fitted, iconButton, yardIcon } from "./parts.ts";
 import { type Line, table } from "./table.ts";
@@ -325,39 +327,38 @@ function mapView(_art: Art, host: HTMLElement): () => void {
     goTo(near >= 0 ? near : at.y * land.w + at.x, near >= 0);
   };
 
-  let down: { x: number; y: number; moved: boolean } | null = null;
-  c.addEventListener("pointerdown", (e) => {
-    down = { x: e.clientX, y: e.clientY, moved: false };
-    c.setPointerCapture(e.pointerId);
-  });
-  c.addEventListener("pointermove", (e) => {
-    if (!down) return;
-    if (!down.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) down.moved = true;
+  // What the map listens to and asks for is held while it is up, and let go once it has gone.
+  const life = scope();
+  mapPress(life, c, {
+    tap,
     // Beside the yard, a drag moves the camera with it.
-    if (!down.moved || narrow()) return;
-    const at = tileUnder(e);
-    viewHooks.look(at.x * TILE + TILE / 2, at.y * TILE + TILE / 2);
-  });
-  c.addEventListener("pointerup", (e) => {
-    const was = down;
-    down = null;
-    if (was && !was.moved) tap(e);
-  });
-  c.addEventListener("pointercancel", () => {
-    down = null;
+    drag: (e) => {
+      if (narrow()) return;
+      const at = tileUnder(e);
+      viewHooks.look(at.x * TILE + TILE / 2, at.y * TILE + TILE / 2);
+    },
   });
 
   // The marks fade and come back, and the frame follows the camera: drawn each frame, while the map is up.
   const frame = (): void => {
-    if (!c.isConnected) return;
+    if (!c.isConnected) {
+      life.close();
+      return;
+    }
     draw();
-    requestAnimationFrame(frame);
+    life.frame(frame);
   };
-  requestAnimationFrame(frame);
+  life.frame(frame);
   return draw;
 }
 
 // ---------- trouble ----------
+
+/** The trouble view's row for power, while the yard is short of it: power used, made, and the speed machines work at (the rules' `speed`). */
+export function shortRow(y: Yard): readonly [string, string, string] | null {
+  const p = power(y);
+  return p.speed < 100 ? [String(p.demand), String(p.supply), `${p.speed}%`] : null;
+}
 
 function troubleView(art: Art, host: HTMLElement): () => void {
   const short = table("Power", ["Used", "Made", "Speed"]);
@@ -375,16 +376,16 @@ function troubleView(art: Art, host: HTMLElement): () => void {
     );
   return () => {
     const y = S.world;
-    const p = power(y);
-    short.el.hidden = p.pace >= 1;
+    const cells = shortRow(y);
+    short.el.hidden = cells === null;
     short.set(
-      p.pace < 1
+      cells
         ? [
             {
               key: "power",
               head: () =>
                 el("span", "wrong", {}, yardIcon("bolt"), el("span", "k-grow k-coral", { text: "Not enough" })),
-              cells: [String(p.demand), String(p.supply), `${Math.round(p.pace * 100)}%`],
+              cells: [...cells],
             },
           ]
         : [],
@@ -393,7 +394,7 @@ function troubleView(art: Art, host: HTMLElement): () => void {
     list.el.hidden = groups.length === 0;
     none.hidden = groups.length > 0;
     // Short of power is trouble too, in the row above: then it is only the pieces that are fine.
-    none.textContent = p.pace < 1 ? "No piece is in trouble." : "Nothing is wrong.";
+    none.textContent = cells ? "No piece is in trouble." : "Nothing is wrong.";
     list.set(
       groups.map((g): Line => ({
         // Its pictures are built once for a row: a group that gains a kind of piece is a new row.

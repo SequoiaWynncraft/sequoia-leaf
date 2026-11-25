@@ -109,7 +109,7 @@ describe("the planner", () => {
       for (let k = 0; k < F.MINUTE; k++) F.step(y);
       expect(heldAt(y, 7, plank) - before).toBe(each);
       // What its card and the yard's books say it makes a minute is the planner's, by the yard's power.
-      expect(F.rate(y, F.at(y, 6, 4))).toBeCloseTo(each * F.power(y).pace);
+      expect(F.machineRate(y, F.at(y, 6, 4)).effective).toBeCloseTo(each * F.power(y).pace);
     }
   });
 

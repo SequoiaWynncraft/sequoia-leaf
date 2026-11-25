@@ -45,5 +45,19 @@ export * from "./tables.ts";
 export { step } from "./tick.ts";
 export * from "./unlocks.ts";
 export { placeYard, saveYard, type YardPlan, yardPlan, yardRefusal } from "./whole.ts";
-export { ahead, carries, nextOf, power, rewire, sortWay, takes, wayOut } from "./wire.ts";
+export {
+  ahead,
+  carries,
+  type KindPower,
+  nextOf,
+  type Power,
+  power,
+  type PowerSummary,
+  powerSummary,
+  rewire,
+  sortWay,
+  takes,
+  wants,
+  wayOut,
+} from "./wire.ts";
 export * from "./yard.ts";
