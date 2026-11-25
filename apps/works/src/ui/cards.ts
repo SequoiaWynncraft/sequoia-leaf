@@ -26,6 +26,7 @@ import {
   type Act,
   ALL_ITEMS,
   BOILER,
+  carried,
   carries,
   CRATE,
   DEADFALL,
@@ -51,10 +52,11 @@ import {
   kind as kindOf,
   KIND_INFO,
   MADE_BY,
+  makes,
+  MINUTE,
   NODES,
   type Numbered,
   numeral,
-  PACE,
   type Plot,
   PYLON,
   RECIPE,
@@ -305,8 +307,8 @@ const GROUND: Readonly<Record<string, readonly [string, string]>> = {
 
 const STEPS = ["From the ground", "Worked once", "Put together", "The guild's goods", "Takes the whole yard"];
 
-/** Seconds, as a card says them: "1.2s". */
-const secs = (ticks: number): string => `${Math.round(ticks) / 10}s`;
+/** So many a minute, as a card says it: "50 /min", whole from 10 up and to a tenth below. */
+const aMinute = (v: number): string => `${v >= 10 ? Math.round(v) : Math.round(v * 10) / 10} /min`;
 const n = (v: number): string => v.toLocaleString("en-US", { maximumFractionDigits: 3 });
 const nameOf = (k: number): string => KIND_INFO[k]?.name ?? "";
 const many = (k: number): string => ITEM_INFO[k]?.many ?? "";
@@ -343,11 +345,11 @@ function itemCard(art: Art, p: ItemPrint): Description {
         ...((recipe.need[i] ?? 1) > 1 ? { count: `×${recipe.need[i]}` } : {}),
       })),
     });
-    rows.push({ label: "In", things: [{ ref: machineRef(recipe.by), note: `${secs(recipe.ticks)} for one` }] });
+    rows.push({ label: "In", things: [{ ref: machineRef(recipe.by), note: aMinute(makes(recipe.by, 1, recipe)) }] });
   } else if (isRaw(k)) {
     rows.push({
       label: "Gathered by",
-      things: [{ ref: machineRef(GATHERER), note: `${secs(TICKS.gather)} for one` }],
+      things: [{ ref: machineRef(GATHERER), note: aMinute(makes(GATHERER, 1, null)) }],
     });
     rows.push({
       label: "Lies in",
@@ -377,21 +379,20 @@ function itemCard(art: Art, p: ItemPrint): Description {
   };
 }
 
-/** How long a machine takes over one thing, at a grade's pace. */
-function paceOf(k: Kind, grade: number): string {
-  // A grade works its first grade's ticks in so many of its own.
-  const faster = (PACE[1] ?? 2) / (PACE[grade] ?? PACE[1] ?? 2);
-  if (k === GATHERER) return secs(TICKS.gather * faster);
-  if (k === STUDY) return `${secs(TICKS.study * faster)} a folio`;
-  if (carries(k)) return `${secs(Math.ceil(8 / (PACE[grade] ?? 2)))} a tile`;
-  if (k === BOILER) return `${secs(TICKS.burn)} a piece`;
-  if (isMaker(k)) {
-    const ticks = (MADE_BY[k] ?? []).map((r) => r.ticks * faster);
-    const lo = Math.min(...ticks);
-    const hi = Math.max(...ticks);
-    return lo === hi ? secs(lo) : `${secs(lo)}–${secs(hi)}`;
-  }
-  return "";
+/**
+ * What a piece does a minute at a grade's pace, working flat out (the rules' planner): what a gatherer
+ * gathers, a machine makes (from its quickest recipe to its slowest), a Study takes in, a boiler burns,
+ * and a belt or what stands in a line of belt carries.
+ */
+export function paceOf(k: Kind, grade: number): Stat | null {
+  if (k === GATHERER) return { label: "Gathers", value: aMinute(makes(k, grade, null)) };
+  if (k === STUDY) return { label: "Takes in", value: aMinute(makes(k, grade, null)) };
+  if (carries(k)) return { label: "Carries", value: aMinute(carried(grade)) };
+  if (k === BOILER) return { label: "Burns", value: aMinute(MINUTE / TICKS.burn) };
+  if (!isMaker(k)) return null;
+  const often = (MADE_BY[k] ?? []).map((r) => Math.round(makes(k, grade, r)));
+  const [lo, hi] = [Math.min(...often), Math.max(...often)];
+  return { label: "Makes", value: lo === hi ? aMinute(lo) : `${lo}–${aMinute(hi)}` };
 }
 
 /** A kind's own blocks: how many are free to place. A price needs no sentence: the card shows it, and taking a piece away gives all of it back. */
@@ -410,7 +411,7 @@ function machineCard(art: Art, p: MachinePrint): Description {
   if ((GIVES[k] ?? 0) > 0) stats.push({ label: "Gives", value: String(p.gives) });
   if (p.stops) stats.push({ label: "Built", value: `${p.stops[0]} of ${p.stops[1]}` });
   const pace = paceOf(k, grade);
-  if (pace) stats.push({ label: "Pace", value: pace });
+  if (pace) stats.push(pace);
   if (p.key) stats.push({ label: "Key", value: p.key });
   const rows: Row[] = [];
   if (isMaker(k)) rows.push({ label: "Can make", things: p.recipes.map((r) => ({ ref: itemRef(r) })) });

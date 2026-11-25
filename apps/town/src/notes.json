@@ -1,5 +1,14 @@
 [
   {
+    "id": "works-per-minute",
+    "at": "2026-11-25T15:20Z",
+    "title": "The Works: speeds a minute",
+    "lines": [
+      "A piece's card says what it does a minute, in place of the seconds it takes for one: what a gatherer gathers, a machine makes, a Study takes in, a boiler burns and a belt carries. A belt carries 150, 200 or 300 things a minute by its grade.",
+      "A thing's card says how many a minute its machine makes."
+    ]
+  },
+  {
     "id": "works-pointer",
     "at": "2026-11-25T15:10Z",
     "title": "The Works: clearer machine arrows",

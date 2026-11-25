@@ -78,7 +78,7 @@ import type {
 import { openTools } from "./dock.ts";
 import { givenIn } from "./goal.ts";
 import type { GroundPrint, PlotPrint } from "./land.ts";
-import { flowOf, kindNumbers, numbersOf, saysNumbers } from "./numbers.ts";
+import { flowOf, numbersOf, saysNumbers } from "./numbers.ts";
 import { orderRef } from "./refs.ts";
 import type { WaysPrint } from "./splitter.ts";
 import { given, givenTo, lockOf, needsOf, nextUp, researchOpen, tierOpen } from "./standing.ts";
@@ -138,8 +138,8 @@ function machinePrint(k: Kind, grade = 1): MachinePrint {
     recipes: recipesFor(w.open, k).map((r) => r.out),
     open: k === DEPOT || locked(w.open, { build: k, grade }) === null,
     spare: grade > 1 ? 0 : (w.spare[k] ?? 0),
-    // What it carries a minute, once the yard counts; a grade above the first says so in its own sentence.
-    numbers: saysNumbers(w) && grade <= 1 ? kindNumbers(k, 1) : [],
+    // What it does a minute is its pace, on the card itself (`paceOf`).
+    numbers: [],
     stops: k === STOP ? [stops(w), w.open.stops] : null,
   };
 }
