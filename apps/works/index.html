@@ -280,6 +280,10 @@
         font: var(--f-ui);
         color: var(--k-cream);
       }
+      /* Written on paper (the letter about an absence), a list is in the paper's ink, as the kit writes on paper. */
+      .k-paper .gl {
+        color: var(--k-ink);
+      }
       .gl-row {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
@@ -323,12 +327,9 @@
         text-align: right;
         white-space: nowrap;
       }
+      /* Its colour is the kit's dim, or Leaf's green where it is lit (`k-dim`, `k-leafy`), on paper too. */
       .gl-note {
         white-space: nowrap;
-        color: var(--k-dim);
-      }
-      .gl-note.lit {
-        color: var(--k-leaf);
       }
       /*
        * In the corner a row is its picture, its bar and its count, with no name: the picture takes

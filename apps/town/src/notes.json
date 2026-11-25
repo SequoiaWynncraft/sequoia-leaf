@@ -1,20 +1,13 @@
 [
   {
     "id": "works-top-two-rows",
-    "at": "2026-11-25T16:27Z",
+    "at": "2026-11-25T00:00Z",
     "title": "The Works: a shorter top on a phone",
     "lines": [
-      "On an upright phone the top of the screen is two rows: your Leaf and Coins, then the power with the folded card beside it. The way out and the settings button head the column of buttons on the right.",
-      "Folded, the card shows how many orders are ready to hand over."
+      "On an upright phone the top of the screen is two rows: your Leaf and Coins, then the power. The way out and the settings button head the column of buttons on the right.",
+      "Folded, the card in the top corner is one square button beside the power. A number on its corner counts the orders ready to hand over, and ! means a commission can be taken."
     ],
     "more": [
-      {
-        "head": "Changed",
-        "points": [
-          "On an upright phone the power bar is under the power numbers.",
-          "Folded, the card shows as much of its title as fits. Where room is short, the orders to hand over come first, then what is left, then the title."
-        ]
-      },
       {
         "head": "Fixed",
         "points": [
@@ -22,6 +15,14 @@
           "A card opened during a walk through trouble no longer covers the walk's bar."
         ]
       }
+    ]
+  },
+  {
+    "id": "works-letter-ink",
+    "at": "2026-11-25T16:02Z",
+    "title": "The Works: the letter is readable again",
+    "lines": [
+      "The letter that says what your yard did while you were away writes what the depot took in and what is to hand over in dark ink, so it can be read on its paper."
     ]
   },
   {
