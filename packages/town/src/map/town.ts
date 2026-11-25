@@ -34,9 +34,10 @@ export const TOWN_MAP: TownMap = {
 
   // At the Works, along its front and by the crate pile, side on, each with room for a crate on the
   // side they face, and none on the bench, in the doorway or where the town's own stand at the door;
-  // at the stump, sitting round it over the board, none on the logs (the member's and the dozers'
-  // seats) and one behind the board, where the string of lights only just clears a head; before the
-  // Grove's stone, facing it, either side of where the member stands to go in.
+  // at the stump, standing round it over the board once its free log is taken (`spots.ts` sits
+  // somebody there first): behind the board, low enough that the string of lights clears a head and
+  // the stump hides their feet, and either side, clear of its edge; before the Grove's stone, facing it, either side of where the member
+  // stands to go in.
   busy: {
     works: {
       middle: { piece: "works", x: 86, y: 25 },
@@ -51,9 +52,8 @@ export const TOWN_MAP: TownMap = {
     table: {
       middle: { piece: "great-stump", x: 0, y: -15 },
       spots: [
-        { piece: "great-stump", x: 0, y: 5, dir: 3 },
-        { piece: "great-stump", x: 4, y: -29, dir: 0 },
-        { piece: "great-stump", x: -29, y: -7, dir: 2 },
+        { piece: "great-stump", x: 4, y: -27, dir: 0 },
+        { piece: "great-stump", x: -31, y: -7, dir: 2 },
         { piece: "great-stump", x: 28, y: -7, dir: 1 },
       ],
     },

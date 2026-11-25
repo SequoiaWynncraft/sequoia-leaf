@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { seedOf } from "@sequoia-leaf/town/clock.ts";
-import { TOWN } from "@sequoia-leaf/town/map/map.ts";
+import { RESTS, TOWN } from "@sequoia-leaf/town/map/map.ts";
 import type { Stand } from "@sequoia-leaf/town/map/rows.ts";
 
 import {
@@ -15,6 +15,7 @@ import {
   makeSpots,
   meet,
   poseAt,
+  SEATED,
   sits,
   type Thing,
   WORK_MS,
@@ -62,6 +63,24 @@ describe("who has which spot", () => {
     }
   });
 
+  test("at the stump the first to come sits on its free log and whoever comes next stands round it, but nobody new is given a log somebody else sits on", () => {
+    const logs = SEATED.table;
+    const laid = LAID.table.length;
+    expect(logs).toBeGreaterThan(0);
+    for (const someone of ids(20)) expect(choose(12, laid, [someone], new Map(), logs).get(someone)).toBe(0);
+    const [a = "", b = ""] = ids(2, 200);
+    const two = choose(12, laid, [a, b], new Map(), logs);
+    expect([...two.values()].filter((n) => n < logs)).toHaveLength(logs);
+    expect([...two.values()].every((n) => n < laid)).toBe(true);
+    // Somebody sitting on the log already: the first to come stands, and keeps their spot when the log is free again.
+    const shut = new Set([0]);
+    const standing = choose(12, laid, [a], new Map(), logs, shut).get(a);
+    expect(standing).toBeGreaterThanOrEqual(logs);
+    expect(choose(12, laid, [a], new Map([[a, standing ?? -1]]), logs).get(a)).toBe(standing);
+    // Whoever had the log keeps it.
+    expect(choose(12, laid, [a], new Map([[a, 0]]), logs, shut).get(a)).toBe(0);
+  });
+
   test("a spot somebody leaves is free for the next to come, and nobody is moved to it", () => {
     const spots = makeSpots(() => Array.from({ length: 3 }, (_, k) => ({ x: k * 20, y: 0, dir: 0 as const })));
     const [a = "", b = "", c = "", d = ""] = ids(4, 100);
@@ -78,7 +97,14 @@ describe("who has which spot", () => {
 describe("where the spots are", () => {
   const laidBoxes = PLACES.flatMap((at) => LAID[at].map((s, n) => ({ at, n, boxes: footprint(at, s, sits(at, n)) })));
 
-  test("nobody at a spot laid by hand is on top of anybody at another, at any place, or of a seat, the town's own, a lantern post or the way in", () => {
+  test("the stump's first spots are its logs that are not kept for the member, and nobody sits anywhere else", () => {
+    const logs = RESTS.filter((r) => r.at === "table" && !r.yours).map((r) => ({ x: r.x, y: r.y, dir: r.dir }));
+    expect(logs.length).toBeGreaterThan(0);
+    expect(LAID.table.slice(0, SEATED.table)).toEqual(logs);
+    for (const at of PLACES) LAID[at].forEach((_, n) => expect(sits(at, n)).toBe(at === "table" && n < logs.length));
+  });
+
+  test("nobody at a spot laid by hand is on top of anybody at another, at any place, or of a seat but the log they sit on, the town's own, a lantern post or the way in", () => {
     const clear = keepClear();
     for (const one of laidBoxes) {
       for (const other of laidBoxes)
@@ -86,6 +112,7 @@ describe("where the spots are", () => {
           for (const b of one.boxes)
             for (const o of other.boxes)
               if (meet(b, o)) throw new Error(`${one.at} ${one.n} is on top of ${other.at} ${other.n}`);
+      if (sits(one.at, one.n)) continue;
       for (const b of one.boxes)
         for (const c of clear) if (meet(b, c)) throw new Error(`${one.at} ${one.n} is on ${JSON.stringify(c)}`);
     }
@@ -181,13 +208,25 @@ describe("what each is doing in their spot", () => {
     expect(apart).toBe(true);
   });
 
-  test("at the stump they sit over the board, before the stone they stand facing it", () => {
+  test("somebody away on a log at the stump dozes there facing as it does", () => {
+    const log = LAID.table[0];
+    if (!log) throw new Error("no log at the stump");
+    expect(poseAt({ id: id(7), at: "table", spot: log, n: 0, away: true, now: T0 })).toMatchObject({
+      x: log.x,
+      y: log.y,
+      dir: log.dir,
+      seated: true,
+      dozing: true,
+    });
+  });
+
+  test("at the stump they sit on a log over the board or stand round it, before the stone they stand facing it", () => {
     LAID.table.forEach((s, n) => {
       expect(poseAt({ id: id(5), at: "table", spot: s, n, away: false, now: T0 })).toMatchObject({
         x: s.x,
         y: s.y,
         dir: s.dir,
-        seated: true,
+        seated: n < SEATED.table,
       });
     });
     for (const s of LAID.grove)

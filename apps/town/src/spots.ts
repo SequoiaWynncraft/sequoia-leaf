@@ -1,10 +1,12 @@
 /**
  * Where each member busy at one of the games is in town, and what they do there, in place: a spot
  * of their own. Each place has spots laid by hand where they read well (`LAID`), and past those
- * further ones a step out (`further`), on top of nobody and nothing. A member's spot is chosen by
- * their account and kept for as long as they stay (`makeSpots`), and nobody is given one that
- * somebody else has. At the Works they work at a crate of their own beside them (`atWork`, by Leaf's
- * clock); at the stump they sit over the board; before the Grove's stone they stand facing it.
+ * further ones a step out (`further`), on top of nobody and nothing. At the stump the first are its
+ * logs, which somebody sits on while one is free; past those, and at the other places, a member's
+ * spot is chosen by their account. Each keeps theirs for as long as they stay (`makeSpots`), and
+ * nobody is given one that somebody else has. At the Works they work at a crate of their own beside
+ * them (`atWork`, by Leaf's clock); at the stump they sit on a log over the board, or stand round it
+ * when the logs are taken; before the Grove's stone they stand facing it.
  * Nothing here is drawn (`visitors.ts` draws it), and who is at which place is `where.ts`'s word.
  */
 
@@ -25,15 +27,21 @@ export interface Box {
 
 const spot = (x: number, y: number, dir: Spot["dir"]): Spot => ({ x, y, dir });
 
-/** The spots of each place laid by hand, the first wanted most: the map's (`busy`). */
+/** The stump's logs that are not kept for the member, as spots: somebody at the raid table sits on one of these before anywhere else. */
+const LOGS: readonly Spot[] = RESTS.filter((r) => r.at === "table" && !r.yours).map((r) => spot(r.x, r.y, r.dir));
+
+/** How many of each place's first spots are seats: sat on, and given out in order before any other. */
+export const SEATED: Readonly<Record<Stand, number>> = { works: 0, table: LOGS.length, grove: 0 };
+
+/** The spots of each place laid by hand: the stump's logs first, then the map's (`busy`). */
 export const LAID: Readonly<Record<Stand, readonly Spot[]>> = {
   works: BUSY.works.spots,
-  table: BUSY.table.spots,
+  table: [...LOGS, ...BUSY.table.spots],
   grove: BUSY.grove.spots,
 };
 
-/** At the stump a member sits; at the Works and before the stone they stand. Past the spots laid by hand, everybody stands. */
-export const sits = (at: Stand, n: number): boolean => at === "table" && n < LAID.table.length;
+/** Whether somebody at a place's `n`th spot sits: on the stump's logs they do; everywhere else they stand. */
+export const sits = (at: Stand, n: number): boolean => n < SEATED[at];
 
 /** How wide a member's figure is drawn, in the town's pixels; and how tall standing, sitting facing us, and sitting side on or away. */
 const ACROSS = 10;
@@ -166,21 +174,27 @@ export function further(at: Stand, most: number, open: (p: Pt) => boolean, clear
 
 /**
  * Who has which of a place's spots (by their number in the place's list, `count` of them, the first
- * `laid` laid by hand), for everybody at it (`ids`), given who had which before (`had`): whoever had
- * one keeps it; everybody else, in order of their account, takes the one their account wants among
- * those laid by hand if it is free, else the next free one round from it, else the first free one
- * further out. Nobody has a spot that somebody else has; with nothing free, somebody has none.
+ * `laid` laid by hand and the first `seated` of those seats), for everybody at it (`ids`), given who
+ * had which before (`had`): whoever had one keeps it; everybody else, in order of their account,
+ * takes the first free seat, else the spot their account wants among the rest laid by hand if it is
+ * free, else the next free one round from it, else the first free one further out. A spot in `shut`
+ * (a seat somebody else sits on) is given to nobody new. Nobody has a spot that somebody else has;
+ * with nothing free, somebody has none.
  */
 export function choose(
   count: number,
   laid: number,
   ids: readonly string[],
   had: ReadonlyMap<string, number>,
+  seated = 0,
+  shut: ReadonlySet<number> = new Set(),
 ): Map<string, number> {
   const out = new Map<string, number>();
   const used = new Set<number>();
   const here = [...new Set(ids)];
   const hand = Math.min(laid, count);
+  const seats = Array.from({ length: Math.min(seated, hand) }, (_, k) => k);
+  const pick = hand - seats.length;
   for (const id of here) {
     const n = had.get(id);
     if (n === undefined || n >= count || used.has(n)) continue;
@@ -188,10 +202,10 @@ export function choose(
     used.add(n);
   }
   for (const id of here.filter((i) => !out.has(i)).toSorted()) {
-    const want = hand > 0 ? seedOf(id) % hand : 0;
-    const round = Array.from({ length: hand }, (_, k) => (want + k) % hand);
+    const want = pick > 0 ? seedOf(id) % pick : 0;
+    const round = Array.from({ length: pick }, (_, k) => seats.length + ((want + k) % pick));
     const rest = Array.from({ length: count - hand }, (_, k) => hand + k);
-    const n = [...round, ...rest].find((k) => !used.has(k));
+    const n = [...seats, ...round, ...rest].find((k) => !used.has(k) && !shut.has(k));
     if (n === undefined) continue;
     out.set(id, n);
     used.add(n);
@@ -202,15 +216,20 @@ export function choose(
 /**
  * The spots everybody busy in town has, kept from one moment to the next: `place` says, for
  * everybody at a place (`ids`), the spot each has, which is the one they had for as long as they
- * stay there (`choose`); leaving a place frees theirs. `spotsOf` is each place's spots, the first
- * `LAID[at].length` laid by hand.
+ * stay there (`choose`); leaving a place frees theirs. A seat `held` says somebody else sits on is
+ * given to nobody new. `spotsOf` is each place's spots, the first `LAID[at].length` laid by hand.
  */
 export function makeSpots(spotsOf: (at: Stand) => readonly Spot[]) {
   const had = new Map<Stand, Map<string, number>>();
   return {
-    place(at: Stand, ids: readonly string[]): Map<string, { spot: Spot; n: number }> {
+    place(
+      at: Stand,
+      ids: readonly string[],
+      held: (s: Spot) => boolean = () => false,
+    ): Map<string, { spot: Spot; n: number }> {
       const spots = spotsOf(at);
-      const now = choose(spots.length, LAID[at].length, ids, had.get(at) ?? new Map());
+      const shut = new Set(spots.slice(0, SEATED[at]).flatMap((s, n) => (held(s) ? [n] : [])));
+      const now = choose(spots.length, LAID[at].length, ids, had.get(at) ?? new Map(), SEATED[at], shut);
       had.set(at, now);
       const out = new Map<string, { spot: Spot; n: number }>();
       for (const [id, n] of now) {
@@ -236,14 +255,15 @@ export interface Pose {
 
 /**
  * How somebody at a place (`at`) is at a moment (`now`, Leaf's clock), with their spot (`spot`, the
- * `n`th of the place's): at it and nowhere else, never on the way to it; dozing there, sat down
- * facing us, if they are away (Leaf's rule); else busy there: at the stump sitting over the board,
- * at the Works at work at their crate, before the stone standing facing it.
+ * `n`th of the place's): at it and nowhere else, never on the way to it; dozing there if they are
+ * away (Leaf's rule), sat down facing us, or on a log as it faces; else busy there: at the stump
+ * on a log over the board or standing round it, at the Works at work at their crate, before the
+ * stone standing facing it.
  */
 export function poseAt(o: { id: string; at: Stand; spot: Spot; n: number; away: boolean; now: number }): Pose {
   const { spot: s } = o;
   const at = { x: s.x, y: s.y };
-  if (o.away) return { ...at, dir: 0, seated: true, dozing: true, work: null };
+  if (o.away) return { ...at, dir: sits(o.at, o.n) ? s.dir : 0, seated: true, dozing: true, work: null };
   if (o.at === "works") {
     const work = atWork(o.id, s, o.now);
     return { ...at, dir: work.dir, seated: false, dozing: false, work };
