@@ -73,8 +73,8 @@ interface Also {
   readonly shut?: readonly HTMLElement[];
   /** Hidden with the parts by the page's style (`index.html`) rather than here, each with an id of its own: only named as what the button folds. */
   readonly styled?: readonly HTMLElement[];
-  /** Whether it is open until the player chooses, where that is not as `opened` has it. */
-  readonly first?: boolean;
+  /** Whether it is open until the player chooses, where that is not as `opened` has it: asked each time it is drawn. */
+  readonly first?: () => boolean;
 }
 
 /**
@@ -89,7 +89,7 @@ function fold(
   parts: readonly HTMLElement[],
   name?: (open: boolean) => string,
   { shut = [], styled = [], first }: Also = {},
-): () => void {
+): { press: () => void; again: () => void } {
   // Lists and cards have ids of their own kinds, so a goal called "done" is never the list's.
   const key = typeof f === "number" ? `goal-${idOf(f)}` : `list-${f}`;
   const ids = [...parts, ...shut].map((p, i) => (p.id ||= `fold-${key}-${i}`));
@@ -100,12 +100,16 @@ function fold(
     b.setAttribute("aria-expanded", String(open));
     if (name) b.setAttribute("aria-label", name(open));
   };
-  set(opened(f, first));
-  return () => {
-    const open = b.getAttribute("aria-expanded") !== "true";
-    set(open);
-    keepFold(f, open);
-    sfx.tap();
+  const again = (): void => set(opened(f, first?.()));
+  again();
+  return {
+    press: () => {
+      const open = b.getAttribute("aria-expanded") !== "true";
+      set(open);
+      keepFold(f, open);
+      sfx.tap();
+    },
+    again,
   };
 }
 
@@ -119,7 +123,7 @@ export function foldedList(f: List, word: string, list: HTMLElement): HTMLElemen
     word,
     el("span", "k-faint", { text: String(list.childElementCount) }),
   );
-  const press = fold(label, f, [list]);
+  const { press } = fold(label, f, [list]);
   return [label, list];
 }
 
@@ -128,25 +132,30 @@ export function foldedHead(g: Goal, side: HTMLElement | null, parts: readonly HT
   const title = GOALS[g]?.title ?? "";
   const name = (open: boolean): string => `${open ? "Hide" : "Show"} ${title}`;
   const b = iconButton("wood sm fold", icon("fold"), name(true), () => press());
-  const press = fold(b, g, parts, name);
+  const { press } = fold(b, g, parts, name);
   return head(g, side, b);
 }
 
 /**
  * The button that folds the card in the corner (`hud.ts`) to one line, `short` shown in `full`'s
- * place, and the research under the card (`under`) hidden with it by the page's style; open until
- * the player chooses where `first` says so. It stays on the page while the card is drawn again, so
- * that whoever is on it stays on it: `named` names it again for the card's title (`title`) as it is now.
+ * place, and the research under the card (`under`) hidden with it by the page's style; open, until
+ * the player chooses, while `first` says so. It stays on the page while the card is drawn again, so
+ * that whoever is on it stays on it: `named` names it again for the card's title (`title`) as it is
+ * now, and `again` folds it as `first` says now, where the player has not chosen.
  */
 export function foldedCard(
   title: () => string,
   full: HTMLElement,
   short: HTMLElement,
   under: HTMLElement,
-  first: boolean,
-): { button: HTMLElement; named: () => void } {
+  first: () => boolean,
+): { button: HTMLElement; named: () => void; again: () => void } {
   const name = (open: boolean): string => `${open ? "Hide" : "Show"} ${title()}`;
-  const b = iconButton("wood sm fold", icon("fold"), name(first), () => press());
-  const press = fold(b, "track", [full], name, { shut: [short], styled: [under], first });
-  return { button: b, named: () => b.setAttribute("aria-label", name(b.getAttribute("aria-expanded") === "true")) };
+  const b = iconButton("wood sm fold", icon("fold"), name(first()), () => press());
+  const { press, again } = fold(b, "track", [full], name, { shut: [short], styled: [under], first });
+  return {
+    button: b,
+    named: () => b.setAttribute("aria-label", name(b.getAttribute("aria-expanded") === "true")),
+    again,
+  };
 }

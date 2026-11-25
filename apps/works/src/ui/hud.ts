@@ -13,6 +13,7 @@ import { GOALS, isFilled, power, TICK_MS, tierName } from "@sequoia-leaf/factory
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
+import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { leave } from "@sequoia-leaf/kit/shell.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
@@ -139,8 +140,16 @@ function tracker(): () => void {
   const go = el("button", "go", { type: "button", onclick: openTracked }, full, short);
   let title = "";
   // On a short screen (a phone on its side) there is no room under the top bar for the card open:
-  // it is folded until the player opens it.
-  const fold = foldedCard(() => title, full, short, $("study"), !window.matchMedia("(max-height: 500px)").matches);
+  // it is folded until the player chooses, and turning the phone folds or opens it with it.
+  const sideways = window.matchMedia("(max-height: 500px)");
+  const fold = foldedCard(
+    () => title,
+    full,
+    short,
+    $("study"),
+    () => !sideways.matches,
+  );
+  scope().on(sideways, "change", fold.again);
   $("track").append(go, fold.button);
   // Pointing (or a finger kept on it) shows the card of the node in hand, or of the goal waited on.
   link(go, orderRef("story"), { acts: true });

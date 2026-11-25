@@ -129,16 +129,21 @@ export function useFakeLeaf(): void {
     performance.now = () => 1000;
   });
   afterEach(() => {
-    // The page first, so that what it sends as it is put away reaches this test's Leaf.
-    letGo();
-    net.world?.done();
-    net.world = null;
-    current = null;
-    forgetLedger();
+    closed();
     performance.now = clock;
-    Reflect.deleteProperty(globalThis, "window");
-    Reflect.deleteProperty(globalThis, "document");
   });
+}
+
+/** The page put away, and the stand-in Leaf with it: as after a test, for a test that opens one page after another. */
+export function closed(): void {
+  // The page first, so that what it sends as it is put away reaches this test's Leaf.
+  letGo();
+  net.world?.done();
+  net.world = null;
+  current = null;
+  forgetLedger();
+  Reflect.deleteProperty(globalThis, "window");
+  Reflect.deleteProperty(globalThis, "document");
 }
 
 /** Waits until a condition holds, a millisecond at a time. */

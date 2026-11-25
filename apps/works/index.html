@@ -655,6 +655,10 @@
         align-items: center;
         contain: inline-size;
       }
+      /* Its buttons, as one row: the line's own elsewhere, and on a short screen a row that scrolls (below). */
+      #hand > .row {
+        display: contents;
+      }
       #hand .say.bad {
         color: var(--k-coral);
       }
@@ -1367,6 +1371,12 @@
           left: auto;
           right: calc(var(--u) * -3);
         }
+        /* A finger's card: under what hangs below the top bar (a walk's bar too), above the line over the
+           tools (`main.ts` measures both), and clear of the books. */
+        body > .k-tip.k-info.sheet {
+          width: calc(100% - var(--edge) - var(--u) * 23);
+          max-height: min(72vh, calc(100dvh - var(--sheet-floor, 0px) - var(--sheet-top, 0px) - var(--u) * 2));
+        }
         /* Buttons that do not fit in one row go on in another. */
         #hand .acts {
           flex-shrink: 1;
@@ -1412,6 +1422,41 @@
         body.walking #track,
         body.walking #study {
           display: none;
+        }
+        /* The order in hand, open, stays above the line over the tools (`--handt`, measured): what does not fit scrolls. */
+        #track .full {
+          max-height: calc(var(--handt, 100dvh) - var(--toph, 0px) - var(--u) * 24);
+          overflow-y: auto;
+          overscroll-behavior: contain;
+        }
+        /* The line in two rows at most: what it says, in one line, and its buttons beside it where they fit,
+           or else in a row of their own that scrolls sideways. */
+        #hand .say {
+          flex: 1 1 auto;
+          min-width: min(10em, 100%);
+          display: block;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: calc(var(--u) * 20);
+        }
+        #hand > .row {
+          flex: 0 1 auto;
+          display: flex;
+          align-items: center;
+          gap: calc(var(--u) * 3);
+          min-width: 0;
+          overflow-x: auto;
+          scrollbar-width: none;
+          padding-block: calc(var(--u) * 3);
+          margin-block: calc(var(--u) * -3);
+        }
+        #hand > .row > * {
+          flex: none;
+          flex-wrap: nowrap;
+        }
+        #hand > .row > :first-child {
+          margin-left: auto;
         }
         /* The research being studied sits beside the order in hand, not under it: there is room across, not down. */
         #study {

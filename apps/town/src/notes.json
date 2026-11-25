@@ -1,7 +1,7 @@
 [
   {
     "id": "works-phone",
-    "at": "2026-11-25T12:57Z",
+    "at": "2026-11-25T14:04Z",
     "title": "The Works: more of the yard on a phone",
     "lines": [
       "On a phone the tools are one row you scroll sideways, and the yard's books are a column down the right side.",
@@ -18,13 +18,14 @@
         "head": "Changed",
         "points": [
           "The line over the tools tells you to tap a piece for its card only until you have opened a card once on that device. After that, on a phone, it takes no room while it has nothing to say.",
-          "Folded, the card in the corner shows its title and what is left, and the research being studied under it is hidden too. On a phone held sideways it starts folded."
+          "Folded, the card in the corner shows its title and what is left, and the research being studied under it is hidden too. On a phone held sideways it starts folded, and until you fold or open it yourself, turning the phone folds or opens it."
         ]
       },
       {
         "head": "Fixed",
         "points": [
-          "On a narrow phone, the blueprint places over the tools no longer run off the left edge of the screen."
+          "On a narrow phone, the blueprint places over the tools no longer run off the left edge of the screen.",
+          "An Undo that gives Coins back in one part and costs Coins in another no longer stops partway when you have enough for the whole. If an Undo can't be done, none of it is done, and it stays for you to try again."
         ]
       }
     ]

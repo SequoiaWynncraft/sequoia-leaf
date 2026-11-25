@@ -79,8 +79,6 @@ function measure(): void {
   root.setProperty("--dockh", `${Math.round(dock.height)}px`);
   // The line over the dock is as wide as it: unrounded, so that their edges meet.
   root.setProperty("--dockw", `${dock.width}px`);
-  // A card's sheet stops above the dock.
-  root.setProperty("--sheet-floor", `${Math.round(dock.height > 0 ? window.innerHeight - dock.top : 0)}px`);
   // Under the top bar: the order in hand, or in a visit whose yard it is.
   const track = $(S.visiting ? "visit" : "track").getBoundingClientRect();
   root.setProperty("--trackb", `${Math.round(track.bottom)}px`);
@@ -88,6 +86,13 @@ function measure(): void {
   const study = $("study").hidden ? track : $("study").getBoundingClientRect();
   const hand = $("hand").getBoundingClientRect();
   root.setProperty("--handh", `${Math.round(hand.height)}px`);
+  root.setProperty("--handt", `${Math.round(hand.top)}px`);
+  // A finger's card stops above the line over the dock (or the dock, in a visit), and on a phone below
+  // what hangs under the top bar: the order in hand, the research, a walk's bar (`index.html`).
+  const floor = hand.height > 0 ? hand.top : dock.height > 0 ? dock.top : window.innerHeight;
+  root.setProperty("--sheet-floor", `${Math.round(window.innerHeight - floor)}px`);
+  const walk = $("walk").getBoundingClientRect();
+  root.setProperty("--sheet-top", `${Math.round(Math.max(top.bottom, track.bottom, study.bottom, walk.bottom))}px`);
   // On a narrow screen the order in hand runs the width of it, and the yard is clear only below.
   inset.top = track.width > window.innerWidth * 0.6 ? Math.max(top.bottom, track.bottom, study.bottom) : top.bottom;
   // A visit has nothing along the bottom.
@@ -232,7 +237,7 @@ async function boot(): Promise<Page | null> {
   const held = scope();
   held.on(window, "resize", fit);
   // The dock grows a row when the story opens more tools than fit: everything over it moves up.
-  for (const id of ["top", "dock", "hand", "track", "visit", "study"]) held.observe($(id), "size", measure);
+  for (const id of ["top", "dock", "hand", "track", "visit", "study", "walk"]) held.observe($(id), "size", measure);
 
   // ---------- the clock ----------
 

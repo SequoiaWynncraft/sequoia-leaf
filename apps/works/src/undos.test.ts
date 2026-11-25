@@ -1,7 +1,8 @@
 /**
  * What may be undone, moved by its one function: Undo pressed for the last thing not yet pressed for,
  * undone once Leaf has done all of it, the last first; let go when Leaf turned it down or it changed
- * when Leaf's yard was taken, with a line if it was pressed for.
+ * when Leaf's yard was taken, with a line if it was pressed for; kept, with no Undo waiting, when what
+ * was due could not be undone now.
  */
 import { describe, expect, test } from "bun:test";
 
@@ -84,5 +85,14 @@ describe("what may be undone", () => {
   test(`keeps the last ${KEPT} things done`, () => {
     const many = after(Array.from({ length: KEPT + 5 }, (_, k) => keep(k + 1))).undos;
     expect([many.length, many[0]?.id, many.at(-1)?.id]).toEqual([KEPT, 6, KEPT + 5]);
+  });
+
+  test("what could not be undone now stays to be undone, and no Undo waits, for it or for what came before it", () => {
+    const pressed = after([keep(1), heard(1), keep(2), heard(2), press, press]).undos;
+    expect(due(pressed)?.id).toBe(2);
+    const stuck = after([{ do: "stuck" }], pressed);
+    expect([ids(stuck.undos), due(stuck.undos), stuck.said]).toEqual([[1, 2], undefined, []]);
+    // Pressed again, it is the one due.
+    expect(due(after([press], stuck.undos).undos)?.id).toBe(2);
   });
 });

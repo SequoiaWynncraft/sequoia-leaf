@@ -48,7 +48,6 @@ import {
   RIGHT,
   route,
   SORTER,
-  standLots,
   standRefusal,
   tilesOf,
   TUNNEL,
@@ -78,6 +77,7 @@ import {
   type Tool,
 } from "./state.ts";
 import { CHANGED, due, type Entry, type UndoEvent, type Undos, undoStep } from "./undos.ts";
+import { type Undoing, undoPlan } from "./unplan.ts";
 import { runOut, stepWay, type Ways, waysAt, waysBack } from "./ways.ts";
 import { coins, type Did, doNow, onTake, takesCommands } from "./yard.ts";
 
@@ -670,56 +670,33 @@ export function pickFrom(x: number, y: number): boolean {
   return true;
 }
 
-/**
- * Stands again pieces that were taken away, all of them or none: the only use of `stand`. More than
- * one command carries (`standLots`: so many pieces, so many characters) goes as several, once the
- * whole is known to go, each all or none, those that give Coins back first: a purse that pays for the
- * whole pays for each in turn. A copy and a blueprint are each one command of their own. Gives back
- * why it was not done, or null.
- */
-function standNow(pieces: readonly Piece[]): string | null {
-  const no = standRefusal(S.world, pieces, coins());
-  if (no !== null) return no;
-  for (const lot of standLots(S.world, pieces)) {
-    const did = doNow({ do: "stand", pieces: lot });
-    if ("refused" in did) return did.why;
-  }
-  return null;
-}
-
 /** What could not be undone, said on the line over the dock. */
 const cannotUndo = (why: string): void => {
   toolHooks.said(`Cannot undo: ${why.toLowerCase()}.`);
 };
 
-/** Stands again pieces that were taken away, as a copy is stood: new, and holding nothing. */
-function putBack(what: readonly Piece[]): void {
-  const no = standNow(what);
-  if (no !== null) cannotUndo(no);
-  else for (const s of what) puff(s.x * TILE + 8, (s.y + 1) * TILE - 2, 4, DUST, 6);
+/** What an Undo of something built, raised or taken puts back (`unplan.ts`); nothing for what else was done. */
+function undoing(d: Done): Undoing | null {
+  if (d.did === "built") return { cells: d.cells, turned: d.turned, back: d.under ?? [], was: d.was ?? [] };
+  if (d.did === "raised") return { cells: [], turned: [], back: [], was: d.was };
+  if (d.did === "took") return { cells: [], turned: [], back: d.what, was: [] };
+  return null;
 }
 
 /**
- * Gives pieces that still stand the way and the grade they had, each for the difference: together
- * with Select, and without it one at a time, as building over a piece does. A tunnel is named by the
- * way it goes in, so it is only raised or lowered.
+ * Undoes something built, raised or taken by its plan (`unplan.ts`): all of it, or where the rules
+ * would refuse any of it (Coins short of the whole, or something in the way), none of it. Gives back
+ * why not, or null.
  */
-function asTheyWere(was: readonly Piece[]): void {
+function unbuild(u: Undoing): string | null {
   const w = S.world;
-  const still = was.filter((p) => kindAt(w, p.x, p.y) === p.kind);
-  if (still.length === 0) return;
-  if (usable("select") || still.length === 1) {
-    const no = standNow(still);
-    if (no !== null) cannotUndo(no);
-    return;
-  }
-  for (const p of still) {
-    const did = doNow({ do: "build", kind: p.kind, x: p.x, y: p.y, dir: p.dir, grade: gradeOf(p.kind, p.grade) });
-    if ("refused" in did) {
-      cannotUndo(did.why);
-      return;
-    }
-  }
+  const plan = undoPlan(w, u, usable("select"), coins());
+  if ("why" in plan) return plan.why;
+  const taken = u.cells.filter((i) => w.kind[i] !== NONE);
+  for (const a of plan.acts) doNow(a);
+  for (const i of taken) puff((i % W()) * TILE + 8, (Math.floor(i / W()) + 1) * TILE - 4, 4, DUST, 7);
+  for (const p of u.back) puff(p.x * TILE + 8, (p.y + 1) * TILE - 2, 4, DUST, 6);
+  return null;
 }
 
 /**
@@ -732,46 +709,51 @@ export function undo(): boolean {
   return settle() > 0 || undos.some((u) => u.asked);
 }
 
-/** Undoes what Undo was pressed for and Leaf has done, the last first, while the yard takes commands. Gives back how many were undone. */
+/**
+ * Undoes what Undo was pressed for and Leaf has done, the last first, while the yard takes commands.
+ * What cannot be undone now, none of it done, stays to be undone, and the presses waiting are let
+ * go (`stuck`), so nothing before it is undone under it. Gives back how many were undone.
+ */
 function settle(): number {
   let n = 0;
   for (let u = due(undos); u && takesCommands(); u = due(undos)) {
-    moveUndos({ do: "undone", id: u.id });
-    if (!holds(u)) toolHooks.said(CHANGED);
-    else {
-      undoNow(u.done);
+    if (!holds(u)) {
+      moveUndos({ do: "undone", id: u.id });
+      toolHooks.said(CHANGED);
+      continue;
+    }
+    const no = undoNow(u.done);
+    if (no === null) {
+      moveUndos({ do: "undone", id: u.id });
       n++;
+    } else {
+      moveUndos({ do: "stuck" });
+      yardSfx.no();
+      cannotUndo(no);
     }
   }
   return n;
 }
 
-/** Undoes something done, as it stands as it was just after. */
-function undoNow(last: Done): void {
+/** Undoes something done, as it stands as it was just after. Gives back why it could not be, none of it done, or null. */
+function undoNow(last: Done): string | null {
   const w = S.world;
-  if (last.did === "built") {
-    const cells = last.cells.filter((i) => w.kind[i] !== NONE);
-    // Many pieces go as one with Select; without it, one at a time, as the spade takes them.
-    if (usable("select") && cells.length > 0) doNow({ do: "clear", tiles: cells });
-    else for (const p of piecesAt(w, cells)) doNow({ do: "remove", x: p.x, y: p.y });
-    for (const i of cells) puff((i % W()) * TILE + 8, (Math.floor(i / W()) + 1) * TILE - 4, 4, DUST, 7);
-    for (const t of last.turned) doNow({ do: "turn", ...xy(t.i), dir: t.was });
-    if (last.under) putBack(last.under);
-    if (last.was) asTheyWere(last.was);
-  } else if (last.did === "raised") asTheyWere(last.was);
-  else if (last.did === "took") putBack(last.what);
-  else if (last.did === "painted")
-    for (const l of last.lines.toReversed()) doNow({ do: "paint", ...xy(l.i), tint: l.was });
+  const u = undoing(last);
+  const no = u
+    ? unbuild(u)
+    : last.did === "moved"
+      ? does({ do: "move", tiles: last.tiles, turns: last.turns, x: last.x, y: last.y })
+      : null;
+  if (no !== null) return no;
+  if (last.did === "painted") for (const l of last.lines.toReversed()) doNow({ do: "paint", ...xy(l.i), tint: l.was });
   else if (last.did === "way") waysBack(w, last.i, xy(last.i).x, xy(last.i).y, last.was, (a) => void doNow(a));
-  else if (last.did === "moved") {
-    const no = does({ do: "move", tiles: last.tiles, turns: last.turns, x: last.x, y: last.y });
-    if (no !== null) cannotUndo(no);
-  } else unturn(last);
+  else if (last.did === "turned") unturn(last);
   yardSfx.undo();
   // What was marked or in hand may be what was undone.
   if (S.hand.is === "select") go({ do: "pick", tool: "select" });
   keepAim();
   toolHooks.changed();
+  return null;
 }
 
 // ---------- runs of belt ----------

@@ -433,6 +433,27 @@ function turning(p: HandPrint): HTMLElement[] {
   return out;
 }
 
+/** The brush's colours: a piece of belt in each, and one with none; the one on the brush (`on`) lit. */
+const tintButtons = (on: number): HTMLElement[] =>
+  [0, 1, 2, 3, 4, 5, 6].map((t) => {
+    const name = PAINTS[t - 1]?.name ?? "No colour";
+    const b = el(
+      "button",
+      `k-slot${on === t ? " lit" : ""}`,
+      { type: "button", "aria-label": name, "aria-pressed": on === t ? "true" : "false" },
+      fitted(bare(t), 10, 16),
+    );
+    b.addEventListener("click", () => {
+      S.tint = t;
+      refreshDock();
+    });
+    tip(b, name);
+    return b;
+  });
+
+/** How far a row that scrolls sideways is from its end: none for no row. */
+const endOf = (row: Element | null): number => (row ? row.scrollWidth - row.clientWidth - row.scrollLeft : 0);
+
 /** The line over the dock, drawn from its print alone. */
 function drawHand(p: HandPrint): void {
   const hand = $("hand");
@@ -504,32 +525,22 @@ function drawHand(p: HandPrint): void {
         confirm();
       }),
     );
-  // The brush's colours: a piece of belt in each, and one with none.
-  const tints =
-    p.tints === null
-      ? []
-      : [0, 1, 2, 3, 4, 5, 6].map((t) => {
-          const name = PAINTS[t - 1]?.name ?? "No colour";
-          const b = el(
-            "button",
-            `k-slot${p.tints === t ? " lit" : ""}`,
-            { type: "button", "aria-label": name, "aria-pressed": p.tints === t ? "true" : "false" },
-            fitted(bare(t), 10, 16),
-          );
-          b.addEventListener("click", () => {
-            S.tint = t;
-            refreshDock();
-          });
-          tip(b, name);
-          return b;
-        });
-  hand.replaceChildren(
-    el("span", p.line.bad ? "say bad" : "say", { text: p.line.text }),
+  const tints = p.tints === null ? [] : tintButtons(p.tints);
+  // What it says, then its buttons in one row (`index.html`): on a short screen it scrolls sideways,
+  // and shows its end first, where Undo and Cancel are; drawn again, it stays as far from its end
+  // as the player scrolled it, so that a button asking to be pressed again stays where it was.
+  const fromEnd = endOf(hand.querySelector(".row"));
+  const row = el(
+    "div",
+    "row",
+    {},
     ...(tints.length > 0 ? [el("div", "tints", {}, ...tints)] : []),
     ...(grades.length > 0 ? [el("div", `grades${p.gradesNudged ? " nudged" : ""}`, {}, ...grades)] : []),
     ...(upgrade ? [el("div", "acts", {}, upgrade)] : []),
     el("div", p.acting ? "acts tight" : "acts", {}, ...kids),
   );
+  hand.replaceChildren(el("span", p.line.bad ? "say bad" : "say", { text: p.line.text }), row);
+  row.scrollLeft = row.scrollWidth - row.clientWidth - fromEnd;
   hand.classList.toggle("building", p.building);
 }
 

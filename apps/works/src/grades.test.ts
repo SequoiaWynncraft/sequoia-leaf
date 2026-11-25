@@ -19,7 +19,9 @@ import {
   highest,
   item,
   JOINER,
+  kindAt,
   MILL,
+  piecesAt,
   plot,
   PLOT_IDS,
   priceAt,
@@ -35,7 +37,7 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 
-import { act, coinsAre, ctx, type FakeLeaf, isRecord, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
+import { act, closed, coinsAre, ctx, type FakeLeaf, isRecord, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { gradeInHand, S } from "./state.ts";
 import {
   aimAt,
@@ -323,6 +325,84 @@ function mark(x0: number, y0: number, x1: number, y1: number): void {
   markEnd();
 }
 
+/** A small seeded random, `n` at most: the same yards every run. */
+function seeded(seed: number): (n: number) => number {
+  let s = seed;
+  return (n) => {
+    s = (s * 1_103_515_245 + 12_345) % 2_147_483_648;
+    return Math.floor((s / 2_147_483_648) * n);
+  };
+}
+/** Every piece of the yard, as a text to compare. */
+const everyPiece = (): string =>
+  JSON.stringify(piecesAt(S.world, within(S.world, 0, 0, S.world.land.w - 1, S.world.land.h - 1)));
+const RANDOM_KINDS = [BELT, SPLITTER, JOINER, SORTER, CRATE] as const;
+
+/**
+ * One round of random copies and upgrades undone: two areas of 6 by 3. The first: a random piece at
+ * a random grade, or nothing, on each tile, and a piece on two corners, so that the copy's box is
+ * the area's. The second, under the copy: mostly the same kind turned and at another grade, or
+ * nothing, or a belt for a splitter or a joiner to take the place of. The copy is set down, perhaps
+ * the area it is on raised and that undone, and then the copy undone: with no Coins done whole or
+ * refused whole saying how short, and with that many, done; the yard as it was, and as Leaf has it.
+ * Gives whether the copy could be set down.
+ */
+async function undoRound(random: (n: number) => number): Promise<boolean> {
+  closed();
+  const y = yardAt(4);
+  const grade = (): { grade: number } => ({ grade: 1 + random(2) });
+  const dir = (): 0 | 1 | 2 | 3 => ([0, 1, 2, 3] as const)[random(4)] ?? 0;
+  for (let z = 0; z < 3; z++)
+    for (let x = 0; x < 6; x++) {
+      const corner = (x === 0 && z === 0) || (x === 5 && z === 2);
+      const kind = RANDOM_KINDS[random(corner ? RANDOM_KINDS.length : RANDOM_KINDS.length + 2)];
+      if (kind === undefined) continue;
+      build(y, kind, 17 + x, 13 + z, dir(), Infinity, grade());
+      const under = random(10);
+      if (under < 6) build(y, kind, 17 + x, 20 + z, dir(), Infinity, grade());
+      else if (under < 8 && (kind === SPLITTER || kind === JOINER))
+        build(y, BELT, 17 + x, 20 + z, dir(), Infinity, grade());
+    }
+  const fake = await opened(y, 100_000);
+  const said = listen();
+  const was = everyPiece();
+  mark(17, 13, 22, 15);
+  hold("copy");
+  aimAt(19, 21);
+  if (!place(19, 21)) return false;
+  await inStep(fake, 1);
+  if (random(2) === 1) {
+    mark(17, 20, 22, 22);
+    if (upgradeMark()) {
+      await inStep(fake, 2);
+      expect(undo()).toBe(true);
+      await until(() => fake.leaf.commands.length > 2);
+      await inStep(fake, fake.leaf.commands.length);
+    }
+  }
+  const sentBefore = fake.leaf.commands.length;
+  coinsAre(0);
+  const after = everyPiece();
+  if (!undo()) {
+    expect(said.at(-1)).toMatch(/^Cannot undo: not enough coins: \d+ short\.$/);
+    expect(everyPiece()).toBe(after);
+    coinsAre(Number(/(\d+) short/.exec(said.at(-1) ?? "")?.[1]));
+    expect(undo()).toBe(true);
+  }
+  await until(() => fake.leaf.commands.length > sentBefore);
+  await inStep(fake, fake.leaf.commands.length);
+  expect(everyPiece()).toBe(was);
+  setTool(null);
+  return true;
+}
+
+/** So many rounds of `undoRound`, one after another: how many set a copy down. */
+async function undoRounds(random: (n: number) => number, left: number): Promise<number> {
+  if (left === 0) return 0;
+  const tried = (await undoRound(random)) ? 1 : 0;
+  return tried + (await undoRounds(random, left - 1));
+}
+
 describe("many pieces at once", () => {
   test("a copy stood over the same pieces at another grade is sent, as the rules would raise them, and undone to the grades they had; over itself it sends nothing", async () => {
     const y = yardAt(3);
@@ -504,6 +584,59 @@ describe("many pieces at once", () => {
     expect([...grades([0, 21], 16), ...grades([0, 21], 21)]).toEqual([2, 2, 1, 1]);
     expect(S.world.dir[at(S.world, 0, 16)]).toBe(1);
     await inStep(fake, 3);
+  });
+
+  test("an Undo is planned whole: with no Coins it puts back a copy that cost nothing, though one part takes Coins that another gives back", async () => {
+    const y = yardAt(4);
+    build(y, SPLITTER, 18, 13, 0, Infinity);
+    build(y, SPLITTER, 19, 13, 0, Infinity, { grade: 2 });
+    build(y, JOINER, 18, 16, 0, Infinity, { grade: 2 });
+    build(y, SPLITTER, 19, 16, 0, Infinity);
+    const fake = await opened(y, 0);
+    const said = listen();
+    mark(18, 13, 19, 13);
+    hold("copy");
+    aimAt(18, 16);
+    expect(S.aim).toMatchObject({ why: null, cost: 0 });
+    expect(place(18, 16)).toBe(true);
+    expect([kindAt(S.world, 18, 16), ...grades([18, 19], 16)]).toEqual([SPLITTER, 1, 2]);
+    await inStep(fake, 1);
+    // Taking up the splitter gives Coins back, and so does lowering the other; the joiner stood again takes them.
+    expect(undo()).toBe(true);
+    expect(said).toEqual([]);
+    expect([kindAt(S.world, 18, 16), ...grades([18, 19], 16)]).toEqual([JOINER, 2, 1]);
+    await inStep(fake, 4);
+    expect(sent(fake)).toEqual(["copy", "clear", "stand", "stand"]);
+  });
+
+  test("an Undo the purse cannot pay for does none of it and stays to be undone; with exactly enough, it puts the yard back as it was", async () => {
+    const y = yardAt(4);
+    build(y, BELT, 18, 13, 0, Infinity, { grade: 2 });
+    build(y, BELT, 18, 16, 0, Infinity);
+    const fake = await opened(y, 1000);
+    const said = listen();
+    mark(18, 16, 18, 16);
+    expect(upgradeMark()).toBe(true);
+    await inStep(fake, 1);
+    // Taking away the belt that was raised gives back what it is worth now; standing the old one costs less.
+    mark(18, 16, 18, 16);
+    expect(clearMark()).toBe(true);
+    await inStep(fake, 2);
+    coinsAre(0);
+    const before = encode(S.world);
+    expect(undo()).toBe(false);
+    expect(said.at(-1)).toMatch(/^Cannot undo: not enough coins: \d+ short\.$/);
+    expect(encode(S.world)).toBe(before);
+    const short = Number(/(\d+) short/.exec(said.at(-1) ?? "")?.[1]);
+    coinsAre(short);
+    expect(undo()).toBe(true);
+    expect(grades([18], 16)).toEqual([2]);
+    await inStep(fake, 3);
+    expect(sent(fake)).toEqual(["upgrade", "clear", "stand"]);
+  });
+
+  test("random copies and upgrades are undone exactly with the Coins the Undo says it needs, never short partway", async () => {
+    expect(await undoRounds(seeded(20_261_125), 30)).toBeGreaterThan(10);
   });
 
   test("Upgrade all is offered only with nothing marked, once Upgrading an area is known; a marked area has its own Upgrade", async () => {
