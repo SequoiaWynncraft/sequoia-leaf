@@ -5,8 +5,8 @@
  * and research only once the Study may be built. The last button is the depot's until the yard owns
  * a second plot, and from then the yard's (`views.ts`): the same sheet, with its map and its list of
  * trouble, and on the button how many pieces are in trouble. On a phone the books' buttons are a
- * column down the right side (`index.html`). In a visit, only "Top yards" of the books, and in the
- * node's place a strip that says whose yard it is.
+ * column down the right side, on an upright phone under the way out and the gear (`index.html`). In
+ * a visit, only "Top yards" of the books, and in the node's place a strip that says whose yard it is.
  */
 
 import { GOALS, isFilled, power, TICK_MS, tierName } from "@sequoia-leaf/factory";
@@ -99,6 +99,10 @@ function openTracked(): void {
   togglePanel(w.hand === -1 && !ready && tierOpen() ? "tier" : "orders");
 }
 
+/** Orders filled and waiting to be handed over, as a tag: on the open card's small line, and on the folded line. */
+const readyTag = (ready: number): HTMLElement | null =>
+  ready > 0 ? el("span", "k-chip lit", { text: `${ready} to hand over` }) : null;
+
 /** The box in the corner open: what kind of goal it is (and orders ready), its title, what it wants, what comes next, and after it. */
 function fullTrack(
   p: ReturnType<typeof trackPrint>,
@@ -109,13 +113,7 @@ function fullTrack(
   // What it wants, by the one part that lays such rows out: here each a picture, a bar and a count.
   const wanted = wantsShort(p.wants);
   return [
-    el(
-      "div",
-      "k-row",
-      {},
-      label === "" ? null : el("span", "k-label k-grow", { text: label }),
-      p.ready > 0 ? el("span", "k-chip lit", { text: `${p.ready} to hand over` }) : null,
-    ),
+    el("div", "k-row", {}, label === "" ? null : el("span", "k-label k-grow", { text: label }), readyTag(p.ready)),
     el("div", "", { text: title }),
     wanted?.node ?? null,
     said === null ? null : saidLine(p.next?.is, said.line),
@@ -129,11 +127,12 @@ function fullTrack(
  * the tier screen's words (the goal waited on, with its lock; projects to take; or everything done),
  * and pressed, it opens the tier's screen, where that is. Orders filled and waiting to be handed over
  * are counted on the small line over its title, and while there are any, pressed, it opens Orders.
- * A button at its side folds it to one line, its title and what is left (`folds.ts`), and hides the
- * research under it: the choice is kept on the device. Until it is made, the card is open, but on a
- * short screen. On a phone the folded line sits in the top bar after the power, where the title is
- * left out if little of it would fit (`index.html`). Drawn again, only what is inside it changes,
- * so whoever is on one of its buttons stays there.
+ * A button at its side folds it to one line (`folds.ts`): its title, the orders ready to hand over
+ * and what is left, the title given up first and what is left next where room is short
+ * (`index.html`); and it hides the research under it. The choice is kept on the device. Until it is
+ * made, the card is open, but on a short screen. On a phone the folded line sits in the top bar
+ * after the power. Drawn again, only what is inside it changes, so whoever is on one of its buttons
+ * stays there.
  */
 function tracker(): () => void {
   const full = el("div", "full");
@@ -159,10 +158,18 @@ function tracker(): () => void {
     title = said?.title ?? GOALS[p.hand]?.title ?? "";
     full.replaceChildren(...fullTrack(p, said, title).filter((n) => n !== null));
     // Folded: the title, in a box of its own that `index.html` leaves empty where too little of it
-    // fits; and what is left of what it wants, or the line that says what comes next.
+    // fits; then the orders ready to hand over, and what is left of what it wants (or the line that
+    // says what comes next), which gives way to them where both do not fit.
+    const ready = readyTag(p.ready);
     short.replaceChildren(
       el("span", "name", {}, el("span", "", { text: title })),
-      said === null ? el("span", "k-label", { text: left(p.wants) }) : saidLine(p.next?.is, said.line),
+      el(
+        "span",
+        "tail",
+        {},
+        ready && el("span", "ready", {}, ready),
+        said === null ? el("span", "k-label", { text: left(p.wants) }) : saidLine(p.next?.is, said.line),
+      ),
     );
     fold.named();
   });

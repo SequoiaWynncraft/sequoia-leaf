@@ -96,6 +96,10 @@
       #books {
         margin-left: auto;
       }
+      /* The books and the way out, together: in the top bar's row here, a column on a phone (below). */
+      #side {
+        display: contents;
+      }
       .pip {
         position: relative;
       }
@@ -195,13 +199,34 @@
           clip-path: inset(50%);
         }
       }
-      #track .short > :not(.name) {
-        flex: none;
+      /*
+       * After the title, the orders ready to hand over, then what is left. Where both do not fit, what
+       * is left goes on to a second line, which is not shown. Alone, what is left keeps to one line where
+       * it can, and where the line is short of room takes two, as tall as the button.
+       */
+      #track .short > .tail {
+        flex: 0 1 auto;
+        min-width: min-content;
+        height: calc(var(--u) * 16);
+        display: flex;
+        flex-wrap: wrap;
+        column-gap: calc(var(--u) * 3);
+        overflow: hidden;
         font: var(--f-small);
       }
-      /* As wide as the screen allows beside the books' column on a phone, so that more of the title shows. */
+      #track .short > .tail > * {
+        flex: 0 1 auto;
+        min-height: calc(var(--u) * 16);
+        display: flex;
+        align-items: center;
+      }
+      /* A lock stays beside its words. */
+      #track .short > .tail > .k-row {
+        flex-wrap: nowrap;
+      }
+      /* Folded, wider than open, so that more of the title shows. */
       #track:has(> .fold[aria-expanded="false"]) {
-        width: min(calc(var(--u) * 180), calc(100vw - var(--edge) * 2 - var(--u) * 23));
+        width: min(calc(var(--u) * 180), calc(100vw - var(--edge) * 2));
       }
       #top:has(> #track > .fold[aria-expanded="false"]) + #study {
         display: none;
@@ -214,7 +239,7 @@
       #track .k-label {
         flex: 1 0 auto;
       }
-      /* How many orders wait to be handed over: a tag on the small line over the title, as small as it. */
+      /* How many orders wait to be handed over: a tag on the small line over the title (and on the folded line), as small as it. */
       #track .k-chip {
         min-height: calc(var(--u) * 9);
         padding-inline: calc(var(--u) * 2);
@@ -1348,39 +1373,65 @@
         #tools > button {
           flex: none;
         }
-        /* Under the top bar as it is laid out (`--barb`, measured), however many rows it wraps to; beside the order's folded line where that is a row of its own. */
-        #books {
-          position: fixed;
-          top: calc(var(--barb, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
-          right: var(--edge);
-          flex-direction: column;
-          margin: 0;
-        }
-        /* What hangs under the top bar stops short of the books' column: a button's width and a gap. */
-        #track,
-        #study {
-          width: min(calc(var(--u) * 132), calc(100vw - var(--edge) * 2 - var(--u) * 23));
+        /*
+         * What stands beside the side column keeps clear of it: the column's own width from the screen's
+         * right edge (`--sidew`, measured: two columns where one does not fit), and a gap.
+         */
+        :root {
+          --side: calc(var(--sidew, calc(var(--edge) + var(--u) * 20)) + var(--u) * 3);
         }
         /*
-         * Folded, the order in hand is a line of the top bar after the power, where the books' column
-         * leaves the row empty: as tall as the purse, and only as wide as what is left and its button
-         * (on a short screen, as wide as the row has room for, and the title shows where it fits).
-         * Where it does not fit beside the power, it is a row of its own, which stops short of the books.
+         * The side column: the yard's books (on an upright phone the way out and the gear first), a
+         * button to a row, down the right side. Where they do not all fit above its foot, the rest go
+         * on in a second column to its left, from the top, so that every button stays in reach.
+         */
+        #books,
+        #side {
+          grid-auto-flow: column;
+          grid-template-rows: repeat(auto-fit, calc(var(--u) * 20));
+          grid-auto-columns: calc(var(--u) * 20);
+          gap: calc(var(--u) * 3);
+          direction: rtl;
+          pointer-events: none;
+        }
+        :is(#books, #corner) > * {
+          direction: ltr;
+          pointer-events: auto;
+        }
+        /* Under the top bar as it is laid out (`--barb`, measured), however many rows it wraps to;
+           beside the order's folded line where that is a row of its own; down to the screen's foot. */
+        #books {
+          --at: calc(var(--barb, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
+          position: fixed;
+          top: var(--at);
+          right: var(--edge);
+          display: grid;
+          max-height: calc(100dvh - var(--at) - var(--bottom));
+          margin: 0;
+        }
+        /* What hangs under the top bar stops short of the side column. */
+        #track,
+        #study {
+          width: min(calc(var(--u) * 132), calc(100vw - var(--edge) - var(--side)));
+        }
+        /*
+         * Folded, the order in hand is a line of the top bar after the power, as tall as the purse, as
+         * wide as the row has room for: its title shows where some of it fits.
          */
         #track:has(> .fold[aria-expanded="false"]) {
           position: relative;
           inset: auto;
-          flex: 0 1 auto;
-          width: auto;
-          max-width: calc(100% - var(--u) * 23);
+          flex: 1 1 auto;
+          width: min-content;
           padding-block: 0;
+          align-self: stretch;
         }
         #power {
           align-self: stretch;
         }
         /* A visit's strip too: My yard keeps its width, on a row of its own where the owner's name needs this one. */
         #visit {
-          max-width: calc(100vw - var(--edge) * 2 - var(--u) * 23);
+          max-width: calc(100vw - var(--edge) - var(--side));
           flex-wrap: wrap;
         }
         #visit .who {
@@ -1392,7 +1443,7 @@
           margin-left: auto;
         }
         #walk {
-          right: calc(var(--edge) + var(--u) * 23);
+          right: var(--side);
         }
         #corner {
           margin-left: auto;
@@ -1405,11 +1456,21 @@
           left: auto;
           right: calc(var(--u) * -3);
         }
-        /* A finger's card: under what hangs below the top bar (a walk's bar too), above the line over the
-           tools (`main.ts` measures both), and clear of the books. */
+        /*
+         * A finger's card: under what hangs below the top bar (a walk's bar too), above the line over the
+         * tools (`main.ts` measures both), and clear of the side column. Where that leaves it less than a
+         * third of the screen (a phone on its side, on a walk), it comes down over the tools to the
+         * screen's foot instead: it never reaches up over what is under the top bar.
+         */
         body > .k-tip.k-info.sheet {
-          width: calc(100% - var(--edge) - var(--u) * 23);
-          max-height: min(72vh, calc(100dvh - var(--sheet-floor, 0px) - var(--sheet-top, 0px) - var(--u) * 2));
+          --floor: clamp(
+            0px,
+            (100dvh - var(--sheet-floor, 0px) - var(--sheet-top, 0px) - 33dvh) * 1000,
+            var(--sheet-floor, 0px)
+          );
+          bottom: var(--floor);
+          width: calc(100% - var(--side));
+          max-height: min(72vh, calc(100dvh - var(--floor) - var(--sheet-top, 0px) - var(--u) * 2));
         }
         /* Buttons that do not fit in one row go on in another. */
         #hand .acts {
@@ -1429,13 +1490,62 @@
         }
       }
       /*
+       * An upright phone: the way out and the gear lead the side column, above the books, under the top
+       * bar. The top bar is then the purse alone, and the power with the order's folded line, each row
+       * as wide as the screen, whatever the purse holds. The column stops above the line over the tools.
+       */
+      @media (max-width: 760px) and (min-height: 501px) {
+        #side {
+          --at: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
+          position: fixed;
+          top: var(--at);
+          right: var(--edge);
+          display: grid;
+          max-height: calc(100dvh - var(--sheet-floor, 0px) - var(--at) - var(--u) * 3);
+        }
+        #books,
+        #corner {
+          display: contents;
+        }
+        #corner > * {
+          order: -1;
+        }
+        /* The power's bar under its numbers, so that the order's line has room beside it on the narrowest phone. */
+        #power {
+          display: grid;
+          grid-template-columns: auto auto;
+          gap: var(--u) calc(var(--u) * 3);
+          align-content: center;
+          padding: 0 calc(var(--u) * 2);
+        }
+        #power > :first-child {
+          grid-row: span 2;
+          align-self: center;
+        }
+        #power .k-bar {
+          width: auto;
+        }
+        /* Ten million Leaf fits across the narrowest phone. */
+        #purse {
+          gap: calc(var(--u) * 3);
+          padding-inline: calc(var(--u) * 3);
+        }
+        /* The purse alone on the first row, however little it holds: an empty row-wide part after it, which takes back its gap. */
+        #top::after {
+          content: "";
+          order: 2;
+          flex-basis: 100%;
+          margin-top: calc(var(--u) * -2);
+        }
+      }
+      /*
        * A short screen (a phone on its side), where the books' column reaches down beside them: the
        * tools and the line over them, still over the middle, stop short of it on both sides.
        */
       @media (max-height: 500px) {
         #dock,
         #hand {
-          --most: calc(100vw - var(--edge) * 2 - var(--u) * 46);
+          --most: calc(100vw - var(--side) * 2);
         }
         #dock {
           max-width: var(--most);
@@ -1450,16 +1560,16 @@
         }
         /* A panel beside the yard stops short of the books, which stay there to switch between panels. */
         #panel:not(.full) {
-          right: calc(var(--edge) + var(--u) * 23);
+          right: var(--side);
         }
         /* A walk's bar goes under the top bar, as on a phone (`views.ts`), in the order's place. */
         body.walking #track,
         body.walking #study {
           display: none;
         }
-        /* The order's folded line takes the room across that the top bar has. */
+        /* The order's folded line, where it is a row of its own, stops short of the books' column beside it. */
         #track:has(> .fold[aria-expanded="false"]) {
-          flex-grow: 1;
+          max-width: calc(100vw - var(--edge) - var(--side));
         }
         /* The order in hand, open, stays above the line over the tools (`--handt`, measured): what does not fit scrolls. */
         #track .full {
@@ -1507,7 +1617,7 @@
         #study {
           top: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
           left: calc(var(--edge) + var(--u) * 135);
-          width: min(calc(var(--u) * 132), calc(100vw - var(--edge) * 2 - var(--u) * 158));
+          width: min(calc(var(--u) * 132), calc(100vw - var(--edge) - var(--u) * 135 - var(--side)));
         }
       }
       /* Asked for less motion: nothing here bobs, blinks or slides in; a nudge's bubble still points. Last, so
@@ -1530,8 +1640,10 @@
       <div id="purse" class="k-plaque hung"></div>
       <button id="power" class="k-plaque hung" type="button"></button>
       <div id="track" class="k-plaque hung"></div>
-      <div id="books"></div>
-      <div id="corner"></div>
+      <div id="side">
+        <div id="books"></div>
+        <div id="corner"></div>
+      </div>
     </div>
     <button id="study" class="k-plaque" type="button" hidden></button>
     <div id="visit" class="k-plaque" hidden></div>
