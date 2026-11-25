@@ -166,7 +166,7 @@ export function restart(): void {
 export interface NoticeButton {
   readonly word: string;
   readonly quiet?: boolean;
-  /** Drawn as Discord's own button: its blurple and its mark. */
+  /** Drawn as Discord's own button, in its blurple. */
   readonly discord?: boolean;
   readonly go: (away: () => void) => void;
 }
