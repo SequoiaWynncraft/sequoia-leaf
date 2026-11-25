@@ -135,6 +135,22 @@ describe("what the guild pays a Minecraft account", () => {
 });
 
 describe("a Sequoia session", () => {
+  it("on an alternate account, as the mod's may be, leaves whom the Discord account signs in as alone", async () => {
+    const alt = playerId("00000000-0000-4000-8000-0000000000a2");
+    // Alice's own Discord account, in the mod on her alternate.
+    backend.backend.sessions["alt-token"] = () =>
+      Response.json({ ...sessionOf(alt, "AliceAlt"), discord_id: discordOf(alice), primary_account: false });
+    const app = leafs.app();
+
+    await app.request("/v1/me", { headers: { Cookie: "seq_session=alice-token" } });
+    const after = await app.request("/v1/me", { headers: { Cookie: "seq_session=alt-token" } });
+    const signsInAs = await logins((l) => l.discordPlayer(DiscordId.make(discordOf(alice))));
+    await app.dispose();
+
+    expect(after.status).toBe(200);
+    expect(Option.getOrUndefined(signsInAs)).toBe(alice);
+  });
+
   it("signs in as its account's player, and makes its Discord account sign in as the same", async () => {
     const app = leafs.app();
 

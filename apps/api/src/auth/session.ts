@@ -29,6 +29,8 @@ const BackendIdentity = Schema.Struct({
   minecraft_username: Schema.String,
   guild_rank: Schema.optionalKey(Schema.NullOr(Schema.String)),
   website_admin: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+  /** Whether the session's account is the member's primary one; the mod's may be an alternate's. */
+  primary_account: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
 });
 
 /**
@@ -57,7 +59,8 @@ export class Identities extends Context.Service<
           const now = yield* Clock.currentTimeMillis;
           const playerId = yield* logins.player(body.minecraft_uuid);
           const discord = discordOf(body);
-          if (discord !== null) {
+          // A Discord account signs in as its member's primary account's player, never an alternate's.
+          if (discord !== null && body.primary_account === true) {
             const was = yield* logins.discordPlayer(discord);
             if (Option.getOrUndefined(was) !== playerId) {
               yield* logins.linkDiscord(discord, playerId, now);

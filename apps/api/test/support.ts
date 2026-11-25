@@ -353,6 +353,7 @@ export function sessionOf(player: string, username: string, rank: string | null 
     expires_at: "2026-12-01T00:00:00Z",
     guild_rank: rank,
     website_admin: false,
+    primary_account: true,
   };
 }
 
