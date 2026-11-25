@@ -398,6 +398,8 @@ function doingOnto(y: Yard, i: number, r: number, o: KeptPiece, studied: Goal | 
   if (out !== null) h.out[r] = out;
   const making = makingOf(y, i, r, o, studied);
   if (making !== NONE) h.making[r] = making;
+  // What a machine is making is what it last began (`lastRecipe`), though no save keeps that apart.
+  if (making !== NONE && isMaker(k)) h.last[r] = making;
   if (isMaker(k) || k === GATHERER || (k === STUDY && studied !== undefined))
     h.work[r] = whole(o.work, workFor(k, making) - 1) ?? 0;
   if (k === CRATE) h.open[r] = o.closed === true ? 0 : 1;

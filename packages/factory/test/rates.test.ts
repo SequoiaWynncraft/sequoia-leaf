@@ -118,6 +118,17 @@ describe("a machine's last recipe", () => {
     expect(F.lastRecipe(y, mill)).toBeNull();
   });
 
+  test("is what a machine read back in the middle of making something is making, so it keeps it once that is done", () => {
+    const y = delivering();
+    const mill = F.at(y, 29, 20);
+    const row = F.holderOf(y, mill);
+    for (let k = 0; k < 600 && (y.holders.making[row] ?? F.NONE) === F.NONE; k++) F.step(y);
+    expect(y.holders.making[row]).toBe(plank);
+    const read = F.decode(F.encode(y), y.land);
+    if (!read) throw new Error("the yard did not read back");
+    expect(F.lastRecipe(read, mill)).toBe(sawing);
+  });
+
   test("is not kept in a save, so a yard read afresh takes it from the copy it replaces, where the same machine still stands", () => {
     const y = delivering();
     const mill = F.at(y, 29, 20);
