@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { leaf, minecraftId, playerId } from "@sequoia-leaf/core";
 import { Schema } from "effect";
+import { SqlClient } from "effect/sql";
 
+import { readHere } from "../src/activity/here.ts";
 import { discordOf, fakeBackend, sessionOf, testLeaf } from "./support.ts";
 
 const Me = Schema.Struct({ player: Schema.Struct({ id: Schema.String }) });
@@ -255,6 +257,13 @@ describe("linking a Wynncraft account later", () => {
       // oxlint-disable-next-line no-await-in-loop -- one after the other, so the ids follow
       await leafs.query(
         (sql) => sql`
+          INSERT INTO players_seen (player_id, name, guest, first_seen_at, last_seen_at)
+          VALUES (${player}, 'Nuss', 0, ${T0}, ${T0});
+        `,
+      );
+      // oxlint-disable-next-line no-await-in-loop -- one after the other, so the ids follow
+      await leafs.query(
+        (sql) => sql`
           INSERT INTO sessions (player_id, guest, started_at) VALUES (${player}, 0, ${T0});
         `,
       );
@@ -275,8 +284,9 @@ describe("linking a Wynncraft account later", () => {
     expect(
       await leafs.query((sql) => sql`SELECT player_id AS id FROM visits WHERE left_at IS NULL ORDER BY id`),
     ).toEqual([{ id: account }, { id: guestId }].toSorted((a, b) => a.id.localeCompare(b.id)));
-    // Nobody sees them twice in town.
-    expect(await leafs.query((sql) => sql`SELECT player_id AS id FROM last_visits`)).toEqual([{ id: account }]);
+    // Nobody sees them twice in town, though their visit is still open on record.
+    const here = await leafs.run(SqlClient.SqlClient.use((sql) => readHere(sql)(T0 + 2000)));
+    expect([...here.present, ...here.resting, ...here.gone].map((seen) => seen.playerId)).toEqual([account]);
   });
 
   it("does not welcome a Discord player who spent every Coin a second time", async () => {

@@ -159,9 +159,6 @@ const moveHistory = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId) =
     yield* sql`UPDATE visits SET camp_owner = ${into} WHERE camp_owner = ${from}`;
     yield* sql`UPDATE last_visits SET camp_owner = ${into} WHERE camp_owner = ${from}`;
     yield* sql`DELETE FROM player_names WHERE player_id = ${from}`;
-    // Out of who is about: one person is not shown twice. Their visits stay; a page still open as
-    // `from` is not listed, and is let go when it signs in again.
-    yield* sql`DELETE FROM last_visits WHERE player_id = ${from}`;
   });
 
 /** Drops `player`'s state of `game`, keeping it in `keeper`'s save history so staff can bring it back. */

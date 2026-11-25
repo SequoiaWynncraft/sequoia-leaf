@@ -30,4 +30,5 @@ export default Effect.gen(function* () {
       merged_at  INTEGER NOT NULL
     ) STRICT
   `;
+  yield* sql`CREATE INDEX merges_from ON merges (from_id)`;
 });
