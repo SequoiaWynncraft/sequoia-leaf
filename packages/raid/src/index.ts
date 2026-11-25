@@ -235,6 +235,7 @@ export { checkRun, type Loaded, readRunView } from "./save.ts";
 // Between runs.
 export {
   type Almanac,
+  beatenBosses,
   newAlmanac,
   readAlmanac,
   type News,

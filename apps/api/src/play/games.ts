@@ -70,6 +70,8 @@ export interface Held {
    * stored: the batch that takes it keeps it, and one that fails lets go of the copy holding it.
    */
   readonly post: (written: boolean) => string | null;
+  /** Where it stands among everyone's as it is, brought to no moment; null for a game with no board. */
+  readonly standing: () => Standing | null;
 }
 
 /** A game as the play service handles it: in stored text and JSON, whatever the game's own types. */
@@ -173,6 +175,7 @@ export function played<State, Command, View, Note, Short>(
         kept = postcard ?? kept;
         return postcard;
       },
+      standing: opened.standing,
     };
   };
   return {

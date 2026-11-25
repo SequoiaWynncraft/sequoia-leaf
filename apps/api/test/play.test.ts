@@ -48,6 +48,7 @@ import {
 import { staged as stagedYard } from "@sequoia-leaf/factory/test/yards.ts";
 import { PULLS } from "@sequoia-leaf/pulls";
 import {
+  beatenBosses,
   foughtOf,
   picksOf,
   planCommands,
@@ -2822,7 +2823,7 @@ describe("a person's numbers", () => {
     const { view } = await playRun(bob);
     await stand(stranger(1), 900, T0);
     await stand(bob, 500, T0);
-    const bosses = view.almanac.bosses.flat().length;
+    const bosses = beatenBosses(view.almanac).size;
     expect(await personOf(bob)).toEqual({
       id: bob,
       name: "Bob",
@@ -2977,6 +2978,31 @@ function cardOf(text: string) {
 /** What Alice's yard as Leaf stores it tells the town. */
 const yardCard = async () => cardOf((await storedYard()).state);
 
+/** The doors Leaf sends Alice's town, as sent. */
+const doorsSent = async () =>
+  Schema.decodeUnknownSync(Schema.Struct({ state: Schema.Struct({ doors: Schema.Unknown }) }))(
+    await (await send("GET", "/v1/game/play/town")).json(),
+  ).state.doors;
+/**
+ * Keeps a postcard the town would not read with Alice's table at `rev`, as anything else might have,
+ * and checks that her town is not sent it, makes the table due, and the sweep writes it again.
+ */
+async function refusedCard(rev: number, postcard: object) {
+  await services.query((sql) => sql`UPDATE play_state SET rev = ${rev} WHERE player_id = ${alice} AND game = 'raid'`);
+  await services.query(
+    (sql) => sql`
+      INSERT INTO play_postcards (player_id, game, rev, postcard) VALUES (${alice}, 'raid', ${rev}, ${JSON.stringify(postcard)})
+      ON CONFLICT (player_id, game) DO UPDATE SET rev = excluded.rev, postcard = excluded.postcard
+    `,
+  );
+  clock.now += 60_000;
+  expect(await doorsSent()).toEqual({});
+  expect(await dueOf("raid")).toBe(clock.now);
+  clock.now += 60_000;
+  await tending();
+  expect([await doorsSent(), await dueOf("raid")]).toEqual([{ raid: TABLE_SET_OUT }, null]);
+}
+
 describe("what each state tells the town", () => {
   const MINUTE = 60_000;
 
@@ -3076,6 +3102,12 @@ describe("what each state tells the town", () => {
     expect((await townNow()).doors).toEqual({ raid: TABLE_SET_OUT, works: await yardCard() });
     // The yard still works, so it is due its next tend as any written then; the table stands still.
     expect([await dueOf("works"), await dueOf("raid")]).toEqual([clock.now + TEND_AFTER, null]);
+  });
+
+  it("that the town would not read (Coins below 0, a line over 160 letters) is not sent: the state is made due, and the sweep writes it", async () => {
+    await keepTable(null);
+    await refusedCard(1, { waiting: "Ready.", till: -1 });
+    await refusedCard(2, { waiting: "a".repeat(161), till: 0 });
   });
 
   it("is made due by the town only as the town saw it: a state put right meanwhile, at the same rev, is left be", async () => {

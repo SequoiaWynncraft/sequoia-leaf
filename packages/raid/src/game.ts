@@ -39,6 +39,7 @@ import {
 import { TRAIL_COUNT } from "./content/rooms.ts";
 import {
   type Almanac,
+  beatenBosses,
   newAlmanac,
   type News,
   type Payout,
@@ -577,13 +578,13 @@ export const RAID: Game<Table, RaidCommand, TableView, RaidNote> = {
   decode: decodeTable,
   encode: encodeTable,
   command: readCommand,
-  // The bosses beaten on every trail, the runs finished or abandoned, and the furthest room met on any trail.
+  // The different bosses beaten, every trail together, the runs finished or abandoned, and the furthest room met on any trail.
   standing: ({ almanac }) => ({
-    score: almanac.bosses.reduce((sum, beaten) => sum + beaten.length, 0),
+    score: beatenBosses(almanac).size,
     also: { runs: almanac.runs, room: Math.max(0, ...almanac.best) },
   }),
-  // A carved figure of each boss the almanac has beaten, for the member's camp.
-  awards: (state) => [...new Set(state.almanac.bosses.flat())].map((boss) => `trophy-${boss}`),
+  // A carved figure of each boss beaten, for the member's camp.
+  awards: (state) => [...beatenBosses(state.almanac)].map((boss) => `trophy-${boss}`),
   // A raid under way, or the board set out, for the town's door.
   postcard,
 };

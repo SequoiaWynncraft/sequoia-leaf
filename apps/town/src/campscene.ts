@@ -28,7 +28,6 @@ import {
   CGW,
   freeSpot,
   type PetId,
-  petsOf,
   type Placed,
   standsBy,
   taken,
@@ -80,6 +79,7 @@ import {
   refusal,
   setOutAs,
   shown,
+  town,
   visiting,
 } from "./leaf.ts";
 import { comeTo, makePet, MY_PETS, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
@@ -810,7 +810,7 @@ export function makeCamp(
   /** Somebody new moves in when the camp has earned it; they come in off the trail. */
   function movingIn(): void {
     if (visiting()) return;
-    for (const kind of petsOf(mine())) {
+    for (const kind of town().pets) {
       if (pets.some((p) => p.kind === kind)) continue;
       const p = addPet(kind, MY_PETS[kind], 0, TRAIL_IN);
       p.x = TRAIL_END.x;
@@ -856,7 +856,7 @@ export function makeCamp(
 
     const fire = fireAt() ?? { x: CW / 2, y: TRAIL_Y };
     // The member's own come to meet them; somebody else's pets are about their camp, in a colour of their own.
-    petsOf(shown().camp).forEach((kind, i) => {
+    shown().pets.forEach((kind, i) => {
       const pet = addPet(kind, MY_PETS[kind], host ? 1 + ((seed + i) % 3) : 0, about(fire, host ? 120 : 100));
       if (!host) comeTo(pet, TRAIL_IN, petWorld);
     });

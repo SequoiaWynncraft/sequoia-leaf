@@ -23,8 +23,8 @@ import {
   type Table,
   tableView,
 } from "./game.ts";
-import { payout } from "./outside.ts";
-import { foughtOf, picksOf, pieces, playsAsKept, spotOf, summariseRun } from "./run.ts";
+import { beatenBosses, payout, recordRun, trailCleared, trailOpen } from "./outside.ts";
+import { foughtOf, picksOf, pieces, playsAsKept, type RunSummary, spotOf, summariseRun } from "./run.ts";
 import { RAID_STATS } from "./stats.ts";
 import { readNotes, readView } from "./wire.ts";
 
@@ -408,7 +408,7 @@ describe("a whole run, played by commands", () => {
     // Where the table stands, for the player's card: the bosses beaten, the runs done, the furthest room.
     expect(RAID.standing?.(RAID.create(ctx(42)))).toEqual({ score: 0, also: { runs: 0, room: 0 } });
     expect(RAID.standing?.(state)).toEqual({
-      score: state.almanac.bosses.flat().length,
+      score: beatenBosses(state.almanac).size,
       also: { runs: 1, room: ended.summary.reached },
     });
   });
@@ -695,6 +695,35 @@ describe("a look won as a pull's prize", () => {
   test("changes nothing when it was bought before", () => {
     const bought = must(RAID.create(ctx(1)), { do: "buyLook", kind: "lantern", look: "jar" }, ctx(1)).state;
     expect(won(bought, "pull:look:jar")).toBe(bought);
+  });
+});
+
+describe("bosses beaten", () => {
+  test("count each boss once, however many trails it was beaten on, with one trophy each and every trail still marked", () => {
+    const state = RAID.create(ctx(1));
+    // The same three bosses beaten on the first trail and then on the second.
+    for (const trail of [0, 1]) {
+      const run: RunSummary = {
+        trail,
+        ending: "won",
+        cleared: 12,
+        reached: 12,
+        bosses: ["oldbramble", "hoardmagpie", "bigcrab"],
+        fielded: [],
+        threeStars: [],
+        forged: [],
+        topped: [],
+      };
+      state.almanac = recordRun(state.almanac, run).almanac;
+    }
+    expect(beatenBosses(state.almanac)).toEqual(new Set(["oldbramble", "hoardmagpie", "bigcrab"]));
+    expect(RAID.standing?.(state)?.score).toBe(3);
+    expect(RAID.awards?.(state)).toEqual(["trophy-oldbramble", "trophy-hoardmagpie", "trophy-bigcrab"]);
+    expect([trailCleared(state.almanac, 0), trailCleared(state.almanac, 1), trailOpen(state.almanac, 2)]).toEqual([
+      true,
+      true,
+      true,
+    ]);
   });
 });
 

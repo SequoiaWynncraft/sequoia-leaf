@@ -112,7 +112,7 @@
     "packages/raid/src/fight/core.ts": 529,
     "packages/raid/src/fight/engine.ts": 567,
     "packages/raid/src/run.ts": 713,
-    "packages/town/src/game.ts": 555
+    "packages/town/src/game.ts": 553
   },
   "max-lines-per-function": {
     "apps/api/migrations/0010_schema.ts": 171,
@@ -123,7 +123,7 @@
     "apps/api/src/live/live.ts": 310,
     "apps/api/src/play/coins.ts": 95,
     "apps/api/src/play/service.ts": 677,
-    "apps/api/src/play/store.ts": 182,
+    "apps/api/src/play/store.ts": 175,
     "apps/api/src/quests/store.ts": 173,
     "apps/battler/src/main.ts": 105,
     "apps/battler/src/screen/art/table.ts": 168,

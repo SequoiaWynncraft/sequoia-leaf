@@ -39,6 +39,10 @@ const theirs = TOWN.create(ctx(2));
 theirs.camp.first = "cat";
 theirs.camp.placed.push({ n: theirs.made++, id: "well", x: 30, y: 30, t: 0, s: 0 });
 
+/** What Leaf sends a visitor of Alice's camp, as recorded from the real routes. */
+const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
+const aliceCamp = isRecord(GAME) ? GAME["GET /v1/game/play/{game}/of/{player}, a camp"] : undefined;
+
 let world: Standin | null = null;
 /** Until Leaf has answered everything sent, a turn of the page's clock at a time, for a while at most. */
 async function answeredAll(turns = 50): Promise<void> {
@@ -50,6 +54,20 @@ async function answeredAll(turns = 50): Promise<void> {
 afterEach(() => {
   lookAt(null);
   world?.done();
+});
+
+test("a camp visited shows who lives there as Leaf sends it, and nothing of the owner's count of callers", async () => {
+  if (!isRecord(aliceCamp)) throw new Error("the contract has no camp visit");
+  world = standin({
+    "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: own } },
+    "GET /v1/game/play/town/of/alice": { status: 200, body: aliceCamp["body"] },
+    "GET /v1/game/people/alice": { status: 200, body: { id: "alice", name: "Alice", games: {}, played: 0, afk: 0 } },
+  });
+  expect(await openTown("me", () => undefined)).toBeNull();
+  const looked = await openCamp("alice");
+  if (typeof looked === "string") throw new Error(looked);
+  lookAt(looked);
+  expect([shown().pets, shown().camp.greeted]).toEqual([["glorp"], 0]);
 });
 
 test("a camp visited is opened beside the member's own and shown, and nothing but reads is sent", async () => {

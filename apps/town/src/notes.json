@@ -1,5 +1,14 @@
 [
   {
+    "id": "bosses-once-camp-pets",
+    "at": "2026-11-25T17:40Z",
+    "title": "Bosses counted once, and every pet for visitors",
+    "lines": [
+      "The Little Raid counts each boss once, however many trails you beat it on. There are 3 bosses, so the most anyone has on the Bosses beaten board is 3.",
+      "Visitors to your camp see every pet that lives there. Before, they saw only the pet you chose first."
+    ]
+  },
+  {
     "id": "works-whole-yard-plan",
     "at": "2026-11-25T18:17Z",
     "title": "The Works: save the whole yard and put it back",

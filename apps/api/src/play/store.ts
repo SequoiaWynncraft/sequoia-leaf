@@ -7,6 +7,7 @@ import {
   type Placed,
   type PlayerId,
   type Postcard,
+  readPostcard,
   type Standing,
   talliedFrom,
   utcDay,
@@ -47,9 +48,10 @@ export type Stored = typeof Stored.Type;
 
 const Answered = Schema.Struct({ result: Schema.String });
 
-/** A postcard as kept (`Game.postcard`), read back from its JSON. */
-const KeptPostcard = Schema.fromJsonString(Schema.Struct({ waiting: Schema.String, till: Schema.Int }));
-const readPostcard = Schema.decodeUnknownOption(KeptPostcard);
+const readJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown));
+/** A postcard as kept (`Game.postcard`), read back from its JSON as the town reads one. */
+const keptPostcard = (text: string): Option.Option<Postcard> =>
+  Option.flatMap(readJson(text), (raw) => Option.fromNullOr(readPostcard(raw)));
 
 /** An activity as stored, for reading back. */
 const Activity = Schema.Struct({
@@ -98,7 +100,7 @@ function doorsOf(rows: readonly (typeof Door.Type)[], now: number) {
   for (const row of rows) {
     const game = gameId(row.game);
     if (game === undefined || !POSTING.includes(game)) continue;
-    const card = row.kept === row.rev && row.postcard !== null ? readPostcard(row.postcard) : Option.none();
+    const card = row.kept === row.rev && row.postcard !== null ? keptPostcard(row.postcard) : Option.none();
     if (Option.isSome(card)) shown[game] = card.value;
     else if ((row.kept !== row.rev || row.postcard !== null) && (row.dueAt === null || row.dueAt > now))
       stale.push(row);
@@ -173,6 +175,54 @@ function givenIn(sql: SqlClient.SqlClient) {
   };
 }
 
+/** A state whose standing was not worked out from it as stored: whose, of which game, and its `rev` and text. */
+const Unstood = Schema.Struct({ playerId: PlayerUuid, game: Schema.String, rev: Schema.Int, state: Schema.String });
+export type Unstood = typeof Unstood.Type;
+
+/**
+ * Where each state stands (`standings`): written by the batch that writes the state, or worked out
+ * again from the state as stored for one whose standing is not of its `rev` (`stood`, migration 42;
+ * `restand.ts`).
+ */
+function standingsIn(sql: SqlClient.SqlClient) {
+  const unstood = SqlSchema.findAll({
+    Request: Schema.Int,
+    Result: Unstood,
+    execute: (most) => sql`
+      SELECT player_id AS playerId, game, rev, state FROM play_state WHERE stood IS NOT rev ORDER BY updated_at LIMIT ${most}
+    `,
+  });
+  return {
+    stand: (playerId: PlayerId, game: string, standing: Standing, guest: boolean, now: number): Effect.Effect<void> =>
+      sql`
+        INSERT INTO standings (player_id, game, score, also, guest, updated_at)
+        VALUES (${playerId}, ${game}, ${standing.score}, ${JSON.stringify(standing.also)}, ${guest ? 1 : 0}, ${now})
+        ON CONFLICT (player_id, game) DO UPDATE SET
+          score = excluded.score, also = excluded.also, guest = excluded.guest,
+          updated_at = CASE WHEN score = excluded.score THEN updated_at ELSE excluded.updated_at END
+      `.pipe(Effect.asVoid, Effect.orDie),
+    unstood: (most: number) => unstood(most).pipe(Effect.orDie),
+    restand: (playerId: PlayerId, game: string, rev: number, standing: Standing | null): Effect.Effect<void> =>
+      sql
+        .withTransaction(
+          Effect.gen(function* () {
+            const stood = yield* sql`
+              UPDATE play_state SET stood = rev
+              WHERE player_id = ${playerId} AND game = ${game} AND rev = ${rev} AND stood IS NOT rev RETURNING rev
+            `;
+            if (stood.length === 0 || standing === null) return;
+            yield* sql`
+              INSERT INTO standings (player_id, game, score, also, guest, updated_at)
+              SELECT player_id, game, ${standing.score}, ${JSON.stringify(standing.also)}, guest, updated_at FROM play_state
+              WHERE player_id = ${playerId} AND game = ${game}
+              ON CONFLICT (player_id, game) DO UPDATE SET score = excluded.score, also = excluded.also, guest = excluded.guest
+            `;
+          }),
+        )
+        .pipe(Effect.orDie),
+  };
+}
+
 /**
  * What the play service keeps: each player's state in each game (`play_state`), what each command
  * answered (`play_commands`, each player's newest 256 to each game), the things players did that
@@ -180,8 +230,8 @@ function givenIn(sql: SqlClient.SqlClient) {
  * each player's commands were done and refused each UTC day (`command_days`, for the staff's
  * report), where each player's state stands in a game with a board (`standings`), what each
  * player has won for good in any game (`awards`, never taken away), and what each state tells the
- * town (`play_postcards`). Every method but `board` is meant to run inside the play service's
- * transaction. A database failure is a defect.
+ * town (`play_postcards`). Every method but `board`, `unstood` and `restand` (in a transaction of its
+ * own) is meant to run inside the play service's transaction. A database failure is a defect.
  */
 export class PlayStore extends Context.Service<
   PlayStore,
@@ -198,7 +248,7 @@ export class PlayStore extends Context.Service<
     readonly rest: (playerId: PlayerId, game: string, rev: number, reads: boolean) => Effect.Effect<void>;
     /**
      * Stores a new player's state, untouched (`rev` 0), made `now`, due a tend at `dueAt` (null:
-     * never). Says whether it did: false when one was there already.
+     * never), standing nowhere until a batch changes it. Says whether it did: false when one was there already.
      */
     readonly create: (
       playerId: PlayerId,
@@ -211,8 +261,10 @@ export class PlayStore extends Context.Service<
     /** Whether the player's state in a game is stored at `rev`. */
     readonly isAt: (playerId: PlayerId, game: string, rev: number) => Effect.Effect<boolean>;
     /**
-     * Stores a state over the one there, its `rev` up by one, due a tend at `dueAt` (null: never).
-     * Whatever else writes a state must raise its `rev` too: Leaf holds a copy while the `rev` is its own.
+     * Stores a state over the one there, its `rev` up by one, due a tend at `dueAt` (null: never), and
+     * where it stands as of that `rev` (`stood`): the batch writes its standing with it. Whatever else
+     * writes a state must raise its `rev` too: Leaf holds a copy while the `rev` is its own; and its
+     * standing is then worked out again (`restand`).
      */
     readonly write: (
       playerId: PlayerId,
@@ -259,6 +311,15 @@ export class PlayStore extends Context.Service<
     readonly board: (game: string, playerId: PlayerId) => Effect.Effect<Board>;
     /** Where a player stands in each game they have a standing in, by game, each place worked out as `board`'s own. */
     readonly standingsOf: (playerId: PlayerId) => Effect.Effect<ReadonlyMap<string, Placed>>;
+    /** The states whose standing was not worked out from them as stored (`stood` is not their `rev`), `most` at most, the longest unwritten first. */
+    readonly unstood: (most: number) => Effect.Effect<readonly Unstood[]>;
+    /**
+     * Writes where a state stored at `rev` stands, as worked out from it (null: nowhere, for a game
+     * with no board or a state that does not read), if it is still at `rev` and its standing is not
+     * of it. The standing keeps when it was reached, since its state is the same; one there was none
+     * of is reached as the state was written.
+     */
+    readonly restand: (playerId: PlayerId, game: string, rev: number, standing: Standing | null) => Effect.Effect<void>;
     /**
      * What every call of the player's is told (`Given`): everything they have won for good, in the
      * order Leaf first saw it; and with `postcards`, for the town, the postcard kept for each of
@@ -392,8 +453,8 @@ export class PlayStore extends Context.Service<
         },
         create: (playerId, game, state, guest, now, dueAt) =>
           sql`
-            INSERT INTO play_state (player_id, game, rev, state, guest, updated_at, born, due_at)
-            VALUES (${playerId}, ${game}, 0, ${state}, ${guest ? 1 : 0}, ${now}, ${now}, ${dueAt})
+            INSERT INTO play_state (player_id, game, rev, state, guest, updated_at, born, due_at, stood)
+            VALUES (${playerId}, ${game}, 0, ${state}, ${guest ? 1 : 0}, ${now}, ${now}, ${dueAt}, 0)
             ON CONFLICT (player_id, game) DO NOTHING
             RETURNING rev
           `.pipe(
@@ -407,8 +468,8 @@ export class PlayStore extends Context.Service<
           ),
         write: (playerId, game, state, guest, now, dueAt) =>
           sql`
-            UPDATE play_state SET rev = rev + 1, state = ${state}, guest = ${guest ? 1 : 0}, updated_at = ${now}, due_at = ${dueAt}
-            WHERE player_id = ${playerId} AND game = ${game}
+            UPDATE play_state SET rev = rev + 1, state = ${state}, guest = ${guest ? 1 : 0}, updated_at = ${now}, due_at = ${dueAt},
+            stood = rev + 1 WHERE player_id = ${playerId} AND game = ${game}
           `.pipe(Effect.asVoid, Effect.orDie),
         answered: (playerId, game, commandId) =>
           answered({ playerId, game, commandId }).pipe(Effect.map(Option.map((row) => row.result)), Effect.orDie),
@@ -455,14 +516,6 @@ export class PlayStore extends Context.Service<
                 VALUES (${playerId}, ${utcDay(now) * DAY_MS}, ${done}, ${refused})
                 ON CONFLICT (player_id, day) DO UPDATE SET done = done + excluded.done, refused = refused + excluded.refused
               `.pipe(Effect.asVoid, Effect.orDie),
-        stand: (playerId, game, standing, guest, now) =>
-          sql`
-            INSERT INTO standings (player_id, game, score, also, guest, updated_at)
-            VALUES (${playerId}, ${game}, ${standing.score}, ${JSON.stringify(standing.also)}, ${guest ? 1 : 0}, ${now})
-            ON CONFLICT (player_id, game) DO UPDATE SET
-              score = excluded.score, also = excluded.also, guest = excluded.guest,
-              updated_at = CASE WHEN score = excluded.score THEN updated_at ELSE excluded.updated_at END
-          `.pipe(Effect.asVoid, Effect.orDie),
         board: (game, playerId) => Effect.all({ top: top(game), you: own({ playerId, game }) }).pipe(Effect.orDie),
         standingsOf: (playerId) =>
           standingsOf(playerId).pipe(
@@ -470,6 +523,7 @@ export class PlayStore extends Context.Service<
             Effect.orDie,
           ),
         ...givenIn(sql),
+        ...standingsIn(sql),
       });
     }),
   );

@@ -286,6 +286,42 @@ export function petsOf(camp: Pick<Camp, "first" | "placed" | "greeted">): PetId[
   return [camp.first, ...rest.slice(0, more)];
 }
 
+/** What anybody at a camp sees there, its owner or a visitor: the pet chosen first, what stands there, and who lives there. */
+export interface PublicCamp {
+  readonly first: Camp["first"];
+  readonly placed: readonly Placed[];
+  readonly pets: readonly PetId[];
+}
+
+/** A camp's public part, worked out from the whole camp: a visitor is never given what it is worked out from. */
+export const publicCamp = (camp: Camp): PublicCamp => ({ first: camp.first, placed: camp.placed, pets: petsOf(camp) });
+
+/** A camp as a visitor is given it: its public part, and none of the owner's own (no tray, letters, callers greeted or things won). */
+export function visitorsCamp(camp: Camp): Camp {
+  const { first, placed } = publicCamp(camp);
+  return {
+    first,
+    placed: placed.map(({ n, id, x, y, t, s }) => ({ n, id, x, y, t, s })),
+    tray: {},
+    fresh: [],
+    looked: 0,
+    letters: [],
+    greeted: 0,
+    earned: [],
+  };
+}
+
+/** Who lives in a camp, as a view off the wire says: each pet once, or null for anything else. */
+export function readPets(v: unknown): PetId[] | null {
+  if (!Array.isArray(v) || v.length > PETS.length) return null;
+  const pets: PetId[] = [];
+  for (const p of v) {
+    if (!isPet(p) || pets.includes(p)) return null;
+    pets.push(p);
+  }
+  return pets;
+}
+
 /**
  * How many of any one thing a member may have, standing in the camp and in the tray together:
  * nothing more of it is kept while they have that many.

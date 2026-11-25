@@ -35,9 +35,16 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 41: no Leaf sessions, no merges recorded, and no record of why an id is Leaf's. */
+/** Undoes migration 42: no `rev` kept of what each state's standing was worked out from. */
+const beforePlayStood = (sql: SqlClient.SqlClient) =>
+  Effect.andThen(sql`DROP INDEX play_state_unstood`, sql`ALTER TABLE play_state DROP COLUMN stood`);
+
+/** Undoes migrations 42 and 41: no Leaf sessions, no merges recorded, and no record of why an id is Leaf's. */
 const beforeSignIns = (sql: SqlClient.SqlClient) =>
-  Effect.all([sql`DROP TABLE sign_ins`, sql`DROP TABLE merges`, sql`ALTER TABLE leaf_ids DROP COLUMN for_discord`]);
+  Effect.andThen(
+    beforePlayStood(sql),
+    Effect.all([sql`DROP TABLE sign_ins`, sql`DROP TABLE merges`, sql`ALTER TABLE leaf_ids DROP COLUMN for_discord`]),
+  );
 
 /** Undoes migrations 41 and 40: no logins kept, and no player's id marked as not their account's. */
 const beforeLogins = (sql: SqlClient.SqlClient) =>
@@ -232,6 +239,7 @@ describe("the database", () => {
       { migration_id: 39, name: "play_postcards" },
       { migration_id: 40, name: "logins" },
       { migration_id: 41, name: "sign_ins" },
+      { migration_id: 42, name: "play_stood" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -302,7 +310,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 41 },
+      { latest: 42 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -622,6 +630,40 @@ describe("the database", () => {
       { game: "works", due: 5 },
     ]);
     expect(await query(path, (sql) => sql`SELECT * FROM play_postcards`)).toEqual([]);
+  });
+
+  it("has each state stand as of its rev, but each Little Raid table written since it was made, which is worked out again", async () => {
+    const path = join(directory, "leaf.db");
+    const [a, b] = ["a", "b"].map((n) => `00000000-0000-4000-8000-00000000000${n}`);
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // Back to before migration 42: a table written, one never written, a yard and a camp.
+        yield* beforePlayStood(sql);
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 42`;
+        yield* sql`
+          INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES
+            (${a}, 'raid', 3, '{}', 1), (${b}, 'raid', 0, '{}', 1), (${a}, 'works', 5, '{}', 1), (${a}, 'town', 2, '{}', 1)
+        `;
+      }),
+    );
+    expect(
+      await query(
+        path,
+        (sql) => sql`SELECT game, rev, stood FROM play_state WHERE stood IS NOT rev ORDER BY game, player_id`,
+      ),
+    ).toEqual([{ game: "raid", rev: 3, stood: null }]);
+    expect(
+      await query(
+        path,
+        (sql) => sql`SELECT game, rev, stood FROM play_state WHERE stood IS rev ORDER BY game, player_id`,
+      ),
+    ).toEqual([
+      { game: "raid", rev: 0, stood: 0 },
+      { game: "town", rev: 2, stood: 2 },
+      { game: "works", rev: 5, stood: 5 },
+    ]);
   });
 
   it("enforces foreign keys, which SQLite leaves off unless asked", async () => {
