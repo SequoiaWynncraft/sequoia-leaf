@@ -39,6 +39,7 @@ import {
   TILES,
   whole,
 } from "./fields.ts";
+import { after, before, isId, undo } from "./history.ts";
 import { paint } from "./lines.ts";
 import {
   claim,
@@ -63,6 +64,7 @@ import {
   stand,
   upgrade,
 } from "./pieces.ts";
+import { REASON } from "./reasons.ts";
 import { type Leg, legPiece } from "./route.ts";
 import {
   type Goal,
@@ -97,7 +99,8 @@ interface Carries {
   saveBlueprint: { readonly slot: number; readonly tiles: readonly number[] };
   deleteBlueprint: { readonly slot: number };
   turn: At & { readonly dir: Dir };
-  paint: At & { readonly tint: number };
+  /** `onto`: the stroke this adds to, by its first command's id: the newest entry (`history.ts`). */
+  paint: At & { readonly tint: number; readonly onto?: string };
   recipe: At & { readonly item: Item | null };
   sort: At & { readonly item: Item | null };
   side: At & { readonly right: boolean };
@@ -116,6 +119,11 @@ interface Carries {
   handOver: { readonly order: number };
   // Nothing: it pays the till in.
   collect: object;
+  /**
+   * `entry`: the newest entry, as the page shows it, by the id of the command that made it. On the
+   * wire `id` is each command's own, so the entry has a name of its own.
+   */
+  undo: { readonly entry: string };
 }
 type Name = keyof Carries;
 
@@ -137,17 +145,6 @@ export const LOCKED = "locked";
 export type Did = { readonly coins: CoinChange[]; readonly log: Logged[] } | Turned;
 const done = (coins: CoinChange[] = [], log: Logged[] = []): Did => ({ coins, log });
 
-/** Why the Coins of each change move, as the ledger says. */
-const REASON = {
-  till: "Earned in the Works",
-  build: "Built in the Works",
-  lay: "Belts laid in the Works",
-  remove: "Taken away in the Works",
-  lower: "Lowered in the Works",
-  upgrade: "Upgraded in the Works",
-  buyPlot: "A plot for the Works",
-} as const;
-
 function change(y: Yard, amount: number, reason: string, free: boolean): CoinChange {
   const key = `bank:${y.bank++}`;
   return free ? { amount, reason, key, free: true } : { amount, reason, key };
@@ -156,10 +153,10 @@ function payIn(y: Yard): CoinChange[] {
   const coins = collect(y);
   return coins > 0 ? [change(y, coins, REASON.till, true)] : [];
 }
-/** A price paid: the till paid in first, then the price taken (or, below nothing, given back). */
-function priced(y: Yard, price: number, reason: string): CoinChange[] {
+/** A price paid: the till paid in first, then the price taken (or, below nothing, given back, free, for `back`). */
+function priced(y: Yard, price: number, reason: string, back: string = REASON.lower): CoinChange[] {
   const paid = payIn(y);
-  if (price < 0) return [...paid, change(y, -price, REASON.lower, true)];
+  if (price < 0) return [...paid, change(y, -price, back, true)];
   return price > 0 ? [...paid, change(y, -price, reason, false)] : paid;
 }
 
@@ -243,7 +240,7 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
   },
   stand: {
     refused: "cannot_stand",
-    // One piece stood again (a removal undone) is a piece built: it is of no tool.
+    // One piece stood is a piece built: it is of no tool.
     lock: (a) => (a.pieces.length === 1 ? null : { use: "select" }),
     read: (v) => {
       const pieces = listOf(v.pieces, STAND_MOST, (p) => readPiece(p));
@@ -344,8 +341,11 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
   paint: {
     refused: "nothing_to_paint",
     lock: needs({ use: "paint" }),
-    read: (v, f) => (f.spot && whole(v.tint, TINTS) ? { do: "paint", tint: v.tint, ...f.spot } : null),
-    write: (a) => ({ tint: a.tint, ...spot(a) }),
+    read: (v, f) =>
+      f.spot && whole(v.tint, TINTS) && (v.onto === undefined || isId(v.onto))
+        ? { do: "paint", tint: v.tint, ...(v.onto === undefined ? {} : { onto: v.onto }), ...f.spot }
+        : null,
+    write: (a) => ({ tint: a.tint, ...spot(a), ...(a.onto === undefined ? {} : { onto: a.onto }) }),
     act: (y, a, _coins, no) => (paint(y, at(y, a.x, a.y), a.tint) ? done() : no("Nothing to paint here")),
   },
   recipe: {
@@ -488,6 +488,16 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
       return done(payIn(y));
     },
   },
+  undo: {
+    refused: "cannot_undo",
+    read: (v) => (isId(v.entry) ? { do: "undo", entry: v.entry } : null),
+    write: (a) => ({ entry: a.entry }),
+    act: (y, a, coins, no) => {
+      const did = undo(y, a.entry, coins);
+      // What the command cost comes back free, as given back; what it gave back is taken, as a price is.
+      return did.ok ? done(priced(y, -did.coins, REASON.undo, REASON.undo)) : no(did.why);
+    },
+  },
 };
 
 function nodeOf<D extends "take" | "queue" | "unqueue">(v: Record<string, unknown>, name: D): ActOf<D> | null {
@@ -518,8 +528,17 @@ function actOne<D extends Name>(y: Yard, a: ActOf<D>, coins: number): Did {
   return spec.act(y, a, coins, (said) => ({ refused: spec.refused ?? LOCKED, why: said }));
 }
 
-/** Does a command to a yard already at its tick, with `coins` to spend. Nothing is changed unless it is done. */
-export const act = (y: Yard, a: Act, coins: number): Did => actOne(y, a, coins);
+/**
+ * Does a command (its id `id`) to a yard already at its tick, with `coins` to spend. Nothing is changed
+ * unless it is done; done, what Undo would need to undo it is kept under its id, or the history
+ * forgotten (`history.ts`).
+ */
+export function act(y: Yard, a: Act, coins: number, id = ""): Did {
+  const was = before(y, a);
+  const did = actOne(y, a, coins);
+  if (!("refused" in did)) after(y, a, was, did.coins, id);
+  return did;
+}
 
 /** A command's act off the wire, every field checked; null for anything else. Fields it does not use are let be. */
 export function readAct(v: Record<string, unknown>): Act | null {

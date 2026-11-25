@@ -320,6 +320,8 @@ const LEFT_OUT = new Set([
   "holders.idle",
   // Which row of a side table holds a piece's parts: reading a yard back may change it.
   "row",
+  // What Undo would undo is mixed in as its bytes: an entry's id is worked out from them.
+  "history.0.id",
   "holders.size",
   "holders.tile",
   "tunnels.size",
@@ -417,13 +419,14 @@ describe("the check", () => {
   test("changes with every part of a yard but those it names as left out, and finds a part added without being mixed in", () => {
     const y = running();
     expect(F.saveBlueprint(y, 1, F.within(y, 10, 10, 30, 26))).toBeNull();
-    // Every kind of part is there to change: a holder, a tunnel, an order, a blueprint.
-    expect([y.holders.size > 0, y.tunnels.size > 0, y.board.length > 0, y.blueprints.some((b) => b)]).toEqual([
-      true,
-      true,
-      true,
-      true,
-    ]);
+    // Every kind of part is there to change: a holder, a tunnel, an order, a blueprint, something to undo.
+    expect([
+      y.holders.size > 0,
+      y.tunnels.size > 0,
+      y.board.length > 0,
+      y.blueprints.some((b) => b),
+      y.history.length > 0,
+    ]).toEqual([true, true, true, true, true]);
     expect(unmixed(y)).toEqual([]);
     expect(unmixed(y, (c) => Object.assign(c, { glow: 3 }))).toEqual(["glow"]);
     expect(unmixed(y, (c) => Object.assign(c.holders, { heat: new Uint8Array(c.holders.tile.length) }))).toEqual([

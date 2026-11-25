@@ -441,7 +441,7 @@ export function setIn(y: Yard, x: number, z: number, way: number, on: boolean): 
 }
 
 /** Sets a splitter's ways in; with none left, its next way in goes from `turn` too (`tick.ts`). Who takes from whom changes, so the plumbing is worked out again. */
-function insTo(y: Yard, i: number, ins: number): void {
+export function insTo(y: Yard, i: number, ins: number): void {
   if (y.ins[i] === ins) return;
   y.ins[i] = ins;
   if (ins === 0) y.turn[i] = (y.turn[i] ?? 0) & 3;

@@ -131,6 +131,12 @@ export interface Wire {
   waitingFrom: number;
 }
 
+/** Something done that Undo would undo, as the rules keep it (`history.ts`): its bytes, and its id, read from them: the id of the command that did it. */
+export interface Entry {
+  readonly id: string;
+  readonly bytes: Uint8Array;
+}
+
 /** A piece kept in a blueprint, 10 bytes: kind, x, y, way, span, recipe, open, tint, a splitter's ways or a sorter's side (`packWays`), grade. */
 export const PIECE_BYTES = 10;
 
@@ -218,6 +224,8 @@ export interface Yard {
   /** Worked out from the goals done (`reopen`). */
   open: Open;
   news: News[];
+  /** What Undo would undo, the newest last (`history.ts`). */
+  history: Entry[];
   /**
    * How many changes the rules have made to the yard other than running it on: each command done
    * (`play`), and each time what is open is worked out again (`reopen`, as a goal is finished).
@@ -301,6 +309,7 @@ export function emptyYard(land: Land, tier = 0): Yard {
     paid: 0,
     open: openOf(done),
     news: [],
+    history: [],
     rev: 0,
   };
   const [cx, cy] = land.depot;

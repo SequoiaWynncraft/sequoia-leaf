@@ -21,7 +21,7 @@ import { shown } from "@sequoia-leaf/kit/card.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./art/belts.ts";
-import { aimOf, groupOf, type Hand, IDLE, markOf, runOf, type Tile, toolOf } from "./hand.ts";
+import { aimOf, groupOf, type Hand, IDLE, markOf, runOf, type Stage, type Tile, toolOf } from "./hand.ts";
 import type { Nudge } from "./teach.ts";
 
 /**
@@ -279,3 +279,6 @@ export function tileAt(pageX: number, pageY: number): { x: number; y: number } {
 
 /** The middle of a tile, in the yard's pixels. */
 export const mid = (x: number, y: number): Pt => ({ x: x * TILE + TILE / 2, y: y * TILE + TILE / 2 });
+
+/** Whether Undo shows: while the yard has something to undo, kept with it, so after a reload and on another device too; not while saving. */
+export const undoes = (stage: Stage | null): boolean => stage?.is !== "saving" && S.world.history.length > 0;

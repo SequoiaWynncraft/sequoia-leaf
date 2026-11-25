@@ -48,7 +48,6 @@ import {
   RIGHT,
   route,
   SORTER,
-  standLots,
   standRefusal,
   tilesOf,
   TUNNEL,
@@ -77,98 +76,13 @@ import {
   S,
   type Tool,
 } from "./state.ts";
-import { CHANGED, due, type Entry, type UndoEvent, type Undos, undoStep } from "./undos.ts";
-import { runOut, stepWay, type Ways, waysAt, waysBack } from "./ways.ts";
-import { coins, type Did, doNow, onTake, takesCommands } from "./yard.ts";
+import { runOut, stepWay } from "./ways.ts";
+import { coins, type Did, doNow } from "./yard.ts";
 
 const DUST = "#cbb894";
 
 /** Called whenever the tool in hand, or what it is aimed at, changes: the interface listens. */
 export const toolHooks: { changed: () => void; said: (text: string) => void } = { changed: () => {}, said: () => {} };
-
-/**
- * Something done that can be undone: things built (`under`: the piece one of them took the place
- * of; `was`: pieces of the same kind that stood where some were set down, as they stood, which the
- * setting down turned, raised or lowered), pieces raised where they stand (as they stood), things
- * taken away, a thing turned or a sorter flipped (the way it faced, and where it was flipped,
- * `right`: whether it sent to its right), lines coloured (the tile each was coloured by, and the
- * colour that tile had), pieces moved as one (`tiles`: where they stand now, with the turns and the
- * corner that put them back), a splitter's way shut, opened, put first or turned in (its ways, as
- * they were).
- */
-type Done =
-  | {
-      did: "built";
-      cells: number[];
-      turned: { i: number; was: Dir }[];
-      under?: readonly Piece[];
-      was?: readonly Piece[];
-    }
-  | { did: "raised"; was: readonly Piece[] }
-  | { did: "took"; what: readonly Piece[] }
-  | { did: "turned"; i: number; was: Dir; right?: boolean }
-  | { did: "way"; i: number; was: Ways }
-  | { did: "painted"; stroke: number; lines: readonly { i: number; was: number }[] }
-  | { did: "moved"; tiles: number[]; turns: Dir; x: number; y: number };
-
-/** What may be undone (`undos.ts`), each as what it did. */
-let undos: Undos<Done> = [];
-let undone = 0;
-
-/** Moves what may be undone, and says on the line over the dock what came of it, if anything. */
-function moveUndos(e: UndoEvent<Done>): void {
-  const s = undoStep(undos, e);
-  undos = s.undos;
-  if (s.said !== null) toolHooks.said(s.said);
-}
-
-/** The tiles something done touched: what it built, turned, raised, took away, coloured or moved. */
-function touched(d: Done): number[] {
-  const w = S.world;
-  switch (d.did) {
-    case "built":
-      return [...d.cells, ...d.turned.map((t) => t.i), ...tilesOf(w, d.was ?? [])];
-    case "raised":
-      return tilesOf(w, d.was);
-    case "took":
-      return tilesOf(w, d.what);
-    case "turned":
-    case "way":
-      return [d.i];
-    case "painted":
-      return d.lines.map((l) => l.i);
-    case "moved":
-      return d.tiles;
-  }
-}
-
-/** Whether two pieces stand alike, in all that undoing reads: kind, place, way, span, grade, colour and a splitter's ways. */
-const alike = (a: Piece | undefined, b: Piece | undefined): boolean =>
-  a !== undefined &&
-  b !== undefined &&
-  a.kind === b.kind &&
-  a.x === b.x &&
-  a.y === b.y &&
-  a.dir === b.dir &&
-  a.span === b.span &&
-  a.grade === b.grade &&
-  a.tint === b.tint &&
-  a.shut === b.shut &&
-  a.first === b.first &&
-  a.ins === b.ins;
-
-/** Whether what was done still stands as it was just after: what undoing it would put back is what it changed. */
-function holds(u: Entry<Done>): boolean {
-  const now = piecesAt(S.world, u.tiles);
-  return now.length === u.after.length && now.every((p, k) => alike(p, u.after[k]));
-}
-
-/** Hears Leaf's word on a command of an entry (`did`, as `doNow` gave it), and undoes what is due once it has come. */
-async function awaitLeaf(id: number, did: Did): Promise<void> {
-  const yes = "refused" in did ? false : await did.taken;
-  moveUndos({ do: "heard", id, yes });
-  settle();
-}
 
 /** Whether the rules refused something done (`did`, as `doNow` gave it): if so, it is said why, with its sound. */
 function refused(did: Did): boolean {
@@ -177,21 +91,6 @@ function refused(did: Did): boolean {
   toolHooks.said(`${did.why}.`);
   return true;
 }
-
-/** Keeps something just done (`did`, as `doNow` gave it) to be undone. */
-function remember(d: Done, did: Did): void {
-  const id = ++undone;
-  const tiles = touched(d);
-  moveUndos({ do: "keep", entry: { done: d, id, tiles, after: piecesAt(S.world, tiles) } });
-  void awaitLeaf(id, did);
-}
-
-// When the copy becomes Leaf's yard, what no longer stands as it was done is let go, and what Undo
-// was pressed for while the yard was being taken is undone if it is due.
-onTake(() => {
-  moveUndos({ do: "took", holds });
-  settle();
-});
 
 const W = (): number => S.world.land.w;
 
@@ -405,10 +304,10 @@ export function place(x: number, y: number): boolean {
   const there = kindAt(w, x, y);
   const was = there === NONE ? undefined : dirOf(i);
   const wasRight = sendsRight(w, i);
-  const under = there !== NONE && replaces(tool, there) ? standing(i) : null;
+  const under = there !== NONE && replaces(tool, there);
   const grade = gradeOn(tool, i);
-  // Over a piece of its kind of a lower grade: that piece, as it stands, to put back.
-  const raised = raisedOn(tool, i) === undefined ? null : standing(i);
+  // Over a piece of its kind of a lower grade: that piece is raised.
+  const raised = raisedOn(tool, i) !== undefined;
   const cost = priceAt(w, tool, x, y, grade);
   const did = doNow({ do: "build", kind: tool, x, y, dir: S.dir, grade, ...sideInHand(tool) });
   if ("refused" in did) {
@@ -417,23 +316,13 @@ export function place(x: number, y: number): boolean {
     toolHooks.changed();
     return false;
   }
-  if (raised) {
-    remember({ did: "raised", was: [raised] }, did);
-    lifted(x, y, cost);
-  } else if (there !== NONE && !under) {
-    const turned = was === undefined ? null : turnedFrom(i, was, wasRight);
-    if (turned) {
-      remember(turned, did);
-      yardSfx.turn();
-    }
+  if (raised) lifted(x, y, cost);
+  else if (there !== NONE && !under) {
+    // Over a piece of its kind: turned, or a sorter flipped.
+    if (was !== dirOf(i) || sendsRight(w, i) !== wasRight) yardSfx.turn();
   } else {
-    const cells = [i];
     const far = w.kind[i] === TUNNEL ? otherMouth(w, i) : -1;
-    if (far >= 0) {
-      cells.push(far);
-      landed(far % W(), Math.floor(far / W()), false);
-    }
-    remember({ did: "built", cells, turned: [], ...(under ? { under: [under] } : {}) }, did);
+    if (far >= 0) landed(far % W(), Math.floor(far / W()), false);
     landed(x, y, tool === BELT);
     paid(x, y, cost);
   }
@@ -441,9 +330,6 @@ export function place(x: number, y: number): boolean {
   toolHooks.changed();
   return true;
 }
-
-/** What stands on a tile, as it would need to be put back. */
-const standing = (i: number): Piece | null => piecesAt(S.world, [i])[0] ?? null;
 
 /** A piece raised where it stands: a glint, what it cost rising from it, and its sound. */
 function lifted(x: number, y: number, cost: number): void {
@@ -460,13 +346,11 @@ export function raiseAt(x: number, y: number): boolean {
   const w = S.world;
   const i = at(w, x, y);
   const k = i < 0 ? NONE : (w.kind[i] ?? NONE);
-  const was = i < 0 ? null : standing(i);
-  if (!isKind(k) || !was) return false;
+  if (!isKind(k) || k === DEPOT) return false;
   const grade = (w.grade[i] ?? 0) + 1;
   const cost = priceAt(w, k, x, y, grade);
   const did = doNow({ do: "build", kind: k, x, y, dir: dirOf(i), grade });
   if (refused(did)) return false;
-  remember({ did: "raised", was: [was] }, did);
   lifted(x, y, cost);
   toolHooks.changed();
   return true;
@@ -476,16 +360,14 @@ export function raiseAt(x: number, y: number): boolean {
 export function takeAway(x: number, y: number, quiet = false): boolean {
   const w = S.world;
   const i = at(w, x, y);
-  const was = i >= 0 ? standing(i) : null;
   const did = doNow({ do: "remove", x, y });
-  if ("refused" in did || !was) {
+  if ("refused" in did) {
     if (!quiet) {
       go({ do: "aim", aim: aimed(x, y, "refused" in did ? did.why : null, 0) });
       yardSfx.no();
     }
     return false;
   }
-  remember({ did: "took", what: [was] }, did);
   const px = x * TILE + 8;
   const py = (y + 1) * TILE - 4;
   puff(px, py, 6, DUST, 9);
@@ -501,26 +383,24 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
   return true;
 }
 
-/** How many strokes of the brush there have been: each is undone as one. */
-let strokes = 0;
-
 /**
  * Colours the line through a tile with the colour on the brush. `more` is a drag going on (a stroke
- * the hand still holds): its lines are undone together, and passing over what cannot be coloured
- * says nothing. Without it, a tap or a press begins a stroke of its own (`pointer`), whether or not
- * it colours anything where it lands. Nothing is coloured with the brush out of hand.
+ * the hand still holds): its lines are undone together, each command after the first saying the
+ * entry it adds to (`onto`, the newest, which the stroke keeps), and passing over what cannot be
+ * coloured says nothing. Without it, a tap or a press begins a stroke of its own (`pointer`), whether
+ * or not it colours anything where it lands. Nothing is coloured with the brush out of hand.
  */
 export function paintAt(x: number, y: number, more = false, pointer = -1): boolean {
   if (S.hand.is !== "paint" || (more && S.hand.stroke === null)) return false;
-  if (!more) go({ do: "stroke", pointer, id: ++strokes });
-  const id = S.hand.is === "paint" ? (S.hand.stroke?.id ?? 0) : 0;
+  if (!more) go({ do: "stroke", pointer, id: null });
+  const stroke = S.hand.is === "paint" ? S.hand.stroke : null;
   const w = S.world;
   const i = at(w, x, y);
   const line = lineOf(w, i);
-  const was = i < 0 ? 0 : (w.tint[i] ?? 0);
   // A line that is that colour already is let be: a drag crosses the same line many times.
   if (line.length > 0 && line.every((j) => w.tint[j] === S.tint)) return false;
-  const did = doNow({ do: "paint", x, y, tint: S.tint });
+  const onto = stroke?.id ?? null;
+  const did = doNow({ do: "paint", x, y, tint: S.tint, ...(onto === null ? {} : { onto }) });
   if ("refused" in did) {
     if (!more) {
       yardSfx.no();
@@ -528,14 +408,8 @@ export function paintAt(x: number, y: number, more = false, pointer = -1): boole
     }
     return false;
   }
-  // The stroke's lines are one entry: each line it colours is added to it, and waited on with it.
-  const top = undos.at(-1);
-  if (top?.done.did === "painted" && top.done.stroke === id) {
-    const lines = [...top.done.lines, { i, was }];
-    const tiles = lines.map((l) => l.i);
-    moveUndos({ do: "grow", entry: { done: { ...top.done, lines }, id: top.id, tiles, after: piecesAt(w, tiles) } });
-    void awaitLeaf(top.id, did);
-  } else remember({ did: "painted", stroke: id, lines: [{ i, was }] }, did);
+  // The stroke's lines are one entry, the newest: the next line it colours adds to it.
+  if (stroke) go({ do: "stroke", pointer: stroke.pointer, id: S.world.history.at(-1)?.id ?? null });
   const col = PAINTS[S.tint - 1]?.lit ?? DUST;
   for (const j of line.slice(0, 80)) puff((j % W()) * TILE + 8, Math.floor(j / W()) * TILE + 9, 1, col, 5);
   yardSfx.paint();
@@ -552,10 +426,8 @@ export function turnAt(x: number, y: number): boolean {
     yardSfx.no();
     return false;
   }
-  const was = dirOf(i);
-  const did = doNow({ do: "turn", x, y, dir: RIGHT[was] });
+  const did = doNow({ do: "turn", x, y, dir: RIGHT[dirOf(i)] });
   if ("refused" in did) return false;
-  remember({ did: "turned", i, was }, did);
   yardSfx.turn();
   return true;
 }
@@ -565,13 +437,11 @@ export function wayAt(x: number, y: number, way: number): boolean {
   const w = S.world;
   const i = at(w, x, y);
   const act = stepWay(w, i, x, y, way);
-  const was = waysAt(w, i);
   const did = i < 0 ? null : doNow(act);
   if (!did || "refused" in did) {
     yardSfx.no();
     return false;
   }
-  remember({ did: "way", i, was }, did);
   const putFirst = act.do === "first";
   // Dust where the bar drops across the way, or lifts off it; plum bits where a flag goes up.
   const dir = dirOf(i);
@@ -615,18 +485,6 @@ function sideOver(tool: Kind, i: number): void {
   toolHooks.changed();
 }
 
-/** What building over a piece of its kind changed that can be undone: the way it faced, and a sorter's side (`right`, as it was). */
-function turnedFrom(i: number, was: Dir, right: boolean): Done | null {
-  const flipped = sendsRight(S.world, i) !== right;
-  return was !== dirOf(i) || flipped ? { did: "turned", i, was, ...(flipped ? { right } : {}) } : null;
-}
-
-/** Turns a thing back the way it faced, and flips a sorter back to the side it sent to. */
-function unturn(d: { readonly i: number; readonly was: Dir; readonly right?: boolean }): void {
-  if (dirOf(d.i) !== d.was) doNow({ do: "turn", ...xy(d.i), dir: d.was });
-  if (d.right !== undefined) doNow({ do: "side", ...xy(d.i), right: d.right });
-}
-
 /** X: flips the sorter in hand to send to its other side, or with nothing in hand the sorter pointed at. */
 export function flip(): void {
   const h = S.hand;
@@ -649,10 +507,8 @@ export function flipAt(x: number, y: number): boolean {
     yardSfx.no();
     return false;
   }
-  const was = sendsRight(S.world, i);
-  const did = doNow({ do: "side", x, y, right: !was });
+  const did = doNow({ do: "side", x, y, right: !sendsRight(S.world, i) });
   if ("refused" in did) return false;
-  remember({ did: "turned", i, was: dirOf(i), right: was }, did);
   yardSfx.turn();
   return true;
 }
@@ -671,106 +527,19 @@ export function pickFrom(x: number, y: number): boolean {
 }
 
 /**
- * Stands again pieces that were taken away, all of them or none: the only use of `stand`. More than
- * one command carries (`standLots`: so many pieces, so many characters) goes as several, once the
- * whole is known to go, each all or none. A copy and a blueprint are each one command of their own. Gives back why it was not done,
- * or null.
- */
-function standNow(pieces: readonly Piece[]): string | null {
-  const no = standRefusal(S.world, pieces, coins());
-  if (no !== null) return no;
-  for (const lot of standLots(pieces)) {
-    const did = doNow({ do: "stand", pieces: lot });
-    if ("refused" in did) return did.why;
-  }
-  return null;
-}
-
-/** What could not be undone, said on the line over the dock. */
-const cannotUndo = (why: string): void => {
-  toolHooks.said(`Cannot undo: ${why.toLowerCase()}.`);
-};
-
-/** Stands again pieces that were taken away, as a copy is stood: new, and holding nothing. */
-function putBack(what: readonly Piece[]): void {
-  const no = standNow(what);
-  if (no !== null) cannotUndo(no);
-  else for (const s of what) puff(s.x * TILE + 8, (s.y + 1) * TILE - 2, 4, DUST, 6);
-}
-
-/**
- * Gives pieces that still stand the way and the grade they had, each for the difference: together
- * with Select, and without it one at a time, as building over a piece does. A tunnel is named by the
- * way it goes in, so it is only raised or lowered.
- */
-function asTheyWere(was: readonly Piece[]): void {
-  const w = S.world;
-  const still = was.filter((p) => kindAt(w, p.x, p.y) === p.kind);
-  if (still.length === 0) return;
-  if (usable("select") || still.length === 1) {
-    const no = standNow(still);
-    if (no !== null) cannotUndo(no);
-    return;
-  }
-  for (const p of still) {
-    const did = doNow({ do: "build", kind: p.kind, x: p.x, y: p.y, dir: p.dir, grade: gradeOf(p.kind, p.grade) });
-    if ("refused" in did) {
-      cannotUndo(did.why);
-      return;
-    }
-  }
-}
-
-/**
- * Undo pressed: for the last thing done not yet pressed for. It is undone once Leaf has done it too
- * (at once, if it has), while what it touched stands as it was just after. Gives back whether
- * anything was undone, or waits for Leaf to be.
+ * Undo pressed: the yard's newest entry undone by the rules, all of it or none, as one command done
+ * on the copy at once and sent to Leaf (`doNow`), naming the entry so that another tab's Undo cannot
+ * undo it twice. The rules' reason is said when it is not done. Gives back whether it was.
  */
 export function undo(): boolean {
-  moveUndos({ do: "press" });
-  return settle() > 0 || undos.some((u) => u.asked);
-}
-
-/** Undoes what Undo was pressed for and Leaf has done, the last first, while the yard takes commands. Gives back how many were undone. */
-function settle(): number {
-  let n = 0;
-  for (let u = due(undos); u && takesCommands(); u = due(undos)) {
-    moveUndos({ do: "undone", id: u.id });
-    if (!holds(u)) toolHooks.said(CHANGED);
-    else {
-      undoNow(u.done);
-      n++;
-    }
-  }
-  return n;
-}
-
-/** Undoes something done, as it stands as it was just after. */
-function undoNow(last: Done): void {
-  const w = S.world;
-  if (last.did === "built") {
-    const cells = last.cells.filter((i) => w.kind[i] !== NONE);
-    // Many pieces go as one with Select; without it, one at a time, as the spade takes them.
-    if (usable("select") && cells.length > 0) doNow({ do: "clear", tiles: cells });
-    else for (const p of piecesAt(w, cells)) doNow({ do: "remove", x: p.x, y: p.y });
-    for (const i of cells) puff((i % W()) * TILE + 8, (Math.floor(i / W()) + 1) * TILE - 4, 4, DUST, 7);
-    for (const t of last.turned) doNow({ do: "turn", ...xy(t.i), dir: t.was });
-    if (last.under) putBack(last.under);
-    if (last.was) asTheyWere(last.was);
-  } else if (last.did === "raised") asTheyWere(last.was);
-  else if (last.did === "took") putBack(last.what);
-  else if (last.did === "painted")
-    for (const l of last.lines.toReversed()) doNow({ do: "paint", ...xy(l.i), tint: l.was });
-  else if (last.did === "way") waysBack(w, last.i, xy(last.i).x, xy(last.i).y, last.was, (a) => void doNow(a));
-  else if (last.did === "moved") {
-    const no = does({ do: "move", tiles: last.tiles, turns: last.turns, x: last.x, y: last.y });
-    if (no !== null) cannotUndo(no);
-  } else unturn(last);
+  const did = doNow({ do: "undo", entry: S.world.history.at(-1)?.id ?? "" });
+  if (refused(did)) return false;
   yardSfx.undo();
   // What was marked or in hand may be what was undone.
   if (S.hand.is === "select") go({ do: "pick", tool: "select" });
   keepAim();
   toolHooks.changed();
+  return true;
 }
 
 // ---------- runs of belt ----------
@@ -872,7 +641,6 @@ export function runEnd(pointer = 0): void {
 /** Lays the run that is showing, worked out again first if the yard or the purse has changed under it. */
 export function commitRun(): boolean {
   keepAim();
-  const w = S.world;
   const run = runOf(S.hand);
   go({ do: "laid" });
   if (!run) return false;
@@ -884,12 +652,6 @@ export function commitRun(): boolean {
   }
   // The first belt, already standing, turned to meet the run: all of it or none, with the run.
   const [bend] = run.turns;
-  const was = bend ? dirOf(at(w, bend.x, bend.y)) : undefined;
-  // The belts the run is laid along, which it raises: as they stand, to put back.
-  const raised = run.legs.flatMap((leg) =>
-    kindAt(w, leg.x, leg.y) === BELT ? (standing(at(w, leg.x, leg.y)) ?? []) : [],
-  );
-  const clear = new Set(run.legs.filter((leg) => kindAt(w, leg.x, leg.y) === NONE));
   const did = doNow(bend ? { do: "lay", legs: run.legs, turn: bend } : { do: "lay", legs: run.legs });
   if ("refused" in did) {
     yardSfx.no();
@@ -897,13 +659,7 @@ export function commitRun(): boolean {
     toolHooks.changed();
     return false;
   }
-  const turned = bend && was !== undefined ? [{ i: at(w, bend.x, bend.y), was }] : [];
-  const cells: number[] = [];
   run.legs.forEach((leg, n) => {
-    const i = at(w, leg.x, leg.y);
-    if (clear.has(leg)) cells.push(i);
-    const far = leg.tunnel ? otherMouth(w, i) : -1;
-    if (far >= 0) cells.push(far);
     // The belts go down one after another along the run, each with its own clack.
     window.setTimeout(
       () => {
@@ -912,7 +668,6 @@ export function commitRun(): boolean {
       Math.min(n, 14) * 28,
     );
   });
-  remember({ did: "built", cells, turned, ...(raised.length > 0 ? { was: raised } : {}) }, did);
   const end = run.legs.at(-1);
   if (end) {
     S.dir = end.dir;
@@ -1130,9 +885,6 @@ function aimGroup(x: number, y: number): void {
   });
 }
 
-/** The quarter turns that undo so many. */
-const TURNS_BACK = [0, 3, 2, 1] as const;
-
 /**
  * Sets the pieces in hand down where they are aimed, all of them or none, in one command: a move,
  * a copy or a blueprint, each naming the turns and the corner. What is in hand is worked out again
@@ -1149,21 +901,19 @@ function setDown(): boolean {
   const aim = h.stage.aim;
   const box = boxOf(g.at);
   const tiles = tilesOf(w, g.at);
-  // What a copy would stand that is not there now, and the pieces some of it would take the place of.
+  // What a copy would stand that is not there now.
   const stood = g.at.filter((p) => kindAt(w, p.x, p.y) !== p.kind);
-  const under = stood.flatMap((p) => standing(at(w, p.x, p.y)) ?? []);
   // Pieces of the same kind already standing there that the rules would turn (a sorter to another
-  // side too), raise or lower: as they stand now.
-  const changed = g.at.flatMap((p) => {
+  // side too), raise or lower.
+  const changes = g.at.some((p) => {
     const i = at(w, p.x, p.y);
-    if (kindAt(w, p.x, p.y) !== p.kind) return [];
+    if (kindAt(w, p.x, p.y) !== p.kind) return false;
     const turns = (p.kind !== TUNNEL && dirOf(i) !== p.dir) || sendsRight(w, i) !== keepsRight(p);
-    return turns || gradeOf(p.kind, p.grade) !== (w.grade[i] ?? 0) ? (standing(i) ?? []) : [];
+    return turns || gradeOf(p.kind, p.grade) !== (w.grade[i] ?? 0);
   });
   const moving = g.as === "move";
   // A copy over itself, just set down: nothing the rules would change, so nothing is sent.
-  if (!moving && aim.why === null && stood.length === 0 && changed.length === 0) return false;
-  const was = boxOf(piecesInHand(g));
+  if (!moving && aim.why === null && stood.length === 0 && !changes) return false;
   const act: Act =
     typeof g.as === "number"
       ? { do: "placeBlueprint", slot: g.as, turns: g.turns, x: box.x, y: box.y }
@@ -1171,14 +921,10 @@ function setDown(): boolean {
   const did = doNow(act);
   if (refused(did)) return false;
   if (moving) {
-    remember({ did: "moved", tiles, turns: TURNS_BACK[g.turns], x: was.x, y: was.y }, did);
     const [x1, y1] = [box.x + box.w - 1, box.y + box.h - 1];
     go({ do: "unhold" });
     go({ do: "marked", mark: { x0: box.x, y0: box.y, x1, y1, tiles, pieces: g.at, cost: h.stage.mark?.cost ?? 0 } });
-  } else {
-    remember({ did: "built", cells: tilesOf(w, stood), turned: [], under, was: changed }, did);
-    paid(aim.x, aim.y, aim.cost);
-  }
+  } else paid(aim.x, aim.y, aim.cost);
   // The pieces land in a wave out from the pointer, each ring of it with one sound.
   const wave: Piece[][] = [];
   for (const p of g.at) (wave[Math.min(14, Math.round(Math.hypot(p.x - aim.x, p.y - aim.y)))] ??= []).push(p);
@@ -1202,7 +948,6 @@ export function clearMark(): boolean {
   if (!m || groupOf(S.hand)) return false;
   const did = doNow({ do: "clear", tiles: m.tiles });
   if (refused(did)) return false;
-  remember({ did: "took", what: m.pieces }, did);
   for (const p of m.pieces) puff(p.x * TILE + 8, (p.y + 1) * TILE - 4, 3, DUST, 9);
   const refund = coinsOf(did);
   if (refund > 0) float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, `+${refund}`, GOLD[2], 1.2);
@@ -1239,7 +984,6 @@ export function upgradeMark(all = false): boolean {
   const cost = upgradePrice(w, m.tiles);
   const did = doNow({ do: "upgrade", tiles: tilesOf(w, was) });
   if (refused(did)) return false;
-  remember({ did: "raised", was }, did);
   for (const p of was.slice(0, 160)) sparkle(p.x * TILE + 8, p.y * TILE + 6, 2, 5);
   if (cost > 0) float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, `-${cost}`, GOLD[0], 1.2);
   yardSfx.ready();

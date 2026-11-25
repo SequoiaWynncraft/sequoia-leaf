@@ -10,6 +10,7 @@ import { check } from "./check.ts";
 import { awayOf, here, stillAt, TICK_MS } from "./clock.ts";
 import { decode, encode, type KeptOrder } from "./codec.ts";
 import { type Act, act, readAct, type Turned } from "./commands.ts";
+import { isId } from "./history.ts";
 import { LAND, type Land } from "./land.ts";
 import { fillBoard, ORDER_TOLD, ORDER_WAITS } from "./orders.ts";
 import { shortOf, writeCommand } from "./page.ts";
@@ -21,8 +22,12 @@ import { drain, emptyYard, type News, type Standing, type Yard } from "./yard.ts
 /** How far behind Leaf's clock `advance` leaves a yard, in ticks; and how far ahead a command may be done. */
 export const LEAD = 30;
 
-/** A command: what the player did, and the tick the page's copy stood at when they did it. */
-export type Command = Act & { readonly tick: number };
+/**
+ * A command: what the player did, the tick the page's copy stood at when they did it, and its id: the
+ * page's, unique among the player's commands to the Works, which Leaf answers it by and what Undo
+ * would undo is named by (`history.ts`). One of the tests' may have none.
+ */
+export type Command = Act & { readonly tick: number; readonly id?: string };
 
 /** What the page is given: the yard as kept, without its seed, with its letter, and Leaf's tick now. */
 export interface View {
@@ -118,7 +123,7 @@ function told(y: Yard): Logged[] {
  */
 export function play(y: Yard, c: Command, purse = Infinity): Done<Yard, News> | Turned {
   stepTo(y, c.tick);
-  const did = act(y, c, purse + Math.floor(y.till / MILLI));
+  const did = act(y, c, purse + Math.floor(y.till / MILLI), c.id ?? "");
   if ("refused" in did) return did;
   y.seen = here(y);
   y.rev++;
@@ -134,8 +139,9 @@ const whole = (v: unknown, most: number): v is number =>
 /** A command off the wire, every field checked, or null. Fields it does not use are let be. */
 export function readCommand(v: unknown): Command | null {
   if (!isRecord(v) || !whole(v.tick, 1e12)) return null;
+  if (v.id !== undefined && !isId(v.id)) return null;
   const rest = readAct(v);
-  return rest && { ...rest, tick: v.tick };
+  return rest && { ...rest, tick: v.tick, ...(v.id === undefined ? {} : { id: v.id }) };
 }
 
 const view = (y: Yard, ctx: Ctx): View => ({

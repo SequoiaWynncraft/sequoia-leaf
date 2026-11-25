@@ -35,7 +35,7 @@ import { PAINTS } from "../art/belts.ts";
 import { type Art, bare } from "../art/index.ts";
 import type { Stage } from "../hand.ts";
 import { turns, WORKS_KEYS, type WorksAction } from "../keymap.ts";
-import { builds, DRAWN, gradeInHand, S } from "../state.ts";
+import { builds, DRAWN, gradeInHand, S, undoes } from "../state.ts";
 import {
   askSave,
   cancel,
@@ -378,7 +378,7 @@ export function handPrint(): HandPrint {
     upgrade: upgradeOf(stage),
     turn: builds(tool) || g !== null,
     flip: tool === SORTER,
-    undo: stage?.is !== "saving",
+    undo: undoes(stage),
     bin: typeof g?.as === "number" ? { slot: g.as, asking: asking(`delete-${g.as}`) } : null,
     cancel: tool !== null,
     go: aiming

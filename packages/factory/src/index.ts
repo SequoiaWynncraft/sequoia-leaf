@@ -4,10 +4,11 @@
  */
 export * from "./build.ts";
 export { fromBase64, toBase64 } from "./bytes.ts";
+export { type KeptPiece } from "./cells.ts";
 export { check } from "./check.ts";
 export * from "./clock.ts";
 export { type Act, type ActOf, COMMANDS, LOCKED, REFUSED, type Turned, type Wired, writeAct } from "./commands.ts";
-export { readLeg, readPiece, standLots } from "./fields.ts";
+export { readLeg, readPiece } from "./fields.ts";
 export * from "./content/asks.ts";
 export * from "./content/items.ts";
 export * from "./content/machines.ts";
@@ -22,13 +23,13 @@ export {
   type Keep,
   type KeptOrder,
   keptOrder,
-  type KeptPiece,
   type KeptPrint,
   orderOf,
   VERSION,
   vouch,
 } from "./codec.ts";
 export * from "./game.ts";
+export { UNDO_BYTES, UNDO_MOST } from "./history.ts";
 export * from "./land.ts";
 export { join, lineOf, paint } from "./lines.ts";
 export * from "./orders.ts";

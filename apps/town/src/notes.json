@@ -1,5 +1,33 @@
 [
   {
+    "id": "works-undo",
+    "at": "2026-11-25T17:09Z",
+    "title": "The Works: Undo is kept with your yard",
+    "lines": [
+      "Undo undoes the whole of the last thing you did, or none of it. If you're short of Coins, nothing is undone.",
+      "What you can undo is kept with your yard: it is still there after you reload the page, and on another device."
+    ],
+    "more": [
+      {
+        "head": "Changed",
+        "points": [
+          "The Undo button shows only while there is something to undo.",
+          "When Undo brings back a piece you took away, it comes back empty: what it held was lost when you took it away.",
+          "After an update to the Works, there is nothing to undo from before it.",
+          "Undo keeps up to 20 changes. Setting what a machine makes or what a sorter sorts, opening or shutting a crate, and buying a plot cannot be undone, and Undo forgets everything before them.",
+          "Something very large done at once, such as taking away most of a big yard, cannot be undone. Undo says so."
+        ]
+      },
+      {
+        "head": "Fixed",
+        "points": [
+          "Undoing the removal of your free starting mill gives that mill back free, and a mill you paid for back as paid.",
+          "Undo counts the Coins in your till once, not twice."
+        ]
+      }
+    ]
+  },
+  {
     "id": "works-top-two-rows",
     "at": "2026-11-25T17:00Z",
     "title": "The Works: a shorter top on a phone",

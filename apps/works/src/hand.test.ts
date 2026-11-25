@@ -23,7 +23,7 @@ const build: Hand = { is: "build", kind: MILL, aim, faced: 7 };
 const belt: Hand = { is: "build", kind: BELT, aim, faced: -1 };
 const dragging: Hand = { is: "beltDrag", pointer: 1, path: [{ x: 1, y: 1 }], run, aim };
 const tapping: Hand = { is: "beltTaps", from: { x: 1, y: 1 }, run, aim };
-const stroking: Hand = { is: "paint", aim, stroke: { pointer: 1, id: 9 } };
+const stroking: Hand = { is: "paint", aim, stroke: { pointer: 1, id: "p-9" } };
 const select = (stage: Extract<Hand, { is: "select" }>["stage"]): Hand => ({ is: "select", stage });
 
 describe("Escape", () => {
@@ -111,11 +111,11 @@ describe("a drag", () => {
   });
 
   test("a stroke can only be begun with the brush in hand", () => {
-    expect(step(IDLE, { do: "stroke", pointer: 1, id: 1 })).toBe(IDLE);
-    expect(step({ is: "paint", aim: null, stroke: null }, { do: "stroke", pointer: 1, id: 1 })).toEqual({
+    expect(step(IDLE, { do: "stroke", pointer: 1, id: "p-1" })).toBe(IDLE);
+    expect(step({ is: "paint", aim: null, stroke: null }, { do: "stroke", pointer: 1, id: "p-1" })).toEqual({
       is: "paint",
       aim: null,
-      stroke: { pointer: 1, id: 1 },
+      stroke: { pointer: 1, id: "p-1" },
     });
   });
 });
