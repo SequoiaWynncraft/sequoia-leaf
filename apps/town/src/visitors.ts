@@ -6,15 +6,17 @@
  * put somewhere else by fading out there and in at the new place (`FADE`).
  *
  * - **Visitors**, in one of the games just now, busy at it in place, each at a spot of their own
- *   (`spots.ts`): at the Works working at a crate beside them, at the raid table sitting at the stump
- *   over its board, in the Grove standing before its stone while a light rises from it now and then.
+ *   (`spots.ts`): at the Works working at a crate beside them, at the raid table sitting on the
+ *   stump's free log over its board or standing round it, in the Grove standing before its stone
+ *   while a light rises from it now and then.
  *   Away (Leaf's rule) they have sat down in their spot and nodded off: eyes closed, a "z" now and
  *   then. They never speak, and their card has their name and rank, and what they are about.
  * - **Dozers**, gone in the last day and happy to be left in town: each on a seat for where they
  *   were (`dozing`), eyes closed, a small "z" drifting up. They never speak or move. Whoever goes
  *   from a game stays on their feet in their spot until `SITS_AFTER` after Leaf last saw them, and is
  *   then on their seat, or gone if they do not stay or no seat is left. Nobody awake sits down on a
- *   dozer (`seatFree`), so a dozer keeps their seat while somebody sits down anywhere else.
+ *   dozer (`seatFree`), so a dozer keeps their seat while somebody sits down anywhere else; but
+ *   somebody at the raid table has the stump's free log before a dozer does.
  *
  * A raid party home is cheered where its members are (`events.ts`): nobody is drawn for it.
  * Whoever is about the town is there live (`players.ts`), where they really are, and nobody live is
@@ -36,7 +38,19 @@ import { type Actor, G, type Seat, SEATS, SEED } from "./game.ts";
 import { guild, type Person } from "./guild.ts";
 import { VISITORS_MOST } from "./live.ts";
 import { crate, type Standing } from "./props.ts";
-import { type Box, clearOf, crateAt, further, keepClear, LAID, makeSpots, meet, poseAt, strings } from "./spots.ts";
+import {
+  type Box,
+  clearOf,
+  crateAt,
+  further,
+  keepClear,
+  LAID,
+  makeSpots,
+  meet,
+  poseAt,
+  sits,
+  strings,
+} from "./spots.ts";
 import { props } from "./town.ts";
 
 /** How long somebody takes to fade in or out, in seconds. */
@@ -209,9 +223,9 @@ function breathe(v: Visiting): void {
   if (a.alpha > 0.5 && onScreen(at.x, at.y)) float(at.x + 4, at.y - 20, "z", CREAM, 1.4);
 }
 
-/** Away from the keys, though still in the game: sat down in their spot, facing us, nodded off. */
+/** Away from the keys, though still in the game: sat down in their spot, facing as `at` says (`poseAt`), nodded off. */
 function nap(v: Visiting, at: Spot): void {
-  sitAt(v, { ...at, dir: 0 });
+  sitAt(v, at);
   v.a.body = v.shut ??= dozy(v.open);
   breathe(v);
 }
@@ -248,6 +262,9 @@ function asleep(v: Visiting, s: Seat, seen: number): void {
 }
 
 // ---------- the spots ----------
+
+/** The town's seat at a point, if one is: a spot at the stump that is one of its logs. */
+const seatAt = (p: Pt): Seat | undefined => SEATS.find((s) => s.x === p.x && s.y === p.y);
 
 /** The places that are busy, in the order their spots are given out. */
 const STANDS: readonly Stand[] = ["works", "table", "grove"];
@@ -348,7 +365,7 @@ function busy(v: Visiting, at: Stand, got: { spot: Spot; n: number }, isAway: bo
   const pose = poseAt({ id: v.a.id, at, spot: got.spot, n: got.n, away: isAway, now: G.now });
   v.a.carry = false;
   if (pose.dozing) {
-    nap(v, got.spot);
+    nap(v, { ...got.spot, dir: pose.dir });
     if (at === "works") v.kit.push(crateOf(got.spot));
   } else {
     v.a.body = v.open;
@@ -359,9 +376,11 @@ function busy(v: Visiting, at: Stand, got: { spot: Spot; n: number }, isAway: bo
   v.a.doing = at;
 }
 
-/** Somebody gone from a game, not yet dozing or gone: on their feet in their spot, their crate by them at the Works. */
-function lingers(v: Visiting, at: Stand, s: Spot): void {
-  standAt(v, s, s.dir);
+/** Somebody gone from a game, not yet dozing or gone: still on their log at the stump, else on their feet in their spot, their crate by them at the Works. */
+function lingers(v: Visiting, at: Stand, got: { spot: Spot; n: number }): void {
+  const s = got.spot;
+  if (sits(at, got.n)) sitAt(v, s);
+  else standAt(v, s, s.dir);
   v.a.carry = false;
   v.a.doing = at;
   if (at === "works") v.kit.push(crateOf(s));
@@ -391,16 +410,27 @@ export function stepVisitors(dt: number, awake: readonly Actor[]): void {
 
   const visitors = guild.visitors().filter((w) => !liveNow.has(w.id));
   const resting = guild.resting().filter((r) => !liveNow.has(r.id));
-  // Who has which spot at each place: those busy there, and those gone from it still on their feet there.
+  // Who has which spot at each place: those busy there, and those gone from it still there. Nobody
+  // new is given a log somebody awake sits on or has set off for.
+  const held = (p: Pt): boolean => {
+    const seat = seatAt(p);
+    return seat !== undefined && (seat.taken || awake.some((a) => sitsOn(a, seat)));
+  };
   const placed = new Map(
     STANDS.map((at) => [
       at,
-      spots.place(at, [
-        ...visitors.filter((w) => w.at === at).map((w) => w.id),
-        ...resting.filter((r) => r.at === at && now < r.seen + SITS_AFTER).map((r) => r.id),
-      ]),
+      spots.place(
+        at,
+        [
+          ...visitors.filter((w) => w.at === at).map((w) => w.id),
+          ...resting.filter((r) => r.at === at && now < r.seen + SITS_AFTER).map((r) => r.id),
+        ],
+        held,
+      ),
     ]),
   );
+  // The seats somebody at a game sits on, which nobody dozes on.
+  const sat = [...placed].flatMap(([at, got]) => [...got.values()].filter((g) => sits(at, g.n)).map((g) => g.spot));
 
   let atStone = false;
   for (const w of visitors) {
@@ -412,18 +442,18 @@ export function stepVisitors(dt: number, awake: readonly Actor[]): void {
   }
   if (atStone) stoneLight();
 
-  // Not a seat somebody here sits on or is on the way to (`taken`), nor one a player live in town sits on.
+  // Not a seat somebody here sits on or is on the way to (`taken`), one a player live in town sits
+  // on, nor one somebody at a game sits on.
   const seats = dozing(
     resting.filter((r) => r.stays),
-    SEATS.filter((s) => !s.taken && awake.every((a) => !sitsOn(a, s))),
+    SEATS.filter((s) => !s.taken && awake.every((a) => !sitsOn(a, s)) && sat.every((p) => seatAt(p) !== s)),
   );
   for (const r of resting) {
     const at = r.at;
     if (now < r.seen + SITS_AFTER) {
       // Gone, and not yet dozing: on their feet in their spot. Whoever was about the town was there live, and is next seen on their seat.
       const got = at === "town" ? undefined : placed.get(at)?.get(r.id);
-      if (at !== "town" && got)
-        wanted.set(r.id, { who: r, put: { at, ...got }, pose: (v) => lingers(v, at, got.spot) });
+      if (at !== "town" && got) wanted.set(r.id, { who: r, put: { at, ...got }, pose: (v) => lingers(v, at, got) });
       continue;
     }
     const seat = seats.get(r.id);

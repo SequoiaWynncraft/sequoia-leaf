@@ -203,6 +203,38 @@ describe("members dozing", () => {
   });
 });
 
+describe("at the raid table", () => {
+  const log = SEATS.find((s) => s.at === "table" && !s.yours);
+  if (!log) throw new Error("no log at the stump that is not the member's");
+  const onLog = (a: Actor): boolean => a.seat !== null && a.seat.x === log.x && a.seat.y === log.y;
+
+  test("somebody playing sits on the stump's free log, nobody dozes on it while they do, and once gone they stay on it", () => {
+    visiting = [visitor("Quillon", "table")];
+    // Gone a while from the table, so wanting its log to doze on.
+    resting = [rester("Fernhollow", "table", SITS_AFTER + 600_000)];
+    step(FADED);
+    step(FADED);
+    expect(onLog(figure("Quillon"))).toBe(true);
+    expect(figure("Quillon").dir).toBe(log.dir);
+    expect(onLog(figure("Fernhollow"))).toBe(false);
+    // Gone from the game: still on the log until they doze, and nobody else is put there meanwhile.
+    visiting = [];
+    resting = [...resting, rester("Quillon", "table", 0)];
+    step(FADED);
+    expect(onLog(figure("Quillon"))).toBe(true);
+    expect(onLog(figure("Fernhollow"))).toBe(false);
+  });
+
+  test("with somebody awake on the log, whoever comes to play stands round the stump instead", () => {
+    const me = makeActor({ name: "Tester", rank: "", level: 1, voice: 1 }, null, log.from.x, log.from.y, true);
+    sit(me, log);
+    visiting = [visitor("Quillon", "table")];
+    step(FADED, [me]);
+    expect(figure("Quillon").seat).toBeNull();
+    stop(me);
+  });
+});
+
 describe("hops", () => {
   test("a hop on somebody the clock puts where they are runs and is over", () => {
     resting = [rester("Quillon", "works", 60_000)];
