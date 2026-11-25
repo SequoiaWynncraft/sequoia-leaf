@@ -1,7 +1,8 @@
 /**
  * Folds on the tier's and the research screens: the list of those done and the list of research
  * known, shut at first, and the list of projects, open at first, each under a label that folds it;
- * and each goal's card, open at first, with a button at the end of its head that folds it to the head. What the player chose is kept on this
+ * and each goal's card, open at first, with a button at the end of its head that folds it to the head.
+ * And the card in the corner of the yard (`hud.ts`), open at first, which folds to one line. What the player chose is kept on this
  * device under `FOLDS`, beside the screen's other settings: a view, so nothing of it goes to Leaf.
  *
  * A fold is drawn from the kept choices on every drawing, so it stands as the player left it when
@@ -17,8 +18,8 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { head } from "./goal.ts";
 import { iconButton } from "./parts.ts";
 
-/** The lists that fold, and whether each is open at first. */
-const LISTS = { done: false, known: false, projects: true } as const;
+/** The lists that fold, and the card in the corner (`track`), and whether each is open at first. */
+const LISTS = { done: false, known: false, projects: true, track: true } as const;
 type List = keyof typeof LISTS;
 /** What folds: one of the lists, or a goal's card. */
 export type Fold = List | Goal;
@@ -70,14 +71,22 @@ export function keepFold(f: Fold, open: boolean): void {
  * Makes `b` the fold of `parts`, which it names for whoever cannot see them: draws them from the kept
  * choice now, and gives what a press does: shows them if they were hidden or hides them, says so on
  * the button (in `name`'s words too, where the button is only a picture), keeps the choice and taps.
+ * What is shown in their place while they are folded (`shut`) is hidden while they are open.
  * Nothing else is touched, so nothing is built again and the scroll does not move.
  */
-function fold(b: HTMLElement, f: Fold, parts: readonly HTMLElement[], name?: (open: boolean) => string): () => void {
+function fold(
+  b: HTMLElement,
+  f: Fold,
+  parts: readonly HTMLElement[],
+  name?: (open: boolean) => string,
+  shut: readonly HTMLElement[] = [],
+): () => void {
   // Lists and cards have ids of their own kinds, so a goal called "done" is never the list's.
   const key = typeof f === "number" ? `goal-${idOf(f)}` : `list-${f}`;
-  b.setAttribute("aria-controls", parts.map((p, i) => (p.id ||= `fold-${key}-${i}`)).join(" "));
+  b.setAttribute("aria-controls", [...parts, ...shut].map((p, i) => (p.id ||= `fold-${key}-${i}`)).join(" "));
   const set = (open: boolean): void => {
     for (const p of parts) p.hidden = !open;
+    for (const p of shut) p.hidden = open;
     b.setAttribute("aria-expanded", String(open));
     if (name) b.setAttribute("aria-label", name(open));
   };
@@ -111,4 +120,12 @@ export function foldedHead(g: Goal, side: HTMLElement | null, parts: readonly HT
   const b = iconButton("wood sm fold", icon("fold"), name(true), () => press());
   const press = fold(b, g, parts, name);
   return head(g, side, b);
+}
+
+/** The button that folds the card in the corner (`hud.ts`) to one line: `short`, in place of `full`. It is named for the card's title. */
+export function foldedCard(title: string, full: HTMLElement, short: HTMLElement): HTMLElement {
+  const name = (open: boolean): string => `${open ? "Hide" : "Show"} ${title}`;
+  const b = iconButton("wood sm fold", icon("fold"), name(true), () => press());
+  const press = fold(b, "track", [full], name, [short]);
+  return b;
 }

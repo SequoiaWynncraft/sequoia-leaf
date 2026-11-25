@@ -1,7 +1,8 @@
 /**
  * The folds of the tier's and the research screens, as kept on the device: the lists of those done
  * and of research known shut and every card open until the player says otherwise; a choice made
- * wins; kept text that does not read is no choice; and a card's choice is that card's alone.
+ * wins; kept text that does not read is no choice; and a card's choice is that card's alone. The
+ * card in the corner of the yard is open until it is folded, and stays as it was left.
  */
 import { afterEach, expect, test } from "bun:test";
 
@@ -78,4 +79,15 @@ test("a card's choice folds that card alone", () => {
   keepFold(CRATES, false);
   expect(standing()).toEqual([false, false, true, false]);
   expect(ALL_GOALS.filter((g) => !opened(g))).toEqual([CRATES]);
+});
+
+test("the card in the corner is open at first, and stays folded once folded, kept beside the other choices", () => {
+  world = standin({});
+  expect(opened("track")).toBe(true);
+  keepFold(BOILER, false);
+  keepFold("track", false);
+  expect([opened("track"), ...standing()]).toEqual([false, false, false, false, true]);
+  expect(JSON.parse(world.store.getItem(FOLDS) ?? "null")).toEqual({ track: false, goals: { boiler: false } });
+  keepFold("track", true);
+  expect(opened("track")).toBe(true);
 });

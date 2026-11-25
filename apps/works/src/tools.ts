@@ -170,6 +170,14 @@ async function awaitLeaf(id: number, did: Did): Promise<void> {
   settle();
 }
 
+/** Whether the rules refused something done (`did`, as `doNow` gave it): if so, it is said why, with its sound. */
+function refused(did: Did): boolean {
+  if (!("refused" in did)) return false;
+  yardSfx.no();
+  toolHooks.said(`${did.why}.`);
+  return true;
+}
+
 /** Keeps something just done (`did`, as `doNow` gave it) to be undone. */
 function remember(d: Done, did: Did): void {
   const id = ++undone;
@@ -457,11 +465,7 @@ export function raiseAt(x: number, y: number): boolean {
   const grade = (w.grade[i] ?? 0) + 1;
   const cost = priceAt(w, k, x, y, grade);
   const did = doNow({ do: "build", kind: k, x, y, dir: dirOf(i), grade });
-  if ("refused" in did) {
-    yardSfx.no();
-    toolHooks.said(`${did.why}.`);
-    return false;
-  }
+  if (refused(did)) return false;
   remember({ did: "raised", was: [was] }, did);
   lifted(x, y, cost);
   toolHooks.changed();
@@ -1165,11 +1169,7 @@ function setDown(): boolean {
       ? { do: "placeBlueprint", slot: g.as, turns: g.turns, x: box.x, y: box.y }
       : { do: g.as, tiles: g.tiles, turns: g.turns, x: box.x, y: box.y };
   const did = doNow(act);
-  if ("refused" in did) {
-    yardSfx.no();
-    toolHooks.said(`${did.why}.`);
-    return false;
-  }
+  if (refused(did)) return false;
   if (moving) {
     remember({ did: "moved", tiles, turns: TURNS_BACK[g.turns], x: was.x, y: was.y }, did);
     const [x1, y1] = [box.x + box.w - 1, box.y + box.h - 1];
@@ -1201,11 +1201,7 @@ export function clearMark(): boolean {
   const m = remarked();
   if (!m || groupOf(S.hand)) return false;
   const did = doNow({ do: "clear", tiles: m.tiles });
-  if ("refused" in did) {
-    yardSfx.no();
-    toolHooks.said(`${did.why}.`);
-    return false;
-  }
+  if (refused(did)) return false;
   remember({ did: "took", what: m.pieces }, did);
   for (const p of m.pieces) puff(p.x * TILE + 8, (p.y + 1) * TILE - 4, 3, DUST, 9);
   const refund = coinsOf(did);
@@ -1217,28 +1213,32 @@ export function clearMark(): boolean {
   return true;
 }
 
-/** What raising everything marked to the highest grade the yard may build would cost: 0 where nothing marked can be raised. */
-export function upgradeCost(): number {
-  const m = markOf(S.hand);
-  return m && !groupOf(S.hand) ? upgradePrice(S.world, m.tiles) : 0;
+/** What Upgrade raises: the area marked, or with `all` the whole yard; nothing while pieces are in hand. */
+function raising(all: boolean): Mark | null {
+  const { w, h } = S.world.land;
+  if (groupOf(S.hand)) return null;
+  return all ? markArea({ x: 0, y: 0 }, { x: w - 1, y: h - 1 }) : remarked();
+}
+
+/** What raising everything marked (with `all`, everything in the yard) to the highest grade the yard may build would cost: 0 where nothing can be raised. */
+export function upgradeCost(all = false): number {
+  const m = raising(all);
+  return m ? upgradePrice(S.world, m.tiles) : 0;
 }
 
 /**
- * Raises every piece marked to the highest grade the yard may build of its kind, all of them or
- * none, for the whole price. Says whether it did; the rules' reason is said when it could not.
+ * Raises every piece marked (with `all`, every piece in the yard) to the highest grade the yard may
+ * build of its kind, all of them or none, for the whole price. Says whether it did; the rules'
+ * reason is said when it could not. Leaf is sent the tiles of the pieces it raises.
  */
-export function upgradeMark(): boolean {
+export function upgradeMark(all = false): boolean {
   const w = S.world;
-  const m = remarked();
-  if (!m || groupOf(S.hand)) return false;
+  const m = raising(all);
+  if (!m) return false;
   const was = m.pieces.filter((p) => isGraded(p.kind) && gradeOf(p.kind, p.grade) < highest(w.open, p.kind));
   const cost = upgradePrice(w, m.tiles);
-  const did = doNow({ do: "upgrade", tiles: m.tiles });
-  if ("refused" in did) {
-    yardSfx.no();
-    toolHooks.said(`${did.why}.`);
-    return false;
-  }
+  const did = doNow({ do: "upgrade", tiles: tilesOf(w, was) });
+  if (refused(did)) return false;
   remember({ did: "raised", was }, did);
   for (const p of was.slice(0, 160)) sparkle(p.x * TILE + 8, p.y * TILE + 6, 2, 5);
   if (cost > 0) float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, `-${cost}`, GOLD[0], 1.2);

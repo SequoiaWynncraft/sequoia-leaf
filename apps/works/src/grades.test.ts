@@ -14,14 +14,18 @@ import {
   CRATE,
   create,
   encode,
+  goal,
+  highest,
   JOINER,
   MILL,
   priceAt,
+  reopen,
   SORTER,
   sortWay,
   SPLITTER,
   TUNNEL,
   upgradePrice,
+  within,
   type Yard,
 } from "@sequoia-leaf/factory";
 
@@ -48,6 +52,7 @@ import {
   upgradeCost,
   upgradeMark,
 } from "./tools.ts";
+import { handPrint } from "./ui/dock.ts";
 import { differences, doNow } from "./yard.ts";
 
 useFakeLeaf();
@@ -400,5 +405,64 @@ describe("many pieces at once", () => {
     expect(said.length).toBe(1);
     expect(grades([18], 13)).toEqual([1]);
     expect(doNow(act({ do: "upgrade", tiles: [at(S.world, 18, 13)] }))).toHaveProperty("refused");
+  });
+
+  test("with Select in hand and nothing marked, Upgrade all raises everything in the yard that can be raised, for the whole price or not at all; undo puts every grade back", async () => {
+    const y = yardAt(4);
+    for (const x of [18, 19, 20]) build(y, BELT, x, 13, 0, Infinity);
+    build(y, MILL, 21, 13, 0, Infinity);
+    build(y, CRATE, 22, 13, 0, Infinity);
+    build(y, BELT, 18, 16, 0, Infinity);
+    const fake = await opened(y, 0);
+    const said = listen();
+    setTool("select");
+    const cost = upgradePrice(S.world, within(S.world, 0, 0, S.world.land.w - 1, S.world.land.h - 1));
+    expect(cost).toBeGreaterThan(0);
+    expect(handPrint().upgrade).toEqual({ all: true, cost, asking: false });
+    const before = encode(S.world);
+    // Short by one Coin: none is raised, the rules say by how much, and nothing is sent.
+    coinsAre(cost - 1);
+    expect(upgradeMark(true)).toBe(false);
+    expect(said).toEqual(["Not enough Coins: 1 short."]);
+    expect(encode(S.world)).toBe(before);
+    await Bun.sleep(5);
+    expect(sent(fake)).toEqual([]);
+    coinsAre(cost);
+    expect(upgradeMark(true)).toBe(true);
+    expect([...grades([18, 19, 20, 21, 22], 13), ...grades([18], 16)]).toEqual([2, 2, 2, 2, 0, 2]);
+    // Nothing is left to raise: it is no longer offered.
+    expect(handPrint().upgrade).toBeNull();
+    await inStep(fake, 1);
+    expect(sent(fake)).toEqual(["upgrade"]);
+    coinsAre(0);
+    expect(undo()).toBe(true);
+    expect([...grades([18, 19, 20, 21, 22], 13), ...grades([18], 16)]).toEqual([1, 1, 1, 1, 0, 1]);
+    await inStep(fake, 2);
+    expect(sent(fake)).toEqual(["upgrade", "stand"]);
+  });
+
+  test("Upgrade all is offered only with nothing marked, once Upgrading an area is known; a marked area has its own Upgrade", async () => {
+    const y = yardAt(4);
+    for (const x of [18, 19]) build(y, BELT, x, 13, 0, Infinity);
+    build(y, CRATE, 22, 13, 0, Infinity);
+    const upgrading = goal("upgrading");
+    y.done = y.done.filter((g) => g !== upgrading);
+    reopen(y);
+    await opened(y, 100_000);
+    setTool("select");
+    // The belts can be raised, but Upgrading is not known: nothing is offered, and the rules refuse it.
+    expect(highest(S.world.open, BELT)).toBe(2);
+    expect(handPrint().upgrade).toBeNull();
+    expect(upgradeMark(true)).toBe(false);
+    expect(grades([18, 19], 13)).toEqual([1, 1]);
+    S.world.done.push(upgrading);
+    reopen(S.world);
+    expect(handPrint().upgrade).toMatchObject({ all: true });
+    mark(18, 13, 18, 13);
+    expect(handPrint().upgrade).toMatchObject({ all: false, cost: upgradePrice(S.world, [at(S.world, 18, 13)]) });
+    // An area marked with nothing in it that can be raised offers neither.
+    mark(22, 13, 22, 13);
+    expect(S.mark?.pieces.length).toBe(1);
+    expect(handPrint().upgrade).toBeNull();
   });
 });

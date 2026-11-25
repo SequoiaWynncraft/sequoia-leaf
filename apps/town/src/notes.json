@@ -1,5 +1,35 @@
 [
   {
+    "id": "works-phone",
+    "at": "2026-11-25T11:47Z",
+    "title": "The Works: more of the yard on a phone",
+    "lines": [
+      "On a phone the tools are one row you scroll sideways, and the yard's books are a column down the right side.",
+      "The card in the top corner folds to one line with the arrow at its side, on any screen, and stays folded on that device."
+    ],
+    "more": [
+      {
+        "head": "New",
+        "points": [
+          "With Select in hand and nothing marked, Upgrade all raises every piece in the yard to the highest grade you have unlocked, for the whole price, all of it or none. Press it twice. It comes with the research Upgrading an area, and Undo puts the grades back."
+        ]
+      },
+      {
+        "head": "Changed",
+        "points": [
+          "The line over the tools tells you to tap a piece for its card only until you have opened a card once on that device. After that, on a phone, it takes no room while it has nothing to say.",
+          "Folded, the card in the corner shows its title and what is left, and the research being studied under it is hidden too."
+        ]
+      },
+      {
+        "head": "Fixed",
+        "points": [
+          "On a narrow phone, the blueprint places over the tools no longer run off the left edge of the screen."
+        ]
+      }
+    ]
+  },
+  {
     "id": "stump-log-first",
     "at": "2026-11-25T13:45Z",
     "title": "Players at the stump sit on its log",
