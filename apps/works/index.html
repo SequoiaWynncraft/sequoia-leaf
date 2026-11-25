@@ -53,7 +53,11 @@
         pointer-events: none;
       }
 
-      /* Along the top: the purse and the power on the left, the yard's books and the way out on the right. */
+      /*
+       * Along the top, two groups that never trade places: on the left the purse and the power
+       * (`#bar`), which wrap among themselves however wide the purse is; at the right the yard's books
+       * and the way out (`#side`), the way out last, in the corner.
+       */
       #top {
         position: fixed;
         z-index: 5;
@@ -61,12 +65,22 @@
         left: var(--edge);
         right: var(--edge);
         display: flex;
-        flex-wrap: wrap;
         align-items: flex-start;
         gap: calc(var(--u) * 3);
         pointer-events: none;
       }
-      #top > * {
+      #bar {
+        flex: 1 1 auto;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: inherit;
+      }
+      /* Only the parts take presses: the gaps and the empty end of a row leave them to the yard. */
+      #purse,
+      #gauge > *,
+      #books > *,
+      #corner > * {
         pointer-events: auto;
       }
       #purse {
@@ -90,25 +104,17 @@
         display: flex;
         align-items: flex-start;
         gap: inherit;
-        pointer-events: none;
-      }
-      #gauge > * {
-        pointer-events: auto;
       }
       #power .short {
         color: var(--k-coral);
       }
+      /* The books and the way out, together: at the right end of the first row here, a column on a phone (below). */
+      #side,
       #books,
       #corner {
         display: flex;
+        flex: none;
         gap: calc(var(--u) * 3);
-      }
-      #books {
-        margin-left: auto;
-      }
-      /* The books and the way out, together: in the top bar's row here, a column on a phone (below). */
-      #side {
-        display: contents;
       }
       .pip {
         position: relative;
@@ -1243,29 +1249,6 @@
         #power .k-bar {
           width: calc(var(--u) * 20);
         }
-        /* Two rows: the purse and the way out, then the power (and the order in hand, folded) and the yard's books. */
-        #corner {
-          margin-left: auto;
-          order: 2;
-        }
-        #purse {
-          order: 1;
-        }
-        #gauge {
-          order: 3;
-        }
-        #books {
-          order: 4;
-        }
-        /* The yard's button leads its row, which ends at the screen's edge: its count has room to widen there. */
-        #books > .pip.bad {
-          order: -1;
-        }
-        /* Any other button may end the row: its count widens inward, so the edge never cuts it. */
-        #books > .pip:not(.bad)[data-n]::after {
-          left: auto;
-          right: calc(var(--u) * -3);
-        }
         /* Short of power, the numbers say so and the bar gives them its room. */
         #power.short .k-bar {
           display: none;
@@ -1369,10 +1352,9 @@
           direction: ltr;
           pointer-events: auto;
         }
-        /* Under the top bar as it is laid out (`--barb`, measured), however many rows it wraps to;
-           beside the order's folded line where that is a row of its own; down to the screen's foot. */
+        /* Under the top bar as it is laid out (`--toph`, measured), however many rows it wraps to; down to the screen's foot. */
         #books {
-          --at: calc(var(--barb, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
+          --at: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
           position: fixed;
           top: var(--at);
           right: var(--edge);
@@ -1400,12 +1382,6 @@
         }
         #walk {
           right: var(--side);
-        }
-        #corner {
-          margin-left: auto;
-        }
-        #books > .pip.bad {
-          order: 0;
         }
         /* Every count widens inward, so the screen's edge never cuts it. */
         #books > .pip[data-n]::after {
@@ -1447,8 +1423,8 @@
       }
       /*
        * An upright phone: the way out and the gear lead the side column, above the books, under the top
-       * bar. The top bar is then the purse alone, and the power with the order's folded line, each row
-       * as wide as the screen, whatever the purse holds. The column stops above the line over the tools.
+       * bar. The top bar is then the purse alone, and the power with the order folded, each row as wide
+       * as the screen, whatever the purse holds. The column stops above the line over the tools.
        */
       @media (max-width: 760px) and (min-height: 501px) {
         #side {
@@ -1471,12 +1447,9 @@
           gap: calc(var(--u) * 3);
           padding-inline: calc(var(--u) * 3);
         }
-        /* The purse alone on the first row, however little it holds: an empty row-wide part after it, which takes back its gap. */
-        #top::after {
-          content: "";
-          order: 2;
-          flex-basis: 100%;
-          margin-top: calc(var(--u) * -2);
+        /* The purse alone on the first row, however little it holds, and the power under it. */
+        #bar {
+          flex-direction: column;
         }
       }
       /*
@@ -1574,10 +1547,12 @@
   <body>
     <canvas id="words"></canvas>
     <div id="top">
-      <div id="purse" class="k-plaque hung"></div>
-      <div id="gauge">
-        <button id="power" class="k-plaque hung" type="button"></button>
-        <div id="track" class="k-plaque hung"></div>
+      <div id="bar">
+        <div id="purse" class="k-plaque hung"></div>
+        <div id="gauge">
+          <button id="power" class="k-plaque hung" type="button"></button>
+          <div id="track" class="k-plaque hung"></div>
+        </div>
       </div>
       <div id="side">
         <div id="books"></div>
