@@ -1064,6 +1064,21 @@ describe("GET /v1/game/guild/events", () => {
     ).toEqual(["events"]);
   });
 
+  it("counts a raid once when one of its party's accounts is linked to another player", async () => {
+    // Erin's account signs in as a player who came with Discord first.
+    const erinsPlayer = "6e3a1c2e-7f00-4c4a-9d8e-1f2b3c4d5e6f";
+    const erin = playerId("10000000-0000-0000-0000-00000000000e");
+    await services.query(
+      (sql) => sql`
+        INSERT INTO logins (kind, external_id, player_id, linked_at) VALUES ('minecraft', ${erin}, ${erinsPlayer}, 0)
+      `,
+    );
+
+    await synced(T0 - HOUR, raidOf(100, T0 - 20 * MINUTE, alice, erin));
+
+    expect(await dayOf()).toMatchObject({ today: { raids: 1, wars: 0 } });
+  });
+
   it("counts a raid in the UTC day it happened, not the day Leaf wrote it down", async () => {
     const midnight = T0 + 12 * HOUR;
     clock.now = midnight + 5 * MINUTE;

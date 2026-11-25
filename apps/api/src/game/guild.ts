@@ -81,6 +81,12 @@ const TOLD = "activities a JOIN ledger_entries l ON l.idempotency_key = a.source
  * territory fought at, by when the war happened, of two at one moment the one
  * whose name sorts later.
  */
+/**
+ * How long a credit's source key's last part is, `:` and the account's dashed UUID
+ * (`raid:<completion>:<account>`): without it, the key names the raid or war, whoever's account it was.
+ */
+const ACCOUNT_SUFFIX = 37;
+
 export const guildDay = Effect.fnUntraced(function* (now: number) {
   const sql = yield* SqlClient.SqlClient;
   const from = utcDay(now) * DAY_MS;
@@ -88,7 +94,7 @@ export const guildDay = Effect.fnUntraced(function* (now: number) {
     Request: Schema.Int,
     Result: Schema.Struct({ kind: Schema.Literals(["raid", "war"]), count: Schema.Int }),
     execute: (since) => sql`
-      SELECT a.kind AS kind, COUNT(DISTINCT replace(a.source_key, ':' || a.player_id, '')) AS count
+      SELECT a.kind AS kind, COUNT(DISTINCT substr(a.source_key, 1, length(a.source_key) - ${ACCOUNT_SUFFIX})) AS count
       FROM ${sql.literal(TOLD)}
       WHERE a.occurred_at >= ${since} AND a.occurred_at < ${since + DAY_MS}
       GROUP BY a.kind
