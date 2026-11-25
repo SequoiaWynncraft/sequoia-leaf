@@ -33,6 +33,7 @@ import { pick, shown as cardShown, thing } from "@sequoia-leaf/kit/card.ts";
 import { el, icon, unit } from "@sequoia-leaf/kit/dom.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
+import { PER_MINUTE, perMinute, whole } from "@sequoia-leaf/kit/say.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
@@ -40,7 +41,7 @@ import { must } from "@sequoia-leaf/kit/util.ts";
 import { countedOver, reached } from "../arrivals.ts";
 import { TILE } from "../art/belts.ts";
 import type { Art } from "../art/index.ts";
-import { aMinute, flowRows, said, SHORT, yardFlows } from "../flows.ts";
+import { cellOf, flowRows, said, SHORT, yardFlows } from "../flows.ts";
 import { layout } from "../layout.ts";
 import { alarm, layPlan, makePlan, paintPlan, type Plan } from "../plan.ts";
 import { S, seenFrom } from "../state.ts";
@@ -219,7 +220,7 @@ function forSale(y: Yard): readonly { price: string; x: number; y: number }[] {
     !y.plots.includes(plot.plot) && plotState(y, plot.plot).state === "for sale"
       ? [
           {
-            price: plot.price.toLocaleString("en-US"),
+            price: whole(plot.price),
             x: (plot.x + plot.w / 2) * MAP,
             y: (plot.y + plot.h / 2) * MAP,
           },
@@ -408,10 +409,10 @@ function troubleView(art: Art, host: HTMLElement): () => void {
 // ---------- makes and needs ----------
 
 /** Coins kept in thousandths, as whole Coins. */
-const coins = (thousandths: number): string => Math.floor(thousandths / MILLI).toLocaleString("en-US");
+const coins = (thousandths: number): string => whole(Math.floor(thousandths / MILLI));
 
 function needsView(_art: Art, host: HTMLElement): () => void {
-  const things = table("Items", ["Can make", "Can use", "Reached the depot"], { unit: "/min", stack: true });
+  const things = table("Items", ["Can make", "Can use", "Reached the depot"], { unit: PER_MINUTE, stack: true });
   const none = el("div", "k-dim", { text: "Nothing is made yet." });
   const over = el("div", "k-s k-dim");
   const totals = table("In total", [""], { wide: 60 });
@@ -432,12 +433,12 @@ function needsView(_art: Art, host: HTMLElement): () => void {
       rows.map((f): Line => {
         const short = f.needed - f.made;
         const lacks = short >= SHORT;
-        const need = aMinute(f.needed);
+        const need = cellOf(f.needed);
         return {
           key: String(f.item),
           head: () => thing(itemRef(f.item)),
-          ...(lacks ? { note: `Can use ${said(aMinute(short))} more than it makes` } : {}),
-          cells: [aMinute(f.made), lacks ? [said(need), "coral"] : need, aMinute(f.reached)],
+          ...(lacks ? { note: `Can use ${perMinute(short)} more than it makes` } : {}),
+          cells: [cellOf(f.made), lacks ? [said(need), "coral"] : need, cellOf(f.reached)],
         };
       }),
     );
@@ -448,7 +449,7 @@ function needsView(_art: Art, host: HTMLElement): () => void {
       { key: "orders", head: () => "Coins from orders", cells: [[coins(y.paid), "gold"]] },
       { key: "depot", head: () => "Coins from the depot", cells: [[coins(y.sold), "gold"]] },
       { key: "goals", head: () => "Goals done", cells: [`${y.done.filter(isNode).length} of ${NODE_COUNT}`] },
-      { key: "handed", head: () => "Side orders handed over", cells: [y.handed.toLocaleString("en-US")] },
+      { key: "handed", head: () => "Side orders handed over", cells: [whole(y.handed)] },
     ]);
   };
 }

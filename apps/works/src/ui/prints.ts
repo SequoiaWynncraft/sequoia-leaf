@@ -58,6 +58,7 @@ import {
   unlocked,
   worthAt,
 } from "@sequoia-leaf/factory";
+import { perMinute, whole } from "@sequoia-leaf/kit/say.ts";
 
 import { WORKS_KEYS } from "../keymap.ts";
 import { layout, sendsRight } from "../layout.ts";
@@ -86,8 +87,6 @@ import { given, givenTo, lockOf, needsOf, nextUp, researchOpen, tierOpen } from 
 /** A number read back out of a reference, if it is a whole one. */
 const numberIn = (id: string): number => (/^\d+$/.test(id) ? Number(id) : -1);
 const asItem = (n: number): Item | null => (isItem(n) ? n : null);
-/** A count as a card prints it: "1,200". */
-const counted = (v: number): string => v.toLocaleString("en-US", { maximumFractionDigits: 3 });
 
 function itemPrint(k: Item): ItemPrint {
   const w = S.world;
@@ -100,12 +99,12 @@ function itemPrint(k: Item): ItemPrint {
     asked.push({
       ref: orderRef("story"),
       name: hand.title,
-      note: `${counted(owed(hand.want, got))} owed`,
+      note: `${whole(owed(hand.want, got))} owed`,
       tag: "in hand",
     });
   w.board.forEach((o, slot) => {
     const left = owed(o.want, o.filled);
-    if (left > 0) asked.push({ ref: orderRef(slot), name: o.title, note: `${counted(left)} owed` });
+    if (left > 0) asked.push({ ref: orderRef(slot), name: o.title, note: `${whole(left)} owed` });
   });
   const found: [Plot, number, boolean][] = [];
   // A thing from the ground says where it lies.
@@ -192,7 +191,7 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     making: making ? making.out : null,
     flow: flowOf(w, i, saysNumbers(w)),
     gathering: k === GATHERER ? asItem(w.land.deposit[i] ?? NONE) : null,
-    perMinute: per > 0 ? Math.round(per) : null,
+    perMinute: per > 0 ? perMinute(per) : null,
     numbers: saysNumbers(w) ? numbersOf(w, i) : [],
     set,
     sorts: can ? ALL_ITEMS.filter((t) => can.has(t) || (w.depot[t] ?? 0) > 0 || set === t) : [],

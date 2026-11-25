@@ -26,6 +26,7 @@ import {
 } from "@sequoia-leaf/factory";
 import { describe } from "@sequoia-leaf/kit/card.ts";
 import { el } from "@sequoia-leaf/kit/dom.ts";
+import { perMinute } from "@sequoia-leaf/kit/say.ts";
 
 import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
@@ -40,8 +41,6 @@ import { given, lockOf, needsOf, researchOf, studyStands } from "./standing.ts";
 export const researchHooks: { changed: () => void } = { changed: () => {} };
 
 const WORKING = STATES.indexOf("working");
-/** A number as the screen says it: whole, or to one place. */
-const n = (v: number): string => v.toLocaleString("en-US", { maximumFractionDigits: 1 });
 /** A list in words: "a, b and c". */
 const listed = (parts: readonly string[]): string =>
   parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1) ?? ""}` : (parts[0] ?? "");
@@ -74,7 +73,7 @@ export function studying(): { pace: number; working: number; says: string } {
     standing === 0
       ? "No Study stands."
       : working > 0
-        ? `${n(pace)} folios a minute from ${working} ${many(working)}.`
+        ? `${perMinute(pace, "folios")} from ${working} ${many(working)}.`
         : dark === standing
           ? `No power reaches the ${many(standing)}.`
           : missing.size > 0

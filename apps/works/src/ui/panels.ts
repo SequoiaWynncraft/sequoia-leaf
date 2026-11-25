@@ -35,6 +35,7 @@ import {
   WORKSHOP,
 } from "@sequoia-leaf/factory";
 import { amount, asking, asksAgain, el, icon, pressedTwice, replay } from "@sequoia-leaf/kit/dom.ts";
+import { whole } from "@sequoia-leaf/kit/say.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
 
@@ -166,7 +167,7 @@ const boardEnd = (p: ReturnType<typeof ordersPrint>): HTMLElement[] =>
         ...Array.from({ length: Math.max(0, p.hooks - p.orders.length) }, () =>
           el("div", "k-card order waiting", {}, el("div", "k-dim", { text: "A new order is on its way." })),
         ),
-        el("div", "k-d", { text: `Orders handed over: ${p.handed.toLocaleString("en-US")}` }),
+        el("div", "k-d", { text: `Orders handed over: ${whole(p.handed)}` }),
       ]
     : [];
 

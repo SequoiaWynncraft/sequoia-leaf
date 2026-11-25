@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { item, makes, MILL, RECIPE, step } from "@sequoia-leaf/factory";
 import { delivering } from "@sequoia-leaf/factory/test/yards.ts";
 
-import { aMinute, flowRows, said, yardFlows } from "./flows.ts";
+import { cellOf, flowRows, said, yardFlows } from "./flows.ts";
 
 const plank = item("plank");
 const ore = item("ore");
@@ -11,10 +11,15 @@ const clay = item("clay");
 const ingot = item("ingot");
 
 describe("makes and needs", () => {
-  test("a number a minute is whole from ten up, to one decimal under ten unless it is whole, and none is faint", () => {
-    expect([40, 37.5, 1234.4, 10, 9.96].map((v) => said(aMinute(v)))).toEqual(["40", "38", "1,234", "10", "10"]);
-    expect([2.5, 0.3, 9.94, 3, 0.04].map((v) => said(aMinute(v)))).toEqual(["2.5", "0.3", "9.9", "3", "0"]);
-    expect([aMinute(0), aMinute(0.04), aMinute(3)]).toEqual([["0", "faint"], ["0", "faint"], "3"]);
+  test("a number a minute is said as a quantity is (`num`), and none is faint", () => {
+    expect([40, 37.5, 1234.4, 10, 9.96].map((v) => said(cellOf(v)))).toEqual(["40", "38", "1,234", "10", "10"]);
+    expect([2.5, 0.3, 9.94, 3, 0.04].map((v) => said(cellOf(v)))).toEqual(["2.5", "0.3", "9.9", "3", "0"]);
+    expect([cellOf(0), cellOf(0.04), cellOf(-2), cellOf(3)]).toEqual([
+      ["0", "faint"],
+      ["0", "faint"],
+      ["0", "faint"],
+      "3",
+    ]);
   });
 
   test("the rows are every thing made, needed or come in; what the yard is short of first, the largest shortfall first, the rest in the tables' order", () => {

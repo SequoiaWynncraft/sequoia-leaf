@@ -7,6 +7,7 @@
 
 import { ALL_ITEMS, type Away, finishedSince, isFilled, knownSince, TICK_MS } from "@sequoia-leaf/factory";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { coinsText, whole } from "@sequoia-leaf/kit/say.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
@@ -95,18 +96,14 @@ function write(scope: Scope, away: Away, done: () => void): () => void {
     if (made) lines.push(el("div", "line", {}, el("hr"), made.node));
   };
   if (away.coins > 0)
-    line(
-      coinArt,
-      el("span", "k-grow", { text: "Earned" }),
-      el("b", "", { text: `+${away.coins.toLocaleString("en-US")}` }),
-    );
+    line(coinArt, el("span", "k-grow", { text: "Earned" }), el("b", "", { text: `+${whole(away.coins)}` }));
   const most = ALL_ITEMS.filter((k) => (away.made[k] ?? 0) > 0)
     .toSorted((a, b) => (away.made[b] ?? 0) - (away.made[a] ?? 0))
     .slice(0, 5);
   list(
     counted(
       "The depot took in",
-      most.map((k) => [itemRef(k), (away.made[k] ?? 0).toLocaleString("en-US")] as const),
+      most.map((k) => [itemRef(k), whole(away.made[k] ?? 0)] as const),
     ),
   );
   if (lines.length === 0) line(icon("heart"), el("span", "k-grow", { text: "Nothing reached the depot." }));
@@ -118,7 +115,7 @@ function write(scope: Scope, away: Away, done: () => void): () => void {
     counted(
       "To hand over",
       S.world.board.flatMap((o, slot) =>
-        isFilled(o.want, o.filled) ? [[orderRef(slot), `${o.pay.toLocaleString("en-US")} Coins`] as const] : [],
+        isFilled(o.want, o.filled) ? [[orderRef(slot), coinsText(o.pay)] as const] : [],
       ),
     ),
   );

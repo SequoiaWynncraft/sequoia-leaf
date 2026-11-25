@@ -8,6 +8,7 @@
 import { add, el, icon as glyph, replay, shown, when } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { balance, type Currency } from "@sequoia-leaf/kit/purse.ts";
+import { whole } from "@sequoia-leaf/kit/say.ts";
 import { type Scope, scope } from "@sequoia-leaf/kit/scope.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
@@ -78,9 +79,6 @@ export function sheet(title: string, rows: readonly Count[]): HTMLElement {
   );
 }
 
-/** A number as the town writes it: 1,234. */
-const written = (v: number): string => v.toLocaleString("en-US");
-
 /** The member's level, how far through it they are, and its bar. */
 export function levelBar(me: Pick<Me, "level" | "xp" | "next">): HTMLElement[] {
   const fill = el("i");
@@ -91,7 +89,7 @@ export function levelBar(me: Pick<Me, "level" | "xp" | "next">): HTMLElement[] {
       "k-row",
       {},
       el("span", "k-grow", { text: `Level ${me.level}` }),
-      el("span", "k-dim", { text: `${written(me.xp)} / ${written(me.next)} XP` }),
+      el("span", "k-dim", { text: `${whole(me.xp)} / ${whole(me.next)} XP` }),
     ),
     el("div", "k-bar", {}, fill),
   ];

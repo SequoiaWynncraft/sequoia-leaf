@@ -29,6 +29,7 @@ import {
   STUDY,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { num, perMinute } from "@sequoia-leaf/kit/say.ts";
 
 let known: { open: Yard["open"]; yes: boolean } | null = null;
 /** Whether the yard may make a recipe that takes more than 1 of a part: from then on its cards say numbers. */
@@ -41,11 +42,9 @@ export function saysNumbers(w: Yard): boolean {
   return known.yes;
 }
 
-/** A number as a card says it: whole, or to one place. */
-const n = (v: number): string => v.toLocaleString("en-US", { maximumFractionDigits: 1 });
-/** So many of a thing: "1 plank", "60 planks". */
-const things = (v: number, k: number): string =>
-  `${n(v)} ${v === 1 ? (ITEM_INFO[k]?.name ?? "").toLowerCase() : (ITEM_INFO[k]?.many ?? "")}`;
+/** What so many of a thing are called: "plank" for 1, "planks" for 60. */
+const called = (v: number, k: number): string =>
+  num(v) === "1" ? (ITEM_INFO[k]?.name ?? "").toLowerCase() : (ITEM_INFO[k]?.many ?? "");
 
 /**
  * What the piece standing on a tile does a minute, in a sentence, where its card's pace (`paceOf` in
@@ -59,11 +58,10 @@ export function numbersOf(w: Yard, i: number): string[] {
   if (share >= 1) return [];
   if (k === GATHERER) {
     const raw = w.land.deposit[i] ?? NONE;
-    return isItem(raw)
-      ? [`Gathers ${things(makes(GATHERER, grade, null) * share, raw)} a minute: power is short.`]
-      : [];
+    const pace = makes(GATHERER, grade, null) * share;
+    return isItem(raw) ? [`Gathers ${perMinute(pace, called(pace, raw))}: power is short.`] : [];
   }
-  if (k === STUDY) return [`Studies ${n(makes(STUDY, grade, null) * share)} folios a minute: power is short.`];
+  if (k === STUDY) return [`Studies ${perMinute(makes(STUDY, grade, null) * share, "folios")}: power is short.`];
   return [];
 }
 

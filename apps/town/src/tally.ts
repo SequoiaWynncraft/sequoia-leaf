@@ -17,7 +17,7 @@ import {
 } from "@sequoia-leaf/core";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
-import { duration } from "@sequoia-leaf/kit/person.ts";
+import { duration, whole } from "@sequoia-leaf/kit/say.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 
 /** Kept in the browser once the member has opened the Tally. */
@@ -58,10 +58,10 @@ export interface Board {
   readonly you: Place | null;
 }
 
-const whole = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
+const isWhole = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
 
 function placeOf(v: unknown): Place | null {
-  return isRecord(v) && whole(v.place) && whole(v.score) ? { place: v.place, score: v.score } : null;
+  return isRecord(v) && isWhole(v.place) && isWhole(v.score) ? { place: v.place, score: v.score } : null;
 }
 
 function rowOf(v: unknown): Row | null {
@@ -86,7 +86,7 @@ export function readBoard(v: unknown): Board | null {
 export function scoreText(unit: TallyUnit, score: number): string {
   if (unit === "time") return duration(score);
   if (unit === "level") return `Level ${score}`;
-  return score.toLocaleString("en-US");
+  return whole(score);
 }
 
 /**

@@ -14,6 +14,7 @@ import type { Placed } from "@sequoia-leaf/core";
 
 import { type Action, type Description, refresh, register, type Stat } from "./card.ts";
 import { ask, isRecord, outside } from "./net.ts";
+import { duration } from "./say.ts";
 
 /** What a game says of somebody's standing in it: its name, and their numbers, given the Coins it has taken from them. */
 export interface GameStats {
@@ -111,16 +112,6 @@ export function readPerson(v: unknown): Said | null {
 export async function askPerson(id: string): Promise<Said | null> {
   const a = await ask(`/v1/game/people/${encodeURIComponent(id)}`);
   return a.status === 200 ? readPerson(a.body) : null;
-}
-
-/** A time played, as the card writes it: "under 1 min", "42 min", "3 h 20 min" ("3 h" on the hour), and from 100 hours "132 h". */
-export function duration(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  if (minutes < 1) return "under 1 min";
-  if (hours < 1) return `${minutes} min`;
-  if (hours >= 100 || minutes % 60 === 0) return `${hours.toLocaleString("en-US")} h`;
-  return `${hours} h ${minutes % 60} min`;
 }
 
 /** "Time played", for a time above none; "Time AFK", for a minute or more. */

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { isRecord } from "./net.ts";
-import { duration, type GameStats, numbersOf, readBoard, readPerson } from "./person.ts";
+import { type GameStats, numbersOf, readBoard, readPerson } from "./person.ts";
 
 /** What Leaf's game routes really answer, from the contract its own tests write. */
 const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
@@ -100,40 +100,6 @@ describe("a person's card", () => {
     expect(readPerson({ name: "Wrenly", games: { works }, played: 5 })).toBeNull();
     expect(readPerson({ code: "no_such_player" })).toBeNull();
   });
-});
-
-test("a time played is written in minutes under an hour, hours and minutes under 100 hours, and hours from there", () => {
-  const MIN = 60;
-  const HOUR = 60 * MIN;
-  expect(
-    [
-      0,
-      59,
-      MIN,
-      42 * MIN + 59,
-      HOUR - 1,
-      HOUR,
-      3 * HOUR,
-      3 * HOUR + 20 * MIN,
-      100 * HOUR - 1,
-      100 * HOUR,
-      132 * HOUR + 59 * MIN,
-      1320 * HOUR,
-    ].map(duration),
-  ).toEqual([
-    "under 1 min",
-    "under 1 min",
-    "1 min",
-    "42 min",
-    "59 min",
-    "1 h",
-    "3 h",
-    "3 h 20 min",
-    "99 h 59 min",
-    "100 h",
-    "132 h",
-    "1,320 h",
-  ]);
 });
 
 test("a board reads what Leaf really answers, and nothing from what makes no sense", () => {

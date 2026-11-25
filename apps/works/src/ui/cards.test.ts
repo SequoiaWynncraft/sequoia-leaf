@@ -71,8 +71,8 @@ describe("a card", () => {
     // The same count of changes: only power, which the card does not name, differs.
     S.world = short;
     const after = printOf(ref);
-    expect(before).toMatchObject({ line: "Waiting for planks and ingots to make tools.", perMinute: 30 });
-    expect(after).toMatchObject({ line: "Waiting for planks and ingots to make tools.", perMinute: 21 });
+    expect(before).toMatchObject({ line: "Waiting for planks and ingots to make tools.", perMinute: "30 /min" });
+    expect(after).toMatchObject({ line: "Waiting for planks and ingots to make tools.", perMinute: "21 /min" });
     expect(cardKey(ref)).not.toBe(key);
   });
 
@@ -186,7 +186,7 @@ describe("the cards of tiers 2 and 3", () => {
     // Tools from a plank and an ingot, one of each: the parts and what it holds, and no numbers a minute.
     expect(printOf(tileRef(at(S.world, 20, 15)))).toMatchObject({
       numbers: [],
-      perMinute: 30,
+      perMinute: "30 /min",
       flow: {
         out: item("tool"),
         perMinute: 30,

@@ -6,7 +6,7 @@
  * What the member has won there reaches the camp through Leaf too (its awards).
  */
 
-import type { Postcards } from "@sequoia-leaf/core";
+import { coinsText, type Postcards } from "@sequoia-leaf/core";
 import { WORKS_STATS } from "@sequoia-leaf/factory/stats.ts";
 import { RAID_STATS } from "@sequoia-leaf/raid/stats.ts";
 
@@ -66,9 +66,8 @@ export const isGame = (id: string): id is GameId => id === "works" || id === "ta
 export function worksWaiting(doors: Postcards): AwayLine | null {
   const till = doors.works?.till ?? 0;
   if (till < 1) return null;
-  const coins = till === 1 ? "1 Coin" : `${till.toLocaleString("en-US")} Coins`;
   return {
     art: "coin",
-    text: `Your Works has ${coins} waiting for you. Go in to collect ${till === 1 ? "it" : "them"}.`,
+    text: `Your Works has ${coinsText(till)} waiting for you. Go in to collect ${till === 1 ? "it" : "them"}.`,
   };
 }
