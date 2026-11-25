@@ -8,6 +8,7 @@ import { AppConfig } from "../config.ts";
 import type { Events } from "../events/store.ts";
 import type { FeedError } from "../feeds.ts";
 import type { Ledger } from "../ledger/store.ts";
+import type { Logins } from "../players/logins.ts";
 import type { Quests } from "../quests/store.ts";
 import { syncCredits, type SyncMode, type SyncResult } from "./sync.ts";
 
@@ -52,7 +53,7 @@ const onDemand = Effect.gen(function* () {
   }
 }).pipe(Effect.catchCause((cause) => Effect.logError("The on-demand credit sync failed", cause)));
 
-type Needs = AppConfig | SqlClient.SqlClient | HttpClient.HttpClient | Ledger | Quests | Events;
+type Needs = AppConfig | SqlClient.SqlClient | HttpClient.HttpClient | Ledger | Quests | Events | Logins;
 
 /**
  * The credit sync and what must not happen in the middle of one, one at a time

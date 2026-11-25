@@ -1,4 +1,4 @@
-import type { PlayerId } from "@sequoia-leaf/core";
+import type { MinecraftId, PlayerId } from "@sequoia-leaf/core";
 import { Context, type Redacted, Schema } from "effect";
 import {
   HttpApi,
@@ -10,6 +10,7 @@ import {
   OpenApi,
 } from "effect/http-api";
 
+import type { DiscordId } from "../wire.ts";
 import {
   BadOrigin,
   BodyTooLarge,
@@ -72,6 +73,10 @@ import {
 /** Who is making a request, as sequoia-backend vouches for them. */
 export interface Identity {
   readonly playerId: PlayerId;
+  /** The Minecraft account they signed in with, if they signed in with one. */
+  readonly minecraft: MinecraftId | null;
+  /** The Discord account they signed in with. */
+  readonly discord: DiscordId | null;
   readonly username: string;
   /** The player's rank in the guild, or null when they are not a member now. */
   readonly guildRank: string | null;

@@ -11,6 +11,7 @@ import {
   LIVE_PATH,
   LIVE_VERSION,
   livePath,
+  minecraftId,
   type Motion,
   playerId,
   readToClient,
@@ -947,8 +948,8 @@ describe("opening a connection", () => {
     await start({ mostPlayers: 1 });
     const sessionOk = Effect.succeed(true);
     const session = Redacted.make("a session");
-    const alicesIdentity = { playerId: alice, username: "Alice", guildRank: "CAPTAIN", admin: false, session };
-    const bobsIdentity = { playerId: bob, username: "Bob", guildRank: "RECRUIT", admin: false, session };
+    const alicesIdentity = { ...signedInAs(alice), username: "Alice", guildRank: "CAPTAIN", admin: false, session };
+    const bobsIdentity = { ...signedInAs(bob), username: "Bob", guildRank: "RECRUIT", admin: false, session };
     const opening = await Effect.runPromise(Deferred.make<Socket.Socket, Error>());
     // Alice's socket is slow to open: past the time her open's charge refills.
     const pending = services?.run(
@@ -1047,8 +1048,13 @@ function standInSocket(written: unknown[]): Socket.Socket {
   });
 }
 
+/** A player who signed in with the Minecraft account of their own id, and no Discord account Leaf heard of. */
+function signedInAs(id: typeof alice) {
+  return { playerId: id, minecraft: minecraftId(id), discord: null };
+}
+
 const alicesIdentity = {
-  playerId: alice,
+  ...signedInAs(alice),
   username: "Alice",
   guildRank: "CAPTAIN",
   admin: false,

@@ -1,5 +1,21 @@
-export { type AchievementAward, type AchievementRules, leafForAward, type PayingLadder } from "./achievements.ts";
-export { type Activity, type ActivityKind, RAID_KEYS, type RaidKey, raidKeyForName, RAIDS } from "./activity.ts";
+export {
+  type AchievementAward,
+  type AchievementRules,
+  awardOf,
+  leafForAward,
+  type PayingLadder,
+  type ReportedAward,
+} from "./achievements.ts";
+export {
+  type Activity,
+  type ActivityKind,
+  activityOf,
+  RAID_KEYS,
+  type RaidKey,
+  raidKeyForName,
+  RAIDS,
+  type ReportedActivity,
+} from "./activity.ts";
 export { type Balances, PURSE_HEADER, readBalances } from "./balances.ts";
 export { DAILY_CHEST, EARNINGS } from "./coins.ts";
 export { DAY_MS, utcDay, utcWeekStart, WEEK_MS } from "./days.ts";
@@ -38,7 +54,15 @@ export {
   PAGE_ERRORS_PATH,
   PAGES,
 } from "./page-errors.ts";
-export { parsePlayerId, type PlayerId, playerId } from "./player.ts";
+export {
+  type MinecraftId,
+  minecraftId,
+  ownPlayer,
+  parseMinecraftId,
+  parsePlayerId,
+  type PlayerId,
+  playerId,
+} from "./player.ts";
 export { clamp, hash, type Pt, type Rect, vnoise } from "./plane.ts";
 export { below, chance, draw32, mix, pick, shuffled, type Stream, weighted } from "./rng.ts";
 export { NO_POSTCARDS, type Postcard, type Postcards, readPostcard, readPostcards } from "./postcard.ts";

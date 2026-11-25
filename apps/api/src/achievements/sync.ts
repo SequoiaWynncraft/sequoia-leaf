@@ -1,16 +1,26 @@
-import { type AchievementAward, draftEntry, leaf, leafForAward, type PlayerId, type Rules } from "@sequoia-leaf/core";
+import {
+  awardOf,
+  draftEntry,
+  leaf,
+  leafForAward,
+  ownPlayer,
+  type PlayerId,
+  type ReportedAward,
+  type Rules,
+} from "@sequoia-leaf/core";
 import { Effect } from "effect";
 
 import { Events } from "../events/store.ts";
 import { Ledger } from "../ledger/store.ts";
 import { levelOf, levelUp } from "../levels/pay.ts";
+import { Logins } from "../players/logins.ts";
 import { type SyncMode, windowedSync } from "../sync/windowed.ts";
 
-/** Reads the achievement milestones players reached during [from, to), in milliseconds since the Unix epoch. */
+/** Reads the achievement milestones Minecraft accounts reached during [from, to), in milliseconds since the Unix epoch. */
 export type AwardSource<E = never, R = never> = (
   from: number,
   to: number,
-) => Effect.Effect<readonly AchievementAward[], E, R>;
+) => Effect.Effect<readonly ReportedAward[], E, R>;
 
 /**
  * Pays the Leaf each new achievement milestone earns, with an event for each.
@@ -26,7 +36,9 @@ export const syncAchievements = <E, R>(source: AwardSource<E, R>, rules: Rules, 
       const levelBefore = new Map<PlayerId, number>();
       let recorded = 0;
       let leafPaid = 0;
-      for (const award of inWindow(awards, from, to)) {
+      const reached = inWindow(awards, from, to);
+      const players = yield* (yield* Logins).players(reached.map((award) => award.account));
+      for (const award of reached.map((r) => awardOf(r, players.get(r.account) ?? ownPlayer(r.account)))) {
         const amount = leafForAward(award, rules.achievements);
         const idempotencyKey = `achievement:${award.awardId}`;
         if (amount === 0 || award.milestoneId === null || (yield* ledger.isRecorded(idempotencyKey))) {
@@ -75,8 +87,8 @@ export const syncAchievements = <E, R>(source: AwardSource<E, R>, rules: Rules, 
   );
 
 /** The awards earned in [from, to), each once, oldest first. */
-function inWindow(awards: readonly AchievementAward[], from: number, to: number): AchievementAward[] {
-  const unique = new Map<string, AchievementAward>();
+function inWindow(awards: readonly ReportedAward[], from: number, to: number): ReportedAward[] {
+  const unique = new Map<string, ReportedAward>();
   for (const award of awards) {
     if (award.earnedAt >= from && award.earnedAt < to) {
       unique.set(award.awardId, award);

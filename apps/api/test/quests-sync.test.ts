@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 
-import { type Activity, DEFAULT_RULES, type PlayerId, playerId, refreshQuests, type Rules } from "@sequoia-leaf/core";
+import {
+  DEFAULT_RULES,
+  minecraftId,
+  type PlayerId,
+  playerId,
+  refreshQuests,
+  type ReportedActivity,
+  type Rules,
+} from "@sequoia-leaf/core";
 
 import { type CreditSource, syncCredits } from "../src/earning/sync.ts";
 import { Ledger } from "../src/ledger/store.ts";
@@ -31,11 +39,11 @@ const rules: Rules = {
   },
 };
 
-function war(id: number, player: PlayerId, occurredAt: number): Activity {
+function war(id: number, player: PlayerId, occurredAt: number): ReportedActivity {
   return {
     kind: "war",
     sourceKey: `war:${id}:${player}`,
-    playerId: player,
+    account: minecraftId(player),
     occurredAt,
     seasonRating: 60,
     territory: "Detlas",

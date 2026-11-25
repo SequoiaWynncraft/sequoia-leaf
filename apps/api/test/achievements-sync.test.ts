@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 
-import { type AchievementAward, DEFAULT_RULES, type PlayerId, playerId, type Rules } from "@sequoia-leaf/core";
+import {
+  DEFAULT_RULES,
+  minecraftId,
+  type PlayerId,
+  playerId,
+  type ReportedAward,
+  type Rules,
+} from "@sequoia-leaf/core";
 import { Effect } from "effect";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
@@ -22,10 +29,10 @@ beforeEach(() => {
   ledger = testLeaf({ now: T0 }, () => Promise.reject(new Error("No network in this test")));
 });
 
-function award(player: PlayerId, ladder: string, milestoneId: string | null, earnedAt: number): AchievementAward {
+function award(player: PlayerId, ladder: string, milestoneId: string | null, earnedAt: number): ReportedAward {
   return {
     awardId: `${player}:${ladder}:${milestoneId ?? "badge"}`,
-    playerId: player,
+    account: minecraftId(player),
     ladder,
     milestoneId,
     tier: milestoneId,
@@ -38,7 +45,7 @@ function award(player: PlayerId, ladder: string, milestoneId: string | null, ear
 const unreachable: AwardSource<Error> = () => Effect.fail(new Error("Sierra is down"));
 
 /** A feed that answers a window with the awards inside it. The list can grow, as Sierra's does. */
-function feed(awards: AchievementAward[]): AwardSource {
+function feed(awards: ReportedAward[]): AwardSource {
   return (from, to) => Effect.succeed(awards.filter((one) => one.earnedAt >= from && one.earnedAt < to));
 }
 
@@ -133,7 +140,7 @@ describe("syncAchievements", () => {
   });
 
   it("pays a milestone that Sierra reports late once the deep run reads its window again", async () => {
-    const awards: AchievementAward[] = [];
+    const awards: ReportedAward[] = [];
     const source = feed(awards);
     await sync(source, T0);
     await sync(source, T0 + 60 * MINUTE);
@@ -155,7 +162,7 @@ describe("syncAchievements", () => {
 
   it("lets one run through at a time", async () => {
     await sync(feed([]), T0);
-    const answer = Promise.withResolvers<AchievementAward[]>();
+    const answer = Promise.withResolvers<ReportedAward[]>();
     const slow: AwardSource = () => Effect.promise(() => answer.promise);
 
     const first = sync(slow, T0 + MINUTE);

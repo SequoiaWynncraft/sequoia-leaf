@@ -1,9 +1,9 @@
-import { type Activity, raidKeyForName } from "@sequoia-leaf/core";
+import { raidKeyForName, type ReportedActivity } from "@sequoia-leaf/core";
 import { Effect, Schema } from "effect";
 import type { HttpClient } from "effect/http";
 
 import { type FeedConfig, type FeedError, readFeedWindow } from "../feeds.ts";
-import { IsoTime, PlayerUuid } from "../wire.ts";
+import { IsoTime, MinecraftUuid } from "../wire.ts";
 
 /** One raid party member's credit, as sequoia-backend's `/internal/player-credits` lists it. */
 const RaidCredit = Schema.Struct({
@@ -12,7 +12,7 @@ const RaidCredit = Schema.Struct({
   raid_name: Schema.NonEmptyString,
   /** This member's share of the rating the raid earned the guild. */
   season_rating: Schema.Int,
-  player_uuid: PlayerUuid,
+  player_uuid: MinecraftUuid,
 });
 
 /** One war participant's credit. */
@@ -25,7 +25,7 @@ const WarCredit = Schema.Struct({
   war_points: Schema.NullOr(Schema.Finite),
   /** Whether the territory was in Sequoia's claim; left out, or null, when the backend does not know. */
   in_claim: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
-  player_uuid: PlayerUuid,
+  player_uuid: MinecraftUuid,
 });
 
 const CreditFeed = Schema.Struct({ raids: Schema.Array(RaidCredit), wars: Schema.Array(WarCredit) });
@@ -39,16 +39,16 @@ export const readCredits = (
   config: FeedConfig,
   from: number,
   to: number,
-): Effect.Effect<Activity[], FeedError, HttpClient.HttpClient> =>
+): Effect.Effect<ReportedActivity[], FeedError, HttpClient.HttpClient> =>
   readFeedWindow("credits", config, "/internal/player-credits", CreditFeed, from, to).pipe(
     Effect.map(({ raids, wars }) => raids.map(raidActivity).concat(wars.flatMap(warActivity))),
   );
 
-function raidActivity(row: typeof RaidCredit.Type): Activity {
+function raidActivity(row: typeof RaidCredit.Type): ReportedActivity {
   return {
     kind: "raid",
     sourceKey: `raid:${row.completion_id}:${row.player_uuid}`,
-    playerId: row.player_uuid,
+    account: row.player_uuid,
     occurredAt: row.completed_at,
     seasonRating: row.season_rating,
     raid: raidKeyForName(row.raid_name),
@@ -57,14 +57,14 @@ function raidActivity(row: typeof RaidCredit.Type): Activity {
 }
 
 /** None while the backend has not scored the war. */
-function warActivity(row: typeof WarCredit.Type): Activity[] {
+function warActivity(row: typeof WarCredit.Type): ReportedActivity[] {
   if (row.war_points === null) {
     return [];
   }
   const war = {
     kind: "war",
     sourceKey: `war:${row.war_submission_id}:${row.player_uuid}`,
-    playerId: row.player_uuid,
+    account: row.player_uuid,
     occurredAt: row.completed_at,
     seasonRating: row.season_rating,
     territory: row.territory,

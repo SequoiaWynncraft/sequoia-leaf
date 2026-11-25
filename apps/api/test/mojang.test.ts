@@ -1,13 +1,14 @@
 import { describe, expect, it } from "bun:test";
 
-import { leaf, playerId } from "@sequoia-leaf/core";
+import { leaf, minecraftId } from "@sequoia-leaf/core";
 import { Effect, Option } from "effect";
 
 import { MAX_SKIN_BYTES, Mojang, MojangError } from "../src/game/mojang.ts";
+import { Logins } from "../src/players/logins.ts";
 import { fakeBackend, type Fetcher, sessionOf, skinPng, testLeaf } from "./support.ts";
 
-const alice = playerId("10000000-0000-0000-0000-000000000001");
-const bob = playerId("10000000-0000-0000-0000-00000000000b");
+const alice = minecraftId("10000000-0000-0000-0000-000000000001");
+const bob = minecraftId("10000000-0000-0000-0000-00000000000b");
 
 /** A profile as Mojang's session server sends it, with its textures property base64-encoded. */
 function profile(name: string, textures: unknown) {
@@ -128,9 +129,10 @@ describe("Mojang, over the network", () => {
     const services = testLeaf({ now: 0 }, (url, init) =>
       new URL(url).hostname === "backend.test" ? backend.fetcher(url, init) : fetcher(url, init),
     );
-    // Bob has earned Leaf, so Leaf knows him.
+    // Bob's account has earned Leaf, so Leaf knows him.
+    const bobs = await services.run(Logins.use((logins) => logins.player(bob)));
     await services.post(
-      { kind: "earn", playerId: bob, amount: leaf(110), source: "raid", idempotencyKey: "raid:1" },
+      { kind: "earn", playerId: bobs, amount: leaf(110), source: "raid", idempotencyKey: "raid:1" },
       0,
     );
     const app = services.app();

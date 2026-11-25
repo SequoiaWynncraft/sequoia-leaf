@@ -2,6 +2,7 @@ import { DAY_MS, type PlayerId } from "@sequoia-leaf/core";
 import { Cache, Clock, Context, Duration, Effect, Exit, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
+import { Logins } from "../players/logins.ts";
 import { knownAmong, UNASKED_KEPT_MS } from "./known.ts";
 import { MAX_SKIN_BYTES, Mojang, MojangError } from "./mojang.ts";
 import { PlayerNames } from "./names.ts";
@@ -108,6 +109,7 @@ export class Skins extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const mojang = yield* Mojang;
       const names = yield* PlayerNames;
+      const logins = yield* Logins;
       const kept = SqlSchema.findOneOption({
         Request: Schema.String,
         Result: Kept,
@@ -118,7 +120,9 @@ export class Skins extends Context.Service<
       /** Asks Mojang for the player's skin now, and keeps what it answers. */
       const fetch = (playerId: PlayerId, now: number) =>
         Effect.gen(function* () {
-          const profile = yield* mojang.profile(playerId);
+          // A player with no Minecraft account has no skin at Mojang: they are drawn as Leaf draws them.
+          const account = (yield* logins.minecraftOf([playerId])).get(playerId);
+          const profile = account === undefined ? Option.none() : yield* mojang.profile(account);
           if (Option.isSome(profile)) {
             yield* names.remember(playerId, profile.value.name, now);
           }
