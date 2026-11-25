@@ -14,14 +14,21 @@ import {
   CRATE,
   create,
   encode,
+  goal,
+  highest,
+  item,
   JOINER,
   MILL,
   priceAt,
+  refusal,
+  reopen,
   SORTER,
   sortWay,
   SPLITTER,
+  STAND_MOST,
   TUNNEL,
   upgradePrice,
+  within,
   type Yard,
 } from "@sequoia-leaf/factory";
 
@@ -29,6 +36,7 @@ import { act, coinsAre, ctx, type FakeLeaf, isRecord, opened, until, useFakeLeaf
 import { gradeInHand, S } from "./state.ts";
 import {
   aimAt,
+  clearMark,
   flip,
   hold,
   markEnd,
@@ -48,6 +56,7 @@ import {
   upgradeCost,
   upgradeMark,
 } from "./tools.ts";
+import { handPrint, pressUpgrade } from "./ui/dock.ts";
 import { differences, doNow } from "./yard.ts";
 
 useFakeLeaf();
@@ -400,5 +409,110 @@ describe("many pieces at once", () => {
     expect(said.length).toBe(1);
     expect(grades([18], 13)).toEqual([1]);
     expect(doNow(act({ do: "upgrade", tiles: [at(S.world, 18, 13)] }))).toHaveProperty("refused");
+  });
+
+  test("with Select in hand and nothing marked, Upgrade all raises everything in the yard that can be raised, for the whole price or not at all; undo puts every grade back", async () => {
+    const y = yardAt(4);
+    for (const x of [18, 19, 20]) build(y, BELT, x, 13, 0, Infinity);
+    build(y, MILL, 21, 13, 0, Infinity);
+    build(y, CRATE, 22, 13, 0, Infinity);
+    build(y, BELT, 18, 16, 0, Infinity);
+    const fake = await opened(y, 0);
+    const said = listen();
+    setTool("select");
+    const cost = upgradePrice(S.world, within(S.world, 0, 0, S.world.land.w - 1, S.world.land.h - 1));
+    expect(cost).toBeGreaterThan(0);
+    // With no Coins it is offered, drawn as short of its whole price.
+    expect(handPrint().upgrade).toEqual({ all: true, cost, asking: false, short: cost });
+    const before = encode(S.world);
+    // Short by one Coin: none is raised, the rules say by how much, and nothing is sent.
+    coinsAre(cost - 1);
+    expect(handPrint().upgrade).toMatchObject({ short: 1 });
+    expect(upgradeMark(true)).toBe(false);
+    expect(said).toEqual(["Not enough Coins: 1 short."]);
+    expect(encode(S.world)).toBe(before);
+    await Bun.sleep(5);
+    expect(sent(fake)).toEqual([]);
+    coinsAre(cost);
+    expect(handPrint().upgrade).toMatchObject({ short: 0 });
+    expect(upgradeMark(true)).toBe(true);
+    expect([...grades([18, 19, 20, 21, 22], 13), ...grades([18], 16)]).toEqual([2, 2, 2, 2, 0, 2]);
+    // Nothing is left to raise: it is no longer offered.
+    expect(handPrint().upgrade).toBeNull();
+    await inStep(fake, 1);
+    expect(sent(fake)).toEqual(["upgrade"]);
+    coinsAre(0);
+    expect(undo()).toBe(true);
+    expect([...grades([18, 19, 20, 21, 22], 13), ...grades([18], 16)]).toEqual([1, 1, 1, 1, 0, 1]);
+    await inStep(fake, 2);
+    expect(sent(fake)).toEqual(["upgrade", "stand"]);
+  });
+
+  test("160 painted grade II sorters taken away are stood again by Undo in more than one stand, each fitting one request to Leaf", async () => {
+    const y = yardAt(4);
+    let n = 0;
+    for (let z = 0; z < y.land.h; z++)
+      for (let x = 0; x < y.land.w && n < STAND_MOST; x++) {
+        if (refusal(y, SORTER, x, z, Infinity) !== null) continue;
+        build(y, SORTER, x, z, 0, Infinity, { grade: 2 });
+        y.tint[at(y, x, z)] = 6;
+        y.set[at(y, x, z)] = item("brick");
+        n++;
+      }
+    const fake = await opened(y, 1_000_000);
+    mark(0, 0, S.world.land.w - 1, S.world.land.h - 1);
+    expect(S.mark?.pieces.length).toBe(STAND_MOST);
+    expect(clearMark()).toBe(true);
+    expect(undo()).toBe(true);
+    await until(() => fake.leaf.commands.length >= 3);
+    expect(sent(fake)).toEqual(["clear", "stand", "stand"]);
+    for (const c of fake.leaf.commands.slice(1)) expect(JSON.stringify(c).length + 40).toBeLessThanOrEqual(12_000);
+    await inStep(fake, 3);
+  });
+
+  test("Upgrade all is weighed against the Coins when pressed: short, it says by how much at once; Coins come in since it was drawn, it still asks to be pressed again", async () => {
+    const y = yardAt(4);
+    for (const x of [18, 19]) build(y, BELT, x, 13, 0, Infinity);
+    await opened(y, 0);
+    const said = listen();
+    setTool("select");
+    const cost = handPrint().upgrade?.cost ?? 0;
+    expect(cost).toBeGreaterThan(1);
+    coinsAre(cost - 1);
+    pressUpgrade(true);
+    expect(said).toEqual(["Not enough Coins: 1 short."]);
+    expect(handPrint().upgrade).toMatchObject({ asking: false });
+    // Drawn short, then the last Coin comes in before the dock is drawn again: one press only asks.
+    coinsAre(cost);
+    pressUpgrade(true);
+    expect(grades([18, 19], 13)).toEqual([1, 1]);
+    expect(handPrint().upgrade).toMatchObject({ asking: true, short: 0 });
+    pressUpgrade(true);
+    expect(grades([18, 19], 13)).toEqual([2, 2]);
+  });
+
+  test("Upgrade all is offered only with nothing marked, once Upgrading an area is known; a marked area has its own Upgrade", async () => {
+    const y = yardAt(4);
+    for (const x of [18, 19]) build(y, BELT, x, 13, 0, Infinity);
+    build(y, CRATE, 22, 13, 0, Infinity);
+    const upgrading = goal("upgrading");
+    y.done = y.done.filter((g) => g !== upgrading);
+    reopen(y);
+    await opened(y, 100_000);
+    setTool("select");
+    // The belts can be raised, but Upgrading is not known: nothing is offered, and the rules refuse it.
+    expect(highest(S.world.open, BELT)).toBe(2);
+    expect(handPrint().upgrade).toBeNull();
+    expect(upgradeMark(true)).toBe(false);
+    expect(grades([18, 19], 13)).toEqual([1, 1]);
+    S.world.done.push(upgrading);
+    reopen(S.world);
+    expect(handPrint().upgrade).toMatchObject({ all: true });
+    mark(18, 13, 18, 13);
+    expect(handPrint().upgrade).toMatchObject({ all: false, cost: upgradePrice(S.world, [at(S.world, 18, 13)]) });
+    // An area marked with nothing in it that can be raised offers neither.
+    mark(22, 13, 22, 13);
+    expect(S.mark?.pieces.length).toBe(1);
+    expect(handPrint().upgrade).toBeNull();
   });
 });

@@ -7,7 +7,7 @@ export { fromBase64, toBase64 } from "./bytes.ts";
 export { check } from "./check.ts";
 export * from "./clock.ts";
 export { type Act, type ActOf, COMMANDS, LOCKED, REFUSED, type Turned, type Wired, writeAct } from "./commands.ts";
-export { readLeg, readPiece } from "./fields.ts";
+export { readLeg, readPiece, standLots } from "./fields.ts";
 export * from "./content/asks.ts";
 export * from "./content/items.ts";
 export * from "./content/machines.ts";

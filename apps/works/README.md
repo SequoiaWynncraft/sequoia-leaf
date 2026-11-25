@@ -73,7 +73,9 @@ bun test                         # the screen's own questions, the yard on a sta
 - **Nothing in `src/` reaches `review/` or `test/`** (`shipped.test.ts`): the page ships without them.
 
 The screen keeps only its own settings in the browser: `works.screen.v1` (the lessons taken, the
-zoom, the grade chosen for each kind) and `works.view.v1` (the yard's sheet's last view).
+zoom, the grade chosen for each kind), `works.view.v1` (the yard's sheet's last view),
+`works.folds.v1` (what is folded: lists, goal cards, the card in the corner) and `works.card.v1` (a
+card has been pinned from the yard, so the line over the dock stops saying how).
 
 ## Looking at it from outside
 

@@ -7,7 +7,7 @@
  */
 
 import { at, BELT } from "@sequoia-leaf/factory";
-import { pick, point, shown, surface } from "@sequoia-leaf/kit/card.ts";
+import { point, shown, surface } from "@sequoia-leaf/kit/card.ts";
 import { placeOf } from "@sequoia-leaf/kit/keyboard.ts";
 import { forControl, heldAgain, typing } from "@sequoia-leaf/kit/keys.ts";
 import { LONG_PRESS } from "@sequoia-leaf/kit/press.ts";
@@ -279,13 +279,11 @@ export function initInput(canvas: InputSurface): void {
         for (const o of downs.values()) o.moved = true;
         return;
       }
-      // A finger kept on a thing asks what it is: its card, pinned, even with a tool in hand.
+      // A finger kept on a thing asks what it is (what rides a belt first): its card, pinned, even with a tool in hand.
       pressTimer = window.setTimeout(() => {
         if (d.moved || !downs.has(d.id)) return;
         d.moved = true;
-        const ref = riderAt(t.x, t.y) ?? refAt(t.x, t.y);
-        const b = tileBox(t.x, t.y);
-        if (ref) pick(ref, b.x, b.y, b.w, b.h);
+        openCard(t.x, t.y, true);
       }, LONG_PRESS);
       return;
     }

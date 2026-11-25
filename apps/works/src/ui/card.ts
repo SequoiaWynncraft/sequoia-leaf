@@ -9,6 +9,7 @@
  */
 import { at, carries, isItem, NONE, piecesAt, tilesOf } from "@sequoia-leaf/factory";
 import { close, pick, refresh, register, shown, watch } from "@sequoia-leaf/kit/card.ts";
+import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
 import { TILE } from "../art/belts.ts";
@@ -109,13 +110,25 @@ export function tileBox(x: number, y: number): { x: number; y: number; w: number
   return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
 }
 
-/** Pins the card for whatever is on a tile (or puts it away, if it was the one pinned). Gives whether one is up. */
-export function openCard(x: number, y: number): boolean {
-  const ref = refAt(x, y);
+/** Kept on this device once a card has been asked for from the yard: the line over the dock stops saying how (`dock.ts`). */
+const LEARNT = "works.card.v1";
+/** Whether a card has been asked for from the yard on this device. */
+export const cardLearnt = (): boolean => keptText(LEARNT) !== null;
+
+/**
+ * Pins the card for what is on a tile (or puts it away, if it was the one pinned), and gives whether
+ * one is up: the one way the yard asks for a card, by a tap, a click or a finger kept on a tile.
+ * Asking where nothing has a card puts the card that is up away; a finger kept there (`held`: a pan
+ * that paused) leaves it. A finger kept on a belt asks first about what rides it. Asking for a card
+ * is kept as learnt on this device.
+ */
+export function openCard(x: number, y: number, held = false): boolean {
+  const ref = (held ? riderAt(x, y) : null) ?? refAt(x, y);
   if (!ref) {
-    close();
+    if (!held) close();
     return false;
   }
+  if (!cardLearnt()) keepText(LEARNT, "1");
   const b = tileBox(x, y);
   return pick(ref, b.x, b.y, b.w, b.h);
 }

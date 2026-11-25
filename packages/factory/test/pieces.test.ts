@@ -772,3 +772,48 @@ describe("a run of belt", () => {
     }
   });
 });
+
+/** A lot as the page sends it: a command with its tick, and the room the kit keeps for its id. */
+const sent = (lot: readonly F.Piece[]): number =>
+  JSON.stringify(F.writeCommand({ do: "stand", pieces: lot, tick: 999_999_999 })).length + 40;
+
+describe("pieces stood again in lots", () => {
+  /** 160 grade II sorters, each painted, set to a thing and sending it right: the longest a piece comes to on the wire. */
+  const sorters = Array.from({ length: F.STAND_MOST }, (_, k): F.Piece => ({
+    kind: F.SORTER,
+    x: k % 40,
+    y: Math.floor(k / 40),
+    dir: 0,
+    span: 0,
+    recipe: brick,
+    tint: 6,
+    first: 2,
+    grade: 2,
+  }));
+  test("as many sorters as one stand may hold, too long for one request, go as more than one, each fitting one, in order and whole", () => {
+    expect(sent(sorters)).toBeGreaterThan(12_000);
+    const lots = F.standLots(sorters);
+    expect(lots.length).toBe(2);
+    expect(lots.flat()).toEqual(sorters);
+    for (const lot of lots) {
+      expect(sent(lot)).toBeLessThanOrEqual(12_000);
+      expect(F.readCommand({ ...F.writeAct({ do: "stand", pieces: lot }), tick: 1 })).toMatchObject({
+        do: "stand",
+        pieces: lot,
+      });
+    }
+  });
+
+  test("short pieces go STAND_MOST at a time, and a few as one", () => {
+    const belts = Array.from({ length: 2 * F.STAND_MOST + 1 }, (_, k): F.Piece => ({
+      kind: F.BELT,
+      x: k % 40,
+      y: Math.floor(k / 40),
+      dir: 0,
+      span: 0,
+    }));
+    expect(F.standLots(belts).map((lot) => lot.length)).toEqual([F.STAND_MOST, F.STAND_MOST, 1]);
+    expect(F.standLots(belts.slice(0, 3))).toEqual([belts.slice(0, 3)]);
+    expect(F.standLots([])).toEqual([]);
+  });
+});

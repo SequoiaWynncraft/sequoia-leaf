@@ -1,7 +1,8 @@
 /**
  * Folds on the tier's and the research screens: the list of those done and the list of research
  * known, shut at first, and the list of projects, open at first, each under a label that folds it;
- * and each goal's card, open at first, with a button at the end of its head that folds it to the head. What the player chose is kept on this
+ * and each goal's card, open at first, with a button at the end of its head that folds it to the head.
+ * And the card in the corner of the yard (`hud.ts`), open at first, which folds to one line. What the player chose is kept on this
  * device under `FOLDS`, beside the screen's other settings: a view, so nothing of it goes to Leaf.
  *
  * A fold is drawn from the kept choices on every drawing, so it stands as the player left it when
@@ -17,8 +18,8 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { head } from "./goal.ts";
 import { iconButton } from "./parts.ts";
 
-/** The lists that fold, and whether each is open at first. */
-const LISTS = { done: false, known: false, projects: true } as const;
+/** The lists that fold, and the card in the corner (`track`), and whether each is open at first. */
+const LISTS = { done: false, known: false, projects: true, track: true } as const;
 type List = keyof typeof LISTS;
 /** What folds: one of the lists, or a goal's card. */
 export type Fold = List | Goal;
@@ -52,10 +53,10 @@ function kept(): Choices {
 
 const idOf = (g: Goal): string => GOALS[g]?.id ?? "";
 
-/** Whether a fold is open: as the player left it, or else as `LISTS` says for a list, and open for a card. */
-export function opened(f: Fold): boolean {
+/** Whether a fold is open: as the player left it, or else as `first` says, or as `LISTS` says for a list, and open for a card. */
+export function opened(f: Fold, first?: boolean): boolean {
   const c = kept();
-  return typeof f === "number" ? (c.goals[idOf(f)] ?? true) : (c.lists[f] ?? LISTS[f]);
+  return (typeof f === "number" ? c.goals[idOf(f)] : c.lists[f]) ?? first ?? (typeof f === "number" || LISTS[f]);
 }
 
 /** Keeps a choice made, beside those made before: the lists' by name, as they have always been kept, and the cards' under `goals`. */
@@ -66,27 +67,49 @@ export function keepFold(f: Fold, open: boolean): void {
   keepText(FOLDS, JSON.stringify({ ...c.lists, goals: c.goals }));
 }
 
+/** What a fold does besides showing or hiding its parts. */
+interface Also {
+  /** Shown in the parts' place while they are folded, and hidden while they are open. */
+  readonly shut?: readonly HTMLElement[];
+  /** Hidden with the parts by the page's style (`index.html`) rather than here, each with an id of its own: only named as what the button folds. */
+  readonly styled?: readonly HTMLElement[];
+  /** Whether it is open until the player chooses, where that is not as `opened` has it: asked each time it is drawn. */
+  readonly first?: () => boolean;
+}
+
 /**
  * Makes `b` the fold of `parts`, which it names for whoever cannot see them: draws them from the kept
  * choice now, and gives what a press does: shows them if they were hidden or hides them, says so on
  * the button (in `name`'s words too, where the button is only a picture), keeps the choice and taps.
  * Nothing else is touched, so nothing is built again and the scroll does not move.
  */
-function fold(b: HTMLElement, f: Fold, parts: readonly HTMLElement[], name?: (open: boolean) => string): () => void {
+function fold(
+  b: HTMLElement,
+  f: Fold,
+  parts: readonly HTMLElement[],
+  name?: (open: boolean) => string,
+  { shut = [], styled = [], first }: Also = {},
+): { press: () => void; again: () => void } {
   // Lists and cards have ids of their own kinds, so a goal called "done" is never the list's.
   const key = typeof f === "number" ? `goal-${idOf(f)}` : `list-${f}`;
-  b.setAttribute("aria-controls", parts.map((p, i) => (p.id ||= `fold-${key}-${i}`)).join(" "));
+  const ids = [...parts, ...shut].map((p, i) => (p.id ||= `fold-${key}-${i}`));
+  b.setAttribute("aria-controls", [...ids, ...styled.map((p) => p.id)].join(" "));
   const set = (open: boolean): void => {
     for (const p of parts) p.hidden = !open;
+    for (const p of shut) p.hidden = open;
     b.setAttribute("aria-expanded", String(open));
     if (name) b.setAttribute("aria-label", name(open));
   };
-  set(opened(f));
-  return () => {
-    const open = b.getAttribute("aria-expanded") !== "true";
-    set(open);
-    keepFold(f, open);
-    sfx.tap();
+  const again = (): void => set(opened(f, first?.()));
+  again();
+  return {
+    press: () => {
+      const open = b.getAttribute("aria-expanded") !== "true";
+      set(open);
+      keepFold(f, open);
+      sfx.tap();
+    },
+    again,
   };
 }
 
@@ -100,7 +123,7 @@ export function foldedList(f: List, word: string, list: HTMLElement): HTMLElemen
     word,
     el("span", "k-faint", { text: String(list.childElementCount) }),
   );
-  const press = fold(label, f, [list]);
+  const { press } = fold(label, f, [list]);
   return [label, list];
 }
 
@@ -109,6 +132,30 @@ export function foldedHead(g: Goal, side: HTMLElement | null, parts: readonly HT
   const title = GOALS[g]?.title ?? "";
   const name = (open: boolean): string => `${open ? "Hide" : "Show"} ${title}`;
   const b = iconButton("wood sm fold", icon("fold"), name(true), () => press());
-  const press = fold(b, g, parts, name);
+  const { press } = fold(b, g, parts, name);
   return head(g, side, b);
+}
+
+/**
+ * The button that folds the card in the corner (`hud.ts`) to one line, `short` shown in `full`'s
+ * place, and the research under the card (`under`) hidden with it by the page's style; open, until
+ * the player chooses, while `first` says so. It stays on the page while the card is drawn again, so
+ * that whoever is on it stays on it: `named` names it again for the card's title (`title`) as it is
+ * now, and `again` folds it as `first` says now, where the player has not chosen.
+ */
+export function foldedCard(
+  title: () => string,
+  full: HTMLElement,
+  short: HTMLElement,
+  under: HTMLElement,
+  first: () => boolean,
+): { button: HTMLElement; named: () => void; again: () => void } {
+  const name = (open: boolean): string => `${open ? "Hide" : "Show"} ${title()}`;
+  const b = iconButton("wood sm fold", icon("fold"), name(first()), () => press());
+  const { press, again } = fold(b, "track", [full], name, { shut: [short], styled: [under], first });
+  return {
+    button: b,
+    named: () => b.setAttribute("aria-label", name(b.getAttribute("aria-expanded") === "true")),
+    again,
+  };
 }
