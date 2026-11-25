@@ -131,7 +131,8 @@ function fullTrack(
  * are counted on the small line over its title, and while there are any, pressed, it opens Orders.
  * A button at its side folds it to one line, its title and what is left (`folds.ts`), and hides the
  * research under it: the choice is kept on the device. Until it is made, the card is open, but on a
- * short screen. Drawn again, only what is inside it changes,
+ * short screen. On a phone the folded line sits in the top bar after the power, where the title is
+ * left out if little of it would fit (`index.html`). Drawn again, only what is inside it changes,
  * so whoever is on one of its buttons stays there.
  */
 function tracker(): () => void {
@@ -157,9 +158,10 @@ function tracker(): () => void {
     const said = p.next ? nextWords(p.next) : null;
     title = said?.title ?? GOALS[p.hand]?.title ?? "";
     full.replaceChildren(...fullTrack(p, said, title).filter((n) => n !== null));
-    // Folded: the title, and what is left of what it wants, or the line that says what comes next.
+    // Folded: the title, in a box of its own that `index.html` leaves empty where too little of it
+    // fits; and what is left of what it wants, or the line that says what comes next.
     short.replaceChildren(
-      el("span", "name", { text: title }),
+      el("span", "name", {}, el("span", "", { text: title })),
       said === null ? el("span", "k-label", { text: left(p.wants) }) : saidLine(p.next?.is, said.line),
     );
     fold.named();

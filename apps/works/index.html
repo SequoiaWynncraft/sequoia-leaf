@@ -129,7 +129,10 @@
         background: var(--k-coral);
       }
 
-      /* The order in hand, always in view: pressed, it opens Orders; the button at its side folds it to one line. */
+      /*
+       * The order in hand, always in view: pressed, it opens Orders; the button at its side folds it to
+       * one line. It is in the top bar but hangs under it, out of its rows, but folded on a phone.
+       */
       #track {
         position: fixed;
         z-index: 4;
@@ -168,14 +171,29 @@
         min-height: calc(var(--u) * 16);
         display: flex;
         align-items: center;
-        gap: calc(var(--u) * 3);
       }
+      /* The title asks for no room of its own: it has what the line has beside what is left. */
       #track .short .name {
         flex: 1;
         min-width: 0;
+        container: title / inline-size;
+      }
+      #track .short .name > span {
+        display: block;
+        margin-right: calc(var(--u) * 3);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+      /* Where too little of it would show, it is not shown (nor the gap after it), only said to a screen reader. */
+      @container title (width < 100px) {
+        #track .short .name > span {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          margin: 0;
+          clip-path: inset(50%);
+        }
       }
       #track .short > :not(.name) {
         flex: none;
@@ -185,7 +203,7 @@
       #track:has(> .fold[aria-expanded="false"]) {
         width: min(calc(var(--u) * 180), calc(100vw - var(--edge) * 2 - var(--u) * 23));
       }
-      #track:has(> .fold[aria-expanded="false"]) + #study {
+      #top:has(> #track > .fold[aria-expanded="false"]) + #study {
         display: none;
       }
       /* The line over the order's title keeps to one line: what is to hand over goes under it where both do not fit. */
@@ -1230,7 +1248,7 @@
         #power .k-bar {
           width: calc(var(--u) * 20);
         }
-        /* Two rows: the purse and the way out, then the power and the yard's books. */
+        /* Two rows: the purse and the way out, then the power (and the order in hand, folded on a phone) and the yard's books. */
         #corner {
           margin-left: auto;
           order: 2;
@@ -1238,7 +1256,8 @@
         #purse {
           order: 1;
         }
-        #power {
+        #power,
+        #track {
           order: 3;
         }
         #books {
@@ -1329,10 +1348,10 @@
         #tools > button {
           flex: none;
         }
-        /* Under the top bar as it is laid out (`--toph`, measured), however many rows it wraps to. */
+        /* Under the top bar as it is laid out (`--barb`, measured), however many rows it wraps to; beside the order's folded line where that is a row of its own. */
         #books {
           position: fixed;
-          top: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
+          top: calc(var(--barb, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
           right: var(--edge);
           flex-direction: column;
           margin: 0;
@@ -1341,6 +1360,23 @@
         #track,
         #study {
           width: min(calc(var(--u) * 132), calc(100vw - var(--edge) * 2 - var(--u) * 23));
+        }
+        /*
+         * Folded, the order in hand is a line of the top bar after the power, where the books' column
+         * leaves the row empty: as tall as the purse, and only as wide as what is left and its button
+         * (on a short screen, as wide as the row has room for, and the title shows where it fits).
+         * Where it does not fit beside the power, it is a row of its own, which stops short of the books.
+         */
+        #track:has(> .fold[aria-expanded="false"]) {
+          position: relative;
+          inset: auto;
+          flex: 0 1 auto;
+          width: auto;
+          max-width: calc(100% - var(--u) * 23);
+          padding-block: 0;
+        }
+        #power {
+          align-self: stretch;
         }
         /* A visit's strip too: My yard keeps its width, on a row of its own where the owner's name needs this one. */
         #visit {
@@ -1421,6 +1457,10 @@
         body.walking #study {
           display: none;
         }
+        /* The order's folded line takes the room across that the top bar has. */
+        #track:has(> .fold[aria-expanded="false"]) {
+          flex-grow: 1;
+        }
         /* The order in hand, open, stays above the line over the tools (`--handt`, measured): what does not fit scrolls. */
         #track .full {
           max-height: calc(var(--handt, 100dvh) - var(--toph, 0px) - var(--u) * 24);
@@ -1489,10 +1529,10 @@
     <div id="top">
       <div id="purse" class="k-plaque hung"></div>
       <button id="power" class="k-plaque hung" type="button"></button>
+      <div id="track" class="k-plaque hung"></div>
       <div id="books"></div>
       <div id="corner"></div>
     </div>
-    <div id="track" class="k-plaque hung"></div>
     <button id="study" class="k-plaque" type="button" hidden></button>
     <div id="visit" class="k-plaque" hidden></div>
     <div id="walk"></div>
