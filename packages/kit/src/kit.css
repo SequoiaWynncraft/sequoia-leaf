@@ -136,6 +136,11 @@
   outline-offset: calc(var(--u) * 2);
   box-shadow: 0 0 0 calc(var(--u) * 2) var(--k-cream);
 }
+/* Nor before any key is pressed (`dialog.ts`): a button a card gives the focus to as the page opens. */
+:root.k-unkeyed :is(button, a, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: none;
+  box-shadow: none;
+}
 /* A dialog or a card given the focus to hold it, not to be pressed, shows no ring. */
 [tabindex="-1"]:focus {
   outline: none;

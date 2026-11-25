@@ -234,15 +234,9 @@ function show(notice: Notice, scrimLook = notice.ask === true ? "k-ask" : ""): (
   );
   const scrim = el("div", `k-scrim ${scrimLook}`.trim(), {}, paper);
   document.body.append(scrim);
-  // A layer first, so that what had the focus before the notice is what has it back after. The card
-  // holds the focus, not its first button, so no keyboard ring shows on a card nobody has keyed to;
-  // Enter presses that button all the same, and Tab goes to it.
-  const done = dialog(paper, head, null, (e) => {
-    if (e.key !== "Enter" || e.repeat || document.activeElement !== paper || !buttons[0]) return false;
-    e.preventDefault();
-    buttons[0].click();
-    return true;
-  });
+  // A layer first, so that what had the focus before the notice is what has it back after.
+  const done = dialog(paper, head, null);
+  buttons[0]?.focus();
   const away = (): void => {
     scrim.remove();
     done();
