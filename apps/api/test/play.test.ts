@@ -66,7 +66,7 @@ import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
 import { GAMES, type Played, played } from "../src/play/games.ts";
 import { type JobTimes, Play, TEND_AFTER } from "../src/play/service.ts";
-import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
+import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, dueAgain, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
 import { DAY, fakeBackend, fakeMojang, type Fakes, noNetwork, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
@@ -2933,6 +2933,41 @@ describe("what each state tells the town", () => {
     expect((await townNow()).doors).toEqual({ raid: TABLE_SET_OUT, works: await yardCard() });
     // The yard still works, so it is due its next tend as any written then; the table stands still.
     expect([await dueOf("works"), await dueOf("raid")]).toEqual([clock.now + TEND_AFTER, null]);
+  });
+
+  it("is made due by the town only as the town saw it: a state put right meanwhile, at the same rev, is left be", async () => {
+    await keepTable(null);
+    // What the town read: the table at rev 1, with no postcard, due never.
+    const seen = { game: "raid", rev: 1, kept: null, postcard: null, dueAt: null };
+    await services.query((sql) => dueAgain(sql, alice, seen, clock.now));
+    expect(await dueOf("raid")).toBe(clock.now);
+    // The sweep puts it right at the same rev; the town's update of what it saw before comes late.
+    clock.now += MINUTE;
+    await tending();
+    expect([await postcardsOf(), await dueOf("raid")]).toEqual([{ raid: TABLE_SET_OUT }, null]);
+    await services.query((sql) => dueAgain(sql, alice, seen, clock.now));
+    expect(await dueOf("raid")).toBeNull();
+  });
+
+  it("stays due for a state that does not read when keeping it as telling nothing fails", async () => {
+    await keepTable(T0, "{}");
+    await services.query(
+      (sql) => sql`
+        CREATE TRIGGER no_room BEFORE INSERT ON play_postcards WHEN NEW.postcard IS NULL
+        BEGIN SELECT RAISE(ABORT, 'the disk is full'); END
+      `,
+    );
+    clock.now += MINUTE;
+    await tending();
+    expect(await dueOf("raid")).toBe(T0);
+    expect(await services.query((sql) => sql`SELECT count(*) AS n FROM play_postcards`)).toEqual([{ n: 0 }]);
+    await services.query((sql) => sql`DROP TRIGGER no_room`);
+    clock.now += MINUTE;
+    await tending();
+    expect(await dueOf("raid")).toBeNull();
+    expect(await services.query((sql) => sql`SELECT rev, postcard FROM play_postcards`)).toEqual([
+      { rev: 1, postcard: null },
+    ]);
   });
 
   it("is kept as nothing for a state that does not read, which the town then leaves be; and goes with its state", async () => {

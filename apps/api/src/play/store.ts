@@ -78,7 +78,7 @@ export interface Board {
 }
 
 /** A state of a player's, with the `rev` of the postcard kept for it (null: none) and when it is due. */
-const Door = Schema.Struct({
+export const Door = Schema.Struct({
   game: Schema.String,
   rev: Schema.Int,
   kept: Schema.NullOr(Schema.Int),
@@ -94,17 +94,32 @@ const Door = Schema.Struct({
  */
 function doorsOf(rows: readonly (typeof Door.Type)[], now: number) {
   const shown: Partial<Record<GameId, Postcard>> = {};
-  const stale: GameId[] = [];
+  const stale: (typeof Door.Type)[] = [];
   for (const row of rows) {
     const game = gameId(row.game);
     if (game === undefined || !POSTING.includes(game)) continue;
     const card = row.kept === row.rev && row.postcard !== null ? readPostcard(row.postcard) : Option.none();
     if (Option.isSome(card)) shown[game] = card.value;
     else if ((row.kept !== row.rev || row.postcard !== null) && (row.dueAt === null || row.dueAt > now))
-      stale.push(game);
+      stale.push(row);
   }
   return { shown, stale };
 }
+
+/**
+ * Makes a player's state due at `now`, for Leaf's sweep to write its postcard again, only if it and
+ * its postcard are still as the town `seen` them (stale) and it is not due by then already: one the
+ * sweep or its own page put right meanwhile, at the same `rev` or another, is left be.
+ */
+export const dueAgain = (sql: SqlClient.SqlClient, playerId: PlayerId, seen: typeof Door.Type, now: number) => {
+  const kept = (column: "rev" | "postcard") =>
+    sql`(SELECT p.${sql(column)} FROM play_postcards AS p WHERE p.player_id = s.player_id AND p.game = s.game)`;
+  return sql`
+    UPDATE play_state AS s SET due_at = ${now}
+    WHERE player_id = ${playerId} AND game = ${seen.game} AND rev = ${seen.rev} AND (due_at IS NULL OR due_at > ${now})
+      AND ${kept("rev")} IS ${seen.kept} AND ${kept("postcard")} IS ${seen.postcard}
+  `;
+};
 
 /**
  * What every call of a player's is told (`Given`), and how it is kept: what they have won for good
@@ -132,8 +147,7 @@ function givenIn(sql: SqlClient.SqlClient) {
         if (!withPostcards) return { awards: won, postcards: NO_POSTCARDS };
         const { shown, stale } = doorsOf(yield* doors(playerId), now);
         // A state whose postcard is not of it is made due, for Leaf's sweep to write the postcard again.
-        for (const game of stale)
-          yield* sql`UPDATE play_state SET due_at = ${now} WHERE player_id = ${playerId} AND game = ${game}`;
+        for (const seen of stale) yield* dueAgain(sql, playerId, seen, now);
         return { awards: won, postcards: shown };
       }).pipe(Effect.orDie),
     award: (playerId: PlayerId, ids: readonly string[], now: number): Effect.Effect<void> =>
@@ -360,18 +374,22 @@ export class PlayStore extends Context.Service<
           Effect.map((rows) => new Map(rows.map((row) => [row.game, row.dueAt]))),
           Effect.orDie,
         ),
-        rest: (playerId, game, rev, reads) =>
-          Effect.all([
-            sql`UPDATE play_state SET due_at = NULL WHERE player_id = ${playerId} AND game = ${game} AND rev = ${rev}`,
-            // A state that does not read tells the town nothing, at its `rev`: the town makes it due no more for that.
-            reads
-              ? Effect.void
-              : sql`
-                  INSERT INTO play_postcards (player_id, game, rev, postcard)
-                  SELECT player_id, game, rev, NULL FROM play_state WHERE player_id = ${playerId} AND game = ${game} AND rev = ${rev}
-                  ON CONFLICT (player_id, game) DO UPDATE SET rev = excluded.rev, postcard = NULL
-                `,
-          ]).pipe(Effect.asVoid, Effect.orDie),
+        rest: (playerId, game, rev, reads) => {
+          const rested = sql`UPDATE play_state SET due_at = NULL WHERE player_id = ${playerId} AND game = ${game} AND rev = ${rev}`;
+          // A state that does not read tells the town nothing, at its `rev`, kept as it rests, so that the
+          // town makes it due no more and a failure leaves it due. A codec fix that makes such states
+          // read again needs its migration to make that game's states with a null postcard due once:
+          // the town's reads alone will not.
+          const toldNothing = sql`
+            INSERT INTO play_postcards (player_id, game, rev, postcard)
+            SELECT player_id, game, rev, NULL FROM play_state WHERE player_id = ${playerId} AND game = ${game} AND rev = ${rev}
+            ON CONFLICT (player_id, game) DO UPDATE SET rev = excluded.rev, postcard = NULL
+          `;
+          return (reads ? rested : sql.withTransaction(Effect.andThen(rested, toldNothing))).pipe(
+            Effect.asVoid,
+            Effect.orDie,
+          );
+        },
         create: (playerId, game, state, guest, now, dueAt) =>
           sql`
             INSERT INTO play_state (player_id, game, rev, state, guest, updated_at, born, due_at)
