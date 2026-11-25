@@ -55,6 +55,9 @@ function pictureOf(ref: string | null, size: number): Node | null {
   return art instanceof Element ? art.cloneNode(true) : null;
 }
 
+/** A goal's own picture, as its head shows it, at most `size` across; nothing for a goal with none. */
+export const goalPicture = (g: Goal, size: number): Node | null => pictureOf(pictureRef(g), size);
+
 // ---------- a list ----------
 
 /** How many have come, of how many. */

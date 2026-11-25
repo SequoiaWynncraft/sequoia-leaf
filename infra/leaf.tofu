@@ -27,9 +27,10 @@ resource "coolify_application_github_app" "leaf" {
   server_uuid      = local.coolify.server_uuid
   destination_uuid = local.coolify.destination_uuid
 
-  # Coolify builds the repository's Dockerfile and deploys every push to main.
+  # Coolify builds the repository's Dockerfile and deploys every push to main,
+  # which the repository's webhook tells it about (see the README).
   github_app_uuid        = local.coolify.github_app_uuid
-  git_repository         = "https://github.com/SequoiaWynncraft/sequoia-leaf"
+  git_repository         = "https://github.com/notes-supply/leaf"
   git_branch             = "main"
   build_pack             = "dockerfile"
   is_auto_deploy_enabled = true
@@ -53,7 +54,7 @@ resource "coolify_application_github_app" "leaf" {
     prevent_destroy = true
     # Coolify only takes these two when it creates an application and does
     # not report them afterwards, so an adopted application has neither in
-    # the state. A difference in the GitHub App would replace the application.
+    # the state. A difference in the source would replace the application.
     ignore_changes = [github_app_uuid, destination_uuid]
   }
 }

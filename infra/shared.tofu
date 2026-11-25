@@ -12,7 +12,9 @@ locals {
     server_uuid = "jwowk40kck8gswoc8o040c4c"
     # The `coolify` Docker network, which the backend is on too.
     destination_uuid = "a844s4gcss80kwsoc4s40wc8"
-    # The `sequoia-coolify` GitHub App, installed on the organisation's repositories.
-    github_app_uuid = "xkcgss0kc8sc04o8cw8g00og"
+    # Coolify's "Public GitHub" source, which clones public repositories
+    # without an app. Leaf moved to it from the `sequoia-coolify` GitHub App
+    # when the repository left the SequoiaWynncraft organisation.
+    github_app_uuid = "b8w88888w0kgk0ck8c80cwc4"
   }
 }

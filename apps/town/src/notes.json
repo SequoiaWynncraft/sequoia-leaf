@@ -1,7 +1,7 @@
 [
   {
     "id": "works-undo",
-    "at": "2026-11-25T17:06Z",
+    "at": "2026-11-25T17:09Z",
     "title": "The Works: Undo is kept with your yard",
     "lines": [
       "Undo undoes the whole of the last thing you did, or none of it. If you're short of Coins, nothing is undone.",
@@ -23,6 +23,24 @@
         "points": [
           "Undoing the removal of your free starting mill gives that mill back free, and a mill you paid for back as paid.",
           "Undo counts the Coins in your till once, not twice."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "works-top-two-rows",
+    "at": "2026-11-25T17:00Z",
+    "title": "The Works: a shorter top on a phone",
+    "lines": [
+      "On an upright phone the top of the screen is two rows: your Leaf and Coins, then the power. The way out and the settings button head the column of buttons on the right.",
+      "Folded, the card in the top corner is one square button beside the power. A number on its corner counts the orders ready to hand over, and ! means a commission can be taken."
+    ],
+    "more": [
+      {
+        "head": "Fixed",
+        "points": [
+          "On a phone held sideways, buttons in the right-hand column that do not fit go into a second column. Before, the last one could be below the bottom of the screen.",
+          "A card opened during a walk through trouble no longer covers the walk's bar."
         ]
       }
     ]
