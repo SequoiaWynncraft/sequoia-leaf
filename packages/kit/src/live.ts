@@ -166,8 +166,13 @@ export function restart(): void {
 export interface NoticeButton {
   readonly word: string;
   readonly quiet?: boolean;
+  /** Drawn as Discord's own button, in its blurple. */
+  readonly discord?: boolean;
   readonly go: (away: () => void) => void;
 }
+
+/** The button that signs in with Discord, on every card that asks for it. */
+const SIGN_IN: NoticeButton = { word: "Sign in with Discord", discord: true, go: signInWithDiscord };
 
 /**
  * A notice over the page that must be answered: a title, a line (if not empty) and its buttons. One
@@ -205,7 +210,7 @@ export function shutNotice(why: Shut): Notice {
       buttons: [{ word: "Try again", go: loadAgain }],
     };
   if (!outside.top()) return { title: "Signed out", line: "", buttons: [{ word: "Back to town", go: () => leave() }] };
-  return { title: "Guild Town", line: "", buttons: [{ word: "Sign in with Discord", go: signInWithDiscord }] };
+  return { title: "Guild Town", line: "", buttons: [SIGN_IN] };
 }
 
 /** Puts a notice over the page. Returns how to take it away. */
@@ -214,7 +219,7 @@ function show(notice: Notice, scrimLook = notice.ask === true ? "k-ask" : ""): (
   const buttons = notice.buttons.map((b) =>
     el(
       "button",
-      b.quiet === true ? "k-btn slate sm wide" : "k-btn wide",
+      b.quiet === true ? "k-btn slate sm wide" : b.discord === true ? "k-btn discord wide" : "k-btn wide",
       { type: "button", onclick: () => b.go(away) },
       b.word,
     ),
@@ -343,8 +348,7 @@ export type LetGo = "replaced" | "signedout";
  * comes back.
  */
 export function letGoNotice(why: LetGo, again: () => void): Notice {
-  if (why === "signedout")
-    return { title: "Signed out", line: "", buttons: [{ word: "Sign in with Discord", go: signInWithDiscord }] };
+  if (why === "signedout") return { title: "Signed out", line: "", buttons: [SIGN_IN] };
   const here = (away: () => void): void => {
     away();
     again();

@@ -449,7 +449,10 @@ function tab(t: Tones, rise: number, down: boolean): Grid {
     },
   );
 }
-/** What a button's colour says: gold confirms, blue shows or hides, green buys or grows, wood is plain, coral leaves or removes, slate is quiet. */
+/**
+ * What a button's colour says: gold confirms, blue shows or hides, green buys or grows, wood is
+ * plain, coral leaves or removes, slate is quiet; and Discord's own blurple signs in with Discord.
+ */
 const TONES = {
   gold: { light: "#ffe082", face: "#f5ad35", foot: "#bf6e17" },
   blue: { light: "#7cc6ff", face: "#2f86e0", foot: "#1a4d99" },
@@ -458,6 +461,7 @@ const TONES = {
   coral: { light: "#f89785", face: "#d9584d", foot: "#98302f" },
   slate: { light: "#74679a", face: "#4b4163", foot: "#2b2440" },
   off: { light: "#453c5c", face: "#332b47", foot: "#221c33" },
+  discord: { light: "#8c95f7", face: "#5865f2", foot: "#4752c4" },
 } satisfies Readonly<Record<string, Tones>>;
 
 // ---------- settings: a slider, a switch, a key ----------

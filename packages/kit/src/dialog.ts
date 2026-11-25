@@ -117,8 +117,16 @@ function goRound(e: KeyboardEvent, node: HTMLElement): void {
   }
 }
 
+/**
+ * Until a key is pressed (and again after a press with the mouse or a finger), what the page itself
+ * gives the focus to shows no keyboard ring (`kit.css`): a browser draws one on a page just opened.
+ */
+const unkeyed = (on: boolean): void => void document.documentElement.classList.toggle("k-unkeyed", on);
+
 if (typeof window !== "undefined") {
+  unkeyed(true);
   window.addEventListener("pointerdown", (e) => {
+    unkeyed(true);
     const top = layers.at(-1);
     if (top && e.target instanceof Node && top.at()?.contains(e.target)) top.keyed = false;
   });
@@ -126,6 +134,7 @@ if (typeof window !== "undefined") {
   window.addEventListener(
     "keydown",
     (e) => {
+      unkeyed(false);
       const top = layers.at(-1);
       const node = top?.at();
       if (!top) return;
