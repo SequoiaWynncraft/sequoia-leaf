@@ -129,7 +129,8 @@ function fullTrack(
  * and pressed, it opens the tier's screen, where that is. Orders filled and waiting to be handed over
  * are counted on the small line over its title, and while there are any, pressed, it opens Orders.
  * A button at its side folds it to one line, its title and what is left (`folds.ts`), and hides the
- * research under it: the choice is kept on the device. Drawn again, only what is inside it changes,
+ * research under it: the choice is kept on the device. Until it is made, the card is open, but on a
+ * short screen. Drawn again, only what is inside it changes,
  * so whoever is on one of its buttons stays there.
  */
 function tracker(): () => void {
@@ -137,7 +138,9 @@ function tracker(): () => void {
   const short = el("div", "short");
   const go = el("button", "go", { type: "button", onclick: openTracked }, full, short);
   let title = "";
-  const fold = foldedCard(() => title, full, short, $("study"));
+  // On a short screen (a phone on its side) there is no room under the top bar for the card open:
+  // it is folded until the player opens it.
+  const fold = foldedCard(() => title, full, short, $("study"), !window.matchMedia("(max-height: 500px)").matches);
   $("track").append(go, fold.button);
   // Pointing (or a finger kept on it) shows the card of the node in hand, or of the goal waited on.
   link(go, orderRef("story"), { acts: true });

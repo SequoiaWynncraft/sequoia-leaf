@@ -80,8 +80,13 @@ export const sheetIcon = (): Node => yardIcon(hasViews() ? "map" : "depot");
 /** What the sheet asks of the rest of the screen: to bring a point of the yard, in its pixels, to the middle of the view at once. */
 export const viewHooks: { look: (x: number, y: number) => void } = { look: () => {} };
 
-/** Whether the sheet is a full sheet, as on a phone, and not the panel beside the yard: the page's own breakpoint. */
-const narrow = (): boolean => window.matchMedia("(max-width: 760px), (orientation: portrait)").matches;
+/**
+ * Whether the sheet leaves the yard too little room to stay open while the yard is looked at: a full
+ * sheet, as on a phone (the page's own breakpoint), or a short screen, where the panel beside the
+ * yard reaches down over the tools. A walk, or a pick on its map, puts it away.
+ */
+const narrow = (): boolean =>
+  window.matchMedia("(max-width: 760px), (max-height: 500px), (orientation: portrait)").matches;
 
 // ---------- going to a place ----------
 

@@ -11,6 +11,7 @@ import {
   at,
   BELT,
   build,
+  buyPlot,
   CRATE,
   create,
   encode,
@@ -19,6 +20,8 @@ import {
   item,
   JOINER,
   MILL,
+  plot,
+  PLOT_IDS,
   priceAt,
   refusal,
   reopen,
@@ -464,6 +467,42 @@ describe("many pieces at once", () => {
     await until(() => fake.leaf.commands.length >= 3);
     expect(sent(fake)).toEqual(["clear", "stand", "stand"]);
     for (const c of fake.leaf.commands.slice(1)) expect(JSON.stringify(c).length + 40).toBeLessThanOrEqual(12_000);
+    await inStep(fake, 3);
+  });
+
+  test("an Undo in several lots gives Coins back before it takes them: with an empty purse it puts back a copy that cost nothing", async () => {
+    const y = yardAt(4);
+    for (const id of PLOT_IDS) if (id !== "yard") buyPlot(y, plot(id), Infinity);
+    /** 132 painted sorters, set to bricks and sending them right: at grade II in the rows `raised` says. */
+    const area = (z0: number, dir: 0 | 1, tint: number, raised: (row: number) => boolean): void => {
+      for (let z = z0; z < z0 + 6; z++)
+        for (let x = 0; x < 22; x++) {
+          build(y, SORTER, x, z, dir, Infinity, raised(z - z0) ? { grade: 2 } : {});
+          const i = at(y, x, z);
+          y.tint[i] = tint;
+          y.set[i] = item("brick");
+          y.first[i] = 3;
+        }
+    };
+    area(3, 0, 6, (row) => row >= 3);
+    area(16, 1, 3, (row) => row < 3);
+    const fake = await opened(y, 0);
+    // The copy lowers as many sorters as it raises: it costs nothing.
+    mark(0, 3, 21, 8);
+    hold("copy");
+    // The copy in hand is aimed by the middle of its box: 22 by 6, its corner on (0, 16).
+    aimAt(10, 18);
+    expect(S.aim).toMatchObject({ why: null, cost: 0 });
+    expect(place(10, 18)).toBe(true);
+    expect([...grades([0, 21], 16), ...grades([0, 21], 21)]).toEqual([1, 1, 2, 2]);
+    await inStep(fake, 1);
+    const said = listen();
+    expect(undo()).toBe(true);
+    await until(() => fake.leaf.commands.length >= 3);
+    expect(said).toEqual([]);
+    expect(sent(fake)).toEqual(["copy", "stand", "stand"]);
+    expect([...grades([0, 21], 16), ...grades([0, 21], 21)]).toEqual([2, 2, 1, 1]);
+    expect(S.world.dir[at(S.world, 0, 16)]).toBe(1);
     await inStep(fake, 3);
   });
 

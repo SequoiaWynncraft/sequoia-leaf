@@ -673,13 +673,14 @@ export function pickFrom(x: number, y: number): boolean {
 /**
  * Stands again pieces that were taken away, all of them or none: the only use of `stand`. More than
  * one command carries (`standLots`: so many pieces, so many characters) goes as several, once the
- * whole is known to go, each all or none. A copy and a blueprint are each one command of their own.
- * Gives back why it was not done, or null.
+ * whole is known to go, each all or none, those that give Coins back first: a purse that pays for the
+ * whole pays for each in turn. A copy and a blueprint are each one command of their own. Gives back
+ * why it was not done, or null.
  */
 function standNow(pieces: readonly Piece[]): string | null {
   const no = standRefusal(S.world, pieces, coins());
   if (no !== null) return no;
-  for (const lot of standLots(pieces)) {
+  for (const lot of standLots(S.world, pieces)) {
     const did = doNow({ do: "stand", pieces: lot });
     if ("refused" in did) return did.why;
   }

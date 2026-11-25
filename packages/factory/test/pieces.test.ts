@@ -777,7 +777,11 @@ describe("a run of belt", () => {
 const sent = (lot: readonly F.Piece[]): number =>
   JSON.stringify(F.writeCommand({ do: "stand", pieces: lot, tick: 999_999_999 })).length + 40;
 
+/** The kth tile of the yard's own plot, row by row. */
+const ownTile = (k: number): { x: number; y: number } => ({ x: 16 + (k % 16), y: 12 + Math.floor(k / 16) });
+
 describe("pieces stood again in lots", () => {
+  const big = F.create({ seed: 1, tier: 4 });
   /** 160 grade II sorters, each painted, set to a thing and sending it right: the longest a piece comes to on the wire. */
   const sorters = Array.from({ length: F.STAND_MOST }, (_, k): F.Piece => ({
     kind: F.SORTER,
@@ -792,7 +796,7 @@ describe("pieces stood again in lots", () => {
   }));
   test("as many sorters as one stand may hold, too long for one request, go as more than one, each fitting one, in order and whole", () => {
     expect(sent(sorters)).toBeGreaterThan(12_000);
-    const lots = F.standLots(sorters);
+    const lots = F.standLots(big, sorters);
     expect(lots.length).toBe(2);
     expect(lots.flat()).toEqual(sorters);
     for (const lot of lots) {
@@ -812,8 +816,27 @@ describe("pieces stood again in lots", () => {
       dir: 0,
       span: 0,
     }));
-    expect(F.standLots(belts).map((lot) => lot.length)).toEqual([F.STAND_MOST, F.STAND_MOST, 1]);
-    expect(F.standLots(belts.slice(0, 3))).toEqual([belts.slice(0, 3)]);
-    expect(F.standLots([])).toEqual([]);
+    expect(F.standLots(big, belts).map((lot) => lot.length)).toEqual([F.STAND_MOST, F.STAND_MOST, 1]);
+    expect(F.standLots(big, belts.slice(0, 3))).toEqual([belts.slice(0, 3)]);
+    expect(F.standLots(big, [])).toEqual([]);
+  });
+
+  test("lots that give Coins back go before lots that take them, each in the order its pieces came", () => {
+    const y = F.create({ seed: 1, tier: 4 });
+    // Ten grade II belts, stood again at grade I: they give back. Before them in the list, 160 new belts.
+    for (let k = 0; k < 10; k++) must(y, { do: "build", kind: "belt", ...ownTile(k), dir: 0, grade: 2 });
+    const lowered = Array.from({ length: 10 }, (_, k): F.Piece => ({ kind: F.BELT, ...ownTile(k), dir: 0, span: 0 }));
+    const fresh = Array.from({ length: F.STAND_MOST }, (_, k): F.Piece => ({
+      kind: F.BELT,
+      x: k % 40,
+      y: Math.floor(k / 40),
+      dir: 0,
+      span: 0,
+    }));
+    const lots = F.standLots(y, [...fresh, ...lowered]);
+    expect(lots).toEqual([lowered, fresh]);
+    expect(F.priceOf(y, lowered)).toBeLessThan(0);
+    // Nothing gives back: the lots keep their order.
+    expect(F.standLots(y, [...fresh, ...fresh.slice(0, 3)])).toEqual([fresh, fresh.slice(0, 3)]);
   });
 });

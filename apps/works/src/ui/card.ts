@@ -117,14 +117,15 @@ export const cardLearnt = (): boolean => keptText(LEARNT) !== null;
 
 /**
  * Pins the card for what is on a tile (or puts it away, if it was the one pinned), and gives whether
- * one is up: the one way the yard asks for a card, by a tap, a click or a finger kept on a tile. With
- * `rider` (a finger kept on it), what rides a belt there is asked about first. Asking is kept as
- * learnt on this device.
+ * one is up: the one way the yard asks for a card, by a tap, a click or a finger kept on a tile.
+ * Asking where nothing has a card puts the card that is up away; a finger kept there (`held`: a pan
+ * that paused) leaves it. A finger kept on a belt asks first about what rides it. Asking for a card
+ * is kept as learnt on this device.
  */
-export function openCard(x: number, y: number, rider = false): boolean {
-  const ref = (rider ? riderAt(x, y) : null) ?? refAt(x, y);
+export function openCard(x: number, y: number, held = false): boolean {
+  const ref = (held ? riderAt(x, y) : null) ?? refAt(x, y);
   if (!ref) {
-    close();
+    if (!held) close();
     return false;
   }
   if (!cardLearnt()) keepText(LEARNT, "1");

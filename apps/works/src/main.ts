@@ -65,29 +65,33 @@ function refreshAll(): void {
   refreshCard();
 }
 
-/** How much of the screen the interface covers, so the camera can keep the yard clear of it. */
+/**
+ * How much of the screen the interface covers, so the camera can keep the yard clear of it. Each
+ * part is read only once what places it has been written: the order in hand hangs from the top bar
+ * (`--toph`), the research from the order (`--trackb`), the line over the dock from the dock. A part
+ * that only moves changes no size, and no observer would measure it again.
+ */
 function measure(): void {
+  const root = document.documentElement.style;
   const top = $("top").getBoundingClientRect();
+  root.setProperty("--toph", `${Math.round(top.bottom)}px`);
+  const dock = $("dock").getBoundingClientRect();
+  root.setProperty("--dockh", `${Math.round(dock.height)}px`);
+  // The line over the dock is as wide as it: unrounded, so that their edges meet.
+  root.setProperty("--dockw", `${dock.width}px`);
+  // A card's sheet stops above the dock.
+  root.setProperty("--sheet-floor", `${Math.round(dock.height > 0 ? window.innerHeight - dock.top : 0)}px`);
   // Under the top bar: the order in hand, or in a visit whose yard it is.
   const track = $(S.visiting ? "visit" : "track").getBoundingClientRect();
-  const hand = $("hand").getBoundingClientRect();
-  const dock = $("dock").getBoundingClientRect();
-  document.documentElement.style.setProperty("--trackb", `${Math.round(track.bottom)}px`);
-  // The research being studied hangs under the order in hand, when it is there: read once it has
-  // moved with it, for it moves without changing size, and nothing would measure again.
+  root.setProperty("--trackb", `${Math.round(track.bottom)}px`);
+  // The research being studied hangs under the order in hand, when it is there.
   const study = $("study").hidden ? track : $("study").getBoundingClientRect();
+  const hand = $("hand").getBoundingClientRect();
+  root.setProperty("--handh", `${Math.round(hand.height)}px`);
   // On a narrow screen the order in hand runs the width of it, and the yard is clear only below.
   inset.top = track.width > window.innerWidth * 0.6 ? Math.max(top.bottom, track.bottom, study.bottom) : top.bottom;
   // A visit has nothing along the bottom.
   inset.bottom = S.visiting ? 0 : Math.max(0, window.innerHeight - hand.top);
-  document.documentElement.style.setProperty("--toph", `${Math.round(top.bottom)}px`);
-  document.documentElement.style.setProperty("--dockh", `${Math.round(dock.height)}px`);
-  // The line over the dock is as wide as it: unrounded, so that their edges meet.
-  document.documentElement.style.setProperty("--dockw", `${dock.width}px`);
-  // A card's sheet stops above the dock.
-  const floor = dock.height > 0 ? window.innerHeight - dock.top : 0;
-  document.documentElement.style.setProperty("--sheet-floor", `${Math.round(floor)}px`);
-  document.documentElement.style.setProperty("--handh", `${Math.round(hand.height)}px`);
 }
 
 /**
@@ -225,10 +229,10 @@ async function boot(): Promise<Page | null> {
   // The dock's height is only known once it has been laid out with its tools in it.
   measure();
   look(home().x, home().y, true);
-  window.addEventListener("resize", fit);
+  const held = scope();
+  held.on(window, "resize", fit);
   // The dock grows a row when the story opens more tools than fit: everything over it moves up.
-  const watch = new ResizeObserver(measure);
-  for (const id of ["top", "dock", "hand", "track", "visit", "study"]) watch.observe($(id));
+  for (const id of ["top", "dock", "hand", "track", "visit", "study"]) held.observe($(id), "size", measure);
 
   // ---------- the clock ----------
 

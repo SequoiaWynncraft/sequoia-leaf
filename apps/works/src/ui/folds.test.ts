@@ -91,3 +91,12 @@ test("the card in the corner is open at first, and stays folded once folded, kep
   keepFold("track", true);
   expect(opened("track")).toBe(true);
 });
+
+test("a fold asked to start shut (the card in the corner on a short screen) is shut until the player opens it, and then stays open", () => {
+  world = standin({});
+  expect([opened("track", false), opened("track", true), opened("track")]).toEqual([false, true, true]);
+  keepFold("track", true);
+  expect(opened("track", false)).toBe(true);
+  keepFold("track", false);
+  expect(opened("track", true)).toBe(false);
+});

@@ -5,7 +5,7 @@
 import { isDir } from "./build.ts";
 import { STAND_CHARS, STAND_MOST } from "./content/machines.ts";
 import { LAND } from "./land.ts";
-import { keptOf, type Piece } from "./pieces.ts";
+import { keptOf, type Piece, priceOf } from "./pieces.ts";
 import { type Leg, legKind, legSpan } from "./route.ts";
 import {
   BELT,
@@ -20,6 +20,7 @@ import {
   TOP,
   TUNNEL,
 } from "./tables.ts";
+import type { Yard } from "./yard.ts";
 
 /** A tile a command names. */
 export interface At {
@@ -104,11 +105,12 @@ export const legOnWire = (l: Leg): Record<string, unknown> => ({
 });
 
 /**
- * Pieces to stand, in order, in as few lots as each go in one `stand` command: no more than
- * `STAND_MOST` pieces in a lot, and no more than `STAND_CHARS` characters of them on the wire. A
- * piece alone is always a lot of its own.
+ * Pieces to stand on a yard, in as few lots as each go in one `stand` command: no more than
+ * `STAND_MOST` pieces in a lot, and no more than `STAND_CHARS` characters of them on the wire; a
+ * piece alone is always a lot of its own. The lots that give Coins back come first, then the rest,
+ * each in the order its pieces came: so a purse that pays for the whole pays for each lot in turn.
  */
-export function standLots(pieces: readonly Piece[]): Piece[][] {
+export function standLots(y: Yard, pieces: readonly Piece[]): Piece[][] {
   const lots: Piece[][] = [];
   let size = 0;
   for (const p of pieces) {
@@ -123,5 +125,6 @@ export function standLots(pieces: readonly Piece[]): Piece[][] {
       size = n;
     }
   }
-  return lots;
+  const gives = lots.map((lot) => priceOf(y, lot) < 0);
+  return [...lots.filter((_, k) => gives[k]), ...lots.filter((_, k) => !gives[k])];
 }

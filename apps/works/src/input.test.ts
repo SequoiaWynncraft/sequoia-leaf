@@ -237,8 +237,53 @@ describe("a finger", () => {
       }),
     );
     expect(handPrint().line.text).toBe("Tap a piece for its card.");
-    // The finger has rested on it long enough.
+    // The finger has rested on it long enough, and lifts.
     for (const wait of waits.splice(0)) wait();
+    canvas.dispatchEvent(
+      Object.assign(new Event("pointerup"), {
+        pointerId: 2,
+        pointerType: "touch",
+        button: 0,
+        clientX: p.x,
+        clientY: p.y,
+      }),
+    );
     expect(handPrint().line.text).toBe("");
+  });
+
+  test("resting on bare ground and then moving on leaves a pinned card up; a tap there puts it away", async () => {
+    await openedEmptyHanded();
+    S.finger = true;
+    const waits: (() => void)[] = [];
+    const canvas = canvasPage(waits);
+    const w = S.world;
+    let bare = -1;
+    for (let i = 0; i < w.kind.length && bare < 0; i++)
+      if (refAt(i % w.land.w, Math.floor(i / w.land.w)) === null) bare = i;
+    const p = toPage((bare % w.land.w) * 16 + 8, Math.floor(bare / w.land.w) * 16 + 8);
+    const press = (type: string): void => {
+      canvas.dispatchEvent(
+        Object.assign(new Event(type), { pointerId: 3, pointerType: "touch", button: 0, clientX: p.x, clientY: p.y }),
+      );
+    };
+    const pinned = {
+      stack: ["tile:0"],
+      pinned: true,
+      via: "touch",
+      at: {},
+      from: {},
+      side: false,
+      preview: false,
+    } as const;
+    deck.open = pinned;
+    press("pointerdown");
+    for (const wait of waits.splice(0)) wait();
+    expect(deck.open).toBe(pinned);
+    press("pointerup");
+    expect(deck.open).toBe(pinned);
+    // A tap: down and up, with no rest.
+    press("pointerdown");
+    press("pointerup");
+    expect(deck.open).toBeNull();
   });
 });

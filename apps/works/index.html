@@ -1340,6 +1340,19 @@
         #study {
           width: min(calc(var(--u) * 132), calc(100vw - var(--edge) * 2 - var(--u) * 23));
         }
+        /* A visit's strip too: My yard keeps its width, on a row of its own where the owner's name needs this one. */
+        #visit {
+          max-width: calc(100vw - var(--edge) * 2 - var(--u) * 23);
+          flex-wrap: wrap;
+        }
+        #visit .who {
+          flex: 1 1 8em;
+          overflow-wrap: anywhere;
+        }
+        #visit > .k-btn {
+          flex: none;
+          margin-left: auto;
+        }
         #walk {
           right: calc(var(--edge) + var(--u) * 23);
         }
@@ -1371,12 +1384,40 @@
           display: none;
         }
       }
-      /* A phone on its side: the line over the tools, still over their middle, stops short of the books' column. */
+      /*
+       * A short screen (a phone on its side), where the books' column reaches down beside them: the
+       * tools and the line over them, still over the middle, stop short of it on both sides.
+       */
       @media (max-height: 500px) {
+        #dock,
         #hand {
           --most: calc(100vw - var(--edge) * 2 - var(--u) * 46);
+        }
+        #dock {
+          max-width: var(--most);
+          max-width: calc(
+            round(down, var(--most) - var(--u) * 8 - var(--slot) / 2, var(--slot) + var(--u)) + var(--slot) / 2 +
+              var(--u) * 8
+          );
+        }
+        #hand {
           min-width: min(max(var(--dockw, 0px), calc(var(--u) * 300)), var(--most));
           max-width: var(--most);
+        }
+        /* A panel beside the yard stops short of the books, which stay there to switch between panels. */
+        #panel:not(.full) {
+          right: calc(var(--edge) + var(--u) * 23);
+        }
+        /* A walk's bar goes under the top bar, as on a phone (`views.ts`), in the order's place. */
+        body.walking #track,
+        body.walking #study {
+          display: none;
+        }
+        /* The research being studied sits beside the order in hand, not under it: there is room across, not down. */
+        #study {
+          top: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
+          left: calc(var(--edge) + var(--u) * 135);
+          width: min(calc(var(--u) * 132), calc(100vw - var(--edge) * 2 - var(--u) * 158));
         }
       }
       /* Asked for less motion: nothing here bobs, blinks or slides in; a nudge's bubble still points. Last, so
