@@ -7,6 +7,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  BELT,
   check,
   create,
   encode,
@@ -26,13 +27,13 @@ import {
 } from "@sequoia-leaf/factory";
 import { asking, pressedTwice } from "@sequoia-leaf/kit/dom.ts";
 
-import { ctx, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
+import { clear, ctx, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { heldBox } from "./held.ts";
 import { askSave, askSaveYard, saveIn, saveKey } from "./plans.ts";
 import { S, toolHooks } from "./state.ts";
-import { aimAt, cancel, confirm, hold, markEnd, markOver, markStart, setTool, unaim, undo } from "./tools.ts";
-import { handPrint } from "./ui/dock.ts";
-import { differences } from "./yard.ts";
+import { aimAt, cancel, confirm, hold, markEnd, markOver, markStart, setTool, takeAway, unaim, undo } from "./tools.ts";
+import { handPrint, pressUpgrade } from "./ui/dock.ts";
+import { differences, doNow } from "./yard.ts";
 
 // The input's module reaches the scene, which makes canvases as it loads: a document is there first
 // whose canvases take any drawing and keep none of it, as `input.test.ts` has it.
@@ -237,7 +238,7 @@ describe("a press that waits for a second", () => {
     markEnd();
     askSave();
     const area = saveKey(1);
-    expect(area).toMatch(/:area:\d+$/);
+    expect(area).toMatch(/:area:\d+@\d+$/);
     expect([pressedTwice(area, () => {}), asking(area)]).toEqual([false, true]);
     // Save put away: what it waited for goes with it.
     cancel();
@@ -247,6 +248,43 @@ describe("a press that waits for a second", () => {
     const all = saveKey(1);
     expect(all).not.toBe(area);
     expect(pressedTwice(all, () => {})).toBe(false);
+  });
+});
+
+describe("a press that waits for a second, when the yard changes", () => {
+  test("Upgrade all pressed once, then a clearing undone: the price changes and the second press asks again, raising nothing", async () => {
+    const fake = await opened(yard(), 1000);
+    setTool("select");
+    expect(takeAway(28, 20)).toBe(true);
+    const price = handPrint().upgrade?.cost ?? 0;
+    pressUpgrade(true);
+    expect(handPrint().upgrade?.asking).toBe(true);
+    expect(undo()).toBe(true);
+    expect([handPrint().upgrade?.asking, (handPrint().upgrade?.cost ?? 0) > price]).toEqual([false, true]);
+    pressUpgrade(true);
+    expect(handPrint().upgrade?.asking).toBe(true);
+    await until(() => fake.leaf.posts >= 2);
+    await Bun.sleep(5);
+    expect(sent(fake.leaf)).toEqual(["remove", "undo"]);
+  });
+
+  test("Save over a kept place pressed once, then a piece built elsewhere: the second press asks again, keeping nothing", async () => {
+    await opened(twoPlans(), 1000);
+    setTool("select");
+    markStart(27, 19);
+    markOver(30, 22);
+    markEnd();
+    askSave();
+    const kept = S.world.blueprints[1];
+    expect(pressedTwice(saveKey(1), () => {})).toBe(false);
+    const [spot] = clear(1);
+    if (!spot) throw new Error("no clear ground");
+    expect(doNow({ do: "build", kind: BELT, dir: 0, grade: 1, ...spot })).not.toHaveProperty("refused");
+    expect([asking(saveKey(1)), pressedTwice(saveKey(1), () => {}), S.world.blueprints[1]]).toEqual([
+      false,
+      false,
+      kept,
+    ]);
   });
 });
 

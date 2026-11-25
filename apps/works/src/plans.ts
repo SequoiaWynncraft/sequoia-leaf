@@ -28,7 +28,7 @@ import { TILE } from "./art/belts.ts";
 import { float, puff, sparkle } from "./fx.ts";
 import { groupOf, type HandEvent, markOf, type Stage } from "./hand.ts";
 import { yardSfx } from "./sound.ts";
-import { type Aim, type Group, moveHand, S, toolHooks } from "./state.ts";
+import { type Aim, type Group, moveHand, pressKey, S, toolHooks } from "./state.ts";
 import { coins, doNow } from "./yard.ts";
 
 const DUST = "#cbb894";
@@ -41,24 +41,24 @@ export function digest(values: ArrayLike<number>): number {
 }
 
 /**
- * A press that waits for a second (`pressedTwice`) is named by exactly what it confirms, so that a
- * second press never confirms something else: a blueprint's place by its number and what is kept
- * there; Save over a kept place by what it keeps there (the area marked, or the whole yard).
+ * A press that waits for a second (`pressedTwice`) is named by exactly what it confirms (`pressKey`):
+ * a blueprint's place by its number and what is kept there; Save over a kept place by what it keeps
+ * there too (the area marked, or the whole yard).
  */
 const printKey = (slot: number): string => {
   const p = S.world.blueprints[slot];
   return p ? `${slot}:${p.whole ? "yard" : "area"}:${digest(p.pieces)}` : `${slot}:none`;
 };
 /** Place, putting the plan of the whole yard in a place back. */
-export const placeKey = (slot: number): string => `place:${printKey(slot)}`;
+export const placeKey = (slot: number): string => pressKey(`place:${printKey(slot)}`);
 /** The bin, throwing the blueprint in a place away. */
-export const deleteKey = (slot: number): string => `delete:${printKey(slot)}`;
+export const deleteKey = (slot: number): string => pressKey(`delete:${printKey(slot)}`);
 /** A kept place pressed while Save or Save yard asks where: keeping what it asks about over what is kept there. */
 export function saveKey(slot: number): string {
   const h = S.hand;
   const m = markOf(h);
   const what = h.is === "select" && h.stage.is === "savingYard" ? "yard" : m ? `area:${digest(m.tiles)}` : "none";
-  return `save:${printKey(slot)}:${what}`;
+  return pressKey(`save:${printKey(slot)}:${what}`);
 }
 
 /** Moves what is in hand (`moveHand`). */

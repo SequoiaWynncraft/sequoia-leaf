@@ -642,6 +642,21 @@ describe("a stroke of the brush", () => {
     expect(rows.every((z) => y.tint[F.at(y, 30, z)] === 2)).toBe(true);
   });
 
+  test("that colours a line and colours it back as it was takes nothing up: undone, every belt stands, carrying what it carries", () => {
+    const y = laid();
+    // A running line: a belt on it carrying a thing.
+    const belt = [...y.kind.keys()].find((i) => y.kind[i] === F.BELT && y.item[i] !== F.NONE && y.tint[i] === 0) ?? -1;
+    expect(belt).toBeGreaterThanOrEqual(0);
+    must(y, { do: "paint", tint: 4, ...xyOf(y, belt), id: "s-1" });
+    must(y, { do: "paint", tint: 0, onto: "s-1", ...xyOf(y, belt), id: "s-2" });
+    const line = F.lineOf(y, belt);
+    const carried = (): unknown => line.map((i) => [y.kind[i], y.made[i], y.item[i], y.prog[i]]);
+    const was = carried();
+    expect(y.history.map((e) => e.id)).toEqual(["s-1"]);
+    expect(undo(y)).not.toHaveProperty("refused");
+    expect(carried()).toEqual(was);
+  });
+
   test("undone sets back the colour alone: a splitter's next way out is as the yard left it", () => {
     const y = junctions();
     y.history = [];

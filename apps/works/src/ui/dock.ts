@@ -46,7 +46,7 @@ import {
   yardPress,
   yardSaveOffered,
 } from "../plans.ts";
-import { builds, DRAWN, gradeInHand, type Group, S, type Tool, toolHooks, undoes } from "../state.ts";
+import { builds, DRAWN, gradeInHand, type Group, pressKey, S, type Tool, toolHooks, undoes } from "../state.ts";
 import {
   cancel,
   clearMark,
@@ -298,7 +298,7 @@ function upgradeOf(stage: Stage | null): Upgrade | null {
 }
 
 /** Upgrade's press waiting for a second, named by what it raises: the whole yard, or the area marked. */
-const upgradeKey = (all: boolean): string => (all ? "upgrade-all" : `upgrade:${digest(S.mark?.tiles ?? [])}`);
+const upgradeKey = (all: boolean): string => pressKey(all ? "upgrade-all" : `upgrade:${digest(S.mark?.tiles ?? [])}`);
 
 /** Upgrade (or Upgrade all) pressed, weighed against the purse now: short, the rules say by how much; else it asks twice. */
 export function pressUpgrade(all: boolean): void {

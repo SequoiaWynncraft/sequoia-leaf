@@ -2,7 +2,8 @@
  * The marks over the pieces in hand, drawn into their picture once for each place they are aimed
  * (`inHand`, in `scene.ts`): gold over each piece that can go and coral over each that cannot, with a
  * line where the pieces end; and for a plan of the whole yard, coral corners over each piece it would
- * take up, as the spade marks what it takes, so that what goes is seen before Place is pressed.
+ * take up, as the spade marks what it takes, so that what goes is seen before Place is pressed. The
+ * plan zoomed out marks them too (`far.ts`).
  */
 import { boxOf, tilesOf, type Yard } from "@sequoia-leaf/factory";
 import { CORAL, GOLD } from "@sequoia-leaf/kit/palette.ts";
@@ -22,7 +23,7 @@ interface Box {
 }
 
 /** The tiles a plan of the whole yard in hand would take up; none for anything else in hand. */
-const takenUp = (grp: Group): readonly number[] => (isWhole(grp.as) ? grp.tiles : []);
+export const takenUp = (grp: Group): readonly number[] => (isWhole(grp.as) ? grp.tiles : []);
 
 /** The box the pieces in hand are drawn in: theirs, and for a plan of the whole yard, the pieces it would take up too. */
 export function heldBox(w: Yard, grp: Group): Box {

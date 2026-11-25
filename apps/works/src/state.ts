@@ -158,6 +158,14 @@ export function moveHand(e: HandEvent): void {
   if (heldOf(S.hand) !== was) unask();
 }
 
+/**
+ * What a press that waits for a second (`pressedTwice`) is named: exactly what it confirms, and the
+ * yard's count of changes (`rev`), so that any change to the yard lets it go and no second press
+ * confirms what the first was not shown. A yard taken from Leaf in place of the copy lets it go too
+ * (`yard.ts`).
+ */
+export const pressKey = (target: string): string => `${target}@${S.world.rev}`;
+
 /** Called whenever the tool in hand, or what it is aimed at, changes, and to say something: the interface listens (`dock.ts`). */
 export const toolHooks: { changed: () => void; said: (text: string) => void } = { changed: () => {}, said: () => {} };
 

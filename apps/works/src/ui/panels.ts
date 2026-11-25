@@ -41,7 +41,7 @@ import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
 
 import type { Art } from "../art/index.ts";
 import { yardSfx } from "../sound.ts";
-import { S } from "../state.ts";
+import { pressKey, S } from "../state.ts";
 import { doNow } from "../yard.ts";
 import { board } from "./board.ts";
 import {
@@ -218,7 +218,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
       const filled = (): Counts | null => S.world.board.find((b) => b.id === s.id)?.filled ?? null;
       const rows = wantsOrder(s.want, filled);
       if (rows) live.push(rows);
-      const ask = `swap:${s.id}`;
+      const ask = pressKey(`swap:${s.id}`);
       const act = s.full
         ? button("sm", ["Hand over"], () => {
             panelHooks.handOver(s.id);
