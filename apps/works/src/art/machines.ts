@@ -745,9 +745,9 @@ const JOINER = [
   "....kccccck.....",
 ];
 
-/** A square picture typed in rows, turned a quarter to the right. */
+/** A picture typed in rows, turned a quarter to the right. */
 const quarter = (r: readonly string[]): string[] =>
-  r.map((_, y) => r.map((_row, x) => r[r.length - 1 - x]?.charAt(y) ?? ".").join(""));
+  Array.from(r[0] ?? "", (_, y) => r.map((_row, x) => r[r.length - 1 - x]?.charAt(y) ?? ".").join(""));
 
 /** A square picture typed pointing east, turned to point each way: east, south, west, north. */
 function eachWay(rows: readonly string[]): Canvas[] {
@@ -774,13 +774,16 @@ function vane(dir: number): Canvas {
   return bitmap(rows[dir] ?? [], PAL);
 }
 
-/** The brass pointer on a machine's way out. */
-function pointer(dir: number, col: string): Canvas {
-  const east = ["k..", "yk.", "yyk", "yk.", "k.."];
-  const west = ["..k", ".ky", "kyy", ".ky", "..k"];
-  const south = ["kyyyk", ".kyk.", "..k.."];
-  const rows = dir === 0 ? east : dir === 1 ? south : dir === 2 ? west : south.toReversed();
-  return bitmap(rows, { k: INK, y: col });
+/**
+ * The pointer on a machine's way out, typed pointing east, as large as a splitter's arrowheads: bright
+ * brass lit along its top edge and shaded along its foot, so that it shines against whatever it lies
+ * on (belts, timber, brick). Lit, for a machine pointed at or picked, it is the brightest brass.
+ */
+const POINTER = ["k....", "kwk..", "kwyk.", "kyyyk", "kyok.", "kok..", "k...."];
+const SHINE = { k: INK, w: GOLD[3], y: GOLD[2], o: GOLD[1] };
+const SHONE = { k: INK, w: "#ffffff", y: GOLD[3], o: GOLD[2] };
+function pointer(dir: number, lit: boolean): Canvas {
+  return bitmap(Array.from({ length: dir }).reduce<readonly string[]>(quarter, POINTER), lit ? SHONE : SHINE);
 }
 
 function crate(big: boolean, open: boolean): Sprite {
@@ -1097,8 +1100,8 @@ export function makeMachines(): Machines {
       eachWay(SPLITTER.map((row, y) => (y >= top && y <= foot ? row : ".".repeat(16)))),
     ),
     vane: [0, 1, 2, 3].map(vane),
-    pointer: [0, 1, 2, 3].map((d) => pointer(d, GOLD[0])),
-    pointerLit: [0, 1, 2, 3].map((d) => pointer(d, GOLD[2])),
+    pointer: [0, 1, 2, 3].map((d) => pointer(d, false)),
+    pointerLit: [0, 1, 2, 3].map((d) => pointer(d, true)),
     crate: [false, true].map((big) => [false, true].map((open) => crate(big, open))),
     depot: depot(),
     fly: [0, 1, 2, 3].map((s) => outlined(wheelPic(s, GOLD[1], GOLD[0], GOLD[0], CREAM, DEPOT.wheelR), INK)),
