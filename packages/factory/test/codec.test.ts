@@ -320,6 +320,8 @@ const LEFT_OUT = new Set([
   "holders.idle",
   // Which row of a side table holds a piece's parts: reading a yard back may change it.
   "row",
+  // How often each tile has been cleared, for Undo within a command: reading a yard back stands every piece anew.
+  "made",
   // What Undo would undo is mixed in as its bytes: an entry's id is worked out from them.
   "history.0.id",
   "holders.size",
