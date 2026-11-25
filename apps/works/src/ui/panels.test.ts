@@ -17,6 +17,9 @@ import {
   isNode,
   item,
   LINE,
+  litOf,
+  MILL,
+  NONE,
   ORDER_WAITS,
   play,
   power,
@@ -30,11 +33,12 @@ import {
 
 import { S } from "../state.ts";
 import type { Need } from "./goal.ts";
-import { bookNames, booksPrint, foldedPrint, trackPrint } from "./hud.ts";
+import { bookNames, booksPrint, foldedPrint, plaquePrint, trackPrint } from "./hud.ts";
 import { ordersPrint, placed, plural, powerPrint } from "./panels.ts";
 import { researchPrint, stripPrint } from "./research.ts";
 import { lockOf, nextUp, nextWords, researchOpen, studiable, takeable, tierOpen } from "./standing.ts";
 import { tierPrint } from "./tier.ts";
+import { shortRow } from "./views.ts";
 
 const order = (id: number, planks: number): { id: number; full: boolean } => ({ id, full: planks >= 10 });
 const ids = (list: readonly { id: number }[]): number[] => list.map((s) => s.id);
@@ -100,9 +104,60 @@ describe("a panel is kept by what it prints", () => {
     y.supply = 400;
     y.demand = 402;
     S.world = y;
-    expect([power(y).pace < 1, Math.round(power(y).pace * 100), powerPrint().pace]).toEqual([true, 100, 99]);
+    expect([power(y).pace < 1, Math.round(power(y).pace * 100), powerPrint().speed]).toEqual([true, 100, 99]);
+  });
+
+  test("power: each kind's row says what one of it draws at its grade, as its total counts it", () => {
+    const y = create({ seed: 5, tier: 4 });
+    millsInReach(y, 1, 2);
+    S.world = y;
+    expect([powerPrint().demand, mills()]).toEqual([4.5, { kind: MILL, about: "1 in reach, 4.5 each", drawn: 4.5 }]);
+    // A second mill, of the first grade: the row says both draws.
+    millsInReach(y, 1, 1);
+    expect([powerPrint().demand, mills()]).toEqual([
+      7.5,
+      { kind: MILL, about: "2 in reach, 3 to 4.5 each", drawn: 7.5 },
+    ]);
+  });
+
+  test("power: a mill in the dark says nothing of what one draws, and none in reach says only how many are dark", () => {
+    const y = create({ seed: 5, tier: 4 });
+    millsInReach(y, 1, 1);
+    millsInDark(y, 1, 2);
+    S.world = y;
+    expect(mills()).toEqual({ kind: MILL, about: "1 in reach, 1 in the dark, 3 each", drawn: 3 });
+    const dark = create({ seed: 5, tier: 4 });
+    millsInDark(dark, 2, 2);
+    S.world = dark;
+    expect(mills()).toEqual({ kind: MILL, about: "2 in the dark", drawn: 0 });
+  });
+
+  test("power: the book, the bar over the yard and the trouble view say the same speed, rounded down", () => {
+    const y = create({ seed: 5, tier: 4 });
+    // Nine mills of grade II in reach draw 40.5 of the 40 made: 98.77%.
+    millsInReach(y, 9, 2);
+    S.world = y;
+    expect([power(y).supply, power(y).demand]).toEqual([40, 40.5]);
+    expect([powerPrint().speed, plaquePrint().speed, shortRow(y)]).toEqual([98, 98, ["40.5", "40", "98%"]]);
   });
 });
+
+/** The power book's row for mills. */
+const mills = (): unknown => powerPrint().draws.find((d) => d.kind === MILL);
+
+/** Builds `n` mills of a grade where power reaches, each on the first tile that takes one; where they stand. */
+function millsInReach(y: Yard, n: number, grade: number, reached = true): { x: number; y: number }[] {
+  const lit = litOf(y);
+  const out: { x: number; y: number }[] = [];
+  for (let i = 0; i < y.kind.length && out.length < n; i++) {
+    const at = { x: i % y.land.w, y: Math.floor(i / y.land.w) };
+    if (y.kind[i] === NONE && (lit[i] === 1) === reached && build(y, MILL, at.x, at.y, 0, Infinity, { grade }).ok)
+      out.push(at);
+  }
+  if (out.length < n) throw new Error("no room for the mills");
+  return out;
+}
+const millsInDark = (y: Yard, n: number, grade: number): unknown => millsInReach(y, n, grade, false);
 
 /** What the books' buttons are called now, each titled by its id. */
 const names = (): Map<string, string> => bookNames(booksPrint(), (id) => id);

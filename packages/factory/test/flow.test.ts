@@ -16,10 +16,10 @@ const sawing = F.RECIPE[plank];
 const gathers = F.makes(F.GATHERER, 1, null);
 
 /** What a yard can make and needs of each thing a minute, as `flow` adds them up. */
-function flows(y: F.Yard, aimed?: Uint8Array): { made: F.Counts; needed: F.Counts } {
+function flows(y: F.Yard): { made: F.Counts; needed: F.Counts } {
   const made = F.counts();
   const needed = F.counts();
-  F.flow(y, made, needed, aimed);
+  F.flow(y, made, needed);
   return { made, needed };
 }
 const run = (y: F.Yard, ticks: number): void => {
@@ -60,28 +60,30 @@ describe("what a yard can make and needs a minute", () => {
     expect(needed[deadfall]).toBe(F.needs(2, sawing)[0]?.perMinute ?? -1);
   });
 
-  test("a machine told what to make is counted holding nothing; one told nothing, once it holds a part, and after it is empty again where the caller keeps what it was counted for", () => {
+  test("a machine told what to make is counted holding nothing; one told nothing, once it holds a part, and after it is empty again for what it last began, until it is taken away", () => {
     if (!sawing) throw new Error("no plank recipe");
     const y = sawmill();
-    const aimed = new Uint8Array(y.kind.length).fill(F.NONE);
     // Nothing has reached the mill yet.
-    expect(flows(y, aimed).made[plank]).toBe(0);
+    expect(flows(y).made[plank]).toBe(0);
     run(y, 60);
-    expect(flows(y, aimed).made[plank]).toBe(F.makes(F.MILL, 1, sawing));
+    expect(flows(y).made[plank]).toBe(F.makes(F.MILL, 1, sawing));
     // Its gatherer gone and the last of its deadfall sawn, it holds nothing and is told nothing.
     must(y, { do: "remove", x: 3, y: 4 });
     run(y, 200);
     expect(F.aim(y, F.at(y, 4, 4))).toBeNull();
-    expect(flows(y).made[plank]).toBe(0);
-    const kept = flows(y, aimed);
+    const kept = flows(y);
     expect([kept.made[plank], kept.needed[deadfall]]).toEqual([
       F.makes(F.MILL, 1, sawing),
       F.needs(1, sawing)[0]?.perMinute ?? -1,
     ]);
-    // What was kept for a mill is not a bench's, on the same tile.
+    // Taken away, and another mill built on its tile: that one has begun nothing.
+    must(y, { do: "remove", x: 4, y: 4 });
+    must(y, { do: "build", kind: "mill", x: 4, y: 4, dir: 0 });
+    expect(flows(y).made[plank]).toBe(0);
+    // Nor is it a bench's, on the same tile.
     must(y, { do: "remove", x: 4, y: 4 });
     must(y, { do: "build", kind: "bench", x: 4, y: 4, dir: 0 });
-    expect(flows(y, aimed).made[plank]).toBe(0);
+    expect(flows(y).made[plank]).toBe(0);
     // Told what to make, a machine is counted at once.
     const tool = F.RECIPE[F.item("tool")];
     if (!tool) throw new Error("no tool recipe");
@@ -138,10 +140,9 @@ describe("what a yard can make and needs a minute", () => {
     run(y, 60);
     const made = F.counts();
     const needed = F.counts();
-    const aimed = new Uint8Array(y.kind.length).fill(F.NONE);
-    F.flow(y, made, needed, aimed);
+    F.flow(y, made, needed);
     const before = F.check(y);
-    F.flow(y, made, needed, aimed);
+    F.flow(y, made, needed);
     // Added to what was there, twice over; and the yard is as it was.
     expect(made[plank]).toBe(2 * F.makes(F.MILL, 1, sawing ?? null));
     expect(F.check(y)).toBe(before);

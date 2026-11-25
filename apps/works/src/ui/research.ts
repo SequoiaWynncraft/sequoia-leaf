@@ -16,7 +16,7 @@ import {
   ITEM_INFO,
   LINE,
   litOf,
-  rate,
+  machineRate,
   STATES,
   status,
   STUDY,
@@ -66,7 +66,7 @@ export function studying(): { pace: number; working: number; says: string } {
     if (lit[i] !== 1) dark++;
     else if (condition(w, i) % TROUBLE === WORKING) {
       working++;
-      pace += rate(w, i);
+      pace += machineRate(w, i).effective;
     } else for (const f of status(w, i)?.missing ?? []) missing.add(f);
   }
   const says =

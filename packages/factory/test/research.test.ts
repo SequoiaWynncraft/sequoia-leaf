@@ -301,11 +301,11 @@ describe("a Study", () => {
   test("a Study's pace is its grade's, at the share of power the yard has, and none in the dark", () => {
     const { y } = studies([[folio, 2]]);
     const i = F.at(y, 5, 7);
-    expect(F.rate(y, i)).toBe(F.makes(F.STUDY, 1, null));
+    expect(F.machineRate(y, i).effective).toBe(F.makes(F.STUDY, 1, null));
     y.grade[i] = 2;
-    expect(F.rate(y, i)).toBe(F.makes(F.STUDY, 2, null));
+    expect(F.machineRate(y, i).effective).toBe(F.makes(F.STUDY, 2, null));
     // A second Study past the depot's reach is in the dark.
     must(y, { do: "build", kind: "study", x: 0, y: 0, dir: 0 });
-    expect(F.rate(y, F.at(y, 0, 0))).toBe(0);
+    expect(F.machineRate(y, F.at(y, 0, 0)).effective).toBe(0);
   });
 });

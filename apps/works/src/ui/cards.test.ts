@@ -16,12 +16,16 @@ import {
   build,
   create,
   DEPOT,
+  GATHERER,
   goal,
   isGraded,
   item,
+  litOf,
   MILL,
+  play,
   plot,
   power,
+  refusal,
   setFirst,
   setRecipe,
   setSort,
@@ -32,6 +36,7 @@ import {
   STOP,
   STUDY,
   study,
+  SWAP_EVERY,
   TOOLS,
   unlocked,
   unlockedBy,
@@ -108,6 +113,52 @@ describe("a card", () => {
     coinsAre(0);
   });
 
+  test("of a side order stays that order's when the one above it is swapped, and is gone once it is swapped", () => {
+    const y = create({ seed: 3, tier: 4 });
+    S.world = y;
+    const [above, pinned] = y.board;
+    if (!above || !pinned) throw new Error("no board");
+    const ref = orderRef(pinned.id);
+    expect(printOf(ref)).toMatchObject({ card: "order", title: pinned.title });
+    const swapped = play(y, { do: "swap", order: above.id, tick: y.tick });
+    if ("refused" in swapped) throw new Error(swapped.why);
+    // The pinned order is now first on the board; its card still shows it.
+    expect(y.board[0]?.id).toBe(pinned.id);
+    expect(printOf(ref)).toMatchObject({ card: "order", title: pinned.title });
+    y.tick += SWAP_EVERY;
+    const gone = play(y, { do: "swap", order: pinned.id, tick: y.tick });
+    if ("refused" in gone) throw new Error(gone.why);
+    expect(printOf(ref)).toBeNull();
+  });
+
+  test("of a mill where power does not reach draws its recipe at 0 a minute, short of power, as its line says", () => {
+    const y = create({ seed: 5, tier: 2 });
+    const lit = litOf(y);
+    const dark = y.kind.findIndex(
+      (_, i) => lit[i] === 0 && refusal(y, MILL, i % y.land.w, Math.floor(i / y.land.w), Infinity) === null,
+    );
+    const [x, z] = [dark % y.land.w, Math.floor(dark / y.land.w)];
+    build(y, MILL, x, z, 0, Infinity);
+    setRecipe(y, x, z, item("plank"));
+    S.world = y;
+    expect(printOf(tileRef(dark))).toMatchObject({
+      line: "No power here. Place a pylon near it.",
+      perMinute: "0 /min",
+      flow: { out: item("plank"), perMinute: 0, slow: true },
+    });
+  });
+
+  test("of a gatherer where power does not reach says it gathers 0 a minute", () => {
+    const y = create({ seed: 5, tier: 2 });
+    const lit = litOf(y);
+    const dark = y.kind.findIndex(
+      (_, i) => lit[i] === 0 && refusal(y, GATHERER, i % y.land.w, Math.floor(i / y.land.w), Infinity) === null,
+    );
+    build(y, GATHERER, dark % y.land.w, Math.floor(dark / y.land.w), 0, Infinity);
+    S.world = y;
+    expect(printOf(tileRef(dark))).toMatchObject({ perMinute: "0 /min" });
+  });
+
   test("prints plain values only, read back as they are: every card of a yard with a piece of each kind it can stand", () => {
     const y = create({ seed: 5, tier: 4 });
     ALL_KINDS.forEach((k, n) => build(y, k, 17 + (n % 7) * 2, 13 + Math.floor(n / 7) * 2, 0, Infinity));
@@ -120,7 +171,7 @@ describe("a card", () => {
       ...y.land.plots.map((p) => plotRef(p.plot)),
       ...ALL_GOALS.map(nodeRef),
       orderRef("story"),
-      ...y.board.map((_, slot) => orderRef(slot)),
+      ...y.board.map((o) => orderRef(o.id)),
       // A kind at each grade above the first, and everything a new yard has or a goal unlocks or leaves.
       ...ALL_KINDS.filter(isGraded).flatMap((k) => [machineRef(k, 2), machineRef(k, 3)]),
       ...[...unlocked(START), ...ALL_GOALS.flatMap((g) => unlockedBy(g))].map(unlockRef),

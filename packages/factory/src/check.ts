@@ -14,8 +14,9 @@
  * one gives the same check: what only Leaf holds and moves (the seed and `serial`, the orders ever
  * hung, and the orders hung that do not count yet, which the page may not have heard of; its clock's
  * moment; the letter); news no screen has taken, and the count of changes (`rev`); what is worked out from the rest (what is open,
- * where power reaches and the plumbing, a machine's note that it found nothing to start on); and which
- * row of a side table holds a piece's parts, which reading a yard back may change.
+ * where power reaches and the plumbing, a machine's note that it found nothing to start on); the
+ * recipe a machine last began, which only a screen reads and nothing keeps; and which row of a side
+ * table holds a piece's parts, which reading a yard back may change.
  * `test/codec.test.ts` changes every other part of a yard in turn and fails if the check does not
  * change with it.
  */

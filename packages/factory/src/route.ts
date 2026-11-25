@@ -5,25 +5,8 @@
 import { at, digsUnder, type Dir, DX, DY } from "./build.ts";
 import { toward } from "./land.ts";
 import type { Piece } from "./pieces.ts";
-import {
-  BELT,
-  BENCH,
-  BOILER,
-  CRATE,
-  DEPOT,
-  JOINER,
-  type Kind,
-  locked,
-  MILL,
-  NONE,
-  SORTER,
-  SPLITTER,
-  STOP,
-  STUDY,
-  TUNNEL,
-  WORKSHOP,
-} from "./tables.ts";
-import { ahead, takes as sideTakes } from "./wire.ts";
+import { BELT, DEPOT, isMaker, type Kind, locked, NONE, TUNNEL } from "./tables.ts";
+import { ahead, takes } from "./wire.ts";
 import type { Yard } from "./yard.ts";
 
 /** Where a leg of a run is laid, which way it goes, and its grade: what a leg of belt and a leg of tunnel both hold. */
@@ -62,22 +45,15 @@ export const legPiece = (l: Leg): Piece => ({
 const DIG = 4;
 const DIRS: readonly Dir[] = [0, 1, 2, 3];
 
-/** Whether the piece on tile `t` would take things from tile `c`, handed over going `d`. */
-function takesFrom(y: Yard, t: number, c: number, d: Dir): boolean {
-  const k = y.kind[t] ?? NONE;
-  if (k === DEPOT || k === STOP || k === STUDY) return true;
-  if (k === SPLITTER || k === SORTER) return sideTakes(y, t, c);
-  if (k === TUNNEL) return (y.span[t] ?? 0) > 0 && d === y.dir[t];
-  if (k === BELT || k === JOINER || k === MILL || k === BENCH || k === WORKSHOP || k === CRATE || k === BOILER)
-    return c !== ahead(y, t);
-  return false;
-}
-
 /**
  * The shortest clear run from the tile `from` to `to`. If something stands on `to`, the run ends
- * beside it, pointing into it from a side it takes things from (for the depot, whichever of its
- * tiles is nearest); if `to` is clear ground, the run ends on it, pointing on the way it came, or
+ * beside it, pointing into it from a side it takes things from, as the plumbing has it (`takes`: for
+ * the depot, whichever of its tiles is nearest; a piece that is full takes from the same sides); if `to` is clear ground, the run ends on it, pointing on the way it came, or
  * into the depot if it ends beside it. Nothing if there is no way.
+ *
+ * A mill, bench or workshop takes things in by its front too, but what it makes goes out there: a
+ * run into one ends on the tile ahead of it only when it begins there, or when there is no other way
+ * in, so that what it makes still has a way out.
  */
 export function route(
   y: Yard,
@@ -85,14 +61,44 @@ export function route(
   to: readonly [number, number],
   opts: { readonly tunnels?: boolean } = {},
 ): Leg[] | null {
+  return find(y, from, to, opts.tunnels ?? true, false) ?? find(y, from, to, opts.tunnels ?? true, true);
+}
+
+function find(
+  y: Yard,
+  from: readonly [number, number],
+  to: readonly [number, number],
+  tunnels: boolean,
+  fronts: boolean,
+): Leg[] | null {
   // A run that crosses a tunnel's near mouth it steps over is looked for again with that mouth ruled out.
   const ruled = new Set<number>();
   for (let tries = 0; tries < 12; tries++) {
-    const found = search(y, from, to, opts.tunnels ?? true, ruled);
+    const found = search(y, from, to, tunnels, ruled, fronts);
     if (found === null || Array.isArray(found)) return found;
     ruled.add(found);
   }
   return null;
+}
+
+/** What a run is going into: the tile it ends beside (-1 for clear ground), and the tile it begins on. */
+interface Into {
+  readonly target: number;
+  readonly start: number;
+  /** Whether it may end on the tile ahead of a mill, bench or workshop (`route`). */
+  readonly fronts: boolean;
+}
+
+/**
+ * Whether a run on tile `i` ends there, pointing into the piece on `j`: the piece it goes to (or any
+ * tile of the depot), from a side that piece takes things by, and not where a maker puts out what it
+ * makes unless that is allowed or the run begins there.
+ */
+function endsInto(y: Yard, i: number, j: number, to: Into): boolean {
+  const k = y.kind[j] ?? NONE;
+  if (j !== to.target && !(k === DEPOT && y.kind[to.target] === DEPOT)) return false;
+  if (!takes(y, j, i)) return false;
+  return to.fronts || i === to.start || !isMaker(k) || ahead(y, j) !== i;
 }
 
 function search(
@@ -101,6 +107,7 @@ function search(
   to: readonly [number, number],
   tunnels: boolean,
   ruled: ReadonlySet<number>,
+  fronts: boolean,
 ): Leg[] | number | null {
   const W = y.land.w;
   const start = at(y, from[0], from[1]);
@@ -119,8 +126,7 @@ function search(
     land.trunk[i] === 0;
   if (!clear(start)) return null;
   const digs = tunnels && locked(y.open, { build: TUNNEL }) === null;
-  const target = y.kind[goal] !== NONE ? goal : -1;
-  const toDepot = y.kind[goal] === DEPOT;
+  const into: Into = { target: y.kind[goal] !== NONE ? goal : -1, start, fronts };
 
   // A place in the search is a tile and, just out of a tunnel, the one way it must go on: tile * 5 + (0, or 1 + way).
   const n = y.kind.length * 5;
@@ -149,7 +155,7 @@ function search(
         if (must !== 0 && must - 1 !== d) continue;
         const j = toward(land, i, d);
         if (j < 0) continue;
-        if (target >= 0 ? (j === target || (toDepot && y.kind[j] === DEPOT)) && takesFrom(y, j, i, d) : i === goal) {
+        if (into.target >= 0 ? endsInto(y, i, j, into) : i === goal) {
           end = s;
           endDir = d;
           break search;
@@ -168,14 +174,14 @@ function search(
   if (end < 0) return null;
   // On clear ground the last belt goes on the way the run came; beside the depot, into it: a run
   // that ends there was meant to go in.
-  if (target < 0) {
+  if (into.target < 0) {
     const p = prev[end] ?? -1;
     if (p >= 0) endDir = wayBetween(W, Math.floor(p / 5), goal);
     const onto = toward(land, goal, endDir);
     if (onto < 0 || y.kind[onto] !== DEPOT)
       for (const d of DIRS) {
         const j = toward(land, goal, d);
-        if (j >= 0 && y.kind[j] === DEPOT && takesFrom(y, j, goal, d)) endDir = d;
+        if (j >= 0 && y.kind[j] === DEPOT && takes(y, j, goal)) endDir = d;
       }
   }
 

@@ -50,6 +50,12 @@ export interface Holders {
   /** A finished thing waiting to leave, and what is being made next. */
   out: Uint8Array;
   making: Uint8Array;
+  /**
+   * What a machine last began to make, or `NONE` before it has begun anything (`lastRecipe`). It is
+   * the piece's, so it goes when the piece is taken away; it is neither kept in a save nor checked,
+   * so a page carries it over to a yard it reads afresh (`keepLast`).
+   */
+  last: Uint8Array;
   /** The work done on the next piece, in half-ticks (`tick.ts`). */
   work: Uint16Array;
   /** 1 while a machine has looked at what it holds and found nothing it can start on. */
@@ -240,6 +246,7 @@ const holders = (cap: number): Holders => ({
   tile: new Int32Array(cap),
   out: new Uint8Array(cap),
   making: new Uint8Array(cap),
+  last: new Uint8Array(cap),
   work: new Uint16Array(cap),
   idle: new Uint8Array(cap),
   open: new Uint8Array(cap),
@@ -388,7 +395,19 @@ export function holderRow(y: Yard, tile: number): number {
   let h = y.holders;
   if (h.size === h.tile.length) {
     const bigger = holders(grown(h.size));
-    for (const key of ["tile", "out", "making", "work", "idle", "open", "fuel", "kinds", "count", "stock"] as const)
+    for (const key of [
+      "tile",
+      "out",
+      "making",
+      "last",
+      "work",
+      "idle",
+      "open",
+      "fuel",
+      "kinds",
+      "count",
+      "stock",
+    ] as const)
       bigger[key].set(h[key]);
     bigger.size = h.size;
     y.holders = h = bigger;
@@ -397,6 +416,7 @@ export function holderRow(y: Yard, tile: number): number {
   h.tile[r] = tile;
   h.out[r] = NONE;
   h.making[r] = NONE;
+  h.last[r] = NONE;
   h.work[r] = 0;
   h.idle[r] = 0;
   h.open[r] = 1;
@@ -433,7 +453,7 @@ export function dropRow(y: Yard, tile: number): void {
     const h = y.holders;
     const last = --h.size;
     if (r !== last) {
-      for (const key of ["tile", "out", "making", "work", "idle", "open", "fuel", "kinds", "count"] as const)
+      for (const key of ["tile", "out", "making", "last", "work", "idle", "open", "fuel", "kinds", "count"] as const)
         h[key][r] = h[key][last] ?? 0;
       h.stock.copyWithin(r * ITEM_COUNT, last * ITEM_COUNT, (last + 1) * ITEM_COUNT);
       y.row[h.tile[r] ?? 0] = r;

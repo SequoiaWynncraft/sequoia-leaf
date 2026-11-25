@@ -11,6 +11,7 @@ import { point, shown, surface } from "@sequoia-leaf/kit/card.ts";
 import { placeOf } from "@sequoia-leaf/kit/keyboard.ts";
 import { forControl, heldAgain, typing } from "@sequoia-leaf/kit/keys.ts";
 import { LONG_PRESS } from "@sequoia-leaf/kit/press.ts";
+import { type Scope, scope } from "@sequoia-leaf/kit/scope.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 
 import { pan, zoom } from "./camera.ts";
@@ -141,10 +142,12 @@ interface Down {
   doing: "pan" | "take" | "hand" | "none";
   finger: boolean;
   last: { x: number; y: number };
+  /** A finger's wait to ask what it rests on (`LONG_PRESS`): let go of as the press moves, ends or gives way to another. */
+  readonly hold: Scope;
 }
+/** The presses on the yard, each by its pointer: one is only ever ended by its own pointer's events. */
 const downs = new Map<number, Down>();
 let pinch: { d: number; cx: number; cy: number } | null = null;
-let pressTimer = 0;
 
 /** Where the mouse is on the page while it is over the yard: what it is over is worked out again as the yard moves under it. */
 let mouse: { x: number; y: number } | null = null;
@@ -219,97 +222,115 @@ export function fingerTap(tx: number, ty: number): void {
   refreshDock();
 }
 
-/** A press is over: a finger that did not move was a tap, a mouse that was laying a run lays it. */
+/**
+ * A press is over, lifted (`pointerup`), or cancelled by the browser or its hold on the pointer lost:
+ * lifted, a finger that did not move was a tap, and a mouse that was laying a run lays it; a press
+ * that ended otherwise does nothing more, and its drag ends without doing anything. A press that is
+ * not its pointer's (over already) is nothing.
+ */
 function lift(e: PointerEvent): void {
   const d = downs.get(e.pointerId);
   downs.delete(e.pointerId);
-  window.clearTimeout(pressTimer);
+  d?.hold.close();
   if (downs.size < 2) pinch = null;
   if (!d) return;
+  const lifted = e.type === "pointerup";
   const t = tileAt(e.clientX, e.clientY);
   if (d.finger) {
-    if (d.moved || e.type === "pointercancel") return;
+    if (d.moved || !lifted) return;
     if (S.hand.is === "idle") ask(t.x, t.y, e.clientX, e.clientY);
     else fingerTap(t.x, t.y);
     return;
   }
-  // A press the browser cancelled ends its drag without doing anything; let go, it finishes it.
   if (d.doing === "hand") {
-    if (e.type === "pointercancel") dragLost();
-    else dragEnd(d.id);
-  } else if (d.doing === "pan" && !d.moved && e.button === 0) ask(t.x, t.y, e.clientX, e.clientY);
+    if (lifted) dragEnd(d.id);
+    else dragLost();
+  } else if (d.doing === "pan" && !d.moved && lifted && e.button === 0) ask(t.x, t.y, e.clientX, e.clientY);
 }
 
 /** What input uses of the yard's canvas: its events, holding a press, and marking it for the cards. */
-export type InputSurface = Pick<HTMLCanvasElement, "addEventListener" | "setPointerCapture" | "dataset">;
+export type InputSurface = EventTarget & Pick<HTMLCanvasElement, "setPointerCapture" | "dataset">;
+
+/** A press begins on the yard: by a finger, it waits to ask what it rests on, in a scope of its own (`hold`) under `life`. */
+function pressed(e: PointerEvent, canvas: InputSurface, life: Scope): void {
+  point(null, 0, 0);
+  // A new press ends every other's wait to ask.
+  for (const o of downs.values()) o.hold.close();
+  const finger = e.pointerType !== "mouse";
+  if (S.finger !== finger) {
+    S.finger = finger;
+    if (finger) S.hover = null;
+    refreshDock();
+  }
+  if (finger) mouse = null;
+  const t = tileAt(e.clientX, e.clientY);
+  const d: Down = {
+    id: e.pointerId,
+    x: e.clientX,
+    y: e.clientY,
+    sx: e.clientX,
+    sy: e.clientY,
+    moved: false,
+    doing: "none",
+    finger,
+    last: t,
+    hold: life.child(),
+  };
+  downs.set(e.pointerId, d);
+  canvas.setPointerCapture(e.pointerId);
+  if (finger) fingerDown(d, t);
+  else mouseDown(e, d, t);
+}
+
+/** A finger goes down: a second begins a pinch, and one alone waits to ask what it rests on. */
+function fingerDown(d: Down, t: { x: number; y: number }): void {
+  if (downs.size === 2) {
+    const [a, b] = [...downs.values()];
+    if (a && b) pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+    for (const o of downs.values()) o.moved = true;
+    return;
+  }
+  // A finger kept on a thing asks what it is (what rides a belt first): its card, pinned, even with a tool in hand.
+  d.hold.after(LONG_PRESS, () => {
+    if (d.moved || downs.get(d.id) !== d) return;
+    d.moved = true;
+    openCard(t.x, t.y, true);
+  });
+}
+
+/** A mouse button goes down: the right takes away, the middle or an empty hand moves the view, else the hand's drag begins. */
+function mouseDown(e: PointerEvent, d: Down, t: { x: number; y: number }): void {
+  if (e.button === 2 && !S.visiting) {
+    // With pieces in hand it lets them go: taking one away would leave the hand holding what is not there.
+    if (S.group) cancel();
+    else {
+      d.doing = "take";
+      takeAway(t.x, t.y, true);
+    }
+    return;
+  }
+  if (e.button === 1 || S.hand.is === "idle") {
+    d.doing = "pan";
+    return;
+  }
+  if (S.hand.is === "remove") {
+    d.doing = "take";
+    takeAway(t.x, t.y);
+    return;
+  }
+  d.doing = "hand";
+  press(t.x, t.y, e.pointerId);
+}
 
 export function initInput(canvas: InputSurface): void {
-  document.addEventListener("pointerdown", unlock, true);
+  const life = scope();
+  life.on(document, "pointerdown", () => unlock(), { capture: true });
 
   // A press on the yard is read here: the cards do not put themselves away for it.
   surface(canvas);
-  canvas.addEventListener("pointerdown", (e) => {
-    point(null, 0, 0);
-    window.clearTimeout(pressTimer);
-    const finger = e.pointerType !== "mouse";
-    if (S.finger !== finger) {
-      S.finger = finger;
-      if (finger) S.hover = null;
-      refreshDock();
-    }
-    if (finger) mouse = null;
-    const t = tileAt(e.clientX, e.clientY);
-    const d: Down = {
-      id: e.pointerId,
-      x: e.clientX,
-      y: e.clientY,
-      sx: e.clientX,
-      sy: e.clientY,
-      moved: false,
-      doing: "none",
-      finger,
-      last: t,
-    };
-    downs.set(e.pointerId, d);
-    canvas.setPointerCapture(e.pointerId);
-    if (finger) {
-      if (downs.size === 2) {
-        const [a, b] = [...downs.values()];
-        if (a && b) pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
-        for (const o of downs.values()) o.moved = true;
-        return;
-      }
-      // A finger kept on a thing asks what it is (what rides a belt first): its card, pinned, even with a tool in hand.
-      pressTimer = window.setTimeout(() => {
-        if (d.moved || !downs.has(d.id)) return;
-        d.moved = true;
-        openCard(t.x, t.y, true);
-      }, LONG_PRESS);
-      return;
-    }
-    if (e.button === 2 && !S.visiting) {
-      // With pieces in hand it lets them go: taking one away would leave the hand holding what is not there.
-      if (S.group) cancel();
-      else {
-        d.doing = "take";
-        takeAway(t.x, t.y, true);
-      }
-      return;
-    }
-    if (e.button === 1 || S.hand.is === "idle") {
-      d.doing = "pan";
-      return;
-    }
-    if (S.hand.is === "remove") {
-      d.doing = "take";
-      takeAway(t.x, t.y);
-      return;
-    }
-    d.doing = "hand";
-    press(t.x, t.y, e.pointerId);
-  });
+  life.on(canvas, "pointerdown", (e) => pressed(e, canvas, life));
 
-  canvas.addEventListener("pointermove", (e) => {
+  life.on(canvas, "pointermove", (e) => {
     const d = downs.get(e.pointerId);
     const t = tileAt(e.clientX, e.clientY);
     if (e.pointerType === "mouse") {
@@ -323,7 +344,7 @@ export function initInput(canvas: InputSurface): void {
     d.y = e.clientY;
     if (!d.moved && Math.hypot(d.x - d.sx, d.y - d.sy) > (d.finger ? 9 : 4)) {
       d.moved = true;
-      window.clearTimeout(pressTimer);
+      d.hold.close();
     }
     if (d.finger) {
       if (pinch && downs.size >= 2) {
@@ -350,19 +371,22 @@ export function initInput(canvas: InputSurface): void {
     d.last = t;
   });
 
-  canvas.addEventListener("pointerup", lift);
-  canvas.addEventListener("pointercancel", lift);
+  life.on(canvas, "pointerup", lift);
+  life.on(canvas, "pointercancel", lift);
+  // A press whose hold on its pointer is lost (to the browser, or another element) is over, as a cancelled one.
+  life.on(canvas, "lostpointercapture", lift);
   // A finger's tap is all told by now. The click a browser makes of it afterwards would land on
   // whatever the tap put under the finger: a button of the card it opened.
-  canvas.addEventListener("touchend", (e) => e.preventDefault());
-  canvas.addEventListener("pointerleave", (e) => {
+  life.on(canvas, "touchend", (e) => e.preventDefault());
+  life.on(canvas, "pointerleave", (e) => {
     if (e.pointerType !== "mouse") return;
     mouse = null;
     S.hover = null;
     if (!running() && !S.finger && S.hand.is !== "idle") unaim();
     point(null, 0, 0);
   });
-  canvas.addEventListener(
+  life.on(
+    canvas,
     "wheel",
     (e) => {
       e.preventDefault();
@@ -371,7 +395,7 @@ export function initInput(canvas: InputSurface): void {
     { passive: false },
   );
 
-  window.addEventListener("keydown", (e) => {
+  life.on(window, "keydown", (e) => {
     unlock();
     // Enter or Space on a button is the button's, whatever the player has put on them.
     if (typing(e) || inputHooks.settingsUp() || forControl(e)) return;
@@ -381,10 +405,10 @@ export function initInput(canvas: InputSurface): void {
     // A key held down rotates, removes or picks once: only moving the view, zooming and undoing go on.
     else if (act !== undefined && !act.again && (!S.visiting || LOOKS.has(act.id))) DOES[act.id](e, act.nth);
   });
-  window.addEventListener("keyup", (e) => {
+  life.on(window, "keyup", (e) => {
     held.delete(placeOf(e));
   });
-  window.addEventListener("blur", letGo);
+  life.on(window, "blur", letGo);
 }
 
 /**
@@ -412,6 +436,7 @@ function escape(e: KeyboardEvent, enter: boolean): void {
  */
 export function letGo(): void {
   held.clear();
+  for (const d of downs.values()) d.hold.close();
   downs.clear();
   pinch = null;
   // A finger's long press waiting to ask what it is on finds its press gone, and asks nothing.

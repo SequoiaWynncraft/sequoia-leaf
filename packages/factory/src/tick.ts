@@ -49,7 +49,6 @@ import {
   type Goal,
   GOALS,
   HALF,
-  isFolio,
   ITEM_COUNT,
   JOINER,
   MILL,
@@ -66,7 +65,7 @@ import {
   WORK,
   WORKSHOP,
 } from "./tables.ts";
-import { ahead, carries, farMouth, nextOf, rewire, sortWay, WAY_TURN, wayIn, wayOut } from "./wire.ts";
+import { ahead, carries, farMouth, nextOf, rewire, sortWay, wants, WAY_TURN, wayIn, wayOut } from "./wire.ts";
 import { enough, holderOf, type Holders, put, take, tunnelOf, type Wire, type Yard } from "./yard.ts";
 
 const BURNS = (GIVES[BOILER] ?? 0) * HALF;
@@ -167,6 +166,7 @@ function work(y: Yard, wire: Wire, waiting: Uint8Array): void {
         continue;
       }
       h.making[r] = found;
+      h.last[r] = found;
     }
     const recipe = RECIPE[h.making[r] ?? NONE];
     if (!recipe) continue;
@@ -356,10 +356,17 @@ function turnOn(y: Yard, to: number, side: number): void {
 
 /**
  * Whether the tile at `to` will take the thing `n` handed to it from the tile beside it on its side
- * `side` (a way), by the plumbing: which sides each tile takes from, and what each machine may make.
+ * `side` (a way), asked in three steps the rules answer apart: whether it takes things from that side
+ * (`Wire.taken`, which `takes` reads too), whether it takes that thing (`wants`), and whether it has
+ * room for it this tick.
  */
 function accepts(y: Yard, to: number, n: number, side: number, wire: Wire): boolean {
-  if (to < 0 || (((wire.taken[to] ?? 0) >> side) & 1) === 0) return false;
+  if (to < 0 || (((wire.taken[to] ?? 0) >> side) & 1) === 0 || !wants(y, to, n)) return false;
+  return roomFor(y, to, n, side, wire);
+}
+
+/** Whether a tile that takes the thing `n` from its side `side` has room for it this tick: a belt empty, a joiner on its turn, a machine short of parts. */
+function roomFor(y: Yard, to: number, n: number, side: number, wire: Wire): boolean {
   const k = y.kind[to];
   if (k === DEPOT || k === STOP) return true;
   if (k === BELT || k === TUNNEL || k === SORTER) return y.item[to] === NONE;
@@ -388,8 +395,8 @@ function accepts(y: Yard, to: number, n: number, side: number, wire: Wire): bool
     return have < BUFFER * least;
   }
   if (k === CRATE) return (h.count[r] ?? 0) + (h.out[r] === NONE ? 0 : 1) < y.open.crate;
-  if (k === BOILER) return n === DEADFALL && have < FUEL;
-  if (k === STUDY) return isFolio(n) && have < STUDY_HOLDS;
+  if (k === BOILER) return have < FUEL;
+  if (k === STUDY) return have < STUDY_HOLDS;
   return false;
 }
 

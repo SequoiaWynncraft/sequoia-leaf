@@ -7,7 +7,8 @@
  * - `tile:<index>` whatever stands on a tile of the yard;
  * - `plot:<plot>` a plot of land;
  * - `node:<goal>` a goal: a lesson, a project, a commission or a piece of research; `order:story` is
- *   the node in hand, and `order:<slot>` one of the board's orders;
+ *   the node in hand, and `order:<id>` a side order, by the id it keeps wherever it hangs on the
+ *   board (the rules' `orderAt`);
  * - `tool:<tool>` a tool a goal unlocks;
  * - `perk:<what>.<number>` a number a goal raises, as it will be (`perk:blueprints.<count>.<pieces>`,
  *   `perk:board`);
@@ -34,7 +35,8 @@ export const tileRef = (i: number): string => `tile:${i}`;
 export const plotRef = (id: Plot): string => `plot:${id}`;
 /** A goal: a lesson, a project, a commission or a piece of research. */
 export const nodeRef = (g: Goal): string => `node:${g}`;
-export const orderRef = (slot: number | "story"): string => `order:${slot}`;
+/** A side order by its id, or the node in hand. */
+export const orderRef = (id: number | "story"): string => `order:${id}`;
 export const toolRef = (tool: Tool): string => `tool:${tool}`;
 export const tierRef = (tier: number): string => `tier:${tier}`;
 /** What a finished goal leaves in town. */
