@@ -507,9 +507,9 @@ export function thing(
     opts.note === undefined
       ? null
       : typeof opts.note === "string"
-        ? el("span", "k-s k-dim", { text: opts.note })
+        ? el("span", "k-thing-note k-s k-dim", { text: opts.note })
         : opts.note,
-    opts.tag ? el("span", "k-info-tagged", { text: opts.tag }) : null,
+    opts.tag ? el("span", "k-thing-tag k-info-tagged", { text: opts.tag }) : null,
   );
   link(t, ref);
   return t;

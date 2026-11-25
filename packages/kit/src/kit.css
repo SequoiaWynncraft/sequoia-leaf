@@ -934,6 +934,21 @@ button.k-info-chip:hover .k-chip {
   color: var(--k-gold);
   white-space: nowrap;
 }
+/* Its name wraps in its own column; what is said of it (a count, how many a minute, a tag) never does. */
+.k-thing-name {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.k-thing > :is(.k-thing-count, .k-thing-note, .k-thing-tag) {
+  flex: none;
+  white-space: nowrap;
+}
+/* A note or a tag stands clear of the name it follows. */
+.k-thing-name + :is(.k-thing-note, .k-thing-tag),
+.k-thing-count + :is(.k-thing-note, .k-thing-tag),
+.k-thing-note + .k-thing-tag {
+  margin-left: calc(var(--u) * 2);
+}
 .k-thing.lit .k-thing-name {
   color: var(--k-gold-lt);
 }
