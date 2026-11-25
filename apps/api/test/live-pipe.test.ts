@@ -56,6 +56,32 @@ const binary = (first: number) => new Uint8Array([first, 0, 0]);
 const noMotion = () => undefined;
 
 describe("a connection's pipe", () => {
+  it("counts a snapshot as sent once the socket has taken it, or put it in line, and not one the socket failed to take", async () => {
+    const bytes: number[] = [];
+    // A socket gone by the time it is written a frame beginning 9.
+    const writer: Socket.Writer = {
+      write: (frame) =>
+        frame instanceof Uint8Array && frame[0] === 9
+          ? Effect.fail(new Socket.SocketError({ reason: new Socket.SocketCloseError({ code: CLOSE.done }) }))
+          : Effect.void,
+      writeAll: () => Effect.void,
+    };
+    const tally = noTally();
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const pipe = yield* Pipe.make(writer, LIVE_VERSION, (n) => void bytes.push(n));
+        yield* pipe.writeIf(() => new Uint8Array([2, 0]), tally);
+        yield* pipe.writeIf(() => new Uint8Array([9, 0, 0]), tally);
+        yield* pipe.writeIf(() => null, tally);
+        // Something waits to be written: the next snapshot goes in line behind it.
+        pipe.send("joined");
+        yield* pipe.writeIf(() => new Uint8Array([3, 0, 0, 0]), tally);
+      }),
+    );
+
+    expect([tally, bytes]).toEqual([{ direct: 1, queued: 1, passed: 1 }, [2, 4]]);
+  });
+
   it("writes what it is sent in the order sent, texts and binary frames alike, and closes after them", async () => {
     const written: Written = [];
     await Effect.runPromise(

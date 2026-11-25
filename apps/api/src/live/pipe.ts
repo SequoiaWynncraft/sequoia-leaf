@@ -102,11 +102,14 @@ export class Pipe implements Connection {
         this.queue(frame, tally);
         return Effect.void;
       }
-      const sent = Effect.sync(() => {
-        tally.direct++;
-        this.motion(frame.byteLength);
+      // Counted in the write's own step: a step more a write costs every player at every tick.
+      return Effect.match(this.writer.write(frame), {
+        onFailure: () => undefined,
+        onSuccess: () => {
+          tally.direct++;
+          this.motion(frame.byteLength);
+        },
       });
-      return Effect.ignore(Effect.andThen(this.writer.write(frame), sent));
     });
     const inLine = Effect.sync(() => {
       const frame = this.closed ? null : take();

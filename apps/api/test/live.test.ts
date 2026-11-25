@@ -1346,7 +1346,7 @@ describe("an open interrupted while its socket opens", () => {
 });
 
 describe("when Leaf stops", () => {
-  it("says farewell within a second, however long a socket takes over its close", async () => {
+  it("closes every connection at once, and says farewell within a second, however long a socket takes over its close", async () => {
     await start();
     const live = await services?.run(Live.use((service) => Effect.succeed(service)));
     if (!live) throw new Error("no Live");
@@ -1358,20 +1358,22 @@ describe("when Leaf stops", () => {
         writeAll: () => Effect.void,
       }),
     });
-    for (const [who, socket] of [
-      [alicesIdentity, stuck],
-      [someone(bob, "Bob"), standInSocket([])],
-    ] as const)
+    const serve = (who: ReturnType<typeof someone>, socket: Socket.Socket) =>
       void services
         ?.run(Effect.scoped(live.open(who, "town", Effect.succeed(socket), signedIn)))
         .catch(() => undefined);
+    // Alice's connection first, then Bob's: one after another, Bob's close would wait on hers for ever.
+    serve(alicesIdentity, stuck);
+    await closedThrough(1);
+    const bobs: unknown[] = [];
+    serve(someone(bob, "Bob"), standInSocket(bobs));
     await closedThrough(2);
     let said = false;
     void services?.run(live.farewell).then(() => (said = true));
     await pass("1200 millis");
     await turnsUntil(() => said);
 
-    expect(said).toBe(true);
+    expect(bobs.filter(Socket.isCloseEvent).map((c) => c.code)).toEqual([CLOSE.restart]);
   });
 
   it("closes every connection as restarting, for the game to come back", async () => {
