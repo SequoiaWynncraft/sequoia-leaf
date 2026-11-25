@@ -3,14 +3,14 @@
  * offers them through Leaf (`/v1/game/requests`): an aspect request, a tome request and, where the
  * backend sells it, LE, so many at a price each. Each row has its price on a button, or in its place
  * why the member cannot buy it, in the backend's words. The backend makes the request and takes the
- * Leaf; the row then says where it stands in the queue.
+ * Leaf; the row then says where it stands in the queue. What each row shows is `requests.ts`'s.
  */
 
-import { type LeRate, leRateText, leTooDear, leTooFew, type RequestKind, REQUESTS } from "@sequoia-leaf/core";
+import { type RequestKind, REQUESTS } from "@sequoia-leaf/core";
 import { asking, asksAgain, el, icon as glyph, pressedTwice, replay } from "@sequoia-leaf/kit/dom.ts";
 import { isGuest } from "@sequoia-leaf/kit/live.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
-import { type Answer, ask, isRecord } from "@sequoia-leaf/kit/net.ts";
+import { ask } from "@sequoia-leaf/kit/net.ts";
 import { waitingLook } from "@sequoia-leaf/kit/play.ts";
 import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { fly } from "@sequoia-leaf/kit/pursebar.ts";
@@ -22,20 +22,22 @@ import { folk, KEEPER } from "@sequoia-leaf/town/folk.ts";
 import { hop, say } from "./actors.ts";
 import { G } from "./game.ts";
 import { button, centre, faceOf, pic, purseAt, slot } from "./hud.ts";
+import {
+  KINDS,
+  leBlocked,
+  locks,
+  named,
+  type Offers,
+  offersOf,
+  type Outcome,
+  outcomeOf,
+  type Shown,
+  shown,
+} from "./requests.ts";
 import { requestArt } from "./treasuryart.ts";
 
-/** The guild's requests the Treasury sells, in the order it lists them. */
-const KINDS: readonly RequestKind[] = ["aspect", "tome", "le"];
 /** Each request's name on its row. */
 const NAMES: Readonly<Record<RequestKind, string>> = { aspect: REQUESTS.aspect, tome: REQUESTS.tome, le: "LE" };
-const LOST = "Could not tell whether the request went through. Check the queue in Discord before trying again.";
-const UNREACHED = "The guild's requests could not be reached. Try again in a moment.";
-
-/** A request's line where its button would be: why it cannot be bought, or what buying it did. */
-interface Said {
-  text: string;
-  tone: "k-gold" | "k-coral" | "k-dim";
-}
 
 /** One request's row: its card, the lines under its name, and the place for its button. */
 interface Row {
@@ -45,7 +47,7 @@ interface Row {
   readonly side: HTMLElement;
 }
 
-/** The counter as the panel shows it: what Leaf says of each request, and what the member has typed. */
+/** The counter as the panel shows it: what Leaf says of each request now, what the member's tries came to, and what they typed. */
 interface Counter {
   readonly life: Scope;
   readonly rows: readonly Row[];
@@ -56,14 +58,10 @@ interface Counter {
   readonly reason: HTMLTextAreaElement;
   /** How many LE to ask for: whole, from the fewest the backend sells. */
   readonly many: HTMLInputElement;
-  /** What Leaf says each costs (for LE, Leaf for 1 LE), while the member may buy it. */
-  readonly price: Partial<Record<RequestKind, number>>;
-  /** What to say in place of a request's button. */
-  readonly said: Partial<Record<RequestKind, Said>>;
-  /** Why the last try did not go through, when it may be tried again: said under the row, with its button still there. */
-  readonly again: Partial<Record<RequestKind, string>>;
-  /** LE as the backend sells it; null until Leaf says, and while the backend sells none, its row is hidden. */
-  le: LeRate | null;
+  /** Every request's offer, as Leaf last answered; nothing until it has. */
+  offers: Offers;
+  /** What the member's last try at each request came to. */
+  readonly outcomes: Partial<Record<RequestKind, Outcome>>;
   busy: boolean;
   writing: boolean;
 }
@@ -71,23 +69,23 @@ interface Counter {
 /** How many LE the field says, 0 for none. */
 const asked = (t: Counter): number => (Number.isFinite(t.many.valueAsNumber) ? t.many.valueAsNumber : 0);
 
-/** What a row's button spends now: its price, and for LE so many at the price of one. */
-function costOf(t: Counter, kind: RequestKind): number | undefined {
-  const each = t.price[kind];
-  return kind === "le" && each !== undefined ? asked(t) * each : each;
-}
+/** What a row shows now. */
+const showing = (t: Counter, kind: RequestKind): Shown => shown(kind, t.offers[kind], t.outcomes[kind]);
+
+/** What a row's button spends now at `price`: that, and for LE so many at the price of one. */
+const costOf = (t: Counter, kind: RequestKind, price: number): number => (kind === "le" ? asked(t) * price : price);
 
 /** Why a row's button will not buy what it shows (LE not whole, too few, or more than the member's Leaf), or null. */
 function blocked(t: Counter, kind: RequestKind): string | null {
-  if (kind !== "le" || t.le === null) return null;
-  const n = asked(t);
-  if (!Number.isInteger(n) || n < t.le.minimum) return leTooFew(t.le);
-  const { leaf } = balance();
-  return n * t.le.leafPerLe > leaf ? leTooDear(n, t.le, leaf) : null;
+  const { sale } = showing(t, kind);
+  return kind === "le" && sale ? leBlocked(sale, asked(t), balance().leaf) : null;
 }
 
-/** A request as a sentence names it: "your tome request", "your 40 LE request". */
-const named = (kind: RequestKind, n: number): string => (kind === "le" ? `${whole(n)} LE` : kind);
+/** Forgets what a try came to where it may be tried again as it stands: the row is about to be tried, or its number changed. */
+function forgetPassing(t: Counter, kind: RequestKind): void {
+  const outcome = t.outcomes[kind];
+  if (outcome && !locks(kind, outcome)) delete t.outcomes[kind];
+}
 
 /** A row's button, at what it spends now. */
 function buttonOf(t: Counter, row: Row, cost: number): HTMLButtonElement {
@@ -106,20 +104,15 @@ function buttonOf(t: Counter, row: Row, cost: number): HTMLButtonElement {
 
 function drawRow(t: Counter, row: Row): void {
   const { kind, card, side, under } = row;
-  const cost = costOf(t, kind);
-  const words = t.said[kind];
-  side.replaceChildren(!words && cost !== undefined ? buttonOf(t, row, cost) : "");
-  const again = t.again[kind];
-  const note = words ?? (again === undefined ? null : { text: again, tone: "k-coral" });
+  const { hidden, sale, rate, said } = showing(t, kind);
+  side.replaceChildren(sale ? buttonOf(t, row, costOf(t, kind, sale.price)) : "");
   under.replaceChildren(
-    kind === "le" && t.le !== null ? el("div", "k-d", { text: leRateText(t.le) }) : "",
-    note ? el("div", `k-read ${note.tone}`, { text: note.text }) : "",
+    rate === null ? "" : el("div", "k-d", { text: rate }),
+    said ? el("div", `k-read ${said.tone}`, { text: said.text }) : "",
   );
-  if (kind === "le") {
-    card.hidden = t.le === null;
-    t.many.hidden = side.childElementCount === 0;
-  }
-  if (kind === "tome" && t.writing && !words) card.append(t.reason);
+  card.hidden = hidden;
+  if (kind === "le") t.many.hidden = sale === null;
+  if (kind === "tome" && t.writing && sale) card.append(t.reason);
   else if (kind === "tome") t.reason.remove();
 }
 
@@ -143,7 +136,7 @@ function press(t: Counter, row: Row, b: HTMLButtonElement, cost: number): void {
   const why = blocked(t, kind);
   if (why !== null) {
     // LE the backend would not sell, or more than the member has: said under the row, the field to put it right.
-    t.again[kind] = why;
+    t.outcomes[kind] = { is: "again", text: why };
     draw(t);
     t.many.focus();
     sfx.no();
@@ -159,36 +152,17 @@ function press(t: Counter, row: Row, b: HTMLButtonElement, cost: number): void {
   if (kind === "tome" || pressedTwice(t.life, { on: `request:${kind}`, price: cost }, redraw)) void buy(t, kind, b);
 }
 
-/** Takes LE's rate from Leaf's offer: false, and its row stays hidden, when the backend sells no LE. */
-function offerLe(t: Counter, offer: unknown): boolean {
-  if (!isRecord(offer) || typeof offer.price !== "number" || typeof offer.minimum !== "number") return false;
-  // The field starts at the fewest the backend sells, and keeps what was typed when Leaf is asked again.
-  if (t.le === null) t.many.value = String(offer.minimum);
-  t.many.min = String(offer.minimum);
-  t.le = { leafPerLe: offer.price, minimum: offer.minimum };
-  return true;
-}
-
+/** Asks Leaf what it sells now, and shows every row as it answers. */
 async function look(t: Counter): Promise<void> {
-  const answer = await ask("/v1/game/requests");
-  const body = answer.status === 200 && isRecord(answer.body) ? answer.body : null;
-  const message = isRecord(answer.body) && typeof answer.body.message === "string" ? answer.body.message : UNREACHED;
-  for (const kind of KINDS) {
-    const offer = body?.[kind];
-    if (kind === "le" && !offerLe(t, offer)) continue;
-    if (isRecord(offer) && typeof offer.price === "number") {
-      t.price[kind] = offer.price;
-      if (typeof offer.why_not === "string") t.said[kind] ??= { text: offer.why_not, tone: "k-dim" };
-    } else t.said[kind] ??= { text: message, tone: "k-dim" };
+  const had = t.offers.le?.sold === true;
+  t.offers = offersOf(await ask("/v1/game/requests"));
+  const le = t.offers.le;
+  if (le?.sold) {
+    // The field starts at the fewest the backend sells, and keeps what was typed while LE stays on sale.
+    if (!had) t.many.value = String(le.minimum);
+    t.many.min = String(le.minimum);
   }
   draw(t);
-}
-
-/** The request made, as Leaf answers it: where it stands, what it cost, and the Leaf left; null for anything else. */
-function madeOf(answer: Answer): { position: number; paid: number; left: number } | null {
-  const made = answer.status === 200 && isRecord(answer.body) ? answer.body : null;
-  if (!made || typeof made.position !== "number" || typeof made.leaf_paid !== "number") return null;
-  return typeof made.leaf === "number" ? { position: made.position, paid: made.leaf_paid, left: made.leaf } : null;
 }
 
 /** Cinfy files a request bought at the button `b`. */
@@ -206,7 +180,7 @@ function filed(t: Counter, b: HTMLButtonElement): void {
 async function buy(t: Counter, kind: RequestKind, b: HTMLButtonElement): Promise<void> {
   t.busy = true;
   t.many.disabled = true;
-  delete t.again[kind];
+  forgetPassing(t, kind);
   const n = asked(t);
   const wanted = kind === "tome" ? { reason: t.reason.value.trim() } : kind === "le" ? { amount: n } : {};
   const answer = await waitingLook(
@@ -219,22 +193,13 @@ async function buy(t: Counter, kind: RequestKind, b: HTMLButtonElement): Promise
   );
   t.busy = false;
   t.many.disabled = false;
-  const made = madeOf(answer);
-  if (made) {
-    t.said[kind] = {
-      text: `Added your ${named(kind, n)} request to the queue at position #${made.position}. ${whole(made.paid)} Leaf paid; you have ${whole(made.left)} left.`,
-      tone: "k-gold",
-    };
+  const outcome = outcomeOf(answer, named(kind, n));
+  t.outcomes[kind] = outcome;
+  if (outcome.is === "made") {
     filed(t, b);
     // What the rest costs against the Leaf left.
     void look(t);
   } else {
-    // Refused, nothing was taken, and the backend says why; anything else may have gone through.
-    const message = isRecord(answer.body) ? answer.body.message : null;
-    const refused = answer.status >= 400 && answer.status < 500 && typeof message === "string";
-    // Nothing was taken and it may be tried again (the guild's server was busy): the button and what was written stay.
-    if (answer.status === 503 && typeof message === "string") t.again[kind] = message;
-    else t.said[kind] = { text: refused ? message : LOST, tone: "k-coral" };
     sfx.no();
     replay(b, "shake");
   }
@@ -290,16 +255,14 @@ export function treasury(body: HTMLElement, life: Scope): null {
       "aria-label": "What is the tome for?",
     }),
     many,
-    price: {},
-    said: {},
-    again: {},
-    le: null,
+    offers: {},
+    outcomes: {},
     busy: false,
     writing: false,
   };
   // How many LE changes what its button spends, and puts by why the last number would not do.
   life.on(many, "input", () => {
-    delete t.again.le;
+    forgetPassing(t, "le");
     draw(t);
   });
   draw(t);

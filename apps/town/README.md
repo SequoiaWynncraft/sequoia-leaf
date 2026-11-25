@@ -78,7 +78,7 @@ says so.
   name pins it, a finger kept on a thing in the camp pins it as a sheet. People keep their own
   card (below), and the town's other things their one-line hint. What is bought is in the camp's
   Storage at once: its picture goes from the stall's button to the camp's button in the dock.
-- **The Treasury** (`treasury.ts`). Cinfy sells the guild's paid requests, an aspect request and a
+- **The Treasury** (`treasury.ts`, what each row shows in `requests.ts`). Cinfy sells the guild's paid requests, an aspect request and a
   tome request, for the Leaf the backend asks (3,000 each), and LE where the backend sells it (200
   Leaf for 1 LE, at least 32 LE). The page asks Leaf
   (`GET /v1/game/requests`), which asks the backend as the member: each row has its price on a
@@ -89,7 +89,9 @@ says so.
   the member's Leaf leaves the button dim, and pressing it says why under the row.
   `POST /v1/game/requests` buys it: the backend takes the Leaf from the guild's ledger, and the row
   says where the request stands in the queue and the purse shows the Leaf left. Refused, it says
-  why; with no answer, it says to check the queue in Discord, and does not send it again. A guest
+  why (LE keeps its field and button, for another number); with no answer, it says to check the
+  queue in Discord, and does not send it again. Each answer to the GET replaces every row's offer:
+  a reason that no longer holds goes, and LE comes and goes as the backend sells it. A guest
   sees the aspect and tome rows without buttons and one line saying who they are for.
 - **Doors into the games.** The Works and The Little Raid are games of their own. Each has a card
   that says what is waiting there and a button to go in; walking on into the Works' doorway, or
