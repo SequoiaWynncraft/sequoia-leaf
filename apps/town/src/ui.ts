@@ -13,6 +13,7 @@ import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { ask as askLeaf, isRecord, outside } from "@sequoia-leaf/kit/net.ts";
 import { waitingLook } from "@sequoia-leaf/kit/play.ts";
 import { fly } from "@sequoia-leaf/kit/pursebar.ts";
+import { whole } from "@sequoia-leaf/kit/say.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { dist, makeCanvas, pick } from "@sequoia-leaf/kit/util.ts";
@@ -97,9 +98,6 @@ const KINDS: readonly RequestKind[] = ["aspect", "tome"];
 const LOST = "Could not tell whether the request went through. Check the queue in Discord before trying again.";
 const UNREACHED = "The guild's requests could not be reached. Try again in a moment.";
 
-/** A number of Leaf as the backend writes it: 3,000. */
-const leafText = (n: number): string => n.toLocaleString("en-US");
-
 /** A request's line where its button would be: why it cannot be bought, or what buying it did. */
 interface Said {
   text: string;
@@ -160,8 +158,8 @@ function treasury(body: HTMLElement): null {
               `leaf sm${asking(key) ? " asking" : ""}`,
               // A tome is not asked for twice: with what it is for written, its button says what pressing it does.
               kind === "tome"
-                ? [writing ? "Buy" : null, glyph("leaf"), leafText(cost)]
-                : [asksAgain(key, [glyph("leaf"), leafText(cost)], "Buy?")],
+                ? [writing ? "Buy" : null, glyph("leaf"), whole(cost)]
+                : [asksAgain(key, [glyph("leaf"), whole(cost)], "Buy?")],
               (b) => {
                 press(kind, b);
               },
@@ -221,7 +219,7 @@ function treasury(body: HTMLElement): null {
       typeof made.leaf === "number"
     ) {
       said[kind] = {
-        text: `Added your ${kind} request to the queue at position #${made.position}. ${leafText(made.leaf_paid)} Leaf paid; you have ${leafText(made.leaf)} left.`,
+        text: `Added your ${kind} request to the queue at position #${made.position}. ${whole(made.leaf_paid)} Leaf paid; you have ${whole(made.leaf)} left.`,
         tone: "k-gold",
       };
       sfx.buy();
@@ -320,7 +318,7 @@ function notes(body: HTMLElement): () => void {
         const q = now();
         // A quest pays by itself the moment it is finished.
         const paid = q.goals.some((g) => g.have >= g.need);
-        pay.replaceChildren(amount("leaf", leafText(q.reward)));
+        pay.replaceChildren(amount("leaf", whole(q.reward)));
         kind.textContent = paid ? "" : kindLine(q, outside.now());
         if (bars.length !== q.goals.length) {
           // Each way to finish it, its bar and its count; "or" between them.
@@ -347,7 +345,7 @@ function notes(body: HTMLElement): () => void {
               ? ""
               : button(
                   `sm ${cost > 0 ? "leaf" : "wood"}${asking(key) ? " asking" : ""}`,
-                  cost > 0 ? [asksAgain(key, ["Reroll", glyph("leaf"), leafText(cost)], "Reroll?")] : ["Reroll"],
+                  cost > 0 ? [asksAgain(key, ["Reroll", glyph("leaf"), whole(cost)], "Reroll?")] : ["Reroll"],
                   (b) => void press(b),
                 ),
         );

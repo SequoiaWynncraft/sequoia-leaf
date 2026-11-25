@@ -25,11 +25,37 @@
     ]
   },
   {
+    "id": "works-per-minute",
+    "at": "2026-11-25T15:52Z",
+    "title": "The Works: speeds a minute",
+    "lines": [
+      "A piece's card says what it does a minute, in place of the seconds it takes for one: what a gatherer gathers, a machine makes, a Study takes in, a boiler burns and a belt carries. A belt carries 150, 200 or 300 things a minute by its grade.",
+      "Every speed in the Works is written the same way, as a number and /min: on cards, in the Items list, on the research screen and in what a higher grade does. Under 10 it has one decimal, so a grade I workshop makes 7.5–20 /min."
+    ],
+    "more": [
+      {
+        "head": "Also",
+        "points": [
+          "A thing's card says how many a minute its machine makes.",
+          "Numbers of 1,000 and more have their comma everywhere, as in prices and pay on cards and health in The Little Raid."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "works-pointer",
+    "at": "2026-11-25T15:10Z",
+    "title": "The Works: clearer machine arrows",
+    "lines": [
+      "The arrow on a machine that shows which way it sends what it makes is bigger and brighter, so it stands out on belts."
+    ]
+  },
+  {
     "id": "discord-sign-in",
     "at": "2026-11-25T14:40Z",
     "title": "Sign in with Discord",
     "lines": [
-      "Anyone can sign in with Discord now. A Wynncraft account is not needed.",
+      "Anyone can sign in with Discord now, with the blue Discord button. A Wynncraft account is not needed.",
       "Sequoia members link their Wynncraft account in Settings, under Account, to collect the Leaf their raids and wars earned. It is kept until they do."
     ]
   },

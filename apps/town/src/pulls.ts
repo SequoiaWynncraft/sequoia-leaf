@@ -5,6 +5,7 @@
  * cannot be made. `grovescene.ts` and `groveui.ts` show them.
  */
 
+import { exact, whole } from "@sequoia-leaf/core";
 import {
   type Counters,
   type Pulled,
@@ -29,9 +30,7 @@ export const EVERGREEN = "Evergreen";
 export const RARITY_NAMES = Object.keys(RARITIES).filter((r): r is Rarity => Object.hasOwn(RARITIES, r));
 export const tierOf = (rarity: Rarity): Tier => RARITIES[rarity].tier;
 
-/** A number as the page writes it: 10,000. */
-export const count = (n: number): string => n.toLocaleString("en-US");
-const seeds = (n: number): string => `${count(n)} ${n === 1 ? "Seed" : "Seeds"}`;
+const seeds = (n: number): string => `${whole(n)} ${n === 1 ? "Seed" : "Seeds"}`;
 
 /** A banner that can be shown: open by Leaf's view, with somebody as its headliner. */
 export interface Showing {
@@ -82,7 +81,7 @@ export function revealOf(note: PullsNote, banners: readonly BannerPerson[]): Rev
   return {
     name: prizeName(note.prize, banners),
     rarity: note.rarity,
-    have: note.have > 1 ? `You have ${count(note.have)}` : "New",
+    have: note.have > 1 ? `You have ${whole(note.have)}` : "New",
     owned: note.have > 1,
     seeds: note.t === "pull" ? `+${seeds(RATES.seeds[tierOf(note.rarity)])}` : null,
   };
@@ -104,7 +103,7 @@ export const owedLine = (c: Pick<Counters, "owed">, name: string): string | null
 // ---------- the chances ----------
 
 /** A share in percent, with as many decimals as it needs, up to three: 0.8, 5.952. */
-const pc = (share: number): number => Number((share * 100).toFixed(3));
+const pc = (share: number): string => exact(share * 100);
 export const percent = (share: number): string => `${pc(share)}%`;
 
 /**

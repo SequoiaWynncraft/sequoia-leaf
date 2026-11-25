@@ -65,6 +65,7 @@ export {
 } from "./player.ts";
 export { clamp, hash, type Pt, type Rect, vnoise } from "./plane.ts";
 export { below, chance, draw32, mix, pick, shuffled, type Stream, weighted } from "./rng.ts";
+export { coinsText, duration, exact, num, PER_MINUTE, perMinute, whole } from "./say.ts";
 export { NO_POSTCARDS, type Postcard, type Postcards, readPostcard, readPostcards } from "./postcard.ts";
 export {
   applyActivityToQuests,

@@ -136,6 +136,11 @@
   outline-offset: calc(var(--u) * 2);
   box-shadow: 0 0 0 calc(var(--u) * 2) var(--k-cream);
 }
+/* Nor before any key is pressed (`dialog.ts`): a button a card gives the focus to as the page opens. */
+:root.k-unkeyed :is(button, a, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: none;
+  box-shadow: none;
+}
 /* A dialog or a card given the focus to hold it, not to be pressed, shows no ring. */
 [tabindex="-1"]:focus {
   outline: none;
@@ -983,6 +988,13 @@ button.k-info-chip:hover .k-chip {
 .k-btn:is(.blue, .green, .leaf, .wood, .coral, .slate, .plum) {
   color: var(--k-cream);
   text-shadow: 0 var(--u) 0 #0007;
+}
+/* Signing in with Discord looks like Discord: its blurple and white words. */
+.k-btn.discord {
+  --f: var(--k-f-btn-discord);
+  --fd: var(--k-f-btn-discord-down);
+  color: #fff;
+  text-shadow: 0 var(--u) 0 #0005;
 }
 .k-btn.blue {
   --f: var(--k-f-btn-blue);

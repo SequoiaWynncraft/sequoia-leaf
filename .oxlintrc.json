@@ -24,7 +24,8 @@
     ],
     "leaf/hook-framework": "error",
     "leaf/raw-browser": "error",
-    "leaf/module-let": "error"
+    "leaf/module-let": "error",
+    "leaf/said-number": "error"
   },
   "overrides": [
     {
@@ -49,7 +50,14 @@
       ],
       "rules": {
         "leaf/raw-browser": "off",
-        "leaf/module-let": "off"
+        "leaf/module-let": "off",
+        "leaf/said-number": "off"
+      }
+    },
+    {
+      "files": ["packages/core/src/say.ts"],
+      "rules": {
+        "leaf/said-number": "off"
       }
     },
     {

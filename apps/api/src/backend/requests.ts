@@ -1,4 +1,4 @@
-import type { RequestKind } from "@sequoia-leaf/core";
+import { type RequestKind, whole } from "@sequoia-leaf/core";
 import { Duration, Effect, type Redacted, Schema } from "effect";
 import { type HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
@@ -62,12 +62,9 @@ const NOT_LINKED = "This queue requires a linked Minecraft account. Use /link wi
 const SIGN_IN = "Your session has expired. Sign in again";
 const BUSY = "The guild's server could not take the Leaf just now. No Leaf was taken. Try again in a minute.";
 
-/** A number as the backend writes Leaf: 3,000. */
-const leafText = (n: number): string => n.toLocaleString("en-US");
-
 /** Why a member with `balance` Leaf cannot pay `price` for a request, in the backend's words. */
 export const notEnoughLeaf = (kind: RequestKind, price: number, balance: number): string =>
-  `${kind === "aspect" ? "An aspect" : "A tome"} request costs ${leafText(price)} Leaf. You have ${leafText(balance)}.`;
+  `${kind === "aspect" ? "An aspect" : "A tome"} request costs ${whole(price)} Leaf. You have ${whole(balance)}.`;
 
 /**
  * The backend's reason for a refusal. Its errors' bodies may come without words (Spring leaves them

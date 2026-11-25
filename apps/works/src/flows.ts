@@ -5,6 +5,7 @@
  */
 
 import { ALL_ITEMS, counts, flow, type Item, NONE, type Yard } from "@sequoia-leaf/factory";
+import { num } from "@sequoia-leaf/kit/say.ts";
 
 import type { Cell } from "./ui/table.ts";
 
@@ -65,14 +66,12 @@ export function flowRows(made: ArrayLike<number>, needed: ArrayLike<number>, cam
 export const SHORT = 0.05;
 
 /**
- * A number a minute as it is printed: whole from ten up; under ten to one decimal, unless it is
- * whole; and none at all faint, so that the numbers there are stand out.
+ * A number a minute as its cell prints it, under a column that says "/min": as `num` says it, and
+ * none at all faint, so that the numbers there are stand out.
  */
-export function aMinute(v: number): Cell {
-  const tenth = Math.round(v * 10) / 10;
-  if (tenth <= 0) return ["0", "faint"];
-  if (tenth >= 10 || Number.isInteger(tenth)) return Math.round(tenth).toLocaleString("en-US");
-  return tenth.toFixed(1);
+export function cellOf(v: number): Cell {
+  const said = num(Math.max(0, v));
+  return said === "0" ? [said, "faint"] : said;
 }
 
 /** The words of a number as it is printed. */

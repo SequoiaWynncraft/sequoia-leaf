@@ -71,8 +71,8 @@ describe("a card", () => {
     // The same count of changes: only power, which the card does not name, differs.
     S.world = short;
     const after = printOf(ref);
-    expect(before).toMatchObject({ line: "Waiting for planks and ingots to make tools.", perMinute: 30 });
-    expect(after).toMatchObject({ line: "Waiting for planks and ingots to make tools.", perMinute: 21 });
+    expect(before).toMatchObject({ line: "Waiting for planks and ingots to make tools.", perMinute: "30 /min" });
+    expect(after).toMatchObject({ line: "Waiting for planks and ingots to make tools.", perMinute: "21 /min" });
     expect(cardKey(ref)).not.toBe(key);
   });
 
@@ -186,7 +186,7 @@ describe("the cards of tiers 2 and 3", () => {
     // Tools from a plank and an ingot, one of each: the parts and what it holds, and no numbers a minute.
     expect(printOf(tileRef(at(S.world, 20, 15)))).toMatchObject({
       numbers: [],
-      perMinute: 30,
+      perMinute: "30 /min",
       flow: {
         out: item("tool"),
         perMinute: 30,
@@ -213,7 +213,8 @@ describe("the cards of tiers 2 and 3", () => {
         ],
       },
     });
-    expect(printOf(machineRef(BELT))).toMatchObject({ numbers: ["Carries up to 150 items a minute."] });
+    // What a belt carries a minute is its pace, on the card (`paceOf`), not a sentence too.
+    expect(printOf(machineRef(BELT))).toMatchObject({ numbers: [] });
     // Once the yard may build mills higher, each part says how many that is at the highest grade too;
     // and a piece of the second grade counts its own.
     const y = counted(4);
@@ -240,11 +241,9 @@ describe("the cards of tiers 2 and 3", () => {
         ],
       },
     });
-    expect(printOf(tileRef(at(y, 22, 17)))).toMatchObject({ numbers: ["Carries up to 200 items a minute."] });
-    expect(printOf(tileRef(at(y, 24, 15)))).toMatchObject({
-      numbers: ["Studies up to 12 folios a minute."],
-      flow: null,
-    });
+    // A belt's and a Study's numbers a minute are their paces, on the card; a sentence only while power is short.
+    expect(printOf(tileRef(at(y, 22, 17)))).toMatchObject({ numbers: [] });
+    expect(printOf(tileRef(at(y, 24, 15)))).toMatchObject({ numbers: [], flow: null });
   });
 
   test("name a kind by its grade once the yard may build it higher, and offer to raise a piece for what the rules ask", () => {

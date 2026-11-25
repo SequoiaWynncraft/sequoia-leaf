@@ -10,6 +10,7 @@
  */
 import { type Description, type Entry, link, register, type Stat } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { coinsText, whole } from "@sequoia-leaf/kit/say.ts";
 import { owned } from "@sequoia-leaf/town/camp.ts";
 import { PRESENTS, STALLS } from "@sequoia-leaf/town/catalogue.ts";
 import { folkNamed } from "@sequoia-leaf/town/folk.ts";
@@ -35,7 +36,7 @@ function whereFrom(id: string): { rows: Entry[]; words: string } {
   const thing = thingOf(id);
   const stalls = STALLS.flatMap((s) => {
     const stock = s.stock.find((k) => k.thing === id);
-    return stock ? [{ ref: stallRef(s.id), note: `${stock.price.toLocaleString("en-US")} Coins` }] : [];
+    return stock ? [{ ref: stallRef(s.id), note: coinsText(stock.price) }] : [];
   });
   if (stalls.length > 0) return { rows: stalls, words: "" };
   if (thing?.kind === "trophies") return { rows: [], words: "Won, never bought." };
@@ -80,7 +81,7 @@ function stallDesc(id: string): Description | null {
     rows: [
       {
         label: "Sells",
-        things: s.stock.map((k) => ({ ref: thingRef(k.thing), note: k.price.toLocaleString("en-US") })),
+        things: s.stock.map((k) => ({ ref: thingRef(k.thing), note: whole(k.price) })),
       },
     ],
   };

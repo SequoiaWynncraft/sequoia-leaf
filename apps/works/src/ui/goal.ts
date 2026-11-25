@@ -33,6 +33,7 @@ import {
 } from "@sequoia-leaf/factory";
 import { describe, link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { coinsText, whole } from "@sequoia-leaf/kit/say.ts";
 
 import { fitted, pic } from "./parts.ts";
 import { giftRef, itemRef, nodeRef, pictureRef, tierRef, unlockRef } from "./refs.ts";
@@ -114,7 +115,7 @@ function list(
     if (opts.links ?? names) link(what, line.ref);
     const end = el("span", "gl-end");
     const count = line.count;
-    if (line.locked !== undefined) end.append(icon("lock"), el("span", "gl-n", { text: num(line.locked) }));
+    if (line.locked !== undefined) end.append(icon("lock"), el("span", "gl-n", { text: whole(line.locked) }));
     else if (count) {
       const fill = el("i");
       const bar = el("div", "k-bar", {}, fill);
@@ -124,7 +125,7 @@ function list(
         const { have, of } = count();
         const got = Math.min(have, of);
         fill.style.setProperty("--v", `${of > 0 ? (got / of) * 100 : 0}%`);
-        counted.textContent = `${num(got)} / ${num(of)}`;
+        counted.textContent = `${whole(got)} / ${whole(of)}`;
         bar.classList.toggle("leaf", got >= of);
       });
     } else if (line.act) end.append(line.act);
@@ -146,9 +147,6 @@ function list(
     update,
   };
 }
-
-/** A number as a list shows it: "1,200". */
-const num = (v: number): string => v.toLocaleString("en-US");
 
 /** A list, or nothing where it would have no rows. */
 const listed = (
@@ -257,7 +255,7 @@ export function needs(
 /** A thing unlocked, as a row: its own card, with the number beside it where it is a number, or a plot's price. */
 function unlockLine(u: Unlock): Line {
   const amount = "amount" in u ? u.amount : undefined;
-  const note = u.is === "plot" ? `${u.price.toLocaleString("en-US")} Coins` : amount;
+  const note = u.is === "plot" ? coinsText(u.price) : amount;
   // A grade and a number are called what the rules call them, not what the piece they change is called.
   const named = u.is === "grade" || u.is === "number" || u.is === "blueprints";
   if (named)

@@ -13,6 +13,7 @@ import { GOALS, isFilled, power, TICK_MS, tierName } from "@sequoia-leaf/factory
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
+import { whole } from "@sequoia-leaf/kit/say.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { leave } from "@sequoia-leaf/kit/shell.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
@@ -77,7 +78,7 @@ function powerPlaque(): () => void {
 /** What is left of what a goal wants, summed over every thing it wants: "120 left". */
 function left(wants: Given): string {
   const n = wants.reduce((sum, [, have, of]) => sum + of - have, 0);
-  return `${n.toLocaleString("en-US")} left`;
+  return `${whole(n)} left`;
 }
 
 /** What the box in the corner prints: the node in hand, or what comes next; orders ready to hand over; what it wants, and what comes after it. */

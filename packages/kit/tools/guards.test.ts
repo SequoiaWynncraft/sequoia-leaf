@@ -375,6 +375,30 @@ describe("the repository's lint rules", () => {
     ]);
   });
 
+  test("find a number said its own way, outside `say.ts`: a format, or a rate in words of its own, but not prose", () => {
+    expect(
+      linted([
+        "export const a = (v: number): string => v.toLocaleString('en-US');",
+        "export const b = new Intl.NumberFormat('en-US');",
+        "export const c = { maximumFractionDigits: 1 };",
+        "export const d = (v: number): string => `${v} /min`;",
+        "export const e = (v: number): string => `${v} folios a minute, from ${v} Studies`;",
+        "export const f = 'Carries up to 150 items a minute.';",
+        "export const g = 'Try again in a minute.';",
+        "export const h = 'Its card says what it makes and needs a minute.';",
+        "export const i = (id: string): string => `https://x.y/session/minecraft/profile/${id}`;",
+        "export const j = (v: number): string => `${v} min`;",
+      ]),
+    ).toEqual([
+      "1 leaf(said-number)",
+      "2 leaf(said-number)",
+      "3 leaf(said-number)",
+      "4 leaf(said-number)",
+      "5 leaf(said-number)",
+      "6 leaf(said-number)",
+    ]);
+  });
+
   test("find a browser primitive taken as a value, and letting go of one, but not a name of its own or a type", () => {
     expect(
       linted([

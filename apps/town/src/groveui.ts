@@ -20,6 +20,7 @@ import {
 } from "@sequoia-leaf/kit/dom.ts";
 import { balance, leafOpen, leafShut } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
+import { whole } from "@sequoia-leaf/kit/say.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tipAt } from "@sequoia-leaf/kit/tip.ts";
 import { headliner, PRIZES, type PullsView, RARITIES, type Rarity, RATES } from "@sequoia-leaf/pulls";
@@ -29,7 +30,6 @@ import { $, button, pic, slot } from "./hud.ts";
 import {
   cannotPull,
   chances,
-  count,
   dayAndTime,
   EVERGREEN,
   GROVE,
@@ -163,7 +163,7 @@ export function makeGroveUi(host: GroveHost) {
     const key = pullKey(pool, n);
     const b = button(
       `leaf grove-pull${asking(key) ? " asking" : ""}`,
-      [asksAgain(key, [el("span", "", { text: `Pull ${n}` }), amount("leaf", count(n * RATES.leaf))], "Pull?")],
+      [asksAgain(key, [el("span", "", { text: `Pull ${n}` }), amount("leaf", whole(n * RATES.leaf))], "Pull?")],
       (pressed) => {
         sfx.tap();
         // Drawn for one pool, it never spends in another: a banner may have ended under the pointer.
@@ -198,7 +198,7 @@ export function makeGroveUi(host: GroveHost) {
         }),
       ),
     );
-    leaf.replaceChildren(amount("leaf", count(balance().leaf)));
+    leaf.replaceChildren(amount("leaf", whole(balance().leaf)));
 
     const c = b ? v.counters.banner : v.counters.grove;
     const owed = b ? owedLine(c, b.person.name) : null;
@@ -223,7 +223,7 @@ export function makeGroveUi(host: GroveHost) {
         "k-row",
         {},
         ...TABS.map(([tab, name]) =>
-          button("wood sm", [name, tab === "seeds" ? el("b", "k-leafy", { text: count(v.seeds) }) : null], () => {
+          button("wood sm", [name, tab === "seeds" ? el("b", "k-leafy", { text: whole(v.seeds) }) : null], () => {
             openPanel(tab);
           }),
         ),
@@ -315,7 +315,7 @@ export function makeGroveUi(host: GroveHost) {
               {},
               el("span", "k-info-tile-pic", {}, pic(host.picture(prize))),
               el("span", "k-info-tile-name k-s", { text: nameOf(prize) }),
-              have > 0 ? el("span", "k-info-tagged corner", { text: `x${count(have)}` }) : null,
+              have > 0 ? el("span", "k-info-tagged corner", { text: `x${whole(have)}` }) : null,
             );
           }),
         ),
@@ -326,13 +326,13 @@ export function makeGroveUi(host: GroveHost) {
   /** The Seeds in hand, and each mid-tier prize they buy: the exchange asks twice. */
   function seeds(body: HTMLElement): void {
     const v = host.view();
-    body.append(el("div", "k-title", {}, "Seeds: ", el("span", "k-leafy", { text: count(v.seeds) })));
+    body.append(el("div", "k-title", {}, "Seeds: ", el("span", "k-leafy", { text: whole(v.seeds) })));
     for (const o of offers(v, PRIZES)) {
       const key = `seeds:${o.prize}`;
       const buy = button(
         `green sm${asking(key) ? " asking" : ""}${o.enough ? "" : " off"}`,
         // One the Seeds do not reach is locked, so that it is not told from the others by its colour alone.
-        [asksAgain(key, [o.enough ? null : glyph("lock"), `${count(o.price)} Seeds`], "Exchange?")],
+        [asksAgain(key, [o.enough ? null : glyph("lock"), `${whole(o.price)} Seeds`], "Exchange?")],
         (b) => {
           if (!o.enough) refused(b, "Not enough Seeds.");
           else if (pressedTwice(key, renderPanel)) host.exchange(o.prize, b);
@@ -479,7 +479,7 @@ export function makeGroveUi(host: GroveHost) {
       again = n;
       names.replaceChildren(
         ...list.map((p) => {
-          const tag = el("span", "grove-name", {}, el("i"), p.have > 1 ? `${p.name} x${count(p.have)}` : p.name);
+          const tag = el("span", "grove-name", {}, el("i"), p.have > 1 ? `${p.name} x${whole(p.have)}` : p.name);
           tag.style.setProperty("--c", p.colour);
           return tag;
         }),

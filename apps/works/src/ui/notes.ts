@@ -3,6 +3,7 @@
 import { type Goal, GOALS, isNode, NODES } from "@sequoia-leaf/factory";
 import { amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 import { fly, type PurseBar, purseBar } from "@sequoia-leaf/kit/pursebar.ts";
+import { whole } from "@sequoia-leaf/kit/say.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
@@ -102,7 +103,7 @@ export function banner(done: Goal, next: Goal | null): void {
       "div",
       "k-body",
       {},
-      head(done, info.pay > 0 ? amount("coin", `+${info.pay}`) : null),
+      head(done, info.pay > 0 ? amount("coin", `+${whole(info.pay)}`) : null),
       ...some(unlocks(done), leaves(done)).map((l) => l.node),
       says,
       button("wide", ["Back to work"], closeBanner),

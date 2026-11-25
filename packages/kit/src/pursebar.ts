@@ -6,6 +6,7 @@
  */
 import { el, icon, type IconName, replay, say } from "./dom.ts";
 import { balance, type Currency, leafShut } from "./purse.ts";
+import { whole } from "./say.ts";
 import { sfx } from "./sound.ts";
 import { tip, tipAt } from "./tip.ts";
 import type { Pt } from "./util.ts";
@@ -39,7 +40,7 @@ export function purseBar(host: HTMLElement, coins: () => number = () => balance(
   const held = (kind: Currency): number => (kind === "coins" ? coins() : balance().leaf);
   const parts = kinds.map((kind) => {
     const art = icon(kind === "leaf" ? "leaf" : "coin");
-    const num = el("span", "", { text: held(kind).toLocaleString("en-US") });
+    const num = el("span", "", { text: whole(held(kind)) });
     const box = el("span", kind === "leaf" ? "k-cur leaf" : "k-cur", { tabindex: 0 }, art, num);
     host.append(box);
     tip(box, ABOUT[kind][0], ABOUT[kind][1]);
@@ -53,7 +54,7 @@ export function purseBar(host: HTMLElement, coins: () => number = () => balance(
         if (c.shown === real) continue;
         const d = real - c.shown;
         c.shown += Math.sign(d) * Math.min(Math.abs(d), Math.max(1, Math.ceil(Math.abs(d) * dt * 5)));
-        c.num.textContent = c.shown.toLocaleString("en-US");
+        c.num.textContent = whole(c.shown);
         const now = performance.now();
         if (d > 0 && now > tickAt) {
           tickAt = now + 70;

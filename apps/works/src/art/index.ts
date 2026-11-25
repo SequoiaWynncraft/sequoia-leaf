@@ -20,6 +20,7 @@ import {
 } from "@sequoia-leaf/factory";
 import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
+import { whole } from "@sequoia-leaf/kit/say.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { hash, makeCanvas, must, vnoise } from "@sequoia-leaf/kit/util.ts";
 
@@ -106,7 +107,7 @@ function signMaker(): (price: number) => Sprite {
   return (price) => {
     const had = made.get(price);
     if (had) return had;
-    const text = price.toLocaleString("en-US");
+    const text = whole(price);
     const probe = makeCanvas(4, 4).g;
     const tw = widthOf(probe, text, 1);
     const w = tw + 13;

@@ -1,10 +1,12 @@
 import {
+  exact,
   leafForLevel,
   type QuestObjective,
   type QuestSlot,
   type QuestTemplate,
   type RuleChange,
   type Rules,
+  whole,
 } from "@sequoia-leaf/core";
 
 /** A Discord embed, as much of one as the rate card uses. */
@@ -49,11 +51,6 @@ const LADDER_NAMES: Readonly<Record<string, string>> = { "raid:": "Raid mileston
 
 const HOUR_MS = 60 * 60 * 1000;
 
-const number = (value: number) => value.toLocaleString("en-US");
-
-/** A rate such as 0.5 or 1, without trailing zeros. */
-const rate = (value: number) => (Number.isInteger(value) ? number(value) : String(value));
-
 /** An objective in a rate card's words, any raid kind standing in for the one a quest names. */
 function objective(goal: QuestObjective): string {
   switch (goal.type) {
@@ -62,7 +59,7 @@ function objective(goal: QuestObjective): string {
     case "wars":
       return `${goal.count} wars`;
     case "season_rating":
-      return `${number(goal.amount)} season rating`;
+      return `${whole(goal.amount)} season rating`;
   }
 }
 
@@ -72,7 +69,7 @@ function questLines(templates: readonly QuestTemplate[], slot: QuestSlot): strin
     .filter((template) => template.slot === slot)
     .map(
       (template) =>
-        `• ${template.objectives.map(objective).join(" or ")}: **${number(template.reward.leaf)}** Leaf, ${number(template.reward.xp)} XP`,
+        `• ${template.objectives.map(objective).join(" or ")}: **${whole(template.reward.leaf)}** Leaf, ${whole(template.reward.xp)} XP`,
     );
   return [...new Set(lines)];
 }
@@ -97,21 +94,21 @@ function day(date: string): string {
  */
 export function rateCard(rules: Rules, changes: readonly RuleChange[]): Embed {
   const { earning, quests, levels, achievements } = rules;
-  const raidLeaf = SHARE_BY_GAMBITS.map((share) => number(Math.floor(share * earning.leafPerRaidSeasonRating)));
+  const raidLeaf = SHARE_BY_GAMBITS.map((share) => whole(Math.floor(share * earning.leafPerRaidSeasonRating)));
   const xpNote = achievements.grantsXp ? "" : " No XP.";
 
   const fields: EmbedField[] = [
     {
       name: "Raids",
       value:
-        `**${raidLeaf.join(" / ")}** Leaf for 3 / 2 / 1 / 0 gambits: ${rate(earning.leafPerRaidSeasonRating)} Leaf per point of your share of the raid's season rating. ` +
+        `**${raidLeaf.join(" / ")}** Leaf for 3 / 2 / 1 / 0 gambits: ${exact(earning.leafPerRaidSeasonRating)} Leaf per point of your share of the raid's season rating. ` +
         "When the mod didn't see your gambits, the party's rating is split evenly.",
     },
     {
       name: "Wars",
       value:
-        `**${rate(earning.leafPerWarPoint)}** Leaf per war point in FFA wars and snipes, ` +
-        `**${rate(earning.leafPerClaimWarPoint)}** per war point when we take back our own claim.`,
+        `**${exact(earning.leafPerWarPoint)}** Leaf per war point in FFA wars and snipes, ` +
+        `**${exact(earning.leafPerClaimWarPoint)}** per war point when we take back our own claim.`,
     },
     ...questField(
       "Daily quests",
@@ -136,21 +133,21 @@ export function rateCard(rules: Rules, changes: readonly RuleChange[]): Embed {
       value:
         TIER_NAMES.flatMap(([id, name]) => {
           const leaf = ladder.leafByMilestone.get(id);
-          return leaf === undefined ? [] : [`${name} **${number(leaf)}**`];
+          return leaf === undefined ? [] : [`${name} **${whole(leaf)}**`];
         }).join(" · ") + `.${xpNote}`,
     })),
     {
       name: "Levels",
       value:
-        `Raids and wars give as much XP as Leaf, quests the XP they list. Level 2 takes ${number(levels.firstLevelXp)} XP and each level after it ${number(levels.xpGrowthPerLevel)} more. ` +
-        `Each level pays Leaf: ${number(leafForLevel(2, levels))} for level 2, ${number(levels.leafGrowthPerLevel)} more for each one after (${number(leafForLevel(10, levels))} for level 10).`,
+        `Raids and wars give as much XP as Leaf, quests the XP they list. Level 2 takes ${whole(levels.firstLevelXp)} XP and each level after it ${whole(levels.xpGrowthPerLevel)} more. ` +
+        `Each level pays Leaf: ${whole(leafForLevel(2, levels))} for level 2, ${whole(levels.leafGrowthPerLevel)} more for each one after (${whole(leafForLevel(10, levels))} for level 10).`,
     },
     ...(quests.reroll === undefined
       ? []
       : [
           {
             name: "Quest swaps",
-            value: `Swap a ${quests.reroll.slots.join(" or ")} quest you don't fancy: ${quests.reroll.freePerDay} free a day for each, then **${number(quests.reroll.leaf)}** Leaf a swap.`,
+            value: `Swap a ${quests.reroll.slots.join(" or ")} quest you don't fancy: ${quests.reroll.freePerDay} free a day for each, then **${whole(quests.reroll.leaf)}** Leaf a swap.`,
           },
         ]),
     ...(changes.length === 0

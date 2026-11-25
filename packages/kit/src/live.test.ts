@@ -167,6 +167,8 @@ describe("finding out where the game is", () => {
     expect([world.went, world.store.length]).toEqual([[], 0]);
     const gate = shutNotice("signedout");
     expect(words(gate)).toEqual(["Guild Town", "", "Sign in with Discord"]);
+    // Drawn as Discord's own button, here and wherever signing in is asked for.
+    expect(gate.buttons[0]?.discord).toBe(true);
     press(gate, "Sign in with Discord");
     expect(world.went).toEqual(["/v1/game/sign-in?to=%2Fplay%2Ftown%2F%3Fx%3D1"]);
   });

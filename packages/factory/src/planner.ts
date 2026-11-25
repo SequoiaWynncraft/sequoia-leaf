@@ -1,8 +1,10 @@
 /**
- * The planner: what pieces make and need a minute, worked out from the tables alone, for a card to
- * show and for balancing. Every piece is taken as working every tick, with power enough and nothing
- * held up; nothing in the rules reads it.
+ * The planner: what pieces make, burn, carry and need a minute, worked out from the tables alone, for
+ * a card to show, for the yard's books (`status.ts`'s `rate` and `flow`, which scale it by the yard's
+ * power) and for balancing. Every piece is taken as working every tick, with power enough and nothing
+ * held up; nothing that moves the yard reads it.
  */
+import { TICKS } from "./content/machines.ts";
 import { GATHERER, isRaw, type Item, type Kind, PACE, RECIPE, type Recipe, STUDY, WORK } from "./tables.ts";
 
 /** Ticks in a minute. */
@@ -15,6 +17,9 @@ export function makes(k: Kind, grade: number, r: Recipe | null): number {
   const work = k === GATHERER ? WORK.gather : k === STUDY ? WORK.study : (r?.work ?? 0);
   return work > 0 ? (MINUTE * (PACE[grade] ?? 0)) / work : 0;
 }
+
+/** How many pieces of deadfall a minute a boiler burns while it makes power, at any grade. */
+export const burned = (): number => MINUTE / TICKS.burn;
 
 /**
  * How many things a minute a line of belt of a grade carries, fed flat out, and a tunnel, splitter,

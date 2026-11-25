@@ -5,6 +5,8 @@
  */
 import { describe, expect, test } from "bun:test";
 
+import { coinsText, num } from "@sequoia-leaf/core";
+
 import * as F from "../src/index.ts";
 
 /** Every `Unlocks` in the tables, by whose it is. */
@@ -62,14 +64,18 @@ describe("what is unlocked", () => {
       for (const e of F.unlocked({ grades: u.grades ?? {} })) {
         if (e.is !== "grade") continue;
         expect(e.name).toBe(`${F.KIND_INFO[e.kind]?.name} ${F.numeral(e.grade)}`);
-        expect(e.says).toContain(`${F.price(e.kind, e.grade).toLocaleString("en-US")} Coins.`);
+        expect(e.says).toContain(`${coinsText(F.price(e.kind, e.grade))}.`);
         const more = F.carries(e.kind)
           ? [F.carried(e.grade), F.carried(e.grade - 1)]
           : e.kind === F.GATHERER || e.kind === F.STUDY
             ? [F.makes(e.kind, e.grade, null), F.makes(e.kind, e.grade - 1, null)]
             : [(F.PACE[e.grade] ?? 0) / (F.PACE[1] ?? 1)];
-        for (const v of more) expect(e.says).toContain(v.toLocaleString("en-US", { maximumFractionDigits: 1 }));
+        for (const v of more) expect(e.says).toContain(num(v));
+        // What it carries, gathers or studies is a rate, said so many /min.
+        if (more.length > 1)
+          expect(e.says).toContain(`${num(more[0] ?? 0)} ${F.STUDY === e.kind ? "folios" : "items"} /min`);
       }
+    expect(F.gradeSays(F.BELT, 2)).toStartWith("Carries up to 200 items /min, up from 150. A tile costs ");
     expect([1, 2, 3].map(F.numeral)).toEqual(["I", "II", "III"]);
   });
 
