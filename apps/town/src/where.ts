@@ -21,7 +21,7 @@
  */
 
 import { silentSince, VISIT_RULES, type VisitRules } from "@sequoia-leaf/core";
-import type { Place } from "@sequoia-leaf/kit/presence.ts";
+import type { CampOwner, Place } from "@sequoia-leaf/kit/presence.ts";
 import type { Stand } from "@sequoia-leaf/town/map/rows.ts";
 
 /** Somebody in the town's live room with the member: their account, name, and rank as the town shows it. */
@@ -38,6 +38,8 @@ export interface Listed {
   name: string;
   rank: string | null;
   at: Place;
+  /** At a camp, whose, when Leaf says; null anywhere else. */
+  camp: CampOwner | null;
   /** When Leaf last saw them, in milliseconds since 1970; null when it does not say. */
   seen: number | null;
   /** In the game: when they last did something, as far as Leaf knows; null for not yet. */
@@ -58,14 +60,15 @@ interface Someone {
  * - `listed`: in the game, where Leaf's list says, out of the room;
  * - `gone`: gone from the game, where they were last.
  *
- * In the game (`live` or `listed`), `acted` is when they last did something, as far as anybody
- * knows, in milliseconds since 1970, or null for not yet. Gone, `seen` is when Leaf last saw them
- * (null for just now) and `stays` whether their character stays in town, dozing.
+ * At a camp, `camp` is whose, when Leaf says; null anywhere else. In the game (`live` or `listed`),
+ * `acted` is when they last did something, as far as anybody knows, in milliseconds since 1970, or
+ * null for not yet. Gone, `seen` is when Leaf last saw them (null for just now) and `stays` whether
+ * their character stays in town, dozing.
  */
 export type Where =
-  | (Someone & { state: "live"; at: "town"; acted: number | null })
-  | (Someone & { state: "listed"; at: Place; acted: number | null })
-  | (Someone & { state: "gone"; at: Place; seen: number | null; stays: boolean });
+  | (Someone & { state: "live"; at: "town"; camp: null; acted: number | null })
+  | (Someone & { state: "listed"; at: Place; camp: CampOwner | null; acted: number | null })
+  | (Someone & { state: "gone"; at: Place; camp: CampOwner | null; seen: number | null; stays: boolean });
 
 /** Whether somebody is in the game now: in the room, or on Leaf's list as here. */
 export const inGame = (w: Where): w is Extract<Where, { state: "live" | "listed" }> => w.state !== "gone";
@@ -109,16 +112,18 @@ export function whereabouts(o: {
     name: p.name,
     rank: p.rank,
     at: p.at,
+    camp: p.camp,
     seen,
     stays,
   });
 
-  for (const m of o.room ?? []) put({ state: "live", id: m.id, name: m.name, rank: m.rank, at: "town", acted: null });
+  for (const m of o.room ?? [])
+    put({ state: "live", id: m.id, name: m.name, rank: m.rank, at: "town", camp: null, acted: null });
   const leftJustNow: Listed[] = [];
   for (const p of o.present) {
     if (p.seen !== null && silentSince(p.seen, o.now, rules)) leftJustNow.push(p);
     else if (o.room !== null && p.at === "town") leftJustNow.push({ ...p, seen: null });
-    else put({ state: "listed", id: p.id, name: p.name, rank: p.rank, at: p.at, acted: null });
+    else put({ state: "listed", id: p.id, name: p.name, rank: p.rank, at: p.at, camp: p.camp, acted: null });
   }
   // Gone, newest first, those who have only just left first of all; what Leaf says next of staying is
   // believed, until then they stay, as Leaf has anybody who never said.
@@ -133,6 +138,19 @@ export function whereabouts(o: {
     ...o.gone.map((p) => ({ p, stays: false })),
   ].toSorted((a, b) => byNewest(a.p, b.p));
   for (const { p, stays } of left) put(gone(p, p.seen, stays));
+  return out;
+}
+
+/**
+ * How many are at each camp now, by its owner's id: everybody else in the game whose record has them
+ * there (`all`, which never has the member), and the member, once, at the camp the page has them at
+ * (`mine`; null at none).
+ */
+export function atCamps(all: ReadonlyMap<string, Where>, mine: string | null): ReadonlyMap<string, number> {
+  const out = new Map<string, number>();
+  const add = (owner: string): void => void out.set(owner, (out.get(owner) ?? 0) + 1);
+  for (const w of all.values()) if (inGame(w) && w.at === "camp" && w.camp !== null) add(w.camp.id);
+  if (mine !== null) add(mine);
   return out;
 }
 

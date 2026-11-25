@@ -163,12 +163,15 @@ export const GuildEvents = Schema.Struct({
 export const PLACES = ["town", "camp", "works", "table", "grove"] as const;
 
 /**
- * Where the member is; whether their character may stay in town, dozing, after they go, when the
- * page says (left out, it is as it was: on for somebody Leaf has never been told about); and what the
- * page is on, by its width when it signed in, when it says.
+ * Where the member is, and at a camp whose camp it is when the page says (`camp_owner`: the owner's
+ * player id, as the camp list and the camps' rooms name a camp; only with the place `camp`, and only
+ * a camp Leaf has, or the member's own); whether their character may stay in town, dozing, after
+ * they go, when the page says (left out, it is as it was: on for somebody Leaf has never been told
+ * about); and what the page is on, by its width when it signed in, when it says.
  */
 export const PresenceBody = Schema.Struct({
   place: Schema.Literals(PLACES),
+  camp_owner: Schema.optional(Schema.String),
   stay: Schema.optional(Schema.Boolean),
   device: Schema.optional(Schema.Literals(DEVICES)),
 });
@@ -187,11 +190,17 @@ export const PageErrorBody = Schema.Struct({
   stack: Schema.String.check(Schema.isMaxLength(PAGE_ERROR_STACK)),
 });
 
-/** Somebody in the game, or gone from it in the last day, and when they were last seen. */
+/**
+ * Somebody in the game, or gone from it in the last day, and when they were last seen. At a camp,
+ * whose, when their page said: the owner's player id and name, both or neither; nothing of a camp
+ * in any other place.
+ */
 const Seen = Schema.Struct({
   id: Schema.String,
   username: Schema.String,
   place: Schema.String,
+  camp_owner: Schema.optionalKey(Schema.String),
+  camp_owner_name: Schema.optionalKey(Schema.String),
   guest: Schema.Boolean,
   seen_at: Time,
 });

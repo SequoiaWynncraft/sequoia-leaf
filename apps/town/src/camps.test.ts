@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { type Reply, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 
-import { type Camp, camps, fetchCamps, inOrder, like, named, nextAfter, readCamps } from "./camps.ts";
+import { type Camp, camps, fetchCamps, heldOrder, inOrder, like, named, nextAfter, readCamps } from "./camps.ts";
 import { likedLine } from "./news.ts";
 
 const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
@@ -27,6 +27,8 @@ const ALL = [
   camp("Pipwick", 4, 9),
 ];
 const names = (list: readonly Camp[]): string[] => list.map((c) => c.name);
+/** Nobody at any camp. */
+const NOBODY: ReadonlyMap<string, number> = new Map();
 
 /** A like of the member's camp as their stream sends it (`eventJsonText`): the event, its details in `data`. */
 const event = (by: unknown) => ({ id: 9, type: "camp_liked", created_at: "x", data: { by } });
@@ -48,8 +50,29 @@ describe("the signpost's camps", () => {
   });
 
   test("are the most liked first, a tie to more set out and then by name; or the most set out first", () => {
-    expect(names(inOrder(ALL, "liked"))).toEqual(["Pipwick", "Mossback", "sootpaw", "Wrenly", "Embertoe"]);
-    expect(names(inOrder(ALL, "set"))).toEqual(["Embertoe", "sootpaw", "Wrenly", "Pipwick", "Mossback"]);
+    expect(names(inOrder(ALL, "liked", NOBODY))).toEqual(["Pipwick", "Mossback", "sootpaw", "Wrenly", "Embertoe"]);
+    expect(names(inOrder(ALL, "set", NOBODY))).toEqual(["Embertoe", "sootpaw", "Wrenly", "Pipwick", "Mossback"]);
+  });
+
+  test("are the most here first, a tie to more likes and then as Leaf lists them", () => {
+    const here = new Map([
+      ["embertoe", 1],
+      ["sootpaw", 3],
+      ["wrenly", 1],
+    ]);
+    expect(names(inOrder(ALL, "here", here))).toEqual(["sootpaw", "Wrenly", "Embertoe", "Mossback", "Pipwick"]);
+    expect(names(inOrder(ALL, "here", NOBODY))).toEqual(["Mossback", "Pipwick", "Wrenly", "sootpaw", "Embertoe"]);
+  });
+
+  test("hold the order they were put in while somebody reads them, whoever comes and goes; a camp new to the list goes last", () => {
+    const opened = inOrder(ALL, "here", new Map([["wrenly", 2]])).map((c) => c.id);
+    expect(names(heldOrder(opened, ALL))).toEqual(["Wrenly", "Mossback", "Pipwick", "sootpaw", "Embertoe"]);
+    // Three come to Embertoe's and Wrenly's empties while the list is open: the rows stay where they were.
+    expect(inOrder(ALL, "here", new Map([["embertoe", 3]]))[0]?.name).toBe("Embertoe");
+    expect(names(heldOrder(opened, ALL))).toEqual(["Wrenly", "Mossback", "Pipwick", "sootpaw", "Embertoe"]);
+    // Leaf lists a new camp, and no longer lists Mossback's.
+    const later = [...ALL.filter((c) => c.id !== "mossback"), camp("Fennel", 9, 9)];
+    expect(names(heldOrder(opened, later))).toEqual(["Wrenly", "Pipwick", "sootpaw", "Embertoe", "Fennel"]);
   });
 
   test("are found by any part of the name, in any case", () => {
@@ -61,14 +84,15 @@ describe("the signpost's camps", () => {
 
   test("go on to the next in the order chosen, never the member's own, and round from the last to the first", () => {
     // The member is Mossback.
-    expect(nextAfter(ALL, "liked", "pipwick", "mossback")?.name).toBe("sootpaw");
-    expect(nextAfter(ALL, "liked", "embertoe", "mossback")?.name).toBe("Pipwick");
-    expect(nextAfter(ALL, "set", "sootpaw", "mossback")?.name).toBe("Wrenly");
-    expect(nextAfter(ALL, "set", "pipwick", "mossback")?.name).toBe("Embertoe");
+    expect(nextAfter(ALL, "liked", "pipwick", "mossback", NOBODY)?.name).toBe("sootpaw");
+    expect(nextAfter(ALL, "liked", "embertoe", "mossback", NOBODY)?.name).toBe("Pipwick");
+    expect(nextAfter(ALL, "set", "sootpaw", "mossback", NOBODY)?.name).toBe("Wrenly");
+    expect(nextAfter(ALL, "set", "pipwick", "mossback", NOBODY)?.name).toBe("Embertoe");
+    expect(nextAfter(ALL, "here", "sootpaw", "mossback", new Map([["sootpaw", 2]]))?.name).toBe("Pipwick");
     // A camp no longer listed goes to the first.
-    expect(nextAfter(ALL, "liked", "gone", "mossback")?.name).toBe("Pipwick");
+    expect(nextAfter(ALL, "liked", "gone", "mossback", NOBODY)?.name).toBe("Pipwick");
     // Nowhere else to go.
-    expect(nextAfter([camp("Wrenly", 0, 0), camp("Mossback", 0, 0)], "liked", "wrenly", "mossback")).toBeNull();
+    expect(nextAfter([camp("Wrenly", 0, 0), camp("Mossback", 0, 0)], "liked", "wrenly", "mossback", NOBODY)).toBeNull();
   });
 
   test("hold Leaf's answer to a like, and say what Leaf said when it refuses", async () => {

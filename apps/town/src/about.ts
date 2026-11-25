@@ -8,16 +8,16 @@
  *   with the member, or out of the room, whoever Leaf has in town; and for whoever is away, for how
  *   long.
  * - **Elsewhere**: in the game, but not in town: at the Works, at the raid table, in the Grove, in
- *   their camp; and for whoever is away, for how long.
- * - **Seen lately**: gone in the last day, newest first, with how long ago; first of all whoever
- *   has only just walked out of the town's room.
+ *   their camp or visiting somebody's (`campWords`); and for whoever is away, for how long.
+ * - **Seen lately**: gone in the last day, newest first, with how long ago, and whose camp for
+ *   whoever was last at one; first of all whoever has only just walked out of the town's room.
  *
  * The panel is one row for each player, kept by their id, so nobody can be listed twice. That is
  * the panel as it is opened; while it stays open its order holds (`held`).
  */
 
 import { away } from "@sequoia-leaf/core";
-import type { Place } from "@sequoia-leaf/kit/presence.ts";
+import type { CampOwner, Place } from "@sequoia-leaf/kit/presence.ts";
 
 import { span } from "./letter.ts";
 import { inGame, type InRoom, type Where } from "./where.ts";
@@ -64,32 +64,45 @@ export const partsOf = (a: About): AboutPart[] =>
 /** What the panel says when there is nobody else anywhere. */
 export const ALONE = "Only you, for now.";
 
-/** Where somebody in the game but not in town is, in words. */
-export const WHERE: Readonly<Record<Place, string>> = {
+/** Where somebody in the game is, in words, but at a camp (`campWords`). */
+export const WHERE: Readonly<Record<Exclude<Place, "camp">, string>> = {
   town: "in town",
   works: "at the Works",
   table: "at the raid table",
   grove: "in the Grove",
-  camp: "in their camp",
 };
+
+/**
+ * Whose camp somebody (`id`) is at, in words, as the member (`me`) reads it: "in their camp",
+ * "visiting you", "visiting Name"; "in a camp" where Leaf does not say whose.
+ */
+export function campWords(id: string, camp: CampOwner | null, me: string): string {
+  if (camp === null) return "in a camp";
+  if (camp.id === id) return "in their camp";
+  return camp.id === me ? "visiting you" : `visiting ${camp.name}`;
+}
+
+/** Where somebody is, or was last, in words, as the member (`me`) reads it. */
+export const placeWords = (w: Where, me: string): string =>
+  w.at === "camp" ? campWords(w.id, w.camp, me) : WHERE[w.at];
 
 /** How long somebody has been away, in words: "away for 20 minutes"; only "away" when Leaf has never heard them do anything. */
 export const awayWords = (acted: number | null, now: number): string =>
   acted === null ? "away" : `away for ${span(Math.max(0, (now - acted) / 60_000))}`;
 
 /**
- * What somebody in the game is about, in words, for their row and their card: where they are if not
- * in town, and for how long they have been away if they are (Leaf's rule, `away`); nothing for
- * somebody just about the town, or gone.
+ * What somebody in the game is about, in words, for their row and their card, as the member (`me`)
+ * reads them: where they are if not in town, and for how long they have been away if they are
+ * (Leaf's rule, `away`); nothing for somebody just about the town, or gone.
  */
-export function doingWords(w: Where, now: number): string[] {
+export function doingWords(w: Where, now: number, me: string): string[] {
   if (w.state === "gone") return [];
-  return [...(w.at === "town" ? [] : [WHERE[w.at]]), ...(away(w.acted, now) ? [awayWords(w.acted, now)] : [])];
+  return [...(w.at === "town" ? [] : [placeWords(w, me)]), ...(away(w.acted, now) ? [awayWords(w.acted, now)] : [])];
 }
 
-/** A person's card's line under their rank: "At the Works", "Away for 20 minutes", both; null for nothing to say. */
-export function cardLine(w: Where | undefined, now: number): string | null {
-  const said = w ? doingWords(w, now).join(", ") : "";
+/** A person's card's line under their rank: "At the Works", "Visiting you", "Away for 20 minutes"; null for nothing to say. */
+export function cardLine(w: Where | undefined, now: number, me: string): string | null {
+  const said = w ? doingWords(w, now, me).join(", ") : "";
   return said === "" ? null : said.charAt(0).toUpperCase() + said.slice(1);
 }
 
@@ -117,11 +130,15 @@ export function whoIsAbout(o: { me: InRoom; all: ReadonlyMap<string, Where>; now
 
   put("In town", o.me, line(o.me.rank), true);
   const here = all.filter(inGame).toSorted(byName);
-  for (const w of here.filter((x) => x.at === "town")) put("In town", w, line(w.rank, ...doingWords(w, o.now)));
-  for (const w of here.filter((x) => x.at !== "town")) put("Elsewhere", w, line(w.rank, ...doingWords(w, o.now)));
+  const doing = (w: Where): string => line(w.rank, ...doingWords(w, o.now, o.me.id));
+  for (const w of here.filter((x) => x.at === "town")) put("In town", w, doing(w));
+  for (const w of here.filter((x) => x.at !== "town")) put("Elsewhere", w, doing(w));
   // In the order the record has them: whoever has only just left first, then newest first.
-  for (const w of all)
-    if (w.state === "gone") put("Seen lately", w, line(w.rank, w.seen === null ? JUST_NOW : agoLine(w.seen, o.now)));
+  for (const w of all) {
+    if (w.state !== "gone") continue;
+    const camp = w.at === "camp" ? placeWords(w, o.me.id) : null;
+    put("Seen lately", w, line(w.rank, camp, w.seen === null ? JUST_NOW : agoLine(w.seen, o.now)));
+  }
 
   const count = [...rows.values()].filter((r) => r.part !== "Seen lately").length;
   return { rows, count, alone: count === 1 && rows.size === 1 };

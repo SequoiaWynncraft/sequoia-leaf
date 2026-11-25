@@ -5,10 +5,12 @@ import type { Seen } from "./here.ts";
 import { Visits } from "./visits.ts";
 
 const iso = (at: number) => new Date(at).toISOString();
+/** Somebody on the lists, as pages are given them: at a camp, whose (its owner's id and name); nothing of a camp anywhere else. */
 const seenJson = (player: Seen) => ({
   id: player.playerId,
   username: player.username,
   place: player.place,
+  ...(player.camp === null ? {} : { camp_owner: player.camp.playerId, camp_owner_name: player.camp.name }),
   guest: player.guest,
   seen_at: iso(player.seenAt),
 });

@@ -45,7 +45,7 @@ export class BadOrigin extends Schema.Error<BadOrigin>("BadOrigin")(answer("bad_
 /**
  * A request Leaf cannot read: an event id that is not one, a quest id that is
  * not one, a reroll without a cost, a player id that is not a UUID, a place in
- * town that is not one, a number of days that is not one, a batch of commands
+ * town that is not one or a camp there that is not one, a number of days that is not one, a batch of commands
  * that is not one of the game's, a guild request that is not one or a tome
  * request without its reason, or a purchase from sequoia-backend that is not
  * one, or has a key that is not one.
@@ -57,6 +57,7 @@ export class Invalid extends Schema.Error<Invalid>("Invalid")(
     "invalid_cost",
     "invalid_uuid",
     "invalid_place",
+    "invalid_camp",
     "invalid_days",
     "invalid_command",
     "invalid_request",

@@ -63,8 +63,8 @@ function tick(room: Room, n: number, time: number): boolean {
 /**
  * What a room's snapshot, still to be told to a page, does after each kind of frame the page may
  * be sent meanwhile (`Snapshot`): goes to nobody greeted since (a welcome begins the page again),
- * is made again without whoever left, or goes as it is. A new kind of frame does not compile until
- * it is placed here.
+ * is made again without whoever left, or goes as it is. A new kind of text frame does not compile
+ * until it is placed here; binary frames (`greet`, the tick's snapshot) are not in `ToClient`.
  */
 const AFTER: Record<ToClient["t"], "not told" | "without them" | "as it is"> = {
   welcome: "not told",

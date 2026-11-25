@@ -2,7 +2,9 @@
  * The camps there are, as Leaf lists them (`GET /v1/game/camps`), for the signpost and the strip at
  * somebody's camp: read, put in order, found by name, and the next one along; a like given or taken
  * back; and who likes the member's camp and who stayed in it this week. The page holds the list as
- * Leaf last gave it, and the order last chosen at the signpost, which "Next camp" follows too.
+ * Leaf last gave it, and the order last chosen at the signpost, which "Next camp" follows too. How
+ * many are at each camp now is not Leaf's list's to say: it is counted from who is about
+ * (`atCamps` in `where.ts`), so that the signpost and "Who is about" always agree.
  */
 
 import { ask, isRecord } from "@sequoia-leaf/kit/net.ts";
@@ -25,7 +27,7 @@ export interface Visitor {
 }
 
 /** The orders the signpost lists camps in, by what each is called. */
-export const ORDERS = { liked: "Most liked", set: "Most set out" } as const;
+export const ORDERS = { liked: "Most liked", set: "Most set out", here: "Most here" } as const;
 export type Order = keyof typeof ORDERS;
 
 /**
@@ -88,13 +90,29 @@ export function readCamps(v: unknown): Camp[] | null {
 const byName = (a: Camp, b: Camp): number =>
   a.name.localeCompare(b.name, "en", { sensitivity: "base" }) || (a.id < b.id ? -1 : 1);
 
-/** Camps in an order: the most liked first, a tie going to more set out; or the most set out first, a tie to more likes; then by name. */
-export function inOrder(list: readonly Camp[], o: Order): Camp[] {
+/**
+ * Camps in an order: the most liked first, a tie going to more set out, then by name; the most set
+ * out first, a tie going to more likes, then by name; or the most here now (`here`, by the owner's
+ * id), a tie going to more likes, then as the list has them.
+ */
+export function inOrder(list: readonly Camp[], o: Order, here: ReadonlyMap<string, number>): Camp[] {
+  const at = (c: Camp): number => here.get(c.id) ?? 0;
+  if (o === "here") return list.toSorted((a, b) => at(b) - at(a) || b.likes - a.likes);
   return list.toSorted((a, b) =>
     o === "liked"
       ? b.likes - a.likes || b.setOut - a.setOut || byName(a, b)
       : b.setOut - a.setOut || b.likes - a.likes || byName(a, b),
   );
+}
+
+/**
+ * The camps in an order worked out before (`ids`), so that rows do not move while somebody reads
+ * them: each still listed where it was, and any new to the list after them, as `list` has them.
+ */
+export function heldOrder(ids: readonly string[], list: readonly Camp[]): Camp[] {
+  const byId = new Map(list.map((c) => [c.id, c]));
+  const was = new Set(ids);
+  return [...ids.flatMap((id) => byId.get(id) ?? []), ...list.filter((c) => !was.has(c.id))];
 }
 
 /** The camps whose owner's name has `words` in it, in any case; all of them for no words. */
@@ -103,11 +121,20 @@ export function named(list: readonly Camp[], words: string): Camp[] {
   return w === "" ? [...list] : list.filter((c) => c.name.toLowerCase().includes(w));
 }
 
-/** The camp after `at` in an order, never the member's own (`me`) or `at` itself, from the first again after the last; null for none. */
-export function nextAfter(list: readonly Camp[], o: Order, at: string, me: string): Camp | null {
-  const ways = inOrder(list, o).filter((c) => c.id !== me);
-  const here = ways.findIndex((c) => c.id === at);
-  const next = ways[(here + 1) % Math.max(1, ways.length)];
+/**
+ * The camp after `at` in an order (with how many are at each, `here`), never the member's own (`me`)
+ * or `at` itself, from the first again after the last; null for none.
+ */
+export function nextAfter(
+  list: readonly Camp[],
+  o: Order,
+  at: string,
+  me: string,
+  here: ReadonlyMap<string, number>,
+): Camp | null {
+  const ways = inOrder(list, o, here).filter((c) => c.id !== me);
+  const from = ways.findIndex((c) => c.id === at);
+  const next = ways[(from + 1) % Math.max(1, ways.length)];
   return next === undefined || next.id === at ? null : next;
 }
 

@@ -107,11 +107,13 @@ export const serveLeaf = (options: {
 export const Stores = Layer.mergeAll(
   Quests.layer,
   ActivityReport.layer.pipe(Layer.provideMerge(Visits.layer)),
-  Layer.mergeAll(Skins.layer, Tallies.layer, Camps.layer).pipe(Layer.provideMerge(PlayerNames.layer)),
+  Skins.layer,
+  Tallies.layer,
+  Camps.layer,
   PlayStore.layer,
   Coins.layer,
   Purchases.layer,
-).pipe(Layer.provideMerge(Events.layer), Layer.provideMerge(Ledger.layer));
+).pipe(Layer.provideMerge(PlayerNames.layer), Layer.provideMerge(Events.layer), Layer.provideMerge(Ledger.layer));
 
 /**
  * What Leaf reaches outside its own code (its settings, its database, Mojang, the network, the

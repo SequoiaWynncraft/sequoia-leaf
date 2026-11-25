@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { Place } from "@sequoia-leaf/kit/presence.ts";
 
-import { agoLine, ALONE, cardLine, held, partsOf, whoIsAbout } from "./about.ts";
+import { agoLine, ALONE, campWords, cardLine, held, partsOf, whoIsAbout } from "./about.ts";
 import { GUEST } from "./live.ts";
 import { type InRoom, type Listed, whereabouts } from "./where.ts";
 
@@ -17,7 +17,12 @@ const mate = (
   rank: string | null = null,
   seen: number = NOW,
   acted: number | null = NOW,
-): Listed => ({ id, name, rank, at, seen, acted });
+): Listed => ({ id, name, rank, at, camp: null, seen, acted });
+/** Somebody on Leaf's list at `owner`'s camp (by id), named as Leaf names them; or at a camp Leaf does not say whose. */
+const camper = (id: string, name: string, owner: string | null, seen: number = NOW): Listed => ({
+  ...mate(id, name, "camp", null, seen),
+  camp: owner === null ? null : { id: owner, name: owner === ME.id ? ME.name : owner.toUpperCase() },
+});
 /**
  * Who is about with the member, from the room (or none) and Leaf's lists, by way of where each is;
  * everybody in the room seen doing something just now, but those `idle`.
@@ -69,7 +74,7 @@ describe("who is about", () => {
       present: [
         mate("q", "Quillon", "works"),
         mate("m", "Mossling", "table", "Recruiter"),
-        mate("g", "Glimmer", "camp", GUEST),
+        { ...mate("g", "Glimmer", "camp", GUEST), camp: { id: "g", name: "Glimmer" } },
       ],
       resting: [],
     });
@@ -83,19 +88,26 @@ describe("who is about", () => {
     expect(about.count).toBe(4);
   });
 
-  test("seen lately: newest first, each with how long ago, as the dozers' cards say it", () => {
+  test("seen lately: newest first, each with how long ago, as the dozers' cards say it, and whose camp at one", () => {
     const about = whoIs({
       room: [ME],
       present: [],
       resting: [
         mate("f", "Fernhollow", "town", "Recruit", NOW - 180 * MIN),
         mate("q", "Quillon", "works", null, NOW - 40 * MIN),
-        mate("o", "Oakhart", "camp", GUEST, NOW - 61 * MIN),
+        { ...mate("o", "Oakhart", "camp", GUEST, NOW - 61 * MIN), camp: { id: "o", name: "Oakhart" } },
       ],
     });
     expect(shown(about)).toEqual([
       ["In town", ["Tester: Strategist (you)"]],
-      ["Seen lately", ["Quillon: 40 minutes ago", "Oakhart: Guest · an hour ago", "Fernhollow: Recruit · 3 hours ago"]],
+      [
+        "Seen lately",
+        [
+          "Quillon: 40 minutes ago",
+          "Oakhart: Guest · in their camp · an hour ago",
+          "Fernhollow: Recruit · 3 hours ago",
+        ],
+      ],
     ]);
     // Seen lately are not in the game now.
     expect(about.count).toBe(1);
@@ -230,13 +242,50 @@ describe("who is away", () => {
       stirred: new Map([["b", NOW - 61 * MIN]]),
       now: NOW,
     });
-    expect(["b", "q", "m", "f", "nobody"].map((id) => cardLine(all.get(id), NOW))).toEqual([
+    expect(["b", "q", "m", "f", "nobody"].map((id) => cardLine(all.get(id), NOW, ME.id))).toEqual([
       "Away for an hour",
       "At the Works",
       "At the raid table, away for 7 minutes",
       null,
       null,
     ]);
+  });
+});
+
+describe("who is about, at the camps", () => {
+  test("says whose camp somebody is in: their own, the member's, or somebody else's; and where Leaf does not say, a camp", () => {
+    const about = whoIs({
+      room: [ME],
+      present: [
+        camper("o", "Oakley", "o"),
+        camper("v", "Vale", ME.id),
+        camper("w", "Wren", "o"),
+        camper("x", "Ash", null),
+      ],
+      resting: [camper("r", "Rowan", "o", NOW - 3 * 60 * MIN), mate("q", "Quillon", "works", null, NOW - 2 * 60 * MIN)],
+    });
+    expect(shown(about)).toEqual([
+      ["In town", ["Tester: Strategist (you)"]],
+      ["Elsewhere", ["Ash: in a camp", "Oakley: in their camp", "Vale: visiting you", "Wren: visiting O"]],
+      ["Seen lately", ["Quillon: 2 hours ago", "Rowan: visiting O · 3 hours ago"]],
+    ]);
+  });
+
+  test("a person's card says the same", () => {
+    const all = whereabouts({
+      me: ME.id,
+      room: [ME],
+      present: [camper("o", "Oakley", "o"), camper("v", "Vale", ME.id), camper("w", "Wren", "o")],
+      resting: [],
+      gone: [],
+      now: NOW,
+    });
+    expect(["o", "v", "w"].map((id) => cardLine(all.get(id), NOW, ME.id))).toEqual([
+      "In their camp",
+      "Visiting you",
+      "Visiting O",
+    ]);
+    expect(campWords("w", { id: "o", name: "Oakley" }, "o")).toBe("visiting you");
   });
 });
 

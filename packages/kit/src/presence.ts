@@ -1,6 +1,6 @@
 /**
  * Who is here: when the game is live, each page tells the server where in the game the member is
- * (the town, their camp, the Works, the table, the Grove) and what the page is on, every half minute and at
+ * (the town, a camp and whose, the Works, the table, the Grove) and what the page is on, every half minute and at
  * once when where changes; and hears back everybody seen in the last little while, and those gone in
  * the last day whose characters stay. Whether the member's character may stay in town after they go
  * is the town's to say (`stay`, from Leaf's town): a page that has not been told says nothing of it,
@@ -16,11 +16,25 @@ import { ask, isRecord, put } from "./net.ts";
 
 export type Place = "town" | "camp" | "works" | "table" | "grove";
 
+/** Whose camp somebody is at: its owner's player id (how the camp list and the camps' rooms name a camp) and name. */
+export interface CampOwner {
+  id: string;
+  name: string;
+}
+
+/** Where the page says the member is: a place, and at a camp whose, if the page knows; null anywhere else. */
+interface Spot {
+  readonly place: Place;
+  readonly camp: string | null;
+}
+
 /** Somebody the server has seen in the game lately, and where. */
 export interface Present {
   id: string;
   name: string;
   place: Place;
+  /** At a camp, whose, when the server says; null anywhere else. */
+  camp: CampOwner | null;
   /** Their rank, if the server says. */
   rank: string | null;
   /** Whether they play as a guest, not in the guild. */
@@ -36,6 +50,8 @@ export interface Resting {
   id: string;
   name: string;
   place: Place;
+  /** At a camp, whose, when the server says; null anywhere else. */
+  camp: CampOwner | null;
   /** When the server last saw them, in milliseconds since 1970. */
   seen: number;
   /** Whether they played as a guest, not in the guild. */
@@ -46,6 +62,14 @@ export const EVERY = 30_000;
 
 const PLACES: readonly Place[] = ["town", "camp", "works", "table", "grove"];
 export const isPlace = (v: unknown): v is Place => PLACES.some((p) => p === v);
+
+/** Whose camp a row of the server's lists says somebody is at: only at a camp, with its owner's id and name; else null. */
+function campOf(row: Record<string, unknown>): CampOwner | null {
+  const { place, camp_owner: id, camp_owner_name: name } = row;
+  return place === "camp" && typeof id === "string" && id !== "" && typeof name === "string" && name !== ""
+    ? { id, name }
+    : null;
+}
 
 /** The list from the server's answer, leaving out anything that makes no sense. */
 export function readPresent(v: unknown): Present[] {
@@ -59,6 +83,7 @@ export function readPresent(v: unknown): Present[] {
       id: p.id,
       name: p.username,
       place: p.place,
+      camp: campOf(p),
       rank: typeof p.rank === "string" ? p.rank : null,
       guest: p.guest === true,
       seen: Number.isFinite(seen) ? seen : null,
@@ -80,12 +105,12 @@ export function readResting(v: unknown, list: "resting" | "gone" = "resting"): R
     if (!isRecord(r) || typeof r.id !== "string" || typeof r.username !== "string" || !isPlace(r.place)) continue;
     const seen = typeof r.seen_at === "string" ? Date.parse(r.seen_at) : NaN;
     if (!Number.isFinite(seen)) continue;
-    out.push({ id: r.id, name: r.username, place: r.place, seen, guest: r.guest === true });
+    out.push({ id: r.id, name: r.username, place: r.place, camp: campOf(r), seen, guest: r.guest === true });
   }
   return out;
 }
 
-let at: Place | null = null;
+let at: Spot | null = null;
 /** Whether the member's character stays, as the town said; null on a page that has not been told. */
 let staying: boolean | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -117,27 +142,32 @@ function heard(body: unknown): void {
  */
 async function send(telling = false, asking = false): Promise<void> {
   if (at === null || !member()) return;
-  const roomKeeps = at === roomed && !telling;
+  const roomKeeps = at.place === roomed && !telling;
   // In a room of the place, the room keeps the member there, and tells the page of every change.
   if (roomKeeps && !asking) return;
   const on = device();
   const a = roomKeeps
     ? await ask("/v1/game/presence")
     : await put("/v1/game/presence", {
-        place: at,
+        place: at.place,
+        ...(at.camp === null ? {} : { camp_owner: at.camp }),
         ...(staying === null ? {} : { stay: staying }),
         ...(on === null ? {} : { device: on }),
       });
   if (a.status === 200) heard(a.body);
 }
 
-/** Says where the member is now; `null` while this page is not where they are (a game is open over it). */
-export function here(place: Place | null): void {
+/**
+ * Says where the member is now, and at a camp whose (`camp`, its owner's player id); `null` while
+ * this page is not where they are (a game is open over it). Another camp is somewhere else.
+ */
+export function here(place: Place | null, camp: string | null = null): void {
   if (!member()) return;
-  const moved = place !== at;
-  at = place;
+  const to = place === null ? null : { place, camp: place === "camp" ? camp : null };
+  const moved = to?.place !== at?.place || to?.camp !== at?.camp;
+  at = to;
   timer ??= setInterval(() => void send(), EVERY);
-  if (moved && place !== null) void send(false, true);
+  if (moved && to !== null) void send(false, true);
 }
 
 /**
@@ -164,7 +194,16 @@ export function inRoom(kind: string | null): void {
  * other asks at its turn.
  */
 export function askAgain(): void {
-  if (roomed !== null && roomed === at) void send(false, true);
+  if (roomed !== null && roomed === at?.place) void send(false, true);
+}
+
+/**
+ * Asks Leaf who is about now, for a page about to count from it out of a room that tells it every
+ * change (the signpost at a camp, which otherwise hears it every half minute): done once the answer
+ * is heard, or none comes. Nothing without Leaf, or while the page is not where the member is.
+ */
+export function askNow(): Promise<void> {
+  return send(false, true);
 }
 
 /**
@@ -173,7 +212,7 @@ export function askAgain(): void {
  */
 export function heardAbout(who: unknown): void {
   if (who === undefined) askAgain();
-  else if (roomed !== null && roomed === at) heard(who);
+  else if (roomed !== null && roomed === at?.place) heard(who);
 }
 
 /** Forgets where the member is and what the town said of staying (for tests). */

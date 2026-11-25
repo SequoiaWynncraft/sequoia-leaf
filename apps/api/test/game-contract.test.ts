@@ -230,6 +230,11 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("GET /v1/game/camps/visitors", "GET", "/v1/game/camps/visitors");
   await call("PUT /v1/game/camps/{player}/like, own camp", "PUT", `/v1/game/camps/${alice}/like`);
   await call("DELETE /v1/game/camps/{player}/like", "DELETE", `/v1/game/camps/${bob}/like`);
+  // The guest goes to Bob's camp; and whose camp, said in town, is refused.
+  const visiting = { place: "camp", camp_owner: bob };
+  await call("PUT /v1/game/presence, visiting a camp", "PUT", "/v1/game/presence", visiting, "visitor-token");
+  const refused = { place: "town", camp_owner: bob };
+  await call("PUT /v1/game/presence, a camp refused", "PUT", "/v1/game/presence", refused, "visitor-token");
   // The Tally: this week's guild raids, the SEQ levels, and a week asked of a board kept for all time only.
   await call("GET /v1/game/tally/{board}/{period}", "GET", "/v1/game/tally/raids/week");
   await call("GET /v1/game/tally/{board}/{period}, all time", "GET", "/v1/game/tally/level/all");

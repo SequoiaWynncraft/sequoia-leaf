@@ -198,13 +198,16 @@ export const RerollBodyErrorsLive = Layer.succeed(RerollBodyErrors)(
   payloadError(new Invalid({ code: "invalid_cost", message: 'Send the cost you agreed to as { "leaf": n }' })),
 );
 
-/** A presence whose body is not `{ "place" }` (with one of the game's places, and `stay` true or false if any) gets `invalid_place`. */
+/**
+ * A presence whose body is not `{ "place" }` (with one of the game's places, `camp_owner` a string,
+ * and `stay` true or false, if any) gets `invalid_place`.
+ */
 export const PresenceBodyErrorsLive = Layer.succeed(PresenceBodyErrors)(
   payloadError(
     new Invalid({
       code: "invalid_place",
       message:
-        'Send where you are as { "place": "town" }, or camp, works or table, "stay" as true or false, and "device" as phone or desktop',
+        'Send where you are as { "place": "town" }, or camp, works or table; at a camp "camp_owner" as its owner\'s UUID, "stay" as true or false, and "device" as phone or desktop',
     }),
   ),
 );
