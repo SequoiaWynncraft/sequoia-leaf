@@ -39,8 +39,9 @@ const BackendIdentity = Schema.Struct({
  * inspects the token itself. Sessions it confirmed in the last minute are
  * remembered, so a page that makes several requests asks once, and requests
  * that arrive together share one question; a revoked session stops working
- * within a minute. Each confirmed session finds its player through `Logins`,
- * and the Discord account it came with is made to sign in as that player.
+ * within a minute. Each confirmed session finds its player through `Logins`;
+ * one on its member's primary account also makes the Discord account it came
+ * with sign in as that player.
  */
 export class Identities extends Context.Service<
   Identities,
