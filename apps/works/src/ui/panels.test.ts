@@ -30,7 +30,7 @@ import {
 
 import { S } from "../state.ts";
 import type { Need } from "./goal.ts";
-import { bookNames, booksPrint } from "./hud.ts";
+import { bookNames, booksPrint, foldedPrint, trackPrint } from "./hud.ts";
 import { ordersPrint, placed, plural, powerPrint } from "./panels.ts";
 import { researchPrint, stripPrint } from "./research.ts";
 import { lockOf, nextUp, nextWords, researchOpen, studiable, takeable, tierOpen } from "./standing.ts";
@@ -282,6 +282,22 @@ describe("the tier's screen", () => {
     // Research that waits on research.
     yardAt(3);
     expect(lockOf(goal("tooling"))).toBe("1 research left");
+  });
+
+  test("folded, the box in the corner shows its goal, and on its corner the orders to hand over, else ! while a commission may be taken", () => {
+    const y = yardAt(3);
+    const lanterns = { goal: goal("lanterns"), title: "Lanterns for the great tree" };
+    // The tier's commission waits on its ten research: nothing to do, nothing on the corner.
+    expect(foldedPrint(trackPrint())).toEqual({ ...lanterns, todo: "", badge: null });
+    // Its research known, the commission may be taken.
+    y.done = [...y.done, ...ALL_GOALS.filter((g) => !isNode(g) && (GOALS[g]?.tier ?? 0) <= 3)];
+    reopen(y);
+    expect(foldedPrint(trackPrint())).toEqual({ ...lanterns, todo: "ready to take", badge: "!" });
+    // An order filled as well: the count is on the corner, and the name says both.
+    const first = y.board[0];
+    if (!first) throw new Error("no board");
+    for (const n of ALL_ITEMS) first.filled[n] = first.want[n] ?? 0;
+    expect(foldedPrint(trackPrint())).toEqual({ ...lanterns, todo: "1 to hand over, ready to take", badge: "1" });
   });
 
   test("shows research beside the projects: what is being studied, else the first that can be begun and how", () => {

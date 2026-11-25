@@ -65,16 +65,30 @@ function refreshAll(): void {
   refreshCard();
 }
 
+/** The parts whose size `measure` reads: it reads them again whenever one of them changes size. */
+const MEASURED = ["top", "side", "books", "dock", "hand", "track", "visit", "study", "walk"] as const;
+
 /**
  * How much of the screen the interface covers, so the camera can keep the yard clear of it. Each
  * part is read only once what places it has been written: the order in hand hangs from the top bar
- * (`--toph`), the research from the order (`--trackb`), the line over the dock from the dock. A part
- * that only moves changes no size, and no observer would measure it again.
+ * (`--toph`), or folded on a phone is in it; the research hangs from the order (`--trackb`), the line
+ * over the dock from the dock. A part that only moves changes no size, and no observer would measure
+ * it again.
  */
 function measure(): void {
   const root = document.documentElement.style;
   const top = $("top").getBoundingClientRect();
   root.setProperty("--toph", `${Math.round(top.bottom)}px`);
+  // The rows of the top bar but a row of the order's folded line alone, beside which the books' column
+  // of a phone on its side hangs (`index.html`): on the power's row, the line is as tall as the power.
+  const bar = Math.max(...["purse", "power"].map((id) => $(id).getBoundingClientRect().bottom));
+  root.setProperty("--barb", `${Math.round(bar)}px`);
+  // How far the side column reaches in from the screen's right edge, in one column or two: on an
+  // upright phone it is the way out, the gear and the books (`#side`), on a phone on its side the
+  // books alone. What stands beside it keeps clear of it.
+  const side = $("side").getBoundingClientRect();
+  const column = side.width > 0 ? side : $("books").getBoundingClientRect();
+  root.setProperty("--sidew", `${Math.round(window.innerWidth - column.left)}px`);
   const dock = $("dock").getBoundingClientRect();
   root.setProperty("--dockh", `${Math.round(dock.height)}px`);
   // The line over the dock is as wide as it: unrounded, so that their edges meet.
@@ -239,7 +253,7 @@ async function boot(): Promise<Page | null> {
   const held = scope();
   held.on(window, "resize", fit);
   // The dock grows a row when the story opens more tools than fit: everything over it moves up.
-  for (const id of ["top", "dock", "hand", "track", "visit", "study", "walk"]) held.observe($(id), "size", measure);
+  for (const id of MEASURED) held.observe($(id), "size", measure);
 
   // ---------- the clock ----------
 
