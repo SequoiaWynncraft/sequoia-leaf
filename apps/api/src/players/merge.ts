@@ -132,17 +132,41 @@ const addUp = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId, now: nu
     }
   });
 
-/** Likes and stays move to the one player, except any they would make of their own camp. */
+/**
+ * Likes and stays move to the one player, except any they would make of their own camp. Where
+ * somebody has one with both, they are made one: the like or unlike given last stands, and a stay
+ * runs from the first to the last of both.
+ */
 const moveLikes = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId) =>
   Effect.gen(function* () {
-    for (const [table, who, owner] of [
-      ["camp_likes", "liker_id", "owner_id"],
-      ["camp_visits", "visitor_id", "owner_id"],
+    for (const [who, owner, other] of [
+      ["liker_id", "owner_id", "owner_id"],
+      ["owner_id", "liker_id", "liker_id"],
     ] as const) {
-      yield* sql`UPDATE OR IGNORE ${sql(table)} SET ${sql(who)} = ${into} WHERE ${sql(who)} = ${from} AND ${sql(owner)} != ${into}`;
-      yield* sql`UPDATE OR IGNORE ${sql(table)} SET ${sql(owner)} = ${into} WHERE ${sql(owner)} = ${from} AND ${sql(who)} != ${into}`;
-      yield* sql`DELETE FROM ${sql(table)} WHERE ${sql(who)} = ${from} OR ${sql(owner)} = ${from}`;
+      yield* sql`
+        INSERT INTO camp_likes (${sql(who)}, ${sql(owner)}, first_at, at, liked)
+        SELECT ${into}, ${sql(other)}, first_at, at, liked FROM camp_likes
+        WHERE ${sql(who)} = ${from} AND ${sql(owner)} != ${into}
+        ON CONFLICT (liker_id, owner_id) DO UPDATE SET
+          first_at = min(first_at, excluded.first_at),
+          at = max(at, excluded.at),
+          liked = CASE WHEN excluded.at > at THEN excluded.liked ELSE liked END
+      `;
     }
+    for (const [who, owner, other] of [
+      ["visitor_id", "owner_id", "owner_id"],
+      ["owner_id", "visitor_id", "visitor_id"],
+    ] as const) {
+      yield* sql`
+        INSERT INTO camp_visits (${sql(who)}, ${sql(owner)}, first_at, last_at)
+        SELECT ${into}, ${sql(other)}, first_at, last_at FROM camp_visits
+        WHERE ${sql(who)} = ${from} AND ${sql(owner)} != ${into}
+        ON CONFLICT (visitor_id, owner_id) DO UPDATE SET
+          first_at = min(first_at, excluded.first_at), last_at = max(last_at, excluded.last_at)
+      `;
+    }
+    yield* sql`DELETE FROM camp_likes WHERE liker_id = ${from} OR owner_id = ${from}`;
+    yield* sql`DELETE FROM camp_visits WHERE visitor_id = ${from} OR owner_id = ${from}`;
   });
 
 /**

@@ -43,11 +43,11 @@ function setCookies(response: Response): Map<string, string> {
 const valueOf = (line: string | undefined) => line?.split(";")[0]?.split("=")[1] ?? "";
 
 /** A proof the backend would give for Nuss's Discord account, coming back to `returnTo`. */
-function proof(returnTo: string, member: boolean | null = false) {
+function proof(returnTo: string, member: boolean | null = false, username = "nuss187") {
   return () =>
     Response.json({
       discord_id: NUSS_DISCORD,
-      username: "nuss187",
+      username,
       display_name: "Nuss",
       avatar: null,
       return_to: returnTo,
@@ -72,9 +72,9 @@ async function comeBack(code: string, returnTo: string, nonce: string) {
 }
 
 /** Signs Nuss in with Discord alone: their Leaf session's token. */
-async function signInNuss(member: boolean | null = false): Promise<string> {
+async function signInNuss(member: boolean | null = false, username = "nuss187"): Promise<string> {
   const { nonce, returnTo } = await begin();
-  backend.proofs["code-1"] = proof(returnTo, member);
+  backend.proofs["code-1"] = proof(returnTo, member, username);
   const response = await comeBack("code-1", returnTo, nonce);
   return valueOf(setCookies(response).get("__Host-leaf_session"));
 }
@@ -125,6 +125,17 @@ describe("signing in with Discord", () => {
     const id = idOf(me.body);
     expect(id).not.toBe(NUSS_DISCORD);
     expect(await leafs.query((sql) => sql`SELECT player_id AS id FROM leaf_ids`)).toEqual([{ id }]);
+  });
+
+  it("names a returning Discord player by their Discord username as it is now, even once Leaf forgot it", async () => {
+    const first = await meWith(`__Host-leaf_session=${await signInNuss()}`);
+    await leafs.query((sql) => sql`DELETE FROM player_names`);
+
+    await signInNuss(false, "nuss_the_second");
+
+    expect(await leafs.query((sql) => sql`SELECT player_id AS id, username FROM player_names`)).toEqual([
+      { id: idOf(first.body), username: "nuss_the_second" },
+    ]);
   });
 
   it("signs the same Discord account in as the same player next time", async () => {
@@ -287,6 +298,26 @@ describe("linking a Wynncraft account later", () => {
     // Nobody sees them twice in town, though their visit is still open on record.
     const here = await leafs.run(SqlClient.SqlClient.use((sql) => readHere(sql)(T0 + 2000)));
     expect([...here.present, ...here.resting, ...here.gone].map((seen) => seen.playerId)).toEqual([account]);
+  });
+
+  it("keeps the like given last when somebody liked one camp and unliked the other", async () => {
+    const token = await signInNuss();
+    const guestId = idOf((await meWith(`__Host-leaf_session=${token}`)).body);
+    const friend = "00000000-0000-4000-8000-0000000000f1";
+    await leafs.query(
+      (sql) => sql`
+        INSERT INTO camp_likes (liker_id, owner_id, first_at, at, liked) VALUES
+          (${friend}, ${account}, ${T0 - 5000}, ${T0 - 4000}, 0),
+          (${friend}, ${guestId}, ${T0 - 3000}, ${T0 - 2000}, 1)
+      `,
+    );
+    sequoiaSession("nuss-sequoia", account, "Nuss187");
+
+    await meWith(`seq_session=nuss-sequoia`);
+
+    expect(
+      await leafs.query((sql) => sql`SELECT liker_id AS liker, owner_id AS owner, first_at, at, liked FROM camp_likes`),
+    ).toEqual([{ liker: friend, owner: account, first_at: T0 - 5000, at: T0 - 2000, liked: 1 }]);
   });
 
   it("does not welcome a Discord player who spent every Coin a second time", async () => {

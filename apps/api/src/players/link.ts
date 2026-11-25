@@ -1,4 +1,4 @@
-import { type MinecraftId, playerId } from "@sequoia-leaf/core";
+import { type MinecraftId, type PlayerId, playerId } from "@sequoia-leaf/core";
 import { Effect, Option } from "effect";
 import { SecureRandom } from "effect/crypto";
 import { SqlClient } from "effect/sql";
@@ -20,14 +20,26 @@ const newPlayerId = Effect.gen(function* () {
 const newPlayer = (discord: DiscordId, name: string, now: number) =>
   Effect.gen(function* () {
     const logins = yield* Logins;
-    const sql = yield* SqlClient.SqlClient;
     const player = yield* newPlayerId;
     yield* logins.notOwnAccount(player, now);
     yield* logins.linkDiscord(discord, player, now);
+    yield* nameDiscordPlayer(player, name, now);
+    return player;
+  });
+
+/**
+ * A Discord-only player's name, their Discord username as it is now: they have no Minecraft account
+ * for Mojang to name them by, so it is written at each sign-in, a new username or a name long
+ * unasked for brought back.
+ */
+const nameDiscordPlayer = (player: PlayerId, name: string, now: number) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
     yield* sql`
       INSERT INTO player_names (player_id, username, updated_at, asked_at) VALUES (${player}, ${name}, ${now}, ${now})
+      ON CONFLICT (player_id) DO UPDATE
+      SET username = excluded.username, updated_at = excluded.updated_at, asked_at = excluded.asked_at
     `.pipe(Effect.orDie);
-    return player;
   });
 
 /**
@@ -35,8 +47,16 @@ const newPlayer = (discord: DiscordId, name: string, now: number) =>
  * a new one, named by their Discord username. Run it in a transaction.
  */
 export const discordPlayer = Effect.fnUntraced(function* (discord: DiscordId, name: string, now: number) {
-  const known = yield* (yield* Logins).discordPlayer(discord);
-  return Option.isSome(known) ? known.value : yield* newPlayer(discord, name, now);
+  const logins = yield* Logins;
+  const known = yield* logins.discordPlayer(discord);
+  if (Option.isNone(known)) {
+    return yield* newPlayer(discord, name, now);
+  }
+  // A player with a Minecraft account linked is named by it, not by Discord.
+  if (yield* logins.discordOnly(known.value)) {
+    yield* nameDiscordPlayer(known.value, name, now);
+  }
+  return known.value;
 });
 
 /**
