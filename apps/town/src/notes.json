@@ -1,7 +1,7 @@
 [
   {
     "id": "works-phone",
-    "at": "2026-11-25T14:22Z",
+    "at": "2026-11-25T14:23Z",
     "title": "The Works: more of the yard on a phone",
     "lines": [
       "On a phone the tools are one row you scroll sideways, and the yard's books are a column down the right side.",
@@ -11,7 +11,7 @@
       {
         "head": "New",
         "points": [
-          "With Select in hand and nothing marked, Upgrade all raises every piece in the yard to the highest grade you have unlocked, for the whole price, all of it or none. Press it twice. It comes with the research Upgrading an area, and Undo puts the grades back."
+          "With Select in hand and nothing marked, Upgrade all raises every piece in the yard to the highest grade you have unlocked, for the whole price, all of it or none. Press it twice. Without enough Coins it is greyed out, and pressing it says how many Coins you are short. It comes with the research Upgrading an area, and Undo puts the grades back."
         ]
       },
       {
