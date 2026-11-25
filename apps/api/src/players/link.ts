@@ -21,7 +21,7 @@ const newPlayer = (discord: DiscordId, name: string, now: number) =>
   Effect.gen(function* () {
     const logins = yield* Logins;
     const player = yield* newPlayerId;
-    yield* logins.notOwnAccount(player, now);
+    yield* logins.notOwnAccount(player, now, true);
     yield* logins.linkDiscord(discord, player, now);
     yield* nameDiscordPlayer(player, name, now);
     return player;
@@ -87,7 +87,7 @@ export const accountPlayer = Effect.fnUntraced(function* (
     const player = ofDiscord ?? (yield* newPlayer(discord, name, now));
     yield* logins.linkMinecraft(account, player, now);
     if (ofAccount === playerId(account)) {
-      yield* logins.notOwnAccount(ofAccount, now);
+      yield* logins.notOwnAccount(ofAccount, now, false);
     }
     return player;
   }

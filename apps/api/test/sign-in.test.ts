@@ -387,6 +387,36 @@ describe("linking a Wynncraft account later", () => {
     ).toEqual([{ id: nussId }]);
   });
 
+  it("keeps a player whose account went to someone else apart when its person makes another account their main", async () => {
+    // Pat plays on account A, which goes to Nuss; then Pat makes account B his main.
+    const pat = "200000000000000007";
+    const b = playerId("00000000-0000-4000-8000-0000000000b2");
+    sequoiaSession("pat-on-a", account, "PatA", pat);
+    await meWith(`seq_session=pat-on-a`);
+    await leafs.query(
+      (sql) => sql`
+        INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${account}, 'works', 4, '{}', ${T0})
+      `,
+    );
+    sequoiaSession("nuss-on-a", account, "Nuss187");
+    await meWith(`seq_session=nuss-on-a`);
+    sequoiaSession("pat-on-b", b, "PatB", pat);
+
+    const me = await meWith(`seq_session=pat-on-b`);
+
+    expect(idOf(me.body)).toBe(b);
+    expect(await leafs.query((sql) => sql`SELECT count(*) AS n FROM merges`)).toEqual([{ n: 0 }]);
+    expect(await leafs.query((sql) => sql`SELECT player_id AS id FROM play_state`)).toEqual([{ id: account }]);
+  });
+
+  it("stops asking another browser to link once the account is linked", async () => {
+    const token = await signInNuss(true);
+    sequoiaSession("nuss-sequoia", account, "Nuss187");
+    await meWith(`seq_session=nuss-sequoia`);
+
+    expect((await meWith(`__Host-leaf_session=${token}`)).body).toMatchObject({ ask_link: false });
+  });
+
   it("follows a member's new primary account, as Leaf always has, without taking one account's player into another's", async () => {
     const main = playerId("00000000-0000-4000-8000-00000000000a");
     const other = playerId("00000000-0000-4000-8000-0000000000a2");

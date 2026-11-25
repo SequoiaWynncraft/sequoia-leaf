@@ -35,8 +35,9 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 41: no Leaf sessions, and no merges recorded. */
-const beforeSignIns = (sql: SqlClient.SqlClient) => Effect.andThen(sql`DROP TABLE sign_ins`, sql`DROP TABLE merges`);
+/** Undoes migration 41: no Leaf sessions, no merges recorded, and no record of why an id is Leaf's. */
+const beforeSignIns = (sql: SqlClient.SqlClient) =>
+  Effect.all([sql`DROP TABLE sign_ins`, sql`DROP TABLE merges`, sql`ALTER TABLE leaf_ids DROP COLUMN for_discord`]);
 
 /** Undoes migrations 41 and 40: no logins kept, and no player's id marked as not their account's. */
 const beforeLogins = (sql: SqlClient.SqlClient) =>

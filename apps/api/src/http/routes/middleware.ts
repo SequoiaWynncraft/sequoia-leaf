@@ -77,7 +77,8 @@ const leafSessions = (signIns: SignIns["Service"], logins: Logins["Service"], pu
       admin: false,
       session: Redacted.make(token),
       via: "discord",
-      askLink: member === true,
+      // Asked only while the player they are now has no Minecraft account: linked in another browser, not asked.
+      askLink: member === true && (yield* logins.discordOnly(playerId)),
     };
     return identity;
   });

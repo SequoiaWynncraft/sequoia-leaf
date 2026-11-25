@@ -31,4 +31,7 @@ export default Effect.gen(function* () {
     ) STRICT
   `;
   yield* sql`CREATE INDEX merges_from ON merges (from_id)`;
+  // Why a player's id is not their account's: Leaf made it for a Discord account (1), or their
+  // account went to another person (0). Only a player made for Discord is taken into another.
+  yield* sql`ALTER TABLE leaf_ids ADD COLUMN for_discord INTEGER NOT NULL DEFAULT 0 CHECK (for_discord IN (0, 1))`;
 });
