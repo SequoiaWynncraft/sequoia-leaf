@@ -24,10 +24,13 @@
  *   back the settings the command changed, and only those, each as the command's own setter sets it,
  *   so that what it holds, carries and is doing (a splitter's next way, beside its ways in) is its own;
  * - a piece the command set down, or set in the place of another, is taken away, as the spade takes it;
- * - a piece the command took away, or set another in the place of, is stood again as new, as `stand`
- *   stands one: its settings, holding nothing, doing nothing; one of the pieces to hand as one;
+ * - a piece the command took away, or set another in the place of, is stood again as new: its
+ *   settings, holding nothing, doing nothing; one of the pieces to hand as one. Putting back is not
+ *   building: nothing asks whether it may be built now, and its Coins are the recorded opposite;
  * - pieces moved are moved back as one, with what they hold now.
  * The Coins go the other way: what the command cost is given back, and what it gave back is taken.
+ * All or none: everything that can refuse (the entry's name, its check, the Coins; a move's own
+ * refusal) is asked before anything changes, and nothing after that can refuse.
  *
  * An entry's bytes: its id (a count, then a byte each), what it is (a byte: 1 a move, 2 a stroke of
  * the brush, 4 too much to keep), the Coins it moved (a varint, zigzag), the check of its tiles after
@@ -56,14 +59,13 @@ import {
   move,
   packWays,
   piecesAt,
-  stand,
   tilesOf,
   unpackWays,
 } from "./pieces.ts";
 import { REASON } from "./reasons.ts";
 import { legPiece } from "./route.ts";
 import { CRATE, DEPOT, gradeOf, isKind, type Kind, NONE, TUNNEL } from "./tables.ts";
-import { changed, type Entry, holderOf, vacate, type Yard } from "./yard.ts";
+import { changed, type Entry, holderOf, place, tunnelRow, vacate, type Yard } from "./yard.ts";
 
 /** The most entries a yard keeps, and the most bytes they may come to in all. */
 export const UNDO_MOST = 20;
@@ -471,21 +473,28 @@ function takeAway(y: Yard, i: number): void {
 }
 
 /**
- * Stands a piece taken away again as new, as `stand` stands one (a tunnel by its way-in mouth, both
- * mouths at once): its settings, holding nothing, doing nothing; one of the pieces to hand only if it
- * was one.
+ * Stands a piece taken away again on its bare tile, as new: its settings as the player set them,
+ * holding nothing, doing nothing; one of the pieces to hand only if it was one. Putting back is not
+ * building: what the yard had is put back without asking whether it may be built now (an unlock, a
+ * price), so nothing here can refuse. Each of a tunnel's mouths is stood with its own settings, and
+ * its way-in mouth has its row.
  */
 function standBack(y: Yard, s: Setting): void {
-  const had = y.spare[s.kind] ?? 0;
-  y.spare[s.kind] = s.free ? 1 : 0;
-  const { x, y: z } = { x: s.tile % y.land.w, y: Math.floor(s.tile / y.land.w) };
-  stand(y, [{ kind: s.kind, x, y: z, dir: s.dir, span: s.span, ...s.kept }], Infinity);
-  y.spare[s.kind] = s.free ? Math.max(0, had - 1) : had;
+  place(y, s.tile, s.kind, s.dir, s.kept.grade ?? 1);
+  for (const part of SETTINGS) part.to(y, s.tile, part.of(s));
+  y.span[s.tile] = s.span;
+  if (s.span > 0) tunnelRow(y, s.tile);
+  if (s.free) {
+    y.free[s.tile] = 1;
+    y.spare[s.kind] = Math.max(0, (y.spare[s.kind] ?? 0) - 1);
+  }
 }
 
 /**
  * Puts back how the pieces on an entry's tiles stood: each that still stands has back the settings
- * the command changed; the rest are taken away, and what was taken away is stood again as new.
+ * the command changed; the rest are taken away, and what was taken away is stood again as new. Every
+ * tile a piece is stood on is one of the entry's, bare once what stands there is taken away, and no
+ * step can refuse: it is done whole once begun.
  */
 function putBack(y: Yard, u: Undoing): void {
   const was = new Map(u.was.map((s, k) => [s.tile, { s, mask: u.masks[k] ?? 0 }]));
@@ -493,7 +502,7 @@ function putBack(y: Yard, u: Undoing): void {
   for (const i of u.tiles) if (!stays.has(i) && y.kind[i] !== NONE) takeAway(y, i);
   for (const { s, mask } of was.values()) {
     if (stays.has(s.tile)) SETTINGS.forEach((part, n) => mask & (1 << n) && part.to(y, s.tile, part.of(s)));
-    else if (s.span >= 0) standBack(y, s);
+    else standBack(y, s);
   }
 }
 

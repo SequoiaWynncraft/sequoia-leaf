@@ -664,4 +664,59 @@ describe("a piece stood again", () => {
     ]);
     readsBack(y);
   });
+
+  test("is put back, not built: a paid belt coloured before the yard may paint, taken away and undone, stands again coloured, its Coin taken back", () => {
+    // A saved yard, a paid belt built in it and coloured; read back as an old save is that kept a
+    // colour from before Paint was unlocked (Signs not done): the colour is carried.
+    const start = saved("v7-mid");
+    start.spare[F.BELT] = 0;
+    const t =
+      [...start.kind.keys()].find(
+        (i) => F.refusal(start, F.BELT, i % start.land.w, Math.floor(i / start.land.w), Infinity, 0) === null,
+      ) ?? -1;
+    must(start, { do: "build", kind: "belt", dir: 0, ...xyOf(start, t) });
+    must(start, { do: "paint", tint: 4, ...xyOf(start, t) });
+    const rec: Rec = JSON.parse(F.encode(start));
+    const done = Array.isArray(rec.done) ? rec.done.filter((g) => g !== "signs") : [];
+    const y = F.decode(JSON.stringify({ ...rec, done }), start.land);
+    if (!y) throw new Error("the yard does not read back");
+    y.history = [];
+    expect([F.locked(y.open, { use: "paint" }) !== null, y.kind[t], y.tint[t], y.free[t]]).toEqual([
+      true,
+      F.BELT,
+      4,
+      0,
+    ]);
+    const gave = coinsOf(play(y, { do: "remove", ...xyOf(y, t) }));
+    expect(gave).toBeGreaterThan(0);
+    const did = undo(y);
+    expect([coinsOf(did), y.kind[t], y.tint[t], y.free[t], y.history]).toEqual([-gave, F.BELT, 4, 0, []]);
+    readsBack(y);
+  });
+
+  test("a tunnel taken away and undone stands again with each mouth's own colour", () => {
+    const y = laid();
+    const { w } = y.land;
+    const at =
+      [...y.kind.keys()].find(
+        (i) =>
+          F.refusal(y, F.TUNNEL, i % w, Math.floor(i / w), Infinity, 0) === null &&
+          F.tunnelExit(y, i % w, Math.floor(i / w), 0),
+      ) ?? -1;
+    must(y, { do: "build", kind: "tunnel", dir: 0, ...xyOf(y, at) });
+    const far = F.otherMouth(y, at);
+    y.tint[at] = 3;
+    y.tint[far] = 4;
+    y.history = [];
+    must(y, { do: "remove", ...xyOf(y, at) });
+    expect(undo(y)).not.toHaveProperty("refused");
+    expect([y.kind[at], y.kind[far], y.tint[at], y.tint[far], F.otherMouth(y, at)]).toEqual([
+      F.TUNNEL,
+      F.TUNNEL,
+      3,
+      4,
+      far,
+    ]);
+    readsBack(y);
+  });
 });
