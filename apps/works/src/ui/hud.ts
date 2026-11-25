@@ -177,9 +177,10 @@ function tracker(): () => void {
     const said = p.next ? nextWords(p.next) : null;
     title = said?.title ?? GOALS[p.hand]?.title ?? "";
     full.replaceChildren(...fullTrack(p, said, title).filter((n) => n !== null));
-    // Folded: the goal's own picture (the Orders book's where it has none), and what there is to do on its corner.
+    // Folded: the goal's own picture, inside the button as the books' icons are (the Orders book's where it
+    // has none), and what there is to do on its corner.
     folded = foldedPrint(p);
-    fold.tile.replaceChildren((folded.goal === -1 ? null : goalPicture(folded.goal, 16)) ?? yardIcon("orders"));
+    fold.tile.replaceChildren((folded.goal === -1 ? null : goalPicture(folded.goal, 14)) ?? yardIcon("orders"));
     set(fold.tile, folded.badge);
     fold.tile.setAttribute("aria-label", folded.todo === "" ? folded.title : `${folded.title}, ${folded.todo}`);
     fold.named();

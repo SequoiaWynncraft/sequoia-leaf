@@ -85,6 +85,16 @@
       #power .k-bar {
         width: calc(var(--u) * 34);
       }
+      /* The power and the order in hand, folded: one part of the row, so that the order stays beside the power. */
+      #gauge {
+        display: flex;
+        align-items: flex-start;
+        gap: inherit;
+        pointer-events: none;
+      }
+      #gauge > * {
+        pointer-events: auto;
+      }
       #power .short {
         color: var(--k-coral);
       }
@@ -187,7 +197,7 @@
       #track > .fold[aria-expanded="false"] {
         display: none;
       }
-      #top:has(> #track > .fold[aria-expanded="false"]) + #study {
+      #top:has(#track > .fold[aria-expanded="false"]) + #study {
         display: none;
       }
       /* The line over the order's title keeps to one line: what is to hand over goes under it where both do not fit. */
@@ -229,7 +239,7 @@
         flex-direction: column;
       }
       #visit[hidden],
-      body.visiting :is(#power, #track, #study, #hand, #dock) {
+      body.visiting :is(#gauge, #study, #hand, #dock) {
         display: none;
       }
       /* The research being studied, under the order in hand: its folio, its name, and how far it has come. */
@@ -1233,7 +1243,7 @@
         #power .k-bar {
           width: calc(var(--u) * 20);
         }
-        /* Two rows: the purse and the way out, then the power (and the order in hand, folded on a phone) and the yard's books. */
+        /* Two rows: the purse and the way out, then the power (and the order in hand, folded) and the yard's books. */
         #corner {
           margin-left: auto;
           order: 2;
@@ -1241,8 +1251,7 @@
         #purse {
           order: 1;
         }
-        #power,
-        #track {
+        #gauge {
           order: 3;
         }
         #books {
@@ -1566,8 +1575,10 @@
     <canvas id="words"></canvas>
     <div id="top">
       <div id="purse" class="k-plaque hung"></div>
-      <button id="power" class="k-plaque hung" type="button"></button>
-      <div id="track" class="k-plaque hung"></div>
+      <div id="gauge">
+        <button id="power" class="k-plaque hung" type="button"></button>
+        <div id="track" class="k-plaque hung"></div>
+      </div>
       <div id="side">
         <div id="books"></div>
         <div id="corner"></div>
