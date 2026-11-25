@@ -1,0 +1,282 @@
+/**
+ * Pieces as bytes: the yard's own (`codec.ts`, its `cells`), and what an Undo puts back
+ * (`history.ts`), in one format. A piece is read off its tile as a kept piece first (`keptPiece`),
+ * and kept pieces are what is written (`packKept`) and read back (`unpackCells`).
+ *
+ * The pieces' bytes are how many pieces there are (varint), then each piece in tile order: the tiles
+ * since the last piece less one (varint); a byte of its kind (low four bits), its way (two bits),
+ * whether it carries something (64) and whether more parts follow (128); if it carries, the thing
+ * (byte) and its progress in eighths with the side it came in from (a byte, four bits each); if more
+ * follow, which (varint, a bit each), then those:
+ *   2 what it holds: how many kinds (varint), then a thing (byte) and how many (varint) each
+ *   4 out (byte)   8 work (varint)   16 making (byte)   32 turn (byte)   64 what it is set to (byte)
+ *   128 span (byte, +8), and for a way-in mouth a thing (byte) and its progress (byte) for each tile under
+ *   256 a shut crate   512 fuel (byte)   1024 one of the pieces to hand   2048 tint (byte)
+ *   4096 a splitter's ways (byte: its shut ways, the way it puts first and its ways in, `packWays`), or a
+ *        sorter's right side (the same byte, as the way it puts first)   8192 a grade above 1 (byte)
+ *
+ * Bytes that are not pieces are refused whole: bytes cut short or left over, a part this version
+ * does not know, more pieces than the land has tiles, and counts no yard could have (more than 255
+ * kinds of thing held, more than a million of one). What today's tables allow is no part of the
+ * shape: a thing they do not have is let go, more of one than a piece holds is clamped as it is put
+ * back, and a tunnel longer than tunnels go is a piece that cannot stand.
+ */
+import { Reader, Writer } from "./bytes.ts";
+import { waysOn } from "./pieces.ts";
+import { ALL_ITEMS, CRATE, DEPOT, NONE, SPAN_MOST } from "./tables.ts";
+import { held, holderOf, type Holders, tunnelOf, type Yard } from "./yard.ts";
+
+/** The parts a piece's bytes may say follow, a bit each. */
+const PARTS = 0x3ffe;
+/** The most kinds of thing, and of one thing, a piece's bytes may say it holds: past these the bytes are no yard's. */
+const KINDS_MOST = 255;
+const MANY_MOST = 1_000_000;
+
+/** A piece as kept, in the yard's own units, before it is vouched for. */
+export interface KeptPiece {
+  readonly tile: number;
+  readonly kind: number;
+  readonly dir: number;
+  readonly item?: number;
+  readonly prog?: number;
+  readonly via?: number;
+  readonly held?: readonly (readonly [number, number])[];
+  readonly out?: number;
+  readonly work?: number;
+  readonly making?: number;
+  readonly turn?: number;
+  readonly recipe?: number;
+  readonly span?: number;
+  readonly under?: readonly number[];
+  readonly along?: readonly number[];
+  readonly closed?: boolean;
+  readonly fuel?: number;
+  readonly free?: boolean;
+  readonly tint?: number;
+  readonly ways?: number;
+  readonly grade?: number;
+}
+type Building = { -readonly [K in keyof KeptPiece]: KeptPiece[K] };
+
+/** The parts of one number each, by their bit, in the order the bytes have them: those before the span, and after it. */
+const EARLY = [
+  [4, "out"],
+  [8, "work"],
+  [16, "making"],
+  [32, "turn"],
+  [64, "recipe"],
+] as const;
+const LATE = [
+  [512, "fuel"],
+  [2048, "tint"],
+  [4096, "ways"],
+  [8192, "grade"],
+] as const;
+
+// ---------- off the yard ----------
+
+/** What a holder's row holds and is doing, as kept: only what there is. */
+function heldBy(h: Holders, r: number): Partial<Building> {
+  const kinds = ALL_ITEMS.filter((n) => held(h, r, n) > 0);
+  const [out, work, making, fuel] = [h.out[r] ?? NONE, h.work[r] ?? 0, h.making[r] ?? NONE, h.fuel[r] ?? 0];
+  return {
+    ...(kinds.length > 0 ? { held: kinds.map((n): [number, number] => [n, held(h, r, n)]) } : {}),
+    ...(out === NONE ? {} : { out }),
+    ...(work === 0 ? {} : { work }),
+    ...(making === NONE ? {} : { making }),
+    ...(fuel === 0 ? {} : { fuel }),
+  };
+}
+
+/** How the piece on a tile is set, as kept: only what is not as a new piece has it. */
+function settingsAt(y: Yard, i: number): Partial<Building> {
+  const [turn, recipe, tint, ways, grade] = [
+    y.turn[i] ?? 0,
+    y.set[i] ?? NONE,
+    y.tint[i] ?? 0,
+    waysOn(y, i),
+    y.grade[i] ?? 0,
+  ];
+  return {
+    ...(turn === 0 ? {} : { turn }),
+    ...(recipe === NONE ? {} : { recipe }),
+    ...(y.kind[i] === CRATE && y.holders.open[holderOf(y, i)] === 0 ? { closed: true } : {}),
+    ...(y.free[i] === 1 ? { free: true } : {}),
+    ...(tint === 0 ? {} : { tint }),
+    ...(ways === 0 ? {} : { ways }),
+    ...(grade > 1 ? { grade } : {}),
+  };
+}
+
+/** A tunnel mouth's span, as kept, and for its way-in mouth what is under the ground. */
+function spanAt(y: Yard, i: number): Partial<Building> {
+  const span = y.span[i] ?? 0;
+  if (span === 0) return {};
+  const at = tunnelOf(y, i) * SPAN_MOST;
+  const under = Array.from({ length: Math.max(0, span) }, (_, s) => y.tunnels.under[at + s] ?? NONE);
+  return { span, under, along: under.map((_, s) => y.tunnels.along[at + s] ?? 0) };
+}
+
+/** The piece on a tile, as kept. */
+export function keptPiece(y: Yard, i: number): KeptPiece {
+  const r = holderOf(y, i);
+  const item = y.item[i] ?? NONE;
+  return {
+    tile: i,
+    kind: y.kind[i] ?? NONE,
+    dir: y.dir[i] ?? 0,
+    ...(item === NONE ? {} : { item, prog: y.prog[i] ?? 0, via: y.via[i] ?? 0 }),
+    ...(r >= 0 ? heldBy(y.holders, r) : {}),
+    ...settingsAt(y, i),
+    ...spanAt(y, i),
+  };
+}
+
+/** The yard's pieces as bytes, in tile order. */
+export function packCells(y: Yard): Uint8Array {
+  const at = Array.from(y.kind.keys()).filter((i) => y.kind[i] !== NONE && y.kind[i] !== DEPOT);
+  return packKept(at.map((i) => keptPiece(y, i)));
+}
+
+// ---------- writing ----------
+
+/** Which parts follow a kept piece's first byte: those it has. */
+function partsOf(p: KeptPiece): number {
+  const has: readonly (readonly [number, unknown])[] = [
+    [2, p.held],
+    ...EARLY.map(([bit, key]) => [bit, p[key]] as const),
+    [128, p.span],
+    [256, p.closed],
+    ...LATE.map(([bit, key]) => [bit, p[key]] as const),
+    [1024, p.free],
+  ];
+  return has.reduce((f, [bit, v]) => (v === undefined || v === false ? f : f | bit), 0);
+}
+
+/** Writes what a holder holds: how many kinds, then each thing and how many. */
+function writeHeld(o: Writer, pairs: readonly (readonly [number, number])[]): void {
+  o.varint(pairs.length);
+  for (const [n, c] of pairs) {
+    o.byte(n);
+    o.varint(c);
+  }
+}
+
+/** Writes a tunnel mouth's span, and for each tile under a way-in mouth what is there. */
+function writeSpan(o: Writer, p: KeptPiece): void {
+  const span = p.span ?? 0;
+  o.byte(span + 8);
+  for (let s = 0; s < span; s++) {
+    o.byte(p.under?.[s] ?? NONE);
+    o.byte(p.along?.[s] ?? 0);
+  }
+}
+
+/** Writes those of a kept piece's parts of one number each that it has: a byte each, but work a varint. */
+function writeNumbers(o: Writer, p: KeptPiece, parts: typeof EARLY | typeof LATE): void {
+  for (const [, key] of parts) {
+    const v = p[key];
+    if (v === undefined) continue;
+    if (key === "work") o.varint(v);
+    else o.byte(v);
+  }
+}
+
+/** Writes a kept piece, from its first byte. */
+function writeKept(o: Writer, p: KeptPiece): void {
+  const f = partsOf(p);
+  o.byte(p.kind | (p.dir << 4) | (p.item === undefined ? 0 : 64) | (f === 0 ? 0 : 128));
+  if (p.item !== undefined) {
+    o.byte(p.item);
+    o.byte((p.prog ?? 0) | ((p.via ?? 0) << 4));
+  }
+  if (f !== 0) o.varint(f);
+  if (p.held) writeHeld(o, p.held);
+  writeNumbers(o, p, EARLY);
+  if (p.span !== undefined) writeSpan(o, p);
+  writeNumbers(o, p, LATE);
+}
+
+/** Pieces as kept (in tile order, none twice) as bytes: `unpackCells` reads back the same. */
+export function packKept(pieces: readonly KeptPiece[]): Uint8Array {
+  const o = new Writer();
+  o.varint(pieces.length);
+  let last = -1;
+  for (const p of pieces) {
+    o.varint(p.tile - last - 1);
+    last = p.tile;
+    writeKept(o, p);
+  }
+  return o.bytes();
+}
+
+// ---------- reading ----------
+
+/** Reads what a holder holds: how many kinds, then each thing and how many; null past what a yard could hold. */
+function heldOf(r: Reader): [number, number][] | null {
+  const kinds = r.varint();
+  if (kinds > KINDS_MOST) return null;
+  const pairs: [number, number][] = [];
+  for (let k = 0; k < kinds; k++) {
+    const thing = r.byte();
+    const many = r.varint();
+    if (many > MANY_MOST) return null;
+    pairs.push([thing, many]);
+  }
+  return pairs;
+}
+
+/** Reads a tunnel mouth's span onto a piece, and for a way-in mouth what is under the ground. */
+function readSpan(r: Reader, p: Building): void {
+  const span = r.byte() - 8;
+  const under: number[] = [];
+  const along: number[] = [];
+  for (let s = 0; s < span; s++) {
+    under.push(r.byte());
+    along.push(r.byte());
+  }
+  Object.assign(p, { span, under, along });
+}
+
+/** Reads the parts `f` says follow onto a piece; false for bytes that are no yard's. */
+function readParts(r: Reader, p: Building, f: number): boolean {
+  const pairs = f & 2 ? heldOf(r) : [];
+  if (!pairs) return false;
+  if (f & 2) p.held = pairs;
+  for (const [bit, key] of EARLY) if (f & bit) p[key] = key === "work" ? r.varint() : r.byte();
+  if (f & 128) readSpan(r, p);
+  for (const [bit, key] of LATE) if (f & bit) p[key] = r.byte();
+  Object.assign(p, f & 256 ? { closed: true } : {}, f & 1024 ? { free: true } : {});
+  return true;
+}
+
+/** Reads a piece on a tile, from its first byte; null for bytes that are no yard's. */
+function readKept(r: Reader, tile: number): KeptPiece | null {
+  const kd = r.byte();
+  const p: Building = { tile, kind: kd & 15, dir: (kd >> 4) & 3 };
+  if (kd & 64) {
+    p.item = r.byte();
+    const pv = r.byte();
+    p.prog = pv & 15;
+    p.via = pv >> 4;
+  }
+  const f = kd & 128 ? r.varint() : 0;
+  if (f > PARTS || (f & ~PARTS) !== 0 || !readParts(r, p, f)) return null;
+  return r.over ? null : p;
+}
+
+/** The pieces read back from their bytes, on a land of `tiles` tiles; null for bytes that are not pieces. */
+export function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
+  const r = new Reader(bytes);
+  const out: KeptPiece[] = [];
+  const pieces = r.varint();
+  if (r.over || pieces > tiles) return null;
+  let tile = -1;
+  for (let n = 0; n < pieces; n++) {
+    tile += r.varint() + 1;
+    const p = tile < tiles ? readKept(r, tile) : null;
+    if (!p) return null;
+    out.push(p);
+  }
+  return r.done ? out : null;
+}

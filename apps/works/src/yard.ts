@@ -220,17 +220,9 @@ let collectedAt = 0;
 const refusalHearers: ((why: string) => void)[] = [];
 /** Puts away whatever the member has under way, as the yard stops taking input (`gate`). */
 let putAway = (): void => undefined;
-/** Hears each time the copy becomes Leaf's yard as read. */
-const takeHearers: (() => void)[] = [];
 
-/** Hears each time the copy becomes Leaf's yard as read, once the link has it: what was worked out of the copy before may no longer hold. */
-export const onTake = (fn: () => void): void => void takeHearers.push(fn);
-
-/**
- * What doing something to the yard came to: the rules' refusal, or what they did, with whether Leaf
- * did it too (`taken`, once Leaf answers: false when Leaf turned it down or it was never sent on).
- */
-export type Did = Turned | (Done<Yard, News> & { readonly taken: Promise<boolean> });
+/** What doing something to the yard came to: the rules' refusal, or what they did. Leaf's word on it comes with its answer (`heard`). */
+export type Did = Turned | Done<Yard, News>;
 
 /** What the yard says, and what anything the member does while Leaf's yard is being taken is refused with. */
 export const CATCHING_UP = "The yard is catching up with the guild's server";
@@ -276,7 +268,6 @@ export async function openYard(player: string, trouble: (why: Trouble) => void):
   opened.onAnswer(heard);
   collectedAt = performance.now();
   if (!take()) return "closed";
-  heardTake();
   listen(S.visiting?.id ?? player);
   return null;
 }
@@ -381,13 +372,7 @@ function unlike(f: Follow): false {
 function read(): void {
   if (!take()) return;
   go({ do: "took" });
-  heardTake();
 }
-
-/** Tells whatever hears it that the copy is Leaf's yard as read, once the link has taken it. */
-const heardTake = (): void => {
-  for (const fn of takeHearers) fn();
-};
 
 /** The copy becomes Leaf's yard, run on to the tick already shown. False when Leaf's rules are newer than the page's. */
 function take(): boolean {
@@ -525,17 +510,17 @@ export function doNow(act: Act): Did {
   const done = play(S.world, command, balance().coins);
   if ("refused" in done) return done;
   // A review page's own yard (`S.alone`) sends nothing: what is done is all there is.
-  if (link.is !== "inStep") return { ...done, taken: Promise.resolve(S.alone) };
+  if (link.is !== "inStep") return done;
   const sending = writeCommand(command);
   if (act.do === "collect") collectedAt = performance.now();
   go({ do: "send", sent: { command: sending, tick: S.world.tick, check: check(S.world) } });
   // What it pays or takes shows in the purse until Leaf answers, whose answer brings Leaf's word.
-  const answer = link.leaf.send(
+  void link.leaf.send(
     sending,
     undefined,
     (done.coins ?? []).reduce((sum, c) => sum + c.amount, 0),
   );
-  return { ...done, taken: answer.then((a) => !("refused" in a)) };
+  return done;
 }
 
 /** Pays the till into the ledger, and puts away the letter about a time away. */

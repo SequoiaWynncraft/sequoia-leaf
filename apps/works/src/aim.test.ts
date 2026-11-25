@@ -15,6 +15,7 @@ import {
   create,
   encode,
   holderOf,
+  MILLI,
   plot,
   priceAt,
   TUNNEL,
@@ -246,18 +247,26 @@ describe("whatever costs Coins", () => {
       expect(fake.leaf.commands).toEqual([]);
     });
 
-  test("pieces put back by an undo are refused whole once the purse does not cover them, and nothing is sent", async () => {
+  test("an Undo that takes back what a piece taken away gave is refused whole once the purse and the till's whole Coins do not cover it, by how many; the till is counted once", async () => {
     const fake = await priced(0);
     const said: string[] = [];
     toolHooks.said = (text) => void said.push(text);
     expect(takeAway(18, 13)).toBe(true);
     await until(() => fake.leaf.posts >= 2);
     fake.leaf.commands = [];
-    coinsAre(0);
     const price = priceAt(S.world, CRATE, 18, 13);
-    undo();
-    expect(said).toEqual([`Cannot undo: not enough coins: ${price} short.`]);
+    // All but two of what it gave back are in the till, whole, and a part; one in the purse: one short.
+    for (const y of [S.world, fake.leaf.yard]) y.till = (price - 2) * MILLI + 500;
+    coinsAre(1);
+    expect(undo()).toBe(false);
+    expect(said).toEqual(["Not enough Coins: 1 short."]);
     await Bun.sleep(5);
     expect(fake.leaf.commands).toEqual([]);
+    // One more in the purse covers it exactly: it is done, and sent as one command.
+    coinsAre(2);
+    expect(undo()).toBe(true);
+    expect([S.world.kind[at(S.world, 18, 13)], S.world.till]).toEqual([CRATE, 500]);
+    await until(() => fake.leaf.commands.length >= 1);
+    expect(fake.leaf.commands).toMatchObject([{ do: "undo" }]);
   });
 });

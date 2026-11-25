@@ -62,6 +62,12 @@ export class Reader {
     this.over = true;
     return 0;
   }
+  /** The bytes not yet read, all of them, leaving none. */
+  rest(): Uint8Array {
+    const left = this.buf.subarray(this.at);
+    this.at = this.buf.length;
+    return left;
+  }
 }
 
 const ABC = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

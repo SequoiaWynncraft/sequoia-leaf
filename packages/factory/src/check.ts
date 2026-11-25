@@ -5,7 +5,8 @@
  * hand and those in line after it, the line of research, and what each goal not done has been
  * given) and the board (each order's wants, what came in, its pay, its words and when it began to
  * count), the depot's books (what awards and the standing are read from), what was seen at the
- * owner's last command, the pieces to hand, the blueprints, and every part of every piece, tile by
+ * owner's last command, the pieces to hand, the blueprints, what Undo would undo (each entry's bytes:
+ * its id is worked out from them), and every part of every piece, tile by
  * tile, numbered by the tables. Every number that may pass 32 bits (the clock, the counters, the
  * Coins, the books) is mixed in by both halves of its 64.
  *
@@ -79,7 +80,8 @@ export function check(y: Yard): number {
   tally(y.seen.depot);
   for (const p of y.plots) mix(p + 32);
   bytes(y.spare);
-  for (const b of y.blueprints) bytes(b);
+  // The blueprints, always as many, and then each entry of what Undo would undo.
+  for (const b of [...y.blueprints, ...y.history.map((e) => e.bytes)]) bytes(b);
   tally(y.depot);
   for (const o of y.board) {
     if (!counting(o, y.tick)) continue;

@@ -46,11 +46,14 @@ export type Hand =
   /** A run of belt laid from two taps: where the first tap said it starts, and once a second has said where it ends, the run. */
   | { readonly is: "beltTaps"; readonly from: Tile; readonly run: Run | null; readonly aim: Aim | null }
   | { readonly is: "remove"; readonly aim: Aim | null }
-  /** The brush; while a drag colours lines, the press (`pointer`) and the stroke's number, which undoes it as one. */
+  /**
+   * The brush; while a drag colours lines, the press (`pointer`) and the entry of the yard's history
+   * it adds to (`id`, none until it has coloured a line), which Undo undoes as one.
+   */
   | {
       readonly is: "paint";
       readonly aim: Aim | null;
-      readonly stroke: { readonly pointer: number; readonly id: number } | null;
+      readonly stroke: { readonly pointer: number; readonly id: number | null } | null;
     }
   | { readonly is: "select"; readonly stage: Stage };
 
@@ -70,8 +73,8 @@ export type HandEvent =
   | { readonly do: "from"; readonly from: Tile | null }
   /** A run or a belt was laid, or failed to be: the belt stays in hand, aimed at nothing. */
   | { readonly do: "laid" }
-  /** A stroke of the brush begun by a press (`pointer`), with its number; or ended. */
-  | { readonly do: "stroke"; readonly pointer: number; readonly id: number }
+  /** A stroke of the brush begun by a press (`pointer`), or gone on, with the entry it adds to; or ended. */
+  | { readonly do: "stroke"; readonly pointer: number; readonly id: number | null }
   | { readonly do: "stroked" }
   /** Select: a first corner (a mouse's drag, `pointer`, or a finger's first tap), the area so far, and the area marked. */
   | { readonly do: "corner"; readonly corner: Tile; readonly pointer: number | null }

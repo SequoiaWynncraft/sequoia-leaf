@@ -180,8 +180,3 @@ export const STUDY_HOLDS = 20;
 export const BLUEPRINT = { w: 32, h: 24 } as const;
 /** The most pieces one `stand` command carries: Leaf reads a command of at most 16 KiB. */
 export const STAND_MOST = 160;
-/**
- * The most characters the pieces of one `stand` command come to on the wire: well inside the 12,000
- * a page puts in one request to Leaf (`play.ts` in the kit), with room for the rest of the command.
- */
-export const STAND_CHARS = 11_000;

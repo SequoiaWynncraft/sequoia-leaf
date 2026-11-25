@@ -64,6 +64,7 @@ import {
   usable,
 } from "./tools.ts";
 import { moveFrom, tileRef } from "./ui/card.ts";
+import { handPrint } from "./ui/dock.ts";
 import { printOf } from "./ui/prints.ts";
 import { again, differences, doNow, runYard } from "./yard.ts";
 
@@ -414,106 +415,70 @@ describe("a drag ends with what is in hand", () => {
   });
 });
 
-describe("undo, as Leaf did things", () => {
-  test("leaves alone a piece another page built, where Leaf turned this page's own piece down", async () => {
+describe("Undo, done by the rules", () => {
+  test("is one command naming the yard's newest entry, done alike on the page and on Leaf, and shows while there is one", async () => {
     const fake = await opened(yardAt(2), 100);
     const [a] = clear(1);
     if (!a) throw new Error("no room");
-    // Another page of the member's builds a mill on a tile this page still shows empty.
-    fake.elsewhere({ do: "build", kind: "mill", ...a, dir: 0 });
+    expect(handPrint().undo).toBe(false);
     setTool(BELT);
     expect(place(a.x, a.y)).toBe(true);
-    // Leaf turns the belt down, and the page takes Leaf's yard, mill and all.
-    await until(() => kindAt(a) === "mill");
-    undo();
-    await Bun.sleep(5);
-    expect([kindAt(a), kindOn(fake.leaf.yard, a)]).toEqual(["mill", "mill"]);
-    expect(sent(fake.leaf).filter((c) => c === "clear" || c === "remove")).toEqual([]);
-  });
-
-  test("pressed before Leaf has answered, waits for Leaf, and once Leaf has done it, undoes it", async () => {
-    const fake = await opened(yardAt(2), 100);
-    const [a] = clear(1);
-    if (!a) throw new Error("no room");
-    setTool(BELT);
-    expect(place(a.x, a.y)).toBe(true);
-    const said: string[] = [];
-    toolHooks.said = (text) => void said.push(text);
-    // Leaf has not answered: the belt stands until it has.
+    const id = S.world.history.at(-1)?.id;
+    expect(handPrint().undo).toBe(true);
     expect(undo()).toBe(true);
-    expect(kindAt(a)).toBe("belt");
+    expect([kindAt(a), S.world.history, handPrint().undo]).toEqual([undefined, [], false]);
     await until(() => fake.leaf.commands.length >= 2);
     await Bun.sleep(2);
-    expect([kindAt(a), kindOn(fake.leaf.yard, a), sent(fake.leaf), said]).toEqual([
-      undefined,
-      undefined,
-      ["build", "remove"],
-      [],
-    ]);
+    expect(fake.leaf.commands.slice(1)).toMatchObject([{ do: "undo", entry: id }]);
+    expect([kindOn(fake.leaf.yard, a), differences()]).toEqual([undefined, 0]);
   });
 
-  test("pressed twice before Leaf has answered, undoes the last two, the last first", async () => {
-    const fake = await opened(yardAt(2), 100);
-    const tiles = clear(40);
-    const [a, b] = [tiles[0], tiles.at(-1)];
-    if (!a || !b) throw new Error("no room");
-    setTool(BELT);
-    expect(place(a.x, a.y)).toBe(true);
-    expect(place(b.x, b.y)).toBe(true);
-    expect([undo(), undo()]).toEqual([true, true]);
-    await until(() => fake.leaf.commands.length >= 4);
-    await Bun.sleep(2);
-    expect([kindAt(a), kindAt(b), kindOn(fake.leaf.yard, a), kindOn(fake.leaf.yard, b)]).toEqual([
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-    ]);
-    expect(fake.leaf.commands.slice(2)).toMatchObject([
-      { do: "remove", ...b },
-      { do: "remove", ...a },
-    ]);
-    // Nothing is left to press for.
-    expect(undo()).toBe(false);
-  });
-
-  test("pressed for what Leaf then turns down, says nothing was done to undo, and undoes nothing older", async () => {
-    const fake = await opened(yardAt(2), 100);
-    const tiles = clear(40);
-    const [a, b] = [tiles[0], tiles.at(-1)];
-    if (!a || !b) throw new Error("no room");
-    setTool(BELT);
-    expect(place(a.x, a.y)).toBe(true);
-    await until(() => fake.leaf.posts >= 1);
-    await Bun.sleep(2);
-    // Another page of the member's builds a mill where this page still shows nothing, and this page builds a belt there.
-    fake.elsewhere({ do: "build", kind: "mill", ...b, dir: 0 });
-    expect(place(b.x, b.y)).toBe(true);
-    const said: string[] = [];
-    toolHooks.said = (text) => void said.push(text);
-    expect(undo()).toBe(true);
-    await until(() => kindAt(b) === "mill");
-    await Bun.sleep(5);
-    expect(said).toContain("Nothing to undo: the guild's server did not do it.");
-    expect([kindAt(a), kindOn(fake.leaf.yard, a), sent(fake.leaf)]).toEqual(["belt", "belt", ["build", "build"]]);
-  });
-
-  test("lets go of what no longer stands as it was done, when Leaf's yard is taken", async () => {
+  test("is kept with the yard: Leaf's yard taken again, as after a reload or on another device, still undoes the same", async () => {
     const fake = await opened(yardAt(2), 100);
     const [a] = clear(1);
     if (!a) throw new Error("no room");
     setTool(BELT);
     expect(place(a.x, a.y)).toBe(true);
     await until(() => fake.leaf.posts >= 1);
-    await Bun.sleep(2);
-    // Another page takes that belt away and puts a mill there; this page takes Leaf's yard.
-    fake.elsewhere({ do: "remove", ...a });
-    fake.elsewhere({ do: "build", kind: "mill", ...a, dir: 0 });
     await again();
-    expect(kindAt(a)).toBe("mill");
-    expect(undo()).toBe(false);
+    expect([kindAt(a), handPrint().undo]).toEqual(["belt", true]);
+    expect(undo()).toBe(true);
+    await until(() => fake.leaf.posts >= 2);
+    expect([kindAt(a), kindOn(fake.leaf.yard, a)]).toEqual([undefined, undefined]);
+  });
+
+  test("another page's Undo of the same thing comes first: this page's is refused by Leaf, and nothing is undone twice", async () => {
+    const fake = await opened(yardAt(2), 100);
+    const tiles = clear(40);
+    const [a, b] = [tiles[0], tiles.at(-1)];
+    if (!a || !b) throw new Error("no room");
+    setTool(BELT);
+    expect(place(a.x, a.y)).toBe(true);
+    expect(place(b.x, b.y)).toBe(true);
+    await until(() => fake.leaf.posts >= 1);
+    await Bun.sleep(2);
+    // Another page of the member's undoes the belt on b; this page still shows it, and undoes it too.
+    fake.elsewhere({ do: "undo", entry: S.world.history.at(-1)?.id });
+    expect(undo()).toBe(true);
+    // Leaf's newest entry is the belt on a: an Undo naming b's is refused, and the page takes Leaf's yard.
+    await until(() => fake.leaf.posts >= 2);
     await Bun.sleep(5);
-    expect([kindAt(a), sent(fake.leaf)]).toEqual(["mill", ["build"]]);
+    expect([kindAt(a), kindAt(b), kindOn(fake.leaf.yard, a), kindOn(fake.leaf.yard, b)]).toEqual([
+      "belt",
+      undefined,
+      "belt",
+      undefined,
+    ]);
+  });
+
+  test("with nothing to undo says so, and sends nothing", async () => {
+    const fake = await opened(yardAt(2), 100);
+    const said: string[] = [];
+    toolHooks.said = (text) => void said.push(text);
+    expect(undo()).toBe(false);
+    expect(said).toEqual(["Nothing to undo."]);
+    await Bun.sleep(5);
+    expect(fake.leaf.commands).toEqual([]);
   });
 });
 

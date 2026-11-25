@@ -1,7 +1,7 @@
 /**
  * Keeping a yard, and reading it back. The yard is written as a small JSON record of its numbers,
- * goals and orders, with its pieces packed into bytes (`cells`, base64) and each of its
- * blueprints the same (`packPrint`). Reading is by shape first: a record of the wrong shape or
+ * goals and orders, with its pieces packed into bytes (`cells`, base64, as `cells.ts` packs them) and
+ * each of its blueprints the same (`packPrint`), and what Undo would put back (`history.ts`). Reading is by shape first: a record of the wrong shape or
  * version is refused whole, and nothing else is. Inside a good one, every piece is built again through
  * the rules (`vouch`), and anything that depends on today's tuning (how much a piece holds, how far a
  * tunnel goes, which goals, plots and grades open when) is clamped or carried, never a reason to
@@ -12,35 +12,20 @@
  * price for the grade it was kept at; one of the pieces to hand goes back to hand. What a machine is
  * told to make, and the way a splitter puts first, are kept only where the yard may set them.
  *
- * The pieces' bytes are how many pieces there are (varint), then each piece in tile order: the tiles
- * since the last piece less one (varint); a byte of its kind (low four bits), its way (two bits),
- * whether it carries something (64) and whether more parts follow (128); if it carries, the thing
- * (byte) and its progress in eighths with the side it came in from (a byte, four bits each); if more
- * follow, which (varint, a bit each), then those:
- *   2 what it holds: how many kinds (varint), then a thing (byte) and how many (varint) each
- *   4 out (byte)   8 work (varint)   16 making (byte)   32 turn (byte)   64 what it is set to (byte)
- *   128 span (byte, +8), and for a way-in mouth a thing (byte) and its progress (byte) for each tile under
- *   256 a shut crate   512 fuel (byte)   1024 one of the pieces to hand   2048 tint (byte)
- *   4096 a splitter's ways (byte: its shut ways, the way it puts first and its ways in, `packWays`), or a
- *        sorter's right side (the same byte, as the way it puts first)   8192 a grade above 1 (byte)
- *
- * Bytes that are not pieces are refused whole: bytes cut short or left over, a part this version
- * does not know, more pieces than the land has tiles, and counts no yard could have (more than 255
- * kinds of thing held, more than a million of one). What today's tables allow is no part of the
- * shape: a thing they do not have is let go, more of one than a piece holds is clamped as it is put
- * back, and a tunnel longer than tunnels go is a piece that cannot stand. *
  * A yard kept by the Works' first design (version 3, its pieces a list) is brought over as far as is
  * cheap (`fromFirst`): it is a new yard at the tier its story had reached. One kept by version 6
  * reads as this version's, but for the grades it did not keep (`UNGRADED`).
  */
 import { build, isDir, keeps, plotState, refusal } from "./build.ts";
 import { fromBase64, Reader, toBase64, Writer } from "./bytes.ts";
+import { type KeptPiece, packCells, unpackCells } from "./cells.ts";
 import { here } from "./clock.ts";
 import { FUEL, STUDY_HOLDS, TICKS } from "./content/machines.ts";
 import { NODES } from "./content/nodes.ts";
+import { historyOf } from "./history.ts";
 import { LAND, type Land } from "./land.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
-import { keptOf, packPieces, packWays, type Piece, piecesOf, placed, unpackWays, waysOn, waysTo } from "./pieces.ts";
+import { keptOf, packPieces, packWays, type Piece, piecesOf, placed, unpackWays, waysTo } from "./pieces.ts";
 import {
   ALL_GOALS,
   ALL_ITEMS,
@@ -121,38 +106,8 @@ const REGRADED: ReadonlySet<number> = new Set([SPLITTER, JOINER, SORTER]);
 const regraded = (k: number, grade: number | undefined, ungraded: boolean, top: () => number): number =>
   grade ?? (ungraded && REGRADED.has(k) ? top() : 1);
 
-/** The parts a piece's bytes may say follow, a bit each. */
-const PARTS = 0x3ffe;
-/** The most kinds of thing, and of one thing, a piece's bytes may say it holds: past these the bytes are no yard's. */
-const KINDS_MOST = 255;
-const MANY_MOST = 1_000_000;
 /** A goal's id, as kept. */
 const goalId = (g: Goal): string => GOALS[g]?.id ?? "";
-
-/** A piece as kept, in the yard's own units, before it is vouched for. */
-export interface KeptPiece {
-  readonly tile: number;
-  readonly kind: number;
-  readonly dir: number;
-  readonly item?: number;
-  readonly prog?: number;
-  readonly via?: number;
-  readonly held?: readonly (readonly [number, number])[];
-  readonly out?: number;
-  readonly work?: number;
-  readonly making?: number;
-  readonly turn?: number;
-  readonly recipe?: number;
-  readonly span?: number;
-  readonly under?: readonly number[];
-  readonly along?: readonly number[];
-  readonly closed?: boolean;
-  readonly fuel?: number;
-  readonly free?: boolean;
-  readonly tint?: number;
-  readonly ways?: number;
-  readonly grade?: number;
-}
 
 type Rec = Record<string, unknown>;
 const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -181,73 +136,6 @@ export function untally(v: unknown, most: number): Counts {
 }
 
 // ---------- writing ----------
-
-/** The yard's pieces as bytes. */
-function packCells(y: Yard): Uint8Array {
-  const o = new Writer();
-  const h = y.holders;
-  const t = y.tunnels;
-  let pieces = 0;
-  for (const k of y.kind) if (k !== NONE && k !== DEPOT) pieces++;
-  o.varint(pieces);
-  let last = -1;
-  for (let i = 0; i < y.kind.length; i++) {
-    const k = y.kind[i] ?? NONE;
-    if (k === NONE || k === DEPOT) continue;
-    o.varint(i - last - 1);
-    last = i;
-    const r = holderOf(y, i);
-    const holder = r >= 0;
-    const span = y.span[i] ?? 0;
-    let f = 0;
-    if (holder && (h.count[r] ?? 0) > 0) f |= 2;
-    if (holder && h.out[r] !== NONE) f |= 4;
-    if (holder && h.work[r] !== 0) f |= 8;
-    if (holder && h.making[r] !== NONE) f |= 16;
-    if (y.turn[i] !== 0) f |= 32;
-    if (y.set[i] !== NONE) f |= 64;
-    if (span !== 0) f |= 128;
-    if (k === CRATE && holder && h.open[r] === 0) f |= 256;
-    if (holder && h.fuel[r] !== 0) f |= 512;
-    if (y.free[i] === 1) f |= 1024;
-    if (y.tint[i] !== 0) f |= 2048;
-    if (waysOn(y, i) !== 0) f |= 4096;
-    if ((y.grade[i] ?? 0) > 1) f |= 8192;
-    const carrying = y.item[i] !== NONE;
-    o.byte(k | ((y.dir[i] ?? 0) << 4) | (carrying ? 64 : 0) | (f === 0 ? 0 : 128));
-    if (carrying) {
-      o.byte(y.item[i] ?? NONE);
-      o.byte((y.prog[i] ?? 0) | ((y.via[i] ?? 0) << 4));
-    }
-    if (f !== 0) o.varint(f);
-    if (f & 2) {
-      const kinds = ALL_ITEMS.filter((n) => held(h, r, n) > 0);
-      o.varint(kinds.length);
-      for (const n of kinds) {
-        o.byte(n);
-        o.varint(held(h, r, n));
-      }
-    }
-    if (f & 4) o.byte(h.out[r] ?? NONE);
-    if (f & 8) o.varint(h.work[r] ?? 0);
-    if (f & 16) o.byte(h.making[r] ?? NONE);
-    if (f & 32) o.byte(y.turn[i] ?? 0);
-    if (f & 64) o.byte(y.set[i] ?? NONE);
-    if (f & 128) {
-      o.byte(span + 8);
-      const tr = tunnelOf(y, i) * SPAN_MOST;
-      for (let s = 0; s < span; s++) {
-        o.byte(t.under[tr + s] ?? NONE);
-        o.byte(t.along[tr + s] ?? 0);
-      }
-    }
-    if (f & 512) o.byte(h.fuel[r] ?? 0);
-    if (f & 2048) o.byte(y.tint[i] ?? 0);
-    if (f & 4096) o.byte(waysOn(y, i));
-    if (f & 8192) o.byte(y.grade[i] ?? 1);
-  }
-  return o.bytes();
-}
 
 /**
  * A blueprint as kept: each piece in its order, as its kind, x and y (a byte each), then its way
@@ -365,70 +253,15 @@ export function encode(y: Yard, keep: Keep = {}): string {
     ...(y.blueprints.some((b) => b !== null)
       ? { blueprints: y.blueprints.map((b) => b && toBase64(packPrint(b))) }
       : {}),
+    ...(y.history.length > 0 ? { history: y.history.map((e) => toBase64(e.bytes)) } : {}),
   });
 }
 
 // ---------- reading ----------
 
-/** The pieces read back from their bytes, or null for bytes that are not pieces. */
-function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
-  const r = new Reader(bytes);
-  const out: KeptPiece[] = [];
-  const pieces = r.varint();
-  if (r.over || pieces > tiles) return null;
-  let tile = -1;
-  for (let n = 0; n < pieces; n++) {
-    tile += r.varint() + 1;
-    const kd = r.byte();
-    if (r.over || tile >= tiles) return null;
-    const p: { -readonly [K in keyof KeptPiece]: KeptPiece[K] } = { tile, kind: kd & 15, dir: (kd >> 4) & 3 };
-    if (kd & 64) {
-      p.item = r.byte();
-      const pv = r.byte();
-      p.prog = pv & 15;
-      p.via = pv >> 4;
-    }
-    const f = kd & 128 ? r.varint() : 0;
-    if (f > PARTS || (f & ~PARTS) !== 0) return null;
-    if (f & 2) {
-      const kinds = r.varint();
-      if (kinds > KINDS_MOST) return null;
-      const pairs: [number, number][] = [];
-      for (let k = 0; k < kinds; k++) {
-        const thing = r.byte();
-        const many = r.varint();
-        if (many > MANY_MOST) return null;
-        pairs.push([thing, many]);
-      }
-      p.held = pairs;
-    }
-    if (f & 4) p.out = r.byte();
-    if (f & 8) p.work = r.varint();
-    if (f & 16) p.making = r.byte();
-    if (f & 32) p.turn = r.byte();
-    if (f & 64) p.recipe = r.byte();
-    if (f & 128) {
-      p.span = r.byte() - 8;
-      const under: number[] = [];
-      const along: number[] = [];
-      for (let s = 0; s < p.span; s++) {
-        under.push(r.byte());
-        along.push(r.byte());
-      }
-      p.under = under;
-      p.along = along;
-    }
-    if (f & 256) p.closed = true;
-    if (f & 512) p.fuel = r.byte();
-    if (f & 1024) p.free = true;
-    if (f & 2048) p.tint = r.byte();
-    if (f & 4096) p.ways = r.byte();
-    if (f & 8192) p.grade = r.byte();
-    if (r.over) return null;
-    out.push(p);
-  }
-  return r.done ? out : null;
-}
+/** What a kept piece was paid for at the grade it was kept at, in thousandths of a Coin, at today's prices: one to hand was paid nothing. */
+const paidFor = (o: KeptPiece): number =>
+  o.free === true || !isKind(o.kind) ? 0 : price(o.kind, Math.max(1, o.grade ?? 1)) * MILLI;
 
 /**
  * Stands each kept piece again through the rules, as play would build it, and gives it the parts it
@@ -446,8 +279,6 @@ function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined,
   let owed = 0;
   const { land } = y;
   const tiles = land.w * land.h;
-  const paidFor = (o: KeptPiece): number =>
-    o.free === true || !isKind(o.kind) ? 0 : price(o.kind, Math.max(1, o.grade ?? 1)) * MILLI;
   for (const o of pieces) {
     const i = whole(o.tile, tiles - 1);
     const k = o.kind;
@@ -868,6 +699,10 @@ export function vouch(
   const last = whole(seen.tick, tick);
   const had = whole(seen.till, 1e12);
   y.seen = last === null || had === null ? here(y) : { tick: last, till: had, depot: untally(seen.depot, 1e12) };
+  // What Undo would undo, every entry as it was kept, or none; a yard kept before it had them has none.
+  const history: unknown[] = Array.isArray(raw.history) ? raw.history : [];
+  const entries = history.map((b) => (typeof b === "string" ? fromBase64(b) : null)).filter((b) => b !== null);
+  y.history = entries.length === history.length ? historyOf(entries, land.w * land.h) : [];
   y.news = [];
   return y;
 }

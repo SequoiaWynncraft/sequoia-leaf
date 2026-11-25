@@ -55,6 +55,7 @@ describe("what the page writes for an act", () => {
     { do: "turn", dir: 3, x: 47, y: 0 },
     { do: "paint", tint: 6, x: 2, y: 2 },
     { do: "paint", tint: 0, x: 2, y: 2 },
+    { do: "paint", tint: 3, x: 2, y: 2, onto: 4_000_000_000 },
     { do: "recipe", item: F.item("gear"), x: 4, y: 5 },
     { do: "recipe", item: null, x: 4, y: 5 },
     { do: "sort", item: F.item("pot"), x: 4, y: 5 },
@@ -77,6 +78,8 @@ describe("what the page writes for an act", () => {
     { do: "swap", order: 12 },
     { do: "handOver", order: 3 },
     { do: "collect" },
+    { do: "undo", entry: 0 },
+    { do: "undo", entry: 4_294_967_295 },
   ];
 
   test("reads back off the wire as the same act, for every kind of act", () => {

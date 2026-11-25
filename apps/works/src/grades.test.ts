@@ -19,6 +19,7 @@ import {
   item,
   JOINER,
   MILL,
+  piecesAt,
   priceAt,
   refusal,
   reopen,
@@ -272,6 +273,9 @@ describe("a piece set down over one of its kind", () => {
   });
 });
 
+/** Every piece in the page's copy of the yard, as it stands. */
+const stood = (): unknown => piecesAt(S.world, within(S.world, 0, 0, S.world.land.w, S.world.land.h));
+
 describe("a run of belt", () => {
   test("dragged along belts of a lower grade raises them and lays the clear tiles at the grade in hand, in one command; one undo takes it back", async () => {
     const y = yardAt(3);
@@ -293,9 +297,9 @@ describe("a run of belt", () => {
     expect(sent(fake)).toEqual(["lay"]);
     expect(undo()).toBe(true);
     expect(grades([18, 19, 20, 21, 22, 23], 21)).toEqual([1, 1, 1, 0, 0, 0]);
-    // The new belts cleared, and those raised stood again as they were.
-    await inStep(fake, 3);
-    expect(sent(fake)).toEqual(["lay", "clear", "stand"]);
+    // The new belts taken away, and those raised set back as they were: one command, the rules'.
+    await inStep(fake, 2);
+    expect(sent(fake)).toEqual(["lay", "undo"]);
   });
 
   test("at the first grade along belts of the second lays nothing over them: they are stepped over as they stand", async () => {
@@ -347,7 +351,7 @@ describe("many pieces at once", () => {
     expect(grades([18, 19], 16)).toEqual([1, 1]);
     expect(grades([18, 19], 13)).toEqual([2, 2]);
     await inStep(fake, 2);
-    expect(sent(fake)).toEqual(["copy", "stand"]);
+    expect(sent(fake)).toEqual(["copy", "undo"]);
   });
 
   test("a copy stood over sorters that differ only in their side is sent, as the rules would flip them, and undone to the sides they had", async () => {
@@ -396,7 +400,7 @@ describe("many pieces at once", () => {
     expect(undo()).toBe(true);
     expect(grades([18, 19, 20, 21, 22], 13)).toEqual([1, 1, 1, 1, 0]);
     await inStep(fake, 2);
-    expect(sent(fake)).toEqual(["upgrade", "stand"]);
+    expect(sent(fake)).toEqual(["upgrade", "undo"]);
   });
 
   test("in a yard that may not raise an area yet, the rules refuse it and say why", async () => {
@@ -445,10 +449,10 @@ describe("many pieces at once", () => {
     expect(undo()).toBe(true);
     expect([...grades([18, 19, 20, 21, 22], 13), ...grades([18], 16)]).toEqual([1, 1, 1, 1, 0, 1]);
     await inStep(fake, 2);
-    expect(sent(fake)).toEqual(["upgrade", "stand"]);
+    expect(sent(fake)).toEqual(["upgrade", "undo"]);
   });
 
-  test("160 painted grade II sorters taken away are stood again by Undo in more than one stand, each fitting one request to Leaf", async () => {
+  test("160 painted grade II sorters taken away are stood again by one Undo, as they stood, in one small command", async () => {
     const y = yardAt(4);
     let n = 0;
     for (let z = 0; z < y.land.h; z++)
@@ -460,14 +464,16 @@ describe("many pieces at once", () => {
         n++;
       }
     const fake = await opened(y, 1_000_000);
+    const was = stood();
     mark(0, 0, S.world.land.w - 1, S.world.land.h - 1);
     expect(S.mark?.pieces.length).toBe(STAND_MOST);
     expect(clearMark()).toBe(true);
     expect(undo()).toBe(true);
-    await until(() => fake.leaf.commands.length >= 3);
-    expect(sent(fake)).toEqual(["clear", "stand", "stand"]);
-    for (const c of fake.leaf.commands.slice(1)) expect(JSON.stringify(c).length + 40).toBeLessThanOrEqual(12_000);
-    await inStep(fake, 3);
+    expect(stood()).toEqual(was);
+    await until(() => fake.leaf.commands.length >= 2);
+    expect(sent(fake)).toEqual(["clear", "undo"]);
+    expect(JSON.stringify(fake.leaf.commands[1]).length).toBeLessThan(80);
+    await inStep(fake, 2);
   });
 
   test("Upgrade all is weighed against the Coins when pressed: short, it says by how much at once; Coins come in since it was drawn, it still asks to be pressed again", async () => {

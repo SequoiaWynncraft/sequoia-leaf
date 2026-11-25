@@ -1417,6 +1417,75 @@ describe("the Works", () => {
   });
 });
 
+/** What Alice's play may still pay in now. */
+const roomNow = () => services.run(Coins.use((coins) => coins.room(alice, clock.now)));
+/** Alice's yard as her page is shown it now. */
+const yardShown = async (): Promise<Yard> =>
+  yardOf(Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json()).state).yard;
+
+describe("an Undo in the Works", () => {
+  let ids = 0;
+  /** The Works' commands from Alice's page, each with an id of its own, at Leaf's tick now, and what each came to. */
+  async function works(commands: readonly Record<string, unknown>[]) {
+    const opening = await send("GET", "/v1/game/play/works");
+    const { clock: tick, yard } = yardOf(Schema.decodeUnknownSync(Shown)(await opening.json()).state);
+    const sent = commands.map((c) => ({ id: `u-${++ids}`, tick, ...c }));
+    const answered = await send("POST", "/v1/game/play/works", { commands: sent });
+    return { yard, results: Schema.decodeUnknownSync(Answered)(await answered.json()).results };
+  }
+  /** The mill to hand by the depot, then a mill paid for, taken away: what it gave back is the newest Coins entry. */
+  const millTaken = [
+    { do: "build", kind: "mill", x: 21, y: 15, dir: 0 },
+    { do: "build", kind: "mill", x: 24, y: 12, dir: 0 },
+    { do: "remove", x: 24, y: 12 },
+  ];
+
+  it("puts back what was taken away and takes back what it gave; undone again, gives back what it cost: the Coins net to nothing, none of it earned", async () => {
+    const roomBefore = await roomNow();
+    expect((await works(millTaken)).results.map((r) => "refused" in r)).toEqual([false, false, false]);
+    const [, paid, gave] = await entries(alice);
+    expect([paid?.amount, gave?.amount]).toEqual([-Number(gave?.amount), Number(gave?.amount)]);
+    // The mill taken away put back, then the mill paid for taken away: each Undo the newest entry.
+    const undone = async () => (await works([{ do: "undo", entry: (await yardShown()).history.at(-1)?.id }])).results;
+    expect(await undone()).toEqual([{ id: `u-${ids}`, notes: [] }]);
+    expect(await undone()).toEqual([{ id: `u-${ids}`, notes: [] }]);
+    // Left to undo: the mill to hand, which cost nothing.
+    expect((await yardShown()).history.length).toBe(1);
+    const back = (await entries(alice)).slice(3);
+    expect(back.map((e) => [e.amount, e.reason])).toEqual([
+      [-Number(gave?.amount), "Undone in the Works"],
+      [Number(gave?.amount), "Undone in the Works"],
+    ]);
+    // What was given back by Undo is free: it is not counted as earned, and leaves the room as it was.
+    expect(
+      await services.query(
+        (sql) => sql`SELECT amount, earned FROM coin_entries WHERE reason = 'Undone in the Works' ORDER BY id`,
+      ),
+    ).toEqual([
+      { amount: -Number(gave?.amount), earned: 1 },
+      { amount: Number(gave?.amount), earned: 0 },
+    ]);
+    expect([await coinsOf(alice), await roomNow()]).toEqual([300, roomBefore]);
+  });
+
+  it("is refused whole when another game has spent the Coins it would take back since: the yard and the ledger as they were", async () => {
+    await works(millTaken);
+    const gave = Number((await entries(alice)).at(-1)?.amount);
+    const entry = (await yardShown()).history.at(-1)?.id;
+    // Another page of Alice's spends, in another game, all but one Coin less than the Undo takes back.
+    const spend = (await coinsOf(alice)) - gave + 1;
+    await services.run(
+      Play.use((play) => play.send({ playerId: alice, guest: false }, played(SHOP), [{ id: "l-1", price: spend }])),
+    );
+    expect(await coinsOf(alice)).toBe(gave - 1);
+    const before = [await stored(alice, "works"), await entries(alice)];
+    const { results } = await works([{ do: "undo", entry }]);
+    expect(results).toEqual([{ id: `u-${ids}`, refused: "not_enough_coins" }]);
+    expect([await stored(alice, "works"), await entries(alice)]).toEqual(before);
+    expect((await yardShown()).history.at(-1)?.id).toBe(entry);
+  });
+});
+
 describe("a batch's answer", () => {
   it("for the Works holds no yard: Leaf's clock, and the yard's tick, check and orders hung that do not count yet, as the page works them out", async () => {
     const opening = Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json());

@@ -327,6 +327,9 @@ function sumOf(bytes: Uint8Array): number {
   return h >>> 0;
 }
 
+/** Whether Undo shows: while the yard has something to undo, kept with it, so after a reload and on another device too; not while saving. */
+const undoes = (stage: Stage | null): boolean => stage?.is !== "saving" && S.world.history.length > 0;
+
 export function handPrint(): HandPrint {
   const h = S.hand;
   const tool = S.tool;
@@ -378,7 +381,7 @@ export function handPrint(): HandPrint {
     upgrade: upgradeOf(stage),
     turn: builds(tool) || g !== null,
     flip: tool === SORTER,
-    undo: stage?.is !== "saving",
+    undo: undoes(stage),
     bin: typeof g?.as === "number" ? { slot: g.as, asking: asking(`delete-${g.as}`) } : null,
     cancel: tool !== null,
     go: aiming
