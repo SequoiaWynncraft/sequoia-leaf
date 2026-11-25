@@ -367,6 +367,8 @@ export interface Backend {
   awards: (from: number, to: number) => unknown;
   /** The answer to anything under `/api`, the routes asked with a member's own session. */
   api: (request: Request) => Response | Promise<Response>;
+  /** The answer to redeeming a Discord-only sign-in's one-time code, by the code. */
+  proofs: Record<string, () => Response>;
   /** The path of every request it was sent, in order. */
   readonly calls: string[];
 }
@@ -378,6 +380,7 @@ export function fakeBackend(sessions: Record<string, () => Response> = {}): { ba
     credits: () => ({ raids: [], wars: [] }),
     awards: () => ({ awards: [] }),
     api: () => new Response("not found", { status: 404 }),
+    proofs: {},
     calls: [],
   };
   const fetcher: Fetcher = (url, init) => {
@@ -400,6 +403,13 @@ export function fakeBackend(sessions: Record<string, () => Response> = {}): { ba
     }
     if (path.startsWith("/api/")) {
       return Promise.resolve(backend.api(request));
+    }
+    const proof = /^\/internal\/leaf\/discord-proofs\/(.+)$/.exec(path)?.[1];
+    if (proof !== undefined && request.headers.get("Authorization") === "Bearer internal-token") {
+      const answer = backend.proofs[decodeURIComponent(proof)];
+      // Each code is redeemed once.
+      delete backend.proofs[decodeURIComponent(proof)];
+      return Promise.resolve(answer?.() ?? Response.json({ error: "unknown or expired code" }, { status: 404 }));
     }
     return Promise.resolve(new Response("not found", { status: 404 }));
   };

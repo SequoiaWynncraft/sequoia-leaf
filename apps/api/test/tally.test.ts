@@ -484,6 +484,8 @@ describe("the counters' first counts", () => {
         await before.query((sql) => sql`DROP TRIGGER ${sql(trigger)}`);
       }
       await before.query((sql) => sql`DROP TABLE last_visits`);
+      await before.query((sql) => sql`DROP TABLE sign_ins`);
+      await before.query((sql) => sql`DROP TABLE merges`);
       await before.query((sql) => sql`DROP TABLE logins`);
       await before.query((sql) => sql`DROP TABLE leaf_ids`);
       await before.query((sql) => sql`DROP TABLE play_postcards`);

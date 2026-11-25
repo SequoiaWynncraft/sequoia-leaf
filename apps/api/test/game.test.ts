@@ -434,6 +434,8 @@ describe("GET /v1/game/me", () => {
       event_cursor: 1,
       coins: 300,
       version: 1,
+      signed_in_with: "sequoia",
+      ask_link: false,
     });
   });
 
@@ -500,6 +502,8 @@ describe("GET /v1/game/me", () => {
       event_cursor: 0,
       coins: 300,
       version: 1,
+      signed_in_with: "sequoia",
+      ask_link: false,
     });
     expect(await member.json()).toMatchObject({ guest: false });
     // Only the member's answer read the news and their XP; and only the member's name is kept for the guild's news.

@@ -1,4 +1,4 @@
-import { ByteSize, Effect, Layer, Option, Redacted } from "effect";
+import { ByteSize, Clock, Effect, Layer, Option, Redacted } from "effect";
 import { HttpServerError, HttpServerRequest } from "effect/http";
 import { HttpApiBuilder, HttpApiError, HttpApiSecurity } from "effect/http-api";
 
@@ -27,8 +27,10 @@ import {
   Unauthorized,
 } from "../../api/errors.ts";
 import { Identities } from "../../auth/session.ts";
+import { LEAF_SESSION_COOKIE, SignIns } from "../../auth/sign-ins.ts";
 import { AppConfig } from "../../config.ts";
 import { RequestNote } from "../observe.ts";
+import { cookieOf } from "../sign-in.ts";
 
 /** The largest body Leaf reads. */
 const MAX_BODY = ByteSize.kibibytes(16);
@@ -59,6 +61,7 @@ export function sessionCookies(header: string | undefined): number {
  */
 export const sessionChecks = Effect.gen(function* () {
   const identities = yield* Identities;
+  const signIns = yield* SignIns;
   const { publicOrigin } = yield* AppConfig;
   const bearerToken = HttpApiBuilder.securityDecode(HttpApiSecurity.bearer);
   const cookieToken = HttpApiBuilder.securityDecode(SessionCookie);
@@ -93,6 +96,33 @@ export const sessionChecks = Effect.gen(function* () {
     return result.identity;
   });
 
+  /** A Leaf session's cookie, for a player who signed in with Discord alone; "" when there is none. */
+  const leafCookie = Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    return cookieOf(request.headers["cookie"], LEAF_SESSION_COOKIE);
+  });
+
+  /** Who a Leaf session belongs to, while it lasts. */
+  const admitLeaf = Effect.fnUntraced(function* (token: string) {
+    const signedIn = yield* signIns.identify(token, yield* Clock.currentTimeMillis);
+    if (Option.isNone(signedIn)) {
+      return yield* new Unauthorized({ code: "unauthorized", message: "Your session has expired. Sign in again" });
+    }
+    const { playerId, discord, name, member } = signedIn.value;
+    const identity: Identity = {
+      playerId,
+      minecraft: null,
+      discord,
+      username: name,
+      guildRank: null,
+      admin: false,
+      session: Redacted.make(token),
+      via: "discord",
+      askLink: member === true,
+    };
+    return identity;
+  });
+
   return {
     /** The Bearer's turn: only a request that also came with the cookie. */
     bearer: Effect.fnUntraced(function* (credential: Redacted.Redacted) {
@@ -110,20 +140,23 @@ export const sessionChecks = Effect.gen(function* () {
     upgrade: Effect.gen(function* () {
       yield* oneSessionCookie;
       const cookie = Redacted.value(yield* cookieToken);
-      if (cookie === "") {
+      const leaf = cookie === "" ? yield* leafCookie : "";
+      if (cookie === "" && leaf === "") {
         return yield* admit(Redacted.value(yield* bearerToken));
       }
       const request = yield* HttpServerRequest.HttpServerRequest;
       if (request.headers["origin"] !== publicOrigin) {
         return yield* new BadOrigin({ code: "bad_origin", message: "Leaf takes this only from its own pages" });
       }
-      return yield* admit(cookie);
+      return cookie === "" ? yield* admitLeaf(leaf) : yield* admit(cookie);
     }),
     /** The cookie's turn: the cookie, or the Bearer when there is no cookie. */
     cookie: Effect.fnUntraced(function* (credential: Redacted.Redacted) {
       yield* oneSessionCookie;
       const cookie = Redacted.value(credential);
-      if (cookie === "") {
+      // The website's session wins over Leaf's own: it is the member's, with their account and rank.
+      const leaf = cookie === "" ? yield* leafCookie : "";
+      if (cookie === "" && leaf === "") {
         return yield* admit(Redacted.value(yield* bearerToken));
       }
       // Another site's page can make a browser send the cookie, but not with Leaf's own origin.
@@ -131,7 +164,7 @@ export const sessionChecks = Effect.gen(function* () {
       if (!SAFE_METHODS.has(request.method) && request.headers["origin"] !== publicOrigin) {
         return yield* new BadOrigin({ code: "bad_origin", message: "Leaf takes this only from its own pages" });
       }
-      return yield* admit(cookie);
+      return cookie === "" ? yield* admitLeaf(leaf) : yield* admit(cookie);
     }),
   };
 });

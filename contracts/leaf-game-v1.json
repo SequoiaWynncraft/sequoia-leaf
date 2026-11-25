@@ -32,7 +32,9 @@
       },
       "event_cursor": 14,
       "coins": 300,
-      "version": 15
+      "version": 15,
+      "signed_in_with": "sequoia",
+      "ask_link": false
     }
   },
   "GET /v1/game/me, signed out": {
@@ -68,7 +70,9 @@
       },
       "event_cursor": 0,
       "coins": 300,
-      "version": 0
+      "version": 0,
+      "signed_in_with": "sequoia",
+      "ask_link": false
     }
   },
   "GET /v1/game/guild/events": {
@@ -1434,7 +1438,9 @@
       },
       "event_cursor": 14,
       "coins": 300,
-      "version": 17
+      "version": 17,
+      "signed_in_with": "sequoia",
+      "ask_link": false
     }
   },
   "GET /v1/game/play/{game}, the town": {

@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { leaf, playerId, RAIDS } from "@sequoia-leaf/core";
 import { Effect, Fiber, Layer, Logger, References } from "effect";
+import { SecureRandom } from "effect/crypto";
 import { FetchHttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
 
 import { Identities } from "../src/auth/session.ts";
 import { AppConfig } from "../src/config.ts";
+import { databaseAt } from "../src/db.ts";
 import { runCreditSync } from "../src/earning/run.ts";
 import { Logins } from "../src/players/logins.ts";
 import { type LogLine, MINUTE, testConfig, testLeaf, unanswered } from "./support.ts";
@@ -165,18 +167,10 @@ describe("signing in", () => {
   it("gives the backend three seconds to say, then says so and logs it as a timeout", async () => {
     const lines: unknown[] = [];
     const identities = Identities.layer.pipe(
-      // The backend never answers, so no player is looked up.
-      Layer.provide(
-        Layer.succeed(Logins)(
-          Logins.of({
-            player: () => Effect.die("not asked"),
-            players: () => Effect.die("not asked"),
-            minecraftOf: () => Effect.die("not asked"),
-            discordPlayer: () => Effect.die("not asked"),
-            linkDiscord: () => Effect.die("not asked"),
-          }),
-        ),
-      ),
+      // The backend never answers, so no player is looked up: the database is there only to be needed.
+      Layer.provide(Logins.layer),
+      Layer.provideMerge(databaseAt(":memory:")),
+      Layer.provide(SecureRandom.layerWebCrypto),
       Layer.provide(Layer.succeed(AppConfig)(testConfig())),
       Layer.provide(FetchHttpClient.layer),
       Layer.provide(
@@ -201,7 +195,9 @@ describe("signing in", () => {
     );
 
     expect(outcome).toEqual({ before: undefined, after: { status: "unavailable" } });
-    expect(lines).toEqual([{ route: "/auth/web/me", reason: "timeout" }]);
+    // Only what Leaf says of the backend: the database's migrations log their own lines.
+    const told: unknown[] = lines.filter((line) => typeof line === "object" && line !== null && "route" in line);
+    expect(told).toEqual([{ route: "/auth/web/me", reason: "timeout" }]);
   });
 
   it("asks the backend once for several requests in the same minute", async () => {

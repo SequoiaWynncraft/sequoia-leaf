@@ -120,7 +120,7 @@
     "apps/api/migrations/0010_schema.ts": 171,
     "apps/api/src/activity/report.ts": 102,
     "apps/api/src/http/routes/me.ts": 223,
-    "apps/api/src/http/routes/people.ts": 309,
+    "apps/api/src/http/routes/people.ts": 243,
     "apps/api/src/http/routes/play.ts": 229,
     "apps/api/src/live/live.ts": 310,
     "apps/api/src/play/coins.ts": 95,

@@ -1050,7 +1050,7 @@ function standInSocket(written: unknown[]): Socket.Socket {
 
 /** A player who signed in with the Minecraft account of their own id, and no Discord account Leaf heard of. */
 function signedInAs(id: typeof alice) {
-  return { playerId: id, minecraft: minecraftId(id), discord: null };
+  return { playerId: id, minecraft: minecraftId(id), discord: null, via: "sequoia" as const, askLink: false };
 }
 
 const alicesIdentity = {
