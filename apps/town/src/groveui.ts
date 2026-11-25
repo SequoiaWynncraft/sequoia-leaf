@@ -7,20 +7,24 @@
  * `grovescene.ts`, which asks Leaf.
  */
 
+import { type Choice, type Choices, choices } from "@sequoia-leaf/kit/choices.ts";
 import {
   amount,
   asking,
   asksAgain,
   el,
   icon as glyph,
+  keepingFocus,
   pressedTwice,
   replay,
-  unask,
+  type Spend,
   when,
 } from "@sequoia-leaf/kit/dom.ts";
+import { longPress } from "@sequoia-leaf/kit/press.ts";
 import { balance, leafOpen, leafShut } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { whole } from "@sequoia-leaf/kit/say.ts";
+import { type Scope, scope } from "@sequoia-leaf/kit/scope.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tipAt } from "@sequoia-leaf/kit/tip.ts";
 import { headliner, PRIZES, type PullsView, RARITIES, type Rarity, RATES } from "@sequoia-leaf/pulls";
@@ -41,7 +45,7 @@ import {
   percent,
   pityLine,
   prizeName,
-  pullKey,
+  pullSpend,
   RARITY_NAMES,
   rules,
   type Showing,
@@ -71,10 +75,10 @@ export interface GroveHost {
 }
 
 type Tab = "prizes" | "seeds" | "history";
-const TABS: readonly (readonly [Tab, string])[] = [
-  ["prizes", "Prizes"],
-  ["seeds", "Seeds"],
-  ["history", "History"],
+const TABS: readonly Choice<Tab>[] = [
+  { id: "prizes", name: "Prizes" },
+  { id: "seeds", name: "Seeds" },
+  { id: "history", name: "History" },
 ];
 
 /** A rarity's name on its colour. */
@@ -91,12 +95,50 @@ function refused(b: HTMLElement, why: string): void {
   tipAt({ x: box.left, y: box.top, w: box.width, h: box.height }, why, "", b);
 }
 
-/** How long Skip is held before it goes straight to the end picture, in milliseconds. */
-const HOLD = 450;
+/** The pools beside an open banner, one of them on show: a radio group (`choices.ts`). */
+function poolChoices(open: Showing | null, host: GroveHost): Choices<string> {
+  const pools = open
+    ? [
+        { id: open.id, name: open.person.name },
+        { id: GROVE, name: EVERGREEN },
+      ]
+    : [];
+  return choices(pools, {
+    kind: "radio",
+    name: "Pool",
+    chosen: host.pool(),
+    look: "sm",
+    choose: (id) => host.choose(id),
+  });
+}
+
+/** The last pulls, newest first: for a top prize, the pull it came on. */
+function history(host: GroveHost, body: HTMLElement): void {
+  const rows = past(host.view().history, host.banners());
+  if (rows.length === 0) body.append(el("div", "k-dim", { text: "No pulls yet." }));
+  for (const p of rows)
+    body.append(
+      el(
+        "div",
+        "grove-past",
+        {},
+        plate(p.rarity),
+        el("span", "k-grow", { text: prizeName(p.prize, host.banners()) }),
+        p.top ? el("b", "k-gold", { text: p.top }) : null,
+        el("span", "k-read k-dim", { text: `${p.pool}, ${p.when}` }),
+      ),
+    );
+}
 
 export function makeGroveUi(host: GroveHost) {
+  /** What the Grove's words and buttons hold for as long as the page stands. */
+  const lasting = scope();
+  /** What the Grove holds while it shows one thing (`at`, by its state and pool): a pull waiting for its second press. */
+  const showing = lasting.turns();
+  /** What the Grove shows now, as `showing` names it. */
+  const seen = (): string => `${host.state()} ${host.pool()}`;
   const canvas = el("canvas");
-  const pools = el("div", "k-tabs grove-pools");
+  const pools = el("div", "grove-pools");
   const leaf = el("div", "k-plaque grove-leaf");
   const words = el("div", "grove-words");
   const back = button("wood sm grove-back", [glyph("back"), "Back to town"], () => {
@@ -118,20 +160,10 @@ export function makeGroveUi(host: GroveHost) {
   const root = $("grove");
   root.append(stage);
 
-  // A press on Skip goes on to the next prize; held, to the end picture.
-  let held = 0;
-  let wentToEnd = false;
-  skip.addEventListener("pointerdown", () => {
-    wentToEnd = false;
-    held = window.setTimeout(() => {
-      wentToEnd = true;
-      host.toEnd();
-    }, HOLD);
-  });
-  skip.addEventListener("pointerleave", () => window.clearTimeout(held));
-  skip.addEventListener("click", () => {
-    window.clearTimeout(held);
-    if (!wentToEnd) host.next();
+  // A press on Skip goes on to the next prize; held (`press.ts`, one pointer's), to the end picture.
+  const heldToEnd = longPress(lasting, skip, { starts: (e) => e.button === 0, asked: () => host.toEnd() });
+  lasting.on(skip, "click", (e) => {
+    if (!heldToEnd(e)) host.next();
   });
 
   /** The pool on show is the banner (and not the always-open pool). */
@@ -160,16 +192,17 @@ export function makeGroveUi(host: GroveHost) {
         },
       );
     const pool = host.pool();
-    const key = pullKey(pool, n);
+    const spend = pullSpend(pool, n);
     const b = button(
-      `leaf grove-pull${asking(key) ? " asking" : ""}`,
-      [asksAgain(key, [el("span", "", { text: `Pull ${n}` }), amount("leaf", whole(n * RATES.leaf))], "Pull?")],
+      `leaf grove-pull${asking(spend) ? " asking" : ""}`,
+      [asksAgain(spend, [el("span", "", { text: `Pull ${n}` }), amount("leaf", whole(spend.price))], "Pull?")],
       (pressed) => {
         sfx.tap();
         // Drawn for one pool, it never spends in another: a banner may have ended under the pointer.
-        if (host.pool() === pool && pressedTwice(key, render)) host.pull(n, "leaf", pressed);
+        if (host.pool() === pool && pressedTwice(showing(seen()), spend, render)) host.pull(n, "leaf", pressed);
       },
     );
+    b.dataset.keep = `pull:${n}`;
     const why = cannotPull(n, balance().leaf, leafOpen(), leafShut());
     if (why) closeLeaf(b, "Leaf", why);
     return b;
@@ -180,24 +213,11 @@ export function makeGroveUi(host: GroveHost) {
     const open = host.banner();
     const b = onBanner();
     pools.hidden = open === null;
-    pools.replaceChildren(
-      ...(open
-        ? [
-            [open.id, open.person.name],
-            [GROVE, EVERGREEN],
-          ]
-        : []
-      ).map(([id = GROVE, name = ""]) =>
-        el("button", "k-btn sm", {
-          type: "button",
-          "aria-selected": String(id === host.pool()),
-          text: name,
-          onclick: () => {
-            host.choose(id);
-          },
-        }),
-      ),
-    );
+    // Drawn again under the keyboard (an arrow chose), the pool chosen keeps it.
+    const keyed = pools.contains(document.activeElement);
+    const strip = poolChoices(open, host);
+    pools.replaceChildren(strip.el);
+    if (keyed) strip.focus();
     leaf.replaceChildren(amount("leaf", whole(balance().leaf)));
 
     const c = b ? v.counters.banner : v.counters.grove;
@@ -207,63 +227,113 @@ export function makeGroveUi(host: GroveHost) {
     const next = nextFree(v.free);
     // Said under the buttons when not even one pull can be made.
     const shut = v.free.waiting > 0 ? null : cannotPull(1, balance().leaf, leafOpen(), leafShut());
-    words.replaceChildren(
-      // Only beside a banner does the always-open pool need saying.
-      ...(open ? [el("div", "k-over", { text: b ? `Until ${dayAndTime(b.until)}` : "Always open" })] : []),
-      el(
-        "div",
-        "k-plaque grove-pity",
-        {},
-        el("span", "", {}, "Top prize: ", el("b", "", { text: pityLine(c) })),
-        el("div", "k-bar", {}, bar),
-        owed ? el("div", "k-read", { text: owed }) : null,
-      ),
-      el(
-        "div",
-        "k-row",
-        {},
-        ...TABS.map(([tab, name]) =>
-          button("wood sm", [name, tab === "seeds" ? el("b", "k-leafy", { text: whole(v.seeds) }) : null], () => {
-            openPanel(tab);
+    // Drawn again under the keyboard (a pull stopped asking, the Leaf changed), the same button keeps it.
+    keepingFocus(words, () =>
+      words.replaceChildren(
+        // Only beside a banner does the always-open pool need saying.
+        ...(open ? [el("div", "k-over", { text: b ? `Until ${dayAndTime(b.until)}` : "Always open" })] : []),
+        el(
+          "div",
+          "k-plaque grove-pity",
+          {},
+          el("span", "", {}, "Top prize: ", el("b", "", { text: pityLine(c) })),
+          el("div", "k-bar", {}, bar),
+          owed ? el("div", "k-read", { text: owed }) : null,
+        ),
+        el(
+          "div",
+          "k-row",
+          {},
+          ...TABS.map(({ id, name }) => {
+            const launcher = button(
+              "wood sm",
+              [name, id === "seeds" ? el("b", "k-leafy", { text: whole(v.seeds) }) : null],
+              () => {
+                openPanel(id);
+              },
+            );
+            launcher.dataset.book = id;
+            launcher.dataset.keep = `book:${id}`;
+            return launcher;
           }),
         ),
+        ...(next ? [el("div", "k-read k-over", { text: next })] : []),
+        ...(atEnd() ? [] : [el("div", "k-row grove-pulls", {}, pullButton(1), pullButton(10))]),
+        ...(shut ? [el("div", "k-read k-over", { text: shut })] : []),
       ),
-      ...(next ? [el("div", "k-read k-over", { text: next })] : []),
-      ...(atEnd() ? [] : [el("div", "k-row grove-pulls", {}, pullButton(1), pullButton(10))]),
-      ...(shut ? [el("div", "k-read k-over", { text: shut })] : []),
     );
     renderEnd();
   }
 
   /** What the end of a ceremony offers: the same pull again, and putting it away. */
   function renderEnd(): void {
-    end.replaceChildren(
-      ...(again && atEnd() ? [pullButton(again)] : []),
-      button("wood", ["Done"], () => {
-        host.done();
-      }),
-    );
+    const done = button("wood", ["Done"], () => {
+      host.done();
+    });
+    done.dataset.keep = "done";
+    keepingFocus(end, () => end.replaceChildren(...(again && atEnd() ? [pullButton(again)] : []), done));
   }
 
   // ---------- the panel ----------
 
-  let tab: Tab | null = null;
+  /**
+   * The panel while it is open: the tab on show, the row of tabs, the page under it, what the page
+   * holds while that tab is on show (an exchange waiting for its second press), and which of the
+   * banner's buttons opened it, which has the keyboard back as it closes.
+   */
+  let book: { tab: Tab; tabs: Choices<Tab>; page: HTMLElement; life: Scope; from: Tab | null } | null = null;
   /** The rules are on show among the prizes: the "?" there shows them and puts them away. */
   let ruled = false;
 
+  /** Opens the panel at a tab, or turns it to another. Opened from the banner with the keyboard, the keyboard goes to the tab. */
   function openPanel(to: Tab): void {
-    if (tab === null) sfx.open();
-    ruled &&= to === tab;
-    tab = to;
+    ruled &&= to === book?.tab;
+    if (book) {
+      if (book.tab !== to) {
+        book.life.close();
+        book = { ...book, tab: to, life: lasting.child() };
+        book.tabs.select(to);
+        book.page.scrollTop = 0;
+      }
+      renderPanel();
+      return;
+    }
+    sfx.open();
+    const page = el("div", "k-body k-scroll");
+    const tabs = choices(TABS, {
+      kind: "tabs",
+      name: "Grove",
+      chosen: to,
+      look: "sm",
+      row: "k-grow",
+      page,
+      choose: openPanel,
+    });
+    const close = el(
+      "button",
+      "k-btn wood icon sm",
+      { type: "button", "aria-label": "Close", onclick: closePanel },
+      glyph("close"),
+    );
+    panel.replaceChildren(el("header", "k-head", {}, tabs.el, close), page);
     panel.hidden = false;
+    const at = document.activeElement;
+    const from = at instanceof HTMLElement ? (TABS.find((t) => t.id === at.dataset.book)?.id ?? null) : null;
+    book = { tab: to, tabs, page, life: lasting.child(), from };
     renderPanel();
+    if (from) tabs.focus();
   }
 
   function closePanel(): void {
-    if (tab === null) return;
-    tab = null;
+    if (!book) return;
+    const { life, from } = book;
+    book = null;
+    life.close();
+    const inside = panel.contains(document.activeElement);
     panel.hidden = true;
     panel.replaceChildren();
+    // The keyboard was in it: back to the banner's button for the tab it was opened at, drawn again or not.
+    if (inside && from) words.querySelector<HTMLElement>(`[data-book="${from}"]`)?.focus({ preventScroll: true });
     sfx.close();
   }
 
@@ -286,13 +356,12 @@ export function makeGroveUi(host: GroveHost) {
           type: "button",
           "aria-label": "Rules",
           "aria-expanded": String(ruled),
+          "data-keep": "rules",
           text: "?",
           onclick: () => {
             ruled = !ruled;
             sfx.tap();
             renderPanel();
-            // The panel is drawn again: the press stays on the button that was pressed.
-            panel.querySelector<HTMLElement>(".grove-rules")?.focus();
           },
         }),
       ),
@@ -323,21 +392,22 @@ export function makeGroveUi(host: GroveHost) {
     }
   }
 
-  /** The Seeds in hand, and each mid-tier prize they buy: the exchange asks twice. */
-  function seeds(body: HTMLElement): void {
+  /** The Seeds in hand, and each mid-tier prize they buy: the exchange asks twice, while the tab stays on show (`life`). */
+  function seeds(body: HTMLElement, life: Scope): void {
     const v = host.view();
     body.append(el("div", "k-title", {}, "Seeds: ", el("span", "k-leafy", { text: whole(v.seeds) })));
     for (const o of offers(v, PRIZES)) {
-      const key = `seeds:${o.prize}`;
+      const spend: Spend = { on: `seeds:${o.prize}`, price: o.price };
       const buy = button(
-        `green sm${asking(key) ? " asking" : ""}${o.enough ? "" : " off"}`,
+        `green sm${asking(spend) ? " asking" : ""}${o.enough ? "" : " off"}`,
         // One the Seeds do not reach is locked, so that it is not told from the others by its colour alone.
-        [asksAgain(key, [o.enough ? null : glyph("lock"), `${whole(o.price)} Seeds`], "Exchange?")],
+        [asksAgain(spend, [o.enough ? null : glyph("lock"), `${whole(o.price)} Seeds`], "Exchange?")],
         (b) => {
           if (!o.enough) refused(b, "Not enough Seeds.");
-          else if (pressedTwice(key, renderPanel)) host.exchange(o.prize, b);
+          else if (pressedTwice(life, spend, renderPanel)) host.exchange(o.prize, b);
         },
       );
+      buy.dataset.keep = `seeds:${o.prize}`;
       body.append(
         el(
           "div",
@@ -357,59 +427,24 @@ export function makeGroveUi(host: GroveHost) {
     }
   }
 
-  /** The last pulls, newest first: for a top prize, the pull it came on. */
-  function history(body: HTMLElement): void {
-    const rows = past(host.view().history, host.banners());
-    if (rows.length === 0) body.append(el("div", "k-dim", { text: "No pulls yet." }));
-    for (const p of rows)
-      body.append(
-        el(
-          "div",
-          "grove-past",
-          {},
-          plate(p.rarity),
-          el("span", "k-grow", { text: nameOf(p.prize) }),
-          p.top ? el("b", "k-gold", { text: p.top }) : null,
-          el("span", "k-read k-dim", { text: `${p.pool}, ${p.when}` }),
-        ),
-      );
-  }
-
+  /**
+   * The page under the tabs, drawn again: the tabs and the keyboard on them stay. The keyboard on
+   * the page stays on the same button (an offer, by its prize), or with that gone goes to the tab
+   * on show, so that closing the panel can give it back to the button that opened it.
+   */
   function renderPanel(): void {
-    if (tab === null) return;
-    const body = el("div", "k-body k-scroll");
-    panel.replaceChildren(
-      el(
-        "header",
-        "k-head",
-        {},
-        el(
-          "div",
-          "k-tabs k-grow",
-          {},
-          ...TABS.map(([id, name]) =>
-            el("button", "k-btn sm", {
-              type: "button",
-              "aria-selected": String(id === tab),
-              text: name,
-              onclick: () => {
-                openPanel(id);
-              },
-            }),
-          ),
-        ),
-        el(
-          "button",
-          "k-btn wood icon sm",
-          { type: "button", "aria-label": "Close", onclick: closePanel },
-          glyph("close"),
-        ),
-      ),
-      body,
+    if (!book) return;
+    const { tab, tabs, page, life } = book;
+    keepingFocus(
+      page,
+      () => {
+        page.replaceChildren();
+        if (tab === "prizes") prizes(page);
+        else if (tab === "seeds") seeds(page, life);
+        else history(host, page);
+      },
+      () => tabs.focus(),
     );
-    if (tab === "prizes") prizes(body);
-    else if (tab === "seeds") seeds(body);
-    else history(body);
   }
 
   function render(): void {
@@ -433,9 +468,6 @@ export function makeGroveUi(host: GroveHost) {
       atEnd(),
     ]);
   }, render);
-  /** The state and the pool last seen: a confirmation is let go when either changes. */
-  let seen = "";
-
   return {
     root,
     canvas,
@@ -448,16 +480,13 @@ export function makeGroveUi(host: GroveHost) {
     closePanel,
     /**
      * The Grove is in `state` now: what cannot be used in it cannot be pressed or reached, and a
-     * button waiting to be pressed again stops waiting when the state or the pool changes.
+     * pull waiting to be pressed again stops waiting when the state or the pool changes.
      */
     at(state: GroveState): void {
       banner.inert = state !== "banner";
       panel.inert = state !== "banner";
       end.inert = state !== "end";
-      const now = `${state} ${host.pool()}`;
-      if (now === seen) return;
-      seen = now;
-      unask();
+      showing(`${state} ${host.pool()}`);
     },
     /** Says what Leaf refused, or nothing; the buttons are drawn again, none of them asking. */
     said(line: string | null): void {
@@ -465,7 +494,7 @@ export function makeGroveUi(host: GroveHost) {
       said.hidden = line === null;
       if (line !== null) render();
     },
-    panelOpen: (): boolean => tab !== null,
+    panelOpen: (): boolean => book !== null,
     /** The name of the pool on show, as the picture writes it. */
     poolName: (): string => onBanner()?.person.name ?? EVERGREEN,
     /** The frame is `w` by `h` art pixels, `scale` CSS pixels to each, upright or not, `left` and `top` CSS pixels in from the window's corner. */

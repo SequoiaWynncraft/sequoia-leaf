@@ -1,11 +1,15 @@
 /**
- * A long press with a finger: resting on a thing for `LONG_PRESS` asks what it is, and the click
- * that ends such a press is the press's, not the thing's. Cards (`card.ts`) and tips (`tip.ts`)
- * ask with it.
+ * A long press: resting on a thing for `LONG_PRESS` asks something of it, and the click that ends
+ * such a press is the press's, not the thing's. Cards (`card.ts`) and tips (`tip.ts`) ask with a
+ * finger what a thing is; the Grove's Skip, held with any pointer, goes to the end picture.
  *
- * Each press is a child of the thing's scope, holding the wait and the listeners for its finger
- * moving away or lifting, so however a press ends, nothing of it is left on the thing for the next.
- * A press whose thing has left the page by the time it has lasted asks nothing.
+ * A press is one pointer's, by its id, and a child of the thing's scope, holding the wait and the
+ * listeners for that pointer moving away, leaving the thing, lifting or being cancelled. Moving
+ * away is wandering too far from where it went down, or off the thing at all: a finger's pointer is
+ * the thing's until it lifts (the browser captures it), so the thing hears it moving off and is
+ * never told it left. It ends once, however it ends, and nothing of it is left on the thing for the
+ * next; another pointer going down on the thing begins a press of its own in its place. A press
+ * whose thing has left the page by the time it has lasted asks nothing.
  */
 import type { Scope } from "./scope.ts";
 
@@ -36,11 +40,25 @@ export interface Click {
 const madeBy = (click: Click, pointer: number): boolean =>
   click.detail > 0 && (click.pointerId === undefined || click.pointerId === pointer);
 
-/** What a press needs of its thing: its events, and whether it is on the page. */
-export type Pressable = EventTarget & { readonly isConnected: boolean };
+/** What a press needs of its thing: its events, whether it is on the page, and where it is on it. */
+export type Pressable = EventTarget & {
+  readonly isConnected: boolean;
+  getBoundingClientRect(): {
+    readonly left: number;
+    readonly top: number;
+    readonly right: number;
+    readonly bottom: number;
+  };
+};
+
+/** Whether a pointer is over a thing: inside its box, edges and all. */
+function over(target: Pressable, e: PointerEvent): boolean {
+  const r = target.getBoundingClientRect();
+  return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+}
 
 export interface PressOpts {
-  /** Whether a pointer going down begins a press: a finger, on a thing that asks this way. */
+  /** Whether a pointer going down begins a press: a finger, on a thing that asks what it is. */
   starts(e: PointerEvent): boolean;
   /** The press has lasted, still, on a thing on the page. */
   asked(): void;
@@ -65,15 +83,16 @@ export function longPress(owner: Scope, target: Pressable, opts: PressOpts): (cl
   const lift = (e: PointerEvent): void => {
     if (ours(e)) to(IDLE);
   };
-  /** A finger goes down to rest: the wait, and the ways it ends early, in a scope of its own. */
+  /** A pointer goes down to rest: the wait, and the ways it ends early, in a scope of its own. */
   const hold = (e: PointerEvent): Press => {
     const scope = owner.child();
     const [x, y] = [e.clientX, e.clientY];
     scope.on(target, "pointermove", (m) => {
-      if (ours(m) && Math.hypot(m.clientX - x, m.clientY - y) > STILL) to(IDLE);
+      if (ours(m) && (Math.hypot(m.clientX - x, m.clientY - y) > STILL || !over(target, m))) to(IDLE);
     });
     scope.on(target, "pointerup", lift);
     scope.on(target, "pointercancel", lift);
+    scope.on(target, "pointerleave", lift);
     scope.after(LONG_PRESS, () => to(target.isConnected ? { at: "asked", pointer: e.pointerId } : IDLE));
     return { at: "held", pointer: e.pointerId, scope };
   };

@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
+import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 
-import { kindLine, noteWhen, openingTab, readNews, redrawn, SEEN, unread } from "./board.ts";
+import { kindLine, noteWhen, openingTab, questBoard, readNews, redrawn, SEEN, unread } from "./board.ts";
 import type { Quest } from "./guild.ts";
 import { readQuests } from "./live.ts";
 import { NOTES } from "./notes.ts";
@@ -142,5 +143,40 @@ describe("the board's news", () => {
     expect(unread()).toBe(true);
     world.store.setItem(SEEN, NOTES[0]?.id ?? "");
     expect(unread()).toBe(false);
+  });
+});
+
+const redraw = (): void => undefined;
+
+describe("a paid reroll on the board", () => {
+  const paid = { ...(QUESTS[0] ?? { id: "q" }), reroll: 100 };
+
+  test("goes on its second press while Quests stays on show; a free one goes at once", () => {
+    const board = questBoard(scope());
+    board.show("Quests");
+    expect(board.reroll(paid, redraw)).toBe(false);
+    expect(board.reroll(paid, redraw)).toBe(true);
+    expect(board.reroll({ ...paid, reroll: 0 }, redraw)).toBe(true);
+    expect(board.reroll({ ...paid, reroll: null }, redraw)).toBe(false);
+  });
+
+  test("pressed once, then News read and Quests shown again, only asks", () => {
+    const board = questBoard(scope());
+    board.show("Quests");
+    expect(board.reroll(paid, redraw)).toBe(false);
+    board.show("News");
+    board.show("Quests");
+    expect(board.reroll(paid, redraw)).toBe(false);
+    expect(board.reroll(paid, redraw)).toBe(true);
+  });
+
+  test("pressed once, then its price changes, only asks; and the board put away ends it", () => {
+    const life = scope();
+    const board = questBoard(life);
+    board.show("Quests");
+    expect(board.reroll(paid, redraw)).toBe(false);
+    expect(board.reroll({ ...paid, reroll: 200 }, redraw)).toBe(false);
+    life.close();
+    expect(board.reroll({ ...paid, reroll: 200 }, redraw)).toBe(false);
   });
 });

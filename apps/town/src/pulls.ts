@@ -6,6 +6,7 @@
  */
 
 import { exact, whole } from "@sequoia-leaf/core";
+import type { Spend } from "@sequoia-leaf/kit/dom.ts";
 import {
   type Counters,
   type Pulled,
@@ -214,8 +215,8 @@ export function groveState(at: {
 /** The one rule: a pull or an exchange is sent only at the banner or at a ceremony's end, one at a time. */
 export const takesCommand = (state: GroveState): boolean => state === "banner" || state === "end";
 
-/** A paid pull asks to be pressed again for its own pool and count, and no other. */
-export const pullKey = (pool: string, n: number): string => `pull:${pool}:${n}`;
+/** A paid pull asks to be pressed again for its own pool and count, at its price, and no other. */
+export const pullSpend = (pool: string, n: number): Spend => ({ on: `pull:${pool}:${n}`, price: n * RATES.leaf });
 
 /** The banner open now, for the Grove's card in town: whose it is and until when. */
 export const bannerLine = (b: Showing, zone?: string): string =>

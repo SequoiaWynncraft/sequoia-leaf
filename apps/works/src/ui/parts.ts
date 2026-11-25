@@ -1,14 +1,14 @@
 /** Small pieces the yard's interface is put together from: its own icons, and a few helpers over the kit's. */
 
 import { ALL_ITEMS, type Counts, type Item, ITEM_INFO, RECIPE, type Tool } from "@sequoia-leaf/factory";
-import { add, el, shown, when } from "@sequoia-leaf/kit/dom.ts";
+import { add, el, pic, shown, when } from "@sequoia-leaf/kit/dom.ts";
 import { INK } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
-import { makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { PAL } from "../art/pal.ts";
 
-export { when } from "@sequoia-leaf/kit/dom.ts";
+export { $, pic, when } from "@sequoia-leaf/kit/dom.ts";
 
 /**
  * A part of the interface kept by what it prints: `print` works out every value it shows of the
@@ -26,15 +26,6 @@ export function shows<P>(print: () => P, draw: (p: P) => void): () => void {
 }
 
 export type Kid = Node | string | null;
-
-export const $ = (id: string): HTMLElement => must(document.getElementById(id), id);
-
-/** A copy of a small picture, shown `scale` interface units to each of its pixels. */
-export function pic(src: HTMLCanvasElement, scale = 1): HTMLCanvasElement {
-  const { c, g } = makeCanvas(src.width, src.height);
-  g.drawImage(src, 0, 0);
-  return shown(c, scale);
-}
 
 /** A copy of a picture cut down to fit a box, keeping its top: a tall machine is known by its head. */
 export function fitted(src: HTMLCanvasElement, w: number, h: number): HTMLCanvasElement {

@@ -20,10 +20,18 @@ export interface PurseBar {
   bump(kind: Currency): void;
 }
 
-const ABOUT: Record<Currency, readonly [string, string]> = {
+const ABOUT: Readonly<Record<Currency, readonly [string, string]>> = {
   leaf: ["Leaf", "Earned with the guild, out in the world."],
   coins: ["Coins", "Made in town: the Works, the games."],
 };
+
+/** What a page shows in its purse, where it is not the purse as it is. */
+export interface PurseOptions {
+  /** The number of Coins to show, when a page counts more than the purse holds (the Works, with its till). */
+  readonly coins?: () => number;
+  /** What each currency's tip says of where it comes from, in a page's own words (the town names its places). */
+  readonly about?: Readonly<Partial<Record<Currency, string>>>;
+}
 
 const centre = (node: Element): Pt => {
   const r = node.getBoundingClientRect();
@@ -31,19 +39,19 @@ const centre = (node: Element): Pt => {
 };
 
 /**
- * Fills `host` (a `k-plaque`, usually) with the two counters, and keeps them in step with the purse.
- * `coins` is the number of Coins to show, when a page counts
- * more than the purse holds (the Works, with its till).
+ * Fills `host` (a `k-plaque`, usually) with the two counters, and keeps them in step with the purse,
+ * each number as `whole` says it.
  */
-export function purseBar(host: HTMLElement, coins: () => number = () => balance().coins): PurseBar {
+export function purseBar(host: HTMLElement, of: PurseOptions = {}): PurseBar {
   const kinds = ["leaf", "coins"] as const;
+  const coins = of.coins ?? (() => balance().coins);
   const held = (kind: Currency): number => (kind === "coins" ? coins() : balance().leaf);
   const parts = kinds.map((kind) => {
     const art = icon(kind === "leaf" ? "leaf" : "coin");
     const num = el("span", "", { text: whole(held(kind)) });
     const box = el("span", kind === "leaf" ? "k-cur leaf" : "k-cur", { tabindex: 0 }, art, num);
     host.append(box);
-    tip(box, ABOUT[kind][0], ABOUT[kind][1]);
+    tip(box, ABOUT[kind][0], of.about?.[kind] ?? ABOUT[kind][1]);
     return { kind, art, num, shown: held(kind) };
   });
   let tickAt = 0;

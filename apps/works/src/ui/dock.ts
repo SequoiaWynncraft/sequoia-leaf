@@ -25,7 +25,7 @@ import {
   stops,
 } from "@sequoia-leaf/factory";
 import { link } from "@sequoia-leaf/kit/card.ts";
-import { amount, asking, asksAgain, el, icon, pressedTwice } from "@sequoia-leaf/kit/dom.ts";
+import { amount, asking, asksAgain, el, icon, pressedTwice, type Spend } from "@sequoia-leaf/kit/dom.ts";
 import { coinsText } from "@sequoia-leaf/kit/say.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 
@@ -46,7 +46,18 @@ import {
   yardPress,
   yardSaveOffered,
 } from "../plans.ts";
-import { builds, DRAWN, gradeInHand, type Group, pressKey, S, type Tool, toolHooks, undoes } from "../state.ts";
+import {
+  builds,
+  DRAWN,
+  gradeInHand,
+  type Group,
+  handSession,
+  pressKey,
+  S,
+  type Tool,
+  toolHooks,
+  undoes,
+} from "../state.ts";
 import {
   cancel,
   clearMark,
@@ -294,15 +305,17 @@ function upgradeOf(stage: Stage | null): Upgrade | null {
   const all = stage?.is === "empty";
   if ((!all && stage?.is !== "marked") || locked(S.world.open, { use: "upgrade" }) !== null) return null;
   const cost = upgradeCost(all);
-  return cost > 0 ? { all, cost, asking: asking(upgradeKey(all)), short: Math.max(0, cost - coins()) } : null;
+  return cost > 0 ? { all, cost, asking: asking(upgradeKey(all, cost)), short: Math.max(0, cost - coins()) } : null;
 }
 
-/** Upgrade's press waiting for a second, named by what it raises: the whole yard, or the area marked. */
-const upgradeKey = (all: boolean): string => pressKey(all ? "upgrade-all" : `upgrade:${digest(S.mark?.tiles ?? [])}`);
+/** What Upgrade's press waiting for a second spends on: what it raises (the whole yard, or the area marked), at its price. */
+const upgradeKey = (all: boolean, cost: number): Spend =>
+  pressKey(all ? "upgrade-all" : `upgrade:${digest(S.mark?.tiles ?? [])}`, cost);
 
 /** Upgrade (or Upgrade all) pressed, weighed against the purse now: short, the rules say by how much; else it asks twice. */
 export function pressUpgrade(all: boolean): void {
-  if (upgradeCost(all) > coins() || pressedTwice(upgradeKey(all), refreshDock)) upgradeMark(all);
+  const cost = upgradeCost(all);
+  if (cost > coins() || pressedTwice(handSession(), upgradeKey(all, cost), refreshDock)) upgradeMark(all);
 }
 
 /**
@@ -310,7 +323,7 @@ export function pressUpgrade(all: boolean): void {
  * it says how short (the rules' own sentence) at once, asking nothing.
  */
 function upgradeButton(u: Upgrade): HTMLElement {
-  const key = upgradeKey(u.all);
+  const key = upgradeKey(u.all, u.cost);
   const b = button(
     u.short > 0 ? "sm off" : u.asking ? "sm asking" : "sm",
     [asksAgain(key, [u.all ? "Upgrade all" : "Upgrade", amount("coin", u.cost)], "Press again")],

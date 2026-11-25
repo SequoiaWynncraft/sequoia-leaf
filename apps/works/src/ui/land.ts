@@ -69,7 +69,7 @@ export function plotCard(p: PlotPrint, buy: (plot: Plot) => boolean): Descriptio
               label: `Buy for ${whole(p.price)}`,
               look: enough ? "sm wide" : "sm wide off",
               icon: icon("coin"),
-              ...(enough ? { ask: AGAIN } : {}),
+              ...(enough ? { ask: { again: AGAIN, price: p.price } } : {}),
               on: () => {
                 // Bought, the card has nothing more to offer: it is put away, so it does not sit over the new land.
                 if (buy(p.plot)) close();

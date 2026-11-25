@@ -1101,10 +1101,11 @@ button.k-info-chip:hover .k-chip {
 }
 
 /*
- * A row of buttons where one is chosen: wooden tabs standing on a rail. The chosen one is gold and
- * stands taller; pressed, a tab sinks. Each tab carries its own length of rail, a unit past it each
- * side, so the rails of a row meet however the row is laid out: in rows one over another, each
- * row has room for its rail and for the chosen tab of the row under it.
+ * A row of buttons where one is chosen (`choices.ts`: tabs, or a radio group): wooden tabs standing
+ * on a rail. The chosen one is gold and stands taller; pressed, a tab sinks. Each tab carries its
+ * own length of rail, a unit past it each side, so the rails of a row meet however the row is laid
+ * out: in rows one over another, each row has room for its rail and for the chosen tab of the row
+ * under it.
  */
 .k-tabs {
   display: flex;
@@ -1122,7 +1123,7 @@ button.k-info-chip:hover .k-chip {
 .k-tabs > .k-btn:active {
   border-image-source: var(--k-f-tab-down);
 }
-.k-tabs > .k-btn[aria-selected="true"] {
+.k-tabs > .k-btn:is([aria-selected="true"], [aria-checked="true"]) {
   border-image: var(--k-f-tab-on) 5 3 3 fill / calc(var(--u) * 5) calc(var(--u) * 3) calc(var(--u) * 3) /
     calc(var(--u) * 2) var(--u) calc(var(--u) * 3);
   padding-bottom: calc(var(--u) * 2);

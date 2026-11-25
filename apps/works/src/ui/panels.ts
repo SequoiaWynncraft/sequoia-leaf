@@ -24,8 +24,9 @@ import {
   unlockedBy,
   WHEEL,
 } from "@sequoia-leaf/factory";
-import { amount, asking, asksAgain, el, icon, pressedTwice, replay } from "@sequoia-leaf/kit/dom.ts";
+import { amount, asking, asksAgain, el, icon, pressedTwice, replay, type Spend } from "@sequoia-leaf/kit/dom.ts";
 import { num, whole } from "@sequoia-leaf/kit/say.ts";
+import { type Scope, scope } from "@sequoia-leaf/kit/scope.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
 
@@ -161,7 +162,21 @@ const boardEnd = (p: ReturnType<typeof ordersPrint>): HTMLElement[] =>
       ]
     : [];
 
-function orders(_art: Art, body: HTMLElement): () => void {
+/** What swapping an order gives up: what has been given to it so far, counted. */
+const swapKey = (id: number): Spend =>
+  pressKey(`swap:${id}`, S.world.board.find((b) => b.id === id)?.filled.reduce((sum, n) => sum + n, 0) ?? 0);
+
+/**
+ * Whether a press on an order's Swap goes ahead: at once while nothing has been given to it; else
+ * on a second press for the same order with as much given, while its panel stays open (`life`).
+ * The list moves up under the pointer after a hand over: what has been given is not lost to one press.
+ */
+export function swapPressed(life: Scope, id: number, again: () => void): boolean {
+  const spend = swapKey(id);
+  return spend.price === 0 || pressedTwice(life, spend, again);
+}
+
+function orders(_art: Art, body: HTMLElement, life: Scope): () => void {
   let live: Listed[] = [];
   let places: number[] = [];
   const draw = (p: ReturnType<typeof ordersPrint>): void => {
@@ -208,7 +223,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
       const filled = (): Counts | null => S.world.board.find((b) => b.id === s.id)?.filled ?? null;
       const rows = wantsOrder(s.want, filled);
       if (rows) live.push(rows);
-      const ask = pressKey(`swap:${s.id}`);
+      const ask = swapKey(s.id);
       const act = s.full
         ? button("sm", ["Hand over"], () => {
             panelHooks.handOver(s.id);
@@ -219,7 +234,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
             (b) => {
               const no = swapRefusal(S.world, s.id);
               // The list moves up under the pointer after a hand over: what has been delivered is not lost to one press.
-              if (no === null && (filled()?.some((n) => n > 0) ?? false) && !pressedTwice(ask, again)) return;
+              if (no === null && !swapPressed(life, s.id, again)) return;
               if (no !== null || "refused" in doNow({ do: "swap", order: s.id })) {
                 yardSfx.no();
                 replay(b, "shake");
@@ -382,7 +397,8 @@ function powerBook(_art: Art, body: HTMLElement): () => void {
 
 // ---------- opening and closing ----------
 
-const BUILD: Record<PanelId, (art: Art, body: HTMLElement) => () => void> = {
+/** Each panel's builder: from its body and what it holds while it is open (`life`), how to bring it up to date. */
+const BUILD: Record<PanelId, (art: Art, body: HTMLElement, life: Scope) => () => void> = {
   orders,
   board,
   tier: (_art, body) => tierScreen(body),
@@ -401,7 +417,8 @@ const HEAD: Record<PanelId, () => Node> = {
 /** The panels that are a full sheet on a phone: each is a screen of its own, with rows to tap. */
 const FULL: ReadonlySet<PanelId> = new Set<PanelId>(["tier", "research"]);
 
-let refresh: (() => void) | null = null;
+/** The panel open: how it is brought up to date, and what it holds while it is open (a Swap waiting for its second press), closed as it shuts or another opens. */
+let open: { readonly refresh: () => void; readonly life: Scope } | null = null;
 let theArt: Art | null = null;
 /** The control the focus was on when the panel opened: it has the focus back when the panel shuts. */
 let opener: HTMLElement | null = null;
@@ -441,8 +458,10 @@ export function openPanel(id: PanelId): void {
   p.append(el("header", "k-head", {}, HEAD[id](), title, x));
   const body = el("div", "k-body k-scroll");
   p.append(body);
-  refresh = BUILD[id](theArt, body);
-  refresh();
+  open?.life.close();
+  const life = scope();
+  open = { refresh: BUILD[id](theArt, body, life), life };
+  open.refresh();
   p.hidden = false;
   // The focus goes into the panel, so the next Tab is in it and not along the toolbar; the control it
   // was on (the book's button, most often) has it back when the panel shuts.
@@ -461,7 +480,8 @@ export function closePanel(): void {
   $("panel").replaceChildren();
   if (inside && opener?.isConnected) opener.focus({ preventScroll: true });
   opener = null;
-  refresh = null;
+  open?.life.close();
+  open = null;
   tipOff();
   sfx.close();
   document.body.classList.remove("panel-open");
@@ -474,7 +494,7 @@ export function togglePanel(id: PanelId): void {
 }
 
 export function refreshPanel(): void {
-  refresh?.();
+  open?.refresh();
 }
 
 /** The part of the page the panel is covering, if one is open. */

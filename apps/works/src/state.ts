@@ -18,7 +18,8 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 import { shown } from "@sequoia-leaf/kit/card.ts";
-import { unask } from "@sequoia-leaf/kit/dom.ts";
+import type { Spend } from "@sequoia-leaf/kit/dom.ts";
+import { type Scope, scope } from "@sequoia-leaf/kit/scope.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./art/belts.ts";
@@ -147,24 +148,29 @@ export interface Group {
 const heldOf = (h: Hand): string =>
   `${String(toolOf(h))}:${h.is === "select" ? `${h.stage.is}:${String(groupOf(h)?.as ?? "")}` : ""}`;
 
+/** What lasts while the same thing is held (`heldOf`), such as a press waiting for its second. */
+const sessions = scope().turns();
+
 /**
- * Moves what is in hand (`hand.ts`): the one way anything changes it. A press waiting to be pressed
- * again (`pressedTwice`) is let go when what is held changes (another tool, stage or blueprint, or
- * none), so that no second press confirms what the first was not for.
+ * What is held now holds this: a press waiting to be pressed again on it (`pressedTwice`: Upgrade,
+ * Save over a kept place, the bin, Place). It closes as what is held changes (another tool, stage
+ * or blueprint, or none), so that no second press confirms what the first was not for.
  */
+export const handSession = (): Scope => sessions(heldOf(S.hand));
+
+/** Moves what is in hand (`hand.ts`): the one way anything changes it, which ends what it held if that changed. */
 export function moveHand(e: HandEvent): void {
-  const was = heldOf(S.hand);
   S.hand = step(S.hand, e);
-  if (heldOf(S.hand) !== was) unask();
+  handSession();
 }
 
 /**
- * What a press that waits for a second (`pressedTwice`) is named: exactly what it confirms, and the
- * yard's count of changes (`rev`), so that any change to the yard lets it go and no second press
- * confirms what the first was not shown. A yard taken from Leaf in place of the copy lets it go too
- * (`yard.ts`).
+ * What a press that waits for a second (`pressedTwice`) spends on: exactly what it confirms, and
+ * the yard's count of changes (`rev`), so that any change to the yard lets it go and no second press
+ * confirms what the first was not shown; and its price (0 where nothing is paid). A yard taken from
+ * Leaf in place of the copy lets it go too (`yard.ts`).
  */
-export const pressKey = (target: string): string => `${target}@${S.world.rev}`;
+export const pressKey = (target: string, price = 0): Spend => ({ on: `${target}@${S.world.rev}`, price });
 
 /** Called whenever the tool in hand, or what it is aimed at, changes, and to say something: the interface listens (`dock.ts`). */
 export const toolHooks: { changed: () => void; said: (text: string) => void } = { changed: () => {}, said: () => {} };

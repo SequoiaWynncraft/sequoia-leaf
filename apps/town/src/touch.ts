@@ -20,6 +20,9 @@ import { closeCard, closePanel } from "./hud.ts";
 import { type Prop, propUnder } from "./props.ts";
 import type { Hover, Steer } from "./stage.ts";
 
+/** A thing standing, for whoever points at it: the same thing (`id`) by its kind and where it stands. */
+const propHover = (p: Prop, box: Rect): Hover => ({ id: `prop:${p.kind}:${p.x}:${p.y}`, box, tip: p.tip, ref: p.ref });
+
 /** Somewhere with a prompt: one of the town's places, one of a camp's own, a way out. */
 export interface Door extends Prompted {
   id: string;
@@ -153,19 +156,19 @@ export function makeTouch(here: Here) {
   }
 
   function under(x: number, y: number): (Hover & { who?: Actor }) | null {
-    if (onSign(x, y) && show.sign) return { box: show.sign, tip: null };
+    if (onSign(x, y) && show.sign) return { id: "sign", box: show.sign, tip: null };
     const who = personAt(x, y);
     if (who) {
-      const foot = feet(who);
-      const tall = headOf(who);
-      return { box: { x: foot.x - 6, y: foot.y - tall, w: 12, h: tall + 1 - who.lift }, tip: null, who };
+      const [foot, tall] = [feet(who), headOf(who)];
+      const box = { x: foot.x - 6, y: foot.y - tall, w: 12, h: tall + 1 - who.lift };
+      return { id: `who:${who.id || who.who.name}`, box, tip: null, who };
     }
     const own = here.ownAt(x, y);
     if (own) return own;
     const prop = propUnder(here.props(), x, y);
-    if (prop?.hit && prop.kind !== "trunk") return { box: prop.hit, tip: prop.tip, ref: prop.ref };
+    if (prop?.hit && prop.kind !== "trunk") return propHover(prop, prop.hit);
     const door = boxAt(x, y);
-    return door?.box ? { box: door.box, tip: null } : null;
+    return door?.box ? { id: `door:${door.id}`, box: door.box, tip: null } : null;
   }
 
   /** A touch with a finger or the mouse; says whether it was bare ground, so that a drag may steer. */

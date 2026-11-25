@@ -14,6 +14,7 @@ import type { PetArt } from "./campart.ts";
 import { csfx } from "./campsfx.ts";
 import { float } from "./fx.ts";
 import type { Standing } from "./props.ts";
+import type { Hover } from "./stage.ts";
 
 export interface PetLive extends Standing {
   kind: PetId;
@@ -34,6 +35,8 @@ export interface PetLive extends Standing {
   voice: number;
   phase: number;
   alpha: number;
+  /** What it is for whoever points at it: the same thing (`id`) wherever it walks, its name, and what it is like. */
+  pointed(): Hover;
 }
 
 /** What each kind is, in a line, for whoever points at one. */
@@ -75,6 +78,11 @@ export function makePet(kind: PetId, art: PetArt, at: Pt): PetLive {
     paint(g: Ctx, cx: number, cy: number): void {
       paintPet(g, p, cx, cy);
     },
+    pointed: () => ({
+      id: `pet:${kind}:${p.name}`,
+      box: { x: p.x - 6, y: p.y - 10, w: 12, h: 11 },
+      tip: [p.name, PET_ABOUT[kind]],
+    }),
   };
   return p;
 }

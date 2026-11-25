@@ -1211,10 +1211,7 @@ export function makeCamp(
       if (pet) pleased(pet);
       return pet !== null;
     },
-    ownAt(x, y) {
-      const pet = petAt(pets, x, y);
-      return pet ? { box: { x: pet.x - 6, y: pet.y - 10, w: 12, h: 11 }, tip: [pet.name, PET_ABOUT[pet.kind]] } : null;
-    },
+    ownAt: (x, y) => petAt(pets, x, y)?.pointed() ?? null,
     props: () => [...pic.props, ...flats],
     sky(x, y) {
       if (y >= campHedge(x, seed)) return false;
@@ -1484,7 +1481,7 @@ export function makeCamp(
       const n = hand()?.drag ? null : thingAt(at.x, at.y);
       const l = n !== null && n !== hand()?.n ? liveAt(n) : null;
       const h: Hover | null = l?.prop.hit
-        ? { box: l.prop.hit, tip: [l.thing.name, ""], ref: thingRef(l.thing.id) }
+        ? { id: thingRef(l.thing.id), box: l.prop.hit, tip: [l.thing.name, ""], ref: thingRef(l.thing.id) }
         : null;
       show.hover = h?.box ?? null;
       show.pointed = null;

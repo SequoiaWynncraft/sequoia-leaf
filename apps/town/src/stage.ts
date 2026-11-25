@@ -33,6 +33,8 @@ export interface Steer {
 
 /** What the pointer is resting on: a box to mark, and words about it if it has any. */
 export interface Hover {
+  /** Which thing it is, the same each frame while it is the same thing: its tip waits on this (`dwell.ts`). */
+  id: string;
   box: Rect;
   tip: readonly [string, string] | null;
   /** A thing with a card of its own (a camp thing), which explains itself in place of the tip. */

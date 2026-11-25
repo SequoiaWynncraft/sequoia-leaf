@@ -4,6 +4,8 @@
 import { whole } from "@sequoia-leaf/core";
 
 import { pressKeysHeld, stillHeld } from "./keys.ts";
+import type { Scope } from "./scope.ts";
+import { makeCanvas, must } from "./util.ts";
 
 /** What waits for a held mouse button to lift (`unheld`). */
 const owed = new Set<() => void>();
@@ -152,6 +154,32 @@ export function shown(c: HTMLCanvasElement, scale = 1): HTMLCanvasElement {
   return c;
 }
 
+/**
+ * Draws what is in `node` again (`draw`), with whoever had the keyboard on a control in it put back
+ * on the control drawn for the same thing: the one with the same `data-keep`. With none drawn for
+ * it (an offer gone), the keyboard goes where `elsewhere` puts it, such as the tab on show.
+ */
+export function keepingFocus(node: HTMLElement, draw: () => void, elsewhere: () => void = () => undefined): void {
+  const at = document.activeElement;
+  const inside = at instanceof HTMLElement && node.contains(at);
+  const kept = inside ? at.closest<HTMLElement>("[data-keep]")?.dataset.keep : undefined;
+  draw();
+  if (!inside) return;
+  const again = [...node.querySelectorAll<HTMLElement>("[data-keep]")].find((e) => e.dataset.keep === kept);
+  if (kept !== undefined && again) again.focus({ preventScroll: true });
+  else elsewhere();
+}
+
+/** The page's element with this id: one the page's own HTML has. */
+export const $ = (id: string): HTMLElement => must(document.getElementById(id), id);
+
+/** A copy of a small picture, shown `scale` interface units to each of its pixels. */
+export function pic(src: HTMLCanvasElement, scale = 1): HTMLCanvasElement {
+  const { c, g } = makeCanvas(src.width, src.height);
+  g.drawImage(src, 0, 0);
+  return shown(c, scale);
+}
+
 /** Plays an element's one-shot animation class again from the start. */
 export function replay(node: HTMLElement, cls: string): void {
   node.classList.remove(cls);
@@ -159,53 +187,90 @@ export function replay(node: HTMLElement, cls: string): void {
   node.classList.add(cls);
 }
 
-/** The button that has been pressed once and is waiting to be pressed again, and the keys down when it was. */
+/**
+ * What a button that spends would do, as the button says it: what it is for (`on`, by what names
+ * it: a plot, a quest, the area marked) and what it costs (`price`: Leaf, Coins, or what is lost,
+ * such as what an order has been given; 0 for nothing). A second press does it only for the same
+ * thing at the same price: one for another thing, or a price changed since, asks again.
+ */
+export interface Spend {
+  readonly on: string;
+  readonly price: number;
+}
+
+/** A spend as one value, the same for the same thing at the same price. */
+const spendKey = (s: Spend): string => `${s.on}|${s.price}`;
+
+/**
+ * The button that has been pressed once and is waiting to be pressed again: what it spends on, the
+ * scope it was pressed in, the wait (a scope of that one, holding the four seconds), how it is
+ * drawn again, and the keys down when it was pressed.
+ */
 let asked: {
-  key: string;
-  timer: ReturnType<typeof setTimeout>;
-  redraw: () => void;
-  keys: ReadonlyMap<string, number>;
+  readonly key: string;
+  readonly within: Scope;
+  readonly wait: Scope;
+  readonly redraw: () => void;
+  readonly keys: ReadonlyMap<string, number>;
 } | null = null;
 
-/** Whether the button `key` has been pressed once and is waiting: it is drawn asking. */
-export const asking = (key: string): boolean => asked?.key === key;
+/** Whether the button for `spend` has been pressed once and is waiting: it is drawn asking. */
+export const asking = (spend: Spend): boolean => asked?.key === spendKey(spend);
 
 /**
  * What a button that asks is drawn with: its label, or the question in the label's place. Both are
  * in the button, one over the other and only one seen, so asking never changes the button's size.
  */
-export function asksAgain(key: string, label: readonly Child[], question: string): HTMLElement {
-  const on = asking(key);
+export function asksAgain(spend: Spend, label: readonly Child[], question: string): HTMLElement {
+  const on = asking(spend);
   return el("span", "k-asks", {}, el("span", on ? "hid" : "", {}, ...label), el("span", on ? "" : "hid", {}, question));
 }
 
 /**
- * A press on a button that spends. The first press only notes it and gives false: `redraw` is
+ * A press on a button that spends. `life` is what the player is looking at while the button
+ * waits: the tab on show, the card on top, what the hand is doing (`Scope.turns` gives one for
+ * each); leaving it ends the wait. The first press only notes it and gives false: `redraw` is
  * called so the button asks, and again if four seconds pass without a second press. The second
- * press gives true. A key that was down at the first press and has not come up since is not a
- * second press (a held Enter says itself again): it gives false and changes nothing.
+ * press, in the same `life` and for the same `spend`, gives true. Once `life` closes, the button no
+ * longer waits, and its next press is a first one. A key that was down at the first press and has
+ * not come up since is not a second press (a held Enter says itself again): it gives false and
+ * changes nothing. One button waits at a time: a press on another stops the first waiting, and it
+ * is drawn as it was.
  */
-export function pressedTwice(key: string, redraw: () => void): boolean {
-  const second = asking(key);
-  if (second && asked && stillHeld(asked.keys)) return false;
-  clearTimeout(asked?.timer);
-  asked = second ? null : { key, timer: setTimeout(unask, 4000), redraw, keys: pressKeysHeld() };
-  if (!second) {
-    // Drawn again, the button is a new one: whoever pressed it with a key is put back on it.
-    const keyed = typeof document !== "undefined" && document.activeElement instanceof HTMLButtonElement;
-    redraw();
-    if (keyed) document.querySelector<HTMLElement>(".k-btn.asking")?.focus();
-  }
-  return second;
+export function pressedTwice(life: Scope, spend: Spend, redraw: () => void): boolean {
+  if (life.closed) return false;
+  const key = spendKey(spend);
+  const was = asked;
+  const second = was !== null && was.key === key && was.within === life;
+  if (second && stillHeld(was.keys)) return false;
+  asked = null;
+  was?.wait.close();
+  if (second) return true;
+  const wait = life.child();
+  asked = { key, within: life, wait, redraw, keys: pressKeysHeld() };
+  wait.after(4000, unask);
+  // What it is on put away, nothing is drawn: it has gone with it.
+  wait.hold(() => {
+    if (asked?.wait === wait) asked = null;
+  });
+  if (was && was.redraw !== redraw) was.redraw();
+  // Drawn again, the button is a new one: whoever pressed it with a key is put back on it.
+  const keyed = typeof document !== "undefined" && document.activeElement instanceof HTMLButtonElement;
+  redraw();
+  if (keyed) document.querySelector<HTMLElement>(".k-btn.asking")?.focus();
+  return false;
 }
 
-/** The button waiting for its second press stops waiting, now, and is drawn as it was. */
+/**
+ * The button waiting for its second press stops waiting, now, and is drawn as it was: its four
+ * seconds are up, or everything it was shown on changed at once (a yard read afresh from Leaf).
+ */
 export function unask(): void {
-  if (!asked) return;
-  clearTimeout(asked.timer);
-  const { redraw } = asked;
+  const was = asked;
+  if (!was) return;
   asked = null;
-  redraw();
+  was.wait.close();
+  was.redraw();
 }
 
 let region: HTMLElement | null = null;

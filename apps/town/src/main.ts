@@ -13,13 +13,14 @@
 
 import { pick as pickCard, point } from "@sequoia-leaf/kit/card.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
+import { dwell } from "@sequoia-leaf/kit/dwell.ts";
 import { member } from "@sequoia-leaf/kit/live.ts";
 import { paced } from "@sequoia-leaf/kit/pace.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { bake, lookFor, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
-import { tipAt, tipOff } from "@sequoia-leaf/kit/tip.ts";
+import { tipAt, tipOff, tipTo } from "@sequoia-leaf/kit/tip.ts";
 import { clamp, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { FOLK } from "@sequoia-leaf/town/folk.ts";
 
@@ -309,8 +310,6 @@ async function boot(): Promise<void> {
     },
   });
   let mouse: Pt | null = null;
-  /** What the pointer is resting on, since when, and whether its tip is up. */
-  let rest: { hover: Hover; since: number; shown: boolean } | null = null;
   const TIP = {};
   /** Lets go of every key and press held: the window has lost the keyboard, or the settings menu is up. */
   const letGo = (): void => {
@@ -380,26 +379,29 @@ async function boot(): Promise<void> {
     return { dx, dy, toward: toward ? toWorld(toward.x, toward.y) : null };
   }
 
+  /** A thing with a line of its own, rested on: its line shows, and goes with it as it moves. */
+  const resting = dwell<Hover>({
+    ms: REST,
+    show: (h) => {
+      showTip(h);
+    },
+    follow: (h) => {
+      tipTo(pageBox(h), TIP);
+    },
+    hide: () => {
+      tipOff(TIP);
+    },
+  });
+
   /** The mouse resting on a thing marks it, and after a moment says what it is. */
   function pointing(): void {
     const h = mouse ? scene().point(toWorld(mouse.x, mouse.y)) : null;
     if (!mouse) scene().point(null);
     canvas.style.cursor = h ? "pointer" : "default";
-    // A camp thing explains itself through the cards, which keep their own time.
-    if (h?.ref || rest?.hover.ref) {
-      const box = h ? pageBox(h) : null;
-      point(h?.ref ?? null, box?.x ?? 0, box?.y ?? 0, box?.w ?? 0, box?.h ?? 0);
-    }
-    const same = h && rest && h.tip === rest.hover.tip && h.box.x === rest.hover.box.x && h.box.y === rest.hover.box.y;
-    if (same && rest) {
-      if (!rest.shown && !rest.hover.ref && performance.now() - rest.since > REST) {
-        rest.shown = true;
-        showTip(rest.hover);
-      }
-      return;
-    }
-    if (rest?.shown) tipOff(TIP);
-    rest = h ? { hover: h, since: performance.now(), shown: false } : null;
+    // A camp thing explains itself through the cards, which keep their own time; anything else with its line.
+    const box = h ? pageBox(h) : null;
+    point(h?.ref ?? null, box?.x ?? 0, box?.y ?? 0, box?.w ?? 0, box?.h ?? 0);
+    resting(h?.tip && !h.ref ? h : null, performance.now());
   }
 
   // ---------- every moment ----------

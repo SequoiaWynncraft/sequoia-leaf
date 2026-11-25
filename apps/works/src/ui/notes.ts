@@ -16,7 +16,7 @@ let bar: PurseBar | null = null;
 
 export function initNotes(): void {
   // The Works shows the Coins as Leaf will count them for a price: the purse's, and the till's whole Coins.
-  bar = purseBar($("purse"), coins);
+  bar = purseBar($("purse"), { coins });
 }
 
 export function tickNotes(dt: number): void {

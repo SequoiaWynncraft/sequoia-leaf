@@ -20,7 +20,7 @@ import {
   saveKey,
   type YardPress,
 } from "../plans.ts";
-import { S, toolHooks } from "../state.ts";
+import { handSession, S, toolHooks } from "../state.ts";
 import { confirm, hold } from "../tools.ts";
 import { button, iconButton, yardIcon } from "./parts.ts";
 import { thumb } from "./thumb.ts";
@@ -87,7 +87,7 @@ function keptButton(p: Extract<Place, { kept: true }>): HTMLElement {
     p.asking || !kept ? ["Replace?"] : [thumb(piecesOf(kept.pieces), p.whole ? S.world.land : null), factsOf(p)];
   return button(p.asking ? "sm asking" : "wood sm print", face, () => {
     if (!S.saving) hold(slot);
-    else if (pressedTwice(key, toolHooks.changed)) saveIn(slot);
+    else if (pressedTwice(handSession(), key, toolHooks.changed)) saveIn(slot);
   });
 }
 
@@ -103,7 +103,7 @@ export function binButton(bin: { readonly slot: number; readonly asking: boolean
   if (!bin) return [];
   const { slot, asking: again } = bin;
   const drop = (): void => {
-    if (pressedTwice(deleteKey(slot), toolHooks.changed)) dropBlueprint(slot);
+    if (pressedTwice(handSession(), deleteKey(slot), toolHooks.changed)) dropBlueprint(slot);
   };
   const b = again
     ? button("sm asking", ["Delete?"], drop)
@@ -123,7 +123,7 @@ export function yardButtons(saveYard: boolean, place: YardPress | null): HTMLEle
   if (!place) return out;
   const label = ["Place", ...(place.cost === 0 ? [] : [amount("coin", pressWords(place.cost))])];
   const style = place.bad ? "sm off" : place.asking ? "sm asking" : "sm";
-  const b = button(style, [asksAgain(place.key, label, "Press again")], () => {
+  const b = button(style, [asksAgain(place.spend, label, "Press again")], () => {
     confirm();
   });
   b.dataset.act = "place-yard";

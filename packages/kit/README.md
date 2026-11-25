@@ -155,10 +155,13 @@ With a mouse, Chromium makes no click when what a press began on is replaced bef
 nothing is drawn again under a held mouse button: `when` waits for its next call after the button
 lifts, and `unheld(fn)` (which `refresh()` uses) for the tick after the click.
 
-A button that spends asks to be pressed again (`pressedTwice(key, redraw)`, drawn with `asking` and
-`asksAgain`). The second press must be a new one: a key that was down at the first and has not come
-up since (a held Enter saying itself again, `keys.ts`) does not make it. `unask()` stops the button
-waiting at once, as four seconds left alone do.
+A button that spends asks to be pressed again (`pressedTwice(life, spend, redraw)`, drawn with
+`asking(spend)` and `asksAgain`). `spend` names what the press is for and the price its button says
+(`{ on, price }`): a press for another thing, or at a price changed since, only asks. `life` is what
+the player is looking at while it waits, the tab on show, the card on top or what the hand holds
+(`Scope.turns` gives one for each): leaving it ends the wait. The second press must be a new one: a
+key that was down at the first and has not come up since (a held Enter saying itself again,
+`keys.ts`) does not make it. `unask()` stops the button waiting at once, as four seconds left alone do.
 
 **What opens over the page** (`dialog.ts`). A page's panel calls `dialog(panel, titleElement, close)`
 as it opens and the function it returns once it has closed: the panel is a dialog named by its
@@ -172,8 +175,8 @@ listener left on a button after its press, a timer that clears a newer hover, an
 that hides a new letter.
 So the browser's listeners, timers, frames, observers and sockets are asked of a scope: `on`,
 `after`, `every`, `frame`, `observe` (a node's changes, or its size) and `socket`, each giving back
-how to let go of it alone, and `child()` for a scope that closes with its parent and may close
-first. `close()` lets go of everything the scope still holds, its children's too, the newest first;
+how to let go of it alone, `child()` for a scope that closes with its parent and may close first,
+and `turns()` for one child at a time, for whatever is on show now. `close()` lets go of everything the scope still holds, its children's too, the newest first;
 closing twice is closing once, and a closed scope starts nothing. An owner holds one scope, and each
 thing that comes and goes under it (a press, a letter, a board rising, a panel) a child of it, so
 that what ends one ends all it held. `scope.ts` is the one file that may call those primitives

@@ -145,4 +145,24 @@ describe("a scope", () => {
     expect(s.child().closed).toBe(true);
     expect(s.socket("ws://127.0.0.1:9/")).toBeNull();
   });
+
+  test("in turns, keeps one child while the same thing is on show, and a new one for each thing after another", () => {
+    const panel = scope();
+    const tab = panel.turns();
+    const quests = tab("quests");
+    expect(tab("quests")).toBe(quests);
+    const news = tab("news");
+    expect([quests.closed, news.closed]).toEqual([true, false]);
+    // Back to the first: not the scope it had, which closed as it left.
+    const again = tab("quests");
+    expect(again).not.toBe(quests);
+    expect([news.closed, again.closed]).toEqual([true, false]);
+    // A thing is itself, not whatever looks like it.
+    const card = { stack: ["plot:meadow"] };
+    const entry = tab(card);
+    expect(tab(card)).toBe(entry);
+    expect(tab({ stack: ["plot:meadow"] })).not.toBe(entry);
+    panel.close();
+    expect(tab("quests").closed).toBe(true);
+  });
 });

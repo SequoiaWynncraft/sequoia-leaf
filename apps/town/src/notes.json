@@ -1,5 +1,30 @@
 [
   {
+    "id": "page-drift",
+    "at": "2026-11-25T18:25Z",
+    "title": "Buttons that ask to be pressed again",
+    "lines": [
+      "A button that asks you to press it again does only what it asked about, at the price it showed. If you close its panel or go to another tab or card first, the next press asks again.",
+      "Your Leaf and Coins in town are written with commas: 12,345."
+    ],
+    "more": [
+      {
+        "head": "Fixed",
+        "points": [
+          "Buying a plot could happen with one press after you opened something in its ground from its card and pressed Back.",
+          "A paid reroll on the quest board could happen with one press after you opened News and went back to Quests.",
+          "In the Grove, an exchange in Seeds could happen with one press after you closed Seeds and opened it again.",
+          "In The Works, one press could swap an order after you closed the orders and opened them again.",
+          "Skip in the Grove goes to the end only while your finger or mouse stays on it.",
+          "Opening Prizes, Seeds or History in the Grove with the keyboard puts the keyboard on its tab. When a Grove button stops asking to be pressed again, the keyboard stays on it. Closing the panel gives the keyboard back to the button that opened it.",
+          "The left and right arrow keys go from tab to tab in the Grove and in The Little Raid's almanac, as in Settings. In the Grove they also choose the pool.",
+          "Escape puts away the letter at the gate, and the keyboard starts on its Into town button. With another notice over the letter, Enter presses that notice's button and leaves the letter up.",
+          "Resting the mouse on a pet at a camp shows its name. A name shown for something that moves stays beside it."
+        ]
+      }
+    ]
+  },
+  {
     "id": "bosses-once-camp-pets",
     "at": "2026-11-25T18:17Z",
     "title": "Bosses counted once, and every pet for visitors",
