@@ -57,11 +57,11 @@ export const GAMES: Readonly<Record<GameId, Game>> = {
 export const isGame = (id: string): id is GameId => id === "works" || id === "table";
 
 /**
- * What the Works has waiting, as a line for the arrival letter; it pays nothing. What the yard
- * earns gathers in its till, which Leaf runs on while the member is away and keeps on the yard's
- * postcard; none of it reaches their Coins until they go in (putting the Works' own letter away pays
- * it in, or the page does within a minute) or buy something there. While they are in the Works the
- * page pays the till in once a minute, so what it holds is what the yard made since they left.
+ * What the Works has waiting, as a line for the arrival letter; it pays nothing. Whatever the yard
+ * earns gathers in its till (the depot's takings, and orders and goals handed over), which Leaf
+ * keeps on the yard's postcard, the yard run on while the member is away; none of it reaches their
+ * Coins until they go in (putting the Works' own letter away pays it in, or the page does within a
+ * minute) or buy something there. So the line says what is waiting, not when it was made.
  */
 export function worksWaiting(doors: Postcards): AwayLine | null {
   const till = doors.works?.till ?? 0;
@@ -69,6 +69,6 @@ export function worksWaiting(doors: Postcards): AwayLine | null {
   const coins = till === 1 ? "1 Coin" : `${till.toLocaleString("en-US")} Coins`;
   return {
     art: "coin",
-    text: `Your Works made ${coins} while you were away. Go in to collect ${till === 1 ? "it" : "them"}.`,
+    text: `Your Works has ${coins} waiting for you. Go in to collect ${till === 1 ? "it" : "them"}.`,
   };
 }

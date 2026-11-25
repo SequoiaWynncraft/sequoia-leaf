@@ -65,10 +65,11 @@ export interface Held {
    */
   readonly unposted: () => string | null;
   /**
-   * What `unposted` gives, taken to be stored with it: the batch that takes it keeps it, and one that
-   * fails lets go of the copy holding it.
+   * What to store with it as a batch keeps it: its postcard as it stands, when it is `written` (its
+   * `rev` moves on, and the postcard with it) or that is not the one stored; else null. Taken to be
+   * stored: the batch that takes it keeps it, and one that fails lets go of the copy holding it.
    */
-  readonly post: () => string | null;
+  readonly post: (written: boolean) => string | null;
 }
 
 /** A game as the play service handles it: in stored text and JSON, whatever the game's own types. */
@@ -167,8 +168,8 @@ export function played<State, Command, View, Note, Short>(
         return opened;
       },
       unposted,
-      post: () => {
-        const postcard = unposted();
+      post: (written) => {
+        const postcard = written && game.postcard ? JSON.stringify(game.postcard(current())) : unposted();
         kept = postcard ?? kept;
         return postcard;
       },
@@ -256,3 +257,6 @@ export const GAMES: Readonly<Record<GameId, Played>> = {
   town: played(TOWN, campRoom, true),
   pulls: played(PULLS),
 };
+
+/** The games whose states tell the town anything (`Played.posts`). */
+export const POSTING: readonly GameId[] = Object.values(GAMES).flatMap((p) => (p.posts ? [p.id] : []));

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Ctx } from "@sequoia-leaf/core";
+import { ALL_ITEMS, collect, create, FACTORY, ORDER_WAITS, play, step } from "@sequoia-leaf/factory";
 import { TOWN, type Town } from "@sequoia-leaf/town";
 
 import { worksWaiting } from "./games.ts";
@@ -61,13 +62,27 @@ describe("the arrival letter", () => {
     expect(l.lines.map((x) => x.art)).toEqual(["leaf", "folk", "coin", "crab"]);
   });
 
-  test("the Works' till as Leaf keeps it is mentioned and not paid: going in collects it", () => {
+  test("the Coins waiting in the Works as Leaf keeps them are mentioned and not paid: going in collects them", () => {
     expect(worksWaiting(till(1))).toEqual({
       art: "coin",
-      text: "Your Works made 1 Coin while you were away. Go in to collect it.",
+      text: "Your Works has 1 Coin waiting for you. Go in to collect it.",
     });
-    expect(worksWaiting(till(1240))?.text).toBe(
-      "Your Works made 1,240 Coins while you were away. Go in to collect them.",
+    expect(worksWaiting(till(1240))?.text).toBe("Your Works has 1,240 Coins waiting for you. Go in to collect them.");
+  });
+
+  test("an order handed over and left uncollected is waiting too, so the line says nothing of when it was made", () => {
+    const y = create({ seed: 3, tier: 4 });
+    const order = y.board[0];
+    if (!order) throw new Error("no board");
+    for (let k = 0; k < ORDER_WAITS; k++) step(y);
+    for (const n of ALL_ITEMS) order.filled[n] = order.want[n] ?? 0;
+    collect(y);
+    expect(play(y, { do: "handOver", order: order.id, tick: y.tick })).not.toHaveProperty("refused");
+    // The page has not collected it yet: closed now, the till still holds the order's pay.
+    const card = FACTORY.postcard?.(y);
+    expect(card?.till).toBe(order.pay);
+    expect(worksWaiting({ works: { waiting: "", till: card?.till ?? 0 } })?.text).toBe(
+      `Your Works has ${order.pay.toLocaleString("en-US")} Coins waiting for you. Go in to collect them.`,
     );
   });
 

@@ -272,6 +272,14 @@ const sum = (spends: readonly Taken[]) => spends.reduce((all, spend) => all + sp
 const standsStill = (held: Held, player: PlayerId, guest: boolean) =>
   !held.run(ctxOf({ playerId: player, guest }, Infinity, 0, 0, NOTHING_GIVEN), () => false);
 
+/**
+ * Whether a state is Leaf's no more until it is written again: it stands still, and its postcard is
+ * the one stored. One whose postcard is still to be written stays due until the batch that writes
+ * it (`settle`) has it due as it then is, so that a write that fails is tried again.
+ */
+const rests = (held: Held, player: PlayerId, guest: boolean) =>
+  standsStill(held, player, guest) && held.unposted() === null;
+
 /** A tend that failed, logged (whose, and of which game) as the sweep's tends are waited for: the others go on. */
 const failed = (player: PlayerId, game: string, defect: unknown) =>
   Effect.annotateLogs(Effect.logError(`Tending the ${game} state of ${player} failed`, defect), { player, game });
@@ -509,7 +517,7 @@ export class Play extends Context.Service<
             if (lane.copy !== undefined || maker === null) return lane.copy;
             // The player's Coins open with the welcome as their first state is made.
             yield* coins.open(player, at);
-            const ctx = ctxOf(maker, at, yield* dice, 0, yield* store.given(player, false));
+            const ctx = ctxOf(maker, at, yield* dice, 0, yield* store.given(player, false, at));
             const text = coded(job, () => played.create(ctx));
             const held = coded(job, () => played.read(text, null));
             return held && (lane.copy = { rev: null, text, guest: maker.guest, born: null, at, held, unsaved: true });
@@ -522,9 +530,9 @@ export class Play extends Context.Service<
               `The ${played.id} state stored for ${player} does not read; it is kept as it is`,
             ).pipe(Effect.annotateLogs({ player, game: played.id, rev }));
           }
-          // A state stored due a tend that stands still is due none until it is written again.
-          if (dueAt !== null && (held === null || standsStill(held, player, guest))) {
-            yield* inSqlite(job, store.rest(player, played.id, rev));
+          // A state stored due that rests (`rests`), or does not read, is due none until it is written again.
+          if (dueAt !== null && (held === null || rests(held, player, guest))) {
+            yield* inSqlite(job, store.rest(player, played.id, rev, held !== null));
           }
           return held && (lane.copy = { rev, text: state, guest, born, at, held, unsaved: false });
         });
@@ -545,7 +553,7 @@ export class Play extends Context.Service<
           const copy = yield* copyOf(job, maker);
           if (!copy) return copy;
           // The owner's own open of the town is given their postcards as well; a batch reads them itself.
-          const given = yield* store.given(job.lane.player, job.kind === "open" && job.lane.played.showsDoors);
+          const given = yield* store.given(job.lane.player, job.kind === "open" && job.lane.played.showsDoors, job.at);
           copy.at = job.at;
           yield* runOn(job, copy, given);
           return { copy, given };
@@ -562,7 +570,7 @@ export class Play extends Context.Service<
           const { at } = copy;
           // The state's generation: a new one is made, by this batch's transaction, at `at`.
           const born = copy.born ?? at;
-          const given = yield* store.given(player, played.showsDoors);
+          const given = yield* store.given(player, played.showsDoors, at);
           const against = { coins: yield* coins.balance(player), room: yield* coins.room(player, at) };
           // The ledger's balance, read once a command takes Leaf.
           let leaf: number | null = null;
@@ -663,7 +671,7 @@ export class Play extends Context.Service<
                   yield* store.award(player, won, at);
                 }
                 // What the state tells the town, kept with it whenever it is not what is stored.
-                yield* store.post(player, played.id, copy.held.post());
+                yield* store.post(player, played.id, next, copy.held.post(changed), dueAt);
                 for (const { id, result } of answers) {
                   // An answer kept for it already: another Leaf did it at this `rev`.
                   if (!(yield* store.answer(player, played.id, id, next, keptOf(result)))) return yield* new Lost();

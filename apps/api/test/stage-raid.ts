@@ -9,6 +9,8 @@ import { isComponentId, isFigureId, isFinishedId, RAID, startRun, type Table, TR
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
+import { keepStaged } from "./stage-kept.ts";
+
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const whole = (v: unknown, least: number, most: number): number | null =>
   typeof v === "number" && Number.isInteger(v) && v >= least && v <= most ? v : null;
@@ -75,10 +77,6 @@ export const stageRaid = (playerId: PlayerId, ops: readonly unknown[]) =>
     for (const op of ops) if (isRecord(op)) step(table, op, made);
     const text = RAID.encode(table);
     if (RAID.decode(text) === null) return [];
-    if (Option.isSome(stored)) {
-      yield* sql`UPDATE play_state SET rev = rev + 1, state = ${text}, updated_at = ${Date.now()} WHERE player_id = ${playerId} AND game = 'raid'`;
-    } else {
-      yield* sql`INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${playerId}, 'raid', 1, ${text}, ${Date.now()})`;
-    }
+    yield* keepStaged(playerId, "raid", text, RAID.postcard?.(table), Date.now());
     return made;
   });

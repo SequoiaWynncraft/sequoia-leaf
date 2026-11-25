@@ -262,18 +262,21 @@ test("the doors and the letter say what Leaf keeps of each game, never what a pa
   w.store.setItem("town.postcard.works.v1", JSON.stringify({ waiting: "The yard is quiet.", till: 3, trophies: [] }));
   expect(await openTown("me", () => undefined)).toBeNull();
   expect(town().doors).toEqual(doors);
-  expect(worksWaiting(town().doors)?.text).toBe(
-    "Your Works made 240 Coins while you were away. Go in to collect them.",
-  );
+  expect(worksWaiting(town().doors)?.text).toBe("Your Works has 240 Coins waiting for you. Go in to collect them.");
   expect(GAMES.works.waiting(town().doors)).toBe("An order is filled and waiting at the gate.");
   expect(GAMES.table.waiting(town().doors)).toBe("The board is set out. One crab is uncounted.");
 });
 
-test("a town from a Leaf from before the doors opens with none: the town's own lines, and nothing of Coins", async () => {
+/** The town's rules as the Leaf before the doors ran them (main at 7cb91a56). */
+const BEFORE_DOORS = "1e233b596ff9a1";
+
+test("a town page with the doors, answered by a Leaf from before them, loads again rather than show a town without them", async () => {
   const before = Object.fromEntries(Object.entries(own).filter(([key]) => key !== "doors"));
-  world = standin({ "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: before } } });
-  expect(await openTown("me", () => undefined)).toBeNull();
-  expect(town().doors).toEqual({});
-  expect(worksWaiting(town().doors)).toBeNull();
-  expect(GAMES.works.waiting(town().doors)).toBe("The yard is quiet. Somebody should start it up.");
+  const answer = { status: 200, body: { rev: 1, now: "x", state: before, rules: BEFORE_DOORS } };
+  world = standin({ "GET /v1/game/play/town": answer });
+  expect(await openTown("me", () => undefined)).toBe("closed");
+  expect(world.reloaded.count).toBe(1);
+  // Loaded again within half a minute and answered by the same Leaf, it stays shut instead of loading again.
+  expect(await openTown("me", () => undefined)).toBe("closed");
+  expect(world.reloaded.count).toBe(1);
 });

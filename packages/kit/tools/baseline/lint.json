@@ -92,7 +92,7 @@
     "packages/town/src/game.ts": 97
   },
   "max-lines": {
-    "apps/api/src/play/service.ts": 634,
+    "apps/api/src/play/service.ts": 636,
     "apps/battler/src/screen/fightview.ts": 899,
     "apps/battler/src/screen/ui/pages.ts": 707,
     "apps/battler/src/screen/ui/table.ts": 545,
@@ -126,7 +126,7 @@
     "apps/api/src/live/live.ts": 310,
     "apps/api/src/play/coins.ts": 95,
     "apps/api/src/play/service.ts": 677,
-    "apps/api/src/play/store.ts": 174,
+    "apps/api/src/play/store.ts": 181,
     "apps/api/src/quests/store.ts": 173,
     "apps/battler/src/main.ts": 107,
     "apps/battler/src/screen/art/table.ts": 168,
