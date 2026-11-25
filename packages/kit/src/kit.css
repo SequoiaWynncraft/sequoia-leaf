@@ -1267,16 +1267,33 @@ button.k-info-chip:hover .k-chip {
   background: #0b0710cc;
 }
 /* Over everything a page has, the settings menu too, for a live room it has let go of: the page goes on beneath it. */
-.k-scrim.k-let-go {
+.k-scrim:is(.k-let-go, .k-ask) {
   z-index: 96;
 }
-/* The card a page shows instead of itself when it will not open: a title, a line, one button. */
+/* Asked before the page has opened: nothing of the page not yet drawn shows behind it, and every word is in the game's face. */
+.k-scrim.k-ask {
+  background: var(--k-ink);
+}
+.k-ask .k-shut {
+  width: min(calc(var(--u) * 200), 100%);
+}
+.k-ask .k-shut p {
+  font: var(--f-ui);
+}
+/* The card a page shows instead of itself when it will not open: a title, a line if it has one, its buttons. */
 .k-shut {
   width: min(calc(var(--u) * 170), 100%);
   box-sizing: border-box;
 }
 .k-shut p {
   margin: calc(var(--u) * 3) 0 calc(var(--u) * 5);
+}
+/* A card with no line: its button stands as far under the title as it would under a line. */
+.k-shut .k-title + .k-btn {
+  margin-top: calc(var(--u) * 5);
+}
+.k-shut .k-btn + .k-btn {
+  margin-top: calc(var(--u) * 3);
 }
 /* Asked of the guild's server, which is taking more than a moment: the thing dims and brightens in two steps. */
 .k-wait {
@@ -1591,6 +1608,22 @@ button.k-info-chip:hover .k-chip {
   justify-content: flex-end;
   gap: calc(var(--u) * 3);
   margin-top: calc(var(--u) * 4);
+}
+/* The Account tab: what each line is, how it stands, and a button where there is something to do. On a narrow panel the button goes under them. */
+.k-settings-account {
+  flex-wrap: wrap;
+  min-height: calc(var(--u) * 24);
+  padding-block: calc(var(--u) * 2);
+}
+.k-settings-account > .k-name {
+  flex: 1;
+}
+.k-settings-account > .k-btn {
+  margin-left: auto;
+}
+.k-settings-stands {
+  font: var(--f-ui);
+  color: var(--k-cream);
 }
 /* The keyboard the player has, over the keys: its name, and the list it is chosen from. */
 .k-settings-keyboard {

@@ -7,17 +7,20 @@
  * - known: the game is live, as them, and the purse holds Leaf's word on their Leaf and Coins;
  * - known as a guest (signed in, not in the guild): the game is live, as them, with Leaf's word on
  *   their Leaf and Coins, and the page asks nothing that is only for members (`/v1/me...`, the guild's news);
- * - signed out: the whole window goes to the guild's sign-in and comes back, once; refused again
- *   within a minute, or in a frame, it says so on a card instead;
+ * - signed out: the gate, a card with one button, Sign in with Discord (Leaf's own sign-in, which
+ *   anyone may use and members too); nothing goes there by itself. In the town's frame, the card
+ *   goes back to town instead;
  * - not a member (a server that lets in only members), or the server is having trouble: a card says so.
  *
- * The cards (`shutCard`) are the same on every page.
+ * The cards (`shutCard`) are the same on every page. A member of the guild's Discord with no
+ * Minecraft account linked is asked to link one before the town opens (`askToLink`).
  */
 
 import { type Balances, type Device, deviceForWidth, readBalances } from "@sequoia-leaf/core";
 
 import { dialog } from "./dialog.ts";
 import { el } from "./dom.ts";
+import { keepText, keptText } from "./keep.ts";
 import { ask, isRecord, listen, type Listening, outside } from "./net.ts";
 import type { Trouble } from "./play.ts";
 import { asGuest, fromLeaf, leafSpending, onLeaf, said, watch } from "./purse.ts";
@@ -35,17 +38,19 @@ export interface Member {
   level: { number: number; into: number; next: number };
   /** The id of the newest thing that happened to them; 0 if nothing has. */
   cursor: number;
+  /** How they signed in: on the guild's website, with a Minecraft account linked, or with Discord alone. */
+  signedInWith: "sequoia" | "discord";
+  /** Whether they have a Minecraft account now, however they signed in: one may have been linked since. */
+  linked: boolean;
+  /** Whether to ask them to link a Minecraft account: a member of the guild's Discord with none linked. */
+  askLink: boolean;
 }
 
-/** Why the game will not open: signed out, not one of the guild, the server in trouble, or gone to sign in. */
-export type Shut = "signedout" | "member" | "closed" | "signin";
+/** Why the game will not open: signed out, not one of the guild, or the server in trouble. */
+export type Shut = "signedout" | "member" | "closed";
 
 export type Where =
   { mode: "none" } | { mode: "live"; me: Member; signIn: string } | { mode: "shut"; why: Shut; signIn: string };
-
-/** When this browser was last sent to sign in, so that a member refused again is not sent round and round. */
-const SIGNED_KEY = "town.signin.v1";
-const AGAIN_AFTER = 60_000;
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
@@ -69,6 +74,9 @@ export function readMember(v: unknown): Member | null {
     leaf,
     level: { number: level, into, next },
     cursor: Math.max(0, num(v.event_cursor) ?? 0),
+    signedInWith: v.signed_in_with === "discord" ? "discord" : "sequoia",
+    linked: v.linked === true || v.signed_in_with !== "discord",
+    askLink: v.ask_link === true,
   };
 }
 
@@ -77,15 +85,9 @@ async function look(): Promise<Where> {
   const signIn = hello.status === 200 && isRecord(hello.body) ? str(hello.body.sign_in) : null;
   if (signIn === null) return { mode: "none" };
   const me = await ask("/v1/game/me");
-  const store = outside.store();
   if (me.status === 200) {
     const member = readMember(me.body);
     if (!member) return { mode: "shut", why: "closed", signIn };
-    try {
-      store?.removeItem(SIGNED_KEY);
-    } catch {
-      // Nothing was remembered.
-    }
     if (member.guest) asGuest();
     leafSpending(isRecord(hello.body) && hello.body.leaf_spending === true);
     // From here on the purse is Leaf's word, guest or member.
@@ -93,31 +95,33 @@ async function look(): Promise<Where> {
     signedInOn = deviceForWidth(outside.width());
     return { mode: "live", me: member, signIn };
   }
-  if (me.status === 401) {
-    if (!outside.top() || !store) return { mode: "shut", why: "signedout", signIn };
-    let last = 0;
-    try {
-      last = Number(store.getItem(SIGNED_KEY) ?? 0) || 0;
-    } catch {
-      last = 0;
-    }
-    const now = outside.now();
-    if (now - last < AGAIN_AFTER && now >= last) return { mode: "shut", why: "signedout", signIn };
-    goSignIn(signIn);
-    return { mode: "shut", why: "signin", signIn };
-  }
+  if (me.status === 401) return { mode: "shut", why: "signedout", signIn };
   if (me.status === 403) return { mode: "shut", why: "member", signIn };
   return { mode: "shut", why: "closed", signIn };
 }
 
-/** Sends the whole window to the guild's sign-in, to come back here after. */
-function goSignIn(signIn: string): void {
-  try {
-    outside.store()?.setItem(SIGNED_KEY, String(outside.now()));
-  } catch {
-    // It still goes; it only cannot remember having gone.
-  }
-  outside.go(signIn + encodeURIComponent(outside.href()));
+/** Where the town is, on this page's server. */
+export const townAddress = (): string => new URL("/play/town/", outside.href()).href;
+
+/** Where the whole window comes back to after going away: this page, or the town when the page is in its frame. */
+const backTo = (): string => (outside.top() ? outside.href() : townAddress());
+
+/**
+ * Sends the whole window to Leaf's own sign-in, with Discord, to come back here after. Anyone may
+ * use it, with or without a Minecraft account linked.
+ */
+export function signInWithDiscord(): void {
+  // With its query: a link to somebody's camp (`?camp=`) or yard (`?of=`) comes back to it signed in.
+  const page = new URL(backTo());
+  outside.away(`/v1/game/sign-in?to=${encodeURIComponent(page.pathname + page.search)}`);
+}
+
+/**
+ * Sends the whole window to the guild's sign-in (`signIn`, from hello), which has a Discord account
+ * with no Minecraft account link one, and comes back here signed in on the guild's website.
+ */
+export function linkAccount(signIn: string): void {
+  outside.away(signIn + encodeURIComponent(backTo()));
 }
 
 let finding: Promise<Where> | null = null;
@@ -158,57 +162,90 @@ export function restart(): void {
 
 // ---------- the cards for a game that will not open ----------
 
-const CARDS: Readonly<Record<Exclude<Shut, "signin">, readonly [string, string, string]>> = {
-  signedout: ["Signed out", "Sign in with the guild's website, and the gate will know you.", "Sign in"],
-  // Only a server that lets in members alone answers so; the guild's own lets everyone in, guests too.
-  member: ["Members only", "Guild Town is for Sequoia members.", "Try again"],
-  closed: ["Just a moment", "The guild's books are closed for a moment. Try again.", "Try again"],
+/** A button of a notice: its word, and what a press does, given how to take the notice away. A quiet one is smaller, under the others. */
+export interface NoticeButton {
+  readonly word: string;
+  readonly quiet?: boolean;
+  readonly go: (away: () => void) => void;
+}
+
+/**
+ * A notice over the page that must be answered: a title, a line (if not empty) and its buttons. One
+ * that asks something of somebody signed in, before the page opens (`ask`), is a wider card with
+ * its title on one line and every word in the game's face, over a page nothing of which shows yet.
+ */
+export interface Notice {
+  readonly title: string;
+  readonly line: string;
+  readonly ask?: boolean;
+  readonly buttons: readonly NoticeButton[];
+}
+
+/** Loads the page again: what Try again does. */
+const loadAgain = (): void => {
+  outside.reload();
 };
 
 /**
- * Puts a notice over the page that must be answered: a title, a line (if not empty) and one button,
- * which does `go` (given how to take the notice away). Returns how to take it away.
+ * The notice for why the game will not open. Signed out it is the gate: the town's name and one
+ * button, which signs in with Discord; in the town's frame, the way back to town instead.
  */
-function card(title: string, line: string, word: string, go: (away: () => void) => void, scrimLook = ""): () => void {
-  const button = el("button", "k-btn wide", { type: "button" }, word);
-  const head = el("h1", "k-title big", { text: title });
+export function shutNotice(why: Shut): Notice {
+  if (why === "member")
+    // Only a server that lets in members alone answers so; the guild's own lets everyone in, guests too.
+    return {
+      title: "Members only",
+      line: "Guild Town is for Sequoia members.",
+      buttons: [{ word: "Try again", go: loadAgain }],
+    };
+  if (why === "closed")
+    return {
+      title: "Just a moment",
+      line: "The guild's books are closed for a moment. Try again.",
+      buttons: [{ word: "Try again", go: loadAgain }],
+    };
+  if (!outside.top()) return { title: "Signed out", line: "", buttons: [{ word: "Back to town", go: () => leave() }] };
+  return { title: "Guild Town", line: "", buttons: [{ word: "Sign in with Discord", go: signInWithDiscord }] };
+}
+
+/** Puts a notice over the page. Returns how to take it away. */
+function show(notice: Notice, scrimLook = notice.ask === true ? "k-ask" : ""): () => void {
+  const head = el("h1", notice.ask === true ? "k-title" : "k-title big", { text: notice.title });
+  const buttons = notice.buttons.map((b) =>
+    el(
+      "button",
+      b.quiet === true ? "k-btn slate sm wide" : "k-btn wide",
+      { type: "button", onclick: () => b.go(away) },
+      b.word,
+    ),
+  );
   const paper = el(
     "section",
     "k-paper k-rise k-shut",
     { role: "alertdialog" },
     head,
-    line === "" ? null : el("p", "", { text: line }),
-    button,
+    notice.line === "" ? null : el("p", "", { text: notice.line }),
+    ...buttons,
   );
   const scrim = el("div", `k-scrim ${scrimLook}`.trim(), {}, paper);
   document.body.append(scrim);
   // A layer first, so that what had the focus before the notice is what has it back after.
   const done = dialog(paper, head, null);
-  button.focus();
+  buttons[0]?.focus();
   const away = (): void => {
     scrim.remove();
     done();
   };
-  button.addEventListener("click", () => go(away));
   return away;
 }
 
 /**
- * Puts the page away behind the card for why it will not open: a title, a line and one button.
- * In a frame, signed out goes back to town instead of to the sign-in. On its way to sign in, the
- * page is left empty. A game in a frame says it is ready, so that the town shows its card.
+ * Puts the page away behind the card for why it will not open (`shutNotice`). A game in a frame
+ * says it is ready, so that the town shows its card.
  */
-export function shutCard(why: Shut, signIn: string): void {
+export function shutCard(why: Shut): void {
   document.body.replaceChildren();
-  if (why !== "signin") {
-    const [title, line, word] = CARDS[why];
-    const back = why === "signedout" && !outside.top();
-    card(title, line, back ? "Back to town" : word, () => {
-      if (back) leave();
-      else if (why === "signedout") goSignIn(signIn);
-      else location.reload();
-    });
-  }
+  show(shutNotice(why));
   if (inTown()) tell({ town: "ready" });
 }
 
@@ -218,16 +255,56 @@ export function shutCard(why: Shut, signIn: string): void {
  */
 export function pageCard(title: string, line: string, word: string, go: () => void): void {
   document.body.replaceChildren();
-  card(title, line, word, go);
+  show({ title, line, buttons: [{ word, go }] });
   if (inTown()) tell({ town: "ready" });
+}
+
+// ---------- asking a member to link their account ----------
+
+/** Kept in the tab once a member has answered Later: they are not asked again until the tab closes. */
+const LATER_KEY = "leaf.link.later.v1";
+
+/**
+ * The notice that asks a member of the guild's Discord with no Minecraft account linked to link
+ * one, or null where there is nothing to ask: anybody else, or a member who answered Later in this
+ * tab. Link account goes to the guild's sign-in; Later takes the notice away, and `later` is called.
+ */
+export function linkNotice(w: Where, later: () => void): Notice | null {
+  if (w.mode !== "live" || !w.me.askLink || keptText(LATER_KEY, "tab") !== null) return null;
+  const { signIn } = w;
+  return {
+    title: "Link your Wynncraft account",
+    line: "Link the account you play on to collect the Leaf your raids and wars earned.",
+    ask: true,
+    buttons: [
+      { word: "Link account", go: () => linkAccount(signIn) },
+      {
+        word: "Later",
+        quiet: true,
+        go: (away) => {
+          keepText(LATER_KEY, "1", "tab");
+          away();
+          later();
+        },
+      },
+    ],
+  };
+}
+
+/** Asks the member to link their account (`linkNotice`), before the town opens: done at once where there is nothing to ask, else when they answer Later. */
+export function askToLink(w: Where): Promise<void> {
+  return new Promise((resolve) => {
+    const notice = linkNotice(w, resolve);
+    if (notice) show(notice);
+    else resolve();
+  });
 }
 
 /**
  * Puts a game away behind the card for a page opened where no Leaf answers: a game played on Leaf
  * needs the guild's server. `line` says so in the game's words.
  */
-export const serverCard = (line: string): void =>
-  pageCard("No server here", line, "Try again", () => location.reload());
+export const serverCard = (line: string): void => pageCard("No server here", line, "Try again", loadAgain);
 
 /** What a game says when the state Leaf keeps for the player does not read. */
 export const UNREADABLE = "Your game could not be read. It has been kept; tell the guild.";
@@ -241,7 +318,7 @@ export function unreadableCard(): void {
   const back = !outside.top();
   pageCard("Could not be read", UNREADABLE, back ? "Back to town" : "Try again", () => {
     if (back) leave();
-    else location.reload();
+    else loadAgain();
   });
 }
 
@@ -250,9 +327,9 @@ export function unreadableCard(): void {
  * signed out or turned away, or the state Leaf keeps not reading. A game that can be visited says
  * its own card for nothing to visit (`pageCard`); any other is shown it as closed.
  */
-export function troubleCard(why: Trouble, signIn: string): void {
+export function troubleCard(why: Trouble): void {
   if (why === "unreadable") unreadableCard();
-  else shutCard(why === "nothing" ? "closed" : why, signIn);
+  else shutCard(why === "nothing" ? "closed" : why);
 }
 
 // ---------- the cards for a live room let go of ----------
@@ -260,31 +337,27 @@ export function troubleCard(why: Trouble, signIn: string): void {
 /** Why a page has let go of its live room for good (`realtime.ts`): the player went live somewhere else, or their session ended. */
 export type LetGo = "replaced" | "signedout";
 
-/** What each card says: a title, a line, and its one button. */
-export const LET_GO: Readonly<Record<LetGo, readonly [string, string, string]>> = {
-  replaced: ["Playing somewhere else", "This page has let go of the town.", "Play here"],
-  signedout: CARDS.signedout,
-};
-
 /**
- * Puts the card for a live room let go of over the page, which plays on beneath it: a title, a line
- * and one button. Playing somewhere else, the button is `again` (taking the room back); signed out,
- * it goes to the guild's sign-in and comes back. Returns how to take the card away.
+ * The notice for a live room let go of: a title, a line (if any) and one button. Playing somewhere
+ * else, the button is `again` (taking the room back); signed out, it signs in with Discord and
+ * comes back.
  */
-export function letGoCard(why: LetGo, signIn: string, again: () => void): () => void {
-  const [title, line, word] = LET_GO[why];
-  return card(
-    title,
-    line,
-    word,
-    (away) => {
-      if (why === "signedout") return goSignIn(signIn);
-      away();
-      again();
-    },
-    "k-let-go",
-  );
+export function letGoNotice(why: LetGo, again: () => void): Notice {
+  if (why === "signedout")
+    return { title: "Signed out", line: "", buttons: [{ word: "Sign in with Discord", go: signInWithDiscord }] };
+  const here = (away: () => void): void => {
+    away();
+    again();
+  };
+  return {
+    title: "Playing somewhere else",
+    line: "This page has let go of the town.",
+    buttons: [{ word: "Play here", go: here }],
+  };
 }
+
+/** Puts the card for a live room let go of (`letGoNotice`) over the page, which plays on beneath it. Returns how to take the card away. */
+export const letGoCard = (why: LetGo, again: () => void): (() => void) => show(letGoNotice(why, again), "k-let-go");
 
 // ---------- the member's own news ----------
 

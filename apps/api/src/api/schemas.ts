@@ -134,6 +134,12 @@ export const GameMe = Schema.Struct({
   coins: Schema.Number,
   /** The version of `coins` and `leaf` (`Purse.version`): of two answers, the higher is the newer. */
   version: Schema.Number,
+  /** How they signed in: `sequoia`, the website's session (a linked Minecraft account), or `discord` alone. */
+  signed_in_with: Schema.Literals(["sequoia", "discord"]),
+  /** Whether they have a Minecraft account now, linked from Discord or signed in with it. */
+  linked: Schema.Boolean,
+  /** Whether to ask them to link a Wynncraft account: in the guild's Discord as a member, with none linked. */
+  ask_link: Schema.Boolean,
 });
 
 /** A skin sheet, the 64 by 64 PNG Minecraft wraps around a character. */

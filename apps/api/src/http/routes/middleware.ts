@@ -1,4 +1,4 @@
-import { ByteSize, Effect, Layer, Option, Redacted } from "effect";
+import { ByteSize, Clock, Effect, Layer, Option, Redacted } from "effect";
 import { HttpServerError, HttpServerRequest } from "effect/http";
 import { HttpApiBuilder, HttpApiError, HttpApiSecurity } from "effect/http-api";
 
@@ -27,8 +27,11 @@ import {
   Unauthorized,
 } from "../../api/errors.ts";
 import { Identities } from "../../auth/session.ts";
+import { leafCookies, SignIns } from "../../auth/sign-ins.ts";
 import { AppConfig } from "../../config.ts";
+import { Logins } from "../../players/logins.ts";
 import { RequestNote } from "../observe.ts";
+import { cookieOf } from "../sign-in.ts";
 
 /** The largest body Leaf reads. */
 const MAX_BODY = ByteSize.kibibytes(16);
@@ -43,6 +46,47 @@ const SAFE_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD"]);
 export function sessionCookies(header: string | undefined): number {
   return (header ?? "").split(/[;,]/).filter((pair) => pair.split("=", 1)[0]?.trim() === SessionCookie.key).length;
 }
+
+/** Leaf's own sessions, for players who signed in with Discord alone: the cookie, and who it is. */
+const leafSessions = (signIns: SignIns["Service"], logins: Logins["Service"], publicOrigin: string) => {
+  /** A Leaf session's cookie, for a player who signed in with Discord alone; "" when there is none. */
+  const leafCookie = Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    return cookieOf(request.headers["cookie"], leafCookies(publicOrigin).session);
+  });
+
+  /** Who a Leaf session belongs to, while it lasts. */
+  const admitLeaf = Effect.fnUntraced(function* (token: string) {
+    const signedIn = yield* signIns.identify(token, yield* Clock.currentTimeMillis);
+    if (Option.isNone(signedIn)) {
+      return yield* new Unauthorized({ code: "unauthorized", message: "Your session has expired. Sign in again" });
+    }
+    // The player its Discord account is now: linking may have taken their first player into another.
+    const { discord, name, member } = signedIn.value;
+    const now = yield* logins.discordPlayer(discord);
+    if (Option.isNone(now)) {
+      return yield* new Unauthorized({ code: "unauthorized", message: "Your session has expired. Sign in again" });
+    }
+    const playerId = now.value;
+    const linked = (yield* logins.minecraftOf([playerId])).has(playerId);
+    const identity: Identity = {
+      playerId,
+      minecraft: null,
+      discord,
+      username: name,
+      guildRank: null,
+      admin: false,
+      session: Redacted.make(token),
+      via: "discord",
+      linked,
+      // Asked only while the player they are now has no Minecraft account: linked in another browser, not asked.
+      askLink: member === true && !linked,
+    };
+    return identity;
+  });
+
+  return { leafCookie, admitLeaf };
+};
 
 /**
  * Who a request's session belongs to, for both ways in: `Session`, which lets in only current
@@ -59,6 +103,8 @@ export function sessionCookies(header: string | undefined): number {
  */
 export const sessionChecks = Effect.gen(function* () {
   const identities = yield* Identities;
+  const signIns = yield* SignIns;
+  const logins = yield* Logins;
   const { publicOrigin } = yield* AppConfig;
   const bearerToken = HttpApiBuilder.securityDecode(HttpApiSecurity.bearer);
   const cookieToken = HttpApiBuilder.securityDecode(SessionCookie);
@@ -93,6 +139,20 @@ export const sessionChecks = Effect.gen(function* () {
     return result.identity;
   });
 
+  const { leafCookie, admitLeaf } = leafSessions(signIns, logins, publicOrigin);
+
+  /**
+   * The website's session, or, when the backend has refused it (signed out there, or linked
+   * elsewhere), a Leaf session the same browser holds: one stale cookie does not hide a fresh one.
+   */
+  const admitEither = (cookie: string) =>
+    admit(cookie).pipe(
+      Effect.catchIf(
+        (failure) => failure instanceof Unauthorized,
+        (refused) => Effect.flatMap(leafCookie, (leaf) => (leaf === "" ? Effect.fail(refused) : admitLeaf(leaf))),
+      ),
+    );
+
   return {
     /** The Bearer's turn: only a request that also came with the cookie. */
     bearer: Effect.fnUntraced(function* (credential: Redacted.Redacted) {
@@ -110,20 +170,23 @@ export const sessionChecks = Effect.gen(function* () {
     upgrade: Effect.gen(function* () {
       yield* oneSessionCookie;
       const cookie = Redacted.value(yield* cookieToken);
-      if (cookie === "") {
+      const leaf = cookie === "" ? yield* leafCookie : "";
+      if (cookie === "" && leaf === "") {
         return yield* admit(Redacted.value(yield* bearerToken));
       }
       const request = yield* HttpServerRequest.HttpServerRequest;
       if (request.headers["origin"] !== publicOrigin) {
         return yield* new BadOrigin({ code: "bad_origin", message: "Leaf takes this only from its own pages" });
       }
-      return yield* admit(cookie);
+      return cookie === "" ? yield* admitLeaf(leaf) : yield* admitEither(cookie);
     }),
     /** The cookie's turn: the cookie, or the Bearer when there is no cookie. */
     cookie: Effect.fnUntraced(function* (credential: Redacted.Redacted) {
       yield* oneSessionCookie;
       const cookie = Redacted.value(credential);
-      if (cookie === "") {
+      // The website's session wins over Leaf's own: it is the member's, with their account and rank.
+      const leaf = cookie === "" ? yield* leafCookie : "";
+      if (cookie === "" && leaf === "") {
         return yield* admit(Redacted.value(yield* bearerToken));
       }
       // Another site's page can make a browser send the cookie, but not with Leaf's own origin.
@@ -131,7 +194,7 @@ export const sessionChecks = Effect.gen(function* () {
       if (!SAFE_METHODS.has(request.method) && request.headers["origin"] !== publicOrigin) {
         return yield* new BadOrigin({ code: "bad_origin", message: "Leaf takes this only from its own pages" });
       }
-      return yield* admit(cookie);
+      return cookie === "" ? yield* admitLeaf(leaf) : yield* admitEither(cookie);
     }),
   };
 });

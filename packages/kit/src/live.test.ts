@@ -2,7 +2,20 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { type Balances, readBalances } from "@sequoia-leaf/core";
 
-import { followLeaf, isGuest, keepLeaf, passPurse, readMember, refreshLeaf, restart, start, where } from "./live.ts";
+import {
+  followLeaf,
+  isGuest,
+  keepLeaf,
+  linkNotice,
+  type Notice,
+  passPurse,
+  readMember,
+  refreshLeaf,
+  restart,
+  shutNotice,
+  start,
+  where,
+} from "./live.ts";
 import { isRecord, type Listening } from "./net.ts";
 import { balance, forgetLedger, fromLeaf, LEAF_NOT_HERE, LEAF_SHUT, leafFor, leafOpen, leafShut } from "./purse.ts";
 import {
@@ -10,7 +23,6 @@ import {
   HELLO,
   keptOpen,
   membersOnly,
-  MemoryStore,
   type Reply,
   type Sent,
   type Standin,
@@ -37,6 +49,16 @@ afterEach(() => {
 
 const live = (me: Reply, opts: Parameters<typeof standin>[1] = {}): Standin =>
   standin({ "GET /v1/game/hello": HELLO, "GET /v1/game/me": me }, opts);
+
+/** What a notice says: its title, its line, and the word on each button. */
+const words = (n: Notice): string[] => [n.title, n.line, ...n.buttons.map((b) => b.word)];
+
+/** Presses the button of a notice with this word on it; `away` is how the notice is taken away. */
+function press(n: Notice, word: string, away: () => void = () => undefined): void {
+  const button = n.buttons.find((b) => b.word === word);
+  if (!button) throw new Error(`no ${word} button`);
+  button.go(away);
+}
 
 describe("finding out where the game is", () => {
   test.each([
@@ -65,6 +87,9 @@ describe("finding out where the game is", () => {
         leaf: 2450,
         level: { number: 7, into: 230, next: 1400 },
         cursor: 140,
+        signedInWith: "sequoia",
+        linked: true,
+        askLink: false,
       },
     });
     expect(where()).toBe(w);
@@ -96,6 +121,9 @@ describe("finding out where the game is", () => {
       leaf: 0,
       level: { number: 1, into: 0, next: 1000 },
       cursor: 0,
+      signedInWith: "sequoia",
+      linked: true,
+      askLink: false,
     });
     expect(readBalances(isRecord(r) ? r.body : null)).toEqual({ coins: 300, leaf: 0, version: 0 });
     expect(readBalances({ coins: "lots", leaf: 0, version: 1 })).toBeNull();
@@ -108,42 +136,65 @@ describe("finding out where the game is", () => {
     expect(world.sent.length).toBe(2);
   });
 
-  test("401: the whole window goes to sign in, to come back to this page", async () => {
+  test("reads how the player signed in, and whether to ask them to link an account", () => {
+    expect(readMember({ ...GUEST, signed_in_with: "discord", ask_link: true })).toMatchObject({
+      signedInWith: "discord",
+      askLink: true,
+    });
+    expect(readMember({ ...GUEST, signed_in_with: "discord", ask_link: false })).toMatchObject({
+      signedInWith: "discord",
+      linked: false,
+      askLink: false,
+    });
+    // Linked since, in another browser: a Discord sign-in, linked.
+    expect(readMember({ ...GUEST, signed_in_with: "discord", linked: true, ask_link: false })).toMatchObject({
+      signedInWith: "discord",
+      linked: true,
+    });
+    expect(readMember({ ...TESTER, signed_in_with: "sequoia", ask_link: false })).toMatchObject({
+      signedInWith: "sequoia",
+      askLink: false,
+    });
+    // A Leaf that says neither: signed in as everyone was before, and nothing to ask.
+    expect(readMember(TESTER)).toMatchObject({ signedInWith: "sequoia", askLink: false });
+  });
+
+  test("401: the gate, the town's name and one button, which signs in with Discord and comes back to this page", async () => {
     world = live({ status: 401, body: { code: "unauthorized" } });
-    expect(await start()).toMatchObject({ mode: "shut", why: "signin" });
-    expect(world.went).toEqual([
-      `https://api.example/auth/web/start?return_to=${encodeURIComponent("https://leaf.example/play/town/?x=1")}`,
-    ]);
+    const w = await start();
+    expect(w).toMatchObject({ mode: "shut", why: "signedout" });
+    // Nothing goes anywhere by itself, and nothing is kept.
+    expect([world.went, world.store.length]).toEqual([[], 0]);
+    const gate = shutNotice("signedout");
+    expect(words(gate)).toEqual(["Guild Town", "", "Sign in with Discord"]);
+    press(gate, "Sign in with Discord");
+    expect(world.went).toEqual(["/v1/game/sign-in?to=%2Fplay%2Ftown%2F%3Fx%3D1"]);
   });
 
-  test("401 again within a minute of going: a card, not another trip", async () => {
-    const store = new MemoryStore();
-    world = live({ status: 401 }, { store });
-    await start();
-    expect(world.went.length).toBe(1);
-    const sentAt = world.clock.now;
-    world.done();
-    restart();
-
-    // Back from signing in 40 seconds later, and still refused.
-    world = live({ status: 401 }, { store });
-    world.clock.now = sentAt + 40_000;
-    expect(await start()).toMatchObject({ mode: "shut", why: "signedout" });
-    expect(world.went).toEqual([]);
-    world.done();
-    restart();
-
-    // Long after, it may go again.
-    world = live({ status: 401 }, { store });
-    world.clock.now = sentAt + 61_000;
-    expect(await start()).toMatchObject({ mode: "shut", why: "signin" });
-    expect(world.went.length).toBe(1);
+  test("the gate comes back to the page it is on, whichever game that is, with whose it is", () => {
+    world = live({ status: 401 }, { href: "https://leaf.example/play/works/?of=someone#top" });
+    press(shutNotice("signedout"), "Sign in with Discord");
+    expect(world.went).toEqual(["/v1/game/sign-in?to=%2Fplay%2Fworks%2F%3Fof%3Dsomeone"]);
   });
 
-  test("401 in a frame: signed out, and nowhere to go", async () => {
+  test("401 in the town's frame: signed out, with the way back to town and nowhere else to go", async () => {
     world = live({ status: 401 }, { top: false });
     expect(await start()).toMatchObject({ mode: "shut", why: "signedout" });
+    expect(words(shutNotice("signedout"))).toEqual(["Signed out", "", "Back to town"]);
     expect(world.went).toEqual([]);
+  });
+
+  test("not a member, or the books closed: a card that says so, and Try again loads the page again", () => {
+    world = live({ status: 403 });
+    expect(words(shutNotice("member"))).toEqual(["Members only", "Guild Town is for Sequoia members.", "Try again"]);
+    const closed = shutNotice("closed");
+    expect(words(closed)).toEqual([
+      "Just a moment",
+      "The guild's books are closed for a moment. Try again.",
+      "Try again",
+    ]);
+    press(closed, "Try again");
+    expect(world.reloaded.count).toBe(1);
   });
 
   test("403: not one of the guild", async () => {
@@ -159,6 +210,60 @@ describe("finding out where the game is", () => {
   ] as const)("%s after hello: the guild's books are closed", async (_why, me) => {
     world = live(me);
     expect(await start()).toMatchObject({ mode: "shut", why: "closed" });
+  });
+});
+
+describe("asking a member with no account linked to link one", () => {
+  /** A member of the guild's Discord who signed in with Discord alone. */
+  const UNLINKED = { ...GUEST, signed_in_with: "discord", ask_link: true };
+
+  test("they are asked, in the game's face: Link account goes to the guild's sign-in and comes back to this page", async () => {
+    world = live({ status: 200, body: UNLINKED });
+    const asked = linkNotice(await start(), () => undefined);
+    if (!asked) throw new Error("not asked");
+    expect([...words(asked), asked.ask]).toEqual([
+      "Link your Wynncraft account",
+      "Link the account you play on to collect the Leaf your raids and wars earned.",
+      "Link account",
+      "Later",
+      true,
+    ]);
+    expect(asked.buttons.map((b) => b.quiet === true)).toEqual([false, true]);
+    press(asked, "Link account");
+    expect(world.went).toEqual([
+      `https://api.example/auth/web/start?return_to=${encodeURIComponent("https://leaf.example/play/town/?x=1")}`,
+    ]);
+  });
+
+  test("Later takes the card away, the town opens, and they are not asked again in this tab; a new tab asks", async () => {
+    world = live({ status: 200, body: UNLINKED });
+    const w = await start();
+    const did: string[] = [];
+    const asked = linkNotice(w, () => did.push("opens"));
+    if (!asked) throw new Error("not asked");
+    press(asked, "Later", () => did.push("away"));
+    expect(did).toEqual(["away", "opens"]);
+    expect(linkNotice(w, () => undefined)).toBeNull();
+    // Nothing of it is kept in the browser: only in the tab.
+    expect(world.store.length).toBe(0);
+    world.done();
+    restart();
+
+    world = live({ status: 200, body: UNLINKED });
+    expect(linkNotice(await start(), () => undefined)).not.toBeNull();
+  });
+
+  test.each([
+    ["a member signed in on the website", TESTER],
+    ["somebody who signed in with Discord and is not in the guild's Discord", { ...GUEST, signed_in_with: "discord" }],
+  ] as const)("%s is not asked", async (_who, me) => {
+    world = live({ status: 200, body: me });
+    expect(linkNotice(await start(), () => undefined)).toBeNull();
+  });
+
+  test("nobody is asked where the game is not live", async () => {
+    world = live({ status: 401 });
+    expect(linkNotice(await start(), () => undefined)).toBeNull();
   });
 });
 
@@ -360,7 +465,8 @@ describe("against what Leaf really answers", () => {
       "GET /v1/game/hello": said("GET /v1/game/hello"),
       "GET /v1/game/me": said("GET /v1/game/me, signed out"),
     });
-    expect(await start()).toMatchObject({ mode: "shut", why: "signin" });
+    expect(await start()).toMatchObject({ mode: "shut", why: "signedout" });
+    expect(world.went).toEqual([]);
     world.done();
     restart();
     world = standin({

@@ -30,6 +30,65 @@ import {
   seconds,
 } from "./shared.ts";
 
+/** `GET /v1/game/me`: who is signed in, with their Leaf, Coins and level, and how they signed in. */
+const gameMe = ({
+  coins,
+  names,
+  events,
+  ledger,
+}: {
+  readonly coins: Coins["Service"];
+  readonly names: PlayerNames["Service"];
+  readonly events: Events["Service"];
+  readonly ledger: Ledger["Service"];
+}) =>
+  Effect.gen(function* () {
+    const identity = yield* CurrentIdentity;
+    // Read only: a player with no Coins account yet is shown the welcome it will open with.
+    if (isGuest(identity)) {
+      // A guest has their Leaf, to spend on what is for everyone: what they earned as a
+      // member, or the staff gave them. They have no XP or news of the guild's.
+      const { leaf, coins: held, version } = yield* coins.balances(identity.playerId);
+      return {
+        player: { id: identity.playerId, username: identity.username },
+        rank: null,
+        guest: true,
+        leaf,
+        xp: 0,
+        level: levelJson(0),
+        event_cursor: 0,
+        coins: held,
+        version,
+        signed_in_with: identity.via,
+        linked: identity.linked,
+        ask_link: identity.askLink,
+      };
+    }
+    // The backend vouches for the name, so the guild's news can show it.
+    yield* names.remember(identity.playerId, identity.username, yield* Clock.currentTimeMillis);
+    // The cursor first: an event is written in the transaction that pays it, so the account
+    // read after it holds everything up to the cursor. Something paid in between is in the
+    // balance and after the cursor, and the game asks again for nothing; read the other way
+    // round, it would be under the cursor and missing from the balance, and never asked for.
+    const cursor = yield* events.latestIdOf(identity.playerId);
+    const { xp } = yield* ledger.account(identity.playerId);
+    const { leaf, coins: held, version } = yield* coins.balances(identity.playerId);
+    return {
+      player: { id: identity.playerId, username: identity.username },
+      rank: identity.guildRank,
+      guest: false,
+      leaf,
+      xp,
+      level: levelJson(xp),
+      event_cursor: cursor,
+      coins: held,
+      version,
+      signed_in_with: identity.via,
+      linked: identity.linked,
+      ask_link: identity.askLink,
+    };
+  });
+
 export const GamePeopleHandlers = HttpApiBuilder.group(LeafApi, "gamePeople", (handlers) =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
@@ -45,48 +104,7 @@ export const GamePeopleHandlers = HttpApiBuilder.group(LeafApi, "gamePeople", (h
 
     return (
       handlers
-        .handle("me", () =>
-          Effect.gen(function* () {
-            const identity = yield* CurrentIdentity;
-            // Read only: a player with no Coins account yet is shown the welcome it will open with.
-            if (isGuest(identity)) {
-              // A guest has their Leaf, to spend on what is for everyone: what they earned as a
-              // member, or the staff gave them. They have no XP or news of the guild's.
-              const { leaf, coins: held, version } = yield* coins.balances(identity.playerId);
-              return {
-                player: { id: identity.playerId, username: identity.username },
-                rank: null,
-                guest: true,
-                leaf,
-                xp: 0,
-                level: levelJson(0),
-                event_cursor: 0,
-                coins: held,
-                version,
-              };
-            }
-            // The backend vouches for the name, so the guild's news can show it.
-            yield* names.remember(identity.playerId, identity.username, yield* Clock.currentTimeMillis);
-            // The cursor first: an event is written in the transaction that pays it, so the account
-            // read after it holds everything up to the cursor. Something paid in between is in the
-            // balance and after the cursor, and the game asks again for nothing; read the other way
-            // round, it would be under the cursor and missing from the balance, and never asked for.
-            const cursor = yield* events.latestIdOf(identity.playerId);
-            const { xp } = yield* ledger.account(identity.playerId);
-            const { leaf, coins: held, version } = yield* coins.balances(identity.playerId);
-            return {
-              player: { id: identity.playerId, username: identity.username },
-              rank: identity.guildRank,
-              guest: false,
-              leaf,
-              xp,
-              level: levelJson(xp),
-              event_cursor: cursor,
-              coins: held,
-              version,
-            };
-          }),
-        )
+        .handle("me", () => gameMe({ coins, names, events, ledger }))
         .handle("skin", ({ params }) =>
           Effect.gen(function* () {
             const playerId = parsePlayerId(params.uuid);

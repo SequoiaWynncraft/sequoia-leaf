@@ -73,19 +73,17 @@ async function boot(): Promise<void> {
   watchPage("battler");
   const where = await start();
   if (where.mode === "shut") {
-    shutCard(where.why, where.signIn);
+    shutCard(where.why);
     return;
   }
   if (where.mode !== "live") {
     serverCard(NEEDS_LEAF);
     return;
   }
-  const { signIn, me } = where;
-  const card = (why: Parameters<typeof troubleCard>[0]): void => troubleCard(why, signIn);
-  const trouble = await openTable(me.id, card);
+  const trouble = await openTable(where.me.id, troubleCard);
   if (trouble) {
     failedToOpen(trouble);
-    card(trouble);
+    troubleCard(trouble);
     return;
   }
   const menu = startSettings(scope(), lookBack);

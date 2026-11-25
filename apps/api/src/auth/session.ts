@@ -1,10 +1,13 @@
 import type { PlayerId } from "@sequoia-leaf/core";
-import { Cache, Clock, Context, Duration, Effect, Exit, Layer, Option, Redacted, Schema } from "effect";
+import { Cache, Clock, Context, Duration, Effect, Exit, Layer, Redacted, Schema } from "effect";
+import { SecureRandom } from "effect/crypto";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import { SqlClient } from "effect/sql";
 
 import type { Identity } from "../api/api.ts";
 import { askBackend, logFailure } from "../backend/failure.ts";
 import { AppConfig } from "../config.ts";
+import { accountPlayer } from "../players/link.ts";
 import { Logins } from "../players/logins.ts";
 import { DiscordId, MinecraftUuid } from "../wire.ts";
 
@@ -53,20 +56,22 @@ export class Identities extends Context.Service<
       const { backendUrl } = yield* AppConfig;
       const client = yield* HttpClient.HttpClient;
       const logins = yield* Logins;
+      const sql = yield* SqlClient.SqlClient;
+      const random = yield* SecureRandom.SecureRandom;
 
       /** The player a session the backend vouched for signs in as. */
       const admitted = (token: string, body: typeof BackendIdentity.Type) =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
-          const playerId = yield* logins.player(body.minecraft_uuid);
           const discord = discordOf(body);
-          // A Discord account signs in as its member's primary account's player, never an alternate's.
-          if (discord !== null && body.primary_account === true) {
-            const was = yield* logins.discordPlayer(discord);
-            if (Option.getOrUndefined(was) !== playerId) {
-              yield* logins.linkDiscord(discord, playerId, now);
-            }
-          }
+          // A Discord account and its member's primary account sign in as one player (`accountPlayer`);
+          // an alternate's session, as the mod's may be, is its own account's player and changes nothing.
+          const playerId =
+            discord !== null && body.primary_account === true
+              ? yield* sql
+                  .withTransaction(accountPlayer(discord, body.minecraft_uuid, body.minecraft_username, now))
+                  .pipe(Effect.provideService(SecureRandom.SecureRandom, random), Effect.orDie)
+              : yield* logins.player(body.minecraft_uuid);
           return toResult(token, body, playerId);
         });
 
@@ -120,6 +125,9 @@ function toResult(token: string, body: typeof BackendIdentity.Type, playerId: Pl
       playerId,
       minecraft: body.minecraft_uuid,
       discord: discordOf(body),
+      via: "sequoia",
+      linked: true,
+      askLink: false,
       username: body.minecraft_username,
       guildRank: typeof rank === "string" && rank !== "" ? rank : null,
       admin: body.website_admin === true,

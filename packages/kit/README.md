@@ -274,13 +274,19 @@ no Leaf, and the page shows `serverCard(line)` in its own words. With Leaf it as
   with no Leaf (`asGuest`): `leafShown()` is false, so no page shows a Leaf number, and every Leaf
   button's tip is "Leaf is earned by raiding with Sequoia." (`leafShut()`). `followLeaf` and
   `keepLeaf` listen to nothing, and no page asks `/v1/me...` or the guild's news.
-- **Signed out (401).** The whole window goes to the `sign_in` address the server gave, with its
-  own address on the end, and comes back. Refused again within a minute (the time it went is kept
-  in the browser), or in a frame, it shows the "Signed out" card instead.
+- **Signed out (401).** The gate: a card with the title "Guild Town" and one button, "Sign in with
+  Discord", which sends the whole window to Leaf's own sign-in (`/v1/game/sign-in?to=<this page>`)
+  and comes back. Anyone may sign in so, with or without a Minecraft account linked; nothing goes
+  there by itself. In the town's frame it is the "Signed out" card, whose button goes back to town.
+- **Asked to link** (`ask_link: true`: a member of the guild's Discord with no Minecraft account
+  linked). The game is live, as them; before the town opens, `askToLink` shows a card with "Link
+  account" (the `sign_in` address the server gave, with the page's address on the end) and "Later",
+  which is remembered until the tab closes. The settings menu's Account tab (`account.ts`) says how
+  the player signed in, has the same "Link account", and signs out.
 - **Not a member (403)**, from a server that lets in only members (the guild's own lets in guests),
   or **trouble (5xx, no answer)**: a card says so, with one button.
 
-The cards are `shutCard`: a `k-paper` with a title, a line and one button, in place of the page.
+The cards are `shutCard`: a `k-paper` with a title, a line if it has one and its button, in place of the page.
 
 **Games Leaf owns** (`play.ts`). A game on Leaf's play service keeps nothing of itself in the
 browser: `openPlay(game, reader, { player })` fetches its state (`GET /v1/game/play/<game>`), read
@@ -369,10 +375,10 @@ the snapshots either side, where the newest has them past it, and never on the w
 So nobody is ever drawn anywhere they have not been, however slow or uneven the network. Leaf's clock
 (learnt from pings, by the quickest) is for what goes by Leaf's time. Without Leaf it opens
 nothing, and nobody is ever there. Drawing the others is the page's.
-Once a connection has let go for good, `letGoCard(why, signIn, again)` puts the
+Once a connection has let go for good, `letGoCard(why, again)` puts the
 kit's card for it over the page, which plays on beneath: "Playing somewhere
 else" with "Play here" (`again`, to take the room back), or the "Signed out"
-card, whose button goes to sign in.
+card, whose button signs in with Discord.
 
 All of it reaches the server through `net.ts`, which tests replace with `standin.ts`; the tests
 read the server's own contract files (`contracts/leaf-api-v1.json`, `contracts/leaf-game-v1.json`).

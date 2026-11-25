@@ -29,6 +29,9 @@
  * restarting (1012), and event streams end, before the server goes.
  *
  * - `--guest`: Tester is signed in but not in the guild (any more), so they play as a guest.
+ * - `--discord <name>[:member]`: a sign-in that lets Discord alone through (Leaf's "Sign in with
+ *   Discord") comes back as the Discord account `<name>` with no Minecraft account linked, with
+ *   the one-time proof the backend gives; `:member` makes it one Sequoia's Discord calls a member.
  * - `--down`: the backend can't be asked who Tester is, so they answer 503.
  * - `--busy`: every minute, a few of the four finish a raid together, for the guild's news.
  * - `--admin`: the backend knows one more session, `staff`, of Warden, a website admin who is not
@@ -99,7 +102,7 @@ import {
 } from "./support.ts";
 
 const USAGE =
-  "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--spending] [--log] [--crowd <n>] [--at <place>:<n>[:<away>],...] [--dice <n>] [--leaf <n>]";
+  "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--spending] [--log] [--crowd <n>] [--at <place>:<n>[:<away>],...] [--dice <n>] [--leaf <n>] [--discord <name>[:member]]";
 
 const [portText = "", publicDirText = "", ...given] = process.argv.slice(2);
 const port = Number(portText);
@@ -121,7 +124,8 @@ const atGames = (busyAt < 0 ? "" : (given[busyAt + 1] ?? "?"))
     return { place, n: Number(n), afk: Number(afk) };
   });
 /** The options with a value, each with its value, taken out. */
-const valued = new Set([crowdAt, diceAt, leafAt, busyAt].flatMap((i) => (i >= 0 ? [i, i + 1] : [])));
+const discordAt = given.indexOf("--discord");
+const valued = new Set([crowdAt, diceAt, leafAt, busyAt, discordAt].flatMap((i) => (i >= 0 ? [i, i + 1] : [])));
 const flags = given.filter((_, i) => !valued.has(i));
 if (
   !Number.isInteger(port) ||
@@ -158,6 +162,7 @@ const guest = flags.includes("--guest");
 const down = flags.includes("--down");
 const busy = flags.includes("--busy");
 const admin = flags.includes("--admin");
+const [discordName, discordMember] = (discordAt === -1 ? "" : (given[discordAt + 1] ?? "")).split(":");
 const spending = flags.includes("--spending");
 const printLog = flags.includes("--log");
 const origin = `http://127.0.0.1:${port}`;
@@ -685,6 +690,20 @@ function signing(request: Request): Response | undefined {
       status: 302,
       headers: { Location: back, "Set-Cookie": "seq_session=; Path=/; Max-Age=0" },
     });
+  }
+  // Leaf's own sign-in, as a Discord account with no Minecraft account: back with a one-time proof.
+  if (discordName && url.searchParams.get("allow_unlinked") === "true") {
+    const code = `leafd_${crypto.randomUUID()}`;
+    backend.proofs[code] = () =>
+      Response.json({
+        discord_id: "100000000000000187",
+        username: discordName,
+        display_name: discordName,
+        avatar: null,
+        return_to: back,
+        sequoia_member: discordMember === "member",
+      });
+    return new Response(null, { status: 302, headers: { Location: `${back}&leaf_discord=${code}` } });
   }
   // `?as=<name>`: one of the others, for a second page as somebody else; otherwise Tester.
   const as = url.searchParams.get("as")?.toLowerCase();

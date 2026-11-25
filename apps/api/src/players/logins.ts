@@ -34,6 +34,20 @@ export class Logins extends Context.Service<
     readonly discordPlayer: (discord: DiscordId) => Effect.Effect<Option.Option<PlayerId>>;
     /** Makes this Discord account sign in as this player, from whichever it signed in as before. */
     readonly linkDiscord: (discord: DiscordId, player: PlayerId, now: number) => Effect.Effect<void>;
+    /** Makes this Minecraft account sign in as this player, from whichever it signed in as before. */
+    readonly linkMinecraft: (account: MinecraftId, player: PlayerId, now: number) => Effect.Effect<void>;
+    /**
+     * Marks a player's id as not their Minecraft account's: one Leaf made for a Discord account
+     * (`madeForDiscord`), or one whose account went to another person.
+     */
+    readonly notOwnAccount: (player: PlayerId, now: number, madeForDiscord: boolean) => Effect.Effect<void>;
+    /** Whether a Discord account other than this one signs in as the player. */
+    readonly claimedByOther: (player: PlayerId, discord: DiscordId) => Effect.Effect<boolean>;
+    /**
+     * Whether the player came with Discord alone: an id Leaf made for a Discord account, with no
+     * Minecraft account linked to them since. Not one whose own account went to someone else.
+     */
+    readonly discordOnly: (player: PlayerId) => Effect.Effect<boolean>;
   }
 >()("leaf/Logins") {
   static readonly layer = Layer.effect(
@@ -104,15 +118,50 @@ export class Logins extends Context.Service<
             discordRow(discord),
             Option.map((row) => row.playerId),
           ).pipe(Effect.orDie),
-        linkDiscord: (discord, player, now) =>
-          sql`
-            INSERT INTO logins (kind, external_id, player_id, linked_at)
-            VALUES ('discord', ${discord}, ${player}, ${now})
-            ON CONFLICT (kind, external_id) DO UPDATE
-            SET player_id = excluded.player_id, linked_at = excluded.linked_at
-            WHERE player_id IS NOT excluded.player_id
-          `.pipe(Effect.asVoid, Effect.orDie),
+        ...writes(sql),
       });
     }),
   );
 }
+
+/** The links that change who signs in as whom. */
+const writes = (
+  sql: SqlClient.SqlClient,
+): Pick<Logins["Service"], "linkDiscord" | "linkMinecraft" | "notOwnAccount" | "claimedByOther" | "discordOnly"> => ({
+  linkDiscord: (discord, player, now) =>
+    sql`
+        INSERT INTO logins (kind, external_id, player_id, linked_at)
+        VALUES ('discord', ${discord}, ${player}, ${now})
+        ON CONFLICT (kind, external_id) DO UPDATE
+        SET player_id = excluded.player_id, linked_at = excluded.linked_at
+        WHERE player_id IS NOT excluded.player_id
+      `.pipe(Effect.asVoid, Effect.orDie),
+  linkMinecraft: (account, player, now) =>
+    sql`
+        INSERT INTO logins (kind, external_id, player_id, linked_at)
+        VALUES ('minecraft', ${account}, ${player}, ${now})
+        ON CONFLICT (kind, external_id) DO UPDATE
+        SET player_id = excluded.player_id, linked_at = excluded.linked_at
+        WHERE player_id IS NOT excluded.player_id
+      `.pipe(Effect.asVoid, Effect.orDie),
+  notOwnAccount: (player, now, madeForDiscord) =>
+    sql`
+      INSERT OR IGNORE INTO leaf_ids (player_id, made_at, for_discord) VALUES (${player}, ${now}, ${madeForDiscord ? 1 : 0})
+    `.pipe(Effect.asVoid, Effect.orDie),
+  claimedByOther: (player, discord) =>
+    Effect.map(
+      sql`
+          SELECT 1 AS n FROM logins WHERE kind = 'discord' AND player_id = ${player} AND external_id != ${discord}
+        `,
+      (rows) => rows.length > 0,
+    ).pipe(Effect.orDie),
+  discordOnly: (player) =>
+    Effect.map(
+      sql`
+          SELECT 1 AS n FROM leaf_ids AS m
+          WHERE m.player_id = ${player} AND m.for_discord = 1
+            AND NOT EXISTS (SELECT 1 FROM logins AS l WHERE l.kind = 'minecraft' AND l.player_id = m.player_id)
+        `,
+      (rows) => rows.length > 0,
+    ).pipe(Effect.orDie),
+});

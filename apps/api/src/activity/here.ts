@@ -150,7 +150,9 @@ export const readHere = (sql: SqlClient.SqlClient) => {
 
 /**
  * The first `most` newest visits `where` picks, with who they are, and at a camp whose: newest heard
- * of first, or newest closed first.
+ * of first, or newest closed first. A player taken into another when they linked an account
+ * (`merges`) is nobody now: their visits stay on record, but they are not about, even from a page
+ * still open as them.
  */
 const newest = (sql: SqlClient.SqlClient, where: Statement.Fragment, by: "heard" | "left", most: number) => sql`
   SELECT * FROM (
@@ -158,7 +160,7 @@ const newest = (sql: SqlClient.SqlClient, where: Statement.Fragment, by: "heard"
            l.guest, l.heard_at AS heardAt, l.left_at AS leftAt, l.stay
     FROM last_visits AS l JOIN players_seen AS p ON p.player_id = l.player_id
       LEFT JOIN players_seen AS o ON o.player_id = l.camp_owner
-    WHERE ${where}
+    WHERE ${where} AND NOT EXISTS (SELECT 1 FROM merges AS m WHERE m.from_id = l.player_id)
     ORDER BY ${sql.literal(by === "heard" ? "l.heard_at" : "l.left_at")} DESC, l.player_id LIMIT ${most}
   )
 `;

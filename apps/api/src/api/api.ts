@@ -77,6 +77,12 @@ export interface Identity {
   readonly minecraft: MinecraftId | null;
   /** The Discord account they signed in with. */
   readonly discord: DiscordId | null;
+  /** How they signed in: the website's session, or Leaf's own for Discord alone. */
+  readonly via: "sequoia" | "discord";
+  /** Whether the player has a Minecraft account now, however they signed in. */
+  readonly linked: boolean;
+  /** Whether they are to be asked to link a Wynncraft account: a member of the guild's Discord with none linked. */
+  readonly askLink: boolean;
   readonly username: string;
   /** The player's rank in the guild, or null when they are not a member now. */
   readonly guildRank: string | null;

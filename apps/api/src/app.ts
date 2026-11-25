@@ -6,6 +6,7 @@ import { FetchHttpClient, HttpRouter } from "effect/http";
 import { ActivityReport } from "./activity/report.ts";
 import { Visits } from "./activity/visits.ts";
 import { Identities } from "./auth/session.ts";
+import { SignIns } from "./auth/sign-ins.ts";
 import { Camps } from "./camps/store.ts";
 import { AppConfig } from "./config.ts";
 import { Database } from "./db.ts";
@@ -18,6 +19,7 @@ import { ApiRoutes, NotFound } from "./http/handlers.ts";
 import { SafetyHeaders } from "./http/headers.ts";
 import { Observed } from "./http/observe.ts";
 import { Pages } from "./http/pages.ts";
+import { SignInRoutes } from "./http/sign-in.ts";
 import { OpenStreams } from "./http/streams.ts";
 import { Ledger } from "./ledger/store.ts";
 import { Live, LIVE_SOCKETS, LiveTuned } from "./live/live.ts";
@@ -37,7 +39,7 @@ import { Tallies } from "./tally/store.ts";
  */
 export const Routes = Layer.mergeAll(
   // Each answered request is counted, and 5xx and slow ones logged; the live connection counts its own.
-  Layer.mergeAll(ApiRoutes, Pages, NotFound).pipe(Layer.provide(Observed.layer)),
+  Layer.mergeAll(ApiRoutes, Pages, NotFound, SignInRoutes).pipe(Layer.provide(Observed.layer)),
   LiveRoute,
   SafetyHeaders,
 ).pipe(Layer.provide(Identities.layer));
@@ -114,6 +116,7 @@ export const Stores = Layer.mergeAll(
   PlayStore.layer,
   Coins.layer,
   Purchases.layer,
+  SignIns.layer,
 ).pipe(
   Layer.provideMerge(PlayerNames.layer),
   Layer.provideMerge(Events.layer),
@@ -131,7 +134,7 @@ export const Services = Layer.mergeAll(Play.layer, Credits.layer, Live.layer.pip
   Layer.provideMerge(Stores),
   Layer.provideMerge(Database),
   Layer.provide(Mojang.layer),
-  Layer.provide(SecureRandom.layerWebCrypto),
+  Layer.provideMerge(SecureRandom.layerWebCrypto),
   Layer.provideMerge(BunServices.layer),
   Layer.provideMerge(FetchHttpClient.layer),
   Layer.provideMerge(AppConfig.layer),
