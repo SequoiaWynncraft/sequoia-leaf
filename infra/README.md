@@ -75,9 +75,14 @@ webhook secrets, and they would be written into the state.
 
 ## What is not managed here
 
-- **The server, Coolify itself, the `coolify` network and the GitHub App.**
-  They are shared with the backend and the site. `shared.tofu` only names
-  them.
+- **The server, Coolify itself, the `coolify` network and Coolify's "Public
+  GitHub" source.** They are shared with the backend and the site.
+  `shared.tofu` only names them. This repository is public, so Coolify clones
+  it without a GitHub App.
+- **The repository's webhook to Coolify**, which starts a deploy on each push
+  to `main`. Coolify takes it at `/webhooks/source/github/events/manual` and
+  checks it against the application's own webhook secret, so it is set by
+  hand, like the secret values below.
 - **The two R2 buckets**, as described above.
 - **Secret values**: `BACKEND_INTERNAL_TOKEN`, which the backend owns, and
   `BACKUP_S3_ACCESS_KEY_ID` with `BACKUP_S3_SECRET_ACCESS_KEY`, the R2 token
@@ -104,7 +109,7 @@ tofu -chdir=infra plan
   the database.** Both have `prevent_destroy`, so OpenTofu refuses such a
   plan rather than carrying it out. Do not remove that to get a
   plan through.
-- **Coolify does not report which GitHub App or network an application uses.**
+- **Coolify does not report which source or network an application uses.**
   The provider would replace an application over a difference in either,
   which is why both are ignored after creation.
 - **Changing a variable does not restart Leaf.** It takes effect at the next
