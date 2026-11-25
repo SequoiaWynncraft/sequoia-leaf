@@ -1,7 +1,7 @@
 /**
  * What a piece's card says in numbers, from the rules' planner: for a machine, its recipe with what it
  * makes and needs of each part a minute and how many of the piece before it that is (`flowOf`); and
- * in sentences, what a gatherer gathers, a Study studies and a belt carries.
+ * in sentences, what a gatherer gathers and a Study studies while power is short (the rest is a piece's pace).
  *
  * A card says these only from the moment the yard may make a recipe that takes more than 1 of a
  * part (`saysNumbers`): until then every recipe is one of each, and no card changes. They are part
@@ -9,8 +9,6 @@
  */
 import {
   aim,
-  carried,
-  carries,
   feeders,
   GATHERER,
   held,
@@ -31,6 +29,7 @@ import {
   STUDY,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { num, perMinute } from "@sequoia-leaf/kit/say.ts";
 
 let known: { open: Yard["open"]; yes: boolean } | null = null;
 /** Whether the yard may make a recipe that takes more than 1 of a part: from then on its cards say numbers. */
@@ -43,33 +42,26 @@ export function saysNumbers(w: Yard): boolean {
   return known.yes;
 }
 
-/** A number as a card says it: whole, or to one place. */
-const n = (v: number): string => v.toLocaleString("en-US", { maximumFractionDigits: 1 });
-/** So many of a thing: "1 plank", "60 planks". */
-const things = (v: number, k: number): string =>
-  `${n(v)} ${v === 1 ? (ITEM_INFO[k]?.name ?? "").toLowerCase() : (ITEM_INFO[k]?.many ?? "")}`;
-
-/** What a kind of piece does a minute at a grade, where that needs no recipe: a belt, tunnel, splitter, joiner or sorter carries. */
-export function kindNumbers(k: Kind, grade: number): string[] {
-  if (carries(k)) return [`Carries up to ${n(carried(grade))} items a minute.`];
-  return [];
-}
+/** What so many of a thing are called: "plank" for 1, "planks" for 60. */
+const called = (v: number, k: number): string =>
+  num(v) === "1" ? (ITEM_INFO[k]?.name ?? "").toLowerCase() : (ITEM_INFO[k]?.many ?? "");
 
 /**
- * What the piece standing on a tile does a minute, in a sentence, where that is not a recipe: what a
- * gatherer gathers, a Study studies, a belt carries. A machine's recipe is drawn instead (`flowOf`).
+ * What the piece standing on a tile does a minute, in a sentence, where its card's pace (`paceOf` in
+ * `cards.ts`, flat out) does not say it already: what a gatherer gathers or a Study studies while
+ * power is short. A machine's recipe is drawn instead (`flowOf`).
  */
 export function numbersOf(w: Yard, i: number): string[] {
   const k = w.kind[i] ?? NONE;
   const grade = w.grade[i] ?? 0;
   const share = litOf(w)[i] === 1 ? power(w).pace : 1;
-  const short = share < 1 ? ": power is short" : "";
+  if (share >= 1) return [];
   if (k === GATHERER) {
     const raw = w.land.deposit[i] ?? NONE;
-    return isItem(raw) ? [`Gathers ${things(makes(GATHERER, grade, null) * share, raw)} a minute${short}.`] : [];
+    const pace = makes(GATHERER, grade, null) * share;
+    return isItem(raw) ? [`Gathers ${perMinute(pace, called(pace, raw))}: power is short.`] : [];
   }
-  if (k === STUDY) return [`Studies up to ${n(makes(STUDY, grade, null) * share)} folios a minute${short}.`];
-  if (carries(k)) return kindNumbers(k, grade);
+  if (k === STUDY) return [`Studies ${perMinute(makes(STUDY, grade, null) * share, "folios")}: power is short.`];
   return [];
 }
 

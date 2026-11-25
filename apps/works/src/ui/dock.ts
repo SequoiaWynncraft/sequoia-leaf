@@ -28,6 +28,7 @@ import {
 } from "@sequoia-leaf/factory";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { amount, asking, asksAgain, el, icon, pressedTwice } from "@sequoia-leaf/kit/dom.ts";
+import { coinsText, whole } from "@sequoia-leaf/kit/say.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 
 import { PAINTS } from "../art/belts.ts";
@@ -171,7 +172,7 @@ function shownIn(row: HTMLElement, b: Element | null): void {
   else if (r && r.right > v.right) row.scrollLeft += r.right - v.right;
 }
 
-const price = (n: number): string => (n === 0 ? "free" : `${n.toLocaleString("en-US")} Coins`);
+const price = (n: number): string => (n === 0 ? "free" : coinsText(n));
 
 /** What the line says with Select in hand: of the pieces in hand, of the area marked, or how to mark one. */
 function selectLine(f: boolean): { text: string; bad: boolean } {
@@ -407,7 +408,7 @@ function placeButton(p: Place, saving: boolean): HTMLElement {
     "facts",
     {},
     el("span", "", { text: `${p.w}x${p.h}` }),
-    el("span", p.cost === 0 ? "" : "k-gold", { text: p.cost === 0 ? "free" : p.cost.toLocaleString("en-US") }),
+    el("span", p.cost === 0 ? "" : "k-gold", { text: p.cost === 0 ? "free" : whole(p.cost) }),
   );
   const face = p.asking || !kept ? ["Replace?"] : [thumb(piecesOf(kept)), facts];
   return button(p.asking ? "sm asking" : "wood sm print", face, () => {

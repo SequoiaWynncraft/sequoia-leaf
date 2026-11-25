@@ -1,5 +1,8 @@
 /** Small helpers for building the interface out of the kit's classes. */
 
+// The words are core's: `say.ts`, which draws with `el`, takes them from there too.
+import { whole } from "@sequoia-leaf/core";
+
 import { pressKeysHeld, stillHeld } from "./keys.ts";
 
 /** What waits for a held mouse button to lift (`unheld`). */
@@ -136,9 +139,9 @@ export function icon(name: IconName, scale = 1): HTMLElement {
   return i;
 }
 
-/** An amount of Leaf or Coins with its icon. */
+/** An amount of Leaf or Coins with its icon: a number as `whole` says it, or words ("free", "+12"). */
 export function amount(kind: "leaf" | "coin", n: number | string): HTMLElement {
-  return el("span", kind === "leaf" ? "k-cur leaf" : "k-cur", {}, icon(kind), String(n));
+  return el("span", kind === "leaf" ? "k-cur leaf" : "k-cur", {}, icon(kind), typeof n === "number" ? whole(n) : n);
 }
 
 /** A canvas drawn elsewhere, shown `scale` screen pixels to each of its own (in interface units). */

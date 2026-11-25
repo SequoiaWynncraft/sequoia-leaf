@@ -21,6 +21,7 @@ import {
   type Stat,
 } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { whole } from "@sequoia-leaf/kit/say.ts";
 import {
   abilityShort,
   abilityText,
@@ -224,8 +225,8 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
           ? `${now.speed.toFixed(2)}/s`
           : "none"
         : key === "health" && u
-          ? `${Math.max(0, Math.round(u.hp))}/${Math.round(u.maxHp)}`
-          : String(Math.round(now[key]));
+          ? `${whole(Math.max(0, u.hp))}/${whole(u.maxHp)}`
+          : whole(now[key]);
     const d = now[key] - plain[key];
     const moved = Math.abs(d) < (key === "speed" ? 0.005 : 0.5) ? 0 : d;
     return moved === 0
@@ -470,7 +471,7 @@ function purseDesc(run: RunView): Description {
     icon: glyph("acorn"),
     tag: "The money inside a raid.",
     stats: [
-      { label: "Held", value: String(run.acorns) },
+      { label: "Held", value: whole(run.acorns) },
       { label: "Piles", value: `${s.piles}/${s.most}` },
       { label: "Pays", value: `+${s.pays}` },
     ],

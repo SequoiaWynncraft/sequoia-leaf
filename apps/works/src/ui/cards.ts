@@ -26,6 +26,8 @@ import {
   type Act,
   ALL_ITEMS,
   BOILER,
+  burned,
+  carried,
   carries,
   CRATE,
   DEADFALL,
@@ -51,10 +53,10 @@ import {
   kind as kindOf,
   KIND_INFO,
   MADE_BY,
+  makes,
   NODES,
   type Numbered,
   numeral,
-  PACE,
   type Plot,
   PYLON,
   RECIPE,
@@ -63,7 +65,6 @@ import {
   SPLITTER,
   STOP,
   STUDY,
-  TICKS,
   tierName,
   type Tool,
   TOOL_INFO,
@@ -82,6 +83,7 @@ import {
   type Stat,
 } from "@sequoia-leaf/kit/card.ts";
 import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { exact, num, perMinute, whole } from "@sequoia-leaf/kit/say.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
 import type { Art } from "../art/index.ts";
@@ -170,12 +172,12 @@ export interface StandingPrint extends SorterPrint {
   readonly holding: readonly (readonly [Item, number])[];
   readonly most: number | null;
   readonly count: number;
-  /** What it makes or gathers, and how many a minute at the yard's pace now, as the card rounds it (null when none). */
+  /** What it makes or gathers, and how many a minute at the yard's pace now, as the card says it ("40 /min"; null when none). */
   readonly making: Item | null;
   /** A machine's recipe as its card draws it: what goes in, what comes out, and how many a minute. */
   readonly flow: Flow | null;
   readonly gathering: Item | null;
-  readonly perMinute: number | null;
+  readonly perMinute: string | null;
   /** What it makes, needs, gathers, studies or carries a minute, in sentences (`numbers.ts`): none until the yard counts. */
   readonly numbers: readonly string[];
   /** The one thing it is told to make, or a sorter to send to its side, or nothing. */
@@ -305,9 +307,6 @@ const GROUND: Readonly<Record<string, readonly [string, string]>> = {
 
 const STEPS = ["From the ground", "Worked once", "Put together", "The guild's goods", "Takes the whole yard"];
 
-/** Seconds, as a card says them: "1.2s". */
-const secs = (ticks: number): string => `${Math.round(ticks) / 10}s`;
-const n = (v: number): string => v.toLocaleString("en-US", { maximumFractionDigits: 3 });
 const nameOf = (k: number): string => KIND_INFO[k]?.name ?? "";
 const many = (k: number): string => ITEM_INFO[k]?.many ?? "";
 
@@ -343,11 +342,11 @@ function itemCard(art: Art, p: ItemPrint): Description {
         ...((recipe.need[i] ?? 1) > 1 ? { count: `×${recipe.need[i]}` } : {}),
       })),
     });
-    rows.push({ label: "In", things: [{ ref: machineRef(recipe.by), note: `${secs(recipe.ticks)} for one` }] });
+    rows.push({ label: "In", things: [{ ref: machineRef(recipe.by), note: perMinute(makes(recipe.by, 1, recipe)) }] });
   } else if (isRaw(k)) {
     rows.push({
       label: "Gathered by",
-      things: [{ ref: machineRef(GATHERER), note: `${secs(TICKS.gather)} for one` }],
+      things: [{ ref: machineRef(GATHERER), note: perMinute(makes(GATHERER, 1, null)) }],
     });
     rows.push({
       label: "Lies in",
@@ -366,32 +365,30 @@ function itemCard(art: Art, p: ItemPrint): Description {
     name: info?.name ?? "",
     icon: art.item(k),
     tag: STEPS[info?.step ?? 0] ?? "",
-    aside: amount("coin", n(info?.worth ?? 0)),
+    aside: amount("coin", exact(info?.worth ?? 0)),
     stats: [
       { label: "Step", value: String(info?.step ?? 0) },
-      { label: "Orders pay", value: n(info?.worth ?? 0) },
-      { label: "Depot pays", value: n((info?.worth ?? 0) * DEPOT_SHARE) },
+      { label: "Orders pay", value: exact(info?.worth ?? 0) },
+      { label: "Depot pays", value: exact((info?.worth ?? 0) * DEPOT_SHARE) },
     ],
     blocks: [...(ground ? [{ title: ground[0], body: ground[1] }] : []), ...(p.lock ? [{ body: `${p.lock}.` }] : [])],
     rows,
   };
 }
 
-/** How long a machine takes over one thing, at a grade's pace. */
-function paceOf(k: Kind, grade: number): string {
-  // A grade works its first grade's ticks in so many of its own.
-  const faster = (PACE[1] ?? 2) / (PACE[grade] ?? PACE[1] ?? 2);
-  if (k === GATHERER) return secs(TICKS.gather * faster);
-  if (k === STUDY) return `${secs(TICKS.study * faster)} a folio`;
-  if (carries(k)) return `${secs(Math.ceil(8 / (PACE[grade] ?? 2)))} a tile`;
-  if (k === BOILER) return `${secs(TICKS.burn)} a piece`;
-  if (isMaker(k)) {
-    const ticks = (MADE_BY[k] ?? []).map((r) => r.ticks * faster);
-    const lo = Math.min(...ticks);
-    const hi = Math.max(...ticks);
-    return lo === hi ? secs(lo) : `${secs(lo)}–${secs(hi)}`;
-  }
-  return "";
+/**
+ * What a piece does a minute at a grade's pace, working flat out (the rules' planner): what a gatherer
+ * gathers, a machine makes (from its quickest recipe to its slowest), a Study takes in, a boiler burns,
+ * and a belt or what stands in a line of belt carries.
+ */
+export function paceOf(k: Kind, grade: number): Stat | null {
+  if (k === GATHERER) return { label: "Gathers", value: perMinute(makes(k, grade, null)) };
+  if (k === STUDY) return { label: "Takes in", value: perMinute(makes(k, grade, null)) };
+  if (carries(k)) return { label: "Carries", value: perMinute(carried(grade)) };
+  if (k === BOILER) return { label: "Burns", value: perMinute(burned()) };
+  if (!isMaker(k)) return null;
+  const often = (MADE_BY[k] ?? []).map((r) => makes(k, grade, r));
+  return { label: "Makes", value: perMinute([Math.min(...often), Math.max(...often)]) };
 }
 
 /** A kind's own blocks: how many are free to place. A price needs no sentence: the card shows it, and taking a piece away gives all of it back. */
@@ -406,11 +403,11 @@ function machineCard(art: Art, p: MachinePrint): Description {
   if (p.later) return { name: nameOf(k), icon: machinePic(art, k), tag: what };
   const stats: Stat[] = [];
   const draw = ((DRAW[k] ?? 0) * (DRAWN[isGraded(k) ? grade : 0] ?? HALF)) / HALF;
-  if (draw > 0) stats.push({ label: "Draws", value: n(draw) });
+  if (draw > 0) stats.push({ label: "Draws", value: num(draw) });
   if ((GIVES[k] ?? 0) > 0) stats.push({ label: "Gives", value: String(p.gives) });
   if (p.stops) stats.push({ label: "Built", value: `${p.stops[0]} of ${p.stops[1]}` });
   const pace = paceOf(k, grade);
-  if (pace) stats.push({ label: "Pace", value: pace });
+  if (pace) stats.push(pace);
   if (p.key) stats.push({ label: "Key", value: p.key });
   const rows: Row[] = [];
   if (isMaker(k)) rows.push({ label: "Can make", things: p.recipes.map((r) => ({ ref: itemRef(r) })) });
@@ -470,11 +467,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
   const waits = p.flow?.waiting === true;
   // Once the card says what it gathers a minute in a sentence, the row names the thing and no more.
   const per = p.numbers.length === 0 ? p.perMinute : null;
-  if (p.gathering !== null)
-    rows.push({
-      label: "Gathering",
-      things: [{ ref: itemRef(p.gathering), note: per !== null ? `${per} a minute` : "" }],
-    });
+  if (p.gathering !== null) rows.push({ label: "Gathering", things: [{ ref: itemRef(p.gathering), note: per ?? "" }] });
   if (p.studying !== null) rows.push({ label: "Studying", things: [{ ref: nodeRef(p.studying) }] });
   if (k === SORTER) rows.push(...sorterRows(p));
   rows.push(...(base.rows ?? []));
@@ -557,7 +550,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
     actions.push({
       label: "Remove",
       look: "coral sm",
-      after: p.refund > 0 ? amount("coin", `+${p.refund}`) : null,
+      after: p.refund > 0 ? amount("coin", `+${whole(p.refund)}`) : null,
       hint: "Remove",
       ...(p.free ? {} : { about: "Any items inside it are lost." }),
       on: () => hands.remove(x, y),
@@ -631,7 +624,7 @@ function nodeCard(p: NodePrint, hands: Hands): Description | null {
     name: info.title,
     icon: goalPic(g),
     tag: node ? `${nodeKind(g)}, from ${node.from}` : `Tier ${info.tier} research`,
-    ...(info.pay > 0 ? { aside: amount("coin", info.pay.toLocaleString("en-US")) } : {}),
+    ...(info.pay > 0 ? { aside: amount("coin", info.pay) } : {}),
     blocks: [
       ...(says === "" ? [] : [{ body: says }]),
       ...(p.done
@@ -656,7 +649,7 @@ const orderCard = (p: OrderPrint): Description => ({
   name: p.title,
   icon: yardIcon("orders"),
   tag: `From ${p.from}`,
-  aside: amount("coin", p.pay.toLocaleString("en-US")),
+  aside: amount("coin", p.pay),
   blocks: [
     { body: p.line },
     ...(p.full ? [{ body: "Filled, and waiting to be handed over." }] : []),

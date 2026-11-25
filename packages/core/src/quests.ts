@@ -1,6 +1,7 @@
 import { type Activity, type RaidKey } from "./activity.ts";
 import { DAY_MS, utcDay, utcWeekStart, WEEK_MS } from "./days.ts";
 import type { PlayerId } from "./player.ts";
+import { whole } from "./say.ts";
 
 /**
  * - `daily`: one becomes available each UTC day and they bank up, so a player
@@ -593,7 +594,7 @@ export function questTitle(objectives: readonly QuestObjective[]): string {
 function amountOf(objective: QuestObjective): string {
   switch (objective.type) {
     case "season_rating":
-      return `${objective.amount.toLocaleString("en-US")} season rating`;
+      return `${whole(objective.amount)} season rating`;
     case "wars":
       return objective.count === 1 ? "1 war" : `${objective.count} wars`;
     case "raids": {

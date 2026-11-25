@@ -53,7 +53,7 @@ function line(r: Row): HTMLElement {
     el("span", "place", { text: String(r.place) }),
     el("span", "k-thing-pic", {}, pic(face, 2)),
     el("span", "who", {}, el("b", "k-thing-name", { text: r.name }), el("span", "k-dim", { text: said })),
-    amount("coin", r.score.toLocaleString("en-US")),
+    amount("coin", r.score),
   );
   known({ id: r.id, name: r.name, line: said, face });
   // The card goes beside the list, not over it.

@@ -9,18 +9,15 @@
 import { type Item, numeral } from "@sequoia-leaf/factory";
 import { link, thing } from "@sequoia-leaf/kit/card.ts";
 import { el } from "@sequoia-leaf/kit/dom.ts";
+import { num, perMinuteNode } from "@sequoia-leaf/kit/say.ts";
 
 import type { Art } from "../art/index.ts";
 import type { Flow, FlowPart } from "./numbers.ts";
 import { pic, yardIcon } from "./parts.ts";
 import { itemRef, machineRef } from "./refs.ts";
 
-/** A number as a card says it: whole, or to one place. */
-const n = (v: number): string => v.toLocaleString("en-US", { maximumFractionDigits: 1 });
-
 /** So many a minute: the number, then "/min" small. */
-const rate = (v: number): HTMLElement =>
-  el("span", "fl-rate", {}, el("span", "k-name", { text: n(v) }), el("span", "k-s k-dim", { text: "/min" }));
+const rate = (v: number): HTMLElement => perMinuteNode(v, "fl-rate");
 
 /** A thing in its slot, twice its usual size: its picture names it when pointed at and opens its card; in the corner, what it holds. */
 function slotOf(art: Art, t: Item, have: string | null, cls: string): HTMLElement {
@@ -59,8 +56,8 @@ function partOf(art: Art, p: FlowPart, waiting: boolean): HTMLElement {
           "span",
           "fl-by",
           {},
-          thing(machineRef(by.kind), { bare: true, count: n(by.count) }),
-          by.top ? el("span", "fl-top k-s", { text: `or ${n(by.top.count)} at ${numeral(by.top.grade)}` }) : null,
+          thing(machineRef(by.kind), { bare: true, count: num(by.count) }),
+          by.top ? el("span", "fl-top k-s", { text: `or ${num(by.top.count)} at ${numeral(by.top.grade)}` }) : null,
         )
       : null,
   );

@@ -5,6 +5,7 @@
 import type { Item, Plot } from "@sequoia-leaf/factory";
 import { type Block, close, type Description } from "@sequoia-leaf/kit/card.ts";
 import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { coinsText, whole } from "@sequoia-leaf/kit/say.ts";
 
 import { itemRef } from "./refs.ts";
 
@@ -47,16 +48,13 @@ export function plotCard(p: PlotPrint, buy: (plot: Plot) => boolean): Descriptio
   const blocks: Block[] = [
     ...(p.bank ? [{ body: "The stream runs through it. A waterwheel must be beside the stream." }] : []),
     ...(p.state === "not yet" ? [{ body: `${p.not ?? "Not for sale yet"}.` }] : []),
-    ...(p.state === "for sale" && !enough ? [{ body: `You need ${p.short.toLocaleString("en-US")} more Coins.` }] : []),
+    ...(p.state === "for sale" && !enough ? [{ body: `You need ${coinsText(p.short)} more.` }] : []),
   ];
   return {
     name: p.name,
     icon: icon("star"),
     tag: p.why,
-    aside:
-      p.state === "owned"
-        ? el("span", "k-chip lit", {}, icon("check"), "Yours")
-        : amount("coin", p.price.toLocaleString("en-US")),
+    aside: p.state === "owned" ? el("span", "k-chip lit", {}, icon("check"), "Yours") : amount("coin", p.price),
     blocks,
     rows: [
       {
@@ -68,7 +66,7 @@ export function plotCard(p: PlotPrint, buy: (plot: Plot) => boolean): Descriptio
       p.state === "for sale" && !p.visiting
         ? [
             {
-              label: `Buy for ${p.price.toLocaleString("en-US")}`,
+              label: `Buy for ${whole(p.price)}`,
               look: enough ? "sm wide" : "sm wide off",
               icon: icon("coin"),
               ...(enough ? { ask: AGAIN } : {}),

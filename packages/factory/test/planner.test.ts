@@ -108,7 +108,13 @@ describe("the planner", () => {
       const before = heldAt(y, 7, plank);
       for (let k = 0; k < F.MINUTE; k++) F.step(y);
       expect(heldAt(y, 7, plank) - before).toBe(each);
+      // What its card and the yard's books say it makes a minute is the planner's, by the yard's power.
+      expect(F.rate(y, F.at(y, 6, 4))).toBeCloseTo(each * F.power(y).pace);
     }
+  });
+
+  test("a boiler burns a piece of deadfall in the ticks the tables give it, at any grade: 30 a minute", () => {
+    expect(F.burned()).toBe(30);
   });
 
   test("a bench kept fed in a yard makes what the planner says, and takes of each part what it says it needs", () => {

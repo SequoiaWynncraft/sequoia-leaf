@@ -4,8 +4,8 @@
  * in a sentence for a screen to show (`status`, which words what `condition` decides). Nothing here
  * changes the yard but working out its power and plumbing if a change left them unknown.
  */
-import { BUFFER, FUEL, REACH, TICKS } from "./content/machines.ts";
-import { MINUTE } from "./planner.ts";
+import { BUFFER, FUEL, REACH } from "./content/machines.ts";
+import { burned, makes } from "./planner.ts";
 import { litOf } from "./power.ts";
 import {
   ALL_ITEMS,
@@ -27,7 +27,6 @@ import {
   JOINER,
   MILL,
   NONE,
-  PACE,
   PYLON,
   RECIPE,
   type Recipe,
@@ -38,7 +37,6 @@ import {
   STUDY,
   TUNNEL,
   WHEEL,
-  WORK,
   WORKSHOP,
 } from "./tables.ts";
 import {
@@ -155,15 +153,15 @@ function takenAhead(y: Yard, i: number, n: Item): "yes" | "nothing" | "never" {
   return found;
 }
 
-/** How many of a thing a gatherer or machine turns out, or folios a Study takes in, in a minute at the yard's present pace, or 0. */
+/** How many of a thing a gatherer or machine turns out, or folios a Study takes in, in a minute at the yard's present pace (the planner's `makes`), or 0. */
 export function rate(y: Yard, i: number): number {
   if (i < 0 || y.kind[i] === NONE || litOf(y)[i] !== 1) return 0;
+  const grade = y.grade[i] ?? 0;
   const share = power(y).pace;
-  const pace = (PACE[y.grade[i] ?? 0] ?? 0) * share * 600;
-  if (y.kind[i] === GATHERER) return pace / WORK.gather;
-  if (y.kind[i] === STUDY) return pace / WORK.study;
+  if (y.kind[i] === GATHERER) return makes(GATHERER, grade, null) * share;
+  if (y.kind[i] === STUDY) return makes(STUDY, grade, null) * share;
   const r = aim(y, i);
-  return r ? pace / r.work : 0;
+  return r ? makes(r.by, grade, r) * share : 0;
 }
 
 /**
@@ -187,10 +185,10 @@ export function flow(y: Yard, made: Counts, needed: Counts, aimed?: Uint8Array):
   for (let c = 0; c < work.length; c++) {
     const i = work[c] ?? 0;
     const k = y.kind[i] ?? NONE;
-    const often = (PACE[y.grade[i] ?? 0] ?? 0) * share * MINUTE;
+    const grade = y.grade[i] ?? 0;
     if (k === GATHERER) {
       const n = y.land.deposit[i] ?? NONE;
-      if (isItem(n)) made[n] = (made[n] ?? 0) + often / WORK.gather;
+      if (isItem(n)) made[n] = (made[n] ?? 0) + makes(GATHERER, grade, null) * share;
       continue;
     }
     if (k === STUDY) {
@@ -207,7 +205,7 @@ export function flow(y: Yard, made: Counts, needed: Counts, aimed?: Uint8Array):
       for (let f = 0; f < FOLIOS.length; f++) {
         const n = FOLIOS[f] ?? NONE;
         const still = Math.max(0, (want[n] ?? 0) - (got?.[n] ?? 0));
-        if (still > 0) needed[n] = (needed[n] ?? 0) + ((often / WORK.study) * still) / left;
+        if (still > 0) needed[n] = (needed[n] ?? 0) + (makes(STUDY, grade, null) * share * still) / left;
       }
       continue;
     }
@@ -220,14 +218,14 @@ export function flow(y: Yard, made: Counts, needed: Counts, aimed?: Uint8Array):
       rec = last && last.by === k && wire.recipes[k]?.includes(last) === true ? last : null;
     }
     if (!rec) continue;
-    const batches = often / rec.work;
+    const batches = makes(rec.by, grade, rec) * share;
     made[rec.out] = (made[rec.out] ?? 0) + batches;
     for (let p = 0; p < rec.from.length; p++) {
       const n = rec.from[p] ?? NONE;
       needed[n] = (needed[n] ?? 0) + batches * (rec.need[p] ?? 1);
     }
   }
-  needed[DEADFALL] = (needed[DEADFALL] ?? 0) + (wire.boilers.length * MINUTE) / TICKS.burn;
+  needed[DEADFALL] = (needed[DEADFALL] ?? 0) + wire.boilers.length * burned();
 }
 
 /** How `condition` says a piece stands: its state's place in `STATES`, with this added while it is in trouble. */

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Ctx } from "@sequoia-leaf/core";
+import { coinsText, type Ctx } from "@sequoia-leaf/core";
 import { ALL_ITEMS, collect, create, FACTORY, ORDER_WAITS, play, step } from "@sequoia-leaf/factory";
 import { TOWN, type Town } from "@sequoia-leaf/town";
 
@@ -82,7 +82,7 @@ describe("the arrival letter", () => {
     const card = FACTORY.postcard?.(y);
     expect(card?.till).toBe(order.pay);
     expect(worksWaiting({ works: { waiting: "", till: card?.till ?? 0 } })?.text).toBe(
-      `Your Works has ${order.pay.toLocaleString("en-US")} Coins waiting for you. Go in to collect them.`,
+      `Your Works has ${coinsText(order.pay)} waiting for you. Go in to collect them.`,
     );
   });
 
