@@ -33,8 +33,7 @@ import {
   DEADFALL,
   DEPOT,
   DEPOT_SHARE,
-  DRAW,
-  DRAWN,
+  drawnAt,
   GATHERER,
   GIVES,
   type Goal,
@@ -42,7 +41,6 @@ import {
   gradeSays,
   HALF,
   isFolio,
-  isGraded,
   isMaker,
   isNode,
   isRaw,
@@ -402,7 +400,7 @@ function machineCard(art: Art, p: MachinePrint): Description {
   const what = grade > 1 ? gradeSays(k, grade) : (KIND_INFO[k]?.what ?? "");
   if (p.later) return { name: nameOf(k), icon: machinePic(art, k), tag: what };
   const stats: Stat[] = [];
-  const draw = ((DRAW[k] ?? 0) * (DRAWN[isGraded(k) ? grade : 0] ?? HALF)) / HALF;
+  const draw = drawnAt(k, grade) / HALF;
   if (draw > 0) stats.push({ label: "Draws", value: num(draw) });
   if ((GIVES[k] ?? 0) > 0) stats.push({ label: "Gives", value: String(p.gives) });
   if (p.stops) stats.push({ label: "Built", value: `${p.stops[0]} of ${p.stops[1]}` });

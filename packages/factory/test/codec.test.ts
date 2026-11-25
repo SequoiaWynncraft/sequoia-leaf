@@ -318,6 +318,8 @@ const LEFT_OUT = new Set([
   "supply",
   "demand",
   "holders.idle",
+  // Read only by a screen, and never kept: the recipe a machine last began.
+  "holders.last",
   // Which row of a side table holds a piece's parts: reading a yard back may change it.
   "row",
   // What Undo would undo is mixed in as its bytes: an entry's id is worked out from them.

@@ -134,6 +134,8 @@ export const PACE: readonly number[] = [0, ...halves((g) => g.pace)];
 /** Power is counted in halves: a power is 2, and a piece of each grade draws this many halves for each power its kind draws. */
 export const HALF = 2;
 export const DRAWN: readonly number[] = [HALF, ...halves((g) => g.draw)];
+/** The power a piece of a kind at a grade draws where power reaches it, in halves: its kind's, once for each half its grade draws. */
+export const drawnAt = (k: number, grade: number): number => (DRAW[k] ?? 0) * (DRAWN[isGraded(k) ? grade : 0] ?? HALF);
 /** The work in gathering one thing and in studying one folio, in half-ticks. */
 export const WORK = { gather: TICKS.gather * 2, study: TICKS.study * 2 } as const;
 /** What a piece of a kind and grade costs to build. */

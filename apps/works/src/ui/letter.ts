@@ -114,9 +114,7 @@ function write(scope: Scope, away: Away, done: () => void): () => void {
   list(
     counted(
       "To hand over",
-      S.world.board.flatMap((o, slot) =>
-        isFilled(o.want, o.filled) ? [[orderRef(slot), coinsText(o.pay)] as const] : [],
-      ),
+      S.world.board.flatMap((o) => (isFilled(o.want, o.filled) ? [[orderRef(o.id), coinsText(o.pay)] as const] : [])),
     ),
   );
   const mostMs = S.world.open.away * TICK_MS;

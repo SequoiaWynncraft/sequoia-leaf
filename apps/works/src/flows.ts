@@ -4,7 +4,7 @@
  * and a number a minute as it is printed. Nothing here touches the page.
  */
 
-import { ALL_ITEMS, counts, flow, type Item, NONE, type Yard } from "@sequoia-leaf/factory";
+import { ALL_ITEMS, counts, flow, type Item, type Yard } from "@sequoia-leaf/factory";
 import { num } from "@sequoia-leaf/kit/say.ts";
 
 import type { Cell } from "./ui/table.ts";
@@ -18,12 +18,6 @@ const kept: { yard: Yard | null; rev: number; second: number; made: Float64Array
   needed: counts(),
 };
 /**
- * The thing each machine was last counted for, by tile, which the rules' `flow` reads and writes: a
- * machine told nothing that holds nothing for a moment is still counted for what it was making.
- */
-let aimed = new Uint8Array(0);
-
-/**
  * What the pieces standing in the yard can make of each thing a minute, and need of each (the rules'
  * `flow`), as of this second of the yard's clock and the rules' count of its changes (`y.rev`).
  */
@@ -33,10 +27,9 @@ export function yardFlows(y: Yard): { readonly made: Float64Array; readonly need
   kept.yard = y;
   kept.rev = y.rev;
   kept.second = second;
-  if (aimed.length !== y.kind.length) aimed = new Uint8Array(y.kind.length).fill(NONE);
   kept.made.fill(0);
   kept.needed.fill(0);
-  flow(y, kept.made, kept.needed, aimed);
+  flow(y, kept.made, kept.needed);
   return kept;
 }
 

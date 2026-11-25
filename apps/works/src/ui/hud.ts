@@ -42,6 +42,12 @@ function set(b: HTMLElement, n: string | null): void {
   b.classList.toggle("long", n !== null && n.length > 2);
 }
 
+/** What the power over the yard prints: the power used and made, and the speed machines work at (the rules' `speed`). */
+export function plaquePrint(): { readonly demand: number; readonly supply: number; readonly speed: number } {
+  const p = power(S.world);
+  return { demand: p.demand, supply: p.supply, speed: p.speed };
+}
+
 function powerPlaque(): () => void {
   const host = $("power");
   const nums = el("span");
@@ -52,26 +58,20 @@ function powerPlaque(): () => void {
     togglePanel("power");
   });
   tip(host, "Power", () => {
-    const p = power(S.world);
-    return p.pace < 1
-      ? `The yard uses ${p.demand} power and makes ${p.supply}. Every machine works at ${Math.floor(p.pace * 100)}% speed.`
+    const p = plaquePrint();
+    return p.speed < 100
+      ? `The yard uses ${p.demand} power and makes ${p.supply}. Every machine works at ${p.speed}% speed.`
       : `The yard uses ${p.demand} of the ${p.supply} power it makes.`;
   });
-  return shows(
-    () => {
-      const p = power(S.world);
-      return { demand: p.demand, supply: p.supply, pace: Math.floor(p.pace * 100) };
-    },
-    (p) => {
-      const short = p.pace < 100;
-      nums.textContent = short ? `${p.demand} / ${p.supply} · ${p.pace}%` : `${p.demand} / ${p.supply}`;
-      host.setAttribute("aria-label", `Power ${nums.textContent}`);
-      nums.classList.toggle("short", short);
-      host.classList.toggle("short", short);
-      bar.classList.toggle("coral", short);
-      fill.style.setProperty("--v", `${Math.min(100, (p.demand / Math.max(1, p.supply)) * 100)}%`);
-    },
-  );
+  return shows(plaquePrint, (p) => {
+    const short = p.speed < 100;
+    nums.textContent = short ? `${p.demand} / ${p.supply} · ${p.speed}%` : `${p.demand} / ${p.supply}`;
+    host.setAttribute("aria-label", `Power ${nums.textContent}`);
+    nums.classList.toggle("short", short);
+    host.classList.toggle("short", short);
+    bar.classList.toggle("coral", short);
+    fill.style.setProperty("--v", `${Math.min(100, (p.demand / Math.max(1, p.supply)) * 100)}%`);
+  });
 }
 
 /**

@@ -1,6 +1,6 @@
 /**
  * The planner: what pieces make, burn, carry and need a minute, worked out from the tables alone, for
- * a card to show, for the yard's books (`status.ts`'s `rate` and `flow`, which scale it by the yard's
+ * a card to show, for the yard's books (`status.ts`'s `machineRate` and `flow`, which scale it by the yard's
  * power) and for balancing. Every piece is taken as working every tick, with power enough and nothing
  * held up; nothing that moves the yard reads it.
  */

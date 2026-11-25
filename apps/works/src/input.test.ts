@@ -4,12 +4,13 @@
  * nothing, so no card comes up for whatever passes beneath; once the yard stands still, what is under
  * the mouse then is pointed at, and a card for it may follow.
  */
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { BELT, build, create } from "@sequoia-leaf/factory";
 import { deck } from "@sequoia-leaf/kit/card.ts";
 import { keyboard } from "@sequoia-leaf/kit/keyboard.ts";
 import { noKeysHeld } from "@sequoia-leaf/kit/keys.ts";
+import { LONG_PRESS } from "@sequoia-leaf/kit/press.ts";
 
 import { opened, useFakeLeaf } from "../test/fake-leaf.ts";
 import { aimOf } from "./hand.ts";
@@ -29,12 +30,13 @@ const { initInput, stepInput } = await import("./input.ts");
 useFakeLeaf();
 
 /**
- * A page for the input to listen on: a window, a document and the yard's canvas. A card's moment
- * never comes; what the page waits for is put in `waits`, for a test to run when it says.
+ * A page for the input to listen on: a window, a document and the yard's canvas. What the page itself
+ * waits for on the window (a clack, dust) never comes; a long press waits in the kit's scope, on the
+ * clock a test holds (`jest.useFakeTimers`).
  */
-function canvasPage(waits: (() => void)[] = []): EventTarget {
+function canvasPage(): EventTarget {
   const win = Object.assign(new EventTarget(), {
-    setTimeout: (f: () => void) => waits.push(f),
+    setTimeout: () => 0,
     clearTimeout: () => {},
     innerWidth: 320,
     innerHeight: 200,
@@ -219,11 +221,16 @@ describe("the keys", () => {
 });
 
 describe("a finger", () => {
+  // A long press waits in the kit's scope: the tests' clock moves only when they say.
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   test("kept on a piece asks for its card as a tap does, and from then on the line does not say how", async () => {
     await openedEmptyHanded();
     S.finger = true;
-    const waits: (() => void)[] = [];
-    const canvas = canvasPage(waits);
+    const canvas = canvasPage();
+    jest.useFakeTimers();
     expect(handPrint().line.text).toBe("Tap a piece for its card.");
     const [x, y] = S.world.land.depot;
     const p = toPage(x * 16 + 8, y * 16 + 8);
@@ -238,7 +245,7 @@ describe("a finger", () => {
     );
     expect(handPrint().line.text).toBe("Tap a piece for its card.");
     // The finger has rested on it long enough, and lifts.
-    for (const wait of waits.splice(0)) wait();
+    jest.advanceTimersByTime(LONG_PRESS);
     canvas.dispatchEvent(
       Object.assign(new Event("pointerup"), {
         pointerId: 2,
@@ -251,11 +258,30 @@ describe("a finger", () => {
     expect(handPrint().line.text).toBe("");
   });
 
+  test("kept on a piece but losing its hold before the moment asks for nothing, and lifting is no tap", async () => {
+    await openedEmptyHanded();
+    S.finger = true;
+    const canvas = canvasPage();
+    jest.useFakeTimers();
+    const [x, y] = S.world.land.depot;
+    const p = toPage(x * 16 + 8, y * 16 + 8);
+    const finger = (type: string): void => {
+      canvas.dispatchEvent(
+        Object.assign(new Event(type), { pointerId: 2, pointerType: "touch", button: 0, clientX: p.x, clientY: p.y }),
+      );
+    };
+    finger("pointerdown");
+    finger("lostpointercapture");
+    jest.advanceTimersByTime(LONG_PRESS);
+    finger("pointerup");
+    expect([deck.open, handPrint().line.text]).toEqual([null, "Tap a piece for its card."]);
+  });
+
   test("resting on bare ground and then moving on leaves a pinned card up; a tap there puts it away", async () => {
     await openedEmptyHanded();
     S.finger = true;
-    const waits: (() => void)[] = [];
-    const canvas = canvasPage(waits);
+    const canvas = canvasPage();
+    jest.useFakeTimers();
     const w = S.world;
     let bare = -1;
     for (let i = 0; i < w.kind.length && bare < 0; i++)
@@ -277,7 +303,7 @@ describe("a finger", () => {
     } as const;
     deck.open = pinned;
     press("pointerdown");
-    for (const wait of waits.splice(0)) wait();
+    jest.advanceTimersByTime(LONG_PRESS);
     expect(deck.open).toBe(pinned);
     press("pointerup");
     expect(deck.open).toBe(pinned);

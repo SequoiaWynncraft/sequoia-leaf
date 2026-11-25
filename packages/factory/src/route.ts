@@ -5,25 +5,8 @@
 import { at, digsUnder, type Dir, DX, DY } from "./build.ts";
 import { toward } from "./land.ts";
 import type { Piece } from "./pieces.ts";
-import {
-  BELT,
-  BENCH,
-  BOILER,
-  CRATE,
-  DEPOT,
-  JOINER,
-  type Kind,
-  locked,
-  MILL,
-  NONE,
-  SORTER,
-  SPLITTER,
-  STOP,
-  STUDY,
-  TUNNEL,
-  WORKSHOP,
-} from "./tables.ts";
-import { ahead, takes as sideTakes } from "./wire.ts";
+import { BELT, DEPOT, type Kind, locked, NONE, TUNNEL } from "./tables.ts";
+import { takes } from "./wire.ts";
 import type { Yard } from "./yard.ts";
 
 /** Where a leg of a run is laid, which way it goes, and its grade: what a leg of belt and a leg of tunnel both hold. */
@@ -62,21 +45,10 @@ export const legPiece = (l: Leg): Piece => ({
 const DIG = 4;
 const DIRS: readonly Dir[] = [0, 1, 2, 3];
 
-/** Whether the piece on tile `t` would take things from tile `c`, handed over going `d`. */
-function takesFrom(y: Yard, t: number, c: number, d: Dir): boolean {
-  const k = y.kind[t] ?? NONE;
-  if (k === DEPOT || k === STOP || k === STUDY) return true;
-  if (k === SPLITTER || k === SORTER) return sideTakes(y, t, c);
-  if (k === TUNNEL) return (y.span[t] ?? 0) > 0 && d === y.dir[t];
-  if (k === BELT || k === JOINER || k === MILL || k === BENCH || k === WORKSHOP || k === CRATE || k === BOILER)
-    return c !== ahead(y, t);
-  return false;
-}
-
 /**
  * The shortest clear run from the tile `from` to `to`. If something stands on `to`, the run ends
- * beside it, pointing into it from a side it takes things from (for the depot, whichever of its
- * tiles is nearest); if `to` is clear ground, the run ends on it, pointing on the way it came, or
+ * beside it, pointing into it from a side it takes things from, as the plumbing has it (`takes`: for
+ * the depot, whichever of its tiles is nearest; a piece that is full takes from the same sides); if `to` is clear ground, the run ends on it, pointing on the way it came, or
  * into the depot if it ends beside it. Nothing if there is no way.
  */
 export function route(
@@ -149,7 +121,7 @@ function search(
         if (must !== 0 && must - 1 !== d) continue;
         const j = toward(land, i, d);
         if (j < 0) continue;
-        if (target >= 0 ? (j === target || (toDepot && y.kind[j] === DEPOT)) && takesFrom(y, j, i, d) : i === goal) {
+        if (target >= 0 ? (j === target || (toDepot && y.kind[j] === DEPOT)) && takes(y, j, i) : i === goal) {
           end = s;
           endDir = d;
           break search;
@@ -175,7 +147,7 @@ function search(
     if (onto < 0 || y.kind[onto] !== DEPOT)
       for (const d of DIRS) {
         const j = toward(land, goal, d);
-        if (j >= 0 && y.kind[j] === DEPOT && takesFrom(y, j, goal, d)) endDir = d;
+        if (j >= 0 && y.kind[j] === DEPOT && takes(y, j, goal)) endDir = d;
       }
   }
 

@@ -9,22 +9,21 @@ import { burned, makes } from "./planner.ts";
 import { litOf } from "./power.ts";
 import {
   ALL_ITEMS,
-  BELT,
   BENCH,
   BOILER,
   CRATE,
   DEADFALL,
   DEPOT,
+  drawnAt,
   FOLIOS,
   GATHERER,
   GIVES,
   GOALS,
-  isFolio,
+  HALF,
   isItem,
   isMaker,
   type Item,
   ITEM_INFO,
-  JOINER,
   MILL,
   NONE,
   PYLON,
@@ -35,22 +34,10 @@ import {
   SPLITTER,
   STOP,
   STUDY,
-  TUNNEL,
   WHEEL,
   WORKSHOP,
 } from "./tables.ts";
-import {
-  ahead,
-  carries,
-  closedWays,
-  nextOf,
-  power,
-  rewire,
-  sortWay,
-  takes as takesFrom,
-  wayIn,
-  wayOut,
-} from "./wire.ts";
+import { carries, closedWays, nextOf, power, rewire, sortWay, takes as takesFrom, wants, wayOut } from "./wire.ts";
 import { type Counts, held, holderOf, tunnelOf, type Yard } from "./yard.ts";
 
 /** How a thing stands: doing its job, with nothing to do just now, or in trouble that will not mend itself. */
@@ -121,18 +108,8 @@ export function aim(y: Yard, i: number): Recipe | null {
   return null;
 }
 
-/** Whether the piece at `to` could ever take a thing from the tile `i`, handed it there. A full belt or machine still counts. */
-function takes(y: Yard, i: number, to: number, n: Item): boolean {
-  const k = y.kind[to] ?? NONE;
-  if (k === DEPOT || k === STOP || (k === STUDY && isFolio(n))) return true;
-  if ((k === BELT || k === CRATE) && ahead(y, to) !== i) return true;
-  if ((k === SPLITTER || k === SORTER || (k === TUNNEL && (y.span[to] ?? 0) > 0)) && takesFrom(y, to, i)) return true;
-  if (k === JOINER && (wayIn(y, to, 0) === i || wayIn(y, to, 1) === i || wayIn(y, to, 2) === i)) return true;
-  const only = y.set[to] ?? NONE;
-  if (isMaker(k))
-    for (const rec of recipesOf(y, k)) if (rec.from.includes(n) && (only === NONE || only === rec.out)) return true;
-  return k === BOILER && n === DEADFALL;
-}
+/** Whether the piece at `to` could ever take a thing from the tile `i`, handed it there: by that side, and that thing. A full belt or machine still counts. */
+const takes = (y: Yard, i: number, to: number, n: Item): boolean => takesFrom(y, to, i) && wants(y, to, n);
 
 /** Whether what stands ahead of a tile could ever take a thing from it: yes, nothing stands there, or never. */
 function takenAhead(y: Yard, i: number, n: Item): "yes" | "nothing" | "never" {
@@ -153,42 +130,65 @@ function takenAhead(y: Yard, i: number, n: Item): "yes" | "nothing" | "never" {
   return found;
 }
 
-/** How many of a thing a gatherer or machine turns out, or folios a Study takes in, in a minute at the yard's present pace (the planner's `makes`), or 0. */
-export function rate(y: Yard, i: number): number {
-  if (i < 0 || y.kind[i] === NONE || litOf(y)[i] !== 1) return 0;
+/** The recipe a machine last began, while it stands: what it is counted for while it holds nothing and is told nothing (`flow`); none before it has begun one. */
+export function lastRecipe(y: Yard, i: number): Recipe | null {
+  const r = i >= 0 && isMaker(y.kind[i] ?? NONE) ? holderOf(y, i) : -1;
+  return r < 0 ? null : (RECIPE[y.holders.last[r] ?? NONE] ?? null);
+}
+
+/**
+ * What a gatherer, a machine or a Study does a minute (the planner's `makes`), as every screen says
+ * it: what it turns out (or a Study takes in) at full power, for what it is making (`aim`, or the
+ * recipe given); the share of ticks it works, none where power does not reach and else the yard's
+ * pace; what it does now at that share; and the power it draws now, its grade's where power reaches
+ * it and none where it does not. Anything else does nothing a minute.
+ */
+export interface MachineRate {
+  readonly nominal: number;
+  readonly share: number;
+  readonly effective: number;
+  readonly draw: number;
+}
+
+export function machineRate(y: Yard, i: number, recipe: Recipe | null = aim(y, i)): MachineRate {
+  const k = i < 0 ? NONE : (y.kind[i] ?? NONE);
   const grade = y.grade[i] ?? 0;
-  const share = power(y).pace;
-  if (y.kind[i] === GATHERER) return makes(GATHERER, grade, null) * share;
-  if (y.kind[i] === STUDY) return makes(STUDY, grade, null) * share;
-  const r = aim(y, i);
-  return r ? makes(r.by, grade, r) * share : 0;
+  const lit = k !== NONE && litOf(y)[i] === 1;
+  const share = lit ? power(y).pace : 0;
+  const nominal =
+    k === GATHERER
+      ? makes(GATHERER, grade, null)
+      : k === STUDY
+        ? makes(STUDY, grade, null)
+        : isMaker(k) && recipe
+          ? makes(recipe.by, grade, recipe)
+          : 0;
+  return { nominal, share, effective: nominal * share, draw: lit ? drawnAt(k, grade) / HALF : 0 };
 }
 
 /**
  * What the pieces standing in a yard can make of each thing a minute, and what they need of each a
  * minute to do it: added to `made` and `needed`, which the caller clears. Every gatherer, machine and
- * Study power reaches is taken as working each tick the yard's power lets it (as `rate` takes it),
+ * Study power reaches is taken as working each tick the yard's power lets it (as `machineRate` takes it),
  * never waiting for a part or for room: so `made` is a ceiling, not a count of anything.
  *
  * A machine is counted for the recipe it is working toward (`aim`). One that holds nothing and is
- * told nothing has none for the moment: where the caller keeps `aimed` (a thing for each tile, `NONE`
- * to begin with), it is counted for the recipe it was last counted for, and this writes there what it
- * counts each machine for. A Study needs the folios the research first in line still wants, in the
- * shares it wants them; a boiler in reach, the deadfall it burns.
+ * told nothing has none for the moment: it is counted for the recipe it last began (`lastRecipe`),
+ * which goes with it when it is taken away. A Study needs the folios the research first in line still
+ * wants, in the shares it wants them; a boiler in reach, the deadfall it burns. Each counts at the
+ * rate every screen says (`machineRate`).
  *
  * It runs down the plumbing's lists, so it costs in step with the pieces that work, and makes nothing.
  */
-export function flow(y: Yard, made: Counts, needed: Counts, aimed?: Uint8Array): void {
+export function flow(y: Yard, made: Counts, needed: Counts): void {
   const wire = y.wire ?? rewire(y);
-  const share = power(y).pace;
   const work = wire.work;
   for (let c = 0; c < work.length; c++) {
     const i = work[c] ?? 0;
     const k = y.kind[i] ?? NONE;
-    const grade = y.grade[i] ?? 0;
     if (k === GATHERER) {
       const n = y.land.deposit[i] ?? NONE;
-      if (isItem(n)) made[n] = (made[n] ?? 0) + makes(GATHERER, grade, null) * share;
+      if (isItem(n)) made[n] = (made[n] ?? 0) + machineRate(y, i).effective;
       continue;
     }
     if (k === STUDY) {
@@ -202,23 +202,17 @@ export function flow(y: Yard, made: Counts, needed: Counts, aimed?: Uint8Array):
         left += Math.max(0, (want[n] ?? 0) - (got?.[n] ?? 0));
       }
       if (left <= 0) continue;
+      const studies = machineRate(y, i).effective;
       for (let f = 0; f < FOLIOS.length; f++) {
         const n = FOLIOS[f] ?? NONE;
         const still = Math.max(0, (want[n] ?? 0) - (got?.[n] ?? 0));
-        if (still > 0) needed[n] = (needed[n] ?? 0) + (makes(STUDY, grade, null) * share * still) / left;
+        if (still > 0) needed[n] = (needed[n] ?? 0) + (studies * still) / left;
       }
       continue;
     }
-    let rec = aim(y, i);
-    if (rec) {
-      if (aimed) aimed[i] = rec.out;
-    } else {
-      const last = aimed ? RECIPE[aimed[i] ?? NONE] : undefined;
-      // What was kept for another kind of machine on this tile, or for a recipe it may not make now, is not this one's.
-      rec = last && last.by === k && wire.recipes[k]?.includes(last) === true ? last : null;
-    }
+    const rec = aim(y, i) ?? lastRecipe(y, i);
     if (!rec) continue;
-    const batches = makes(rec.by, grade, rec) * share;
+    const batches = machineRate(y, i, rec).effective;
     made[rec.out] = (made[rec.out] ?? 0) + batches;
     for (let p = 0; p < rec.from.length; p++) {
       const n = rec.from[p] ?? NONE;

@@ -3,7 +3,7 @@
  * holds, an arrow, and the thing coming out. A dot over a part's slot for each one a single make
  * takes: filled while it holds that many, hollow and coral while the machine waits for it. Once the
  * yard counts, under each part how many a minute and the machines that make that many, and under
- * the thing made how many a minute (coral, with the bolt, while power is short).
+ * the thing made how many a minute (coral, with the bolt, while power is short or does not reach it).
  */
 
 import { type Item, numeral } from "@sequoia-leaf/factory";
@@ -79,7 +79,7 @@ export function flowNode(art: Art, f: Flow): HTMLElement {
       el(
         "span",
         `fl-made${f.slow ? " k-coral" : ""}`,
-        f.slow ? { "aria-label": "power is short" } : {},
+        f.slow ? { "aria-label": f.dark ? "no power here" : "power is short" } : {},
         f.slow ? yardIcon("bolt") : null,
         rate(f.perMinute),
       ),

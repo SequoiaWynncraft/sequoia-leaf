@@ -14,6 +14,7 @@ import {
   build,
   buyPlot,
   check,
+  CRATE,
   create,
   deliver,
   DEPOT,
@@ -36,7 +37,7 @@ import {
 } from "@sequoia-leaf/factory";
 import { deck } from "@sequoia-leaf/kit/card.ts";
 
-import { act, clear, ctx, kindAt, kindOn, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
+import { act, clear, ctx, isRecord, kindAt, kindOn, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { asIf, layout } from "./layout.ts";
 import { DRAWN, draws, S } from "./state.ts";
 import {
@@ -495,6 +496,30 @@ describe("Undo, done by the rules", () => {
       0,
       [stroke, "elsewhere-1"],
     ]);
+  });
+
+  test("after a crate built is shut from its card, has nothing to undo: the crate stands, shut, on the page and on Leaf", async () => {
+    const fake = await opened(yardAt(3), 1000);
+    const [a] = clear(1);
+    if (!a) throw new Error("no room");
+    setTool(CRATE);
+    expect(place(a.x, a.y)).toBe(true);
+    await until(() => fake.leaf.posts >= 1);
+    expect(handPrint().undo).toBe(true);
+    // The crate's card: Shut it; Leaf says it is done.
+    expect("refused" in doNow({ do: "crate", x: a.x, y: a.y, open: false })).toBe(false);
+    await until(() => fake.leaf.posts >= 2);
+    const open = (y: Yard): number | undefined => y.holders.open[holderOf(y, at(y, a.x, a.y))];
+    expect(handPrint().undo).toBe(false);
+    expect(undo()).toBe(false);
+    await Bun.sleep(5);
+    expect([kindAt(a), open(S.world), kindOn(fake.leaf.yard, a), open(fake.leaf.yard)]).toEqual([
+      "crate",
+      0,
+      "crate",
+      0,
+    ]);
+    expect(fake.leaf.commands.map((c) => (isRecord(c) ? c.do : null))).toEqual(["build", "crate"]);
   });
 
   test("with nothing to undo says so, and sends nothing", async () => {
