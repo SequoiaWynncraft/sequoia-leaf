@@ -129,7 +129,7 @@ function list(
         bar.classList.toggle("leaf", got >= of);
       });
     } else if (line.act) end.append(line.act);
-    else if (line.note) end.append(el("span", line.lit ? "gl-note lit" : "gl-note", { text: line.note }));
+    else if (line.note) end.append(el("span", line.lit ? "gl-note k-leafy" : "gl-note k-dim", { text: line.note }));
     return el("div", `gl-row${line.lit ? " lit" : ""}${line.locked === undefined ? "" : " locked"}`, {}, what, end);
   });
   const update = (): void => {
