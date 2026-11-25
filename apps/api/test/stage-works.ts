@@ -10,6 +10,8 @@ import { fillHand, isStage, staged } from "@sequoia-leaf/factory/test/yards.ts";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
+import { keepStaged } from "./stage-kept.ts";
+
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const whole = (v: unknown, most: number): number | null =>
   typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= most ? v : null;
@@ -20,6 +22,7 @@ const tester = (now: number, seed: number) => ({
   seed,
   room: 0,
   awards: [],
+  postcards: {},
 });
 
 /**
@@ -121,11 +124,7 @@ export const stageWorks = (playerId: PlayerId, ops: readonly unknown[], others: 
     }
     if (!yard) return;
     const text = FACTORY.encode(yard);
-    if (Option.isSome(stored)) {
-      yield* sql`UPDATE play_state SET rev = rev + 1, state = ${text}, updated_at = ${now} WHERE player_id = ${playerId} AND game = 'works'`;
-    } else {
-      yield* sql`INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${playerId}, 'works', 1, ${text}, ${now})`;
-    }
+    yield* keepStaged(playerId, "works", text, FACTORY.postcard?.(yard), now);
     const standing = FACTORY.standing?.(yard);
     if (standing) {
       yield* sql`

@@ -1,8 +1,12 @@
 import {
   DAY_MS,
+  type GameId,
+  gameId,
   type Logged,
+  NO_POSTCARDS,
   type Placed,
   type PlayerId,
+  type Postcard,
   type Standing,
   talliedFrom,
   utcDay,
@@ -12,6 +16,7 @@ import { SqlClient, SqlSchema } from "effect/sql";
 
 import { tally } from "../tally/store.ts";
 import { PlayerUuid } from "../wire.ts";
+import { type Given, POSTING } from "./games.ts";
 
 /** How many of each player's newest commands to each game have their answers kept, so that one sent again is answered the same. */
 export const ANSWERS_KEPT = 256;
@@ -25,8 +30,9 @@ export const BOARD_MOST = 20;
 /**
  * A player's state in a game, as stored: how many batches have changed it, the game's own text,
  * when it was last written, whether the player was a guest when it was, when it was made (its
- * generation; 0 for one made before Leaf kept that), and when Leaf is next to tend it (null: never,
- * as for a state standing still or of a game that does not go on by itself).
+ * generation; 0 for one made before Leaf kept that), when Leaf is next to have it in hand (null:
+ * never, as for a state standing still or of a game that does not go on by itself), and the
+ * postcard kept with it at its `rev`, as JSON (null: none, or one of another `rev`).
  */
 const Stored = Schema.Struct({
   rev: Schema.Int,
@@ -35,10 +41,15 @@ const Stored = Schema.Struct({
   guest: Schema.BooleanFromBit,
   born: Schema.Int,
   dueAt: Schema.NullOr(Schema.Int),
+  postcard: Schema.NullOr(Schema.String),
 });
 export type Stored = typeof Stored.Type;
 
 const Answered = Schema.Struct({ result: Schema.String });
+
+/** A postcard as kept (`Game.postcard`), read back from its JSON. */
+const KeptPostcard = Schema.fromJsonString(Schema.Struct({ waiting: Schema.String, till: Schema.Int }));
+const readPostcard = Schema.decodeUnknownOption(KeptPostcard);
 
 /** An activity as stored, for reading back. */
 const Activity = Schema.Struct({
@@ -66,14 +77,111 @@ export interface Board {
   readonly you: Option.Option<Placed>;
 }
 
+/** A state of a player's, with the `rev` of the postcard kept for it (null: none) and when it is due. */
+export const Door = Schema.Struct({
+  game: Schema.String,
+  rev: Schema.Int,
+  kept: Schema.NullOr(Schema.Int),
+  postcard: Schema.NullOr(Schema.String),
+  dueAt: Schema.NullOr(Schema.Int),
+});
+
+/**
+ * The postcards to show of a player's states, by game: each kept at its state's `rev` that reads.
+ * A state of a game that writes postcards (`POSTING`) whose postcard is missing, of another `rev`
+ * or does not read shows none, and is given back as stale unless it is due by `now` already. One
+ * kept as nothing (a state that does not read) shows none and is not stale.
+ */
+function doorsOf(rows: readonly (typeof Door.Type)[], now: number) {
+  const shown: Partial<Record<GameId, Postcard>> = {};
+  const stale: (typeof Door.Type)[] = [];
+  for (const row of rows) {
+    const game = gameId(row.game);
+    if (game === undefined || !POSTING.includes(game)) continue;
+    const card = row.kept === row.rev && row.postcard !== null ? readPostcard(row.postcard) : Option.none();
+    if (Option.isSome(card)) shown[game] = card.value;
+    else if ((row.kept !== row.rev || row.postcard !== null) && (row.dueAt === null || row.dueAt > now))
+      stale.push(row);
+  }
+  return { shown, stale };
+}
+
+/**
+ * Makes a player's state due at `now`, for Leaf's sweep to write its postcard again, only if it and
+ * its postcard are still as the town `seen` them (stale) and it is not due by then already: one the
+ * sweep or its own page put right meanwhile, at the same `rev` or another, is left be.
+ */
+export const dueAgain = (sql: SqlClient.SqlClient, playerId: PlayerId, seen: typeof Door.Type, now: number) => {
+  const kept = (column: "rev" | "postcard") =>
+    sql`(SELECT p.${sql(column)} FROM play_postcards AS p WHERE p.player_id = s.player_id AND p.game = s.game)`;
+  return sql`
+    UPDATE play_state AS s SET due_at = ${now}
+    WHERE player_id = ${playerId} AND game = ${seen.game} AND rev = ${seen.rev} AND (due_at IS NULL OR due_at > ${now})
+      AND ${kept("rev")} IS ${seen.kept} AND ${kept("postcard")} IS ${seen.postcard}
+  `;
+};
+
+/**
+ * What every call of a player's is told (`Given`), and how it is kept: what they have won for good
+ * (`awards`, never taken away) and what each of their states tells the town (`play_postcards`,
+ * kept with the state in the play service's transaction, and read back by the player's key).
+ */
+function givenIn(sql: SqlClient.SqlClient) {
+  const awards = SqlSchema.findAll({
+    Request: Schema.String,
+    Result: Schema.Struct({ id: Schema.String }),
+    execute: (playerId) => sql`SELECT id FROM awards WHERE player_id = ${playerId} ORDER BY at, id`,
+  });
+  const doors = SqlSchema.findAll({
+    Request: Schema.String,
+    Result: Door,
+    execute: (playerId) => sql`
+      SELECT s.game, s.rev, p.rev AS kept, p.postcard, s.due_at AS dueAt FROM play_state AS s
+      LEFT JOIN play_postcards AS p USING (player_id, game) WHERE player_id = ${playerId}
+    `,
+  });
+  return {
+    given: (playerId: PlayerId, withPostcards: boolean, now: number): Effect.Effect<Given> =>
+      Effect.gen(function* () {
+        const won = (yield* awards(playerId)).map((row) => row.id);
+        if (!withPostcards) return { awards: won, postcards: NO_POSTCARDS };
+        const { shown, stale } = doorsOf(yield* doors(playerId), now);
+        // A state whose postcard is not of it is made due, for Leaf's sweep to write the postcard again.
+        for (const seen of stale) yield* dueAgain(sql, playerId, seen, now);
+        return { awards: won, postcards: shown };
+      }).pipe(Effect.orDie),
+    award: (playerId: PlayerId, ids: readonly string[], now: number): Effect.Effect<void> =>
+      Effect.forEach(
+        ids,
+        (id) => sql`INSERT INTO awards (player_id, id, at) VALUES (${playerId}, ${id}, ${now}) ON CONFLICT DO NOTHING`,
+        { discard: true },
+      ).pipe(Effect.orDie),
+    post: (playerId: PlayerId, game: GameId, rev: number, postcard: string | null, dueAt: number | null) =>
+      postcard === null
+        ? Effect.void
+        : Effect.all(
+            [
+              sql`
+                INSERT INTO play_postcards (player_id, game, rev, postcard) VALUES (${playerId}, ${game}, ${rev}, ${postcard})
+                ON CONFLICT (player_id, game) DO UPDATE SET rev = excluded.rev, postcard = excluded.postcard
+              `,
+              // Kept with its postcard, a state made due for it is due as the batch has it: a state standing still, no longer.
+              sql`UPDATE play_state SET due_at = ${dueAt} WHERE player_id = ${playerId} AND game = ${game} AND due_at IS NOT ${dueAt}`,
+            ],
+            { discard: true },
+          ).pipe(Effect.orDie),
+  };
+}
+
 /**
  * What the play service keeps: each player's state in each game (`play_state`), what each command
  * answered (`play_commands`, each player's newest 256 to each game), the things players did that
  * are worth remembering (`activity`, up to 1,000 a player a UTC day, for 180 days), and how many of
  * each player's commands were done and refused each UTC day (`command_days`, for the staff's
  * report), where each player's state stands in a game with a board (`standings`), what each
- * player has won for good in any game (`awards`, never taken away). Every method but `board` is
- * meant to run inside the play service's transaction. A database failure is a defect.
+ * player has won for good in any game (`awards`, never taken away), and what each state tells the
+ * town (`play_postcards`). Every method but `board` is meant to run inside the play service's
+ * transaction. A database failure is a defect.
  */
 export class PlayStore extends Context.Service<
   PlayStore,
@@ -87,7 +195,7 @@ export class PlayStore extends Context.Service<
     /** For each game with a state due a tend, when the one due longest was due: how far behind Leaf's tending is. */
     readonly firstDue: Effect.Effect<ReadonlyMap<string, number>>;
     /** Says a state stored at `rev` stands still: it is due no tend until it is written again. */
-    readonly rest: (playerId: PlayerId, game: string, rev: number) => Effect.Effect<void>;
+    readonly rest: (playerId: PlayerId, game: string, rev: number, reads: boolean) => Effect.Effect<void>;
     /**
      * Stores a new player's state, untouched (`rev` 0), made `now`, due a tend at `dueAt` (null:
      * never). Says whether it did: false when one was there already.
@@ -151,10 +259,26 @@ export class PlayStore extends Context.Service<
     readonly board: (game: string, playerId: PlayerId) => Effect.Effect<Board>;
     /** Where a player stands in each game they have a standing in, by game, each place worked out as `board`'s own. */
     readonly standingsOf: (playerId: PlayerId) => Effect.Effect<ReadonlyMap<string, Placed>>;
-    /** Everything a player has won for good, in the order Leaf first saw it. */
-    readonly awards: (playerId: PlayerId) => Effect.Effect<readonly string[]>;
+    /**
+     * What every call of the player's is told (`Given`): everything they have won for good, in the
+     * order Leaf first saw it; and with `postcards`, for the town, the postcard kept for each of
+     * their states at its `rev` (`doorsOf`), each state whose postcard is not made due at `now`; or
+     * else none.
+     */
+    readonly given: (playerId: PlayerId, postcards: boolean, now: number) => Effect.Effect<Given>;
     /** Keeps each of these the player does not hold yet, as won now. */
     readonly award: (playerId: PlayerId, ids: readonly string[], now: number) => Effect.Effect<void>;
+    /**
+     * Keeps what the player's state in a game at `rev` tells the town (`Game.postcard`, as JSON), over
+     * what was kept, and has the state due at `dueAt`; null keeps both as they are.
+     */
+    readonly post: (
+      playerId: PlayerId,
+      game: GameId,
+      rev: number,
+      postcard: string | null,
+      dueAt: number | null,
+    ) => Effect.Effect<void>;
   }
 >()("leaf/PlayStore") {
   static readonly layer = Layer.effect(
@@ -165,7 +289,11 @@ export class PlayStore extends Context.Service<
         Request: Schema.Struct({ playerId: Schema.String, game: Schema.String }),
         Result: Stored,
         execute: ({ playerId, game }) =>
-          sql`SELECT rev, state, updated_at AS updatedAt, guest, born, due_at AS dueAt FROM play_state WHERE player_id = ${playerId} AND game = ${game}`,
+          sql`
+            SELECT s.rev, s.state, s.updated_at AS updatedAt, s.guest, s.born, s.due_at AS dueAt,
+            CASE WHEN p.rev = s.rev THEN p.postcard END AS postcard FROM play_state AS s
+            LEFT JOIN play_postcards AS p USING (player_id, game) WHERE player_id = ${playerId} AND game = ${game}
+          `,
       });
       const revOf = SqlSchema.findOneOption({
         Request: Schema.Struct({ playerId: Schema.String, game: Schema.String }),
@@ -232,11 +360,7 @@ export class PlayStore extends Context.Service<
           SELECT game, ${place} AS place, score, also FROM standings AS s WHERE player_id = ${playerId} ORDER BY game
         `,
       });
-      const awards = SqlSchema.findAll({
-        Request: Schema.String,
-        Result: Schema.Struct({ id: Schema.String }),
-        execute: (playerId) => sql`SELECT id FROM awards WHERE player_id = ${playerId} ORDER BY at, id`,
-      });
+
       return PlayStore.of({
         read: (playerId, game) => read({ playerId, game }).pipe(Effect.orDie),
         revOf: (playerId, game) =>
@@ -250,11 +374,22 @@ export class PlayStore extends Context.Service<
           Effect.map((rows) => new Map(rows.map((row) => [row.game, row.dueAt]))),
           Effect.orDie,
         ),
-        rest: (playerId, game, rev) =>
-          sql`UPDATE play_state SET due_at = NULL WHERE player_id = ${playerId} AND game = ${game} AND rev = ${rev}`.pipe(
+        rest: (playerId, game, rev, reads) => {
+          const rested = sql`UPDATE play_state SET due_at = NULL WHERE player_id = ${playerId} AND game = ${game} AND rev = ${rev}`;
+          // A state that does not read tells the town nothing, at its `rev`, kept as it rests, so that the
+          // town makes it due no more and a failure leaves it due. A codec fix that makes such states
+          // read again needs its migration to make that game's states with a null postcard due once:
+          // the town's reads alone will not.
+          const toldNothing = sql`
+            INSERT INTO play_postcards (player_id, game, rev, postcard)
+            SELECT player_id, game, rev, NULL FROM play_state WHERE player_id = ${playerId} AND game = ${game} AND rev = ${rev}
+            ON CONFLICT (player_id, game) DO UPDATE SET rev = excluded.rev, postcard = NULL
+          `;
+          return (reads ? rested : sql.withTransaction(Effect.andThen(rested, toldNothing))).pipe(
             Effect.asVoid,
             Effect.orDie,
-          ),
+          );
+        },
         create: (playerId, game, state, guest, now, dueAt) =>
           sql`
             INSERT INTO play_state (player_id, game, rev, state, guest, updated_at, born, due_at)
@@ -334,18 +469,7 @@ export class PlayStore extends Context.Service<
             Effect.map((rows) => new Map(rows.map(({ game, ...placed }) => [game, placed]))),
             Effect.orDie,
           ),
-        awards: (playerId) =>
-          awards(playerId).pipe(
-            Effect.map((rows) => rows.map((row) => row.id)),
-            Effect.orDie,
-          ),
-        award: (playerId, ids, now) =>
-          Effect.forEach(
-            ids,
-            (id) =>
-              sql`INSERT INTO awards (player_id, id, at) VALUES (${playerId}, ${id}, ${now}) ON CONFLICT DO NOTHING`,
-            { discard: true },
-          ).pipe(Effect.orDie),
+        ...givenIn(sql),
       });
     }),
   );

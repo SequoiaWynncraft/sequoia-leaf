@@ -59,7 +59,14 @@ export const stagePulls = (playerId: PlayerId, ops: readonly unknown[], others: 
     const kept = Option.isSome(stored) ? PULLS.decode(stored.value.state) : null;
     // A new player's pulls, counting on from the old one's, so that no pull's Leaf is keyed as an earlier one was.
     const created = (): Pulls => ({
-      ...PULLS.create({ now, player: { id: playerId, guest: false }, seed: 20_261_122, room: 0, awards: [] }),
+      ...PULLS.create({
+        now,
+        player: { id: playerId, guest: false },
+        seed: 20_261_122,
+        room: 0,
+        awards: [],
+        postcards: {},
+      }),
       pulls: kept?.pulls ?? 0,
     });
     let s = kept ?? created();

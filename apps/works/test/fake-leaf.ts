@@ -50,6 +50,7 @@ export const ctx = (): Ctx => ({
   seed: 7,
   room: 1e9,
   awards: [],
+  postcards: {},
 });
 
 /**

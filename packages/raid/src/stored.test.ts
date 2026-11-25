@@ -29,6 +29,7 @@ const ctx = (seed = 99): Ctx => ({
   seed,
   room: 1e9,
   awards: [],
+  postcards: {},
 });
 const read = (text: string): Table => {
   const table = RAID.decode(text);

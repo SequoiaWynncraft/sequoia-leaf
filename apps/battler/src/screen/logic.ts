@@ -1,12 +1,11 @@
 /**
  * Small questions the screen keeps asking of a run, answered without touching the page: where a
  * held figure may go, what an item would become on a figure, how the savings stack up, what the
- * next nudge for a new member is, what the postcard for the town says. They are here, apart from
+ * next nudge for a new member is. They are here, apart from
  * the drawing, so that they can be checked by tests.
  */
-import { mix, type Postcard } from "@sequoia-leaf/core";
+import { mix } from "@sequoia-leaf/core";
 import {
-  type Almanac,
   boonNumber,
   buy,
   COMPONENT_IDS,
@@ -41,7 +40,6 @@ import {
   type Stars,
   starScale,
   stepFor,
-  TRAILS,
   type TraitId,
   TRAITS,
   traitsNow,
@@ -372,21 +370,6 @@ export function rackHas(run: RunView, item: FinishedId): "item" | "parts" | null
 /** Every figure of a trait, cheapest first, in the order of the roster within a tier. */
 export const membersOf = (trait: TraitId): FigureId[] =>
   FIGURE_IDS.filter((id) => traitsOf(id).includes(trait)).toSorted((a, b) => FIGURES[a].tier - FIGURES[b].tier);
-
-/**
- * The postcard the table leaves for the town (the kit's `postcard.ts`): a raid under way and where
- * it got to, or the board set out. The table keeps no till.
- */
-export function postcard(run: RunView | null, almanac: Almanac): Postcard {
-  const trail = run ? TRAILS[run.trail] : undefined;
-  const waiting =
-    run && run.stage.phase !== "over"
-      ? `A raid is under way: room ${run.room + 1}, on ${trail?.name ?? "the trail"}.`
-      : almanac.runs === 0
-        ? "The board is set out. One crab is uncounted."
-        : "The board is set out for another raid.";
-  return { waiting, till: 0 };
-}
 
 /** A name at the start of a sentence or a line: "a Moth" is "A Moth" there. */
 export const opening = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);

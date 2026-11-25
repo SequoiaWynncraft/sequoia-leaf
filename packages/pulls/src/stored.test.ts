@@ -19,7 +19,14 @@ const fixture = (name: string): string => FIXTURES.find(([n]) => n === name)?.[1
 
 /** Wednesday 25 November 2026, 12:00 UTC: banner-1 is open. */
 const T0 = Date.UTC(2026, 10, 25, 12);
-const ctx = (now = T0): Ctx => ({ now, player: { id: "mossback", guest: false }, seed: 7, room: 0, awards: [] });
+const ctx = (now = T0): Ctx => ({
+  now,
+  player: { id: "mossback", guest: false },
+  seed: 7,
+  room: 0,
+  awards: [],
+  postcards: {},
+});
 const read = (text: string): Pulls => {
   const state = PULLS.decode(text);
   if (!state) throw new Error("does not read");

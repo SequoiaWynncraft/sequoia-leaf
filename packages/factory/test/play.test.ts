@@ -41,7 +41,14 @@ describe("random play", () => {
   });
 });
 
-const ctx = (now: number): Ctx => ({ now, player: { id: "p", guest: false }, seed: 9, room: 0, awards: [] });
+const ctx = (now: number): Ctx => ({
+  now,
+  player: { id: "p", guest: false },
+  seed: 9,
+  room: 0,
+  awards: [],
+  postcards: {},
+});
 const at0 = 1_800_000_000_000;
 const HOUR = 3600 * 1000;
 

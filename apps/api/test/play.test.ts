@@ -25,6 +25,7 @@ import {
   FACTORY,
   GATHERER,
   GOALS,
+  here,
   isFilled,
   item,
   itemName,
@@ -65,7 +66,7 @@ import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
 import { GAMES, type Played, played } from "../src/play/games.ts";
 import { type JobTimes, Play, TEND_AFTER } from "../src/play/service.ts";
-import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
+import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, dueAgain, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
 import { DAY, fakeBackend, fakeMojang, type Fakes, noNetwork, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
@@ -516,12 +517,19 @@ describe("commands", () => {
     ]);
     expect(await services.query((sql) => sql`SELECT count(*) AS n FROM activity`)).toEqual([{ n: 0 }]);
     expect(await services.query((sql) => sql`SELECT count(*) AS n FROM play_commands`)).toEqual([{ n: 0 }]);
+    // Nor what the table tells the town: it is written in the same transaction.
+    expect(await services.query((sql) => sql`SELECT count(*) AS n FROM play_postcards`)).toEqual([{ n: 0 }]);
     // Sent again once the disk has room, the batch is done whole, as if for the first time.
     const done = await commanded(batch);
     expect(done.results.map((r) => ("notes" in r ? "done" : r.refused))).toEqual(["done", "done", "done"]);
     expect(done.view.runs).toBe(1);
     expect(done.view.run?.rustles).toBe(0);
     expect(await services.query((sql) => sql`SELECT kind FROM activity`)).toEqual([{ kind: "raid_started" }]);
+    expect(
+      await services.query(
+        (sql) => sql`SELECT s.rev, p.rev AS kept FROM play_state s JOIN play_postcards p USING (player_id, game)`,
+      ),
+    ).toEqual([{ rev: done.rev, kept: done.rev }]);
   });
 
   it("that are not the game's, or a batch that is not one, are refused whole and do nothing", async () => {
@@ -1483,7 +1491,14 @@ describe("a batch's answer", () => {
 });
 
 /** Leaf's call to a game at a moment of its clock, as Alice's. */
-const ctxAt = (now: number) => ({ now, player: { id: alice, guest: false }, seed: 0, room: 0, awards: [] });
+const ctxAt = (now: number) => ({
+  now,
+  player: { id: alice, guest: false },
+  seed: 0,
+  room: 0,
+  awards: [],
+  postcards: {},
+});
 /** Leaf's sweep of these games' states, and the wait for every tend it put in a line to end. */
 const sweep = (games: readonly Played[]) => Play.use((play) => Effect.flatten(play.tend(games)));
 /** Leaf tending every game's states. */
@@ -2785,6 +2800,191 @@ function townOf(state: unknown): TownView {
 const townNow = async () =>
   townOf(Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/town")).json()).state);
 const nOf = (view: TownView, id: string) => view.camp.placed.find((p) => p.id === id)?.n ?? -1;
+
+/** What Leaf keeps of what each of a player's states tells the town, by game. */
+async function postcardsOf(player: PlayerId = alice) {
+  const rows = await services.query<{ game: string; postcard: string }>(
+    (sql) => sql`SELECT game, postcard FROM play_postcards WHERE player_id = ${player} ORDER BY game`,
+  );
+  return Object.fromEntries(rows.map((kept): [string, unknown] => [kept.game, JSON.parse(kept.postcard)]));
+}
+/** A new member's table, as it tells the town. */
+const TABLE_SET_OUT = { waiting: "The board is set out. One crab is uncounted.", till: 0 };
+/** Puts a new table (or `text`) in Alice's place as a Leaf from before postcards kept it, due at `dueAt`. */
+async function keepTable(dueAt: number | null = T0, text = RAID.encode(RAID.create(ctxAt(T0)))) {
+  await services.query(
+    (sql) => sql`
+      INSERT INTO play_state (player_id, game, rev, state, updated_at, due_at) VALUES (${alice}, 'raid', 1, ${text}, ${T0}, ${dueAt})
+    `,
+  );
+}
+/** When Alice's state in a game is due. */
+async function dueOf(game: string) {
+  const [state] = await services.query<{ dueAt: number | null }>(
+    (sql) => sql`SELECT due_at AS dueAt FROM play_state WHERE player_id = ${alice} AND game = ${game}`,
+  );
+  return state?.dueAt;
+}
+/** What a yard, kept as `text`, tells the town. */
+function cardOf(text: string) {
+  const card = FACTORY.postcard?.(yardIn(text));
+  if (!card) throw new Error("the Works writes no postcard");
+  return card;
+}
+/** What Alice's yard as Leaf stores it tells the town. */
+const yardCard = async () => cardOf((await storedYard()).state);
+
+describe("what each state tells the town", () => {
+  const MINUTE = 60_000;
+
+  it("is written with the state, by her commands and by Leaf's runs while she is away, and her town is given it", async () => {
+    await keepMid();
+    const { clock: tick } = yardOf(
+      Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json()).state,
+    );
+    await send("POST", "/v1/game/play/works", { commands: [{ id: "w-1", do: "collect", tick }] });
+    const collected = await yardCard();
+    expect(collected?.till).toBe(0);
+    expect(await postcardsOf()).toEqual({ works: collected });
+    // An hour away: Leaf runs the yard on by itself, its till grows, and its postcard with it, in the same write.
+    clock.now += 60 * MINUTE;
+    await tending();
+    const away = await yardCard();
+    expect(away?.till).toBeGreaterThan(0);
+    expect(await postcardsOf()).toEqual({ works: away });
+    // Her town is given it as it opens and with each batch, for the letter and the door; a visitor to her camp is not.
+    expect((await townNow()).doors).toEqual({ works: away });
+    expect((await townDid([{ id: "t-1", do: "readMail" }])).view.doors).toEqual({ works: away });
+    const seen = Schema.decodeUnknownSync(Shown)(await (await visit(alice, "town", bob)).json()).state;
+    expect(townOf(seen).doors).toEqual({});
+  });
+
+  it("is written by Leaf's sweep for a state stored before Leaf kept postcards, which then stands still again", async () => {
+    // A yard run on to where it stands still since its owner left it, and a table, as stored before
+    // postcards, then made due by `0039_play_postcards`.
+    const kept = await keepMid(services, (w) => {
+      w.seen = here(w);
+      stepTo(w, w.tick + w.open.away);
+    });
+    const table = RAID.encode(RAID.create(ctxAt(clock.now)));
+    await services.query(
+      (sql) => sql`
+        INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${alice}, 'raid', 1, ${table}, ${clock.now})
+      `,
+    );
+    await services.query((sql) => sql`UPDATE play_state SET due_at = ${clock.now} WHERE player_id = ${alice}`);
+    expect(await postcardsOf()).toEqual({});
+    clock.now += MINUTE;
+    await tending();
+    // What each says as it was stored: the yard's eight hours of Coins, and the table set out.
+    const works = cardOf(kept);
+    expect(works.till).toBe(Math.floor(yardIn(kept).till / MILLI));
+    expect(works.till).toBeGreaterThan(0);
+    expect(await postcardsOf()).toEqual({
+      raid: { waiting: "The board is set out. One crab is uncounted.", till: 0 },
+      works,
+    });
+    expect(await yardCard()).toEqual(works);
+    const due = await services.query<{ dueAt: number | null }>(
+      (sql) => sql`SELECT due_at AS dueAt FROM play_state WHERE player_id = ${alice} ORDER BY game`,
+    );
+    expect(due).toEqual([{ dueAt: null }, { dueAt: null }]);
+  });
+
+  it("stays due when its first write fails, and is written by the next sweep", async () => {
+    await app.dispose();
+    let posts = 0;
+    start({
+      play: (real) => ({
+        ...real,
+        post: (player, game, rev, postcard, dueAt) =>
+          Effect.suspend(() =>
+            postcard !== null && ++posts === 1
+              ? Effect.die(new Error("the disk is full"))
+              : real.post(player, game, rev, postcard, dueAt),
+          ),
+      }),
+    });
+    await keepTable();
+    clock.now += MINUTE;
+    await tending();
+    expect([await postcardsOf(), await dueOf("raid")]).toEqual([{}, T0]);
+    clock.now += MINUTE;
+    await tending();
+    expect([await postcardsOf(), await dueOf("raid")]).toEqual([{ raid: TABLE_SET_OUT }, null]);
+  });
+
+  it("of another rev than its state's, or none, is not shown: the town makes the state due, and the sweep writes it", async () => {
+    await keepMid();
+    const { clock: tick } = yardOf(
+      Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json()).state,
+    );
+    await send("POST", "/v1/game/play/works", { commands: [{ id: "w-1", do: "collect", tick }] });
+    // A Leaf from before postcards, beside this one in a deploy, writes the yard and the table, and no postcard.
+    await services.query(
+      (sql) => sql`UPDATE play_state SET rev = rev + 1, due_at = NULL WHERE player_id = ${alice} AND game = 'works'`,
+    );
+    await keepTable(null);
+    clock.now += MINUTE;
+    expect((await townNow()).doors).toEqual({});
+    expect([await dueOf("works"), await dueOf("raid")]).toEqual([clock.now, clock.now]);
+    clock.now += MINUTE;
+    await tending();
+    expect((await townNow()).doors).toEqual({ raid: TABLE_SET_OUT, works: await yardCard() });
+    // The yard still works, so it is due its next tend as any written then; the table stands still.
+    expect([await dueOf("works"), await dueOf("raid")]).toEqual([clock.now + TEND_AFTER, null]);
+  });
+
+  it("is made due by the town only as the town saw it: a state put right meanwhile, at the same rev, is left be", async () => {
+    await keepTable(null);
+    // What the town read: the table at rev 1, with no postcard, due never.
+    const seen = { game: "raid", rev: 1, kept: null, postcard: null, dueAt: null };
+    await services.query((sql) => dueAgain(sql, alice, seen, clock.now));
+    expect(await dueOf("raid")).toBe(clock.now);
+    // The sweep puts it right at the same rev; the town's update of what it saw before comes late.
+    clock.now += MINUTE;
+    await tending();
+    expect([await postcardsOf(), await dueOf("raid")]).toEqual([{ raid: TABLE_SET_OUT }, null]);
+    await services.query((sql) => dueAgain(sql, alice, seen, clock.now));
+    expect(await dueOf("raid")).toBeNull();
+  });
+
+  it("stays due for a state that does not read when keeping it as telling nothing fails", async () => {
+    await keepTable(T0, "{}");
+    await services.query(
+      (sql) => sql`
+        CREATE TRIGGER no_room BEFORE INSERT ON play_postcards WHEN NEW.postcard IS NULL
+        BEGIN SELECT RAISE(ABORT, 'the disk is full'); END
+      `,
+    );
+    clock.now += MINUTE;
+    await tending();
+    expect(await dueOf("raid")).toBe(T0);
+    expect(await services.query((sql) => sql`SELECT count(*) AS n FROM play_postcards`)).toEqual([{ n: 0 }]);
+    await services.query((sql) => sql`DROP TRIGGER no_room`);
+    clock.now += MINUTE;
+    await tending();
+    expect(await dueOf("raid")).toBeNull();
+    expect(await services.query((sql) => sql`SELECT rev, postcard FROM play_postcards`)).toEqual([
+      { rev: 1, postcard: null },
+    ]);
+  });
+
+  it("is kept as nothing for a state that does not read, which the town then leaves be; and goes with its state", async () => {
+    await keepTable(null, "{}");
+    expect((await townNow()).doors).toEqual({});
+    clock.now += MINUTE;
+    await tending();
+    // Kept as nothing at its rev: the town makes it due no more, and the sweep has nothing to do.
+    expect(await services.query((sql) => sql`SELECT rev, postcard FROM play_postcards`)).toEqual([
+      { rev: 1, postcard: null },
+    ]);
+    expect((await townNow()).doors).toEqual({});
+    expect(await dueOf("raid")).toBeNull();
+    await services.query((sql) => sql`DELETE FROM play_state WHERE player_id = ${alice} AND game = 'raid'`);
+    expect(await services.query((sql) => sql`SELECT count(*) AS n FROM play_postcards`)).toEqual([{ n: 0 }]);
+  });
+});
 
 describe("the town, played by commands through HTTP", () => {
   it("opens a new member's camp, welcomes them, sells into the tray, sets out, moves and puts away by id, and pays the chest once a day", async () => {

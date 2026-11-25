@@ -34,6 +34,7 @@ const ctx = (now = T0, guest = false, seed = 7): Ctx => ({
   seed,
   room: 0,
   awards: [],
+  postcards: {},
 });
 const fresh = (): Pulls => PULLS.create(ctx());
 const counters = (top = 0, mid = 0, owed = false): Counters => ({ top, mid, owed });

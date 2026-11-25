@@ -8,14 +8,10 @@
  * which `apply` draws from and moves on, and which `view` never shows.
  */
 
-/** The games Leaf plays. */
-export const GAME_IDS = ["raid", "works", "town", "pulls"] as const;
-export type GameId = (typeof GAME_IDS)[number];
+import type { GameId } from "./games.ts";
+import type { Postcard, Postcards } from "./postcard.ts";
 
-/** The game a name stands for, or undefined when it is not one. */
-export function gameId(name: string): GameId | undefined {
-  return GAME_IDS.find((id) => id === name);
-}
+export { GAME_IDS, type GameId, gameId } from "./games.ts";
 
 /** What Leaf tells a game about each call. */
 export interface Ctx {
@@ -36,6 +32,12 @@ export interface Ctx {
   readonly room: number;
   /** Everything the player has won for good, in any game (`Game.awards`): Leaf keeps each, and never takes one away. */
   readonly awards: readonly string[];
+  /**
+   * The postcard of each of the player's games that writes one (`Game.postcard`), as Leaf keeps it
+   * with that game's state: given to the owner's own opens and batches of the town, which shows the
+   * doors to the others; every other call is given none.
+   */
+  readonly postcards: Postcards;
 }
 
 /** Coins a command pays (or, negative, takes), each keyed by the fact it records so it is paid once. */
@@ -158,6 +160,11 @@ export interface Game<State, Command, View, Note, Short = never> {
   standing?(state: State): Standing;
   /** What this state shows was won for good (a boss beaten, a capstone built), by names other games know it by. */
   awards?(state: State): readonly string[];
+  /**
+   * What this state tells the town, for the door to the game: Leaf keeps it beside the state,
+   * written in the transaction that writes the state whenever it is not what the state says.
+   */
+  postcard?(state: State): Postcard;
 }
 
 /** Whether a command's answer is a refusal. */

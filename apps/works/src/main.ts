@@ -14,13 +14,12 @@
  * on it); nothing here reaches `review/`.
  */
 
-import { ALL_ITEMS, ITEM_INFO, postcard, power } from "@sequoia-leaf/factory";
+import { ALL_ITEMS, ITEM_INFO, power } from "@sequoia-leaf/factory";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { keepLeaf, pageCard, serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
 import { paced } from "@sequoia-leaf/kit/pace.ts";
 import { askPerson } from "@sequoia-leaf/kit/person.ts";
 import type { Trouble } from "@sequoia-leaf/kit/play.ts";
-import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
 import { failedToOpen, watchPage } from "@sequoia-leaf/kit/report.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
@@ -135,18 +134,6 @@ const keepSettings = (): void => {
   screen.zoom = zoomSteps();
   keepScreen();
 };
-
-/** What the town was last told about the yard, so that it is told only what has changed. */
-let carded = "";
-/** Leaves the town a postcard about the yard, if anything on it has changed. Not of somebody else's. */
-function sendCard(): void {
-  if (S.visiting) return;
-  const card = postcard(S.world);
-  const text = JSON.stringify(card);
-  if (text === carded) return;
-  carded = text;
-  post("works", card);
-}
 
 /** Who the member is, once the yard is open from Leaf; or nothing, with the card that says why it is not. */
 async function opened(params: URLSearchParams): Promise<{ id: string } | null> {
@@ -319,7 +306,6 @@ async function boot(): Promise<Page | null> {
     slow = 0.25;
     if (!S.visiting) capstones();
     callers();
-    sendCard();
     refreshAll();
   }
 
@@ -386,7 +372,6 @@ async function boot(): Promise<Page | null> {
     // The town says where the member is from here: nothing more from the yard, in case it would come after.
     here(null);
     keepSettings();
-    sendCard();
   });
   window.addEventListener("pagehide", keepSettings);
   if (!S.alone) {

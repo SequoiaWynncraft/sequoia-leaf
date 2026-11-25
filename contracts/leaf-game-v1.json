@@ -1554,6 +1554,12 @@
               "taken": false
             }
           ]
+        },
+        "doors": {
+          "raid": {
+            "waiting": "A raid is under way: room 1, on The Easy Way.",
+            "till": 0
+          }
         }
       },
       "purse": {
@@ -1740,6 +1746,12 @@
           "away": 0,
           "said": [],
           "mail": []
+        },
+        "doors": {
+          "raid": {
+            "waiting": "A raid is under way: room 1, on The Easy Way.",
+            "till": 0
+          }
         }
       },
       "purse": {

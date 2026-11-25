@@ -6,7 +6,6 @@ import {
   type FigureId,
   type ItemId,
   move,
-  newAlmanac,
   type Piece,
   type RoomRecord,
   type Run,
@@ -28,7 +27,6 @@ import {
   ownTraitCount,
   pieceNumbers,
   plainNumbers,
-  postcard,
   rackHas,
   reachOf,
   reachOfOffer,
@@ -383,20 +381,6 @@ describe("what a card says about a figure", () => {
     run.items = ["thorn", "thorn", "hoard"];
     expect(rackHas(run, "blackthorn")).toBe("parts");
     expect(rackHas(run, "hoard")).toBe("item");
-  });
-});
-
-describe("the postcard for the town", () => {
-  test("a new member's table is set out, with no till", () => {
-    expect(postcard(null, newAlmanac())).toEqual({ waiting: "The board is set out. One crab is uncounted.", till: 0 });
-  });
-
-  test("a raid under way says where it got to", () => {
-    const run = begun();
-    run.room = 4;
-    const almanac = { ...newAlmanac(), runs: 3 };
-    expect(postcard(run, almanac)).toEqual({ waiting: "A raid is under way: room 5, on The Easy Way.", till: 0 });
-    expect(postcard(null, almanac).waiting).toBe("The board is set out for another raid.");
   });
 });
 

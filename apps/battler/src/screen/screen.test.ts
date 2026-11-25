@@ -16,6 +16,7 @@ const ctx = (): Ctx => ({
   seed: (rolled = (rolled * 48_271) % 2_147_483_647),
   room: 1e9,
   awards: [],
+  postcards: {},
 });
 function must(state: Kept, command: RaidCommand): { state: Kept; notes: RaidNote[] } {
   const done = RAID.apply(state, command, ctx());

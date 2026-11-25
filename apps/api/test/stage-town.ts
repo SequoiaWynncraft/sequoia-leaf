@@ -152,7 +152,7 @@ export const stageTown = (playerId: PlayerId, ops: readonly unknown[], others: r
       for (const [i, other] of others.entries()) {
         const many = whole(op.others[i], LIVED.length);
         if (many === null) continue;
-        const s = TOWN.create({ now, player: other, seed: 20_261_122 + i, room: 0, awards: [] });
+        const s = TOWN.create({ now, player: other, seed: 20_261_122 + i, room: 0, awards: [], postcards: {} });
         liveIn(s, many);
         s.camp.first = PETS[i % PETS.length] ?? "cat";
         const standing = TOWN.standing?.(s) ?? { score: 0, also: {} };
@@ -200,7 +200,14 @@ export const stageTown = (playerId: PlayerId, ops: readonly unknown[], others: r
     })(playerId);
     const kept = Option.isSome(stored) ? TOWN.decode(stored.value.state) : null;
     const created = (): Town => {
-      const fresh = TOWN.create({ now, player: { id: playerId, guest: false }, seed: 20_261_122, room: 0, awards: [] });
+      const fresh = TOWN.create({
+        now,
+        player: { id: playerId, guest: false },
+        seed: 20_261_122,
+        room: 0,
+        awards: [],
+        postcards: {},
+      });
       fresh.made = Math.max(fresh.made, kept?.made ?? 0);
       return fresh;
     };

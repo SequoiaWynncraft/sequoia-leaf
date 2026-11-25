@@ -59,6 +59,17 @@ export interface Held {
   readonly run: (ctx: Ctx, more: () => boolean, command?: unknown) => boolean;
   /** Brings it to `ctx.now` (`Game.advance`), to show and to do commands to. */
   readonly open: (ctx: Ctx) => Opened;
+  /**
+   * What it tells the town as it stands (`Game.postcard`), as JSON, when that is not the postcard
+   * stored with it; null when it is, and for a game that writes none.
+   */
+  readonly unposted: () => string | null;
+  /**
+   * What to store with it as a batch keeps it: its postcard as it stands, when it is `written` (its
+   * `rev` moves on, and the postcard with it) or that is not the one stored; else null. Taken to be
+   * stored: the batch that takes it keeps it, and one that fails lets go of the copy holding it.
+   */
+  readonly post: (written: boolean) => string | null;
 }
 
 /** A game as the play service handles it: in stored text and JSON, whatever the game's own types. */
@@ -72,10 +83,14 @@ export interface Played {
   readonly reads: (command: unknown) => boolean;
   /** Whether a command is one of the game's that its page sends by itself (`Game.chore`), not for anything the player did. */
   readonly chore: (command: unknown) => boolean;
-  /** A stored state read into memory; null when the text is not one the game can read. */
-  readonly read: (text: string) => Held | null;
+  /** A stored state read into memory, with the postcard stored with it (null: none); null when the text is not one the game can read. */
+  readonly read: (text: string, postcard: string | null) => Held | null;
   /** Whether its states go on by themselves (`Game.tend`), for Leaf to tend. */
   readonly tends: boolean;
+  /** Whether its states tell the town anything (`Game.postcard`), which Leaf keeps with each. */
+  readonly posts: boolean;
+  /** Whether it shows the doors to the other games (the town): its owner's opens and batches are given the postcards. */
+  readonly showsDoors: boolean;
   /** Whether a visitor's page is told each command done (`Game.echo`). */
   readonly echoes: boolean;
   /**
@@ -96,17 +111,24 @@ export interface Played {
 export function played<State, Command, View, Note, Short>(
   game: Game<State, Command, View, Note, Short>,
   room: (player: PlayerId) => string | null = () => null,
+  showsDoors = false,
 ): Played {
-  const held = (decoded: State): Held => {
+  const held = (decoded: State, stored: string | null): Held => {
     let state = decoded;
     /** The state as it was before a command that has not been kept. */
     let undo: string | null = null;
+    /** The postcard stored with the state. */
+    let kept = stored;
     const current = (): State => {
       if (undo !== null) {
         state = game.decode(undo) ?? state;
         undo = null;
       }
       return state;
+    };
+    const unposted = (): string | null => {
+      const postcard = game.postcard ? JSON.stringify(game.postcard(current())) : null;
+      return postcard === kept ? null : postcard;
     };
     const opened: Opened = {
       attempt: (raw, at) => {
@@ -145,6 +167,12 @@ export function played<State, Command, View, Note, Short>(
         state = game.advance(current(), ctx);
         return opened;
       },
+      unposted,
+      post: (written) => {
+        const postcard = written && game.postcard ? JSON.stringify(game.postcard(current())) : unposted();
+        kept = postcard ?? kept;
+        return postcard;
+      },
     };
   };
   return {
@@ -156,11 +184,13 @@ export function played<State, Command, View, Note, Short>(
       const command = game.command(raw);
       return command !== null && game.chore?.(command) === true;
     },
-    read: (text) => {
+    read: (text, postcard) => {
       const decoded = game.decode(text);
-      return decoded === null ? null : held(decoded);
+      return decoded === null ? null : held(decoded, postcard);
     },
     tends: game.tend !== undefined,
+    posts: game.postcard !== undefined,
+    showsDoors,
     echoes: game.echo !== undefined,
     room,
   };
@@ -202,6 +232,20 @@ export function toRoom(of: Played, player: PlayerId, game: Opened, ctx: Ctx, wat
   };
 }
 
+/** What Leaf tells every call of a player's, whatever the game: what they have won, and for the town, what each game tells it. */
+export type Given = Pick<Ctx, "awards" | "postcards">;
+/** Nothing given: for Leaf's own running on, which is no call. */
+export const NOTHING_GIVEN: Given = { awards: [], postcards: {} };
+
+/** What Leaf tells a game about a call by `playing`. */
+export const ctxOf = (
+  playing: { readonly playerId: PlayerId; readonly guest: boolean },
+  now: number,
+  seed: number,
+  room: number,
+  given: Given,
+): Ctx => ({ now, player: { id: playing.playerId, guest: playing.guest }, seed, room, ...given });
+
 /** The version of each game's rules, read from the files Leaf runs as it starts. */
 const RULES = rulesVersions();
 
@@ -209,6 +253,10 @@ const RULES = rulesVersions();
 export const GAMES: Readonly<Record<GameId, Played>> = {
   raid: played(RAID),
   works: played(FACTORY, (player) => visitRoom("works", player)),
-  town: played(TOWN, campRoom),
+  // The town's doors and letter say what each of the member's games tells it.
+  town: played(TOWN, campRoom, true),
   pulls: played(PULLS),
 };
+
+/** The games whose states tell the town anything (`Played.posts`). */
+export const POSTING: readonly GameId[] = Object.values(GAMES).flatMap((p) => (p.posts ? [p.id] : []));

@@ -81,7 +81,14 @@ function junctionsRun(d: Digest): void {
 /** A copy of the generated yard, which the tests share. */
 const generatedCopy = (): F.Yard => F.decode(F.encode(generated().y), generated().y.land) ?? F.create();
 
-const ctx = (now: number): Ctx => ({ now, player: { id: "p", guest: false }, seed: 9, room: 0, awards: [] });
+const ctx = (now: number): Ctx => ({
+  now,
+  player: { id: "p", guest: false },
+  seed: 9,
+  room: 0,
+  awards: [],
+  postcards: {},
+});
 
 /**
  * The largest staged yard tended as Leaf tends a yard nobody has open: every two minutes of Leaf's
