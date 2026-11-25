@@ -1394,6 +1394,8 @@
           direction: rtl;
           pointer-events: none;
         }
+        /* Only the column runs right to left: the way out stays before the gear where they are a row. */
+        #corner,
         :is(#books, #corner) > * {
           direction: ltr;
           pointer-events: auto;

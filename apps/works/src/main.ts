@@ -65,6 +65,9 @@ function refreshAll(): void {
   refreshCard();
 }
 
+/** The parts whose size `measure` reads: it reads them again whenever one of them changes size. */
+const MEASURED = ["top", "side", "books", "dock", "hand", "track", "visit", "study", "walk"] as const;
+
 /**
  * How much of the screen the interface covers, so the camera can keep the yard clear of it. Each
  * part is read only once what places it has been written: the order in hand hangs from the top bar
@@ -250,8 +253,7 @@ async function boot(): Promise<Page | null> {
   const held = scope();
   held.on(window, "resize", fit);
   // The dock grows a row when the story opens more tools than fit: everything over it moves up.
-  for (const id of ["top", "side", "books", "dock", "hand", "track", "visit", "study", "walk"])
-    held.observe($(id), "size", measure);
+  for (const id of MEASURED) held.observe($(id), "size", measure);
 
   // ---------- the clock ----------
 
