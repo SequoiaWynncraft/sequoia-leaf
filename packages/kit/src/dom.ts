@@ -213,12 +213,26 @@ const seen = (q: Element): boolean =>
     ? q.checkVisibility({ visibilityProperty: true })
     : q.getClientRects().length > 0);
 
-/** What the page hears of a press: a pointer going down, a key going down, a click, or a pointer or key coming up. */
+/**
+ * What the page hears of a press: a pointer going down, a key going down, a click, a pointer or key
+ * coming up, or a pointer taken by the browser for itself (a scroll, a pinch), which makes no click.
+ */
 export type Heard =
   | { readonly is: "down"; readonly on: EventTarget | null }
   | { readonly is: "key"; readonly key: Pick<KeyboardEvent, "code" | "repeat" | "target"> }
   | { readonly is: "click"; readonly on: EventTarget | null }
-  | { readonly is: "up" };
+  | { readonly is: "up" }
+  | { readonly is: "cancel" };
+
+/** The keys that only move the keyboard (Tab) or change what another key does: no press of their own. */
+const MOVES_ONLY = /^(?:Tab|Shift|Control|Alt|Meta|OS|CapsLock|NumLock|ScrollLock|Fn)/;
+
+/** Whether a click on `on` is the click of the press that landed on `pressed`: on it, in it, or around it. */
+const clickOf = (pressed: EventTarget | null, on: EventTarget | null): boolean =>
+  !onPage() ||
+  (pressed instanceof Element &&
+    on instanceof Element &&
+    (pressed === on || pressed.contains(on) || on.contains(pressed)));
 
 /**
  * The page's presses, counted, and the one spend waiting for its second press. A press is a pointer
@@ -241,9 +255,15 @@ class Asking {
   heard(h: Heard): void {
     if (h.is === "down") this.#press(h.on);
     else if (h.is === "key") {
-      if (pressesButtons(h.key.code) && !heldAgain(h.key)) this.#press(h.key.target);
+      // Enter and Space press the control with the keyboard on it; any other key is a press on nothing.
+      if (!MOVES_ONLY.test(h.key.code) && !heldAgain(h.key))
+        this.#press(pressesButtons(h.key.code) ? h.key.target : null);
+    } else if (h.is === "cancel") {
+      // The browser took the pointer: it lands on nothing, and no click will come of it.
+      [this.#on, this.#clicked] = [null, true];
+      this.#over();
     } else if (h.is === "click") {
-      if (!this.#clicked) {
+      if (!this.#clicked && clickOf(this.#on, h.on)) {
         // The press's own click: it lands where the click does.
         this.#clicked = true;
         this.#on = h.on;
@@ -446,10 +466,25 @@ if (typeof window !== "undefined") {
     heard({ is: "up" });
   };
   page.on(window, "pointerup", up, first);
-  page.on(window, "pointercancel", up, first);
+  page.on(
+    window,
+    "pointercancel",
+    () => {
+      mouseHeld(false);
+      heard({ is: "cancel" });
+    },
+    first,
+  );
   page.on(window, "keyup", () => heard({ is: "up" }), first);
-  // Let go outside the window, the button's lift never arrives here.
-  page.on(window, "blur", up);
+  // Let go outside the window, the button's lift never arrives here; and a press in another tab or
+  // frame is never heard here, so a spend waiting stops waiting once the page is left at all.
+  page.on(window, "blur", () => {
+    up();
+    unask();
+  });
+  page.on(document, "visibilitychange", () => {
+    if (document.hidden) unask();
+  });
 }
 
 let region: HTMLElement | null = null;

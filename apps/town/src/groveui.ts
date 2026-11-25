@@ -321,7 +321,8 @@ export function makeGroveUi(host: GroveHost) {
       glyph("close"),
     );
     panel.replaceChildren(el("header", "k-head", {}, tabs.el, close), page);
-    panel.hidden = false;
+    // The book lies over the banner's words: nothing under it can be pressed or reached while it is open.
+    [panel.hidden, words.inert] = [false, true];
     const at = document.activeElement;
     const from = at instanceof HTMLElement ? (TABS.find((t) => t.id === at.dataset.book)?.id ?? null) : null;
     book = { tab: to, tabs, page, life: lasting.child(), from };
@@ -335,7 +336,7 @@ export function makeGroveUi(host: GroveHost) {
     book = null;
     life.close();
     const inside = panel.contains(document.activeElement);
-    panel.hidden = true;
+    [panel.hidden, words.inert] = [true, false];
     panel.replaceChildren();
     // The keyboard was in it: back to the banner's button for the tab it was opened at, drawn again or not.
     if (inside && from) words.querySelector<HTMLElement>(`[data-book="${from}"]`)?.focus({ preventScroll: true });

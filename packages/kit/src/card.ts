@@ -582,19 +582,15 @@ function actionOf(a: Action, card: Ref): HTMLElement {
   const slot = a.look === "slot";
   const spend = actionSpend(card, a);
   const ask = a.ask !== undefined && asking(spend) ? a.ask.again : null;
+  const face = slot ? [a.icon ? fit(a.icon, 12) : null] : [a.icon ?? null, a.label || null, a.after ?? null];
   const b = el(
     "button",
     slot
       ? `k-slot k-info-pin${a.lit ? " lit" : ""}`
       : `k-btn ${a.look ?? "wood sm"}${a.off ? " off" : ""}${ask ? " asking" : ""}`,
-    { type: "button", "aria-label": a.label && slot ? a.label : null },
-    ...(a.ask !== undefined && !slot
-      ? [asksAgain(spend, [a.icon ?? null, a.label || null, a.after ?? null], a.ask.again)]
-      : [
-          a.icon && !ask ? (slot ? fit(a.icon, 12) : a.icon) : null,
-          ask ?? (a.label && !slot ? a.label : null),
-          slot || ask ? null : (a.after ?? null),
-        ]),
+    { type: "button", "aria-label": a.label && slot ? (ask ?? a.label) : null },
+    // One that asks shows its question through the kit (`asksAgain`), in a slot as on a button.
+    ...(a.ask === undefined ? face : [asksAgain(spend, face, a.ask.again)]),
   );
   b.addEventListener("click", () => {
     if (!deck.confirms(a, refresh)) return;

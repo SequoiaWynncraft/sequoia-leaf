@@ -4,7 +4,7 @@
     "at": "2026-11-25T18:25Z",
     "title": "Buttons that ask to be pressed again",
     "lines": [
-      "A button that asks you to press it again does only what it asked about, at the price it showed, and only if your next press is on it while it asks. Press or tap anything else first, including to scroll a list on a phone, and it asks again.",
+      "A button that asks you to press it again does only what it asked about, at the price it showed, and only if your next press is on it while it asks. Press, tap or type anything else first, scroll a list on a phone, or go to another tab or window, and it asks again.",
       "Your Leaf and Coins in town are written with commas: 12,345."
     ],
     "more": [
@@ -18,8 +18,10 @@
           "In the Grove, Pull 10 could happen with one press after you opened History and closed it, and an exchange in Seeds after you went back to town and came back.",
           "In The Works, a dim Buy on a plot's card could buy the plot if the last Coins came in while you held it down. Now it only says you do not have enough Coins.",
           "In The Works, saving a blueprint over another could replace it without showing Replace? if the yard changed while you chose the place.",
+          "In the Grove, with Prizes, Seeds or History open, the keyboard no longer reaches Pull 10 and the other buttons under it.",
+          "In The Works, opening the orders with O and closing them with Escape no longer keeps an Upgrade waiting for its second press.",
           "Skip in the Grove goes to the end only while your finger or mouse stays on it.",
-          "Opening Prizes, Seeds or History in the Grove with the keyboard puts the keyboard on its tab. When a button stops asking to be pressed again, or Free pull is drawn again, the keyboard stays on it. Closing the panel gives the keyboard back to the button that opened it.",
+          "Opening Prizes, Seeds or History in the Grove with the keyboard puts the keyboard on its tab. In town and in the Grove, when a button stops asking to be pressed again after four seconds, or Free pull is drawn again, the keyboard stays on it. Closing the panel gives the keyboard back to the button that opened it.",
           "The left and right arrow keys go from tab to tab in the Grove and in The Little Raid's almanac, as in Settings. In the Grove they also choose the pool.",
           "Escape puts away the letter at the gate, and the keyboard starts on its Into town button. With another notice over the letter, Enter presses that notice's button and leaves the letter up.",
           "Resting the mouse on a pet at a camp shows its name. A name shown for something that moves stays beside it."

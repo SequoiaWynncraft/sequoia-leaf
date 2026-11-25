@@ -409,6 +409,55 @@ describe("on a page, the second press is only on a button that shows the questio
     await over();
     expect([pressOn(yard, panel, MEADOW, undrawn), pressOn(yard, panel, MEADOW, undrawn)]).toEqual([false, false]);
   });
+  test("a key that is not Enter, Space or Tab is a press on nothing: Orders opened by O and shut by Escape, and Enter only asks", async () => {
+    page = aPage();
+    noKeysHeld();
+    const up = shelf(page.body, RAKES, "Upgrade", "Press again");
+    key("Enter", false, up.button());
+    expect(pressedTwice(panel, RAKES, up.draw)).toBe(false);
+    noKeysHeld();
+    await over();
+    key("KeyO", false, up.button());
+    noKeysHeld();
+    await over();
+    expect(asking(RAKES)).toBe(false);
+    key("Escape", false, up.button());
+    noKeysHeld();
+    await over();
+    key("Enter", false, up.button());
+    expect(pressedTwice(panel, RAKES, up.draw)).toBe(false);
+    noKeysHeld();
+  });
+
+  test("a finger that scrolls from the question makes no click: the ask goes, and a click after it is a first press", async () => {
+    page = aPage();
+    noKeysHeld();
+    const fern = shelf(page.body, FERN, "Exchange", "Exchange?");
+    expect(pressOn(fern.button(), panel, FERN, fern.draw)).toBe(false);
+    await over();
+    press(fern.button());
+    heard({ is: "cancel" });
+    await Bun.sleep(1);
+    expect(asking(FERN)).toBe(false);
+    heard({ is: "click", on: fern.button() });
+    expect(pressedTwice(panel, FERN, fern.draw)).toBe(false);
+    await over();
+  });
+
+  test("a click on something other than what the press landed on is a press of its own", async () => {
+    page = aPage();
+    noKeysHeld();
+    const pull = shelf(page.body, PULL, "Pull 10", "Pull?");
+    const empty = el("div");
+    page.body.appendChild(empty);
+    expect(pressOn(pull.button(), panel, PULL, pull.draw)).toBe(false);
+    await over();
+    // A mouse button held down on nothing, and a click no press made on the question before it is let go.
+    press(empty);
+    heard({ is: "click", on: pull.button() });
+    expect(pressedTwice(panel, PULL, pull.draw)).toBe(false);
+    await over();
+  });
 });
 
 describe("nothing is drawn again under a held mouse button", () => {
