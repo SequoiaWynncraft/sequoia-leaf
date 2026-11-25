@@ -57,10 +57,14 @@ export const GAMES: Readonly<Record<GameId, Game>> = {
 export const isGame = (id: string): id is GameId => id === "works" || id === "table";
 
 /**
- * What the Works has waiting, as a line for the arrival letter. The yard pays its own till from
- * its own letter when the member goes in, so this line says so and pays nothing.
+ * What the Works has waiting, as a line for the arrival letter; it pays nothing. What the yard
+ * earns gathers in its till, on Leaf, for as long as it works on after the member's last command;
+ * none of it reaches their Coins until they go in (putting the Works' own letter away pays it in, or
+ * the page does within a minute) or buy something there. The `till` is the postcard's: what this
+ * browser last saw, at most a minute's earnings, since the page pays it in once a minute. It only
+ * says Coins are there; how many, Leaf alone knows, so the line gives no number.
  */
 export function worksWaiting(till = read("works")?.till ?? 0): AwayLine | null {
   if (till < 1) return null;
-  return { art: "coin", text: `${till} Coin${till === 1 ? " is" : "s are"} waiting in the Works' till` };
+  return { art: "coin", text: "Your Works has Coins waiting. Go in to collect them." };
 }

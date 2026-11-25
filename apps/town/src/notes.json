@@ -1,5 +1,13 @@
 [
   {
+    "id": "letter-works-coins",
+    "at": "2026-11-25T11:22Z",
+    "title": "The welcome letter's Works line",
+    "lines": [
+      "The welcome letter now says \"Your Works has Coins waiting. Go in to collect them.\" It gives no number: the one it gave was what this device last saw, often far less than your yard had made since."
+    ]
+  },
+  {
     "id": "camp-here",
     "at": "2026-11-25T01:33Z",
     "title": "Who is at which camp",

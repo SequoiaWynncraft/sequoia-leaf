@@ -50,10 +50,12 @@ describe("the arrival letter", () => {
     expect(l.lines.map((x) => x.art)).toEqual(["leaf", "folk", "coin", "crab"]);
   });
 
-  test("the Works' till is mentioned and not paid: the yard pays it itself", () => {
+  test("Coins in the Works are mentioned, with no number, and not paid: going in collects them", () => {
+    const line: AwayLine = { art: "coin", text: "Your Works has Coins waiting. Go in to collect them." };
     expect(worksWaiting(0)).toBeNull();
-    expect(worksWaiting(1)?.text).toBe("1 Coin is waiting in the Works' till");
-    expect(worksWaiting(340)).toEqual({ art: "coin", text: "340 Coins are waiting in the Works' till" });
+    // The postcard's number is what this browser last saw, not what the yard has made since: it is not shown.
+    expect(worksWaiting(1)).toEqual(line);
+    expect(worksWaiting(340)).toEqual(line);
   });
 
   test("time away, in plain words", () => {
