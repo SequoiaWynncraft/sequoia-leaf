@@ -1,0 +1,51 @@
+name: News
+
+# Each patch note a merge to main adds to the town's News tab (apps/town/src/notes.json) is posted
+# to a Discord channel, by a webhook kept as the secret NEWS_WEBHOOK. Without the secret, nothing is
+# posted. A note changed after it was posted is not posted again.
+on:
+  push:
+    branches: [main]
+    paths: [apps/town/src/notes.json]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: news
+
+jobs:
+  post:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The merge and the main it was merged onto, to tell which notes are new.
+          fetch-depth: 2
+      - name: Post the new notes
+        env:
+          NEWS_WEBHOOK: ${{ secrets.NEWS_WEBHOOK }}
+        run: |
+          set -euo pipefail
+          if [ -z "$NEWS_WEBHOOK" ]; then echo "No NEWS_WEBHOOK: nothing posted."; exit 0; fi
+          notes=apps/town/src/notes.json
+          git show "HEAD^1:$notes" > /tmp/before.json 2>/dev/null || echo '[]' > /tmp/before.json
+          # The notes this merge added, oldest first, each as a Discord message.
+          jq -c --slurpfile before /tmp/before.json '
+            ($before[0] | map(.id)) as $had
+            | map(select(.id as $id | $had | index($id) | not)) | reverse | .[]
+            | {embeds: [{
+                title: .title,
+                url: "https://leaf.seqwawa.com/play/town/",
+                description: ([(.lines // [])[]]
+                  + [(.more // [])[] | "**\(.head)**\n" + ([.points[] | "- " + .] | join("\n"))]
+                  | join("\n\n"))[0:4000],
+                color: 16101685,
+                timestamp: (.at | sub("Z$"; ":00Z"))
+              }]}' "$notes" |
+          while read -r message; do
+            curl -fsS -H 'Content-Type: application/json' --data "$message" "$NEWS_WEBHOOK"
+            sleep 1
+          done
