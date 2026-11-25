@@ -11,8 +11,9 @@
  *
  * Each command with an Undo (`REACH`) keeps one entry: the tiles it changed; what stood on them before,
  * as the player set it and nothing the yard was doing (`Setting`: the settings `stand`, copies and
- * blueprints keep, `keptAt`, with whether it was one of the pieces to hand); which of those settings
- * it changed on each piece that still stands; and the Coins it moved, but for the till paid in.
+ * blueprints keep, `keptAt`, with whether it was one of the pieces to hand); which of those pieces it
+ * took up (taken away, or another stood in its place, however like it: the tile's `made` moved on)
+ * and which settings it changed on each of the rest; and the Coins it moved, but for the till paid in.
  *
  * The history holds by construction. Undo takes the newest entry first; ticks change no setting, only
  * what pieces hold, carry and are doing; and every other command that changes a piece or the Coins
@@ -24,7 +25,8 @@
  *   back the settings the command changed, and only those, each as the command's own setter sets it,
  *   so that what it holds, carries and is doing (a splitter's next way, beside its ways in) is its own;
  * - a piece the command set down, or set in the place of another, is taken away, as the spade takes it;
- * - a piece the command took away, or set another in the place of, is stood again as new: its
+ * - a piece the command took up (took away, or set another in the place of, even one like it) is
+ *   stood again as new: its
  *   settings, holding nothing, doing nothing; one of the pieces to hand as one. Putting back is not
  *   building: nothing asks whether it may be built now, and its Coins are the recorded opposite;
  * - pieces moved are moved back as one, with what they hold now.
@@ -36,17 +38,22 @@
  * the brush, 4 too much to keep), the Coins it moved (a varint, zigzag), the check of its tiles after
  * it (four bytes), the tiles it changed that held nothing before (a count, then each as the tiles
  * since the last less one), for a move the turns and corner that move the pieces back (a byte each),
- * which settings the command changed on each piece that stood there (a count, then a varint each,
- * `SETTINGS`), and last what stood there (`packSettings`).
+ * for each piece that stood there, a word of what the command did to it (a count, then a varint each:
+ * `UP` for one it took up, else the settings it changed where it stands, a bit each after `UP`, in
+ * `SETTINGS`' order, none for one whose settings came back to how they were), and last what stood
+ * there (`packSettings`).
  *
  * The history never outlives the rules or the land it was made under: it is kept stamped with both
  * (`stampOf`: the rules' version, as the page and Leaf compare it, and the land's own bytes), and a
  * yard read under another stamp has none, alike on the page and on Leaf. What an entry would put back,
  * and what it would cost, were the rules' and the land's when it was made.
  *
- * At most `UNDO_MOST` entries and `UNDO_BYTES` bytes in all, the oldest let go first. A command
- * whose own entry is over that is still done, and kept, under its id, as one that cannot be undone;
- * a stroke over it goes on as one, so that no part of it is undone.
+ * An entry may be as large as `UNDO_ENTRY`: room for the largest thing a player can do at once, a
+ * plan of the whole yard put back over another yard on the guild's land, every tile of it changed
+ * (`test/whole.test.ts` measures it). At most `UNDO_MOST` entries and `UNDO_BYTES` bytes in all,
+ * room for two of those, the oldest let go first. A command whose own entry is over `UNDO_ENTRY`
+ * (on a land larger than the guild's) is still done, and kept, under its id, as one that cannot be
+ * undone; a stroke over it goes on as one, so that no part of it is undone.
  */
 import type { CoinChange } from "@sequoia-leaf/core";
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts" with { type: "macro" };
@@ -99,12 +106,16 @@ export function stampOf(land: Land): string {
   return stamp;
 }
 
-/** The most entries a yard keeps, and the most bytes they may come to in all. */
+/** The most entries a yard keeps; the most bytes one may take, and all of them together. */
 export const UNDO_MOST = 20;
-export const UNDO_BYTES = 4096;
+export const UNDO_ENTRY = 16 * 1024;
+export const UNDO_BYTES = 2 * UNDO_ENTRY;
 
 /** The commands that change a piece or the Coins with no Undo, which forget every entry. */
 const FORGETS: ReadonlySet<string> = new Set(["recipe", "sort", "crate", "buyPlot"]);
+
+/** In what a command did to a piece (`masks`): it took it up. The settings it changed are the bits above. */
+const UP = 1;
 
 /** What an entry is, a bit each. */
 const MOVED = 1;
@@ -144,7 +155,7 @@ interface Undoing {
   readonly sum: number;
   /** Every tile it changed, in order. */
   readonly tiles: readonly number[];
-  /** How the pieces stood on those of them that held one before, and the settings the command changed on each (`SETTINGS`, a bit each). */
+  /** How the pieces stood on those of them that held one before, and what the command did to each: `UP`, or the settings it changed. */
   readonly was: readonly Setting[];
   readonly masks: readonly number[];
   /** For a move, the turns and the corner that move the pieces back. */
@@ -155,6 +166,8 @@ interface Undoing {
 export interface Before {
   readonly tiles: readonly number[];
   readonly was: ReadonlyMap<number, Setting>;
+  /** Each tile's `made` before it, in the order of `tiles`: one that moved on had its piece taken up. */
+  readonly made: readonly number[];
   /** For a move, the turns and the corner that move the pieces back. */
   readonly back: Undoing["back"];
 }
@@ -279,7 +292,11 @@ const REACH: { readonly [D in Name]?: (y: Yard, a: ActOf<D>) => readonly number[
   build: (y, a) => [tileOf(y, a), ...tunnelEnd(y, a)],
   lay: (y, a) => [...tilesOf(y, a.legs.map(legPiece)), ...(a.turn ? [tileOf(y, a.turn)] : [])],
   stand: (y, a) => tilesOf(y, a.pieces),
-  placeBlueprint: (y, a) => tilesOf(y, blueprintAt(y, a.slot, a.turns, a.x, a.y) ?? []),
+  // A plan of the whole yard may change every tile.
+  placeBlueprint: (y, a) =>
+    y.blueprints[a.slot]?.whole
+      ? Array.from({ length: y.kind.length }, (_, i) => i)
+      : tilesOf(y, blueprintAt(y, a.slot, a.turns, a.x, a.y) ?? []),
   move: (y, a) => [...inArea(y, a), ...tilesOf(y, copyOf(y, a.tiles, a.turns, a.x, a.y) ?? [])],
   copy: (y, a) => tilesOf(y, copyOf(y, a.tiles, a.turns, a.x, a.y) ?? []),
   remove: one,
@@ -307,9 +324,10 @@ export function before(y: Yard, a: Act): Before | null {
   const mouths = near.flatMap((i) => (i < 0 ? [] : [i, otherMouth(y, i)]));
   const tiles = [...new Set(mouths)].filter((i) => i >= 0 && y.kind[i] !== DEPOT).toSorted((i, j) => i - j);
   const was = new Map(tiles.flatMap((i) => [settingAt(y, i) ?? []].flat().map((s) => [i, s] as const)));
-  if (a.do !== "move") return { tiles, was, back: null };
+  const made = tiles.map((i) => y.made[i] ?? 0);
+  if (a.do !== "move") return { tiles, was, made, back: null };
   const box = boxOf(piecesAt(y, a.tiles));
-  return { tiles, was, back: { turns: (4 - a.turns) & 3, x: box.x, y: box.y } };
+  return { tiles, was, made, back: { turns: (4 - a.turns) & 3, x: box.x, y: box.y } };
 }
 
 /** 32 bits of how the pieces on some tiles stand: everything a command sets, nothing ticks change. */
@@ -351,7 +369,13 @@ function overCap(id: string, flags: number): Entry {
 }
 
 /** An entry's bytes, of the yard after its command (`y`); `was` is how the pieces on its tiles stood before. */
-function written(y: Yard, u: Omit<Undoing, "sum" | "masks">): Uint8Array {
+/** An entry as a command done makes it, before it is written: its tiles, how they stood, and which pieces it took up. */
+type Undone = Omit<Undoing, "sum" | "masks"> & {
+  /** The tiles of the pieces it took up: taken away, or another stood in their place, however like them. */
+  readonly up: ReadonlySet<number>;
+};
+
+function written(y: Yard, u: Undone): Uint8Array {
   const o = new Writer();
   writeId(o, u.id);
   o.byte(u.flags);
@@ -364,7 +388,8 @@ function written(y: Yard, u: Omit<Undoing, "sum" | "masks">): Uint8Array {
   fresh.forEach((i, k) => o.varint(i - (fresh[k - 1] ?? -1) - 1));
   if (u.back) for (const v of [u.back.turns, u.back.x, u.back.y]) o.byte(v);
   o.varint(u.was.length);
-  for (const s of u.was) o.varint(changedOf(y, s));
+  // A piece taken up is stood again new, whatever it is like; one changed where it stands always has a setting changed.
+  for (const s of u.was) o.varint(u.up.has(s.tile) ? UP : changedOf(y, s) << 1);
   packSettings(o, u.was);
   return o.bytes();
 }
@@ -386,15 +411,14 @@ function strokeOf(y: Yard, a: Act): Undoing | null {
 }
 
 /** What a command done (`b` taken before it, `id` its id) changed, with the stroke it adds to: its entry, but for the check. */
-function undoing(
-  y: Yard,
-  b: Before,
-  id: string,
-  stroke: Undoing | null,
-  coins: number,
-  paint: boolean,
-): Omit<Undoing, "sum" | "masks"> {
-  const done = b.back ? b.tiles : b.tiles.filter((i) => !standsAs(y, i, b.was.get(i)));
+function undoing(y: Yard, b: Before, id: string, stroke: Undoing | null, coins: number, paint: boolean): Undone {
+  // The pieces it took up: their tiles' `made` moved on. A stroke takes none up, but keeps what it had.
+  const took = b.tiles.filter((i, k) => b.was.has(i) && y.made[i] !== b.made[k]);
+  const up = new Set([
+    ...took,
+    ...(stroke?.was.flatMap((s, k) => ((stroke.masks[k] ?? 0) & UP ? [s.tile] : [])) ?? []),
+  ]);
+  const done = b.back ? b.tiles : b.tiles.filter((i) => up.has(i) || !standsAs(y, i, b.was.get(i)));
   // How the stroke's lines stood before it, over how this command found them.
   const was = new Map([...done.flatMap((i) => b.was.get(i) ?? []), ...(stroke?.was ?? [])].map((s) => [s.tile, s]));
   return {
@@ -404,6 +428,7 @@ function undoing(
     tiles: [...new Set([...done, ...(stroke?.tiles ?? [])])].toSorted((i, j) => i - j),
     was: [...was.values()].toSorted((p, q) => p.tile - q.tile),
     back: b.back,
+    up,
   };
 }
 
@@ -425,7 +450,7 @@ export function after(y: Yard, a: Act, b: Before | null, changes: readonly CoinC
   if (u.tiles.length === 0 && u.coins === 0) return;
   const bytes = written(y, u);
   const kept = stroke ? y.history.slice(0, -1) : y.history;
-  y.history = bytes.length > UNDO_BYTES ? [overCap(u.id, u.flags)] : capped([...kept, entry(bytes)]);
+  y.history = bytes.length > UNDO_ENTRY ? [overCap(u.id, u.flags)] : capped([...kept, entry(bytes)]);
 }
 
 // ---------- reading ----------
@@ -441,12 +466,12 @@ function readTiles(r: Reader, tiles: number): number[] | null {
   return n > tiles || out.some((i) => i >= tiles) ? null : out;
 }
 
-/** Settings changed, one for each piece that stood on an entry's tiles, after their count; null past `most`. */
+/** What a command did to each piece that stood on an entry's tiles, after their count: `UP` alone, or settings changed; null past `most`. */
 function readMasks(r: Reader, most: number): number[] | null {
   const n = r.varint();
   const out: number[] = [];
   for (let k = 0; k < Math.min(n, most) && !r.over; k++) out.push(r.varint());
-  return n > most || out.some((m) => m >= 1 << SETTINGS.length) ? null : out;
+  return n > most || out.some((m) => m >= 2 << SETTINGS.length || (m & UP && m !== UP)) ? null : out;
 }
 
 /** The rest of an entry's bytes, after its Coins and check: its tiles, the way back, the settings changed and how the pieces stood. */
@@ -533,17 +558,19 @@ function standBack(y: Yard, s: Setting): void {
 }
 
 /**
- * Puts back how the pieces on an entry's tiles stood: each that still stands has back the settings
- * the command changed; the rest are taken away, and what was taken away is stood again as new. Every
+ * Puts back how the pieces on an entry's tiles stood: each the command changed where it stands has
+ * back the settings it changed; the rest are taken away, and each piece it took up is stood again as
+ * new, however like it what stands there now is. Every
  * tile a piece is stood on is one of the entry's, bare once what stands there is taken away, and no
  * step can refuse: it is done whole once begun.
  */
 function putBack(y: Yard, u: Undoing): void {
   const was = new Map(u.was.map((s, k) => [s.tile, { s, mask: u.masks[k] ?? 0 }]));
-  const stays = new Set(u.tiles.filter((i) => was.get(i)?.s.kind === y.kind[i]));
+  // The pieces the command did not take up: each still stands, and has back the settings it changed, if any.
+  const stays = new Set(u.tiles.filter((i) => was.has(i) && ((was.get(i)?.mask ?? 0) & UP) === 0));
   for (const i of u.tiles) if (!stays.has(i) && y.kind[i] !== NONE) takeAway(y, i);
   for (const { s, mask } of was.values()) {
-    if (stays.has(s.tile)) SETTINGS.forEach((part, n) => mask & (1 << n) && part.to(y, s.tile, part.of(s)));
+    if (stays.has(s.tile)) SETTINGS.forEach((part, n) => (mask >> 1) & (1 << n) && part.to(y, s.tile, part.of(s)));
     else standBack(y, s);
   }
 }

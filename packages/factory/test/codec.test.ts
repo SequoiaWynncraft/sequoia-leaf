@@ -131,7 +131,7 @@ describe("a yard kept before splitters, joiners and sorters had grades", () => {
     const back = F.decode(asKept(y), y.land);
     expect(back && lineGrades(back)).toEqual([2, 3, 3, 3, 2, 2]);
     expect(
-      back && F.piecesOf(back.blueprints[0] ?? new Uint8Array()).map((p) => [F.kindName(p.kind), p.grade ?? 1]),
+      back && F.piecesOf(back.blueprints[0]?.pieces ?? new Uint8Array()).map((p) => [F.kindName(p.kind), p.grade ?? 1]),
     ).toEqual([
       ["belt", 2],
       ["splitter", 2],
@@ -322,6 +322,8 @@ const LEFT_OUT = new Set([
   "holders.last",
   // Which row of a side table holds a piece's parts: reading a yard back may change it.
   "row",
+  // How often each tile has been cleared, for Undo within a command: reading a yard back stands every piece anew.
+  "made",
   // What Undo would undo is mixed in as its bytes: an entry's id is worked out from them.
   "history.0.id",
   "holders.size",
@@ -362,8 +364,8 @@ function change(y: F.Yard, path: string): void {
     v instanceof Uint32Array
   )
     v[at(v)] = (v[at(v)] ?? 0) ^ 1;
-  else if (Array.isArray(v) && (v[0] === null || v[0] instanceof Uint8Array))
-    v[0] = v[0] instanceof Uint8Array ? v[0].map((b) => b ^ 1) : Uint8Array.of(1);
+  // An empty place for a blueprint: given one.
+  else if (Array.isArray(v) && v[0] === null) v[0] = { pieces: Uint8Array.of(1), whole: false };
   else if (Array.isArray(v)) v.push(v[0] ?? 0);
   else throw new Error(`${path}: nothing to change`);
 }

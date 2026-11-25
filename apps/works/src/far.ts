@@ -9,7 +9,6 @@
  */
 
 import {
-  boxOf,
   DEPOT,
   DRAW,
   DX,
@@ -27,6 +26,7 @@ import { CORAL, CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import type { Ctx } from "@sequoia-leaf/kit/util.ts";
 
 import { PAINTS, TILE } from "./art/belts.ts";
+import { heldBox, takenUp } from "./held.ts";
 import type { Layout } from "./layout.ts";
 import { alarm, blockColour, layPlan, makePlan, paintPlan, type Plan } from "./plan.ts";
 import { builds, type Group, S, seenFrom, tileNudge } from "./state.ts";
@@ -59,6 +59,27 @@ function inHand(y: Yard, grp: Group): NonNullable<typeof held> {
     }
   });
   return (held = { for: grp.at, tiles, of });
+}
+
+/**
+ * The pieces in hand where they would stand: gold where each can go, coral where it cannot; for a
+ * plan of the whole yard, a coral box on each piece it would take up, as the spade marks what it
+ * takes; and a box round all of it. `P` is a tile's size in the picture.
+ */
+function handMarks(g: Ctx, y: Yard, grp: Group, dx: number, dy: number, P: number): void {
+  const W = y.land.w;
+  const X = (i: number): number => dx + (i % W) * P;
+  const Y = (i: number): number => dy + Math.floor(i / W) * P;
+  const hand = inHand(y, grp);
+  for (let n = 0; n < hand.tiles.length; n++) {
+    const i = hand.tiles[n] ?? 0;
+    g.fillStyle = grp.why[hand.of[n] ?? 0] === null ? GOLD[2] : CORAL;
+    g.fillRect(X(i), Y(i), P, P);
+  }
+  for (const i of takenUp(grp)) box(g, X(i), Y(i), P, P, CORAL);
+  const b = heldBox(y, grp);
+  const stuck = grp.why.some((r) => r !== null);
+  box(g, dx + b.x * P, dy + b.y * P, b.w * P, b.h * P, stuck ? CORAL : CREAM, true);
 }
 
 /** Whether a tool is one that the reach of power matters to. */
@@ -162,19 +183,7 @@ export function drawPlanMarks(g: Ctx, y: Yard, dx: number, dy: number): void {
     else if (tool === "paint") {
       if (!bad) box(g, x, top, P, P, PAINTS[S.tint - 1]?.lit ?? CREAM, true);
     } else if (tool === "select") {
-      if (S.group) {
-        // The pieces in hand where they would stand: gold where each can go, coral where it cannot.
-        const grp = S.group;
-        const hand = inHand(y, grp);
-        for (let n = 0; n < hand.tiles.length; n++) {
-          const i = hand.tiles[n] ?? 0;
-          g.fillStyle = grp.why[hand.of[n] ?? 0] === null ? GOLD[2] : CORAL;
-          g.fillRect(X(i), Y(i), P, P);
-        }
-        const b = boxOf(grp.at);
-        const stuck = grp.why.some((r) => r !== null);
-        box(g, dx + b.x * P, dy + b.y * P, b.w * P, b.h * P, stuck ? CORAL : CREAM, true);
-      }
+      if (S.group) handMarks(g, y, S.group, dx, dy, P);
     } else if (!S.run) {
       // One piece about to be built: its block, and for a tunnel the mouth it would come up at.
       g.fillStyle = bad ? CORAL : blockColour(tool);

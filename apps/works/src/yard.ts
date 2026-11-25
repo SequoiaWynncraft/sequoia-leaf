@@ -81,6 +81,7 @@ import {
   writeCommand,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { unask } from "@sequoia-leaf/kit/dom.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
 import { type Answered, openPlay, type Play, type Trouble } from "@sequoia-leaf/kit/play.ts";
@@ -398,6 +399,8 @@ function take(): boolean {
   shown = Math.max(shown, yard.tick);
   keepLast(S.world, yard);
   S.world = yard;
+  // A press waiting for a second was for the yard it was shown on (`pressKey`).
+  unask();
   reads++;
   seen = Math.max(seen, rev);
   // What the yard as read has of what a visit was told is let go; none of the rest is begun.

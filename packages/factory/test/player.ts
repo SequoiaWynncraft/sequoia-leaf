@@ -98,6 +98,9 @@ export class Player {
         return { do: "placeBlueprint", slot, turns: this.int(4), ...at };
       }
       case 7:
+        // A yard that may keep the whole yard now and then does: the same draws as ever for one that may not.
+        if (F.locked(y.open, { use: "whole" }) === null && this.r() < 0.3)
+          return { do: "saveYard", slot: this.int(F.BLUEPRINTS_MOST) };
         return { do: "saveBlueprint", slot: this.int(F.BLUEPRINTS_MOST), tiles: this.box() };
       case 8: {
         // Now and then a copy of one piece onto ground where a piece may stand, which a box at

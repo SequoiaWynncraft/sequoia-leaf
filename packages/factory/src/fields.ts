@@ -3,6 +3,7 @@
  * checked, and the pieces and legs of a run read off it and written back onto it by name.
  */
 import { isDir } from "./build.ts";
+import type { ActOf } from "./commands.ts";
 import { LAND } from "./land.ts";
 import { keptOf, type Piece } from "./pieces.ts";
 import { type Leg, legKind, legSpan } from "./route.ts";
@@ -10,6 +11,7 @@ import {
   BELT,
   BLUEPRINTS_MOST,
   DEPOT,
+  goalNamed,
   type Item,
   itemName,
   itemNamed,
@@ -101,3 +103,18 @@ export const legOnWire = (l: Leg): Record<string, unknown> => ({
   span: legSpan(l),
   ...(l.grade === 1 ? {} : { grade: l.grade }),
 });
+
+/** A command that names a node, read off the wire by the node's id. */
+export function nodeOf<D extends "take" | "queue" | "unqueue">(v: Record<string, unknown>, name: D): ActOf<D> | null {
+  const g = goalNamed(v.node);
+  return g === null ? null : { do: name, node: g };
+}
+/** A command that names a piece of research, read off the wire by its id. */
+export function researchOf<D extends "study" | "unstudy">(v: Record<string, unknown>, name: D): ActOf<D> | null {
+  const g = goalNamed(v.research);
+  return g === null ? null : { do: name, research: g };
+}
+/** A command that names a standing order, read off the wire by its number. */
+export function orderOf<D extends "swap" | "handOver">(v: Record<string, unknown>, name: D): ActOf<D> | null {
+  return whole(v.order, 1e9) ? { do: name, order: v.order } : null;
+}

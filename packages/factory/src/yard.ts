@@ -146,6 +146,16 @@ export interface Entry {
 /** A piece kept in a blueprint, 10 bytes: kind, x, y, way, span, recipe, open, tint, a splitter's ways or a sorter's side (`packWays`), grade. */
 export const PIECE_BYTES = 10;
 
+/**
+ * A blueprint: its pieces, `PIECE_BYTES` a piece, and whether it is a plan of the whole yard
+ * (`whole.ts`), whose pieces are kept on the tiles they stood on and go back there. Any other has its
+ * pieces from the corner of their box, and is set down wherever it is aimed.
+ */
+export interface Print {
+  readonly pieces: Uint8Array;
+  readonly whole: boolean;
+}
+
 export interface Yard {
   readonly land: Land;
   /** What stands on each tile (`NONE` for nothing), and which way it sends things. */
@@ -181,6 +191,13 @@ export interface Yard {
   readonly span: Int8Array;
   /** The piece's row in `holders` (or for a tunnel's way-in mouth, in `tunnels`), or -1. */
   readonly row: Int32Array;
+  /**
+   * How many times each tile has been cleared (`vacate`, as taking a piece away and standing one do),
+   * counting round from 255 to 0: a piece taken up, whether or not another like it is stood in its
+   * place, is told from one that stayed, within a command (`history.ts`). Neither kept nor checked:
+   * reading a yard back stands every piece anew.
+   */
+  readonly made: Uint8Array;
   holders: Holders;
   tunnels: Tunnels;
   /** Which tiles power reaches, 1 for each, while `powered`; worked out again when next read after a change. */
@@ -208,7 +225,7 @@ export interface Yard {
   plots: Plot[];
   /** The pieces to hand that are not standing, by kind. */
   readonly spare: Uint8Array;
-  blueprints: (Uint8Array | null)[];
+  blueprints: (Print | null)[];
   /**
    * The goals done, in the order they were done; the node in hand, or -1; the nodes waiting after it,
    * in the player's order; the research being studied and that waiting after it; and what each goal
@@ -283,6 +300,7 @@ export function emptyYard(land: Land, tier = 0): Yard {
     free: new Uint8Array(n),
     span: new Int8Array(n),
     row: new Int32Array(n).fill(-1),
+    made: new Uint8Array(n),
     holders: holders(16),
     tunnels: tunnels(8),
     lit: new Uint8Array(n),
@@ -512,6 +530,7 @@ export function place(y: Yard, i: number, k: Kind, d: number, g = 1): void {
 /** Takes whatever stands on a tile away, row and all, leaving it as new ground. */
 export function vacate(y: Yard, i: number): void {
   dropRow(y, i);
+  y.made[i] = ((y.made[i] ?? 0) + 1) & 255;
   y.kind[i] = NONE;
   y.dir[i] = 0;
   y.item[i] = NONE;

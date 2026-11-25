@@ -17,10 +17,13 @@ import {
 import {
   ALL_ITEMS,
   BELT,
+  BENCH,
   check,
   clockOf,
   counts,
   countsOf,
+  CRATE,
+  create as createYard,
   deliver,
   FACTORY,
   GATHERER,
@@ -1490,6 +1493,52 @@ describe("an Undo in the Works", () => {
     ]);
     const yard = await yardShown();
     expect([yard.kind[21 + 15 * yard.land.w], yard.history.map((e) => e.id)]).toEqual([BELT, ["a-1"]]);
+  });
+
+  it("puts a plan of the whole yard back as one command for its net price, and undoes it as one: the ledger nets to nothing", async () => {
+    // Alice's yard, every goal done, kept with a plan of itself; then its crate and its bench taken away.
+    const w = createYard({ seed: 7, tier: 5 });
+    const done = (c: Record<string, unknown>): void => {
+      const read = readCommand({ tick: w.tick, ...c });
+      if (!read || "refused" in playWorks(w, read)) throw new Error(`${JSON.stringify(c)} was not done`);
+    };
+    done({ do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
+    done({ do: "build", kind: "crate", x: 24, y: 12, dir: 0 });
+    done({ do: "build", kind: "bench", x: 25, y: 12, dir: 0 });
+    done({ do: "saveYard", slot: 0 });
+    done({ do: "remove", x: 24, y: 12 });
+    done({ do: "remove", x: 25, y: 12 });
+    w.history = [];
+    w.at = clock.now;
+    // Opened first, so that her Coins open with the welcome, then written over as a staging step does.
+    await yardShown();
+    const text = FACTORY.encode(w);
+    await services.query(
+      (sql) =>
+        sql`UPDATE play_state SET rev = rev + 1, state = ${text}, updated_at = ${clock.now} WHERE player_id = ${alice}`,
+    );
+    const before = await yardShown();
+    const tile = (x: number, y: number) => x + y * before.land.w;
+    expect((await works([{ do: "placeBlueprint", slot: 0, turns: 0, x: 0, y: 0 }])).results).toEqual([
+      { id: `u-${ids}`, notes: [] },
+    ]);
+    const placed = await yardShown();
+    expect([placed.kind[tile(24, 12)], placed.kind[tile(25, 12)], placed.kind[tile(21, 15)]]).toEqual([
+      CRATE,
+      BENCH,
+      before.kind[tile(21, 15)],
+    ]);
+    // A crate and a bench stood, the mill left standing: one entry, for both.
+    expect((await entries(alice)).slice(-1)).toEqual([
+      { amount: -60, reason: "Built in the Works", game: "works", key: expect.any(String) },
+    ]);
+    expect(await coinsOf(alice)).toBe(240);
+    const entry = placed.history.at(-1)?.id;
+    expect((await works([{ do: "undo", entry }])).results).toEqual([{ id: `u-${ids}`, notes: [] }]);
+    expect((await entries(alice)).slice(-1)).toEqual([
+      { amount: 60, reason: "Undone in the Works", game: "works", key: expect.any(String) },
+    ]);
+    expect([await coinsOf(alice), (await yardShown()).kind]).toEqual([300, before.kind]);
   });
 
   it("is refused whole when another game has spent the Coins it would take back since: the yard and the ledger as they were", async () => {

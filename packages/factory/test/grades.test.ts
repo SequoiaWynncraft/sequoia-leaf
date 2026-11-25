@@ -183,14 +183,14 @@ describe("keeping a grade", () => {
     must(y, { do: "move", tiles: [F.at(y, 5, 6)], turns: 0, x: 6, y: 6 });
     expect(y.grade[F.at(y, 6, 6)]).toBe(2);
     must(y, { do: "saveBlueprint", slot: 0, tiles: [F.at(y, 6, 6)] });
-    const print = F.piecesOf(y.blueprints[0] ?? new Uint8Array());
+    const print = F.piecesOf(y.blueprints[0]?.pieces ?? new Uint8Array());
     expect(print.map((p) => p.grade)).toEqual([2]);
     const pieces = F.placed(print, 0, 3, 6).map((p) => Object.assign({}, p, { kind: F.kindName(p.kind) }));
     must(y, { do: "stand", pieces });
     expect(y.grade[F.at(y, 3, 6)]).toBe(2);
     const back = F.decode(F.encode(y), y.land);
     expect(back && [back.grade[F.at(back, 3, 6)], back.grade[F.at(back, 6, 6)]]).toEqual([2, 2]);
-    expect(back && F.piecesOf(back.blueprints[0] ?? new Uint8Array()).map((p) => p.grade)).toEqual([2]);
+    expect(back && F.piecesOf(back.blueprints[0]?.pieces ?? new Uint8Array()).map((p) => p.grade)).toEqual([2]);
     expect(give(yard(3), { do: "stand", pieces })).toMatchObject({
       refused: "cannot_stand",
       why: "A grade 2 mill is not unlocked yet",
@@ -326,14 +326,14 @@ describe("splitters, joiners and sorters", () => {
     must(y, { do: "copy", tiles: F.within(y, 2, 1, 4, 1), turns: 0, x: 2, y: 6 });
     expect(grades(6)).toEqual([2, 3, 2]);
     must(y, { do: "saveBlueprint", slot: 0, tiles: F.within(y, 2, 1, 4, 1) });
-    expect(F.piecesOf(y.blueprints[0] ?? new Uint8Array()).map((p) => p.grade)).toEqual([2, 3, 2]);
+    expect(F.piecesOf(y.blueprints[0]?.pieces ?? new Uint8Array()).map((p) => p.grade)).toEqual([2, 3, 2]);
     must(y, { do: "placeBlueprint", slot: 0, turns: 0, x: 2, y: 7 });
     expect(grades(7)).toEqual([2, 3, 2]);
     const back = F.decode(F.encode(y), y.land);
     expect(back && [1, 6, 7].flatMap((z) => [0, 1, 2].map((d) => back.grade[F.at(back, 2 + d, z)]))).toEqual([
       2, 3, 2, 2, 3, 2, 2, 3, 2,
     ]);
-    expect(back && F.piecesOf(back.blueprints[0] ?? new Uint8Array()).map((p) => p.grade)).toEqual([2, 3, 2]);
+    expect(back && F.piecesOf(back.blueprints[0]?.pieces ?? new Uint8Array()).map((p) => p.grade)).toEqual([2, 3, 2]);
     expect(back && F.check(back)).toBe(F.check(y));
     const before = F.check(y);
     must(y, { do: "build", kind: "splitter", x: 2, y: 1, dir: 0, grade: 3 });

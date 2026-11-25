@@ -18,10 +18,23 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 import { shown } from "@sequoia-leaf/kit/card.ts";
+import { unask } from "@sequoia-leaf/kit/dom.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./art/belts.ts";
-import { aimOf, groupOf, type Hand, IDLE, markOf, runOf, type Stage, type Tile, toolOf } from "./hand.ts";
+import {
+  aimOf,
+  groupOf,
+  type Hand,
+  type HandEvent,
+  IDLE,
+  markOf,
+  runOf,
+  type Stage,
+  step,
+  type Tile,
+  toolOf,
+} from "./hand.ts";
 import type { Nudge } from "./teach.ts";
 
 /**
@@ -130,6 +143,32 @@ export interface Group {
   why: (string | null)[];
 }
 
+/** What is held, as a press waiting to be pressed again is for it: the tool, Select's stage, and the pieces or blueprint held. */
+const heldOf = (h: Hand): string =>
+  `${String(toolOf(h))}:${h.is === "select" ? `${h.stage.is}:${String(groupOf(h)?.as ?? "")}` : ""}`;
+
+/**
+ * Moves what is in hand (`hand.ts`): the one way anything changes it. A press waiting to be pressed
+ * again (`pressedTwice`) is let go when what is held changes (another tool, stage or blueprint, or
+ * none), so that no second press confirms what the first was not for.
+ */
+export function moveHand(e: HandEvent): void {
+  const was = heldOf(S.hand);
+  S.hand = step(S.hand, e);
+  if (heldOf(S.hand) !== was) unask();
+}
+
+/**
+ * What a press that waits for a second (`pressedTwice`) is named: exactly what it confirms, and the
+ * yard's count of changes (`rev`), so that any change to the yard lets it go and no second press
+ * confirms what the first was not shown. A yard taken from Leaf in place of the copy lets it go too
+ * (`yard.ts`).
+ */
+export const pressKey = (target: string): string => `${target}@${S.world.rev}`;
+
+/** Called whenever the tool in hand, or what it is aimed at, changes, and to say something: the interface listens (`dock.ts`). */
+export const toolHooks: { changed: () => void; said: (text: string) => void } = { changed: () => {}, said: () => {} };
+
 /** The tile whose card is pinned open, as the kit's cards have it: the one source of what the yard marks. -1 for none. */
 function pinnedTile(): number {
   const card = shown();
@@ -168,7 +207,7 @@ export const S: {
   readonly run: Run | null;
   /** A finger's run: the tile it starts from. */
   readonly from: Tile | null;
-  /** With Select in hand: the area marked, the first corner of one being marked, the pieces held, and whether Save is asking where. */
+  /** With Select in hand: the area marked, the first corner of one being marked, the pieces held, and whether Save (or Save yard) is asking where. */
   readonly mark: Mark | null;
   readonly corner: Tile | null;
   readonly group: Group | null;
@@ -223,7 +262,7 @@ export const S: {
     return groupOf(S.hand);
   },
   get saving() {
-    return S.hand.is === "select" && S.hand.stage.is === "saving";
+    return S.hand.is === "select" && (S.hand.stage.is === "saving" || S.hand.stage.is === "savingYard");
   },
   dir: 0,
   right: false,
@@ -281,4 +320,5 @@ export function tileAt(pageX: number, pageY: number): { x: number; y: number } {
 export const mid = (x: number, y: number): Pt => ({ x: x * TILE + TILE / 2, y: y * TILE + TILE / 2 });
 
 /** Whether Undo shows: while the yard has something to undo, kept with it, so after a reload and on another device too; not while saving. */
-export const undoes = (stage: Stage | null): boolean => stage?.is !== "saving" && S.world.history.length > 0;
+export const undoes = (stage: Stage | null): boolean =>
+  stage?.is !== "saving" && stage?.is !== "savingYard" && S.world.history.length > 0;

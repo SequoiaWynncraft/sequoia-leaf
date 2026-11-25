@@ -45,20 +45,27 @@ const settingsWord = (y: Yard, i: number): number =>
   (((y.span[i] ?? 0) + 8) << 16) |
   ((y.set[i] ?? 0) << 24);
 
+/** Mixes in some bytes, how many and then four at a time: a plan of the whole yard is some 16,000 of them. */
+function mixBytes(b: Uint8Array, mix: (v: number) => void): void {
+  mix(b.length);
+  for (let k = 0; k < b.length; k += 4)
+    mix((b[k] ?? 0) | ((b[k + 1] ?? 0) << 8) | ((b[k + 2] ?? 0) << 16) | ((b[k + 3] ?? 0) << 24));
+}
+
 /**
- * Mixes in the yard's kept bytes: each of its blueprints (or none), then what Undo would undo, how
- * many entries and each one's bytes (its id among them); a byte at a time.
+ * Mixes in the yard's kept bytes: each of its blueprints (or none) and whether it is a plan of the
+ * whole yard, then what Undo would undo, how many entries and each one's bytes (its id among them).
  */
 function mixKept(y: Yard, mix: (v: number) => void): void {
   for (const b of y.blueprints) {
-    mix(b === null ? -1 : b.length);
-    for (let k = 0; k < (b?.length ?? 0); k++) mix(b?.[k] ?? 0);
+    if (b === null) mix(-1);
+    else {
+      mix(b.whole ? -2 : -3);
+      mixBytes(b.pieces, mix);
+    }
   }
   mix(y.history.length);
-  for (const { bytes } of y.history) {
-    mix(bytes.length);
-    for (let k = 0; k < bytes.length; k++) mix(bytes[k] ?? 0);
-  }
+  for (const { bytes } of y.history) mixBytes(bytes, mix);
 }
 
 /** The yard in 32 bits. */

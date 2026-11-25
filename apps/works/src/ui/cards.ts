@@ -102,7 +102,7 @@ import {
 } from "./goal.ts";
 import { groundCard, type GroundPrint, plotCard, type PlotPrint } from "./land.ts";
 import type { Flow } from "./numbers.ts";
-import { fitted, partsWords, type YardIcon, yardIcon } from "./parts.ts";
+import { fitted, partsWords, TOOL_ICON, yardIcon } from "./parts.ts";
 import { itemRef, machineRef, nodeRef, pictureRef, plotRef } from "./refs.ts";
 import { sorterActions, type SorterPrint, sorterRows } from "./sorter.ts";
 import { splitterWays, type WaysPrint } from "./splitter.ts";
@@ -654,9 +654,6 @@ const orderCard = (p: OrderPrint): Description => ({
     ...listBlocks(wantsGiven(p.wants)),
   ],
 });
-
-/** Each tool's picture: the one it has in the dock. */
-export const TOOL_ICON: Readonly<Record<Tool, YardIcon>> = { paint: "brush", select: "select", upgrade: "upgrade" };
 
 /** The picture of what each kind of number changes. */
 export const PERK_ART: Readonly<

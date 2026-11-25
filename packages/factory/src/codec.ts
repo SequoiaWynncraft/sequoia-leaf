@@ -1,7 +1,8 @@
 /**
  * Keeping a yard, and reading it back. The yard is written as a small JSON record of its numbers,
  * goals and orders, with its pieces packed into bytes (`cells`, base64, as `cells.ts` packs them) and
- * each of its blueprints the same (`packPrint`), and what Undo would put back (`history.ts`). Reading is by shape first: a record of the wrong shape or
+ * each of its blueprints the same (`packPrint`; a plan of the whole yard as `{ "whole": ... }`), and
+ * what Undo would put back (`history.ts`). Reading is by shape first: a record of the wrong shape or
  * version is refused whole, and nothing else is. Inside a good one, every piece is built again through
  * the rules (`vouch`), and anything that depends on today's tuning (how much a piece holds, how far a
  * tunnel goes, which goals, plots and grades open when) is clamped or carried, never a reason to
@@ -53,7 +54,17 @@ import {
   SPLITTER,
   TUNNEL,
 } from "./tables.ts";
-import { type Away, type Counts, counts, emptyYard, hold, reopen, type Standing, type Yard } from "./yard.ts";
+import {
+  type Away,
+  type Counts,
+  counts,
+  emptyYard,
+  hold,
+  type Print,
+  reopen,
+  type Standing,
+  type Yard,
+} from "./yard.ts";
 
 /** 7: whole numbers, grades (a splitter's, a joiner's and a sorter's too), goals and research. */
 export const VERSION = 7;
@@ -150,6 +161,12 @@ export type KeptPrint = readonly {
   readonly grade?: number;
 }[];
 
+/** A blueprint as kept: its pieces before they are vouched for, and whether it is a plan of the whole yard. */
+export interface KeptBlueprint {
+  readonly pieces: KeptPrint | null;
+  readonly whole: boolean;
+}
+
 /** A kept blueprint's pieces read back from their bytes, or null for bytes that are not pieces. */
 function unpackPrint(bytes: Uint8Array | null): KeptPrint | null {
   if (!bytes) return null;
@@ -180,6 +197,15 @@ function unpackPrint(bytes: Uint8Array | null): KeptPrint | null {
     });
   }
   return out;
+}
+
+/** A blueprint's pieces as kept, in base64. */
+const printText = (b: Print): string => toBase64(packPrint(b.pieces));
+/** A blueprint as kept read back: a plan of the whole yard is `{ whole }`, any other its text alone. */
+function keptBlueprint(v: unknown): KeptBlueprint {
+  const all = isRec(v) && typeof v.whole === "string";
+  const text = all ? v.whole : v;
+  return { pieces: typeof text === "string" ? unpackPrint(fromBase64(text)) : null, whole: all };
 }
 
 export interface Keep {
@@ -218,7 +244,7 @@ export function encode(y: Yard, keep: Keep = {}): string {
     paid: y.paid,
     cells: toBase64(packCells(y)),
     ...(y.blueprints.some((b) => b !== null)
-      ? { blueprints: y.blueprints.map((b) => b && toBase64(packPrint(b))) }
+      ? { blueprints: y.blueprints.map((b) => b && (b.whole ? { whole: printText(b) } : printText(b))) }
       : {}),
     ...(y.history.length > 0 ? { history: y.history.map((e) => toBase64(e.bytes)), stamp: stampOf(y.land) } : {}),
   });
@@ -403,21 +429,17 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
   const pieces = bytes && unpackCells(bytes, land.w * land.h);
   if (!pieces) return null;
   const prints: unknown[] = Array.isArray(raw.blueprints) ? raw.blueprints : [];
-  return vouch(
-    raw,
-    pieces,
-    prints.map((b) => (typeof b === "string" ? unpackPrint(fromBase64(b)) : null)),
-    land,
-  );
+  return vouch(raw, pieces, prints.map(keptBlueprint), land);
 }
 
 /**
- * A kept blueprint read back as it was kept: its pieces, each of a real kind and way, or nothing.
- * Whether the yard may set it down now is the rules' to say when it does. A splitter, joiner or
- * sorter kept in it with no grade by a version that gave them none (`ungraded`) is at the highest
- * grade of the belts and tunnels it is kept with.
+ * A kept blueprint read back as it was kept: its pieces, each of a real kind and way, or nothing; a
+ * plan of the whole yard's on the tiles they were kept on. Whether the yard may set it down now is
+ * the rules' to say when it does. A splitter, joiner or sorter kept in it with no grade by a version
+ * that gave them none (`ungraded`) is at the highest grade of the belts and tunnels it is kept with.
  */
-function blueprint(v: KeptPrint | null | undefined, ungraded: boolean): Uint8Array | null {
+function blueprint(print: KeptBlueprint | undefined, ungraded: boolean): Print | null {
+  const v = print?.pieces;
   if (!v) return null;
   const line = (): number =>
     Math.max(1, ...v.flatMap((p) => (p.kind === BELT || p.kind === TUNNEL ? [p.grade ?? 1] : [])));
@@ -435,7 +457,9 @@ function blueprint(v: KeptPrint | null | undefined, ungraded: boolean): Uint8Arr
       ...keptOf({ recipe, open: lets ? undefined : false, tint, ...unpackWays(ways), grade }, k),
     });
   }
-  return pieces.length > 0 ? packPieces(placed(pieces, 0, 0, 0)) : null;
+  if (pieces.length === 0) return null;
+  const all = print.whole;
+  return { pieces: packPieces(all ? pieces : placed(pieces, 0, 0, 0)), whole: all };
 }
 
 /** A standing order as it is kept, and as Leaf's answer to a batch carries it: what it wants and has had, by name. */
@@ -490,7 +514,7 @@ function keptAway(v: unknown): Away | null {
 export function vouch(
   raw: Rec,
   pieces: readonly KeptPiece[],
-  prints: readonly (KeptPrint | null)[],
+  prints: readonly KeptBlueprint[],
   land: Land,
 ): Yard | null {
   const seed = "seed" in raw ? whole(raw.seed, 0xffffffff) : null;

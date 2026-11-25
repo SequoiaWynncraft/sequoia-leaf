@@ -9,8 +9,7 @@ import { TILE } from "./art/belts.ts";
 import { float, flutter } from "./fx.ts";
 import { layout } from "./layout.ts";
 import { yardSfx } from "./sound.ts";
-import { S } from "./state.ts";
-import { toolHooks } from "./tools.ts";
+import { S, toolHooks } from "./state.ts";
 import { doNow } from "./yard.ts";
 
 /** Does a command, and gives back the rules' reason it was not done, or null. */

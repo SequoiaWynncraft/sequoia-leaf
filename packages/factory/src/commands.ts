@@ -34,8 +34,11 @@ import {
   legOnWire,
   listOf,
   named,
+  nodeOf,
+  orderOf,
   readLeg,
   readPiece,
+  researchOf,
   TILES,
   whole,
 } from "./fields.ts";
@@ -68,7 +71,6 @@ import { REASON } from "./reasons.ts";
 import { type Leg, legPiece } from "./route.ts";
 import {
   type Goal,
-  goalNamed,
   GOALS,
   type Item,
   itemName,
@@ -83,6 +85,7 @@ import {
   SORTER,
   TINTS,
 } from "./tables.ts";
+import { placeYard, saveYard } from "./whole.ts";
 import { collect, type Yard } from "./yard.ts";
 
 /** What each command carries, by its name. */
@@ -97,6 +100,8 @@ interface Carries {
   clear: { readonly tiles: readonly number[] };
   upgrade: { readonly tiles: readonly number[] };
   saveBlueprint: { readonly slot: number; readonly tiles: readonly number[] };
+  /** Every piece in the yard, as a plan of the whole yard (`whole.ts`). */
+  saveYard: { readonly slot: number };
   deleteBlueprint: { readonly slot: number };
   turn: At & { readonly dir: Dir };
   /** `onto`: the stroke this adds to, by its first command's id: the newest entry (`history.ts`). */
@@ -261,6 +266,12 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
         : null,
     write: (a) => ({ slot: a.slot, turns: a.turns, ...spot(a) }),
     act: (y, a, coins, no) => {
+      const print = y.blueprints[a.slot];
+      // A plan of the whole yard goes back where it was taken, however it is aimed, and makes the yard its layout.
+      if (print?.whole) {
+        const did = placeYard(y, print, coins);
+        return did.ok ? done(priced(y, did.cost, REASON.build, REASON.remove)) : no(did.why);
+      }
       const pieces = blueprintAt(y, a.slot, a.turns, a.x, a.y);
       if (!pieces) return no("There is no blueprint there");
       const did = stand(y, pieces, coins);
@@ -325,6 +336,13 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
     read: (_v, f) => (f.tiles && f.slot !== null ? { do: "saveBlueprint", slot: f.slot, tiles: f.tiles } : null),
     write: (a) => ({ slot: a.slot, tiles: a.tiles }),
     act: (y, a, _coins, no) => doneUnless(saveBlueprint(y, a.slot, a.tiles), no),
+  },
+  saveYard: {
+    refused: "cannot_save_blueprint",
+    lock: needs({ use: "whole" }),
+    read: (_v, f) => (f.slot === null ? null : { do: "saveYard", slot: f.slot }),
+    write: (a) => ({ slot: a.slot }),
+    act: (y, a, _coins, no) => doneUnless(saveYard(y, a.slot), no),
   },
   deleteBlueprint: {
     refused: "no_blueprint",
@@ -499,18 +517,6 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
     },
   },
 };
-
-function nodeOf<D extends "take" | "queue" | "unqueue">(v: Record<string, unknown>, name: D): ActOf<D> | null {
-  const g = goalNamed(v.node);
-  return g === null ? null : { do: name, node: g };
-}
-function researchOf<D extends "study" | "unstudy">(v: Record<string, unknown>, name: D): ActOf<D> | null {
-  const g = goalNamed(v.research);
-  return g === null ? null : { do: name, research: g };
-}
-function orderOf<D extends "swap" | "handOver">(v: Record<string, unknown>, name: D): ActOf<D> | null {
-  return whole(v.order, 1e9) ? { do: name, order: v.order } : null;
-}
 
 /** The code each command is refused with, but for wanting an unlock, by name: every command but those never refused. */
 export const REFUSED: Readonly<Record<string, string>> = Object.fromEntries(
