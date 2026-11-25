@@ -1,6 +1,6 @@
 /**
  * A press on the sheet's map (`views.ts`), owned by the pointer that began it. Lifted where it went
- * down, it is a tap; moved further than a finger rests, it drags, at each move, and is no tap. While
+ * down, having gone no further than a finger rests, it is a tap; moved further than a finger rests, it drags, at each move, and is no tap. While
  * it lasts, another pointer going down is not the press's and does nothing. Cancelled, or losing its
  * hold on the pointer, it is over, and its lift is no tap. The press and its listeners are the
  * scope's: closed, it hears nothing more.
@@ -16,6 +16,10 @@ type Press =
   | { readonly at: "down"; readonly pointer: number; readonly x: number; readonly y: number; moved: boolean };
 
 const IDLE: Press = { at: "idle" };
+
+/** Whether a pointer is further from where its press went down than a finger rests. */
+const wandered = (press: { readonly x: number; readonly y: number }, e: PointerEvent): boolean =>
+  Math.hypot(e.clientX - press.x, e.clientY - press.y) > STILL;
 
 /** What a press on the map asks of it. */
 export interface MapHands {
@@ -37,14 +41,15 @@ export function mapPress(owner: Scope, target: MapSurface, hands: MapHands): voi
   });
   owner.on(target, "pointermove", (e) => {
     if (press.at !== "down" || e.pointerId !== press.pointer) return;
-    if (!press.moved && Math.hypot(e.clientX - press.x, e.clientY - press.y) > STILL) press.moved = true;
+    if (!press.moved && wandered(press, e)) press.moved = true;
     if (press.moved) hands.drag(e);
   });
   owner.on(target, "pointerup", (e) => {
     if (press.at !== "down" || e.pointerId !== press.pointer) return;
-    const moved = press.moved;
+    // Lifted away from where it went down is no tap, though no move came between to say so.
+    const still = !press.moved && !wandered(press, e);
     press = IDLE;
-    if (!moved) hands.tap(e);
+    if (still) hands.tap(e);
   });
   /** The press is over without a lift: cancelled, or its hold on the pointer lost. */
   const gone = (e: PointerEvent): void => {

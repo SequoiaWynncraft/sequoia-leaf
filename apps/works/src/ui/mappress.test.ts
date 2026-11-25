@@ -45,6 +45,14 @@ describe("a press on the map", () => {
     expect(canvas.captured).toEqual([1, 1]);
   });
 
+  test("lifted further off than a finger rests is no tap, though no move came to say it had gone", () => {
+    const { told, send } = map();
+    send("pointerdown", 1, 10);
+    send("pointermove", 1, 13);
+    send("pointerup", 1, 20);
+    expect(told).toEqual([]);
+  });
+
   test("dragged, with a second finger put down and the first lifted unmoved since, is no tap", () => {
     const { told, send } = map();
     send("pointerdown", 1, 10);

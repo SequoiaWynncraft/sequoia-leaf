@@ -166,7 +166,7 @@ function standingPrint(i: number, k: Kind): StandingPrint {
   const x = i % w.land.w;
   const y = Math.floor(i / w.land.w);
   const st = status(w, i);
-  const per = machineRate(w, i).effective;
+  const rate = machineRate(w, i);
   const h = w.holders;
   const r = holderOf(w, i);
   const making = aim(w, i);
@@ -192,7 +192,8 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     making: making ? making.out : null,
     flow: flowOf(w, i, saysNumbers(w)),
     gathering: k === GATHERER ? asItem(w.land.deposit[i] ?? NONE) : null,
-    perMinute: per > 0 ? perMinute(per) : null,
+    // What it makes now, said even when that is none: where power does not reach, 0 /min.
+    perMinute: rate.nominal > 0 ? perMinute(rate.effective) : null,
     numbers: saysNumbers(w) ? numbersOf(w, i) : [],
     set,
     sorts: can ? ALL_ITEMS.filter((t) => can.has(t) || (w.depot[t] ?? 0) > 0 || set === t) : [],

@@ -16,6 +16,7 @@ import {
   build,
   create,
   DEPOT,
+  GATHERER,
   goal,
   isGraded,
   item,
@@ -142,9 +143,20 @@ describe("a card", () => {
     S.world = y;
     expect(printOf(tileRef(dark))).toMatchObject({
       line: "No power here. Place a pylon near it.",
-      perMinute: null,
+      perMinute: "0 /min",
       flow: { out: item("plank"), perMinute: 0, slow: true },
     });
+  });
+
+  test("of a gatherer where power does not reach says it gathers 0 a minute", () => {
+    const y = create({ seed: 5, tier: 2 });
+    const lit = litOf(y);
+    const dark = y.kind.findIndex(
+      (_, i) => lit[i] === 0 && refusal(y, GATHERER, i % y.land.w, Math.floor(i / y.land.w), Infinity) === null,
+    );
+    build(y, GATHERER, dark % y.land.w, Math.floor(dark / y.land.w), 0, Infinity);
+    S.world = y;
+    expect(printOf(tileRef(dark))).toMatchObject({ perMinute: "0 /min" });
   });
 
   test("prints plain values only, read back as they are: every card of a yard with a piece of each kind it can stand", () => {
