@@ -13,7 +13,7 @@
         "points": [
           "The research needs the plan chest's shelves, and costs 15,000 Timber folios and 15,000 Brass folios.",
           "A plan of the whole yard goes back where you saved it. It doesn't follow the pointer, and it can't be turned.",
-          "While you hold it, the line says how many pieces it builds and takes up. Place shows what it costs or gives back, and asks you to press it again.",
+          "While you hold it, every piece it would take up is marked, and the line says how many pieces it builds and takes up. Place shows what it costs or gives back, and asks you to press it again.",
           "If you're short of Coins, or a piece can't stand where the plan has it, nothing changes, and Place says why.",
           "Undo takes the whole of it back."
         ]
@@ -22,6 +22,14 @@
         "head": "Changed",
         "points": ["Undo can take back a whole-yard placement, or clearing, in one step."]
       }
+    ]
+  },
+  {
+    "id": "works-corner-stays",
+    "at": "2026-11-25T17:49Z",
+    "title": "The Works: the way out stays in the corner",
+    "lines": [
+      "On a wider screen the way out and the settings button always sit at the top right, after the yard's books, however much Leaf and Coins you hold."
     ]
   },
   {
