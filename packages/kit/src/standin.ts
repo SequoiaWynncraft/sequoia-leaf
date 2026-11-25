@@ -68,8 +68,8 @@ export interface Standin {
   went: string[];
   /** How many times the page loaded itself again. */
   reloaded: { count: number };
-  /** Sets the time the page sees. */
-  clock: { now: number };
+  /** Sets the time the page sees: by the wall clock (`now`), and by the one that only goes forward (`elapsed`). */
+  clock: { now: number; elapsed: number };
   /** The page comes back: visible again, focused, or back on the network. */
   wake(): void;
   /** The page may be going: hidden, put away, or closed by the town. */
@@ -93,7 +93,7 @@ export function standin(
   const sent: Sent[] = [];
   const went: string[] = [];
   const reloaded = { count: 0 };
-  const clock = { now: 1_800_000_000_000 };
+  const clock = { now: 1_800_000_000_000, elapsed: 0 };
   const woken = new Set<() => void>();
   const leavers = new Set<() => void>();
   const done = pretend({
@@ -126,6 +126,7 @@ export function standin(
       reloaded.count++;
     },
     now: () => clock.now,
+    elapsed: () => clock.elapsed,
     socket: () => {
       throw new Error("No live connection in this test");
     },

@@ -132,6 +132,7 @@ export {
   ENTRY_BYTES,
   Flag,
   INTERP_MS,
+  LIVE_OLDEST,
   LIVE_PATH,
   livePath,
   LIVE_VERSION,
@@ -153,6 +154,7 @@ export {
   type ToServer,
   visitRoom,
 } from "./live.ts";
+export { type AboutChange, aboutChange, applyAbout, readWho, type Who } from "./about.ts";
 export {
   type CoinChange,
   COMMAND_ID,

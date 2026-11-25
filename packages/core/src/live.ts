@@ -11,6 +11,10 @@
  * - **Text, the cold path.** Everything else is a small JSON object with a `t`: joining and leaving a
  *   room, who is in it, clock pings, and actions (`ToServer`, `ToClient`).
  *
+ * In a room of the town, who is about elsewhere in the game comes too: Leaf's whole lists as the
+ * page comes in (`about`, numbered), and then what changed in them (`aboutChanged`, each numbered one
+ * more), which the page makes into the next lists itself (`about.ts`).
+ *
  * A visit's room (`visitRoom`) is still: everybody visiting one player's state, who hear what Leaf
  * does to it as it does it (`did`), and nothing of each other but who is there. A camp's room
  * (`campRoom`) moves as the town's does, and hears when the owner changes the camp (`changed`).
@@ -24,12 +28,21 @@
  * them on.
  */
 
+import { type AboutChange, readAboutChange } from "./about.ts";
 import { type GameId, gameId } from "./play.ts";
 import { parsePlayerId, type PlayerId } from "./player.ts";
 
 export const LIVE_PATH = "/v1/game/live";
-/** The wire's version. Version 1 had no jump count, and no client ever spoke it. */
-export const LIVE_VERSION = 2;
+/**
+ * The wire's version. Version 1 had no jump count, and no client ever spoke it. Version 2 was told
+ * all of who is about at every change; version 3 is told what changed (`aboutChanged`).
+ */
+export const LIVE_VERSION = 3;
+/**
+ * The oldest version Leaf still speaks, for pages loaded before it spoke the newest: a page of
+ * version 2 cannot be told to load again, and is served as it was until it does.
+ */
+export const LIVE_OLDEST = 2;
 
 /** Where a game opens its live connection into a room of a kind (`ROOMS`). */
 export const livePath = (room: string): string => `${LIVE_PATH}?v=${LIVE_VERSION}&room=${encodeURIComponent(room)}`;
@@ -92,7 +105,6 @@ export const ENTRY_BYTES = 24;
 
 const u8 = (n: number): number => n & 0xff;
 const u16 = (n: number): number => n & 0xffff;
-const finite = (...ns: number[]): boolean => ns.every((n) => Number.isFinite(n));
 
 function writeMotion(view: DataView, at: number, m: Motion): void {
   view.setFloat32(at, m.x, true);
@@ -110,7 +122,7 @@ function readMotion(view: DataView, at: number): Motion | null {
   const y = view.getFloat32(at + 4, true);
   const vx = view.getFloat32(at + 8, true);
   const vy = view.getFloat32(at + 12, true);
-  if (!finite(x, y, vx, vy)) return null;
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(vx) || !Number.isFinite(vy)) return null;
   return {
     x,
     y,
@@ -125,28 +137,44 @@ function readMotion(view: DataView, at: number): Motion | null {
 
 const viewOf = (bytes: Uint8Array): DataView => new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
+/**
+ * A frame of `length` bytes to write, and a view to write it by, over the same new memory. Made
+ * from the memory up, rather than viewing the bytes' `buffer`, which JavaScriptCore must make
+ * anew for a typed array that has not been asked for it yet.
+ */
+function frameOf(length: number): { bytes: Uint8Array<ArrayBuffer>; view: DataView } {
+  const memory = new ArrayBuffer(length);
+  return { bytes: new Uint8Array(memory), view: new DataView(memory) };
+}
+
 /** The game's move: its number for it (counting up, wrapping at 65536) and its player's motion. */
 export function encodeMove(seq: number, m: Motion): Uint8Array<ArrayBuffer> {
-  const bytes = new Uint8Array(MOVE_BYTES);
-  const view = viewOf(bytes);
+  const { bytes, view } = frameOf(MOVE_BYTES);
   view.setUint8(0, Op.Move);
   view.setUint16(1, u16(seq), true);
   writeMotion(view, 3, m);
   return bytes;
 }
 
+/**
+ * Where a move is read from: Leaf takes thousands a second, each a frame fresh off its socket, and
+ * copying one here costs less than asking the frame for its `buffer` (see `frameOf`). It holds a
+ * move only within one call of `decodeMove`, which reads it whole before returning.
+ */
+const MOVE_READ = frameOf(MOVE_BYTES);
+
 /** A move, or null for anything that is not exactly one (another length, another op, a number that is not finite). */
 export function decodeMove(bytes: Uint8Array): { seq: number; motion: Motion } | null {
   if (bytes.byteLength !== MOVE_BYTES || bytes[0] !== Op.Move) return null;
-  const view = viewOf(bytes);
+  MOVE_READ.bytes.set(bytes);
+  const { view } = MOVE_READ;
   const motion = readMotion(view, 3);
   return motion === null ? null : { seq: view.getUint16(1, true), motion };
 }
 
 /** A room's changes since the last tick, made once and sent to everyone in it. */
 export function encodeSnapshot(tick: number, time: number, entries: readonly Entry[]): Uint8Array<ArrayBuffer> {
-  const bytes = new Uint8Array(SNAPSHOT_HEAD_BYTES + entries.length * ENTRY_BYTES);
-  const view = viewOf(bytes);
+  const { bytes, view } = frameOf(SNAPSHOT_HEAD_BYTES + entries.length * ENTRY_BYTES);
   view.setUint8(0, Op.Snapshot);
   view.setUint32(1, tick >>> 0, true);
   view.setFloat64(5, time, true);
@@ -225,7 +253,9 @@ export type ToServer =
   /** Something the player did that others in the room see once, one of `ACTS`: an emote, a wave. */
   | { t: "act"; kind: string; arg: string }
   /** The game's clock, for Leaf to send back with its own (`pong`). */
-  | { t: "ping"; c: number };
+  | { t: "ping"; c: number }
+  /** The page has missed a change to who is about: Leaf sends all of it again (`about`, numbered). */
+  | { t: "about" };
 
 /** Somebody in a room. `id` is their number in it, the one their motion carries. */
 export interface LiveMember {
@@ -277,13 +307,20 @@ export type ToClient =
   | { t: "act"; id: number; kind: string; arg: string }
   | { t: "pong"; c: number; s: number }
   /**
-   * Who is where has changed: somebody came into the game, went, or is somewhere else in it. Told to
-   * everybody in every room of the game's places with Leaf's list of who is about now (`who`, as
-   * `GET /v1/game/presence` answers it), so that no page need ask for it. From a Leaf that sends no
-   * list, the page asks for it. A page from before it was told ignores it, as it ignores anything it
-   * does not know.
+   * Leaf's lists of who is about (`who`, as `GET /v1/game/presence` answers it), numbered (`v`). To
+   * a page of version 3, as it comes into a room of the game's places, and again when it asks: each
+   * change after is numbered one more (`aboutChanged`). To a page of version 2, at every change to
+   * who is where (somebody came into the game, went, or is somewhere else in it), the same frame,
+   * whose number it does not read. From a Leaf that sends no list, the page asks for it. A page from
+   * before it was told ignores it, as it ignores anything it does not know.
    */
-  | { t: "about"; who?: unknown }
+  | { t: "about"; who?: unknown; v?: number }
+  /**
+   * Who is about has changed, as the lists numbered `v - 1` became those numbered `v` (`about.ts`):
+   * told to every page of version 3 in a room of the game's places. A page without lists `v - 1`
+   * asks for all of them (`about`).
+   */
+  | ({ t: "aboutChanged"; v: number } & AboutChange)
   | { t: "error"; code: "unknown_room" | "not_in_room" | "bad_act" }
   /**
    * In a visit's room: a batch of commands Leaf has just done to the state visited, as it kept them.
@@ -371,6 +408,18 @@ function readWelcome(v: Record<string, unknown>): ToClient | null {
   return { t: "welcome", v: version, you, room, hz, time, roster: roster.filter((m) => m !== null) };
 }
 
+/** Who is about, all of it: numbered (`v`), from a Leaf that speaks version 3; without the lists, from one that sent none. */
+function readAbout(v: Record<string, unknown>): ToClient {
+  if (!record(v.who)) return { t: "about" };
+  return num(v.v) ? { t: "about", who: v.who, v: v.v } : { t: "about", who: v.who };
+}
+
+/** A change to who is about, numbered, or null for anything that is not one. */
+function readAboutChanged(v: Record<string, unknown>): ToClient | null {
+  const change = readAboutChange(v);
+  return change !== null && num(v.v) ? { t: "aboutChanged", v: v.v, ...change } : null;
+}
+
 /** What Leaf sent as text, or null for anything that is not one of its messages. */
 export function readToClient(text: string): ToClient | null {
   let v: unknown;
@@ -394,7 +443,9 @@ export function readToClient(text: string): ToClient | null {
     case "pong":
       return num(v.c) && num(v.s) ? { t: "pong", c: v.c, s: v.s } : null;
     case "about":
-      return record(v.who) ? { t: "about", who: v.who } : { t: "about" };
+      return readAbout(v);
+    case "aboutChanged":
+      return readAboutChanged(v);
     case "error": {
       const code = ERRORS.find((c) => c === v.code);
       return code ? { t: "error", code } : null;

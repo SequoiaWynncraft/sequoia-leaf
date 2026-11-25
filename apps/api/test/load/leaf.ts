@@ -4,7 +4,7 @@
  *   bun apps/api/test/load/leaf.ts <port> [owners] [cold]
  *
  * The real app on a database in memory, on the machine's clock, with the tests' stand-in backend
- * knowing a session for each of 1,000 walkers (`w<n>`, every fourth not in the guild), `owners`
+ * knowing a session for each of 3,000 walkers (`w<n>`, every fourth not in the guild), `owners`
  * members (20 by default) whose yard is the largest staged one, written a minute ago (`o<n>`), and
  * 200 who only visit (`v<n>`); and `cold` more such yards (50 by default), left eight hours ago,
  * that no page keeps up. To see it as the 4-core server would run it, start it in a scope of its own:
@@ -19,6 +19,9 @@
  *   service's jobs spent their time (`PlayMeter`), the CPU used, the most memory held, and how far
  *   behind the yard longest unwritten was, sampled each second.
  *
+ * `LIVE_MOST_PLAYERS` in the environment sets how many players Live holds at once, as it does for
+ * Leaf itself, so that more walkers than that can be let in to see what they cost.
+ *
  * SIGTERM or Ctrl-C stops it.
  */
 import { monitorEventLoopDelay } from "node:perf_hooks";
@@ -29,6 +32,7 @@ import { Effect, Layer, Schema } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { SqlClient, SqlSchema } from "effect/sql";
 
+import type { TickTimes } from "../../src/live/live.ts";
 import { GAMES } from "../../src/play/games.ts";
 import { type JobTimes, Play } from "../../src/play/service.ts";
 import { fakeBackend, sessionOf, testLeaf } from "../support.ts";
@@ -37,7 +41,13 @@ import { coldId, lookerId, LOOKERS, ownerId, spread, walkerId, WALKERS } from ".
 const port = Number(process.argv[2]);
 const owners = Number(process.argv[3] ?? 20);
 const cold = Number(process.argv[4] ?? 50);
-if (!Number.isInteger(port) || ![owners, cold].every((n) => Number.isInteger(n) && n >= 0)) {
+const mostPlayers =
+  process.env["LIVE_MOST_PLAYERS"] === undefined ? undefined : Number(process.env["LIVE_MOST_PLAYERS"]);
+if (
+  !Number.isInteger(port) ||
+  ![owners, cold].every((n) => Number.isInteger(n) && n >= 0) ||
+  (mostPlayers !== undefined && !Number.isInteger(mostPlayers))
+) {
   console.error("Usage: bun apps/api/test/load/leaf.ts <port> [owners] [cold]");
   process.exit(2);
 }
@@ -62,6 +72,7 @@ class Phase {
   readonly cpu = process.cpuUsage();
   readonly loop = monitorEventLoopDelay({ resolution: 5 });
   readonly jobs: JobTimes[] = [];
+  readonly ticks: TickTimes[] = [];
   rss = 0;
   /** How far behind the yard longest unwritten was, in seconds, each second. */
   readonly behind: number[] = [];
@@ -101,6 +112,17 @@ class Phase {
         ]),
       ),
       cpu_of_one_core: `${(((cpu.user + cpu.system) / 1e6 / seconds) * 100).toFixed(0)}%`,
+      live_ticks: {
+        n: this.ticks.length,
+        late_ms: spread(this.ticks.map((t) => t.late)),
+        writing_ms: spread(this.ticks.map((t) => t.writing)),
+        rooms: spread(this.ticks.map((t) => t.rooms)),
+        written: {
+          direct: this.ticks.reduce((n, t) => n + t.direct, 0),
+          queued: this.ticks.reduce((n, t) => n + t.queued, 0),
+          passed: this.ticks.reduce((n, t) => n + t.passed, 0),
+        },
+      },
       rss_mib_most: Math.round(this.rss / 1024 / 1024),
       yard_behind_s: {
         first: this.behind[0] ?? null,
@@ -122,7 +144,11 @@ const leaf = testLeaf(
   },
   fetcher,
   {},
-  { meter: (times) => phase.jobs.push(times) },
+  {
+    meter: (times) => phase.jobs.push(times),
+    liveMeter: (times) => phase.ticks.push(times),
+    ...(mostPlayers === undefined ? {} : { live: { mostPlayers } }),
+  },
 );
 
 // The yards: the owners' written a minute ago, and the cold ones eight hours ago, each as if its

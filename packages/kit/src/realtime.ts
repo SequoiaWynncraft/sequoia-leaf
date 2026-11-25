@@ -22,6 +22,8 @@
  * What this page knows of the room starts at a welcome, each time: who is in it, where they have
  * been, and Leaf's clock. Nothing heard before a welcome counts, and a new connection's picture
  * replaces the old one only then, so nothing of one room, or one connection, is mixed with another's.
+ * In a room of the town it hears who is about elsewhere in the game, and gives it the page's
+ * presence: Leaf's lists, as it comes in, and each change to them after (`AboutHeard`).
  * In a visit's room (core's `visitRoom`) it hears what Leaf does to the state visited (`did`), and in
  * a camp's (`campRoom`) when the owner changed it (`changed`); what was done while it was not in the
  * room is never told, so a page hears a welcome after a drop as the moment to read the state again.
@@ -38,7 +40,6 @@ import {
   decodeSnapshot,
   encodeMove,
   type GameId,
-  INTERP_MS,
   type LiveMember,
   livePath,
   type Motion,
@@ -50,8 +51,10 @@ import {
   visitRoom,
 } from "@sequoia-leaf/core";
 
+import { AboutHeard } from "./about.ts";
 import { device, type LetGo, member } from "./live.ts";
 import { ask, type Backoff, backoff, type LiveSocket, outside } from "./net.ts";
+import { Playout, Track } from "./playout.ts";
 import { askAgain, heardAbout, inRoom } from "./presence.ts";
 
 // What a page needs of the wire to draw who is in its room.
@@ -96,95 +99,6 @@ export class ClockSync {
   /** The quickest round trip lately, in milliseconds; null before any ping came back. */
   rtt(): number | null {
     return this.samples.length === 0 ? null : Math.min(...this.samples.map((s) => s.rtt));
-  }
-}
-
-// ---------- when to draw others ----------
-
-/** How many of the latest snapshots' times on the way the playout goes by. */
-const TRANSITS = 40;
-/** The most the slowest snapshots lately may put the moment drawn back, in milliseconds, however uneven the network. */
-const MOST_UNEVEN = 1500;
-/** How much faster or slower than its own clock the moment drawn may run while it settles: a tenth. */
-const SETTLE = 0.1;
-
-/**
- * The moment of Leaf's clock to draw others at. A snapshot stamped `time` reaches this page some
- * while later by its own clock: the network's delay, and how far the two clocks differ, together.
- * The page draws at its own clock less the time most snapshots lately took (all but the slowest
- * tenth), less `INTERP_MS`, so that the moment drawn has a snapshot on either side of it however
- * slow and uneven the network is. Drawn behind Leaf's clock as it is instead, a page whose snapshots
- * take longer than `INTERP_MS` would have nothing past the newest to draw but a guess, and somebody
- * stopping or turning would be seen overshooting and coming back. The moment drawn settles towards
- * a new delay by at most a tenth of the time passing, so that nobody is ever drawn jumping or going
- * back when the network changes.
- */
-export class Playout {
-  private readonly transits: number[] = [];
-  /** How far behind this page's clock the moment drawn is, and when that was last worked out. */
-  private behind: number | null = null;
-  private at = 0;
-
-  /** A snapshot stamped `time` by Leaf's clock came at `now` by this page's. */
-  heard(time: number, now: number): void {
-    this.transits.push(now - time);
-    if (this.transits.length > TRANSITS) this.transits.shift();
-  }
-
-  /** The moment of Leaf's clock to draw others at, at `now` by this page's clock; null before any snapshot came. */
-  time(now: number): number | null {
-    if (this.transits.length === 0) return null;
-    const sorted = this.transits.toSorted((a, b) => a - b);
-    const quickest = sorted[0] ?? 0;
-    const most = sorted[Math.ceil((sorted.length - 1) * 0.9)] ?? quickest;
-    const want = quickest + Math.min(most - quickest, MOST_UNEVEN) + INTERP_MS;
-    if (this.behind === null) this.behind = want;
-    else {
-      const step = Math.max(0, now - this.at) * SETTLE;
-      this.behind += Math.max(-step, Math.min(step, want - this.behind));
-    }
-    this.at = now;
-    return now - this.behind;
-  }
-}
-
-// ---------- somebody's track ----------
-
-/** The longest a track keeps, in milliseconds of Leaf's clock. */
-const KEEP_MS = 2500;
-
-/** Somebody's motion as snapshots told it, and where they are to be drawn at any moment of Leaf's clock. */
-export class Track {
-  private readonly points: { time: number; m: Motion }[] = [];
-
-  add(time: number, m: Motion): void {
-    const last = this.points.at(-1);
-    if (last && time < last.time) return;
-    if (last && time === last.time) this.points.pop();
-    this.points.push({ time, m });
-    while (this.points.length > 2 && (this.points[1]?.time ?? 0) < time - KEEP_MS) this.points.shift();
-  }
-
-  /**
-   * Where they are at `time`: between the snapshots either side of it, or where the newest has them
-   * if none is newer yet: never anywhere they have not been. Between two snapshots with different
-   * jumps they are drawn where they were, then where they jumped to, never on the way.
-   */
-  at(time: number): Motion | null {
-    const pts = this.points;
-    const first = pts[0];
-    const last = pts.at(-1);
-    if (!first || !last) return null;
-    if (time <= first.time) return first.m;
-    if (time >= last.time) return last.m;
-    let i = pts.length - 1;
-    while (i > 0 && (pts[i - 1]?.time ?? 0) > time) i--;
-    const a = pts[i - 1];
-    const b = pts[i];
-    if (!a || !b) return last.m;
-    if (a.m.jump !== b.m.jump) return a.m;
-    const k = (time - a.time) / Math.max(1, b.time - a.time);
-    return { ...a.m, x: a.m.x + (b.m.x - a.m.x) * k, y: a.m.y + (b.m.y - a.m.y) * k };
   }
 }
 
@@ -487,11 +401,17 @@ export function roomState(c: Conn<unknown>, now: number): RoomState {
   return c.downSince === null ? { at: "joining" } : { at: "down", ms: now - c.downSince };
 }
 
+/**
+ * Somebody in the room as one connection heard of them (by its welcome, or `joined`), with their
+ * motion as it came: nobody's motion is kept apart from them, to outlive their leaving.
+ */
+type Person = LiveMember & { readonly track: Track };
+const person = (m: LiveMember): Person => ({ ...m, track: new Track() });
+
 /** What one connection knows of the room. Made afresh for each, and shown only once its welcome came. */
 interface Link {
   readonly socket: LiveSocket;
-  readonly people: Map<number, LiveMember>;
-  readonly tracks: Map<number, Track>;
+  readonly people: Map<number, Person>;
   clock: ClockSync | null;
   /** When to draw others, from when this connection's snapshots came. */
   playout: Playout;
@@ -499,6 +419,8 @@ interface Link {
   /** When anything last came from Leaf on it, and when it last sent a ping (this page's clock). */
   heard: number;
   pinged: number | null;
+  /** Who is about, as this connection has heard it since its welcome. */
+  readonly about: AboutHeard;
 }
 
 const NOBODY: ReadonlyMap<number, LiveMember> = new Map();
@@ -513,6 +435,32 @@ const stop = (t: ReturnType<typeof setTimeout> | null): null => {
 const inside = (c: Conn<Link>): Link | null => (c.at === "open" && c.room === "in" ? c.link : null);
 /** The connection on its way or open now, if there is one. */
 const current = (c: Conn<Link>): Link | null => (c.at === "connecting" || c.at === "open" ? c.link : null);
+
+/** What the room a page is in said on its connection, but for its welcome and its pongs, told to the page's ears. */
+function roomSaid(l: Link, m: ToClient, ears: LiveEars): void {
+  switch (m.t) {
+    case "joined":
+      l.people.set(m.member.id, person(m.member));
+      return ears.joined?.(m.member);
+    case "left":
+      l.people.delete(m.id);
+      return ears.left?.(m.id);
+    case "act":
+      return ears.act?.(m.id, m.kind, m.arg);
+    case "did":
+      return ears.did?.(m.rev, m.did, m.after, m.ids);
+    case "changed":
+      return ears.changed?.(m.rev);
+    case "about":
+      return m.v === undefined ? heardAbout(m.who) : l.about.given(m.v, m.who);
+    case "aboutChanged":
+      return l.about.changed(m);
+    case "error":
+    case "welcome":
+    case "pong":
+      return;
+  }
+}
 
 /**
  * Puts the player in a room on Leaf, live. Without Leaf it does nothing, and nobody is ever there.
@@ -662,8 +610,8 @@ export function joinLive(first: string, ears: LiveEars = {}): LiveRoom {
     l.clock = new ClockSync(m.time, outside.now());
     l.playout = new Playout();
     l.people.clear();
-    l.tracks.clear();
-    for (const r of m.roster) l.people.set(r.id, r);
+    l.about.forget();
+    for (const r of m.roster) l.people.set(r.id, person(r));
     inRoom(room);
     // Whoever came or went while the page was not in the room, Leaf's list says now.
     askAgain();
@@ -680,26 +628,7 @@ export function joinLive(first: string, ears: LiveEars = {}): LiveRoom {
     if (m?.t === "welcome") return welcomed(l, m);
     if (m?.t === "pong") return l.clock?.add(m.c, m.s, outside.now());
     // Before its welcome, and once the page has left the room it was welcomed into, nothing else counts.
-    if (!m || shown() !== l) return;
-    switch (m.t) {
-      case "joined":
-        l.people.set(m.member.id, m.member);
-        return ears.joined?.(m.member);
-      case "left":
-        l.people.delete(m.id);
-        l.tracks.delete(m.id);
-        return ears.left?.(m.id);
-      case "act":
-        return ears.act?.(m.id, m.kind, m.arg);
-      case "did":
-        return ears.did?.(m.rev, m.did, m.after, m.ids);
-      case "changed":
-        return ears.changed?.(m.rev);
-      case "about":
-        return heardAbout(m.who);
-      case "error":
-        return;
-    }
+    if (m && shown() === l) roomSaid(l, m, ears);
   }
 
   function snapshot(l: Link, data: ArrayBuffer): void {
@@ -708,12 +637,8 @@ export function joinLive(first: string, ears: LiveEars = {}): LiveRoom {
     const snap = decodeSnapshot(new Uint8Array(data));
     if (!snap) return;
     l.playout.heard(snap.time, outside.now());
-    for (const entry of snap.entries) {
-      if (entry.id === l.you) continue;
-      let track = l.tracks.get(entry.id);
-      if (!track) l.tracks.set(entry.id, (track = new Track()));
-      track.add(snap.time, entry);
-    }
+    // Only of those the page knows to be here: of anybody else (somebody it was told has left), nothing is kept.
+    for (const entry of snap.entries) if (entry.id !== l.you) l.people.get(entry.id)?.track.add(snap.time, entry);
   }
 
   /**
@@ -752,12 +677,12 @@ export function joinLive(first: string, ears: LiveEars = {}): LiveRoom {
     const l: Link = {
       socket: outside.socket(liveUrl(room)),
       people: new Map(),
-      tracks: new Map(),
       clock: null,
       playout: new Playout(),
       you: null,
       heard: now,
       pinged: null,
+      about: new AboutHeard({ show: heardAbout, ask: () => say(l, { t: "about" }) }),
     };
     l.socket.binaryType = "arraybuffer";
     l.socket.addEventListener("open", () => move({ do: "opened", link: l }));
@@ -796,7 +721,7 @@ export function joinLive(first: string, ears: LiveEars = {}): LiveRoom {
     sample(id) {
       const l = shown();
       const time = l?.playout.time(outside.now()) ?? null;
-      return time === null ? null : (l?.tracks.get(id)?.at(time) ?? null);
+      return time === null ? null : (l?.people.get(id)?.track.at(time) ?? null);
     },
     serverNow() {
       const clock = shown()?.clock;

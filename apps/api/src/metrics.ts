@@ -143,6 +143,20 @@ export const live = {
   handoffs: Metric.counter("leaf_live_handoffs_total", {
     description: "Openings that handed a player over from one of their pages to another",
   }),
+  ticks: Metric.counter("leaf_live_ticks_total", { description: "Live's ticks, at which rooms send what moved" }),
+  roomsFlushed: Metric.counter("leaf_live_rooms_flushed_total", {
+    description: "Rooms that sent a snapshot at a tick; over ticks, rooms flushed a tick",
+  }),
+  framesSent: seriesOf(
+    Metric.counter("leaf_live_frames_sent_total", {
+      description: "Frames given to players' connections: rooms' snapshots (motion), and who is about (about)",
+    }),
+  ),
+  bytesSent: seriesOf(
+    Metric.counter("leaf_live_bytes_sent_total", {
+      description: "Bytes of the frames given to players' connections, by kind as frames_sent; a text's in characters",
+    }),
+  ),
 };
 
 const databaseBytes = seriesOf(Metric.gauge("leaf_database_bytes", { description: "Size of the database's files" }));

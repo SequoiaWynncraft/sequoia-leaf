@@ -63,6 +63,7 @@ The server is configured with environment variables:
 | `PUBLIC_DIR`                  | none                       | The built game pages to serve under `/play`.            |
 | `GAME_SIGN_IN_URL`            | see below                  | Where the game sends a member to sign in.               |
 | `GAME_LEAF_SPENDING`          | `false`                    | Whether a game's command may spend Leaf.                |
+| `LIVE_MOST_PLAYERS`           | `2000`                     | The most players Live holds at once (read at start).    |
 
 Without `BACKEND_INTERNAL_TOKEN` the server answers requests but does not read
 the credit feed, which is what local development wants. Without `SIERRA_URL` it
@@ -924,7 +925,7 @@ and span, and kept a minute (`TALLY_KEPT_MS`).
 
 ### Live: players in the same place, as it happens
 
-`GET /v1/game/live?v=2&room=<kind>` (`livePath` in core) is a WebSocket into a
+`GET /v1/game/live?v=3&room=<kind>` (`livePath` in core) is a WebSocket into a
 room; the game adds `&device=phone` or `desktop`, what the page is on, for the
 player's visits (anything else there is taken as nothing said). Players in the same room see each other move as it happens, and see who
 comes, goes and does what. Anyone the game's
@@ -947,10 +948,12 @@ for the game's routes. With the cookie, the request must carry `Origin` equal to
 `PUBLIC_ORIGIN`, though it is a `GET`: a page on another site can open a
 WebSocket to Leaf, and the browser would send the cookie with it. Before the
 upgrade it is refused as the API refuses: 401 `unauthorized`, 403 `bad_origin`,
-503 `identity_unavailable`, 400 `unsupported_version` (no `v`, or another),
+503 `identity_unavailable`, 400 `unsupported_version` (no `v`, or one Leaf does
+not speak: it speaks 3, and 2 for pages loaded before 3 was),
 `unknown_room` (no `room`, or not one of `ROOMS`) or `not_websocket`; 429 `slow_down` for a player who opens connections too often
 (ten at once, then one every ten seconds, each counted); and 503 `live_full` past
-1000 players. An opening that hands the player over between their own pages is
+`LIVE_MOST_PLAYERS` players (2,000 by default: what one Leaf carries with room
+to spare, by the load test below). An opening that hands the player over between their own pages is
 counted apart (ten at once, then one every two seconds, and past that as any
 other): one that takes over a connection of theirs that is open, or the first
 within five seconds of one their page closed itself (1000, 1001 or 1005), as the
@@ -985,21 +988,28 @@ whenever the game's count changes and at the first move of each new connection
 `flags`, `facing` and `pose` are the game's, passed on as they come. Leaf sends
 a room's snapshot once a tick (every 33 ms, `TICK`), only when somebody's motion
 changed, with only those who changed, made once and sent to everyone in the room.
+A tick goes through only the rooms with work: one where motion changed since the
+last, or where somebody is shown walking (who is stood still once their game has
+sent nothing for 300 ms). It writes each room's snapshot to the sockets itself,
+behind anything still waiting to go to one, so that frames keep their order.
 
 Text frames are JSON with a `t`:
 
-| From | `t`       | Holds                                                                                                              |
-| ---- | --------- | ------------------------------------------------------------------------------------------------------------------ |
-| game | `join`    | `room`: moves to a room of that kind on the open connection, leaving the other; in one of that kind, greets again. |
-| game | `leave`   |                                                                                                                    |
-| game | `act`     | `kind` and `arg`, one of `ACTS` in core (an emote: `wave`, ...; a touch on a thing in town: `post:174,100`).       |
-| game | `ping`    | `c`: the game's clock.                                                                                             |
-| Leaf | `welcome` | `v`, `you` (the player's number in the room), `room` (with its copy: `town/1`), `hz`, `time`, `roster`             |
-| Leaf | `joined`  | `member`: `{ id, player, name, rank, guest }`                                                                      |
-| Leaf | `left`    | `id`                                                                                                               |
-| Leaf | `act`     | `id`, `kind`, `arg`                                                                                                |
-| Leaf | `pong`    | `c` as it came, and `s`: Leaf's clock                                                                              |
-| Leaf | `error`   | `code`: `unknown_room`, `not_in_room` or `bad_act`                                                                 |
+| From | `t`            | Holds                                                                                                                   |
+| ---- | -------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| game | `join`         | `room`: moves to a room of that kind on the open connection, leaving the other; in one of that kind, greets again.      |
+| game | `leave`        |                                                                                                                         |
+| game | `act`          | `kind` and `arg`, one of `ACTS` in core (an emote: `wave`, ...; a touch on a thing in town: `post:174,100`).            |
+| game | `ping`         | `c`: the game's clock.                                                                                                  |
+| game | `about`        | Asks for all of who is about again (a change did not follow the lists the page has).                                    |
+| Leaf | `welcome`      | `v`, `you` (the player's number in the room), `room` (with its copy: `town/1`), `hz`, `time`, `roster`                  |
+| Leaf | `joined`       | `member`: `{ id, player, name, rank, guest }`                                                                           |
+| Leaf | `left`         | `id`                                                                                                                    |
+| Leaf | `act`          | `id`, `kind`, `arg`                                                                                                     |
+| Leaf | `pong`         | `c` as it came, and `s`: Leaf's clock                                                                                   |
+| Leaf | `about`        | `who`: all of who is about, as the presence routes answer; and `v`, its number                                          |
+| Leaf | `aboutChanged` | `v`, one more than the last; `at`; `lists`: of `present`, `resting` and `gone`, each that changed: `drop`, `add`, `put` |
+| Leaf | `error`        | `code`: `unknown_room`, `not_in_room` or `bad_act`                                                                      |
 
 A `welcome` is followed at once by a snapshot of everybody's motion, so a
 newcomer sees where everyone already is. A player whose name or rank changed
@@ -1076,11 +1086,19 @@ their page never says where it is. Every change to who is about, once it is
 written (somebody comes into a room or leaves it, a page says its player is
 somewhere else, or says otherwise about staying, a visit goes silent, somebody
 away does something), is told to everybody in every room of the game's places
-(not a visit's room) as `{ "t": "about", "who" }`, `who` the presence routes'
-answer, read once 200 ms after the first change of a burst; a write that only
-says again what was said is not a change. A page from before `who` was sent
-asks for the lists when told, and a page that does not know `about` at all
-asks every 30 seconds: neither is a new `LIVE_VERSION`.
+(not a visit's room), read once 200 ms after the first change of a burst; a
+write that only says again what was said is not a change. A page of version 3
+is given all of the lists as it comes into such a room, `{ "t": "about", "v",
+"who" }` (`who` the presence routes' answer), and then each change to them,
+`{ "t": "aboutChanged", "v", "at", "lists" }`, numbered one more than the last
+(`packages/core/src/about.ts`): of each list that changed, who left it (`drop`,
+by id), who joined it at which place (`add`), and of those who stayed, the
+fields that changed (`put`). The page makes the next lists from the last it has,
+the same people, fields and order as Leaf's; a change that does not follow them
+(a number missed) it lets go, and asks for all of them again (`{ "t": "about"
+}`), once. A page of version 2 is told all of the lists at every change, as it
+was before; a page from before `who` was sent asks for the lists when told, and
+a page that does not know `about` at all asks every 30 seconds.
 
 **What it is not, yet.** Positions are the game's to say, inside the room and
 at its pace: right for walking about together, never for anything that pays or
@@ -1090,7 +1108,9 @@ found by its kind; tables will need copies addressed by who they
 belong to, as a camp's is, and a moment the whole town sees (a pull at the
 tree) will need to reach every copy of the town. One process holds every room; a second would need
 each copy owned by one of them. A change to the wire goes with a new
-`LIVE_VERSION`, and pages built for the old one need a way to load again.
+`LIVE_VERSION`. A page cannot be told by Live to load again, so Leaf goes on
+speaking the version before (`LIVE_OLDEST`) to pages loaded before the change,
+until they load again of their own accord.
 
 **How long it takes.** From a player moving to another player seeing it: up to
 50 ms waiting for the game's next send (starting, stopping and jumping go at
@@ -1106,15 +1126,41 @@ has one in thirty join anew each second, has owners' pages send commands, visits
 yards in bursts and has Leaf tend fifty yards eight hours behind. It times every
 move from its sender to each other player in the room receiving it (not to the
 screen), every command and every visit; Leaf says how long its event loop was
-held, where the play service's time went, its CPU and its memory. On the
-development machine, 300 players: 18.6 ms at the median, 34 ms at the 95th
-percentile and 37 ms at the 99th, the event loop held 3.6 ms at the 99th, 31% of
-one core and 212 MiB; while Leaf tended the fifty yards, 37 ms at the 99th and
-113 ms at worst. Measured on the
-screen, with `play.ts --crowd 6` and two pages as two members on the same
-machine, one walking about the town and the other read every 100 ms for 24
-seconds: the second draws the first where the first said it was 125 to 135 ms
-before, and so at most 10 of the town's pixels behind it at the town's walk.
+held, where the play service's time went, its CPU and its memory, and what
+the players were sent a second each. `drive.ts` can also have walkers leave the
+room and come back (`churn`), and several drivers can share the walkers (`from`)
+when one is too slow to time them all. On the development machine, walking
+about the town once all are in, with twenty owners' pages sending commands,
+timed by drivers of at most 1,000 walkers each:
+
+| Players | Leaf's CPU, of one core | Moves seen, median and 99th percentile | Event loop held, 99th percentile |  Memory |
+| ------: | ----------------------: | -------------------------------------: | -------------------------------: | ------: |
+|     300 |                     14% |                           19 and 35 ms |                           1.8 ms | 208 MiB |
+|   1,000 |                     25% |                           22 and 38 ms |                           3.3 ms | 287 MiB |
+|   2,000 |                     50% |                           25 and 45 ms |                           3.9 ms | 390 MiB |
+|   3,000 |                     86% |                          40 and 137 ms |                            16 ms | 538 MiB |
+
+Each player is sent about 14 KB a second, nearly all of it motion. Of who is
+about, with 40 players and one leaving the room and coming back each second,
+1.2 KB a second each (all of the lists at each change came to 6.5 KB); with
+1,000, who outnumber the 50 the lists hold, and ten coming and going a second,
+4.4 KB (8.7 KB). Two thousand is where `LIVE_MOST_PLAYERS` stops by default:
+a little over half a core, which leaves the rest of the one Leaf process (the
+play service, the routes) room. When everybody comes in at once, as after a
+deploy (2,000 over five seconds), the slowest moves of those seconds take longer:
+68 to 77 ms at the 99th percentile and 78 to 124 ms at worst (when each
+connection's own fiber wrote its frames, 57 to 81 and 70 to 101). A tick writes everybody's snapshots itself, about 10 ms of writes at
+2,000, and while players come in it lets their connections take turns between
+its writes, so that a tick's writes take up to 47 ms at the 99th percentile
+then. The load test's `join` phase measures it, with what each tick took
+(`LiveMeter`) and the driver's own lag. Of the CPU at 1,000, a third is Bun
+writing the frames to the sockets, one write a player a tick, and a quarter
+Effect's runtime, mostly the fiber that reads each connection; Live's own code
+is a tenth. Measured on the screen, with `play.ts --crowd 6` and two pages as
+two members on the same machine, one walking about the town and the other read
+every 100 ms for 24 seconds: the second draws the first where the first said it
+was 125 to 135 ms before, and so at most 10 of the town's pixels behind it at
+the town's walk.
 
 ## The game's pages
 
@@ -1473,6 +1519,8 @@ path as it was asked):
 | `leaf_live_players`, `leaf_live_connections`, `leaf_live_rooms`                                                  |                                                                                                                | Who is in Live now                                                                                                                                                                                                                                                   |
 | `leaf_live_opened_total`, `leaf_live_closed_total`, `leaf_live_handoffs_total`, `leaf_live_frames_dropped_total` | `how` (`page`, `drop`, `leaf`) on closed                                                                       | Connections, and frames that could not be taken                                                                                                                                                                                                                      |
 | `leaf_live_refused_total`                                                                                        | `reason` (the code)                                                                                            | Openings turned away before their upgrade                                                                                                                                                                                                                            |
+| `leaf_live_ticks_total`, `leaf_live_rooms_flushed_total`                                                         |                                                                                                                | Live's ticks, and the rooms that sent a snapshot at one: their rates' ratio is rooms flushed a tick                                                                                                                                                                  |
+| `leaf_live_frames_sent_total`, `leaf_live_bytes_sent_total`                                                      | `kind` (`motion`, `about`)                                                                                     | Frames given to players' connections, and their bytes: rooms' snapshots, and who is about                                                                                                                                                                            |
 | `leaf_play_commands_total`                                                                                       | `game`, `outcome` (`taken`, `refused`, `failed`, `slow`, `invalid`)                                            | Play commands; a rule's refusal is counted, never logged                                                                                                                                                                                                             |
 | `leaf_play_job_seconds`                                                                                          | `game`, `kind` (`open`, `visit`, `batch`, `tend`), `phase` (`queue`, `simulation`, `codec`, `sqlite`, `other`) | Where each play job's time went                                                                                                                                                                                                                                      |
 | `leaf_play_overdue_seconds`                                                                                      | `game`                                                                                                         | How long the state due a tend longest has been due                                                                                                                                                                                                                   |

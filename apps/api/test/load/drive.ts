@@ -1,37 +1,51 @@
 /**
  * Loads a Leaf started with `leaf.ts`, from a process of its own, and says how it held up, as JSON:
  *
- *   bun apps/api/test/load/drive.ts <port> [walkers] [owners] [visitors] [seconds] [sweep]
+ *   bun apps/api/test/load/drive.ts <port> [walkers] [owners] [visitors] [seconds] [sweep] [churn] [from]
  *
- * (300 walkers, 20 owners, 50 visitors, 20 seconds and a sweep of at most 300 seconds by default;
- * `owners` as `leaf.ts` was given them.) It goes through three phases, each measured on its own:
+ * (300 walkers, 20 owners, 50 visitors, 20 seconds, a sweep of at most 300 seconds and no churn by
+ * default; `owners` as `leaf.ts` was given them.) Its walkers are `w<from>` on (`w0` by default),
+ * so that several drivers can share the walkers between them when one process would be too slow to
+ * time them all: each times the moves of its own walkers only. It goes through four phases, each
+ * measured on its own:
  *
- * 1. `walk`: the walkers join over the first five seconds and walk about the town at the game's pace
- *    (`CLIENT_HZ` moves a second); each second, one in thirty connects again (joining the town
- *    anew); and each owner's page sends a batch of one to eight commands to their yard every second.
- * 2. `visits`: the same, with `visitors` players visiting the first owner's yard at once as it begins.
- * 3. `sweep`: the same, with Leaf tending the cold yards meanwhile, from the phase's beginning until
+ * 1. `join`: the walkers join over five seconds, as after a deploy, each walking as soon as it is
+ *    in, and three seconds more.
+ * 2. `walk`: the walkers walk about the town at the game's pace (`CLIENT_HZ` moves a second); each second, one in thirty connects again (joining the town
+ *    anew), and `churn` walkers leave the room and join it again a second later, each of which
+ *    changes who is about; and each owner's page sends a batch of one to eight commands to their
+ *    yard every second.
+ * 3. `visits`: the same, with `visitors` players visiting the first owner's yard at once as it begins.
+ * 4. `sweep`: the same, with Leaf tending the cold yards meanwhile, from the phase's beginning until
  *    it is done or `sweep` seconds have passed; and as it begins, `visitors` players visit one of
  *    those yards at once, which Leaf must bring eight hours on first.
  *
  * Each move is timed from its sending to each other walker in its room being told it, on this
- * process's clock; each command and visit from its sending to its answer. Leaf's own measures (the
+ * process's clock; each command and visit from its sending to its answer. What the walkers were sent
+ * is counted too, in bytes a walker a second: motion (binary) and text, and of the text the words of
+ * who is about. Leaf's own measures (the
  * event loop's delay, where the play service's jobs spent their time, CPU, memory, how far behind
- * the yard longest unwritten was) come from its `/load/report`.
+ * the yard longest unwritten was, and what Live's ticks took) come from its `/load/report`; and the
+ * driver says how long its own event loop was held, since a driver too slow to keep up shows its
+ * own delays as Leaf's.
  */
+import { monitorEventLoopDelay } from "node:perf_hooks";
+
 import { CLIENT_HZ, Flag, playPath, visitPath } from "@sequoia-leaf/core";
 import { Schema } from "effect";
 
 import { LiveClient } from "../live-client.ts";
 import { coldId, ownerId, spread } from "./shared.ts";
 
-const [port, walkers, owners, visitors, seconds, sweepMost] = [
+const [port, walkers, owners, visitors, seconds, sweepMost, churn, from] = [
   process.argv[2],
   process.argv[3] ?? 300,
   process.argv[4] ?? 20,
   process.argv[5] ?? 50,
   process.argv[6] ?? 20,
   process.argv[7] ?? 300,
+  process.argv[8] ?? 0,
+  process.argv[9] ?? 0,
 ].map(Number);
 if (
   port === undefined ||
@@ -40,10 +54,14 @@ if (
   visitors === undefined ||
   seconds === undefined ||
   sweepMost === undefined ||
-  ![port, walkers, owners, visitors, seconds, sweepMost].every((n) => Number.isInteger(n) && n >= 0) ||
+  churn === undefined ||
+  from === undefined ||
+  ![port, walkers, owners, visitors, seconds, sweepMost, churn, from].every((n) => Number.isInteger(n) && n >= 0) ||
   walkers < 2
 ) {
-  console.error("Usage: bun apps/api/test/load/drive.ts <port> [walkers >= 2] [owners] [visitors] [seconds] [sweep]");
+  console.error(
+    "Usage: bun apps/api/test/load/drive.ts <port> [walkers >= 2] [owners] [visitors] [seconds] [sweep] [churn] [from]",
+  );
   process.exit(2);
 }
 const origin = `http://127.0.0.1:${port}`;
@@ -58,7 +76,13 @@ let coldVisits: number[] = [];
 let abouts = 0;
 let aboutBytes = 0;
 let phaseBegan = 0;
+/** What the walkers had been sent when the phase began (`received`). */
+let receivedBefore = { binary: 0, text: 0 };
 const phases: { name: string; [measure: string]: unknown }[] = [];
+/** How long this process's own event loop was held, read and begun again with each phase. */
+const lag = monitorEventLoopDelay({ resolution: 5 });
+lag.enable();
+const ms = (ns: number) => Number((ns / 1e6).toFixed(1));
 const begin = async (name: string) => {
   await fetch(`${origin}/load/phase?name=${name}`, { method: "POST" });
   moves = [];
@@ -68,12 +92,22 @@ const begin = async (name: string) => {
   coldVisits = [];
   abouts = 0;
   aboutBytes = 0;
+  receivedBefore = received();
   phaseBegan = performance.now();
+  lag.reset();
 };
-const end = (name: string, more: Record<string, unknown> = {}) =>
+const end = (name: string, more: Record<string, unknown> = {}) => {
+  const now = received();
+  const perWalkerS = (bytes: number) => Math.round(bytes / walkers / ((performance.now() - phaseBegan) / 1000));
   phases.push({
     name,
     moves_seen_ms: spread(moves),
+    driver_event_loop_ms: { p50: ms(lag.percentile(50)), p99: ms(lag.percentile(99)), max: ms(lag.max) },
+    received_bytes_per_walker_s: {
+      motion: perWalkerS(now.binary - receivedBefore.binary),
+      text: perWalkerS(now.text - receivedBefore.text),
+      about: perWalkerS(aboutBytes),
+    },
     works_commands_ms: spread(commands),
     works_answers_not_200: refused,
     about_frames: {
@@ -84,6 +118,7 @@ const end = (name: string, more: Record<string, unknown> = {}) =>
     ...(coldVisits.length > 0 && { visits_to_a_cold_yard_ms: spread(coldVisits) }),
     ...more,
   });
+};
 
 /** A walker: their connection while it is open, and when each of their moves was sent, by number. */
 interface Walker {
@@ -97,13 +132,38 @@ interface Walker {
   dx: number;
 }
 let failedOpens = 0;
+/** What connections closed since the driver began had been sent, and what the open ones have been: every walker's, together. */
+const sentToClosed = { binary: 0, text: 0 };
+const received = () => {
+  const sum = { ...sentToClosed };
+  for (const w of all) {
+    sum.binary += w.client?.received.binary ?? 0;
+    sum.text += w.client?.received.text ?? 0;
+  }
+  return sum;
+};
+/** A walker's connection let go of: what it was sent is kept in the totals. */
+const letGo = (w: Walker) => {
+  if (w.client === null) return;
+  sentToClosed.binary += w.client.received.binary;
+  sentToClosed.text += w.client.received.text;
+  w.client.close();
+  w.client = null;
+};
 /** Every walker's moves as sent, by room and their number in it. */
 const sentBy = new Map<string, Map<number, number>>();
 const keyOf = (room: string, you: number) => `${room}#${you}`;
 
+/** A walker welcomed into a room: their moves from now on are timed as theirs there. */
+const seated = (w: Walker, welcome: { room: string; you: number }) => {
+  sentBy.delete(keyOf(w.room, w.you));
+  Object.assign(w, { room: welcome.room, you: welcome.you, sent: new Map() });
+  sentBy.set(keyOf(w.room, w.you), w.sent);
+};
+
 /** Opens a walker's connection, and tries again in a few seconds if it does not open. */
 const connect = async (w: Walker): Promise<void> => {
-  const opened = await LiveClient.open(origin, { bearer: `w${w.n}` })
+  const opened = await LiveClient.open(origin, { bearer: `w${from + w.n}` })
     .then(async (client) => ({ client, welcome: await client.next("welcome", () => true, 5000) }))
     .catch(() => null);
   if (opened === null) {
@@ -112,9 +172,8 @@ const connect = async (w: Walker): Promise<void> => {
     return;
   }
   const { client, welcome } = opened;
-  sentBy.delete(keyOf(w.room, w.you));
-  Object.assign(w, { client, room: welcome.room, you: welcome.you, sent: new Map(), openedAt: performance.now() });
-  sentBy.set(keyOf(w.room, w.you), w.sent);
+  seated(w, welcome);
+  Object.assign(w, { client, openedAt: performance.now() });
   client.onSnapshot = (snapshot, at) => {
     for (const e of snapshot.entries) {
       if (e.id === w.you) continue;
@@ -122,7 +181,7 @@ const connect = async (w: Walker): Promise<void> => {
       if (sent !== undefined) moves.push(at - sent);
     }
     for (const m of client.texts)
-      if (m.t === "about") {
+      if (m.t === "about" || m.t === "aboutChanged") {
         abouts++;
         aboutBytes += JSON.stringify(m).length;
       }
@@ -142,8 +201,10 @@ const all: Walker[] = Array.from({ length: walkers }, (_, n) => ({
   x: (n * 37) % 512,
   dx: 64 / CLIENT_HZ,
 }));
+/** Walkers out of the room for a second, by number, so that none is taken out again meanwhile; none of them walks. */
+const out = new Set<number>();
 const step = (w: Walker) => {
-  if (w.client === null) return;
+  if (w.client === null || out.has(w.n)) return;
   w.x += w.dx;
   if (w.x < 0 || w.x > 512) w.dx = -w.dx;
   const seq = w.client.move({
@@ -164,10 +225,29 @@ const walking = setInterval(() => all.forEach(step), 1000 / CLIENT_HZ);
 const joining = setInterval(() => {
   for (const w of all) {
     if (w.client === null || performance.now() - w.openedAt < 20_000 || Math.random() >= 1 / 30) continue;
-    const was = w.client;
-    w.client = null;
-    was.close();
+    letGo(w);
     void connect(w);
+  }
+}, 1000);
+const churning = setInterval(() => {
+  for (let i = 0; i < churn; i++) {
+    const w = all[Math.floor(Math.random() * all.length)];
+    const client = w?.client;
+    if (w === undefined || !client || out.has(w.n)) continue;
+    out.add(w.n);
+    client.send({ t: "leave" });
+    setTimeout(() => {
+      // A walker who connected again meanwhile is in the room already.
+      if (w.client !== client) {
+        out.delete(w.n);
+        return;
+      }
+      void client
+        .join()
+        .then((welcome) => seated(w, welcome))
+        .catch(() => undefined)
+        .finally(() => out.delete(w.n));
+    }, 1000);
   }
 }, 1000);
 
@@ -213,11 +293,14 @@ const visitBurst = (owner: string, many: number, times: number[]) =>
     }),
   );
 
-await begin("walk");
-// Joining over the first five seconds.
+await begin("join");
 for (const [i, w] of all.entries()) {
   setTimeout(() => void connect(w), (i * 5000) / walkers);
 }
+await Bun.sleep(8000);
+end("join", { walkers_connected: all.filter((w) => w.client !== null).length });
+
+await begin("walk");
 await Bun.sleep(seconds * 1000);
 end("walk", { walkers_connected: all.filter((w) => w.client !== null).length });
 
@@ -245,6 +328,7 @@ end("sweep", { sweep: swept.done ? `done in ${swept.took_s} s` : `not done after
 stopped = true;
 clearInterval(walking);
 clearInterval(joining);
+clearInterval(churning);
 paging.forEach(clearTimeout);
 const leaf: unknown = await (await fetch(`${origin}/load/report`)).json();
 const cpu = process.cpuUsage();

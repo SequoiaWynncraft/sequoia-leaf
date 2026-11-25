@@ -1,17 +1,20 @@
 import { describe, expect, it } from "bun:test";
 
 import { decodeSnapshot, Flag, type Motion, readToClient, type ToClient } from "@sequoia-leaf/core";
+import { Effect } from "effect";
 
 import {
+  type Connection,
   halted,
   moved,
+  noTally,
   type Occupant,
   QUIET_MS,
   reconnected,
   Room,
   Rooms,
   type Shown,
-  told,
+  type Snapshot,
 } from "../src/live/room.ts";
 
 /** Where the room shows somebody, or null before their first move. */
@@ -19,10 +22,19 @@ const motionOf = (o: Occupant) => (o.shown.state === "seen" ? o.shown.motion : n
 /** The number of the move the room shows of somebody, or null before their first. */
 const seqOf = (o: Occupant) => (o.shown.state === "seen" ? o.shown.seq : null);
 
-/** What one person in a room was sent: the text decoded, and the binary frames as they were. */
+/** What one person in a room was sent, on the one connection they have: the text decoded, and the binary frames as they were. */
 function inbox() {
   const texts: ToClient[] = [];
   const frames: Uint8Array[] = [];
+  const connection: Connection = {
+    writeIf: (take, tally) =>
+      Effect.sync(() => {
+        const frame = take();
+        if (frame === null) return void tally.passed++;
+        frames.push(frame);
+        tally.direct++;
+      }),
+  };
   return {
     texts,
     frames,
@@ -33,10 +45,48 @@ function inbox() {
           const m = readToClient(frame);
           if (m) texts.push(m);
         }
+        return true;
       },
+      connection: () => connection,
     },
   };
 }
+
+/** One of the room's ticks: its snapshot, if anything moved, written to everybody it is for as Live writes it. Says whether there was one. */
+function tick(room: Room, n: number, time: number): boolean {
+  const snapshot = room.flush(n, time);
+  if (snapshot === null) return false;
+  for (const r of snapshot.to) Effect.runSync(r.connection.writeIf(() => snapshot.for(r), noTally()));
+  return true;
+}
+
+/**
+ * What a room's snapshot, still to be told to a page, does after each kind of frame the page may
+ * be sent meanwhile (`Snapshot`): goes to nobody greeted since (a welcome begins the page again),
+ * is made again without whoever left, or goes as it is. A new kind of frame does not compile until
+ * it is placed here.
+ */
+const AFTER: Record<ToClient["t"], "not told" | "without them" | "as it is"> = {
+  welcome: "not told",
+  left: "without them",
+  joined: "as it is",
+  act: "as it is",
+  did: "as it is",
+  changed: "as it is",
+  about: "as it is",
+  aboutChanged: "as it is",
+  error: "as it is",
+  pong: "as it is",
+};
+
+/** What a snapshot says to the first it is for, decoded. */
+const shownTo = (snapshot: Snapshot | null) => {
+  const first = snapshot?.to[0];
+  const frame = first ? snapshot?.for(first) : null;
+  return frame ? decodeSnapshot(frame) : null;
+};
+/** Whose motion a snapshot's frame shows, by their ids. */
+const idsIn = (frame: Uint8Array | null) => decodeSnapshot(frame ?? new Uint8Array())?.entries.map((e) => e.id);
 
 const TOWN = { width: 512, height: 352, capacity: 3, speed: 160 };
 const person = (name: string, guest = false) => ({ player: `id-${name}`, name, rank: guest ? null : "Captain", guest });
@@ -91,13 +141,13 @@ describe("a room", () => {
     const b = inbox();
     const alice = room.join(person("Alice"), a.outbox, 0, 30, 1);
     const bob = room.join(person("Bob"), b.outbox, 0, 30, 1);
-    room.move(alice.member.id, 1, at(10, 10), 0);
-    room.move(alice.member.id, 2, at(12, 10, Flag.Moving), 0);
+    room.move(alice.member.id, 1, at(10, 10), 5000);
+    room.move(alice.member.id, 2, at(12, 10, Flag.Moving), 5000);
 
-    expect(room.flush(1, 5000)).toBe(true);
-    expect(room.flush(2, 5033)).toBe(false);
+    expect(tick(room, 1, 5000)).toBe(true);
+    expect(tick(room, 2, 5033)).toBe(false);
     room.move(bob.member.id, 1, at(300, 200), 0);
-    room.flush(3, 5066);
+    tick(room, 3, 5066);
 
     expect(a.frames.length).toBe(2);
     expect(a.frames[0]).toBe(b.frames[0]);
@@ -197,7 +247,7 @@ describe("a room", () => {
     room.join(person("Bob"), a.outbox, 0, 30, 1);
     room.move(alice.member.id, 1, at(400, 300, 0, 1), 0);
     room.move(alice.member.id, 2, at(401, 300, Flag.Moving, 1), 0);
-    room.flush(1, 0);
+    tick(room, 1, 0);
 
     expect(decodeSnapshot(a.frames.at(-1) ?? new Uint8Array())?.entries.map((e) => [e.x, e.jump])).toEqual([[401, 1]]);
   });
@@ -226,12 +276,12 @@ describe("a room", () => {
     const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
     room.join(person("Bob"), b.outbox, 0, 30, 1);
     room.move(alice.member.id, 1, { ...at(50, 60, Flag.Moving | 4), vx: 30 }, 0);
-    room.flush(1, 0);
+    tick(room, 1, 0);
     room.halt(alice.member.id);
-    room.flush(2, 0);
+    tick(room, 2, 0);
     room.halt(alice.member.id);
 
-    expect(room.flush(3, 0)).toBe(false);
+    expect(tick(room, 3, 0)).toBe(false);
     expect(decodeSnapshot(b.frames.at(-1) ?? new Uint8Array())?.entries.map((e) => [e.x, e.vx, e.flags])).toEqual([
       [50, 0, 4],
     ]);
@@ -245,21 +295,18 @@ describe("a room", () => {
     // Alice walks right, twenty moves a second, and her tab is hidden after the last.
     for (let i = 0; i <= 10; i++)
       room.move(alice.member.id, i + 1, { ...at(50 + i * 3, 60, Flag.Moving), vx: 64 }, i * 50);
-    room.flush(1, 500);
+    tick(room, 1, 500);
     const shown = () => decodeSnapshot(b.frames.at(-1) ?? new Uint8Array())?.entries.map((e) => [e.x, e.vx, e.flags]);
     expect(shown()).toEqual([[80, 64, Flag.Moving]]);
 
     // Still walking a moment after her last move: a move may be a little late.
-    room.quiet(500 + QUIET_MS - 1);
-    expect(room.flush(2, 500 + QUIET_MS - 1)).toBe(false);
-    room.quiet(500 + QUIET_MS);
-    room.flush(3, 500 + QUIET_MS);
+    expect(tick(room, 2, 500 + QUIET_MS - 1)).toBe(false);
+    tick(room, 3, 500 + QUIET_MS);
     expect(shown()).toEqual([[80, 0, 0]]);
     // Standing, she stays as she is, however long it is quiet; her next move walks her on.
-    room.quiet(60_000);
-    expect(room.flush(4, 60_000)).toBe(false);
+    expect(tick(room, 4, 60_000)).toBe(false);
     room.move(alice.member.id, 20, { ...at(83, 60, Flag.Moving), vx: 64 }, 60_010);
-    room.flush(5, 60_010);
+    tick(room, 5, 60_010);
     expect(shown()).toEqual([[83, 64, Flag.Moving]]);
   });
 
@@ -279,6 +326,89 @@ describe("a room", () => {
     ]);
     expect(a.texts.some((m) => m.t === "act")).toBe(false);
     expect(room.size).toBe(1);
+  });
+
+  it("makes a snapshot for everybody with a connection, and it stays for them only while they are there on it", () => {
+    const room = new Room("town", 1, TOWN);
+    const a = inbox();
+    const b = inbox();
+    const c = inbox();
+    let bobs: Connection | null = b.outbox.connection();
+    const alice = room.join(person("Alice"), a.outbox, 0, 30, 1);
+    room.join(person("Bob"), { send: (frame) => b.outbox.send(frame), connection: () => bobs }, 0, 30, 1);
+    const carol = room.join(person("Carol"), c.outbox, 0, 30, 1);
+    room.move(alice.member.id, 1, at(10, 10), 0);
+    const snapshot = room.flush(1, 0);
+    expect(snapshot?.to.map((r) => r.occupant.member.name)).toEqual(["Alice", "Bob", "Carol"]);
+
+    // Carol leaves; Bob's page has a new connection, which the room greets afresh.
+    room.leave(carol.member.id);
+    bobs = inbox().outbox.connection();
+    expect(snapshot?.to.map((r) => snapshot.for(r) !== null)).toEqual([true, false, false]);
+    // Somebody whose page has no connection now (in their grace) is not one it is made for.
+    bobs = null;
+    room.move(alice.member.id, 2, at(12, 10), 10);
+    expect(room.flush(2, 10)?.to.map((r) => r.occupant.member.name)).toEqual(["Alice"]);
+  });
+
+  it("shows nobody it was made before the leaving of to anybody told after, and everybody else to all", () => {
+    const room = new Room("town", 1, { ...TOWN, capacity: 5 });
+    room.join(person("Alice"), inbox().outbox, 0, 30, 1);
+    const bob = room.join(person("Bob"), inbox().outbox, 0, 30, 1);
+    const carol = room.join(person("Carol"), inbox().outbox, 0, 30, 1);
+    room.move(bob.member.id, 1, at(10, 10), 0);
+    room.move(carol.member.id, 1, at(20, 10), 0);
+    const snapshot = room.flush(1, 0);
+    const [toAlice, toBob, toCarol] = snapshot?.to ?? [];
+    if (!snapshot || !toAlice || !toBob || !toCarol) throw new Error("not for all three");
+    // Carol is told it as it was made; then Bob leaves, and somebody comes in.
+    expect(idsIn(snapshot.for(toCarol))).toEqual([bob.member.id, carol.member.id]);
+    room.leave(bob.member.id);
+    room.join(person("Dave"), inbox().outbox, 0, 30, 1);
+
+    // Alice, told after Bob's leaving, is told Carol's move and nothing of Bob's; the frame is made
+    // again once, for everybody still to be told; Bob is told nothing, and Dave is not one it is for.
+    const toAliceNow = snapshot.for(toAlice);
+    expect(idsIn(toAliceNow)).toEqual([carol.member.id]);
+    expect(snapshot.for(toAlice)).toBe(toAliceNow);
+    expect(snapshot.for(toBob)).toBeNull();
+    expect(snapshot.to.map((r) => r.occupant.member.name)).toEqual(["Alice", "Bob", "Carol"]);
+  });
+
+  it("has a rule for every kind of frame a page may be sent before a snapshot reaches it", () => {
+    // Only a welcome and a leaving say where anybody is; each has its test, this and the one before.
+    expect(Object.entries(AFTER).filter(([, rule]) => rule !== "as it is")).toEqual([
+      ["welcome", "not told"],
+      ["left", "without them"],
+    ]);
+  });
+
+  it("tells nothing to anybody greeted again since it was made, and all of it to everybody else", () => {
+    const room = new Room("town", 1, { ...TOWN, capacity: 5 });
+    const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
+    const bob = room.join(person("Bob"), inbox().outbox, 0, 30, 1);
+    room.move(bob.member.id, 1, at(10, 10), 0);
+    const snapshot = room.flush(1, 0);
+    const [toAlice, toBob] = snapshot?.to ?? [];
+    if (!snapshot || !toAlice || !toBob) throw new Error("not for both");
+    // Bob walks on, and Alice is greeted again where she is: her welcome shows Bob where he is now.
+    room.move(bob.member.id, 2, at(14, 10), 30);
+    room.greet(alice, 30, 30, 1);
+
+    expect([snapshot.for(toAlice), idsIn(snapshot.for(toBob))]).toEqual([null, [bob.member.id]]);
+  });
+
+  it("knows somebody as in it only while they are, not once gone nor gone and back in as another", () => {
+    const room = new Room("town", 1, TOWN);
+    const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
+    expect(room.has(alice)).toBe(true);
+    room.leave(alice.member.id);
+    expect(room.has(alice)).toBe(false);
+    // Numbers wrap round: somebody else comes in with hers, and is not her.
+    for (let i = 0; i < 65_534; i++) room.leave(room.join(person("x"), inbox().outbox, 0, 30, 1).member.id);
+    const bob = room.join(person("Bob"), inbox().outbox, 0, 30, 1);
+    expect(bob.member.id).toBe(alice.member.id);
+    expect([room.has(alice), room.has(bob)]).toEqual([false, true]);
   });
 
   it("numbers people counting up, never 0, wrapping and skipping anybody still there", () => {
@@ -323,6 +453,50 @@ describe("the rooms", () => {
     expect([...rooms.all()].map((r) => r.name)).toEqual(["town/1", "town/2", "town/3"]);
   });
 
+  it("has work at a tick only for a room where motion changed or somebody is shown walking", () => {
+    const rooms = new Rooms();
+    const town = rooms.place("town");
+    const visit = rooms.place("visit:works:10000000-0000-0000-0000-000000000001");
+    if (!town || !visit) throw new Error("no rooms");
+    const alice = town.join(person("Alice"), inbox().outbox, 0, 30, 1);
+    const bob = town.join(person("Bob"), inbox().outbox, 0, 30, 1);
+    const looker = visit.join(person("Carol"), inbox().outbox, 0, 30, 1);
+    // Come in, nobody has moved: no work anywhere. Nothing moves in a still room.
+    expect(rooms.busy()).toEqual([]);
+    visit.move(looker.member.id, 1, at(5, 5, Flag.Moving), 0);
+    expect(rooms.busy()).toEqual([]);
+
+    // A step that stands Alice still is told at the next tick, and then the town has none.
+    town.move(alice.member.id, 1, at(10, 10), 0);
+    expect(rooms.busy()).toEqual([town]);
+    expect(town.flush(1, 0)).not.toBeNull();
+    expect(rooms.busy()).toEqual([]);
+
+    // Bob walking keeps it on the list, told or not, until his game goes quiet and he is stood still.
+    town.move(bob.member.id, 1, at(20, 20, Flag.Moving), 100);
+    expect(town.flush(2, 133)).not.toBeNull();
+    expect(town.flush(3, 166)).toBeNull();
+    expect(rooms.busy()).toEqual([town]);
+    const stood = town.flush(4, 100 + QUIET_MS);
+    expect(shownTo(stood)?.entries.map((e) => [e.id, e.flags])).toEqual([[bob.member.id, 0]]);
+    expect(rooms.busy()).toEqual([]);
+
+    // A halt of somebody walking is work; of somebody standing, none.
+    town.move(bob.member.id, 2, at(21, 20, Flag.Moving), 2000);
+    town.flush(5, 2000);
+    town.halt(bob.member.id);
+    expect(shownTo(town.flush(6, 2010))?.entries.map((e) => e.flags)).toEqual([0]);
+    town.halt(bob.member.id);
+    expect(rooms.busy()).toEqual([]);
+
+    // A room closed with somebody walking in it is off the list.
+    town.move(bob.member.id, 3, at(22, 20, Flag.Moving), 3000);
+    town.leave(alice.member.id);
+    town.leave(bob.member.id);
+    rooms.tidy(town);
+    expect(rooms.busy()).toEqual([]);
+  });
+
   it("has no room of a kind there is not", () => {
     expect(new Rooms().place("hall")).toBeUndefined();
   });
@@ -363,12 +537,11 @@ describe("what a room shows of somebody", () => {
 
   it("stands somebody walking where they are, to be told, and leaves anybody standing or unseen as they are", () => {
     const seen = moved({ state: "unseen" }, 1, walking(10), 1000, kind).shown;
-    const standing = told(halted(seen));
+    const standing = halted(seen);
 
-    expect(halted(seen)).toMatchObject({ changed: true, motion: { x: 10, vx: 0, vy: 0, flags: 0 } });
+    expect(standing).toMatchObject({ changed: true, motion: { x: 10, vx: 0, vy: 0, flags: 0 } });
     expect(halted(standing)).toBe(standing);
-    expect(standing).toMatchObject({ changed: false });
     const unseen: Shown = { state: "unseen" };
-    expect([halted(unseen), told(unseen), reconnected(unseen)]).toEqual([unseen, unseen, unseen]);
+    expect([halted(unseen), reconnected(unseen)]).toEqual([unseen, unseen]);
   });
 });

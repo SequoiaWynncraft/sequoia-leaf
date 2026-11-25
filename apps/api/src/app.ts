@@ -20,7 +20,7 @@ import { Observed } from "./http/observe.ts";
 import { Pages } from "./http/pages.ts";
 import { OpenStreams } from "./http/streams.ts";
 import { Ledger } from "./ledger/store.ts";
-import { Live, LIVE_SOCKETS } from "./live/live.ts";
+import { Live, LIVE_SOCKETS, LiveTuned } from "./live/live.ts";
 import { LiveRoute } from "./live/route.ts";
 import { Watchers } from "./live/watchers.ts";
 import { Coins } from "./play/coins.ts";
@@ -118,7 +118,7 @@ export const Stores = Layer.mergeAll(
  * machine's dice and its processes), the play service and the credit sync on the stores, and the live rooms, which the routes serve and
  * the server's farewell closes, and which write who is in them into the stores' presence and visits.
  */
-export const Services = Layer.mergeAll(Play.layer, Credits.layer, Live.layer).pipe(
+export const Services = Layer.mergeAll(Play.layer, Credits.layer, Live.layer.pipe(Layer.provide(LiveTuned))).pipe(
   Layer.provideMerge(Watchers.layer),
   Layer.provideMerge(Stores),
   Layer.provideMerge(Database),

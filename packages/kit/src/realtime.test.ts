@@ -13,9 +13,11 @@ import {
   visitRoom,
 } from "@sequoia-leaf/core";
 
+import { ABOUT_ASK_AGAIN } from "./about.ts";
 import { restart, start } from "./live.ts";
 import { backoff, onWake, outside, pretend } from "./net.ts";
-import { here } from "./presence.ts";
+import { Playout, Track } from "./playout.ts";
+import { hearPresent, here, type Present } from "./presence.ts";
 import { forgetLedger } from "./purse.ts";
 import {
   askWhy,
@@ -28,13 +30,11 @@ import {
   LIVE_BACKOFF,
   type LiveRoom,
   type LiveStatus,
-  Playout,
   roomState,
   sendIn,
   silent,
   type Step,
   stepConn,
-  Track,
 } from "./realtime.ts";
 import { FakeSocket, HELLO, type Reply, type Standin, standin, TESTER } from "./standin.ts";
 
@@ -379,6 +379,16 @@ describe("where the connection is", () => {
 });
 
 const ALICE = { id: 2, player: "a", name: "Alice", rank: "Captain", guest: false };
+/** A change to who is about, numbered `v`, that changes nothing but when the lists were made. */
+const change = (v: number): ToClient => ({ t: "aboutChanged", v, at: `2026-11-25T10:00:0${v % 10}.000Z`, lists: {} });
+/** Somebody on Leaf's lists of who is about, at a place. */
+const listed = (id: string, place: string) => ({
+  id,
+  username: id,
+  place,
+  guest: false,
+  seen_at: "2026-11-25T10:00:00.000Z",
+});
 const welcome = (you: number, time: number, roster = [{ ...ALICE, id: you }], room = "town"): ToClient => ({
   t: "welcome",
   v: 1,
@@ -491,6 +501,27 @@ describe("a live room", () => {
     expect(heard).toEqual(["welcome 1 town/1 1", "joined Alice", "act 2 emote wave", "left 2"]);
   });
 
+  test("keeps the motion only of those it knows are here: none of somebody it was told has left, all of the rest", async () => {
+    const w = await live();
+    room = joinLive("town");
+    const s = socket(0);
+    s.open();
+    const now = w.clock.now;
+    s.says(welcome(1, now, [{ ...ALICE, id: 1 }, ALICE, { ...ALICE, id: 3, name: "Bea" }]));
+    s.says({ t: "left", id: 2 });
+    // A snapshot made before Alice left, or of somebody the page never heard of, comes after.
+    s.sends(
+      encodeSnapshot(1, now - 100, [
+        { id: 2, seq: 1, ...at(5, 5) },
+        { id: 3, seq: 1, ...at(7, 7) },
+        { id: 4, seq: 1, ...at(9, 9) },
+      ]),
+    );
+
+    expect([...room.members().keys()]).toEqual([1, 3]);
+    expect([room.sample(2), room.sample(4), room.sample(3)?.x]).toEqual([null, null, 7]);
+  });
+
   test("in a visit's room, hears each batch Leaf did to the state visited, from its welcome on", async () => {
     const w = await live();
     const heard: unknown[] = [];
@@ -569,6 +600,110 @@ describe("a live room", () => {
 
     // Said before the room welcomed the page; then asked at the welcome, and again at the room's word without lists.
     expect(w.sent.filter((x) => x.path === "/v1/game/presence").map((x) => x.method)).toEqual(["PUT", "GET", "GET"]);
+  });
+
+  test("makes who is about from Leaf's lists and each change after, and asks for all of them once when one does not follow", async () => {
+    const w = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: TESTER },
+      "GET /v1/game/presence": { status: 200, body: { at: "2026-11-25T09:00:00.000Z", present: [], resting: [] } },
+      "PUT /v1/game/presence": { status: 200, body: { at: "2026-11-25T09:00:00.000Z", present: [], resting: [] } },
+    });
+    world = w;
+    await start();
+    undo = pretend({
+      socket: (url) => {
+        const s = new FakeSocket(url);
+        sockets.push(s);
+        return s;
+      },
+    });
+    const lists: string[][] = [];
+    const unhear = hearPresent((present: readonly Present[]) => lists.push(present.map((p) => `${p.name} ${p.place}`)));
+    room = joinLive("town");
+    here("town");
+    await Bun.sleep(10);
+    const s = socket(0);
+    s.open();
+    s.says(welcome(1, w.clock.now));
+    await Bun.sleep(10);
+    lists.length = 0;
+    s.says({
+      t: "about",
+      v: 4,
+      who: { at: "2026-11-25T10:00:00.000Z", present: [listed("Bo", "town")], resting: [], gone: [] },
+    });
+    s.says({
+      t: "aboutChanged",
+      v: 5,
+      at: "2026-11-25T10:00:01.000Z",
+      lists: { present: { add: [[0, listed("Al", "works")]], put: [{ id: "Bo", place: "camp" }] } },
+    });
+    // Number 7 does not follow 5: let go, and all of them asked for, once.
+    const missed: ToClient = {
+      t: "aboutChanged",
+      v: 7,
+      at: "2026-11-25T10:00:03.000Z",
+      lists: { present: { drop: ["Bo"] } },
+    };
+    s.says(missed);
+    s.says({ t: "aboutChanged", v: 8, at: "2026-11-25T10:00:03.500Z", lists: {} });
+    s.says({ t: "about", v: 8, who: { at: "2026-11-25T10:00:04.000Z", present: [], resting: [], gone: [] } });
+    s.says({
+      t: "aboutChanged",
+      v: 9,
+      at: "2026-11-25T10:00:05.000Z",
+      lists: { present: { add: [[0, listed("Cy", "town")]] } },
+    });
+    unhear();
+    here(null);
+
+    expect(lists).toEqual([["Bo town"], ["Al works", "Bo camp"], [], ["Cy town"]]);
+    expect(s.texts().filter((m) => m["t"] === "about")).toEqual([{ t: "about" }]);
+  });
+
+  test("asks again for all of who is about while changes go on not following, every few seconds, whatever the machine's clock says", async () => {
+    const w = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: TESTER },
+      "GET /v1/game/presence": { status: 200, body: { at: "2026-11-25T09:00:00.000Z", present: [], resting: [] } },
+      "PUT /v1/game/presence": { status: 200, body: { at: "2026-11-25T09:00:00.000Z", present: [], resting: [] } },
+    });
+    world = w;
+    await start();
+    undo = pretend({
+      socket: (url) => {
+        const s = new FakeSocket(url);
+        sockets.push(s);
+        return s;
+      },
+    });
+    room = joinLive("town");
+    here("town");
+    await Bun.sleep(10);
+    const s = socket(0);
+    s.open();
+    s.says(welcome(1, w.clock.now));
+    const asks = () => s.texts().filter((m) => m["t"] === "about").length;
+    s.says({ t: "about", v: 4, who: { at: "2026-11-25T10:00:00.000Z", present: [], resting: [], gone: [] } });
+    // A number missed: all of them asked for. Leaf may not have taken the ask (the page sent too
+    // much a moment ago): the changes still do not follow, and a few seconds on, it asks again.
+    s.says(change(6));
+    w.clock.elapsed += 1000;
+    s.says(change(7));
+    const early = asks();
+    // The machine's clock is set back meanwhile: how long since the last ask is not.
+    w.clock.now -= 3_600_000;
+    w.clock.elapsed += ABOUT_ASK_AGAIN;
+    s.says(change(8));
+    const again = asks();
+    // Given all of them: what follows is taken, and nothing more is asked.
+    s.says({ t: "about", v: 8, who: { at: "2026-11-25T10:00:08.000Z", present: [], resting: [], gone: [] } });
+    w.clock.elapsed += ABOUT_ASK_AGAIN;
+    s.says(change(9));
+    here(null);
+
+    expect([early, again, asks()]).toEqual([1, 2, 2]);
   });
 
   test("sends a stop or a jump at once, even with a move still waiting its turn", async () => {
