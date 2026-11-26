@@ -24,7 +24,7 @@ import { type FigureId, FIGURES, isFigureId, type Stars } from "@sequoia-leaf/ra
 import { MEMBER_IDS } from "@sequoia-leaf/raid/content/members.ts";
 import { ROOM_COUNT, worth } from "@sequoia-leaf/raid/content/rooms.ts";
 import { CALLINGS, KINS } from "@sequoia-leaf/raid/content/traits.ts";
-import { resolveFight } from "@sequoia-leaf/raid/fight/engine.ts";
+import { openFight, resolveFight } from "@sequoia-leaf/raid/fight/engine.ts";
 import type { FightSetup, FightSummary } from "@sequoia-leaf/raid/fight/types.ts";
 import { opposition } from "@sequoia-leaf/raid/foe.ts";
 import { COLS, HOME_ROWS } from "@sequoia-leaf/raid/hex.ts";
@@ -66,14 +66,19 @@ function swapped(party: Party, put: readonly (readonly [FigureId, Stars])[]): Pa
   return { ...party, figures };
 }
 
+/** The id a fight gives our figure at `seat`, as it seats everyone (`openFight`). */
+const seated = (setup: FightSetup, seat: number | undefined): number | undefined =>
+  seat === undefined ? undefined : openFight(setup).units.find((u) => u.side === 0 && u.seat === seat)?.id;
+
 class Score {
   fights = 0;
   won = 0;
   dealt = 0;
-  add(fight: FightSummary, kind?: FigureId): void {
+  /** A fight, and the damage of the figure measured (`id`, as `seated` finds it), never another of its kind on the board. */
+  add(fight: FightSummary, id?: number): void {
     this.fights++;
     if (fight.result === "win") this.won++;
-    if (kind) this.dealt += fight.units.find((u) => u.side === 0 && u.kind === kind && !u.summoned)?.dealt ?? 0;
+    if (id !== undefined) this.dealt += fight.units.find((u) => u.id === id)?.dealt ?? 0;
   }
   get say(): string {
     return String(Math.round(this.dealt / Math.max(1, this.fights))).padStart(6);
@@ -119,8 +124,13 @@ function table(title: string, fights: readonly Kept[], put: (kind: FigureId, sta
       const hard = new Score();
       for (const { setup, won: wonBefore } of fights) {
         const [ours, theirs] = setup.sides;
-        const fight = resolveFight({ seed: setup.seed, sides: [swapped(ours, put(kind, stars)), theirs] });
-        all.add(fight, kind);
+        const given = put(kind, stars);
+        const party = swapped(ours, given);
+        // The measured figure is the first put in, so the first of those added at the end.
+        const seat = party.figures[party.figures.length - given.length]?.seat;
+        const match: FightSetup = { seed: setup.seed, sides: [party, theirs] };
+        const fight = resolveFight(match);
+        all.add(fight, seated(match, seat));
         if (!wonBefore) hard.add(fight);
       }
       return `${pct(all.won, all.fights)} ${pct(hard.won, hard.fights).padStart(5)} ${all.say}`;
@@ -155,17 +165,16 @@ for (const kind of measured) {
     const score = new Score();
     for (let room = 0; room < ROOM_COUNT; room++) {
       for (let seed = 1; seed <= 40; seed++) {
+        const seat = freeSeat(kind, new Set());
         const ours: Party = {
           who: "alone",
           title: "",
           boons: [],
           might: 100,
-          figures: [{ kind, stars, seat: freeSeat(kind, new Set()), items: [], fed: 0 }],
+          figures: [{ kind, stars, seat, items: [], fed: 0 }],
         };
-        score.add(
-          resolveFight({ seed: seed * 31 + room, sides: [ours, opposition(seed * 977 + room, room, 0)] }),
-          kind,
-        );
+        const match: FightSetup = { seed: seed * 31 + room, sides: [ours, opposition(seed * 977 + room, room, 0)] };
+        score.add(resolveFight(match), seated(match, seat));
       }
     }
     return `${pct(score.won, score.fights)} ${score.say}`;
