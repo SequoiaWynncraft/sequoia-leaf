@@ -1195,6 +1195,16 @@ b.dmg.true {
 .ends > .k-btn {
   flex: 1 1 auto;
 }
+/* The line of the look tried: every look's line in one cell, the rest hidden, so the box never changes height. */
+.lookinfo {
+  display: grid;
+}
+.lookinfo > * {
+  grid-area: 1 / 1;
+}
+.lookinfo > [aria-hidden="true"] {
+  visibility: hidden;
+}
 .swatch {
   display: grid;
   place-items: center;
