@@ -84,4 +84,5 @@ export const GOOD_WITH: Readonly<Record<FigureId, Three>> = {
   kettle: ["stewpot", "glowthorn", "lichen"],
   crab23: ["stewpot", "glowthorn", "lichen"],
   apothecary: ["glowthorn", "stewpot", "mothlantern"],
+  "banner-1": ["stewpot", "glowthorn", "lichen"],
 };

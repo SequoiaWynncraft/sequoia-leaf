@@ -612,7 +612,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/fx.ts`                           | Sparks, leaves and rising words                                                                 |
 | `src/sprites.ts`, `src/ground.ts`     | The town's art                                                                                  |
 | `src/campart.ts`, `src/campground.ts` | The camp's art: the cabin, every thing, the pets, the clearing's floor                          |
-| `src/members.ts`                      | Who each banner's member is in a camp: their name and their figure, from Leaf                   |
+| `src/members.ts`                      | A banner's member in a camp: the thing takes their name and figure (the figures' `member.ts`)   |
 | `src/campsfx.ts`                      | The camp's own sounds                                                                           |
 
 The catalogue of camp things (`things.ts`), what is for sale (`catalogue.ts`), the mailbox

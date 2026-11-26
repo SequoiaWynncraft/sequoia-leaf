@@ -15,10 +15,11 @@ import {
   TROUBLE_IDS,
   type UnitKind,
 } from "@sequoia-leaf/raid/content/figures.ts";
+import { MEMBER_IDS } from "@sequoia-leaf/raid/content/members.ts";
 
 export function showSheet(): void {
   const zoom = 3;
-  const kinds: UnitKind[] = [...FIGURE_IDS, ...SUMMON_IDS, ...TROUBLE_IDS];
+  const kinds: UnitKind[] = [...FIGURE_IDS, ...MEMBER_IDS, ...SUMMON_IDS, ...TROUBLE_IDS];
   const wide = 424;
   const cells: { kind: UnitKind; x: number; y: number; w: number }[] = [];
   let x = 0;

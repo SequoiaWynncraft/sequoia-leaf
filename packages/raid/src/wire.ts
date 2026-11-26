@@ -6,14 +6,14 @@ import { BOON_IDS, isBoonId } from "./content/boons.ts";
  * A fight's outcome is read as Leaf decided it: the page plays the fight from its setup, and loads
  * again if its rules do not play it to that (`playsAsKept`).
  */
-import { BOSS_IDS, FIGURE_IDS, isBossId, isFigureId, isStars } from "./content/figures.ts";
+import { BOSS_IDS, isBossId, isFigureId, isStars } from "./content/figures.ts";
 import { FINISHED_IDS, isComponentId, isFinishedId, isItemId } from "./content/items.ts";
 import { baseOf, clothOf, isLookKind, lanternOf, readLooks } from "./content/looks.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS } from "./content/traits.ts";
 import type { RaidNote, RunView, TableView } from "./game.ts";
 import { type News, type Payout, readAlmanac, trailOpen } from "./outside.ts";
-import { readRoster } from "./own.ts";
+import { OWNABLE, readRoster } from "./own.ts";
 import { ACORNS_WHYS, type AcornsWhy, type Ending, type Note, type RunSummary, type Spot } from "./run.ts";
 import { fields, Nonsense, readRunView } from "./save.ts";
 
@@ -68,8 +68,8 @@ function summaryOf(v: unknown): RunSummary {
     cleared: whole(s.cleared, 0, ROOM_COUNT, what),
     reached: whole(s.reached, 0, ROOM_COUNT, what),
     bosses: each(s.bosses, isBossId, BOSS_IDS.length, what),
-    fielded: each(s.fielded, isFigureId, FIGURE_IDS.length, what),
-    threeStars: each(s.threeStars, isFigureId, FIGURE_IDS.length, what),
+    fielded: each(s.fielded, isFigureId, OWNABLE.length, what),
+    threeStars: each(s.threeStars, isFigureId, OWNABLE.length, what),
     forged: each(s.forged, isFinishedId, FINISHED_IDS.length, what),
     topped: each(s.topped, isTraitId, TRAIT_IDS.length, what),
   };

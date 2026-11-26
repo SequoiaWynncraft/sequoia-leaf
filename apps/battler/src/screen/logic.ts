@@ -366,9 +366,9 @@ export function rackHas(run: RunView, item: FinishedId): "item" | "parts" | null
   return loose.some((c, i) => i !== at && c === b) ? "parts" : null;
 }
 
-/** Every figure of a trait, cheapest first, in the order of the roster within a tier. */
-export const membersOf = (trait: TraitId): FigureId[] =>
-  FIGURE_IDS.filter((id) => traitsOf(id).includes(trait)).toSorted((a, b) => FIGURES[a].tier - FIGURES[b].tier);
+/** Every figure of a trait among some (all twenty-eight, unless said), cheapest first, in their own order within a tier. */
+export const membersOf = (trait: TraitId, among: readonly FigureId[] = FIGURE_IDS): FigureId[] =>
+  among.filter((id) => traitsOf(id).includes(trait)).toSorted((a, b) => FIGURES[a].tier - FIGURES[b].tier);
 
 /** A name at the start of a sentence or a line: "a Moth" is "A Moth" there. */
 export const opening = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);

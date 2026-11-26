@@ -1,4 +1,4 @@
-import { framesOf, portrait } from "@sequoia-leaf/figures/sprites.ts";
+import { framesOf, nameOf, portrait } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The tally as the page shows it: what every figure in a fight did, a row each, "You" on the left
  * and the other party on the right (one at a time on an upright phone, with a switch). Each row is
@@ -21,7 +21,6 @@ import {
   MEASURES,
   partsOf,
   type Party,
-  specOf,
   type Unit,
   type UnitKind,
 } from "@sequoia-leaf/raid";
@@ -70,10 +69,12 @@ export const partyName = (party: Pick<Party, "who" | "by">): HTMLElement =>
  * A figure's small picture for a row, at most 18 by 12 of its pixels: small figures whole, taller
  * ones from the top (their heads), and the bosses at half size, so every row is the same height.
  */
-const heads = new Map<UnitKind, HTMLCanvasElement>();
+const heads = new Map<HTMLCanvasElement, HTMLCanvasElement>();
 function headOf(kind: UnitKind): HTMLCanvasElement {
-  const kept = heads.get(kind) ?? cutHead(kind);
-  heads.set(kind, kept);
+  // Kept by the picture it was cut from: a banner's member is cut again once they are drawn as themselves.
+  const whole = framesOf(kind).idle[0];
+  const kept = heads.get(whole) ?? cutHead(kind);
+  heads.set(whole, kept);
   // A copy for each row: one picture cannot be in two rows at once.
   const { c, g } = makeCanvas(kept.width, kept.height);
   g.drawImage(kept, 0, 0);
@@ -200,7 +201,7 @@ export function tallyView(refOf: (id: number) => string, cls = ""): TallyView {
       "tv-row",
       { "data-kind": u.kind, "data-id": u.id, tabindex: "0" },
       el("span", "tv-pic", {}, pic(headOf(u.kind))),
-      el("span", "tv-name", { text: specOf(u.kind).name }),
+      el("span", "tv-name", { text: nameOf(u.kind) }),
       bar,
       n,
       star,

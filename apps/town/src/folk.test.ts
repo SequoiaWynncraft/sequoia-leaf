@@ -43,7 +43,6 @@ const MEMBERS_ONLY: Readonly<Record<string, string>> = {
   "apps/town/src/aboutui.ts": "the faces of those listed in Who is about, members and guests alone",
   "apps/town/src/tallyui.ts": "the faces of those on the Tally's boards, members and guests alone",
   "apps/town/src/campart.ts": "the pictures of a banner's member standing in a camp, each way they look",
-  "apps/town/src/members.ts": "a banner's member in a camp, from their own skin, or their made-up look until it loads",
   "apps/town/src/signpost.ts": "the faces of the camps' owners at the signpost, members and guests alone",
   "apps/town/src/mailbox.ts": "the faces of a camp's visitors in its mailbox, members and guests alone",
   "apps/town/src/hud.ts": "the face of the owner of a camp visited, a member or a guest",
@@ -91,7 +90,6 @@ describe("the town's own", () => {
           "apps/town/src/players.ts",
           "apps/town/src/main.ts",
           "apps/town/src/aboutui.ts",
-          "apps/town/src/members.ts",
           "apps/town/src/grovescene.ts",
         ]).toContain(path);
     // And one of the town's own is only ever made as itself.

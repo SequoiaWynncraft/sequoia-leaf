@@ -33,7 +33,8 @@ export {
   type UnitKind,
   type UnitSpec,
 } from "./content/figures.ts";
-export { levelOf, placedOf, type Roster, rosterOf, stallOdds, stallPool } from "./own.ts";
+export { figuresFor, levelOf, OWNABLE, placedOf, type Roster, rosterOf, stallOdds, stallPool } from "./own.ts";
+export { isMemberId, MEMBER_IDS, type MemberId } from "./content/members.ts";
 export {
   CALLINGS,
   type CallingId,

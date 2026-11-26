@@ -93,6 +93,26 @@ the three dearest carry a third trait.
 | 5    | Orphion          | Mist    | Fang + Sage    | 700    | 62     | 1     | **Antlers Ring.** Its gold antlers ring: 160 magic damage to every enemy within two hexes, and the whole party attacks 12% faster for 4 seconds.      |
 | 5    | Hearth Cat       | Ember   | Sneak + Fang   | 700    | 66     | 1     | **Off The Table.** Looks at its target, then bats it off its hex: 240 physical damage, knocked back 2 hexes, stunned for 1.5 seconds.                 |
 
+**A banner's member.** Each pull banner has one more figure, which is a guild member
+(`content/members.ts`: `MEMBER_IDS`, by the banner's id). It is a figure like any other, at five
+acorns, and not one of the twenty-eight (`FIGURE_IDS`): the main way's stall never offers it, no
+regular brings it, a board holding it is not met on the main way, and the almanac does not count
+it. Only a run with the member's own figures sells it, to a member who has pulled it (below). Its
+name in the rules is "A guild member"; the page gives it the member's name and their picture.
+
+| Tier | Figure         | Kin     | Calling | Health | Attack | Reach | Ability (one star)                                                                                                                                          |
+| ---- | -------------- | ------- | ------- | ------ | ------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5    | A guild member | Feather | Mender  | 640    | 46     | 3     | **On My Way.** Runs over to the friend who is most hurt and stands by them: 260 health back for the friend, and a shield of 180 for 4 seconds on them both. |
+
+It comes up on a free hex touching the friend, the one furthest from the enemy nearest them; with
+no free hex it stays where it is, and with nobody else left it heals and shields itself. Measured
+as the twenty-eight were (first trail): alone at one, two and three stars it wins 17%, 26% and 51%
+of the fifteen rooms (Greg 15, 32, 60; Orphion 14, 32, 51; the Hearth Cat 15, 26, 41); swapped for
+the cheapest figure of 5,089 boards the bots set out with, those are won 70% of the time with it
+at one star and 88% at two (Greg 77 and 93, Orphion 71 and 91, the Hearth Cat 71 and 89; 63%
+without); and in 3,200 runs with it on the stall, fights with it fielded are won 15 points more
+often than the same rooms without regard to it (Greg 19, Orphion 8, the Hearth Cat 7).
+
 **Traits.** A trait switches on when the party fields enough _different_ figures that carry it;
 copies of one figure count once, however many emblems they hold. A figure carries its own traits
 and the kin of any emblem it holds. Every kin has four members, one of them at one acorn and one at
@@ -225,7 +245,7 @@ A member's fight at a sparring room leaves the party it was decided from (side 0
 other members to meet there (`Done.keep`, at `boardSlot`: `board:<trail>:<room>`, the room's place
 in `ROOMS`), the newest over the older. A run with the member's own figures leaves and meets its
 boards apart (`own:<trail>:<room>`), with their levels; a board met on the main way never has a
-level. A guest's leaves nothing, and trouble and bosses keep
+level, nor a banner's member: one that holds one is not met. A guest's leaves nothing, and trouble and bosses keep
 nothing. A `take` that moves the run on to a sparring room (`takenTo`: a lost last room is fought
 again, and a run whose takings end it moves nowhere) asks Leaf for a board left there (`meets`),
 and Leaf hands it one, picked by its dice, with the member's Leaf id, their name, and how many
@@ -276,11 +296,12 @@ member owns: not the stall, not the odds, not a number.
 A run with the member's own figures writes down their roster as it starts (`run.own`, `Roster`):
 each figure they have pulled and its level, copies pulled less one, 6 at most (`LEVELS`). Leaf tells
 the table what was pulled as awards (`rosterOf`: `pull:figure:<id>` is the figure, and
-`copies:figure:<id>:<n>` its nth copy). The run keeps that roster to its end, whatever is pulled
+`copies:figure:<id>:<n>` its nth copy; `pull:headliner:<banner>` and `copies:headliner:<banner>:<n>`
+are that banner's member). The run keeps that roster to its end, whatever is pulled
 meanwhile. A member who has pulled no figure is refused (`nothing_pulled`).
 
 - The stall sells every one-acorn figure, and above one acorn only the figures in the roster
-  (`stallPool`). The odds by level are the table's, with the share of a cost the roster has nothing
+  (`stallPool`), a banner's member among them (`figuresFor`). The odds by level are the table's, with the share of a cost the roster has nothing
   of going to the others (`stallOdds`). The opening pick is from the one-acorn figures.
 - A level is 3% more health and attack, 18% at most, on that figure wherever it stands in the run;
   a one-acorn figure not pulled is level 0. It multiplies with stars and with what items add, and
@@ -341,6 +362,7 @@ it would send. `encodeTable` and `decodeTable` are the table as Leaf stores it.
 | File                   | What it holds                                                                                                         |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `content/figures.ts`   | The 28 figures, the forest's trouble and bosses, and the summoned: names, numbers, ability sentences, quips           |
+| `content/members.ts`   | The banners' members: for each pull banner, a figure that is a guild member                                           |
 | `content/traits.ts`    | Kins and callings: steps, sentences, numbers                                                                          |
 | `content/items.ts`     | Components, finished items, emblems, what forges into what, how a figure holds them                                   |
 | `content/boons.ts`     | The boons                                                                                                             |

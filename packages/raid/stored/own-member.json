@@ -1,0 +1,307 @@
+{
+  "game": "little-raid-table",
+  "v": 2,
+  "rng": 3730226279,
+  "runs": 1,
+  "run": {
+    "seed": 1576608662,
+    "rng": 1349891779,
+    "trail": 0,
+    "room": 6,
+    "stage": {
+      "phase": "plan",
+      "picks": []
+    },
+    "resolve": 16,
+    "acorns": 25,
+    "streak": -1,
+    "level": 4,
+    "xp": 6,
+    "board": [
+      null,
+      {
+        "id": 12,
+        "kind": "banner-1",
+        "stars": 1,
+        "items": [],
+        "fed": 0
+      },
+      {
+        "id": 10,
+        "kind": "barrowgnome",
+        "stars": 1,
+        "items": [],
+        "fed": 0
+      },
+      {
+        "id": 7,
+        "kind": "rock",
+        "stars": 1,
+        "items": ["gnomecharm"],
+        "fed": 0
+      },
+      {
+        "id": 1,
+        "kind": "crab7",
+        "stars": 2,
+        "items": ["wasptail"],
+        "fed": 0
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "bench": [
+      {
+        "id": 11,
+        "kind": "barrowgnome",
+        "stars": 1,
+        "items": [],
+        "fed": 0
+      },
+      {
+        "id": 4,
+        "kind": "emberkit",
+        "stars": 2,
+        "items": ["wasptail"],
+        "fed": 0
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "items": [],
+    "stall": ["badger", "banner-1", "kettle", "barrowgnome", "rock"],
+    "held": false,
+    "rustles": 1,
+    "bought": 0,
+    "boons": ["headstart", "gnomecharm"],
+    "foe": {
+      "who": "The forest",
+      "title": "A stiff wind",
+      "figures": [
+        {
+          "kind": "mud",
+          "stars": 2,
+          "seat": 3,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "bramble",
+          "stars": 2,
+          "seat": 2,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "wasp",
+          "stars": 2,
+          "seat": 5,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "gust",
+          "stars": 2,
+          "seat": 15,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "gust",
+          "stars": 2,
+          "seat": 19,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "magpie",
+          "stars": 2,
+          "seat": 17,
+          "items": [],
+          "fed": 0
+        }
+      ],
+      "boons": [],
+      "might": 100
+    },
+    "record": [
+      {
+        "room": 0,
+        "kind": "trouble",
+        "result": "win",
+        "standing": [1, 0],
+        "boss": null
+      },
+      {
+        "room": 1,
+        "kind": "trouble",
+        "result": "win",
+        "standing": [2, 0],
+        "boss": null
+      },
+      {
+        "room": 2,
+        "kind": "spar",
+        "result": "win",
+        "standing": [3, 0],
+        "boss": null
+      },
+      {
+        "room": 3,
+        "kind": "spar",
+        "result": "win",
+        "standing": [3, 0],
+        "boss": null
+      },
+      {
+        "room": 4,
+        "kind": "boss",
+        "result": "win",
+        "standing": [4, 0],
+        "boss": "oldbramble"
+      },
+      {
+        "room": 5,
+        "kind": "spar",
+        "result": "loss",
+        "standing": [0, 2],
+        "boss": null
+      }
+    ],
+    "nextId": 13,
+    "last": {
+      "seed": 2227941144,
+      "sides": [
+        {
+          "who": "You",
+          "title": "",
+          "figures": [
+            {
+              "kind": "banner-1",
+              "stars": 1,
+              "seat": 1,
+              "items": [],
+              "fed": 0,
+              "level": 2
+            },
+            {
+              "kind": "barrowgnome",
+              "stars": 1,
+              "seat": 2,
+              "items": [],
+              "fed": 0
+            },
+            {
+              "kind": "rock",
+              "stars": 1,
+              "seat": 3,
+              "items": ["gnomecharm"],
+              "fed": 0
+            },
+            {
+              "kind": "crab7",
+              "stars": 2,
+              "seat": 4,
+              "items": ["wasptail"],
+              "fed": 0
+            }
+          ],
+          "boons": ["headstart"],
+          "might": 100
+        },
+        {
+          "who": "Orphion",
+          "title": "brought Gnome Sneaks",
+          "figures": [
+            {
+              "kind": "lanterngnome",
+              "stars": 2,
+              "seat": 17,
+              "items": ["glowcap"],
+              "fed": 0
+            },
+            {
+              "kind": "mossmote",
+              "stars": 2,
+              "seat": 16,
+              "items": [],
+              "fed": 0
+            },
+            {
+              "kind": "glorp",
+              "stars": 2,
+              "seat": 3,
+              "items": [],
+              "fed": 0
+            },
+            {
+              "kind": "moth",
+              "stars": 1,
+              "seat": 18,
+              "items": [],
+              "fed": 0
+            }
+          ],
+          "boons": [],
+          "might": 100
+        }
+      ]
+    },
+    "own": {
+      "banner-1": 2,
+      "greg": 0,
+      "slug": 1,
+      "kettle": 0,
+      "rock": 0,
+      "badger": 0
+    },
+    "seen": {
+      "fielded": ["crab7", "emberkit", "rock", "barrowgnome", "banner-1"],
+      "threeStars": [],
+      "forged": ["wasptail"],
+      "topped": []
+    }
+  },
+  "almanac": {
+    "fielded": [],
+    "threeStars": [],
+    "forged": [],
+    "topped": [],
+    "bosses": [[], [], []],
+    "best": [0, 0, 0],
+    "runs": 0
+  },
+  "trail": 0,
+  "looks": {
+    "cloth": "bare",
+    "lantern": "iron",
+    "bases": "plain",
+    "owned": []
+  }
+}

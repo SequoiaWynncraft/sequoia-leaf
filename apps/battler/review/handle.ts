@@ -29,7 +29,7 @@ import {
   type TableView,
 } from "@sequoia-leaf/raid";
 
-import { fightState } from "../src/screen/fightview.ts";
+import { fightEvents, fightState } from "../src/screen/fightview.ts";
 import { carryOn, enterRun, lookBack, setOut, startNew, toFront } from "../src/screen/flow.ts";
 import { grab, hover, tapPawn, unpick } from "../src/screen/hand.ts";
 import { heldRow, heldTop } from "../src/screen/held.ts";
@@ -52,6 +52,7 @@ import {
   waitingForLeaf,
 } from "../src/screen/state.ts";
 import { sheetUp } from "../src/screen/ui/fightsheet.ts";
+import { meetMember } from "../src/screen/ui/own.ts";
 import { type PageId, renderPages, showPage } from "../src/screen/ui/pages.ts";
 import { redrawTallies, TV } from "../src/screen/ui/tally.ts";
 
@@ -62,6 +63,8 @@ export interface Handle {
   start(seed: number, trail?: number, own?: boolean): Promise<string>;
   /** Has the member hold what pulling these copies of each figure awards (`{ greg: 3 }`), where the play server stages it. */
   pulled(copies: Record<string, number>): Promise<void>;
+  /** Has the nth of the play server's other members be the first banner's member (null: nobody), and asks who it is again. */
+  member(n: number | null): Promise<void>;
   /** A new member: the play server forgets the table, and the page takes the new one. */
   fresh(): Promise<void>;
   /** The bot plays this many whole rooms, unseen, and the table shows the room after them. */
@@ -78,6 +81,8 @@ export interface Handle {
   tick(steps: number): string;
   /** Moves a fight on until an ability has hexes lit and something is in the air (or a number of steps has passed). */
   busy(most?: number): string;
+  /** Moves a fight on until a figure of a kind has used its ability (or a number of steps has passed). */
+  casts(kind: string, most?: number): string;
   /** Counts every first-time nudge as given, so that none shows. */
   taught(): void;
   /** Stops the stage's clock, so that only `skip` and `tick` move it; and runs it on by hand. */
@@ -260,6 +265,14 @@ export function openHandle(): void {
       await staged({ pulled: copies });
       renderPages(true);
     },
+    async member(n) {
+      await askLeaf("/test/play/pulls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: [{ headliner: n }] }),
+      });
+      await meetMember();
+    },
     async fresh() {
       await staged({ fresh: true });
       S.prefs.taught = [];
@@ -305,6 +318,12 @@ export function openHandle(): void {
       stage.skip(2 / (HZ * S.prefs.speed));
       const f = fightState();
       return `${f.stage} ${f.tick}: ${f.lit} lit, ${f.thrown} thrown`;
+    },
+    casts(kind, most = 900) {
+      const cast = (): boolean => fightEvents().some((ev) => ev.t === "cast" && ev.kind === kind);
+      for (let i = 0; i < most && !cast() && !fightState().over; i++) stage.skip(1 / (HZ * S.prefs.speed));
+      stage.skip(3 / (HZ * S.prefs.speed));
+      return `${fightState().tick}: ${cast() ? "cast" : "no cast"}`;
     },
     taught() {
       for (const id of NUDGES) if (!S.prefs.taught.includes(id)) S.prefs.taught.push(id);

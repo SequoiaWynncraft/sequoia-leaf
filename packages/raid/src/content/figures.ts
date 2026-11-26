@@ -12,6 +12,7 @@
  * and `short` is what a card on the table shows: effects and numbers only, in at most two short
  * fragments.
  */
+import { type MemberId, MEMBERS } from "./members.ts";
 import type { CallingId, KinId, TraitId } from "./traits.ts";
 
 /** What health and attack are multiplied by at one, two and three stars. */
@@ -95,9 +96,11 @@ export const FIGURE_IDS = [
   "whitefox",
   "hearthcat",
 ] as const;
-export type FigureId = (typeof FIGURE_IDS)[number];
+/** A figure a member can field: one of the twenty-eight, or a banner's member (`members.ts`). */
+export type FigureId = (typeof FIGURE_IDS)[number] | MemberId;
 
 export const FIGURES: Record<FigureId, FigureSpec> = {
+  ...MEMBERS,
   // ---------- one acorn ----------
   emberkit: {
     name: "Emberkit",
@@ -1031,16 +1034,13 @@ const has = <K extends string>(table: Readonly<Record<K, unknown>>, v: unknown):
 export const isFigureId = (v: unknown): v is FigureId => has(FIGURES, v);
 export const isSummonId = (v: unknown): v is SummonId => has(SUMMONS, v);
 export const isTroubleId = (v: unknown): v is TroubleId => has(TROUBLE, v);
-export const isUnitKind = (v: unknown): v is UnitKind => isFigureId(v) || isSummonId(v) || isTroubleId(v);
+/** The numbers and words for anyone who can stand on the board. */
+const EVERYONE: Record<UnitKind, UnitSpec> = { ...FIGURES, ...SUMMONS, ...TROUBLE };
+export const specOf = (kind: UnitKind): UnitSpec => EVERYONE[kind];
+export const isUnitKind = (v: unknown): v is UnitKind => has(EVERYONE, v);
 export const isBossId = (v: unknown): v is BossId => BOSS_IDS.some((b) => b === v);
 export const isStars = (v: unknown): v is Stars => v === 1 || v === 2 || v === 3;
 
-/** The numbers and words for anyone who can stand on the board. */
-export function specOf(kind: UnitKind): UnitSpec {
-  if (isFigureId(kind)) return FIGURES[kind];
-  if (isSummonId(kind)) return SUMMONS[kind];
-  return TROUBLE[kind];
-}
 /** A figure's traits: its kin, its calling, and a third if it has one. */
 export const traitsOf = (kind: FigureId): readonly TraitId[] => {
   const f = FIGURES[kind];

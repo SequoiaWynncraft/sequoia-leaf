@@ -7,6 +7,7 @@
  * and sends every move there as a command. Inside the town it says when it is ready, and sends news
  * worth a line in the town's feed.
  */
+import { nameOf } from "@sequoia-leaf/figures/sprites.ts";
 import { refresh, settle } from "@sequoia-leaf/kit/card.ts";
 import { keepLeaf, serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
@@ -15,7 +16,7 @@ import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
-import { FIGURES } from "@sequoia-leaf/raid";
+import type { RaidNote } from "@sequoia-leaf/raid";
 
 import { onTraitWoke, stepFightView } from "./screen/fightview.ts";
 import {
@@ -46,6 +47,7 @@ import { registerCards } from "./screen/ui/cards.ts";
 import { onCarry, placeSheet, registerFought } from "./screen/ui/fightsheet.ts";
 import { openLight } from "./screen/ui/lit.ts";
 import { renderNudge, stepNudge } from "./screen/ui/nudge.ts";
+import { meetMember } from "./screen/ui/own.ts";
 import { openPages, pagesClick, renderPages, showPage } from "./screen/ui/pages.ts";
 import { renderPicks } from "./screen/ui/picks.ts";
 import { buildTable, placeFoe, renderTable, stepTable, toast, wakeChip } from "./screen/ui/table.ts";
@@ -65,6 +67,15 @@ function closing(): void {
 /** Sets out from the front page, which goes once Leaf has laid the run out. */
 async function setOutOn(trail: number, own: boolean): Promise<void> {
   if (await startNew(trail, own)) showPage(null);
+}
+
+/** The member's first three-star figure ever is worth a line in the town. */
+function tellFirstThreeStars(notes: readonly RaidNote[]): void {
+  for (const note of notes) {
+    const first = S.almanac.threeStars.length === 0 && S.run?.seen.threeStars.length === 1;
+    if (note.t === "merged" && note.stars === 3 && first)
+      tell({ town: "news", text: `A first three-star figure at the stump: ${nameOf(note.kind)}.`, tone: "gold" });
+  }
 }
 
 async function boot(): Promise<void> {
@@ -89,6 +100,8 @@ async function boot(): Promise<void> {
   const menu = startSettings(scope(), lookBack);
   registerCards();
   registerFought();
+  // Who each banner's member is: their figure is nobody yet until Leaf has said.
+  void meetMember();
   onCarry(carryOn, lookBack);
   buildTable({
     rustle: () => void doRustle(),
@@ -118,17 +131,7 @@ async function boot(): Promise<void> {
   // What the rules say happened is acted out by the figures, then the interface is drawn again.
   onNotes((notes) => {
     hearNotes(notes);
-    for (const note of notes) {
-      // The member's first three-star figure ever is worth a line in the town.
-      const first = S.almanac.threeStars.length === 0 && S.run?.seen.threeStars.length === 1;
-      if (note.t === "merged" && note.stars === 3 && first) {
-        tell({
-          town: "news",
-          text: `A first three-star figure at the stump: ${FIGURES[note.kind].name}.`,
-          tone: "gold",
-        });
-      }
-    }
+    tellFirstThreeStars(notes);
   });
   onChange(() => {
     if (S.screen.at === "plan") syncPawns(S.run);

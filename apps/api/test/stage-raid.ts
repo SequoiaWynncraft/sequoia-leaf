@@ -5,7 +5,8 @@
  * name, figures pulled). Only the play server on this machine (`play.ts`) serves it, at
  * `POST /test/play/raid`; the guild's own Leaf has no such route.
  *
- * `{ pulled: { greg: 3 } }` has Tester hold the awards of three copies of Greg pulled, and
+ * `{ pulled: { greg: 3 } }` has Tester hold the awards of three copies of Greg pulled (a banner's
+ * member by its banner, `{ "banner-1": 2 }`), and
  * `{ start: { seed, trail, own: true } }` sets out with the figures pulled; `{ fresh: true }` is a
  * member who has pulled nothing.
  */
@@ -15,6 +16,7 @@ import {
   isComponentId,
   isFigureId,
   isFinishedId,
+  isMemberId,
   RAID,
   type Roster,
   rosterOf,
@@ -80,16 +82,17 @@ export const stageRaid = (playerId: PlayerId, ops: readonly unknown[]) =>
     })(playerId);
     if (ops.some((op) => isRecord(op) && op.fresh === true)) {
       yield* sql`DELETE FROM play_state WHERE player_id = ${playerId} AND game = 'raid'`;
-      yield* sql`DELETE FROM awards WHERE player_id = ${playerId} AND (id LIKE 'pull:figure:%' OR id LIKE 'copies:figure:%')`;
+      yield* sql`DELETE FROM awards WHERE player_id = ${playerId} AND (id LIKE 'pull:figure:%' OR id LIKE 'copies:figure:%' OR id LIKE 'pull:headliner:%' OR id LIKE 'copies:headliner:%')`;
       return [];
     }
-    // What Tester has pulled, as the pulls award it: each figure, and each further copy.
+    // What Tester has pulled, as the pulls award it: each figure or banner's member, and each further copy.
     const pulled = ops.flatMap((op) => (isRecord(op) && isRecord(op.pulled) ? Object.entries(op.pulled) : []));
-    const won = pulled.flatMap(([id, copies]) =>
-      Array.from({ length: whole(copies, 1, 99) ?? 0 }, (_, i) =>
-        i === 0 ? `pull:figure:${id}` : `copies:figure:${id}:${i + 1}`,
-      ),
-    );
+    const won = pulled.flatMap(([id, copies]) => {
+      const prize = isMemberId(id) ? `headliner:${id}` : `figure:${id}`;
+      return Array.from({ length: whole(copies, 1, 99) ?? 0 }, (_, i) =>
+        i === 0 ? `pull:${prize}` : `copies:${prize}:${i + 1}`,
+      );
+    });
     for (const id of won) {
       yield* sql`INSERT OR IGNORE INTO awards (player_id, id, at) VALUES (${playerId}, ${id}, ${Date.now()})`;
     }

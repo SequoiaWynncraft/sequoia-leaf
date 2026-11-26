@@ -326,6 +326,8 @@ body[data-picking="yes"] #foe {
 #stall.tight .offer .name {
   font: var(--f-small);
   min-height: calc(var(--t-s) * 2);
+  /* A member's name may be one long word: it goes onto the second line there, never cut. */
+  overflow-wrap: anywhere;
 }
 .offer .foot {
   display: flex;
@@ -1199,10 +1201,17 @@ b.dmg.true {
   .offer.gone {
     min-height: calc(var(--u) * 56);
   }
+  /* A figure's card: its level and stars over its price, which leaves its name the width a member's name needs. */
+  .fside .k-row.tight {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: calc(var(--u) * 30);
+  }
   /* Five to a row on a phone: a name is small there, where the usual size cannot fit. */
   .offer .name {
     font: var(--f-small);
     min-height: calc(var(--t-s) * 2);
+    overflow-wrap: anywhere;
   }
   .offer .foot {
     justify-content: center;
