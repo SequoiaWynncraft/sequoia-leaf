@@ -2,8 +2,9 @@ name: News
 
 # Each patch note a merge to main adds to the town's News tab (apps/town/src/notes.json) is posted
 # to Discord, by every webhook kept as the secrets NEWS_WEBHOOK and NEWS_WEBHOOK_2. A secret that is
-# not set is skipped; without either, nothing is posted. A webhook that fails does not stop the
-# other from getting the notes, but fails the run. A note changed after it was posted is not posted again.
+# not set is skipped; without either, nothing is posted. A webhook that fails, or takes over 15 s,
+# does not stop the other from getting the notes, but fails the run. A note changed after it was
+# posted is not posted again.
 on:
   push:
     branches: [main]
@@ -18,7 +19,7 @@ concurrency:
 jobs:
   post:
     runs-on: ubuntu-24.04
-    timeout-minutes: 2
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -54,8 +55,8 @@ jobs:
           failed=0
           for name in "${hooks[@]}"; do
             while read -r message; do
-              if ! curl -fsS -o /dev/null -H 'Content-Type: application/json' --data "$message" "${!name}"; then
-                echo "::error::$name refused a note."
+              if ! curl -fsS --max-time 15 -o /dev/null -H 'Content-Type: application/json' --data "$message" "${!name}"; then
+                echo "::error::$name did not take a note."
                 failed=1
               fi
               sleep 1
