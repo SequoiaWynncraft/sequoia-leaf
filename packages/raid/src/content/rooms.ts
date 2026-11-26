@@ -57,6 +57,15 @@ export const STALL_ODDS: readonly (readonly [number, number, number, number, num
   [12, 20, 30, 28, 10],
 ];
 
+/**
+ * A figure's level, in a run with the member's own figures (`own.ts`): one for each copy pulled
+ * after the first, `most` at most, each `boost` percent more health and attack. It is not a star:
+ * stars are made in the run, and multiply with it.
+ */
+export const LEVELS = { most: 6, boost: 3 } as const;
+/** How much more health and attack a level gives, in percent. */
+export const levelBoost = (level: number): number => level * LEVELS.boost;
+
 /** What a figure sells for: its price at one star, a little less than was paid at two and three. */
 export const sellPrice = (tier: number, stars: Stars): number =>
   stars === 1 ? tier : stars === 2 ? tier * 3 - 1 : tier * 9 - 2;

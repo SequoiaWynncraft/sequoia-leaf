@@ -26,6 +26,8 @@ export interface Placed {
   items: ItemId[];
   /** How many times Greg has eaten. */
   fed: number;
+  /** Its level (`LEVELS`), in a run with the member's own figures; absent for 0. */
+  level?: number;
 }
 export interface Party {
   /** Whose it is: a handle, or a name for the trouble. */
@@ -109,7 +111,8 @@ export function isPlaced(v: unknown): v is Placed {
     Array.isArray(v.items) &&
     v.items.length <= HOLDS &&
     v.items.every(isItemId) &&
-    isWhole(v.fed, 0, 1000)
+    isWhole(v.fed, 0, 1000) &&
+    (v.level === undefined || isWhole(v.level, 1, 99))
   );
 }
 /** Whether a party says whose it is (and, for a member's own board, their id) and has a line about it. */

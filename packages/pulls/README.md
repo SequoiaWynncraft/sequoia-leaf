@@ -33,7 +33,9 @@ them is in this package.
 
 What a prize is, once won, is the other games' to say, from the award (`pull:<prize>`): the town
 puts a figure in the camp's Storage once (its thing `figure-<id>`), and for a `headliner:` the
-banner's member (`member-<banner>`). A second copy of a prize brings nothing but its Seeds.
+banner's member (`member-<banner>`). Each further copy of a prize, up to the seventh, is an award
+of its own (`copies:<prize>:<n>`, n from 2 to 7): The Little Raid reads a figure's level from them,
+for a raid with the member's own figures.
 
 Before the pools gave figures they gave the town's things (`thing:<id>`) and the raid table's looks
 (`look:<id>`). `EARLIER` lists those with the rarity each had. None is in a pool or to be had for
@@ -66,5 +68,5 @@ and numbers, and nothing is refused: a counter past certainty is certain on the 
 pulls past the most wait as the most, a longer history keeps its last pulls, and a prize or pool
 these rules do not know (a banner retired, its headliner, a figure gone from the raid) is kept as it
 was won. Only the Treasury's wares, which went before any of this, are dropped. `stored/` holds
-states as Leaf stores them, frozen; `src/stored.test.ts` fails if a change stops one reading. `awards` is `pull:<prize>` for each prize held; `standing` is the number of different prizes, with
+states as Leaf stores them, frozen; `src/stored.test.ts` fails if a change stops one reading. `awards` is `pull:<prize>` for each prize held and `copies:<prize>:<n>` for each further copy up to the seventh; `standing` is the number of different prizes, with
 pulls ever and top-tier prizes won; each top-tier prize is logged as `pulls_top`.

@@ -3631,8 +3631,12 @@ describe("pulls", () => {
     expect((await ledgerOf(alice)).slice(1)).toEqual([spent]);
     const have = PULLS.decode((await storedIn("pulls"))[0]?.state ?? "")?.have ?? {};
     expect(Object.values(have).reduce((sum, n) => sum + n, 0)).toBe(10);
+    // Each prize once, and each further copy of one by a name of its own.
+    const copies = Object.entries(have).flatMap(([id, n]) =>
+      Array.from({ length: n - 1 }, (_, i) => `copies:${id}:${i + 2}`),
+    );
     expect(new Set((await awarded(alice)).map((a) => a.id))).toEqual(
-      new Set(Object.keys(have).map((id) => `pull:${id}`)),
+      new Set([...Object.keys(have).map((id) => `pull:${id}`), ...copies]),
     );
   });
 

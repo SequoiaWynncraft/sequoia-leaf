@@ -223,7 +223,9 @@ or sent) and is exactly what a fight takes.
 
 A member's fight at a sparring room leaves the party it was decided from (side 0 of its setup) for
 other members to meet there (`Done.keep`, at `boardSlot`: `board:<trail>:<room>`, the room's place
-in `ROOMS`), the newest over the older. A guest's leaves nothing, and trouble and bosses keep
+in `ROOMS`), the newest over the older. A run with the member's own figures leaves and meets its
+boards apart (`own:<trail>:<room>`), with their levels; a board met on the main way never has a
+level. A guest's leaves nothing, and trouble and bosses keep
 nothing. A `take` that moves the run on to a sparring room (`takenTo`: a lost last room is fought
 again, and a run whose takings end it moves nowhere) asks Leaf for a board left there (`meets`),
 and Leaf hands it one, picked by its dice, with the member's Leaf id, their name, and how many
@@ -267,6 +269,30 @@ and the furthest room met on each trail. None of it changes a fight or the stall
 figures can be offered to everyone from their first run (`STALL_POOL`). The next trail opens when the
 last is cleared.
 
+**Two ways to set out.** `start` says which: with all figures (what everything above describes), or
+with `own: true` the figures the member has pulled at the Grove. The first never reads anything a
+member owns: not the stall, not the odds, not a number.
+
+A run with the member's own figures writes down their roster as it starts (`run.own`, `Roster`):
+each figure they have pulled and its level, copies pulled less one, 6 at most (`LEVELS`). Leaf tells
+the table what was pulled as awards (`rosterOf`: `pull:figure:<id>` is the figure, and
+`copies:figure:<id>:<n>` its nth copy). The run keeps that roster to its end, whatever is pulled
+meanwhile. A member who has pulled no figure is refused (`nothing_pulled`).
+
+- The stall sells every one-acorn figure, and above one acorn only the figures in the roster
+  (`stallPool`). The odds by level are the table's, with the share of a cost the roster has nothing
+  of going to the others (`stallOdds`). The opening pick is from the one-acorn figures.
+- A level is 3% more health and attack, 18% at most, on that figure wherever it stands in the run;
+  a one-acorn figure not pulled is level 0. It multiplies with stars and with what items add, and
+  it is not a star. Each figure of a party carries its level (`Placed.level`, absent for 0), so a
+  fight says the same thing every time it is played from its setup.
+- Sparring partners, the forest and the bosses are as on the main way.
+- It pays Coins as any run does, and is written nowhere else: not into the almanac, so it carves
+  no trophy, moves no standing and opens no trail (a trail is open to it once the main way has
+  opened it). Its log lines carry `own: true`, and add nothing to the Tally's counters.
+
+`TableView.roster` is the roster a run would start with now, for the front page and the almanac.
+
 ## Chance
 
 Every draw a run makes comes from its stream (`run.rng`, core's `rng.ts`): the first picks, the stall, who
@@ -281,7 +307,7 @@ anything, so nothing a command draws can be worked out beforehand from what the 
 `RAID` is the game's `Game` (`packages/core/src/play.ts`), for Leaf's play service. Its state, the
 `Table`, is the run in hand (or none), the almanac, the looks (`content/looks.ts`), the trail picked
 on the front page, the number of runs begun, and the table's stream. One command for each thing a
-player does (`RaidCommand`): `start` (a run on a trail; a run in hand is put down first, as walking
+player does (`RaidCommand`): `start` (a run on a trail, with all figures or with `own` the member's own; a run in hand is put down first, as walking
 home, once it has fought a room), `trail` (pick the trail to set out on next), `look` (put an owned look on the table;
 a look is owned when bought with `buyLook`, or won as a pull's prize: `advance` adds each
 `pull:look:<id>` among the player's awards to the looks owned, and takes no Leaf),

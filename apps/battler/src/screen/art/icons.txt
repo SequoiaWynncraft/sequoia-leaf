@@ -1,5 +1,5 @@
 # The small pictures, typed as rows of letters like the figures (`PAL` in the figures' `pal.ts`). A
-# block is a line naming the picture (`trait`, `item`, `boon`, `room` or `glyph`, and which), then its rows.
+# block is a line naming the picture (`trait`, `item`, `boon`, `room`, `glyph` or `level`, and which), then its rows.
 
 # ---------- traits ----------
 
@@ -787,3 +787,47 @@ uWWWUWWWu
 ..W.W.W..
 .u..W..u.
 ....u....
+
+# ---------- a figure's level, in a raid with the member's own figures ----------
+
+level 1
+.L.
+LL.
+.L.
+.L.
+LLL
+
+level 2
+LL.
+..L
+.L.
+L..
+LLL
+
+level 3
+LL.
+..L
+.L.
+..L
+LL.
+
+level 4
+L.L
+L.L
+LLL
+..L
+..L
+
+level 5
+LLL
+L..
+LL.
+..L
+LL.
+
+level 6
+.LL
+L..
+LL.
+L.L
+.L.

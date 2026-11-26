@@ -1,5 +1,14 @@
 [
   {
+    "id": "raid-own",
+    "at": "2026-11-26T19:25Z",
+    "title": "Raid with your figures",
+    "lines": [
+      "At The Little Raid you can now set out with the figures you have pulled at the Grove. The stall sells every 1-acorn figure, and the others only if you have pulled them.",
+      "Each copy of a figure after the first is 1 level: 3% more health and attack, up to level 6. These raids pay Coins and are not counted for the board or the almanac."
+    ]
+  },
+  {
     "id": "raid-met-boards",
     "at": "2026-11-26T18:50Z",
     "title": "Sparring against members",

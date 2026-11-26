@@ -7,6 +7,7 @@ import { ECONOMY, MAX_LEVEL, ROOM_COUNT, ROOMS, STALL_ODDS } from "./content/roo
 import { traitNumber } from "./content/traits.ts";
 import { resolveFight } from "./fight/engine.ts";
 import { opposition } from "./foe.ts";
+import { levelOf, type Roster, stallOdds } from "./own.ts";
 import { isParty, type Party, partyWorth } from "./party.ts";
 import {
   abandon,
@@ -24,6 +25,7 @@ import {
   layOutAfresh,
   move,
   nextStreak,
+  partyOf,
   picksOf,
   type Piece,
   pieceAt,
@@ -1122,5 +1124,87 @@ describe("a room laid out afresh", () => {
     const other = structuredClone(before);
     layOutAfresh(other, 7);
     expect([other.stall, other.foe]).not.toEqual([run.stall, run.foe]);
+  });
+});
+
+const costing = (tier: number): FigureId[] => FIGURE_IDS.filter((id) => FIGURES[id].tier === tier);
+/** How often each figure is offered over many rustles at a level, and whether a place was ever left empty. */
+function stallOver(own: Roster, level: number): { seen: Map<FigureId, number>; empty: boolean } {
+  const run = startRun(3, { own });
+  expect(choose(run, 0).ok).toBe(true);
+  run.level = level;
+  const seen = new Map<FigureId, number>();
+  let empty = false;
+  for (let i = 0; i < 400; i++) {
+    run.rustles = 1;
+    expect(rustle(run).ok).toBe(true);
+    for (const kind of run.stall) {
+      if (kind) seen.set(kind, (seen.get(kind) ?? 0) + 1);
+      else empty = true;
+    }
+  }
+  return { seen, empty };
+}
+
+describe("the stall of a run with the member's own figures", () => {
+  test("a small roster: every one-acorn figure, and above one acorn only the figures pulled", () => {
+    const { seen, empty } = stallOver({ slug: 0, greg: 2 }, MAX_LEVEL);
+    expect(abc([...seen.keys()])).toEqual(abc([...costing(1), "slug", "greg"]));
+    expect(empty).toBe(false);
+  });
+  test("a roster with a cost missing: its odds are shared out over the costs the roster has", () => {
+    const { seen, empty } = stallOver({ slug: 0, badger: 1, greg: 0 }, MAX_LEVEL);
+    expect(abc([...seen.keys()])).toEqual(abc([...costing(1), "slug", "badger", "greg"]));
+    expect(empty).toBe(false);
+    // At the top level the odds are 12/20/30/28/10; without the 30, a two-acorn figure is 20 in 70.
+    const odds = STALL_ODDS[MAX_LEVEL - 1] ?? [0, 0, 0, 0, 0];
+    const total = [...seen.values()].reduce((a, b) => a + b, 0);
+    expect((seen.get("slug") ?? 0) / total).toBeCloseTo(odds[1] / (100 - odds[2]), 1);
+    expect((seen.get("badger") ?? 0) / total).toBeCloseTo(odds[3] / (100 - odds[2]), 1);
+    const run = startRun(3, { own: { slug: 0, badger: 1, greg: 0 } });
+    run.level = MAX_LEVEL;
+    expect(stallOdds(run)).toEqual([odds[0], odds[1], 0, odds[3], odds[4]]);
+    expect(stallOdds({ level: MAX_LEVEL, own: null })).toEqual([...odds]);
+  });
+  test("a whole roster: the stall and everything else are drawn as on the main way", () => {
+    const whole: Roster = Object.fromEntries(FIGURE_IDS.map((id) => [id, 0]));
+    const [main, own] = [startRun(21), startRun(21, { own: whole })];
+    for (const run of [main, own]) {
+      expect(choose(run, 0).ok).toBe(true);
+      run.level = MAX_LEVEL;
+      for (let i = 0; i < 20; i++) {
+        run.rustles = 1;
+        rustle(run);
+      }
+    }
+    expect<Run>({ ...own, own: null }).toEqual(main);
+  });
+  test("the opening pick is from the one-acorn figures, whatever the roster, so a run can always begin", () => {
+    for (let seed = 1; seed < 30; seed++) {
+      const run = startRun(seed, { own: { greg: 6 } });
+      const pick = picksOf(run)[0];
+      expect(pick?.kind === "starter" && pick.options.every((id) => FIGURES[id].tier === 1)).toBe(true);
+      expect(run.stall.every((id) => id !== null && FIGURES[id].tier === 1)).toBe(true);
+    }
+  });
+  test("a figure's level goes into the party's data, absent for 0; on the main way nobody has one", () => {
+    const run = started();
+    put(run, "greg", 3);
+    expect(partyOf(run).figures.every((p) => !("level" in p))).toBe(true);
+    const own = startRun(1, { own: { greg: 2, worm: 0 } });
+    put(own, "greg", 3, 2);
+    put(own, "worm", 4);
+    put(own, "moth", 5);
+    expect(partyOf(own).figures.map((p) => [p.kind, p.stars, p.level])).toEqual([
+      ["greg", 2, 2],
+      ["worm", 1, undefined],
+      ["moth", 1, undefined],
+    ]);
+    expect([levelOf(own, "greg"), levelOf(own, "moth"), levelOf(run, "greg")]).toEqual([2, 0, 0]);
+    expect(isParty(JSON.parse(JSON.stringify(partyOf(own))))).toBe(true);
+    const [first] = partyOf(own).figures;
+    expect(isParty({ ...partyOf(own), figures: [{ ...first, level: 0 }] })).toBe(false);
+    // A roster kept with a level higher than levels go now acts as the top one.
+    expect(levelOf({ own: { greg: 9 } }, "greg")).toBe(6);
   });
 });

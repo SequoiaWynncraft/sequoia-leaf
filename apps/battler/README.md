@@ -107,7 +107,16 @@ kit's card: "The table needs the guild's server."
 - **The end of a run** is a page of paper: the rooms, the party that got there, what is new in the
   almanac, and the Coins paid into the member's purse. Then again, or back to town.
 - **Round the game.** A front page (a line saying everyone plays with the same figures here; carry
-  on, or which way to set out; the almanac; how to play; table looks; leave the table). Every one of
+  on, or which way to set out; the almanac; how to play; table looks; leave the table). A member who
+  has pulled a figure at the Grove chooses there between "All figures" and "Your figures"; the
+  second says how many they have, what the stall sells, what a copy does and that such a raid is
+  not counted. A member who has pulled none is not asked.
+- **A level** (in a raid with the member's own figures) is a small green "Lv 3" on the stall's card,
+  in the head of the figure's card with the line "Level 3: 9% more health and attack.", under the
+  figure on the front page and the end page, and a small green number at the left of its base on
+  the board and the bench. It is never drawn as a star. The almanac's tiles show the level of every
+  figure pulled. While such a raid is in hand, a sign in the top bar says "Your figures" (and "All
+  figures" on the main way, for a member who has both). Every one of
   the twenty-eight figures can be at the stall for everyone from the first run. The almanac shows
   every figure, trait and item met so far, which figures reached three stars, and how far each trail
   has been walked. Table looks are the one thing Leaf buys here: a cloth under the
@@ -225,7 +234,7 @@ has the rules' bot play whole rooms unseen and `plan()` has it plan the room tha
 on the page's copy and sends what it would do, `planCommands`); `to("boon" | "component" | "boss" |
 "lastboss" | "end" | "front")` plays on to a moment worth looking at; `fight()` sets out;
 `settled()` waits until Leaf has answered everything sent; `send(command)` sends one as the page
-would. `fresh()` (a new member), `start` from a chosen seed, `acorns(n)`, `give(kind)`, `offer(at,
+would. `fresh()` (a new member, who has pulled nothing), `pulled({ greg: 3 })` (copies pulled), `start` from a chosen seed (and `own`), `acorns(n)`, `give(kind)`, `offer(at,
 kind)`, `item(id)` and `strip()` stage a moment play does not reach (a merge, an item to forge,
 empty hands): they ask the play server the tours run against (`apps/api/test/play.ts`, at
 `/test/play/raid`), and on the guild's own Leaf, which has no such route, do nothing. `busy()` runs
@@ -259,6 +268,10 @@ bun review/tour.ts review/sheet.json <out-dir> sheet
 `review/feel.json` and `review/feel-phone.json` go through who gets hit, what everyone did and the
 open table: the front page, a Bulwark's card with its draw chip and tip, a fight with each of the
 tally's three tabs, the sheet after a lost room and a won one, and "Last fight" while planning.
+
+`review/own.json` and `review/own-phone.json` go through a raid with the member's own figures: the
+front page for a member who has pulled nothing and with each way chosen, the stall, bench and board
+with levelled figures, a levelled two-star figure's card, the almanac, a fight and the end.
 
 `review/kit-cards.json` and `review/kit-cards-phone.json` go through what the kit's cards brought:
 a board with figures holding nothing, one component and three items, a held item's card, a card

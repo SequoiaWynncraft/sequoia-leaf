@@ -33,6 +33,7 @@ export {
   type UnitKind,
   type UnitSpec,
 } from "./content/figures.ts";
+export { levelOf, placedOf, type Roster, rosterOf, stallOdds, stallPool } from "./own.ts";
 export {
   CALLINGS,
   type CallingId,
@@ -103,6 +104,8 @@ export {
   ROOMS,
   sellPrice,
   STALL_ODDS,
+  levelBoost,
+  LEVELS,
   type Trail,
   TRAIL_COUNT,
   TRAILS,

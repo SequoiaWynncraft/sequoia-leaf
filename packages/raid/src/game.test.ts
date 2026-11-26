@@ -12,7 +12,7 @@ import {
 } from "@sequoia-leaf/core";
 
 import { SENSIBLE } from "./bot.ts";
-import { FIGURES } from "./content/figures.ts";
+import { FIGURE_IDS, FIGURES } from "./content/figures.ts";
 import { EMBLEM_IDS, EMBLEMS } from "./content/items.ts";
 import { newLooks } from "./content/looks.ts";
 import { MAX_LEVEL, regularOf, ROOMS } from "./content/rooms.ts";
@@ -35,6 +35,7 @@ import {
   tableView,
 } from "./game.ts";
 import { beatenBosses, payout, recordRun, trailCleared, trailOpen } from "./outside.ts";
+import { rosterOf } from "./own.ts";
 import { isParty, type Party } from "./party.ts";
 import {
   fieldCap,
@@ -107,6 +108,7 @@ describe("a new player's table", () => {
       almanac: state.almanac,
       trail: 0,
       looks: state.looks,
+      roster: {},
     });
   });
   test("has its own stream from Leaf's dice", () => {
@@ -501,6 +503,8 @@ describe("commands off the wire", () => {
     });
     expect(readCommand({ do: "hold", on: false })).toEqual({ do: "hold", on: false });
     expect(readCommand({ do: "fight", seed: 7 })).toEqual({ do: "fight" });
+    expect(readCommand({ do: "start", trail: 1, own: true })).toEqual({ do: "start", trail: 1, own: true });
+    expect(readCommand({ do: "start", trail: 1, own: "yes" })).toEqual({ do: "start", trail: 1 });
     // A command's id is its own: the look it names is `look`.
     expect(readCommand({ id: "c2", do: "buyLook", kind: "bases", look: "gilt" })).toEqual({
       do: "buyLook",
@@ -541,7 +545,7 @@ describe("what the page may show before Leaf answers", () => {
     const same = (c: RaidCommand): void => {
       const guessed = predict(RAID.view(state, ctx()), c);
       const done = must(state, c);
-      expect(guessed).toEqual({ view: tableView(done.state), notes: [...done.notes] });
+      expect(guessed).toEqual({ view: tableView(done.state, ctx()), notes: [...done.notes] });
       state = done.state;
     };
     same({ do: "give", item: 0, to: { on: "board", at: seat } });
@@ -953,5 +957,170 @@ describe("another member's board in a sparring room", () => {
     expect(isParty({ ...board, by: 7 })).toBe(false);
     expect(regularOf({ who: "Greg" })?.kind).toBe("greg");
     expect(regularOf({ who: "Greg", by: MEMBER })).toBeNull();
+  });
+});
+
+/** Every figure pulled seven times over, as the pulls award it, with what else a member may have won. */
+const EVERYTHING = [
+  "trophy-oldbramble",
+  "pull:look:gilt",
+  "pull:thing:fountain",
+  "pull:headliner:banner-1",
+  ...FIGURE_IDS.flatMap((id) => [`pull:figure:${id}`, ...[2, 3, 4, 5, 6, 7].map((n) => `copies:figure:${id}:${n}`)]),
+];
+
+/**
+ * A table played by the bot for some rooms, or to its end, with the same dice every time: what it
+ * came to, and everything its commands paid, logged and noted.
+ */
+function walked(awards: readonly string[], own: boolean, rooms = 99, from: Table | null = null) {
+  rolls = 0;
+  const at = (): Ctx => ({ ...ctx(), awards });
+  const coins: CoinChange[] = [];
+  const log: Logged[] = [];
+  const notes: RaidNote[] = [];
+  let state = from ?? RAID.create(at());
+  const did = (c: RaidCommand): void => {
+    const done = must(state, c, at());
+    coins.push(...(done.coins ?? []));
+    log.push(...(done.log ?? []));
+    notes.push(...done.notes);
+    expect(readNotes(wire(done.notes))).toEqual([...done.notes]);
+    state = done.state;
+  };
+  did(own ? { do: "start", trail: 0, own } : { do: "start", trail: 0 });
+  for (let room = 0; room < rooms && state.run; room++) {
+    for (let again = 0; again < 40; again++) {
+      const commands = planCommands(RAID.view(state, at()), SENSIBLE);
+      if (commands.length === 0) break;
+      for (const c of commands) if (isDone(RAID.apply(state, c, at()))) did(c);
+    }
+    did({ do: "fight" });
+    did({ do: "take" });
+  }
+  return { state, coins, log, notes };
+}
+
+describe("the roster a member's awards come to", () => {
+  test("is each figure pulled, with a level for every copy after the first, 6 at most", () => {
+    expect(
+      rosterOf([
+        "pull:figure:greg",
+        "copies:figure:greg:3",
+        "copies:figure:greg:2",
+        "pull:figure:worm",
+        "copies:figure:slug:7",
+        "copies:figure:moth:9",
+        "copies:figure:nobody:2",
+        "pull:figure:nobody",
+        "pull:look:gilt",
+        "copies:thing:rock:2",
+        "pull:headliner:banner-1",
+        "trophy-oldbramble",
+        "pull:figure:greg:2",
+      ]),
+    ).toEqual({ greg: 2, worm: 0, slug: 6, moth: 6 });
+    expect(rosterOf(EVERYTHING)).toEqual(Object.fromEntries(FIGURE_IDS.map((id) => [id, 6])));
+  });
+  test("is shown on the page, and is nobody for a member who has pulled nothing", () => {
+    const state = RAID.create(ctx(1));
+    const view = RAID.view(state, { ...ctx(), awards: ["pull:figure:greg", "copies:figure:greg:2"] });
+    expect(view.roster).toEqual({ greg: 1 });
+    expect(readView(wire(view))).toEqual(view);
+    expect(RAID.view(state, { ...ctx(), awards: ["pull:thing:rock", "trophy-bigcrab"] }).roster).toEqual({});
+  });
+});
+
+describe("the main way", () => {
+  test("plays the same, draw for draw, whatever the player has pulled", () => {
+    const plain = walked([], false, 6);
+    const rich = walked(EVERYTHING, false, 6);
+    expect(rich).toEqual(plain);
+    expect(rich.state.run?.own).toBeNull();
+    expect(rich.state.run?.record.length).toBe(6);
+    const fights = rich.notes.flatMap((n) => (n.t === "fight" ? n.setup.sides : []));
+    expect(fights.flatMap((party) => party.figures).some((p) => "level" in p)).toBe(false);
+    expect(rich.log.some((l) => "own" in l.data)).toBe(false);
+  });
+});
+
+describe("a run with the member's own figures", () => {
+  test("is not offered to a member who has pulled no figure", () => {
+    const state = RAID.create(ctx(1));
+    for (const awards of [[], ["pull:thing:rock", "pull:headliner:banner-1", "trophy-bigcrab"]]) {
+      expect(RAID.apply(state, { do: "start", trail: 0, own: true }, { ...ctx(), awards })).toEqual({
+        refused: "nothing_pulled",
+      });
+    }
+    expect(refusalText("nothing_pulled")).toBe("You have pulled no figures yet.");
+  });
+  test("writes the roster down when it starts, and keeps it whatever is pulled meanwhile", () => {
+    const first = ["pull:figure:greg", "copies:figure:greg:2", "pull:figure:slug"];
+    const begun = walked(first, true, 1);
+    expect(begun.state.run?.own).toEqual({ greg: 1, slug: 0 });
+    // More is pulled while the run is in hand: the page is told, the run is not.
+    const later: Ctx = { ...ctx(), awards: EVERYTHING };
+    const view = RAID.view(begun.state, later);
+    expect([view.run?.own, view.roster.greg, view.roster.badger]).toEqual([{ greg: 1, slug: 0 }, 6, 6]);
+    expect(readView(wire(view))).toEqual(view);
+    const rustled = must(must(begun.state, { do: "choose", option: 0 }, later).state, { do: "rustle" }, later).state;
+    expect(must(must(rustled, { do: "fight" }, later).state, { do: "take" }, later).state.run?.own).toEqual({
+      greg: 1,
+      slug: 0,
+    });
+    expect(RAID.decode(RAID.encode(rustled))).toEqual(rustled);
+    // A roster that names nobody the game has is no run.
+    const raw = JSON.parse(RAID.encode(rustled));
+    raw.run.own = { nobody: 1 };
+    expect(RAID.decode(JSON.stringify(raw))?.run).toBeNull();
+  });
+  test("fights with its figures' levels in the fight's setup, which plays to the outcome Leaf kept", () => {
+    const { notes } = walked(EVERYTHING, true, 3);
+    const fights = notes.filter((n) => n.t === "fight");
+    expect(fights.length).toBe(3);
+    for (const fight of fights) {
+      expect(fight.setup.sides[0].figures.every((p) => p.level === 6)).toBe(true);
+      expect(fight.setup.sides[1].figures.every((p) => p.level === undefined)).toBe(true);
+      expect(playsAsKept(fight)).toBe(true);
+    }
+  });
+  test("leaves and meets its boards apart from the main way's, and only it is met with levels", () => {
+    // Two rooms in, the run stands before room 2, a sparring room.
+    const fighting = must(planned(walked(EVERYTHING, true, 2).state), { do: "fight" });
+    const board = fighting.keep?.[0];
+    expect(board?.slot).toBe("own:0:2");
+    expect(RAID.meets?.(fighting.state, { do: "take" })).toBe("own:0:3");
+    const met = metOf(board?.data);
+    const inOwn = opposition(1, 2, 0, met, true);
+    const inMain = opposition(1, 2, 0, met);
+    expect([inOwn.by, inMain.by]).toEqual([MEMBER, MEMBER]);
+    expect(inOwn.figures.every((p) => p.level === 6)).toBe(true);
+    expect(inMain.figures.every((p) => p.level === undefined)).toBe(true);
+  });
+  test("pays its Coins, and changes no almanac, award, standing or trail; its log lines say what it was", () => {
+    const main = walked([], false, 2).state;
+    const home = must(main, { do: "abandon" }).state;
+    const before = structuredClone(home);
+    const { state, coins, log, notes } = walked(EVERYTHING, true, 99, home);
+    const ended = notes.findLast((n) => n.t === "ended");
+    if (ended?.t !== "ended") throw new Error("the run did not end");
+    // It did what a run on the main way would have been written down for.
+    expect(ended.summary.bosses.length).toBeGreaterThan(0);
+    expect(ended.summary.reached).toBeGreaterThan(before.almanac.best[0] ?? 0);
+    expect(ended.news).toEqual([]);
+    expect(coins).toEqual([{ amount: payout(ended.summary).coins, reason: "The Little Raid", key: "run:2" }]);
+    expect(state.almanac).toEqual(before.almanac);
+    expect(RAID.awards?.(state)).toEqual(RAID.awards?.(before) ?? []);
+    expect(RAID.standing?.(state)).toEqual(RAID.standing?.(before));
+    expect([0, 1, 2].map((trail) => trailOpen(state.almanac, trail))).toEqual([true, false, false]);
+    expect(log.every((l) => l.data["own"] === true)).toBe(true);
+    expect(log.map((l) => l.kind)).toEqual(["raid_started", ...ended.run.record.map(() => "raid_room"), "raid_ended"]);
+  });
+  test("may set out on a trail only once the main game has opened it", () => {
+    const state = RAID.create(ctx(1));
+    const at: Ctx = { ...ctx(), awards: EVERYTHING };
+    expect(RAID.apply(state, { do: "start", trail: 1, own: true }, at)).toEqual({ refused: "trail_closed" });
+    state.almanac.bosses[0] = ["bigcrab"];
+    expect(must(state, { do: "start", trail: 1, own: true }, at).state.run).toMatchObject({ trail: 1 });
   });
 });

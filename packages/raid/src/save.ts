@@ -35,6 +35,7 @@ import { ECONOMY, MAX_LEVEL, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts"
 import { isTraitId, TRAIT_IDS, traitNumber } from "./content/traits.ts";
 import type { FightResult, FightSetup, FightSummary, Tally } from "./fight/types.ts";
 import { SEATS } from "./hex.ts";
+import { readRoster, type Roster } from "./own.ts";
 import { isParty, type Party } from "./party.ts";
 import {
   type Choice,
@@ -90,6 +91,9 @@ function readPiece(v: unknown, nextId: number): Piece | null {
     fed: whole(p.fed, 0, ROOMY, "how much Greg has eaten"),
   };
 }
+/** A run's roster. A run saved before there were runs with the member's own figures is one on the main way. */
+const readOwn = (v: unknown): Roster | null =>
+  v === undefined || v === null ? null : (readRoster(v) ?? bad("the roster"));
 const isChoiceKind = (v: unknown): v is Choice["kind"] => v === "starter" || v === "component" || v === "boon";
 /** A pick waiting, with nothing on offer: as it is shown behind the first, and before it is drawn again. */
 function blankChoice(v: unknown): Choice {
@@ -276,6 +280,7 @@ function readParts(r: Record<string, unknown>, old: boolean, shown: boolean): { 
     record: list(r.record, 400, "the record").map((x) => readRecord(x, room)),
     nextId,
     last: drawn(() => readLast(r.last), null, false),
+    own: readOwn(r.own),
     seen: {
       fielded: unique(each(seen.fielded, isFigureId, FIGURE_IDS.length, "the almanac notes"), "the almanac notes"),
       threeStars: unique(

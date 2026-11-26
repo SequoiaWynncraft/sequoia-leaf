@@ -175,6 +175,13 @@ export interface Pulls {
   rng: number;
 }
 
+/** The most copies of a prize that are each told as an award. */
+export const COPIES_TOLD = 7;
+
+/** What holding `n` copies of a prize awards: the prize, and each further copy told. */
+const awardsOf = (prize: string, n: number): string[] =>
+  [`pull:${prize}`].concat(Array.from({ length: Math.min(n, COPIES_TOLD) - 1 }, (_, i) => `copies:${prize}:${i + 2}`));
+
 /** How many pulls the history keeps. */
 export const HISTORY = 200;
 
@@ -476,5 +483,6 @@ export const PULLS: Game<Pulls, PullsCommand, PullsView, PullsNote> = {
     },
   }),
   // Each prize the player has: the town sends a figure, a banner's member or an earlier thing to the camp, the raid's table owns an earlier look.
-  awards: (s) => Object.keys(s.have).map((prize) => `pull:${prize}`),
+  // And each further copy of it up to the seventh (`copies:<prize>:<n>`), which the raid reads a figure's level from.
+  awards: (s) => Object.entries(s.have).flatMap(([prize, n]) => awardsOf(prize, n)),
 };

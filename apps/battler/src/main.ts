@@ -63,8 +63,8 @@ function closing(): void {
 }
 
 /** Sets out from the front page, which goes once Leaf has laid the run out. */
-async function setOutOn(trail: number): Promise<void> {
-  if (await startNew(trail)) showPage(null);
+async function setOutOn(trail: number, own: boolean): Promise<void> {
+  if (await startNew(trail, own)) showPage(null);
 }
 
 async function boot(): Promise<void> {
@@ -108,7 +108,7 @@ async function boot(): Promise<void> {
       showPage(null);
       enterRun();
     },
-    start: (trail) => void setOutOn(trail),
+    start: (trail, own) => void setOutOn(trail, own),
     goHome: () => void goHome(),
     leave: leaveTable,
     gear: () => menu.gear(),

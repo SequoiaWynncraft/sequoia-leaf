@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { boonNumber } from "../content/boons.ts";
 import { FIGURES, specOf, starScale } from "../content/figures.ts";
-import { FIGHT } from "../content/rooms.ts";
+import { FIGHT, levelBoost, LEVELS } from "../content/rooms.ts";
 import { traitNumber } from "../content/traits.ts";
 import { backRow, CELLS, cellSeat, distance, rowOf, seatCell } from "../hex.ts";
 import {
@@ -573,5 +573,48 @@ describe("falling", () => {
     const f = fightOf([at("crab7", 3, 0)], [at("gnat", 3, 0)]);
     ready(unitOf(f, "crab7"));
     expect(runFight(f).result).toBe("win");
+  });
+});
+
+/** A two-star Badger holding Winter Hoard and Blackthorn Sprig, at a level, as it is seated for a fight. */
+const seated = (level: number) =>
+  unitOf(
+    fightOf([{ ...at("badger", 3, 0, 2, ["hoard", "blackthorn"]), ...(level > 0 && { level }) }], [at("gnat", 3, 0)]),
+    "badger",
+  );
+/** The brawl with every one of ours at a level. */
+function levelled(seed: number): FightSetup {
+  const [ours, theirs] = brawl(seed).sides;
+  ours.figures.forEach((p, i) => {
+    p.level = 1 + (i % 6);
+  });
+  return { seed, sides: [ours, theirs] };
+}
+
+describe("a level", () => {
+  test("is 3% more health and attack, 18% at most, multiplied with stars and with what items add", () => {
+    expect([LEVELS.boost, LEVELS.most, levelBoost(3), levelBoost(LEVELS.most)]).toEqual([3, 6, 9, 18]);
+    const { hp, attack } = specOf("badger");
+    // Two stars, Winter Hoard's +30% health and Blackthorn Sprig's +30% attack.
+    for (let level = 0; level <= LEVELS.most; level++) {
+      const more = starScale(2) * (1 + (3 * level) / 100);
+      expect([seated(level).maxHp, seated(level).attack]).toEqual([
+        Math.round(hp * more * 1.3),
+        Math.round(attack * more * 1.3),
+      ]);
+    }
+    const [plain, most] = [seated(0), seated(LEVELS.most)];
+    expect(most.maxHp).toBeGreaterThan(plain.maxHp);
+    // Nothing else of the figure changes, its stars least of all.
+    for (const key of ["stars", "speed", "range", "armour", "ward", "power", "manaFull"] as const) {
+      expect(most[key]).toBe(plain[key]);
+    }
+  });
+  test("is in the fight's setup, so the fight plays the same every time, and otherwise than without it", () => {
+    const kept: FightSetup = JSON.parse(JSON.stringify(levelled(11)));
+    const [a, b] = [recordFight(levelled(11)), recordFight(kept)];
+    expect(b).toEqual(a);
+    expect(resolveFight(kept)).toEqual(a.summary);
+    expect(JSON.stringify(a.steps)).not.toBe(JSON.stringify(recordFight(brawl(11)).steps));
   });
 });

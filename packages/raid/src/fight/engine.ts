@@ -13,7 +13,7 @@ import { chance, mix } from "@sequoia-leaf/core";
 import { boonNumber } from "../content/boons.ts";
 import { abilityNumber, FIGURES, isFigureId, specOf, type Stars, starScale } from "../content/figures.ts";
 import { carries, FINISHED, type FinishedId, type ItemId, itemStats } from "../content/items.ts";
-import { FIGHT } from "../content/rooms.ts";
+import { FIGHT, levelBoost } from "../content/rooms.ts";
 import { TRAIT_IDS, traitNumber } from "../content/traits.ts";
 import { backRow, cellAt, CELLS, colOf, distance, HOME_ROWS, seatCell, type Side, stepToward } from "../hex.ts";
 import { type Party, type Placed, traitSteps } from "../party.ts";
@@ -118,7 +118,7 @@ function equip(u: Unit, item: ItemId): void {
   }
 }
 
-/** Puts one of a party's figures on its hex, with its stars, its items and its party's boons counted in. */
+/** Puts one of a party's figures on its hex, with its stars, its level, its items and its party's boons counted in. */
 function seat(f: Fight, side: Side, p: Placed, party: Party): Unit {
   const spec = specOf(p.kind);
   const might = party.might / 100;
@@ -142,7 +142,7 @@ function seat(f: Fight, side: Side, p: Placed, party: Party): Unit {
     health += boonNumber("smallfry", "boost");
     attack += boonNumber("smallfry", "boost");
   }
-  const star = starScale(p.stars);
+  const star = starScale(p.stars) * (1 + levelBoost(p.level ?? 0) / 100);
   const home = seatCell(side, p.seat);
   const u = enter(f, {
     side,

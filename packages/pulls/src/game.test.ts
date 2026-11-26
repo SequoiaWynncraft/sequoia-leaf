@@ -284,7 +284,33 @@ describe("keeping it", () => {
     const { rng, ...shown } = s;
     expect(rng).toBeNumber();
     expect(PULLS.view(s, ctx())).toEqual({ ...shown, open: [{ id: "banner-1", until: Date.UTC(2026, 11, 8) }] });
-    expect(PULLS.awards?.(s)).toEqual(Object.keys(s.have).map((prize) => `pull:${prize}`));
+    expect(PULLS.awards?.(s)?.filter((id) => id.startsWith("pull:"))).toEqual(
+      Object.keys(s.have).map((prize) => `pull:${prize}`),
+    );
+  });
+
+  it("awards each prize once, and each further copy of it up to the seventh by a name of its own", () => {
+    const s = { ...fresh(), have: { "figure:greg": 3, "figure:worm": 1, "figure:slug": 9, "thing:fountain": 2 } };
+    const awards = PULLS.awards?.(s) ?? [];
+    expect(awards).toEqual([
+      "pull:figure:greg",
+      "copies:figure:greg:2",
+      "copies:figure:greg:3",
+      "pull:figure:worm",
+      "pull:figure:slug",
+      ...[2, 3, 4, 5, 6, 7].map((n) => `copies:figure:slug:${n}`),
+      "pull:thing:fountain",
+      "copies:thing:fountain:2",
+    ]);
+    // The raid reads a figure's level from them: copies less one, 6 at most.
+    expect(RAID.view(RAID.create(ctx()), { ...ctx(), awards }).roster).toEqual({ greg: 2, worm: 0, slug: 6 });
+    // No other reader takes a copy's award for anything: the camp is sent each thing once, the table owns no look by it.
+    const town = TOWN.advance(TOWN.create(ctx()), { ...ctx(), awards });
+    const things = [figureThing("greg"), figureThing("worm"), figureThing("slug"), "fountain"];
+    expect(town.camp.tray).toEqual(Object.fromEntries(things.map((id) => [id, 1])));
+    expect(town.camp.earned.toSorted()).toEqual(things.toSorted());
+    const table = RAID.create(ctx());
+    expect(RAID.advance(table, { ...ctx(), awards: [...awards, "copies:look:gilt:2"] })).toBe(table);
   });
 
   it("keeps what earlier pulls gave: it reads, is in the history with its rarity, and is still the camp's and the table's", () => {

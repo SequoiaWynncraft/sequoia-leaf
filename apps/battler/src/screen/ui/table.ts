@@ -26,7 +26,6 @@ import {
   ROOMS,
   type RunView,
   rustleCost,
-  STALL_ODDS,
   tally,
   topStep,
   type TraitId,
@@ -47,6 +46,7 @@ import { artPx, place, V } from "../stage.ts";
 import { busy, S } from "../state.ts";
 import { acorns, boonRef, figPic, figureRef, itemRef, pic, traitRef, unitRef } from "./cards.ts";
 import { forgetLight, paintLight } from "./lit.ts";
+import { oddsRow, runTag, waySign } from "./own.ts";
 import { type TallyView, tallyView } from "./tally.ts";
 
 /** What the buttons ask for. The table only asks; whoever built it answers. */
@@ -125,7 +125,7 @@ export function buildTable(a: Asks): void {
     pic(glyph("swords")),
     el("span", "", { text: "Last fight" }),
   );
-  add(hud, purse, track, last, resolve, el("div", "", { id: "corner" }, help, sound, door));
+  add(hud, purse, track, waySign(), last, resolve, el("div", "", { id: "corner" }, help, sound, door));
 
   const rustle = el("button", "k-btn wood", { id: "rustle", type: "button", onclick: a.rustle });
   tip(rustle, "Reroll", () => `New figures on the stall. 1 a room is free; after that each costs ${ECONOMY.rustle}.`);
@@ -360,7 +360,7 @@ function renderStall(run: RunView): void {
   if (!stall) return;
   const key = run.stall
     .map((kind, i) => `${kind}:${priceOf(run, i)}:${canBuy(run, i) ? 1 : 0}:${kind ? twins(run, kind) : 0}`)
-    .join();
+    .join(run.own ? ";" : ",");
   if (key === stallKey) return;
   stallKey = key;
   if (stallWatched !== stall && typeof ResizeObserver === "function") {
@@ -398,6 +398,7 @@ function renderStall(run: RunView): void {
       owned
         ? el("span", `have${have >= 2 ? " ready" : ""}`, { text: have >= 2 ? "3!" : have === 1 ? "2" : "+" })
         : null,
+      runTag(run, kind),
     );
     // Tapping an offer buys it; a finger kept on it asks what it is.
     link(card, figureRef(kind), { acts: true });
@@ -448,19 +449,13 @@ function renderPurseSide(run: RunView): void {
     el("i", "", { style: `--v:${need > 0 ? Math.round((xp / need) * 100) : 100}%` }),
   );
   const wasLv = level.dataset.n;
-  // What a reroll can bring at this level, each tier in its colour, cheapest first.
-  const odds = STALL_ODDS[Math.min(lv, STALL_ODDS.length) - 1] ?? [];
   level.replaceChildren(
     el("b", "", { text: `Level ${lv}` }),
     bar,
     el("span", "k-dim", { text: need > 0 ? `${xp}/${need}` : "top" }),
     el("span", "k-dim fielded", {}, pic(glyph("figure")), `${fielded(run)}/${fieldCap(run)}`),
-    el(
-      "span",
-      "odds",
-      {},
-      ...odds.flatMap((share, i) => (share > 0 ? [el("span", `t${i + 1}`, { text: `${share}%` })] : [])),
-    ),
+    // What a reroll can bring at this level, each tier in its colour, cheapest first.
+    oddsRow({ ...run, level: lv }),
   );
   level.setAttribute("aria-label", need > 0 ? `Level ${lv}, ${xp}/${need} XP` : `Level ${lv}`);
   level.dataset.n = String(lv);

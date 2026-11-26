@@ -26,9 +26,9 @@ function must(state: Kept, command: RaidCommand): { state: Kept; notes: RaidNote
 /** A table with a run in its first room, its starter on the board. */
 const begun = (): Kept =>
   must(must(RAID.create(ctx()), { do: "start", trail: 0 }).state, { do: "choose", option: 0 }).state;
-const at = (state: Kept): Table => ({ run: tableView(state).run, runs: state.runs });
+const at = (state: Kept): Table => ({ run: tableView(state, ctx()).run, runs: state.runs });
 const runOf = (state: Kept): RunView => {
-  const run = tableView(state).run;
+  const run = tableView(state, ctx()).run;
   if (!run) throw new Error("no run");
   return run;
 };

@@ -30,6 +30,7 @@ import {
   readNotes,
   readView,
   refusalText,
+  type Roster,
   type RunView,
   type TableView,
 } from "@sequoia-leaf/raid";
@@ -46,6 +47,8 @@ export const S: {
   trail: number;
   /** Runs begun at this table. */
   runs: number;
+  /** The figures the member has pulled, with their levels. */
+  roster: Roster;
   prefs: Prefs;
   /** What the table is showing; moved on by `go`. */
   screen: Screen;
@@ -55,6 +58,7 @@ export const S: {
   looks: newLooks(),
   trail: 0,
   runs: 0,
+  roster: {},
   prefs: newPrefs(),
   screen: { at: "front" },
 };
@@ -109,7 +113,7 @@ function heldOff(command: RaidCommand): boolean {
 export const busy = (): boolean => hold.held(true);
 
 /** What the page shows, as text, to tell whether Leaf's answer changed it. */
-const picture = (): string => JSON.stringify([S.run, S.almanac, S.looks, S.trail, S.runs]);
+const picture = (): string => JSON.stringify([S.run, S.almanac, S.looks, S.trail, S.runs, S.roster]);
 
 /** Takes Leaf's state (the copy, with what is still waiting on top) into what the page shows. */
 function take(view: TableView): void {
@@ -117,6 +121,7 @@ function take(view: TableView): void {
   S.looks = view.looks;
   S.trail = view.trail;
   S.runs = view.runs;
+  S.roster = view.roster;
   // A run that has ended stays on the table, for its last page, while the screen shows it.
   S.run = view.run ?? endedOf(S.screen)?.run ?? null;
 }

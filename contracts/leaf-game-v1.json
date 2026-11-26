@@ -572,7 +572,8 @@
           "lantern": "iron",
           "bases": "plain",
           "owned": []
-        }
+        },
+        "roster": {}
       },
       "purse": {
         "coins": 300,
@@ -713,6 +714,7 @@
           "record": [],
           "nextId": 2,
           "last": null,
+          "own": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -735,7 +737,8 @@
           "lantern": "iron",
           "bases": "plain",
           "owned": []
-        }
+        },
+        "roster": {}
       },
       "purse": {
         "coins": 300,
@@ -850,6 +853,7 @@
           "record": [],
           "nextId": 2,
           "last": null,
+          "own": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -872,7 +876,8 @@
           "lantern": "iron",
           "bases": "plain",
           "owned": []
-        }
+        },
+        "roster": {}
       },
       "purse": {
         "coins": 300,
@@ -1013,6 +1018,7 @@
           "record": [],
           "nextId": 2,
           "last": null,
+          "own": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -1035,7 +1041,8 @@
           "lantern": "iron",
           "bases": "plain",
           "owned": []
-        }
+        },
+        "roster": {}
       },
       "purse": {
         "coins": 300,
@@ -1189,6 +1196,7 @@
           "record": [],
           "nextId": 2,
           "last": null,
+          "own": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -1211,7 +1219,8 @@
           "lantern": "iron",
           "bases": "plain",
           "owned": ["plum"]
-        }
+        },
+        "roster": {}
       },
       "purse": {
         "coins": 300,
@@ -1334,6 +1343,7 @@
           "record": [],
           "nextId": 2,
           "last": null,
+          "own": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -1356,7 +1366,8 @@
           "lantern": "iron",
           "bases": "plain",
           "owned": ["plum"]
-        }
+        },
+        "roster": {}
       },
       "purse": {
         "coins": 300,
@@ -1409,7 +1420,8 @@
           "lantern": "iron",
           "bases": "plain",
           "owned": []
-        }
+        },
+        "roster": {}
       },
       "purse": {
         "coins": 300,

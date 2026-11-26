@@ -26,21 +26,13 @@ import {
   isEmblemId,
   type ItemId,
 } from "./content/items.ts";
-import {
-  ECONOMY,
-  MAX_LEVEL,
-  ROOM_COUNT,
-  type RoomKind,
-  ROOMS,
-  sellPrice,
-  STALL_ODDS,
-  TRAILS,
-} from "./content/rooms.ts";
+import { ECONOMY, MAX_LEVEL, ROOM_COUNT, type RoomKind, ROOMS, sellPrice, TRAILS } from "./content/rooms.ts";
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
 import { resolveFight } from "./fight/engine.ts";
 import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
 import { opposition } from "./foe.ts";
 import { COLS, SEATS } from "./hex.ts";
+import { placedOf, type Roster, stallOdds, stallPool } from "./own.ts";
 import { type Party, type Placed, type TraitState, traitStates, traitSteps } from "./party.ts";
 
 // ---------- what a run is ----------
@@ -115,6 +107,11 @@ export interface Run {
   nextId: number;
   /** The last fight fought, as it was set up, so that it can be played again to be looked back on. */
   last: FightSetup | null;
+  /**
+   * For a run with the member's own figures, their roster as it was when the run started: what the
+   * stall sells above one acorn, and each figure's level. Null on the main way, which reads nothing owned.
+   */
+  own: Roster | null;
   /** Things this run has done that the almanac remembers. */
   seen: {
     fielded: FigureId[];
@@ -307,10 +304,10 @@ export const sellValue = (piece: Piece): number => sellPrice(FIGURES[piece.kind]
 /** What the next rustle costs. */
 export const rustleCost = (run: Pick<Run, "rustles">): number => (run.rustles > 0 ? 0 : ECONOMY.rustle);
 /** The party as it would go into a fight now. */
-export function partyOf(run: Pick<Run, "board" | "boons">): Party {
+export function partyOf(run: Pick<Run, "board" | "boons" | "own">): Party {
   const figures: Placed[] = [];
   run.board.forEach((p, seat) => {
-    if (p) figures.push({ kind: p.kind, stars: p.stars, seat, items: p.items.slice(), fed: p.fed });
+    if (p) figures.push(placedOf(run, p, seat));
   });
   return {
     who: "You",
@@ -328,17 +325,14 @@ export const roomNow = (run: Pick<Run, "room">) => ROOMS[Math.min(run.room, ROOM
 
 // ---------- the stall ----------
 
-/** Who the stall may offer: every figure, to everyone, from the first run. Nothing won or bought anywhere changes it. */
+/** Who the stall may offer on the main way: every figure, to everyone, from the first run. Nothing won or bought anywhere changes it. */
 export const STALL_POOL: readonly FigureId[] = FIGURE_IDS;
 
 /** How many offers the stall has: more with A Wider Stall. */
 export const stallSize = (run: Pick<Run, "boons">): number =>
   run.boons.includes("widestall") ? boonNumber("widestall", "offers") : ECONOMY.stall;
 function drawOffer(run: Run): FigureId | null {
-  const odds = STALL_ODDS[Math.min(run.level, STALL_ODDS.length) - 1] ?? STALL_ODDS[0];
-  if (!odds) return null;
-  const tier = 1 + weighted(run, odds);
-  const pool = STALL_POOL.filter((id) => FIGURES[id].tier === tier);
+  const pool = stallPool(run, 1 + weighted(run, stallOdds(run)));
   return pool.length > 0 ? pick(run, pool) : null;
 }
 function restock(run: Run): void {
@@ -382,6 +376,8 @@ function remember<T>(list: T[], v: T): void {
 export interface RunOptions {
   /** Which trail, counting from 0. */
   trail?: number;
+  /** For a run with the member's own figures, their roster; left out on the main way. */
+  own?: Roster;
 }
 /** Starts a run. It begins with a choice waiting: one of three one-acorn figures to set out with. */
 export function startRun(seed: number, options: RunOptions = {}): Run {
@@ -413,6 +409,7 @@ export function startRun(seed: number, options: RunOptions = {}): Run {
     record: [],
     nextId: 1,
     last: null,
+    own: options.own ?? null,
     seen: { fielded: [], threeStars: [], forged: [], topped: [] },
   };
   const cheapest = STALL_POOL.filter((id) => FIGURES[id].tier === 1);
@@ -840,7 +837,7 @@ export function takeTakings(run: Run, met?: Met): Taken {
   run.rustles = ECONOMY.freeRustles + (run.boons.includes("regular") ? boonNumber("regular", "rustles") : 0);
   if (run.held) run.held = false;
   else restock(run);
-  run.foe = opposition(draw32(run), run.room, run.trail, met);
+  run.foe = opposition(draw32(run), run.room, run.trail, met, run.own !== null);
   const next = ROOMS[run.room];
   if (next) notes.push({ t: "room", room: run.room, kind: next.kind, who: run.foe.who, title: run.foe.title });
   const waiting = picks[0];

@@ -18,7 +18,7 @@ import text from "./icons.txt";
 
 const ROWS = readRows(text);
 /** A picture's rows from `icons.txt`, by its kind and its id. */
-const rowsOf = (kind: "trait" | "item" | "room" | "glyph", id: string): readonly string[] =>
+const rowsOf = (kind: "trait" | "item" | "room" | "glyph" | "level", id: string): readonly string[] =>
   ROWS.get(`${kind} ${id}`) ?? [];
 
 /** The signs the buttons and the purse carry. */
@@ -69,6 +69,8 @@ export const itemPic = (id: ItemId): HTMLCanvasElement =>
 export const itemIcon = (id: ItemId): HTMLCanvasElement => copy(itemPic(id));
 export const glyphPic = (id: Glyph): HTMLCanvasElement => bakedOf(`g:${id}`, rowsOf("glyph", id), id !== "hand");
 export const glyph = (id: Glyph): HTMLCanvasElement => copy(glyphPic(id));
+/** A figure's level, 1 to 6, as a small green number: drawn beside its base, never among its stars. */
+export const levelPic = (level: number): HTMLCanvasElement => bakedOf(`l:${level}`, rowsOf("level", String(level)));
 export const roomIcon = (kind: RoomKind): HTMLCanvasElement => copy(bakedOf(`r:${kind}`, rowsOf("room", kind)));
 
 /** A boon's picture: its own, or for a charm its kin's sign hanging on a string. */

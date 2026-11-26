@@ -28,12 +28,14 @@ import {
   isComponentId,
   type ItemId,
   legal,
+  levelBoost,
   openFight,
   type Party,
   partyOf,
   picksOf,
   type Piece,
   pieces,
+  placedOf,
   type RunView,
   specOf,
   type Spot,
@@ -285,10 +287,10 @@ export interface Numbers {
 }
 export const NUMBER_KEYS = ["health", "attack", "speed", "reach", "armour", "ward"] as const;
 
-/** A figure's own numbers at a number of stars, before anything it holds or belongs to. */
-export function plainNumbers(kind: UnitKind, stars: Stars): Numbers {
+/** A figure's own numbers at a number of stars and a level, before anything it holds or belongs to. */
+export function plainNumbers(kind: UnitKind, stars: Stars, level = 0): Numbers {
   const spec = specOf(kind);
-  const star = starScale(stars);
+  const star = starScale(stars) * (1 + levelBoost(level) / 100);
   return {
     health: Math.round(spec.hp * star),
     attack: Math.round(spec.attack * star),
@@ -326,10 +328,7 @@ export function pieceNumbers(run: RunView, spot: Spot): Numbers | null {
   const piece = run.bench[spot.at];
   if (!piece) return null;
   // Alone, in the middle row: nobody to share a trait with, and no row of Tidy Formation's.
-  const alone: Party = {
-    ...partyOf(run),
-    figures: [{ kind: piece.kind, stars: piece.stars, seat: 7, items: piece.items.slice(), fed: piece.fed }],
-  };
+  const alone: Party = { ...partyOf(run), figures: [placedOf(run, piece, 7)] };
   return startNumbers(alone, 7);
 }
 
