@@ -6,6 +6,7 @@ export * from "./build.ts";
 export { fromBase64, toBase64 } from "./bytes.ts";
 export { type KeptPiece } from "./cells.ts";
 export { check } from "./check.ts";
+export { blueprintCode, CODE_MOST, CODE_PREFIX, codePieces, codeRefusal, packedCode } from "./code.ts";
 export * from "./clock.ts";
 export { type Act, type ActOf, COMMANDS, LOCKED, REFUSED, type Turned, type Wired, writeAct } from "./commands.ts";
 export { readLeg, readPiece } from "./fields.ts";

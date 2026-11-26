@@ -1,11 +1,12 @@
 /**
- * The yard's places for blueprints, as the line over the dock shows them with Select in hand, and the
- * buttons for blueprints beside them: the bin for one in hand, Save yard, and Place for a plan of the
- * whole yard in hand (`plans.ts`). Each is drawn from what the line's print says (`dock.ts`), and a
- * press that asks again draws the line again (`toolHooks.changed`).
+ * The yard's places for blueprints, as the line over the dock shows them with Select in hand (and as
+ * Paste code offers them, `code.ts`), and the buttons for blueprints beside them: the bin for one in
+ * hand, Save yard, and Place for a plan of the whole yard in hand (`plans.ts`). Each is drawn from
+ * what the line's print says (`dock.ts`), and a press that asks again draws the line again
+ * (`toolHooks.changed`).
  */
 import { boxOf, piecesOf, priceOf } from "@sequoia-leaf/factory";
-import { amount, asking, asksAgain, el, pressedTwice } from "@sequoia-leaf/kit/dom.ts";
+import { amount, asking, asksAgain, el, pressedTwice, type Spend } from "@sequoia-leaf/kit/dom.ts";
 import { whole } from "@sequoia-leaf/kit/say.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 
@@ -15,6 +16,7 @@ import {
   deleteKey,
   digest,
   dropBlueprint,
+  pasteKey,
   pressWords,
   saveIn,
   saveKey,
@@ -44,6 +46,11 @@ export type Place =
 /** The places for blueprints, while Select has nothing marked or Save (or Save yard) is asking. */
 export function placesOf(stage: Stage | null): Place[] {
   if (stage?.is !== "empty" && stage?.is !== "saving" && stage?.is !== "savingYard") return [];
+  return places(saveKey);
+}
+
+/** Every place for a blueprint, each kept one asking again for what keeping over it is (`key`). */
+function places(key: (slot: number) => Spend): Place[] {
   return Array.from({ length: S.world.open.blueprints }, (_, slot): Place => {
     const kept = S.world.blueprints[slot];
     if (!kept) return { slot, kept: false };
@@ -56,7 +63,7 @@ export function placesOf(stage: Stage | null): Place[] {
       w: box.w,
       h: box.h,
       cost: kept.whole ? 0 : priceOf(S.world, pieces, true),
-      asking: asking(saveKey(slot)),
+      asking: asking(key(slot)),
       sum: digest(kept.pieces),
     };
   });
@@ -69,31 +76,47 @@ export function placesOf(stage: Stage | null): Place[] {
  * an empty one, on a second press over a kept one.
  */
 export function placeButton(p: Place, saving: boolean): HTMLElement {
+  const { slot } = p;
   const b = p.kept
-    ? keptButton(p)
+    ? keptButton(p, saveKey(slot), () => {
+        if (!S.saving) hold(slot);
+        else if (pressedTwice(handSession(), saveKey(slot), toolHooks.changed)) saveIn(slot);
+      })
     : button(saving ? "wood sm" : "wood sm off", ["Empty"], () => {
-        if (S.saving) saveIn(p.slot);
+        if (S.saving) saveIn(slot);
       });
-  b.dataset.place = String(p.slot);
+  b.dataset.place = String(slot);
   return b;
 }
 
 /**
- * A place with a blueprint kept in it: pressed, it is taken in hand, or while Save asks, kept over on
- * a second press. What it keeps over is named as it is pressed (the yard may have changed since it
- * was drawn), and the question is drawn for the same name.
+ * The places offered to keep a pasted code's blueprint in (`code`): pressed, it is kept at once in an
+ * empty one (`keep`), or over a kept one on a second press, which draws them again (`redraw`) to ask.
  */
-function keptButton(p: Extract<Place, { kept: true }>): HTMLElement {
-  const { slot } = p;
-  const kept = S.world.blueprints[slot];
+export function pastePlaces(code: string, keep: (slot: number) => void, redraw: () => void): HTMLElement[] {
+  return places((slot) => pasteKey(slot, code)).map((p) => {
+    const { slot } = p;
+    const b = p.kept
+      ? keptButton(p, pasteKey(slot, code), () => {
+          if (pressedTwice(handSession(), pasteKey(slot, code), redraw)) keep(slot);
+        })
+      : button("wood sm", ["Empty"], () => keep(slot));
+    b.dataset.place = String(slot);
+    return b;
+  });
+}
+
+/**
+ * A place with a blueprint kept in it, showing what it keeps, or while a press over it waits for a
+ * second (`key`, named as it is pressed: the yard may have changed since it was drawn), the question.
+ */
+function keptButton(p: Extract<Place, { kept: true }>, key: Spend, press: () => void): HTMLElement {
+  const kept = S.world.blueprints[p.slot];
   const face =
     p.asking || !kept
-      ? [asksAgain(saveKey(slot), [], "Replace?")]
+      ? [asksAgain(key, [], "Replace?")]
       : [thumb(piecesOf(kept.pieces), p.whole ? S.world.land : null), factsOf(p)];
-  return button(p.asking ? "sm asking" : "wood sm print", face, () => {
-    if (!S.saving) hold(slot);
-    else if (pressedTwice(handSession(), saveKey(slot), toolHooks.changed)) saveIn(slot);
-  });
+  return button(p.asking ? "sm asking" : "wood sm print", face, press);
 }
 
 /** What a kept place says under its picture: its size in tiles and what standing it costs now; a plan of the whole yard, that it is one. */

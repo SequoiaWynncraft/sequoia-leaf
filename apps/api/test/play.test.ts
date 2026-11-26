@@ -18,6 +18,7 @@ import {
   ALL_ITEMS,
   BELT,
   BENCH,
+  blueprintCode,
   check,
   clockOf,
   counts,
@@ -43,6 +44,7 @@ import {
   stepTo,
   swapRefusal,
   TICK_MS,
+  within as inArea,
   writeAct,
   type Yard,
 } from "@sequoia-leaf/factory";
@@ -1429,6 +1431,44 @@ const roomNow = () => services.run(Coins.use((coins) => coins.room(alice, clock.
 /** Alice's yard as her page is shown it now. */
 const yardShown = async (): Promise<Yard> =>
   yardOf(Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json()).state).yard;
+
+describe("a blueprint code in the Works", () => {
+  it("keeps the blueprint a code from another yard is, as Leaf reads it; a broken code is refused and keeps nothing", async () => {
+    // A yard somewhere else keeps a mill and a belt; its code is what its owner would paste in Discord.
+    const other = createYard({ seed: 3, tier: 5 });
+    const done = (c: Record<string, unknown>): void => {
+      const read = readCommand({ tick: other.tick, ...c });
+      if (!read || "refused" in playWorks(other, read)) throw new Error(`${JSON.stringify(c)} was not done`);
+    };
+    done({ do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
+    done({ do: "build", kind: "belt", x: 22, y: 15, dir: 0 });
+    done({ do: "saveBlueprint", slot: 0, tiles: inArea(other, 21, 15, 22, 15) });
+    const kept = other.blueprints[0];
+    const code = kept ? blueprintCode(kept) : null;
+    // Alice's yard, with a place for one blueprint and nothing kept in it.
+    await yardShown();
+    const w = createYard({ seed: 7, tier: 3 });
+    w.at = clock.now;
+    const text = FACTORY.encode(w);
+    await services.query(
+      (sql) =>
+        sql`UPDATE play_state SET rev = rev + 1, state = ${text}, updated_at = ${clock.now}
+            WHERE player_id = ${alice} AND game = 'works'`,
+    );
+    const opening = await send("GET", "/v1/game/play/works");
+    const { clock: tick } = yardOf(Schema.decodeUnknownSync(Shown)(await opening.json()).state);
+    const sent = [
+      { id: "p-1", tick, do: "pasteBlueprint", slot: 0, code: `${code ?? ""}A` },
+      { id: "p-2", tick, do: "pasteBlueprint", slot: 0, code },
+    ];
+    const answered = await send("POST", "/v1/game/play/works", { commands: sent });
+    expect(Schema.decodeUnknownSync(Answered)(await answered.json()).results).toEqual([
+      { id: "p-1", refused: "cannot_paste_blueprint" },
+      { id: "p-2", notes: [] },
+    ]);
+    expect((await yardShown()).blueprints).toEqual([kept ?? null, null, null, null]);
+  });
+});
 
 describe("an Undo in the Works", () => {
   let ids = 0;

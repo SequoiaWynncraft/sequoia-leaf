@@ -711,20 +711,62 @@
         gap: calc(var(--u) * 3);
       }
       /* A blueprint's place: its layout as a small picture, and beside it its size over its price. */
-      #hand .print {
+      :is(#hand, #code) .print {
         gap: calc(var(--u) * 2);
         padding-inline: calc(var(--u) * 2);
       }
-      #hand .print canvas {
+      :is(#hand, #code) .print canvas {
         margin-block: calc(var(--u) * -1);
       }
-      #hand .facts {
+      :is(#hand, #code) .facts {
         display: flex;
         flex-direction: column;
         align-items: flex-start;
         gap: var(--u);
         font: var(--f-small);
         line-height: 1;
+      }
+      /* A blueprint's code to copy by hand, or a field to paste one in and the places to keep it in: over the yard, under the top bar. */
+      #code {
+        position: fixed;
+        z-index: 12;
+        left: 0;
+        right: 0;
+        margin-inline: auto;
+        top: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
+        width: min(calc(var(--u) * 220), calc(100vw - var(--edge) * 2));
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 3);
+        box-sizing: border-box;
+        font: var(--f-ui);
+      }
+      #code[hidden] {
+        display: none;
+      }
+      #code .k-title {
+        margin: 0;
+      }
+      #code .k-field {
+        width: 100%;
+        word-break: break-all;
+      }
+      #code .say.bad {
+        color: var(--k-coral);
+      }
+      #code .say:empty {
+        display: none;
+      }
+      #code .places {
+        display: flex;
+        flex-wrap: wrap;
+        gap: calc(var(--u) * 3);
+      }
+      #code .places:empty {
+        display: none;
+      }
+      #code .end {
+        justify-content: flex-end;
       }
       /* With a tool in hand it is the thing that matters: the brass frame. */
       #hand.building {
@@ -1564,6 +1606,7 @@
     <div id="walk"></div>
     <div id="feed" aria-live="polite"></div>
     <div id="hand" class="k-tip"></div>
+    <div id="code" class="k-tip" hidden></div>
     <nav id="dock" class="k-shelf" aria-label="Tools"><div id="tools"></div></nav>
     <aside id="panel" class="k-panel" role="dialog" aria-labelledby="panel-title" hidden></aside>
     <div id="banner" class="k-panel" hidden></div>

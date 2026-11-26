@@ -855,26 +855,12 @@
         display: none;
       }
 
-      /* What a tome request is for, typed at the Treasury, across its row. 16px at least, or a phone zooms in on it. */
+      /* What a tome request is for, typed at the Treasury, across its row (`kit.css` draws the field). */
       .k-card:has(> textarea.k-field) {
         flex-wrap: wrap;
       }
       .k-field {
-        box-sizing: border-box;
         flex-basis: 100%;
-        padding: calc(var(--u) * 2) calc(var(--u) * 3);
-        border: var(--u) solid var(--k-faint);
-        background: var(--k-ink);
-        color: var(--k-cream);
-        font: var(--f-typed);
-        resize: none;
-      }
-      .k-field:focus {
-        outline: none;
-        border-color: var(--k-gold);
-      }
-      .k-field::placeholder {
-        color: var(--k-faint);
       }
       /* A row's dim line beside a field and a button breaks where it reads best: "200 Leaf for 1 LE," then "at least 32 LE." */
       #panel .k-card .k-col > .k-d {

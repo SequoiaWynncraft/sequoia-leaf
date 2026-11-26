@@ -1,7 +1,8 @@
 /**
  * Blueprints with Select: the pieces a blueprint in hand would stand, keeping the marked pieces in a
  * place, keeping the whole yard in one once "A plan of the whole yard" is known, putting such a plan
- * back, and throwing a blueprint away.
+ * back, throwing a blueprint away, and a blueprint's code: copied from one in hand, and pasted into a
+ * place (`code.ts` in the rules reads it, here and on Leaf).
  *
  * A plan of the whole yard goes back where it was taken: in hand, it shows the yard as it would be
  * put back (what is stood, over the yard with what is taken up gone), wherever the pointer is. The
@@ -10,6 +11,7 @@
  * why at once and asks nothing.
  */
 import {
+  blueprintCode,
   blueprintRefusal,
   DEPOT,
   locked,
@@ -239,4 +241,42 @@ export function dropBlueprint(slot: number): void {
   if (groupOf(S.hand)?.as === slot) go({ do: "unhold" });
   yardSfx.take();
   toolHooks.changed();
+}
+
+// ---------- codes ----------
+
+/** The code of the blueprint in a place, to copy: none for an empty place or a plan of the whole yard, which is not shared. */
+export function codeIn(slot: number): string | null {
+  const print = S.world.blueprints[slot];
+  return print ? blueprintCode(print) : null;
+}
+
+/** Copy code, beside the bin: for a blueprint in hand but a plan of the whole yard, and whether its code was just copied. */
+export interface CopyPrint {
+  readonly slot: number;
+  readonly copied: boolean;
+}
+export const copyable = (g: Group | null): CopyPrint | null =>
+  typeof g?.as === "number" && !isWhole(g.as) ? { slot: g.as, copied: S.copied === g.as } : null;
+
+/** Paste code, beside Save yard: with Select in hand and nothing marked, once the yard keeps blueprints. */
+export const pasteOffered = (stage: Stage | null): boolean => stage?.is === "empty" && S.world.open.blueprints > 0;
+
+/** A kept place pressed while Paste code asks where: keeping the code's blueprint over what is kept there. */
+export const pasteKey = (slot: number, code: string): Spend =>
+  pressKey(`paste:${printKey(slot)}:${digest(new TextEncoder().encode(code.trim()))}`);
+
+/**
+ * Keeps the blueprint a code is in a place, as one command the rules read on the page and on Leaf;
+ * says why it cannot be, with its sound, or nothing when it is kept.
+ */
+export function pasteIn(slot: number, code: string): string | null {
+  const did = doNow({ do: "pasteBlueprint", slot, code: code.trim() });
+  if ("refused" in did) {
+    yardSfx.no();
+    return `${did.why}.`;
+  }
+  yardSfx.ready();
+  toolHooks.changed();
+  return null;
 }

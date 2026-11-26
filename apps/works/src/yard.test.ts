@@ -6,6 +6,7 @@ import {
   BELT,
   build,
   check,
+  codePieces,
   counts,
   create,
   deliver,
@@ -15,6 +16,7 @@ import {
   LEAD,
   ORDER_WAITS,
   readAnswer,
+  REFUSED,
   stepTo,
   TICK_MS,
   type Yard,
@@ -142,6 +144,20 @@ describe("the yard, on Leaf", () => {
       hung: [],
     });
     expect(isRecord(body) && body.results).toEqual([{ id: "w-1", notes: [] }]);
+  });
+
+  test("reads what Leaf answers a blueprint code pasted: kept, or refused with the code the rules name, as the page reads each code", async () => {
+    const contract: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
+    const exchange = isRecord(contract) ? contract["POST /v1/game/play/{game}, the Works, a blueprint code"] : null;
+    const sent =
+      isRecord(exchange) && isRecord(exchange.request) && isRecord(exchange.request.body) ? exchange.request.body : {};
+    const codes = Array.isArray(sent.commands) ? sent.commands.map((c: unknown) => (isRecord(c) ? c.code : null)) : [];
+    expect(codes.map((c) => typeof c === "string" && codePieces(c) !== null)).toEqual([true, false]);
+    const body = isRecord(exchange) ? exchange.body : null;
+    expect(isRecord(body) && body.results).toEqual([
+      { id: "w-2", notes: [] },
+      { id: "w-3", refused: REFUSED.pasteBlueprint },
+    ]);
   });
 
   test("opens as Leaf has it, and keeps nothing of the game in the browser", async () => {

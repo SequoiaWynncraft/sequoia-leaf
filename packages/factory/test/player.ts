@@ -55,6 +55,13 @@ export class Player {
     }
     return { kind: F.kindName(kind), ...this.spot(), dir: 0 };
   }
+  /** The code of one of a yard's blueprints, a fifth of the time cut short; one of no blueprint, for none. */
+  code(y: F.Yard): string {
+    const print = y.blueprints[this.int(F.BLUEPRINTS_MOST)];
+    const code = (print && F.blueprintCode(print)) ?? `${F.CODE_PREFIX}AAAA`;
+    return this.r() < 0.2 ? code.slice(0, -2) : code;
+  }
+
   box(): number[] {
     const { x, y } = this.spot();
     const r = 1 + this.int(5);
@@ -97,11 +104,14 @@ export class Player {
         if (!y.blueprints[slot] || this.r() < 0.2) return { do: "deleteBlueprint", slot };
         return { do: "placeBlueprint", slot, turns: this.int(4), ...at };
       }
-      case 7:
-        // A yard that may keep the whole yard now and then does: the same draws as ever for one that may not.
-        if (F.locked(y.open, { use: "whole" }) === null && this.r() < 0.3)
-          return { do: "saveYard", slot: this.int(F.BLUEPRINTS_MOST) };
+      case 7: {
+        // A yard that may keep the whole yard now and then does, or pastes a code of one of its
+        // blueprints (now and then broken in the copying): the same draws as ever for one that may not.
+        const r = F.locked(y.open, { use: "whole" }) === null ? this.r() : 1;
+        if (r < 0.15) return { do: "saveYard", slot: this.int(F.BLUEPRINTS_MOST) };
+        if (r < 0.3) return { do: "pasteBlueprint", slot: this.int(F.BLUEPRINTS_MOST), code: this.code(y) };
         return { do: "saveBlueprint", slot: this.int(F.BLUEPRINTS_MOST), tiles: this.box() };
+      }
       case 8: {
         // Now and then a copy of one piece onto ground where a piece may stand, which a box at
         // random seldom finds; else a move or a copy, by the size of the box: the same draws either way.

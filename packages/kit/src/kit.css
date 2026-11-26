@@ -1354,6 +1354,23 @@ button.k-info-chip:hover .k-chip {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+/* A field typed or pasted in, on any page. 16px at least, or a phone zooms in on it. */
+.k-field {
+  box-sizing: border-box;
+  padding: calc(var(--u) * 2) calc(var(--u) * 3);
+  border: var(--u) solid var(--k-faint);
+  background: var(--k-ink);
+  color: var(--k-cream);
+  font: var(--f-typed);
+  resize: none;
+}
+.k-field:focus {
+  outline: none;
+  border-color: var(--k-gold);
+}
+.k-field::placeholder {
+  color: var(--k-faint);
+}
 .k-row {
   display: flex;
   align-items: center;
