@@ -478,7 +478,7 @@ export function meets(state: Table, c: RaidCommand): Meeting | null {
   const run = state.run;
   const to = c.do === "take" && run ? takenTo(run) : null;
   if (!run || to === null || ROOMS[to]?.kind !== "spar") return null;
-  return { slot: boardSlot(run.trail, to, run.own !== null), avoid: metLately(run.record) };
+  return { slot: boardSlot(run.trail, to, run.own !== null), avoid: metLately(run.record, run.foe) };
 }
 
 /**

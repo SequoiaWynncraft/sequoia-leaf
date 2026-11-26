@@ -111,6 +111,12 @@ export function across(
 
 /** How many of the members met lately are not met again: one member's board at most once in three met in a row. */
 export const MET_APART = 2;
-/** The members whose boards a run met in its last `MET_APART` rooms against one, most lately last. */
-export const metLately = (record: readonly { readonly met?: string }[]): string[] =>
-  record.flatMap((r) => (r.met === undefined ? [] : [r.met])).slice(-MET_APART);
+/**
+ * The members whose boards a run met in its last `MET_APART` rooms against one, most lately last:
+ * those its record keeps, and the one across now (`now`), whose room is not in the record until it
+ * is taken (Leaf asks `Game.meets` before the take).
+ */
+export const metLately = (record: readonly { readonly met?: string }[], now: Party): string[] =>
+  [...record, now.by === undefined ? {} : { met: now.by }]
+    .flatMap((r) => (r.met === undefined ? [] : [r.met]))
+    .slice(-MET_APART);

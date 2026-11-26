@@ -951,20 +951,19 @@ describe("another member's board in a sparring room", () => {
     expect(regular.log?.[0]?.data).not.toHaveProperty("met");
   });
   test("a room fought against a member's board keeps whose it was, and the next sparring rooms meet somebody else", () => {
+    // Room 2 is sparring against a member's board, and room 3 sparring after it.
     const met = must(fighting(1), { do: "take" }, { ...ctx(), met: metOf(keptBoard()) }).state;
-    const taken = must(must(planned(met), { do: "fight" }).state, { do: "take" }).state;
+    const against = must(planned(met), { do: "fight" }).state;
+    // Leaf asks before the take that writes room 2 into the record: the member across now is left out already.
+    expect(meets(against, { do: "take" })).toEqual({ slot: "board:0:3", avoid: [MEMBER] });
+    const taken = must(against, { do: "take" }).state;
     expect(runOf(taken).record.at(-1)).toMatchObject({ room: 2, kind: "spar", met: MEMBER });
-    // The next sparring room's board is never that member's; of several, only the last two met are left out.
-    const run = runOf(taken);
-    expect(meets(taken, { do: "take" })).toBeNull();
+    // Of several met, only the last two are left out; a regular across now counts for nobody.
     const next = fighting(2);
-    runOf(next).record = run.record;
-    expect(meets(next, { do: "take" })?.avoid).toEqual([MEMBER]);
-    const sparred = run.record.at(-1);
+    const sparred = runOf(taken).record.at(-1);
     if (!sparred) throw new Error("a room taken");
     const seen = ["m-1", "m-2", "m-3"].map((who, i) => Object.assign(structuredClone(sparred), { room: i, met: who }));
-    const { met: _, ...plain } = sparred;
-    runOf(next).record = [...seen, { ...plain, room: 3 }];
+    runOf(next).record = seen;
     expect(meets(next, { do: "take" })?.avoid).toEqual(["m-2", "m-3"]);
     expect(MET_APART).toBe(2);
   });
