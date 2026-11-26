@@ -568,6 +568,7 @@
         },
         "trail": 0,
         "looks": {
+          "place": "clearing",
           "cloth": "bare",
           "lantern": "iron",
           "bases": "plain",
@@ -606,6 +607,120 @@
     "body": {
       "rev": 1,
       "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "runs": 1,
+        "run": {
+          "trail": 0,
+          "room": 0,
+          "stage": {
+            "phase": "plan",
+            "picks": []
+          },
+          "resolve": 20,
+          "acorns": 2,
+          "streak": 0,
+          "level": 1,
+          "xp": 0,
+          "board": [
+            null,
+            null,
+            null,
+            {
+              "id": 1,
+              "kind": "barrowgnome",
+              "stars": 1,
+              "items": [],
+              "fed": 0
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
+          "items": [],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+          "held": false,
+          "rustles": 1,
+          "bought": 0,
+          "boons": [],
+          "foe": {
+            "who": "The forest",
+            "title": "A few gnats",
+            "figures": [
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 2,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 4,
+                "items": [],
+                "fed": 0
+              }
+            ],
+            "boons": [],
+            "might": 100
+          },
+          "record": [],
+          "nextId": 2,
+          "last": null,
+          "own": null,
+          "seen": {
+            "fielded": [],
+            "threeStars": [],
+            "forged": [],
+            "topped": []
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0
+        },
+        "trail": 0,
+        "looks": {
+          "place": "clearing",
+          "cloth": "bare",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": []
+        },
+        "roster": {}
+      },
+      "purse": {
+        "coins": 300,
+        "leaf": 32163,
+        "version": 16
+      },
       "results": [
         {
           "id": "c-1",
@@ -631,120 +746,7 @@
             }
           ]
         }
-      ],
-      "state": {
-        "runs": 1,
-        "run": {
-          "trail": 0,
-          "room": 0,
-          "stage": {
-            "phase": "plan",
-            "picks": []
-          },
-          "resolve": 20,
-          "acorns": 2,
-          "streak": 0,
-          "level": 1,
-          "xp": 0,
-          "board": [
-            null,
-            null,
-            null,
-            {
-              "id": 1,
-              "kind": "barrowgnome",
-              "stars": 1,
-              "items": [],
-              "fed": 0
-            },
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
-          "bench": [null, null, null, null, null, null, null, null, null],
-          "items": [],
-          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
-          "held": false,
-          "rustles": 1,
-          "bought": 0,
-          "boons": [],
-          "foe": {
-            "who": "The forest",
-            "title": "A few gnats",
-            "figures": [
-              {
-                "kind": "gnat",
-                "stars": 1,
-                "seat": 2,
-                "items": [],
-                "fed": 0
-              },
-              {
-                "kind": "gnat",
-                "stars": 1,
-                "seat": 4,
-                "items": [],
-                "fed": 0
-              }
-            ],
-            "boons": [],
-            "might": 100
-          },
-          "record": [],
-          "nextId": 2,
-          "last": null,
-          "own": null,
-          "seen": {
-            "fielded": [],
-            "threeStars": [],
-            "forged": [],
-            "topped": []
-          }
-        },
-        "almanac": {
-          "fielded": [],
-          "threeStars": [],
-          "forged": [],
-          "topped": [],
-          "bosses": [[], [], []],
-          "best": [0, 0, 0],
-          "runs": 0
-        },
-        "trail": 0,
-        "looks": {
-          "cloth": "bare",
-          "lantern": "iron",
-          "bases": "plain",
-          "owned": []
-        },
-        "roster": {}
-      },
-      "purse": {
-        "coins": 300,
-        "leaf": 32163,
-        "version": 16
-      }
+      ]
     }
   },
   "POST /v1/game/play/{game}, a refusal": {
@@ -765,12 +767,6 @@
     "body": {
       "rev": 1,
       "now": "2026-11-25T12:55:00.000Z",
-      "results": [
-        {
-          "id": "c-3",
-          "refused": "no_fight"
-        }
-      ],
       "state": {
         "runs": 1,
         "run": {
@@ -872,6 +868,7 @@
         },
         "trail": 0,
         "looks": {
+          "place": "clearing",
           "cloth": "bare",
           "lantern": "iron",
           "bases": "plain",
@@ -883,7 +880,13 @@
         "coins": 300,
         "leaf": 32163,
         "version": 16
-      }
+      },
+      "results": [
+        {
+          "id": "c-3",
+          "refused": "no_fight"
+        }
+      ]
     }
   },
   "POST /v1/game/play/{game}, sent again": {
@@ -910,32 +913,6 @@
     "body": {
       "rev": 1,
       "now": "2026-11-25T12:55:00.000Z",
-      "results": [
-        {
-          "id": "c-1",
-          "notes": [
-            {
-              "t": "started",
-              "trail": 0,
-              "run": 1
-            }
-          ]
-        },
-        {
-          "id": "c-2",
-          "notes": [
-            {
-              "t": "starter",
-              "kind": "barrowgnome",
-              "piece": 1,
-              "to": {
-                "on": "board",
-                "at": 3
-              }
-            }
-          ]
-        }
-      ],
       "state": {
         "runs": 1,
         "run": {
@@ -1037,6 +1014,7 @@
         },
         "trail": 0,
         "looks": {
+          "place": "clearing",
           "cloth": "bare",
           "lantern": "iron",
           "bases": "plain",
@@ -1048,7 +1026,33 @@
         "coins": 300,
         "leaf": 32163,
         "version": 16
-      }
+      },
+      "results": [
+        {
+          "id": "c-1",
+          "notes": [
+            {
+              "t": "started",
+              "trail": 0,
+              "run": 1
+            }
+          ]
+        },
+        {
+          "id": "c-2",
+          "notes": [
+            {
+              "t": "starter",
+              "kind": "barrowgnome",
+              "piece": 1,
+              "to": {
+                "on": "board",
+                "at": 3
+              }
+            }
+          ]
+        }
+      ]
     }
   },
   "POST /v1/game/play/{game}, not a command": {
@@ -1102,18 +1106,6 @@
     "body": {
       "rev": 2,
       "now": "2026-11-25T12:55:00.000Z",
-      "results": [
-        {
-          "id": "c-5",
-          "notes": [
-            {
-              "t": "look",
-              "kind": "cloth",
-              "id": "plum"
-            }
-          ]
-        }
-      ],
       "state": {
         "runs": 1,
         "run": {
@@ -1215,6 +1207,7 @@
         },
         "trail": 0,
         "looks": {
+          "place": "clearing",
           "cloth": "plum",
           "lantern": "iron",
           "bases": "plain",
@@ -1226,7 +1219,19 @@
         "coins": 300,
         "leaf": 4163,
         "version": 17
-      }
+      },
+      "results": [
+        {
+          "id": "c-5",
+          "notes": [
+            {
+              "t": "look",
+              "kind": "cloth",
+              "id": "plum"
+            }
+          ]
+        }
+      ]
     }
   },
   "POST /v1/game/play/{game}, a look bought, sent again": {
@@ -1249,18 +1254,6 @@
     "body": {
       "rev": 2,
       "now": "2026-11-25T12:55:00.000Z",
-      "results": [
-        {
-          "id": "c-5",
-          "notes": [
-            {
-              "t": "look",
-              "kind": "cloth",
-              "id": "plum"
-            }
-          ]
-        }
-      ],
       "state": {
         "runs": 1,
         "run": {
@@ -1362,6 +1355,7 @@
         },
         "trail": 0,
         "looks": {
+          "place": "clearing",
           "cloth": "plum",
           "lantern": "iron",
           "bases": "plain",
@@ -1373,7 +1367,19 @@
         "coins": 300,
         "leaf": 4163,
         "version": 17
-      }
+      },
+      "results": [
+        {
+          "id": "c-5",
+          "notes": [
+            {
+              "t": "look",
+              "kind": "cloth",
+              "id": "plum"
+            }
+          ]
+        }
+      ]
     }
   },
   "POST /v1/game/play/{game}, a guest with too little Leaf": {
@@ -1396,12 +1402,6 @@
     "body": {
       "rev": 0,
       "now": "2026-11-25T12:55:00.000Z",
-      "results": [
-        {
-          "id": "v-1",
-          "refused": "not_enough_leaf"
-        }
-      ],
       "state": {
         "runs": 0,
         "run": null,
@@ -1416,6 +1416,7 @@
         },
         "trail": 0,
         "looks": {
+          "place": "clearing",
           "cloth": "bare",
           "lantern": "iron",
           "bases": "plain",
@@ -1427,7 +1428,13 @@
         "coins": 300,
         "leaf": 0,
         "version": 2
-      }
+      },
+      "results": [
+        {
+          "id": "v-1",
+          "refused": "not_enough_leaf"
+        }
+      ]
     }
   },
   "GET /v1/game/me, after a look bought": {
@@ -1634,33 +1641,6 @@
     "body": {
       "rev": 1,
       "now": "2026-11-25T12:55:00.000Z",
-      "results": [
-        {
-          "id": "t-1",
-          "notes": []
-        },
-        {
-          "id": "t-2",
-          "notes": []
-        },
-        {
-          "id": "t-3",
-          "notes": []
-        },
-        {
-          "id": "t-4",
-          "notes": [
-            {
-              "t": "setOut",
-              "n": 11
-            }
-          ]
-        },
-        {
-          "id": "t-5",
-          "notes": []
-        }
-      ],
       "state": {
         "sightings": 0,
         "spotAt": 0,
@@ -1790,7 +1770,34 @@
         "coins": 275,
         "leaf": 4163,
         "version": 19
-      }
+      },
+      "results": [
+        {
+          "id": "t-1",
+          "notes": []
+        },
+        {
+          "id": "t-2",
+          "notes": []
+        },
+        {
+          "id": "t-3",
+          "notes": []
+        },
+        {
+          "id": "t-4",
+          "notes": [
+            {
+              "t": "setOut",
+              "n": 11
+            }
+          ]
+        },
+        {
+          "id": "t-5",
+          "notes": []
+        }
+      ]
     }
   },
   "GET /v1/game/play/{game}/standings": {
@@ -2627,12 +2634,6 @@
     "body": {
       "rev": 1,
       "now": "2026-11-25T12:55:00.000Z",
-      "results": [
-        {
-          "id": "w-1",
-          "notes": []
-        }
-      ],
       "state": {
         "clock": 0,
         "tick": 0,
@@ -2643,7 +2644,13 @@
         "coins": 300,
         "leaf": 220,
         "version": 17
-      }
+      },
+      "results": [
+        {
+          "id": "w-1",
+          "notes": []
+        }
+      ]
     }
   },
   "POST /v1/game/play/{game}, the Works, a blueprint code": {

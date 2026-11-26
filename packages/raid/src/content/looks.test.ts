@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { BASES, CLOTHS, LANTERNS, LOOK_KINDS, LOOKS, newLooks, owns, readLooks, wear } from "./looks.ts";
+import { LOOK_KINDS, LOOKS, newLooks, owns, readLooks, tryOn, wear } from "./looks.ts";
 
 describe("the looks of the table", () => {
   test("everybody has the first look of each kind, and the rest cost Leaf", () => {
@@ -22,7 +22,7 @@ describe("the looks of the table", () => {
   });
 
   test("every look has a name of its own", () => {
-    const ids = [...CLOTHS, ...LANTERNS, ...BASES].map((l) => l.id);
+    const ids = LOOK_KINDS.flatMap((kind) => LOOKS[kind]).map((l) => l.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
@@ -36,6 +36,30 @@ describe("the looks of the table", () => {
     expect(wear(looks, "cloth", "bare")).toBe(true);
   });
 
+  test("the place is a look like the others: the clearing is everybody's, the hall is bought, chosen and kept", () => {
+    const looks = newLooks();
+    expect(looks.place).toBe("clearing");
+    expect(wear(looks, "place", "hall")).toBe(false);
+    // Trying it on shows it and changes nothing.
+    expect(tryOn(looks, "place", "hall").place).toBe("hall");
+    expect(tryOn(looks, "cloth", "hall")).toEqual(looks);
+    expect(looks.place).toBe("clearing");
+    looks.owned.push("hall");
+    expect(wear(looks, "cloth", "hall")).toBe(false);
+    expect(wear(looks, "place", "hall")).toBe(true);
+    expect(readLooks(structuredClone(looks))).toEqual(looks);
+    expect(wear(looks, "place", "clearing")).toBe(true);
+    expect(looks).toEqual({ ...newLooks(), owned: ["hall"] });
+  });
+
+  test("looks kept before the table had a place are in the clearing", () => {
+    const old = { cloth: "plum", lantern: "iron", bases: "plain", owned: ["plum"] };
+    expect(readLooks(old)).toEqual({ ...newLooks(), cloth: "plum", owned: ["plum"] });
+    expect(readLooks({ ...old, place: "hall" })?.place).toBe("clearing");
+    expect(readLooks({ ...old, place: "hall", owned: ["plum", "hall"] })?.place).toBe("hall");
+    expect(readLooks({ ...old, place: "moon" })).toBeNull();
+  });
+
   test("are read back only as a member could have them: nothing worn that was not bought, nothing free listed as bought", () => {
     expect(readLooks(newLooks())).toEqual(newLooks());
     expect(readLooks({ cloth: "plum", lantern: "jar", bases: "gilt", owned: ["jar"] })).toEqual({
@@ -44,6 +68,7 @@ describe("the looks of the table", () => {
       owned: ["jar"],
     });
     expect(readLooks({ cloth: "plum", lantern: "jar", bases: "gilt", owned: ["plum", "jar", "gilt"] })).toEqual({
+      place: "clearing",
       cloth: "plum",
       lantern: "jar",
       bases: "gilt",

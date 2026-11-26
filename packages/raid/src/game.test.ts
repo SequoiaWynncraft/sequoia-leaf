@@ -103,7 +103,7 @@ describe("a new player's table", () => {
     const state = RAID.create(ctx(1));
     expect(state.run).toBeNull();
     expect(state.runs).toBe(0);
-    expect(state.looks).toEqual({ cloth: "bare", lantern: "iron", bases: "plain", owned: [] });
+    expect(state.looks).toEqual(newLooks());
     expect(RAID.view(state, ctx())).toEqual({
       runs: 0,
       run: null,
@@ -354,7 +354,7 @@ describe("every command a player has", () => {
       refused: "no_such_look",
     });
     const bought = must(state, { do: "buyLook", kind: "lantern", look: "jar" }, ctx(1));
-    expect(bought.state.looks).toEqual({ cloth: "bare", lantern: "jar", bases: "plain", owned: ["jar"] });
+    expect(bought.state.looks).toEqual({ ...newLooks(), lantern: "jar", owned: ["jar"] });
     expect(bought.notes).toEqual([{ t: "look", kind: "lantern", id: "jar" }]);
     expect(bought.leaf).toEqual([
       { amount: 28_000, reason: "Raid table look: Jar of fireflies", key: "look:jar", for: "everyone" },
@@ -709,12 +709,65 @@ describe("a table's numbers on its player's card", () => {
 /** A table as Leaf opens it for a player who holds these awards. */
 const won = (state: Table, ...awards: string[]): Table => RAID.advance(state, { ...ctx(1), awards });
 
+/** A raid begun, planned and fought with the same dice, at a table in the hall or in the clearing. */
+const playedIn = (inHall: boolean) => {
+  let state = RAID.create(ctx(7));
+  if (inHall) state = { ...state, looks: { ...state.looks, place: "hall", owned: ["hall"] } };
+  const notes: RaidNote[] = [];
+  const act = (c: RaidCommand, seed: number): void => {
+    const done = RAID.apply(state, c, ctx(seed));
+    if (!isDone(done)) return;
+    state = done.state;
+    notes.push(...done.notes);
+  };
+  act({ do: "start", trail: 0 }, 1);
+  act({ do: "choose", option: 0 }, 2);
+  for (let step = 3; step < 12; step++) {
+    for (const c of planCommands(RAID.view(state, ctx(step)), SENSIBLE)) act(c, step);
+  }
+  act({ do: "fight" }, 12);
+  return { run: state.run, rng: state.rng, notes };
+};
+
+describe("the place the table stands", () => {
+  const hall = { do: "buyLook", kind: "place", look: "hall" } as const;
+  test("is bought with Leaf, chosen and kept like any look", () => {
+    const state = RAID.create(ctx(1));
+    expect(RAID.apply(state, { do: "look", kind: "place", look: "hall" }, ctx(1))).toEqual({ refused: "not_owned" });
+    expect(RAID.apply(state, { do: "buyLook", kind: "place", look: "clearing" }, ctx(1))).toEqual({ refused: "owned" });
+    const bought = must(state, hall, ctx(1));
+    expect(bought.state.looks).toEqual({ ...newLooks(), place: "hall", owned: ["hall"] });
+    expect(bought.notes).toEqual([{ t: "look", kind: "place", id: "hall" }]);
+    expect(readNotes(wire(bought.notes))).toEqual([...bought.notes]);
+    expect(bought.leaf).toEqual([
+      { amount: 40_000, reason: "Raid table look: The guild hall", key: "look:hall", for: "everyone" },
+    ]);
+    expect(RAID.apply(bought.state, hall, ctx(1))).toEqual({ refused: "owned" });
+    expect(RAID.decode(RAID.encode(bought.state))?.looks).toEqual(bought.state.looks);
+    expect(readView(wire(RAID.view(bought.state, ctx(1))))?.looks.place).toBe("hall");
+    const back = must(bought.state, { do: "look", kind: "place", look: "clearing" }, ctx(1));
+    expect(back.state.looks).toEqual({ ...newLooks(), owned: ["hall"] });
+    expect(back.leaf).toBeUndefined();
+  });
+  test("a table stored before there was a second place is in the clearing", () => {
+    const stored: unknown = JSON.parse(RAID.encode(started()));
+    if (typeof stored !== "object" || stored === null || !("looks" in stored)) throw new Error("not a table");
+    stored.looks = { cloth: "bare", lantern: "iron", bases: "plain", owned: [] };
+    expect(RAID.decode(JSON.stringify(stored))?.looks).toEqual(newLooks());
+  });
+  test("changes nothing of a run: the same dice play the same raid in the hall as in the clearing", () => {
+    const there = playedIn(true);
+    expect(there.run?.stage.phase).toBe("fight");
+    expect(there).toEqual(playedIn(false));
+  });
+});
+
 describe("a look won as a pull's prize", () => {
   test("is owned at the table, costs nothing, and may be put on", () => {
     const state = RAID.create(ctx(1));
     expect(won(state, "trophy-oldbramble", "pull:thing:rock", "pull:look:bare", "pull:look:nothing")).toBe(state);
     const owner = won(state, "pull:look:gilt", "pull:look:baize");
-    expect(owner.looks).toEqual({ cloth: "bare", lantern: "iron", bases: "plain", owned: ["gilt", "baize"] });
+    expect(owner.looks).toEqual({ ...newLooks(), owned: ["gilt", "baize"] });
     expect(state.looks.owned).toEqual([]);
     expect(RAID.apply(owner, { do: "buyLook", kind: "bases", look: "gilt" }, ctx(1))).toEqual({ refused: "owned" });
     const worn = must(owner, { do: "look", kind: "bases", look: "gilt" }, ctx(1));

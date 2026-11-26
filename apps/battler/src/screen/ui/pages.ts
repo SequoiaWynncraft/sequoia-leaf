@@ -11,9 +11,7 @@ import { balance, LEAF_MEMBERS, leafFor, leafOpen } from "@sequoia-leaf/kit/purs
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { tipAt } from "@sequoia-leaf/kit/tip.ts";
 import {
-  baseOf,
   BOSS_IDS,
-  clothOf,
   COMPONENT_IDS,
   ECONOMY,
   FIGHT,
@@ -23,7 +21,6 @@ import {
   FINISHED_IDS,
   isMemberId,
   itemName,
-  lanternOf,
   LOOK_KINDS,
   LOOK_TITLES,
   type LookId,
@@ -41,15 +38,15 @@ import {
   TRAILS,
   TRAIT_IDS,
   TRAITS,
+  tryOn,
   unfought,
   wornOf,
 } from "@sequoia-leaf/raid";
 
 import { glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
-import { paintSwatch } from "../art/table.ts";
+import { paintLook } from "../art/place.ts";
 import { endedOf } from "../screen.ts";
 import { snd } from "../sounds.ts";
-import { dress } from "../stage.ts";
 import { ask, S } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
 import { figuresHere, nothingNew, pulledLine, pulledTag, runTag, setsOutOwn, wayPrefix, waysOf } from "./own.ts";
@@ -515,7 +512,6 @@ async function wear(c: Extract<RaidCommand, { do: "look" | "buyLook" }>, button:
     tipAt({ x: r.left, y: r.top, w: r.width, h: r.height }, did.why, "", at);
   }
   if (!did?.ok) return;
-  dress(S.looks.cloth, S.looks.lantern);
   renderPages(true);
   if (c.do === "buyLook") snd.buy();
 }
@@ -550,15 +546,10 @@ function lookLine(kind: LookKind, spec: (typeof LOOKS)[LookKind][number], shown:
 }
 
 function looks(): HTMLElement {
-  const tried: { kind: LookKind; id: LookId } = trying ?? { kind: "cloth", id: wearing("cloth") };
-  const dressed = {
-    cloth: (tried.kind === "cloth" ? clothOf(tried.id) : null) ?? S.looks.cloth,
-    lantern: (tried.kind === "lantern" ? lanternOf(tried.id) : null) ?? S.looks.lantern,
-    bases: (tried.kind === "bases" ? baseOf(tried.id) : null) ?? S.looks.bases,
-  };
+  const tried: { kind: LookKind; id: LookId } = trying ?? { kind: "place", id: wearing("place") };
   const body = el("div", "k-body k-scroll", {});
   add(body, el("div", "k-row", {}, el("span", "k-grow"), amount("leaf", balance().leaf)));
-  add(body, el("div", "swatch", {}, figPic(paintSwatch(dressed.cloth, dressed.lantern, dressed.bases))));
+  add(body, el("div", "swatch", {}, figPic(paintLook(tryOn(S.looks, tried.kind, tried.id)))));
   // Every look's line, one over another and only the one tried shown: the box is as tall as the
   // tallest whichever is tried, so nothing under it moves.
   add(

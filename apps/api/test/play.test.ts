@@ -970,7 +970,13 @@ describe("Leaf a command takes", () => {
     const buy = buyCloth("plum");
     const done = await commanded([buy]);
     expect(done.results).toEqual([{ id: buy.id, notes: [{ t: "look", kind: "cloth", id: "plum" }] }]);
-    expect(done.view.looks).toEqual({ cloth: "plum", lantern: "iron", bases: "plain", owned: ["plum"] });
+    expect(done.view.looks).toEqual({
+      place: "clearing",
+      cloth: "plum",
+      lantern: "iron",
+      bases: "plain",
+      owned: ["plum"],
+    });
     expect(await services.account(alice)).toEqual({ playerId: alice, balance: 2000, xp: 30_000 });
     const spent = {
       kind: "spend",

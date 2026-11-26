@@ -152,9 +152,15 @@ kit's card: "The table needs the guild's server."
   twenty-eight. Every one of
   the twenty-eight figures can be at the stall for everyone from the first run. The almanac shows
   every figure, trait and item met so far, which figures reached three stars, and how far each trail
-  has been walked. Table looks are the one thing Leaf buys here: a cloth under the
-  board, a different lantern, different bases; each is shown before it is bought and changes
-  nothing but the picture.
+  has been walked. Table looks are the one thing Leaf buys here: the place the
+  table stands, a cloth under the board, a different lantern, different bases; each is shown
+  before it is bought and changes nothing but the picture.
+- **The guild hall.** The second place the table may stand, late at night: a long oak table where
+  the stump is and of the same size, so the board, the bench, the lanterns (on iron stands on the
+  table) and whoever sits round it are where they are in the clearing. Stone flags and a blue
+  runner under it, the hearth lit on the far wall to the left, the moon through the windows to
+  the right, the guild's banners. The fire, its sparks, the candle on the table, a moth at a
+  lantern, the cat by the hearth and the dust in the moon move; nothing of it crosses the board.
 - **First time.** One nudge at a time, in the place it matters: a hand points, one line says what
   to do, and it is gone for good once the thing has been done.
 
@@ -252,6 +258,7 @@ timed can be stepped by hand.
 | `@sequoia-leaf/figures`       | The figures' pictures, which the town draws too (`packages/figures`, with its README)                 |
 | `src/screen/art/icons.ts`     | A small picture for every trait, item, boon, kind of room and button, typed in `icons.txt`            |
 | `src/screen/art/table.ts`     | The painted table, the halves of the board, the looks                                                 |
+| `src/screen/art/place.ts`     | The second place the table may stand (the guild hall), what moves in it, and which place is painted   |
 | `src/screen/art/pal.ts`       | A colour for each trait                                                                               |
 | `src/screen/ui/table.ts`      | The interface round the table: purse, track, traits, rack, stall, buttons, the fight's panel          |
 | `src/screen/ui/tally.ts`      | The tally as rows and bars, two parties side by side (one at a time on a phone), with its tabs        |

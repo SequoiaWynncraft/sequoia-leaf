@@ -12,9 +12,10 @@ import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { paced } from "@sequoia-leaf/kit/pace.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
-import type { ClothId, LanternId } from "@sequoia-leaf/raid";
+import { type Looks, newLooks } from "@sequoia-leaf/raid";
 
-import { paintHalf, paintTable, type Place } from "./art/table.ts";
+import { paintPlace } from "./art/place.ts";
+import { paintHalf, type Place } from "./art/table.ts";
 import { BENCH_H, BENCH_Y, BOARD_W, GAP, type Pt } from "./geometry.ts";
 
 export const V = {
@@ -57,6 +58,8 @@ export interface Hooks {
   over(g: Ctx): boolean;
   /** The window changed size. */
   resized(): void;
+  /** The place and looks the table has now, as Leaf says: read each frame, so the paint never lags them. */
+  looks(): Looks;
 }
 
 let hooks: Hooks | null = null;
@@ -68,7 +71,6 @@ const buf = makeCanvas(320, 200, true);
 const overBuf = makeCanvas(320, 200, true);
 let table: HTMLCanvasElement | null = null;
 let tableKey = "";
-let look: { cloth: ClothId; lantern: LanternId } = { cloth: "bare", lantern: "iron" };
 let halves: { far: HTMLCanvasElement; near: HTMLCanvasElement } | null = null;
 let overWasDrawn = false;
 let stopped = false;
@@ -142,17 +144,12 @@ export function layout(): void {
   if (stopped) render();
 }
 
-/** Changes how the table is dressed. */
-export function dress(cloth: ClothId, lantern: LanternId): void {
-  look = { cloth, lantern };
-  repaint();
-}
-
 function repaint(): void {
-  const key = `${V.w}x${V.h}@${V.bx},${V.by}:${look.cloth}:${look.lantern}`;
+  const look = hooks?.looks() ?? newLooks();
+  const key = `${V.w}x${V.h}@${V.bx},${V.by}:${look.place}:${look.cloth}:${look.lantern}`;
   if (key === tableKey && table) return;
   tableKey = key;
-  table = paintTable(place(), look.cloth, look.lantern);
+  table = paintPlace(place(), look);
 }
 
 /** Moves the clock on. */
@@ -164,6 +161,7 @@ export function tick(dt: number): void {
 export function render(): void {
   if (!ctx || !view || !hooks) return;
   const g = buf.g;
+  repaint();
   if (table) g.drawImage(table, 0, 0);
   hooks.draw(g);
   ctx.imageSmoothingEnabled = false;

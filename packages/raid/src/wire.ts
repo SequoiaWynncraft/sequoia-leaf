@@ -8,7 +8,7 @@ import { BOON_IDS, isBoonId } from "./content/boons.ts";
  */
 import { BOSS_IDS, isBossId, isFigureId, isStars } from "./content/figures.ts";
 import { FINISHED_IDS, isComponentId, isFinishedId, isItemId } from "./content/items.ts";
-import { baseOf, clothOf, isLookKind, lanternOf, readLooks } from "./content/looks.ts";
+import { isLookKind, lookOf, readLooks } from "./content/looks.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS } from "./content/traits.ts";
 import type { RaidNote, RunView, TableView } from "./game.ts";
@@ -245,7 +245,7 @@ function noteOf(v: unknown): RaidNote {
       return { t: "trail", trail: whole(n.trail, 0, TRAIL_COUNT - 1, "a note") };
     case "look": {
       const kind = one(n.kind, isLookKind, "a note");
-      const id = kind === "cloth" ? clothOf(n.id) : kind === "lantern" ? lanternOf(n.id) : baseOf(n.id);
+      const id = lookOf(kind, n.id);
       return id === null ? bad("a note") : { t: "look", kind, id };
     }
     case "made":
