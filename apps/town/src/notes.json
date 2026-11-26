@@ -1,5 +1,14 @@
 [
   {
+    "id": "raid-fight-show",
+    "at": "2026-11-26T22:20Z",
+    "title": "Fights you can follow",
+    "lines": [
+      "In The Little Raid, figures wind up before they use their ability, a blow lands as its number shows, and a figure that falls tumbles off its base. Every ability has its own look and its own sound.",
+      "Hard hits and falls pause the fight for less than a tenth of a second, and Greg, Orphion, the Hearth Cat and the bosses shake the board with their abilities. Both are shorter at 2x and 4x, and the board does not shake if your device is set to reduce motion."
+    ]
+  },
+  {
     "id": "raid-figure-mechanics",
     "at": "2026-11-26T22:02Z",
     "title": "Raid figures fight smarter",

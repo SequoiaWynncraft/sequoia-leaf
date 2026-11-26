@@ -16,7 +16,7 @@ import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 import { itemPic, levelPic } from "./art/icons.ts";
 import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
 import { drawFightMarks } from "./fightmarks.ts";
-import { drawFight, drawFightAir, fightHeldUnder, fightOn } from "./fightview.ts";
+import { drawFight, drawFightAir, fightBump, fightHeldUnder, fightOn } from "./fightview.ts";
 import { burst, drawFlyers, drawFxOver, drawFxUnder, wordsFx } from "./fx.ts";
 import { cellXY, GAP, HEX_H, HEX_W, ROW, seatXY, slotXY } from "./geometry.ts";
 import type { Marks } from "./gesture.ts";
@@ -311,6 +311,15 @@ function drawLamps(g: Ctx): void {
 }
 
 export function drawScene(g: Ctx): void {
+  // A big moment in a fight bumps the board and everything on it; the stump around it stays put.
+  const bump = fightBump();
+  g.save();
+  g.translate(bump.x, bump.y);
+  drawTable(g);
+  g.restore();
+}
+
+function drawTable(g: Ctx): void {
   const marks = handMarks();
   const { far, near } = boardHalves();
   g.drawImage(far, V.bx - 1, V.by - Math.round(V.gap) - 1);

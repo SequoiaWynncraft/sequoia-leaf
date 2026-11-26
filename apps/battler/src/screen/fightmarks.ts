@@ -28,10 +28,10 @@ interface Body {
   castUntil: number;
   move: (Move & { under: boolean }) | null;
 }
-/** The fight on the table as `fightview.ts` keeps it, read as it goes on. */
+/** The fight on the table as `board.ts` keeps it, read as it goes on. */
 interface View {
   readonly fight: Fight | null;
-  readonly actors: readonly Body[];
+  readonly actors: readonly (Body | undefined)[];
   readonly clock: number;
 }
 /** The events shown here and nowhere else. */
