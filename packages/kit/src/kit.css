@@ -1364,8 +1364,8 @@ button.k-info-chip:hover .k-chip {
   font: var(--f-typed);
   resize: none;
 }
+/* The keyboard's ring is every control's (above); the edge turns gold as well while it is typed in. */
 .k-field:focus {
-  outline: none;
   border-color: var(--k-gold);
 }
 .k-field::placeholder {
