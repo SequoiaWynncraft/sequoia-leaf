@@ -273,10 +273,13 @@ function soldAway(note: Extract<RaidNote, { t: "sold" }>): void {
       },
     });
   }
-  const rack = boardSpot(document.getElementById("rack")) ?? purse;
-  note.items.forEach((item, i) =>
-    fly(itemPic(item), from, rack, { delay: 0.15 + i * 0.12, dur: 0.5, arc: 20, land: () => snd.give() }),
-  );
+  // Where the rack is once it has been drawn with them: an empty rack is not on the page until then.
+  later(0.15, () => {
+    const rack = boardSpot(document.getElementById("rack")) ?? purse;
+    note.items.forEach((item, i) =>
+      fly(itemPic(item), from, rack, { delay: i * 0.12, dur: 0.5, arc: 20, land: () => snd.give() }),
+    );
+  });
 }
 
 /** Acts out what the rules said happened, in order. */
