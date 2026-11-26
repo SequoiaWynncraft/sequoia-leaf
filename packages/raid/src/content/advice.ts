@@ -1,6 +1,6 @@
 /**
- * Advice for the cards, which the fight never reads: what kind of fighter each calling makes and
- * where it stands, and three finished items that suit each figure.
+ * Advice for the cards, which the fight never reads: what kind of fighter each calling makes,
+ * where each figure stands, and three finished items that suit each figure.
  *
  * The items follow the calling first: tanks take what Bark and Chestnut make, fighters and
  * assassins Thorn with Chestnut or Plume, ranged Thorn and Plume, casters and healers Glowcap
@@ -8,25 +8,29 @@
  * ability wants something else has its own three. `bun review/balance.ts 200 0 suits` plays sample
  * fights again with each figure given each item, and none of these is among a figure's three worst.
  */
-import type { FigureId } from "./figures.ts";
+import { standRow } from "../hex.ts";
+import { type FigureId, FIGURES } from "./figures.ts";
 import type { FinishedId } from "./items.ts";
 import { type CallingId, traitDraw } from "./traits.ts";
 
-export interface Role {
-  /** The kind of fighter, in a word. */
-  readonly role: string;
-  /** Where it fights from. */
-  readonly place: string;
-}
-
-export const ROLES: Readonly<Record<CallingId, Role>> = {
-  bulwark: { role: "Tank", place: "front row" },
-  fang: { role: "Fighter", place: "front row" },
-  slinger: { role: "Ranged", place: "back row" },
-  sage: { role: "Caster", place: "back row" },
-  mender: { role: "Healer", place: "back row" },
-  sneak: { role: "Assassin", place: "leaps to the enemy back row" },
+/** The kind of fighter each calling makes, in a word. */
+export const ROLES: Readonly<Record<CallingId, string>> = {
+  bulwark: "Tank",
+  fang: "Fighter",
+  slinger: "Ranged",
+  sage: "Caster",
+  mender: "Healer",
+  sneak: "Assassin",
 };
+
+/** A party's rows, from its front line back. */
+const ROW_NAMES = ["front row", "second row", "third row", "back row"] as const;
+/**
+ * Where a figure fights from: the furthest row back from which its reach meets the enemy's front
+ * line (`standRow`), so that seated there it attacks without walking. A Sneak leaps from anywhere.
+ */
+export const placeOf = (id: FigureId): string =>
+  FIGURES[id].calling === "sneak" ? "leaps to the enemy back row" : (ROW_NAMES[standRow(FIGURES[id].range)] ?? "");
 
 /** What a figure's draw is called on its card: "Draws fire", "Draws fire ×2", "Avoids fire"; nothing for 0. */
 export function drawName(draw: number): string | null {
@@ -42,9 +46,10 @@ export const drawTip = (draw: number): string =>
   `Enemies pick their target as if this figure stood ${drawReach(draw)}.`;
 
 /** The line a card shows under a figure's name: `Tank · front row · draws fire`. */
-export function roleLine(calling: CallingId): string {
+export function roleLine(id: FigureId): string {
+  const { calling } = FIGURES[id];
   const draw = drawName(traitDraw(calling));
-  return [ROLES[calling].role, ROLES[calling].place, ...(draw ? [draw.toLowerCase()] : [])].join(" · ");
+  return [ROLES[calling], placeOf(id), ...(draw ? [draw.toLowerCase()] : [])].join(" · ");
 }
 
 export type Three = readonly [FinishedId, FinishedId, FinishedId];

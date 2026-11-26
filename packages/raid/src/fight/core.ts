@@ -74,36 +74,27 @@ export function drawOf(kind: UnitKind, items: readonly ItemId[]): number {
 /** How near an enemy seems to a figure picking a target: its distance less its draw. */
 const seems = (from: number, o: Unit): number => distance(from, o.cell) - o.draw;
 /**
- * The enemy a figure picks when it picks a new target: the one that seems nearest (distance less
+ * The order a figure picks a new target in: enemies in its reach before the rest, so that it never
+ * walks off while there is somebody it can hit; then the one that seems nearest (distance less
  * draw); ties go to the one really nearer, then to the hex that comes first for its side.
  */
+const pickOrder =
+  (u: Unit) =>
+  (a: Unit, b: Unit): number =>
+    Number(distance(u.cell, a.cell) > u.range) - Number(distance(u.cell, b.cell) > u.range) ||
+    seems(u.cell, a) - seems(u.cell, b) ||
+    distance(u.cell, a.cell) - distance(u.cell, b.cell) ||
+    order(u.side, a.cell) - order(u.side, b.cell);
+/** Enemies in the order a figure picks a new target (`pickOrder`). */
+export const foesByDraw = (f: Fight, u: Unit): Unit[] => foesOf(f, u.side).toSorted(pickOrder(u));
+/** The enemy a figure picks when it picks a new target: the first in `pickOrder`. */
 export function drawnFoe(f: Fight, u: Unit): Unit | undefined {
+  const first = pickOrder(u);
   let best: Unit | undefined;
-  let bestSeems = 99;
-  let bestAway = 99;
-  let bestOrder = 0;
   for (const o of f.units) {
-    if (o.side === u.side || !o.alive || o.hiddenUntil > f.tick) continue;
-    const away = distance(u.cell, o.cell);
-    const near = away - o.draw;
-    const at = order(u.side, o.cell);
-    if (near < bestSeems || (near === bestSeems && (away < bestAway || (away === bestAway && at < bestOrder)))) {
-      best = o;
-      bestSeems = near;
-      bestAway = away;
-      bestOrder = at;
-    }
+    if (o.side !== u.side && targetable(f, o) && (!best || first(o, best) < 0)) best = o;
   }
   return best;
-}
-/** Enemies of a side in the order a figure on a hex would pick them, as `drawnFoe` does. */
-export function foesByDraw(f: Fight, side: Side, cell: number): Unit[] {
-  return foesOf(f, side).toSorted(
-    (a, b) =>
-      seems(cell, a) - seems(cell, b) ||
-      distance(cell, a.cell) - distance(cell, b.cell) ||
-      order(side, a.cell) - order(side, b.cell),
-  );
 }
 /** The enemy nearest a figure, whatever its draw; ties go to the hex that comes first for its side. */
 export function nearestFoe(f: Fight, u: Unit): Unit | undefined {

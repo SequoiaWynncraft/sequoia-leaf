@@ -54,7 +54,7 @@ function starterCard(kind: FigureId): HTMLElement[] {
   return [
     art(portrait(kind), figureRef(kind)),
     el("b", "k-gold", { text: spec.name }),
-    el("div", "k-dim", { text: roleLine(spec.calling) }),
+    el("div", "k-dim", { text: roleLine(kind) }),
     el(
       "div",
       "k-wrap",

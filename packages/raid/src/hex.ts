@@ -33,6 +33,11 @@ export const cellSeat = (side: Side, cell: number): number => {
 };
 /** The back row of a side's half in a fight. */
 export const backRow = (side: Side): number => (side === 0 ? ROWS - 1 : 0);
+/**
+ * The row of its own half (0 the front line) a figure of some reach stands in: the furthest back
+ * from which it reaches the enemy's front line, which is one hex further off than its own.
+ */
+export const standRow = (reach: number): number => Math.min(reach, HOME_ROWS) - 1;
 
 /** The middle of a hex, in hex widths: for drawing, and for the angles of a cone. */
 export const centre = (cell: number): { x: number; y: number } => {
@@ -174,10 +179,18 @@ export function cone(from: number, toward: number, depth: number): number[] {
   return out;
 }
 
+/** How far a hex is from the nearest of some hexes. */
+function clearOf(cell: number, hexes: readonly number[]): number {
+  let least = CELLS;
+  for (const other of hexes) least = Math.min(least, distance(cell, other));
+  return least;
+}
+
 /**
- * The first step of the shortest way from `from` to any free hex within `reach` of `goal`, walking
- * round hexes that are taken. If nothing that close can be reached, the first step toward the free
- * hex that gets nearest; if nothing gets nearer than standing still, -1.
+ * The first step of the shortest way from `from` to a free hex within `reach` of `goal`, walking
+ * round hexes that are taken; -1 if there is no way to one. Of the hexes equally few steps away it
+ * makes for the one furthest from any of `foes` (the hexes enemies stand on), the first found if
+ * several are.
  *
  * `taken` has one entry a cell: -1 where the hex is free.
  */
@@ -185,31 +198,44 @@ const seen = new Int32Array(CELLS);
 const queue = new Uint8Array(CELLS);
 const first = new Uint8Array(CELLS);
 let stamp = 0;
-export function stepToward(side: Side, taken: readonly number[], from: number, goal: number, reach: number): number {
+export function stepToward(
+  side: Side,
+  taken: readonly number[],
+  from: number,
+  goal: number,
+  reach: number,
+  foes: readonly number[] = NONE,
+): number {
   stamp++;
   seen[from] = stamp;
   queue[0] = from;
   let head = 0;
   let tail = 1;
-  let best = -1;
-  let bestAway = distance(from, goal);
+  /** Where in the queue the hexes one step further off begin. */
+  let edge = 0;
+  let found = -1;
+  let clearest = -1;
   while (head < tail) {
+    if (head === edge) {
+      // Every hex this many steps off has been looked at: one in reach among them ends the search.
+      if (found >= 0) break;
+      edge = tail;
+    }
     const here = queue[head++] ?? 0;
     for (const next of neighboursFor(side, here)) {
       if (seen[next] === stamp || taken[next] !== -1) continue;
       seen[next] = stamp;
       const step = here === from ? next : (first[here] ?? next);
       first[next] = step;
-      const away = distance(next, goal);
-      if (away <= reach) return step;
-      if (away < bestAway) {
-        bestAway = away;
-        best = step;
+      const clear = distance(next, goal) <= reach ? clearOf(next, foes) : -1;
+      if (clear > clearest) {
+        clearest = clear;
+        found = step;
       }
       queue[tail++] = next;
     }
   }
-  return best;
+  return found;
 }
 
 /** How many steps it is from one hex to another walking round hexes that are taken; -1 if there is no way. */

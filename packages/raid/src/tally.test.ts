@@ -162,7 +162,11 @@ describe("the tally", () => {
       const own = f.units.filter((o) => o.id === u.id || o.owner === u.id);
       const d = rowOf(rows, u.id);
       expect(measureOf(d, "damage"), u.name).toBe(own.reduce((n, o) => n + o.dealt, 0));
-      expect(d.taken + d.kept, u.name).toBeGreaterThanOrEqual(own.reduce((n, o) => n + o.taken, 0));
+      // The fight counts all of a felling hit; the tally only the health there was left to lose.
+      const past = only(events, "hit")
+        .filter((h) => own.some((o) => o.id === h.id))
+        .reduce((n, h) => n + h.amount - h.soaked - h.lost, 0);
+      expect(d.taken + d.kept, u.name).toBeGreaterThanOrEqual(own.reduce((n, o) => n + o.taken, 0) - past);
       expect(d.stood, u.name).toBe(u.alive);
     }
     const ends = only(events, "end");

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { boonNumber } from "../content/boons.ts";
-import { FIGURES, specOf, starScale } from "../content/figures.ts";
+import { FIGURE_IDS, FIGURES, specOf, starScale } from "../content/figures.ts";
 import { FIGHT, levelBoost, LEVELS } from "../content/rooms.ts";
 import { traitNumber } from "../content/traits.ts";
-import { backRow, CELLS, cellSeat, distance, rowOf, seatCell } from "../hex.ts";
+import { backRow, CELLS, cellSeat, distance, HOME_ROWS, rowOf, seatCell } from "../hex.ts";
 import {
   at,
   fightOf,
@@ -288,6 +288,64 @@ describe("walking", () => {
     // The straight way was shut: it took more steps than the distance.
     expect(only(events, "move").filter((e) => e.id === crab.id).length).toBeGreaterThan(4);
   });
+  test("from the back row, a figure that reaches further than two hexes attacks their front row without a step", () => {
+    for (const id of FIGURE_IDS) {
+      if (FIGURES[id].range <= 2) continue;
+      const f = fightOf([at(id, 3, HOME_ROWS - 1)], [at("mud", 3, 0)]);
+      stillSide(f, 1);
+      const u = unitOf(f, id);
+      u.manaFull = 0;
+      const events = stepUntil(f, (e) => e.t === "shot", 100);
+      expect(only(events, "shot")[0]?.id, id).toBe(u.id);
+      expect(only(events, "move"), id).toEqual([]);
+    }
+  });
+  test("having to walk, it makes for the hex furthest from any enemy among the nearest it can attack from", () => {
+    // A Cinder Newt (reach 2) made to go for a Mud seven hexes off, with a Gnat standing beside the Mud.
+    const f = fightOf([onCell("cindernewt", 0, 52)], [onCell("mud", 1, 3), onCell("gnat", 1, 11)]);
+    stillSide(f, 1);
+    const newt = unitOf(f, "cindernewt");
+    const mud = unitOf(f, "mud", 1);
+    const gnat = unitOf(f, "gnat", 1);
+    newt.manaFull = 0;
+    taunt(f, newt, 10, mud);
+    const events = stepUntil(f, (e) => e.t === "shot");
+    expect(only(events, "shot")[0]?.target).toBe(mud.id);
+    // Five steps either way; the first hex found in reach of the Mud touches the Gnat, and this one does not.
+    expect(only(events, "move").length).toBe(5);
+    expect([distance(newt.cell, mud.cell), distance(newt.cell, gnat.cell)]).toEqual([2, 2]);
+  });
+  test("with no way to the one it is after, it goes straight for one it can get at", () => {
+    // A Mud with every hex round it taken, and a Gnat in the far corner of their front row, no nearer.
+    const f = fightOf([onCell("crab7", 0, 52)], [onCell("mud", 1, 21), onCell("gnat", 1, 27)]);
+    stillSide(f, 1);
+    for (const cell of [14, 15, 22, 28, 29]) f.taken[cell] = 99;
+    const gnat = unitOf(f, "gnat", 1);
+    const events = stepUntil(f, (e) => e.t === "swing", 600);
+    expect(only(events, "swing")[0]?.target).toBe(gnat.id);
+    expect(only(events, "move").length).toBe(distance(52, gnat.cell) - 1);
+  });
+  test("with no way to anybody, it closes up on the one it is after and then stands", () => {
+    const rocks = [0, 1, 2, 3, 4, 5, 6].map((col) => at("rock", col, 0));
+    const f = fightOf([...rocks, at("crab7", 3, 2)], [at("mud", 6, 0), at("gnat", 0, 0)]);
+    stillSide(f, 1);
+    const crab = unitOf(f, "crab7");
+    const moves = only(steps(f, 300), "move").filter((e) => e.id === crab.id);
+    expect(moves.length).toBe(2);
+    expect(distance(crab.cell, unitOf(f, "mud", 1).cell)).toBe(2);
+  });
+  test("made to go for somebody it cannot get at, it attacks whoever is in its reach and takes no step", () => {
+    const f = fightOf([onCell("crab7", 0, 31)], [onCell("gnat", 1, 24), onCell("mud", 1, 0)]);
+    stillSide(f, 1);
+    f.taken[1] = 99;
+    f.taken[7] = 99;
+    const crab = unitOf(f, "crab7");
+    crab.manaFull = 0;
+    taunt(f, crab, 3, unitOf(f, "mud", 1));
+    const events = steps(f, 40);
+    expect(only(events, "move")).toEqual([]);
+    expect(only(events, "swing")[0]?.target).toBe(unitOf(f, "gnat", 1).id);
+  });
   test("a Rock stays where it was put", () => {
     const f = fightOf([at("rock", 3, 3)], [at("gnat", 3, 3)]);
     const rock = unitOf(f, "rock");
@@ -453,6 +511,18 @@ describe("draw: who a figure goes for", () => {
       ["crab7", 1, cellAt(2, 1)],
     ]);
     expect(plain.picked).toBe(unitOf(plain.f, "gnat", 1).id);
+  });
+  test("it never walks off to somebody else while an enemy is in its reach", () => {
+    // To a Crab #7 a Sneak beside it seems two hexes off and a Bulwark two hexes off seems one.
+    const f = fightOf(
+      [onCell("crab7", 0, FINCH)],
+      [onCell("worm", 1, cellAt(1, 0)), onCell("barrowgnome", 1, cellAt(2, 0))],
+    );
+    stillSide(f, 1);
+    unitOf(f, "crab7").manaFull = 0;
+    const events = stepUntil(f, (e) => e.t === "swing");
+    expect(only(events, "move")).toEqual([]);
+    expect(only(events, "swing")[0]?.target).toBe(unitOf(f, "worm", 1).id);
   });
   test("a Sneak at the same distance is passed over", () => {
     const { picked, f } = firstPick([

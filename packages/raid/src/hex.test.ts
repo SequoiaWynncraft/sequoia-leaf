@@ -165,6 +165,22 @@ describe("finding a way", () => {
     const step = stepToward(0, board, cellAt(3, 7), cellAt(3, 3), 3);
     expect(distance(step, cellAt(3, 3))).toBeLessThanOrEqual(3);
   });
+  test("of the nearest hexes in reach, it makes for the one furthest from any enemy", () => {
+    const board = free();
+    const goal = cellAt(3, 0);
+    const other = cellAt(4, 1);
+    board[goal] = 1;
+    board[other] = 2;
+    /** Where a walk from the back row ends, with a reach of two, knowing where some enemies stand. */
+    const end = (foes: readonly number[]): number => {
+      let here = cellAt(3, 7);
+      for (let i = 0; i < 9 && distance(here, goal) > 2; i++) here = stepToward(0, board, here, goal, 2, foes);
+      return here;
+    };
+    // Told of nobody it takes the first hex found, which touches the other enemy.
+    expect(distance(end([]), other)).toBe(1);
+    expect([distance(end([goal, other]), goal), distance(end([goal, other]), other)]).toEqual([2, 2]);
+  });
   test("walks round a wall", () => {
     const board = free();
     // A wall across row 4 with one gap at the far right.
@@ -185,13 +201,13 @@ describe("finding a way", () => {
     expect(distance(here, goal)).toBe(1);
     expect(trail).toContain(cellAt(6, 4));
   });
-  test("with no way through, it still closes the distance, and then stands", () => {
+  test("with no way to a hex in reach there is no step, though a longer reach finds one", () => {
     const board = free();
     for (let col = 0; col < COLS; col++) board[cellAt(col, 4)] = 99;
     const goal = cellAt(3, 2);
-    const first = stepToward(0, board, cellAt(3, 7), goal, 1);
-    expect(distance(first, goal)).toBeLessThan(distance(cellAt(3, 7), goal));
-    expect(stepToward(0, board, cellAt(3, 5), goal, 1)).toBe(-1);
+    expect(stepToward(0, board, cellAt(3, 7), goal, 1)).toBe(-1);
+    const nearer = stepToward(0, board, cellAt(3, 7), goal, 3);
+    expect(distance(nearer, goal)).toBeLessThan(distance(cellAt(3, 7), goal));
     expect(walkLength(board, cellAt(3, 7), goal)).toBe(-1);
   });
   test("both sides walk alike: a mirrored walk is the mirror of the walk", () => {
