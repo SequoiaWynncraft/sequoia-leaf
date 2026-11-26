@@ -93,14 +93,16 @@ const narrow = (): boolean =>
 
 // ---------- going to a place ----------
 
-/** Brings a tile to the middle of the view at once, and with `card` pins the card of what stands there. */
+/** Brings a tile to the middle of the view at once, and with `card` pins the card of what stands there, whose mark then closes in on it. */
 function goTo(i: number, card: boolean): void {
   const W = S.world.land.w;
   const x = i % W;
   const y = Math.floor(i / W);
   viewHooks.look(x * TILE + TILE / 2, y * TILE + TILE / 2);
+  if (!card) return;
   // Pinning the card that is already pinned would put it away.
-  if (card && cardShown()?.ref !== tileRef(i)) openCard(x, y);
+  if (cardShown()?.ref !== tileRef(i)) openCard(x, y);
+  S.brought = { tile: i, at: S.t };
 }
 
 // ---------- walking a group ----------

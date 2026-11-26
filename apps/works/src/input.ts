@@ -45,6 +45,7 @@ import {
   unaim,
   undo,
 } from "./tools.ts";
+import { setWayIn } from "./tunnel.ts";
 import { closeCard, openCard, refAt, riderAt, tileBox } from "./ui/card.ts";
 import { openTools, refreshDock } from "./ui/dock.ts";
 import { closeBanner } from "./ui/notes.ts";
@@ -214,6 +215,11 @@ export function fingerTap(tx: number, ty: number): void {
     }
     return;
   }
+  // The tunnel's first tap sets where it goes in.
+  if (setWayIn(tx, ty)) {
+    refreshDock();
+    return;
+  }
   // A second tap where it is aimed sets it down; a plan of the whole yard is aimed at the whole yard.
   const a = aimOf(h);
   if (a && ((a.x === tx && a.y === ty) || isWhole(S.group?.as))) {
@@ -303,8 +309,9 @@ function fingerDown(d: Down, t: { x: number; y: number }): void {
 /** A mouse button goes down: the right takes away, the middle or an empty hand moves the view, else the hand's drag begins. */
 function mouseDown(e: PointerEvent, d: Down, t: { x: number; y: number }): void {
   if (e.button === 2 && !S.visiting) {
-    // With pieces in hand it lets them go: taking one away would leave the hand holding what is not there.
-    if (S.group) cancel();
+    // With pieces in hand it lets them go: taking one away would leave the hand holding what is not
+    // there. With a tunnel's way in set, it lets that go.
+    if (S.group || S.hand.is === "tunnel") cancel();
     else {
       d.doing = "take";
       takeAway(t.x, t.y, true);

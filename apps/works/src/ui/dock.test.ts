@@ -1,15 +1,30 @@
 /**
- * The line over the dock, by what it prints: with nothing in hand it says how to open a piece's card
- * until a card has been asked for from the yard on this device (`openCard`), and from then on
- * nothing; a tool's words still show, and so does what is said, for a few seconds.
+ * The dock and the line over it. The tools' order: belt, splitter, joiner and tunnel first, then the
+ * rest in the order the yard unlocked them, so that no tool moves once it is unlocked. The line, by
+ * what it prints: with nothing in hand it says how to open a piece's card until a card has been
+ * asked for from the yard on this device (`openCard`), and from then on nothing; a tool's words
+ * still show, and so does what is said, for a few seconds.
  */
 import { expect, test } from "bun:test";
 
+import {
+  BELT,
+  create,
+  type Goal,
+  goal,
+  goalsBelow,
+  JOINER,
+  type Kind,
+  openOf,
+  SPLITTER,
+  TUNNEL,
+} from "@sequoia-leaf/factory";
+
 import { net, opened, useFakeLeaf } from "../../test/fake-leaf.ts";
-import { S } from "../state.ts";
+import { dockOrder, DRAWN, S } from "../state.ts";
 import { setTool } from "../tools.ts";
 import { openCard, refAt } from "./card.ts";
-import { handPrint, say } from "./dock.ts";
+import { handPrint, openTools, say } from "./dock.ts";
 
 useFakeLeaf();
 
@@ -65,4 +80,41 @@ test("once a card has been asked for, a tool's words still show, and what is sai
   expect(line()).toBe("Not enough Coins: 5 short.");
   performance.now = () => 3700;
   expect(line()).toBe("");
+});
+
+/** The tools a yard that has done these goals has in its dock, in order: those unlocked, and drawn. */
+const docked = (done: readonly Goal[]): Kind[] => {
+  const open = openOf(done);
+  return dockOrder(done).filter((k) => (open.kinds[k] ?? 0) > 0 && DRAWN.includes(k));
+};
+/** Belt, splitter, joiner and tunnel, of some tools, in their order; and the rest. */
+const LINE: ReadonlySet<Kind> = new Set([BELT, SPLITTER, JOINER, TUNNEL]);
+const ofLine = (ks: Kind[]): Kind[] => ks.filter((k) => LINE.has(k));
+const notOfLine = (ks: Kind[]): Kind[] => ks.filter((k) => !LINE.has(k));
+
+test("the first four slots are belt, splitter, joiner and tunnel, and the keys 1 to 4 with them", async () => {
+  await opened(create({ seed: 5, tier: 2 }));
+  expect(openTools().slice(0, 4)).toEqual([BELT, SPLITTER, JOINER, TUNNEL]);
+  // Every kind the page draws has a slot, each once.
+  expect(dockOrder(S.world.done).toSorted((a, b) => a - b)).toEqual(DRAWN.toSorted((a, b) => a - b));
+});
+
+test("a tool unlocked later goes after the others: none moves but to let the four take the first slots", () => {
+  // Every goal in an order play could do them, and again with the projects of tier 1 the other way round.
+  const all = goalsBelow(9);
+  const one = ["boiler", "crates", "culvert", "signs"].map(goal);
+  const swapped = all.map((g) => (one.includes(g) ? (one[one.length - 1 - one.indexOf(g)] ?? g) : g));
+  expect(swapped).not.toEqual(all);
+  for (const order of [all, swapped]) {
+    // In the end, every kind the page draws.
+    expect(docked(order).toSorted((a, b) => a - b)).toEqual(DRAWN.toSorted((a, b) => a - b));
+    for (let n = 0; n < order.length; n++) {
+      const before = docked(order.slice(0, n));
+      const after = docked(order.slice(0, n + 1));
+      // The four first, in their order, as each is unlocked.
+      expect(after.slice(0, ofLine(after).length)).toEqual(ofLine(after));
+      // The rest as they were, and anything new after them.
+      expect(notOfLine(after).slice(0, notOfLine(before).length)).toEqual(notOfLine(before));
+    }
+  }
 });

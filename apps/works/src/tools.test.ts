@@ -39,6 +39,7 @@ import { deck } from "@sequoia-leaf/kit/card.ts";
 
 import { act, clear, ctx, isRecord, kindAt, kindOn, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { asIf, layout } from "./layout.ts";
+import { pinnedTiles, pinPulse } from "./pinned.ts";
 import { DRAWN, draws, S, toolHooks } from "./state.ts";
 import {
   aimAt,
@@ -538,6 +539,29 @@ const pin = (i: number): void => {
 };
 
 describe("the pinned card", () => {
+  test("of a tunnel marks both mouths; the view brought to it, the mark closes in for a moment and then holds", async () => {
+    const y = yardAt(2);
+    build(y, kind("tunnel"), 20, 13, 0, Infinity, { span: 2 });
+    await opened(y);
+    expect(pinnedTiles()).toEqual([]);
+    pin(at(S.world, 23, 13));
+    expect(pinnedTiles()).toEqual([at(S.world, 23, 13), at(S.world, 20, 13)]);
+    S.t = 100;
+    expect(pinPulse()).toBe(0);
+    S.brought = { tile: at(S.world, 23, 13), at: 100 };
+    const out = [100, 100.2, 100.5, 100.6, 101, 102].map((t) => {
+      S.t = t;
+      return pinPulse();
+    });
+    expect(out[0]).toBeGreaterThan(0);
+    expect(out[1]).toBeLessThan(out[0] ?? 0);
+    expect(out[2]).toBeGreaterThan(out[1] ?? 0);
+    expect(out.slice(-2)).toEqual([0, 0]);
+    // Another piece's card pinned: no pulse for it.
+    S.t = 100;
+    S.brought = { tile: at(S.world, 1, 1), at: 100 };
+    expect(pinPulse()).toBe(0);
+  });
   test("is the one source of what the yard marks: taking up a tool closes it, and nothing is marked", async () => {
     const y = yardAt(2);
     build(y, BELT, 18, 13, 0, Infinity);

@@ -4,17 +4,24 @@
  */
 
 import {
+  BELT,
   DEPOT,
   type Dir,
   emptyYard,
+  type Goal,
   highest,
+  JOINER,
   type Kind,
   kind,
   KIND_COUNT,
   LAND,
   type Leg,
+  openOf,
   type Piece,
   type Plot,
+  SPLITTER,
+  TUNNEL,
+  unlockedBy,
   type Yard,
 } from "@sequoia-leaf/factory";
 import { shown } from "@sequoia-leaf/kit/card.ts";
@@ -39,23 +46,23 @@ import {
 import type { Nudge } from "./teach.ts";
 
 /**
- * The kinds of piece this page draws and builds, in the order they sit in the dock (which is also
- * the order of the number keys, as far as the keys go): what makes, what carries, what gives power.
- * The dock, the pick and the drawing all read this list; a test holds it to every kind in the
- * tables but the depot, which is never built.
+ * The kinds of piece this page draws and builds: what a line is built with, what makes, what else
+ * carries, what gives power. The dock puts them in the order a yard unlocked them (`dockOrder`); the
+ * pick and the drawing read this list; a test holds it to every kind in the tables but the depot,
+ * which is never built.
  */
 export const DRAWN: readonly Kind[] = (
   [
     "belt",
+    "splitter",
+    "joiner",
+    "tunnel",
     "gatherer",
     "mill",
     "bench",
     "workshop",
     "study",
-    "splitter",
-    "joiner",
     "sorter",
-    "tunnel",
     "stop",
     "crate",
     "pylon",
@@ -69,6 +76,24 @@ for (const k of DRAWN) drawn[k] = 1;
 drawn[DEPOT] = 1;
 /** Whether this page draws a kind of piece: those it builds (`DRAWN`), and the depot. */
 export const draws = (k: number): boolean => drawn[k] === 1;
+
+/** What a line of belt is built with, and used most: the first four slots, once each is unlocked. */
+const LINE: readonly Kind[] = [BELT, SPLITTER, JOINER, TUNNEL];
+
+/** The kinds a new yard may build, as `DRAWN` has them. */
+const NEW_YARD = DRAWN.filter((k) => (openOf([]).kinds[k] ?? 0) > 0);
+
+/**
+ * Every tool in the order it sits in the dock, which is also the order of the keys (`tool` in
+ * `keymap.ts`), for a yard that has done these goals in this order: the four a line is built with,
+ * then the rest in the order the yard unlocked them (what a new yard has, then what each goal
+ * unlocked), so that a tool unlocked later goes after the others and moves none; then any left, as
+ * `DRAWN` has them.
+ */
+export function dockOrder(done: readonly Goal[]): Kind[] {
+  const later = done.flatMap((g) => unlockedBy(g).flatMap((u) => (u.is === "kind" ? [u.kind] : [])));
+  return [...new Set([...LINE, ...NEW_YARD, ...later, ...DRAWN])];
+}
 
 /**
  * What is in the member's hand: a kind of piece to build (by its number), the spade that takes
@@ -211,7 +236,7 @@ export const S: {
   readonly tool: Tool;
   readonly aim: Aim | null;
   readonly run: Run | null;
-  /** A finger's run: the tile it starts from. */
+  /** Where a finger's run starts, or the tunnel in hand goes in: the tile a first tap or click set. */
   readonly from: Tile | null;
   /** With Select in hand: the area marked, the first corner of one being marked, the pieces held, and whether Save (or Save yard) is asking where. */
   readonly mark: Mark | null;
@@ -231,6 +256,11 @@ export const S: {
   finger: boolean;
   /** The tile whose card is pinned open (the kit's pinned card is the one source of it), or -1. */
   readonly picked: number;
+  /**
+   * The tile the view was last brought to with its card (a walk of the Trouble list, a tap on the
+   * map), and when, in screen seconds: the mark on it closes in for a moment (`pinPulse`).
+   */
+  brought: { readonly tile: number; readonly at: number } | null;
   /** Plots being cleared before the member's eyes: when each began, in screen seconds, and where from. */
   clearing: Map<Plot, { at: number; x: number; y: number }>;
   /** Redwoods being felled before the member's eyes, by their place in the land's `trees`: when each began, in screen seconds. */
@@ -260,7 +290,8 @@ export const S: {
     return runOf(S.hand);
   },
   get from() {
-    return S.hand.is === "beltTaps" ? S.hand.from : null;
+    const h = S.hand;
+    return h.is === "beltTaps" || h.is === "tunnel" ? h.from : null;
   },
   get mark() {
     return markOf(S.hand);
@@ -283,12 +314,16 @@ export const S: {
   get picked() {
     return pinnedTile();
   },
+  brought: null,
   clearing: new Map(),
   felling: new Map(),
   panel: null,
   nudge: null,
   copied: -1,
 };
+
+/** Where the piece in hand stands, aimed at a tile: there, but for a tunnel whose way in is set, which stands where it goes in. */
+export const standsOn = (aim: Tile): Tile => (S.hand.is === "tunnel" ? S.hand.from : aim);
 
 /** The nudge being said over a tile of the yard, if the one being said is. */
 export const tileNudge = (): Nudge | null => (S.nudge?.part === undefined ? S.nudge : null);

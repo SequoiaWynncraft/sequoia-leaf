@@ -77,7 +77,8 @@ import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
 import { heldBox, heldMarks } from "./held.ts";
 import { lampsIn } from "./lamps.ts";
 import { armsAt, asIf, type Layout, layout, pylonTop, sendsRight, sortSide } from "./layout.ts";
-import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, tileNudge } from "./state.ts";
+import { pinMark } from "./pinned.ts";
+import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, standsOn, tileNudge } from "./state.ts";
 import { cameFrom, dirAt, hooded } from "./tiles.ts";
 import { drawShades, eachTrunk } from "./trees.ts";
 
@@ -1555,12 +1556,7 @@ function marksLayer(f: Frame): void {
           for (let k = 0; k < TILE; k += 3) g.fillRect(tx * TILE - cx, ty * TILE - cy + k, 1, 1);
       }
   }
-  if (S.picked >= 0) {
-    const px = (S.picked % land.w) * TILE - cx;
-    const py = Math.floor(S.picked / land.w) * TILE - cy;
-    if (w.kind[S.picked] === DEPOT) corners(g, dx - 24, dfoot - 48, 48, 48, GOLD[2], false);
-    else corners(g, px, py, TILE, TILE, GOLD[2], false);
-  }
+  pinMark(g, w, cx, cy, dx - 24, dfoot - 48, markSize);
   if (S.hover && tool === null) {
     const i = S.hover.y * land.w + S.hover.x;
     const k = S.hover.x >= 0 && S.hover.y >= 0 && S.hover.x < land.w && S.hover.y < land.h ? w.kind[i] : NONE;
@@ -1606,8 +1602,9 @@ function marksLayer(f: Frame): void {
   }
   if (S.from && !S.run) corners(g, S.from.x * TILE - cx, S.from.y * TILE - cy, TILE, TILE, GOLD[2], true);
   if (S.aim && tool !== null) {
-    const x = S.aim.x * TILE - cx;
-    const y = S.aim.y * TILE - cy;
+    const on = standsOn(S.aim);
+    const x = on.x * TILE - cx;
+    const y = on.y * TILE - cy;
     const bad = S.aim.why !== null;
     if (tool === "remove") corners(g, x, y, TILE, TILE, CORAL, true);
     else if (tool === "paint") {
@@ -1643,7 +1640,7 @@ function marksLayer(f: Frame): void {
         if (pip) g.drawImage(pip, x, y);
         g.globalAlpha = 1;
       }
-      piece(art, w, S.aim.y * land.w + S.aim.x, tool, S.dir, grade, 1, true, x, y, now, bad ? 0.5 : 0.8);
+      piece(art, w, on.y * land.w + on.x, tool, S.dir, grade, 1, true, x, y, now, bad ? 0.5 : 0.8);
       const far = S.aim.far ?? -1;
       if (tool === TUNNEL && far >= 0) {
         const out = art.m.hood[lookOf(grade)]?.[BACK[S.dir]];
@@ -1659,11 +1656,14 @@ function marksLayer(f: Frame): void {
       }
       g.globalAlpha = 1;
       used = mark;
+      const col = bad ? CORAL : GOLD[2];
       if (tool === PYLON) {
         const ring = ((REACH.pylon * w.open.reach) / 10_000) * TILE;
-        pixelRing(g, x + 8, y + 8, ring, ring, bad ? CORAL : GOLD[2], 2);
+        pixelRing(g, x + 8, y + 8, ring, ring, col, 2);
       }
-      corners(g, x, y, TILE, TILE, bad ? CORAL : GOLD[2], true);
+      corners(g, x, y, TILE, TILE, col, true);
+      // And the tile aimed at, which for a tunnel whose way in is set is where it would come up, or cannot.
+      corners(g, S.aim.x * TILE - cx, S.aim.y * TILE - cy, TILE, TILE, col, true);
     }
   }
   const nudged = tileNudge();
