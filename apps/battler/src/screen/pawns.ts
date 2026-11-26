@@ -250,6 +250,38 @@ function merge(note: Extract<Note, { t: "merged" }>, delay: number): void {
   });
 }
 
+/** A figure sold: it hops off to the stall, its acorns fly to the purse, and what it held flies back to the rack as it was. */
+function soldAway(note: Extract<RaidNote, { t: "sold" }>): void {
+  const p = pawns.get(note.piece);
+  const to = boardSpot(document.getElementById("stall")) ?? slotXY(4);
+  const from = p ? { x: p.x, y: p.y - 8 } : spotXY(note.from);
+  if (p) {
+    live(p, { e: "spoken", to: "stall" });
+    live(p, { e: "last hop" });
+    hop(p, to, 0.3, 10, true);
+  }
+  snd.sell();
+  const purse = boardSpot(document.getElementById("acorns")) ?? to;
+  for (let i = 0; i < note.acorns; i++) {
+    fly(glyphPic("acorn"), from, purse, {
+      delay: 0.08 + i * 0.05,
+      dur: 0.4,
+      arc: 16,
+      land: () => {
+        snd.acorn(i);
+        signal("acorn", 1);
+      },
+    });
+  }
+  // Where the rack is once it has been drawn with them: an empty rack is not on the page until then.
+  later(0.15, () => {
+    const rack = boardSpot(document.getElementById("rack")) ?? purse;
+    note.items.forEach((item, i) =>
+      fly(itemPic(item), from, rack, { delay: i * 0.12, dur: 0.5, arc: 20, land: () => snd.give() }),
+    );
+  });
+}
+
 /** Acts out what the rules said happened, in order. */
 export function hearNotes(notes: readonly RaidNote[]): void {
   let delay = 0;
@@ -276,31 +308,8 @@ export function hearNotes(notes: readonly RaidNote[]): void {
     } else if (note.t === "merged") {
       merge(note, delay);
       delay += 0.65;
-    } else if (note.t === "sold") {
-      {
-        const p = pawns.get(note.piece);
-        const to = boardSpot(document.getElementById("stall")) ?? slotXY(4);
-        const from = p ? { x: p.x, y: p.y - 8 } : spotXY(note.from);
-        if (p) {
-          live(p, { e: "spoken", to: "stall" });
-          live(p, { e: "last hop" });
-          hop(p, to, 0.3, 10, true);
-        }
-        snd.sell();
-        const purse = boardSpot(document.getElementById("acorns")) ?? to;
-        for (let i = 0; i < note.acorns; i++) {
-          fly(glyphPic("acorn"), from, purse, {
-            delay: 0.08 + i * 0.05,
-            dur: 0.4,
-            arc: 16,
-            land: () => {
-              snd.acorn(i);
-              signal("acorn", 1);
-            },
-          });
-        }
-      }
-    } else if (note.t === "moved") snd.place();
+    } else if (note.t === "sold") soldAway(note);
+    else if (note.t === "moved") snd.place();
     else if (note.t === "gave") {
       const p = pawns.get(note.piece);
       if (!p) continue;

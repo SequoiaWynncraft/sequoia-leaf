@@ -5,7 +5,7 @@
     "apps/battler/src/screen/flow.ts": 30,
     "apps/battler/src/screen/hand.ts": 70,
     "apps/battler/src/screen/logic.ts": 27,
-    "apps/battler/src/screen/pawns.ts": 35,
+    "apps/battler/src/screen/pawns.ts": 17,
     "apps/battler/src/screen/scene.ts": 18,
     "apps/battler/src/screen/screen.ts": 35,
     "apps/battler/src/screen/ui/cards.ts": 24,

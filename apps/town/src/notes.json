@@ -1,5 +1,13 @@
 [
   {
+    "id": "raid-sell-items-back",
+    "at": "2026-11-26T22:13Z",
+    "title": "Selling keeps your items",
+    "lines": [
+      "In The Little Raid, a figure's Sell button shows the items it holds beside the acorns. When you sell it, those items fly back to your rack as they are."
+    ]
+  },
+  {
     "id": "raid-fight-show",
     "at": "2026-11-26T22:08Z",
     "title": "Fights you can follow",
