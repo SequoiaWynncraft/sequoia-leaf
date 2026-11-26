@@ -6,7 +6,8 @@
  * these names. A raid run is `raid_started` (`trail`), then a `raid_room` for each room fought
  * (`room`, `kind`, `won` true for one won, `resolve` left, the fight's `seconds`, and for a room
  * fought against another member's board `met`, their Leaf id), then `raid_ended`
- * (`trail`, `rooms_won`, `ended`: `won`, `lost` or `left`, and the `coins` it paid); the Works logs
+ * (`trail`, `rooms_won`, `ended`: `won`, `lost` or `left`, and the `coins` it paid), each with `own`
+ * true for a run with the member's own figures; the Works logs
  * `works_plot` and `works_plan` for what was bought (`plot` or `plan`, and its `price`),
  * `works_order` for a standing order handed over (`order`, `title`, `pay`) and `works_story` for each
  * story order finished (`order`, its number in the story, `title`, `pay`); the town logs

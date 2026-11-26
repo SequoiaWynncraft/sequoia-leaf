@@ -7,7 +7,7 @@ import { TRAIT_IDS } from "@sequoia-leaf/raid/content/traits.ts";
 
 import { GLYPHS } from "./icons.ts";
 
-test("icons.txt has a picture for every trait, item, kind of room and sign, a boon's own for each that is not a charm, and nothing else", async () => {
+test("icons.txt has a picture for every trait, item, kind of room and sign, a boon's own for each that is not a charm, a number for each level, and nothing else", async () => {
   const named = [...readRows(await Bun.file(new URL("icons.txt", import.meta.url)).text()).keys()];
   const wanted = [
     ...TRAIT_IDS.map((id) => `trait ${id}`),
@@ -15,6 +15,7 @@ test("icons.txt has a picture for every trait, item, kind of room and sign, a bo
     ...BOON_IDS.filter((id) => !isEmblemId(id)).map((id) => `boon ${id}`),
     ...["trouble", "spar", "boss"].map((kind) => `room ${kind}`),
     ...GLYPHS.map((id) => `glyph ${id}`),
+    ...[1, 2, 3, 4, 5, 6].map((level) => `level ${level}`),
   ];
   expect(named.toSorted()).toEqual(wanted.toSorted());
 });

@@ -8,7 +8,7 @@ import { HOLDS } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, TRAIL_COUNT } from "./content/rooms.ts";
 import { traitNumber } from "./content/traits.ts";
 import { RAID, type Table } from "./game.ts";
-import { type Choice, type Fought, foughtOf, type Phase, picksOf, type Piece, type Run } from "./run.ts";
+import { type Choice, type Fought, foughtOf, type Phase, picksOf, type Piece, playsAsKept, type Run } from "./run.ts";
 
 /**
  * Tables as Leaf stores them, made by the rules of earlier versions and frozen in `../stored`. Each
@@ -73,10 +73,39 @@ describe("every stored table kept as a fixture", () => {
       "long-time.json",
       "new-table.json",
       "older-run.json",
+      "own-fighting.json",
       "picks-waiting.json",
       "planning.json",
       "starter-waiting.json",
     ]);
+  });
+});
+
+describe("a table kept before there were runs with the member's own figures", () => {
+  test("reads with its run on the main way: no roster, and nobody with a level", () => {
+    for (const [name, text] of FIXTURES) {
+      const run = read(text).run;
+      if (name === "own-fighting.json" || !run) continue;
+      expect(run.own).toBeNull();
+      const parties = [run.last, foughtOf(run)?.setup].flatMap((setup) => setup?.sides ?? []);
+      expect(parties.flatMap((party) => party.figures).some((p) => "level" in p)).toBe(false);
+    }
+  });
+});
+
+describe("a table kept in the fight of a run with the member's own figures", () => {
+  test("reads with its roster, and the fight with its levels, which plays to the outcome kept", () => {
+    const run = runOf(read(fixture("own-fighting.json")));
+    expect(run.own).toEqual({ crab7: 2, worm: 0, slug: 1, rock: 0, badger: 3, greg: 1 });
+    const fight = foughtOf(run);
+    if (!fight) throw new Error("no fight");
+    expect(fight.setup.sides[0].figures.map((p) => [p.kind, p.stars, p.level])).toEqual([
+      ["emberkit", 2, undefined],
+      ["barrowgnome", 1, undefined],
+      ["rock", 1, undefined],
+      ["crab7", 2, 2],
+    ]);
+    expect(playsAsKept(fight)).toBe(true);
   });
 });
 

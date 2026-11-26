@@ -1,0 +1,82 @@
+[
+  ["size", 1280, 760],
+  ["wait", 900],
+  [
+    "eval",
+    "(async () => { await window.raid.fresh(); await window.raid.hold(true); await window.raid.taught(); return await 'nothing pulled'; })()"
+  ],
+  ["wait", 600],
+  ["shot", "d-01-front-nothing-pulled"],
+  [
+    "eval",
+    "(async () => { await window.raid.pulled({\"crab7\": 3, \"worm\": 1, \"moth\": 2, \"emberkit\": 1, \"slug\": 4, \"kettle\": 2, \"jay\": 1, \"rock\": 2, \"leafling\": 1, \"badger\": 7, \"fogowl\": 1, \"greg\": 5}); return await JSON.stringify(window.raid.leaf().roster); })()"
+  ],
+  ["wait", 600],
+  ["shot", "d-02-front-all-figures"],
+  ["click", "#k-figures-own"],
+  ["wait", 500],
+  ["shot", "d-03-front-your-figures"],
+  ["click", "#start"],
+  ["wait", 500],
+  [
+    "eval",
+    "(async () => { await window.raid.settled(); await window.raid.skip(1.2); return await JSON.stringify(window.raid.state()); })()"
+  ],
+  ["wait", 500],
+  ["shot", "d-04-first-pick"],
+  ["click", "[data-pick='0']"],
+  ["eval", "window.raid.settled()"],
+  ["tap", 3, 3],
+  ["eval", "window.raid.settled()"],
+  [
+    "eval",
+    "(async () => { await window.raid.skip(1.6); await window.raid.bot(4); await window.raid.skip(2); await window.raid.plan(); await window.raid.acorns(30); await window.raid.give('badger', 2); await window.raid.give('greg'); await window.raid.give('slug', 2); await window.raid.offer(0,'badger'); await window.raid.offer(1,'greg'); await window.raid.offer(2,'kettle'); await window.raid.skip(1.5); return await window.raid.party().map(p => p.kind + '*' + p.stars + '@' + p.on + p.at).join(' '); })()"
+  ],
+  ["wait", 700],
+  [
+    "moveAt",
+    "(()=>{const r=document.querySelector('[data-offer=\"3\"]').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+  ],
+  ["wait", 200],
+  ["move", 5, 5],
+  ["eval", "(window.raid.skip(0.5), 'nothing pointed at')"],
+  ["wait", 300],
+  ["shot", "d-05-own-run-stall-bench-board"],
+  ["moveAt", "(()=>{const p = window.raid.party().find(p => p.kind === 'badger'); return window.raid.at(p.id)})()"],
+  ["eval", "(window.raid.skip(0.6), 'resting on the badger')"],
+  ["wait", 600],
+  ["shot", "d-06-card-levelled-two-star"],
+  ["eval", "(async () => { await window.raid.drop(); await window.raid.skip(0.3); return await 'put down'; })()"],
+  [
+    "moveAt",
+    "(()=>{const r=document.querySelector('[data-offer=\"1\"]').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+  ],
+  ["wait", 600],
+  ["shot", "d-07-card-on-the-stall"],
+  ["move", 5, 5],
+  ["wait", 200],
+  [
+    "eval",
+    "(async () => { await window.raid.to('front'); await window.raid.skip(0.3); return await 'front with own raid laid out'; })()"
+  ],
+  ["wait", 500],
+  ["shot", "d-08-front-raid-laid-out"],
+  [
+    "eval",
+    "(async () => { await window.raid.page('almanac'); await window.raid.skip(0.3); return await 'almanac'; })()"
+  ],
+  ["wait", 500],
+  ["shot", "d-09-almanac-levels"],
+  [
+    "eval",
+    "(async () => { await window.raid.page(null); document.getElementById('carryon').click(); await window.raid.skip(1); await window.raid.fight(); window.raid.tick(120); return await JSON.stringify(window.raid.state().mode); })()"
+  ],
+  ["wait", 600],
+  ["shot", "d-10-own-run-fight"],
+  [
+    "eval",
+    "(async () => { await window.raid.tick(3000); await window.raid.skip(10); await window.raid.to('end'); await window.raid.skip(4); return await JSON.stringify(window.raid.state().mode); })()"
+  ],
+  ["wait", 800],
+  ["shot", "d-11-end-of-own-run"]
+]

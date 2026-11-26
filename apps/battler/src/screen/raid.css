@@ -72,6 +72,10 @@ button.k-chip {
   gap: var(--u);
   padding: var(--u) calc(var(--u) * 2);
 }
+#way {
+  padding: calc(var(--u) * 2) calc(var(--u) * 3);
+  font: var(--f-ui);
+}
 .pip {
   width: calc(var(--u) * 9);
   height: calc(var(--u) * 9);
@@ -376,6 +380,17 @@ body[data-picking="yes"] #foe {
   right: calc(var(--u) * 2);
   font: var(--f-name);
   color: var(--k-dim);
+}
+/* A figure's level: a small tag in Leaf's green, on the stall, a card, the almanac and a party's row. Never a star. */
+.lv {
+  font: var(--f-small);
+  white-space: nowrap;
+}
+.offer .lv,
+.tile .lv {
+  position: absolute;
+  top: calc(var(--u) * 3);
+  left: calc(var(--u) * 2);
 }
 .offer .have.ready {
   color: var(--k-gold-lt);
@@ -1112,7 +1127,8 @@ b.dmg.true {
   #corner {
     order: 3;
   }
-  #lastfight {
+  #lastfight,
+  #way {
     order: 4;
   }
   #track {

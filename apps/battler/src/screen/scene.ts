@@ -8,12 +8,12 @@ import { beatAt, drawFigure, drawStanding, drawStars, framesOf, hoverAt } from "
 import { CREAM, GOLD, INK, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
-import { fieldCap, fielded, type ItemId, pieceAt, type RunView, type Stars } from "@sequoia-leaf/raid";
+import { fieldCap, fielded, type ItemId, levelOf, pieceAt, type RunView, type Stars } from "@sequoia-leaf/raid";
 import { type FigureId, isBossId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { regularOf, ROOMS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 
-import { itemPic } from "./art/icons.ts";
+import { itemPic, levelPic } from "./art/icons.ts";
 import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
 import { drawFight, drawFightAir, fightHeldUnder, fightOn } from "./fightview.ts";
 import { burst, drawFlyers, drawFxOver, drawFxUnder, wordsFx } from "./fx.ts";
@@ -134,6 +134,9 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
         lit: shine.lit,
       });
       drawHeld(g, heldRow(items, p.x + sway, heldTop(p.y - lift, false)), ox, oy);
+      // Its level, at the left of its base.
+      const level = S.run ? levelOf(S.run, p.kind) : 0;
+      if (level > 0) g.drawImage(levelPic(level), Math.round(x) - 10, Math.round(y) - 6);
       g.globalAlpha = 1;
     },
     top: () => {

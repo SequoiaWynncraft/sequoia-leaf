@@ -50,6 +50,7 @@ import {
   recordRun,
   trailOpen,
 } from "./outside.ts";
+import { type Roster, rosterOf } from "./own.ts";
 import { postcard } from "./postcard.ts";
 import {
   abandon,
@@ -110,14 +111,19 @@ export interface TableView {
   almanac: Almanac;
   trail: number;
   looks: Looks;
+  /** The figures the member has pulled, with their levels: what a run with their own figures would start with now. */
+  roster: Roster;
 }
 
 // ---------- commands ----------
 
 /** Everything a player can do at the table. */
 export type RaidCommand =
-  /** Set out on a trail. A run in hand is put down first, as walking home, once it has fought a room. */
-  | { do: "start"; trail: number }
+  /**
+   * Set out on a trail: with all figures, or (`own`) with those the member has pulled. A run in hand
+   * is put down first, as walking home, once it has fought a room.
+   */
+  | { do: "start"; trail: number; own?: boolean }
   /** Pick the trail to set out on next, on the front page. */
   | { do: "trail"; trail: number }
   /** Put a look on the table. (A command's `id` on the wire is its own, so the look is `look`.) */
@@ -172,6 +178,7 @@ export const TABLE_REFUSALS = {
   no_run: "There is no raid laid out.",
   unfought: "The first room has not been fought yet.",
   trail_closed: "That trail is not open yet.",
+  nothing_pulled: "You have pulled no figures yet.",
   no_such_look: "There is no such look.",
   not_owned: "That look is not yours yet.",
   owned: "That look is yours already.",
@@ -201,13 +208,20 @@ function spotOf(v: unknown): Spot | null {
   return { on: v.on, at: v.at };
 }
 
+/** Setting out, off the wire: on a trail, and with the member's own figures only when it says so. */
+function readStart(v: Record<string, unknown>): RaidCommand | null {
+  if (!whole(v.trail, 0, TRAIL_COUNT - 1)) return null;
+  return v.own === true ? { do: "start", trail: v.trail, own: true } : { do: "start", trail: v.trail };
+}
+
 /** A command off the wire, or null. Fields it does not use (the command's id) are let be. */
 export function readCommand(v: unknown): RaidCommand | null {
   if (!isRecord(v)) return null;
   switch (v.do) {
     case "start":
+      return readStart(v);
     case "trail":
-      return whole(v.trail, 0, TRAIL_COUNT - 1) ? { do: v.do, trail: v.trail } : null;
+      return whole(v.trail, 0, TRAIL_COUNT - 1) ? { do: "trail", trail: v.trail } : null;
     case "look":
     case "buyLook":
       return isLookKind(v.kind) && typeof v.look === "string" && v.look.length <= 32
@@ -284,17 +298,19 @@ export function runView(run: RunView): RunView {
     record: run.record,
     nextId: run.nextId,
     last: run.last,
+    own: run.own,
     seen: run.seen,
   };
 }
 
-export function tableView(state: Table): TableView {
+export function tableView(state: Table, ctx: Pick<Ctx, "awards">): TableView {
   return {
     runs: state.runs,
     run: state.run ? runView(state.run) : null,
     almanac: state.almanac,
     trail: state.trail,
     looks: state.looks,
+    roster: rosterOf(ctx.awards),
   };
 }
 
@@ -345,13 +361,15 @@ function act(run: Run, c: RunCommand, met: Met | undefined): RunDone {
 /**
  * A run that has ended: written into the almanac, let go of, and paid for under its number. It is
  * paid what it is worth, or what the player may still earn (`room`) when that is less, and says so.
+ * A run with the member's own figures is paid the same and written nowhere: the almanac, and so the
+ * trophies, the standing and the trails open, are the main way's alone.
  */
 function finish(s: Table, run: Run, notes: RaidNote[], log: Logged[], room: number): CoinChange[] {
   const summary = summariseRun(run);
   const worth = payout(summary);
   const paid: Payout =
     worth.coins > room ? { coins: Math.max(0, room), lines: [...worth.lines, { why: "full", coins: 0 }] } : worth;
-  const recorded = recordRun(s.almanac, summary);
+  const recorded = run.own ? { almanac: s.almanac, news: [] } : recordRun(s.almanac, summary);
   s.almanac = recorded.almanac;
   s.run = null;
   notes.push({ t: "ended", run: runView(run), summary, paid, news: recorded.news });
@@ -362,13 +380,20 @@ function finish(s: Table, run: Run, notes: RaidNote[], log: Logged[], room: numb
       rooms_won: summary.cleared,
       ended: summary.ending ?? "lost",
       coins: paid.coins,
+      ...ownLogged(run),
     },
   });
   return paid.coins > 0 ? [{ amount: paid.coins, reason: "The Little Raid", key: `run:${s.runs}` }] : [];
 }
 
-function setOut(s: Table, trail: number, room: number): Answer {
-  if (!trailOpen(s.almanac, trail)) return no("trail_closed");
+/** What a log line of a run with the member's own figures says besides. */
+const ownLogged = (run: Pick<Run, "own">): { own?: true } => (run.own ? { own: true } : {});
+
+function setOut(s: Table, { trail, own: asked }: Extract<RaidCommand, { do: "start" }>, ctx: Ctx): Answer {
+  // The main way is never told what the member has pulled.
+  const own: Roster | null = asked ? rosterOf(ctx.awards) : null;
+  if (own && Object.keys(own).length === 0) return no("nothing_pulled");
+  const room = ctx.room;
   const notes: RaidNote[] = [];
   const log: Logged[] = [];
   let coins: CoinChange[] = [];
@@ -380,10 +405,10 @@ function setOut(s: Table, trail: number, room: number): Answer {
     coins = finish(s, run, notes, log, room);
   }
   s.runs += 1;
-  s.run = startRun(draw32(s), { trail });
+  s.run = startRun(draw32(s), own ? { trail, own } : { trail });
   s.trail = trail;
   notes.push({ t: "started", trail, run: s.runs });
-  log.push({ kind: LOGGED.raidStarted, data: { trail } });
+  log.push({ kind: LOGGED.raidStarted, data: { trail, ...ownLogged(s.run) } });
   return { state: s, notes, coins, log };
 }
 
@@ -417,12 +442,13 @@ function play(s: Table, c: RunCommand, ctx: Ctx): Answer {
         seconds: Math.round(seconds * 10) / 10,
         // A sparring room fought against another member's board: whose.
         ...(across === undefined ? {} : { met: across }),
+        ...ownLogged(run),
       },
     });
   }
   // The board a member fought a sparring room with, exactly as the fight was decided from, left for others to meet there.
   const party = c.do === "fight" && keeps(run, ctx) ? foughtOf(run)?.setup.sides[0] : undefined;
-  const keep = party === undefined ? [] : [{ slot: boardSlot(run.trail, run.room), data: party }];
+  const keep = party === undefined ? [] : [{ slot: boardSlot(run.trail, run.room, run.own !== null), data: party }];
   const coins = run.stage.phase === "over" ? finish(s, run, notes, log, ctx.room) : [];
   return { state: s, notes, coins, log, keep };
 }
@@ -435,7 +461,7 @@ export function meets(state: Table, c: RaidCommand): string | null {
   const run = state.run;
   if (c.do !== "take" || !run) return null;
   const to = takenTo(run);
-  return to !== null && ROOMS[to]?.kind === "spar" ? boardSlot(run.trail, to) : null;
+  return to !== null && ROOMS[to]?.kind === "spar" ? boardSlot(run.trail, to, run.own !== null) : null;
 }
 
 /**
@@ -451,7 +477,7 @@ export function applyCommand(state: Table, c: RaidCommand, ctx: Ctx): Answer {
   // Leaf's dice, stirred into both streams before anything is drawn.
   s.rng = mix(s.rng, ctx.seed);
   if (s.run) s.run.rng = mix(s.run.rng, ctx.seed);
-  if (c.do === "start") return setOut(s, c.trail, ctx.room);
+  if (c.do === "start") return setOut(s, c, ctx);
   if (c.do === "trail") {
     if (!trailOpen(s.almanac, c.trail)) return no("trail_closed");
     s.trail = c.trail;
@@ -607,7 +633,7 @@ export const RAID: Game<Table, RaidCommand, TableView, RaidNote> = {
   apply: applyCommand,
   // A sparring room may be against the board another member fought it with.
   meets,
-  view: (state) => tableView(state),
+  view: tableView,
   decode: decodeTable,
   encode: encodeTable,
   command: readCommand,

@@ -783,11 +783,13 @@ for the staff's report (see [Who played](#who-played-the-staffs-view)).
 **Awards.** A game may say what a state shows was won for good
 (`Game.awards`): The Little Raid a carved figure of each boss its almanac has
 beaten (`trophy-<boss>`), the Works a model of each capstone its depot has
-taken in (`model-<capstone>`). In the transaction of a batch that changed such
+taken in (`model-<capstone>`), the pulls each prize held (`pull:<prize>`) and
+each further copy of it up to the seventh (`copies:<prize>:<n>`). In the transaction of a batch that changed such
 a game's state, each one the player does not hold yet is written to `awards`
 (`player_id`, `id`, `at`); none is ever taken away. Every call of every game
 is told all the player holds (`Ctx.awards`), so that the town can send each to
-the camp as a trophy.
+the camp as a trophy, and The Little Raid can read the figures a member has
+pulled and their levels.
 
 **Tending.** A game may say that its states go on by themselves for hours
 (`Game.tend`): the Works' yards work while their owners are away. Everything

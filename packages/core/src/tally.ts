@@ -307,14 +307,14 @@ export function rankTally<Id extends string>(unit: TallyUnit, counted: readonly 
   return ranked;
 }
 
-/** Each counter a thing the games log adds one to (`Done.log`). */
+/** Each counter a thing the games log adds one to (`Done.log`). A raid with the member's own figures (`own`) adds to none. */
 export function talliedFrom(logged: readonly Logged[]): TallyStat[] {
   return logged.flatMap((l): TallyStat[] => {
     switch (l.kind) {
       case LOGGED.raidRoom:
-        return ["raid_rooms"];
+        return l.data["own"] === true ? [] : ["raid_rooms"];
       case LOGGED.raidEnded:
-        return l.data["ended"] === "won" ? ["raid_wins"] : [];
+        return l.data["ended"] === "won" && l.data["own"] !== true ? ["raid_wins"] : [];
       case LOGGED.worksOrder:
         return ["works_orders"];
       case LOGGED.townCrab:

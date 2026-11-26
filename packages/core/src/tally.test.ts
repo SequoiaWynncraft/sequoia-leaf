@@ -52,6 +52,9 @@ describe("what the games log", () => {
         { kind: LOGGED.raidRoom, data: { won: false } },
         { kind: LOGGED.raidEnded, data: { ended: "lost" } },
         { kind: LOGGED.raidEnded, data: { ended: "won" } },
+        // A raid with the member's own figures is counted nowhere.
+        { kind: LOGGED.raidRoom, data: { won: true, own: true } },
+        { kind: LOGGED.raidEnded, data: { ended: "won", own: true } },
         { kind: LOGGED.worksOrder, data: { order: 3 } },
         { kind: LOGGED.worksPlot, data: { price: 40 } },
         { kind: LOGGED.townCrab, data: {} },

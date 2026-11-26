@@ -34,9 +34,12 @@ export function enterRun(): void {
   go({ e: "sit", ...tableNow() });
 }
 
-/** Sets out on a trail: Leaf lays a new run out (putting down any run in hand), and the table shows it. Says whether it did. */
-export async function startNew(trail: number): Promise<boolean> {
-  const did = await ask({ do: "start", trail }, document.getElementById("start"));
+/**
+ * Sets out on a trail, with all figures or (`own`) the member's own: Leaf lays a new run out (putting
+ * down any run in hand), and the table shows it. Says whether it did.
+ */
+export async function startNew(trail: number, own = false): Promise<boolean> {
+  const did = await ask(own ? { do: "start", trail, own } : { do: "start", trail }, document.getElementById("start"));
   if (!did?.ok) return false;
   enterRun();
   return true;

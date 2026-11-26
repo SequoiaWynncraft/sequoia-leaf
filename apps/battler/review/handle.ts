@@ -52,14 +52,16 @@ import {
   waitingForLeaf,
 } from "../src/screen/state.ts";
 import { sheetUp } from "../src/screen/ui/fightsheet.ts";
-import { type PageId, showPage } from "../src/screen/ui/pages.ts";
+import { type PageId, renderPages, showPage } from "../src/screen/ui/pages.ts";
 import { redrawTallies, TV } from "../src/screen/ui/tally.ts";
 
 type Jump = "front" | "boon" | "component" | "spar" | "boss" | "lastboss" | "end";
 
 export interface Handle {
-  /** Starts a run on a trail, at its first pick; from a chosen seed where the play server stages it. */
-  start(seed: number, trail?: number): Promise<string>;
+  /** Starts a run on a trail, at its first pick; from a chosen seed where the play server stages it. With `own`, with the figures pulled. */
+  start(seed: number, trail?: number, own?: boolean): Promise<string>;
+  /** Has the member hold what pulling these copies of each figure awards (`{ greg: 3 }`), where the play server stages it. */
+  pulled(copies: Record<string, number>): Promise<void>;
   /** A new member: the play server forgets the table, and the page takes the new one. */
   fresh(): Promise<void>;
   /** The bot plays this many whole rooms, unseen, and the table shows the room after them. */
@@ -248,11 +250,15 @@ async function bot(rooms: number): Promise<void> {
 
 export function openHandle(): void {
   window.raid = {
-    async start(seed, trail = 0) {
+    async start(seed, trail = 0, own = false) {
       // From the chosen seed where the play server stages it; otherwise as the front page sets out.
-      const staging = await staged({ start: { seed, trail } });
-      if (staging.length === 0) await startNew(trail);
+      const staging = await staged({ start: { seed, trail, own } });
+      if (staging.length === 0) await startNew(trail, own);
       return settle();
+    },
+    async pulled(copies) {
+      await staged({ pulled: copies });
+      renderPages(true);
     },
     async fresh() {
       await staged({ fresh: true });

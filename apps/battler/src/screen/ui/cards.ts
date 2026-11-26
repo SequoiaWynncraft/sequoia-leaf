@@ -61,7 +61,6 @@ import {
   sellValue,
   specOf,
   spotOf,
-  STALL_ODDS,
   type Stars,
   traitDraw,
   type TraitId,
@@ -98,6 +97,7 @@ import {
 } from "../logic.ts";
 import { pieces as richPieces } from "../rich.ts";
 import { doNow, S } from "../state.ts";
+import { levelOnCard, oddsStats } from "./own.ts";
 
 /** A drawn picture on the page, `scale` interface units to each of its pixels. */
 export function pic(c: HTMLCanvasElement, scale = 1, cls = ""): HTMLCanvasElement {
@@ -173,6 +173,8 @@ export interface FigureExtras {
   items?: readonly ItemId[];
   /** How many times Greg has eaten. */
   fed?: number;
+  /** Its level, in a run with the member's own figures or among the figures they have pulled. */
+  level?: number;
   /** As it stands in a fight just now. */
   unit?: Unit;
   /** A line under the price: whose it is. */
@@ -190,6 +192,30 @@ export interface FigureExtras {
 }
 
 const NAMES = { health: "Health", attack: "Attack", speed: "Speed", reach: "Reach", armour: "Armour", ward: "Ward" };
+
+/** A figure's numbers for its card: raised by what it holds, belongs to or its level in green, lowered in coral. */
+function statsOf(kind: UnitKind, stars: Stars, extras: FigureExtras, level: number): Stat[] {
+  const u = extras.unit;
+  const plain = plainNumbers(kind, stars);
+  const now: Numbers = u
+    ? { health: u.maxHp, attack: u.attack, speed: u.speed, reach: u.range, armour: u.armour, ward: u.ward }
+    : (extras.numbers ?? plainNumbers(kind, stars, level));
+  return NUMBER_KEYS.map((key) => {
+    const value =
+      key === "speed"
+        ? specOf(kind).speed > 0
+          ? `${now.speed.toFixed(2)}/s`
+          : "none"
+        : key === "health" && u
+          ? `${whole(Math.max(0, u.hp))}/${whole(u.maxHp)}`
+          : whole(now[key]);
+    const d = now[key] - plain[key];
+    const moved = Math.abs(d) < (key === "speed" ? 0.005 : 0.5) ? 0 : d;
+    return moved === 0
+      ? { label: NAMES[key], value }
+      : { label: NAMES[key], value, mark: moved > 0 ? "raised" : "lowered" };
+  });
+}
 
 /** Any figure: its role, its traits, its numbers, its ability in a few words, and the items that suit it. */
 export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = {}): Description {
@@ -214,28 +240,9 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
     };
   };
 
-  // Its numbers: raised by what it holds or belongs to in green, lowered in coral.
-  const plain = plainNumbers(kind, stars);
-  const now: Numbers = u
-    ? { health: u.maxHp, attack: u.attack, speed: u.speed, reach: u.range, armour: u.armour, ward: u.ward }
-    : (extras.numbers ?? plain);
-  const stats: Stat[] = NUMBER_KEYS.map((key) => {
-    const value =
-      key === "speed"
-        ? spec.speed > 0
-          ? `${now.speed.toFixed(2)}/s`
-          : "none"
-        : key === "health" && u
-          ? `${whole(Math.max(0, u.hp))}/${whole(u.maxHp)}`
-          : whole(now[key]);
-    const d = now[key] - plain[key];
-    const moved = Math.abs(d) < (key === "speed" ? 0.005 : 0.5) ? 0 : d;
-    return moved === 0
-      ? { label: NAMES[key], value }
-      : { label: NAMES[key], value, mark: moved > 0 ? "raised" : "lowered" };
-  });
+  const lv = levelOnCard(kind, extras);
 
-  const blocks: Block[] = [];
+  const blocks: Block[] = lv.blocks; // What its level gives comes first, under the numbers it raises.
   if (spec.ability)
     blocks.push({
       title: spec.ability.name,
@@ -270,13 +277,13 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
       "span",
       "fside",
       {},
-      el("span", "k-row tight", {}, pic(starsPic(stars)), figure ? acorns(figure.tier) : null),
+      el("span", "k-row tight", {}, lv.tag, pic(starsPic(stars)), figure ? acorns(figure.tier) : null),
       extras.whose ? el("span", "k-dim", { text: extras.whose }) : null,
     ),
     chips: [chip(kin, "Kin"), chip(calling, "Calling"), ...more.map((t) => chip(t, "Also")), drawChip(draw)].filter(
       (c): c is Chip => c !== null,
     ),
-    stats,
+    stats: statsOf(kind, stars, extras, lv.level),
     blocks,
     rows,
     actions:
@@ -488,12 +495,11 @@ function purseDesc(run: RunView): Description {
 
 /** The level: how many may be fielded, how XP comes, and what the stall offers at it, a tier a line. */
 function levelDesc(run: RunView): Description {
-  const odds = STALL_ODDS[Math.min(run.level, STALL_ODDS.length) - 1] ?? [];
   return {
     name: `Level ${run.level}`,
     icon: glyph("acorn"),
     tag: "How many figures you may field.",
-    stats: odds.flatMap((share, i) => (share > 0 ? [{ label: `${i + 1}-acorn figures`, value: `${share}%` }] : [])),
+    stats: oddsStats(run),
     blocks: [{ body: `${ECONOMY.xpBought} XP for ${ECONOMY.xpCost} acorns. Every room gives ${ECONOMY.xpRoom} XP.` }],
   };
 }
@@ -544,6 +550,7 @@ export function registerCards(): void {
     if (!run || !foe) return null;
     return figureDesc(foe.kind, foe.stars, {
       items: foe.items,
+      level: foe.level ?? 0,
       whose: `${acrossName(run.foe)}'s`,
       party: run.foe,
       numbers: startNumbers(run.foe, foe.seat),

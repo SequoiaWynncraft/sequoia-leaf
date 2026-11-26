@@ -15,6 +15,12 @@ import { rejection, testConfig } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 
+/** The awards the pulls give for further copies of prizes, from a state as stored, in order. */
+function copies(text: string): string[] {
+  const read = PULLS.decode(text);
+  return (read ? (PULLS.awards?.(read) ?? []) : []).filter((id) => id.startsWith("copies:")).toSorted();
+}
+
 let directory: string;
 
 beforeEach(() => {
@@ -247,6 +253,7 @@ describe("the database", () => {
       { migration_id: 41, name: "sign_ins" },
       { migration_id: 42, name: "play_stood" },
       { migration_id: 43, name: "play_kept_met" },
+      { migration_id: 44, name: "copies_awards" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -317,7 +324,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 43 },
+      { latest: 44 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -698,6 +705,57 @@ describe("the database", () => {
       { game: "town", rev: 2, stood: 2 },
       { game: "works", rev: 5, stood: 5 },
     ]);
+  });
+
+  it("gives each player who has pulled already an award for every further copy of a prize, up to the seventh, as the game awards them", async () => {
+    const path = join(directory, "leaf.db");
+    const pulled = "00000000-0000-4000-8000-00000000000a";
+    const opened = "00000000-0000-4000-8000-00000000000b";
+    const raided = "00000000-0000-4000-8000-00000000000c";
+    const guest = "00000000-0000-4000-8000-00000000000d";
+    const ctx: Ctx = {
+      now: Date.UTC(2026, 10, 26),
+      player: { id: alice, guest: false },
+      seed: 7,
+      room: 0,
+      awards: [],
+      postcards: {},
+    };
+    const have = { "figure:greg": 3, "figure:worm": 1, "figure:slug": 9, "thing:rock": 2 };
+    // With a ware of the Treasury's, retired: let go of as the game reads the state.
+    const state = PULLS.encode({ ...PULLS.create(ctx), have: { ...have, "ware:jar": 4 } });
+    expect(copies(state)).toHaveLength(2 + 6 + 1);
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // Back to before migration 44: a member who has pulled (one award for a copy kept already), one
+        // who has only opened the pulls, one who has only played the raid, and a guest who has pulled.
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 44`;
+        yield* sql`DELETE FROM awards`;
+        yield* sql`INSERT INTO awards (player_id, id, at) VALUES (${pulled}, 'copies:figure:greg:2', 1), (${pulled}, 'pull:figure:greg', 1)`;
+        for (const [player, game, text, isGuest] of [
+          [pulled, "pulls", state, 0],
+          [opened, "pulls", PULLS.encode(PULLS.create(ctx)), 0],
+          [raided, "raid", "{}", 0],
+          [guest, "pulls", state, 1],
+        ] as const) {
+          yield* sql`
+            INSERT INTO play_state (player_id, game, rev, state, updated_at, guest)
+            VALUES (${player}, ${game}, 1, ${text}, 5, ${isGuest})
+          `;
+        }
+      }),
+    );
+    // The one kept already keeps when it was first won; a player who has pulled nothing is given none.
+    const given = (player: string) =>
+      copies(state).map((id) => ({ player, id, at: player === pulled && id === "copies:figure:greg:2" ? 1 : 5 }));
+    expect(
+      await query(
+        path,
+        (sql) => sql`SELECT player_id AS player, id, at FROM awards WHERE id LIKE 'copies:%' ORDER BY player_id, id`,
+      ),
+    ).toEqual([...given(pulled), ...given(guest)]);
   });
 
   it("enforces foreign keys, which SQLite leaves off unless asked", async () => {

@@ -13,6 +13,7 @@ import { ECONOMY, MAX_LEVEL, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts"
 import { isTraitId, TRAIT_IDS } from "./content/traits.ts";
 import type { RaidNote, RunView, TableView } from "./game.ts";
 import { type News, type Payout, readAlmanac, trailOpen } from "./outside.ts";
+import { readRoster } from "./own.ts";
 import { ACORNS_WHYS, type AcornsWhy, type Ending, type Note, type RunSummary, type Spot } from "./run.ts";
 import { fields, Nonsense, readRunView } from "./save.ts";
 
@@ -37,7 +38,14 @@ export function readView(v: unknown): TableView | null {
     if (!trailOpen(almanac, trail)) bad("the trail");
     const run = r.run === null ? null : runOf(r.run, "the run");
     if (run?.stage.phase === "over") bad("the run");
-    return { runs: whole(r.runs, 0, 1_000_000_000, "the runs"), run, almanac, trail, looks };
+    return {
+      runs: whole(r.runs, 0, 1_000_000_000, "the runs"),
+      run,
+      almanac,
+      trail,
+      looks,
+      roster: readRoster(r.roster) ?? bad("the roster"),
+    };
   } catch (err) {
     if (err instanceof Nonsense) return null;
     throw err;

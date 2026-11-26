@@ -52,13 +52,15 @@ import { snd } from "../sounds.ts";
 import { dress } from "../stage.ts";
 import { ask, S } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
+import { nothingNew, pulledLine, pulledTag, runTag, setsOutOwn, wayPrefix, waysOf } from "./own.ts";
 
 export type PageId = "front" | "almanac" | "howto" | "looks" | "summary";
 
 /** What the pages ask for. */
 export interface PageAsks {
   carryOn: () => void;
-  start: (trail: number) => void;
+  /** Set out on a trail, with all figures or (`own`) the member's own. */
+  start: (trail: number, own: boolean) => void;
   goHome: () => void;
   leave: () => void;
   /** A gear for the settings menu, on the pages that cover the table and have no close of their own. */
@@ -124,7 +126,7 @@ function partyRow(run: RunView): HTMLElement {
   const row = el("div", "party", {});
   const board = run.board.flatMap((p) => (p ? [p] : []));
   for (const p of board.length > 0 ? board : pieces(run)) {
-    const who = el("div", "who", {}, pic(starsPic(p.stars)), figPic(portrait(p.kind)));
+    const who = el("div", "who", {}, pic(starsPic(p.stars)), figPic(portrait(p.kind)), runTag(run, p.kind));
     link(who, `figure:${p.kind}/${p.stars}`);
     row.append(who);
   }
@@ -153,7 +155,7 @@ function front(): HTMLElement {
         {},
         el("b", "k-gold", { text: "A raid is laid out" }),
         el("span", "k-dim", {
-          text: `Room ${run.room + 1} of ${ROOM_COUNT}, ${TRAILS[run.trail]?.name ?? ""}. Health ${run.resolve}.`,
+          text: `${wayPrefix(run)}Room ${run.room + 1} of ${ROOM_COUNT}, ${TRAILS[run.trail]?.name ?? ""}. Health ${run.resolve}.`,
         }),
         partyRow(run),
       ),
@@ -213,7 +215,7 @@ function front(): HTMLElement {
   }
   // The raid laid out, while it has fought no room, stays the one set out on.
   const keep = run !== null && run.stage.phase !== "over" && unfought(run);
-  if (keep) add(body, el("div", "k-label", { text: "Which way, next time?" }));
+  add(body, ...waysOf(keep, () => renderPages(true)));
   const trails = el("div", "trails", { role: "radiogroup" });
   for (let i = 0; i < TRAIL_COUNT; i++) {
     const t = TRAILS[i];
@@ -261,7 +263,7 @@ function front(): HTMLElement {
       el(
         "button",
         `k-btn wide${run ? " wood" : ""}`,
-        { type: "button", id: "start", onclick: () => asks?.start(S.trail) },
+        { type: "button", id: "start", onclick: () => asks?.start(S.trail, setsOutOwn()) },
         pic(glyph("swords")),
         run ? "New raid" : "Set out",
       ),
@@ -304,7 +306,6 @@ function front(): HTMLElement {
       "Leave the table",
     ),
   );
-  body.prepend(el("p", "k-read fair", { text: "Everyone plays with the same figures here." }));
   return panel("The Little Raid", pic(glyph("swords")), body, false, "front");
 }
 
@@ -321,6 +322,7 @@ function figureTile(id: FigureId): HTMLElement {
     pic(portrait(id, { dark: !met }), 2),
     met ? el("span", "k-s", { text: FIGURES[id].name }) : null,
     starred ? pic(starsPic(3), 1, "badge") : null,
+    pulledTag(id),
   );
   if (met) link(tile, `figure:${id}/${starred ? 3 : 1}/lore`);
   return tile;
@@ -354,7 +356,7 @@ function almanac(): HTMLElement {
     add(
       page,
       el("div", "k-dim", {
-        text: `${a.fielded.length} of ${FIGURE_IDS.length} met. ${a.threeStars.length} taken to three stars.`,
+        text: `${a.fielded.length} of ${FIGURE_IDS.length} met. ${a.threeStars.length} taken to three stars.${pulledLine()}`,
       }),
     );
     add(page, el("div", "tiles", {}, ...FIGURE_IDS.map(figureTile)));
@@ -671,12 +673,7 @@ function summary(): HTMLElement | null {
         ? el("div", "k-d", { text: "Your purse can take no more for now. It has room again within the hour." })
         : el("div", "k-row pay", {}, el("span", "k-grow", { text: WHY[l.why] }), amount("coin", `+${l.coins}`)),
     );
-  if (right.childElementCount === 0)
-    add(
-      right,
-      el("div", "k-label", { text: "New in the almanac" }),
-      el("span", "k-dim", { text: "Nothing this time." }),
-    );
+  if (right.childElementCount === 0) add(right, ...nothingNew(run));
   add(
     left,
     el(
@@ -690,7 +687,7 @@ function summary(): HTMLElement | null {
       "div",
       "k-wrap ends",
       {},
-      el("button", "k-btn", { type: "button", id: "again", onclick: () => asks?.start(sum.trail) }, "Again"),
+      el("button", "k-btn", { type: "button", id: "again", onclick: () => asks?.start(sum.trail, !!run.own) }, "Again"),
       el(
         "button",
         "k-btn wood",
