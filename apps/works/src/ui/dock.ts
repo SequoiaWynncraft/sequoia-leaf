@@ -23,6 +23,7 @@ import {
   SORTER,
   STOP,
   stops,
+  TUNNEL,
 } from "@sequoia-leaf/factory";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { amount, asking, asksAgain, el, icon, pressedTwice, type Spend } from "@sequoia-leaf/kit/dom.ts";
@@ -51,6 +52,7 @@ import {
 } from "../plans.ts";
 import {
   builds,
+  dockOrder,
   DRAWN,
   gradeInHand,
   type Group,
@@ -81,11 +83,11 @@ import { copyButton, pasteButton } from "./code.ts";
 import { $, button, fitted, iconButton, shows, when, type YardIcon, yardIcon } from "./parts.ts";
 import { binButton, type Place, placeButton, placesOf, yardButtons } from "./places.ts";
 
-/** The tools in the order they sit in the dock, which is also the order of their keys (`tool` in `keymap.ts`): every kind this page draws. */
+/** Every kind this page draws, as a tool. */
 export const TOOLS: readonly Kind[] = DRAWN;
 
 /** The tools the yard may build, in dock order. */
-export const openTools = (): Kind[] => TOOLS.filter(usable);
+export const openTools = (): Kind[] => dockOrder(S.world.done).filter(usable);
 
 /** Tools seen in the dock before, so that a new one can make an entrance. */
 let known: Set<Kind | "select" | "paint"> | null = null;
@@ -252,12 +254,26 @@ function handLine(): { text: string; bad: boolean } {
     const what = `Raise to ${numeral(S.aim.grade ?? 1)}: ${price(S.aim.cost)}.`;
     return { text: f ? `${what} Tap again, or Raise.` : `${what} Click to raise it.`, bad: false };
   }
-  if (tool === BELT) {
-    if (!f) return { text: `Belt: drag to place a line.${turns()}`, bad: false };
-    return { text: S.from ? "Now tap where it ends." : "Tap where the line starts.", bad: false };
-  }
+  if (tool === BELT) return { text: beltLine(f), bad: false };
+  if (tool === TUNNEL) return { text: tunnelLine(f), bad: false };
   if (f) return { text: S.aim ? "Tap again, or Build." : `${name}: tap where it goes.`, bad: false };
   return { text: `${name}: click to place it.${turns(tool === SORTER)}`, bad: false };
+}
+
+/** What the line says with the belt in hand: for a mouse, to drag; for a finger, where to tap first, then next. */
+function beltLine(f: boolean): string {
+  if (!f) return `Belt: drag to place a line.${turns()}`;
+  return S.from ? "Now tap where it ends." : "Tap where the line starts.";
+}
+
+/** What the line says with the tunnel in hand: where to click (or tap) first, then where next; for a finger with the way out aimed, how to build it. */
+function tunnelLine(f: boolean): string {
+  const from = S.from;
+  if (!from)
+    return f ? "Tunnel: tap where it goes in." : `Tunnel: click where it goes in, then where it comes up.${turns()}`;
+  const out = S.aim && (S.aim.x !== from.x || S.aim.y !== from.y);
+  if (f) return out ? "Tap again, or Build." : "Now tap where it comes up.";
+  return `Now click where it comes up.${turns()}`;
 }
 
 /** Everything the line over the dock shows, worked out from what is in hand, the yard and the purse: it is drawn again exactly when this differs. */

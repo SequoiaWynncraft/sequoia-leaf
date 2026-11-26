@@ -45,6 +45,7 @@ import {
   unaim,
   undo,
 } from "./tools.ts";
+import { setWayIn } from "./tunnel.ts";
 import { closeCard, openCard, refAt, riderAt, tileBox } from "./ui/card.ts";
 import { openTools, refreshDock } from "./ui/dock.ts";
 import { closeBanner } from "./ui/notes.ts";
@@ -179,8 +180,9 @@ function hoverOn(t: { x: number; y: number }): void {
   pointAt(t.x, t.y);
 }
 
-/** A tap or click on a tile with nothing in hand: ask about what is there. */
+/** A tap or click on a tile with nothing in hand: ask about what is there. What the view was brought to with no card is no longer marked. */
 function ask(tx: number, ty: number, pageX: number, pageY: number): void {
+  S.brought = null;
   const p = toYard(pageX, pageY);
   const who = callerAt(p.x, p.y);
   if (who && !S.visiting) {
@@ -212,6 +214,11 @@ export function fingerTap(tx: number, ty: number): void {
       markOver(tx, ty);
       markEnd();
     }
+    return;
+  }
+  // The tunnel's first tap sets where it goes in.
+  if (setWayIn(tx, ty)) {
+    refreshDock();
     return;
   }
   // A second tap where it is aimed sets it down; a plan of the whole yard is aimed at the whole yard.
@@ -303,8 +310,9 @@ function fingerDown(d: Down, t: { x: number; y: number }): void {
 /** A mouse button goes down: the right takes away, the middle or an empty hand moves the view, else the hand's drag begins. */
 function mouseDown(e: PointerEvent, d: Down, t: { x: number; y: number }): void {
   if (e.button === 2 && !S.visiting) {
-    // With pieces in hand it lets them go: taking one away would leave the hand holding what is not there.
-    if (S.group) cancel();
+    // With pieces in hand it lets them go: taking one away would leave the hand holding what is not
+    // there. With a tunnel's way in set, it lets that go.
+    if (S.group || S.hand.is === "tunnel") cancel();
     else {
       d.doing = "take";
       takeAway(t.x, t.y, true);

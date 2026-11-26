@@ -28,16 +28,17 @@ import type { Ctx } from "@sequoia-leaf/kit/util.ts";
 import { PAINTS, TILE } from "./art/belts.ts";
 import { heldBox, takenUp } from "./held.ts";
 import type { Layout } from "./layout.ts";
+import { markedTiles, pinPulse } from "./pinned.ts";
 import { alarm, blockColour, layPlan, makePlan, paintPlan, type Plan } from "./plan.ts";
-import { builds, type Group, S, seenFrom, tileNudge } from "./state.ts";
+import { builds, type Group, S, seenFrom, standsOn, tileNudge, type Tool } from "./state.ts";
 import { troubled } from "./trouble.ts";
 
 /** A plan for each size a step is drawn at, made when first gone out to. */
 const plans = new Map<number, Plan>();
 
 /** A line a pixel wide just outside a box of the picture: it is being pointed at. `breathe` draws it a pixel further out half the time. */
-function box(g: Ctx, x: number, y: number, w: number, h: number, col: string, breathe = false): void {
-  const k = breathe && Math.sin(S.t * 6) > 0 ? 2 : 1;
+function box(g: Ctx, x: number, y: number, w: number, h: number, col: string, breathe = false, out = 0): void {
+  const k = (breathe && Math.sin(S.t * 6) > 0 ? 2 : 1) + out;
   g.fillStyle = col;
   g.fillRect(x - k, y - k, w + k * 2, 1);
   g.fillRect(x - k, y + h + k - 1, w + k * 2, 1);
@@ -103,6 +104,42 @@ export function drawPlan(g: Ctx, y: Yard, L: Layout, cornerX: number, cornerY: n
   return [dx, dy];
 }
 
+/** The plan as the marks over it are drawn: where to draw, the yard, a tile's size, and where a tile is. */
+interface Over {
+  readonly g: Ctx;
+  readonly y: Yard;
+  readonly P: number;
+  readonly X: (i: number) => number;
+  readonly Y: (i: number) => number;
+}
+
+/** The box of the piece on a tile, over the plan: its tile, or for the depot its nine; `out` pixels further out. */
+function around(o: Over, i: number, col: string, breathe: boolean, out = 0): void {
+  const { land } = o.y;
+  const depot = land.depot[1] * land.w + land.depot[0];
+  if (o.y.kind[i] === DEPOT) box(o.g, o.X(depot) - o.P, o.Y(depot) - o.P, o.P * 3, o.P * 3, col, breathe, out);
+  else box(o.g, o.X(i), o.Y(i), o.P, o.P, col, breathe, out);
+}
+
+/**
+ * Over the plan, what is pointed at: the piece marked (`markedTiles`), every tile of it, gold between
+ * two lines of ink, standing out for a moment after the view is brought to it; and with nothing in
+ * hand, the piece under the mouse.
+ */
+function pointed(o: Over, tool: Tool): void {
+  const out = pinPulse();
+  for (const i of markedTiles()) {
+    around(o, i, INK, false, out + 1);
+    around(o, i, INK, false, out - 1);
+    around(o, i, GOLD[2], false, out);
+  }
+  const { land } = o.y;
+  const t = S.hover;
+  if (!t || tool !== null || t.x < 0 || t.y < 0 || t.x >= land.w || t.y >= land.h) return;
+  const i = t.y * land.w + t.x;
+  if (o.y.kind[i] !== NONE) around(o, i, GOLD[2], true);
+}
+
 /**
  * Over the plan: a mark on each piece in trouble, and what is being pointed at or is about to be
  * built, as the picture near shows them, each as a box of its tiles.
@@ -133,19 +170,7 @@ export function drawPlanMarks(g: Ctx, y: Yard, dx: number, dy: number): void {
       if (here !== (x > 0 && lit[i - 1] === 1)) g.fillRect(X(i), Y(i), 1, P);
     }
   }
-  const depot = land.depot[1] * W + land.depot[0];
-  /** The box of the piece on a tile: its tile, or for the depot its nine. */
-  const around = (i: number, col: string, breathe: boolean): void => {
-    if (y.kind[i] === DEPOT) box(g, X(depot) - P, Y(depot) - P, P * 3, P * 3, col, breathe);
-    else box(g, X(i), Y(i), P, P, col, breathe);
-  };
-  const tileOf = (x: number, yy: number): number => yy * W + x;
-  if (S.picked >= 0) around(S.picked, GOLD[2], false);
-  if (S.hover && tool === null) {
-    const { x, y: hy } = S.hover;
-    if (x >= 0 && hy >= 0 && x < W && hy < land.h && y.kind[tileOf(x, hy)] !== NONE)
-      around(tileOf(x, hy), GOLD[2], true);
-  }
+  pointed({ g, y, P, X, Y }, tool);
   if (S.mark) {
     // The pieces marked, lit gold on their tiles; the area itself a line of dashes that march.
     const m = S.mark;
@@ -176,8 +201,9 @@ export function drawPlanMarks(g: Ctx, y: Yard, dx: number, dy: number): void {
   }
   if (S.from && !S.run) box(g, dx + S.from.x * P, dy + S.from.y * P, P, P, GOLD[2], true);
   if (S.aim && tool !== null) {
-    const x = dx + S.aim.x * P;
-    const top = dy + S.aim.y * P;
+    const on = standsOn(S.aim);
+    const x = dx + on.x * P;
+    const top = dy + on.y * P;
     const bad = S.aim.why !== null;
     if (tool === "remove") box(g, x, top, P, P, CORAL, true);
     else if (tool === "paint") {
@@ -200,7 +226,10 @@ export function drawPlanMarks(g: Ctx, y: Yard, dx: number, dy: number): void {
           g.fillRect(Math.round(x + P / 2 + Math.cos(a) * r), Math.round(top + P / 2 + Math.sin(a) * r), 1, 1);
         }
       }
-      box(g, x, top, P, P, bad ? CORAL : CREAM, true);
+      const col = bad ? CORAL : CREAM;
+      box(g, x, top, P, P, col, true);
+      // And the tile aimed at, which for a tunnel whose way in is set is where it would come up, or cannot.
+      box(g, dx + S.aim.x * P, dy + S.aim.y * P, P, P, col, true);
     }
   }
   const nudged = tileNudge();

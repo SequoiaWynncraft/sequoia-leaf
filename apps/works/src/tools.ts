@@ -11,6 +11,8 @@
  * of its kind of a lower grade it raises that piece, for the difference; over one of a higher grade
  * it only turns it, and never lowers it. A copy or a blueprint stands its pieces at the grades it
  * holds, and raises or lowers what of the same kind stands under it, as the rules do.
+ *
+ * A tunnel takes two clicks (or taps): the first sets where it goes in, the second where it comes up.
  */
 
 import {
@@ -55,12 +57,13 @@ import {
   worthAt,
 } from "@sequoia-leaf/factory";
 import { close as closeCards } from "@sequoia-leaf/kit/card.ts";
-import { CREAM, GOLD, SKY } from "@sequoia-leaf/kit/palette.ts";
+import { GOLD, SKY } from "@sequoia-leaf/kit/palette.ts";
 
 import { PAINTS, TILE } from "./art/belts.ts";
-import { float, flutter, puff, ring, sparkle } from "./fx.ts";
+import { float, flutter, puff, sparkle } from "./fx.ts";
 import { aimOf, groupOf, markOf, runOf, type Tile } from "./hand.ts";
 import { keepsRight, sendsRight } from "./layout.ts";
+import { aimed, DUST, landed, paid, refused } from "./outcome.ts";
 import { aimYard, isWhole, piecesInHand, pressYard } from "./plans.ts";
 import { yardSfx } from "./sound.ts";
 import {
@@ -77,35 +80,15 @@ import {
   type Tool,
   toolHooks,
 } from "./state.ts";
+import { comesUp, setWayIn, tunnelAim } from "./tunnel.ts";
 import { runOut, stepWay } from "./ways.ts";
-import { coins, type Did, doNow } from "./yard.ts";
-
-const DUST = "#cbb894";
-
-/** Whether the rules refused something done (`did`, as `doNow` gave it): if so, it is said why, with its sound. */
-function refused(did: Did): boolean {
-  if (!("refused" in did)) return false;
-  yardSfx.no();
-  toolHooks.said(`${did.why}.`);
-  return true;
-}
+import { coins, doNow } from "./yard.ts";
 
 const W = (): number => S.world.land.w;
 
 /** Moves what is in hand (`moveHand`). */
 const go = moveHand;
 
-/** An aim at a tile: why it cannot be, what it costs, and for a tunnel its far mouth; of the yard and the purse as they are now. */
-const aimed = (x: number, y: number, why: string | null, cost: number, far = -1): Aim => ({
-  x,
-  y,
-  why,
-  cost,
-  far,
-  yard: S.world,
-  rev: S.world.rev,
-  coins: coins(),
-});
 /**
  * Whether what was worked out is of the yard and the purse as they are now: the same yard, and Coins
  * that still cover its cost, or that fall short of it by as much as before. The till's whole Coins
@@ -208,20 +191,26 @@ export function aimAt(x: number, y: number): void {
     case "beltTaps":
       go({ do: "run", run: null, aim: buildAim(BELT, x, y) });
       return;
+    case "tunnel":
+      go({ do: "aim", aim: tunnelAim(h.from, h.faced, x, y), faced: at(w, x, y) });
+      return;
     case "build": {
       const i = at(w, x, y);
-      const there = kindAt(w, x, y);
-      if (h.faced !== i) {
-        const over = there !== NONE && (replaces(h.kind, there) || raisedOn(h.kind, i) !== undefined);
-        if (over && S.dir !== dirOf(i)) {
-          S.dir = dirOf(i);
-          toolHooks.changed();
-        }
-        sideOver(h.kind, i);
-      }
+      if (h.faced !== i) faceOver(h.kind, i);
       go({ do: "aim", aim: buildAim(h.kind, x, y), faced: i });
     }
   }
+}
+
+/** A kind in hand brought to a tile anew: over a piece it would replace or raise, it faces as that piece does, and a sorter sends to its side. */
+function faceOver(k: Kind, i: number): void {
+  const there = S.world.kind[i] ?? NONE;
+  const over = there !== NONE && (replaces(k, there) || raisedOn(k, i) !== undefined);
+  if (over && S.dir !== dirOf(i)) {
+    S.dir = dirOf(i);
+    toolHooks.changed();
+  }
+  sideOver(k, i);
 }
 
 /** What would come of building a kind on a tile, facing the way the hand faces: why not, the price, the grade, what it raises, a tunnel's far mouth. */
@@ -262,22 +251,6 @@ export function keepAim(again = false): void {
   }
 }
 
-/** What something just built took from the purse, or gave back, rising from its tile. */
-function paid(x: number, y: number, cost: number): void {
-  if (cost !== 0) float(x * TILE + 8, y * TILE - 2, cost > 0 ? `-${cost}` : `+${-cost}`, GOLD[cost > 0 ? 0 : 2], 0.9);
-}
-
-/** A piece lands: dust, a ring under anything but a belt, and (unless `quiet`) its sound. */
-function landed(x: number, y: number, belt: boolean, n = 0, quiet = false): void {
-  const px = x * TILE + 8;
-  const py = (y + 1) * TILE - 2;
-  puff(px, py, belt ? 3 : 7, DUST, belt ? 4 : 7);
-  if (!belt) ring(px, py - 4, CREAM, 9);
-  if (quiet) return;
-  if (belt) yardSfx.belt(n);
-  else yardSfx.place();
-}
-
 /** Uses the tool in hand on a tile. Says whether anything was done. */
 export function place(x: number, y: number): boolean {
   const h = S.hand;
@@ -285,6 +258,7 @@ export function place(x: number, y: number): boolean {
   if (h.is === "remove") return takeAway(x, y);
   if (h.is === "paint") return paintAt(x, y);
   if (h.is === "select") return setDown();
+  if (h.is === "tunnel") return comesUp(h.from, x, y);
   const tool = h.is === "build" ? h.kind : BELT;
   const w = S.world;
   const i = at(w, x, y);
@@ -455,7 +429,7 @@ export function rotate(): void {
     if (h.stage.is !== "holding") return;
     const g = h.stage.group;
     go({ do: "group", group: { ...g, turns: RIGHT[g.turns] }, aim: h.stage.aim });
-  } else if (h.is === "build" || h.is === "beltDrag" || h.is === "beltTaps") S.dir = RIGHT[S.dir];
+  } else if (h.is === "build" || h.is === "beltDrag" || h.is === "beltTaps" || h.is === "tunnel") S.dir = RIGHT[S.dir];
   else return;
   yardSfx.turn();
   keepAim(true);
@@ -736,9 +710,11 @@ export function unaim(): void {
   if (!isWhole(S.group?.as)) go({ do: "aim", aim: null });
 }
 
-/** Escape: what is in hand steps back one stage (`hand.ts`). */
+/** Escape: what is in hand steps back one stage (`hand.ts`); a tunnel's way in let go, the tunnel is aimed where the mouse is. */
 export function cancel(): void {
+  const wayIn = S.hand.is === "tunnel";
   go({ do: "back", finger: S.finger });
+  if (wayIn && S.hover) aimAt(S.hover.x, S.hover.y);
   toolHooks.changed();
 }
 
@@ -746,7 +722,8 @@ export function cancel(): void {
 
 /**
  * A press with something in hand, on a tile, by a pointer: the brush begins a stroke, the belt a
- * run, Select an area (but with pieces held, which it sets down), and anything else is used there.
+ * run, Select an area (but with pieces held, which it sets down), the tunnel where it goes in,
+ * and anything else is used there.
  */
 export function press(x: number, y: number, pointer: number): void {
   const h = S.hand;
@@ -755,7 +732,7 @@ export function press(x: number, y: number, pointer: number): void {
   else if (h.is === "select" && h.stage.is !== "holding") {
     markStart(x, y, pointer);
     markOver(x, y, pointer);
-  } else place(x, y);
+  } else if (!setWayIn(x, y)) place(x, y);
 }
 
 /** The press has reached another tile: whatever drag the hand holds for it goes on; any other does nothing. */

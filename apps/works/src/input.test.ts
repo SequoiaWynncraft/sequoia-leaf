@@ -2,23 +2,25 @@
  * The mouse over the yard points at what is under it now, whether the mouse moved or the yard moved
  * under it (the keys, an eased look, a zoom). While the yard moves under it, the mouse rests on
  * nothing, so no card comes up for whatever passes beneath; once the yard stands still, what is under
- * the mouse then is pointed at, and a card for it may follow.
+ * the mouse then is pointed at, and a card for it may follow. A tunnel is laid with two clicks or
+ * taps: where it goes in, then where it comes up.
  */
 import { afterEach, describe, expect, jest, test } from "bun:test";
 
-import { BELT, build, create } from "@sequoia-leaf/factory";
+import { at, BELT, build, check, CRATE, create, NONE, TUNNEL, type Yard } from "@sequoia-leaf/factory";
 import { deck } from "@sequoia-leaf/kit/card.ts";
 import { keyboard } from "@sequoia-leaf/kit/keyboard.ts";
 import { noKeysHeld } from "@sequoia-leaf/kit/keys.ts";
 import { LONG_PRESS } from "@sequoia-leaf/kit/press.ts";
 
-import { opened, useFakeLeaf } from "../test/fake-leaf.ts";
+import { ctx, type FakeLeaf, isRecord, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { aimOf } from "./hand.ts";
 import { WORKS_KEYS } from "./keymap.ts";
 import { S, toPage } from "./state.ts";
-import { setTool } from "./tools.ts";
+import { confirm, rotate, setTool } from "./tools.ts";
 import { refAt } from "./ui/card.ts";
 import { handPrint, openTools } from "./ui/dock.ts";
+import { differences } from "./yard.ts";
 
 // The camera's module draws onto canvases that are made as it loads (`scene.ts`): a document is there
 // first whose canvases take any drawing and keep none of it.
@@ -311,5 +313,129 @@ describe("a finger", () => {
     press("pointerdown");
     press("pointerup");
     expect(deck.open).toBeNull();
+  });
+});
+
+/**
+ * A yard with tunnels to hand and a crate at (19, 13) and (21, 13), a tile apart: a tunnel going in
+ * at (18, 13) comes up between them by itself. The page listens; the tunnel is in hand, facing right.
+ */
+async function crates(tier = 2, more?: (y: Yard) => void): Promise<{ canvas: EventTarget; leaf: FakeLeaf["leaf"] }> {
+  const y = create({ seed: 5, tier });
+  y.at = ctx().now;
+  for (const x of [19, 21]) expect(build(y, CRATE, x, 13, 0, Infinity).ok).toBe(true);
+  more?.(y);
+  const fake = await opened(y, 1000);
+  const canvas = canvasPage();
+  S.finger = false;
+  setTool(TUNNEL);
+  S.dir = 0;
+  return { canvas, leaf: fake.leaf };
+}
+/** A pointer's event over the middle of a tile: the mouse's left or right button, or a finger. */
+const on = (canvas: EventTarget, type: string, x: number, y: number, how: "left" | "right" | "finger"): void => {
+  const p = toPage(x * 16 + 8, y * 16 + 8);
+  canvas.dispatchEvent(
+    Object.assign(new Event(type), {
+      pointerId: how === "finger" ? 4 : 1,
+      pointerType: how === "finger" ? "touch" : "mouse",
+      button: how === "right" ? 2 : 0,
+      clientX: p.x,
+      clientY: p.y,
+    }),
+  );
+};
+const click = (canvas: EventTarget, x: number, y: number, how: "left" | "right" | "finger" = "left"): void => {
+  if (how !== "finger") on(canvas, "pointermove", x, y, how);
+  on(canvas, "pointerdown", x, y, how);
+  on(canvas, "pointerup", x, y, how);
+};
+const kindOf = (x: number, y: number): number => S.world.kind[at(S.world, x, y)] ?? NONE;
+const span = (x: number, y: number): number => S.world.span[at(S.world, x, y)] ?? 0;
+const names = (commands: unknown[]): unknown[] => commands.map((c) => (isRecord(c) ? c.do : null));
+
+describe("a tunnel", () => {
+  test("a first click sets where it goes in and builds nothing; a second, past the crates, builds both ends there", async () => {
+    const { canvas } = await crates();
+    click(canvas, 18, 13);
+    expect([S.hand.is, kindOf(18, 13)]).toEqual(["tunnel", NONE]);
+    // Pointing past both crates: it would come up there.
+    on(canvas, "pointermove", 22, 13, "left");
+    expect([S.aim?.why, S.aim?.far]).toEqual([null, at(S.world, 22, 13)]);
+    click(canvas, 22, 13);
+    expect([kindOf(18, 13), kindOf(22, 13), span(18, 13), kindOf(20, 13)]).toEqual([TUNNEL, TUNNEL, 3, NONE]);
+    // The tunnel stays in hand, with no way in set.
+    expect([S.hand.is, S.tool]).toEqual(["build", TUNNEL]);
+  });
+
+  test("a second click where it goes in comes up at the nearest tile it can, as one click did", async () => {
+    const { canvas, leaf } = await crates();
+    click(canvas, 18, 13);
+    click(canvas, 18, 13);
+    expect([kindOf(18, 13), kindOf(20, 13), span(18, 13)]).toEqual([TUNNEL, TUNNEL, 1]);
+    await Bun.sleep(5);
+    expect(names(leaf.commands)).toEqual(["build"]);
+  });
+
+  test("pointing where it cannot come up shows the nearest tile, says why, and a click there builds nothing", async () => {
+    const { canvas, leaf } = await crates();
+    click(canvas, 18, 13);
+    const near = at(S.world, 20, 13);
+    for (const [x, y, why] of [
+      [22, 14, "A tunnel comes up straight ahead of where it goes in"],
+      [23, 13, "A tunnel passes under 1 to 3 tiles"],
+      [19, 13, "A tunnel passes under 1 to 3 tiles"],
+      [21, 13, "Something is here already"],
+    ] as const) {
+      on(canvas, "pointermove", x, y, "left");
+      expect([S.aim?.why, S.aim?.far]).toEqual([why, near]);
+      click(canvas, x, y);
+      expect([S.hand.is, kindOf(18, 13)]).toEqual(["tunnel", NONE]);
+      expect(handPrint().line).toEqual({ text: why, bad: true });
+    }
+    await Bun.sleep(5);
+    expect(leaf.commands).toEqual([]);
+  });
+
+  test("points the way of a tile in line with where it goes in; R turns it, and Escape or the right button lets the way in go", async () => {
+    const { canvas } = await crates();
+    click(canvas, 18, 13);
+    // Two tiles down: it faces down and would come up there.
+    on(canvas, "pointermove", 18, 16, "left");
+    expect([S.dir, S.aim?.why, S.aim?.far]).toEqual([1, null, at(S.world, 18, 16)]);
+    // Turned, it no longer comes up under the pointer, which stays where it is.
+    rotate();
+    expect([S.dir, S.aim?.why]).toEqual([2, "A tunnel comes up straight ahead of where it goes in"]);
+    // The right button lets the way in go, and takes nothing away.
+    click(canvas, 18, 16, "right");
+    expect([S.hand.is, S.tool]).toEqual(["build", TUNNEL]);
+    click(canvas, 18, 13);
+    expect(S.hand.is).toBe("tunnel");
+    key("keydown", "Escape", "Escape");
+    key("keyup", "Escape", "Escape");
+    expect([S.hand.is, S.tool]).toEqual(["build", TUNNEL]);
+  });
+
+  test("on a phone: tap where it goes in, tap where it comes up, then the gold button", async () => {
+    const { canvas, leaf } = await crates();
+    click(canvas, 18, 13, "finger");
+    expect([S.hand.is, handPrint().line.text]).toEqual(["tunnel", "Now tap where it comes up."]);
+    click(canvas, 22, 13, "finger");
+    expect([kindOf(18, 13), handPrint().go]).toEqual([NONE, { label: "Build", bad: false }]);
+    expect(confirm()).toBe(true);
+    expect([kindOf(18, 13), kindOf(22, 13), span(18, 13)]).toEqual([TUNNEL, TUNNEL, 3]);
+    await until(() => leaf.posts >= 1);
+    await Bun.sleep(5);
+    expect(names(leaf.commands)).toEqual(["lay"]);
+    // Leaf laid it as the page did.
+    expect([differences(), check(S.world)]).toEqual([0, check(leaf.yard)]);
+  });
+
+  test("on a tunnel already standing, one click raises it as before", async () => {
+    // Where tunnels may be built at grade II.
+    const { canvas } = await crates(3, (y) => expect(build(y, TUNNEL, 18, 15, 0, Infinity).ok).toBe(true));
+    S.grades[TUNNEL] = 2;
+    click(canvas, 18, 15);
+    expect([S.hand.is, S.world.grade[at(S.world, 18, 15)]]).toEqual(["build", 2]);
   });
 });

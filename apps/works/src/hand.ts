@@ -1,8 +1,9 @@
 /**
  * What the member has in hand, as one value (`S.hand`), and the one function that moves it (`step`).
  * Each variant holds only what it can have: a kind of piece to build and where it is aimed; a run of
- * belt being dragged out with the mouse, or laid from two taps; the spade; the brush, with the lines
- * a drag going on has coloured; Select, at one of its stages; or nothing.
+ * belt being dragged out with the mouse, or laid from two taps; a tunnel whose way in a first click
+ * has set; the spade; the brush, with the lines a drag going on has coloured; Select, at one of its
+ * stages; or nothing.
  *
  * A drag belongs to the hand: a run of belt, a stroke of the brush and an area being marked are each
  * a variant, with the press that began it. Whatever the hand is moved to ends the drag with it, so a
@@ -13,7 +14,7 @@
  * hands it in; nothing here reads the yard, the purse or the page.
  */
 
-import { BELT, type Kind } from "@sequoia-leaf/factory";
+import { BELT, type Kind, TUNNEL } from "@sequoia-leaf/factory";
 
 import type { Aim, Group, Mark, Run, Tool } from "./state.ts";
 
@@ -49,6 +50,11 @@ export type Hand =
     }
   /** A run of belt laid from two taps: where the first tap said it starts, and once a second has said where it ends, the run. */
   | { readonly is: "beltTaps"; readonly from: Tile; readonly run: Run | null; readonly aim: Aim | null }
+  /**
+   * A tunnel whose way in (`from`) a first click or tap has set, aimed at the tile where it would
+   * come up; `faced` is the tile it last took its facing from.
+   */
+  | { readonly is: "tunnel"; readonly from: Tile; readonly aim: Aim | null; readonly faced: number }
   | { readonly is: "remove"; readonly aim: Aim | null }
   /**
    * The brush; while a drag colours lines, the press (`pointer`) and the entry of the yard's history
@@ -73,7 +79,7 @@ export type HandEvent =
   /** A drag with the belt begins on a tile; it passes over more (`path`, as `tools.ts` follows it), and its run is worked out. */
   | { readonly do: "drag"; readonly pointer: number; readonly path: readonly Tile[] }
   | { readonly do: "run"; readonly run: Run | null; readonly aim: Aim | null }
-  /** A finger's run: where it starts, or (with null) none. */
+  /** Where a finger's run starts, or a tunnel goes in; or (with null) none, as when it is built. */
   | { readonly do: "from"; readonly from: Tile | null }
   /** A run or a belt was laid, or failed to be: the belt stays in hand, aimed at nothing. */
   | { readonly do: "laid" }
@@ -111,6 +117,18 @@ const belt = (h: Extract<Hand, { is: "beltDrag" | "beltTaps" }>): Hand => ({
   faced: -1,
 });
 
+/** The tunnel in hand, with no way in set: a finger's aim is put away, a mouse's follows the pointer. */
+const tunnel: Hand = { is: "build", kind: TUNNEL, aim: null, faced: -1 };
+
+/** Where a run of belt or a tunnel starts: a finger's first tap, a tunnel's first click; with none, the piece in hand again. */
+function startsAt(h: Hand, from: Tile | null): Hand {
+  if (from === null) return h.is === "beltTaps" ? belt(h) : h.is === "tunnel" ? tunnel : h;
+  if ((h.is === "build" && h.kind === BELT) || h.is === "beltTaps")
+    return { is: "beltTaps", from, run: null, aim: null };
+  if ((h.is === "build" && h.kind === TUNNEL) || h.is === "tunnel") return { is: "tunnel", from, aim: null, faced: -1 };
+  return h;
+}
+
 /** Select at a stage. */
 const at = (stage: Stage): Hand => ({ is: "select", stage });
 
@@ -138,6 +156,8 @@ function back(h: Hand, finger: boolean): Hand {
     case "beltDrag":
     case "beltTaps":
       return belt(h);
+    case "tunnel":
+      return tunnel;
     case "paint":
       return h.stroke ? { ...h, stroke: null } : finger && h.aim ? { ...h, aim: null } : IDLE;
     case "build":
@@ -165,7 +185,7 @@ export function step(h: Hand, e: HandEvent): Hand {
         return at(h.stage.mark ? { is: "marked", mark: h.stage.mark } : { is: "empty" });
       return h;
     case "aim":
-      if (h.is === "build") return { ...h, aim: e.aim, faced: e.faced ?? h.faced };
+      if (h.is === "build" || h.is === "tunnel") return { ...h, aim: e.aim, faced: e.faced ?? h.faced };
       if (h.is === "remove" || h.is === "paint" || h.is === "beltTaps") return { ...h, aim: e.aim };
       if (h.is === "select" && h.stage.is === "holding") return at({ ...h.stage, aim: e.aim });
       return h;
@@ -178,10 +198,7 @@ export function step(h: Hand, e: HandEvent): Hand {
       if (h.is === "beltDrag" || h.is === "beltTaps") return { ...h, run: e.run, aim: e.aim };
       return h;
     case "from":
-      if (e.from === null) return h.is === "beltTaps" ? belt(h) : h;
-      if ((h.is === "build" && h.kind === BELT) || h.is === "beltTaps")
-        return { is: "beltTaps", from: e.from, run: null, aim: null };
-      return h;
+      return startsAt(h, e.from);
     case "laid":
       return h.is === "beltDrag" || h.is === "beltTaps" ? belt(h) : h;
     case "stroke":
@@ -225,6 +242,8 @@ export function toolOf(h: Hand): Tool {
     case "beltDrag":
     case "beltTaps":
       return BELT;
+    case "tunnel":
+      return TUNNEL;
     case "remove":
       return "remove";
     case "paint":
