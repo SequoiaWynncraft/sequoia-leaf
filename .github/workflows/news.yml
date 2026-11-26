@@ -1,10 +1,9 @@
 name: News
 
 # Each patch note a merge to main adds to the town's News tab (apps/town/src/notes.json) is posted
-# to Discord, by every webhook kept as the secrets NEWS_WEBHOOK and NEWS_WEBHOOK_2. A secret that is
-# not set is skipped; without either, nothing is posted. A webhook that fails, or takes over 15 s,
-# does not stop the other from getting the notes, but fails the run. A note changed after it was
-# posted is not posted again.
+# to Discord, by each webhook kept as the secrets NEWS_WEBHOOK and NEWS_WEBHOOK_2, each in its own
+# job, so one that fails or hangs never keeps the notes from the other. A secret that is not set is
+# skipped. A note changed after it was posted is not posted again.
 on:
   push:
     branches: [main]
@@ -18,8 +17,13 @@ concurrency:
 
 jobs:
   post:
+    name: post (${{ matrix.webhook }})
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        webhook: [NEWS_WEBHOOK, NEWS_WEBHOOK_2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,15 +32,11 @@ jobs:
           fetch-depth: 2
       - name: Post the new notes
         env:
-          NEWS_WEBHOOK: ${{ secrets.NEWS_WEBHOOK }}
-          NEWS_WEBHOOK_2: ${{ secrets.NEWS_WEBHOOK_2 }}
+          NAME: ${{ matrix.webhook }}
+          WEBHOOK: ${{ secrets[matrix.webhook] }}
         run: |
           set -euo pipefail
-          hooks=()
-          for name in NEWS_WEBHOOK NEWS_WEBHOOK_2; do
-            if [ -n "${!name:-}" ]; then hooks+=("$name"); fi
-          done
-          if [ "${#hooks[@]}" -eq 0 ]; then echo "No news webhook: nothing posted."; exit 0; fi
+          if [ -z "$WEBHOOK" ]; then echo "No $NAME: nothing posted."; exit 0; fi
           notes=apps/town/src/notes.json
           git show "HEAD^1:$notes" > /tmp/before.json 2>/dev/null || echo '[]' > /tmp/before.json
           # The notes this merge added, oldest first, each as a Discord message.
@@ -51,15 +51,8 @@ jobs:
                   | join("\n\n"))[0:4000],
                 color: 16101685,
                 timestamp: (.at | sub("Z$"; ":00Z"))
-              }]}' "$notes" > /tmp/messages.jsonl
-          failed=0
-          for name in "${hooks[@]}"; do
-            while read -r message; do
-              if ! curl -fsS --max-time 15 -o /dev/null -H 'Content-Type: application/json' --data "$message" "${!name}"; then
-                echo "::error::$name did not take a note."
-                failed=1
-              fi
-              sleep 1
-            done < /tmp/messages.jsonl
+              }]}' "$notes" |
+          while read -r message; do
+            curl -fsS --max-time 15 -o /dev/null -H 'Content-Type: application/json' --data "$message" "$WEBHOOK"
+            sleep 1
           done
-          exit "$failed"
