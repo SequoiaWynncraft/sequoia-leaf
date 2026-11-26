@@ -742,7 +742,7 @@ export function beginFight(run: Run): Begun {
 }
 
 /** What a room not won costs in resolve: a base and one more for each enemy left, a draw only the base; a win nothing. */
-function resolveLost(run: Pick<Run, "boons">, fight: FightSummary): number {
+export function resolveLost(run: Pick<Run, "boons">, fight: FightSummary): number {
   if (fight.result === "win") return 0;
   const standing = fight.result === "draw" ? 0 : fight.standing[1];
   const less = run.boons.includes("blanket") ? boonNumber("blanket", "less") : 0;

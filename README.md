@@ -780,6 +780,20 @@ kept 180 days, older rows being removed as new ones are written. So is the
 count of the batch's commands done and refused, in `command_days`. Both are
 for the staff's report (see [Who played](#who-played-the-staffs-view)).
 
+**Raid fights.** Each fight The Little Raid decides is logged as a `raid_fight`
+(the raid's `FightRecord`, `packages/raid/src/fought.ts`), which goes to
+`raid_fights` instead of `activity`, in the same transaction: who and when, the
+raid's rules version (`Played.rules`), and the record's run, way, trail, room,
+kind, who was across, result, margin, seconds, resolve after, level and acorns
+as columns, with the party as it fought and the party against it as JSON. Up to
+1,000 of a player's a UTC day, kept a year, older rows removed as new ones are
+written; a row is about 830 bytes with its index. Nothing reads it but
+`bun apps/api/scripts/raid-stats.ts <database copy | fights.jsonl>`, which reports
+win rates by comp, figure, figure at its stars, item, item on each figure and
+boon, each beside the same rooms, and can write the rows out as JSON lines
+(`export=`). It opens the file read-only; give it a snapshot from
+`/data/backups` (see [Backups](#backups)), not `/data/leaf.db`.
+
 **Awards.** A game may say what a state shows was won for good
 (`Game.awards`): The Little Raid a carved figure of each boss its almanac has
 beaten (`trophy-<boss>`), the Works a model of each capstone its depot has

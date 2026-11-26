@@ -370,7 +370,10 @@ A run that ends (won, lost, or walked home from) is written into the almanac and
 pays its Coins as one change keyed `run:<number>`. Commands log `raid_started` (trail), `raid_room`
 (room, kind, won, resolve left, the fight's seconds, and `met`, the member's Leaf id, for a room
 fought against another member's board) and `raid_ended` (trail, rooms won, how it ended, Coins
-paid).
+paid); and every `fight` logs `raid_fight`, the fight's record (`fightRecord`, `fought.ts`: the
+run, way, trail, room, who was across, result, margin, seconds, resolve after, level, acorns, and
+both parties as they fought), which Leaf keeps for the staff apart from the rest (`readFight`
+reads one back).
 
 A member's `fight` at a sparring room keeps the board it was decided from for other members
 (`Done.keep`), and a `take` into a sparring room meets another member's (`RAID.meets`, `Ctx.met`):
@@ -519,6 +522,8 @@ While no member is still in, every wait is 0 (`later`): the regulars play straig
 | `wire.ts`              | Reading Leaf's view and notes back                                                                                    |
 | `sitting/`             | Eight at once on Leaf's clock: the state, the clock, the carousel, commands, what a page is shown, storing it         |
 | `tally.ts`             | What every figure did in a fight, read from its events                                                                |
+| `fought.ts`            | A fight's record, as Leaf keeps it for the staff, and the margin it was won or lost by                                |
+| `rates.ts`             | How often fights are won, beside the same rooms, for the reports                                                      |
 | `bot.ts`               | A player with habits                                                                                                  |
 | `index.ts`             | Everything a screen needs, in one place                                                                               |
 | `testkit.ts`           | Helpers for the tests only                                                                                            |
@@ -645,7 +650,9 @@ prints how far each gets, how every room and every trouble plan goes, and how tr
 and boons do against the same rooms without them. Its `suits` section plays a sample of the fights
 again with each figure given each finished item, and lists for every figure the items that helped it
 most and least beside the three a card recommends; none of those is among a figure's three worst. The bot is a rough player: it seats by a plain
-rule and does not look at what it is about to fight.
+rule and does not look at what it is about to fight. With `rows=<file>` it also writes every fight
+of the habits that are trying as Leaf would keep it, one JSON line each, for Leaf's report
+(`apps/api/scripts/raid-stats.ts`).
 
 Where the numbers stood when this was written, 300 runs a habit, with the draw rule in:
 

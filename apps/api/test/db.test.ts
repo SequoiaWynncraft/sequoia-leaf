@@ -41,8 +41,12 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 43: the pieces players leave not indexed by game and slot (the pulls' counts it let go stay gone). */
-const beforePlayKeptMet = (sql: SqlClient.SqlClient) => sql`DROP INDEX IF EXISTS play_kept_slot`;
+/** Undoes migration 45: no raid fights kept. */
+const beforeRaidFights = (sql: SqlClient.SqlClient) => sql`DROP TABLE raid_fights`;
+
+/** Undoes migrations 45 and 43: the pieces players leave not indexed by game and slot (the pulls' counts it let go stay gone). */
+const beforePlayKeptMet = (sql: SqlClient.SqlClient) =>
+  Effect.andThen(beforeRaidFights(sql), sql`DROP INDEX IF EXISTS play_kept_slot`);
 
 /** Undoes migrations 43 and 42: no `rev` kept of what each state's standing was worked out from. */
 const beforePlayStood = (sql: SqlClient.SqlClient) =>
@@ -254,6 +258,7 @@ describe("the database", () => {
       { migration_id: 42, name: "play_stood" },
       { migration_id: 43, name: "play_kept_met" },
       { migration_id: 44, name: "copies_awards" },
+      { migration_id: 45, name: "raid_fights" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -310,6 +315,7 @@ describe("the database", () => {
           "leaf_ids",
           "sign_ins",
           "merges",
+          "raid_fights",
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;
         }
@@ -324,7 +330,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 44 },
+      { latest: 45 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -731,6 +737,7 @@ describe("the database", () => {
         const sql = yield* SqlClient.SqlClient;
         // Back to before migration 44: a member who has pulled (one award for a copy kept already), one
         // who has only opened the pulls, one who has only played the raid, and a guest who has pulled.
+        yield* beforeRaidFights(sql);
         yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 44`;
         yield* sql`DELETE FROM awards`;
         yield* sql`INSERT INTO awards (player_id, id, at) VALUES (${pulled}, 'copies:figure:greg:2', 1), (${pulled}, 'pull:figure:greg', 1)`;

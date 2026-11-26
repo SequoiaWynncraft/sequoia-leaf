@@ -110,10 +110,11 @@ export interface LeafSpend {
   readonly for: LeafFor;
 }
 
-/** Something worth remembering that a player did, for the `activity` table. */
+/** Something worth remembering that a player did, for the `activity` table (a raid's room fought has a table of its own). */
 export interface Logged {
   readonly kind: string;
-  readonly data: Readonly<Record<string, string | number | boolean>>;
+  /** Plain data, kept as JSON. */
+  readonly data: Readonly<Record<string, unknown>>;
 }
 
 /** A command done: the state after it, and what happened, for the player's page to show. */
