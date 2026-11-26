@@ -264,7 +264,7 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
             {
               label: "Sell",
               look: "wood sm wide",
-              after: acorns(`+${sellValue(piece)}`),
+              after: soldFor(piece),
               on: () => {
                 const spot = spotOf(S.run ?? run, sale.id);
                 // Sold from its card: the card goes with it.
@@ -274,6 +274,20 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
           ]
         : [],
   };
+}
+
+/** What selling a figure gives: its acorns, and the pictures of the items it holds, which go back to the rack as they are. */
+function soldFor(piece: { readonly items: readonly ItemId[] } & Parameters<typeof sellValue>[0]): HTMLElement {
+  const back =
+    piece.items.length > 0
+      ? el(
+          "span",
+          "k-row tight",
+          { "aria-label": `and ${piece.items.map(itemName).join(", ")} back to the rack` },
+          ...piece.items.map((item) => pic(itemIcon(item))),
+        )
+      : null;
+  return el("span", "k-row tight", {}, acorns(`+${sellValue(piece)}`), back);
 }
 
 /** The chip after a figure's traits saying how it draws enemies' eyes, with a tip; none for a draw of 0. */
