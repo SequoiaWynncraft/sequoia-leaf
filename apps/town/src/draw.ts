@@ -13,6 +13,7 @@ import { bubble, bubbleSize, prompt, promptSize, wrap } from "@sequoia-leaf/kit/
 import { FOOT_X, FOOT_Y, SIT, WALK } from "@sequoia-leaf/kit/skin.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx, dist, lerp, makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { isMemberThing } from "@sequoia-leaf/town/things.ts";
 
 import { feet, headOf, HOP, onScreen } from "./actors.ts";
 import { bits, emoted, floaters, rings } from "./fx.ts";
@@ -93,18 +94,29 @@ interface Item {
 }
 const order: Item[] = [];
 
-/** A thing where it stands, shivering or hopping for a moment if it has just been touched. */
-export function drawProp(g: Ctx, p: Prop, cx: number, cy: number): void {
+/** The shadow on the ground under somebody standing at a point of the picture; smaller while they are `up` off it. */
+function shadow(g: Ctx, x: number, y: number, up: boolean): void {
+  g.fillStyle = "rgba(20,10,28,0.34)";
+  const lift = up ? 1 : 0;
+  g.fillRect(x - 4 + lift, y - 1, 8 - lift * 2, 2);
+  g.fillRect(x - 3 + lift, y - 2, 6 - lift * 2, 4);
+}
+
+/** How far from its spot a thing is drawn this moment: shivering or hopping, if it has just been touched. */
+function bumped(p: Prop): Pt {
   const since = G.t - p.bumpAt;
-  let dx = 0;
-  let dy = 0;
-  if (since < 0.4) {
-    const k = 1 - since / 0.4;
-    if (p.hops) dy = -Math.round(Math.abs(Math.sin(since * 16)) * 4 * k);
-    else dx = Math.round(Math.sin(since * 50) * 1.7 * k);
-  }
-  const sx = Math.round(p.x) - cx + dx;
-  const sy = Math.round(p.y) - cy + dy;
+  if (since >= 0.4) return { x: 0, y: 0 };
+  const k = 1 - since / 0.4;
+  return p.hops
+    ? { x: 0, y: -Math.round(Math.abs(Math.sin(since * 16)) * 4 * k) }
+    : { x: Math.round(Math.sin(since * 50) * 1.7 * k), y: 0 };
+}
+
+/** A thing where it stands, or where a touch has just moved it (`bumped`). */
+export function drawProp(g: Ctx, p: Prop, cx: number, cy: number): void {
+  const by = bumped(p);
+  const sx = Math.round(p.x) - cx + by.x;
+  const sy = Math.round(p.y) - cy + by.y;
   if (p.sprite) g.drawImage(p.sprite.c, sx - p.sprite.ax, sy - p.sprite.ay);
   p.extra?.(g, sx, sy);
 }
@@ -255,17 +267,14 @@ export function drawPicture(pic: Picture): HTMLCanvasElement {
     if (hit && (hit.x - cx > w + 8 || hit.x + hit.w - cx < -8 || hit.y - cy > h + 8 || hit.y + hit.h - cy < -30))
       continue;
     order.push({ z: p.z, prop: p, actor: null, other: null });
+    // A banner's member in a camp stands as a person does: with a person's shadow on the ground.
+    if (isMemberThing(p.kind)) shadow(g, Math.round(p.x) - cx, Math.round(p.y) - cy, bumped(p).y < -2);
   }
   for (const a of people) {
     if (a.away || a.alpha <= 0.02) continue;
     const at = feet(a);
     order.push({ z: a.seat ? at.y + 9 : at.y, prop: null, actor: a, other: null });
-    if (!a.seat && a.lift === 0) {
-      g.fillStyle = "rgba(20,10,28,0.34)";
-      const lift = hopOf(a) > 2 ? 1 : 0;
-      g.fillRect(Math.round(at.x) - 4 + lift - cx, Math.round(at.y) - 1 - cy, 8 - lift * 2, 2);
-      g.fillRect(Math.round(at.x) - 3 + lift - cx, Math.round(at.y) - 2 - cy, 6 - lift * 2, 4);
-    }
+    if (!a.seat && a.lift === 0) shadow(g, Math.round(at.x) - cx, Math.round(at.y) - cy, hopOf(a) > 2);
   }
   for (const o of pic.others()) order.push({ z: o.z, prop: null, actor: null, other: o });
   order.sort((a, b) => a.z - b.z);

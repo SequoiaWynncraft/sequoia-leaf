@@ -221,11 +221,13 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   pictures from `packages/figures` (`character` in `campart.ts`), on 3 squares of ground. Set out, it
   breathes as it does on the raid's table, and the one that flies hovers (`stepLive` in
   `camptouch.ts`); "Rotate" mirrors it, and touched it hops and says its line from the raid.
-  A banner's headliner brings a statue of that member (`statues.ts`): Leaf says who
-  (`GET /v1/game/banners`), the thing is called "Statue of NAME", and its picture is their own
-  figure facing us, every colour turned to marble by its lightness, on the fox statue's plinth
-  (`carve` in `campart.ts`). Every page asks, so a visitor sees whose it is. A member may have as
-  many as 999 of any one thing, standing and stored together; with that many the market sells no
+  A banner's headliner brings that member, a character too (`members.ts`): Leaf says who
+  (`GET /v1/game/banners`), the thing has their name, and its pictures are the town's own figure
+  of them standing (the kit's `bake`), from their skin or their made-up look, on one square with a
+  person's shadow under it. "Rotate" faces them right or left; touched they hop and turn to
+  whoever touched them for a moment, and say nothing. Until Leaf answers the thing is "A guild
+  member", a person all of one dusk colour. Every page asks, so a visitor sees who it is. A member
+  may have as many as 999 of any one thing, standing and stored together; with that many the market sells no
   more of it (and takes nothing), a present of it stays in its letter, and a prize of it is not
   kept. As many as three hundred things may be set out in a camp; with that many standing, nothing
   more comes out of Storage until something is put away.
@@ -610,7 +612,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/fx.ts`                           | Sparks, leaves and rising words                                                                 |
 | `src/sprites.ts`, `src/ground.ts`     | The town's art                                                                                  |
 | `src/campart.ts`, `src/campground.ts` | The camp's art: the cabin, every thing, the pets, the clearing's floor                          |
-| `src/statues.ts`                      | Whose statue each banner's is: its name and its figure, from Leaf                               |
+| `src/members.ts`                      | Who each banner's member is in a camp: their name and their figure, from Leaf                   |
 | `src/campsfx.ts`                      | The camp's own sounds                                                                           |
 
 The catalogue of camp things (`things.ts`), what is for sale (`catalogue.ts`), the mailbox

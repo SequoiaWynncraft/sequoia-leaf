@@ -42,6 +42,7 @@ import { closeCard, closePanel, covered, hush, initHud, tickHud } from "./hud.ts
 import { TOWN_KEYS } from "./keymap.ts";
 import { here, keepTold, onTown, openCamp, town as kept, troubleCard, visiting, whoseCamp } from "./leaf.ts";
 import { showMapSheet } from "./mapsheet.ts";
+import { nameMembers } from "./members.ts";
 import { leafNow, onStage } from "./players.ts";
 import { lookFromOutside } from "./review.ts";
 import { darkOf, inGame, mayAct, next, openOf, type Place, placeOf, takesWalk } from "./screen.ts";
@@ -49,7 +50,6 @@ import { startSettings } from "./settings.ts";
 import { showCampSheet, showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
 import type { Bound, Hover, Scene, Stage, Steer, Stood } from "./stage.ts";
-import { nameStatues } from "./statues.ts";
 import { listenKeys } from "./townkeys.ts";
 import { makeTown } from "./townscene.ts";
 
@@ -176,7 +176,7 @@ async function boot(): Promise<void> {
   const menu = startSettings(scope(), () => letGo());
   initHud(menu.gear());
   const art = makeCampArt(sprites);
-  void nameStatues(art);
+  void nameMembers(art);
   const town = makeTown(sprites, art, stage);
   const campUi = makeCampUi(art);
   const camp = makeCamp(sprites, art, stage, town.backdrop, campUi);

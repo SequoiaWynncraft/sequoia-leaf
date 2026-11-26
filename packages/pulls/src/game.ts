@@ -94,7 +94,7 @@ const druid = DRUID.map((id) => `figure:${id}`);
 /**
  * Every prize, by rarity: `figure:` is one of the raid's figures, by its price there, and
  * `headliner:` a banner's headliner. The camp is sent a figure once, as the town's `figure-<id>`,
- * and for a headliner their statue (`statue-<banner>`).
+ * and for a headliner the member themself (`member-<banner>`).
  */
 export const PRIZES: Readonly<Record<Rarity, readonly string[]>> = {
   Leafkin: figures(1),
@@ -475,6 +475,6 @@ export const PULLS: Game<Pulls, PullsCommand, PullsView, PullsNote> = {
       }, 0),
     },
   }),
-  // Each prize the player has: the town sends a figure, a statue or an earlier thing to the camp, the raid's table owns an earlier look.
+  // Each prize the player has: the town sends a figure, a banner's member or an earlier thing to the camp, the raid's table owns an earlier look.
   awards: (s) => Object.keys(s.have).map((prize) => `pull:${prize}`),
 };

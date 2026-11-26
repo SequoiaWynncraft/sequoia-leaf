@@ -1,5 +1,14 @@
 [
   {
+    "id": "camp-member-stands",
+    "at": "2026-11-26T18:41Z",
+    "title": "Banner members in camp",
+    "lines": [
+      "A banner's member now stands in your camp as themselves, in place of the marble statue. They are under Characters in Storage.",
+      "Touch them and they hop and look at you."
+    ]
+  },
+  {
     "id": "works-building-tweaks",
     "at": "2026-11-26T11:50Z",
     "title": "Building tweaks",
