@@ -24,6 +24,22 @@ export const boardSlot = (trail: number, room: number, own = false): string =>
 const MOST_FIELDED = MAX_LEVEL + boonNumber("extrachair", "more");
 
 /**
+ * One figure of a board met, as it stands across the table. Its level stands only in a run with
+ * the member's own figures (`levels`), and no higher than levels go.
+ */
+function asMet(p: Placed, levels: boolean): Placed {
+  const level = levels ? Math.min(LEVELS.most, p.level ?? 0) : 0;
+  return {
+    kind: p.kind,
+    stars: p.stars,
+    seat: p.seat,
+    items: p.items.slice(),
+    fed: p.fed,
+    ...(level > 0 && { level }),
+  };
+}
+
+/**
  * Another member's board as Leaf hands it over (`Ctx.met`), as the party across the table: only one
  * a member could have fielded (a party of one to `MOST_FIELDED` of the stall's own figures), signed
  * with the member's name and id. Null for anything else.
@@ -36,20 +52,20 @@ export function boardMet(met: Met, levels = false): Party | null {
     who: met.name,
     by: met.player,
     title: "their board at this room",
-    figures: data.figures.map((p) => ({
-      kind: p.kind,
-      stars: p.stars,
-      seat: p.seat,
-      items: p.items.slice(),
-      fed: p.fed,
-      // A level stands only in a run with the member's own figures (`levels`), and no higher than levels go.
-      ...(levels && p.level !== undefined && { level: Math.min(LEVELS.most, p.level) }),
-    })),
+    figures: data.figures.map((p) => asMet(p, levels)),
     boons: data.boons.filter((b) => FIGHT_BOONS.includes(b)),
     might: 100,
   };
   // Signed so, it has to be a party still: a name or an id longer than a party allows is not one.
   return isParty(board) ? board : null;
+}
+
+/** Who is waiting in a sparring room: a regular, or the board Leaf handed over (`met`), the regular being one of the crowd. */
+function sparring(seed: number, roomIndex: number, trailIndex: number, met: Met | undefined, levels: boolean): Party {
+  const regular = sparParty(mix(seed, 700 + roomIndex), roomIndex, trailIndex);
+  const board = met === undefined ? null : boardMet(met, levels);
+  if (board === null || met === undefined) return regular;
+  return below({ rng: mix(seed, 900 + roomIndex) }, met.of + 1) < met.of ? board : regular;
 }
 
 /**
@@ -61,12 +77,7 @@ export function boardMet(met: Met, levels = false): Party | null {
 export function opposition(seed: number, roomIndex: number, trailIndex: number, met?: Met, levels = false): Party {
   const room = ROOMS[roomIndex];
   const trail = TRAILS[trailIndex] ?? TRAILS[0];
-  if (!room || room.kind === "spar") {
-    const regular = sparParty(mix(seed, 700 + roomIndex), roomIndex, trailIndex);
-    const board = met === undefined ? null : boardMet(met, levels);
-    if (board === null || met === undefined) return regular;
-    return below({ rng: mix(seed, 900 + roomIndex) }, met.of + 1) < met.of ? board : regular;
-  }
+  if (!room || room.kind === "spar") return sparring(seed, roomIndex, trailIndex, met, levels);
   const plan = pick({ rng: mix(seed, 300 + roomIndex) }, room.plans);
   const figures: Placed[] = [];
   for (const [kind, stars, col, row, from] of plan.party) {

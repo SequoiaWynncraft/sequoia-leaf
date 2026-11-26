@@ -1086,10 +1086,10 @@ describe("a run with the member's own figures", () => {
   });
   test("leaves and meets its boards apart from the main way's, and only it is met with levels", () => {
     // Two rooms in, the run stands before room 2, a sparring room.
-    const fighting = must(planned(walked(EVERYTHING, true, 2).state), { do: "fight" });
-    const board = fighting.keep?.[0];
+    const sent = must(planned(walked(EVERYTHING, true, 2).state), { do: "fight" });
+    const board = sent.keep?.[0];
     expect(board?.slot).toBe("own:0:2");
-    expect(RAID.meets?.(fighting.state, { do: "take" })).toBe("own:0:3");
+    expect(RAID.meets?.(sent.state, { do: "take" })).toBe("own:0:3");
     const met = metOf(board?.data);
     const inOwn = opposition(1, 2, 0, met, true);
     const inMain = opposition(1, 2, 0, met);
