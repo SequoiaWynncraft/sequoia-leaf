@@ -1,11 +1,11 @@
 /**
  * Where to stand: a plain, sensible way of seating a party on its half of the board. The bot uses
  * it, and so do the sparring partners. Sturdy close fighters go in the front row from the middle
- * out, anyone with reach goes behind them, and Sneaks that are going to leap anyway wait at the
- * back corners.
+ * out, anyone with reach goes behind them in the row its reach is for (`standRow`), and Sneaks that
+ * are going to leap anyway wait at the back corners.
  */
 import { type FigureId, FIGURES } from "./content/figures.ts";
-import { COLS, HOME_ROWS } from "./hex.ts";
+import { COLS, HOME_ROWS, standRow } from "./hex.ts";
 
 /** Columns from the middle out. */
 const MIDDLE_OUT = [3, 2, 4, 1, 5, 0, 6] as const;
@@ -63,7 +63,8 @@ export function arrange(party: readonly Standing[], leaping: boolean): number[] 
     }
   }
   for (const i of close) sitIn(i, [0, 1], MIDDLE_OUT);
-  for (const i of far) sitIn(i, spec(i).range <= 2 ? [1, 2] : [2, 3], MIDDLE_OUT);
+  // Each as far back as it still reaches from, as its card says; a full row spills one forward.
+  for (const i of far) sitIn(i, [standRow(spec(i).range), standRow(spec(i).range) - 1], MIDDLE_OUT);
   for (const i of sneaks) sitIn(i, [3, 2], EDGES_IN);
   return seats;
 }

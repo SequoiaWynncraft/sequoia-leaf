@@ -25,7 +25,7 @@ export const MEMBERS: Record<MemberId, FigureSpec> = {
     hp: 640,
     attack: 46,
     speed: 0.75,
-    range: 3,
+    range: 4,
     armour: 30,
     ward: 35,
     mana: [20, 90],

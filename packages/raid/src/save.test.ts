@@ -206,7 +206,8 @@ describe("loading puts right what today's rules would not allow", () => {
     const crowded = mustLoad(
       tampered(run, (raw) => {
         const board = listIn(raw.board);
-        for (let seat = 0; seat < 20; seat++) board[seat] = { id: seat + 1, kind: "worm", stars: 1, items: [], fed: 0 };
+        for (let seat = 0; seat < board.length; seat++)
+          board[seat] = seat < 20 ? { id: seat + 1, kind: "worm", stars: 1, items: [], fed: 0 } : null;
         raw.nextId = 100;
         raw.bench = listIn(raw.bench).map(() => null);
       }),

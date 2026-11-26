@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { drawName, drawTip, GOOD_WITH, roleLine, ROLES } from "./advice.ts";
+import { COLS, distance, seatCell } from "../hex.ts";
+import { drawName, drawTip, GOOD_WITH, placeOf, roleLine, ROLES } from "./advice.ts";
 import { BOON_IDS, boonShort, boonText } from "./boons.ts";
 import {
   abilityShort,
   abilityText,
   FIGURE_IDS,
+  FIGURES,
   specOf,
   type Stars,
   SUMMON_IDS,
@@ -14,7 +16,7 @@ import {
 } from "./figures.ts";
 import { FINISHED_IDS, isFinishedId, ITEM_IDS, itemShort, itemText } from "./items.ts";
 import { MEMBER_IDS } from "./members.ts";
-import { CALLINGS, TRAIT_IDS, TRAITS, traitShort, traitText } from "./traits.ts";
+import { TRAIT_IDS, TRAITS, traitShort, traitText } from "./traits.ts";
 
 /** The longest a fragment may be and still fit one line of a card. */
 const FRAGMENT = 48;
@@ -83,12 +85,30 @@ describe("short forms", () => {
 });
 
 describe("advice for the cards", () => {
-  test("every calling has a role and a place", () => {
-    for (const calling of CALLINGS)
-      expect(roleLine(calling)).toStartWith(`${ROLES[calling].role} · ${ROLES[calling].place}`);
-    expect(roleLine("fang")).toBe("Fighter · front row");
-    expect(roleLine("bulwark")).toBe("Tank · front row · draws fire");
-    expect(roleLine("sneak")).toBe("Assassin · leaps to the enemy back row · avoids fire");
+  test("a card says a figure's role, where it stands, and its draw", () => {
+    for (const id of [...FIGURE_IDS, ...MEMBER_IDS])
+      expect(roleLine(id)).toStartWith(`${ROLES[FIGURES[id].calling]} · ${placeOf(id)}`);
+    expect(roleLine("emberkit")).toBe("Fighter · front row");
+    expect(roleLine("barrowgnome")).toBe("Tank · front row · draws fire");
+    expect(roleLine("worm")).toBe("Assassin · leaps to the enemy back row · avoids fire");
+    expect(roleLine("moth")).toBe("Caster · back row");
+    expect(roleLine("cindernewt")).toBe("Caster · second row");
+  });
+  test("seated where its card says, every figure reaches the enemy's front line", () => {
+    const rows = ["front row", "second row", "third row", "back row"];
+    const theirFront = Array.from({ length: COLS }, (_, col) => seatCell(1, col));
+    for (const id of [...FIGURE_IDS, ...MEMBER_IDS]) {
+      if (FIGURES[id].calling === "sneak") continue;
+      const row = rows.indexOf(placeOf(id));
+      expect(row, id).toBeGreaterThanOrEqual(0);
+      for (let col = 0; col < COLS; col++) {
+        const from = seatCell(0, row * COLS + col);
+        expect(
+          Math.min(...theirFront.map((cell) => distance(from, cell))),
+          `${id} in column ${col}`,
+        ).toBeLessThanOrEqual(FIGURES[id].range);
+      }
+    }
   });
   test("a draw has a name and a tip", () => {
     expect(drawName(0)).toBeNull();

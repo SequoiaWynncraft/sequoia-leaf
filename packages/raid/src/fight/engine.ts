@@ -449,23 +449,32 @@ function choose(f: Fight, u: Unit): Unit | undefined {
   return drawnFoe(f, u);
 }
 
-function walk(f: Fight, u: Unit, t: Unit): void {
-  if (u.rooted) return;
-  let step = stepToward(u.side, f.taken, u.cell, t.cell, u.range);
-  if (step < 0) {
-    // Boxed in: see whether anyone else can be got at, in the order it would pick them.
-    for (const o of foesByDraw(f, u.side, u.cell)) {
-      if (o.id === t.id) continue;
-      step = stepToward(u.side, f.taken, u.cell, o.cell, u.range);
-      if (step >= 0) {
-        u.target = o.id;
-        break;
-      }
-    }
+/**
+ * Takes a step toward a hex it can attack from. It makes for whoever it is after, if there is a way;
+ * else whoever it was on its way to already; else whoever else it can get at, in the order it would
+ * pick them, so that it neither queues behind one it cannot get at nor turns about between two.
+ * If that one is in its reach already (it was made to go for somebody out of the way), it takes no
+ * step and gives them back to be attacked.
+ */
+function walk(f: Fight, u: Unit, t: Unit): Unit | undefined {
+  if (u.rooted) return undefined;
+  const foes = foesByDraw(f, u);
+  const cells = foes.map((o) => o.cell);
+  const way = (o: Unit, reach = u.range): number => stepToward(u.side, f.taken, u.cell, o.cell, reach, cells);
+  let step = -1;
+  for (const o of [t, foes.find((h) => h.id === u.target), ...foes]) {
+    if (o === undefined) continue;
+    if (distance(u.cell, o.cell) <= u.range) return o;
+    step = way(o);
+    if (step < 0) continue;
+    if (o !== t) u.target = o.id;
+    break;
   }
+  // With no way to anybody it closes up on the one it is after, and then stands.
+  for (let reach = u.range + 1; step < 0 && reach < distance(u.cell, t.cell); reach++) step = way(t, reach);
   if (step < 0) {
     u.busyUntil = f.tick + 3;
-    return;
+    return undefined;
   }
   const from = u.cell;
   const slowed = u.slowUntil > f.tick ? u.slowBy : 0;
@@ -475,6 +484,7 @@ function walk(f: Fight, u: Unit, t: Unit): void {
   u.cell = step;
   u.busyUntil = f.tick + ticks;
   emit(f, { t: "move", id: u.id, from, to: step, ticks });
+  return undefined;
 }
 
 function off(f: Fight, u: Unit, status: StatusId): void {
@@ -498,7 +508,8 @@ function expire(f: Fight, u: Unit): void {
 
 function act(f: Fight, u: Unit): void {
   const now = f.tick;
-  if (u.hiddenUntil > now || u.stunUntil > now) return;
+  // Hidden or stunned: nothing until it ends.
+  if (Math.max(u.hiddenUntil, u.stunUntil) > now) return;
   if (u.cool > 0) u.cool -= 1;
   if (u.busyUntil > now) return;
   if (u.manaFull > 0 && u.mana >= u.manaFull && cast(f, u)) {
@@ -517,11 +528,8 @@ function act(f: Fight, u: Unit): void {
   }
   const t = choose(f, u);
   if (!t) return;
-  if (distance(u.cell, t.cell) <= u.range) {
-    if (u.cool <= 0 && u.attack > 0) strike(f, u, t);
-    return;
-  }
-  walk(f, u, t);
+  const at = distance(u.cell, t.cell) <= u.range ? t : walk(f, u, t);
+  if (at && u.cool <= 0 && u.attack > 0) strike(f, u, at);
 }
 
 /** Once a second: burns bite, the regrowing regrow, the Stewpot goes round, and after dusk everyone hurts. */

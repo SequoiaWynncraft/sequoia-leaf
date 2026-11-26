@@ -272,7 +272,7 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
   return {
     name: nameOf(kind),
     icon: portrait(kind),
-    tag: figure ? roleLine(figure.calling) : "",
+    tag: isFigureId(kind) ? roleLine(kind) : "",
     aside: el(
       "span",
       "fside",
