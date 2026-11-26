@@ -20,7 +20,7 @@ import {
   tally,
 } from "@sequoia-leaf/raid";
 
-import { fightTitle, opening } from "../logic.ts";
+import { acrossName, fightTitle } from "../logic.ts";
 import { snd } from "../sounds.ts";
 import { S } from "../state.ts";
 import { figureDesc } from "./cards.ts";
@@ -68,7 +68,7 @@ export function registerFought(): void {
     const across = p.setup.sides[1];
     return figureDesc(u.kind, u.stars, {
       unit: u,
-      whose: u.side === 0 ? "Yours" : `${opening(across.who)}'s`,
+      whose: u.side === 0 ? "Yours" : `${acrossName(across)}'s`,
       party: p.setup.sides[u.side],
     });
   });
@@ -108,7 +108,7 @@ export function openSheet(
   const result = leaf?.outcome.result ?? p.fight.result ?? "draw";
   const title = fightTitle(result, leaf?.outcome.ticks ?? p.fight.tick);
   const view = tallyView(foughtRef, "sheet");
-  view.across(p.setup.sides[1].who);
+  view.across(p.setup.sides[1]);
   if (leaf?.kept !== false) {
     view.show(
       p.fight.units,

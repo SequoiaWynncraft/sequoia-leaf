@@ -1,4 +1,4 @@
-import { draw32, mix, pick, shuffled, weighted } from "@sequoia-leaf/core";
+import { draw32, type Met, mix, pick, shuffled, weighted } from "@sequoia-leaf/core";
 
 /**
  * A run: one little raid, from the first pick to the last room. It is plain data (so it saves as it
@@ -39,9 +39,9 @@ import {
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
 import { resolveFight } from "./fight/engine.ts";
 import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
+import { opposition } from "./foe.ts";
 import { COLS, SEATS } from "./hex.ts";
 import { type Party, type Placed, type TraitState, traitStates, traitSteps } from "./party.ts";
-import { sparParty } from "./spar.ts";
 
 // ---------- what a run is ----------
 
@@ -325,28 +325,6 @@ export const traitsNow = (run: Pick<Run, "board">): TraitState[] =>
   traitStates(run.board.flatMap((p) => (p ? [p] : [])));
 /** The room the run is in. */
 export const roomNow = (run: Pick<Run, "room">) => ROOMS[Math.min(run.room, ROOM_COUNT - 1)];
-
-// ---------- the forest's side ----------
-
-/** Who is waiting in a room: the forest's trouble as planned, or a regular's party for sparring. */
-export function opposition(seed: number, roomIndex: number, trailIndex: number): Party {
-  const room = ROOMS[roomIndex];
-  const trail = TRAILS[trailIndex] ?? TRAILS[0];
-  if (!room || room.kind === "spar") return sparParty(mix(seed, 700 + roomIndex), roomIndex, trailIndex);
-  const plan = pick({ rng: mix(seed, 300 + roomIndex) }, room.plans);
-  const figures: Placed[] = [];
-  for (const [kind, stars, col, row, from] of plan.party) {
-    if ((from ?? 0) > trailIndex) continue;
-    figures.push({ kind, stars, seat: row * COLS + col, items: [], fed: 0 });
-  }
-  return {
-    who: "The forest",
-    title: plan.name,
-    figures,
-    boons: [],
-    might: (room.kind === "boss" ? trail?.boss : trail?.trouble) ?? 100,
-  };
-}
 
 // ---------- the stall ----------
 
@@ -764,17 +742,40 @@ export function beginFight(run: Run): Begun {
   return { ok: true, notes: [{ t: "fight", room: run.room, seed: setup.seed, setup, outcome }], setup };
 }
 
+/** What a room not won costs in resolve: a base and one more for each enemy left, a draw only the base; a win nothing. */
+function resolveLost(run: Pick<Run, "boons">, fight: FightSummary): number {
+  if (fight.result === "win") return 0;
+  const standing = fight.result === "draw" ? 0 : fight.standing[1];
+  const less = run.boons.includes("blanket") ? boonNumber("blanket", "less") : 0;
+  return Math.max(1, Math.min(ECONOMY.lossMost, ECONOMY.lossBase + standing) - less);
+}
+
+/**
+ * The room the takings of the fight being fought move the run on to (`takeTakings`): the next one,
+ * or the last again when it is not won. Null when they end the run (the last room won, or resolve
+ * gone), and outside a fight.
+ */
+export function takenTo(run: Pick<Run, "stage" | "room" | "resolve" | "boons">): number | null {
+  const fight = foughtOf(run);
+  if (!fight || !ROOMS[run.room]) return null;
+  const last = run.room >= ROOM_COUNT - 1;
+  if ((fight.outcome.result === "win" && last) || run.resolve - resolveLost(run, fight.outcome) <= 0) return null;
+  return last ? run.room : run.room + 1;
+}
+
 /**
  * Ends the room: works out how the fight went, takes resolve for a loss, pays acorns and
  * experience, queues what there is to choose, and moves on to the next room (or ends the run).
- * It may be called at any point after `beginFight`, which is all "skip" is.
+ * It may be called at any point after `beginFight`, which is all "skip" is. In a sparring room
+ * next, `met` is the board another member fought it with that Leaf picked (`opposition`).
  */
-export function takeTakings(run: Run): Taken {
+export function takeTakings(run: Run, met?: Met): Taken {
   const { stage } = run;
   if (stage.phase !== "fight") return no(stage.phase === "over" ? "raid_over" : "no_fight");
   const { setup, outcome: fight } = stage.fight;
   const room = ROOMS[run.room];
   if (!room) return no("no_such_room");
+  const to = takenTo(run);
   const won = fight.result === "win";
   const last = run.room >= ROOM_COUNT - 1;
   const notes: Note[] = [{ t: "result", room: run.room, result: fight.result, standing: fight.standing }];
@@ -784,10 +785,7 @@ export function takeTakings(run: Run): Taken {
   run.last = setup;
 
   if (!won) {
-    // A loss costs a base and one more for each enemy left; a draw only the base.
-    const standing = fight.result === "draw" ? 0 : fight.standing[1];
-    const less = run.boons.includes("blanket") ? boonNumber("blanket", "less") : 0;
-    const cost = Math.max(1, Math.min(ECONOMY.lossMost, ECONOMY.lossBase + standing) - less);
+    const cost = resolveLost(run, fight);
     run.resolve = Math.max(0, run.resolve - cost);
     notes.push({ t: "resolve", change: -cost, left: run.resolve });
   }
@@ -798,7 +796,7 @@ export function takeTakings(run: Run): Taken {
       notes.push({ t: "fed", piece: p.id, fed: p.fed });
     }
   }
-  if (run.resolve <= 0 || (won && last)) {
+  if (to === null) {
     run.stage = { phase: "over", ending: won && last ? "won" : "lost" };
     notes.push({ t: "over", won: won && last });
     return { ok: true, notes, fight };
@@ -836,13 +834,13 @@ export function takeTakings(run: Run): Taken {
   if (boonDue) picks.push({ kind: "boon", options: boonOptions(run, []), redraws: ECONOMY.boonRedraws });
 
   // On to the next room. The last one is fought again until it is won or resolve runs out.
-  if (!last) run.room++;
+  run.room = to;
   run.stage = { phase: "plan", picks };
   run.bought = 0;
   run.rustles = ECONOMY.freeRustles + (run.boons.includes("regular") ? boonNumber("regular", "rustles") : 0);
   if (run.held) run.held = false;
   else restock(run);
-  run.foe = opposition(draw32(run), run.room, run.trail);
+  run.foe = opposition(draw32(run), run.room, run.trail, met);
   const next = ROOMS[run.room];
   if (next) notes.push({ t: "room", room: run.room, kind: next.kind, who: run.foe.who, title: run.foe.title });
   const waiting = picks[0];

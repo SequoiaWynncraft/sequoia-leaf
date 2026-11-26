@@ -15,6 +15,7 @@ import {
 import { REGULARS } from "@sequoia-leaf/raid/content/rooms.ts";
 
 import {
+  acrossName,
   arrivalOf,
   canBuy,
   combosWithHeld,
@@ -394,16 +395,35 @@ describe("a fight's sheet", () => {
 });
 
 describe("who watches from the side logs", () => {
+  const forest = { who: "The forest" };
   test("is the same two all raid, others from one raid to the next, and never the regular across the table", () => {
-    expect(watchersOf(7, "The forest")).toEqual(watchersOf(7, "The forest"));
-    const pairs = new Set(Array.from({ length: 40 }, (_, n) => watchersOf(n + 1, "The forest").join()));
+    expect(watchersOf(7, forest)).toEqual(watchersOf(7, forest));
+    const pairs = new Set(Array.from({ length: 40 }, (_, n) => watchersOf(n + 1, forest).join()));
     expect(pairs.size).toBeGreaterThan(10);
     for (const regular of REGULARS) {
       for (let n = 1; n < 30; n++) {
-        const [a, b] = watchersOf(n, regular.name);
+        const [a, b] = watchersOf(n, { who: regular.name });
         expect([a === regular.kind, b === regular.kind, a === b]).toEqual([false, false, false]);
       }
     }
+  });
+  test("may be any regular across another member's board, whatever that member is called", () => {
+    const greg = { who: "Greg", by: "10000000-0000-0000-0000-000000000002" };
+    const watching = new Set(Array.from({ length: 60 }, (_, n) => watchersOf(n + 1, greg)).flat());
+    expect(watching.has("greg")).toBe(true);
+    expect(Array.from({ length: 60 }, (_, n) => watchersOf(n + 1, greg))).toEqual(
+      Array.from({ length: 60 }, (_, n) => watchersOf(n + 1, forest)),
+    );
+  });
+});
+
+describe("the name across the table", () => {
+  test("starts a sentence with a regular's capital, and is a member's or the forest's as written", () => {
+    expect(acrossName({ who: "the Hearth Cat" })).toBe("The Hearth Cat");
+    expect(acrossName({ who: "The forest" })).toBe("The forest");
+    expect(acrossName({ who: "mossy_fern", by: "10000000-0000-0000-0000-000000000002" })).toBe("mossy_fern");
+    // A member called as a regular is a member still.
+    expect(acrossName({ who: "a Moth", by: "10000000-0000-0000-0000-000000000002" })).toBe("a Moth");
   });
 });
 

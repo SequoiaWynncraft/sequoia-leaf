@@ -34,7 +34,7 @@ import {
   traitsNow,
   traitsOf,
 } from "@sequoia-leaf/raid";
-import { regularNamed } from "@sequoia-leaf/raid/content/rooms.ts";
+import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
 import { boonIcon, glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
 import { rimTop, stumpOf } from "../art/table.ts";
@@ -501,7 +501,7 @@ function renderActs(run: RunView): void {
 }
 
 function renderFightBar(run: RunView): void {
-  panelTally?.across(run.foe.who);
+  panelTally?.across(run.foe);
   for (const tab of document.querySelectorAll<HTMLElement>("#speeds [data-speed]")) {
     tab.setAttribute("aria-selected", String(Number(tab.dataset.speed) === S.prefs.speed));
   }
@@ -509,14 +509,14 @@ function renderFightBar(run: RunView): void {
 
 /**
  * Who is across the table, on a small plate beside them: a regular with the town's mark, "Greg
- * brought Mist Fangs"; the forest's own trouble by its name.
+ * brought Mist Fangs"; the forest's own trouble, and another member's board, by its name.
  */
 function renderFoe(run: RunView): void {
   const foe = byId("foe");
   if (!foe) return;
   // While a fight's sheet is up the room that is over is what is talked about, not the one coming.
   foe.hidden = S.screen.at === "front" || S.screen.at === "over" || S.screen.at === "after";
-  if (regularNamed(run.foe.who)) {
+  if (regularOf(run.foe)) {
     foe.replaceChildren(
       el("div", "brought", {}, folkName(opening(run.foe.who), "k-pix"), el("span", "", { text: run.foe.title })),
     );

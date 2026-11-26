@@ -1,5 +1,14 @@
 [
   {
+    "id": "raid-met-boards",
+    "at": "2026-11-26T18:50Z",
+    "title": "Sparring against members",
+    "lines": [
+      "A sparring room in The Little Raid can now be against the board another member fought that room with, under their name.",
+      "Your own board is saved each time you fight a sparring room."
+    ]
+  },
+  {
     "id": "camp-member-stands",
     "at": "2026-11-26T18:41Z",
     "title": "Banner members in camp",

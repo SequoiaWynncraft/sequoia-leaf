@@ -1,11 +1,21 @@
 /**
  * Staging a moment at the raid's table, for the screenshot tours: what play does not reach by
  * itself (a run from a chosen seed, more acorns, a figure handed over, a figure on the stall, an
- * item on the rack, empty hands, a new member). Only the play server on this machine
- * (`play.ts`) serves it, at `POST /test/play/raid`; the guild's own Leaf has no such route.
+ * item on the rack, empty hands, a new member, another member's board across the table, under a
+ * name). Only the play server on this machine (`play.ts`) serves it, at `POST /test/play/raid`; the
+ * guild's own Leaf has no such route.
  */
 import type { PlayerId } from "@sequoia-leaf/core";
-import { isComponentId, isFigureId, isFinishedId, RAID, startRun, type Table, TRAIL_COUNT } from "@sequoia-leaf/raid";
+import {
+  boardMet,
+  isComponentId,
+  isFigureId,
+  isFinishedId,
+  RAID,
+  startRun,
+  type Table,
+  TRAIL_COUNT,
+} from "@sequoia-leaf/raid";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
@@ -44,6 +54,10 @@ function step(table: Table, op: Record<string, unknown>, made: number[]): void {
     if (at !== null) run.stall[at] = op.offer.kind;
   }
   if (isComponentId(op.item) || isFinishedId(op.item)) run.items.push(op.item);
+  // The party waiting in the room as another member's board, signed as the rules sign one Leaf hands over.
+  if (typeof op.member === "string")
+    run.foe =
+      boardMet({ player: "20000000-0000-4000-8000-0000000000aa", name: op.member, data: run.foe, of: 1 }) ?? run.foe;
   if (op.strip === true) {
     for (const piece of [...run.board, ...run.bench]) if (piece) piece.items = [];
   }

@@ -38,7 +38,42 @@ export interface Ctx {
    * doors to the others; every other call is given none.
    */
   readonly postcards: Postcards;
+  /**
+   * For the one command a game says `meets` a slot (`Game.meets`): a piece another player left
+   * there, picked by Leaf's dice for that command. Absent on every other call, and when nobody else
+   * has left one.
+   */
+  readonly met?: Met;
 }
+
+/**
+ * A piece of the player's that a command leaves for other players to meet (`Done.keep`), such as the
+ * board a member fought a room with. Leaf keeps one for each player, game and slot, the newest over
+ * any older, and shows it to no page: it reaches another player only as what their game makes of it.
+ */
+export interface Kept {
+  /** Where it is left, such as `board:0:3`: up to 64 small letters, digits and `_ . : -` (`SLOT`). */
+  readonly slot: string;
+  /** Plain data, kept as JSON: at most `KEPT_BYTES` of it. */
+  readonly data: unknown;
+}
+
+/** A piece another player left at a slot (`Kept`), as Leaf hands it to the command that meets it (`Ctx.met`). */
+export interface Met {
+  /** Whose it is: their Leaf id. */
+  readonly player: string;
+  /** Their name, as Leaf shows it to other players. */
+  readonly name: string;
+  /** The piece as they left it: anything at all, for the game to check. */
+  readonly data: unknown;
+  /** How many other players have a piece at that slot. */
+  readonly of: number;
+}
+
+/** What a kept piece's slot may be called (`Kept.slot`). */
+export const SLOT = /^[a-z0-9_.:-]{1,64}$/;
+/** The longest a kept piece may be, as JSON, in bytes (`Kept.data`). */
+export const KEPT_BYTES = 16 * 1024;
 
 /** Coins a command pays (or, negative, takes), each keyed by the fact it records so it is paid once. */
 export interface CoinChange {
@@ -89,6 +124,8 @@ export interface Done<S, N> {
   readonly leaf?: readonly LeafSpend[];
   /** Things worth remembering that the player did (a run begun or ended, an order filled). */
   readonly log?: readonly Logged[];
+  /** Pieces of the player's that the command leaves for other players to meet, kept only if the command is. */
+  readonly keep?: readonly Kept[];
 }
 
 /** A whole number players are listed by, highest first, and a few more shown beside it. */
@@ -131,6 +168,12 @@ export interface Game<State, Command, View, Note, Short = never> {
    * leaves it: time only goes forward.
    */
   apply(state: State, command: Command, ctx: Ctx): Done<State, Note> | Refused;
+  /**
+   * The slot at which this command, done now, would meet somebody else's piece (`Kept`): Leaf asks
+   * before the command is tried, and gives it one that another player left there (`Ctx.met`). Null
+   * when it meets none; a game without it meets nobody's.
+   */
+  meets?(state: State, command: Command): string | null;
   /** What the player's browser is given: the state without anything that tells the future. */
   view(state: State, ctx: Ctx): View;
   /**

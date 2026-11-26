@@ -2,11 +2,12 @@ import { pick, type Stream, weighted } from "@sequoia-leaf/core";
 
 /**
  * Sparring partners. A sparring room is fought against the party one of the regulars at the table
- * brought (`REGULARS`: Greg, the Hearth Cat and the rest, never a member). Until real members'
- * saved boards exist, this makes one up from a seed: a regular, a taste for one kin and one
- * calling, and a party about as good as a member's would be by that room, made only of what a
- * member at its level could have found at the stall. What comes out is a plain `Party`, the same
- * shape a real saved board will have. It holds components and what they forge into, never an emblem.
+ * brought (`REGULARS`: Greg, the Hearth Cat and the rest, never a member), or against the board
+ * another member fought it with (`opposition`). This makes a regular's up from a seed: a regular, a
+ * taste for one kin and one calling, and a party about as good as a member's would be by that room,
+ * made only of what a member at its level could have found at the stall. What comes out is a plain
+ * `Party`, the same shape as a member's board. It holds components and what they forge into, never
+ * an emblem.
  */
 import { FIGURE_IDS, type FigureId, FIGURES, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
 import { type ComponentId, holdItem, type ItemId } from "./content/items.ts";

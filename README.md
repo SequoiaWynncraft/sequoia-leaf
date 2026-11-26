@@ -661,6 +661,22 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   again, and the command stands. A spend earns no XP and uses none of the
   Coins' room. The raid's `buyLook` and the pulls' `pull` take Leaf, both for
   everyone.
+- A command may leave pieces of the player's for other players to meet
+  (`Done.keep`: a slot and its data), such as the board a member fought a
+  sparring room of the raid with (`board:<trail>:<room>`). Each is kept in the
+  batch's transaction if the command is done, one for each player, game and
+  slot, the newest over the older (`play_kept`). A slot is up to 64 small
+  letters, digits and `_ . : -` (core's `SLOT`), and a piece at most 16 KiB of
+  JSON (`KEPT_BYTES`): one past either is not kept, Leaf logs a warning with
+  the game and the slot, and the command and the batch stand. No route serves
+  a piece: it reaches another player only as what their game makes of it.
+- Before a command is tried, Leaf asks the game what slot it meets
+  (`Game.meets`), and gives it one piece another player left there
+  (`Ctx.met`): of those not the caller's own, in the order of their players'
+  ids, the one at the command's dice, counted round; with whose it is, their
+  name as the boards show it, and how many there are (`of`). With none,
+  nothing is given. The raid's `take` into a sparring room meets the boards
+  other members fought it with.
 - A stored state that does not read (a rules change that forgot an older
   version, say) answers both routes 409 `state_unreadable`: nothing is done,
   the state is kept as it is, and Leaf logs the player and the game. The page
@@ -738,8 +754,8 @@ written (a state from before took it from where it stands, or else from the
 player as last seen), which whatever Leaf writes of it while they are away says
 too. Migration 26 made `play_kept` (a piece in each `player_id`, `game` and
 `slot`, its `data` as JSON) and gave each member who had pulled their `have`,
-from their stored pulls; nothing read it, and nothing has written it since
-the raid's boards and the pulls' copies stopped. Migration 27 gave `played` time AFK, as pages said
+from their stored pulls; migration 43 let those go again, since nothing read
+them, and indexed `play_kept` by `game` and `slot`, for meeting. Migration 27 gave `played` time AFK, as pages said
 it; migration 28 put `time_in` in its place, counted from visits (below), and
 removed it.
 

@@ -6,8 +6,10 @@ import { join } from "node:path";
 import {
   type Game,
   GAME_IDS,
+  KEPT_BYTES,
   leaf,
   type LeafFor,
+  type Met,
   MOST_COMMANDS,
   MOST_FLUSHED,
   type PlayerId,
@@ -62,6 +64,7 @@ import {
   SENSIBLE,
   type TableView,
 } from "@sequoia-leaf/raid";
+import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 import { decodeTown, readView as readTownView, type TownView } from "@sequoia-leaf/town";
 import { Effect, Exit, Fiber, Logger, Option, References, Schema } from "effect";
 import { SqlClient } from "effect/sql";
@@ -72,6 +75,7 @@ import { knownAmong } from "../src/game/known.ts";
 import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
 import { GAMES, type Played, played } from "../src/play/games.ts";
+import { keptPieces } from "../src/play/kept.ts";
 import { type JobTimes, Play, TEND_AFTER } from "../src/play/service.ts";
 import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, dueAgain, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
 import { DAY, fakeBackend, fakeMojang, type Fakes, noNetwork, sessionOf, steadyDice, testLeaf } from "./support.ts";
@@ -1158,6 +1162,265 @@ describe("a command's Leaf", () => {
       results: [{ id: "m-1", notes: ["sold"] }],
     });
     expect(await services.account(alice)).toMatchObject({ balance: 80 });
+  });
+});
+
+/** The pieces Leaf keeps of a player's for others to meet, by game and slot, their data read back. */
+const keptOf = async (player: PlayerId) =>
+  Schema.decodeUnknownSync(
+    Schema.Array(
+      Schema.Struct({
+        game: Schema.String,
+        slot: Schema.String,
+        data: Schema.fromJsonString(Schema.Unknown),
+        at: Schema.Number,
+      }),
+    ),
+  )(
+    await services.query(
+      (sql) =>
+        sql`SELECT game, slot, data, updated_at AS at FROM play_kept WHERE player_id = ${player} ORDER BY game, slot`,
+    ),
+  );
+
+/** A meeting command: it leaves its text at `slot`, and meets the slot `meet` names, if any. */
+interface Meeting {
+  readonly slot: string;
+  readonly text: string;
+  readonly meet: string | null;
+}
+const isMeeting = (v: unknown): v is Meeting =>
+  typeof v === "object" &&
+  v !== null &&
+  "slot" in v &&
+  typeof v.slot === "string" &&
+  "text" in v &&
+  typeof v.text === "string" &&
+  "meet" in v &&
+  (v.meet === null || typeof v.meet === "string");
+/**
+ * A game whose every command leaves its text at the slot it names, and meets the slot it says (or
+ * none): its one note is what Leaf gave it of another player's (`Ctx.met`), null for nothing. A
+ * text of "refuse" is refused.
+ */
+const MEETER: Game<{ n: number }, Meeting, { n: number }, Met | null> = {
+  id: "town",
+  create: () => ({ n: 0 }),
+  advance: (state) => state,
+  meets: (_, meeting) => meeting.meet,
+  apply: (state, meeting, ctx) =>
+    meeting.text === "refuse"
+      ? { refused: "refused" }
+      : { state: { n: state.n + 1 }, notes: [ctx.met ?? null], keep: [{ slot: meeting.slot, data: meeting.text }] },
+  view: (state) => state,
+  decode: (text) => {
+    const v: unknown = JSON.parse(text);
+    return typeof v === "object" && v !== null && "n" in v && typeof v.n === "number" ? { n: v.n } : null;
+  },
+  encode: (state) => JSON.stringify(state),
+  command: (v) => (isMeeting(v) ? { slot: v.slot, text: v.text, meet: v.meet } : null),
+};
+/** Meeting commands of a player's, sent to the play service: each one's note, or its refusal. */
+async function meetings(player: PlayerId, commands: readonly (Partial<Meeting> & { id: string })[], guest = false) {
+  clock.now += 100;
+  const sent = commands.map((c) => ({ id: c.id, slot: c.slot ?? "s", text: c.text ?? "", meet: c.meet ?? null }));
+  const batch = await services.run(Play.use((play) => play.send({ playerId: player, guest }, played(MEETER), sent)));
+  if (batch.status !== "done") throw new Error(`The batch was ${batch.status}`);
+  return batch.results.map((r) => ("notes" in r ? r.notes[0] : r.refused));
+}
+
+/** The piece at a slot of the meeting game picked for a player's roll, as Leaf picks one. */
+const pick = (slot: string, not: PlayerId, roll: number) =>
+  services.run(Effect.flatMap(keptPieces, (kept) => kept.pick("town", slot, not, roll)));
+
+describe("what a command leaves for others to meet", () => {
+  it("is kept if the command is, newest over older; one past 16 KiB or at a slot Leaf does not allow is not, and the batch stands", async () => {
+    const lines: unknown[] = [];
+    const capture = Logger.layer([
+      Logger.map(Logger.formatStructured, ({ annotations }) => void lines.push(annotations)),
+    ]);
+    const commands = [
+      // A string's JSON is the string in quotes, each "é" two bytes.
+      { id: "k-1", slot: "fits", text: "x".repeat(KEPT_BYTES - 2) },
+      { id: "k-2", slot: "wide", text: "é".repeat(KEPT_BYTES / 2) },
+      { id: "k-3", slot: "Not a slot", text: "" },
+      { id: "k-4", slot: "x".repeat(65), text: "" },
+      { id: "k-5", slot: "board:0:3", text: "older" },
+      { id: "k-6", slot: "board:0:3", text: "newer" },
+      { id: "k-7", slot: "nope", text: "refuse" },
+    ].map(({ id, slot, text }) => ({ id, slot, text, meet: null }));
+    const batch = await services.run(
+      Play.use((play) => play.send({ playerId: alice, guest: false }, played(MEETER), commands)).pipe(
+        Effect.provide(capture),
+        Effect.provideService(References.MinimumLogLevel, "All"),
+      ),
+    );
+    expect(batch).toMatchObject({ status: "done", rev: 1, view: { n: 6 } });
+    expect(batch.status === "done" && batch.results.map((r) => ("notes" in r ? r.notes : r.refused))).toEqual([
+      ...Array.from({ length: 6 }, () => [null]),
+      "refused",
+    ]);
+    expect(await keptOf(alice)).toEqual([
+      { game: "town", slot: "board:0:3", data: "newer", at: clock.now },
+      { game: "town", slot: "fits", data: "x".repeat(KEPT_BYTES - 2), at: clock.now },
+    ]);
+    expect(lines.filter((a) => JSON.stringify(a).includes('"slot"'))).toEqual(
+      ["wide", "Not a slot", "x".repeat(65)].map((slot) => ({ player: alice, game: "town", slot })),
+    );
+  });
+
+  it("is nothing of a command refused", async () => {
+    expect(await meetings(alice, [{ id: "r-1", text: "refuse" }])).toEqual(["refused"]);
+    expect(await keptOf(alice)).toEqual([]);
+  });
+
+  it("is given to another player's command that meets its slot, picked by that command's dice, named as the boards name players, and never their own", async () => {
+    // Each opens the game, so that Leaf knows their names as the boards show them.
+    await coinsOf(alice);
+    await coinsOf(bob);
+    // Nobody else has left anything: nothing is met.
+    expect(await meetings(alice, [{ id: "a-1", text: "Alice's", meet: "s" }])).toEqual([null]);
+    expect(
+      await meetings(bob, [
+        { id: "b-1", text: "Bob's", meet: "s" },
+        { id: "b-2", slot: "t", meet: "s" },
+        { id: "b-3", slot: "w" },
+      ]),
+    ).toEqual([
+      { player: alice, name: "Alice", data: "Alice's", of: 1 },
+      { player: alice, name: "Alice", data: "Alice's", of: 1 },
+      null,
+    ]);
+    // Bob's own is at the slot now, and is never his to meet; Alice meets his.
+    expect(await meetings(bob, [{ id: "b-4", slot: "u", meet: "s" }])).toEqual([
+      { player: alice, name: "Alice", data: "Alice's", of: 1 },
+    ]);
+    expect(
+      await meetings(alice, [
+        { id: "a-2", slot: "v", meet: "s" },
+        { id: "a-3", slot: "v", meet: "nowhere" },
+      ]),
+    ).toEqual([{ player: bob, name: "Bob", data: "Bob's", of: 1 }, null]);
+    // With a guest's there too, Alice meets one of the two others.
+    await meetings(carol, [{ id: "c-1", text: "Carol's" }], true);
+    const [met] = await meetings(alice, [{ id: "a-4", slot: "v", meet: "s" }]);
+    expect([bob, carol]).toContain(Object(met).player);
+    expect(met).toMatchObject({ of: 2, data: Object(met).player === bob ? "Bob's" : "Carol's" });
+    // Of them in the order of their ids, the one at the roll, counted round.
+    const picked = (roll: number, not: PlayerId) => pick("s", not, roll).then(Option.map((l) => l.playerId));
+    expect(await Promise.all([0, 1, 2, 0xffffffff].map((roll) => picked(roll, alice)))).toEqual(
+      [bob, carol, bob, carol].map(Option.some),
+    );
+    expect(await Promise.all([0, 1, 2].map((roll) => picked(roll, dave)))).toEqual(
+      [alice, bob, carol].map(Option.some),
+    );
+    expect(await pick("nowhere", dave, 3)).toEqual(Option.none());
+  });
+});
+
+/**
+ * The raid's rules, telling the test what Leaf gave each `take` (`Ctx.met`), with the room of the
+ * fight it took: Bob's table, played through the play service.
+ */
+const given: { readonly room: number | undefined; readonly met: Met | undefined }[] = [];
+const spied = played({
+  ...RAID,
+  apply: (state, c, ctx) => {
+    if (c.do === "take") given.push({ room: state.run?.room, met: ctx.met });
+    return RAID.apply(state, c, ctx);
+  },
+});
+/** Commands of Bob's at the raid table, through the spied rules: the view after them. */
+async function asBob(commands: readonly RaidCommand[]) {
+  clock.now += Math.max(1, commands.length) * 100;
+  const batch = await services.run(
+    Play.use((play) => play.send({ playerId: bob, guest: false }, spied, ided(commands))),
+  );
+  if (batch.status !== "done") throw new Error(`The batch was ${batch.status}`);
+  return { results: batch.results, view: viewOf(batch.view) };
+}
+/** A player's raid table: how to send commands to it, as their page does or through the spied rules. */
+type Table = (commands: readonly RaidCommand[]) => Promise<{ readonly view: TableView; readonly results: unknown }>;
+const atHttp =
+  (player: PlayerId): Table =>
+  (commands) =>
+    commanded(ided(commands), player);
+/** Plans the room that is up as the bot would. */
+async function planRoom(table: Table, view: TableView): Promise<TableView> {
+  let now = view;
+  for (let again = 0; again < 30; again++) {
+    const commands = planCommands(now, SENSIBLE);
+    if (commands.length === 0) return now;
+    // oxlint-disable-next-line no-await-in-loop -- each batch is planned from Leaf's answer to the last
+    now = (await table(commands)).view;
+  }
+  return now;
+}
+/** Sets out, and plays on until the run is in `room`, planning each room before it as the bot would; `room` itself unplanned. */
+async function setOutTo(table: Table, room: number): Promise<TableView> {
+  let view = (await table([{ do: "start", trail: 0 }])).view;
+  for (let guard = 0; guard < 40 && view.run && view.run.room < room; guard++) {
+    // oxlint-disable-next-line no-await-in-loop -- each room is planned from Leaf's answer to the last
+    view = await planRoom(table, view);
+    // oxlint-disable-next-line no-await-in-loop -- the next room is planned from Leaf's answer
+    view = (await table([{ do: "fight" }, { do: "take" }])).view;
+  }
+  if (view.run?.room !== room) throw new Error(`The run did not reach room ${room}`);
+  return view;
+}
+/** The party a fight was decided from, on the table's side, as the view after it shows it. */
+const sideOf = (view: TableView) => (view.run ? foughtOf(view.run)?.setup.sides[0] : undefined);
+
+describe("a member's board at a sparring room of the Little Raid", () => {
+  it("is kept as fought there, the newest over the older, and nothing of a command refused", async () => {
+    const table = atHttp(alice);
+    const view = await setOutTo(table, 2);
+    // Room 1 was trouble: a component is to be picked before the party may set out.
+    expect(view.run ? picksOf(view.run)[0]?.kind : null).toBe("component");
+    const refused = await table([{ do: "fight" }]);
+    expect(refused.results).toEqual([{ id: expect.any(String), refused: "pick_component" }]);
+    expect(await keptOf(alice)).toEqual([]);
+    await planRoom(table, view);
+    const first = sideOf((await table([{ do: "fight" }])).view);
+    expect(first?.figures.length).toBeGreaterThan(0);
+    expect(await keptOf(alice)).toEqual([{ game: "raid", slot: "board:0:2", data: first, at: clock.now }]);
+    // Fought there again, in the next run.
+    await table([{ do: "take" }]);
+    await planRoom(table, await setOutTo(table, 2));
+    const second = sideOf((await table([{ do: "fight" }])).view);
+    expect(await keptOf(alice)).toEqual([{ game: "raid", slot: "board:0:2", data: second, at: clock.now }]);
+  });
+
+  it("is given to another member's take into that room, with their name, never their own; with nobody else's, nothing is", async () => {
+    given.length = 0;
+    await coinsOf(alice);
+    // Bob first: nobody has left a board anywhere.
+    await planRoom(asBob, await setOutTo(asBob, 1));
+    await asBob([{ do: "fight" }, { do: "take" }]);
+    expect(given.map((g) => g.room)).toEqual([0, 1]);
+    expect(given.every((g) => g.met === undefined)).toBe(true);
+    // Bob fights room 2, and his board is kept there; then Alice fights it.
+    await planRoom(asBob, (await asBob([])).view);
+    await asBob([{ do: "fight" }, { do: "take" }]);
+    const alices = atHttp(alice);
+    await planRoom(alices, await setOutTo(alices, 2));
+    const board = sideOf((await alices([{ do: "fight" }])).view);
+    // Bob's next run, into room 2 again: he meets Alice's board, under her name, and never his own.
+    given.length = 0;
+    await planRoom(asBob, await setOutTo(asBob, 1));
+    const taken = await asBob([{ do: "fight" }, { do: "take" }]);
+    expect(given.at(-1)).toEqual({ room: 1, met: { player: alice, name: "Alice", data: board, of: 1 } });
+    expect(given.slice(0, -1).every((g) => g.met === undefined)).toBe(true);
+    // Across the table: her board, signed, or a regular, as the crowd fell.
+    const foe = taken.view.run?.foe;
+    if (foe?.by === undefined) expect(foe && regularOf(foe)).not.toBeNull();
+    else
+      expect(foe).toMatchObject({
+        who: "Alice",
+        by: alice,
+        title: "their board at this room",
+        figures: board?.figures,
+      });
   });
 });
 

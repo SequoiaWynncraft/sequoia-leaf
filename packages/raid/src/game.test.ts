@@ -1,12 +1,23 @@
 import { describe, expect, test } from "bun:test";
 
-import type { CoinChange, Ctx, Done, Logged, Refused } from "@sequoia-leaf/core";
+import {
+  type CoinChange,
+  type Ctx,
+  type Done,
+  type Logged,
+  type Met,
+  mix,
+  type Refused,
+  SLOT,
+} from "@sequoia-leaf/core";
 
 import { SENSIBLE } from "./bot.ts";
 import { FIGURES } from "./content/figures.ts";
 import { EMBLEM_IDS, EMBLEMS } from "./content/items.ts";
 import { newLooks } from "./content/looks.ts";
+import { MAX_LEVEL, regularOf, ROOMS } from "./content/rooms.ts";
 import { resolveFight } from "./fight/engine.ts";
+import { opposition } from "./foe.ts";
 import {
   decodeTable,
   encodeTable,
@@ -24,7 +35,19 @@ import {
   tableView,
 } from "./game.ts";
 import { beatenBosses, payout, recordRun, trailCleared, trailOpen } from "./outside.ts";
-import { foughtOf, picksOf, pieces, playsAsKept, type RunSummary, spotOf, summariseRun } from "./run.ts";
+import { isParty, type Party } from "./party.ts";
+import {
+  fieldCap,
+  foughtOf,
+  picksOf,
+  pieces,
+  playsAsKept,
+  type RunSummary,
+  spotOf,
+  summariseRun,
+  takenTo,
+} from "./run.ts";
+import { sparParty } from "./spar.ts";
 import { RAID_STATS } from "./stats.ts";
 import { readNotes, readView } from "./wire.ts";
 
@@ -737,5 +760,198 @@ describe("awards", () => {
     state.almanac.bosses[0] = ["oldbramble", "bigcrab"];
     state.almanac.bosses[1] = ["oldbramble"];
     expect(RAID.awards?.(state)).toEqual(["trophy-oldbramble", "trophy-bigcrab"]);
+  });
+});
+
+/** Another member, whose board a table may meet. */
+const MEMBER = "10000000-0000-0000-0000-000000000002";
+/** A table taken on through its rooms as the bot plays them, each planned, fought and taken, until its run is in `room`. */
+function reach(state: Table, room: number): Table {
+  let s = state;
+  for (let guard = 0; guard < 40 && s.run && s.run.room < room; guard++) {
+    s = must(planned(s), { do: "fight" }).state;
+    s = must(s, { do: "take" }).state;
+  }
+  if (s.run?.room !== room) throw new Error(`the run did not reach room ${room}`);
+  return s;
+}
+/** A table fighting the room `room`, planned by the bot. */
+const fighting = (room: number, seed = 5): Table => must(planned(reach(started(seed), room)), { do: "fight" }).state;
+/** A member's board for room 2 as Leaf keeps it: what another table fought it with. */
+function keptBoard(): Party {
+  const data = must(planned(reach(started(11), 2)), { do: "fight" }).keep?.[0]?.data;
+  if (!isParty(data)) throw new Error("no board was kept");
+  return data;
+}
+/** A board another member left, as Leaf hands it to the command that meets it. */
+const metOf = (data: unknown, of = 1000, more: Partial<Met> = {}): Met => ({
+  player: MEMBER,
+  name: "Fernwick",
+  data,
+  of,
+  ...more,
+});
+/** Where a command meets another member's board, as Leaf asks the rules (undefined if it could not ask). */
+const meets = (state: Table, c: RaidCommand) => RAID.meets?.(state, c);
+/** A Greg of one star, at a seat. */
+const greg = (seat: number) => ({ kind: "greg", stars: 1, seat, items: [], fed: 0 });
+/** A table's run, which the test needs there. */
+function runOf(state: Table) {
+  if (!state.run) throw new Error("no run");
+  return state.run;
+}
+
+describe("another member's board in a sparring room", () => {
+  test("a fight there keeps the party it was decided from, exactly, at the trail and the room", () => {
+    expect(ROOMS[2]?.kind).toBe("spar");
+    const done = must(planned(reach(started(5), 2)), { do: "fight" });
+    const side = fought(done.state)?.setup.sides[0];
+    expect(side?.figures.length).toBeGreaterThan(0);
+    expect(done.keep).toEqual([{ slot: "board:0:2", data: side }]);
+    expect(SLOT.test("board:0:2")).toBe(true);
+    // Its takings keep nothing more.
+    expect(must(done.state, { do: "take" }).keep).toEqual([]);
+  });
+  test("a trouble room, a boss room, a guest and a refused command keep nothing", () => {
+    const trouble = planned(started(5));
+    expect(must(trouble, { do: "fight" }).keep).toEqual([]);
+    const boss = structuredClone(trouble);
+    runOf(boss).room = 4;
+    expect(ROOMS[4]?.kind).toBe("boss");
+    expect(must(boss, { do: "fight" }).keep).toEqual([]);
+    const spar = planned(reach(started(5), 2));
+    expect(must(spar, { do: "fight" }, { ...ctx(), player: { ...PLAYER, guest: true } }).keep).toEqual([]);
+    const bare = structuredClone(spar);
+    runOf(bare).board = runOf(bare).board.map(() => null);
+    expect(RAID.apply(bare, { do: "fight" }, ctx())).toEqual({ refused: "board_empty" });
+  });
+  test("a take meets a board only where it moves the run on to a sparring room", () => {
+    // Room 1 is trouble, after room 0; room 2 sparring, after room 1; room 4 a boss, after room 3.
+    expect(meets(fighting(0), { do: "take" })).toBeNull();
+    const into2 = fighting(1);
+    expect(meets(into2, { do: "take" })).toBe("board:0:2");
+    expect(meets(fighting(2), { do: "take" })).toBe("board:0:3");
+    expect(meets(fighting(3), { do: "take" })).toBeNull();
+    // Nothing else meets anything, nor a take with no fight to take, nor a table with no run.
+    for (const c of [{ do: "fight" }, { do: "rustle" }, { do: "abandon" }] as const) expect(meets(into2, c)).toBeNull();
+    expect(meets(planned(reach(started(5), 1)), { do: "take" })).toBeNull();
+    expect(meets(RAID.create(ctx(1)), { do: "take" })).toBeNull();
+    // A loss that ends the run moves it nowhere.
+    const ending = structuredClone(into2);
+    const fight = fought(ending);
+    if (!fight) throw new Error("no fight");
+    runOf(ending).resolve = 1;
+    fight.outcome.result = "loss";
+    expect(meets(ending, { do: "take" })).toBeNull();
+    // The last room, lost, is fought again; won, the run is over.
+    runOf(ending).resolve = 20;
+    runOf(ending).room = ROOMS.length - 1;
+    expect(takenTo(runOf(ending))).toBe(ROOMS.length - 1);
+    fight.outcome.result = "win";
+    expect(takenTo(runOf(ending))).toBeNull();
+  });
+  test("where a take moves the run on to is where the takings take it, room by room of a whole run", () => {
+    let state = must(RAID.create(ctx(42)), { do: "start", trail: 0 }).state;
+    for (let guard = 0; guard < 40 && state.run; guard++) {
+      state = must(planned(state), { do: "fight" }).state;
+      const to = takenTo(runOf(state));
+      state = must(state, { do: "take" }).state;
+      expect(state.run?.room ?? null).toBe(to);
+    }
+    expect(state.run).toBeNull();
+  });
+  test("met by 1,000 others, the foe is a member's board, signed with their name, and its fight plays from the kept figures", () => {
+    const board = keptBoard();
+    const taken = must(fighting(1), { do: "take" }, { ...ctx(), met: metOf(board) });
+    const foe = runOf(taken.state).foe;
+    expect(foe).toEqual({
+      who: "Fernwick",
+      by: MEMBER,
+      title: "their board at this room",
+      figures: board.figures,
+      boons: board.boons,
+      might: 100,
+    });
+    expect(regularOf(foe)).toBeNull();
+    expect(taken.notes).toContainEqual({
+      t: "room",
+      room: 2,
+      kind: "spar",
+      who: "Fernwick",
+      title: "their board at this room",
+    });
+    const fight = fought(must(planned(taken.state), { do: "fight" }).state);
+    expect(fight?.setup.sides[1]).toEqual(foe);
+    expect(fight && playsAsKept(fight)).toBe(true);
+  });
+  test("a room fought against a member's board is logged with whose it was, and one against a regular is not", () => {
+    const met = must(fighting(1), { do: "take" }, { ...ctx(), met: metOf(keptBoard()) }).state;
+    const against = must(must(planned(met), { do: "fight" }).state, { do: "take" });
+    expect(against.log?.[0]).toMatchObject({ kind: "raid_room", data: { room: 3, kind: "spar", met: MEMBER } });
+    const regular = must(fighting(2), { do: "take" });
+    expect(regular.log?.[0]?.data).not.toHaveProperty("met");
+  });
+  test("without a member's board, or with anything else, the foe is the regular's party it always was", () => {
+    const into2 = fighting(1);
+    const at = ctx();
+    const plain = must(into2, { do: "take" }, at).state;
+    expect(regularOf(runOf(plain).foe)).not.toBeNull();
+    const board = keptBoard();
+    const [first] = board.figures;
+    if (!first) throw new Error("an empty board");
+    const wrong: unknown[] = [
+      null,
+      "a board",
+      { ...board, might: 5 },
+      { ...board, figures: [] },
+      { ...board, figures: Array.from({ length: 10 }, (_, seat) => greg(seat)) },
+      { ...board, figures: [{ ...first, kind: "gnat" }] },
+    ];
+    for (const data of wrong) expect(must(into2, { do: "take" }, { ...at, met: metOf(data) }).state).toEqual(plain);
+    // Nor signed with a name longer than a party may have.
+    const long = metOf(board, 1000, { name: "x".repeat(81) });
+    expect(must(into2, { do: "take" }, { ...at, met: long }).state).toEqual(plain);
+    // Nine figures, as many as anybody can field, is a board.
+    expect(fieldCap({ level: MAX_LEVEL, boons: ["extrachair"] })).toBe(9);
+    const nine = { ...board, figures: Array.from({ length: 9 }, (_, seat) => greg(seat)) };
+    expect(runOf(must(into2, { do: "take" }, { ...at, met: metOf(nine) }).state).foe.by).toBe(MEMBER);
+  });
+  test("the regular's party for a seed is the one it was before a member's board could be met", () => {
+    for (const seed of [1, 77, 4242]) {
+      for (const room of [2, 3, 5, 13]) {
+        const before = sparParty(mix(seed, 700 + room), room, 1);
+        expect(opposition(seed, room, 1)).toEqual(before);
+        expect(opposition(seed, room, 1, metOf("not a board"))).toEqual(before);
+      }
+    }
+  });
+  test("the regular is one of the crowd: the board is a member's `of` times in `of + 1`", () => {
+    const board = keptBoard();
+    const share = (of: number): number => {
+      const seeds = Array.from({ length: 600 }, (_, n) => n + 1);
+      return seeds.filter((seed) => opposition(seed, 2, 0, metOf(board, of)).by === MEMBER).length / seeds.length;
+    };
+    expect(Math.abs(share(1) - 1 / 2)).toBeLessThan(0.06);
+    expect(Math.abs(share(3) - 3 / 4)).toBeLessThan(0.06);
+    expect(share(1000)).toBeGreaterThan(0.99);
+  });
+  test("a table facing a member's board, and one that fought it, read back with whose it is", () => {
+    const met = must(fighting(1), { do: "take" }, { ...ctx(), met: metOf(keptBoard()) }).state;
+    expect(RAID.decode(RAID.encode(met))?.run?.foe.by).toBe(MEMBER);
+    expect(readView(RAID.view(met, ctx()))?.run?.foe.by).toBe(MEMBER);
+    const fightDone = must(planned(met), { do: "fight" });
+    const note = readNotes(fightDone.notes)?.find((n) => n.t === "fight");
+    expect(note?.t === "fight" && note.setup.sides[1].by).toBe(MEMBER);
+    expect(RAID.decode(RAID.encode(fightDone.state))?.run && fought(fightDone.state)?.setup.sides[1].by).toBe(MEMBER);
+    const after = must(fightDone.state, { do: "take" }).state;
+    expect(RAID.decode(RAID.encode(after))?.run?.last?.sides[1].by).toBe(MEMBER);
+  });
+  test("whose board it is reads as a Leaf id, and a party with one is never a regular's, whatever it is called", () => {
+    const board = keptBoard();
+    expect(isParty({ ...board, by: MEMBER })).toBe(true);
+    expect(isParty({ ...board, by: "x".repeat(65) })).toBe(false);
+    expect(isParty({ ...board, by: 7 })).toBe(false);
+    expect(regularOf({ who: "Greg" })?.kind).toBe("greg");
+    expect(regularOf({ who: "Greg", by: MEMBER })).toBeNull();
   });
 });

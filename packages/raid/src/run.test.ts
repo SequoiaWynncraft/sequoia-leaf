@@ -6,6 +6,7 @@ import { isEmblemId, type ItemId } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, ROOMS, STALL_ODDS } from "./content/rooms.ts";
 import { traitNumber } from "./content/traits.ts";
 import { resolveFight } from "./fight/engine.ts";
+import { opposition } from "./foe.ts";
 import { isParty, type Party, partyWorth } from "./party.ts";
 import {
   abandon,
@@ -23,7 +24,6 @@ import {
   layOutAfresh,
   move,
   nextStreak,
-  opposition,
   picksOf,
   type Piece,
   pieceAt,

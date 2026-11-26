@@ -35,9 +35,15 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 42: no `rev` kept of what each state's standing was worked out from. */
+/** Undoes migration 43: the pieces players leave not indexed by game and slot (the pulls' counts it let go stay gone). */
+const beforePlayKeptMet = (sql: SqlClient.SqlClient) => sql`DROP INDEX IF EXISTS play_kept_slot`;
+
+/** Undoes migrations 43 and 42: no `rev` kept of what each state's standing was worked out from. */
 const beforePlayStood = (sql: SqlClient.SqlClient) =>
-  Effect.andThen(sql`DROP INDEX play_state_unstood`, sql`ALTER TABLE play_state DROP COLUMN stood`);
+  Effect.andThen(
+    beforePlayKeptMet(sql),
+    Effect.andThen(sql`DROP INDEX play_state_unstood`, sql`ALTER TABLE play_state DROP COLUMN stood`),
+  );
 
 /** Undoes migrations 42 and 41: no Leaf sessions, no merges recorded, and no record of why an id is Leaf's. */
 const beforeSignIns = (sql: SqlClient.SqlClient) =>
@@ -240,6 +246,7 @@ describe("the database", () => {
       { migration_id: 40, name: "logins" },
       { migration_id: 41, name: "sign_ins" },
       { migration_id: 42, name: "play_stood" },
+      { migration_id: 43, name: "play_kept_met" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -310,7 +317,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 42 },
+      { latest: 43 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -358,7 +365,7 @@ describe("the database", () => {
     ]);
   });
 
-  it("keeps how many of each prize each member who has pulled has, from their stored pulls, as the game reads them", async () => {
+  it("kept how many of each prize each member who had pulled had, and lets go of them again, since nothing read them", async () => {
     const path = join(directory, "leaf.db");
     const pulled = "00000000-0000-4000-8000-00000000000a";
     const opened = "00000000-0000-4000-8000-00000000000b";
@@ -400,9 +407,36 @@ describe("the database", () => {
         }
       }),
     );
+    // Migration 26 kept the member's counts; migration 43 let them go.
     expect(
       await query(path, (sql) => sql`SELECT player_id AS player, game, slot, data, updated_at AS at FROM play_kept`),
-    ).toEqual([{ player: pulled, game: "pulls", slot: "have", data: JSON.stringify(have), at: 5 }]);
+    ).toEqual([]);
+  });
+
+  it("finds the pieces players leave for others by game and slot, and lets go of the pulls' counts nothing read", async () => {
+    const path = join(directory, "leaf.db");
+    const [a, b] = ["a", "b"].map((n) => `00000000-0000-4000-8000-00000000000${n}`);
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // Back to before migration 43: a member's board for a room of the raid, and two members' pulls counted.
+        yield* beforePlayKeptMet(sql);
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 43`;
+        yield* sql`
+          INSERT INTO play_kept (player_id, game, slot, data, updated_at) VALUES
+            (${a}, 'raid', 'board:0:2', '{}', 1), (${a}, 'pulls', 'have', '{}', 1), (${b}, 'pulls', 'have', '{}', 1)
+        `;
+      }),
+    );
+    expect(await query(path, (sql) => sql`SELECT player_id AS player, game, slot FROM play_kept`)).toEqual([
+      { player: a, game: "raid", slot: "board:0:2" },
+    ]);
+    const plan = await query(
+      path,
+      (sql) => sql`EXPLAIN QUERY PLAN SELECT count(*) FROM play_kept WHERE game = 'raid' AND slot = 'board:0:2'`,
+    );
+    expect(JSON.stringify(plan)).toContain("play_kept_slot");
   });
 
   it("starts each player's time in each game from what Leaf had: their pages' calls as played, the rest of their visits since as AFK", async () => {

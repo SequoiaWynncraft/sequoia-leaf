@@ -1,8 +1,8 @@
 /**
  * A party as it comes to the table: who stands where, with how many stars, holding what. It is
- * plain data on purpose. The member's own board is turned into one before a fight; the forest's
- * trouble is written as one; and a regular's party for sparring is one that could be stored and
- * sent as it is.
+ * plain data on purpose. The member's own board is turned into one before a fight, and is what Leaf
+ * keeps for other members to meet in that sparring room; the forest's trouble is written as one; and
+ * a sparring room's party, a regular's or another member's board, is one stored and sent as it is.
  */
 import { type BoonId, isBoonId } from "./content/boons.ts";
 import {
@@ -30,6 +30,11 @@ export interface Placed {
 export interface Party {
   /** Whose it is: a handle, or a name for the trouble. */
   who: string;
+  /**
+   * The Leaf id of the member whose own board it is, met in a sparring room. Absent for the member's
+   * own party, the forest's and a regular's.
+   */
+  by?: string;
   /** A line about it: "A few gnats", "brought Embers and Fangs". */
   title: string;
   figures: Placed[];
@@ -107,15 +112,21 @@ export function isPlaced(v: unknown): v is Placed {
     isWhole(v.fed, 0, 1000)
   );
 }
+/** Whether a party says whose it is (and, for a member's own board, their id) and has a line about it. */
+const isSigned = (v: Record<string, unknown>): boolean =>
+  typeof v.who === "string" &&
+  v.who.length <= 80 &&
+  typeof v.title === "string" &&
+  v.title.length <= 200 &&
+  (v.by === undefined || (typeof v.by === "string" && v.by.length <= 64));
+
 /**
  * Whether something is a whole party: the check for one that has been stored or sent. Nobody shares a
  * seat. A party stored when charms counted for a kin has `charms` too, which is let be.
  */
 export function isParty(v: unknown): v is Party {
-  if (!isRecord(v)) return false;
+  if (!isRecord(v) || !isSigned(v)) return false;
   const { figures, boons } = v;
-  if (typeof v.who !== "string" || v.who.length > 80 || typeof v.title !== "string" || v.title.length > 200)
-    return false;
   if (!Array.isArray(figures) || figures.length > SEATS || !figures.every(isPlaced)) return false;
   if (new Set(figures.map((p) => p.seat)).size !== figures.length) return false;
   if (!Array.isArray(boons) || boons.length > 32 || !boons.every(isBoonId)) return false;

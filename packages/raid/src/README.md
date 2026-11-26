@@ -214,13 +214,28 @@ Each charm puts its emblem on the item bench, for one figure to hold.
 
 **Sparring.** A sparring room is fought against a party one of the regulars at the table brought
 (`REGULARS` in `content/rooms.ts`: Greg, the Hearth Cat, a Barrow Gnome, Crab #7, Orphion
-and a Moth, each one of the battler's own figures). For now `sparParty(seed, room, trail)` makes
-one up: a regular, a taste for one kin and one calling, a level and a number of acorns to have spent by that room, stars bought with what is left,
+and a Moth, each one of the battler's own figures), or against the board another member fought
+that room with. `sparParty(seed, room, trail)` makes a regular's up: a regular, a taste for one kin and one calling, a level and a number of acorns to have spent by that room, stars bought with what is left,
 and items. It brings only what a member at its level could have found: figures of a cost the stall
 offers at that level, as often as it offers them, and a second or third star only where the stall
 offers that cost at least 12 or 30 times in a hundred. It gives back a `Party`, which is plain data (`isParty` checks one that has been stored
-or sent) and is exactly what a fight takes, so a member's saved board can stand in later without
-anything else changing.
+or sent) and is exactly what a fight takes.
+
+A member's fight at a sparring room leaves the party it was decided from (side 0 of its setup) for
+other members to meet there (`Done.keep`, at `boardSlot`: `board:<trail>:<room>`, the room's place
+in `ROOMS`), the newest over the older. A guest's leaves nothing, and trouble and bosses keep
+nothing. A `take` that moves the run on to a sparring room (`takenTo`: a lost last room is fought
+again, and a run whose takings end it moves nowhere) asks Leaf for a board left there (`meets`),
+and Leaf hands it one, picked by its dice, with the member's Leaf id, their name, and how many
+members left one there (`Ctx.met`, `of`). The regular is one of that crowd: one draw from the room's
+own stream (`opposition`) makes the foe the member's board `of` times in `of + 1`, and the regular's
+otherwise, so the run's stream moves the same either way and the regular's party for a seed is
+the one it always was. Only a board a member could have fielded is met (`boardMet`: one to nine of
+the stall's own figures, as `isParty` reads them); anything else is the regular. Across the table
+it is `{ who: <their name>, by: <their id>, title: "their board at this room" }`, with its figures
+and fight boons, at plain might. A party with `by` is never a regular's, whatever its name
+(`regularOf`). The same member may be met in several rooms, whatever the board's age or strength,
+and beating one pays as beating a regular does.
 
 **Trouble and bosses.** The forest's own figures are never on the stall. Each trouble room has two
 plans and draws one.
@@ -279,8 +294,14 @@ gives the sentence the page shows.
 
 A run that ends (won, lost, or walked home from) is written into the almanac and let go of, and
 pays its Coins as one change keyed `run:<number>`. Commands log `raid_started` (trail), `raid_room`
-(room, kind, won, resolve left, the fight's seconds) and `raid_ended` (trail, rooms won, how it
-ended, Coins paid).
+(room, kind, won, resolve left, the fight's seconds, and `met`, the member's Leaf id, for a room
+fought against another member's board) and `raid_ended` (trail, rooms won, how it ended, Coins
+paid).
+
+A member's `fight` at a sparring room keeps the board it was decided from for other members
+(`Done.keep`), and a `take` into a sparring room meets another member's (`RAID.meets`, `Ctx.met`):
+see Sparring above. Leaf keeps the boards and picks one; the rules only leave one and check the one
+they are handed.
 
 What the page is shown (`TableView`) is the table without its streams, the run's seed, or what the
 picks waiting behind the first will offer. `readView` and `readNotes` (`wire.ts`) read what Leaf
@@ -308,6 +329,7 @@ it would send. `encodeTable` and `decodeTable` are the table as Leaf stores it.
 | `fight/engine.ts`      | Seating, traits and items switching on, the clock, the end                                                            |
 | `formation.ts`         | A plain way of seating a party, used by the bot and the sparring partners                                             |
 | `spar.ts`              | The regulars' parties for sparring                                                                                    |
+| `foe.ts`               | Who waits in a room: the forest's trouble, a regular's party, or another member's board                               |
 | `run.ts`               | The run and every action on it                                                                                        |
 | `save.ts`              | A run read back from plain data: shape first, then today's numbers                                                    |
 | `outside.ts`           | Payout, almanac, trails                                                                                               |
