@@ -1,5 +1,14 @@
 [
   {
+    "id": "raid-steady-table",
+    "at": "2026-11-26T22:30Z",
+    "title": "A steadier raid table",
+    "lines": [
+      "In The Little Raid, the pictures of the figures who want an item are half the size they were, on the cards after a room and on a component's card.",
+      "The stall no longer moves up or down when a figure's name is long, the stall's cards no longer move sideways when the acorns change, and the sheet after a fight no longer grows as its lines are counted."
+    ]
+  },
+  {
     "id": "raid-items-easy",
     "at": "2026-11-26T21:05Z",
     "title": "Easier raid items",

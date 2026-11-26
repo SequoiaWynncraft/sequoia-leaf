@@ -24,7 +24,7 @@ import { snd } from "./sounds.ts";
 import { boardSpot, dress } from "./stage.ts";
 import { ask, changed, doNow, go, onScreen, prefsChanged, S, tableNow } from "./state.ts";
 import { acorns } from "./ui/cards.ts";
-import { closeSheet, openSheet, sheetTaking, sheetUp } from "./ui/fightsheet.ts";
+import { closeSheet, openSheet, sheetTaking, sheetUp, type Taking } from "./ui/fightsheet.ts";
 import { forgetTable, wakeChip } from "./ui/table.ts";
 
 const MIDDLE = { x: BOARD_W / 2, y: 64 };
@@ -182,10 +182,29 @@ const WHY: Readonly<Record<AcornsWhy, string>> = {
 /** What a line of the takings is called. The run has taken the room by then, so its streak is the one paid for. */
 const whyName = (why: AcornsWhy): string => (why === "streak" && S.run ? streakName(S.run.streak) : WHY[why]);
 
-/** Leaf has settled the room: its sheet rises, and what it paid is counted out. */
+/** The line a note adds to what the room paid, if any. With a level gained, the XP is not a line of its own. */
+function takingOf(note: RaidNote, levels: boolean): Taking | null {
+  if (note.t === "resolve") {
+    const change = `${note.change > 0 ? "+" : ""}${note.change}`;
+    return ["Health", el("b", note.change > 0 ? "k-leafy" : "k-coral", {}, icon("heart"), change)];
+  }
+  if (note.t === "fed") return ["Greg has eaten something.", ""];
+  if (note.t === "acorns") return [whyName(note.why), acorns(`+${note.amount}`)];
+  if (note.t === "xp") return levels ? null : ["XP", el("b", "k-leafy", { text: `+${note.gained}` })];
+  if (note.t === "level") return ["Level up", el("b", "k-leafy", { text: `Level ${note.level}` })];
+  return null;
+}
+
+/** Leaf has settled the room: its sheet rises with a place for each line it paid, and they are counted out. */
 function counting(notes: readonly RaidNote[], play: Playback): void {
   signal("fought");
-  openSheet("after", { setup: play.fought.setup, outcome: play.fought.outcome, kept: play.kept });
+  const levels = notes.some((n) => n.t === "level");
+  const lines = notes.map((note) => takingOf(note, levels));
+  openSheet(
+    "after",
+    { setup: play.fought.setup, outcome: play.fought.outcome, kept: play.kept },
+    lines.filter((line) => line !== null),
+  );
   const result = notes.find((n) => n.t === "result");
   const won = result?.t === "result" && result.result === "win";
   const ended = endedIn(notes);
@@ -198,10 +217,10 @@ function counting(notes: readonly RaidNote[], play: Playback): void {
       tone: "gold",
     });
   let t = 0.1;
-  const levels = notes.some((n) => n.t === "level");
+  let line = 0;
   notes.forEach((note, i) => {
     later(t, () => go({ e: "count", upTo: i + 1 }));
-    t = count(note, t, levels);
+    t = count(note, t, lines[i] ? line++ : -1);
   });
   later(t + 0.5, () => {
     go({ e: "counted" });
@@ -212,8 +231,8 @@ function counting(notes: readonly RaidNote[], play: Playback): void {
 /** Where the purse of acorns is, from the board's corner. */
 const purse = (): { x: number; y: number } => boardSpot(document.getElementById("acorns")) ?? MIDDLE;
 
-/** Shows one line of the takings, and says when the next may start. */
-function count(note: RaidNote, at: number, levels: boolean): number {
+/** Acts out one note of the takings, showing its line (`line`, the place kept for it, or -1 for none), and says when the next may start. */
+function count(note: RaidNote, at: number, line: number): number {
   if (note.t === "result") {
     {
       const text = note.result === "win" ? "Room won!" : note.result === "loss" ? "Room lost." : "A draw.";
@@ -232,16 +251,7 @@ function count(note: RaidNote, at: number, levels: boolean): number {
   if (note.t === "resolve") {
     {
       later(at, () => {
-        sheetTaking(
-          "Health",
-          el(
-            "b",
-            note.change > 0 ? "k-leafy" : "k-coral",
-            {},
-            icon("heart"),
-            `${note.change > 0 ? "+" : ""}${note.change}`,
-          ),
-        );
+        sheetTaking(line);
         snd.resolve();
         const spot = boardSpot(document.getElementById("resolve"));
         if (spot)
@@ -260,7 +270,7 @@ function count(note: RaidNote, at: number, levels: boolean): number {
     {
       const p = pawns.get(note.piece);
       later(at, () => {
-        sheetTaking("Greg has eaten something.", "");
+        sheetTaking(line);
         if (p) say(p.x, p.y - 22, "Greg has eaten something.", LEAF, { ttl: 1.4 });
       });
       return at + 0.3;
@@ -271,7 +281,7 @@ function count(note: RaidNote, at: number, levels: boolean): number {
       const slow = note.why === "interest";
       const each = slow ? 0.16 : 0.08;
       later(at, () => {
-        sheetTaking(whyName(note.why), acorns(`+${note.amount}`));
+        sheetTaking(line);
         say(MIDDLE.x, MIDDLE.y + 12, `${whyName(note.why)} +${note.amount}`, GOLD[2], { ttl: 1.1 });
         const to = purse();
         // Savings pay out of the purse's own piles, an acorn at a time; the rest comes off the board.
@@ -294,9 +304,10 @@ function count(note: RaidNote, at: number, levels: boolean): number {
   }
   if (note.t === "xp") {
     {
-      if (levels) return at;
+      // With a level gained, the level's line says it.
+      if (line < 0) return at;
       later(at, () => {
-        sheetTaking("XP", el("b", "k-leafy", { text: `+${note.gained}` }));
+        sheetTaking(line);
         snd.xp();
       });
       return at + 0.25;
@@ -305,7 +316,7 @@ function count(note: RaidNote, at: number, levels: boolean): number {
   if (note.t === "level") {
     {
       later(at, () => {
-        sheetTaking("Level up", el("b", "k-leafy", { text: `Level ${note.level}` }));
+        sheetTaking(line);
         snd.level();
         say(MIDDLE.x, MIDDLE.y + 30, `Level ${note.level}: field one more`, LEAF, { big: true, ttl: 1.6 });
       });
