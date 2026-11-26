@@ -311,9 +311,9 @@ function front(): HTMLElement {
 
 // ---------- the almanac ----------
 
-/** A figure in the almanac: met (fielded) or not yet, and a badge for three stars. */
+/** A figure in the almanac: shown once it has been fielded or pulled, dark until then; a badge for three stars. */
 function figureTile(id: FigureId): HTMLElement {
-  const met = S.almanac.fielded.includes(id);
+  const met = S.almanac.fielded.includes(id) || S.roster[id] !== undefined;
   const starred = S.almanac.threeStars.includes(id);
   const tile = el(
     "button",
@@ -356,7 +356,7 @@ function almanac(): HTMLElement {
     add(
       page,
       el("div", "k-dim", {
-        text: `${a.fielded.length} of ${FIGURE_IDS.length} met. ${a.threeStars.length} taken to three stars.${pulledLine()}`,
+        text: `${a.fielded.length} of ${FIGURE_IDS.length} fielded. ${a.threeStars.length} taken to three stars.${pulledLine()}`,
       }),
     );
     add(page, el("div", "tiles", {}, ...FIGURE_IDS.map(figureTile)));
