@@ -1,8 +1,9 @@
 name: News
 
 # Each patch note a merge to main adds to the town's News tab (apps/town/src/notes.json) is posted
-# to a Discord channel, by a webhook kept as the secret NEWS_WEBHOOK. Without the secret, nothing is
-# posted. A note changed after it was posted is not posted again.
+# to Discord, by every webhook kept as the secrets NEWS_WEBHOOK and NEWS_WEBHOOK_2. A secret that is
+# not set is skipped; without either, nothing is posted. A webhook that fails does not stop the
+# other from getting the notes, but fails the run. A note changed after it was posted is not posted again.
 on:
   push:
     branches: [main]
@@ -27,9 +28,14 @@ jobs:
       - name: Post the new notes
         env:
           NEWS_WEBHOOK: ${{ secrets.NEWS_WEBHOOK }}
+          NEWS_WEBHOOK_2: ${{ secrets.NEWS_WEBHOOK_2 }}
         run: |
           set -euo pipefail
-          if [ -z "$NEWS_WEBHOOK" ]; then echo "No NEWS_WEBHOOK: nothing posted."; exit 0; fi
+          hooks=()
+          for name in NEWS_WEBHOOK NEWS_WEBHOOK_2; do
+            if [ -n "${!name:-}" ]; then hooks+=("$name"); fi
+          done
+          if [ "${#hooks[@]}" -eq 0 ]; then echo "No news webhook: nothing posted."; exit 0; fi
           notes=apps/town/src/notes.json
           git show "HEAD^1:$notes" > /tmp/before.json 2>/dev/null || echo '[]' > /tmp/before.json
           # The notes this merge added, oldest first, each as a Discord message.
@@ -44,8 +50,15 @@ jobs:
                   | join("\n\n"))[0:4000],
                 color: 16101685,
                 timestamp: (.at | sub("Z$"; ":00Z"))
-              }]}' "$notes" |
-          while read -r message; do
-            curl -fsS -H 'Content-Type: application/json' --data "$message" "$NEWS_WEBHOOK"
-            sleep 1
+              }]}' "$notes" > /tmp/messages.jsonl
+          failed=0
+          for name in "${hooks[@]}"; do
+            while read -r message; do
+              if ! curl -fsS -o /dev/null -H 'Content-Type: application/json' --data "$message" "${!name}"; then
+                echo "::error::$name refused a note."
+                failed=1
+              fi
+              sleep 1
+            done < /tmp/messages.jsonl
           done
+          exit "$failed"
