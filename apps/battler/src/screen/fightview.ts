@@ -1,143 +1,37 @@
-import { type Move, moveAt } from "@sequoia-leaf/figures/move.ts";
-import {
-  type BaseLook,
-  beatAt,
-  drawFigure,
-  drawStanding,
-  drawStars,
-  framesOf,
-  hoverAt,
-} from "@sequoia-leaf/figures/sprites.ts";
+import { moveAt } from "@sequoia-leaf/figures/move.ts";
+import { type BaseLook, beatAt, drawStanding, drawStars, framesOf, hoverAt } from "@sequoia-leaf/figures/sprites.ts";
 /**
- * The fight, played on the table from the rules' own steps. The rules decide everything; this
- * turns each thing that happened into something seen on the board: figures walk, turn, lunge,
- * recoil, strike a pose of their own to use an ability, and tip over; what is thrown flies; rings
- * spread across the hexes an ability covers; shields settle, burns lick, the stunned see stars.
+ * The fight, played on the table from the rules' own steps (`playback.ts`), with the lead-in the
+ * table gives each blow (`fightshow.ts`). The rules decide everything; this plays it on, draws
+ * everyone in it as their bodies move (`motion.ts`), what flies, the hexes an ability lights, what
+ * is on or wrong with each figure, and the health over their feet.
  *
  * Time here is the fight's own clock, in steps (twenty a second), so that playing it at 2x or 4x
- * or stepping it by hand moves everything together. Before the first step there is a short
- * run-in: the two halves of the board come together, then traits switch on, late crabs turn up
- * and Sneaks leap, one after another.
+ * or stepping it by hand moves everything together; a hit-stop holds it a moment. Before the first
+ * step there is a short run-in: the two halves of the board come together, then traits switch on,
+ * late crabs turn up and Sneaks leap, one after another.
  */
 import { CREAM, EARTH, GOLD, GREEN, INK, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
-import { clamp, type Ctx, lerp } from "@sequoia-leaf/kit/util.ts";
-import {
-  type Fight,
-  type FightEvent,
-  type FightSetup,
-  HZ,
-  openFight,
-  stepFight,
-  type TraitId,
-  type Unit,
-} from "@sequoia-leaf/raid";
-import { FIGURES, isBossId, isFigureId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
-import { TRAITS } from "@sequoia-leaf/raid/content/traits.ts";
-import { distance, seatCell } from "@sequoia-leaf/raid/hex.ts";
+import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
+import { type FightEvent, type FightSetup, HZ, type Unit } from "@sequoia-leaf/raid";
+import { isBossId } from "@sequoia-leaf/raid/content/figures.ts";
+import { seatCell } from "@sequoia-leaf/raid/hex.ts";
 
-import { itemPic, traitPic } from "./art/icons.ts";
-import { TRAIT_COLOUR } from "./art/pal.ts";
 import { hexMark } from "./art/table.ts";
-import { showMark } from "./fightmarks.ts";
-import { burst, motes, ring, say } from "./fx.ts";
+import { clockNow, feetAt, FV } from "./board.ts";
+import { begin, show, stepShown } from "./fightshow.ts";
+import { burst, pace } from "./fx.ts";
 import { cellXY, HEX_H, HEX_W, type Pt } from "./geometry.ts";
 import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
 import type { Speed } from "./keep.ts";
 import { DIM, shineOf } from "./light.ts";
+import { leadOf } from "./looks.ts";
+import { drawShot } from "./marks.ts";
+import { type Actor, actorFor, poseOf } from "./motion.ts";
+import { advance, openPlayback, playOut } from "./playback.ts";
 import { snd } from "./sounds.ts";
 import { type Standing, V } from "./stage.ts";
-
-/** How far below the middle of its hex a figure's feet are (the same as while planning). */
-const FOOT = 3;
-
-interface Actor {
-  unit: Unit;
-  /** Feet, from the board's corner, with the halves together. */
-  x: number;
-  y: number;
-  /** Where it is going, by the fight's clock, and whether it goes under the board for the middle of the way; null standing. */
-  move: (Move & { under: boolean }) | null;
-  left: boolean;
-  /** Not yet on the board: one that turns up later. */
-  bornAt: number;
-  lungeAt: number;
-  lx: number;
-  ly: number;
-  hurtAt: number;
-  hx: number;
-  hy: number;
-  flashAt: number;
-  castUntil: number;
-  /** Tipped over, and when. */
-  down: boolean;
-  fallAt: number;
-  hopAt: number;
-  shieldAt: number;
-  hpShown: number;
-  phase: number;
-}
-
-type ShotLook =
-  "seed" | "pebble" | "cone" | "beam" | "cushion" | "tea" | "plaster" | "drop" | "dust" | "gust" | "pellet";
-/** Something thrown: a move by the fight's clock, at an even pace, drawn as what it is. */
-interface Shot extends Move {
-  look: ShotLook;
-  col: string;
-}
-interface Flash {
-  cell: number;
-  t0: number;
-  col: string;
-}
-interface Pop {
-  pic: HTMLCanvasElement;
-  id: number;
-  t0: number;
-}
-interface Cue {
-  at: number;
-  ev: FightEvent;
-}
-
-/** How far the fight on the table has been played: not at all, the run-in, the steps, or done (when, by the stage's clock). */
-type Stage = "off" | "run-in" | "run" | { done: number };
-
-const FV: {
-  fight: Fight | null;
-  actors: Actor[];
-  /** The fight's clock as it is shown, in steps: negative during the run-in. */
-  clock: number;
-  speed: Speed;
-  stage: Stage;
-  cues: Cue[];
-  shots: Shot[];
-  flashes: Flash[];
-  pops: Pop[];
-  dusk: number;
-  clacked: boolean;
-  /** The look of the bases the member's figures stand on. */
-  bases: BaseLook;
-  /** Told once, when the fight has been played to its end and shown a moment longer. */
-  done: (() => void) | null;
-  /** Everything that has been shown happening so far, the opening first: what the tally is counted from. */
-  seen: FightEvent[];
-} = {
-  fight: null,
-  actors: [],
-  clock: 0,
-  speed: 1,
-  stage: "off",
-  cues: [],
-  shots: [],
-  flashes: [],
-  pops: [],
-  dusk: 0,
-  clacked: false,
-  bases: "plain",
-  done: null,
-  seen: [],
-};
 
 const marksByColour = new Map<string, HTMLCanvasElement>();
 function markOf(col: string): HTMLCanvasElement {
@@ -149,7 +43,7 @@ function markOf(col: string): HTMLCanvasElement {
   return m;
 }
 
-export const fightOn = (): boolean => FV.fight !== null;
+export const fightOn = (): boolean => FV.pb !== null;
 /** Where the fight has got to, for looking from outside. */
 export const fightState = (): {
   stage: string;
@@ -162,50 +56,19 @@ export const fightState = (): {
   thrown: number;
 } => ({
   stage: typeof FV.stage === "string" ? FV.stage : "done",
-  tick: FV.fight?.tick ?? 0,
-  clock: FV.clock,
-  over: FV.fight?.over ?? false,
-  result: FV.fight?.result ?? null,
+  tick: FV.pb?.fight.tick ?? 0,
+  clock: clockNow(),
+  over: FV.pb?.fight.over ?? false,
+  result: FV.pb?.fight.result ?? null,
   lit: FV.flashes.length,
   thrown: FV.shots.length,
 });
 /** Everyone who has been in the fight on the table, for whoever keeps count. */
-export const fightUnits = (): readonly Unit[] => FV.fight?.units ?? [];
+export const fightUnits = (): readonly Unit[] => FV.pb?.fight.units ?? [];
 /** Everything shown happening in the fight on the table so far, for whoever keeps count. */
 export const fightEvents = (): readonly FightEvent[] => FV.seen;
 export function setSpeed(s: Speed): void {
   FV.speed = s;
-}
-
-const feetAt = (cell: number): Pt => {
-  const p = cellXY(cell);
-  return { x: p.x, y: p.y + FOOT };
-};
-const colourOf = (kind: UnitKind): string => (isFigureId(kind) ? TRAIT_COLOUR[FIGURES[kind].kin] : GREEN[3]);
-
-function actorFor(unit: Unit, at: Pt, bornAt: number): Actor {
-  return {
-    unit,
-    x: at.x,
-    y: at.y,
-    move: null,
-    left: unit.side === 1,
-    bornAt,
-    lungeAt: -99,
-    lx: 0,
-    ly: 0,
-    hurtAt: -99,
-    hx: 0,
-    hy: 0,
-    flashAt: -99,
-    castUntil: -99,
-    down: false,
-    fallAt: 0,
-    hopAt: -99,
-    shieldAt: -99,
-    hpShown: unit.hp,
-    phase: (unit.id * 0.37) % 1,
-  };
 }
 
 /**
@@ -213,553 +76,142 @@ function actorFor(unit: Unit, at: Pt, bornAt: number): Actor {
  * to it); the figures then stay as they ended until `endFight`.
  */
 export function startFight(setup: FightSetup, speed: Speed, bases: BaseLook, done: () => void): void {
-  const fight = openFight(setup);
-  FV.fight = fight;
+  const pb = openPlayback(setup, leadOf);
+  FV.pb = pb;
   FV.speed = speed;
   FV.bases = bases;
   FV.stage = "run-in";
   FV.shots = [];
   FV.flashes = [];
-  FV.pops = [];
+  FV.signs = [];
   FV.dusk = 0;
   FV.clacked = false;
+  FV.bump = { at: -99, px: 0 };
   FV.done = done;
   FV.seen = [];
   // Everyone starts where they were seated; what the opening did to them is acted out in the run-in.
-  FV.actors = fight.units.map((u) =>
+  FV.actors = pb.fight.units.map((u) =>
     actorFor(u, u.summoned ? feetAt(u.cell) : feetAt(seatCell(u.side, u.seat)), u.summoned ? Infinity : -Infinity),
   );
-  const cues: Cue[] = [];
-  let at = 14;
-  let lastKind = "";
-  for (const ev of fight.opening) {
-    if (ev.t === "trait") at += 7;
-    else if (ev.t === "summon") at += 8;
-    else if (ev.t === "leap") at += lastKind === "leap" ? 2 : 8;
-    else if (ev.t === "end") at += 4;
-    cues.push({ at, ev });
-    lastKind = ev.t;
-  }
-  const total = at + 12;
-  for (const c of cues) c.at -= total;
-  FV.cues = cues;
-  FV.clock = -total;
 }
 
 /** Stops showing the fight: the party's own figures stand on their seats again. */
 export function endFight(): void {
-  FV.fight = null;
+  FV.pb = null;
   FV.stage = "off";
   FV.actors = [];
   FV.shots = [];
   FV.flashes = [];
-  FV.pops = [];
-  FV.cues = [];
+  FV.signs = [];
   FV.dusk = 0;
   FV.done = null;
   FV.seen = [];
+  pace.k = 1;
 }
 
 /** Goes straight to the end: the fight comes out the same, it is only not watched. */
 export function skipFight(): void {
-  const f = FV.fight;
-  if (!f || typeof FV.stage !== "string") return;
+  const pb = FV.pb;
+  if (!pb || typeof FV.stage !== "string") return;
   // What was still to be shown counts all the same.
-  for (const cue of FV.cues) FV.seen.push(cue.ev);
-  while (!f.over) FV.seen.push(...stepFight(f));
-  FV.cues = [];
+  FV.seen.push(...playOut(pb));
   FV.shots = [];
   FV.flashes = [];
-  // Anyone who turned up late is on the board now; everyone is where they ended.
-  f.units.forEach((u, i) => {
-    let a = FV.actors[i];
-    if (!a) {
-      a = actorFor(u, feetAt(u.cell), -Infinity);
-      FV.actors[i] = a;
-    }
+  // Anyone who turned up late is on the board now; everyone is where they ended, and the fallen are gone.
+  pb.fight.units.forEach((u, i) => {
+    const a = FV.actors[i] ?? actorFor(u, feetAt(u.cell), -Infinity);
+    FV.actors[i] = a;
     const at = feetAt(u.cell);
     a.x = at.x;
     a.y = at.y;
     a.move = null;
+    a.blow = null;
+    a.wind = null;
     a.bornAt = -Infinity;
     a.hpShown = u.hp;
-    a.down = !u.alive;
-    a.fallAt = -999;
+    a.fallAt = u.alive ? Infinity : -999;
+    a.gone = !u.alive;
     a.castUntil = -99;
   });
-  FV.clock = f.tick;
   finish();
 }
 
 function finish(): void {
-  if (typeof FV.stage !== "string") return;
+  const pb = FV.pb;
+  if (typeof FV.stage !== "string" || !pb) return;
   FV.stage = { done: V.t };
-  const f = FV.fight;
-  if (!f) return;
+  pace.k = 1;
   // Whoever is left standing on the side that won hops about it.
-  const winner = f.result === "win" ? 0 : f.result === "loss" ? 1 : -1;
+  const winner = pb.fight.result === "win" ? 0 : pb.fight.result === "loss" ? 1 : -1;
   let n = 0;
   for (const a of FV.actors) {
-    if (a.unit.alive && a.unit.side === winner) a.hopAt = FV.clock + (n++ % 4) * 2;
+    if (a?.unit.alive && a.unit.side === winner) a.hopAt = pb.clock + (n++ % 4) * 2;
   }
 }
 
-function travel(a: Actor, to: Pt, ticks: number, arc: number, under = false): void {
-  a.move = { from: { x: a.x, y: a.y }, to, t0: FV.clock, dur: Math.max(1, ticks), arc, smooth: false, under };
-  if (Math.abs(to.x - a.x) > 1) a.left = to.x < a.x;
-}
-
-function face(a: Actor, toward: Actor | undefined): void {
-  if (toward && Math.abs(toward.x - a.x) > 1) a.left = toward.x < a.x;
-}
-
-const SHOT_LOOKS: Partial<Record<UnitKind, ShotLook>> = {
-  finch: "seed",
-  crab12: "pebble",
-  chickaree: "cone",
-  lanterngnome: "beam",
-  mossmote: "cushion",
-  kettle: "tea",
-  crab23: "plaster",
-  drizzlefrog: "drop",
-  moth: "dust",
-  gust: "gust",
-};
-
-/** The kinds of damage, coloured as the cards colour their words: coral, rose, cream. */
-const DAMAGE_COL = { physical: "#e67967", magic: "#d88ad0", true: CREAM } as const;
-
-/** Makes one thing the rules said happened into something seen and heard. */
-function show(ev: FightEvent): void {
-  const f = FV.fight;
-  if (!f) return;
-  FV.seen.push(ev);
-  if (showMark(ev, FV)) return;
-  const now = FV.clock;
-  switch (ev.t) {
-    case "move": {
-      const a = FV.actors[ev.id];
-      if (a) travel(a, feetAt(ev.to), ev.ticks, 2);
-      break;
-    }
-    case "leap": {
-      const a = FV.actors[ev.id];
-      if (!a) break;
-      const to = feetAt(ev.to);
-      if (ev.why === "knocked") {
-        travel(a, to, 4, 4);
-        a.left = !a.left;
-        burst(a.x, a.y - 4, 6, [CREAM, STONE[3]], { speed: 30, ttl: 0.3 });
-      } else if (a.unit.kind === "worm") {
-        burst(a.x, a.y, 10, [EARTH[1], EARTH[2], EARTH[0]], { speed: 30, ttl: 0.45, toward: -Math.PI / 2, spread: 2 });
-        travel(a, to, 5, 0, true);
-        snd.dig();
-      } else {
-        travel(a, to, ev.why === "sneak" ? 8 : 5, ev.why === "sneak" ? 18 : 12);
-        snd.leap();
-      }
-      break;
-    }
-    case "swing": {
-      const a = FV.actors[ev.id];
-      const t = FV.actors[ev.target];
-      if (!a || !t) break;
-      face(a, t);
-      const d = Math.hypot(t.x - a.x, t.y - a.y) || 1;
-      a.lungeAt = now;
-      a.lx = ((t.x - a.x) / d) * 5;
-      a.ly = ((t.y - a.y) / d) * 4;
-      snd.swing();
-      break;
-    }
-    case "shot": {
-      const a = FV.actors[ev.id];
-      const t = FV.actors[ev.target];
-      if (!a) break;
-      face(a, t);
-      const from = feetAt(ev.from);
-      const to = t ? { x: t.x, y: t.y } : feetAt(ev.to);
-      const look: ShotLook = SHOT_LOOKS[a.unit.kind] ?? "pellet";
-      const lobbed = look === "cone" || look === "cushion" || look === "tea" || look === "plaster" || look === "pebble";
-      FV.shots.push({
-        from: { x: from.x, y: from.y - 11 },
-        to: { x: to.x, y: to.y - 10 },
-        t0: now,
-        dur: Math.max(1, ev.ticks),
-        arc: lobbed ? 8 + distance(ev.from, ev.to) * 2.5 : look === "beam" ? 0 : 3,
-        smooth: false,
-        look,
-        col: colourOf(a.unit.kind),
-      });
-      a.lungeAt = now;
-      a.lx = 0;
-      a.ly = -2;
-      snd.shot();
-      break;
-    }
-    case "hit": {
-      const a = FV.actors[ev.id];
-      if (!a) break;
-      const by = FV.actors[ev.by];
-      const direct = ev.source === "attack" || ev.source === "ability" || ev.source === "item";
-      if (direct) {
-        const dx = by ? a.x - by.x : 0;
-        const dy = by ? a.y - by.y : -1;
-        const d = Math.hypot(dx, dy) || 1;
-        a.hurtAt = now;
-        a.flashAt = now;
-        a.hx = (dx / d) * (ev.hard ? 4 : 2.5);
-        a.hy = (dy / d) * (ev.hard ? 3 : 2);
-        const col = ev.soaked >= ev.amount ? WATER[3] : DAMAGE_COL[ev.kind];
-        burst(a.x, a.y - 11, ev.hard ? 9 : 4, [col, "#ffffff"], { speed: ev.hard ? 46 : 30, ttl: 0.3 });
-        say(
-          a.x + (Math.random() - 0.5) * 8,
-          a.y - framesOf(a.unit.kind).tall - 2,
-          ev.hard ? `${ev.amount}!` : String(ev.amount),
-          ev.hard ? GOLD[2] : col,
-          { big: ev.hard, ttl: 0.7 },
-        );
-        snd.hit(ev.kind, ev.hard);
-      } else if (ev.source === "burn") {
-        burst(a.x, a.y - 6, 3, ["#e67967", GOLD[1], GOLD[2]], { speed: 14, grav: -40, ttl: 0.4, scatter: 8 });
-        say(a.x + 6, a.y - 10, String(ev.amount), "#e67967", { ttl: 0.5, rise: 7 });
-        snd.burn();
-      } else if (ev.source === "thorns") {
-        a.flashAt = now;
-        say(a.x - 6, a.y - 12, String(ev.amount), GREEN[4], { ttl: 0.5, rise: 7 });
-      } else {
-        say(a.x, a.y - 12, String(ev.amount), "#cdb6d8", { ttl: 0.5, rise: 6 });
-      }
-      break;
-    }
-    case "slip": {
-      const a = FV.actors[ev.id];
-      if (!a) break;
-      a.hurtAt = now;
-      a.hx = a.left ? 4 : -4;
-      a.hy = 0;
-      say(a.x, a.y - framesOf(a.unit.kind).tall - 2, "dodge", WATER[3], { ttl: 0.6 });
-      burst(a.x, a.y - 8, 4, [WATER[3], "#ffffff"], { speed: 20, ttl: 0.3, grav: 0 });
-      snd.slip();
-      break;
-    }
-    case "cast": {
-      const a = FV.actors[ev.id];
-      if (!a) break;
-      const col = colourOf(ev.kind);
-      a.castUntil = now + 9;
-      face(a, FV.actors[ev.targets[0] ?? -1]);
-      // The hexes it covers light one after another, nearest first: a ring, a cone or a line spreading.
-      for (const cell of ev.cells) FV.flashes.push({ cell, t0: now + distance(a.unit.cell, cell) * 1.5, col });
-      if (ev.name) say(a.x, a.y - framesOf(ev.kind).tall - 8, ev.name, col, { ttl: 1.1, rise: 8 });
-      if (ev.shape === "ring") ring(a.x, a.y, ev.cells.length > 7 ? 46 : 24, col, 0.5);
-      else if (ev.shape === "self") ring(a.x, a.y, 12, col, 0.4);
-      else if (ev.shape === "cone" || ev.shape === "line") {
-        const t = FV.actors[ev.targets[0] ?? -1];
-        const toward = t ? Math.atan2(t.y - a.y, t.x - a.x) : a.left ? Math.PI : 0;
-        burst(a.x, a.y - 8, 18, [col, GOLD[2], "#ffffff"], {
-          toward,
-          spread: ev.shape === "cone" ? 0.9 : 0.25,
-          speed: 90,
-          ttl: 0.35,
-          grav: 0,
-        });
-      } else burst(a.x, a.y - 12, 6, [col, "#ffffff"], { speed: 22, ttl: 0.4, grav: -20 });
-      snd.cast(isFigureId(ev.kind) ? FIGURES[ev.kind].tier - 1 : isBossId(ev.kind) ? 4 : 1);
-      break;
-    }
-    case "heal": {
-      const a = FV.actors[ev.id];
-      if (!a) break;
-      const quiet = ev.source === "regrow";
-      motes(a.x, a.y - 6, quiet ? 2 : 7, [GREEN[4], "#c9ef9a", "#ffffff"]);
-      if (!quiet) {
-        say(a.x, a.y - framesOf(a.unit.kind).tall - 2, `+${ev.amount}`, "#c9ef9a", { ttl: 0.7 });
-        snd.heal();
-      }
-      break;
-    }
-    case "shield": {
-      const a = FV.actors[ev.id];
-      if (!a) break;
-      a.shieldAt = now;
-      snd.shield();
-      break;
-    }
-    case "status": {
-      const a = FV.actors[ev.id];
-      if (!a) break;
-      if (!ev.on) {
-        if (ev.status === "shield") burst(a.x, a.y - 9, 8, [WATER[3], CREAM], { speed: 34, ttl: 0.35 });
-        else if (ev.status === "hidden") {
-          burst(a.x, a.y, 10, [EARTH[1], EARTH[2], EARTH[0]], {
-            speed: 34,
-            ttl: 0.45,
-            toward: -Math.PI / 2,
-            spread: 2,
-          });
-          a.hopAt = now;
-          snd.dig();
-        }
-        break;
-      }
-      if (ev.status === "stun") snd.stun();
-      else if (ev.status === "burn") burst(a.x, a.y - 4, 6, ["#e67967", GOLD[1]], { speed: 20, grav: -30, ttl: 0.4 });
-      else if (ev.status === "slow") burst(a.x, a.y - 2, 5, [WATER[2], WATER[3]], { speed: 14, ttl: 0.5 });
-      else if (ev.status === "taunt")
-        say(a.x, a.y - framesOf(a.unit.kind).tall - 2, "!", "#e67967", { big: true, ttl: 0.6 });
-      else if (ev.status === "hidden") {
-        burst(a.x, a.y, 10, [EARTH[1], EARTH[2], EARTH[0]], { speed: 30, ttl: 0.45, toward: -Math.PI / 2, spread: 2 });
-        snd.dig();
-      } else if (ev.status === "haste")
-        burst(a.x, a.y - 6, 6, [CREAM, GOLD[2]], { speed: 26, grav: -50, ttl: 0.4, toward: -Math.PI / 2, spread: 0.6 });
-      else if (ev.status === "braced") ring(a.x, a.y, 11, STONE[3], 0.35);
-      break;
-    }
-    case "boost": {
-      const a = FV.actors[ev.id];
-      if (!a) break;
-      say(a.x, a.y - framesOf(a.unit.kind).tall - 2, `+${ev.amount} attack`, "#f4a08c", { ttl: 0.9 });
-      burst(a.x, a.y - 10, 5, ["#f4a08c", GOLD[2]], {
-        speed: 20,
-        grav: -40,
-        ttl: 0.5,
-        toward: -Math.PI / 2,
-        spread: 0.7,
-      });
-      break;
-    }
-    case "fall": {
-      const a = FV.actors[ev.id];
-      if (!a) break;
-      a.down = true;
-      a.fallAt = now;
-      a.castUntil = -99;
-      burst(a.x, a.y, 7, ["#cbb894", CREAM], { speed: 22, ttl: 0.35, toward: -Math.PI / 2, spread: 2.6 });
-      snd.fall(isBossId(a.unit.kind));
-      break;
-    }
-    case "rise": {
-      const a = FV.actors[ev.id];
-      if (!a) break;
-      a.down = false;
-      a.hopAt = now;
-      say(a.x, a.y - framesOf(a.unit.kind).tall - 6, "Second Wind!", GOLD[2], { ttl: 1.4 });
-      motes(a.x, a.y - 6, 10, [GOLD[2], CREAM]);
-      snd.rise();
-      break;
-    }
-    case "summon": {
-      const u = f.units[ev.id];
-      if (!u) break;
-      const from = FV.actors[ev.by];
-      const at = feetAt(ev.cell);
-      let a = FV.actors[ev.id];
-      if (!a) {
-        a = actorFor(u, from ? { x: from.x, y: from.y } : at, now);
-        FV.actors[ev.id] = a;
-      }
-      a.bornAt = now;
-      // A bit of somebody comes off them; anyone else just turns up.
-      if (from && ev.kind === "glorplet") {
-        a.x = from.x;
-        a.y = from.y;
-        travel(a, at, 5, 8);
-      } else {
-        a.x = at.x;
-        a.y = at.y;
-        a.move = null;
-      }
-      burst(at.x, at.y - 4, 10, [colourOf(ev.kind), CREAM, "#ffffff"], { speed: 28, ttl: 0.4 });
-      if (ev.kind === "uncounted" || ev.kind === "biguncounted")
-        say(at.x, at.y - 16, "Nobody counted this one.", CREAM, { ttl: 1.3 });
-      snd.summon();
-      break;
-    }
-    case "trait": {
-      const col = TRAIT_COLOUR[ev.trait];
-      ev.ids.forEach((id, i) => {
-        const a = FV.actors[id];
-        if (!a) return;
-        a.hopAt = now + i * 0.8;
-        burst(a.x, a.y - 10, 4, [col, GOLD[2]], { speed: 18, ttl: 0.45, grav: -10 });
-      });
-      const first = FV.actors[ev.ids[0] ?? -1];
-      if (first) {
-        FV.pops.push({ pic: traitPic(ev.trait), id: first.unit.id, t0: now });
-        say(
-          first.x,
-          first.y - framesOf(first.unit.kind).tall - 14,
-          `${TRAITS[ev.trait].name}${ev.step > 1 ? ` ${ev.step}` : ""}`,
-          col,
-          { ttl: 1 },
-        );
-      }
-      if (ev.side === 0) {
-        traitWoke?.(ev.trait);
-        snd.trait(ev.step);
-      }
-      break;
-    }
-    case "item": {
-      const a = FV.actors[ev.id];
-      if (a) FV.pops.push({ pic: itemPic(ev.item), id: a.unit.id, t0: now });
-      break;
-    }
-    case "dusk": {
-      if (FV.dusk === 0) {
-        say(75, 40, "Dusk falls.", "#cdb6d8", { big: true, ttl: 1.6 });
-        snd.dusk();
-      }
-      FV.dusk = ev.n;
-      break;
-    }
+/** Plays the fight on: lead-ins begin and things happen as the clock reaches them. */
+function play(dt: number): void {
+  const pb = FV.pb;
+  if (!pb) return;
+  const moved = advance(pb, dt, FV.speed);
+  pace.k = pb.held > 0 ? 0 : FV.speed;
+  // The halves meet with a clack a few steps into the run-in.
+  if (!FV.clacked && V.gap < 0.5) {
+    FV.clacked = true;
+    snd.clack();
+    for (let x = 6; x < 150; x += 12)
+      burst(x, 60, 2, ["#cbb894", CREAM], { speed: 16, ttl: 0.35, toward: -Math.PI / 2, spread: 2 });
   }
-}
-
-/** Told when one of the member's traits switches on as a fight starts, to light its chip. */
-let traitWoke: ((trait: TraitId) => void) | null = null;
-export function onTraitWoke(fn: (trait: TraitId) => void): void {
-  traitWoke = fn;
+  for (const lead of moved.begun) begin(lead);
+  for (const cue of moved.happened) show(cue);
+  if (pb.clock >= 0) FV.stage = "run";
+  if (pb.fight.over) {
+    pb.clock = Math.max(pb.clock, pb.fight.tick);
+    finish();
+  }
 }
 
 /** Moves the fight on with the stage's clock. */
 export function stepFightView(dt: number): void {
-  const f = FV.fight;
-  if (!f) return;
-  if (FV.stage === "run-in" || FV.stage === "run") {
-    FV.clock += dt * HZ * FV.speed;
-    // The halves meet with a clack a few steps into the run-in.
-    if (!FV.clacked && V.gap < 0.5) {
-      FV.clacked = true;
-      snd.clack();
-      for (let x = 6; x < 150; x += 12)
-        burst(x, 60, 2, ["#cbb894", CREAM], { speed: 16, ttl: 0.35, toward: -Math.PI / 2, spread: 2 });
-    }
-    while (FV.cues.length > 0 && (FV.cues[0]?.at ?? 0) <= FV.clock) {
-      const cue = FV.cues.shift();
-      if (cue) show(cue.ev);
-    }
-    if (FV.clock >= 0) FV.stage = "run";
-    if (FV.stage === "run") {
-      let guard = 0;
-      while (!f.over && f.tick < Math.floor(FV.clock) && guard++ < 200) {
-        for (const ev of stepFight(f)) show(ev);
-      }
-      if (f.over) {
-        FV.clock = Math.max(FV.clock, f.tick);
-        finish();
-      }
-    }
-  } else if (typeof FV.stage !== "string") {
-    FV.clock += dt * HZ;
+  const pb = FV.pb;
+  if (!pb) return;
+  if (FV.stage === "run-in" || FV.stage === "run") play(dt);
+  else if (typeof FV.stage !== "string") {
+    pb.clock += dt * HZ;
     const tell = V.t - FV.stage.done > 0.7 ? FV.done : null;
     if (tell) {
       FV.done = null;
       tell();
     }
   }
+  const c = pb.clock;
   for (const a of FV.actors) {
+    if (!a) continue;
     if (a.move) {
-      const now = moveAt(a.move, FV.clock);
+      const now = moveAt(a.move, c);
       a.x = now.x;
       a.y = now.y;
       if (now.k >= 1) a.move = null;
     }
     a.hpShown += (a.unit.hp - a.hpShown) * Math.min(1, dt * 10 * FV.speed);
   }
-  FV.shots = FV.shots.filter((s) => {
-    if (FV.clock < s.t0 + s.dur) return true;
-    burst(s.to.x, s.to.y, 3, [s.col, "#ffffff"], { speed: 22, ttl: 0.25 });
-    return false;
-  });
-  FV.flashes = FV.flashes.filter((fl) => FV.clock < fl.t0 + 10);
-  FV.pops = FV.pops.filter((p) => FV.clock < p.t0 + 16);
+  stepShown(c);
+  FV.flashes = FV.flashes.filter((fl) => c < fl.t0 + 10);
+  FV.signs = FV.signs.filter((p) => c < p.t0 + 16);
 }
 
-function drawShot(g: Ctx, s: Shot): void {
-  const now = moveAt(s, FV.clock);
-  const k = now.k;
-  const x = Math.round(V.bx + now.x);
-  const y = Math.round(V.by + now.y - now.lift);
-  switch (s.look) {
-    case "seed":
-      R(g, x - 1, y, 3, 2, INK);
-      R(g, x, y, 1, 1, EARTH[2]);
-      break;
-    case "pebble":
-      R(g, x - 1, y - 1, 4, 4, INK);
-      R(g, x, y, 2, 2, STONE[2]);
-      R(g, x, y, 1, 1, STONE[3]);
-      break;
-    case "cone":
-      R(g, x - 2, y - 2, 5, 6, INK);
-      R(g, x - 1, y - 1, 3, 4, "#6f3826");
-      R(g, x - 1, y - 1, 1, 1, "#a35d3b");
-      R(g, x + 1, y + 1, 1, 1, "#542a1f");
-      break;
-    case "beam": {
-      for (let i = 0; i < 5; i++) {
-        const j = clamp(k - i * 0.07, 0, 1);
-        const bx = Math.round(V.bx + lerp(s.from.x, s.to.x, j));
-        const by = Math.round(V.by + lerp(s.from.y, s.to.y, j));
-        g.globalAlpha = 1 - i * 0.18;
-        R(g, bx - 1, by - 1, 2, 2, i === 0 ? "#ffffff" : GOLD[2]);
-      }
-      g.globalAlpha = 1;
-      break;
-    }
-    case "cushion":
-      R(g, x - 3, y - 2, 7, 5, INK);
-      R(g, x - 2, y - 1, 5, 3, CREAM);
-      R(g, x, y, 1, 1, "#cbb894");
-      break;
-    case "tea":
-      R(g, x - 2, y - 1, 6, 5, INK);
-      R(g, x - 1, y, 3, 3, CREAM);
-      R(g, x + 2, y + 1, 1, 1, CREAM);
-      R(g, x, y - 3, 1, 1, "#ffffff");
-      break;
-    case "plaster":
-      R(g, x - 3, y - 1, 7, 3, INK);
-      R(g, x - 2, y, 5, 1, "#e9d8b8");
-      R(g, x, y, 1, 1, "#cbb894");
-      break;
-    case "drop":
-      R(g, x - 2, y - 3, 5, 7, INK);
-      R(g, x - 1, y - 1, 3, 4, WATER[2]);
-      R(g, x, y - 2, 1, 1, WATER[2]);
-      R(g, x - 1, y - 1, 1, 2, WATER[3]);
-      break;
-    case "dust":
-      for (let i = 0; i < 5; i++) {
-        R(
-          g,
-          x + Math.round(Math.sin(FV.clock * 2 + i * 2) * 3),
-          y + Math.round(Math.cos(FV.clock * 1.7 + i) * 2),
-          1,
-          1,
-          i % 2 ? CREAM : WATER[3],
-        );
-      }
-      break;
-    case "gust":
-      for (let i = 0; i < 6; i++) {
-        const a = FV.clock * 0.9 + i;
-        R(g, x + Math.round(Math.cos(a) * 3), y + Math.round(Math.sin(a) * 2), 1, 1, i % 2 ? "#ffffff" : WATER[3]);
-      }
-      break;
-    case "pellet":
-      R(g, x - 1, y - 1, 3, 3, INK);
-      R(g, x, y, 1, 1, s.col);
-      break;
-  }
+/** How far the board is bumped just now by a big moment: down, up, and settling, in whole pixels. */
+export function fightBump(): Pt {
+  const d = clockNow() - FV.bump.at;
+  if (!FV.pb || FV.bump.px === 0 || d < 0 || d >= 6) return { x: 0, y: 0 };
+  const k = Math.round(FV.bump.px * (1 - d / 6));
+  return { x: 0, y: Math.floor(d) % 2 === 0 ? k : -Math.ceil(k / 2) };
 }
 
 /** What is on, or wrong with, a figure, drawn round it. */
 function drawStatus(g: Ctx, a: Actor, x: number, y: number, tall: number, tick: number): void {
   const u = a.unit;
-  const c = FV.clock;
+  const c = clockNow();
   /** Just clear of its sides. */
   const half = Math.max(8, Math.round(framesOf(u.kind).wide / 2) + 2);
   if (u.shield > 0) {
@@ -772,7 +224,7 @@ function drawStatus(g: Ctx, a: Actor, x: number, y: number, tall: number, tick: 
     R(g, x + half - 2, top + 1, 1, 1, WATER[3]);
     R(g, x - half, top + 2, 1, tall, WATER[3]);
     R(g, x + half - 1, top + 2, 1, tall, WATER[3]);
-    R(g, x - half + 3, top + 1, 3, 1, "#ffffff");
+    R(g, x - half + 3, top + 1, 3, 1, CREAM);
     g.globalAlpha = 1;
   }
   if (u.burnUntil > tick) {
@@ -829,18 +281,80 @@ function drawBars(g: Ctx, a: Actor, x: number, y: number): void {
   const hp = Math.round(clamp(a.hpShown / u.maxHp, 0, 1) * w);
   R(g, left, top, hp, 2, u.side === 0 ? GREEN[4] : "#e67967");
   R(g, left, top, hp, 1, u.side === 0 ? "#c9ef9a" : "#f4a08c");
-  if (u.shield > 0) R(g, left, top, Math.max(1, Math.round(clamp(u.shield / u.maxHp, 0, 1) * w)), 1, "#ffffff");
+  if (u.shield > 0) R(g, left, top, Math.max(1, Math.round(clamp(u.shield / u.maxHp, 0, 1) * w)), 1, CREAM);
   if (u.manaFull > 0) {
     R(g, left, top + 3, w, 1, "#211228");
     R(g, left, top + 3, Math.round(clamp(u.mana / u.manaFull, 0, 1) * w), 1, WATER[3]);
   }
 }
 
+/** Gone to ground: a mound of earth where it went under. */
+function drawMound(g: Ctx, x: number, y: number): void {
+  R(g, x - 6, y - 1, 12, 3, INK);
+  R(g, x - 5, y - 2, 10, 3, EARTH[1]);
+  R(g, x - 3, y - 3, 6, 1, EARTH[2]);
+  R(g, x - 4, y - 1, 2, 1, EARTH[0]);
+}
+
+/** One figure in the fight as it stands on the table now, if it is on it. */
+function standing(g: Ctx, a: Actor, c: number, tick: number): Standing | null {
+  const u = a.unit;
+  if (c < a.bornAt || a.gone) return null;
+  const p = poseOf(a, c);
+  const down = c >= a.fallAt;
+  const hidden = u.alive && u.hiddenUntil > tick;
+  const sunk = a.move?.under === true && Math.abs(moveAt(a.move, c).k - 0.5) < 0.35;
+  // While the halves are still apart, the far party stands back with its half.
+  const back = u.side === 1 ? Math.round(V.gap) : 0;
+  const shine = shineOf(u.kind, u.items, a.x, V.t);
+  const x = Math.round(V.bx + a.x + p.dx);
+  const ground = Math.round(V.by + a.y + p.dy - back);
+  const y = Math.round(ground - p.lift - shine.hop);
+  const hover = down ? 0 : hoverAt(u.kind, V.t, a.phase);
+  const left = p.flip ? !a.left : a.left;
+  return {
+    x: a.x,
+    y: a.y - back,
+    draw: () => {
+      if (hidden || sunk) return drawMound(g, x, ground);
+      // Off the ground, its shadow stays on it.
+      if (p.lift > 2) {
+        g.fillStyle = "rgba(26,15,30,0.3)";
+        g.fillRect(x - 6, ground - 1, 12, 2);
+      }
+      g.globalAlpha = p.alpha * (shine.dim ? DIM : 1);
+      // The member's figures stand on the bases they chose; the forest's, and what is summoned, on plain ones.
+      drawStanding(g, u.kind, x, y, u.side === 0 ? FV.bases : "plain", {
+        hover: hover + p.rise,
+        pose: p.cast ? "cast" : "idle",
+        beat: beatAt(V.t, a.phase),
+        left,
+        flash: p.tint === "flash",
+        hurt: p.tint === "hurt",
+        lit: shine.lit,
+        bend: { sx: p.sx, sy: p.sy, lean: left ? -p.lean : p.lean, turn: p.turn },
+      });
+      // What it holds follows it about, under its health bar, and falls with it.
+      if (u.alive && !down) drawHeld(g, heldRow(u.items, x - V.bx, heldTop(y - V.by, true)), V.bx, V.by);
+      g.globalAlpha = 1;
+    },
+    top: () => {
+      if (down || !u.alive || hidden || sunk) return;
+      // Over the figure's head as it is drawn now: casting, some rear up taller than they stand.
+      const f = framesOf(u.kind);
+      const tall = (p.cast ? Math.max(f.tall, f.castTall) : f.tall) + Math.max(0, p.sy);
+      drawStatus(g, a, x, y - hover, tall, tick);
+      if (u.stars > 1) drawStars(g, u.stars, x, y - 3 - hover - tall);
+      drawBars(g, a, x, y);
+    },
+  };
+}
+
 /** Adds everyone in the fight to the list of things standing on the table. */
 export function drawFight(g: Ctx, list: Standing[]): void {
-  const f = FV.fight;
-  if (!f) return;
-  const c = FV.clock;
+  const pb = FV.pb;
+  if (!pb) return;
+  const c = pb.clock;
   // Dusk falling over the table itself; the figures stay lit.
   if (FV.dusk > 0) {
     g.fillStyle = `rgba(32,14,50,${Math.min(0.5, 0.14 + FV.dusk * 0.03)})`;
@@ -855,96 +369,19 @@ export function drawFight(g: Ctx, list: Standing[]): void {
   }
   g.globalAlpha = 1;
   for (const a of FV.actors) {
-    const u = a.unit;
-    if (c < a.bornAt) continue;
-    const fallen = a.down ? c - a.fallAt : -1;
-    if (fallen > 22) continue;
-    const frames = framesOf(u.kind);
-    const hidden = u.alive && u.hiddenUntil > f.tick;
-    // While the halves are still apart, the far party stands back with its half.
-    const back = u.side === 1 ? Math.round(V.gap) : 0;
-    let lift = 0;
-    let sunk = false;
-    if (a.move) {
-      const now = moveAt(a.move, c);
-      lift = now.lift;
-      sunk = a.move.under && now.k > 0.15 && now.k < 0.85;
-    }
-    const born = c - a.bornAt;
-    if (born >= 0 && born < 4) lift += (4 - born) * 2;
-    const hopped = c - a.hopAt;
-    if (hopped >= 0 && hopped < 6) lift += Math.sin((hopped / 6) * Math.PI) * 5;
-    let dx = 0;
-    let dy = 0;
-    const lunged = c - a.lungeAt;
-    if (lunged >= 0 && lunged < 5) {
-      const k = lunged < 2 ? lunged / 2 : 1 - (lunged - 2) / 3;
-      dx += a.lx * k;
-      dy += a.ly * k;
-    }
-    const hurt = c - a.hurtAt;
-    if (hurt >= 0 && hurt < 4) {
-      const k = 1 - hurt / 4;
-      dx += a.hx * k;
-      dy += a.hy * k;
-    }
-    const shine = shineOf(u.kind, u.items, a.x, V.t);
-    const x = Math.round(V.bx + a.x + dx);
-    const y = Math.round(V.by + a.y + dy - back - lift - shine.hop);
-    const hover = fallen < 0 ? hoverAt(u.kind, V.t, a.phase) : 0;
-    const beat = beatAt(V.t, a.phase);
-    list.push({
-      x: a.x,
-      y: a.y - back + (fallen >= 0 ? -6 : 0),
-      draw: () => {
-        if (hidden || sunk) {
-          // Gone to ground: a mound of earth where it went under.
-          R(g, x - 6, y - 1, 12, 3, INK);
-          R(g, x - 5, y - 2, 10, 3, EARTH[1]);
-          R(g, x - 3, y - 3, 6, 1, EARTH[2]);
-          R(g, x - 4, y - 1, 2, 1, EARTH[0]);
-          return;
-        }
-        if (fallen >= 0) {
-          g.globalAlpha = clamp(1 - (fallen - 10) / 12, 0, 1);
-          drawFigure(g, u.kind, x, y, { pose: "fallen", left: a.left });
-          g.globalAlpha = 1;
-          return;
-        }
-        if (shine.dim) g.globalAlpha = DIM;
-        // The member's figures stand on the bases they chose; the forest's, and what is summoned, on plain ones.
-        drawStanding(g, u.kind, x, y, u.side === 0 ? FV.bases : "plain", {
-          hover,
-          pose: c < a.castUntil ? "cast" : "idle",
-          beat,
-          left: a.left,
-          flash: c - a.flashAt >= 0 && c - a.flashAt < 1.5,
-          lit: shine.lit,
-        });
-        // What it holds follows it about, under its health bar, and falls with it.
-        if (u.alive) drawHeld(g, heldRow(u.items, x - V.bx, heldTop(y - V.by, true)), V.bx, V.by);
-        g.globalAlpha = 1;
-      },
-      top: () => {
-        if (fallen >= 0 || !u.alive) return;
-        if (hidden || sunk) return;
-        // Over the figure's head as it is drawn now: casting, some rear up taller than they stand.
-        const tall = c < a.castUntil ? Math.max(frames.tall, frames.castTall) : frames.tall;
-        drawStatus(g, a, x, y - hover, tall, f.tick);
-        if (u.stars > 1) drawStars(g, u.stars, x, y - 3 - hover - tall);
-        drawBars(g, a, x, y);
-      },
-    });
+    const s = a ? standing(g, a, c, pb.fight.tick) : null;
+    if (s) list.push(s);
   }
 }
 
 /** What flies over the board, and the small signs that pop over a figure. Drawn after everyone standing. */
 export function drawFightAir(g: Ctx): void {
-  for (const s of FV.shots) drawShot(g, s);
-  for (const p of FV.pops) {
+  const c = clockNow();
+  for (const s of FV.shots) drawShot(g, s, c);
+  for (const p of FV.signs) {
     const a = FV.actors[p.id];
     if (!a) continue;
-    const k = (FV.clock - p.t0) / 16;
+    const k = (c - p.t0) / 16;
     const rise = Math.round((1 - (1 - k) * (1 - k)) * 6);
     g.globalAlpha = clamp((1 - k) * 3, 0, 1);
     g.drawImage(
@@ -958,11 +395,11 @@ export function drawFightAir(g: Ctx): void {
 
 /** The item a figure in the fight holds under a point measured from the board's corner. */
 export function fightHeldUnder(x: number, y: number): HeldAt | null {
-  const f = FV.fight;
+  const f = FV.pb?.fight;
   if (!f) return null;
   for (const a of FV.actors) {
-    const u = a.unit;
-    if (!u.alive || FV.clock < a.bornAt || u.hiddenUntil > f.tick) continue;
+    const u = a?.unit;
+    if (!a || !u?.alive || clockNow() < a.bornAt || u.hiddenUntil > f.tick) continue;
     const back = u.side === 1 ? Math.round(V.gap) : 0;
     const hit = heldAt(heldRow(u.items, a.x, heldTop(a.y - back, true)), x, y);
     if (hit) return hit;
@@ -974,7 +411,7 @@ export function fightHeldUnder(x: number, y: number): HeldAt | null {
 export function unitUnder(x: number, y: number): { unit: Unit; x: number; y: number } | null {
   let best: Actor | null = null;
   for (const a of FV.actors) {
-    if (!a.unit.alive || FV.clock < a.bornAt) continue;
+    if (!a?.unit.alive || clockNow() < a.bornAt) continue;
     const f = framesOf(a.unit.kind);
     const half = Math.max(7, f.wide / 2);
     if (x < a.x - half || x > a.x + half || y > a.y + 4 || y < a.y - f.tall - 2) continue;

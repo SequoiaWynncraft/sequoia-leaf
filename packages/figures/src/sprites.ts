@@ -1,14 +1,15 @@
 /**
  * The figures as pictures ready to draw: each one's typed rows baked once into small canvases
- * (standing, breathing in, using its ability, tipped over, a pale flash for being hit, a dark
- * outline for one not opened yet), all with the one-pixel dark edge, facing right and facing left.
+ * (standing, breathing in, using its ability, tipped over, a pale flash and a sore edge for being
+ * hit, a dark outline for one not opened yet), all with the one-pixel dark edge, facing right and
+ * facing left. A fight bends them as they move (`Bend`): squashed, stretched, leaned and turned.
  * Also the bases they stand on and the stars over their heads.
  *
  * A banner's member has no typed rows: it is a person, drawn as the town draws one (the kit's
  * `skin.ts`), in the same pictures as everyone else here (`person`), from whoever it is said to be
  * (`wear`), and until then nobody yet. It is called by that member's name (`nameOf`).
  */
-import { GOLD, GREEN, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
+import { CORAL, GOLD, GREEN, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, flipped, outlined, rgb } from "@sequoia-leaf/kit/pix.ts";
 import { bake as walking, type Body, type Dir, FOOT_Y, FRAME_W, NOBODY, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
@@ -33,6 +34,8 @@ export interface Frames {
   readonly cast: HTMLCanvasElement;
   readonly fallen: HTMLCanvasElement;
   readonly flash: HTMLCanvasElement;
+  /** Its edge in the sore colour of a figure just hit. */
+  readonly hurt: HTMLCanvasElement;
   readonly dark: HTMLCanvasElement;
   /** The size of a standing picture, and the pixel in it that stands on the figure's spot. */
   readonly w: number;
@@ -75,6 +78,28 @@ function tinted(src: HTMLCanvasElement, colour: string): HTMLCanvasElement {
     img.data[i + 1] = gg;
     img.data[i + 2] = b;
     img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
+/** The same picture with its edge (every solid pixel beside a clear one) in another colour. */
+function reEdged(src: HTMLCanvasElement, colour: string): HTMLCanvasElement {
+  const { c, g } = makeCanvas(src.width, src.height);
+  g.drawImage(src, 0, 0);
+  const img = g.getImageData(0, 0, c.width, c.height);
+  const solid = (x: number, y: number): boolean =>
+    x >= 0 && y >= 0 && x < c.width && y < c.height && (img.data[(y * c.width + x) * 4 + 3] ?? 0) >= 40;
+  const [r, gg, b] = rgb(colour);
+  const edge: number[] = [];
+  for (let y = 0; y < c.height; y++)
+    for (let x = 0; x < c.width; x++)
+      if (solid(x, y) && !(solid(x - 1, y) && solid(x + 1, y) && solid(x, y - 1) && solid(x, y + 1)))
+        edge.push((y * c.width + x) * 4);
+  for (const i of edge) {
+    img.data[i] = r;
+    img.data[i + 1] = gg;
+    img.data[i + 2] = b;
   }
   g.putImageData(img, 0, 0);
   return c;
@@ -127,6 +152,7 @@ function person(body: Body): { right: Frames; left: Frames } {
       cast: cut(dir, 1),
       fallen: tipped(a, left),
       flash: tinted(a, FLASH),
+      hurt: reEdged(a, CORAL),
       dark: tinted(a, SKY[0]),
       w: PERSON.w,
       h: PERSON.h,
@@ -175,6 +201,7 @@ function bake(kind: UnitKind): { right: Frames; left: Frames } {
     idle: [idleA, edged(plain(lists.b))] as const,
     cast: edged(plain(lists.cast)),
     flash: tinted(idleA, FLASH),
+    hurt: reEdged(idleA, CORAL),
     dark: outlined(tinted(a, SKY[0]), SKY[2]),
     w: w + 2,
     h: h + 2,
@@ -193,6 +220,7 @@ function bake(kind: UnitKind): { right: Frames; left: Frames } {
     idle: [flipped(base.idle[0]), flipped(base.idle[1])],
     cast: flipped(base.cast),
     flash: flipped(base.flash),
+    hurt: flipped(base.hurt),
     dark: flipped(base.dark),
     ax: base.w - base.ax,
     fallen: tipped(flipped(idleA), true),
@@ -222,13 +250,27 @@ export const beatAt = (t: number, phase = 0): 0 | 1 => (Math.floor(t * 1.7 + pha
 export const hoverAt = (kind: UnitKind, t: number, phase = 0): number =>
   framesOf(kind).flies ? 2 + Math.round(Math.sin(t * 4 + phase * 6)) : 0;
 
+/**
+ * A figure bent as it moves, in whole pixels: wider and taller than its picture (less for negative
+ * numbers), its feet kept where they are; its top leaned `lean` pixels to the right (rows slide
+ * over, the lower less); turned about its feet by `turn`.
+ */
+export interface Bend {
+  readonly sx: number;
+  readonly sy: number;
+  readonly lean: number;
+  readonly turn: number;
+}
+
 export interface Shown {
   pose?: Pose;
   /** Which of the two standing pictures. */
   beat?: 0 | 1;
   left?: boolean;
-  /** Drawn as a pale flash, for the moment it is hit. */
+  /** Drawn as a pale flash, for the moment it is hit, or in the sore colour just after. */
   flash?: boolean;
+  hurt?: boolean;
+  bend?: Bend;
   /** Drawn as a dark outline: one not opened yet. */
   dark?: boolean;
   /** With a gold outline round it: one of the trait that is lit. */
@@ -247,6 +289,22 @@ function gilded(pic: HTMLCanvasElement): HTMLCanvasElement {
   return c;
 }
 
+/** Draws a picture whose feet are `ax`, `ay` in it at `px`, `py`, bent if it is. */
+function place(g: Ctx, pic: HTMLCanvasElement, px: number, py: number, ax: number, ay: number, b?: Bend): void {
+  if (!b || (b.sx === 0 && b.sy === 0 && b.lean === 0 && b.turn === 0)) {
+    g.drawImage(pic, px - ax, py - ay);
+    return;
+  }
+  g.save();
+  g.translate(px, py);
+  if (b.turn !== 0) g.rotate(b.turn);
+  if (b.lean !== 0) g.transform(1, 0, -b.lean / Math.max(4, ay), 1, 0, 0);
+  const w = Math.max(1, pic.width + b.sx);
+  const h = Math.max(1, pic.height + b.sy);
+  g.drawImage(pic, -Math.round((ax * w) / pic.width), -Math.round((ay * h) / pic.height), w, h);
+  g.restore();
+}
+
 /** Draws a figure with its feet at `x`, `y`. */
 export function drawFigure(g: Ctx, kind: UnitKind, x: number, y: number, o: Shown = {}): void {
   const f = framesOf(kind, o.left);
@@ -256,9 +314,17 @@ export function drawFigure(g: Ctx, kind: UnitKind, x: number, y: number, o: Show
   if (o.pose === "fallen") {
     g.drawImage(f.fallen, px - Math.round(f.fallen.width / 2), py - f.fallen.height + 2);
   } else {
-    const pic = o.dark ? f.dark : o.flash ? f.flash : o.pose === "cast" ? f.cast : f.idle[o.beat ?? 0];
-    if (o.lit) g.drawImage(gilded(pic), px - f.ax - 1, py - f.ay - 1);
-    else g.drawImage(pic, px - f.ax, py - f.ay);
+    const pic = o.dark
+      ? f.dark
+      : o.flash
+        ? f.flash
+        : o.hurt
+          ? f.hurt
+          : o.pose === "cast"
+            ? f.cast
+            : f.idle[o.beat ?? 0];
+    if (o.lit) place(g, gilded(pic), px, py, f.ax + 1, f.ay + 1, o.bend);
+    else place(g, pic, px, py, f.ax, f.ay, o.bend);
   }
   if (o.alpha !== undefined) g.globalAlpha = 1;
 }

@@ -28,9 +28,11 @@ import {
   SENSIBLE,
   type TableView,
 } from "@sequoia-leaf/raid";
+import { isUnitKind, specOf } from "@sequoia-leaf/raid/content/figures.ts";
+import { COLS } from "@sequoia-leaf/raid/hex.ts";
 
-import { fightEvents, fightState } from "../src/screen/fightview.ts";
-import { carryOn, enterRun, lookBack, setOut, startNew, toFront } from "../src/screen/flow.ts";
+import { fightEvents, fightState, startFight } from "../src/screen/fightview.ts";
+import { carryOn, doSpeed, enterRun, lookBack, setOut, startNew, toFront } from "../src/screen/flow.ts";
 import { grab, hover, tapPawn, unpick } from "../src/screen/hand.ts";
 import { heldRow, heldTop } from "../src/screen/held.ts";
 import { NUDGES } from "../src/screen/logic.ts";
@@ -83,6 +85,17 @@ export interface Handle {
   busy(most?: number): string;
   /** Moves a fight on until a figure of a kind has used its ability (or a number of steps has passed). */
   casts(kind: string, most?: number): string;
+  /**
+   * For looking at a fight: plays one on the table between two parties of the figures named, seated
+   * by their reach, at some stars, from a seed. Nothing is sent to Leaf; the table must be planning.
+   */
+  watch(ours: string[], theirs: string[], stars?: 1 | 2 | 3, seed?: number): string;
+  /** Runs a fight on until a figure of a kind uses its ability (or something of a sort happens: "swing", "fall"), and gives back the fight's clock then (-1 if it never does). */
+  when(kind: string): number;
+  /** Runs the stage's clock on in sixtieths of a second until a fight's clock has reached a step (hit-stops and all). */
+  until(step: number): string;
+  /** Watches fights at 1x, 2x or 4x, as the buttons do. */
+  speed(s: 1 | 2 | 4): void;
   /** Counts every first-time nudge as given, so that none shows. */
   taught(): void;
   /** Stops the stage's clock, so that only `skip` and `tick` move it; and runs it on by hand. */
@@ -327,6 +340,32 @@ export function openHandle(): void {
       stage.skip(3 / (HZ * S.prefs.speed));
       return `${fightState().tick}: ${cast() ? "cast" : "no cast"}`;
     },
+    watch(ours, theirs, stars = 1, seed = 1) {
+      if (S.screen.at !== "plan") return "not planning";
+      const seated = (kinds: string[]) => {
+        const used = new Map<number, number>();
+        return kinds.filter(isUnitKind).map((kind) => {
+          const range = specOf(kind).range;
+          const row = range <= 1 ? 0 : range === 2 ? 1 : 3;
+          const col = used.get(row) ?? 0;
+          used.set(row, col + 1);
+          return { kind, stars, seat: row * COLS + ([3, 2, 4, 1, 5, 0, 6][col % COLS] ?? 0), items: [], fed: 0 };
+        });
+      };
+      const party = (kinds: string[]) => ({ who: "watched", title: "", figures: seated(kinds), boons: [], might: 100 });
+      startFight({ seed, sides: [party(ours), party(theirs)] }, S.prefs.speed, S.looks.bases, () => undefined);
+      return "watching";
+    },
+    when(kind) {
+      const cast = (): boolean => fightEvents().some((ev) => ev.t === kind || (ev.t === "cast" && ev.kind === kind));
+      for (let i = 0; i < 20_000 && !cast() && !fightState().over; i++) stage.skip(1 / 60);
+      return cast() ? Math.floor(fightState().clock) : -1;
+    },
+    until(step) {
+      for (let i = 0; i < 20_000 && fightState().clock < step && !fightState().over; i++) stage.skip(1 / 60);
+      return `${fightState().stage} ${fightState().clock.toFixed(1)}`;
+    },
+    speed: doSpeed,
     taught() {
       for (const id of NUDGES) if (!S.prefs.taught.includes(id)) S.prefs.taught.push(id);
       prefsChanged();

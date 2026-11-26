@@ -108,10 +108,19 @@ kit's card: "The table needs the guild's server."
   for boons. What is taken flies to where it lives.
 - **The fight.** Played from the rules' own steps at 1x, 2x or 4x, or skipped to its end. The two
   halves of the board slide together with a clack, traits switch on one after another, late crabs
-  turn up and Sneaks leap; then each thing the rules say happened is shown on the board: things
-  thrown fly (a seed, a pebble, a cone, a cup of tea), the hexes an ability covers light outward
-  from the caster, shields settle, burns lick, the stunned see stars, heals rise as motes, numbers
-  rise from whoever is hit. The lower panel is the tally meanwhile: "You" on the left and the other
+  turn up and Sneaks leap; then each thing the rules say happened is shown on the board, at the
+  step the rules say: things thrown fly (an attack throws a small thing of the thrower's colour, an
+  ability its own: a seed, a pebble, a cone, a cup of tea), the hexes an ability covers light
+  outward from the caster, shields settle, burns lick, the stunned see stars, heals rise as motes,
+  numbers rise from whoever is hit. The table looks a few steps ahead, so each blow has its lead-in:
+  a figure draws back and lunges so that the blow peaks as its number shows, winds up before its
+  ability goes off (each in a way of its own, with light gathering in), and sets off on a leap so
+  that it comes down as its damage does. Each ability leaves its own mark and has its own sound.
+  Figures squash and stretch as they hop, walk, land and are hit, take a sore edge when hit, and
+  tumble off their base and go in a puff of their own when they fall. A hard hit, an ability that
+  hits two or more and a fall hold the fight's clock a moment, and the big moments bump the board
+  on the stump; both less at 2x, almost not at 4x, and no bump for a player whose system asks for
+  less motion. The lower panel is the tally meanwhile: "You" on the left and the other
   party on the right, a row for each figure (its small picture, its name, a bar and a number), sorted
   by the tab chosen and sliding into new places as that changes, six to a side and more scrolling.
   **Damage** draws each bar in physical coral, magic rose and true cream; **Tanked** in what got
@@ -213,46 +222,56 @@ arrangement for a wide window and another for a phone held upright.
 The clock only moves in the stage's `tick`, and a fight's clock is counted from it, so everything
 timed can be stepped by hand.
 
-| File                          | What it holds                                                                                    |
-| ----------------------------- | ------------------------------------------------------------------------------------------------ |
-| `src/main.ts`                 | Puts the parts together; speaks to the town                                                      |
-| `@sequoia-leaf/raid`          | The rules, and the table as Leaf plays it (`packages/raid`, with its README)                     |
-| `src/screen/state.ts`         | The page's copy of Leaf's table; every move is a command (`doNow`, `ask`); `go` moves the screen |
-| `src/screen/screen.ts`        | What the table is showing, as one value, and the one function that moves it on                   |
-| `src/screen/flow.ts`          | Acts out each move of the screen: sitting down, the fight, counting out the takings, the end     |
-| `src/screen/stage.ts`         | The canvases, the size of an art pixel, where the board sits, the clock                          |
-| `src/screen/geometry.ts`      | Where hexes, seats and bench hollows are, and which is under a point                             |
-| `src/screen/scene.ts`         | Drawing a frame: the board, lit hexes, who is waiting across it, the party, the fight            |
-| `src/screen/pawns.ts`         | The party's figures on board and bench; buying, selling and three-become-one acted out           |
-| `src/screen/hand.ts`          | Dragging and tapping, and asking what a thing is                                                 |
-| `src/screen/light.ts`         | Which trait is lit (pointed at, or clicked and kept), and how that shows on a figure             |
-| `src/screen/rich.ts`          | The words on a card sorted for colouring: numbers, heals and shields, kinds of damage            |
-| `src/screen/fightview.ts`     | The fight played from the rules' events                                                          |
-| `src/screen/fx.ts`            | Sparks, rings, rising words, things that fly, "in a moment"                                      |
-| `src/screen/logic.ts`         | Small questions asked of a run: where a figure may go, what an item would make, the next nudge   |
-| `src/screen/making.ts`        | Items: who on the board wants one, what a figure's card offers, what letting go would do         |
-| `src/screen/keep.ts`          | The view settings kept in the browser                                                            |
-| `src/screen/sounds.ts`        | The table's sounds, made from the kit's tones                                                    |
-| `src/screen/signals.ts`       | Small happenings more than one part answers: an acorn landing, a star                            |
-| `@sequoia-leaf/figures`       | The figures' pictures, which the town draws too (`packages/figures`, with its README)            |
-| `src/screen/art/icons.ts`     | A small picture for every trait, item, boon, kind of room and button, typed in `icons.txt`       |
-| `src/screen/art/table.ts`     | The painted table, the halves of the board, the looks                                            |
-| `src/screen/art/pal.ts`       | A colour for each trait                                                                          |
-| `src/screen/ui/table.ts`      | The interface round the table: purse, track, traits, rack, stall, buttons, the fight's panel     |
-| `src/screen/ui/tally.ts`      | The tally as rows and bars, two parties side by side (one at a time on a phone), with its tabs   |
-| `src/screen/ui/fightsheet.ts` | The sheet of a fight that is over: after it with the takings and "Carry on", or "Last fight"     |
-| `src/screen/held.ts`          | What a figure holds: where the row of small pictures under its base goes, drawing it, hitting it |
-| `src/screen/ui/cards.ts`      | What each thing says about itself, registered with the kit's cards                               |
-| `src/screen/ui/refs.ts`       | The names things go by on a card: `piece:12`, `item:thorn@2`, `drop:2:rack:0`                    |
-| `src/screen/ui/suits.ts`      | Items on a figure's card, with their buttons; the small pictures of who wants an item            |
-| `src/screen/ui/drop.ts`       | The tip of an item in the hand, the rack's marks for the hand, an item made on the rack          |
-| `src/screen/ui/lit.ts`        | Which trait the cards have pointed at or pinned, and marking the chips and the stall for it      |
-| `src/screen/ui/picks.ts`      | Three cards to choose from                                                                       |
-| `src/screen/ui/pages.ts`      | The front page, the almanac, how to play, table looks, the end of a run                          |
-| `src/screen/ui/nudge.ts`      | The first-time nudges                                                                            |
+| File                          | What it holds                                                                                         |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `src/main.ts`                 | Puts the parts together; speaks to the town                                                           |
+| `@sequoia-leaf/raid`          | The rules, and the table as Leaf plays it (`packages/raid`, with its README)                          |
+| `src/screen/state.ts`         | The page's copy of Leaf's table; every move is a command (`doNow`, `ask`); `go` moves the screen      |
+| `src/screen/screen.ts`        | What the table is showing, as one value, and the one function that moves it on                        |
+| `src/screen/flow.ts`          | Acts out each move of the screen: sitting down, the fight, counting out the takings, the end          |
+| `src/screen/stage.ts`         | The canvases, the size of an art pixel, where the board sits, the clock                               |
+| `src/screen/geometry.ts`      | Where hexes, seats and bench hollows are, and which is under a point                                  |
+| `src/screen/scene.ts`         | Drawing a frame: the board, lit hexes, who is waiting across it, the party, the fight                 |
+| `src/screen/pawns.ts`         | The party's figures on board and bench; buying, selling and three-become-one acted out                |
+| `src/screen/hand.ts`          | Dragging and tapping, and asking what a thing is                                                      |
+| `src/screen/light.ts`         | Which trait is lit (pointed at, or clicked and kept), and how that shows on a figure                  |
+| `src/screen/rich.ts`          | The words on a card sorted for colouring: numbers, heals and shields, kinds of damage                 |
+| `src/screen/fightview.ts`     | The fight played on, and everyone in it drawn as they move, what flies, the health bars               |
+| `src/screen/playback.ts`      | The rules' fight stepped to the shown clock, a copy run ahead for lead-ins, the hit-stop, budgets     |
+| `src/screen/fightshow.ts`     | What each event looks like (a table by event), and the lead-in each blow gets                         |
+| `src/screen/looks.ts`         | Each ability's look and sound as a table: wind-up, body, what it throws, its mark, its weight         |
+| `src/screen/fightmarks.ts`    | Ground that slows or hurts, a line marked before it lands, a pull, a channel held in its pose         |
+| `src/screen/marks.ts`         | Things thrown, as they fly; each ability's mark; the puff a fallen figure goes in                     |
+| `src/screen/motion.ts`        | A figure's body at a moment: lunge, hurt, hop, walk, wind-up, tumble, as squash, lean and turn        |
+| `src/screen/board.ts`         | The fight on the table as it stands, which the three above keep                                       |
+| `src/screen/fx.ts`            | Sparks, light gathering, rings, small pictures, streaks, rising words, things that fly, "in a moment" |
+| `src/screen/logic.ts`         | Small questions asked of a run: where a figure may go, what an item would make, the next nudge        |
+| `src/screen/keep.ts`          | The view settings kept in the browser                                                                 |
+| `src/screen/sounds.ts`        | The table's sounds, made from the kit's tones                                                         |
+| `src/screen/signals.ts`       | Small happenings more than one part answers: an acorn landing, a star                                 |
+| `@sequoia-leaf/figures`       | The figures' pictures, which the town draws too (`packages/figures`, with its README)                 |
+| `src/screen/art/icons.ts`     | A small picture for every trait, item, boon, kind of room and button, typed in `icons.txt`            |
+| `src/screen/art/table.ts`     | The painted table, the halves of the board, the looks                                                 |
+| `src/screen/art/pal.ts`       | A colour for each trait                                                                               |
+| `src/screen/ui/table.ts`      | The interface round the table: purse, track, traits, rack, stall, buttons, the fight's panel          |
+| `src/screen/ui/tally.ts`      | The tally as rows and bars, two parties side by side (one at a time on a phone), with its tabs        |
+| `src/screen/ui/fightsheet.ts` | The sheet of a fight that is over: after it with the takings and "Carry on", or "Last fight"          |
+| `src/screen/held.ts`          | What a figure holds: where the row of small pictures under its base goes, drawing it, hitting it      |
+| `src/screen/ui/cards.ts`      | What each thing says about itself, registered with the kit's cards, and the references to them        |
+| `src/screen/ui/lit.ts`        | Which trait the cards have pointed at or pinned, and marking the chips and the stall for it           |
+| `src/screen/ui/picks.ts`      | Three cards to choose from                                                                            |
+| `src/screen/ui/pages.ts`      | The front page, the almanac, how to play, table looks, the end of a run                               |
+| `src/screen/ui/nudge.ts`      | The first-time nudges                                                                                 |
 
-`geometry.ts`, `gesture.ts`, `logic.ts`, `making.ts`, `keep.ts`, `light.ts` and `rich.ts` have tests
-beside them.
+`geometry.ts`, `logic.ts`, `keep.ts`, `light.ts`, `rich.ts` and `playback.ts` have tests beside them;
+`playback.test.ts` holds that the fight on the table, lead-ins, hit-stops and all, is the rules'
+own, event for event, to the same end, at every speed.
+
+Everything in a fight counts the fight's clock (the sparks too, through `fx.ts`'s `pace`), so 2x
+and 4x speed it all up alike and a hit-stop holds it all. An ability's look is its entry in
+`looks.ts` and, for its mark, in `MARKS` (`marks.ts`): a richer one is a mark of several layers
+(pictures from `ROWS`, rings, bursts, streaks, as long as it likes) and its own `bump` and `stop`
+in its look.
 
 ## Looking at it from outside
 
@@ -275,7 +294,10 @@ and `rack()` and `held()` what is on the rack and in every hand; `page(id)` open
 `arrive()` has whoever is waiting walk in again; `taught()` counts every nudge as given; `state()`
 says where things stand (the Coins too); `bench()` times a frame; `carry()` presses "Carry on",
 `last()` opens or puts away "Last fight", and `tally(measure, side)` chooses a tab of the tally and,
-on a phone, a party. `copy()` is the page's own copy of the run and `leaf()` the copy of Leaf's
+on a phone, a party. `watch(ours, theirs, stars, seed)` plays a fight of the figures named on the
+table while planning (nothing goes to Leaf), `when(kind)` runs it on until a figure of that kind
+uses its ability (or an event of that sort happens: `"swing"`, `"fall"`) and says the fight's clock
+then, `until(step)` runs it on to a step, and `speed(s)` watches at 1x, 2x or 4x. `copy()` is the page's own copy of the run and `leaf()` the copy of Leaf's
 table it draws from, to change by hand and see Leaf's next answer put it back; `redraw()` draws the
 table from them.
 

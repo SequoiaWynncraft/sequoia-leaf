@@ -5,6 +5,8 @@
  */
 import { heard, noise, note, penta, sfx, type SoundKind, tone } from "@sequoia-leaf/kit/sound.ts";
 
+import type { Voice } from "./looks.ts";
+
 /** The kinds of the table's own sounds, by id: each one the player can switch off on its own. */
 const RAID = {
   shop: "raid.shop",
@@ -162,14 +164,14 @@ export const snd = {
     if (!heard(RAID.fights)) return;
     if (may("slip", 90)) noise(0.09, 3000, { vol: 0.04, q: 0.8, slide: 0.5 });
   },
-  /** An ability: a rising breath, deeper for the dear ones. */
-  cast(weight: number): void {
+  /** An ability, in its own voice (`looks.ts`): a note in its timbre, a second note after it, a breath of noise. */
+  ability(v: Voice): void {
     if (!heard(RAID.fights)) return;
     if (!may("cast", 80)) return;
-    const base = note(12 - weight * 3);
-    tone(base, 0.22, { vol: 0.1, type: "triangle", slide: 1.5 });
-    noise(0.2, 1200, { vol: 0.05, q: 0.8, slide: 3 });
-    tone(base * 2, 0.3, { vol: 0.05, type: "sine", at: 0.12 });
+    const vol = v.vol ?? 0.09;
+    tone(note(v.n), 0.22, { vol, type: v.wave, slide: v.slide ?? 1.4 });
+    if (v.two !== undefined) tone(note(v.n + v.two), 0.26, { vol: vol * 0.7, type: "sine", at: 0.1 });
+    if (v.hiss !== undefined) noise(0.18, v.hiss, { vol: vol * 0.55, q: 0.9 });
   },
   heal(): void {
     if (!heard(RAID.fights)) return;

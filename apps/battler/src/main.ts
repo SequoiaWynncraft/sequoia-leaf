@@ -18,7 +18,8 @@ import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
 import type { RaidNote } from "@sequoia-leaf/raid";
 
-import { onTraitWoke, stepFightView } from "./screen/fightview.ts";
+import { onTraitWoke } from "./screen/fightshow.ts";
+import { stepFightView } from "./screen/fightview.ts";
 import {
   carryOn,
   doHold,

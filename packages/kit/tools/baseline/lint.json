@@ -2,9 +2,7 @@
   "complexity": {
     "apps/api/src/play/service.ts": 53,
     "apps/battler/src/screen/art/table.ts": 75,
-    "apps/battler/src/screen/fightview.ts": 171,
     "apps/battler/src/screen/flow.ts": 30,
-    "apps/battler/src/screen/fx.ts": 17,
     "apps/battler/src/screen/hand.ts": 70,
     "apps/battler/src/screen/logic.ts": 27,
     "apps/battler/src/screen/pawns.ts": 35,
@@ -90,7 +88,6 @@
   },
   "max-lines": {
     "apps/api/src/play/service.ts": 622,
-    "apps/battler/src/screen/fightview.ts": 899,
     "apps/battler/src/screen/ui/pages.ts": 697,
     "apps/battler/src/screen/ui/table.ts": 540,
     "apps/town/src/campart.ts": 1389,
@@ -125,7 +122,6 @@
     "apps/api/src/quests/store.ts": 173,
     "apps/battler/src/main.ts": 97,
     "apps/battler/src/screen/art/table.ts": 168,
-    "apps/battler/src/screen/fightview.ts": 378,
     "apps/battler/src/screen/flow.ts": 91,
     "apps/battler/src/screen/ui/pages.ts": 282,
     "apps/battler/src/screen/ui/table.ts": 126,
@@ -163,7 +159,6 @@
   },
   "module-let": {
     "apps/battler/src/screen/art/table.ts": 2,
-    "apps/battler/src/screen/fightview.ts": 1,
     "apps/battler/src/screen/fx.ts": 1,
     "apps/battler/src/screen/hand.ts": 4,
     "apps/battler/src/screen/scene.ts": 4,
