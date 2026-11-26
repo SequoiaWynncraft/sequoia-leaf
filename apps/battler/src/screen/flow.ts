@@ -21,7 +21,7 @@ import { arrive, arrived, watchersCheer } from "./scene.ts";
 import { endedIn, type Playback, type Screen } from "./screen.ts";
 import { signal } from "./signals.ts";
 import { snd } from "./sounds.ts";
-import { boardSpot, dress } from "./stage.ts";
+import { boardSpot } from "./stage.ts";
 import { ask, changed, doNow, go, onScreen, prefsChanged, S, tableNow } from "./state.ts";
 import { acorns } from "./ui/cards.ts";
 import { closeSheet, openSheet, sheetTaking, sheetUp, type Taking } from "./ui/fightsheet.ts";
@@ -138,7 +138,6 @@ function acted(before: Screen, now: Screen): void {
     forgetTable();
     clearPawns();
     clearFx();
-    dress(S.looks);
     syncPawns(run, true);
   }
   if (before.at === "after" && now.at !== "after") forgetLater();

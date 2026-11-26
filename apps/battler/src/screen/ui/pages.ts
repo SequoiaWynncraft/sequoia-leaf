@@ -47,7 +47,6 @@ import { glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
 import { paintLook } from "../art/place.ts";
 import { endedOf } from "../screen.ts";
 import { snd } from "../sounds.ts";
-import { dress } from "../stage.ts";
 import { ask, S } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
 import { figuresHere, nothingNew, pulledLine, pulledTag, runTag, setsOutOwn, wayPrefix, waysOf } from "./own.ts";
@@ -513,7 +512,6 @@ async function wear(c: Extract<RaidCommand, { do: "look" | "buyLook" }>, button:
     tipAt({ x: r.left, y: r.top, w: r.width, h: r.height }, did.why, "", at);
   }
   if (!did?.ok) return;
-  dress(S.looks);
   renderPages(true);
   if (c.do === "buyLook") snd.buy();
 }

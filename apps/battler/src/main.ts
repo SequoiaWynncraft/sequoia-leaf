@@ -78,6 +78,28 @@ function tellFirstThreeStars(notes: readonly RaidNote[]): void {
       tell({ town: "news", text: `A first three-star figure at the stump: ${nameOf(note.kind)}.`, tone: "gold" });
   }
 }
+/** What the stage asks of the table each frame: its moving parts, its words, and the looks it is dressed in. */
+const STAGE: stage.Hooks = {
+  step(dt) {
+    stepFx(dt);
+    stepPawns();
+    stepFightView(dt);
+    stepScene(dt);
+    stepTable();
+    stepNudge();
+  },
+  draw: drawScene,
+  words: wordsScene,
+  over: drawOver,
+  resized() {
+    placeFoe();
+    placeSheet();
+    // The stall growing or shrinking lays the page out again too: a card stays beside its thing.
+    settle();
+    renderNudge();
+  },
+  looks: () => S.looks,
+};
 
 async function boot(): Promise<void> {
   await fontsReady();
@@ -151,26 +173,7 @@ async function boot(): Promise<void> {
   onHeld(() => snd.no());
   onTraitWoke((trait) => wakeChip(trait));
 
-  stage.open({
-    step(dt) {
-      stepFx(dt);
-      stepPawns();
-      stepFightView(dt);
-      stepScene(dt);
-      stepTable();
-      stepNudge();
-    },
-    draw: drawScene,
-    words: wordsScene,
-    over: drawOver,
-    resized() {
-      placeFoe();
-      placeSheet();
-      // The stall growing or shrinking lays the page out again too: a card stays beside its thing.
-      settle();
-      renderNudge();
-    },
-  });
+  stage.open(STAGE);
   openHand(must(document.querySelector<HTMLCanvasElement>("#view"), "the table's canvas"));
   openLight();
 

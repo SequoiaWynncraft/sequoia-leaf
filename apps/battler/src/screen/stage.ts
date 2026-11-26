@@ -58,6 +58,8 @@ export interface Hooks {
   over(g: Ctx): boolean;
   /** The window changed size. */
   resized(): void;
+  /** The place and looks the table has now, as Leaf says: read each frame, so the paint never lags them. */
+  looks(): Looks;
 }
 
 let hooks: Hooks | null = null;
@@ -69,7 +71,6 @@ const buf = makeCanvas(320, 200, true);
 const overBuf = makeCanvas(320, 200, true);
 let table: HTMLCanvasElement | null = null;
 let tableKey = "";
-let look: Looks = newLooks();
 let halves: { far: HTMLCanvasElement; near: HTMLCanvasElement } | null = null;
 let overWasDrawn = false;
 let stopped = false;
@@ -143,13 +144,8 @@ export function layout(): void {
   if (stopped) render();
 }
 
-/** Changes where the table stands and how it is dressed. */
-export function dress(looks: Looks): void {
-  look = looks;
-  repaint();
-}
-
 function repaint(): void {
+  const look = hooks?.looks() ?? newLooks();
   const key = `${V.w}x${V.h}@${V.bx},${V.by}:${look.place}:${look.cloth}:${look.lantern}`;
   if (key === tableKey && table) return;
   tableKey = key;
@@ -165,6 +161,7 @@ export function tick(dt: number): void {
 export function render(): void {
   if (!ctx || !view || !hooks) return;
   const g = buf.g;
+  repaint();
   if (table) g.drawImage(table, 0, 0);
   hooks.draw(g);
   ctx.imageSmoothingEnabled = false;
