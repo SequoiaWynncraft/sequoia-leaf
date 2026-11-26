@@ -50,9 +50,15 @@ jobs:
                   + [(.more // [])[] | "**\(.head)**\n" + ([.points[] | "- " + .] | join("\n"))]
                   | join("\n\n"))[0:4000],
                 color: 16101685,
-                timestamp: (.at | sub("Z$"; ":00Z"))
-              }]}' "$notes" |
+                timestamp: (.at | if test("T") then sub("Z$"; ":00Z") else . + "T12:00:00Z" end)
+              }]}' "$notes" > /tmp/messages.jsonl
+          # Every note is tried; any that fails is named, and the job fails at the end.
+          failed=0
           while read -r message; do
-            curl -fsS --max-time 15 -o /dev/null -H 'Content-Type: application/json' --data "$message" "$WEBHOOK"
+            if ! curl -fsS --max-time 15 -o /dev/null -H 'Content-Type: application/json' --data "$message" "$WEBHOOK"; then
+              echo "::error::$NAME did not take the note \"$(jq -r '.embeds[0].title' <<< "$message")\"."
+              failed=1
+            fi
             sleep 1
-          done
+          done < /tmp/messages.jsonl
+          exit "$failed"
