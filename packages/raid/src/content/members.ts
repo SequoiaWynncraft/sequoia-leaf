@@ -1,8 +1,9 @@
 /**
  * The banners' members: for each pull banner, a figure of the raid that is a guild member. It is
- * written like any figure (`figures.ts` puts these among `FIGURES`), and is nobody in particular
- * here: who a banner's member is comes from Leaf, and the page gives the figure their name and
- * their picture.
+ * written like any figure (`figures.ts` puts these among `FIGURES`). Its rules are made for the
+ * member the banner is about (the first banner's is gaz, whose line its ability is named after),
+ * but the name and the picture are not kept here: who a banner's member is comes from Leaf, and
+ * the page gives the figure their name and their picture.
  *
  * It is not one of the twenty-eight (`FIGURE_IDS`): the main way never offers it, the regulars
  * never bring it and the almanac does not count it. Only a run with the member's own figures sells
@@ -20,22 +21,22 @@ export const MEMBERS: Record<MemberId, FigureSpec> = {
     name: "A guild member",
     tier: 5,
     kin: "feather",
-    calling: "mender",
+    calling: "sage",
     extra: [],
-    hp: 640,
-    attack: 46,
+    hp: 680,
+    attack: 44,
     speed: 0.75,
     range: 4,
-    armour: 30,
+    armour: 25,
     ward: 35,
-    mana: [20, 90],
+    mana: [40, 90],
     ability: {
-      name: "On My Way",
-      shape: "ally",
-      text: "Runs over to the friend who is most hurt and stands by them: {heal} health back for the friend, and a shield of {shield} for {lasts} seconds on them both.",
-      n: { heal: [260, 455, 1000], shield: [180, 315, 700], lasts: [4, 4, 4] },
-      short: "Leaps to most hurt ally, heals {heal}. Shield {shield} for {lasts}s on both.",
+      name: "I heard you weren't graiding.",
+      shape: "bolt",
+      text: "Picks the enemy who has dealt the least damage so far, wherever they are, and stuns them for {stun} seconds. One second later, {damage} magic damage to them and {splash} to every enemy touching them.",
+      n: { stun: [1.5, 1.75, 2.5], damage: [400, 700, 1600], splash: [200, 350, 800] },
+      short: "Stuns enemy with least damage dealt {stun}s. 1s later, {damage} magic, {splash} to those touching.",
     },
-    quip: "One of the guild. Came as soon as they heard.",
+    quip: "Keeps the guild raid list. Checks it twice.",
   },
 };

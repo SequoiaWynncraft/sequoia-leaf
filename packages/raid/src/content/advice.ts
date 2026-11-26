@@ -84,10 +84,10 @@ export const GOOD_WITH: Readonly<Record<FigureId, Three>> = {
   lanterngnome: ["fairyring", "mothlantern", "glowthorn"],
   leafling: ["stewpot", "lichen", "glowthorn"],
   cindernewt: ["glowthorn", "lichen", "stewpot"],
+  "banner-1": ["fairyring", "mothlantern", "glowthorn"],
   // Healers: Glowcap, with Chestnut.
   mossmote: ["stewpot", "glowthorn", "mothlantern"],
   kettle: ["stewpot", "glowthorn", "lichen"],
   crab23: ["stewpot", "glowthorn", "lichen"],
   apothecary: ["glowthorn", "stewpot", "mothlantern"],
-  "banner-1": ["stewpot", "glowthorn", "lichen"],
 };

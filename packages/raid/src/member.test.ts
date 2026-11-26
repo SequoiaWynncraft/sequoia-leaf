@@ -13,9 +13,10 @@ import { abilityNumber, abilityText, FIGURE_IDS, type FigureId, FIGURES, type St
 import { isMemberId, MEMBER_IDS, MEMBERS } from "./content/members.ts";
 import { MAX_LEVEL, ROOMS, STALL_ODDS, TRAIL_COUNT } from "./content/rooms.ts";
 import { HZ } from "./fight/core.ts";
+import type { FightEvent } from "./fight/types.ts";
 import { boardMet, opposition } from "./foe.ts";
 import { RAID, type Table } from "./game.ts";
-import { cellAt, distance, neighbours } from "./hex.ts";
+import { cellAt, distance } from "./hex.ts";
 import { newAlmanac } from "./outside.ts";
 import { levelOf, OWNABLE, rosterOf, stallOdds, stallPool } from "./own.ts";
 import { isParty, traitStates } from "./party.ts";
@@ -191,10 +192,10 @@ describe("a run with the member's own figures", () => {
     expect(giveItem(run, 0, { on: "board", at: 8 }).ok).toBe(true);
     expect(piece.items).toEqual(["stewpot"]);
     const traits = traitStates([piece]).map((t) => t.trait);
-    expect(traits.toSorted()).toEqual(["feather", "mender"]);
-    // With one more Mender on the board the calling switches on, the member counted.
-    run.board[9] = { id: run.nextId++, kind: "kettle", stars: 1, items: [], fed: 0 };
-    expect(traitStates(run.board.flatMap((p) => (p ? [p] : []))).find((t) => t.trait === "mender")?.step).toBe(1);
+    expect(traits.toSorted()).toEqual(["feather", "sage"]);
+    // With one more Sage on the board the calling switches on, the member counted.
+    run.board[9] = { id: run.nextId++, kind: "moth", stars: 1, items: [], fed: 0 };
+    expect(traitStates(run.board.flatMap((p) => (p ? [p] : []))).find((t) => t.trait === "sage")?.step).toBe(1);
     expect(sell(run, { on: "board", at: 8 }).ok).toBe(true);
     expect(run.acorns).toBe(99 - 45 + 43);
   });
@@ -248,83 +249,87 @@ const n = (name: string, stars: Stars): number => abilityNumber(UNIT, name, star
 const HOME = cellAt(3, 4);
 const FAR = cellAt(0, 7);
 
-/** The member at home with its mana full, friends where they are put, and one plain enemy across the board. */
-function scene(stars: Stars, friends: readonly (readonly [FigureId, number])[], foe = cellAt(3, 0)) {
+/** The member at home with its mana full, friends where they are put, and still enemies, each having dealt so much. */
+function scene(
+  stars: Stars,
+  foes: readonly (readonly [number, number])[],
+  friends: readonly (readonly [FigureId, number])[] = [],
+) {
   const f = fightOf(
     [onCell(UNIT, 0, HOME, stars), ...friends.map(([kind, cell]) => onCell(kind, 0, cell))],
-    [onCell("mud", 1, foe)],
+    foes.map(([cell]) => onCell("mud", 1, cell)),
   );
   for (const o of f.units) if (o.side === 1 || o.kind !== UNIT) still(o, 5000);
+  const across = f.units.filter((o) => o.side === 1);
+  across.forEach((o, i) => (o.dealt = foes[i]?.[1] ?? 0));
   const u = unitOf(f, UNIT);
   u.attack = 0;
-  return { f, u: ready(u) };
+  return { f, u: ready(u), across };
 }
+/** What the member's ability did to each enemy, by id: the damage it was sent with. */
+const blasted = (events: readonly FightEvent[], by: number): number[][] =>
+  only(events, "hit")
+    .filter((e) => e.by === by && e.source === "ability")
+    .map((e) => [e.id, e.before, e.kind === "magic" ? 1 : 0]);
 
-describe("On My Way", () => {
+describe("I heard you weren't graiding.", () => {
   test.each([1, 2, 3] as const)(
-    "at %i stars: runs to the friend most hurt, gives them health back, and shields them both",
+    "at %i stars: stuns the enemy who has dealt the least, then a second later blasts them and those touching them",
     (stars) => {
-      const { f, u } = scene(stars, [
-        ["crab7", FAR],
-        ["emberkit", cellAt(6, 7)],
+      const { f, u, across } = scene(stars, [
+        [cellAt(5, 0), 50],
+        [cellAt(1, 1), 0],
+        [cellAt(2, 1), 100],
+        [cellAt(6, 3), 200],
       ]);
-      const crab = unitOf(f, "crab7");
-      const kit = unitOf(f, "emberkit");
-      crab.hp = 1000;
-      kit.hp = 3000;
-      u.hp = Math.round(u.maxHp / 10);
-      const events = steps(f, 1);
-      const cast = only(events, "cast")[0];
-      expect([cast?.name, cast?.shape, cast?.targets]).toEqual(["On My Way", "ally", [crab.id]]);
-      // It went: from home to a hex touching the friend, the one furthest from the enemy nearest them.
-      const leapt = only(events, "leap").filter((e) => e.id === u.id);
-      expect(leapt.map((e) => [e.from, e.why])).toEqual([[HOME, "ability"]]);
-      expect(distance(u.cell, crab.cell)).toBe(1);
-      const foe = unitOf(f, "mud", 1);
-      const free = neighbours(crab.cell).filter((cell) => cell === u.cell || f.taken[cell] === -1);
-      expect(distance(u.cell, foe.cell)).toBe(Math.max(...free.map((cell) => distance(cell, foe.cell))));
-      // Health back for the friend alone, though the member is the more hurt.
-      expect(only(events, "heal").map((e) => [e.id, e.amount, e.by])).toEqual([[crab.id, n("heal", stars), u.id]]);
-      expect(crab.hp).toBe(1000 + n("heal", stars));
-      // A shield on them both.
-      const shields = only(events, "shield").map((e) => [e.id, e.amount, e.ticks]);
-      expect(shields).toEqual([
-        [crab.id, n("shield", stars), n("lasts", stars) * HZ],
-        [u.id, n("shield", stars), n("lasts", stars) * HZ],
+      const [far, slacker, beside, busy] = across;
+      if (!far || !slacker || !beside || !busy) throw new Error("four enemies");
+      expect(distance(slacker.cell, beside.cell)).toBe(1);
+      expect([far, busy].map((o) => distance(slacker.cell, o.cell) > 1)).toEqual([true, true]);
+      const first = steps(f, 1);
+      const cast = only(first, "cast")[0];
+      expect([cast?.name, cast?.shape, cast?.targets, cast?.ticks]).toEqual([
+        "I heard you weren't graiding.",
+        "bolt",
+        [slacker.id],
+        HZ,
       ]);
-      expect([crab.shield, u.shield, kit.shield, u.mana]).toEqual([n("shield", stars), n("shield", stars), 0, 0]);
+      const stunned = only(first, "status").filter((e) => e.status === "stun" && e.on);
+      expect(stunned.map((e) => [e.id, e.ticks, e.by])).toEqual([
+        [slacker.id, Math.round(n("stun", stars) * HZ), u.id],
+      ]);
+      // Nothing lands until the second is up.
+      const waiting = steps(f, HZ - 1);
+      expect(blasted([...first, ...waiting], u.id)).toEqual([]);
+      const landed = steps(f, 1);
+      expect(blasted(landed, u.id)).toEqual([
+        [slacker.id, n("damage", stars), 1],
+        [beside.id, n("splash", stars), 1],
+      ]);
+      expect(u.mana).toBe(0);
     },
   );
   test("its sentence says so, with the numbers for its stars", () => {
     expect(abilityText(UNIT, 1)).toBe(
-      "Runs over to the friend who is most hurt and stands by them: 260 health back for the friend, and a shield of 180 for 4 seconds on them both.",
+      "Picks the enemy who has dealt the least damage so far, wherever they are, and stuns them for 1.5 seconds. One second later, 400 magic damage to them and 200 to every enemy touching them.",
     );
-    expect(abilityText(UNIT, 3)).toContain("1000 health back");
+    expect(abilityText(UNIT, 3)).toContain("1600 magic damage");
   });
-  test("beside the friend already, it stays where it is", () => {
-    const { f, u } = scene(1, [["crab7", cellAt(4, 4)]]);
-    unitOf(f, "crab7").hp = 1000;
-    const events = steps(f, 1);
-    expect(only(events, "leap")).toEqual([]);
-    expect(u.cell).toBe(HOME);
-    expect(only(events, "shield").length).toBe(2);
-  });
-  test("with nobody else left, it looks after itself: health back and one shield", () => {
-    const { f, u } = scene(1, []);
-    u.hp = 100;
-    const events = steps(f, 1);
-    expect(only(events, "leap")).toEqual([]);
-    expect(only(events, "heal").map((e) => [e.id, e.amount])).toEqual([[u.id, n("heal", 1)]]);
-    expect(only(events, "shield").map((e) => [e.id, e.amount])).toEqual([[u.id, n("shield", 1)]]);
-  });
-  test("a Mender, so with another its help counts for more", () => {
-    const { f, u } = scene(1, [
-      ["crab7", FAR],
-      ["kettle", cellAt(6, 7)],
+  test("of enemies who have dealt the same, it picks the nearest", () => {
+    const { f } = scene(1, [
+      [cellAt(0, 0), 0],
+      [cellAt(3, 3), 0],
     ]);
-    unitOf(f, "crab7").hp = 1000;
-    expect(u.mending).toBe(20);
-    const events = steps(f, 1);
-    expect(only(events, "heal")[0]?.amount).toBe(Math.round(n("heal", 1) * 1.2));
+    const near = f.units.find((o) => o.side === 1 && o.cell === cellAt(3, 3));
+    if (!near) throw new Error("an enemy at 3, 3");
+    expect(only(steps(f, 1), "cast")[0]?.targets).toEqual([near.id]);
+  });
+  test("a Sage, so with another its ability is stronger", () => {
+    const { f, u, across } = scene(1, [[cellAt(3, 0), 0]], [["moth", FAR]]);
+    const [foe] = across;
+    if (!foe) throw new Error("one enemy");
+    expect(u.power).toBeGreaterThan(100);
+    const events = steps(f, HZ + 1);
+    expect(blasted(events, u.id)).toEqual([[foe.id, (n("damage", 1) * u.power) / 100, 1]]);
   });
 });

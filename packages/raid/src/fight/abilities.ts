@@ -32,6 +32,7 @@ import {
   mostHurt,
   nearestFoe,
   powered,
+  secs,
   shieldUp,
   slow,
   stun,
@@ -387,16 +388,21 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
 
   // ---------- a banner's member ----------
   "banner-1": (f, u, n) => {
-    // The friend most hurt; with nobody else left standing, itself.
-    const friend = mostHurt(f, u.side, false).find((o) => o.id !== u.id) ?? u;
-    // It comes up on the side away from whoever is nearest the friend, so behind them.
-    const from = nearestFoe(f, friend)?.cell ?? u.cell;
-    const beside = distance(u.cell, friend.cell) <= 1 ? u.cell : freeBeside(f, u.side, friend.cell, from);
-    const to = beside >= 0 ? beside : u.cell;
-    say(f, u, [to, friend.cell], [friend.id], 0);
-    leap(f, u, to, "ability");
-    heal(f, friend, powered(u, n("heal")), "ability", u);
-    for (const o of new Set([friend, u])) shieldUp(f, o, powered(u, n("shield")), n("lasts"), u);
+    // The enemy who has dealt the least so far, anywhere on the board; of those level, the nearest.
+    const t = foesByDistance(f, u.side, u.cell).reduce<Unit | undefined>(
+      (least, o) => (least === undefined || o.dealt < least.dealt ? o : least),
+      undefined,
+    );
+    if (!t) return false;
+    const damage = powered(u, n("damage"));
+    const touching = powered(u, n("splash"));
+    say(f, u, around(t.cell), [t.id], secs(1));
+    stun(f, t, n("stun"), u);
+    // It lands where they are by then, if the stun has worn off and they have moved.
+    later(f, secs(1), () => {
+      hurt(f, t, damage, "magic", "ability", u);
+      for (const o of foesWithin(f, u.side, t.cell, 1)) if (o.id !== t.id) hurt(f, o, touching, "magic", "ability", u);
+    });
     return true;
   },
 

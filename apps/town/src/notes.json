@@ -1,7 +1,16 @@
 [
   {
+    "id": "raid-gaz-sage",
+    "at": "2026-11-26T21:52Z",
+    "title": "gaz fights with magic",
+    "lines": [
+      "In The Little Raid, gaz, the first banner's member, is now a Sage who attacks instead of healing. His ability, I heard you weren't graiding., picks the enemy who has dealt the least damage so far, stuns them for 1.5 seconds, then deals 400 magic damage to them and 200 to every enemy touching them.",
+      "He has 680 health and starts each fight with more mana. The items suggested for him are now Fairy Ring, Moth Lantern and Glowthorn."
+    ]
+  },
+  {
     "id": "raid-steady-table",
-    "at": "2026-11-26T22:30Z",
+    "at": "2026-11-26T21:40Z",
     "title": "A steadier raid table",
     "lines": [
       "In The Little Raid, the pictures of the figures who want an item are half the size they were, on the cards after a room and on a component's card.",
