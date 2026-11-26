@@ -169,6 +169,8 @@ export type {
   StatusId,
   Tally,
   Unit,
+  Zone,
+  ZoneKind,
 } from "./fight/types.ts";
 
 // The run.

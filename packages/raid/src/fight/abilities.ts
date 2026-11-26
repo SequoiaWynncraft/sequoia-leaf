@@ -1,8 +1,8 @@
 /**
  * What each ability does on the board, keyed by whose it is. The names, sentences and numbers are
  * in `content/figures.ts`; each function here is that sentence carried out with the verbs from
- * `core.ts`. One gives back false when there is nothing to use it on yet, and the figure keeps its
- * mana and carries on until there is.
+ * `core.ts` and `moves.ts`. One gives back false when there is nothing to use it on yet, or it is
+ * not worth using yet (`mind.ts`), and the figure keeps its mana and carries on until it is.
  *
  * An ability works out how strong it is once, as it is used. Whatever it sends on its way lands
  * with that strength: what happens to its owner after (a Fairy Ring growing, a fall) does not
@@ -13,7 +13,6 @@ import { cone, distance, line, neighbours, within } from "../hex.ts";
 import {
   alliesOf,
   brace,
-  drawnFoe,
   emit,
   farthestFoe,
   flight,
@@ -25,6 +24,7 @@ import {
   freeNear,
   haste,
   heal,
+  hide,
   hurt,
   knockBack,
   later,
@@ -40,6 +40,8 @@ import {
   targetable,
   taunt,
 } from "./core.ts";
+import { aim, crowd, drawnFoe, wanted, weakest } from "./mind.ts";
+import { busiestHex, type Channel, channel, dash, dashTo, over, pull, send, telegraph, zone } from "./moves.ts";
 import type { Fight, Unit } from "./types.ts";
 
 /** An ability: the fight, whose it is, and its numbers at that figure's stars by name. */
@@ -47,20 +49,8 @@ export type Cast = (f: Fight, u: Unit, n: (name: string) => number) => boolean;
 
 const ids = (units: readonly Unit[]): number[] => units.map((o) => o.id);
 
-/**
- * Who a figure's ability is aimed at when the sentence says "its target": whoever it is attacking,
- * if in reach, else whoever it would pick to attack (draw counted), if that one is in reach.
- */
-export function aim(f: Fight, u: Unit): Unit | undefined {
-  const current = u.target >= 0 ? f.units[u.target] : undefined;
-  if (current && current.side !== u.side && targetable(f, current) && distance(u.cell, current.cell) <= u.range) {
-    return current;
-  }
-  const picked = drawnFoe(f, u);
-  return picked && distance(u.cell, picked.cell) <= u.range ? picked : undefined;
-}
-/** Announces an ability: the hexes it covers, who it is aimed at, and how long before it lands. */
-function say(f: Fight, u: Unit, cells: number[], targets: number[], ticks: number): void {
+/** Announces an ability: the hexes it covers, who it is aimed at, how long before it lands, and its pulses if it is channelled. */
+function say(f: Fight, u: Unit, cells: number[], targets: number[], ticks: number, pulses?: Channel): void {
   const ability = specOf(u.kind).ability;
   emit(f, {
     t: "cast",
@@ -71,17 +61,8 @@ function say(f: Fight, u: Unit, cells: number[], targets: number[], ticks: numbe
     cells,
     targets,
     ticks,
+    ...pulses,
   });
-}
-/** Throws something at somebody: it flies, and `land` happens when it arrives. At oneself, it happens at once. */
-function send(f: Fight, u: Unit, from: number, target: Unit, land: () => void, wait = 0): void {
-  if (target.id === u.id && wait === 0) {
-    land();
-    return;
-  }
-  const ticks = flight(from, target.cell) + wait;
-  emit(f, { t: "shot", id: u.id, target: target.id, from, to: target.cell, ticks, what: "ability" });
-  later(f, ticks, land);
 }
 /** Touching hexes, with the middle one first. */
 const around = (cell: number): number[] => [cell, ...neighbours(cell)];
@@ -98,7 +79,7 @@ function splash(
   each: (o: Unit) => void,
 ): number {
   const foes = foesWithin(f, u.side, u.cell, steps);
-  if (foes.length === 0) return -1;
+  if (foes.length === 0 || !crowd(f, u, foes.length)) return -1;
   say(f, u, spread(u.cell, steps), ids(foes), 0);
   let total = 0;
   for (const o of foes) {
@@ -124,6 +105,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     const reach = distance(u.cell, t.cell);
     const cells = line(u.cell, t.cell, reach + 1).slice(reach - 1);
     const hit = foesOn(f, u.side, cells);
+    if (!crowd(f, u, hit.length)) return false;
     say(f, u, cells, ids(hit), 0);
     for (const o of hit) hurt(f, o, powered(u, n("damage")), "magic", "ability", u);
     return true;
@@ -138,12 +120,15 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   },
   moth: (f, u, n) => {
     const t = aim(f, u);
-    if (!t) return false;
+    if (!t || !crowd(f, u, foesOn(f, u.side, around(t.cell)).length)) return false;
     const damage = powered(u, n("damage"));
+    const dust = powered(u, n("dust"));
     say(f, u, around(t.cell), [t.id], flight(u.cell, t.cell));
-    send(f, u, u.cell, t, () => {
+    const land = (): void => {
       for (const o of foesWithin(f, u.side, t.cell, 1)) hurt(f, o, damage, "magic", "ability", u);
-    });
+      zone(f, u, around(t.cell), "dust", n("lasts"), { damage: dust });
+    };
+    send(f, u, u.cell, t, land, 0, [damage, "magic"]);
     return true;
   },
   worm: (f, u, n) => {
@@ -164,9 +149,16 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     if (!t) return false;
     const damage = powered(u, n("damage"));
     say(f, u, [t.cell], [t.id], flight(u.cell, t.cell));
-    for (let i = 0; i < n("seeds"); i++) {
-      send(f, u, u.cell, t, () => hurt(f, t, damage, "physical", "ability", u), i * 2);
-    }
+    // A seed whose target has fallen flies on, from where it fell, at the enemy nearest there.
+    const seed = (from: number, at: Unit, wait: number): void => {
+      const land = (): void => {
+        const next = targetable(f, at) ? at : foesByDistance(f, u.side, at.cell)[0];
+        if (next === at) hurt(f, at, damage, "physical", "ability", u);
+        else if (next) seed(at.cell, next, 0);
+      };
+      send(f, u, from, at, land, wait, [damage, "physical"]);
+    };
+    for (let i = 0; i < n("seeds"); i++) seed(u.cell, t, i * 2);
     return true;
   },
   crab7: (f, u, n) => {
@@ -179,6 +171,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   },
   barrowgnome: (f, u, n) => {
     const foes = foesWithin(f, u.side, u.cell, 1);
+    if (!crowd(f, u, foes.length)) return false;
     say(f, u, around(u.cell), ids(foes), 0);
     shieldUp(f, u, powered(u, n("shield")), n("lasts"), u);
     for (const o of foes) hurt(f, o, powered(u, n("damage")), "physical", "ability", u);
@@ -187,15 +180,23 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
 
   // ---------- two acorns ----------
   kettle: (f, u, n) => {
-    const t = mostHurt(f, u.side, true)[0];
-    if (!t) return false;
+    const first = mostHurt(f, u.side, false)[0];
+    if (!first) return false;
     const amount = powered(u, n("heal"));
-    say(f, u, [t.cell], [t.id], t.id === u.id ? 0 : flight(u.cell, t.cell));
-    send(f, u, u.cell, t, () => heal(f, t, amount, "ability", u));
+    const sips = over(n("pours"), n("sips"));
+    say(f, u, [first.cell], [first.id], 0, sips);
+    channel(f, u, sips, () => {
+      // Each sip goes to whoever is most hurt as it is poured.
+      const t = mostHurt(f, u.side, false)[0];
+      if (t) send(f, u, u.cell, t, () => heal(f, t, amount, "ability", u));
+    });
     return true;
   },
-  slug: (f, u, n) =>
-    splash(f, u, 1, powered(u, n("damage")), "magic", (o) => slow(f, o, n("slow"), n("lasts"), u)) >= 0,
+  slug: (f, u, n) => {
+    if (splash(f, u, 1, powered(u, n("damage")), "magic", () => {}) < 0) return false;
+    zone(f, u, neighbours(u.cell), "slime", n("lasts"), { slow: n("slow") });
+    return true;
+  },
   glorp: (f, u, n) => {
     const cell = freeNear(f, u.cell, 2);
     if (cell < 0) return false;
@@ -211,14 +212,20 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     if (!t) return false;
     const damage = powered(u, n("damage"));
     say(f, u, [t.cell], [t.id], flight(u.cell, t.cell));
-    send(f, u, u.cell, t, () => {
+    const land = (): void => {
       hurt(f, t, damage, "physical", "ability", u);
       stun(f, t, n("stun"), u);
-    });
+    };
+    send(f, u, u.cell, t, land, 0, [damage, "physical"]);
     return true;
   },
   jay: (f, u, n) => {
-    say(f, u, [u.cell], [u.id], 0);
+    const t = weakest(foesWithin(f, u.side, u.cell, n("reach")));
+    say(f, u, [u.cell], [t?.id ?? u.id], 0);
+    if (t) {
+      dash(f, u, dashTo(f, u, t));
+      u.target = t.id;
+    }
     haste(f, u, powered(u, n("haste")), n("lasts"), u);
     return true;
   },
@@ -230,12 +237,13 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     say(f, u, [first.cell], [first.id], flight(u.cell, first.cell));
     const skip = (from: number, t: Unit, left: number): void => {
       struck.add(t.id);
-      send(f, u, from, t, () => {
+      const land = (): void => {
         hurt(f, t, damage, "physical", "ability", u);
         if (left <= 0) return;
         const next = foesByDistance(f, u.side, t.cell).find((o) => !struck.has(o.id) && distance(t.cell, o.cell) <= 2);
         if (next) skip(t.cell, next, left - 1);
-      });
+      };
+      send(f, u, from, t, land, 0, [damage, "physical"]);
     };
     skip(u.cell, first, n("skips"));
     return true;
@@ -251,7 +259,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
       ids(lit),
       flight(u.cell, lit[0]?.cell ?? u.cell),
     );
-    for (const o of lit) send(f, u, u.cell, o, () => hurt(f, o, damage, "magic", "ability", u));
+    for (const o of lit) send(f, u, u.cell, o, () => hurt(f, o, damage, "magic", "ability", u), 0, [damage, "magic"]);
     return true;
   },
 
@@ -280,10 +288,18 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   cindernewt: (f, u, n) => {
     const t = aim(f, u);
     if (!t) return false;
-    const cells = cone(u.cell, t.cell, Math.max(2, distance(u.cell, t.cell)));
-    const hit = foesOn(f, u.side, cells);
-    say(f, u, cells, ids(hit), 0);
-    for (const o of hit) hurt(f, o, powered(u, n("damage")), "magic", "ability", u);
+    const breath = (to: number): number[] => cone(u.cell, to, Math.max(2, distance(u.cell, to)));
+    const hit = foesOn(f, u.side, breath(t.cell));
+    if (!crowd(f, u, hit.length)) return false;
+    const damage = powered(u, n("damage"));
+    const breaths = over(n("lasts"), n("breaths"));
+    say(f, u, breath(t.cell), ids(hit), 0, breaths);
+    let toward = t.cell;
+    channel(f, u, breaths, () => {
+      // Turned toward its target each time; with nobody in reach, the way it last breathed.
+      toward = aim(f, u)?.cell ?? toward;
+      for (const o of foesOn(f, u.side, breath(toward))) hurt(f, o, damage, "magic", "ability", u);
+    });
     return true;
   },
   drizzlefrog: (f, u, n) => {
@@ -291,10 +307,11 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     if (!t) return false;
     const damage = powered(u, n("damage"));
     say(f, u, [t.cell], [t.id], flight(u.cell, t.cell));
-    send(f, u, u.cell, t, () => {
+    const land = (): void => {
       hurt(f, t, damage, "magic", "ability", u);
-      slow(f, t, n("slow"), n("lasts"), u);
-    });
+      zone(f, u, around(t.cell), "puddle", n("lasts"), { slow: n("slow") });
+    };
+    send(f, u, u.cell, t, land, 0, [damage, "magic"]);
     return true;
   },
   rock: (f, u, n) => {
@@ -303,11 +320,20 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     return true;
   },
   bushgnome: (f, u, n) => {
-    const t = aim(f, u);
-    if (!t) return false;
-    const busy = t.target !== u.id;
-    say(f, u, [t.cell], [t.id], 0);
-    hurt(f, t, powered(u, n("damage")) * (busy ? 1.5 : 1), "physical", "ability", u);
+    const first = aim(f, u) ?? drawnFoe(f, u);
+    if (!first) return false;
+    const damage = powered(u, n("damage"));
+    const hides = secs(n("hides"));
+    say(f, u, [first.cell], [first.id], hides);
+    hide(f, u, hides);
+    later(f, hides, () => {
+      // It jumps out at its target, or with that one gone, at whoever it would pick now.
+      const t = targetable(f, first) ? first : drawnFoe(f, u);
+      if (!t) return;
+      leap(f, u, landingBy(f, u, t), "ability");
+      u.target = t.id;
+      hurt(f, t, damage * (t.target === u.id ? 1 : 1.5), "physical", "ability", u);
+    });
     return true;
   },
   crab23: (f, u, n) => {
@@ -333,8 +359,11 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     return true;
   },
   fogowl: (f, u, n) => {
-    const t = farthestFoe(f, u);
-    if (!t) return false;
+    const far = farthestFoe(f, u);
+    if (!far) return false;
+    // Of the enemies no more than 1 hex nearer than the furthest, the one with the least health.
+    const away = distance(u.cell, far.cell) - 1;
+    const t = weakest(foesOf(f, u.side).filter((o) => distance(u.cell, o.cell) >= away)) ?? far;
     const to = landingBy(f, u, t);
     say(f, u, [to], [t.id], 0);
     leap(f, u, to, "ability");
@@ -348,13 +377,19 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     if (!t) return false;
     const cells = line(u.cell, t.cell, n("length"));
     const hit = foesOn(f, u.side, cells);
-    say(f, u, cells, ids(hit), 0);
-    for (const o of hit) hurt(f, o, powered(u, n("damage")), "physical", "ability", u);
+    if (!crowd(f, u, hit.length)) return false;
+    const damage = powered(u, n("damage"));
+    const mark = secs(n("mark"));
+    say(f, u, cells, ids(hit), mark);
+    telegraph(f, u, cells, mark, () => {
+      for (const o of foesOn(f, u.side, cells)) hurt(f, o, damage, "physical", "ability", u);
+    });
     return true;
   },
   crab40: (f, u, n) => {
     const foes = foesWithin(f, u.side, u.cell, 2);
     say(f, u, spread(u.cell, 2), ids(foes), 0);
+    for (const o of foes) pull(f, u, o);
     shieldUp(f, u, powered(u, n("shield")), n("lasts"), u);
     for (const o of foes) taunt(f, o, n("taunt"), u);
     return true;
@@ -370,7 +405,18 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   },
 
   // ---------- five acorns ----------
-  greg: (f, u, n) => splash(f, u, 2, powered(u, n("damage")), "magic", (o) => stun(f, o, n("stun"), u)) >= 0,
+  greg: (f, u, n) => {
+    const to = busiestHex(f, u, n("jump"));
+    const caught = foesWithin(f, u.side, to, 2);
+    if (caught.length === 0 || !crowd(f, u, caught.length)) return false;
+    say(f, u, spread(to, 2), ids(caught), 0);
+    leap(f, u, to, "ability");
+    for (const o of caught) {
+      hurt(f, o, powered(u, n("damage")), "magic", "ability", u);
+      stun(f, o, n("stun"), u);
+    }
+    return true;
+  },
   whitefox: (f, u, n) => {
     if (splash(f, u, 2, powered(u, n("damage")), "magic", () => {}) < 0) return false;
     for (const o of alliesOf(f, u.side)) haste(f, o, powered(u, n("haste")), n("lasts"), u);
@@ -421,11 +467,12 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     if (!t) return false;
     const damage = powered(u, n("damage"));
     say(f, u, [t.cell], [t.id], flight(u.cell, t.cell));
-    send(f, u, u.cell, t, () => {
+    const land = (): void => {
       hurt(f, t, damage, "magic", "ability", u);
       knockBack(f, t, u.cell, n("push"));
       slow(f, t, n("slow"), n("lasts"), u);
-    });
+    };
+    send(f, u, u.cell, t, land, 0, [damage, "magic"]);
     return true;
   },
   magpie: (f, u, n) => {
@@ -470,6 +517,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     if (!t) return false;
     const cells = cone(u.cell, t.cell, 2);
     const hit = foesOn(f, u.side, cells);
+    if (!crowd(f, u, hit.length)) return false;
     say(f, u, cells, ids(hit), 0);
     const amount = Math.round((u.attack0 * n("attack")) / 100);
     u.attack += amount;
@@ -482,6 +530,6 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
 /** Uses a figure's ability, if it has one and there is something to use it on. */
 export function cast(f: Fight, u: Unit): boolean {
   const ability = CASTS[u.kind];
-  if (!ability) return false;
+  if (!ability || !wanted(f, u)) return false;
   return ability(f, u, (name) => abilityNumber(u.kind, name, u.stars));
 }

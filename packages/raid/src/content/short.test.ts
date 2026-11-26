@@ -77,7 +77,7 @@ describe("short forms", () => {
   });
   test("the numbers are the ones for the stars asked for", () => {
     expect(abilityShort("barrowgnome", 2)).toBe("Shield 210 for 4s. 70 physical to adjacent enemies.");
-    expect(abilityShort("kettle", 1)).toBe("Heals most hurt ally for 150.");
+    expect(abilityShort("kettle", 1)).toBe("3 sips over 1s to most hurt ally, 50 each.");
     expect(abilityShort("rock", 1)).toBe("Takes 40% less damage for 4s. Enemies hitting it up close take 45.");
     expect(traitShort("ember", 1)).toBe("Ember hits burn, 2% health/s for 4s.");
     expect(traitShort("ember", 2)).toBe("Whole party's hits burn, 4%/s.");

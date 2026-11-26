@@ -85,12 +85,17 @@ function named(ev: FightEvent): number[] {
     case "leap":
     case "rise":
     case "item":
+    case "zone":
+    case "telegraph":
       return [ev.id];
     case "dusk":
     case "end":
       return [];
   }
 }
+
+/** Who gave a heal or a shield: healing nobody gave (regrowing, coming up from a burrow, a bite that heals) is its own. */
+const giver = (ev: { id: number; by: number }): number => (ev.by >= 0 ? ev.by : ev.id);
 
 /**
  * What everyone did, one entry a figure, by id. `everyone` names figures to include even if they
@@ -130,10 +135,9 @@ export function tally(events: readonly FightEvent[], everyone: readonly number[]
       target.taken += ev.lost;
       target.kept += Math.max(0, ev.before - ev.amount) + ev.soaked;
     } else if (ev.t === "heal") {
-      // Healing that nobody gave (regrowing, coming up from a burrow, a bite that heals) is its own.
-      row(ev.by >= 0 ? ev.by : ev.id).healed += ev.amount;
+      row(giver(ev)).healed += ev.amount;
     } else if (ev.t === "shield") {
-      row(ev.by >= 0 ? ev.by : ev.id).shielded += ev.amount;
+      row(giver(ev)).shielded += ev.amount;
     } else if (ev.t === "fall") {
       if (ev.by >= 0) row(ev.by).felled++;
       // A summoned figure falling is not its summoner falling.

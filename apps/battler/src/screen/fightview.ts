@@ -39,6 +39,7 @@ import { distance, seatCell } from "@sequoia-leaf/raid/hex.ts";
 import { itemPic, traitPic } from "./art/icons.ts";
 import { TRAIT_COLOUR } from "./art/pal.ts";
 import { hexMark } from "./art/table.ts";
+import { showMark } from "./fightmarks.ts";
 import { burst, motes, ring, say } from "./fx.ts";
 import { cellXY, HEX_H, HEX_W, type Pt } from "./geometry.ts";
 import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
@@ -333,6 +334,7 @@ function show(ev: FightEvent): void {
   const f = FV.fight;
   if (!f) return;
   FV.seen.push(ev);
+  if (showMark(ev, FV)) return;
   const now = FV.clock;
   switch (ev.t) {
     case "move": {
@@ -612,8 +614,6 @@ function show(ev: FightEvent): void {
       FV.dusk = ev.n;
       break;
     }
-    case "end":
-      break;
   }
 }
 

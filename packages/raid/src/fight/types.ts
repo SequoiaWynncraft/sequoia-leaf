@@ -16,8 +16,10 @@ export type HealSource = "ability" | "regrow" | "burrow" | "item" | "leech";
 export type StatusId = "burn" | "stun" | "slow" | "shield" | "taunt" | "hidden" | "haste" | "braced";
 /** How a fight went, for the party at the table (side 0). */
 export type FightResult = "win" | "loss" | "draw";
-/** Why somebody changed hex without walking. */
-export type LeapWhy = "sneak" | "ability" | "knocked";
+/** Why somebody changed hex without walking: a Sneak's opening leap, an ability, knocked back, dashing, or pulled. */
+export type LeapWhy = "sneak" | "ability" | "knocked" | "dash" | "pull";
+/** What a zone is: slime and puddles slow whoever stands in them, dust hurts them every second. */
+export type ZoneKind = "slime" | "puddle" | "dust";
 
 /** Everything a fight needs: two parties and a seed. The same setup always gives the same fight. */
 export interface FightSetup {
@@ -75,6 +77,10 @@ export interface Unit {
   busyUntil: number;
   /** Who it is attacking; -1 for nobody. */
   target: number;
+  /** Damage thrown at it and not landed yet, as it would land: what a figure picking a target counts (`mind.ts`). */
+  incoming: number;
+  /** The step its area ability began waiting for a second enemy to come into it; -1 while it is not waiting. */
+  waitFrom: number;
   attacks: number;
   rooted: boolean;
   steady: boolean;
@@ -154,6 +160,17 @@ export interface Unit {
   casts: number;
 }
 
+/** Hexes marked by somebody's ability for a while: enemies of `side` standing in them are slowed, or hurt every second. */
+export interface Zone {
+  /** Whose it is. */
+  readonly id: number;
+  readonly side: Side;
+  readonly kind: ZoneKind;
+  /** Percent slower, and magic damage a second. */
+  readonly slow: number;
+  readonly damage: number;
+}
+
 /** Something on its way that lands at a step. */
 export interface Pending {
   at: number;
@@ -170,6 +187,8 @@ export interface Fight {
   units: Unit[];
   /** For each hex, who stands on it; -1 where nobody does. */
   taken: number[];
+  /** For each hex, the zone on it; the newest wins. */
+  zones: (Zone | null)[];
   /** How many are still up on each side. */
   standing: [number, number];
   over: boolean;
@@ -221,7 +240,11 @@ export type FightEvent =
     }
   /** An attack slips past. */
   | { t: "slip"; id: number; by: number }
-  /** An ability begins: whose, its shape, the hexes it covers, who it is aimed at, and how long before it lands. */
+  /**
+   * An ability begins: whose, its shape, the hexes it covers, who it is aimed at, and how long before
+   * it lands. One that is channelled lands in `pulses`, `every` steps apart, the first at once, while
+   * its owner stands still.
+   */
   | {
       t: "cast";
       id: number;
@@ -231,12 +254,18 @@ export type FightEvent =
       cells: number[];
       targets: number[];
       ticks: number;
+      pulses?: number;
+      every?: number;
     }
   | { t: "heal"; id: number; by: number; amount: number; source: HealSource; hp: number }
   /** A shield goes up, or is added to; `shield` is what it now holds. `ticks` of 0 lasts until it is broken. */
   | { t: "shield"; id: number; by: number; amount: number; shield: number; ticks: number }
   /** A status starts or stops. `amount` is its strength where it has one (percent slower, percent of health a second). */
   | { t: "status"; id: number; status: StatusId; on: boolean; ticks: number; amount: number; by: number }
+  /** Hexes become a zone of somebody's (`on`), for `ticks`; or stop being it. */
+  | { t: "zone"; id: number; side: Side; kind: ZoneKind; cells: number[]; ticks: number; on: boolean }
+  /** Somebody's ability marks the hexes it will land on, in `ticks`, on whoever is there by then. */
+  | { t: "telegraph"; id: number; cells: number[]; ticks: number }
   /** A lasting change for the rest of the fight. */
   | { t: "boost"; id: number; by: number; stat: "attack"; amount: number }
   | { t: "fall"; id: number; by: number; cell: number }

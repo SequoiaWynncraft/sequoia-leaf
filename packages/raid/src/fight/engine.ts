@@ -7,8 +7,8 @@ import { chance, mix } from "@sequoia-leaf/core";
  * `runFight` goes straight to the end, for the bot and for "skip".
  *
  * A step, in order: things in flight land; once a second burns, regrowth and dusk tick; then every
- * figure still up has its turn (uses its ability if its mana is full, else attacks whoever it is
- * after if they are in reach, else walks a hex toward them).
+ * figure still up has its turn (uses its ability if its mana is full and it is worth using, else
+ * attacks whoever it is after if they are in reach, else walks a hex toward them).
  */
 import { boonNumber } from "../content/boons.ts";
 import { abilityNumber, FIGURES, isFigureId, specOf, type Stars, starScale } from "../content/figures.ts";
@@ -19,19 +19,16 @@ import { backRow, cellAt, CELLS, colOf, distance, HOME_ROWS, seatCell, type Side
 import { type Party, type Placed, traitSteps } from "../party.ts";
 import { cast } from "./abilities.ts";
 import {
-  drawnFoe,
   drawOf,
   emit,
   enter,
   flight,
-  foesByDraw,
   foesWithin,
   freeNear,
   gainMana,
   heal,
   hurt,
   HZ,
-  later,
   leap,
   mostHurt,
   otherSide,
@@ -41,6 +38,8 @@ import {
   summon,
   targetable,
 } from "./core.ts";
+import { drawnFoe, fly, foesByDraw, onTarget } from "./mind.ts";
+import { slowNow } from "./moves.ts";
 import type { Fight, FightEvent, FightResult, FightSetup, FightSummary, Pending, StatusId, Unit } from "./types.ts";
 
 // ---------- sitting down ----------
@@ -301,6 +300,7 @@ export function openFight(setup: FightSetup): Fight {
     tick: 0,
     units: [],
     taken,
+    zones: taken.map(() => null),
     standing: [0, 0],
     over: false,
     result: null,
@@ -347,9 +347,7 @@ export function openFight(setup: FightSetup): Fight {
 export function speedNow(f: Fight, u: Unit): number {
   let more = u.quick * u.quicken;
   if (u.hasteUntil > f.tick) more += u.hasteBy;
-  let speed = u.speed * (1 + more / 100);
-  if (u.slowUntil > f.tick) speed *= 1 - u.slowBy / 100;
-  return speed;
+  return u.speed * (1 + more / 100) * (1 - slowNow(f, u) / 100);
 }
 
 /**
@@ -427,7 +425,7 @@ function strike(f: Fight, u: Unit, t: Unit): void {
     for (let n = 0; n < (twice ? 2 : 1); n++) {
       const wait = ticks + n * 2;
       emit(f, { t: "shot", id: u.id, target: t.id, from: u.cell, to: t.cell, ticks: wait, what: "attack" });
-      later(f, wait, () => land(f, u, t, false, blow));
+      fly(f, t, blow.attack, "physical", wait, () => land(f, u, t, false, blow));
     }
   }
   if (u.quicken > 0 && u.quick < u.quickMost) u.quick++;
@@ -435,18 +433,14 @@ function strike(f: Fight, u: Unit, t: Unit): void {
 
 /**
  * Who a figure goes for: whoever is making it, then whoever it is already on if they are still in
- * reach, then the enemy that seems nearest once draw is counted (`drawnFoe`).
+ * reach and not already done for (`onTarget`), then the enemy it would pick anew (`drawnFoe`).
  */
 function choose(f: Fight, u: Unit): Unit | undefined {
   if (u.tauntUntil > f.tick) {
     const by = f.units[u.tauntBy];
     if (by && targetable(f, by)) return by;
   }
-  const current = u.target >= 0 ? f.units[u.target] : undefined;
-  if (current && current.side !== u.side && targetable(f, current) && distance(u.cell, current.cell) <= u.range) {
-    return current;
-  }
-  return drawnFoe(f, u);
+  return onTarget(f, u) ?? drawnFoe(f, u);
 }
 
 /**
@@ -477,8 +471,7 @@ function walk(f: Fight, u: Unit, t: Unit): Unit | undefined {
     return undefined;
   }
   const from = u.cell;
-  const slowed = u.slowUntil > f.tick ? u.slowBy : 0;
-  const ticks = Math.round((FIGHT.walk * 100) / (100 - Math.min(80, slowed)));
+  const ticks = Math.round((FIGHT.walk * 100) / (100 - Math.min(80, slowNow(f, u))));
   f.taken[from] = -1;
   f.taken[step] = u.id;
   u.cell = step;
