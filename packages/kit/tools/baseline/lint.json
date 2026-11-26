@@ -118,7 +118,7 @@
     "apps/api/src/live/live.ts": 310,
     "apps/api/src/play/coins.ts": 95,
     "apps/api/src/play/service.ts": 669,
-    "apps/api/src/play/store.ts": 173,
+    "apps/api/src/play/store.ts": 153,
     "apps/api/src/quests/store.ts": 173,
     "apps/battler/src/main.ts": 97,
     "apps/battler/src/screen/art/table.ts": 168,

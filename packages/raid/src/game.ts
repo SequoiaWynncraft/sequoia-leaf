@@ -39,6 +39,7 @@ import {
 } from "./content/looks.ts";
 import { ROOMS, TRAIL_COUNT } from "./content/rooms.ts";
 import { boardSlot } from "./foe.ts";
+import { fightRecord } from "./fought.ts";
 import {
   type Almanac,
   beatenBosses,
@@ -441,7 +442,9 @@ function play(s: Table, c: RunCommand, ctx: Ctx): Answer {
   const done = act(run, c, ctx.met);
   if (!done.ok) return no(done.code);
   const notes: RaidNote[] = [...done.notes];
-  const log: Logged[] = [];
+  // Every fight decided, kept whole for the staff's analysis.
+  const decided = c.do === "fight" ? foughtOf(run) : null;
+  const log: Logged[] = decided ? [{ kind: LOGGED.raidFight, data: fightRecord(s.runs, run, decided) }] : [];
   const fought = run.record[room];
   if (c.do === "take" && fought) {
     log.push({
@@ -459,7 +462,7 @@ function play(s: Table, c: RunCommand, ctx: Ctx): Answer {
     });
   }
   // The board a member fought a sparring room with, exactly as the fight was decided from, left for others to meet there.
-  const party = c.do === "fight" && keeps(run, ctx) ? foughtOf(run)?.setup.sides[0] : undefined;
+  const party = decided && keeps(run, ctx) ? decided.setup.sides[0] : undefined;
   const keep = party === undefined ? [] : [{ slot: boardSlot(run.trail, run.room, run.own !== null), data: party }];
   const coins = run.stage.phase === "over" ? finish(s, run, notes, log, ctx.room) : [];
   return { state: s, notes, coins, log, keep };

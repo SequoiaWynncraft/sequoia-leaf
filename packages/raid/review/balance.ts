@@ -1,15 +1,17 @@
-import { CARELESS, fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
 /**
  * Plays many whole runs with bots of different habits and prints how far each gets, room by room,
  * and which traits, figures and items do better or worse than the rest:
  *
- *     bun review/balance.ts [runs each] [trail 0-2] [section ...]
+ *     bun review/balance.ts [runs each] [trail 0-2] [section ...] [only=<habit>,...] [rows=<file>]
  *
  * Sections: habits, rooms, traits, figures, items, suits, fights (all of them if none is named). It
  * is a gauge for tuning the tables in `src/game/content`, not a verdict: the bots are rough players.
  * `suits` is each figure with the finished items it held, worst first, beside the three a card
- * recommends for it.
+ * recommends for it. `rows` writes every fight of the habits that are trying to a file, one JSON line
+ * each, as Leaf keeps a fight (`src/fought.ts`), for Leaf's `raid-stats.ts` to report on.
  */
+import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts";
+import { CARELESS, fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
 import { GOOD_WITH } from "@sequoia-leaf/raid/content/advice.ts";
 import { BOON_IDS, type BoonId, BOONS } from "@sequoia-leaf/raid/content/boons.ts";
 import { FIGURE_IDS, type FigureId, FIGURES, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
@@ -18,7 +20,9 @@ import { ROOM_COUNT, ROOMS, TRAILS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { CALLINGS, KINS, TRAIT_IDS, type TraitId, TRAITS } from "@sequoia-leaf/raid/content/traits.ts";
 import { resolveFight } from "@sequoia-leaf/raid/fight/engine.ts";
 import type { FightSetup, FightSummary } from "@sequoia-leaf/raid/fight/types.ts";
-import { beginFight, endingOf, startRun, takeTakings, traitsNow } from "@sequoia-leaf/raid/run.ts";
+import { fightRecord, margin } from "@sequoia-leaf/raid/fought.ts";
+import { Tally } from "@sequoia-leaf/raid/rates.ts";
+import { beginFight, endingOf, foughtOf, startRun, takeTakings, traitsNow } from "@sequoia-leaf/raid/run.ts";
 
 const args = process.argv.slice(2);
 const runs = Number(args[0] ?? 200);
@@ -27,34 +31,10 @@ const only = args
   .find((a) => a.startsWith("only="))
   ?.slice(5)
   .split(",");
-const sections = new Set(args.slice(2).filter((a) => !a.startsWith("only=")));
+const rowsTo = args.find((a) => a.startsWith("rows="))?.slice(5);
+const sections = new Set(args.slice(2).filter((a) => !a.includes("=")));
 const shows = (name: string): boolean => sections.size === 0 || sections.has(name);
 
-/** Wins and tries, as a rate, kept room by room so that late rooms are not held against what only turns up late. */
-class Tally {
-  won = 0;
-  tried = 0;
-  readonly rooms: { won: number; tried: number }[] = Array.from({ length: ROOM_COUNT }, () => ({ won: 0, tried: 0 }));
-  add(win: boolean, room = 0): void {
-    this.tried++;
-    if (win) this.won++;
-    const r = this.rooms[room];
-    if (r) {
-      r.tried++;
-      if (win) r.won++;
-    }
-  }
-  get rate(): number {
-    return this.tried === 0 ? 0 : this.won / this.tried;
-  }
-  /** The rate these fights would have been won at if this made no difference: each room's own rate, weighted by how often it was seen there. */
-  expected(rates: readonly number[]): number {
-    if (this.tried === 0) return 0;
-    let sum = 0;
-    this.rooms.forEach((r, i) => (sum += r.tried * (rates[i] ?? 0)));
-    return sum / this.tried;
-  }
-}
 const pct = (n: number): string => `${Math.round(n * 100)}%`.padStart(4);
 const tallies = <K extends string>(keys: readonly K[]): Map<K, Tally> => new Map(keys.map((k) => [k, new Tally()]));
 
@@ -78,17 +58,6 @@ const bySuit = new Map<string, { sum: number; n: number }>();
 /** One fight in this many, among those trying, is played again for every figure and item. */
 const SUIT_EVERY = 24;
 let suitTrials = 0;
-const left = (f: FightSummary, side: 0 | 1): number => {
-  let hp = 0;
-  let max = 0;
-  for (const u of f.units) {
-    if (u.side !== side || u.summoned) continue;
-    hp += u.hp;
-    max += u.maxHp;
-  }
-  return max > 0 ? hp / max : 0;
-};
-const margin = (f: FightSummary): number => left(f, 0) - left(f, 1);
 function trySuits(setup: FightSetup, base: FightSummary): void {
   const [ours, theirs] = setup.sides;
   const was = margin(base);
@@ -115,6 +84,9 @@ let seconds = 0;
 let fights = 0;
 let dusks = 0;
 let draws = 0;
+/** The fights as Leaf would keep them (`rows`), each a JSON line, and the rules' version they say. */
+const kept: string[] = [];
+const rules = rulesVersions().raid;
 
 interface Line {
   name: string;
@@ -143,6 +115,11 @@ for (const habit of HABITS) {
       const plan = `${String(room + 1).padStart(2)} ${run.foe.who === "The forest" ? run.foe.title : "sparring"}`;
       const begun = beginFight(run);
       if (!begun.ok) break;
+      const decided = foughtOf(run);
+      if (rowsTo !== undefined && decided && trying(habit)) {
+        const at = Date.now();
+        kept.push(JSON.stringify({ at, player: `bot:${habit.name}`, rules, ...fightRecord(n, run, decided) }));
+      }
       const taken = takeTakings(run);
       if (!taken.ok) break;
       const win = taken.fight.result === "win";
@@ -239,6 +216,8 @@ if (shows("fights")) {
   );
 }
 const roomRates = byRoom.map((t) => t.rate);
+/** How much more often fights with something are won than the same rooms without regard to it. */
+const lean = (t: Tally): number => t.rate - t.expected(roomRates);
 const signed = (n: number): string => `${n >= 0 ? "+" : ""}${Math.round(n * 100)}`.padStart(4);
 /**
  * Prints a table of how often fights were won with something, beside how often the same rooms are
@@ -249,7 +228,6 @@ function table(title: string, rows: [string, Tally, string][]): void {
   console.log(
     `${title}: fights won with it, how that differs from the same rooms without regard to it, and how often seen.`,
   );
-  const lean = (t: Tally): number => t.rate - t.expected(roomRates);
   for (const [, t, label] of rows.toSorted((a, b) => lean(b[1]) - lean(a[1]))) {
     if (t.tried === 0) {
       console.log(`  ${label.padEnd(32)}    -         never seen`);
@@ -330,4 +308,8 @@ if (shows("suits")) {
     console.log(`      best: ${list(best)}; worst: ${list(worst)}`);
   }
   console.log(`\n${clashes} recommended item${clashes === 1 ? "" : "s"} among a figure's three worst.\n`);
+}
+if (rowsTo !== undefined) {
+  await Bun.write(rowsTo, kept.map((row) => `${row}\n`).join(""));
+  console.log(`${kept.length} fights written to ${rowsTo}.`);
 }

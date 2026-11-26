@@ -9,22 +9,17 @@ import {
   type Postcard,
   readPostcard,
   type Standing,
-  talliedFrom,
   utcDay,
 } from "@sequoia-leaf/core";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
-import { tally } from "../tally/store.ts";
 import { PlayerUuid } from "../wire.ts";
 import { type Given, POSTING } from "./games.ts";
+import { loggingIn } from "./logs.ts";
 
 /** How many of each player's newest commands to each game have their answers kept, so that one sent again is answered the same. */
 export const ANSWERS_KEPT = 256;
-/** How many things a player did are logged in a UTC day; past that, they are not logged (the play goes on). */
-export const LOGGED_A_DAY = 1000;
-/** How long what players did is kept. */
-export const ACTIVITY_KEPT_MS = 180 * DAY_MS;
 /** How many are listed at the top of a game's board. */
 export const BOARD_MOST = 20;
 
@@ -266,7 +261,8 @@ function standingsIn(sql: SqlClient.SqlClient) {
 /**
  * What the play service keeps: each player's state in each game (`play_state`), what each command
  * answered (`play_commands`, each player's newest 256 to each game), the things players did that
- * are worth remembering (`activity`, up to 1,000 a player a UTC day, for 180 days), and how many of
+ * are worth remembering (`activity`, up to 1,000 a player a UTC day, for 180 days; the raid's fights
+ * in `raid_fights`, as many, for a year: `logs.ts`), and how many of
  * each player's commands were done and refused each UTC day (`command_days`, for the staff's
  * report), where each player's state stands in a game with a board (`standings`), what each
  * player has won for good in any game (`awards`, never taken away), and what each state tells the
@@ -331,8 +327,9 @@ export class PlayStore extends Context.Service<
     readonly keepNewest: (playerId: PlayerId, game: string) => Effect.Effect<void>;
     /**
      * Writes down what a player did, as far as the UTC day's `LOGGED_A_DAY` goes, and lets go of
-     * what was done in the game longer ago than `ACTIVITY_KEPT_MS`; and counts each thing the Tally
-     * counts (`talliedFrom`), however much was logged.
+     * what was done in the game longer ago than `ACTIVITY_KEPT_MS`, but a raid fight, which goes to
+     * `raid_fights` for `FIGHTS_KEPT_MS` (`loggingIn`); and counts each thing the Tally counts
+     * (`talliedFrom`), however much was logged.
      */
     readonly log: (playerId: PlayerId, game: string, logged: readonly Logged[], now: number) => Effect.Effect<void>;
     /** A player's activity, oldest first. */
@@ -440,12 +437,6 @@ export class PlayStore extends Context.Service<
           SELECT result FROM play_commands WHERE player_id = ${playerId} AND game = ${game} AND command_id = ${commandId}
         `,
       });
-      const loggedSince = SqlSchema.findAll({
-        Request: Schema.Struct({ playerId: Schema.String, since: Schema.Int }),
-        Result: Schema.Struct({ n: Schema.Int }),
-        execute: ({ playerId, since }) =>
-          sql`SELECT count(*) AS n FROM activity WHERE player_id = ${playerId} AND at >= ${since}`,
-      });
       const activity = SqlSchema.findAll({
         Request: Schema.String,
         Result: Activity,
@@ -548,22 +539,6 @@ export class PlayStore extends Context.Service<
               ORDER BY id DESC LIMIT 1 OFFSET ${ANSWERS_KEPT}
             )
           `.pipe(Effect.asVoid, Effect.orDie),
-        log: (playerId, game, logged, now) =>
-          logged.length === 0
-            ? Effect.void
-            : Effect.gen(function* () {
-                const [today] = yield* loggedSince({ playerId, since: utcDay(now) * DAY_MS });
-                const room = Math.max(0, LOGGED_A_DAY - (today?.n ?? 0));
-                for (const one of logged.slice(0, room)) {
-                  yield* sql`
-                    INSERT INTO activity (player_id, at, game, kind, data)
-                    VALUES (${playerId}, ${now}, ${game}, ${one.kind}, ${JSON.stringify(one.data)})
-                  `;
-                }
-                yield* sql`DELETE FROM activity WHERE game = ${game} AND at < ${now - ACTIVITY_KEPT_MS}`;
-                // The Tally counts all of it, logged or not.
-                for (const stat of talliedFrom(logged)) yield* tally(sql, playerId, stat, 1, now);
-              }).pipe(Effect.orDie),
         activity: (playerId) => activity(playerId).pipe(Effect.orDie),
         count: (playerId, done, refused, now) =>
           done === 0 && refused === 0
@@ -581,6 +556,7 @@ export class PlayStore extends Context.Service<
           ),
         ...givenIn(sql),
         ...standingsIn(sql),
+        ...loggingIn(sql),
       });
     }),
   );

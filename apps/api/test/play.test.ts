@@ -76,8 +76,9 @@ import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
 import { GAMES, type Played, played } from "../src/play/games.ts";
 import { keptPieces } from "../src/play/kept.ts";
+import { ACTIVITY_KEPT_MS, LOGGED_A_DAY } from "../src/play/logs.ts";
 import { type JobTimes, Play, TEND_AFTER } from "../src/play/service.ts";
-import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, dueAgain, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
+import { ANSWERS_KEPT, BOARD_MOST, dueAgain, PlayStore } from "../src/play/store.ts";
 import { DAY, fakeBackend, fakeMojang, type Fakes, noNetwork, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");

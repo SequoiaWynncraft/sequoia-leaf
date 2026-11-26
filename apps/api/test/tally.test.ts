@@ -484,6 +484,7 @@ describe("the counters' first counts", () => {
         await before.query((sql) => sql`DROP TRIGGER ${sql(trigger)}`);
       }
       await before.query((sql) => sql`DROP TABLE last_visits`);
+      await before.query((sql) => sql`DROP TABLE raid_fights`);
       await before.query((sql) => sql`DROP INDEX play_kept_slot`);
       await before.query((sql) => sql`DROP INDEX play_state_unstood`);
       await before.query((sql) => sql`ALTER TABLE play_state DROP COLUMN stood`);

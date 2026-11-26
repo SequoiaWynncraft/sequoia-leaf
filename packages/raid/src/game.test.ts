@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import {
   type CoinChange,
@@ -15,9 +16,10 @@ import { SENSIBLE } from "./bot.ts";
 import { FIGURE_IDS, FIGURES } from "./content/figures.ts";
 import { EMBLEM_IDS, EMBLEMS } from "./content/items.ts";
 import { newLooks } from "./content/looks.ts";
-import { MAX_LEVEL, regularOf, ROOMS } from "./content/rooms.ts";
+import { LEVELS, MAX_LEVEL, regularOf, ROOMS } from "./content/rooms.ts";
 import { resolveFight } from "./fight/engine.ts";
 import { opposition } from "./foe.ts";
+import { readFight } from "./fought.ts";
 import {
   decodeTable,
   encodeTable,
@@ -36,7 +38,7 @@ import {
 } from "./game.ts";
 import { beatenBosses, payout, recordRun, trailCleared, trailOpen } from "./outside.ts";
 import { rosterOf } from "./own.ts";
-import { isParty, type Party } from "./party.ts";
+import { isParty, type Party, traitSteps } from "./party.ts";
 import {
   fieldCap,
   foughtOf,
@@ -1112,8 +1114,13 @@ describe("a run with the member's own figures", () => {
     expect(RAID.awards?.(state)).toEqual(RAID.awards?.(before) ?? []);
     expect(RAID.standing?.(state)).toEqual(RAID.standing?.(before));
     expect([0, 1, 2].map((trail) => trailOpen(state.almanac, trail))).toEqual([true, false, false]);
-    expect(log.every((l) => l.data["own"] === true)).toBe(true);
-    expect(log.map((l) => l.kind)).toEqual(["raid_started", ...ended.run.record.map(() => "raid_room"), "raid_ended"]);
+    // Each fight's record says the way it set out, as the other lines say they are of one.
+    expect(log.every((l) => (l.kind === "raid_fight" ? l.data["way"] === "own" : l.data["own"] === true))).toBe(true);
+    expect(log.map((l) => l.kind)).toEqual([
+      "raid_started",
+      ...ended.run.record.flatMap(() => ["raid_fight", "raid_room"]),
+      "raid_ended",
+    ]);
   });
   test("may set out on a trail only once the main game has opened it", () => {
     const state = RAID.create(ctx(1));
@@ -1121,5 +1128,92 @@ describe("a run with the member's own figures", () => {
     expect(RAID.apply(state, { do: "start", trail: 1, own: true }, at)).toEqual({ refused: "trail_closed" });
     state.almanac.bosses[0] = ["bigcrab"];
     expect(must(state, { do: "start", trail: 1, own: true }, at).state.run).toMatchObject({ trail: 1 });
+  });
+});
+
+/** The fights a command's log keeps for the staff, each read back as Leaf stores one. */
+const fightsOf = (done: Done<Table, RaidNote>) =>
+  (done.log ?? []).filter((l) => l.kind === "raid_fight").map((l) => readFight(wire(l.data)));
+
+describe("every fight decided, kept for the staff", () => {
+  test("a fight logs one record: the party it was decided from, and how it came out; its takings log none", () => {
+    const sent = must(planned(started(5)), { do: "fight" });
+    const decided = fought(sent.state);
+    if (!decided) throw new Error("no fight");
+    const ours = decided.setup.sides[0];
+    const plan = ROOMS[0]?.plans.findIndex((p) => p.name === decided.setup.sides[1].title);
+    const taken = must(sent.state, { do: "take" });
+    expect(fightsOf(sent)).toEqual([
+      {
+        run: 1,
+        way: "main",
+        trail: 0,
+        room: 0,
+        kind: "trouble",
+        across: `plan:${plan}`,
+        result: decided.outcome.result,
+        margin: expect.any(Number),
+        seconds: Math.round(decided.outcome.seconds * 10) / 10,
+        // Resolve as the takings leave it; the level and acorns as the party set out.
+        resolve: runOf(taken.state).resolve,
+        level: runOf(sent.state).level,
+        acorns: runOf(sent.state).acorns,
+        party: { figures: ours.figures, traits: traitSteps(ours), boons: [] },
+        against: null,
+      },
+    ]);
+    expect(fightsOf(taken)).toEqual([]);
+    // A win leaves the party more of itself than the forest has left.
+    const margin = fightsOf(sent)[0]?.margin ?? 0;
+    expect(decided.outcome.result === "win" ? margin > 0 : margin <= 0).toBe(true);
+  });
+  test("a sparring room's record has the party across: a regular's, or a member's board and whose", () => {
+    const sparred = must(planned(reach(started(5), 2)), { do: "fight" });
+    const regular = fightsOf(sparred)[0];
+    const foe = fought(sparred.state)?.setup.sides[1];
+    if (!foe) throw new Error("no fight");
+    expect(regular?.across).toBe(`regular:${regularOf(foe)?.kind}`);
+    expect(regular?.against).toEqual({ figures: foe.figures, traits: traitSteps(foe), boons: foe.boons });
+    const board = keptBoard();
+    const met = must(fighting(1), { do: "take" }, { ...ctx(), met: metOf(board) }).state;
+    expect(runOf(met).foe.by).toBe(MEMBER);
+    const member = fightsOf(must(planned(met), { do: "fight" }))[0];
+    expect(member?.across).toBe(`member:${MEMBER}`);
+    expect(member?.against?.figures).toEqual(board.figures);
+  });
+  test("a run with the member's own figures says so, with each figure's level, and every boon of the run", () => {
+    const { log } = walked(EVERYTHING, true, 4);
+    const fights = log.filter((l) => l.kind === "raid_fight").map((l) => readFight(wire(l.data)));
+    expect(fights.length).toBe(4);
+    expect(fights.every((f) => f?.way === "own")).toBe(true);
+    expect(fights.some((f) => f?.party.figures.some((p) => p.level === LEVELS.most))).toBe(true);
+    const third = walked(EVERYTHING, true, 3).state;
+    expect(fightsOf(must(planned(third), { do: "fight" }))[0]?.party.boons).toEqual(runOf(third).boons);
+  });
+  test("a refused fight logs nothing, and a stored table fights as it did", () => {
+    const spar = planned(reach(started(5), 2));
+    const bare = structuredClone(spar);
+    runOf(bare).board = runOf(bare).board.map(() => null);
+    expect(RAID.apply(bare, { do: "fight" }, ctx())).toEqual({ refused: "board_empty" });
+    const stored = decodeTable(readFileSync(new URL("../stored/planning.json", import.meta.url), "utf8"));
+    if (!stored) throw new Error("the stored table does not read");
+    const fights = fightsOf(must(planned(stored), { do: "fight" }));
+    expect(fights).toHaveLength(1);
+    expect(fights[0]?.run).toBe(stored.runs);
+  });
+  test("a record reads back only as the rules have one", () => {
+    const record = fightsOf(must(planned(reach(started(5), 2)), { do: "fight" }))[0];
+    if (!record) throw new Error("no record");
+    const figure = record.party.figures[0];
+    for (const broken of [
+      { ...record, margin: 2 },
+      { ...record, way: "sideways" },
+      { ...record, against: undefined },
+      { ...record, party: { ...record.party, traits: { crab: 0 } } },
+      { ...record, party: { ...record.party, figures: [{ ...figure, kind: "nobody" }] } },
+      { ...record, party: { ...record.party, boons: ["luck"] } },
+    ]) {
+      expect(readFight(wire(broken))).toBeNull();
+    }
   });
 });
