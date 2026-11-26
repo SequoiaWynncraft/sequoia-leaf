@@ -1556,7 +1556,7 @@ function marksLayer(f: Frame): void {
           for (let k = 0; k < TILE; k += 3) g.fillRect(tx * TILE - cx, ty * TILE - cy + k, 1, 1);
       }
   }
-  pinMark(g, w, cx, cy, dx - 24, dfoot - 48, markSize);
+  pinMark(g, w, cx, cy, dx - 24, dfoot - 48);
   if (S.hover && tool === null) {
     const i = S.hover.y * land.w + S.hover.x;
     const k = S.hover.x >= 0 && S.hover.y >= 0 && S.hover.x < land.w && S.hover.y < land.h ? w.kind[i] : NONE;

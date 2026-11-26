@@ -7,8 +7,9 @@
  *   yard on screen as a frame, a price on each plot for sale. A tap goes there (to the piece in
  *   trouble under the finger, with its card); on land that is not the yard's it opens the plot's card.
  * - **Trouble**: the pieces in trouble (`trouble.ts`) in groups by what is wrong, the largest first.
- *   A tap on a group goes to its first piece and opens its card, and a bar stays while the member
- *   walks the group: what is wrong, which of how many, back and on, and a way out.
+ *   A tap on a group goes to its first piece and opens its card (on a phone, where the card would
+ *   cover it, marks it instead), and a bar stays while the member walks the group: what is wrong,
+ *   which of how many, back and on, and a way out.
  * - **Items**: for each thing, at most how many the yard's pieces can make and can use a
  *   minute (the rules' `flow`), and what reached the depot in the last minute, counted
  *   (`arrivals.ts`); what they can use more of than they can make first, with by how many. Then the
@@ -48,7 +49,7 @@ import { alarm, layPlan, makePlan, paintPlan, type Plan } from "../plan.ts";
 import { S, seenFrom } from "../state.ts";
 import { troubled, troubleGroups } from "../trouble.ts";
 import { NOT_WALKING, type Walk, walkAt, type WalkEvent, walkStep } from "../walk.ts";
-import { itemRef, openCard, plotRef, tileRef } from "./card.ts";
+import { closeCard, itemRef, openCard, plotRef, tileRef } from "./card.ts";
 import { mapPress } from "./mappress.ts";
 import { closePanel, openPanel, refreshPanel } from "./panels.ts";
 import { $, fitted, iconButton, yardIcon } from "./parts.ts";
@@ -93,16 +94,22 @@ const narrow = (): boolean =>
 
 // ---------- going to a place ----------
 
-/** Brings a tile to the middle of the view at once, and with `card` pins the card of what stands there, whose mark then closes in on it. */
+/**
+ * Brings a tile to the middle of the view at once, and with `card` pins the card of what stands there,
+ * whose mark then closes in on it. On a phone the card would cover the piece: any card is put away,
+ * and the piece is marked with none; a tap on it opens it.
+ */
 function goTo(i: number, card: boolean): void {
   const W = S.world.land.w;
   const x = i % W;
   const y = Math.floor(i / W);
   viewHooks.look(x * TILE + TILE / 2, y * TILE + TILE / 2);
   if (!card) return;
+  const opens = !narrow();
   // Pinning the card that is already pinned would put it away.
-  if (cardShown()?.ref !== tileRef(i)) openCard(x, y);
-  S.brought = { tile: i, at: S.t };
+  if (!opens) closeCard();
+  else if (cardShown()?.ref !== tileRef(i)) openCard(x, y);
+  S.brought = { tile: i, at: S.t, card: opens };
 }
 
 // ---------- walking a group ----------
@@ -123,11 +130,12 @@ const tilesOf = (title: string): readonly number[] | null =>
 const barHome = (): HTMLElement | null =>
   narrow() ? $("walk") : document.querySelector<HTMLElement>("#panel .walk-slot");
 
-/** Moves the walk, and brings the bar and the page's look into line with it; a walk at a new piece goes there, with its card. */
+/** Moves the walk, and brings the bar and the page's look into line with it; a walk at a new piece goes there, with its card. Ended, what it was at is no longer marked. */
 function walk(e: WalkEvent): void {
   const was = walking;
   walking = walkStep(walking, e);
   const w = walking;
+  if (was.is === "walking" && w.is !== "walking") S.brought = null;
   if (w.is === "walking" && (was.is !== "walking" || was.tile !== w.tile)) {
     if (was.is === "walking") sfx.tap();
     goTo(w.tile, true);

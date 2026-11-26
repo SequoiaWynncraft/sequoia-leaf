@@ -257,10 +257,12 @@ export const S: {
   /** The tile whose card is pinned open (the kit's pinned card is the one source of it), or -1. */
   readonly picked: number;
   /**
-   * The tile the view was last brought to with its card (a walk of the Trouble list, a tap on the
-   * map), and when, in screen seconds: the mark on it closes in for a moment (`pinPulse`).
+   * The tile the view was last brought to (a walk of the Trouble list, a tap on the map), when, in
+   * screen seconds, and whether its card was opened: on a phone it is not, and the piece is marked
+   * with no card (`markedTiles`) until the walk ends or a tap asks about the yard. The mark on it
+   * closes in for a moment (`pinPulse`).
    */
-  brought: { readonly tile: number; readonly at: number } | null;
+  brought: { readonly tile: number; readonly at: number; readonly card: boolean } | null;
   /** Plots being cleared before the member's eyes: when each began, in screen seconds, and where from. */
   clearing: Map<Plot, { at: number; x: number; y: number }>;
   /** Redwoods being felled before the member's eyes, by their place in the land's `trees`: when each began, in screen seconds. */

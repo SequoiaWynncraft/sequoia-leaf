@@ -28,7 +28,7 @@ import type { Ctx } from "@sequoia-leaf/kit/util.ts";
 import { PAINTS, TILE } from "./art/belts.ts";
 import { heldBox, takenUp } from "./held.ts";
 import type { Layout } from "./layout.ts";
-import { pinnedTiles, pinPulse } from "./pinned.ts";
+import { markedTiles, pinPulse } from "./pinned.ts";
 import { alarm, blockColour, layPlan, makePlan, paintPlan, type Plan } from "./plan.ts";
 import { builds, type Group, S, seenFrom, standsOn, tileNudge, type Tool } from "./state.ts";
 import { troubled } from "./trouble.ts";
@@ -122,13 +122,13 @@ function around(o: Over, i: number, col: string, breathe: boolean, out = 0): voi
 }
 
 /**
- * Over the plan, what is pointed at: the piece whose card is pinned, every tile of it, gold between
+ * Over the plan, what is pointed at: the piece marked (`markedTiles`), every tile of it, gold between
  * two lines of ink, standing out for a moment after the view is brought to it; and with nothing in
  * hand, the piece under the mouse.
  */
 function pointed(o: Over, tool: Tool): void {
   const out = pinPulse();
-  for (const i of pinnedTiles()) {
+  for (const i of markedTiles()) {
     around(o, i, INK, false, out + 1);
     around(o, i, INK, false, out - 1);
     around(o, i, GOLD[2], false, out);

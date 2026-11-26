@@ -180,8 +180,9 @@ function hoverOn(t: { x: number; y: number }): void {
   pointAt(t.x, t.y);
 }
 
-/** A tap or click on a tile with nothing in hand: ask about what is there. */
+/** A tap or click on a tile with nothing in hand: ask about what is there. What the view was brought to with no card is no longer marked. */
 function ask(tx: number, ty: number, pageX: number, pageY: number): void {
+  S.brought = null;
   const p = toYard(pageX, pageY);
   const who = callerAt(p.x, p.y);
   if (who && !S.visiting) {
