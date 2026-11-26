@@ -20,7 +20,7 @@ import { givingBack, layer } from "./dialog.ts";
 import { add, asking, asksAgain, el, icon, pressedTwice, type Spend, unheld } from "./dom.ts";
 import { longPress } from "./press.ts";
 import { scope } from "./scope.ts";
-import { goesWith, iconButton, tip, tipAt, tipOff } from "./tip.ts";
+import { goesWith, iconButton, tip, tipBeside, tipOff } from "./tip.ts";
 
 /** A thing, named as `"kind:id"`: `"item:gear"`, `"figure:barrow-gnome"`, `"trait:ember"`. */
 export type Ref = string;
@@ -113,6 +113,8 @@ export interface Description {
   readonly icon?: Node | null;
   /** One line under the name: a role, a kind, "worked once". */
   readonly tag?: string | Node;
+  /** What it is in a line, for the tip it gives inside another card: what an item adds. */
+  readonly brief?: string;
   /** At the right of the head: a price, stars. */
   readonly aside?: Node | string | null;
   readonly chips?: readonly Chip[];
@@ -807,11 +809,10 @@ export function link(target: HTMLElement, ref: Ref, opts: LinkOpts = {}): void {
   let timer = 0;
   const side = opts.side ?? false;
   const inCard = (): boolean => node?.contains(target) ?? false;
-  /** A picture without its name, inside a card, says its name in a plain tip. */
+  /** Inside a card, a thing says in a plain tip what it is in a line, and its name where only its picture shows. */
   const named = (): void => {
-    if (!inCard() || target.querySelector(".k-thing-name, .k-info-tile-name")) return;
-    const r = target.getBoundingClientRect();
-    tipAt({ x: r.left, y: r.top, w: r.width, h: r.height }, deck.describe(ref)?.name ?? "", "", target);
+    const d = inCard() ? deck.describe(ref) : null;
+    if (d) tipBeside(target, target.querySelector(".k-thing-name, .k-info-tile-name") ? "" : d.name, d.brief);
   };
   /** After a moment, if the mouse is still on it, its card shows. */
   const rest = (): void => {

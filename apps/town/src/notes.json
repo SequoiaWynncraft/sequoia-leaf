@@ -1,5 +1,13 @@
 [
   {
+    "id": "raid-card-hover",
+    "at": "2026-11-26T22:26Z",
+    "title": "Items say what they give",
+    "lines": [
+      "In The Little Raid, pointing at an item or boon inside a card shows what it gives, such as Thorn: +15% attack, and what it does. Click it to open its whole card, as before."
+    ]
+  },
+  {
     "id": "raid-sell-items-back",
     "at": "2026-11-26T22:13Z",
     "title": "Selling keeps your items",

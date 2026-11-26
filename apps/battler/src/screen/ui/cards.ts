@@ -368,6 +368,10 @@ export const itemWords = (id: ItemId): HTMLElement => {
   );
 };
 
+/** What an item is in a line, for a tip: what it adds, and what it does unless that is all it does. */
+const itemBrief = (id: ItemId): string =>
+  [itemAdds(id).join(" · "), isComponentId(id) ? "" : itemShort(id)].filter((part) => part !== "").join(". ");
+
 /**
  * An item: what it adds and does, and what it is made of or makes (or for an emblem, its kin). A
  * component's "makes" lines put first, lit and tagged "have", the ones whose other half the party
@@ -384,6 +388,7 @@ export function itemDesc(id: ItemId, run: RunView | null, itemAt = -1, lore = fa
     return {
       name: itemName(id),
       icon: itemIcon(id),
+      brief: itemBrief(id),
       tag: "An emblem",
       blocks,
       chips: [{ label: "Kin", text: TRAITS[kin].name, icon: traitIcon(kin), ref: traitRef(kin) }],
@@ -392,6 +397,7 @@ export function itemDesc(id: ItemId, run: RunView | null, itemAt = -1, lore = fa
   return {
     name: itemName(id),
     icon: itemIcon(id),
+    brief: itemBrief(id),
     tag: isComponentId(id) ? "A component" : "A finished item",
     blocks,
     rows: isComponentId(id)
@@ -427,6 +433,7 @@ export function boonDesc(id: BoonId): Description {
   return {
     name: spec.name,
     icon: boonIcon(id),
+    brief: boonShort(id),
     tag: spec.sort === "charm" ? "A charm" : "A boon",
     blocks: [{ body: rich(boonShort(id)) }],
     chips: kin ? [{ label: "Counts for", text: TRAITS[kin].name, icon: traitIcon(kin), ref: traitRef(kin) }] : [],
