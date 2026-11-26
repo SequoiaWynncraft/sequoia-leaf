@@ -105,8 +105,8 @@ export interface Look {
   /** Steps it winds up before its ability goes off, and how its body moves meanwhile. */
   readonly wind: number;
   readonly body: Body;
-  /** Colours drawn in toward it while it winds up. */
-  readonly gather?: readonly string[];
+  /** Colours drawn in toward it while it winds up: these, or its own (`livery.ts`). */
+  readonly gather?: readonly string[] | "own";
   /** For one that leaps or runs to where it goes off: steps on the way, ending as it goes off. */
   readonly leap?: number;
   /** For one that strikes its target itself: how far it lunges, peaking as it goes off. */
@@ -119,12 +119,11 @@ export interface Look {
   readonly mark: MarkId;
   /**
    * It lands some steps after it goes off (the rules' `ticks`), with nothing thrown: the hexes it
-   * covers are marked until then, and its mark, bump and stop come then, on whoever it is for where
+   * covers are marked until then, its owner's seal lies under whoever it is for and a lance hangs
+   * over them, in its owner's colours (`spells.ts`), and its mark, bump and stop come then, where
    * they stand by then.
    */
   readonly lands?: true;
-  /** Until it lands, its owner's face looms behind whoever it is for, with its name as a caption (`omens.ts`). */
-  readonly looms?: true;
   /** A big moment: how far the board bumps, in art pixels at 1x (1 for most, 2 for the biggest). */
   readonly bump?: number;
   /** Seconds the fight's clock holds as it goes off, at 1x; a big moment holds as long as `STOP.big` unless it says. */
@@ -170,10 +169,9 @@ export const LOOKS: Partial<Record<UnitKind, Look>> = {
   "banner-1": {
     wind: 12,
     body: "rear",
-    gather: [SKY[3], GOLD[1], WATER[3]],
+    gather: "own",
     mark: "caught",
     lands: true,
-    looms: true,
     bump: 2,
     stop: 0.12,
   },
@@ -248,7 +246,7 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
   bigcrab: { n: -15, wave: "square", hiss: 1800, slide: 0.6, vol: 0.12 },
 };
 
-/** What a figure throws when it only attacks: a small thing of its own colour, some with a streak behind, a few a thing of their own (`shot`). */
+/** What a figure throws when it only attacks: a small thing of a colour (`"own"`: its own, as `livery.ts` has it), some with a streak behind, a few a thing of their own (`shot`). */
 export const ATTACK_SHOT: Partial<
   Record<UnitKind, { readonly col: string; readonly trail?: boolean; readonly shot?: Thrown }>
 > = {
@@ -265,7 +263,7 @@ export const ATTACK_SHOT: Partial<
   crab23: { col: PAPER[1] },
   heron: { col: CREAM, trail: true },
   apothecary: { col: SKY[4] },
-  "banner-1": { col: GOLD[1], trail: true, shot: "bolt" },
+  "banner-1": { col: "own", trail: true, shot: "bolt" },
   toadstool: { col: SKY[4] },
   gust: { col: CREAM, trail: true },
 };

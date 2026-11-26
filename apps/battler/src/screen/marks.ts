@@ -44,7 +44,6 @@ const INKS: Readonly<Record<string, string>> = {
   E: EARTH[2],
   s: STONE[2],
   S: STONE[3],
-  v: SKY[3],
   w: WATER[2],
   W: WATER[3],
   m: GREEN[3],
@@ -64,7 +63,6 @@ const ROWS = {
   spark: ["G", "o"],
   spoon: ["l", "M"],
   runner: ["eEe"],
-  bolt: [".v.", "vWv", ".v."],
   snip: ["c...c", ".c.c.", "..c.."],
   scribble: ["o.o.o", ".o.o."],
   chevron: [".o.", "o.o"],
@@ -146,6 +144,13 @@ export function drawShot(g: Ctx, s: Shot, c: number): void {
     // A small edged thing.
     R(g, x - 1, y - 1, 3, 3, INK);
     R(g, x, y, 1, 1, s.look === "beam" ? GOLD[2] : s.col);
+  } else if (s.look === "bolt") {
+    // A cross of its thrower's colour with a bright middle.
+    R(g, x - 2, y - 1, 5, 3, INK);
+    R(g, x - 1, y - 2, 3, 5, INK);
+    R(g, x - 1, y, 3, 1, s.col);
+    R(g, x, y - 1, 1, 3, s.col);
+    R(g, x, y, 1, 1, GOLD[2]);
   } else if (s.look === "dust") swirl(g, x, y, c, [CREAM, WATER[3]]);
   else if (s.look === "gust") swirl(g, x, y, c * 1.6, [CREAM, WATER[3]]);
   else {
@@ -166,6 +171,8 @@ export interface At {
   /** Where each figure it is for stands. */
   readonly hit: readonly Pt[];
   readonly col: string;
+  /** Its owner's own colours (`livery.ts`). */
+  readonly own: readonly string[];
   /** Whether whoever it lands on holds anything (shiny, to a magpie). */
   readonly shiny: boolean;
 }
@@ -291,13 +298,14 @@ export const MARKS: Readonly<Record<MarkId, (m: At) => void>> = {
     pop(art("swipe"), chest(m).x, chest(m).y, "stick", 0.25);
     burst(chest(m).x, chest(m).y, 6, [CORAL, CREAM], { speed: 40, ttl: 0.25, toward: away(m), spread: 1 });
   },
-  // What loomed comes down: lines down onto each one hit, the ground thrown out all round, and embers left rising off every hex.
+  // What hung comes down, in its owner's colours: lines down onto each hex, the ground thrown out all round, and embers left rising off every hex.
   caught: (m) => {
-    dustRing(m.x, m.y, 30, [SKY[3], GOLD[1]]);
-    ring(m.x, m.y, 15, GOLD[2], 0.3);
+    const [main = m.col, trim = m.col, core = CREAM] = m.own;
+    dustRing(m.x, m.y, 30, [trim, core]);
+    ring(m.x, m.y, 15, core, 0.3);
     for (const c of m.cells) {
-      streak({ x: c.x, y: c.y - 30 }, { x: c.x, y: c.y - 3 }, GOLD[2], SKY[3], 0.24);
-      burst(c.x, c.y - 3, 3, [SKY[3], SKY[4], WATER[3]], {
+      streak({ x: c.x, y: c.y - 30 }, { x: c.x, y: c.y - 3 }, core, main, 0.24);
+      burst(c.x, c.y - 3, 3, m.own, {
         toward: UP,
         spread: 0.7,
         speed: 22,

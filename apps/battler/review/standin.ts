@@ -1,12 +1,10 @@
 /**
  * For looking at a banner's member in a fight from outside (`window.standin`), beside the tours'
  * handle: the play server's members wear plain made-up skins, so `wear()` has the first banner's
- * member wear a skin with a face worth looking at (a hood with a trim round a face of another
- * colour), and `seat()` plays a fight with everyone seated where the tour says, so that whoever an
+ * member wear a mage's skin (teal hair, a crimson cloak and hood with purple trim, a gold collar), and `seat()` plays a fight with everyone seated where the tour says, so that whoever an
  * ability picks can be put in the front row or the back.
  */
 import { wear } from "@sequoia-leaf/figures/sprites.ts";
-import { GOLD, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap } from "@sequoia-leaf/kit/pix.ts";
 import { bake } from "@sequoia-leaf/kit/skin.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
@@ -15,27 +13,43 @@ import { isUnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { fightEvents, fightUnits, startFight } from "../src/screen/fightview.ts";
 import { S } from "../src/screen/state.ts";
 
-const INKS = { P: "#7b3f9c", p: SKY[2], G: GOLD[1], g: GOLD[0], T: "#3fa79b", t: "#2f8a8a", D: "#143f4a" };
-const FACE = ["PPPPPPPP", "PGGGGGGP", "GTTTTTTG", "GDDTTDDG", "GTTDDTTG", "GTDDDDTG", "PGDTTDGP", "PPGGGGPP"];
-const HOOD = ["PPPPPPPP", "PPPPPPPG", "PPPPPPGG", "PPPPPPGT", "PPPPPPGT", "PPPPPPGT", "PPPPPPPG", "pPPPPPPP"];
-const BACK = ["PPPPPPPP", "PPPPPPPP", "PPPPPPPP", "PPPPPPPP", "PPPPPPPP", "PPPPPPPP", "pPPPPPPp", "ppPPPPpp"];
+/** A mage's colours, as painted and not the palette's: teal hair, a crimson cloak and hood trimmed purple, a gold collar, a dark robe, brown boots. */
+const INKS = {
+  T: "#109e85",
+  t: "#0a584a",
+  L: "#02bfa8",
+  K: "#ffa0b1",
+  k: "#ffdde3",
+  R: "#a90013",
+  r: "#8a0010",
+  V: "#5f02d5",
+  v: "#4b03a7",
+  Y: "#ffd800",
+  D: "#0f0826",
+  N: "#654234",
+  n: "#27130c",
+  B: "#b57b67",
+};
+const FACE = ["rRTRRRRt", "TTtVVLTt", "RVTTTTTT", "RVTkLLkT", "tTTLLLLt", "RVtLLLtR", "RtTKLKRR", "RRNTTNRR"];
+const HOOD = ["rrRRRRRt", "rRRRRRVt", "rRRRRRVT", "rRRRRVTT", "rRRRRVTT", "rRRRRRVT", "rRRRRRVt", "rrRRRRVv"];
+const BACK = ["rrRRRRrr", "rRRRRRRr", "RRRRRRRR", "RRRRRRRR", "RRRRRRRR", "RRRRRRRR", "rRRRRRRr", "rrVVVVrr"];
 const ROBE = [
-  "PPGGGGPP",
-  "PPPGGPPP",
-  "PPPGGPPP",
-  "PPPGGPPP",
-  "PPPGGPPP",
-  "PPPGGPPP",
-  "GGGGGGGG",
-  "PPPGGPPP",
-  "PPPGGPPP",
-  "PPPGGPPP",
-  "pPPGGPPp",
-  "ggGGGGgg",
+  "RVYDDYVR",
+  "RVVYYVVR",
+  "RRVDDVRR",
+  "RRVDDVRR",
+  "RRVDDVRR",
+  "RRVDDVRR",
+  "RRVDDVRR",
+  "RRVDDVRR",
+  "RRVVVVRR",
+  "RRVDDVRR",
+  "rRVDDVRr",
+  "rRVDDVRr",
 ];
-const SIDE = ["PPPP", "PPPP", "PPPP", "PPPP", "PPPP", "PPPP", "GGGG", "PPPP", "PPPP", "PPPP", "pppp", "gggg"];
-const ARM = ["PPPP", "PPPP", "PPPP", "PPPP", "PPPP", "PPPP", "PPPP", "PPPP", "GGGG", "gggg", "TTTT", "TTTT"];
-const LEG = ["pppp", "pppp", "pppp", "pppp", "pppp", "pppp", "pppp", "pppp", "pppp", "GGGG", "gggg", "gggg"];
+const SIDE = ["RRRR", "RRRR", "RRRR", "RRRR", "RRRR", "RRRR", "RRRR", "RRRR", "RRRR", "rRRr", "VVVV", "rrrr"];
+const ARM = ["RRRR", "RRRR", "RRRR", "RRRR", "RRRR", "RRRR", "RRRR", "RRRR", "rRRr", "VVVV", "KKKK", "kKKk"];
+const LEG = ["RnnR", "RnnR", "RnnR", "RnnR", "VnnV", "nnnn", "nnnn", "NNNN", "NNNN", "BBBB", "BBBB", "NNNN"];
 
 /** A whole skin sheet laid out as a real one is: the head's faces, the body's, an arm and a leg. */
 function sheet(): HTMLCanvasElement {
@@ -61,9 +75,15 @@ function sheet(): HTMLCanvasElement {
 type Seated = readonly [kind: string, seat: number];
 
 const standin = {
-  /** The first banner's member is Hoodwick from now on, in the hooded skin. */
-  wear(): string {
-    wear("banner-1", "Hoodwick", bake(sheet()));
+  /**
+   * The first banner's member is Hoodwick from now on, in the mage's skin; or, given a skin sheet as
+   * a `data:` address, in that skin, as the game paints a member from their own (pictures stay out
+   * of the repository, so whoever looks passes one in).
+   */
+  async wear(skin?: string): Promise<string> {
+    const worn = skin === undefined ? sheet() : Object.assign(new Image(), { src: skin });
+    if (worn instanceof HTMLImageElement) await worn.decode();
+    wear("banner-1", "Hoodwick", bake(worn));
     return "Hoodwick";
   },
   /** Plays a fight on the table between two parties seated as said, at some stars, from a seed; the table must be planning. */

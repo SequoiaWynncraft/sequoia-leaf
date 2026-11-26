@@ -30,9 +30,9 @@ import { DIM, shineOf } from "./light.ts";
 import { leadOf } from "./looks.ts";
 import { drawShot } from "./marks.ts";
 import { type Actor, actorFor, poseOf } from "./motion.ts";
-import { drawOmens } from "./omens.ts";
 import { advance, openPlayback, playOut } from "./playback.ts";
 import { snd } from "./sounds.ts";
+import { drawSpells } from "./spells.ts";
 import { type Standing, V } from "./stage.ts";
 
 const marksByColour = new Map<string, HTMLCanvasElement>();
@@ -395,7 +395,7 @@ export function drawFightAir(g: Ctx): void {
     );
   }
   g.globalAlpha = 1;
-  drawOmens(g);
+  drawSpells(g);
 }
 
 /** The item a figure in the fight holds under a point measured from the board's corner. */
