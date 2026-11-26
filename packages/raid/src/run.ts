@@ -874,17 +874,17 @@ export interface RunSummary {
   topped: TraitId[];
 }
 export function summariseRun(run: RunView): RunSummary {
-  const wonRooms = new Set(run.record.filter((r) => r.result === "win").map((r) => r.room));
+  // A room is cleared only as the room it is: a sitting's rooms past the fifteenth are kept as the last, as sparring.
+  const wonRooms = new Set(
+    run.record.flatMap((r) => (r.result === "win" && r.kind === ROOMS[r.room]?.kind ? [r.room] : [])),
+  );
   const bosses: BossId[] = [];
   for (const r of run.record) if (r.result === "win" && r.boss && !bosses.includes(r.boss)) bosses.push(r.boss);
   return {
     trail: run.trail,
     ending: endingOf(run),
     cleared: wonRooms.size,
-    reached: Math.min(
-      ROOM_COUNT,
-      run.record.reduce((most, r) => Math.max(most, r.room + 1), run.room + 1),
-    ),
+    reached: Math.min(ROOM_COUNT, Math.max(run.room, ...run.record.map((r) => r.room)) + 1),
     bosses,
     fielded: run.seen.fielded.slice(),
     threeStars: run.seen.threeStars.slice(),

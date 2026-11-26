@@ -20,6 +20,7 @@ import {
   picksOf,
   pieces,
   playsAsKept,
+  type RoomRecord,
   type Run,
   startRun,
   summariseRun,
@@ -238,6 +239,15 @@ describe("bringing a sitting to a moment", () => {
 
 // ---------- the end ----------
 
+/** A room as a run's record keeps it. */
+const roomFought = (room: number, kind: RoomRecord["kind"], result: RoomRecord["result"]): RoomRecord => ({
+  room,
+  kind,
+  result,
+  standing: [1, 0],
+  boss: null,
+});
+
 describe("how a sitting ends", () => {
   test("every sitting of regulars ends, with one winner and every place given once", () => {
     for (let seed = 100; seed < 130; seed++) {
@@ -283,6 +293,14 @@ describe("how a sitting ends", () => {
       for (const s of seatsIn(after)) expect(picksOf(s.run)).toEqual([]);
       for (const s of after.seats) if (s.run.record.length > ROOM_COUNT) expect(s.run.record.at(-1)?.kind).toBe("spar");
     }
+    // A room won past the fifteenth clears nothing: the last room lost and then a win after it is not the last room cleared.
+    const { run } = seat(started(5, 0), 0);
+    run.record = [
+      roomFought(ROOM_COUNT - 2, "spar", "win"),
+      roomFought(ROOM_COUNT - 1, "boss", "loss"),
+      roomFought(ROOM_COUNT - 1, "spar", "win"),
+    ];
+    expect(summariseRun(run).cleared).toBe(1);
     // Every room's cost, the fifteen and those after: the run's rule, and 1 more for each room past the last.
     for (const [before, after] of STEPS.filter(([b]) => b.stage.at === "fight")) {
       before.seats.forEach((s, i) => {
@@ -318,6 +336,8 @@ describe("a sparring room", () => {
           expect(home.setup.sides).toEqual([seat(t, a).shown, seat(t, b).shown]);
           expect(home.outcome).toEqual(resolveFight(home.setup));
           expect(away.outcome).toEqual(sided(home.outcome, 1));
+          // Who is left standing changes places too, so each run is charged for the other side's.
+          expect(away.outcome.standing).toEqual([home.outcome.standing[1], home.outcome.standing[0]]);
           expect([home.outcome.result, away.outcome.result].toSorted()).toEqual(
             home.outcome.result === "draw" ? ["draw", "draw"] : ["loss", "win"],
           );
