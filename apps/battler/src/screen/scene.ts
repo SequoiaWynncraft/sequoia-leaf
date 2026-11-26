@@ -14,6 +14,7 @@ import { regularOf, ROOMS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 
 import { itemPic, levelPic } from "./art/icons.ts";
+import { drawLife } from "./art/place.ts";
 import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
 import { drawFightMarks } from "./fightmarks.ts";
 import { drawFight, drawFightAir, fightBump, fightHeldUnder, fightOn } from "./fightview.ts";
@@ -325,6 +326,7 @@ function drawTable(g: Ctx): void {
   g.drawImage(far, V.bx - 1, V.by - Math.round(V.gap) - 1);
   g.drawImage(near, V.bx - 1, V.by + HOME_ROWS * ROW - 1);
   drawLamps(g);
+  drawLife(g, place(), V.t, S.looks.place);
   const run = S.run;
   if (!run || S.screen.at === "front" || S.screen.at === "over") return;
   drawPeople(g, run);

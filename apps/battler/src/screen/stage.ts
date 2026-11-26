@@ -12,9 +12,10 @@ import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { paced } from "@sequoia-leaf/kit/pace.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
-import type { ClothId, LanternId } from "@sequoia-leaf/raid";
+import { type Looks, newLooks } from "@sequoia-leaf/raid";
 
-import { paintHalf, paintTable, type Place } from "./art/table.ts";
+import { paintPlace } from "./art/place.ts";
+import { paintHalf, type Place } from "./art/table.ts";
 import { BENCH_H, BENCH_Y, BOARD_W, GAP, type Pt } from "./geometry.ts";
 
 export const V = {
@@ -68,7 +69,7 @@ const buf = makeCanvas(320, 200, true);
 const overBuf = makeCanvas(320, 200, true);
 let table: HTMLCanvasElement | null = null;
 let tableKey = "";
-let look: { cloth: ClothId; lantern: LanternId } = { cloth: "bare", lantern: "iron" };
+let look: Looks = newLooks();
 let halves: { far: HTMLCanvasElement; near: HTMLCanvasElement } | null = null;
 let overWasDrawn = false;
 let stopped = false;
@@ -142,17 +143,17 @@ export function layout(): void {
   if (stopped) render();
 }
 
-/** Changes how the table is dressed. */
-export function dress(cloth: ClothId, lantern: LanternId): void {
-  look = { cloth, lantern };
+/** Changes where the table stands and how it is dressed. */
+export function dress(looks: Looks): void {
+  look = looks;
   repaint();
 }
 
 function repaint(): void {
-  const key = `${V.w}x${V.h}@${V.bx},${V.by}:${look.cloth}:${look.lantern}`;
+  const key = `${V.w}x${V.h}@${V.bx},${V.by}:${look.place}:${look.cloth}:${look.lantern}`;
   if (key === tableKey && table) return;
   tableKey = key;
-  table = paintTable(place(), look.cloth, look.lantern);
+  table = paintPlace(place(), look);
 }
 
 /** Moves the clock on. */

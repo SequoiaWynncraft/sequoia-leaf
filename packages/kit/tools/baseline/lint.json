@@ -1,7 +1,7 @@
 {
   "complexity": {
     "apps/api/src/play/service.ts": 53,
-    "apps/battler/src/screen/art/table.ts": 75,
+    "apps/battler/src/screen/art/table.ts": 72,
     "apps/battler/src/screen/flow.ts": 30,
     "apps/battler/src/screen/hand.ts": 70,
     "apps/battler/src/screen/logic.ts": 27,
@@ -88,7 +88,7 @@
   },
   "max-lines": {
     "apps/api/src/play/service.ts": 622,
-    "apps/battler/src/screen/ui/pages.ts": 686,
+    "apps/battler/src/screen/ui/pages.ts": 679,
     "apps/battler/src/screen/ui/table.ts": 540,
     "apps/town/src/campart.ts": 1389,
     "apps/town/src/campscene.ts": 1354,
@@ -121,7 +121,7 @@
     "apps/api/src/play/store.ts": 173,
     "apps/api/src/quests/store.ts": 173,
     "apps/battler/src/main.ts": 97,
-    "apps/battler/src/screen/art/table.ts": 168,
+    "apps/battler/src/screen/art/table.ts": 147,
     "apps/battler/src/screen/flow.ts": 91,
     "apps/battler/src/screen/ui/pages.ts": 282,
     "apps/battler/src/screen/ui/table.ts": 126,

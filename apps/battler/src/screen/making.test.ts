@@ -10,6 +10,7 @@ import {
   GOOD_WITH,
   type ItemId,
   newAlmanac,
+  newLooks,
   type Piece,
   predict,
   type RaidCommand,
@@ -127,7 +128,7 @@ describe("what a figure's card offers", () => {
   });
 });
 const emptyAlmanac: TableView["almanac"] = newAlmanac();
-const plainLooks: TableView["looks"] = { cloth: "bare", lantern: "iron", bases: "plain", owned: [] };
+const plainLooks: TableView["looks"] = newLooks();
 
 describe("who on the board wants an item", () => {
   // A Kettle is good with a Stewpot, a Glowthorn and a Lichen Locket; a Rock with none of those.

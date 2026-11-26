@@ -1,5 +1,5 @@
 import { PAL } from "@sequoia-leaf/figures/pal.ts";
-import { type BaseLook, drawStanding } from "@sequoia-leaf/figures/sprites.ts";
+import { drawStanding } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The table, painted once for the size of the window and kept: the top of the great stump with its
  * rings, the clearing and the far trunks behind it, the cloth, the bench along its near edge, the
@@ -11,7 +11,7 @@ import { type BaseLook, drawStanding } from "@sequoia-leaf/figures/sprites.ts";
 import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, ell, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, hash, makeCanvas, vnoise } from "@sequoia-leaf/kit/util.ts";
-import type { ClothId, LanternId } from "@sequoia-leaf/raid";
+import type { ClothId, LanternId, Looks } from "@sequoia-leaf/raid";
 import type { UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { COLS, HOME_ROWS } from "@sequoia-leaf/raid/hex.ts";
 
@@ -32,7 +32,8 @@ import {
   SLOT_W,
 } from "../geometry.ts";
 
-const at = (ramp: readonly string[], i: number): string => ramp[clamp(Math.round(i), 0, ramp.length - 1)] ?? "#000000";
+export const at = (ramp: readonly string[], i: number): string =>
+  ramp[clamp(Math.round(i), 0, ramp.length - 1)] ?? "#000000";
 const DEEP = ["#141f1c", "#19291f", "#1e3324"] as const;
 const TRUNK_RAMP = ["#1c1019", "#2a1519", ...BARK];
 
@@ -217,18 +218,27 @@ function paintTrunk(hw: number, height: number, seed: number): HTMLCanvasElement
   });
 }
 
+/** The four tones a lantern's post is made of, darkest first. */
+export type PostTones = readonly [string, string, string, string, ...string[]];
 /** A lantern post with its arm reaching `side` (1 right, -1 left), and whichever lantern is hung. */
-function drawPost(g: Ctx, x: number, foot: number, side: 1 | -1, lantern: LanternId): void {
+export function drawPost(
+  g: Ctx,
+  x: number,
+  foot: number,
+  side: 1 | -1,
+  lantern: LanternId,
+  of: PostTones = BARK,
+): void {
   const { c, g: pg } = makeCanvas(20, 40);
   R(pg, 4, 37, 6, 3, STONE[1]);
   R(pg, 4, 37, 6, 1, STONE[3]);
-  R(pg, 5, 4, 3, 34, BARK[1]);
-  R(pg, 5, 4, 1, 34, BARK[3]);
-  R(pg, 4, 2, 5, 2, BARK[2]);
-  R(pg, 5, 5, 12, 2, BARK[1]);
-  R(pg, 5, 5, 12, 1, BARK[3]);
-  for (let i = 0; i < 4; i++) R(pg, 8 + i, 10 - i, 1, 1, BARK[1]);
-  R(pg, 15, 7, 1, 2, BARK[0]);
+  R(pg, 5, 4, 3, 34, of[1]);
+  R(pg, 5, 4, 1, 34, of[3]);
+  R(pg, 4, 2, 5, 2, of[2]);
+  R(pg, 5, 5, 12, 2, of[1]);
+  R(pg, 5, 5, 12, 1, of[3]);
+  for (let i = 0; i < 4; i++) R(pg, 8 + i, 10 - i, 1, 1, of[1]);
+  R(pg, 15, 7, 1, 2, of[0]);
   if (lantern === "paper") {
     R(pg, 14, 9, 3, 1, BARK[1]);
     R(pg, 13, 10, 5, 5, SKY[4]);
@@ -281,7 +291,8 @@ export function warmGlow(): HTMLCanvasElement {
   ]);
   return warm;
 }
-function lightHole(): HTMLCanvasElement {
+/** A soft hole, for cutting light out of the dark laid over the picture. */
+export function lightHole(): HTMLCanvasElement {
   hole ??= radial([
     [0, "rgba(0,0,0,1)"],
     [0.45, "rgba(0,0,0,0.9)"],
@@ -301,7 +312,7 @@ const CLOTH: Readonly<Record<ClothId, readonly [string, string, string] | null>>
 };
 
 /** The cloth under the board, if there is one: its colour at a pixel, or null where it does not reach. */
-function clothAt(cloth: ClothId, x: number, y: number, p: Place): string | null {
+export function clothAt(cloth: ClothId, x: number, y: number, p: Place): string | null {
   const tones = CLOTH[cloth];
   if (!tones) return null;
   const x0 = p.bx - 9;
@@ -325,6 +336,32 @@ function clothAt(cloth: ClothId, x: number, y: number, p: Place): string | null 
   if (hash(x >> 1, y >> 1, 611) > 0.9) return tones[0];
   if ((x - x0) % 56 === 55) return tones[2];
   return tones[1];
+}
+
+/** The bench: a plank along the near edge with nine hollows cut in it. */
+export function drawBench(g: Ctx, p: Place): void {
+  const px = p.bx + BENCH_X - 4;
+  const py = p.by + BENCH_Y - 2;
+  const pw = BENCH_W + 8;
+  const ph = BENCH_H + 3;
+  R(g, px, py - 1, pw, ph + 2, INK);
+  R(g, px - 1, py, pw + 2, ph, INK);
+  R(g, px, py, pw, ph, BARK[3]);
+  R(g, px, py, pw, 1, BARK[4]);
+  R(g, px, py + ph - 2, pw, 2, BARK[1]);
+  for (let i = 0; i < 9; i++) R(g, px + 6 + i * 21, py + 1, 9, 1, BARK[2]);
+  for (const nx of [px + 1, px + pw - 3]) {
+    R(g, nx, py + 3, 2, 2, GOLD[1]);
+    R(g, nx, py + ph - 6, 2, 2, GOLD[1]);
+  }
+  for (let i = 0; i < BENCH_SLOTS; i++) {
+    const sx = p.bx + BENCH_X + i * SLOT_W + 1;
+    const sy = py + 3;
+    R(g, sx, sy, SLOT_W - 2, BENCH_H - 5, INK);
+    R(g, sx + 1, sy + 1, SLOT_W - 3, BENCH_H - 6, "#211228");
+    R(g, sx + 1, sy + BENCH_H - 6, SLOT_W - 3, 1, SKY[1]);
+    R(g, sx + SLOT_W - 3, sy + 1, 1, BENCH_H - 6, SKY[1]);
+  }
 }
 
 /** The table and everything round it that never moves, lit, for a window this size. */
@@ -452,29 +489,7 @@ export function paintTable(p: Place, cloth: ClothId, lantern: LanternId): HTMLCa
   }
   for (const post of postsOf(p)) drawPost(g, post.x, post.foot, post.side, lantern);
 
-  // The bench: a plank along the near edge with nine hollows cut in it.
-  const px = p.bx + BENCH_X - 4;
-  const py = p.by + BENCH_Y - 2;
-  const pw = BENCH_W + 8;
-  const ph = BENCH_H + 3;
-  R(g, px, py - 1, pw, ph + 2, INK);
-  R(g, px - 1, py, pw + 2, ph, INK);
-  R(g, px, py, pw, ph, BARK[3]);
-  R(g, px, py, pw, 1, BARK[4]);
-  R(g, px, py + ph - 2, pw, 2, BARK[1]);
-  for (let i = 0; i < 9; i++) R(g, px + 6 + i * 21, py + 1, 9, 1, BARK[2]);
-  for (const nx of [px + 1, px + pw - 3]) {
-    R(g, nx, py + 3, 2, 2, GOLD[1]);
-    R(g, nx, py + ph - 6, 2, 2, GOLD[1]);
-  }
-  for (let i = 0; i < BENCH_SLOTS; i++) {
-    const sx = p.bx + BENCH_X + i * SLOT_W + 1;
-    const sy = py + 3;
-    R(g, sx, sy, SLOT_W - 2, BENCH_H - 5, INK);
-    R(g, sx + 1, sy + 1, SLOT_W - 3, BENCH_H - 6, "#211228");
-    R(g, sx + 1, sy + BENCH_H - 6, SLOT_W - 3, 1, SKY[1]);
-    R(g, sx + SLOT_W - 3, sy + 1, 1, BENCH_H - 6, SKY[1]);
-  }
+  drawBench(g, p);
 
   // Dusk over everything, with the lanterns' light and the pool it throws on the board cut out.
   const dusk = makeCanvas(p.w, p.h);
@@ -515,20 +530,24 @@ export function paintTable(p: Place, cloth: ClothId, lantern: LanternId): HTMLCa
   return c;
 }
 
+type Dressing = Pick<Looks, "cloth" | "lantern" | "bases">;
+function swatchRings(x: number, y: number): string {
+  const ring = Math.hypot(x - 80, (y - 8) * 1.3) / 9 + vnoise(x / 22, y / 22, 503) * 1.1;
+  return ring - Math.floor(ring) < 0.16 ? BARK[4] : GOLD[0];
+}
+
 /**
  * A corner of the table as it would look dressed a certain way, for trying a look on before it is
  * bought: a patch of cloth with a few hexes on it, the lantern lit, and three figures on their bases.
+ * Another place than the clearing gives its own wood for the table and tones for the post.
  */
-export function paintSwatch(cloth: ClothId, lantern: LanternId, bases: BaseLook): HTMLCanvasElement {
+export function paintSwatch(looks: Dressing, wood = swatchRings, post?: PostTones): HTMLCanvasElement {
   const w = 92;
   const h = 62;
   const p: Place = { w, h, bx: 20, by: 24 };
   const c = paint(w, h, (x, y) => {
-    const laid = clothAt(cloth, x, y, p);
-    if (laid && x < w - 4 && y < h - 4) return laid;
-    const ring = Math.hypot(x - 80, (y - 8) * 1.3) / 9 + vnoise(x / 22, y / 22, 503) * 1.1;
-    const f = ring - Math.floor(ring);
-    return f < 0.16 ? BARK[4] : GOLD[0];
+    const laid = clothAt(looks.cloth, x, y, p);
+    return laid && x < w - 4 && y < h - 4 ? laid : wood(x, y);
   });
   const g = c.getContext("2d");
   if (!g) return c;
@@ -548,9 +567,9 @@ export function paintSwatch(cloth: ClothId, lantern: LanternId, bases: BaseLook)
     ["glorp", 76, 45],
   ];
   for (const [kind, x, y] of stand) {
-    drawStanding(g, kind, x, y, bases);
+    drawStanding(g, kind, x, y, looks.bases);
   }
-  drawPost(g, 9, 56, 1, lantern);
+  drawPost(g, 9, 56, 1, looks.lantern, post);
   g.globalCompositeOperation = "lighter";
   g.globalAlpha = 0.2;
   g.drawImage(warmGlow(), 18 - 30, 29 - 30, 60, 60);

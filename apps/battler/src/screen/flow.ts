@@ -138,7 +138,7 @@ function acted(before: Screen, now: Screen): void {
     forgetTable();
     clearPawns();
     clearFx();
-    dress(S.looks.cloth, S.looks.lantern);
+    dress(S.looks);
     syncPawns(run, true);
   }
   if (before.at === "after" && now.at !== "after") forgetLater();

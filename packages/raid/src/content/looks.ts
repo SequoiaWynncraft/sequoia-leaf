@@ -1,7 +1,7 @@
 /**
- * How the table may look: a cloth under the board, a lantern over it, and the figures' bases. They
- * change nothing but the picture. The plain one of each kind is everybody's; the rest are bought
- * with Leaf (the table's `buyLook`).
+ * How the table may look: the place it stands, a cloth under the board, a lantern over it, and the
+ * figures' bases. They change nothing but the picture. The plain one of each kind is everybody's;
+ * the rest are bought with Leaf (the table's `buyLook`).
  */
 
 import type { LeafFor } from "@sequoia-leaf/core";
@@ -16,8 +16,18 @@ export interface LookSpec<Id extends string> {
   readonly for: LeafFor;
 }
 
+export const PLACES = [
+  { id: "clearing", name: "The clearing", text: "The great stump, at dusk.", leaf: 0, for: "everyone" },
+  {
+    id: "hall",
+    name: "The guild hall",
+    text: "The long oak table, late, with the hearth still lit.",
+    leaf: 40_000,
+    for: "everyone",
+  },
+] as const satisfies readonly LookSpec<string>[];
 export const CLOTHS = [
-  { id: "bare", name: "Bare rings", text: "The stump as it was cut.", leaf: 0, for: "everyone" },
+  { id: "bare", name: "Bare wood", text: "The table as it was cut.", leaf: 0, for: "everyone" },
   { id: "baize", name: "Green baize", text: "A proper games cloth, moss green.", leaf: 12_000, for: "everyone" },
   {
     id: "plum",
@@ -51,19 +61,22 @@ export const BASES = [
   { id: "gilt", name: "Gilt rims", text: "A line of gold round every base.", leaf: 28_000, for: "everyone" },
 ] as const satisfies readonly LookSpec<string>[];
 
+export type PlaceId = (typeof PLACES)[number]["id"];
 export type ClothId = (typeof CLOTHS)[number]["id"];
 export type LanternId = (typeof LANTERNS)[number]["id"];
 export type BaseId = (typeof BASES)[number]["id"];
-export type LookId = ClothId | LanternId | BaseId;
-export type LookKind = "cloth" | "lantern" | "bases";
+export type LookId = PlaceId | ClothId | LanternId | BaseId;
+export type LookKind = "place" | "cloth" | "lantern" | "bases";
 
 export const LOOKS: Readonly<Record<LookKind, readonly LookSpec<LookId>[]>> = {
+  place: PLACES,
   cloth: CLOTHS,
   lantern: LANTERNS,
   bases: BASES,
 };
-export const LOOK_KINDS: readonly LookKind[] = ["cloth", "lantern", "bases"];
+export const LOOK_KINDS: readonly LookKind[] = ["place", "cloth", "lantern", "bases"];
 export const LOOK_TITLES: Readonly<Record<LookKind, string>> = {
+  place: "Around the table",
   cloth: "Under the board",
   lantern: "Over the table",
   bases: "Under the figures",
@@ -71,19 +84,24 @@ export const LOOK_TITLES: Readonly<Record<LookKind, string>> = {
 
 /** The looks a member has: what is on the table now, and those bought (the free ones are never listed). */
 export interface Looks {
+  place: PlaceId;
   cloth: ClothId;
   lantern: LanternId;
   bases: BaseId;
   owned: LookId[];
 }
-export const newLooks = (): Looks => ({ cloth: "bare", lantern: "iron", bases: "plain", owned: [] });
+export const newLooks = (): Looks => ({
+  place: "clearing",
+  cloth: "bare",
+  lantern: "iron",
+  bases: "plain",
+  owned: [],
+});
 
 const idOf = <Id extends string>(list: readonly LookSpec<Id>[], v: unknown): Id | null =>
   list.find((l) => l.id === v)?.id ?? null;
 /** A look's name as one of its kind, or null if it is not one. */
-export const clothOf = (v: unknown): ClothId | null => idOf(CLOTHS, v);
-export const lanternOf = (v: unknown): LanternId | null => idOf(LANTERNS, v);
-export const baseOf = (v: unknown): BaseId | null => idOf(BASES, v);
+export const lookOf = (kind: LookKind, v: unknown): LookId | null => idOf(LOOKS[kind], v);
 export const isLookKind = (v: unknown): v is LookKind => LOOK_KINDS.some((kind) => kind === v);
 /** A look that is bought: one of any kind, other than the free one. */
 export const isBoughtLook = (v: unknown): v is LookId =>
@@ -96,19 +114,23 @@ export function owns(looks: Pick<Looks, "owned">, kind: LookKind, id: string): b
 }
 
 /** What is worn of a kind. */
-export const wornOf = (looks: Looks, kind: LookKind): LookId =>
-  kind === "cloth" ? looks.cloth : kind === "lantern" ? looks.lantern : looks.bases;
+export const wornOf = (looks: Looks, kind: LookKind): LookId => looks[kind];
+
+/** The looks with one more put on, owned or not (trying it on); as they were if it is not one of that kind. */
+export function tryOn(looks: Looks, kind: LookKind, id: string): Looks {
+  return {
+    ...looks,
+    place: (kind === "place" ? idOf(PLACES, id) : null) ?? looks.place,
+    cloth: (kind === "cloth" ? idOf(CLOTHS, id) : null) ?? looks.cloth,
+    lantern: (kind === "lantern" ? idOf(LANTERNS, id) : null) ?? looks.lantern,
+    bases: (kind === "bases" ? idOf(BASES, id) : null) ?? looks.bases,
+  };
+}
 
 /** Puts a look on the table, if it is one of that kind the member may use; says whether it did. */
 export function wear(looks: Looks, kind: LookKind, id: string): boolean {
   if (!owns(looks, kind, id)) return false;
-  const cloth = kind === "cloth" ? clothOf(id) : null;
-  const lantern = kind === "lantern" ? lanternOf(id) : null;
-  const bases = kind === "bases" ? baseOf(id) : null;
-  if (cloth) looks.cloth = cloth;
-  else if (lantern) looks.lantern = lantern;
-  else if (bases) looks.bases = bases;
-  else return false;
+  Object.assign(looks, tryOn(looks, kind, id));
   return true;
 }
 
@@ -117,7 +139,7 @@ const isLookId = (v: unknown): v is LookId => LOOK_KINDS.some((kind) => LOOKS[ki
 /**
  * Looks from plain data, or null if they are not a member's looks. A look bought that is free now
  * is no longer listed as bought, and one worn that is not the member's now is put away for the
- * plain one of its kind.
+ * plain one of its kind. Looks kept before the table had a place are in the clearing.
  */
 export function readLooks(v: unknown): Looks | null {
   if (!isRecord(v) || !Array.isArray(v.owned) || v.owned.length > 64) return null;
@@ -126,14 +148,12 @@ export function readLooks(v: unknown): Looks | null {
     if (!isLookId(id) || owned.includes(id)) return null;
     if (isBoughtLook(id)) owned.push(id);
   }
-  const cloth = clothOf(v.cloth);
-  const lantern = lanternOf(v.lantern);
-  const bases = baseOf(v.bases);
-  if (!cloth || !lantern || !bases) return null;
   const looks = newLooks();
   looks.owned = owned;
-  wear(looks, "cloth", cloth);
-  wear(looks, "lantern", lantern);
-  wear(looks, "bases", bases);
+  for (const kind of LOOK_KINDS) {
+    const id = lookOf(kind, kind === "place" ? (v.place ?? looks.place) : v[kind]);
+    if (!id) return null;
+    wear(looks, kind, id);
+  }
   return looks;
 }

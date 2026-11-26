@@ -352,7 +352,7 @@ anything, so nothing a command draws can be worked out beforehand from what the 
 ## The table, as Leaf plays it (`game.ts`)
 
 `RAID` is the game's `Game` (`packages/core/src/play.ts`), for Leaf's play service. Its state, the
-`Table`, is the run in hand (or none), the almanac, the looks (`content/looks.ts`), the trail picked
+`Table`, is the run in hand (or none), the almanac, the looks (`content/looks.ts`: the place the table stands, the cloth, the lantern, the bases), the trail picked
 on the front page, the number of runs begun, and the table's stream. One command for each thing a
 player does (`RaidCommand`): `start` (a run on a trail, with all figures or with `own` the member's own; a run in hand is put down first, as walking
 home, once it has fought a room), `trail` (pick the trail to set out on next), `look` (put an owned look on the table;
