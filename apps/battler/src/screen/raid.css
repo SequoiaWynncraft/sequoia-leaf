@@ -232,6 +232,50 @@ body[data-picking="yes"] #foe {
   width: calc(var(--u) * 16);
   height: calc(var(--u) * 16);
 }
+/* An item in the hand: the components it would forge with pulse, and the one it is over is bright. */
+#rack .item {
+  position: relative;
+}
+#rack .item.pairs {
+  animation: pairs 0.9s ease-in-out infinite alternate;
+}
+#rack .item.aimed {
+  animation: none;
+  filter: brightness(1.35);
+  box-shadow: 0 0 0 var(--u) var(--k-cream);
+}
+@keyframes pairs {
+  from {
+    box-shadow: 0 0 0 var(--u) #f5b95e60;
+  }
+  to {
+    box-shadow: 0 0 0 var(--u) var(--k-gold);
+  }
+}
+/* Somebody fielded wants it: the board's small heart, in its corner. */
+#rack .item.wanted::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--u) * -2);
+  right: calc(var(--u) * 4);
+  width: var(--u);
+  height: var(--u);
+  pointer-events: none;
+  filter: drop-shadow(var(--u) 0 0 var(--k-ink)) drop-shadow(calc(var(--u) * -1) 0 0 var(--k-ink))
+    drop-shadow(0 var(--u) 0 var(--k-ink)) drop-shadow(0 calc(var(--u) * -1) 0 var(--k-ink));
+  box-shadow:
+    calc(var(--u) * 1) calc(var(--u) * 0) #e67967,
+    calc(var(--u) * 3) calc(var(--u) * 0) #e67967,
+    calc(var(--u) * 0) calc(var(--u) * 1) #e67967,
+    calc(var(--u) * 1) calc(var(--u) * 1) #e67967,
+    calc(var(--u) * 2) calc(var(--u) * 1) #e67967,
+    calc(var(--u) * 3) calc(var(--u) * 1) #e67967,
+    calc(var(--u) * 4) calc(var(--u) * 1) #e67967,
+    calc(var(--u) * 1) calc(var(--u) * 2) #e67967,
+    calc(var(--u) * 2) calc(var(--u) * 2) #e67967,
+    calc(var(--u) * 3) calc(var(--u) * 2) #e67967,
+    calc(var(--u) * 2) calc(var(--u) * 3) #e67967;
+}
 
 /* ---------- along the bottom: the stall ---------- */
 
@@ -864,13 +908,82 @@ b.dmg.true {
 }
 /* A long name wraps under itself rather than running off the pick. */
 .makes > .k-thing:not(.bare) {
-  min-width: 0;
   white-space: normal;
   line-height: 1.05;
+}
+/*
+ * A recipe line (on a pick, in a component's card, a figure's three): the item's name keeps the
+ * room of its longest word and wraps at spaces only, "have" stays at the end of the name's line,
+ * and the figures that want the item go on a short line of their own under the name.
+ */
+:is(.makes, .k-info-make) > .k-thing:not(.bare) {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  row-gap: var(--u);
+  min-width: auto;
+}
+:is(.makes, .k-info-make, .suit) .k-thing-name {
+  flex: 1 1 0;
+  min-width: auto;
+  overflow-wrap: normal;
+}
+:is(.makes, .k-info-make) .k-thing > .k-thing-tag {
+  margin-left: auto;
+}
+:is(.makes, .k-info-make) .k-thing > .wantedby {
+  order: 1;
+  flex: 0 0 100%;
+  justify-content: flex-start;
+  padding-left: calc(var(--u) * 12);
 }
 .makes.lit {
   background: #f5b95e26;
   box-shadow: inset var(--u) 0 0 var(--k-gold);
+}
+/* The fielded figures that want an item: their small pictures in a row, under a pick's name or at the end of a line. */
+.wantedby {
+  display: inline-flex;
+  flex: none;
+  align-items: flex-end;
+  gap: var(--u);
+}
+.pick .wantedby {
+  justify-content: center;
+  min-height: calc(var(--u) * 12);
+}
+/* A figure's three on its card: each with its button, or the components it still needs. */
+.suits {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 3);
+  width: 100%;
+}
+.suits .k-info-things {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--u);
+}
+.suit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--u) * 3);
+  min-height: calc(var(--u) * 16);
+  padding: 0 var(--u);
+}
+.suit.lit {
+  background: #f5b95e26;
+  box-shadow: inset var(--u) 0 0 var(--k-gold);
+}
+.suit .needs {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  font: var(--f-small);
+}
+.suit .needs .k-thing {
+  opacity: 0.85;
 }
 .pick .art.k-link {
   display: grid;
@@ -1160,6 +1273,10 @@ b.dmg.true {
   }
   #rack .k-plaque {
     grid-template-columns: auto;
+  }
+  /* A long rack goes to two columns rather than down over the traits. */
+  #rack .k-plaque.items:has(> :nth-child(6)) {
+    grid-template-columns: repeat(2, auto);
   }
   /* Big enough for a finger, here and in the corner. */
   #rack .item,

@@ -330,8 +330,8 @@ function renderRack(run: RunView): void {
         { type: "button", "data-item": at, "aria-label": itemName(item) },
         pic(itemIcon(item)),
       );
-      // Tapping an item picks it up to give it; a finger kept on it asks what it is.
-      link(slot, itemRef(item, at), { acts: true });
+      // Tapping an item picks it up to give it; a finger kept on it asks what it is. Its card goes beside the rack.
+      link(slot, itemRef(item, at), { acts: true, side: true });
       items.append(slot);
     });
     rack.append(items);

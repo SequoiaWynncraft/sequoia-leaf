@@ -21,14 +21,12 @@ import {
   combosWithHeld,
   fightTitle,
   handing,
-  looseComponents,
   membersOf,
   nudgeFor,
   type NudgeId,
   ownTraitCount,
   pieceNumbers,
   plainNumbers,
-  rackHas,
   reachOf,
   reachOfOffer,
   recipesOf,
@@ -167,7 +165,6 @@ describe("handing an item over", () => {
     const run = begun();
     run.items = ["thorn", "thorn", "hoard", "bark"];
     put(run, "worm", "bench", 0, ["plume"]);
-    expect(looseComponents(run)).toEqual(["thorn", "thorn", "bark", "plume"]);
     // The thorn at place 0, against everything else that is held.
     expect(combosWithHeld(run, "thorn", 0)).toEqual([
       { with: "thorn", makes: "blackthorn" },
@@ -365,7 +362,7 @@ describe("what a card says about a figure", () => {
     expect(membersOf("ember")).toEqual(["emberkit", "kettle", "cindernewt", "hearthcat"]);
     expect(membersOf("fang")).toEqual(["emberkit", "crab7", "jay", "badger", "whitefox", "hearthcat"]);
   });
-  test("where a figure is, and what the rack has", () => {
+  test("where a figure is", () => {
     const run = startRun(3, { trail: 0 });
     run.board.fill(null);
     run.bench.fill(null);
@@ -376,12 +373,6 @@ describe("what a card says about a figure", () => {
     expect(whereIs(run, "worm")).toBe("bench");
     expect(whereIs(run, "moth")).toBe("stall");
     expect(whereIs(run, "greg")).toBe(null);
-    run.items = ["thorn", "plume"];
-    expect(rackHas(run, "wasptail")).toBe("parts");
-    expect(rackHas(run, "blackthorn")).toBe(null);
-    run.items = ["thorn", "thorn", "hoard"];
-    expect(rackHas(run, "blackthorn")).toBe("parts");
-    expect(rackHas(run, "hoard")).toBe("item");
   });
 });
 

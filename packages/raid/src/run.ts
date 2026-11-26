@@ -188,6 +188,8 @@ export type Note =
   | { t: "xp"; gained: number; cost: number }
   | { t: "level"; level: number }
   | { t: "gave"; item: ItemId; piece: number; forged: FinishedId | null; holds: ItemId[] }
+  /** Two components on the rack became a finished item, which is at this place on it now. */
+  | { t: "made"; item: FinishedId; at: number }
   | { t: "acorns"; why: AcornsWhy; amount: number }
   /** Items put on the item bench by a boon: A Basket On The Stump's components, or a charm's emblem. */
   | { t: "items"; why: "basket" | "charm"; items: ItemId[] }
@@ -224,6 +226,7 @@ export const REFUSALS = {
   no_such_item: "There is no such item.",
   hands_full: "It is holding all it can.",
   already_kin: "It is of that kin already.",
+  two_components: "It takes two components.",
   board_empty: "Put somebody on the board first.",
   too_many_fielded: "There are more on the board than you can field.",
   no_fight: "There has been no fight yet.",
@@ -264,6 +267,8 @@ export function pieceAt(run: RunView, spot: Spot): Piece | null | undefined {
   if (!Number.isInteger(spot.at)) return undefined;
   return spot.on === "board" ? run.board[spot.at] : run.bench[spot.at];
 }
+/** Puts a figure, or nobody, at a spot. */
+const put = (run: RunView, at: Spot, who: Piece | null) => ((at.on === "board" ? run.board : run.bench)[at.at] = who);
 /** Where a figure is, by its number. */
 export function spotOf(run: Pick<Run, "board" | "bench">, piece: number): Spot | null {
   const seat = run.board.findIndex((p) => p?.id === piece);
@@ -367,7 +372,7 @@ const componentOptions = (run: Run, count: number): ComponentId[] => shuffled(ru
 function newPiece(run: RunView, kind: FigureId): Piece {
   return { id: run.nextId++, kind, stars: 1, items: [], fed: 0 };
 }
-function remember<T>(list: T[], v: T): void {
+export function remember<T>(list: T[], v: T): void {
   if (!list.includes(v)) list.push(v);
 }
 
@@ -453,7 +458,7 @@ export function layOutAfresh(run: Run, seed: number): void {
 }
 
 /** Why nothing can be planned just now, or null if it can. */
-function notPlanning({ stage }: Pick<Run, "stage">): Why | null {
+export function notPlanning({ stage }: Pick<Run, "stage">): Why | null {
   if (stage.phase === "over") return "raid_over";
   if (stage.phase === "fight") return "fighting";
   const up = stage.picks[0];
@@ -622,8 +627,7 @@ export function sell(run: RunView, from: Spot): Done {
   const acorns = sellValue(piece);
   run.acorns += acorns;
   run.items.push(...piece.items);
-  if (from.on === "board") run.board[from.at] = null;
-  else run.bench[from.at] = null;
+  put(run, from, null);
   return yes([
     { t: "sold", kind: piece.kind, stars: piece.stars, piece: piece.id, from, acorns, items: piece.items.slice() },
   ]);
@@ -640,10 +644,8 @@ export function move(run: RunView, from: Spot, to: Spot): Done {
   if (!there && to.on === "board" && from.on === "bench" && fielded(run) >= fieldCap(run)) {
     return no("field_full", fieldCap(run));
   }
-  if (to.on === "board") run.board[to.at] = piece;
-  else run.bench[to.at] = piece;
-  if (from.on === "board") run.board[from.at] = there;
-  else run.bench[from.at] = there;
+  put(run, to, piece);
+  put(run, from, there);
   return yes([{ t: "moved", piece: piece.id, from, to, swapped: there?.id ?? null }]);
 }
 /** Takes a figure off the board to the first free place on the bench. */

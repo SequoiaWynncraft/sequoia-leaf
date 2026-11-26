@@ -52,6 +52,7 @@ import {
 } from "./outside.ts";
 import { type Roster, rosterOf } from "./own.ts";
 import { postcard } from "./postcard.ts";
+import { forgeItems } from "./rack.ts";
 import {
   abandon,
   beginFight,
@@ -147,6 +148,8 @@ export type RaidCommand =
   | { do: "xp" }
   /** Hand the item at a place on the rack to a figure. */
   | { do: "give"; item: number; to: Spot }
+  /** Make the finished item of two components on the rack, in the first one's place. */
+  | { do: "forge"; item: number; with: number }
   /** Send the party in: the boards are locked and the fight is decided. */
   | { do: "fight" }
   /** Take what the fight paid, and go on to the next room or to the end. */
@@ -159,7 +162,8 @@ export type RaidCommandName = RaidCommand["do"];
 export type RunCommand = Exclude<RaidCommand, { do: "start" | "trail" | "look" | "buyLook" }>;
 
 /** The commands a page may show before Leaf answers: they draw nothing, so Leaf will do just the same. */
-export const PREDICTED = ["move", "bench", "sell", "give", "hold", "buy", "xp"] as const satisfies RaidCommandName[];
+const predicted = ["move", "bench", "sell", "give", "forge", "hold", "buy", "xp"] as const;
+export const PREDICTED = predicted satisfies readonly RaidCommandName[];
 /** A command a page may show before Leaf answers. */
 export type Predicted = Extract<RaidCommand, { do: (typeof PREDICTED)[number] }>;
 export const isPredicted = (c: RaidCommand): c is Predicted => PREDICTED.some((name) => name === c.do);
@@ -214,6 +218,12 @@ function readStart(v: Record<string, unknown>): RaidCommand | null {
   return v.own === true ? { do: "start", trail: v.trail, own: true } : { do: "start", trail: v.trail };
 }
 
+/** Forging on the rack, off the wire: two of its places. */
+const readForge = (v: Record<string, unknown>): RaidCommand | null =>
+  v.do === "forge" && whole(v.item, 0, 399) && whole(v.with, 0, 399)
+    ? { do: "forge", item: v.item, with: v.with }
+    : null;
+
 /** A command off the wire, or null. Fields it does not use (the command's id) are let be. */
 export function readCommand(v: unknown): RaidCommand | null {
   if (!isRecord(v)) return null;
@@ -256,7 +266,7 @@ export function readCommand(v: unknown): RaidCommand | null {
     case "abandon":
       return { do: v.do };
     default:
-      return null;
+      return readForge(v);
   }
 }
 
@@ -336,6 +346,8 @@ function plan(run: RunView, c: Predicted): RunDone {
       return buyXp(run);
     case "give":
       return giveItem(run, c.item, c.to);
+    case "forge":
+      return forgeItems(run, c.item, c.with);
   }
 }
 

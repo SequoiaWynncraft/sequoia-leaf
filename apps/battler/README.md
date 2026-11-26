@@ -37,7 +37,7 @@ kit's card: "The table needs the guild's server."
 - **Planning.** A figure may be dragged (mouse or finger) from the stall to the bench or the board,
   about the board and bench, onto another to change places, and onto the stall to sell it; the
   stall says what it would pay. Everything may be done by tapping instead: tap a figure, then tap
-  where it goes; tap an offer to buy it; tap an item, then the figure to hold it. Hexes light for
+  where it goes; tap an offer to buy it. Hexes light for
   where a held figure may go, and a column of pips beside the front line shows how many may be
   fielded. Two fingers on the stall at once are two taps, and an offer let go over the offer it was
   picked from is a tap that slipped, and buys.
@@ -52,13 +52,19 @@ kit's card: "The table needs the guild's server."
   a chip after them when its draw is not 0 ("Draws fire", "Draws fire ×2", "Slips notice", with a
   tip saying enemies pick it as if it stood a hex nearer or further), its numbers
   (green where an item, a trait or a boon raises one, coral where something lowers it), its
-  ability, what it holds and three finished items that suit it (lit if the rack has one, or both
-  its halves). A trait's card has its steps (the one reached lit, the next saying how many more),
+  ability, what it holds and three finished items that suit it. On one of the party's own while
+  planning, each of the three is a line: lit with a "Make" button (or "Give", for one already on
+  the rack) where it can be had now from the rack and what the figure holds, which makes it and
+  hands it over in one press; else the pictures of the components still missing, "held", or "no
+  room". On anybody else's, the three are pictures, lit where the rack could make one for it. A trait's card has its steps (the one reached lit, the next saying how many more),
   for the Bulwark and the Sneak first a line saying how they draw, and every figure that carries it,
   cheapest first: lit if fielded, tagged if on the bench or the stall. An item's card has what it adds, what
   it does and what it is made of; a component's has what it makes with each other half (that
   half's picture, an arrow, the finished item), the ones whose other half the party holds first,
-  lit and tagged "have", as on the pick of a component. There are cards for a boon, a room on the track, the
+  lit and tagged "have", as on the pick of a component. At the end of each "makes" line are the
+  small pictures of the fielded figures that want that item (`making.ts`, `wanters`: it is one of
+  the three that suit a figure on the board that does not hold it and has a place for it), and the
+  lines somebody wants come before the rest; the pick of a component has them under its name too. There are cards for a boon, a room on the track, the
   purse and the level too. The almanac's cards add the long sentence and the flavour line.
 - **Traits.** A strip of chips, one for every trait the party has any of, with how many and how
   many the next step needs. When a step switches on the chip lights, the figures of that trait hop,
@@ -81,9 +87,23 @@ kit's card: "The table needs the guild's server."
   finished item or an emblem has a gold edge, a loose component the plain dark one, each on a small
   dark tile; pointing at one shows that item's card.
   The row is never wider than a hex, so it never reaches a neighbour on its row, and it is drawn
-  with its figure, so a nearer figure stands in front of it. While a component is in the hand
-  (carried or tapped), every figure holding its other half shows what the two would make, faint,
-  over its head, and held over one a card says it by name.
+  with its figure, so a nearer figure stands in front of it.
+- **Handing over and making items.** An item may be dragged onto a figure, and a component onto
+  another component on the rack; or tapped, and then the figure or the other component tapped.
+  While it is in the hand, the figures that could take it have brackets at their feet, every
+  figure holding its other half shows what the two would make, faint, over its head, and the
+  components it pairs with on the rack pulse. Over a figure or a pairing component (carried, or
+  tapped as its aim), a tip says what letting go would do: the item the two would make, as its own
+  card says it; or what the figure gets and how many of its 3 places are full then; or why it
+  cannot (the refusal's own words). Carried, letting go does it; tapped, the tip's button does, or
+  a second tap on the same aim. A mouse's click on an item pins its card beside the rack, and on a
+  figure of the party's beside the board; a finger's tap pins none, since a sheet would cover the
+  board where the next tap goes (a finger kept on the thing asks for its card). Two components on the rack become the finished item in the first
+  one's place. Nothing is taken apart again. Let go anywhere else, nothing happens. The keyboard
+  does the same with Enter on the rack's places, and with the buttons on a figure's card.
+- **Who wants what.** While an item is in the hand, or pointed at or focused (on the rack, in a
+  card, or a component on its pick), each fielded figure that wants it has a small heart beside its
+  head; a place on the rack whose item somebody fielded wants has the same heart in its corner.
 - **Picks.** The first figure, a component, a boon: three cards over the board, with the one redraw
   for boons. What is taken flies to where it lives.
 - **The fight.** Played from the rules' own steps at 1x, 2x or 4x, or skipped to its end. The two
@@ -140,8 +160,8 @@ deploy) is not shown: only how Leaf says it came out, and what it paid.
 
 Every move is a command (`src/screen/state.ts`):
 
-- Moving, benching, swapping, selling, handing over an item, holding the stall, buying and
-  experience are worked out on the page's copy by the shared rules (the package's `predict`) and
+- Moving, benching, swapping, selling, handing over an item, making one on the rack, holding the
+  stall, buying and experience are worked out on the page's copy by the shared rules (the package's `predict`) and
   shown at once, and sent. One Leaf turns down is taken back, and the member hears why.
 - Rustling, the picks, setting out and the takings wait for Leaf, which draws what they draw (the
   stall, the picks, the fight's seed); while Leaf takes more than 150 ms, the thing asked for shows
@@ -210,6 +230,7 @@ timed can be stepped by hand.
 | `src/screen/fightview.ts`     | The fight played from the rules' events                                                          |
 | `src/screen/fx.ts`            | Sparks, rings, rising words, things that fly, "in a moment"                                      |
 | `src/screen/logic.ts`         | Small questions asked of a run: where a figure may go, what an item would make, the next nudge   |
+| `src/screen/making.ts`        | Items: who on the board wants one, what a figure's card offers, what letting go would do         |
 | `src/screen/keep.ts`          | The view settings kept in the browser                                                            |
 | `src/screen/sounds.ts`        | The table's sounds, made from the kit's tones                                                    |
 | `src/screen/signals.ts`       | Small happenings more than one part answers: an acorn landing, a star                            |
@@ -221,13 +242,17 @@ timed can be stepped by hand.
 | `src/screen/ui/tally.ts`      | The tally as rows and bars, two parties side by side (one at a time on a phone), with its tabs   |
 | `src/screen/ui/fightsheet.ts` | The sheet of a fight that is over: after it with the takings and "Carry on", or "Last fight"     |
 | `src/screen/held.ts`          | What a figure holds: where the row of small pictures under its base goes, drawing it, hitting it |
-| `src/screen/ui/cards.ts`      | What each thing says about itself, registered with the kit's cards, and the references to them   |
+| `src/screen/ui/cards.ts`      | What each thing says about itself, registered with the kit's cards                               |
+| `src/screen/ui/refs.ts`       | The names things go by on a card: `piece:12`, `item:thorn@2`, `drop:2:rack:0`                    |
+| `src/screen/ui/suits.ts`      | Items on a figure's card, with their buttons; the small pictures of who wants an item            |
+| `src/screen/ui/drop.ts`       | The tip of an item in the hand, the rack's marks for the hand, an item made on the rack          |
 | `src/screen/ui/lit.ts`        | Which trait the cards have pointed at or pinned, and marking the chips and the stall for it      |
 | `src/screen/ui/picks.ts`      | Three cards to choose from                                                                       |
 | `src/screen/ui/pages.ts`      | The front page, the almanac, how to play, table looks, the end of a run                          |
 | `src/screen/ui/nudge.ts`      | The first-time nudges                                                                            |
 
-`geometry.ts`, `logic.ts`, `keep.ts`, `light.ts` and `rich.ts` have tests beside them.
+`geometry.ts`, `gesture.ts`, `logic.ts`, `making.ts`, `keep.ts`, `light.ts` and `rich.ts` have tests
+beside them.
 
 ## Looking at it from outside
 
@@ -243,7 +268,8 @@ kind)`, `item(id)` and `strip()` stage a moment play does not reach (a merge, an
 empty hands): they ask the play server the tours run against (`apps/api/test/play.ts`, at
 `/test/play/raid`), and on the guild's own Leaf, which has no such route, do nothing. `busy()` runs
 a fight on to a moment with an ability's hexes lit and something in the air; `party()` lists the
-party's figures by number for `grab(id, x, y)`, `tap(id)`, `hover(itemAt, id)`, `hand(itemAt, id)`
+party's figures by number for `grab(id, x, y)`, `tap(id)`, `hover(itemAt, id)` (and `pair(itemAt,
+rackAt)` over another place on the rack), `hand(itemAt, id)`
 and `drop()`; `at(id)` and `heldAt(id, i)` say where a figure and what it holds are on the page,
 and `rack()` and `held()` what is on the rack and in every hand; `page(id)` opens a page;
 `arrive()` has whoever is waiting walk in again; `taught()` counts every nudge as given; `state()`

@@ -347,14 +347,14 @@ export class Deck {
     return d !== null;
   }
 
-  /** Shows what dropping the thing in hand would do, while cards are otherwise held shut. */
-  preview(ref: Ref | null, at: Spot, from: object): void {
+  /** Shows what dropping the thing in hand would do, while cards are otherwise held shut; with `side`, beside it. */
+  preview(ref: Ref | null, at: Spot, from: object, side = false): void {
     const d = ref === null ? null : this.describe(ref);
     if (ref === null || !d) {
       if (this.open?.preview) this.#set(null, null);
       return;
     }
-    this.#set({ stack: [ref], pinned: false, via: "mouse", at, from, side: false, preview: true }, d);
+    this.#set({ stack: [ref], pinned: false, via: "mouse", at, from, side, preview: true }, d);
   }
 
   /** Puts the card away; with `from`, only if that is who opened it. */
@@ -920,9 +920,9 @@ export function pick(ref: Ref | null, x: number, y: number, w = 0, h = 0): boole
   return deck.press(ref, { x, y, w, h }, lastVia, CANVAS);
 }
 
-/** While the game holds something, shows what letting it go here would do (or nothing). */
-export function show(ref: Ref | null, x = 0, y = 0, w = 0, h = 0): void {
-  deck.preview(ref, { x, y, w, h }, CANVAS);
+/** While the game holds something, shows what letting it go here would do (or nothing); with `side`, beside the box. */
+export function show(ref: Ref | null, x = 0, y = 0, w = 0, h = 0, side = false): void {
+  deck.preview(ref, { x, y, w, h }, CANVAS, side);
 }
 
 /** The canvas's token, for `close(canvasCard)`: puts away only a card that `point` or `pick` opened. */

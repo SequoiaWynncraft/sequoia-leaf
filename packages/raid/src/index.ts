@@ -233,6 +233,7 @@ export {
   whyText,
   xpToNext,
 } from "./run.ts";
+export { forgeItems } from "./rack.ts";
 export { boardMet, boardSlot, opposition } from "./foe.ts";
 export { checkRun, type Loaded, readRunView } from "./save.ts";
 

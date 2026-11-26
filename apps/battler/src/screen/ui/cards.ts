@@ -7,19 +7,12 @@ import { nameOf, portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
  * - `piece:<id>` one of the party's own, with what it holds, its numbers as they stand, and Sell;
  * - `foe:<seat>` one waiting across the board; `unit:<id>` anyone in a fight;
  * - `trait:<id>`, `item:<id>` (`item:<id>@<at>` on the rack), `boon:<id>`, `room:<index>`;
- * - `acorns:` the purse, `level:` the level, and `drop:<item>:<piece>` what giving an item would do.
+ * - `acorns:` the purse, `level:` the level. (`drop:` is the tip of an item in the hand, `drop.ts`.)
  *
- * Cards use the short forms; the almanac's add the long sentence and the flavour line.
+ * The references are named in `refs.ts`. Cards use the short forms; the almanac's add the long
+ * sentence and the flavour line.
  */
-import {
-  type Block,
-  type Chip,
-  type Description,
-  type Entry,
-  register,
-  type Row,
-  type Stat,
-} from "@sequoia-leaf/kit/card.ts";
+import { type Block, type Chip, type Description, type Entry, register, type Stat } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { whole } from "@sequoia-leaf/kit/say.ts";
 import {
@@ -39,7 +32,6 @@ import {
   type FigureId,
   FIGURES,
   FINISHED,
-  GOOD_WITH,
   isBoonId,
   isComponentId,
   isEmblemId,
@@ -77,7 +69,6 @@ import { fightUnits } from "../fightview.ts";
 import {
   acrossName,
   combosWithHeld,
-  handing,
   membersOf,
   NUMBER_KEYS,
   type Numbers,
@@ -85,7 +76,6 @@ import {
   ownTraitCount,
   pieceNumbers,
   plainNumbers,
-  rackHas,
   recipesOf,
   savings,
   startNumbers,
@@ -98,6 +88,10 @@ import {
 import { pieces as richPieces } from "../rich.ts";
 import { doNow, S } from "../state.ts";
 import { figuresHere, levelOnCard, oddsStats } from "./own.ts";
+import { figureRef, itemRef, pieceRef, traitRef } from "./refs.ts";
+import { itemsOf, wantedBy } from "./suits.ts";
+
+export * from "./refs.ts";
 
 /** A drawn picture on the page, `scale` interface units to each of its pixels. */
 export function pic(c: HTMLCanvasElement, scale = 1, cls = ""): HTMLCanvasElement {
@@ -143,22 +137,6 @@ export function rich(text: string, cls = "short"): HTMLElement {
 
 /** An amount of acorns with their sign. */
 export const acorns = (n: number | string): HTMLElement => el("span", "k-cur", {}, icon("acorn"), String(n));
-
-// ---------- references ----------
-
-export const figureRef = (kind: FigureId): string => `figure:${kind}`;
-export const pieceRef = (id: number): string => `piece:${id}`;
-export const foeRef = (seat: number): string => `foe:${seat}`;
-export const unitRef = (id: number): string => `unit:${id}`;
-export const traitRef = (id: TraitId): string => `trait:${id}`;
-export const itemRef = (id: ItemId, at = -1): string => (at >= 0 ? `item:${id}@${at}` : `item:${id}`);
-export const boonRef = (id: BoonId): string => `boon:${id}`;
-export const dropRef = (item: number, piece: number): string => `drop:${item}:${piece}`;
-/** The trait a reference names, if it names one. */
-export const traitOfRef = (ref: string | null): TraitId | null => {
-  const id = ref?.startsWith("trait:") ? (ref.slice(6).split("/")[0] ?? "") : "";
-  return isTraitId(id) ? id : null;
-};
 
 /** An id and the flags after it: `"emberkit/3/lore"` is `emberkit` with `3` and `lore`. */
 const flagsOf = (id: string): { id: string; flags: string[] } => {
@@ -256,18 +234,12 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
     blocks.push({ body: el("i", "k-dim quip", { text: spec.quip }) });
   }
 
-  // What it holds, and the three finished items that suit it (lit if the rack has one, or both its halves).
+  // What it holds, and the three finished items that suit it: for one of the party's own, with their buttons.
   const run = extras.run ?? null;
-  const rows: Row[] = [{ label: "Holds", look: "icons", things: items.map((item) => ({ ref: itemRef(item) })) }];
-  if (isFigureId(kind))
-    rows.push({
-      label: "Good with",
-      look: "icons",
-      things: GOOD_WITH[kind].map((item) => ({ ref: itemRef(item), lit: run ? rackHas(run, item) !== null : false })),
-    });
-
   const sale = extras.sellable;
   const piece = sale && run ? pieces(run).find((p) => p.id === sale.id) : undefined;
+  const held = itemsOf(kind, items, run, piece);
+  blocks.push(...held.blocks);
   const draw = u ? u.draw : drawOf(kind, items);
   return {
     name: nameOf(kind),
@@ -285,7 +257,7 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
     ),
     stats: statsOf(kind, stars, extras, lv.level),
     blocks,
-    rows,
+    rows: held.rows,
     actions:
       sale && piece && run
         ? [
@@ -371,7 +343,7 @@ export function traitDesc(id: TraitId, run: RunView | null, lore = false): Descr
 // ---------- an item, a boon ----------
 
 /** What an item adds, in numbers, on a line (an emblem adds none); and what it does. */
-const itemWords = (id: ItemId): HTMLElement => {
+export const itemWords = (id: ItemId): HTMLElement => {
   const adds = itemAdds(id);
   return el(
     "div",
@@ -385,7 +357,7 @@ const itemWords = (id: ItemId): HTMLElement => {
 /**
  * An item: what it adds and does, and what it is made of or makes (or for an emblem, its kin). A
  * component's "makes" lines put first, lit and tagged "have", the ones whose other half the party
- * already holds.
+ * already holds. At the end of each line, the fielded figures that want what it makes (`wantedBy`).
  */
 export function itemDesc(id: ItemId, run: RunView | null, itemAt = -1, lore = false): Description {
   const blocks: Block[] = [{ body: itemWords(id) }];
@@ -414,17 +386,25 @@ export function itemDesc(id: ItemId, run: RunView | null, itemAt = -1, lore = fa
   };
 }
 
+/** Where a "makes" line goes: the ones the party can finish first, and among those and the rest, the ones somebody fielded wants. */
+const weight = (e: Entry): number => (e.lit ? 2 : 0) + (e.note ? 1 : 0);
+
 /** A component's "makes" lines: the other half, an arrow, and the finished item; the ones the party can finish first. */
 export function makesLines(id: ItemId, run: RunView | null, itemAt = -1): Entry[] {
   if (!isComponentId(id)) return [];
   const held = new Set(run ? combosWithHeld(run, id, itemAt).map((c) => c.with) : []);
-  const line = (r: { with: ComponentId; makes: ItemId }): Entry =>
-    held.has(r.with)
-      ? { ref: itemRef(r.makes), from: itemRef(r.with), lit: true, tag: "have" }
-      : { ref: itemRef(r.makes), from: itemRef(r.with) };
+  const line = (r: { with: ComponentId; makes: ItemId }): Entry => {
+    const by = wantedBy(run, r.makes);
+    return {
+      ref: itemRef(r.makes),
+      from: itemRef(r.with),
+      ...(held.has(r.with) ? { lit: true, tag: "have" } : {}),
+      ...(by ? { note: by } : {}),
+    };
+  };
   return recipesOf(id)
     .map(line)
-    .toSorted((a, b) => Number(b.lit ?? false) - Number(a.lit ?? false));
+    .toSorted((a, b) => weight(b) - weight(a));
 }
 
 export function boonDesc(id: BoonId): Description {
@@ -504,23 +484,6 @@ function levelDesc(run: RunView): Description {
   };
 }
 
-/** What giving the item on the rack to one of the party would do: what the two make, or just that it is given. */
-function dropDesc(run: RunView, at: number, pieceId: number): Description | null {
-  const item = run.items[at];
-  const spot = spotOf(run, pieceId);
-  const piece = spot ? pieceAt(run, spot) : null;
-  if (item === undefined || !piece) return null;
-  const would = handing(piece, item);
-  if (would.can && would.forged)
-    return {
-      name: itemName(would.forged),
-      icon: itemIcon(would.forged),
-      tag: `${itemName(would.with)} and ${itemName(item)} make it.`,
-      blocks: [{ body: itemWords(would.forged) }],
-    };
-  return { name: `Give ${itemName(item)}`, tag: `to ${piece.kind === "greg" ? "Greg" : "this figure"}.` };
-}
-
 /** Says what every kind of thing at the table is. */
 export function registerCards(): void {
   register("figure", (raw) => {
@@ -584,8 +547,4 @@ export function registerCards(): void {
   register("room", (id) => (S.run ? roomDesc(Number(id), S.run) : null));
   register("acorns", () => (S.run ? purseDesc(S.run) : null));
   register("level", () => (S.run ? levelDesc(S.run) : null));
-  register("drop", (raw) => {
-    const [at = "", piece = ""] = raw.split(":");
-    return S.run ? dropDesc(S.run, Number(at), Number(piece)) : null;
-  });
 }

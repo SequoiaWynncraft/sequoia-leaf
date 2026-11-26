@@ -175,7 +175,9 @@ ability aimed at "its target" goes for the same one; abilities that say "nearest
   is a draw too.
 
 **Items.** Five components, one stat each. Any two handed to the same figure become one of fifteen
-finished items with both stats and an effect. A figure holds three. Trouble rooms give a pick of one
+finished items with both stats and an effect, and so do two on the item bench (the rack) that are
+forged there (`forgeItems`, `rack.ts`): the item takes the first one's place. A finished item is
+never taken apart. A figure holds three. Trouble rooms give a pick of one
 component from three when won and from two when lost; a beaten boss gives two picks.
 
 Emblems are a third sort of item, one for each kin, and a charm boon is the only way to get one. An
@@ -336,7 +338,8 @@ player does (`RaidCommand`): `start` (a run on a trail, with all figures or with
 home, once it has fought a room), `trail` (pick the trail to set out on next), `look` (put an owned look on the table;
 a look is owned when bought with `buyLook`, or won as a pull's prize: `advance` adds each
 `pull:look:<id>` among the player's awards to the looks owned, and takes no Leaf),
-`choose`, `redraw`, `buy`, `sell`, `move`, `bench`, `rustle`, `hold`, `xp`, `give`, `fight`
+`choose`, `redraw`, `buy`, `sell`, `move`, `bench`, `rustle`, `hold`, `xp`, `give`, `forge` (two
+components on the rack, `{ do: "forge", item, with }`: the item is made at `item`'s place), `fight`
 (boards locked, the fight decided; its note carries both boards, the seed and the outcome), `take`
 and `abandon`. A run that has fought no room yet is never put down: `start` and `abandon` then leave
 it as it is, drawing, paying and logging nothing, so that an opening cannot be drawn again for free.
@@ -357,7 +360,7 @@ they are handed.
 What the page is shown (`TableView`) is the table without its streams, the run's seed, or what the
 picks waiting behind the first will offer. `readView` and `readNotes` (`wire.ts`) read what Leaf
 sends back into these types, field by field. `predict` works out on the page's copy the commands
-that draw nothing (`PREDICTED`: moving, benching, selling, handing over, holding the stall, buying, experience), exactly
+that draw nothing (`PREDICTED`: moving, benching, selling, handing over, forging on the rack, holding the stall, buying, experience), exactly
 as Leaf will; `planCommands` has the bot plan a room on the page's copy and gives back the commands
 it would send. `encodeTable` and `decodeTable` are the table as Leaf stores it.
 
@@ -383,6 +386,7 @@ it would send. `encodeTable` and `decodeTable` are the table as Leaf stores it.
 | `spar.ts`              | The regulars' parties for sparring                                                                                    |
 | `foe.ts`               | Who waits in a room: the forest's trouble, a regular's party, or another member's board                               |
 | `run.ts`               | The run and every action on it                                                                                        |
+| `rack.ts`              | Two components forged on the rack                                                                                     |
 | `save.ts`              | A run read back from plain data: shape first, then today's numbers                                                    |
 | `outside.ts`           | Payout, almanac, trails                                                                                               |
 | `content/looks.ts`     | How the table may look: cloths, lanterns, bases                                                                       |
@@ -418,7 +422,7 @@ A run is a plain object. Every action takes it, and either changes it and gives 
 `{ ok: true, notes }` or leaves it alone and gives back `{ ok: false, code, why }`, a code and a
 sentence to show the player. Notes say what happened, in order, naming figures by their own number in the run
 (`piece`), so a screen can animate each one: `bought`, `merged`, `sold`, `moved`, `rustled`,
-`level`, `gave`, `acorns`, `resolve`, `choice`, `room`, `over` and so on (see `Note` in `run.ts`).
+`level`, `gave`, `made`, `acorns`, `resolve`, `choice`, `room`, `over` and so on (see `Note` in `run.ts`).
 
 ```ts
 import * as raid from "@sequoia-leaf/raid";
