@@ -1,4 +1,4 @@
-import { type Balances, DAY_MS, EARNINGS, type PlayerId, utcDay } from "@sequoia-leaf/core";
+import { type Balances, type CoinChange, DAY_MS, EARNINGS, type PlayerId, utcDay } from "@sequoia-leaf/core";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
@@ -23,6 +23,25 @@ export type CoinPost =
   | { readonly status: "posted" }
   /** An entry with the same key was posted before: nothing was changed. */
   | { readonly status: "duplicate" };
+
+/**
+ * What each of a command's Coins changes comes to, worked out in order from the balance: one that
+ * pays in is cut to what the player may still earn (`room`) unless it is `free`. Null when the
+ * balance would go below nothing at any point: the command cannot be paid for.
+ */
+export function payable(changes: readonly CoinChange[], balance: number, room: number): number[] | null {
+  let after = balance;
+  let left = room;
+  const amounts: number[] = [];
+  for (const change of changes) {
+    const amount = change.free === true ? change.amount : Math.min(change.amount, left);
+    if (change.free !== true) left -= Math.max(0, amount);
+    after += amount;
+    if (after < 0) return null;
+    amounts.push(amount);
+  }
+  return amounts;
+}
 
 const Balance = Schema.Struct({ balance: Schema.Int });
 

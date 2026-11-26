@@ -332,8 +332,8 @@ export const TRAIL_COUNT = TRAILS.length;
 
 /**
  * The regulars at the table, whose parties turn up for sparring: the battler's own figures, each
- * sitting across the table as itself. None of them is a member; one day a sparring party will be a
- * real member's saved one.
+ * sitting across the table as itself. None of them is a member: a sparring room may be another
+ * member's board instead (`Party.by`), whatever name that member goes by.
  */
 export const REGULARS = [
   { name: "Greg", kind: "greg" },
@@ -347,6 +347,9 @@ export const REGULARS = [
 /** The regulars' names, as a party is signed. */
 export const HANDLES: readonly string[] = REGULARS.map((r) => r.name);
 
-/** The regular who brought a party, by the name it was signed with; none for anybody else. */
-export const regularNamed = (name: string): (typeof REGULARS)[number] | null =>
-  REGULARS.find((r) => r.name === name) ?? null;
+/**
+ * The regular who brought a party, by the name it was signed with; none for anybody else, and none
+ * for a member's own board (`Party.by`) whatever its name: a member may be called Greg too.
+ */
+export const regularOf = (party: { readonly who: string; readonly by?: string }): (typeof REGULARS)[number] | null =>
+  party.by === undefined ? (REGULARS.find((r) => r.name === party.who) ?? null) : null;

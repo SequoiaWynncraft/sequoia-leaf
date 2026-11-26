@@ -1,6 +1,5 @@
 import {
   type Balances,
-  type CoinChange,
   COMMAND_ID,
   type Ctx,
   isLeaf,
@@ -34,9 +33,10 @@ import { AppConfig } from "../config.ts";
 import { Ledger } from "../ledger/store.ts";
 import { Watchers } from "../live/watchers.ts";
 import { type CommandOutcome, type JobPhase, playCommands, playJobSeconds } from "../metrics.ts";
-import { type CoinEntry, Coins } from "./coins.ts";
+import { type CoinEntry, Coins, payable } from "./coins.ts";
 import { Copies } from "./copies.ts";
 import { type Attempt, ctxOf, type Given, type Held, NOTHING_GIVEN, type Played, toRoom, unreadable } from "./games.ts";
+import { type Keeping, keptPieces } from "./kept.ts";
 import { nextSlice } from "./slices.ts";
 import { PlayStore } from "./store.ts";
 
@@ -183,11 +183,11 @@ export interface Playing {
 export type Result =
   { readonly id: string; readonly notes: readonly unknown[] } | { readonly id: string; readonly refused: string };
 /** A command's answer as it is kept: its notes or its refusal, without its id or any state. */
-const Kept = Schema.Union([
+const KeptAnswer = Schema.Union([
   Schema.Struct({ notes: Schema.Array(Schema.Unknown) }),
   Schema.Struct({ refused: Schema.String }),
 ]);
-const readKept = Schema.decodeUnknownSync(Schema.fromJsonString(Kept));
+const readKept = Schema.decodeUnknownSync(Schema.fromJsonString(KeptAnswer));
 const keptOf = (result: Result): string =>
   JSON.stringify("refused" in result ? { refused: result.refused } : { notes: result.notes });
 
@@ -231,25 +231,6 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 /** Which state of which player's a lane is of. */
 const keyOf = (player: PlayerId, played: Played) => `${played.id}:${player}`;
 
-/**
- * What each of a command's Coins changes comes to, worked out in order from the balance: one that
- * pays in is cut to what the player may still earn (`room`) unless it is `free`. Null when the
- * balance would go below nothing at any point: the command cannot be paid for.
- */
-function payable(changes: readonly CoinChange[], balance: number, room: number): number[] | null {
-  let after = balance;
-  let left = room;
-  const amounts: number[] = [];
-  for (const change of changes) {
-    const amount = change.free === true ? change.amount : Math.min(change.amount, left);
-    if (change.free !== true) left -= Math.max(0, amount);
-    after += amount;
-    if (after < 0) return null;
-    amounts.push(amount);
-  }
-  return amounts;
-}
-
 /** A spend of a command's as the ledger takes it: its amount checked, and keyed for the player and the game. */
 interface Taken {
   readonly amount: Leaf;
@@ -267,6 +248,32 @@ const ofState = (born: number, key: string): string => (born === 0 ? key : `${bo
 
 /** Nanoseconds in milliseconds. */
 const msOf = (ns: bigint) => Number(ns) / 1e6;
+
+/** Counts where a job's time went (`leaf_play_job_seconds`), by the monotonic clock `nanos`, and tells the meter, if there is one. */
+const measured = (job: Job, nanos: () => bigint, meter: ((times: JobTimes) => void) | null) =>
+  Effect.suspend(() => {
+    const total = nanos() - job.arrived;
+    const game = job.lane.played.id;
+    const phases: Record<JobPhase, bigint> = {
+      queue: job.waited,
+      simulation: job.simulated,
+      codec: job.coded,
+      sqlite: job.sqlite,
+      other: total - job.waited - job.simulated - job.coded - job.sqlite,
+    };
+    meter?.({
+      game,
+      kind: job.kind,
+      waited: msOf(job.waited),
+      sqlite: msOf(job.sqlite),
+      worked: msOf(total - job.waited - job.sqlite),
+    });
+    return Effect.forEach(
+      Object.entries(phases),
+      ([phase, ns]) => Metric.update(playJobSeconds({ game, kind: job.kind, phase }), Math.max(0, Number(ns)) / 1e9),
+      { discard: true },
+    );
+  });
 
 /** What spends come to, in Leaf. */
 const sum = (spends: readonly Taken[]) => spends.reduce((all, spend) => all + spend.amount, 0);
@@ -327,7 +334,12 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * when its spends come to more than the ledger's balance; otherwise each is
  * posted to the ledger as a spend on the `shop` sink, keyed `play:<game>:<player>:<born>:<key>` (`ofState`), and logged
  * (`leaf_spent`). A key the ledger has seen is not taken again, and the command stands. Leaf earns no
- * XP and uses none of the Coins' room. A player with no state yet gets a new one,
+ * XP and uses none of the Coins' room. A command done may leave pieces of the player's for others to
+ * meet (`Done.keep`): each is written in the batch's transaction over the one at its slot, but one
+ * whose slot is not one `SLOT` allows or whose JSON is over `KEPT_BYTES`, which is logged and let go
+ * while the command and the batch stand. Before a command is tried, the game is asked what slot it
+ * meets (`Game.meets`), and given one piece another player left there, picked by the command's dice
+ * and named as the boards name players (`Ctx.met`). A player with no state yet gets a new one,
  * and their Coins open with the welcome as it is made. A stored state that will not read is left as
  * it is: the player and the game are logged, and nothing is done. Leaf's dice for each call come from
  * `SecureRandom`. A visitor (`visit`) is shown somebody's state, and is given nothing of theirs.
@@ -384,6 +396,8 @@ export class Play extends Context.Service<
       const store = yield* PlayStore;
       const coins = yield* Coins;
       const ledger = yield* Ledger;
+      // The pieces players leave for others to meet, and what a command meets of them.
+      const kept = yield* keptPieces;
       const { gameLeafSpending } = yield* AppConfig;
       const random = yield* SecureRandom.SecureRandom;
       const clock = yield* Clock.Clock;
@@ -458,33 +472,6 @@ export class Play extends Context.Service<
           job.coded += nanos() - began;
         }
       };
-      /** Counts where a job's time went (`leaf_play_job_seconds`), and tells the meter, if there is one. */
-      const measured = (job: Job) =>
-        Effect.suspend(() => {
-          const total = nanos() - job.arrived;
-          const game = job.lane.played.id;
-          const phases: Record<JobPhase, bigint> = {
-            queue: job.waited,
-            simulation: job.simulated,
-            codec: job.coded,
-            sqlite: job.sqlite,
-            other: total - job.waited - job.simulated - job.coded - job.sqlite,
-          };
-          meter?.({
-            game,
-            kind: job.kind,
-            waited: msOf(job.waited),
-            sqlite: msOf(job.sqlite),
-            worked: msOf(total - job.waited - job.sqlite),
-          });
-          return Effect.forEach(
-            Object.entries(phases),
-            ([phase, ns]) =>
-              Metric.update(playJobSeconds({ game, kind: job.kind, phase }), Math.max(0, Number(ns)) / 1e9),
-            { discard: true },
-          );
-        });
-
       /** Runs `work` for a job when its slice comes, and says what it said: whether there is further to go. */
       const slice = (job: Job, work: (more: () => boolean) => boolean) =>
         Effect.suspend(() => {
@@ -578,6 +565,8 @@ export class Play extends Context.Service<
           const entries: CoinEntry[] = [];
           const taken: Taken[] = [];
           const logs: Logged[] = [];
+          // The pieces the commands done leave for others to meet.
+          const leaving: Keeping[] = [];
           // Everybody where the state is seen hears what the batch did, if anybody is there.
           const told = toRoom(played, player, game, ctx(0, room), watchers);
           /**
@@ -617,6 +606,7 @@ export class Play extends Context.Service<
                 room -= free ? 0 : Math.max(0, amount);
               }
               logs.push(...did.log);
+              leaving.push(...(yield* kept.of(played.id, player, did.pieces)));
               return { id, notes: did.notes };
             });
           for (const { id, command } of sent) {
@@ -626,7 +616,10 @@ export class Play extends Context.Service<
               continue;
             }
             yield* runOn(job, copy, given, command);
-            const attempt = game.attempt(command, ctx(yield* dice, room));
+            const attempt = game.attempt(
+              command,
+              yield* kept.meet(played.id, game.meets(command), ctx(yield* dice, room)),
+            );
             // A command refused, by the rules or for Leaf or Coins, is not done at all.
             const result = "refused" in attempt ? { id, refused: attempt.refused } : yield* weigh(id, attempt);
             results.push(result);
@@ -683,6 +676,7 @@ export class Play extends Context.Service<
                 }
                 for (const entry of entries) yield* coins.post(player, entry, at);
                 yield* store.log(player, played.id, logs, at);
+                yield* kept.keep(player, played.id, leaving, at);
                 yield* store.count(player, answers.length - refused, refused, at);
                 // The balances as the batch leaves them, for the page: no other answer is needed.
                 return { rev: next, purse: yield* coins.balances(player) };
@@ -767,7 +761,7 @@ export class Play extends Context.Service<
                     again(Effect.flatMap(work(job), (then) => Effect.map(settle(job), then))),
                     (exit) => void Deferred.doneUnsafe(done, exit),
                   );
-              return Effect.ensuring(doing, Effect.andThen(Effect.sync(unshare), measured(job)));
+              return Effect.ensuring(doing, Effect.andThen(Effect.sync(unshare), measured(job, nanos, meter)));
             }),
             stop: () => {
               unshare();

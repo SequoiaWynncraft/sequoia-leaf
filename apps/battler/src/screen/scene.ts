@@ -10,7 +10,7 @@ import { R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
 import { fieldCap, fielded, type ItemId, pieceAt, type RunView, type Stars } from "@sequoia-leaf/raid";
 import { type FigureId, isBossId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
-import { regularNamed, ROOMS } from "@sequoia-leaf/raid/content/rooms.ts";
+import { regularOf, ROOMS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 
 import { itemPic } from "./art/icons.ts";
@@ -232,9 +232,12 @@ function drawCap(g: Ctx, run: RunView): void {
   }
 }
 
-/** The regular who brought the party across the table, if a regular did: the forest's trouble has nobody sat there. */
-function regularOf(run: RunView): FigureId | null {
-  return ROOMS[run.room]?.kind === "spar" ? (regularNamed(run.foe.who)?.kind ?? null) : null;
+/**
+ * The regular who brought the party across the table, if a regular did: the forest's trouble has
+ * nobody sat there, nor has another member's board.
+ */
+function regularAcross(run: RunView): FigureId | null {
+  return ROOMS[run.room]?.kind === "spar" ? (regularOf(run.foe)?.kind ?? null) : null;
 }
 
 /** When the watchers last had something to hop about. */
@@ -279,10 +282,10 @@ function drawPeople(g: Ctx, run: RunView): void {
   const up = V.t - cheerAt;
   const bounce = (i: number): number =>
     up >= 0 && up < 0.9 ? Math.abs(Math.sin((up + i * 0.1) * 9)) * 3 * (1 - up / 0.9) : 0;
-  const across = regularOf(run);
+  const across = regularAcross(run);
   if (across) drawAcross(g, across, cx, rim);
   if (p.w > 330) {
-    const [a, b] = watchersOf(S.runs, run.foe.who);
+    const [a, b] = watchersOf(S.runs, run.foe);
     drawFigure(g, a, cx - rx - 34, cy + 5 - bounce(0), { beat: Math.floor(V.t * 1.2) % 2 === 0 ? 0 : 1 });
     drawFigure(g, b, cx + rx + 34, cy + 11 - bounce(1), {
       left: true,

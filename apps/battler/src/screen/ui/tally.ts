@@ -20,13 +20,14 @@ import {
   measureOf,
   MEASURES,
   partsOf,
+  type Party,
   specOf,
   type Unit,
   type UnitKind,
 } from "@sequoia-leaf/raid";
-import { regularNamed } from "@sequoia-leaf/raid/content/rooms.ts";
+import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
-import { opening } from "../logic.ts";
+import { acrossName, opening } from "../logic.ts";
 import { snd } from "../sounds.ts";
 import { pic } from "./cards.ts";
 
@@ -62,8 +63,8 @@ const PARTS: Readonly<Record<Measure, readonly string[]>> = {
 };
 
 /** The other party's name as a heading: a regular's in the town's green after the acorn, anyone else's in coral. */
-export const partyName = (who: string): HTMLElement =>
-  regularNamed(who) ? folkName(opening(who), "k-pix") : el("b", "k-coral", { text: opening(who) });
+export const partyName = (party: Pick<Party, "who" | "by">): HTMLElement =>
+  regularOf(party) ? folkName(opening(party.who), "k-pix") : el("b", "k-coral", { text: acrossName(party) });
 
 /**
  * A figure's small picture for a row, at most 18 by 12 of its pixels: small figures whole, taller
@@ -133,7 +134,7 @@ export interface TallyView {
   /** Shows what everyone in a fight did; `units` says who each one is. */
   show(units: readonly Unit[], rows: readonly Did[]): void;
   /** Names the party across the table. */
-  across(who: string): void;
+  across(party: Pick<Party, "who" | "by">): void;
   redraw(): void;
   /** Forgets every row, for a fight that is not the one shown. */
   clear(): void;
@@ -280,8 +281,8 @@ export function tallyView(refOf: (id: number) => string, cls = ""): TallyView {
       did = d;
       redraw();
     },
-    across(who) {
-      theirs.replaceChildren(partyName(who));
+    across(party) {
+      theirs.replaceChildren(partyName(party));
     },
     redraw,
     clear() {

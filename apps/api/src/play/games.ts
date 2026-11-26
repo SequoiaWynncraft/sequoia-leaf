@@ -2,9 +2,11 @@ import {
   campRoom,
   type CoinChange,
   type Ctx,
+  type Done,
   type Game,
   type GameId,
   isRefused,
+  type Kept,
   type LeafSpend,
   type Logged,
   type PlayerId,
@@ -27,6 +29,8 @@ export type Attempt =
       readonly coins: readonly CoinChange[];
       readonly leaf: readonly LeafSpend[];
       readonly log: readonly Logged[];
+      /** What it leaves for other players to meet (`Done.keep`). */
+      readonly pieces: readonly Kept[];
       /** Makes the state the command left the open state. Until then, nothing has changed. */
       readonly keep: () => void;
       /** What a visitor's page is told of it (`Game.echo`): asked once it is kept, before the next command. */
@@ -35,6 +39,8 @@ export type Attempt =
 
 /** A state brought to Leaf's clock, that commands are done to one at a time. */
 export interface Opened {
+  /** The slot at which a command (one the game `reads`), done now, would meet another player's piece (`Game.meets`); else null. */
+  readonly meets: (command: unknown) => string | null;
   readonly attempt: (command: unknown, ctx: Ctx) => Attempt;
   /** The state as it stands, as the game stores it. */
   readonly text: () => string;
@@ -109,6 +115,25 @@ export interface Played {
   readonly room: (player: PlayerId) => string | null;
 }
 
+/** What a command done comes to, as the service weighs it: every part there, as nothing where the game left it out. */
+const doneOf = <S, N>(done: Done<S, N>) => ({
+  notes: done.notes,
+  coins: done.coins ?? [],
+  leaf: done.leaf ?? [],
+  log: done.log ?? [],
+  pieces: done.keep ?? [],
+});
+
+/** What a command off the wire, done to `state` now, would meet (`Game.meets`): null for none, and for one not the game's. */
+function meetsOf<State, Command>(
+  game: Pick<Game<State, Command, unknown, unknown>, "command" | "meets">,
+  state: State,
+  raw: unknown,
+): string | null {
+  const command = game.command(raw);
+  return command === null ? null : (game.meets?.(state, command) ?? null);
+}
+
 /**
  * Wraps a game for the service, keeping its own types inside. A game's rules may change the state
  * they are given in place (the Works' do), so the state is kept as text before each command, and a
@@ -139,6 +164,7 @@ export function played<State, Command, View, Note, Short>(
       return postcard === kept ? null : postcard;
     };
     const opened: Opened = {
+      meets: (raw) => meetsOf(game, current(), raw),
       attempt: (raw, at) => {
         const command = game.command(raw);
         if (command === null) {
@@ -151,10 +177,7 @@ export function played<State, Command, View, Note, Short>(
         }
         undo = before;
         return {
-          notes: answer.notes,
-          coins: answer.coins ?? [],
-          leaf: answer.leaf ?? [],
-          log: answer.log ?? [],
+          ...doneOf(answer),
           keep: () => {
             state = answer.state;
             undo = null;

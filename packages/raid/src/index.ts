@@ -189,7 +189,6 @@ export {
   move,
   nextStreak,
   type Note,
-  opposition,
   partyOf,
   type Phase,
   type Piece,
@@ -230,6 +229,7 @@ export {
   whyText,
   xpToNext,
 } from "./run.ts";
+export { boardMet, boardSlot, opposition } from "./foe.ts";
 export { checkRun, type Loaded, readRunView } from "./save.ts";
 
 // Between runs.

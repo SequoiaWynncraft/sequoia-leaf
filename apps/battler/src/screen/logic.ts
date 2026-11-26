@@ -46,7 +46,7 @@ import {
   traitsOf,
   type UnitKind,
 } from "@sequoia-leaf/raid";
-import { regularNamed, REGULARS } from "@sequoia-leaf/raid/content/rooms.ts";
+import { regularOf, REGULARS } from "@sequoia-leaf/raid/content/rooms.ts";
 
 /** Where a figure picked up from `from` may be put down: free seats, free hollows, and places it would swap into. */
 export interface Reach {
@@ -373,6 +373,12 @@ export const membersOf = (trait: TraitId): FigureId[] =>
 
 /** A name at the start of a sentence or a line: "a Moth" is "A Moth" there. */
 export const opening = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
+/**
+ * The name of the party across the table as a sentence starts with it: a regular's with a capital
+ * ("The Hearth Cat"), a member's (`Party.by`) and the forest's as they are written.
+ */
+export const acrossName = (party: Pick<Party, "who" | "by">): string =>
+  regularOf(party) ? opening(party.who) : party.who;
 
 /** The title of a fight's sheet: how it went and how long it took, "Room won · 14 s". */
 export function fightTitle(result: FightResult, ticks: number): string {
@@ -384,8 +390,8 @@ export function fightTitle(result: FightResult, ticks: number): string {
  * The two regulars who watch from the side logs, never the one across the table: picked by the
  * run's number at the table, so they stay the same all raid and change from one raid to the next.
  */
-export function watchersOf(runNumber: number, across: string): [FigureId, FigureId] {
-  const skip = regularNamed(across)?.kind;
+export function watchersOf(runNumber: number, across: Pick<Party, "who" | "by">): [FigureId, FigureId] {
+  const skip = regularOf(across)?.kind;
   const others = REGULARS.map((r) => r.kind).filter((k) => k !== skip);
   const roll = mix(runNumber, 0x5ea7);
   const a = others[roll % others.length] ?? "moth";

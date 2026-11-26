@@ -18,6 +18,7 @@ import {
   type Game,
   LOGGED,
   type Logged,
+  type Met,
   mix,
   type Refused,
 } from "@sequoia-leaf/core";
@@ -36,7 +37,8 @@ import {
   wear,
   wornOf,
 } from "./content/looks.ts";
-import { TRAIL_COUNT } from "./content/rooms.ts";
+import { ROOMS, TRAIL_COUNT } from "./content/rooms.ts";
+import { boardSlot } from "./foe.ts";
 import {
   type Almanac,
   beatenBosses,
@@ -58,6 +60,7 @@ import {
   choose,
   type Done as RunDone,
   fieldCap,
+  foughtOf,
   giveItem,
   hold,
   move,
@@ -74,6 +77,7 @@ import {
   type Stage,
   startRun,
   summariseRun,
+  takenTo,
   takeTakings,
   toBench,
   type Why,
@@ -319,8 +323,8 @@ function plan(run: RunView, c: Predicted): RunDone {
   }
 }
 
-/** A run action, on the run in hand. */
-function act(run: Run, c: RunCommand): RunDone {
+/** A run action, on the run in hand; `met` is another member's board that a `take` meets (`Ctx.met`). */
+function act(run: Run, c: RunCommand, met: Met | undefined): RunDone {
   if (isPredicted(c)) return plan(run, c);
   switch (c.do) {
     case "choose":
@@ -332,7 +336,7 @@ function act(run: Run, c: RunCommand): RunDone {
     case "fight":
       return beginFight(run);
     case "take":
-      return takeTakings(run);
+      return takeTakings(run, met);
     case "abandon":
       return abandon(run);
   }
@@ -383,13 +387,21 @@ function setOut(s: Table, trail: number, room: number): Answer {
   return { state: s, notes, coins, log };
 }
 
+/**
+ * Whether a run's fight is kept for other members to meet (`Done.keep`): a member's, not a guest's,
+ * at a sparring room. Trouble and bosses are the forest's.
+ */
+const keeps = (run: Run, ctx: Ctx): boolean => !ctx.player.guest && ROOMS[run.room]?.kind === "spar";
+
 function play(s: Table, c: RunCommand, ctx: Ctx): Answer {
   const run = s.run;
   if (!run) return no("no_run");
   const room = run.record.length;
-  // The takings are paid from the fight as it was decided when the party set out.
-  const seconds = run.stage.phase === "fight" ? run.stage.fight.outcome.seconds : 0;
-  const done = act(run, c);
+  // The takings are paid from the fight as it was decided when the party set out, against whoever was across.
+  const before = foughtOf(run);
+  const seconds = before?.outcome.seconds ?? 0;
+  const across = before?.setup.sides[1].by;
+  const done = act(run, c, ctx.met);
   if (!done.ok) return no(done.code);
   const notes: RaidNote[] = [...done.notes];
   const log: Logged[] = [];
@@ -403,11 +415,27 @@ function play(s: Table, c: RunCommand, ctx: Ctx): Answer {
         won: fought.result === "win",
         resolve: run.resolve,
         seconds: Math.round(seconds * 10) / 10,
+        // A sparring room fought against another member's board: whose.
+        ...(across === undefined ? {} : { met: across }),
       },
     });
   }
+  // The board a member fought a sparring room with, exactly as the fight was decided from, left for others to meet there.
+  const party = c.do === "fight" && keeps(run, ctx) ? foughtOf(run)?.setup.sides[0] : undefined;
+  const keep = party === undefined ? [] : [{ slot: boardSlot(run.trail, run.room), data: party }];
   const coins = run.stage.phase === "over" ? finish(s, run, notes, log, ctx.room) : [];
-  return { state: s, notes, coins, log };
+  return { state: s, notes, coins, log, keep };
+}
+
+/**
+ * Where a command meets another member's board (`Game.meets`): a `take` that moves the run on to a
+ * sparring room (`takenTo`: a run whose takings end it moves nowhere) meets one at that room's slot.
+ */
+export function meets(state: Table, c: RaidCommand): string | null {
+  const run = state.run;
+  if (c.do !== "take" || !run) return null;
+  const to = takenTo(run);
+  return to !== null && ROOMS[to]?.kind === "spar" ? boardSlot(run.trail, to) : null;
 }
 
 /**
@@ -577,6 +605,8 @@ export const RAID: Game<Table, RaidCommand, TableView, RaidNote> = {
   create: newTable,
   advance: wonLooks,
   apply: applyCommand,
+  // A sparring room may be against the board another member fought it with.
+  meets,
   view: (state) => tableView(state),
   decode: decodeTable,
   encode: encodeTable,

@@ -71,11 +71,12 @@ import {
   type Unit,
   type UnitKind,
 } from "@sequoia-leaf/raid";
-import { regularNamed } from "@sequoia-leaf/raid/content/rooms.ts";
+import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
 import { boonIcon, glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
 import { fightUnits } from "../fightview.ts";
 import {
+  acrossName,
   combosWithHeld,
   handing,
   membersOf,
@@ -443,7 +444,7 @@ function roomDesc(index: number, run: RunView): Description | null {
   const lines: string[] = [];
   if (here)
     lines.push(
-      regularNamed(run.foe.who)
+      regularOf(run.foe)
         ? `${opening(run.foe.who)} ${run.foe.title}.`
         : `${run.foe.who}${run.foe.title ? `: ${run.foe.title}` : ""}.`,
     );
@@ -543,7 +544,7 @@ export function registerCards(): void {
     if (!run || !foe) return null;
     return figureDesc(foe.kind, foe.stars, {
       items: foe.items,
-      whose: `${opening(run.foe.who)}'s`,
+      whose: `${acrossName(run.foe)}'s`,
       party: run.foe,
       numbers: startNumbers(run.foe, foe.seat),
     });
@@ -554,7 +555,7 @@ export function registerCards(): void {
     if (!run || !u) return null;
     return figureDesc(u.kind, u.stars, {
       unit: u,
-      whose: u.side === 0 ? "Yours" : `${opening(run.foe.who)}'s`,
+      whose: u.side === 0 ? "Yours" : `${acrossName(run.foe)}'s`,
       run: u.side === 0 ? run : null,
       party: u.side === 1 ? run.foe : null,
     });
