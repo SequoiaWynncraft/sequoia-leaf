@@ -41,7 +41,7 @@ export const powered = (u: Unit, amount: number): number => (amount * u.power) /
 export const targetable = (f: Fight, u: Unit): boolean => u.alive && u.hiddenUntil <= f.tick;
 const other = (side: Side): Side => (side === 0 ? 1 : 0);
 /** A hex's place in the order a side breaks ties in, so that both sides break them alike. */
-const order = (side: Side, cell: number): number => (side === 0 ? cell : mirror(cell));
+export const order = (side: Side, cell: number): number => (side === 0 ? cell : mirror(cell));
 
 // ---------- who is where ----------
 
@@ -70,31 +70,6 @@ export function drawOf(kind: UnitKind, items: readonly ItemId[]): number {
   if (isFigureId(kind)) for (const t of traitsOf(kind)) draw += traitDraw(t);
   for (const item of items) if (isFinishedId(item)) draw += FINISHED[item].n.draw ?? 0;
   return Math.min(FIGHT.drawMost, Math.max(FIGHT.drawLeast, draw));
-}
-/** How near an enemy seems to a figure picking a target: its distance less its draw. */
-const seems = (from: number, o: Unit): number => distance(from, o.cell) - o.draw;
-/**
- * The order a figure picks a new target in: enemies in its reach before the rest, so that it never
- * walks off while there is somebody it can hit; then the one that seems nearest (distance less
- * draw); ties go to the one really nearer, then to the hex that comes first for its side.
- */
-const pickOrder =
-  (u: Unit) =>
-  (a: Unit, b: Unit): number =>
-    Number(distance(u.cell, a.cell) > u.range) - Number(distance(u.cell, b.cell) > u.range) ||
-    seems(u.cell, a) - seems(u.cell, b) ||
-    distance(u.cell, a.cell) - distance(u.cell, b.cell) ||
-    order(u.side, a.cell) - order(u.side, b.cell);
-/** Enemies in the order a figure picks a new target (`pickOrder`). */
-export const foesByDraw = (f: Fight, u: Unit): Unit[] => foesOf(f, u.side).toSorted(pickOrder(u));
-/** The enemy a figure picks when it picks a new target: the first in `pickOrder`. */
-export function drawnFoe(f: Fight, u: Unit): Unit | undefined {
-  const first = pickOrder(u);
-  let best: Unit | undefined;
-  for (const o of f.units) {
-    if (o.side !== u.side && targetable(f, o) && (!best || first(o, best) < 0)) best = o;
-  }
-  return best;
 }
 /** The enemy nearest a figure, whatever its draw; ties go to the hex that comes first for its side. */
 export function nearestFoe(f: Fight, u: Unit): Unit | undefined {
@@ -381,6 +356,8 @@ export function enter(f: Fight, s: Start): Unit {
     cool: 0,
     busyUntil: 0,
     target: -1,
+    incoming: 0,
+    waitFrom: -1,
     attacks: 0,
     rooted: spec.rooted === true,
     steady: spec.steady === true,
@@ -417,7 +394,8 @@ export function enter(f: Fight, s: Start): Unit {
     digLess: 0,
     digFor: 0,
     regrow: 0,
-    thorns: 0,
+    // Only the brambles have a number for it.
+    thorns: (abilityNumber(s.kind, "thorns", s.stars) * s.power) / 100,
     called: false,
     pierce: 0,
     twice: 0,
@@ -439,9 +417,6 @@ export function enter(f: Fight, s: Start): Unit {
     healed: 0,
     casts: 0,
   };
-  if (s.kind === "bramble" || s.kind === "sprout" || s.kind === "oldbramble") {
-    u.thorns = powered(u, abilityNumber(s.kind, "thorns", s.stars));
-  }
   f.units.push(u);
   f.taken[s.cell] = u.id;
   f.standing[s.side]++;

@@ -80,8 +80,13 @@ export const FIGHT = {
   /** How long one hex takes to walk, and how long a figure stands still to use its ability, in steps. */
   walk: 6,
   cast: 6,
-  /** How long anything thrown takes to cross one hex, in steps. */
+  /** How long anything thrown takes to cross one hex, and a figure dashing, in steps. */
   flight: 2,
+  dash: 2,
+  /** A heal or shield waits until somebody it reaches is at this share of their health or under, in percent. */
+  mendUnder: 85,
+  /** How long an area ability that would catch one enemy of three or more waits for a second, in steps. */
+  crowdWait: 20,
   /** Mana from attacking, and the most one hit can give whoever it lands on. */
   manaAttack: 10,
   manaHit: 10,

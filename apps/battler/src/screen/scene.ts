@@ -15,6 +15,7 @@ import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 
 import { itemPic, levelPic } from "./art/icons.ts";
 import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
+import { drawFightMarks } from "./fightmarks.ts";
 import { drawFight, drawFightAir, fightHeldUnder, fightOn } from "./fightview.ts";
 import { burst, drawFlyers, drawFxOver, drawFxUnder, wordsFx } from "./fx.ts";
 import { cellXY, GAP, HEX_H, HEX_W, ROW, seatXY, slotXY } from "./geometry.ts";
@@ -324,6 +325,7 @@ export function drawScene(g: Ctx): void {
     drawMarks(g);
   }
   drawFxUnder(g);
+  drawFightMarks(g);
   const list: Standing[] = [];
   if (fighting) drawFight(g, list);
   else {

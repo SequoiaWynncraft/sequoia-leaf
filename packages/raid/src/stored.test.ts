@@ -8,7 +8,7 @@ import { HOLDS } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, TRAIL_COUNT } from "./content/rooms.ts";
 import { traitNumber } from "./content/traits.ts";
 import { RAID, type Table } from "./game.ts";
-import { type Choice, type Fought, foughtOf, type Phase, picksOf, type Piece, playsAsKept, type Run } from "./run.ts";
+import { type Choice, type Fought, foughtOf, type Phase, picksOf, type Piece, type Run } from "./run.ts";
 
 /**
  * Tables as Leaf stores them, made by the rules of earlier versions and frozen in `../stored`. Each
@@ -95,7 +95,7 @@ describe("a table kept before there were runs with the member's own figures", ()
 });
 
 describe("a table kept in the fight of a run with the member's own figures", () => {
-  test("reads with its roster, and the fight with its levels, which plays to the outcome kept", () => {
+  test("reads with its roster, and the fight with its levels and the outcome Leaf kept", () => {
     const run = runOf(read(fixture("own-fighting.json")));
     expect(run.own).toEqual({ crab7: 2, worm: 0, slug: 1, rock: 0, badger: 3, greg: 1 });
     const fight = foughtOf(run);
@@ -106,7 +106,10 @@ describe("a table kept in the fight of a run with the member's own figures", () 
       ["rock", 1, undefined],
       ["crab7", 2, 2],
     ]);
-    expect(playsAsKept(fight)).toBe(true);
+    // Kept before figures used their abilities as they do now: today's rules play it otherwise, and
+    // the page shows only its end (`playsAsKept`), with the outcome as Leaf kept it.
+    const kept: { run: { stage: { fight: Fought } } } = JSON.parse(fixture("own-fighting.json"));
+    expect(fight.outcome).toEqual(kept.run.stage.fight.outcome);
   });
 });
 
