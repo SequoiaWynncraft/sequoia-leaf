@@ -1,6 +1,18 @@
 import { afterEach, describe, expect, jest, test } from "bun:test";
 
-import { asking, asksAgain, el, heard, mouseHeld, pressedTwice, type Spend, tappedTwice, unheld, when } from "./dom.ts";
+import {
+  asking,
+  asksAgain,
+  el,
+  heard,
+  mouseHeld,
+  pressedTwice,
+  type Spend,
+  tappedTwice,
+  unask,
+  unheld,
+  when,
+} from "./dom.ts";
 import { heldAgain, noKeysHeld } from "./keys.ts";
 import { type Scope, scope } from "./scope.ts";
 import { aPage, type Part } from "./standin.ts";
@@ -204,6 +216,9 @@ function shelf(body: Part, spend: Spend, label: string, question: string) {
 describe("on a page, the second press is only on a button that shows the question", () => {
   let page: ReturnType<typeof aPage> | null = null;
   afterEach(() => {
+    // A test may end while a button still asks: put it away while the page is there, or its wait
+    // ends in a later test, with no page to draw on.
+    unask();
     page?.done();
     page = null;
   });
