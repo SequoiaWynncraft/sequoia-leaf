@@ -49,6 +49,12 @@ export function tipAt(spot: TipSpot, title: string, text = "", by: object | null
   if (by instanceof Element) by.setAttribute("aria-describedby", ID);
 }
 
+/** A plain tip beside an element, for as long as the element keeps it. */
+export function tipBeside(target: Element, title: string, text = ""): void {
+  const r = target.getBoundingClientRect();
+  tipAt({ x: r.left, y: r.top, w: r.width, h: r.height }, title, text, target);
+}
+
 /** Puts a tip beside a spot: above it where there is room, otherwise below, and inside the window. */
 function putBeside(node: HTMLElement, spot: TipSpot): void {
   const r = node.getBoundingClientRect();
