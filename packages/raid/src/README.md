@@ -98,11 +98,12 @@ the three dearest carry a third trait.
 acorns, and not one of the twenty-eight (`FIGURE_IDS`): the main way's stall never offers it, no
 regular brings it, a board holding it is not met on the main way, and the almanac does not count
 it. Only a run with the member's own figures sells it, to a member who has pulled it (below). Its
-name in the rules is "A guild member"; the page gives it the member's name and their picture.
+name in the rules is "A guild member"; the page gives it the member's name and their picture. Its
+rules are made for the member: the first banner's is gaz, a Sage whose ability is his own line.
 
-| Tier | Figure         | Kin     | Calling | Health | Attack | Reach | Ability (one star)                                                                                                                                          |
-| ---- | -------------- | ------- | ------- | ------ | ------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 5    | A guild member | Feather | Mender  | 640    | 46     | 3     | **On My Way.** Runs over to the friend who is most hurt and stands by them: 260 health back for the friend, and a shield of 180 for 4 seconds on them both. |
+| Tier | Figure         | Kin     | Calling | Health | Attack | Reach | Ability (one star)                                                                                                                                                                                                           |
+| ---- | -------------- | ------- | ------- | ------ | ------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5    | A guild member | Feather | Sage    | 680    | 44     | 4     | **I heard you weren't graiding.** Picks the enemy who has dealt the least damage so far, wherever they are, and stuns them for 1.5 seconds. One second later, 400 magic damage to them and 200 to every enemy touching them. |
 
 It comes up on a free hex touching the friend, the one furthest from the enemy nearest them; with
 no free hex it stays where it is, and with nobody else left it heals and shields itself. Measured
