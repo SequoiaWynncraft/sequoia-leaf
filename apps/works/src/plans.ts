@@ -13,6 +13,7 @@
 import {
   blueprintCode,
   blueprintRefusal,
+  cleanCode,
   DEPOT,
   locked,
   NONE,
@@ -264,14 +265,15 @@ export const pasteOffered = (stage: Stage | null): boolean => stage?.is === "emp
 
 /** A kept place pressed while Paste code asks where: keeping the code's blueprint over what is kept there. */
 export const pasteKey = (slot: number, code: string): Spend =>
-  pressKey(`paste:${printKey(slot)}:${digest(new TextEncoder().encode(code.trim()))}`);
+  pressKey(`paste:${printKey(slot)}:${digest(new TextEncoder().encode(cleanCode(code)))}`);
 
 /**
  * Keeps the blueprint a code is in a place, as one command the rules read on the page and on Leaf;
  * says why it cannot be, with its sound, or nothing when it is kept.
  */
 export function pasteIn(slot: number, code: string): string | null {
-  const did = doNow({ do: "pasteBlueprint", slot, code: code.trim() });
+  // The code as the rules read it, not as pasted: spaces and line breaks would only make the batch longer.
+  const did = doNow({ do: "pasteBlueprint", slot, code: cleanCode(code) });
   if ("refused" in did) {
     yardSfx.no();
     return `${did.why}.`;

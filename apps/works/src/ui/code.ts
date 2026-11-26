@@ -8,7 +8,7 @@
  * The box (`#code`, over the yard under the top bar) is one at a time, a layer that Escape or Close
  * puts away, and it goes with what is held (`handSession`).
  */
-import { codeRefusal } from "@sequoia-leaf/factory";
+import { cleanCode, codeRefusal } from "@sequoia-leaf/factory";
 import { dialog } from "@sequoia-leaf/kit/dialog.ts";
 import { el } from "@sequoia-leaf/kit/dom.ts";
 import { type Scope, scope } from "@sequoia-leaf/kit/scope.ts";
@@ -70,7 +70,8 @@ async function copyCode(slot: number): Promise<void> {
     await navigator.clipboard.writeText(code);
   } catch {
     forget();
-    showCode(code);
+    // Refused after the hand moved on (another tool, or Paste code open): the box is not shown over it.
+    if (!session.closed) showCode(code);
     return;
   }
   if (session.closed) return;
@@ -122,7 +123,7 @@ function askCode(): void {
     line.classList.toggle("bad", bad);
   };
   const draw = (): void => {
-    const code = field.value.trim();
+    const code = cleanCode(field.value);
     const why = code === "" ? null : codeRefusal(S.world.open, code);
     said(code === "" ? "" : why === null ? "Paste it in which place?" : `${why}.`, why !== null);
     places.replaceChildren(...(code !== "" && why === null ? pastePlaces(code, keep, draw) : []));

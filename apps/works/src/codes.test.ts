@@ -88,11 +88,13 @@ describe("Paste code", () => {
     const fake = await opened(yard(), 1000);
     setTool("select");
     const code = twoBelts();
-    expect(pasteIn(2, `  ${code}\n`)).toBeNull();
+    // Pasted with spaces around it and a line break in it: Leaf is sent the code alone.
+    expect(pasteIn(2, `  ${code.slice(0, 9)}\n${code.slice(9)}\n`)).toBeNull();
     expect(codeIn(2)).toBe(code);
     await until(() => fake.leaf.posts >= 1);
     await Bun.sleep(5);
     expect(sent(fake.leaf)).toEqual(["pasteBlueprint"]);
+    expect(fake.leaf.commands[0]).toMatchObject({ code });
     expect(fake.leaf.yard.blueprints[2]).toEqual(S.world.blueprints[2]);
   });
 

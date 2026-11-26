@@ -93,6 +93,18 @@ describe("a blueprint's code", () => {
     expect(b.blueprints[0]).toBeNull();
   });
 
+  test("says how many bytes of pieces follow it, so no code cut short is ever the code of fewer pieces", () => {
+    const code = codeIn(kept(), 0);
+    const bytes = Buffer.from(code.slice(F.CODE_PREFIX.length), "base64");
+    expect(((bytes[3] ?? 0) << 8) + (bytes[4] ?? 0)).toBe(bytes.length - 5);
+    // The same pieces, said to be one byte more than follow, with their own check: not a code.
+    const longer = Uint8Array.from(bytes);
+    longer[4] = (bytes[4] ?? 0) + 1;
+    expect(paste(bare(5, 2), 0, F.CODE_PREFIX + Buffer.from(longer).toString("base64").replace(/=+$/, ""))).toEqual(
+      NOT,
+    );
+  });
+
   test("is none for a plan of the whole yard, which goes back where it was taken", () => {
     const y = kept();
     y.open = F.openOf([...F.ALL_GOALS]);

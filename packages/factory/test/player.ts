@@ -55,9 +55,9 @@ export class Player {
     }
     return { kind: F.kindName(kind), ...this.spot(), dir: 0 };
   }
-  /** The code of one of a yard's blueprints, a fifth of the time cut short; one of no blueprint, for none. */
+  /** The code of one of a yard's kept blueprints, a fifth of the time cut short; one of no blueprint, for none. */
   code(y: F.Yard): string {
-    const print = y.blueprints[this.int(F.BLUEPRINTS_MOST)];
+    const print = this.pick(y.blueprints.filter((p) => p !== null && !p.whole));
     const code = (print && F.blueprintCode(print)) ?? `${F.CODE_PREFIX}AAAA`;
     return this.r() < 0.2 ? code.slice(0, -2) : code;
   }
@@ -102,7 +102,9 @@ export class Player {
       case 6: {
         const slot = this.int(F.BLUEPRINTS_MOST);
         if (!y.blueprints[slot] || this.r() < 0.2) return { do: "deleteBlueprint", slot };
-        return { do: "placeBlueprint", slot, turns: this.int(4), ...at };
+        // Half the time from a tile where a piece may stand, which a spot at random seldom is.
+        const from = this.r() < 0.5 ? this.where() : at;
+        return { do: "placeBlueprint", slot, turns: this.int(4), x: from.x, y: from.y };
       }
       case 7: {
         // A yard that may keep the whole yard now and then does, or pastes a code of one of its

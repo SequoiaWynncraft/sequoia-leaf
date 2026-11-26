@@ -1,9 +1,10 @@
 /**
  * A blueprint as a code a player copies and pastes elsewhere (`blueprintCode`): a short prefix that
- * says the code's version, then in base64 with no padding a check of the blueprint's pieces (24 bits)
- * and the pieces packed as a kept yard packs them (`packPrint`). The same blueprint always gives the
- * same code; the check makes a code cut short or mistyped no code, not one of fewer pieces. A plan of
- * the whole yard has none: it goes back where it was taken, in its own yard.
+ * says the code's version, then in base64 with no padding a check of the blueprint's pieces (24 bits),
+ * how many bytes of pieces follow (16 bits), and the pieces packed as a kept yard packs them
+ * (`packPrint`). The same blueprint always gives the same code. A code cut short is never one of fewer
+ * pieces, since fewer bytes follow than it says; a mistyped one fails its check. A plan of the whole
+ * yard has none: it goes back where it was taken, in its own yard.
  *
  * The base64 is the plain one (`+` and `/`), not the URL one: Discord reads `__` as underlining and
  * leaves the underscores out of text copied off the message.
@@ -29,14 +30,17 @@ export const CODE_PREFIX = "wb1.";
 
 /** The most bytes a piece takes in a code: its kind, where, its way and what follows, and five of those. */
 const PIECE_MOST = 9;
-/** The bytes of a code's check, before its pieces. */
-const CHECK = 3;
+/** The bytes before a code's pieces: their check (3), then how many bytes of them follow (2). */
+const HEAD = 5;
 
 /** The longest a code can be: every tile of the largest box a blueprint holds a piece of the most bytes. */
-export const CODE_MOST = CODE_PREFIX.length + Math.ceil((CHECK + BLUEPRINT.w * BLUEPRINT.h * PIECE_MOST) / 3) * 4;
+export const CODE_MOST = CODE_PREFIX.length + Math.ceil((HEAD + BLUEPRINT.w * BLUEPRINT.h * PIECE_MOST) / 3) * 4;
 
 /** Whether a command's code is text no longer than any code can be: the rules read it as they do it. */
 export const isCode = (v: unknown): v is string => typeof v === "string" && v.length <= CODE_MOST;
+
+/** A code as pasted, with the spaces and line breaks it often comes with left out: the text the rules read, and the page sends. */
+export const cleanCode = (code: string): string => code.replace(/\s+/g, "");
 
 /** Why a code is refused when it is not one. */
 const NOT_A_CODE = "That is not a blueprint code";
@@ -48,12 +52,12 @@ function checkOf(packed: Uint8Array): number {
   return (h >>> 0) & 0xffffff;
 }
 
-/** The code of a blueprint's pieces packed as a kept yard packs them (`packPrint`): the prefix, their check, then them. */
+/** The code of a blueprint's pieces packed as a kept yard packs them (`packPrint`): the prefix, their check and length, then them. */
 export function packedCode(packed: Uint8Array): string {
   const check = checkOf(packed);
-  const all = new Uint8Array(CHECK + packed.length);
-  all.set([check >> 16, (check >> 8) & 255, check & 255]);
-  all.set(packed, CHECK);
+  const all = new Uint8Array(HEAD + packed.length);
+  all.set([check >> 16, (check >> 8) & 255, check & 255, packed.length >> 8, packed.length & 255]);
+  all.set(packed, HEAD);
   return `${CODE_PREFIX}${toBase64(all).replace(/=+$/, "")}`;
 }
 
@@ -63,12 +67,13 @@ const codeOf = (pieces: Uint8Array): string => packedCode(packPrint(pieces));
 /** A blueprint's code; none for a plan of the whole yard. */
 export const blueprintCode = (print: Print): string | null => (print.whole ? null : codeOf(print.pieces));
 
-/** The packed pieces a code carries after its prefix, if its check is theirs. */
+/** The packed pieces a code carries after its prefix, if as many bytes of them follow as it says, and its check is theirs. */
 function packedOf(text: string): Uint8Array | null {
   const body = text.slice(CODE_PREFIX.length);
   const bytes = fromBase64(body.padEnd(Math.ceil(body.length / 4) * 4, "="));
-  if (!bytes || bytes.length <= CHECK) return null;
-  const packed = bytes.subarray(CHECK);
+  if (!bytes || bytes.length <= HEAD) return null;
+  const packed = bytes.subarray(HEAD);
+  if (((bytes[3] ?? 0) << 8) + (bytes[4] ?? 0) !== packed.length) return null;
   return ((bytes[0] ?? 0) << 16) + ((bytes[1] ?? 0) << 8) + (bytes[2] ?? 0) === checkOf(packed) ? packed : null;
 }
 
@@ -104,7 +109,7 @@ function apart(pieces: readonly Piece[]): boolean {
  */
 export function codePieces(code: string): Piece[] | null {
   if (!isCode(code)) return null;
-  const text = code.replace(/\s+/g, "");
+  const text = cleanCode(code);
   if (!text.startsWith(CODE_PREFIX)) return null;
   const kept = unpackPrint(packedOf(text));
   if (!kept || kept.length === 0) return null;

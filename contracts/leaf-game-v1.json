@@ -2645,14 +2645,14 @@
             "id": "w-2",
             "do": "pasteBlueprint",
             "slot": 0,
-            "code": "wb1.vXxcAgAAAAABAAA",
+            "code": "wb1.vXxcAAgCAAAAAAEAAA",
             "tick": 0
           },
           {
             "id": "w-3",
             "do": "pasteBlueprint",
             "slot": 0,
-            "code": "wb1.vXxcAgAAAAABA",
+            "code": "wb1.vXxcAAgCAAAAAAEA",
             "tick": 0
           }
         ]
