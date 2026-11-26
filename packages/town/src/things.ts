@@ -34,7 +34,7 @@ export interface Thing {
   id: string;
   name: string;
   kind: Kind;
-  /** A line about it, for whoever points at it. */
+  /** A line about it, for whoever points at it; none where a line would add nothing. */
   about: string;
   /** What touching it does, in a few words; empty if it only shivers. */
   does: string;
@@ -88,6 +88,9 @@ function thing(
 
 /** The camp thing one of The Little Raid's figures is. */
 export const figureThing = (figure: string): string => `figure-${figure}`;
+/** The camp thing a pull banner's member is, and whether a thing is one. */
+export const memberThing = (banner: string): string => `member-${banner}`;
+export const isMemberThing = (id: string): boolean => id.startsWith(memberThing(""));
 
 export const THINGS: readonly Thing[] = [
   // What every camp begins with.
@@ -281,9 +284,6 @@ export const THINGS: readonly Thing[] = [
   }),
   thing("crab-throne", "Crab throne", "seats", 2, 1, "A seat with claws for arms.", "Sit down.", { seats: 1 }),
 
-  // A banner's headliner, in marble: one for each of the pull game's banners. The page names and draws whose it is.
-  thing("statue-banner-1", "A statue", "oddments", 1, 1, "Marble, on a plinth.", "", { light: 22, turns: "flip" }),
-
   // Small presents, which cannot be bought.
   thing("pinecone", "A very good pinecone", "oddments", 1, 1, "Chosen with care.", "Rolls a little."),
   thing("painted-pebble", "Painted pebble", "oddments", 1, 1, "Somebody painted a crab on it.", "Clicks."),
@@ -325,6 +325,10 @@ export const THINGS: readonly Thing[] = [
       turns: "flip",
     }),
   ),
+
+  // A banner's member, one for each of the pull game's banners: a person, who takes a person's square.
+  // Only Leaf knows who; the page gives the thing their name and draws them (`members.ts`).
+  thing(memberThing("banner-1"), "A guild member", "characters", 1, 1, "", "Hops and looks at you.", { turns: "flip" }),
 ];
 
 const BY_ID = new Map(THINGS.map((t) => [t.id, t]));
@@ -333,6 +337,23 @@ const BY_ID = new Map(THINGS.map((t) => [t.id, t]));
 export const thingOf = (id: string): Thing | null => BY_ID.get(id) ?? null;
 
 export const isThing = (id: unknown): id is string => typeof id === "string" && BY_ID.has(id);
+
+/**
+ * The camp thing an award brings: a trophy is named as its thing, a pull's `figure:` prize is that
+ * figure's thing, a banner's headliner is that banner's member, and a `thing:` prize of earlier
+ * pulls is that thing.
+ */
+export const thingWon = (award: string): string =>
+  award
+    .replace(/^pull:figure:/, figureThing(""))
+    .replace(/^pull:headliner:/, memberThing(""))
+    .replace(/^pull:thing:/, "");
+
+/** A thing by the id a camp was stored with, or null: a banner's member was `statue-<banner>` while it was a statue. */
+export function storedThing(v: unknown): string | null {
+  const id = typeof v === "string" ? v.replace(/^statue-/, memberThing("")) : v;
+  return isThing(id) ? id : null;
+}
 
 /** How many ways round a thing can be set down. */
 export const turnsOf = (t: Thing): number => (t.turns === "none" ? 1 : 2);

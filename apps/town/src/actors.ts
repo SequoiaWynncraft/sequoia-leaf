@@ -5,7 +5,7 @@
  */
 
 import { EARTH } from "@sequoia-leaf/kit/palette.ts";
-import type { Body } from "@sequoia-leaf/kit/skin.ts";
+import type { Body, Dir } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { dist, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { folkAt, roll, type Walk } from "@sequoia-leaf/town/clock.ts";
@@ -126,11 +126,14 @@ export function hop(a: Actor, times = 1, late = 0): void {
   a.hops = Math.max(a.hops, times - 1 - done);
 }
 
+/** The way a step mostly goes, or a look. */
+export const dirOf = (dx: number, dy: number): Dir => (Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0);
+
 export function face(a: Actor, x: number, y: number): void {
   const dx = x - a.x;
   const dy = y - a.y;
   if (Math.abs(dx) < 0.3 && Math.abs(dy) < 0.3) return;
-  a.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0;
+  a.dir = dirOf(dx, dy);
   if (Math.abs(dx) > 0.3) a.side = dx < 0 ? -1 : 1;
 }
 

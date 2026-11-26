@@ -5,7 +5,7 @@ import { RAID } from "@sequoia-leaf/raid";
 import { FIGURE_IDS, FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
 import { isBoughtLook } from "@sequoia-leaf/raid/content/looks.ts";
 import { TOWN } from "@sequoia-leaf/town";
-import { figureThing, isThing } from "@sequoia-leaf/town/things.ts";
+import { figureThing, isThing, memberThing } from "@sequoia-leaf/town/things.ts";
 
 import {
   BANNERS,
@@ -85,9 +85,9 @@ describe("the prizes", () => {
     expect(PRIZES.Druid).toEqual(["figure:crab40", "figure:apothecary"]);
     expect(Object.values(PRIZES).map((list) => list.length)).toEqual([7, 7, 6, 3, 2, 3, 1]);
     expect(PRIZES.Yggdrasil).toEqual(["headliner:banner-1"]);
-    // The town has a thing to send for each figure, and a statue for each banner's headliner.
+    // The town has a thing to send for each figure, and for each banner's headliner.
     expect(FIGURE_IDS.filter((id) => !isThing(figureThing(id)))).toEqual([]);
-    expect(BANNERS.filter(({ id }) => !isThing(`statue-${id}`))).toEqual([]);
+    expect(BANNERS.filter(({ id }) => !isThing(memberThing(id)))).toEqual([]);
     expect(rarityOf("figure:greg")).toBe("Treant");
     expect(rarityOf("figure:nobody")).toBeUndefined();
     expect(rarityOf("headliner:banner-0")).toBe("Yggdrasil");

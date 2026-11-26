@@ -13,7 +13,7 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, dist, must, type Pt, type Rect } from "@sequoia-leaf/kit/util.ts";
 import type { Ground } from "@sequoia-leaf/town/map/grid.ts";
 
-import { feet, headOf, hop, pushOf, shove, stop, walkTo } from "./actors.ts";
+import { dirOf, feet, headOf, hop, pushOf, shove, stop, walkTo } from "./actors.ts";
 import { ring } from "./fx.ts";
 import { type Actor, G, type Prompted, show } from "./game.ts";
 import { closeCard, closePanel } from "./hud.ts";
@@ -71,8 +71,6 @@ const FINGER = 10;
 const inside = (r: Rect, x: number, y: number, pad = 0): boolean =>
   x >= r.x - pad && y >= r.y - pad && x < r.x + r.w + pad && y < r.y + r.h + pad;
 const me = (): Actor => must(G.player, "the member");
-/** The way a push mostly goes. */
-const dirOf = (dx: number, dy: number): Dir => (Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0);
 
 export function makeTouch(here: Here) {
   /** The door the prompt hangs by, kept while it fades. */

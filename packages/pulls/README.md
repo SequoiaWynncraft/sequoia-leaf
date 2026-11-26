@@ -33,7 +33,7 @@ them is in this package.
 
 What a prize is, once won, is the other games' to say, from the award (`pull:<prize>`): the town
 puts a figure in the camp's Storage once (its thing `figure-<id>`), and for a `headliner:` the
-banner's statue (`statue-<banner>`). A second copy of a prize brings nothing but its Seeds.
+banner's member (`member-<banner>`). A second copy of a prize brings nothing but its Seeds.
 
 Before the pools gave figures they gave the town's things (`thing:<id>`) and the raid table's looks
 (`look:<id>`). `EARLIER` lists those with the rarity each had. None is in a pool or to be had for

@@ -60,7 +60,7 @@ import {
 } from "./folk.ts";
 import { isLetter, type Letter, letter, post, tidied } from "./mail.ts";
 import { stretchOf } from "./stretch.ts";
-import { figureThing, isThing, thingOf, turnsOf } from "./things.ts";
+import { isThing, storedThing, thingOf, thingWon, turnsOf } from "./things.ts";
 
 // ---------- the state ----------
 
@@ -248,17 +248,6 @@ function arrivalOf(s: Town, o: { rng: number; made: number }, now: number): Arri
 /** The furthest of two places in the member's news. */
 const further = (a: number | null, b: number | null): number | null =>
   a === null ? b : b === null ? a : Math.max(a, b);
-
-/**
- * The camp thing an award brings: a trophy is named as its thing, a pull's `figure:` prize is that
- * figure's thing, a banner's headliner is that banner's statue, and a `thing:` prize of earlier
- * pulls is that thing.
- */
-const thingWon = (award: string): string =>
-  award
-    .replace(/^pull:figure:/, figureThing(""))
-    .replace(/^pull:headliner:/, "statue-")
-    .replace(/^pull:thing:/, "");
 
 /**
  * The state at `ctx.now`: the things the member has won elsewhere (trophies, a pull's prizes) that
@@ -566,8 +555,9 @@ export const encodeTown = (s: Town): string =>
 const TIME = 8.64e15;
 
 function placedOf(v: unknown): Placed | null {
-  if (!isRecord(v) || !whole(v.n, 0, 1e9) || !isThing(v.id)) return null;
-  const { n, id, x, y, t, s } = v;
+  const id = isRecord(v) ? storedThing(v.id) : null;
+  if (!isRecord(v) || !whole(v.n, 0, 1e9) || id === null) return null;
+  const { n, x, y, t, s } = v;
   return whole(x, 0, CGW) && whole(y, 0, CGH) && whole(t, 0, 3) && whole(s, 0, 7) ? { n, id, x, y, t, s } : null;
 }
 
@@ -587,8 +577,9 @@ function all<T>(v: unknown, one: (x: unknown) => T | null): T[] | null {
 function counts(v: unknown): Record<string, number> | null {
   if (!isRecord(v)) return null;
   const out: Record<string, number> = {};
-  for (const [id, n] of Object.entries(v)) {
-    if (!isThing(id) || !whole(n, 1, MOST_OWNED)) return null;
+  for (const [was, n] of Object.entries(v)) {
+    const id = storedThing(was);
+    if (id === null || !whole(n, 1, MOST_OWNED)) return null;
     out[id] = n;
   }
   return out;
@@ -602,11 +593,11 @@ function counts(v: unknown): Record<string, number> | null {
 function storedCamp(v: unknown): Camp | null {
   if (!isRecord(v) || !(v.first === "" || isPet(v.first)) || !whole(v.greeted, 0, 999)) return null;
   const placed = all(v.placed, placedOf);
-  const parcels = all(v.parcels ?? [], (p) => (isThing(p) ? p : null));
+  const parcels = all(v.parcels ?? [], storedThing);
   const letters = all(v.letters, (l) => (isLetter(l) ? { ...l, from: nowNamed(l.from) } : null));
-  const earned = all(v.earned, (p) => (isThing(p) ? p : null));
+  const earned = all(v.earned, storedThing);
   const tray = counts(v.tray);
-  const fresh = all(v.fresh ?? [], (p) => (isThing(p) ? p : null));
+  const fresh = all(v.fresh ?? [], storedThing);
   const looked = v.looked ?? 0;
   if (!placed || !parcels || !letters || !earned || !tray || !fresh || !whole(looked, 0, 1e9)) return null;
   if (fresh.length > MOST_NEW) return null;

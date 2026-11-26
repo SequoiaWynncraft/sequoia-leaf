@@ -368,6 +368,19 @@ export function lookFor(name: string): Look {
 /** Where a player's skin sheet is served. */
 export const skinOf = (id: string): string => `/v1/game/skins/${encodeURIComponent(id)}`;
 
+/** Somebody's own skin as their figure, once it has come; never, if it cannot be read: what stands for them stays. */
+export function skinFigure(id: string, come: (body: Body) => void): void {
+  const img = new Image();
+  img.addEventListener("load", () => {
+    try {
+      come(bake(img));
+    } catch {
+      // A picture that cannot be read.
+    }
+  });
+  img.src = skinOf(id);
+}
+
 /** Faces given by `faceFor`, by player. */
 const faces = new Map<string, { face: HTMLCanvasElement }>();
 let facesCome = 0;
@@ -381,18 +394,11 @@ export function faceFor(id: string, name: string, fetch: boolean): HTMLCanvasEle
   if (had) return had.face;
   const got = { face: bake(paintSkin(lookFor(name))).face };
   faces.set(id, got);
-  if (fetch) {
-    const img = new Image();
-    img.addEventListener("load", () => {
-      try {
-        got.face = bake(img).face;
-        facesCome++;
-      } catch {
-        // A picture that cannot be read: the look of their own stays.
-      }
+  if (fetch)
+    skinFigure(id, (body) => {
+      got.face = body.face;
+      facesCome++;
     });
-    img.src = skinOf(id);
-  }
   return got.face;
 }
 

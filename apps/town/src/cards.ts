@@ -62,7 +62,7 @@ function thingDesc(art: CampArt, id: string): Description | null {
     tag: KIND_NAMES[thing.kind],
     stats,
     blocks: [
-      { body: won ? thing.about : `${TO_WIN} ${thing.about}` },
+      ...(thing.about ? [{ body: won ? thing.about : `${TO_WIN} ${thing.about}` }] : []),
       ...(thing.does ? [{ title: "Touched", body: thing.does }] : []),
       ...(from.words ? [{ title: "From", body: from.words }] : []),
     ],

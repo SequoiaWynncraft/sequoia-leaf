@@ -256,19 +256,19 @@ describe("things won", () => {
     expect(TOWN.advance(won, ctx(T0, awards))).toBe(won);
   });
 
-  test("a pull's thing arrives once, whatever copies come after; its headliner brings the banner's statue", () => {
+  test("a pull's thing arrives once, whatever copies come after; its headliner brings the banner's member", () => {
     // Awards from before the camp knew of them: handed over on the next look.
     const awards = ["pull:thing:fountain", "pull:look:baize", "pull:headliner:banner-1", "pull:thing:nothing"];
     const won = TOWN.advance(fresh(), ctx(T0, awards));
-    expect(won.camp.tray).toEqual({ fountain: 1, "statue-banner-1": 1 });
-    expect(won.camp.earned).toEqual(["fountain", "statue-banner-1"]);
+    expect(won.camp.tray).toEqual({ fountain: 1, "member-banner-1": 1 });
+    expect(won.camp.earned).toEqual(["fountain", "member-banner-1"]);
     // Set out and gone from the tray: a second copy of the prize is the same award, and brings nothing.
     const set = did(won, { do: "setOut", thing: "fountain", x: 30, y: 20, t: 0 }).state;
     expect(TOWN.advance(set, ctx(T0, awards))).toBe(set);
-    // The statue is set out, turned and put away like any thing.
-    const statue = did(set, { do: "setOut", thing: "statue-banner-1", x: 34, y: 20, t: 1 }).state;
-    expect(did(statue, { do: "putAway", n: nOf(statue, "statue-banner-1") }).state.camp.tray).toEqual({
-      "statue-banner-1": 1,
+    // The member is set out, turned and put away like any thing.
+    const member = did(set, { do: "setOut", thing: "member-banner-1", x: 34, y: 20, t: 1 }).state;
+    expect(did(member, { do: "putAway", n: nOf(member, "member-banner-1") }).state.camp.tray).toEqual({
+      "member-banner-1": 1,
     });
   });
 
@@ -510,6 +510,32 @@ describe("keeping a town", () => {
     const s = fresh();
     for (let i = 0; i <= MOST_NEW; i++) store(s.camp, i === 0 ? "rock" : "stump");
     expect([s.camp.fresh.length, s.camp.fresh[0], s.camp.looked]).toEqual([MOST_NEW, "stump", 1]);
+  });
+
+  test("a camp kept while a banner's member was a statue is read with the member in its place, and is not sent a second", () => {
+    const s = fresh();
+    const stood = { n: 900, id: "statue-banner-1", x: 34, y: 20, t: 1, s: 0 };
+    const kept = JSON.stringify({
+      ...JSON.parse(encodeTown(s)),
+      camp: {
+        ...s.camp,
+        placed: [...s.camp.placed, stood],
+        tray: { rock: 1, "statue-banner-1": 2 },
+        fresh: ["statue-banner-1"],
+        earned: ["statue-banner-1"],
+        parcels: ["statue-banner-1"],
+      },
+    });
+    const read = decodeTown(kept);
+    expect(read?.camp).toEqual({
+      ...s.camp,
+      placed: [...s.camp.placed, { ...stood, id: "member-banner-1" }],
+      tray: { rock: 1, "member-banner-1": 3 },
+      fresh: ["member-banner-1", "member-banner-1"],
+      earned: ["member-banner-1"],
+    });
+    expect(read && TOWN.advance(read, ctx(T0, ["pull:headliner:banner-1"]))).toBe(read);
+    expect(read && encodeTown(read)).not.toContain("statue-banner");
   });
 
   test("a camp kept with parcels by the trail is read with them in the tray, new, and what stood still stands", () => {

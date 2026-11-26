@@ -12,10 +12,10 @@ import { type FigureId, isFigureId } from "@sequoia-leaf/raid/content/figures.ts
 import { TOGGLES } from "@sequoia-leaf/town";
 import type { Placed } from "@sequoia-leaf/town/camp.ts";
 import { LOST_CRAB } from "@sequoia-leaf/town/catalogue.ts";
-import { figureThing, footprint, type Thing } from "@sequoia-leaf/town/things.ts";
+import { figureThing, footprint, isMemberThing, type Thing } from "@sequoia-leaf/town/things.ts";
 
 import { onScreen } from "./actors.ts";
-import { type CampArt, HUES, pictureOf, SHELF_SLOTS, TUBES, WICKS } from "./campart.ts";
+import { type CampArt, HUES, lookTowards, pictureOf, SHELF_SLOTS, TUBES, WICKS } from "./campart.ts";
 import { csfx } from "./campsfx.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { G, hooks, today } from "./game.ts";
@@ -291,11 +291,10 @@ const TOUCH: Readonly<Record<string, Touch>> = {
     nudge(l);
     noise(0.3, 900, { vol: 0.06, slide: 2.2, q: 0.8 });
   },
-  weathervane: (l, w) => {
+  weathervane: (l) => {
     l.at = G.t;
     l.backAt = G.t + 1.1;
     csfx.spin();
-    void w;
   },
 
   "flower-pot": petals,
@@ -517,12 +516,14 @@ export function touch(l: Live, w: TouchWorld, wx: number, wy: number): void {
     fn(l, w, wx, wy);
     return;
   }
-  // A character hops, and says its line.
+  // A character hops, and says its line. A banner's member hops and never says a word: they turn to
+  // whoever is here for a moment, as a member touched in town does.
   if (l.thing.kind === "characters") {
     l.prop.hops = true;
     nudge(l);
     sfx.pop();
-    float(l.prop.x, top(l) - 2, l.thing.about, CREAM, 2.6);
+    if (isMemberThing(l.thing.id)) forAWhile(l, w, lookTowards(l.placed.t, l.prop, G.player), 2.4);
+    else float(l.prop.x, top(l) - 2, l.thing.about, CREAM, 2.6);
     return;
   }
   // A trophy: it catches the light, and says what it was for.
