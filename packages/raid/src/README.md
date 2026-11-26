@@ -361,6 +361,109 @@ that draw nothing (`PREDICTED`: moving, benching, selling, handing over, holding
 as Leaf will; `planCommands` has the bot plan a room on the page's copy and gives back the commands
 it would send. `encodeTable` and `decodeTable` are the table as Leaf stores it.
 
+## A sitting: eight at once, on Leaf's clock (`sitting/`)
+
+A sitting is The Little Raid played by up to eight together (the design calls it a live table;
+`Table` above is the solo one). Every seat is a `Run` going through the same fifteen rooms by the
+run's own rules; the sitting adds the clock, who fights whom, the carousel, and who is out and in
+what place. It is plain data, and nothing in the folder reads a clock or draws from anywhere but
+the sitting's stream and each seat's run's.
+
+**The state** (`sitting.ts`). `Sitting`: its stream (`rng`), who opened it (`by`, a Leaf id), the
+room (counting from 0; past the fifteenth they are sparring rooms), the `stage`, the `seats` (none
+while open, eight from the start), the `pairs` of the sparring room in hand or the last one (home,
+the lower seat, first), the `odd` one out and the seat whose board it copies, and what is `owed`. A
+`Seat` is whose it is (`Who`: a member's Leaf id and name, or a regular, which is one of the 28
+figures with a trait it is fond of), its `run`, its board as it was at the last lock (`shown`,
+signed with its name and a member's id), and its `place` once out (1 the winner).
+
+**The stages and their clocks.** Each stage but `over` has the moment it ends (`until`, Leaf's
+milliseconds). The numbers are `CLOCK`.
+
+| Stage      | What happens                                                         | Ends after                                       |
+| ---------- | -------------------------------------------------------------------- | ------------------------------------------------ |
+| `open`     | members sit (`sat`, in order); whoever opened it may start it        | 30 minutes, closing it (`over`, no seats)        |
+| `carousel` | the ring; seats let in by `turns`, the first `open` of them may take | the first: 12 s; later: 5 s a pair, 8 s the last |
+| `plan`     | everyone plans the room                                              | 30 s for rooms 1 to 5, 35 s after                |
+| `fight`    | boards locked, every fight decided, being watched                    | the longest fight, and 4 s                       |
+| `over`     | `ended` is the moment it ended                                       |                                                  |
+
+While no member is still in, every wait is 0 (`later`): the regulars play straight to the end.
+
+**The functions, and what each promises.**
+
+- `advance(sitting, now)` (`clock.ts`) does every deadline that has passed, in order, each at its
+  own moment, and nothing else. Brought to a moment in one call or through any moments on the way,
+  a sitting is the same, byte for byte. It never changes the sitting given, and gives it back as it
+  is when nothing was due.
+- `openSitting(call)` makes one, open, with its opener sat. `command(sitting, c, call)`
+  (`commands.ts`) brings the sitting to `call.now`, stirs Leaf's dice for the call (`call.seed`)
+  into its stream (and into the caller's run for a run command) before anything is drawn, then does
+  the command or refuses it with a code and a sentence (`SITTING_REFUSALS`, or the run's own
+  `REFUSALS`). Refused, the sitting it gives back is only brought to the moment. The commands
+  (`SittingCommand`, read off the wire by `readCommand`): `sit` (the eighth starts it); `leave`
+  (before the start the seat is free again, and the next to have sat becomes the opener; after it
+  the seat is out, in the last place among those in); `start` (the opener only; regulars take the
+  empty seats); `pick` (an offer of the carousel's ring); and the run's own planning commands
+  (`choose`, `redraw`, `buy`, `sell`, `move`, `bench`, `rustle`, `hold`, `xp`, `give`), done to the
+  caller's seat by `game.ts`'s `act`, in planning only. `fight`, `take`, setting out and walking
+  home are the clock's. That a member is at one sitting at a time is Leaf's to keep.
+- `sittingView(sitting, viewer)` (`view.ts`): the stage and when it ends, the room and its kind,
+  every seat's name, resolve, level, streak, place, whom it faces in a sparring room, its board as
+  last locked, and while the fights are watched the setup of the fight it is in (`sideOf` says which
+  side is a seat's own); and the viewer's seat and run as `runView` shows a run (no stream, no pick
+  not yet offered). Somebody not seated gets the same with `you` and `run` null. `predict(view, c)`
+  is `game.ts`'s `predict` for a seat: the same commands, and the stage's refusal first.
+- `owed`: when a member's seat goes out or the sitting ends, its run's own payout (`payout`), under
+  `seat:<n>`. `paidOff(sitting, keys)` takes off what Leaf has paid. A regular is owed nothing.
+  Paying within what a member may still earn is Leaf's.
+- `encodeSitting` and `decodeSitting` (`keep.ts`): as a run is read back, the shape first (each
+  run by `checkRun`), then whether the parts agree (eight seats once started, nobody twice, each
+  place once, a seat out exactly when its run is over, every run in where the stage is, a winner
+  once over); anything else is null.
+
+**How it plays.**
+
+- **Starting.** Members take the first seats in the order they sat; the rest are regulars, drawn
+  from all 28 figures, no two alike, each fond of one of its own traits. Every seat's run is a new
+  one on the first trail.
+- **The carousel.** Before room 1, and after each of the first two bosses. Nine figures stand in
+  the ring (`CAROUSELS`): nine one-acorn figures; then five of two acorns and four of three; then
+  three of three, four of four and two of five; no figure twice while its cost has others. Each
+  holds a component, dealt from two of each. The first is open to everyone at once, and its figure
+  is who a seat sets out with, in the middle of the front row: it settles the run's own first pick.
+  The regulars wait for the members there, and take theirs by the dice when it ends. The later ones let seats in two at a time by `turns`: lowest resolve first, the lower seat among
+  equals. A regular takes one by the dice as its turn opens; whoever has taken none when it ends
+  gets one of what is left, by the dice. A figure taken later goes to the bench holding its
+  component; with a full bench it joins only if it makes three of a kind (as buying does), and
+  otherwise is sold on the spot: its price in acorns, and its component on the item bench.
+- **Planning.** Laid out from the sitting's stream: in the forest's rooms one plan of the room,
+  the same for everyone, each on their own board; in a sparring room the pairs, and each seat's
+  `foe` is the board its opponent last locked.
+- **The lock.** The regulars plan as the bot does (`planRoom` with `fondOf` their trait: the
+  sensible habit with a liking, nothing cleverer). Every seat's waiting picks take their first
+  option, and a seat with nobody on the board puts the first from its bench up. Every board becomes
+  what the seat shows. Each fight is `{ seed, sides }` with a seed from the sitting's stream,
+  decided once, and written into the run as the fight it is fighting.
+- **A pair's fight** is one fight: side 0 the home seat's board, side 1 the away seat's. The home
+  run keeps how it came out; the away run keeps the same setup, and the outcome turned to its side
+  (`sided`: a win is a loss, who is left standing changes places), so that each run's own
+  `takeTakings` costs it what a lost room costs, from the same fight, and a draw costs both. The
+  page plays the fight from the setup, and gives `playsAsKept` the outcome turned back.
+- **The odd one out** fights a copy of another seat's board (one still in, by the dice); only its
+  own run is touched. Somebody whose opponent leaves during planning fights that seat's last board
+  in the same way.
+- **The takings.** Every seat's run takes its takings by the run's own rules: resolve, acorns,
+  streaks, experience, picks and the stall's next offer. Whoever is at 0 is out.
+- **Places.** Those out in the same room are placed below everyone still in, by the resolve they
+  had before it, then by seat. When one seat is left in (or none), the sitting is over: the last in
+  is first, and its run is won.
+- **After room fifteen** sparring rooms go on. The run stays in its last room by its own count
+  (`takeTakings` with `more`: the last room won does not end it), so acorns, streaks, experience
+  and the stall go on as after any room; there is no component to pick and no boon; and a room not
+  won costs the run's rule and 1 more for each room past the fifteenth. Rooms won after the
+  fifteenth add nothing to the payout, which counts each room once.
+
 ## What is where
 
 | File                   | What it holds                                                                                                         |
@@ -388,6 +491,7 @@ it would send. `encodeTable` and `decodeTable` are the table as Leaf stores it.
 | `content/looks.ts`     | How the table may look: cloths, lanterns, bases                                                                       |
 | `game.ts`              | The table as Leaf plays it: state, commands, what the page is shown, predictions                                      |
 | `wire.ts`              | Reading Leaf's view and notes back                                                                                    |
+| `sitting/`             | Eight at once on Leaf's clock: the state, the clock, the carousel, commands, what a page is shown, storing it         |
 | `tally.ts`             | What every figure did in a fight, read from its events                                                                |
 | `bot.ts`               | A player with habits                                                                                                  |
 | `index.ts`             | Everything a screen needs, in one place                                                                               |

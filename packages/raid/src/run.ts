@@ -364,7 +364,7 @@ function boonOptions(run: Run, not: readonly BoonId[]): BoonId[] {
 }
 const componentOptions = (run: Run, count: number): ComponentId[] => shuffled(run, COMPONENT_IDS).slice(0, count);
 
-function newPiece(run: RunView, kind: FigureId): Piece {
+export function newPiece(run: RunView, kind: FigureId): Piece {
   return { id: run.nextId++, kind, stars: 1, items: [], fed: 0 };
 }
 function remember<T>(list: T[], v: T): void {
@@ -533,7 +533,7 @@ export function redraw(run: Run): Done {
  * items of the other two go to it while it has room, and the rest back to the item bench. `loose`
  * is a figure just bought that has no place of its own yet.
  */
-function merge(run: RunView, loose: Piece | null, notes: Note[]): void {
+export function merge(run: RunView, loose: Piece | null, notes: Note[]): void {
   let spare = loose;
   for (;;) {
     const groups = new Map<string, Piece[]>();
@@ -750,29 +750,31 @@ function resolveLost(run: Pick<Run, "boons">, fight: FightSummary): number {
 /**
  * The room the takings of the fight being fought move the run on to (`takeTakings`): the next one,
  * or the last again when it is not won. Null when they end the run (the last room won, or resolve
- * gone), and outside a fight.
+ * gone), and outside a fight. With `more` the last room won does not end it: the run stays there,
+ * for whoever plays it to say what comes next (a sitting's rooms after the fifteenth).
  */
-export function takenTo(run: Pick<Run, "stage" | "room" | "resolve" | "boons">): number | null {
+export function takenTo(run: Pick<Run, "stage" | "room" | "resolve" | "boons">, more?: boolean): number | null {
   const fight = foughtOf(run);
   if (!fight || !ROOMS[run.room]) return null;
-  const last = run.room >= ROOM_COUNT - 1;
-  if ((fight.outcome.result === "win" && last) || run.resolve - resolveLost(run, fight.outcome) <= 0) return null;
-  return last ? run.room : run.room + 1;
+  const won = !more && fight.outcome.result === "win" && run.room >= ROOM_COUNT - 1;
+  if (won || run.resolve - resolveLost(run, fight.outcome) <= 0) return null;
+  return Math.min(run.room + 1, ROOM_COUNT - 1);
 }
 
 /**
  * Ends the room: works out how the fight went, takes resolve for a loss, pays acorns and
  * experience, queues what there is to choose, and moves on to the next room (or ends the run).
  * It may be called at any point after `beginFight`, which is all "skip" is. In a sparring room
- * next, `met` is the board another member fought it with that Leaf picked (`opposition`).
+ * next, `met` is the board another member fought it with that Leaf picked (`opposition`). `more` is
+ * `takenTo`'s: the last room won pays as any room and does not end the run.
  */
-export function takeTakings(run: Run, met?: Met): Taken {
+export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   const { stage } = run;
   if (stage.phase !== "fight") return no(stage.phase === "over" ? "raid_over" : "no_fight");
   const { setup, outcome: fight } = stage.fight;
   const room = ROOMS[run.room];
   if (!room) return no("no_such_room");
-  const to = takenTo(run);
+  const to = takenTo(run, more);
   const won = fight.result === "win";
   const last = run.room >= ROOM_COUNT - 1;
   const notes: Note[] = [{ t: "result", room: run.room, result: fight.result, standing: fight.standing }];

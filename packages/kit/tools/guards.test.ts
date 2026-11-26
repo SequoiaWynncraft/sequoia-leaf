@@ -239,11 +239,11 @@ describe("the import check, on what Bun builds and checks", () => {
           'import { tour } from "./review.ts";\nimport { play } from "../../../packages/raid/src/index.ts";\nconsole.log(tour, play);\n',
         "apps/town/src/review.ts": 'import { step } from "../review/step.ts";\nexport const tour = step;\n',
         "apps/town/review/step.ts": "export const step = 1;\n",
-        // Works ships the raid's bot through the barrel the town already reaches it by.
+        // Works ships review code through the barrel the town already reaches it by.
         "apps/works/index.html": '<script type="module" src="./src/init.ts"></script>',
         "apps/works/src/init.ts": 'import { play } from "../../../packages/raid/src/index.ts";\nconsole.log(play);\n',
-        "packages/raid/src/index.ts": 'export { bot as play } from "./bot.ts";\n',
-        "packages/raid/src/bot.ts": "export const bot = 2;\n",
+        "packages/raid/src/index.ts": 'export { bot as play } from "../review/bot.ts";\n',
+        "packages/raid/review/bot.ts": "export const bot = 2;\n",
       },
       {},
     );
@@ -251,8 +251,8 @@ describe("the import check, on what Bun builds and checks", () => {
       expect((await findings(at)).found.review).toEqual({
         "town: apps/town/src/init.ts -> apps/town/src/review.ts": 1,
         "town: apps/town/src/review.ts -> apps/town/review/step.ts": 1,
-        "town: packages/raid/src/index.ts -> packages/raid/src/bot.ts": 1,
-        "works: packages/raid/src/index.ts -> packages/raid/src/bot.ts": 1,
+        "town: packages/raid/src/index.ts -> packages/raid/review/bot.ts": 1,
+        "works: packages/raid/src/index.ts -> packages/raid/review/bot.ts": 1,
       });
     } finally {
       done();

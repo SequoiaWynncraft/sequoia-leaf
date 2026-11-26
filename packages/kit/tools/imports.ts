@@ -22,11 +22,10 @@ const RULES = ["core", "factory", "raid", "town", "pulls"].map((r) => `packages/
 
 /**
  * Review code that ships today: the town's handles for tours and the console, which `main.ts`
- * installs, and the raid's bot, which only the balance run and the battler's tour drive, exported
- * by the raid's barrel and imported by `game.ts` for `planCommands` (the tour's), so that every
- * build of the raid ships it, the API's too. The Town and Little Raid rebuilds take them out.
+ * installs. The Town rebuild takes them out. (The raid's bot is not review code: the regulars at a
+ * sitting play by it, on Leaf.)
  */
-const REVIEW_CODE = new Set(["apps/town/src/review.ts", "packages/raid/src/bot.ts"]);
+const REVIEW_CODE = new Set(["apps/town/src/review.ts"]);
 
 const isReview = (f: string): boolean => f.split("/").includes("review") || REVIEW_CODE.has(f);
 /** Whether a file is a test or only helps tests. */

@@ -4,9 +4,6 @@
     "apps/works/src/ui/board.ts apps/works/src/ui/card.ts apps/works/src/ui/dock.ts apps/works/src/ui/hud.ts apps/works/src/ui/panels.ts apps/works/src/ui/prints.ts apps/works/src/ui/views.ts": 1
   },
   "review": {
-    "api: packages/raid/src/game.ts -> packages/raid/src/bot.ts": 1,
-    "battler: packages/raid/src/game.ts -> packages/raid/src/bot.ts": 1,
-    "battler: packages/raid/src/index.ts -> packages/raid/src/bot.ts": 1,
     "town: apps/town/src/main.ts -> apps/town/src/review.ts": 1,
     "town: apps/town/src/townscene.ts -> apps/town/src/review.ts": 1
   }
