@@ -12,7 +12,7 @@ import { GOOD_WITH } from "./content/advice.ts";
 import { abilityNumber, abilityText, FIGURE_IDS, type FigureId, FIGURES, type Stars } from "./content/figures.ts";
 import { isMemberId, MEMBER_IDS, MEMBERS } from "./content/members.ts";
 import { MAX_LEVEL, ROOMS, STALL_ODDS, TRAIL_COUNT } from "./content/rooms.ts";
-import { HZ } from "./fight/core.ts";
+import { HZ, summon } from "./fight/core.ts";
 import type { FightEvent } from "./fight/types.ts";
 import { boardMet, opposition } from "./foe.ts";
 import { RAID, type Table } from "./game.ts";
@@ -36,7 +36,7 @@ import {
 } from "./run.ts";
 import { checkRun } from "./save.ts";
 import { sparParty } from "./spar.ts";
-import { fightOf, onCell, only, partyOfFigures, ready, steps, still, unitOf } from "./testkit.ts";
+import { fightOf, onCell, only, partyOfFigures, ready, steps, stepUntil, still, unitOf } from "./testkit.ts";
 import { readView } from "./wire.ts";
 
 const UNIT = "banner-1";
@@ -249,10 +249,10 @@ const n = (name: string, stars: Stars): number => abilityNumber(UNIT, name, star
 const HOME = cellAt(3, 4);
 const FAR = cellAt(0, 7);
 
-/** The member at home with its mana full, friends where they are put, and still enemies, each having dealt so much. */
+/** The member at home with its mana full, friends where they are put, and still enemies, each having taken and dealt so much. */
 function scene(
   stars: Stars,
-  foes: readonly (readonly [number, number])[],
+  foes: readonly (readonly [cell: number, taken: number, dealt?: number])[],
   friends: readonly (readonly [FigureId, number])[] = [],
 ) {
   const f = fightOf(
@@ -260,8 +260,11 @@ function scene(
     foes.map(([cell]) => onCell("mud", 1, cell)),
   );
   for (const o of f.units) if (o.side === 1 || o.kind !== UNIT) still(o, 5000);
-  const across = f.units.filter((o) => o.side === 1);
-  across.forEach((o, i) => (o.dealt = foes[i]?.[1] ?? 0));
+  // In the order they were given, whatever order the fight seats them in.
+  const across = foes.flatMap(([cell, taken, dealt]) => {
+    const o = f.units.find((x) => x.side === 1 && x.cell === cell);
+    return o ? [Object.assign(o, { taken, dealt: dealt ?? 0 })] : [];
+  });
   const u = unitOf(f, UNIT);
   u.attack = 0;
   return { f, u: ready(u), across };
@@ -271,58 +274,84 @@ const blasted = (events: readonly FightEvent[], by: number): number[][] =>
   only(events, "hit")
     .filter((e) => e.by === by && e.source === "ability")
     .map((e) => [e.id, e.before, e.kind === "magic" ? 1 : 0]);
+const SENTENCE = (stun: string, damage: number): string =>
+  `Picks the enemy who has taken the least damage so far, wherever they are, and stuns them for ${stun} seconds. If several have taken the same, it picks the one who has dealt the least. One second later, ${damage} magic damage to them and to every enemy touching them.`;
 
 describe("I heard you weren't graiding.", () => {
   test.each([1, 2, 3] as const)(
-    "at %i stars: stuns the enemy who has dealt the least, then a second later blasts them and those touching them",
+    "at %i stars: stuns the enemy who has taken the least, then a second later blasts them and those touching them",
     (stars) => {
       const { f, u, across } = scene(stars, [
-        [cellAt(5, 0), 50],
-        [cellAt(1, 1), 0],
-        [cellAt(2, 1), 100],
-        [cellAt(6, 3), 200],
+        [cellAt(5, 0), 300, 0],
+        [cellAt(1, 1), 40, 900],
+        [cellAt(2, 1), 200, 100],
+        [cellAt(3, 3), 2000, 0],
       ]);
-      const [far, slacker, beside, busy] = across;
-      if (!far || !slacker || !beside || !busy) throw new Error("four enemies");
-      expect(distance(slacker.cell, beside.cell)).toBe(1);
-      expect([far, busy].map((o) => distance(slacker.cell, o.cell) > 1)).toEqual([true, true]);
+      const [far, caught, beside, tank] = across;
+      if (!far || !caught || !beside || !tank) throw new Error("four enemies");
+      expect(distance(caught.cell, beside.cell)).toBe(1);
+      expect([far, tank].map((o) => distance(caught.cell, o.cell) > 1)).toEqual([true, true]);
+      // The one in front of it has dealt nothing, and has taken the most: it is left alone.
+      expect(distance(u.cell, tank.cell)).toBe(1);
       const first = steps(f, 1);
       const cast = only(first, "cast")[0];
       expect([cast?.name, cast?.shape, cast?.targets, cast?.ticks]).toEqual([
         "I heard you weren't graiding.",
         "bolt",
-        [slacker.id],
+        [caught.id],
         HZ,
       ]);
       const stunned = only(first, "status").filter((e) => e.status === "stun" && e.on);
-      expect(stunned.map((e) => [e.id, e.ticks, e.by])).toEqual([
-        [slacker.id, Math.round(n("stun", stars) * HZ), u.id],
-      ]);
+      expect(stunned.map((e) => [e.id, e.ticks, e.by])).toEqual([[caught.id, Math.round(n("stun", stars) * HZ), u.id]]);
       // Nothing lands until the second is up.
       const waiting = steps(f, HZ - 1);
       expect(blasted([...first, ...waiting], u.id)).toEqual([]);
       const landed = steps(f, 1);
       expect(blasted(landed, u.id)).toEqual([
-        [slacker.id, n("damage", stars), 1],
-        [beside.id, n("splash", stars), 1],
+        [caught.id, n("damage", stars), 1],
+        [beside.id, n("damage", stars), 1],
       ]);
       expect(u.mana).toBe(0);
     },
   );
   test("its sentence says so, with the numbers for its stars", () => {
-    expect(abilityText(UNIT, 1)).toBe(
-      "Picks the enemy who has dealt the least damage so far, wherever they are, and stuns them for 1.5 seconds. One second later, 400 magic damage to them and 200 to every enemy touching them.",
-    );
-    expect(abilityText(UNIT, 3)).toContain("1600 magic damage");
+    expect(abilityText(UNIT, 1)).toBe(SENTENCE("2", 550));
+    expect(abilityText(UNIT, 2)).toBe(SENTENCE("2.5", 950));
+    expect(abilityText(UNIT, 3)).toBe(SENTENCE("3.5", 2200));
+    expect(MEMBERS[UNIT].mana).toEqual([50, 80]);
   });
-  test("of enemies who have dealt the same, it picks the nearest", () => {
-    const { f } = scene(1, [
+  test("of enemies who have taken the same, it picks the one who has dealt the least", () => {
+    const { f, across } = scene(1, [
+      [cellAt(3, 3), 0, 50],
+      [cellAt(0, 0), 0, 0],
+    ]);
+    expect(only(steps(f, 1), "cast")[0]?.targets).toEqual([across[1]?.id ?? -1]);
+  });
+  test("of enemies who have taken and dealt the same, it picks the nearest", () => {
+    const { f, across } = scene(1, [
       [cellAt(0, 0), 0],
       [cellAt(3, 3), 0],
     ]);
-    const near = f.units.find((o) => o.side === 1 && o.cell === cellAt(3, 3));
-    if (!near) throw new Error("an enemy at 3, 3");
-    expect(only(steps(f, 1), "cast")[0]?.targets).toEqual([near.id]);
+    expect(only(steps(f, 1), "cast")[0]?.targets).toEqual([across[1]?.id ?? -1]);
+  });
+  test("it picks a summoned enemy only when nobody else is up", () => {
+    const f = fightOf([onCell(UNIT, 0, HOME)], [onCell("mud", 1, cellAt(0, 0))]);
+    const brought = unitOf(f, "mud", 1);
+    still(brought, 5000).taken = 900;
+    const made = summon(f, "uncounted", 1, 1, cellAt(3, 3), null);
+    if (!made) throw new Error("nobody summoned");
+    still(made, 5000);
+    const u = ready(unitOf(f, UNIT));
+    u.attack = 0;
+    expect(only(steps(f, 1), "cast")[0]?.targets).toEqual([brought.id]);
+    brought.alive = false;
+    ready(u).busyUntil = 0;
+    expect(
+      only(
+        stepUntil(f, (e) => e.t === "cast"),
+        "cast",
+      )[0]?.targets,
+    ).toEqual([made.id]);
   });
   test("a Sage, so with another its ability is stronger", () => {
     const { f, u, across } = scene(1, [[cellAt(3, 0), 0]], [["moth", FAR]]);
@@ -330,6 +359,6 @@ describe("I heard you weren't graiding.", () => {
     if (!foe) throw new Error("one enemy");
     expect(u.power).toBeGreaterThan(100);
     const events = steps(f, HZ + 1);
-    expect(blasted(events, u.id)).toEqual([[foe.id, (n("damage", 1) * u.power) / 100, 1]]);
+    expect(blasted(events, u.id)).toEqual([[foe.id, Math.round((n("damage", 1) * u.power) / 100), 1]]);
   });
 });
