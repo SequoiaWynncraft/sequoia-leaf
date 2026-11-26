@@ -434,20 +434,19 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
 
   // ---------- a banner's member ----------
   "banner-1": (f, u, n) => {
-    // The enemy who has dealt the least so far, anywhere on the board; of those level, the nearest.
-    const t = foesByDistance(f, u.side, u.cell).reduce<Unit | undefined>(
-      (least, o) => (least === undefined || o.dealt < least.dealt ? o : least),
-      undefined,
-    );
+    // Whoever the fight has touched least, anywhere on the board: the least damage taken, of those
+    // level the least dealt, then the nearest. The summoned are picked only when nobody else is up.
+    const t = foesByDistance(f, u.side, u.cell).toSorted(
+      (a, b) => Number(a.summoned) - Number(b.summoned) || a.taken - b.taken || a.dealt - b.dealt,
+    )[0];
     if (!t) return false;
     const damage = powered(u, n("damage"));
-    const touching = powered(u, n("splash"));
     say(f, u, around(t.cell), [t.id], secs(1));
     stun(f, t, n("stun"), u);
     // It lands where they are by then, if the stun has worn off and they have moved.
     later(f, secs(1), () => {
       hurt(f, t, damage, "magic", "ability", u);
-      for (const o of foesWithin(f, u.side, t.cell, 1)) if (o.id !== t.id) hurt(f, o, touching, "magic", "ability", u);
+      for (const o of foesWithin(f, u.side, t.cell, 1)) if (o.id !== t.id) hurt(f, o, damage, "magic", "ability", u);
     });
     return true;
   },

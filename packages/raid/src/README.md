@@ -101,18 +101,22 @@ it. Only a run with the member's own figures sells it, to a member who has pulle
 name in the rules is "A guild member"; the page gives it the member's name and their picture. Its
 rules are made for the member: the first banner's is gaz, a Sage whose ability is his own line.
 
-| Tier | Figure         | Kin     | Calling | Health | Attack | Reach | Ability (one star)                                                                                                                                                                                                           |
-| ---- | -------------- | ------- | ------- | ------ | ------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 5    | A guild member | Feather | Sage    | 680    | 44     | 4     | **I heard you weren't graiding.** Picks the enemy who has dealt the least damage so far, wherever they are, and stuns them for 1.5 seconds. One second later, 400 magic damage to them and 200 to every enemy touching them. |
+| Tier | Figure         | Kin     | Calling | Health | Attack | Reach | Ability (one star)                                                                                                                                                                                                                                                                               |
+| ---- | -------------- | ------- | ------- | ------ | ------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 5    | A guild member | Feather | Sage    | 680    | 44     | 4     | **I heard you weren't graiding.** Picks the enemy who has taken the least damage so far, wherever they are, and stuns them for 2 seconds. If several have taken the same, it picks the one who has dealt the least. One second later, 550 magic damage to them and to every enemy touching them. |
 
-It comes up on a free hex touching the friend, the one furthest from the enemy nearest them; with
-no free hex it stays where it is, and with nobody else left it heals and shields itself. Measured
-as the twenty-eight were (first trail): alone at one, two and three stars it wins 17%, 26% and 51%
-of the fifteen rooms (Greg 15, 32, 60; Orphion 14, 32, 51; the Hearth Cat 15, 26, 41); swapped for
-the cheapest figure of 5,089 boards the bots set out with, those are won 70% of the time with it
-at one star and 88% at two (Greg 77 and 93, Orphion 71 and 91, the Hearth Cat 71 and 89; 63%
-without); and in 3,200 runs with it on the stall, fights with it fielded are won 15 points more
-often than the same rooms without regard to it (Greg 19, Orphion 8, the Hearth Cat 7).
+It starts a fight with 50 of the 80 mana its ability takes. Whoever it catches is whoever the
+fight has touched least: a front line taking the hits is never the one, and an enemy that was
+summoned is picked only when nobody else is up. It is a pull's top prize, sold only in a run with
+the member's own figures, so it is made stronger than the twenty-eight's five-acorn figures: 15 to
+20 points above the best of them at one star and about 5 at two, in the fights the bots lost, and
+alone no better than Greg at two and three stars. Measured with `bun review/swap.ts 20` (first
+trail: 3,187 boards the bots set out from room 5 on, each fought again with its cheapest figure
+swapped for the one measured, holding nothing): those fights are won 91% of the time with it at
+one star and 98% at two (Greg 84 and 96, Orphion 77 and 92, the Hearth Cat 78 and 92; 66%
+without), and of the ones the bots lost, 75% and 94% (Greg 57 and 88, Orphion 41 and 77, the
+Hearth Cat 45 and 78). Alone at one, two and three stars it wins 25%, 33% and 64% of the fifteen
+rooms (Greg 17, 34, 64; Orphion 14, 33, 49; the Hearth Cat 15, 26, 41).
 
 **Traits.** A trait switches on when the party fields enough _different_ figures that carry it;
 copies of one figure count once, however many emblems they hold. A figure carries its own traits
