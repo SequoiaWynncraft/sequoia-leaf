@@ -13,6 +13,12 @@ this is only how they look.
   casting, tipped over, hit, not yet opened, facing either way), `drawFigure`, `portrait`,
   `drawStanding` (a figure on its base, whose look every caller names), `drawStars` and `starsPic`;
   and how one moves while it stands, by the clock alone (`beatAt`, `hoverAt`).
+- A banner's member (the raid's `content/members.ts`) has no typed rows: it is a person, drawn as
+  the town draws one from a skin (the kit's `skin.ts`), at that size, facing us, in the same
+  pictures as everyone else (`person` in `sprites.ts`). `src/member.ts` asks Leaf who each
+  banner's member is (`meetMembers`) for any page that shows one, the raid's table and the town's
+  camps alike: nobody yet, then their name and made-up look, then their own skin. `nameOf` is what
+  anyone on the stump is called, and `shownAs` changes when a figure's name or pictures do.
 - `src/move.ts`: a figure going from one point to another in an arc (`Move`, `moveAt`), which every
   table moves its figures by.
 

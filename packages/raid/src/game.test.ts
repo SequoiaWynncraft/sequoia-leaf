@@ -1015,12 +1015,11 @@ describe("the roster a member's awards come to", () => {
         "pull:figure:nobody",
         "pull:look:gilt",
         "copies:thing:rock:2",
-        "pull:headliner:banner-1",
         "trophy-oldbramble",
         "pull:figure:greg:2",
       ]),
     ).toEqual({ greg: 2, worm: 0, slug: 6, moth: 6 });
-    expect(rosterOf(EVERYTHING)).toEqual(Object.fromEntries(FIGURE_IDS.map((id) => [id, 6])));
+    expect(rosterOf(EVERYTHING)).toEqual({ ...Object.fromEntries(FIGURE_IDS.map((id) => [id, 6])), "banner-1": 0 });
   });
   test("is shown on the page, and is nobody for a member who has pulled nothing", () => {
     const state = RAID.create(ctx(1));
@@ -1047,7 +1046,7 @@ describe("the main way", () => {
 describe("a run with the member's own figures", () => {
   test("is not offered to a member who has pulled no figure", () => {
     const state = RAID.create(ctx(1));
-    for (const awards of [[], ["pull:thing:rock", "pull:headliner:banner-1", "trophy-bigcrab"]]) {
+    for (const awards of [[], ["pull:thing:rock", "pull:headliner:banner-9", "trophy-bigcrab"]]) {
       expect(RAID.apply(state, { do: "start", trail: 0, own: true }, { ...ctx(), awards })).toEqual({
         refused: "nothing_pulled",
       });

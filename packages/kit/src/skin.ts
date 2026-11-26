@@ -4,7 +4,7 @@
  * under it is drawn at half size, so the figure is two and a half heads tall.
  */
 
-import { CREAM, INK } from "./palette.ts";
+import { CREAM, INK, SKY } from "./palette.ts";
 import { flipped, outlineInPlace, R, rgb } from "./pix.ts";
 import { makeCanvas } from "./util.ts";
 
@@ -328,6 +328,22 @@ export function paintSkin(l: Look): HTMLCanvasElement {
   R(g, 0, 29, 16, 3, l.shoes);
   return c;
 }
+
+/**
+ * Nobody yet: a person all of one dusk colour, with the figure's own dark edge. For somebody who is
+ * a member but not yet known which: any other face or clothes would be somebody else's.
+ */
+export const NOBODY: Look = {
+  skin: SKY[2],
+  hair: SKY[2],
+  light: SKY[2],
+  eye: SKY[2],
+  top: SKY[2],
+  legs: SKY[2],
+  shoes: SKY[2],
+  style: "short",
+  sleeves: "long",
+};
 
 // ---------- how a member looks before their own skin arrives ----------
 

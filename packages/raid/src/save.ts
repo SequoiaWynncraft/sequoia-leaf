@@ -19,7 +19,7 @@
 import { mix } from "@sequoia-leaf/core";
 
 import { BOON_IDS, type BoonId, isBoonId } from "./content/boons.ts";
-import { FIGURE_IDS, type FigureId, isBossId, isFigureId, isStars, isUnitKind } from "./content/figures.ts";
+import { type FigureId, isBossId, isFigureId, isStars, isUnitKind } from "./content/figures.ts";
 import {
   carries,
   EMBLEMS,
@@ -35,7 +35,7 @@ import { ECONOMY, MAX_LEVEL, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts"
 import { isTraitId, TRAIT_IDS, traitNumber } from "./content/traits.ts";
 import type { FightResult, FightSetup, FightSummary, Tally } from "./fight/types.ts";
 import { SEATS } from "./hex.ts";
-import { readRoster, type Roster } from "./own.ts";
+import { OWNABLE, readRoster, type Roster } from "./own.ts";
 import { isParty, type Party } from "./party.ts";
 import {
   type Choice,
@@ -282,11 +282,8 @@ function readParts(r: Record<string, unknown>, old: boolean, shown: boolean): { 
     last: drawn(() => readLast(r.last), null, false),
     own: readOwn(r.own),
     seen: {
-      fielded: unique(each(seen.fielded, isFigureId, FIGURE_IDS.length, "the almanac notes"), "the almanac notes"),
-      threeStars: unique(
-        each(seen.threeStars, isFigureId, FIGURE_IDS.length, "the almanac notes"),
-        "the almanac notes",
-      ),
+      fielded: unique(each(seen.fielded, isFigureId, OWNABLE.length, "the almanac notes"), "the almanac notes"),
+      threeStars: unique(each(seen.threeStars, isFigureId, OWNABLE.length, "the almanac notes"), "the almanac notes"),
       forged: unique(each(seen.forged, isFinishedId, FINISHED_IDS.length, "the almanac notes"), "the almanac notes"),
       topped: unique(each(seen.topped, isTraitId, TRAIT_IDS.length, "the almanac notes"), "the almanac notes"),
     },

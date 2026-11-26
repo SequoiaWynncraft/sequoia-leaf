@@ -165,6 +165,8 @@ img.k-px {
 .k-head .k-title,
 .k-info-head .k-name {
   font: var(--f-head);
+  /* A name of one long word (a member's) goes onto a second line, never under what is beside it. */
+  overflow-wrap: anywhere;
 }
 /* Sentences that are read: what a thing does, a note, a letter, a tip. */
 .k-read,

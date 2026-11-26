@@ -7,6 +7,7 @@ import { below, type Met, mix, pick } from "@sequoia-leaf/core";
 
 import { boonNumber, FIGHT_BOONS } from "./content/boons.ts";
 import { isFigureId } from "./content/figures.ts";
+import { isMemberId } from "./content/members.ts";
 import { LEVELS, MAX_LEVEL, ROOMS, TRAILS } from "./content/rooms.ts";
 import { COLS } from "./hex.ts";
 import { isParty, type Party, type Placed } from "./party.ts";
@@ -42,12 +43,13 @@ function asMet(p: Placed, levels: boolean): Placed {
 /**
  * Another member's board as Leaf hands it over (`Ctx.met`), as the party across the table: only one
  * a member could have fielded (a party of one to `MOST_FIELDED` of the stall's own figures), signed
- * with the member's name and id. Null for anything else.
+ * with the member's name and id. A banner's member stands only on a board met by a run with the
+ * member's own figures (`levels`). Null for anything else.
  */
 export function boardMet(met: Met, levels = false): Party | null {
   const { data } = met;
   if (!isParty(data) || data.figures.length === 0 || data.figures.length > MOST_FIELDED) return null;
-  if (!data.figures.every((p) => isFigureId(p.kind))) return null;
+  if (!data.figures.every((p) => isFigureId(p.kind) && (levels || !isMemberId(p.kind)))) return null;
   const board: Party = {
     who: met.name,
     by: met.player,

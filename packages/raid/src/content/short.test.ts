@@ -13,6 +13,7 @@ import {
   type UnitKind,
 } from "./figures.ts";
 import { FINISHED_IDS, isFinishedId, ITEM_IDS, itemShort, itemText } from "./items.ts";
+import { MEMBER_IDS } from "./members.ts";
 import { CALLINGS, TRAIT_IDS, TRAITS, traitShort, traitText } from "./traits.ts";
 
 /** The longest a fragment may be and still fit one line of a card. */
@@ -49,7 +50,7 @@ function checkShort(what: string, short: string, long: string, most: number): vo
 }
 
 const STARS: readonly Stars[] = [1, 2, 3];
-const EVERYONE: readonly UnitKind[] = [...FIGURE_IDS, ...SUMMON_IDS, ...TROUBLE_IDS];
+const EVERYONE: readonly UnitKind[] = [...FIGURE_IDS, ...MEMBER_IDS, ...SUMMON_IDS, ...TROUBLE_IDS];
 
 describe("short forms", () => {
   test("every ability has one, at every number of stars", () => {
@@ -99,7 +100,7 @@ describe("advice for the cards", () => {
     expect(drawTip(-1)).toBe("Enemies pick their target as if this figure stood 1 hex further.");
   });
   test("every figure is good with three different finished items", () => {
-    for (const id of FIGURE_IDS) {
+    for (const id of [...FIGURE_IDS, ...MEMBER_IDS]) {
       const three = GOOD_WITH[id];
       expect(three.length).toBe(3);
       expect(new Set(three).size, id).toBe(3);

@@ -385,6 +385,21 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     return true;
   },
 
+  // ---------- a banner's member ----------
+  "banner-1": (f, u, n) => {
+    // The friend most hurt; with nobody else left standing, itself.
+    const friend = mostHurt(f, u.side, false).find((o) => o.id !== u.id) ?? u;
+    // It comes up on the side away from whoever is nearest the friend, so behind them.
+    const from = nearestFoe(f, friend)?.cell ?? u.cell;
+    const beside = distance(u.cell, friend.cell) <= 1 ? u.cell : freeBeside(f, u.side, friend.cell, from);
+    const to = beside >= 0 ? beside : u.cell;
+    say(f, u, [to, friend.cell], [friend.id], 0);
+    leap(f, u, to, "ability");
+    heal(f, friend, powered(u, n("heal")), "ability", u);
+    for (const o of new Set([friend, u])) shieldUp(f, o, powered(u, n("shield")), n("lasts"), u);
+    return true;
+  },
+
   // ---------- the forest's trouble ----------
   wasp: (f, u, n) => {
     const t = aim(f, u);

@@ -116,7 +116,11 @@ kit's card: "The table needs the guild's server."
   figure on the front page and the end page, and a small green number at the left of its base on
   the board and the bench. It is never drawn as a star. The almanac's tiles show the level of every
   figure pulled. While such a raid is in hand, a sign in the top bar says "Your figures" (and "All
-  figures" on the main way, for a member who has both). Every one of
+  figures" on the main way, for a member who has both). A banner's member a member has pulled is a
+  figure there too: wherever it shows it has that member's name and is drawn from their skin
+  (`meetMember`; "A guild member", all of one dusk colour, until Leaf has said who), the front
+  page counts it ("You have 14 of 29 figures"), and the almanac has a tile for it after the
+  twenty-eight. Every one of
   the twenty-eight figures can be at the stall for everyone from the first run. The almanac shows
   every figure, trait and item met so far, which figures reached three stars, and how far each trail
   has been walked. Table looks are the one thing Leaf buys here: a cloth under the

@@ -74,6 +74,7 @@ describe("every stored table kept as a fixture", () => {
       "new-table.json",
       "older-run.json",
       "own-fighting.json",
+      "own-member.json",
       "picks-waiting.json",
       "planning.json",
       "starter-waiting.json",
@@ -85,7 +86,7 @@ describe("a table kept before there were runs with the member's own figures", ()
   test("reads with its run on the main way: no roster, and nobody with a level", () => {
     for (const [name, text] of FIXTURES) {
       const run = read(text).run;
-      if (name === "own-fighting.json" || !run) continue;
+      if (name.startsWith("own-") || !run) continue;
       expect(run.own).toBeNull();
       const parties = [run.last, foughtOf(run)?.setup].flatMap((setup) => setup?.sides ?? []);
       expect(parties.flatMap((party) => party.figures).some((p) => "level" in p)).toBe(false);

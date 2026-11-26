@@ -3,9 +3,14 @@
  * (standing, breathing in, using its ability, tipped over, a pale flash for being hit, a dark
  * outline for one not opened yet), all with the one-pixel dark edge, facing right and facing left.
  * Also the bases they stand on and the stars over their heads.
+ *
+ * A banner's member has no typed rows: it is a person, drawn as the town draws one (the kit's
+ * `skin.ts`), in the same pictures as everyone else here (`person`), from whoever it is said to be
+ * (`wear`), and until then nobody yet. It is called by that member's name (`nameOf`).
  */
 import { GOLD, GREEN, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, flipped, outlined, rgb } from "@sequoia-leaf/kit/pix.ts";
+import { bake as walking, type Body, type Dir, FOOT_Y, FRAME_W, NOBODY, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
 import {
   FIGURE_IDS,
@@ -13,8 +18,10 @@ import {
   isBossId,
   isFigureId,
   isSummonId,
+  specOf,
   type UnitKind,
 } from "@sequoia-leaf/raid/content/figures.ts";
+import { isMemberId, type MemberId } from "@sequoia-leaf/raid/content/members.ts";
 
 import { artOf } from "./figures.ts";
 import { FOREST_TONES, PAL, SUMMON_TONES, TIER_TONES, type Tones } from "./pal.ts";
@@ -88,8 +95,65 @@ function tipped(src: HTMLCanvasElement, left: boolean): HTMLCanvasElement {
 }
 
 const edged = (c: HTMLCanvasElement): HTMLCanvasElement => outlined(c, INK);
+/** The pale colour a figure flashes when it is hit. */
+const FLASH = "#fff8e0";
+
+/** Where a person stands in one of their pictures (`skin.ts`), dark edge and all, and the row that folds when they breathe in. */
+const PERSON = { x: 1, y: 2, w: FRAME_W - 2, h: FOOT_Y - 1, breath: 12 } as const;
+
+/**
+ * A person as one of the raid's figures, at the size the town draws them (a pixel of theirs is a
+ * pixel of any figure's): standing and breathing, a step forward for using their ability, tipped
+ * over, hit. Facing right and left are their own two sides, not one mirrored.
+ */
+function person(body: Body): { right: Frames; left: Frames } {
+  /** One of their pictures cut to the figure; `sunk`, with everything above the breath row a pixel lower. */
+  const cut = (dir: Dir, pose: number, sunk = false): HTMLCanvasElement => {
+    const { c, g } = makeCanvas(PERSON.w, PERSON.h);
+    const src = body.frames[dir]?.[pose];
+    if (!src) return c;
+    const below = PERSON.h - PERSON.breath;
+    if (!sunk) g.drawImage(src, -PERSON.x, -PERSON.y);
+    else {
+      g.drawImage(src, PERSON.x, PERSON.y + PERSON.breath, PERSON.w, below, 0, PERSON.breath, PERSON.w, below);
+      g.drawImage(src, PERSON.x, PERSON.y, PERSON.w, PERSON.breath - 1, 0, 1, PERSON.w, PERSON.breath - 1);
+    }
+    return c;
+  };
+  const facing = (dir: Dir, left: boolean): Frames => {
+    const a = cut(dir, 0);
+    return {
+      idle: [a, cut(dir, 0, true)],
+      cast: cut(dir, 1),
+      fallen: tipped(a, left),
+      flash: tinted(a, FLASH),
+      dark: tinted(a, SKY[0]),
+      w: PERSON.w,
+      h: PERSON.h,
+      ax: PERSON.w / 2,
+      ay: PERSON.h - 1,
+      tall: PERSON.h - 2,
+      castTall: PERSON.h - 2,
+      wide: PERSON.w - 2,
+      head: 0,
+      flies: false,
+    };
+  };
+  return { right: facing(0, false), left: facing(0, true) };
+}
+
+/** Who each banner's member is, once somebody has said (`wear`): their name, the figure they are drawn from, and how many times it has been said. */
+const worn = new Map<UnitKind, { readonly name: string; readonly body: Body; readonly said: number }>();
+/** What anyone on the stump is called: a banner's member by the member's own name, everyone else as the rules name them. */
+export const nameOf = (kind: UnitKind): string => worn.get(kind)?.name ?? specOf(kind).name;
+/**
+ * A word for how a figure is shown now, which changes when its name or its pictures do: for whoever
+ * keeps something drawn of it. Nobody (an empty place) is shown as nothing.
+ */
+export const shownAs = (kind: UnitKind | null): string => (kind ? `${kind}/${worn.get(kind)?.said ?? 0}` : "");
 
 function bake(kind: UnitKind): { right: Frames; left: Frames } {
+  if (isMemberId(kind)) return person(worn.get(kind)?.body ?? walking(paintSkin(NOBODY)));
   const art = artOf(kind);
   const at = art.breath ?? Math.floor(art.rows.length * 0.6);
   const lists = {
@@ -110,7 +174,7 @@ function bake(kind: UnitKind): { right: Frames; left: Frames } {
   const base = {
     idle: [idleA, edged(plain(lists.b))] as const,
     cast: edged(plain(lists.cast)),
-    flash: tinted(idleA, "#fff8e0"),
+    flash: tinted(idleA, FLASH),
     dark: outlined(tinted(a, SKY[0]), SKY[2]),
     w: w + 2,
     h: h + 2,
@@ -137,6 +201,11 @@ function bake(kind: UnitKind): { right: Frames; left: Frames } {
 }
 
 const baked = new Map<UnitKind, { right: Frames; left: Frames }>();
+/** Has a banner's member be somebody from now on: called by their name, and drawn from their figure. */
+export function wear(kind: MemberId, name: string, body: Body): void {
+  worn.set(kind, { name, body, said: (worn.get(kind)?.said ?? 0) + 1 });
+  baked.delete(kind);
+}
 /** A figure's pictures, facing right or left. */
 export function framesOf(kind: UnitKind, left = false): Frames {
   let f = baked.get(kind);

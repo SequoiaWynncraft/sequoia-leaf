@@ -1,4 +1,4 @@
-import { portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
+import { nameOf, portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The pages that sit over the table: the front page before a run, the almanac of everything met so
  * far, how to play, the looks for the table that Leaf buys, and the paper at a run's end. One is up
@@ -19,9 +19,9 @@ import {
   FIGHT,
   FIGURE_IDS,
   type FigureId,
-  FIGURES,
   FINISHED,
   FINISHED_IDS,
+  isMemberId,
   itemName,
   lanternOf,
   LOOK_KINDS,
@@ -52,7 +52,7 @@ import { snd } from "../sounds.ts";
 import { dress } from "../stage.ts";
 import { ask, S } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
-import { nothingNew, pulledLine, pulledTag, runTag, setsOutOwn, wayPrefix, waysOf } from "./own.ts";
+import { figuresHere, nothingNew, pulledLine, pulledTag, runTag, setsOutOwn, wayPrefix, waysOf } from "./own.ts";
 
 export type PageId = "front" | "almanac" | "howto" | "looks" | "summary";
 
@@ -313,14 +313,14 @@ function front(): HTMLElement {
 
 /** A figure in the almanac: shown once it has been fielded or pulled, dark until then; a badge for three stars. */
 function figureTile(id: FigureId): HTMLElement {
-  const met = S.almanac.fielded.includes(id) || S.roster[id] !== undefined;
+  const met = isMemberId(id) || S.almanac.fielded.includes(id) || S.roster[id] !== undefined;
   const starred = S.almanac.threeStars.includes(id);
   const tile = el(
     "button",
     `k-card tile${met ? "" : " unmet"}`,
     { type: "button", "aria-label": met ? null : "Not met" },
     pic(portrait(id, { dark: !met }), 2),
-    met ? el("span", "k-s", { text: FIGURES[id].name }) : null,
+    met ? el("span", "k-s", { text: nameOf(id) }) : null,
     starred ? pic(starsPic(3), 1, "badge") : null,
     pulledTag(id),
   );
@@ -359,7 +359,7 @@ function almanac(): HTMLElement {
         text: `${a.fielded.length} of ${FIGURE_IDS.length} fielded. ${a.threeStars.length} taken to three stars.${pulledLine()}`,
       }),
     );
-    add(page, el("div", "tiles", {}, ...FIGURE_IDS.map(figureTile)));
+    add(page, el("div", "tiles", {}, ...figuresHere().map(figureTile)));
   } else if (tab === "traits") {
     add(page, el("div", "k-dim", { text: `${a.topped.length} switched all the way on.` }));
     const list = el("div", "k-col", {});
@@ -646,10 +646,9 @@ function summary(): HTMLElement | null {
   if (fresh.length > 0) {
     const list = el("div", "news", {});
     for (const n of fresh) {
-      if (n.t === "fielded")
-        list.append(el("span", "new", {}, pic(portrait(n.figure)), `Met ${FIGURES[n.figure].name}`));
+      if (n.t === "fielded") list.append(el("span", "new", {}, pic(portrait(n.figure)), `Met ${nameOf(n.figure)}`));
       else if (n.t === "threeStars")
-        list.append(el("span", "new", {}, pic(starsPic(3)), `${FIGURES[n.figure].name} to three stars`));
+        list.append(el("span", "new", {}, pic(starsPic(3)), `${nameOf(n.figure)} to three stars`));
       else if (n.t === "forged") list.append(el("span", "new", {}, pic(itemIcon(n.item)), `Made ${itemName(n.item)}`));
       else if (n.t === "topped")
         list.append(el("span", "new", {}, pic(traitIcon(n.trait)), `${TRAITS[n.trait].name} all the way on`));

@@ -1,4 +1,4 @@
-import { portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
+import { nameOf, portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * Cards: what each thing at the table says about itself, in the kit's one card (`card.ts`). Every
  * kind of thing is registered once and named by a reference:
@@ -97,7 +97,7 @@ import {
 } from "../logic.ts";
 import { pieces as richPieces } from "../rich.ts";
 import { doNow, S } from "../state.ts";
-import { levelOnCard, oddsStats } from "./own.ts";
+import { figuresHere, levelOnCard, oddsStats } from "./own.ts";
 
 /** A drawn picture on the page, `scale` interface units to each of its pixels. */
 export function pic(c: HTMLCanvasElement, scale = 1, cls = ""): HTMLCanvasElement {
@@ -270,7 +270,7 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
   const piece = sale && run ? pieces(run).find((p) => p.id === sale.id) : undefined;
   const draw = u ? u.draw : drawOf(kind, items);
   return {
-    name: spec.name,
+    name: nameOf(kind),
     icon: portrait(kind),
     tag: figure ? roleLine(figure.calling) : "",
     aside: el(
@@ -323,7 +323,7 @@ function member(id: FigureId, run: RunView | null): Entry {
   return {
     ref: own ? pieceRef(own.id) : figureRef(id),
     lit: where === "board",
-    name: FIGURES[id].name,
+    name: nameOf(id),
     icon: portrait(id),
     note: acorns(FIGURES[id].tier),
     ...(where === "bench" || where === "stall" ? { tag: where } : {}),
@@ -364,7 +364,7 @@ export function traitDesc(id: TraitId, run: RunView | null, lore = false): Descr
       state ? el("b", "", { text: `${count}/${state.next}` }) : null,
     ),
     blocks,
-    rows: [{ label: "Every figure", look: "tiles", things: membersOf(id).map((f) => member(f, run)) }],
+    rows: [{ label: "Every figure", look: "tiles", things: membersOf(id, figuresHere()).map((f) => member(f, run)) }],
   };
 }
 

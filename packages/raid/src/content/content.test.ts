@@ -33,10 +33,11 @@ import {
   itemStats,
   itemText,
 } from "./items.ts";
+import { MEMBER_IDS } from "./members.ts";
 import { BOSS_ROOMS, ECONOMY, MAX_LEVEL, ROOMS, sellPrice, STALL_ODDS, TRAILS, worth } from "./rooms.ts";
 import { CALLINGS, KINS, stepFor, TRAIT_IDS, TRAITS, traitText } from "./traits.ts";
 
-const EVERYONE: readonly UnitKind[] = [...FIGURE_IDS, ...SUMMON_IDS, ...TROUBLE_IDS];
+const EVERYONE: readonly UnitKind[] = [...FIGURE_IDS, ...MEMBER_IDS, ...SUMMON_IDS, ...TROUBLE_IDS];
 /** A Worm (a Burrow and a Sneak) holding these. */
 const worm = (items: ItemId[]): Carrier => ({ kind: "worm", items });
 /** The mean health of a tier's figures. */

@@ -4,6 +4,7 @@
  * and what touching it shows are the town page's (`campart.ts`, `camptouch.ts`).
  */
 import { FIGURE_IDS, FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
+import { MEMBER_IDS } from "@sequoia-leaf/raid/content/members.ts";
 
 export const KINDS = [
   "home",
@@ -328,7 +329,9 @@ export const THINGS: readonly Thing[] = [
 
   // A banner's member, one for each of the pull game's banners: a person, who takes a person's square.
   // Only Leaf knows who; the page gives the thing their name and draws them (`members.ts`).
-  thing(memberThing("banner-1"), "A guild member", "characters", 1, 1, "", "Hops and looks at you.", { turns: "flip" }),
+  ...MEMBER_IDS.map((id) =>
+    thing(memberThing(id), FIGURES[id].name, "characters", 1, 1, "", "Hops and looks at you.", { turns: "flip" }),
+  ),
 ];
 
 const BY_ID = new Map(THINGS.map((t) => [t.id, t]));

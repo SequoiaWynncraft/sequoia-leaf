@@ -4,6 +4,7 @@ import { type Ctx, isRefused } from "@sequoia-leaf/core";
 import { RAID } from "@sequoia-leaf/raid";
 import { FIGURE_IDS, FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
 import { isBoughtLook } from "@sequoia-leaf/raid/content/looks.ts";
+import { MEMBER_IDS } from "@sequoia-leaf/raid/content/members.ts";
 import { TOWN } from "@sequoia-leaf/town";
 import { figureThing, isThing, memberThing } from "@sequoia-leaf/town/things.ts";
 
@@ -88,6 +89,13 @@ describe("the prizes", () => {
     // The town has a thing to send for each figure, and for each banner's headliner.
     expect(FIGURE_IDS.filter((id) => !isThing(figureThing(id)))).toEqual([]);
     expect(BANNERS.filter(({ id }) => !isThing(memberThing(id)))).toEqual([]);
+    // And each banner's member is a figure of the raid, which no `figure:` prize is.
+    expect(BANNERS.map(({ id }) => id)).toEqual([...MEMBER_IDS]);
+    expect(
+      Object.values(PRIZES)
+        .flat()
+        .filter((prize) => MEMBER_IDS.some((id) => prize === `figure:${id}`)),
+    ).toEqual([]);
     expect(rarityOf("figure:greg")).toBe("Treant");
     expect(rarityOf("figure:nobody")).toBeUndefined();
     expect(rarityOf("headliner:banner-0")).toBe("Yggdrasil");

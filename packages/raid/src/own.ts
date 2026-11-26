@@ -5,8 +5,12 @@
  * reads nothing a member owns.
  */
 import { FIGURE_IDS, type FigureId, FIGURES, isFigureId } from "./content/figures.ts";
+import { isMemberId, MEMBER_IDS } from "./content/members.ts";
 import { LEVELS, STALL_ODDS } from "./content/rooms.ts";
 import type { Placed } from "./party.ts";
+
+/** Every figure a member can have: the twenty-eight, and each banner's member. */
+export const OWNABLE: readonly FigureId[] = [...FIGURE_IDS, ...MEMBER_IDS];
 
 /** The figures a member has pulled, each with its level. */
 export type Roster = Partial<Record<FigureId, number>>;
@@ -15,16 +19,22 @@ interface Way {
   readonly own: Roster | null;
 }
 
+/** The figure a prize of the pull game is: `figure:<id>` one of the twenty-eight, `headliner:<banner>` that banner's member. */
+const prizeFigure = (sort: string | undefined, id: string | undefined): FigureId | undefined =>
+  (sort === "figure" ? FIGURE_IDS : MEMBER_IDS).find((figure) => figure === id);
+
 /**
- * The roster a player's awards come to: a figure for each `pull:figure:<id>`, and a level for each
- * further copy (`copies:figure:<id>:<n>` is the nth copy pulled), `LEVELS.most` at most.
+ * The roster a player's awards come to: a figure for each `pull:figure:<id>` and a banner's member
+ * for each `pull:headliner:<banner>`, and a level for each further copy (`copies:<prize>:<n>` is
+ * the nth copy pulled), `LEVELS.most` at most.
  */
 export function rosterOf(awards: readonly string[]): Roster {
   const roster: Roster = {};
   for (const award of awards) {
-    const copy = /^copies:figure:([^:]+):(\d)$/.exec(award);
-    const id = (copy ?? /^pull:figure:([^:]+)$/.exec(award))?.[1];
-    if (isFigureId(id)) roster[id] = Math.max(roster[id] ?? 0, copy ? Math.min(LEVELS.most, Number(copy[2]) - 1) : 0);
+    const copy = /^copies:(figure|headliner):([^:]+):(\d)$/.exec(award);
+    const prize = copy ?? /^pull:(figure|headliner):([^:]+)$/.exec(award);
+    const id = prizeFigure(prize?.[1], prize?.[2]);
+    if (id) roster[id] = Math.max(roster[id] ?? 0, copy ? Math.min(LEVELS.most, Number(copy[3]) - 1) : 0);
   }
   return roster;
 }
@@ -50,11 +60,19 @@ export function placedOf(run: Way, p: Omit<Placed, "seat" | "level"> & { kind: F
 }
 
 /**
- * Who the stall may offer at a cost: on the main way everyone of that cost; in a run with the
- * member's own figures every one-acorn figure, and above one acorn those of its roster.
+ * The figures there are for a roster: the twenty-eight, and each banner's member it has. With no
+ * roster (the main way) the twenty-eight alone.
+ */
+export const figuresFor = (own: Roster | null): readonly FigureId[] =>
+  own ? OWNABLE.filter((id) => !isMemberId(id) || own[id] !== undefined) : FIGURE_IDS;
+
+/**
+ * Who the stall may offer at a cost: on the main way each of the twenty-eight of that cost; in a
+ * run with the member's own figures every one-acorn figure, and above one acorn those of its
+ * roster, a banner's member among them.
  */
 export const stallPool = ({ own }: Way, tier: number): FigureId[] =>
-  FIGURE_IDS.filter((id) => FIGURES[id].tier === tier && (tier === 1 || !own || own[id] !== undefined));
+  figuresFor(own).filter((id) => FIGURES[id].tier === tier && (tier === 1 || !own || own[id] !== undefined));
 
 /**
  * The stall's odds at a run's level, a weight for each cost from one acorn up: the table's, with

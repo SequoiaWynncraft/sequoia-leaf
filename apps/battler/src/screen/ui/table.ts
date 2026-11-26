@@ -1,4 +1,4 @@
-import { portrait, portraitRoom } from "@sequoia-leaf/figures/sprites.ts";
+import { nameOf, portrait, portraitRoom, shownAs } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The interface round the table, built from the kit's pieces: the purse and the track along the
  * top, the traits the party has, the rack of items, and the stall along the bottom with the acorns,
@@ -359,7 +359,7 @@ function renderStall(run: RunView): void {
   const stall = byId("stall");
   if (!stall) return;
   const key = run.stall
-    .map((kind, i) => `${kind}:${priceOf(run, i)}:${canBuy(run, i) ? 1 : 0}:${kind ? twins(run, kind) : 0}`)
+    .map((kind, i) => `${shownAs(kind)}:${priceOf(run, i)}:${canBuy(run, i) ? 1 : 0}:${kind ? twins(run, kind) : 0}`)
     .join(run.own ? ";" : ",");
   if (key === stallKey) return;
   stallKey = key;
@@ -385,9 +385,9 @@ function renderStall(run: RunView): void {
     const card = el(
       "button",
       `k-card offer t${spec.tier}${canBuy(run, i) ? "" : " cant"}${have >= 2 ? " lit" : ""}`,
-      { type: "button", "data-offer": i, "aria-label": `${spec.name}, ${acornsSaid(price)}` },
+      { type: "button", "data-offer": i, "aria-label": `${nameOf(kind)}, ${acornsSaid(price)}` },
       el("div", "art", { style: `height: calc(var(--u) * ${portraitRoom()} * var(--fs))` }, figPic(portrait(kind))),
-      el("div", "name", { text: spec.name }),
+      el("div", "name", { text: nameOf(kind) }),
       el(
         "div",
         "foot",

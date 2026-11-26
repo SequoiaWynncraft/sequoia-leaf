@@ -229,7 +229,7 @@ describe("loading puts right what today's rules would not allow", () => {
         run.level,
         run.room,
       ]);
-      expect(laid.stall.every((offer) => offer === null || FIGURE_IDS.includes(offer))).toBe(true);
+      expect(laid.stall.every((offer) => offer === null || FIGURE_IDS.some((id) => id === offer))).toBe(true);
       expect(laid.foe.figures.length).toBeGreaterThan(0);
     }
     const boon = again[3];

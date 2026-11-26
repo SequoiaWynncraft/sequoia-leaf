@@ -4,11 +4,13 @@
  * in hand is, and a figure's level wherever it is written. A level is always a small green "Lv 3",
  * never a star.
  */
+import { meetMembers } from "@sequoia-leaf/figures/member.ts";
 import type { Block } from "@sequoia-leaf/kit/card.ts";
 import { type Choice, choices } from "@sequoia-leaf/kit/choices.ts";
 import { el } from "@sequoia-leaf/kit/dom.ts";
 import {
-  FIGURE_IDS,
+  type FigureId,
+  figuresFor,
   isFigureId,
   levelBoost,
   levelOf,
@@ -19,7 +21,7 @@ import {
 } from "@sequoia-leaf/raid";
 
 import { snd } from "../sounds.ts";
-import { onChange, S } from "../state.ts";
+import { changed, onChange, S } from "../state.ts";
 
 /** What each way of setting out is called: with every figure, or with those the member has pulled. */
 const wayName = (own: boolean): string => (own ? "Your figures" : "All figures");
@@ -29,6 +31,13 @@ const NOT_COUNTED = "Not counted for the board or the almanac.";
 const picked = { own: false };
 /** How many figures the member has pulled. */
 const pulled = (): number => Object.keys(S.roster).length;
+/**
+ * The figures there are for this member: the twenty-eight, and each banner's member they have
+ * pulled. What "of 28 figures" counts, the almanac's tiles, and who a trait's card lists.
+ */
+export const figuresHere = (): readonly FigureId[] => figuresFor(S.roster);
+/** Asks who each banner's member is, and draws the page again each time one is better known. */
+export const meetMember = (): Promise<void> => meetMembers(changed);
 /** Whether the front page sets out with the member's own figures: never for a member who has pulled none. */
 export const setsOutOwn = (): boolean => picked.own && pulled() > 0;
 
@@ -61,7 +70,7 @@ export function waysOf(keep: boolean, redraw: () => void): (HTMLElement | null)[
     "div",
     "k-col tight k-read",
     {},
-    el("b", "", { text: `You have ${pulled()} of ${FIGURE_IDS.length} figures.` }),
+    el("b", "", { text: `You have ${pulled()} of ${figuresHere().length} figures.` }),
     el("span", "", {
       text: `In these raids you are offered every 1-acorn figure to buy with acorns, and other figures only if you have pulled them at the Grove. Each copy of a figure you have pulled after the first is 1 level: ${LEVELS.boost}% more health and attack, up to level ${LEVELS.most}.`,
     }),
