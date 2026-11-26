@@ -141,6 +141,24 @@ describe("a redwood felled, kept", () => {
     const back = F.decode(JSON.stringify(rec), y.land);
     expect(back && Array.from(back.felled)).toEqual(Array.from(y.felled));
   });
+
+  test("no more entries are read than the land has redwoods: a redwood kept after that many stands", () => {
+    const y = meadow();
+    const junk = Array.from({ length: F.LAND.trees.length }, () => tile(20, 30));
+    const rec = { ...JSON.parse(F.encode(y)), felled: [...junk, TILES[0]] };
+    const back = F.decode(JSON.stringify(rec), y.land);
+    expect(back && F.redwoodAt(back, TILES[0] ?? -1)).toBe(true);
+  });
+
+  test("is kept as version 8, so a Leaf that knows only version 7 refuses it rather than plant it back", () => {
+    const y = meadow();
+    must(y, { do: "fell", ...TREE });
+    expect(JSON.parse(F.encode(y)).v).toBe(8);
+    // A version-7 yard, kept before redwoods could be felled, still reads with every redwood standing.
+    const seven = { ...JSON.parse(F.encode(meadow())), v: 7 };
+    const back = F.decode(JSON.stringify(seven), y.land);
+    expect(back && TILES.map((i) => F.redwoodAt(back, i))).toEqual([true, true, true, true]);
+  });
 });
 
 /** A yard with every goal done that owns the Meadow, its redwood felled and a belt where it stood, kept as a plan. */

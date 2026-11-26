@@ -15,8 +15,9 @@
  * told to make, and the way a splitter puts first, are kept only where the yard may set them.
  *
  * A yard kept by the Works' first design (version 3, its pieces a list) is brought over as far as is
- * cheap (`fromFirst`): it is a new yard at the tier its story had reached. One kept by version 6
- * reads as this version's, but for the grades it did not keep (`UNGRADED`).
+ * cheap (`fromFirst`): it is a new yard at the tier its story had reached. One kept by version 7
+ * reads as this version's with every redwood standing (`UNFELLED`); one kept by version 6 too, but
+ * for the grades it did not keep (`UNGRADED`).
  */
 import { build, isDir, plotState, refusal } from "./build.ts";
 import { fromBase64, Reader, toBase64, Writer } from "./bytes.ts";
@@ -67,8 +68,14 @@ import {
   type Yard,
 } from "./yard.ts";
 
-/** 7: whole numbers, grades (a splitter's, a joiner's and a sorter's too), goals and research. */
-export const VERSION = 7;
+/** 8: whole numbers, grades (a splitter's, a joiner's and a sorter's too), goals, research and redwoods felled. */
+export const VERSION = 8;
+/**
+ * The version before redwoods could be felled. It still reads, with every redwood standing. A Leaf
+ * that knows no later one refuses a yard this one keeps, rather than read it with its felled
+ * redwoods standing again and what was built where they stood taken away.
+ */
+const UNFELLED = 7;
 /**
  * The version before splitters, joiners and sorters had grades, which it kept with none. It still
  * reads: each it kept in the yard stands at the highest grade the yard may build of its kind, for
@@ -430,7 +437,8 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
     return null;
   }
   if (isRec(raw) && raw.v === FIRST && Array.isArray(raw.cells)) return fromFirst(raw, land);
-  if (!isRec(raw) || (raw.v !== VERSION && raw.v !== UNGRADED) || typeof raw.cells !== "string") return null;
+  if (!isRec(raw) || typeof raw.cells !== "string") return null;
+  if (raw.v !== VERSION && raw.v !== UNFELLED && raw.v !== UNGRADED) return null;
   const bytes = fromBase64(raw.cells);
   const pieces = bytes && unpackCells(bytes, land.w * land.h);
   if (!pieces) return null;
@@ -512,10 +520,13 @@ function keptAway(v: unknown): Away | null {
   return seconds === null || coins === null ? null : { seconds, coins, made: untally(v.made, 1e12) };
 }
 
-/** Fells each redwood kept as felled, by a tile of it, on a plot the yard owns; anything else kept is let go. */
+/**
+ * Fells each redwood kept as felled, by a tile of it, on a plot the yard owns; anything else kept is
+ * let go. No more are read than the land has redwoods, as many as a yard ever keeps.
+ */
 function felledOnto(y: Yard, kept: unknown): void {
   const { land } = y;
-  for (const v of Array.isArray(kept) ? kept : []) {
+  for (const v of Array.isArray(kept) ? kept.slice(0, land.trees.length) : []) {
     const i = whole(v, land.w * land.h - 1) ?? -1;
     const t = land.tree[i] ?? -1;
     const plot = land.plots[land.plot[i] ?? NONE];
