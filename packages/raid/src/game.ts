@@ -330,7 +330,7 @@ type Answer = Done<Table, RaidNote> | Refused;
 const no = (code: TableWhy | Why): Refused => ({ refused: code });
 
 /** A command that draws nothing, on a run with or without its streams: Leaf's, or the page's copy. */
-function plan(run: RunView, c: Predicted): RunDone {
+export function plan(run: RunView, c: Predicted): RunDone {
   switch (c.do) {
     case "buy":
       return buy(run, c.offer);
@@ -352,7 +352,7 @@ function plan(run: RunView, c: Predicted): RunDone {
 }
 
 /** A run action, on the run in hand; `met` is another member's board that a `take` meets (`Ctx.met`). */
-function act(run: Run, c: RunCommand, met: Met | undefined): RunDone {
+export function act(run: Run, c: RunCommand, met: Met | undefined): RunDone {
   if (isPredicted(c)) return plan(run, c);
   switch (c.do) {
     case "choose":

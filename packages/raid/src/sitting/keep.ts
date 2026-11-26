@@ -1,0 +1,176 @@
+/**
+ * A sitting as Leaf stores it, and read back. It is plain data, so keeping it is writing it out.
+ * Reading goes as a run's does (`save.ts`): the shape first, field by field into a fresh sitting,
+ * each seat's run by the run's own reader, then whether the parts agree with each other. Anything
+ * else is refused: a sitting that does not read is not one.
+ */
+import { isFigureId } from "../content/figures.ts";
+import { isComponentId } from "../content/items.ts";
+import { isTraitId } from "../content/traits.ts";
+import { isParty } from "../party.ts";
+import { endingOf } from "../run.ts";
+import { checkRun, fields, Nonsense } from "../save.ts";
+import {
+  CHAIRS,
+  type Member,
+  type Offer,
+  type Owed,
+  type Seat,
+  type Sitting,
+  type Stage,
+  type Who,
+} from "./sitting.ts";
+
+const GAME = "little-raid-sitting";
+export const SITTING_VERSION = 1;
+
+export const encodeSitting = (t: Sitting): string =>
+  JSON.stringify({
+    game: GAME,
+    v: SITTING_VERSION,
+    rng: t.rng,
+    by: t.by,
+    room: t.room,
+    stage: t.stage,
+    seats: t.seats,
+    pairs: t.pairs,
+    odd: t.odd,
+    owed: t.owed,
+  });
+
+const { record, whole, list, one, unique, bad } = fields;
+const UINT = 0xffffffff;
+/** A moment of Leaf's clock. */
+const moment = (v: unknown, what: string): number => whole(v, 0, Number.MAX_SAFE_INTEGER, what);
+const text = (v: unknown, most: number, what: string): string =>
+  typeof v === "string" && v.length > 0 && v.length <= most ? v : bad(what);
+/** A seat's number. */
+const chair = (v: unknown, what: string): number => whole(v, 0, CHAIRS - 1, what);
+
+function readMember(v: unknown): Member {
+  const m = record(v, "a member");
+  return { id: text(m.id, 64, "a member's id"), name: text(m.name, 80, "a member's name") };
+}
+function readWho(v: unknown): Who {
+  const w = record(v, "whose a seat is");
+  if (w.is === "member") return { is: "member", ...readMember(w) };
+  if (w.is !== "regular") return bad("whose a seat is");
+  return { is: "regular", figure: one(w.figure, isFigureId, "a regular"), habit: one(w.habit, isTraitId, "a regular") };
+}
+function readSeat(v: unknown): Seat {
+  const s = record(v, "a seat");
+  const run = checkRun(s.run);
+  if (!run.ok) return bad("a seat's run");
+  return {
+    who: readWho(s.who),
+    run: run.run,
+    shown: one(s.shown, isParty, "a seat's board"),
+    place: s.place === null ? null : whole(s.place, 1, CHAIRS, "a place"),
+  };
+}
+function readOffer(v: unknown): Offer {
+  const o = record(v, "the ring");
+  return {
+    kind: one(o.kind, isFigureId, "the ring"),
+    item: one(o.item, isComponentId, "the ring"),
+    by: o.by === null ? null : chair(o.by, "the ring"),
+  };
+}
+function readStage(v: unknown): Stage {
+  const s = record(v, "the stage");
+  if (s.at === "over") return { at: "over", ended: moment(s.ended, "the end") };
+  const until = moment(s.until, "the deadline");
+  if (s.at === "plan" || s.at === "fight") return { at: s.at, until };
+  if (s.at === "open") {
+    const sat = list(s.sat, CHAIRS - 1, "who has sat").map(readMember);
+    unique(
+      sat.map((m) => m.id),
+      "who has sat",
+    );
+    return { at: "open", until, sat };
+  }
+  if (s.at !== "carousel") return bad("the stage");
+  const turns = unique(
+    list(s.turns, CHAIRS, "the turns").map((x) => chair(x, "the turns")),
+    "the turns",
+  );
+  const ring = list(s.ring, 32, "the ring").map(readOffer);
+  unique(
+    ring.flatMap((offer) => (offer.by === null ? [] : [offer.by])),
+    "the ring",
+  );
+  return { at: "carousel", until, ring, turns, open: whole(s.open, 0, turns.length, "the turns") };
+}
+/** Two different seats. */
+function readTwo(v: unknown, what: string): [number, number] {
+  const [a, b] = list(v, 2, what).map((x) => chair(x, what));
+  return a === undefined || b === undefined || a === b ? bad(what) : [a, b];
+}
+function readOwed(v: unknown): Owed {
+  const o = record(v, "what is owed");
+  return {
+    key: text(o.key, 64, "what is owed"),
+    member: text(o.member, 64, "what is owed"),
+    coins: whole(o.coins, 1, 1_000_000, "what is owed"),
+  };
+}
+
+/** Whether each seat agrees with where the sitting stands: in exactly while its run goes on, its run where the stage is, and a winner once it is over. */
+function seatsAgree({ stage, seats }: Sitting): void {
+  const phase = stage.at === "fight" ? "fight" : stage.at === "over" ? "over" : "plan";
+  for (const { run, place } of seats) {
+    if ((place === null) !== (endingOf(run) === null)) bad("who is out");
+    if (place === null && run.stage.phase !== phase) bad("where a run stands");
+  }
+  if (stage.at === "over" && seats.length > 0 && !seats.some((seat) => seat.place === 1)) bad("the winner");
+}
+
+/** Whether the parts of a sitting agree: eight seats once started, nobody twice, each place once, and the seats with the stage. */
+function agree(t: Sitting): void {
+  const { stage, seats } = t;
+  const started = stage.at !== "open" && (stage.at !== "over" || seats.length > 0);
+  if (seats.length !== (started ? CHAIRS : 0)) bad("the seats");
+  if (stage.at === "open" && !stage.sat.some((m) => m.id === t.by)) bad("who opened it");
+  unique(
+    seats.map((seat) => (seat.who.is === "member" ? `member:${seat.who.id}` : `regular:${seat.who.figure}`)),
+    "the seats",
+  );
+  unique(
+    seats.flatMap((seat) => (seat.place === null ? [] : [seat.place])),
+    "the places",
+  );
+  seatsAgree(t);
+}
+
+function read(v: unknown): Sitting {
+  const r = record(v, "the sitting");
+  if (r.game !== GAME || r.v !== SITTING_VERSION) bad("the version");
+  const pairs = list(r.pairs, CHAIRS / 2, "the pairs").map((p) => readTwo(p, "the pairs"));
+  unique(pairs.flat(), "the pairs");
+  const t: Sitting = {
+    rng: whole(r.rng, 0, UINT, "the random stream"),
+    by: text(r.by, 64, "who opened it"),
+    room: whole(r.room, 0, 999, "the room"),
+    stage: readStage(r.stage),
+    seats: list(r.seats, CHAIRS, "the seats").map(readSeat),
+    pairs,
+    odd: r.odd === null ? null : readTwo(r.odd, "the odd one out"),
+    owed: list(r.owed, CHAIRS, "what is owed").map(readOwed),
+  };
+  unique(
+    t.owed.map((o) => o.key),
+    "what is owed",
+  );
+  agree(t);
+  return t;
+}
+
+/** A sitting from the text Leaf stored, or null for anything that is not one. */
+export function decodeSitting(stored: string): Sitting | null {
+  try {
+    return read(JSON.parse(stored));
+  } catch (err) {
+    if (err instanceof Nonsense || err instanceof SyntaxError) return null;
+    throw err;
+  }
+}
