@@ -18,6 +18,7 @@ import {
   type Game,
   LOGGED,
   type Logged,
+  type Meeting,
   type Met,
   mix,
   type Refused,
@@ -38,7 +39,7 @@ import {
   wornOf,
 } from "./content/looks.ts";
 import { ROOMS, TRAIL_COUNT } from "./content/rooms.ts";
-import { boardSlot } from "./foe.ts";
+import { boardSlot, metLately } from "./foe.ts";
 import { fightRecord } from "./fought.ts";
 import {
   type Almanac,
@@ -470,13 +471,14 @@ function play(s: Table, c: RunCommand, ctx: Ctx): Answer {
 
 /**
  * Where a command meets another member's board (`Game.meets`): a `take` that moves the run on to a
- * sparring room (`takenTo`: a run whose takings end it moves nowhere) meets one at that room's slot.
+ * sparring room (`takenTo`: a run whose takings end it moves nowhere) meets one at that room's slot,
+ * of a member whose board it has not met lately (`metLately`).
  */
-export function meets(state: Table, c: RaidCommand): string | null {
+export function meets(state: Table, c: RaidCommand): Meeting | null {
   const run = state.run;
-  if (c.do !== "take" || !run) return null;
-  const to = takenTo(run);
-  return to !== null && ROOMS[to]?.kind === "spar" ? boardSlot(run.trail, to, run.own !== null) : null;
+  const to = c.do === "take" && run ? takenTo(run) : null;
+  if (!run || to === null || ROOMS[to]?.kind !== "spar") return null;
+  return { slot: boardSlot(run.trail, to, run.own !== null), avoid: metLately(run.record, run.foe) };
 }
 
 /**

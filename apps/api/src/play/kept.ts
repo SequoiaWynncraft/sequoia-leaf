@@ -3,7 +3,7 @@
  * game and slot) and what a command meets of theirs (`Game.meets`, `Ctx.met`), as the play service
  * handles them. A database failure is a defect.
  */
-import { type Ctx, type Kept, KEPT_BYTES, type PlayerId, SLOT } from "@sequoia-leaf/core";
+import { type Ctx, type Kept, KEPT_BYTES, type Meeting, type PlayerId, SLOT } from "@sequoia-leaf/core";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
@@ -26,22 +26,31 @@ export const keptPieces = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const names = yield* PlayerNames;
   const left = SqlSchema.findOneOption({
-    Request: Schema.Struct({ game: Schema.String, slot: Schema.String, not: Schema.String, roll: Schema.Int }),
+    Request: Schema.Struct({
+      game: Schema.String,
+      slot: Schema.String,
+      not: Schema.String,
+      avoid: Schema.String,
+      roll: Schema.Int,
+    }),
     Result: Left,
-    // One statement, so that the count and the piece picked are of the same pieces.
-    execute: ({ game, slot, not, roll }) => sql`
-      WITH o AS (SELECT player_id, data FROM play_kept WHERE game = ${game} AND slot = ${slot} AND player_id <> ${not})
+    // One statement, so that the count and the piece picked are of the same pieces. `avoid` is a JSON list of ids.
+    execute: ({ game, slot, not, avoid, roll }) => sql`
+      WITH o AS (
+        SELECT player_id, data FROM play_kept WHERE game = ${game} AND slot = ${slot} AND player_id <> ${not}
+          AND player_id NOT IN (SELECT value FROM json_each(${avoid}))
+      )
       SELECT player_id AS playerId, data, (SELECT count(*) FROM o) AS of FROM o ORDER BY player_id
       LIMIT 1 OFFSET ${roll} % max(1, (SELECT count(*) FROM o))
     `,
   });
   /**
-   * One piece left at a slot of a game by a player other than `not`, with how many such there are:
-   * of them in the order of their players' ids, the one at `roll`, counted round. None when there
-   * are none.
+   * One piece left at a slot of a game by a player other than `not` and those to `avoid`, with how
+   * many such there are: of them in the order of their players' ids, the one at `roll`, counted
+   * round. None when there are none.
    */
-  const pick = (game: string, slot: string, not: string, roll: number) =>
-    left({ game, slot, not, roll }).pipe(Effect.orDie);
+  const pick = (game: string, slot: string, not: string, avoid: readonly string[], roll: number) =>
+    left({ game, slot, not, avoid: JSON.stringify(avoid), roll }).pipe(Effect.orDie);
   return {
     pick,
     /**
@@ -77,13 +86,15 @@ export const keptPieces = Effect.gen(function* () {
         { discard: true },
       ).pipe(Effect.orDie),
     /**
-     * A command's call (`ctx`) with what it meets at `slot` (`Game.meets`), picked by the call's own
-     * dice (`pick`), its owner named as the boards name players (`PlayerNames`, "Someone" for one
-     * Leaf cannot name). The call as it is for no slot, and for a slot nobody else has left one at.
+     * A command's call (`ctx`) with what it meets (`Game.meets`), picked by the call's own dice
+     * (`pick`) from those not to be avoided, its owner named as the boards name players
+     * (`PlayerNames`, "Someone" for one Leaf cannot name). The call as it is for no meeting, and for
+     * a slot nobody else it may meet has left one at.
      */
-    meet: (game: string, slot: string | null, ctx: Ctx) =>
+    meet: (game: string, meeting: Meeting | null, ctx: Ctx) =>
       Effect.gen(function* () {
-        const found = slot === null ? Option.none() : yield* pick(game, slot, ctx.player.id, ctx.seed);
+        const found =
+          meeting === null ? Option.none() : yield* pick(game, meeting.slot, ctx.player.id, meeting.avoid, ctx.seed);
         if (Option.isNone(found)) return ctx;
         const { playerId, data, of } = found.value;
         const name = (yield* names.of([playerId])).get(playerId) ?? "Someone";

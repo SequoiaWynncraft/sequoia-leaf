@@ -9,6 +9,7 @@ import {
   type Kept,
   type LeafSpend,
   type Logged,
+  type Meeting,
   type PlayerId,
   type Standing,
   type ToClient,
@@ -39,8 +40,8 @@ export type Attempt =
 
 /** A state brought to Leaf's clock, that commands are done to one at a time. */
 export interface Opened {
-  /** The slot at which a command (one the game `reads`), done now, would meet another player's piece (`Game.meets`); else null. */
-  readonly meets: (command: unknown) => string | null;
+  /** Where a command (one the game `reads`), done now, would meet another player's piece (`Game.meets`); else null. */
+  readonly meets: (command: unknown) => Meeting | null;
   readonly attempt: (command: unknown, ctx: Ctx) => Attempt;
   /** The state as it stands, as the game stores it. */
   readonly text: () => string;
@@ -129,7 +130,7 @@ function meetsOf<State, Command>(
   game: Pick<Game<State, Command, unknown, unknown>, "command" | "meets">,
   state: State,
   raw: unknown,
-): string | null {
+): Meeting | null {
   const command = game.command(raw);
   return command === null ? null : (game.meets?.(state, command) ?? null);
 }

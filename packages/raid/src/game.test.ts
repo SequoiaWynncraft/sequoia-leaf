@@ -18,7 +18,7 @@ import { EMBLEM_IDS, EMBLEMS } from "./content/items.ts";
 import { newLooks } from "./content/looks.ts";
 import { LEVELS, MAX_LEVEL, regularOf, ROOMS } from "./content/rooms.ts";
 import { resolveFight } from "./fight/engine.ts";
-import { opposition } from "./foe.ts";
+import { MET_APART, opposition } from "./foe.ts";
 import { readFight } from "./fought.ts";
 import {
   decodeTable,
@@ -888,8 +888,8 @@ describe("another member's board in a sparring room", () => {
     // Room 1 is trouble, after room 0; room 2 sparring, after room 1; room 4 a boss, after room 3.
     expect(meets(fighting(0), { do: "take" })).toBeNull();
     const into2 = fighting(1);
-    expect(meets(into2, { do: "take" })).toBe("board:0:2");
-    expect(meets(fighting(2), { do: "take" })).toBe("board:0:3");
+    expect(meets(into2, { do: "take" })).toEqual({ slot: "board:0:2", avoid: [] });
+    expect(meets(fighting(2), { do: "take" })).toEqual({ slot: "board:0:3", avoid: [] });
     expect(meets(fighting(3), { do: "take" })).toBeNull();
     // Nothing else meets anything, nor a take with no fight to take, nor a table with no run.
     for (const c of [{ do: "fight" }, { do: "rustle" }, { do: "abandon" }] as const) expect(meets(into2, c)).toBeNull();
@@ -949,6 +949,23 @@ describe("another member's board in a sparring room", () => {
     expect(against.log?.[0]).toMatchObject({ kind: "raid_room", data: { room: 3, kind: "spar", met: MEMBER } });
     const regular = must(fighting(2), { do: "take" });
     expect(regular.log?.[0]?.data).not.toHaveProperty("met");
+  });
+  test("a room fought against a member's board keeps whose it was, and the next sparring rooms meet somebody else", () => {
+    // Room 2 is sparring against a member's board, and room 3 sparring after it.
+    const met = must(fighting(1), { do: "take" }, { ...ctx(), met: metOf(keptBoard()) }).state;
+    const against = must(planned(met), { do: "fight" }).state;
+    // Leaf asks before the take that writes room 2 into the record: the member across now is left out already.
+    expect(meets(against, { do: "take" })).toEqual({ slot: "board:0:3", avoid: [MEMBER] });
+    const taken = must(against, { do: "take" }).state;
+    expect(runOf(taken).record.at(-1)).toMatchObject({ room: 2, kind: "spar", met: MEMBER });
+    // Of several met, only the last two are left out; a regular across now counts for nobody.
+    const next = fighting(2);
+    const sparred = runOf(taken).record.at(-1);
+    if (!sparred) throw new Error("a room taken");
+    const seen = ["m-1", "m-2", "m-3"].map((who, i) => Object.assign(structuredClone(sparred), { room: i, met: who }));
+    runOf(next).record = seen;
+    expect(meets(next, { do: "take" })?.avoid).toEqual(["m-2", "m-3"]);
+    expect(MET_APART).toBe(2);
   });
   test("without a member's board, or with anything else, the foe is the regular's party it always was", () => {
     const into2 = fighting(1);
@@ -1143,7 +1160,7 @@ describe("a run with the member's own figures", () => {
     const sent = must(planned(walked(EVERYTHING, true, 2).state), { do: "fight" });
     const board = sent.keep?.[0];
     expect(board?.slot).toBe("own:0:2");
-    expect(RAID.meets?.(sent.state, { do: "take" })).toBe("own:0:3");
+    expect(RAID.meets?.(sent.state, { do: "take" })).toEqual({ slot: "own:0:3", avoid: [] });
     const met = metOf(board?.data);
     const inOwn = opposition(1, 2, 0, met, true);
     const inMain = opposition(1, 2, 0, met);

@@ -1214,7 +1214,7 @@ const MEETER: Game<{ n: number }, Meeting, { n: number }, Met | null> = {
   id: "town",
   create: () => ({ n: 0 }),
   advance: (state) => state,
-  meets: (_, meeting) => meeting.meet,
+  meets: (_, meeting) => (meeting.meet === null ? null : { slot: meeting.meet, avoid: [] }),
   apply: (state, meeting, ctx) =>
     meeting.text === "refuse"
       ? { refused: "refused" }
@@ -1236,9 +1236,9 @@ async function meetings(player: PlayerId, commands: readonly (Partial<Meeting> &
   return batch.results.map((r) => ("notes" in r ? r.notes[0] : r.refused));
 }
 
-/** The piece at a slot of the meeting game picked for a player's roll, as Leaf picks one. */
-const pick = (slot: string, not: PlayerId, roll: number) =>
-  services.run(Effect.flatMap(keptPieces, (kept) => kept.pick("town", slot, not, roll)));
+/** The piece at a slot of the meeting game picked for a player's roll, as Leaf picks one, never one of `avoid`'s. */
+const pick = (slot: string, not: PlayerId, roll: number, avoid: readonly PlayerId[] = []) =>
+  services.run(Effect.flatMap(keptPieces, (kept) => kept.pick("town", slot, not, avoid, roll)));
 
 describe("what a command leaves for others to meet", () => {
   it("is kept if the command is, newest over older; one past 16 KiB or at a slot Leaf does not allow is not, and the batch stands", async () => {
@@ -1322,6 +1322,16 @@ describe("what a command leaves for others to meet", () => {
       [alice, bob, carol].map(Option.some),
     );
     expect(await pick("nowhere", dave, 3)).toEqual(Option.none());
+    // Those the game says to avoid are left out of the count and the pick; with all of them avoided, none.
+    const avoiding = (roll: number) => pick("s", dave, roll, [bob]).then(Option.map((l) => [l.playerId, l.of]));
+    expect(await Promise.all([0, 1, 2].map(avoiding))).toEqual(
+      [
+        [alice, 2],
+        [carol, 2],
+        [alice, 2],
+      ].map(Option.some),
+    );
+    expect(await pick("s", dave, 0, [alice, bob, carol])).toEqual(Option.none());
   });
 });
 

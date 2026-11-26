@@ -6,9 +6,10 @@
 import { below, type Met, mix, pick } from "@sequoia-leaf/core";
 
 import { boonNumber, FIGHT_BOONS } from "./content/boons.ts";
-import { isFigureId } from "./content/figures.ts";
+import { type BossId, isBossId, isFigureId } from "./content/figures.ts";
 import { isMemberId } from "./content/members.ts";
 import { LEVELS, MAX_LEVEL, ROOMS, TRAILS } from "./content/rooms.ts";
+import type { FightResult, FightSummary } from "./fight/types.ts";
 import { COLS } from "./hex.ts";
 import { isParty, type Party, type Placed } from "./party.ts";
 import { sparParty } from "./spar.ts";
@@ -94,3 +95,28 @@ export function opposition(seed: number, roomIndex: number, trailIndex: number, 
     might: (room.kind === "boss" ? trail?.boss : trail?.trouble) ?? 100,
   };
 }
+
+/**
+ * What a room's record keeps of its fight (`RoomRecord`): how it came out, the boss among those
+ * across, and whose board it was when it was a member's.
+ */
+export function across(
+  foe: Party,
+  fight: Pick<FightSummary, "result" | "standing">,
+): { result: FightResult; standing: [number, number]; boss: BossId | null; met?: string } {
+  const { result, standing } = fight;
+  const boss = foe.figures.map((p) => p.kind).find(isBossId) ?? null;
+  return foe.by === undefined ? { result, standing, boss } : { result, standing, boss, met: foe.by };
+}
+
+/** How many of the members met lately are not met again: one member's board at most once in three met in a row. */
+export const MET_APART = 2;
+/**
+ * The members whose boards a run met in its last `MET_APART` rooms against one, most lately last:
+ * those its record keeps, and the one across now (`now`), whose room is not in the record until it
+ * is taken (Leaf asks `Game.meets` before the take).
+ */
+export const metLately = (record: readonly { readonly met?: string }[], now: Party): string[] =>
+  [...record, now.by === undefined ? {} : { met: now.by }]
+    .flatMap((r) => (r.met === undefined ? [] : [r.met]))
+    .slice(-MET_APART);

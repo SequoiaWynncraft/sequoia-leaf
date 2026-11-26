@@ -195,6 +195,7 @@ export {
   gameId,
   isRefused,
   type Kept,
+  type Meeting,
   KEPT_BYTES,
   type LeafFor,
   type LeafSpend,

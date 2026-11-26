@@ -130,8 +130,11 @@ function readRecord(v: unknown, room: number): RoomRecord {
     result,
     standing: [whole(standing[0], 0, 99, "the record"), whole(standing[1], 0, 99, "the record")],
     boss: r.boss === null ? null : one(r.boss, isBossId, "the record"),
+    ...(r.met === undefined ? {} : { met: one(r.met, isMemberRef, "the record") }),
   };
 }
+/** A member's Leaf id as a record keeps it: a short string. */
+const isMemberRef = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 64;
 
 /** A fight's setup: a seed and two parties. */
 function readSetup(v: unknown, what: string): FightSetup {

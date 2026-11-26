@@ -16,7 +16,7 @@ import { draw32, type Met, mix, pick, shuffled, weighted } from "@sequoia-leaf/c
  * started; nothing the run draws is worked out from it after that.
  */
 import { BOON_IDS, type BoonId, boonNumber, BOONS, FIGHT_BOONS } from "./content/boons.ts";
-import { type BossId, FIGURE_IDS, type FigureId, FIGURES, isBossId, type Stars } from "./content/figures.ts";
+import { type BossId, FIGURE_IDS, type FigureId, FIGURES, type Stars } from "./content/figures.ts";
 import {
   COMPONENT_IDS,
   type ComponentId,
@@ -30,7 +30,7 @@ import { ECONOMY, MAX_LEVEL, ROOM_COUNT, type RoomKind, ROOMS, sellPrice, TRAILS
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
 import { resolveFight } from "./fight/engine.ts";
 import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
-import { opposition } from "./foe.ts";
+import { across, opposition } from "./foe.ts";
 import { COLS, SEATS } from "./hex.ts";
 import { placedOf, type Roster, stallOdds, stallPool } from "./own.ts";
 import { type Party, type Placed, type TraitState, traitStates, traitSteps } from "./party.ts";
@@ -74,6 +74,8 @@ export interface RoomRecord {
   standing: [number, number];
   /** The boss that was in it, beaten or not. */
   boss: BossId | null;
+  /** Whose board it was, when it was another member's: their Leaf id. */
+  met?: string;
 }
 export interface Run {
   /** Where the stream started. The bot's own habits are drawn from it; the run's draws never are. */
@@ -780,8 +782,7 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   const won = fight.result === "win";
   const last = run.room >= ROOM_COUNT - 1;
   const notes: Note[] = [{ t: "result", room: run.room, result: fight.result, standing: fight.standing }];
-  const boss = run.foe.figures.map((p) => p.kind).find(isBossId) ?? null;
-  run.record.push({ room: run.room, kind: room.kind, result: fight.result, standing: fight.standing, boss });
+  run.record.push({ room: run.room, kind: room.kind, ...across(run.foe, fight) });
   run.streak = nextStreak(run.streak, fight.result);
   run.last = setup;
 
