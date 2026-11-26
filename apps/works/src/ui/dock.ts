@@ -35,9 +35,12 @@ import type { Stage } from "../hand.ts";
 import { turns, WORKS_KEYS, type WorksAction } from "../keymap.ts";
 import {
   askSave,
+  copyable,
+  type CopyPrint,
   deleteKey,
   digest,
   isWhole,
+  pasteOffered,
   piecesInHand,
   savingLine,
   turnsInHand,
@@ -74,6 +77,7 @@ import {
 } from "../tools.ts";
 import { CATCHING_UP, catchingUp, coins } from "../yard.ts";
 import { cardLearnt, machineRef } from "./card.ts";
+import { copyButton, pasteButton } from "./code.ts";
 import { $, button, fitted, iconButton, shows, when, type YardIcon, yardIcon } from "./parts.ts";
 import { binButton, type Place, placeButton, placesOf, yardButtons } from "./places.ts";
 
@@ -284,6 +288,9 @@ interface HandPrint {
   readonly undo: boolean;
   /** A blueprint held, and whether its bin asks to be pressed again. */
   readonly bin: { readonly slot: number; readonly asking: boolean } | null;
+  /** Copy code, for a blueprint held but a plan of the whole yard; Paste code, with nothing marked. */
+  readonly copy: CopyPrint | null;
+  readonly paste: boolean;
   readonly cancel: boolean;
   /** For a finger: the gold button, what it says, and whether what is aimed cannot go. */
   readonly go: { readonly label: string; readonly bad: boolean } | null;
@@ -373,6 +380,8 @@ export function handPrint(): HandPrint {
     flip: tool === SORTER,
     undo: undoes(stage),
     bin: typeof g?.as === "number" ? { slot: g.as, asking: asking(deleteKey(g.as)) } : null,
+    copy: copyable(g),
+    paste: pasteOffered(stage),
     cancel: tool !== null,
     go: aiming
       ? {
@@ -470,7 +479,11 @@ function drawHand(p: HandPrint): void {
       action("Remove", "clear", clearMark),
       ...(p.save ? [button("sm", ["Save"], askSave)] : []),
     );
-  const wide = [...(p.upgrade ? [upgradeButton(p.upgrade)] : []), ...yardButtons(p.saveYard, p.place)];
+  const wide = [
+    ...(p.upgrade ? [upgradeButton(p.upgrade)] : []),
+    ...yardButtons(p.saveYard, p.place),
+    ...pasteButton(p.paste),
+  ];
   // The grades a kind in hand may be built at: the numeral and the price of one, the chosen one lit.
   const kind = p.kind;
   const grades =
@@ -496,7 +509,7 @@ function drawHand(p: HandPrint): void {
           link(b, machineRef(kind, grade), { acts: true });
           return b;
         });
-  kids.push(...turning(p), ...binButton(p.bin));
+  kids.push(...turning(p), ...copyButton(p.copy), ...binButton(p.bin));
   const tints = p.tints === null ? [] : tintButtons(p.tints);
   // What it says, then its buttons (`index.html`): on a short screen those that come and go scroll
   // sideways from their start, and Undo and Cancel stay at the end. Drawn again, the row stays where

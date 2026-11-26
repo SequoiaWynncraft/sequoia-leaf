@@ -239,6 +239,8 @@ export const S: {
   panel: string | null;
   /** The nudge being said (`teach.ts`): over its tile, or beside the part of the interface it is about. */
   nudge: Nudge | null;
+  /** The place of the blueprint in hand whose code was just copied, for a moment while it is held (`ui/code.ts`), or -1. */
+  copied: number;
 } = {
   world: emptyYard(LAND),
   visiting: null,
@@ -285,6 +287,7 @@ export const S: {
   felling: new Map(),
   panel: null,
   nudge: null,
+  copied: -1,
 };
 
 /** The nudge being said over a tile of the yard, if the one being said is. */

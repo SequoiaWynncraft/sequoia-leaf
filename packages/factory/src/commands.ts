@@ -27,6 +27,7 @@ import {
   tipOut,
   turn,
 } from "./build.ts";
+import { isCode, pasteBlueprint } from "./code.ts";
 import { STAND_MOST } from "./content/machines.ts";
 import {
   type At,
@@ -105,6 +106,8 @@ interface Carries {
   saveBlueprint: { readonly slot: number; readonly tiles: readonly number[] };
   /** Every piece in the yard, as a plan of the whole yard (`whole.ts`). */
   saveYard: { readonly slot: number };
+  /** A blueprint's code, as pasted (`code.ts`): the rules read it. */
+  pasteBlueprint: { readonly slot: number; readonly code: string };
   deleteBlueprint: { readonly slot: number };
   turn: At & { readonly dir: Dir };
   /** `onto`: the stroke this adds to, by its first command's id: the newest entry (`history.ts`). */
@@ -204,8 +207,12 @@ const writeItem = (a: At & { readonly item: Item | null }): Record<string, unkno
   item: a.item === null ? null : itemName(a.item),
   ...spot(a),
 });
-/** Done if the rules said null, or refused with what they said. */
-const doneUnless = (why: string | null, no: (why: string) => Turned): Did => (why === null ? done() : no(why));
+/** Refused with what the rules said; or where they said null, done, `then` done first. */
+function doneUnless(why: string | null, no: (why: string) => Turned, then?: () => void): Did {
+  if (why !== null) return no(why);
+  then?.();
+  return done();
+}
 
 /** Every command, by its name. */
 export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
@@ -345,6 +352,13 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
     write: (a) => ({ slot: a.slot }),
     act: (y, a, _coins, no) => doneUnless(saveYard(y, a.slot), no),
   },
+  pasteBlueprint: {
+    refused: "cannot_paste_blueprint",
+    lock: needs({ blueprint: 0 }),
+    read: (v, f) => (f.slot !== null && isCode(v.code) ? { do: "pasteBlueprint", slot: f.slot, code: v.code } : null),
+    write: (a) => ({ slot: a.slot, code: a.code }),
+    act: (y, a, _coins, no) => doneUnless(pasteBlueprint(y, a.slot, a.code), no),
+  },
   deleteBlueprint: {
     refused: "no_blueprint",
     read: (_v, f) => (f.slot === null ? null : { do: "deleteBlueprint", slot: f.slot }),
@@ -446,23 +460,13 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
     refused: "cannot_take",
     read: (v) => nodeOf(v, "take"),
     write: (a) => ({ node: goalId(a.node) }),
-    act: (y, a, _coins, no) => {
-      const why = takeRefusal(y, a.node);
-      if (why !== null) return no(why);
-      takeNode(y, a.node);
-      return done();
-    },
+    act: (y, a, _coins, no) => doneUnless(takeRefusal(y, a.node), no, () => takeNode(y, a.node)),
   },
   queue: {
     refused: "cannot_queue",
     read: (v) => nodeOf(v, "queue"),
     write: (a) => ({ node: goalId(a.node) }),
-    act: (y, a, _coins, no) => {
-      const why = queueRefusal(y, a.node);
-      if (why !== null) return no(why);
-      queue(y, a.node);
-      return done();
-    },
+    act: (y, a, _coins, no) => doneUnless(queueRefusal(y, a.node), no, () => queue(y, a.node)),
   },
   unqueue: {
     refused: "not_queued",
@@ -474,12 +478,7 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
     refused: "cannot_study",
     read: (v) => researchOf(v, "study"),
     write: (a) => ({ research: goalId(a.research) }),
-    act: (y, a, _coins, no) => {
-      const why = studyRefusal(y, a.research);
-      if (why !== null) return no(why);
-      study(y, a.research);
-      return done();
-    },
+    act: (y, a, _coins, no) => doneUnless(studyRefusal(y, a.research), no, () => study(y, a.research)),
   },
   unstudy: {
     refused: "not_studied",

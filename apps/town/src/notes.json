@@ -1,5 +1,14 @@
 [
   {
+    "id": "blueprint-codes",
+    "at": "2026-11-26T11:44Z",
+    "title": "Blueprint codes",
+    "lines": [
+      "In The Works, take a blueprint in hand and press Copy code to copy it as text you can paste in Discord. Plans of the whole yard have no code.",
+      "To use a code, press Paste code with Select in hand and nothing marked, paste it, and choose a place. A blueprint with pieces you have not unlocked is kept, but cannot be placed until you unlock them."
+    ]
+  },
+  {
     "id": "fell-redwoods",
     "at": "2026-11-26T11:35Z",
     "title": "Fell redwoods",

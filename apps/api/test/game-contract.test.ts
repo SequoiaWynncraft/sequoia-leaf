@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { leaf as leafOf, playerId } from "@sequoia-leaf/core";
+import { blueprintCode, create as createYard, FACTORY, play, readCommand, within } from "@sequoia-leaf/factory";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
@@ -326,8 +327,47 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     },
     "bob-token",
   );
+  // Bob's yard a tier on (as a staging step writes it), with a place for a blueprint: he pastes a
+  // blueprint's code from Discord, and the same code broken in the copying. Leaf reads each.
+  const yard = createYard({ seed: 5, tier: 3 });
+  yard.at = clock.now;
+  const staged = FACTORY.encode(yard);
+  await leaf.query(
+    (sql) => sql`UPDATE play_state SET rev = rev + 1, state = ${staged}, updated_at = ${clock.now}
+                 WHERE player_id = ${bob} AND game = 'works'`,
+  );
+  const code = millAndBelt();
+  await call(
+    "POST /v1/game/play/{game}, the Works, a blueprint code",
+    "POST",
+    "/v1/game/play/works",
+    {
+      player: bob,
+      commands: [
+        { id: "w-2", do: "pasteBlueprint", slot: 0, code, tick: yard.tick },
+        { id: "w-3", do: "pasteBlueprint", slot: 0, code: code.slice(0, -2), tick: yard.tick },
+      ],
+    },
+    "bob-token",
+  );
   await app.dispose();
   return recorded;
+}
+
+/** The code of a blueprint of a mill and a belt, kept in a yard somewhere else. */
+function millAndBelt(): string {
+  const y = createYard({ seed: 3, tier: 5 });
+  const done = (c: Record<string, unknown>): void => {
+    const read = readCommand({ tick: y.tick, ...c });
+    if (!read || "refused" in play(y, read)) throw new Error(`${JSON.stringify(c)} was not done`);
+  };
+  done({ do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
+  done({ do: "build", kind: "belt", x: 22, y: 15, dir: 0 });
+  done({ do: "saveBlueprint", slot: 0, tiles: within(y, 21, 15, 22, 15) });
+  const kept = y.blueprints[0];
+  const code = kept ? blueprintCode(kept) : null;
+  if (code === null) throw new Error("no code");
+  return code;
 }
 
 /**

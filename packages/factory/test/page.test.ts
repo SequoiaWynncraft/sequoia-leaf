@@ -52,6 +52,7 @@ describe("what the page writes for an act", () => {
     { do: "upgrade", tiles: [12] },
     { do: "saveBlueprint", slot: 0, tiles: [13, 14] },
     { do: "saveYard", slot: 1 },
+    { do: "pasteBlueprint", slot: 3, code: "wb1.BwAAAA" },
     { do: "deleteBlueprint", slot: 2 },
     { do: "turn", dir: 3, x: 47, y: 0 },
     { do: "paint", tint: 6, x: 2, y: 2 },

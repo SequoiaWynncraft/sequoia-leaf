@@ -2633,5 +2633,94 @@
         "version": 17
       }
     }
+  },
+  "POST /v1/game/play/{game}, the Works, a blueprint code": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/works",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002",
+        "commands": [
+          {
+            "id": "w-2",
+            "do": "pasteBlueprint",
+            "slot": 0,
+            "code": "wb1.vXxcAAgCAAAAAAEAAA",
+            "tick": 0
+          },
+          {
+            "id": "w-3",
+            "do": "pasteBlueprint",
+            "slot": 0,
+            "code": "wb1.vXxcAAgCAAAAAAEA",
+            "tick": 0
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 3,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "clock": 0,
+        "tick": 0,
+        "check": 2784240161,
+        "hung": [
+          {
+            "id": 0,
+            "title": "Frames for the market stalls",
+            "from": "The market stalls",
+            "line": "New stalls for market day. The old ones have been leaning on each other.",
+            "want": {
+              "frame": 210
+            },
+            "pay": 195,
+            "filled": {},
+            "starts": 50
+          },
+          {
+            "id": 1,
+            "title": "Tools for Pipwick",
+            "from": "Pipwick",
+            "line": "Pipwick borrowed a hammer, and now nobody can find Pipwick's hammer.",
+            "want": {
+              "tool": 165
+            },
+            "pay": 175,
+            "filled": {},
+            "starts": 50
+          },
+          {
+            "id": 2,
+            "title": "Engines and ingots for Fika",
+            "from": "Fika",
+            "line": "Fika sleeps on the bellows and would like them warmer. An engine, then. Meow.",
+            "want": {
+              "ingot": 390,
+              "engine": 55
+            },
+            "pay": 320,
+            "filled": {},
+            "starts": 50
+          }
+        ]
+      },
+      "purse": {
+        "coins": 300,
+        "leaf": 220,
+        "version": 17
+      },
+      "results": [
+        {
+          "id": "w-2",
+          "notes": []
+        },
+        {
+          "id": "w-3",
+          "refused": "cannot_paste_blueprint"
+        }
+      ]
+    }
   }
 }

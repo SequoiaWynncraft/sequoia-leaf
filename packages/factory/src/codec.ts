@@ -128,7 +128,7 @@ export function untally(v: unknown, most: number): Counts {
  * with a bit for each part that follows (4 span, 8 tint, 16 a splitter's ways, 32 a shut crate,
  * 64 recipe, 128 a grade above 1), then those, a byte each.
  */
-function packPrint(b: Uint8Array): Uint8Array {
+export function packPrint(b: Uint8Array): Uint8Array {
   const o = new Writer();
   for (const p of piecesOf(b)) {
     o.byte(p.kind);
@@ -176,7 +176,7 @@ export interface KeptBlueprint {
 }
 
 /** A kept blueprint's pieces read back from their bytes, or null for bytes that are not pieces. */
-function unpackPrint(bytes: Uint8Array | null): KeptPrint | null {
+export function unpackPrint(bytes: Uint8Array | null): KeptPrint | null {
   if (!bytes) return null;
   const r = new Reader(bytes);
   const out: KeptPrint[number][] = [];
