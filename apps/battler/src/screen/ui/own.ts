@@ -63,7 +63,7 @@ export function waysOf(keep: boolean, redraw: () => void): (HTMLElement | null)[
     {},
     el("b", "", { text: `You have ${pulled()} of ${FIGURE_IDS.length} figures.` }),
     el("span", "", {
-      text: `In these raids the stall offers every 1-acorn figure, and other figures only if you have pulled them at the Grove. Each copy of a figure you have pulled after the first is 1 level: ${LEVELS.boost}% more health and attack, up to level ${LEVELS.most}.`,
+      text: `In these raids you are offered every 1-acorn figure to buy with acorns, and other figures only if you have pulled them at the Grove. Each copy of a figure you have pulled after the first is 1 level: ${LEVELS.boost}% more health and attack, up to level ${LEVELS.most}.`,
     }),
     el("span", "", { text: NOT_COUNTED }),
   );
