@@ -5,7 +5,7 @@ import { beatAt, drawFigure, drawStanding, drawStars, framesOf, hoverAt } from "
  * figures waiting on the far half, the party's own on the near half and the bench, and (while one
  * is on) the fight.
  */
-import { CREAM, GOLD, INK, WATER } from "@sequoia-leaf/kit/palette.ts";
+import { CREAM, GOLD, INK, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
 import { fieldCap, fielded, type ItemId, levelOf, pieceAt, type RunView, type Stars } from "@sequoia-leaf/raid";
@@ -18,6 +18,7 @@ import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
 import { drawFight, drawFightAir, fightHeldUnder, fightOn } from "./fightview.ts";
 import { burst, drawFlyers, drawFxOver, drawFxUnder, wordsFx } from "./fx.ts";
 import { cellXY, GAP, HEX_H, HEX_W, ROW, seatXY, slotXY } from "./geometry.ts";
+import type { Marks } from "./gesture.ts";
 import { handMarks } from "./hand.ts";
 import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
 import { DIM, shineOf } from "./light.ts";
@@ -355,22 +356,56 @@ export function drawScene(g: Ctx): void {
     R(g, x, y + 2, 1, 1, GOLD[2]);
   }
   for (const s of list) s.top();
-  // Figures an item in the hand could be given to.
+  if (!fighting) drawItemMarks(g, marks);
+  if (fighting) drawFightAir(g);
+  drawFxOver(g);
+}
+
+/** The outline round the small heart, then the heart: where to draw its shape, and in what. */
+const HEART = [
+  [-1, 0, INK],
+  [1, 0, INK],
+  [0, -1, INK],
+  [0, 1, INK],
+  [0, 0, SKY[5]],
+] as const;
+/** A small heart, its top left at a point, outlined: one of the fielded wants the item in the hand, or pointed at. */
+function drawHeart(g: Ctx, x: number, y: number): void {
+  for (const [dx, dy, c] of HEART) {
+    R(g, x + dx + 1, y + dy, 1, 1, c);
+    R(g, x + dx + 3, y + dy, 1, 1, c);
+    R(g, x + dx, y + dy + 1, 5, 1, c);
+    R(g, x + dx + 1, y + dy + 2, 3, 1, c);
+    R(g, x + dx + 2, y + dy + 3, 1, 1, c);
+  }
+}
+
+/**
+ * The marks of an item in the hand or pointed at: brackets at the feet of the figures that would
+ * take it (bright on the one it is aimed at, the rest pulsing), and a heart beside the stars of
+ * each fielded figure that wants it, which stays still while the brackets pulse.
+ */
+function drawItemMarks(g: Ctx, marks: Marks): void {
   for (const id of marks.takers) {
     const p = pawns.get(id);
     if (!p) continue;
-    const on = id === marks.taker;
+    const on = id === marks.taker || marks.wanters.includes(id);
     g.globalAlpha = on ? 1 : 0.5 + 0.3 * Math.sin(V.t * 6);
     const x = Math.round(V.bx + p.x);
     const y = Math.round(V.by + p.y);
-    R(g, x - 8, y + 2, 4, 1, on ? CREAM : GOLD[2]);
-    R(g, x + 5, y + 2, 4, 1, on ? CREAM : GOLD[2]);
-    R(g, x - 9, y, 1, 2, on ? CREAM : GOLD[2]);
-    R(g, x + 9, y, 1, 2, on ? CREAM : GOLD[2]);
-    g.globalAlpha = 1;
+    const c = id === marks.taker ? CREAM : GOLD[2];
+    R(g, x - 8, y + 2, 4, 1, c);
+    R(g, x + 5, y + 2, 4, 1, c);
+    R(g, x - 9, y, 1, 2, c);
+    R(g, x + 9, y, 1, 2, c);
   }
-  if (fighting) drawFightAir(g);
-  drawFxOver(g);
+  g.globalAlpha = 1;
+  for (const id of marks.wanters) {
+    const p = pawns.get(id);
+    if (!p || p.id === marks.held) continue;
+    // Its bottom level with the bottom of the stars, clear of three of them.
+    drawHeart(g, Math.round(V.bx + p.x + 11), Math.round(V.by + p.y - framesOf(p.kind).tall - 7));
+  }
 }
 
 export function wordsScene(ctx: Ctx, px: number): void {

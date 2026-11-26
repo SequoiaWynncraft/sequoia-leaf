@@ -248,6 +248,8 @@ function noteOf(v: unknown): RaidNote {
       const id = kind === "cloth" ? clothOf(n.id) : kind === "lantern" ? lanternOf(n.id) : baseOf(n.id);
       return id === null ? bad("a note") : { t: "look", kind, id };
     }
+    case "made":
+      return { t: "made", item: one(n.item, isFinishedId, "a note"), at: whole(n.at, 0, 399, "a note") };
     case "ended":
       return {
         t: "ended",

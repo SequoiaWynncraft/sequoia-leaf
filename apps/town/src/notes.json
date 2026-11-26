@@ -1,5 +1,14 @@
 [
   {
+    "id": "raid-items-easy",
+    "at": "2026-11-26T21:05Z",
+    "title": "Easier raid items",
+    "lines": [
+      "In The Little Raid, a figure's card has a Make button for each of the 3 items that suit it, when your components can make it. One press makes the item and the figure holds it.",
+      "Drop one component on another on the rack to make the item there. A small heart marks who on the board wants the component you hold or point at."
+    ]
+  },
+  {
     "id": "raid-fight-behaviour",
     "at": "2026-11-26T20:45Z",
     "title": "Ranged figures stay back",

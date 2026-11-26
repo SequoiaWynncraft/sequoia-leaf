@@ -1,0 +1,243 @@
+[
+  ["size", 1280, 760],
+  ["wait", 900],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.fresh(); await r.hold(true); await r.start(11, 0); await r.taught(); await r.bot(5); await r.skip(2); await r.plan(); await r.skip(2); await r.strip(); for (const k of ['thorn','bark','plume']) await r.item(k); await r.settled(); r.skip(0.6); return JSON.stringify({board: r.party().filter(p=>p.on==='board').map(p=>p.kind), rack: r.rack(), choice: r.state().choice});})()"
+  ],
+  [
+    "downAt",
+    "(()=>{const r=window.raid; const p=r.party().find(p=>p.on==='board'&&p.kind==='rock'); return r.at(p.id)})()"
+  ],
+  [
+    "upAt",
+    "(()=>{const r=window.raid; const p=r.party().find(p=>p.on==='board'&&p.kind==='rock'); return r.at(p.id)})()"
+  ],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.settled(); r.skip(0.4); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  ["wait", 700],
+  ["shot", "d-01-card-one-makeable"],
+  [
+    "downAt",
+    "(()=>{const e=document.querySelector(\".k-info.pinned .suit.lit .k-btn\"); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+  ],
+  [
+    "upAt",
+    "(()=>{const e=document.querySelector(\".k-info.pinned .suit.lit .k-btn\"); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+  ],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.settled(); r.skip(1); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  ["wait", 700],
+  ["shot", "d-02-made-and-held"],
+  [
+    "downAt",
+    "(()=>{const e=document.querySelector(\".k-info.pinned .k-info-x\"); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+  ],
+  [
+    "upAt",
+    "(()=>{const e=document.querySelector(\".k-info.pinned .k-info-x\"); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+  ],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.settled(); r.skip(0.3); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; r.hover(r.rack().indexOf('plume'), r.party().find(p=>p.on==='board'&&p.kind==='crab7').id); r.skip(0.4); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  ["wait", 700],
+  ["shot", "d-03-tip-give"],
+  ["eval", "(async()=>{const r=window.raid; r.drop(); return 'down'})()"],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.item('bark'); await r.settled(); r.hand(r.rack().lastIndexOf('bark'), r.party().find(p=>p.on==='board'&&p.kind==='slug').id); await r.item('chestnut'); await r.settled(); r.skip(0.5); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; r.hover(r.rack().indexOf('chestnut'), r.party().find(p=>p.on==='board'&&p.kind==='slug').id); r.skip(0.4); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  ["wait", 700],
+  ["shot", "d-04-tip-make"],
+  ["eval", "(async()=>{const r=window.raid; r.drop(); return 'down'})()"],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; for (const k of ['lichen','stewpot']) { await r.item(k); await r.settled(); r.hand(r.rack().indexOf(k), r.party().find(p=>p.on==='board'&&p.kind==='rock').id); await r.settled(); } r.skip(0.4); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; r.hover(r.rack().indexOf('plume'), r.party().find(p=>p.on==='board'&&p.kind==='rock').id); r.skip(0.4); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  ["wait", 700],
+  ["shot", "d-06-tip-cannot"],
+  ["eval", "(async()=>{const r=window.raid; r.drop(); return 'down'})()"],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; for (const k of ['thorn','glowcap']) await r.item(k); await r.settled(); r.skip(0.3); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  [
+    "downAt",
+    "(()=>{const r=window.raid; const i=(r.rack().indexOf('plume')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+  ],
+  [
+    "upAt",
+    "(()=>{const r=window.raid; const i=(r.rack().indexOf('plume')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+  ],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.settled(); r.skip(0.5); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  ["move", 640, 30],
+  ["wait", 700],
+  ["shot", "d-07-component-in-hand"],
+  [
+    "downAt",
+    "(()=>{const r=window.raid; const p=r.party().find(p=>p.on==='board'&&p.kind==='crab7'); return r.at(p.id)})()"
+  ],
+  [
+    "upAt",
+    "(()=>{const r=window.raid; const p=r.party().find(p=>p.on==='board'&&p.kind==='crab7'); return r.at(p.id)})()"
+  ],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.settled(); r.skip(0.4); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  ["wait", 700],
+  ["shot", "d-07b-tap-tip"],
+  [
+    "downAt",
+    "(()=>{const r=window.raid; const p=r.party().find(p=>p.on==='board'&&p.kind==='crab7'); return r.at(p.id)})()"
+  ],
+  [
+    "upAt",
+    "(()=>{const r=window.raid; const p=r.party().find(p=>p.on==='board'&&p.kind==='crab7'); return r.at(p.id)})()"
+  ],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.settled(); r.skip(1); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.item('plume'); await r.settled(); r.skip(0.3); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  [
+    "downAt",
+    "(()=>{const r=window.raid; const i=(r.rack().indexOf('plume')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+  ],
+  [
+    "moveAt",
+    "(()=>{const r=window.raid; const i=(r.rack().indexOf('glowcap')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+  ],
+  [
+    "moveAt",
+    "(()=>{const r=window.raid; const i=(r.rack().indexOf('thorn')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+  ],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.settled(); r.skip(0.5); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  ["wait", 700],
+  ["shot", "d-08-pair-tip"],
+  [
+    "upAt",
+    "(()=>{const r=window.raid; const i=(r.rack().indexOf('thorn')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+  ],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.settled(); r.skip(1); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  ["move", 640, 30],
+  ["wait", 700],
+  ["shot", "d-09-forged-on-rack"],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.item('chestnut'); await r.item('bark'); await r.settled(); document.querySelector('#rack [data-item=\"'+r.rack().indexOf('chestnut')+'\"]').focus(); return r.rack().join(' ')})()"
+  ],
+  ["key", "Enter"],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; document.querySelector('#rack [data-item=\"'+r.rack().indexOf('bark')+'\"]').focus(); return document.activeElement?.getAttribute('aria-label')})()"
+  ],
+  ["key", "Enter"],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.settled(); r.skip(0.3); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; document.querySelector('.k-info.pinned .k-info-acts .k-btn')?.focus(); return document.activeElement?.textContent})()"
+  ],
+  ["key", "Enter"],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.settled(); r.skip(1); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  ["wait", 700],
+  ["shot", "d-10-keyboard-forged"],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; while (r.rack().length < 10) { await r.item(['plume','glowcap','thorn','chestnut','bark'][r.rack().length % 5]); } await r.settled(); r.skip(0.5); return r.rack().join(' ');})()"
+  ],
+  ["wait", 700],
+  ["shot", "d-11-rack-ten"],
+  [
+    "moveAt",
+    "(()=>{const r=window.raid; const i=(r.rack().indexOf('thorn')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+  ],
+  ["wait", 400],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.settled(); r.skip(0.4); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  ["wait", 700],
+  ["shot", "d-11b-rack-card"],
+  ["move", 640, 30],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; const to = await r.to('component'); await r.skip(1.5); return to + ' ' + JSON.stringify(r.state().choice) + ' ' + r.party().filter(p=>p.on==='board').map(p=>p.kind).join(' ');})()"
+  ],
+  ["wait", 900],
+  ["wait", 700],
+  ["shot", "d-12-pick"],
+  [
+    "moveAt",
+    "(()=>{const e=document.querySelector(\"#picks [data-pick=\\\"1\\\"]\"); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+  ],
+  ["wait", 400],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.settled(); r.skip(0.4); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  ["wait", 700],
+  ["shot", "d-13-pick-pointed"],
+  ["move", 60, 420],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; const run = r.copy(); const kinds = ['crab7','finch','worm']; let i = 0; for (const p of run.board) if (p) { p.kind = kinds[i++ % 3]; p.items = []; } run.stage.picks[0].options = ['thorn','plume','chestnut']; run.items.push('thorn','chestnut'); r.redraw(); r.skip(0.6); return run.board.filter(Boolean).map(p => p.kind).join(' ') + ' | ' + run.items.join(' ');})()"
+  ],
+  ["wait", 900],
+  ["wait", 700],
+  ["shot", "d-14-pick-wanted"],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; document.getElementById('pickhide')?.click(); r.skip(0.5); return document.getElementById('picks')?.className})()"
+  ],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.settled(); r.skip(0.4); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  [
+    "moveAt",
+    "(()=>{const r=window.raid; const i=(r.rack().indexOf('chestnut')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+  ],
+  ["wait", 400],
+  [
+    "eval",
+    "(async()=>{const r=window.raid; await r.settled(); r.skip(0.4); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+  ],
+  ["wait", 700],
+  ["shot", "d-15-rack-card-wanted"]
+]

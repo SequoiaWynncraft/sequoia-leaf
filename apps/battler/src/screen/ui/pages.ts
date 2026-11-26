@@ -485,7 +485,7 @@ const HOW: readonly (readonly [() => HTMLCanvasElement, string])[] = [
     () => glyph("pin"),
     `Every ${ECONOMY.interestPer} acorns you keep earn 1 more each room. Hold keeps the stall as it is.`,
   ],
-  [() => glyph("brush"), "Two components on one figure make an item. Drag one on, or tap it and tap the figure."],
+  [() => glyph("brush"), "Two components make an item, on a figure or the rack. Drag one onto the other, or tap both."],
   [() => glyph("help"), "Point at anything for its card; click or tap to keep it open. Names in a card open theirs."],
 ];
 

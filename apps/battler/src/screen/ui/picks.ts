@@ -32,13 +32,14 @@ import { snd } from "../sounds.ts";
 import { boardSpot } from "../stage.ts";
 import { ask, S } from "../state.ts";
 import { boonRef, figureRef, itemRef, makesLines, pic, rich, traitRef } from "./cards.ts";
+import { wantedBy } from "./suits.ts";
 
 let key = "";
 
 /** A pick's title, and under it only what the cards cannot show. */
 const TITLES: Readonly<Record<Choice["kind"], readonly [string, string | null]>> = {
   starter: ["Who sets out with you?", null],
-  component: ["Something from the room", "Two components on one figure make an item."],
+  component: ["Something from the room", "Two components make an item."],
   boon: ["A boon", "For the rest of the raid."],
 };
 
@@ -72,9 +73,11 @@ function starterCard(kind: FigureId): HTMLElement[] {
 /**
  * A component on offer: what it adds, and what it makes with each of the others, as the other
  * half's picture, an arrow and the finished item. The ones whose other half the party already
- * holds come first, lit and tagged "have", so the pick that finishes an item is plain.
+ * holds come first, lit and tagged "have", so the pick that finishes an item is plain. Under its
+ * name are the fielded figures that want anything it makes, and on each line the ones that want
+ * that item.
  */
-function componentCard(run: RunView, item: ComponentId): HTMLElement[] {
+function componentCard(run: RunView, item: ComponentId): (HTMLElement | null)[] {
   const lines = makesLines(item, run).map((line) =>
     el(
       "div",
@@ -82,13 +85,14 @@ function componentCard(run: RunView, item: ComponentId): HTMLElement[] {
       {},
       line.from ? thing(line.from, { bare: true }) : null,
       el("span", "k-dim", { text: "→" }),
-      thing(line.ref, line.tag ? { tag: line.tag } : {}),
+      thing(line.ref, { ...(line.note ? { note: line.note } : {}), ...(line.tag ? { tag: line.tag } : {}) }),
     ),
   );
   return [
     art(itemIcon(item), itemRef(item)),
     el("b", "k-gold", { text: COMPONENTS[item].name }),
     rich(itemAdds(item).join(" · ")),
+    wantedBy(run, item),
     el("div", "makeslist", {}, ...lines),
   ];
 }

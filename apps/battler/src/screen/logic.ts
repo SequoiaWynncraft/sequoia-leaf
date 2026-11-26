@@ -18,7 +18,6 @@ import {
   FIGURE_IDS,
   type FigureId,
   FIGURES,
-  FINISHED,
   type FinishedId,
   forge,
   holdItem,
@@ -108,14 +107,6 @@ export function handing(piece: Pick<Piece, "kind" | "items">, item: ItemId): Han
 /** What a component makes with each of the five components. */
 export function recipesOf(item: ComponentId): { with: ComponentId; makes: FinishedId }[] {
   return COMPONENT_IDS.map((other) => ({ with: other, makes: forge(item, other) }));
-}
-
-/** The loose components the party has: on the item bench, and held unforged by a figure. */
-export function looseComponents(run: RunView): ComponentId[] {
-  const out: ComponentId[] = [];
-  for (const item of run.items) if (isComponentId(item)) out.push(item);
-  for (const p of pieces(run)) for (const item of p.items) if (isComponentId(item)) out.push(item);
-  return out;
 }
 
 /** What a component would make with each *other* loose component the party has, without repeats. */
@@ -354,16 +345,6 @@ export function whereIs(run: RunView, kind: FigureId): "board" | "bench" | "stal
   if (run.bench.some((p) => p?.kind === kind)) return "bench";
   if (run.stall.includes(kind)) return "stall";
   return null;
-}
-
-/** Whether the rack has a finished item, or both the components that make it. */
-export function rackHas(run: RunView, item: FinishedId): "item" | "parts" | null {
-  if (run.items.includes(item)) return "item";
-  const [a, b] = FINISHED[item].made;
-  const loose = run.items.filter(isComponentId);
-  const at = loose.indexOf(a);
-  if (at < 0) return null;
-  return loose.some((c, i) => i !== at && c === b) ? "parts" : null;
 }
 
 /** Every figure of a trait among some (all twenty-eight, unless said), cheapest first, in their own order within a tier. */

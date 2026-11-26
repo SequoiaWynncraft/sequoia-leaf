@@ -108,6 +108,8 @@ export interface Handle {
   strip(): Promise<void>;
   /** Holds the item at a place on the rack over a figure; and hands it over. */
   hover(itemAt: number, id: number): void;
+  /** Holds the item at a place on the rack over another place on it. */
+  pair(itemAt: number, rackAt: number): void;
   hand(itemAt: number, id: number): void;
   drop(): void;
   page(id: PageId | null): void;
@@ -386,7 +388,12 @@ export function openHandle(): void {
       syncPawns(S.run, true);
       changed();
     },
-    hover,
+    hover(itemAt, id) {
+      hover(itemAt, { piece: id });
+    },
+    pair(itemAt, rackAt) {
+      hover(itemAt, { rack: rackAt });
+    },
     hand(itemAt, id) {
       const spot = spotOfPawn(pawns.get(id));
       if (spot) doNow({ do: "give", item: itemAt, to: spot });
