@@ -25,12 +25,20 @@ import { doNow, S } from "../state.ts";
 import { headOf } from "./heads.ts";
 import { itemRef } from "./refs.ts";
 
-/** The small pictures of the fielded figures that want an item, each figure once; nothing where nobody does. */
+/**
+ * The small pictures of the fielded figures that want an item, each figure once; nothing where
+ * nobody does. At half the tally's size: a hint beside a recipe, smaller than the items it is about.
+ */
 export function wantedBy(run: RunView | null, item: ItemId): HTMLElement | null {
   const kinds = [...new Set(run ? wanters(run, item).map((p) => p.kind) : [])];
   if (kinds.length === 0) return null;
   const names = kinds.map((kind) => FIGURES[kind].name).join(", ");
-  return el("span", "wantedby", { role: "img", "aria-label": `For ${names}` }, ...kinds.map((k) => shown(headOf(k))));
+  return el(
+    "span",
+    "wantedby",
+    { role: "img", "aria-label": `For ${names}` },
+    ...kinds.map((k) => shown(headOf(k), 0.5)),
+  );
 }
 
 /** Gets a finished item for one of the party's figures, as its card offers it now. */

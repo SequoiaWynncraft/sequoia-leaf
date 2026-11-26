@@ -366,10 +366,12 @@ body[data-picking="yes"] #foe {
   max-width: 100%;
   overflow: hidden;
 }
-/* A word too wide for its card (see fitNames): every name in the small style, as on a phone. */
+/*
+ * A word too wide for its card (see fitNames): every name in the small style, as on a phone, in
+ * the same room as the usual size, so the stall keeps its height from one shop to the next.
+ */
 #stall.tight .offer .name {
   font: var(--f-small);
-  min-height: calc(var(--t-s) * 2);
   /* A member's name may be one long word: it goes onto the second line there, never cut. */
   overflow-wrap: anywhere;
 }
@@ -451,7 +453,8 @@ body[data-picking="yes"] #foe {
   align-items: center;
   justify-content: center;
   gap: var(--u);
-  min-width: calc(var(--u) * 58);
+  /* As wide as the purse and the odds usually need, so the stall beside them keeps its width as they change. */
+  min-width: calc(var(--u) * 66);
   padding: var(--u) calc(var(--u) * 3);
   background: var(--k-deep);
   box-shadow: 0 0 0 var(--u) var(--k-ink);
@@ -713,8 +716,9 @@ body[data-picking="yes"] #foe {
   grid-template-columns: minmax(0, 1fr);
   gap: calc(var(--u) * 6);
 }
+/* What the room paid, in a column as wide whatever it paid, so the tally beside it never moves. */
 #fsheet.after .fs-main {
-  grid-template-columns: minmax(0, 1fr) minmax(calc(var(--u) * 82), auto);
+  grid-template-columns: minmax(0, 1fr) calc(var(--u) * 100);
 }
 .fs-aside {
   justify-content: flex-start;
@@ -729,9 +733,12 @@ body[data-picking="yes"] #foe {
 .fs-aside .pay {
   gap: calc(var(--u) * 2);
 }
-/* "Win streak 3" on one line: the column is as wide as its longest line needs. */
+/* A line not counted out yet keeps its place (`openSheet`). "Win streak 3" fits on one line; a longer one wraps. */
+.fs-aside .pay.due {
+  visibility: hidden;
+}
 .fs-aside .pay > .k-grow {
-  white-space: nowrap;
+  min-width: 0;
 }
 /* However the sheet scrolls, "Carry on" stays in reach. */
 #carry {
@@ -934,7 +941,7 @@ b.dmg.true {
   order: 1;
   flex: 0 0 100%;
   justify-content: flex-start;
-  padding-left: calc(var(--u) * 12);
+  padding-left: calc(var(--u) * 14);
 }
 .makes.lit {
   background: #f5b95e26;
@@ -949,7 +956,7 @@ b.dmg.true {
 }
 .pick .wantedby {
   justify-content: center;
-  min-height: calc(var(--u) * 12);
+  min-height: calc(var(--u) * 6);
 }
 /* A figure's three on its card: each with its button, or the components it still needs. */
 .suits {

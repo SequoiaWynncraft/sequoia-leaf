@@ -93,13 +93,28 @@ export function placeSheet(): void {
   box.style.setProperty("--room", `${Math.max(160, Math.floor(bottom - hud - 12))}px`);
 }
 
+/** A line of what a room paid: what for, and how much. */
+export type Taking = readonly [label: string, value: Node | string];
+
+/** The list of what a room paid, every line in its place and hidden until it is counted out. */
+const takingsOf = (lines: readonly Taking[] = []): HTMLElement =>
+  el(
+    "div",
+    "takings k-col tight",
+    {},
+    ...lines.map(([label, value]) => el("div", "k-row pay due", {}, el("span", "k-grow", { text: label }), value)),
+  );
+
 /**
- * Opens the sheet: `after` as a fight ends, for that fight as Leaf decided it (`leaf`), with room for
- * the takings and "Carry on"; `again` for the last fight the run kept, with a button to put it away.
+ * Opens the sheet: `after` as a fight ends, for that fight as Leaf decided it (`leaf`), with the
+ * lines of what the room paid (`takings`) and "Carry on"; `again` for the last fight the run kept,
+ * with a button to put it away. Every line is in its place from the start, hidden until it is
+ * counted out (`sheetTaking`), so the sheet never grows as they come.
  */
 export function openSheet(
   how: "after" | "again",
   leaf?: { setup: FightSetup; outcome: FightSummary; kept: boolean },
+  lines?: readonly Taking[],
 ): void {
   const p = played(leaf?.setup ?? S.run?.last ?? null);
   const bottom = document.getElementById("bottom");
@@ -127,7 +142,7 @@ export function openSheet(
           icon("close"),
         )
       : null;
-  const takings = el("div", "takings k-col tight", {});
+  const takings = takingsOf(lines);
   const carry =
     how === "after"
       ? el("button", "k-btn wide", { type: "button", id: "carry", onclick: () => SH.carry?.() }, "Carry on")
@@ -160,11 +175,12 @@ export function openSheet(
   if (carry) carry.focus({ preventScroll: true });
 }
 
-/** A line of what the room paid, as it is counted out. */
-export function sheetTaking(label: string, value: Node | string): void {
-  const list = SH.takings;
-  if (!list || SH.up !== "after") return;
-  list.append(el("div", "k-row pay k-rise", {}, el("span", "k-grow", { text: label }), value));
+/** Shows the `at`th line of what the room paid as it is counted out, in the place kept for it. */
+export function sheetTaking(at: number): void {
+  const line = SH.takings?.children[at];
+  if (SH.up !== "after" || !line) return;
+  line.classList.remove("due");
+  line.classList.add("k-rise");
 }
 
 /** Puts the sheet away. */
