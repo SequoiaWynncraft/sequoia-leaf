@@ -520,9 +520,37 @@ async function wear(c: Extract<RaidCommand, { do: "look" | "buyLook" }>, button:
   if (c.do === "buyLook") snd.buy();
 }
 
+/** A look's name, words and button (use it, buy it, or on the table); `shown` for the one tried, the rest hidden but holding their room. */
+function lookLine(kind: LookKind, spec: (typeof LOOKS)[LookKind][number], shown: boolean): HTMLElement {
+  const { id: look } = spec;
+  const mine = owns(S.looks, kind, look);
+  const on = wearing(kind) === look;
+  const act = on
+    ? el("span", "k-chip lit", {}, icon("check"), "On the table")
+    : el(
+        "button",
+        mine ? "k-btn sm" : "k-btn leaf sm",
+        {
+          type: "button",
+          id: shown ? (mine ? "uselook" : "buylook") : null,
+          onclick: (e: Event) => void wear({ do: mine ? "look" : "buyLook", kind, look }, e.currentTarget),
+        },
+        ...(mine ? ["Use it"] : ["Buy", amount("leaf", spec.leaf)]),
+      );
+  // With spending off, or for a guest a look for members, the look is shown and its Buy button closed.
+  if (!on && !mine && !leafOpen()) closeLeaf(act, `${spec.leaf} Leaf`);
+  else if (!on && !mine && !leafFor(spec.for)) closeLeaf(act, `${spec.leaf} Leaf`, LEAF_MEMBERS);
+  return el(
+    "div",
+    "k-card",
+    shown ? {} : { "aria-hidden": "true", inert: "" },
+    el("div", "k-col k-grow tight", {}, el("b", "k-gold", { text: spec.name }), el("span", "k-d", { text: spec.text })),
+    act,
+  );
+}
+
 function looks(): HTMLElement {
   const tried: { kind: LookKind; id: LookId } = trying ?? { kind: "cloth", id: wearing("cloth") };
-  const spec = LOOKS[tried.kind].find((l) => l.id === tried.id);
   const dressed = {
     cloth: (tried.kind === "cloth" ? clothOf(tried.id) : null) ?? S.looks.cloth,
     lantern: (tried.kind === "lantern" ? lanternOf(tried.id) : null) ?? S.looks.lantern,
@@ -531,54 +559,19 @@ function looks(): HTMLElement {
   const body = el("div", "k-body k-scroll", {});
   add(body, el("div", "k-row", {}, el("span", "k-grow"), amount("leaf", balance().leaf)));
   add(body, el("div", "swatch", {}, figPic(paintSwatch(dressed.cloth, dressed.lantern, dressed.bases))));
-  if (spec) {
-    const mine = owns(S.looks, tried.kind, tried.id);
-    const on = wearing(tried.kind) === tried.id;
-    const { kind, id: look } = tried;
-    const act = on
-      ? el("span", "k-chip lit", {}, icon("check"), "On the table")
-      : mine
-        ? el(
-            "button",
-            "k-btn sm",
-            {
-              type: "button",
-              id: "uselook",
-              onclick: (e: Event) => void wear({ do: "look", kind, look }, e.currentTarget),
-            },
-            "Use it",
-          )
-        : el(
-            "button",
-            "k-btn leaf sm",
-            {
-              type: "button",
-              id: "buylook",
-              onclick: (e: Event) => void wear({ do: "buyLook", kind, look }, e.currentTarget),
-            },
-            "Buy",
-            amount("leaf", spec.leaf),
-          );
-    // With spending off, or for a guest a look for members, the look is shown and its Buy button closed.
-    if (!on && !mine && !leafOpen()) closeLeaf(act, `${spec.leaf} Leaf`);
-    else if (!on && !mine && !leafFor(spec.for)) closeLeaf(act, `${spec.leaf} Leaf`, LEAF_MEMBERS);
-    add(
-      body,
-      el(
-        "div",
-        "k-card",
-        {},
-        el(
-          "div",
-          "k-col k-grow tight",
-          {},
-          el("b", "k-gold", { text: spec.name }),
-          el("span", "k-d", { text: spec.text }),
-        ),
-        act,
+  // Every look's line, one over another and only the one tried shown: the box is as tall as the
+  // tallest whichever is tried, so nothing under it moves.
+  add(
+    body,
+    el(
+      "div",
+      "lookinfo",
+      {},
+      ...LOOK_KINDS.flatMap((kind) =>
+        LOOKS[kind].map((l) => lookLine(kind, l, kind === tried.kind && l.id === tried.id)),
       ),
-    );
-  }
+    ),
+  );
   for (const kind of LOOK_KINDS) {
     add(body, el("div", "k-label", { text: LOOK_TITLES[kind] }));
     const row = el("div", "k-wrap", {});

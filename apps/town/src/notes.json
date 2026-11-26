@@ -1,5 +1,13 @@
 [
   {
+    "id": "raid-looks-steady",
+    "at": "2026-11-26T22:47Z",
+    "title": "Table looks hold still",
+    "lines": [
+      "In The Little Raid, the Table looks page no longer jumps when you pick a look with a longer name or description."
+    ]
+  },
+  {
     "id": "raid-card-hover",
     "at": "2026-11-26T22:26Z",
     "title": "Items say what they give",
