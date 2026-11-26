@@ -41,6 +41,10 @@ export interface Actor {
   wind: { readonly from: number; readonly at: number; readonly body: Body } | null;
   /** In its ability's pose until then. */
   castUntil: number;
+  /** An ability of its own that has gone off and not yet landed: when each, and how it points at whoever it is for (`aim`, as `acts.ts` has it; `left` for our left). */
+  held: { readonly at: number; readonly lands: number; readonly aim: number; readonly left: boolean } | null;
+  /** Caught by somebody's ability that has not yet landed: it shrinks, and shakes as the moment comes. */
+  dread: { readonly from: number; readonly until: number } | null;
   /** When it fell (`Infinity` standing), which way it tumbles, and whether its puff has been made and it is gone. */
   fallAt: number;
   tumble: 1 | -1;
@@ -68,6 +72,8 @@ export function actorFor(unit: Unit, at: Pt, bornAt: number): Actor {
     hard: false,
     wind: null,
     castUntil: -99,
+    held: null,
+    dread: null,
     fallAt: Infinity,
     tumble: 1,
     gone: false,
@@ -257,6 +263,16 @@ function windPose(p: Pose, a: Actor, c: number): void {
   } else if (c - w.at < 4) body.after?.(p, c - w.at);
 }
 
+/** Caught, and waiting for it to land: smaller and smaller, and shaking for the last of it. */
+function dreadPose(p: Pose, a: Actor, c: number): void {
+  const d = a.dread;
+  if (!d || c < d.from || c >= d.until) return;
+  const k = (c - d.from) / Math.max(1e-9, d.until - d.from);
+  p.sy -= k > 0.5 ? 2 : 1;
+  p.sx += 1;
+  if (k > 0.65) p.dx += Math.floor(c) % 2 === 0 ? 1 : -1;
+}
+
 /** A fall: knocked up off its base, a quarter turn over, and down. */
 function fallPose(p: Pose, a: Actor, c: number): void {
   const d = c - a.fallAt;
@@ -288,6 +304,7 @@ export function poseOf(a: Actor, c: number): Pose {
   windPose(p, a, c);
   blowPose(p, a.blow, c);
   hurtPose(p, a, c);
+  dreadPose(p, a, c);
   fallPose(p, a, c);
   return p;
 }

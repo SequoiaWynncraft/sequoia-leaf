@@ -6,6 +6,7 @@
 
 import { CREAM, INK, SKY } from "./palette.ts";
 import { flipped, outlineInPlace, R, rgb } from "./pix.ts";
+import { strongTones, type Tone } from "./tones.ts";
 import { makeCanvas } from "./util.ts";
 
 /** Facing: down (towards us), left, right, up (away). */
@@ -24,6 +25,10 @@ export interface Body {
   frames: HTMLCanvasElement[][];
   /** The face alone, 8x8, for cards and buttons. */
   face: HTMLCanvasElement;
+  /** The pieces the frames are put together from, for whoever poses them another way. */
+  parts: Parts;
+  /** The skin's own colours on the palette, the one there is most of first (`tones.ts`). */
+  tones: readonly Tone[];
 }
 
 type Sheet = HTMLImageElement | HTMLCanvasElement;
@@ -94,7 +99,12 @@ function take(
   return c;
 }
 
-interface Parts {
+/**
+ * A skin's pieces at the figure's size: the head's four faces (8x8); the body from the front, the
+ * back and each side (4x6); an arm from the front, the back and outside (2x6); a leg from the front
+ * and the back (2x5) and from outside (4x5). The arm and leg are the right-hand ones.
+ */
+export interface Parts {
   headF: HTMLCanvasElement;
   headL: HTMLCanvasElement;
   headR: HTMLCanvasElement;
@@ -189,7 +199,8 @@ function poseSide(p: Parts, pose: number, west: boolean): HTMLCanvasElement {
 
 /** The walking figure for a skin sheet. Throws if the sheet cannot be read (a picture from elsewhere). */
 export function bake(sheet: Sheet): Body {
-  const p = parts(flatten(sheet));
+  const flat = flatten(sheet);
+  const p = parts(flat);
   const poses = [0, 1, 2, 3];
   return {
     frames: [
@@ -199,6 +210,8 @@ export function bake(sheet: Sheet): Body {
       poses.map((n) => poseFront(p, n, true)),
     ],
     face: p.headF,
+    parts: p,
+    tones: strongTones(flat.getContext("2d")?.getImageData(0, 0, flat.width, flat.height).data ?? []),
   };
 }
 

@@ -249,6 +249,10 @@ timed can be stepped by hand.
 | `src/screen/fightmarks.ts`    | Ground that slows or hurts, a line marked before it lands, a pull, a channel held in its pose         |
 | `src/screen/marks.ts`         | Things thrown, as they fly; each ability's mark; the puff a fallen figure goes in                     |
 | `src/screen/motion.ts`        | A figure's body at a moment: lunge, hurt, hop, walk, wind-up, tumble, as squash, lean and turn        |
+| `src/screen/acting.ts`        | A person on a rig at a moment: the stance their body is in for what the fight is doing to them        |
+| `src/screen/spells.ts`        | An ability that lands later, until it does: the dark, the seal, the thread, the corners, its landing  |
+| `src/screen/hung.ts`          | When such an ability lands, counted from the step it went off, and whether its target is still there  |
+| `src/screen/livery.ts`        | The colours anything of a figure's own is drawn in: a person's from their skin, on the palette        |
 | `src/screen/board.ts`         | The fight on the table as it stands, which the three above keep                                       |
 | `src/screen/fx.ts`            | Sparks, light gathering, rings, small pictures, streaks, rising words, things that fly, "in a moment" |
 | `src/screen/logic.ts`         | Small questions asked of a run: where a figure may go, what an item would make, the next nudge        |
@@ -275,7 +279,16 @@ timed can be stepped by hand.
 own, event for event, to the same end, at every speed.
 
 Everything in a fight counts the fight's clock (the sparks too, through `fx.ts`'s `pace`), so 2x
-and 4x speed it all up alike and a hit-stop holds it all. An ability's look is its entry in
+and 4x speed it all up alike and a hit-stop holds it all. A banner's member is a person on a rig (`@sequoia-leaf/figures`, `rig.ts`), and
+`acting.ts` has them act out what the fight says with their body: arms and legs swing as they walk,
+an arm is drawn back and thrown out so that what they throw leaves their hand, they reel when hit,
+sway when stunned and fall with their limbs going. An ability that lands later (`lands` in its look) has its
+hexes marked until it does, and its mark, bump and stop then; meanwhile the table is dark but for a
+pool of light round whoever it is for, a seal on the ground round them lights a stud at a time, a
+thread runs to them from its owner's hand and gold corners close round them (`spells.ts`), all in
+its owner's colours: a person's are the strongest tones of their skin as the palette has them
+(`livery.ts`, the kit's `tones.ts`). It is timed from the step the rules say it went off
+(`hung.ts`), and still lands when whoever it is for falls first. An ability's look is its entry in
 `looks.ts` and, for its mark, in `MARKS` (`marks.ts`): a richer one is a mark of several layers
 (pictures from `ROWS`, rings, bursts, streaks, as long as it likes) and its own `bump` and `stop`
 in its look.
@@ -323,6 +336,11 @@ bun review/tour.ts review/tour-desktop.json <out-dir>
 bun review/tour.ts review/tour-phone.json <out-dir>
 bun review/tour.ts review/sheet.json <out-dir> sheet
 ```
+
+`review/standin.ts` puts `window.standin` beside the handle for looking at a banner's member:
+`wear()` gives the first banner's member a mage's skin drawn by code (the play server's skins are
+plain) or, given a skin sheet as a `data:` address, that skin, `seat(ours, theirs, stars, seed)` plays a fight with everyone seated where it says, and
+`caught(kind)` says who that kind's last ability was for.
 
 `review/feel.json` and `review/feel-phone.json` go through who gets hit, what everyone did and the
 open table: the front page, a Bulwark's card with its draw chip and tip, a fight with each of the

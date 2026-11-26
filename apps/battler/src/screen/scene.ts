@@ -27,6 +27,7 @@ import { DIM, shineOf } from "./light.ts";
 import { arrivalOf, handing, watchersOf } from "./logic.ts";
 import { aloft, FOOT, type Pawn, pawns, spotOfPawn } from "./pawns.ts";
 import { snd } from "./sounds.ts";
+import { drawSeals } from "./spells.ts";
 import { boardHalves, place, type Standing, V } from "./stage.ts";
 import { S } from "./state.ts";
 
@@ -337,6 +338,7 @@ function drawTable(g: Ctx): void {
   }
   drawFxUnder(g);
   drawFightMarks(g);
+  drawSeals(g);
   const list: Standing[] = [];
   if (fighting) drawFight(g, list);
   else {

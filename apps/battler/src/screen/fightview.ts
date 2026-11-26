@@ -18,6 +18,7 @@ import { type FightEvent, type FightSetup, HZ, type Unit } from "@sequoia-leaf/r
 import { isBossId } from "@sequoia-leaf/raid/content/figures.ts";
 import { seatCell } from "@sequoia-leaf/raid/hex.ts";
 
+import { stanceOf } from "./acting.ts";
 import { hexMark } from "./art/table.ts";
 import { clockNow, feetAt, FV } from "./board.ts";
 import { begin, show, stepShown } from "./fightshow.ts";
@@ -31,6 +32,7 @@ import { drawShot } from "./marks.ts";
 import { type Actor, actorFor, poseOf } from "./motion.ts";
 import { advance, openPlayback, playOut } from "./playback.ts";
 import { snd } from "./sounds.ts";
+import { drawSpells } from "./spells.ts";
 import { type Standing, V } from "./stage.ts";
 
 const marksByColour = new Map<string, HTMLCanvasElement>();
@@ -312,6 +314,8 @@ function standing(g: Ctx, a: Actor, c: number, tick: number): Standing | null {
   const y = Math.round(ground - p.lift - shine.hop);
   const hover = down ? 0 : hoverAt(u.kind, V.t, a.phase);
   const left = p.flip ? !a.left : a.left;
+  // A person on a rig acts with their body; anyone else is their picture, bent.
+  const act = stanceOf(a, c, tick);
   return {
     x: a.x,
     y: a.y - back,
@@ -332,7 +336,7 @@ function standing(g: Ctx, a: Actor, c: number, tick: number): Standing | null {
         flash: p.tint === "flash",
         hurt: p.tint === "hurt",
         lit: shine.lit,
-        bend: { sx: p.sx, sy: p.sy, lean: left ? -p.lean : p.lean, turn: p.turn },
+        ...(act ? { act } : { bend: { sx: p.sx, sy: p.sy, lean: left ? -p.lean : p.lean, turn: p.turn } }),
       });
       // What it holds follows it about, under its health bar, and falls with it.
       if (u.alive && !down) drawHeld(g, heldRow(u.items, x - V.bx, heldTop(y - V.by, true)), V.bx, V.by);
@@ -391,6 +395,7 @@ export function drawFightAir(g: Ctx): void {
     );
   }
   g.globalAlpha = 1;
+  drawSpells(g);
 }
 
 /** The item a figure in the fight holds under a point measured from the board's corner. */

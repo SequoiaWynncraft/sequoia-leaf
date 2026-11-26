@@ -136,6 +136,7 @@ picture file.
 | `dialog.ts`   | What opens over the page (a panel, a pinned card, a notice): `dialog(node, title, close)` (below)   |
 | `mark.ts`     | The mark of the town's own: a name in leaf green after the acorn, on a page or a canvas             |
 | `skin.ts`     | A walking figure and a face from a block-game skin sheet, or from a made-up look                    |
+| `tones.ts`    | A picture's own strong colours, each as the palette's pair of its hue                               |
 | `sound.ts`    | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all                    |
 | `dom.ts`      | `el`, `icon`, `amount`, `when` (draws a part again only when it changes), `say` and a few more      |
 | `purse.ts`    | Leaf and Coins, shared by every page of the game: both Leaf's, only shown                           |
