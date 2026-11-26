@@ -40,6 +40,9 @@ export interface Ring {
   flat: boolean;
 }
 
+/** The colour of dust raised from the yard's ground. */
+export const DUST = "#cbb894";
+
 export const bits: Bit[] = [];
 export const floaters: Floater[] = [];
 export const rings: Ring[] = [];

@@ -7,7 +7,7 @@
  *
  * Pointing at a thing on the yard says what it is; clicking or tapping pins its card.
  */
-import { at, carries, isItem, NONE, piecesAt, tilesOf } from "@sequoia-leaf/factory";
+import { at, carries, isItem, NONE, piecesAt, redwoodAt, tilesOf } from "@sequoia-leaf/factory";
 import { close, pick, refresh, register, shown, watch } from "@sequoia-leaf/kit/card.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
@@ -18,6 +18,7 @@ import { buyLand, takeInHand } from "../plots.ts";
 import { yardSfx } from "../sound.ts";
 import { S, toolHooks, toPage } from "../state.ts";
 import { flipAt, hold, pickFrom, raiseAt, setTool, takeAway, turnAt, usable, wayAt } from "../tools.ts";
+import { fellAt } from "../trees.ts";
 import { doNow } from "../yard.ts";
 import { cardOf, type Hands } from "./cards.ts";
 import { togglePanel } from "./panels.ts";
@@ -39,7 +40,7 @@ export function refAt(x: number, y: number): string | null {
   if (w.kind[i] !== NONE) return tileRef(i);
   const raw = w.land.deposit[i] ?? NONE;
   if (isItem(raw)) return itemRef(raw);
-  if (w.land.water[i] === 1 || w.land.trunk[i] === 1) return tileRef(i);
+  if (w.land.water[i] === 1 || redwoodAt(w, i)) return tileRef(i);
   return null;
 }
 
@@ -73,6 +74,7 @@ const HANDS: Hands = {
   raise: (x, y) => void raiseAt(x, y),
   way: (x, y, way) => void wayAt(x, y, way),
   buy: buyLand,
+  fell: fellAt,
   refuse: (why) => {
     yardSfx.no();
     toolHooks.said(`${why}.`);

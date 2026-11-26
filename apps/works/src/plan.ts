@@ -32,6 +32,7 @@ import {
   plotState,
   PYLON,
   RAW,
+  redwoodAt,
   SORTER,
   SPLITTER,
   STOP,
@@ -334,7 +335,7 @@ function numberOf(s: Seen, y: Yard, L: Layout, i: number, depot: number): number
     (s.ground[i] ?? 0) |
     ((s.edge[i] ?? 0) << 2) |
     ((land.water[i] ?? 0) << 4) |
-    ((land.trunk[i] ?? 0) << 5) |
+    ((redwoodAt(y, i) ? 1 : 0) << 5) |
     ((lies < RAW.length ? lies + 1 : 0) << 6) |
     ((s.under[i] ?? 0) << 30);
   if (k === NONE) return n >>> 0;

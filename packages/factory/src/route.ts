@@ -7,7 +7,7 @@ import { toward } from "./land.ts";
 import type { Piece } from "./pieces.ts";
 import { BELT, DEPOT, isMaker, type Kind, locked, NONE, TUNNEL } from "./tables.ts";
 import { ahead, takes } from "./wire.ts";
-import type { Yard } from "./yard.ts";
+import { redwoodAt, type Yard } from "./yard.ts";
 
 /** Where a leg of a run is laid, which way it goes, and its grade: what a leg of belt and a leg of tunnel both hold. */
 interface Laid {
@@ -123,7 +123,7 @@ function search(
     y.kind[i] === NONE &&
     owned[land.plot[i] ?? NONE] === true &&
     land.water[i] === 0 &&
-    land.trunk[i] === 0;
+    !redwoodAt(y, i);
   if (!clear(start)) return null;
   const digs = tunnels && locked(y.open, { build: TUNNEL }) === null;
   const into: Into = { target: y.kind[goal] !== NONE ? goal : -1, start, fronts };

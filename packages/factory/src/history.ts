@@ -29,13 +29,14 @@
  *   stood again as new: its
  *   settings, holding nothing, doing nothing; one of the pieces to hand as one. Putting back is not
  *   building: nothing asks whether it may be built now, and its Coins are the recorded opposite;
- * - pieces moved are moved back as one, with what they hold now.
+ * - pieces moved are moved back as one, with what they hold now;
+ * - a redwood the command felled stands again on its tiles, bare as the command left them.
  * The Coins go the other way: what the command cost is given back, and what it gave back is taken.
  * All or none: everything that can refuse (the entry's name, its check, the Coins; a move's own
  * refusal) is asked before anything changes, and nothing after that can refuse.
  *
  * An entry's bytes: its id (a count, then a byte each), what it is (a byte: 1 a move, 2 a stroke of
- * the brush, 4 too much to keep), the Coins it moved (a varint, zigzag), the check of its tiles after
+ * the brush, 4 too much to keep, 8 a redwood felled, its tiles the entry's), the Coins it moved (a varint, zigzag), the check of its tiles after
  * it (four bytes), the tiles it changed that held nothing before (a count, then each as the tiles
  * since the last less one), for a move the turns and corner that move the pieces back (a byte each),
  * for each piece that stood there, a word of what the command did to it (a count, then a varint each:
@@ -79,7 +80,7 @@ import {
 import { REASON } from "./reasons.ts";
 import { legPiece } from "./route.ts";
 import { CRATE, DEPOT, gradeOf, isKind, type Kind, NONE, TUNNEL } from "./tables.ts";
-import { changed, type Entry, holderOf, place, tunnelRow, vacate, type Yard } from "./yard.ts";
+import { changed, type Entry, holderOf, place, redwoodAt, standingTree, tunnelRow, vacate, type Yard } from "./yard.ts";
 
 /** The version of the Works' rules this was built with: the one the page and Leaf compare. */
 const RULES = rulesVersions().works;
@@ -99,7 +100,7 @@ export function stampOf(land: Land): string {
     h = Math.imul(h ^ v, 0x01000193);
   };
   for (const v of [land.w, land.h, ...land.depot]) mix(v);
-  for (const a of [land.deposit, land.water, land.trunk, land.plot]) for (let i = 0; i < a.length; i++) mix(a[i] ?? 0);
+  for (const a of [land.deposit, land.water, land.tree, land.plot]) for (let i = 0; i < a.length; i++) mix(a[i] ?? 0);
   for (const p of land.plots) for (const v of [p.plot, p.price, p.x, p.y, p.w, p.h]) mix(v);
   const stamp = `${RULES}.${(h >>> 0).toString(36)}`;
   STAMPS.set(land, stamp);
@@ -121,6 +122,7 @@ const UP = 1;
 const MOVED = 1;
 const STROKE = 2;
 const TOO_BIG = 4;
+const FELLED = 8;
 
 /** Why an Undo is refused. */
 const UNDO_SAYS = {
@@ -277,6 +279,11 @@ const tileOf = (y: Yard, p: { readonly x: number; readonly y: number }): number 
 const one = (y: Yard, a: { readonly x: number; readonly y: number }): number[] => [tileOf(y, a)];
 /** The tiles of the pieces on some tiles: a tunnel's both mouths. */
 const inArea = (y: Yard, a: { readonly tiles: readonly number[] }): number[] => tilesOf(y, piecesAt(y, a.tiles));
+/** Every tile of the redwood standing on the tile a command names, or none. */
+function treeOf(y: Yard, a: { readonly x: number; readonly y: number }): readonly number[] {
+  const t = standingTree(y, tileOf(y, a));
+  return t < 0 ? [] : (y.land.trees[t] ?? []);
+}
 /** A new tunnel's far mouth, where it would come up. */
 function tunnelEnd(y: Yard, a: ActOf<"build">): number[] {
   const exit = a.kind === TUNNEL ? tunnelExit(y, a.x, a.y, a.dir) : null;
@@ -308,6 +315,7 @@ const REACH: { readonly [D in Name]?: (y: Yard, a: ActOf<D>) => readonly number[
   way: one,
   first: one,
   wayIn: one,
+  fell: treeOf,
 };
 
 /** The tiles a command may change, or null for one with no Undo (`REACH`). */
@@ -330,14 +338,14 @@ export function before(y: Yard, a: Act): Before | null {
   return { tiles, was, made, back: { turns: (4 - a.turns) & 3, x: box.x, y: box.y } };
 }
 
-/** 32 bits of how the pieces on some tiles stand: everything a command sets, nothing ticks change. */
+/** 32 bits of how the pieces on some tiles stand, and whether a redwood does: everything a command sets, nothing ticks change. */
 function sumOf(y: Yard, tiles: readonly number[]): number {
   let h = 0x811c9dc5 | 0;
   const mix = (v: number): void => {
     h = Math.imul(h ^ v, 0x01000193);
   };
   for (const i of tiles) {
-    mix(i);
+    mix(redwoodAt(y, i) ? ~i : i);
     for (const part of ["kind", "dir", "grade", "tint", "shut", "first", "ins", "set", "free", "span"] as const)
       mix(y[part][i] ?? 0);
     mix(y.kind[i] === CRATE ? (y.holders.open[holderOf(y, i)] ?? 1) : -1);
@@ -410,20 +418,26 @@ function strokeOf(y: Yard, a: Act): Undoing | null {
   return u && (u.flags & STROKE) !== 0 ? u : null;
 }
 
-/** What a command done (`b` taken before it, `id` its id) changed, with the stroke it adds to: its entry, but for the check. */
-function undoing(y: Yard, b: Before, id: string, stroke: Undoing | null, coins: number, paint: boolean): Undone {
+/** What an entry is, a bit each, by what its command was (`name`, `b` taken before it). */
+const flagsOf = (b: Before, name: Name): number =>
+  (b.back ? MOVED : 0) | (name === "paint" ? STROKE : 0) | (name === "fell" ? FELLED : 0);
+
+/** What a command done (`b` taken before it, `id` its id, `name` what it was) changed, with the stroke it adds to: its entry, but for the check. */
+function undoing(y: Yard, b: Before, id: string, stroke: Undoing | null, coins: number, name: Name): Undone {
   // The pieces it took up: their tiles' `made` moved on. A stroke takes none up, but keeps what it had.
   const took = b.tiles.filter((i, k) => b.was.has(i) && y.made[i] !== b.made[k]);
   const up = new Set([
     ...took,
     ...(stroke?.was.flatMap((s, k) => ((stroke.masks[k] ?? 0) & UP ? [s.tile] : [])) ?? []),
   ]);
-  const done = b.back ? b.tiles : b.tiles.filter((i) => up.has(i) || !standsAs(y, i, b.was.get(i)));
+  // A move's tiles are all its own, and so are the tiles of a redwood felled: nothing stood there before or after.
+  const flags = flagsOf(b, name);
+  const done = flags & (MOVED | FELLED) ? b.tiles : b.tiles.filter((i) => up.has(i) || !standsAs(y, i, b.was.get(i)));
   // How the stroke's lines stood before it, over how this command found them.
   const was = new Map([...done.flatMap((i) => b.was.get(i) ?? []), ...(stroke?.was ?? [])].map((s) => [s.tile, s]));
   return {
     id: stroke?.id ?? id,
-    flags: (b.back ? MOVED : 0) | (paint ? STROKE : 0),
+    flags,
     coins: (stroke?.coins ?? 0) + coins,
     tiles: [...new Set([...done, ...(stroke?.tiles ?? [])])].toSorted((i, j) => i - j),
     was: [...was.values()].toSorted((p, q) => p.tile - q.tile),
@@ -446,7 +460,7 @@ export function after(y: Yard, a: Act, b: Before | null, changes: readonly CoinC
   // A stroke over the cap goes on as one that cannot be undone: no part of it is undone.
   if (stroke && stroke.flags & TOO_BIG) return;
   const coins = changes.reduce((n, c) => n + (c.reason === REASON.till ? 0 : c.amount), 0);
-  const u = undoing(y, b, id, stroke, coins, a.do === "paint");
+  const u = undoing(y, b, id, stroke, coins, a.do);
   if (u.tiles.length === 0 && u.coins === 0) return;
   const bytes = written(y, u);
   const kept = stroke ? y.history.slice(0, -1) : y.history;
@@ -495,7 +509,7 @@ function readEntry(bytes: Uint8Array, tiles: number): Undoing | null {
     const big = r.done && !r.over && (flags & ~(TOO_BIG | STROKE)) === 0;
     return big ? { id, flags, coins: 0, sum: 0, tiles: [], was: [], masks: [], back: null } : null;
   }
-  if ((flags & ~(MOVED | STROKE)) !== 0) return null;
+  if ((flags & ~(MOVED | STROKE | FELLED)) !== 0) return null;
   const zig = r.varint();
   const sum = (r.byte() | (r.byte() << 8) | (r.byte() << 16) | (r.byte() << 24)) >>> 0;
   const body = readBody(r, flags, tiles);
@@ -573,6 +587,12 @@ function putBack(y: Yard, u: Undoing): void {
     if (stays.has(s.tile)) SETTINGS.forEach((part, n) => (mask >> 1) & (1 << n) && part.to(y, s.tile, part.of(s)));
     else standBack(y, s);
   }
+  // A redwood felled stands again: every tile of the entry was one of its.
+  if (u.flags & FELLED)
+    for (const i of u.tiles) {
+      const t = y.land.tree[i] ?? -1;
+      if (t >= 0) y.felled[t] = 0;
+    }
 }
 
 /**

@@ -68,6 +68,7 @@ const UNDONE: ReadonlySet<string> = new Set([
   "way",
   "first",
   "wayIn",
+  "fell",
 ]);
 
 /** The Coins a command moved to the player, the till paid in with it left out. */
@@ -97,12 +98,12 @@ function readsBack(y: F.Yard): void {
   expect(back && [F.encode(back), F.check(back)]).toEqual([F.encode(y), F.check(y)]);
 }
 
-/** How every piece stands, as the player set it, and the pieces to hand: all Undo puts back. */
+/** How every piece stands, as the player set it, the pieces to hand and the redwoods felled: all Undo puts back. */
 function settings(y: F.Yard): string {
   const pieces = [...y.kind.keys()].flatMap((i) =>
     F.isKind(y.kind[i] ?? F.NONE) ? [[i, y.kind[i], y.dir[i], y.span[i], y.free[i], F.keptAt(y, i)]] : [],
   );
-  return JSON.stringify([pieces, Array.from(y.spare)]);
+  return JSON.stringify([pieces, Array.from(y.spare), Array.from(y.felled)]);
 }
 
 /** What the piece on a tile carries, holds and is doing: its running state, none of which Undo sets. */
@@ -165,8 +166,10 @@ function undoneAll(
   seed: number,
   ticks: (y: F.Yard, r: () => number) => void = () => {},
 ): { kinds: Set<string>; short: number; undone: number } {
-  // Its owner there at its last tick, with nothing in its till or to undo: only the commands move anything.
+  // Its owner there at its last tick, with nothing in its till or to undo: only the commands move
+  // anything. It owns the Meadow where it may buy it, so that a redwood may be felled.
   const y = start;
+  give(y, { do: "buyPlot", plot: "meadow" });
   y.till = 0;
   y.history = [];
   const r = rng(seed);
@@ -264,6 +267,7 @@ describe("Undo", () => {
         "way",
         "first",
         "wayIn",
+        "fell",
       ]),
     );
   });

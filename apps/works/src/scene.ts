@@ -79,6 +79,7 @@ import { lampsIn } from "./lamps.ts";
 import { armsAt, asIf, type Layout, layout, pylonTop, sendsRight, sortSide } from "./layout.ts";
 import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, tileNudge } from "./state.ts";
 import { cameFrom, dirAt, hooded } from "./tiles.ts";
+import { drawShades, eachTrunk } from "./trees.ts";
 
 /** What the frame needs to know about the moment: how far into the next tick it is, and how the yard is going. */
 export interface Moment {
@@ -1251,6 +1252,7 @@ function floorLayer(f: Frame): void {
       g.restore();
     }
 
+  drawShades(g, f.art, cx, cy, W, H);
   for (let ty = ty0; ty <= ty1; ty++)
     for (let tx = tx0; tx <= tx1; tx++)
       if (land.water[ty * land.w + tx] === 1) glint(g, land, tx, ty, tx * TILE - cx, ty * TILE - cy, S.t);
@@ -1376,12 +1378,7 @@ function standingLayer(f: Frame): void {
       if (fly) put(fly, dl + DEPOT_ART.fly.x - 6, dt + DEPOT_ART.fly.y - 6, dz + 0.1);
     }
   }
-  for (const tr of art.trunks) {
-    const x = tr.x - cx;
-    const y = tr.y - cy;
-    if (x < -40 || x > W + 40 || y < -4 || y > H + 80) continue;
-    stand(tr.s, x, y, tr.y);
-  }
+  eachTrunk(art, cx, cy, W, H, stand);
   for (let n = 0; n + 2 < L.fences.length; n += 3) {
     const fx = L.fences[n] ?? 0;
     const fy = L.fences[n + 1] ?? 0;

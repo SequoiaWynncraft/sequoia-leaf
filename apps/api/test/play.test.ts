@@ -38,6 +38,7 @@ import {
   readAnswer,
   readCommand,
   readView as readYardView,
+  redwoodAt,
   route,
   stepTo,
   swapRefusal,
@@ -1542,6 +1543,39 @@ describe("an Undo in the Works", () => {
       { amount: 60, reason: "Undone in the Works", game: "works", key: expect.any(String) },
     ]);
     expect([await coinsOf(alice), (await yardShown()).kind]).toEqual([300, before.kind]);
+  });
+
+  it("fells a redwood on a plot the yard owns for 100 Coins, and refuses one on a plot it does not; undone, the redwood stands and the Coins come back", async () => {
+    // Alice's yard owns the Meadow, as a staging step writes it over: its redwood stands at 22, 33.
+    const w = createYard({ seed: 7, tier: 1 });
+    const read = readCommand({ tick: w.tick, do: "buyPlot", plot: "meadow" });
+    if (!read || "refused" in playWorks(w, read)) throw new Error("the Meadow was not bought");
+    w.history = [];
+    w.at = clock.now;
+    await yardShown();
+    const text = FACTORY.encode(w);
+    await services.query(
+      (sql) =>
+        sql`UPDATE play_state SET rev = rev + 1, state = ${text}, updated_at = ${clock.now} WHERE player_id = ${alice}`,
+    );
+    const tree = 22 + 33 * w.land.w;
+    expect((await works([{ do: "fell", x: 10, y: 14 }])).results).toEqual([{ id: `u-${ids}`, refused: "cannot_fell" }]);
+    expect((await works([{ do: "fell", x: 23, y: 34 }])).results).toEqual([{ id: `u-${ids}`, notes: [] }]);
+    expect((await entries(alice)).slice(-1)).toEqual([
+      { amount: -100, reason: "Felled in the Works", game: "works", key: expect.any(String) },
+    ]);
+    const felled = await yardShown();
+    expect([await coinsOf(alice), redwoodAt(felled, tree)]).toEqual([200, false]);
+    expect((await works([{ do: "build", kind: "belt", x: 22, y: 33, dir: 0 }])).results).toEqual([
+      { id: `u-${ids}`, notes: [] },
+    ]);
+    const undo = async () => works([{ do: "undo", entry: (await yardShown()).history.at(-1)?.id }]);
+    await undo();
+    await undo();
+    expect((await entries(alice)).slice(-1)).toEqual([
+      { amount: 100, reason: "Undone in the Works", game: "works", key: expect.any(String) },
+    ]);
+    expect([await coinsOf(alice), redwoodAt(await yardShown(), tree)]).toEqual([300, true]);
   });
 
   it("is refused whole when another game has spent the Coins it would take back since: the yard and the ledger as they were", async () => {

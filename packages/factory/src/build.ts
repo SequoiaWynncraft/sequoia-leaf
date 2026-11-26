@@ -2,6 +2,7 @@
  * Building in the yard, taking things away, turning and setting pieces, and buying plots.
  * Everything that costs Coins is told the balance and says what it took.
  */
+import { FELL_PRICE } from "./content/plots.ts";
 import { besideWater, type Plotted, tileAt, touching } from "./land.ts";
 import { join } from "./lines.ts";
 import {
@@ -31,7 +32,20 @@ import {
   TUNNEL,
   WHEEL,
 } from "./tables.ts";
-import { changed, enough, held, holderOf, holds, place, take, tunnelRow, vacate, type Yard } from "./yard.ts";
+import {
+  changed,
+  enough,
+  held,
+  holderOf,
+  holds,
+  place,
+  redwoodAt,
+  standingTree,
+  take,
+  tunnelRow,
+  vacate,
+  type Yard,
+} from "./yard.ts";
 
 /** What came of trying to spend Coins: what it cost, or why not, in plain words. */
 export type Spent = { readonly ok: true; readonly cost: number } | { readonly ok: false; readonly why: string };
@@ -71,7 +85,7 @@ function ground(y: Yard, x: number, z: number): string | null {
   const plot = y.land.plots[y.land.plot[i] ?? NONE];
   if (!plot || !y.plots.includes(plot.plot)) return plot ? `${plot.name} is not the yard's yet` : "That is off the map";
   if (y.land.water[i] === 1) return "Nothing can be built on the stream";
-  if (y.land.trunk[i] === 1) return "Nothing can be built on a tree";
+  if (redwoodAt(y, i)) return "Nothing can be built on a tree";
   return null;
 }
 
@@ -469,6 +483,23 @@ export function plotRefusal(y: Yard, id: Plot, coins: number): string | null {
   if (state === "owned") return "You already own that plot";
   if (state === "not yet") return why;
   return coins < (plotOf(y, id)?.price ?? 0) ? "Not enough Coins" : null;
+}
+
+/** Why the redwood on a tile cannot be felled with `coins` in the purse, or nothing if it can. */
+export function fellRefusal(y: Yard, x: number, z: number, coins: number): string | null {
+  const i = at(y, x, z);
+  if (i < 0 || !redwoodAt(y, i)) return "There is no redwood here";
+  const plot = y.land.plots[y.land.plot[i] ?? NONE];
+  if (!plot || !y.plots.includes(plot.plot)) return plot ? `${plot.name} is not the yard's yet` : "That is off the map";
+  return coins < FELL_PRICE ? "Not enough Coins" : null;
+}
+
+/** Fells the redwood on a tile, every tile of it, and says what it cost. */
+export function fell(y: Yard, x: number, z: number, coins: number): Spent {
+  const why = fellRefusal(y, x, z, coins);
+  if (why !== null) return { ok: false, why };
+  y.felled[standingTree(y, at(y, x, z))] = 1;
+  return { ok: true, cost: FELL_PRICE };
 }
 
 /** Buys a plot and says what it cost. */

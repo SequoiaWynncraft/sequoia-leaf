@@ -12,7 +12,9 @@ import {
   build,
   buyPlot,
   type Dir,
+  fell,
   isDir,
+  type Refund,
   remove,
   setFirst,
   setIn,
@@ -21,6 +23,7 @@ import {
   setSide,
   setSort,
   setWay,
+  type Spent,
   tipOut,
   turn,
 } from "./build.ts";
@@ -115,6 +118,8 @@ interface Carries {
   first: At & { readonly way: number | null };
   wayIn: At & { readonly way: number; readonly on: boolean };
   buyPlot: { readonly plot: Plot };
+  /** Any tile of the redwood. */
+  fell: At;
   take: { readonly node: Goal };
   queue: { readonly node: Goal };
   unqueue: { readonly node: Goal };
@@ -164,6 +169,13 @@ function priced(y: Yard, price: number, reason: string, back: string = REASON.lo
   if (price < 0) return [...paid, change(y, -price, back, true)];
   return price > 0 ? [...paid, change(y, -price, reason, false)] : paid;
 }
+
+/** Done, if the rules spent Coins, with what it cost paid as `reason`; else refused with their reason. */
+const spent = (y: Yard, did: Spent, reason: string, no: (why: string) => Turned): Did =>
+  did.ok ? done(priced(y, did.cost, reason)) : no(did.why);
+/** Done, if the rules took something away, with what came back given free; else refused with their reason. */
+const refunded = (y: Yard, did: Refund, no: (why: string) => Turned): Did =>
+  did.ok ? done(did.refund > 0 ? [change(y, did.refund, REASON.remove, true)] : []) : no(did.why);
 
 const goalId = (g: Goal): string => GOALS[g]?.id ?? "";
 
@@ -303,32 +315,21 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
     refused: "nothing_to_take_away",
     read: (_v, f) => f.spot && { do: "remove", ...f.spot },
     write: spot,
-    act: (y, a, _coins, no) => {
-      const did = remove(y, a.x, a.y);
-      if (!did.ok) return no(did.why);
-      return done(did.refund > 0 ? [change(y, did.refund, REASON.remove, true)] : []);
-    },
+    act: (y, a, _coins, no) => refunded(y, remove(y, a.x, a.y), no),
   },
   clear: {
     refused: "nothing_to_clear",
     lock: needs({ use: "select" }),
     read: (_v, f) => f.tiles && { do: "clear", tiles: f.tiles },
     write: (a) => ({ tiles: a.tiles }),
-    act: (y, a, _coins, no) => {
-      const did = clear(y, a.tiles);
-      if (!did.ok) return no(did.why);
-      return done(did.refund > 0 ? [change(y, did.refund, REASON.remove, true)] : []);
-    },
+    act: (y, a, _coins, no) => refunded(y, clear(y, a.tiles), no),
   },
   upgrade: {
     refused: "cannot_upgrade",
     lock: needs({ use: "upgrade" }),
     read: (_v, f) => f.tiles && { do: "upgrade", tiles: f.tiles },
     write: (a) => ({ tiles: a.tiles }),
-    act: (y, a, coins, no) => {
-      const did = upgrade(y, a.tiles, coins);
-      return did.ok ? done(priced(y, did.cost, REASON.upgrade)) : no(did.why);
-    },
+    act: (y, a, coins, no) => spent(y, upgrade(y, a.tiles, coins), REASON.upgrade, no),
   },
   saveBlueprint: {
     refused: "cannot_save_blueprint",
@@ -434,6 +435,12 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
         { kind: LOGGED.worksPlot, data: { plot: plotName(a.plot), price: did.cost } },
       ]);
     },
+  },
+  fell: {
+    refused: "cannot_fell",
+    read: (_v, f) => f.spot && { do: "fell", ...f.spot },
+    write: spot,
+    act: (y, a, coins, no) => spent(y, fell(y, a.x, a.y, coins), REASON.fell, no),
   },
   take: {
     refused: "cannot_take",

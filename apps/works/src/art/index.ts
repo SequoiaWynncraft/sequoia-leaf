@@ -42,8 +42,10 @@ export interface Art {
   ground: Ground;
   item: ItemArt;
   m: Machines;
-  /** The redwoods that stand in the yard, each with where its foot goes. */
-  trunks: { s: Sprite; x: number; y: number }[];
+  /** Each of the land's redwoods, by its place in the land's `trees`, with where its foot goes. */
+  trunks: { s: Sprite; x: number; y: number; tree: number }[];
+  /** The shade a standing redwood throws at its own foot, its corner `SHADE` from the foot. */
+  shade: HTMLCanvasElement;
   /** Bushes and ferns for uncleared land, and where they grow on each plot (by the plot's place in the land's list). */
   growth: Sprite[];
   under: Under[][];
@@ -74,7 +76,7 @@ function undergrowth(land: Land): Under[][] {
     for (let ty = plot.y; ty < plot.y + plot.h; ty++)
       for (let tx = plot.x; tx < plot.x + plot.w; tx++) {
         const i = ty * land.w + tx;
-        if (land.water[i] === 1 || land.trunk[i] === 1) continue;
+        if (land.water[i] === 1 || (land.tree[i] ?? -1) >= 0) continue;
         // What lies in the ground shows through here and there, so a plot says what it holds.
         const thick = vnoise(tx / 2.6, ty / 2.6, 130 + n);
         const keep = (land.deposit[i] === NONE ? 0.62 : 0.3) + (thick - 0.5) * 0.7;
@@ -89,17 +91,26 @@ function undergrowth(land: Land): Under[][] {
   });
 }
 
-function redwoods(land: Land): Art["trunks"] {
-  const out: Art["trunks"] = [];
-  for (let ty = 0; ty < land.h; ty++)
-    for (let tx = 0; tx < land.w; tx++) {
-      const here = land.trunk[ty * land.w + tx] === 1;
-      const first = here && land.trunk[ty * land.w + tx - 1] !== 1 && land.trunk[(ty - 1) * land.w + tx] !== 1;
-      if (!first) continue;
-      const s = trunk(12, 70, 3 + tx * 1.3 + ty * 0.7, 58, 30);
-      out.push({ s, x: (tx + 1) * TILE, y: (ty + 2) * TILE - 1 });
-    }
-  return out;
+/** Each redwood's trunk, drawn from its north-west tile, its foot at the bottom of its second row. */
+const redwoods = (land: Land): Art["trunks"] =>
+  land.trees.flatMap((tiles, tree) => {
+    const first = tiles[0];
+    if (first === undefined) return [];
+    const tx = first % land.w;
+    const ty = Math.floor(first / land.w);
+    const s = trunk(12, 70, 3 + tx * 1.3 + ty * 0.7, 58, 30);
+    return [{ s, x: (tx + 1) * TILE, y: (ty + 2) * TILE - 1, tree }];
+  });
+
+/** Where the corner of a redwood's shade is, from its foot. */
+export const SHADE = { x: -TILE - 6, y: -4 } as const;
+
+/** The shade at a redwood's foot: rows narrowing downward, each a third dark. */
+function rootShade(): HTMLCanvasElement {
+  const { c, g } = makeCanvas(44, 7);
+  g.fillStyle = "rgba(20,10,28,0.3)";
+  for (let k = 0; k < 7; k++) g.fillRect(k, k, 44 - k * 2, 1);
+  return c;
 }
 
 function signMaker(): (price: number) => Sprite {
@@ -314,6 +325,7 @@ export function makeArt(land: Land): Art {
     item,
     m,
     trunks: redwoods(land),
+    shade: rootShade(),
     growth: [
       bush(18, 12, 301, WILD),
       bush(24, 15, 302, WILD),

@@ -279,23 +279,10 @@ function flowers(g: Ctx, land: Land): void {
   for (let ty = 0; ty < land.h; ty++)
     for (let tx = 0; tx < land.w; tx++) {
       const i = ty * land.w + tx;
-      if (rawAt(land, i) || land.water[i] || land.trunk[i] || hash(tx, ty, 97) < 0.86) continue;
+      if (rawAt(land, i) || land.water[i] || (land.tree[i] ?? -1) >= 0 || hash(tx, ty, 97) < 0.86) continue;
       if (Math.hypot(tx - land.depot[0], ty - land.depot[1]) < 6) continue;
       const pic = pics[Math.floor(hash(tx, ty, 98) * pics.length)];
       if (pic) g.drawImage(pic, tx * TILE + MARGIN.l + 3 + Math.floor(hash(tx, ty, 99) * 8), ty * TILE + MARGIN.t + 5);
-    }
-}
-
-/** The shade a standing redwood throws at its own foot. */
-function rootShade(g: Ctx, land: Land): void {
-  g.fillStyle = "rgba(20,10,28,0.3)";
-  for (let ty = 0; ty < land.h; ty++)
-    for (let tx = 0; tx < land.w; tx++) {
-      const here = land.trunk[ty * land.w + tx] === 1;
-      const first = here && land.trunk[ty * land.w + tx - 1] !== 1 && land.trunk[(ty - 1) * land.w + tx] !== 1;
-      if (!first) continue;
-      for (let k = 0; k < 7; k++)
-        g.fillRect(tx * TILE + MARGIN.l - 6 + k, (ty + 2) * TILE + MARGIN.t - 5 + k, 44 - k * 2, 1);
     }
 }
 
@@ -304,7 +291,6 @@ export function paintGround(land: Land): Ground {
     const c = floor(land, wild);
     const g = must(c.getContext("2d"), "2d context");
     if (!wild) flowers(g, land);
-    rootShade(g, land);
     deposits(g, land);
     forest(g, land);
     return c;

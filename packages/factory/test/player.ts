@@ -76,7 +76,7 @@ export class Player {
     const at = this.spot();
     const orders = y.board.map((o) => o.id);
     const things = [...F.ITEMS, "moss"];
-    switch (this.int(27)) {
+    switch (this.int(28)) {
       case 0:
         return { do: "build", kind: this.pick([...F.KINDS, "cart"]), dir: this.int(4), ...this.grade(), ...at };
       case 1:
@@ -184,6 +184,12 @@ export class Player {
       case 26:
         // Undo, mostly of what the yard would undo next; now and then of something else, as another tab would ask.
         return { do: "undo", entry: this.r() < 0.9 ? (y.history.at(-1)?.id ?? "") : `elsewhere-${this.int(1e6)}` };
+      case 27: {
+        // Mostly a tile of a redwood still standing, on the yard's land or not; now and then anywhere.
+        const standing = y.land.trees.flatMap((tiles) => tiles.filter((i) => F.redwoodAt(y, i)));
+        const i = this.r() < 0.85 ? this.pick(standing) : undefined;
+        return { do: "fell", ...(i === undefined ? at : { x: i % y.land.w, y: Math.floor(i / y.land.w) }) };
+      }
       default:
         return (
           this.pick<Rec>([

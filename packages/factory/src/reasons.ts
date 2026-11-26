@@ -7,5 +7,6 @@ export const REASON = {
   lower: "Lowered in the Works",
   upgrade: "Upgraded in the Works",
   buyPlot: "A plot for the Works",
+  fell: "Felled in the Works",
   undo: "Undone in the Works",
 } as const;

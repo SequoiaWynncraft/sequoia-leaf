@@ -4,7 +4,7 @@
  * clock, the power put by, the till and its counter, the goals (those done, in order, the node in
  * hand and those in line after it, the line of research, and what each goal not done has been
  * given) and the board (each order's wants, what came in, its pay, its words and when it began to
- * count), the depot's books (what awards and the standing are read from), what was seen at the
+ * count), the plots owned and the redwoods felled, the depot's books (what awards and the standing are read from), what was seen at the
  * owner's last command, the pieces to hand, the blueprints, what Undo would undo (each entry's bytes:
  * its id is worked out from them), and every part of every piece, tile by
  * tile, numbered by the tables. Every number that may pass 32 bits (the clock, the counters, the
@@ -68,6 +68,12 @@ function mixKept(y: Yard, mix: (v: number) => void): void {
   for (const { bytes } of y.history) mixBytes(bytes, mix);
 }
 
+/** Mixes in the plots owned, in the order they were bought, and each redwood felled; making nothing. */
+function mixLand(y: Yard, mix: (v: number) => void): void {
+  for (let k = 0; k < y.plots.length; k++) mix((y.plots[k] ?? 0) + 32);
+  for (let t = 0; t < y.felled.length; t++) if (y.felled[t] === 1) mix(0x10000 + t);
+}
+
 /** The yard in 32 bits. */
 export function check(y: Yard): number {
   let h = 0x811c9dc5 | 0;
@@ -119,7 +125,7 @@ export function check(y: Yard): number {
   num(y.seen.tick);
   num(y.seen.till);
   tally(y.seen.depot);
-  for (const p of y.plots) mix(p + 32);
+  mixLand(y, mix);
   bytes(y.spare);
   mixKept(y, mix);
   tally(y.depot);
