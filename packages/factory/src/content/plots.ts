@@ -8,6 +8,9 @@
  *   ~  the stream            T  a redwood (nothing is built on one)        D  the depot
  */
 
+/** Coins to fell a redwood that stands on a plot the yard owns: its tiles are then ground like any other. */
+export const FELL_PRICE = 100;
+
 export const PLOT_W = 16;
 export const PLOT_H = 12;
 

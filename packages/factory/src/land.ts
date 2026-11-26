@@ -23,9 +23,15 @@ export interface Land {
   readonly h: number;
   /** What a gatherer would gather at each tile, or `NONE`. */
   readonly deposit: Uint8Array;
-  /** 1 where the stream runs, and 1 where a redwood stands. Nothing is built on either. */
+  /** 1 where the stream runs. Nothing is built on it. */
   readonly water: Uint8Array;
-  readonly trunk: Uint8Array;
+  /**
+   * Which redwood grows on each tile, as a place in `trees`, or -1. Whether it still stands is the
+   * yard's to say (`redwoodAt`): a yard may fell one.
+   */
+  readonly tree: Int32Array;
+  /** Each redwood's tiles, two by two where they can be, from its north-west corner. */
+  readonly trees: readonly (readonly number[])[];
   /** Which plot each tile is on, as a place in `plots`, or `NONE`. */
   readonly plot: Uint8Array;
   readonly plots: readonly Plotted[];
@@ -37,16 +43,37 @@ export interface Land {
   readonly step: readonly [number, number, number, number];
 }
 
-/** The parts a land is made from; the rest is worked out. */
-export type LandParts = Omit<Land, "edge" | "step">;
+/** The parts a land is made from, with `trunk` 1 on each tile a redwood grows on; the rest is worked out. */
+export type LandParts = Omit<Land, "edge" | "step" | "tree" | "trees"> & { readonly trunk: Uint8Array };
 
 export function landOf(parts: LandParts): Land {
+  const { trunk, ...rest } = parts;
   const { w, h } = parts;
   const edge = new Uint8Array(w * h);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++)
       edge[y * w + x] = (x === w - 1 ? 1 : 0) | (y === h - 1 ? 2 : 0) | (x === 0 ? 4 : 0) | (y === 0 ? 8 : 0);
-  return { ...parts, edge, step: [1, w, -1, -w] };
+  return { ...rest, ...redwoods(w, h, trunk, parts.plot), edge, step: [1, w, -1, -w] };
+}
+
+/**
+ * The redwoods a land's trunks make: read across and down, each trunk tile not yet in one begins
+ * one, which takes the trunk tiles of the two by two from it that no other has, on its own plot. So
+ * every trunk tile is in exactly one redwood, and a redwood never spans two plots.
+ */
+function redwoods(w: number, h: number, trunk: Uint8Array, plotAt: Uint8Array): Pick<Land, "tree" | "trees"> {
+  const tree = new Int32Array(w * h).fill(-1);
+  const trees: number[][] = [];
+  for (let i = 0; i < w * h; i++) {
+    if (trunk[i] !== 1 || tree[i] !== -1) continue;
+    const x = i % w;
+    const own = [i, i + 1, i + w, i + w + 1].filter(
+      (j, k) => (k % 2 === 0 || x + 1 < w) && j < w * h && trunk[j] === 1 && tree[j] === -1 && plotAt[j] === plotAt[i],
+    );
+    for (const j of own) tree[j] = trees.length;
+    trees.push(own);
+  }
+  return { tree, trees };
 }
 
 const LETTER: Readonly<Record<string, string>> = {

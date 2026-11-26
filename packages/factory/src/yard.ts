@@ -223,6 +223,11 @@ export interface Yard {
   seen: Seen;
   /** Plots owned, in the order they were bought. */
   plots: Plot[];
+  /**
+   * 1 for each of the land's redwoods the yard has felled (`fell`), by its place in the land's
+   * `trees`. Every rule asks whether one stands on a tile through `redwoodAt`, never the land alone.
+   */
+  readonly felled: Uint8Array;
   /** The pieces to hand that are not standing, by kind. */
   readonly spare: Uint8Array;
   blueprints: (Print | null)[];
@@ -318,6 +323,7 @@ export function emptyYard(land: Land, tier = 0): Yard {
     away: null,
     seen: { tick: 0, till: 0, depot: counts() },
     plots: [plot("yard")],
+    felled: new Uint8Array(land.trees.length),
     spare: Uint8Array.from(STARTING),
     blueprints: Array.from({ length: BLUEPRINTS_MOST }, () => null),
     done,
@@ -389,6 +395,17 @@ export function drain(y: Yard): News[] {
   y.news = [];
   return news;
 }
+
+// ---------- redwoods ----------
+
+/** The redwood standing on a tile, as its place in the land's `trees`; -1 where none grows, or the yard felled it. */
+export function standingTree(y: Yard, i: number): number {
+  const t = y.land.tree[i] ?? -1;
+  return t >= 0 && y.felled[t] !== 1 ? t : -1;
+}
+
+/** Whether a redwood stands on a tile, as the yard has it: the one way anything asks. */
+export const redwoodAt = (y: Yard, i: number): boolean => standingTree(y, i) >= 0;
 
 // ---------- rows ----------
 

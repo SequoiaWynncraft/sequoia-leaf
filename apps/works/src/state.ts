@@ -233,6 +233,8 @@ export const S: {
   readonly picked: number;
   /** Plots being cleared before the member's eyes: when each began, in screen seconds, and where from. */
   clearing: Map<Plot, { at: number; x: number; y: number }>;
+  /** Redwoods being felled before the member's eyes, by their place in the land's `trees`: when each began, in screen seconds. */
+  felling: Map<number, number>;
   /** Which panel is open. */
   panel: string | null;
   /** The nudge being said (`teach.ts`): over its tile, or beside the part of the interface it is about. */
@@ -280,6 +282,7 @@ export const S: {
     return pinnedTile();
   },
   clearing: new Map(),
+  felling: new Map(),
   panel: null,
   nudge: null,
 };

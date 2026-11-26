@@ -1350,7 +1350,7 @@ export class Builder {
   /** Ground a piece may stand on: the yard's own, clear, not the stream and not a redwood. */
   private free(i: number): boolean {
     const { land } = this.y;
-    if (i < 0 || this.y.kind[i] !== F.NONE || land.water[i] === 1 || land.trunk[i] === 1) return false;
+    if (i < 0 || this.y.kind[i] !== F.NONE || land.water[i] === 1 || F.redwoodAt(this.y, i)) return false;
     const plot = land.plots[land.plot[i] ?? F.NONE];
     return plot !== undefined && this.y.plots.includes(plot.plot);
   }

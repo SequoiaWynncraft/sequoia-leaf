@@ -11,6 +11,8 @@ import {
   costOf,
   CRATE,
   DEPOT,
+  FELL_PRICE,
+  fellRefusal,
   FUEL,
   GATHERER,
   GIVES,
@@ -45,6 +47,7 @@ import {
   ready,
   RECIPE,
   recipesFor,
+  redwoodAt,
   RIGHT,
   SORTER,
   SPLITTER,
@@ -225,7 +228,14 @@ function tilePrint(i: number): StandingPrint | GroundPrint | null {
   const k = w.kind[i] ?? NONE;
   if (isKind(k)) return standingPrint(i, k);
   if (w.land.water[i] === 1) return { card: "ground", ground: "stream" };
-  if (w.land.trunk[i] === 1) return { card: "ground", ground: "redwood" };
+  if (redwoodAt(w, i)) {
+    const x = i % w.land.w;
+    const y = Math.floor(i / w.land.w);
+    // Fell shows where the rules would let the yard fell it with Coins enough: on its own land, and not on a visit.
+    const may = S.visiting === null && fellRefusal(w, x, y, Infinity) === null;
+    const fell = may ? { x, y, price: FELL_PRICE, short: Math.max(0, FELL_PRICE - coins()) } : null;
+    return { card: "ground", ground: "redwood", fell };
+  }
   return null;
 }
 

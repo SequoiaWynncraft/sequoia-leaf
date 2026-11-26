@@ -736,7 +736,7 @@ export function map(y: F.Yard): string {
       if (k === F.BELT) row += ">v<^"[y.dir[i] ?? 0] ?? "?";
       else if (k !== F.NONE) row += K[k] ?? "?";
       else if (y.land.water[i] === 1) row += "~";
-      else if (y.land.trunk[i] === 1) row += "T";
+      else if (F.redwoodAt(y, i)) row += "T";
       else if (F.isItem(dep)) row += L[F.itemName(dep)] ?? "?";
       else row += lit[i] === 1 ? "." : " ";
     }

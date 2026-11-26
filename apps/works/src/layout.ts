@@ -25,6 +25,7 @@ import {
   type Plotted,
   PYLON,
   REACH,
+  redwoodAt,
   RIGHT,
   SORTER,
   sortWay,
@@ -253,7 +254,7 @@ function signs(y: Yard, owned: readonly boolean[]): Sign[] {
   const clear = (tx: number, ty: number): boolean => {
     if (!on(tx, ty) || land.water[ty * land.w + tx] === 1) return false;
     for (let z = ty - 1; z <= ty + 4; z++)
-      for (let x = tx - 2; x <= tx + 2; x++) if (on(x, z) && land.trunk[z * land.w + x] === 1) return false;
+      for (let x = tx - 2; x <= tx + 2; x++) if (on(x, z) && redwoodAt(y, z * land.w + x)) return false;
     return true;
   };
   land.plots.forEach((plot, n) => {

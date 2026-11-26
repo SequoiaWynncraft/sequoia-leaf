@@ -100,7 +100,7 @@ import {
   unlocks,
   wantsGiven,
 } from "./goal.ts";
-import { groundCard, type GroundPrint, plotCard, type PlotHands, type PlotPrint } from "./land.ts";
+import { groundCard, type GroundPrint, type LandHands, plotCard, type PlotPrint } from "./land.ts";
 import type { Flow } from "./numbers.ts";
 import { fitted, partsWords, TOOL_ICON, yardIcon } from "./parts.ts";
 import { itemRef, machineRef, nodeRef, pictureRef, plotRef } from "./refs.ts";
@@ -272,7 +272,7 @@ export type Print =
   | GiftPrint;
 
 /** What a card's buttons do: the page's own tools, handed in, so that drawing a card reaches no yard. */
-export interface Hands extends PlotHands {
+export interface Hands extends LandHands {
   /** Does a command (a recipe, a crate shut or opened, emptying), and says whether it was done. */
   act(a: Act): boolean;
   turn(x: number, y: number): void;
@@ -721,7 +721,7 @@ export function cardOf(art: Art, p: Print, hands: Hands): Description | null {
     case "standing":
       return standingCard(art, p, hands);
     case "ground":
-      return groundCard(p);
+      return groundCard(p, hands);
     case "plot":
       return plotCard(p, hands);
     case "node":

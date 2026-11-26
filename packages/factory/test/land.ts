@@ -159,7 +159,7 @@ export function widened(land: F.Land, w: number, h: number): F.Land {
     for (let x = 0; x < land.w; x++) {
       deposit[y * w + x] = land.deposit[y * land.w + x] ?? F.NONE;
       water[y * w + x] = land.water[y * land.w + x] ?? 0;
-      trunk[y * w + x] = land.trunk[y * land.w + x] ?? 0;
+      trunk[y * w + x] = (land.tree[y * land.w + x] ?? -1) >= 0 ? 1 : 0;
     }
   return oneplot(w, h, deposit, water, trunk, land.depot);
 }

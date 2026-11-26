@@ -1,6 +1,7 @@
 /**
- * The cards of the land itself: the stream and a redwood, where nothing can be built, and a plot,
- * with what lies in its ground and whether it is for sale. A part of the yard's cards (`cards.ts`).
+ * The cards of the land itself: the stream and a redwood, where nothing can be built (a redwood on
+ * the yard's own land can be felled), and a plot, with what lies in its ground and whether it is for
+ * sale. A part of the yard's cards (`cards.ts`).
  */
 import type { Item, Plot } from "@sequoia-leaf/factory";
 import { type Block, close, type Description } from "@sequoia-leaf/kit/card.ts";
@@ -10,10 +11,14 @@ import { coinsText, whole } from "@sequoia-leaf/kit/say.ts";
 import { itemRef } from "./refs.ts";
 
 /** A tile with nothing on it that has a card: the stream, or a redwood. */
-export interface GroundPrint {
-  readonly card: "ground";
-  readonly ground: "stream" | "redwood";
-}
+export type GroundPrint =
+  | { readonly card: "ground"; readonly ground: "stream" }
+  | {
+      readonly card: "ground";
+      readonly ground: "redwood";
+      /** Where the yard may fell it (on its own plot, not on a visit): the tile asked about, the price, and how many Coins short the purse is. */
+      readonly fell: { readonly x: number; readonly y: number; readonly price: number; readonly short: number } | null;
+    };
 
 export interface PlotPrint {
   readonly card: "plot";
@@ -32,28 +37,53 @@ export interface PlotPrint {
   readonly visiting: boolean;
 }
 
-export const groundCard = (p: GroundPrint): Description =>
-  p.ground === "stream"
-    ? {
-        name: "The stream",
-        tag: "Nothing can be built on it. A waterwheel beside it makes power, and a tunnel can go under it.",
-      }
-    : { name: "A redwood", tag: "Nothing can be built on it. Belts go round it, or under it by tunnel." };
-
 /** What a button that buys says once it has been pressed: the second press buys. */
 export const AGAIN = "Press again to buy";
 
-/** What a plot's card does: buys the plot, and says why a button will not do what it says, with its sound. */
-export interface PlotHands {
+/** What the land's cards do: buy a plot, fell a redwood, and say why a button will not do what it says, with its sound. */
+export interface LandHands {
   buy(plot: Plot): boolean;
+  fell(x: number, y: number): boolean;
   refuse(why: string): void;
+}
+
+export function groundCard(p: GroundPrint, hands: Pick<LandHands, "fell" | "refuse">): Description {
+  if (p.ground === "stream")
+    return {
+      name: "The stream",
+      tag: "Nothing can be built on it. A waterwheel beside it makes power, and a tunnel can go under it.",
+    };
+  const fell = p.fell;
+  return {
+    name: "Redwood",
+    tag: "Nothing can be built on it. Belts go round it, or under it by tunnel.",
+    blocks: fell && fell.short > 0 ? [{ body: `You need ${coinsText(fell.short)} more.` }] : [],
+    actions: fell
+      ? [
+          {
+            label: "Fell",
+            look: fell.short === 0 ? "sm wide" : "sm wide off",
+            after: amount("coin", fell.price),
+            ...(fell.short === 0
+              ? {
+                  ask: { again: "Press again to fell", price: fell.price },
+                  on: () => {
+                    // Felled, there is nothing for the card to be about: it is put away.
+                    if (hands.fell(fell.x, fell.y)) close();
+                  },
+                }
+              : { on: () => hands.refuse("Not enough Coins") }),
+          },
+        ]
+      : [],
+  };
 }
 
 /**
  * A plot's card. Its Buy, drawn with enough Coins, asks to be pressed again and buys; drawn short,
  * it buys nothing whatever comes in while it is pressed, and says why.
  */
-export function plotCard(p: PlotPrint, hands: PlotHands): Description {
+export function plotCard(p: PlotPrint, hands: Pick<LandHands, "buy" | "refuse">): Description {
   const enough = p.short === 0;
   const blocks: Block[] = [
     ...(p.bank ? [{ body: "The stream runs through it. A waterwheel must be beside the stream." }] : []),

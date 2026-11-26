@@ -71,6 +71,7 @@ describe("what the page writes for an act", () => {
     { do: "wayIn", way: 2, on: true, x: 6, y: 7 },
     { do: "wayIn", way: 0, on: false, x: 6, y: 7 },
     { do: "buyPlot", plot: F.plot("meadow") },
+    { do: "fell", x: 22, y: 33 },
     { do: "take", node: F.goal("crates") },
     { do: "queue", node: F.goal("signs") },
     { do: "unqueue", node: F.goal("culvert") },

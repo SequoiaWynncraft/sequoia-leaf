@@ -128,7 +128,7 @@ export class Gen {
     return this.idx(x + DX[d] * n, z + DY[d] * n);
   }
   free(i: number): boolean {
-    return i >= 0 && this.y.kind[i] === F.NONE && this.y.land.water[i] === 0 && this.y.land.trunk[i] === 0;
+    return i >= 0 && this.y.kind[i] === F.NONE && this.y.land.water[i] === 0 && !F.redwoodAt(this.y, i);
   }
   room(i: number): boolean {
     return this.free(i) && this.y.land.deposit[i] === F.NONE;

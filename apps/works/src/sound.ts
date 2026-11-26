@@ -88,6 +88,12 @@ export const yardSfx = {
     sfx.buy();
     for (let i = 0; i < 5; i++) tone(penta(2 + i), 0.14, { vol: 0.07, type: "square", at: 0.2 + i * 0.05 });
   },
+  /** A redwood felled: a short rustle rising as it lifts away. */
+  fell(): void {
+    if (!heard(WORKS.building)) return;
+    noise(0.32, 900, { vol: 0.07, slide: 2.2, q: 0.8 });
+    tone(note(-3), 0.3, { vol: 0.06, type: "sine", slide: 1.6, attack: 0.06 });
+  },
   /** Undergrowth coming down: a long rustle that runs away across the plot. */
   clear(): void {
     if (!heard(WORKS.building)) return;

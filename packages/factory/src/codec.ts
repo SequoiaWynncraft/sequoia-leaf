@@ -6,16 +6,18 @@
  * version is refused whole, and nothing else is. Inside a good one, every piece is built again through
  * the rules (`vouch`), and anything that depends on today's tuning (how much a piece holds, how far a
  * tunnel goes, which goals, plots and grades open when) is clamped or carried, never a reason to
- * refuse the yard; nothing a player has is lost. Goals done, plots owned, orders on the board,
- * blueprints and line colours are carried as kept. A piece that cannot stand at the grade it was kept
+ * refuse the yard; nothing a player has is lost. Goals done, plots owned, redwoods felled (each by
+ * its first tile, and only on a plot the yard owns), orders on the board, blueprints and line
+ * colours are carried as kept. A piece that cannot stand at the grade it was kept
  * at stands at the highest grade the yard may build of its kind, and one that cannot stand at all
  * (land it is not on, ground it cannot work, a kind not opened) is paid back into the till at today's
  * price for the grade it was kept at; one of the pieces to hand goes back to hand. What a machine is
  * told to make, and the way a splitter puts first, are kept only where the yard may set them.
  *
  * A yard kept by the Works' first design (version 3, its pieces a list) is brought over as far as is
- * cheap (`fromFirst`): it is a new yard at the tier its story had reached. One kept by version 6
- * reads as this version's, but for the grades it did not keep (`UNGRADED`).
+ * cheap (`fromFirst`): it is a new yard at the tier its story had reached. One kept by version 7
+ * reads as this version's with every redwood standing (`UNFELLED`); one kept by version 6 too, but
+ * for the grades it did not keep (`UNGRADED`).
  */
 import { build, isDir, plotState, refusal } from "./build.ts";
 import { fromBase64, Reader, toBase64, Writer } from "./bytes.ts";
@@ -66,8 +68,14 @@ import {
   type Yard,
 } from "./yard.ts";
 
-/** 7: whole numbers, grades (a splitter's, a joiner's and a sorter's too), goals and research. */
-export const VERSION = 7;
+/** 8: whole numbers, grades (a splitter's, a joiner's and a sorter's too), goals, research and redwoods felled. */
+export const VERSION = 8;
+/**
+ * The version before redwoods could be felled. It still reads, with every redwood standing. A Leaf
+ * that knows no later one refuses a yard this one keeps, rather than read it with its felled
+ * redwoods standing again and what was built where they stood taken away.
+ */
+const UNFELLED = 7;
 /**
  * The version before splitters, joiners and sorters had grades, which it kept with none. It still
  * reads: each it kept in the yard stands at the highest grade the yard may build of its kind, for
@@ -230,6 +238,7 @@ export function encode(y: Yard, keep: Keep = {}): string {
     ...(away === null ? {} : { away: { seconds: away.seconds, coins: away.coins, made: tally(away.made) } }),
     seen: { tick: y.seen.tick, till: y.seen.till, depot: tally(y.seen.depot) },
     plots: y.plots.map(plotName),
+    ...(y.felled.includes(1) ? { felled: felledTiles(y) } : {}),
     done: y.done.map(goalId),
     hand: y.hand === -1 ? null : goalId(y.hand),
     ...(y.queue.length > 0 ? { queue: y.queue.map(goalId) } : {}),
@@ -249,6 +258,10 @@ export function encode(y: Yard, keep: Keep = {}): string {
     ...(y.history.length > 0 ? { history: y.history.map((e) => toBase64(e.bytes)), stamp: stampOf(y.land) } : {}),
   });
 }
+
+/** The first tile of each redwood the yard has felled, in the land's order. */
+const felledTiles = (y: Yard): number[] =>
+  y.land.trees.flatMap((tiles, t) => (y.felled[t] === 1 && tiles[0] !== undefined ? [tiles[0]] : []));
 
 // ---------- reading ----------
 
@@ -424,7 +437,8 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
     return null;
   }
   if (isRec(raw) && raw.v === FIRST && Array.isArray(raw.cells)) return fromFirst(raw, land);
-  if (!isRec(raw) || (raw.v !== VERSION && raw.v !== UNGRADED) || typeof raw.cells !== "string") return null;
+  if (!isRec(raw) || typeof raw.cells !== "string") return null;
+  if (raw.v !== VERSION && raw.v !== UNFELLED && raw.v !== UNGRADED) return null;
   const bytes = fromBase64(raw.cells);
   const pieces = bytes && unpackCells(bytes, land.w * land.h);
   if (!pieces) return null;
@@ -504,6 +518,20 @@ function keptAway(v: unknown): Away | null {
   const seconds = whole(v.seconds, 1e9);
   const coins = whole(v.coins, 1e12);
   return seconds === null || coins === null ? null : { seconds, coins, made: untally(v.made, 1e12) };
+}
+
+/**
+ * Fells each redwood kept as felled, by a tile of it, on a plot the yard owns; anything else kept is
+ * let go. No more are read than the land has redwoods, as many as a yard ever keeps.
+ */
+function felledOnto(y: Yard, kept: unknown): void {
+  const { land } = y;
+  for (const v of Array.isArray(kept) ? kept.slice(0, land.trees.length) : []) {
+    const i = whole(v, land.w * land.h - 1) ?? -1;
+    const t = land.tree[i] ?? -1;
+    const plot = land.plots[land.plot[i] ?? NONE];
+    if (t >= 0 && plot && y.plots.includes(plot.plot)) y.felled[t] = 1;
+  }
 }
 
 /**
@@ -600,6 +628,8 @@ export function vouch(
     if (p !== null && !y.plots.includes(p) && land.plots.some((q) => q.plot === p)) y.plots.push(p);
   }
 
+  // The redwoods it felled, before its pieces stand where they stood.
+  felledOnto(y, raw.felled);
   y.till += stand(y, pieces, studied, ungraded);
 
   fillBoard(y);
