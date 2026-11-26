@@ -58,6 +58,12 @@ export interface Kept {
   readonly data: unknown;
 }
 
+/** Where a command meets another player's piece (`Game.meets`): the slot, and the players whose piece it is not to be. */
+export interface Meeting {
+  readonly slot: string;
+  readonly avoid: readonly string[];
+}
+
 /** A piece another player left at a slot (`Kept`), as Leaf hands it to the command that meets it (`Ctx.met`). */
 export interface Met {
   /** Whose it is: their Leaf id. */
@@ -170,11 +176,11 @@ export interface Game<State, Command, View, Note, Short = never> {
    */
   apply(state: State, command: Command, ctx: Ctx): Done<State, Note> | Refused;
   /**
-   * The slot at which this command, done now, would meet somebody else's piece (`Kept`): Leaf asks
-   * before the command is tried, and gives it one that another player left there (`Ctx.met`). Null
-   * when it meets none; a game without it meets nobody's.
+   * Where this command, done now, would meet somebody else's piece (`Kept`): Leaf asks before the
+   * command is tried, and gives it one that another player left there (`Ctx.met`), never one of
+   * the players it says to `avoid`. Null when it meets none; a game without it meets nobody's.
    */
-  meets?(state: State, command: Command): string | null;
+  meets?(state: State, command: Command): Meeting | null;
   /** What the player's browser is given: the state without anything that tells the future. */
   view(state: State, ctx: Ctx): View;
   /**
