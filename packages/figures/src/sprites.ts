@@ -5,13 +5,14 @@
  * facing left. A fight bends them as they move (`Bend`): squashed, stretched, leaned and turned.
  * Also the bases they stand on and the stars over their heads.
  *
- * A banner's member has no typed rows: it is a person, drawn as the town draws one (the kit's
- * `skin.ts`), in the same pictures as everyone else here (`person`), from whoever it is said to be
- * (`wear`), and until then nobody yet. It is called by that member's name (`nameOf`).
+ * A banner's member has no typed rows: it is a person, their skin's pieces on a rig (`rig.ts`), in
+ * the same pictures as everyone else here (`person`), from whoever it is said to be (`wear`), and
+ * until then nobody yet. A fight poses one a stance at a time (`Shown.act`). It is called by that
+ * member's name (`nameOf`).
  */
 import { CORAL, GOLD, GREEN, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, flipped, outlined, rgb } from "@sequoia-leaf/kit/pix.ts";
-import { bake as walking, type Body, type Dir, FOOT_Y, FRAME_W, NOBODY, paintSkin } from "@sequoia-leaf/kit/skin.ts";
+import { bake as walking, type Body, NOBODY, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
 import {
   FIGURE_IDS,
@@ -26,6 +27,7 @@ import { isMemberId, type MemberId } from "@sequoia-leaf/raid/content/members.ts
 
 import { artOf } from "./figures.ts";
 import { FOREST_TONES, PAL, SUMMON_TONES, TIER_TONES, type Tones } from "./pal.ts";
+import { REST, RIG, rigPic, type Stance } from "./rig.ts";
 
 export type Pose = "idle" | "cast" | "fallen";
 
@@ -123,49 +125,34 @@ const edged = (c: HTMLCanvasElement): HTMLCanvasElement => outlined(c, INK);
 /** The pale colour a figure flashes when it is hit. */
 const FLASH = "#fff8e0";
 
-/** Where a person stands in one of their pictures (`skin.ts`), dark edge and all, and the row that folds when they breathe in. */
-const PERSON = { x: 1, y: 2, w: FRAME_W - 2, h: FOOT_Y - 1, breath: 12 } as const;
-
 /**
- * A person as one of the raid's figures, at the size the town draws them (a pixel of theirs is a
- * pixel of any figure's): standing and breathing, a step forward for using their ability, tipped
- * over, hit. Facing right and left are their own two sides, not one mirrored.
+ * A person as one of the raid's figures: their skin's pieces on a rig (`rig.ts`), at the size the
+ * town draws them (a pixel of theirs is a pixel of any figure's). These are the pictures anyone
+ * who only shows them needs (standing, a breath later, arms up for their ability, lying where they
+ * fell); a fight poses them itself, a stance at a time (`Shown.act`).
  */
 function person(body: Body): { right: Frames; left: Frames } {
-  /** One of their pictures cut to the figure; `sunk`, with everything above the breath row a pixel lower. */
-  const cut = (dir: Dir, pose: number, sunk = false): HTMLCanvasElement => {
-    const { c, g } = makeCanvas(PERSON.w, PERSON.h);
-    const src = body.frames[dir]?.[pose];
-    if (!src) return c;
-    const below = PERSON.h - PERSON.breath;
-    if (!sunk) g.drawImage(src, -PERSON.x, -PERSON.y);
-    else {
-      g.drawImage(src, PERSON.x, PERSON.y + PERSON.breath, PERSON.w, below, 0, PERSON.breath, PERSON.w, below);
-      g.drawImage(src, PERSON.x, PERSON.y, PERSON.w, PERSON.breath - 1, 0, 1, PERSON.w, PERSON.breath - 1);
-    }
-    return c;
-  };
-  const facing = (dir: Dir, left: boolean): Frames => {
-    const a = cut(dir, 0);
+  const facing = (left: boolean): Frames => {
+    const a = rigPic(body, { ...REST, left });
     return {
-      idle: [a, cut(dir, 0, true)],
-      cast: cut(dir, 1),
-      fallen: tipped(a, left),
+      idle: [a, rigPic(body, { ...REST, left, nod: 1 })],
+      cast: rigPic(body, { ...REST, left, arm: 6, offArm: 6, nod: -1 }),
+      fallen: rigPic(body, { ...REST, left, lie: true, arm: 3, offArm: 1, leg: 1 }),
       flash: tinted(a, FLASH),
       hurt: reEdged(a, CORAL),
       dark: tinted(a, SKY[0]),
-      w: PERSON.w,
-      h: PERSON.h,
-      ax: PERSON.w / 2,
-      ay: PERSON.h - 1,
-      tall: PERSON.h - 2,
-      castTall: PERSON.h - 2,
-      wide: PERSON.w - 2,
+      w: RIG.w,
+      h: RIG.h,
+      ax: RIG.ax,
+      ay: RIG.ay,
+      tall: RIG.tall,
+      castTall: RIG.tall,
+      wide: RIG.wide,
       head: 0,
       flies: false,
     };
   };
-  return { right: facing(0, false), left: facing(0, true) };
+  return { right: facing(false), left: facing(true) };
 }
 
 /** Who each banner's member is, once somebody has said (`wear`): their name, the figure they are drawn from, and how many times it has been said. */
@@ -178,8 +165,16 @@ export const nameOf = (kind: UnitKind): string => worn.get(kind)?.name ?? specOf
  */
 export const shownAs = (kind: UnitKind | null): string => (kind ? `${kind}/${worn.get(kind)?.said ?? 0}` : "");
 
+/** The body of a figure that is a person on a rig, which a stance poses; null for one drawn from typed rows. */
+export function rigOf(kind: UnitKind): Body | null {
+  if (!isMemberId(kind)) return null;
+  return worn.get(kind)?.body ?? (NOBODY_YET.body ??= walking(paintSkin(NOBODY)));
+}
+const NOBODY_YET: { body?: Body } = {};
+
 function bake(kind: UnitKind): { right: Frames; left: Frames } {
-  if (isMemberId(kind)) return person(worn.get(kind)?.body ?? walking(paintSkin(NOBODY)));
+  const body = rigOf(kind);
+  if (body) return person(body);
   const art = artOf(kind);
   const at = art.breath ?? Math.floor(art.rows.length * 0.6);
   const lists = {
@@ -276,6 +271,8 @@ export interface Shown {
   /** With a gold outline round it: one of the trait that is lit. */
   lit?: boolean;
   alpha?: number;
+  /** For a person on a rig (`rigOf`): the stance they are in, in place of `pose`, `beat`, `left` and `bend`. */
+  act?: Stance;
 }
 
 const gilt = new Map<HTMLCanvasElement, HTMLCanvasElement>();
@@ -305,26 +302,41 @@ function place(g: Ctx, pic: HTMLCanvasElement, px: number, py: number, ax: numbe
   g.restore();
 }
 
+const struck = new WeakMap<HTMLCanvasElement, { flash: HTMLCanvasElement; hurt: HTMLCanvasElement }>();
+/** A posed picture as it is drawn when hit: pale, and with the sore edge; made the first time each is asked for. */
+function struckOf(pic: HTMLCanvasElement): { flash: HTMLCanvasElement; hurt: HTMLCanvasElement } {
+  let s = struck.get(pic);
+  if (!s) {
+    s = { flash: tinted(pic, FLASH), hurt: reEdged(pic, CORAL) };
+    struck.set(pic, s);
+  }
+  return s;
+}
+
+/** The picture a figure is drawn as now. */
+function shownPic(kind: UnitKind, f: Frames, o: Shown): HTMLCanvasElement {
+  if (o.dark) return f.dark;
+  const body = o.act ? rigOf(kind) : null;
+  if (body && o.act) {
+    const posed = rigPic(body, o.act);
+    return o.flash ? struckOf(posed).flash : o.hurt ? struckOf(posed).hurt : posed;
+  }
+  return o.flash ? f.flash : o.hurt ? f.hurt : o.pose === "cast" ? f.cast : f.idle[o.beat ?? 0];
+}
+
 /** Draws a figure with its feet at `x`, `y`. */
 export function drawFigure(g: Ctx, kind: UnitKind, x: number, y: number, o: Shown = {}): void {
   const f = framesOf(kind, o.left);
   const px = Math.round(x);
   const py = Math.round(y);
   if (o.alpha !== undefined) g.globalAlpha = o.alpha;
-  if (o.pose === "fallen") {
+  if (o.pose === "fallen" && !o.act) {
     g.drawImage(f.fallen, px - Math.round(f.fallen.width / 2), py - f.fallen.height + 2);
   } else {
-    const pic = o.dark
-      ? f.dark
-      : o.flash
-        ? f.flash
-        : o.hurt
-          ? f.hurt
-          : o.pose === "cast"
-            ? f.cast
-            : f.idle[o.beat ?? 0];
-    if (o.lit) place(g, gilded(pic), px, py, f.ax + 1, f.ay + 1, o.bend);
-    else place(g, pic, px, py, f.ax, f.ay, o.bend);
+    const pic = shownPic(kind, f, o);
+    const bend = o.act ? undefined : o.bend;
+    if (o.lit) place(g, gilded(pic), px, py, f.ax + 1, f.ay + 1, bend);
+    else place(g, pic, px, py, f.ax, f.ay, bend);
   }
   if (o.alpha !== undefined) g.globalAlpha = 1;
 }

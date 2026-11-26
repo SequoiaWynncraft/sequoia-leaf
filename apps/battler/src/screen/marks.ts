@@ -44,6 +44,7 @@ const INKS: Readonly<Record<string, string>> = {
   E: EARTH[2],
   s: STONE[2],
   S: STONE[3],
+  v: SKY[3],
   w: WATER[2],
   W: WATER[3],
   m: GREEN[3],
@@ -63,6 +64,7 @@ const ROWS = {
   spark: ["G", "o"],
   spoon: ["l", "M"],
   runner: ["eEe"],
+  bolt: [".v.", "vWv", ".v."],
   snip: ["c...c", ".c.c.", "..c.."],
   scribble: ["o.o.o", ".o.o."],
   chevron: [".o.", "o.o"],
@@ -104,7 +106,7 @@ export interface Shot {
 
 /** How high a thrown thing arcs over a distance in pixels: lobbed things high, a beam not at all. */
 export function arcOf(look: Thrown | null, far: number): number {
-  if (look === "beam" || look === "runner") return 0;
+  if (look === "beam" || look === "runner" || look === "bolt") return 0;
   if (look === "cone" || look === "cushion" || look === "tea" || look === "plaster" || look === "spoon")
     return 6 + far * 0.18;
   return look === "pebble" ? 3 + far * 0.06 : 3;
@@ -134,13 +136,14 @@ export function drawShot(g: Ctx, s: Shot, c: number): void {
   const p = pointAt(s, k);
   const x = Math.round(p.x);
   const y = Math.round(p.y);
+  // A streak behind it for some.
+  if (s.trail || s.look === "beam")
+    for (let i = 1; i <= 3; i++) {
+      const q = pointAt(s, clamp(k - i * 0.07, 0, 1));
+      R(g, Math.round(q.x), Math.round(q.y), 1, 1, s.look === "beam" ? GOLD[1] : s.col);
+    }
   if (s.look === null || s.look === "beam") {
-    // A small edged thing, with a streak behind it for some.
-    if (s.trail || s.look === "beam")
-      for (let i = 1; i <= 3; i++) {
-        const q = pointAt(s, clamp(k - i * 0.07, 0, 1));
-        R(g, Math.round(q.x), Math.round(q.y), 1, 1, s.look === "beam" ? GOLD[1] : s.col);
-      }
+    // A small edged thing.
     R(g, x - 1, y - 1, 3, 3, INK);
     R(g, x, y, 1, 1, s.look === "beam" ? GOLD[2] : s.col);
   } else if (s.look === "dust") swirl(g, x, y, c, [CREAM, WATER[3]]);
@@ -287,6 +290,22 @@ export const MARKS: Readonly<Record<MarkId, (m: At) => void>> = {
   bat: (m) => {
     pop(art("swipe"), chest(m).x, chest(m).y, "stick", 0.25);
     burst(chest(m).x, chest(m).y, 6, [CORAL, CREAM], { speed: 40, ttl: 0.25, toward: away(m), spread: 1 });
+  },
+  // What loomed comes down: lines down onto each one hit, the ground thrown out all round, and embers left rising off every hex.
+  caught: (m) => {
+    dustRing(m.x, m.y, 30, [SKY[3], GOLD[1]]);
+    ring(m.x, m.y, 15, GOLD[2], 0.3);
+    for (const c of m.cells) {
+      streak({ x: c.x, y: c.y - 30 }, { x: c.x, y: c.y - 3 }, GOLD[2], SKY[3], 0.24);
+      burst(c.x, c.y - 3, 3, [SKY[3], SKY[4], WATER[3]], {
+        toward: UP,
+        spread: 0.7,
+        speed: 22,
+        grav: -26,
+        ttl: 0.8,
+        scatter: 8,
+      });
+    }
   },
   // Anyone with nothing of its own yet: a ring and a few sparks in its owner's colour.
   plain: (m) => {

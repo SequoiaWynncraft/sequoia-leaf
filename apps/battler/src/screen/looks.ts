@@ -46,7 +46,8 @@ export type Thrown =
   | "gust"
   | "spark"
   | "spoon"
-  | "runner";
+  | "runner"
+  | "bolt";
 
 /** The mark an ability leaves where it goes off (`marks.ts`). */
 export type MarkId =
@@ -78,6 +79,7 @@ export type MarkId =
   | "sit"
   | "antlers"
   | "bat"
+  | "caught"
   | "plain"
   | "sting"
   | "gust"
@@ -88,7 +90,7 @@ export type MarkId =
   | "swoop"
   | "crabbier";
 
-/** An ability's own sound: a note (semitones from A), its timbre, a second note after it, a breath of noise (its pitch), a slide, how loud. */
+/** An ability's own sound: a note (semitones from A), its timbre, a second note after it, a breath of noise (its pitch), a slide, how loud; and for one that lands later, its sound then. */
 export interface Voice {
   readonly n: number;
   readonly wave: OscillatorType;
@@ -96,6 +98,7 @@ export interface Voice {
   readonly hiss?: number;
   readonly slide?: number;
   readonly vol?: number;
+  readonly lands?: Voice;
 }
 
 export interface Look {
@@ -114,6 +117,14 @@ export interface Look {
   readonly ahead?: Thrown;
   /** Where it is seen going off: where each thing thrown lands, else at the moment it goes off. */
   readonly mark: MarkId;
+  /**
+   * It lands some steps after it goes off (the rules' `ticks`), with nothing thrown: the hexes it
+   * covers are marked until then, and its mark, bump and stop come then, on whoever it is for where
+   * they stand by then.
+   */
+  readonly lands?: true;
+  /** Until it lands, its owner's face looms behind whoever it is for, with its name as a caption (`omens.ts`). */
+  readonly looms?: true;
   /** A big moment: how far the board bumps, in art pixels at 1x (1 for most, 2 for the biggest). */
   readonly bump?: number;
   /** Seconds the fight's clock holds as it goes off, at 1x; a big moment holds as long as `STOP.big` unless it says. */
@@ -155,8 +166,17 @@ export const LOOKS: Partial<Record<UnitKind, Look>> = {
   greg: { wind: 12, body: "rise", mark: "sit", bump: 2 },
   whitefox: { wind: 10, body: "rear", gather: [GOLD[1], GOLD[2]], mark: "antlers", bump: 1 },
   hearthcat: { wind: 12, body: "stare", lunge: 6, mark: "bat", bump: 1 },
-  // ---------- a banner's member: plain until its own is drawn ----------
-  "banner-1": { wind: 6, body: "rear", mark: "plain" },
+  // ---------- a banner's member ----------
+  "banner-1": {
+    wind: 12,
+    body: "rear",
+    gather: [SKY[3], GOLD[1], WATER[3]],
+    mark: "caught",
+    lands: true,
+    looms: true,
+    bump: 2,
+    stop: 0.12,
+  },
   // ---------- the forest's own ----------
   wasp: { wind: 6, body: "shake", lunge: 5, mark: "sting" },
   puddle: { wind: 6, body: "wobble", mark: "splash" },
@@ -205,7 +225,16 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
   greg: { n: -19, wave: "triangle", hiss: 200, slide: 0.5, vol: 0.14 },
   whitefox: { n: 19, wave: "sine", two: 7, vol: 0.09 },
   hearthcat: { n: 3, wave: "triangle", hiss: 2500, slide: 0.6 },
-  "banner-1": { n: 9, wave: "triangle" },
+  // A low two-note stare, and a thump with a bell over it when it lands.
+  "banner-1": {
+    n: -14,
+    wave: "triangle",
+    two: -1,
+    hiss: 500,
+    slide: 0.94,
+    vol: 0.1,
+    lands: { n: -22, wave: "sine", two: 34, hiss: 260, slide: 0.5, vol: 0.14 },
+  },
   // ---------- the forest's own ----------
   wasp: { n: 21, wave: "sawtooth", slide: 0.8, vol: 0.04 },
   puddle: { n: 0, wave: "sine", hiss: 1200, slide: 0.6 },
@@ -219,8 +248,10 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
   bigcrab: { n: -15, wave: "square", hiss: 1800, slide: 0.6, vol: 0.12 },
 };
 
-/** What a figure throws when it only attacks: a small thing of its own colour, some with a streak behind. */
-export const ATTACK_SHOT: Partial<Record<UnitKind, { readonly col: string; readonly trail?: boolean }>> = {
+/** What a figure throws when it only attacks: a small thing of its own colour, some with a streak behind, a few a thing of their own (`shot`). */
+export const ATTACK_SHOT: Partial<
+  Record<UnitKind, { readonly col: string; readonly trail?: boolean; readonly shot?: Thrown }>
+> = {
   mossmote: { col: GREEN[4] },
   moth: { col: WATER[3] },
   finch: { col: EARTH[2] },
@@ -234,7 +265,7 @@ export const ATTACK_SHOT: Partial<Record<UnitKind, { readonly col: string; reado
   crab23: { col: PAPER[1] },
   heron: { col: CREAM, trail: true },
   apothecary: { col: SKY[4] },
-  "banner-1": { col: EARTH[2] },
+  "banner-1": { col: GOLD[1], trail: true, shot: "bolt" },
   toadstool: { col: SKY[4] },
   gust: { col: CREAM, trail: true },
 };

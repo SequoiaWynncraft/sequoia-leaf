@@ -249,6 +249,8 @@ timed can be stepped by hand.
 | `src/screen/fightmarks.ts`    | Ground that slows or hurts, a line marked before it lands, a pull, a channel held in its pose         |
 | `src/screen/marks.ts`         | Things thrown, as they fly; each ability's mark; the puff a fallen figure goes in                     |
 | `src/screen/motion.ts`        | A figure's body at a moment: lunge, hurt, hop, walk, wind-up, tumble, as squash, lean and turn        |
+| `src/screen/acting.ts`        | A person on a rig at a moment: the stance their body is in for what the fight is doing to them        |
+| `src/screen/omens.ts`         | The face that looms at whoever an ability is for until it lands, its caption, and its landing         |
 | `src/screen/board.ts`         | The fight on the table as it stands, which the three above keep                                       |
 | `src/screen/fx.ts`            | Sparks, light gathering, rings, small pictures, streaks, rising words, things that fly, "in a moment" |
 | `src/screen/logic.ts`         | Small questions asked of a run: where a figure may go, what an item would make, the next nudge        |
@@ -275,7 +277,14 @@ timed can be stepped by hand.
 own, event for event, to the same end, at every speed.
 
 Everything in a fight counts the fight's clock (the sparks too, through `fx.ts`'s `pace`), so 2x
-and 4x speed it all up alike and a hit-stop holds it all. An ability's look is its entry in
+and 4x speed it all up alike and a hit-stop holds it all. A banner's member is a person on a rig (`@sequoia-leaf/figures`, `rig.ts`), and
+`acting.ts` has them act out what the fight says with their body: arms and legs swing as they walk,
+an arm is drawn back and thrown out so that what they throw leaves their hand, they reel when hit,
+sway when stunned and fall with their limbs going. An ability that lands later (`lands` in its look) has its
+hexes marked until it does, and its mark, bump and stop then; one that `looms` has its owner's face
+lean in huge just in front of whoever it is for meanwhile, with its name as a caption on a strip of
+paper and gold corners round the one caught, and the face goes at them in pieces as it lands
+(`omens.ts`). An ability's look is its entry in
 `looks.ts` and, for its mark, in `MARKS` (`marks.ts`): a richer one is a mark of several layers
 (pictures from `ROWS`, rings, bursts, streaks, as long as it likes) and its own `bump` and `stop`
 in its look.
@@ -323,6 +332,11 @@ bun review/tour.ts review/tour-desktop.json <out-dir>
 bun review/tour.ts review/tour-phone.json <out-dir>
 bun review/tour.ts review/sheet.json <out-dir> sheet
 ```
+
+`review/standin.ts` puts `window.standin` beside the handle for looking at a banner's member:
+`wear()` gives the first banner's member a hooded skin with a face (the play server's skins are
+plain), `seat(ours, theirs, stars, seed)` plays a fight with everyone seated where it says, and
+`caught(kind)` says who that kind's last ability was for.
 
 `review/feel.json` and `review/feel-phone.json` go through who gets hit, what everyone did and the
 open table: the front page, a Bulwark's card with its draw chip and tip, a fight with each of the

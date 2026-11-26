@@ -13,9 +13,15 @@ this is only how they look.
   casting, tipped over, hit, not yet opened, facing either way), `drawFigure`, `portrait`,
   `drawStanding` (a figure on its base, whose look every caller names), `drawStars` and `starsPic`;
   and how one moves while it stands, by the clock alone (`beatAt`, `hoverAt`).
-- A banner's member (the raid's `content/members.ts`) has no typed rows: it is a person, drawn as
-  the town draws one from a skin (the kit's `skin.ts`), at that size, facing us, in the same
-  pictures as everyone else (`person` in `sprites.ts`). `src/member.ts` asks Leaf who each
+- A banner's member (the raid's `content/members.ts`) has no typed rows: it is a person, the pieces
+  of their skin (the kit's `skin.ts`: head, body, an arm, a leg) on a rig, at the size the town
+  draws people. `src/rig.ts` draws a person in a `Stance` (`rigPic`): each limb at one of sixteen
+  angles from its joint, the head at us or turned, the body sunk, swayed or lying, seen from the
+  front or the side; `handOf` is where its hand is. `src/acts.ts` is what a person does as stances
+  over time: standing, walking, throwing, raising an ability, holding whoever it is for, bringing it
+  down, reeling, dazed, falling, cheering. `rigOf` in `sprites.ts` is the body of a figure that is
+  one; whoever only shows them gets the same pictures as for everyone else (`person`), and a fight
+  poses them a stance at a time (`Shown.act`). `src/member.ts` asks Leaf who each
   banner's member is (`meetMembers`) for any page that shows one, the raid's table and the town's
   camps alike: nobody yet, then their name and made-up look, then their own skin. `nameOf` is what
   anyone on the stump is called, and `shownAs` changes when a figure's name or pictures do.

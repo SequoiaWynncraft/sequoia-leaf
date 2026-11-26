@@ -145,7 +145,7 @@ export function dozy(body: Body): Body {
   const sat = front?.[SIT];
   // Seen from the front and sitting, the head is drawn at (2, 5); the side and back show no eyes.
   if (front && sat) front[SIT] = shutEyes(sat, 2, 5);
-  return { frames, face: shutEyes(body.face, 0, 0) };
+  return { ...body, frames, face: shutEyes(body.face, 0, 0) };
 }
 
 // ---------- where each is ----------

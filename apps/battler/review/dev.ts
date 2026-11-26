@@ -7,6 +7,7 @@ import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 
 import { openHandle } from "./handle.ts";
 import { showSheet } from "./sheet.ts";
+import { openStandIn } from "./standin.ts";
 
 if (new URLSearchParams(location.search).has("sheet")) {
   await fontsReady();
@@ -16,4 +17,5 @@ if (new URLSearchParams(location.search).has("sheet")) {
     await import("../src/main.ts")
   ).booted;
   openHandle();
+  openStandIn();
 }

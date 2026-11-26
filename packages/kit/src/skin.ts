@@ -24,6 +24,8 @@ export interface Body {
   frames: HTMLCanvasElement[][];
   /** The face alone, 8x8, for cards and buttons. */
   face: HTMLCanvasElement;
+  /** The pieces the frames are put together from, for whoever poses them another way. */
+  parts: Parts;
 }
 
 type Sheet = HTMLImageElement | HTMLCanvasElement;
@@ -94,7 +96,12 @@ function take(
   return c;
 }
 
-interface Parts {
+/**
+ * A skin's pieces at the figure's size: the head's four faces (8x8); the body from the front, the
+ * back and each side (4x6); an arm from the front, the back and outside (2x6); a leg from the front
+ * and the back (2x5) and from outside (4x5). The arm and leg are the right-hand ones.
+ */
+export interface Parts {
   headF: HTMLCanvasElement;
   headL: HTMLCanvasElement;
   headR: HTMLCanvasElement;
@@ -199,6 +206,7 @@ export function bake(sheet: Sheet): Body {
       poses.map((n) => poseFront(p, n, true)),
     ],
     face: p.headF,
+    parts: p,
   };
 }
 

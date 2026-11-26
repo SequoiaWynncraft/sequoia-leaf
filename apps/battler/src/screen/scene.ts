@@ -25,6 +25,7 @@ import { handMarks } from "./hand.ts";
 import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
 import { DIM, shineOf } from "./light.ts";
 import { arrivalOf, handing, watchersOf } from "./logic.ts";
+import { wordsOmens } from "./omens.ts";
 import { aloft, FOOT, type Pawn, pawns, spotOfPawn } from "./pawns.ts";
 import { snd } from "./sounds.ts";
 import { boardHalves, place, type Standing, V } from "./stage.ts";
@@ -422,6 +423,7 @@ function drawItemMarks(g: Ctx, marks: Marks): void {
 }
 
 export function wordsScene(ctx: Ctx, px: number): void {
+  wordsOmens(ctx, px);
   wordsFx(ctx, px);
 }
 

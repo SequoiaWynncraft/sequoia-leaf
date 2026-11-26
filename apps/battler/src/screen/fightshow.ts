@@ -16,6 +16,7 @@ import { FIGURES, isBossId, isFigureId } from "@sequoia-leaf/raid/content/figure
 import { TRAITS } from "@sequoia-leaf/raid/content/traits.ts";
 import { distance } from "@sequoia-leaf/raid/hex.ts";
 
+import { aimAt, handAt } from "./acting.ts";
 import { itemPic, traitPic } from "./art/icons.ts";
 import { TRAIT_COLOUR } from "./art/pal.ts";
 import { clockNow, colourOf, face, feetAt, fightNow, FV, travel } from "./board.ts";
@@ -25,6 +26,7 @@ import type { Pt } from "./geometry.ts";
 import { ATTACK_SHOT, type Look, LOOKS, puffOf, VOICES } from "./looks.ts";
 import { arcOf, type At, MARKS, puff, type Shot } from "./marks.ts";
 import { type Actor, actorFor, TUMBLE } from "./motion.ts";
+import { hang, stepOmens } from "./omens.ts";
 import { bumpFor, type Cue, holdFor, type Lead, type Weight } from "./playback.ts";
 import { snd } from "./sounds.ts";
 
@@ -203,7 +205,7 @@ const ON: On = {
     const own = ev.what === "ability" ? LOOKS[a.unit.kind] : undefined;
     const small = ATTACK_SHOT[a.unit.kind];
     const mark = own && t ? markAt(a, t) : null;
-    throwAt({ x: from.x, y: from.y - 11 }, ev.target, feetAt(ev.to), at, ev.ticks, own?.shot ?? null, {
+    throwAt(handOr(a, at, from), ev.target, feetAt(ev.to), at, ev.ticks, own?.shot ?? small?.shot ?? null, {
       col: small?.col ?? STONE[3],
       trail: small?.trail ?? false,
       land: mark,
@@ -288,6 +290,10 @@ const ON: On = {
   zone: () => undefined,
 };
 
+/** Where something leaves whoever throws it: a person's hand, and for anyone else chest height over where they stand. */
+const handOr = (a: Actor, at: number, from: Pt): Pt =>
+  handAt(a, at, fightNow()?.tick ?? 0) ?? { x: from.x, y: from.y - 11 };
+
 /** The mark a thrown ability leaves where it lands on `t`. */
 function markAt(a: Actor, t: Actor): () => void {
   const look = LOOKS[a.unit.kind];
@@ -361,10 +367,27 @@ function cast(ev: Events["cast"], at: number): void {
   if (t && t !== a) face(a, t);
   // The hexes it covers light one after another, nearest first: a ring, a cone or a line spreading.
   for (const cell of ev.cells) FV.flashes.push({ cell, t0: at + distance(a.unit.cell, cell) * 1.5, col });
-  // Its name, small, so that it never covers what it does.
-  if (ev.name) say(a.x, a.y - framesOf(ev.kind).tall - 8, ev.name, col, { small: true, ttl: 0.8, rise: 6 });
-  if (look) goesOff(ev, look);
+  // Its name, small, so that it never covers what it does; one that looms has it as its caption.
+  if (ev.name && !look?.looms)
+    say(a.x, a.y - framesOf(ev.kind).tall - 8, ev.name, col, { small: true, ttl: 0.8, rise: 6 });
+  if (look?.lands) hold(ev, look, a, t, at);
+  else if (look) goesOff(ev, look);
   snd.ability(VOICES[ev.kind] ?? { n: 12, wave: "triangle" });
+}
+
+/**
+ * An ability that lands later goes off: its hexes are marked until it lands, its owner holds
+ * whoever it is for (a person points at them), and what looms over them does (`omens.ts`).
+ */
+function hold(ev: Events["cast"], look: Look, a: Actor, t: Actor | undefined, at: number): void {
+  showMark({ t: "telegraph", id: ev.id, cells: ev.cells, ticks: ev.ticks }, MARKED);
+  if (t) a.held = { at, lands: at + ev.ticks, aim: aimAt(t.x - a.x, t.y - a.y), left: a.left };
+  hang(look.looms ? ev.kind : null, ev.targets[0] ?? -1, ev.name, ev.ticks, () => {
+    for (const cell of ev.cells) FV.flashes.push({ cell, t0: clockNow(), col: colourOf(ev.kind) });
+    goesOff(ev, look);
+    const landing = VOICES[ev.kind]?.lands;
+    if (landing) snd.ability(landing);
+  });
 }
 
 /** An ability going off: its mark (a thrown one leaves its mark where each thing lands instead), and the weight it lands with. */
@@ -476,6 +499,7 @@ function on<K extends keyof Events>(t: K, ev: Events[K], at: number): void {
 
 /** Things thrown follow whoever they are thrown at, and land; a fallen figure, its tumble over, goes in a puff. */
 export function stepShown(c: number): void {
+  stepOmens(c);
   FV.shots = FV.shots.filter((s) => {
     const t = actor(s.target);
     if (t && t.unit.alive) s.to = chestOf(t);
