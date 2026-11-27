@@ -18,7 +18,16 @@ import { predict, type SeatView, type SittingView } from "@sequoia-leaf/raid/sit
 import { OWN } from "../sides.ts";
 import { changed, type Did, go, heldOff, hold, LIVE, refuse, S, type Seated, tellNotes } from "../state.ts";
 import type { Answer, Gone, Line } from "./line.ts";
-import { CLOSED_UNSTARTED, closedUnstarted, NOT_SEATED, paidLines, refusalWords, seatedAt } from "./reads.ts";
+import {
+  CLOSED_UNSTARTED,
+  closedUnstarted,
+  NOT_SEATED,
+  paidLines,
+  refusalWords,
+  scoutable,
+  scoutedRun,
+  seatedAt,
+} from "./reads.ts";
 
 /** What the member has said and wants Leaf to show: ready (or not) in a room's planning, and a room's fight watched. */
 interface Wanted {
@@ -30,7 +39,9 @@ const L: {
   /** The seat's run as it set out for the fight it is in: what the room paid is told against it. */
   before: RunView | null;
   wanted: Wanted;
-} = { line: null, before: null, wanted: { ready: null, watched: null } };
+  /** The seat whose board the table shows in place of the member's own (scouting); null for their own. */
+  scout: number | null;
+} = { line: null, before: null, wanted: { ready: null, watched: null }, scout: null };
 const viewHearers: ((view: SittingView, was: SittingView) => void)[] = [];
 const goneHearers: ((why: Gone) => void)[] = [];
 const doneHearers: ((why: string | null) => void)[] = [];
@@ -52,14 +63,34 @@ export const onLineGone = (fn: (why: Gone) => void): void => void goneHearers.pu
 /** Hears that the member is done with a sitting, and why when the page says so. */
 export const onDone = (fn: (why: string | null) => void): void => void doneHearers.push(fn);
 
+/** The seat whose board the table shows in place of the member's own, if any. */
+export const scouting = (): number | null => L.scout;
+
+/**
+ * Shows another seat's board on the table in place of the member's own, while planning or in a
+ * carousel (null, or the member's own seat: back to it). Says whether what the table shows changed.
+ */
+export function scoutAt(seat: number | null): boolean {
+  const view = L.line?.view;
+  const to = !view || seat === view.you || !scoutable(view) || !view.seats[seat ?? -1] ? null : seat;
+  if (to === L.scout) return false;
+  L.scout = to;
+  return true;
+}
+
+/** What is said of the member's own commands while another's board is shown. */
+export const BACK_FIRST = "That is not your board. Back to yours first.";
+
 /**
  * The run the shared table is shown: the seat's own, but with no pick up while the carousel stands
  * (the first figure is taken from the ring), and, for a seat that is out or a table that is over, at
- * planning with nothing to pick, so that its board stays on the table to watch from.
+ * planning with nothing to pick, so that its board stays on the table to watch from. While another's
+ * board is shown, theirs, as Leaf has it now.
  */
 export function shownRun(view: SittingView): RunView | null {
   const run = view.run;
   if (!run) return null;
+  if (L.scout !== null && scoutable(view)) return scoutedRun(view, L.scout);
   if (mineOf(view)?.place != null || run.stage.phase === "over") return { ...run, stage: { phase: "plan", picks: [] } };
   // The ring stands alone on the far half: whoever waits in the next room comes after it.
   if (view.stage.at === "carousel" && run.stage.phase === "plan")
@@ -137,16 +168,25 @@ async function asked(command: SittingCommand, waiting: Element | null): Promise<
   return answered(line, await hold.until(false, waitingLook(waiting, line.send(command))));
 }
 
+/** The member's own commands are off while another's board is shown: said so, and not sent. */
+function scoutingOff(): Did | null {
+  if (L.scout === null) return null;
+  refuse(BACK_FIRST);
+  return { ok: false, why: BACK_FIRST };
+}
+
 const SEAT: Seated = {
   run: () => (L.line ? shownRun(L.line.view) : null),
   table: () => ({ run: L.line ? shownRun(L.line.view) : null, runs: S.runs }),
   doNow(command) {
     const line = L.line;
     if (!line || heldOff(command) || !isPlanning(command)) return null;
-    return shownNow(line, command);
+    return scoutingOff() ?? shownNow(line, command);
   },
   ask(command, waiting) {
     if (heldOff(command)) return Promise.resolve(null);
+    const off = scoutingOff();
+    if (off) return Promise.resolve(off);
     if (isPlanning(command)) return asked(command, waiting);
     const why = "At a live table the clock sets out.";
     refuse(why);
@@ -157,13 +197,15 @@ const SEAT: Seated = {
 /** Takes the figure at a place in the carousel's ring: shown at once, as Leaf will take it; Leaf's answer wins. */
 export function takeFromRing(offer: number): Did | null {
   const line = L.line;
-  return line && atLiveTable() ? shownNow(line, { do: "pick", offer }) : null;
+  return line && atLiveTable() ? (scoutingOff() ?? shownNow(line, { do: "pick", offer })) : null;
 }
 
 /** Ready to fight, or not after all: wanted until Leaf shows it, or the room's planning is over (`resendWanted`). */
 export function readyUp(on: boolean): Did | null {
   const line = L.line;
   if (!line || !atLiveTable()) return null;
+  const off = scoutingOff();
+  if (off) return off;
   L.wanted.ready = { room: line.view.room, on };
   return shownNow(line, { do: "ready", on, room: line.view.room });
 }
@@ -247,6 +289,7 @@ export function doneWithTable(why: string | null = null): void {
   L.line = null;
   L.before = null;
   L.wanted = { ready: null, watched: null };
+  L.scout = null;
   for (const fn of doneHearers) fn(why);
 }
 
@@ -259,6 +302,7 @@ export function takeUp(line: Line): void {
   if (L.line) doneWithTable();
   L.line = line;
   L.before = null;
+  L.scout = null;
   const seen = { view: line.view };
   line.onView((view) => {
     if (L.line !== line) return;
@@ -266,6 +310,8 @@ export function takeUp(line: Line): void {
     seen.view = view;
     // Leaf shows the member without a seat (left in another tab, or the table closed unstarted): the page lets it go.
     if (!seatedAt(view, line.player)) return doneWithTable(closedUnstarted(view, was) ? CLOSED_UNSTARTED : NOT_SEATED);
+    // A fight's start (or the end) brings the member back to their own board.
+    if (!scoutable(view)) L.scout = null;
     for (const fn of viewHearers) fn(view, was);
   });
   line.onRead(() => {

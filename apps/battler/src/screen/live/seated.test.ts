@@ -14,6 +14,7 @@ import {
   startRun,
   tableView,
 } from "@sequoia-leaf/raid";
+import { newPiece } from "@sequoia-leaf/raid/run.ts";
 import { advance } from "@sequoia-leaf/raid/sitting/clock.ts";
 import { type Call, command, openSitting } from "@sequoia-leaf/raid/sitting/commands.ts";
 import { CLOCK, type Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
@@ -24,6 +25,7 @@ import { ask, doNow, go, onNotes, onRefused, openTable, S, tableNow } from "../s
 import { openLine } from "./line.ts";
 import { CLOSED_UNSTARTED, NOT_SEATED } from "./reads.ts";
 import {
+  BACK_FIRST,
   doneWithTable,
   liveLine,
   liveView,
@@ -31,9 +33,12 @@ import {
   onSeatView,
   paidFor,
   readyUp,
+  scoutAt,
+  scouting,
   shownRun,
   sitAt,
   stepBack,
+  takeFromRing,
   takeUp,
 } from "./seated.ts";
 
@@ -342,4 +347,77 @@ test("Ready is a state the page wants: turned down (an older Leaf's `invalid_com
   liveLine()?.read();
   await until(() => liveLine()?.owed() === false, "the read to land");
   expect(readies().length).toBe(2);
+});
+
+/** The member's room, with the fourth seat's table made its own: a figure holding an item, a component on the rack, acorns and a level. */
+function scouted(): { t: Sitting; now: number } {
+  const { t: room, now } = planning();
+  const t = structuredClone(room);
+  const them = t.seats[3]?.run;
+  if (!them) throw new Error("no fourth seat");
+  const moth = newPiece(them, "moth");
+  moth.items = ["bark"];
+  them.board[9] = moth;
+  them.rack = { thorn: 2, plume: 1 };
+  them.acorns = 17;
+  them.level = 4;
+  them.boons = ["formation"];
+  return { t, now };
+}
+
+describe("scouting at the live seat", () => {
+  test("shows a seat's table as Leaf has it now, in place of the member's own; their own row brings theirs back", async () => {
+    const { t, now } = scouted();
+    const line = await seated(t, now, answeringLeaf(now, { sitting: t, notes: [] }).routes);
+    expect(scoutAt(3)).toBe(true);
+    const them = line.view.seats[3];
+    const shown = shownRun(line.view);
+    if (!them || !shown) throw new Error("nothing shown");
+    // Leaf sent it: the page shows the seat's table as it came, and invents nothing.
+    expect(them.table.board[9]).toMatchObject({ kind: "moth", items: ["bark"] });
+    expect(them.table.rack).toEqual({ thorn: 2, plume: 1 });
+    const { board, bench, rack, acorns, level, xp, boons } = shown;
+    expect({ board, bench, rack, acorns, level, xp, boons }).toEqual(them.table);
+    // Their boons come too, so their figures' cards show the numbers those boons give.
+    expect(boons).toEqual(["formation"]);
+    // The member's own stall stays theirs; nobody stands across.
+    expect(shown.stall).toEqual(line.view.run?.stall ?? []);
+    expect([shown.resolve, shown.foe.figures.length]).toEqual([them.resolve, 0]);
+    // Their own row (or nobody's) is the member's own board again.
+    expect(scoutAt(line.view.you)).toBe(true);
+    expect([scouting(), shownRun(line.view)]).toEqual([null, line.view.run]);
+  });
+
+  test("turns the member's own commands down until they are back, and sends nothing", async () => {
+    const { t, now } = scouted();
+    const leaf = answeringLeaf(now, { sitting: t, notes: [] });
+    await seated(t, now, leaf.routes);
+    scoutAt(3);
+    expect(doNow({ do: "hold", on: true })).toEqual({ ok: false, why: BACK_FIRST });
+    expect(await ask({ do: "rustle" })).toEqual({ ok: false, why: BACK_FIRST });
+    expect(readyUp(true)).toEqual({ ok: false, why: BACK_FIRST });
+    expect(takeFromRing(0)).toEqual({ ok: false, why: BACK_FIRST });
+    expect(refused).toEqual([BACK_FIRST, BACK_FIRST, BACK_FIRST, BACK_FIRST]);
+    expect(leaf.posted).toEqual([]);
+  });
+
+  test("a fight's start brings the member back to their own board", async () => {
+    const { t, now } = scouted();
+    if (t.stage.at !== "plan") throw new Error("not planning");
+    const fight = advance(t, t.stage.until);
+    expect(fight.stage.at).toBe("fight");
+    const routes: Record<string, Route | Reply> = {
+      "GET /v1/game/play/raid": { status: 200, body: soloTable() },
+      "GET /v1/game/sittings/s1": { status: 200, body: answer("s1", 2, fight, t.stage.until + 50) },
+    };
+    await seated(t, now, routes);
+    expect(scoutAt(3)).toBe(true);
+    liveLine()?.read();
+    await until(() => liveView()?.stage.at === "fight", "the fight to be read");
+    const view = liveView();
+    expect(scouting()).toBeNull();
+    expect(view && shownRun(view)?.board).toEqual(view?.run?.board);
+    // And no other seat may be scouted while it is fought.
+    expect(scoutAt(3)).toBe(false);
+  });
 });

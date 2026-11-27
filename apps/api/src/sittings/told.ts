@@ -24,8 +24,17 @@ export function membersAt(t: Sitting): string[] {
   return t.seats.flatMap((seat) => (seat.who.is === "member" ? [seat.who.id] : []));
 }
 
-/** What every member at a sitting is shown of it alike: its view for nobody in particular, with no seat or run of their own. */
-const sharedView = (t: Sitting): string => JSON.stringify(sittingView(t, null));
+/**
+ * What every member at a sitting is shown of it alike, from a view of it (`sittingView`, or one as it
+ * came off the wire): all of it but the viewer's own seat and run, and every seat's table as it stands
+ * now, which moves with each member's planning. Only that changing tells every member; a table to
+ * scout is read by the page scouting it.
+ */
+export function sharedText(view: unknown): string {
+  const plain = typeof view === "object" && view !== null ? { ...view, you: null, run: null } : null;
+  return JSON.stringify(plain, (key: string, value: unknown) => (key === "table" ? undefined : value));
+}
+const sharedView = (t: Sitting): string => sharedText(sittingView(t, null));
 
 /** Each member's own run at a sitting, by their Leaf id. */
 function runsAt(t: Sitting): Map<string, string> {

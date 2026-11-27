@@ -61,25 +61,22 @@ describe("the clock at the top", () => {
     const begun = started(3, 1, 1000);
     const carousel = sittingView(begun, "leaf-0");
     expect(clockText(carousel, 1000)).toBe(`Carousel · ${CLOCK.together / 1000} s`);
-    // The member's take: the regulars' turn, whose length is nobody's to count.
-    const took = must(command(begun, { do: "pick", offer: 0 }, call(1500, 5)));
-    expect(clockText(sittingView(took, "leaf-0"), 1500)).toBe("Carousel");
     const plan = until(begun, (t) => t.stage.at === "plan");
     const at = deadline(plan) - CLOCK.plan;
     expect(clockText(sittingView(plan, "leaf-0"), at)).toBe("Planning · 30 s");
     expect(clockText(sittingView(plan, "leaf-0"), at + 1500)).toBe("Planning · 29 s");
     expect(clockText(sittingView(plan, "leaf-0"), deadline(plan) + 400)).toBe("Planning · 0 s");
     const fight = until(plan, (t) => t.stage.at === "fight");
-    expect(clockText(sittingView(fight, "leaf-0"), deadline(fight) - 6200)).toBe("The fight · 7 s");
+    expect(clockText(sittingView(fight, "leaf-0"), deadline(fight) - 6200)).toBe("Fight · 7 s");
   });
 
-  test("in a carousel counts the member's own turn down while it is theirs, and nothing while others choose", () => {
+  test("in a carousel counts the turn being taken down, the member's own or others'", () => {
     const later = until(started(5, CHAIRS), (t) => t.stage.at === "carousel" && t.room > 0);
     if (later.stage.at !== "carousel") throw new Error("not a carousel");
     const [first = 0, , third = 0] = later.stage.turns;
     const ends = later.stage.ends;
     expect(clockText(sittingView(later, member(first).id), ends - 3200)).toBe("Carousel · 4 s");
-    expect(clockText(sittingView(later, member(third).id), ends - 3200)).toBe("Carousel");
+    expect(clockText(sittingView(later, member(third).id), ends - 3200)).toBe("Carousel · 4 s");
   });
 
   test("seconds are whole, never below 0", () => {

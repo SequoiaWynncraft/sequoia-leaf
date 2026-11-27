@@ -244,6 +244,12 @@ export const snd = {
     tone(note(-5), 0.3, { vol: 0.12, type: "triangle" });
     tone(note(-5), 0.3, { vol: 0.12, type: "triangle", at: 0.3 });
   },
+  /** A stage begins at a live table: two bright notes, under its banner. */
+  round(): void {
+    if (!heard(RAID.fights) || !may("round", 600)) return;
+    tone(note(7), 0.16, { vol: 0.08, type: "triangle" });
+    tone(note(12), 0.3, { vol: 0.08, type: "triangle", at: 0.12 });
+  },
   /** Something big is coming up the path. */
   boss(): void {
     if (!heard(RAID.bosses)) return;

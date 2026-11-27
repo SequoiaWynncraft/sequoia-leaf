@@ -132,7 +132,7 @@ export function summary(asks: EndAsks | null): HTMLElement | null {
   add(paper, el("h1", "k-title big", { text: title }), ...howFar(run, sum));
   const left = el("div", "k-col", {});
   const right = el("div", "k-col", {});
-  add(paper, el("div", "pips", {}, ...pipsOf(run, "span")), el("div", "cols", {}, left, right));
+  add(paper, el("div", "pips", {}, ...pipsOf(run)), el("div", "cols", {}, left, right));
   add(left, el("div", "k-label", { text: "The party that got there" }), partyRow(run), el("hr", ""));
   const fresh = news.filter((n) => n.t !== "best");
   if (fresh.length > 0)

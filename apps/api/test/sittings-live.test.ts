@@ -6,7 +6,7 @@ import { type Call, command, openSitting, type SittingCommand } from "@sequoia-l
 import { CLOCK, type Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
 
 import { Sittings } from "../src/sittings/service.ts";
-import { listMoved, toldOf } from "../src/sittings/told.ts";
+import { listMoved, sharedText, toldOf } from "../src/sittings/told.ts";
 import { LiveClient } from "./live-client.ts";
 import { playThrough, type Reach, type Seen, seen } from "./sittings-drive.ts";
 import { fakeBackend, sessionOf, steadyDice, testLeaf } from "./support.ts";
@@ -81,10 +81,9 @@ type Of<T extends ToClient["t"]> = Extract<ToClient, { t: T }>;
 const nudges = <T extends "sitting" | "sittings">(page: LiveClient, t: T): Of<T>[] =>
   page.texts.filter((m): m is Of<T> => m.t === t);
 
-/** What every member is shown of a sitting alike, from one member's answer: all of it but their seat and run. */
+/** What every member is shown of a sitting alike, from one member's answer, as Leaf tells by it (`sharedText`). */
 function sharedOf(answer: unknown): string {
-  const state = typeof answer === "object" && answer !== null && "state" in answer ? answer.state : null;
-  return JSON.stringify(typeof state === "object" && state !== null ? { ...state, you: null, run: null } : null);
+  return sharedText(typeof answer === "object" && answer !== null && "state" in answer ? answer.state : null);
 }
 
 /** An answer a driver had: whose session, whether it sent commands, the sitting as it read it, and what everybody is shown of it alike. */
@@ -157,6 +156,11 @@ describe("who is told of a write", () => {
     // Alice's own planning, which nobody else sees until the lock: only she is told.
     const held = done(planning, { do: "hold", on: true }, A(T0 + 20_000));
     expect(sorted(toldOf(planning, held))).toEqual([alice]);
+    // A figure bought changes the table anyone may scout; that alone tells only her too: a page
+    // scouting her reads as it scouts, rather than every member reading on each of her moves.
+    const bought = command(held, { do: "buy", offer: 0 }, A(T0 + 20_000));
+    if (bought.ok) expect(sorted(toldOf(held, bought.sitting))).toEqual([alice]);
+    expect(bought.ok || ["pick_component", "acorns", "bench_full"].includes(bought.code)).toBe(true);
     // Alice is ready: everyone sees who is.
     const ready = done(held, { do: "ready", on: true, room: held.room }, A(T0 + 20_001));
     expect(sorted(toldOf(held, ready))).toEqual([alice, bob]);

@@ -1017,6 +1017,28 @@ uWWWUWWWu
 .u..W..u.
 ....u....
 
+glyph ring
+...yyy...
+.yy...yy.
+.y.....y.
+y...Y...y
+y..YwY..y
+y...Y...y
+.y.....y.
+.yy...yy.
+...yyy...
+
+glyph eye
+.........
+..wwwww..
+.ww...ww.
+ww.kkk.ww
+w..kwk..w
+ww.kkk.ww
+.ww...ww.
+..wwwww..
+.........
+
 # ---------- a figure's level, in a raid with the member's own figures ----------
 
 level 1

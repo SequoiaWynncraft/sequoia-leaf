@@ -48,6 +48,8 @@ export const GLYPHS = [
   "coin",
   "flame",
   "frost",
+  "ring",
+  "eye",
 ] as const;
 export type Glyph = (typeof GLYPHS)[number];
 

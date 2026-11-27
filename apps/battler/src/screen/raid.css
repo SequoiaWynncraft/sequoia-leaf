@@ -82,8 +82,8 @@ button.k-chip {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* Past the fifteenth room of an endless run, the room it is in, before the pips. */
-#track > .deep {
+/* Past the fifteenth room of an endless run, the room it is in, before the pips; at a live table, the round. */
+#track > .where {
   padding-right: calc(var(--u) * 2);
   font: var(--f-ui);
   white-space: nowrap;
@@ -1731,34 +1731,8 @@ body[data-rule] #says {
   }
 }
 
-/*
- * At a live table, whose clock is in the bar too (not a phone): the clock by its stage and seconds on
- * one line, of one width for every stage ("Carousel", "Planning", "The fight").
- */
-@media (min-width: 621px) and (max-width: 1139px) and (min-aspect-ratio: 4/5) {
-  body[data-live] #live-clock {
-    width: calc(var(--u) * 72);
-    padding-inline: var(--u);
-    grid-template-areas: "label secs";
-  }
-  body[data-live] #live-clock .vs {
-    display: none;
-  }
-}
-/*
- * And narrower (not a phone): its track the wing the run is in, sooner than at a table alone; and
- * every table's purse by its Coins, the same on the front page and at any table.
- */
+/* And narrower (not a phone): every table's purse by its Coins, the same on the front page and at any table. */
 @media (min-width: 621px) and (max-width: 959px) and (min-aspect-ratio: 4/5) {
-  body[data-live] #track {
-    flex: none;
-    width: calc(var(--u) * 58);
-    overflow: hidden;
-  }
-  body[data-live] #track .pip.now ~ .pip.wing,
-  body[data-live] #track .pip.now ~ .pip.wing ~ .pip,
-  body[data-live] #track .pip:has(~ .pip.wing ~ .pip.now),
-  body[data-live] #track .pip:has(~ .pip.wing.now),
   #purse > .k-cur.leaf {
     display: none;
   }
@@ -1772,15 +1746,15 @@ body[data-rule] #says {
   #hud {
     gap: var(--u);
   }
-  #track {
+  body:not([data-live]) #track {
     flex: none;
     width: calc(var(--u) * 58);
     overflow: hidden;
   }
-  #track .pip.now ~ .pip.wing,
-  #track .pip.now ~ .pip.wing ~ .pip,
-  #track .pip:has(~ .pip.wing ~ .pip.now),
-  #track .pip:has(~ .pip.wing.now) {
+  body:not([data-live]) #track .pip.now ~ .pip.wing,
+  body:not([data-live]) #track .pip.now ~ .pip.wing ~ .pip,
+  body:not([data-live]) #track .pip:has(~ .pip.wing ~ .pip.now),
+  body:not([data-live]) #track .pip:has(~ .pip.wing.now) {
     display: none;
   }
 }
@@ -1801,10 +1775,10 @@ body[data-rule] #says {
     max-width: 100%;
     overflow: hidden;
   }
-  #track:has(> .deep) .pip.now ~ .pip.wing,
-  #track:has(> .deep) .pip.now ~ .pip.wing ~ .pip,
-  #track:has(> .deep) .pip:has(~ .pip.wing ~ .pip.now),
-  #track:has(> .deep) .pip:has(~ .pip.wing.now) {
+  #track:has(> .where) .pip.now ~ .pip.wing,
+  #track:has(> .where) .pip.now ~ .pip.wing ~ .pip,
+  #track:has(> .where) .pip:has(~ .pip.wing ~ .pip.now),
+  #track:has(> .where) .pip:has(~ .pip.wing.now) {
     display: none;
   }
 }

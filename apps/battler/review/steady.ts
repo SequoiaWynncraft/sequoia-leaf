@@ -18,7 +18,8 @@
  * another member, another sitting down, and the table started and gone; a live table opened and
  * left; the line that a room was taken and the rooms held coming in with the Deep Woods' card up;
  * Set out; and End this raid, asked and done, to the end page and back to the front page. The table:
- * see `tableWalk`.
+ * see `tableWalk`, which ends at a live table: its tracker counting down, a player's board scouted by
+ * the keyboard and by their row, back, and a stage's banner.
  */
 import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -208,6 +209,12 @@ const rackChecks = (where: string): Step[] => [
 const sent = (command: string): string =>
   `const d = await r.send(${command}); if (!d?.ok) throw new Error("refused: " + ${JSON.stringify(command)} + " " + JSON.stringify(d)); return JSON.stringify(d.notes.map((n) => n.t));`;
 
+/** Whose board the live table shows, as the walk meant it (null: the member's own); else the walk fails here. */
+const scoutingIs = (seat: number | null): Step => [
+  "eval",
+  `(() => { const s = JSON.parse(window.tables.state()).scouting; return s === ${seat} ? "scouting " + s : "${FAIL} scouting " + s + ", not ${seat}"; })()`,
+];
+
 /**
  * The table while planning, and on through a fight: buying, a star-up, selling, moving and swapping
  * figures, Buy XP to a level up, Hold, items handed over and forged; more than fifty rerolls on the
@@ -308,14 +315,38 @@ function tableWalk(shot: (what: string) => Step): Step[] {
     ["wait", 2500],
     take("seated at a live table, planning"),
     shot("43-live-table"),
+    // The tracker counts down (its seconds, and the bar under it): nothing else moves.
+    ["wait", 2200],
+    take("a live table: the tracker counting down"),
+    // Scouting: the third player's board on the table by the keyboard, the second's by their row (in view at every size), and Space back.
+    ["key", "3"],
+    ["wait", 1200],
+    scoutingIs(2),
+    take("scouting a player by the keyboard"),
+    shot("44-live-scouting"),
+    ...tap('#live-players [data-seat="1"]', "scouting another player by their row", 1200),
+    scoutingIs(1),
+    ["wait", 1500],
+    take("scouting: the tracker still counting"),
+    ["key", " "],
+    ["wait", 900],
+    scoutingIs(null),
+    take("back to the member's own board"),
     // A deep rack at the live table: the page's own copy, as nothing stages a seat's rack.
     staged(
       `r.copy().rack = { thorn: 30, plume: 21, glowcap: 12, bark: 9, chestnut: 7, blackthorn: 3, hoard: 2, tongs: 1 }; r.redraw();`,
     ),
     ["wait", 900],
     take("a deep rack at the live table"),
-    shot("44-live-rack"),
+    shot("45-live-rack"),
     ...rackChecks("a live table"),
+    // The clock moved to the deadline: the fight's stage begins, with its banner.
+    ["eval", `(async () => { try { return await window.tables.next(); } catch (e) { return "${FAIL} " + e; } })()`],
+    ["wait", 300],
+    take("a stage begins: its banner"),
+    shot("46-live-banner"),
+    ["wait", 1500],
+    take("the banner gone, the fight playing"),
   ];
 }
 

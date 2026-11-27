@@ -4,7 +4,7 @@
  * room it is in), the card each room opens, and the chairs an endless run has won. A room of the Deep
  * Woods that is held says by whom; one the forest grows in says by how much.
  */
-import { type Description, link, register } from "@sequoia-leaf/kit/card.ts";
+import { type Description, register } from "@sequoia-leaf/kit/card.ts";
 import { el } from "@sequoia-leaf/kit/dom.ts";
 import { member } from "@sequoia-leaf/kit/live.ts";
 import {
@@ -20,15 +20,17 @@ import {
   roomAt,
   roomOf,
   roomsFought,
+  type RoomSpec,
   type RunView,
 } from "@sequoia-leaf/raid";
 import { nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
 import { glyph, roomIcon } from "../art/icons.ts";
 import { acrossName } from "../logic.ts";
-import { S } from "../state.ts";
+import { LIVE, S } from "../state.ts";
 import { pic } from "./cards.ts";
 import { ruleRow } from "./rulecards.ts";
+import { drawTrack, type Slot } from "./tracker.ts";
 
 /** The rooms the track shows, counting from 0: the fifteen the run is among (for an endless run past the fifteenth, those it has come round to). */
 export function roomsShown(run: Pick<RunView, "room">): number[] {
@@ -42,17 +44,38 @@ export function outcomeOf(run: Pick<RunView, "record">, room: number): "won" | "
   return record ? (record.result === "win" ? "won" : record.result === "loss" ? "lost" : "drawn") : "";
 }
 
-/** The rooms a run is among as pips (the room it is in lit), each with a gap before a new wing. */
-export function pipsOf(run: RunView, tag: "button" | "span"): HTMLElement[] {
+/** A room's pip classes on a run's rooms: its kind, the room the run is in (lit while it is to be fought), how it came out, and a gap before a new wing. */
+function pipClass(run: RunView, i: number, room: RoomSpec, fights: boolean): string {
+  const state = outcomeOf(run, i);
+  const here = fights && i === run.room && run.stage.phase !== "over" && state !== "won";
+  const wing = i % ROOM_COUNT > 0 && roomAt(i - 1)?.wing !== room.wing ? " wing" : "";
+  // `now`: the room the run is in, won or not, which a narrow window's track shows the wing of.
+  return `${room.kind} ${here ? "here lit" : state}${wing}${i === run.room ? " now" : ""}`.trim();
+}
+
+/** The rooms a run is among as pips, for its end page: each with a gap before a new wing. */
+export function pipsOf(run: RunView): HTMLElement[] {
   return roomsShown(run).flatMap((i) => {
+    const room = roomAt(i);
+    return room ? [el("span", `k-slot pip ${pipClass(run, i, room, false)}`, {}, pic(roomIcon(room.kind)))] : [];
+  });
+}
+
+/** The rooms a run is among as the tracker's rounds, each with its card: the one it is in the keyboard's stop. */
+function slotsOf(run: RunView): Slot[] {
+  return roomsShown(run).flatMap((i): Slot[] => {
     const room = roomAt(i);
     if (!room) return [];
     const state = outcomeOf(run, i);
-    const here = tag === "button" && i === run.room && run.stage.phase !== "over" && state !== "won";
-    const wing = i % ROOM_COUNT > 0 && roomAt(i - 1)?.wing !== room.wing ? " wing" : "";
-    // `now`: the room the run is in, won or not, which a narrow window's track shows the wing of.
-    const cls = `k-slot pip ${room.kind} ${here ? "here lit" : state}${wing}${i === run.room ? " now" : ""}`.trim();
-    return [el(tag, cls, tag === "button" ? { type: "button" } : {}, pic(roomIcon(room.kind)))];
+    return [
+      {
+        pic: roomIcon(room.kind),
+        cls: pipClass(run, i, room, true),
+        label: `Room ${i + 1}${state ? `, ${state}` : ""}`,
+        ref: `room:${i}`,
+        stop: i === run.room && run.stage.phase !== "over",
+      },
+    ];
   });
 }
 
@@ -80,28 +103,16 @@ export function trackPlaque(): HTMLElement {
   });
 }
 
-/** Draws the track for a run: past the fifteenth room, which room it is in, before the pips. */
+/** Draws the track for a run: its rooms, and past the fifteenth which room it is in, before them. At a live table the table's own tracker is drawn instead (`live/hud.ts`). */
 export function renderTrack(run: RunView): void {
   const track = document.getElementById("track");
-  if (!track) return;
+  if (!track || LIVE.seat) return;
   const key = `${S.runs}:${run.way.course.id}:${run.room}:${run.stage.phase}:${roomsFought(run)}`;
   if (key === drawn.key) return;
   drawn.key = key;
-  const pips = pipsOf(run, "button");
-  roomsShown(run).forEach((i, at) => {
-    const pip = pips[at];
-    if (!pip) return;
-    const state = outcomeOf(run, i);
-    pip.setAttribute("aria-label", `Room ${i + 1}${state ? `, ${state}` : ""}`);
-    pip.tabIndex = i === run.room && run.stage.phase !== "over" ? 0 : -1;
-    link(pip, `room:${i}`);
-  });
   // On a phone, the number alone.
-  const past =
-    run.room >= ROOM_COUNT
-      ? el("b", "k-gold deep", {}, el("span", "wide-only", { text: "Room " }), String(run.room + 1))
-      : null;
-  track.replaceChildren(...(past ? [past] : []), ...pips);
+  const where = run.room >= ROOM_COUNT ? (["Room ", String(run.room + 1)] as const) : null;
+  drawTrack(track, { where, slots: slotsOf(run), key, clock: null });
 }
 
 /** An endless run's chairs, for the level's plaque: how many figures it may field, once a boss past the fifteenth room has given one (hidden until then). */

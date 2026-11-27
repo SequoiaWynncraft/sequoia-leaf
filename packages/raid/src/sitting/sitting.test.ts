@@ -1038,8 +1038,20 @@ describe("what a viewer is shown", () => {
           "faces",
           "board",
           "fight",
+          "table",
         ]);
         expect(s.board).toEqual(seat(t, i).shown);
+        // Its table as it stands now, to scout: board, bench, rack, acorns, level, XP and boons, never its stall.
+        const { run } = seat(t, i);
+        expect(s.table).toEqual({
+          board: run.board,
+          bench: run.bench,
+          rack: run.rack,
+          acorns: run.acorns,
+          level: run.level,
+          xp: run.xp,
+          boons: run.boons,
+        });
         expect(s.fight).toEqual(t.stage.at === "fight" ? (foughtOf(seat(t, i).run)?.setup ?? null) : null);
       }
       const stranger = sittingView(t, null);
