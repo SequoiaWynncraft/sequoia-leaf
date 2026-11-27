@@ -61,7 +61,7 @@ describe("the allocation guard", () => {
         "kinds/lean.ts:rules.work",
         "tick.ts:step",
       ]);
-      expect(found.makes.map((m) => m.split(": …")[0]).toSorted()).toEqual([
+      expect(found.makes.map((m) => m.split(": …")[0] ?? "").toSorted((a, b) => a.localeCompare(b))).toEqual([
         "kinds/bare.ts:rules.work: new",
         "kinds/lean.ts:rules.work: new",
       ]);
