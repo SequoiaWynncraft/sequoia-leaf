@@ -3,18 +3,21 @@
  * from the yard than any the plots table has (sixteen round today's nine), each a plot of the plots
  * table's size with deadfall, a pool and a redwood standing where a yard might build. They are added
  * to the plots table (`RINGED_IDS`) and the land is put together from all of them (`RINGED`), as the
- * land is.
+ * land is. A second ring round that one (`RING_2`) makes the land of tier 5, seven plots by seven
+ * (`SEVEN`).
  */
 import * as F from "../src/index.ts";
 import { must } from "./yards.ts";
 
 /** How far from the yard the ring is, in plots: one past the plots table's furthest. */
 const OUT = 1 + Math.max(...F.PLOTS.map((p) => Math.max(Math.abs(p.col), Math.abs(p.row))));
-const SIDE = Array.from({ length: 2 * OUT + 1 }, (_, k) => k - OUT);
-/** The plots of the ring, each from the yard as the plots table places them. */
-const AROUND: readonly (readonly [number, number])[] = SIDE.flatMap((col) =>
-  SIDE.flatMap((row) => (Math.max(Math.abs(col), Math.abs(row)) === OUT ? [[col, row] as const] : [])),
-);
+/** The places of the plots `out` plots from the yard, each from the yard as the plots table places them. */
+function around(out: number): readonly (readonly [number, number])[] {
+  const side = Array.from({ length: 2 * out + 1 }, (_, k) => k - out);
+  return side.flatMap((col) =>
+    side.flatMap((row) => (Math.max(Math.abs(col), Math.abs(row)) === out ? [[col, row] as const] : [])),
+  );
+}
 
 /** A ring plot's ground: a redwood, deadfall and a pool, each a little further along by the plot's place in the ring. */
 function rows(n: number): string[] {
@@ -37,22 +40,31 @@ function rows(n: number): string[] {
   return out.map((r) => r.join(""));
 }
 
+/** The plots of a ring `out` plots from the yard, numbered on from `from`, as the plots table has its own. */
+const ringOf = (out: number, from: number): readonly F.PlotInfo<string>[] =>
+  around(out).map(([col, row], k) => ({
+    id: `ring-${col}-${row}`,
+    name: `Ring plot ${from + k + 1}`,
+    col,
+    row,
+    price: 1_000_000,
+    why: "A plot of a ring added for a test.",
+    rows: rows(from + k),
+  }));
+
 /** The ring's plots, as the plots table has its own. */
-export const RING: readonly F.PlotInfo<string>[] = AROUND.map(([col, row], n) => ({
-  id: `ring-${col}-${row}`,
-  name: `Ring plot ${n + 1}`,
-  col,
-  row,
-  price: 1_000_000,
-  why: "A plot of a ring added for a test.",
-  rows: rows(n),
-}));
+export const RING: readonly F.PlotInfo<string>[] = ringOf(OUT, 0);
+/** A second ring round the first: with both, the land is seven plots by seven, as tier 5's will be. */
+export const RING_2: readonly F.PlotInfo<string>[] = ringOf(OUT + 1, RING.length);
 
 /** The plots table with the ring added at its end. */
 export const RINGED_IDS: readonly string[] = [...F.PLOT_IDS, ...RING.map((p) => p.id)];
 
 /** The guild's land with the ring round it. */
 export const RINGED: F.Land = F.landFrom([...F.PLOTS, ...RING], RINGED_IDS);
+
+/** The guild's land with both rings round it: forty-nine plots, seven by seven. */
+export const SEVEN: F.Land = F.landFrom([...F.PLOTS, ...RING, ...RING_2], [...RINGED_IDS, ...RING_2.map((p) => p.id)]);
 
 /** A yard on the larger land that owns a plot of the ring, with a crate on it, its redwood felled and a plan of the whole yard kept. */
 export function outward(): F.Yard {

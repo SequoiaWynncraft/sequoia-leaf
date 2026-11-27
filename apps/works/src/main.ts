@@ -31,9 +31,9 @@ import { stepFlights, stepWalkers } from "./actors.ts";
 import { noteArrivals } from "./arrivals.ts";
 import { TILE } from "./art/belts.ts";
 import { makeArt } from "./art/index.ts";
-import { ease, inset, inView, look, pan, resize, setCamera, setZoom, zoomSteps } from "./camera.ts";
+import { ease, holdView, inset, inView, look, pan, resize, setCamera, setZoom, zoomSteps } from "./camera.ts";
 import { callers, capstones, handOver, onNews } from "./events.ts";
-import { arrive } from "./figure/you.ts";
+import { arrive, comeIn } from "./figure/you.ts";
 import { updateFx } from "./fx.ts";
 import { initInput, inputHooks, stepInput } from "./input.ts";
 import { stepClearing } from "./plots.ts";
@@ -429,6 +429,10 @@ async function boot(): Promise<Page | null> {
       nudgeAt = 0;
     },
     nudged: () => lessons.said?.id ?? null,
+    comeIn(name) {
+      comeIn(name, art.ground);
+      holdView(true);
+    },
   };
 }
 
@@ -450,6 +454,8 @@ export interface Page {
   restaged(lessonsTaken: string[] | null): void;
   /** The nudge being said, by its id. */
   nudged(): string | null;
+  /** You stand at the depot's door with the look the town gives `name`: on a review page's own yard, which nobody arrives in. */
+  comeIn(name: string): void;
 }
 
 /** The page as it opens: its `Page`, or nothing when it did not open (no Leaf, signed out, a visit to nobody). */
