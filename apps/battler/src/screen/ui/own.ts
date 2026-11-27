@@ -46,15 +46,20 @@ const WAYS: readonly Choice<"all" | "own">[] = [
   { id: "own", name: wayName(true) },
 ];
 
+/** A part of the page held in its place but not shown: unseen, and out of the keyboard's way. */
+export const unshown = (shown: boolean): Record<string, string> => (shown ? {} : { "aria-hidden": "true", inert: "" });
+
 /**
- * The front page's part on how to set out, over the trails: for a member who has pulled a figure,
- * the two ways to choose from and what the chosen one is; for anyone else the one line about the
- * one way there is. While the raid laid out has fought no room (`keep`), nothing is chosen.
+ * The front page's part on how to set out, under the trails: for a member who has pulled a figure,
+ * the two ways to choose from and what the chosen one is (both held in one place, so that choosing
+ * moves nothing); for anyone else the one line about the one way there is. While the raid laid out
+ * has fought no room (`keep`), nothing is chosen.
  */
 export function waysOf(keep: boolean, redraw: () => void): (HTMLElement | null)[] {
-  const fair = el("p", "k-read fair", { text: "Everyone plays with the same figures here." });
-  if (keep) return [pulled() > 0 ? null : fair, el("div", "k-label", { text: "Which way, next time?" })];
-  if (pulled() === 0) return [fair];
+  const fair = (shown = true): HTMLElement =>
+    el("p", "k-read fair", { text: "Everyone plays with the same figures here.", ...unshown(shown) });
+  if (keep) return [pulled() > 0 ? null : fair()];
+  if (pulled() === 0) return [fair()];
   const ways = choices(WAYS, {
     kind: "radio",
     name: "Figures",
@@ -65,18 +70,17 @@ export function waysOf(keep: boolean, redraw: () => void): (HTMLElement | null)[
       redraw();
     },
   });
-  if (!setsOutOwn()) return [ways.el, fair];
   const about = el(
     "div",
     "k-col tight k-read",
-    {},
+    unshown(setsOutOwn()),
     el("b", "", { text: `You have ${pulled()} of ${figuresHere().length} figures.` }),
     el("span", "", {
       text: `In these raids you are offered every 1-acorn figure to buy with acorns, and other figures only if you have pulled them at the Grove. Each copy of a figure you have pulled after the first is 1 level: ${LEVELS.boost}% more health and attack, up to level ${LEVELS.most}.`,
     }),
     el("span", "", { text: NOT_COUNTED }),
   );
-  return [ways.el, about];
+  return [ways.el, el("div", "stack", {}, fair(!setsOutOwn()), about)];
 }
 
 /** Which way a raid is, before the line about it on the front page: said to a member who has both ways. */

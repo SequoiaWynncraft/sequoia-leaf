@@ -135,14 +135,29 @@ kit's card: "The table needs the guild's server."
 - **A boss** is not announced: it walks in from the trees, slowly, before the rest of its party.
 - **The end of a run** is a page of paper: the rooms, the party that got there, what is new in the
   almanac, and the Coins paid into the member's purse. Then again, or back to town.
-- **Round the game.** A front page (a line saying everyone plays with the same figures here; carry
-  on, or which way to set out; the almanac; how to play; table looks; leave the table). A member who
-  has pulled a figure at the Grove chooses there between "All figures" and "Your figures"; the
-  second says how many they have, what the stall sells, what a copy does and that such a raid is
-  not counted. A member who has pulled none is not asked.
+- **Round the game.** A front page that picks a way to play (`ui/modes.ts` is the table of them,
+  `ui/front.ts` draws it). Along the top a strip for each run laid out: its trail, room and health,
+  going home early and Carry on. Down the left the categories as large tabs (Normal,
+  Endless, Versus), and under the chosen one its modes as cards; a mode the page cannot set out on
+  yet (`setOut` null: Endless, the Deep Woods and the live tables, for now) is not shown, nor a
+  category with none shown. In the middle the chosen mode's card: its name, one sentence, a picture
+  of the table as it is dressed, its options, and its foot: Set out, or Carry on with its run laid
+  out and New raid beside it once that run has fought a room, with a line under them saying why
+  Set out is closed or that a new raid ends the one laid out. On the right its board, a title and
+  rows of a rank, a name and a number, the member's own lit (and under the list when below it);
+  the trails' board is the member's own records. Along the bottom the almanac, how to play, table
+  looks and leave the table. On an upright phone it is the same, one part under another, the mode
+  alone in its category not listed. The trails' options are the figures to set out with and the
+  three trails (a radio group: the arrows choose; one not open yet can be chosen to look at, and
+  then Set out says why it is closed), with what the chosen one is under them. Whatever is chosen,
+  the card, the board and the button stay where they are: the words of every trail and of each way
+  are laid in one place with only the chosen one shown. A member who has pulled a figure at the
+  Grove chooses there between "All figures" and "Your figures"; the second says how many they
+  have, what the stall sells, what a copy does and that such a raid is not counted. A member who
+  has pulled none is not asked.
 - **A level** (in a raid with the member's own figures) is a small green "Lv 3" on the stall's card,
   in the head of the figure's card with the line "Level 3: 9% more health and attack.", under the
-  figure on the front page and the end page, and a small green number at the left of its base on
+  figure on the end page, and a small green number at the left of its base on
   the board and the bench. It is never drawn as a star. The almanac's tiles show the level of every
   figure pulled. While such a raid is in hand, a sign in the top bar says "Your figures" (and "All
   figures" on the main way, for a member who has both). A banner's member a member has pulled is a
@@ -271,10 +286,12 @@ timed can be stepped by hand.
 | `src/screen/ui/cards.ts`      | What each thing says about itself, registered with the kit's cards, and the references to them        |
 | `src/screen/ui/lit.ts`        | Which trait the cards have pointed at or pinned, and marking the chips and the stall for it           |
 | `src/screen/ui/picks.ts`      | Three cards to choose from                                                                            |
-| `src/screen/ui/pages.ts`      | The front page, the almanac, how to play, table looks, the end of a run                               |
+| `src/screen/ui/modes.ts`      | The ways to play as a table: each mode's category, words, Set out, run and board; the foot it shows   |
+| `src/screen/ui/front.ts`      | The front page: runs laid out, the categories and modes, the chosen mode's card, its board            |
+| `src/screen/ui/pages.ts`      | The pages over the table: the almanac, how to play, table looks, the end of a run                     |
 | `src/screen/ui/nudge.ts`      | The first-time nudges                                                                                 |
 
-`geometry.ts`, `logic.ts`, `keep.ts`, `light.ts`, `rich.ts` and `playback.ts` have tests beside them;
+`geometry.ts`, `logic.ts`, `keep.ts`, `light.ts`, `rich.ts`, `playback.ts` and `ui/modes.ts` have tests beside them;
 `playback.test.ts` holds that the fight on the table, lead-ins, hit-stops and all, is the rules'
 own, event for event, to the same end, at every speed.
 

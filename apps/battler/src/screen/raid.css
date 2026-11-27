@@ -1092,18 +1092,6 @@ b.dmg.true {
   flex-direction: column;
   gap: calc(var(--u) * 2);
 }
-.three > * {
-  flex: 1;
-  min-width: 0;
-  padding-inline: calc(var(--u) * 2);
-}
-.three > .k-btn.sm {
-  flex-direction: column;
-  gap: var(--u);
-  padding-block: calc(var(--u) * 2);
-  white-space: normal;
-  line-height: 1;
-}
 .party {
   display: flex;
   flex-wrap: wrap;
@@ -1195,14 +1183,14 @@ b.dmg.true {
 .ends > .k-btn {
   flex: 1 1 auto;
 }
-/* The line of the look tried: every look's line in one cell, the rest hidden, so the box never changes height. */
-.lookinfo {
+/* Things of which one is shown at a time (the line of the look tried, what a way of setting out is), all in one cell and the rest hidden, so the box never changes height. */
+.stack {
   display: grid;
 }
-.lookinfo > * {
+.stack > * {
   grid-area: 1 / 1;
 }
-.lookinfo > [aria-hidden="true"] {
+.stack > [aria-hidden="true"] {
   visibility: hidden;
 }
 .swatch {
@@ -1218,6 +1206,110 @@ b.dmg.true {
 }
 .look[aria-pressed="true"] {
   filter: brightness(1.25);
+}
+
+/* ---------- the front page: the ways to play ---------- */
+
+/* As tall as the window lets it be, whatever is chosen: the card, the board and the button keep their places. */
+.page.front {
+  min-width: 0;
+  width: min(100%, calc(var(--u) * 480));
+  height: min(calc(100dvh - var(--u) * 8), calc(var(--u) * 380));
+}
+.page > .menu {
+  flex: 1;
+  overflow: hidden;
+}
+.runs {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 2);
+}
+.run {
+  padding-block: calc(var(--u) * 2);
+}
+.run > .k-col {
+  min-width: calc(var(--u) * 60);
+}
+.menu-cols {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: calc(var(--u) * 84) minmax(0, 1fr) calc(var(--u) * 136);
+  gap: calc(var(--u) * 4);
+}
+.menu-cols > * {
+  min-height: 0;
+}
+.picker,
+.modes {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 2);
+}
+.picker {
+  overflow: hidden auto;
+}
+.cats {
+  flex-direction: column;
+}
+.cats > .k-btn {
+  flex: none;
+  justify-content: flex-start;
+  min-height: calc(var(--u) * 24);
+}
+.mode,
+.board {
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(var(--u) * 3);
+}
+.mode-head {
+  --fs: 1;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 4);
+}
+.mode p {
+  margin: 0;
+}
+.mode-opts {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 3);
+}
+.k-card.trail.chosen {
+  border-image-source: var(--k-f-card-chosen);
+}
+.mode-foot > .k-row > .k-btn {
+  flex: 1;
+}
+/* Its line is there when it is empty too: a reason coming or going moves nothing. */
+.mode-foot > p {
+  min-height: calc(var(--t-r) * 1.4);
+  margin: calc(var(--u) * 2) 0 0;
+}
+.board {
+  overflow: hidden auto;
+}
+.board-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+  padding: var(--u) calc(var(--u) * 2);
+}
+.board-row .place {
+  min-width: calc(var(--u) * 10);
+  text-align: right;
+  color: var(--k-gold);
+}
+.board-row .place:empty {
+  display: none;
+}
+.menu-foot > .k-btn {
+  flex: 1;
 }
 
 /* A stall too narrow for five large pictures and names shows both small, each inside its own card. */
@@ -1489,13 +1581,74 @@ b.dmg.true {
   .pick > .k-dim {
     font: var(--f-small);
   }
-  /* Four tabs do not fit in a row: two rows of two. */
-  .page .k-tabs {
+  /* The almanac's four tabs do not fit in a row: two rows of two. */
+  .page.wide .k-tabs {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
-  .three {
+  /* The front page one part under another, all of it scrolling: the categories a row of tabs, a mode alone in its category not listed. */
+  /* Held at the top of the window: a shorter page never moves what is above its card. */
+  #modal[data-page="front"] {
+    align-items: start;
+  }
+  .page.front {
+    height: auto;
+  }
+  .page > .menu {
+    overflow: hidden auto;
+  }
+  .menu-cols {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+  }
+  .picker,
+  .board,
+  .mode-opts {
+    overflow: visible;
+  }
+  .cats {
+    flex-direction: row;
+  }
+  /* Tabs fit across a phone: the categories by their names alone, every tab as narrow as its name. */
+  .menu .k-tabs > .k-btn {
+    min-width: 0;
+    padding-inline: calc(var(--u) * 2);
+  }
+  .cats > .k-btn {
+    flex: 1;
+    justify-content: center;
+    min-height: calc(var(--u) * 20);
+  }
+  .cats canvas {
+    display: none;
+  }
+  .modes {
+    flex-flow: row wrap;
+  }
+  .modes:has(> :only-child) {
+    display: none;
+  }
+  .run,
+  .menu-foot {
     flex-wrap: wrap;
+  }
+  .run .acts {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+  /* The run's two buttons small, side by side under its words. */
+  .acts > .k-btn {
+    flex: 1;
+    min-height: calc(var(--u) * 16);
+    padding-inline: calc(var(--u) * 3);
+  }
+  /* A picture of the table one screen pixel to each of its own, beside the mode's name. */
+  .mode-head {
+    --fs: 0.5;
+  }
+  .menu-foot > #leave {
+    flex-basis: 100%;
   }
   .summary .cols {
     grid-template-columns: minmax(0, 1fr);
