@@ -26,6 +26,7 @@ import { CORAL, CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import type { Ctx } from "@sequoia-leaf/kit/util.ts";
 
 import { PAINTS, TILE } from "./art/belts.ts";
+import { you } from "./figure/you.ts";
 import { heldBox, takenUp } from "./held.ts";
 import type { Layout } from "./layout.ts";
 import { markedTiles, pinPulse } from "./pinned.ts";
@@ -111,6 +112,17 @@ interface Over {
   readonly P: number;
   readonly X: (i: number) => number;
   readonly Y: (i: number) => number;
+}
+
+/** Where the member stands in their own yard, over the plan (`k` of its pixels to one of the yard's): a cream dot, edged dark. */
+function planYou(g: Ctx, dx: number, dy: number, k: number): void {
+  const c = you();
+  if (!c) return;
+  const [x, y] = [Math.round(dx + c.x * k), Math.round(dy + c.y * k)];
+  g.fillStyle = INK;
+  g.fillRect(x - 2, y - 2, 4, 4);
+  g.fillStyle = CREAM;
+  g.fillRect(x - 1, y - 1, 2, 2);
 }
 
 /** The box of the piece on a tile, over the plan: its tile, or for the depot its nine; `out` pixels further out. */
@@ -232,6 +244,7 @@ export function drawPlanMarks(g: Ctx, y: Yard, dx: number, dy: number): void {
       box(g, dx + S.aim.x * P, dy + S.aim.y * P, P, P, col, true);
     }
   }
+  planYou(g, dx, dy, P / TILE);
   const nudged = tileNudge();
   if (nudged) {
     // The place a nudge is about.

@@ -33,6 +33,7 @@ import { TILE } from "./art/belts.ts";
 import { makeArt } from "./art/index.ts";
 import { ease, inset, inView, look, pan, resize, setCamera, setZoom, zoomSteps } from "./camera.ts";
 import { callers, capstones, handOver, onNews } from "./events.ts";
+import { arrive } from "./figure/you.ts";
 import { updateFx } from "./fx.ts";
 import { initInput, inputHooks, stepInput } from "./input.ts";
 import { stepClearing } from "./plots.ts";
@@ -159,8 +160,8 @@ function card(why: Trouble): void {
   else troubleCard(why);
 }
 
-/** Who the member is, once the yard is open from Leaf; or nothing, with the card that says why it is not. */
-async function opened(params: URLSearchParams): Promise<{ id: string } | null> {
+/** Who the member is (their id and name), once the yard is open from Leaf; or nothing, with the card that says why it is not. */
+async function opened(params: URLSearchParams): Promise<{ id: string; name: string } | null> {
   watchPage("works");
   const where = await start();
   if (where.mode === "shut") {
@@ -191,7 +192,7 @@ async function boot(): Promise<Page | null> {
   const params = new URLSearchParams(location.search);
   // Who the member is, and then the yard as Leaf has it. Without Leaf there is no yard, unless a
   // review page handed one in.
-  const me = S.alone ? { id: "" } : await opened(params);
+  const me = S.alone ? { id: "", name: "" } : await opened(params);
   if (!me) return null;
   const art = makeArt(S.world.land);
 
@@ -244,7 +245,7 @@ async function boot(): Promise<Page | null> {
   fit();
   // The dock's height is only known once it has been laid out with its tools in it.
   measure();
-  look(home().x, home().y, true);
+  if (!arrive(me, art.ground)) look(home().x, home().y, true);
   const held = scope();
   held.on(window, "resize", fit);
   // The dock grows a row when the story opens more tools than fit: everything over it moves up.

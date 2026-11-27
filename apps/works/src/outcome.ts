@@ -7,10 +7,14 @@
 import { CREAM, GOLD } from "@sequoia-leaf/kit/palette.ts";
 
 import { TILE } from "./art/belts.ts";
+import { handReach } from "./figure/reach.ts";
 import { float, puff, ring } from "./fx.ts";
 import { yardSfx } from "./sound.ts";
 import { type Aim, S, toolHooks } from "./state.ts";
 import { coins, type Did } from "./yard.ts";
+
+/** What reach says of a run and of pieces in hand, worked into their aims as `aimed` works it into one tile's. */
+export { piecesReach, withReach } from "./figure/reach.ts";
 
 /** The colour of the dust a piece lands in, or is taken away in. */
 export const DUST = "#cbb894";
@@ -23,11 +27,14 @@ export function refused(did: Did): boolean {
   return true;
 }
 
-/** An aim at a tile: why it cannot be, what it costs, and for a tunnel its far mouth; of the yard and the purse as they are now. */
+/**
+ * An aim at a tile: why it cannot be (out of reach, `figure/reach.ts`, else the rules' reason), what
+ * it costs, and for a tunnel its far mouth; of the yard and the purse as they are now.
+ */
 export const aimed = (x: number, y: number, why: string | null, cost: number, far = -1): Aim => ({
   x,
   y,
-  why,
+  why: handReach(x, y) ?? why,
   cost,
   far,
   yard: S.world,

@@ -34,6 +34,7 @@ bun test                         # the screen's own questions, the yard on a sta
 | numbers a minute on a card                  | `ui/numbers.ts`                                                                  |
 | lessons and nudges                          | `teach.ts` (`nudge`, and `stepLessons` for when one is taken)                    |
 | moments, walkers, sparks, sounds            | `events.ts`, `actors.ts`, `fx.ts`, `sound.ts`                                    |
+| you in your yard: walking, the view, reach  | `figure/you.ts`, `figure/character.ts`, `figure/follow.ts`, `figure/reach.ts`    |
 | the letter, the top bar, notices, panels    | `ui/letter.ts`, `ui/hud.ts`, `ui/notes.ts`, `ui/panels.ts`, `ui/board.ts`        |
 
 ## What must hold

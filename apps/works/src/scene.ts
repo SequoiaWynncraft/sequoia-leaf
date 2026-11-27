@@ -66,7 +66,7 @@ import { bubble, bubbleSize, wrap } from "@sequoia-leaf/kit/signs.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx, hash, makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 
-import { HOP, walkers } from "./actors.ts";
+import { walkers } from "./actors.ts";
 import { armAt, type Arms, arms, beltTile, marksOf, PAINTS, ride, STEPS, TILE, withArm, woodOf } from "./art/belts.ts";
 import { BEYOND, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
@@ -77,6 +77,7 @@ import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
 import { heldBox, heldMarks } from "./held.ts";
 import { lampsIn } from "./lamps.ts";
 import { armsAt, asIf, type Layout, layout, pylonTop, sendsRight, sortSide } from "./layout.ts";
+import { eachPerson } from "./people.ts";
 import { pinMark } from "./pinned.ts";
 import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, standsOn, tileNudge } from "./state.ts";
 import { cameFrom, dirAt, hooded } from "./tiles.ts";
@@ -1412,20 +1413,8 @@ function standingLayer(f: Frame): void {
     }
   }
 
-  // The gnomes who come to the gate, and the yard's own: waddling, or standing; arms up under a crate.
-  for (const a of walkers) {
-    const m = art.m;
-    const hat = a.carrying ? 1 : 0;
-    const frame = a.moving
-      ? m.waddle[a.hat]?.[hat]?.[Math.floor(a.walked / 4) % 2]
-      : m.gnome[a.hat]?.[a.carrying ? 3 : 0];
-    if (!frame) continue;
-    const up = a.hop > 0 ? Math.abs(Math.sin((1 - a.hop / HOP) * Math.PI)) * 5 : 0;
-    const x = Math.round(a.x) - cx;
-    const y = Math.round(a.y - up) - cy;
-    stand(frame, x, y, a.y, a.alpha);
-    if (a.carrying) stand(art.parcel, x, y - 14, a.y + 0.1, a.alpha);
-  }
+  // The gnomes, and the member in their own yard.
+  eachPerson(art, cx, cy, put);
 
   blit(g, standing(gr), cx - gr.x, cy - gr.y, W, H, 0, 0);
 

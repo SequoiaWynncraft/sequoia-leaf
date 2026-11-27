@@ -49,6 +49,8 @@ const MEMBERS_ONLY: Readonly<Record<string, string>> = {
   "apps/town/src/live.ts": "where each player's own skin is served",
   "apps/works/src/ui/board.ts": "the faces of the yards' owners on Top yards, members and guests alone",
   "apps/works/src/ui/hud.ts": "the face of the owner of a yard visited, a member or a guest",
+  "apps/works/src/figure/you.ts": "the member themself, walking in their own yard",
+  "apps/works/src/figure/character.ts": "the poses of the member's own figure as it walks",
 };
 
 /** Whether a file takes anything from the skin figure but the name of a facing (`Dir`), which anything that turns uses. */
@@ -91,6 +93,7 @@ describe("the town's own", () => {
           "apps/town/src/main.ts",
           "apps/town/src/aboutui.ts",
           "apps/town/src/grovescene.ts",
+          "apps/works/src/figure/you.ts",
         ]).toContain(path);
     // And one of the town's own is only ever made as itself.
     for (const [path, text] of files)

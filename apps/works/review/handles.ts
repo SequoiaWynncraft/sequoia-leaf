@@ -27,8 +27,10 @@ import { tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "../src/art/belts.ts";
-import { look, zoom } from "../src/camera.ts";
+import { following, holdView, look, zoom } from "../src/camera.ts";
 import { forget } from "../src/events.ts";
+import { reachBox } from "../src/figure/reach.ts";
+import { backToDoor, you } from "../src/figure/you.ts";
 import { fingerTap } from "../src/input.ts";
 import { layout } from "../src/layout.ts";
 import type { Page } from "../src/main.ts";
@@ -54,6 +56,14 @@ import { closeBanner } from "../src/ui/notes.ts";
 import { closePanel, openPanel, type PanelId } from "../src/ui/panels.ts";
 import { $ } from "../src/ui/parts.ts";
 import { again, differences, doNow, screen, visitFollowing, yardReads } from "../src/yard.ts";
+
+/** Where you stand in your own yard, and how: your feet, the tile, whether you walk somewhere and the view goes with you, and what is in reach. */
+function yours(): Record<string, unknown> | null {
+  const c = you();
+  if (!c) return null;
+  const { x, y, tile, going, running, speed, way, pose } = c;
+  return { x, y, tile, going, running, speed, way, pose, following: following(), reach: reachBox() };
+}
 
 /** A goal's id, as a script reads it; null for none. */
 const goalId = (g: number): string | null => GOALS[g]?.id ?? null;
@@ -170,6 +180,9 @@ export function installHandles(p: Page): void {
           : null,
       );
       look(S.world.land.depot[0] * TILE + 8, S.world.land.depot[1] * TILE + 8, true);
+      // You stand at the depot's door of the yard put in place, and the view comes back to you.
+      backToDoor();
+      holdView(true);
       p.refresh();
     },
     hold: (on, lead, at) => {
@@ -360,6 +373,7 @@ export function installHandles(p: Page): void {
         reads: yardReads(),
         check: check(w),
         visit: S.visiting ? visitFollowing() : null,
+        you: yours(),
       };
     },
   };

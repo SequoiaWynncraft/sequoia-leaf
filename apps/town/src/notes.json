@@ -1,5 +1,24 @@
 [
   {
+    "id": "works-you-walk",
+    "at": "TBD",
+    "title": "You in your yard",
+    "lines": [
+      "In The Works you walk round your yard as yourself, in your own skin. WASD or the arrow keys walk, and holding them runs; the view follows you. On a phone, tap the ground to walk there.",
+      "You build and remove within reach: the plot you stand on and the 8 around it. From the yard's middle plot that is the whole yard."
+    ],
+    "more": [
+      {
+        "head": "Also",
+        "points": [
+          "Belts, splitters, joiners, sorters and tunnels are walked over. Machines, the depot, redwoods and the stream are walked around.",
+          "Drag the yard to look elsewhere. Walking, or Space, brings the view back to you.",
+          "A tap on a piece still opens its card. Cards, turning, painting and grades work from anywhere."
+        ]
+      }
+    ]
+  },
+  {
     "id": "raid-endless-past-400",
     "at": "2026-11-27T15:47Z",
     "title": "Endless runs past room 400",

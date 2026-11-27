@@ -63,7 +63,7 @@ import { PAINTS, TILE } from "./art/belts.ts";
 import { float, flutter, puff, sparkle } from "./fx.ts";
 import { aimOf, groupOf, markOf, runOf, type Tile } from "./hand.ts";
 import { keepsRight, sendsRight } from "./layout.ts";
-import { aimed, DUST, landed, paid, refused } from "./outcome.ts";
+import { aimed, DUST, landed, paid, piecesReach, refused, withReach } from "./outcome.ts";
 import { aimYard, isWhole, piecesInHand, pressYard } from "./plans.ts";
 import { yardSfx } from "./sound.ts";
 import {
@@ -550,7 +550,7 @@ function reckon(path: readonly Tile[]): void {
  */
 function runFrom(legs: Leg[], turns: Run["turns"], bad: string | null): Run {
   const pieces = legs.map(legPiece);
-  const why = bad ?? standRefusal(S.world, pieces, coins());
+  const why = piecesReach(pieces) ?? bad ?? standRefusal(S.world, pieces, coins());
   return { legs, turns, cost: priceOf(S.world, pieces), why, yard: S.world, rev: S.world.rev, coins: coins() };
 }
 
@@ -832,7 +832,7 @@ function aimGroup(x: number, y: number): void {
   const box = boxOf(placed(from, g.turns, 0, 0));
   const placedAt = placed(from, g.turns, x - ((box.w - 1) >> 1), y - ((box.h - 1) >> 1));
   const moving = g.as === "move";
-  const whys = refusals(w, placedAt, moving ? tilesOf(w, from) : null);
+  const whys = withReach(placedAt, refusals(w, placedAt, moving ? tilesOf(w, from) : null));
   const why = moving ? (whys.find((r) => r !== null) ?? null) : standRefusal(w, placedAt, coins(), whys);
   go({
     do: "group",

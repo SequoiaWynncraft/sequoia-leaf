@@ -2,10 +2,12 @@
 import { type ActionOf, keymap } from "@sequoia-leaf/kit/keyboard.ts";
 
 export const WORKS_KEYS = keymap("works", {
-  up: { shelf: "Looking about", does: "Move the view up", keys: ["KeyW", "ArrowUp"], held: true },
-  left: { shelf: "Looking about", does: "Move the view left", keys: ["KeyA", "ArrowLeft"], held: true },
-  down: { shelf: "Looking about", does: "Move the view down", keys: ["KeyS", "ArrowDown"], held: true },
-  right: { shelf: "Looking about", does: "Move the view right", keys: ["KeyD", "ArrowRight"], held: true },
+  // In somebody else's yard, where there is no figure of yours, they move the view.
+  up: { shelf: "Walking", does: "Walk up", keys: ["KeyW", "ArrowUp"], held: true },
+  left: { shelf: "Walking", does: "Walk left", keys: ["KeyA", "ArrowLeft"], held: true },
+  down: { shelf: "Walking", does: "Walk down", keys: ["KeyS", "ArrowDown"], held: true },
+  right: { shelf: "Walking", does: "Walk right", keys: ["KeyD", "ArrowRight"], held: true },
+  home: { shelf: "Walking", does: "Bring the view back to you", keys: ["Space"] },
   zoomIn: { shelf: "Looking about", does: "Zoom in", keys: ["Shift+Equal", "NumpadAdd"], repeats: true },
   zoomOut: { shelf: "Looking about", does: "Zoom out", keys: ["Shift+Minus", "NumpadSubtract"], repeats: true },
   // The nth slot picks the nth tool in the toolbar, whichever key the player has put in it.
