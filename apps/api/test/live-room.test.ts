@@ -77,6 +77,8 @@ const AFTER: Record<ToClient["t"], "not told" | "without them" | "as it is"> = {
   aboutChanged: "as it is",
   error: "as it is",
   pong: "as it is",
+  sitting: "as it is",
+  sittings: "as it is",
 };
 
 /** What a snapshot says to the first it is for, decoded. */

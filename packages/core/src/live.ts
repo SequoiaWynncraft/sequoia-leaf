@@ -19,6 +19,16 @@
  * does to it as it does it (`did`), and nothing of each other but who is there. A camp's room
  * (`campRoom`) moves as the town's does, and hears when the owner changes the camp (`changed`).
  *
+ * Some of what Leaf says is the player's own, not their room's (`Nudge`): that a raid sitting they
+ * are at moved on, told to every connection they have, in whatever room it is, or none.
+ *
+ * A connection opened into a room of a listening kind (`RoomKind.listens`: the open tables',
+ * `SITTINGS_ROOM`) is a listener: it hears what Leaf says there and what it tells the player, and is
+ * nowhere the player can be seen. A player has at most one presence connection (in the town, a camp,
+ * a visit) and one listener, each beside the other: a new one of either kind replaces only the old
+ * one of its kind. A listener sends nothing but pings, and cannot join another room; a presence
+ * connection cannot join a listening one.
+ *
  * Why Leaf closes a connection is said by its close code alone (`CLOSE`).
  *
  * Motion is state, never an event: each frame says all of where a player is, and only the newest
@@ -334,7 +344,23 @@ export type ToClient =
    * In a camp's room: Leaf has kept a batch of the owner's that changed what a visitor is shown of
    * the camp, and `rev` is the state's stored revision after it. A visitor's page reads the camp again.
    */
-  | { t: "changed"; rev: number };
+  | { t: "changed"; rev: number }
+  | Nudge;
+
+/**
+ * Leaf's word that something a page reads of it over HTTP has changed, never what: the page reads it
+ * then, and is shown only what its reading shows it.
+ *
+ * - `sitting`: a raid sitting the player is at has moved on, and is stored at `rev` now
+ *   (`GET /v1/game/sittings/{id}?rev=`). It is the player's own: told on their connection whatever
+ *   room it is in, or none, to every member at the sitting before or after the change.
+ * - `sittings`: the list of open tables has changed (`GET /v1/game/sittings`), told to everybody in
+ *   the room of the open tables (`SITTINGS_ROOM`).
+ */
+export type Nudge = { t: "sitting"; id: string; rev: number } | { t: "sittings" };
+
+/** Whether something Leaf said is a nudge (`Nudge`), the player's own, rather than their room's. */
+export const isNudge = (m: ToClient): m is Nudge => m.t === "sitting" || m.t === "sittings";
 
 /**
  * What a kind of room is: how far it reaches, how many fit in one copy of it before another is
@@ -348,12 +374,21 @@ export interface RoomKind {
   capacity: number;
   speed: number;
   still?: boolean;
+  /** A connection opened into it is a listener, beside the player's presence, and in no room of the game's. */
+  listens?: boolean;
 }
+
+/**
+ * The room of everybody looking at the raid's open tables (the Versus card), whose connections are
+ * listeners (`RoomKind.listens`): told when the list of them changes (`sittings`, a `Nudge`).
+ */
+export const SITTINGS_ROOM = "sittings";
 
 /** The rooms there are. Each place that wants its players live adds itself here. */
 export const ROOMS: Readonly<Record<string, RoomKind>> = {
   // The town's walk is 64 a second.
   town: { width: 512, height: 352, capacity: 32, speed: 160 },
+  [SITTINGS_ROOM]: { width: 0, height: 0, capacity: 1000, speed: 0, still: true, listens: true },
 };
 
 /**
@@ -373,6 +408,9 @@ export const campRoom = (player: PlayerId): string => `camp:${player}`;
 // the town's pace.
 const CAMP: RoomKind = { width: 432, height: 320, capacity: 32, speed: 160 };
 const CAMP_ROOM = /^camp:(.{36})$/;
+
+/** Whether a connection into the room a name asks for is a listener (`RoomKind.listens`). */
+export const listensIn = (name: string): boolean => roomKind(name)?.listens === true;
 
 /** The kind of room a name asks for, if there is one: one of `ROOMS`, a camp's room, or a visit's room. */
 export function roomKind(name: string): RoomKind | undefined {
@@ -458,6 +496,12 @@ export function readToClient(text: string): ToClient | null {
     case "changed":
       return num(v.rev) ? { t: "changed", rev: v.rev } : null;
     default:
-      return null;
+      return readNudge(v);
   }
+}
+
+/** A nudge (`Nudge`), or null for anything that is not one. */
+function readNudge(v: Record<string, unknown>): Nudge | null {
+  if (v.t === "sittings") return { t: "sittings" };
+  return v.t === "sitting" && str(v.id) && num(v.rev) ? { t: "sitting", id: v.id, rev: v.rev } : null;
 }

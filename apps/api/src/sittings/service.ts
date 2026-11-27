@@ -5,7 +5,8 @@
  * Every read and every command brings a sitting to Leaf's clock first (`advance`, or `command`, which
  * does it), one job at a time for each sitting (its lane, held only while somebody waits on it), and
  * writes it back only if it changed, in one transaction with everything that follows from it
- * (`writes.ts`). No timer has to fire for a sitting to be right: the minute's sweep brings every
+ * (`writes.ts`); once it is kept, every member at it is told, and so are those looking at the open
+ * tables when their list changed (`told.ts`). No timer has to fire for a sitting to be right: the minute's sweep brings every
  * sitting whose due moment has passed to the clock, so that Coins are paid, seats freed and tables
  * closed even when nobody looks. Leaf's dice for each command come from `SecureRandom`.
  */

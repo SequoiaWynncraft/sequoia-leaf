@@ -3,18 +3,22 @@
  * tables open to sit at, the member's record, their own sitting followed (its line, `seated.ts`),
  * and opening, sitting down, starting and leaving.
  *
- * The list is read every 2 seconds while the card is up and the member sits nowhere. The first read,
+ * The page holds its live connection while the member has a table or the card is up (`heard.ts`).
+ * While the card is up and the member sits nowhere, the list is read when Leaf says it changed (once
+ * for words close together), when the soonest of its tables closes, after a table the member was at,
+ * as the page comes into the live room, and every `POLL_EVERY` while it is not in it. The first read,
  * which gives a member who sits at a table their sitting back, is tried again on the kit's timer
  * until Leaf answers it, whether or not the card is up. Whatever was asked of Leaf before the
  * member took up or let go of a sitting (`T.gen` moves on) is not acted on when it answers: a list
  * read answered after Leave cannot follow the table just left again.
  */
-import { ask, backoff, isRecord } from "@sequoia-leaf/kit/net.ts";
+import { ask, backoff, isRecord, outside } from "@sequoia-leaf/kit/net.ts";
 import { RETRY } from "@sequoia-leaf/kit/play.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 
 import type { TablesRecord } from "../ui/modes.ts";
-import { type Line, openLine } from "./line.ts";
+import { gathered, hearing, hearLive, onHearing, onNudge, POLL_EVERY } from "./heard.ts";
+import { AFTER_DEADLINE, type Line, openLine } from "./line.ts";
 import { refusalWords } from "./reads.ts";
 import { doneWithTable, liveLine, onDone, takeUp } from "./seated.ts";
 
@@ -39,6 +43,13 @@ export const T: {
   asking: boolean;
   /** Moves on whenever the member takes up or lets go of a sitting: an answer asked for before it is not acted on. */
   gen: number;
+  /** Whether the list may be behind Leaf's: Leaf said it changed, or the page came into the live room, since it was asked for. */
+  stale: boolean;
+  /** When the list was last asked for, and when the soonest of its tables closes (the page's clock). */
+  listAt: number;
+  closesAt: number | null;
+  /** Whether the card is up. */
+  shown: () => boolean;
 } = {
   scope: null,
   me: null,
@@ -50,13 +61,26 @@ export const T: {
   leaving: false,
   asking: false,
   gen: 0,
+  stale: false,
+  listAt: -Infinity,
+  closesAt: null,
+  shown: () => false,
 };
 
 const RECORD_EVERY = 60_000;
-const LIST_EVERY = 2000;
+/** How often the page looks at what it holds: the card up or not, a table or not, and the list due. */
+const LOOK_EVERY = 1000;
+
+/** In how long the soonest of the listed tables closes, from Leaf's `now`, in milliseconds; null with none. */
+function soonestOf(body: { readonly now?: unknown }, open: readonly unknown[]): number | null {
+  const now = typeof body.now === "string" ? Date.parse(body.now) : Number.NaN;
+  const closes = open.flatMap((t) => (isRecord(t) && typeof t.closes === "string" ? [Date.parse(t.closes)] : []));
+  const soonest = Math.min(...closes.filter(Number.isFinite));
+  return Number.isFinite(now) && Number.isFinite(soonest) ? soonest - now : null;
+}
 
 /** The list Leaf answers, and the member's own sitting. */
-function readListed(body: unknown): { open: Listed[]; yours: string | null } | null {
+function readListed(body: unknown): { open: Listed[]; yours: string | null; closesIn: number | null } | null {
   if (!isRecord(body) || !Array.isArray(body.open)) return null;
   const open = body.open.flatMap((t): Listed[] =>
     isRecord(t) &&
@@ -67,7 +91,7 @@ function readListed(body: unknown): { open: Listed[]; yours: string | null } | n
       ? [{ id: t.id, by: t.by.name, sat: t.sat }]
       : [],
   );
-  return { open, yours: typeof body.yours === "string" ? body.yours : null };
+  return { open, yours: typeof body.yours === "string" ? body.yours : null, closesIn: soonestOf(body, body.open) };
 }
 
 /**
@@ -76,6 +100,8 @@ function readListed(body: unknown): { open: Listed[]; yours: string | null } | n
  */
 export async function readList(): Promise<boolean> {
   const asked = T.gen;
+  T.stale = false;
+  T.listAt = outside.now();
   const answer = await ask("/v1/game/sittings");
   const listed = answer.status === 200 ? readListed(answer.body) : null;
   if (!listed) return false;
@@ -83,6 +109,7 @@ export async function readList(): Promise<boolean> {
   if (asked !== T.gen) return true;
   const before = JSON.stringify(T.open);
   T.open = listed.open;
+  T.closesAt = listed.closesIn === null ? null : outside.now() + listed.closesIn + AFTER_DEADLINE;
   // Their own table not read (no answer, or trouble) is not done: the first read is tried again for it.
   const restored = listed.yours && !liveLine() ? (await follow(listed.yours)) !== null : true;
   if (JSON.stringify(T.open) !== before) T.redraw();
@@ -217,7 +244,21 @@ export function knowTables(scope: Scope, me: { id: string; name: string }, redra
   });
 }
 
-/** Starts following the live tables: the member's own sitting, if they are at one, and the list while the card is up (`shown`). */
+/** Whether the member is looking at the list: the card is up, and they follow no table. */
+const looking = (): boolean => !liveLine() && T.shown();
+
+/** Whether the list is due a read at `now`: it may be behind Leaf's, the page is not hearing (and it is `POLL_EVERY` old), or a table on it has closed. */
+function listDue(now: number): boolean {
+  if (T.stale) return true;
+  if (!hearing()) return now - T.listAt >= POLL_EVERY;
+  return T.closesAt !== null && now >= T.closesAt;
+}
+
+/**
+ * Starts following the live tables: the member's own sitting, if they are at one, and the list while
+ * the card is up (`shown`); the live connection is held while either is (`hearLive`), and what it
+ * hears is read (`followHeard`).
+ */
 export function followTables(
   scope: Scope,
   me: { id: string; name: string },
@@ -225,8 +266,36 @@ export function followTables(
   shown: () => boolean,
 ): void {
   knowTables(scope, me, redraw);
+  T.shown = shown;
+  followHeard(scope);
   void firstRead();
-  scope.every(LIST_EVERY, () => {
-    if (!liveLine() && shown()) void readList();
+  scope.every(LOOK_EVERY, () => {
+    hearLive(liveLine() !== null || shown());
+    if (looking() && listDue(outside.now())) void readList();
   });
+}
+
+/**
+ * What the live connection hears, read: the member's sitting when Leaf says it moved on, and the list
+ * when it says that changed; once the page is in the live room, each once, for what it did not hear
+ * before; and the list again once the member is done with a table, which it was not read during.
+ */
+function followHeard(scope: Scope): void {
+  const soon = gathered(scope, () => {
+    if (looking() && T.stale) void readList();
+  });
+  const stale = (): void => {
+    T.stale = true;
+    soon();
+  };
+  onNudge((n) => {
+    if (n.t === "sittings") return stale();
+    const line = liveLine();
+    if (line?.id === n.id) line.heard(n.rev);
+  });
+  onHearing((now) => {
+    liveLine()?.liveMoved(now);
+    if (now) stale();
+  });
+  onDone(stale);
 }

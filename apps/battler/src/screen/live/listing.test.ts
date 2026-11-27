@@ -7,6 +7,7 @@ import { type Call, command, openSitting } from "@sequoia-leaf/raid/sitting/comm
 import type { Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import { sittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
+import { hearFresh } from "./heard.ts";
 import { openLine } from "./line.ts";
 import { followTables, knowTables, leave, readList, T } from "./listing.ts";
 import { doneWithTable, liveLine, takeUp } from "./seated.ts";
@@ -42,6 +43,7 @@ async function until(holds: () => boolean, tries = 50): Promise<void> {
 let world: Standin | null = null;
 afterEach(() => {
   doneWithTable();
+  hearFresh();
   world?.done();
 });
 

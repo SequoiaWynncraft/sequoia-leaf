@@ -30,6 +30,7 @@ import { Mojang, MojangError, type MojangProfile } from "../src/game/mojang.ts";
 import { LeafInstance } from "../src/instance.ts";
 import { Ledger } from "../src/ledger/store.ts";
 import { Live, LiveMeter, LiveTuning, type TickTimes } from "../src/live/live.ts";
+import { LivePlayers } from "../src/live/players.ts";
 import { Watchers } from "../src/live/watchers.ts";
 import { MetricsListener, metricsText, RuntimeMetrics } from "../src/metrics.ts";
 import { type JobTimes, Play, PlayMeter } from "../src/play/service.ts";
@@ -247,7 +248,8 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     ),
     Layer.provide(Layer.succeed(LiveMeter)(fakes.liveMeter ?? null)),
   );
-  // Who hears what Leaf does to a state: the play service tells them, Live puts them there.
+  // Who hears what Leaf does to a state: the play service tells them, Live puts them there; and
+  // Live's players by id, whom the sittings tell when one they are at moves on.
   const credits = Layer.effect(
     Credits,
     Credits.useSync((real) => fakes.credits?.(real) ?? real),
@@ -261,6 +263,7 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     live,
   ).pipe(
     Layer.provideMerge(Watchers.layer),
+    Layer.provideMerge(LivePlayers.layer),
     Layer.provideMerge(Layer.succeed(References.MaxOpsBeforeYield)(fakes.stepsBeforeYield ?? 2048)),
   );
   // Layers built through the same memo map are built once, so `run` and `app` see the same database.

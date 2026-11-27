@@ -80,8 +80,8 @@ interface Shows {
  *   everybody else's motion still goes, so nobody loses a move.
  * - `joined`: nobody who came in since is in it, as they were not in the room when it was made; nor
  *   is anybody it shows who left and whose number was given to somebody new, which is a leaving.
- * - `act`, `did`, `changed`, `about`, `aboutChanged`, `error`, `pong`: none says where anybody is,
- *   and it goes as it is.
+ * - `act`, `did`, `changed`, `about`, `aboutChanged`, `error`, `pong`, `sitting`, `sittings`: none
+ *   says where anybody is, and it goes as it is.
  * - A close: nothing is written after it (`Connection.writeIf`).
  *
  * The next snapshot comes only after this one has gone to everybody: one tick at a time. The room's

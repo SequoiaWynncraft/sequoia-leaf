@@ -23,6 +23,7 @@ import { SignInRoutes } from "./http/sign-in.ts";
 import { OpenStreams } from "./http/streams.ts";
 import { Ledger } from "./ledger/store.ts";
 import { Live, LIVE_SOCKETS, LiveTuned } from "./live/live.ts";
+import { LivePlayers } from "./live/players.ts";
 import { LiveRoute } from "./live/route.ts";
 import { Watchers } from "./live/watchers.ts";
 import { Coins } from "./play/coins.ts";
@@ -141,6 +142,7 @@ export const Services = Layer.mergeAll(
   Live.layer.pipe(Layer.provide(LiveTuned)),
 ).pipe(
   Layer.provideMerge(Watchers.layer),
+  Layer.provideMerge(LivePlayers.layer),
   Layer.provideMerge(Stores),
   Layer.provideMerge(Database),
   Layer.provide(Mojang.layer),

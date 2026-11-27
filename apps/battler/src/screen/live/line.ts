@@ -7,10 +7,12 @@
  * - Commands go in order, one request at a time, as many as are waiting in each; after a failure
  *   (no answer, trouble, too fast) the same batch goes again with the same ids, so nothing is done twice.
  * - Leaf's clock is kept as how far it is from the page's (`now`), from each answer's `now`.
- * - The sitting is read again when its stage's deadline passes, every 2 seconds while it is open or
- *   in a carousel (others sit, others take from the ring), and as the page comes back; each read
- *   sends the `rev` the page has and is mostly answered unchanged. A read answered while a command
- *   was on its way is let go: the command's answer is newer.
+ * - The sitting is read again when Leaf says it moved on (`heard`: others sit, take from the ring,
+ *   lock; once for words that come close together, and only while the page is behind them), when
+ *   its stage's deadline passes, as the page comes back, and as the page comes into the live room
+ *   (`liveMoved`: what was said before was not heard); and every `POLL_EVERY` while the page is not
+ *   in it (`heard.ts`). Each read sends the `rev` the page has. A read answered while a command was
+ *   on its way is let go: the command's answer is newer.
  * - A sitting Leaf no longer has, or cannot read, or a member signed out, ends the line (`onGone`).
  */
 import { MOST_COMMANDS, readBalances } from "@sequoia-leaf/core";
@@ -23,14 +25,14 @@ import type { SittingCommand } from "@sequoia-leaf/raid/sitting/commands.ts";
 import type { SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 import { readSittingView } from "@sequoia-leaf/raid/sitting/wire.ts";
 
+import { gathered, hearing, POLL_EVERY } from "./heard.ts";
+
 /** What Leaf answered a command: what happened, or why not (the code and Leaf's own sentence). */
 export type Answer = { readonly notes: RaidNote[] } | { readonly refused: string; readonly why: string };
 
 /** Why a line ends: the sitting is gone or does not read, or the member is signed out. */
 export type Gone = "missing" | "unreadable" | "signedout";
 
-/** How often an open sitting or a carousel is read again. */
-export const BUSY_EVERY = 2000;
 /** How long after a deadline the sitting is read: Leaf brings it to its clock as it is read. */
 export const AFTER_DEADLINE = 150;
 
@@ -45,6 +47,13 @@ export interface Line {
   send(command: SittingCommand, predict?: (view: SittingView) => SittingView): Promise<Answer>;
   /** Asks Leaf for the sitting again (with the `rev` the page has). */
   read(): Promise<void>;
+  /** Leaf says the sitting is at `rev` now: it is read, once for the words that come close together, unless the page has it. */
+  heard(rev: number): void;
+  /**
+   * The page came into the live room (`true`: what Leaf said before was not heard, and the sitting is
+   * read once) or lost it; either way the next read is planned for where it stands.
+   */
+  liveMoved(cameIn: boolean): void;
   /** Whether anything sent has not been answered yet. */
   waiting(): boolean;
   /** Hears each time the view changes. */
@@ -90,7 +99,6 @@ function answerOf(results: readonly unknown[], id: string): Answer {
 
 /** The deadline of a stage, if it has one. */
 const deadlineOf = (view: SittingView): number | null => (view.stage.at === "over" ? null : view.stage.until);
-const busy = (view: SittingView): boolean => view.stage.at === "open" || view.stage.at === "carousel";
 
 /** Ids for this page's commands at a sitting: a name of the page's own, and a count. */
 function ids(): () => string {
@@ -111,6 +119,12 @@ class SittingLine implements Line {
   readonly #scope: Scope;
   readonly #path: string;
   readonly #next = ids();
+  /** Whether the page is in the live room, hearing Leaf say when the sitting moves on. */
+  readonly #live: () => boolean;
+  /** The newest `rev` Leaf has said the sitting is at. */
+  #heard = -1;
+  /** Reads the sitting once for the words that come close together, if the page is behind them still. */
+  readonly #nudged: () => void;
   #base: SittingView;
   #copy: SittingView;
   #rev: number;
@@ -126,10 +140,14 @@ class SittingLine implements Line {
   readonly #viewers: ((view: SittingView) => void)[] = [];
   readonly #goners: ((why: Gone) => void)[] = [];
 
-  constructor(scope: Scope, id: string, player: string, opened: Read & { view: SittingView }) {
+  constructor(scope: Scope, id: string, player: string, opened: Read & { view: SittingView }, live: () => boolean) {
     this.id = id;
     this.player = player;
     this.#scope = scope;
+    this.#live = live;
+    this.#nudged = gathered(scope, () => {
+      if (this.#heard > this.#rev) void this.read();
+    });
     this.#path = `/v1/game/sittings/${id}`;
     this.#base = opened.view;
     this.#copy = opened.view;
@@ -179,6 +197,17 @@ class SittingLine implements Line {
     this.#took(answer);
   }
 
+  heard(rev: number): void {
+    if (this.#over || rev <= this.#rev) return;
+    this.#heard = Math.max(this.#heard, rev);
+    this.#nudged();
+  }
+
+  liveMoved(cameIn: boolean): void {
+    this.#plan();
+    if (cameIn) void this.read();
+  }
+
   close(): void {
     this.#flush();
     // Whoever waits on a command hears that the line is put away: nothing is left waiting after leaving.
@@ -204,6 +233,8 @@ class SittingLine implements Line {
     this.#rev = answer.rev;
     this.#show();
     this.#plan();
+    // Leaf said of a newer `rev` than this answer: read again (a read that went before the change).
+    if (this.#heard > this.#rev) this.#nudged();
   }
   /** The view again from Leaf's and what still waits on it; whoever hears is told if it changed. */
   #show(): void {
@@ -234,14 +265,14 @@ class SittingLine implements Line {
     else return "again";
     return "stop";
   }
-  /** Reads the sitting again at its deadline, and every 2 seconds while it is open or in a carousel. */
+  /** Reads the sitting again at its deadline, and every `POLL_EVERY` while the page is not in the live room. */
   #plan(): void {
     this.#timer?.();
     this.#timer = null;
     if (this.#over) return;
     const due = deadlineOf(this.#base);
     const toDeadline = due === null ? Infinity : due - this.now() + AFTER_DEADLINE;
-    const wait = Math.min(busy(this.#base) ? BUSY_EVERY : Infinity, Math.max(AFTER_DEADLINE, toDeadline));
+    const wait = Math.min(this.#live() ? Infinity : POLL_EVERY, Math.max(AFTER_DEADLINE, toDeadline));
     if (Number.isFinite(wait)) this.#timer = this.#scope.after(wait, () => void this.read());
   }
 
@@ -296,8 +327,17 @@ class SittingLine implements Line {
   }
 }
 
-/** Opens a line to a sitting Leaf has shown the page (`first`, its answer to a read or an opening), for the member `player`. */
-export function openLine(parent: Scope, id: string, player: string, first: unknown): Line | null {
+/**
+ * Opens a line to a sitting Leaf has shown the page (`first`, its answer to a read or an opening), for
+ * the member `player`; `live` says whether the page is in the live room (`heard.ts`).
+ */
+export function openLine(
+  parent: Scope,
+  id: string,
+  player: string,
+  first: unknown,
+  live: () => boolean = hearing,
+): Line | null {
   const opened = readAnswer(first);
-  return opened?.view ? new SittingLine(parent.child(), id, player, { ...opened, view: opened.view }) : null;
+  return opened?.view ? new SittingLine(parent.child(), id, player, { ...opened, view: opened.view }, live) : null;
 }

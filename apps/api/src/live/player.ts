@@ -30,9 +30,11 @@ export type Place =
 export const NOWHERE: Place = { at: "none" };
 
 /**
- * A player in Live: who they are, their place in a room, their allowances, and their connection now.
- * A player outlives their connections: a new one (after a drop, or from another tab) takes over the
- * same place, and the room never notices. A player with no connection stays, standing, for a grace
+ * A player in Live: who they are, their place in a room, their allowances, their presence connection
+ * now, and their listener, if one is open (`listen.ts`: a connection in no room, beside the presence
+ * one, that only hears what Leaf tells the player). A player outlives their connections: a new
+ * presence one (after a drop, or from another tab) takes over the same place, and the room never
+ * notices. A player with no connection stays, standing, for a grace
  * period, and then leaves the room. Their record is kept for as long as anything is left of them: a
  * connection, a place, or an allowance not yet filled up again, so that leaving and coming back
  * never refills one.
@@ -41,8 +43,10 @@ export class Player {
   identity: Identity;
   /** Where they are: in no room, or in one as its occupant, hearing what Leaf tells it (`Watchers`). */
   place: Place = NOWHERE;
-  /** Their connection: none, open, or gone a moment ago, in their grace (`lifecycle.ts` moves it). */
+  /** Their presence connection: none, open, or gone a moment ago, in their grace (`lifecycle.ts` moves it). */
   link: Link<Pipe> = NO_LINK;
+  /** Their listener, while one is open: no grace, no room, and no part of their presence. */
+  listener: Pipe | null = null;
   /** Connections of theirs let in and not yet open: while there are any, the record is theirs. */
   opening = 0;
   /** What their connection's page said it is on, if it did. */
@@ -86,11 +90,18 @@ export class Player {
     return this.pipe;
   }
 
-  /** Whether nothing is left of them: no connection, opening, open or in its grace, no place, and nothing owed on any allowance. */
+  /** Something of the player's own, on every connection they have open; says whether any took it. */
+  tell(frame: string): boolean {
+    const heard = this.send(frame);
+    return (this.listener?.send(frame) ?? false) || heard;
+  }
+
+  /** Whether nothing is left of them: no connection, opening, open or in its grace, no listener, no place, and nothing owed on any allowance. */
   gone(now: number): boolean {
     return (
       this.opening === 0 &&
       this.link.state === "none" &&
+      this.listener === null &&
       this.place.at === "none" &&
       [this.moves, this.texts, this.acts, this.opens, this.handoffs, this.strikes].every((a) => a.full(now))
     );
