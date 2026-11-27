@@ -260,15 +260,20 @@ function packSettings(o: Writer, was: readonly Setting[]): void {
   }
 }
 
-/** One piece's settings read back, after its tile; null for bytes that are not a piece's. */
-function readSetting(r: Reader, tile: number): Setting | null {
+/**
+ * One piece's settings read back, after its tile; null for bytes that are not a piece's. Each kind
+ * named is told to `seen` first, known here or not, for what asks which kinds a history names.
+ */
+function readSetting(r: Reader, tile: number, seen?: (kind: number) => void): Setting | null {
   const kd = r.byte();
   const f = kd & 128 ? r.byte() : 0;
   const [recipe, closed, tint, ways, grade, span, high = 0] = [1, 2, 4, 8, 16, 32, 64].map((bit) =>
     f & bit ? r.byte() : undefined,
   );
   const [kind, dir] = [(kd & 15) | (high << 4), (kd >> 4) & 3];
-  if (r.over || f > 127 || !isKind(kind) || FIXED[kind] === 1 || !isDir(dir)) return null;
+  if (r.over || f > 127 || (f & 64 && (high === 0 || high > 15)) || !isDir(dir)) return null;
+  seen?.(kind);
+  if (!isKind(kind) || FIXED[kind] === 1) return null;
   const kept = keptOf(
     { ...unpackWays(ways ?? 0), recipe, tint, grade, open: closed === undefined ? undefined : false },
     kind,
@@ -277,12 +282,12 @@ function readSetting(r: Reader, tile: number): Setting | null {
 }
 
 /** How pieces stood, read back, for a yard of so many tiles; null for bytes that are not pieces'. */
-function readSettings(r: Reader, tiles: number): Setting[] | null {
+function readSettings(r: Reader, tiles: number, seen?: (kind: number) => void): Setting[] | null {
   const n = r.varint();
   const out: Setting[] = [];
   for (let k = 0, tile = -1; k < Math.min(n, tiles) && !r.over; k++) {
     tile += r.varint() + 1;
-    const s = tile < tiles ? readSetting(r, tile) : null;
+    const s = tile < tiles ? readSetting(r, tile, seen) : null;
     if (!s) return null;
     out.push(s);
   }
@@ -512,18 +517,23 @@ function readMasks(r: Reader, most: number): number[] | null {
 }
 
 /** The rest of an entry's bytes, after its Coins and check: its tiles, the way back, the settings changed and how the pieces stood. */
-function readBody(r: Reader, flags: number, tiles: number): Pick<Undoing, "tiles" | "was" | "masks" | "back"> | null {
+function readBody(
+  r: Reader,
+  flags: number,
+  tiles: number,
+  seen?: (kind: number) => void,
+): Pick<Undoing, "tiles" | "was" | "masks" | "back"> | null {
   const fresh = readTiles(r, tiles);
   const back = flags & MOVED ? { turns: r.byte(), x: r.byte(), y: r.byte() } : null;
   const masks = readMasks(r, tiles);
-  const was = fresh && masks && !r.over && (back?.turns ?? 0) <= 3 ? readSettings(r, tiles) : null;
+  const was = fresh && masks && !r.over && (back?.turns ?? 0) <= 3 ? readSettings(r, tiles, seen) : null;
   if (!fresh || !masks || !was || masks.length !== was.length) return null;
   const all = [...new Set([...fresh, ...was.map((s) => s.tile)])].toSorted((i, j) => i - j);
   return all.length === fresh.length + was.length ? { tiles: all, was, masks, back } : null;
 }
 
-/** An entry read back from its bytes, for a yard of so many tiles; null for bytes that are not an entry. */
-function readEntry(bytes: Uint8Array, tiles: number): Undoing | null {
+/** An entry read back from its bytes, for a yard of so many tiles; null for bytes that are not an entry. Each kind it names is told to `seen`. */
+function readEntry(bytes: Uint8Array, tiles: number, seen?: (kind: number) => void): Undoing | null {
   const r = new Reader(bytes);
   const id = readId(r);
   const flags = r.byte();
@@ -535,8 +545,21 @@ function readEntry(bytes: Uint8Array, tiles: number): Undoing | null {
   if ((flags & ~(MOVED | STROKE | FELLED)) !== 0) return null;
   const zig = r.varint();
   const sum = (r.byte() | (r.byte() << 8) | (r.byte() << 16) | (r.byte() << 24)) >>> 0;
-  const body = readBody(r, flags, tiles);
+  const body = readBody(r, flags, tiles, seen);
   return body && { id, flags, coins: zig % 2 === 1 ? -(zig + 1) / 2 : zig / 2, sum, ...body };
+}
+
+/**
+ * The kinds the pieces in a history's entries name (each as base64, `kept`), known here or not, on a
+ * land of so many tiles: what a reader asks before it reads them. An entry stops at a kind not known.
+ */
+export function historyKinds(kept: unknown, tiles: number): number[] {
+  const kinds: number[] = [];
+  for (const b of Array.isArray(kept) ? kept : []) {
+    const bytes = typeof b === "string" ? fromBase64(b) : b instanceof Uint8Array ? b : null;
+    if (bytes) readEntry(bytes, tiles, (k) => kinds.push(k));
+  }
+  return kinds;
 }
 
 /**

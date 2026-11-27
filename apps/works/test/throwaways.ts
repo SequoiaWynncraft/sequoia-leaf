@@ -267,6 +267,24 @@ out.undoTurn =
   covers(chuteRead, CHUTE, 20, 13, 21, 15, 20, 14) &&
   F.check(chuteRead) === F.check(chuting);
 
+// Kept: a yard whose only kind past 15 is in a plan of the whole yard, in a blueprint, or in what Undo
+// would undo is kept as version 10; one with none as 9, as before there could be one.
+const planOnly = F.create({ land, tier: 5, seed: 1 });
+F.build(planOnly, FORGE, 20, 10, 0, Infinity);
+F.saveYard(planOnly, 1);
+F.remove(planOnly, 20, 10);
+const printOnly = fresh();
+F.build(printOnly, FORGE, 20, 10, 0, Infinity);
+F.saveBlueprint(printOnly, 1, F.within(printOnly, 19, 9, 21, 11));
+F.remove(printOnly, 20, 10);
+const historyOnly = fresh();
+act(historyOnly, { do: "build", kind: FORGE, x: 20, y: 10, dir: 0 }, Infinity, "h1");
+act(historyOnly, { do: "remove", x: 20, y: 10 }, Infinity, "h2");
+const wide = [planOnly, printOnly, historyOnly];
+const versions = [...wide, fresh()].map((v) => JSON.parse(F.encode(v)).v);
+out.keptWide = JSON.stringify(versions) === "[10,10,10,9]" && wide.every((v) => !v.kind.some((k) => k > 15 && k !== F.NONE));
+console.log(JSON.stringify({ texts: wide.map((v) => F.encode(v)) }));
+
 console.log(JSON.stringify(out));
 `;
 
@@ -350,5 +368,6 @@ export const PLAYED_BIG = Object.fromEntries(
     "forgeReadBack",
     "forgeRemoved",
     "undoTurn",
+    "keptWide",
   ].map((k) => [k, true]),
 );

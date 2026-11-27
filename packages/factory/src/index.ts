@@ -42,7 +42,9 @@ export {
   type KeptOrder,
   keptOrder,
   type KeptPrint,
+  keptUnknown,
   orderOf,
+  PLACED,
   VERSION,
   vouch,
 } from "./codec.ts";

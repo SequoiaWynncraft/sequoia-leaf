@@ -113,8 +113,8 @@ describe("a yard kept before splitters, joiners and sorters had grades", () => {
     expect(lineGrades(back)).toEqual([2, 2, 2, 2, 2, 2]);
     expect([back.till, back.paid]).toEqual([y.till, y.paid]);
     expect(flatOut(back, 1, 4)).toBe(F.carried(2));
-    // Kept again, it is this version's, and reads back as itself.
-    expect(record(F.encode(back)).v).toBe(F.VERSION);
+    // Kept again, it is this version's for a yard of no kind past 15, and reads back as itself.
+    expect(record(F.encode(back)).v).toBe(F.PLACED);
     roundTrip(back);
     // This version keeps a splitter of grade I as grade I.
     expect(lineGrades(roundTrip(y))).toEqual([2, 1, 1, 1, 2, 2]);

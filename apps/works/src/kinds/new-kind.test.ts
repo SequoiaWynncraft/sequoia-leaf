@@ -25,7 +25,8 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, syml
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { KIND_DEFS, KINDS } from "@sequoia-leaf/factory";
+import { newerThan } from "@sequoia-leaf/core";
+import { decode, keptLater, KIND_DEFS, KINDS } from "@sequoia-leaf/factory";
 
 import {
   MAKERS,
@@ -394,8 +395,24 @@ describe("a new kind of piece", () => {
       checks(at);
       writeFileSync(join(at, "big.ts"), PLAY_BIG);
       const played = bun(at, "big.ts");
-      expect(played.out).not.toContain("rror");
-      expect(JSON.parse(played.out.trim().split("\n").at(-1) ?? "{}")).toEqual(PLAYED_BIG);
+      expect(played.ok).toBe(true);
+      const lines = played.out.trim().split("\n");
+      expect(JSON.parse(lines.at(-1) ?? "{}")).toEqual(PLAYED_BIG);
+      // Each yard kept with a kind past 15 in a plan, a blueprint or Undo alone is a newer Leaf's here,
+      // where no such kind is known: never read with it let go, whatever version it says; and the Leaf
+      // before such kinds (whose \`keptLater\` begins \`newerThan(text, 9)\`) takes it as a newer one's too.
+      const { texts } = JSON.parse(lines.at(-2) ?? "{}") as { texts: string[] };
+      expect(texts.length).toBe(3);
+      for (const text of texts) {
+        const as9 = JSON.stringify({ ...JSON.parse(text), v: 9 });
+        expect([keptLater(text), decode(text), newerThan(text, 9), keptLater(as9), decode(as9)]).toEqual([
+          true,
+          null,
+          true,
+          true,
+          null,
+        ]);
+      }
       writeFileSync(join(at, "page.ts"), PAGE_BIG);
       const paged = bun(at, "page.ts");
       expect(paged.out).not.toContain("rror");
