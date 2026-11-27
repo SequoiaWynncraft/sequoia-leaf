@@ -17,6 +17,7 @@ import {
   kind,
   makes,
   MILL,
+  price,
   RECIPE,
   setRecipe,
   type Yard,
@@ -37,7 +38,7 @@ function hall(grade: number, belt: number | null): Yard {
   const y = create({ seed: 5, tier: 6 });
   expect(build(y, ASSEMBLER, ...xy(-6, -4), 0, Infinity, { grade })).toEqual({
     ok: true,
-    cost: [400, 1200, 3200][grade - 1],
+    cost: price(ASSEMBLER, grade),
   });
   expect(setRecipe(y, ...xy(-6, -4), item("tool"))).toBeNull();
   if (belt !== null) expect(build(y, BELT, ...xy(-4, -4), 0, Infinity, { grade: belt }).ok).toBe(true);
@@ -82,7 +83,7 @@ describe("the assembler on the page", () => {
   test("is drawn and in the dock, has a lamp while it works, and is brick on the map", () => {
     expect([DRAWN.includes(ASSEMBLER), draws(ASSEMBLER)]).toEqual([true, true]);
     expect(PAGES.assembler.dock).toBe(15);
-    expect(blockColour(ASSEMBLER)).toBe(PAGES.assembler.map?.[0]);
+    expect(blockColour(ASSEMBLER)).toBe(PAGES.assembler.map?.[0] ?? "");
     const out: Lamp[] = [];
     const lit = { pace: 1, bright: 1, reach: 1, tall: false, kiln: () => false };
     PAGES.assembler.lamps?.(S.world, 0, 100, 200, { ...lit, working: () => true }, out);

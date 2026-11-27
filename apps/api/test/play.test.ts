@@ -1851,7 +1851,7 @@ describe("the assembler in the Works", () => {
       const read = readCommand(c);
       if (!read || "refused" in playWorks(copy, read)) throw new Error(`${c.id} was not done on the copy`);
     }
-    expect([state.tick, state.check]).toEqual([tick, check(copy)]);
+    expect(state).toMatchObject({ clock: tick, tick, check: check(copy) });
     const yard = await yardShown();
     expect([yard.kind[own], yard.grade[own], yard.set[own]]).toEqual([copy.kind[own], 2, item("lantern")]);
     expect((await entries(alice)).slice(-2).map((e) => [e.amount, e.reason])).toEqual([
