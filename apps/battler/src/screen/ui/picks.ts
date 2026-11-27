@@ -16,10 +16,10 @@ import {
   catalogOf,
   type Choice,
   type ComponentId,
-  componentIn,
   type FigureId,
   figureIn,
   itemAdds,
+  itemName,
   picksOf,
   pieces,
   roleLine,
@@ -99,7 +99,7 @@ function componentCard(cat: Catalog, run: RunView, item: ComponentId): (HTMLElem
   );
   return [
     art(itemIcon(item), itemRef(item)),
-    el("b", "k-gold", { text: componentIn(cat, item).name }),
+    el("b", "k-gold", { text: itemName(cat, item) }),
     rich(itemAdds(cat, item).join(" · ")),
     wantedBy(run, item),
     el("div", "makeslist", {}, ...lines),

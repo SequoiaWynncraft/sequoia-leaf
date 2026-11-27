@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { figureIn } from "../content/figures.ts";
-import { componentIn, type FinishedId, finishedIn, type ItemId, itemStats } from "../content/items.ts";
+import { type FinishedId, type ItemId, itemIn, itemStats } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { cellAt } from "../hex.ts";
 import { CAT, fightOf, onCell, only, ready, steps, stepUntil, still, stillSide, unitOf } from "../testkit.ts";
@@ -12,7 +12,7 @@ import type { Fight, Unit } from "./types.ts";
 const HOME = cellAt(3, 4);
 const NEAR = cellAt(3, 3);
 const BESIDE = cellAt(2, 3);
-const num = (id: FinishedId, name: string): number => finishedIn(CAT, id).n[name] ?? 0;
+const num = (id: FinishedId, name: string): number => itemIn(CAT, id).n[name] ?? 0;
 
 /** A Crab #7 holding some items, facing a plain target; it only attacks unless told otherwise. */
 function holder(items: ItemId[], kind: "crab7" | "finch" | "moth" = "crab7"): { f: Fight; u: Unit; target: Unit } {
@@ -29,16 +29,12 @@ function holder(items: ItemId[], kind: "crab7" | "finch" | "moth" = "crab7"): { 
 describe("components", () => {
   test("each adds its one stat", () => {
     const base = figureIn(CAT, "crab7");
-    expect(holder(["thorn"]).u.attack).toBe(
-      Math.round(base.attack * (1 + componentIn(CAT, "thorn").stats.attack / 100)),
-    );
-    expect(holder(["plume"]).u.speed).toBeCloseTo(base.speed * (1 + componentIn(CAT, "plume").stats.speed / 100));
-    expect(holder(["glowcap"]).u.power).toBe(100 + componentIn(CAT, "glowcap").stats.power);
-    expect(holder(["bark"]).u.armour).toBe(base.armour + componentIn(CAT, "bark").stats.armour);
-    expect(holder(["bark"]).u.ward).toBe(base.ward + componentIn(CAT, "bark").stats.ward);
-    expect(holder(["chestnut"]).u.maxHp).toBe(
-      Math.round(base.hp * (1 + componentIn(CAT, "chestnut").stats.health / 100)),
-    );
+    expect(holder(["thorn"]).u.attack).toBe(Math.round(base.attack * (1 + itemIn(CAT, "thorn").stats.attack / 100)));
+    expect(holder(["plume"]).u.speed).toBeCloseTo(base.speed * (1 + itemIn(CAT, "plume").stats.speed / 100));
+    expect(holder(["glowcap"]).u.power).toBe(100 + itemIn(CAT, "glowcap").stats.power);
+    expect(holder(["bark"]).u.armour).toBe(base.armour + itemIn(CAT, "bark").stats.armour);
+    expect(holder(["bark"]).u.ward).toBe(base.ward + itemIn(CAT, "bark").stats.ward);
+    expect(holder(["chestnut"]).u.maxHp).toBe(Math.round(base.hp * (1 + itemIn(CAT, "chestnut").stats.health / 100)));
     expect(holder([]).u.attack).toBe(base.attack);
   });
   test("a finished item gives both halves' stats, and three items add up", () => {

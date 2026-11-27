@@ -9,10 +9,10 @@ import {
   catalogOf,
   type ComponentId,
   type FinishedId,
-  finishedIn,
   forgeItems,
   giveItem,
   GOOD_WITH,
+  halvesOf,
   HOLDS,
   isComponentId,
   isFinishedId,
@@ -31,7 +31,7 @@ export type Holder = Pick<Piece, "kind" | "items">;
 /** The loose component a figure holds: the next component handed to it forges with that one. */
 const looseOf = (holder: Holder): ComponentId | undefined => holder.items.find(isComponentId);
 const isHalf = (cat: Catalog, item: FinishedId, part: ItemId | undefined): boolean =>
-  finishedIn(cat, item).made.some((c) => c === part);
+  halvesOf(cat, item).some((c) => c === part);
 
 /** Whether a figure has a place for a finished item: a free one, or a loose half of it to forge it in. */
 const roomFor = (cat: Catalog, holder: Holder, item: FinishedId): boolean =>
@@ -71,7 +71,7 @@ export function offerOf(run: Pick<RunView, "items" | "era">, holder: Holder, ite
   const cat = catalogOf(run);
   if (holder.items.includes(item)) return { item, how: "held" };
   if (!roomFor(cat, holder, item)) return { item, how: "full" };
-  const [a, b] = finishedIn(cat, item).made;
+  const [a, b] = halvesOf(cat, item);
   const loose = looseOf(holder);
   const free = holder.items.length < HOLDS;
   // The item is on the rack already.
@@ -140,12 +140,12 @@ export const pairsOf = (run: RunView, at: number): number[] =>
   run.items.flatMap((_, rack) => (legal(run, { do: "forge", item: rack, with: at }) ? [rack] : []));
 
 /**
- * What letting the item in the hand go on its aim would do: two components become a finished item
+ * What letting the item in the hand go on its aim would do: two items a recipe joins make an item
  * (on the figure that holds the other, or on the rack); the figure holds it, with so many of its
  * places full then; or nothing, for the reason the rules give.
  */
 export type Drop = { readonly command: Predicted } & (
-  | { readonly does: "make"; readonly item: FinishedId }
+  | { readonly does: "make"; readonly item: ItemId }
   | { readonly does: "give"; readonly item: ItemId; readonly holds: number }
   | { readonly does: "nothing"; readonly item: ItemId; readonly why: string }
 );

@@ -49,7 +49,7 @@ export interface Party {
 
 export type TraitCounts = Partial<Record<TraitId, number>>;
 
-/** A figure as far as its traits go: what it is, and what it holds (an emblem makes it one of a kin as well). */
+/** A figure as far as its traits go: what it is, and what it holds (an emblem grants it a trait as well). */
 export interface Carrier {
   readonly kind: UnitKind;
   readonly items: readonly ItemId[];
@@ -137,6 +137,17 @@ export function isParty(v: unknown): v is Party {
   if (new Set(figures.map((p) => p.seat)).size !== figures.length) return false;
   if (!Array.isArray(boons) || boons.length > 32 || !boons.every(isBoonId)) return false;
   return isWhole(v.might, 10, 1000);
+}
+
+/**
+ * The chairs some figures on a board take, which the room's chairs cap (`Room.chairs`): one each,
+ * but none for the first copy of a figure that takes none (`chairs` 0, a Stowaway), and one for
+ * each copy after it. Hexes are still one a body: nobody shares a seat.
+ */
+export function chairsUsed(cat: Catalog, figures: readonly { readonly kind: UnitKind }[]): number {
+  const free = new Set<FigureId>();
+  for (const { kind } of figures) if (isFigureId(kind) && figureIn(cat, kind).chairs === 0) free.add(kind);
+  return figures.length - free.size;
 }
 
 /** What a party has had spent on its figures, in acorns: a rough measure of how strong it is. */

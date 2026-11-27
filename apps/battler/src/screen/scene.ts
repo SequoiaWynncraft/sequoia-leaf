@@ -8,7 +8,7 @@ import { beatAt, drawFigure, drawStanding, drawStars, framesOf, hoverAt } from "
 import { CREAM, GOLD, INK, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
-import { fieldCap, fielded, type ItemId, levelOf, pieceAt, type RunView, type Stars } from "@sequoia-leaf/raid";
+import { chairsOn, fieldCap, type ItemId, levelOf, pieceAt, type RunView, type Stars } from "@sequoia-leaf/raid";
 import { type FigureId, isBossId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { regularOf, ROOMS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
@@ -235,10 +235,10 @@ function drawMarks(g: Ctx): void {
   g.globalAlpha = 1;
 }
 
-/** How many may be fielded, as a column of pips beside the front line: gold for a figure, hollow for room. */
+/** The room's chairs, as a column of pips beside the front line: gold for a chair taken, hollow for a free one. */
 function drawCap(g: Ctx, run: RunView): void {
   const cap = fieldCap(run);
-  const on = fielded(run);
+  const on = chairsOn(run);
   const x = V.bx - 7;
   const y0 = V.by + HOME_ROWS * ROW + 4;
   const flash = V.t - boardFull.at < 0.5 && Math.floor(V.t * 12) % 2 === 0;

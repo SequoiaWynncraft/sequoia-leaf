@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { CASTS } from "../fight/abilities.ts";
 import { COLS, HOME_ROWS } from "../hex.ts";
 import type { Carrier } from "../party.ts";
-import { BOON_IDS, boonIn, boonText } from "./boons.ts";
+import { BOON_IDS, boonIn, boonText, giftOf } from "./boons.ts";
 import { available, catalogAt } from "./catalog.ts";
 import {
   abilityText,
@@ -21,21 +21,20 @@ import {
 } from "./figures.ts";
 import {
   COMPONENT_IDS,
-  componentIn,
   EMBLEM_IDS,
-  emblemKin,
+  emblemTrait,
   FINISHED_IDS,
-  finishedIn,
-  forge,
-  holdItem,
+  halvesOf,
   HOLDS,
   type ItemId,
+  itemIn,
   itemName,
   itemQuip,
   itemStats,
   itemText,
 } from "./items.ts";
 import { MEMBER_IDS } from "./members.ts";
+import { combine, holdItem } from "./recipes.ts";
 import { LEGACY_ERA } from "./releases.ts";
 
 /** Everyone's figures of a tier, as the carousel would ring them. */
@@ -179,34 +178,39 @@ describe("items", () => {
     const made = new Set<string>();
     for (const a of COMPONENT_IDS) {
       for (const b of COMPONENT_IDS) {
-        expect(forge(CAT, a, b)).toBe(forge(CAT, b, a));
-        made.add(forge(CAT, a, b));
+        expect(combine(CAT, a, b)).toEqual(combine(CAT, b, a));
+        made.add(combine(CAT, a, b)?.id ?? "nothing");
       }
     }
     expect(made.size).toBe(15);
   });
   test("each component is a single stat", () => {
     for (const id of COMPONENT_IDS) {
-      const s = componentIn(CAT, id).stats;
+      const s = itemIn(CAT, id).stats;
       const kinds = [s.attack, s.speed, s.power, s.armour + s.ward, s.health].filter((n) => n > 0);
       expect(kinds.length).toBe(1);
     }
   });
   test("a finished item has both halves' stats and a sentence with no gaps", () => {
     for (const id of FINISHED_IDS) {
-      const [a, b] = finishedIn(CAT, id).made;
+      const [a, b] = halvesOf(CAT, id);
       const whole = itemStats(CAT, id);
-      expect(whole.attack).toBe(componentIn(CAT, a).stats.attack + componentIn(CAT, b).stats.attack);
-      expect(whole.health).toBe(componentIn(CAT, a).stats.health + componentIn(CAT, b).stats.health);
-      expect(whole.armour).toBe(componentIn(CAT, a).stats.armour + componentIn(CAT, b).stats.armour);
+      expect(whole.attack).toBe(itemIn(CAT, a).stats.attack + itemIn(CAT, b).stats.attack);
+      expect(whole.health).toBe(itemIn(CAT, a).stats.health + itemIn(CAT, b).stats.health);
+      expect(whole.armour).toBe(itemIn(CAT, a).stats.armour + itemIn(CAT, b).stats.armour);
       expect(itemText(CAT, id)).not.toContain("{");
     }
-    const names = FINISHED_IDS.map((id) => finishedIn(CAT, id).name);
+    const names = FINISHED_IDS.map((id) => itemName(CAT, id));
     expect(new Set(names).size).toBe(15);
   });
   test("a second component forges with the first; a third thing takes a free place; a fourth is refused", () => {
-    expect(holdItem(CAT, worm([]), "thorn")).toEqual({ held: ["thorn"], forged: null, with: null });
-    expect(holdItem(CAT, worm(["thorn"]), "plume")).toEqual({ held: ["wasptail"], forged: "wasptail", with: "thorn" });
+    expect(holdItem(CAT, worm([]), "thorn")).toEqual({ held: ["thorn"], made: null, forged: null, with: null });
+    expect(holdItem(CAT, worm(["thorn"]), "plume")).toEqual({
+      held: ["wasptail"],
+      made: { gives: "item", id: "wasptail" },
+      forged: "wasptail",
+      with: "thorn",
+    });
     expect(holdItem(CAT, worm(["wasptail", "stump"]), "bark")).toMatchObject({ held: ["wasptail", "stump", "bark"] });
     // Full of finished things: nothing more fits.
     expect(holdItem(CAT, worm(["wasptail", "stump", "hoard"]), "bark")).toEqual({ refused: "hands_full" });
@@ -218,19 +222,22 @@ describe("items", () => {
     expect(HOLDS).toBe(3);
   });
   test("an emblem takes a place of its own and never forges: components still pair up around it", () => {
-    expect(holdItem(CAT, worm([]), "crabcharm")).toEqual({ held: ["crabcharm"], forged: null, with: null });
+    expect(holdItem(CAT, worm([]), "crabcharm")).toEqual({ held: ["crabcharm"], made: null, forged: null, with: null });
     expect(holdItem(CAT, worm(["crabcharm"]), "thorn")).toEqual({
       held: ["crabcharm", "thorn"],
+      made: null,
       forged: null,
       with: null,
     });
     expect(holdItem(CAT, worm(["crabcharm", "thorn"]), "plume")).toEqual({
       held: ["crabcharm", "wasptail"],
+      made: { gives: "item", id: "wasptail" },
       forged: "wasptail",
       with: "thorn",
     });
     expect(holdItem(CAT, worm(["thorn"]), "crabcharm")).toEqual({
       held: ["thorn", "crabcharm"],
+      made: null,
       forged: null,
       with: null,
     });
@@ -252,7 +259,7 @@ describe("items", () => {
       expect(Object.values(itemStats(CAT, id)).every((n) => n === 0)).toBe(true);
       expect(itemName(CAT, id)).toBe(boonIn(CAT, id).name);
       expect(itemQuip(CAT, id)).toBe(boonIn(CAT, id).quip);
-      expect(itemText(CAT, id)).toContain(traitIn(CAT, emblemKin(CAT, id)).name);
+      expect(itemText(CAT, id)).toContain(traitIn(CAT, emblemTrait(CAT, id)).name);
     }
   });
 });
@@ -262,9 +269,10 @@ describe("boons", () => {
     expect(BOON_IDS.length).toBeGreaterThanOrEqual(16);
     expect(BOON_IDS.length).toBeLessThanOrEqual(22);
     expect(BOON_IDS.filter((id) => boonIn(CAT, id).sort === "charm")).toEqual([...EMBLEM_IDS]);
+    expect(BOON_IDS.flatMap((id) => giftOf(CAT, id))).toEqual([...EMBLEM_IDS]);
     // Every kin but Graid, whose emblem comes with its banner.
     for (const kin of KINS)
-      expect(EMBLEM_IDS.filter((id) => emblemKin(CAT, id) === kin).length).toBe(kin === "graid" ? 0 : 1);
+      expect(EMBLEM_IDS.filter((id) => emblemTrait(CAT, id) === kin).length).toBe(kin === "graid" ? 0 : 1);
     for (const id of BOON_IDS) expect(boonText(CAT, id)).not.toContain("{");
   });
 });

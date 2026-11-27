@@ -4,10 +4,10 @@ import {
   choose,
   type FigureId,
   FINISHED_IDS,
-  finishedIn,
   forgeItems,
   giveItem,
   GOOD_WITH,
+  halvesOf,
   type ItemId,
   LEGACY_ERA,
   type Piece,
@@ -88,7 +88,7 @@ describe("what a figure's card offers", () => {
   test("a press makes exactly that item, the figure holds it, and exactly its two components are used", () => {
     // Every finished item, for a figure holding nothing, one half of it, or another component, from a rack with one of each and a spare.
     for (const item of FINISHED_IDS) {
-      const [a, b] = finishedIn(CAT, item).made;
+      const [a, b] = halvesOf(CAT, item);
       const another = item === "lichen" ? "quilt" : "lichen";
       for (const held of [[], [a], [b], ["glowcap"], [another, "glowcap"]] satisfies ItemId[][]) {
         const run = planning([["rock", [...held]]], ["thorn", "plume", "glowcap", "bark", "chestnut", a, b]);

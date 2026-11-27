@@ -16,19 +16,21 @@ import { FIGURE_IDS, type FigureId, type FigureSpec, type Tier } from "./figures
 import {
   COMPONENT_IDS,
   type ComponentId,
-  type ComponentSpec,
   EMBLEM_IDS,
   type EmblemId,
   FINISHED_IDS,
   type FinishedId,
-  type FinishedSpec,
+  ITEM_IDS,
+  type ItemId,
+  type ItemSpec,
+  sortOf,
 } from "./items.ts";
 import { MEMBER_IDS } from "./members.ts";
 import { type Arrival, fields, fold, type Patch } from "./patch.ts";
 import { type Era, eraOf, LAST_ERA, pullsEra, type ReleaseId, RELEASES } from "./releases.ts";
 import { BASE } from "./releases/base.ts";
 import { GROOT } from "./releases/groot.ts";
-import { type KinId, TRAIT_IDS, type TraitId, type TraitSpec } from "./traits.ts";
+import { TRAIT_IDS, type TraitId, type TraitSpec } from "./traits.ts";
 
 export type { FigureId } from "./figures.ts";
 export type { Era } from "./releases.ts";
@@ -42,13 +44,15 @@ export type Access = "shared" | { readonly headliner: Banner["id"] };
 
 /**
  * A figure as a catalogue has it: its words and numbers, the release it came with, who may have it,
- * its rarity as a prize, and how it is drawn (everyone's by the set; a headliner as its banner says).
+ * its rarity as a prize, how it is drawn (everyone's by the set; a headliner as its banner says),
+ * and the chairs it takes on a board (`chairsUsed`).
  */
 export interface Figure extends FigureSpec {
   readonly since: ReleaseId;
   readonly access: Access;
   readonly prize: Rarity;
   readonly look: Look;
+  readonly chairs: 0 | 1;
 }
 
 /** Every release's patch, in the order the releases open. A release with nothing in it yet has none. */
@@ -101,10 +105,8 @@ export interface Catalog {
   /** The order draws are made in: only ever added to at its end (`DRAWN`). */
   readonly order: readonly FigureId[];
   readonly traits: Readonly<Partial<Record<TraitId, TraitSpec>>>;
-  readonly components: Readonly<Partial<Record<ComponentId, ComponentSpec>>>;
-  readonly finished: Readonly<Partial<Record<FinishedId, FinishedSpec>>>;
-  /** The kin each emblem makes its holder. */
-  readonly emblems: Readonly<Partial<Record<EmblemId, KinId>>>;
+  /** Every item open, of every sort: components, finished items and emblems. */
+  readonly items: Readonly<Partial<Record<ItemId, ItemSpec>>>;
   readonly boons: Readonly<Partial<Record<BoonId, BoonSpec>>>;
   /**
    * What is open, as lists in their kinds' own order: what is walked to draw, count or show traits,
@@ -125,7 +127,7 @@ export interface Open {
   readonly boons: readonly BoonId[];
 }
 /** What of a catalogue a patch folds into, kind by kind. */
-type Kinds = Pick<Catalog, "traits" | "components" | "finished" | "emblems" | "boons">;
+type Kinds = Pick<Catalog, "traits" | "items" | "boons">;
 const present = <K extends string>(ids: readonly K[], table: Readonly<Partial<Record<K, unknown>>>): K[] =>
   ids.filter((id) => table[id] !== undefined);
 
@@ -140,6 +142,14 @@ function whoseOf(id: FigureId, since: ReleaseId): { readonly access: Access; rea
   return { access: { headliner: banner.id }, look: banner.look };
 }
 
+/** Checks every item is of the sort its id's list says: a mistake in the content stops the catalogue being made. */
+function sorted(items: Kinds["items"]): void {
+  for (const id of ITEM_IDS) {
+    const sort = items[id]?.sort;
+    if (sort !== undefined && sort !== sortOf(id)) throw new Error(`${id} is a ${sortOf(id)}, not a ${sort}`);
+  }
+}
+
 /**
  * The catalogue of every era, from the base and the patches given (each release's, in the order
  * the releases open): one era's catalogue is the one before it with that release's patch folded in.
@@ -150,13 +160,7 @@ export function catalogsOf(patches: readonly Patch[]): readonly Catalog[] {
   const since: Partial<Record<FigureId, ReleaseId>> = {};
   const came: FigureId[] = [];
   const banners: Banner[] = [];
-  let was: Kinds = {
-    traits: {},
-    components: {},
-    finished: {},
-    emblems: {},
-    boons: {},
-  };
+  let was: Kinds = { traits: {}, items: {}, boons: {} };
   for (const { id: release } of RELEASES) {
     const found = patches.filter((p) => p.release === release);
     if (found.length > 1) throw new Error(`${release} has ${found.length} patches`);
@@ -169,24 +173,23 @@ export function catalogsOf(patches: readonly Patch[]): readonly Catalog[] {
     }
     was = {
       traits: fold(TRAIT_IDS, was.traits, patch?.traits, fields),
-      components: fold(COMPONENT_IDS, was.components, patch?.components, fields),
-      finished: fold(FINISHED_IDS, was.finished, patch?.finished, fields),
-      emblems: fold(EMBLEM_IDS, was.emblems, patch?.emblems, (_, kin) => kin),
+      items: fold(ITEM_IDS, was.items, patch?.items, fields),
       boons: fold(BOON_IDS, was.boons, patch?.boons, fields),
     };
+    sorted(was.items);
     const figures: Partial<Record<FigureId, Figure>> = {};
     for (const id of came) {
       const [f, from] = [arrived[id], since[id]];
-      if (f && from) figures[id] = { ...f, since: from, ...whoseOf(id, from) };
+      if (f && from) figures[id] = { ...f, since: from, ...whoseOf(id, from), chairs: f.chairs ?? 1 };
     }
     const order = [...DRAWN.filter((id) => figures[id]), ...came.filter((id) => !DRAWN.includes(id))];
     banners.push(...BANNERS.filter((b) => b.opens === release));
     const era = eraOf(release);
     const ids: Open = {
       traits: present(TRAIT_IDS, was.traits),
-      components: present(COMPONENT_IDS, was.components),
-      finished: present(FINISHED_IDS, was.finished),
-      emblems: present(EMBLEM_IDS, was.emblems),
+      components: present(COMPONENT_IDS, was.items),
+      finished: present(FINISHED_IDS, was.items),
+      emblems: present(EMBLEM_IDS, was.items),
       boons: present(BOON_IDS, was.boons),
     };
     const earlier = (at: Era): Catalog => {

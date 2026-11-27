@@ -16,7 +16,7 @@ import { SENSIBLE } from "./bot.ts";
 import { legal, type Predicted, type RaidCommand } from "./command.ts";
 import { catalogAt } from "./content/catalog.ts";
 import { figureIn } from "./content/figures.ts";
-import { EMBLEM_IDS, emblemKin } from "./content/items.ts";
+import { EMBLEM_IDS, grantOf } from "./content/items.ts";
 import { newLooks } from "./content/looks.ts";
 import { eraAt, LEGACY_ERA } from "./content/releases.ts";
 import { LEVELS, MAX_LEVEL, regularOf, ROOMS } from "./content/rooms.ts";
@@ -641,7 +641,7 @@ describe("an emblem handed to a figure of its kin already", () => {
     const figure = run ? pieces(run)[0] : undefined;
     const spot = run && figure ? spotOf(run, figure.id) : null;
     if (!run || !figure || !spot) throw new Error("nobody to hand it to");
-    const own = EMBLEM_IDS.find((id) => emblemKin(CAT, id) === figureIn(CAT, figure.kind).kin);
+    const own = EMBLEM_IDS.find((id) => grantOf(CAT, id) === figureIn(CAT, figure.kind).kin);
     if (!own) throw new Error("no emblem of its kin");
     run.boons = [own];
     run.items = [own];

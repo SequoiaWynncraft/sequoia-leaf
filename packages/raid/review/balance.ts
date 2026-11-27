@@ -16,7 +16,8 @@ import { GOOD_WITH } from "@sequoia-leaf/raid/content/advice.ts";
 import { BOON_IDS, type BoonId, boonIn } from "@sequoia-leaf/raid/content/boons.ts";
 import { catalogAt, everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
 import { type FigureId, figureIn, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
-import { FINISHED_IDS, type FinishedId, finishedIn, holdItem, isFinishedId } from "@sequoia-leaf/raid/content/items.ts";
+import { FINISHED_IDS, type FinishedId, isFinishedId, itemName } from "@sequoia-leaf/raid/content/items.ts";
+import { holdItem } from "@sequoia-leaf/raid/content/recipes.ts";
 import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import { ROOM_COUNT, ROOMS, TRAILS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { CALLINGS, KINS, TRAIT_IDS, type TraitId, traitIn } from "@sequoia-leaf/raid/content/traits.ts";
@@ -279,11 +280,7 @@ if (shows("figures")) {
 if (shows("items")) {
   table(
     "Finished items held",
-    FINISHED_IDS.map((id): [FinishedId, Tally, string] => [
-      id,
-      byItem.get(id) ?? new Tally(),
-      finishedIn(NOW, id).name,
-    ]),
+    FINISHED_IDS.map((id): [FinishedId, Tally, string] => [id, byItem.get(id) ?? new Tally(), itemName(NOW, id)]),
   );
   table(
     "Boons held",
@@ -313,10 +310,10 @@ if (shows("suits")) {
     const named = GOOD_WITH[id].map((item) => {
       const clash = worst.includes(item);
       if (clash) clashes++;
-      return `${finishedIn(NOW, item).name} ${points(gain(id, item))}${clash ? " *" : ""}`;
+      return `${itemName(NOW, item)} ${points(gain(id, item))}${clash ? " *" : ""}`;
     });
     const list = (items: readonly FinishedId[]): string =>
-      items.map((item) => `${finishedIn(NOW, item).name} ${points(gain(id, item))}`).join(", ");
+      items.map((item) => `${itemName(NOW, item)} ${points(gain(id, item))}`).join(", ");
     console.log(`  ${figureIn(NOW, id).name} (${n} fights)`);
     console.log(`      good with: ${named.join(", ")}`);
     console.log(`      best: ${list(best)}; worst: ${list(worst)}`);

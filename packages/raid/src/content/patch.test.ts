@@ -17,7 +17,7 @@ import { pieces } from "../run.ts";
 import { BOON_IDS } from "./boons.ts";
 import { type Catalog, catalogAt, catalogsOf } from "./catalog.ts";
 import { figureIn, traitsOf } from "./figures.ts";
-import { COMPONENT_IDS, EMBLEM_IDS, FINISHED_IDS } from "./items.ts";
+import { COMPONENT_IDS, EMBLEM_IDS, FINISHED_IDS, ITEM_IDS } from "./items.ts";
 import type { Patch } from "./patch.ts";
 import { type Era, eraAt, eraOf, RELEASES } from "./releases.ts";
 import { BASE } from "./releases/base.ts";
@@ -142,16 +142,20 @@ describe("the fold", () => {
           Array.from({ length: 2 + Object.keys(t.n).length }, () => t.steps.length),
         );
       }
-      for (const id of FINISHED_IDS)
-        for (const half of cat.finished[id]?.made ?? []) expect(cat.components[half]).toBeDefined();
-      for (const id of EMBLEM_IDS) {
-        const kin = cat.emblems[id];
-        if (kin) expect([cat.traits[kin], cat.boons[id]].every((x) => x !== undefined)).toBe(true);
+      for (const id of ITEM_IDS) {
+        for (const half of cat.items[id]?.made ?? []) expect(cat.items[half]).toBeDefined();
+        const grants = cat.items[id]?.grants;
+        if (grants) expect(cat.traits[grants]).toBeDefined();
+      }
+      for (const id of BOON_IDS) {
+        const gives = cat.boons[id]?.gives;
+        if (gives) expect(cat.items[gives]).toBeDefined();
       }
       for (const id of cat.order) for (const t of traitsOf(cat, id)) expect(cat.traits[t]).toBeDefined();
       // Items and boons are all the base's so far; a release that brings one adds it here.
-      const counts: number[] = [COMPONENT_IDS.length, FINISHED_IDS.length, BOON_IDS.length];
-      expect([cat.components, cat.finished, cat.boons].map((kind) => Object.keys(kind).length)).toEqual(counts);
+      const counts: number[] = [COMPONENT_IDS.length, FINISHED_IDS.length, EMBLEM_IDS.length, BOON_IDS.length];
+      const { components, finished, emblems, boons } = cat.ids;
+      expect([components, finished, emblems, boons].map((kind) => kind.length)).toEqual(counts);
     }
   });
 });
@@ -179,9 +183,7 @@ test("the base's tables are read by its patch alone, the patches by the catalogu
   const homes: Readonly<Record<string, string>> = {
     BASE_FIGURES: "figures.ts",
     BASE_TRAITS: "traits.ts",
-    BASE_COMPONENTS: "items.ts",
-    BASE_FINISHED: "items.ts",
-    BASE_EMBLEMS: "items.ts",
+    BASE_ITEMS: "items.ts",
     BASE_BOONS: "boons.ts",
   };
   const strays = Object.entries(homes).flatMap(([name, home]) =>

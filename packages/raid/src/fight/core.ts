@@ -5,8 +5,8 @@
  */
 import { boonNumber } from "../content/boons.ts";
 import type { Catalog } from "../content/catalog.ts";
-import { abilityNumber, isFigureId, specOf, traitsOf, type UnitKind } from "../content/figures.ts";
-import { finishedNumber, isFinishedId, type ItemId } from "../content/items.ts";
+import { abilityNumber, specOf, type UnitKind } from "../content/figures.ts";
+import { carriedTraits, type ItemId, itemNumber } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { traitDraw, traitNumber } from "../content/traits.ts";
 import { distance, line, mirror, neighboursFor, type Side, within } from "../hex.ts";
@@ -44,13 +44,14 @@ export function alliesOf(f: Fight, side: Side): Unit[] {
   return out;
 }
 /**
- * A figure's draw: what its callings and the items it holds add up to, kept between the fight's
- * least and most. The forest's own carry no calling, so theirs is 0.
+ * A figure's draw: what the callings it carries (its own, and any an item grants) and the items it
+ * holds add up to, kept between the fight's least and most. The forest's own carry no calling, so
+ * theirs is 0.
  */
 export function drawOf(cat: Catalog, kind: UnitKind, items: readonly ItemId[]): number {
   let draw = 0;
-  if (isFigureId(kind)) for (const t of traitsOf(cat, kind)) draw += traitDraw(t);
-  for (const item of items) if (isFinishedId(item)) draw += finishedNumber(cat, item, "draw");
+  for (const t of carriedTraits(cat, kind, items)) draw += traitDraw(t);
+  for (const item of items) draw += itemNumber(cat, item, "draw");
   return Math.min(FIGHT.drawMost, Math.max(FIGHT.drawLeast, draw));
 }
 /** The enemy nearest a figure, whatever its draw; ties go to the hex that comes first for its side. */
