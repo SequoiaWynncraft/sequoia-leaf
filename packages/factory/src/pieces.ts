@@ -232,7 +232,8 @@ export function priceOf(y: Yard, pieces: readonly Pick<Piece, "kind" | "x" | "y"
   const spare = Uint8Array.from(y.spare);
   let cost = 0;
   for (const p of pieces) {
-    const i = bare ? -1 : at(y, p.x, p.y);
+    const t = bare ? -1 : at(y, p.x, p.y);
+    const i = t < 0 ? t : pieceOf(y, t);
     const there = i < 0 ? NONE : (y.kind[i] ?? NONE);
     cost += bare ? costOf(y, p.kind, p.grade, spare) : priceAt(y, p.kind, p.x, p.y, p.grade, spare);
     if (there === p.kind) continue;

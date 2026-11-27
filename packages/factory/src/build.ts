@@ -80,7 +80,8 @@ export const costOf = (y: Yard, k: Kind, g = 1, spare: Uint8Array = y.spare): nu
   price(k, gradeOf(k, g)) - ((spare[k] ?? 0) > 0 ? price(k, gradeOf(k)) : 0);
 
 /** What comes back for the piece on a tile taken away: what it cost at its grade, less grade 1's for one the yard had to hand. */
-export function worthAt(y: Yard, i: number): number {
+export function worthAt(y: Yard, t: number): number {
+  const i = pieceOf(y, t);
   const k = y.kind[i] ?? NONE;
   return price(k, y.grade[i] ?? 0) - (y.free[i] === 1 ? price(k, gradeOf(k)) : 0);
 }
@@ -93,7 +94,8 @@ export const replaces = (k: number, there: number): boolean => there !== k && (O
  * grade costs more (or, lower, gives back); else its cost, less what a replaced piece gives back.
  */
 export function priceAt(y: Yard, k: Kind, x: number, z: number, g = 1, spare: Uint8Array = y.spare): number {
-  const i = at(y, x, z);
+  const t = at(y, x, z);
+  const i = t < 0 ? t : pieceOf(y, t);
   const there = i < 0 ? NONE : (y.kind[i] ?? NONE);
   if (there === NONE) return costOf(y, k, g, spare);
   if (there === k) return price(k, gradeOf(k, g)) - price(k, y.grade[i] ?? 0);

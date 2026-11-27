@@ -50,6 +50,7 @@ import { always, anything, sell } from "./sink.ts";
 export const chute = kind({
   name: "chute",
   info: { name: "Chute", cost: 30, draw: 0, gives: 0, what: "Takes every item, as the depot does." },
+  starters: 1,
   size: [2, 3],
   ports: { in: around(2, 3), out: [] },
   rules: { wants: anything, room: always, give: sell },
@@ -281,6 +282,20 @@ const standsOver = (x, z, onto) => {
 };
 out.undoFits = standsOver(20, 10, [21, 11]) && standsOver(24, 9, null);
 
+// A starter chute stood again by a plan of the whole yard over a belt on its corner, and that undone,
+// goes back to hand: what it is, read from its own tile, though Undo names the corner first.
+const starter = F.create({ land, tier: 5, seed: 1 });
+const hadSpare = starter.spare[CHUTE];
+F.build(starter, CHUTE, 20, 14, 0, Infinity);
+F.saveYard(starter, 1);
+F.remove(starter, 20, 14);
+F.build(starter, F.BELT, 20, 13, 0, Infinity);
+act(starter, { do: "placeBlueprint", slot: 1, turns: 0, x: 0, y: 0 }, Infinity, "p1");
+const stoodFree = starter.free[tile(starter, 20, 14)] === 1 && starter.spare[CHUTE] === 0;
+act(starter, { do: "undo", entry: "p1" }, Infinity, "p2");
+out.undoStarter =
+  hadSpare === 1 && stoodFree && starter.spare[CHUTE] === 1 && starter.kind[tile(starter, 20, 13)] === F.BELT && bare(starter, 20, 14, 21, 15);
+
 // Kept: a yard whose only kind past 15 is in a plan of the whole yard, in a blueprint, or in what Undo
 // would undo is kept as version 10; one with none as 9, as before there could be one.
 const planOnly = F.create({ land, tier: 5, seed: 1 });
@@ -384,5 +399,6 @@ export const PLAYED_BIG = Object.fromEntries(
     "undoTurn",
     "keptWide",
     "undoFits",
+    "undoStarter",
   ].map((k) => [k, true]),
 );

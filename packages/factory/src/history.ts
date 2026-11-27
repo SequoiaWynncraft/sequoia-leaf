@@ -612,7 +612,9 @@ function fitsBack(y: Yard, u: Undoing): boolean {
 }
 
 /** Takes away the piece on a tile, as the spade takes it: what it held goes, and one of the pieces to hand goes back to hand. */
-function takeAway(y: Yard, i: number): void {
+function takeAway(y: Yard, t: number): void {
+  // What a piece is, as its own tile keeps it, whichever of its tiles is named.
+  const i = pieceOf(y, t);
   const k = y.kind[i] ?? NONE;
   if (y.free[i] === 1) y.spare[k] = (y.spare[k] ?? 0) + 1;
   vacate(y, i);
