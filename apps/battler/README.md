@@ -42,8 +42,10 @@ kit's card: "The table needs the guild's server."
   gulps and his number rises over him, and what it held flies to the rack (`ui/feedtarget.ts`); a
   bench figure's card has the same button beside Sell, for the keyboard and a finger. Everything may be done by tapping instead: tap a figure, then tap
   where it goes; tap an offer to buy it. Hexes light for
-  where a held figure may go, and a column of pips beside the front line shows how many may be
-  fielded. Two fingers on the stall at once are two taps, and an offer let go over the offer it was
+  where a held figure may go, and under them the rows it belongs in are tinted dusk, as its card
+  says: the front two for a front-row or second-row figure, the back two for a back-row one, none
+  for a Sneak (`zone.ts`); only advice, it may go anywhere lit. A column of pips beside the front
+  line shows how many may be fielded. Two fingers on the stall at once are two taps, and an offer let go over the offer it was
   picked from is a tap that slipped, and buys.
 - **What things are.** Every thing on the table is a card in the kit's one card system
   (`card.ts`): resting the mouse on anything shows its card, clicking pins it, and a finger taps it

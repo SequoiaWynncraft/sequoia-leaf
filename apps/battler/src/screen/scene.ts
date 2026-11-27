@@ -34,6 +34,7 @@ import { snd } from "./sounds.ts";
 import { drawSeals } from "./spells.ts";
 import { boardHalves, place, type Standing, V } from "./stage.ts";
 import { S } from "./state.ts";
+import { drawZone } from "./zone.ts";
 
 /** When the board was last found full, for flashing its count. */
 export const boardFull = { at: -9 };
@@ -212,6 +213,7 @@ function drawMarks(g: Ctx): void {
   };
   for (const seat of marks.seats) put(litMark, seat, pulse);
   for (const seat of marks.swaps) put(swapMark, seat, pulse * 0.8);
+  drawZone(g, marks.zone, V.bx, V.by);
   const t = marks.target;
   if (t?.on === "board" && (marks.seats.includes(t.at) || marks.swaps.includes(t.at))) put(aimMark, t.at, 0.9);
   g.globalAlpha = 1;

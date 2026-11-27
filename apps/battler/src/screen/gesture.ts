@@ -5,14 +5,24 @@
  * lifted again does nothing to it. Each pointer's own press (`hand.ts`) becomes a carry once it has
  * moved far enough with something under it.
  *
- * Everything the table lights for the hand (where a figure may go, who would take an item and who
- * wants it, the components it pairs with, the thing under the hand) is worked out from the gesture
- * and the run (`marksOf`).
+ * Everything the table lights for the hand (where a figure may go and the rows it belongs in, who
+ * would take an item and who wants it, the components it pairs with, the thing under the hand) is
+ * worked out from the gesture and the run (`marksOf`).
  */
-import { type FigureId, isComponentId, type ItemId, pieces, type RunView, type Spot, spotOf } from "@sequoia-leaf/raid";
+import {
+  type FigureId,
+  isComponentId,
+  type ItemId,
+  pieceAt,
+  pieces,
+  type RunView,
+  type Spot,
+  spotOf,
+} from "@sequoia-leaf/raid";
 
 import { handing, reachOf, reachOfOffer } from "./logic.ts";
 import { type Aim, pairsOf, wanters } from "./making.ts";
+import { zoneOf } from "./zone.ts";
 
 /** A thing in the hand: one of the party's figures (by its number), an offer on the stall, an item on the rack. */
 export type Held =
@@ -92,6 +102,8 @@ export interface Marks {
   seats: number[];
   swaps: number[];
   slots: number[];
+  /** The seats of the rows the figure in hand belongs in (`zone.ts`), lit softly whether it may go there or not. */
+  zone: number[];
   /** The place under the hand. */
   target: Spot | null;
   /** The figure tapped and waiting to be told where to go, and the one carried; -1 for none. */
@@ -129,6 +141,7 @@ const EMPTY: Marks = {
   seats: [],
   swaps: [],
   slots: [],
+  zone: [],
   target: null,
   picked: -1,
   held: -1,
@@ -173,13 +186,19 @@ function aimMarks(g: Gesture, seen: Seen): Pick<Marks, "taker" | "pair"> | null 
 function reachMarks(held: Held, run: RunView): Partial<Marks> {
   if (held.what === "pawn") {
     const from = spotOf(run, held.id);
-    if (!from) return {};
+    const piece = from ? pieceAt(run, from) : null;
+    if (!from || !piece) return {};
     const reach = reachOf(run, from);
-    return { seats: reach.seats, swaps: reach.swaps, slots: [...reach.slots, ...reach.slotSwaps] };
+    return {
+      seats: reach.seats,
+      swaps: reach.swaps,
+      slots: [...reach.slots, ...reach.slotSwaps],
+      zone: zoneOf(run, piece.kind),
+    };
   }
   if (held.what === "offer") {
     const reach = reachOfOffer(run, held.at);
-    return { seats: reach.seats, slots: reach.slots };
+    return { seats: reach.seats, slots: reach.slots, zone: zoneOf(run, held.kind) };
   }
   const item = held.item;
   return { takers: pieces(run).flatMap((p) => (handing(p, item).can ? [p.id] : [])), pairs: pairsOf(run, held.at) };
