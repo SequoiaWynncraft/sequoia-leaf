@@ -128,7 +128,7 @@ export interface MachinePrint {
   readonly graded: boolean;
   /** A kind this page does not draw (`DRAWN`): its card says only what it is. */
   readonly later: boolean;
-  /** What one more costs now: at the first grade, the pieces to hand counted. */
+  /** What one more costs now, as setting it down charges it: the pieces to hand counted (`costOf`). */
   readonly price: number;
   /** For a tunnel standing, the tiles it passes under, which its prices go by; 0 for any other. */
   readonly span: number;

@@ -53,38 +53,32 @@ function whyNot(from: Tile, x: number, y: number, grade: number): string | null 
  * anew (not the tile it last took its facing from, `faced`), it faces that way, until R turns it, as a
  * piece brought over a belt faces the belt. It comes up on the tile if the tile is straight ahead,
  * within its reach and free; aimed at the way in itself, at the nearest tile it can. Aimed anywhere
- * else, the far mouth shown is that nearest tile, and the aim says why this one will not do. Its
- * price, and whether the purse covers it, are the tunnel's that comes up where it is shown: so a
- * tunnel the purse is short for shows its own price, and is worked out again as the purse changes.
+ * else, or short of Coins, the far mouth shown is that nearest tile, and the aim says why this one
+ * will not do. Its price is the tunnel's asked for, where the tile will do: so a tunnel the purse is
+ * short for shows what it costs (for one passing under 5 tiles or fewer, what the nearest costs too),
+ * and is worked out again as the purse changes. Its span is the one it is priced by (`Aim.span`).
  */
 export function tunnelAim(from: Tile, faced: number, x: number, y: number): Aim {
   const w = S.world;
   const here = x === from.x && y === from.y;
   if (faced !== at(w, x, y)) facing(from, x, y);
   const grade = gradeInHand(TUNNEL);
+  const nearest = tunnelExit(w, from.x, from.y, S.dir);
   const fits = here ? refusal(w, TUNNEL, from.x, from.y, Infinity, S.dir, { grade }) : whyNot(from, x, y, grade);
-  const exit = here || fits !== null ? tunnelExit(w, from.x, from.y, S.dir) : { x, y };
-  const span = exit ? under(from, exit) : 0;
+  // The tunnel asked for, where the tile will do: its span prices it, Coins aside.
+  const asked = fits !== null ? null : here ? nearest : { x, y };
+  const span = under(from, asked ?? nearest ?? from);
   const rules = fits ?? refusal(w, TUNNEL, from.x, from.y, coins(), S.dir, { grade, span });
+  const exit = rules === null ? asked : nearest;
   // Out of reach is judged on the very command `comesUp` would send for the far mouth shown.
   const why = (exit && reachOf(tunnelAct(from, here, exit, grade))) ?? rules;
-  const cost = priceAt(w, TUNNEL, from.x, from.y, grade, w.spare, span);
-  return { ...aimed(x, y, why, cost, exit ? at(w, exit.x, exit.y) : -1), grade };
+  const priced = asked || exit ? span : 0;
+  const cost = priceAt(w, TUNNEL, from.x, from.y, grade, w.spare, priced);
+  return { ...aimed(x, y, why, cost, exit ? at(w, exit.x, exit.y) : -1), grade, span: priced };
 }
 
-/**
- * How many tiles the tunnel aimed now passes under, with `tool` in hand, for what each grade of it
- * costs: from its way in (set, or the tile aimed at) to the far mouth shown; 0 for any other tool, or
- * with nowhere for it to come up.
- */
-export function aimedSpan(tool: unknown): number {
-  const a = S.aim;
-  const far = a?.far ?? -1;
-  if (tool !== TUNNEL || !a || far < 0) return 0;
-  const w = S.world.land.w;
-  const h = S.hand;
-  return under(h.is === "tunnel" ? h.from : a, { x: far % w, y: Math.floor(far / w) });
-}
+/** How many tiles the tunnel aimed now passes under, as it is priced (`Aim.span`), with `tool` in hand; 0 for any other tool, or none aimed. */
+export const aimedSpan = (tool: unknown): number => (tool === TUNNEL ? (S.aim?.span ?? 0) : 0);
 
 /**
  * Whether a press with the tunnel in hand and no way in set would set its way in on a tile: a clear
@@ -110,8 +104,9 @@ export function wayInAim(x: number, y: number): Aim | null {
   const w = S.world;
   const grade = gradeInHand(TUNNEL);
   const exit = tunnelExit(w, x, y, S.dir);
-  const cost = priceAt(w, TUNNEL, x, y, grade, w.spare, exit?.span ?? 0);
-  return { ...aimed(x, y, null, cost, exit ? at(w, exit.x, exit.y) : -1), grade };
+  const span = exit?.span ?? 0;
+  const cost = priceAt(w, TUNNEL, x, y, grade, w.spare, span);
+  return { ...aimed(x, y, null, cost, exit ? at(w, exit.x, exit.y) : -1), grade, span };
 }
 
 /**

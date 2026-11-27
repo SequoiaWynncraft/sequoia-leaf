@@ -527,7 +527,7 @@ function drawHand(p: HandPrint): void {
             setGrade(grade);
           });
           // Pointing (or a finger kept on it) shows what that grade is.
-          link(b, machineRef(kind, grade), { acts: true });
+          link(b, machineRef(kind, grade, aimedSpan(kind)), { acts: true });
           return b;
         });
   kids.push(...turning(p), ...copyButton(p.copy), ...binButton(p.bin));

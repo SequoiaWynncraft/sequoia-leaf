@@ -40,7 +40,6 @@ import {
   orderAt,
   type Plot,
   plotState,
-  price,
   priceAt,
   ready,
   RECIPE,
@@ -132,7 +131,7 @@ function machinePrint(k: Kind, grade = 1, span = 0): MachinePrint {
     grade,
     graded: isGraded(k) && (grade > 1 || highest(w.open, k) > 1),
     later: !draws(k),
-    price: grade > 1 ? price(k, grade, span) : costOf(w, k, 1, w.spare, span),
+    price: costOf(w, k, grade, w.spare, span),
     span: Math.abs(span),
     // The depot's power is what is open says it makes.
     gives: FIXED[k] === 1 ? w.open.depot : (GIVES[k] ?? 0),
@@ -325,6 +324,13 @@ const NUMBERED = ["stops", "crate", "reach", "depot", "span", "away", "hooks"] a
 /** The unlocks that are one thing or none: the board, a splitter's flags and its ways in, felling, wide mouths. */
 const FLAGGED = ["board", "first", "ins", "felling", "mouths"] as const;
 
+/** A kind, or a kind at a grade, or a tunnel at a grade under so many tiles, as `machineRef` names it. */
+function machineOf(id: string): MachinePrint | null {
+  const [k = "", grade = "1", span = "0"] = id.split(".");
+  const kind = numberIn(k);
+  return isKind(kind) ? machinePrint(kind, Math.max(1, numberIn(grade)), Math.max(0, numberIn(span))) : null;
+}
+
 /** The unlock a `perk:` reference names, as the rules make it. */
 function perkOf(id: string): Unlock | null {
   const [of = "", a = "", b = ""] = id.split(".");
@@ -351,12 +357,8 @@ export function printOf(ref: string): Print | null {
   switch (kind) {
     case "item":
       return isItem(n) ? itemPrint(n) : null;
-    case "machine": {
-      // A kind, or a kind at a grade: `machine:<kind>.<grade>`.
-      const [k = "", grade] = id.split(".");
-      const kindOf = numberIn(k);
-      return isKind(kindOf) ? machinePrint(kindOf, grade === undefined ? 1 : Math.max(1, numberIn(grade))) : null;
-    }
+    case "machine":
+      return machineOf(id);
     case "tile":
       return tilePrint(n);
     case "plot":

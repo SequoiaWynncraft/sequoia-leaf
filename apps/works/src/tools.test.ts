@@ -69,10 +69,11 @@ import {
   undo,
   usable,
 } from "./tools.ts";
-import { comesUp, setWayIn, tunnelAim } from "./tunnel.ts";
+import { aimedSpan, comesUp, setWayIn, tunnelAim } from "./tunnel.ts";
 import { moveFrom, tileRef } from "./ui/card.ts";
 import { handPrint } from "./ui/dock.ts";
 import { printOf } from "./ui/prints.ts";
+import { machineRef } from "./ui/refs.ts";
 import { again, coins, differences, doNow, runYard } from "./yard.ts";
 
 useFakeLeaf();
@@ -360,6 +361,13 @@ describe("a tunnel through a deep culvert", () => {
       [12, 36, 96],
       [26, 78, 208],
     ]);
+    // Each button's card, held, is of that grade of the tunnel aimed: the same price, worked out once.
+    const held = [1, 2, 3].map((g) => printOf(machineRef(kind("tunnel"), g, aimedSpan(kind("tunnel")))));
+    expect(held.map((p) => (p?.card === "machine" ? [p.price, p.span] : null))).toEqual([
+      [26, 12],
+      [78, 12],
+      [208, 12],
+    ]);
     expect(comesUp(from, ...xy(6, -5))).toBe(true);
     await until(() => fake.leaf.commands.some((c) => isRecord(c) && c.do === "lay"));
     const p = printOf(tileRef(at(w, from.x, from.y)));
@@ -399,7 +407,7 @@ describe("a tunnel's way in, drawn", () => {
 });
 
 describe("a long tunnel the purse is short for", () => {
-  test("shows its own price and far mouth, and turns good once the purse covers it, with the pointer still", async () => {
+  test("shows its own price, and turns good once the purse covers it, with the pointer still", async () => {
     await opened(create({ seed: 5, tier: 6 }), 15);
     S.world.till = 0;
     setTool(kind("tunnel"));
@@ -407,16 +415,35 @@ describe("a long tunnel the purse is short for", () => {
     const from = near(-7, -5);
     expect(setWayIn(from.x, from.y)).toBe(true);
     aimAt(...xy(6, -5));
+    // Short, it shows the nearest tile it could come up on, as ever, and the price of the one asked for.
     expect([coins(), S.aim?.why, S.aim?.cost, S.aim?.far]).toEqual([
       15,
       "Not enough Coins",
       26,
-      at(S.world, ...xy(6, -5)),
+      at(S.world, ...xy(-5, -5)),
     ]);
     // The till earns what is short; the pointer has not moved.
     S.world.till += 11 * MILLI;
     keepAim();
-    expect([coins(), S.aim?.why, S.aim?.cost]).toEqual([26, null, 26]);
+    expect([coins(), S.aim?.why, S.aim?.cost, S.aim?.far]).toEqual([26, null, 26, at(S.world, ...xy(6, -5))]);
+  });
+
+  test("one under 5 tiles or fewer, short of Coins, shows what the page always showed: the nearest tile, its price, why", async () => {
+    await opened(create({ seed: 5, tier: 5 }), 11);
+    S.world.till = 0;
+    setTool(kind("tunnel"));
+    S.dir = 0;
+    const from = near(-7, -5);
+    expect(setWayIn(from.x, from.y)).toBe(true);
+    for (const ahead of [3, 4, 5, 6]) {
+      aimAt(...xy(-7 + ahead, -5));
+      expect([ahead, S.aim?.why, S.aim?.cost, S.aim?.far]).toEqual([
+        ahead,
+        "Not enough Coins",
+        12,
+        at(S.world, ...xy(-5, -5)),
+      ]);
+    }
   });
 });
 

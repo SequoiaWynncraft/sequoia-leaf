@@ -46,6 +46,13 @@ describe("a deep culvert", () => {
     expect([yard().open.span, yard(["deepculvert"]).open.span, F.SPAN_MOST]).toEqual([5, 12, 12]);
   });
 
+  test("says what each tile beyond 5 adds at each grade, as the prices have it", () => {
+    const more = [1, 2, 3].map((g) => F.price(F.TUNNEL, g, 6) - F.price(F.TUNNEL, g, 5));
+    expect(F.RESEARCH.find((r) => r.id === "deepculvert")?.what).toBe(
+      `A tunnel passes under up to 12 tiles, up from 5. Each tile beyond 5 adds ${more[0]} Coins to its price at grade 1, ${more[1]} at grade 2 and ${more[2]} at grade 3.`,
+    );
+  });
+
   test("without it, a tunnel under 6 or 12 tiles is refused, changing nothing; under 5 it is laid as before", () => {
     const y = yard();
     const was = F.encode(y);

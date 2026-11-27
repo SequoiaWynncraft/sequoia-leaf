@@ -97,7 +97,7 @@ const FLAGS = [
   {
     is: "felling",
     name: "Felling",
-    says: `Redwoods on your land can be felled. The first costs ${coinsText(FELLING.first)}. Each one after costs 50% more than the one before.`,
+    says: `Redwoods on your land can be felled. The first costs ${coinsText(FELLING.first)}. Each one after costs half as much again, rounded down to a whole ${num(FELLING.round)}.`,
   },
   {
     is: "mouths",
