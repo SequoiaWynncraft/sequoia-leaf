@@ -962,7 +962,7 @@ button.k-info-stat:hover .k-label,
 }
 .k-info-row.k-look-tiles .k-info-things {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(min-content, 1fr));
   gap: calc(var(--u) * 3);
 }
 .k-slot.k-info-icon {
@@ -1001,11 +1001,9 @@ button.k-info-stat:hover .k-label,
   place-items: end center;
   min-height: calc(var(--u) * 22);
 }
-/* A long name breaks inside its tile and never widens it. */
+/* A long name goes onto more lines inside its tile, between words (`.k-thing-name`). */
 .k-info-tile-name {
-  max-width: 100%;
   line-height: 1.1;
-  overflow-wrap: break-word;
 }
 .k-info-tile .k-cur {
   gap: var(--u);
@@ -1056,10 +1054,21 @@ button.k-info-stat:hover .k-label,
   color: var(--k-gold);
   white-space: nowrap;
 }
-/* Its name wraps in its own column; what is said of it (a count, how many a minute, a tag) never does. */
-.k-thing-name {
+/*
+ * A thing's or a good's name, wherever it is written, wraps only between words: its column is never
+ * narrower than its longest word, and what is beside it gives way first. What is said of it (a
+ * count, how many a minute, a tag) never wraps. A member's name is one word they chose, so it may
+ * break anywhere (`member`), as a title's does.
+ */
+.k-thing-name,
+.k-info-tile-name {
+  min-width: min-content;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.k-thing-name.member {
   min-width: 0;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 .k-thing > :is(.k-thing-count, .k-thing-note, .k-thing-tag) {
   flex: none;

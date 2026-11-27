@@ -93,6 +93,14 @@ export interface Listed {
 }
 
 /**
+ * Texts held unseen in a row, so that it is as wide as the widest of them: every row of a list holds
+ * each name in it and the widest count it can show, so its columns line up, a count growing moves
+ * nothing, and its rows put their counts under their names all together or not at all.
+ */
+const shadows = (texts: readonly string[]): HTMLElement[] =>
+  [...new Set(texts)].map((text) => el("span", "gl-shadow", { "aria-hidden": "true", text }));
+
+/**
  * A label and its rows of things. With no label (what a goal wants, the first rows under its head)
  * there is none; with `names` off (the corner and an order, where a row is its picture, its bar and
  * its count) a row has no name, and with `links` off it is not a link either, for it sits inside
@@ -105,15 +113,29 @@ function list(
 ): Listed {
   const names = opts.names ?? true;
   const live: (() => void)[] = [];
+  const nameOf = (line: Line): string => line.name ?? describe(line.ref)?.name ?? "";
+  // Every row holds, unseen, each name in the list and the widest count it can show (`shadows`).
+  const allNames = names ? lines.map(nameOf) : [];
+  const widest = lines.flatMap((line) => {
+    const of = line.count?.().of;
+    return of === undefined ? [] : [`${whole(of)} / ${whole(of)}`];
+  });
   const rows = lines.map((line) => {
-    const said = describe(line.ref);
-    const name = line.name ?? said?.name ?? "";
+    const name = nameOf(line);
     const what = el(
       "span",
       "gl-what",
       names ? {} : { title: name },
       el("span", "gl-pic", {}, pictureOf(line.ref, SLOT.row)),
-      names ? el("span", line.read ? "gl-name k-read" : "gl-name", { text: name }) : null,
+      names
+        ? el(
+            "span",
+            "gl-cell",
+            {},
+            el("span", line.read ? "gl-name k-thing-name k-read" : "gl-name k-thing-name", { text: name }),
+            ...shadows(allNames),
+          )
+        : null,
     );
     if (opts.links ?? names) link(what, line.ref);
     const end = el("span", "gl-end");
@@ -122,8 +144,8 @@ function list(
     else if (count) {
       const fill = el("i");
       const bar = el("div", "k-bar", {}, fill);
-      const counted = el("span", "gl-n");
-      end.append(bar, counted);
+      const counted = el("span");
+      end.append(bar, el("span", "gl-n gl-cell", {}, counted, ...shadows(widest)));
       live.push(() => {
         const { have, of } = count();
         const got = Math.min(have, of);
@@ -142,7 +164,7 @@ function list(
   return {
     node: el(
       "div",
-      names ? "gl" : "gl tight",
+      `${names ? "gl" : "gl tight"}${widest.length > 0 ? " counted" : ""}`,
       {},
       label === null ? null : el("div", "k-label", { text: label }),
       ...rows,
@@ -312,7 +334,7 @@ export function head(g: Goal, side: Node | null = null, fold: Node | null = null
     "gh-what",
     {},
     el("span", "gh-pic k-slot", {}, pictureOf(pictureRef(g), SLOT.head)),
-    el("span", "gh-name k-name", { text: info?.title ?? "" }),
+    el("span", "gh-name k-name k-thing-name", { text: info?.title ?? "" }),
   );
   link(what, nodeRef(g));
   const end = fold === null ? side : el("span", "gh-side", {}, side, fold);
