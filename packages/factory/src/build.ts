@@ -39,11 +39,11 @@ import { KIT } from "./wire.ts";
 import {
   changed,
   enough,
+  face,
   held,
   holderOf,
   holds,
   place,
-  recover,
   redwoodAt,
   standingTree,
   take,
@@ -218,8 +218,7 @@ function relay(y: Yard, k: Kind, i: number, d: Dir, g: number, lay: Lay): void {
   const mouth = KIT.otherMouth(y, i);
   const turns = FAST[k] !== 1;
   if (y.grade[i] !== g || (turns && y.dir[i] !== d)) changed(y);
-  if (turns && isBig(k) && y.dir[i] !== d) recover(y, i, k, d);
-  if (turns) y.dir[i] = d;
+  if (turns) face(y, i, d);
   y.grade[i] = g;
   if (mouth >= 0) y.grade[mouth] = g;
   RULES[k]?.laid(KIT, y, i, lay);
@@ -241,8 +240,7 @@ export function turn(y: Yard, x: number, z: number, d: Dir): boolean {
   const k = y.kind[i] ?? NONE;
   if (y.dir[i] === d) return true;
   if (!isKind(k) || covers(y, k, i, d, i) !== null) return false;
-  if (isBig(k)) recover(y, i, k, d);
-  y.dir[i] = d;
+  face(y, i, d);
   changed(y);
   return true;
 }

@@ -41,6 +41,20 @@ export const RULES_SIFTER = rules(
   `{ at: front(2, 0), sends: "out" }, { at: front(2, 1), sends: "also" }`,
 );
 export const RULES_FORGE = rules("forge", 3, "Makes resin of deadfall and stone.", `{ at: front(3, 1), sends: "out" }`);
+/** A throwaway of two tiles across by three down, not square, so that turning it moves its tiles: a chute that sells what it takes, as the depot does. */
+export const RULES_CHUTE = `/** A throwaway kind for the test that a kind may cover many tiles, not square. */
+import { kind } from "./kind.ts";
+import { around } from "./ports.ts";
+import { always, anything, sell } from "./sink.ts";
+
+export const chute = kind({
+  name: "chute",
+  info: { name: "Chute", cost: 30, draw: 0, gives: 0, what: "Takes every item, as the depot does." },
+  size: [2, 3],
+  ports: { in: around(2, 3), out: [] },
+  rules: { wants: anything, room: always, give: sell },
+});
+`;
 
 /** A throwaway machine on the page: a picture of its own, drawn once over its tiles. */
 const page = (
@@ -85,6 +99,7 @@ export const ${name}: KindPage = {
 `;
 export const PAGE_SIFTER = page("sifter", 16);
 export const PAGE_FORGE = page("forge", 17);
+export const PAGE_CHUTE = page("chute", 18);
 
 /**
  * Plays both throwaways by the rules, in the copy, and prints what it found as one line of JSON, each
@@ -106,7 +121,7 @@ const kindOf = (name) => {
 const land = bareLand(34, 20, [], [26, 10]);
 const fresh = () => {
   const y = F.create({ land, tier: 4, seed: 1 });
-  for (const n of ["sifter", "forge"]) y.open.kinds[kindOf(n)] = 1;
+  for (const n of ["sifter", "forge", "chute"]) y.open.kinds[kindOf(n)] = 1;
   return y;
 };
 const tile = (y, x, z) => F.at(y, x, z);
@@ -233,6 +248,25 @@ const forgeRead = F.decode(F.encode(forge), land);
 out.forgeReadBack = forgeRead !== null && F.check(forgeRead) === F.check(forge);
 out.forgeRemoved = F.remove(forge, 19, 9).ok && bare(forge, 19, 9, 21, 11);
 
+// The chute, two across by three down facing east, its own tile (20, 14): it covers 20 to 21 across and 13 to 15 down.
+// Turned south by a command it covers 19 to 21 across and 14 to 15 down; undone, it covers what it did,
+// as a turn would put it, and reads back so.
+const CHUTE = kindOf("chute");
+const chuting = fresh();
+F.build(chuting, CHUTE, 20, 14, 0, Infinity);
+act(chuting, { do: "turn", x: 21, y: 15, dir: 1 }, Infinity, "t1");
+const turnedSouth = covers(chuting, CHUTE, 19, 14, 21, 15, 20, 14) && bare(chuting, 20, 13, 21, 13);
+act(chuting, { do: "undo", entry: "t1" }, Infinity, "t2");
+const chuteRead = F.decode(F.encode(chuting), land);
+out.undoTurn =
+  turnedSouth &&
+  chuting.dir[tile(chuting, 20, 14)] === 0 &&
+  covers(chuting, CHUTE, 20, 13, 21, 15, 20, 14) &&
+  bare(chuting, 19, 14, 19, 15) &&
+  chuteRead !== null &&
+  covers(chuteRead, CHUTE, 20, 13, 21, 15, 20, 14) &&
+  F.check(chuteRead) === F.check(chuting);
+
 console.log(JSON.stringify(out));
 `;
 
@@ -315,5 +349,6 @@ export const PLAYED_BIG = Object.fromEntries(
     "resin",
     "forgeReadBack",
     "forgeRemoved",
+    "undoTurn",
   ].map((k) => [k, true]),
 );

@@ -79,9 +79,20 @@ import {
 } from "./pieces.ts";
 import { REASON } from "./reasons.ts";
 import { legPiece } from "./route.ts";
-import { OWN, piecesTiles, tilesAt } from "./sizes.ts";
+import { OWN, pieceOf, piecesTiles, tilesAt } from "./sizes.ts";
 import { FIXED, gradeOf, isKind, keptKind, type Kind, NONE, SHUTS, SPANS } from "./tables.ts";
-import { changed, type Entry, holderOf, place, redwoodAt, standingTree, tunnelRow, vacate, type Yard } from "./yard.ts";
+import {
+  changed,
+  type Entry,
+  face,
+  holderOf,
+  place,
+  redwoodAt,
+  standingTree,
+  tunnelRow,
+  vacate,
+  type Yard,
+} from "./yard.ts";
 
 /** The version of the Works' rules this was built with: the one the page and Leaf compare. */
 const RULES = rulesVersions().works;
@@ -196,7 +207,8 @@ const SETTINGS: readonly {
   readonly of: (s: Setting) => number;
   readonly to: (y: Yard, i: number, v: number) => void;
 }[] = [
-  { at: (y, i) => y.dir[i] ?? 0, of: (s) => s.dir, to: (y, i, v) => (y.dir[i] = v) },
+  // Turned back as a turn turns it, a piece of more than one tile over the tiles it covers that way.
+  { at: (y, i) => y.dir[i] ?? 0, of: (s) => s.dir, to: face },
   { at: (y, i) => y.grade[i] ?? 0, of: (s) => s.kept.grade ?? gradeOf(s.kind), to: (y, i, v) => (y.grade[i] = v) },
   { at: (y, i) => y.tint[i] ?? 0, of: (s) => s.kept.tint ?? 0, to: (y, i, v) => (y.tint[i] = v) },
   { at: (y, i) => y.set[i] ?? NONE, of: (s) => s.kept.recipe ?? NONE, to: (y, i, v) => (y.set[i] = v) },
@@ -289,6 +301,12 @@ function treeOf(y: Yard, a: { readonly x: number; readonly y: number }): readonl
   const t = standingTree(y, tileOf(y, a));
   return t < 0 ? [] : (y.land.trees[t] ?? []);
 }
+/** Every tile the piece on the tile a turn names would cover turned: a piece of more than one tile's new tiles. */
+function turnedTo(y: Yard, a: ActOf<"turn">): number[] {
+  const own = pieceOf(y, tileOf(y, a));
+  const W = y.land.w;
+  return own < 0 ? [] : tilesAt(y.kind[own] ?? NONE, own % W, Math.floor(own / W), a.dir, W, y.land.h);
+}
 /** A new tunnel's far mouth, where it would come up. */
 function tunnelEnd(y: Yard, a: ActOf<"build">): number[] {
   const exit = SPANS[a.kind] === 1 ? tunnelExit(y, a.x, a.y, a.dir) : null;
@@ -314,7 +332,7 @@ const REACH: { readonly [D in Name]?: (y: Yard, a: ActOf<D>) => readonly number[
   remove: one,
   clear: inArea,
   upgrade: inArea,
-  turn: one,
+  turn: (y, a) => [tileOf(y, a), ...turnedTo(y, a)],
   paint: (y, a) => lineOf(y, tileOf(y, a)),
   side: one,
   way: one,

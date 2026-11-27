@@ -562,7 +562,7 @@ export function place(y: Yard, i: number, k: Kind, d: number, g = 1): void {
 }
 
 /** Lays the piece of more than one tile standing on its own tile `i` over the rest of its tiles: each takes its kind and where its own tile is, and nothing else. */
-export function cover(y: Yard, i: number, k: Kind, d: number): void {
+export function cover(y: Yard, i: number, k: number, d: number): void {
   const f = FACING[k]?.[d];
   if (!f) return;
   const w = y.land.w;
@@ -577,12 +577,19 @@ export function cover(y: Yard, i: number, k: Kind, d: number): void {
   }
 }
 
-/** Turns the piece of more than one tile on its own tile `i` to face `d`: off the tiles it covered, and over those it covers now, which are clear. */
-export function recover(y: Yard, i: number, k: Kind, d: number): void {
+/**
+ * Turns the piece on its own tile `i` to face `d`, what it holds and its row kept: the one way a
+ * standing piece is turned, by a turn, by one of its kind laid over it, and by Undo. One of more than
+ * one tile comes off the tiles it covered and over those it covers turned, which are clear.
+ */
+export function face(y: Yard, i: number, d: number): void {
+  const k = y.kind[i] ?? NONE;
   const f = FACING[k]?.[(y.dir[i] ?? 0) & 3];
-  for (let t = 1; t < (f?.dx.length ?? 0); t++) clearTile(y, i + (f?.dx[t] ?? 0) + (f?.dy[t] ?? 0) * y.land.w);
+  if (f && f.dx.length > 1) {
+    for (let t = 1; t < f.dx.length; t++) clearTile(y, i + (f.dx[t] ?? 0) + (f.dy[t] ?? 0) * y.land.w);
+    cover(y, i, k, d & 3);
+  }
   y.dir[i] = d;
-  cover(y, i, k, d & 3);
 }
 
 /** Takes whatever stands on a tile away, row and all, leaving it as new ground: every tile of a piece of more than one. */

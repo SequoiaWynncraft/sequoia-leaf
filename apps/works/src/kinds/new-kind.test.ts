@@ -30,12 +30,14 @@ import { KIND_DEFS, KINDS } from "@sequoia-leaf/factory";
 import {
   MAKERS,
   PAGE_BIG,
+  PAGE_CHUTE,
   PAGE_FORGE,
   PAGE_SIFTER,
   PAGED_BIG,
   PLAY_BIG,
   PLAYED_BIG,
   RECIPE_LINES,
+  RULES_CHUTE,
   RULES_FORGE,
   RULES_SIFTER,
 } from "../../test/throwaways.ts";
@@ -382,7 +384,8 @@ describe("a new kind of piece", () => {
     try {
       addKind(at, "sifter", RULES_SIFTER, PAGE_SIFTER);
       addKind(at, "forge", RULES_FORGE, PAGE_FORGE);
-      unlockAtStart(at, ["sifter", "forge"]);
+      addKind(at, "chute", RULES_CHUTE, PAGE_CHUTE);
+      unlockAtStart(at, ["sifter", "forge", "chute"]);
       // What they make is content, as every maker's recipes are.
       const recipes = join(at, "packages/factory/src/content/recipes.ts");
       const text = readFileSync(recipes, "utf8").replace(`"mill" | "bench" | "workshop"`, MAKERS);
