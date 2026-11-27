@@ -2,13 +2,14 @@
 import { expect, test } from "bun:test";
 
 import { at, build, create, TUNNEL } from "@sequoia-leaf/factory";
+import { xy } from "@sequoia-leaf/factory/test/near.ts";
 
 import { cameFrom, dirAt, hooded } from "./tiles.ts";
 
 test("a tunnel's hoods hide the half of each mouth toward the other, where a thing goes under and comes up", () => {
   const y = create({ seed: 5, tier: 3 });
-  expect(build(y, TUNNEL, 20, 16, 0, Infinity, { span: 2 }).ok).toBe(true);
-  const [inMouth, outMouth] = [at(y, 20, 16), at(y, 23, 16)];
+  expect(build(y, TUNNEL, ...xy(-4, -2), 0, Infinity, { span: 2 }).ok).toBe(true);
+  const [inMouth, outMouth] = [at(y, ...xy(-4, -2)), at(y, ...xy(-1, -2))];
   expect([y.kind[outMouth], dirAt(y, inMouth)]).toEqual([TUNNEL, 0]);
   // Going in: seen on the near half, gone under the hood past the middle.
   expect([0.2, 0.5, 0.7].map((p) => hooded(y, inMouth, p))).toEqual([false, false, true]);

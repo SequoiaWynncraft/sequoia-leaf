@@ -35,6 +35,7 @@ import {
   SPLITTER,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 import { deck } from "@sequoia-leaf/kit/card.ts";
 
 import { act, clear, ctx, isRecord, kindAt, kindOn, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
@@ -94,24 +95,24 @@ describe("Select's copy", () => {
     const y = yardAt(3);
     buyPlot(y, plot("meadow"), Infinity);
     // 161 belts on the yard's own plot, clear of the depot, and of where the meadow's redwoods would meet a copy of them.
-    for (let z = 12; z < 24; z++)
-      for (let x = 16; x < 32; x++) {
-        const byDepot = z >= 17 && z <= 19 && x > 22;
-        const byTrees = (z === 21 || z === 22) && (x === 22 || x === 23);
-        if (!byDepot && !byTrees) expect(build(y, BELT, x, z, 0, Infinity).ok).toBe(true);
+    for (let dy = -6; dy < 6; dy++)
+      for (let dx = -8; dx < 8; dx++) {
+        const byDepot = dy >= -1 && dy <= 1 && dx > -2;
+        const byTrees = (dy === 3 || dy === 4) && (dx === -2 || dx === -1);
+        if (!byDepot && !byTrees) expect(build(y, BELT, ...xy(dx, dy), 0, Infinity).ok).toBe(true);
       }
     expect(y.kind.filter((k) => k === BELT).length).toBe(161);
     const fake = await opened(y, 10_000);
     setTool("select");
-    markStart(16, 12);
-    markOver(31, 23);
+    markStart(...xy(-8, -6));
+    markOver(...xy(7, 5));
     markEnd();
     expect(S.mark?.pieces.length).toBe(161);
     hold("copy");
     // Its box of 16 by 12 on the meadow, (16, 24) to (31, 35).
-    aimAt(23, 29);
+    aimAt(...xy(-1, 11));
     expect(S.aim?.why).toBeNull();
-    expect(place(23, 29)).toBe(true);
+    expect(place(...xy(-1, 11))).toBe(true);
     expect(S.world.kind.filter((k) => k === BELT).length).toBe(322);
     await until(() => fake.leaf.posts >= 1);
     await Bun.sleep(5);
@@ -125,41 +126,41 @@ describe("Select's copy", () => {
 
   test("sets down what stands on the tiles it was taken up from, as the rules do, after a copy has landed on them", async () => {
     const y = yardAt(3);
-    for (let x = 18; x < 21; x++) build(y, BELT, x, 13, 0, Infinity);
+    for (let dx = -6; dx < -3; dx++) build(y, BELT, ...xy(dx, -5), 0, Infinity);
     await opened(y, 10_000);
     setTool("select");
-    markStart(18, 13);
-    markOver(20, 13);
+    markStart(...xy(-6, -5));
+    markOver(...xy(-4, -5));
     markEnd();
     hold("copy");
     // The first copy lands one tile on, over two of the three it was taken from.
-    aimAt(20, 13);
-    expect(place(20, 13)).toBe(true);
+    aimAt(...xy(-4, -5));
+    expect(place(...xy(-4, -5))).toBe(true);
     if (S.group) S.group.turns = 1;
-    aimAt(26, 15);
-    expect(S.group?.at).toEqual(placed(piecesAt(S.world, S.group?.tiles ?? []), 1, 26, 14));
+    aimAt(...xy(2, -3));
+    expect(S.group?.at).toEqual(placed(piecesAt(S.world, S.group?.tiles ?? []), 1, ...xy(2, -4)));
   });
 });
 
 describe("a piece's card's Move", () => {
   test("takes that piece alone in hand, and setting it down moves it, done alike on the page and on Leaf", async () => {
     const y = yardAt(3);
-    for (let x = 18; x < 21; x++) build(y, BELT, x, 13, 0, Infinity);
-    build(y, kind("crate"), 21, 13, 0, Infinity);
+    for (let dx = -6; dx < -3; dx++) build(y, BELT, ...xy(dx, -5), 0, Infinity);
+    build(y, kind("crate"), ...xy(-3, -5), 0, Infinity);
     const fake = await opened(y, 10_000);
     const w = S.world;
-    expect(printOf(tileRef(at(w, 21, 13)))).toMatchObject({ card: "standing", move: true });
+    expect(printOf(tileRef(at(w, ...xy(-3, -5))))).toMatchObject({ card: "standing", move: true });
     // On a tile with nothing standing, it takes nothing up.
     const hand = S.hand;
-    moveFrom(24, 15);
+    moveFrom(...xy(0, -3));
     expect(S.hand).toBe(hand);
-    moveFrom(21, 13);
+    moveFrom(...xy(-3, -5));
     expect(S.group?.as).toBe("move");
-    expect(piecesAt(w, S.group?.tiles ?? []).map((p) => [p.kind, p.x, p.y])).toEqual([[kind("crate"), 21, 13]]);
-    aimAt(25, 15);
+    expect(piecesAt(w, S.group?.tiles ?? []).map((p) => [p.kind, p.x, p.y])).toEqual([[kind("crate"), ...xy(-3, -5)]]);
+    aimAt(...xy(1, -3));
     expect(S.aim?.why).toBeNull();
-    expect(place(25, 15)).toBe(true);
-    expect([kindAt({ x: 21, y: 13 }), kindAt({ x: 25, y: 15 }), kindAt({ x: 20, y: 13 })]).toEqual([
+    expect(place(...xy(1, -3))).toBe(true);
+    expect([kindAt({ ...near(-3, -5) }), kindAt({ ...near(1, -3) }), kindAt({ ...near(-4, -5) })]).toEqual([
       undefined,
       "crate",
       "belt",
@@ -172,10 +173,10 @@ describe("a piece's card's Move", () => {
 
   test("takes a tunnel's two mouths alone, and not the belts that cross over between them", async () => {
     const y = yardAt(3);
-    expect(build(y, kind("tunnel"), 20, 16, 0, Infinity, { span: 2 }).ok).toBe(true);
-    for (let z = 15; z < 18; z++) expect(build(y, BELT, 21, z, 1, Infinity).ok).toBe(true);
+    expect(build(y, kind("tunnel"), ...xy(-4, -2), 0, Infinity, { span: 2 }).ok).toBe(true);
+    for (let dy = -3; dy < 0; dy++) expect(build(y, BELT, ...xy(-3, dy), 1, Infinity).ok).toBe(true);
     await opened(y, 10_000);
-    moveFrom(20, 16);
+    moveFrom(...xy(-4, -2));
     expect(S.group?.as).toBe("move");
     expect(piecesAt(S.world, S.group?.tiles ?? []).map((p) => p.kind)).toEqual([kind("tunnel")]);
   });
@@ -184,17 +185,17 @@ describe("a piece's card's Move", () => {
 describe("the belt tool, with a finger", () => {
   test("tapping a splitter starts the run on the tile ahead of it, and Leaf lays it as the page did", async () => {
     const y = yardAt(1);
-    build(y, BELT, 18, 13, 0, Infinity);
-    build(y, SPLITTER, 19, 13, 0, Infinity);
+    build(y, BELT, ...xy(-6, -5), 0, Infinity);
+    build(y, SPLITTER, ...xy(-5, -5), 0, Infinity);
     const fake = await opened(y, 10_000);
     S.finger = true;
     setTool(BELT);
-    tapBelt(19, 13);
-    tapBelt(24, 13);
+    tapBelt(...xy(-5, -5));
+    tapBelt(...xy(0, -5));
     expect(S.run?.why).toBeNull();
-    expect(S.run?.legs[0]).toMatchObject({ x: 20, y: 13 });
+    expect(S.run?.legs[0]).toMatchObject({ ...near(-4, -5) });
     expect(confirm()).toBe(true);
-    expect([kindAt({ x: 19, y: 13 }), kindAt({ x: 20, y: 13 }), kindAt({ x: 24, y: 13 })]).toEqual([
+    expect([kindAt({ ...near(-5, -5) }), kindAt({ ...near(-4, -5) }), kindAt({ ...near(0, -5) })]).toEqual([
       "splitter",
       "belt",
       "belt",
@@ -233,16 +234,16 @@ describe("what is worked out from the yard and kept", () => {
 
   test("is worked out again when a line is coloured: a colour is part of what stands", async () => {
     const y = yardAt(2);
-    for (let x = 18; x < 22; x++) build(y, BELT, x, 13, 0, Infinity);
+    for (let dx = -6; dx < -2; dx++) build(y, BELT, ...xy(dx, -5), 0, Infinity);
     await opened(y);
     const before = layout(S.world);
-    expect("refused" in doNow(act({ do: "paint", x: 19, y: 13, tint: 3 }))).toBe(false);
+    expect("refused" in doNow(act({ do: "paint", ...near(-5, -5), tint: 3 }))).toBe(false);
     expect(layout(S.world)).not.toBe(before);
   });
 
   test("is worked out again for every change the rules count, and kept while the yard only runs on", async () => {
     const y = yardAt(2);
-    for (let x = 18; x < 22; x++) build(y, BELT, x, 13, 0, Infinity);
+    for (let dx = -6; dx < -2; dx++) build(y, BELT, ...xy(dx, -5), 0, Infinity);
     y.till = 3 * MILLI;
     const fake = await opened(y);
     const before = layout(S.world);
@@ -263,15 +264,15 @@ describe("what is worked out from the yard and kept", () => {
 
   test("is worked out again when a piece is raised where it stands, a sorter is set, or a way is put first", async () => {
     const y = yardAt(5);
-    build(y, BELT, 18, 13, 0, Infinity);
-    build(y, SORTER, 19, 13, 0, Infinity);
-    build(y, SPLITTER, 20, 13, 0, Infinity);
-    build(y, BELT, 21, 13, 0, Infinity);
+    build(y, BELT, ...xy(-6, -5), 0, Infinity);
+    build(y, SORTER, ...xy(-5, -5), 0, Infinity);
+    build(y, SPLITTER, ...xy(-4, -5), 0, Infinity);
+    build(y, BELT, ...xy(-3, -5), 0, Infinity);
     await opened(y, 100_000);
     for (const c of [
-      { do: "build", kind: "belt", x: 18, y: 13, dir: 0, grade: 2 },
-      { do: "sort", x: 19, y: 13, item: "plank" },
-      { do: "first", x: 20, y: 13, way: 0 },
+      { do: "build", kind: "belt", ...near(-6, -5), dir: 0, grade: 2 },
+      { do: "sort", ...near(-5, -5), item: "plank" },
+      { do: "first", ...near(-4, -5), way: 0 },
     ]) {
       const before = layout(S.world);
       expect(doNow(act(c))).not.toHaveProperty("refused");
@@ -284,8 +285,8 @@ describe("the kinds this page draws", () => {
   test("are every kind in the tables but the depot, each once; a sorter is in the dock once unlocked, picked up with Q, and drawn with a belt's arms", async () => {
     expect(DRAWN.toSorted((a, b) => a - b)).toEqual(ALL_KINDS.filter((k) => k !== DEPOT));
     const y = yardAt(4);
-    build(y, SORTER, 18, 13, 0, Infinity);
-    build(y, BELT, 19, 13, 0, Infinity);
+    build(y, SORTER, ...xy(-6, -5), 0, Infinity);
+    build(y, BELT, ...xy(-5, -5), 0, Infinity);
     // With Coins for the cart stop built below.
     await opened(y, 1000);
     expect(DRAWN.every(draws)).toBe(true);
@@ -293,15 +294,18 @@ describe("the kinds this page draws", () => {
     expect([draws(DEPOT), usable(DEPOT), DRAWN.includes(DEPOT)]).toEqual([true, false, false]);
     expect([usable(SORTER), usable(kind("stop")), usable(kind("study"))]).toEqual([true, true, true]);
     setTool(null);
-    expect(pickFrom(18, 13)).toBe(true);
+    expect(pickFrom(...xy(-6, -5))).toBe(true);
     expect(S.tool).toBe(SORTER);
     const L = layout(S.world);
-    expect([(L.arms[at(S.world, 18, 13)] ?? 0) > 0, (L.arms[at(S.world, 19, 13)] ?? 0) > 0]).toEqual([true, true]);
+    expect([(L.arms[at(S.world, ...xy(-6, -5))] ?? 0) > 0, (L.arms[at(S.world, ...xy(-5, -5))] ?? 0) > 0]).toEqual([
+      true,
+      true,
+    ]);
     // A piece that hands into a cart stop is one whose things reach the depot: the stop is told which.
-    expect("refused" in doNow(act({ do: "build", kind: "stop", x: 20, y: 13, dir: 0 }))).toBe(false);
+    expect("refused" in doNow(act({ do: "build", kind: "stop", ...near(-4, -5), dir: 0 }))).toBe(false);
     const after = layout(S.world);
-    const n = after.intoDepot.indexOf(at(S.world, 19, 13));
-    expect([n >= 0, after.intoStop[n]]).toEqual([true, at(S.world, 20, 13)]);
+    const n = after.intoDepot.indexOf(at(S.world, ...xy(-5, -5)));
+    expect([n >= 0, after.intoStop[n]]).toEqual([true, at(S.world, ...xy(-4, -5))]);
   });
 
   for (const tier of [0, 1, 2])
@@ -314,11 +318,11 @@ describe("the kinds this page draws", () => {
 describe("a tunnel aimed", () => {
   test("knows where its far mouth comes up, worked out once for the aim", async () => {
     const y = yardAt(2);
-    build(y, BELT, 19, 13, 0, Infinity);
+    build(y, BELT, ...xy(-5, -5), 0, Infinity);
     await opened(y);
     setTool(kind("tunnel"));
-    aimAt(18, 13);
-    expect(S.aim?.far).toBe(at(S.world, 20, 13));
+    aimAt(...xy(-6, -5));
+    expect(S.aim?.far).toBe(at(S.world, ...xy(-4, -5)));
   });
 });
 
@@ -326,10 +330,10 @@ describe("a tunnel's card", () => {
   test("reads nothing of the holders' table at its own row", async () => {
     const y = yardAt(2);
     // A crate holding three planks, and a tunnel: each the first row of its own table.
-    build(y, kind("crate"), 18, 13, 0, Infinity);
-    build(y, kind("tunnel"), 20, 13, 0, Infinity);
-    const crate = at(y, 18, 13);
-    const tunnel = at(y, 20, 13);
+    build(y, kind("crate"), ...xy(-6, -5), 0, Infinity);
+    build(y, kind("tunnel"), ...xy(-4, -5), 0, Infinity);
+    const crate = at(y, ...xy(-6, -5));
+    const tunnel = at(y, ...xy(-4, -5));
     for (let k = 0; k < 3; k++) put(y.holders, holderOf(y, crate), item("plank"));
     await opened(y);
     expect([S.world.row[crate], S.world.row[tunnel]]).toEqual([0, 0]);
@@ -341,23 +345,23 @@ describe("a tunnel's card", () => {
 describe("pieces in hand, drawn as they would stand", () => {
   test("are drawn from a yard that shares all but its own few arrays with the real one, and nothing is written to it", async () => {
     const y = yardAt(3);
-    for (let x = 18; x < 22; x++) build(y, BELT, x, 13, 0, Infinity);
-    build(y, kind("crate"), 22, 13, 0, Infinity);
+    for (let dx = -6; dx < -2; dx++) build(y, BELT, ...xy(dx, -5), 0, Infinity);
+    build(y, kind("crate"), ...xy(-2, -5), 0, Infinity);
     await opened(y);
     const w = S.world;
-    const tiles = [18, 19, 20, 21, 22].map((x) => at(w, x, 13));
+    const tiles = [-6, -5, -4, -3, -2].map((dx) => at(w, ...xy(dx, -5)));
     const kept = (): unknown => [encode(w), [w.kind, w.dir, w.span, w.shut, w.tint, w.row].map((a) => Array.from(a))];
     const before = kept();
-    const group = { as: "move" as const, tiles, at: placed(piecesAt(w, tiles), 1, 20, 15) };
+    const group = { as: "move" as const, tiles, at: placed(piecesAt(w, tiles), 1, ...xy(-4, -3)) };
     const as = asIf(w, group);
     expect(kept()).toEqual(before);
     // Moved: gone from where they stand, and standing where they are aimed, turned to face south.
-    expect([as.kind[at(w, 18, 13)], as.kind[at(w, 20, 15)], as.dir[at(w, 20, 15)], as.kind[at(w, 20, 19)]]).toEqual([
-      NONE,
-      BELT,
-      1,
-      kind("crate"),
-    ]);
+    expect([
+      as.kind[at(w, ...xy(-6, -5))],
+      as.kind[at(w, ...xy(-4, -3))],
+      as.dir[at(w, ...xy(-4, -3))],
+      as.kind[at(w, ...xy(-4, 1))],
+    ]).toEqual([NONE, BELT, 1, kind("crate")]);
     // Everything else is the real yard's own, and its own arrays are kept for the next aim.
     for (const part of ["holders", "tunnels", "land", "item", "prog", "lit"] as const) expect(as[part]).toBe(w[part]);
     expect(as.kind).not.toBe(w.kind);
@@ -385,17 +389,17 @@ describe("the page", () => {
 describe("a drag ends with what is in hand", () => {
   test("a drag that goes on after the brush was put away (as the yard gives way to Leaf's) colours nothing", async () => {
     const y = yardAt(2);
-    for (let x = 18; x < 22; x++) build(y, BELT, x, 13, 0, Infinity);
-    for (let x = 18; x < 22; x++) build(y, BELT, x, 16, 0, Infinity);
+    for (let dx = -6; dx < -2; dx++) build(y, BELT, ...xy(dx, -5), 0, Infinity);
+    for (let dx = -6; dx < -2; dx++) build(y, BELT, ...xy(dx, -2), 0, Infinity);
     const fake = await opened(y);
     setTool("paint");
     S.tint = 3;
-    press(19, 13, 1);
-    expect(S.world.tint[at(S.world, 19, 13)]).toBe(3);
+    press(...xy(-5, -5), 1);
+    expect(S.world.tint[at(S.world, ...xy(-5, -5))]).toBe(3);
     // The yard gives way to Leaf's: what is under way is put away, as Escape puts it away.
     cancel();
-    dragOver(19, 16, 1);
-    expect(S.world.tint[at(S.world, 19, 16)]).toBe(0);
+    dragOver(...xy(-5, -2), 1);
+    expect(S.world.tint[at(S.world, ...xy(-5, -2))]).toBe(0);
     await until(() => fake.leaf.posts >= 1);
     expect(sent(fake.leaf)).toEqual(["paint"]);
   });
@@ -403,17 +407,17 @@ describe("a drag ends with what is in hand", () => {
   test("losing focus mid-drag lays no run, and the belt aims again where the mouse goes", async () => {
     const fake = await opened(yardAt(2));
     setTool(BELT);
-    runStart(18, 13, 1);
-    runOver(21, 13, 1);
+    runStart(...xy(-6, -5), 1);
+    runOver(...xy(-3, -5), 1);
     expect([running(), S.run?.legs.length]).toEqual([true, 4]);
     // What the window's blur does.
     dragLost();
     expect([running(), S.run, S.tool]).toEqual([false, null, BELT]);
     // A let-go that comes after all lays nothing.
     dragEnd(1);
-    S.hover = { x: 18, y: 14 };
-    aimAt(18, 14);
-    expect([S.aim?.x, S.aim?.y]).toEqual([18, 14]);
+    S.hover = { ...near(-6, -4) };
+    aimAt(...xy(-6, -4));
+    expect([S.aim?.x, S.aim?.y]).toEqual(xy(-6, -4));
     await Bun.sleep(5);
     expect(fake.leaf.posts).toBe(0);
   });
@@ -477,21 +481,21 @@ describe("Undo, done by the rules", () => {
 
   test("a stroke whose entry is no longer the newest once the page takes Leaf's yard mid-drag begins an entry of its own with its next line", async () => {
     const y = yardAt(4);
-    for (const z of [12, 14]) for (const x of [16, 17, 18]) build(y, BELT, x, z, 0, Infinity);
+    for (const dy of [-6, -4]) for (const dx of [-8, -7, -6]) build(y, BELT, ...xy(dx, dy), 0, Infinity);
     const fake = await opened(y, 100);
     setTool("paint");
-    expect(paintAt(16, 12, false, 1)).toBe(true);
+    expect(paintAt(...xy(-8, -6), false, 1)).toBe(true);
     const stroke = S.world.history.at(-1)?.id ?? "";
     await until(() => fake.leaf.posts >= 1);
     // Another page of the member's does something, and this page takes Leaf's yard mid-drag.
-    fake.elsewhere({ do: "turn", x: 18, y: 14, dir: 1, id: "elsewhere-1" });
+    fake.elsewhere({ do: "turn", ...near(-6, -4), dir: 1, id: "elsewhere-1" });
     await again();
     expect(S.world.history.map((e) => e.id)).toEqual([stroke, "elsewhere-1"]);
-    expect(paintAt(16, 14, true, 1)).toBe(true);
+    expect(paintAt(...xy(-8, -4), true, 1)).toBe(true);
     expect(S.world.history.length).toBe(3);
     // One Undo undoes the line painted since: the other page's turn and the stroke's first line stand.
     expect(undo()).toBe(true);
-    expect([tint(16, 12) > 0, tint(16, 14), S.world.history.map((e) => e.id)]).toEqual([
+    expect([tint(...xy(-8, -6)) > 0, tint(...xy(-8, -4)), S.world.history.map((e) => e.id)]).toEqual([
       true,
       0,
       [stroke, "elsewhere-1"],
@@ -541,14 +545,14 @@ const pin = (i: number): void => {
 describe("the pinned card", () => {
   test("of a tunnel marks both mouths; the view brought to it, the mark closes in for a moment and then holds", async () => {
     const y = yardAt(2);
-    build(y, kind("tunnel"), 20, 13, 0, Infinity, { span: 2 });
+    build(y, kind("tunnel"), ...xy(-4, -5), 0, Infinity, { span: 2 });
     await opened(y);
     expect(markedTiles()).toEqual([]);
-    pin(at(S.world, 23, 13));
-    expect(markedTiles()).toEqual([at(S.world, 23, 13), at(S.world, 20, 13)]);
+    pin(at(S.world, ...xy(-1, -5)));
+    expect(markedTiles()).toEqual([at(S.world, ...xy(-1, -5)), at(S.world, ...xy(-4, -5))]);
     S.t = 100;
     expect(pinPulse()).toBe(0);
-    S.brought = { tile: at(S.world, 23, 13), at: 100, card: true };
+    S.brought = { tile: at(S.world, ...xy(-1, -5)), at: 100, card: true };
     const out = [100, 100.2, 100.5, 100.6, 101, 102].map((t) => {
       S.t = t;
       return pinPulse();
@@ -559,35 +563,35 @@ describe("the pinned card", () => {
     expect(out.slice(-2)).toEqual([0, 0]);
     // Another piece's card pinned: no pulse for it.
     S.t = 100;
-    S.brought = { tile: at(S.world, 1, 1), at: 100, card: true };
+    S.brought = { tile: at(S.world, ...xy(-23, -17)), at: 100, card: true };
     expect(pinPulse()).toBe(0);
   });
 
   test("is not over the piece on a phone: the piece the view was brought to is marked with no card, until a card is opened or the walk ends", async () => {
     const y = yardAt(2);
-    build(y, kind("tunnel"), 20, 13, 0, Infinity, { span: 2 });
-    build(y, BELT, 18, 13, 0, Infinity);
+    build(y, kind("tunnel"), ...xy(-4, -5), 0, Infinity, { span: 2 });
+    build(y, BELT, ...xy(-6, -5), 0, Infinity);
     await opened(y);
     deck.open = null;
-    const mouth = at(S.world, 20, 13);
+    const mouth = at(S.world, ...xy(-4, -5));
     // Brought there with its card opened, and the card put away since: nothing is marked.
     S.brought = { tile: mouth, at: S.t, card: true };
     expect(markedTiles()).toEqual([]);
     // Brought there on a phone, where the card is not opened over it: marked, both mouths.
     S.brought = { tile: mouth, at: S.t, card: false };
-    expect(markedTiles()).toEqual([mouth, at(S.world, 23, 13)]);
+    expect(markedTiles()).toEqual([mouth, at(S.world, ...xy(-1, -5))]);
     // Another piece's card opened: that one is marked.
-    pin(at(S.world, 18, 13));
-    expect(markedTiles()).toEqual([at(S.world, 18, 13)]);
+    pin(at(S.world, ...xy(-6, -5)));
+    expect(markedTiles()).toEqual([at(S.world, ...xy(-6, -5))]);
     deck.open = null;
     S.brought = null;
     expect(markedTiles()).toEqual([]);
   });
   test("is the one source of what the yard marks: taking up a tool closes it, and nothing is marked", async () => {
     const y = yardAt(2);
-    build(y, BELT, 18, 13, 0, Infinity);
+    build(y, BELT, ...xy(-6, -5), 0, Infinity);
     await opened(y);
-    const i = at(S.world, 18, 13);
+    const i = at(S.world, ...xy(-6, -5));
     pin(i);
     expect(S.picked).toBe(i);
     setTool(BELT);
@@ -596,15 +600,15 @@ describe("the pinned card", () => {
 
   test("closes when the piece it is about is taken away, or cleared with an area", async () => {
     const y = yardAt(3);
-    for (let x = 18; x < 21; x++) build(y, BELT, x, 13, 0, Infinity);
+    for (let dx = -6; dx < -3; dx++) build(y, BELT, ...xy(dx, -5), 0, Infinity);
     await opened(y);
-    pin(at(S.world, 18, 13));
-    expect(takeAway(18, 13)).toBe(true);
+    pin(at(S.world, ...xy(-6, -5)));
+    expect(takeAway(...xy(-6, -5))).toBe(true);
     expect([deck.open, S.picked]).toEqual([null, -1]);
-    pin(at(S.world, 19, 13));
+    pin(at(S.world, ...xy(-5, -5)));
     // Another piece taken away leaves it be.
-    expect(takeAway(20, 13)).toBe(true);
-    expect(S.picked).toBe(at(S.world, 19, 13));
+    expect(takeAway(...xy(-4, -5))).toBe(true);
+    expect(S.picked).toBe(at(S.world, ...xy(-5, -5)));
     deck.close();
   });
 });

@@ -25,6 +25,7 @@ import {
   writeAct,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 import { asking, pressedTwice } from "@sequoia-leaf/kit/dom.ts";
 import { press } from "@sequoia-leaf/kit/standin.ts";
 
@@ -54,12 +55,12 @@ function must(y: Yard, c: Record<string, unknown>): void {
 /** A yard Leaf has with every goal done, a line of planks into the depot and a crate of ore by it, standing for Leaf's clock now. */
 function yard(known = true): Yard {
   const y = create({ seed: 5, tier: 5 });
-  must(y, { do: "build", kind: "gatherer", x: 29, y: 21, dir: 3 });
-  must(y, { do: "build", kind: "mill", x: 29, y: 20, dir: 2 });
-  const legs = route(y, [28, 20], y.land.depot);
+  must(y, { do: "build", kind: "gatherer", ...near(5, 3), dir: 3 });
+  must(y, { do: "build", kind: "mill", ...near(5, 2), dir: 2 });
+  const legs = route(y, xy(4, 2), y.land.depot);
   if (!legs) throw new Error("no way to the depot");
   must(y, writeAct({ do: "lay", legs }));
-  must(y, { do: "build", kind: "crate", x: 29, y: 14, dir: 2 });
+  must(y, { do: "build", kind: "crate", ...near(5, -4), dir: 2 });
   if (!known) {
     y.done = y.done.filter((g) => g !== goalNamed("wholeyard"));
     reopen(y);
@@ -116,8 +117,8 @@ function changed(): { y: Yard; saved: string } {
   const y = yard();
   must(y, { do: "saveYard", slot: 0 });
   const saved = settings(y);
-  must(y, { do: "remove", x: 29, y: 14 });
-  must(y, { do: "build", kind: "bench", x: 30, y: 14, dir: 0 });
+  must(y, { do: "remove", ...near(5, -4) });
+  must(y, { do: "build", kind: "bench", ...near(6, -4), dir: 0 });
   y.history = [];
   return { y, saved };
 }
@@ -129,8 +130,8 @@ describe("a plan of the whole yard in hand", () => {
     setTool("select");
     hold(0);
     const at = S.group?.at;
-    expect(at?.map((p) => [kindName(p.kind), p.x, p.y])).toEqual([["crate", 29, 14]]);
-    aimAt(3, 3);
+    expect(at?.map((p) => [kindName(p.kind), p.x, p.y])).toEqual([["crate", ...xy(5, -4)]]);
+    aimAt(...xy(-21, -15));
     expect(S.group?.at).toEqual(at);
     // The mouse leaving the yard for the dock lets go of no aim: Place stays.
     unaim();
@@ -177,7 +178,7 @@ describe("a plan of the whole yard in hand", () => {
   test("short of Coins, Place is drawn off and says how short at once, for the whole, asking nothing", async () => {
     const { y } = changed();
     // Over a yard with the bench and the crate gone and nothing in its place: it costs a crate.
-    must(y, { do: "remove", x: 30, y: 14 });
+    must(y, { do: "remove", ...near(6, -4) });
     y.history = [];
     const said: string[] = [];
     await opened(y, 0);
@@ -207,7 +208,7 @@ describe("a plan of the whole yard in hand", () => {
 function twoPlans(): Yard {
   const { y } = changed();
   must(y, { do: "saveYard", slot: 1 });
-  must(y, { do: "remove", x: 30, y: 14 });
+  must(y, { do: "remove", ...near(6, -4) });
   y.history = [];
   return y;
 }
@@ -236,8 +237,8 @@ describe("a press that waits for a second", () => {
     await opened(twoPlans(), 1000);
     setTool("select");
     // The mill's line: a gatherer, a mill and a belt.
-    markStart(27, 19);
-    markOver(30, 22);
+    markStart(...xy(3, 1));
+    markOver(...xy(6, 4));
     markEnd();
     askSave();
     const area = saveKey(1);
@@ -260,7 +261,7 @@ describe("a press that waits for a second, when the yard changes", () => {
   test("Upgrade all pressed once, then a clearing undone: the price changes and the second press asks again, raising nothing", async () => {
     const fake = await opened(yard(), 1000);
     setTool("select");
-    expect(takeAway(28, 20)).toBe(true);
+    expect(takeAway(...xy(4, 2))).toBe(true);
     const price = handPrint().upgrade?.cost ?? 0;
     press();
     pressUpgrade(true);
@@ -278,8 +279,8 @@ describe("a press that waits for a second, when the yard changes", () => {
   test("Save over a kept place pressed once, then a piece built elsewhere: the second press asks again, keeping nothing", async () => {
     await opened(twoPlans(), 1000);
     setTool("select");
-    markStart(27, 19);
-    markOver(30, 22);
+    markStart(...xy(3, 1));
+    markOver(...xy(6, 4));
     markEnd();
     askSave();
     const kept = S.world.blueprints[1];
@@ -305,10 +306,10 @@ describe("a plan of the whole yard in hand, by a finger", () => {
     setTool("select");
     hold(0);
     press();
-    fingerTap(3, 3);
+    fingerTap(...xy(-21, -15));
     expect([handPrint().place?.asking, settings(S.world) === saved]).toEqual([true, false]);
     press();
-    fingerTap(40, 30);
+    fingerTap(...xy(16, 12));
     expect(settings(S.world)).toBe(saved);
   });
 });
@@ -329,12 +330,12 @@ describe("what a plan of the whole yard in hand would take up", () => {
     if (!g) throw new Error("nothing in hand");
     expect(piecesAt(S.world, g.tiles).map((p) => [kindName(p.kind), p.x, p.y])).toEqual(
       expect.arrayContaining([
-        ["bench", 30, 14],
+        ["bench", ...xy(6, -4)],
         ["workshop", far.x, far.y],
       ]),
     );
     const box = heldBox(S.world, g);
     const inBox = (x: number, z: number): boolean => x >= box.x && x < box.x + box.w && z >= box.y && z < box.y + box.h;
-    expect([inBox(30, 14), inBox(far.x, far.y), inBox(29, 14)]).toEqual([true, true, true]);
+    expect([inBox(...xy(6, -4)), inBox(far.x, far.y), inBox(...xy(5, -4))]).toEqual([true, true, true]);
   });
 });

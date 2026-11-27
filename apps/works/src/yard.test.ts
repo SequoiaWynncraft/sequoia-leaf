@@ -21,6 +21,7 @@ import {
   TICK_MS,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 import { staged } from "@sequoia-leaf/factory/test/yards.ts";
 import type { Trouble } from "@sequoia-leaf/kit/play.ts";
 import { balance } from "@sequoia-leaf/kit/purse.ts";
@@ -195,17 +196,17 @@ describe("the yard, on Leaf", () => {
   test("a raise still on its way stays paid for in the purse when Leaf answers the one before it", async () => {
     const yard = create({ seed: 5, tier: 3 });
     yard.at = ctx().now;
-    build(yard, BELT, 20, 16, 0, Infinity);
-    build(yard, BELT, 21, 16, 0, Infinity);
+    build(yard, BELT, ...xy(-4, -2), 0, Infinity);
+    build(yard, BELT, ...xy(-3, -2), 0, Infinity);
     const fake = await opened(yard, 1000);
     const held = holding(fake, "POST /v1/game/play/works");
     // A belt raised to grade 2 where it stands: paid for.
-    doNow(act({ do: "build", kind: "belt", dir: 0, grade: 2, x: 20, y: 16 }));
+    doNow(act({ do: "build", kind: "belt", dir: 0, grade: 2, ...near(-4, -2) }));
     const price = 1000 - balance().coins;
     expect(price).toBeGreaterThan(0);
     await until(() => held.length >= 1);
     // The second waits behind the first; both show paid for at once.
-    doNow(act({ do: "build", kind: "belt", dir: 0, grade: 2, x: 21, y: 16 }));
+    doNow(act({ do: "build", kind: "belt", dir: 0, grade: 2, ...near(-3, -2) }));
     expect(balance().coins).toBe(1000 - 2 * price);
     // Leaf answers the first, with its balances after the first alone: the second is still shown paid for.
     held.shift()?.();

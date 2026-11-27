@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { leaf as leafOf, playerId } from "@sequoia-leaf/core";
 import { blueprintCode, create as createYard, FACTORY, play, readCommand, within } from "@sequoia-leaf/factory";
+import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
@@ -338,7 +339,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   // A batch in the Works, answered short: Bob sets a gatherer down at the tick his page was given.
   const works = await app.request("/v1/game/play/works", { headers: { Authorization: "Bearer bob-token" } });
   const tick = field(field(await works.json(), "state"), "clock");
-  const gatherer = { id: "w-1", do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick };
+  const gatherer = { id: "w-1", do: "build", kind: "gatherer", ...near(-4, -3), dir: 0, tick };
   await call(
     "POST /v1/game/play/{game}, the Works",
     "POST",
@@ -384,9 +385,9 @@ function millAndBelt(): string {
     const read = readCommand({ tick: y.tick, ...c });
     if (!read || "refused" in play(y, read)) throw new Error(`${JSON.stringify(c)} was not done`);
   };
-  done({ do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
-  done({ do: "build", kind: "belt", x: 22, y: 15, dir: 0 });
-  done({ do: "saveBlueprint", slot: 0, tiles: within(y, 21, 15, 22, 15) });
+  done({ do: "build", kind: "mill", ...near(-3, -3), dir: 0 });
+  done({ do: "build", kind: "belt", ...near(-2, -3), dir: 0 });
+  done({ do: "saveBlueprint", slot: 0, tiles: within(y, ...xy(-3, -3), ...xy(-2, -3)) });
   const kept = y.blueprints[0];
   const code = kept ? blueprintCode(kept) : null;
   if (code === null) throw new Error("no code");

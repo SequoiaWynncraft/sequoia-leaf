@@ -9,6 +9,7 @@
 import { expect, test } from "bun:test";
 
 import { ALL_ITEMS, at, BELT, build, create, plot, type Yard } from "@sequoia-leaf/factory";
+import { xy } from "@sequoia-leaf/factory/test/near.ts";
 import { Deck } from "@sequoia-leaf/kit/card.ts";
 import { el, pressedTwice } from "@sequoia-leaf/kit/dom.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
@@ -47,56 +48,57 @@ function mark(x0: number, y0: number, x1: number, y1: number): void {
 }
 
 const redraw = (): void => undefined;
-const grades = (xs: readonly number[], z: number): number[] => xs.map((x) => S.world.grade[at(S.world, x, z)] ?? 0);
+const grades = (dxs: readonly number[], dy: number): number[] =>
+  dxs.map((dx) => S.world.grade[at(S.world, ...xy(dx, dy))] ?? 0);
 /** What was sent to Leaf, by what each command does. */
 const sent = (fake: FakeLeaf): unknown[] => fake.leaf.commands.map((c) => (isRecord(c) ? c.do : null));
 
 test("Upgrade pressed once over one area, then pressed over another, only asks: it raises the second area on its own second press", async () => {
   const y = yardAt(4);
-  for (const x of [18, 19, 20]) build(y, BELT, x, 13, 0, Infinity);
+  for (const dx of [-6, -5, -4]) build(y, BELT, ...xy(dx, -5), 0, Infinity);
   const fake = await opened(y, 100_000);
-  mark(18, 13, 18, 13);
+  mark(...xy(-6, -5), ...xy(-6, -5));
   press();
   pressUpgrade(false);
   expect(handPrint().upgrade).toMatchObject({ asking: true });
   // Two other belts marked within the four seconds: the button is theirs, at their price, and asks afresh.
-  mark(19, 13, 20, 13);
+  mark(...xy(-5, -5), ...xy(-4, -5));
   expect(handPrint().upgrade).toMatchObject({ asking: false });
   press();
   pressUpgrade(false);
-  expect(grades([18, 19, 20], 13)).toEqual([1, 1, 1]);
+  expect(grades([-6, -5, -4], -5)).toEqual([1, 1, 1]);
   expect(handPrint().upgrade).toMatchObject({ asking: true });
   press();
   pressUpgrade(false);
-  expect(grades([18, 19, 20], 13)).toEqual([1, 2, 2]);
+  expect(grades([-6, -5, -4], -5)).toEqual([1, 2, 2]);
   await Bun.sleep(5);
   expect(sent(fake)).toEqual(["upgrade"]);
 });
 
 test("Upgrade asked over an area, marked again over the same area after another, asks again", async () => {
   const y = yardAt(4);
-  for (const x of [18, 19]) build(y, BELT, x, 13, 0, Infinity);
+  for (const dx of [-6, -5]) build(y, BELT, ...xy(dx, -5), 0, Infinity);
   await opened(y, 100_000);
-  mark(18, 13, 18, 13);
+  mark(...xy(-6, -5), ...xy(-6, -5));
   press();
   pressUpgrade(false);
-  mark(19, 13, 19, 13);
-  mark(18, 13, 18, 13);
+  mark(...xy(-5, -5), ...xy(-5, -5));
+  mark(...xy(-6, -5), ...xy(-6, -5));
   press();
   pressUpgrade(false);
-  expect(grades([18, 19], 13)).toEqual([1, 1]);
+  expect(grades([-6, -5], -5)).toEqual([1, 1]);
   press();
   pressUpgrade(false);
-  expect(grades([18, 19], 13)).toEqual([2, 1]);
+  expect(grades([-6, -5], -5)).toEqual([2, 1]);
 });
 
 /** A yard with blueprints: a row of belts kept as the blueprint in its first place. */
 async function withBlueprint(): Promise<void> {
   const y = yardAt(6);
-  for (const x of [18, 19, 20]) build(y, BELT, x, 13, 0, Infinity);
+  for (const dx of [-6, -5, -4]) build(y, BELT, ...xy(dx, -5), 0, Infinity);
   await opened(y, 100_000);
   expect(S.world.open.blueprints).toBeGreaterThan(0);
-  mark(18, 13, 20, 13);
+  mark(...xy(-6, -5), ...xy(-4, -5));
   askSave();
   saveIn(0);
   expect(S.world.blueprints[0]).toBeTruthy();
@@ -222,7 +224,7 @@ const pressOn = (b: HTMLElement): void => {
 test("Save over a kept place, the yard changed while the places are up: a press shows Replace?, and only a press on it keeps", async () => {
   await withBlueprint();
   const was = S.world.blueprints[0];
-  mark(18, 13, 19, 13);
+  mark(...xy(-6, -5), ...xy(-5, -5));
   askSave();
   const page = aPage();
   let shown: HTMLElement = el("button");

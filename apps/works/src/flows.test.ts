@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { aim, at, item, makes, MILL, RECIPE, step } from "@sequoia-leaf/factory";
+import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 import { delivering, must } from "@sequoia-leaf/factory/test/yards.ts";
 
 import { cellOf, flowRows, said, yardFlows } from "./flows.ts";
@@ -58,7 +59,7 @@ describe("makes and needs", () => {
 
   test("a machine holding nothing for a moment is still counted for the recipe it was working on", () => {
     const y = delivering();
-    const mill = at(y, 29, 20);
+    const mill = at(y, ...xy(5, 2));
     for (let k = 0; k < 600 && aim(y, mill) !== null; k++) step(y);
     expect(aim(y, mill)).toBeNull();
     expect(yardFlows(y).made[plank]).toBe(makes(MILL, 1, RECIPE[plank] ?? null));
@@ -66,12 +67,12 @@ describe("makes and needs", () => {
 
   test("a machine taken away is no longer counted: a fresh one built in its place, told nothing, is counted for nothing", () => {
     const y = delivering();
-    must(y, { do: "recipe", x: 29, y: 20, item: "plank" });
+    must(y, { do: "recipe", ...near(5, 2), item: "plank" });
     expect(yardFlows(y).made[plank]).toBe(makes(MILL, 1, RECIPE[plank] ?? null));
-    must(y, { do: "remove", x: 29, y: 20 });
+    must(y, { do: "remove", ...near(5, 2) });
     expect(yardFlows(y).made[plank]).toBe(0);
-    must(y, { do: "build", kind: "mill", x: 29, y: 20, dir: 2 });
-    expect(aim(y, at(y, 29, 20))).toBeNull();
+    must(y, { do: "build", kind: "mill", ...near(5, 2), dir: 2 });
+    expect(aim(y, at(y, ...xy(5, 2)))).toBeNull();
     expect(yardFlows(y).made[plank]).toBe(0);
   });
 });

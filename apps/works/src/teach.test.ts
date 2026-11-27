@@ -31,6 +31,7 @@ import {
   study,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 
 import { NO_LESSONS, nudge, SAID_FOR, stepLessons } from "./teach.ts";
 
@@ -121,16 +122,16 @@ describe("teaching", () => {
     const taught = new Set(["board", "tier"]);
     expect(nudge(w, taught, false)).toBeNull();
     // Six benches beside the depot draw more than it gives.
-    for (let k = 0; k < 6; k++) build(w, BENCH, 21, 14 + k, 0, 999);
+    for (let k = 0; k < 6; k++) build(w, BENCH, ...xy(-3, -4 + k), 0, 999);
     expect(nudge(w, taught, false)?.id).toBe("short");
     taught.add("short");
     // Planks sawn straight into the second bench, and nothing else: it fills with planks.
-    build(w, GATHERER, 19, 15, 0, 999);
-    build(w, MILL, 20, 15, 0, 999);
+    build(w, GATHERER, ...xy(-5, -3), 0, 999);
+    build(w, MILL, ...xy(-4, -3), 0, 999);
     run(w, 600);
     const stuck = nudge(w, taught, false);
     expect(stuck?.id).toBe("starved");
-    expect([stuck?.x, stuck?.y]).toEqual([21, 15]);
+    expect([stuck?.x, stuck?.y]).toEqual(xy(-3, -3));
     taught.add("starved");
     expect(nudge(w, taught, false)).toBeNull();
     deliver(w, item("plank"), 1);
@@ -163,37 +164,39 @@ describe("teaching each new idea, once, where it is met", () => {
     expect(nudge(w, quiet, false)).toMatchObject({ id: "tier", part: "tier", lasting: false });
     expect(nudge(w, new Set([...quiet, "tier"]), false)).toBeNull();
     // A card open on a machine and a kind in hand say nothing more while every recipe is one of each and there is one grade.
-    build(w, BENCH, 21, 14, 0, 999);
-    expect(nudge(w, new Set([...quiet, "tier"]), false, { picked: at(w, 21, 14), hand: BELT })).toBeNull();
+    build(w, BENCH, ...xy(-3, -4), 0, 999);
+    expect(nudge(w, new Set([...quiet, "tier"]), false, { picked: at(w, ...xy(-3, -4)), hand: BELT })).toBeNull();
   });
 
   test("a machine's numbers, the first time a card is open on one once the yard counts: over that machine", () => {
     const told = new Set([...quiet, "tier"]);
     const w = create({ seed: 4, tier: 2 });
-    build(w, BENCH, 21, 14, 0, 999);
+    build(w, BENCH, ...xy(-3, -4), 0, 999);
     expect(nudge(w, told, false)).toBeNull();
-    expect(nudge(w, told, false, { picked: at(w, 21, 14), hand: null })).toMatchObject({ id: "numbers", x: 21, y: 14 });
+    expect(nudge(w, told, false, { picked: at(w, ...xy(-3, -4)), hand: null })).toMatchObject({
+      id: "numbers",
+      ...near(-3, -4),
+    });
     // Not for a card on anything that makes nothing, and not twice.
-    build(w, BELT, 22, 14, 0, 999);
-    expect(nudge(w, told, false, { picked: at(w, 22, 14), hand: null })).toBeNull();
-    expect(nudge(w, new Set([...told, "numbers"]), false, { picked: at(w, 21, 14), hand: null })).toBeNull();
+    build(w, BELT, ...xy(-2, -4), 0, 999);
+    expect(nudge(w, told, false, { picked: at(w, ...xy(-2, -4)), hand: null })).toBeNull();
+    expect(nudge(w, new Set([...told, "numbers"]), false, { picked: at(w, ...xy(-3, -4)), hand: null })).toBeNull();
   });
 
   test("a way put first, the first time a splitter's card is open once the yard may put one first: over that splitter", () => {
     const told = new Set([...quiet, "tier", "study", "research", "numbers"]);
     const early = create({ seed: 4, tier: 4 });
-    build(early, SPLITTER, 21, 14, 0, 999);
-    expect(nudge(early, told, false, { picked: at(early, 21, 14), hand: null })).toBeNull();
+    build(early, SPLITTER, ...xy(-3, -4), 0, 999);
+    expect(nudge(early, told, false, { picked: at(early, ...xy(-3, -4)), hand: null })).toBeNull();
     const w = create({ seed: 4, tier: 5 });
-    build(w, SPLITTER, 21, 14, 0, 999);
+    build(w, SPLITTER, ...xy(-3, -4), 0, 999);
     expect(nudge(w, told, false)).toBeNull();
-    expect(nudge(w, told, false, { picked: at(w, 21, 14), hand: null })).toMatchObject({
+    expect(nudge(w, told, false, { picked: at(w, ...xy(-3, -4)), hand: null })).toMatchObject({
       id: "first",
-      x: 21,
-      y: 14,
+      ...near(-3, -4),
       part: "ways",
     });
-    expect(nudge(w, new Set([...told, "first"]), false, { picked: at(w, 21, 14), hand: null })).toBeNull();
+    expect(nudge(w, new Set([...told, "first"]), false, { picked: at(w, ...xy(-3, -4)), hand: null })).toBeNull();
   });
 
   test("the grades, the first time a kind that has two is in hand: beside the buttons that choose one, with the key for a mouse", () => {
@@ -218,7 +221,7 @@ describe("teaching each new idea, once, where it is met", () => {
     expect(first).toMatchObject({ id: "study", tool: STUDY, part: "tool", lasting: true });
     // It says how the folio is made, in the rules' own sentence for the recipe.
     expect(first?.text).toContain(recipeSays(folio).slice(2));
-    expect(build(w, STUDY, 21, 14, 0, Infinity).ok).toBe(true);
+    expect(build(w, STUDY, ...xy(-3, -4), 0, Infinity).ok).toBe(true);
     expect(nudge(w, told, false)).toMatchObject({ id: "research", part: "research", lasting: true });
     const research = ALL_GOALS.find((g) => !isNode(g) && ready(w.open, g));
     if (research === undefined) throw new Error("no research may be studied");
@@ -264,7 +267,7 @@ describe("lessons, step by step", () => {
     const w = create({ seed: 4, tier: 3 });
     let lessons = stepLessons(NO_LESSONS, w, quiet, when(0)).lessons;
     lessons = stepLessons(lessons, w, quiet, when(1, { hidden: true })).lessons;
-    expect(build(w, STUDY, 21, 14, 0, Infinity).ok).toBe(true);
+    expect(build(w, STUDY, ...xy(-3, -4), 0, Infinity).ok).toBe(true);
     const built = stepLessons(lessons, w, quiet, when(2, { hidden: true }));
     expect(built.taken).toEqual(["study"]);
     // Taken, it is not said again even with no Study standing.

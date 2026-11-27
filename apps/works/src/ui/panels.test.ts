@@ -30,6 +30,7 @@ import {
   TIERS,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { xy } from "@sequoia-leaf/factory/test/near.ts";
 
 import { S } from "../state.ts";
 import type { Need } from "./goal.ts";
@@ -265,7 +266,7 @@ describe("the tier's screen", () => {
       "brassfolio: not begun",
     ]);
     expect(tierPrint().research).toMatchObject({ known: 0, all: 10 });
-    build(y, STUDY, 20, 15, 0, Infinity);
+    build(y, STUDY, ...xy(-4, -3), 0, Infinity);
     expect(waits(tierPrint().commission?.needs ?? [])[0]).toBe("oilpress: not begun: study");
     study(y, goal("oilpress"));
     study(y, goal("workshop"));
@@ -359,7 +360,7 @@ describe("the tier's screen", () => {
     const y = yardAt(3);
     // Nothing is being studied and no Study stands: the first that can be begun leads to building one.
     expect(section()).toEqual({ known: 0, all: 10, studied: null, ready: "oilpress: build" });
-    build(y, STUDY, 20, 15, 0, Infinity);
+    build(y, STUDY, ...xy(-4, -3), 0, Infinity);
     expect(section()).toEqual({ known: 0, all: 10, studied: null, ready: "oilpress: study" });
     // Being studied: what it wants is printed as the research screen prints it, and a folio studied
     // moves a bar and prints the same.
@@ -420,7 +421,7 @@ describe("the tier's screen", () => {
 describe("research", () => {
   test("prints what is being studied, the rest of the line, what may be studied and what waits, and what is known", () => {
     const y = yardAt(3);
-    build(y, STUDY, 20, 15, 0, Infinity);
+    build(y, STUDY, ...xy(-4, -3), 0, Infinity);
     let p = researchPrint();
     expect([p.first, p.next, p.full, p.left, p.known]).toEqual([null, [], false, true, []]);
     expect(p.todo.length).toBe(10);
@@ -453,7 +454,7 @@ describe("research", () => {
   test("the slim bar is there once a Study stands with something to study, and says how far the research has come", () => {
     const y = yardAt(3);
     expect(stripPrint()).toEqual({ hidden: true, goal: null, have: 0, of: 0 });
-    build(y, STUDY, 20, 15, 0, Infinity);
+    build(y, STUDY, ...xy(-4, -3), 0, Infinity);
     // Something could be studied: the bar is there, and says nothing is.
     expect(stripPrint()).toEqual({ hidden: false, goal: null, have: 0, of: 0 });
     study(y, goal("workshop"));

@@ -17,3 +17,6 @@ export const xy = (dx: number, dy: number): [number, number] => [F.LAND.depot[0]
 
 /** The tile of a place from the depot. */
 export const tileNear = (dx: number, dy: number): number => (F.LAND.depot[1] + dy) * F.LAND.w + F.LAND.depot[0] + dx;
+
+/** A column from the depot: its x. */
+export const col = (dx: number): number => F.LAND.depot[0] + dx;

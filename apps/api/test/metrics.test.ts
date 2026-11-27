@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 
 import { LIVE_PATH, livePath, PAGE_ERRORS_PATH, playerId } from "@sequoia-leaf/core";
 import { readView as readYardView } from "@sequoia-leaf/factory";
+import { near } from "@sequoia-leaf/factory/test/near.ts";
 import { Effect } from "effect";
 
 import type { Settings } from "../src/config.ts";
@@ -168,7 +169,7 @@ describe("the play service", () => {
       asAlice("POST", {
         player: alice,
         commands: [
-          { id: "w-1", do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick },
+          { id: "w-1", do: "build", kind: "gatherer", ...near(-4, -3), dir: 0, tick },
           { id: "w-2", do: "remove", x: 2, y: 2, tick },
         ],
       }),

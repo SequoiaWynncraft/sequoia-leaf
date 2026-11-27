@@ -8,6 +8,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { blueprintCode, create, play, readCommand, within, type Yard } from "@sequoia-leaf/factory";
+import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 import { asking, pressedTwice } from "@sequoia-leaf/kit/dom.ts";
 import { press } from "@sequoia-leaf/kit/standin.ts";
 
@@ -29,9 +30,9 @@ function must(y: Yard, c: Record<string, unknown>): void {
 /** A yard Leaf has at a tier, every goal below it done, with a mill and a belt kept in place 0 and, at tier 5, the whole yard in place 1. */
 function yard(tier = 5): Yard {
   const y = create({ seed: 5, tier });
-  must(y, { do: "build", kind: "mill", x: 29, y: 20, dir: 2 });
-  must(y, { do: "build", kind: "belt", x: 28, y: 20, dir: 2 });
-  if (y.open.blueprints > 0) must(y, { do: "saveBlueprint", slot: 0, tiles: within(y, 28, 20, 29, 20) });
+  must(y, { do: "build", kind: "mill", ...near(5, 2), dir: 2 });
+  must(y, { do: "build", kind: "belt", ...near(4, 2), dir: 2 });
+  if (y.open.blueprints > 0) must(y, { do: "saveBlueprint", slot: 0, tiles: within(y, ...xy(4, 2), ...xy(5, 2)) });
   if (tier === 5) must(y, { do: "saveYard", slot: 1 });
   y.history = [];
   y.at = ctx().now;
@@ -41,9 +42,9 @@ function yard(tier = 5): Yard {
 /** The code of a blueprint of two belts, kept in a yard somewhere else. */
 function twoBelts(): string {
   const y = create({ seed: 9, tier: 5 });
-  must(y, { do: "build", kind: "belt", x: 21, y: 15, dir: 0 });
-  must(y, { do: "build", kind: "belt", x: 22, y: 15, dir: 0 });
-  must(y, { do: "saveBlueprint", slot: 0, tiles: within(y, 21, 15, 22, 15) });
+  must(y, { do: "build", kind: "belt", ...near(-3, -3), dir: 0 });
+  must(y, { do: "build", kind: "belt", ...near(-2, -3), dir: 0 });
+  must(y, { do: "saveBlueprint", slot: 0, tiles: within(y, ...xy(-3, -3), ...xy(-2, -3)) });
   const kept = y.blueprints[0];
   const code = kept ? blueprintCode(kept) : null;
   if (code === null) throw new Error("no code");
