@@ -12,8 +12,13 @@
  * its own in the power book, beside a boiler gone cold. Anything else that had to change to have a
  * kind fails here.
  *
- * A save keeps a kind in 4 bits, and so does an Undo entry (step F3 of tiers 5 to 8 widens them), so
- * a 17th kind is refused in both, out loud, rather than kept as another kind.
+ * A 17th kind is kept in a save and in an Undo entry past the four bits a kind once had, and read
+ * back as itself.
+ *
+ * Kinds of more than one tile are two more throwaways (`test/throwaways.ts`), each one module of the
+ * rules and one of the page, with the recipes they make added to the content: built, fed on their
+ * backs and sides and never their fronts, working, handing out of their ways out, standing as one
+ * from any tile, and removed, moved, copied, blueprinted, undone, kept, checked and walked round.
  */
 import { describe, expect, test } from "bun:test";
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -22,6 +27,16 @@ import { dirname, join } from "node:path";
 
 import { KIND_DEFS, KINDS } from "@sequoia-leaf/factory";
 
+import {
+  MAKERS,
+  PAGE_FORGE,
+  PAGE_SIFTER,
+  PLAY_BIG,
+  PLAYED_BIG,
+  RECIPE_LINES,
+  RULES_FORGE,
+  RULES_SIFTER,
+} from "../../test/throwaways.ts";
 import { PAGES } from "./index.ts";
 
 const root = join(import.meta.dir, "..", "..", "..", "..");
@@ -165,20 +180,14 @@ for (let t = 0; t < 400; t++) {
 const made = F.counts();
 const needed = F.counts();
 F.flow(y, made, needed);
-let kept = "";
-try {
-  F.encode(y);
-} catch (e) {
-  kept = String(e);
-}
-// Undo keeps what a command took up, its kind in the same bits.
+// Kept and read back, a 17th kind past the four bits a kind once had.
+const read = F.decode(F.encode(y), y.land);
+const kept = read !== null && read.kind[sieve] === k && F.check(read) === F.check(y);
+// Undo keeps what a command took up, and stands it again.
 F.build(y, k, 5, 7, 0, Infinity);
-let undoKept = "";
-try {
-  act(y, { do: "remove", x: 5, y: 7 }, Infinity, "a1");
-} catch (e) {
-  undoKept = String(e);
-}
+act(y, { do: "remove", x: 5, y: 7 }, Infinity, "a1");
+act(y, { do: "undo", entry: "a1" }, Infinity, "a2");
+const undoKept = y.kind[F.at(y, 5, 7)] === k;
 console.log(
   JSON.stringify({
     built,
@@ -191,8 +200,8 @@ console.log(
     behindOnly: !F.takes(y, sieve, F.at(y, 10, 3)),
     over: F.refusal(y, k, 10, 4, Infinity, 1),
     refund: F.remove(y, 10, 4),
-    kept: kept.includes("4 bits"),
-    undoKept: undoKept.includes("4 bits"),
+    kept,
+    undoKept,
   }),
 );
 `;
@@ -283,6 +292,21 @@ function addKind(at: string, name: string, rules: string, page: string): void {
   }
 }
 
+/**
+ * Unlocks kinds from a new yard's start in the copy: no goal names a throwaway kind, and a yard read
+ * back keeps only pieces it may build, as it would a real kind that a goal unlocks.
+ */
+function unlockAtStart(at: string, names: readonly string[]): void {
+  const nodes = join(at, "packages/factory/src/content/nodes.ts");
+  const start = `kinds: ["belt", "gatherer", "mill", "pylon"],`;
+  const text = readFileSync(nodes, "utf8");
+  expect(text).toContain(start);
+  writeFileSync(
+    nodes,
+    text.replace(start, `kinds: ["belt", "gatherer", "mill", "pylon", ${names.map((n) => `"${n}"`).join(", ")}],`),
+  );
+}
+
 /** The copy type-checks: the rules, their tests and the page. */
 function checks(at: string): void {
   for (const project of ["packages/factory", "packages/factory/tsconfig.test.json", "apps/works"]) {
@@ -296,6 +320,7 @@ describe("a new kind of piece", () => {
     const at = copy();
     try {
       addKind(at, "sieve", RULES_SIEVE, PAGE_SIEVE);
+      unlockAtStart(at, ["sieve"]);
       checks(at);
       writeFileSync(join(at, "play.ts"), PLAY);
       const played = bun(at, "play.ts");
@@ -345,6 +370,27 @@ describe("a new kind of piece", () => {
           ["Furnaces", "1 burning", 300],
         ],
       });
+    } finally {
+      rmSync(at, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  test("of more than one tile is one module of the rules and one of the page, and plays as one piece", () => {
+    const at = copy();
+    try {
+      addKind(at, "sifter", RULES_SIFTER, PAGE_SIFTER);
+      addKind(at, "forge", RULES_FORGE, PAGE_FORGE);
+      unlockAtStart(at, ["sifter", "forge"]);
+      // What they make is content, as every maker's recipes are.
+      const recipes = join(at, "packages/factory/src/content/recipes.ts");
+      const text = readFileSync(recipes, "utf8").replace(`"mill" | "bench" | "workshop"`, MAKERS);
+      writeFileSync(recipes, text);
+      for (const line of RECIPE_LINES) addAfter(recipes, /^ {2}\{ out: /, line);
+      checks(at);
+      writeFileSync(join(at, "big.ts"), PLAY_BIG);
+      const played = bun(at, "big.ts");
+      expect(played.out).not.toContain("rror");
+      expect(JSON.parse(played.out.trim().split("\n").at(-1) ?? "{}")).toEqual(PLAYED_BIG);
     } finally {
       rmSync(at, { recursive: true, force: true });
     }

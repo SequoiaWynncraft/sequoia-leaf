@@ -82,5 +82,19 @@ export {
   waysOf,
 } from "./wire.ts";
 export { KIND_DEFS, type KindRules, RULES } from "./kinds/list.ts";
+export {
+  cornerOf,
+  FACING,
+  type Facing,
+  isBig,
+  OWN,
+  type Out,
+  outsOf,
+  pieceOf,
+  piecesTiles,
+  sizeOf,
+  tilesAt,
+} from "./sizes.ts";
+export type { Ports } from "./kinds/kind.ts";
 export type { Hooks, KindDef, Words } from "./kinds/kind.ts";
 export * from "./yard.ts";
