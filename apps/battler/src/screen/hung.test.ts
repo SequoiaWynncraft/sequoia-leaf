@@ -4,7 +4,7 @@ import type { FightSetup } from "@sequoia-leaf/raid";
 import { LEGACY_ERA } from "@sequoia-leaf/raid";
 import { at, partyOfFigures } from "@sequoia-leaf/raid/testkit.ts";
 
-import { fateOf, hangs, type Hung, stillCaught } from "./hung.ts";
+import { APART, bathOf, fateOf, hangs, type Hung, stillCaught } from "./hung.ts";
 import { leadOf } from "./looks.ts";
 import { advance, openPlayback } from "./playback.ts";
 
@@ -75,5 +75,15 @@ describe("an ability that lands later", () => {
     const h = hangs(40, 20);
     expect(fateOf(h, 58, { over: true, tick: 57 })).toBe("never");
     expect(fateOf(h, 61, { over: true, tick: 60 })).toBe("lands");
+  });
+});
+
+describe("a bath of Yule's", () => {
+  test("each friend stands as itself until its own bubble closes, one after another, then in it until the bath lands", () => {
+    const h = hangs(100, 40);
+    expect([0, 1, 2].map((i) => bathOf(h, i, 100))).toEqual(["bubble", "itself", "itself"]);
+    expect([0, 1, 2].map((i) => bathOf(h, i, 100 + APART))).toEqual(["bubble", "bubble", "itself"]);
+    expect([0, 1, 2].map((i) => bathOf(h, i, 100 + 2 * APART))).toEqual(["bubble", "bubble", "bubble"]);
+    expect([0, 1, 2].map((i) => bathOf(h, i, 140))).toEqual(["itself", "itself", "itself"]);
   });
 });

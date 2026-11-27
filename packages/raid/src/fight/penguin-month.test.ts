@@ -13,8 +13,9 @@ import { type TraitId, traitNumber } from "../content/traits.ts";
 import { cellAt, distance, groupsTouching, line, rowOf, touching } from "../hex.ts";
 import type { Placed } from "../party.ts";
 import { onCell, only, partyOfFigures, ready, steps, stepUntil, still, unitOf } from "../testkit.ts";
-import { hurt, secs, shieldUp } from "./core.ts";
+import { hide, hurt, secs, shieldUp } from "./core.ts";
 import { openFight } from "./engine.ts";
+import { covered } from "./mind.ts";
 import type { Fight, FightEvent, Unit } from "./types.ts";
 
 const PENGUINS = eraOf("penguin-month");
@@ -171,6 +172,17 @@ describe("Huddle", () => {
     expect(leapt?.why).toBe("sneak");
     expect(f.opening.findIndex((e) => e.t === "pool")).toBeLessThan(f.opening.findIndex((e) => e === leapt));
     expect(jet.pool).toBe(0);
+  });
+  test("one whose group's shield would take what is on its way is not counted as covered: targeting sees the pool", () => {
+    const f = fight([onCell("dibs", 0, HOME), onCell("jet", 0, RIGHT)], [onCell("mud", 1, FOUR)]);
+    const jet = unitOf(f, "jet");
+    const pool = f.pools[0];
+    if (!pool) throw new Error("no pool");
+    jet.hp = 10;
+    jet.incoming = 100;
+    expect([pool.left > 100, covered(f, jet)]).toEqual([true, false]);
+    pool.left = 0;
+    expect(covered(f, jet)).toBe(true);
   });
 });
 
@@ -332,6 +344,34 @@ describe("Bubble Bath (Yule)", () => {
     }
     expect(counts).toEqual([1, 2, 3, n("yule", "most")]);
     expect(n("yule", "most", 3)).toBe(4);
+  });
+
+  test("never bubbles itself: the most hurt friend but itself, and with only itself hurt it waits", () => {
+    const { f, u, friends } = bath();
+    const [, finch] = friends;
+    if (!finch) throw new Error("no finch");
+    for (const o of friends) o.hp = o.maxHp;
+    finch.hp = Math.round(finch.maxHp * 0.4);
+    u.hp = Math.round(u.maxHp * 0.1);
+    expect(castOf(stepUntil(f, castBy(u)), u)?.targets).toEqual([finch.id]);
+    const alone = bath();
+    for (const o of alone.friends) o.hp = o.maxHp;
+    alone.u.hp = Math.round(alone.u.maxHp * 0.1);
+    expect(castOf(steps(alone.f, 40), alone.u)).toBeUndefined();
+    expect(alone.u.hiddenUntil).toBe(0);
+  });
+
+  test("a figure put in a bubble stops channelling, as a stun stops it: the pulses left are lost", () => {
+    const { f, u } = scene("kettle", [FOUR], [onCell("moth", 0, RIGHT), onCell("yule", 0, LEFT)]);
+    const moth = unitOf(f, "moth");
+    moth.attack = 0;
+    moth.hp = 10;
+    const cast = castOf(stepUntil(f, castBy(u)), u);
+    expect(cast?.pulses).toBeGreaterThan(1);
+    hide(f, u, secs(3), unitOf(f, "yule"));
+    // A sip already poured still lands; none more is poured.
+    const poured = only(steps(f, secs(3)), "shot").filter((e) => e.id === u.id && e.what === "ability");
+    expect(poured).toEqual([]);
   });
 
   test("a Yule in a bubble gets the health and not the mana", () => {

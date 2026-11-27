@@ -32,8 +32,10 @@ export function fly(f: Fight, target: Unit, raw: number, kind: DamageKind, ticks
     land();
   });
 }
+/** A figure's shield as a hit meets it: its own, and what its group's one shield (Huddle) holds. */
+export const shieldOf = (f: Fight, o: Unit): number => o.shield + (f.pools[o.pool]?.left ?? 0);
 /** Whether what is on its way to a figure already takes all its health and shield. */
-export const covered = (o: Unit): boolean => o.incoming > 0 && o.incoming >= o.hp + o.shield;
+export const covered = (f: Fight, o: Unit): boolean => o.incoming > 0 && o.incoming >= o.hp + shieldOf(f, o);
 
 // ---------- who a figure goes for ----------
 
@@ -41,7 +43,7 @@ export const covered = (o: Unit): boolean => o.incoming > 0 && o.incoming >= o.h
 const seems = (from: number, o: Unit): number => distance(from, o.cell) - o.draw;
 /** Enemies its attacks reach first, those whose health is already covered after them, and the rest last. */
 const rank = (f: Fight, u: Unit, o: Unit): number =>
-  distance(u.cell, o.cell) > attackReach(f, u) ? 2 : covered(o) ? 1 : 0;
+  distance(u.cell, o.cell) > attackReach(f, u) ? 2 : covered(f, o) ? 1 : 0;
 /**
  * The order a figure picks a new target in: enemies in its reach before the rest, so that it never
  * walks off while there is somebody it can hit, and of those, one whose health is already covered
@@ -70,7 +72,7 @@ export function drawnFoe(f: Fight, u: Unit): Unit | undefined {
 export function onTarget(f: Fight, u: Unit): Unit | undefined {
   const t = f.units[u.target];
   const keeps = t && t.side !== u.side && targetable(f, t) && distance(u.cell, t.cell) <= attackReach(f, u);
-  return keeps && !covered(t) ? t : undefined;
+  return keeps && !covered(f, t) ? t : undefined;
 }
 /**
  * Who a figure's ability is aimed at when the sentence says "its target": whoever it is attacking,
@@ -82,8 +84,8 @@ export function aim(f: Fight, u: Unit): Unit | undefined {
   return picked && distance(u.cell, picked.cell) <= u.range ? picked : undefined;
 }
 /** Of some enemies, the one with the least health, passing over any whose health is covered while there are others. */
-export function weakest(foes: readonly Unit[]): Unit | undefined {
-  const open = foes.filter((o) => !covered(o));
+export function weakest(f: Fight, foes: readonly Unit[]): Unit | undefined {
+  const open = foes.filter((o) => !covered(f, o));
   return (open.length > 0 ? open : foes).toSorted((a, b) => a.hp - b.hp || a.id - b.id)[0];
 }
 

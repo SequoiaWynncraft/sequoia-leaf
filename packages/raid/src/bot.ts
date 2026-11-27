@@ -398,7 +398,11 @@ function seatParty<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): vo
   const closed = closedNow(run);
   const seats = arrange(
     catalogOf(run),
-    party.map((p) => ({ kind: p.kind, health: specOf(catalogOf(run), p.kind).hp * starScale(p.stars) })),
+    party.map((p) => ({
+      kind: p.kind,
+      health: specOf(catalogOf(run), p.kind).hp * starScale(p.stars),
+      items: p.items,
+    })),
     stepFor(catalogOf(run), "sneak", counts.sneak ?? 0) > 0,
     closed,
   );

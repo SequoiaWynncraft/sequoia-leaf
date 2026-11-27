@@ -8,7 +8,7 @@ import { type Catalog, catalogOf } from "./content/catalog.ts";
  * dropping it on a figure: Tongs take back everything the figure holds; a Whetstone turns each
  * component and finished item it holds into another of its sort. (Handing an item over is `giveItem`, in `run.ts`.)
  */
-import { carries, grantOf, type ItemId, sortOf } from "./content/items.ts";
+import { carries, drawnComponents, grantOf, type ItemId, sortOf } from "./content/items.ts";
 import { combine } from "./content/recipes.ts";
 import { meltValue, type RackItem, type ToolId } from "./content/tools.ts";
 import { takeMade } from "./made.ts";
@@ -97,7 +97,8 @@ export function useTongs(run: RunView, to: Spot): Done {
 function whetted(cat: Catalog, kind: Piece["kind"], item: ItemId, rest: readonly ItemId[]): ItemId[] {
   const sort = sortOf(item);
   if (sort === "emblem") return [];
-  const open = sort === "component" ? cat.ids.components : cat.ids.finished;
+  // Components as every draw has them: never one that turns up only elsewhere (the Knife).
+  const open = sort === "component" ? drawnComponents(cat) : cat.ids.finished;
   return open.filter((id) => {
     const grants = grantOf(cat, id);
     return id !== item && (grants === undefined || !carries(cat, kind, rest, grants));

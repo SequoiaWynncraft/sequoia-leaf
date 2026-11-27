@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   choose,
   countOn,
+  eraOf,
   type FigureId,
   FINISHED_IDS,
   forgeItems,
@@ -259,5 +260,29 @@ describe("an item in the hand", () => {
     // Over the rack a tool does nothing.
     expect(dropOf(run, "tongs", { rack: "whetstone" })).toBeNull();
     expect(run.rack).toEqual({ tongs: 1, whetstone: 1 });
+  });
+});
+
+/** A run of Penguin Month's era with these figures and this rack. */
+function knives(figures: [FigureId, ItemId[]][], rack: RackItem[]): RunView {
+  const run = planning(figures, rack);
+  run.era = eraOf("penguin-month");
+  return run;
+}
+
+describe("two Knives (Penguin Month)", () => {
+  test("on the rack, the tip says they make An Extra Chair, and its button forges them, by tap or keyboard alike", () => {
+    const run = knives([["worm", []]], ["knife", "knife"]);
+    const drop = dropOf(run, "knife", { rack: "knife" });
+    expect(drop).toMatchObject({ does: "boon", item: "knife", boon: "extrachair" });
+    expect(drop?.command).toEqual({ do: "forge", item: "knife", with: "knife" });
+    const copy = structuredClone(run);
+    expect(forgeItems(copy, "knife", "knife")).toMatchObject({ ok: true, notes: [{ t: "boon", boon: "extrachair" }] });
+    expect([copy.boons.includes("extrachair"), countOn(copy.rack, "knife")]).toEqual([true, 0]);
+  });
+  test("a Knife handed to a figure holding one says the same: both used up, the chair the run's", () => {
+    const run = knives([["worm", ["knife"]]], ["knife"]);
+    const id = run.board[0]?.id ?? -1;
+    expect(dropOf(run, "knife", { piece: id })).toMatchObject({ does: "boon", boon: "extrachair" });
   });
 });

@@ -108,7 +108,7 @@ export const GROOT_NIGHT_CASTS: Partial<Record<UnitKind, Cast>> = {
   },
 
   crab8: (f, u, n) => {
-    const first = weakest(foesOf(f, u.side));
+    const first = weakest(f, foesOf(f, u.side));
     if (!first) return false;
     const hides = secs(n("hides"));
     const damage = powered(u, n("damage"));
@@ -117,7 +117,7 @@ export const GROOT_NIGHT_CASTS: Partial<Record<UnitKind, Cast>> = {
     later(f, hides, () => {
       // It picks as it comes up: the enemy with the least health then, and again at once for each that falls.
       for (let again = n("again"); u.alive; again--) {
-        const t = weakest(foesOf(f, u.side));
+        const t = weakest(f, foesOf(f, u.side));
         if (!t) return;
         // One hard cut each time it comes up: beside them, or where it stands if it already is.
         const to = landingBy(f, u, t);

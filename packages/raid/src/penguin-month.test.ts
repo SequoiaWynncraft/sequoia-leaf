@@ -15,10 +15,11 @@ import { eraAt, eraOf } from "./content/releases.ts";
 import { ROOMS } from "./content/rooms.ts";
 import { arrange } from "./formation.ts";
 import { besideOf, groupsTouching, seatCell } from "./hex.ts";
+import { useWhetstone } from "./rack.ts";
 import { rackOf } from "./racks.ts";
 import { roomPicks } from "./rewards.ts";
 import { roomOf } from "./room.ts";
-import { choose, newPiece, startRun } from "./run.ts";
+import { beginFight, choose, newPiece, startRun, takeTakings } from "./run.ts";
 import { ringItems } from "./sitting/sitting.ts";
 
 const OPENS = Date.UTC(2026, 11, 22);
@@ -81,6 +82,48 @@ describe("Penguin Month opens on Leaf's clock", () => {
   });
 });
 
+/** A run of Groot Night's era with two gnomes fielded, sent in, and Leaf's clock past 22 December before the takings. */
+function across(room: number): ReturnType<typeof startRun> {
+  const run = startRun(3, { era: eraAt(OPENS - 1) });
+  expect(choose(run, 0).ok).toBe(true);
+  run.board = run.board.map(() => null);
+  run.bench = run.bench.map(() => null);
+  Object.assign(run, { level: 6, room });
+  run.board[3] = newPiece(run, "barrowgnome");
+  run.board[4] = newPiece(run, "bushgnome");
+  run.board[2] = newPiece(run, "greg");
+  run.board[10] = newPiece(run, "whitefox");
+  for (const p of run.board) if (p) p.stars = 3;
+  run.stage = { phase: "plan", picks: [] };
+  expect(beginFight(run).ok).toBe(true);
+  run.era = eraAt(OPENS);
+  return run;
+}
+
+describe("a fight settles in the era it was locked in", () => {
+  test("the gnomes pay as Gnome was when it set out: two are a step before 22 December, none after", () => {
+    const run = across(1);
+    const taken = takeTakings(run);
+    expect(taken.ok).toBe(true);
+    const notes = taken.ok ? taken.notes : [];
+    expect(notes.some((n) => n.t === "acorns" && n.why === "gnomes")).toBe(true);
+  });
+  test("the picks after a boss are drawn as they were then: no Knife from a fight locked before Penguin Month", () => {
+    const boss = ROOMS.findIndex((r) => r.kind === "boss");
+    let won = 0;
+    for (let seed = 0; seed < 20; seed++) {
+      const run = across(boss);
+      run.rng = seed;
+      const taken = takeTakings(run);
+      if (!taken.ok || taken.fight.result !== "win") continue;
+      won++;
+      const options = run.stage.phase === "plan" ? run.stage.picks.flatMap((p) => p.options) : [];
+      expect(options).not.toContain("knife");
+    }
+    expect(won).toBeGreaterThan(0);
+  });
+});
+
 describe("the Carving Knife", () => {
   const BOSS = ROOMS.findIndex((r) => r.kind === "boss");
   const TROUBLE = ROOMS.findIndex((r) => r.kind === "trouble");
@@ -97,6 +140,22 @@ describe("the Carving Knife", () => {
     const before = startRun(1, { era: eraAt(OPENS - 1) });
     expect(roomPicks(before, roomOf(before, BOSS), true).flatMap((p) => p.options)).not.toContain("knife");
   });
+  test("is never what a Whetstone makes of a component, which draws as every draw does", () => {
+    const made = new Set<string>();
+    for (let seed = 1; seed <= 400; seed++) {
+      const run = startRun(seed, { era: PENGUINS });
+      expect(choose(run, 0).ok).toBe(true);
+      run.board = run.board.map(() => null);
+      const worm = newPiece(run, "worm");
+      worm.items = ["thorn", "glowcap"];
+      run.board[3] = worm;
+      run.rack = rackOf(["whetstone"]);
+      expect(useWhetstone(run, { on: "board", at: 3 }).ok).toBe(true);
+      for (const item of worm.items) made.add(item);
+    }
+    expect(made.has("knife")).toBe(false);
+    expect([...made].filter((i) => drawnComponents(PM).some((c) => c === i)).length).toBeGreaterThan(2);
+  });
   test("is in no basket, no carousel ring, and no ordinary draw", () => {
     expect(drawnComponents(PM)).not.toContain("knife");
     expect(ringItems(PM)).not.toContain("knife");
@@ -112,6 +171,11 @@ const seated = (party: readonly FigureId[]): number[] =>
   );
 /** The row of its own half a seat is in, 0 the front. */
 const rowOfSeat = (s: number): number => Math.floor(s / 7);
+
+/** Whether Dibs, Jet and the third of a party are seated in one touching group. */
+const touchingDibs = (seats: number[]): boolean =>
+  besideOf(seats[0] ?? -1).includes(seats[2] ?? -2) ||
+  groupsTouching([0, 1, 2].map((i) => seatCell(0, seats[i] ?? 0))).length === 1;
 
 describe("the bot", () => {
   test("seats Huddle figures touching, round the frontmost of them, Jet in the group rather than a corner", () => {
@@ -133,6 +197,16 @@ describe("the bot", () => {
       false,
     );
     expect(besideOf(withLarp[0] ?? -1)).toContain(withLarp[1] ?? -2);
+  });
+  test("seats one holding a Guild Onesie touching the Huddle figures, as its own would; without it, where its reach puts it", () => {
+    const party = (onesie: boolean) =>
+      (["dibs", "jet", "kettle", "finch", "badger"] as const).map((kind) => ({
+        kind,
+        health: specOf(PM, kind).hp,
+        items: kind === "kettle" && onesie ? (["huddlecharm"] as const) : [],
+      }));
+    expect(touchingDibs(arrange(PM, party(true), false))).toBe(true);
+    expect(touchingDibs(arrange(PM, party(false), false))).toBe(false);
   });
   test("seats Pomp in the row with the most mana bars, which its fanfare fills; with most at the back it stays there", () => {
     // Three close fighters in front, and one with reach behind them: Pomp joins the front.

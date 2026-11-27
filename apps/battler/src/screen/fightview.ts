@@ -29,7 +29,7 @@ import { seatCell } from "@sequoia-leaf/raid/hex.ts";
 import { stanceOf } from "./acting.ts";
 import { hexMark } from "./art/table.ts";
 import { clockNow, feetAt, FV, shownCell } from "./board.ts";
-import { drawBubbled } from "./bubble.ts";
+import { drawBubbled, waitsForBubble } from "./bubble.ts";
 import { drawCalls } from "./call.ts";
 import { begin, show, stepShown } from "./fightshow.ts";
 import { burst, pace } from "./fx.ts";
@@ -338,7 +338,8 @@ function standing(g: Ctx, cat: Catalog, a: Actor, c: number, tick: number): Stan
   if (c < a.bornAt || a.gone) return null;
   const p = poseOf(a, c);
   const down = c >= a.fallAt;
-  const hidden = u.alive && u.hiddenUntil > tick;
+  // A friend of Yule's whose own bubble has not closed yet stands as itself, never as a mound or a shell.
+  const hidden = u.alive && u.hiddenUntil > tick && !waitsForBubble(u.id);
   const sunk = a.move?.under === true && Math.abs(moveAt(a.move, c).k - 0.5) < 0.35;
   // While the halves are still apart, the far party stands back with its half.
   const back = u.side === FV.ours ? 0 : Math.round(V.gap);

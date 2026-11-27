@@ -27,7 +27,7 @@ import { pawns } from "../pawns.ts";
 import { snd } from "../sounds.ts";
 import { boardSpot } from "../stage.ts";
 import { catalogFor, doOrAsk, S } from "../state.ts";
-import { itemDesc } from "./cards.ts";
+import { boonDesc, itemDesc } from "./cards.ts";
 import { dropOfId, itemOfRef } from "./refs.ts";
 
 /** A kind's tile on the rack, on the page. */
@@ -47,7 +47,7 @@ function tipOf(drop: Drop, done: () => void): Description {
       blocks: [{ body: el("span", "k-coral", { text: drop.why }) }],
     };
   const act = {
-    label: drop.does === "make" ? "Make" : drop.does === "give" ? "Give" : "Use",
+    label: drop.does === "make" || drop.does === "boon" ? "Make" : drop.does === "give" ? "Give" : "Use",
     look: "sm wide",
     on: () => {
       done();
@@ -72,6 +72,7 @@ function tipOf(drop: Drop, done: () => void): Description {
     };
   }
   if (drop.does === "make") return { ...itemDesc(catalogFor(S.run), drop.item, null), actions: [act] };
+  if (drop.does === "boon") return { ...boonDesc(catalogFor(S.run), drop.boon), actions: [act] };
   return {
     ...itemDesc(catalogFor(S.run), drop.item, null),
     rows: [],

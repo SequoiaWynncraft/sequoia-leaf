@@ -13,7 +13,7 @@
  * After a room, on the run, a trait acts through `ROOM_HOOKS`.
  */
 import type { BoonId } from "../content/boons.ts";
-import { catalogOf } from "../content/catalog.ts";
+import { type Catalog, catalogAt } from "../content/catalog.ts";
 import { abilityNumber, type UnitKind } from "../content/figures.ts";
 import type { ItemId, ItemStats } from "../content/items.ts";
 import { type TraitId, traitNumber } from "../content/traits.ts";
@@ -224,23 +224,27 @@ export function whenFell(f: Fight, u: Unit): void {
 
 // ---------- after a room ----------
 
-/** What a trait does on the run after a room, at the step the board has it: the notes it gives. */
-export type RoomHook = (run: Run, fight: Fought, step: number) => Note[];
+/** What a trait does on the run after a room, at the step the board has it, by the catalogue of the fight's era: the notes it gives. */
+export type RoomHook = (run: Run, fight: Fought, step: number, cat: Catalog) => Note[];
 export const ROOM_HOOKS: Readonly<Partial<Record<TraitId, RoomHook>>> = {
   // The gnomes find acorns, more for a win.
-  gnome: (run, fight, step) => {
+  gnome: (run, fight, step, cat) => {
     const won = fight.outcome.result === "win";
-    const amount = traitNumber(catalogOf(run), "gnome", won ? "win" : "loss", step);
+    const amount = traitNumber(cat, "gnome", won ? "win" : "loss", step);
     if (amount <= 0) return [];
     run.acorns += amount;
     return [{ t: "acorns", why: "gnomes", amount }];
   },
 };
-/** Every trait's doing after a room, in the catalogue's order, for those the board has on (`steps`). */
+/**
+ * Every trait's doing after a room, in the catalogue's order, for those the board has on (`steps`),
+ * by the catalogue of the era the fight was locked in (its setup's), never the clock's.
+ */
 export function afterRoom(run: Run, fight: Fought, steps: Partial<Record<TraitId, number>>): Note[] {
-  return catalogOf(run).ids.traits.flatMap((trait) => {
+  const cat = catalogAt(fight.setup.era);
+  return cat.ids.traits.flatMap((trait) => {
     const step = steps[trait] ?? 0;
     const hook = ROOM_HOOKS[trait];
-    return hook && step > 0 ? hook(run, fight, step) : [];
+    return hook && step > 0 ? hook(run, fight, step, cat) : [];
   });
 }

@@ -10,6 +10,7 @@
  */
 import type { Catalog } from "./content/catalog.ts";
 import { type FigureId, figureIn } from "./content/figures.ts";
+import { carriedTraits, type ItemId } from "./content/items.ts";
 import { KINS, type TraitId } from "./content/traits.ts";
 import { besideOf, COLS, HOME_ROWS, standRow } from "./hex.ts";
 
@@ -25,6 +26,8 @@ export interface Standing {
   kind: FigureId;
   /** Health with stars counted in, for who goes in front. */
   health: number;
+  /** What it holds: an emblem's origin counts for where it sits (a Guild Onesie's Huddle sits touching). */
+  items?: readonly ItemId[];
 }
 
 /**
@@ -158,10 +161,15 @@ function sitInRow(
   }
 }
 
-/** A figure's origins: its kin, and a kin it carries as a third trait (Larp's Huddle). */
-function originsOf(cat: Catalog, kind: FigureId): TraitId[] {
-  const f = figureIn(cat, kind);
-  return [f.kin, ...f.extra].filter((t) => KINS.some((k) => k === t));
+/** A figure's origins: its kin, a kin it carries as a third trait (Larp's Huddle), and one an emblem it holds grants. */
+const originsOf = (cat: Catalog, s: Standing | undefined): TraitId[] =>
+  s ? carriedTraits(cat, s.kind, s.items ?? []).filter((t) => KINS.some((k) => k === t)) : [];
+/** The origins whose figures sit touching: those every figure that sits touching carries (Huddle). */
+function touchingOrigins(cat: Catalog): TraitId[] {
+  const lists = cat.order
+    .filter((id) => figureIn(cat, id).stands === "touching")
+    .map((kind) => originsOf(cat, { kind, health: 0 }));
+  return (lists[0] ?? []).filter((t) => lists.every((l) => l.includes(t)));
 }
 /**
  * Those who sit touching move, frontmost first, to the free seat touching the most of those of their
@@ -176,16 +184,20 @@ function sitTouching(
   free: (seat: number) => boolean,
 ): void {
   const kind = (i: number): FigureId => party[i]?.kind ?? "rock";
+  // Whoever sits touching, and whoever carries an origin of theirs by an emblem.
+  const huddles = touchingOrigins(cat);
+  const sitsTouching = (i: number): boolean =>
+    figureIn(cat, kind(i)).stands === "touching" || originsOf(cat, party[i]).some((t) => huddles.includes(t));
   const movers = party
     .map((_, i) => i)
-    .filter((i) => figureIn(cat, kind(i)).stands === "touching" && (seats[i] ?? -1) >= 0)
+    .filter((i) => sitsTouching(i) && (seats[i] ?? -1) >= 0)
     .toSorted((a, b) => Math.floor((seats[a] ?? 0) / COLS) - Math.floor((seats[b] ?? 0) / COLS) || a - b);
   const settled: number[] = [];
   const allOf = (origins: readonly TraitId[]): number[] =>
-    settled.filter((j) => originsOf(cat, kind(j)).some((t) => origins.includes(t))).map((j) => seats[j] ?? -1);
+    settled.filter((j) => originsOf(cat, party[j]).some((t) => origins.includes(t))).map((j) => seats[j] ?? -1);
   for (const i of movers) {
     const was = seats[i] ?? -1;
-    const own = allOf(originsOf(cat, kind(i)));
+    const own = allOf(originsOf(cat, party[i]));
     const touches = (seat: number): number => besideOf(seat).filter((s) => own.includes(s)).length;
     settled.push(i);
     if (own.length === 0 || touches(was) > 0) continue;

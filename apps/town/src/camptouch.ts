@@ -8,11 +8,10 @@ import { BARK, CREAM, EARTH, GOLD, GREEN, SKY, STONE, WATER } from "@sequoia-lea
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, lerp, pick } from "@sequoia-leaf/kit/util.ts";
-import { type FigureId, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { TOGGLES } from "@sequoia-leaf/town";
 import type { Placed } from "@sequoia-leaf/town/camp.ts";
 import { LOST_CRAB } from "@sequoia-leaf/town/catalogue.ts";
-import { figureThing, footprint, isMemberThing, type Thing } from "@sequoia-leaf/town/things.ts";
+import { figureOfThing, footprint, isMemberThing, type Thing } from "@sequoia-leaf/town/things.ts";
 
 import { onScreen } from "./actors.ts";
 import { type CampArt, HUES, lookTowards, pictureOf, SHELF_SLOTS, TUBES, WICKS } from "./campart.ts";
@@ -502,12 +501,6 @@ const TOUCH: Readonly<Record<string, Touch>> = {
   },
 };
 
-/** The figure of the raid a camp's character is; null for any other thing. */
-function figureOf(thing: Thing): FigureId | null {
-  const id = thing.id.slice(figureThing("").length);
-  return thing.kind === "characters" && isFigureId(id) ? id : null;
-}
-
 /** A thing is touched: it does what it does, or at the least it shivers and shines. */
 export function touch(l: Live, w: TouchWorld, wx: number, wy: number): void {
   l.taps++;
@@ -516,13 +509,14 @@ export function touch(l: Live, w: TouchWorld, wx: number, wy: number): void {
     fn(l, w, wx, wy);
     return;
   }
-  // A character hops, and says its line. A banner's member hops and never says a word: they turn to
-  // whoever is here for a moment, as a member touched in town does.
+  // A character hops, and says its line. A banner's member drawn from a skin hops and never says a
+  // word: they turn to whoever is here for a moment, as a member touched in town does.
   if (l.thing.kind === "characters") {
     l.prop.hops = true;
     nudge(l);
     sfx.pop();
-    if (isMemberThing(l.thing.id)) forAWhile(l, w, lookTowards(l.placed.t, l.prop, G.player), 2.4);
+    if (isMemberThing(l.thing.id) && !figureOfThing(l.thing))
+      forAWhile(l, w, lookTowards(l.placed.t, l.prop, G.player), 2.4);
     else float(l.prop.x, top(l) - 2, l.thing.about, CREAM, 2.6);
     return;
   }
@@ -547,7 +541,7 @@ export function stepLive(l: Live, w: TouchWorld, dt: number): void {
     if (id === "tiny-cairn" || id === "bird-bath") sfx.pop();
     repaint(l, w);
   } else if (id === "weathervane" && l.backAt > 0) show(l, w, Math.floor((G.t - l.at) * 9) % 2);
-  const figure = figureOf(l.thing);
+  const figure = figureOfThing(l.thing);
   // A character stands as it does on the raid's table: breathing, and hovering if it flies.
   if (figure) {
     const phase = ((l.placed.x * 7 + l.placed.y * 3) % 10) / 10;

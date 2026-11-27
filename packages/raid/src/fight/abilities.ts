@@ -201,7 +201,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     return true;
   },
   jay: (f, u, n) => {
-    const t = weakest(foesWithin(f, u.side, u.cell, n("reach")));
+    const t = weakest(f, foesWithin(f, u.side, u.cell, n("reach")));
     say(f, u, [u.cell], [t?.id ?? u.id], 0);
     if (t) {
       dash(f, u, dashTo(f, u, t));
@@ -344,7 +344,11 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     if (!far) return false;
     // Of the enemies no more than 1 hex nearer than the furthest, the one with the least health.
     const away = distance(u.cell, far.cell) - 1;
-    const t = weakest(foesOf(f, u.side).filter((o) => distance(u.cell, o.cell) >= away)) ?? far;
+    const t =
+      weakest(
+        f,
+        foesOf(f, u.side).filter((o) => distance(u.cell, o.cell) >= away),
+      ) ?? far;
     const to = landingBy(f, u, t);
     say(f, u, [to], [t.id], 0);
     leap(f, u, to, "ability");

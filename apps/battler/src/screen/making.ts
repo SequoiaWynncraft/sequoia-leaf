@@ -5,6 +5,7 @@
  * page never says other than what Leaf will do.
  */
 import {
+  type BoonId,
   type Catalog,
   catalogOf,
   type ComponentId,
@@ -23,6 +24,7 @@ import {
   type ItemId,
   kindsOn,
   legal,
+  type Note,
   type Piece,
   type PlanningCommand,
   type Predicted,
@@ -161,6 +163,8 @@ export const pairsOf = (run: RunView, item: RackItem): ItemId[] =>
  */
 export type Drop = { readonly command: PlanningCommand } & (
   | { readonly does: "make"; readonly item: ItemId }
+  /** Two items a recipe makes a boon of (two Knives: An Extra Chair), both used up. */
+  | { readonly does: "boon"; readonly item: ItemId; readonly boon: BoonId }
   | { readonly does: "give"; readonly item: ItemId; readonly holds: number }
   /** The Tongs: what the figure holds, all back to the rack. */
   | { readonly does: "tongs"; readonly item: "tongs"; readonly items: readonly ItemId[] }
@@ -184,22 +188,35 @@ function toolDrop(run: RunView, command: Extract<PlanningCommand, { do: "tongs" 
   return took?.t === "tongs" ? { does: "tongs", item: "tongs", items: took.items, command } : null;
 }
 
+/** A boon a recipe made, as the notes of a forge or a hand-over say it: both items used up; null for none. */
+function boonDrop(notes: readonly Note[], command: PlanningCommand, item: ItemId): Drop | null {
+  const made = notes.find((n) => n.t === "boon");
+  return made?.t === "boon" ? { does: "boon", item, boon: made.boon, command } : null;
+}
+
 /** What letting go would do, asked of the rules on a copy; null where it would do nothing worth a tip. */
 export function dropOf(run: RunView, item: RackItem, aim: Aim): Drop | null {
   const command = commandOf(run, item, aim);
   if (countOn(run.rack, item) === 0 || !command) return null;
   if (command.do === "tongs" || command.do === "whetstone") return toolDrop(run, command);
-  const copy = structuredClone(run);
-  if (command.do === "forge") {
-    const done = forgeItems(copy, command.item, command.with);
-    const made = done.ok ? done.notes.find((n) => n.t === "made") : undefined;
-    return made?.t === "made" ? { does: "make", item: made.item, command } : null;
-  }
-  if (command.do !== "give") return null;
+  if (command.do === "forge") return forgeDrop(structuredClone(run), command);
+  return command.do === "give" ? giveDrop(structuredClone(run), command) : null;
+}
+/** Two on the rack forged, on a copy: the item they make, or the boon (two Knives). */
+function forgeDrop(copy: RunView, command: Extract<PlanningCommand, { do: "forge" }>): Drop | null {
+  const done = forgeItems(copy, command.item, command.with);
+  if (!done.ok) return null;
+  const made = done.notes.find((n) => n.t === "made");
+  const boon = boonDrop(done.notes, command, command.item);
+  return boon ?? (made?.t === "made" ? { does: "make", item: made.item, command } : null);
+}
+/** An item handed over, on a copy: what it makes there (an item or a boon), what the figure then holds, or why not. */
+function giveDrop(copy: RunView, command: Extract<PlanningCommand, { do: "give" }>): Drop | null {
   const done = giveItem(copy, command.item, command.to);
   if (!done.ok) return { does: "nothing", item: command.item, why: done.why, command };
   const gave = done.notes.find((n) => n.t === "gave");
-  if (gave?.t !== "gave") return null;
+  const boon = boonDrop(done.notes, command, command.item);
+  if (boon || gave?.t !== "gave") return boon;
   return gave.forged
     ? { does: "make", item: gave.forged, command }
     : { does: "give", item: command.item, holds: gave.holds.length, command };

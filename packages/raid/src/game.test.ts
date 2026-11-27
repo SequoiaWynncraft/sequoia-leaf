@@ -588,7 +588,11 @@ describe("what the page may show before Leaf answers", () => {
     let state = planned(started(5));
     state = must(state, { do: "fight" }).state;
     state = must(state, { do: "take" }).state;
-    state = must(state, { do: "choose", option: 0 }).state;
+    // The first component on offer; the dice this test is handed may have made the pick one of tools.
+    const options = state.held.main?.stage.phase === "plan" ? (state.held.main.stage.picks[0]?.options ?? []) : [];
+    state = must(state, { do: "choose", option: Math.max(0, options.findIndex(isItemId)) }).state;
+    if (kindsOn(state.held.main?.rack ?? {}).every((k) => !isItemId(k)) && state.held.main)
+      state.held.main.rack = { ...state.held.main.rack, thorn: 1 };
     const seat = state.held.main?.board.findIndex((p) => p !== null) ?? -1;
     const offer = state.held.main?.stall.findIndex((k) => k !== null) ?? -1;
     const same = (c: RaidCommand): void => {

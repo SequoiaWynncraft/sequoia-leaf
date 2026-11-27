@@ -111,10 +111,10 @@ export const PENGUIN_MONTH_CASTS: Partial<Record<UnitKind, Cast>> = {
   },
 
   yule: (f, u, n) => {
-    // One more friend each later use, up to its most; never one already hidden.
+    // One more friend each later use, up to its most; never itself, nor one already hidden.
     const count = Math.min(n("most"), 1 + u.casts);
     const ins = mostHurt(f, u.side, true)
-      .filter((o) => o.hiddenUntil <= f.tick)
+      .filter((o) => o.id !== u.id && o.hiddenUntil <= f.tick)
       .slice(0, count);
     if (ins.length === 0) return false;
     const ticks = secs(n("lasts"));

@@ -21,7 +21,7 @@ import type { Fight, FightEvent, UnitKind } from "@sequoia-leaf/raid";
 
 import { clockNow, fightNow, FOOT, FV } from "./board.ts";
 import { calling } from "./call.ts";
-import { fateOf, hangs, type Hung } from "./hung.ts";
+import { bathOf, fateOf, hangs, type Hung } from "./hung.ts";
 import { LOOKS } from "./looks.ts";
 import type { Actor } from "./motion.ts";
 import { dimRounds, hushing } from "./spells.ts";
@@ -38,8 +38,7 @@ interface Bubble {
 }
 const bubbles: Bubble[] = [];
 
-/** Steps between one bubble closing and the next (0.15 seconds), and how far up a friend in one floats. */
-const APART = 3;
+/** How far up a friend in a bubble floats. */
 const FLOAT = 2;
 /** Steps a bubble is kept after it pops. */
 const KEPT = 4;
@@ -80,18 +79,18 @@ const wasBubbled = (id: number): boolean => bubbles.some((b) => b.fight === figh
 export const bubbleSays = (ev: Extract<FightEvent, { t: "status" }>): boolean =>
   ev.status === "hidden" && (wasBubbled(ev.id) || shutsInBubbles(FV.actors[ev.by]?.unit.kind));
 
-/** The bubble a figure is in now, and the step it closed; null for none, or not closed yet. */
-function inBubble(id: number, c: number): { b: Bubble; closed: number } | null {
+/** How a figure in a bath of the fight on show is drawn now (`bathOf`); null for one in none. */
+function bathNow(id: number, c: number): "itself" | "bubble" | null {
   for (const b of bubbles) {
     const i = b.ids.indexOf(id);
-    const closed = b.hung.at + i * APART;
-    if (i >= 0 && b.fight === fightNow() && !b.landed && c >= closed && c < b.hung.lands) return { b, closed };
+    if (i >= 0 && b.fight === fightNow() && !b.landed) return bathOf(b.hung, i, c);
   }
   return null;
 }
+const inBubble = (id: number, c: number): boolean => bathNow(id, c) === "bubble";
 
-/** Whether a figure is drawn in a bubble now, rather than as itself. */
-export const bubbled = (id: number): boolean => inBubble(id, clockNow()) !== null;
+/** Whether a figure the rules have hidden is drawn as itself all the same: its bubble has not closed yet. */
+export const waitsForBubble = (id: number): boolean => bathNow(id, clockNow()) === "itself";
 
 const outlines = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
 /** A picture's dark edge alone, the rest of it clear: a friend drawn in outline only. */

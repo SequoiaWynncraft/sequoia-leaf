@@ -5,6 +5,7 @@ import { figureIn } from "@sequoia-leaf/raid/content/figures.ts";
 import { eraOf, LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 
 import {
+  figureOfThing,
   figureThing,
   footprint,
   isMemberThing,
@@ -35,6 +36,10 @@ describe("the catalogue", () => {
       memberThing("groot-night"),
       memberThing("penguin-month"),
     ]);
+    // A character is its figure: Yule's camp thing too, which says its line and stands as its figure does; a skin's member is none.
+    expect(figureOfThing({ id: memberThing("penguin-month"), kind: "characters" })).toBe("yule");
+    expect(figureOfThing({ id: figureThing("dibs"), kind: "characters" })).toBe("dibs");
+    expect(figureOfThing({ id: memberThing("groot-night"), kind: "characters" })).toBeNull();
     // Yule, drawn by the set, is a figure on 3 squares with its line.
     expect(thingOf(memberThing("penguin-month"))).toMatchObject({
       name: "Yule",
