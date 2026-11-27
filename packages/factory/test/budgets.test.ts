@@ -242,6 +242,21 @@ describe("allocation", () => {
     const tick = reached("tick.ts", "step", excused);
     for (const f of ["orders.ts:deliver", "orders.ts:offer", "land.ts:toward", "yard.ts:put", "wire.ts:nextOf"])
       expect(tick.reached).toContain(f);
+    // Each kind's step, which the tick finds by the kind's number: the guard reads them all.
+    for (const f of [
+      "kinds/line.ts:carryOn",
+      "kinds/splitter.ts:hands",
+      "kinds/sorter.ts:hands",
+      "kinds/tunnel.ts:passUnder",
+      "kinds/crate.ts:hands",
+      "kinds/maker.ts:work",
+      "kinds/gatherer.ts:work",
+      "kinds/study.ts:work",
+      "kinds/boiler.ts:burn",
+      "kinds/maker.ts:room",
+      "kinds/joiner.ts:room",
+    ])
+      expect(tick.reached).toContain(f);
     expect(tick.makes).toEqual([]);
     // And the guard sees what it looks for: with nothing excused, it finds the plumbing and the orders.
     const all = reached("tick.ts", "step", new Set());

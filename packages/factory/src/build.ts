@@ -1,37 +1,38 @@
 /**
  * Building in the yard, taking things away, turning and setting pieces, and buying plots.
- * Everything that costs Coins is told the balance and says what it took.
+ * Everything that costs Coins is told the balance and says what it took. What only some kinds of
+ * piece may be or be set to is each kind's to say (`kinds/`): where it may stand, what it is laid
+ * over, the other tiles it stands on, and what each command that sets something on a piece does.
  */
 import { FELL_PRICE } from "./content/plots.ts";
-import { besideWater, type Plotted, tileAt, touching } from "./land.ts";
+import type { Setters } from "./kinds/kind.ts";
+import { RULES } from "./kinds/list.ts";
+import { keepsFor } from "./kinds/maker.ts";
+import { digs, exitOf } from "./kinds/tunnel.ts";
+import { type Plotted, touching } from "./land.ts";
 import { join } from "./lines.ts";
 import {
   ALL_ITEMS,
-  BELT,
-  CRATE,
-  DEPOT,
-  GATHERER,
+  FAST,
+  FIXED,
   gradeOf,
-  holdsMost,
-  isMaker,
   type Item,
-  JOINER,
   type Kind,
+  KIND_INFO,
+  LINED,
   locked,
+  MOST,
   NONE,
+  OVER,
   type Plot,
   price,
-  PYLON,
+  REACHES,
   RECIPE,
   type Recipe,
-  recipesFor,
-  SORTER,
-  SPLITTER,
-  STOP,
-  STUDY,
-  TUNNEL,
-  WHEEL,
+  STUDIES,
 } from "./tables.ts";
+import { at, type Dir, ground, kindAt } from "./tiles.ts";
+import { KIT } from "./wire.ts";
 import {
   changed,
   enough,
@@ -42,10 +43,12 @@ import {
   redwoodAt,
   standingTree,
   take,
-  tunnelRow,
   vacate,
   type Yard,
 } from "./yard.ts";
+
+export { at, BACK, type Dir, DX, DY, isDir, kindAt, LEFT, otherMouth, RIGHT, right } from "./tiles.ts";
+export { insTo } from "./yard.ts";
 
 /** What came of trying to spend Coins: what it cost, or why not, in plain words. */
 export type Spent = { readonly ok: true; readonly cost: number } | { readonly ok: false; readonly why: string };
@@ -55,39 +58,6 @@ export type Refund = { readonly ok: true; readonly refund: number } | { readonly
 export type Laid =
   | { readonly ok: true; readonly cost: number; readonly laid: readonly number[] }
   | { readonly ok: false; readonly why: string };
-
-/** The four ways, east, south, west, north, as steps across and down. */
-export const DX = [1, 0, -1, 0] as const;
-export const DY = [0, 1, 0, -1] as const;
-export type Dir = 0 | 1 | 2 | 3;
-export const isDir = (v: unknown): v is Dir => v === 0 || v === 1 || v === 2 || v === 3;
-/** A quarter turn to the right of a way. */
-export const right = (d: Dir): Dir => (d === 0 ? 1 : d === 1 ? 2 : d === 2 ? 3 : 0);
-/** For each way, the way behind it and a quarter turn to its left and to its right. */
-export const BACK = [2, 3, 0, 1] as const;
-export const LEFT = [3, 0, 1, 2] as const;
-export const RIGHT = [1, 2, 3, 0] as const;
-const dx = (d: number): number => DX[d & 3] ?? 0;
-const dy = (d: number): number => DY[d & 3] ?? 0;
-
-/** The tile at (x, y) of a yard's land, or -1. */
-export const at = (y: Yard, x: number, z: number): number => tileAt(y.land, x, z);
-/** What stands at (x, y), or `NONE`. */
-export const kindAt = (y: Yard, x: number, z: number): number => {
-  const i = at(y, x, z);
-  return i < 0 ? NONE : (y.kind[i] ?? NONE);
-};
-
-/** Why nothing can stand on a tile, whatever it is: off the map, not the yard's land, water, or a redwood. */
-function ground(y: Yard, x: number, z: number): string | null {
-  const i = at(y, x, z);
-  if (i < 0) return "That is off the map";
-  const plot = y.land.plots[y.land.plot[i] ?? NONE];
-  if (!plot || !y.plots.includes(plot.plot)) return plot ? `${plot.name} is not the yard's yet` : "That is off the map";
-  if (y.land.water[i] === 1) return "Nothing can be built on the stream";
-  if (redwoodAt(y, i)) return "Nothing can be built on a tree";
-  return null;
-}
 
 /**
  * How a piece is to be set down beyond its kind, tile and way: its grade (1 if not said), a
@@ -111,9 +81,8 @@ export function worthAt(y: Yard, i: number): number {
   return price(k, y.grade[i] ?? 0) - (y.free[i] === 1 ? price(k, gradeOf(k)) : 0);
 }
 
-/** Whether a kind may be set down in the place of what stands: a splitter or a joiner on a belt, or on one another. */
-export const replaces = (k: number, there: number): boolean =>
-  (k === SPLITTER || k === JOINER) && there !== k && (there === BELT || there === SPLITTER || there === JOINER);
+/** Whether a kind may be set down in the place of what stands: one its kind says it goes over (a splitter on a belt). */
+export const replaces = (k: number, there: number): boolean => there !== k && (OVER[k] ?? []).includes(there);
 
 /**
  * What building a kind at a grade on a tile takes from the purse: over one of its kind, what its
@@ -127,42 +96,24 @@ export function priceAt(y: Yard, k: Kind, x: number, z: number, g = 1, spare: Ui
   return costOf(y, k, g, spare) - worthAt(y, i);
 }
 
-/** The other mouth of the tunnel on a tile, or -1. */
-export function otherMouth(y: Yard, i: number): number {
-  const span = y.span[i] ?? 0;
-  const d = y.dir[i] ?? 0;
-  const far = (Math.abs(span) + 1) * Math.sign(span);
-  const { w } = y.land;
-  return span === 0 ? -1 : at(y, (i % w) + dx(d) * far, Math.floor(i / w) + dy(d) * far);
-}
-
 /** Whether a tunnel may pass under a tile: under anything but the depot. */
-export const digsUnder = (y: Yard, x: number, z: number): boolean => kindAt(y, x, z) !== DEPOT;
+export const digsUnder = (y: Yard, x: number, z: number): boolean => digs(KIT, y, x, z);
 
 /** Where a tunnel going in at a tile would come up: the nearest clear tile beyond one to three others, or the end of `span`. */
-export function tunnelExit(
+export const tunnelExit = (
   y: Yard,
   x: number,
   z: number,
   d: number,
   span?: number,
-): { x: number; y: number; span: number } | null {
-  const most = span ?? y.open.span;
-  if (most < 1 || most > y.open.span) return null;
-  for (let s = 1; s <= most; s++) {
-    if (!digsUnder(y, x + dx(d) * s, z + dy(d) * s)) return null;
-    if (span !== undefined && s < span) continue;
-    const ex = x + dx(d) * (s + 1);
-    const ey = z + dy(d) * (s + 1);
-    if (ground(y, ex, ey) === null && kindAt(y, ex, ey) === NONE) return { x: ex, y: ey, span: s };
-  }
-  return null;
-}
+): { x: number; y: number; span: number } | null => exitOf(KIT, y, x, z, d, span);
 
-function depotInTheWay(y: Yard, x: number, z: number, d: number, span?: number): boolean {
-  for (let s = 1; s <= (span ?? y.open.span); s++) if (!digsUnder(y, x + dx(d) * s, z + dy(d) * s)) return true;
-  return false;
-}
+/** What a kind is called in a sentence: "the depot". */
+const lower = (k: number): string => (KIND_INFO[k]?.name ?? "").toLowerCase();
+
+/** Why one more of a kind may not stand, by the limit its kind has (`KindDef.most`); nothing for one with none. */
+const overLimit = (y: Yard, k: number, more = 1): string | null =>
+  MOST[k] === "stops" ? locked(y.open, { stops: stops(y) + more }) : null;
 
 /** Why a kind cannot be built here with `coins` in the purse, or nothing if it can. */
 export function refusal(
@@ -176,32 +127,31 @@ export function refusal(
 ): string | null {
   const bad = ground(y, x, z);
   if (bad !== null) return bad;
-  if (k === DEPOT) return "There is only one depot";
+  if (FIXED[k] === 1) return `There is only one ${lower(k)}`;
   const g = gradeOf(k, lay.grade);
   const lock = locked(y.open, { build: k, grade: g });
   if (lock !== null) return lock;
   const i = at(y, x, z);
   const there = y.kind[i] ?? NONE;
-  if (there === DEPOT) return "The depot stands here";
-  if (there === k) {
-    // Laid over one of its kind, a piece turns it and raises or lowers it to its grade; a tunnel only
-    // raises or lowers, and one asked for with its span (as a blueprint or a copy asks) only the
-    // tunnel going in here, that way, that far.
-    const other = (lay.span ?? 0) > 0 && (y.span[i] !== lay.span || y.dir[i] !== d);
-    if (k === TUNNEL && (y.grade[i] === g || other)) return "Something is here already";
-  } else {
-    if (there !== NONE && !replaces(k, there)) return "Something is here already";
-    if (k === GATHERER && y.land.deposit[i] === NONE) return "A gatherer must be placed on a deposit";
-    if (k === WHEEL && !besideWater(y.land, i)) return "A waterwheel must be beside the stream";
-    const most = k === STOP ? locked(y.open, { stops: stops(y) + 1 }) : null;
-    if (most !== null) return most;
-    if (k === TUNNEL && !tunnelExit(y, x, z, d, lay.span))
-      return depotInTheWay(y, x, z, d, lay.span)
-        ? "A tunnel cannot go under the depot"
-        : `A tunnel needs a free tile to come up on, 1 to ${y.open.span} tiles ahead`;
-  }
+  if (FIXED[there] === 1) return `The ${lower(there)} stands here`;
+  const why = standsOver(y, k, i, d, g, lay);
+  if (why !== null) return why;
   if (coins < priceAt(y, k, x, z, g)) return "Not enough Coins";
   return null;
+}
+
+/**
+ * Why a kind cannot stand on the tile `i` over what stands there, as its kind says: laid over one of
+ * its kind, a piece turns it and raises or lowers it to its grade, as its kind lets it (`Hooks.over`);
+ * else where it goes, nothing or what it may take the place of, its own checks and how many may stand.
+ */
+function standsOver(y: Yard, k: Kind, i: number, d: number, g: number, lay: Lay): string | null {
+  const there = y.kind[i] ?? NONE;
+  const r = RULES[k];
+  if (!r) return null;
+  if (there === k) return r.over(KIT, y, i, d, g, lay);
+  if (there !== NONE && !replaces(k, there)) return "Something is here already";
+  return r.refusal(KIT, y, i, d, lay) ?? overLimit(y, k);
 }
 
 /**
@@ -214,7 +164,7 @@ export function refusal(
 export function build(y: Yard, k: Kind, x: number, z: number, d: Dir, coins: number, lay: Lay = {}): Spent {
   const did = setDown(y, k, x, z, d, coins, lay);
   if (!did.ok) return did;
-  if (k === BELT || k === TUNNEL) join(y, did.laid);
+  if (LINED[k] === 1) join(y, did.laid);
   return { ok: true, cost: did.cost };
 }
 
@@ -227,12 +177,7 @@ export function setDown(y: Yard, k: Kind, x: number, z: number, d: Dir, coins: n
   const g = gradeOf(k, lay.grade);
   const cost = priceAt(y, k, x, z, g);
   if (there === k) {
-    const mouth = otherMouth(y, i);
-    if (y.grade[i] !== g || (k !== TUNNEL && y.dir[i] !== d)) changed(y);
-    if (k !== TUNNEL) y.dir[i] = d;
-    y.grade[i] = g;
-    if (mouth >= 0) y.grade[mouth] = g;
-    sideAsLaid(y, i, k, lay);
+    relay(y, k, i, d, g, lay);
     return { ok: true, cost, laid: [] };
   }
   // A replaced belt goes back as if taken away; what it carried and its colour stay.
@@ -240,7 +185,7 @@ export function setDown(y: Yard, k: Kind, x: number, z: number, d: Dir, coins: n
     there === NONE ? null : { item: y.item[i] ?? NONE, prog: y.prog[i] ?? 0, via: y.via[i] ?? 0, tint: y.tint[i] ?? 0 };
   if (there !== NONE && y.free[i] === 1) y.spare[there] = (y.spare[there] ?? 0) + 1;
   place(y, i, k, d, g);
-  sideAsLaid(y, i, k, lay);
+  RULES[k]?.laid(KIT, y, i, lay);
   if ((y.spare[k] ?? 0) > 0) {
     // One of the pieces the yard has to hand.
     y.free[i] = 1;
@@ -252,30 +197,30 @@ export function setDown(y: Yard, k: Kind, x: number, z: number, d: Dir, coins: n
     y.via[i] = kept.via;
     y.tint[i] = kept.tint;
   }
-  const laid = [i];
-  if (k === TUNNEL) {
-    const exit = tunnelExit(y, x, z, d, lay.span);
-    if (exit) {
-      y.span[i] = exit.span;
-      tunnelRow(y, i);
-      const far = at(y, exit.x, exit.y);
-      place(y, far, TUNNEL, d, g);
-      y.span[far] = -exit.span;
-      laid.push(far);
-    }
-  }
+  const laid = [i, ...(RULES[k]?.lays(KIT, y, i, d, g, lay) ?? [])];
   changed(y);
-  if (k === PYLON) y.powered = false;
+  if (REACHES[k] === 1) y.powered = false;
   return { ok: true, cost, laid };
 }
 
-/** How many cart stops stand. */
-export const stops = (y: Yard): number => y.kind.reduce((n, k) => (k === STOP ? n + 1 : n), 0);
+/** A piece laid over one of its kind turns it (but one its kind keeps fast) and raises or lowers it to its grade, both mouths of a tunnel. */
+function relay(y: Yard, k: Kind, i: number, d: Dir, g: number, lay: Lay): void {
+  const mouth = KIT.otherMouth(y, i);
+  const turns = FAST[k] !== 1;
+  if (y.grade[i] !== g || (turns && y.dir[i] !== d)) changed(y);
+  if (turns) y.dir[i] = d;
+  y.grade[i] = g;
+  if (mouth >= 0) y.grade[mouth] = g;
+  RULES[k]?.laid(KIT, y, i, lay);
+}
 
-/** Whether what stands on a tile can be turned: anything but the depot and a tunnel. */
+/** How many pieces stand that the yard's cart stops limit (`KindDef.most`). */
+export const stops = (y: Yard): number => y.kind.reduce((n, k) => (MOST[k] === "stops" ? n + 1 : n), 0);
+
+/** Whether what stands on a tile can be turned: anything but what its kind keeps fast (the depot, a tunnel). */
 export function turnable(y: Yard, x: number, z: number): boolean {
   const there = kindAt(y, x, z);
-  return there !== NONE && there !== DEPOT && there !== TUNNEL;
+  return there !== NONE && FAST[there] !== 1;
 }
 
 /** Turns something to face another way. Costs nothing. */
@@ -294,23 +239,32 @@ export function remove(y: Yard, x: number, z: number): Refund {
   const i = at(y, x, z);
   const there = i < 0 ? NONE : (y.kind[i] ?? NONE);
   if (there === NONE) return { ok: false, why: "There is nothing here" };
-  if (there === DEPOT) return { ok: false, why: "The depot cannot be removed" };
+  if (FIXED[there] === 1) return { ok: false, why: `The ${lower(there)} cannot be removed` };
   const refund = worthAt(y, i);
   const free = y.free[i] === 1;
   // Both mouths of a tunnel go together.
-  const mouth = otherMouth(y, i);
+  const mouth = KIT.otherMouth(y, i);
   vacate(y, i);
   if (mouth >= 0) vacate(y, mouth);
   changed(y);
-  if (there === PYLON) y.powered = false;
+  if (REACHES[there] === 1) y.powered = false;
   if (free) y.spare[there] = (y.spare[there] ?? 0) + 1;
   return { ok: true, refund };
 }
 
 /** The recipes whose parts the machine on a tile keeps by it: the one it is told to make, or each it may make. */
-export function keeps(y: Yard, i: number): readonly Recipe[] {
-  const told = RECIPE[y.set[i] ?? NONE];
-  return told ? [told] : recipesFor(y.open, y.kind[i] ?? NONE);
+export const keeps = (y: Yard, i: number): readonly Recipe[] => keepsFor(KIT, y, i);
+
+/** What the piece on a tile takes being set by a command, by what the command sets; nothing where nothing stands or its kind takes none. */
+function setter<S extends keyof Setters>(
+  y: Yard,
+  x: number,
+  z: number,
+  what: S,
+): { i: number; set: NonNullable<Setters[S]> } | null {
+  const i = at(y, x, z);
+  const set = i < 0 ? undefined : RULES[y.kind[i] ?? NONE]?.set[what];
+  return set ? { i, set } : null;
 }
 
 /**
@@ -318,51 +272,22 @@ export function keeps(y: Yard, i: number): readonly Recipe[] {
  * beyond what it keeps for that (`keeps`, `holdsMost`) is tipped out. Says why it could not, or nothing.
  */
 export function setRecipe(y: Yard, x: number, z: number, out: Item | null): string | null {
-  const i = at(y, x, z);
-  const there = i < 0 ? NONE : (y.kind[i] ?? NONE);
-  if (!isMaker(there) || (out !== null && RECIPE[out]?.by !== there)) return "That cannot make it";
-  const lock = out === null ? null : locked(y.open, { make: out });
-  if (lock !== null) return lock;
-  const h = y.holders;
-  const r = holderOf(y, i);
-  y.set[i] = out ?? NONE;
-  h.making[r] = NONE;
-  h.work[r] = 0;
-  h.idle[r] = 0;
-  const kept = keeps(y, i);
-  for (const n of ALL_ITEMS) take(h, r, n, held(h, r, n) - holdsMost(kept, n));
-  changed(y);
-  return null;
+  const s = setter(y, x, z, "recipe");
+  return s ? s.set(KIT, y, s.i, out) : "That cannot make it";
 }
 
 /** Sets the one thing a sorter sends to its side, or with nothing makes it a belt. Says whether there was a sorter. */
 export function setSort(y: Yard, x: number, z: number, n: Item | null): boolean {
-  const i = at(y, x, z);
-  if (i < 0 || y.kind[i] !== SORTER) return false;
-  y.set[i] = n ?? NONE;
-  changed(y);
-  return true;
+  const s = setter(y, x, z, "sort");
+  s?.set(KIT, y, s.i, n);
+  return s !== null;
 }
 
 /** Sets the side a sorter sends the thing it is set to: its right, or its left. Says whether there was a sorter. */
 export function setSide(y: Yard, x: number, z: number, toRight: boolean): boolean {
-  const i = at(y, x, z);
-  if (i < 0 || y.kind[i] !== SORTER) return false;
-  sideTo(y, i, toRight);
-  return true;
-}
-
-/** Sends what a sorter set down is set to to the side it was laid to (`Lay`), where that was said. */
-function sideAsLaid(y: Yard, i: number, k: Kind, lay: Lay): void {
-  if (k === SORTER && lay.right !== undefined) sideTo(y, i, lay.right);
-}
-
-/** Sends what the sorter on a tile is set to to its right or its left, kept as `sortWay` reads it. */
-function sideTo(y: Yard, i: number, toRight: boolean): void {
-  const first = toRight ? 3 : 0;
-  if (y.first[i] === first) return;
-  y.first[i] = first;
-  changed(y);
+  const s = setter(y, x, z, "side");
+  s?.set(KIT, y, s.i, toRight);
+  return s !== null;
 }
 
 /** Empties what a machine, crate or boiler holds, all of it or one kind of thing. Says how many went. */
@@ -379,11 +304,7 @@ export function tipOut(y: Yard, x: number, z: number, only: Item | null = null):
     take(h, r, n, held(h, r, n));
   }
   if (gone === 0) return 0;
-  // Whatever it was part-way through may have lost a part: a recipe's, or the folio a Study works on.
-  const making = h.making[r] ?? NONE;
-  const recipe = RECIPE[making];
-  const lost = y.kind[i] === STUDY ? making !== NONE && held(h, r, making) === 0 : !!recipe && !enough(h, r, recipe);
-  if (lost) {
+  if (lostPart(y, i, r)) {
     h.making[r] = NONE;
     h.work[r] = 0;
   }
@@ -392,17 +313,24 @@ export function tipOut(y: Yard, x: number, z: number, only: Item | null = null):
   return gone;
 }
 
+/** Whether what the holder on a tile (its row `r`) was part-way through has lost a part: a recipe's, or the folio a Study works on. */
+function lostPart(y: Yard, i: number, r: number): boolean {
+  const h = y.holders;
+  const making = h.making[r] ?? NONE;
+  if (STUDIES[y.kind[i] ?? NONE] === 1) return making !== NONE && held(h, r, making) === 0;
+  const recipe = RECIPE[making];
+  return !!recipe && !enough(h, r, recipe);
+}
+
 /** Opens or shuts a crate: shut, it takes things in and lets nothing out. Says whether there was a crate. */
 export function setOpen(y: Yard, x: number, z: number, open: boolean): boolean {
-  const i = at(y, x, z);
-  if (i < 0 || y.kind[i] !== CRATE) return false;
-  const r = holderOf(y, i);
-  if ((y.holders.open[r] === 1) !== open) {
-    y.holders.open[r] = open ? 1 : 0;
-    changed(y);
-  }
-  return true;
+  const s = setter(y, x, z, "open");
+  s?.set(KIT, y, s.i, open);
+  return s !== null;
 }
+
+/** Whether a number is one of a splitter's ways out: 0 ahead, 1 left, 2 right. */
+const isWay = (way: number): boolean => way === 0 || way === 1 || way === 2;
 
 /**
  * Shuts or opens one of a splitter's ways out: 0 for ahead, 1 for left, 2 for right. Shutting the
@@ -410,17 +338,9 @@ export function setOpen(y: Yard, x: number, z: number, open: boolean): boolean {
  * Says whether there was a splitter.
  */
 export function setWay(y: Yard, x: number, z: number, way: number, open: boolean): boolean {
-  const i = at(y, x, z);
-  if (i < 0 || y.kind[i] !== SPLITTER || (way !== 0 && way !== 1 && way !== 2)) return false;
-  const was = y.shut[i] ?? 0;
-  const shut = open ? was & ~(1 << way) : was | (1 << way);
-  insTo(y, i, (y.ins[i] ?? 0) & ~(1 << way));
-  if (was !== shut) {
-    y.shut[i] = shut;
-    if (!open && y.first[i] === way + 1) y.first[i] = 0;
-    changed(y);
-  }
-  return true;
+  const s = isWay(way) ? setter(y, x, z, "way") : null;
+  s?.set(KIT, y, s.i, way, open);
+  return s !== null;
 }
 
 /**
@@ -429,12 +349,8 @@ export function setWay(y: Yard, x: number, z: number, way: number, open: boolean
  * hands to whom is the same, so the plumbing stands. Says why it could not, or nothing.
  */
 export function setFirst(y: Yard, x: number, z: number, way: number | null): string | null {
-  const i = at(y, x, z);
-  if (i < 0 || y.kind[i] !== SPLITTER) return "There is no splitter there";
-  if (way !== null && ((y.shut[i] ?? 0) >> way) & 1) return "That way is shut";
-  if (way !== null && ((y.ins[i] ?? 0) >> way) & 1) return "That way takes things in";
-  y.first[i] = way === null ? 0 : way + 1;
-  return null;
+  const s = setter(y, x, z, "first");
+  return s ? s.set(KIT, y, s.i, way) : "There is no splitter there";
 }
 
 /**
@@ -443,23 +359,9 @@ export function setFirst(y: Yard, x: number, z: number, way: number | null): str
  * Says whether there was a splitter.
  */
 export function setIn(y: Yard, x: number, z: number, way: number, on: boolean): boolean {
-  const i = at(y, x, z);
-  if (i < 0 || y.kind[i] !== SPLITTER || (way !== 0 && way !== 1 && way !== 2)) return false;
-  const bit = 1 << way;
-  if (on) {
-    y.shut[i] = (y.shut[i] ?? 0) & ~bit;
-    if (y.first[i] === way + 1) y.first[i] = 0;
-  }
-  insTo(y, i, on ? (y.ins[i] ?? 0) | bit : (y.ins[i] ?? 0) & ~bit);
-  return true;
-}
-
-/** Sets a splitter's ways in; with none left, its next way in goes from `turn` too (`tick.ts`). Who takes from whom changes, so the plumbing is worked out again. */
-export function insTo(y: Yard, i: number, ins: number): void {
-  if (y.ins[i] === ins) return;
-  y.ins[i] = ins;
-  if (ins === 0) y.turn[i] = (y.turn[i] ?? 0) & 3;
-  changed(y);
+  const s = isWay(way) ? setter(y, x, z, "in") : null;
+  s?.set(KIT, y, s.i, way, on);
+  return s !== null;
 }
 
 // ---------- land ----------

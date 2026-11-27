@@ -5,16 +5,20 @@
  * held up; nothing that moves the yard reads it.
  */
 import { TICKS } from "./content/machines.ts";
-import { GATHERER, isRaw, type Item, type Kind, PACE, RECIPE, type Recipe, STUDY, WORK } from "./tables.ts";
+import { GATHERING, isRaw, type Item, type Kind, PACE, RECIPE, type Recipe, WORK_OF } from "./tables.ts";
 
 /** Ticks in a minute. */
 export const MINUTE = 600;
 /** How far across its tile a thing on a belt is counted in: eighths (`tick.ts`). */
 const ACROSS = 8;
 
-/** How many times a minute a piece of a kind and grade finishes: a gatherer's thing, a machine's recipe, a Study's folio. */
+/**
+ * How many times a minute a piece of a kind and grade finishes: a gatherer's thing, a machine's
+ * recipe, a Study's folio. The work in one is the kind's own (`KindDef.work`), or else the recipe's.
+ */
 export function makes(k: Kind, grade: number, r: Recipe | null): number {
-  const work = k === GATHERER ? WORK.gather : k === STUDY ? WORK.study : (r?.work ?? 0);
+  const own = WORK_OF[k] ?? 0;
+  const work = own > 0 ? own : (r?.work ?? 0);
   return work > 0 ? (MINUTE * (PACE[grade] ?? 0)) / work : 0;
 }
 
@@ -43,7 +47,7 @@ export function needs(grade: number, r: Recipe): { item: Item; perMinute: number
 /** What makes a thing: a gatherer for a thing from the ground, else its recipe's machine. */
 export const makerOf = (n: Item): { kind: Kind; recipe: Recipe | null } => {
   const r = RECIPE[n] ?? null;
-  return { kind: isRaw(n) || !r ? GATHERER : r.by, recipe: r };
+  return { kind: isRaw(n) || !r ? GATHERING : r.by, recipe: r };
 };
 
 /** For each part a machine of a grade needs to make a recipe flat out, how many of the piece before it that is, each at `before`. */
@@ -67,10 +71,7 @@ export interface Branch {
 export function tree(n: Item, perMinute: number, grade = 1): Branch {
   const { kind, recipe } = makerOf(n);
   const count = perMinute / makes(kind, grade, recipe);
-  const from =
-    kind === GATHERER || !recipe
-      ? []
-      : recipe.from.map((part, p) => tree(part, perMinute * (recipe.need[p] ?? 0), grade));
+  const from = !recipe ? [] : recipe.from.map((part, p) => tree(part, perMinute * (recipe.need[p] ?? 0), grade));
   return { item: n, kind, count, perMinute, from };
 }
 

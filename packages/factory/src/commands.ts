@@ -47,6 +47,7 @@ import {
   whole,
 } from "./fields.ts";
 import { after, before, isId, undo } from "./history.ts";
+import { RULES } from "./kinds/list.ts";
 import { paint } from "./lines.ts";
 import {
   claim,
@@ -86,7 +87,6 @@ import {
   type Plot,
   plotName,
   plotNamed,
-  SORTER,
   TINTS,
 } from "./tables.ts";
 import { placeYard, saveYard } from "./whole.ts";
@@ -221,8 +221,8 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
     read: (v, f) => {
       const k = kindNamed(v.kind);
       const grade = gradeOf(v.grade);
-      // Which side a sorter sends to is said for a sorter alone, and kept as it is where it is not said.
-      const side = k === SORTER && typeof v.right === "boolean" ? { right: v.right } : {};
+      // Which side a sorter sends to is said for a kind that has a side alone, and kept as it is where it is not said.
+      const side = k !== null && RULES[k]?.set.side && typeof v.right === "boolean" ? { right: v.right } : {};
       return f.spot && k !== null && isDir(v.dir) && grade !== null
         ? { do: "build", kind: k, dir: v.dir, grade, ...side, ...f.spot }
         : null;

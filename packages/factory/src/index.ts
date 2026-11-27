@@ -63,19 +63,24 @@ export * from "./tables.ts";
 export { step } from "./tick.ts";
 export * from "./unlocks.ts";
 export { placeYard, saveYard, type YardPlan, yardPlan, yardRefusal } from "./whole.ts";
+export { type KindPower, type PowerSummary, powerSummary } from "./supply.ts";
+export * from "./tiles.ts";
 export {
   ahead,
   carries,
-  type KindPower,
+  closedWays,
+  type Kit,
+  KIT,
   nextOf,
   type Power,
   power,
-  type PowerSummary,
-  powerSummary,
   rewire,
   sortWay,
   takes,
   wants,
   wayOut,
+  waysOf,
 } from "./wire.ts";
+export { KIND_DEFS, type KindRules, RULES } from "./kinds/list.ts";
+export type { Hooks, KindDef, Words } from "./kinds/kind.ts";
 export * from "./yard.ts";

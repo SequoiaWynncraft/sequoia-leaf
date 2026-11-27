@@ -13,9 +13,9 @@ import { PLOTS } from "./content/plots.ts";
 import { TIERS } from "./content/tiers.ts";
 import { carried, makes } from "./planner.ts";
 import {
-  BELT,
+  ALL_KINDS,
+  DOES,
   drawnAt,
-  GATHERER,
   type Goal,
   GOALS,
   HALF,
@@ -26,15 +26,14 @@ import {
   kind,
   KIND_INFO,
   kindNamed,
+  OWNS,
   PACE,
+  PER_TILE,
   type Plot,
   plot,
   plotName,
   price,
   RECIPE,
-  STOP,
-  STUDY,
-  TUNNEL,
 } from "./tables.ts";
 import { carries } from "./wire.ts";
 
@@ -140,14 +139,13 @@ export function recipeSays(out: Item): string {
 
 /** What a kind of piece at a grade above the first does more than the first, and what one costs. */
 export function gradeSays(k: Kind, grade: number): string {
-  const cost = `${k === BELT ? "A tile costs" : "Costs"} ${coinsText(price(k, grade))}.`;
+  const cost = `${PER_TILE[k] === 1 ? "A tile costs" : "Costs"} ${coinsText(price(k, grade))}.`;
   if (carries(k)) return `Carries up to ${perMinute(carried(grade), "items")}${upFrom(carried(grade - 1))}. ${cost}`;
   const draw = (g: number): number => drawnAt(k, g) / HALF;
   const power = `draws ${num(draw(grade))} power${upFrom(draw(grade - 1))}`;
-  if (k === GATHERER)
-    return `Gathers ${perMinute(makes(k, grade, null), "items")}${upFrom(makes(k, grade - 1, null))}, and ${power}. ${cost}`;
-  if (k === STUDY)
-    return `Studies ${perMinute(makes(k, grade, null), "folios")}${upFrom(makes(k, grade - 1, null))}, and ${power}. ${cost}`;
+  const does = DOES[k];
+  if (does)
+    return `${does[0]} ${perMinute(makes(k, grade, null), does[1])}${upFrom(makes(k, grade - 1, null))}, and ${power}. ${cost}`;
   return `Works ${num((PACE[grade] ?? 0) / (PACE[1] ?? 1))} times as fast as grade ${numeral(1)}, and ${power}. ${cost}`;
 }
 
@@ -202,7 +200,7 @@ function number(of: Numbered, to: number): Unlock {
 }
 
 /** The kind a number belongs to: unlocked with its kind, and with nothing before it, the number is part of the kind. */
-const OF_KIND: Partial<Record<Numbered, Kind>> = { stops: STOP, span: TUNNEL };
+const ofKind = (of: Numbered): Kind | undefined => ALL_KINDS.find((k) => OWNS[k]?.includes(of));
 const NUMBERED: readonly Numbered[] = ["stops", "crate", "reach", "depot", "span", "away", "hooks"];
 
 /**
@@ -217,7 +215,7 @@ export function unlocked(u: Unlocks): Unlock[] {
   const kinds = (u.kinds ?? []).map(kind);
   /** The number that comes with a kind, if one does. */
   const own = (k: Kind): Unlock | undefined => {
-    const of = NUMBERED.find((f) => OF_KIND[f] === k && u[f] !== undefined);
+    const of = NUMBERED.find((f) => ofKind(f) === k && u[f] !== undefined);
     const made = of === undefined ? undefined : number(of, u[of] ?? 0);
     return made?.is === "number" && made.was === 0 ? made : undefined;
   };
@@ -268,7 +266,7 @@ export function unlocked(u: Unlocks): Unlock[] {
     const to = u[of];
     if (to === undefined) continue;
     const made = number(of, to);
-    const kindOf = OF_KIND[of];
+    const kindOf = ofKind(of);
     if (made.is === "number" && made.was === 0 && kindOf !== undefined && kinds.includes(kindOf)) continue;
     out.push(made);
   }

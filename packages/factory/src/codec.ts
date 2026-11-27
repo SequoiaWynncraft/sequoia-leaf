@@ -37,9 +37,8 @@ import { keptOf, packPieces, packWays, type Piece, piecesOf, placed, unpackWays 
 import {
   ALL_GOALS,
   ALL_ITEMS,
-  BELT,
   BLUEPRINTS_MOST,
-  DEPOT,
+  FIXED,
   type Goal,
   goalNamed,
   GOALS,
@@ -49,8 +48,8 @@ import {
   isNode,
   itemName,
   itemNamed,
-  JOINER,
   kindNamed,
+  LINED,
   MILLI,
   nextHand,
   NONE,
@@ -58,9 +57,8 @@ import {
   plotNamed,
   price,
   ready,
-  SORTER,
-  SPLITTER,
-  TUNNEL,
+  REGRADED,
+  SPANS,
 } from "./tables.ts";
 import {
   type Away,
@@ -96,14 +94,12 @@ const UNFELLED = 7;
  * of the belts and tunnels in that blueprint (`regraded`).
  */
 const UNGRADED = 6;
-/** The kinds `UNGRADED` kept with no grade. */
-const REGRADED: ReadonlySet<number> = new Set([SPLITTER, JOINER, SORTER]);
 /**
  * The grade of a piece kept: as it says, or where it says none, the first; but a splitter, joiner or
  * sorter that `UNGRADED` kept (`ungraded`) goes at `top`.
  */
 const regraded = (k: number, grade: number | undefined, ungraded: boolean, top: () => number): number =>
-  grade ?? (ungraded && REGRADED.has(k) ? top() : 1);
+  grade ?? (ungraded && REGRADED[k] === 1 ? top() : 1);
 
 /** A goal's id, as kept. */
 const goalId = (g: Goal): string => GOALS[g]?.id ?? "";
@@ -308,7 +304,8 @@ function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined,
       continue;
     }
     const span = o.span ?? 0;
-    if (k === TUNNEL && span < 0) {
+    // The far end of a piece that runs under tiles (a tunnel's far mouth) stands with its way in.
+    if (SPANS[k] === 1 && span < 0) {
       far.push(o);
       continue;
     }
@@ -316,7 +313,7 @@ function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined,
     const z = (i - x) / land.w;
     const kept1 = regraded(k, o.grade, ungraded, () => highest(y.open, k));
     const may = (grade: number): boolean =>
-      y.kind[i] === NONE && refusal(y, k, x, z, Infinity, d, k === TUNNEL ? { span, grade } : { grade }) === null;
+      y.kind[i] === NONE && refusal(y, k, x, z, Infinity, d, SPANS[k] === 1 ? { span, grade } : { grade }) === null;
     const top = Math.min(kept1, Math.max(1, highest(y.open, k)));
     const grade = may(kept1) ? kept1 : top < kept1 && may(top) ? top : null;
     if (grade === null) {
@@ -326,7 +323,7 @@ function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined,
     // Only a piece kept as one the yard had to hand takes the place of one: the rest were paid for.
     const spare = y.spare[k] ?? 0;
     if (o.free !== true) y.spare[k] = 0;
-    const did = build(y, k, x, z, d, Infinity, k === TUNNEL ? { span, grade } : { grade });
+    const did = build(y, k, x, z, d, Infinity, SPANS[k] === 1 ? { span, grade } : { grade });
     if (o.free !== true) y.spare[k] = spare;
     if (!did.ok) {
       owed += paidFor(o);
@@ -338,7 +335,7 @@ function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined,
   }
   for (const o of far) {
     const i = whole(o.tile, tiles - 1);
-    if (i !== null && y.kind[i] === TUNNEL && (y.span[i] ?? 0) < 0 && y.span[i] === o.span && y.dir[i] === o.dir)
+    if (i !== null && y.kind[i] === o.kind && (y.span[i] ?? 0) < 0 && y.span[i] === o.span && y.dir[i] === o.dir)
       kept.push([i, o]);
   }
   for (const [i, o] of kept) keptOnto(y, i, o, studied);
@@ -425,7 +422,7 @@ function firstPiece(v: unknown): KeptPiece | null {
   const kind = kindNamed(v.k);
   const tile = whole(v.i, 1e6);
   const dir = whole(v.d, 3);
-  if (kind === null || kind === DEPOT || tile === null || dir === null) return null;
+  if (kind === null || FIXED[kind] === 1 || tile === null || dir === null) return null;
   const span = typeof v.s === "number" && Number.isInteger(v.s) ? v.s : 0;
   const recipe = typeof v.r === "string" ? itemNamed(v.r) : null;
   const tint = whole(v.h, 255) ?? 0;
@@ -487,13 +484,12 @@ function blueprint(
   if (!v) return null;
   // A plan of the whole yard's tiles are the land's it was kept on; a blueprint's, from the corner of its box.
   const [sx, sy] = print.whole ? shift : [0, 0];
-  const line = (): number =>
-    Math.max(1, ...v.flatMap((p) => (p.kind === BELT || p.kind === TUNNEL ? [p.grade ?? 1] : [])));
+  const line = (): number => Math.max(1, ...v.flatMap((p) => (LINED[p.kind] === 1 ? [p.grade ?? 1] : [])));
   const pieces: Piece[] = [];
   for (const { kind: k, x: kx, y: ky, dir: d, span, recipe, open: lets, tint, ways, grade: kept } of v) {
     const grade = regraded(k, kept, ungraded, line);
     const [x, z] = [kx + sx, ky + sy];
-    if (!isKind(k) || k === DEPOT || !isDir(d)) return null;
+    if (!isKind(k) || FIXED[k] === 1 || !isDir(d)) return null;
     if (whole(x, 255) === null || whole(z, 255) === null || whole(span, 255) === null) return null;
     pieces.push({
       kind: k,

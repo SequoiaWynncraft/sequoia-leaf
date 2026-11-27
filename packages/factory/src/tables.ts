@@ -8,11 +8,17 @@
  * tile. A number becomes one only through its guard (`isItem`, `isKind`, ...), which checks it.
  */
 import { ITEM, type ItemName, ITEMS, type Wants } from "./content/items.ts";
-import { BLUEPRINT, BUFFER, GRADED, GRADES, KIND, type KindName, KINDS, STARTERS, TICKS } from "./content/machines.ts";
+import { BLUEPRINT, BUFFER, GRADES, TICKS } from "./content/machines.ts";
 import { NODES, START, type Tool, TOOLS, type Unlocks } from "./content/nodes.ts";
 import { PLOT_IDS, type PlotName } from "./content/plots.ts";
 import { RECIPES } from "./content/recipes.ts";
 import { RESEARCH } from "./content/research.ts";
+import type { KindDef, KindInfo } from "./kinds/kind.ts";
+import { KIND_DEFS, type KindName } from "./kinds/list.ts";
+
+export type { KindInfo, KindName };
+/** The kinds' names, in kind order: a kind is its number here (`kinds/list.ts`). */
+export const KINDS: readonly KindName[] = KIND_DEFS.map((d) => d.name);
 
 declare const no: unique symbol;
 type No<T extends string> = number & { readonly [no]: T };
@@ -99,7 +105,7 @@ export const plotName = (n: Plot): PlotName => PLOT_IDS[n] ?? "yard";
 
 /** What each thing is worth, how many machines deep it is, and how it is spoken of. */
 export const ITEM_INFO = ALL_ITEMS.map((n) => ITEM[itemName(n)]);
-export const KIND_INFO = ALL_KINDS.map((n) => KIND[kindName(n)]);
+export const KIND_INFO: readonly KindInfo[] = KIND_DEFS.map((d) => d.info);
 /** Coins are counted in whole thousandths. */
 export const MILLI = 1000;
 /** The share of a thing's worth the depot pays for it on arrival, whether or not an order wants it. */
@@ -114,14 +120,53 @@ export const FOLIOS = ALL_ITEMS.filter(isFolio);
 export const COST = ALL_KINDS.map((n) => KIND_INFO[n]?.cost ?? 0);
 export const DRAW = ALL_KINDS.map((n) => KIND_INFO[n]?.draw ?? 0);
 export const GIVES = ALL_KINDS.map((n) => KIND_INFO[n]?.gives ?? 0);
-export const STARTING = ALL_KINDS.map((n) => STARTERS[kindName(n)] ?? 0);
+export const STARTING = KIND_DEFS.map((d: KindDef) => d.starters ?? 0);
+
+// ---------- what the rules read of each kind, as data ----------
+
+/** 1 for each kind that a flag of its module says (`KindDef`), by its number; 0 for one that does not, and nothing for no kind. */
+const flagOf = (f: (d: KindDef) => unknown): Uint8Array => Uint8Array.from(KIND_DEFS, (d: KindDef) => (f(d) ? 1 : 0));
+/** The kinds with a grade, that hold things (a row in `holders`), that may be shut, that carry a thing across their tile. */
+export const GRADED = flagOf((d) => d.graded);
+export const HOLDS = flagOf((d) => d.holds);
+export const SHUTS = flagOf((d) => d.shuts);
+export const CARRIES = flagOf((d) => d.carries);
+/** The kinds with a line's colour, with their line (`LINED`) or alone; and those that hand by ways (ahead, left, right). */
+export const TINTED = flagOf((d) => d.tint);
+export const LINED = flagOf((d) => d.tint === "line");
+export const WAYS = Uint8Array.from(KIND_DEFS, (d: KindDef) => d.ways ?? 0);
+/** The depot; the kinds that cannot be turned; those that run under tiles; those power reaches out from. */
+export const FIXED = flagOf((d) => d.fixed);
+export const FAST = flagOf((d) => d.fast);
+export const SPANS = flagOf((d) => d.spans);
+export const REACHES = flagOf((d) => d.reaches);
+/** The kinds that work for the research first in the line, and that version 6 kept with no grade. */
+export const STUDIES = flagOf((d) => d.studies);
+export const REGRADED = flagOf((d) => d.regraded);
+/** Half-ticks of work in each thing a kind finishes, where it is the kind's and not a recipe's: 0 for the rest. */
+export const WORK_OF = KIND_DEFS.map((d: KindDef) => d.work ?? 0);
+/** For each kind, the kinds it may be set down in the place of. */
+export const OVER: readonly (readonly number[])[] = KIND_DEFS.map((d: KindDef) =>
+  (d.over ?? []).flatMap((name) => kindNamed(name) ?? []),
+);
+/** For each kind, the numbers a goal raises that come with it; and the number of what is open that limits how many stand. */
+export const OWNS: readonly (readonly string[])[] = KIND_DEFS.map((d: KindDef) => d.owns ?? []);
+export const MOST: readonly ("stops" | null)[] = KIND_DEFS.map((d: KindDef) => d.most ?? null);
+/** What each kind does a minute, as a verb and what it does it to (`KindDef.does`); and whether its price is a tile's. */
+export const DOES: readonly (readonly [string, string] | null)[] = KIND_DEFS.map((d: KindDef) => d.does ?? null);
+export const PER_TILE = flagOf((d) => d.perTile);
+/** The kind that gathers the things from the ground (`KindDef.gathers`). */
+export const GATHERING: Kind = sure(
+  kindNamed(KIND_DEFS.find((d: KindDef) => d.gathers === true)?.name),
+  "kind that gathers",
+);
 
 // ---------- grades ----------
 
 /** The highest grade there is. */
 export const TOP = GRADES.length;
 /** Whether a kind has a grade. */
-export const isGraded = (k: number): boolean => isKind(k) && GRADED.includes(kindName(k));
+export const isGraded = (k: number): boolean => GRADED[k] === 1;
 /** A piece's grade as it is kept: 1 to `TOP` for a kind that has one, 0 for a kind that has none. */
 export const gradeOf = (k: number, g = 1): number => (isGraded(k) ? Math.min(TOP, Math.max(1, Math.floor(g))) : 0);
 /** A grade's numbers made whole: so far as halves of grade 1 can, and a whole number of them always. */
