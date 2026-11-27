@@ -14,7 +14,10 @@ export interface Banner {
   readonly opens: ReleaseId;
   readonly from: number;
   readonly until: number;
-  /** A five-acorn figure that only a run with the member's own figures sells, to whoever pulled it. */
+  /**
+   * A five-acorn figure that a run with the member's own figures sells only to whoever pulled it,
+   * and everyone's ways sell once a release makes it one of everyone's figures (`Figure.everyones`).
+   */
   readonly headliner: FigureId;
   /**
    * How the headliner is drawn: by the set, or (`skin`) from the skin of the member Leaf says it is

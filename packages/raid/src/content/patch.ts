@@ -2,7 +2,9 @@
  * A release is a patch: the figures, traits, items and boons it brings (`add`), and the changes it
  * makes to those that came before (`change`, field by field). Words and numbers only. The
  * catalogue of an era is the base and every patch open by then, folded in order (`catalog.ts`), so
- * a number that changes on a date is a `change` in that date's patch and nothing else.
+ * a number that changes on a date is a `change` in that date's patch and nothing else. So is who a
+ * figure is for: a banner's headliner becomes one of everyone's figures by a `change` setting its
+ * `everyones`.
  */
 import type { BoonId, BoonSpec } from "./boons.ts";
 import type { Rarity } from "./catalog.ts";
@@ -26,6 +28,12 @@ export interface Arrival extends FigureSpec {
    * Stowaway). Only the first copy of it on a board takes none (`chairsUsed`).
    */
   readonly chairs?: 0 | 1;
+  /**
+   * Whether the ways with everyone's figures have it (`Figure.everyones`): their stall, first pick,
+   * regulars, carousel, the boards they meet, and the almanac. Left out, a grove figure is and a
+   * banner's headliner is not; a patch's `change` makes a headliner everyone's with `true`.
+   */
+  readonly everyones?: boolean;
 }
 
 export interface Patch {

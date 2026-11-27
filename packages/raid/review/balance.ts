@@ -14,7 +14,7 @@ import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts";
 import { CARELESS, fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
 import { GOOD_WITH } from "@sequoia-leaf/raid/content/advice.ts";
 import { BOON_IDS, type BoonId, boonIn } from "@sequoia-leaf/raid/content/boons.ts";
-import { catalogAt, everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
+import { catalogAt, everyFigure } from "@sequoia-leaf/raid/content/catalog.ts";
 import { type FigureId, figureIn, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { FINISHED_IDS, type FinishedId, isFinishedId, itemName } from "@sequoia-leaf/raid/content/items.ts";
 import { holdItem } from "@sequoia-leaf/raid/content/recipes.ts";
@@ -53,7 +53,7 @@ const trying = (habit: Habit): boolean => !habit.careless;
 const byRoom = Array.from({ length: ROOM_COUNT }, () => new Tally());
 const byPlan = new Map<string, Tally>();
 const byTrait = new Map<string, Tally>();
-const byFigure = tallies<FigureId>(everyShared());
+const byFigure = tallies<FigureId>(everyFigure());
 const byFigureStars = new Map<string, Tally>();
 const byItem = tallies<FinishedId>(FINISHED_IDS);
 /**
@@ -158,7 +158,7 @@ for (const habit of HABITS) {
       }
       for (const u of taken.fight.units) {
         if (u.side !== 0 || u.summoned || total <= 0) continue;
-        const kind = everyShared().find((id) => id === u.kind);
+        const kind = everyFigure().find((id) => id === u.kind);
         if (!kind) continue;
         const s = share.get(kind) ?? { dealt: 0, fights: 0 };
         s.dealt += u.dealt / total;
@@ -264,7 +264,7 @@ if (shows("traits")) {
 if (shows("figures")) {
   table(
     "Figures fielded",
-    everyShared().map((id): [FigureId, Tally, string] => {
+    everyFigure().map((id): [FigureId, Tally, string] => {
       const s = share.get(id);
       const dealt = s && s.fights > 0 ? ` deals ${pct(s.dealt / s.fights).trim()}` : "";
       return [id, byFigure.get(id) ?? new Tally(), `${figureIn(NOW, id).tier} ${figureIn(NOW, id).name}${dealt}`];
@@ -300,7 +300,7 @@ if (shows("suits")) {
     return t && t.n > 0 ? (t.sum / t.n) * 100 : Number.NaN;
   };
   let clashes = 0;
-  for (const id of everyShared()) {
+  for (const id of everyFigure()) {
     const ranked = FINISHED_IDS.filter((item) => !Number.isNaN(gain(id, item))).toSorted(
       (a, b) => gain(id, a) - gain(id, b),
     );

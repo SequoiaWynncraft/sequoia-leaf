@@ -3317,8 +3317,9 @@ describe("awards", () => {
     expect(won.length).toBeGreaterThan(0);
     for (const award of won) expect(award.id).toStartWith("trophy-");
     // More runs, until one beats a boss not beaten before: the awards already held keep the moment they were won.
+    // That is the trail's last boss, a whole trail won, which the bot's seeded runs do on the tenth.
     let all = won;
-    for (let runs = 0; runs < 8 && all.length === won.length; runs++) {
+    for (let runs = 0; runs < 16 && all.length === won.length; runs++) {
       // oxlint-disable-next-line no-await-in-loop -- one run after another
       await playRun();
       // oxlint-disable-next-line no-await-in-loop -- one run after another

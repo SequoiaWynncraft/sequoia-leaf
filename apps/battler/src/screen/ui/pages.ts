@@ -17,7 +17,6 @@ import {
   FIGHT,
   type FigureId,
   halvesOf,
-  isMemberId,
   itemName,
   LOOK_KINDS,
   LOOK_TITLES,
@@ -121,7 +120,7 @@ function panel(title: string, sign: HTMLElement | null, body: HTMLElement, withC
 
 /** A figure in the almanac: shown once it has been fielded or pulled, dark until then; a badge for three stars. */
 function figureTile(id: FigureId): HTMLElement {
-  const met = isMemberId(id) || S.almanac.fielded.includes(id) || S.roster[id] !== undefined;
+  const met = S.almanac.fielded.includes(id) || S.roster[id] !== undefined;
   const starred = S.almanac.threeStars.includes(id);
   const tile = el(
     "button",

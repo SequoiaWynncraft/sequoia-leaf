@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
 import { figureIn, RAID } from "@sequoia-leaf/raid";
-import { available, catalogAt, prizeOf } from "@sequoia-leaf/raid/content/catalog.ts";
+import { available, catalogAt, everyShared, prizeOf } from "@sequoia-leaf/raid/content/catalog.ts";
 import { isBoughtLook } from "@sequoia-leaf/raid/content/looks.ts";
 import { eraAt, eraOf } from "@sequoia-leaf/raid/content/releases.ts";
 import { TOWN } from "@sequoia-leaf/town";
@@ -73,10 +73,11 @@ const tiers = (c: Counters, n: number) =>
   new Set(Array.from({ length: n }, (_, seed) => RARITIES[draw({ ...c }, GROVE, { rng: seed }).rarity].tier));
 
 /**
- * Everyone's figures; those the pools have at T0, as prizes, which Seqwawa joins on 8 December (it
- * came with the expansion's first release, while banner-1 was open); and those of one of the raid's prices.
+ * The grove's figures, no headliner; those the pools have at T0, as prizes, which Seqwawa joins on 8
+ * December (it came with the expansion's first release, while banner-1 was open); and those of one
+ * of the raid's prices.
  */
-const everyones = available(CAT, { for: "regular" });
+const everyones = everyShared().filter((id) => CAT.figures[id] !== undefined);
 const pooled = everyones.filter((id) => id !== "seqwawa");
 const priced = (price: number): string[] => pooled.filter((id) => figureIn(CAT, id).tier === price).map(prizeOf);
 /** Every prize of a pool. */

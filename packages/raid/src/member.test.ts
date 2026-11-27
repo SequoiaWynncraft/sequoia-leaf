@@ -1,7 +1,8 @@
 /**
- * A banner's member as a figure of the raid: never on the main way, whatever a member has pulled;
- * sold, levelled, merged and met only in a run with the member's own figures; and its ability,
- * against its own sentence.
+ * A banner's member as a figure of the raid: until `gaz-stall`, never on the main way, whatever a
+ * member has pulled; from it, one of everyone's figures at five acorns, with no level. Sold,
+ * levelled and merged with the member's own figures only to whoever pulled it; and its ability,
+ * against its own sentence, at each era's numbers.
  */
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -10,9 +11,10 @@ import type { Ctx, Met } from "@sequoia-leaf/core";
 
 import { GOOD_WITH } from "./content/advice.ts";
 import { BANNERS } from "./content/banners.ts";
+import { catalogAt } from "./content/catalog.ts";
 import { abilityNumber, abilityText, type FigureId, figureIn, type Stars, TIERS } from "./content/figures.ts";
 import { isMemberId, MEMBERS } from "./content/members.ts";
-import { LEGACY_ERA } from "./content/releases.ts";
+import { eraOf, LEGACY_ERA } from "./content/releases.ts";
 import { MAX_LEVEL, ROOMS, STALL_ODDS, TRAIL_COUNT } from "./content/rooms.ts";
 import { HZ, summon } from "./fight/core.ts";
 import type { FightEvent } from "./fight/types.ts";
@@ -24,6 +26,8 @@ import { levelOf, rosterOf, stallOdds, stallPool } from "./own.ts";
 import { isParty, traitStates } from "./party.ts";
 import { buy, choose, giveItem, move, partyOf, picksOf, pieces, type Run, rustle, sell, startRun } from "./run.ts";
 import { checkRun } from "./save.ts";
+import { layCarousel } from "./sitting/carousel.ts";
+import { command, openSitting } from "./sitting/commands.ts";
 import { sparParty } from "./spar.ts";
 import {
   CAT,
@@ -107,10 +111,12 @@ describe("the twenty-eight", () => {
   });
 });
 
-describe("the main way, whatever a member has pulled", () => {
+describe("the main way before gaz-stall, whatever a member has pulled", () => {
   test("is told nothing of the roster, and its stall never offers a banner's member", () => {
     const run = setOut(HAS, false);
     expect(run.way).toEqual(onTrail(0));
+    // A run kept at the era before, as Leaf has it until its next command.
+    run.era = LEGACY_ERA;
     const seen = offered(run);
     expect([...seen.keys()].filter(isMemberId)).toEqual([]);
     expect(seen.size).toBe(EVERYONES.length);
@@ -140,6 +146,82 @@ describe("the main way, whatever a member has pulled", () => {
     }
     // The same board without the member is met, so it is the member that keeps it out.
     expect(boardMet(CAT, boardWith("greg"))?.by).toBe(met.player);
+  });
+});
+
+/** The catalogue from `gaz-stall` on, where the first banner's headliner is everyone's. */
+const GAZ = catalogAt(eraOf("gaz-stall"));
+
+describe("the main way from gaz-stall, whatever a member has pulled", () => {
+  test("its stall offers a banner's member for five acorns, with no level, to members who pulled it and those who did not", () => {
+    for (const awards of [HAS, []]) {
+      const run = setOut(awards, false);
+      run.era = GAZ.era;
+      expect(run.way).toEqual(onTrail(0));
+      const seen = offered(run);
+      expect(seen.size).toBe(GAZ.order.length);
+      expect(seen.get(UNIT)).toBeGreaterThan(0);
+      run.acorns = 9;
+      run.stall[0] = UNIT;
+      expect(buy(run, 0).ok).toBe(true);
+      expect([run.acorns, levelOf(run, UNIT)]).toEqual([4, 0]);
+    }
+  });
+  test("a regular brings one to a sparring room, with no level", () => {
+    const SEEDS = Array.from({ length: 150 }, (_, i) => i + 1);
+    const brought = Array.from({ length: TRAIL_COUNT }, (_, trail) =>
+      ROOMS.flatMap((room, at) =>
+        room.kind !== "spar" ? [] : SEEDS.flatMap((seed) => sparParty(GAZ, seed, at, trail).figures),
+      ).filter((p) => isMemberId(p.kind)),
+    );
+    for (const members of brought) expect(members.length).toBeGreaterThan(0);
+    expect(brought.flat().some((p) => p.level !== undefined)).toBe(false);
+  });
+  test("a live table's carousel has one among its five-acorn figures", () => {
+    const player = { id: "10000000-0000-0000-0000-000000000003", name: "A member" };
+    const now = 1_800_000_000_000;
+    const rings = Array.from({ length: 40 }, (_, seed) => {
+      const started = command(openSitting({ now, seed, player }), { do: "start" }, { now, seed: seed + 1, player });
+      if (!started.ok) throw new Error(started.why);
+      layCarousel(started.sitting, now, [5, 5, 5, 5, 5, 5, 5, 5, 5], false);
+      const stage = started.sitting.stage;
+      return stage.at === "carousel" ? stage.ring.map((o) => o.kind) : [];
+    });
+    expect(rings.every((ring) => ring.length === 9)).toBe(true);
+    expect(rings.filter((ring) => ring.includes(UNIT)).length).toBeGreaterThan(0);
+  });
+  test("a board holding one is met, without its level", () => {
+    const met = boardWith(UNIT);
+    const board = boardMet(GAZ, met);
+    expect([board?.by, board?.figures.map((p) => [p.kind, p.level])]).toEqual([
+      met.player,
+      [
+        [UNIT, undefined],
+        ["crab7", undefined],
+      ],
+    ]);
+  });
+  test("its numbers are trimmed to sit among everyone's five-acorn figures; the era before keeps its own", () => {
+    const numbers = (cat: typeof GAZ) =>
+      ([1, 2, 3] as const).map((stars) => [
+        abilityNumber(cat, UNIT, "stun", stars),
+        abilityNumber(cat, UNIT, "damage", stars),
+      ]);
+    expect(numbers(CAT)).toEqual([
+      [2, 550],
+      [2.5, 950],
+      [3.5, 2200],
+    ]);
+    expect(numbers(GAZ)).toEqual([
+      [1.5, 370],
+      [2, 640],
+      [3, 1450],
+    ]);
+    expect([figureIn(CAT, UNIT).mana, figureIn(GAZ, UNIT).mana]).toEqual([
+      [50, 80],
+      [30, 90],
+    ]);
+    expect(abilityText(GAZ, UNIT, 1)).toBe(SENTENCE("1.5", 370));
   });
 });
 
