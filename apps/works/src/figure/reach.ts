@@ -71,15 +71,17 @@ function setsDown(y: Yard, p: Piece): number[] {
 }
 
 /**
- * The tiles a build changes. Over a piece of its kind it sets that piece down again where it stands,
- * raised or turned: every tile of it, a tunnel by the mouths that stand. Else the piece it stands (a
- * tunnel coming up where the rules dig it), and whatever stood there.
+ * The tiles a build changes: every tile the piece it stands will cover (a tunnel's far mouth where the
+ * rules dig it, or over a tunnel the mouth that stands), and every tile of whatever stood there. Over a
+ * piece of its kind, set down again raised or turned, that is its tiles as they were and as they will
+ * be turned, which differ for a piece of more than one tile that is not square.
  */
 function built(y: Yard, act: Extract<Act, { do: "build" }>): number[] {
   const i = at(y, act.x, act.y);
-  if (i >= 0 && y.kind[i] === act.kind) return taken(y, [i]);
-  const exit = SPANS[act.kind] === 1 ? tunnelExit(y, act.x, act.y, act.dir) : null;
-  return setsDown(y, { kind: act.kind, x: act.x, y: act.y, dir: act.dir, span: exit?.span ?? 0 });
+  const over = i >= 0 && y.kind[i] === act.kind;
+  const exit = SPANS[act.kind] === 1 && !over ? tunnelExit(y, act.x, act.y, act.dir) : null;
+  const span = over ? Math.abs(y.span[i] ?? 0) : (exit?.span ?? 0);
+  return [...new Set(setsDown(y, { kind: act.kind, x: act.x, y: act.y, dir: act.dir, span }))];
 }
 
 /**

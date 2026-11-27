@@ -378,10 +378,17 @@ S.alone = true;
 F.build(y, FORGE, 10, 15, 1, Infinity);
 const picked = pickFrom(11, 16) && S.dir === 1 && S.grades[FORGE] === 1;
 const turnedOn = turnAt(9, 14) && y.dir[F.at(y, 10, 15)] === 2;
+// Building a chute facing south over one facing east counts reach on every tile it will cover turned,
+// as well as those it covers now.
+const CHUTE = F.kindNamed("chute");
+F.build(y, CHUTE, 14, 14, 0, Infinity);
+const relaid = footprint(y, { do: "build", kind: CHUTE, x: 14, y: 14, dir: 1 }).flat();
+const reachTurned = [[13, 14], [13, 15], [14, 13], [15, 15]].every(([x, z]) => relaid.includes(F.at(y, x, z)));
 console.log(
   JSON.stringify({
     preview: laid(preview) === laid(built) && previewOnce === 2,
     pointerPiece: picked && turnedOn,
+    reachTurned,
     aimBoxes: boxes[0] === JSON.stringify({ x: 9, y: 4, w: 3, h: 3 }) && boxes[1] === JSON.stringify({ x: 19, y: 9, w: 3, h: 3 }),
     docked: DRAWN.includes(FORGE) && DRAWN.includes(SIFTER),
     card: tiles.every((t) => refAt(t % 34, Math.floor(t / 34)) === tileRef(own)),
@@ -399,6 +406,7 @@ export const PAGED_BIG = Object.fromEntries(
     "preview",
     "aimBoxes",
     "pointerPiece",
+    "reachTurned",
     "docked",
     "card",
     "drawnOnce",
