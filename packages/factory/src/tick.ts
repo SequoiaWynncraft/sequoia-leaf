@@ -41,7 +41,7 @@ import { RULES } from "./kinds/list.ts";
 import { work as make } from "./kinds/maker.ts";
 import { passUnder } from "./kinds/under.ts";
 import { BURNS, CARRIES, ITEM_COUNT, NONE, PACE, SPAN_MOST } from "./tables.ts";
-import { KIT, rewire, roomBeside } from "./wire.ts";
+import { KIT, rewire, roomAt } from "./wire.ts";
 import { holderOf, take, tunnelOf, type Wire, type Yard } from "./yard.ts";
 
 /**
@@ -81,7 +81,7 @@ function power(y: Yard, wire: Wire, waiting: Uint8Array): boolean {
     if ((h.fuel[r] ?? 0) <= 0 && (h.stock[r * ITEM_COUNT + burns.fuel] ?? 0) > 0) {
       take(h, r, burns.fuel);
       h.fuel[r] = burns.ticks;
-      roomBeside(y, i, waiting);
+      roomAt(y, i, waiting);
     }
     if ((h.fuel[r] ?? 0) > 0) {
       h.fuel[r] = (h.fuel[r] ?? 1) - 1;

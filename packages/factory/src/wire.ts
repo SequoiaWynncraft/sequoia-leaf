@@ -247,11 +247,19 @@ export function roomBeside(y: Yard, i: number, waiting: Uint8Array): void {
   waiting[i - 1] = 0;
   waiting[i + w] = 0;
   waiting[i - w] = 0;
-  // A far mouth is the one tile with a span below 0, and a piece of more than one tile wakes every tile
-  // round it. This stays this small so that every hand-off has it inlined: with the far mouth's case in
-  // it, it was not, and a line of belts ran 40% slower.
+  // A far mouth is the one tile with a span below 0. This stays this small so that every hand-off has
+  // it inlined: with the far mouth's case in it, it was not, and a line of belts ran 40% slower.
   if ((y.span[i] ?? 0) < 0) mouthBehind(y, i, waiting);
-  else if (y.part[i] !== 0) roomRound(y, i, waiting);
+}
+
+/**
+ * The piece on a tile that holds things may have room, as `roomBeside`: for a piece of more than one
+ * tile, every tile round it (`roomRound`). What carries is one tile, and asks `roomBeside` itself, so
+ * that stays as small as it must.
+ */
+export function roomAt(y: Yard, i: number, waiting: Uint8Array): void {
+  if (y.part[i] !== 0) roomRound(y, i, waiting);
+  else roomBeside(y, i, waiting);
 }
 
 /** A tunnel's far mouth may have room: its way-in mouth stops waiting. */
@@ -301,7 +309,7 @@ export function sendOut(y: Yard, i: number, r: number, wire: Wire): void {
   }
   handTo(y, to, n, side, 0, wire);
   h.out[r] = NONE;
-  roomBeside(y, i, wire.waiting);
+  roomAt(y, i, wire.waiting);
 }
 
 /**
@@ -320,7 +328,7 @@ export function sendPort(y: Yard, i: number, r: number, port: number, wire: Wire
   if (!accepts(y, to, n, side, wire)) return false;
   handTo(y, to, n, side, 0, wire);
   held[r] = NONE;
-  roomBeside(y, i, wire.waiting);
+  roomRound(y, i, wire.waiting);
   return true;
 }
 
@@ -540,7 +548,7 @@ export const KIT: Kit = {
   portTo,
   outsOf,
   refused,
-  roomBeside,
+  roomBeside: roomAt,
   wireOf,
   // What reaches the depot and the research; power.
   deliver,
