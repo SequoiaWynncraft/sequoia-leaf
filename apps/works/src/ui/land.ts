@@ -18,6 +18,8 @@ export type GroundPrint =
       readonly ground: "redwood";
       /** Where the yard may fell it (on its own plot, not on a visit): the tile asked about, the price, and how many Coins short the purse is. */
       readonly fell: { readonly x: number; readonly y: number; readonly price: number; readonly short: number } | null;
+      /** On its own plot, why it may not be felled yet: felling not studied. */
+      readonly locked: string | null;
     };
 
 export interface PlotPrint {
@@ -57,7 +59,10 @@ export function groundCard(p: GroundPrint, hands: Pick<LandHands, "fell" | "refu
   return {
     name: "Redwood",
     tag: "Nothing can be built on it. Belts go round it, or under it by tunnel.",
-    blocks: fell && fell.short > 0 ? [{ body: `You need ${coinsText(fell.short)} more.` }] : [],
+    blocks: [
+      ...(p.locked === null ? [] : [{ body: `${p.locked}.` }]),
+      ...(fell && fell.short > 0 ? [{ body: `You need ${coinsText(fell.short)} more.` }] : []),
+    ],
     actions: fell
       ? [
           {

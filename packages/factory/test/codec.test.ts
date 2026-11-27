@@ -192,8 +192,10 @@ describe("decode refuses whole", () => {
       ...Array.from({ length: given }, (_, n) => [n, ...varint(many)]).flat(),
     ];
     expect(F.decode(withCells(good, crate(F.ITEM_COUNT)))).not.toBeNull();
-    // A thing today's tables do not have, and more of one than a crate holds today, read (and are let go, or clamped).
-    expect(F.decode(withCells(good, crate(F.ITEM_COUNT + 1)))).not.toBeNull();
+    // More of one than a crate holds today reads (and is clamped). A thing today's tables do not have is
+    // a newer Leaf's: not read here, never with it let go.
+    expect(F.decode(withCells(good, crate(F.ITEM_COUNT + 1)))).toBeNull();
+    expect(F.keptLater(withCells(good, crate(F.ITEM_COUNT + 1)))).toBe(true);
     expect(F.decode(withCells(good, crate(F.ITEM_COUNT + 1, F.ITEM_COUNT)))).toBeNull();
     expect(F.decode(withCells(good, crate(1, 1, F.CRATE_MOST)))).not.toBeNull();
     expect(F.decode(withCells(good, crate(1, 1, F.CRATE_MOST + 1)))).not.toBeNull();
@@ -207,9 +209,12 @@ describe("decode refuses whole", () => {
       ...Array<number>(Math.max(0, span) * 2).fill(0),
     ];
     expect(F.decode(withCells(good, tunnel(F.SPAN_MOST)))).not.toBeNull();
-    // Longer than tunnels go today: it reads, and cannot stand.
-    expect(F.decode(withCells(good, tunnel(F.SPAN_MOST + 1)))).not.toBeNull();
-    expect(F.decode(withCells(good, tunnel(-(F.SPAN_MOST + 1))))).not.toBeNull();
+    // Longer than tunnels go today, from either mouth: a newer Leaf's, not read here.
+    for (const span of [F.SPAN_MOST + 1, -(F.SPAN_MOST + 1)])
+      expect([F.decode(withCells(good, tunnel(span))), F.keptLater(withCells(good, tunnel(span)))]).toEqual([
+        null,
+        true,
+      ]);
     // More pieces than the land has tiles.
     expect(F.decode(withCells(good, varint(F.LAND.w * F.LAND.h + 1)))).toBeNull();
     // A part this version does not know: the lowest bit, and the one past the highest.
@@ -338,8 +343,9 @@ const LEFT_OUT = new Set([
   "made",
   // Where a tile's piece of more than one tile stands: worked out from that tile's kind and way, which are mixed in.
   "part",
-  // What Undo would undo is mixed in as its bytes: an entry's id is worked out from them.
+  // What Undo would undo is mixed in as its bytes: an entry's id and longest span are worked out from them.
   "history.0.id",
+  "history.0.span",
   "holders.size",
   "holders.tile",
   "tunnels.size",

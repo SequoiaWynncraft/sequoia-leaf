@@ -168,7 +168,7 @@ describe("a card", () => {
       // Every tile: what stands on it, the stream, a redwood, or nothing.
       ...Array.from({ length: y.kind.length }, (_, i) => tileRef(i)),
       ...ALL_ITEMS.map(itemRef),
-      ...ALL_KINDS.map(machineRef),
+      ...ALL_KINDS.map((k, n) => machineRef(k, n)),
       ...y.land.plots.map((p) => plotRef(p.plot)),
       ...ALL_GOALS.map(nodeRef),
       orderRef("story"),
@@ -195,6 +195,7 @@ describe("a card", () => {
     const drawing: Record<string, string[]> = {
       "./cards.ts": [
         "../art/machines.ts",
+        "../art/nature.ts",
         "../kinds/index.ts",
         "../sound.ts",
         "./flow.ts",
@@ -323,7 +324,8 @@ describe("the cards of tiers 2 and 3", () => {
     S.world = counted(2);
     const belt = tileRef(at(S.world, ...xy(-2, -3)));
     expect(printOf(belt)).toMatchObject({ raise: null, machine: { grade: 1, graded: false } });
-    expect(printOf(machineRef(BELT, 2))).toMatchObject({ grade: 2, graded: true, open: false, price: 3, spare: 0 });
+    // Grade II costs 3, less the 1 of a belt to hand, as setting one down charges and its button says.
+    expect(printOf(machineRef(BELT, 2))).toMatchObject({ grade: 2, graded: true, open: false, price: 2, spare: 0 });
     S.world = counted(3);
     // The same price a marked area would be raised for; and the Coins to hand say whether they cover it.
     const cost = upgradePrice(S.world, [at(S.world, ...xy(-2, -3))]);

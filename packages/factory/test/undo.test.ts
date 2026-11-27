@@ -69,7 +69,6 @@ const UNDONE: ReadonlySet<string> = new Set([
   "way",
   "first",
   "wayIn",
-  "fell",
 ]);
 
 /** The Coins a command moved to the player, the till paid in with it left out. */
@@ -168,7 +167,7 @@ function undoneAll(
   ticks: (y: F.Yard, r: () => number) => void = () => {},
 ): { kinds: Set<string>; short: number; undone: number } {
   // Its owner there at its last tick, with nothing in its till or to undo: only the commands move
-  // anything. It owns the Meadow where it may buy it, so that a redwood may be felled.
+  // anything. It owns the Meadow where it may buy it.
   const y = start;
   give(y, { do: "buyPlot", plot: "meadow" });
   y.till = 0;
@@ -268,7 +267,6 @@ describe("Undo", () => {
         "way",
         "first",
         "wayIn",
-        "fell",
       ]),
     );
   });

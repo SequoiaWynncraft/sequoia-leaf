@@ -95,24 +95,21 @@ describe("what depends on today's tuning", () => {
     expect(F.held(back.holders, back.row[t.i] ?? -1, F.item("plank"))).toBe(back.open.crate);
   });
 
-  test("a thing today's tables do not have, held, is let go and the rest kept", () => {
+  test("a thing today's tables do not have, held, is a newer Leaf's: not read here, never with it let go", () => {
     const y = staged("mid");
     const t = freeTile(y);
     const crate = [1, ...varint(t.i), F.CRATE | 128, 2, 2, F.ITEM_COUNT, 3, F.item("plank"), 4];
-    const back = F.decode(withCells(F.encode(y), crate));
-    if (!back) throw new Error("the yard does not read");
-    expect(F.held(back.holders, back.row[t.i] ?? -1, F.item("plank"))).toBe(4);
+    const text = withCells(F.encode(y), crate);
+    expect([F.decode(text), F.keptLater(text)]).toEqual([null, true]);
   });
 
-  test("a tunnel longer than tunnels go today reads, and is paid back", () => {
+  test("a tunnel longer than tunnels go today is a newer Leaf's: not read here, never removed and paid back", () => {
     const y = staged("mid");
     const t = freeTile(y);
     const span = F.SPAN_MOST + 1;
     const tunnel = [1, ...varint(t.i), F.TUNNEL | 128, ...varint(128), span + 8, ...Array<number>(span * 2).fill(0)];
-    const back = F.decode(withCells(F.encode(y), tunnel));
-    if (!back) throw new Error("the yard does not read");
-    expect(back.kind[t.i]).toBe(F.NONE);
-    expect(back.till).toBe(y.till + F.price(F.TUNNEL, 1) * F.MILLI);
+    const text = withCells(F.encode(y), tunnel);
+    expect([F.decode(text), F.keptLater(text)]).toEqual([null, true]);
   });
 
   test("a piece that cannot stand where it is today is paid back, at today's price for its grade", () => {

@@ -9,7 +9,7 @@ import { coinsText, num, perMinute } from "@sequoia-leaf/core";
 
 import { REACH } from "./content/machines.ts";
 import { START, type Tool, type Unlocks } from "./content/nodes.ts";
-import { PLOTS } from "./content/plots.ts";
+import { FELLING, PLOTS } from "./content/plots.ts";
 import { TIERS } from "./content/tiers.ts";
 import { carried, makes } from "./planner.ts";
 import {
@@ -78,9 +78,11 @@ export type Unlock = Said &
     | { readonly is: "board"; readonly hooks: number }
     | { readonly is: "first" }
     | { readonly is: "ins" }
+    | { readonly is: "felling" }
+    | { readonly is: "mouths" }
   );
 
-/** What a splitter's flags and its ways in each let it do, as their unlocks are listed. */
+/** What each unlock that is one thing or none lets the yard do, as they are listed: a splitter's flags and ways in, felling, wide mouths. */
 const FLAGS = [
   {
     is: "first",
@@ -91,6 +93,16 @@ const FLAGS = [
     is: "ins",
     name: "Ways in",
     says: "A splitter's ahead, left or right can be set to In on its card: it takes items in there as well as from behind, in turn, and sends them out of its other ways.",
+  },
+  {
+    is: "felling",
+    name: "Felling",
+    says: `Redwoods on your land can be felled. The first costs ${coinsText(FELLING.first)}. Each one after costs half as much again, rounded down to a whole ${num(FELLING.round)}.`,
+  },
+  {
+    is: "mouths",
+    name: "Wide mouths",
+    says: "A tunnel takes items in from the left and right of its way in, as well as from behind.",
   },
 ] as const;
 
@@ -137,9 +149,9 @@ export function recipeSays(out: Item): string {
   return `A ${lower(r.by)} makes ${ITEM_INFO[out]?.many ?? ""} from ${listed(parts)}.`;
 }
 
-/** What a kind of piece at a grade above the first does more than the first, and what one costs. */
-export function gradeSays(k: Kind, grade: number): string {
-  const cost = `${PER_TILE[k] === 1 ? "A tile costs" : "Costs"} ${coinsText(price(k, grade))}.`;
+/** What a kind of piece at a grade above the first does more than the first, and what one costs (a tunnel under `span` tiles). */
+export function gradeSays(k: Kind, grade: number, span = 0): string {
+  const cost = `${PER_TILE[k] === 1 ? "A tile costs" : "Costs"} ${coinsText(price(k, grade, span))}.`;
   if (carries(k)) return `Carries up to ${perMinute(carried(grade), "items")}${upFrom(carried(grade - 1))}. ${cost}`;
   const draw = (g: number): number => drawnAt(k, g) / HALF;
   const power = `draws ${num(draw(grade))} power${upFrom(draw(grade - 1))}`;

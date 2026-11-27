@@ -6,12 +6,13 @@ import { describe, expect, test } from "bun:test";
 
 import { EDGE, IN_THE_WAY, OUTSIDE, TILE_PX, WATER } from "../src/footing.ts";
 import * as F from "../src/index.ts";
+import { learn } from "./goals.ts";
 import { must } from "./yards.ts";
 
 /** The middle of a tile, in pixels of the art. */
 const mid = (x: number, y: number): F.Place => ({ x: x * TILE_PX + 8, y: y * TILE_PX + 8 });
 /** A yard at tier 4, where everything the slice builds is open. */
-const yard = (): F.Yard => F.create({ seed: 3, tier: 4 });
+const yard = (): F.Yard => F.create({ seed: 3, tier: 5 });
 /** Why a figure's feet do not fit at the middle of a tile, or null. */
 const why = (y: F.Yard, x: number, z: number): string | null => {
   const p = mid(x, z);
@@ -52,6 +53,7 @@ describe("what a figure walks over", () => {
     must(y, { do: "buyPlot", plot: "meadow" });
     expect(why(y, 20, 30)).toBeNull();
     expect(why(y, 22, 33)).toBe(IN_THE_WAY);
+    learn(y, F.goal("felling"));
     must(y, { do: "fell", x: 22, y: 33 });
     expect(why(y, 22, 33)).toBeNull();
     must(y, { do: "buyPlot", plot: "stream" });

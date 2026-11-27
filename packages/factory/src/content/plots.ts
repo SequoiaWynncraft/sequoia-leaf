@@ -13,8 +13,12 @@
  *   ~  the stream            T  a redwood (nothing is built on one)        D  the depot
  */
 
-/** Coins to fell a redwood that stands on a plot the yard owns: its tiles are then ground like any other. */
-export const FELL_PRICE = 100;
+/**
+ * Coins to fell a redwood that stands on a plot the yard owns, once felling is studied: the first
+ * costs `first`, and each after half as much again as the one before, rounded down to a whole
+ * `round` (`fellPrice`). Its tiles are then ground like any other.
+ */
+export const FELLING = { first: 1000, round: 100 } as const;
 
 export const PLOT_W = 16;
 export const PLOT_H = 12;

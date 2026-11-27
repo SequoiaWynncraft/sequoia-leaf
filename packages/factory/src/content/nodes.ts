@@ -48,6 +48,10 @@ export interface Unlocks {
   readonly first?: true;
   /** A splitter may turn its ways out to take things in, as well as from behind. */
   readonly ins?: true;
+  /** Redwoods on the yard's land may be felled, each dearer than the last (`fellPrice`). */
+  readonly felling?: true;
+  /** A tunnel's way-in mouth takes things in from its left and right, as well as from behind. */
+  readonly mouths?: true;
 }
 
 /** What a new yard has. */

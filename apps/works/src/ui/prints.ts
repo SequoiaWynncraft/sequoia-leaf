@@ -8,7 +8,7 @@ import {
   aim,
   ALL_ITEMS,
   costOf,
-  FELL_PRICE,
+  fellPrice,
   fellRefusal,
   FIXED,
   GATHERING,
@@ -40,7 +40,6 @@ import {
   orderAt,
   type Plot,
   plotState,
-  price,
   priceAt,
   ready,
   RECIPE,
@@ -122,8 +121,8 @@ function itemPrint(k: Item): ItemPrint {
   return { card: "item", item: k, lock: RECIPE[k] ? locked(w.open, { make: k }) : null, found, asked };
 }
 
-/** A kind of piece at a grade: the first, unless the card names a higher or the piece stands at one. */
-function machinePrint(k: Kind, grade = 1): MachinePrint {
+/** A kind of piece at a grade: the first, unless the card names a higher or the piece stands at one; a tunnel priced by the tiles it runs under (`span`). */
+function machinePrint(k: Kind, grade = 1, span = 0): MachinePrint {
   const w = S.world;
   const key = S.visiting ? null : WORKS_KEYS.names("tool")[openTools().indexOf(k)];
   return {
@@ -132,7 +131,8 @@ function machinePrint(k: Kind, grade = 1): MachinePrint {
     grade,
     graded: isGraded(k) && (grade > 1 || highest(w.open, k) > 1),
     later: !draws(k),
-    price: grade > 1 ? price(k, grade) : costOf(w, k),
+    price: costOf(w, k, grade, w.spare, span),
+    span: Math.abs(span),
     // The depot's power is what is open says it makes.
     gives: FIXED[k] === 1 ? w.open.depot : (GIVES[k] ?? 0),
     key: key ?? null,
@@ -186,7 +186,7 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     card: "standing",
     x,
     y,
-    machine: machinePrint(k, Math.max(1, grade)),
+    machine: machinePrint(k, Math.max(1, grade), w.span[i]),
     line: st?.line ?? null,
     trouble: st?.trouble ?? false,
     state: st?.state ?? null,
@@ -235,10 +235,13 @@ function tilePrint(i: number): StandingPrint | GroundPrint | null {
   if (redwoodAt(w, i)) {
     const x = i % w.land.w;
     const y = Math.floor(i / w.land.w);
-    // Fell shows where the rules would let the yard fell it with Coins enough: on its own land, and not on a visit.
-    const may = S.visiting === null && fellRefusal(w, x, y, Infinity) === null;
-    const fell = may ? { x, y, price: FELL_PRICE, short: Math.max(0, FELL_PRICE - coins()) } : null;
-    return { card: "ground", ground: "redwood", fell };
+    // Fell shows where the rules would let the yard fell it with Coins enough: on its own land, felling
+    // studied, and not on a visit. On its own land before felling is studied, the card says so.
+    const own = S.visiting === null && fellRefusal(w, x, y, Infinity) === null;
+    const lock = own ? locked(w.open, { fell: true }) : null;
+    const cost = fellPrice(w);
+    const fell = own && lock === null ? { x, y, price: cost, short: Math.max(0, cost - coins()) } : null;
+    return { card: "ground", ground: "redwood", fell, locked: lock };
   }
   return null;
 }
@@ -318,8 +321,15 @@ function orderPrint(id: string): NodePrint | OrderPrint | null {
 }
 
 const NUMBERED = ["stops", "crate", "reach", "depot", "span", "away", "hooks"] as const;
-/** The unlocks that are one thing or none: the board, a splitter's flags and its ways in. */
-const FLAGGED = ["board", "first", "ins"] as const;
+/** The unlocks that are one thing or none: the board, a splitter's flags and its ways in, felling, wide mouths. */
+const FLAGGED = ["board", "first", "ins", "felling", "mouths"] as const;
+
+/** A kind, or a kind at a grade, or a tunnel at a grade under so many tiles, as `machineRef` names it. */
+function machineOf(id: string): MachinePrint | null {
+  const [k = "", grade = "1", span = "0"] = id.split(".");
+  const kind = numberIn(k);
+  return isKind(kind) ? machinePrint(kind, Math.max(1, numberIn(grade)), Math.max(0, numberIn(span))) : null;
+}
 
 /** The unlock a `perk:` reference names, as the rules make it. */
 function perkOf(id: string): Unlock | null {
@@ -347,12 +357,8 @@ export function printOf(ref: string): Print | null {
   switch (kind) {
     case "item":
       return isItem(n) ? itemPrint(n) : null;
-    case "machine": {
-      // A kind, or a kind at a grade: `machine:<kind>.<grade>`.
-      const [k = "", grade] = id.split(".");
-      const kindOf = numberIn(k);
-      return isKind(kindOf) ? machinePrint(kindOf, grade === undefined ? 1 : Math.max(1, numberIn(grade))) : null;
-    }
+    case "machine":
+      return machineOf(id);
     case "tile":
       return tilePrint(n);
     case "plot":

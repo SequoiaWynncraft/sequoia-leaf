@@ -23,6 +23,7 @@ describe("random play", () => {
     ["a yard at tier 1", () => F.create({ seed: 12, tier: 1 })],
     ["a yard at tier 3", () => F.create({ seed: 13, tier: 3 })],
     ["a yard with tier 4 done", () => F.create({ seed: 14, tier: 5 })],
+    ["a yard with tier 5's research done", () => F.create({ seed: 15, tier: 6 })],
     ["a delivering yard, its board filled", boardFilled],
     ["a generated yard", () => F.decode(F.encode(generated().y), generated().y.land) ?? F.create()],
   ];
@@ -100,6 +101,7 @@ describe("what a visitor is told", () => {
     ["a new yard", () => F.create({ seed: 21 }), true],
     ["a yard at tier 3", () => F.create({ seed: 23, tier: 3 }), true],
     ["a yard with tier 4 done", () => F.create({ seed: 24, tier: 5 }), true],
+    ["a yard with tier 5's research done", () => F.create({ seed: 25, tier: 6 }), true],
     ["a delivering yard, its board filled", boardFilled, true],
     ["a generated yard", () => F.decode(F.encode(generated().y), generated().y.land) ?? F.create(), false],
   ];

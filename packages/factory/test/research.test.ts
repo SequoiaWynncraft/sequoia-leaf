@@ -212,9 +212,11 @@ describe("a Study", () => {
     expect(study(kept)).toEqual([60, folio]);
     run(kept, 20);
     expect(given(kept, big)).toBe(1);
-    // The research the work was for not first: not studiable, known, nothing, or finished as it is read.
+    // A line naming research today's tables do not have is a newer Leaf's: not read here, never with it let go.
+    const later = JSON.stringify({ ...rec, done, line: ["nothing", idOf(next)] });
+    expect([F.decode(later, y.land), F.keptLater(later, y.land)]).toEqual([null, true]);
+    // The research the work was for not first: not studiable, known, or finished as it is read.
     const firsts: (readonly [string[], Record<string, unknown>])[] = [
-      [["nothing", idOf(next)], {}],
       [[idOf(big), idOf(next)], { got: { [idOf(big)]: { [F.itemName(folio)]: wants(big) } } }],
     ];
     if (unmet !== undefined) firsts.push([[idOf(unmet), idOf(next)], {}]);

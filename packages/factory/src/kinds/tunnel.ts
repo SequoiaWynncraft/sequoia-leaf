@@ -1,7 +1,7 @@
 /**
  * The tunnel: a belt that runs under 1 to 3 tiles (more, as goals raise `span`) and comes up on the
  * other side. It is two pieces set down and taken up together: the way-in mouth, which takes things
- * in from behind and holds what is under the ground in a row of `tunnels` (`span` positive, how many
+ * in from behind (and from its sides, with wide mouths) and holds what is under the ground in a row of `tunnels` (`span` positive, how many
  * tiles it passes under), and the far mouth (`span` negative), which hands them on ahead as a belt.
  * Neither can be turned; laid over one of its kind, a tunnel is only raised or lowered.
  */
@@ -9,7 +9,7 @@ import type { Lay } from "../build.ts";
 import type { Wire, Yard } from "../yard.ts";
 import { kind } from "./kind.ts";
 import type { Kit } from "./kit.ts";
-import { anything, behindOnly, carrierCondition, carrierWords, carryOn, empty, lay, readyAhead } from "./line.ts";
+import { anything, carrierCondition, carrierWords, carryOn, empty, lay, readyAhead } from "./line.ts";
 import { passUnder } from "./under.ts";
 
 /** Where a tunnel going in at (x, y) facing `d` would come up: the nearest clear tile beyond one to as many as it may run under, or the end of `span`. */
@@ -74,6 +74,9 @@ function lays(k: Kit, y: Yard, i: number, d: number, grade: number, l: Lay): rea
   return [far];
 }
 
+/** The sides a mouth takes things in from: a way-in mouth by its ports, a far mouth from none. */
+const sides = (k: Kit, y: Yard, i: number): number => ((y.span[i] ?? 0) > 0 ? k.takesAt(y, i) : 0);
+
 /** A way-in mouth passes what is under the ground along; a far mouth hands on what has crossed it, ahead. */
 function hands(k: Kit, y: Yard, i: number, wire: Wire): void {
   if ((y.span[i] ?? 0) > 0) passUnder(k, y, i, wire.waiting);
@@ -94,9 +97,20 @@ export const tunnel = kind({
   tint: "line",
   fast: true,
   spans: true,
+  deeper: { past: 5, each: 2 },
   owns: ["span"],
+  // Its way-in mouth takes things in from behind, and with wide mouths from its left and right too,
+  // as a belt does. What it carries it hands by its hooks: under the ground to its far mouth.
+  ports: {
+    in: [
+      [0, 0, 2],
+      [0, 0, 1, "mouths"],
+      [0, 0, 3, "mouths"],
+    ],
+    out: [],
+  },
   rules: {
-    sides: (k, y, i) => ((y.span[i] ?? 0) > 0 ? behindOnly(k, y, i) : 0),
+    sides,
     next: (k, y, i) => ((y.span[i] ?? 0) > 0 ? k.farMouth(y, i) : k.ahead(y, i)),
     wants: anything,
     room: empty,

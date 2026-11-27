@@ -29,14 +29,14 @@
  *   stood again as new: its
  *   settings, holding nothing, doing nothing; one of the pieces to hand as one. Putting back is not
  *   building: nothing asks whether it may be built now, and its Coins are the recorded opposite;
- * - pieces moved are moved back as one, with what they hold now;
- * - a redwood the command felled stands again on its tiles, bare as the command left them.
+ * - pieces moved are moved back as one, with what they hold now.
+ * Felling a redwood is never undone: it forgets every entry, as buying a plot does.
  * The Coins go the other way: what the command cost is given back, and what it gave back is taken.
  * All or none: everything that can refuse (the entry's name, its check, the Coins; a move's own
  * refusal) is asked before anything changes, and nothing after that can refuse.
  *
  * An entry's bytes: its id (a count, then a byte each), what it is (a byte: 1 a move, 2 a stroke of
- * the brush, 4 too much to keep, 8 a redwood felled, its tiles the entry's), the Coins it moved (a varint, zigzag), the check of its tiles after
+ * the brush, 4 too much to keep), the Coins it moved (a varint, zigzag), the check of its tiles after
  * it (four bytes), the tiles it changed that held nothing before (a count, then each as the tiles
  * since the last less one), for a move the turns and corner that move the pieces back (a byte each),
  * for each piece that stood there, a word of what the command did to it (a count, then a varint each:
@@ -60,7 +60,7 @@ import type { CoinChange } from "@sequoia-leaf/core";
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts" with { type: "macro" };
 
 import { at, type Dir, insTo, isDir, otherMouth, tunnelExit } from "./build.ts";
-import { fromBase64, Reader, Writer } from "./bytes.ts";
+import { fromBase64, Reader, spanByte, spanOfByte, Writer } from "./bytes.ts";
 import type { Act, ActOf } from "./commands.ts";
 import type { Land } from "./land.ts";
 import { lineOf } from "./lines.ts";
@@ -80,7 +80,7 @@ import {
 import { REASON } from "./reasons.ts";
 import { legPiece } from "./route.ts";
 import { OWN, pieceOf, piecesTiles, tilesAt } from "./sizes.ts";
-import { FIXED, gradeOf, isKind, keptKind, type Kind, NONE, SHUTS, SPANS } from "./tables.ts";
+import { FIXED, gradeOf, isKind, keptKind, type Kind, NONE, SHUTS, SPAN_MOST, SPANS } from "./tables.ts";
 import { ground } from "./tiles.ts";
 import {
   changed,
@@ -89,7 +89,6 @@ import {
   holderOf,
   place,
   redwoodAt,
-  standingTree,
   tunnelRow,
   uncover,
   vacate,
@@ -127,7 +126,7 @@ export const UNDO_ENTRY = 16 * 1024;
 export const UNDO_BYTES = 2 * UNDO_ENTRY;
 
 /** The commands that change a piece or the Coins with no Undo, which forget every entry. */
-const FORGETS: ReadonlySet<string> = new Set(["recipe", "sort", "crate", "buyPlot"]);
+const FORGETS: ReadonlySet<string> = new Set(["recipe", "sort", "crate", "buyPlot", "fell"]);
 
 /** In what a command did to a piece (`masks`): it took it up. The settings it changed are the bits above. */
 const UP = 1;
@@ -136,7 +135,6 @@ const UP = 1;
 const MOVED = 1;
 const STROKE = 2;
 const TOO_BIG = 4;
-const FELLED = 8;
 
 /** Why an Undo is refused. */
 const UNDO_SAYS = {
@@ -252,7 +250,7 @@ function packSettings(o: Writer, was: readonly Setting[]): void {
       [4, k.tint],
       [8, ways === 0 ? undefined : ways],
       [16, k.grade],
-      [32, s.span === 0 ? undefined : s.span + 8],
+      [32, s.span === 0 ? undefined : spanByte(s.span)],
       [64, s.kind > 15 ? s.kind >> 4 : undefined],
     ];
     const f = parts.reduce((m, [bit, v]) => (v === undefined ? m : m | bit), 0);
@@ -262,11 +260,24 @@ function packSettings(o: Writer, was: readonly Setting[]): void {
   }
 }
 
+/** What a piece in a history names, known here or not: its kind, its span and the thing it is told to make. */
+export interface Named {
+  readonly kind: number;
+  readonly span: number;
+  readonly recipe: number | undefined;
+}
+type Seen = (piece: Named) => void;
+
+/** Whether Undo may stand a piece of a kind and span again: a kind there is, not the depot, and no longer than tunnels go. */
+const standsBack = (kind: number, span: number): kind is Kind =>
+  isKind(kind) && FIXED[kind] !== 1 && Math.abs(span) <= SPAN_MOST;
+
 /**
- * One piece's settings read back, after its tile; null for bytes that are not a piece's. Each kind
- * named is told to `seen` first, known here or not, for what asks which kinds a history names.
+ * One piece's settings read back, after its tile; null for bytes that are not a piece's, and for a
+ * kind or span this Leaf does not know. What it names is told to `seen` first, known here or not, for
+ * what asks what a history names (`historyNamed`).
  */
-function readSetting(r: Reader, tile: number, seen?: (kind: number) => void): Setting | null {
+function readSetting(r: Reader, tile: number, seen?: Seen): Setting | null {
   const kd = r.byte();
   const f = kd & 128 ? r.byte() : 0;
   const [recipe, closed, tint, ways, grade, span, high = 0] = [1, 2, 4, 8, 16, 32, 64].map((bit) =>
@@ -274,17 +285,18 @@ function readSetting(r: Reader, tile: number, seen?: (kind: number) => void): Se
   );
   const [kind, dir] = [(kd & 15) | (high << 4), (kd >> 4) & 3];
   if (r.over || f > 127 || (f & 64 && (high === 0 || high > 15)) || !isDir(dir)) return null;
-  seen?.(kind);
-  if (!isKind(kind) || FIXED[kind] === 1) return null;
+  const spans = span === undefined ? 0 : spanOfByte(span);
+  seen?.({ kind, span: spans, recipe });
+  if (!standsBack(kind, spans)) return null;
   const kept = keptOf(
     { ...unpackWays(ways ?? 0), recipe, tint, grade, open: closed === undefined ? undefined : false },
     kind,
   );
-  return { tile, kind, dir, span: span === undefined ? 0 : span - 8, free: (kd & 64) !== 0, kept };
+  return { tile, kind, dir, span: spans, free: (kd & 64) !== 0, kept };
 }
 
 /** How pieces stood, read back, for a yard of so many tiles; null for bytes that are not pieces'. */
-function readSettings(r: Reader, tiles: number, seen?: (kind: number) => void): Setting[] | null {
+function readSettings(r: Reader, tiles: number, seen?: Seen): Setting[] | null {
   const n = r.varint();
   const out: Setting[] = [];
   for (let k = 0, tile = -1; k < Math.min(n, tiles) && !r.over; k++) {
@@ -303,11 +315,6 @@ const tileOf = (y: Yard, p: { readonly x: number; readonly y: number }): number 
 const one = (y: Yard, a: { readonly x: number; readonly y: number }): number[] => [tileOf(y, a)];
 /** The tiles of the pieces on some tiles: a tunnel's both mouths. */
 const inArea = (y: Yard, a: { readonly tiles: readonly number[] }): number[] => tilesOf(y, piecesAt(y, a.tiles));
-/** Every tile of the redwood standing on the tile a command names, or none. */
-function treeOf(y: Yard, a: { readonly x: number; readonly y: number }): readonly number[] {
-  const t = standingTree(y, tileOf(y, a));
-  return t < 0 ? [] : (y.land.trees[t] ?? []);
-}
 /** Every tile the piece on the tile a turn names would cover turned: a piece of more than one tile's new tiles. */
 function turnedTo(y: Yard, a: ActOf<"turn">): number[] {
   const own = pieceOf(y, tileOf(y, a));
@@ -345,7 +352,6 @@ const REACH: { readonly [D in Name]?: (y: Yard, a: ActOf<D>) => readonly number[
   way: one,
   first: one,
   wayIn: one,
-  fell: treeOf,
 };
 
 /** The tiles a command may change, or null for one with no Undo (`REACH`). */
@@ -403,13 +409,16 @@ function readId(r: Reader): string | null {
 }
 
 /** An entry, its id read from its first bytes. */
-const entry = (bytes: Uint8Array): Entry => ({ id: readId(new Reader(bytes)) ?? "", bytes });
+const entry = (bytes: Uint8Array, span: number): Entry => ({ id: readId(new Reader(bytes)) ?? "", bytes, span });
+/** The most tiles any of some pieces passes under, from either mouth. */
+const longest = (pieces: readonly { readonly span: number }[]): number =>
+  pieces.reduce((most, p) => Math.max(most, Math.abs(p.span)), 0);
 /** An entry that cannot be undone, under its id: a command's own entry over the cap, or a stroke's. */
 function overCap(id: string, flags: number): Entry {
   const o = new Writer();
   writeId(o, id);
   o.byte(TOO_BIG | (flags & STROKE));
-  return entry(o.bytes());
+  return entry(o.bytes(), 0);
 }
 
 /** An entry's bytes, of the yard after its command (`y`); `was` is how the pieces on its tiles stood before. */
@@ -455,8 +464,7 @@ function strokeOf(y: Yard, a: Act): Undoing | null {
 }
 
 /** What an entry is, a bit each, by what its command was (`name`, `b` taken before it). */
-const flagsOf = (b: Before, name: Name): number =>
-  (b.back ? MOVED : 0) | (name === "paint" ? STROKE : 0) | (name === "fell" ? FELLED : 0);
+const flagsOf = (b: Before, name: Name): number => (b.back ? MOVED : 0) | (name === "paint" ? STROKE : 0);
 
 /** What a command done (`b` taken before it, `id` its id, `name` what it was) changed, with the stroke it adds to: its entry, but for the check. */
 function undoing(y: Yard, b: Before, id: string, stroke: Undoing | null, coins: number, name: Name): Undone {
@@ -466,9 +474,9 @@ function undoing(y: Yard, b: Before, id: string, stroke: Undoing | null, coins: 
     ...took,
     ...(stroke?.was.flatMap((s, k) => ((stroke.masks[k] ?? 0) & UP ? [s.tile] : [])) ?? []),
   ]);
-  // A move's tiles are all its own, and so are the tiles of a redwood felled: nothing stood there before or after.
+  // A move's tiles are all its own.
   const flags = flagsOf(b, name);
-  const done = flags & (MOVED | FELLED) ? b.tiles : b.tiles.filter((i) => up.has(i) || !standsAs(y, i, b.was.get(i)));
+  const done = flags & MOVED ? b.tiles : b.tiles.filter((i) => up.has(i) || !standsAs(y, i, b.was.get(i)));
   // How the stroke's lines stood before it, over how this command found them.
   const was = new Map([...done.flatMap((i) => b.was.get(i) ?? []), ...(stroke?.was ?? [])].map((s) => [s.tile, s]));
   return {
@@ -500,7 +508,7 @@ export function after(y: Yard, a: Act, b: Before | null, changes: readonly CoinC
   if (u.tiles.length === 0 && u.coins === 0) return;
   const bytes = written(y, u);
   const kept = stroke ? y.history.slice(0, -1) : y.history;
-  y.history = bytes.length > UNDO_ENTRY ? [overCap(u.id, u.flags)] : capped([...kept, entry(bytes)]);
+  y.history = bytes.length > UNDO_ENTRY ? [overCap(u.id, u.flags)] : capped([...kept, entry(bytes, longest(u.was))]);
 }
 
 // ---------- reading ----------
@@ -529,7 +537,7 @@ function readBody(
   r: Reader,
   flags: number,
   tiles: number,
-  seen?: (kind: number) => void,
+  seen?: Seen,
 ): Pick<Undoing, "tiles" | "was" | "masks" | "back"> | null {
   const fresh = readTiles(r, tiles);
   const back = flags & MOVED ? { turns: r.byte(), x: r.byte(), y: r.byte() } : null;
@@ -540,8 +548,8 @@ function readBody(
   return all.length === fresh.length + was.length ? { tiles: all, was, masks, back } : null;
 }
 
-/** An entry read back from its bytes, for a yard of so many tiles; null for bytes that are not an entry. Each kind it names is told to `seen`. */
-function readEntry(bytes: Uint8Array, tiles: number, seen?: (kind: number) => void): Undoing | null {
+/** An entry read back from its bytes, for a yard of so many tiles; null for bytes that are not an entry. What each piece in it names is told to `seen`. */
+function readEntry(bytes: Uint8Array, tiles: number, seen?: Seen): Undoing | null {
   const r = new Reader(bytes);
   const id = readId(r);
   const flags = r.byte();
@@ -550,7 +558,7 @@ function readEntry(bytes: Uint8Array, tiles: number, seen?: (kind: number) => vo
     const big = r.done && !r.over && (flags & ~(TOO_BIG | STROKE)) === 0;
     return big ? { id, flags, coins: 0, sum: 0, tiles: [], was: [], masks: [], back: null } : null;
   }
-  if ((flags & ~(MOVED | STROKE | FELLED)) !== 0) return null;
+  if ((flags & ~(MOVED | STROKE)) !== 0) return null;
   const zig = r.varint();
   const sum = (r.byte() | (r.byte() << 8) | (r.byte() << 16) | (r.byte() << 24)) >>> 0;
   const body = readBody(r, flags, tiles, seen);
@@ -558,16 +566,17 @@ function readEntry(bytes: Uint8Array, tiles: number, seen?: (kind: number) => vo
 }
 
 /**
- * The kinds the pieces in a history's entries name (each as base64, `kept`), known here or not, on a
- * land of so many tiles: what a reader asks before it reads them. An entry stops at a kind not known.
+ * What the pieces in a history's entries name (each as base64, `kept`), known here or not, on a land
+ * of so many tiles: what a reader asks before it reads them. An entry stops at the first piece that
+ * names something not known here, which is told first.
  */
-export function historyKinds(kept: unknown, tiles: number): number[] {
-  const kinds: number[] = [];
+export function historyNamed(kept: unknown, tiles: number): Named[] {
+  const named: Named[] = [];
   for (const b of Array.isArray(kept) ? kept : []) {
     const bytes = typeof b === "string" ? fromBase64(b) : b instanceof Uint8Array ? b : null;
-    if (bytes) readEntry(bytes, tiles, (k) => kinds.push(k));
+    if (bytes) readEntry(bytes, tiles, (p) => named.push(p));
   }
-  return kinds;
+  return named;
 }
 
 /**
@@ -580,7 +589,8 @@ export function historyOf(kept: unknown, stamp: unknown, land: Land): Entry[] {
   const tiles = land.w * land.h;
   const read = kept.flatMap((b) => {
     const bytes = typeof b === "string" ? fromBase64(b) : null;
-    return bytes && readEntry(bytes, tiles) ? [entry(bytes)] : [];
+    const named: Named[] = [];
+    return bytes && readEntry(bytes, tiles, (p) => named.push(p)) ? [entry(bytes, longest(named))] : [];
   });
   return read.length === kept.length ? capped(read) : [];
 }
@@ -679,12 +689,6 @@ function putBack(y: Yard, u: Undoing): void {
     SETTINGS.forEach((part, n) => (mask >> 1) & (1 << n) && part.to(y, s.tile, part.of(s)));
     cover(y, s.tile, s.kind, y.dir[s.tile] ?? 0);
   });
-  // A redwood felled stands again: every tile of the entry was one of its.
-  if (u.flags & FELLED)
-    for (const i of u.tiles) {
-      const t = y.land.tree[i] ?? -1;
-      if (t >= 0) y.felled[t] = 0;
-    }
 }
 
 /**

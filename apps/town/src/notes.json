@@ -38,6 +38,28 @@
     ]
   },
   {
+    "id": "works-tier-5-research",
+    "at": "2026-11-27T21:34Z",
+    "title": "Tier 5's first research",
+    "lines": [
+      "In The Works, tier 5 has its first 3 research: Felling, A deep culvert and Wide mouths.",
+      "Felling a redwood now needs Felling. The first costs 1,000 Coins. Each one after costs half as much again, rounded down to a whole 100. Redwoods you felled before count."
+    ],
+    "more": [
+      {
+        "head": "Tunnels",
+        "points": [
+          "With A deep culvert, a tunnel passes under up to 12 tiles, up from 5. Each tile beyond 5 adds 2 Coins to its price at grade 1, 6 at grade 2 and 16 at grade 3.",
+          "With Wide mouths, a tunnel takes items in from the left and right of its way in, as well as from behind."
+        ]
+      },
+      {
+        "head": "Also",
+        "points": ["Felling a redwood cannot be undone, and its Coins do not come back."]
+      }
+    ]
+  },
+  {
     "id": "raid-item-tools",
     "at": "2026-11-27T21:10Z",
     "title": "The rack, Tongs and the Whetstone",

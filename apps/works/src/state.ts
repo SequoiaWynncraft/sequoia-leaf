@@ -117,6 +117,8 @@ export interface Aim extends Reckoned {
   raises?: number;
   /** For a tunnel, the tile its far mouth would come up on: worked out once for the aim, not each frame. */
   far?: number;
+  /** For a tunnel, the tiles the one it is priced as passes under, which its price at each grade goes by. */
+  span?: number;
 }
 
 /** A run of belt shown before it is laid. */

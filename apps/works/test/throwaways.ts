@@ -361,7 +361,8 @@ const shiftedLegal = shifts.filter((p) => p !== null);
 out.undoShiftSweep = shiftedLegal.length > 300 && shiftedLegal.every((p) => p === true);
 
 // Kept: a yard whose only kind past 15 is in a plan of the whole yard, in a blueprint, or in what Undo
-// would undo is kept as version 10; one with none as 9, as before there could be one.
+// would undo is kept as this version, which a Leaf of version 10 leaves as a newer one's; one with
+// none as 9, as before there could be one.
 const planOnly = F.create({ land, tier: 5, seed: 1 });
 F.build(planOnly, FORGE, 20, 10, 0, Infinity);
 F.saveYard(planOnly, 1);
@@ -375,7 +376,9 @@ act(historyOnly, { do: "build", kind: FORGE, x: 20, y: 10, dir: 0 }, Infinity, "
 act(historyOnly, { do: "remove", x: 20, y: 10 }, Infinity, "h2");
 const wide = [planOnly, printOnly, historyOnly];
 const versions = [...wide, fresh()].map((v) => JSON.parse(F.encode(v)).v);
-out.keptWide = JSON.stringify(versions) === "[10,10,10,9]" && wide.every((v) => !v.kind.some((k) => k > 15 && k !== F.NONE));
+out.keptWide =
+  JSON.stringify(versions) === JSON.stringify([F.VERSION, F.VERSION, F.VERSION, F.PLACED]) &&
+  wide.every((v) => !v.kind.some((k) => k > 15 && k !== F.NONE));
 console.log(JSON.stringify({ texts: wide.map((v) => F.encode(v)) }));
 
 console.log(JSON.stringify(out));

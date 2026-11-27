@@ -272,8 +272,9 @@ export function nudge(
     };
 
   // The tier's own screen, once there is more than lessons: what is on it is its projects, or from the
-  // tier that has none, its commission and the research it waits on. A tier with nothing in it yet has no nudge.
-  const inTier = GOALS.filter((g) => g.kind !== "lesson" && g.tier === w.open.tier);
+  // tier that has none, its commission and the research it waits on. A tier with neither yet (only
+  // research, studied in the Research panel) has no nudge.
+  const inTier = GOALS.filter((g) => (g.kind === "project" || g.kind === "commission") && g.tier === w.open.tier);
   if (w.open.tier >= 1 && inTier.length > 0 && !told("tier"))
     return {
       id: "tier",

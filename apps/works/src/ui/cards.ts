@@ -75,6 +75,7 @@ import { exact, num, perMinute, whole } from "@sequoia-leaf/kit/say.ts";
 
 import type { Art } from "../art/index.ts";
 import { FLAG_AT } from "../art/machines.ts";
+import { stump } from "../art/nature.ts";
 import { pageOf } from "../kinds/index.ts";
 import { yardSfx } from "../sound.ts";
 import { flowNode } from "./flow.ts";
@@ -127,8 +128,10 @@ export interface MachinePrint {
   readonly graded: boolean;
   /** A kind this page does not draw (`DRAWN`): its card says only what it is. */
   readonly later: boolean;
-  /** What one more costs now: at the first grade, the pieces to hand counted. */
+  /** What one more costs now, as setting it down charges it: the pieces to hand counted (`costOf`). */
   readonly price: number;
+  /** For a tunnel standing, the tiles it passes under, which its prices go by; 0 for any other. */
+  readonly span: number;
   /** The power it gives: for the depot, as what is open says. */
   readonly gives: number;
   /** Its key in the dock, if it has one there now. */
@@ -375,10 +378,9 @@ const spareBlocks = (p: MachinePrint): Block[] => (p.spare > 0 ? [{ body: `${p.s
 
 /** A kind of piece at a grade: what it is, what it draws, its pace and its price there. */
 function machineCard(art: Art, p: MachinePrint): Description {
-  const k = p.kind;
-  const grade = p.grade;
+  const { kind: k, grade } = p;
   // Above the first grade it says what that grade does more, and costs; at the first, what the kind is.
-  const what = grade > 1 ? gradeSays(k, grade) : (KIND_INFO[k]?.what ?? "");
+  const what = grade > 1 ? gradeSays(k, grade, p.span) : (KIND_INFO[k]?.what ?? "");
   if (p.later) return { name: nameOf(k), icon: machinePic(art, k), tag: what };
   const stats: Stat[] = [];
   const draw = drawnAt(k, grade) / HALF;
@@ -474,7 +476,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
         look: raise.enough ? "sm" : "sm off",
         after: amount("coin", raise.cost),
         hint: `Raise to ${numeral(raise.to)}`,
-        about: gradeSays(k, raise.to),
+        about: gradeSays(k, raise.to, p.machine.span),
         on: () => hands.raise(x, y),
       });
     // What takes things in from every side and hands none on has no way to face (`KindPage.faces`).
@@ -585,10 +587,13 @@ const orderCard = (p: OrderPrint): Description => ({
   ],
 });
 
+/** The unlocks shown as a perk that are not a number: blueprints, and each that is one thing or none. */
+const FLAGS = ["blueprints", "board", "first", "ins", "felling", "mouths"] as const;
+type Flag = (typeof FLAGS)[number];
+const isFlag = (is: string): is is Flag => FLAGS.some((f) => f === is);
+
 /** The picture of what each kind of number changes. */
-export const PERK_ART: Readonly<
-  Record<Numbered | "blueprints" | "board" | "first" | "ins", (art: Art) => HTMLCanvasElement>
-> = {
+export const PERK_ART: Readonly<Record<Numbered | Flag, (art: Art) => HTMLCanvasElement>> = {
   stops: (art) => art.icon(STOP),
   crate: (art) => art.m.crate[1]?.[0]?.c ?? art.icon(CRATE),
   reach: (art) => art.m.pylon[1]?.[2]?.c ?? art.icon(PYLON),
@@ -606,6 +611,8 @@ export const PERK_ART: Readonly<
     return c;
   },
   ins: (art) => art.waysIn,
+  felling: () => stump(5, false),
+  mouths: (art) => art.icon(TUNNEL),
 };
 
 /** A tool a goal unlocks, with its picture from the dock. */
@@ -618,12 +625,7 @@ const toolCard = (p: ToolPrint): Description => ({
 /** A number a goal raises, as it will be: the picture of what it changes, and the rules' sentence for it, which says what it was before. */
 function perkCard(art: Art, p: PerkPrint): Description | null {
   const u = p.unlock;
-  const of =
-    u.is === "number"
-      ? u.of
-      : u.is === "blueprints" || u.is === "board" || u.is === "first" || u.is === "ins"
-        ? u.is
-        : null;
+  const of = u.is === "number" ? u.of : isFlag(u.is) ? u.is : null;
   if (of === null) return null;
   const shown = "amount" in u && u.amount !== undefined ? `${u.name} ${u.amount}` : u.name;
   return { name: shown, icon: PERK_ART[of](art), tag: u.says };

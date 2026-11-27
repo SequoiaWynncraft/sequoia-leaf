@@ -30,7 +30,9 @@ import {
 
 export const itemRef = (k: Item): string => `item:${k}`;
 /** A kind of piece; with a grade above the first, that kind at that grade. */
-export const machineRef = (k: Kind, grade = 1): string => (grade > 1 ? `machine:${k}.${grade}` : `machine:${k}`);
+/** A kind, at a grade, and for a tunnel the tiles it passes under, which its price goes by: `machine:<kind>.<grade>.<span>`. */
+export const machineRef = (k: Kind, grade = 1, span = 0): string =>
+  span > 0 ? `machine:${k}.${grade}.${span}` : grade > 1 ? `machine:${k}.${grade}` : `machine:${k}`;
 export const tileRef = (i: number): string => `tile:${i}`;
 export const plotRef = (id: Plot): string => `plot:${id}`;
 /** A goal: a lesson, a project, a commission or a piece of research. */
@@ -65,6 +67,10 @@ export function unlockRef(u: Unlock): string {
       return "perk:first";
     case "ins":
       return "perk:ins";
+    case "felling":
+      return "perk:felling";
+    case "mouths":
+      return "perk:mouths";
   }
 }
 

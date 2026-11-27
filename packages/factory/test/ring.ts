@@ -56,7 +56,7 @@ export const RINGED: F.Land = F.landFrom([...F.PLOTS, ...RING], RINGED_IDS);
 
 /** A yard on the larger land that owns a plot of the ring, with a crate on it, its redwood felled and a plan of the whole yard kept. */
 export function outward(): F.Yard {
-  const y = F.create({ land: RINGED, seed: 5, tier: 5 });
+  const y = F.create({ land: RINGED, seed: 5, tier: 6 });
   const ring = RINGED.plots.find((p) => RING.some((q) => q.name === p.name) && p.x === RINGED.origin[0]);
   if (!ring) throw new Error("no ring plot north or south of the yard");
   y.plots.push(ring.plot);

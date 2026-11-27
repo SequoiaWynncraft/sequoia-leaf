@@ -354,10 +354,13 @@ describe("keeping goals", () => {
     const rec: unknown = JSON.parse(F.encode(y));
     if (typeof rec !== "object" || rec === null) throw new Error("not a record");
     // The hall before tier 2 opens, and a lesson out of its order, are carried as kept: what opens
-    // a goal is today's tuning, and a goal done is the member's. One today's tables do not have is let go.
-    const odd = F.decode(JSON.stringify({ ...rec, done: ["hall", "gears", "planks", "nothing"] }));
+    // a goal is today's tuning, and a goal done is the member's.
+    const odd = F.decode(JSON.stringify({ ...rec, done: ["hall", "gears", "planks"] }));
     expect(odd?.done.map((g) => F.GOALS[g]?.id)).toEqual(["hall", "gears", "planks"]);
     expect(odd && id(odd)).toBe("ingots");
+    // One today's tables do not have is a newer Leaf's: the yard is not read here, and left as it is.
+    const later = JSON.stringify({ ...rec, done: ["hall", "gears", "planks", "nothing"] });
+    expect([F.decode(later), F.keptLater(later)]).toEqual([null, true]);
   });
 
   test("a node read back given all it wants, or more, is finished by the rule that finishes one in play: done, paid, logged, and the next in hand", () => {

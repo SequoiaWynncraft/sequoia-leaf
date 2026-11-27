@@ -86,7 +86,7 @@ import {
 
 export { sortWay } from "./kinds/sorter.ts";
 export { ahead, behind, WAY_TURN, wayIn } from "./tiles.ts";
-export { outsOf, pieceOf } from "./sizes.ts";
+export { outsOf, pieceOf, takesAt } from "./sizes.ts";
 
 // ---------- who hands to whom ----------
 
@@ -549,6 +549,7 @@ export const KIT: Kit = {
   sendPort,
   portTo,
   outsOf,
+  takesAt,
   refused,
   roomBeside: roomAt,
   wireOf,

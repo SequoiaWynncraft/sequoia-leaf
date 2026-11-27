@@ -1935,9 +1935,10 @@ describe("an Undo in the Works", () => {
     expect([await coinsOf(alice), (await yardShown()).kind]).toEqual([300, before.kind]);
   });
 
-  it("fells a redwood on a plot the yard owns for 100 Coins, and refuses one on a plot it does not; undone, the redwood stands and the Coins come back", async () => {
-    // Alice's yard owns the Meadow, as a staging step writes it over: its redwood stands at 22, 33.
-    const w = createYard({ seed: 7, tier: 1 });
+  it("fells a redwood on a plot the yard owns, once felling is studied, for 1,000 Coins the first, and refuses one on a plot it does not; it is never undone", async () => {
+    // Alice's yard has tier 5's research done and owns the Meadow, as a staging step writes it over:
+    // its redwood stands at 22, 33. She is given Coins enough to fell it.
+    const w = createYard({ seed: 7, tier: 6 });
     const read = readCommand({ tick: w.tick, do: "buyPlot", plot: "meadow" });
     if (!read || "refused" in playWorks(w, read)) throw new Error("the Meadow was not bought");
     w.history = [];
@@ -1948,26 +1949,30 @@ describe("an Undo in the Works", () => {
       (sql) =>
         sql`UPDATE play_state SET rev = rev + 1, state = ${text}, updated_at = ${clock.now} WHERE player_id = ${alice}`,
     );
+    const grant = { amount: 1000, reason: "A test's grant", game: null, key: `grant:${alice}` };
+    await services.run(Coins.use((coins) => coins.post(alice, grant, clock.now)));
     const tree = tileNear(-2, 15);
     expect((await works([{ do: "fell", ...near(-14, -4) }])).results).toEqual([
       { id: `u-${ids}`, refused: "cannot_fell" },
     ]);
     expect((await works([{ do: "fell", ...near(-1, 16) }])).results).toEqual([{ id: `u-${ids}`, notes: [] }]);
     expect((await entries(alice)).slice(-1)).toEqual([
-      { amount: -100, reason: "Felled in the Works", game: "works", key: expect.any(String) },
+      { amount: -1000, reason: "Felled in the Works", game: "works", key: expect.any(String) },
     ]);
     const felled = await yardShown();
-    expect([await coinsOf(alice), redwoodAt(felled, tree)]).toEqual([200, false]);
+    expect([await coinsOf(alice), redwoodAt(felled, tree), felled.history]).toEqual([300, false, []]);
+    // What is built where it stood is undone as any build is; the redwood stays felled, its Coins spent.
     expect((await works([{ do: "build", kind: "belt", ...near(-2, 15), dir: 0 }])).results).toEqual([
       { id: `u-${ids}`, notes: [] },
     ]);
-    const undo = async () => works([{ do: "undo", entry: (await yardShown()).history.at(-1)?.id }]);
-    await undo();
-    await undo();
-    expect((await entries(alice)).slice(-1)).toEqual([
-      { amount: 100, reason: "Undone in the Works", game: "works", key: expect.any(String) },
+    const built = (await yardShown()).history.at(-1)?.id;
+    expect((await works([{ do: "undo", entry: built }])).results).toEqual([{ id: `u-${ids}`, notes: [] }]);
+    // Nothing is left to undo: the felling is not.
+    expect((await yardShown()).history).toEqual([]);
+    expect((await works([{ do: "undo", entry: "the-felling" }])).results).toEqual([
+      { id: `u-${ids}`, refused: "cannot_undo" },
     ]);
-    expect([await coinsOf(alice), redwoodAt(await yardShown(), tree)]).toEqual([300, true]);
+    expect([await coinsOf(alice), redwoodAt(await yardShown(), tree)]).toEqual([300, false]);
   });
 
   it("is refused whole when another game has spent the Coins it would take back since: the yard and the ledger as they were", async () => {

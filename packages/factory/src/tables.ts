@@ -216,8 +216,18 @@ export const BURNS: readonly (Burns | null)[] = KIND_DEFS.map((d: KindDef) => {
 });
 /** The work in gathering one thing and in studying one folio, in half-ticks. */
 export const WORK = { gather: TICKS.gather * 2, study: TICKS.study * 2 } as const;
-/** What a piece of a kind and grade costs to build. */
-export const price = (k: number, g: number): number => (COST[k] ?? 0) * (g === 0 ? 1 : (GRADES[g - 1]?.price ?? 1));
+/** For each kind that runs under tiles, what each tile past so many adds to its cost (`KindDef.deeper`). */
+const DEEPER = KIND_DEFS.map((d: KindDef) => d.deeper ?? null);
+/**
+ * What a piece of a kind and grade costs to build: its kind's cost, and for one that runs under
+ * `span` tiles (a far mouth's, below 0, counts the same) what each tile past its kind's `past` adds,
+ * times its grade's price.
+ */
+export function price(k: number, g: number, span = 0): number {
+  const deep = DEEPER[k];
+  const more = deep ? deep.each * Math.max(0, Math.abs(span) - deep.past) : 0;
+  return ((COST[k] ?? 0) + more) * (g === 0 ? 1 : (GRADES[g - 1]?.price ?? 1));
+}
 
 /** A count by name, as numbers. */
 export function countsOf(w: Wants): Float64Array {
@@ -350,6 +360,8 @@ const UNLOCKS = [START, ...GOALS.map((g) => g.unlocks)];
 const most = (f: (u: Unlocks) => number | undefined): number => Math.max(0, ...UNLOCKS.map((u) => f(u) ?? 0));
 /** The most of these any yard may have: tiles under a tunnel, blueprints, things in a crate, orders on the board. */
 export const SPAN_MOST = most((u) => u.span);
+// A span is kept in a signed byte (`spanByte`), a far mouth's below 0.
+if (SPAN_MOST > 127) throw new Error("a tunnel runs under at most 127 tiles");
 export const BLUEPRINTS_MOST = most((u) => u.blueprints?.count);
 export const CRATE_MOST = most((u) => u.crate);
 export const HOOKS_MOST = most((u) => u.hooks);
@@ -385,6 +397,9 @@ export interface Open {
   /** Whether a splitter may put one of its ways first, and turn its ways out to take things in. */
   readonly first: boolean;
   readonly ins: boolean;
+  /** Whether redwoods may be felled; whether a tunnel's way in takes things in from its sides too. */
+  readonly felling: boolean;
+  readonly mouths: boolean;
 }
 
 /** A tool's bit in `Open.tools`. */
@@ -438,6 +453,8 @@ export function openOf(goals: readonly Goal[]): Open {
     board: unlocks.some((u) => u.board === true),
     first: unlocks.some((u) => u.first === true),
     ins: unlocks.some((u) => u.ins === true),
+    felling: unlocks.some((u) => u.felling === true),
+    mouths: unlocks.some((u) => u.mouths === true),
   };
 }
 
@@ -453,6 +470,8 @@ export type Lock =
   /** Put one of a splitter's ways first, or turn one of its ways out to take things in. */
   | { readonly first: true }
   | { readonly ins: true }
+  /** Fell a redwood. */
+  | { readonly fell: true }
   /** Have this many cart stops standing. */
   | { readonly stops: number }
   /** Keep a blueprint in a place, of so many pieces in a box of so many tiles across and down. */
@@ -464,6 +483,13 @@ const TOOL_NAME: Readonly<Record<Tool, string>> = {
   upgrade: "Upgrading an area",
   whole: "A plan of the whole yard",
 };
+/** The locks that are one thing open or not: by what is asked, what of `Open` says, and why not. */
+const FLAG_LOCKS = [
+  { ask: "first", open: "first", why: "Putting a way first is not unlocked yet" },
+  { ask: "ins", open: "ins", why: "Ways in for splitters are not unlocked yet" },
+  { ask: "fell", open: "felling", why: "Felling is not unlocked yet" },
+] as const;
+
 /** A tool used with another: an area is raised, and the whole yard kept, with Select. */
 const TOOL_WITH: Partial<Record<Tool, Tool>> = { upgrade: "select", whole: "select" };
 const kindWord = (k: Kind): string => (KIND_INFO[k]?.name ?? "").toLowerCase();
@@ -493,10 +519,12 @@ export function locked(open: Open, ask: Lock): string | null {
     if (before !== null) return before;
     return (open.tools & toolBit(ask.use)) === 0 ? `${TOOL_NAME[ask.use]} is not unlocked yet` : null;
   }
-  if ("first" in ask) return open.first ? null : "Putting a way first is not unlocked yet";
-  if ("ins" in ask) return open.ins ? null : "Ways in for splitters are not unlocked yet";
   if ("stops" in ask)
     return ask.stops > open.stops ? `The yard may have ${open.stops} cart stop${open.stops === 1 ? "" : "s"}` : null;
+  if (!("blueprint" in ask)) {
+    const flag = FLAG_LOCKS.find((f) => f.ask in ask);
+    return flag && !open[flag.open] ? flag.why : null;
+  }
   const { blueprint: slot, pieces = 0, w = 0, h = 0 } = ask;
   if (open.blueprints === 0) return "Blueprints are not unlocked yet";
   if (slot < 0 || slot >= open.blueprints) return "There is no such blueprint";

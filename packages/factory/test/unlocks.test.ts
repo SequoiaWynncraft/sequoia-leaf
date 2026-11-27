@@ -41,7 +41,9 @@ describe("what is unlocked", () => {
         folded.length +
         (u.board ? 1 : 0) +
         (u.first ? 1 : 0) +
-        (u.ins ? 1 : 0);
+        (u.ins ? 1 : 0) +
+        (u.felling ? 1 : 0) +
+        (u.mouths ? 1 : 0);
       expect([id, list.length]).toEqual([id, fields]);
       for (const e of list) {
         expect([id, e.name.length > 0, /^[A-Z].*\.$/.test(e.says)]).toEqual([id, true, true]);
