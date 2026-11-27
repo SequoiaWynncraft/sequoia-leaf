@@ -6,12 +6,13 @@
  * the piece, the view is brought to it with no card, and it is marked all the same.
  */
 
-import { FIXED, NONE, otherMouth, type Yard } from "@sequoia-leaf/factory";
+import { FIXED, NONE, otherMouth, pieceOf, piecesTiles, type Yard } from "@sequoia-leaf/factory";
 import { GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import type { Ctx } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./art/belts.ts";
+import { type Box, pieceBox } from "./big.ts";
 import { S } from "./state.ts";
 
 /** The tile of the piece marked: the one whose card is pinned; else one the view was brought to with no card (a phone's). -1 for none. */
@@ -21,11 +22,11 @@ function markedTile(): number {
   return (S.world.kind[b.tile] ?? NONE) === NONE ? -1 : b.tile;
 }
 
-/** The tiles of the piece marked (`markedTile`): its own, and a tunnel's other mouth. */
+/** The tiles of the piece marked (`markedTile`): every tile it covers, and a tunnel's other mouth. */
 export function markedTiles(): number[] {
   const i = markedTile();
   const far = i < 0 ? -1 : otherMouth(S.world, i);
-  return i < 0 ? [] : far >= 0 ? [i, far] : [i];
+  return i < 0 ? [] : far >= 0 ? [i, far] : piecesTiles(S.world, i);
 }
 
 /** Seconds each of the two times the brackets close in. */
@@ -67,13 +68,27 @@ function pinBox(g: Ctx, x: number, y: number, w: number, h: number, t: number): 
 }
 
 /**
- * The mark near: brackets round each tile of the piece, or the depot's box (its corner at `dx`, `dy`),
- * at least 3 of the screen's pixels thick at any zoom.
+ * The boxes the mark near goes round, in the picture: the box of the piece (every tile of one of more
+ * than one, as one), each mouth of a tunnel, or the depot's box (its corner at `dx`, `dy`).
  */
+export function pinBoxes(w: Yard, cx: number, cy: number, dx: number, dy: number): Box[] {
+  const out: Box[] = [];
+  const done = new Set<number>();
+  for (const i of markedTiles()) {
+    const own = pieceOf(w, i);
+    if (done.has(own)) continue;
+    done.add(own);
+    if (FIXED[w.kind[own] ?? NONE] === 1) out.push({ x: dx, y: dy, w: 48, h: 48 });
+    else {
+      const b = pieceBox(w, own);
+      out.push({ x: b.x * TILE - cx, y: b.y * TILE - cy, w: b.w * TILE, h: b.h * TILE });
+    }
+  }
+  return out;
+}
+
+/** The mark near: brackets round each of its boxes (`pinBoxes`), at least 3 of the screen's pixels thick at any zoom. */
 export function pinMark(g: Ctx, w: Yard, cx: number, cy: number, dx: number, dy: number): void {
   const t = Math.max(1, Math.ceil(3 / S.view.z));
-  for (const i of markedTiles()) {
-    if (FIXED[w.kind[i] ?? NONE] === 1) pinBox(g, dx, dy, 48, 48, t);
-    else pinBox(g, (i % w.land.w) * TILE - cx, Math.floor(i / w.land.w) * TILE - cy, TILE, TILE, t);
-  }
+  for (const b of pinBoxes(w, cx, cy, dx, dy)) pinBox(g, b.x, b.y, b.w, b.h, t);
 }

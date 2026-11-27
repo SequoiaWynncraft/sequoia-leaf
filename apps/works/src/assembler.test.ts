@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 import {
   at,
   BELT,
+  BENCH,
   build,
   carried,
   create,
@@ -23,13 +24,15 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 import { xy } from "@sequoia-leaf/factory/test/near.ts";
+import { deck } from "@sequoia-leaf/kit/card.ts";
 
 import { PAGES } from "./kinds/index.ts";
 import type { Lamp } from "./lamps.ts";
+import { markedTiles, pinBoxes } from "./pinned.ts";
 import { blockColour } from "./plan.ts";
 import { DRAWN, draws, S } from "./state.ts";
-import { tileRef } from "./ui/card.ts";
-import { madeSays } from "./ui/cards.ts";
+import { itemRef, tileRef } from "./ui/card.ts";
+import { madeSays } from "./ui/flow.ts";
 import { printOf } from "./ui/prints.ts";
 
 const ASSEMBLER = kind("assembler");
@@ -106,5 +109,27 @@ describe("the assembler on the page", () => {
     PAGES.assembler.lamps?.(S.world, 0, 100, 200, { ...lit, working: () => true }, out);
     PAGES.assembler.lamps?.(S.world, 0, 100, 200, { ...lit, working: () => false }, out);
     expect(out).toEqual([{ x: 100, y: 188, r: 26, power: 0.6, reach: false }]);
+  });
+
+  test("is listed on the card of each thing it makes once the yard may build it, with what one makes a minute", () => {
+    hall(1, null);
+    expect(printOf(itemRef(item("tool")))).toMatchObject({ makers: [BENCH, ASSEMBLER] });
+    S.world = create({ seed: 5, tier: 5 });
+    expect(printOf(itemRef(item("tool")))).toMatchObject({ makers: [BENCH] });
+  });
+
+  test("pinned, is marked round all 9 of its tiles as one box", () => {
+    const y = hall(1, null);
+    const own = at(y, ...xy(-6, -4));
+    deck.open = { stack: [`tile:${own}`], pinned: true, via: "mouse", at: {}, from: {}, side: false, preview: false };
+    try {
+      expect(markedTiles().toSorted((a, b) => a - b)).toEqual(
+        [-1, 0, 1].flatMap((dz) => [-1, 0, 1].map((dx) => at(y, ...xy(-6 + dx, -4 + dz)))).toSorted((a, b) => a - b),
+      );
+      const [x0, z0] = xy(-7, -5);
+      expect(pinBoxes(y, 0, 0, 0, 0)).toEqual([{ x: x0 * 16, y: z0 * 16, w: 48, h: 48 }]);
+    } finally {
+      deck.open = null;
+    }
   });
 });

@@ -8,9 +8,9 @@
  */
 
 import { type Item, numeral } from "@sequoia-leaf/factory";
-import { link, thing } from "@sequoia-leaf/kit/card.ts";
+import { type Description, link, type Stat, thing } from "@sequoia-leaf/kit/card.ts";
 import { el } from "@sequoia-leaf/kit/dom.ts";
-import { num, perMinuteNode } from "@sequoia-leaf/kit/say.ts";
+import { num, perMinute, perMinuteNode } from "@sequoia-leaf/kit/say.ts";
 
 import type { Art } from "../art/index.ts";
 import type { Flow, FlowPart } from "./numbers.ts";
@@ -89,3 +89,17 @@ export function flowNode(art: Art, f: Flow): HTMLElement {
     ),
   );
 }
+
+/**
+ * A machine's own pace in place of its kind's (from its quickest recipe to its slowest), where it has a
+ * recipe in mind (`f`): what it makes
+ * a minute of what it is making, the number its recipe shows, "up to" what its belt carries where
+ * that holds it back.
+ */
+export const ownPace = (stats: Description["stats"], f: Flow | null): (Stat | string)[] =>
+  (stats ?? []).map((st) =>
+    f && typeof st !== "string" && st.label.startsWith("Makes") ? { label: "Makes", value: madeSays(f) } : st,
+  );
+/** What a machine makes a minute, as its card says it. */
+export const madeSays = (f: Flow): string =>
+  f.most === null ? perMinute(f.perMinute) : `up to ${perMinute(f.perMinute)}`;

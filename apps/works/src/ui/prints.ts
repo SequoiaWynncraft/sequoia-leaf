@@ -29,6 +29,7 @@ import {
   isRaw,
   type Item,
   type Kind,
+  kindsMaking,
   LEFT,
   LINE,
   locked,
@@ -118,7 +119,8 @@ function itemPrint(k: Item): ItemPrint {
       if (plot) found.push([plot.plot, tiles, w.plots.includes(plot.plot)]);
     }
   }
-  return { card: "item", item: k, lock: RECIPE[k] ? locked(w.open, { make: k }) : null, found, asked };
+  const makers = kindsMaking(k).filter((m, n) => n === 0 || locked(w.open, { build: m }) === null);
+  return { card: "item", item: k, lock: RECIPE[k] ? locked(w.open, { make: k }) : null, found, asked, makers };
 }
 
 /** A kind of piece at a grade: the first, unless the card names a higher or the piece stands at one; a tunnel priced by the tiles it runs under (`span`). */

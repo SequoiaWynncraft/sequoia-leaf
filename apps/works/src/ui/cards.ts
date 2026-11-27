@@ -28,7 +28,6 @@ import {
   DEPOT_SHARE,
   drawnAt,
   FIXED,
-  GATHERING,
   GIVES,
   type Goal,
   GOALS,
@@ -36,20 +35,17 @@ import {
   HALF,
   isFolio,
   isNode,
-  isRaw,
   type Item,
   ITEM_INFO,
   itemName,
   type Kind,
   kind as kindOf,
   KIND_INFO,
-  makes,
   NODES,
   type Numbered,
   numeral,
   type Plot,
   PYLON,
-  RECIPE,
   RECIPES_N,
   SPLITTER,
   STOP,
@@ -71,14 +67,14 @@ import {
   type Stat,
 } from "@sequoia-leaf/kit/card.ts";
 import { amount, el } from "@sequoia-leaf/kit/dom.ts";
-import { exact, num, perMinute, whole } from "@sequoia-leaf/kit/say.ts";
+import { exact, num, whole } from "@sequoia-leaf/kit/say.ts";
 
 import type { Art } from "../art/index.ts";
 import { FLAG_AT } from "../art/machines.ts";
 import { stump } from "../art/nature.ts";
 import { pageOf } from "../kinds/index.ts";
 import { yardSfx } from "../sound.ts";
-import { flowNode } from "./flow.ts";
+import { flowNode, ownPace } from "./flow.ts";
 import {
   type Given,
   leaves,
@@ -92,9 +88,10 @@ import {
   wantsGiven,
 } from "./goal.ts";
 import { groundCard, type GroundPrint, type LandHands, plotCard, type PlotPrint } from "./land.ts";
+import { madeRows } from "./made.ts";
 import type { Flow } from "./numbers.ts";
 import { fitted, TOOL_ICON, yardIcon } from "./parts.ts";
-import { itemRef, machineRef, nodeRef, pictureRef, plotRef } from "./refs.ts";
+import { itemRef, machineRef, nodeRef, pictureRef } from "./refs.ts";
 import type { SorterPrint } from "./sorter.ts";
 import { splitterWays, type WaysPrint } from "./splitter.ts";
 
@@ -117,6 +114,8 @@ export interface ItemPrint {
   readonly found: readonly (readonly [Plot, number, boolean])[];
   /** The node in hand and the board's orders still asking for it, with how many they are owed. */
   readonly asked: readonly Named[];
+  /** The machines that make it: its recipe's own, and each the yard may build that makes it too. */
+  readonly makers: readonly Kind[];
 }
 
 export interface MachinePrint {
@@ -320,33 +319,9 @@ const entries = (named: readonly Named[]): Entry[] =>
 function itemCard(art: Art, p: ItemPrint): Description {
   const k = p.item;
   const info = ITEM_INFO[k];
-  const recipe = RECIPE[k];
   const usedIn = RECIPES_N.filter((r) => r.from.includes(k)).map((r) => ({ ref: itemRef(r.out) }));
   const rows: Row[] = [];
-  if (recipe) {
-    rows.push({
-      label: "Made from",
-      // A count only where it is more than 1.
-      things: recipe.from.map((part, i) => ({
-        ref: itemRef(part),
-        ...((recipe.need[i] ?? 1) > 1 ? { count: `×${recipe.need[i]}` } : {}),
-      })),
-    });
-    rows.push({ label: "In", things: [{ ref: machineRef(recipe.by), note: perMinute(makes(recipe.by, 1, recipe)) }] });
-  } else if (isRaw(k)) {
-    rows.push({
-      label: "Gathered by",
-      things: [{ ref: machineRef(GATHERING), note: perMinute(makes(GATHERING, 1, null)) }],
-    });
-    rows.push({
-      label: "Lies in",
-      things: p.found.map(([plot, tiles, yours]) => ({
-        ref: plotRef(plot),
-        note: `${tiles} tiles`,
-        ...(yours ? { lit: true, tag: "yours" } : {}),
-      })),
-    });
-  }
+  rows.push(...madeRows(p));
   rows.push({ label: "Used in", things: usedIn });
   if (isFolio(k)) rows.push({ label: "Studied in", things: [{ ref: machineRef(STUDYING) }] });
   rows.push({ label: "Asked for by", things: entries(p.asked) });
@@ -425,19 +400,6 @@ function takeUp(p: StandingPrint, hands: Hands): Action[] {
     ...(p.move ? [{ label: "Move", on: () => hands.move(x, y) }] : []),
   ];
 }
-
-/**
- * A machine's own pace in place of its kind's (from its quickest recipe to its slowest): what it makes
- * a minute of what it is making, the number its recipe shows, "up to" what its belt carries where
- * that holds it back.
- */
-const ownPace = (stats: Description["stats"], f: Flow): (Stat | string)[] =>
-  (stats ?? []).map((st) =>
-    typeof st !== "string" && st.label.startsWith("Makes") ? { label: "Makes", value: madeSays(f) } : st,
-  );
-/** What a machine makes a minute, as its card says it. */
-export const madeSays = (f: Flow): string =>
-  f.most === null ? perMinute(f.perMinute) : `up to ${perMinute(f.perMinute)}`;
 
 /** A machine standing in the yard: its kind's card, with what this one is doing and holds, and what can be done with it. */
 function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
@@ -519,7 +481,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
         : (own?.said?.(p) ?? p.line ?? KIND_INFO[k]?.what ?? "");
   return {
     ...base,
-    ...(p.flow ? { stats: ownPace(base.stats, p.flow) } : {}),
+    stats: ownPace(base.stats, p.flow),
     tag: el("span", p.trouble && !waits ? "k-coral" : "", { text: said }),
     // What is wrong and what to do about it comes first; the numbers are under it.
     blocks: [
