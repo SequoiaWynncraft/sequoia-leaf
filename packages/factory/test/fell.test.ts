@@ -32,13 +32,24 @@ function meadow(felling = true): F.Yard {
   return y;
 }
 
-/** A yard as `meadow` makes it that has bought every plot it may: every redwood of the land on its own land. */
+/** The first ring's plots: the yard and the eight round it, the land of every yard before tier 5's. */
+const firstRing = (p: F.Plotted): boolean => p.ring <= 1;
+/** The redwoods of the first ring's plots: 9. */
+const FIRST_TREES = F.LAND.trees.filter(
+  (tiles) => (F.LAND.plots[F.LAND.plot[tiles[0] ?? 0] ?? F.NONE]?.ring ?? 9) <= 1,
+);
+
+/** A yard as `meadow` makes it that has bought every plot of the first ring: every redwood of it on its own land. */
 function everywhere(): F.Yard {
   const y = meadow();
   for (let more = true; more;) {
     more = false;
     for (const p of y.land.plots)
-      if (!y.plots.includes(p.plot) && !("refused" in give(y, { do: "buyPlot", plot: F.plotName(p.plot) })))
+      if (
+        firstRing(p) &&
+        !y.plots.includes(p.plot) &&
+        !("refused" in give(y, { do: "buyPlot", plot: F.plotName(p.plot) }))
+      )
         more = true;
   }
   return y;
@@ -97,11 +108,11 @@ describe("felling a redwood", () => {
     const y = everywhere();
     const owned = (tiles: readonly number[]): boolean =>
       y.land.plots.some((p, n) => n === y.land.plot[tiles[0] ?? 0] && y.plots.includes(p.plot));
-    expect(F.LAND.trees.every(owned)).toBe(true);
-    const paid = F.LAND.trees.map((tiles) => coinsOf(play(y, { do: "fell", ...spotOf(y, tiles) }))[0]?.[0]);
-    expect(paid).toEqual(PRICES.slice(0, F.LAND.trees.length).map((p) => -p));
+    expect(FIRST_TREES.every(owned)).toBe(true);
+    const paid = FIRST_TREES.map((tiles) => coinsOf(play(y, { do: "fell", ...spotOf(y, tiles) }))[0]?.[0]);
+    expect(paid).toEqual(PRICES.slice(0, FIRST_TREES.length).map((p) => -p));
     // All 9 felled: the next would cost 36,600.
-    expect([F.LAND.trees.length, F.fellPrice(y)]).toEqual([9, 36_600]);
+    expect([FIRST_TREES.length, F.fellPrice(y)]).toEqual([9, 36_600]);
     // By the count alone, whichever were felled: 2,107,900 for the 20th.
     const counted = (n: number): number => F.fellPrice({ ...y, felled: Uint8Array.from({ length: n }, () => 1) });
     expect(Array.from({ length: 10 }, (_, n) => counted(n))).toEqual(PRICES);
@@ -110,7 +121,7 @@ describe("felling a redwood", () => {
 
   test("counts the redwoods felled before it was research: a yard kept with 8 felled pays 24,400 for its 9th", () => {
     const y = everywhere();
-    const others = F.LAND.trees.filter((tiles) => !tiles.includes(TILES[0] ?? -1));
+    const others = FIRST_TREES.filter((tiles) => !tiles.includes(TILES[0] ?? -1));
     const kept = { ...JSON.parse(F.encode(y)), felled: others.map((tiles) => tiles[0]) };
     const back = F.decode(JSON.stringify(kept), y.land);
     if (!back) throw new Error("the yard does not read back");

@@ -18,6 +18,8 @@ import {
   type Leg,
   MILL,
   type Piece,
+  PLOT_H,
+  PLOT_W,
   reopen,
   TUNNEL,
   type Yard,
@@ -51,20 +53,45 @@ afterEach(() => {
   Reflect.deleteProperty(globalThis, "HTMLElement");
 });
 
-/** A yard at tier 4 that owns every plot of the guild's land, without Long reach: the plot stood on and the eight round it. */
+/**
+ * Every tile below is counted from the north-west corner of the first ring of plots round the yard
+ * (Windfall Hollow's), three plots by three, 48 tiles by 36: the guild's whole land when these were
+ * written, and all of it a yard of tier 4 may own.
+ */
+const [OX, OY] = [LAND.origin[0] - PLOT_W, LAND.origin[1] - PLOT_H];
+/** A tile of the first ring, by its column and row there, as a place on the land. */
+const T = (x: number, z: number): { x: number; y: number } => ({ x: OX + x, y: OY + z });
+/** A tile's number on the land, by its column and row in the first ring. */
+const at = (x: number, z: number): number => (OY + z) * LAND.w + OX + x;
+/** A yard at tier 4 that owns every plot of the first ring, the nine round the depot, without Long reach. */
 function everywhere(): Yard {
   const y = create({ seed: 6, tier: 4 });
-  y.plots = LAND.plots.map((p) => p.plot);
+  y.plots = LAND.plots.filter((p) => p.ring <= 1).map((p) => p.plot);
   y.done = y.done.filter((g) => g !== goal("longreach"));
   reopen(y);
   return y;
 }
 /** The middle of a tile, in pixels of the art. */
-const mid = (x: number, y: number): { x: number; y: number } => ({ x: x * 16 + 8, y: y * 16 + 8 });
+const mid = (x: number, y: number): { x: number; y: number } => ({ x: (OX + x) * 16 + 8, y: (OY + y) * 16 + 8 });
+/** A point in pixels of the art, from the first ring's corner. */
+const px = (x: number, y: number): { x: number; y: number } => ({ x: OX * 16 + x, y: OY * 16 + y });
 /** Builds a piece from anywhere (no figure of yours stands in the yard yet), facing east, which must be built; a tunnel passing under `span` tiles. */
 function stands(y: Yard, kind: Piece["kind"], x: number, z: number, span?: number): void {
-  if (!build(y, kind, x, z, 0, Infinity, span === undefined ? {} : { span }).ok)
+  if (!build(y, kind, OX + x, OY + z, 0, Infinity, span === undefined ? {} : { span }).ok)
     throw new Error(`nothing built at ${x}, ${z}`);
+}
+/** The tools, the reach and the page, given tiles of the first ring. */
+const aim = (x: number, z: number): void => aimAt(OX + x, OY + z);
+const wayIn = (x: number, z: number): boolean => setWayIn(OX + x, OY + z);
+const inReach = (x: number, z: number): boolean => reaches(OX + x, OY + z);
+const startAt = (x: number, z: number): void => markStart(OX + x, OY + z);
+const overAt = (x: number, z: number): void => markOver(OX + x, OY + z);
+const tap = (x: number, z: number): void => fingerTap(OX + x, OY + z);
+const removeAt = (x: number, z: number): boolean => takeAway(OX + x, OY + z);
+/** What is in reach, as a box of tiles of the first ring. */
+function box(): { x0: number; y0: number; x1: number; y1: number } | null {
+  const b = reachBox();
+  return b && { x0: b.x0 - OX, y0: b.y0 - OY, x1: b.x1 - OX, y1: b.y1 - OY };
 }
 /** Does something with a finger, as on a phone: aiming first, and Build (`confirm`) or a second tap to build. */
 function onPhone(act: () => void): void {
@@ -76,7 +103,7 @@ function onPhone(act: () => void): void {
   }
 }
 /** A leg of a run of belt on row 9, heading east, at grade 2. */
-const beltAt = (x: number): Leg => ({ tunnel: false, x, y: 9, dir: 0, grade: 2 });
+const beltAt = (x: number): Leg => ({ tunnel: false, ...T(x, 9), dir: 0, grade: 2 });
 /** Where you stand in Windfall Hollow, the north-west corner: tiles 0 to 31 across and 0 to 23 down are in reach. */
 const HOLLOW = mid(8, 6);
 /** Whether what is in hand is shown as it would go: its aim (or run) says nothing against it, and nor does any piece of it. */
@@ -123,11 +150,11 @@ function click(canvas: EventTarget, x: number, y: number): void {
 /** With Select, the piece on row 9 at `x` marked, taken in hand to move, and set down at `to`: whether it was shown gold, which is whether it went. */
 function moved(x: number, to: number): boolean {
   setTool("select");
-  markStart(x, 9);
-  markOver(x, 9);
+  startAt(x, 9);
+  overAt(x, 9);
   markEnd();
   hold("move");
-  aimAt(to, 9);
+  aim(to, 9);
   const shown = gold();
   expect(confirm()).toBe(shown);
   return shown;
@@ -137,7 +164,7 @@ function moved(x: number, to: number): boolean {
 function setPrint(x: number): boolean {
   setTool("select");
   hold(0);
-  aimAt(x, 20);
+  aim(x, 20);
   const shown = gold();
   expect(confirm()).toBe(shown);
   return shown;
@@ -147,42 +174,42 @@ describe("reach", () => {
   test("from the yard's middle plot, all nine plots of the guild's land are in reach", async () => {
     await opened(everywhere());
     placeYou(mid(24, 21));
-    expect(reachBox()).toEqual({ x0: 0, y0: 0, x1: 47, y1: 35 });
-    expect([reaches(0, 0), reaches(47, 35), reaches(47, 0), reaches(0, 35)]).toEqual([true, true, true, true]);
+    expect(box()).toEqual({ x0: 0, y0: 0, x1: 47, y1: 35 });
+    expect([inReach(0, 0), inReach(47, 35), inReach(47, 0), inReach(0, 35)]).toEqual([true, true, true, true]);
   });
 
   test("from a corner plot, the plot stood on and the eight round it: the far side of the map is out of reach", async () => {
     await opened(everywhere());
     // Windfall Hollow, the north-west corner.
     placeYou(mid(8, 6));
-    expect(reachBox()).toEqual({ x0: -16, y0: -12, x1: 31, y1: 23 });
-    expect([reaches(31, 23), reaches(32, 23), reaches(31, 24), reaches(44, 33)]).toEqual([true, false, false, false]);
+    expect(box()).toEqual({ x0: -16, y0: -12, x1: 31, y1: 23 });
+    expect([inReach(31, 23), inReach(32, 23), inReach(31, 24), inReach(44, 33)]).toEqual([true, false, false, false]);
   });
 
   test("at a plot's edge it is the plot stood on that counts: a step across moves reach a plot over", async () => {
     await opened(everywhere());
     // The last pixel of the Hollow's last column, then the first of the Grove's.
-    placeYou({ x: 16 * 16 - 1, y: 6 * 16 + 8 });
-    expect(reaches(31, 6)).toBe(true);
-    expect(reaches(32, 6)).toBe(false);
+    placeYou(px(16 * 16 - 1, 6 * 16 + 8));
+    expect(inReach(31, 6)).toBe(true);
+    expect(inReach(32, 6)).toBe(false);
     leave();
-    placeYou({ x: 16 * 16, y: 6 * 16 + 8 });
-    expect(reaches(47, 6)).toBe(true);
-    expect(reaches(0, 30)).toBe(false);
+    placeYou(px(16 * 16, 6 * 16 + 8));
+    expect(inReach(47, 6)).toBe(true);
+    expect(inReach(0, 30)).toBe(false);
   });
 
   test("a build, a run, a removal and a set-down out of reach are refused, a build over one of its kind too; turning and painting are not limited", async () => {
     const y = everywhere();
     await opened(y, 100_000);
     placeYou(mid(8, 6));
-    const far = { x: 44, y: 33 };
+    const far = T(44, 33);
     const refused = { refused: "out_of_reach", why: OUT_OF_REACH };
     expect(doNow({ do: "build", kind: BELT, x: far.x, y: far.y, dir: 0, grade: 1 })).toEqual(refused);
     expect(
       doNow({
         do: "lay",
         legs: [
-          { tunnel: false, x: 30, y: 20, dir: 0, grade: 1 },
+          { tunnel: false, ...T(30, 20), dir: 0, grade: 1 },
           { ...far, tunnel: false, dir: 0, grade: 1 },
         ],
       }),
@@ -199,27 +226,27 @@ describe("reach", () => {
     expect(doNow({ do: "remove", x: far.x, y: far.y })).toEqual(refused);
     expect(doNow({ do: "clear", tiles: [far.y * y.land.w + far.x] })).toEqual(refused);
     // In reach, the rules decide.
-    expect("refused" in doNow({ do: "build", kind: BELT, x: 10, y: 6, dir: 0, grade: 1 })).toBe(false);
+    expect("refused" in doNow({ do: "build", kind: BELT, ...T(10, 6), dir: 0, grade: 1 })).toBe(false);
   });
 
   test("an aim out of reach says so, and its ghost shows it; the brush aims anywhere", async () => {
     await opened(everywhere(), 100_000);
     placeYou(HOLLOW);
     setTool(MILL);
-    aimAt(44, 33);
+    aim(44, 33);
     expect(aimOf(S.hand)?.why).toBe(OUT_OF_REACH);
-    aimAt(10, 8);
+    aim(10, 8);
     expect(aimOf(S.hand)?.why).toBeNull();
     // Reach is said first: past it, what the rules would say there does not matter yet.
-    aimAt(40, 30);
+    aim(40, 30);
     expect(aimOf(S.hand)?.why).toBe(OUT_OF_REACH);
     setTool("paint");
-    aimAt(44, 33);
+    aim(44, 33);
     expect(aimOf(S.hand)?.why).not.toBe(OUT_OF_REACH);
     // Without a figure (a visit, a review page's own yard) nothing is out of reach.
     leave();
     setTool(MILL);
-    aimAt(44, 33);
+    aim(44, 33);
     expect(aimOf(S.hand)?.why).not.toBe(OUT_OF_REACH);
   });
 
@@ -230,29 +257,29 @@ describe("reach", () => {
     await opened(y, 100_000);
     placeYou(HOLLOW);
     const far = { refused: "out_of_reach", why: OUT_OF_REACH };
-    expect(beyondReach({ do: "build", kind: TUNNEL, x: 30, y: 12, dir: 0, grade: 1 })).toEqual(far);
-    expect(doNow({ do: "lay", legs: [{ tunnel: true, x: 30, y: 12, dir: 0, span: 2, grade: 1 }] })).toEqual(far);
+    expect(beyondReach({ do: "build", kind: TUNNEL, ...T(30, 12), dir: 0, grade: 1 })).toEqual(far);
+    expect(doNow({ do: "lay", legs: [{ tunnel: true, ...T(30, 12), dir: 0, span: 2, grade: 1 }] })).toEqual(far);
     // With the tunnel in hand: in at 30, 12, up at 33, 12 is coral and refused; up at 31, 12 is gold and built.
     setTool(TUNNEL);
-    expect(setWayIn(30, 12)).toBe(true);
-    aimAt(33, 12);
+    expect(wayIn(30, 12)).toBe(true);
+    aim(33, 12);
     expect([gold(), aimOf(S.hand)?.why]).toEqual([false, OUT_OF_REACH]);
     expect(confirm()).toBe(false);
     // A way in out of reach is not set: nothing it could become is in reach.
     setTool(TUNNEL);
-    expect(setWayIn(33, 14)).toBe(false);
-    expect(setWayIn(28, 14)).toBe(true);
-    aimAt(31, 14);
+    expect(wayIn(33, 14)).toBe(false);
+    expect(wayIn(28, 14)).toBe(true);
+    aim(31, 14);
     expect(gold()).toBe(true);
     expect(confirm()).toBe(true);
     // Taking the far one away is out of reach by its far mouth, with the spade as with a card's Remove.
     setTool("remove");
-    aimAt(30, 10);
+    aim(30, 10);
     expect([gold(), aimOf(S.hand)?.why]).toEqual([false, OUT_OF_REACH]);
-    expect(doNow({ do: "remove", x: 30, y: 10 })).toEqual(far);
-    aimAt(28, 14);
+    expect(doNow({ do: "remove", ...T(30, 10) })).toEqual(far);
+    aim(28, 14);
     expect(gold()).toBe(true);
-    expect(doNow({ do: "remove", x: 28, y: 14 })).not.toEqual(far);
+    expect(doNow({ do: "remove", ...T(28, 14) })).not.toEqual(far);
   });
 
   test("a move: gold where it leaves and lands in reach, coral and refused where it leaves from out of reach", async () => {
@@ -262,9 +289,9 @@ describe("reach", () => {
     await opened(y, 100_000);
     placeYou(HOLLOW);
     expect(moved(33, 26)).toBe(false);
-    expect(S.world.kind[9 * y.land.w + 33]).toBe(MILL);
+    expect(S.world.kind[at(33, 9)]).toBe(MILL);
     expect(moved(28, 26)).toBe(true);
-    expect(S.world.kind[9 * y.land.w + 26]).toBe(MILL);
+    expect(S.world.kind[at(26, 9)]).toBe(MILL);
   });
 
   test("a blueprint holding a tunnel: gold only with both its mouths in reach, and the press does as shown", async () => {
@@ -272,14 +299,12 @@ describe("reach", () => {
     stands(y, TUNNEL, 10, 18);
     await opened(y, 100_000);
     placeYou(HOLLOW);
-    expect(doNow({ do: "saveBlueprint", slot: 0, tiles: [18 * y.land.w + 10, 18 * y.land.w + 12] })).not.toHaveProperty(
-      "refused",
-    );
+    expect(doNow({ do: "saveBlueprint", slot: 0, tiles: [at(10, 18), at(12, 18)] })).not.toHaveProperty("refused");
     // Its box is three tiles wide, aimed at its middle: at 31 its far mouth would be at 32.
     expect(setPrint(31)).toBe(false);
-    expect(S.world.kind[20 * y.land.w + 30]).not.toBe(TUNNEL);
+    expect(S.world.kind[at(30, 20)]).not.toBe(TUNNEL);
     expect(setPrint(30)).toBe(true);
-    expect(S.world.kind[20 * y.land.w + 29]).toBe(TUNNEL);
+    expect(S.world.kind[at(29, 20)]).toBe(TUNNEL);
   });
 
   test("a piece built over one of its kind counts, out of reach too; the turn and grade commands do not", async () => {
@@ -290,18 +315,18 @@ describe("reach", () => {
     // With the belt in hand, turning or raising the far belt is a build on its tile: coral, and refused.
     setTool(BELT);
     S.dir = 1;
-    aimAt(40, 9);
+    aim(40, 9);
     expect([gold(), aimOf(S.hand)?.why]).toEqual([false, OUT_OF_REACH]);
     expect(confirm()).toBe(false);
     setGrade(2);
-    aimAt(40, 9);
+    aim(40, 9);
     expect([gold(), aimOf(S.hand)?.raises]).toEqual([false, 1]);
     expect(confirm()).toBe(false);
-    expect([S.world.dir[9 * y.land.w + 40], S.world.grade[9 * y.land.w + 40]]).toEqual([0, 1]);
+    expect([S.world.dir[at(40, 9)], S.world.grade[at(40, 9)]]).toEqual([0, 1]);
     // Turning it (R, or its card) and the grade command put nothing down and take nothing up.
-    expect(beyondReach({ do: "upgrade", tiles: [9 * y.land.w + 40] })).toBeNull();
-    expect(doNow({ do: "turn", x: 40, y: 9, dir: 1 })).not.toHaveProperty("refused");
-    expect(S.world.dir[9 * y.land.w + 40]).toBe(1);
+    expect(beyondReach({ do: "upgrade", tiles: [at(40, 9)] })).toBeNull();
+    expect(doNow({ do: "turn", ...T(40, 9), dir: 1 })).not.toHaveProperty("refused");
+    expect(S.world.dir[at(40, 9)]).toBe(1);
   });
 
   test("a tunnel raised from its far mouth counts its two mouths, both in reach: gold, and raised", async () => {
@@ -311,14 +336,14 @@ describe("reach", () => {
     stands(y, TUNNEL, 28, 11, 2);
     await opened(y, 100_000);
     placeYou(HOLLOW);
-    expect(reachBox()?.x1).toBe(31);
-    expect(beyondReach({ do: "build", kind: TUNNEL, x: 31, y: 11, dir: 0, grade: 2 })).toBeNull();
+    expect(box()?.x1).toBe(31);
+    expect(beyondReach({ do: "build", kind: TUNNEL, ...T(31, 11), dir: 0, grade: 2 })).toBeNull();
     setTool(TUNNEL);
     setGrade(2);
-    aimAt(31, 11);
+    aim(31, 11);
     expect([gold(), aimOf(S.hand)?.why ?? null]).toEqual([true, null]);
     expect(confirm()).toBe(true);
-    expect([S.world.grade[11 * y.land.w + 28], S.world.grade[11 * y.land.w + 31]]).toEqual([2, 2]);
+    expect([S.world.grade[at(28, 11)], S.world.grade[at(31, 11)]]).toEqual([2, 2]);
   });
 
   test("moving a tunnel's way in onto its far mouth, which would bring the far mouth out of reach, is coral and refused", async () => {
@@ -328,16 +353,16 @@ describe("reach", () => {
     await opened(y, 100_000);
     placeYou(HOLLOW);
     setTool("select");
-    markStart(28, 11);
-    markOver(31, 11);
+    startAt(28, 11);
+    overAt(31, 11);
     markEnd();
     hold("move");
     // Its box is four tiles wide, aimed at its second: aimed at 32, its way in lands on 31.
-    aimAt(32, 11);
-    expect(S.group?.at[0]).toMatchObject({ x: 31, y: 11 });
+    aim(32, 11);
+    expect(S.group?.at[0]).toMatchObject(T(31, 11));
     expect(gold()).toBe(false);
     expect(confirm()).toBe(false);
-    expect(S.world.kind[11 * y.land.w + 28]).toBe(TUNNEL);
+    expect(S.world.kind[at(28, 11)]).toBe(TUNNEL);
   });
 
   test("a run of belt over standing belts counts every tile of it: re-laying far belts is refused", async () => {
@@ -356,11 +381,11 @@ describe("reach", () => {
     setTool(TUNNEL);
     S.dir = 0;
     // East from 30, 12 it would come up at 32, out of reach; the click sets the way in, in reach.
-    aimAt(30, 12);
-    expect([gold(), aimOf(S.hand)?.far]).toEqual([true, 12 * S.world.land.w + 32]);
-    aimAt(32, 12);
+    aim(30, 12);
+    expect([gold(), aimOf(S.hand)?.far]).toEqual([true, at(32, 12)]);
+    aim(32, 12);
     expect(aimOf(S.hand)?.why).toBe(OUT_OF_REACH);
-    expect(setWayIn(30, 12)).toBe(true);
+    expect(wayIn(30, 12)).toBe(true);
   });
 
   test("raising a standing tunnel shows the mouths that stand, and is judged on them", async () => {
@@ -373,18 +398,14 @@ describe("reach", () => {
     setGrade(2);
     S.dir = 0;
     // From 30 to 33: its far mouth is out of reach.
-    aimAt(30, 10);
-    expect([aimOf(S.hand)?.far, aimOf(S.hand)?.why, aimOf(S.hand)?.raises]).toEqual([
-      10 * y.land.w + 33,
-      OUT_OF_REACH,
-      1,
-    ]);
+    aim(30, 10);
+    expect([aimOf(S.hand)?.far, aimOf(S.hand)?.why, aimOf(S.hand)?.raises]).toEqual([at(33, 10), OUT_OF_REACH, 1]);
     expect(confirm()).toBe(false);
     // From 27 to 30, wholly in reach: gold, and raised.
-    aimAt(27, 13);
-    expect([aimOf(S.hand)?.far, gold()]).toEqual([13 * y.land.w + 30, true]);
+    aim(27, 13);
+    expect([aimOf(S.hand)?.far, gold()]).toEqual([at(30, 13), true]);
     expect(confirm()).toBe(true);
-    expect(S.world.grade[13 * y.land.w + 27]).toBe(2);
+    expect(S.world.grade[at(27, 13)]).toBe(2);
   });
 
   test("a phone's run start on a machine stands as it is, as before #270: Build there is what the rules say of a belt on it", async () => {
@@ -393,36 +414,35 @@ describe("reach", () => {
     stands(y, MILL, 10, 9);
     await opened(y, 100_000);
     placeYou(HOLLOW);
-    const t = (x: number, z: number): number => z * y.land.w + x;
     onPhone(() => {
       S.dir = 3;
       setTool(BELT);
-      fingerTap(10, 9);
+      tap(10, 9);
       // The start is the mill, aimed on its own tile, and the hand keeps its facing.
       expect([S.from, aimOf(S.hand)?.x, aimOf(S.hand)?.y, aimOf(S.hand)?.why, S.dir]).toEqual([
-        { x: 10, y: 9 },
-        10,
-        9,
+        T(10, 9),
+        OX + 10,
+        OY + 9,
         null,
         3,
       ]);
       expect(handPrint().go).toEqual({ label: "Build", bad: false });
       // Build, or the same tile again, is a belt on the mill: the rules refuse it, and nothing is laid.
       expect(confirm()).toBe(false);
-      expect([aimOf(S.hand)?.why, S.world.kind[t(11, 9)], S.world.kind[t(10, 9)]]).toEqual([
+      expect([aimOf(S.hand)?.why, S.world.kind[at(11, 9)], S.world.kind[at(10, 9)]]).toEqual([
         "Something is here already",
         255,
         MILL,
       ]);
       setTool(BELT);
-      fingerTap(10, 9);
-      fingerTap(10, 9);
-      expect([S.world.kind[t(11, 9)], S.world.kind[t(10, 9)]]).toEqual([255, MILL]);
+      tap(10, 9);
+      tap(10, 9);
+      expect([S.world.kind[at(11, 9)], S.world.kind[at(10, 9)]]).toEqual([255, MILL]);
       // A run tapped out from it starts where it hands things on.
       setTool(BELT);
-      fingerTap(10, 9);
-      fingerTap(14, 9);
-      expect(S.run?.legs[0]).toMatchObject({ x: 11, y: 9 });
+      tap(10, 9);
+      tap(14, 9);
+      expect(S.run?.legs[0]).toMatchObject(T(11, 9));
     });
   });
 
@@ -433,8 +453,8 @@ describe("reach", () => {
     placeYou(HOLLOW);
     onPhone(() => {
       setTool(BELT);
-      fingerTap(14, 9);
-      expect([aimOf(S.hand)?.x, aimOf(S.hand)?.y, aimOf(S.hand)?.why]).toEqual([14, 9, null]);
+      tap(14, 9);
+      expect([aimOf(S.hand)?.x, aimOf(S.hand)?.y, aimOf(S.hand)?.why]).toEqual([OX + 14, OY + 9, null]);
       expect(handPrint().go).toEqual({ label: "Build", bad: false });
     });
   });
@@ -446,11 +466,11 @@ describe("reach", () => {
     placeYou(HOLLOW);
     onPhone(() => {
       setTool(BELT);
-      fingerTap(40, 9);
-      expect([aimOf(S.hand)?.x, aimOf(S.hand)?.why]).toEqual([40, null]);
+      tap(40, 9);
+      expect([aimOf(S.hand)?.x, aimOf(S.hand)?.why]).toEqual([OX + 40, null]);
       expect(confirm()).toBe(false);
       expect(aimOf(S.hand)?.why).toBe(OUT_OF_REACH);
-      expect(S.world.kind[9 * y.land.w + 41]).not.toBe(BELT);
+      expect(S.world.kind[at(41, 9)]).not.toBe(BELT);
     });
   });
 
@@ -464,7 +484,7 @@ describe("reach", () => {
     const was = toolHooks.said;
     toolHooks.said = (text) => said.push(text);
     try {
-      expect(takeAway(40, 9)).toBe(false);
+      expect(removeAt(40, 9)).toBe(false);
       expect(said).toEqual(["Out of reach."]);
     } finally {
       toolHooks.said = was;
@@ -557,18 +577,18 @@ describe("the walking keys", () => {
   });
 });
 
-/** A row of mills down x = 26 from `top` to the map's foot, every plot owned; from 25, 35 a tap at 27, 35 walks round it. */
+/** A row of mills down x = 26 from `top` to the first ring's foot, every plot of it owned and the land below not, so solid; from 25, 35 a tap at 27, 35 walks round it. */
 async function roundTheWall(top: number): Promise<void> {
   const y = everywhere();
-  for (let z = top; z <= 35; z++) build(y, MILL, 26, z, 0, Infinity);
+  for (let z = top; z <= 35; z++) build(y, MILL, OX + 26, OY + z, 0, Infinity);
   await opened(y);
   canvasPage();
   // Mills, and a redwood where none could be built: solid all the way down.
   for (let z = top; z <= 35; z++) expect(yardSolid(S.world).at(mid(26, z).x, mid(26, z).y)).not.toBeNull();
   const c = placeYou(mid(25, 35));
-  expect(walkTo(27 * 16 + 5, 35 * 16 + 9)).toBe(true);
+  expect(walkTo(px(27 * 16 + 5, 35 * 16 + 9).x, px(27 * 16 + 5, 35 * 16 + 9).y)).toBe(true);
   for (let k = 0; k < 60 * 40 && c.going; k++) stepInput(1 / 60);
-  expect(c.tile).toEqual({ x: 27, y: 35 });
+  expect(c.tile).toEqual(T(27, 35));
 }
 
 describe("a walk asked for by a tap", () => {
@@ -580,7 +600,7 @@ describe("a walk asked for by a tap", () => {
     stepInput(1 / 60);
     pan(-120, -60);
     expect(following()).toBe(false);
-    click(canvas, 30 * 16 + 5, 21 * 16 + 9);
+    click(canvas, OX * 16 + 30 * 16 + 5, OY * 16 + 21 * 16 + 9);
     expect([you()?.going, following()]).toEqual([true, true]);
   });
 
@@ -608,8 +628,8 @@ describe("a walk asked for by a tap", () => {
   test("with no way there at all, goes as near as anyone can get", async () => {
     // A place shut in by mills on every side: walked to, you end beside them.
     const y = everywhere();
-    for (let x = 9; x <= 13; x++) for (const z of [26, 30]) build(y, MILL, x, z, 0, Infinity);
-    for (let z = 27; z <= 29; z++) for (const x of [9, 13]) build(y, MILL, x, z, 0, Infinity);
+    for (let x = 9; x <= 13; x++) for (const z of [26, 30]) build(y, MILL, OX + x, OY + z, 0, Infinity);
+    for (let z = 27; z <= 29; z++) for (const x of [9, 13]) build(y, MILL, OX + x, OY + z, 0, Infinity);
     await opened(y);
     canvasPage();
     const c = placeYou(mid(3, 28));
@@ -618,7 +638,7 @@ describe("a walk asked for by a tap", () => {
     for (let k = 0; k < 60 * 20 && c.going; k++) stepInput(1 / 60);
     // Three tiles from it, outside the ring, on whichever side is nearest: never standing where it began.
     expect(c.going).toBe(false);
-    expect(Math.hypot(c.tile.x - 11, c.tile.y - 28)).toBe(3);
+    expect(Math.hypot(c.tile.x - OX - 11, c.tile.y - OY - 28)).toBe(3);
   });
 });
 
@@ -628,7 +648,7 @@ describe("a zoom while the view goes with you", () => {
     canvasPage();
     setCamera(
       { width: 320, height: 200, style: { transform: "" } },
-      { x: -56, y: -88, w: 48 * 16 + 112, h: 36 * 16 + 144 },
+      { x: -56, y: -88, w: LAND.w * 16 + 112, h: LAND.h * 16 + 144 },
     );
     setZoom(0);
     setTool(null);
@@ -663,7 +683,7 @@ async function framed(): Promise<{ c: ReturnType<typeof placeYou> }> {
   canvasPage();
   setCamera(
     { width: 320, height: 200, style: { transform: "" } },
-    { x: -56, y: -88, w: 48 * 16 + 112, h: 36 * 16 + 144 },
+    { x: -56, y: -88, w: LAND.w * 16 + 112, h: LAND.h * 16 + 144 },
   );
   setZoom(0);
   setTool(null);
@@ -727,17 +747,17 @@ describe("a tap with nothing in hand", () => {
     setTool(null);
     const c = placeYou(mid(24, 21));
     stepInput(1 / 60);
-    click(canvas, 30 * 16 + 5, 21 * 16 + 9);
+    click(canvas, OX * 16 + 30 * 16 + 5, OY * 16 + 21 * 16 + 9);
     expect(c.going).toBe(true);
-    expect(c.bound).toEqual({ x: 30 * 16 + 5, y: 21 * 16 + 9 });
+    expect(c.bound).toEqual(px(30 * 16 + 5, 21 * 16 + 9));
     c.steer(0, 0);
-    expect("refused" in doNow({ do: "build", kind: MILL, x: 20, y: 21, dir: 0, grade: 1 })).toBe(false);
+    expect("refused" in doNow({ do: "build", kind: MILL, ...T(20, 21), dir: 0, grade: 1 })).toBe(false);
     c.put(mid(24, 21).x, mid(24, 21).y);
     // A piece: its card is asked for (no card is drawn here), and nobody walks.
-    click(canvas, 20 * 16 + 8, 21 * 16 + 8);
+    click(canvas, OX * 16 + 20 * 16 + 8, OY * 16 + 21 * 16 + 8);
     expect([c.going, c.bound]).toEqual([false, null]);
     // The ground again: the card is put away, and you go.
-    click(canvas, 27 * 16 + 8, 21 * 16 + 8);
+    click(canvas, OX * 16 + 27 * 16 + 8, OY * 16 + 21 * 16 + 8);
     expect([deck.open, c.going]).toEqual([null, true]);
   });
 });

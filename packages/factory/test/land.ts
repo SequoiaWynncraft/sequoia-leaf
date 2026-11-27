@@ -38,7 +38,7 @@ function oneplot(
     water,
     trunk,
     plot: new Uint8Array(w * h),
-    plots: [{ plot: F.plot("yard"), name: "The Yard", why: "", price: 0, x: 0, y: 0, w, h }],
+    plots: [{ plot: F.plot("yard"), name: "The Yard", why: "", price: 0, ring: 0, x: 0, y: 0, w, h }],
     depot,
   });
 }

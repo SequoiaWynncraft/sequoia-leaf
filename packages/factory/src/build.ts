@@ -10,7 +10,7 @@ import type { Setters } from "./kinds/kind.ts";
 import { RULES } from "./kinds/list.ts";
 import { keepsFor } from "./kinds/maker.ts";
 import { digs, exitOf } from "./kinds/tunnel.ts";
-import { type Plotted, touching } from "./land.ts";
+import { plotPrice, type Plotted, touching } from "./land.ts";
 import { join } from "./lines.ts";
 import { isBig, pieceOf } from "./sizes.ts";
 import {
@@ -410,7 +410,7 @@ export function plotRefusal(y: Yard, id: Plot, coins: number): string | null {
   const { state, why } = plotState(y, id);
   if (state === "owned") return "You already own that plot";
   if (state === "not yet") return why;
-  return coins < (plotOf(y, id)?.price ?? 0) ? "Not enough Coins" : null;
+  return coins < plotPrice(y, id) ? "Not enough Coins" : null;
 }
 
 /**
@@ -445,7 +445,9 @@ export function fell(y: Yard, x: number, z: number, coins: number): Spent {
 export function buyPlot(y: Yard, id: Plot, coins: number): Spent {
   const why = plotRefusal(y, id, coins);
   if (why !== null) return { ok: false, why };
+  // Its price before it is the yard's: owned, it would count toward its own rise.
+  const cost = plotPrice(y, id);
   y.plots.push(id);
   changed(y);
-  return { ok: true, cost: plotOf(y, id)?.price ?? 0 };
+  return { ok: true, cost };
 }

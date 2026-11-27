@@ -10,6 +10,7 @@ import {
   create,
   kind,
   type KindName,
+  LAND,
   type Place,
   RUN,
   type Solid,
@@ -25,15 +26,18 @@ import { GAIT } from "./feel.ts";
 import { Follow } from "./follow.ts";
 import { findWay } from "./way.ts";
 
-/** A yard at tier 4, where everything the slice builds is open; the depot's middle is at 24, 18. */
+/** A yard at tier 4, where everything the slice builds is open. Every tile below is counted east and south of the depot's middle. */
 const yard = (): Yard => create({ seed: 4, tier: 4 });
-/** Builds a piece facing east, which must be built. */
+const [DX, DY] = LAND.depot;
+/** Builds a piece facing east, as far east and south of the depot, which must be built. */
 function build(y: Yard, name: KindName, x: number, z: number): void {
-  const did = built(y, kind(name), x, z, 0, Infinity);
-  if (!did.ok) throw new Error(`no ${name} at ${x}, ${z}`);
+  const did = built(y, kind(name), DX + x, DY + z, 0, Infinity);
+  if (!did.ok) throw new Error(`no ${name} at ${x}, ${z} from the depot`);
 }
-/** The middle of a tile, in pixels of the art. */
-const mid = (x: number, y: number): Place => ({ x: x * 16 + 8, y: y * 16 + 8 });
+/** The middle of a tile as far east and south of the depot, in pixels of the art. */
+const mid = (x: number, y: number): Place => ({ x: (DX + x) * 16 + 8, y: (DY + y) * 16 + 8 });
+/** The tile a figure stands on, as far east and south of the depot. */
+const tileOf = (c: Character): { x: number; y: number } => ({ x: c.tile.x - DX, y: c.tile.y - DY });
 /** What the feet did, counted. */
 function feet(): Footing & { steps: number; asides: number; bumps: number } {
   const f = {
@@ -63,10 +67,10 @@ describe("walking and running", () => {
   test("by the keys, a figure walks at 64 pixels a second at once, and runs at 128 after 0.7 seconds", () => {
     const y = yard();
     const solid = yardSolid(y);
-    const { c } = figure(mid(17, 13));
+    const { c } = figure(mid(-7, -5));
     c.steer(1, 0);
     run(c, solid, 0.5);
-    expect(c.x - mid(17, 13).x).toBeCloseTo(WALK * 0.5, 0);
+    expect(c.x - mid(-7, -5).x).toBeCloseTo(WALK * 0.5, 0);
     expect(c.running).toBe(false);
     run(c, solid, GAIT.runAfter - 0.5 + GAIT.runUp + 0.05);
     expect(c.speed).toBe(RUN);
@@ -82,7 +86,7 @@ describe("walking and running", () => {
   test("goes as far at 30, 60 or 144 frames a second", () => {
     const y = yard();
     const ends = [30, 60, 144].map((hz) => {
-      const { c } = figure(mid(17, 13));
+      const { c } = figure(mid(-7, -5));
       c.steer(1, 0);
       run(c, yardSolid(y), 1.5, hz);
       return c.x;
@@ -92,7 +96,7 @@ describe("walking and running", () => {
 
   test("setting off, a foot comes down at once, then every 10 pixels of a walk; the figure faces the way it goes", () => {
     const y = yard();
-    const { c, feet: f } = figure(mid(17, 13));
+    const { c, feet: f } = figure(mid(-7, -5));
     c.steer(0, 1);
     run(c, yardSolid(y), 0.5);
     expect(c.way).toBe(0);
@@ -104,7 +108,7 @@ describe("walking and running", () => {
   });
 
   test("at rest it breathes now and then, and blinks", () => {
-    const { c } = figure(mid(17, 13));
+    const { c } = figure(mid(-7, -5));
     const poses = new Set<number>();
     for (let k = 0; k < 600; k++) {
       c.step(1 / 60, yardSolid(yard()));
@@ -118,16 +122,16 @@ describe("walking and running", () => {
 describe("solid ground", () => {
   test("a belt is walked over, a mill is not: the keys slide the figure along it", () => {
     const y = yard();
-    for (let x = 18; x <= 22; x++) build(y, "belt", x, 13);
-    const { c } = figure(mid(17, 13));
+    for (let x = -6; x <= -2; x++) build(y, "belt", x, -5);
+    const { c } = figure(mid(-7, -5));
     c.steer(1, 0);
     run(c, yardSolid(y), 1.2);
-    expect(c.tile.x).toBeGreaterThanOrEqual(22);
-    build(y, "mill", 26, 13);
-    const { c: d, feet: f } = figure(mid(24, 13));
+    expect(tileOf(c).x).toBeGreaterThanOrEqual(-2);
+    build(y, "mill", 2, -5);
+    const { c: d, feet: f } = figure(mid(0, -5));
     d.steer(1, 0);
     run(d, yardSolid(y), 1.5);
-    expect(d.x).toBeLessThan(26 * 16);
+    expect(d.x).toBeLessThan(mid(2, -5).x - 8);
     expect(unsound(yardSolid(y), d.x, d.y)).toBeNull();
     // Into it at a walk, no bump is said; only a run that runs into something says so.
     expect(f.bumps).toBe(0);
@@ -135,11 +139,11 @@ describe("solid ground", () => {
 
   test("a figure something is built on is put aside, with a hop, onto the clear ground nearest", () => {
     const y = yard();
-    const { c, told, feet: f } = figure(mid(20, 14));
-    build(y, "mill", 20, 14);
+    const { c, told, feet: f } = figure(mid(-4, -4));
+    build(y, "mill", -4, -4);
     c.step(1 / 60, yardSolid(y));
     expect(f.asides).toBe(1);
-    expect(c.tile.x !== 20 || c.tile.y !== 14).toBe(true);
+    expect(tileOf(c)).not.toEqual({ x: -4, y: -4 });
     expect(unsound(yardSolid(y), c.x, c.y)).toBeNull();
     expect(told.at(-1)).toEqual({ x: c.x, y: c.y });
     run(c, yardSolid(y), 0.1);
@@ -147,10 +151,10 @@ describe("solid ground", () => {
   });
 });
 
-/** A wall of mills from 21, 12 (the yard's top row) down to 21, 17, between where the figure stands and where it is sent. */
+/** A wall of mills 3 west of the depot, from the yard's top row down to the row above the depot's, between where the figure stands and where it is sent. */
 function walled(): Yard {
   const y = yard();
-  for (let z = 12; z <= 17; z++) build(y, "mill", 21, z);
+  for (let z = -6; z <= -1; z++) build(y, "mill", -3, z);
   return y;
 }
 
@@ -229,8 +233,8 @@ describe("a tapped way", () => {
   test("goes round the machines in the way, never through one, and gets there", () => {
     const y = walled();
     const solid = yardSolid(y);
-    const from = mid(19, 14);
-    const to = mid(23, 14);
+    const from = mid(-5, -4);
+    const to = mid(-1, -4);
     const way = findWay(solid, from, to);
     expect(way.whole).toBe(true);
     expect(way.points.length).toBeGreaterThan(1);
@@ -247,8 +251,8 @@ describe("a tapped way", () => {
   test("a long way is run, and comes down to a walk to arrive", () => {
     const y = yard();
     const solid = yardSolid(y);
-    const { c } = figure(mid(17, 13));
-    const to = mid(30, 13);
+    const { c } = figure(mid(-7, -5));
+    const to = mid(6, -5);
     c.goTo(solid, to.x, to.y);
     let fastest = 0;
     let last = 0;
@@ -264,8 +268,8 @@ describe("a tapped way", () => {
   test("a place on a machine is walked to the clear ground nearest it", () => {
     const y = walled();
     const solid = yardSolid(y);
-    const { c } = figure(mid(19, 14));
-    const on = mid(21, 14);
+    const { c } = figure(mid(-5, -4));
+    const on = mid(-3, -4);
     c.goTo(solid, on.x, on.y);
     run(c, solid, 3);
     expect(c.going).toBe(false);
@@ -275,8 +279,8 @@ describe("a tapped way", () => {
 
   test("steering lets go of the way", () => {
     const y = yard();
-    const { c } = figure(mid(17, 13));
-    c.goTo(yardSolid(y), mid(30, 13).x, mid(30, 13).y);
+    const { c } = figure(mid(-7, -5));
+    c.goTo(yardSolid(y), mid(6, -5).x, mid(6, -5).y);
     c.steer(0, 1);
     expect(c.going).toBe(false);
   });

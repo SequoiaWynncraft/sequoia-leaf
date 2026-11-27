@@ -26,6 +26,7 @@ import {
   MILLI,
   NODE_COUNT,
   NONE,
+  plotPrice,
   plotState,
   power,
   type Yard,
@@ -221,7 +222,7 @@ function forSale(y: Yard): readonly { price: string; x: number; y: number; odd: 
     !y.plots.includes(plot.plot) && plotState(y, plot.plot).state === "for sale"
       ? [
           {
-            price: whole(plot.price),
+            price: whole(plotPrice(y, plot.plot)),
             x: (plot.x + plot.w / 2) * MAP,
             y: (plot.y + plot.h / 2) * MAP,
             odd: Math.floor(plot.x / plot.w) % 2 === 1,

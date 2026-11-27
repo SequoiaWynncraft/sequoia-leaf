@@ -7,7 +7,8 @@ import type { KindName } from "../kinds/list.ts";
  * What a node or a piece of research unlocks is one type (`Unlocks`). A new yard starts with `START`.
  */
 import type { ItemName, Wants } from "./items.ts";
-import type { PlotName } from "./plots.ts";
+import { OUTER_IDS, type PlotName } from "./plots.ts";
+import { TIER_5 } from "./tier5.ts";
 
 /** `whole`: a blueprint of the whole yard, kept and put back with Select (`whole.ts`). */
 export const TOOLS = ["paint", "select", "upgrade", "whole"] as const;
@@ -372,7 +373,7 @@ export const NODES: readonly NodeInfo[] = [
     say: "Every party that goes out takes a kit. Every party that comes back has lost it.",
     want: { kit: 300, engine: 150 },
     pay: 8000,
-    unlocks: {},
+    unlocks: { plots: OUTER_IDS },
     gift: { id: "gate-kits", line: "Raid kits from the Works are stacked by the gate." },
   },
   // Tier 4's long works: projects for the days after the gate, none of them needed for the next
@@ -470,4 +471,5 @@ export const NODES: readonly NodeInfo[] = [
     unlocks: { depot: 100 },
     needs: ["observatory", "orreryplans"],
   },
+  ...TIER_5,
 ];

@@ -3,15 +3,18 @@
  * redwoods stand, which plot each tile is on. A land is read-only and shared by every yard on it.
  * The guild's land is put together from the plots table; any other size can be made with `landOf`.
  */
-import { PLOT_H, PLOT_IDS, PLOT_W, type PlotInfo, PLOTS } from "./content/plots.ts";
-import { isPlotOf, item, NONE, type Plot, plot, type Tile } from "./tables.ts";
+import { PLOT_H, PLOT_IDS, PLOT_W, type PlotInfo, PLOTS, RISE } from "./content/plots.ts";
+import { isPlotOf, itemNamed, NONE, type Plot, plot, type Tile } from "./tables.ts";
 
 /** A plot as it lies on a land: its number, its corner and size in tiles, and its price. */
 export interface Plotted {
   readonly plot: Plot;
   readonly name: string;
   readonly why: string;
+  /** Its base price (`PlotInfo.price`): what it costs is `plotPrice`'s to say. */
   readonly price: number;
+  /** How many plots it is from the yard plot, the larger of across and down: 0 for the yard itself. */
+  readonly ring: number;
   readonly x: number;
   readonly y: number;
   readonly w: number;
@@ -83,6 +86,7 @@ function redwoods(w: number, h: number, trunk: Uint8Array, plotAt: Uint8Array): 
   return { tree, trees };
 }
 
+/** What lies in the ground under each letter, by name: a name the tables do not have yet is clear ground (`plots.ts`). */
 const LETTER: Readonly<Record<string, string>> = {
   d: "deadfall",
   s: "stone",
@@ -90,7 +94,14 @@ const LETTER: Readonly<Record<string, string>> = {
   c: "clay",
   a: "sand",
   r: "resin",
+  v: "salvage",
+  t: "tar",
+  q: "crystal",
 };
+/** Each letter's thing as a number, or `NONE`. */
+const DEPOSIT: ReadonlyMap<string, number> = new Map(
+  Object.entries(LETTER).map(([letter, name]) => [letter, itemNamed(name) ?? NONE]),
+);
 
 /**
  * Puts a map together from plots drawn as rows of letters, each placed from the yard plot: as large
@@ -117,22 +128,14 @@ export function landFrom(infos: readonly PlotInfo<string>[], ids: readonly strin
       for (let x = 0; x < PLOT_W; x++) {
         const i = (y0 + y) * w + x0 + x;
         const letter = p.rows[y]?.[x] ?? ".";
-        const raw = LETTER[letter];
         plotAt[i] = n;
-        if (
-          raw === "deadfall" ||
-          raw === "stone" ||
-          raw === "ore" ||
-          raw === "clay" ||
-          raw === "sand" ||
-          raw === "resin"
-        )
-          deposit[i] = item(raw);
+        deposit[i] = DEPOSIT.get(letter) ?? NONE;
         if (letter === "~") water[i] = 1;
         if (letter === "T") trunk[i] = 1;
         if (letter === "D") depots.push([x0 + x, y0 + y]);
       }
-    return { plot: number, name: p.name, why: p.why, price: p.price, x: x0, y: y0, w: PLOT_W, h: PLOT_H };
+    const ring = Math.max(Math.abs(p.col), Math.abs(p.row));
+    return { plot: number, name: p.name, why: p.why, price: p.price, ring, x: x0, y: y0, w: PLOT_W, h: PLOT_H };
   });
   // The depot is the nine tiles marked D; its middle is the fifth of them, reading across and down.
   const depot = depots[4] ?? [Math.floor(w / 2), Math.floor(h / 2)];
@@ -170,3 +173,31 @@ export function besideWater(land: Land, i: number): boolean {
 export const touching = (a: Plotted, b: Plotted): boolean =>
   (a.x < b.x + b.w && b.x < a.x + a.w && (a.y + a.h === b.y || b.y + b.h === a.y)) ||
   (a.y < b.y + b.h && b.y < a.y + a.h && (a.x + a.w === b.x || b.x + b.w === a.x));
+
+/**
+ * How much dearer a plot that rises is, in thousandths, with `n` plots that rise owned: 1,000 with
+ * none, and each one more adds `RISE.percent` per cent of it, rounded down to a whole thousandth.
+ */
+export function rise(n: number): number {
+  let r = 1000;
+  for (let k = 0; k < n; k++) r += Math.floor((r * RISE.percent) / 100);
+  return r;
+}
+
+/** What a plot that rises costs, of a base price, with `n` plots that rise owned: in whole thousands of Coins. */
+export const risen = (base: number, n: number): number => Math.floor((base * rise(n)) / 1_000_000) * 1000;
+
+/** Whether a plot is of the land that rises in price, and counts toward the rise (`RISE`). */
+export const rises = (p: Plotted): boolean => p.ring >= RISE.from;
+
+/**
+ * What a plot costs a yard that owns `plots`: its base price, or for a plot that rises, `risen` by
+ * every plot that rises the yard owns. Nothing for a plot the land does not have.
+ */
+export function plotPrice(y: { readonly land: Land; readonly plots: readonly Plot[] }, id: Plot): number {
+  const p = y.land.plots.find((q) => q.plot === id);
+  if (!p) return 0;
+  if (!rises(p)) return p.price;
+  const owned = y.land.plots.filter((q) => rises(q) && y.plots.includes(q.plot)).length;
+  return risen(p.price, owned);
+}

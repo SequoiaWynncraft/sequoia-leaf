@@ -31,7 +31,7 @@ import { here } from "./clock.ts";
 import { NODES } from "./content/nodes.ts";
 import { historyOf, stampOf } from "./history.ts";
 import { FIRST_LAND, holdsFirst, type KeptLand, keptLandOf, keptOn, piecesOn, tileOn } from "./keptland.ts";
-import { LAND, type Land } from "./land.ts";
+import { LAND, type Land, plotPrice } from "./land.ts";
 import { type KeptNames, keptNames, knownAt10, knownHere, pastTen, WIDER } from "./named.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
 import { keptOf, packPieces, type Piece, placed, unpackWays } from "./pieces.ts";
@@ -340,7 +340,7 @@ function fromFirst(raw: Rec, land: Land): Yard | null {
     if (p === null || y.plots.includes(p)) continue;
     if (plotState(y, p).state === "for sale") y.plots.push(p);
     // A plot the tier does not sell yet is paid back, in the till, at what it would cost again.
-    else y.till += (land.plots.find((q) => q.plot === p)?.price ?? 0) * MILLI;
+    else y.till += plotPrice(y, p) * MILLI;
   }
   const cells: unknown[] = Array.isArray(raw.cells) ? raw.cells : [];
   // Its tiles were the guild's first land's.

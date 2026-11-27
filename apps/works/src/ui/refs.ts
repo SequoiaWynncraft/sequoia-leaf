@@ -44,7 +44,7 @@ export const tierRef = (tier: number): string => `tier:${tier}`;
 /** What a finished goal leaves in town. */
 export const giftRef = (g: Goal): string => `gift:${g}`;
 
-/** The card of a thing unlocked: a kind's, an item's, a plot's, a tool's, or the card of a number as it will be. */
+/** The card of a thing unlocked: a kind's, an item's, a plot's (of plots, the cheapest's), a tool's, or the card of a number as it will be. */
 export function unlockRef(u: Unlock): string {
   switch (u.is) {
     case "kind":
@@ -55,6 +55,9 @@ export function unlockRef(u: Unlock): string {
       return itemRef(u.item);
     case "plot":
       return plotRef(u.plot);
+    // Plots put up for sale together: the card of the cheapest, which says how the rest are priced.
+    case "land":
+      return plotRef(u.first);
     case "tool":
       return toolRef(u.tool);
     case "blueprints":

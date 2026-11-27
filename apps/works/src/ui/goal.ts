@@ -277,12 +277,13 @@ export function needs(
 
 // ---------- what a goal unlocks, and leaves ----------
 
-/** A thing unlocked, as a row: its own card, with the number beside it where it is a number, or a plot's price. */
+/** A thing unlocked, as a row: its own card, with the number beside it where it is a number, or a plot's price (of plots, the least). */
 function unlockLine(u: Unlock): Line {
   const amount = "amount" in u ? u.amount : undefined;
-  const note = u.is === "plot" ? coinsText(u.price) : amount;
-  // A grade and a number are called what the rules call them, not what the piece they change is called.
-  const named = u.is === "grade" || u.is === "number" || u.is === "blueprints";
+  const note = u.is === "plot" ? coinsText(u.price) : u.is === "land" ? `from ${coinsText(u.price)}` : amount;
+  // A grade and a number are called what the rules call them, not what the piece they change is called;
+  // plots put up for sale together, by how many.
+  const named = u.is === "grade" || u.is === "number" || u.is === "blueprints" || u.is === "land";
   if (named)
     return note === undefined ? { ref: unlockRef(u), name: u.name } : { ref: unlockRef(u), name: u.name, note };
   return note === undefined ? { ref: unlockRef(u) } : { ref: unlockRef(u), note };

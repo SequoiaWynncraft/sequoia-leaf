@@ -40,6 +40,7 @@ import {
   NONE,
   orderAt,
   type Plot,
+  plotPrice,
   plotState,
   priceAt,
   ready,
@@ -47,6 +48,7 @@ import {
   recipesFor,
   redwoodAt,
   RIGHT,
+  rises,
   RULES,
   status,
   stops,
@@ -254,6 +256,7 @@ function plotPrint(id: Plot): PlotPrint | null {
   const plot = w.land.plots[index];
   if (!plot) return null;
   const { state, why } = plotState(w, id);
+  const cost = plotPrice(w, id);
   const ground = new Map<Item, number>();
   w.land.deposit.forEach((d, i) => {
     if (isItem(d) && w.land.plot[i] === index) ground.set(d, (ground.get(d) ?? 0) + 1);
@@ -263,12 +266,13 @@ function plotPrint(id: Plot): PlotPrint | null {
     plot: id,
     name: plot.name,
     why: plot.why,
-    price: plot.price,
+    price: cost,
+    rises: rises(plot) && state !== "owned" && w.open.plots[id] === 1,
     state,
     not: why,
     bank: w.land.water.some((v, i) => v === 1 && w.land.plot[i] === index),
     ground: [...ground],
-    short: Math.max(0, plot.price - coins()),
+    short: Math.max(0, cost - coins()),
     visiting: S.visiting !== null,
   };
 }

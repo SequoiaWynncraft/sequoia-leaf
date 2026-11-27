@@ -27,7 +27,7 @@ import { fromCorner, tileFromCorner } from "./keptland.ts";
 import type { Land } from "./land.ts";
 import { counting } from "./orders.ts";
 import { waysOn } from "./pieces.ts";
-import { ITEM_COUNT, NONE, SPAN_MOST } from "./tables.ts";
+import { ITEM_COUNT, NODE_COUNT, NONE, SPAN_MOST } from "./tables.ts";
 import { type Counts, holderOf, type Holders, PIECE_BYTES, tunnelOf, type Tunnels, type Yard } from "./yard.ts";
 
 /** The kinds a kind's first four bits name: what every yard's check was taken over before kinds went past them. */
@@ -157,18 +157,31 @@ function mixWords(mix: (v: number) => void, s: string): void {
   for (let c = 0; c < s.length; c++) mix(s.charCodeAt(c));
 }
 
+/**
+ * How many nodes the tables had when every yard's check was first taken over its goals: tiers 0 to
+ * 4's. The tables number the nodes first and research after them, so a node added since moves every
+ * piece of research along; the check mixes in each goal by the number it had then (`goalWord`), so
+ * that a yard's check does not change with nodes it has nothing to do with.
+ */
+const NODES_THEN = 31;
+/** Where a node added since is mixed in: above every number a piece of research may have. */
+const LATER_NODES = 0x10000;
+/** A goal as the check mixes it in: by the number it had among the nodes there were then, and -1 for none. */
+const goalWord = (g: number): number =>
+  g < NODES_THEN ? g : g < NODE_COUNT ? LATER_NODES + g - NODES_THEN : g - (NODE_COUNT - NODES_THEN);
+
 /** Mixes in the goals done, in hand, queued and in line, and what was got for each, then what was handed and paid. */
 function mixGoals(y: Yard, mix: (v: number) => void): void {
-  for (const g of y.done) mix(g);
+  for (const g of y.done) mix(goalWord(g));
   mix(-1);
-  mix(y.hand);
-  for (const g of y.queue) mix(g);
+  mix(goalWord(y.hand));
+  for (const g of y.queue) mix(goalWord(g));
   mix(-1);
-  for (const g of y.line) mix(g);
+  for (const g of y.line) mix(goalWord(g));
   mix(-1);
   y.got.forEach((got, g) => {
     if (got === null) return;
-    mix(g);
+    mix(goalWord(g));
     mixTally(mix, got);
   });
   mix(y.handed);

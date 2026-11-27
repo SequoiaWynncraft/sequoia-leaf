@@ -112,11 +112,13 @@ describe("memory", () => {
   }, 60_000);
 
   // 1.1 MB since pieces of more than one tile: every tile keeps a byte of the piece it is part of, and every holder one of a by-product.
-  test("at worst, a yard of nothing but crates, as many as the land holds, holds under 1.1 MB", () => {
-    const y = F.create({ land, tier: 4, seed: 1 });
+  test("at worst, a yard of nothing but crates, as many as the guild's land holds with every plot of it owned, holds under 1.1 MB", () => {
+    const y = F.create({ tier: 4, seed: 1 });
+    const guild = y.land;
+    for (const p of guild.plots) if (!y.plots.includes(p.plot)) y.plots.push(p.plot);
     let room = 0;
-    for (let z = 0; z < land.h; z++)
-      for (let x = 0; x < land.w; x++) {
+    for (let z = 0; z < guild.h; z++)
+      for (let x = 0; x < guild.w; x++) {
         if (F.refusal(y, F.CRATE, x, z, Infinity) !== null) continue;
         room++;
         F.build(y, F.CRATE, x, z, 0, Infinity);

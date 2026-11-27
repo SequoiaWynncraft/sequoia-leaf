@@ -16,6 +16,7 @@ import {
   NONE,
   type Piece,
   piecesAt,
+  plotPrice,
   plotState,
   type Plotted,
   REACH,
@@ -36,6 +37,8 @@ import { draws, type Group } from "./state.ts";
 
 export interface Sign {
   plot: Plotted;
+  /** What it costs the yard now (`plotPrice`), as its board says. */
+  price: number;
   /** Where its post stands, in the yard's pixels. */
   x: number;
   y: number;
@@ -194,7 +197,7 @@ function signs(y: Yard, owned: readonly boolean[]): Sign[] {
       const tx = beside ? tx0 : tx0 + step;
       const ty = beside ? ty0 + step : ty0;
       if (!clear(tx, ty)) continue;
-      out.push({ plot, x: tx * TILE + 8, y: ty * TILE + 14 });
+      out.push({ plot, price: plotPrice(y, plot.plot), x: tx * TILE + 8, y: ty * TILE + 14 });
       return;
     }
   });

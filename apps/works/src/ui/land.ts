@@ -3,7 +3,7 @@
  * the yard's own land can be felled), and a plot, with what lies in its ground and whether it is for
  * sale. A part of the yard's cards (`cards.ts`).
  */
-import type { Item, Plot } from "@sequoia-leaf/factory";
+import { type Item, type Plot, RISE_LINE } from "@sequoia-leaf/factory";
 import { type Block, close, type Description } from "@sequoia-leaf/kit/card.ts";
 import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { coinsText, whole } from "@sequoia-leaf/kit/say.ts";
@@ -27,7 +27,10 @@ export interface PlotPrint {
   readonly plot: Plot;
   readonly name: string;
   readonly why: string;
+  /** What it costs the yard now. */
   readonly price: number;
+  /** It is for sale and rises in price: each plot of its kind bought makes it dearer. */
+  readonly rises: boolean;
   readonly state: "owned" | "for sale" | "not yet";
   readonly not: string | null;
   /** The stream runs through it. */
@@ -90,16 +93,21 @@ export function groundCard(p: GroundPrint, hands: Pick<LandHands, "fell" | "refu
  */
 export function plotCard(p: PlotPrint, hands: Pick<LandHands, "buy" | "refuse">): Description {
   const enough = p.short === 0;
+  const buys = p.state === "for sale" && !p.visiting;
+  // Its price is on its Buy, or said where there is none: beside its name, a price of land squeezes a
+  // long name onto more lines on a phone.
   const blocks: Block[] = [
     ...(p.bank ? [{ body: "The stream runs through it. A waterwheel must be beside the stream." }] : []),
     ...(p.state === "not yet" ? [{ body: `${p.not ?? "Not for sale yet"}.` }] : []),
+    ...(p.state !== "owned" && !buys ? [{ body: `It costs ${coinsText(p.price)}.` }] : []),
+    ...(p.rises ? [{ body: RISE_LINE }] : []),
     ...(p.state === "for sale" && !enough ? [{ body: `You need ${coinsText(p.short)} more.` }] : []),
   ];
   return {
     name: p.name,
     icon: icon("star"),
     tag: p.why,
-    aside: p.state === "owned" ? el("span", "k-chip lit", {}, icon("check"), "Yours") : amount("coin", p.price),
+    ...(p.state === "owned" ? { aside: el("span", "k-chip lit", {}, icon("check"), "Yours") } : {}),
     blocks,
     rows: [
       {
@@ -107,24 +115,23 @@ export function plotCard(p: PlotPrint, hands: Pick<LandHands, "buy" | "refuse">)
         things: p.ground.map(([raw, tiles]) => ({ ref: itemRef(raw), note: `${tiles} tiles` })),
       },
     ],
-    actions:
-      p.state === "for sale" && !p.visiting
-        ? [
-            {
-              label: `Buy for ${whole(p.price)}`,
-              look: enough ? "sm wide" : "sm wide off",
-              icon: icon("coin"),
-              ...(enough
-                ? {
-                    ask: { again: AGAIN, price: p.price },
-                    on: () => {
-                      // Bought, the card has nothing more to offer: it is put away, so it does not sit over the new land.
-                      if (hands.buy(p.plot)) close();
-                    },
-                  }
-                : { on: () => hands.refuse("Not enough Coins") }),
-            },
-          ]
-        : [],
+    actions: buys
+      ? [
+          {
+            label: `Buy for ${whole(p.price)}`,
+            look: enough ? "sm wide" : "sm wide off",
+            icon: icon("coin"),
+            ...(enough
+              ? {
+                  ask: { again: AGAIN, price: p.price },
+                  on: () => {
+                    // Bought, the card has nothing more to offer: it is put away, so it does not sit over the new land.
+                    if (hands.buy(p.plot)) close();
+                  },
+                }
+              : { on: () => hands.refuse("Not enough Coins") }),
+          },
+        ]
+      : [],
   };
 }

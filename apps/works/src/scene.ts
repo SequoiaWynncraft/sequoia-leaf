@@ -1038,7 +1038,7 @@ function standingLayer(f: Frame): void {
   }
   stand(art.m.gate, L.gate.x - cx, L.gate.y - cy + 1, L.gate.y + 1);
   // A sign is drawn at the foot of its tile, in front of any undergrowth on the same tile.
-  for (const sign of L.signs) stand(art.sign(sign.plot.price), sign.x - cx, sign.y - cy, sign.y + 2);
+  for (const sign of L.signs) stand(art.sign(sign.price), sign.x - cx, sign.y - cy, sign.y + 2);
 
   // Undergrowth over land that is not the yard's, falling away where a plot has just been bought.
   for (let n = 0; n < land.plots.length; n++) {
