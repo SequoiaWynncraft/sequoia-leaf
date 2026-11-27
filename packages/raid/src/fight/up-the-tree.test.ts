@@ -14,9 +14,9 @@ import { cellAt, distance, neighbours, rowOf } from "../hex.ts";
 import type { Placed } from "../party.ts";
 import { onCell, only, partyOfFigures, ready, steps, stepUntil, still, unitOf } from "../testkit.ts";
 import { cardFor } from "./casts/up-the-tree.ts";
-import { giveMana, heal, hide, hurt, HZ, knockBack, leap, shieldUp, stun } from "./core.ts";
+import { giveMana, heal, hide, hurt, HZ, knockBack, leap, powered, shieldUp, stun } from "./core.ts";
 import { openFight } from "./engine.ts";
-import type { Fight, FightEvent, Unit } from "./types.ts";
+import type { Fight, FightEvent, FightSetup, Unit } from "./types.ts";
 
 const TREE = eraOf("up-the-tree");
 const UT: Catalog = catalogAt(TREE);
@@ -29,9 +29,9 @@ const FAR = cellAt(3, 0);
 /** Beside home on our own half. */
 const BESIDE = cellAt(2, 4);
 
-/** A fight between two lists of figures in Up The Tree's era, opened and not yet stepped. */
-const tree = (ours: Placed[], theirs: Placed[]): Fight =>
-  openFight({ seed: 7, era: TREE, sides: [partyOfFigures(ours), partyOfFigures(theirs)] });
+/** A fight between two lists of figures in Up The Tree's era (under a room's `rules`), opened and not yet stepped. */
+const tree = (ours: Placed[], theirs: Placed[], rules: FightSetup["rules"] = {}): Fight =>
+  openFight({ seed: 7, era: TREE, sides: [partyOfFigures(ours), partyOfFigures(theirs)], rules });
 /** Our caster at home with full mana and no attack, against plain targets on the given hexes. */
 function scene(caster: UnitKind, foes: readonly number[], allies: Placed[] = []): { f: Fight; u: Unit } {
   const f = tree(
@@ -212,10 +212,18 @@ describe("Bhlue, Firewall", () => {
 });
 
 /** Ace with a hurt friend in reach, a low, an armoured and a full-manaed enemy. */
-function table(): { f: Fight; u: Unit; low: Unit; hard: Unit; full: Unit; friend: Unit } {
+function table(rules: FightSetup["rules"] = {}): {
+  f: Fight;
+  u: Unit;
+  low: Unit;
+  hard: Unit;
+  full: Unit;
+  friend: Unit;
+} {
   const f = tree(
     [onCell("ace", 0, HOME), onCell("rock", 0, cellAt(2, 4))],
     [onCell("mud", 1, NEAR), onCell("mud", 1, cellAt(2, 2)), onCell("mud", 1, cellAt(4, 2))],
+    rules,
   );
   const [low, hard, full] = [foeAt(f, NEAR), foeAt(f, cellAt(2, 2)), foeAt(f, cellAt(4, 2))];
   for (const o of [low, hard, full]) still(o, 1000);
@@ -324,7 +332,7 @@ describe("hidden means out of reach, of foes and friends alike", () => {
   test("nothing heals, shields, gives mana to, pushes or deals a heart to a figure that is hidden", () => {
     const { f, u, friend } = table();
     hide(f, friend, 5 * HZ);
-    expect(cardFor(f, u, "hearts")).toBeUndefined();
+    expect(cardFor(f, u, "hearts", u.range)).toBeUndefined();
     const cell = friend.cell;
     expect([
       heal(f, friend, 100, "card", u),
@@ -333,6 +341,17 @@ describe("hidden means out of reach, of foes and friends alike", () => {
       knockBack(f, friend, u, 2),
     ]).toEqual([0, 0, 0, 0]);
     expect([friend.cell, friend.shield]).toEqual([cell, 0]);
+  });
+  test("but what a hidden figure does to itself still reaches it: Lichen Locket's shield as Flop plays dead, its own healing", () => {
+    const f = tree([onCell("flop", 0, HOME, 1, ["lichen"]), onCell("rock", 0, BESIDE)], [onCell("mud", 1, NEAR)]);
+    still(unitOf(f, "mud", 1));
+    const [flop, rock] = [ready(unitOf(f, "flop")), unitOf(f, "rock")];
+    const events = stepUntil(f, castBy(flop));
+    expect(flop.hiddenUntil).toBeGreaterThan(f.tick);
+    expect(only(events, "shield").filter((e) => e.id === flop.id).length).toBe(1);
+    expect(flop.shield).toBeGreaterThan(0);
+    flop.hp = 100;
+    expect([heal(f, flop, 50, "ability", rock), heal(f, flop, 50, "ability", flop)]).toEqual([0, 50]);
   });
 });
 
@@ -353,6 +372,30 @@ describe("shields keep their own clocks", () => {
     const { f, friend, low } = table();
     shieldUp(f, friend, 100, 4, friend);
     expect([low.shields, table().friend.shields]).toEqual([[], []]);
+  });
+});
+
+describe("Full Deck is an ability", () => {
+  test("its cards are picked within its ability's reach, not an attack's: a Fog room does not shorten it", () => {
+    const { f, u, low, hard, full, friend } = table({ reach: 1 });
+    u.manaFull = 80;
+    ready(u);
+    const cards = only(stepUntil(f, castBy(u)), "shot").filter((e) => e.id === u.id && e.what === "ability");
+    expect(cards.map((e) => [e.card, e.target])).toEqual([
+      ["spades", low.id],
+      ["hearts", friend.id],
+      ["diamonds", hard.id],
+      ["clubs", full.id],
+    ]);
+  });
+  test("its heart heals as an ability heals: a Mender's healing counts for more on it", () => {
+    const { f, u, friend } = table();
+    u.manaFull = 80;
+    u.mending = 50;
+    ready(u);
+    stepUntil(f, castBy(u));
+    const healed = only(steps(f, 2 * HZ), "heal").find((e) => e.id === friend.id && e.by === u.id);
+    expect(healed).toMatchObject({ source: "ability", amount: Math.round(powered(u, n("ace", "damage")) * 1.5) });
   });
 });
 

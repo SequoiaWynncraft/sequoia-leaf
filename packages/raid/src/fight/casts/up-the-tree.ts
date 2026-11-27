@@ -46,12 +46,12 @@ const SPADE_MORE = 40;
 /** Breaks a tie the same way for both sides: the hex nearer its own side's front. */
 const tied = (u: Unit) => (a: Unit, b: Unit) => order(u.side, a.cell) - order(u.side, b.cell);
 /**
- * Who a card of a suit goes to, among those in its thrower's reach: spades the enemy with the least
- * health, hearts the most hurt friend, diamonds the enemy with the most armour, clubs the enemy with
- * the most mana. Nobody, with none to pick.
+ * Who a card of a suit goes to, among those within `reach` of its thrower (its attack's for an
+ * attack, its own for Full Deck): spades the enemy with the least health, hearts the most hurt
+ * friend, diamonds the enemy with the most armour, clubs the enemy with the most mana. Nobody, with
+ * none to pick.
  */
-export function cardFor(f: Fight, u: Unit, suit: Suit): Unit | undefined {
-  const reach = attackReach(f, u);
+export function cardFor(f: Fight, u: Unit, suit: Suit, reach: number): Unit | undefined {
   if (suit === "hearts")
     return alliesOf(f, u.side)
       .filter((o) => o.id !== u.id && o.hp < o.maxHp && distance(u.cell, o.cell) <= reach)
@@ -62,17 +62,20 @@ export function cardFor(f: Fight, u: Unit, suit: Suit): Unit | undefined {
   return foes.toSorted((a, b) => by(a) - by(b) || tied(u)(a, b))[0];
 }
 
+/** Whether a card was thrown as an attack or by Full Deck. */
+type Thrown = "attack" | "ability";
 /** Lands a card on a figure as an attack or an ability does, of a kind: what it dealt, 0 for a hit that did not land (slipped, blocked, hidden). */
 type Lands = (o: Unit, raw: number, kind: DamageKind) => number;
 
 /**
- * What a card does where it lands: hearts heal what it would have done; the rest hurt, a spade
- * harder, a diamond through armour; a club takes mana too, if it landed. One that does not land
- * does nothing.
+ * What a card does where it lands: hearts heal what it would have done (as an ability heals, for
+ * Full Deck's); the rest hurt, a spade harder, a diamond through armour; a club takes mana too, if
+ * it landed. One that does not land does nothing.
  */
-function landCard(f: Fight, u: Unit, t: Unit, suit: Suit, amount: number, land: Lands): void {
+function landCard(f: Fight, u: Unit, t: Unit, card: { suit: Suit; amount: number }, what: Thrown, land: Lands): void {
+  const { suit, amount } = card;
   if (suit === "hearts") {
-    heal(f, t, amount, "card", u);
+    heal(f, t, amount, what === "ability" ? "ability" : "card", u);
     return;
   }
   const kind = suit === "diamonds" ? "true" : "physical";
@@ -90,14 +93,15 @@ function throwCard(
   u: Unit,
   t: Unit,
   card: { suit: Suit; amount: number; after: number },
-  what: "attack" | "ability",
+  what: Thrown,
   land: Lands,
 ): void {
   const { suit, amount } = card;
   const ticks = flight(u.cell, t.cell) + card.after;
   emit(f, { t: "shot", id: u.id, target: t.id, from: u.cell, to: t.cell, ticks, what, card: suit });
-  if (suit === "hearts") later(f, ticks, () => landCard(f, u, t, suit, amount, land));
-  else fly(f, t, amount, suit === "diamonds" ? "true" : "physical", ticks, () => landCard(f, u, t, suit, amount, land));
+  const lands = (): void => landCard(f, u, t, card, what, land);
+  if (suit === "hearts") later(f, ticks, lands);
+  else fly(f, t, amount, suit === "diamonds" ? "true" : "physical", ticks, lands);
 }
 
 /**
@@ -108,7 +112,7 @@ function throwCard(
  */
 export function dealCard(f: Fight, u: Unit, amount: number, hits: number, land: Lands): boolean {
   const suit = SUITS[(u.attacks - 1) % SUITS.length] ?? "spades";
-  const to = cardFor(f, u, suit);
+  const to = cardFor(f, u, suit, attackReach(f, u));
   if (!to) return false;
   for (let n = 0; n < hits; n++) throwCard(f, u, to, { suit, amount, after: n * 2 }, "attack", land);
   return true;
@@ -276,7 +280,9 @@ export const UP_THE_TREE_CASTS: Partial<Record<UnitKind, Cast>> = {
     const t = aim(f, u);
     if (!t) return false;
     const damage = powered(u, n("damage"));
-    const cards = SUITS.map((suit) => ({ suit, to: cardFor(f, u, suit) ?? (suit === "hearts" ? undefined : t) }));
+    // Picked within its ability's reach, as `aim` picks its target: a Fog room shortens attacks alone.
+    const pick = (suit: Suit): Unit | undefined => cardFor(f, u, suit, u.range) ?? (suit === "hearts" ? undefined : t);
+    const cards = SUITS.map((suit) => ({ suit, to: pick(suit) }));
     say(
       f,
       u,

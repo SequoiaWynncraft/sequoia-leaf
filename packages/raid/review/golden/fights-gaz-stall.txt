@@ -13,7 +13,7 @@ fight 011 | 8 on 3: win in 5.0s, 8 to 0 standing, 183 events | setup f1a52cf5775
 fight 012 | 7 on 5: win in 26.6s, 7 to 0 standing, 578 events | setup 89ccf5a9c33c fight 4260c6783643
 fight 013 | 7 on 4: win in 12.7s, 4 to 0 standing, 342 events | setup 117c5fc4cb22 fight 75cd9876e160
 fight 014 | 3 on 6: loss in 15.1s, 0 to 7 standing, 334 events | setup d15241d6c683 fight dfbf32c871f5
-fight 015 | 5 on 4: win in 38.0s, 5 to 0 standing, 656 events | setup e47a4436f336 fight 61a4ad5f8778
+fight 015 | 5 on 4: win in 38.0s, 5 to 0 standing, 660 events | setup e47a4436f336 fight a569902ee50a
 fight 016 | 5 on 5: loss in 9.1s, 0 to 6 standing, 272 events | setup b25bc54e60e7 fight 382f91dd7458
 fight 017 | 8 on 4: win in 13.3s, 8 to 0 standing, 471 events | setup 58f111113652 fight 7bd10f8b5ce0
 fight 018 | 8 on 4: win in 6.7s, 9 to 0 standing, 208 events | setup c7f5e1078b9f fight 298617b1801f
@@ -38,7 +38,7 @@ fight 036 | 7 on 6: win in 11.8s, 7 to 0 standing, 384 events | setup 2f4bc95dde
 fight 037 | 4 on 3: win in 10.2s, 5 to 0 standing, 170 events | setup 70ef955af5b7 fight 9a88b2819e7f
 fight 038 | 6 on 6: loss in 12.1s, 0 to 4 standing, 327 events | setup b38e9fc8d49b fight 1bedbe5799b0
 fight 039 | 1 on 4: loss in 1.3s, 0 to 4 standing, 29 events | setup d52fad431cd6 fight 9d99621fbe19
-fight 040 | 8 on 6: loss in 26.4s, 0 to 5 standing, 883 events | setup 28ee890e3776 fight 0dce50df9bbf
+fight 040 | 8 on 6: loss in 26.4s, 0 to 5 standing, 888 events | setup 28ee890e3776 fight 185519dbf1aa
 fight 041 | 7 on 6: loss in 22.6s, 0 to 5 standing, 494 events | setup 977974c93a77 fight a7555242cdcb
 fight 042 | 5 on 1: win in 2.3s, 5 to 0 standing, 45 events | setup c7485ee206be fight 2264579e8737
 fight 043 | 5 on 6: win in 6.5s, 5 to 0 standing, 202 events | setup 8dd24da17e87 fight 07ad7c59eefd
@@ -52,9 +52,9 @@ fight 050 | 8 on 7: win in 15.9s, 9 to 0 standing, 630 events | setup 1ee7db0040
 fight 051 | 7 on 1: win in 3.9s, 7 to 0 standing, 74 events | setup 299985a73d7f fight 224999b348a7
 fight 052 | 3 on 7: loss in 6.2s, 0 to 8 standing, 167 events | setup d7e815f40a50 fight c917929bdd75
 fight 053 | 6 on 3: win in 5.0s, 7 to 0 standing, 140 events | setup 3e8f1a26df4d fight 3f7656b1f331
-fight 054 | 8 on 3: win in 14.8s, 7 to 0 standing, 387 events | setup 0b505b15a15d fight 91b0b5587ee1
+fight 054 | 8 on 3: win in 14.8s, 7 to 0 standing, 394 events | setup 0b505b15a15d fight df1fad42d5bb
 fight 055 | 3 on 4: loss in 15.3s, 0 to 2 standing, 254 events | setup ff43117a6c92 fight e84673165a83
-fight 056 | 6 on 8: loss in 22.3s, 0 to 6 standing, 635 events | setup 41e8ff59d250 fight 1f90f11576f5
+fight 056 | 6 on 8: loss in 22.3s, 0 to 6 standing, 635 events | setup 41e8ff59d250 fight 4e6ea00f0332
 fight 057 | 6 on 5: win in 13.6s, 5 to 0 standing, 385 events | setup 648d07c956bf fight 650f35667db4
 fight 058 | 5 on 6: win in 34.0s, 5 to 0 standing, 571 events | setup 1afda7323b22 fight a9f27bc322d7
 fight 059 | 1 on 2: loss in 2.9s, 0 to 2 standing, 28 events | setup 31214c9c1c71 fight 2b0571c3c5d7
@@ -95,6 +95,6 @@ fight 093 | 5 on 3: win in 15.7s, 5 to 0 standing, 319 events | setup 853b322888
 fight 094 | 3 on 5: loss in 11.4s, 0 to 5 standing, 145 events | setup 3a6a6d00ede8 fight 128de14a0bab
 fight 095 | 4 on 3: loss in 36.0s, 0 to 2 standing, 443 events | setup 5db932b1d039 fight 2c0622583b65
 fight 096 | 6 on 5: win in 27.1s, 3 to 0 standing, 565 events | setup 4672d8119b9a fight f23e58d0b9b4
-fight 097 | 5 on 7: loss in 36.0s, 0 to 5 standing, 869 events | setup 15fb9cf81cb4 fight 0d37bf3fa10b
+fight 097 | 5 on 7: loss in 36.1s, 0 to 5 standing, 925 events | setup 15fb9cf81cb4 fight 112839283203
 fight 098 | 3 on 5: win in 28.4s, 5 to 0 standing, 365 events | setup 63314b3b7330 fight 09f692f2e0b5
 fight 099 | 1 on 6: loss in 3.6s, 0 to 6 standing, 71 events | setup dd9b85325e1a fight 7456806fcc9c

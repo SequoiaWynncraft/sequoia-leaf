@@ -21,11 +21,18 @@ export { enter, freeNear, getUp, lastFallen, type Start, summon } from "./enter.
 /** An amount made bigger by its owner's ability power. */
 export const powered = (u: Unit, amount: number): number => (amount * u.power) / 100;
 /**
- * Whether a figure is there at all: up, and not hidden (underground, up the tree, playing dead, in a
- * shell or a bubble). The one rule for hiding: nothing, foe or friend, aims at, hits, heals,
- * shields, gives mana to, moves, pushes, pulls, cracks or slows one that is not; and it does not act.
+ * Whether a figure is there for anyone else at all: up, and not hidden (underground, up the tree,
+ * playing dead, in a shell or a bubble). The one rule for hiding: nothing else, foe or friend, aims
+ * at, hits, heals, shields, gives mana to, moves, pushes, pulls, cracks or slows one that is not;
+ * and it does not act.
  */
 export const targetable = (f: Fight, u: Unit): boolean => u.alive && u.hiddenUntil <= f.tick;
+/**
+ * Whether what `by` does reaches a figure: the hiding rule (`targetable`), but what a figure does to
+ * itself, or has of itself (given by nobody: an item's shield, a burrow's healing), reaches it hidden.
+ */
+export const reaches = (f: Fight, u: Unit, by: Unit | null): boolean =>
+  by === null || by.id === u.id ? u.alive : targetable(f, u);
 /** Whether what an enemy's ability lands on a figure is blocked (`struck`). A friend's never is. */
 export const blocks = (f: Fight, target: Unit, by: Unit | null): boolean =>
   by !== null && by.side !== target.side && whenStruck(f, target, by);
@@ -158,7 +165,7 @@ export function leap(f: Fight, u: Unit, to: number, why: LeapWhy): void {
 }
 /** Pushes a figure straight away from whoever pushes it, as far as there are free hexes, up to a number. A Rock stays; so does anything too big. */
 export function knockBack(f: Fight, target: Unit, by: Unit, hexes: number): number {
-  if (!targetable(f, target) || target.rooted || target.steady || hexes <= 0) return 0;
+  if (!reaches(f, target, by) || target.rooted || target.steady || hexes <= 0) return 0;
   const from = by.cell;
   const reach = distance(from, target.cell);
   const path = line(from, target.cell, reach + hexes);
@@ -186,7 +193,7 @@ export function gainMana(u: Unit, amount: number): void {
  * back what it received.
  */
 export function giveMana(f: Fight, to: Unit, n: number, by: Unit): number {
-  if (to.id === by.id || to.manaFull <= 0 || !targetable(f, to) || n <= 0) return 0;
+  if (to.id === by.id || to.manaFull <= 0 || !reaches(f, to, by) || n <= 0) return 0;
   to.gifts = to.gifts.filter((g) => f.tick - g.at < secs(FIGHT.giftOver));
   const given = to.gifts.reduce((sum, g) => sum + g.n, 0);
   const amount = Math.min(n, FIGHT.giftMost - given);
@@ -248,7 +255,7 @@ export function slow(f: Fight, target: Unit, percent: number, seconds: number, b
  * long as a burn lasts (`Fight.burning`). Burning again keeps the hotter fire.
  */
 export function burn(f: Fight, target: Unit, percent: number, by: Unit | null): void {
-  if (!targetable(f, target) || percent <= 0) return;
+  if (!reaches(f, target, by) || percent <= 0) return;
   const burnFor = f.burning.lasts;
   const running = target.burnUntil > f.tick;
   const hotter = !running || percent > target.burnBy;
@@ -309,7 +316,7 @@ export function hide(f: Fight, u: Unit, ticks: number, by: Unit = u): void {
 // ---------- healing and shields ----------
 
 export function heal(f: Fight, target: Unit, raw: number, source: HealSource, by: Unit | null): number {
-  if (!targetable(f, target) || raw <= 0) return 0;
+  if (!reaches(f, target, by) || raw <= 0) return 0;
   const mended = by !== null && by.mending > 0 && (source === "ability" || source === "item");
   let amount = raw;
   if (mended) amount *= 1 + by.mending / 100;
@@ -333,7 +340,7 @@ function overflow(f: Fight, target: Unit, extra: number, by: Unit): void {
 }
 /** Puts a shield up, or adds to the one there. `seconds` of 0 lasts until it is broken. */
 export function shieldUp(f: Fight, target: Unit, raw: number, seconds: number, by: Unit | null): number {
-  if (!targetable(f, target)) return 0;
+  if (!reaches(f, target, by)) return 0;
   let amount = raw;
   if (by && by.mending > 0) amount *= 1 + by.mending / 100;
   return shieldOn(f, target, Math.round(amount), seconds, by);
