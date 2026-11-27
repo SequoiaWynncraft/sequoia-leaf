@@ -10,13 +10,16 @@
  * - the page loaded itself again a third time in a row, each within `AGAIN_MS` of the last;
  * - it has been out of its live room for `LIVE_DOWN_MS`, while still trying (`heardLive`).
  *
+ * A page that cannot load its own styles or script reports from its guard instead (`guard.ts`).
+ *
  * Each report says the page, the rules it was built with, the browser's family, the message and the
  * first of the stack, every address in them without its query or fragment. Nothing the player typed
  * is sent. Leaf limits the reports too, and answers each the same.
  */
 
 import {
-  type Browser,
+  browserOf,
+  GAME_OF,
   type Page,
   PAGE_ERROR_MESSAGE,
   PAGE_ERROR_STACK,
@@ -33,8 +36,6 @@ import type { LiveStatus } from "./realtime.ts";
 
 /** The version of each game's rules this page was built with, made as it was built. */
 const RULES = rulesVersions();
-/** The game whose rules each page is built with. */
-const GAME_OF = { town: "town", works: "works", battler: "raid" } as const satisfies Record<Page, keyof typeof RULES>;
 
 /** The most reports one load of a page sends: an error in a drawing loop would send one a frame. */
 export const MOST = 5;
@@ -44,15 +45,6 @@ export const LIVE_DOWN_MS = 60_000;
 export const AGAIN_MS = 15_000;
 /** How many loads in a row, after the first, the page says so at. */
 const RELOADS = 3;
-
-/** The browser's family, from its user agent. */
-export function browserOf(agent: string): Browser {
-  if (/\bEdg(A|iOS)?\//.test(agent)) return "edge";
-  if (/\b(Firefox|FxiOS)\//.test(agent)) return "firefox";
-  if (/\b(Chrome|CriOS|Chromium)\//.test(agent)) return "chrome";
-  if (/\bSafari\//.test(agent)) return "safari";
-  return "other";
-}
 
 /** Text with every address's query and fragment taken out (a stack frame's line and column kept), cut to `most` characters. */
 export function plain(text: string, most: number): string {

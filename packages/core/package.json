@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./page-errors.ts": "./src/page-errors.ts",
     "./build/rules.ts": {
       "types": "./build/rules.d.ts",
       "default": "./build/rules.ts"
