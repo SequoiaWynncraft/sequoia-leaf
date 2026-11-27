@@ -68,8 +68,10 @@ describe("the version a yard is kept as", () => {
     expect(record(F.encode(y)).v).toBe(F.PLACED);
   });
 
-  test("asked cheaply as it is kept, it says what the whole scan of the kept yard says: staged, kept, random play, tier 5", () => {
-    expect(F.WIDER).toBe(false);
+  test("its version is what the whole scan of the kept yard says, and asked cheaply it says the same: staged, kept, random play, tier 5", () => {
+    // The land's 40 plots are past what version 10 knew: while the tables have anything past it, the
+    // whole scan decides (`WIDER`), and the cheap rule is asked only while they have nothing.
+    expect(F.WIDER).toBe(true);
     const yards = [
       ...(["new", "small", "mid", "gate", "large"] as const).map((n) => staged(n)),
       ...SAVES.map(saved),
@@ -94,8 +96,9 @@ describe("the version a yard is kept as", () => {
       const text = F.encode(y);
       const names = F.namesOf(record(text), y.land);
       if (!names) throw new Error("the yard's pieces do not read");
-      expect([F.pastTen(y), record(text).v]).toEqual([!F.knownAt10(names), F.knownAt10(names) ? F.PLACED : F.VERSION]);
-      if (F.pastTen(y)) later++;
+      expect(record(text).v).toBe(F.knownAt10(names) ? F.PLACED : F.VERSION);
+      if (!F.WIDER) expect(F.pastTen(y)).toBe(!F.knownAt10(names));
+      if (!F.knownAt10(names)) later++;
     }
     expect(later).toBeGreaterThan(10);
   });
