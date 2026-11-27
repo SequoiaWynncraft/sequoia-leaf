@@ -155,5 +155,18 @@ export class Scope {
   }
 }
 
-/** A new scope, owned by whoever made it. */
-export const scope = (): Scope => new Scope();
+/** What the page hears as the guard (`guard.ts`) takes it over, to show its line or load it again. */
+export const TAKEN = "leaf:taken";
+
+/** A whole page's scope, which closes when `events` hears `TAKEN`: nothing the page opened runs on against a page the guard has taken. */
+export function pageScope(events: EventTarget | null): Scope {
+  const root = new Scope();
+  if (events !== null) root.on(events, TAKEN, () => root.close());
+  return root;
+}
+
+/** The page's scope, on the window (none where there is no window, as in tests). */
+const page = pageScope("addEventListener" in globalThis ? globalThis : null);
+
+/** A new scope, owned by whoever made it, and closed with the page's when the guard takes the page over. */
+export const scope = (): Scope => page.child();

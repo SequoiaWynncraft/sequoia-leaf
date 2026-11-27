@@ -3,6 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { PAGE_ERRORS_PATH } from "@sequoia-leaf/core";
 
 import { buildOf, firstTry, guard, type GuardWorld, TRIED, UPDATING } from "./guard.ts";
+import { pageScope } from "./scope.ts";
+import { aPage } from "./standin.ts";
+import { must } from "./util.ts";
 
 /** A thing on the page: its own style or script (`own`), or anything else, by address. */
 class Asset extends EventTarget {
@@ -123,6 +126,87 @@ describe("a page whose own styles or script do not load", () => {
     expect(p.did).toEqual([]);
     p.stop();
   });
+});
+
+/** Stands in for the browser's frames and size watchers, run by hand: `frame` draws what is asked for, `resize` tells every watcher still on. */
+function aBrowser() {
+  const frames = new Map<number, (t: number) => void>();
+  const watchers = new Set<{ fn: () => void; on: boolean }>();
+  let next = 0;
+  const values = {
+    requestAnimationFrame: (fn: (t: number) => void) => (frames.set(++next, fn), next),
+    cancelAnimationFrame: (id: number) => void frames.delete(id),
+    ResizeObserver: class {
+      readonly #w: { fn: () => void; on: boolean };
+      constructor(fn: () => void) {
+        this.#w = { fn, on: false };
+        watchers.add(this.#w);
+      }
+      observe(): void {
+        this.#w.on = true;
+      }
+      disconnect(): void {
+        this.#w.on = false;
+      }
+    },
+  };
+  for (const [name, value] of Object.entries(values))
+    Object.defineProperty(globalThis, name, { value, configurable: true });
+  return {
+    frame: (t: number) => {
+      const due = [...frames.values()];
+      frames.clear();
+      for (const fn of due) fn(t);
+    },
+    resize: () => [...watchers].filter((w) => w.on).forEach((w) => w.fn()),
+    done: () => Object.keys(values).forEach((name) => Reflect.deleteProperty(globalThis, name)),
+  };
+}
+
+describe("a page the guard takes over", () => {
+  for (const [what, tab] of [
+    ["to say Leaf is updating", new Map([[`${TRIED}/play/battler/`, buildOf([CSS, JS])]])],
+    ["to load it again", new Map<string, string>()],
+  ] as const) {
+    test(`${what}, stops everything the page opened first: nothing of it runs against the page after`, async () => {
+      const browser = aBrowser();
+      const shown = aPage();
+      try {
+        const p = page(tab);
+        const life = pageScope(p.events).child();
+        /** The page's own parts, gone once the guard has put its line in place of the page or loaded it again. */
+        const top = (): object | null => (p.did.some((d) => d.startsWith("show") || d === "reload") ? null : {});
+        const ran: string[] = [];
+        const errors: unknown[] = [];
+        const run = (name: string): void => {
+          ran.push(name);
+          try {
+            must(top(), name);
+          } catch (e) {
+            errors.push(e);
+          }
+        };
+        life.observe(document.createElement("div"), "size", () => run("top"));
+        const loop = (): void => void life.frame(() => (run("coach"), loop()));
+        loop();
+        browser.frame(16);
+        browser.resize();
+        expect(ran).toEqual(["coach", "top"]);
+        failAt(p.events, new Asset(CSS));
+        await settle();
+        expect(p.did.at(-1)).toMatch(/^show|^reload$/);
+        ran.length = 0;
+        browser.frame(32);
+        browser.resize();
+        expect(ran).toEqual([]);
+        expect(errors).toEqual([]);
+        expect(life.closed).toBe(true);
+      } finally {
+        browser.done();
+        shown.done();
+      }
+    });
+  }
 });
 
 describe("a page's build", () => {
