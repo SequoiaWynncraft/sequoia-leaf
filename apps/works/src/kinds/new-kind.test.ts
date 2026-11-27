@@ -29,8 +29,10 @@ import { KIND_DEFS, KINDS } from "@sequoia-leaf/factory";
 
 import {
   MAKERS,
+  PAGE_BIG,
   PAGE_FORGE,
   PAGE_SIFTER,
+  PAGED_BIG,
   PLAY_BIG,
   PLAYED_BIG,
   RECIPE_LINES,
@@ -391,6 +393,10 @@ describe("a new kind of piece", () => {
       const played = bun(at, "big.ts");
       expect(played.out).not.toContain("rror");
       expect(JSON.parse(played.out.trim().split("\n").at(-1) ?? "{}")).toEqual(PLAYED_BIG);
+      writeFileSync(join(at, "page.ts"), PAGE_BIG);
+      const paged = bun(at, "page.ts");
+      expect(paged.out).not.toContain("rror");
+      expect(JSON.parse(paged.out.trim().split("\n").at(-1) ?? "{}")).toEqual(PAGED_BIG);
     } finally {
       rmSync(at, { recursive: true, force: true });
     }

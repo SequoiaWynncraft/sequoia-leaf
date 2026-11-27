@@ -61,6 +61,7 @@ export const ${name}: KindPage = {
     return at.foot - 8;
   },
   pointer: "bare",
+  lamps: (_y, _i, x, foot, _at, out) => out.push({ x, y: foot - 4, r: 9, power: 0.4, reach: false }),
   map: [GOLD[1], GOLD[2]],
   dock: ${dock},
   faces: true,
@@ -204,6 +205,50 @@ out.forgeRemoved = F.remove(forge, 19, 9).ok && bare(forge, 19, 9, 21, 11);
 
 console.log(JSON.stringify(out));
 `;
+
+/**
+ * What the page makes of the forge, in the copy, and prints as one line of JSON, each part true where
+ * it holds: both throwaways in the dock; one card, its own tile's, from any of its tiles; drawn from
+ * its own tile alone, over its box of three by three; reach counted on every tile it would cover and
+ * every tile it does; its map colour its module's; and one lamp, from the middle of its box.
+ */
+export const PAGE_BIG = `import * as F from "./packages/factory/src/index.ts";
+import { bareLand } from "./packages/factory/test/land.ts";
+import { drawnFrom, pieceBox } from "./apps/works/src/big.ts";
+import { footprint } from "./apps/works/src/figure/reach.ts";
+import { PAGES } from "./apps/works/src/kinds/index.ts";
+import { lampsIn } from "./apps/works/src/lamps.ts";
+import { blockColour } from "./apps/works/src/plan.ts";
+import { DRAWN, S } from "./apps/works/src/state.ts";
+import { refAt } from "./apps/works/src/ui/card.ts";
+import { tileRef } from "./apps/works/src/ui/refs.ts";
+
+const FORGE = F.kindNamed("forge");
+const SIFTER = F.kindNamed("sifter");
+const y = F.create({ land: bareLand(34, 20, [], [26, 10]), tier: 4, seed: 1 });
+if (FORGE === null || SIFTER === null || !F.build(y, FORGE, 20, 10, 0, Infinity).ok) throw new Error("no forge");
+S.world = y;
+const own = F.at(y, 20, 10);
+const tiles = [];
+for (let z = 9; z <= 11; z++) for (let x = 19; x <= 21; x++) tiles.push(F.at(y, x, z));
+const nine = (list) => list.length === 9 && tiles.every((t) => list.includes(t));
+const lamps = lampsIn(y, { x: 0, y: 0 }, { x: 0, y: 0, w: 34 * 16, h: 20 * 16 }, 1, () => true, () => false).filter((l) => l.r === 9);
+console.log(
+  JSON.stringify({
+    docked: DRAWN.includes(FORGE) && DRAWN.includes(SIFTER),
+    card: tiles.every((t) => refAt(t % 34, Math.floor(t / 34)) === tileRef(own)),
+    drawnOnce: tiles.filter((t) => drawnFrom(y, t)).length === 1 && drawnFrom(y, own),
+    box: JSON.stringify(pieceBox(y, F.at(y, 21, 11))) === JSON.stringify({ x: 19, y: 9, w: 3, h: 3 }),
+    reachBuild: nine(footprint(y, { do: "build", kind: FORGE, x: 20, y: 10, dir: 0 }).flat()),
+    reachRemove: nine(footprint(y, { do: "remove", x: 21, y: 11 }).flat()),
+    colour: blockColour(FORGE) === PAGES.forge.map?.[0],
+    lamp: lamps.length === 1 && lamps[0]?.x === 20 * 16 + 8 && lamps[0]?.y === 12 * 16 - 4,
+  }),
+);
+`;
+export const PAGED_BIG = Object.fromEntries(
+  ["docked", "card", "drawnOnce", "box", "reachBuild", "reachRemove", "colour", "lamp"].map((k) => [k, true]),
+);
 
 /** Every part `PLAY_BIG` prints, each to hold. */
 export const PLAYED_BIG = Object.fromEntries(
