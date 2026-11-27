@@ -2,7 +2,8 @@
  * What a function of the package's source calls, all the way down, across its files: for the
  * allocation guard, which reads every function the tick reaches for anything that makes an array,
  * an object, a closure, a string or an iterator. The source is read with its types taken off (Bun's
- * transpiler); a function is a `function` declaration or an arrow given a name with `const`.
+ * transpiler); a function is a `function` declaration or an arrow given a name with `const`, and a
+ * hook a function written in a kind's `rules`, as an arrow or as a method.
  *
  * Each kind of piece plays by hooks in its own module (`src/kinds/`), called through a table by the
  * kind's number, so no name in the caller says which: a table of a hook (`const HANDS = RULES.map((r)
@@ -15,6 +16,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { posix } from "node:path";
 
+/** The package's source: what the guard reads, unless it is given another folder laid out the same. */
 const SRC = new URL("../src/", import.meta.url);
 const transpiler = new Bun.Transpiler({ loader: "ts", target: "bun" });
 
@@ -84,12 +86,24 @@ function pastString(js: string, from: number): number {
   return js.length;
 }
 
-/** The entries of an object literal whose text (`{...}`, braces and all) is `obj`, at its own depth: each key and the text of its value. */
+/**
+ * The entries of an object literal whose text (`{...}`, braces and all) is `obj`, at its own depth:
+ * each key and the text of its value. A method (`work(k, y) { ... }`) is read as the arrow it is
+ * the same as (`(k, y) => { ... }`).
+ */
 function entries(obj: string): [string, string][] {
   const out: [string, string][] = [];
   let from = 1;
   const push = (to: number): void => {
-    const m = /^([\w$]+)\s*(?::\s*([\s\S]*))?$/.exec(obj.slice(from, to).trim());
+    const text = obj.slice(from, to).trim();
+    const method = /^([\w$]+)\s*\(/.exec(text);
+    if (method) {
+      const open = method[0].length - 1;
+      const end = close(text, open);
+      out.push([method[1] ?? "", `(${text.slice(open + 1, end - 1)}) => ${text.slice(end).trim()}`]);
+      return;
+    }
+    const m = /^([\w$]+)\s*(?::\s*([\s\S]*))?$/.exec(text);
     if (m) out.push([m[1] ?? "", (m[2] ?? m[1] ?? "").trim()]);
   };
   for (let i = 1; i < obj.length - 1; i++) {
@@ -162,8 +176,8 @@ function objectAt(js: string, name: RegExp): string {
   return open < 0 ? "" : js.slice(open, close(js, open));
 }
 
-function read(file: string): Source {
-  const js = transpiler.transformSync(readFileSync(new URL(file, SRC), "utf8"));
+function read(file: string, root: URL): Source {
+  const js = transpiler.transformSync(readFileSync(new URL(file, root), "utf8"));
   const src = bodiesOf();
   const { bodies, locals } = src;
   for (const m of js.matchAll(/\bfunction\s+([\w$]+)\s*\(/g)) {
@@ -215,14 +229,14 @@ function read(file: string): Source {
 }
 
 /** Every source file of the package but its content tables, read: its own folder's and the kinds'. */
-function sources(): Map<string, Source> {
+function sources(root: URL = SRC): Map<string, Source> {
   const files = [
-    ...readdirSync(SRC).filter((f) => f.endsWith(".ts")),
-    ...readdirSync(new URL("kinds/", SRC))
+    ...readdirSync(root).filter((f) => f.endsWith(".ts")),
+    ...readdirSync(new URL("kinds/", root))
       .filter((f) => f.endsWith(".ts"))
       .map((f) => `kinds/${f}`),
   ];
-  return new Map(files.map((f) => [f, read(f)]));
+  return new Map(files.map((f) => [f, read(f, root)]));
 }
 
 /** What in a function's body makes something: the first of each kind found, with a little of the text around it. */
@@ -271,14 +285,16 @@ export function loopIn(file: string, name: string, has: string): string {
 
 /**
  * The functions reached from `entry` (in `file`), as `file:name`, but not through `excused`; and what
- * each of them makes. A name a file neither defines nor imports from the package is a built-in.
+ * each of them makes. A name a file neither defines nor imports from the package is a built-in. The
+ * package's source is read, or a folder laid out as it is (`root`), for the guard's own test.
  */
 export function reached(
   file: string,
   entry: string,
   excused: ReadonlySet<string>,
+  root: URL = SRC,
 ): { readonly reached: string[]; readonly makes: string[] } {
-  const all = sources();
+  const all = sources(root);
   const seen = new Set<string>();
   const out: string[] = [];
   /** Each kind's function for a hook, as `file:name`: its module's, or `rulesOf`'s where it leaves the hook out. */
