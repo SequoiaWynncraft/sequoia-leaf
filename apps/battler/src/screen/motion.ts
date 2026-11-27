@@ -7,7 +7,7 @@
  * Squash and stretch are whole pixels added to the picture's width and height, so it stays crisp.
  */
 import { type Move, moveAt } from "@sequoia-leaf/figures/move.ts";
-import type { Unit } from "@sequoia-leaf/raid";
+import type { Form, Unit } from "@sequoia-leaf/raid";
 
 import { FV } from "./board.ts";
 import type { Pt } from "./geometry.ts";
@@ -50,6 +50,12 @@ export interface Actor {
   fallAt: number;
   tumble: 1 | -1;
   gone: boolean;
+  /** Down only for a moment: a Groot figure lying there until it rises in its true form (`rising.ts`), never puffed away. */
+  rising: boolean;
+  /** As itself, or in its true form: as it is drawn, which changes as it is seen to rise. */
+  form: Form;
+  /** Leaning away from something on the board (`dir` -1 to our left, 1 to our right) until a step. */
+  shy: { readonly from: number; readonly until: number; readonly dir: 1 | -1 } | null;
   hopAt: number;
   /** When it last came down from a leap or a hop, for the squash of landing. */
   landAt: number;
@@ -78,6 +84,9 @@ export function actorFor(unit: Unit, at: Pt, bornAt: number): Actor {
     fallAt: Infinity,
     tumble: 1,
     gone: false,
+    rising: false,
+    form: unit.form,
+    shy: null,
     hopAt: -99,
     landAt: -99,
     shieldAt: -99,
@@ -237,6 +246,8 @@ const BODIES: Readonly<
   },
   stare: { wind: (p, k) => (p.lean += Math.round(1.5 * k)), after: (p, d) => (p.lean += d < 2 ? 2 : 0) },
   still: { wind: () => undefined },
+  // Still, but it shudders (the cast picture and the standing one in turn, its sprout and arms with them), then holds the cast.
+  rustle: { wind: (p, k, c) => (p.cast = k > 0.35 || Math.floor(c) % 2 === 0) },
   dig: { wind: (p, k) => (p.sy -= Math.round(5 * k)) },
   fade: {
     wind: (p, k) => {
@@ -260,7 +271,7 @@ function windPose(p: Pose, a: Actor, c: number): void {
   if (c < w.at) {
     const k = (c - w.from) / Math.max(1e-9, w.at - w.from);
     body.wind(p, k, c);
-    if (k > 0.4 && w.body !== "still") p.cast = true;
+    if (k > 0.4 && w.body !== "still" && w.body !== "rustle") p.cast = true;
   } else if (c - w.at < 4) body.after?.(p, c - w.at);
 }
 
@@ -272,6 +283,15 @@ function dreadPose(p: Pose, a: Actor, c: number): void {
   p.sy -= k > 0.5 ? 2 : 1;
   p.sx += 1;
   if (k > 0.65) p.dx += Math.floor(c) % 2 === 0 ? 1 : -1;
+}
+
+/** Leaning away from something on the board, the top first, and a pixel back on its feet. */
+function shyPose(p: Pose, a: Actor, c: number): void {
+  const s = a.shy;
+  if (!s || c < s.from || c >= s.until) return;
+  const lean = Math.min(2, Math.round((c - s.from) * 0.6));
+  p.lean += (a.left ? -s.dir : s.dir) * lean;
+  p.dx += s.dir;
 }
 
 /** A fall: knocked up off its base, a quarter turn over, and down. */
@@ -306,6 +326,7 @@ export function poseOf(a: Actor, c: number): Pose {
   blowPose(p, a.blow, c);
   hurtPose(p, a, c);
   dreadPose(p, a, c);
+  shyPose(p, a, c);
   fallPose(p, a, c);
   return p;
 }

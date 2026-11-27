@@ -13,6 +13,7 @@
  * fragments.
  */
 import { type MemberId, MEMBERS } from "./members.ts";
+import { SEQWAWA } from "./seqwawa.ts";
 import type { CallingId, KinId, TraitId } from "./traits.ts";
 
 /** What health and attack are multiplied by at one, two and three stars. */
@@ -95,6 +96,7 @@ export const FIGURE_IDS = [
   "greg",
   "whitefox",
   "hearthcat",
+  "seqwawa",
 ] as const;
 /** A figure a member can field: one of the twenty-eight, or a banner's member (`members.ts`). */
 export type FigureId = (typeof FIGURE_IDS)[number] | MemberId;
@@ -103,7 +105,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
   ...MEMBERS,
   // ---------- one acorn ----------
   emberkit: {
-    name: "Emberkit",
+    name: "Flint",
     tier: 1,
     kin: "ember",
     calling: "fang",
@@ -125,7 +127,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Asleep in the fire. Do not move the fire.",
   },
   mossmote: {
-    name: "Mossmote",
+    name: "Velvet",
     tier: 1,
     kin: "moss",
     calling: "mender",
@@ -151,7 +153,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     tier: 1,
     kin: "mist",
     calling: "sage",
-    extra: [],
+    extra: ["groot"],
     hp: 210,
     attack: 22,
     speed: 0.7,
@@ -173,7 +175,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     tier: 1,
     kin: "burrow",
     calling: "sneak",
-    extra: [],
+    extra: ["groot"],
     hp: 260,
     attack: 28,
     speed: 0.8,
@@ -191,7 +193,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Has been underground. Will be again.",
   },
   finch: {
-    name: "Twig Finch",
+    name: "Twig",
     tier: 1,
     kin: "feather",
     calling: "slinger",
@@ -213,7 +215,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Small. Loud. Has a twig and is not afraid to use it.",
   },
   crab7: {
-    name: "Crab #7",
+    name: "Nipper",
     tier: 1,
     kin: "crab",
     calling: "fang",
@@ -235,7 +237,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Present at roll call. Barely.",
   },
   barrowgnome: {
-    name: "Barrow Gnome",
+    name: "Hodge",
     tier: 1,
     kin: "gnome",
     calling: "bulwark",
@@ -259,7 +261,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
 
   // ---------- two acorns ----------
   kettle: {
-    name: "Kettle",
+    name: "Brew",
     tier: 2,
     kin: "ember",
     calling: "mender",
@@ -281,7 +283,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Somebody left it on. It came along.",
   },
   slug: {
-    name: "Slug",
+    name: "Mosey",
     tier: 2,
     kin: "moss",
     calling: "bulwark",
@@ -325,7 +327,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Blue. Wobbly. Plural, shortly.",
   },
   chickaree: {
-    name: "Chickaree",
+    name: "Chuck",
     tier: 2,
     kin: "burrow",
     calling: "slinger",
@@ -347,7 +349,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Buries cones. Forgets where. Finds more.",
   },
   jay: {
-    name: "Dusk Jay",
+    name: "Huff",
     tier: 2,
     kin: "feather",
     calling: "fang",
@@ -360,7 +362,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     ward: 15,
     mana: [0, 50],
     ability: {
-      name: "Flurry",
+      name: "That Does It",
       shape: "self",
       text: "Loses its temper: dashes to the enemy with the least health within {reach} hexes, then attacks {haste}% faster for {lasts} seconds.",
       n: { haste: [60, 90, 130], lasts: [4, 4, 4], reach: [3, 3, 3] },
@@ -369,7 +371,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Has a complaint. Has several.",
   },
   crab12: {
-    name: "Crab #12",
+    name: "Skip",
     tier: 2,
     kin: "crab",
     calling: "slinger",
@@ -391,7 +393,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Throws pebbles. Says it was #11.",
   },
   lanterngnome: {
-    name: "Lantern Gnome",
+    name: "Wick",
     tier: 2,
     kin: "gnome",
     calling: "sage",
@@ -415,7 +417,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
 
   // ---------- three acorns ----------
   leafling: {
-    name: "Leafling",
+    name: "Bud",
     tier: 3,
     kin: "moss",
     calling: "sage",
@@ -437,7 +439,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "A sprout with opinions.",
   },
   cindernewt: {
-    name: "Cinder Newt",
+    name: "Toast",
     tier: 3,
     kin: "ember",
     calling: "sage",
@@ -459,7 +461,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Lives in the embers. Complains about the cold.",
   },
   drizzlefrog: {
-    name: "Drizzle Frog",
+    name: "Drizzle",
     tier: 3,
     kin: "mist",
     calling: "slinger",
@@ -485,7 +487,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     tier: 3,
     kin: "burrow",
     calling: "bulwark",
-    extra: [],
+    extra: ["groot"],
     hp: 820,
     attack: 0,
     speed: 0,
@@ -504,7 +506,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "It is a rock. It came anyway.",
   },
   bushgnome: {
-    name: "Gnome In A Bush",
+    name: "Shrub",
     tier: 3,
     kin: "gnome",
     calling: "sneak",
@@ -526,7 +528,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "It is a bush. Pay it no mind.",
   },
   crab23: {
-    name: "Crab #23",
+    name: "Fuss",
     tier: 3,
     kin: "crab",
     calling: "mender",
@@ -550,7 +552,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
 
   // ---------- four acorns ----------
   badger: {
-    name: "Badger",
+    name: "Grudge",
     tier: 4,
     kin: "burrow",
     calling: "fang",
@@ -572,7 +574,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Was asleep. Is not now. Blames you.",
   },
   fogowl: {
-    name: "Fog Owl",
+    name: "Eaves",
     tier: 4,
     kin: "feather",
     calling: "sneak",
@@ -594,7 +596,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "You will not hear it. It heard you.",
   },
   heron: {
-    name: "Reed Heron",
+    name: "Reed",
     tier: 4,
     kin: "feather",
     calling: "slinger",
@@ -616,7 +618,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Stands on one leg. The other is for emergencies.",
   },
   crab40: {
-    name: "Crab #40",
+    name: "Barge",
     tier: 4,
     kin: "crab",
     calling: "bulwark",
@@ -629,7 +631,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     ward: 35,
     mana: [40, 90],
     ability: {
-      name: "Hold The Line",
+      name: "In The Way",
       shape: "ring",
       text: "Gets in everybody's way: pulls every enemy within two hexes 1 hex nearer, then a shield of {shield} for {lasts} seconds, and they have to attack it for {taunt} seconds.",
       n: { shield: [300, 520, 940], lasts: [4, 4, 4], taunt: [3, 3, 4] },
@@ -638,7 +640,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Wide. Has never once been counted wrong.",
   },
   apothecary: {
-    name: "Apothecary Gnome",
+    name: "Dose",
     tier: 4,
     kin: "gnome",
     calling: "mender",
@@ -664,7 +666,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
   greg: {
     name: "Greg",
     tier: 5,
-    kin: "moss",
+    kin: "groot",
     calling: "bulwark",
     extra: ["greg"],
     hp: 880,
@@ -687,8 +689,8 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     name: "Orphion",
     tier: 5,
     kin: "mist",
-    calling: "fang",
-    extra: ["sage"],
+    calling: "sage",
+    extra: ["groot"],
     hp: 700,
     attack: 62,
     speed: 0.85,
@@ -706,7 +708,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Nobody knows whose it is.",
   },
   hearthcat: {
-    name: "Hearth Cat",
+    name: "Vesta",
     tier: 5,
     kin: "ember",
     calling: "sneak",
@@ -727,6 +729,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     },
     quip: "Sits on the board. Things fall off.",
   },
+  seqwawa: SEQWAWA,
 };
 
 // ---------- the ones that are only ever summoned ----------
@@ -747,7 +750,7 @@ export const SUMMONS: Record<SummonId, UnitSpec> = {
     quip: "A bit of Glorp, out on its own.",
   },
   uncounted: {
-    name: "Crab #??",
+    name: "Miscount",
     hp: 300,
     attack: 28,
     speed: 0.7,
@@ -759,7 +762,7 @@ export const SUMMONS: Record<SummonId, UnitSpec> = {
     quip: "Was not on the list. Is here anyway.",
   },
   biguncounted: {
-    name: "Big Crab #??",
+    name: "Big Miscount",
     hp: 600,
     attack: 44,
     speed: 0.65,
@@ -771,7 +774,7 @@ export const SUMMONS: Record<SummonId, UnitSpec> = {
     quip: "Was not on the list. The list was not long enough.",
   },
   sprout: {
-    name: "Bramble Runner",
+    name: "Runner",
     hp: 150,
     attack: 18,
     speed: 0.6,
@@ -968,7 +971,7 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
     quip: "Present at roll call.",
   },
   oldbramble: {
-    name: "Old Bramble",
+    name: "Snag",
     hp: 1500,
     attack: 52,
     speed: 0.6,
@@ -980,14 +983,14 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
     ability: {
       name: "Runners",
       shape: "summon",
-      text: "Whoever attacks it up close takes {thorns} damage. Puts out a runner: a Bramble Runner sprouts beside the nearest enemy, at most {most} at a time.",
+      text: "Whoever attacks it up close takes {thorns} damage. A Runner sprouts beside the nearest enemy, at most {most} at a time.",
       n: { thorns: [12, 21, 38], most: [3, 3, 4] },
       short: "Enemies hitting it up close take {thorns}. Sprouts runners by enemies, {most} at most.",
     },
     quip: "It was here first. It will be here last.",
   },
   hoardmagpie: {
-    name: "The Magpie With The Hoard",
+    name: "Swipe",
     hp: 1950,
     attack: 72,
     speed: 0.9,
@@ -1006,7 +1009,7 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
     quip: "Everything in the hoard was yours once.",
   },
   bigcrab: {
-    name: "The Crab Nobody Counted",
+    name: "Zero",
     hp: 5400,
     attack: 130,
     speed: 0.7,
@@ -1050,22 +1053,17 @@ export const traitsOf = (kind: FigureId): readonly TraitId[] => {
 export function abilityNumber(kind: UnitKind, name: string, stars: Stars): number {
   return specOf(kind).ability?.n[name]?.[stars - 1] ?? 0;
 }
-/** Fills an ability's `{name}` gaps with its numbers at a number of stars. */
-function filled(ability: AbilitySpec, text: string, stars: Stars): string {
-  return text.replaceAll(/\{(\w+)\}/g, (whole: string, key: string) => {
-    const v = ability.n[key]?.[stars - 1];
+/** An ability's sentence (`text`) or card words (`short`) at a number of stars, its `{name}` gaps filled with its numbers. */
+function filled(kind: UnitKind, words: "text" | "short", stars: Stars): string {
+  const ability = specOf(kind).ability;
+  return (ability?.[words] ?? "").replaceAll(/\{(\w+)\}/g, (whole: string, key: string) => {
+    const v = ability?.n[key]?.[stars - 1];
     return v === undefined ? whole : String(v);
   });
 }
 /** What an ability does at a number of stars, in a sentence. */
-export function abilityText(kind: UnitKind, stars: Stars): string {
-  const ability = specOf(kind).ability;
-  return ability ? filled(ability, ability.text, stars) : "";
-}
+export const abilityText = (kind: UnitKind, stars: Stars): string => filled(kind, "text", stars);
 /** What an ability does at a number of stars, in a few words for a card. */
-export function abilityShort(kind: UnitKind, stars: Stars): string {
-  const ability = specOf(kind).ability;
-  return ability ? filled(ability, ability.short, stars) : "";
-}
+export const abilityShort = (kind: UnitKind, stars: Stars): string => filled(kind, "short", stars);
 /** The figures of a tier, in the order of the table. */
 export const figuresOfTier = (tier: Tier): FigureId[] => FIGURE_IDS.filter((id) => FIGURES[id].tier === tier);

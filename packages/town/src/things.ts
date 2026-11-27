@@ -305,17 +305,9 @@ export const THINGS: readonly Thing[] = [
   ),
 
   // Won in the games, never bought.
-  thing(
-    "trophy-oldbramble",
-    "Old Bramble, carved",
-    "trophies",
-    1,
-    1,
-    "For beating Old Bramble in The Little Raid.",
-    "",
-  ),
-  thing("trophy-hoardmagpie", "The Magpie, carved", "trophies", 1, 1, "For beating The Magpie With The Hoard.", ""),
-  thing("trophy-bigcrab", "The Crab Nobody Counted", "trophies", 1, 1, "For finishing The Little Raid.", ""),
+  thing("trophy-oldbramble", "Snag, carved", "trophies", 1, 1, "For beating Snag in The Little Raid.", ""),
+  thing("trophy-hoardmagpie", "Swipe, carved", "trophies", 1, 1, "For beating Swipe in The Little Raid.", ""),
+  thing("trophy-bigcrab", "Zero, carved", "trophies", 1, 1, "For finishing The Little Raid.", ""),
   thing("model-crab", "Clockwork crab, a model", "trophies", 1, 1, "For building one in the Works.", ""),
   thing("model-beacon", "Beacon, a model", "trophies", 1, 1, "For building one in the Works.", ""),
 

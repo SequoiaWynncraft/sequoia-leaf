@@ -7,11 +7,15 @@ import { fateOf, hangs, type Hung, stillCaught } from "./hung.ts";
 import { leadOf } from "./looks.ts";
 import { advance, openPlayback } from "./playback.ts";
 
-/** The banner's member behind a wall, against a party that lasts long enough to be caught several times. */
+/**
+ * The banner's member behind a wall, against a party that lasts long enough to be caught several
+ * times. (The wall has one Groot figure, Greg, so no figure gets back up and the opening is as long
+ * as this was written for: whether a cast is shown in a later frame turns on where frames fall.)
+ */
 const SETUP: FightSetup = {
   seed: 3,
   sides: [
-    partyOfFigures([at("banner-1", 3, 3, 2), at("crab40", 3, 0, 2), at("rock", 2, 0, 2), at("greg", 4, 0, 2)]),
+    partyOfFigures([at("banner-1", 3, 3, 2), at("crab40", 3, 0, 2), at("glorp", 2, 0, 2), at("greg", 4, 0, 2)]),
     partyOfFigures([at("rock", 3, 0, 2), at("crab40", 2, 0, 2), at("badger", 4, 0, 2), at("kettle", 3, 2, 2)]),
   ],
 };

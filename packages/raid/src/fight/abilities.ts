@@ -8,8 +8,10 @@
  * with that strength: what happens to its owner after (a Fairy Ring growing, a fall) does not
  * change it.
  */
-import { abilityNumber, specOf, type UnitKind } from "../content/figures.ts";
-import { cone, distance, line, neighbours, within } from "../hex.ts";
+import { abilityNumber, type UnitKind } from "../content/figures.ts";
+import { formNumber } from "../content/groot.ts";
+import { cone, distance, line, neighbours } from "../hex.ts";
+import { around, ids, say, spread } from "./cast.ts";
 import {
   alliesOf,
   brace,
@@ -22,11 +24,13 @@ import {
   foesWithin,
   freeBeside,
   freeNear,
+  getUp,
   haste,
   heal,
   hide,
   hurt,
   knockBack,
+  lastFallen,
   later,
   leap,
   mostHurt,
@@ -41,33 +45,11 @@ import {
   taunt,
 } from "./core.ts";
 import { aim, crowd, drawnFoe, wanted, weakest } from "./mind.ts";
-import { busiestHex, type Channel, channel, dash, dashTo, over, pull, send, telegraph, zone } from "./moves.ts";
+import { busiestHex, channel, dash, dashTo, over, pull, send, telegraph, zone } from "./moves.ts";
 import type { Fight, Unit } from "./types.ts";
 
 /** An ability: the fight, whose it is, and its numbers at that figure's stars by name. */
 export type Cast = (f: Fight, u: Unit, n: (name: string) => number) => boolean;
-
-const ids = (units: readonly Unit[]): number[] => units.map((o) => o.id);
-
-/** Announces an ability: the hexes it covers, who it is aimed at, how long before it lands, and its pulses if it is channelled. */
-function say(f: Fight, u: Unit, cells: number[], targets: number[], ticks: number, pulses?: Channel): void {
-  const ability = specOf(u.kind).ability;
-  emit(f, {
-    t: "cast",
-    id: u.id,
-    kind: u.kind,
-    name: ability?.name ?? "",
-    shape: ability?.shape ?? "bolt",
-    cells,
-    targets,
-    ticks,
-    ...pulses,
-  });
-}
-/** Touching hexes, with the middle one first. */
-const around = (cell: number): number[] => [cell, ...neighbours(cell)];
-/** Every hex within some steps of one, the middle one first: what an ability that spreads out covers. */
-const spread = (cell: number, steps: number): number[] => (steps === 1 ? around(cell) : [cell, ...within(cell, steps)]);
 
 /** Everything touching it: damage, and something on top for each one hurt. */
 function splash(
@@ -120,13 +102,15 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   },
   moth: (f, u, n) => {
     const t = aim(f, u);
-    if (!t || !crowd(f, u, foesOn(f, u.side, around(t.cell)).length)) return false;
+    // Real Moth, its true form: the dust covers the hexes two away as well.
+    const reach = u.form === "true" ? formNumber("moth", "reach") : 1;
+    if (!t || !crowd(f, u, foesOn(f, u.side, spread(t.cell, reach)).length)) return false;
     const damage = powered(u, n("damage"));
     const dust = powered(u, n("dust"));
-    say(f, u, around(t.cell), [t.id], flight(u.cell, t.cell));
+    say(f, u, spread(t.cell, reach), [t.id], flight(u.cell, t.cell));
     const land = (): void => {
-      for (const o of foesWithin(f, u.side, t.cell, 1)) hurt(f, o, damage, "magic", "ability", u);
-      zone(f, u, around(t.cell), "dust", n("lasts"), { damage: dust });
+      for (const o of foesWithin(f, u.side, t.cell, reach)) hurt(f, o, damage, "magic", "ability", u);
+      zone(f, u, spread(t.cell, reach), "dust", n("lasts"), { damage: dust });
     };
     send(f, u, u.cell, t, land, 0, [damage, "magic"]);
     return true;
@@ -141,7 +125,11 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     say(f, u, [t === far ? to : u.cell], [t.id], 0);
     if (t === far) leap(f, u, to, "ability");
     u.target = t.id;
-    hurt(f, t, powered(u, n("damage")), "physical", "ability", u);
+    const bite = powered(u, n("damage"));
+    hurt(f, t, bite, "physical", "ability", u);
+    // Real Worm, its true form: every other enemy touching where it comes up is bitten too.
+    if (u.form === "true")
+      for (const o of foesWithin(f, u.side, u.cell, 1)) if (o !== t) hurt(f, o, bite, "physical", "ability", u);
     return true;
   },
   finch: (f, u, n) => {
@@ -407,10 +395,14 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   // ---------- five acorns ----------
   greg: (f, u, n) => {
     const to = busiestHex(f, u, n("jump"));
-    const caught = foesWithin(f, u.side, to, 2);
-    if (caught.length === 0 || !crowd(f, u, caught.length)) return false;
-    say(f, u, spread(to, 2), ids(caught), 0);
+    const near = foesWithin(f, u.side, to, 2);
+    if (near.length === 0 || !crowd(f, u, near.length)) return false;
+    say(f, u, spread(to, 2), ids(near), 0);
     leap(f, u, to, "ability");
+    // Real Greg, his true form: first every enemy within 3 hexes is pulled 1 hex nearer him.
+    const pulls = u.form === "true" ? formNumber("greg", "pull") : 0;
+    for (const o of foesByDistance(f, u.side, to)) if (distance(to, o.cell) <= pulls) pull(f, u, o);
+    const caught = pulls > 0 ? foesWithin(f, u.side, to, 2) : near;
     for (const o of caught) {
       hurt(f, o, powered(u, n("damage")), "magic", "ability", u);
       stun(f, o, n("stun"), u);
@@ -420,6 +412,20 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   whitefox: (f, u, n) => {
     if (splash(f, u, 2, powered(u, n("damage")), "magic", () => {}) < 0) return false;
     for (const o of alliesOf(f, u.side)) haste(f, o, powered(u, n("haste")), n("lasts"), u);
+    // Real Orphion, its true form: the party gets a share of its health back.
+    if (u.form === "true")
+      for (const o of alliesOf(f, u.side)) heal(f, o, (o.maxHp * formNumber("whitefox", "heal")) / 100, "ability", u);
+    return true;
+  },
+  seqwawa: (f, u, n) => {
+    const friends = alliesOf(f, u.side);
+    // The last of its party to fall, if still down, fallen within the window and with somewhere to stand.
+    const back = lastFallen(f, u.side, secs(n("window")));
+    const aimed = back ? [...friends, back] : friends;
+    const cells = aimed.map((o) => o.cell);
+    say(f, u, cells, ids(aimed), 0);
+    for (const o of friends) heal(f, o, powered(u, n("heal")), "ability", u);
+    if (back) getUp(f, back, powered(u, n("back")) * (1 + u.mending / 100), "seqwawa");
     return true;
   },
   hearthcat: (f, u, n) => {

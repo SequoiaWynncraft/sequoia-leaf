@@ -25,7 +25,7 @@ counted from the far side). `seatCell(side, seat)` turns one into the other. The
 nine.
 
 **A run.** Fifteen rooms in three wings of five: trouble, trouble, spar, spar, boss; spar, trouble,
-spar, spar, boss; spar, spar, trouble, spar, and The Crab Nobody Counted. Each room is planning with
+spar, spar, boss; spar, spar, trouble, spar, and Zero. Each room is planning with
 no clock, then the fight, then the takings. Winning or losing, the party moves on to the next room;
 only the last room is fought again until it is won or the party goes home.
 
@@ -58,40 +58,42 @@ still be bought if it completes three. Items the merged copies held go to the su
 room (two loose components forge, as they would if handed over), and the rest go back to the item
 bench.
 
-**Figures.** Twenty-eight, in five tiers of 7, 7, 6, 5 and 3. Each has health, attack, attacks a
+**Figures.** Twenty-nine, in five tiers of 7, 7, 6, 5 and 4. Each has health, attack, attacks a
 second, reach in hexes, armour, ward, a mana bar and one ability. Each has one kin and one calling;
-the three dearest carry a third trait.
+the four dearest carry a third trait, and so do the Worm, the Moth and the Rock (Groot). Nobody
+carries more than three.
 
-| Tier | Figure           | Kin     | Calling        | Health | Attack | Reach | Ability (one star)                                                                                                                                                                                         |
-| ---- | ---------------- | ------- | -------------- | ------ | ------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | Emberkit         | Ember   | Fang           | 270    | 30     | 1     | **Do Not Move The Fire.** A spark jumps from its fire: 75 magic damage to its target and to whoever is standing behind it.                                                                                 |
-| 1    | Mossmote         | Moss    | Mender         | 250    | 20     | 4     | **Cushion.** Tucks a cushion round whoever in the party is most hurt: a shield of 110 for 4 seconds.                                                                                                       |
-| 1    | Moth             | Mist    | Sage           | 210    | 22     | 4     | **Wing Dust.** Shakes its wings over its target: 80 magic damage to it and to every enemy touching it, and dust on those hexes for 2 seconds that does 20 magic damage a second to enemies there.          |
-| 1    | Worm             | Burrow  | Sneak          | 260    | 28     | 1     | **Under And Up.** Goes under and comes up beside the enemy furthest away, biting it for 90 physical damage.                                                                                                |
-| 1    | Twig Finch       | Feather | Slinger        | 210    | 26     | 4     | **Seed Volley.** Spits 3 seeds at its target, 34 physical damage each. A seed whose target has fallen flies on at the nearest enemy.                                                                       |
-| 1    | Crab #7          | Crab    | Fang           | 300    | 26     | 1     | **Pinch.** Pinches its target and does not let go: 85 physical damage, and it is stunned for 1.5 seconds.                                                                                                  |
-| 1    | Barrow Gnome     | Gnome   | Bulwark        | 320    | 20     | 1     | **Upend The Barrow.** Tips the barrow over and gets behind it: a shield of 120 for 4 seconds, and 40 physical damage to every enemy touching it.                                                           |
-| 2    | Kettle           | Ember   | Mender         | 330    | 24     | 4     | **Tea.** Pours for 1 second: 3 sips, each to whoever in the party is most hurt then, 50 health back each.                                                                                                  |
-| 2    | Slug             | Moss    | Bulwark        | 430    | 24     | 1     | **Slime.** Slimes every enemy touching it: 60 magic damage, and slime on the hexes touching it for 3 seconds, where enemies are 30% slower.                                                                |
-| 2    | Glorp            | Mist    | Bulwark        | 400    | 28     | 1     | **A Bit Comes Off.** A bit comes off: a Glorplet with 200 health and 24 attack joins the fight beside it.                                                                                                  |
-| 2    | Chickaree        | Burrow  | Slinger        | 270    | 34     | 4     | **Cone From Above.** Lobs a cone at the enemy furthest away: 120 physical damage, and it is stunned for 1 second.                                                                                          |
-| 2    | Dusk Jay         | Feather | Fang           | 340    | 36     | 1     | **Flurry.** Loses its temper: dashes to the enemy with the least health within 3 hexes, then attacks 60% faster for 4 seconds.                                                                             |
-| 2    | Crab #12         | Crab    | Slinger        | 280    | 32     | 4     | **Skipping Stone.** Skims a pebble at its target for 95 physical damage; it skips on to 2 more enemies close by.                                                                                           |
-| 2    | Lantern Gnome    | Gnome   | Sage           | 260    | 24     | 4     | **Who Goes There.** Holds the lantern up at the 3 nearest enemies: 90 magic damage each.                                                                                                                   |
-| 3    | Leafling         | Moss    | Sage           | 390    | 30     | 4     | **Proper Instruction.** Tells the 2 friends nearest it how to do things properly: +22% attack for the rest of the fight.                                                                                   |
-| 3    | Cinder Newt      | Ember   | Sage           | 440    | 34     | 2     | **Warm Breath.** Breathes out over its target 3 times in 1 second, turning to it each time: 50 magic damage each time to every enemy in a cone two hexes deep.                                             |
-| 3    | Drizzle Frog     | Mist    | Slinger        | 370    | 44     | 4     | **One Big Drop.** Spits one big drop at its target: 190 magic damage, and a puddle on its hex and the hexes touching it for 3 seconds, where enemies are 30% slower.                                       |
-| 3    | Rock             | Burrow  | Bulwark        | 820    | 0      | 1     | **It Is A Rock.** Does nothing, pointedly. For 4 seconds it takes 40% less from every hit, and whoever attacks it up close stubs a toe for 45 damage.                                                      |
-| 3    | Gnome In A Bush  | Gnome   | Sneak          | 400    | 42     | 1     | **It Was A Bush.** Hides in its bush for 1 second, where nothing can reach it, then jumps out beside its target: 160 physical damage, and 50% more if the target was attacking somebody else.              |
-| 3    | Crab #23         | Crab    | Mender         | 430    | 28     | 2     | **Plasters.** Hands out plasters to the 2 most hurt in the party: 140 health back each.                                                                                                                    |
-| 4    | Badger           | Burrow  | Fang           | 720    | 58     | 1     | **Clear The Sett.** Turns right round with its claws out: 170 physical damage to every enemy touching it, and it heals for 30% of what lands.                                                              |
-| 4    | Fog Owl          | Feather | Sneak          | 560    | 62     | 1     | **Out Of The Fog.** Swoops onto the enemy with the least health of those furthest away, up to 1 hex nearer than the furthest: 240 physical damage, and it is stunned for 1.5 seconds.                      |
-| 4    | Reed Heron       | Feather | Slinger        | 500    | 64     | 5     | **One Long Stab.** Marks a line 5 hexes long through its target, then 0.5 seconds later stabs along it: 220 physical damage to every enemy on it by then.                                                  |
-| 4    | Crab #40         | Crab    | Bulwark        | 850    | 40     | 1     | **Hold The Line.** Gets in everybody's way: pulls every enemy within two hexes 1 hex nearer, then a shield of 300 for 4 seconds, and they have to attack it for 3 seconds.                                 |
-| 4    | Apothecary Gnome | Gnome   | Mender         | 540    | 34     | 2     | **Tonic For Everyone.** A spoonful each for itself and every friend within two hexes: 180 health back, and 25% faster attacks for 4 seconds.                                                               |
-| 5    | Greg             | Moss    | Bulwark + Greg | 880    | 54     | 1     | **Greg Sits Down.** Greg jumps onto the free hex within 3 hexes that has the most enemies touching it, and sits down. Every enemy within two hexes takes 200 magic damage and is stunned for 1.25 seconds. |
-| 5    | Orphion          | Mist    | Fang + Sage    | 700    | 62     | 1     | **Antlers Ring.** Its gold antlers ring: 160 magic damage to every enemy within two hexes, and the whole party attacks 12% faster for 4 seconds.                                                           |
-| 5    | Hearth Cat       | Ember   | Sneak + Fang   | 700    | 66     | 1     | **Off The Table.** Looks at its target, then bats it off its hex: 240 physical damage, knocked back 2 hexes, stunned for 1.5 seconds.                                                                      |
+| Tier | Figure  | Kin            | Calling         | Health | Attack | Reach | Ability (one star)                                                                                                                                                                                         |
+| ---- | ------- | -------------- | --------------- | ------ | ------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Flint   | Ember          | Fang            | 270    | 30     | 1     | **Do Not Move The Fire.** A spark jumps from its fire: 75 magic damage to its target and to whoever is standing behind it.                                                                                 |
+| 1    | Velvet  | Moss           | Mender          | 250    | 20     | 4     | **Cushion.** Tucks a cushion round whoever in the party is most hurt: a shield of 110 for 4 seconds.                                                                                                       |
+| 1    | Moth    | Mist + Groot   | Sage            | 210    | 22     | 4     | **Wing Dust.** Shakes its wings over its target: 80 magic damage to it and to every enemy touching it, and dust on those hexes for 2 seconds that does 20 magic damage a second to enemies there.          |
+| 1    | Worm    | Burrow + Groot | Sneak           | 260    | 28     | 1     | **Under And Up.** Goes under and comes up beside the enemy furthest away, biting it for 90 physical damage.                                                                                                |
+| 1    | Twig    | Feather        | Slinger         | 210    | 26     | 4     | **Seed Volley.** Spits 3 seeds at its target, 34 physical damage each. A seed whose target has fallen flies on at the nearest enemy.                                                                       |
+| 1    | Nipper  | Crab           | Fang            | 300    | 26     | 1     | **Pinch.** Pinches its target and does not let go: 85 physical damage, and it is stunned for 1.5 seconds.                                                                                                  |
+| 1    | Hodge   | Gnome          | Bulwark         | 320    | 20     | 1     | **Upend The Barrow.** Tips the barrow over and gets behind it: a shield of 120 for 4 seconds, and 40 physical damage to every enemy touching it.                                                           |
+| 2    | Brew    | Ember          | Mender          | 330    | 24     | 4     | **Tea.** Pours for 1 second: 3 sips, each to whoever in the party is most hurt then, 50 health back each.                                                                                                  |
+| 2    | Mosey   | Moss           | Bulwark         | 430    | 24     | 1     | **Slime.** Slimes every enemy touching it: 60 magic damage, and slime on the hexes touching it for 3 seconds, where enemies are 30% slower.                                                                |
+| 2    | Glorp   | Mist           | Bulwark         | 400    | 28     | 1     | **A Bit Comes Off.** A bit comes off: a Glorplet with 200 health and 24 attack joins the fight beside it.                                                                                                  |
+| 2    | Chuck   | Burrow         | Slinger         | 270    | 34     | 4     | **Cone From Above.** Lobs a cone at the enemy furthest away: 120 physical damage, and it is stunned for 1 second.                                                                                          |
+| 2    | Huff    | Feather        | Fang            | 340    | 36     | 1     | **That Does It.** Loses its temper: dashes to the enemy with the least health within 3 hexes, then attacks 60% faster for 4 seconds.                                                                       |
+| 2    | Skip    | Crab           | Slinger         | 280    | 32     | 4     | **Skipping Stone.** Skims a pebble at its target for 95 physical damage; it skips on to 2 more enemies close by.                                                                                           |
+| 2    | Wick    | Gnome          | Sage            | 260    | 24     | 4     | **Who Goes There.** Holds the lantern up at the 3 nearest enemies: 90 magic damage each.                                                                                                                   |
+| 3    | Bud     | Moss           | Sage            | 390    | 30     | 4     | **Proper Instruction.** Tells the 2 friends nearest it how to do things properly: +22% attack for the rest of the fight.                                                                                   |
+| 3    | Toast   | Ember          | Sage            | 440    | 34     | 2     | **Warm Breath.** Breathes out over its target 3 times in 1 second, turning to it each time: 50 magic damage each time to every enemy in a cone two hexes deep.                                             |
+| 3    | Drizzle | Mist           | Slinger         | 370    | 44     | 4     | **One Big Drop.** Spits one big drop at its target: 190 magic damage, and a puddle on its hex and the hexes touching it for 3 seconds, where enemies are 30% slower.                                       |
+| 3    | Rock    | Burrow + Groot | Bulwark         | 820    | 0      | 1     | **It Is A Rock.** Does nothing, pointedly. For 4 seconds it takes 40% less from every hit, and whoever attacks it up close stubs a toe for 45 damage.                                                      |
+| 3    | Shrub   | Gnome          | Sneak           | 400    | 42     | 1     | **It Was A Bush.** Hides in its bush for 1 second, where nothing can reach it, then jumps out beside its target: 160 physical damage, and 50% more if the target was attacking somebody else.              |
+| 3    | Fuss    | Crab           | Mender          | 430    | 28     | 2     | **Plasters.** Hands out plasters to the 2 most hurt in the party: 140 health back each.                                                                                                                    |
+| 4    | Grudge  | Burrow         | Fang            | 720    | 58     | 1     | **Clear The Sett.** Turns right round with its claws out: 170 physical damage to every enemy touching it, and it heals for 30% of what lands.                                                              |
+| 4    | Eaves   | Feather        | Sneak           | 560    | 62     | 1     | **Out Of The Fog.** Swoops onto the enemy with the least health of those furthest away, up to 1 hex nearer than the furthest: 240 physical damage, and it is stunned for 1.5 seconds.                      |
+| 4    | Reed    | Feather        | Slinger         | 500    | 64     | 5     | **One Long Stab.** Marks a line 5 hexes long through its target, then 0.5 seconds later stabs along it: 220 physical damage to every enemy on it by then.                                                  |
+| 4    | Barge   | Crab           | Bulwark         | 850    | 40     | 1     | **In The Way.** Gets in everybody's way: pulls every enemy within two hexes 1 hex nearer, then a shield of 300 for 4 seconds, and they have to attack it for 3 seconds.                                    |
+| 4    | Dose    | Gnome          | Mender          | 540    | 34     | 2     | **Tonic For Everyone.** A spoonful each for itself and every friend within two hexes: 180 health back, and 25% faster attacks for 4 seconds.                                                               |
+| 5    | Greg    | Groot          | Bulwark + Greg  | 880    | 54     | 1     | **Greg Sits Down.** Greg jumps onto the free hex within 3 hexes that has the most enemies touching it, and sits down. Every enemy within two hexes takes 200 magic damage and is stunned for 1.25 seconds. |
+| 5    | Orphion | Mist + Groot   | Sage            | 700    | 62     | 1     | **Antlers Ring.** Its gold antlers ring: 160 magic damage to every enemy within two hexes, and the whole party attacks 12% faster for 4 seconds.                                                           |
+| 5    | Vesta   | Ember          | Sneak + Fang    | 700    | 66     | 1     | **Off The Table.** Looks at its target, then bats it off its hex: 240 physical damage, knocked back 2 hexes, stunned for 1.5 seconds.                                                                      |
+| 5    | Seqwawa | Moss           | Mender + Rooted | 850    | 0      | 4     | **No GG Left Behind.** Every friend gets 140 health back. The last friend to fall, if it fell in the last 3 seconds, gets back up with 200 health.                                                         |
 
 **A banner's member.** Each pull banner has one more figure, which is a guild member
 (`content/members.ts`: `MEMBER_IDS`, by the banner's id). It is a figure like any other, at five
@@ -113,20 +115,21 @@ the member's own figures, so it is made stronger than the twenty-eight's five-ac
 alone no better than Greg at two and three stars. Measured with `bun review/swap.ts 20` (first
 trail: 3,187 boards the bots set out from room 5 on, each fought again with its cheapest figure
 swapped for the one measured, holding nothing): those fights are won 91% of the time with it at
-one star and 98% at two (Greg 84 and 96, Orphion 77 and 92, the Hearth Cat 78 and 92; 66%
+one star and 98% at two (Greg 84 and 96, Orphion 77 and 92, Vesta 78 and 92; 66%
 without), and of the ones the bots lost, 75% and 94% (Greg 57 and 88, Orphion 41 and 77, the
-Hearth Cat 45 and 78). Alone at one, two and three stars it wins 25%, 33% and 64% of the fifteen
-rooms (Greg 17, 34, 64; Orphion 14, 33, 49; the Hearth Cat 15, 26, 41).
+Vesta 45 and 78). Alone at one, two and three stars it wins 25%, 33% and 64% of the fifteen
+rooms (Greg 17, 34, 64; Orphion 14, 33, 49; Vesta 15, 26, 41).
 
 **Traits.** A trait switches on when the party fields enough _different_ figures that carry it;
 copies of one figure count once, however many emblems they hold. A figure carries its own traits
-and the kin of any emblem it holds. Every kin has four members, one of them at one acorn and one at
-two, so any kin can be started in the first rooms.
+and the kin of any emblem it holds. Every kin but Groot has four members, one of them at one acorn
+and one at two, so any kin can be started in the first rooms; Groot is the five named after the
+guild's raids (Worm, Moth, Rock, Greg, Orphion), and has no emblem yet.
 
 | Trait   | Steps   | What it does at its first step                                                                                                                                                            |
 | ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Ember   | 2, 4    | Ember figures' attacks and abilities leave a burn: 2% of health a second for 4 seconds. Healing on the burning is 40% weaker.                                                             |
-| Moss    | 2, 4    | The whole party regrows 1.2% of its health every second.                                                                                                                                  |
+| Moss    | 2, 3, 4 | The whole party regrows 1.2% of its health every second.                                                                                                                                  |
 | Mist    | 2, 4    | The whole party gains 20 ward, and 12 attacks in every hundred slip past it.                                                                                                              |
 | Burrow  | 2, 4    | Burrow figures dig in: +15 armour. The first time one drops under half health it gets 10% of its health back and takes 25% less from attacks and abilities for 2 seconds, still fighting. |
 | Feather | 2, 4    | Feather figures attack 5% faster after every attack, up to 10 times over.                                                                                                                 |
@@ -136,12 +139,17 @@ two, so any kin can be started in the first rooms.
 | Fang    | 2, 4, 6 | Fangs gain 12% attack, and 10 more of their attacks in a hundred land hard, for half as much again.                                                                                       |
 | Slinger | 2, 4    | Slingers reach 1 hex further, and each attack on the same target does 7% more than the last, up to 6 times over.                                                                          |
 | Sage    | 2, 4    | Sages' abilities are 25% stronger, and each of their attacks gives 3 more mana.                                                                                                           |
-| Mender  | 2, 4    | Menders' healing and shields count for 20% more.                                                                                                                                          |
+| Mender  | 2, 3, 4 | Menders' healing and shields count for 20% more.                                                                                                                                          |
 | Sneak   | 2, 4    | When the fight starts, Sneaks leap to the enemy's back row, and their first 2 attacks do 40% more.                                                                                        |
-| Greg    | 1       | After every fight Greg is in, he has eaten something: +3% health for good, up to 10 times.                                                                                                |
+| Groot   | 2, 3, 5 | The first Groot figure to fall each fight gets back up 1 second later in its true form, with 15% of its health. A Groot figure in its true form has 10% more attack and ability power.    |
+| Greg    | 1       | Give Greg a figure from your bench: he eats it, and gains 2% health for good for each acorn of its price (its cost times its copies), up to 40%.                                          |
+| Rooted  | 1       | Does not move or attack, cannot be pushed or pulled, and gains 12 mana a second.                                                                                                          |
 
-The second steps: Ember burns from the whole party's hits and hotter; Moss regrows more; Mist gives
-more ward and more slips; Burrow digs deeper; Feather quickens more; Crab's uncounted crab is a big
+The later steps: Ember burns from the whole party's hits and hotter; Moss regrows 2% at three and
+3% at four; Mender counts for 30% at three, and at four for 35% with healing past a friend's full
+health becoming a shield for 4 seconds, up to 15% of their health; Groot gets every Groot figure
+back up once at three, and at five with 30% of their health and their mana bar at least half full;
+Mist gives more ward and more slips; Burrow digs deeper; Feather quickens more; Crab's uncounted crab is a big
 one, and at five crabs (which takes a Crab emblem) a big one and a small one come; Gnomes have 20%
 more health and find 3 after a win and 2 after a loss; Bulwark gives the rest of the party armour
 too; and so on. `traitText(id, step)` gives the sentence for any step.
@@ -173,7 +181,7 @@ covers is passed over while any other enemy is in reach, whether it was the one 
 one being picked anew.
 
 **When an ability is used.** At once when the mana bar fills, but for two kinds. One that heals or
-shields friends (Mossmote, Kettle, Crab #23, the Apothecary Gnome) waits while
+shields friends (Velvet, Brew, Fuss, Dose) waits while
 every friend it could reach is above 85% health, and the figure goes on attacking. A ring, cone or
 line that damages enemies, and would catch only one while three or more are up, waits up to 1
 second for a second to come into it, and then goes anyway. Who a figure goes for and when its
@@ -191,7 +199,8 @@ ability is worth using are decided in `fight/mind.ts`, with the numbers in `FIGH
   owner standing in one are slowed (by the zone or a slow of their own, whichever is more), or hurt
   every second. A hex holds one zone, the newest.
 - Some abilities take time. A channelled one lands in pulses, the first at once, while its owner
-  stands still; a stun, a fall or being moved ends it and the pulses left are lost. A telegraphed one
+  stands still; a stun, a fall or being moved ends it and the pulses left are lost, and one stood
+  back up on the same hex does not carry on (`Unit.downs`: it lasts in the life it began in). A telegraphed one
   marks its hexes and lands some steps later on whoever is on them then. A dash runs along a free way,
   2 steps a hex, and can be hit on the way; a pull moves an enemy 1 hex nearer, onto a free hex.
 - After 30 seconds dusk falls: every second everyone loses 3% of their health more than the second
@@ -263,8 +272,8 @@ Each charm puts its emblem on the item bench, for one figure to hold.
 | Spare Hat             | An emblem for one figure to hold: it is a Gnome as well, and counts as one more Gnome.                           |
 
 **Sparring.** A sparring room is fought against a party one of the regulars at the table brought
-(`REGULARS` in `content/rooms.ts`: Greg, the Hearth Cat, a Barrow Gnome, Crab #7, Orphion
-and a Moth, each one of the battler's own figures), or against the board another member fought
+(`REGULARS` in `content/rooms.ts`: Greg, Vesta, Hodge, Nipper, Orphion
+and Moth, each one of the battler's own figures), or against the board another member fought
 that room with. `sparParty(seed, room, trail)` makes a regular's up: a regular, a taste for one kin and one calling, a level and a number of acorns to have spent by that room, stars bought with what is left,
 and items. It brings only what a member at its level could have found: figures of a cost the stall
 offers at that level, as often as it offers them, and a second or third star only where the stall
@@ -292,20 +301,20 @@ and beating one pays as beating a regular does.
 **Trouble and bosses.** The forest's own figures are never on the stall. Each trouble room has two
 plans and draws one.
 
-| Trouble                   | Health | Attack | Trick                                                                                                                                                                                                                          |
-| ------------------------- | ------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Gnat                      | 110    | 14     | None.                                                                                                                                                                                                                          |
-| Bramble                   | 300    | 20     | Whoever attacks it up close takes 10 damage.                                                                                                                                                                                   |
-| Wasp                      | 150    | 30     | Stings its target: 50 damage that no armour stops.                                                                                                                                                                             |
-| Puddle                    | 480    | 18     | Splashes every enemy touching it: 40 magic damage, and they are 30% slower for 3 seconds.                                                                                                                                      |
-| Toadstool                 | 260    | 24     | When it falls it puffs spores: 70 magic damage to every enemy within two hexes.                                                                                                                                                |
-| Gust                      | 240    | 22     | Blows its target back 2 hexes: 50 magic damage, and it is 30% slower for 2 seconds. Unless it is a Rock.                                                                                                                       |
-| Magpie                    | 300    | 34     | Flies to your back row when the fight starts. Pecks its target for 90 physical damage, and half as much again if it is holding anything shiny.                                                                                 |
-| Mud                       | 700    | 30     | Squelches: 60 magic damage to every enemy touching it, and they are stuck for 1 second.                                                                                                                                        |
-| Counted Crab              | 380    | 30     | Starts the fight inside its shell: a shield of 120 that lasts until it is broken.                                                                                                                                              |
-| Old Bramble               | 1500   | 52     | Whoever attacks it up close takes 12 damage. Puts out a runner: a Bramble Runner sprouts beside the nearest enemy, at most 3 at a time.                                                                                        |
-| The Magpie With The Hoard | 1950   | 72     | Swoops on whoever is holding the most shiny things: 230 physical damage, and they are stunned for 1.5 seconds.                                                                                                                 |
-| The Crab Nobody Counted   | 5400   | 130    | Starts inside a shell worth 800. Gets crabbier: +15% attack for the rest of the fight, and a pinch of 320 physical damage across a cone two hexes deep. At half health it calls the roll: 2 more crabs nobody counted turn up. |
+| Trouble      | Health | Attack | Trick                                                                                                                                                                                                                          |
+| ------------ | ------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Gnat         | 110    | 14     | None.                                                                                                                                                                                                                          |
+| Bramble      | 300    | 20     | Whoever attacks it up close takes 10 damage.                                                                                                                                                                                   |
+| Wasp         | 150    | 30     | Stings its target: 50 damage that no armour stops.                                                                                                                                                                             |
+| Puddle       | 480    | 18     | Splashes every enemy touching it: 40 magic damage, and they are 30% slower for 3 seconds.                                                                                                                                      |
+| Toadstool    | 260    | 24     | When it falls it puffs spores: 70 magic damage to every enemy within two hexes.                                                                                                                                                |
+| Gust         | 240    | 22     | Blows its target back 2 hexes: 50 magic damage, and it is 30% slower for 2 seconds. Unless it is a Rock.                                                                                                                       |
+| Magpie       | 300    | 34     | Flies to your back row when the fight starts. Pecks its target for 90 physical damage, and half as much again if it is holding anything shiny.                                                                                 |
+| Mud          | 700    | 30     | Squelches: 60 magic damage to every enemy touching it, and they are stuck for 1 second.                                                                                                                                        |
+| Counted Crab | 380    | 30     | Starts the fight inside its shell: a shield of 120 that lasts until it is broken.                                                                                                                                              |
+| Snag         | 1500   | 52     | Whoever attacks it up close takes 12 damage. A Runner sprouts beside the nearest enemy, at most 3 at a time.                                                                                                                   |
+| Swipe        | 1950   | 72     | Swoops on whoever is holding the most shiny things: 230 physical damage, and they are stunned for 1.5 seconds.                                                                                                                 |
+| Zero         | 5400   | 130    | Starts inside a shell worth 800. Gets crabbier: +15% attack for the rest of the fight, and a pinch of 320 physical damage across a cone two hexes deep. At half health it calls the roll: 2 more crabs nobody counted turn up. |
 
 **Trails.** Three difficulties of the same run: The Easy Way, The Brambly Way, The Long Way Round.
 A later trail adds figures to the forest's plans, makes its bosses a little stronger, and gives the
@@ -343,6 +352,86 @@ meanwhile. A member who has pulled no figure is refused (`nothing_pulled`).
   opened it). Its log lines carry `own: true`, and add nothing to the Tally's counters.
 
 `TableView.roster` is the roster a run would start with now, for the front page and the almanac.
+
+## The expansion, release 1: Groot, Seqwawa, Greg fed by hand
+
+The first release of `RAID-EXPANSION.md` (its section 7's "1. Groot"), with the names of
+`RAID-NAMES.md` for everyone in the game today: the regulars sign as Greg, Vesta, Hodge, Nipper,
+Orphion and Moth, and a party stored under an old name or boss title still reads (`nowCalled` in
+`content/rooms.ts`). A crab's number is the tag on its shell, in its picture and its lore line
+(`content/lore.ts`, which now has a line for every figure and trait). The page says origin and class;
+in code the traits keep their words (`kin`, `calling`), so stored runs and the wire read as before.
+
+**Groot** (a kin, steps 2, 3, 5; `content/traits.ts`). A Groot figure carries `rises` from the
+start of a fight. When it falls (`fight/enter.ts`, `grootFalls`) it is down for a moment: its `fall`
+says `back`, the steps until it gets back up, and it still counts as standing meanwhile, so a side
+whose last figure is a falling Groot has not lost. One second later it gets back up (`getUp`, the
+same verb Second Wind and Seqwawa use) on its hex, or the nearest free open hex anywhere on the
+board (`standOn`, beside where it fell when it can be), in its **true form**
+(`content/groot.ts`), with 15% of its health (30% at five), and at five its mana bar at least half
+full. At the first step only the first Groot figure of the side to fall does; from three on, every
+Groot figure, once. With no free hex on the board it stays down. A true form has 10% more attack and
+ability power and one change each: Real Worm's Under And Up also bites every other enemy
+touching where it comes up; Real Moth covers the hexes two from its target, damage and dust;
+Real Rock has 60 attack and attacks 0.6 times a second, grown by its stars and might and its
+items (`Unit.grown`), still rooted; Real Greg pulls every enemy within 3 hexes of where he sits 1
+hex nearer, nearest first, before the damage; Real Orphion gives the whole party 8% of its health
+back. A figure carrying Groot with no true form would get back up as itself.
+
+**Seqwawa** (`content/seqwawa.ts`, id `seqwawa`): five acorns, on everyone's stall, Moss · Mender +
+Rooted, 850 health, no attack, reach 4 (only so it sits in the back row: it never attacks). **Rooted**
+(its own trait): it never moves or attacks, nothing pushes or pulls it (`spec.rooted`, as the
+Rock's), and it gains 12 mana every second (`Unit.manaRate`, ticked with regrowth in `everySecond`;
+Chorus can add to it). Its ability waits like a heal, while every friend is above 85% health
+(`mind.ts`), unless a friend that fell in the last 3 seconds could be stood back up; then heals every
+friend 140, 245 or 560 by its stars, and gets the last of its party to fall back up with 200, 350 or
+800 health, if that one is still down, fell in the last 3 seconds and has somewhere to stand, never one
+that was summoned (`lastFallen`: the last by the order the falls happened, `Unit.fallNo`, so of two on
+one step the later). Ability power and Mender count in. Its mana
+bar is 115, from 20. Its lore line is in `content/lore.ts`.
+
+**Feeding Greg** (`feed.ts`). Greg no longer eats after a fight. `Piece.fed` (and `Placed.fed`) is
+now what he has gained, in percent of his health: a figure from the bench given to a Greg on the
+board or the bench adds 2% for each acorn of its price, its cost times its copies (a two-star of
+one-acorn figures is 3, so 6%, whatever was paid for them: one a boon gave free feeds at its price too), up to 40%. The figure is gone, what it held goes to the rack, and no acorns come
+back. Copies of Greg merging into a star keep the sum, up to 40%; selling him loses it. A table kept
+before version 5 (version 4 is the Wilds' wing), or a sitting before version 2, kept meals of 3%; it is read as meals × 3 (`save.ts`,
+`checkRun(v, old, meals)`), capped at 40 by `settle`; so is every Greg in the run's parties (who waits in the
+room, the last fight's sides, the fight being fought) and on a seat's shown board (`partyAsShare`). Boards Leaf kept for sparring are not versioned:
+an old board's Greg reads his meals as percent, a little weaker, until it is replaced.
+
+**Moss and Mender at 2, 3, 4.** Moss regrows 1.2%, 2%, 3% a second. Mender counts for 20%, 30%,
+35%; at four, a Mender's healing past a friend's full health becomes a shield (`overflow` in
+`core.ts`) for 4 seconds, topping the friend's shields up to 15% of their health at most.
+
+**What the bot does.** It feeds Greg whatever it would otherwise sell while he can still eat
+(`sellSpare`), keeps Seqwawa off the front row (`formation.ts`: never the sturdiest stand-in for a
+missing front line), and values Groot as a trait like any other. `fondOf("groot")` is a habit, and
+the regulars may like Groot.
+
+### What the page reads
+
+- **Forms in the fight.** Every unit has `form`, `"plain"` or `"true"`. It changes only by getting
+  back up: the `rise` event carries it.
+- **`rise`**: `{ t: "rise", id, hp, why, form, cell }`. `why` is `"wind"` (Second Wind: it never fell,
+  it stays on its hex), `"groot"` (a moment after its `fall`, in its true form when it has one) or
+  `"seqwawa"` (No GG Left Behind). `hp` is what it has now, `cell` where it stands. Seqwawa's cast lists
+  the risen figure among its `targets` and its hex among its `cells`.
+- **`fall`** may carry `back`: the steps until a Groot figure gets back up. Meanwhile `alive` is false
+  and it stands nowhere.
+- **The pull** is a `leap` with `why: "pull"`, one hex nearer the puller, as Barge's was; a rooted
+  figure (the Rock, Seqwawa) is never pulled or knocked back. Real Greg's pulls come after his own
+  `leap` and before his `hit`s.
+- **The feed command**: `{ do: "feed", from: Spot, to: Spot }`, with `endless: true` for the endless
+  run, and accepted from a seat at a live table. It draws nothing, so a page may `predict` it, and
+  `mealFor(run, from, to)` says what a meal would add (or why not) before it is sent. Its answer is one
+  note, `{ t: "fed", piece, fed, gained, ate, kind, stars, from, items }`: Greg's number and what he has
+  now, what this meal added, and the figure eaten (its number, kind, stars, where on the bench it was,
+  and the items that went to the rack). Refusals, besides planning's own: `not_from_bench` ("Greg only
+  eats from the bench."), `nobody_there`, `no_such_place`, `not_greg` ("Only Greg eats."),
+  `greg_on_greg` ("Greg does not eat Greg."), `greg_full` ("Greg is full.").
+- **True forms and lore**: `TRUE_FORMS` (Real Worm, Real Moth, Real Rock, Real Greg, Real Orphion),
+  `formText(kind)` and `LORE` from the package's index.
 
 ## Endless runs (`endless.ts`, `depths.ts`, `content/endless.ts`)
 
@@ -559,7 +648,10 @@ While no member is still in, every wait is 0 (`later`): the regulars play straig
 
 | File                   | What it holds                                                                                                          |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `content/figures.ts`   | The 28 figures, the forest's trouble and bosses, and the summoned: names, numbers, ability sentences, quips            |
+| `content/figures.ts`   | The 29 figures, the forest's trouble and bosses, and the summoned: names, numbers, ability sentences, quips            |
+| `content/seqwawa.ts`   | Seqwawa, kept beside the table so it does not grow                                                                     |
+| `content/groot.ts`     | Groot's true forms: names, the one change each, their numbers                                                          |
+| `content/lore.ts`      | Lore lines for the almanac: the expansion's so far                                                                     |
 | `content/members.ts`   | The banners' members: for each pull banner, a figure that is a guild member                                            |
 | `content/traits.ts`    | Kins and callings: steps, sentences, numbers                                                                           |
 | `content/items.ts`     | Components, finished items, emblems, what forges into what, how a figure holds them                                    |
@@ -570,15 +662,20 @@ While no member is still in, every wait is 0 (`later`): the regulars play straig
 | `hex.ts`               | The board: cells and seats, distance, neighbours, lines, cones, rings, finding a way round                             |
 | `party.ts`             | A party as plain data, and trait counting                                                                              |
 | `fight/types.ts`       | What a figure in a fight looks like, and the events a step gives back                                                  |
-| `fight/core.ts`        | The verbs: hurt, heal, shield, stun, slow, burn, taunt, hide, leap, knock back, summon                                 |
+| `fight/clock.ts`       | The fight's clock and notebook: steps, `emit`, `later`                                                                 |
+| `fight/core.ts`        | The verbs: hurt, heal, shield, stun, slow, burn, taunt, hide, leap, knock back                                         |
+| `fight/enter.ts`       | Coming into a fight: sitting down, summoned, getting back up (Second Wind, Groot, Seqwawa)                             |
+| `fight/switch.ts`      | Traits switching on as the parties sit down, one entry a trait                                                         |
+| `fight/cast.ts`        | An ability said out loud (`cast`), and the shapes of hexes it covers                                                   |
 | `fight/moves.ts`       | The verbs that move figures or take time: throw, dash, pull, zone, channel, telegraph                                  |
 | `fight/mind.ts`        | How a figure thinks: who it goes for, what is already on its way, when a heal or an area ability is worth using        |
 | `fight/abilities.ts`   | Each ability, written with those verbs                                                                                 |
-| `fight/engine.ts`      | Seating, traits and items switching on, the clock, the end                                                             |
+| `fight/engine.ts`      | Seating, items switching on, the clock, the end                                                                        |
 | `formation.ts`         | A plain way of seating a party, used by the bot and the sparring partners                                              |
 | `spar.ts`              | The regulars' parties for sparring                                                                                     |
 | `foe.ts`               | Who waits in a room: the forest's trouble, a regular's party, or another member's board                                |
 | `run.ts`               | The run and every action on it                                                                                         |
+| `feed.ts`              | Feeding Greg a figure from the bench                                                                                   |
 | `rack.ts`              | Two components forged on the rack                                                                                      |
 | `save.ts`              | A run read back from plain data: shape first, then today's numbers                                                     |
 | `outside.ts`           | Payout, almanac, trails                                                                                                |
@@ -670,7 +767,7 @@ if (run.stage.phase === "over") {
 ```
 
 **What a fight gives a renderer.** `fight.units` is everyone who has been in the fight, by `id`:
-`kind`, `side`, `stars`, `cell`, `alive`, `hp`, `maxHp`, `shield`, `mana`, `manaFull`, `items`, and
+`kind`, `side`, `stars`, `cell`, `alive`, `hp`, `maxHp`, `shield`, `mana`, `manaFull`, `items`, `form`, and
 the times each status runs until (`stunUntil` and the like, in steps, against `fight.tick`). The
 events of a step (`FightEvent` in `fight/types.ts`) are plain objects:
 
@@ -689,7 +786,8 @@ events of a step (`FightEvent` in `fight/types.ts`) are plain objects:
 - `zone` (hexes becoming somebody's slime, puddle or dust for some steps, and no longer),
   `telegraph` (the hexes an ability will land on, and in how many steps)
 - `heal`, `shield`, `status` (on and off), `boost`, `item` (an item doing its trick)
-- `fall`, `rise` (Second Wind), `summon`, `trait`, `dusk`, `end`
+- `fall` (with `back` for a Groot figure that will get back up), `rise` (Second Wind, Groot or
+  Seqwawa: why, health, form and hex), `summon`, `trait`, `dusk`, `end`
 
 Headless Chromium draws about a frame a second, so a screen should keep its own handle for stepping
 by hand; the fight needs nothing for that, since it only moves when `stepFight` is called.
@@ -710,7 +808,8 @@ afresh (`layOutAfresh`). A run kept by an older game is brought up to date as it
 did not keep yet gets what a new run starts with, a charm taken when charms counted for their kin
 gets its emblem on the item bench (once), and a stored party's old `charms` is let be. A table of
 version 1 kept where its run stood as a phase, the picks, two flags and the fight beside them; it
-reads as one `stage`. A fight in progress keeps its setup and the outcome Leaf decided, read as it
+reads as one `stage`. A table before version 5 (a sitting before version 2) kept Greg's meals,
+which read as 3% each. A fight in progress keeps its setup and the outcome Leaf decided, read as it
 was kept. The last fight fought is kept as its setup (`run.last`), so it can be played again to be
 looked back on. `stored/` holds tables as Leaf stores them, frozen; `stored.test.ts` fails if a
 change stops one reading.
@@ -777,12 +876,29 @@ boss at 35% a try. A fight lasts 16.1 seconds on average, dusk falls in 7% of th
 too rare to show (0% when rounded).
 
 Against the same rooms without regard to them, every one- to four-acorn figure wins within 6 points
-of the rest except Crab #40 (+11); the three five-acorn figures are +12 to +17. Every kin's and
+of the rest except Barge (+11); the three five-acorn figures are +12 to +17. Every kin's and
 calling's first step is within 4 points; of the second steps Sneak (+13), Crab (+11) and Mender
 (+9) do best and Ember and Slinger (-4) worst; the third steps of Bulwark and Fang were
 seen too seldom to judge. Every finished item is within 6. The kin whose fond bot does best is
 Crab (39% of runs won) and worst is Ember (17%). These figures lean on who chooses what: a party
 that can afford a five-acorn figure is usually already doing well.
+
+**The expansion's release 1, measured** (`bun review/balance.ts 300 0`, `bun review/swap.ts 60`,
+first trail, before and after; "control" is the same build with Groot doing nothing). Fights last
+16.6 seconds (16.3 before), dusk falls in 9.7% of the fights kept (8.3%), draws 0.3% (0.4%); in the
+50 fights where Moss 4, Mender 4 and Seqwawa met, dusk fell in 86% and none was a draw. Groot 2 is
++2; Groot 3 +15, of which +10 is the figures (control); Groot 5 +46 in 46 fights. A Groot 5 board
+of 42 acorns' worth with no items beats the sensible bot's eight-figure boards from room 11 on (37,
+items and all) 73% of the time (39% with Groot doing nothing, 7% for another board of that worth).
+The Groot bot wins 79% of runs (73% control): the five are already among the best figures (Worm and
+Moth the best one-acorn ones, Greg and Orphion +14 and +15). Moss 2, 3, 4: -1, -4, -3; Mender 2, 3,
+4: -2, +1, +18 (+15 before, with four Menders needed and no Seqwawa). Seqwawa swapped into the bots'
+boards at one star wins 80% of them and 46% of those the bots lost, between Vesta (78, 41)
+and Greg (85, 57); in the balance table it is +18. The design's first guesses moved: Groot gets back
+up with 15/15/30% (was 40/40/70) and a half-full mana bar at five (was full), and a true form is 10%
+stronger (was 25%), because at the first guesses the Groot bot won 92% of runs and Groot 5 beat
+92% of those boards; Mender's top step is 35% (was 40), as it was before; Seqwawa heals 140 (was 200)
+from a bar of 115 (was 100), because at 200 it stood with Greg in the swap and at +22.
 
 When the draw rule came in, the Bulwark and Sneak bots each gained 6 points of runs won; Bulwark's
 armour went from 20, 45 and 80 (and 15 and 30 for the rest of the party) to 10, 30 and 60 (10 and
@@ -793,8 +909,8 @@ at both steps, while the second step keeps it under for 4 seconds rather than 2 
 ways: a Rock underground stands in front of nobody). That brought it to 34%, and moved no other bot
 by more than 1.
 
-When figures came to reach from the row their cards name (reach 3 became 4, the Reed Heron's 5 and
-the Apothecary Gnome's 2), to attack whoever is in their reach before walking anywhere, and to
+When figures came to reach from the row their cards name (reach 3 became 4, Reed's 5 and
+Dose's 2), to attack whoever is in their reach before walking anywhere, and to
 walk to the safest hex they can attack from, 300 runs a habit on the first trail and 100 on the
 second, before and after:
 
@@ -811,8 +927,8 @@ second, before and after:
 
 Before their health came down, the Slinger and Sage bots met the last boss 10 and 8 points more
 often than they had; the eight figures among them that reach 4 or 5 now have 8% less health (Moth
-and Twig Finch 230 to 210, Chickaree 290 to 270, Crab #12 300 to 280, Lantern Gnome 280 to 260,
-Leafling 420 to 390, Drizzle Frog 400 to 370, Reed Heron 540 to 500). The Apothecary Gnome reaches
+and Twig 230 to 210, Chuck 290 to 270, Skip 300 to 280, Wick 280 to 260,
+Bud 420 to 390, Drizzle 400 to 370, Reed 540 to 500). The Dose reaches
 2 rather than 4 because its Tonic reaches two hexes: from the back row it reached nobody in front,
 and the Gnome bot beat the last boss in 41% of runs where it had in 54%; from the second row it is
 54% again. On the first trail a fight lasts 16.5 seconds on average (16.3 before) and dusk falls in
@@ -833,10 +949,10 @@ linger or channel, 300 runs a habit on the first trail and 100 on the second, be
 
 On the first trail the fond bots that gained most runs won are Mender (41% to 55%), Feather (35% to
 48%) and Mist (32% to 43%); none lost more than 3 points. Against the same rooms, the twelve
-figures changed stand within 2 points of where they stood: Dusk Jay -3 to -1, Gnome In A Bush +2 to
-+1, Greg +18 to +20, Crab #40 +9 to +9, Reed Heron -1 to -2, Slug -2 to -3, Drizzle Frog -4 to -3,
-Kettle -1 to 0, Cinder Newt -3 to -5, Moth 0 to +1, Twig Finch -1 to 0, Fog Owl +5 to +6. No
-number was retuned for it: the Kettle's tea and the Newt's breath are their old amounts in thirds,
+figures changed stand within 2 points of where they stood: Huff -3 to -1, Shrub +2 to
++1, Greg +18 to +20, Barge +9 to +9, Reed -1 to -2, Mosey -2 to -3, Drizzle -4 to -3,
+Brew -1 to 0, Toast -3 to -5, Moth 0 to +1, Twig -1 to 0, Eaves +5 to +6. No
+number was retuned for it: Brew's tea and Toast's breath are their old amounts in thirds,
 and the Moth's dust a second is a quarter of its burst. A fight lasts 16.3 seconds on average on the
 first trail (16.5 before) and 16.4 on the second (16.7). Of the abilities thrown at somebody, 5.3%
 land after their target fell (8.3% before), and single-target bolts are thrown at somebody under

@@ -16,11 +16,11 @@
  * Orphion in the place of a board's two cheapest, from room 11 on; and the figure alone against
  * the fifteen rooms.
  *
- * A banner's member is measured with the twenty-eight's five-acorn figures. Like `balance.ts` it
+ * A banner's member is measured with the stall's five-acorn figures. Like `balance.ts` it
  * is a gauge: the bots are rough players, and every board here was built without the figure.
  */
 import { fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
-import { type FigureId, FIGURES, isFigureId, type Stars } from "@sequoia-leaf/raid/content/figures.ts";
+import { type FigureId, FIGURES, figuresOfTier, isFigureId, type Stars } from "@sequoia-leaf/raid/content/figures.ts";
 import { MEMBER_IDS } from "@sequoia-leaf/raid/content/members.ts";
 import { ROOM_COUNT, worth } from "@sequoia-leaf/raid/content/rooms.ts";
 import { CALLINGS, KINS } from "@sequoia-leaf/raid/content/traits.ts";
@@ -33,7 +33,7 @@ import { beginFight, startRun, takeTakings } from "@sequoia-leaf/raid/run.ts";
 
 const args = process.argv.slice(2);
 const runs = Number(args[0] ?? 60);
-const FIVES: readonly FigureId[] = [...MEMBER_IDS, "greg", "whitefox", "hearthcat"];
+const FIVES: readonly FigureId[] = [...MEMBER_IDS, ...figuresOfTier(5)];
 const measured: readonly FigureId[] = args[1] ? args[1].split(",").filter(isFigureId) : FIVES;
 const STARS: readonly Stars[] = [1, 2, 3];
 /** The first room whose fights are kept: room 5, where a five-acorn figure can first be on a stall. */

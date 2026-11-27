@@ -14,7 +14,9 @@
  *
  * A run saved by an older game of the same version is brought up to date as it is read, each change
  * where its field is read: a field it did not keep yet gets what a new run starts with, and a charm
- * taken before charms were emblems gets its emblem on the item bench.
+ * taken before charms were emblems gets its emblem on the item bench. A run kept when Greg ate a meal
+ * after every fight (`meals`: a table before version 5, a sitting before version 2) has each meal
+ * counted as the share of health it gave him (`MEAL`).
  */
 import { mix } from "@sequoia-leaf/core";
 
@@ -83,9 +85,15 @@ const ROOMY = 999;
 
 // ---------- the shape ----------
 
+/** The share of his health one of Greg's meals gave him, when he ate one after every fight (before `feed`). */
+const MEAL = 3;
+/** What Greg has eaten, as a share of his health: kept as that, or (`meals`) as meals of `MEAL` each. */
+const fedOf = (v: unknown, meals: boolean): number =>
+  whole(v, 0, ROOMY, "how much Greg has eaten") * (meals ? MEAL : 1);
+
 /** What a figure holds, or a note says it holds. */
 const readItems = (v: unknown, what: string): ItemId[] => each(v, isItemId, 8, what);
-function readPiece(v: unknown, nextId: number): Piece | null {
+function readPiece(v: unknown, nextId: number, meals: boolean): Piece | null {
   if (v === null) return null;
   const p = record(v, "a figure");
   return {
@@ -93,7 +101,7 @@ function readPiece(v: unknown, nextId: number): Piece | null {
     kind: one(p.kind, isFigureId, "a figure's kind"),
     stars: one(p.stars, isStars, "a figure's stars"),
     items: readItems(p.items, "what a figure holds"),
-    fed: whole(p.fed, 0, ROOMY, "how much Greg has eaten"),
+    fed: fedOf(p.fed, meals),
   };
 }
 /** A run's roster. A run saved before there were runs with the member's own figures is one on the main way. */
@@ -262,7 +270,12 @@ function readStage(r: Record<string, unknown>, old: boolean, shown: boolean, dra
  * Everything of a run but its streams. What the run drew and does not read is left to be drawn again
  * (`afresh`), but for a run as the page is shown it, which has no stream to draw it from: that is refused.
  */
-function readParts(r: Record<string, unknown>, old: boolean, shown: boolean): { run: RunView; afresh: boolean } {
+function readParts(
+  r: Record<string, unknown>,
+  old: boolean,
+  shown: boolean,
+  meals: boolean,
+): { run: RunView; afresh: boolean } {
   let afresh = false;
   const drawn: Drawn = (read, otherwise, again = true) => {
     try {
@@ -276,8 +289,8 @@ function readParts(r: Record<string, unknown>, old: boolean, shown: boolean): { 
   const boons: BoonId[] = unique(each(r.boons, isBoonId, BOON_IDS.length, "the boons"), "the boons");
   const room = whole(r.room, 0, ROOMY, "the room");
   const nextId = whole(r.nextId, 1, 1_000_000, "the figures' numbers");
-  const board = list(r.board, SEATS, "the board").map((x) => readPiece(x, nextId));
-  const bench = list(r.bench, ROOMY, "the bench").map((x) => readPiece(x, nextId));
+  const board = list(r.board, SEATS, "the board").map((x) => readPiece(x, nextId, meals));
+  const bench = list(r.bench, ROOMY, "the bench").map((x) => readPiece(x, nextId, meals));
   if (board.length !== SEATS) bad("the board");
   const ids = [...board, ...bench].flatMap((p) => (p ? [p.id] : []));
   unique(ids, "the figures' numbers");
@@ -343,10 +356,38 @@ function readParts(r: Record<string, unknown>, old: boolean, shown: boolean): { 
   return { run, afresh };
 }
 
-/** A run as Leaf keeps it, of table version 1 (`old`) or since: with its streams, under today's numbers. */
-function readRun(v: unknown, old: boolean): Run {
+/**
+ * A party kept when Greg ate a meal after every fight: each Greg's meals read as the share of his
+ * health they gave him (`MEAL` each). Any other party, as it is.
+ */
+export const partyAsShare = (p: Party): Party => ({
+  ...p,
+  figures: p.figures.map((x) => (x.kind === "greg" ? { ...x, fed: x.fed * MEAL } : x)),
+});
+const setupAsShare = (s: FightSetup): FightSetup => ({
+  ...s,
+  sides: [partyAsShare(s.sides[0]), partyAsShare(s.sides[1])],
+});
+/**
+ * A run's Gregs that sit in its parties rather than on its board (who waits in the room, the last
+ * fight's and the fight being fought's), read as shares when the run was kept as meals (`meals`), as
+ * its own pieces are (`readPiece`). A fight being fought then plays again as Leaf decided it.
+ */
+function partiesAsShare(run: RunView, meals: boolean): void {
+  if (!meals) return;
+  run.foe = partyAsShare(run.foe);
+  if (run.last) run.last = setupAsShare(run.last);
+  if (run.stage.phase === "fight") {
+    const fight = run.stage.fight;
+    run.stage = { phase: "fight", fight: { ...fight, setup: setupAsShare(fight.setup) } };
+  }
+}
+
+/** A run as Leaf keeps it, of table version 1 (`old`) or since, kept as meals or not: with its streams, under today's numbers. */
+function readRun(v: unknown, old: boolean, meals: boolean): Run {
   const r = record(v, "the run");
-  const { run: parts, afresh } = readParts(r, old, false);
+  const { run: parts, afresh } = readParts(r, old, false, meals);
+  partiesAsShare(parts, meals);
   const run: Run = {
     seed: whole(r.seed, 0, UINT, "the seed"),
     rng: whole(r.rng, 0, UINT, "the random stream"),
@@ -366,7 +407,7 @@ function readRun(v: unknown, old: boolean): Run {
  * levels it makes; the stall is today's size, cut or filled out with empty places; the bench is
  * today's size, its figures past the end moved up into empty places or, with none, sold for what
  * they are worth; a figure holds what a figure may hold now (as many, one loose component, no
- * emblem of a kin it is), and the rest goes to the item bench; Greg has eaten no more than he eats,
+ * emblem of a kin it is), and the rest goes to the item bench; Greg has gained no more than he may,
  * and nobody else anything; a pick of boons has no more redraws than one has now.
  */
 function settle(run: Run): void {
@@ -408,10 +449,13 @@ function settle(run: Run): void {
 
 export type Loaded = { ok: true; run: Run } | { ok: false; why: string };
 
-/** A run as Leaf keeps it in a table of version 1 (`old`) or since; or the reason the data is not one. */
-export function checkRun(v: unknown, old = false): Loaded {
+/**
+ * A run as Leaf keeps it in a table of version 1 (`old`) or since, and with Greg's meals (`meals`:
+ * kept before he was fed by hand) or not; or the reason the data is not one.
+ */
+export function checkRun(v: unknown, old = false, meals = false): Loaded {
   try {
-    return { ok: true, run: readRun(v, old) };
+    return { ok: true, run: readRun(v, old, meals) };
   } catch (err) {
     if (err instanceof Nonsense) return { ok: false, why: `That raid does not add up: ${err.message} is wrong.` };
     throw err;
@@ -421,7 +465,7 @@ export function checkRun(v: unknown, old = false): Loaded {
 /** A run as the page is shown it (no streams, only the first pick's options), or null for one these rules could not have made. */
 export function readRunView(v: unknown): RunView | null {
   try {
-    return readParts(record(v, "the run"), false, true).run;
+    return readParts(record(v, "the run"), false, true, false).run;
   } catch (err) {
     if (err instanceof Nonsense) return null;
     throw err;

@@ -84,17 +84,29 @@ export const BANNERS: readonly Banner[] = [
 /** A banner's headliner, as a prize. */
 export const headliner = (banner: string): string => `headliner:${banner}`;
 
-/** The figures of one of the raid's five prices, as prizes. */
+/**
+ * Figures made while a banner was open, with their rarity and the moment of Leaf's clock they join
+ * the pools: when the next banner opens. A banner's prizes are what it opened with, so a new figure
+ * does not cut the share of the ones there mid-banner. Seqwawa came with the expansion's first
+ * release, during banner-1.
+ */
+const JOINS: readonly { readonly prize: string; readonly rarity: Rarity; readonly at: number }[] = [
+  { prize: "figure:seqwawa", rarity: "Treant", at: Date.UTC(2026, 11, 8) },
+];
+/** The figures of one of the raid's five prices, as prizes, but for those that join later (`JOINS`). */
 const figures = (price: Price): string[] =>
-  FIGURE_IDS.filter((id) => FIGURES[id].tier === price).map((id) => `figure:${id}`);
+  FIGURE_IDS.filter((id) => FIGURES[id].tier === price)
+    .map((id) => `figure:${id}`)
+    .filter((prize) => !JOINS.some((j) => j.prize === prize));
 /** The figures of the raid's fourth price that are Druid; the others of that price are Dryad. */
 const DRUID: readonly FigureId[] = ["crab40", "apothecary"];
 const druid = DRUID.map((id) => `figure:${id}`);
 
 /**
- * Every prize, by rarity: `figure:` is one of the raid's figures, by its price there, and
- * `headliner:` a banner's headliner. The camp is sent a figure once, as the town's `figure-<id>`,
- * and for a headliner the member themself (`member-<banner>`).
+ * Every prize, by rarity, as banner-1 opened with them: `figure:` is one of the raid's figures, by
+ * its price there, and `headliner:` a banner's headliner. The camp is sent a figure once, as the
+ * town's `figure-<id>`, and for a headliner the member themself (`member-<banner>`). What a pull
+ * draws from at a moment is `prizesAt`.
  */
 export const PRIZES: Readonly<Record<Rarity, readonly string[]>> = {
   Leafkin: figures(1),
@@ -105,6 +117,12 @@ export const PRIZES: Readonly<Record<Rarity, readonly string[]>> = {
   Treant: figures(5),
   Yggdrasil: BANNERS.map(({ id }) => headliner(id)),
 };
+
+/** The prizes of a rarity in the pools at a moment of Leaf's clock: `PRIZES`, and what has joined by then (`JOINS`). */
+export const prizesAt = (rarity: Rarity, now: number): readonly string[] => [
+  ...PRIZES[rarity],
+  ...JOINS.filter((j) => j.rarity === rarity && j.at <= now).map((j) => j.prize),
+];
 
 const once = (kind: "thing" | "look", ids: string): string[] => ids.split(" ").map((id) => `${kind}:${id}`);
 /**
@@ -129,7 +147,7 @@ const RARITY_OF = new Map(
   Object.keys(RARITIES)
     .filter(isRarity)
     .flatMap((rarity) =>
-      [...PRIZES[rarity], ...(EARLIER[rarity] ?? [])].map((prize): [string, Rarity] => [prize, rarity]),
+      [...prizesAt(rarity, Infinity), ...(EARLIER[rarity] ?? [])].map((prize): [string, Rarity] => [prize, rarity]),
     ),
 );
 /**
@@ -252,21 +270,23 @@ export function isOpen(pool: string, now: number): boolean {
 }
 
 /**
- * One pull, moving a kind of pool's counters and the stream on: from a banner whose headliner is
- * `headline`, or from `grove` when it is null.
+ * One pull at a moment of Leaf's clock (`now`, for what is in the pools then), moving a kind of
+ * pool's counters and the stream on: from a banner whose headliner is `headline`, or from `grove`
+ * when it is null.
  */
-export function draw(c: Counters, headline: string | null, s: Stream): Drawn {
+export function draw(c: Counters, headline: string | null, s: Stream, now: number): Drawn {
   c.top += 1;
   c.mid += 1;
   const { top } = c;
   if (chance(s) < topChance(top)) {
     c.top = 0;
     c.mid = 0;
-    if (headline === null) return { prize: pick(s, PRIZES.Treant), rarity: "Treant", top };
+    const treant = prizesAt("Treant", now);
+    if (headline === null) return { prize: pick(s, treant), rarity: "Treant", top };
     const fifty: Fifty = c.owed ? "owed" : chance(s) < RATES.top.headliner ? "won" : "lost";
     c.owed = fifty === "lost";
     return fifty === "lost"
-      ? { prize: pick(s, PRIZES.Treant), rarity: "Treant", top, fifty }
+      ? { prize: pick(s, treant), rarity: "Treant", top, fifty }
       : { prize: headline, rarity: "Yggdrasil", top, fifty };
   }
   const { mid, filler } = RATES;
@@ -278,7 +298,7 @@ export function draw(c: Counters, headline: string | null, s: Stream): Drawn {
     const roll = chance(s) * (filler.Leafkin + filler.Sapling + filler.Sprite);
     rarity = roll < filler.Leafkin ? "Leafkin" : roll < filler.Leafkin + filler.Sapling ? "Sapling" : "Sprite";
   }
-  return { prize: pick(s, PRIZES[rarity]), rarity, top };
+  return { prize: pick(s, prizesAt(rarity, now)), rarity, top };
 }
 
 type Answer = Done<Pulls, PullsNote> | Refused;
@@ -312,7 +332,7 @@ function pull(state: Pulls, c: Extract<PullsCommand, { do: "pull" }>, ctx: Ctx):
   const notes: PullsNote[] = [];
   const log: Logged[] = [];
   for (let i = 0; i < c.n; i++) {
-    const drawn = draw(counters, grove ? null : headliner(c.pool), s);
+    const drawn = draw(counters, grove ? null : headliner(c.pool), s, ctx.now);
     const { prize, rarity, top } = drawn;
     const tier = RARITIES[rarity].tier;
     const have = (s.have[prize] ?? 0) + 1;

@@ -21,6 +21,10 @@ export type FightResult = "win" | "loss" | "draw";
 export type LeapWhy = "sneak" | "ability" | "knocked" | "dash" | "pull";
 /** What a zone is: slime and puddles slow whoever stands in them, dust hurts them every second. */
 export type ZoneKind = "slime" | "puddle" | "dust";
+/** How a figure stands in a fight: as itself, or (a Groot figure that got back up) in its true form (`content/groot.ts`). */
+export type Form = "plain" | "true";
+/** Why a figure got back up: Second Wind, Groot, or Seqwawa's No GG Left Behind. */
+export type RiseWhy = "wind" | "groot" | "seqwawa";
 
 /** Everything a fight needs: two parties and a seed, and the Wilds' rule it is played under. The same setup always gives the same fight. */
 export interface FightSetup {
@@ -57,6 +61,8 @@ export interface Unit {
   cell: number;
   alive: boolean;
 
+  /** What its stars, its level and its party's might multiply its health and attack by. */
+  readonly grown: number;
   maxHp: number;
   hp: number;
   shield: number;
@@ -92,6 +98,18 @@ export interface Unit {
   attacks: number;
   rooted: boolean;
   steady: boolean;
+  /** Plain, or its true form once a Groot figure has got back up. */
+  form: Form;
+  /** Mana it gains every second, whatever it does (Rooted). */
+  manaRate: number;
+  /** Groot: it still has its getting back up to come, once it falls. */
+  rises: boolean;
+  /** The step it fell, while it is down for good; -1 while it is up, or down and getting back up. */
+  fellAt: number;
+  /** Which fall for good of the fight it was, counting in the order they happen (`Fight.falls`); 0 while it is up. */
+  fallNo: number;
+  /** How many times it has fallen this fight, for a moment or for good: what it does lasts only in the life it began in. */
+  downs: number;
 
   stunUntil: number;
   slowUntil: number;
@@ -199,6 +217,8 @@ export interface Fight {
   zones: (Zone | null)[];
   /** How many are still up on each side. */
   standing: [number, number];
+  /** How many falls for good there have been, in the order they happened: a fallen figure's `fallNo`. */
+  falls: number;
   over: boolean;
   result: FightResult | null;
   /** What happened as the two parties sat down: traits, summons, leaps. A screen plays these before the first step. */
@@ -278,9 +298,13 @@ export type FightEvent =
   | { t: "telegraph"; id: number; cells: number[]; ticks: number }
   /** A lasting change for the rest of the fight. */
   | { t: "boost"; id: number; by: number; stat: "attack"; amount: number }
-  | { t: "fall"; id: number; by: number; cell: number }
-  /** Would have fallen, and got back up. */
-  | { t: "rise"; id: number; hp: number }
+  /** Falls. A Groot figure that will get back up says in how many steps (`back`); it still counts as standing meanwhile. */
+  | { t: "fall"; id: number; by: number; cell: number; back?: number }
+  /**
+   * Gets back up, on `cell`, with `hp`, in `form`: from Second Wind as it would have fallen (it never
+   * did), or a moment after falling, by Groot (in its true form) or by Seqwawa.
+   */
+  | { t: "rise"; id: number; hp: number; why: RiseWhy; form: Form; cell: number }
   | { t: "summon"; id: number; by: number; kind: UnitKind; cell: number; side: Side }
   /** A trait switches on as the fight starts, with who it touches. */
   | { t: "trait"; side: Side; trait: TraitId; step: number; ids: number[] }

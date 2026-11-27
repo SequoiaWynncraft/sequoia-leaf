@@ -6,14 +6,18 @@
  *
  * All of them face right. A dark edge is added when they are baked (`sprites.ts`).
  *
- * A figure a member can own is up to 22 wide and 26 tall. Its pictures are all typed to one width,
- * so that a pose stays over the same feet, and its standing picture has no empty row above it.
+ * A figure a member can own is up to 22 wide and 26 tall, but for Seqwawa, a hex and a half tall,
+ * whose small picture shows only its top rows (`room`), so a card keeps the room it had. Its
+ * pictures are all typed to one width, so that a pose stays over the same feet, and its standing
+ * picture has no empty row above it.
  *
  * They are drawn as the town draws its own (`apps/town`): in the town's colours only (`pal.ts`),
  * two or three flat tones to a material, small dark eyes. A gnome, a crab, the glorp, the cat and
  * the fox are the town's, larger: `folkart.ts`, `sprites.ts` and `campart.ts` there.
  */
 import { type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
+import { hasTrueForm, type TrueFormId } from "@sequoia-leaf/raid/content/groot.ts";
+import type { Form } from "@sequoia-leaf/raid/fight/types.ts";
 
 import text from "./figures.txt";
 import { readRows } from "./rows.ts";
@@ -30,6 +34,8 @@ export interface FigureArt {
   readonly sym?: true;
   /** The row its head starts at, for a small picture of it, where that is not the top. */
   readonly head?: number;
+  /** How many of its rows, from the top, a small picture of it shows, where that is not all of them: the rest is cut off at its base. */
+  readonly room?: number;
 }
 
 /** What a figure's pictures say beside their rows: where it breathes, where its head starts, whether it flies or has writing on it. */
@@ -62,6 +68,7 @@ const KEPT: Readonly<Partial<Record<UnitKind, Omit<FigureArt, "rows" | "cast" | 
   greg: { breath: 14, head: 2 },
   whitefox: { breath: 18, head: 5 },
   hearthcat: { breath: 15, head: 1 },
+  seqwawa: { head: 3, room: 25 },
   glorplet: { breath: 2 },
   uncounted: { sym: true },
   biguncounted: { sym: true },
@@ -80,16 +87,26 @@ const KEPT: Readonly<Partial<Record<UnitKind, Omit<FigureArt, "rows" | "cast" | 
   bigcrab: { sym: true },
 };
 
+/** The same for Groot's true forms (`<figure> true` in `figures.txt`). */
+const KEPT_TRUE: Readonly<Record<TrueFormId, Omit<FigureArt, "rows" | "cast" | "alt">>> = {
+  worm: { breath: 13 },
+  moth: { flies: true },
+  rock: { breath: 9 },
+  greg: { breath: 15, head: 2 },
+  whitefox: { breath: 18, head: 5 },
+};
+
 const ROWS = readRows(text);
 
-/** A figure's pictures: its rows from `figures.txt`, and what is kept of it here. */
-export function artOf(kind: UnitKind): FigureArt {
-  const cast = ROWS.get(`${kind} cast`);
-  const alt = ROWS.get(`${kind} alt`);
+/** A figure's pictures, as itself or (one of Groot's five) in its true form: its rows from `figures.txt`, and what is kept of it here. */
+export function artOf(kind: UnitKind, form: Form = "plain"): FigureArt {
+  const named = form === "true" && hasTrueForm(kind) ? `${kind} true` : kind;
+  const cast = ROWS.get(`${named} cast`);
+  const alt = ROWS.get(`${named} alt`);
   return {
-    rows: ROWS.get(kind) ?? [],
+    rows: ROWS.get(named) ?? [],
     ...(cast ? { cast } : {}),
     ...(alt ? { alt } : {}),
-    ...KEPT[kind],
+    ...(named === kind ? KEPT[kind] : hasTrueForm(kind) ? KEPT_TRUE[kind] : {}),
   };
 }

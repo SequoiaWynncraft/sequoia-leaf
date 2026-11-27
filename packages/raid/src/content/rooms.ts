@@ -181,7 +181,7 @@ export const ROOMS: readonly Room[] = [
   spar(1, 3, 5, 0),
   spar(1, 3, 8, 1),
   boss(1, {
-    name: "Old Bramble",
+    name: "Snag",
     party: [
       ["oldbramble", 1, 3, 0],
       ["bramble", 1, 1, 0],
@@ -228,7 +228,7 @@ export const ROOMS: readonly Room[] = [
   spar(2, 5, 25, 2),
   spar(2, 5, 30, 3),
   boss(2, {
-    name: "The Magpie With The Hoard",
+    name: "Swipe",
     party: [
       ["hoardmagpie", 1, 3, 1],
       ["mud", 1, 2, 0],
@@ -281,7 +281,7 @@ export const ROOMS: readonly Room[] = [
   ),
   spar(3, 7, 62, 5),
   boss(3, {
-    name: "The Crab Nobody Counted",
+    name: "Zero",
     party: [
       ["bigcrab", 1, 3, 0],
       ["crab", 3, 1, 0],
@@ -353,19 +353,36 @@ export const TRAIL_COUNT = TRAILS.length;
  */
 export const REGULARS = [
   { name: "Greg", kind: "greg" },
-  { name: "the Hearth Cat", kind: "hearthcat" },
-  { name: "a Barrow Gnome", kind: "barrowgnome" },
-  { name: "Crab #7", kind: "crab7" },
+  { name: "Vesta", kind: "hearthcat" },
+  { name: "Hodge", kind: "barrowgnome" },
+  { name: "Nipper", kind: "crab7" },
   { name: "Orphion", kind: "whitefox" },
-  { name: "a Moth", kind: "moth" },
+  { name: "Moth", kind: "moth" },
 ] as const satisfies readonly { name: string; kind: FigureId }[];
 
 /** The regulars' names, as a party is signed. */
 export const HANDLES: readonly string[] = REGULARS.map((r) => r.name);
 
 /**
- * The regular who brought a party, by the name it was signed with; none for anybody else, and none
- * for a member's own board (`Party.by`) whatever its name: a member may be called Greg too.
+ * What a stored party may still be signed or titled with from before the figures had names of their
+ * own (November 2026), and what that one is called now: three bosses' rooms and four regulars.
+ */
+const RENAMED: Readonly<Record<string, string>> = {
+  "Old Bramble": "Snag",
+  "The Magpie With The Hoard": "Swipe",
+  "The Crab Nobody Counted": "Zero",
+  "the Hearth Cat": "Vesta",
+  "a Barrow Gnome": "Hodge",
+  "Crab #7": "Nipper",
+  "a Moth": "Moth",
+};
+/** A party's name or title as it reads now: an old one (`RENAMED`) as it is called today, anything else as it is. */
+export const nowCalled = (name: string): string => RENAMED[name] ?? name;
+
+/**
+ * The regular who brought a party, by the name it was signed with (an old signature too); none for
+ * anybody else, and none for a member's own board (`Party.by`) whatever its name: a member may be
+ * called Greg too.
  */
 export const regularOf = (party: { readonly who: string; readonly by?: string }): (typeof REGULARS)[number] | null =>
-  party.by === undefined ? (REGULARS.find((r) => r.name === party.who) ?? null) : null;
+  party.by === undefined ? (REGULARS.find((r) => r.name === nowCalled(party.who)) ?? null) : null;

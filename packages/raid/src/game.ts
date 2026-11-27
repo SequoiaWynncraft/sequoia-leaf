@@ -51,6 +51,7 @@ import {
 import { ROOMS } from "./content/rooms.ts";
 import { paidFor, reached, readWeek, type Week, weekAt } from "./depths.ts";
 import { heldSlot, isHeld, roomAt } from "./endless.ts";
+import { feed } from "./feed.ts";
 import { boardSlot, metLately } from "./foe.ts";
 import { fightRecord } from "./fought.ts";
 import {
@@ -247,6 +248,8 @@ export function plan(run: RunView, c: Predicted): RunDone {
       return buy(run, c.offer);
     case "sell":
       return sell(run, c.from);
+    case "feed":
+      return feed(run, c.from, c.to);
     case "move":
       return move(run, c.from, c.to);
     case "bench":
@@ -510,6 +513,7 @@ export function planCommands(view: TableView, habit: Habit, endless = false): Ra
     },
     buy: (r, offer) => wrote(buy(r, offer), { do: "buy", offer }),
     sell: (r, from) => wrote(sell(r, from), { do: "sell", from }),
+    feed: (r, from, to) => wrote(feed(r, from, to), { do: "feed", from, to }),
     move: (r, from, to) => wrote(move(r, from, to), { do: "move", from, to }),
     toBench: (r, seat) => wrote(toBench(r, seat), { do: "bench", seat }),
     rustle: () => refusal("not_enough_acorns"),
@@ -525,13 +529,14 @@ export function planCommands(view: TableView, habit: Habit, endless = false): Ra
 
 const GAME = "little-raid-table";
 /**
- * 4: a run of the Wilds keeps the rule picked for its wing (`Run.wing`), and a fight its rule. 3: the
- * endless run beside the run in hand, and the week's deepest rooms. 2: a run keeps where it stands as
- * one value (`Stage`). A table of versions 1 to 3 is read as well: its runs have no rule, and a run of
- * the Wilds past room 5 picks one at its next boss.
+ * 5: what Greg has eaten is a share of his health (`feed`), where it was meals of 3% each. 4: a run
+ * of the Wilds keeps the rule picked for its wing (`Run.wing`), and a fight its rule. 3: the endless
+ * run beside the run in hand, and the week's deepest rooms. 2: a run keeps where it stands as one
+ * value (`Stage`). A table of versions 1 to 4 is read as well: its Greg's meals are 3% each, and a
+ * table of versions 1 to 3 has no rules, so a run of the Wilds past room 5 picks one at its next boss.
  */
-export const TABLE_VERSION = 4;
-const READS = [1, 2, 3, TABLE_VERSION] as const;
+export const TABLE_VERSION = 5;
+const READS = [1, 2, 3, 4, TABLE_VERSION] as const;
 
 export const encodeTable = (state: Table): string =>
   JSON.stringify({
@@ -549,12 +554,12 @@ export const encodeTable = (state: Table): string =>
   });
 
 /**
- * A run as a table keeps it in one of its places (`endless`: the endless run's), or none: one that
- * does not read, or could not have been kept (one over, one of the other place, one with no number
- * of `begun`), is let go of.
+ * A run as a table of a version keeps it in one of its places (`endless`: the endless run's), or
+ * none: one that does not read, or could not have been kept (one over, one of the other place, one
+ * with no number of `begun`), is let go of.
  */
-function keptRun(v: unknown, old: boolean, begun: number, endless: boolean): Run | null {
-  const read = v === null || v === undefined ? null : checkRun(v, old);
+function keptRun(v: unknown, version: number, begun: number, endless: boolean): Run | null {
+  const read = v === null || v === undefined ? null : checkRun(v, version === 1, version < 5);
   if (!read?.ok || read.run.stage.phase === "over" || begun <= 0) return null;
   return (read.run.endless !== null) === endless ? read.run : null;
 }
@@ -572,7 +577,8 @@ export function decodeTable(text: string): Table | null {
   } catch {
     return null;
   }
-  if (!isRecord(raw) || raw.game !== GAME || !READS.some((v) => v === raw.v)) return null;
+  const version = isRecord(raw) && raw.game === GAME ? READS.find((v) => v === raw.v) : undefined;
+  if (!isRecord(raw) || version === undefined) return null;
   const { rng, runs, trail } = raw;
   if (!isWhole(rng, 0, UINT) || !isWhole(runs, 0, 1_000_000_000) || !isWhole(trail, 0, 999)) return null;
   const almanac = readAlmanac(raw.almanac);
@@ -582,8 +588,8 @@ export function decodeTable(text: string): Table | null {
   return {
     rng,
     runs,
-    run: keptRun(raw.run, raw.v === 1, runs, false),
-    endless: keptRun(raw.endless, false, ventures, true),
+    run: keptRun(raw.run, version, runs, false),
+    endless: keptRun(raw.endless, version, ventures, true),
     ventures,
     almanac,
     trail: trailOpen(almanac, trail) ? trail : 0,

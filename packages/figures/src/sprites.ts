@@ -24,6 +24,7 @@ import {
   type UnitKind,
 } from "@sequoia-leaf/raid/content/figures.ts";
 import { isMemberId, type MemberId } from "@sequoia-leaf/raid/content/members.ts";
+import type { Form } from "@sequoia-leaf/raid/fight/types.ts";
 
 import { artOf } from "./figures.ts";
 import { FOREST_TONES, PAL, SUMMON_TONES, TIER_TONES, type Tones } from "./pal.ts";
@@ -51,6 +52,8 @@ export interface Frames {
   readonly wide: number;
   /** The row its head starts at, for a small picture of it. */
   readonly head: number;
+  /** How many of its rows a small picture of it shows (`portrait`): all of them, or its top rows for one as tall as Seqwawa. */
+  readonly room: number;
   readonly flies: boolean;
 }
 
@@ -149,6 +152,7 @@ function person(body: Body): { right: Frames; left: Frames } {
       castTall: RIG.tall,
       wide: RIG.wide,
       head: 0,
+      room: RIG.tall,
       flies: false,
     };
   };
@@ -172,10 +176,10 @@ export function rigOf(kind: UnitKind): Body | null {
 }
 const NOBODY_YET: { body?: Body } = {};
 
-function bake(kind: UnitKind): { right: Frames; left: Frames } {
+function bake(kind: UnitKind, form: Form): { right: Frames; left: Frames } {
   const body = rigOf(kind);
   if (body) return person(body);
-  const art = artOf(kind);
+  const art = artOf(kind, form);
   const at = art.breath ?? Math.floor(art.rows.length * 0.6);
   const lists = {
     a: art.rows,
@@ -206,6 +210,7 @@ function bake(kind: UnitKind): { right: Frames; left: Frames } {
     castTall: lists.cast.length,
     wide: widthOf(lists.a),
     head: art.head ?? 0,
+    room: Math.min(lists.a.length, art.room ?? lists.a.length),
     flies: art.flies === true,
   };
   const right: Frames = { ...base, fallen: tipped(idleA, false) };
@@ -223,18 +228,19 @@ function bake(kind: UnitKind): { right: Frames; left: Frames } {
   return { right, left };
 }
 
-const baked = new Map<UnitKind, { right: Frames; left: Frames }>();
+const baked = new Map<string, { right: Frames; left: Frames }>();
 /** Has a banner's member be somebody from now on: called by their name, and drawn from their figure. */
 export function wear(kind: MemberId, name: string, body: Body): void {
   worn.set(kind, { name, body, said: (worn.get(kind)?.said ?? 0) + 1 });
   baked.delete(kind);
 }
-/** A figure's pictures, facing right or left. */
-export function framesOf(kind: UnitKind, left = false): Frames {
-  let f = baked.get(kind);
+/** A figure's pictures, facing right or left, as itself or (one of Groot's five) in its true form. */
+export function framesOf(kind: UnitKind, left = false, form: Form = "plain"): Frames {
+  const key = form === "true" ? `${kind} true` : kind;
+  let f = baked.get(key);
   if (!f) {
-    f = bake(kind);
-    baked.set(kind, f);
+    f = bake(kind, form);
+    baked.set(key, f);
   }
   return left ? f.left : f.right;
 }
@@ -242,8 +248,8 @@ export function framesOf(kind: UnitKind, left = false): Frames {
 /** Which of a figure's two standing pictures shows at `t` seconds; `phase` (0 to 1) keeps neighbours out of step. */
 export const beatAt = (t: number, phase = 0): 0 | 1 => (Math.floor(t * 1.7 + phase * 2) % 2 === 0 ? 0 : 1);
 /** How far over its spot a figure that flies hovers at `t` seconds, in its own pixels: 1 to 3, and 0 for one that stands. */
-export const hoverAt = (kind: UnitKind, t: number, phase = 0): number =>
-  framesOf(kind).flies ? 2 + Math.round(Math.sin(t * 4 + phase * 6)) : 0;
+export const hoverAt = (kind: UnitKind, t: number, phase = 0, form: Form = "plain"): number =>
+  framesOf(kind, false, form).flies ? 2 + Math.round(Math.sin(t * 4 + phase * 6)) : 0;
 
 /**
  * A figure bent as it moves, in whole pixels: wider and taller than its picture (less for negative
@@ -259,6 +265,8 @@ export interface Bend {
 
 export interface Shown {
   pose?: Pose;
+  /** As itself, or (one of Groot's five) in its true form. */
+  form?: Form;
   /** Which of the two standing pictures. */
   beat?: 0 | 1;
   left?: boolean;
@@ -326,7 +334,7 @@ function shownPic(kind: UnitKind, f: Frames, o: Shown): HTMLCanvasElement {
 
 /** Draws a figure with its feet at `x`, `y`. */
 export function drawFigure(g: Ctx, kind: UnitKind, x: number, y: number, o: Shown = {}): void {
-  const f = framesOf(kind, o.left);
+  const f = framesOf(kind, o.left, o.form);
   const px = Math.round(x);
   const py = Math.round(y);
   if (o.alpha !== undefined) g.globalAlpha = o.alpha;
@@ -341,16 +349,19 @@ export function drawFigure(g: Ctx, kind: UnitKind, x: number, y: number, o: Show
   if (o.alpha !== undefined) g.globalAlpha = 1;
 }
 
-/** A figure standing still on a small canvas of its own, for a card or a button. */
+/**
+ * A figure standing still on a small canvas of its own, for a card or a button: as tall as it stands
+ * (a pose that reaches higher would leave the picture empty at the top), or for one as tall as
+ * Seqwawa its top rows (`room`), its base cut off at the bottom edge.
+ */
 export function portrait(kind: UnitKind, o: Shown = {}): HTMLCanvasElement {
-  const f = framesOf(kind, o.left);
-  // As tall as it stands: a pose that reaches higher would leave the picture empty at the top.
-  const { c, g } = makeCanvas(f.w, f.tall + 2);
+  const f = framesOf(kind, o.left, o.form);
+  const { c, g } = makeCanvas(f.w, f.room + 2);
   drawFigure(g, kind, f.ax, f.tall + 1, o);
   return c;
 }
 /** How tall the tallest portrait of a figure a member can own is, for a place that shows any of them. */
-export const portraitRoom = (): number => Math.max(...FIGURE_IDS.map((kind) => framesOf(kind).tall + 2));
+export const portraitRoom = (): number => Math.max(...FIGURE_IDS.map((kind) => framesOf(kind).room + 2));
 
 // ---------- bases ----------
 

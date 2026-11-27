@@ -3367,26 +3367,26 @@
           "ring": [
             {
               "kind": "emberkit",
-              "item": "chestnut",
-              "by": null
-            },
-            {
-              "kind": "barrowgnome",
-              "item": "chestnut",
-              "by": null
-            },
-            {
-              "kind": "moth",
-              "item": "plume",
-              "by": null
-            },
-            {
-              "kind": "crab7",
               "item": "glowcap",
               "by": null
             },
             {
               "kind": "worm",
+              "item": "thorn",
+              "by": null
+            },
+            {
+              "kind": "barrowgnome",
+              "item": "plume",
+              "by": null
+            },
+            {
+              "kind": "finch",
+              "item": "chestnut",
+              "by": null
+            },
+            {
+              "kind": "moth",
               "item": "bark",
               "by": null
             },
@@ -3396,8 +3396,8 @@
               "by": null
             },
             {
-              "kind": "finch",
-              "item": "thorn",
+              "kind": "crab7",
+              "item": "chestnut",
               "by": null
             },
             {
@@ -3406,8 +3406,8 @@
               "by": null
             },
             {
-              "kind": "barrowgnome",
-              "item": "glowcap",
+              "kind": "moth",
+              "item": "plume",
               "by": null
             }
           ],
@@ -3464,80 +3464,17 @@
           {
             "who": {
               "is": "regular",
-              "figure": "chickaree",
-              "habit": "burrow"
+              "figure": "heron",
+              "habit": "slinger"
             },
-            "name": "Chickaree",
+            "name": "Reed",
             "resolve": 20,
             "level": 1,
             "streak": 0,
             "place": null,
             "faces": null,
             "board": {
-              "who": "Chickaree",
-              "title": "",
-              "figures": [],
-              "boons": [],
-              "might": 100
-            },
-            "fight": null
-          },
-          {
-            "who": {
-              "is": "regular",
-              "figure": "mossmote",
-              "habit": "mender"
-            },
-            "name": "Mossmote",
-            "resolve": 20,
-            "level": 1,
-            "streak": 0,
-            "place": null,
-            "faces": null,
-            "board": {
-              "who": "Mossmote",
-              "title": "",
-              "figures": [],
-              "boons": [],
-              "might": 100
-            },
-            "fight": null
-          },
-          {
-            "who": {
-              "is": "regular",
-              "figure": "cindernewt",
-              "habit": "ember"
-            },
-            "name": "Cinder Newt",
-            "resolve": 20,
-            "level": 1,
-            "streak": 0,
-            "place": null,
-            "faces": null,
-            "board": {
-              "who": "Cinder Newt",
-              "title": "",
-              "figures": [],
-              "boons": [],
-              "might": 100
-            },
-            "fight": null
-          },
-          {
-            "who": {
-              "is": "regular",
-              "figure": "rock",
-              "habit": "bulwark"
-            },
-            "name": "Rock",
-            "resolve": 20,
-            "level": 1,
-            "streak": 0,
-            "place": null,
-            "faces": null,
-            "board": {
-              "who": "Rock",
+              "who": "Reed",
               "title": "",
               "figures": [],
               "boons": [],
@@ -3551,14 +3488,14 @@
               "figure": "jay",
               "habit": "feather"
             },
-            "name": "Dusk Jay",
+            "name": "Huff",
             "resolve": 20,
             "level": 1,
             "streak": 0,
             "place": null,
             "faces": null,
             "board": {
-              "who": "Dusk Jay",
+              "who": "Huff",
               "title": "",
               "figures": [],
               "boons": [],
@@ -3569,17 +3506,80 @@
           {
             "who": {
               "is": "regular",
-              "figure": "slug",
-              "habit": "bulwark"
+              "figure": "mossmote",
+              "habit": "mender"
             },
-            "name": "Slug",
+            "name": "Velvet",
             "resolve": 20,
             "level": 1,
             "streak": 0,
             "place": null,
             "faces": null,
             "board": {
-              "who": "Slug",
+              "who": "Velvet",
+              "title": "",
+              "figures": [],
+              "boons": [],
+              "might": 100
+            },
+            "fight": null
+          },
+          {
+            "who": {
+              "is": "regular",
+              "figure": "cindernewt",
+              "habit": "ember"
+            },
+            "name": "Toast",
+            "resolve": 20,
+            "level": 1,
+            "streak": 0,
+            "place": null,
+            "faces": null,
+            "board": {
+              "who": "Toast",
+              "title": "",
+              "figures": [],
+              "boons": [],
+              "might": 100
+            },
+            "fight": null
+          },
+          {
+            "who": {
+              "is": "regular",
+              "figure": "finch",
+              "habit": "slinger"
+            },
+            "name": "Twig",
+            "resolve": 20,
+            "level": 1,
+            "streak": 0,
+            "place": null,
+            "faces": null,
+            "board": {
+              "who": "Twig",
+              "title": "",
+              "figures": [],
+              "boons": [],
+              "might": 100
+            },
+            "fight": null
+          },
+          {
+            "who": {
+              "is": "regular",
+              "figure": "crab12",
+              "habit": "slinger"
+            },
+            "name": "Skip",
+            "resolve": 20,
+            "level": 1,
+            "streak": 0,
+            "place": null,
+            "faces": null,
+            "board": {
+              "who": "Skip",
               "title": "",
               "figures": [],
               "boons": [],
@@ -3597,7 +3597,7 @@
             "picks": [
               {
                 "kind": "starter",
-                "options": ["emberkit", "mossmote", "worm"]
+                "options": ["barrowgnome", "emberkit", "crab7"]
               }
             ]
           },
@@ -3638,7 +3638,7 @@
           ],
           "bench": [null, null, null, null, null, null, null, null, null],
           "items": [],
-          "stall": ["moth", "moth", "finch", "barrowgnome", "mossmote"],
+          "stall": ["worm", "mossmote", "worm", "worm", "barrowgnome"],
           "held": false,
           "rustles": 1,
           "bought": 0,

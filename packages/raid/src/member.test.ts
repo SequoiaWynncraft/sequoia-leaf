@@ -84,8 +84,8 @@ const boardWith = (kind: FigureId): Met => ({
 });
 
 describe("the twenty-eight", () => {
-  test("stay twenty-eight: a banner's member is a figure, and not one of them", () => {
-    expect(FIGURE_IDS.length).toBe(28);
+  test("stay twenty-nine: a banner's member is a figure, and not one of them", () => {
+    expect(FIGURE_IDS.length).toBe(29);
     expect(OWNABLE).toEqual([...FIGURE_IDS, ...MEMBER_IDS]);
     const stall: readonly string[] = STALL_POOL;
     expect(stall).toEqual([...FIGURE_IDS]);

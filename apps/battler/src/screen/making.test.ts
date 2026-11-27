@@ -225,7 +225,7 @@ describe("an item in the hand", () => {
     const kin = planning([["rock", []]], ["burrowcharm"]);
     expect(dropOf(kin, 0, { piece: first(kin).id })).toMatchObject({
       does: "nothing",
-      why: "It is of that kin already.",
+      why: "It is of that origin already.",
     });
     // Nothing is said of a figure that has gone, or a place with no item.
     expect(dropOf(kin, 0, { piece: 999 })).toBeNull();

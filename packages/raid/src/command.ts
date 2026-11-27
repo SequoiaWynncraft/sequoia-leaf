@@ -18,6 +18,8 @@ export type RunCommand =
   | { do: "redraw" }
   | { do: "buy"; offer: number }
   | { do: "sell"; from: Spot }
+  /** Give Greg (at `to`, on the board or the bench) the figure on the bench at `from` to eat (`feed.ts`). */
+  | { do: "feed"; from: Spot; to: Spot }
   /** Move a figure, changing places with whoever is there. */
   | { do: "move"; from: Spot; to: Spot }
   /** Take a figure off the board to the first free hollow of the bench. */
@@ -53,6 +55,7 @@ export const WHOSE = {
   redraw: "plan",
   buy: "plan",
   sell: "plan",
+  feed: "plan",
   move: "plan",
   bench: "plan",
   rustle: "plan",
@@ -100,7 +103,7 @@ export const isRunCommand = (c: RaidCommand): c is Aimed => !TABLE_COMMANDS.some
 export const forEndless = (c: RaidCommand): boolean => isRunCommand(c) && c.endless === true;
 
 /** The planning commands a page may show before Leaf answers: they draw nothing, so Leaf will do just the same. */
-const predicted = ["move", "bench", "sell", "give", "forge", "hold", "buy", "xp"] as const;
+const predicted = ["move", "bench", "sell", "feed", "give", "forge", "hold", "buy", "xp"] as const;
 export const PREDICTED = predicted satisfies readonly Planning[];
 /** A command a page may show before Leaf answers. */
 export type Predicted = Extract<RunCommand, { do: (typeof PREDICTED)[number] }>;
@@ -153,6 +156,11 @@ const READERS = new Map<string, Reader>(
       const from = spotOf(v.from);
       const to = spotOf(v.to);
       return from && to && { do: "move", from, to };
+    },
+    feed: (v) => {
+      const from = spotOf(v.from);
+      const to = spotOf(v.to);
+      return from && to && { do: "feed", from, to };
     },
     bench: (v) => (isWhole(v.seat, 0, 63) ? { do: "bench", seat: v.seat } : null),
     hold: (v) => (typeof v.on === "boolean" ? { do: "hold", on: v.on } : null),

@@ -354,11 +354,11 @@ export const membersOf = (trait: TraitId, among: readonly FigureId[] = FIGURE_ID
 /** A name at the start of a sentence or a line: "a Moth" is "A Moth" there. */
 export const opening = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
 /**
- * The name of the party across the table as a sentence starts with it: a regular's with a capital
- * ("The Hearth Cat"), a member's (`Party.by`) and the forest's as they are written.
+ * The name of the party across the table as a sentence starts with it: a regular's as it is called
+ * now ("Vesta", for a party stored under its old name), a member's (`Party.by`) and the forest's as
+ * they are written.
  */
-export const acrossName = (party: Pick<Party, "who" | "by">): string =>
-  regularOf(party) ? opening(party.who) : party.who;
+export const acrossName = (party: Pick<Party, "who" | "by">): string => regularOf(party)?.name ?? party.who;
 
 /** The title of a fight's sheet: how it went and how long it took, "Room won · 14 s". */
 export function fightTitle(result: FightResult, ticks: number): string {

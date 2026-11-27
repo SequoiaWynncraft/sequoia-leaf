@@ -36,6 +36,16 @@ export {
 export { figuresFor, levelOf, OWNABLE, placedOf, type Roster, rosterOf, stallOdds, stallPool } from "./own.ts";
 export { isMemberId, MEMBER_IDS, type MemberId } from "./content/members.ts";
 export {
+  formNumber,
+  formText,
+  hasTrueForm,
+  TRUE_FORM_IDS,
+  type TrueForm,
+  type TrueFormId,
+  TRUE_FORMS,
+} from "./content/groot.ts";
+export { LORE } from "./content/lore.ts";
+export {
   CALLINGS,
   type CallingId,
   type KinId,
@@ -166,7 +176,9 @@ export type {
   FightSetup,
   FightSummary,
   HealSource,
+  Form,
   LeapWhy,
+  RiseWhy,
   StatusId,
   Tally,
   Unit,
@@ -237,6 +249,7 @@ export {
   xpToNext,
 } from "./run.ts";
 export { forgeItems } from "./rack.ts";
+export { type Fed, feed, mealFor } from "./feed.ts";
 export { boardMet, boardSlot, opposition } from "./foe.ts";
 
 // The endless runs: the Wilds and the Deep Woods.

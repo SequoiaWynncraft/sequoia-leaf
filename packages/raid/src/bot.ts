@@ -18,8 +18,9 @@ import {
   isEmblemId,
 } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL } from "./content/rooms.ts";
-import { stepFor, TRAIT_IDS, type TraitId } from "./content/traits.ts";
+import { stepFor, TRAIT_IDS, type TraitId, traitNumber } from "./content/traits.ts";
 import type { RuleId } from "./content/wilds.ts";
+import { feed } from "./feed.ts";
 import { arrange } from "./formation.ts";
 import { SEATS } from "./hex.ts";
 import { countTraits } from "./party.ts";
@@ -60,6 +61,7 @@ export interface Hands<R extends RunView = Run> {
   choose(run: R, option: number): Done;
   buy(run: R, offer: number): Done;
   sell(run: R, from: Spot): Done;
+  feed(run: R, from: Spot, to: Spot): Done;
   move(run: R, from: Spot, to: Spot): Done;
   toBench(run: R, seat: number): Done;
   rustle(run: R): Done;
@@ -67,7 +69,7 @@ export interface Hands<R extends RunView = Run> {
   giveItem(run: R, item: number, to: Spot): Done;
 }
 /** The run's own actions. */
-export const DIRECT: Hands = { choose, buy, sell, move, toBench, rustle, buyXp, giveItem };
+export const DIRECT: Hands = { choose, buy, sell, feed, move, toBench, rustle, buyXp, giveItem };
 
 export interface Habit {
   name: string;
@@ -275,7 +277,18 @@ function wants(run: RunView, habit: Habit, kind: FigureId, before: number): numb
   const after = partyScore(habit, bestParty(habit, [...own, guest], cap));
   return after - before + (twins === 1 ? 0.7 * habit.chases : 0) + (better ? 0.4 * habit.chases : 0);
 }
-/** Sells whoever on the bench is doing least: not in the best party, and not half of a pair. */
+/** Where a Greg is who can still eat, the board's before the bench's; null for none. */
+function hungryGreg(run: RunView): Spot | null {
+  const most = traitNumber("greg", "most", 1);
+  const seat = run.board.findIndex((p) => p?.kind === "greg" && p.fed < most);
+  if (seat >= 0) return { on: "board", at: seat };
+  const slot = run.bench.findIndex((p) => p?.kind === "greg" && p.fed < most);
+  return slot >= 0 ? { on: "bench", at: slot } : null;
+}
+/**
+ * Lets go of whoever on the bench is doing least: not in the best party, and not half of a pair. It
+ * goes to a Greg who can still eat (`feed`) if there is one, and is sold if not.
+ */
 function sellSpare<R extends RunView>(run: R, habit: Habit, keep: number, hands: Hands<R>): boolean {
   const own = pieces(run);
   const best = new Set(bestParty(habit, own, fieldCap(run)).map((p) => p.id));
@@ -291,6 +304,8 @@ function sellSpare<R extends RunView>(run: R, habit: Habit, keep: number, hands:
     }
   });
   if (worst < 0 || worstScore > keep) return false;
+  const greg = hungryGreg(run);
+  if (greg && hands.feed(run, { on: "bench", at: worst }, greg).ok) return true;
   return hands.sell(run, { on: "bench", at: worst }).ok;
 }
 

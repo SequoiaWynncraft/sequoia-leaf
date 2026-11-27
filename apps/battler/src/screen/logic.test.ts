@@ -360,7 +360,7 @@ describe("what a card says about a figure", () => {
   });
   test("a trait's figures run cheapest first", () => {
     expect(membersOf("ember")).toEqual(["emberkit", "kettle", "cindernewt", "hearthcat"]);
-    expect(membersOf("fang")).toEqual(["emberkit", "crab7", "jay", "badger", "whitefox", "hearthcat"]);
+    expect(membersOf("fang")).toEqual(["emberkit", "crab7", "jay", "badger", "hearthcat"]);
   });
   test("where a figure is", () => {
     const run = startRun(3, { trail: 0 });
@@ -409,8 +409,11 @@ describe("who watches from the side logs", () => {
 });
 
 describe("the name across the table", () => {
-  test("starts a sentence with a regular's capital, and is a member's or the forest's as written", () => {
-    expect(acrossName({ who: "the Hearth Cat" })).toBe("The Hearth Cat");
+  test("is a regular's name as it is now (old signatures too), and a member's or the forest's as written", () => {
+    expect(acrossName({ who: "Vesta" })).toBe("Vesta");
+    // A party stored before the figures had names reads as the regular is called now.
+    expect(acrossName({ who: "the Hearth Cat" })).toBe("Vesta");
+    expect(acrossName({ who: "a Moth" })).toBe("Moth");
     expect(acrossName({ who: "The forest" })).toBe("The forest");
     expect(acrossName({ who: "mossy_fern", by: "10000000-0000-0000-0000-000000000002" })).toBe("mossy_fern");
     // A member called as a regular is a member still.

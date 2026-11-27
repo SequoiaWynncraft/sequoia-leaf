@@ -26,7 +26,7 @@ import {
 } from "@sequoia-leaf/kit/card.ts";
 import { LONG_PRESS } from "@sequoia-leaf/kit/press.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
-import { pieceAt, type RunView, sellValue, type Spot } from "@sequoia-leaf/raid";
+import type { RunView, Spot } from "@sequoia-leaf/raid";
 
 import { unitUnder } from "./fightview.ts";
 import { BENCH_H, BENCH_X, BENCH_Y, GAP } from "./geometry.ts";
@@ -37,8 +37,9 @@ import { boardFull, foeAt, heldUnder } from "./scene.ts";
 import { snd } from "./sounds.ts";
 import { artPx, boardToPage, toBoard, V } from "./stage.ts";
 import { doNow, onNotes, S } from "./state.ts";
-import { acorns, dropRef, foeRef, itemRef, pieceRef, unitRef } from "./ui/cards.ts";
+import { dropRef, foeRef, itemRef, pieceRef, unitRef } from "./ui/cards.ts";
 import { hearMade, paintRack, rackSlot, registerDrop, seenNow } from "./ui/drop.ts";
+import { aimShop, fillShopHint, hearFed, shopCommand } from "./ui/feedtarget.ts";
 
 /** One pointer's press: what was under it, where, whether it has moved or asked what the thing is. */
 interface Press {
@@ -198,12 +199,7 @@ function tapItem(held: Extract<Held, { what: "item" }>, via: Via): void {
 function startDrag(run: RunView, held: Held, pointer: number, at: { x: number; y: number }): void {
   close();
   hold(true);
-  if (held.what === "pawn") {
-    const spot = placeOfPawn(held.id);
-    const piece = spot ? pieceAt(run, spot) : null;
-    const hint = document.getElementById("sellhint");
-    if (piece && hint) hint.replaceChildren("Sell for ", acorns(`+${sellValue(piece)}`));
-  }
+  fillShopHint(run, held.what === "pawn" ? placeOfPawn(held.id) : null);
   hand({ e: "clear" });
   hand({ e: "carry", pointer, held, x: at.x, y: at.y });
   snd.lift();
@@ -230,6 +226,7 @@ function whileDragging(run: RunView, e: PointerEvent, carried: Extract<Gesture, 
   const shop = document.elementFromPoint(e.clientX, e.clientY)?.closest("#shop") != null;
   const aim = carried.held.what === "item" ? aimAt(run, e) : null;
   hand({ e: "move", pointer: carried.pointer, x: b.x, y: b.y, over: shop ? null : spotAt(b.x, b.y), aim, shop });
+  aimShop(e, shop);
   if (carried.held.what !== "item" || aimKey(aim) === aimKey(carried.aim)) return;
   const box = aim ? aimBox(aim) : null;
   if (aim && box) show(dropRef(carried.held.at, aim), box.x, box.y, box.w, box.h, "rack" in aim);
@@ -253,7 +250,7 @@ function drop(run: RunView, e: PointerEvent, held: Held): void {
     p.x = b.x;
     p.y = b.y + 6;
     if (overShop) {
-      const done = doNow({ do: "sell", from });
+      const done = doNow(shopCommand(from));
       if (!done?.ok) hop(p, spotXY(from), 0.2, 6);
       return;
     }
@@ -545,6 +542,7 @@ export function openHand(view: HTMLCanvasElement): void {
   // The tip of an item in the hand: its button lets the item go, and it is in the hand no more.
   registerDrop(unpick);
   onNotes(hearMade);
+  onNotes(hearFed);
 }
 
 /** For looking at the table from outside: picks a figure up as a finger would, or lets go. */

@@ -27,10 +27,23 @@ import type { KinId } from "@sequoia-leaf/raid/content/traits.ts";
 /**
  * How a figure's body moves while it winds up: rearing up, crouching, rising onto its toes,
  * shaking, leaning back, puffing up, wobbling, staring its target down, keeping perfectly still,
- * sinking into the ground, rising into the fog, or spinning about.
+ * keeping still while what grows on top of it rustles, sinking into the ground, rising into the fog,
+ * or spinning about.
  */
 export type Body =
-  "rear" | "crouch" | "rise" | "shake" | "lean" | "puff" | "wobble" | "stare" | "still" | "dig" | "fade" | "spin";
+  | "rear"
+  | "crouch"
+  | "rise"
+  | "shake"
+  | "lean"
+  | "puff"
+  | "wobble"
+  | "stare"
+  | "still"
+  | "rustle"
+  | "dig"
+  | "fade"
+  | "spin";
 
 /** What an ability throws: flown where the rules fly it, or (`ahead`) thrown in the wind-up so that it arrives as the ability goes off. */
 export type Thrown =
@@ -88,7 +101,8 @@ export type MarkId =
   | "spores"
   | "runner"
   | "swoop"
-  | "crabbier";
+  | "crabbier"
+  | "roots";
 
 /** An ability's own sound: a note (semitones from A), its timbre, a second note after it, a breath of noise (its pitch), a slide, how loud; and for one that lands later, its sound then. */
 export interface Voice {
@@ -165,6 +179,8 @@ export const LOOKS: Partial<Record<UnitKind, Look>> = {
   greg: { wind: 12, body: "rise", mark: "sit", bump: 2 },
   whitefox: { wind: 10, body: "rear", gather: [GOLD[1], GOLD[2]], mark: "antlers", bump: 1 },
   hearthcat: { wind: 12, body: "stare", lunge: 6, mark: "bat", bump: 1 },
+  // Its sprout shakes, then its roots run out to everyone (`roots.ts`) over the rest of the lead-in.
+  seqwawa: { wind: 22, body: "rustle", gather: [GOLD[1], LEAF], mark: "roots", bump: 1 },
   // ---------- a banner's member ----------
   "banner-1": {
     wind: 12,
@@ -223,6 +239,8 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
   greg: { n: -19, wave: "triangle", hiss: 200, slide: 0.5, vol: 0.14 },
   whitefox: { n: 19, wave: "sine", two: 7, vol: 0.09 },
   hearthcat: { n: 3, wave: "triangle", hiss: 2500, slide: 0.6 },
+  // A creak and a rising pair of soft notes, Moss's and a Mender's.
+  seqwawa: { n: -7, wave: "sine", two: 12, hiss: 300, vol: 0.08 },
   // A low two-note stare, and a thump with a bell over it when it lands.
   "banner-1": {
     n: -14,
@@ -281,6 +299,8 @@ const KIN_PUFF: Readonly<Record<KinId, Puff>> = {
   feather: { cols: [PAPER[2], CREAM], drift: "down" },
   crab: { cols: ["#b0483a", PAPER[1]], drift: "out" },
   gnome: { cols: [SKY[4], PAPER[1]], drift: "out" },
+  // Gold, rising: what the raiders saw going back where it came from.
+  groot: { cols: [GOLD[1], GOLD[2], CREAM], drift: "up" },
 };
 const SHELL: Puff = KIN_PUFF.crab;
 const LEAVES: Puff = { cols: [BARK[3], GREEN[3]], drift: "down" };

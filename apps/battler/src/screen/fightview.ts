@@ -135,6 +135,8 @@ export function skipFight(): void {
     a.hpShown = u.hp;
     a.fallAt = u.alive ? Infinity : -999;
     a.gone = !u.alive;
+    a.rising = false;
+    a.form = u.form;
     a.castUntil = -99;
   });
   finish();
@@ -314,7 +316,7 @@ function standing(g: Ctx, a: Actor, c: number, tick: number): Standing | null {
   const x = Math.round(V.bx + a.x + p.dx);
   const ground = Math.round(V.by + a.y + p.dy - back);
   const y = Math.round(ground - p.lift - shine.hop);
-  const hover = down ? 0 : hoverAt(u.kind, V.t, a.phase);
+  const hover = down ? 0 : hoverAt(u.kind, V.t, a.phase, a.form);
   const left = p.flip ? !a.left : a.left;
   // A person on a rig acts with their body; anyone else is their picture, bent.
   const act = stanceOf(a, c, tick);
@@ -331,6 +333,7 @@ function standing(g: Ctx, a: Actor, c: number, tick: number): Standing | null {
       g.globalAlpha = p.alpha * (shine.dim ? DIM : 1);
       // The member's figures stand on the bases they chose; the forest's, and what is summoned, on plain ones.
       drawStanding(g, u.kind, x, y, u.side === FV.ours ? FV.bases : "plain", {
+        form: a.form,
         hover: hover + p.rise,
         pose: p.cast ? "cast" : "idle",
         beat: beatAt(V.t, a.phase),
@@ -347,7 +350,7 @@ function standing(g: Ctx, a: Actor, c: number, tick: number): Standing | null {
     top: () => {
       if (down || !u.alive || hidden || sunk) return;
       // Over the figure's head as it is drawn now: casting, some rear up taller than they stand.
-      const f = framesOf(u.kind);
+      const f = framesOf(u.kind, false, a.form);
       const tall = (p.cast ? Math.max(f.tall, f.castTall) : f.tall) + Math.max(0, p.sy);
       drawStatus(g, a, x, y - hover, tall, tick);
       if (u.stars > 1) drawStars(g, u.stars, x, y - 3 - hover - tall);

@@ -4,36 +4,17 @@
  * made of these, and each one writes down what it did as an event.
  */
 import { boonNumber } from "../content/boons.ts";
-import {
-  abilityNumber,
-  isFigureId,
-  specOf,
-  type Stars,
-  starScale,
-  traitsOf,
-  type UnitKind,
-} from "../content/figures.ts";
+import { abilityNumber, isFigureId, specOf, traitsOf, type UnitKind } from "../content/figures.ts";
 import { FINISHED, isFinishedId, type ItemId } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
-import { traitDraw, TRAITS } from "../content/traits.ts";
+import { traitDraw, traitNumber, TRAITS } from "../content/traits.ts";
 import { distance, line, mirror, neighboursFor, type Side, within } from "../hex.ts";
-import type { DamageKind, DamageSource, Fight, FightEvent, HealSource, LeapWhy, Unit } from "./types.ts";
+import { emit, FOREVER, secs } from "./clock.ts";
+import { freeNear, getUp, grootFalls, summon } from "./enter.ts";
+import type { DamageKind, DamageSource, Fight, HealSource, LeapWhy, Unit } from "./types.ts";
 
-export const HZ = FIGHT.hz;
-/** Seconds as steps of the clock. */
-export const secs = (seconds: number): number => Math.round(seconds * HZ);
-/** A time that never comes: for a shield that lasts until it is broken. */
-export const FOREVER = Number.MAX_SAFE_INTEGER;
-
-export const emit = (f: Fight, ev: FightEvent): void => {
-  f.out.push(ev);
-};
-/** Has something happen in a number of steps: when a thrown thing arrives. */
-export const later = (f: Fight, ticks: number, land: () => void): void => {
-  f.pending.push({ at: f.tick + Math.max(1, ticks), land });
-};
-/** How long something thrown takes to get from one hex to another. */
-export const flight = (from: number, to: number): number => Math.max(1, distance(from, to)) * FIGHT.flight;
+export { emit, flight, FOREVER, HZ, later, secs } from "./clock.ts";
+export { enter, freeNear, getUp, lastFallen, type Start, summon } from "./enter.ts";
 
 /** An amount made bigger by its owner's ability power. */
 export const powered = (u: Unit, amount: number): number => (amount * u.power) / 100;
@@ -135,12 +116,6 @@ export function mostHurt(f: Fight, side: Side, hurtOnly: boolean): Unit[] {
     if (o.side === side && o.alive && (!hurtOnly || o.hp < o.maxHp)) out.push(o);
   }
   return out.toSorted((a, b) => a.hp * b.maxHp - b.hp * a.maxHp || a.id - b.id);
-}
-/** The free hex nearest a hex, within a few steps; the hex itself if it is free. -1 if there is none. */
-export function freeNear(f: Fight, cell: number, steps = 3): number {
-  if (f.taken[cell] === -1) return cell;
-  for (const c of within(cell, steps)) if (f.taken[c] === -1) return c;
-  return -1;
 }
 /** A free hex touching `cell`: the one furthest from `awayFrom`, so that arriving there is arriving behind. -1 if none. */
 export function freeBeside(f: Fight, side: Side, cell: number, awayFrom: number): number {
@@ -279,22 +254,38 @@ export function hide(f: Fight, u: Unit, ticks: number): void {
 
 export function heal(f: Fight, target: Unit, raw: number, source: HealSource, by: Unit | null): number {
   if (!target.alive || raw <= 0) return 0;
+  const mended = by !== null && by.mending > 0 && (source === "ability" || source === "item");
   let amount = raw;
-  if (by && by.mending > 0 && (source === "ability" || source === "item")) amount *= 1 + by.mending / 100;
+  if (mended) amount *= 1 + by.mending / 100;
   if (target.burnUntil > f.tick) amount *= 1 - target.burnDamp / 100;
   const n = Math.min(Math.round(amount), target.maxHp - target.hp);
+  if (mended) overflow(f, target, amount - Math.max(0, n), by);
   if (n <= 0) return 0;
   target.hp += n;
   target.healed += n;
   emit(f, { t: "heal", id: target.id, by: by?.id ?? -1, amount: n, source, hp: target.hp });
   return n;
 }
+/**
+ * Mender at its top step: healing past a friend's full health becomes a shield for a while, up to a
+ * share of that friend's health (`over`), shields already on it counted.
+ */
+function overflow(f: Fight, target: Unit, extra: number, by: Unit): void {
+  const step = f.traits[by.side].mender ?? 0;
+  const room = Math.floor((target.maxHp * traitNumber("mender", "over", step)) / 100 - target.shield);
+  // The healer's shield: theirs to count, already as strong as Mender makes it.
+  if (Math.min(extra, room) >= 1)
+    shieldOn(f, target, Math.round(Math.min(extra, room)), traitNumber("mender", "lasts", step), by);
+}
 /** Puts a shield up, or adds to the one there. `seconds` of 0 lasts until it is broken. */
 export function shieldUp(f: Fight, target: Unit, raw: number, seconds: number, by: Unit | null): number {
   if (!target.alive) return 0;
   let amount = raw;
   if (by && by.mending > 0) amount *= 1 + by.mending / 100;
-  const n = Math.round(amount);
+  return shieldOn(f, target, Math.round(amount), seconds, by);
+}
+/** Puts a shield of `n` up as it is, given by `by` (nobody for one a figure has of itself), and says so. */
+function shieldOn(f: Fight, target: Unit, n: number, seconds: number, by: Unit | null): number {
   if (n <= 0) return 0;
   const ticks = secs(seconds);
   const until = ticks <= 0 ? FOREVER : f.tick + ticks;
@@ -302,159 +293,6 @@ export function shieldUp(f: Fight, target: Unit, raw: number, seconds: number, b
   target.shield += n;
   emit(f, { t: "shield", id: target.id, by: by?.id ?? -1, amount: n, shield: target.shield, ticks });
   return n;
-}
-
-// ---------- summoning ----------
-
-/** What a new figure in a fight starts from; everything not given starts plain. */
-export interface Start {
-  side: Side;
-  kind: UnitKind;
-  stars: Stars;
-  cell: number;
-  seat: number;
-  summoned: boolean;
-  owner: number;
-  items: readonly ItemId[];
-  maxHp: number;
-  attack: number;
-  speed: number;
-  power: number;
-}
-/** Puts a figure on the board. Whoever calls this has made sure the hex is free. */
-export function enter(f: Fight, s: Start): Unit {
-  const spec = specOf(s.kind);
-  const maxHp = Math.max(1, Math.round(s.maxHp));
-  const attack = Math.max(0, Math.round(s.attack));
-  const u: Unit = {
-    id: f.units.length,
-    side: s.side,
-    kind: s.kind,
-    stars: s.stars,
-    name: spec.name,
-    summoned: s.summoned,
-    owner: s.owner,
-    items: s.items,
-    seat: s.seat,
-    cell: s.cell,
-    alive: true,
-    maxHp,
-    hp: maxHp,
-    shield: 0,
-    attack,
-    attack0: attack,
-    speed: s.speed,
-    range: spec.range,
-    draw: 0,
-    armour: spec.armour,
-    ward: spec.ward,
-    power: s.power,
-    mana: spec.mana[0],
-    manaFull: spec.mana[1],
-    crit: 0,
-    slip: 0,
-    cool: 0,
-    busyUntil: 0,
-    target: -1,
-    incoming: 0,
-    waitFrom: -1,
-    attacks: 0,
-    rooted: spec.rooted === true,
-    steady: spec.steady === true,
-    stunUntil: 0,
-    slowUntil: 0,
-    slowBy: 0,
-    burnUntil: 0,
-    burnBy: 0,
-    burnFrom: -1,
-    burnDamp: 0,
-    shieldUntil: 0,
-    tauntUntil: 0,
-    tauntBy: -1,
-    hiddenUntil: 0,
-    hasteUntil: 0,
-    hasteBy: 0,
-    bracedUntil: 0,
-    bracedBy: 0,
-    stub: 0,
-    ember: 0,
-    quicken: 0,
-    quickMost: 0,
-    quick: 0,
-    focusBy: 0,
-    focusMost: 0,
-    focusOn: -1,
-    focus: 0,
-    manaMore: 0,
-    mending: 0,
-    sneakHits: 0,
-    sneakBy: 0,
-    digs: false,
-    digHeal: 0,
-    digLess: 0,
-    digFor: 0,
-    regrow: 0,
-    // Only the brambles have a number for it.
-    thorns: (abilityNumber(s.kind, "thorns", s.stars) * s.power) / 100,
-    called: false,
-    pierce: 0,
-    twice: 0,
-    prickle: 0,
-    clip: 0,
-    leech: 0,
-    powerGrow: 0,
-    castShield: 0,
-    castShieldFor: 0,
-    serveEvery: 0,
-    serveHeal: 0,
-    noHard: false,
-    stunCut: 0,
-    logUnder: 0,
-    logShield: 0,
-    logFor: 0,
-    dealt: 0,
-    taken: 0,
-    healed: 0,
-    casts: 0,
-  };
-  f.units.push(u);
-  f.taken[s.cell] = u.id;
-  f.standing[s.side]++;
-  return u;
-}
-/**
- * Brings a new figure into the fight on a free hex, with its kind's own numbers for its stars
- * unless others are given. It finds its feet for a moment before it does anything.
- */
-export function summon(
-  f: Fight,
-  kind: UnitKind,
-  stars: Stars,
-  side: Side,
-  cell: number,
-  by: Unit | null,
-  numbers: { hp?: number; attack?: number } = {},
-): Unit | undefined {
-  if (cell < 0 || f.taken[cell] !== -1) return undefined;
-  const spec = specOf(kind);
-  const might = f.might[side] / 100;
-  const u = enter(f, {
-    side,
-    kind,
-    stars,
-    cell,
-    seat: -1,
-    summoned: true,
-    owner: by?.id ?? -1,
-    items: [],
-    maxHp: numbers.hp ?? spec.hp * starScale(stars) * might,
-    attack: numbers.attack ?? spec.attack * starScale(stars) * might,
-    speed: spec.speed,
-    power: 100 * might,
-  });
-  u.busyUntil = f.tick + FIGHT.cast;
-  emit(f, { t: "summon", id: u.id, by: by?.id ?? -1, kind, cell, side });
-  return u;
 }
 
 // ---------- hurting ----------
@@ -544,20 +382,22 @@ function fall(f: Fight, u: Unit, by: Unit | null): void {
   if (f.wind[u.side] && !u.summoned) {
     // Second Wind: the first to fall gets back up, with whatever was on it shaken off.
     f.wind[u.side] = false;
-    u.hp = Math.max(1, Math.round((u.maxHp * boonNumber("secondwind", "health")) / 100));
-    u.burnUntil = 0;
-    u.stunUntil = 0;
-    u.slowUntil = 0;
-    u.tauntUntil = 0;
-    emit(f, { t: "rise", id: u.id, hp: u.hp });
+    getUp(f, u, (u.maxHp * boonNumber("secondwind", "health")) / 100, "wind");
     return;
   }
+  // A Groot figure with its getting back up to come is down for a moment, and still counts as standing.
+  const back = grootFalls(f, u);
   u.alive = false;
+  u.downs++;
   u.hp = 0;
   u.shield = 0;
   if (f.taken[u.cell] === u.id) f.taken[u.cell] = -1;
-  f.standing[u.side]--;
-  emit(f, { t: "fall", id: u.id, by: by?.id ?? -1, cell: u.cell });
+  if (back === 0) {
+    f.standing[u.side]--;
+    u.fellAt = f.tick;
+    u.fallNo = ++f.falls;
+  }
+  emit(f, { t: "fall", id: u.id, by: by?.id ?? -1, cell: u.cell, ...(back > 0 && { back }) });
   if (u.kind === "toadstool") {
     // It puffs as it goes: said as an ability, so that a screen can show the spores spreading.
     const spores = powered(u, abilityNumber("toadstool", "damage", u.stars));

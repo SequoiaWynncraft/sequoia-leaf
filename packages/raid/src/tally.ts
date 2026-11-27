@@ -27,7 +27,7 @@ export interface Did {
   shielded: number;
   /** Enemies it brought down. */
   felled: number;
-  /** Still up (it has not fallen, or not yet). */
+  /** Still up: it has not fallen (or not yet), or it got back up after it last did. */
   stood: boolean;
 }
 
@@ -61,37 +61,13 @@ const blank = (id: number): Did => ({
   stood: true,
 });
 
-/** Every figure an event names: whoever it is about, and whoever did it. */
+/** Every figure an event names: whoever it is about, and whoever it was aimed at or done by. */
 function named(ev: FightEvent): number[] {
-  switch (ev.t) {
-    case "swing":
-      return [ev.id, ev.target];
-    case "shot":
-      return [ev.id, ev.target];
-    case "hit":
-    case "slip":
-    case "heal":
-    case "shield":
-    case "status":
-    case "boost":
-    case "fall":
-    case "summon":
-      return [ev.id, ev.by];
-    case "cast":
-      return [ev.id, ...ev.targets];
-    case "trait":
-      return ev.ids;
-    case "move":
-    case "leap":
-    case "rise":
-    case "item":
-    case "zone":
-    case "telegraph":
-      return [ev.id];
-    case "dusk":
-    case "end":
-      return [];
-  }
+  if (ev.t === "cast") return [ev.id, ...ev.targets];
+  if (ev.t === "trait") return ev.ids;
+  if (ev.t === "dusk" || ev.t === "end") return [];
+  if ("target" in ev) return [ev.id, ev.target];
+  return "by" in ev ? [ev.id, ev.by] : [ev.id];
 }
 
 /** Who gave a heal or a shield: healing nobody gave (regrowing, coming up from a burrow, a bite that heals) is its own. */
@@ -142,6 +118,8 @@ export function tally(events: readonly FightEvent[], everyone: readonly number[]
       if (ev.by >= 0) row(ev.by).felled++;
       // A summoned figure falling is not its summoner falling.
       if (ownerOf(ev.id) === ev.id) row(ev.id).stood = false;
+    } else if (ev.t === "rise") {
+      row(ev.id).stood = true;
     }
   }
   return [...rows.values()].toSorted((a, b) => a.id - b.id);

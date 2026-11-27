@@ -2,7 +2,7 @@ import { pick, type Stream, weighted } from "@sequoia-leaf/core";
 
 /**
  * Sparring partners. A sparring room is fought against the party one of the regulars at the table
- * brought (`REGULARS`: Greg, the Hearth Cat and the rest, never a member), or against the board
+ * brought (`REGULARS`: Greg, Vesta and the rest, never a member), or against the board
  * another member fought it with (`opposition`). This makes a regular's up from a seed: a regular, a
  * taste for one kin and one calling, and a party about as good as a member's would be by that room,
  * made only of what a member at its level could have found at the stall. What comes out is a plain
@@ -64,7 +64,7 @@ export function sparParty(
   const kin: KinId = pick(s, KINS);
   const calling: CallingId = pick(s, CALLINGS);
   const likes = (id: FigureId): number =>
-    (FIGURES[id].kin === kin ? LIKES_KIN : 1) * (traitsOf(id).includes(calling) ? LIKES_CALLING : 1);
+    (traitsOf(id).includes(kin) ? LIKES_KIN : 1) * (traitsOf(id).includes(calling) ? LIKES_CALLING : 1);
   const levelOdds = STALL_ODDS[Math.min(STALL_ODDS.length, Math.max(1, strength.level)) - 1] ?? STALL_ODDS[0];
   /** How often the stall offers a figure's cost at the partner's level, out of a hundred. */
   const odds = (id: FigureId): number => levelOdds?.[FIGURES[id].tier - 1] ?? 0;

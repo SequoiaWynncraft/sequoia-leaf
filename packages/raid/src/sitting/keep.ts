@@ -9,7 +9,7 @@ import { isComponentId } from "../content/items.ts";
 import { isTraitId } from "../content/traits.ts";
 import { isParty } from "../party.ts";
 import { endingOf } from "../run.ts";
-import { checkRun, fields, Nonsense } from "../save.ts";
+import { checkRun, fields, Nonsense, partyAsShare } from "../save.ts";
 import {
   CHAIRS,
   type Member,
@@ -22,7 +22,11 @@ import {
 } from "./sitting.ts";
 
 const GAME = "little-raid-sitting";
-export const SITTING_VERSION = 1;
+/**
+ * 2: what Greg has eaten is a share of his health (`feed`), where it was meals of 3% each; its runs
+ * keep the Wilds' wing as version 1's did. A sitting of version 1 is read as well.
+ */
+export const SITTING_VERSION = 2;
 
 export const encodeSitting = (t: Sitting): string =>
   JSON.stringify({
@@ -57,14 +61,17 @@ export function readWho(v: unknown): Who {
   if (w.is !== "regular") return bad("whose a seat is");
   return { is: "regular", figure: one(w.figure, isFigureId, "a regular"), habit: one(w.habit, isTraitId, "a regular") };
 }
-function readSeat(v: unknown): Seat {
+/** A seat, its run kept by a sitting of version 1 (`meals`) or since. */
+function readSeat(v: unknown, meals: boolean): Seat {
   const s = record(v, "a seat");
-  const run = checkRun(s.run);
+  const run = checkRun(s.run, false, meals);
   if (!run.ok) return bad("a seat's run");
+  const shown = one(s.shown, isParty, "a seat's board");
   return {
     who: readWho(s.who),
     run: run.run,
-    shown: one(s.shown, isParty, "a seat's board"),
+    // Its board as shown across the table, its Greg's meals read as shares as the run's are.
+    shown: meals ? partyAsShare(shown) : shown,
     place: s.place === null ? null : whole(s.place, 1, CHAIRS, "a place"),
   };
 }
@@ -144,7 +151,7 @@ function agree(t: Sitting): void {
 
 function read(v: unknown): Sitting {
   const r = record(v, "the sitting");
-  if (r.game !== GAME || r.v !== SITTING_VERSION) bad("the version");
+  if (r.game !== GAME || (r.v !== 1 && r.v !== SITTING_VERSION)) bad("the version");
   const pairs = list(r.pairs, CHAIRS / 2, "the pairs").map((p) => readTwo(p, "the pairs"));
   unique(pairs.flat(), "the pairs");
   const t: Sitting = {
@@ -152,7 +159,7 @@ function read(v: unknown): Sitting {
     by: text(r.by, 64, "who opened it"),
     room: whole(r.room, 0, 999, "the room"),
     stage: readStage(r.stage),
-    seats: list(r.seats, CHAIRS, "the seats").map(readSeat),
+    seats: list(r.seats, CHAIRS, "the seats").map((seat) => readSeat(seat, r.v === 1)),
     pairs,
     odd: r.odd === null ? null : readTwo(r.odd, "the odd one out"),
     owed: list(r.owed, CHAIRS, "what is owed").map(readOwed),
