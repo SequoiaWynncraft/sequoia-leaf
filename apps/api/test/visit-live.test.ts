@@ -19,7 +19,7 @@ import { Effect, Schema } from "effect";
 import { Live, TICK } from "../src/live/live.ts";
 import { Watchers } from "../src/live/watchers.ts";
 import { LiveClient } from "./live-client.ts";
-import { fakeBackend, sessionOf, testLeaf } from "./support.ts";
+import { asPage, fakeBackend, sessionOf, testLeaf } from "./support.ts";
 
 /**
  * A visit's room: everybody visiting a player's yard hears each batch Leaf keeps of it as Leaf
@@ -64,7 +64,7 @@ function call(method: string, path: string, who: PlayerId, body?: unknown): Prom
   return fetch(`${server?.origin ?? ""}${path}`, {
     method,
     headers: { Cookie: `seq_session=${token(who)}`, Origin: ORIGIN, "Content-Type": "application/json" },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    ...(body === undefined ? {} : { body: JSON.stringify(asPage(path, body)) }),
   });
 }
 

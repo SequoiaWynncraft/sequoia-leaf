@@ -8,7 +8,7 @@ import { type Duration, Schema } from "effect";
 
 import { Live, type LiveTuning, TICK } from "../src/live/live.ts";
 import { LiveClient, type Opening } from "./live-client.ts";
-import { fakeBackend, sessionOf, testLeaf } from "./support.ts";
+import { asPage, fakeBackend, sessionOf, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
@@ -268,7 +268,9 @@ describe("when Leaf stops", () => {
     const started = await fetch(`${old.origin}/v1/game/play/raid`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ player: alice, commands: [{ id: "a-1", do: "start", trail: 0 }] }),
+      body: JSON.stringify(
+        asPage("/v1/game/play/raid", { player: alice, commands: [{ id: "a-1", do: "start", trail: 0 }] }),
+      ),
     });
     expect(started.status).toBe(200);
     expect((await sayHere("alice-token", "table", old)).status).toBe(200);

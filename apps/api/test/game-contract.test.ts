@@ -10,7 +10,7 @@ import { codeOfRow } from "@sequoia-leaf/factory/test/yards.ts";
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
 import { sittingExchanges } from "./sittings-contract.ts";
-import { fakeBackend, fakeMojang, MINUTE, rewardQueue, sessionOf, steadyDice, testLeaf } from "./support.ts";
+import { asPage, fakeBackend, fakeMojang, MINUTE, rewardQueue, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 /**
  * The game's routes as the game sees them, from the real routes:
@@ -110,11 +110,12 @@ async function exchanges(): Promise<Record<string, Exchange>> {
 
   const recorded: Record<string, Exchange> = {};
   async function call(name: string, method: string, path: string, body?: unknown, session = "alice-token") {
-    // As the game sends it: the website's cookie, from Leaf's own page.
+    // As the game sends it: the website's cookie, from Leaf's own page, a batch saying its rules;
+    // kept without them, as the answers are (`withoutRules`).
     const response = await app.request(path, {
       method,
       headers: { Cookie: `seq_session=${session}`, Origin: ORIGIN, "Content-Type": "application/json" },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(body === undefined ? {} : { body: JSON.stringify(asPage(path, body)) }),
     });
     recorded[name] = {
       request: body === undefined ? { method, path } : { method, path, body },

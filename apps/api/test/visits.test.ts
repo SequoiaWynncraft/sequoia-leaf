@@ -9,7 +9,7 @@ import { Effect, Schema } from "effect";
 import { type Here, hereFrom } from "../src/activity/here.ts";
 import { Visits } from "../src/activity/visits.ts";
 import { PlayerUuid } from "../src/wire.ts";
-import { type Backend, DAY, fakeBackend, HOUR, MINUTE, noNetwork, sessionOf, testLeaf } from "./support.ts";
+import { asPage, type Backend, DAY, fakeBackend, HOUR, MINUTE, noNetwork, sessionOf, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
@@ -125,7 +125,7 @@ async function command(who: Who, game: string, commands: readonly object[]) {
   const response = await app.request(`/v1/game/play/${game}`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ player, commands: ided }),
+    body: JSON.stringify(asPage(`/v1/game/play/${game}`, { player, commands: ided })),
   });
   expect(response.status).toBe(200);
 }
@@ -180,7 +180,11 @@ describe("time in each game", () => {
     await call("alice", "table");
     const headers = { Authorization: "Bearer alice-token", "Content-Type": "application/json" };
     const batch = (commands: readonly object[]) =>
-      app.request("/v1/game/play/raid", { method: "POST", headers, body: JSON.stringify({ player: alice, commands }) });
+      app.request("/v1/game/play/raid", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(asPage("/v1/game/play/raid", { player: alice, commands })),
+      });
     // Twenty batches at once, the most Leaf takes, each with nothing in it; the next is refused.
     for (let n = 0; n < 20; n++) {
       // oxlint-disable-next-line no-await-in-loop -- one after another

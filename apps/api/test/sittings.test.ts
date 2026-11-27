@@ -17,7 +17,7 @@ import { Coins } from "../src/play/coins.ts";
 import { Sittings } from "../src/sittings/service.ts";
 import { LOGGED_SITTING, MOST_NOT_OVER } from "../src/sittings/writes.ts";
 import { playThrough, type Reach, type Seated } from "./sittings-drive.ts";
-import { fakeBackend, fakeMojang, type Fakes, MINUTE, sessionOf, steadyDice, testLeaf } from "./support.ts";
+import { asPage, fakeBackend, fakeMojang, type Fakes, MINUTE, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
@@ -652,7 +652,7 @@ describe("Limits", () => {
     const raid = await call(
       "POST",
       "/v1/game/play/raid",
-      { player: alice, commands: [{ id: "r-1", do: "trail", trail: 0 }] },
+      asPage("/v1/game/play/raid", { player: alice, commands: [{ id: "r-1", do: "trail", trail: 0 }] }),
       alice,
     );
     expect(raid).toMatchObject({ status: 429, body: { code: "slow_down" } });

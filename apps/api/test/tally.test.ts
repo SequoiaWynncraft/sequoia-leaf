@@ -10,7 +10,7 @@ import { SqlClient } from "effect/sql";
 import { Visits } from "../src/activity/visits.ts";
 import { PlayStore } from "../src/play/store.ts";
 import { SOURCES, Tallies, tally } from "../src/tally/store.ts";
-import { DAY, fakeBackend, HOUR, MINUTE, sessionOf, testLeaf } from "./support.ts";
+import { asPage, DAY, fakeBackend, HOUR, MINUTE, sessionOf, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
@@ -123,7 +123,7 @@ async function carolsTown(commands: readonly Record<string, unknown>[]) {
   const response = await app.request("/v1/game/play/town", {
     method: "POST",
     headers: { Authorization: "Bearer carol-token", "Content-Type": "application/json" },
-    body: JSON.stringify({ player: carol, commands }),
+    body: JSON.stringify(asPage("/v1/game/play/town", { player: carol, commands })),
   });
   expect(response.status).toBe(200);
   return Schema.decodeUnknownSync(

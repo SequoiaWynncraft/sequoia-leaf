@@ -200,6 +200,9 @@ describe("rules other than Leaf's", () => {
     play.onState((state) => heard.push(state));
     expect(await play.send({ do: "add", by: 1 }, add(1))).toEqual({ refused: "outdated" });
     expect([world?.reloaded.count, heard]).toEqual([1, []]);
+    // The batch said the rules the page plays by, for Leaf to do none of it by others.
+    const posted = world?.sent.find((s) => s.method === "POST");
+    expect(isRecord(posted?.body) && posted.body.rules).toBe(rulesVersions().raid);
   });
 });
 

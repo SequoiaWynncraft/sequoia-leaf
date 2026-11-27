@@ -51,6 +51,7 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 import { near, tileNear, xy } from "@sequoia-leaf/factory/test/near.ts";
+import { outward } from "@sequoia-leaf/factory/test/ring.ts";
 import { staged as stagedYard } from "@sequoia-leaf/factory/test/yards.ts";
 import { PULLS } from "@sequoia-leaf/pulls";
 import {
@@ -82,7 +83,17 @@ import { keptPieces } from "../src/play/kept.ts";
 import { ACTIVITY_KEPT_MS, LOGGED_A_DAY } from "../src/play/logs.ts";
 import { type JobTimes, Play, TEND_AFTER } from "../src/play/service.ts";
 import { ANSWERS_KEPT, BOARD_MOST, dueAgain, PlayStore } from "../src/play/store.ts";
-import { DAY, fakeBackend, fakeMojang, type Fakes, noNetwork, sessionOf, steadyDice, testLeaf } from "./support.ts";
+import {
+  asPage,
+  DAY,
+  fakeBackend,
+  fakeMojang,
+  type Fakes,
+  noNetwork,
+  sessionOf,
+  steadyDice,
+  testLeaf,
+} from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
@@ -134,7 +145,8 @@ afterEach(async () => {
  * that is an object, the player the page believes it is (unless the body names one itself).
  */
 function send(method: string, path: string, body?: unknown, player: PlayerId = alice): Promise<Response> {
-  const sent = typeof body === "object" && body !== null && !Array.isArray(body) ? { player, ...body } : body;
+  const sent =
+    typeof body === "object" && body !== null && !Array.isArray(body) ? asPage(path, { player, ...body }) : body;
   return Promise.resolve(
     app.request(path, {
       method,
@@ -1719,6 +1731,52 @@ const roomNow = () => services.run(Coins.use((coins) => coins.room(alice, clock.
 /** Alice's yard as her page is shown it now. */
 const yardShown = async (): Promise<Yard> =>
   yardOf(Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json()).state).yard;
+
+describe("a page playing by other rules than Leaf's", () => {
+  it("has none of its batch done, from a land other than Leaf's or saying no rules: it is answered as a read, with Leaf's rules", async () => {
+    const opening = await send("GET", "/v1/game/play/works");
+    const { clock: tick } = yardOf(Schema.decodeUnknownSync(Shown)(await opening.json()).state);
+    const built = await send("POST", "/v1/game/play/works", {
+      commands: [{ id: "w-1", do: "build", kind: "belt", ...near(-4, -3), dir: 0, tick }],
+    });
+    expect(Schema.decodeUnknownSync(Answered)(await built.json()).results).toEqual([{ id: "w-1", notes: [] }]);
+    const before = await storedYard();
+    // A tab left open across a change of rules: where it says a belt stands, on its land, may be another piece on Leaf's.
+    const remove = async (rules: string | undefined) => {
+      const sent = await send("POST", "/v1/game/play/works", {
+        rules,
+        commands: [{ id: `r-${String(rules)}`, do: "remove", ...near(-4, -3), tick }],
+      });
+      const body: unknown = await sent.json();
+      return { answer: [sent.status, Object(body).results, Object(body).rules], kept: await storedYard() };
+    };
+    const answered = { answer: [200, [], GAMES.works.rules], kept: before };
+    expect(await remove("a-page-of-other-rules")).toEqual(answered);
+    // A page from before pages said their rules.
+    expect(await remove(undefined)).toEqual(answered);
+    expect((await yardShown()).kind[tileNear(-4, -3)]).toBe(BELT);
+  });
+});
+
+describe("a yard kept on more land than Leaf's", () => {
+  it("is left exactly as it is, as a newer Leaf's: still due, through a tend, a read and a command", async () => {
+    const text = FACTORY.encode(outward());
+    await services.query(
+      (sql) => sql`
+        INSERT INTO play_state (player_id, game, rev, state, updated_at, due_at) VALUES (${alice}, 'works', 1, ${text}, ${T0}, ${T0})
+      `,
+    );
+    const before = await services.query((sql) => sql`SELECT * FROM play_state WHERE player_id = ${alice}`);
+    clock.now += 60_000;
+    await tending();
+    const opening = await send("GET", "/v1/game/play/works");
+    expect([opening.status, await codeOf(opening)]).toEqual([409, "state_unreadable"]);
+    const sent = await send("POST", "/v1/game/play/works", { commands: [{ id: "w-1", do: "collect", tick: 0 }] });
+    expect([sent.status, await codeOf(sent)]).toEqual([409, "state_unreadable"]);
+    expect(await services.query((sql) => sql`SELECT * FROM play_state WHERE player_id = ${alice}`)).toEqual(before);
+    expect(await dueOf("works")).toBe(T0);
+  });
+});
 
 describe("a blueprint code in the Works", () => {
   it("keeps the blueprint a code from another yard is, as Leaf reads it; a broken code is refused and keeps nothing", async () => {

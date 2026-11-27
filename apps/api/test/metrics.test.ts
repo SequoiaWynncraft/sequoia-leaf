@@ -8,7 +8,7 @@ import { Effect } from "effect";
 import type { Settings } from "../src/config.ts";
 import { scheduledSync } from "../src/jobs.ts";
 import { LiveClient } from "./live-client.ts";
-import { fakeBackend, type Fetcher, type LogLine, rejection, sessionOf, testLeaf } from "./support.ts";
+import { asPage, fakeBackend, type Fetcher, type LogLine, rejection, sessionOf, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const ORIGIN = "https://leaf.seqwawa.com";
@@ -62,10 +62,11 @@ function sample(text: string, name: string, labels: Readonly<Record<string, stri
 /** What Leaf logged with this message, as the JSON logger writes it. */
 const lines = (message: string) => logged.filter((line) => line.message === message);
 
+/** A request as Alice's page sends it; a batch to the Works says its rules (`asPage`). */
 const asAlice = (method: string, body?: unknown, headers: Record<string, string> = {}): RequestInit => ({
   method,
   headers: { Cookie: "seq_session=alice-token", Origin: ORIGIN, "Content-Type": "application/json", ...headers },
-  ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  ...(body === undefined ? {} : { body: JSON.stringify(asPage("/v1/game/play/works", body)) }),
 });
 
 describe("requests", () => {
