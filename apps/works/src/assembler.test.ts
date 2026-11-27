@@ -85,14 +85,14 @@ describe("the assembler's card", () => {
         ],
       },
     });
-    expect(capped.card === "standing" && capped.flow ? madeSays(capped.flow) : null).toBe("up to 150 /min");
+    expect(capped?.card === "standing" && capped.flow ? madeSays(capped.flow) : null).toBe("up to 150 /min");
     expect(carried(1)).toBe(150);
     // A grade III hall makes 540 a minute; a grade III belt carries 300.
     expect(printOf(tileRef(at(hall(3, 3), ...xy(-6, -4))))).toMatchObject({ flow: { perMinute: 300, most: 300 } });
     // A grade I hall onto a grade III belt makes less than it carries: its own number, no "up to".
     const free = printOf(tileRef(at(hall(1, 3), ...xy(-6, -4))));
     expect(free).toMatchObject({ flow: { perMinute: 270, most: null } });
-    expect(free.card === "standing" && free.flow ? madeSays(free.flow) : null).toBe("270 /min");
+    expect(free?.card === "standing" && free.flow ? madeSays(free.flow) : null).toBe("270 /min");
   });
 });
 

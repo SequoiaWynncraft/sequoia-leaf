@@ -150,6 +150,41 @@ describe("the assembler", () => {
     );
   });
 
+  test("told nothing, makes the recipe of the most kinds of part it holds: a clock, not a banner pole, from gears, frames and glass", () => {
+    const y = alone(ASSEMBLER, 1);
+    const r = F.holderOf(y, tile(y, 20, 10));
+    for (const [n, c] of [
+      ["gear", 2],
+      ["frame", 1],
+      ["glass", 1],
+    ] as const)
+      for (let k = 0; k < c; k++) F.put(y.holders, r, F.item(n));
+    for (let t = 0; t < 40 && y.holders.out[r] === F.NONE; t++) F.step(y);
+    expect(y.holders.out[r]).toBe(F.item("clock"));
+    // With no glass, the banner pole is all it can make.
+    const pole = alone(ASSEMBLER, 1);
+    const p = F.holderOf(pole, tile(pole, 20, 10));
+    F.put(pole.holders, p, F.item("gear"));
+    F.put(pole.holders, p, F.item("frame"));
+    for (let t = 0; t < 40 && pole.holders.out[p] === F.NONE; t++) F.step(pole);
+    expect(pole.holders.out[p]).toBe(F.item("pole"));
+  });
+
+  test("full of one part it stops taking, is in trouble, and says which part blocks the belt", () => {
+    const y = alone(ASSEMBLER, 1);
+    expect(F.build(y, F.CRATE, 17, 10, 0, Infinity).ok).toBe(true);
+    for (let n = 0; n < 200; n++) F.put(y.holders, F.holderOf(y, tile(y, 17, 10)), F.item("glass"));
+    F.build(y, F.BELT, 18, 10, 0, Infinity);
+    for (let t = 0; t < 1200; t++) F.step(y);
+    const r = F.holderOf(y, tile(y, 20, 10));
+    // A clock takes 1 glass, the fewest of any recipe that uses it: 4 recipes' worth, 9 times over.
+    expect(F.held(y.holders, r, F.item("glass"))).toBe(36);
+    expect(y.item[tile(y, 18, 10)]).toBe(F.item("glass"));
+    const said = F.status(y, tile(y, 20, 10));
+    expect([said?.state, said?.trouble, said?.spare]).toEqual(["starved", true, F.item("glass")]);
+    expect(said?.line.startsWith("Full of glass and waiting for")).toBe(true);
+  });
+
   test("keeps 9 times what a bench keeps of each part, and tips out what it no longer keeps when told otherwise", () => {
     const plank = F.item("plank");
     const hamper = F.item("hamper");

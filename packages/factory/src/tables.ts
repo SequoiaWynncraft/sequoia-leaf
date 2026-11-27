@@ -313,8 +313,6 @@ export function needOf(r: Recipe, n: number): number {
   for (let p = 0; p < r.from.length; p++) if (r.from[p] === n) return r.need[p] ?? 0;
   return 0;
 }
-/** How many of a part `p` of a recipe a machine of a kind keeps by it: `BUFFER` recipes' worth, for each of the recipe's own machine it is (`timesOf`). */
-export const partsKept = (k: number, r: Recipe, p: number): number => BUFFER * (r.need[p] ?? 1) * timesOf(k, r);
 /** The most of a thing a machine of a kind keeps by it for some recipes: `BUFFER` recipes' worth for each machine it is, for the one that takes the most of it. */
 export const holdsMost = (k: number, recipes: readonly Recipe[], n: number): number =>
   BUFFER * Math.max(0, ...recipes.map((r) => needOf(r, n) * timesOf(k, r)));

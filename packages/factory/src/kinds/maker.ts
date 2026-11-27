@@ -7,7 +7,7 @@
  * A machine makes, and takes parts in for, only the recipes the plumbing says it may (`Wire.recipes`,
  * asked of `locked` when the plumbing is worked out). One that makes what other machines make (`KindDef.as`)
  * works on their recipes as many times as fast as it is of them, and keeps as many times their parts
- * (`timesOf`, `partsKept`).
+ * (`timesOf`, `holdsMost`).
  */
 import type { KeptPiece } from "../cells.ts";
 import type { Kept } from "../pieces.ts";
@@ -39,11 +39,12 @@ export function wants(k: Kit, y: Yard, i: number, n: number): boolean {
 }
 
 /**
- * Whether it has room for the thing `n`: it takes a thing that some recipe it may make uses together
- * with everything it holds, while it holds fewer than it keeps (`partsKept`) of the fewest of it any such
- * recipe takes.
+ * How many of the thing `n` it takes, as it stands: the one limit both what it takes in (`room`) and
+ * what it says (`condition`, `words`) ask. It takes a thing some recipe it may make uses together with
+ * everything it holds, up to `BUFFER` recipes' worth for each machine it is (`timesOf`) of the fewest of it any such recipe takes; 0
+ * for a thing no such recipe uses.
  */
-export function room(k: Kit, y: Yard, i: number, n: number, _side: number, wire: Wire): boolean {
+export function takesUpTo(k: Kit, y: Yard, i: number, n: number, wire: Wire): number {
   const r = k.holderOf(y, i);
   const kind = y.kind[i] ?? k.NONE;
   const recipes = wire.recipes[kind] ?? NO_RECIPES;
@@ -55,7 +56,17 @@ export function room(k: Kit, y: Yard, i: number, n: number, _side: number, wire:
     const need = needWith(k, y.holders, r, rec, n) * k.timesOf(kind, rec);
     if (need > 0 && (least === 0 || need < least)) least = need;
   }
-  return (y.holders.stock[r * k.ITEM_COUNT + n] ?? 0) < k.BUFFER * least;
+  return k.BUFFER * least;
+}
+
+/** Whether it has room for the thing `n`: while it holds fewer than it takes (`takesUpTo`). */
+export const room = (k: Kit, y: Yard, i: number, n: number, _side: number, wire: Wire): boolean =>
+  (y.holders.stock[k.holderOf(y, i) * k.ITEM_COUNT + n] ?? 0) < takesUpTo(k, y, i, n, wire);
+
+/** Whether it is full of a thing it holds: it takes no more of it as it stands (`takesUpTo`), so the next one blocks the belt bringing it. */
+function fullOf(k: Kit, y: Yard, i: number, n: number): boolean {
+  const have = k.held(y.holders, k.holderOf(y, i), n);
+  return have > 0 && have >= takesUpTo(k, y, i, n, y.wire ?? k.wireOf(y));
 }
 
 /** How many of the thing `n` a recipe takes, where it uses everything the holder's row `r` holds; 0 where it does not. */
@@ -70,16 +81,34 @@ function needWith(k: Kit, h: Holders, r: number, rec: Recipe, n: number): number
   return held === h.kinds[r] ? need : 0;
 }
 
+/** All the parts a recipe takes, of every kind. */
+function partsIn(rec: Recipe): number {
+  let n = 0;
+  for (let p = 0; p < rec.need.length; p++) n += rec.need[p] ?? 0;
+  return n;
+}
+
 /**
- * The recipe a machine can start on with what it holds, by what it makes, or `NONE`: the first of
- * those it may make, or the one it is told to make (`only`), with as many of each part as it takes.
+ * Whether a recipe is made before another a machine could make too: the one of more kinds of part,
+ * then of more parts. Neither, and it is the table's order. Within one machine's own recipes no
+ * recipe's parts are all another's (the content's rule); a machine that makes what others make
+ * (`KindDef.as`) joins their lists, where one may be (a banner pole's frame and gear, a clock's).
+ */
+const before = (a: Recipe, b: Recipe): boolean =>
+  a.from.length !== b.from.length ? a.from.length > b.from.length : partsIn(a) > partsIn(b);
+
+/**
+ * The recipe a machine can start on with what it holds, by what it makes, or `NONE`: of those it may
+ * make, or the one it is told to make (`only`), with as many of each part as it takes, the one made
+ * first (`before`).
  */
 function choose(k: Kit, h: Holders, r: number, recipes: readonly Recipe[], only: number): number {
+  let best: Recipe | null = null;
   for (let n = 0; n < recipes.length; n++) {
     const rec = recipes[n];
-    if (rec && (only === k.NONE || rec.out === only) && k.enough(h, r, rec)) return rec.out;
+    if (rec && (only === k.NONE || rec.out === only) && k.enough(h, r, rec) && (!best || before(rec, best))) best = rec;
   }
-  return k.NONE;
+  return best ? best.out : k.NONE;
 }
 
 /** A machine makes, at its grade's pace: it chooses a recipe it holds the parts for, and works on it until it is made. */
@@ -150,11 +179,10 @@ function condition(k: Kit, y: Yard, i: number, lit: boolean): number {
   if (!rec) return as("idle", (h.count[r] ?? 0) > 0);
   let missing = false;
   let full = false;
-  const kind = y.kind[i] ?? k.NONE;
   for (let p = 0; p < rec.from.length; p++) {
-    const have = k.held(h, r, rec.from[p] ?? k.NONE);
-    if (have < (rec.need[p] ?? 1)) missing = true;
-    if (have >= k.partsKept(kind, rec, p)) full = true;
+    const n = rec.from[p] ?? k.NONE;
+    if (k.held(h, r, n) < (rec.need[p] ?? 1)) missing = true;
+    if (fullOf(k, y, i, n)) full = true;
   }
   return !missing ? as("working") : full ? as("starved", true) : as("waiting");
 }
@@ -194,7 +222,7 @@ function words(k: Kit, y: Yard, i: number, state: string): Words {
     return { line: h.count[r] === 0 ? "Waiting for items." : `Holds ${holding(k, y, r)}. No recipe combines these.` };
   if (state === "working") return { line: `Making ${many(k, rec.out)}${slow(k, y)}.` };
   const missing = rec.from.filter((n, p) => k.held(h, r, n) < (rec.need[p] ?? 1));
-  const full = rec.from.find((n, p) => k.held(h, r, n) >= k.partsKept(y.kind[i] ?? k.NONE, rec, p));
+  const full = rec.from.find((n) => fullOf(k, y, i, n));
   if (state === "starved" && full !== undefined)
     return {
       line: `Full of ${many(k, full)} and waiting for ${list(k, missing)}. If both come in on one belt, the ${many(k, full)} will be blocking it.`,
