@@ -21,6 +21,7 @@ import {
 import { bitmap, outlined, R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, lerp } from "@sequoia-leaf/kit/util.ts";
 
+import { lightRow } from "./fightmarks.ts";
 import { burst, motes, pop, ring, streak } from "./fx.ts";
 import type { Pt } from "./geometry.ts";
 import { leave } from "./litter.ts";
@@ -78,6 +79,8 @@ const ROWS = {
   bite: [".ccc.", "cc.cc", "c...c"],
   // A note rising over a friend given mana (Chorus).
   note: [".g", ".g", "gg"],
+  // Larp's snowball, shaded on its underside.
+  snowball: [".cc.", "cccW", ".WW."],
 } as const satisfies Record<string, readonly string[]>;
 type Art = keyof typeof ROWS;
 
@@ -119,7 +122,8 @@ export function arcOf(look: Thrown | null, far: number): number {
     look === "tea" ||
     look === "plaster" ||
     look === "spoon" ||
-    look === "cap"
+    look === "cap" ||
+    look === "snowball"
   )
     return 6 + far * 0.18;
   if (look === "egg") return 2;
@@ -151,7 +155,7 @@ export function drawShot(g: Ctx, s: Shot, c: number): void {
   const x = Math.round(p.x);
   const y = Math.round(p.y);
   // A Slinger's thing has its shadow on the board under it as it flies.
-  if (s.look === "cap") {
+  if (s.look === "cap" || s.look === "snowball") {
     g.globalAlpha = 0.3;
     R(g, Math.round(V.bx + lerp(s.from.x, s.to.x, k)) - 2, Math.round(V.by + lerp(s.from.y, s.to.y, k)) + 8, 5, 1, INK);
     g.globalAlpha = 1;
@@ -217,6 +221,10 @@ function dustRing(x: number, y: number, r: number, cols: readonly string[]): voi
 const chest = (m: At): Pt => ({ x: m.x, y: m.y - Math.round(m.tall / 2) });
 const head = (m: At): Pt => ({ x: m.x, y: m.y - m.tall - 3 });
 const away = (m: At): number => Math.atan2(m.y - m.from.y, m.x - m.from.x);
+
+/** Flakes of snow coming down onto a spot from above it. */
+const snowOn = (p: Pt, n: number): void =>
+  burst(p.x, p.y - 22, n, [CREAM, WATER[3]], { toward: -UP, spread: 0.5, speed: 12, grav: 30, ttl: 0.7, scatter: 8 });
 
 /** Each ability's mark, by the name `looks.ts` gives it. */
 export const MARKS: Readonly<Record<MarkId, (m: At) => void>> = {
@@ -396,6 +404,37 @@ export const MARKS: Readonly<Record<MarkId, (m: At) => void>> = {
   // The Commodore's call lands: a ring of gold on every place he called to.
   called: (m) => {
     for (const c of m.cells) ring(c.x, c.y, 9, GOLD[2], 0.3);
+  },
+  // Dibs pats a bank of snow up round its own feet and its friend's, which melts as the shield goes.
+  bank: (m) => {
+    for (const h of m.hit.length > 0 ? m.hit : [m]) {
+      leave("bank", h);
+      burst(h.x, h.y - 2, 5, [CREAM, WATER[3]], { speed: 20, toward: UP, spread: 1.6, ttl: 0.3, above: false });
+    }
+  },
+  // Jet's slide: a dotted trail of snow thrown up along the line (the ice is the zone's).
+  lane: (m) => {
+    for (const c of m.cells) burst(c.x, c.y - 1, 2, [CREAM, WATER[3]], { speed: 8, ttl: 0.5, above: false });
+  },
+  // A snowball bursting on whoever it hit.
+  splat: (m) => {
+    burst(chest(m).x, chest(m).y, 7, [CREAM, WATER[3]], { speed: 28, ttl: 0.3, grav: 60 });
+  },
+  // Flurry's snow begins to fall on the hexes it covers (`fightmarks.ts` draws them outlined, then settled).
+  snowfall: (m) => {
+    for (const c of m.cells) snowOn(c, 3);
+  },
+  // Pomp's fanfare: a thin gold arc out to each friend in the row, and the row lit end to end (`fightmarks.ts`).
+  fanfare: (m) => {
+    lightRow(m.from);
+    for (const h of m.hit) streak({ x: m.from.x, y: m.from.y - 14 }, { x: h.x, y: h.y - 14 }, GOLD[2], GOLD[1], 0.3);
+  },
+  // Yule's bubbles pop: water thrown off each friend, and a wet ring left on the hex.
+  bubble: (m) => {
+    for (const h of m.hit) {
+      burst(h.x, h.y - 8, 10, [WATER[3], CREAM], { speed: 34, ttl: 0.35, grav: 40 });
+      leave("ring", h);
+    }
   },
   // Seqwawa's roots flash under everyone it reached (`roots.ts` draws the roots): leaves come up off each.
   roots: (m) => {

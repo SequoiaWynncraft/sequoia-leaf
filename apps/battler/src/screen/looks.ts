@@ -63,7 +63,8 @@ export type Thrown =
   | "runner"
   | "bolt"
   | "cap"
-  | "egg";
+  | "egg"
+  | "snowball";
 
 /** The mark an ability leaves where it goes off (`marks.ts`). */
 export type MarkId =
@@ -111,7 +112,13 @@ export type MarkId =
   | "hatch"
   | "clack"
   | "nothere"
-  | "called";
+  | "called"
+  | "bank"
+  | "lane"
+  | "splat"
+  | "snowfall"
+  | "fanfare"
+  | "bubble";
 
 /** An ability's own sound: a note (semitones from A), its timbre, a second note after it, a breath of noise (its pitch), a slide, how loud; and for one that lands later, its sound then. */
 export interface Voice {
@@ -144,10 +151,13 @@ export interface Look {
    * It lands some steps after it goes off (the rules' `ticks`), with nothing thrown, and what hangs
    * until then: its owner's seal under whoever it is for, in its owner's colours (`spells.ts`); its
    * owner shut in its own shell while whoever it is for is marked (`shell.ts`); or the places its
-   * owner calls somebody to, marked and waited on (`call.ts`). The table dims round whoever or
+   * owner calls somebody to, marked and waited on (`call.ts`); or whoever it is for, shut in a
+   * bubble and drawn in outline (`bubble.ts`). The table dims round whoever or
    * wherever it is for, and its mark, bump and stop come as it lands.
    */
   readonly lands?: Hangs;
+  /** For one that leaps: it slides there along the ground, with no arc (Jet, on its belly). */
+  readonly slides?: true;
   /** For one that leaps: it arrives on a hard cut, with no travel between (a Sneak at its sharpest). */
   readonly cut?: true;
   /** Its mark is left by each of its hits, where each lands, rather than once as it goes off: Munch's bites. */
@@ -161,7 +171,7 @@ export interface Look {
 }
 
 /** What hangs over the table while an ability that lands later waits to land. */
-export type Hangs = "seal" | "shell" | "call";
+export type Hangs = "seal" | "shell" | "call" | "bubble";
 
 /** Every ability on the board, by whose it is. */
 export const LOOKS: Partial<Record<UnitKind, Look>> = {
@@ -175,6 +185,8 @@ export const LOOKS: Partial<Record<UnitKind, Look>> = {
   barrowgnome: { wind: 8, body: "lean", mark: "barrow" },
   // The top of its shell, thrown on an arc; it shatters on whoever had the most armour.
   peep: { wind: 6, body: "lean", shot: "cap", mark: "chips" },
+  // Two pats, and a low bank of snow set down on the enemy's side of its hex and its friend's.
+  dibs: { wind: 6, body: "puff", mark: "bank" },
   // ---------- two acorns ----------
   kettle: { wind: 8, body: "wobble", gather: [CREAM, STONE[3]], shot: "tea", mark: "steam" },
   slug: { wind: 8, body: "puff", mark: "slime" },
@@ -183,6 +195,8 @@ export const LOOKS: Partial<Record<UnitKind, Look>> = {
   jay: { wind: 6, body: "shake", mark: "temper" },
   crab12: { wind: 6, body: "lean", shot: "pebble", mark: "skip" },
   lanterngnome: { wind: 8, body: "rear", gather: [GOLD[1], GOLD[2]], shot: "beam", mark: "lamplight" },
+  // Rocks back, then is gone along the line on its belly; the lane it slid down is left as ice.
+  jet: { wind: 4, body: "crouch", leap: 6, mark: "lane", slides: true },
   // ---------- three acorns ----------
   leafling: { wind: 8, body: "rear", mark: "advice" },
   cindernewt: { wind: 8, body: "puff", gather: [CORAL, GOLD[1]], mark: "breath" },
@@ -194,6 +208,8 @@ export const LOOKS: Partial<Record<UnitKind, Look>> = {
   munch: { wind: 6, body: "rear", lunge: 4, mark: "bites", each: true },
   // Claws up, then the clack: two arcs closing, one out to each friend it gives mana.
   crab31: { wind: 6, body: "rear", mark: "clack", gives: "mana" },
+  // Scoops, then throws them one after another, each on its own arc with its shadow under it.
+  larp: { wind: 6, body: "crouch", shot: "snowball", mark: "splat" },
   // ---------- four acorns ----------
   badger: { wind: 8, body: "spin", mark: "claws" },
   fogowl: { wind: 6, body: "fade", leap: 8, mark: "fog" },
@@ -202,12 +218,18 @@ export const LOOKS: Partial<Record<UnitKind, Look>> = {
   apothecary: { wind: 6, body: "rear", ahead: "spoon", mark: "tonic" },
   // Tips forward: an egg rolls out onto the hex beside it and hatches (`summon` rolls the egg).
   clutch: { wind: 8, body: "lean", mark: "hatch" },
+  // Shakes the globe: the seven hexes are drawn in outline first, then the snow falls on them and settles.
+  flurry: { wind: 8, body: "shake", mark: "snowfall" },
+  // Leans back and blows: thin arcs run both ways along its row, and the row is lit end to end.
+  pomp: { wind: 8, body: "lean", gather: [GOLD[1], GOLD[2]], mark: "fanfare", gives: "mana" },
   // ---------- five acorns ----------
   greg: { wind: 12, body: "rise", mark: "sit", bump: 2 },
   whitefox: { wind: 10, body: "rear", gather: [GOLD[1], GOLD[2]], mark: "antlers", bump: 1 },
   hearthcat: { wind: 12, body: "stare", lunge: 6, mark: "bat", bump: 1 },
   // Its sprout shakes, then its roots run out to everyone (`roots.ts`) over the rest of the lead-in.
   seqwawa: { wind: 22, body: "rustle", gather: [GOLD[1], LEAF], mark: "roots", bump: 1 },
+  // Puffs up; a bubble closes round each friend it is for, who float in outline; they pop out filled in (`bubble.ts`).
+  yule: { wind: 12, body: "puff", gather: [WATER[3], CREAM], mark: "bubble", lands: "bubble", bump: 1, stop: 0.12 },
   // Into its shell; the one with the least health is marked; out beside them on a hard cut, one pinch.
   crab8: { wind: 10, body: "crouch", lunge: 5, mark: "nothere", lands: "shell", cut: true, bump: 1, stop: 0.12 },
   // ---------- a banner's member ----------
@@ -247,6 +269,8 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
   barrowgnome: { n: -5, wave: "triangle", hiss: 700, slide: 0.6 },
   // A small peep, and the hat going.
   peep: { n: 24, wave: "square", two: 5, vol: 0.04 },
+  // Two soft pats in the snow.
+  dibs: { n: -5, wave: "triangle", two: 0, hiss: 900, vol: 0.05 },
   // ---------- two acorns ----------
   kettle: { n: 14, wave: "sine", two: 4, hiss: 5000, slide: 1.3, vol: 0.05 },
   slug: { n: -9, wave: "sine", hiss: 600, slide: 0.7 },
@@ -255,6 +279,8 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
   jay: { n: 9, wave: "sawtooth", slide: 1.3, vol: 0.05 },
   crab12: { n: 12, wave: "triangle", two: 7 },
   lanterngnome: { n: 14, wave: "sine", two: 5 },
+  // A long hiss of ice under a belly.
+  jet: { n: 10, wave: "sine", hiss: 4200, slide: 0.6, vol: 0.05 },
   // ---------- three acorns ----------
   leafling: { n: 7, wave: "triangle", two: 4 },
   cindernewt: { n: -2, wave: "sawtooth", hiss: 1500, slide: 0.8, vol: 0.06 },
@@ -266,6 +292,8 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
   munch: { n: -4, wave: "square", hiss: 2200, slide: 0.5, vol: 0.06 },
   // Two pebbles: a clack, and its note.
   crab31: { n: 15, wave: "triangle", two: 7, hiss: 3200, vol: 0.06 },
+  // A packed crunch of snow.
+  larp: { n: 2, wave: "triangle", hiss: 2600, slide: 0.8, vol: 0.05 },
   // ---------- four acorns ----------
   badger: { n: -7, wave: "sawtooth", hiss: 1800, slide: 0.7, vol: 0.06 },
   fogowl: { n: -3, wave: "sine", two: -5, hiss: 900 },
@@ -274,12 +302,25 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
   apothecary: { n: 12, wave: "sine", two: 7, hiss: 4000, vol: 0.06 },
   // Twigs creak; a dry crack.
   clutch: { n: -9, wave: "triangle", hiss: 2600, slide: 0.7, vol: 0.06 },
+  // Glass shaken, a high ring falling.
+  flurry: { n: 26, wave: "sine", two: -5, hiss: 7000, slide: 0.7, vol: 0.04 },
+  // Three bright notes up.
+  pomp: { n: 12, wave: "square", two: 7, slide: 1.06, vol: 0.06 },
   // ---------- five acorns ----------
   greg: { n: -19, wave: "triangle", hiss: 200, slide: 0.5, vol: 0.14 },
   whitefox: { n: 19, wave: "sine", two: 7, vol: 0.09 },
   hearthcat: { n: 3, wave: "triangle", hiss: 2500, slide: 0.6 },
   // A creak and a rising pair of soft notes, Moss's and a Mender's.
   seqwawa: { n: -7, wave: "sine", two: 12, hiss: 300, vol: 0.08 },
+  // A low blub as the bubble closes; a pop as it goes.
+  yule: {
+    n: -2,
+    wave: "sine",
+    two: 12,
+    slide: 1.4,
+    vol: 0.06,
+    lands: { n: 19, wave: "sine", hiss: 3000, slide: 0.5, vol: 0.09 },
+  },
   // Nothing much as it goes in; a snap as it comes up.
   crab8: { n: -12, wave: "sine", vol: 0.03, lands: { n: 10, wave: "square", hiss: 2400, slide: 0.6, vol: 0.08 } },
   // A low two-note stare, and a thump with a bell over it when it lands.
@@ -329,6 +370,10 @@ export const ATTACK_SHOT: Partial<
   drizzlefrog: { col: WATER[2] },
   crab23: { col: PAPER[1] },
   peep: { col: CREAM },
+  larp: { col: CREAM, shot: "snowball" },
+  flurry: { col: WATER[3] },
+  pomp: { col: GOLD[2], trail: true },
+  yule: { col: WATER[3] },
   crab31: { col: STONE[3] },
   heron: { col: CREAM, trail: true },
   apothecary: { col: SKY[4] },
@@ -356,6 +401,8 @@ const KIN_PUFF: Readonly<Record<KinId, Puff>> = {
   graid: { cols: [GOLD[1], GOLD[2], CREAM], drift: "up" },
   // Shell and moss, scattered.
   grooter: { cols: [CREAM, PAPER[1], GREEN[3]], drift: "out" },
+  // Snow, settling.
+  huddle: { cols: [CREAM, WATER[3]], drift: "down" },
 };
 const SHELL: Puff = KIN_PUFF.crab;
 const LEAVES: Puff = { cols: [BARK[3], GREEN[3]], drift: "down" };

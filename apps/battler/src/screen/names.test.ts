@@ -51,6 +51,13 @@ const NAMES: Readonly<Record<string, string>> = {
   munch: "Munch",
   clutch: "Clutch",
   crab8: "Crab #8",
+  // Penguin Month's (RAID-BANNERS.md, section 2).
+  dibs: "Dibs",
+  jet: "Jet",
+  larp: "Larp",
+  flurry: "Flurry",
+  pomp: "Pomp",
+  yule: "Yule",
   hatchling: "Hatchling",
   grooter1: "Grooter",
   grooter2: "Grooter",

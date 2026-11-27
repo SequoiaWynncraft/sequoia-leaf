@@ -15,6 +15,8 @@ export const TRAIT_COLOUR: Readonly<Record<TraitId, string>> = {
   graid: GOLD[2],
   // Eggshell: what every Grooter creature wears a piece of.
   grooter: PAPER[2],
+  // The pond in winter: the penguins' backs.
+  huddle: WATER[2],
   bulwark: STONE[3],
   fang: "#f4a08c",
   slinger: GOLD[0],

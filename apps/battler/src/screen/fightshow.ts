@@ -22,11 +22,12 @@ import { turnsUp } from "./arrivals.ts";
 import { itemPic, traitPic } from "./art/icons.ts";
 import { TRAIT_COLOUR } from "./art/pal.ts";
 import { clockNow, colourOf, face, feetAt, fightNow, FV, travel } from "./board.ts";
+import { bubbleSays, hangBubble, stepBubbles } from "./bubble.ts";
 import { hangCall, stepCalls } from "./call.ts";
 import { showMark } from "./fightmarks.ts";
 import { burst, gather, motes, ring, say } from "./fx.ts";
 import type { Pt } from "./geometry.ts";
-import { cracked } from "./litter.ts";
+import { cracked, pooled } from "./litter.ts";
 import { ownOf } from "./livery.ts";
 import { ATTACK_SHOT, type Look, LOOKS, puffOf, VOICES } from "./looks.ts";
 import { arcOf, type At, MARKS, puff, type Shot } from "./marks.ts";
@@ -162,8 +163,9 @@ export function begin(l: Lead, cat: Catalog): void {
   } else if (ev.t === "leap") {
     const a = actor(ev.id);
     const worm = a?.unit.kind === "worm";
-    // A worm goes under the board; anyone else leaps, to where it lands as its ability goes off.
-    if (a) travel(a, feetAt(ev.to), l.from, l.at - l.from, worm ? 0 : 14, worm);
+    const flat = worm || (a && LOOKS[a.unit.kind]?.slides);
+    // A worm goes under the board, Jet slides along it; anyone else leaps, to where it lands as its ability goes off.
+    if (a) travel(a, feetAt(ev.to), l.from, l.at - l.from, flat ? 0 : 14, worm);
   }
 }
 
@@ -247,6 +249,7 @@ const ON: On = {
     snd.shield();
   },
   status: (ev, at) => status(ev, at),
+  pool: (ev) => pooled(ev),
   boost: (ev) => {
     const a = actor(ev.id);
     if (!a) return;
@@ -425,6 +428,7 @@ function hold(cat: Catalog, ev: Events["cast"], look: Look, a: Actor, t: Actor |
   // The Commodore's weight comes as the grooters he called arrive (`call.ts`).
   if (look.lands === "call") return hangCall(ev, at, land(false));
   if (look.lands === "shell") return hangShell(ev, at, land(true));
+  if (look.lands === "bubble") return hangBubble(ev, at, land(true));
   showMark({ t: "telegraph", id: ev.id, cells: ev.cells, ticks: ev.ticks }, MARKED);
   if (t) a.held = { at, lands: at + ev.ticks, aim: aimAt(t.x - a.x, t.y - a.y), left: a.left };
   hang(ev.kind, { by: ev.id, to: ev.targets[0] ?? -1 }, at, ev.ticks, land(true));
@@ -452,7 +456,8 @@ function gifted(id: number): void {
 
 function status(ev: Events["status"], at: number): void {
   const a = actor(ev.id);
-  if (!a) return;
+  // A bubble of Yule's is drawn by `bubble.ts`, never as going to ground.
+  if (!a || bubbleSays(ev)) return;
   if (!ev.on) {
     if (ev.status === "shield") burst(a.x, a.y - 9, 8, [WATER[3], CREAM], { speed: 34, ttl: 0.35 });
     else if (ev.status === "hidden") {
@@ -532,6 +537,7 @@ export function stepShown(c: number, cat: Catalog): void {
   stepSpells(c);
   stepCalls(c);
   stepShells(c);
+  stepBubbles(c);
   stepRisings(c);
   stepRoots(c);
   FV.shots = FV.shots.filter((s) => {

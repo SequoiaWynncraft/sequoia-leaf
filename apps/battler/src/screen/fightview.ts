@@ -29,6 +29,7 @@ import { seatCell } from "@sequoia-leaf/raid/hex.ts";
 import { stanceOf } from "./acting.ts";
 import { hexMark } from "./art/table.ts";
 import { clockNow, feetAt, FV, shownCell } from "./board.ts";
+import { drawBubbled } from "./bubble.ts";
 import { drawCalls } from "./call.ts";
 import { begin, show, stepShown } from "./fightshow.ts";
 import { burst, pace } from "./fx.ts";
@@ -288,8 +289,20 @@ function drawStatus(g: Ctx, a: Actor, x: number, y: number, tall: number, tick: 
   }
 }
 
-/** Health under a figure's feet, with its shield over it and its mana beneath, which ticks bright as a friend gives it mana. */
-function drawBars(g: Ctx, a: Actor, x: number, y: number, c: number): void {
+/** What its Huddle group's one shield holds, as a share of the group's health added together; 0 for none. */
+function pooledShare(a: Actor): number {
+  const f = FV.pb?.fight;
+  const pool = f?.pools[a.unit.pool];
+  if (!f || !pool || pool.left <= 0) return 0;
+  const whole = pool.ids.reduce((sum, id) => sum + (f.units[id]?.maxHp ?? 0), 0);
+  return whole > 0 ? clamp(pool.left / whole, 0, 1) : 0;
+}
+
+/**
+ * Health under a figure's feet, with its shield over it and its mana beneath, which ticks bright as
+ * a friend gives it mana; and its group's one shield (Huddle) as a pale-blue band, the same on each.
+ */
+function drawBars(g: Ctx, a: Actor, x: number, y: number, c: number, pool: number): void {
   const u = a.unit;
   const w = isBossId(u.kind) ? 26 : 14;
   const left = x - w / 2;
@@ -300,6 +313,7 @@ function drawBars(g: Ctx, a: Actor, x: number, y: number, c: number): void {
   R(g, left, top, hp, 2, u.side === FV.ours ? GREEN[4] : "#e67967");
   R(g, left, top, hp, 1, u.side === FV.ours ? "#c9ef9a" : "#f4a08c");
   if (u.shield > 0) R(g, left, top, Math.max(1, Math.round(clamp(u.shield / u.maxHp, 0, 1) * w)), 1, CREAM);
+  if (pool > 0) R(g, left, top + 1, Math.max(1, Math.round(pool * w)), 1, WATER[3]);
   if (u.manaFull > 0) {
     R(g, left, top + 3, w, 1, "#211228");
     R(g, left, top + 3, Math.round(clamp(u.mana / u.manaFull, 0, 1) * w), 1, WATER[3]);
@@ -340,7 +354,8 @@ function standing(g: Ctx, cat: Catalog, a: Actor, c: number, tick: number): Stan
     x: a.x,
     y: a.y - back,
     draw: () => {
-      // Crab #8 is a shut shell while it hides; anyone else has gone to ground.
+      // Crab #8 is a shut shell while it hides; a friend of Yule's is in a bubble; anyone else has gone to ground.
+      if (hidden && drawBubbled(g, a, x, ground)) return;
       if (hidden && inShell(u.kind)) return drawStanding(g, cat, u.kind, x, y, "plain", { pose: "cast", left });
       if (hidden || sunk) return drawMound(g, x, ground);
       // Off the ground, its shadow stays on it.
@@ -374,7 +389,7 @@ function standing(g: Ctx, cat: Catalog, a: Actor, c: number, tick: number): Stan
       drawStatus(g, a, x, y - hover, tall, tick);
       // A grooter called is a person, on a summon's base, with no stars.
       if (u.stars > 1 && !(u.summoned && isPersonId(u.kind))) drawStars(g, u.stars, x, y - 3 - hover - tall);
-      drawBars(g, a, x, y, c);
+      drawBars(g, a, x, y, c, pooledShare(a));
     },
   };
 }

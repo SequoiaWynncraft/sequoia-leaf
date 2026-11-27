@@ -215,6 +215,18 @@ trait stowaway
 .nbbNbbn.
 .nnnnnnn.
 
+# Huddle: two penguins standing together.
+trait huddle
+.aa...aa.
+auua.auua
+awwa.awwa
+awoaaawoa
+awwauawwa
+awwauawwa
+.wwaaaww.
+.o.o.o.o.
+.........
+
 # ---------- items ----------
 
 item thorn
@@ -275,6 +287,19 @@ BnnccccnbB
 .BnccccbB.
 ..BBbbBB..
 ...bbbb...
+
+# The Carving Knife: the gnomes' own, its blade worn thin.
+item knife
+.........S
+........St
+.......St.
+......St..
+.....St...
+....St....
+...SN.....
+..nN......
+.nN.......
+.n........
 
 item blackthorn
 ..w....m..
