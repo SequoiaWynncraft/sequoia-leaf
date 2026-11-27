@@ -4,12 +4,12 @@ import { describe, expect, test } from "bun:test";
 import type { Ctx } from "@sequoia-leaf/core";
 
 import { planRoom, SENSIBLE } from "./bot.ts";
-import { readCommand, type RunCommand } from "./command.ts";
+import type { RunCommand } from "./command.ts";
 import type { FigureId, Stars } from "./content/figures.ts";
 import type { ItemId } from "./content/items.ts";
 import { traitNumber, traitShort, traitText } from "./content/traits.ts";
 import { feed } from "./feed.ts";
-import { applyCommand, decodeTable, encodeTable, newTable, predict, tableView } from "./game.ts";
+import { applyCommand, decodeTable, encodeTable, newTable, predict, readCommand, tableView } from "./game.ts";
 import { merge, type Note, type Piece, pieces, type Run, sell, type Spot, startRun } from "./run.ts";
 import { checkRun } from "./save.ts";
 import { advance } from "./sitting/clock.ts";
@@ -157,7 +157,8 @@ describe("the feed command", () => {
   test("reads off the wire, for the run in hand or the endless run, and for a seat at a live table", () => {
     const c: Extract<RunCommand, { do: "feed" }> = { do: "feed", from: bench(0), to: board(3) };
     expect(readCommand(c)).toEqual(c);
-    expect(readCommand({ ...c, endless: true })).toEqual({ ...c, endless: true });
+    expect(readCommand({ ...c, slot: "endless" })).toEqual({ ...c, slot: "endless" });
+    expect(readCommand({ ...c, endless: true })).toEqual({ ...c, slot: "endless" });
     expect(readCommand({ do: "feed", from: bench(0) })).toBeNull();
     expect(readSittingCommand(c)).toEqual(c);
   });
@@ -171,7 +172,7 @@ describe("the feed command", () => {
       put(run, bench(0), "worm");
       table[endless ? "endless" : "run"] = run;
       const c = endless
-        ? ({ do: "feed", from: bench(0), to: board(3), endless: true } as const)
+        ? ({ do: "feed", from: bench(0), to: board(3), slot: "endless" } as const)
         : ({ do: "feed", from: bench(0), to: board(3) } as const);
       const shown = predict(tableView(table, ctx()), c);
       expect(shown && "view" in shown && (endless ? shown.view.endless : shown.view.run)?.board[3]?.fed).toBe(2);

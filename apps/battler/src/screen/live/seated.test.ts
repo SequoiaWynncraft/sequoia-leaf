@@ -3,13 +3,22 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { type Reply, type Route, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
-import { foughtOf, newTable, type RaidCommand, type RaidNote, startRun, tableView } from "@sequoia-leaf/raid";
-import { WHOSE } from "@sequoia-leaf/raid/command.ts";
+import {
+  COMMANDS,
+  foughtOf,
+  isPlanning,
+  newTable,
+  type RaidCommand,
+  type RaidNote,
+  startRun,
+  tableView,
+} from "@sequoia-leaf/raid";
 import { forge } from "@sequoia-leaf/raid/content/items.ts";
 import { advance } from "@sequoia-leaf/raid/sitting/clock.ts";
 import { type Call, command, openSitting } from "@sequoia-leaf/raid/sitting/commands.ts";
 import { CLOCK, type Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import { sittingView } from "@sequoia-leaf/raid/sitting/view.ts";
+import { EVERY_COMMAND, EVERY_PLANNING } from "@sequoia-leaf/raid/testkit.ts";
 
 import { ask, doNow, go, onNotes, onRefused, openTable, S, tableNow } from "../state.ts";
 import { openLine } from "./line.ts";
@@ -154,6 +163,28 @@ function answeringLeaf(now: number, then: { sitting: Sitting; notes: RaidNote[] 
 }
 
 describe("the run's commands at the live seat", () => {
+  for (const { c, ready } of EVERY_PLANNING) {
+    test(`${c.do}: done at once or asked by its spec, and sent to the sitting with no slot`, async () => {
+      const { t: room, now } = planning();
+      const t = structuredClone(room);
+      const mine = t.seats[0];
+      if (!mine) throw new Error("no seat");
+      ready(mine.run);
+      const done = command(t, c, call(now, 9));
+      if (!done.ok) throw new Error(done.why);
+      const leaf = answeringLeaf(now, done);
+      await seated(t, now, leaf.routes);
+      const did = COMMANDS[c.do].draws ? await ask(c) : doNow(c);
+      expect(did).toEqual({ ok: true, notes: done.notes });
+      await until(() => leaf.posted.length > 0 && liveLine()?.waiting() === false);
+      const sent = leaf.posted.map((v) =>
+        isRecord(v) ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== "id")) : v,
+      );
+      expect(sent).toEqual([c]);
+      expect(refused).toEqual([]);
+    });
+  }
+
   test("forging on the rack is shown at once, as Leaf will do it, and sent to the sitting", async () => {
     const { t: room, now } = planning();
     const t = structuredClone(room);
@@ -177,13 +208,12 @@ describe("the run's commands at the live seat", () => {
     const { t, now } = planning();
     const leaf = answeringLeaf(now, { sitting: t, notes: [] });
     await seated(t, now, leaf.routes);
-    const clocks: RaidCommand[] = [{ do: "fight" }, { do: "take" }, { do: "abandon" }];
-    const clockOwned = Object.entries(WHOSE).flatMap(([name, w]): string[] => (w === "clock" ? [name] : []));
-    expect(clocks.map((c): string => c.do)).toEqual(clockOwned);
+    const clocks: RaidCommand[] = Object.values(EVERY_COMMAND).flatMap(({ c }) => (isPlanning(c) ? [] : [c]));
+    expect(clocks.map((c) => c.do)).toEqual(["fight", "take", "abandon"]);
     const setOut: RaidCommand[] = [
       { do: "start", trail: 0 },
       { do: "start", trail: 0, own: true },
-      { do: "endless", way: "wilds" },
+      { do: "start", course: "wilds" },
     ];
     const all = [...setOut, ...clocks];
     expect(all.map((c) => [c, doNow(c)])).toEqual(all.map((c) => [c, null]));

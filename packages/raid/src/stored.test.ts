@@ -92,7 +92,7 @@ describe("a table kept with an endless run", () => {
     expect(table.endless).toMatchObject({ endless: "deep", room: 17, foe: { who: "Fernwhistle" } });
     expect(foughtOf(table.endless ?? runOf(table))?.setup.sides[1].by).toBe("10000000-0000-0000-0000-000000000002");
     expect(table.almanac.deepest.deep).toBe(18);
-    const done = RAID.apply(table, { do: "take", endless: true }, ctx());
+    const done = RAID.apply(table, { do: "take", slot: "endless" }, ctx());
     expect(isRefused(done) ? done.refused : done.state.endless?.room).toBe(18);
   });
 });

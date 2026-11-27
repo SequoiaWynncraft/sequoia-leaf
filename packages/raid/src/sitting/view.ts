@@ -3,10 +3,10 @@
  * as anyone may see it, and the viewer's own run as a page is shown a run. Never a stream, never a
  * pick drawn and not yet offered, and of another seat's board only what it locked last.
  */
-import { isPredicted } from "../command.ts";
+import { isPredicted, plan } from "../command.ts";
 import type { RoomKind } from "../content/rooms.ts";
 import type { FightSetup } from "../fight/types.ts";
-import { plan, runView } from "../game.ts";
+import { runView } from "../game.ts";
 import type { Party } from "../party.ts";
 import { foughtOf, type Note, type RunView } from "../run.ts";
 import type { SittingCommand } from "./commands.ts";
@@ -83,6 +83,7 @@ export function predict(
   if (!view.run) return { refused: "not_seated" };
   const run = structuredClone(view.run);
   const done = plan(run, c);
+  if (!done) return null;
   if (!done.ok) return { refused: done.code };
   // The viewer's own row is read from their run, as Leaf's is.
   const seats = view.seats.map((seat, i) => (i === view.you ? { ...seat, level: run.level } : seat));

@@ -6,6 +6,7 @@ import { below, mix, pick, type Stream } from "@sequoia-leaf/core";
  * numbers out in `review/balance.ts`, and it is honest about being a rough player: a person will
  * place figures better than it does.
  */
+import { act, type PlanningCommand } from "./command.ts";
 import type { BoonId } from "./content/boons.ts";
 import { type FigureId, FIGURES, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
 import {
@@ -20,20 +21,14 @@ import {
 import { ECONOMY, MAX_LEVEL } from "./content/rooms.ts";
 import { stepFor, TRAIT_IDS, type TraitId, traitNumber } from "./content/traits.ts";
 import type { RuleId } from "./content/wilds.ts";
-import { feed } from "./feed.ts";
 import { arrange } from "./formation.ts";
 import { SEATS } from "./hex.ts";
 import { countTraits } from "./party.ts";
 import {
   beginFight,
-  buy,
-  buyXp,
-  choose,
   type Done,
   fieldCap,
   fielded,
-  giveItem,
-  move,
   picksOf,
   type Piece,
   pieces,
@@ -41,35 +36,22 @@ import {
   type Run,
   type RunOptions,
   type RunView,
-  rustle,
   rustleCost,
-  sell,
   type Spot,
   startRun,
   type Taken,
   takeTakings,
-  toBench,
 } from "./run.ts";
 import { closedNow } from "./wing.ts";
 
 /**
- * The actions the bot plans with, on a run `R`. Played directly they are the run's own; a page that
- * plays through Leaf hands it ones that act on its copy, which has no streams, and write down the
- * command for each (see `game.ts`).
+ * How the bot plans, on a run `R`: a member's planning command, done. Played directly it is done to
+ * the run by its spec (`act`); a page that plays through Leaf hands it one that does it to its copy,
+ * which has no streams, and writes the command down (see `game.ts`).
  */
-export interface Hands<R extends RunView = Run> {
-  choose(run: R, option: number): Done;
-  buy(run: R, offer: number): Done;
-  sell(run: R, from: Spot): Done;
-  feed(run: R, from: Spot, to: Spot): Done;
-  move(run: R, from: Spot, to: Spot): Done;
-  toBench(run: R, seat: number): Done;
-  rustle(run: R): Done;
-  buyXp(run: R): Done;
-  giveItem(run: R, item: number, to: Spot): Done;
-}
-/** The run's own actions. */
-export const DIRECT: Hands = { choose, buy, sell, feed, move, toBench, rustle, buyXp, giveItem };
+export type Hands<R extends RunView = Run> = (run: R, c: PlanningCommand) => Done;
+/** The run's own commands. */
+export const DIRECT: Hands = (run, c) => act(run, c);
 
 export interface Habit {
   name: string;
@@ -260,7 +242,7 @@ function settleChoices<R extends RunView>(run: R, habit: Habit, s: Stream, hands
         }
       });
     }
-    if (!hands.choose(run, best).ok) return;
+    if (!hands(run, { do: "choose", option: best }).ok) return;
   }
 }
 
@@ -305,8 +287,8 @@ function sellSpare<R extends RunView>(run: R, habit: Habit, keep: number, hands:
   });
   if (worst < 0 || worstScore > keep) return false;
   const greg = hungryGreg(run);
-  if (greg && hands.feed(run, { on: "bench", at: worst }, greg).ok) return true;
-  return hands.sell(run, { on: "bench", at: worst }).ok;
+  if (greg && hands(run, { do: "feed", from: { on: "bench", at: worst }, to: greg }).ok) return true;
+  return hands(run, { do: "sell", from: { on: "bench", at: worst } }).ok;
 }
 
 function shop<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): void {
@@ -331,7 +313,7 @@ function shop<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): void {
     });
     if (best >= 0) {
       if (!run.bench.includes(null)) sellSpare(run, habit, Infinity, hands);
-      if (hands.buy(run, best).ok) continue;
+      if (hands(run, { do: "buy", offer: best }).ok) continue;
     }
     // Experience, by its habit.
     const short = pieces(run).length < fieldCap(run);
@@ -341,12 +323,12 @@ function shop<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): void {
       run.level < MAX_LEVEL &&
       (habit.levels === "keen" || (habit.levels === "par" && run.level < par)) &&
       run.acorns - ECONOMY.xpCost >= floor;
-    if (wantsLevel && hands.buyXp(run).ok) continue;
+    if (wantsLevel && hands(run, { do: "xp" }).ok) continue;
     // New offers: the free ones always, paid ones while there are acorns to spare.
     const cost = rustleCost(run);
-    if (cost === 0 && hands.rustle(run).ok) continue;
+    if (cost === 0 && hands(run, { do: "rustle" }).ok) continue;
     if (paidRustles < habit.rustles + (short ? 2 : 0) && run.acorns - cost >= Math.max(floor, short ? 1 : 2)) {
-      if (hands.rustle(run).ok) {
+      if (hands(run, { do: "rustle" }).ok) {
         paidRustles++;
         continue;
       }
@@ -362,10 +344,10 @@ function shopCarelessly<R extends RunView>(run: R, s: Stream, hands: Hands<R>): 
   for (let guard = 0; guard < 20; guard++) {
     const able = run.stall.flatMap((kind, i) => (kind && priceOf(run, i) <= run.acorns ? [i] : []));
     if (able.length === 0 || !run.bench.includes(null)) break;
-    if (!hands.buy(run, pick(s, able)).ok) break;
+    if (!hands(run, { do: "buy", offer: pick(s, able) }).ok) break;
   }
   // With a full bench it sells one at random to make room for next time.
-  if (!run.bench.includes(null)) hands.sell(run, { on: "bench", at: below(s, run.bench.length) });
+  if (!run.bench.includes(null)) hands(run, { do: "sell", from: { on: "bench", at: below(s, run.bench.length) } });
 }
 
 // ---------- seating and items ----------
@@ -386,20 +368,20 @@ function seatParty<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): vo
   run.board.forEach((p, seat) => {
     if (!p || want.has(p.id)) return;
     const slot = run.bench.findIndex((b) => b !== null && want.has(b.id));
-    if (slot >= 0) hands.move(run, { on: "bench", at: slot }, { on: "board", at: seat });
-    else if (!hands.toBench(run, seat).ok) hands.sell(run, { on: "board", at: seat });
+    if (slot >= 0) hands(run, { do: "move", from: { on: "bench", at: slot }, to: { on: "board", at: seat } });
+    else if (!hands(run, { do: "bench", seat }).ok) hands(run, { do: "sell", from: { on: "board", at: seat } });
   });
   run.bench.forEach((p, slot) => {
     if (!p || !want.has(p.id)) return;
     const seat = run.board.findIndex((b, s) => b === null && !closed.has(s));
-    if (seat >= 0) hands.move(run, { on: "bench", at: slot }, { on: "board", at: seat });
+    if (seat >= 0) hands(run, { do: "move", from: { on: "bench", at: slot }, to: { on: "board", at: seat } });
   });
   // Then everyone to their own seat: each move puts at least one of them right.
   for (let guard = 0; guard < 2 * SEATS; guard++) {
     const from = run.board.findIndex((p, seat) => p !== null && want.get(p.id) !== seat && want.has(p.id));
     const to = from >= 0 ? want.get(run.board[from]?.id ?? -1) : undefined;
     if (from < 0 || to === undefined) break;
-    if (!hands.move(run, { on: "board", at: from }, { on: "board", at: to }).ok) break;
+    if (!hands(run, { do: "move", from: { on: "board", at: from }, to: { on: "board", at: to } }).ok) break;
   }
 }
 function seatCarelessly<R extends RunView>(run: R, s: Stream, hands: Hands<R>): void {
@@ -407,7 +389,7 @@ function seatCarelessly<R extends RunView>(run: R, s: Stream, hands: Hands<R>): 
     if (!p || fielded(run) >= fieldCap(run)) return;
     const closed = closedNow(run);
     const free = run.board.flatMap((b, seat) => (b || closed.has(seat) ? [] : [seat]));
-    hands.move(run, { on: "bench", at: slot }, { on: "board", at: pick(s, free) });
+    hands(run, { do: "move", from: { on: "bench", at: slot }, to: { on: "board", at: pick(s, free) } });
   });
 }
 
@@ -449,7 +431,7 @@ function handOutItems<R extends RunView>(run: R, habit: Habit, hands: Hands<R>):
         bestScore = score;
       }
     });
-    if (best < 0 || !hands.giveItem(run, at, { on: "board", at: best }).ok) break;
+    if (best < 0 || !hands(run, { do: "give", item: at, to: { on: "board", at: best } }).ok) break;
   }
   // Then each emblem, to the worthiest figure on the board that can take it.
   for (let at = run.items.length - 1; at >= 0; at--) {
@@ -465,7 +447,7 @@ function handOutItems<R extends RunView>(run: R, habit: Habit, hands: Hands<R>):
         bestScore = score;
       }
     });
-    if (best >= 0) hands.giveItem(run, at, { on: "board", at: best });
+    if (best >= 0) hands(run, { do: "give", item: at, to: { on: "board", at: best } });
   }
 }
 

@@ -5,6 +5,7 @@ import type { Ctx, Done } from "@sequoia-leaf/core";
 
 import { planRoom, SENSIBLE } from "./bot.ts";
 import type { RaidCommand } from "./command.ts";
+import { legal } from "./command.ts";
 import type { FigureId, Stars } from "./content/figures.ts";
 import { RULE_IDS, type RuleId, WILDS } from "./content/wilds.ts";
 import { foeOf, roomAt } from "./endless.ts";
@@ -13,7 +14,7 @@ import { openFight, stepFight } from "./fight/engine.ts";
 import { attackReach, closedCells } from "./fight/rules.ts";
 import type { Fight, FightEvent, FightRule, FightSetup } from "./fight/types.ts";
 import { arrange } from "./formation.ts";
-import { legal, RAID, type RaidNote, type Table } from "./game.ts";
+import { RAID, type RaidNote, type Table } from "./game.ts";
 import { colOf, distance, rowOf, seatCell, SEATS } from "./hex.ts";
 import type { Placed } from "./party.ts";
 import {
@@ -435,14 +436,14 @@ function must(state: Table, c: RaidCommand, seed = 7): Table {
 }
 /** A table whose run of the Wilds is in room 7, under a rule picked after room 5. */
 function tableInWing(rule: RuleId): Table {
-  let state = must(RAID.create(ctx(1)), { do: "endless", way: "wilds" });
+  let state = must(RAID.create(ctx(1)), { do: "start", course: "wilds" });
   const run = state.endless;
   if (!run) throw new Error("no run");
   strong(run, 6);
   run.wing = { rule, at: wingOf(6), stumps: rule === "stumps" ? [2, 9, 20] : [] };
   run.foe = foeOf(run, 5);
   run.record.push({ room: 4, kind: "boss", result: "win", standing: [3, 0], boss: "oldbramble" });
-  state = must(state, { do: "fight", endless: true });
+  state = must(state, { do: "fight", slot: "endless" });
   return state;
 }
 const raw = (state: Table): Record<string, unknown> & { endless: Record<string, unknown> } =>
@@ -490,19 +491,19 @@ describe("a run's rule, kept", () => {
     expect(run?.wing).toBeNull();
     expect(run ? foughtOf(run)?.setup.rule : "none").toBeUndefined();
     if (!state || !run) throw new Error("does not read");
-    let table = must(state, { do: "take", endless: true });
+    let table = must(state, { do: "take", slot: "endless" });
     expect(table.endless ? rulePick(table.endless) : undefined).toBeUndefined();
     // On to the wing's boss, room 10.
     const deep = table.endless;
     if (!deep) throw new Error("no run");
     strong(deep, 9);
     deep.foe = foeOf(deep, 3);
-    table = must(must(table, { do: "fight", endless: true }), { do: "take", endless: true });
+    table = must(must(table, { do: "fight", slot: "endless" }), { do: "take", slot: "endless" });
     expect(table.endless ? rulePick(table.endless)?.options : []).toHaveLength(2);
   });
   test("a rule an update took out is none, and the run picks again for the rest of its wing", () => {
     const kept = tableInWing("elbow");
-    let taken = must(kept, { do: "take", endless: true });
+    let taken = must(kept, { do: "take", slot: "endless" });
     const text = raw(taken);
     text.endless.wing = { ...rec(text.endless, "wing"), rule: "bighats" };
     const state = RAID.decode(JSON.stringify(text));
@@ -513,7 +514,7 @@ describe("a run's rule, kept", () => {
     // The pick is shown to the page as it is.
     const waiting = readView(JSON.parse(JSON.stringify(RAID.view(state, ctx()))))?.endless;
     expect(waiting ? rulePick(waiting)?.options : []).toEqual(run ? rulePick(run)?.options : []);
-    taken = must(state, { do: "choose", option: 0, endless: true });
+    taken = must(state, { do: "choose", option: 0, slot: "endless" });
     expect(taken.endless?.wing?.at).toBe(wingOf(taken.endless?.room ?? 0));
     // Shown to the page, a rule it does not know is a view it could not have been sent.
     const view = JSON.parse(JSON.stringify(RAID.view(taken, ctx())));

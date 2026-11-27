@@ -2,12 +2,14 @@
  * Small helpers for the tests beside this file: ways to put a few figures on a board, make some of
  * them stand still as targets, and pick out what happened. Nothing in the game uses this.
  */
+import { isPlanning, type RunCommand } from "./command.ts";
 import type { Stars, UnitKind } from "./content/figures.ts";
 import type { ItemId } from "./content/items.ts";
 import { openFight, stepFight } from "./fight/engine.ts";
 import type { Fight, FightEvent, Unit } from "./fight/types.ts";
 import { cellSeat, COLS, type Side } from "./hex.ts";
 import type { Party, Placed } from "./party.ts";
+import { beginFight, newPiece, type Run, takeTakings } from "./run.ts";
 
 /** Numbers in order, and words in order, for comparing lists whose order does not matter. */
 export const inOrder = (numbers: readonly number[]): number[] => numbers.toSorted((a, b) => a - b);
@@ -105,3 +107,72 @@ export function only<T extends FightEvent["t"]>(events: readonly FightEvent[], t
 function isSort<T extends FightEvent["t"]>(ev: FightEvent, t: T): ev is Extract<FightEvent, { t: T }> {
   return ev.t === t;
 }
+
+// ---------- every command of a run ----------
+
+/** A run planning a room with nothing to pick: three figures, two components on the rack, acorns to spare, a free rustle. */
+function planning(run: Run): void {
+  Object.assign(run, { acorns: 30, level: 4, xp: 0, rustles: 1, held: false, items: ["bark", "thorn"] });
+  run.stage = { phase: "plan", picks: [] };
+  run.board = run.board.map(() => null);
+  run.bench = run.bench.map(() => null);
+  run.board[3] = newPiece(run, "crab7");
+  run.board[4] = newPiece(run, "worm");
+  run.bench[0] = newPiece(run, "moth");
+  run.stall[0] = "crab7";
+}
+/** The same, with a Greg on the board who can still eat. */
+function gregHungry(run: Run): void {
+  planning(run);
+  run.board[5] = newPiece(run, "greg");
+}
+/** The same, with three boons on offer to pick from. */
+function boonsUp(run: Run): void {
+  planning(run);
+  run.stage = {
+    phase: "plan",
+    picks: [{ kind: "boon", options: ["secondwind", "headstart", "smallfry"], redraws: 1 }],
+  };
+}
+
+/**
+ * Each command of a run, and how to make a run ready for it to be done: what the tests of every
+ * command at every kind of table send. A command of a run missing here does not compile.
+ */
+export const EVERY_COMMAND: {
+  readonly [D in RunCommand["do"]]: { readonly c: Extract<RunCommand, { do: D }>; readonly ready: (run: Run) => void };
+} = {
+  choose: { c: { do: "choose", option: 0 }, ready: boonsUp },
+  redraw: { c: { do: "redraw" }, ready: boonsUp },
+  buy: { c: { do: "buy", offer: 0 }, ready: planning },
+  sell: { c: { do: "sell", from: { on: "bench", at: 0 } }, ready: planning },
+  feed: { c: { do: "feed", from: { on: "bench", at: 0 }, to: { on: "board", at: 5 } }, ready: gregHungry },
+  move: { c: { do: "move", from: { on: "board", at: 3 }, to: { on: "board", at: 10 } }, ready: planning },
+  bench: { c: { do: "bench", seat: 3 }, ready: planning },
+  rustle: { c: { do: "rustle" }, ready: planning },
+  hold: { c: { do: "hold", on: true }, ready: planning },
+  xp: { c: { do: "xp" }, ready: planning },
+  give: { c: { do: "give", item: 0, to: { on: "board", at: 3 } }, ready: planning },
+  forge: { c: { do: "forge", item: 0, with: 1 }, ready: planning },
+  fight: { c: { do: "fight" }, ready: planning },
+  take: {
+    c: { do: "take" },
+    ready: (run) => {
+      planning(run);
+      beginFight(run);
+    },
+  },
+  // Walking home is turned down at a table before the first room is fought.
+  abandon: {
+    c: { do: "abandon" },
+    ready: (run) => {
+      planning(run);
+      beginFight(run);
+      takeTakings(run);
+    },
+  },
+};
+/** Those a member plans a room with (`isPlanning`), each with its readying. */
+export const EVERY_PLANNING = Object.values(EVERY_COMMAND).flatMap((each) =>
+  isPlanning(each.c) ? [{ c: each.c, ready: each.ready }] : [],
+);

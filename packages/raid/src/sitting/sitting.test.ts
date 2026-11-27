@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { below, draw32, mix, type Stream } from "@sequoia-leaf/core";
 
 import { planRoom, SENSIBLE } from "../bot.ts";
-import { WHOSE } from "../command.ts";
+import { COMMANDS } from "../command.ts";
 import { FIGURE_IDS, type FigureId, FIGURES } from "../content/figures.ts";
 import { forge } from "../content/items.ts";
 import { PAYOUT } from "../content/keepsakes.ts";
@@ -677,7 +677,7 @@ describe("what people do", () => {
     // Every field a command of a run reads, so that each is read by its name alone.
     const fields = { option: 0, offer: 0, from: { on: "bench", at: 0 }, to: { on: "board", at: 0 }, seat: 0 };
     const read = (name: string) => readCommand({ do: name, ...fields, on: true, item: 0, with: 1 })?.do ?? null;
-    const whose = Object.entries(WHOSE);
+    const whose = Object.entries(COMMANDS).map(([name, spec]): [string, string] => [name, spec.whose]);
     expect(whose.filter(([, w]) => w === "clock").map(([name]) => name)).toEqual(["fight", "take", "abandon"]);
     for (const [name, w] of whose) expect([name, read(name)]).toEqual([name, w === "plan" ? name : null]);
   });
