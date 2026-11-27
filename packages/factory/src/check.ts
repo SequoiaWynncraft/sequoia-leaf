@@ -29,6 +29,8 @@ import { waysOn } from "./pieces.ts";
 import { ITEM_COUNT, NONE, SPAN_MOST } from "./tables.ts";
 import { type Counts, holderOf, PIECE_BYTES, tunnelOf, type Yard } from "./yard.ts";
 
+/** The kinds a kind's first four bits name: what every yard's check was taken over before kinds went past them. */
+const FOUR_BITS = 16;
 const f64 = new Float64Array(1);
 const u32 = new Uint32Array(f64.buffer);
 
@@ -151,7 +153,11 @@ export function check(y: Yard): number {
   num(y.seen.till);
   tally(y.seen.depot);
   mixLand(y, mix);
-  bytes(y.spare);
+  // The pieces to hand, by kind: of the sixteen kinds a kind's four bits once held as they always were,
+  // and of a kind past them only where there is one, so that a kind a yard has none of changes nothing.
+  bytes(y.spare.subarray(0, FOUR_BITS));
+  for (let k = FOUR_BITS; k < y.spare.length; k++)
+    if ((y.spare[k] ?? 0) > 0) mix(0x30000 | (k << 8) | (y.spare[k] ?? 0));
   mixKept(y, mix);
   tally(y.depot);
   for (const o of y.board) {

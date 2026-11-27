@@ -6,6 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 
+import { unpackCells } from "../src/cells.ts";
 import * as F from "../src/index.ts";
 import { bareLand } from "./land.ts";
 import { delivering, flatOut, generated, must } from "./yards.ts";
@@ -211,6 +212,16 @@ describe("decode refuses whole", () => {
     // A part this version does not know: the lowest bit, and the one past the highest.
     expect(F.decode(withCells(good, [1, 5, F.BELT | 128, 1]))).toBeNull();
     expect(F.decode(withCells(good, [1, 5, F.BELT | 128, ...varint(8192)]))).toBeNull();
+  });
+
+  test("a kind's bits past four that are none, or more than four", () => {
+    // A piece on tile 5 whose kind has its bits past four in a part of their own (0x4000), as only a kind past 15 has.
+    const wide = (high: number): number[] => [1, 5, F.SPLITTER | 128, 0x80, 0x80, 0x01, high];
+    expect(unpackCells(Uint8Array.from(wide(1)), 100)?.map((p) => p.kind)).toEqual([F.SPLITTER | 16]);
+    expect(unpackCells(Uint8Array.from(wide(15)), 100)?.map((p) => p.kind)).toEqual([F.SPLITTER | 240]);
+    expect(unpackCells(Uint8Array.from(wide(0)), 100)).toBeNull();
+    expect(unpackCells(Uint8Array.from(wide(16)), 100)).toBeNull();
+    expect(F.decode(withCells(F.encode(F.create({ seed: 1 })), wide(0)))).toBeNull();
   });
 });
 

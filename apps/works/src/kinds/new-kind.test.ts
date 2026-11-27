@@ -26,7 +26,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { newerThan } from "@sequoia-leaf/core";
-import { decode, keptLater, KIND_DEFS, KINDS } from "@sequoia-leaf/factory";
+import { check, decode, keptLater, KIND_DEFS, KINDS } from "@sequoia-leaf/factory";
+import { staged, STAGES } from "@sequoia-leaf/factory/test/yards.ts";
 
 import {
   MAKERS,
@@ -162,6 +163,13 @@ function bun(at: string, ...args: string[]): { ok: boolean; out: string } {
   const run = Bun.spawnSync([process.execPath, ...args], { cwd: at, stdout: "pipe", stderr: "pipe" });
   return { ok: run.exitCode === 0, out: `${run.stdout.toString()}${run.stderr.toString()}` };
 }
+
+/** Each staged yard's check, in the copy. */
+const CHECKS = `import * as F from "./packages/factory/src/index.ts";
+import { staged, STAGES } from "./packages/factory/test/yards.ts";
+
+console.log(JSON.stringify(Object.fromEntries(STAGES.map((s) => [s, F.check(staged(s))]))));
+`;
 
 /** What plays the sieve by the rules, in the copy. */
 const PLAY = `import * as F from "./packages/factory/src/index.ts";
@@ -421,6 +429,31 @@ describe("a new kind of piece", () => {
       rmSync(at, { recursive: true, force: true });
     }
   }, 60_000);
+
+  test("that no yard holds changes no check: every staged yard's, and every replay's", () => {
+    const at = copy();
+    try {
+      addKind(at, "sieve", RULES_SIEVE, PAGE_SIEVE);
+      writeFileSync(join(at, "checks.ts"), CHECKS);
+      const there = bun(at, "checks.ts");
+      expect(JSON.parse(there.out.trim().split("\n").at(-1) ?? "{}")).toEqual(
+        Object.fromEntries(STAGES.map((s) => [s, check(staged(s))])),
+      );
+      // The random player picks a kind to build from every kind's name, so with one more it would build
+      // otherwise; told to pick from those it picked from, it plays what the record was made with.
+      const player = join(at, "packages/factory/test/player.ts");
+      const picks = `this.pick([...F.KINDS, "cart"])`;
+      expect(readFileSync(player, "utf8")).toContain(picks);
+      writeFileSync(
+        player,
+        readFileSync(player, "utf8").replace(picks, `this.pick([...F.KINDS.filter((k) => k !== "sieve"), "cart"])`),
+      );
+      const replays = bun(at, "test", "packages/factory/test/replays.test.ts");
+      expect([replays.ok, replays.out.includes(" 0 fail")]).toEqual([true, true]);
+    } finally {
+      rmSync(at, { recursive: true, force: true });
+    }
+  }, 120_000);
 
   test("is listed once in each list: every kind's module of the rules and of the page, and only they", () => {
     // The rules: each module that says a kind (`kind({`) is in the list, once, in its order.
