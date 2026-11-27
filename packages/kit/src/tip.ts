@@ -24,10 +24,18 @@ export interface TipSpot {
 
 /** Whoever shows a tip at a spot without saying who (`tipAt`): its tips are its own. */
 const ANYONE = { tips: true };
-/** What each element given a tip (`tip`) says now, as a thing's reference. */
-const says = new WeakMap<object, () => string>();
+/** What each element given a tip (`tip`) was given last: its title and its line. */
+const given = new WeakMap<object, { readonly title: Words; readonly text: Words | undefined }>();
+/** How an element its tip names is named again, with its words as they are now. */
+const naming = new WeakMap<object, () => void>();
 
 const wordsOf = (w: Words | undefined): string => (typeof w === "function" ? w() : (w ?? ""));
+
+/** What an element's tip says now, as a thing's reference; null for an element with no tip. */
+function saysNow(owner: object): string | null {
+  const g = given.get(owner);
+  return g ? said(wordsOf(g.title), wordsOf(g.text)) : null;
+}
 
 /**
  * Shows a tip beside a spot on the page, for `by` (an element, or a token of the caller's). With
@@ -73,9 +81,9 @@ export const tipOwner = (): object | null => (deck.open && isSaid(deck.shown()) 
  */
 export function retip(): void {
   const o = deck.open;
-  const now = o ? says.get(o.from) : undefined;
-  if (!o || !now || (o.from instanceof Element && !o.from.isConnected)) return;
-  deck.swap(now());
+  const now = o ? saysNow(o.from) : null;
+  if (!o || now === null || (o.from instanceof Element && !o.from.isConnected)) return;
+  deck.swap(now);
 }
 
 /**
@@ -83,22 +91,26 @@ export function retip(): void {
  * function, asked each time the tip shows.
  */
 export function tip(target: HTMLElement, title: Words, text?: Words): void {
-  const words = (): string => said(wordsOf(title), wordsOf(text));
-  const had = says.has(target);
-  says.set(target, words);
-  // Given a tip again: it says the new words, as it already shows them.
-  if (had) return;
+  const had = given.has(target);
+  given.set(target, { title, text });
+  // Given a tip again: what it already does says the new words, from its name to its tip, up now or next.
+  if (had) {
+    naming.get(target)?.();
+    if (deck.open?.from === target) retip();
+    return;
+  }
   // Whether a tap does something of its own (a button, a thing whose card it opens), or only asks what it is.
   const acts = target.matches("button, a[href], input, select, textarea, summary, [role], [data-ref]");
   /** Named by its title and its words, as they are now: "Leaf 1,200". */
   const name = (): void => {
     const shown = target.textContent?.trim() ?? "";
-    const t = wordsOf(title);
+    const t = wordsOf(given.get(target)?.title);
     target.setAttribute("aria-label", shown && shown !== t ? `${t} ${shown}` : t);
   };
   // Its tip names it where it has no name of its own: it only explains itself, or shows only a picture.
   if (!acts || (!target.hasAttribute("aria-label") && !target.textContent?.trim())) {
     name();
+    naming.set(target, name);
     // Its words change (a purse's count): its name changes with them, as the words on screen do.
     scope().observe(target, { childList: true, characterData: true, subtree: true }, name);
   }
@@ -106,7 +118,7 @@ export function tip(target: HTMLElement, title: Words, text?: Words): void {
     target.setAttribute("role", "button");
     if (target.tabIndex < 0) target.tabIndex = 0;
   }
-  link(target, words, { acts, tip: true });
+  link(target, () => saysNow(target) ?? said(""), { acts, tip: true });
 }
 
 /**

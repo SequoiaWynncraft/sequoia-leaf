@@ -7,16 +7,19 @@
  * Chromium) go through the steps below on it at 1280x760 and 390x844, and checks each line the page
  * says (`tips.say()`: what is up and how, where the focus is, presses on the button, and whether the
  * card is inside the window and clear of its thing; `tips.keeps()`: whether a scrolled card that
- * was shortened to fit stays scrolled where it was) against what it should be. Pictures of the
- * moments go to `<out-dir>`. It fails on the first line that differs.
+ * was shortened to fit stays scrolled where it was; and a few more of the page's handles) against
+ * what it should be. Pictures of the moments go to `<out-dir>`. It fails if any line differs.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 const kit = resolve(import.meta.dir, "..");
-const out = process.argv[2] ?? join(process.env["TMPDIR"] ?? join(homedir(), ".cache"), "kit-tips");
-const site = mkdtempSync(join(process.env["TMPDIR"] ?? join(homedir(), ".cache"), "kit-tips-site-"));
+/** Where the run keeps its page: `TMPDIR`, or `~/.cache` (never `/tmp`), made if it is not there yet. */
+const temp = process.env["TMPDIR"] ?? join(homedir(), ".cache");
+mkdirSync(temp, { recursive: true });
+const out = process.argv[2] ?? join(temp, "kit-tips");
+const site = mkdtempSync(join(temp, "kit-tips-site-"));
 
 type Step = readonly unknown[];
 /** A step, and what the page says after it where it is asked (`tips.say()`). */
@@ -77,6 +80,43 @@ const plan: (Step | [Step, string])[] = [
     ["wait", 80],
     [SAY, `passing Corner ${c} focus=gem pressed=1 clear=yes`],
   ]),
+  // A tip given again says its new words, and names its element by them.
+  ["moveAt", "tips.at('#retipped')"],
+  ["wait", 80],
+  [SAY, "passing New focus=gem pressed=1 clear=yes"],
+  [["eval", "tips.attr('#retipped', 'aria-label')"], "New Retip me"],
+  // A thing described by words of its own keeps them while its tip shows, and after.
+  ["moveAt", "tips.at('#helped')"],
+  ["wait", 80],
+  [["eval", "tips.attr('#helped', 'aria-describedby')"], "help k-tip"],
+  ["move", 640, 700],
+  ["wait", 100],
+  [["eval", "tips.attr('#helped', 'aria-describedby')"], "help"],
+  // A link inside a link: pressed (or Enter on it), the inner one answers; pressed beside it, the outer one.
+  ["click", "#inner"],
+  ["wait", 100],
+  [SAY, "pinned Attack 15 focus=inner pressed=1 clear=yes"],
+  ["key", "Escape"],
+  [
+    "tapAt",
+    "(() => { const r = document.querySelector('#outer').getBoundingClientRect(); return { x: r.left + 6, y: r.top + r.height / 2 }; })()",
+  ],
+  ["wait", 100],
+  [SAY, "pinned Kin focus=outer pressed=1 clear=yes"],
+  ["key", "Escape"],
+  [["eval", "(document.querySelector('#inner').focus(), 'on the inner one')"], "on the inner one"],
+  ["key", "Enter"],
+  [SAY, "pinned Attack 15 focus=card pressed=1 clear=yes"],
+  ["key", "Escape"],
+  ["move", 640, 700],
+  // A thing on a canvas that moves before the pointer has rested: its card grows beside it where it is now.
+  [
+    ["eval", "(tips.point('gem:amber', 100, 300), tips.point('gem:amber', 700, 300), tips.pointed())"],
+    "glance at 700,300",
+  ],
+  ["wait", 400],
+  [["eval", "tips.pointed()"], "passing at 700,300"],
+  [["eval", "tips.point(null)"], "nothing"],
   ["move", 640, 300],
   ["size", 390, 844],
   ["wait", 400],
@@ -109,6 +149,12 @@ const plan: (Step | [Step, string])[] = [
   [SAY, "pinned Long Note sheet-top focus=tall pressed=1 clear=yes"],
   [["eval", "tips.keeps('refresh')"], "shortened=true scrolled=true kept=true"],
   [["eval", "tips.keeps('settle')"], "shortened=true scrolled=true kept=true"],
+  // A tall bar leaves a sheet along the bottom no room: along the top, it is as tall as its room there, not as its rule lets it be.
+  ...tapFinger("body"),
+  [["eval", "tips.bar('400px')"], "bar 400px"],
+  ...tapFinger("#mid"),
+  [SAY, "pinned Longer Note sheet-top focus=mid pressed=1 clear=yes"],
+  [["eval", "tips.bar(null)"], "bar as the page sets it"],
 ];
 
 const steps = plan.map((p) => (typeof p[1] === "string" && Array.isArray(p[0]) ? p[0] : p));

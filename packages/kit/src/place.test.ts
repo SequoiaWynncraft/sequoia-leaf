@@ -75,6 +75,8 @@ describe("a box beside a thing", () => {
     const room = { w: 390, h: 844 };
     const p = beside({ w: 300, h: 200 }, { x: -10, y: -10, w: 500, h: 900 }, room);
     expect(p.x).toBeGreaterThanOrEqual(EDGE);
+    expect(p.y).toBeGreaterThanOrEqual(EDGE);
+    expect(p.x + 300).toBeLessThanOrEqual(390 - EDGE);
     expect(p.y + Math.min(200, p.most)).toBeLessThanOrEqual(844 - EDGE);
   });
 });

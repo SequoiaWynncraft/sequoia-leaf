@@ -348,6 +348,7 @@ const page: {
   described: Element | null;
   via: Via;
   pointing: Ref | null;
+  pointAt: Spot | null;
   pointWait: Release;
 } = {
   node: null,
@@ -359,6 +360,7 @@ const page: {
   described: null,
   via: "mouse",
   pointing: null,
+  pointAt: null,
   pointWait: nothing,
 };
 /** The page's own listeners and waits. */
@@ -408,11 +410,19 @@ const unpin = (): void => {
   page.layer = null;
 };
 
+/** Adds the card's id to what an element is described by, or takes it away, leaving any of the element's own. */
+function described(target: Element, on: boolean): void {
+  const ids = (target.getAttribute("aria-describedby") ?? "").split(/\s+/).filter((id) => id !== "" && id !== TIP_ID);
+  if (on) ids.push(TIP_ID);
+  if (ids.length > 0) target.setAttribute("aria-describedby", ids.join(" "));
+  else target.removeAttribute("aria-describedby");
+}
+
 /** What the passing card describes, while it shows: nothing once it has gone. */
 function describedBy(by: object | null): void {
-  if (page.described?.getAttribute("aria-describedby") === TIP_ID) page.described.removeAttribute("aria-describedby");
+  if (page.described) described(page.described, false);
   page.described = by !== null && by instanceof Element ? by : null;
-  page.described?.setAttribute("aria-describedby", TIP_ID);
+  if (page.described) described(page.described, true);
 }
 
 /** Puts a box at a corner, no taller than `most` (it scrolls, or shows what fits). */
@@ -446,7 +456,9 @@ function placeNow(card: HTMLElement, o: Open, how: "keep" | "follow" | "new"): v
   if (card.classList.contains("sheet")) {
     const s = sheet(r.height, spot, r0);
     card.classList.toggle("top", s.edge === "top");
-    card.style.maxHeight = s.most < r.height ? `${s.most}px` : "";
+    // As tall as that edge's own rule lets it be, measured there, and no taller than its room: the stricter wins.
+    const there = card.getBoundingClientRect().height;
+    card.style.maxHeight = s.most < there ? `${s.most}px` : "";
     page.corner = null;
     return;
   }
@@ -469,7 +481,7 @@ function placeNow(card: HTMLElement, o: Open, how: "keep" | "follow" | "new"): v
 function unpeek(by: HTMLElement | null = null): void {
   if (!page.peek || (by && page.peek.by !== by)) return;
   page.peek.node.remove();
-  if (page.peek.by.getAttribute("aria-describedby") === TIP_ID) page.peek.by.removeAttribute("aria-describedby");
+  described(page.peek.by, false);
   page.peek = null;
 }
 
@@ -490,7 +502,7 @@ function peekAt(target: HTMLElement, ref: Ref): void {
   const t = target.getBoundingClientRect();
   const p = beside({ w: r.width, h: r.height }, { x: t.left, y: t.top, w: t.width, h: t.height }, room());
   putAt(box, p.x, p.y, p.most, r.height);
-  target.setAttribute("aria-describedby", TIP_ID);
+  described(target, true);
   page.peek = { node: box, by: target };
 }
 
@@ -657,6 +669,8 @@ export function link(target: HTMLElement, ref: Ref | (() => Ref), opts: LinkOpts
   const { acts = false, side = false, tip = false } = opts;
   const own = scope();
   const inCard = (): boolean => page.node?.contains(target) ?? false;
+  /** Whether it is this link that was pressed, not one inside it, which answers for itself. */
+  const owns = (e: Event): boolean => (e.target instanceof Element ? e.target.closest(".k-link") : target) === target;
   /** Tells the watchers what is pointed at: a thing, not a tip. */
   const told = (r: Ref | null): void => {
     if (!tip && (r !== null || deck.pointed === now())) deck.point(r);
@@ -695,7 +709,7 @@ export function link(target: HTMLElement, ref: Ref | (() => Ref), opts: LinkOpts
   });
   own.on(target, "keydown", (e) => {
     // Enter asks about it, and Space as well where it is no control (a control's Space is a click).
-    if (acts || !(e.key === "Enter" || (e.key === " " && !target.matches(CONTROLS)))) return;
+    if (acts || !owns(e) || !(e.key === "Enter" || (e.key === " " && !target.matches(CONTROLS)))) return;
     e.preventDefault();
     if (inCard()) deck.follow(now());
     else deck.press(now(), target, "key", target, side);
@@ -703,13 +717,14 @@ export function link(target: HTMLElement, ref: Ref | (() => Ref), opts: LinkOpts
   own.on(target, "pointerdown", () => rested());
   // A finger asks about a thing that acts by resting on it: its card is pinned (inside a card, followed).
   const asked = longPress(own, target, {
-    starts: (e) => e.pointerType !== "mouse" && acts,
+    starts: (e) => e.pointerType !== "mouse" && acts && owns(e),
     asked: () => (inCard() ? deck.follow(now()) : deck.press(now(), target, "touch", target, side)),
   });
   own.on(
     target,
     "click",
     (e) => {
+      if (!owns(e)) return;
       // The tap that ends a long press was asking what the thing is, not using it.
       if (asked(e)) {
         e.stopPropagation();
@@ -742,7 +757,16 @@ export function link(target: HTMLElement, ref: Ref | (() => Ref), opts: LinkOpts
  * at once, and its card after a moment, as for an element.
  */
 export function point(ref: Ref | null, x: number, y: number, w = 0, h = 0): void {
-  if (ref === page.pointing) return;
+  const spot = { x, y, w, h };
+  if (ref === page.pointing) {
+    // The same thing, somewhere else (the view moved under it): what shows of it, and the card it grows into, go there.
+    const at = page.pointAt;
+    if (ref !== null && (!at || at.x !== x || at.y !== y || at.w !== w || at.h !== h)) {
+      page.pointAt = spot;
+      moveCard(CANVAS, spot);
+    }
+    return;
+  }
   const was = page.pointing;
   page.pointing = ref;
   page.pointWait();
@@ -750,11 +774,11 @@ export function point(ref: Ref | null, x: number, y: number, w = 0, h = 0): void
   // Leaving the canvas for a link: the link has already said what is pointed at.
   if (ref !== null) deck.point(ref);
   else if (deck.pointed === was) deck.point(null);
+  page.pointAt = ref === null ? null : spot;
   if (ref === null) return;
-  const spot = { x, y, w, h };
   deck.glance(ref, spot, "mouse", CANVAS);
   page.pointWait = live.after(REST_MS, () => {
-    if (page.pointing === ref) deck.rest(ref, spot, "mouse", CANVAS);
+    if (page.pointing === ref) deck.rest(ref, page.pointAt ?? spot, "mouse", CANVAS);
   });
 }
 

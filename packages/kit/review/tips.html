@@ -48,6 +48,12 @@
         left: 70%;
         bottom: calc(var(--u) * 60 + 10px);
       }
+      /* Where a tall bar (400px, set by the test) would leave a sheet along the bottom no room. */
+      #mid {
+        position: fixed;
+        left: 50%;
+        top: 470px;
+      }
       /* In the middle: its long card fits whole at neither edge. */
       #tall {
         position: fixed;

@@ -834,10 +834,14 @@ button.k-info-stat:hover .k-label,
   gap: var(--u) calc(var(--u) * 4);
   align-items: baseline;
 }
-.k-info-table > span {
+/* A line of a table is no box of its own: its cells are the grid's, so every column lines up. */
+.k-info-trow {
+  display: contents;
+}
+.k-info-trow > span {
   text-align: right;
 }
-.k-info-table > .first {
+.k-info-trow > .first {
   text-align: left;
   color: var(--k-dim);
 }

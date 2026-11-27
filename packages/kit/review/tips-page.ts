@@ -3,9 +3,11 @@
  * say from outside what is up. A plain thing with a tip (`#plain`, it only explains itself), a
  * button with one (`#act`, which counts its presses), a thing with a whole card (`#gem`, and `#low`
  * near the bottom), a button with a tip in each corner, a thing just above the page's bar
- * (`#floor`, a `calc()` in `tips.html`), and one in the middle with a long card (`#tall`).
+ * (`#floor`, a `calc()` in `tips.html`), one in the middle with a long card (`#tall`), one lower
+ * with a longer card (`#mid`), a tip given twice (`#retipped`), a thing with words of its own that
+ * describe it (`#helped`), and a link inside a link (`#inner` in `#outer`).
  */
-import { deck, refresh, register, settle, thing } from "../src/card.ts";
+import { deck, link, point, refresh, register, settle, thing } from "../src/card.ts";
 import { el } from "../src/dom.ts";
 import { tip } from "../src/tip.ts";
 
@@ -40,20 +42,26 @@ register("gem", (id) =>
       }
     : null,
 );
+/** A note of so many lines, each a sentence. */
+const lines = (n: number): { text: string }[] =>
+  Array.from({ length: n }, (_, i) => ({ text: `Line ${i + 1} of what it says.` }));
+
 register("note", (id) =>
-  id === "tall"
-    ? {
-        name: "Long Note",
-        glance: "A card too long to fit whole beside it",
-        sections: [
-          {
-            s: "says",
-            label: "Lines",
-            lines: Array.from({ length: 14 }, (_, i) => ({ text: `Line ${i + 1} of what it says.` })),
-          },
-        ],
-      }
-    : null,
+  id === "longer"
+    ? { name: "Longer Note", sections: [{ s: "says", label: "Lines", lines: lines(30) }] }
+    : id === "tall"
+      ? {
+          name: "Long Note",
+          glance: "A card too long to fit whole beside it",
+          sections: [
+            {
+              s: "says",
+              label: "Lines",
+              lines: lines(14),
+            },
+          ],
+        }
+      : null,
 );
 register("stat", (id) => (id === "attack" ? { name: "Attack 15", glance: "Damage a hit does before armour" } : null));
 register("trait", (id) => (id === "kin" ? { name: "Kin", glance: "Kin strike first" } : null));
@@ -76,7 +84,19 @@ const floor = thing("trait:kin");
 floor.id = "floor";
 const tall = thing("note:tall");
 tall.id = "tall";
-document.body.append(plain, act, gem, low, ...corners, floor, tall);
+const mid = thing("note:longer");
+mid.id = "mid";
+const retipped = el("span", "k-chip", { id: "retipped" }, "Retip me");
+tip(retipped, "Old", "Before");
+tip(retipped, "New", "After");
+const helped = el("span", "k-chip", { id: "helped", "aria-describedby": "help" }, "Helped");
+tip(helped, "Helped", "It has words of its own too.");
+const help = el("span", "", { id: "help", hidden: true }, "Words of its own.");
+const inner = thing("stat:attack");
+inner.id = "inner";
+const outer = el("span", "k-chip", { id: "outer" }, "Kin, with ", inner);
+link(outer, "trait:kin");
+document.body.append(plain, act, gem, low, ...corners, floor, tall, mid, retipped, helped, help, outer);
 
 /** Whether a box is inside the window and clear of another. */
 function clearOf(card: DOMRect, of: DOMRect): boolean {
@@ -121,4 +141,28 @@ function keeps(how: "refresh" | "settle"): string {
   return `shortened=${(after?.style.maxHeight ?? "") !== ""} scrolled=${was > 0} kept=${after?.scrollTop === was}`;
 }
 
-Object.assign(window, { tips: { say, at, keeps } });
+/** An attribute of an element, or "none". */
+const attr = (selector: string, name: string): string => document.querySelector(selector)?.getAttribute(name) ?? "none";
+
+/** Points at a thing drawn on a canvas, in a box 20 pixels square at a point (`ref` null: at nothing). */
+const pointAt = (ref: string | null, x = 0, y = 0): string => {
+  point(ref, x, y, 20, 20);
+  return ref ?? "nothing";
+};
+
+/** The card a canvas thing opened, and the box it is beside. */
+function pointed(): string {
+  const o = deck.open;
+  const box = o?.at;
+  const how = o ? (o.pinned ? "pinned" : o.glance ? "glance" : "passing") : "none";
+  return box && "x" in box && "y" in box ? `${how} at ${String(box.x)},${String(box.y)}` : how;
+}
+
+/** Sets how tall the page's bar along the bottom is, or (null) leaves it as the page's style sets it. */
+function bar(px: string | null): string {
+  if (px === null) document.documentElement.style.removeProperty("--sheet-floor");
+  else document.documentElement.style.setProperty("--sheet-floor", px);
+  return `bar ${px ?? "as the page sets it"}`;
+}
+
+Object.assign(window, { tips: { say, at, keeps, attr, point: pointAt, pointed, bar } });

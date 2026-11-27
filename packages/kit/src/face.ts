@@ -271,6 +271,10 @@ export function thingOf(
   return t;
 }
 
+/** What a screen reader calls a chip that is a button: its words and its count as they show, and what it is ("Gnome 1/2, kin"). */
+export const chipName = (c: Chip): string =>
+  `${c.text}${c.count ? ` ${c.count}` : ""}${c.label ? `, ${c.label.toLowerCase()}` : ""}`;
+
 function chipOf(c: Chip, h: Hands): HTMLElement {
   const face = el(
     "span",
@@ -284,7 +288,7 @@ function chipOf(c: Chip, h: Hands): HTMLElement {
   const box = el(
     ref ? "button" : "span",
     "k-info-chip",
-    ref ? { type: "button", "aria-label": `${c.text}${c.label ? `, ${c.label.toLowerCase()}` : ""}` } : {},
+    ref ? { type: "button", "aria-label": chipName(c) } : {},
     c.label ? el("span", "k-label", { text: c.label }) : null,
     face,
   );
@@ -321,8 +325,9 @@ function blockOf(b: Block): HTMLElement {
 }
 
 function tileOf(e: Entry, h: Hands): HTMLElement {
-  const name = e.name ?? h.describe(e.ref)?.name ?? e.ref;
-  const art = e.icon ?? h.describe(e.ref)?.icon ?? null;
+  const d = e.name !== undefined && e.icon !== undefined ? null : h.describe(e.ref);
+  const name = e.name ?? d?.name ?? e.ref;
+  const art = e.icon ?? d?.icon ?? null;
   const tile = el(
     "span",
     `k-slot k-info-tile${e.lit ? " lit" : ""}${e.locked ? " locked" : ""}`,
@@ -392,15 +397,24 @@ const actionLook = (a: Action, ask: string | null): string =>
 const actionFace = (a: Action): (Node | string | null)[] =>
   a.look === "slot" ? [a.icon ? fit(a.icon, 12) : null] : [a.icon ?? null, a.label || null, a.after ?? null];
 
+/**
+ * What a screen reader calls an action's button where its face does not say it: a hollow holding a
+ * picture (its question while it asks, else its label, else its hint), or a button with nothing but
+ * a picture (its hint). A button whose face has words is named by them.
+ */
+export function actionName(a: Action, ask: string | null): string | null {
+  if (a.look === "slot") return ask ?? a.label ?? a.hint ?? null;
+  return a.label || a.after ? null : (ask ?? a.hint ?? null);
+}
+
 function actionOf(a: Action, card: Ref, h: Hands): HTMLElement {
   const spend = actionSpend(card, a);
   const ask = a.ask !== undefined && asking(spend) ? a.ask.again : null;
   const face = actionFace(a);
-  const named = a.label && a.look === "slot" ? (ask ?? a.label) : null;
   const b: HTMLButtonElement = el(
     "button",
     actionLook(a, ask),
-    { type: "button", "aria-label": named, onclick: () => h.act(a, b) },
+    { type: "button", "aria-label": actionName(a, ask), onclick: () => h.act(a, b) },
     // One that asks shows its question through the kit (`asksAgain`), in a slot as on a button.
     ...(a.ask === undefined ? face : [asksAgain(spend, face, a.ask.again)]),
   );
@@ -409,27 +423,85 @@ function actionOf(a: Action, card: Ref, h: Hands): HTMLElement {
   return b;
 }
 
-/** A sentence with each thing it names linked where its name is in it, and the things it names but does not say after it. */
-function lineOf(l: Line, h: Hands): HTMLElement {
-  const p = el("p", "k-read k-info-line");
-  let rest = l.text;
-  const after: Ref[] = [];
-  const parts: (string | HTMLElement)[] = [];
-  for (const ref of l.refs ?? []) {
-    const name = h.describe(ref)?.name ?? "";
-    const at = name ? rest.indexOf(name) : -1;
-    if (at < 0) {
-      after.push(ref);
-      continue;
-    }
-    const named = el("span", "k-named", { text: name });
-    h.link(named, ref);
-    parts.push(rest.slice(0, at), named);
-    rest = rest.slice(at + name.length);
+/** A letter or a digit: what a name may not touch where it is said whole. */
+const WORDLY = /[\p{L}\p{N}]/u;
+/** A space and a capital after a name: it is the start of a longer name ("Moth" in "Moth Lantern"). */
+const LONGER = /^ \p{Lu}/u;
+
+/** Where a name is said whole in a sentence, clear of what is already taken: -1 where it is not. */
+function wholeAt(text: string, name: string, taken: readonly { at: number; end: number }[]): number {
+  for (let at = text.indexOf(name); at >= 0; at = text.indexOf(name, at + 1)) {
+    const end = at + name.length;
+    const whole = !WORDLY.test(text[at - 1] ?? "") && !WORDLY.test(text[end] ?? "") && !LONGER.test(text.slice(end));
+    if (whole && taken.every((t) => end <= t.at || at >= t.end)) return at;
   }
-  add(p, ...parts, rest, ...after.map((r) => thingOf(h, r)));
-  return p;
+  return -1;
 }
+
+/**
+ * The words of a sentence and the things in them, in the sentence's order: each thing where its name
+ * is said whole (not inside a longer word or a longer name), a longer name first where two share
+ * words; and, in their own order, the things it names but does not say.
+ */
+export function namedIn(
+  text: string,
+  named: readonly { readonly ref: Ref; readonly name: string }[],
+): {
+  readonly parts: readonly (string | { readonly ref: Ref; readonly text: string })[];
+  readonly after: readonly Ref[];
+} {
+  const taken: { at: number; end: number; ref: Ref }[] = [];
+  const found = new Set<number>();
+  const longestFirst = named.map((n, i) => ({ ...n, i })).toSorted((a, b) => b.name.length - a.name.length);
+  for (const n of longestFirst) {
+    const at = n.name ? wholeAt(text, n.name, taken) : -1;
+    if (at < 0) continue;
+    taken.push({ at, end: at + n.name.length, ref: n.ref });
+    found.add(n.i);
+  }
+  const parts: (string | { ref: Ref; text: string })[] = [];
+  const end = taken
+    .toSorted((a, b) => a.at - b.at)
+    .reduce((from, t) => {
+      parts.push(text.slice(from, t.at), { ref: t.ref, text: text.slice(t.at, t.end) });
+      return t.end;
+    }, 0);
+  parts.push(text.slice(end));
+  return { parts: parts.filter((p) => p !== ""), after: named.filter((_, i) => !found.has(i)).map((n) => n.ref) };
+}
+
+/** A sentence with each thing it names linked where its name is said, and the things it names but does not say after it. */
+function lineOf(l: Line, h: Hands): HTMLElement {
+  const named = (l.refs ?? []).map((ref) => ({ ref, name: h.describe(ref)?.name ?? "" }));
+  const { parts, after } = namedIn(l.text, named);
+  const drawn = parts.map((p) => {
+    if (typeof p === "string") return p;
+    const link = el("span", "k-named", { text: p.text });
+    h.link(link, p.ref);
+    return link;
+  });
+  return el("p", "k-read k-info-line", {}, ...drawn, ...after.map((r) => thingOf(h, r)));
+}
+
+/** A table's lines (its headings, then its rows), each as wide as the widest: a short one gets empty cells, so every value stays under its heading. */
+export function tableLines(cols: readonly string[], rows: readonly (readonly string[])[]): string[][] {
+  const n = Math.max(1, cols.length, ...rows.map((r) => r.length));
+  return [cols, ...rows].map((r) => Array.from({ length: n }, (_, i) => r[i] ?? ""));
+}
+
+/** A line of a table: headings, or a row; the first cell its label, at the left. */
+const tableRow = (cells: readonly string[], heads: boolean): HTMLElement =>
+  el(
+    "div",
+    "k-info-trow",
+    { role: "row" },
+    ...cells.map((c, j) =>
+      el("span", `${heads ? "k-label" : ""}${j === 0 ? " first" : ""}`.trim(), {
+        role: heads ? "columnheader" : "cell",
+        text: c,
+      }),
+    ),
+  );
 
 /** A sum's row: what adds (linked to where it comes from) and how much. */
 function sumRowOf(r: SumRow, h: Hands): HTMLElement {
@@ -454,11 +526,10 @@ function sectionOf(s: Section, h: Hands): HTMLElement {
       );
     case "table": {
       // A row a line: the first column its label, at the left; the numbers after it, at the right.
-      const cells = [s.cols, ...s.rows].flatMap((row, i) =>
-        row.map((c, j) => el("span", `${i === 0 ? "k-label" : ""}${j === 0 ? " first" : ""}`.trim(), { text: c })),
-      );
-      const grid = el("div", "k-info-table", {}, ...cells);
-      const n = Math.max(1, s.cols.length);
+      const [heads = [], ...rows] = tableLines(s.cols, s.rows);
+      const grid = el("div", "k-info-table", { role: "table", "aria-label": s.label ?? null }, tableRow(heads, true));
+      add(grid, ...rows.map((r) => tableRow(r, false)));
+      const n = heads.length;
       grid.style.gridTemplateColumns = n > 1 ? `minmax(0, 1fr) repeat(${n - 1}, auto)` : "minmax(0, 1fr)";
       return el("div", "k-info-sec", {}, label, grid);
     }
