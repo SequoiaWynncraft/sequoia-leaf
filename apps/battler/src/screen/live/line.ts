@@ -7,14 +7,15 @@
  * - Commands go in order, one request at a time, as many as are waiting in each; after a failure
  *   (no answer, trouble, too fast) the same batch goes again with the same ids, so nothing is done twice.
  * - Leaf's clock is kept as how far it is from the page's (`now`), from each answer's `now`.
- * - The sitting is read again when Leaf says it moved on (`heard`: others sit, take from the ring,
- *   lock; once for words that come close together, and only while the page is behind them), when
- *   its stage's deadline passes, as the page comes back, and as the page comes into the live room
- *   (`liveMoved`: what was said before was not heard); and every `POLL_EVERY` while the page is not
- *   in it (`heard.ts`). Each read sends the `rev` the page has. A read answered while a command was
- *   on its way is let go: the command's answer is newer. A read that fails leaves what it was for
- *   owed (a word Leaf said, a deadline passed), and the next goes on the kit's timer (`RETRY`),
- *   longer each time, until one lands, whether or not the page is in the live room.
+ * - The sitting is followed (`follow.ts`): one read at a time, asked for when Leaf says it moved on
+ *   past what the page holds (`heard`: others sit, take from the ring, lock), when its stage's
+ *   deadline passes, as the page comes back, as the page comes into the live room (`liveMoved`: what
+ *   was said before was not heard), and every `POLL_EVERY` while it is not in it (`heard.ts`); asked
+ *   for, it is owed until a read that started after the ask lands, and one that fails is tried again
+ *   on the kit's timer. Each read sends the `rev` the page has, and its answer is taken only if it is
+ *   newer. A read is put off while a command is on its way, and one answered after a command went is
+ *   let go: the command's answer is newer, and the read goes again after it if it is still owed. A
+ *   word from Leaf that comes while a command is on its way is weighed against the command's answer.
  * - A sitting Leaf no longer has, or cannot read, or a member signed out, ends the line (`onGone`).
  */
 import { MOST_COMMANDS, readBalances } from "@sequoia-leaf/core";
@@ -27,7 +28,8 @@ import type { SittingCommand } from "@sequoia-leaf/raid/sitting/commands.ts";
 import type { SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 import { readSittingView } from "@sequoia-leaf/raid/sitting/wire.ts";
 
-import { gathered, hearing, POLL_EVERY } from "./heard.ts";
+import { type Follower, follower, type Went } from "./follow.ts";
+import { hearing, POLL_EVERY } from "./heard.ts";
 
 /** What Leaf answered a command: what happened, or why not (the code and Leaf's own sentence). */
 export type Answer = { readonly notes: RaidNote[] } | { readonly refused: string; readonly why: string };
@@ -47,9 +49,9 @@ export interface Line {
   /** Leaf's clock now, in its milliseconds, as near as the page can tell. */
   now(): number;
   send(command: SittingCommand, predict?: (view: SittingView) => SittingView): Promise<Answer>;
-  /** Asks Leaf for the sitting again (with the `rev` the page has). */
-  read(): Promise<void>;
-  /** Leaf says the sitting is at `rev` now: it is read, once for the words that come close together, unless the page has it. */
+  /** Asks for the sitting to be read again (with the `rev` the page has), as soon as the line may. */
+  read(): void;
+  /** Leaf says the sitting is at `rev` now: it is read again, unless the page has it (or a command's answer brings it). */
   heard(rev: number): void;
   /**
    * The page came into the live room (`true`: what Leaf said before was not heard, and the sitting is
@@ -58,6 +60,8 @@ export interface Line {
   liveMoved(cameIn: boolean): void;
   /** Whether anything sent has not been answered yet. */
   waiting(): boolean;
+  /** Whether a read is owed: asked for, and none that started after the ask has landed yet. */
+  owed(): boolean;
   /** Hears each time the view changes. */
   onView(fn: (view: SittingView) => void): void;
   onGone(fn: (why: Gone) => void): void;
@@ -123,12 +127,10 @@ class SittingLine implements Line {
   readonly #next = ids();
   /** Whether the page is in the live room, hearing Leaf say when the sitting moves on. */
   readonly #live: () => boolean;
-  /** The newest `rev` Leaf has said the sitting is at: owed a read until one at it or later lands. */
-  #heard = -1;
-  /** Reads that failed in a row since the last one landed: the next waits `RETRY` for them. */
-  #misses = 0;
-  /** Reads the sitting once for the words that come close together, if the page is behind them still. */
-  readonly #nudged: () => void;
+  /** Reads the sitting, one at a time, whenever one is owed. */
+  readonly #follow: Follower;
+  /** The newest `rev` Leaf said while a command was on its way: weighed against the command's answer. */
+  #heldOver = -1;
   #base: SittingView;
   #copy: SittingView;
   #rev: number;
@@ -149,16 +151,14 @@ class SittingLine implements Line {
     this.player = player;
     this.#scope = scope;
     this.#live = live;
-    this.#nudged = gathered(scope, () => {
-      if (this.#heard > this.#rev) void this.read();
-    });
+    this.#follow = follower(scope, () => this.#readOnce());
     this.#path = `/v1/game/sittings/${id}`;
     this.#base = opened.view;
     this.#copy = opened.view;
     this.#rev = opened.rev;
     this.#skew = opened.leafNow - outside.now();
     scope.hold(outside.leaving(() => this.#flush()));
-    scope.hold(outside.wake(() => void this.read()));
+    scope.hold(outside.wake(() => this.#follow.want()));
     this.#plan();
   }
 
@@ -170,6 +170,9 @@ class SittingLine implements Line {
   }
   waiting(): boolean {
     return this.#batch.length > 0 || this.#queue.length > 0;
+  }
+  owed(): boolean {
+    return this.#follow.owed();
   }
   onView(fn: (view: SittingView) => void): void {
     this.#viewers.push(fn);
@@ -187,34 +190,42 @@ class SittingLine implements Line {
     });
   }
 
-  async read(): Promise<void> {
-    if (this.#over || this.#batch.length > 0) return;
-    const sent = this.#sent;
-    const reply = await ask(`${this.#path}?rev=${this.#rev}`);
-    if (this.#over || sent !== this.#sent) return;
-    if (reply.status !== 200) {
-      if (this.#trouble(reply.status, reply.body) !== "again") return;
-      this.#misses++;
-      this.#plan();
-      return;
-    }
-    const answer = readAnswer(reply.body);
-    if (!answer) return outside.reload();
-    this.#took(answer);
+  read(): void {
+    this.#follow.want();
   }
 
   heard(rev: number): void {
     if (this.#over || rev <= this.#rev) return;
-    this.#heard = Math.max(this.#heard, rev);
-    this.#nudged();
+    // A command on its way may bring it: weighed once the command is answered.
+    if (this.#batch.length > 0) this.#heldOver = Math.max(this.#heldOver, rev);
+    else this.#follow.want();
   }
 
   liveMoved(cameIn: boolean): void {
     this.#plan();
-    if (cameIn) void this.read();
+    if (cameIn) this.#follow.want();
+  }
+
+  /** One read of the sitting, for the follower: put off while a command is on its way, and let go if one went meanwhile. */
+  async #readOnce(): Promise<Went> {
+    if (this.#over) return "stop";
+    if (this.#batch.length > 0) return "later";
+    const sent = this.#sent;
+    const reply = await ask(`${this.#path}?rev=${this.#rev}`);
+    if (this.#over) return "stop";
+    if (sent !== this.#sent) return "later";
+    if (reply.status !== 200) return this.#trouble(reply.status, reply.body) === "again" ? "failed" : "stop";
+    const answer = readAnswer(reply.body);
+    if (!answer) {
+      outside.reload();
+      return "stop";
+    }
+    this.#took(answer);
+    return "landed";
   }
 
   close(): void {
+    this.#follow.stop();
     this.#flush();
     // Whoever waits on a command hears that the line is put away: nothing is left waiting after leaving.
     this.#settle("gone");
@@ -227,21 +238,17 @@ class SittingLine implements Line {
     return [...this.#batch, ...this.#queue].reduce((v, p) => p.predict?.(v) ?? v, this.#base);
   }
   /**
-   * Takes Leaf's answer, unless it is older than the sitting the page holds: two reads on their way at
-   * once (a deadline's and the page coming back) may be answered in either order, and the older
-   * answer must not roll the table back. Only a newer revision replaces the view; the same one only
-   * says Leaf's clock again.
+   * Takes Leaf's answer, unless it is older than the sitting the page holds: a read and a command's
+   * answer may come in either order, and the older must not roll the table back. Only a newer
+   * revision replaces the view; the same one only says Leaf's clock again.
    */
   #took(answer: Read): void {
     if (answer.rev < this.#rev) return;
-    this.#misses = 0;
     this.#skew = answer.leafNow - outside.now();
     if (answer.view && answer.rev > this.#rev) this.#base = answer.view;
     this.#rev = answer.rev;
     this.#show();
     this.#plan();
-    // Leaf said of a newer `rev` than this answer: read again (a read that went before the change).
-    if (this.#heard > this.#rev) this.#nudged();
   }
   /** The view again from Leaf's and what still waits on it; whoever hears is told if it changed. */
   #show(): void {
@@ -252,6 +259,7 @@ class SittingLine implements Line {
   #gone(why: Gone): void {
     if (this.#over) return;
     this.#over = true;
+    this.#follow.stop();
     this.#timer?.();
     this.#settle(why);
     for (const fn of this.#goners) fn(why);
@@ -272,21 +280,15 @@ class SittingLine implements Line {
     else return "again";
     return "stop";
   }
-  /**
-   * Reads the sitting again at its deadline, and every `POLL_EVERY` while the page is not in the live
-   * room; after reads that failed, what is owed (a word Leaf said) at once, and nothing sooner than
-   * the kit's timer allows for them.
-   */
+  /** Asks for a read at the stage's deadline, and every `POLL_EVERY` while the page is not in the live room. */
   #plan(): void {
     this.#timer?.();
     this.#timer = null;
     if (this.#over) return;
     const due = deadlineOf(this.#base);
     const toDeadline = due === null ? Infinity : due - this.now() + AFTER_DEADLINE;
-    const owed = this.#misses > 0 && this.#heard > this.#rev ? 0 : Infinity;
-    const soonest = Math.min(owed, this.#live() ? Infinity : POLL_EVERY, Math.max(AFTER_DEADLINE, toDeadline));
-    const wait = this.#misses > 0 ? Math.max(soonest, backoff(RETRY, this.#misses - 1)) : soonest;
-    if (Number.isFinite(wait)) this.#timer = this.#scope.after(wait, () => void this.read());
+    const wait = Math.min(this.#live() ? Infinity : POLL_EVERY, Math.max(AFTER_DEADLINE, toDeadline));
+    if (Number.isFinite(wait)) this.#timer = this.#scope.after(wait, () => this.#follow.want());
   }
 
   #post(): void {
@@ -317,11 +319,15 @@ class SittingLine implements Line {
     // The batch no longer waits: the view is Leaf's again, with what is still queued on top.
     if (answer) this.#took(answer);
     this.#show();
+    // What Leaf said meanwhile and the answer did not bring is owed a read; a read put off may go.
+    if (this.#heldOver > this.#rev) this.#follow.want();
+    this.#heldOver = -1;
     for (const p of batch)
       p.answer(
         answer ? answerOf(answer.results, p.id) : { refused: "invalid_command", why: "Leaf would not take that." },
       );
     this.#post();
+    this.#follow.kick();
   }
 
   /** What Leaf has not answered, sent at once in one request that outlives the page. */

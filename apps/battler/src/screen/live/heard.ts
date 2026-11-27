@@ -10,8 +10,8 @@
  * While the page is in the room (`hearing`), nothing is read on a timer but a stage's deadline; while
  * it is not (connecting, dropped, let go of, or with no Leaf), what is followed is read every
  * `POLL_EVERY`. Welcomed into the room, the first time and after every drop, the page has not heard
- * what was said meanwhile, and reads what it follows once (`onHearing`). Words that come close
- * together make one read (`gathered`).
+ * what was said meanwhile, and asks for what it follows to be read once (`onHearing`). When each is
+ * read is its follower's to say (`follow.ts`).
  *
  * The page holds the connection a while after nothing wants it (`LINGER_MS`), so that going from card
  * to card opens nothing (Leaf allows a player only so many openings). Told another raid page of the
@@ -21,12 +21,9 @@
 import { type Nudge, SITTINGS_ROOM } from "@sequoia-leaf/core";
 import { outside } from "@sequoia-leaf/kit/net.ts";
 import { joinLive, type LiveEars, type LiveRoom } from "@sequoia-leaf/kit/realtime.ts";
-import type { Release, Scope } from "@sequoia-leaf/kit/scope.ts";
 
 /** How often what is followed is read while the page is not in the room. */
 export const POLL_EVERY = 5000;
-/** How long after a word the page reads, so that any others meanwhile make the same read. */
-export const GATHER_MS = 100;
 /** How long the connection is held once nothing wants it. */
 export const LINGER_MS = 10_000;
 
@@ -90,21 +87,6 @@ export function hearLive(wanted: boolean): void {
     H.room = null;
     heard(false);
   }
-}
-
-/**
- * A read for many words: `ask()` reads once, `GATHER_MS` after the first word, for every word that
- * comes before it; `read` itself says whether it is still wanted then.
- */
-export function gathered(scope: Scope, read: () => void): () => void {
-  const g: { timer: Release | null } = { timer: null };
-  return () => {
-    if (g.timer) return;
-    g.timer = scope.after(GATHER_MS, () => {
-      g.timer = null;
-      read();
-    });
-  };
 }
 
 /** For tests: the connection opened by `opens`, and nothing held or heard. */

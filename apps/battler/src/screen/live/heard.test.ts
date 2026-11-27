@@ -8,7 +8,8 @@ import { type Call, command, openSitting } from "@sequoia-leaf/raid/sitting/comm
 import type { Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import { sittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
-import { GATHER_MS, hearFresh, hearing, hearLive, LINGER_MS, POLL_EVERY } from "./heard.ts";
+import { GATHER_MS } from "./follow.ts";
+import { hearFresh, hearing, hearLive, LINGER_MS, POLL_EVERY } from "./heard.ts";
 import { openLine } from "./line.ts";
 import { followTables, T } from "./listing.ts";
 import { doneWithTable } from "./seated.ts";
@@ -52,6 +53,12 @@ async function pass(ms: number): Promise<void> {
     await landed();
   }
 }
+
+/** The open tables as Leaf lists them, at its clock's start. */
+const listing = (open: unknown[]): Reply => ({
+  status: 200,
+  body: { now: new Date(0).toISOString(), open, yours: null },
+});
 
 /** A live room that only says what it is told to, with what the page gave it to hear on (`ears`). */
 function fakeRoom(): { room: LiveRoom; ears: () => LiveEars; opened: () => number; closed: () => number } {
@@ -117,22 +124,99 @@ test("two nudges close together make one read; one for the `rev` the page has, o
   line.close();
 });
 
-test("a word newer than the answer to the read it made is read again: the read went before the change", async () => {
+test("a burst of words during a slow read makes exactly one more read, after it", async () => {
+  jest.useFakeTimers();
+  const [one, two, , four] = revisions();
+  if (!one || !two || !four) throw new Error("no sitting");
+  const pending: ((reply: Reply) => void)[] = [];
+  world = standin({ "GET /v1/game/sittings/s1": () => new Promise<Reply>((reply) => pending.push(reply)) });
+  const line = openLine(scope(), "s1", ME.id, answer(1, one), () => true);
+  if (!line) throw new Error("no line");
+  line.heard(2);
+  jest.advanceTimersByTime(GATHER_MS);
+  await landed();
+  expect(reads()).toHaveLength(1);
+  // Five words while that read is slow, the first well past the gathering: nothing more goes yet.
+  jest.advanceTimersByTime(300);
+  for (const rev of [3, 4, 5, 6, 7]) line.heard(rev);
+  jest.advanceTimersByTime(1000);
+  await landed();
+  expect(reads()).toHaveLength(1);
+  pending[0]?.({ status: 200, body: answer(2, two) });
+  await landed();
+  jest.advanceTimersByTime(GATHER_MS);
+  await landed();
+  // Exactly one more, sending the `rev` the first brought.
+  expect(reads()).toEqual(["/v1/game/sittings/s1?rev=1", "/v1/game/sittings/s1?rev=2"]);
+  pending[1]?.({ status: 200, body: answer(4, four) });
+  await landed();
+  jest.advanceTimersByTime(60_000);
+  await landed();
+  expect(reads()).toHaveLength(2);
+  expect(line.view).toEqual(sittingView(four, ME.id));
+  line.close();
+});
+
+test("a word while a command is on its way is weighed against the command's answer: brought by it, nothing is read", async () => {
   jest.useFakeTimers();
   const [one, two, three] = revisions();
   if (!one || !two || !three) throw new Error("no sitting");
-  const answers = [answer(2, two), answer(3, three)];
-  world = standin({ "GET /v1/game/sittings/s1": () => ({ status: 200, body: answers.shift() ?? unchanged(3) }) });
+  const posts: ((reply: Reply) => void)[] = [];
+  world = standin({
+    "POST /v1/game/sittings/s1": () => new Promise<Reply>((reply) => posts.push(reply)),
+    "GET /v1/game/sittings/s1": { status: 200, body: answer(3, three) },
+  });
   const line = openLine(scope(), "s1", ME.id, answer(1, one), () => true);
   if (!line) throw new Error("no line");
+  // The member's own command: Leaf's word of it comes before its answer, which brings it.
+  const sent = line.send({ do: "start" });
+  await landed();
+  line.heard(2);
+  jest.advanceTimersByTime(GATHER_MS * 5);
+  await landed();
+  expect(reads()).toEqual([]);
+  posts[0]?.({ status: 200, body: { ...answer(2, two), results: [] } });
+  await sent;
+  jest.advanceTimersByTime(GATHER_MS * 5);
+  await landed();
+  expect(reads()).toEqual([]);
+  // Another command; meanwhile a word of a change after it: once it is answered, one read.
+  const again = line.send({ do: "start" });
+  await landed();
   line.heard(3);
+  posts[1]?.({ status: 200, body: { ...answer(2, two), results: [] } });
+  await again;
   jest.advanceTimersByTime(GATHER_MS);
   await landed();
-  expect(reads()).toEqual(["/v1/game/sittings/s1?rev=1"]);
-  jest.advanceTimersByTime(GATHER_MS);
-  await landed();
-  expect(reads()).toEqual(["/v1/game/sittings/s1?rev=1", "/v1/game/sittings/s1?rev=2"]);
+  expect(reads()).toEqual(["/v1/game/sittings/s1?rev=2"]);
   expect(line.view).toEqual(sittingView(three, ME.id));
+  line.close();
+});
+
+test("back in the live room after a drop, with no word heard and the deadline half an hour off, a failed read is tried again and lands", async () => {
+  jest.useFakeTimers();
+  const [one, two] = revisions();
+  if (!one || !two) throw new Error("no sitting");
+  const replies: Reply[] = ["offline"];
+  world = standin({ "GET /v1/game/sittings/s1": () => replies.shift() ?? { status: 200, body: answer(2, two) } });
+  const live = { now: false };
+  const line = openLine(scope(), "s1", ME.id, answer(1, one), () => live.now);
+  if (!line) throw new Error("no line");
+  const chance = spyOn(Math, "random").mockReturnValue(0);
+  // The sitting changed while the connection was down; back, the read for it fails.
+  live.now = true;
+  line.liveMoved(true);
+  jest.advanceTimersByTime(GATHER_MS);
+  await landed();
+  expect(reads()).toHaveLength(1);
+  jest.advanceTimersByTime(RETRY.first);
+  await landed();
+  expect(reads()).toHaveLength(2);
+  chance.mockRestore();
+  expect(line.view).toEqual(sittingView(two, ME.id));
+  jest.advanceTimersByTime(60_000);
+  await landed();
+  expect(reads()).toHaveLength(2);
   line.close();
 });
 
@@ -148,15 +232,16 @@ test("in the live room the sitting is not read on a timer; out of it, every 5 se
   jest.advanceTimersByTime(POLL_EVERY - 1);
   await landed();
   expect(reads()).toHaveLength(0);
-  jest.advanceTimersByTime(1);
+  jest.advanceTimersByTime(1 + GATHER_MS);
   await landed();
   expect(reads()).toHaveLength(1);
-  jest.advanceTimersByTime(POLL_EVERY);
+  jest.advanceTimersByTime(POLL_EVERY + GATHER_MS);
   await landed();
   expect(reads()).toHaveLength(2);
   // Into the room: what Leaf said before was not heard, so once now; then nothing for a minute.
   live.now = true;
   line.liveMoved(true);
+  jest.advanceTimersByTime(GATHER_MS);
   await landed();
   expect(reads()).toHaveLength(3);
   jest.advanceTimersByTime(60_000);
@@ -165,7 +250,7 @@ test("in the live room the sitting is not read on a timer; out of it, every 5 se
   // Out of it again: every 5 seconds once more.
   live.now = false;
   line.liveMoved(false);
-  jest.advanceTimersByTime(POLL_EVERY);
+  jest.advanceTimersByTime(POLL_EVERY + GATHER_MS);
   await landed();
   expect(reads()).toHaveLength(4);
   line.close();
@@ -219,13 +304,13 @@ test("the open tables are read on Leaf's word, once for two, not on a timer whil
     () => undefined,
     () => true,
   );
-  await landed();
+  await pass(GATHER_MS);
   // The page's first read; the card is up, so the connection opens at the first look.
   expect(lists()).toBe(1);
-  await pass(1000);
+  await pass(1000 - GATHER_MS);
   expect(fake.opened()).toBe(1);
-  // Not in the room yet: 5 seconds after the last read, another.
-  await pass(POLL_EVERY - 1000);
+  // Not in the room yet: 5 seconds after the first, another.
+  await pass(POLL_EVERY - 1000 + GATHER_MS);
   expect(lists()).toBe(2);
   // Welcomed: read once for what was not heard, then nothing on a timer.
   fake.ears().welcome?.(1, "sittings/1", [], false);
@@ -242,9 +327,9 @@ test("the open tables are read on Leaf's word, once for two, not on a timer whil
   fake.ears().nudged?.({ t: "sitting", id: "elsewhere", rev: 4 });
   await pass(GATHER_MS * 5);
   expect(lists()).toBe(4);
-  // Dropped: every 5 seconds until it is back.
+  // Dropped: read at the next look, then every 5 seconds until it is back.
   fake.ears().status?.("closed");
-  await pass(POLL_EVERY);
+  await pass(1000);
   expect(lists()).toBe(5);
   await pass(POLL_EVERY);
   expect(lists()).toBe(6);
@@ -347,25 +432,70 @@ test("a list read Leaf's word started that fails is owed: tried again on the kit
   await pass(GATHER_MS);
   expect(lists()).toBe(2);
   // Leaf says the list changed; the read for it fails, and so does the next. The kit's waits with
-  // half the chance added: 562.5 ms, then 1125 ms, looked at once a second.
+  // half the chance added: 562.5 ms, then 1125 ms.
   const chance = spyOn(Math, "random").mockReturnValue(0.5);
   replies.push("offline", "offline");
   fake.ears().nudged?.({ t: "sittings" });
   await pass(GATHER_MS);
   expect(lists()).toBe(3);
-  expect(T.stale).toBe(true);
-  await pass(1000);
-  expect(lists()).toBe(4);
-  // The second wait is twice the first: no read in the second after it, one by the end of the next.
-  await pass(1000);
+  expect(T.follow?.owed()).toBe(true);
+  await pass(600);
   expect(lists()).toBe(4);
   await pass(1000);
+  expect(lists()).toBe(4);
+  await pass(200);
   expect(lists()).toBe(5);
-  expect([T.stale, T.misses]).toEqual([false, 0]);
+  expect(T.follow?.owed()).toBe(false);
   chance.mockRestore();
   // Landed: nothing more is read for a minute.
   await pass(60_000);
   expect(lists()).toBe(5);
+  held.close();
+  T.shown = () => false;
+});
+
+test("a word more than a moment into a slow list read makes one more read after it, and the older answer never wins", async () => {
+  jest.useFakeTimers();
+  const fake = fakeRoom();
+  const pending: ((reply: Reply) => void)[] = [];
+  world = standin({ "GET /v1/game/sittings": () => new Promise<Reply>((reply) => pending.push(reply)) });
+  const lists = (): number => (world?.sent ?? []).filter((s) => s.path === "/v1/game/sittings").length;
+  const t1 = { id: "t1", by: { id: "leaf-3", name: "Sootpaw" }, sat: 1, closes: new Date(600_000).toISOString() };
+  const held = scope();
+  followTables(
+    held,
+    ME,
+    () => undefined,
+    () => true,
+  );
+  await pass(GATHER_MS);
+  pending[0]?.(listing([]));
+  await landed();
+  await pass(1000);
+  fake.ears().welcome?.(1, "sittings/1", [], false);
+  await pass(GATHER_MS);
+  pending[1]?.(listing([]));
+  await landed();
+  expect(lists()).toBe(2);
+  // A word: a read goes, and is slow. More words come 300 ms in, and on.
+  fake.ears().nudged?.({ t: "sittings" });
+  await pass(GATHER_MS);
+  expect(lists()).toBe(3);
+  await pass(300);
+  for (let i = 0; i < 4; i++) fake.ears().nudged?.({ t: "sittings" });
+  await pass(2000);
+  expect(lists()).toBe(3);
+  // The slow read is answered with the list as it was before the later words: one more read, after it.
+  pending[2]?.(listing([]));
+  await landed();
+  await pass(GATHER_MS);
+  expect(lists()).toBe(4);
+  pending[3]?.(listing([t1]));
+  await landed();
+  expect(T.open).toEqual([{ id: "t1", by: "Sootpaw", sat: 1 }]);
+  await pass(60_000);
+  expect(lists()).toBe(4);
+  expect(T.open).toEqual([{ id: "t1", by: "Sootpaw", sat: 1 }]);
   held.close();
   T.shown = () => false;
 });
