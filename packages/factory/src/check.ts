@@ -27,16 +27,21 @@ import type { Land } from "./land.ts";
 import { counting } from "./orders.ts";
 import { waysOn } from "./pieces.ts";
 import { ITEM_COUNT, NONE, SPAN_MOST } from "./tables.ts";
-import { type Counts, holderOf, PIECE_BYTES, tunnelOf, type Yard } from "./yard.ts";
+import { type Counts, holderOf, type Holders, PIECE_BYTES, tunnelOf, type Tunnels, type Yard } from "./yard.ts";
 
 /** The kinds a kind's first four bits name: what every yard's check was taken over before kinds went past them. */
 const FOUR_BITS = 16;
 const f64 = new Float64Array(1);
 const u32 = new Uint32Array(f64.buffer);
 
-/** The piece on a tile as a number: its kind (its low four bits: those above are mixed in apart), way, place among those to hand, what it carries and its grade. */
+/**
+ * The piece on a tile as a number: its kind, way, place among those to hand, what it carries, how far
+ * across (under 16, four bits), and its grade. A kind's bits past four go above how far across, where
+ * a kind of four bits has none, so its pieces' numbers are as they always were.
+ */
 const pieceWord = (y: Yard, i: number): number =>
   ((y.kind[i] ?? 0) & 15) |
+  (((y.kind[i] ?? 0) & 0xf0) << 16) |
   ((y.dir[i] ?? 0) << 4) |
   ((y.free[i] ?? 0) << 6) |
   ((y.item[i] ?? 0) << 8) |
@@ -50,6 +55,14 @@ const settingsWord = (y: Yard, i: number): number =>
   (waysOn(y, i) << 8) |
   (((y.span[i] ?? 0) + 8) << 16) |
   ((y.set[i] ?? 0) << 24);
+
+/** What a holder is at as a number: the thing it has made, what it is making, its fuel and whether it is open. */
+const doingWord = (hs: Holders, r: number): number =>
+  (hs.out[r] ?? 0) | ((hs.making[r] ?? 0) << 8) | ((hs.fuel[r] ?? 0) << 16) | ((hs.open[r] ?? 0) << 24);
+/** How much a holder holds as a number: how many kinds of thing, and how many things. */
+const heldWord = (hs: Holders, r: number): number => (hs.kinds[r] ?? 0) | ((hs.count[r] ?? 0) << 8);
+/** A tile under a tunnel as a number: what is there, and how far along it is. */
+const underWord = (ts: Tunnels, s: number): number => (ts.under[s] ?? 0) | ((ts.along[s] ?? 0) << 8);
 
 /** Mixes in some bytes, how many and then four at a time: a plan of the whole yard is some 16,000 of them. */
 function mixBytes(b: Uint8Array, mix: (v: number) => void): void {
@@ -101,38 +114,43 @@ function mixLand(y: Yard, mix: (v: number) => void): void {
     }
 }
 
-/** The yard in 32 bits. */
-export function check(y: Yard): number {
-  let h = 0x811c9dc5 | 0;
-  const mix = (v: number): void => {
-    h = Math.imul(h ^ v, 0x01000193);
-  };
-  const num = (x: number): void => {
-    f64[0] = x;
-    mix(u32[0] ?? 0);
-    mix(u32[1] ?? 0);
-  };
-  const tally = (c: Counts): void => {
-    for (let n = 0; n < ITEM_COUNT; n++)
-      if ((c[n] ?? 0) !== 0) {
-        mix(n);
-        num(c[n] ?? 0);
-      }
-    mix(-1);
-  };
-  const words = (s: string): void => {
-    mix(s.length);
-    for (let c = 0; c < s.length; c++) mix(s.charCodeAt(c));
-  };
-  const bytes = (b: Uint8Array | null): void => {
-    mix(b === null ? -1 : b.length);
-    for (const v of b ?? []) mix(v);
-  };
-  num(y.tick);
-  mix(y.charge);
-  num(y.till);
-  num(y.bank);
-  mix(y.told);
+/**
+ * Mixes in the pieces to hand, by kind: of the sixteen kinds a kind's four bits once held, how many
+ * and each, as they always were; of a kind past them, only where there is one, so that a kind a yard
+ * has none of changes nothing.
+ */
+function mixSpare(spare: Uint8Array, mix: (v: number) => void): void {
+  mix(Math.min(spare.length, FOUR_BITS));
+  for (let k = 0; k < spare.length; k++)
+    if (k < FOUR_BITS) mix(spare[k] ?? 0);
+    else if ((spare[k] ?? 0) > 0) mix(0x30000 | (k << 8) | (spare[k] ?? 0));
+}
+
+/** Mixes in a number, as its 64 bits. */
+function mixNum(mix: (v: number) => void, x: number): void {
+  f64[0] = x;
+  mix(u32[0] ?? 0);
+  mix(u32[1] ?? 0);
+}
+
+/** Mixes in counts of things: each thing there is some of and how many, then -1. */
+function mixTally(mix: (v: number) => void, c: Counts): void {
+  for (let n = 0; n < ITEM_COUNT; n++)
+    if ((c[n] ?? 0) !== 0) {
+      mix(n);
+      mixNum(mix, c[n] ?? 0);
+    }
+  mix(-1);
+}
+
+/** Mixes in some text: how long, and each of its characters. */
+function mixWords(mix: (v: number) => void, s: string): void {
+  mix(s.length);
+  for (let c = 0; c < s.length; c++) mix(s.charCodeAt(c));
+}
+
+/** Mixes in the goals done, in hand, queued and in line, and what was got for each, then what was handed and paid. */
+function mixGoals(y: Yard, mix: (v: number) => void): void {
   for (const g of y.done) mix(g);
   mix(-1);
   mix(y.hand);
@@ -143,64 +161,72 @@ export function check(y: Yard): number {
   y.got.forEach((got, g) => {
     if (got === null) return;
     mix(g);
-    tally(got);
+    mixTally(mix, got);
   });
   mix(y.handed);
-  num(y.swapAt);
-  num(y.sold);
-  num(y.paid);
-  num(y.seen.tick);
-  num(y.seen.till);
-  tally(y.seen.depot);
-  mixLand(y, mix);
-  // The pieces to hand, by kind: of the sixteen kinds a kind's four bits once held as they always were,
-  // and of a kind past them only where there is one, so that a kind a yard has none of changes nothing.
-  bytes(y.spare.subarray(0, FOUR_BITS));
-  for (let k = FOUR_BITS; k < y.spare.length; k++)
-    if ((y.spare[k] ?? 0) > 0) mix(0x30000 | (k << 8) | (y.spare[k] ?? 0));
-  mixKept(y, mix);
-  tally(y.depot);
+}
+
+/** Mixes in the orders on the board that count, each with its pay, words, what it wants and what it has. */
+function mixBoard(y: Yard, mix: (v: number) => void): void {
   for (const o of y.board) {
     if (!counting(o, y.tick)) continue;
     mix(o.id);
-    num(o.starts);
-    num(o.pay);
-    words(o.title);
-    words(o.from);
-    words(o.line);
-    tally(o.want);
-    tally(o.filled);
+    mixNum(mix, o.starts);
+    mixNum(mix, o.pay);
+    mixWords(mix, o.title);
+    mixWords(mix, o.from);
+    mixWords(mix, o.line);
+    mixTally(mix, o.want);
+    mixTally(mix, o.filled);
   }
-  const { kind } = y;
-  for (let i = 0; i < kind.length; i++) {
-    const k = kind[i] ?? NONE;
-    if (k !== NONE) mixPiece(y, i, k, mix);
-  }
-  return h >>> 0;
 }
 
-/** Mixes in the piece on a tile (its kind `k`): where it is, its parts and settings, and what its tunnel or its holder holds. */
-function mixPiece(y: Yard, i: number, k: number, mix: (v: number) => void): void {
-  const { holders: hs, tunnels: ts } = y;
-  mix(tileFromCorner(y.land, i));
-  mix(pieceWord(y, i));
-  // A kind past 15 mixes in its bits above four apart, so a yard of none checks as it always did.
-  if (k > 15) mix(0x20000 | (k >> 4));
-  mix(settingsWord(y, i));
-  const t = tunnelOf(y, i);
-  if (t >= 0) {
-    for (let s = t * SPAN_MOST; s < t * SPAN_MOST + SPAN_MOST; s++) mix((ts.under[s] ?? 0) | ((ts.along[s] ?? 0) << 8));
-    return;
+/** The yard in 32 bits. */
+export function check(y: Yard): number {
+  let h = 0x811c9dc5 | 0;
+  const mix = (v: number): void => {
+    h = Math.imul(h ^ v, 0x01000193);
+  };
+  mixNum(mix, y.tick);
+  mix(y.charge);
+  mixNum(mix, y.till);
+  mixNum(mix, y.bank);
+  mix(y.told);
+  mixGoals(y, mix);
+  mixNum(mix, y.swapAt);
+  mixNum(mix, y.sold);
+  mixNum(mix, y.paid);
+  mixNum(mix, y.seen.tick);
+  mixNum(mix, y.seen.till);
+  mixTally(mix, y.seen.depot);
+  mixLand(y, mix);
+  mixSpare(y.spare, mix);
+  mixKept(y, mix);
+  mixTally(mix, y.depot);
+  mixBoard(y, mix);
+  const { kind, holders: hs, tunnels: ts } = y;
+  for (let i = 0; i < kind.length; i++) {
+    const k = kind[i] ?? NONE;
+    if (k === NONE) continue;
+    mix(tileFromCorner(y.land, i));
+    mix(pieceWord(y, i));
+    mix(settingsWord(y, i));
+    const t = tunnelOf(y, i);
+    if (t >= 0) {
+      for (let s = t * SPAN_MOST; s < t * SPAN_MOST + SPAN_MOST; s++) mix(underWord(ts, s));
+      continue;
+    }
+    const r = holderOf(y, i);
+    if (r < 0) continue;
+    mix(doingWord(hs, r));
+    // A by-product held is mixed in only where there is one, so a yard of pieces that make none checks as before.
+    if (hs.also[r] !== NONE) mix(0x10000 | (hs.also[r] ?? 0));
+    mix(heldWord(hs, r));
+    mix(hs.work[r] ?? 0);
+    for (let n = 0; n < ITEM_COUNT; n++) {
+      const c = hs.stock[r * ITEM_COUNT + n] ?? 0;
+      if (c > 0) mix(n | (c << 8));
+    }
   }
-  const r = holderOf(y, i);
-  if (r < 0) return;
-  mix((hs.out[r] ?? 0) | ((hs.making[r] ?? 0) << 8) | ((hs.fuel[r] ?? 0) << 16) | ((hs.open[r] ?? 0) << 24));
-  // A by-product held is mixed in only where there is one, so a yard of pieces that make none checks as before.
-  if (hs.also[r] !== NONE) mix(0x10000 | (hs.also[r] ?? 0));
-  mix((hs.kinds[r] ?? 0) | ((hs.count[r] ?? 0) << 8));
-  mix(hs.work[r] ?? 0);
-  for (let n = 0; n < ITEM_COUNT; n++) {
-    const c = hs.stock[r * ITEM_COUNT + n] ?? 0;
-    if (c > 0) mix(n | (c << 8));
-  }
+  return h >>> 0;
 }

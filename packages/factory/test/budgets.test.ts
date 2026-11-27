@@ -200,7 +200,6 @@ describe("allocation", () => {
     const check = reached("check.ts", "check", new Set());
     // Each tile's and piece's part of it, which runs for every piece, makes nothing at all.
     for (const f of [
-      "check.ts:mixPiece",
       "check.ts:pieceWord",
       "check.ts:settingsWord",
       "pieces.ts:waysOn",
@@ -208,20 +207,18 @@ describe("allocation", () => {
       "yard.ts:tunnelOf",
     ])
       expect(check.reached).toContain(f);
-    // And the loop over the tiles, read on its own: nothing in it makes anything, for any tile. Each
-    // piece is mixed in by `mixPiece`, whose own making would be listed below.
+    // And the loop over the tiles, read on its own: nothing in it makes anything, for any tile.
     const tiles = loopIn("check.ts", "check", "kind.length");
-    expect([tiles.includes("mixPiece"), makes(tiles)]).toEqual([true, []]);
+    expect([tiles.includes("pieceWord"), makes(tiles)]).toEqual([true, []]);
     // What the rest makes, once a call: its hash's closures, its loops over the goals, the orders, the
     // blueprints and what Undo would undo. Anything more, a per-tile array among it, is new here.
     expect(check.makes.map(kindOf)).toEqual([
-      "check.ts:check: an array",
       "check.ts:check: a closure",
-      "check.ts:check: an iterator",
-      "check.ts:check: a copy",
-      "check.ts:bytes: an array",
-      "check.ts:bytes: an iterator",
+      "check.ts:mixGoals: a closure",
+      "check.ts:mixGoals: an iterator",
+      "check.ts:mixGoals: a copy",
       "check.ts:mixKept: an iterator",
+      "check.ts:mixBoard: an iterator",
     ]);
     // How long it takes here, as a number to read: a shared machine's clock is no limit.
     const y = staged("large");
