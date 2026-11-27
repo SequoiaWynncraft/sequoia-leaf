@@ -25,6 +25,7 @@ import {
   type Catalog,
   catalogOf,
   type ComponentId,
+  countOn,
   drawName,
   drawOf,
   drawReach,
@@ -39,6 +40,7 @@ import {
   isEmblemId,
   isFigureId,
   isItemId,
+  isToolId,
   isTraitId,
   itemAdds,
   type ItemId,
@@ -94,6 +96,7 @@ import { feedActions } from "./feedtarget.ts";
 import { figuresAt, levelOnCard, oddsStats } from "./own.ts";
 import { figureRef, itemRef, pieceRef, traitRef } from "./refs.ts";
 import { itemsOf, wantedBy } from "./suits.ts";
+import { toolDesc, withMelt } from "./toolcard.ts";
 import { fedLine, sortWord } from "./words.ts";
 
 export * from "./refs.ts";
@@ -401,7 +404,7 @@ const itemBrief = (cat: Catalog, id: ItemId): string =>
  * component's "makes" lines put first, lit and tagged "have", the ones whose other half the party
  * already holds. At the end of each line, the fielded figures that want what it makes (`wantedBy`).
  */
-export function itemDesc(cat: Catalog, id: ItemId, run: RunView | null, itemAt = -1, lore = false): Description {
+export function itemDesc(cat: Catalog, id: ItemId, run: RunView | null, fromRack = false, lore = false): Description {
   const blocks: Block[] = [{ body: itemWords(cat, id) }];
   if (lore) {
     blocks.push({ body: itemText(cat, id) });
@@ -425,7 +428,7 @@ export function itemDesc(cat: Catalog, id: ItemId, run: RunView | null, itemAt =
     tag: isComponentId(id) ? "A component" : "A finished item",
     blocks,
     rows: isComponentId(id)
-      ? [{ label: "With", things: makesLines(cat, id, run, itemAt) }]
+      ? [{ label: "With", things: makesLines(cat, id, run, fromRack) }]
       : [{ label: "Made from", things: (itemIn(cat, id).made ?? []).map((c) => ({ ref: itemRef(c) })) }],
   };
 }
@@ -433,16 +436,23 @@ export function itemDesc(cat: Catalog, id: ItemId, run: RunView | null, itemAt =
 /** Where a "makes" line goes: the ones the party can finish first, and among those and the rest, the ones somebody fielded wants. */
 const weight = (e: Entry): number => (e.lit ? 2 : 0) + (e.note ? 1 : 0);
 
-/** A component's "makes" lines: the other half, an arrow, and the finished item; the ones the party can finish first. */
-export function makesLines(cat: Catalog, id: ItemId, run: RunView | null, itemAt = -1): Entry[] {
+/**
+ * A component's "makes" lines: the other half, an arrow, and the finished item; the ones the party
+ * can finish first, each with how many of the other half are on the rack ("×14"), or "have" for one
+ * only a figure holds.
+ */
+export function makesLines(cat: Catalog, id: ItemId, run: RunView | null, fromRack = false): Entry[] {
   if (!isComponentId(id)) return [];
-  const held = new Set(run ? combosWithHeld(run, id, itemAt).map((c) => c.with) : []);
+  const held = new Set(run ? combosWithHeld(run, id, fromRack).map((c) => c.with) : []);
+  // The one in question, when it is on the rack, is not one of the others.
+  const onRack = (c: ComponentId): number => (run ? countOn(run.rack, c) : 0) - (fromRack && c === id ? 1 : 0);
   const line = (r: { with: ComponentId; makes: ItemId }): Entry => {
     const by = wantedBy(run, r.makes);
+    const n = onRack(r.with);
     return {
       ref: itemRef(r.makes),
       from: itemRef(r.with),
-      ...(held.has(r.with) ? { lit: true, tag: "have" } : {}),
+      ...(held.has(r.with) ? { lit: true, tag: n > 0 ? `×${n}` : "have" } : {}),
       ...(by ? { note: by } : {}),
     };
   };
@@ -559,12 +569,14 @@ export function registerCards(): void {
   });
   register("item", (raw) => {
     const { id: head, flags } = flagsOf(raw);
-    const [id = "", at = "-1"] = head.split("@");
+    const [id = "", where = ""] = head.split("@");
+    const onRack = where === "rack";
+    if (isToolId(id)) return withMelt(toolDesc(id), S.run, id, onRack);
     if (!isItemId(id)) return null;
     const lore = flags.includes("lore");
     return lore
-      ? itemDesc(catalogOf(S), id, null, Number(at), lore)
-      : itemDesc(catalogFor(S.run), id, S.run, Number(at));
+      ? itemDesc(catalogOf(S), id, null, onRack, lore)
+      : withMelt(itemDesc(catalogFor(S.run), id, S.run, onRack), S.run, id, onRack);
   });
   register("boon", (id) => (isBoonId(id) ? boonDesc(catalogFor(S.run), id) : null));
   register("acorns", () => (S.run ? purseDesc(S.run) : null));

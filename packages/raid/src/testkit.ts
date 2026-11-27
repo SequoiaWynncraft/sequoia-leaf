@@ -122,7 +122,7 @@ function isSort<T extends FightEvent["t"]>(ev: FightEvent, t: T): ev is Extract<
 
 /** A run planning a room with nothing to pick: three figures, two components on the rack, acorns to spare, a free rustle. */
 function planning(run: Run): void {
-  Object.assign(run, { acorns: 30, level: 4, xp: 0, rustles: 1, held: false, items: ["bark", "thorn"] });
+  Object.assign(run, { acorns: 30, level: 4, xp: 0, rustles: 1, held: false, rack: { thorn: 1, bark: 1 } });
   run.stage = { phase: "plan", picks: [] };
   run.board = run.board.map(() => null);
   run.bench = run.bench.map(() => null);
@@ -135,6 +135,13 @@ function planning(run: Run): void {
 function gregHungry(run: Run): void {
   planning(run);
   run.board[5] = newPiece(run, "greg");
+}
+/** The same, with the Tongs and a Whetstone on the rack, and the worm on the board holding a component. */
+function tooled(run: Run): void {
+  planning(run);
+  run.rack = { ...run.rack, tongs: 1, whetstone: 1 };
+  const worm = run.board[4];
+  if (worm) worm.items = ["plume"];
 }
 /** The same, with three boons on offer to pick from. */
 function boonsUp(run: Run): void {
@@ -162,8 +169,11 @@ export const EVERY_COMMAND: {
   rustle: { c: { do: "rustle" }, ready: planning },
   hold: { c: { do: "hold", on: true }, ready: planning },
   xp: { c: { do: "xp" }, ready: planning },
-  give: { c: { do: "give", item: 0, to: { on: "board", at: 3 } }, ready: planning },
-  forge: { c: { do: "forge", item: 0, with: 1 }, ready: planning },
+  give: { c: { do: "give", item: "bark", to: { on: "board", at: 3 } }, ready: planning },
+  forge: { c: { do: "forge", item: "bark", with: "thorn" }, ready: planning },
+  melt: { c: { do: "melt", item: "bark" }, ready: planning },
+  tongs: { c: { do: "tongs", to: { on: "board", at: 4 } }, ready: tooled },
+  whetstone: { c: { do: "whetstone", to: { on: "board", at: 4 } }, ready: tooled },
   fight: { c: { do: "fight" }, ready: planning },
   take: {
     c: { do: "take" },

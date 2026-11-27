@@ -11,25 +11,27 @@
  */
 import {
   catalogOf,
+  type ComponentId,
   type FigureId,
   isComponentId,
-  type ItemId,
+  isToolId,
+  type Piece,
   pieceAt,
   pieces,
+  type RackItem,
   type RunView,
   type Spot,
   spotOf,
+  toolRefusal,
 } from "@sequoia-leaf/raid";
 
 import { handing, reachOf, reachOfOffer } from "./logic.ts";
 import { type Aim, pairsOf, wanters } from "./making.ts";
 import { zoneOf } from "./zone.ts";
 
-/** A thing in the hand: one of the party's figures (by its number), an offer on the stall, an item on the rack. */
+/** A thing in the hand: one of the party's figures (by its number), an offer on the stall, one of a kind on the rack. */
 export type Held =
-  | { what: "pawn"; id: number }
-  | { what: "offer"; at: number; kind: FigureId }
-  | { what: "item"; at: number; item: ItemId };
+  { what: "pawn"; id: number } | { what: "offer"; at: number; kind: FigureId } | { what: "item"; item: RackItem };
 
 export type Gesture =
   | { at: "idle" }
@@ -89,11 +91,11 @@ export function handStep(g: Gesture, ev: HandEvent): Gesture {
  * at a component it pairs with, and its tip then says what letting go would do, with the button
  * that does it. Anything else, the thing tapped is picked up.
  */
-export function tapOf(g: Gesture, pairs: readonly number[], on: Aim): "down" | "aim" | "pick" {
+export function tapOf(g: Gesture, pairs: readonly RackItem[], on: Aim): "down" | "aim" | "pick" {
   const item = g.at === "picked" && g.held.what === "item" ? g.held : null;
   if (!item) return "pick";
   if ("piece" in on) return "aim";
-  if (on.rack === item.at) return "down";
+  if (on.rack === item.item) return "down";
   return pairs.includes(on.rack) ? "aim" : "pick";
 }
 
@@ -110,22 +112,22 @@ export interface Marks {
   /** The figure tapped and waiting to be told where to go, and the one carried; -1 for none. */
   picked: number;
   held: number;
-  /** The place on the rack of the item in the hand; -1 for none. */
-  item: number;
+  /** The kind of the item in the hand; null for none. */
+  item: RackItem | null;
   /** Figures that would take the item in the hand, and the one it is aimed at; -1 for none. */
   takers: number[];
   taker: number;
-  /** Places on the rack the item in the hand would forge with, and the one it is aimed at; -1 for none. */
-  pairs: number[];
-  pair: number;
+  /** Kinds on the rack the item in the hand would forge with, and the one it is aimed at; null for none. */
+  pairs: RackItem[];
+  pair: RackItem | null;
   /** Fielded figures that want the item in the hand, or the one pointed at. */
   wanters: number[];
   /** Where the hand is, from the board's corner. */
   at: { x: number; y: number };
   /** Something carried that is not a figure of the party's yet: an offer from the stall, or an item. */
-  ghost: { kind: FigureId } | { item: ItemId } | null;
+  ghost: { kind: FigureId } | { item: RackItem } | null;
   /** A component in the hand: figures holding its pair show what the two would make. */
-  forging: ItemId | null;
+  forging: ComponentId | null;
 }
 
 /**
@@ -134,7 +136,7 @@ export interface Marks {
  */
 export interface Seen {
   aim: Aim | null;
-  item: ItemId | null;
+  item: RackItem | null;
 }
 const UNSEEN: Seen = { aim: null, item: null };
 
@@ -146,21 +148,21 @@ const EMPTY: Marks = {
   target: null,
   picked: -1,
   held: -1,
-  item: -1,
+  item: null,
   takers: [],
   taker: -1,
   pairs: [],
-  pair: -1,
+  pair: null,
   wanters: [],
   at: { x: 0, y: 0 },
   ghost: null,
   forging: null,
 };
 
-/** An item in the hand: its place on the rack, and if it is a component, what figures holding its pair show. */
+/** An item in the hand: its kind, and if it is a component, what figures holding its pair show. */
 const itemMarks = (held: Extract<Held, { what: "item" }>): Marks => ({
   ...EMPTY,
-  item: held.at,
+  item: held.item,
   forging: isComponentId(held.item) ? held.item : null,
 });
 
@@ -180,7 +182,7 @@ function heldMarks(g: Gesture): Marks {
 function aimMarks(g: Gesture, seen: Seen): Pick<Marks, "taker" | "pair"> | null {
   const aim = g.at === "dragging" ? g.aim : g.at === "picked" ? seen.aim : null;
   if (g.at === "idle" || g.held.what !== "item" || !aim) return null;
-  return "piece" in aim ? { taker: aim.piece, pair: -1 } : { taker: -1, pair: aim.rack };
+  return "piece" in aim ? { taker: aim.piece, pair: null } : { taker: -1, pair: aim.rack };
 }
 
 /** Where the thing in the hand may go: a figure's places, an offer's, or who would take an item and what it forges with. */
@@ -202,9 +204,17 @@ function reachMarks(held: Held, run: RunView): Partial<Marks> {
     return { seats: reach.seats, slots: reach.slots, zone: zoneOf(run, held.kind) };
   }
   const item = held.item;
+  // A tool is taken by whoever it can be used on; it forges with nothing.
+  if (isToolId(item)) {
+    const takes = (p: Piece): boolean => {
+      const to = spotOf(run, p.id);
+      return to !== null && toolRefusal(run, item, to) === null;
+    };
+    return { takers: pieces(run).flatMap((p) => (takes(p) ? [p.id] : [])), pairs: [] };
+  }
   return {
     takers: pieces(run).flatMap((p) => (handing(catalogOf(run), p, item).can ? [p.id] : [])),
-    pairs: pairsOf(run, held.at),
+    pairs: pairsOf(run, item),
   };
 }
 

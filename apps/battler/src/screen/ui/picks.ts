@@ -18,6 +18,7 @@ import {
   type ComponentId,
   type FigureId,
   figureIn,
+  isToolId,
   itemAdds,
   itemName,
   picksOf,
@@ -25,6 +26,8 @@ import {
   roleLine,
   roomsFought,
   type RunView,
+  type ToolId,
+  TOOLS,
   traitIn,
   traitsOf,
 } from "@sequoia-leaf/raid";
@@ -106,6 +109,15 @@ function componentCard(cat: Catalog, run: RunView, item: ComponentId): (HTMLElem
     el("div", "makeslist", {}, ...lines),
   ];
 }
+/** A tool on offer among the components: its picture, its name and what it does. */
+function toolCard(tool: ToolId): HTMLElement[] {
+  return [
+    art(itemIcon(tool), itemRef(tool)),
+    el("b", "k-gold", { text: TOOLS[tool].name }),
+    el("div", "k-dim", { text: "A tool" }),
+    rich(TOOLS[tool].text),
+  ];
+}
 function boonCardParts(cat: Catalog, boon: BoonId): HTMLElement[] {
   const spec = boonIn(cat, boon);
   return [
@@ -121,8 +133,10 @@ function partsOf(run: RunView, choice: Choice, i: number): (HTMLElement | null)[
   switch (choice.kind) {
     case "starter":
       return starterCard(catalogOf(run), choice.options[i] ?? "rock");
-    case "component":
-      return componentCard(catalogOf(run), run, choice.options[i] ?? "thorn");
+    case "component": {
+      const item = choice.options[i] ?? "thorn";
+      return isToolId(item) ? toolCard(item) : componentCard(catalogOf(run), run, item);
+    }
     case "boon":
       return boonCardParts(catalogOf(run), choice.options[i] ?? "windfall");
     case "rule":
@@ -201,7 +215,7 @@ export function renderPicks(): void {
     return;
   }
   // What the party holds too: a component's lines light the halves it already has.
-  const held = `${run.items.join()}|${pieces(run)
+  const held = `${JSON.stringify(run.rack)}|${pieces(run)
     .map((p) => p.items.join())
     .join(";")}`;
   const now = `${S.runs}:${roomsFought(run)}:${picksOf(run).length}:${choice.kind}:${choice.options.join()}:${held}`;

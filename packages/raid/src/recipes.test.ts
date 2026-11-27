@@ -29,6 +29,7 @@ import { boardMet } from "./foe.ts";
 import { takeMade } from "./made.ts";
 import { chairsUsed, countTraits, type Party, type Placed } from "./party.ts";
 import { forgeItems } from "./rack.ts";
+import { rackOf } from "./racks.ts";
 import { beginFight, buy, choose, fieldCap, fielded, giveItem, move, type Piece, type Run, startRun } from "./run.ts";
 import { at, CAT, partyOfFigures } from "./testkit.ts";
 
@@ -69,13 +70,13 @@ describe("every recipe gives the same thing, however the two meet", () => {
         expect(combine(CAT, b, a)).toEqual(made);
 
         const rack = started();
-        rack.items = [a, b];
-        expect(forgeItems(rack, 0, 1)).toEqual({ ok: true, notes: [{ t: "made", item: made.id, at: 0 }] });
+        rack.rack = rackOf([a, b]);
+        expect(forgeItems(rack, a, b)).toEqual({ ok: true, notes: [{ t: "made", item: made.id }] });
 
         const holder = started();
-        holder.items = [a, b];
-        giveItem(holder, 0, { on: "board", at: MIDDLE });
-        const gave = giveItem(holder, 0, { on: "board", at: MIDDLE });
+        holder.rack = rackOf([a, b]);
+        giveItem(holder, a, { on: "board", at: MIDDLE });
+        const gave = giveItem(holder, b, { on: "board", at: MIDDLE });
         expect(gave.ok && gave.notes[0]).toMatchObject({ t: "gave", item: b, forged: made.id });
 
         // Three Worms: the one on the board holds one half, a copy on the bench the other, and the third is bought.
@@ -87,7 +88,11 @@ describe("every recipe gives the same thing, however the two meet", () => {
         merged.acorns = 5;
         expect(buy(merged, 0).ok).toBe(true);
 
-        expect([rack.items, holder.board[MIDDLE]?.items, keeper.items]).toEqual([[made.id], [made.id], [made.id]]);
+        expect([rack.rack, holder.board[MIDDLE]?.items, keeper.items]).toEqual([
+          { [made.id]: 1 },
+          [made.id],
+          [made.id],
+        ]);
         const forged: ItemId[][] = [rack.seen.forged, holder.seen.forged, merged.seen.forged];
         expect(forged).toEqual([[made.id], [made.id], [made.id]]);
       }
@@ -96,11 +101,11 @@ describe("every recipe gives the same thing, however the two meet", () => {
 
   test("two that make nothing are refused on the rack, and stay where they were", () => {
     const run = started();
-    run.items = ["crabcharm", "thorn", "hoard"];
-    expect(forgeItems(run, 0, 1)).toMatchObject({ ok: false, code: "two_components" });
-    expect(forgeItems(run, 1, 2)).toMatchObject({ ok: false, code: "two_components" });
-    expect(forgeItems(run, 1, 1)).toMatchObject({ ok: false, code: "two_components" });
-    expect(run.items).toEqual(["crabcharm", "thorn", "hoard"]);
+    run.rack = rackOf(["crabcharm", "thorn", "hoard"]);
+    expect(forgeItems(run, "crabcharm", "thorn")).toMatchObject({ ok: false, code: "two_components" });
+    expect(forgeItems(run, "thorn", "hoard")).toMatchObject({ ok: false, code: "two_components" });
+    expect(forgeItems(run, "thorn", "thorn")).toMatchObject({ ok: false, code: "no_such_item" });
+    expect(run.rack).toEqual(rackOf(["crabcharm", "thorn", "hoard"]));
   });
 });
 
@@ -122,12 +127,12 @@ describe("a recipe that makes a boon", () => {
   test("on the rack, gives the run the boon and closes both places; a second time it is refused, and nothing is used up", () => {
     const run = started();
     const chairs = fieldCap(run);
-    run.items = ["bark", "thorn", "bark"];
-    expect(forgeItems(run, 0, 2, PATCHED)).toEqual({ ok: true, notes: [{ t: "boon", boon: "extrachair" }] });
-    expect([run.items, run.boons, fieldCap(run)]).toEqual([["thorn"], ["extrachair"], chairs + 1]);
-    run.items = ["bark", "bark"];
-    expect(forgeItems(run, 0, 1, PATCHED)).toMatchObject({ ok: false, code: "boon_held" });
-    expect([run.items, run.boons]).toEqual([["bark", "bark"], ["extrachair"]]);
+    run.rack = rackOf(["bark", "thorn", "bark"]);
+    expect(forgeItems(run, "bark", "bark", PATCHED)).toEqual({ ok: true, notes: [{ t: "boon", boon: "extrachair" }] });
+    expect([run.rack, run.boons, fieldCap(run)]).toEqual([{ thorn: 1 }, ["extrachair"], chairs + 1]);
+    run.rack = rackOf(["bark", "bark"]);
+    expect(forgeItems(run, "bark", "bark", PATCHED)).toMatchObject({ ok: false, code: "boon_held" });
+    expect([run.rack, run.boons]).toEqual([{ bark: 2 }, ["extrachair"]]);
   });
 
   test("is given to a run once by what made it, and an item made goes in the almanac's notes", () => {

@@ -105,11 +105,11 @@ describe("feeding Greg", () => {
   test("what the eaten figure held goes back to the rack, as selling sends it", () => {
     const run = planning();
     put(run, board(3), "greg");
-    run.items = ["bark"];
+    run.rack = { bark: 1 };
     put(run, bench(0), "crab7", 1, ["wasptail", "glowcap"]);
     const done = feed(run, bench(0), board(3));
     expect(done.ok && done.notes[0]).toMatchObject({ items: ["wasptail", "glowcap"] });
-    expect(run.items).toEqual(["bark", "wasptail", "glowcap"]);
+    expect(run.rack).toEqual({ glowcap: 1, bark: 1, wasptail: 1 });
   });
   test("turned down: from the board, nobody there, no such place, anyone but Greg eating, a Greg eaten, and outside planning", () => {
     const run = planning();

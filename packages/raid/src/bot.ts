@@ -18,15 +18,18 @@ import {
   halvesOf,
   isComponentId,
   isEmblemId,
+  isFinishedId,
 } from "./content/items.ts";
 import { holdItem } from "./content/recipes.ts";
 import { ECONOMY, MAX_LEVEL } from "./content/rooms.ts";
+import { isToolId, type RackItem, type ToolId } from "./content/tools.ts";
 import { stepFor, type TraitId, traitNumber } from "./content/traits.ts";
 import type { RuleId } from "./content/wilds.ts";
 import { lastRoom } from "./endless.ts";
 import { arrange } from "./formation.ts";
 import { SEATS } from "./hex.ts";
 import { chairsUsed, countTraits } from "./party.ts";
+import { countOn, kindsOn } from "./racks.ts";
 import { roomsFought } from "./record.ts";
 import { closedNow } from "./room.ts";
 import {
@@ -233,13 +236,15 @@ function likesRule(run: RunView, rule: RuleId): number {
 }
 function likesComponent(run: RunView, item: ComponentId): number {
   const own = pieces(run);
-  const loose = own.some((p) => p.items.some(isComponentId)) || run.items.some(isComponentId);
+  const loose = own.some((p) => p.items.some(isComponentId)) || kindsOn(run.rack).some(isComponentId);
   const casters = own.filter(
     (p) => figureIn(catalogOf(run), p.kind).calling === "sage" || figureIn(catalogOf(run), p.kind).calling === "mender",
   ).length;
   const base = item === "glowcap" ? 2 + casters * 0.4 : item === "thorn" || item === "plume" ? 3 : 2.6;
   return base + (loose ? 0.2 : 0);
 }
+/** How much it likes a tool on offer: less than any component, so it takes one only from a pick of tools; a Whetstone over Tongs. */
+const TOOL_LIKES: Record<ToolId, number> = { tongs: 1, whetstone: 1.5 };
 function settleChoices<R extends RunView>(run: R, habit: Habit, s: Stream, hands: Hands<R>): void {
   for (let guard = 0; guard < 12; guard++) {
     const choice = picksOf(run)[0];
@@ -260,6 +265,7 @@ function settleChoices<R extends RunView>(run: R, habit: Habit, s: Stream, hands
           const rule = choice.options[i];
           if (rule !== undefined) score = likesRule(run, rule);
         } else if (isComponentId(option)) score = likesComponent(run, option);
+        else if (isToolId(option)) score = TOOL_LIKES[option];
         if (score > bestScore) {
           best = i;
           bestScore = score;
@@ -454,30 +460,35 @@ function raisesStep(run: RunView, p: Piece, item: EmblemId): boolean {
     )[trait] ?? 0;
   return stepFor(cat, trait, after) > stepFor(cat, trait, before);
 }
+/** A component or a finished item: what it hands out first. */
+const isMade = (item: RackItem | undefined): item is ComponentId | FinishedId =>
+  isComponentId(item) || isFinishedId(item);
+/** Who on the board it would hand a component or a finished item to: the best suited (`fits`), and worthiest; -1 for nobody. */
+function takerOf(run: RunView, habit: Habit, item: ComponentId | FinishedId): number {
+  const suits = suitOf(catalogOf(run), item);
+  let best = -1;
+  let bestScore = 0;
+  run.board.forEach((p, seat) => {
+    if (!p || "refused" in holdItem(catalogOf(run), p, item)) return;
+    // Somebody already holding a loose component can forge with it now.
+    const forges = isComponentId(item) && p.items.some(isComponentId) ? 1.5 : 1;
+    const score = fits(catalogOf(run), p, suits) * forges * worthOf(catalogOf(run), habit, p.kind, p.stars);
+    if (score > bestScore) {
+      best = seat;
+      bestScore = score;
+    }
+  });
+  return best;
+}
 function handOutItems<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): void {
-  // Components and finished items first, the first on the item bench first.
+  // Components and finished items first, in the rack's order, until the first nobody on the board can take.
   for (let guard = 0; guard < 30; guard++) {
-    const at = run.items.findIndex((item) => !isEmblemId(item));
-    const item = run.items[at];
-    if (item === undefined || isEmblemId(item)) break;
-    const suits = suitOf(catalogOf(run), item);
-    let best = -1;
-    let bestScore = 0;
-    run.board.forEach((p, seat) => {
-      if (!p || "refused" in holdItem(catalogOf(run), p, item)) return;
-      // Somebody already holding a loose component can forge with it now.
-      const forges = isComponentId(item) && p.items.some(isComponentId) ? 1.5 : 1;
-      const score = fits(catalogOf(run), p, suits) * forges * worthOf(catalogOf(run), habit, p.kind, p.stars);
-      if (score > bestScore) {
-        best = seat;
-        bestScore = score;
-      }
-    });
-    if (best < 0 || !hands(run, { do: "give", item: at, to: { on: "board", at: best } }).ok) break;
+    const item = kindsOn(run.rack).find(isMade);
+    const best = item === undefined ? -1 : takerOf(run, habit, item);
+    if (item === undefined || best < 0 || !hands(run, { do: "give", item, to: { on: "board", at: best } }).ok) break;
   }
   // Then each emblem, to the worthiest figure on the board that can take it and that it suits.
-  for (let at = run.items.length - 1; at >= 0; at--) {
-    const item = run.items[at];
+  for (const item of kindsOn(run.rack)) {
     if (!isEmblemId(item)) continue;
     let best = -1;
     let bestScore = 0;
@@ -494,8 +505,50 @@ function handOutItems<R extends RunView>(run: R, habit: Habit, hands: Hands<R>):
         bestScore = score;
       }
     });
-    if (best >= 0) hands(run, { do: "give", item: at, to: { on: "board", at: best } });
+    if (best >= 0) hands(run, { do: "give", item, to: { on: "board", at: best } });
   }
+}
+
+// ---------- tools ----------
+
+/** The fielded figure whose finished items suit it least, if on average they suit it less than a little (`fits` under 1); -1 for none. */
+function misfit(run: RunView): number {
+  const cat = catalogOf(run);
+  let worst = -1;
+  let worstFit = 1;
+  run.board.forEach((p, seat) => {
+    const made = p ? p.items.filter(isFinishedId) : [];
+    if (!p || made.length === 0) return;
+    const fit = made.reduce((n, item) => n + fits(cat, p, suitOf(cat, item)), 0) / made.length;
+    if (fit < worstFit) {
+      worst = seat;
+      worstFit = fit;
+    }
+  });
+  return worst;
+}
+
+/**
+ * Its rule for tools, after handing out. Tongs: on the figure on the bench holding most, if one holds
+ * anything (there it does nothing with it); else, with no Whetstone to use instead, on the fielded
+ * figure whose finished items suit it least (`misfit`); then it hands out again, so each item goes to
+ * whoever suits it best. A Whetstone: on the fielded figure whose finished items suit it least; last
+ * of all, since what it makes is Leaf's to draw. Otherwise a tool is kept. It never melts: the rack
+ * has no limit.
+ */
+function useTools<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): void {
+  let laden = -1;
+  run.bench.forEach((p, slot) => {
+    if (p && p.items.length > (run.bench[laden]?.items.length ?? 0)) laden = slot;
+  });
+  const stone = countOn(run.rack, "whetstone") > 0;
+  const worst = misfit(run);
+  const tongsTo: Spot | null =
+    laden >= 0 ? { on: "bench", at: laden } : !stone && worst >= 0 ? { on: "board", at: worst } : null;
+  if (countOn(run.rack, "tongs") > 0 && tongsTo && hands(run, { do: "tongs", to: tongsTo }).ok)
+    handOutItems(run, habit, hands);
+  const now = misfit(run);
+  if (stone && now >= 0) hands(run, { do: "whetstone", to: { on: "board", at: now } });
 }
 
 // ---------- playing ----------
@@ -506,7 +559,7 @@ export function planRoom(run: Run, habit: Habit): void {
 }
 /**
  * Does everything a player does before a fight, with `hands`, its habits drawn from `s`: settles
- * what is waiting to be chosen, shops, seats the party, hands out items.
+ * what is waiting to be chosen, shops, seats the party, hands out items, uses its tools.
  */
 export function planWith<R extends RunView>(run: R, habit: Habit, hands: Hands<R>, s: Stream): void {
   if (run.stage.phase !== "plan") return;
@@ -519,6 +572,7 @@ export function planWith<R extends RunView>(run: R, habit: Habit, hands: Hands<R
   shop(run, habit, hands);
   seatParty(run, habit, hands);
   handOutItems(run, habit, hands);
+  useTools(run, habit, hands);
 }
 /** Plans a room, fights it and takes the takings. */
 export function playRoom(run: Run, habit: Habit): Taken {

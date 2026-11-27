@@ -70,8 +70,8 @@ describe("the rows a figure in the hand belongs in", () => {
     const offer = (at: number, kind: FigureId): Gesture => after(IDLE, carry({ what: "offer", at, kind }));
     expect(marksOf(offer(0, "finch"), run).zone).toEqual(BACK);
     expect(marksOf(offer(1, "glorp"), run).zone).toEqual(FRONT);
-    run.items = ["thorn"];
-    expect(marksOf(after(IDLE, carry({ what: "item", at: 0, item: "thorn" })), run).zone).toEqual([]);
+    run.rack = { thorn: 1 };
+    expect(marksOf(after(IDLE, carry({ what: "item", item: "thorn" })), run).zone).toEqual([]);
   });
 
   test("advise only: a seat in the rows that is taken still lights, a seat outside them may still be gone to", () => {

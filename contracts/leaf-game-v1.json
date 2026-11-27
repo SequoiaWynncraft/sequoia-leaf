@@ -703,7 +703,7 @@
               null
             ],
             "bench": [null, null, null, null, null, null, null, null, null],
-            "items": [],
+            "rack": {},
             "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
             "held": false,
             "rustles": 1,
@@ -914,7 +914,7 @@
               null
             ],
             "bench": [null, null, null, null, null, null, null, null, null],
-            "items": [],
+            "rack": {},
             "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
             "held": false,
             "rustles": 1,
@@ -1111,7 +1111,7 @@
               null
             ],
             "bench": [null, null, null, null, null, null, null, null, null],
-            "items": [],
+            "rack": {},
             "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
             "held": false,
             "rustles": 1,
@@ -1355,7 +1355,7 @@
               null
             ],
             "bench": [null, null, null, null, null, null, null, null, null],
-            "items": [],
+            "rack": {},
             "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
             "held": false,
             "rustles": 1,
@@ -1554,7 +1554,7 @@
               null
             ],
             "bench": [null, null, null, null, null, null, null, null, null],
-            "items": [],
+            "rack": {},
             "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
             "held": false,
             "rustles": 1,
@@ -2977,7 +2977,7 @@
               null
             ],
             "bench": [null, null, null, null, null, null, null, null, null],
-            "items": [],
+            "rack": {},
             "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
             "held": false,
             "rustles": 1,
@@ -3083,7 +3083,7 @@
               null
             ],
             "bench": [null, null, null, null, null, null, null, null, null],
-            "items": [],
+            "rack": {},
             "stall": ["barrowgnome", "emberkit", "moth", "barrowgnome", "barrowgnome"],
             "held": false,
             "rustles": 1,
@@ -3702,7 +3702,7 @@
             },
             {
               "kind": "barrowgnome",
-              "item": "glowcap",
+              "item": "tongs",
               "by": null
             },
             {
@@ -3967,7 +3967,7 @@
             null
           ],
           "bench": [null, null, null, null, null, null, null, null, null],
-          "items": [],
+          "rack": {},
           "stall": ["barrowgnome", "emberkit", "crab7", "worm", "crab7"],
           "held": false,
           "rustles": 1,

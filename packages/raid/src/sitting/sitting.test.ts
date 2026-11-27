@@ -12,6 +12,7 @@ import { resolveFight } from "../fight/engine.ts";
 import type { FightSummary } from "../fight/types.ts";
 import { planCommands, runView } from "../game.ts";
 import { payout } from "../outside.ts";
+import { countOn, kindsOn, rackSize } from "../racks.ts";
 import {
   abandon,
   choose,
@@ -462,6 +463,9 @@ describe("a sparring room", () => {
 
 // ---------- the carousel ----------
 
+/** A figure, or its price, and what it held: the Tongs one held are on the rack beside it. */
+const held = (run: Run): number => pieces(run).length + run.acorns + rackSize(run.rack) - countOn(run.rack, "tongs");
+
 describe("the carousel", () => {
   test("the first is open to the members at once, and its figure is who a seat sets out with", () => {
     const t = started(51, 3);
@@ -476,7 +480,10 @@ describe("the carousel", () => {
     const wanted = t.stage.ring[free];
     const took = must(command(t, { do: "pick", offer: free }, call(START + 1000, 3, 1)));
     const { run } = seat(took, 1);
-    expect(pieces(run).map((p) => [p.kind, p.items])).toEqual([[wanted?.kind ?? "greg", [wanted?.item ?? "thorn"]]]);
+    // The figure holds its component; the Tongs go to the rack instead.
+    const holds = wanted?.item === "tongs" ? [] : [wanted?.item ?? "thorn"];
+    expect(pieces(run).map((p) => [p.kind, p.items])).toEqual([[wanted?.kind ?? "greg", holds]]);
+    expect(run.rack).toEqual(wanted?.item === "tongs" ? { tongs: 1 } : {});
     expect(fielded(run)).toBe(1);
     expect(picksOf(run)).toEqual([]);
     // A taken figure is refused to the next, and nobody takes two.
@@ -543,9 +550,17 @@ describe("the carousel", () => {
     expect(carousels).toBe(SITTINGS.length);
   });
 
+  test("one figure of each carousel holds the Tongs in place of a component", () => {
+    for (const seed of [51, 52, 53, 54]) {
+      const t = started(seed, 3);
+      if (t.stage.at !== "carousel") throw new Error("no carousel");
+      expect(t.stage.ring.filter((offer) => offer.item === "tongs")).toHaveLength(1);
+    }
+  });
+
   test("everyone in gets one figure of a carousel, the late by the dice as their turn's time is up", () => {
     const t = until(started(52, 8), (s) => s.stage.at === "carousel" && s.room === 5);
-    const counts = t.seats.map((s) => pieces(s.run).length + s.run.acorns + s.run.items.length);
+    const counts = t.seats.map((s) => held(s.run));
     // Nobody chooses: as each pair's time is up the pair gets one each by the dice, and the next is let in.
     let after = t;
     while (after.stage.at === "carousel") {
@@ -559,7 +574,7 @@ describe("the carousel", () => {
     const taken = seatsIn(after).length;
     expect(taken).toBeGreaterThan(1);
     after.seats.forEach((s, i) => {
-      const now = pieces(s.run).length + s.run.acorns + s.run.items.length;
+      const now = held(s.run);
       expect(now - (counts[i] ?? 0)).toBe(s.place === null ? 1 : 0);
     });
   });
@@ -579,7 +594,7 @@ describe("the carousel", () => {
     expect(join(run, "greg", "plume")).toEqual([]);
     expect(pieces(run).length).toBe(1 + ECONOMY.bench);
     expect(run.acorns).toBe(acorns + figureIn(CAT, "greg").tier);
-    expect(run.items).toEqual(["plume"]);
+    expect(run.rack).toEqual({ plume: 1 });
     // The third of a kind joins the two there, with what it held.
     const notes = join(run, twin, "thorn");
     expect(notes.map((note) => note.t)).toEqual(["merged"]);
@@ -781,12 +796,20 @@ describe("a stage ends as soon as nobody has anything left to do", () => {
   });
 
   test("a turn with nobody in it still in is skipped at once, not waited out", () => {
-    const before = until(started(55, 2), (x) => x.stage.at === "fight" && BOSS_ROOMS[0] === x.room, true);
-    const t = structuredClone(advance(before, deadline(before)));
+    // A carousel with a later pair of two regulars that has a pair after it: the first seed that lays one out.
+    const laid = [55, 56, 57, 58, 59, 60, 61, 62, 63, 64].flatMap((seed) => {
+      const before = until(started(seed, 2), (x) => x.stage.at === "fight" && BOSS_ROOMS[0] === x.room, true);
+      const at = structuredClone(advance(before, deadline(before)));
+      if (at.stage.at !== "carousel") return [];
+      const { turns: order } = at.stage;
+      const g = [2, 4].find((p) => order.slice(p, p + 2).every((n) => !isMember(n) && n !== undefined));
+      return g === undefined ? [] : [{ t: at, pair: g }];
+    })[0];
+    const t = laid?.t ?? bad();
+    const pair = laid?.pair ?? bad();
     if (t.stage.at !== "carousel") throw new Error("no carousel");
     const { turns } = t.stage;
-    // A later pair of two regulars, both gone out since the carousel was laid out.
-    const pair = [2, 4, 6].find((g) => turns.slice(g, g + 2).every((n) => !isMember(n) && n !== undefined)) ?? bad();
+    // That pair, both gone out since the carousel was laid out.
     turns.slice(pair, pair + 2).forEach((n, k) => {
       const gone = seat(t, n);
       gone.place = CHAIRS - k;
@@ -903,13 +926,13 @@ describe("what people do", () => {
 
   test("forging on the rack is planning: read off the wire, done at the seat, and predicted by the page as Leaf does it", () => {
     const t = structuredClone(until(started(63, 2), planning(0)));
-    seat(t, 1).run.items = ["bark", "thorn"];
+    seat(t, 1).run.rack = { thorn: 1, bark: 1 };
     const now = deadline(t) - 5000;
-    const forging: SittingCommand = { do: "forge", item: 0, with: 1 };
+    const forging: SittingCommand = { do: "forge", item: "bark", with: "thorn" };
     expect(readCommand({ ...forging, id: "x" })).toEqual(forging);
     const answer = command(t, forging, call(now, 8, 1));
     if (!answer.ok) throw new Error(answer.code);
-    expect(seat(answer.sitting, 1).run.items).toEqual(["hedgehog"]);
+    expect(seat(answer.sitting, 1).run.rack).toEqual({ hedgehog: 1 });
     expect(predict(sittingView(t, member(1).id), forging)).toEqual({
       view: sittingView(answer.sitting, member(1).id),
       notes: answer.notes,
@@ -919,7 +942,8 @@ describe("what people do", () => {
   test("every command of a run is the member's to plan with or the clock's, and a seat reads only the member's", () => {
     // Every field a command of a run reads, so that each is read by its name alone.
     const fields = { option: 0, offer: 0, from: { on: "bench", at: 0 }, to: { on: "board", at: 0 }, seat: 0 };
-    const read = (name: string) => readCommand({ do: name, ...fields, on: true, item: 0, with: 1 })?.do ?? null;
+    const read = (name: string) =>
+      readCommand({ do: name, ...fields, on: true, item: "thorn", with: "bark" })?.do ?? null;
     const whose = Object.entries(COMMANDS).map(([name, spec]): [string, string] => [name, spec.whose]);
     expect(whose.filter(([, w]) => w === "clock").map(([name]) => name)).toEqual(["fight", "take", "abandon"]);
     for (const [name, w] of whose) expect([name, read(name)]).toEqual([name, w === "plan" ? name : null]);
@@ -931,7 +955,7 @@ describe("what people do", () => {
     const waiting = picksOf(run).map((pick) => pick.options[0]);
     const locked = seat(advance(t, deadline(t)), 0).run;
     expect(locked.stage.phase).toBe("fight");
-    expect([...locked.items, ...locked.boons]).toEqual(expect.arrayContaining(waiting));
+    expect([...kindsOn(locked.rack), ...locked.boons]).toEqual(expect.arrayContaining(waiting));
   });
 
   test("leaving a started sitting is going out, and a seat that is out can do nothing", () => {

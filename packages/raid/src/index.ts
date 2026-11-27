@@ -269,7 +269,22 @@ export {
   whyText,
   xpToNext,
 } from "./run.ts";
-export { forgeItems } from "./rack.ts";
+export { forgeItems, melt, toolRefusal, useTongs, useWhetstone } from "./rack.ts";
+export { counted, countOn, isRackItem, kindsOn, type Rack, rackOf, rackSize } from "./racks.ts";
+export type { Pickable } from "./rewards.ts";
+export {
+  isToolId,
+  MELT,
+  meltValue,
+  type RackItem,
+  rackName,
+  rackSortOf,
+  TOOL_IDS,
+  TOOL_ODDS,
+  type ToolId,
+  TOOLS,
+  type ToolSpec,
+} from "./content/tools.ts";
 export { type Fed, feed, mealFor } from "./feed.ts";
 export { boardMet, opposition } from "./foe.ts";
 // A run's record: its last rooms in full, the rest as totals.

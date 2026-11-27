@@ -11,6 +11,7 @@ import { resolveFight } from "./fight/engine.ts";
 import { opposition } from "./foe.ts";
 import { levelOf, type Roster, stallOdds } from "./own.ts";
 import { isParty, type Party, partyWorth } from "./party.ts";
+import { rackOf, rackSize } from "./racks.ts";
 import {
   abandon,
   beginFight,
@@ -256,7 +257,7 @@ describe("selling and moving", () => {
     const done = sell(run, { on: "bench", at: 0 });
     expect(done.ok).toBe(true);
     expect(run.acorns).toBe(acorns + 5);
-    expect(run.items).toEqual(["wasptail", "bark"]);
+    expect(run.rack).toEqual(rackOf(["wasptail", "bark"]));
     expect(run.bench[0]).toBeNull();
     onBench(run, "worm", 4);
     sell(run, { on: "bench", at: 4 });
@@ -264,13 +265,13 @@ describe("selling and moving", () => {
   });
   test("selling a figure that holds an emblem gives the emblem back to the item bench, for another to hold", () => {
     const run = started();
-    run.items = [];
+    run.rack = {};
     onBench(run, "finch", 0, 1, ["crabcharm", "thorn"]);
     const done = sell(run, { on: "bench", at: 0 });
     expect(done.ok && done.notes[0]).toMatchObject({ t: "sold", items: ["crabcharm", "thorn"] });
-    expect(run.items).toEqual(["crabcharm", "thorn"]);
+    expect(run.rack).toEqual(rackOf(["crabcharm", "thorn"]));
     onBench(run, "worm", 1);
-    expect(giveItem(run, 0, { on: "bench", at: 1 }).ok).toBe(true);
+    expect(giveItem(run, "crabcharm", { on: "bench", at: 1 }).ok).toBe(true);
     expect(run.bench[1]?.items).toEqual(["crabcharm"]);
   });
   test("nobody is nowhere, and the last figure stays", () => {
@@ -406,7 +407,7 @@ describe("three of a kind", () => {
     stock(run, 0, "worm");
     const done = buy(run, 0);
     expect(keeper.items).toEqual(["wasptail", "stump", "hoard"]);
-    expect(run.items).toEqual(["blackthorn"]);
+    expect(run.rack).toEqual({ blackthorn: 1 });
     expect(done.ok && done.notes[1]).toMatchObject({ t: "merged", spilled: ["blackthorn"] });
   });
   test("an emblem a merged copy held goes to the keeper while it has room, like any item", () => {
@@ -419,7 +420,7 @@ describe("three of a kind", () => {
     buy(run, 0);
     expect(keeper.stars).toBe(2);
     expect(keeper.items).toEqual(["wasptail", "stump", "crabcharm"]);
-    expect(run.items).toEqual(["mistcharm"]);
+    expect(run.rack).toEqual({ mistcharm: 1 });
   });
   test("loose components that meet in a merge forge, as they would if handed over", () => {
     const run = started();
@@ -432,7 +433,7 @@ describe("three of a kind", () => {
     expect(keeper.stars).toBe(2);
     expect(keeper.items).toEqual(["wasptail", "stump"]);
     expect(run.seen.forged).toEqual(["wasptail"]);
-    expect(run.items).toEqual([]);
+    expect(run.rack).toEqual({});
   });
 });
 
@@ -474,61 +475,64 @@ describe("levels", () => {
 describe("items", () => {
   test("a component handed to a figure is held; a second one forges with it", () => {
     const run = started();
-    run.items = ["thorn", "plume", "bark"];
-    const first = giveItem(run, 0, { on: "board", at: 3 });
+    run.rack = rackOf(["thorn", "plume", "bark"]);
+    const first = giveItem(run, "thorn", { on: "board", at: 3 });
     expect(first.ok && first.notes[0]).toMatchObject({ t: "gave", item: "thorn", forged: null, holds: ["thorn"] });
-    const second = giveItem(run, 0, { on: "board", at: 3 });
+    const second = giveItem(run, "plume", { on: "board", at: 3 });
     expect(second.ok && second.notes[0]).toMatchObject({ t: "gave", item: "plume", forged: "wasptail" });
     expect(run.board[3]?.items).toEqual(["wasptail"]);
-    expect(run.items).toEqual(["bark"]);
+    expect(run.rack).toEqual({ bark: 1 });
     expect(run.seen.forged).toEqual(["wasptail"]);
   });
   test("two of the same component forge too", () => {
     const run = started();
-    run.items = ["bark", "bark"];
-    giveItem(run, 0, { on: "board", at: 3 });
-    giveItem(run, 0, { on: "board", at: 3 });
+    run.rack = rackOf(["bark", "bark"]);
+    giveItem(run, "bark", { on: "board", at: 3 });
+    giveItem(run, "bark", { on: "board", at: 3 });
     expect(run.board[3]?.items).toEqual(["stump"]);
   });
   test("an emblem takes one of a figure's three places, and components still forge beside it", () => {
     const run = started();
     run.board[3] = null;
     const finch = put(run, "finch", 3);
-    run.items = ["crabcharm", "thorn", "plume", "hoard", "bark"];
-    expect(giveItem(run, 0, { on: "board", at: 3 })).toMatchObject({ ok: true, notes: [{ forged: null }] });
-    giveItem(run, 0, { on: "board", at: 3 });
-    expect(giveItem(run, 0, { on: "board", at: 3 })).toMatchObject({ ok: true, notes: [{ forged: "wasptail" }] });
+    run.rack = rackOf(["crabcharm", "thorn", "plume", "hoard", "bark"]);
+    expect(giveItem(run, "crabcharm", { on: "board", at: 3 })).toMatchObject({ ok: true, notes: [{ forged: null }] });
+    giveItem(run, "thorn", { on: "board", at: 3 });
+    expect(giveItem(run, "plume", { on: "board", at: 3 })).toMatchObject({ ok: true, notes: [{ forged: "wasptail" }] });
     expect(finch.items).toEqual(["crabcharm", "wasptail"]);
-    giveItem(run, 0, { on: "board", at: 3 });
+    giveItem(run, "hoard", { on: "board", at: 3 });
     expect(finch.items).toEqual(["crabcharm", "wasptail", "hoard"]);
-    expect(giveItem(run, 0, { on: "board", at: 3 })).toMatchObject({ ok: false, code: "hands_full" });
-    expect(run.items).toEqual(["bark"]);
+    expect(giveItem(run, "bark", { on: "board", at: 3 })).toMatchObject({ ok: false, code: "hands_full" });
+    expect(run.rack).toEqual({ bark: 1 });
   });
   test("an emblem is refused for a figure of its kin already, and the refusal says so", () => {
     const run = started();
     run.board[3] = null;
     const finch = put(run, "finch", 3);
-    run.items = ["feathercharm", "crabcharm"];
-    expect(giveItem(run, 0, { on: "board", at: 3 })).toEqual({
+    run.rack = rackOf(["feathercharm", "crabcharm"]);
+    expect(giveItem(run, "feathercharm", { on: "board", at: 3 })).toEqual({
       ok: false,
       code: "already_kin",
       why: "It is of that origin already.",
     });
     expect(finch.items).toEqual([]);
-    expect(run.items).toEqual(["feathercharm", "crabcharm"]);
+    expect(run.rack).toEqual(rackOf(["feathercharm", "crabcharm"]));
     // A Finch is no Crab, and takes the other.
-    expect(giveItem(run, 1, { on: "board", at: 3 }).ok).toBe(true);
+    expect(giveItem(run, "crabcharm", { on: "board", at: 3 }).ok).toBe(true);
     expect(finch.items).toEqual(["crabcharm"]);
   });
   test("a figure holds three, and no more", () => {
     const run = started();
     const piece = run.board[3];
     if (piece) piece.items = ["stump", "hoard", "quilt"];
-    run.items = ["thorn"];
-    expect(giveItem(run, 0, { on: "board", at: 3 })).toMatchObject({ ok: false, why: "It is holding all it can." });
-    expect(giveItem(run, 4, { on: "board", at: 3 })).toMatchObject({ ok: false, why: "There is no such item." });
-    expect(giveItem(run, 0, { on: "board", at: 9 })).toMatchObject({ ok: false, why: "Nobody is there." });
-    expect(run.items).toEqual(["thorn"]);
+    run.rack = { thorn: 1 };
+    expect(giveItem(run, "thorn", { on: "board", at: 3 })).toMatchObject({
+      ok: false,
+      why: "It is holding all it can.",
+    });
+    expect(giveItem(run, "plume", { on: "board", at: 3 })).toMatchObject({ ok: false, why: "There is no such item." });
+    expect(giveItem(run, "thorn", { on: "board", at: 9 })).toMatchObject({ ok: false, why: "Nobody is there." });
+    expect(run.rack).toEqual({ thorn: 1 });
   });
 });
 
@@ -828,7 +832,7 @@ describe("choices after a room", () => {
     expect(buy(won, 0)).toMatchObject({ ok: false, why: "Pick a component first." });
     const item = pick?.kind === "component" ? pick.options[2] : undefined;
     expect(choose(won, 2).ok).toBe(true);
-    expect(won.items).toEqual(item ? [item] : []);
+    expect(won.rack).toEqual(item ? { [item]: 1 } : {});
 
     const lost = losing();
     fight(lost);
@@ -910,7 +914,7 @@ describe("boons", () => {
   test("Windfall pays at once; A Basket On The Stump leaves two components; Warm Blanket gives resolve back", () => {
     const start = ECONOMY.startAcorns;
     expect(withBoon("windfall").acorns).toBe(start + boonNumber(CAT, "windfall", "acorns"));
-    expect(withBoon("basket").items.length).toBe(boonNumber(CAT, "basket", "components"));
+    expect(rackSize(withBoon("basket").rack)).toBe(boonNumber(CAT, "basket", "components"));
     expect(withBoon("blanket", (run) => (run.resolve = 10)).resolve).toBe(10 + boonNumber(CAT, "blanket", "now"));
     expect(withBoon("blanket", (run) => (run.resolve = 19)).resolve).toBe(20);
   });
@@ -972,13 +976,13 @@ describe("boons", () => {
       { t: "boon", boon: "crabcharm" },
       { t: "items", why: "charm", items: ["crabcharm"] },
     ]);
-    expect(run.items).toEqual(["crabcharm"]);
+    expect(run.rack).toEqual({ crabcharm: 1 });
     expect(run.boons).toEqual(["crabcharm"]);
     // The party is a Badger and a Crab #40: one Crab.
     expect(traitsNow(run).find((t) => t.trait === "crab")).toEqual({ trait: "crab", count: 1, step: 0 });
     // The Badger takes it, and is a Crab as well.
-    expect(giveItem(run, 0, { on: "board", at: 3 }).ok).toBe(true);
-    expect(run.items).toEqual([]);
+    expect(giveItem(run, "crabcharm", { on: "board", at: 3 }).ok).toBe(true);
+    expect(run.rack).toEqual({});
     expect(traitsNow(run).find((t) => t.trait === "crab")).toEqual({ trait: "crab", count: 2, step: 1 });
     const begun = beginFight(run);
     expect(begun.ok && begun.setup.sides[0].figures.find((p) => p.kind === "badger")?.items).toEqual(["crabcharm"]);
@@ -1100,7 +1104,7 @@ describe("a room laid out afresh", () => {
       "xp",
       "board",
       "bench",
-      "items",
+      "rack",
       "boons",
       "record",
     ] as const) {

@@ -1,7 +1,7 @@
 import { PAL } from "@sequoia-leaf/figures/pal.ts";
 import { readRows } from "@sequoia-leaf/figures/rows.ts";
 /**
- * The small pictures: one for every trait, component, finished item and boon, the three kinds of
+ * The small pictures: one for every trait, component, finished item, tool and boon, the three kinds of
  * room, the Wilds' rules, and the few signs the buttons carry. Typed as rows of letters like the
  * figures and kept as text (`icons.txt`), baked once with a dark edge, and handed out as fresh little
  * canvases to put on the page. An emblem is the sign of the trait it grants.
@@ -11,15 +11,10 @@ import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 import type { BoonId } from "@sequoia-leaf/raid/content/boons.ts";
 import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
-import {
-  type EmblemId,
-  emblemTrait,
-  isComponentId,
-  isEmblemId,
-  type ItemId,
-} from "@sequoia-leaf/raid/content/items.ts";
+import { type EmblemId, emblemTrait, isComponentId, isEmblemId } from "@sequoia-leaf/raid/content/items.ts";
 import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import type { RoomKind } from "@sequoia-leaf/raid/content/rooms.ts";
+import type { RackItem } from "@sequoia-leaf/raid/content/tools.ts";
 import type { TraitId } from "@sequoia-leaf/raid/content/traits.ts";
 import type { RuleId } from "@sequoia-leaf/raid/content/wilds.ts";
 
@@ -76,9 +71,10 @@ function copy(src: HTMLCanvasElement): HTMLCanvasElement {
 /** The kept picture of a trait, for drawing on the table. Do not put it on the page. */
 export const traitPic = (id: TraitId): HTMLCanvasElement => bakedOf(`t:${id}`, rowsOf("trait", id));
 export const traitIcon = (id: TraitId): HTMLCanvasElement => copy(traitPic(id));
-export const itemPic = (id: ItemId): HTMLCanvasElement =>
+/** The kept picture of an item or a tool (each typed as an item), for drawing on the table. Do not put it on the page. */
+export const itemPic = (id: RackItem): HTMLCanvasElement =>
   isEmblemId(id) ? traitPic(grantedOf(id)) : bakedOf(`i:${id}`, rowsOf("item", id));
-export const itemIcon = (id: ItemId): HTMLCanvasElement => copy(itemPic(id));
+export const itemIcon = (id: RackItem): HTMLCanvasElement => copy(itemPic(id));
 export const glyphPic = (id: Glyph): HTMLCanvasElement => bakedOf(`g:${id}`, rowsOf("glyph", id), id !== "hand");
 export const glyph = (id: Glyph): HTMLCanvasElement => copy(glyphPic(id));
 /** A figure's level, 1 to 6, as a small green number: drawn beside its base, never among its stars. */
@@ -144,7 +140,7 @@ function halved(rows: readonly string[]): string[] {
  * emblem) with a gold edge and a loose component with the plain dark one, so a component waiting for
  * its pair stands out. Do not put it on the page.
  */
-export function heldPic(id: ItemId): HTMLCanvasElement {
+export function heldPic(id: RackItem): HTMLCanvasElement {
   const key = `h:${id}`;
   let c = baked.get(key);
   if (!c) {

@@ -348,7 +348,7 @@ describe("a table stored under other numbers", () => {
       ),
     );
     expect(run.board.every((p) => !p || p.items.length <= HOLDS)).toBe(true);
-    expect(run.items).toEqual(["glowthorn"]);
+    expect(run.rack).toEqual({ glowthorn: 1 });
   });
 
   test("Greg fed more than he eats now, or anybody else fed at all: as much as he eats, and nothing", () => {

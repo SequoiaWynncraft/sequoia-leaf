@@ -27,18 +27,29 @@ import { mix } from "@sequoia-leaf/core";
 import { BOON_IDS, type BoonId, isBoonId } from "./content/boons.ts";
 import { catalogOf, everyFigure } from "./content/catalog.ts";
 import { type FigureId, isBossId, isFigureId, isStars, isUnitKind } from "./content/figures.ts";
-import { FINISHED_IDS, isComponentId, isEmblemId, isFinishedId, isItemId, type ItemId } from "./content/items.ts";
+import {
+  type EmblemId,
+  FINISHED_IDS,
+  isComponentId,
+  isEmblemId,
+  isFinishedId,
+  isItemId,
+  type ItemId,
+} from "./content/items.ts";
 import { holdItem } from "./content/recipes.ts";
 import { type Era, isEra, LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, MOST_ROOMS, ROOM_COUNT } from "./content/rooms.ts";
 import { type FightRules, ROOM_RULES, ruled } from "./content/rules.ts";
+import { isToolId } from "./content/tools.ts";
 import { isTraitId, renamedTitle, renamedTraits, TRAIT_IDS, traitNumber } from "./content/traits.ts";
 import { isRuleId, RULE_IDS } from "./content/wilds.ts";
 import { lastRoom } from "./endless.ts";
 import type { FightResult, FightSetup, FightSummary, Tally } from "./fight/types.ts";
 import { SEATS } from "./hex.ts";
 import { isParty, type Party } from "./party.ts";
+import { counted, countOn, isRackItem, kindsOn, type Rack, rackOf, withAll } from "./racks.ts";
 import { folded, MET_APART, noRooms, type RoomRecord, roomsFought, type RoomTotals } from "./record.ts";
+import type { Pickable } from "./rewards.ts";
 import { setupRules } from "./room.ts";
 import {
   type Choice,
@@ -80,12 +91,48 @@ function unique<T>(items: T[], what: string): T[] {
 const UINT = 0xffffffff;
 /** The most of anything a run could keep, whatever the numbers: room for them to grow. */
 const ROOMY = 999;
+/** The most of what grows room by room for as long as a run goes on (acorns, figures' numbers, what lies on the rack): whatever a number holds exactly. */
+const MOST = Number.MAX_SAFE_INTEGER;
+
 /**
- * The most loose items a run's item bench may hold: components never stop coming in an endless run
- * (about two in three rooms), so this is no limit a player meets. The rack kept as counts by kind
- * replaces it.
+ * The rack, with the emblems on it and held by figures (`held`) checked: one of each. A run kept
+ * before tools (`tooled`) has a charm's emblem put back if it has none anywhere, and every emblem is
+ * its charm's; since, a Whetstone may have turned one into another.
  */
-const MOST_ITEMS = 100_000;
+function readRackOf(
+  r: Record<string, unknown>,
+  boons: readonly BoonId[],
+  held: readonly ItemId[],
+  tooled: boolean,
+): Rack {
+  let rack = readRack(r);
+  const emblems = (): EmblemId[] => [...kindsOn(rack).filter(isEmblemId), ...held.filter(isEmblemId)];
+  if (!tooled) {
+    // A charm taken before a charm was an emblem has none anywhere: it is put on the item bench.
+    for (const boon of boons)
+      if (isEmblemId(boon) && countOn(rack, boon) === 0 && !held.includes(boon)) rack = counted(rack, boon, 1);
+    // Before a Whetstone could turn one into another, every emblem was its charm's.
+    if (emblems().some((emblem) => !boons.includes(emblem))) bad("the emblems");
+  }
+  // There is one of each emblem.
+  if (kindsOn(rack).some((id) => isEmblemId(id) && countOn(rack, id) > 1)) bad("the emblems");
+  unique(emblems(), "the emblems");
+  return rack;
+}
+
+/**
+ * The rack: kept as how many of each kind (`rack`: a table from version 10, a sitting from 6), or
+ * before that as a list of what lay on it (`items`), folded into counts.
+ */
+function readRack(r: Record<string, unknown>): Rack {
+  if (r.rack === undefined) return rackOf(each(r.items, isRackItem, MOST, "the item bench"));
+  let rack: Rack = {};
+  for (const [kind, n] of Object.entries(record(r.rack, "the rack"))) {
+    if (!isRackItem(kind)) bad("the rack");
+    else rack = counted(rack, kind, whole(n, 1, MOST, "the rack"));
+  }
+  return rack;
+}
 
 // ---------- the shape ----------
 
@@ -116,6 +163,8 @@ function readPiece(v: unknown, nextId: number, meals: boolean): Piece | null {
  */
 const readWayOf = (r: Record<string, unknown>): Way =>
   (r.way === undefined ? oldRunWay(r.trail, r.own, r.endless) : readWay(r.way)) ?? bad("the way");
+/** What a pick of components may offer: a component, or a tool. */
+const isPickable = (v: unknown): v is Pickable => isComponentId(v) || isToolId(v);
 const isChoiceKind = (v: unknown): v is Choice["kind"] =>
   v === "starter" || v === "component" || v === "boon" || v === "rule";
 /** A pick waiting, with nothing on offer: as it is shown behind the first, and before it is drawn again. */
@@ -134,7 +183,7 @@ function readChoice(v: unknown): Choice {
     return options.length === 0 ? bad("the starters") : { kind: "starter", options };
   }
   if (c.kind === "component") {
-    const options = each(c.options, isComponentId, 8, "the components on offer");
+    const options = each(c.options, isPickable, 8, "the components on offer");
     return options.length === 0 ? bad("the components on offer") : { kind: "component", options };
   }
   if (c.kind === "rule") {
@@ -355,6 +404,7 @@ function readParts(
   shown: boolean,
   meals: boolean,
   rows: boolean,
+  tooled: boolean,
 ): { run: RunView; afresh: boolean } {
   let afresh = false;
   const drawn: Drawn = (read, otherwise, again = true) => {
@@ -368,20 +418,18 @@ function readParts(
   };
   const boons: BoonId[] = unique(each(r.boons, isBoonId, BOON_IDS.length, "the boons"), "the boons");
   const room = whole(r.room, 0, MOST_ROOMS, "the room");
-  const nextId = whole(r.nextId, 1, 1_000_000, "the figures' numbers");
+  const nextId = whole(r.nextId, 1, MOST, "the figures' numbers");
   const board = list(r.board, SEATS, "the board").map((x) => readPiece(x, nextId, meals));
   const bench = list(r.bench, ROOMY, "the bench").map((x) => readPiece(x, nextId, meals));
   if (board.length !== SEATS) bad("the board");
   const ids = [...board, ...bench].flatMap((p) => (p ? [p.id] : []));
   unique(ids, "the figures' numbers");
-  const items = each(r.items, isItemId, MOST_ITEMS, "the item bench");
-  const held = [...board, ...bench].flatMap((p) => p?.items ?? []);
-  // A charm taken before a charm was an emblem has none anywhere: it is put on the item bench.
-  for (const boon of boons) if (isEmblemId(boon) && !items.includes(boon) && !held.includes(boon)) items.push(boon);
-  // Every emblem is its charm's, and there is one of it.
-  const emblems = [...items, ...held].filter(isEmblemId);
-  if (emblems.some((emblem) => !boons.includes(emblem))) bad("the emblems");
-  unique(emblems, "the emblems");
+  const rack = readRackOf(
+    r,
+    boons,
+    [...board, ...bench].flatMap((p) => p?.items ?? []),
+    tooled,
+  );
   // A run saved while some figures were locked lists the ones its stall could offer; every figure can now.
   const seen = record(r.seen, "the almanac notes");
   const rooms = readRooms(r, room, rows);
@@ -391,14 +439,14 @@ function readParts(
     room,
     stage: readStage(r, old, shown, drawn),
     resolve: whole(r.resolve, 0, ROOMY, "the resolve"),
-    acorns: whole(r.acorns, 0, 100_000, "the acorns"),
+    acorns: whole(r.acorns, 0, MOST, "the acorns"),
     // A run saved before streaks were kept has none.
     streak: r.streak === undefined ? 0 : whole(r.streak, -MOST_ROOMS, MOST_ROOMS, "the streak"),
     level: whole(r.level, 1, ROOMY, "the level"),
     xp: whole(r.xp, 0, 100_000, "the experience"),
     board,
     bench,
-    items,
+    rack,
     stall: drawn(
       () =>
         list(r.stall, ROOMY, "the stall").map((x): FigureId | null =>
@@ -470,10 +518,14 @@ function partiesAsShare(run: RunView, meals: boolean): void {
   }
 }
 
-/** A run as Leaf keeps it, of table version 1 (`old`) or since, kept as meals or not, its record as rows or not: with its streams, under today's numbers. */
-function readRun(v: unknown, old: boolean, meals: boolean, rows: boolean): Run {
+/**
+ * A run as Leaf keeps it, of table version 1 (`old`) or since, kept as meals or not, its record as
+ * rows or not, and kept since the rack had tools (`tooled`) or before: with its streams, under
+ * today's numbers.
+ */
+function readRun(v: unknown, old: boolean, meals: boolean, rows: boolean, tooled: boolean): Run {
   const r = record(v, "the run");
-  const { run: parts, afresh } = readParts(r, old, false, meals, rows);
+  const { run: parts, afresh } = readParts(r, old, false, meals, rows, tooled);
   partiesAsShare(parts, meals);
   const run: Run = {
     seed: whole(r.seed, 0, UINT, "the seed"),
@@ -513,7 +565,7 @@ function settle(run: Run): void {
     if (free >= 0) bench[free] = piece;
     else {
       run.acorns += sellValue(catalogOf(run), piece);
-      run.items.push(...piece.items);
+      run.rack = withAll(run.rack, piece.items);
     }
   }
   run.bench = bench;
@@ -522,7 +574,8 @@ function settle(run: Run): void {
     for (const item of piece.items) {
       // It keeps what it could have been handed as it is: with a place, making nothing, granting nothing it carries.
       const got = holdItem(catalogOf(run), { kind: piece.kind, items: held }, item);
-      (!("refused" in got) && got.made === null ? held : run.items).push(item);
+      if (!("refused" in got) && got.made === null) held.push(item);
+      else run.rack = counted(run.rack, item, 1);
     }
     piece.items = held;
     piece.fed = piece.kind === "greg" ? Math.min(piece.fed, traitNumber(catalogOf(run), "greg", "most", 1)) : 0;
@@ -536,12 +589,15 @@ export type Loaded = { ok: true; run: Run } | { ok: false; why: string };
 
 /**
  * A run as Leaf keeps it in a table of version 1 (`old`) or since, with Greg's meals (`meals`: kept
- * before he was fed by hand) or not, and its record as rows (`rows`: stored since a table of version
- * 9) or as the run holds it; or the reason the data is not one.
+ * before he was fed by hand) or not, its record as rows (`rows`: stored since a table of version 9)
+ * or as the run holds it, and kept since the rack had tools (`tooled`: a table from version 10, a
+ * sitting from 6) or before; or the reason the data is not one. A run kept before tools has a
+ * charm's emblem put back if it has none anywhere, and every emblem is its charm's; since, a
+ * Whetstone may have turned one into another.
  */
-export function checkRun(v: unknown, old = false, meals = false, rows = false): Loaded {
+export function checkRun(v: unknown, old = false, meals = false, rows = false, tooled = true): Loaded {
   try {
-    return { ok: true, run: readRun(v, old, meals, rows) };
+    return { ok: true, run: readRun(v, old, meals, rows, tooled) };
   } catch (err) {
     if (err instanceof Nonsense) return { ok: false, why: `That raid does not add up: ${err.message} is wrong.` };
     throw err;
@@ -551,7 +607,7 @@ export function checkRun(v: unknown, old = false, meals = false, rows = false): 
 /** A run as the page is shown it (no streams, only the first pick's options), or null for one these rules could not have made. */
 export function readRunView(v: unknown): RunView | null {
   try {
-    return readParts(record(v, "the run"), false, true, false, false).run;
+    return readParts(record(v, "the run"), false, true, false, false, true).run;
   } catch (err) {
     if (err instanceof Nonsense) return null;
     throw err;

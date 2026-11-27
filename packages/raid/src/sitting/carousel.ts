@@ -1,5 +1,6 @@
 /**
- * The carousel: nine figures in a ring, each holding a component, and everyone still in takes one.
+ * The carousel: nine figures in a ring, each holding a component (one of them the Tongs instead),
+ * and everyone still in takes one.
  * Seats are let in a group at a time: in the first, before room 1, the members all at once and then
  * the regulars, and its figure is who a seat sets out with, in place of the run's own first pick; in
  * the later ones two at a time, lowest resolve first. A regular takes one by the dice a moment after
@@ -8,17 +9,18 @@
  * then whoever in it has taken none gets one of what is left by the dice; the next is let in at that
  * moment, and the carousel ends a take's length after the last group's turn, its last take seen.
  */
-import { pick, shuffled } from "@sequoia-leaf/core";
+import { below, pick, shuffled } from "@sequoia-leaf/core";
 
 import { available, catalogOf } from "../content/catalog.ts";
 import type { FigureId, Tier } from "../content/figures.ts";
-import type { ComponentId } from "../content/items.ts";
 import { COLS } from "../hex.ts";
+import { counted, withAll } from "../racks.ts";
 import { fielded, merge, newPiece, type Note, pieces, type RunView, sellValue } from "../run.ts";
 import {
   CLOCK,
   later,
   type Offer,
+  type RingItem,
   ringItems,
   type Sitting,
   type SittingWhy,
@@ -32,21 +34,22 @@ export type Carousel = Extract<Stage, { at: "carousel" }>;
  * A figure joins a run, holding a component: on the bench, or in the middle of the front row when
  * nobody is on the board. Three of a kind merge as they do when bought, which is also how one joins
  * a full bench; with a full bench and no three to make, it is sold on the spot, its price paid in
- * acorns and its component put on the item bench. The first pick of a run (who sets out) is settled
- * by it.
+ * acorns and its component put on the item bench. Tongs are no figure's to hold: they go to the rack,
+ * and the figure joins with nothing. The first pick of a run (who sets out) is settled by it.
  */
-export function join(run: RunView, kind: FigureId, item: ComponentId): Note[] {
+export function join(run: RunView, kind: FigureId, item: RingItem): Note[] {
   if (run.stage.phase === "plan" && run.stage.picks[0]?.kind === "starter") run.stage.picks.shift();
   const twins = pieces(run).filter((p) => p.kind === kind && p.stars === 1).length;
   const slot = run.bench.indexOf(null);
   const piece = newPiece(run, kind);
-  piece.items = [item];
+  if (item === "tongs") run.rack = counted(run.rack, item, 1);
+  else piece.items = [item];
   const placed = fielded(run) === 0 || slot >= 0;
   if (fielded(run) === 0) run.board[Math.floor(COLS / 2)] = piece;
   else if (slot >= 0) run.bench[slot] = piece;
   else if (twins < 2) {
     run.acorns += sellValue(catalogOf(run), piece);
-    run.items.push(item);
+    run.rack = withAll(run.rack, piece.items);
     return [];
   }
   const notes: Note[] = [];
@@ -118,8 +121,9 @@ function waitFrom(t: Sitting, stage: Carousel, at: number): void {
 
 /**
  * Lays a carousel out at a moment: the ring's figures by their costs, no figure twice while a cost
- * has others, each with a component dealt from two of each; and the turns, lowest resolve first,
- * the lower seat first among equals. Then the first group is let in.
+ * has others, each with a component dealt from two of each, and one of them, by the dice, with the
+ * Tongs instead; and the turns, lowest resolve first, the lower seat first among equals. Then the
+ * first group is let in.
  */
 export function layCarousel(t: Sitting, at: number, costs: readonly Tier[]): void {
   const items = shuffled(t, ringItems(catalogOf(t)));
@@ -132,6 +136,8 @@ export function layCarousel(t: Sitting, at: number, costs: readonly Tier[]): voi
     const item = items[i % items.length];
     return kind && item ? [{ kind, item, by: null }] : [];
   });
+  const tongs = ring[below(t, ring.length)];
+  if (tongs) tongs.item = "tongs";
   const resolve = (seat: number): number => t.seats[seat]?.run.resolve ?? 0;
   const turns = t.seats
     .flatMap((seat, i) => (seat.place === null ? [i] : []))

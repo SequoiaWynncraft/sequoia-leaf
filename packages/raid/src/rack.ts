@@ -1,34 +1,126 @@
-import { catalogOf } from "./content/catalog.ts";
+import { pick } from "@sequoia-leaf/core";
+
+import { type Catalog, catalogOf } from "./content/catalog.ts";
 /**
- * The rack: the items nobody is holding. Two on it that a recipe joins (`combine`) make what it
- * makes there: an item, to hand over afterwards, or a boon. (Handing an item over is `giveItem`, in
- * `run.ts`.)
+ * The rack: what nobody is holding, as how many of each kind (`racks.ts`), with no limit. Two on it
+ * that a recipe joins (`combine`) make what it makes there: an item, to hand over afterwards, or a
+ * boon. Anything on it can be melted for acorns, by the member's hand only. A tool on it is used by
+ * dropping it on a figure: Tongs take back everything the figure holds; a Whetstone turns each item
+ * it holds into another of its sort. (Handing an item over is `giveItem`, in `run.ts`.)
  */
+import { carries, grantOf, type ItemId, sortOf } from "./content/items.ts";
 import { combine } from "./content/recipes.ts";
+import { meltValue, type RackItem, type ToolId } from "./content/tools.ts";
 import { takeMade } from "./made.ts";
-import { type Done, notPlanning, refusal, type RunView } from "./run.ts";
+import { counted, countOn, kindsOn, withAll } from "./racks.ts";
+import {
+  type Done,
+  notPlanning,
+  type Piece,
+  pieceAt,
+  pieces,
+  refusal,
+  type Refused,
+  type Run,
+  type RunView,
+  type Spot,
+} from "./run.ts";
 
 /**
- * Makes what the items at two places on the rack make. An item takes the place of the first, and
- * the second's place closes up; a boon closes both. Two that make nothing (an emblem, a finished
- * item, one place twice) are refused, as is a boon the run has already, and nothing is ever taken
+ * Makes what one of each of two kinds on the rack make (two of one kind, for a recipe of two the
+ * same): the item made goes on the rack, and a boon is the run's. Two that make nothing (an emblem,
+ * a finished item, a tool) are refused, as is a boon the run has already, and nothing is ever taken
  * apart again.
  */
-export function forgeItems(run: RunView, at: number, other: number, cat = catalogOf(run)): Done {
+export function forgeItems(run: RunView, a: ItemId, b: ItemId, cat = catalogOf(run)): Done {
   const stop = notPlanning(run);
   if (stop) return refusal(stop);
-  const a = run.items[at];
-  const b = run.items[other];
-  if (a === undefined || b === undefined) return refusal("no_such_item");
-  const made = at === other ? null : combine(cat, a, b);
+  const there = a === b ? countOn(run.rack, a) >= 2 : countOn(run.rack, a) > 0 && countOn(run.rack, b) > 0;
+  if (!there) return refusal("no_such_item");
+  const made = combine(cat, a, b);
   if (!made) return refusal("two_components");
   const notes = takeMade(run, made);
   if (!notes) return refusal("boon_held");
-  if (made.gives === "boon") {
-    run.items = run.items.filter((_, i) => i !== at && i !== other);
-    return { ok: true, notes };
-  }
-  run.items[at] = made.id;
-  run.items.splice(other, 1);
-  return { ok: true, notes: [{ t: "made", item: made.id, at: other < at ? at - 1 : at }] };
+  run.rack = counted(counted(run.rack, a, -1), b, -1);
+  if (made.gives === "boon") return { ok: true, notes };
+  run.rack = counted(run.rack, made.id, 1);
+  return { ok: true, notes: [{ t: "made", item: made.id }] };
+}
+
+/** Melts one of a kind on the rack for acorns (`meltValue`): a component 1, a finished item or an emblem 3, a tool 2. */
+export function melt(run: RunView, item: RackItem): Done {
+  const stop = notPlanning(run);
+  if (stop) return refusal(stop);
+  if (countOn(run.rack, item) === 0) return refusal("no_such_item");
+  const acorns = meltValue(item);
+  run.rack = counted(run.rack, item, -1);
+  run.acorns += acorns;
+  return { ok: true, notes: [{ t: "melted", item, acorns }] };
+}
+
+/**
+ * Why a tool on the rack cannot be dropped on the figure at a spot, or null if it can: what a page
+ * may say before Leaf answers, even of a tool whose outcome it cannot know.
+ */
+export function toolRefusal(run: RunView, tool: ToolId, to: Spot): Refused | null {
+  const on = toolOn(run, tool, to);
+  return "ok" in on ? on : null;
+}
+
+/** The figure at a spot a tool on the rack is dropped on, or why it cannot be. */
+function toolOn(run: RunView, tool: ToolId, to: Spot): Piece | Refused {
+  const stop = notPlanning(run);
+  if (stop) return refusal(stop);
+  if (countOn(run.rack, tool) === 0) return refusal("no_such_item");
+  const piece = pieceAt(run, to);
+  if (!piece) return refusal("nobody_there");
+  if (piece.items.length === 0) return refusal("holds_nothing");
+  return piece;
+}
+
+/** The Tongs dropped on a figure: everything it holds goes back to the rack as it is, and the Tongs are gone. */
+export function useTongs(run: RunView, to: Spot): Done {
+  const piece = toolOn(run, "tongs", to);
+  if ("ok" in piece) return piece;
+  const items = piece.items;
+  run.rack = withAll(counted(run.rack, "tongs", -1), items);
+  piece.items = [];
+  return { ok: true, notes: [{ t: "tongs", piece: piece.id, items: items.slice() }] };
+}
+
+/**
+ * What an item a figure holds may become under a Whetstone: another of its sort that the catalogue
+ * has open, granting nothing its holder carries by itself or by what else it holds (`rest`). An
+ * emblem becomes one the run has nowhere else, so each stays one of its kind.
+ */
+function whetted(cat: Catalog, run: RunView, kind: Piece["kind"], item: ItemId, rest: readonly ItemId[]): ItemId[] {
+  const sort = sortOf(item);
+  const open = sort === "component" ? cat.ids.components : sort === "finished" ? cat.ids.finished : cat.ids.emblems;
+  const anywhere = new Set<string>([...kindsOn(run.rack), ...pieces(run).flatMap((p) => p.items)]);
+  return open.filter((id) => {
+    if (id === item || (sort === "emblem" && anywhere.has(id))) return false;
+    const grants = grantOf(cat, id);
+    return grants === undefined || !carries(cat, kind, rest, grants);
+  });
+}
+
+/**
+ * A Whetstone dropped on a figure: each item it holds becomes another of its sort, place by place,
+ * by the run's dice (a component another component, a finished item another finished item, an
+ * emblem another trait's emblem); one with nothing it may become stays. The Whetstone is gone.
+ * Leaf's to do: it draws.
+ */
+export function useWhetstone(run: Run, to: Spot): Done {
+  const piece = toolOn(run, "whetstone", to);
+  if ("ok" in piece) return piece;
+  const cat = catalogOf(run);
+  const was = piece.items.slice();
+  const now = was.slice();
+  now.forEach((item, i) => {
+    const could = whetted(cat, run, piece.kind, item, now.toSpliced(i, 1));
+    if (could.length > 0) now[i] = pick(run, could);
+  });
+  run.rack = counted(run.rack, "whetstone", -1);
+  piece.items = now;
+  return { ok: true, notes: [{ t: "whetted", piece: piece.id, was, now: now.slice() }] };
 }
