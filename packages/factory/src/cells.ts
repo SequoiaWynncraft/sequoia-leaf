@@ -268,13 +268,16 @@ function readParts(r: Reader, p: Building, f: number): boolean {
   if (f & 128) readSpan(r, p);
   for (const [bit, key] of LATE) if (f & bit) p[key] = r.byte();
   Object.assign(p, f & 256 ? { closed: true } : {}, f & 1024 ? { free: true } : {});
-  // A kind's bits past four: 1 to 15 of them, as only a kind past 15 has (none past 255).
-  if (f & HIGH) {
-    const high = r.byte();
-    if (high === 0 || high > 15) return false;
-    p.kind |= high << 4;
-  }
+  if (f & HIGH && !readHigh(r, p)) return false;
   if (f & ALSO) p.also = r.byte();
+  return true;
+}
+
+/** Reads a kind's bits past four onto a piece: 1 to 15, as only a kind past 15 has (none past 255); false for any other. */
+function readHigh(r: Reader, p: Building): boolean {
+  const high = r.byte();
+  if (high === 0 || high > 15) return false;
+  p.kind |= high << 4;
   return true;
 }
 

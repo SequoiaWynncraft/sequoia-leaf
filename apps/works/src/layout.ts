@@ -14,6 +14,7 @@ import {
   litOf,
   nextOf,
   NONE,
+  type Piece,
   piecesAt,
   plotState,
   type Plotted,
@@ -249,8 +250,8 @@ export function layout(y: Yard): Layout {
   return kept;
 }
 
-/** The arrays a drawing of pieces in hand changes, kept for the next and filled afresh each time. */
-let own: {
+/** The arrays a drawing of pieces in hand changes. */
+interface Drawn {
   kind: Uint8Array;
   dir: Uint8Array;
   span: Int8Array;
@@ -262,7 +263,9 @@ let own: {
   set: Uint8Array;
   row: Int32Array;
   part: Uint8Array;
-} | null = null;
+}
+/** Those arrays, kept for the next drawing and filled afresh each time. */
+let own: Drawn | null = null;
 
 /**
  * The yard as it would be with the pieces in hand set down where they are aimed, and for a move gone
@@ -302,45 +305,53 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
   o.set.set(y.set);
   o.row.set(y.row);
   o.part.set(y.part);
-  const empty = (i: number): void => {
-    o.kind[i] = NONE;
-    o.dir[i] = 0;
-    o.span[i] = 0;
-    o.shut[i] = 0;
-    o.ins[i] = 0;
-    o.first[i] = 0;
-    o.tint[i] = 0;
-    o.grade[i] = 0;
-    o.set[i] = NONE;
-    o.row[i] = -1;
-    o.part[i] = 0;
-  };
   // A copy's tiles are what it copies, and stay; a blueprint's are none, but a plan of the whole yard's, which it takes up.
-  if (grp.as !== "copy") for (const i of tilesOf(y, piecesAt(y, grp.tiles))) if (i >= 0) empty(i);
-  for (const p of grp.at) {
-    const tiles = tilesOf(y, [p]);
-    // Its own tile holds it; a tunnel's far mouth holds itself too, and the rest of a piece of more than one tile is laid over below.
-    for (const i of tiles) if (i >= 0) empty(i);
-    const [near = -1, far = -1] = tiles;
-    for (const [i, span] of SPANS[p.kind] === 1
-      ? ([
-          [near, p.span],
-          [far, -p.span],
-        ] as const)
-      : ([[near, 0]] as const)) {
-      if (i < 0) continue;
-      o.kind[i] = p.kind;
-      o.dir[i] = p.dir;
-      o.span[i] = span;
-      o.shut[i] = i === near ? (p.shut ?? 0) : 0;
-      o.ins[i] = i === near ? (p.ins ?? 0) : 0;
-      o.first[i] = i === near ? (p.first ?? -1) + 1 : 0;
-      o.tint[i] = p.tint ?? 0;
-      o.grade[i] = gradeOf(p.kind, p.grade);
-      o.set[i] = p.recipe ?? NONE;
-    }
-    if (near >= 0 && tiles.every((i) => i >= 0)) layOver(o.kind, o.part, y.land.w, near, p.kind, p.dir);
-  }
+  if (grp.as !== "copy") for (const i of tilesOf(y, piecesAt(y, grp.tiles))) if (i >= 0) emptyIn(o, i);
+  for (const p of grp.at) setDown(o, y, p);
   // Where power reaches is the real yard's, worked out by the rules first; nothing works it out again here.
   return { ...y, ...o, lit: litOf(y), powered: true, wire: null };
+}
+
+/** Empties a tile of a drawing of pieces in hand. */
+function emptyIn(o: Drawn, i: number): void {
+  o.kind[i] = NONE;
+  o.dir[i] = 0;
+  o.span[i] = 0;
+  o.shut[i] = 0;
+  o.ins[i] = 0;
+  o.first[i] = 0;
+  o.tint[i] = 0;
+  o.grade[i] = 0;
+  o.set[i] = NONE;
+  o.row[i] = -1;
+  o.part[i] = 0;
+}
+
+/**
+ * Sets a piece in hand down in a drawing of the yard (`o`), over whatever its tiles held: on its own
+ * tile, and a tunnel's far mouth on its own too; a piece of more than one tile is laid over the rest
+ * of its tiles by the rules' own step (`layOver`), where all of them are on the land.
+ */
+function setDown(o: Drawn, y: Yard, p: Piece): void {
+  const tiles = tilesOf(y, [p]);
+  for (const i of tiles) if (i >= 0) emptyIn(o, i);
+  const [near = -1, far = -1] = tiles;
+  for (const [i, span] of SPANS[p.kind] === 1
+    ? ([
+        [near, p.span],
+        [far, -p.span],
+      ] as const)
+    : ([[near, 0]] as const)) {
+    if (i < 0) continue;
+    o.kind[i] = p.kind;
+    o.dir[i] = p.dir;
+    o.span[i] = span;
+    o.shut[i] = i === near ? (p.shut ?? 0) : 0;
+    o.ins[i] = i === near ? (p.ins ?? 0) : 0;
+    o.first[i] = i === near ? (p.first ?? -1) + 1 : 0;
+    o.tint[i] = p.tint ?? 0;
+    o.grade[i] = gradeOf(p.kind, p.grade);
+    o.set[i] = p.recipe ?? NONE;
+  }
+  if (near >= 0 && tiles.every((i) => i >= 0)) layOver(o.kind, o.part, y.land.w, near, p.kind, p.dir);
 }

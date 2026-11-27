@@ -411,11 +411,15 @@ describe("a new kind of piece", () => {
       // Each yard kept with a kind past 15 in a plan, a blueprint or Undo alone is a newer Leaf's here,
       // where no such kind is known: never read with it let go, whatever version it says; and the Leaf
       // before such kinds (whose \`keptLater\` begins \`newerThan(text, 9)\`) takes it as a newer one's too.
-      const { texts } = JSON.parse(lines.at(-2) ?? "{}") as { texts: string[] };
+      const said: unknown = JSON.parse(lines.at(-2) ?? "{}");
+      const texts =
+        typeof said === "object" && said !== null && "texts" in said && Array.isArray(said.texts)
+          ? said.texts.filter((t): t is string => typeof t === "string")
+          : [];
       expect(texts.length).toBe(3);
-      for (const text of texts) {
-        const as9 = JSON.stringify({ ...JSON.parse(text), v: 9 });
-        expect([keptLater(text), decode(text), newerThan(text, 9), keptLater(as9), decode(as9)]).toEqual([
+      for (const kept of texts) {
+        const as9 = JSON.stringify({ ...JSON.parse(kept), v: 9 });
+        expect([keptLater(kept), decode(kept), newerThan(kept, 9), keptLater(as9), decode(as9)]).toEqual([
           true,
           null,
           true,

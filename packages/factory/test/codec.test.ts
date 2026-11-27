@@ -40,6 +40,9 @@ function running(ticks = 3000): F.Yard {
 /** A whole number below 16,384 as the packed bytes write it, seven bits a byte. */
 const varint = (v: number): number[] => (v < 128 ? [v] : [(v & 127) | 128, v >> 7]);
 
+/** A piece on tile 5 whose kind has its bits past four (`high`) in a part of their own (0x4000), as only a kind past 15 has. */
+const wide = (high: number): number[] => [1, 5, F.SPLITTER | 128, 0x80, 0x80, 0x01, high];
+
 /** A kept yard with its pieces' bytes put in place of its own. */
 const withCells = (good: string, bytes: Uint8Array | readonly number[]): string =>
   JSON.stringify({ ...record(good), cells: F.toBase64(Uint8Array.from(bytes)) });
@@ -215,8 +218,6 @@ describe("decode refuses whole", () => {
   });
 
   test("a kind's bits past four that are none, or more than four", () => {
-    // A piece on tile 5 whose kind has its bits past four in a part of their own (0x4000), as only a kind past 15 has.
-    const wide = (high: number): number[] => [1, 5, F.SPLITTER | 128, 0x80, 0x80, 0x01, high];
     expect(unpackCells(Uint8Array.from(wide(1)), 100)?.map((p) => p.kind)).toEqual([F.SPLITTER | 16]);
     expect(unpackCells(Uint8Array.from(wide(15)), 100)?.map((p) => p.kind)).toEqual([F.SPLITTER | 240]);
     expect(unpackCells(Uint8Array.from(wide(0)), 100)).toBeNull();

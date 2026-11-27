@@ -38,16 +38,15 @@ export {
   decode,
   encode,
   type Keep,
-  type KeptBlueprint,
   type KeptOrder,
   keptOrder,
-  type KeptPrint,
   keptUnknown,
   orderOf,
   PLACED,
   VERSION,
   vouch,
 } from "./codec.ts";
+export { type KeptBlueprint, type KeptPrint } from "./prints.ts";
 export * from "./game.ts";
 export { UNDO_BYTES, UNDO_ENTRY, UNDO_MOST } from "./history.ts";
 export * from "./land.ts";

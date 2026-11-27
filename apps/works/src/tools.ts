@@ -37,7 +37,6 @@ import {
   NONE,
   otherMouth,
   type Piece,
-  pieceOf,
   piecesAt,
   placed,
   priceAt,
@@ -61,6 +60,7 @@ import { GOLD, SKY } from "@sequoia-leaf/kit/palette.ts";
 
 import { buildAct, gradeOn, groupAct, layAct, raisedOn } from "./acts.ts";
 import { PAINTS, TILE } from "./art/belts.ts";
+import { pieceOn } from "./big.ts";
 import { OUT_OF_REACH, reachOf, withReach } from "./figure/reach.ts";
 import { float, flutter, puff, sparkle } from "./fx.ts";
 import { aimOf, groupOf, markOf, runOf, type Tile } from "./hand.ts";
@@ -105,16 +105,6 @@ function fresh(r: Reckoned): boolean {
 const coinsOf = (did: ReturnType<typeof doNow>): number =>
   "refused" in did ? 0 : (did.coins ?? []).reduce((sum, c) => sum + c.amount, 0);
 const xy = (i: number): { x: number; y: number } => ({ x: i % W(), y: Math.floor(i / W()) });
-/**
- * The piece standing on a tile, by its own tile, whichever of its tiles is named (a piece of more than
- * one tile keeps everything of it there): its tile, -1 for none off the map, and where that is. Every
- * tool that reads the piece under the pointer or a card reads it through this.
- */
-function pieceOn(x: number, y: number): { i: number; x: number; y: number } {
-  const t = at(S.world, x, y);
-  const i = t < 0 ? t : pieceOf(S.world, t);
-  return i < 0 ? { i, x, y } : { i, ...xy(i) };
-}
 /** The way a piece faces, as a way. */
 const dirOf = (i: number): Dir => {
   const d = S.world.dir[i] ?? 0;
@@ -310,8 +300,7 @@ function lifted(x: number, y: number, cost: number): void {
  */
 export function raiseAt(tx: number, ty: number): boolean {
   const w = S.world;
-  const { i, x, y } = pieceOn(tx, ty);
-  const k = i < 0 ? NONE : (w.kind[i] ?? NONE);
+  const { i, k, x, y } = pieceOn(S.world, tx, ty);
   if (!isKind(k) || FIXED[k] === 1) return false;
   const grade = (w.grade[i] ?? 0) + 1;
   const cost = priceAt(w, k, x, y, grade);
@@ -385,7 +374,7 @@ export function paintAt(x: number, y: number, more = false, pointer = -1): boole
 /** Turns what stands on a tile a quarter turn to the right. */
 export function turnAt(tx: number, ty: number): boolean {
   const w = S.world;
-  const { i, x, y } = pieceOn(tx, ty);
+  const { i, x, y } = pieceOn(S.world, tx, ty);
   if (!turnable(w, x, y)) {
     yardSfx.no();
     return false;
@@ -399,7 +388,7 @@ export function turnAt(tx: number, ty: number): boolean {
 /** Moves one of the ways out of the splitter on a tile (0 ahead, 1 left, 2 right) on a step (`stepWay`). */
 export function wayAt(tx: number, ty: number, way: number): boolean {
   const w = S.world;
-  const { i, x, y } = pieceOn(tx, ty);
+  const { i, x, y } = pieceOn(S.world, tx, ty);
   const act = stepWay(w, i, x, y, way);
   const did = i < 0 ? null : doNow(act);
   if (!did || "refused" in did) {
@@ -463,7 +452,7 @@ export function flip(): void {
 
 /** Flips the sorter on a tile to send the thing it is set to to its other side. Says whether it did. */
 export function flipAt(tx: number, ty: number): boolean {
-  const { i, x, y } = pieceOn(tx, ty);
+  const { i, x, y } = pieceOn(S.world, tx, ty);
   if (!flips(kindAt(S.world, x, y))) {
     yardSfx.no();
     return false;
@@ -476,8 +465,7 @@ export function flipAt(tx: number, ty: number): boolean {
 
 /** Takes up the tool for whatever stands on a tile, facing the way it faces (a sorter to its side too), at its grade. */
 export function pickFrom(tx: number, ty: number): boolean {
-  const { i } = pieceOn(tx, ty);
-  const k = i < 0 ? NONE : (S.world.kind[i] ?? NONE);
+  const { i, k } = pieceOn(S.world, tx, ty);
   if (k === NONE || FIXED[k] === 1 || !isKind(k) || !usable(k)) return false;
   S.dir = dirOf(i);
   if (flips(k)) S.right = sendsRight(S.world, i);

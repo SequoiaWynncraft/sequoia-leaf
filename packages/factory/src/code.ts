@@ -19,9 +19,9 @@
  */
 import { isDir } from "./build.ts";
 import { fromBase64, toBase64 } from "./bytes.ts";
-import { type KeptPrint, packPrint, unpackPrint } from "./codec.ts";
 import { BLUEPRINT } from "./content/machines.ts";
 import { boxOf, cellsOf, keptOf, packPieces, type Piece, unpackWays } from "./pieces.ts";
+import { type KeptPrint, packPrint, unpackPrint } from "./prints.ts";
 import { FIXED, isKind, locked, type Open, SPAN_MOST, SPANS } from "./tables.ts";
 import type { Print, Yard } from "./yard.ts";
 

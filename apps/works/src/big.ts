@@ -3,7 +3,7 @@
  * it is drawn (once, from its own tile, over the box), where its ways out are, and the box its marks
  * go round. A piece of one tile is its tile, and nothing here changes how it is drawn.
  */
-import { cornerOf, DX, DY, FACING, isItem, NONE, OWN, pieceOf, sizeOf, type Yard } from "@sequoia-leaf/factory";
+import { cornerOf, DX, DY, FACING, isItem, NONE, OWN, pieceOf, sizeOf, tileAt, type Yard } from "@sequoia-leaf/factory";
 
 import { TILE } from "./art/belts.ts";
 import type { Art } from "./art/index.ts";
@@ -34,6 +34,19 @@ export function pieceBox(y: Yard, i: number): Box {
 /** The box a tool's aim marks on (tx, ty), at any zoom: the spade, the whole piece there; a kind in hand facing `d`, every tile it would cover. */
 export const aimBox = (y: Yard, tool: number | "remove", d: number, tx: number, ty: number): Box =>
   tool === "remove" ? pieceBox(y, ty * y.land.w + tx) : boxAt(tool, d, tx, ty);
+
+/**
+ * The piece standing on a tile, by its own tile, whichever of its tiles (tx, ty) names (a piece of more
+ * than one tile keeps everything of it there): its tile (-1 off the map), its kind (`NONE` for none),
+ * and where it is. Every tool that reads the piece under the pointer reads it through this.
+ */
+export function pieceOn(y: Yard, tx: number, ty: number): { i: number; k: number; x: number; y: number } {
+  const W = y.land.w;
+  const t = tileAt(y.land, tx, ty);
+  const i = t < 0 ? t : pieceOf(y, t);
+  const k = y.kind[i] ?? NONE;
+  return i < 0 ? { i, k, x: tx, y: ty } : { i, k, x: i % W, y: Math.floor(i / W) };
+}
 
 /** Whether a piece is drawn from a tile: its own tile, for one of more than one; every tile of one of one. */
 export const drawnFrom = (y: Yard, i: number): boolean => y.part[i] === 0 || y.part[i] === OWN;
