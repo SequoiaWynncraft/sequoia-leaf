@@ -65,6 +65,10 @@ export function unlockRef(u: Unlock): string {
       return "perk:first";
     case "ins":
       return "perk:ins";
+    case "felling":
+      return "perk:felling";
+    case "mouths":
+      return "perk:mouths";
   }
 }
 

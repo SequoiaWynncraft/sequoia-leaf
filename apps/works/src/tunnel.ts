@@ -24,6 +24,9 @@ function ahead(from: Tile, x: number, y: number, d: Dir): number {
   return x === from.x ? Math.max(0, (y - from.y) * DY[d]) : 0;
 }
 
+/** How many tiles a tunnel going in at `from` and coming up at `out` runs under: its price goes by it. */
+const under = (from: Tile, out: Tile): number => Math.abs(out.x - from.x) + Math.abs(out.y - from.y) - 1;
+
 /** Brought to a tile in line with where it goes in, the tunnel faces that tile. */
 function facing(from: Tile, x: number, y: number): void {
   const here = x === from.x && y === from.y;
@@ -61,7 +64,7 @@ export function tunnelAim(from: Tile, faced: number, x: number, y: number): Aim 
   const exit = here || rules !== null ? tunnelExit(w, from.x, from.y, S.dir) : { x, y };
   // Out of reach is judged on the very command `comesUp` would send for the far mouth shown.
   const why = (exit && reachOf(tunnelAct(from, here, exit, grade))) ?? rules;
-  const cost = priceAt(w, TUNNEL, from.x, from.y, grade);
+  const cost = priceAt(w, TUNNEL, from.x, from.y, grade, w.spare, exit ? under(from, exit) : 0);
   return { ...aimed(x, y, why, cost, exit ? at(w, exit.x, exit.y) : -1), grade };
 }
 
@@ -89,7 +92,8 @@ export function wayInAim(x: number, y: number): Aim | null {
   const w = S.world;
   const grade = gradeInHand(TUNNEL);
   const exit = tunnelExit(w, x, y, S.dir);
-  return { ...aimed(x, y, null, priceAt(w, TUNNEL, x, y, grade), exit ? at(w, exit.x, exit.y) : -1), grade };
+  const cost = priceAt(w, TUNNEL, x, y, grade, w.spare, exit?.span ?? 0);
+  return { ...aimed(x, y, null, cost, exit ? at(w, exit.x, exit.y) : -1), grade };
 }
 
 /**

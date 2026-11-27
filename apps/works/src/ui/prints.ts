@@ -8,7 +8,7 @@ import {
   aim,
   ALL_ITEMS,
   costOf,
-  FELL_PRICE,
+  fellPrice,
   fellRefusal,
   FIXED,
   GATHERING,
@@ -235,10 +235,13 @@ function tilePrint(i: number): StandingPrint | GroundPrint | null {
   if (redwoodAt(w, i)) {
     const x = i % w.land.w;
     const y = Math.floor(i / w.land.w);
-    // Fell shows where the rules would let the yard fell it with Coins enough: on its own land, and not on a visit.
-    const may = S.visiting === null && fellRefusal(w, x, y, Infinity) === null;
-    const fell = may ? { x, y, price: FELL_PRICE, short: Math.max(0, FELL_PRICE - coins()) } : null;
-    return { card: "ground", ground: "redwood", fell };
+    // Fell shows where the rules would let the yard fell it with Coins enough: on its own land, felling
+    // studied, and not on a visit. On its own land before felling is studied, the card says so.
+    const own = S.visiting === null && fellRefusal(w, x, y, Infinity) === null;
+    const lock = own ? locked(w.open, { fell: true }) : null;
+    const cost = fellPrice(w);
+    const fell = own && lock === null ? { x, y, price: cost, short: Math.max(0, cost - coins()) } : null;
+    return { card: "ground", ground: "redwood", fell, locked: lock };
   }
   return null;
 }
@@ -318,8 +321,8 @@ function orderPrint(id: string): NodePrint | OrderPrint | null {
 }
 
 const NUMBERED = ["stops", "crate", "reach", "depot", "span", "away", "hooks"] as const;
-/** The unlocks that are one thing or none: the board, a splitter's flags and its ways in. */
-const FLAGGED = ["board", "first", "ins"] as const;
+/** The unlocks that are one thing or none: the board, a splitter's flags and its ways in, felling, wide mouths. */
+const FLAGGED = ["board", "first", "ins", "felling", "mouths"] as const;
 
 /** The unlock a `perk:` reference names, as the rules make it. */
 function perkOf(id: string): Unlock | null {

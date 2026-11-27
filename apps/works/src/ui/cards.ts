@@ -75,6 +75,7 @@ import { exact, num, perMinute, whole } from "@sequoia-leaf/kit/say.ts";
 
 import type { Art } from "../art/index.ts";
 import { FLAG_AT } from "../art/machines.ts";
+import { stump } from "../art/nature.ts";
 import { pageOf } from "../kinds/index.ts";
 import { yardSfx } from "../sound.ts";
 import { flowNode } from "./flow.ts";
@@ -585,10 +586,13 @@ const orderCard = (p: OrderPrint): Description => ({
   ],
 });
 
+/** The unlocks shown as a perk that are not a number: blueprints, and each that is one thing or none. */
+const FLAGS = ["blueprints", "board", "first", "ins", "felling", "mouths"] as const;
+type Flag = (typeof FLAGS)[number];
+const isFlag = (is: string): is is Flag => FLAGS.some((f) => f === is);
+
 /** The picture of what each kind of number changes. */
-export const PERK_ART: Readonly<
-  Record<Numbered | "blueprints" | "board" | "first" | "ins", (art: Art) => HTMLCanvasElement>
-> = {
+export const PERK_ART: Readonly<Record<Numbered | Flag, (art: Art) => HTMLCanvasElement>> = {
   stops: (art) => art.icon(STOP),
   crate: (art) => art.m.crate[1]?.[0]?.c ?? art.icon(CRATE),
   reach: (art) => art.m.pylon[1]?.[2]?.c ?? art.icon(PYLON),
@@ -606,6 +610,8 @@ export const PERK_ART: Readonly<
     return c;
   },
   ins: (art) => art.waysIn,
+  felling: () => stump(5, false),
+  mouths: (art) => art.icon(TUNNEL),
 };
 
 /** A tool a goal unlocks, with its picture from the dock. */
@@ -618,12 +624,7 @@ const toolCard = (p: ToolPrint): Description => ({
 /** A number a goal raises, as it will be: the picture of what it changes, and the rules' sentence for it, which says what it was before. */
 function perkCard(art: Art, p: PerkPrint): Description | null {
   const u = p.unlock;
-  const of =
-    u.is === "number"
-      ? u.of
-      : u.is === "blueprints" || u.is === "board" || u.is === "first" || u.is === "ins"
-        ? u.is
-        : null;
+  const of = u.is === "number" ? u.of : isFlag(u.is) ? u.is : null;
   if (of === null) return null;
   const shown = "amount" in u && u.amount !== undefined ? `${u.name} ${u.amount}` : u.name;
   return { name: shown, icon: PERK_ART[of](art), tag: u.says };

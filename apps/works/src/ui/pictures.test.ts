@@ -55,6 +55,8 @@ function pictured(u: Unlock): boolean {
     case "board":
     case "first":
     case "ins":
+    case "felling":
+    case "mouths":
       return typeof PERK_ART[u.is] === "function";
     // A plot's card has the one picture every plot has.
     case "plot":

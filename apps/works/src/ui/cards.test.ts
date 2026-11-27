@@ -195,6 +195,7 @@ describe("a card", () => {
     const drawing: Record<string, string[]> = {
       "./cards.ts": [
         "../art/machines.ts",
+        "../art/nature.ts",
         "../kinds/index.ts",
         "../sound.ts",
         "./flow.ts",

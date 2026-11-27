@@ -332,12 +332,12 @@ describe("the tier's screen", () => {
       title: "Lanterns for the great tree",
       line: "10 research left",
     });
-    // Every goal of the slice done: the tier after the last is open, with nothing in it yet.
+    // Every goal of the slice done: the last tier is open, its commission still to come.
     y.done = [...ALL_GOALS];
     reopen(y);
     S.world = y;
     expect([y.open.tier, nextWords(nextUp())]).toEqual([
-      TIERS.length,
+      TIERS.length - 1,
       { label: "", title: "Every project is done", line: "More tiers are coming." },
     ]);
   });
