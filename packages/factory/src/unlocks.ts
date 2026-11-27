@@ -149,9 +149,9 @@ export function recipeSays(out: Item): string {
   return `A ${lower(r.by)} makes ${ITEM_INFO[out]?.many ?? ""} from ${listed(parts)}.`;
 }
 
-/** What a kind of piece at a grade above the first does more than the first, and what one costs. */
-export function gradeSays(k: Kind, grade: number): string {
-  const cost = `${PER_TILE[k] === 1 ? "A tile costs" : "Costs"} ${coinsText(price(k, grade))}.`;
+/** What a kind of piece at a grade above the first does more than the first, and what one costs (a tunnel under `span` tiles). */
+export function gradeSays(k: Kind, grade: number, span = 0): string {
+  const cost = `${PER_TILE[k] === 1 ? "A tile costs" : "Costs"} ${coinsText(price(k, grade, span))}.`;
   if (carries(k)) return `Carries up to ${perMinute(carried(grade), "items")}${upFrom(carried(grade - 1))}. ${cost}`;
   const draw = (g: number): number => drawnAt(k, g) / HALF;
   const power = `draws ${num(draw(grade))} power${upFrom(draw(grade - 1))}`;

@@ -130,6 +130,8 @@ export interface MachinePrint {
   readonly later: boolean;
   /** What one more costs now: at the first grade, the pieces to hand counted. */
   readonly price: number;
+  /** For a tunnel standing, the tiles it passes under, which its prices go by; 0 for any other. */
+  readonly span: number;
   /** The power it gives: for the depot, as what is open says. */
   readonly gives: number;
   /** Its key in the dock, if it has one there now. */
@@ -376,10 +378,9 @@ const spareBlocks = (p: MachinePrint): Block[] => (p.spare > 0 ? [{ body: `${p.s
 
 /** A kind of piece at a grade: what it is, what it draws, its pace and its price there. */
 function machineCard(art: Art, p: MachinePrint): Description {
-  const k = p.kind;
-  const grade = p.grade;
+  const { kind: k, grade } = p;
   // Above the first grade it says what that grade does more, and costs; at the first, what the kind is.
-  const what = grade > 1 ? gradeSays(k, grade) : (KIND_INFO[k]?.what ?? "");
+  const what = grade > 1 ? gradeSays(k, grade, p.span) : (KIND_INFO[k]?.what ?? "");
   if (p.later) return { name: nameOf(k), icon: machinePic(art, k), tag: what };
   const stats: Stat[] = [];
   const draw = drawnAt(k, grade) / HALF;
@@ -475,7 +476,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
         look: raise.enough ? "sm" : "sm off",
         after: amount("coin", raise.cost),
         hint: `Raise to ${numeral(raise.to)}`,
-        about: gradeSays(k, raise.to),
+        about: gradeSays(k, raise.to, p.machine.span),
         on: () => hands.raise(x, y),
       });
     // What takes things in from every side and hands none on has no way to face (`KindPage.faces`).

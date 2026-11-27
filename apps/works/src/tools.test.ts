@@ -21,6 +21,7 @@ import {
   encode,
   goal,
   GOALS,
+  gradeSays,
   holderOf,
   item,
   kind,
@@ -328,6 +329,12 @@ describe("a tunnel aimed", () => {
   });
 });
 
+/** What each grade's button quotes with the tunnel's way in set at (-7, -5), aimed `dx` tiles on. */
+function quotes(dx: number): number[] {
+  aimAt(...xy(-7 + dx, -5));
+  return handPrint().grades.map((g) => g.cost);
+}
+
 describe("a tunnel through a deep culvert", () => {
   test("is aimed as far as 12 tiles on, at 2 Coins more for each past 5; its card says what it cost, raises and gives back by the same", async () => {
     // Every research of tier 5 done; a row clear for 14 tiles.
@@ -347,11 +354,21 @@ describe("a tunnel through a deep culvert", () => {
       [null, 26],
       ["A tunnel passes under 1 to 12 tiles", 12],
     ]);
+    // Aimed 12 tiles on, each grade's button quotes what that grade of it costs.
+    expect([quotes(3), quotes(13)]).toEqual([
+      [12, 36, 96],
+      [26, 78, 208],
+    ]);
     expect(comesUp(from, ...xy(6, -5))).toBe(true);
     await until(() => fake.leaf.commands.some((c) => isRecord(c) && c.do === "lay"));
     const p = printOf(tileRef(at(w, from.x, from.y)));
     if (p?.card !== "standing") throw new Error("no card");
     expect([p.machine.price, p.raise?.cost, p.refund]).toEqual([26, 78 - 26, 26]);
+    // Its Raise says what grade II of it costs, as the card's text for that grade does.
+    expect([p.machine.span, gradeSays(kind("tunnel"), 2, p.machine.span)]).toEqual([
+      12,
+      "Carries up to 200 items /min, up from 150. Costs 78 Coins.",
+    ]);
     // From its far mouth alike.
     expect(printOf(tileRef(at(w, ...xy(6, -5))))).toMatchObject({ machine: { price: 26 }, refund: 26 });
   });

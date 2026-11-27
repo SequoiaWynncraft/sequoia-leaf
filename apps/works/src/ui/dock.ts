@@ -77,6 +77,7 @@ import {
   upgradeMark,
   usable,
 } from "../tools.ts";
+import { aimedSpan } from "../tunnel.ts";
 import { CATCHING_UP, catchingUp, coins } from "../yard.ts";
 import { cardLearnt, machineRef } from "./card.ts";
 import { copyButton, pasteButton } from "./code.ts";
@@ -375,7 +376,7 @@ export function handPrint(): HandPrint {
     builds(tool) && top > 1
       ? Array.from({ length: top }, (_, k) => ({
           grade: k + 1,
-          cost: costOf(S.world, tool, k + 1),
+          cost: costOf(S.world, tool, k + 1, S.world.spare, aimedSpan(tool)),
           on: gradeInHand(tool) === k + 1,
         }))
       : [];

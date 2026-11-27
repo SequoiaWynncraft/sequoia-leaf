@@ -133,6 +133,7 @@ function machinePrint(k: Kind, grade = 1, span = 0): MachinePrint {
     graded: isGraded(k) && (grade > 1 || highest(w.open, k) > 1),
     later: !draws(k),
     price: grade > 1 ? price(k, grade, span) : costOf(w, k, 1, w.spare, span),
+    span: Math.abs(span),
     // The depot's power is what is open says it makes.
     gives: FIXED[k] === 1 ? w.open.depot : (GIVES[k] ?? 0),
     key: key ?? null,

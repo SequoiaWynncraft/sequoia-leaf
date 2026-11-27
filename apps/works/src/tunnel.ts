@@ -73,6 +73,20 @@ export function tunnelAim(from: Tile, faced: number, x: number, y: number): Aim 
 }
 
 /**
+ * How many tiles the tunnel aimed now passes under, with `tool` in hand, for what each grade of it
+ * costs: from its way in (set, or the tile aimed at) to the far mouth shown; 0 for any other tool, or
+ * with nowhere for it to come up.
+ */
+export function aimedSpan(tool: unknown): number {
+  const a = S.aim;
+  const far = a?.far ?? -1;
+  if (tool !== TUNNEL || !a || far < 0) return 0;
+  const w = S.world.land.w;
+  const h = S.hand;
+  return under(h.is === "tunnel" ? h.from : a, { x: far % w, y: Math.floor(far / w) });
+}
+
+/**
  * Whether a press with the tunnel in hand and no way in set would set its way in on a tile: a clear
  * tile in reach it could go in at, some way. Out of reach it is not set: the press builds there
  * instead, which reach refuses, and says so.
