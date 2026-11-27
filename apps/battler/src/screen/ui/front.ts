@@ -50,10 +50,10 @@ const TRAIL_ICONS = ["trouble", "spar", "boss"] as const;
 
 /**
  * What the page keeps for the session: the mode chosen, a trail not open yet that the member is
- * looking at (of those open, Leaf keeps the one picked), and whether going home early is being asked.
+ * looking at (of those open, Leaf keeps the one picked), and whether ending the raid is being asked.
  */
 const kept: { mode: ModeId; trail: number | null; home: boolean } = { mode: "trails", trail: null, home: false };
-/** A page has been opened over it, or it has been put away: going home is asked from the start again, and a trail not open yet is no longer looked at. */
+/** A page has been opened over it, or it has been put away: ending the raid is asked from the start again, and a trail not open yet is no longer looked at. */
 export const frontAway = (): void => {
   kept.home = false;
   kept.trail = null;
@@ -80,26 +80,30 @@ const atNow = (): At => ({
 
 // ---------- along the top ----------
 
-/** Going home early: asked first, and not before the run's first room is fought. */
+/** Ending the raid before its last room: asked first, and not before its first room is fought (the rules' `unfought`). */
 function homeOf(go: FrontAsks, run: RunView): HTMLElement {
-  if (unfought(run)) return el("span", "k-read k-dim", { text: "You can go home once the first room is fought." });
+  if (unfought(run))
+    return el("span", "k-read k-dim", { text: "You can end this raid once its first room is fought." });
   const asking = (on: boolean) => (): void => {
     kept.home = on;
     go.redraw();
   };
   if (!kept.home)
-    return el("button", "k-btn wood sm", { type: "button", id: "gohome", onclick: asking(true) }, "Go home early");
+    return el("button", "k-btn coral sm", { type: "button", id: "gohome", onclick: asking(true) }, "End this raid");
+  const won = run.record.filter((r) => r.result === "win").length;
   return el(
     "div",
     "k-row",
     {},
-    el("span", "k-d", { text: "Go home now? You are paid for the rooms you won." }),
-    el("button", "k-btn coral sm", { type: "button", onclick: () => go.goHome() }, "Go home"),
-    el("button", "k-btn wood sm", { type: "button", onclick: asking(false) }, "Stay"),
+    el("span", "k-d", {
+      text: `End this raid now? You are paid for the ${won} ${won === 1 ? "room" : "rooms"} you won.`,
+    }),
+    el("button", "k-btn coral sm", { type: "button", onclick: () => go.goHome() }, "End raid"),
+    el("button", "k-btn wood sm", { type: "button", onclick: asking(false) }, "Keep playing"),
   );
 }
 
-/** A run laid out: its trail, room and health, going home early, and carrying on. */
+/** A run laid out: its trail, room and health, ending it, and carrying on. */
 function strip(go: FrontAsks, run: RunView): HTMLElement {
   return el(
     "div",

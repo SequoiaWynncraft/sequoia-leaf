@@ -420,7 +420,7 @@ function summary(): HTMLElement | null {
   const ended = endedOf(S.screen);
   if (!ended) return null;
   const { run, summary: sum, paid, news } = ended;
-  const title = sum.ending === "won" ? "The raid is done." : sum.ending === "left" ? "Home early." : "Out of health.";
+  const title = sum.ending === "won" ? "The raid is done." : sum.ending === "left" ? "Raid ended." : "Out of health.";
   const paper = el("section", "k-paper page k-rise summary", { role: "dialog", "aria-label": title });
   add(
     paper,
