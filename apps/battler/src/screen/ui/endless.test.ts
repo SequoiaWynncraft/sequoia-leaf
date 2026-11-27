@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { heldSlot, LEGACY_ERA, newAlmanac, type RoomRecord, startRun } from "@sequoia-leaf/raid";
+import { LEGACY_ERA, newAlmanac, type RoomRecord, startRun, wayOn } from "@sequoia-leaf/raid";
 
 import { askToBeMet, chairsSaid, readDepthBoard, takenNews } from "./endless.ts";
 
@@ -10,7 +10,7 @@ const taken = (id: number, room: number, by: string, at = "2026-11-26T12:00:00Z"
   id,
   type: "held_taken",
   created_at: at,
-  data: { game: "raid", slot: heldSlot(room), by: { id: `id-${by}`, username: by } },
+  data: { game: "raid", slot: `deep:${room}`, by: { id: `id-${by}`, username: by } },
 });
 const other = (id: number): unknown => ({ id, type: "leaf_earned", created_at: "2026-11-26T12:00:00Z", data: {} });
 
@@ -67,8 +67,8 @@ describe("the Deep Woods' card", () => {
   test("says the member's board and name can be met there until they have set out there", () => {
     const almanac = newAlmanac();
     expect(askToBeMet(almanac, null)).toBe(true);
-    expect(askToBeMet(almanac, startRun(1, { era: LEGACY_ERA, endless: "wilds" }))).toBe(true);
-    expect(askToBeMet(almanac, startRun(1, { era: LEGACY_ERA, endless: "deep" }))).toBe(false);
+    expect(askToBeMet(almanac, startRun(1, { era: LEGACY_ERA, way: wayOn({ id: "wilds" }) }))).toBe(true);
+    expect(askToBeMet(almanac, startRun(1, { era: LEGACY_ERA, way: wayOn({ id: "deep" }) }))).toBe(false);
     almanac.deepest.deep = 3;
     expect(askToBeMet(almanac, null)).toBe(false);
   });
@@ -77,7 +77,7 @@ describe("the Deep Woods' card", () => {
 const boss = (room: number): RoomRecord => ({ room, kind: "boss", result: "win", standing: [3, 0], boss: null });
 describe("an endless run's chairs", () => {
   test("are said on the level's card once a boss past room 15 has been beaten", () => {
-    const run = startRun(1, { era: LEGACY_ERA, endless: "wilds" });
+    const run = startRun(1, { era: LEGACY_ERA, way: wayOn({ id: "wilds" }) });
     expect(chairsSaid(run)).toEqual([]);
     expect(chairsSaid({ ...run, record: [boss(4), boss(19)] })).toEqual([
       "Bosses beaten after room 15: 1 more figure than your level, 3 at most.",

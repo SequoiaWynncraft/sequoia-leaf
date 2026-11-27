@@ -95,7 +95,7 @@ describe("a patch that changes a trait's steps at a made-up release", () => {
       { do: "choose", option: 0 },
     ])
       table = done(table, c, moment - 1);
-    const run = table.run;
+    const run = table.held.main;
     if (!run) throw new Error("no run");
     // Velvet, a Moss Mender, fielded alone where the starter stood.
     const seat = run.board.findIndex((p) => p !== null);
@@ -109,11 +109,8 @@ describe("a patch that changes a trait's steps at a made-up release", () => {
     expect([run.era, moss(run)]).toEqual([eraAt(moment - 1), 0]);
     // At the moment it moves, it is in the patch's era, and the same board has Moss on.
     const free = run.board.findIndex((p, i) => p === null && i !== seat);
-    const moved = done(
-      table,
-      { do: "move", from: { on: "board", at: seat }, to: { on: "board", at: free } },
-      moment,
-    ).run;
+    const moved = done(table, { do: "move", from: { on: "board", at: seat }, to: { on: "board", at: free } }, moment)
+      .held.main;
     if (!moved) throw new Error("no run");
     expect([moved.era, moss(moved)]).toEqual([eraAt(moment), 1]);
     // The patch was the test's own: the catalogue of that era has Moss at 2/3/4, as release 1 left it.

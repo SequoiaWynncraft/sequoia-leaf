@@ -24,4 +24,4 @@ export const rackDrawn = (run: RunView): string => `${run.era}|${run.items.join(
 export const stallDrawn = (run: RunView): string =>
   `${run.era}|${run.stall
     .map((kind, i) => `${shownAs(kind)}:${priceOf(run, i)}:${canBuy(run, i) ? 1 : 0}:${kind ? twins(run, kind) : 0}`)
-    .join(run.own ? ";" : ",")}`;
+    .join(run.way.figures.pool === "own" ? ";" : ",")}`;

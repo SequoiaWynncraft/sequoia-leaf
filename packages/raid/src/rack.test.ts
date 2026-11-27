@@ -27,7 +27,11 @@ const ctx = (seed: number): Ctx => ({
   postcards: {},
 });
 /** Leaf's table with that run laid out. */
-const tableOf = (run: Run): Table => ({ ...RAID.create(ctx(1)), runs: 1, run });
+const tableOf = (run: Run): Table => ({
+  ...RAID.create(ctx(1)),
+  begun: { main: 1, endless: 0 },
+  held: { main: run, endless: null },
+});
 
 describe("two components on the rack", () => {
   test("become the finished item, in the first one's place, and the second's place closes up", () => {
@@ -114,7 +118,7 @@ describe("forging as a command", () => {
     const guessed = predict(RAID.view(state, ctx(2)), forge);
     const done = RAID.apply(state, forge, ctx(3));
     if ("refused" in done) throw new Error(`refused: ${done.refused}`);
-    expect(done.state.run?.items).toEqual(["bark", "wasptail"]);
+    expect(done.state.held.main?.items).toEqual(["bark", "wasptail"]);
     expect(done.notes).toEqual([{ t: "made", item: "wasptail", at: 1 }]);
     expect(guessed).toEqual({ view: tableView(done.state, ctx(2)), notes: [...done.notes] });
     // Leaf's notes read back on the page as they were sent.
@@ -126,7 +130,7 @@ describe("forging as a command", () => {
     const bad: RaidCommand = { do: "forge", item: 0, with: 1 };
     expect(predict(RAID.view(state, ctx(2)), bad)).toEqual({ refused: "two_components" });
     expect(RAID.apply(state, bad, ctx(3))).toEqual({ refused: "two_components" });
-    const run = state.run;
+    const run = state.held.main;
     if (!run) throw new Error("no run");
     expect([legal(run, { do: "forge", item: 0, with: 1 }), legal(run, { do: "forge", item: 0, with: 2 })]).toEqual([
       false,

@@ -87,7 +87,10 @@ async function turn(reach: Reach, id: string, { player, session }: Seated, next:
   }
   // A pick waiting is sent alone (what follows it is Leaf's to say), so planning is asked for again until it is done.
   for (let ask = 0; ask < 16 && now.at === "plan" && now.run?.stage.phase === "plan"; ask++) {
-    const commands = planCommands({ ...BLANK, run: now.run, runs: now.rev }, SENSIBLE);
+    const commands = planCommands(
+      { ...BLANK, held: { main: now.run, endless: null }, begun: { main: now.rev, endless: 0 } },
+      SENSIBLE,
+    );
     if (commands.length === 0) break;
     // oxlint-disable-next-line no-await-in-loop -- each batch waits on Leaf's answer to the last
     now = await send(commands);

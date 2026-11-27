@@ -155,9 +155,9 @@ describe("every row the goldens keep", () => {
     const table = read(text);
     expect(read(RAID.encode(table))).toEqual(table);
     const view = RAID.view(table, ctx());
-    const run = view.run ?? view.endless;
+    const run = view.held.main ?? view.held.endless;
     if (!run) throw new Error("a table row with no run");
-    const aim = view.run ? {} : { endless: true };
+    const aim = view.held.main ? {} : { endless: true };
     const next = run.stage.phase === "fight" ? "take" : picksOf(run).length > 0 ? "choose" : "fight";
     const c = RAID.command({ do: next, option: 0, ...aim });
     if (!c) throw new Error("no command");
@@ -175,9 +175,17 @@ describe("every row the goldens keep", () => {
       expect(decodeSitting(encodeSitting(next))).toEqual(next);
     },
   );
-  test.each(rows("fight"))("%s reads as Leaf reads a fight, and the same", (_, text) => {
-    expect(readFight(JSON.parse(text))).toEqual(JSON.parse(text));
-  });
+  test.each(rows("fight"))(
+    "%s reads as Leaf reads a fight, and the same; one kept before records said their course, pool and era, with those its way said",
+    (_, text) => {
+      const row: Record<string, unknown> = JSON.parse(text);
+      const said = { main: ["trail", "fair"], own: ["trail", "own"], wilds: ["wilds", "fair"], deep: ["deep", "fair"] };
+      const [course, whose] = Object.entries(said).find(([way]) => way === row.way)?.[1] ?? [];
+      const older = row.course === undefined ? { course, pool: whose, era: CAT.era } : {};
+      const kept: unknown = readFight(row);
+      expect(kept).toEqual({ ...row, ...older });
+    },
+  );
   test.each(rows("board"))("%s is met as a board, with levels only on a lane that keeps them", (name, text) => {
     const data: unknown = JSON.parse(text);
     if (name.includes("-own")) {

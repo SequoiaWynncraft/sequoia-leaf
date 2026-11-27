@@ -16,7 +16,7 @@ import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
-import type { EndlessWay, RaidNote } from "@sequoia-leaf/raid";
+import type { RaidNote, Way } from "@sequoia-leaf/raid";
 
 import { onTraitWoke } from "./screen/fightshow.ts";
 import { stepFightView } from "./screen/fightview.ts";
@@ -32,8 +32,7 @@ import {
   lookBack,
   setOut,
   sitDown,
-  startEndless,
-  startNew,
+  startOn,
   toFront,
   traitOn,
   watchAgain,
@@ -77,11 +76,8 @@ function redrawFront(): void {
 }
 
 /** Sets out from the front page, which goes once Leaf has laid the run out: on a trail, or on an endless run. */
-async function setOutOn(trail: number, own: boolean): Promise<void> {
-  if (await startNew(trail, own)) showPage(null);
-}
-async function setOutEndless(way: EndlessWay): Promise<void> {
-  if (await startEndless(way)) showPage(null);
+async function setOutOn(way: Way): Promise<void> {
+  if (await startOn(way)) showPage(null);
 }
 
 /** The member's first three-star figure ever is worth a line in the town. */
@@ -169,8 +165,7 @@ async function boot(): Promise<void> {
       showPage(null);
       watchAgain(slot);
     },
-    start: (trail, own) => void setOutOn(trail, own),
-    endless: (way) => void setOutEndless(way),
+    setOut: (way) => void setOutOn(way),
     goHome: (slot) => void goHome(slot),
     leave: leaveTable,
     gear: () => menu.gear(),

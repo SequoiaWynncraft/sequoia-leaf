@@ -76,7 +76,6 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { CLIENT_HZ, Flag, leaf as leafOf, type PlayerId, playerId, utcDay } from "@sequoia-leaf/core";
-import { heldSlot } from "@sequoia-leaf/raid";
 import { Effect, Layer, Schema } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { SqlClient } from "effect/sql";
@@ -87,7 +86,7 @@ import { Events } from "../src/events/store.ts";
 import type { Quests } from "../src/quests/store.ts";
 import { LiveClient } from "./live-client.ts";
 import { stagePulls } from "./stage-pulls.ts";
-import { stageRaid, stageWoods } from "./stage-raid.ts";
+import { heldSlot, stageRaid, stageWoods } from "./stage-raid.ts";
 import { stageTally } from "./stage-tally.ts";
 import { stageTown } from "./stage-town.ts";
 import { stageWorks } from "./stage-works.ts";

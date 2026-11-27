@@ -12,22 +12,15 @@ import { type BossId, isBossId, isFigureId } from "./content/figures.ts";
 import { isMemberId } from "./content/members.ts";
 import { LEVELS, MAX_LEVEL, ROOMS, type RoomSpec, type SparStrength, TRAILS } from "./content/rooms.ts";
 import { shut } from "./content/rules.ts";
-import { isHeld, roomAt, sparAt } from "./endless.ts";
+import { isHeld, sparAt } from "./endless.ts";
 import type { FightResult, FightSummary } from "./fight/types.ts";
 import { COLS } from "./hex.ts";
 import { isParty, type Party, type Placed } from "./party.ts";
 import { roomOf, type RoomRun } from "./room.ts";
 import type { Run } from "./run.ts";
 import { sparParty } from "./spar.ts";
+import { counts, courseOf, trailOf } from "./way.ts";
 import { seatOpen } from "./wing.ts";
-
-/**
- * Where a member's board for a room is left for other members to meet (`Done.keep`, `Ctx.met`): its
- * trail, and the room's place in `ROOMS`. A run with the member's own figures (`own`) leaves and
- * meets boards apart from the main way's, so that no level ever reaches a main run.
- */
-export const boardSlot = (trail: number, room: number, own = false): string =>
-  `${own ? "own" : "board"}:${trail}:${room}`;
 
 /** The most figures any member can field, as the run's `fieldCap` has it: the top level, and more with An Extra Chair. */
 const mostFielded = (cat: Catalog): number => MAX_LEVEL + boonNumber(cat, "extrachair", "more");
@@ -118,24 +111,29 @@ export function opposition(
 }
 
 /**
- * Who is waiting in the room a run is in, from the room's seed: for a run that is not endless, as
- * `opposition` has it. In an endless run, the forest as strong as the room says (`Room.might`); in
- * a sparring room a regular as strong as `sparAt` says, but in a room held (`isHeld`) the board of
- * the member who holds it, when Leaf hands one over (`met`) and it is one a member could have
- * fielded (`boardMet`). Nobody sits on a seat the room closes (`Room.rules`): the regular is seated
- * round them, and the forest's plan moves anyone on one to the nearest open seat (`seatOpen`).
+ * Who is waiting in the room a run is in, from the room's seed. On a course whose sparring rooms
+ * meet boards left there (`Across` "met": a trail), as `opposition` has it. On any other, the forest
+ * as strong as the room says (`Room.might`); in a sparring room a regular as strong as `sparAt`
+ * says, but in a room held (`isHeld`) the board of the member who holds it, when Leaf hands one over
+ * (`met`) and it is one a member could have fielded (`boardMet`). A board met keeps its levels only
+ * on a way that meets levels (`counts`). Nobody sits on a seat the room closes (`Room.rules`): the
+ * regular is seated round them, and the forest's plan moves anyone on one to the nearest open seat
+ * (`seatOpen`).
  */
-export function foeOf(run: Pick<Run, "trail" | "era" | "own"> & RoomRun, seed: number, met?: Met): Party {
-  if (!run.endless) return opposition(catalogOf(run), seed, run.room, run.trail, met, run.own !== null);
+export function foeOf(run: Pick<Run, "era"> & RoomRun, seed: number, met?: Met): Party {
+  const course = courseOf(run.way);
+  const trail = trailOf(run.way);
+  const { levelsMet } = counts(run.way);
+  if (course.across === "met") return opposition(catalogOf(run), seed, run.room, trail, met, levelsMet);
   const room = roomOf(run);
   const closed = shut(room.rules);
-  const spec = roomAt(run.room);
+  const spec = course.rooms(run.room);
   if (spec && room.kind !== "spar") {
-    const party = forest(seed, run.room, spec, run.trail, room.might);
+    const party = forest(seed, run.room, spec, trail, room.might);
     return { ...party, figures: seatOpen(party.figures, closed) };
   }
-  const regular = regularAt(catalogOf(run), seed, run.room, run.trail, sparAt(run.room), closed);
-  const held = isHeld(run, run.room) && met ? boardMet(catalogOf(run), met, false, ENDLESS.chairs) : null;
+  const regular = regularAt(catalogOf(run), seed, run.room, trail, sparAt(run.room), closed);
+  const held = isHeld(run, run.room) && met ? boardMet(catalogOf(run), met, levelsMet, ENDLESS.chairs) : null;
   return held ?? regular;
 }
 

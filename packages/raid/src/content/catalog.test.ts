@@ -259,20 +259,20 @@ describe("picked up across a release", () => {
       const [old, now] = [eraAt(at - 1), eraAt(at)];
       expect([
         table.era,
-        table.run?.era,
-        table.run?.stage.phase === "fight" && table.run.stage.fight.setup.era,
+        table.held.main?.era,
+        table.held.main?.stage.phase === "fight" && table.held.main.stage.fight.setup.era,
       ]).toEqual([old, old, old]);
       // Leaf's clock passes the release: the table is in the new era, and so is the page's view; the run is as it was.
       const later = RAID.advance(table, ctxAt(at));
-      expect([later.era, RAID.view(later, ctxAt(at)).era, later.run?.era]).toEqual([now, now, old]);
-      expect(later.run?.stall).toEqual(table.run?.stall);
+      expect([later.era, RAID.view(later, ctxAt(at)).era, later.held.main?.era]).toEqual([now, now, old]);
+      expect(later.held.main?.stall).toEqual(table.held.main?.stall);
       // Its next command moves it: it draws its next stall from the new era, and the fight it took stays the old era's.
       const taken = done(later, { do: "take" }, at);
-      expect([taken.run?.era, taken.run?.last?.era]).toEqual([now, old]);
+      expect([taken.held.main?.era, taken.held.main?.last?.era]).toEqual([now, old]);
       const sold = new Set(
         TIERS.flatMap((tier) => available(catalogAt(now), { for: "stall", figures: { pool: "fair" }, tier })),
       );
-      expect((taken.run?.stall ?? []).filter((kind) => kind !== null && !sold.has(kind))).toEqual([]);
+      expect((taken.held.main?.stall ?? []).filter((kind) => kind !== null && !sold.has(kind))).toEqual([]);
     },
   );
 

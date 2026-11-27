@@ -9,13 +9,17 @@ import {
   chairsOf,
   ENDLESS,
   type EndlessWay,
-  heldRoom,
+  lanes,
   ROOM_COUNT,
   type RunView,
+  wayOn,
+  wayWords,
 } from "@sequoia-leaf/raid";
 
-/** The ways into the endless slot, by name. */
-export const WAY_NAMES: Readonly<Record<EndlessWay, string>> = { wilds: "The Wilds", deep: "The Deep Woods" };
+/** What an endless way is called (`wayWords`). */
+export const courseName = (course: EndlessWay): string => wayWords(wayOn({ id: course })).name;
+/** The Deep Woods with everyone's figures, whose held rooms a room-taken event names by their lane. */
+const DEEP_WOODS = wayOn({ id: "deep" });
 
 /** A board's span: every week there has been, or this one. */
 export type Span = "ever" | "week";
@@ -66,7 +70,7 @@ export function depthBoard(title: string, board: DepthBoard | null, own: number)
 }
 
 /** What an endless run's chairs add, for the level's card: nothing for a run with none. */
-export function chairsSaid(run: Pick<RunView, "endless" | "record">): string[] {
+export function chairsSaid(run: Pick<RunView, "way" | "record">): string[] {
   const n = chairsOf(run);
   if (n === 0) return [];
   return [
@@ -83,7 +87,7 @@ export const endlessWhere = (run: Pick<RunView, "room" | "resolve">): string =>
  * member's board and name: until they have set out there (a run there laid out, or a room won there).
  */
 export const askToBeMet = (almanac: Pick<Almanac, "deepest">, endless: RunView | null): boolean =>
-  almanac.deepest.deep === 0 && endless?.endless !== "deep";
+  almanac.deepest.deep === 0 && endless?.way.course.id !== "deep";
 
 /** A room of the Deep Woods taken from the member: the event's number, the room (from 1), and by whom. */
 export interface Taken {
@@ -96,7 +100,7 @@ function takenOf(v: unknown, since: number): Taken | null {
   if (!isRecord(v) || v.type !== "held_taken" || !whole(v.id) || !isRecord(v.data)) return null;
   const at = typeof v.created_at === "string" ? Date.parse(v.created_at) : Number.NaN;
   const { game, slot, by } = v.data;
-  const room = typeof slot === "string" ? heldRoom(slot) : null;
+  const room = typeof slot === "string" ? lanes(DEEP_WOODS).heldRoom(slot) : null;
   const name = isRecord(by) && typeof by.username === "string" ? by.username : null;
   if (game !== "raid" || room === null || name === null || !(at >= since)) return null;
   return { id: v.id, room: room + 1, by: name };

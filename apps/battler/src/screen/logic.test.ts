@@ -7,6 +7,7 @@ import {
   type ItemId,
   LEGACY_ERA,
   move,
+  onTrail,
   type Piece,
   type RoomRecord,
   type Run,
@@ -332,7 +333,7 @@ describe("teaching by doing", () => {
 
 describe("what a card says about a figure", () => {
   test("a figure's numbers on the board count its items and its party's traits", () => {
-    const run = startRun(3, { era: LEGACY_ERA, trail: 0 });
+    const run = startRun(3, { era: LEGACY_ERA, way: onTrail(0) });
     run.stage = { phase: "plan", picks: [] };
     run.board.fill(null);
     run.bench.fill(null);
@@ -349,7 +350,7 @@ describe("what a card says about a figure", () => {
     expect(pieceNumbers(run, { on: "bench", at: 0 })?.armour).toBe(plain.armour + 40);
   });
   test("a trait's count and next step, as the strip shows them", () => {
-    const run = startRun(3, { era: LEGACY_ERA, trail: 0 });
+    const run = startRun(3, { era: LEGACY_ERA, way: onTrail(0) });
     run.board.fill(null);
     run.board[0] = { id: 1, kind: "emberkit", stars: 1, items: [], fed: 0 };
     expect(ownTraitCount(run, "ember")).toEqual({ count: 1, next: 2, step: 0 });
@@ -365,7 +366,7 @@ describe("what a card says about a figure", () => {
     expect(membersOf(CAT, "fang", EVERYONES)).toEqual(["emberkit", "crab7", "jay", "badger", "hearthcat"]);
   });
   test("where a figure is", () => {
-    const run = startRun(3, { era: LEGACY_ERA, trail: 0 });
+    const run = startRun(3, { era: LEGACY_ERA, way: onTrail(0) });
     run.board.fill(null);
     run.bench.fill(null);
     run.stall = ["moth", null, null, null, null];
@@ -425,7 +426,7 @@ describe("the name across the table", () => {
 
 describe("the far party walking in", () => {
   test("walks in for each room met, and again when the last room is fought again", () => {
-    const run = startRun(9, { era: LEGACY_ERA, trail: 0 });
+    const run = startRun(9, { era: LEGACY_ERA, way: onTrail(0) });
     const first = arrivalOf(run);
     expect(arrivalOf({ ...run, room: 1 })).not.toBe(first);
     const lost: RoomRecord = { room: 14, kind: "boss", result: "loss", standing: [0, 2], boss: "bigcrab" };

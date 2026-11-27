@@ -27,12 +27,14 @@ import {
 
 const GAME = "little-raid-sitting";
 /**
- * 3: the sitting, each seat's run and each fight's setup keep their era. 2: what Greg has eaten is
- * a share of his health (`feed`), where it was meals of 3% each; its runs keep the Wilds' wing as
- * version 1's did. A sitting of versions 1 and 2 is read as well, of `LEGACY_ERA`.
+ * 4: each seat's run keeps how it set out as one value (`Run.way`), where it kept `trail`, `own` and
+ * `endless`. 3: the sitting, each seat's run and each fight's setup keep their era. 2: what Greg has
+ * eaten is a share of his health (`feed`), where it was meals of 3% each; its runs keep the Wilds'
+ * wing as version 1's did. A sitting of versions 1 to 3 is read as well, each run's way from its
+ * three fields; one of versions 1 and 2 is of `LEGACY_ERA`.
  */
-export const SITTING_VERSION = 3;
-const READS: readonly number[] = [1, 2, SITTING_VERSION];
+export const SITTING_VERSION = 4;
+const READS: readonly number[] = [1, 2, 3, SITTING_VERSION];
 
 export const encodeSitting = (t: Sitting): string =>
   JSON.stringify({
@@ -167,7 +169,7 @@ function read(v: unknown): Sitting {
   unique(pairs.flat(), "the pairs");
   const t: Sitting = {
     rng: whole(r.rng, 0, UINT, "the random stream"),
-    era: r.v === SITTING_VERSION ? one(r.era, isEra, "the era") : LEGACY_ERA,
+    era: r.v === 1 || r.v === 2 ? LEGACY_ERA : one(r.era, isEra, "the era"),
     by: text(r.by, 64, "who opened it"),
     room: whole(r.room, 0, 999, "the room"),
     stage: readStage(r.stage),

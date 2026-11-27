@@ -1,0 +1,35 @@
+{
+  "run": 1,
+  "way": "wilds",
+  "course": "wilds",
+  "trail": 0,
+  "pool": "fair",
+  "era": 2,
+  "room": 2,
+  "kind": "spar",
+  "across": "regular:greg",
+  "result": "win",
+  "margin": 0.911,
+  "seconds": 11.1,
+  "resolve": 20,
+  "level": 3,
+  "acorns": 3,
+  "party": {
+    "figures": [
+      { "kind": "emberkit", "stars": 2, "seat": 3, "items": ["blackthorn", "crabcharm"], "fed": 0 },
+      { "kind": "crab23", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+      { "kind": "kettle", "stars": 1, "seat": 24, "items": [], "fed": 0 }
+    ],
+    "traits": { "ember": 1, "crab": 1, "mender": 1 },
+    "boons": ["crabcharm"]
+  },
+  "against": {
+    "figures": [
+      { "kind": "mossmote", "stars": 1, "seat": 24, "items": [], "fed": 0 },
+      { "kind": "emberkit", "stars": 1, "seat": 2, "items": [], "fed": 0 },
+      { "kind": "crab7", "stars": 2, "seat": 3, "items": [], "fed": 0 }
+    ],
+    "traits": { "fang": 1 },
+    "boons": []
+  }
+}

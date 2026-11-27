@@ -1,17 +1,18 @@
 /**
  * A room fought, as Leaf keeps it for the staff's analysis (`raid_fight`, Leaf's `raid_fights`): which
- * run and room, who was across, how it came out, and both parties as they fought. One is written for
- * every fight decided, on either way of setting out; nothing a player sees reads it.
+ * run and room, how the run set out, who was across, how it came out, and both parties as they
+ * fought. One is written for every fight decided, on every way of setting out; nothing a player sees
+ * reads it.
  */
 import { type BoonId, isBoonId } from "./content/boons.ts";
 import { type Catalog, catalogOf } from "./content/catalog.ts";
-import { ENDLESS_WAYS, type EndlessWay } from "./content/endless.ts";
-import { nowCalled, regularOf, type RoomKind } from "./content/rooms.ts";
+import { type Era, eraAt, isEra, LEGACY_ERA } from "./content/releases.ts";
+import { nowCalled, regularOf, type RoomKind, type RoomSpec } from "./content/rooms.ts";
 import { isTraitId, renamedTrait, type TraitId } from "./content/traits.ts";
-import { roomAt } from "./endless.ts";
 import type { FightResult, FightSummary } from "./fight/types.ts";
 import { isPlaced, type Party, type Placed, traitSteps } from "./party.ts";
 import { type Fought, resolveLost, type Run } from "./run.ts";
+import { type CourseId, courseOf, type OldWay, oldWayOf, type Pool, wayLogged, wayOfLogged } from "./way.ts";
 
 /** A party as it fought: its figures as they stood, the traits they switched on with their steps, and its boons. */
 export type FoughtSide = {
@@ -23,10 +24,15 @@ export type FoughtSide = {
 export type FightRecord = {
   /** The run's number at its table. */
   run: number;
-  /** How the run set out: the main way, the member's own figures, or one of the endless ways. */
-  way: "main" | "own" | EndlessWay;
+  /** How the run set out, as the first records said it: the main way, the member's own figures, or an endless way by name. */
+  way: OldWay;
+  /** How the run set out (`wayLogged`): its course, its trail (the first off a trail), and whose figures. */
+  course: CourseId;
   trail: number;
-  /** The room, counting from 0 as `ROOMS` does (an endless run's go on past the fifteenth: `roomAt`). */
+  pool: Pool;
+  /** The era the fight was set up in: what it is played by. */
+  era: Era;
+  /** The room, counting from 0 as its course counts them (an endless run's go on past the fifteenth). */
   room: number;
   kind: RoomKind;
   /** Who was across: `plan:<n>`, the room's nth plan in `ROOMS`; `regular:<figure>`; or `member:<Leaf id>`. */
@@ -59,11 +65,11 @@ function left(f: Pick<FightSummary, "units">, side: 0 | 1): number {
 /** How much better the party's side ended than the other: from -1 (they stand whole) to 1 (we do). */
 export const margin = (f: Pick<FightSummary, "units">): number => left(f, 0) - left(f, 1);
 
-function acrossOf(room: number, foe: Party): string {
+function acrossOf(room: RoomSpec | undefined, foe: Party): string {
   if (foe.by !== undefined) return `member:${foe.by}`;
   const regular = regularOf(foe);
   if (regular) return `regular:${regular.kind}`;
-  return `plan:${roomAt(room)?.plans.findIndex((plan) => plan.name === nowCalled(foe.title)) ?? -1}`;
+  return `plan:${room?.plans.findIndex((plan) => plan.name === nowCalled(foe.title)) ?? -1}`;
 }
 
 const sideOf = (cat: Catalog, party: Party, boons: readonly BoonId[]): FoughtSide => ({
@@ -75,14 +81,16 @@ const sideOf = (cat: Catalog, party: Party, boons: readonly BoonId[]): FoughtSid
 /** The record of the fight a run (its `runs`th at the table) is fighting, as Leaf decided it. */
 export function fightRecord(runs: number, run: Run, { setup, outcome }: Fought): FightRecord {
   const [ours, theirs] = setup.sides;
-  const kind = roomAt(run.room)?.kind ?? "spar";
+  const room = courseOf(run.way).rooms(run.room);
+  const kind = room?.kind ?? "spar";
   return {
     run: runs,
-    way: run.endless ?? (run.own ? "own" : "main"),
-    trail: run.trail,
+    way: oldWayOf(run.way),
+    ...wayLogged(run.way),
+    era: setup.era,
     room: run.room,
     kind,
-    across: acrossOf(run.room, theirs),
+    across: acrossOf(room, theirs),
     result: outcome.result,
     margin: Math.round(margin(outcome) * 1000) / 1000,
     seconds: Math.round(outcome.seconds * 10) / 10,
@@ -111,14 +119,25 @@ function readSide(v: unknown): FoughtSide | null {
   return { figures: v.figures, traits, boons: v.boons };
 }
 
-/** Where a record's fight was and who was across, read back. */
+/**
+ * Where a record's fight was, how its run set out and who was across, read back. A record with no
+ * course, pool or era (one kept before records said them, or one an older Leaf wrote while a deploy
+ * was under way: the row's columns empty) says its way by `way` alone (`wayOfLogged`), and was set up
+ * in the era live at `at`, the moment its row was written, when the reader has it; else in the era
+ * live before records said theirs (`LEGACY_ERA`).
+ */
 function whereOf(
   v: Record<string, unknown>,
-): Pick<FightRecord, "run" | "way" | "trail" | "room" | "kind" | "across"> | null {
-  const { run, way, trail, room, kind, across } = v;
-  if (!whole(run) || !oneOf(way, ["main", "own", ...ENDLESS_WAYS]) || !whole(trail) || !whole(room)) return null;
+  at: number | undefined,
+): Pick<FightRecord, "run" | "way" | "course" | "trail" | "pool" | "era" | "room" | "kind" | "across"> | null {
+  const { run, way, room, kind, across } = v;
+  const said = wayOfLogged(v);
+  const era = v.era == null ? (at === undefined ? LEGACY_ERA : eraAt(at)) : isEra(v.era) ? v.era : null;
+  if (!whole(run) || !oneOf(way, ["main", "own", "wilds", "deep"]) || said?.trail == null || !whole(room)) return null;
   if (!oneOf(kind, ["trouble", "spar", "boss"]) || typeof across !== "string" || across.length > 80) return null;
-  return { run, way, trail, room, kind, across };
+  return era === null
+    ? null
+    : { run, way, course: said.course, trail: said.trail, pool: said.pool, era, room, kind, across };
 }
 
 /** How a record's fight came out, read back. */
@@ -131,10 +150,13 @@ function howOf(
   return { result, margin: by, seconds, resolve, level, acorns };
 }
 
-/** A fight's record read back, as Leaf stores it or a report reads it, checked as the rules have it; null for anything else. */
-export function readFight(v: unknown): FightRecord | null {
+/**
+ * A fight's record read back, as Leaf stores it or a report reads it, checked as the rules have it;
+ * null for anything else. `at` is when its row was written, where the reader has it.
+ */
+export function readFight(v: unknown, at?: number): FightRecord | null {
   if (!isRecord(v)) return null;
-  const where = whereOf(v);
+  const where = whereOf(v, at);
   const how = howOf(v);
   const party = readSide(v.party);
   const against = v.against === null ? null : readSide(v.against);

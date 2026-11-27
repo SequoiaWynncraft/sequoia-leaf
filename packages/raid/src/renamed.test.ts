@@ -122,8 +122,8 @@ describe("what Leaf kept under the old id", () => {
       raw.run.foe.title = title;
       const table = decodeTable(JSON.stringify(raw));
       expect(table?.almanac.topped).toEqual(["graid", "moss"]);
-      expect(table?.run?.seen.topped).toEqual(["graid"]);
-      expect(table?.run?.foe.title).toBe("brought Graid Sages");
+      expect(table?.held.main?.seen.topped).toEqual(["graid"]);
+      expect(table?.held.main?.foe.title).toBe("brought Graid Sages");
       const again = table ? encodeTable(table) : "";
       expect(again).not.toMatch(SAYS_GROOT);
       expect(decodeTable(again)).toEqual(table);

@@ -1,3 +1,4 @@
+import { wayOn } from "@sequoia-leaf/raid/way.ts";
 import { Clock, Effect, Option } from "effect";
 import { HttpApiBuilder } from "effect/http-api";
 
@@ -12,10 +13,11 @@ export const GameRaidHandlers = HttpApiBuilder.group(LeafApi, "gameRaid", (handl
     const names = yield* PlayerNames;
     const depths = yield* RaidDepths;
     return handlers
-      .handle("depths", ({ params }) =>
+      .handle("depths", ({ params, query }) =>
         Effect.gen(function* () {
           const { playerId } = yield* CurrentIdentity;
-          const board = yield* depths.board(params.way, params.span, playerId, yield* Clock.currentTimeMillis);
+          const way = wayOn({ id: params.way }, query.pool === "own" ? {} : null);
+          const board = yield* depths.board(way, params.span, playerId, yield* Clock.currentTimeMillis);
           const named = yield* names.of(board.top.map((row) => row.playerId));
           return {
             top: board.top.map((row) => ({
@@ -30,10 +32,11 @@ export const GameRaidHandlers = HttpApiBuilder.group(LeafApi, "gameRaid", (handl
           };
         }),
       )
-      .handle("held", () =>
+      .handle("held", ({ query }) =>
         Effect.gen(function* () {
           const { playerId } = yield* CurrentIdentity;
-          return { rooms: yield* depths.held(playerId, yield* Clock.currentTimeMillis) };
+          const way = wayOn({ id: "deep" }, query.pool === "own" ? {} : null);
+          return { rooms: yield* depths.held(way, playerId, yield* Clock.currentTimeMillis) };
         }),
       );
   }),

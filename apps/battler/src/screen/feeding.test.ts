@@ -4,15 +4,13 @@ import {
   choose,
   type FigureId,
   LEGACY_ERA,
-  newAlmanac,
-  newLooks,
   type Piece,
   predict,
   refusalText,
   type RunView,
   startRun,
-  type TableView,
 } from "@sequoia-leaf/raid";
+import { viewWith } from "@sequoia-leaf/raid/testkit.ts";
 
 import { feedOffer, feedWords, gregsOf } from "./feeding.ts";
 
@@ -75,24 +73,13 @@ describe("the feed target", () => {
 
   test("letting go does as the rules do, and what they turn down reads as their sentence", () => {
     const run = planning(["greg"], ["badger"]);
-    const view: TableView = {
-      era: LEGACY_ERA,
-      runs: 1,
-      run,
-      endless: null,
-      ventures: 0,
-      week: { at: 0, deepest: { wilds: 0, deep: 0 } },
-      almanac: newAlmanac(),
-      trail: 0,
-      looks: newLooks(),
-      roster: {},
-    };
+    const view = viewWith(run);
     const offer = feedOffer(run, bench(0));
     if (!offer || !("to" in offer)) throw new Error("no feed target");
     const done = predict(view, { do: "feed", from: bench(0), to: offer.to });
     if (!done || !("view" in done)) throw new Error("not fed");
     expect(done.notes[0]).toMatchObject({ t: "fed", gained: offer.gained, fed: 8 });
-    expect(done.view.run?.bench[0]).toBeNull();
+    expect(done.view.held.main?.bench[0]).toBeNull();
     expect(refusalText("greg_full")).toBe("Greg is full.");
     expect(refusalText("not_from_bench")).toBe("Greg only eats from the bench.");
   });

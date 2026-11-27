@@ -103,7 +103,7 @@ describe("the table, on Leaf", () => {
     await until(() => fake.leaf.posts >= 4);
     const kept = [...(world?.store.map.keys() ?? [])];
     expect(kept.filter((k) => k.startsWith("raid."))).toEqual([]);
-    expect(fake.leaf.state.run?.held).toBe(true);
+    expect(fake.leaf.state.held.main?.held).toBe(true);
   });
 
   test("with no Leaf answering, there is no table", async () => {
@@ -124,8 +124,8 @@ describe("the table, on Leaf", () => {
     expect(S.run?.acorns).toBeLessThan(acorns);
     expect(fake.leaf.posts).toBe(posts);
     await until(() => !waitingForLeaf());
-    expect(fake.leaf.state.run?.board[20]).not.toBeNull();
-    expect(fake.leaf.state.run?.acorns).toBe(S.run?.acorns ?? -1);
+    expect(fake.leaf.state.held.main?.board[20]).not.toBeNull();
+    expect(fake.leaf.state.held.main?.acorns).toBe(S.run?.acorns ?? -1);
   });
 
   test("while Leaf answers a rustle, the table is busy: a tap on an offer still showing is turned away, not queued", async () => {
@@ -140,7 +140,7 @@ describe("the table, on Leaf", () => {
     expect(held).toBe(1);
     expect((await rustled)?.ok).toBe(true);
     expect(busy()).toBe(false);
-    expect(fake.leaf.state.run?.bought).toBe(0);
+    expect(fake.leaf.state.held.main?.bought).toBe(0);
   });
 
   test("a purchase Leaf turns down is taken back, and the member hears why", async () => {
@@ -183,7 +183,7 @@ describe("the table, on Leaf", () => {
     run.acorns = 999;
     if (figure) figure.stars = 3;
     doNow({ do: "hold", on: true });
-    await until(() => fake.leaf.state.run?.held === true && S.run?.acorns !== 999);
+    await until(() => fake.leaf.state.held.main?.held === true && S.run?.acorns !== 999);
     expect(S.run?.acorns).toBe(acorns);
     expect(S.run?.board.find((p) => p !== null)?.stars).toBe(1);
   });
@@ -191,30 +191,30 @@ describe("the table, on Leaf", () => {
   test("an endless run beside the run in hand: every command for a run goes to the one the table plays", async () => {
     const fake = await seated();
     // The run in hand, but for its dice (Leaf stirs every run's with each command).
-    const kept = () => ({ ...fake.leaf.state.run, rng: 0 });
+    const kept = () => ({ ...fake.leaf.state.held.main, rng: 0 });
     const inHand = structuredClone(kept());
     expect((await ask({ do: "start", course: "deep" }))?.ok).toBe(true);
     // Setting out on it leaves the table on the run in hand until the page sits down to the endless one.
-    expect(S.run?.endless).toBeNull();
-    expect(S.laid.endless?.endless).toBe("deep");
+    expect(S.run?.way.course.id).toBe("trail");
+    expect(S.laid.endless?.way.course.id).toBe("deep");
     playSlot("endless");
-    expect([S.run?.endless, S.runs, tableNow().run?.endless]).toEqual(["deep", 1, "deep"]);
+    expect([S.run?.way.course.id, S.runs, tableNow().run?.way.course.id]).toEqual(["deep", 1, "deep"]);
     expect((await ask({ do: "choose", option: 0 }))?.ok).toBe(true);
     expect(doNow({ do: "hold", on: true })?.ok).toBe(true);
     await until(() => !waitingForLeaf());
-    expect(fake.leaf.state.endless?.held).toBe(true);
-    expect(fake.leaf.state.endless?.board.some((p) => p !== null)).toBe(true);
+    expect(fake.leaf.state.held.endless?.held).toBe(true);
+    expect(fake.leaf.state.held.endless?.board.some((p) => p !== null)).toBe(true);
     expect(kept()).toEqual(inHand);
     // Back to the run in hand: its commands are its own again.
     playSlot("main");
     doNow({ do: "hold", on: true });
     await until(() => !waitingForLeaf());
-    expect([fake.leaf.state.run?.held, S.run?.endless, S.runs]).toEqual([true, null, 1]);
+    expect([fake.leaf.state.held.main?.held, S.run?.way.course.id, S.runs]).toEqual([true, "trail", 1]);
   });
 
   test("what another page of the member's did shows on this page's next answer", async () => {
     const fake = await seated();
-    const offer = fake.leaf.state.run?.stall.findIndex((k) => k !== null) ?? 0;
+    const offer = fake.leaf.state.held.main?.stall.findIndex((k) => k !== null) ?? 0;
     fake.elsewhere({ do: "buy", offer });
     expect(S.run?.bench.some((p) => p !== null)).toBe(false);
     doNow({ do: "hold", on: true });
@@ -234,7 +234,7 @@ describe("every planning command of a run", () => {
         const fake = fakeLeaf();
         fake.elsewhere({ do: "start", trail: 0 });
         fake.elsewhere({ do: "start", course: "deep" });
-        for (const run of [fake.leaf.state.run, fake.leaf.state.endless]) if (run) ready(run);
+        for (const run of [fake.leaf.state.held.main, fake.leaf.state.held.endless]) if (run) ready(run);
         world = standin(fake.routes);
         expect(await openTable("p", () => undefined)).toBeNull();
         playSlot(slot);

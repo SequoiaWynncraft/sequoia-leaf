@@ -11,12 +11,14 @@ import {
   type AcornsWhy,
   catalogOf,
   endingOf,
-  type EndlessWay,
   picksOf,
   type RaidNote,
+  slotOf,
   specOf,
+  startOf,
   type TraitId,
   traitIn,
+  type Way,
 } from "@sequoia-leaf/raid";
 
 import { glyphPic } from "./art/icons.ts";
@@ -63,21 +65,14 @@ export function sitDown(slot: Slot): void {
 }
 
 /**
- * Sets out on a trail, with all figures or (`own`) the member's own: Leaf lays a new run out (putting
- * down any run in hand), and the table shows it. Says whether it did.
+ * Sets out on a way (a trail or an endless way, with all figures or the member's own): Leaf lays a
+ * new run out in the way's slot (putting down the run there), and the table shows it. The run in the
+ * other slot is not touched. Says whether it did.
  */
-export async function startNew(trail: number, own = false): Promise<boolean> {
-  const did = await ask(own ? { do: "start", trail, own } : { do: "start", trail }, document.getElementById("start"));
+export async function startOn(way: Way): Promise<boolean> {
+  const did = await ask(startOf(way), document.getElementById("start"));
   if (!did?.ok) return false;
-  sitDown("main");
-  return true;
-}
-
-/** Sets out on an endless run, one way or the other, beside the run in hand (which is not touched). Says whether it did. */
-export async function startEndless(way: EndlessWay): Promise<boolean> {
-  const did = await ask({ do: "start", course: way }, document.getElementById("start"));
-  if (!did?.ok) return false;
-  sitDown("endless");
+  sitDown(slotOf(way));
   return true;
 }
 

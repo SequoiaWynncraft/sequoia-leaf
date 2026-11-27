@@ -26,8 +26,11 @@ describe("the table's postcard for the town", () => {
     const run = startRun(5, { era: LEGACY_ERA });
     choose(run, 0);
     run.room = 4;
-    const table = { ...RAID.create(ctx), run, almanac: { ...newAlmanac(), runs: 3 } };
+    const made = RAID.create(ctx);
+    const table = { ...made, held: { ...made.held, main: run }, almanac: { ...newAlmanac(), runs: 3 } };
     expect(RAID.postcard?.(table)).toEqual({ waiting: "A raid is under way: room 5, on The Easy Way.", till: 0 });
-    expect(RAID.postcard?.({ ...table, run: null }).waiting).toBe("The board is set out for another raid.");
+    expect(RAID.postcard?.({ ...table, held: { ...table.held, main: null } }).waiting).toBe(
+      "The board is set out for another raid.",
+    );
   });
 });

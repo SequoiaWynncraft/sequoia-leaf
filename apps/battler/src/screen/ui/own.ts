@@ -22,13 +22,17 @@ import {
   stallOdds,
   type TraitId,
   type UnitKind,
+  wayOn,
+  wayWords,
 } from "@sequoia-leaf/raid";
 
 import { snd } from "../sounds.ts";
 import { changed, onChange, S } from "../state.ts";
 
-/** What each way of setting out is called: with every figure, or with those the member has pulled. */
-const wayName = (own: boolean): string => (own ? "Your figures" : "All figures");
+/** What each way of setting out is called, as to its figures (`wayWords`): every figure, or those the member has pulled. */
+const wayName = (own: boolean): string => wayWords(wayOn({ id: "trail", trail: 0 }, own ? {} : null)).figures;
+/** Whether a run set out with the member's own figures. */
+const isOwn = (run: RunView): boolean => run.way.figures.pool === "own";
 const NOT_COUNTED = "Not counted for the board or the almanac.";
 
 /** The way picked on the front page to set out by. */
@@ -96,12 +100,12 @@ export function waysOf(keep: boolean, redraw: () => void): (HTMLElement | null)[
 }
 
 /** Which way a raid is, before the line about it on the front page: said to a member who has both ways. */
-export const wayPrefix = (run: RunView): string => (run.own || pulled() > 0 ? `${wayName(run.own !== null)}. ` : "");
+export const wayPrefix = (run: RunView): string => (isOwn(run) || pulled() > 0 ? `${wayName(isOwn(run))}. ` : "");
 
 /** The end page's second column when a run brought nothing new: for a run with the member's own figures, why. */
 export const nothingNew = (run: RunView): HTMLElement[] => [
-  el("div", "k-label", { text: run.own ? wayName(true) : "New in the almanac" }),
-  el("span", "k-dim", { text: run.own ? NOT_COUNTED : "Nothing this time." }),
+  el("div", "k-label", { text: isOwn(run) ? wayName(true) : "New in the almanac" }),
+  el("span", "k-dim", { text: isOwn(run) ? NOT_COUNTED : "Nothing this time." }),
 ];
 
 /** After the almanac's count of figures met: how many the member has pulled, if any. */
@@ -112,8 +116,8 @@ export function waySign(): HTMLElement {
   const sign = el("span", "k-plaque hung k-leafy", { id: "way", hidden: true });
   onChange(() => {
     const run = S.run;
-    sign.hidden = !run || (!run.own && pulled() === 0);
-    if (run) sign.textContent = wayName(run.own !== null);
+    sign.hidden = !run || (!isOwn(run) && pulled() === 0);
+    if (run) sign.textContent = wayName(isOwn(run));
   });
   return sign;
 }
@@ -153,7 +157,7 @@ export function levelOnCard(kind: UnitKind, shown: Shown): { level: number; tag:
 }
 
 /** What a reroll brings at a run's level: each cost that can come, from one acorn up, with its share of a hundred. */
-function oddsShares(run: Pick<RunView, "own" | "level" | "era">): { cost: number; share: string }[] {
+function oddsShares(run: Pick<RunView, "way" | "level" | "era">): { cost: number; share: string }[] {
   const odds = stallOdds(run);
   const total = Math.max(
     1,
@@ -162,7 +166,7 @@ function oddsShares(run: Pick<RunView, "own" | "level" | "era">): { cost: number
   return odds.flatMap((w, i) => (w > 0 ? [{ cost: i + 1, share: `${Math.round((w * 100) / total)}%` }] : []));
 }
 /** The same as a row for the level's plaque, each share in its cost's colour; and as the numbers of the level's card. */
-export const oddsRow = (run: Pick<RunView, "own" | "level" | "era">): HTMLElement =>
+export const oddsRow = (run: Pick<RunView, "way" | "level" | "era">): HTMLElement =>
   el("span", "odds", {}, ...oddsShares(run).map(({ cost, share }) => el("span", `t${cost}`, { text: share })));
 export const oddsStats = (run: RunView): { label: string; value: string }[] =>
   oddsShares(run).map(({ cost, share }) => ({ label: `${cost}-acorn figures`, value: share }));

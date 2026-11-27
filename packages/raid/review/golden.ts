@@ -197,13 +197,13 @@ export type Shape = (typeof SHAPES)[number];
 export const VERSIONS: Readonly<Record<Shape, number>> = {
   table: TABLE_VERSION,
   sitting: SITTING_VERSION,
-  fight: 1,
+  fight: 2,
   board: 1,
   depth: 1,
 };
 
-/** Objects keyed by ids rather than by field names: a roster, and the traits a side switched on. */
-const MAPS = new Set(["own", "traits"]);
+/** Objects keyed by ids rather than by field names: a roster (a run kept before version 8 kept it as `own`), and the traits a side switched on. */
+const MAPS = new Set(["own", "roster", "traits"]);
 /** Every key a value is written with, as a path: `run.board[].kind`, `run.own.*`. */
 export function keysOf(v: unknown, into: Set<string>, at = ""): Set<string> {
   if (Array.isArray(v)) for (const x of v) keysOf(x, into, `${at}[]`);
@@ -471,7 +471,7 @@ const OTHER_BOARD = {
 };
 
 /** The run a way plays at a table: the one place the goldens read where a table keeps its runs. */
-const heldBy = (table: Table, way: Way): Run | null => (way.endless ? table.endless : table.run);
+const heldBy = (table: Table, way: Way): Run | null => table.held[way.endless ? "endless" : "main"];
 type Ended = Extract<RaidNote, { t: "ended" }>;
 
 /** A golden run under way at its table: every command sent as Leaf takes one, and what each did, hashed as it is done. */
@@ -529,7 +529,7 @@ class Playing {
     let rustled = false;
     let last = "";
     for (let ask = 0; ask < 16; ask++) {
-      const commands = planCommands(RAID.view(this.table, ctxOf(0)), habit, this.way.endless);
+      const commands = planCommands(RAID.view(this.table, ctxOf(0)), habit, this.way.endless ? "endless" : "main");
       const asked = JSON.stringify(commands);
       if (commands.length > 0 && commands.every((c) => c.do === "move") && asked === last) return;
       last = asked;

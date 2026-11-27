@@ -32,6 +32,7 @@ import { opposition } from "@sequoia-leaf/raid/foe.ts";
 import { COLS, HOME_ROWS } from "@sequoia-leaf/raid/hex.ts";
 import type { Party, Placed } from "@sequoia-leaf/raid/party.ts";
 import { beginFight, startRun, takeTakings } from "@sequoia-leaf/raid/run.ts";
+import { onTrail } from "@sequoia-leaf/raid/way.ts";
 
 /** The catalogue with every release open: what these sims play. */
 const NOW = catalogAt(LAST_ERA);
@@ -108,7 +109,7 @@ interface Kept {
 const kept: Kept[] = [];
 for (const habit of HABITS) {
   for (let n = 1; n <= runs; n++) {
-    const run = startRun(n * 7919 + 13, { era: LAST_ERA, trail: 0 });
+    const run = startRun(n * 7919 + 13, { era: LAST_ERA, way: onTrail(0) });
     for (let guard = 0; guard < 200 && run.stage.phase !== "over"; guard++) {
       planRoom(run, habit);
       const room = run.room;

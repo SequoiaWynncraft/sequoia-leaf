@@ -104,7 +104,7 @@ const inTurn = <A>(items: readonly A[], f: (item: A) => Promise<unknown>): Promi
 const log = (
   player: PlayerId,
   game: string,
-  kinds: readonly (readonly [string, Record<string, string>])[],
+  kinds: readonly (readonly [string, Record<string, unknown>])[],
   at: number,
 ) =>
   services.run(
@@ -293,9 +293,9 @@ describe("the counters", () => {
       alice,
       "raid",
       [
-        [LOGGED.raidRoom, {}],
-        [LOGGED.raidRoom, {}],
-        [LOGGED.raidEnded, { ended: "won" }],
+        [LOGGED.raidRoom, { tallied: true }],
+        [LOGGED.raidRoom, { tallied: true }],
+        [LOGGED.raidEnded, { ended: "won", tallied: true }],
       ],
       LAST_WEEK,
     );
@@ -303,8 +303,8 @@ describe("the counters", () => {
       alice,
       "raid",
       [
-        [LOGGED.raidRoom, {}],
-        [LOGGED.raidEnded, { ended: "lost" }],
+        [LOGGED.raidRoom, { tallied: true }],
+        [LOGGED.raidEnded, { ended: "lost", tallied: true }],
       ],
       T0 - HOUR,
     );

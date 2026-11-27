@@ -143,7 +143,7 @@ describe("a held slot", () => {
 function poised(): string {
   const text = readFileSync(new URL("../../../packages/raid/stored/endless-deep.json", import.meta.url), "utf8");
   const table = RAID.decode(text);
-  const run = table?.endless;
+  const run = table?.held.endless;
   if (!table || !run) throw new Error("the fixture has no endless run");
   run.board = run.board.map((_, seat) =>
     seat < 5 ? { id: 900 + seat, kind: "greg", stars: 3, items: [], fed: 0 } : null,
@@ -180,7 +180,7 @@ describe("the Deep Woods at Leaf", () => {
     await named(alice, "Alice");
     await services.run(PlayStore.use((store) => store.create(alice, "raid", poised(), false, clock.now, null)));
     const view = await raided(alice, [{ do: "fight", endless: true }]);
-    const fight = view.endless?.stage.phase === "fight" ? view.endless.stage.fight : null;
+    const fight = view.held.endless?.stage.phase === "fight" ? view.held.endless.stage.fight : null;
     expect(fight?.outcome.result).toBe("win");
     expect(await keptAt("deep:17")).toEqual([
       { player: alice, data: JSON.stringify(fight?.setup.sides[0]), at: clock.now },

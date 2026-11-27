@@ -13,14 +13,14 @@ import { glyph } from "../art/icons.ts";
 import { watchable } from "../screen.ts";
 import { S, type Slot } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
-import { WAY_NAMES } from "./endless.ts";
+import { courseName } from "./endless.ts";
 import { ruleRow } from "./rulecards.ts";
 import { backLines, bossOfWing } from "./wilds.ts";
 
 /** Whether the card is up, over the front page. */
 const BACK: { up: boolean } = { up: false };
 /** The run of the Wilds laid out, if one is: the run whose card it is. */
-export const wildsLaid = (): RunView | null => (S.laid.endless?.endless === "wilds" ? S.laid.endless : null);
+export const wildsLaid = (): RunView | null => (S.laid.endless?.way.course.id === "wilds" ? S.laid.endless : null);
 export const backUp = (): boolean => BACK.up && wildsLaid() !== null;
 /** Puts the card up, or away. */
 export const showBack = (up: boolean): void => {
@@ -46,7 +46,7 @@ export function backCard(go: BackAsks, run: RunView): HTMLElement {
   return el(
     "section",
     "k-card mode back",
-    { "aria-label": WAY_NAMES.wilds },
+    { "aria-label": courseName("wilds") },
     el(
       "div",
       "mode-head",
@@ -56,7 +56,7 @@ export function backCard(go: BackAsks, run: RunView): HTMLElement {
         "div",
         "k-col tight",
         {},
-        el("h2", "k-title big", { text: WAY_NAMES.wilds }),
+        el("h2", "k-title big", { text: courseName("wilds") }),
         el("p", "k-d", { text: lines.where }),
       ),
     ),

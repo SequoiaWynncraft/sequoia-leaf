@@ -10,23 +10,15 @@ import type { ItemId } from "./content/items.ts";
 import { LEGACY_ERA } from "./content/releases.ts";
 import { traitNumber, traitShort, traitText } from "./content/traits.ts";
 import { feed } from "./feed.ts";
-import {
-  applyCommand,
-  decodeTable,
-  encodeTable,
-  newTable,
-  predict,
-  readCommand,
-  TABLE_VERSION,
-  tableView,
-} from "./game.ts";
+import { applyCommand, decodeTable, encodeTable, newTable, predict, readCommand, tableView } from "./game.ts";
 import { merge, type Note, type Piece, pieces, type Run, sell, type Spot, startRun } from "./run.ts";
 import { checkRun } from "./save.ts";
 import { advance } from "./sitting/clock.ts";
 import { command, openSitting, readCommand as readSittingCommand } from "./sitting/commands.ts";
 import { decodeSitting, encodeSitting, SITTING_VERSION } from "./sitting/keep.ts";
 import type { Sitting } from "./sitting/sitting.ts";
-import { CAT } from "./testkit.ts";
+import { CAT, tableKeptAs } from "./testkit.ts";
+import { onTrail, wayOn } from "./way.ts";
 
 const MOST = traitNumber(CAT, "greg", "most", 1);
 const board = (at: number): Spot => ({ on: "board", at });
@@ -177,18 +169,20 @@ describe("the feed command", () => {
     for (const endless of [false, true]) {
       const table = newTable(ctx());
       const run = planning();
-      run.endless = endless ? "wilds" : null;
+      run.way = endless ? wayOn({ id: "wilds" }) : onTrail(0);
       run.record = [{ room: 0, kind: "trouble", result: "win", standing: [1, 0], boss: null }];
       const greg = put(run, board(3), "greg");
       put(run, bench(0), "worm");
-      table[endless ? "endless" : "run"] = run;
+      table.held[endless ? "endless" : "main"] = run;
       const c = endless
         ? ({ do: "feed", from: bench(0), to: board(3), slot: "endless" } as const)
         : ({ do: "feed", from: bench(0), to: board(3) } as const);
       const shown = predict(tableView(table, ctx()), c);
-      expect(shown && "view" in shown && (endless ? shown.view.endless : shown.view.run)?.board[3]?.fed).toBe(2);
+      expect(
+        shown && "view" in shown && (endless ? shown.view.held.endless : shown.view.held.main)?.board[3]?.fed,
+      ).toBe(2);
       const done = applyCommand(table, c, ctx());
-      expect("state" in done && (endless ? done.state.endless : done.state.run)?.board[3]?.fed).toBe(2);
+      expect("state" in done && (endless ? done.state.held.endless : done.state.held.main)?.board[3]?.fed).toBe(2);
       expect(greg.fed).toBe(0);
     }
   });
@@ -256,17 +250,16 @@ describe("a run kept when Greg ate after every fight", () => {
     const run = planning();
     run.record = [{ room: 0, kind: "trouble", result: "win", standing: [1, 0], boss: null }];
     put(run, board(3), "greg", 1, [], 10);
-    table.run = run;
-    table.runs = 1;
+    table.held.main = run;
+    table.begun.main = 1;
     const text = encodeTable(table);
     for (const before of [4, 3]) {
-      const stored = text.replace(`"v":${TABLE_VERSION}`, `"v":${before}`);
-      expect(stored).not.toBe(text);
+      const stored = JSON.stringify(tableKeptAs(text, before));
       const old = decodeTable(stored);
-      expect(old?.run?.board[3]?.fed).toBe(30);
-      expect(decodeTable(encodeTable(old ?? table))?.run?.board[3]?.fed).toBe(30);
+      expect(old?.held.main?.board[3]?.fed).toBe(30);
+      expect(decodeTable(encodeTable(old ?? table))?.held.main?.board[3]?.fed).toBe(30);
     }
-    expect(decodeTable(text)?.run?.board[3]?.fed).toBe(10);
+    expect(decodeTable(text)?.held.main?.board[3]?.fed).toBe(10);
   });
   test("so is a sitting of version 1", () => {
     const { t, run } = sittingPlanning();

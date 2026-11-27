@@ -7,7 +7,6 @@ import { nameOf, portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { add, amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import {
-  type EndlessWay,
   itemName,
   type News,
   type Payout,
@@ -18,20 +17,20 @@ import {
   specOf,
   TRAILS,
   traitIn,
+  type Way,
+  wayWords,
 } from "@sequoia-leaf/raid";
 
 import { glyph, itemIcon, traitIcon } from "../art/icons.ts";
 import { endedOf } from "../screen.ts";
 import { catalogFor, S } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
-import { WAY_NAMES } from "./endless.ts";
 import { nothingNew, runTag } from "./own.ts";
 import { pipsOf } from "./rooms.ts";
 
 /** What the end page asks for: the same again, or the town. */
 export interface EndAsks {
-  start: (trail: number, own: boolean) => void;
-  endless: (way: EndlessWay) => void;
+  setOut: (way: Way) => void;
   leave: () => void;
 }
 
@@ -51,18 +50,18 @@ function partyRow(run: RunView): HTMLElement {
 function howFar(run: RunView, sum: RunSummary): HTMLElement[] {
   if (sum.ending === "won")
     return [el("div", "", { text: `${ROOM_COUNT} rooms, and the crab nobody counted has been counted.` })];
-  const way = run.endless;
-  if (!way) {
+  const { course } = run.way;
+  if (course.id === "trail") {
     const rooms = `${sum.cleared} room${sum.cleared === 1 ? "" : "s"}`;
     return [el("div", "", { text: `${TRAILS[sum.trail]?.name ?? ""}: ${rooms} won, as far as room ${sum.reached}.` })];
   }
   const wins = run.record.filter((r) => r.result === "win");
   const deepest = Math.max(0, ...wins.map((r) => r.room + 1));
-  const ever = S.almanac.deepest[way];
+  const ever = S.almanac.deepest[course.id];
   return [
-    el("div", "", { text: `${WAY_NAMES[way]}: ${wins.length} rooms won, as deep as room ${deepest}.` }),
+    el("div", "", { text: `${wayWords(run.way).name}: ${wins.length} rooms won, as deep as room ${deepest}.` }),
     ever > 0
-      ? el("div", "k-gold", { text: `Your deepest: room ${ever} ever, room ${S.week.deepest[way]} this week.` })
+      ? el("div", "k-gold", { text: `Your deepest: room ${ever} ever, room ${S.week.deepest[course.id]} this week.` })
       : null,
   ].filter((e) => e !== null);
 }
@@ -103,10 +102,9 @@ function paidLines(paid: Payout, endless: boolean): HTMLElement[] {
   ];
 }
 
-/** Again (the same trail and figures, or the same endless way), or back to town. */
-function endsRow(asks: EndAsks | null, run: RunView, sum: RunSummary): HTMLElement {
-  const way = run.endless;
-  const again = (): void => (way ? asks?.endless(way) : asks?.start(sum.trail, !!run.own));
+/** Again (the same way: its course and figures), or back to town. */
+function endsRow(asks: EndAsks | null, run: RunView): HTMLElement {
+  const again = (): void => asks?.setOut(run.way);
   return el(
     "div",
     "k-wrap ends",
@@ -138,6 +136,6 @@ export function summary(asks: EndAsks | null): HTMLElement | null {
   if (fresh.length > 0)
     add(right, el("div", "k-label", { text: "New in the almanac" }), el("div", "news", {}, ...fresh.map(newThing)));
   else add(right, ...nothingNew(run));
-  add(left, ...paidLines(paid, run.endless !== null), endsRow(asks, run, sum));
+  add(left, ...paidLines(paid, run.way.course.id !== "trail"), endsRow(asks, run));
   return paper;
 }

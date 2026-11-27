@@ -556,15 +556,32 @@
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
         "era": 2,
-        "runs": 0,
-        "run": null,
-        "endless": null,
-        "ventures": 0,
+        "begun": {
+          "main": 0,
+          "endless": 0
+        },
+        "held": {
+          "main": null,
+          "endless": null
+        },
         "week": {
           "at": 1795392000000,
           "deepest": {
             "wilds": 0,
             "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
           }
         },
         "almanac": {
@@ -623,105 +640,128 @@
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
         "era": 2,
-        "runs": 1,
-        "run": {
-          "era": 2,
-          "trail": 0,
-          "room": 0,
-          "stage": {
-            "phase": "plan",
-            "picks": []
-          },
-          "resolve": 20,
-          "acorns": 2,
-          "streak": 0,
-          "level": 1,
-          "xp": 0,
-          "board": [
-            null,
-            null,
-            null,
-            {
-              "id": 1,
-              "kind": "barrowgnome",
-              "stars": 1,
-              "items": [],
-              "fed": 0
+        "begun": {
+          "main": 1,
+          "endless": 0
+        },
+        "held": {
+          "main": {
+            "era": 2,
+            "way": {
+              "course": {
+                "id": "trail",
+                "trail": 0
+              },
+              "figures": {
+                "pool": "fair"
+              }
             },
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
-          "bench": [null, null, null, null, null, null, null, null, null],
-          "items": [],
-          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
-          "held": false,
-          "rustles": 1,
-          "bought": 0,
-          "boons": [],
-          "foe": {
-            "who": "The forest",
-            "title": "A few gnats",
-            "figures": [
+            "room": 0,
+            "stage": {
+              "phase": "plan",
+              "picks": []
+            },
+            "resolve": 20,
+            "acorns": 2,
+            "streak": 0,
+            "level": 1,
+            "xp": 0,
+            "board": [
+              null,
+              null,
+              null,
               {
-                "kind": "gnat",
+                "id": 1,
+                "kind": "barrowgnome",
                 "stars": 1,
-                "seat": 2,
                 "items": [],
                 "fed": 0
               },
-              {
-                "kind": "gnat",
-                "stars": 1,
-                "seat": 4,
-                "items": [],
-                "fed": 0
-              }
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
             ],
+            "bench": [null, null, null, null, null, null, null, null, null],
+            "items": [],
+            "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+            "held": false,
+            "rustles": 1,
+            "bought": 0,
             "boons": [],
-            "might": 100
+            "foe": {
+              "who": "The forest",
+              "title": "A few gnats",
+              "figures": [
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 2,
+                  "items": [],
+                  "fed": 0
+                },
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 4,
+                  "items": [],
+                  "fed": 0
+                }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            "record": [],
+            "nextId": 2,
+            "last": null,
+            "wing": null,
+            "seen": {
+              "fielded": [],
+              "threeStars": [],
+              "forged": [],
+              "topped": []
+            }
           },
-          "record": [],
-          "nextId": 2,
-          "last": null,
-          "own": null,
-          "endless": null,
-          "wing": null,
-          "seen": {
-            "fielded": [],
-            "threeStars": [],
-            "forged": [],
-            "topped": []
-          }
+          "endless": null
         },
-        "endless": null,
-        "ventures": 0,
         "week": {
           "at": 1795392000000,
           "deepest": {
             "wilds": 0,
             "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
           }
         },
         "almanac": {
@@ -800,105 +840,128 @@
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
         "era": 2,
-        "runs": 1,
-        "run": {
-          "era": 2,
-          "trail": 0,
-          "room": 0,
-          "stage": {
-            "phase": "plan",
-            "picks": []
-          },
-          "resolve": 20,
-          "acorns": 2,
-          "streak": 0,
-          "level": 1,
-          "xp": 0,
-          "board": [
-            null,
-            null,
-            null,
-            {
-              "id": 1,
-              "kind": "barrowgnome",
-              "stars": 1,
-              "items": [],
-              "fed": 0
+        "begun": {
+          "main": 1,
+          "endless": 0
+        },
+        "held": {
+          "main": {
+            "era": 2,
+            "way": {
+              "course": {
+                "id": "trail",
+                "trail": 0
+              },
+              "figures": {
+                "pool": "fair"
+              }
             },
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
-          "bench": [null, null, null, null, null, null, null, null, null],
-          "items": [],
-          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
-          "held": false,
-          "rustles": 1,
-          "bought": 0,
-          "boons": [],
-          "foe": {
-            "who": "The forest",
-            "title": "A few gnats",
-            "figures": [
+            "room": 0,
+            "stage": {
+              "phase": "plan",
+              "picks": []
+            },
+            "resolve": 20,
+            "acorns": 2,
+            "streak": 0,
+            "level": 1,
+            "xp": 0,
+            "board": [
+              null,
+              null,
+              null,
               {
-                "kind": "gnat",
+                "id": 1,
+                "kind": "barrowgnome",
                 "stars": 1,
-                "seat": 2,
                 "items": [],
                 "fed": 0
               },
-              {
-                "kind": "gnat",
-                "stars": 1,
-                "seat": 4,
-                "items": [],
-                "fed": 0
-              }
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
             ],
+            "bench": [null, null, null, null, null, null, null, null, null],
+            "items": [],
+            "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+            "held": false,
+            "rustles": 1,
+            "bought": 0,
             "boons": [],
-            "might": 100
+            "foe": {
+              "who": "The forest",
+              "title": "A few gnats",
+              "figures": [
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 2,
+                  "items": [],
+                  "fed": 0
+                },
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 4,
+                  "items": [],
+                  "fed": 0
+                }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            "record": [],
+            "nextId": 2,
+            "last": null,
+            "wing": null,
+            "seen": {
+              "fielded": [],
+              "threeStars": [],
+              "forged": [],
+              "topped": []
+            }
           },
-          "record": [],
-          "nextId": 2,
-          "last": null,
-          "own": null,
-          "endless": null,
-          "wing": null,
-          "seen": {
-            "fielded": [],
-            "threeStars": [],
-            "forged": [],
-            "topped": []
-          }
+          "endless": null
         },
-        "endless": null,
-        "ventures": 0,
         "week": {
           "at": 1795392000000,
           "deepest": {
             "wilds": 0,
             "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
           }
         },
         "almanac": {
@@ -963,105 +1026,128 @@
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
         "era": 2,
-        "runs": 1,
-        "run": {
-          "era": 2,
-          "trail": 0,
-          "room": 0,
-          "stage": {
-            "phase": "plan",
-            "picks": []
-          },
-          "resolve": 20,
-          "acorns": 2,
-          "streak": 0,
-          "level": 1,
-          "xp": 0,
-          "board": [
-            null,
-            null,
-            null,
-            {
-              "id": 1,
-              "kind": "barrowgnome",
-              "stars": 1,
-              "items": [],
-              "fed": 0
+        "begun": {
+          "main": 1,
+          "endless": 0
+        },
+        "held": {
+          "main": {
+            "era": 2,
+            "way": {
+              "course": {
+                "id": "trail",
+                "trail": 0
+              },
+              "figures": {
+                "pool": "fair"
+              }
             },
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
-          "bench": [null, null, null, null, null, null, null, null, null],
-          "items": [],
-          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
-          "held": false,
-          "rustles": 1,
-          "bought": 0,
-          "boons": [],
-          "foe": {
-            "who": "The forest",
-            "title": "A few gnats",
-            "figures": [
+            "room": 0,
+            "stage": {
+              "phase": "plan",
+              "picks": []
+            },
+            "resolve": 20,
+            "acorns": 2,
+            "streak": 0,
+            "level": 1,
+            "xp": 0,
+            "board": [
+              null,
+              null,
+              null,
               {
-                "kind": "gnat",
+                "id": 1,
+                "kind": "barrowgnome",
                 "stars": 1,
-                "seat": 2,
                 "items": [],
                 "fed": 0
               },
-              {
-                "kind": "gnat",
-                "stars": 1,
-                "seat": 4,
-                "items": [],
-                "fed": 0
-              }
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
             ],
+            "bench": [null, null, null, null, null, null, null, null, null],
+            "items": [],
+            "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+            "held": false,
+            "rustles": 1,
+            "bought": 0,
             "boons": [],
-            "might": 100
+            "foe": {
+              "who": "The forest",
+              "title": "A few gnats",
+              "figures": [
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 2,
+                  "items": [],
+                  "fed": 0
+                },
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 4,
+                  "items": [],
+                  "fed": 0
+                }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            "record": [],
+            "nextId": 2,
+            "last": null,
+            "wing": null,
+            "seen": {
+              "fielded": [],
+              "threeStars": [],
+              "forged": [],
+              "topped": []
+            }
           },
-          "record": [],
-          "nextId": 2,
-          "last": null,
-          "own": null,
-          "endless": null,
-          "wing": null,
-          "seen": {
-            "fielded": [],
-            "threeStars": [],
-            "forged": [],
-            "topped": []
-          }
+          "endless": null
         },
-        "endless": null,
-        "ventures": 0,
         "week": {
           "at": 1795392000000,
           "deepest": {
             "wilds": 0,
             "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
           }
         },
         "almanac": {
@@ -1173,105 +1259,128 @@
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
         "era": 2,
-        "runs": 1,
-        "run": {
-          "era": 2,
-          "trail": 0,
-          "room": 0,
-          "stage": {
-            "phase": "plan",
-            "picks": []
-          },
-          "resolve": 20,
-          "acorns": 2,
-          "streak": 0,
-          "level": 1,
-          "xp": 0,
-          "board": [
-            null,
-            null,
-            null,
-            {
-              "id": 1,
-              "kind": "barrowgnome",
-              "stars": 1,
-              "items": [],
-              "fed": 0
+        "begun": {
+          "main": 1,
+          "endless": 0
+        },
+        "held": {
+          "main": {
+            "era": 2,
+            "way": {
+              "course": {
+                "id": "trail",
+                "trail": 0
+              },
+              "figures": {
+                "pool": "fair"
+              }
             },
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
-          "bench": [null, null, null, null, null, null, null, null, null],
-          "items": [],
-          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
-          "held": false,
-          "rustles": 1,
-          "bought": 0,
-          "boons": [],
-          "foe": {
-            "who": "The forest",
-            "title": "A few gnats",
-            "figures": [
+            "room": 0,
+            "stage": {
+              "phase": "plan",
+              "picks": []
+            },
+            "resolve": 20,
+            "acorns": 2,
+            "streak": 0,
+            "level": 1,
+            "xp": 0,
+            "board": [
+              null,
+              null,
+              null,
               {
-                "kind": "gnat",
+                "id": 1,
+                "kind": "barrowgnome",
                 "stars": 1,
-                "seat": 2,
                 "items": [],
                 "fed": 0
               },
-              {
-                "kind": "gnat",
-                "stars": 1,
-                "seat": 4,
-                "items": [],
-                "fed": 0
-              }
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
             ],
+            "bench": [null, null, null, null, null, null, null, null, null],
+            "items": [],
+            "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+            "held": false,
+            "rustles": 1,
+            "bought": 0,
             "boons": [],
-            "might": 100
+            "foe": {
+              "who": "The forest",
+              "title": "A few gnats",
+              "figures": [
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 2,
+                  "items": [],
+                  "fed": 0
+                },
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 4,
+                  "items": [],
+                  "fed": 0
+                }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            "record": [],
+            "nextId": 2,
+            "last": null,
+            "wing": null,
+            "seen": {
+              "fielded": [],
+              "threeStars": [],
+              "forged": [],
+              "topped": []
+            }
           },
-          "record": [],
-          "nextId": 2,
-          "last": null,
-          "own": null,
-          "endless": null,
-          "wing": null,
-          "seen": {
-            "fielded": [],
-            "threeStars": [],
-            "forged": [],
-            "topped": []
-          }
+          "endless": null
         },
-        "endless": null,
-        "ventures": 0,
         "week": {
           "at": 1795392000000,
           "deepest": {
             "wilds": 0,
             "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
           }
         },
         "almanac": {
@@ -1338,105 +1447,128 @@
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
         "era": 2,
-        "runs": 1,
-        "run": {
-          "era": 2,
-          "trail": 0,
-          "room": 0,
-          "stage": {
-            "phase": "plan",
-            "picks": []
-          },
-          "resolve": 20,
-          "acorns": 2,
-          "streak": 0,
-          "level": 1,
-          "xp": 0,
-          "board": [
-            null,
-            null,
-            null,
-            {
-              "id": 1,
-              "kind": "barrowgnome",
-              "stars": 1,
-              "items": [],
-              "fed": 0
+        "begun": {
+          "main": 1,
+          "endless": 0
+        },
+        "held": {
+          "main": {
+            "era": 2,
+            "way": {
+              "course": {
+                "id": "trail",
+                "trail": 0
+              },
+              "figures": {
+                "pool": "fair"
+              }
             },
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
-          "bench": [null, null, null, null, null, null, null, null, null],
-          "items": [],
-          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
-          "held": false,
-          "rustles": 1,
-          "bought": 0,
-          "boons": [],
-          "foe": {
-            "who": "The forest",
-            "title": "A few gnats",
-            "figures": [
+            "room": 0,
+            "stage": {
+              "phase": "plan",
+              "picks": []
+            },
+            "resolve": 20,
+            "acorns": 2,
+            "streak": 0,
+            "level": 1,
+            "xp": 0,
+            "board": [
+              null,
+              null,
+              null,
               {
-                "kind": "gnat",
+                "id": 1,
+                "kind": "barrowgnome",
                 "stars": 1,
-                "seat": 2,
                 "items": [],
                 "fed": 0
               },
-              {
-                "kind": "gnat",
-                "stars": 1,
-                "seat": 4,
-                "items": [],
-                "fed": 0
-              }
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
             ],
+            "bench": [null, null, null, null, null, null, null, null, null],
+            "items": [],
+            "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+            "held": false,
+            "rustles": 1,
+            "bought": 0,
             "boons": [],
-            "might": 100
+            "foe": {
+              "who": "The forest",
+              "title": "A few gnats",
+              "figures": [
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 2,
+                  "items": [],
+                  "fed": 0
+                },
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 4,
+                  "items": [],
+                  "fed": 0
+                }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            "record": [],
+            "nextId": 2,
+            "last": null,
+            "wing": null,
+            "seen": {
+              "fielded": [],
+              "threeStars": [],
+              "forged": [],
+              "topped": []
+            }
           },
-          "record": [],
-          "nextId": 2,
-          "last": null,
-          "own": null,
-          "endless": null,
-          "wing": null,
-          "seen": {
-            "fielded": [],
-            "threeStars": [],
-            "forged": [],
-            "topped": []
-          }
+          "endless": null
         },
-        "endless": null,
-        "ventures": 0,
         "week": {
           "at": 1795392000000,
           "deepest": {
             "wilds": 0,
             "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
           }
         },
         "almanac": {
@@ -1503,15 +1635,32 @@
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
         "era": 2,
-        "runs": 0,
-        "run": null,
-        "endless": null,
-        "ventures": 0,
+        "begun": {
+          "main": 0,
+          "endless": 0
+        },
+        "held": {
+          "main": null,
+          "endless": null
+        },
         "week": {
           "at": 1795392000000,
           "deepest": {
             "wilds": 0,
             "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
           }
         },
         "almanac": {
@@ -2493,7 +2642,10 @@
               "game": "raid",
               "kind": "raid_started",
               "data": {
-                "trail": 0
+                "trail": 0,
+                "course": "trail",
+                "pool": "fair",
+                "tallied": true
               }
             },
             {
@@ -2666,194 +2818,222 @@
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
         "era": 2,
-        "runs": 1,
-        "run": {
-          "era": 2,
-          "trail": 0,
-          "room": 0,
-          "stage": {
-            "phase": "plan",
-            "picks": []
-          },
-          "resolve": 20,
-          "acorns": 2,
-          "streak": 0,
-          "level": 1,
-          "xp": 0,
-          "board": [
-            null,
-            null,
-            null,
-            {
-              "id": 1,
-              "kind": "barrowgnome",
-              "stars": 1,
-              "items": [],
-              "fed": 0
+        "begun": {
+          "main": 1,
+          "endless": 1
+        },
+        "held": {
+          "main": {
+            "era": 2,
+            "way": {
+              "course": {
+                "id": "trail",
+                "trail": 0
+              },
+              "figures": {
+                "pool": "fair"
+              }
             },
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
-          "bench": [null, null, null, null, null, null, null, null, null],
-          "items": [],
-          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
-          "held": false,
-          "rustles": 1,
-          "bought": 0,
-          "boons": [],
-          "foe": {
-            "who": "The forest",
-            "title": "A few gnats",
-            "figures": [
+            "room": 0,
+            "stage": {
+              "phase": "plan",
+              "picks": []
+            },
+            "resolve": 20,
+            "acorns": 2,
+            "streak": 0,
+            "level": 1,
+            "xp": 0,
+            "board": [
+              null,
+              null,
+              null,
               {
-                "kind": "gnat",
+                "id": 1,
+                "kind": "barrowgnome",
                 "stars": 1,
-                "seat": 2,
                 "items": [],
                 "fed": 0
               },
-              {
-                "kind": "gnat",
-                "stars": 1,
-                "seat": 4,
-                "items": [],
-                "fed": 0
-              }
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
             ],
+            "bench": [null, null, null, null, null, null, null, null, null],
+            "items": [],
+            "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+            "held": false,
+            "rustles": 1,
+            "bought": 0,
             "boons": [],
-            "might": 100
+            "foe": {
+              "who": "The forest",
+              "title": "A few gnats",
+              "figures": [
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 2,
+                  "items": [],
+                  "fed": 0
+                },
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 4,
+                  "items": [],
+                  "fed": 0
+                }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            "record": [],
+            "nextId": 2,
+            "last": null,
+            "wing": null,
+            "seen": {
+              "fielded": [],
+              "threeStars": [],
+              "forged": [],
+              "topped": []
+            }
           },
-          "record": [],
-          "nextId": 2,
-          "last": null,
-          "own": null,
-          "endless": null,
-          "wing": null,
-          "seen": {
-            "fielded": [],
-            "threeStars": [],
-            "forged": [],
-            "topped": []
-          }
-        },
-        "endless": {
-          "era": 2,
-          "trail": 0,
-          "room": 0,
-          "stage": {
-            "phase": "plan",
-            "picks": [
-              {
-                "kind": "starter",
-                "options": ["finch", "emberkit", "crab7"]
-              }
-            ]
-          },
-          "resolve": 20,
-          "acorns": 2,
-          "streak": 0,
-          "level": 1,
-          "xp": 0,
-          "board": [
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
-          "bench": [null, null, null, null, null, null, null, null, null],
-          "items": [],
-          "stall": ["barrowgnome", "emberkit", "moth", "barrowgnome", "barrowgnome"],
-          "held": false,
-          "rustles": 1,
-          "bought": 0,
-          "boons": [],
-          "foe": {
-            "who": "The forest",
-            "title": "A few gnats",
-            "figures": [
-              {
-                "kind": "gnat",
-                "stars": 1,
-                "seat": 2,
-                "items": [],
-                "fed": 0
+          "endless": {
+            "era": 2,
+            "way": {
+              "course": {
+                "id": "wilds"
               },
-              {
-                "kind": "gnat",
-                "stars": 1,
-                "seat": 4,
-                "items": [],
-                "fed": 0
+              "figures": {
+                "pool": "fair"
               }
+            },
+            "room": 0,
+            "stage": {
+              "phase": "plan",
+              "picks": [
+                {
+                  "kind": "starter",
+                  "options": ["finch", "emberkit", "crab7"]
+                }
+              ]
+            },
+            "resolve": 20,
+            "acorns": 2,
+            "streak": 0,
+            "level": 1,
+            "xp": 0,
+            "board": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
             ],
+            "bench": [null, null, null, null, null, null, null, null, null],
+            "items": [],
+            "stall": ["barrowgnome", "emberkit", "moth", "barrowgnome", "barrowgnome"],
+            "held": false,
+            "rustles": 1,
+            "bought": 0,
             "boons": [],
-            "might": 100
-          },
-          "record": [],
-          "nextId": 1,
-          "last": null,
-          "own": null,
-          "endless": "wilds",
-          "wing": null,
-          "seen": {
-            "fielded": [],
-            "threeStars": [],
-            "forged": [],
-            "topped": []
+            "foe": {
+              "who": "The forest",
+              "title": "A few gnats",
+              "figures": [
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 2,
+                  "items": [],
+                  "fed": 0
+                },
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 4,
+                  "items": [],
+                  "fed": 0
+                }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            "record": [],
+            "nextId": 1,
+            "last": null,
+            "wing": null,
+            "seen": {
+              "fielded": [],
+              "threeStars": [],
+              "forged": [],
+              "topped": []
+            }
           }
         },
-        "ventures": 1,
         "week": {
           "at": 1795392000000,
           "deepest": {
             "wilds": 0,
             "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
           }
         },
         "almanac": {
@@ -3613,7 +3793,15 @@
         "you": 0,
         "run": {
           "era": 2,
-          "trail": 0,
+          "way": {
+            "course": {
+              "id": "trail",
+              "trail": 0
+            },
+            "figures": {
+              "pool": "fair"
+            }
+          },
           "room": 0,
           "stage": {
             "phase": "plan",
@@ -3691,8 +3879,6 @@
           "record": [],
           "nextId": 1,
           "last": null,
-          "own": null,
-          "endless": null,
           "wing": null,
           "seen": {
             "fielded": [],

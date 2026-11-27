@@ -47,16 +47,16 @@ import {
   type Looks,
   newLooks,
   owns,
-  readLooks,
   wear,
   wornOf,
 } from "./content/looks.ts";
-import { type Era, eraAt, isEra, LEGACY_ERA } from "./content/releases.ts";
-import { ROOMS, TRAIL_COUNT } from "./content/rooms.ts";
-import { paidFor, reached, readWeek, type Week, weekAt } from "./depths.ts";
-import { heldSlot, isHeld, roomAt } from "./endless.ts";
-import { boardSlot, metLately } from "./foe.ts";
+import { type Era, eraAt } from "./content/releases.ts";
+import { TRAIL_COUNT } from "./content/rooms.ts";
+import { type Apart, type Depths, noApart, paidFor, reached, readWeek, type Week, weekAt } from "./depths.ts";
+import { isHeld } from "./endless.ts";
+import { metLately } from "./foe.ts";
 import { fightRecord } from "./fought.ts";
+import { decodeTable, encodeTable } from "./keep.ts";
 import {
   type Almanac,
   beatenBosses,
@@ -64,7 +64,6 @@ import {
   type News,
   type Payout,
   payout,
-  readAlmanac,
   recordRun,
   trailOpen,
 } from "./outside.ts";
@@ -90,7 +89,19 @@ import {
   type Why,
   whyText,
 } from "./run.ts";
-import { checkRun } from "./save.ts";
+import {
+  counts,
+  type Course,
+  courseOf,
+  lanes,
+  offered,
+  payKey,
+  slotOf,
+  trailOf,
+  type Way,
+  wayLogged,
+  wayOn,
+} from "./way.ts";
 
 export type { RunView } from "./run.ts";
 
@@ -102,31 +113,31 @@ export interface Table {
   rng: number;
   /** The era on Leaf's clock as the table was last brought to a moment: what a run set out now draws from. */
   era: Era;
-  /** Runs begun at this table. The run in hand is the last of them, and pays under its number. */
-  runs: number;
-  /** The run in hand, or none. A run that ends is let go of at once. */
-  run: Run | null;
-  /** The endless run, beside the run in hand: each is picked up and put down on its own. */
-  endless: Run | null;
-  /** Endless runs begun at this table. The endless run is the last of them, and pays under its number. */
-  ventures: number;
+  /** Runs begun at this table in each slot. The run held in a slot is the last begun there, and pays under its number (`payKey`). */
+  begun: Record<Slot, number>;
+  /**
+   * The run held in each slot (`slotOf` its way, read as it sets out): the run in hand, and the
+   * endless run beside it. Each is picked up and put down on its own; a run that ends is let go of at once.
+   */
+  held: Record<Slot, Run | null>;
   almanac: Almanac;
   /** The trail picked on the front page, to set out on next. */
   trail: number;
   looks: Looks;
-  /** This week's deepest rooms won in each endless way (`depths.ts`). */
+  /** This week's deepest rooms won in each endless way with everyone's figures (`depths.ts`). */
   week: Week;
+  /** The deepest rooms won with the member's own figures, ever and this week, kept apart from the almanac's and the week's. */
+  apart: Apart;
 }
 
 /** What the player's page is given. */
 export interface TableView {
   /** The era Leaf's clock is in: what the page reads the catalogue by (`catalogOf`). */
   era: Era;
-  runs: number;
-  run: RunView | null;
-  endless: RunView | null;
-  ventures: number;
+  begun: Record<Slot, number>;
+  held: Record<Slot, RunView | null>;
   week: Week;
+  apart: Apart;
   almanac: Almanac;
   trail: number;
   looks: Looks;
@@ -167,11 +178,9 @@ export function refusalText(code: string, view?: TableView): string {
   const table = Object.entries(TABLE_REFUSALS).find(([c]) => c === code);
   if (table) return table[1];
   const run = Object.keys(REFUSALS).find((c): c is Why => c === code);
-  if (run) return whyText(run, view?.run ? fieldCap(view.run) : undefined);
+  if (run) return whyText(run, view?.held.main ? fieldCap(view.held.main) : undefined);
   return "That cannot be done just now.";
 }
-
-const UINT = 0xffffffff;
 
 // ---------- what the page is shown ----------
 
@@ -188,7 +197,7 @@ const stageView = (stage: Stage): Stage =>
 export function runView(run: RunView): RunView {
   return {
     era: run.era,
-    trail: run.trail,
+    way: run.way,
     room: run.room,
     stage: stageView(run.stage),
     resolve: run.resolve,
@@ -208,8 +217,6 @@ export function runView(run: RunView): RunView {
     record: run.record,
     nextId: run.nextId,
     last: run.last,
-    own: run.own,
-    endless: run.endless,
     wing: run.wing,
     seen: run.seen,
   };
@@ -217,13 +224,13 @@ export function runView(run: RunView): RunView {
 
 /** What the page is shown of the table: the week as it stands now (`weekAt`), a new one with nothing won in it yet. */
 export function tableView(state: Table, ctx: Pick<Ctx, "awards" | "now">): TableView {
+  const { main, endless } = state.held;
   return {
     era: state.era,
-    runs: state.runs,
-    run: state.run ? runView(state.run) : null,
-    endless: state.endless ? runView(state.endless) : null,
-    ventures: state.ventures,
+    begun: { ...state.begun },
+    held: { main: main && runView(main), endless: endless && runView(endless) },
     week: weekAt(state.week, ctx.now),
+    apart: { deepest: state.apart.deepest, week: weekAt(state.apart.week, ctx.now) },
     almanac: state.almanac,
     trail: state.trail,
     looks: state.looks,
@@ -236,46 +243,50 @@ export function tableView(state: Table, ctx: Pick<Ctx, "awards" | "now">): Table
 type Answer = Done<Table, RaidNote> | Refused;
 const no = (code: TableWhy | Why): Refused => ({ refused: code });
 
-/** The run a table keeps in a slot, or the page's copy of it. */
-const heldIn = <R>(s: { run: R | null; endless: R | null }, slot: Slot): R | null =>
-  slot === "endless" ? s.endless : s.run;
-
 /**
- * A run that has ended: written into the almanac, let go of, and paid for under its number (an
- * endless run under its own: `endless:<n>`). It is paid what it is worth (`paidFor`), or what the
- * player may still earn (`room`) when that is less, and says so. A run with the member's own figures
- * or an endless run is paid the same and written nowhere: the almanac, and so the trophies, the
- * standing and the trails open, are the main way's alone. (An endless run's deepest rooms are
- * written down as they are won, by `reached`.)
+ * A run that has ended: written into what its way counts for (`counts`: the almanac, and so the
+ * trophies, the standing and the trails open, for a trail with everyone's figures alone), let go of,
+ * and paid for under its number in its slot (`payKey`). It is paid what it is worth (`paidFor`), or
+ * what the player may still earn (`room`) when that is less, and says so. (An endless run's deepest
+ * rooms are written down as they are won, by `reached`.)
  */
 function finish(s: Table, run: Run, notes: RaidNote[], log: Logged[], room: number): CoinChange[] {
   const summary = summariseRun(run);
   const worth = payout(paidFor(run, summary));
   const paid: Payout =
     worth.coins > room ? { coins: Math.max(0, room), lines: [...worth.lines, { why: "full", coins: 0 }] } : worth;
-  const recorded = run.own || run.endless ? { almanac: s.almanac, news: [] } : recordRun(s.almanac, summary);
+  const recorded = counts(run.way).almanac ? recordRun(s.almanac, summary) : { almanac: s.almanac, news: [] };
   s.almanac = recorded.almanac;
-  s[run.endless ? "endless" : "run"] = null;
+  const slot = slotOf(run.way);
+  s.held[slot] = null;
   notes.push({ t: "ended", run: runView(run), summary, paid, news: recorded.news });
   log.push({
     kind: LOGGED.raidEnded,
     data: {
-      trail: run.trail,
+      trail: trailOf(run.way),
       rooms_won: summary.cleared,
       ended: summary.ending ?? "lost",
       coins: paid.coins,
-      ...wayLogged(run),
+      ...logged(run.way),
     },
   });
-  const key = run.endless ? `endless:${s.ventures}` : `run:${s.runs}`;
+  const key = payKey({ at: "table", slot }, s.begun[slot]);
   return paid.coins > 0 ? [{ amount: paid.coins, reason: "The Little Raid", key }] : [];
 }
 
-/** What a log line of a run with the member's own figures, or of an endless run, says besides. */
-const wayLogged = (run: Pick<Run, "own" | "endless">): { own?: true; endless?: EndlessWay } =>
-  run.own ? { own: true } : run.endless ? { endless: run.endless } : {};
+/**
+ * What a log line says of a run's way: as the lines always said it (`own: true` with the member's
+ * own figures, `endless: <course>` off a trail), the way (`wayLogged`), and whether the Tally counts
+ * the run (`tallied`, `counts`).
+ */
+const logged = (way: Way): Record<string, unknown> => ({
+  ...(way.figures.pool === "own" && { own: true }),
+  ...(way.course.id !== "trail" && { endless: way.course.id }),
+  ...wayLogged(way),
+  tallied: counts(way).tally,
+});
 
-/** Setting out afresh puts down the run of that kind laid out (one that has fought a room), as walking home does. */
+/** Setting out afresh puts down the run of that slot laid out (one that has fought a room), as walking home does. */
 function putDown(s: Table, run: Run | null, notes: RaidNote[], log: Logged[], room: number): CoinChange[] {
   if (!run) return [];
   const left = abandon(run);
@@ -284,50 +295,62 @@ function putDown(s: Table, run: Run | null, notes: RaidNote[], log: Logged[], ro
 }
 
 type SetOut = Extract<TableCommand, { do: "start" }>;
+/** The course a command to set out names. */
+const courseOfStart = (c: SetOut): Course => ("course" in c ? { id: c.course } : { id: "trail", trail: c.trail });
+/** The slot a command sets out in. */
+const setOutIn = (c: SetOut): Slot => slotOf(wayOn(courseOfStart(c)));
 
-function setOut(s: Table, { trail, own: asked }: Exclude<SetOut, { course: EndlessWay }>, ctx: Ctx): Answer {
-  // The main way is never told what the member has pulled.
-  const own: Roster | null = asked ? rosterOf(ctx.awards) : null;
-  if (own && Object.keys(own).length === 0) return no("nothing_pulled");
+/**
+ * Setting out on a way, in its slot: the run held there is put down first, the slot's count goes up
+ * and the new run is drawn from the table's stream. On a trail, it is the trail picked. A way with
+ * the member's own figures takes their roster as it is now; a way with everyone's is never told
+ * what the member has pulled.
+ */
+function setOut(s: Table, c: SetOut, ctx: Ctx): Answer {
+  const way = wayOn(courseOfStart(c), c.own === true ? rosterOf(ctx.awards) : null);
+  if (way.figures.pool === "own" && Object.keys(way.figures.roster).length === 0) return no("nothing_pulled");
+  const slot = slotOf(way);
   const notes: RaidNote[] = [];
   const log: Logged[] = [];
-  const coins = putDown(s, s.run, notes, log, ctx.room);
-  s.runs += 1;
-  s.run = startRun(draw32(s), own ? { era: s.era, trail, own } : { era: s.era, trail });
-  s.trail = trail;
-  notes.push({ t: "started", trail, run: s.runs });
-  log.push({ kind: LOGGED.raidStarted, data: { trail, ...wayLogged(s.run) } });
-  return { state: s, notes, coins, log };
-}
-
-/** Setting out on an endless run, beside the run in hand: on the first trail, the fair game's figures. */
-function setOutEndless(s: Table, { course: way }: Extract<SetOut, { course: EndlessWay }>, ctx: Ctx): Answer {
-  const notes: RaidNote[] = [];
-  const log: Logged[] = [];
-  const coins = putDown(s, s.endless, notes, log, ctx.room);
-  s.ventures += 1;
-  s.endless = startRun(draw32(s), { era: s.era, endless: way });
-  notes.push({ t: "started", trail: 0, run: s.ventures, endless: way });
-  log.push({ kind: LOGGED.raidStarted, data: { trail: 0, endless: way } });
+  const coins = putDown(s, s.held[slot], notes, log, ctx.room);
+  s.begun[slot] += 1;
+  s.held[slot] = startRun(draw32(s), { era: s.era, way });
+  if (way.course.id === "trail") s.trail = way.course.trail;
+  const endless = way.course.id === "trail" ? {} : { endless: way.course.id };
+  notes.push({ t: "started", trail: trailOf(way), run: s.begun[slot], ...endless });
+  log.push({ kind: LOGGED.raidStarted, data: { trail: trailOf(way), ...logged(way) } });
   return { state: s, notes, coins, log };
 }
 
 /**
- * What a fight decided leaves with Leaf (`Done.keep`): in an endless run what `reached` says; else a
- * member's board (not a guest's) at a sparring room, exactly as the fight was decided from, for
- * other members to meet there. Trouble and bosses are the forest's.
+ * The deepest rooms a way's pool has won (`reached` writes into them): everyone's figures' in the
+ * almanac and the week, the member's own kept apart; each week as it stands now (`weekAt`).
+ */
+function deepestOf(s: Table, way: Way, now: number): { ever: Depths; week: Week } {
+  if (way.figures.pool === "own") {
+    s.apart.week = weekAt(s.apart.week, now);
+    return { ever: s.apart.deepest, week: s.apart.week };
+  }
+  s.week = weekAt(s.week, now);
+  return { ever: s.almanac.deepest, week: s.week };
+}
+
+/**
+ * What a fight decided leaves with Leaf (`Done.keep`): on a way that keeps its deepest rooms what
+ * `reached` says; else a member's board (not a guest's) at a sparring room, exactly as the fight was
+ * decided from, in its way's lane (`lanes`), for other members to meet there. Trouble and bosses are
+ * the forest's.
  */
 function kept(s: Table, run: Run, decided: Fought, ctx: Ctx): Kept[] {
-  if (run.endless) {
-    s.week = weekAt(s.week, ctx.now);
-    return reached({ ever: s.almanac.deepest, week: s.week }, run, decided, ctx.player.guest);
-  }
-  if (ctx.player.guest || ROOMS[run.room]?.kind !== "spar") return [];
-  return [{ slot: boardSlot(run.trail, run.room, run.own !== null), data: decided.setup.sides[0] }];
+  if (counts(run.way).deepest) return reached(deepestOf(s, run.way, ctx.now), run, decided, ctx.player.guest);
+  const slot = lanes(run.way).board(run.room);
+  if (ctx.player.guest || slot === null || courseOf(run.way).rooms(run.room)?.kind !== "spar") return [];
+  return [{ slot, data: decided.setup.sides[0] }];
 }
 
 function play(s: Table, c: Aimed, ctx: Ctx): Answer {
-  const run = heldIn(s, aimedAt(c));
+  const slot = aimedAt(c);
+  const run = s.held[slot];
   if (!run) return no("no_run");
   // The run moves now: it draws from the era it is moved in.
   run.era = s.era;
@@ -341,8 +364,7 @@ function play(s: Table, c: Aimed, ctx: Ctx): Answer {
   const notes: RaidNote[] = [...done.notes];
   // Every fight decided, kept whole for the staff's analysis.
   const decided = c.do === "fight" ? foughtOf(run) : null;
-  const number = run.endless ? s.ventures : s.runs;
-  const log: Logged[] = decided ? [{ kind: LOGGED.raidFight, data: fightRecord(number, run, decided) }] : [];
+  const log: Logged[] = decided ? [{ kind: LOGGED.raidFight, data: fightRecord(s.begun[slot], run, decided) }] : [];
   const fought = run.record[room];
   if (c.do === "take" && fought) {
     log.push({
@@ -355,7 +377,7 @@ function play(s: Table, c: Aimed, ctx: Ctx): Answer {
         seconds: Math.round(seconds * 10) / 10,
         // A sparring room fought against another member's board: whose.
         ...(across === undefined ? {} : { met: across }),
-        ...wayLogged(run),
+        ...logged(run.way),
       },
     });
   }
@@ -366,16 +388,19 @@ function play(s: Table, c: Aimed, ctx: Ctx): Answer {
 
 /**
  * Where a command meets another member's board (`Game.meets`): a `take` that moves the run on to a
- * sparring room (`takenTo`: a run whose takings end it moves nowhere) meets one at that room's slot,
- * of a member whose board it has not met lately (`metLately`). In an endless run it meets whoever
- * holds a room held (`isHeld`, `heldSlot`), the member too, and nobody's anywhere else.
+ * sparring room (`takenTo`: a run whose takings end it moves nowhere). In a room held (`isHeld`) it
+ * meets whoever holds it, the member too; else at the room's board lane (`lanes`), a member whose
+ * board it has not met lately (`metLately`); and nobody's on a way with neither.
  */
 export function meets(state: Table, c: RaidCommand): Meeting | null {
-  const run = c.do === "take" ? heldIn(state, aimedAt(c)) : null;
+  const run = c.do === "take" ? state.held[aimedAt(c)] : null;
   const to = run && takenTo(run);
-  if (!run || to === null || roomAt(to)?.kind !== "spar") return null;
-  if (run.endless) return isHeld(run, to) ? { slot: heldSlot(to), avoid: [], held: true } : null;
-  return { slot: boardSlot(run.trail, to, run.own !== null), avoid: metLately(run.record, run.foe) };
+  if (!run || to === null || courseOf(run.way).rooms(to)?.kind !== "spar") return null;
+  const lane = lanes(run.way);
+  const held = isHeld(run, to) ? lane.held(to) : null;
+  if (held !== null) return { slot: held, avoid: [], held: true };
+  const board = lane.board(to);
+  return board === null ? null : { slot: board, avoid: metLately(run.record, run.foe) };
 }
 
 /**
@@ -383,12 +408,10 @@ export function meets(state: Table, c: RaidCommand): Meeting | null {
  * home is refused, so that a run's opening cannot be drawn again and again for free.
  */
 export const unfought = (run: Pick<Run, "record">): boolean => run.record.length === 0;
-/** The slot a run is set out in. */
-const setOutIn = (c: SetOut): Slot => ("course" in c ? "endless" : "main");
 /** Whether a command would put down a run that has fought no room yet (`unfought`): setting out afresh in its slot, or walking home. */
 function putsDownUnfought(s: Table, c: RaidCommand): boolean {
   const slot = c.do === "start" ? setOutIn(c) : c.do === "abandon" ? aimedAt(c) : null;
-  const run = slot && heldIn(s, slot);
+  const run = slot && s.held[slot];
   return run !== null && unfought(run);
 }
 
@@ -399,7 +422,7 @@ export function applyCommand(state: Table, c: RaidCommand, ctx: Ctx): Answer {
   // Leaf's clock says the era the command is done in; Leaf's dice are stirred into every stream before anything is drawn.
   s.era = eraAt(ctx.now);
   s.rng = mix(s.rng, ctx.seed);
-  for (const run of [s.run, s.endless]) if (run) run.rng = mix(run.rng, ctx.seed);
+  for (const run of [s.held.main, s.held.endless]) if (run) run.rng = mix(run.rng, ctx.seed);
   return isRunCommand(c) ? play(s, c, ctx) : doTable(s, c, ctx);
 }
 
@@ -413,26 +436,41 @@ interface TableSpec<C extends TableCommand> {
 type TableDo = TableCommand["do"];
 type TableCommandOf<D extends TableDo> = Extract<TableCommand, { do: D }>;
 
-const trailOf = (v: unknown): number | null => (isWhole(v, 0, TRAIL_COUNT - 1) ? v : null);
+const trailIndex = (v: unknown): number | null => (isWhole(v, 0, TRAIL_COUNT - 1) ? v : null);
 const lookOf = (v: Record<string, unknown>): { kind: LookKind; look: string } | null =>
   isLookKind(v.kind) && typeof v.look === "string" && v.look.length <= 32 ? { kind: v.kind, look: v.look } : null;
 
 /**
- * Setting out off the wire: on a trail (`course: "trail"`, or none), with the member's own figures
- * when `own` is true; or on an endless run (`course: "wilds"` or `"deep"`), with the fair game's.
+ * Setting out off the wire: on a trail (`course: "trail"`, or none) or an endless way (`course:
+ * "wilds"` or `"deep"`), with the member's own figures when `own` is true; but only on a way its
+ * course offers (`offered`: a course's row says whose figures it may be set out with).
  */
 function readStart(v: Record<string, unknown>): SetOut | null {
   const course = v.course ?? "trail";
-  if (course !== "trail") return isEndlessWay(course) && v.own !== true ? { do: "start", course } : null;
-  const trail = trailOf(v.trail);
-  return trail === null ? null : v.own === true ? { do: "start", trail, own: true } : { do: "start", trail };
+  const trail = trailIndex(v.trail);
+  const c: SetOut | null = isEndlessWay(course)
+    ? { do: "start", course }
+    : course === "trail" && trail !== null
+      ? { do: "start", trail }
+      : null;
+  if (c === null) return null;
+  const own = v.own === true;
+  return offered(wayOn(courseOfStart(c), own ? {} : null)) ? (own ? { ...c, own } : c) : null;
+}
+
+/** The command that sets out on a way, as the wire says it (`readStart` reads it back): the roster is Leaf's to read. */
+export function startOf({ course, figures }: Way): SetOut {
+  const own = figures.pool === "own" ? { own: true } : {};
+  return course.id === "trail"
+    ? { do: "start", trail: course.trail, ...own }
+    : { do: "start", course: course.id, ...own };
 }
 
 const TABLE: { readonly [D in TableDo]: TableSpec<TableCommandOf<D>> } = {
-  start: { read: readStart, run: (s, c, ctx) => ("course" in c ? setOutEndless(s, c, ctx) : setOut(s, c, ctx)) },
+  start: { read: readStart, run: setOut },
   trail: {
     read: (v) => {
-      const trail = trailOf(v.trail);
+      const trail = trailIndex(v.trail);
       return trail === null ? null : { do: "trail", trail };
     },
     run: (s, c) => {
@@ -500,7 +538,7 @@ export function predict(
 ): { view: TableView; notes: RaidNote[] } | { refused: string } | null {
   if (!isPredicted(c)) return null;
   const slot = aimedAt(c);
-  const held = heldIn(view, slot);
+  const held = view.held[slot];
   if (!held) return { refused: "no_run" };
   const run = structuredClone(held);
   // The run moves in the era Leaf's view is of, as it does at Leaf (`play`).
@@ -508,115 +546,35 @@ export function predict(
   const done = plan(run, c);
   if (!done) return null;
   if (!done.ok) return { refused: done.code };
-  return { view: slot === "endless" ? { ...view, endless: run } : { ...view, run }, notes: done.notes };
+  return { view: { ...view, held: { ...view.held, [slot]: run } }, notes: done.notes };
 }
 
 /**
  * The commands the bot would send to plan the room that is up, worked out on the page's copy: of
- * the run in hand, or (`endless`) of the endless run. A pick waiting is one command alone, since
+ * the run held in a slot (the run in hand, by default). A pick waiting is one command alone, since
  * what comes after it is Leaf's to say; and the bot never rustles here, since the new stall is
  * Leaf's to draw. Send them, and ask again once Leaf has answered: an empty list means the room is
  * planned.
  */
-export function planCommands(view: TableView, habit: Habit, endless = false): RaidCommand[] {
-  const held = endless ? view.endless : view.run;
+export function planCommands(view: TableView, habit: Habit, slot: Slot = "main"): RaidCommand[] {
+  const held = view.held[slot];
   if (held?.stage.phase !== "plan") return [];
   const run = structuredClone(held);
   const out: Aimed[] = [];
   const hands: Hands<RunView> = (r, c) => {
     const done = plan(r, c);
-    if (done?.ok || (!done && c.do === "choose")) out.push(endless ? { ...c, slot: "endless" } : c);
+    if (done?.ok || (!done && c.do === "choose")) out.push(slot === "main" ? c : { ...c, slot });
     // What draws is Leaf's to do: a pick is written down and the bot plans the rest once Leaf has answered; a rustle, never.
     return done ?? refusal(c.do === "choose" ? "nothing_to_choose" : "not_enough_acorns");
   };
   // The page's own stream for the bot's habits: the run's is Leaf's.
-  planWith(run, habit, hands, { rng: mix(endless ? view.ventures : view.runs, 9000 + run.record.length) });
+  planWith(run, habit, hands, { rng: mix(view.begun[slot], 9000 + run.record.length) });
   return out;
 }
 
 // ---------- keeping it ----------
 
-const GAME = "little-raid-table";
-/**
- * 7: a fight's setup keeps what binds it by what the rules set (`FightSetup.rules`) and the rules
- * named, where it kept its one rule by id. 6: the table, each run and each fight's setup keep their
- * era (`releases.ts`). 5: what Greg has eaten is a share of his health (`feed`), where it was meals
- * of 3% each. 4: a run of the Wilds keeps the rule picked for its wing (`Run.wing`), and a fight its
- * rule. 3: the endless run beside the run in hand, and the week's deepest rooms. 2: a run keeps
- * where it stands as one value (`Stage`). A table of versions 1 to 6 is read as well: one of
- * versions 4 to 6 has each fight's rule read as that rule's row; one of versions 1 to 5 and its runs
- * are of `LEGACY_ERA`, one of versions 1 to 4 has Greg's meals at 3% each, and one of versions 1 to
- * 3 has no rules, so a run of the Wilds past room 5 picks one at its next boss.
- */
-export const TABLE_VERSION = 7;
-const READS = [1, 2, 3, 4, 5, 6, TABLE_VERSION] as const;
-
-export const encodeTable = (state: Table): string =>
-  JSON.stringify({
-    game: GAME,
-    v: TABLE_VERSION,
-    rng: state.rng,
-    era: state.era,
-    runs: state.runs,
-    run: state.run,
-    endless: state.endless,
-    ventures: state.ventures,
-    almanac: state.almanac,
-    trail: state.trail,
-    looks: state.looks,
-    week: state.week,
-  });
-
-/**
- * A run as a table of a version keeps it in one of its places (`endless`: the endless run's), or
- * none: one that does not read, or could not have been kept (one over, one of the other place, one
- * with no number of `begun`), is let go of.
- */
-function keptRun(v: unknown, version: number, begun: number, endless: boolean): Run | null {
-  const read = v === null || v === undefined ? null : checkRun(v, version === 1, version < 5);
-  if (!read?.ok || read.run.stage.phase === "over" || begun <= 0) return null;
-  return (read.run.endless !== null) === endless ? read.run : null;
-}
-
-/** A table's era as it kept it, or null for one that is none; a table kept before there were eras is of the era live then. */
-const keptEra = (v: unknown): Era | null => (v === undefined ? LEGACY_ERA : isEra(v) ? v : null);
-
-/**
- * A table from the text Leaf stored, or null for anything not of these versions' shape. Under
- * today's content and numbers it refuses nothing more: a trail picked that is not open is the
- * first, a run that does not read is let go of (`keptRun`), and what an older table did not keep
- * is none, so the almanac and the looks bought are never out of reach.
- */
-export function decodeTable(text: string): Table | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  const version = isRecord(raw) && raw.game === GAME ? READS.find((v) => v === raw.v) : undefined;
-  if (!isRecord(raw) || version === undefined) return null;
-  const { rng, runs, trail } = raw;
-  if (!isWhole(rng, 0, UINT) || !isWhole(runs, 0, 1_000_000_000) || !isWhole(trail, 0, 999)) return null;
-  const almanac = readAlmanac(raw.almanac);
-  const looks = readLooks(raw.looks);
-  if (!almanac || !looks) return null;
-  const ventures = isWhole(raw.ventures, 0, 1_000_000_000) ? raw.ventures : 0;
-  const era = keptEra(raw.era);
-  if (era === null) return null;
-  return {
-    rng,
-    era,
-    runs,
-    run: keptRun(raw.run, version, runs, false),
-    endless: keptRun(raw.endless, version, ventures, true),
-    ventures,
-    almanac,
-    trail: trailOpen(almanac, trail) ? trail : 0,
-    looks,
-    week: readWeek(raw.week),
-  };
-}
+export { decodeTable, encodeTable, TABLE_VERSION } from "./keep.ts";
 
 /**
  * Nothing at the table happens by itself, however long the player is away, but this: the era moves
@@ -636,14 +594,13 @@ function advance(state: Table, ctx: Pick<Ctx, "awards" | "now">): Table {
 export const newTable = (ctx: Pick<Ctx, "seed" | "now">): Table => ({
   rng: mix(ctx.seed >>> 0, 0x7ab1e),
   era: eraAt(ctx.now),
-  runs: 0,
-  run: null,
-  endless: null,
-  ventures: 0,
+  begun: { main: 0, endless: 0 },
+  held: { main: null, endless: null },
   almanac: newAlmanac(),
   trail: 0,
   looks: newLooks(),
   week: readWeek(undefined),
+  apart: noApart(),
 });
 
 /** A carved figure of each boss beaten, on any trail, once. */
@@ -664,8 +621,8 @@ export const RAID: Game<Table, RaidCommand, TableView, RaidNote> = {
   // The different bosses beaten, every trail together, reached as the last of their trophies was first
   // won; the runs finished or abandoned, and the furthest room met on any trail.
   standing: ({ almanac }) => {
-    const counts = trophies(almanac);
-    return { score: counts.length, also: { runs: almanac.runs, room: Math.max(0, ...almanac.best) }, counts };
+    const carved = trophies(almanac);
+    return { score: carved.length, also: { runs: almanac.runs, room: Math.max(0, ...almanac.best) }, counts: carved };
   },
   // A carved figure of each boss beaten, for the member's camp.
   awards: (state) => trophies(state.almanac),

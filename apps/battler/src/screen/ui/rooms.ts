@@ -81,7 +81,7 @@ export function trackPlaque(): HTMLElement {
 export function renderTrack(run: RunView): void {
   const track = document.getElementById("track");
   if (!track) return;
-  const key = `${S.runs}:${run.endless}:${run.room}:${run.stage.phase}:${run.record.map((r) => r.result[0]).join("")}`;
+  const key = `${S.runs}:${run.way.course.id}:${run.room}:${run.stage.phase}:${run.record.map((r) => r.result[0]).join("")}`;
   if (key === drawn.key) return;
   drawn.key = key;
   const pips = pipsOf(run, "button");
@@ -117,6 +117,9 @@ function across(run: RunView): string {
   return `${acrossName(run.foe)}${run.foe.title ? `: ${nowCalled(run.foe.title)}` : ""}.`;
 }
 
+/** Whether a room is past the fifteenth of a run that goes on past them (an endless run's). */
+const pastFifteen = (run: RunView, index: number): boolean => lastRoom(run) === Infinity && index >= ROOM_COUNT;
+
 /** What a room not yet fought gives, by its kind; in an endless run, the chair a boss past the fifteenth room adds. */
 function gives(index: number, room: Room, run: RunView): string {
   const lose = `Lose: 1 of ${ECONOMY.componentsLost}.`;
@@ -125,7 +128,7 @@ function gives(index: number, room: Room, run: RunView): string {
   if (room.kind === "spar") return "A regular's party. It gives no components.";
   if (room.kind === "trouble") return `Win: pick 1 of ${ECONOMY.componentsWon} components. ${lose}`;
   if (index === lastRoom(run)) return "The last room. It is fought again until it is won or health runs out.";
-  const chair = run.endless && index >= ROOM_COUNT && chairsOf(run) < ENDLESS.chairs ? " Win: 1 more chair." : "";
+  const chair = pastFifteen(run, index) && chairsOf(run) < ENDLESS.chairs ? " Win: 1 more chair." : "";
   return `Win: pick 1 of ${ECONOMY.componentsWon} components, twice. ${lose}${chair}`;
 }
 
@@ -141,9 +144,7 @@ function roomDesc(index: number, run: RunView): Description | null {
     here ? across(run) : null,
     state === "won" ? "Won." : state === "lost" ? "Lost." : state === "drawn" ? "A draw." : gives(index, room, run),
     ECONOMY.boonRooms.some((r) => r === index) ? "A boon after it, won or lost." : null,
-    run.endless && index >= ROOM_COUNT && room.kind !== "spar"
-      ? `+${Math.round(room.might - 100)}% health and attack.`
-      : null,
+    pastFifteen(run, index) && room.kind !== "spar" ? `+${Math.round(room.might - 100)}% health and attack.` : null,
   ];
   // The Wilds' rules for the wing the room is in, while they hold: each a line of its own, with its picture.
   const rules = room.named.map((rule) => ({ body: ruleRow(rule) }));

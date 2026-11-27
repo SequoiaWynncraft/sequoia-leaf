@@ -13,9 +13,11 @@ import { whole } from "@sequoia-leaf/core";
 import type { Board as Standings } from "@sequoia-leaf/kit/person.ts";
 import {
   type Almanac,
+  type Course,
+  COURSES,
   ENDLESS,
   type EndlessWay,
-  type RaidCommand,
+  offered,
   ROOM_COUNT,
   type RunView,
   TRAIL_COUNT,
@@ -23,11 +25,13 @@ import {
   trailOpen,
   TRAILS,
   unfought,
+  type Way,
+  wayOn,
   type Week,
 } from "@sequoia-leaf/raid";
 
 import type { Glyph } from "../art/icons.ts";
-import { type DepthBoard, depthBoard, type Span, WAY_NAMES } from "./endless.ts";
+import { courseName, type DepthBoard, depthBoard, type Span } from "./endless.ts";
 
 /** What the table is read against: Leaf's copy, and what is chosen on the page. */
 export interface At {
@@ -86,8 +90,6 @@ export interface Board {
 }
 
 export type ModeId = "trails" | "endless" | "deep" | "live";
-/** What setting out sends Leaf: a trail's run, or an endless run. */
-export type SetOut = Extract<RaidCommand, { do: "start" }>;
 export interface Mode {
   readonly id: ModeId;
   readonly category: CategoryId;
@@ -96,8 +98,8 @@ export interface Mode {
   readonly text: string;
   /** Why the member cannot set out on it now, or null when they can. */
   readonly closed: (at: At) => string | null;
-  /** What Set out sends Leaf; null until the mode is wired, and until then the page does not show it. */
-  readonly setOut: ((at: At) => SetOut) | null;
+  /** The way Set out sets out on; null until the mode is wired, and until then the page does not show it. */
+  readonly setOut: ((at: At) => Way) | null;
   /** The live tables' card (`live/tables.ts`): tables to open and sit at, not Set out. Shown though it has no Set out. */
   readonly tables?: true;
   /** Its run laid out, if one is. */
@@ -136,26 +138,36 @@ export const guildBoard = (s: Standings): Board => ({
   you: s.you ? { place: s.you.place, name: "You", value: whole(s.you.score), you: true } : null,
 });
 
+/**
+ * The way to set out on a course: with the member's own figures when they are chosen and the course
+ * offers them (its row's `pools`), else everyone's. The roster is Leaf's to read when the run sets out.
+ */
+const wayFor = (course: Course, own: boolean): Way => {
+  const mine = wayOn(course, {});
+  return own && offered(mine) ? mine : wayOn(course);
+};
+
 /** The raid of fifteen rooms on a trail: the mode chosen until the member chooses another. */
 export const THE_TRAILS: Mode = {
   id: "trails",
   category: "normal",
-  name: "The trails",
+  name: COURSES.trail.name,
   text: `${ROOM_COUNT} rooms on one of ${TRAIL_COUNT} trails, each harder than the one before and paying more.`,
   closed: (at) => trailClosed(at.almanac, at.trail),
-  setOut: (at) => (at.own ? { do: "start", trail: at.trail, own: true } : { do: "start", trail: at.trail }),
+  setOut: (at) => wayFor({ id: "trail", trail: at.trail }, at.own),
   run: (at) => (at.run && at.run.stage.phase !== "over" ? at.run : null),
   // The guild's board once Leaf has given one with anybody on it; the member's own records until then.
   board: (at) => (at.standings && at.standings.top.length > 0 ? guildBoard(at.standings) : records(at.almanac)),
 };
 
-/** The endless run laid out, if it set out the given way. */
-const endlessOn = (at: At, way: EndlessWay): RunView | null => (at.endless?.endless === way ? at.endless : null);
+/** The endless run laid out, if it set out on the given course. */
+const endlessOn = (at: At, way: EndlessWay): RunView | null => (at.endless?.way.course.id === way ? at.endless : null);
 /** The other way's endless run, whose place a new run takes: why not while it has fought no room, and what it ends once it has. */
 function otherWay(at: At, way: EndlessWay): { closed: string | null; ends: string | null } {
-  const other = at.endless && at.endless.endless !== way ? at.endless : null;
-  if (!other?.endless) return { closed: null, ends: null };
-  const name = WAY_NAMES[other.endless];
+  const other = at.endless && at.endless.way.course.id !== way ? at.endless : null;
+  const course = other?.way.course.id;
+  if (!other || course === undefined || course === "trail") return { closed: null, ends: null };
+  const name = courseName(course);
   return unfought(other)
     ? { closed: `Your raid in ${name} has not fought a room yet.`, ends: null }
     : { closed: null, ends: `A new raid ends your raid in ${name}.` };
@@ -164,10 +176,10 @@ function otherWay(at: At, way: EndlessWay): { closed: string | null; ends: strin
 const endlessMode = (id: ModeId, way: EndlessWay, text: string, title: string): Mode => ({
   id,
   category: "endless",
-  name: WAY_NAMES[way],
+  name: courseName(way),
   text,
   closed: (at) => otherWay(at, way).closed,
-  setOut: () => ({ do: "start", course: way }),
+  setOut: (at) => wayFor({ id: way }, at.own),
   run: (at) => endlessOn(at, way),
   board: (at) => {
     const span: Span = way === "deep" ? "week" : at.span;
