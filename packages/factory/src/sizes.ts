@@ -165,3 +165,11 @@ export function roomRound(y: Pick<Yard, "kind" | "dir" | "land" | "part">, t: nu
     waiting[c - w] = 0;
   }
 }
+
+/** Every tile of the piece standing on a tile, its own first: the tile alone for a piece of one tile. */
+export function piecesTiles(y: Pick<Yard, "kind" | "dir" | "land" | "part">, t: number): number[] {
+  if (y.part[t] === 0) return [t];
+  const i = pieceOf(y, t);
+  const f = facingAt(y, i);
+  return Array.from(f?.dx ?? [], (dx, n) => i + dx + (f?.dy[n] ?? 0) * y.land.w);
+}

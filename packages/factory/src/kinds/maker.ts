@@ -196,6 +196,7 @@ function flow(k: Kit, y: Yard, i: number, made: Counts, needed: Counts): void {
   if (!rec) return;
   const batches = rateOf(k, y, i, rec).effective;
   made[rec.out] = (made[rec.out] ?? 0) + batches;
+  if (rec.also !== k.NONE) made[rec.also] = (made[rec.also] ?? 0) + batches;
   for (let p = 0; p < rec.from.length; p++) {
     const n = rec.from[p] ?? k.NONE;
     needed[n] = (needed[n] ?? 0) + batches * (rec.need[p] ?? 1);
@@ -217,7 +218,8 @@ const mayMake = (k: Kit, y: Yard, i: number, n: number | undefined): n is Item =
 
 /**
  * Puts back what a kept machine was told to make, held and was doing, only as the rules let it be now:
- * told to make and holding only what it may make, no more than it keeps; making only what it keeps a
+ * told to make and holding only what it may make, no more than it keeps (and a by-product only of
+ * such a recipe); making only what it keeps a
  * recipe for and holds all of; work only toward that, below what it takes.
  */
 function onto(k: Kit, y: Yard, i: number, r: number, o: KeptPiece): void {
@@ -225,6 +227,10 @@ function onto(k: Kit, y: Yard, i: number, r: number, o: KeptPiece): void {
   if (mayMake(k, y, i, o.recipe)) y.set[i] = o.recipe;
   stockOnto(k, y, i, r, o, 1e6);
   if (mayMake(k, y, i, o.out)) h.out[r] = o.out;
+  // A by-product held only where it is one of a recipe the machine may make.
+  const also = o.also;
+  if (also !== undefined && k.recipesFor(y.open, y.kind[i] ?? k.NONE).some((rec) => rec.also === also))
+    h.also[r] = also;
   const m = o.making;
   const making = m !== undefined && keepsFor(k, y, i).some((rec) => rec.out === m && k.enough(h, r, rec)) ? m : k.NONE;
   if (making !== k.NONE) {

@@ -4,6 +4,7 @@
  * that may move it, when next read (`litOf`), however many pieces the change was.
  */
 import { REACH } from "./content/machines.ts";
+import { lit, pieceOf } from "./sizes.ts";
 import { NONE, REACHES } from "./tables.ts";
 import { changed, type Yard } from "./yard.ts";
 
@@ -62,3 +63,9 @@ export function repower(y: Yard): Uint8Array {
 
 /** Which tiles power reaches, worked out first if a change may have moved it. */
 export const litOf = (y: Yard): Uint8Array => (y.powered ? y.lit : repower(y));
+
+/** Whether power reaches the piece on a tile: any of its tiles, for a piece of more than one. */
+export function litAt(y: Yard, i: number): boolean {
+  const tiles = litOf(y);
+  return i >= 0 && (y.part[i] === 0 ? tiles[i] === 1 : lit(y, tiles, pieceOf(y, i)) === 1);
+}

@@ -32,9 +32,9 @@ import { type Counts, holderOf, PIECE_BYTES, tunnelOf, type Yard } from "./yard.
 const f64 = new Float64Array(1);
 const u32 = new Uint32Array(f64.buffer);
 
-/** The piece on a tile as a number: its kind, way, place among those to hand, what it carries and its grade. */
+/** The piece on a tile as a number: its kind (its low four bits: those above are mixed in apart), way, place among those to hand, what it carries and its grade. */
 const pieceWord = (y: Yard, i: number): number =>
-  (y.kind[i] ?? 0) |
+  ((y.kind[i] ?? 0) & 15) |
   ((y.dir[i] ?? 0) << 4) |
   ((y.free[i] ?? 0) << 6) |
   ((y.item[i] ?? 0) << 8) |
@@ -171,6 +171,8 @@ export function check(y: Yard): number {
     if (k === NONE) continue;
     mix(tileFromCorner(y.land, i));
     mix(pieceWord(y, i));
+    // A kind past 15 mixes in its bits above four apart, so a yard of none checks as it always did.
+    if (k > 15) mix(0x20000 | (k >> 4));
     mix(settingsWord(y, i));
     const t = tunnelOf(y, i);
     if (t >= 0) {

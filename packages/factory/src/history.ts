@@ -79,6 +79,7 @@ import {
 } from "./pieces.ts";
 import { REASON } from "./reasons.ts";
 import { legPiece } from "./route.ts";
+import { OWN, piecesTiles, tilesAt } from "./sizes.ts";
 import { FIXED, gradeOf, isKind, keptKind, type Kind, NONE, SHUTS, SPANS } from "./tables.ts";
 import { changed, type Entry, holderOf, place, redwoodAt, standingTree, tunnelRow, vacate, type Yard } from "./yard.ts";
 
@@ -180,7 +181,8 @@ export interface Before {
 function settingAt(y: Yard, i: number): Setting | null {
   const k = y.kind[i] ?? NONE;
   const d = y.dir[i] ?? 0;
-  if (!isKind(k) || FIXED[k] === 1 || !isDir(d)) return null;
+  // A piece of more than one tile stands as its own tile has it; its other tiles hold none of it.
+  if (!isKind(k) || FIXED[k] === 1 || !isDir(d) || (y.part[i] !== 0 && y.part[i] !== OWN)) return null;
   return { tile: i, kind: k, dir: d, span: y.span[i] ?? 0, free: y.free[i] === 1, kept: keptAt(y, i) };
 }
 
@@ -221,7 +223,7 @@ function standsAs(y: Yard, i: number, s: Setting | undefined): boolean {
   return now.kind === s.kind && now.span === s.span && now.free === s.free && changedOf(y, s) === 0;
 }
 
-/** Writes how pieces stood (in tile order): each as the tiles since the last less one, then its kind, way and the settings it has. */
+/** Writes how pieces stood (in tile order): each as the tiles since the last less one, then its kind, way and the settings it has; a kind past 15 has its high bits in a part of its own. */
 function packSettings(o: Writer, was: readonly Setting[]): void {
   o.varint(was.length);
   let last = -1;
@@ -237,9 +239,10 @@ function packSettings(o: Writer, was: readonly Setting[]): void {
       [8, ways === 0 ? undefined : ways],
       [16, k.grade],
       [32, s.span === 0 ? undefined : s.span + 8],
+      [64, s.kind > 15 ? s.kind >> 4 : undefined],
     ];
     const f = parts.reduce((m, [bit, v]) => (v === undefined ? m : m | bit), 0);
-    o.byte(keptKind(s.kind) | (s.dir << 4) | (s.free ? 64 : 0) | (f === 0 ? 0 : 128));
+    o.byte((keptKind(s.kind) & 15) | (s.dir << 4) | (s.free ? 64 : 0) | (f === 0 ? 0 : 128));
     if (f !== 0) o.byte(f);
     for (const [, v] of parts) if (v !== undefined) o.byte(v);
   }
@@ -248,10 +251,12 @@ function packSettings(o: Writer, was: readonly Setting[]): void {
 /** One piece's settings read back, after its tile; null for bytes that are not a piece's. */
 function readSetting(r: Reader, tile: number): Setting | null {
   const kd = r.byte();
-  const [kind, dir] = [kd & 15, (kd >> 4) & 3];
   const f = kd & 128 ? r.byte() : 0;
-  const [recipe, closed, tint, ways, grade, span] = [1, 2, 4, 8, 16, 32].map((bit) => (f & bit ? r.byte() : undefined));
-  if (r.over || f > 63 || !isKind(kind) || FIXED[kind] === 1 || !isDir(dir)) return null;
+  const [recipe, closed, tint, ways, grade, span, high = 0] = [1, 2, 4, 8, 16, 32, 64].map((bit) =>
+    f & bit ? r.byte() : undefined,
+  );
+  const [kind, dir] = [(kd & 15) | (high << 4), (kd >> 4) & 3];
+  if (r.over || f > 127 || !isKind(kind) || FIXED[kind] === 1 || !isDir(dir)) return null;
   const kept = keptOf(
     { ...unpackWays(ways ?? 0), recipe, tint, grade, open: closed === undefined ? undefined : false },
     kind,
@@ -296,7 +301,7 @@ function tunnelEnd(y: Yard, a: ActOf<"build">): number[] {
  * these, the mouths of a tunnel on any of them go too (`before`).
  */
 const REACH: { readonly [D in Name]?: (y: Yard, a: ActOf<D>) => readonly number[] } = {
-  build: (y, a) => [tileOf(y, a), ...tunnelEnd(y, a)],
+  build: (y, a) => [tileOf(y, a), ...tunnelEnd(y, a), ...tilesAt(a.kind, a.x, a.y, a.dir, y.land.w, y.land.h)],
   lay: (y, a) => [...tilesOf(y, a.legs.map(legPiece)), ...(a.turn ? [tileOf(y, a.turn)] : [])],
   stand: (y, a) => tilesOf(y, a.pieces),
   // A plan of the whole yard may change every tile.
@@ -328,8 +333,8 @@ function reach<D extends Name>(y: Yard, a: ActOf<D>): readonly number[] | null {
 export function before(y: Yard, a: Act): Before | null {
   const near = reach(y, a);
   if (!near) return null;
-  // A tunnel's mouths go together; the depot never changes.
-  const mouths = near.flatMap((i) => (i < 0 ? [] : [i, otherMouth(y, i)]));
+  // A tunnel's mouths go together, and every tile of a piece of more than one; the depot never changes.
+  const mouths = near.flatMap((i) => (i < 0 ? [] : [...piecesTiles(y, i), otherMouth(y, i)]));
   const tiles = [...new Set(mouths)].filter((i) => i >= 0 && FIXED[y.kind[i] ?? NONE] !== 1).toSorted((i, j) => i - j);
   const was = new Map(tiles.flatMap((i) => [settingAt(y, i) ?? []].flat().map((s) => [i, s] as const)));
   const made = tiles.map((i) => y.made[i] ?? 0);

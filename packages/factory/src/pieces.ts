@@ -25,6 +25,7 @@ import {
 } from "./build.ts";
 import { RULES } from "./kinds/list.ts";
 import { join } from "./lines.ts";
+import { cornerOf, FACING, isBig, OWN, pieceOf, sizeOf } from "./sizes.ts";
 import {
   BELT,
   FIXED,
@@ -46,7 +47,7 @@ import {
 } from "./tables.ts";
 import { packWays, unpackWays } from "./tiles.ts";
 import { KIT } from "./wire.ts";
-import { changed, holderOf, PIECE_BYTES, tunnelOf, type Yard } from "./yard.ts";
+import { changed, cover, holderOf, PIECE_BYTES, tunnelOf, type Yard } from "./yard.ts";
 
 export { packWays, unpackWays } from "./tiles.ts";
 
@@ -109,16 +110,30 @@ export function keptAt(y: Yard, i: number): Kept {
   );
 }
 
-/** How far from a piece's own tile its second one is: for a tunnel, the tile it comes up on. */
-const reach = (p: Piece): number => (SPANS[p.kind] === 1 ? p.span + 1 : 0);
+/**
+ * Every tile a piece stands on, across and down, its own first: a tunnel's way-in mouth and the tile
+ * it comes up on; every tile of a piece of more than one (`sizes.ts`).
+ */
+export function cellsOf(p: {
+  readonly kind: number;
+  readonly x: number;
+  readonly y: number;
+  readonly dir: number;
+  readonly span: number;
+}): (readonly [number, number])[] {
+  const far = SPANS[p.kind] === 1 ? p.span + 1 : 0;
+  if (far > 0)
+    return [
+      [p.x, p.y],
+      [p.x + (DX[p.dir] ?? 0) * far, p.y + (DY[p.dir] ?? 0) * far],
+    ];
+  const f = FACING[p.kind]?.[p.dir & 3];
+  return f ? Array.from(f.dx, (dx, t) => [p.x + dx, p.y + (f.dy[t] ?? 0)] as const) : [[p.x, p.y]];
+}
 
-/** The tiles a set of pieces stands on: each one's own, then for a tunnel the one it comes up on. */
+/** The tiles a set of pieces stands on: each one's own, then for a tunnel the one it comes up on, or the rest of a piece of more than one. */
 export const tilesOf = (y: Yard, pieces: readonly Piece[]): number[] =>
-  pieces.flatMap((p) => {
-    const far = reach(p);
-    const mine = at(y, p.x, p.y);
-    return far > 0 ? [mine, at(y, p.x + (DX[p.dir] ?? 0) * far, p.y + (DY[p.dir] ?? 0) * far)] : [mine];
-  });
+  pieces.flatMap((p) => cellsOf(p).map(([x, z]) => at(y, x, z)));
 
 /** The box of tiles a set of pieces fills: its top-left corner, and how many tiles across and down. */
 export function boxOf(pieces: readonly Piece[]): { x: number; y: number; w: number; h: number } {
@@ -126,31 +141,46 @@ export function boxOf(pieces: readonly Piece[]): { x: number; y: number; w: numb
   let y0 = Infinity;
   let x1 = -Infinity;
   let y1 = -Infinity;
-  for (const p of pieces) {
-    const fx = p.x + (DX[p.dir] ?? 0) * reach(p);
-    const fy = p.y + (DY[p.dir] ?? 0) * reach(p);
-    x0 = Math.min(x0, p.x, fx);
-    y0 = Math.min(y0, p.y, fy);
-    x1 = Math.max(x1, p.x, fx);
-    y1 = Math.max(y1, p.y, fy);
-  }
+  for (const p of pieces)
+    for (const [x, z] of cellsOf(p)) {
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, z);
+      x1 = Math.max(x1, x);
+      y1 = Math.max(y1, z);
+    }
   return pieces.length === 0 ? { x: 0, y: 0, w: 0, h: 0 } : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+/**
+ * A piece turned a quarter turn right about the corner of the set it is in: its middle turned, so a
+ * piece of more than one tile stands on the middle of its tiles turned, or the middle's top left.
+ * Worked in twice the tiles, so that a middle between tiles stays whole.
+ */
+function turned(p: Piece): Piece {
+  const [w, h] = sizeOf(p.kind, p.dir);
+  const [cx, cy] = cornerOf(p.kind, p.dir);
+  const mx = 2 * (p.x + cx) + w - 1;
+  const my = 2 * (p.y + cy) + h - 1;
+  const d = right(p.dir);
+  const [w2, h2] = sizeOf(p.kind, d);
+  const [cx2, cy2] = cornerOf(p.kind, d);
+  return Object.assign({}, p, { x: (-my - (w2 - 1)) / 2 - cx2, y: (mx - (h2 - 1)) / 2 - cy2, dir: d });
 }
 
 /** A set of pieces turned as one, `turns` quarter turns to the right, with the corner of its box on (x, y). */
 export function placed(pieces: readonly Piece[], turns: number, x: number, y: number): Piece[] {
   let out = pieces;
-  for (let k = turns & 3; k > 0; k--)
-    out = out.map((p): Piece => Object.assign({}, p, { x: -p.y, y: p.x, dir: right(p.dir) }));
+  for (let k = turns & 3; k > 0; k--) out = out.map(turned);
   const box = boxOf(out);
   return out.map((p): Piece => Object.assign({}, p, { x: p.x - box.x + x, y: p.y - box.y + y }));
 }
 
-/** The pieces standing on some tiles, each once and never the depot; a tunnel on its way-in mouth, whichever was named. */
+/** The pieces standing on some tiles, each once and never the depot; a tunnel on its way-in mouth, a piece of more than one tile on its own, whichever was named. */
 export function piecesAt(y: Yard, tiles: readonly number[]): Piece[] {
   const out = new Map<number, Piece>();
   const W = y.land.w;
-  for (const t of tiles) {
+  for (const named of tiles) {
+    const t = named < 0 ? named : pieceOf(y, named);
     const k = y.kind[t] ?? NONE;
     const d = y.dir[t] ?? 0;
     if (!isKind(k) || FIXED[k] === 1 || !isDir(d)) continue;
@@ -163,20 +193,23 @@ export function piecesAt(y: Yard, tiles: readonly number[]): Piece[] {
   return [...out.values()];
 }
 
-/** The tiles of the pieces within a rectangle: a tunnel only with both mouths in it, never the depot. */
+/** The tiles of the pieces within a rectangle: a tunnel only with both mouths in it, a piece of more than one tile only whole, never the depot. */
 export function within(y: Yard, x0: number, y0: number, x1: number, y1: number): number[] {
   const out: number[] = [];
+  const inside = ([x, z]: readonly [number, number]): boolean => x >= x0 && x <= x1 && z >= y0 && z <= y1;
   for (let z = Math.max(0, y0); z <= Math.min(y.land.h - 1, y1); z++)
     for (let x = Math.max(0, x0); x <= Math.min(y.land.w - 1, x1); x++) {
       const i = at(y, x, z);
       const k = y.kind[i] ?? NONE;
-      if (k === NONE || FIXED[k] === 1) continue;
+      if (k === NONE || FIXED[k] === 1 || (y.part[i] !== 0 && y.part[i] !== OWN)) continue;
+      if (isBig(k)) {
+        if (cellsOf({ kind: k, x, y: z, dir: (y.dir[i] ?? 0) & 3, span: 0 }).every(inside)) out.push(i);
+        continue;
+      }
       const span = y.span[i] ?? 0;
       const d = y.dir[i] ?? 0;
       const far = (Math.abs(span) + 1) * Math.sign(span);
-      const fx = x + (DX[d] ?? 0) * far;
-      const fy = z + (DY[d] ?? 0) * far;
-      if (fx >= x0 && fx <= x1 && fy >= y0 && fy <= y1) out.push(i);
+      if (inside([x + (DX[d] ?? 0) * far, z + (DY[d] ?? 0) * far])) out.push(i);
     }
   return out;
 }
@@ -216,7 +249,7 @@ export const pieceRefusal = (open: Open, p: Piece): string | null =>
 /** The tiles setting a piece down changes: a piece of its kind standing there, both mouths of a tunnel, or else its own. */
 function claims(y: Yard, p: Piece): number[] {
   const i = at(y, p.x, p.y);
-  if (i < 0 || y.kind[i] !== p.kind) return tilesOf(y, [p]);
+  if (i < 0 || y.kind[i] !== p.kind || isBig(p.kind)) return tilesOf(y, [p]);
   const mouth = otherMouth(y, i);
   return mouth < 0 ? [i] : [i, mouth];
 }
@@ -311,6 +344,7 @@ export function stand(
 /** The per-tile parts of a piece, lifted off its tile to be set down on another. */
 const PARTS = [
   "kind",
+  "part",
   "dir",
   "item",
   "prog",
@@ -343,10 +377,12 @@ export function move(y: Yard, tiles: readonly number[], turns: number, x: number
     for (const part of PARTS)
       y[part][i] = part === "kind" || part === "item" || part === "set" ? NONE : part === "row" ? -1 : 0;
   }
-  const ways = to.flatMap((p): Dir[] => (reach(p) > 0 ? [p.dir, p.dir] : [p.dir]));
+  const ways = to.flatMap((p): Dir[] => cellsOf(p).map(() => p.dir));
+  const covered = PARTS.indexOf("part");
   tilesOf(y, to).forEach((i, k) => {
     const parts = lifted[k];
-    if (!parts || i < 0) return;
+    // The rest of a piece of more than one tile is laid over its tiles, turned, below.
+    if (!parts || i < 0 || (parts[covered] !== 0 && parts[covered] !== OWN)) return;
     PARTS.forEach((part, n) => (y[part][i] = parts[n] ?? 0));
     y.dir[i] = ways[k] ?? y.dir[i] ?? 0;
     y.via[i] = 0;
@@ -355,6 +391,7 @@ export function move(y: Yard, tiles: readonly number[], turns: number, x: number
     const t = tunnelOf(y, i);
     if (t >= 0) y.tunnels.tile[t] = i;
   });
+  for (const p of to) if (isBig(p.kind)) cover(y, at(y, p.x, p.y), p.kind, p.dir);
   changed(y);
   y.powered = false;
   return null;

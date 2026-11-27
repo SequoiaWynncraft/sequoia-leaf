@@ -577,6 +577,14 @@ export function cover(y: Yard, i: number, k: Kind, d: number): void {
   }
 }
 
+/** Turns the piece of more than one tile on its own tile `i` to face `d`: off the tiles it covered, and over those it covers now, which are clear. */
+export function recover(y: Yard, i: number, k: Kind, d: number): void {
+  const f = FACING[k]?.[(y.dir[i] ?? 0) & 3];
+  for (let t = 1; t < (f?.dx.length ?? 0); t++) clearTile(y, i + (f?.dx[t] ?? 0) + (f?.dy[t] ?? 0) * y.land.w);
+  y.dir[i] = d;
+  cover(y, i, k, d & 3);
+}
+
 /** Takes whatever stands on a tile away, row and all, leaving it as new ground: every tile of a piece of more than one. */
 export function vacate(y: Yard, i: number): void {
   if ((y.part[i] ?? 0) === 0) {

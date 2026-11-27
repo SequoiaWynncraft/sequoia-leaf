@@ -17,7 +17,7 @@ import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
 import { besideWater, toward } from "./land.ts";
 import { deliver, giveGoal } from "./orders.ts";
 import { makes, MINUTE } from "./planner.ts";
-import { litOf } from "./power.ts";
+import { litAt, litOf } from "./power.ts";
 import { lit as litBig, outsOf, OWN, pieceOf, roomRound, takesAt } from "./sizes.ts";
 import {
   ALL_ITEMS,
@@ -546,6 +546,7 @@ export const KIT: Kit = {
   deliver,
   giveGoal,
   litOf,
+  litAt,
   pace: (y: Yard): number => power(y).pace,
 };
 export type { Kit };

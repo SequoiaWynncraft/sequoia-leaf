@@ -107,6 +107,7 @@ export interface Kit {
   readonly deliver: typeof Orders.deliver;
   readonly giveGoal: typeof Orders.giveGoal;
   readonly litOf: typeof Power.litOf;
+  readonly litAt: typeof Power.litAt;
   /** The share of ticks the yard's machines work at, as its power lets them (`power`). */
   readonly pace: (y: Yard) => number;
 }

@@ -5,17 +5,20 @@
  * over, the other tiles it stands on, and what each command that sets something on a piece does.
  */
 import { FELL_PRICE } from "./content/plots.ts";
+import { coverRefusal } from "./footprint.ts";
 import type { Setters } from "./kinds/kind.ts";
 import { RULES } from "./kinds/list.ts";
 import { keepsFor } from "./kinds/maker.ts";
 import { digs, exitOf } from "./kinds/tunnel.ts";
 import { type Plotted, touching } from "./land.ts";
 import { join } from "./lines.ts";
+import { isBig, pieceOf } from "./sizes.ts";
 import {
   ALL_ITEMS,
   FAST,
   FIXED,
   gradeOf,
+  isKind,
   type Item,
   type Kind,
   KIND_INFO,
@@ -40,6 +43,7 @@ import {
   holderOf,
   holds,
   place,
+  recover,
   redwoodAt,
   standingTree,
   take,
@@ -149,10 +153,16 @@ function standsOver(y: Yard, k: Kind, i: number, d: number, g: number, lay: Lay)
   const there = y.kind[i] ?? NONE;
   const r = RULES[k];
   if (!r) return null;
-  if (there === k) return r.over(KIT, y, i, d, g, lay);
+  // One of more than one tile is laid again only from its own tile, and turned only where it fits.
+  if (there === k && pieceOf(y, i) === i) return r.over(KIT, y, i, d, g, lay) ?? covers(y, k, i, d, i);
+  if (isBig(k)) return covers(y, k, i, d) ?? r.refusal(KIT, y, i, d, lay) ?? overLimit(y, k);
   if (there !== NONE && !replaces(k, there)) return "Something is here already";
   return r.refusal(KIT, y, i, d, lay) ?? overLimit(y, k);
 }
+
+/** Why a kind of more than one tile cannot stand on the tile `i` facing `d` (over the piece on `self`); nothing for one of one tile. */
+const covers = (y: Yard, k: Kind, i: number, d: number, self = -1): string | null =>
+  isBig(k) ? coverRefusal(y, k, i % y.land.w, Math.floor(i / y.land.w), d, self) : null;
 
 /**
  * Builds something and says what it cost: over one of its kind it turns it and raises or lowers it
@@ -208,6 +218,7 @@ function relay(y: Yard, k: Kind, i: number, d: Dir, g: number, lay: Lay): void {
   const mouth = KIT.otherMouth(y, i);
   const turns = FAST[k] !== 1;
   if (y.grade[i] !== g || (turns && y.dir[i] !== d)) changed(y);
+  if (turns && isBig(k) && y.dir[i] !== d) recover(y, i, k, d);
   if (turns) y.dir[i] = d;
   y.grade[i] = g;
   if (mouth >= 0) y.grade[mouth] = g;
@@ -223,20 +234,23 @@ export function turnable(y: Yard, x: number, z: number): boolean {
   return there !== NONE && FAST[there] !== 1;
 }
 
-/** Turns something to face another way. Costs nothing. */
+/** Turns something to face another way, whichever of its tiles is named: one of more than one tile only where it fits turned. Costs nothing. */
 export function turn(y: Yard, x: number, z: number, d: Dir): boolean {
   if (!turnable(y, x, z)) return false;
-  const i = at(y, x, z);
-  if (y.dir[i] !== d) {
-    y.dir[i] = d;
-    changed(y);
-  }
+  const i = pieceOf(y, at(y, x, z));
+  const k = y.kind[i] ?? NONE;
+  if (y.dir[i] === d) return true;
+  if (!isKind(k) || covers(y, k, i, d, i) !== null) return false;
+  if (isBig(k)) recover(y, i, k, d);
+  y.dir[i] = d;
+  changed(y);
   return true;
 }
 
 /** Takes something away and says what comes back. Whatever it was holding is lost. The depot stays. */
 export function remove(y: Yard, x: number, z: number): Refund {
-  const i = at(y, x, z);
+  const t = at(y, x, z);
+  const i = t < 0 ? t : pieceOf(y, t);
   const there = i < 0 ? NONE : (y.kind[i] ?? NONE);
   if (there === NONE) return { ok: false, why: "There is nothing here" };
   if (FIXED[there] === 1) return { ok: false, why: `The ${lower(there)} cannot be removed` };
@@ -262,7 +276,8 @@ function setter<S extends keyof Setters>(
   z: number,
   what: S,
 ): { i: number; set: NonNullable<Setters[S]> } | null {
-  const i = at(y, x, z);
+  const t = at(y, x, z);
+  const i = t < 0 ? t : pieceOf(y, t);
   const set = i < 0 ? undefined : RULES[y.kind[i] ?? NONE]?.set[what];
   return set ? { i, set } : null;
 }
@@ -292,7 +307,8 @@ export function setSide(y: Yard, x: number, z: number, toRight: boolean): boolea
 
 /** Empties what a machine, crate or boiler holds, all of it or one kind of thing. Says how many went. */
 export function tipOut(y: Yard, x: number, z: number, only: Item | null = null): number {
-  const i = at(y, x, z);
+  const t = at(y, x, z);
+  const i = t < 0 ? t : pieceOf(y, t);
   if (i < 0 || !holds(y.kind[i] ?? NONE)) return 0;
   const h = y.holders;
   const r = holderOf(y, i);

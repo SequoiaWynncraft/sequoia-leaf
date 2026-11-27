@@ -114,7 +114,7 @@ export interface MachineRate {
 export function rateOf(k: Kit, y: Yard, i: number, recipe: Recipe | null): MachineRate {
   const kind = i < 0 ? k.NONE : (y.kind[i] ?? k.NONE);
   const grade = y.grade[i] ?? 0;
-  const lit = kind !== k.NONE && k.litOf(y)[i] === 1;
+  const lit = kind !== k.NONE && k.litAt(y, i);
   const share = lit ? k.pace(y) : 0;
   const own = k.isKind(kind) && (k.WORK_OF[kind] ?? 0) > 0;
   const nominal = own ? k.makes(kind, grade, null) : k.isMaker(kind) && recipe ? k.makes(recipe.by, grade, recipe) : 0;
