@@ -293,6 +293,29 @@ export const Standings = Schema.Struct({
   you: Schema.NullOr(Place),
 });
 
+/**
+ * A board of the Little Raid's endless runs: the 20 deepest rooms won in a way, for all time or this
+ * week, each with its place (how many won deeper, or as deep sooner, and one), its player's id and
+ * name ("Someone" for one Leaf has no name for), the room (counting from 1), when it was first won,
+ * and whether it is the caller's own (`you`); and the caller's own place, or null before they win a room.
+ */
+export const RaidDepths = Schema.Struct({
+  top: Schema.Array(
+    Schema.Struct({
+      place: Schema.Number,
+      id: Schema.String,
+      name: Schema.String,
+      room: Schema.Number,
+      at: Schema.String,
+      you: Schema.Boolean,
+    }),
+  ),
+  you: Schema.NullOr(Schema.Struct({ place: Schema.Number, room: Schema.Number, at: Schema.String })),
+});
+
+/** The rooms of the Deep Woods the caller holds this week, counting from 1, in order. */
+export const RaidHeld = Schema.Struct({ rooms: Schema.Array(Schema.Number) });
+
 /** Somebody's time and Coins in a game: how long they have played it and had it open while AFK, in whole seconds, and the Coins it has taken from them. */
 const InGame = { played: Schema.Number, afk: Schema.Number, spent: Schema.Number };
 

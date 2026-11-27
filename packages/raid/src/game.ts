@@ -16,6 +16,7 @@ import {
   type Done,
   draw32,
   type Game,
+  type Kept,
   LOGGED,
   type Logged,
   type Meeting,
@@ -26,8 +27,17 @@ import {
 
 import { type Habit, type Hands, planWith } from "./bot.ts";
 import {
+  type Aimed,
+  forEndless,
+  isPredicted,
+  type Predicted,
+  type RaidCommand,
+  readCommand,
+  type RunCommand,
+} from "./command.ts";
+import type { EndlessWay } from "./content/endless.ts";
+import {
   isBoughtLook,
-  isLookKind,
   type LookId,
   type LookKind,
   LOOKS,
@@ -38,7 +48,9 @@ import {
   wear,
   wornOf,
 } from "./content/looks.ts";
-import { ROOMS, TRAIL_COUNT } from "./content/rooms.ts";
+import { ROOMS } from "./content/rooms.ts";
+import { paidFor, reached, readWeek, type Week, weekAt } from "./depths.ts";
+import { heldSlot, isHeld, roomAt } from "./endless.ts";
 import { boardSlot, metLately } from "./foe.ts";
 import { fightRecord } from "./fought.ts";
 import {
@@ -53,6 +65,7 @@ import {
   trailOpen,
 } from "./outside.ts";
 import { type Roster, rosterOf } from "./own.ts";
+import { isRecord, isWhole } from "./party.ts";
 import { postcard } from "./postcard.ts";
 import { forgeItems } from "./rack.ts";
 import {
@@ -64,6 +77,7 @@ import {
   choose,
   type Done as RunDone,
   fieldCap,
+  type Fought,
   foughtOf,
   giveItem,
   hold,
@@ -77,7 +91,6 @@ import {
   type RunView,
   rustle,
   sell,
-  type Spot,
   type Stage,
   startRun,
   summariseRun,
@@ -101,16 +114,25 @@ export interface Table {
   runs: number;
   /** The run in hand, or none. A run that ends is let go of at once. */
   run: Run | null;
+  /** The endless run, beside the run in hand: each is picked up and put down on its own. */
+  endless: Run | null;
+  /** Endless runs begun at this table. The endless run is the last of them, and pays under its number. */
+  ventures: number;
   almanac: Almanac;
   /** The trail picked on the front page, to set out on next. */
   trail: number;
   looks: Looks;
+  /** This week's deepest rooms won in each endless way (`depths.ts`). */
+  week: Week;
 }
 
 /** What the player's page is given. */
 export interface TableView {
   runs: number;
   run: RunView | null;
+  endless: RunView | null;
+  ventures: number;
+  week: Week;
   almanac: Almanac;
   trail: number;
   looks: Looks;
@@ -120,60 +142,11 @@ export interface TableView {
 
 // ---------- commands ----------
 
-/** Everything a player can do at the table. */
-export type RaidCommand =
-  /**
-   * Set out on a trail: with all figures, or (`own`) with those the member has pulled. A run in hand
-   * is put down first, as walking home, once it has fought a room.
-   */
-  | { do: "start"; trail: number; own?: boolean }
-  /** Pick the trail to set out on next, on the front page. */
-  | { do: "trail"; trail: number }
-  /** Put a look on the table. (A command's `id` on the wire is its own, so the look is `look`.) */
-  | { do: "look"; kind: LookKind; look: string }
-  /** Buy a look with Leaf, and put it on the table. */
-  | { do: "buyLook"; kind: LookKind; look: string }
-  /** Take one of the options of the pick waiting. */
-  | { do: "choose"; option: number }
-  /** Ask for three other boons. */
-  | { do: "redraw" }
-  | { do: "buy"; offer: number }
-  | { do: "sell"; from: Spot }
-  /** Move a figure, changing places with whoever is there. */
-  | { do: "move"; from: Spot; to: Spot }
-  /** Take a figure off the board to the first free hollow of the bench. */
-  | { do: "bench"; seat: number }
-  | { do: "rustle" }
-  /** Keep the stall as it is for the next room, or let it go. */
-  | { do: "hold"; on: boolean }
-  /** Buy experience. */
-  | { do: "xp" }
-  /** Hand the item at a place on the rack to a figure. */
-  | { do: "give"; item: number; to: Spot }
-  /** Make the finished item of two components on the rack, in the first one's place. */
-  | { do: "forge"; item: number; with: number }
-  /** Send the party in: the boards are locked and the fight is decided. */
-  | { do: "fight" }
-  /** Take what the fight paid, and go on to the next room or to the end. */
-  | { do: "take" }
-  /** Walk home early, once a room has been fought. */
-  | { do: "abandon" };
-
-export type RaidCommandName = RaidCommand["do"];
-/** The commands that act on the run in hand. */
-export type RunCommand = Exclude<RaidCommand, { do: "start" | "trail" | "look" | "buyLook" }>;
-
-/** The commands a page may show before Leaf answers: they draw nothing, so Leaf will do just the same. */
-const predicted = ["move", "bench", "sell", "give", "forge", "hold", "buy", "xp"] as const;
-export const PREDICTED = predicted satisfies readonly RaidCommandName[];
-/** A command a page may show before Leaf answers. */
-export type Predicted = Extract<RaidCommand, { do: (typeof PREDICTED)[number] }>;
-export const isPredicted = (c: RaidCommand): c is Predicted => PREDICTED.some((name) => name === c.do);
-
 /** What a command did, for the page to show. */
 export type RaidNote =
   | Note
-  | { t: "started"; trail: number; run: number }
+  /** A run set out: on a trail, or (`endless`) an endless run, with its number at the table. */
+  | { t: "started"; trail: number; run: number; endless?: EndlessWay }
   | { t: "trail"; trail: number }
   | { t: "look"; kind: LookKind; id: LookId }
   /** A run ended (won, lost, or walked home from): what it came to, what it paid, and what is new in the almanac. */
@@ -204,73 +177,7 @@ export function refusalText(code: string, view?: TableView): string {
   return "That cannot be done just now.";
 }
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const UINT = 0xffffffff;
-const whole = (v: unknown, least: number, most: number): v is number =>
-  typeof v === "number" && Number.isInteger(v) && v >= least && v <= most;
-/** A place as a command names it. Anything past the board and bench is turned down by the rules. */
-function spotOf(v: unknown): Spot | null {
-  if (!isRecord(v) || (v.on !== "board" && v.on !== "bench") || !whole(v.at, 0, 63)) return null;
-  return { on: v.on, at: v.at };
-}
-
-/** Setting out, off the wire: on a trail, and with the member's own figures only when it says so. */
-function readStart(v: Record<string, unknown>): RaidCommand | null {
-  if (!whole(v.trail, 0, TRAIL_COUNT - 1)) return null;
-  return v.own === true ? { do: "start", trail: v.trail, own: true } : { do: "start", trail: v.trail };
-}
-
-/** Forging on the rack, off the wire: two of its places. */
-const readForge = (v: Record<string, unknown>): RaidCommand | null =>
-  v.do === "forge" && whole(v.item, 0, 399) && whole(v.with, 0, 399)
-    ? { do: "forge", item: v.item, with: v.with }
-    : null;
-
-/** A command off the wire, or null. Fields it does not use (the command's id) are let be. */
-export function readCommand(v: unknown): RaidCommand | null {
-  if (!isRecord(v)) return null;
-  switch (v.do) {
-    case "start":
-      return readStart(v);
-    case "trail":
-      return whole(v.trail, 0, TRAIL_COUNT - 1) ? { do: "trail", trail: v.trail } : null;
-    case "look":
-    case "buyLook":
-      return isLookKind(v.kind) && typeof v.look === "string" && v.look.length <= 32
-        ? { do: v.do, kind: v.kind, look: v.look }
-        : null;
-    case "choose":
-      return whole(v.option, 0, 15) ? { do: "choose", option: v.option } : null;
-    case "buy":
-      return whole(v.offer, 0, 15) ? { do: "buy", offer: v.offer } : null;
-    case "sell": {
-      const from = spotOf(v.from);
-      return from ? { do: "sell", from } : null;
-    }
-    case "move": {
-      const from = spotOf(v.from);
-      const to = spotOf(v.to);
-      return from && to ? { do: "move", from, to } : null;
-    }
-    case "bench":
-      return whole(v.seat, 0, 63) ? { do: "bench", seat: v.seat } : null;
-    case "hold":
-      return typeof v.on === "boolean" ? { do: "hold", on: v.on } : null;
-    case "give": {
-      const to = spotOf(v.to);
-      return to && whole(v.item, 0, 399) ? { do: "give", item: v.item, to } : null;
-    }
-    case "redraw":
-    case "rustle":
-    case "xp":
-    case "fight":
-    case "take":
-    case "abandon":
-      return { do: v.do };
-    default:
-      return readForge(v);
-  }
-}
 
 // ---------- what the page is shown ----------
 
@@ -311,14 +218,19 @@ export function runView(run: RunView): RunView {
     nextId: run.nextId,
     last: run.last,
     own: run.own,
+    endless: run.endless,
     seen: run.seen,
   };
 }
 
-export function tableView(state: Table, ctx: Pick<Ctx, "awards">): TableView {
+/** What the page is shown of the table: the week as it stands now (`weekAt`), a new one with nothing won in it yet. */
+export function tableView(state: Table, ctx: Pick<Ctx, "awards" | "now">): TableView {
   return {
     runs: state.runs,
     run: state.run ? runView(state.run) : null,
+    endless: state.endless ? runView(state.endless) : null,
+    ventures: state.ventures,
+    week: weekAt(state.week, ctx.now),
     almanac: state.almanac,
     trail: state.trail,
     looks: state.looks,
@@ -373,19 +285,21 @@ export function act(run: Run, c: RunCommand, met: Met | undefined): RunDone {
 }
 
 /**
- * A run that has ended: written into the almanac, let go of, and paid for under its number. It is
- * paid what it is worth, or what the player may still earn (`room`) when that is less, and says so.
- * A run with the member's own figures is paid the same and written nowhere: the almanac, and so the
- * trophies, the standing and the trails open, are the main way's alone.
+ * A run that has ended: written into the almanac, let go of, and paid for under its number (an
+ * endless run under its own: `endless:<n>`). It is paid what it is worth (`paidFor`), or what the
+ * player may still earn (`room`) when that is less, and says so. A run with the member's own figures
+ * or an endless run is paid the same and written nowhere: the almanac, and so the trophies, the
+ * standing and the trails open, are the main way's alone. (An endless run's deepest rooms are
+ * written down as they are won, by `reached`.)
  */
 function finish(s: Table, run: Run, notes: RaidNote[], log: Logged[], room: number): CoinChange[] {
   const summary = summariseRun(run);
-  const worth = payout(summary);
+  const worth = payout(paidFor(run, summary));
   const paid: Payout =
     worth.coins > room ? { coins: Math.max(0, room), lines: [...worth.lines, { why: "full", coins: 0 }] } : worth;
-  const recorded = run.own ? { almanac: s.almanac, news: [] } : recordRun(s.almanac, summary);
+  const recorded = run.own || run.endless ? { almanac: s.almanac, news: [] } : recordRun(s.almanac, summary);
   s.almanac = recorded.almanac;
-  s.run = null;
+  s[run.endless ? "endless" : "run"] = null;
   notes.push({ t: "ended", run: runView(run), summary, paid, news: recorded.news });
   log.push({
     kind: LOGGED.raidEnded,
@@ -394,46 +308,68 @@ function finish(s: Table, run: Run, notes: RaidNote[], log: Logged[], room: numb
       rooms_won: summary.cleared,
       ended: summary.ending ?? "lost",
       coins: paid.coins,
-      ...ownLogged(run),
+      ...wayLogged(run),
     },
   });
-  return paid.coins > 0 ? [{ amount: paid.coins, reason: "The Little Raid", key: `run:${s.runs}` }] : [];
+  const key = run.endless ? `endless:${s.ventures}` : `run:${s.runs}`;
+  return paid.coins > 0 ? [{ amount: paid.coins, reason: "The Little Raid", key }] : [];
 }
 
-/** What a log line of a run with the member's own figures says besides. */
-const ownLogged = (run: Pick<Run, "own">): { own?: true } => (run.own ? { own: true } : {});
+/** What a log line of a run with the member's own figures, or of an endless run, says besides. */
+const wayLogged = (run: Pick<Run, "own" | "endless">): { own?: true; endless?: EndlessWay } =>
+  run.own ? { own: true } : run.endless ? { endless: run.endless } : {};
+
+/** Setting out afresh puts down the run of that kind laid out (one that has fought a room), as walking home does. */
+function putDown(s: Table, run: Run | null, notes: RaidNote[], log: Logged[], room: number): CoinChange[] {
+  if (!run) return [];
+  const left = abandon(run);
+  if (left.ok) notes.push(...left.notes);
+  return finish(s, run, notes, log, room);
+}
 
 function setOut(s: Table, { trail, own: asked }: Extract<RaidCommand, { do: "start" }>, ctx: Ctx): Answer {
   // The main way is never told what the member has pulled.
   const own: Roster | null = asked ? rosterOf(ctx.awards) : null;
   if (own && Object.keys(own).length === 0) return no("nothing_pulled");
-  const room = ctx.room;
   const notes: RaidNote[] = [];
   const log: Logged[] = [];
-  let coins: CoinChange[] = [];
-  // Setting out afresh puts down the raid that is laid out (one that has fought a room), as walking home does.
-  if (s.run) {
-    const run = s.run;
-    const left = abandon(run);
-    if (left.ok) notes.push(...left.notes);
-    coins = finish(s, run, notes, log, room);
-  }
+  const coins = putDown(s, s.run, notes, log, ctx.room);
   s.runs += 1;
   s.run = startRun(draw32(s), own ? { trail, own } : { trail });
   s.trail = trail;
   notes.push({ t: "started", trail, run: s.runs });
-  log.push({ kind: LOGGED.raidStarted, data: { trail, ...ownLogged(s.run) } });
+  log.push({ kind: LOGGED.raidStarted, data: { trail, ...wayLogged(s.run) } });
+  return { state: s, notes, coins, log };
+}
+
+/** Setting out on an endless run, beside the run in hand: on the first trail, the fair game's figures. */
+function setOutEndless(s: Table, { way }: Extract<RaidCommand, { do: "endless" }>, ctx: Ctx): Answer {
+  const notes: RaidNote[] = [];
+  const log: Logged[] = [];
+  const coins = putDown(s, s.endless, notes, log, ctx.room);
+  s.ventures += 1;
+  s.endless = startRun(draw32(s), { endless: way });
+  notes.push({ t: "started", trail: 0, run: s.ventures, endless: way });
+  log.push({ kind: LOGGED.raidStarted, data: { trail: 0, endless: way } });
   return { state: s, notes, coins, log };
 }
 
 /**
- * Whether a run's fight is kept for other members to meet (`Done.keep`): a member's, not a guest's,
- * at a sparring room. Trouble and bosses are the forest's.
+ * What a fight decided leaves with Leaf (`Done.keep`): in an endless run what `reached` says; else a
+ * member's board (not a guest's) at a sparring room, exactly as the fight was decided from, for
+ * other members to meet there. Trouble and bosses are the forest's.
  */
-const keeps = (run: Run, ctx: Ctx): boolean => !ctx.player.guest && ROOMS[run.room]?.kind === "spar";
+function kept(s: Table, run: Run, decided: Fought, ctx: Ctx): Kept[] {
+  if (run.endless) {
+    s.week = weekAt(s.week, ctx.now);
+    return reached({ ever: s.almanac.deepest, week: s.week }, run, decided, ctx.player.guest);
+  }
+  if (ctx.player.guest || ROOMS[run.room]?.kind !== "spar") return [];
+  return [{ slot: boardSlot(run.trail, run.room, run.own !== null), data: decided.setup.sides[0] }];
+}
 
-function play(s: Table, c: RunCommand, ctx: Ctx): Answer {
-  const run = s.run;
+function play(s: Table, c: Aimed, ctx: Ctx): Answer {
+  const run = forEndless(c) ? s.endless : s.run;
   if (!run) return no("no_run");
   const room = run.record.length;
   // The takings are paid from the fight as it was decided when the party set out, against whoever was across.
@@ -445,7 +381,8 @@ function play(s: Table, c: RunCommand, ctx: Ctx): Answer {
   const notes: RaidNote[] = [...done.notes];
   // Every fight decided, kept whole for the staff's analysis.
   const decided = c.do === "fight" ? foughtOf(run) : null;
-  const log: Logged[] = decided ? [{ kind: LOGGED.raidFight, data: fightRecord(s.runs, run, decided) }] : [];
+  const number = run.endless ? s.ventures : s.runs;
+  const log: Logged[] = decided ? [{ kind: LOGGED.raidFight, data: fightRecord(number, run, decided) }] : [];
   const fought = run.record[room];
   if (c.do === "take" && fought) {
     log.push({
@@ -458,13 +395,11 @@ function play(s: Table, c: RunCommand, ctx: Ctx): Answer {
         seconds: Math.round(seconds * 10) / 10,
         // A sparring room fought against another member's board: whose.
         ...(across === undefined ? {} : { met: across }),
-        ...ownLogged(run),
+        ...wayLogged(run),
       },
     });
   }
-  // The board a member fought a sparring room with, exactly as the fight was decided from, left for others to meet there.
-  const party = decided && keeps(run, ctx) ? decided.setup.sides[0] : undefined;
-  const keep = party === undefined ? [] : [{ slot: boardSlot(run.trail, run.room, run.own !== null), data: party }];
+  const keep = decided ? kept(s, run, decided, ctx) : [];
   const coins = run.stage.phase === "over" ? finish(s, run, notes, log, ctx.room) : [];
   return { state: s, notes, coins, log, keep };
 }
@@ -472,52 +407,62 @@ function play(s: Table, c: RunCommand, ctx: Ctx): Answer {
 /**
  * Where a command meets another member's board (`Game.meets`): a `take` that moves the run on to a
  * sparring room (`takenTo`: a run whose takings end it moves nowhere) meets one at that room's slot,
- * of a member whose board it has not met lately (`metLately`).
+ * of a member whose board it has not met lately (`metLately`). In an endless run it meets whoever
+ * holds a room held (`isHeld`, `heldSlot`), the member too, and nobody's anywhere else.
  */
 export function meets(state: Table, c: RaidCommand): Meeting | null {
-  const run = state.run;
+  const run = forEndless(c) ? state.endless : state.run;
   const to = c.do === "take" && run ? takenTo(run) : null;
-  if (!run || to === null || ROOMS[to]?.kind !== "spar") return null;
+  if (!run || to === null || roomAt(to)?.kind !== "spar") return null;
+  if (run.endless) return isHeld(run, to) ? { slot: heldSlot(to), avoid: [], held: true } : null;
   return { slot: boardSlot(run.trail, to, run.own !== null), avoid: metLately(run.record, run.foe) };
 }
 
 /**
- * Whether the run in hand has fought no room yet. Such a run is not put down: setting out afresh or
- * walking home is refused, so that a run's opening cannot be drawn again and again for free.
+ * Whether a run has fought no room yet. Such a run is not put down: setting out afresh or walking
+ * home is refused, so that a run's opening cannot be drawn again and again for free.
  */
 export const unfought = (run: Pick<Run, "record">): boolean => run.record.length === 0;
+/** Whether a command would put down a run that has fought no room yet (`unfought`): the endless run's, or the run in hand's. */
+function putsDownUnfought(s: Table, c: RaidCommand): boolean {
+  const run = c.do === "endless" || forEndless(c) ? s.endless : s.run;
+  return (c.do === "start" || c.do === "endless" || c.do === "abandon") && run !== null && unfought(run);
+}
 
 export function applyCommand(state: Table, c: RaidCommand, ctx: Ctx): Answer {
   if (c.do === "start" && !trailOpen(state.almanac, c.trail)) return no("trail_closed");
-  if ((c.do === "start" || c.do === "abandon") && state.run && unfought(state.run)) return no("unfought");
+  if (putsDownUnfought(state, c)) return no("unfought");
   const s = structuredClone(state);
-  // Leaf's dice, stirred into both streams before anything is drawn.
+  // Leaf's dice, stirred into every stream before anything is drawn.
   s.rng = mix(s.rng, ctx.seed);
-  if (s.run) s.run.rng = mix(s.run.rng, ctx.seed);
+  for (const run of [s.run, s.endless]) if (run) run.rng = mix(run.rng, ctx.seed);
   if (c.do === "start") return setOut(s, c, ctx);
+  if (c.do === "endless") return setOutEndless(s, c, ctx);
   if (c.do === "trail") {
     if (!trailOpen(s.almanac, c.trail)) return no("trail_closed");
     s.trail = c.trail;
     return { state: s, notes: [{ t: "trail", trail: c.trail }] };
   }
+  if (c.do === "look" || c.do === "buyLook") return dress(s, c);
+  return play(s, c, ctx);
+}
+
+/** Puts an owned look on the table, or buys one with Leaf and puts it on. */
+function dress(s: Table, c: Extract<RaidCommand, { do: "look" | "buyLook" }>): Answer {
+  const spec = LOOKS[c.kind].find((l) => l.id === c.look);
+  if (!spec) return no("no_such_look");
   if (c.do === "look") {
-    if (!LOOKS[c.kind].some((l) => l.id === c.look)) return no("no_such_look");
     if (!wear(s.looks, c.kind, c.look)) return no("not_owned");
     return { state: s, notes: [{ t: "look", kind: c.kind, id: wornOf(s.looks, c.kind) }] };
   }
-  if (c.do === "buyLook") {
-    const spec = LOOKS[c.kind].find((l) => l.id === c.look);
-    if (!spec) return no("no_such_look");
-    if (owns(s.looks, c.kind, spec.id)) return no("owned");
-    s.looks.owned.push(spec.id);
-    wear(s.looks, c.kind, spec.id);
-    return {
-      state: s,
-      notes: [{ t: "look", kind: c.kind, id: spec.id }],
-      leaf: [{ amount: spec.leaf, reason: `Raid table look: ${spec.name}`, key: `look:${spec.id}`, for: spec.for }],
-    };
-  }
-  return play(s, c, ctx);
+  if (owns(s.looks, c.kind, spec.id)) return no("owned");
+  s.looks.owned.push(spec.id);
+  wear(s.looks, c.kind, spec.id);
+  return {
+    state: s,
+    notes: [{ t: "look", kind: c.kind, id: spec.id }],
+    leaf: [{ amount: spec.leaf, reason: `Raid table look: ${spec.name}`, key: `look:${spec.id}`, for: spec.for }],
+  };
 }
 
 /**
@@ -530,11 +475,12 @@ export function predict(
   c: RaidCommand,
 ): { view: TableView; notes: RaidNote[] } | { refused: string } | null {
   if (!isPredicted(c)) return null;
-  if (!view.run) return { refused: "no_run" };
-  const run = structuredClone(view.run);
+  const held = forEndless(c) ? view.endless : view.run;
+  if (!held) return { refused: "no_run" };
+  const run = structuredClone(held);
   const done = plan(run, c);
   if (!done.ok) return { refused: done.code };
-  return { view: { ...view, run }, notes: done.notes };
+  return { view: forEndless(c) ? { ...view, endless: run } : { ...view, run }, notes: done.notes };
 }
 
 /**
@@ -544,16 +490,18 @@ export function predict(
 export const legal = (run: RunView, c: Predicted): boolean => plan(structuredClone(run), c).ok;
 
 /**
- * The commands the bot would send to plan the room that is up, worked out on the page's copy. A pick
- * waiting is one command alone, since what comes after it is Leaf's to say; and the bot never
- * rustles here, since the new stall is Leaf's to draw. Send them, and ask again once Leaf has
- * answered: an empty list means the room is planned.
+ * The commands the bot would send to plan the room that is up, worked out on the page's copy: of
+ * the run in hand, or (`endless`) of the endless run. A pick waiting is one command alone, since
+ * what comes after it is Leaf's to say; and the bot never rustles here, since the new stall is
+ * Leaf's to draw. Send them, and ask again once Leaf has answered: an empty list means the room is
+ * planned.
  */
-export function planCommands(view: TableView, habit: Habit): RaidCommand[] {
-  if (view.run?.stage.phase !== "plan") return [];
-  const run = structuredClone(view.run);
-  const out: RaidCommand[] = [];
-  const wrote = <T extends { ok: boolean }>(done: T, c: RaidCommand): T => {
+export function planCommands(view: TableView, habit: Habit, endless = false): RaidCommand[] {
+  const held = endless ? view.endless : view.run;
+  if (held?.stage.phase !== "plan") return [];
+  const run = structuredClone(held);
+  const out: Aimed[] = [];
+  const wrote = <T extends { ok: boolean }>(done: T, c: Aimed): T => {
     if (done.ok) out.push(c);
     return done;
   };
@@ -572,15 +520,19 @@ export function planCommands(view: TableView, habit: Habit): RaidCommand[] {
     giveItem: (r, item, to) => wrote(giveItem(r, item, to), { do: "give", item, to }),
   };
   // The page's own stream for the bot's habits: the run's is Leaf's.
-  planWith(run, habit, hands, { rng: mix(view.runs, 9000 + run.record.length) });
-  return out;
+  planWith(run, habit, hands, { rng: mix(endless ? view.ventures : view.runs, 9000 + run.record.length) });
+  return endless ? out.map((c): Aimed => ({ ...c, endless: true })) : out;
 }
 
 // ---------- keeping it ----------
 
 const GAME = "little-raid-table";
-/** 2: a run keeps where it stands as one value (`Stage`). A table of version 1 is read as well. */
-export const TABLE_VERSION = 2;
+/**
+ * 3: the endless run beside the run in hand, and the week's deepest rooms. 2: a run keeps where it
+ * stands as one value (`Stage`). A table of versions 1 and 2 is read as well.
+ */
+export const TABLE_VERSION = 3;
+const READS = [1, 2, TABLE_VERSION] as const;
 
 export const encodeTable = (state: Table): string =>
   JSON.stringify({
@@ -589,16 +541,30 @@ export const encodeTable = (state: Table): string =>
     rng: state.rng,
     runs: state.runs,
     run: state.run,
+    endless: state.endless,
+    ventures: state.ventures,
     almanac: state.almanac,
     trail: state.trail,
     looks: state.looks,
+    week: state.week,
   });
 
 /**
- * A table from the text Leaf stored, or null for anything not of this version's shape. Under
+ * A run as a table keeps it in one of its places (`endless`: the endless run's), or none: one that
+ * does not read, or could not have been kept (one over, one of the other place, one with no number
+ * of `begun`), is let go of.
+ */
+function keptRun(v: unknown, old: boolean, begun: number, endless: boolean): Run | null {
+  const read = v === null || v === undefined ? null : checkRun(v, old);
+  if (!read?.ok || read.run.stage.phase === "over" || begun <= 0) return null;
+  return (read.run.endless !== null) === endless ? read.run : null;
+}
+
+/**
+ * A table from the text Leaf stored, or null for anything not of these versions' shape. Under
  * today's content and numbers it refuses nothing more: a trail picked that is not open is the
- * first, and a run that does not read (or could not have been kept: one over, one with no number)
- * is let go of, so the almanac and the looks bought are never out of reach.
+ * first, a run that does not read is let go of (`keptRun`), and what an older table did not keep
+ * is none, so the almanac and the looks bought are never out of reach.
  */
 export function decodeTable(text: string): Table | null {
   let raw: unknown;
@@ -607,15 +573,24 @@ export function decodeTable(text: string): Table | null {
   } catch {
     return null;
   }
-  if (!isRecord(raw) || raw.game !== GAME || (raw.v !== 1 && raw.v !== TABLE_VERSION)) return null;
+  if (!isRecord(raw) || raw.game !== GAME || !READS.some((v) => v === raw.v)) return null;
   const { rng, runs, trail } = raw;
-  if (!whole(rng, 0, UINT) || !whole(runs, 0, 1_000_000_000) || !whole(trail, 0, 999)) return null;
+  if (!isWhole(rng, 0, UINT) || !isWhole(runs, 0, 1_000_000_000) || !isWhole(trail, 0, 999)) return null;
   const almanac = readAlmanac(raw.almanac);
   const looks = readLooks(raw.looks);
   if (!almanac || !looks) return null;
-  const read = raw.run === null ? null : checkRun(raw.run, raw.v === 1);
-  const run = read?.ok && read.run.stage.phase !== "over" && runs > 0 ? read.run : null;
-  return { rng, runs, run, almanac, trail: trailOpen(almanac, trail) ? trail : 0, looks };
+  const ventures = isWhole(raw.ventures, 0, 1_000_000_000) ? raw.ventures : 0;
+  return {
+    rng,
+    runs,
+    run: keptRun(raw.run, raw.v === 1, runs, false),
+    endless: keptRun(raw.endless, false, ventures, true),
+    ventures,
+    almanac,
+    trail: trailOpen(almanac, trail) ? trail : 0,
+    looks,
+    week: readWeek(raw.week),
+  };
 }
 
 /**
@@ -634,9 +609,12 @@ export const newTable = (ctx: Pick<Ctx, "seed">): Table => ({
   rng: mix(ctx.seed >>> 0, 0x7ab1e),
   runs: 0,
   run: null,
+  endless: null,
+  ventures: 0,
   almanac: newAlmanac(),
   trail: 0,
   looks: newLooks(),
+  week: readWeek(undefined),
 });
 
 /** A carved figure of each boss beaten, on any trail, once. */

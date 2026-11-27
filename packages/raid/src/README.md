@@ -344,6 +344,40 @@ meanwhile. A member who has pulled no figure is refused (`nothing_pulled`).
 
 `TableView.roster` is the roster a run would start with now, for the front page and the almanac.
 
+## Endless runs (`endless.ts`, `depths.ts`, `content/endless.ts`)
+
+A table keeps a second run beside the run in hand: the endless run. Each is picked up and put down
+on its own. `{ do: "endless", way }` sets out on one (an endless run in hand is put down first, as
+walking home, once it has fought a room), and every command for a run acts on the endless run when
+it says `endless: true`. It is the fair game on the first trail: the 28 figures, nothing owned.
+
+- **Rooms.** The fifteen of the first trail, and after them the fifteen again (`CYCLE`), the same
+  kinds in the same order, for ever (`roomAt`). An endless run has no last room (`lastRoom`): winning
+  the fifteenth moves it on, and only resolve ends it.
+- **The forest** after room 15 is the trail's own party for that place, 5% stronger in health,
+  attack and ability for each room past the fifteenth, compounding (`grownAt`, a party's `might`, at
+  most 1000).
+- **Chairs.** Each boss beaten after room 15 lets one more figure be fielded, 3 at most (`chairsOf`,
+  in `fieldCap`): 9, 10, then 11 for a party at the top level, and one more with An Extra Chair.
+- **Regulars** after room 15 field the top level and a chair for each boss on the way, and have
+  spent 35 acorns in room 16 and 10 more for every room after it, with 4 components and 1 more a
+  room (`sparAt`). Down there they may star any figure (`SparStrength.anyStars`): a member that
+  deep has seen the stall often enough to find the copies.
+- **The two ways** (`EndlessWay`). In the Wilds every sparring room is a regular's. In the Deep Woods
+  a sparring room from room 16 on (`ENDLESS.heldFrom`) is held by the member who won it last this
+  week (`isHeld`, Leaf's slot `heldSlot`: `deep:<room>`): a `take` into it meets their board as they
+  won with it, chairs and all, under their name, the member's own when they hold it; a regular while
+  nobody does. Winning it leaves the board that won (`Kept.held`), and Leaf tells the member it was
+  taken from. A week starts on Monday at 00:00 UTC; a room held last week is held by nobody.
+- **Depths.** The deepest room won in each way, counting from 1, is kept for all time
+  (`Almanac.deepest`) and for the week (`Table.week`, `weekAt`); each new deepest is left for that
+  way's boards (`depthSlot`: `depth:<way>:ever`, `depth:<way>:week`). A guest's are written down and
+  nothing is left.
+- **Coins.** Rooms 1 to 15 pay as a first-trail run pays, and a run that won the fifteenth is paid the
+  win (`paidFor`); nothing after it pays, nor does a boss beaten after it. It pays under its own number
+  (`endless:<n>`, `Table.ventures`), and is written into nothing else of the almanac: no trophy, no
+  trail opened, no standing. Its log lines and fight records carry its way.
+
 ## Chance
 
 Every draw a run makes comes from its stream (`run.rng`, core's `rng.ts`): the first picks, the stall, who
@@ -496,41 +530,45 @@ While no member is still in, every wait is 0 (`later`): the regulars play straig
 
 ## What is where
 
-| File                   | What it holds                                                                                                         |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `content/figures.ts`   | The 28 figures, the forest's trouble and bosses, and the summoned: names, numbers, ability sentences, quips           |
-| `content/members.ts`   | The banners' members: for each pull banner, a figure that is a guild member                                           |
-| `content/traits.ts`    | Kins and callings: steps, sentences, numbers                                                                          |
-| `content/items.ts`     | Components, finished items, emblems, what forges into what, how a figure holds them                                   |
-| `content/boons.ts`     | The boons                                                                                                             |
-| `content/rooms.ts`     | Acorns, levels, stall odds, the fight's clock, the fifteen rooms and their plans, sparring strength, trails, regulars |
-| `content/keepsakes.ts` | The payout                                                                                                            |
-| `content/advice.ts`    | What kind of fighter each calling makes and where it stands, and three finished items that suit each figure           |
-| `hex.ts`               | The board: cells and seats, distance, neighbours, lines, cones, rings, finding a way round                            |
-| `party.ts`             | A party as plain data, and trait counting                                                                             |
-| `fight/types.ts`       | What a figure in a fight looks like, and the events a step gives back                                                 |
-| `fight/core.ts`        | The verbs: hurt, heal, shield, stun, slow, burn, taunt, hide, leap, knock back, summon                                |
-| `fight/moves.ts`       | The verbs that move figures or take time: throw, dash, pull, zone, channel, telegraph                                 |
-| `fight/mind.ts`        | How a figure thinks: who it goes for, what is already on its way, when a heal or an area ability is worth using       |
-| `fight/abilities.ts`   | Each ability, written with those verbs                                                                                |
-| `fight/engine.ts`      | Seating, traits and items switching on, the clock, the end                                                            |
-| `formation.ts`         | A plain way of seating a party, used by the bot and the sparring partners                                             |
-| `spar.ts`              | The regulars' parties for sparring                                                                                    |
-| `foe.ts`               | Who waits in a room: the forest's trouble, a regular's party, or another member's board                               |
-| `run.ts`               | The run and every action on it                                                                                        |
-| `rack.ts`              | Two components forged on the rack                                                                                     |
-| `save.ts`              | A run read back from plain data: shape first, then today's numbers                                                    |
-| `outside.ts`           | Payout, almanac, trails                                                                                               |
-| `content/looks.ts`     | How the table may look: cloths, lanterns, bases                                                                       |
-| `game.ts`              | The table as Leaf plays it: state, commands, what the page is shown, predictions                                      |
-| `wire.ts`              | Reading Leaf's view and notes back                                                                                    |
-| `sitting/`             | Eight at once on Leaf's clock: the state, the clock, the carousel, commands, what a page is shown, storing it         |
-| `tally.ts`             | What every figure did in a fight, read from its events                                                                |
-| `fought.ts`            | A fight's record, as Leaf keeps it for the staff, and the margin it was won or lost by                                |
-| `rates.ts`             | How often fights are won, beside the same rooms, for the reports                                                      |
-| `bot.ts`               | A player with habits                                                                                                  |
-| `index.ts`             | Everything a screen needs, in one place                                                                               |
-| `testkit.ts`           | Helpers for the tests only                                                                                            |
+| File                   | What it holds                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `content/figures.ts`   | The 28 figures, the forest's trouble and bosses, and the summoned: names, numbers, ability sentences, quips            |
+| `content/members.ts`   | The banners' members: for each pull banner, a figure that is a guild member                                            |
+| `content/traits.ts`    | Kins and callings: steps, sentences, numbers                                                                           |
+| `content/items.ts`     | Components, finished items, emblems, what forges into what, how a figure holds them                                    |
+| `content/boons.ts`     | The boons                                                                                                              |
+| `content/rooms.ts`     | Acorns, levels, stall odds, the fight's clock, the fifteen rooms and their plans, sparring strength, trails, regulars  |
+| `content/keepsakes.ts` | The payout                                                                                                             |
+| `content/advice.ts`    | What kind of fighter each calling makes and where it stands, and three finished items that suit each figure            |
+| `hex.ts`               | The board: cells and seats, distance, neighbours, lines, cones, rings, finding a way round                             |
+| `party.ts`             | A party as plain data, and trait counting                                                                              |
+| `fight/types.ts`       | What a figure in a fight looks like, and the events a step gives back                                                  |
+| `fight/core.ts`        | The verbs: hurt, heal, shield, stun, slow, burn, taunt, hide, leap, knock back, summon                                 |
+| `fight/moves.ts`       | The verbs that move figures or take time: throw, dash, pull, zone, channel, telegraph                                  |
+| `fight/mind.ts`        | How a figure thinks: who it goes for, what is already on its way, when a heal or an area ability is worth using        |
+| `fight/abilities.ts`   | Each ability, written with those verbs                                                                                 |
+| `fight/engine.ts`      | Seating, traits and items switching on, the clock, the end                                                             |
+| `formation.ts`         | A plain way of seating a party, used by the bot and the sparring partners                                              |
+| `spar.ts`              | The regulars' parties for sparring                                                                                     |
+| `foe.ts`               | Who waits in a room: the forest's trouble, a regular's party, or another member's board                                |
+| `run.ts`               | The run and every action on it                                                                                         |
+| `rack.ts`              | Two components forged on the rack                                                                                      |
+| `save.ts`              | A run read back from plain data: shape first, then today's numbers                                                     |
+| `outside.ts`           | Payout, almanac, trails                                                                                                |
+| `content/looks.ts`     | How the table may look: cloths, lanterns, bases                                                                        |
+| `game.ts`              | The table as Leaf plays it: state, what the page is shown, predictions                                                 |
+| `command.ts`           | Everything a player can do at the table, and reading a command off the wire                                            |
+| `endless.ts`           | Endless runs: the rooms after the fifteenth, the forest growing, chairs, regulars by depth, the Deep Woods' held rooms |
+| `depths.ts`            | How deep endless runs go: the deepest rooms ever and this week, what a won room leaves, what one is paid for           |
+| `content/endless.ts`   | The endless runs' numbers: growth, chairs, the first held room, regulars after room 15, the rooms that come round      |
+| `wire.ts`              | Reading Leaf's view and notes back                                                                                     |
+| `sitting/`             | Eight at once on Leaf's clock: the state, the clock, the carousel, commands, what a page is shown, storing it          |
+| `tally.ts`             | What every figure did in a fight, read from its events                                                                 |
+| `fought.ts`            | A fight's record, as Leaf keeps it for the staff, and the margin it was won or lost by                                 |
+| `rates.ts`             | How often fights are won, beside the same rooms, for the reports                                                       |
+| `bot.ts`               | A player with habits                                                                                                   |
+| `index.ts`             | Everything a screen needs, in one place                                                                                |
+| `testkit.ts`           | Helpers for the tests only                                                                                             |
 
 Tuning the game is editing the files in `content/`. The sentences shown to players are built from
 the same numbers the fight reads (`abilityText`, `traitText`, `itemText`, `boonText`), so a changed
@@ -647,6 +685,26 @@ looked back on. `stored/` holds tables as Leaf stores them, frozen; `stored.test
 change stops one reading.
 
 ## Trying the numbers
+
+`review/endless.ts` plays endless runs: `bun review/endless.ts 100 wilds`, or `deep` (the runs one
+after another, every sparring room won held for the next; `week=<n>` lets the holders go every n
+runs, `heldFrom=<room>` and `keep=<n>` try other rules). 100 runs a habit, the bots leveling to the
+top and saving after room 15; where the runs that got past room 15 ended, the first guess (regulars
+spending 70 and 9 a room, 6 components and one every 3 rooms) beside the numbers now:
+
+| Way        | Habit                       | Past room 15 | Median end, first guess / now | Mean end, first guess / now |
+| ---------- | --------------------------- | ------------ | ----------------------------- | --------------------------- |
+| The Wilds  | sensible                    | 52%          | 19 / 23                       | 20.7 / 23.0                 |
+|            | best (Sneak, Sage, Feather) | 51-64%       | 19-21 / 26                    | 21.9-25.2 / 26.5-31.3       |
+|            | everyone                    | 45%          | 19 / 23                       | 21.3 / 25.1                 |
+| Deep Woods | everyone, 150 runs a week   | 46%          | 19                            | 20.7                        |
+
+Rooms 1 to 15 are the first trail's, so about half of the sensible bot's runs end before room 16
+whatever the endless numbers are. After room 15, fights of 9 to 12 a side last 10 to 15 seconds on
+average, dusk falls in 2 to 5% and none is a draw; fights are won as often with 3 traits switched on
+as with 11. In the Deep Woods held boards are won 24% of the time and regulars 63%. Held from room
+3, as first designed, the early rooms filled with the week's luckiest boards and the median run
+ended in room 8 (in room 9 with the last three winners kept and one met by the dice).
 
 `review/balance.ts` plays whole runs with the bot under different habits (sensible, a saver who
 levels, a roller who chases stars, one fond of each kin and each calling, and a careless one) and

@@ -1,11 +1,12 @@
-import type { RoomKind } from "../content/rooms.ts";
-import type { FightSetup } from "../fight/types.ts";
 /**
  * What a page is shown of a sitting, for one viewer: the stage and when it ends, every seat as far
  * as anyone may see it, and the viewer's own run as a page is shown a run. Never a stream, never a
  * pick drawn and not yet offered, and of another seat's board only what it locked last.
  */
-import { isPredicted, plan, runView } from "../game.ts";
+import { isPredicted } from "../command.ts";
+import type { RoomKind } from "../content/rooms.ts";
+import type { FightSetup } from "../fight/types.ts";
+import { plan, runView } from "../game.ts";
 import type { Party } from "../party.ts";
 import { foughtOf, type Note, type RunView } from "../run.ts";
 import { isSeatCommand, type SittingCommand } from "./commands.ts";

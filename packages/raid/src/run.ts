@@ -28,9 +28,10 @@ import {
 } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, type RoomKind, ROOMS, sellPrice, TRAILS } from "./content/rooms.ts";
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
+import { type EndlessWay, extraChairs, foeOf, lastRoom, roomOf } from "./endless.ts";
 import { resolveFight } from "./fight/engine.ts";
 import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
-import { across, opposition } from "./foe.ts";
+import { across } from "./foe.ts";
 import { COLS, SEATS } from "./hex.ts";
 import { placedOf, type Roster, stallOdds, stallPool } from "./own.ts";
 import { type Party, type Placed, type TraitState, traitStates, traitSteps } from "./party.ts";
@@ -114,6 +115,8 @@ export interface Run {
    * stall sells above one acorn, and each figure's level. Null on the main way, which reads nothing owned.
    */
   own: Roster | null;
+  /** For an endless run (`endless.ts`), which of its ways it set out on; null for a run of fifteen rooms. */
+  endless: EndlessWay | null;
   /** Things this run has done that the almanac remembers. */
   seen: {
     fielded: FigureId[];
@@ -261,9 +264,9 @@ export function pieces(run: Pick<Run, "board" | "bench">): Piece[] {
   return out;
 }
 export const fielded = (run: Pick<Run, "board">): number => run.board.reduce((n, p) => n + (p ? 1 : 0), 0);
-/** How many figures may be fielded: the level, and one more with An Extra Chair. */
-export const fieldCap = (run: Pick<Run, "level" | "boons">): number =>
-  run.level + (run.boons.includes("extrachair") ? boonNumber("extrachair", "more") : 0);
+/** How many figures may be fielded: the level, one more with An Extra Chair, and an endless run's chairs. */
+export const fieldCap = (run: Pick<Run, "level" | "boons" | "record" | "endless">): number =>
+  run.level + extraChairs(run);
 /** Who is at a spot: null for nobody, undefined for no such spot. */
 export function pieceAt(run: RunView, spot: Spot): Piece | null | undefined {
   if (!Number.isInteger(spot.at)) return undefined;
@@ -328,12 +331,14 @@ export function partyOf(run: Pick<Run, "board" | "boons" | "own">): Party {
 export const traitsNow = (run: Pick<Run, "board">): TraitState[] =>
   traitStates(run.board.flatMap((p) => (p ? [p] : [])));
 /** The room the run is in. */
-export const roomNow = (run: Pick<Run, "room">) => ROOMS[Math.min(run.room, ROOM_COUNT - 1)];
+export const roomNow = roomOf;
 
 // ---------- the stall ----------
 
 /** Who the stall may offer on the main way: every figure, to everyone, from the first run. Nothing won or bought anywhere changes it. */
 export const STALL_POOL: readonly FigureId[] = FIGURE_IDS;
+/** The one-acorn figures, which a run's first pick offers. */
+const CHEAPEST = STALL_POOL.filter((id) => FIGURES[id].tier === 1);
 
 /** How many offers the stall has: more with A Wider Stall. */
 export const stallSize = (run: Pick<Run, "boons">): number =>
@@ -385,14 +390,12 @@ export interface RunOptions {
   trail?: number;
   /** For a run with the member's own figures, their roster; left out on the main way. */
   own?: Roster;
+  /** For an endless run, its way. */
+  endless?: EndlessWay;
 }
 /** Starts a run. It begins with a choice waiting: one of three one-acorn figures to set out with. */
 export function startRun(seed: number, options: RunOptions = {}): Run {
   const trail = Math.min(TRAILS.length - 1, Math.max(0, Math.trunc(options.trail ?? 0)));
-  const board: (Piece | null)[] = [];
-  for (let i = 0; i < SEATS; i++) board.push(null);
-  const bench: (Piece | null)[] = [];
-  for (let i = 0; i < ECONOMY.bench; i++) bench.push(null);
   const run: Run = {
     seed: seed >>> 0,
     rng: mix(seed >>> 0, 1),
@@ -404,8 +407,8 @@ export function startRun(seed: number, options: RunOptions = {}): Run {
     streak: 0,
     level: 1,
     xp: 0,
-    board,
-    bench,
+    board: Array.from({ length: SEATS }, () => null),
+    bench: Array.from({ length: ECONOMY.bench }, () => null),
     items: [],
     stall: [],
     held: false,
@@ -417,15 +420,15 @@ export function startRun(seed: number, options: RunOptions = {}): Run {
     nextId: 1,
     last: null,
     own: options.own ?? null,
+    endless: options.endless ?? null,
     seen: { fielded: [], threeStars: [], forged: [], topped: [] },
   };
-  const cheapest = STALL_POOL.filter((id) => FIGURES[id].tier === 1);
   run.stage = {
     phase: "plan",
-    picks: [{ kind: "starter", options: shuffled(run, cheapest).slice(0, ECONOMY.starters) }],
+    picks: [{ kind: "starter", options: shuffled(run, CHEAPEST).slice(0, ECONOMY.starters) }],
   };
   restock(run);
-  run.foe = opposition(draw32(run), 0, trail);
+  run.foe = foeOf(run, draw32(run));
   return run;
 }
 
@@ -444,10 +447,9 @@ export function layOutAfresh(run: Run, seed: number): void {
   run.held = false;
   run.bought = 0;
   run.rustles = ECONOMY.freeRustles + (run.boons.includes("regular") ? boonNumber("regular", "rustles") : 0);
-  const cheapest = STALL_POOL.filter((id) => FIGURES[id].tier === 1);
   const picks = picksOf(run).map((choice): Choice => {
     if (choice.kind === "starter")
-      return { kind: "starter", options: shuffled(run, cheapest).slice(0, ECONOMY.starters) };
+      return { kind: "starter", options: shuffled(run, CHEAPEST).slice(0, ECONOMY.starters) };
     if (choice.kind === "component") {
       const count = Math.min(ECONOMY.componentsWon, Math.max(ECONOMY.componentsLost, choice.options.length));
       return { kind: "component", options: componentOptions(run, count) };
@@ -456,7 +458,7 @@ export function layOutAfresh(run: Run, seed: number): void {
   });
   run.stage = { phase: "plan", picks };
   restock(run);
-  run.foe = opposition(draw32(run), run.room, run.trail);
+  run.foe = foeOf(run, draw32(run));
 }
 
 /** Why nothing can be planned just now, or null if it can. */
@@ -757,12 +759,12 @@ export function resolveLost(run: Pick<Run, "boons">, fight: FightSummary): numbe
  * gone), and outside a fight. With `more` the last room won does not end it: the run stays there,
  * for whoever plays it to say what comes next (a sitting's rooms after the fifteenth).
  */
-export function takenTo(run: Pick<Run, "stage" | "room" | "resolve" | "boons">, more?: boolean): number | null {
+export function takenTo(run: RunView, more?: boolean): number | null {
   const fight = foughtOf(run);
-  if (!fight || !ROOMS[run.room]) return null;
-  const won = !more && fight.outcome.result === "win" && run.room >= ROOM_COUNT - 1;
+  if (!fight || !roomOf(run)) return null;
+  const won = !more && fight.outcome.result === "win" && run.room >= lastRoom(run);
   if (won || run.resolve - resolveLost(run, fight.outcome) <= 0) return null;
-  return Math.min(run.room + 1, ROOM_COUNT - 1);
+  return Math.min(run.room + 1, lastRoom(run));
 }
 
 /**
@@ -776,11 +778,11 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   const { stage } = run;
   if (stage.phase !== "fight") return no(stage.phase === "over" ? "raid_over" : "no_fight");
   const { setup, outcome: fight } = stage.fight;
-  const room = ROOMS[run.room];
+  const room = roomOf(run);
   if (!room) return no("no_such_room");
   const to = takenTo(run, more);
   const won = fight.result === "win";
-  const last = run.room >= ROOM_COUNT - 1;
+  const last = run.room >= lastRoom(run);
   const notes: Note[] = [{ t: "result", room: run.room, result: fight.result, standing: fight.standing }];
   run.record.push({ room: run.room, kind: room.kind, ...across(run.foe, fight) });
   run.streak = nextStreak(run.streak, fight.result);
@@ -842,8 +844,8 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   run.rustles = ECONOMY.freeRustles + (run.boons.includes("regular") ? boonNumber("regular", "rustles") : 0);
   if (run.held) run.held = false;
   else restock(run);
-  run.foe = opposition(draw32(run), run.room, run.trail, met, run.own !== null);
-  const next = ROOMS[run.room];
+  run.foe = foeOf(run, draw32(run), met);
+  const next = roomOf(run);
   if (next) notes.push({ t: "room", room: run.room, kind: next.kind, who: run.foe.who, title: run.foe.title });
   const waiting = picks[0];
   if (waiting) notes.push({ t: "choice", kind: waiting.kind });
@@ -882,7 +884,8 @@ export function summariseRun(run: RunView): RunSummary {
     run.record.flatMap((r) => (r.result === "win" && r.kind === ROOMS[r.room]?.kind ? [r.room] : [])),
   );
   const bosses: BossId[] = [];
-  for (const r of run.record) if (r.result === "win" && r.boss && !bosses.includes(r.boss)) bosses.push(r.boss);
+  for (const r of run.record)
+    if (r.result === "win" && r.boss && r.room < ROOM_COUNT && !bosses.includes(r.boss)) bosses.push(r.boss);
   return {
     trail: run.trail,
     ending: endingOf(run),

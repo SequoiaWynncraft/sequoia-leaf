@@ -237,6 +237,11 @@ export {
 } from "./run.ts";
 export { forgeItems } from "./rack.ts";
 export { boardMet, boardSlot, opposition } from "./foe.ts";
+
+// The endless runs: the Wilds and the Deep Woods.
+export { ENDLESS, ENDLESS_WAYS, type EndlessWay, isEndlessWay } from "./content/endless.ts";
+export { chairsOf, grownAt, heldRoom, heldSlot, lastRoom, roomAt, sparAt } from "./endless.ts";
+export { type Deepest, type Depths, depthSlot, type Week, weekAt } from "./depths.ts";
 export { checkRun, type Loaded, readRunView } from "./save.ts";
 
 // Between runs.
@@ -298,22 +303,27 @@ export {
 
 // The table as Leaf plays it.
 export {
+  type Aimed,
+  forEndless,
+  isPredicted,
+  isRunCommand,
+  type Predicted,
+  PREDICTED,
+  type RaidCommand,
+  type RaidCommandName,
+  readCommand,
+  type RunCommand,
+} from "./command.ts";
+export {
   decodeTable,
   encodeTable,
-  isPredicted,
   legal,
   newTable,
   planCommands,
-  type Predicted,
-  PREDICTED,
   predict,
   RAID,
-  type RaidCommand,
-  type RaidCommandName,
   type RaidNote,
-  readCommand,
   refusalText,
-  type RunCommand,
   runView,
   type RunView,
   type Table,

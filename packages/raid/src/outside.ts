@@ -9,6 +9,7 @@ import { FINISHED_IDS, type FinishedId, isFinishedId } from "./content/items.ts"
 import { PAYOUT } from "./content/keepsakes.ts";
 import { ROOM_COUNT, TRAIL_COUNT, TRAILS } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS, type TraitId } from "./content/traits.ts";
+import { type Depths, noDepths, readDepths } from "./depths.ts";
 import type { RunSummary } from "./run.ts";
 
 // ---------- Coins ----------
@@ -49,6 +50,8 @@ export interface Almanac {
   best: number[];
   /** Runs finished or abandoned. */
   runs: number;
+  /** The deepest room won in each endless way, ever, counting from 1 (`depths.ts`). */
+  deepest: Depths;
 }
 export function newAlmanac(): Almanac {
   return {
@@ -59,6 +62,7 @@ export function newAlmanac(): Almanac {
     bosses: TRAILS.map(() => []),
     best: TRAILS.map(() => 0),
     runs: 0,
+    deepest: noDepths(),
   };
 }
 
@@ -92,6 +96,7 @@ export function recordRun(old: Almanac, summary: RunSummary): { almanac: Almanac
     bosses: TRAILS.map((_, i) => (old.bosses[i] ?? []).slice()),
     best: TRAILS.map((_, i) => old.best[i] ?? 0),
     runs: old.runs + 1,
+    deepest: { ...old.deepest },
   };
   const news: News[] = [];
   const trail = Math.min(TRAIL_COUNT - 1, Math.max(0, summary.trail));
@@ -182,5 +187,6 @@ export function readAlmanac(a: unknown): Almanac | null {
     bosses: TRAILS.map((_, i) => bosses[i] ?? []),
     best: TRAILS.map((_, i) => Math.min(ROOM_COUNT, best[i] ?? 0)),
     runs,
+    deepest: readDepths(a.deepest),
   };
 }

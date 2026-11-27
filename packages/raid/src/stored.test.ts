@@ -7,7 +7,7 @@ import { FIGURE_IDS, FIGURES } from "./content/figures.ts";
 import { HOLDS } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, TRAIL_COUNT } from "./content/rooms.ts";
 import { traitNumber } from "./content/traits.ts";
-import { RAID, type Table } from "./game.ts";
+import { RAID, type Table, TABLE_VERSION } from "./game.ts";
 import { type Choice, type Fought, foughtOf, type Phase, picksOf, type Piece, type Run } from "./run.ts";
 
 /**
@@ -69,6 +69,7 @@ describe("every stored table kept as a fixture", () => {
   });
   test("there is one for each kind of table Leaf keeps", () => {
     expect(FIXTURES.map(([name]) => name).toSorted()).toEqual([
+      "endless-deep.json",
       "fighting.json",
       "long-time.json",
       "new-table.json",
@@ -79,6 +80,18 @@ describe("every stored table kept as a fixture", () => {
       "planning.json",
       "starter-waiting.json",
     ]);
+  });
+});
+
+describe("a table kept with an endless run", () => {
+  test("reads with the run in hand and, beside it, the endless run fighting a room held in the Deep Woods", () => {
+    const table = read(fixture("endless-deep.json"));
+    expect(table.run?.endless).toBeNull();
+    expect(table.endless).toMatchObject({ endless: "deep", room: 17, foe: { who: "Fernwhistle" } });
+    expect(foughtOf(table.endless ?? runOf(table))?.setup.sides[1].by).toBe("10000000-0000-0000-0000-000000000002");
+    expect(table.almanac.deepest.deep).toBe(18);
+    const done = RAID.apply(table, { do: "take", endless: true }, ctx());
+    expect(isRefused(done) ? done.refused : done.state.endless?.room).toBe(18);
   });
 });
 
@@ -123,7 +136,7 @@ describe("a table of version 1", () => {
   test("is stored again as the version now, and reads back the same", () => {
     for (const [, text] of FIXTURES) {
       const table = read(text);
-      expect(JSON.parse(RAID.encode(table))).toMatchObject({ v: 2 });
+      expect(JSON.parse(RAID.encode(table))).toMatchObject({ v: TABLE_VERSION });
       expect(read(RAID.encode(table))).toEqual(table);
     }
   });

@@ -7,7 +7,8 @@
  */
 import { mix } from "@sequoia-leaf/core";
 
-import { act, type RaidCommand, readCommand as readRunCommand } from "../game.ts";
+import { readCommand as readRunCommand, type RunCommand } from "../command.ts";
+import { act } from "../game.ts";
 import { abandon, type Note } from "../run.ts";
 import { hasTaken, take } from "./carousel.ts";
 import { advance, begin, gone } from "./clock.ts";
@@ -34,7 +35,7 @@ export interface Call {
 
 /** The run's own commands a seat plans with. Setting out, the fight, the takings and walking home are the sitting's, on the clock. */
 const SEAT_DOES = ["choose", "redraw", "buy", "sell", "move", "bench", "rustle", "hold", "xp", "give"] as const;
-export type SeatCommand = Extract<RaidCommand, { do: (typeof SEAT_DOES)[number] }>;
+export type SeatCommand = Extract<RunCommand, { do: (typeof SEAT_DOES)[number] }>;
 export const isSeatCommand = (c: { do: string }): c is SeatCommand => SEAT_DOES.some((name) => name === c.do);
 
 export type SittingCommand =

@@ -2,8 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import type { Ctx } from "@sequoia-leaf/core";
 
+import { type RaidCommand, readCommand } from "./command.ts";
 import type { ItemId } from "./content/items.ts";
-import { legal, predict, RAID, type RaidCommand, readCommand, refusalText, type Table, tableView } from "./game.ts";
+import { legal, predict, RAID, refusalText, type Table, tableView } from "./game.ts";
 import { forgeItems } from "./rack.ts";
 import { beginFight, choose, giveItem, pieces, type Run, spotOf, startRun, summariseRun } from "./run.ts";
 import { readNotes } from "./wire.ts";

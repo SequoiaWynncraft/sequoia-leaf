@@ -21,6 +21,7 @@ import {
 import { GamePeopleHandlers } from "./routes/people.ts";
 import { GamePlayHandlers } from "./routes/play.ts";
 import { GamePresenceHandlers } from "./routes/presence.ts";
+import { GameRaidHandlers } from "./routes/raid.ts";
 import { GameReportsHandlers } from "./routes/reports.ts";
 import { GameRequestsHandlers } from "./routes/requests.ts";
 import { GameHelloHandlers, RatesHandlers, SystemHandlers } from "./routes/system.ts";
@@ -41,6 +42,7 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     GamePeopleHandlers,
     GamePresenceHandlers,
     GamePlayHandlers,
+    GameRaidHandlers,
     GameCampsHandlers,
     GameRequestsHandlers,
     GameTallyHandlers,

@@ -52,7 +52,16 @@ export type PlayerEvent =
       };
     }
   /** Somebody liked the player's camp, the first time they ever did: who, named as they were then. */
-  | { readonly type: "camp_liked"; readonly data: { by: { id: string; username: string } } };
+  | { readonly type: "camp_liked"; readonly data: { by: { id: string; username: string } } }
+  /**
+   * Somebody took a place in a game that the player held this week (`Kept.held`): the game, the
+   * slot (the Little Raid's `deep:<room>`, a room of the Deep Woods counting from 0), and who, named
+   * as they were then.
+   */
+  | {
+      readonly type: "held_taken";
+      readonly data: { game: string; slot: string; by: { id: string; username: string } };
+    };
 
 /** An event as stored: its place in the player's history, and its details as the JSON text that was written. */
 const StoredEvent = Schema.Struct({ id: Schema.Int, type: Schema.String, data: Schema.String, createdAt: Schema.Int });

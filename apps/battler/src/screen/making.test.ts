@@ -111,7 +111,17 @@ describe("what a figure's card offers", () => {
 
   test("the commands are ones the page may show at once, and nothing is offered that the rules refuse", () => {
     const run = planning([["rock", ["plume"]]], ["bark", "chestnut", "chestnut"]);
-    const view: TableView = { runs: 1, run, almanac: emptyAlmanac, trail: 0, looks: plainLooks, roster: {} };
+    const view: TableView = {
+      runs: 1,
+      run,
+      endless: null,
+      ventures: 0,
+      week: { at: 0, deepest: { wilds: 0, deep: 0 } },
+      almanac: emptyAlmanac,
+      trail: 0,
+      looks: plainLooks,
+      roster: {},
+    };
     const commands: RaidCommand[] = commandsFor(run, offerOf(run, first(run), "hoard"), { on: "board", at: 0 });
     expect(commands).toEqual([
       { do: "forge", item: 1, with: 2 },

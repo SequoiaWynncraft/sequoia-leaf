@@ -140,7 +140,17 @@ function wishes(seen: Sitting, who: number, members: number, dice: Stream): Sitt
   if (who === members - 1 && seen.room >= 7) return [{ do: "leave" }];
   if (seen.stage.at === "carousel") return [{ do: "pick", offer: below(dice, seen.stage.ring.length) }];
   if (seen.stage.at === "fight") return below(dice, 5) === 0 ? [{ do: "rustle" }] : [];
-  const view = { runs: 1, run: runView(mine.run), almanac: newAlmanac(), trail: 0, looks: newLooks(), roster: {} };
+  const view = {
+    runs: 1,
+    run: runView(mine.run),
+    endless: null,
+    ventures: 0,
+    week: { at: 0, deepest: { wilds: 0, deep: 0 } },
+    almanac: newAlmanac(),
+    trail: 0,
+    looks: newLooks(),
+    roster: {},
+  };
   const plan = planCommands(view, SENSIBLE).flatMap((c) => readCommand(c) ?? []);
   return below(dice, 6) === 0 ? [...plan, { do: "rustle" }] : plan;
 }

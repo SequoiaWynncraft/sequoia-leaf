@@ -56,12 +56,20 @@ export interface Kept {
   readonly slot: string;
   /** Plain data, kept as JSON: at most `KEPT_BYTES` of it. */
   readonly data: unknown;
+  /**
+   * The slot has one holder: the player who left a piece there last this week (from Monday, 00:00
+   * UTC). Leaf lets go of everybody else's piece there, and tells a player who held it this week
+   * that it was taken (`held_taken`).
+   */
+  readonly held?: true;
 }
 
 /** Where a command meets another player's piece (`Game.meets`): the slot, and the players whose piece it is not to be. */
 export interface Meeting {
   readonly slot: string;
   readonly avoid: readonly string[];
+  /** It meets the slot's holder this week (`Kept.held`), whoever that is, the player too; none when nobody holds it. */
+  readonly held?: true;
 }
 
 /** A piece another player left at a slot (`Kept`), as Leaf hands it to the command that meets it (`Ctx.met`). */

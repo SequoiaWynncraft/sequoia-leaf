@@ -117,8 +117,8 @@ export const CARELESS: Habit = {
 /** A sensible player with a favourite trait. */
 export const fondOf = (trait: TraitId): Habit => ({ ...SENSIBLE, name: trait, taste: { [trait]: 3 } });
 
-/** The level a sensible player has by each room. */
-const PAR = [1, 2, 3, 3, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7] as const;
+/** The level a sensible player has by each room, and after the fifteenth (an endless run's) the top. */
+const PAR = [1, 2, 3, 3, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8] as const;
 /** Roughly what a figure is worth on the board, by tier and by stars. */
 const TIER_WORTH = [1, 1.5, 2.1, 3, 4.2] as const;
 const STAR_WORTH = [1, 1.9, 3.6] as const;
@@ -170,8 +170,8 @@ function bestParty(habit: Habit, all: readonly Piece[], size: number): Piece[] {
 }
 
 const floorOf = (run: RunView, habit: Habit): number => {
-  // Near the end, or near going home, there is nothing to save for.
-  if (run.room >= 13 || run.resolve <= 8) return 0;
+  // Near the end, or near going home, there is nothing to save for. An endless run has no end.
+  if ((run.room >= 13 && !run.endless) || run.resolve <= 8) return 0;
   return habit.keeps[Math.min(2, Math.floor(run.room / 5))] ?? 0;
 };
 

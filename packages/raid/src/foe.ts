@@ -8,7 +8,7 @@ import { below, type Met, mix, pick } from "@sequoia-leaf/core";
 import { boonNumber, FIGHT_BOONS } from "./content/boons.ts";
 import { type BossId, isBossId, isFigureId } from "./content/figures.ts";
 import { isMemberId } from "./content/members.ts";
-import { LEVELS, MAX_LEVEL, ROOMS, TRAILS } from "./content/rooms.ts";
+import { LEVELS, MAX_LEVEL, type Room, ROOMS, type SparStrength, TRAILS } from "./content/rooms.ts";
 import type { FightResult, FightSummary } from "./fight/types.ts";
 import { COLS } from "./hex.ts";
 import { isParty, type Party, type Placed } from "./party.ts";
@@ -43,13 +43,14 @@ function asMet(p: Placed, levels: boolean): Placed {
 
 /**
  * Another member's board as Leaf hands it over (`Ctx.met`), as the party across the table: only one
- * a member could have fielded (a party of one to `MOST_FIELDED` of the stall's own figures), signed
- * with the member's name and id. A banner's member stands only on a board met by a run with the
- * member's own figures (`levels`). Null for anything else.
+ * a member could have fielded (a party of one to `MOST_FIELDED` of the stall's own figures, and
+ * `chairs` more for a board of an endless run), signed with the member's name and id. A banner's
+ * member stands only on a board met by a run with the member's own figures (`levels`). Null for
+ * anything else.
  */
-export function boardMet(met: Met, levels = false): Party | null {
+export function boardMet(met: Met, levels = false, chairs = 0): Party | null {
   const { data } = met;
-  if (!isParty(data) || data.figures.length === 0 || data.figures.length > MOST_FIELDED) return null;
+  if (!isParty(data) || data.figures.length === 0 || data.figures.length > MOST_FIELDED + chairs) return null;
   if (!data.figures.every((p) => isFigureId(p.kind) && (levels || !isMemberId(p.kind)))) return null;
   const board: Party = {
     who: met.name,
@@ -63,9 +64,13 @@ export function boardMet(met: Met, levels = false): Party | null {
   return isParty(board) ? board : null;
 }
 
+/** A regular's party for a sparring room, from the room's seed: as strong as the room says, or as `strength` says. */
+export const regularAt = (seed: number, roomIndex: number, trailIndex: number, strength?: SparStrength): Party =>
+  sparParty(mix(seed, 700 + roomIndex), roomIndex, trailIndex, strength);
+
 /** Who is waiting in a sparring room: a regular, or the board Leaf handed over (`met`), the regular being one of the crowd. */
 function sparring(seed: number, roomIndex: number, trailIndex: number, met: Met | undefined, levels: boolean): Party {
-  const regular = sparParty(mix(seed, 700 + roomIndex), roomIndex, trailIndex);
+  const regular = regularAt(seed, roomIndex, trailIndex);
   const board = met === undefined ? null : boardMet(met, levels);
   if (board === null || met === undefined) return regular;
   return below({ rng: mix(seed, 900 + roomIndex) }, met.of + 1) < met.of ? board : regular;
@@ -79,8 +84,19 @@ function sparring(seed: number, roomIndex: number, trailIndex: number, met: Met 
  */
 export function opposition(seed: number, roomIndex: number, trailIndex: number, met?: Met, levels = false): Party {
   const room = ROOMS[roomIndex];
-  const trail = TRAILS[trailIndex] ?? TRAILS[0];
   if (!room || room.kind === "spar") return sparring(seed, roomIndex, trailIndex, met, levels);
+  return forest(seed, roomIndex, room, trailIndex);
+}
+
+/** The most a party's might can be (`isParty`). */
+const MIGHT_MOST = 1000;
+
+/**
+ * The forest's trouble or boss in a room, at the trail's strength, and `grown` percent of that
+ * (an endless run's rooms after the fifteenth).
+ */
+export function forest(seed: number, roomIndex: number, room: Room, trailIndex: number, grown = 100): Party {
+  const trail = TRAILS[trailIndex] ?? TRAILS[0];
   const plan = pick({ rng: mix(seed, 300 + roomIndex) }, room.plans);
   const figures: Placed[] = [];
   for (const [kind, stars, col, row, from] of plan.party) {
@@ -92,7 +108,10 @@ export function opposition(seed: number, roomIndex: number, trailIndex: number, 
     title: plan.name,
     figures,
     boons: [],
-    might: (room.kind === "boss" ? trail?.boss : trail?.trouble) ?? 100,
+    might: Math.min(
+      MIGHT_MOST,
+      Math.round((((room.kind === "boss" ? trail?.boss : trail?.trouble) ?? 100) * grown) / 100),
+    ),
   };
 }
 
