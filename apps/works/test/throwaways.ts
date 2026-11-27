@@ -113,6 +113,7 @@ export const PAGE_CHUTE = page("chute", 18);
 export const PLAY_BIG = `import * as F from "./packages/factory/src/index.ts";
 import { act } from "./packages/factory/src/commands.ts";
 import { after } from "./packages/factory/src/history.ts";
+import { REASON } from "./packages/factory/src/reasons.ts";
 import { bareLand } from "./packages/factory/test/land.ts";
 
 const kindOf = (name) => {
@@ -313,6 +314,52 @@ act(starter, { do: "undo", entry: "p1" }, Infinity, "p2");
 out.undoStarter =
   hadSpare === 1 && stoodFree && starter.spare[CHUTE] === 1 && starter.kind[tile(starter, 20, 13)] === F.BELT && bare(starter, 20, 14, 21, 15);
 
+// A plan of the whole yard with a forge on (10, 10) put back over the forge moved one tile east, and
+// over each big kind set down anywhere near facing any way (a chute one of the pieces to hand), then
+// undone: every time the yard stands as it did, its pieces, ways and starters, the Coins all back.
+const settled = (y) => JSON.stringify([[...y.kind], [...y.part], [...y.dir], [...y.free], [...y.spare]]);
+const coinsOf = (did) => ("refused" in did ? NaN : did.coins.reduce((n, c) => n + (c.reason === REASON.till ? 0 : c.amount), 0));
+const planOver = (set) => {
+  const y = F.create({ land, tier: 5, seed: 1 });
+  F.build(y, FORGE, 10, 10, 0, Infinity);
+  F.saveYard(y, 1);
+  F.remove(y, 10, 10);
+  if (!set(y)) return null;
+  const was = settled(y);
+  const put = act(y, { do: "placeBlueprint", slot: 1, turns: 0, x: 0, y: 0 }, Infinity, "p1");
+  if ("refused" in put) return null;
+  const back = act(y, { do: "undo", entry: "p1" }, Infinity, "p2");
+  return !("refused" in back) && settled(y) === was && coinsOf(put) + coinsOf(back) === 0;
+};
+out.undoPlanOver = planOver((y) => F.build(y, FORGE, 11, 10, 0, Infinity).ok) === true;
+const placements = [];
+for (const k of [FORGE, CHUTE, SIFTER])
+  for (let x = 7; x <= 13; x++)
+    for (let z = 7; z <= 13; z++) for (let d = 0; d < 4; d++) placements.push(planOver((y) => F.build(y, k, x, z, d, Infinity).ok));
+const legal = placements.filter((p) => p !== null);
+out.undoPlanSweep = legal.length > 300 && legal.every((p) => p === true);
+// The same rule for a move and a copy: the forge, or the forge and a chute beside it, moved or copied
+// to every corner near, turned every way, beside a sifter, and that undone, stands as it did.
+const shifted = (name, tiles, turns, x, z) => {
+  const y = fresh();
+  F.build(y, FORGE, 10, 10, 0, Infinity);
+  F.build(y, CHUTE, 13, 10, 0, Infinity);
+  F.build(y, SIFTER, 8, 13, 0, Infinity);
+  const was = settled(y);
+  const did = act(y, { do: name, tiles: F.within(y, ...tiles), turns, x, y: z }, Infinity, "m1");
+  // Refused, or a copy onto what it copies: nothing done, nothing to undo.
+  if ("refused" in did || (settled(y) === was && y.history.length === 0)) return null;
+  const back = act(y, { do: "undo", entry: "m1" }, Infinity, "m2");
+  return !("refused" in back) && settled(y) === was && coinsOf(did) + coinsOf(back) === 0;
+};
+const shifts = [];
+for (const name of ["move", "copy"])
+  for (const tiles of [[9, 9, 11, 11], [9, 9, 14, 11]])
+    for (let turns = 0; turns < 4; turns++)
+      for (let x = 5; x <= 13; x++) for (let z = 6; z <= 14; z++) shifts.push(shifted(name, tiles, turns, x, z));
+const shiftedLegal = shifts.filter((p) => p !== null);
+out.undoShiftSweep = shiftedLegal.length > 300 && shiftedLegal.every((p) => p === true);
+
 // Kept: a yard whose only kind past 15 is in a plan of the whole yard, in a blueprint, or in what Undo
 // would undo is kept as version 10; one with none as 9, as before there could be one.
 const planOnly = F.create({ land, tier: 5, seed: 1 });
@@ -457,6 +504,9 @@ export const PLAYED_BIG = Object.fromEntries(
     "keptWide",
     "undoFits",
     "undoStarter",
+    "undoPlanOver",
+    "undoPlanSweep",
+    "undoShiftSweep",
     "saysBlocked",
     "saysWaiting",
   ].map((k) => [k, true]),

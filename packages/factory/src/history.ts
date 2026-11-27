@@ -84,13 +84,14 @@ import { FIXED, gradeOf, isKind, keptKind, type Kind, NONE, SHUTS, SPANS } from 
 import { ground } from "./tiles.ts";
 import {
   changed,
+  cover,
   type Entry,
-  face,
   holderOf,
   place,
   redwoodAt,
   standingTree,
   tunnelRow,
+  uncover,
   vacate,
   type Yard,
 } from "./yard.ts";
@@ -208,8 +209,8 @@ const SETTINGS: readonly {
   readonly of: (s: Setting) => number;
   readonly to: (y: Yard, i: number, v: number) => void;
 }[] = [
-  // Turned back as a turn turns it, a piece of more than one tile over the tiles it covers that way.
-  { at: (y, i) => y.dir[i] ?? 0, of: (s) => s.dir, to: face },
+  // A piece of more than one tile is laid over the tiles it covers that way by `putBack`, once all are set.
+  { at: (y, i) => y.dir[i] ?? 0, of: (s) => s.dir, to: (y, i, v) => (y.dir[i] = v) },
   { at: (y, i) => y.grade[i] ?? 0, of: (s) => s.kept.grade ?? gradeOf(s.kind), to: (y, i, v) => (y.grade[i] = v) },
   { at: (y, i) => y.tint[i] ?? 0, of: (s) => s.kept.tint ?? 0, to: (y, i, v) => (y.tint[i] = v) },
   { at: (y, i) => y.set[i] ?? NONE, of: (s) => s.kept.recipe ?? NONE, to: (y, i, v) => (y.set[i] = v) },
@@ -367,17 +368,23 @@ export function before(y: Yard, a: Act): Before | null {
   return { tiles, was, made, back: { turns: (4 - a.turns) & 3, x: box.x, y: box.y } };
 }
 
-/** 32 bits of how the pieces on some tiles stand, and whether a redwood does: everything a command sets, nothing ticks change. */
+/**
+ * 32 bits of how the pieces on some tiles stand, and whether a redwood does: everything a command
+ * sets, nothing ticks change. A tile of a piece of more than one counts as its piece: where the
+ * piece's own tile is, and how it stands there; so a tile is as it was when the same piece covers it.
+ */
 function sumOf(y: Yard, tiles: readonly number[]): number {
   let h = 0x811c9dc5 | 0;
   const mix = (v: number): void => {
     h = Math.imul(h ^ v, 0x01000193);
   };
   for (const i of tiles) {
+    const own = pieceOf(y, i);
     mix(redwoodAt(y, i) ? ~i : i);
+    if (own !== i) mix(0x40000 | (y.part[i] ?? 0));
     for (const part of ["kind", "dir", "grade", "tint", "shut", "first", "ins", "set", "free", "span"] as const)
-      mix(y[part][i] ?? 0);
-    mix(SHUTS[y.kind[i] ?? NONE] === 1 ? (y.holders.open[holderOf(y, i)] ?? 1) : -1);
+      mix(y[part][own] ?? 0);
+    mix(SHUTS[y.kind[own] ?? NONE] === 1 ? (y.holders.open[holderOf(y, own)] ?? 1) : -1);
   }
   return h >>> 0;
 }
@@ -593,22 +600,39 @@ export function undoRefusal(y: Yard, id: string, coins: number): string | null {
   return short > 0 ? `Not enough Coins: ${short} short` : null;
 }
 
+/** The own tiles of the pieces an entry's command changed where they stand: each still stands, and Undo keeps it. */
+const keptOn = (u: Undoing): Set<number> =>
+  new Set(u.was.flatMap((s, k) => (((u.masks[k] ?? 0) & UP) === 0 ? [s.tile] : [])));
+
+/** The own tiles of the pieces on an entry's tiles that Undo takes away: every one it does not keep (`keptOn`), whole. */
+function goneFrom(y: Yard, u: Undoing, kept: ReadonlySet<number>): Set<number> {
+  const gone = new Set<number>();
+  for (const i of u.tiles) {
+    const own = pieceOf(y, i);
+    if (y.kind[own] !== NONE && !kept.has(own)) gone.add(own);
+  }
+  return gone;
+}
+
 /**
- * Whether every piece an entry stands again fits where it stood, by the rule a piece is built by: each
- * tile it covers the yard's own ground, not water nor a redwood, and empty or one of the entry's own,
- * which Undo clears first. A piece of one tile is on one of the entry's own by how entries are made.
+ * Whether every piece an entry knows stood before its command stands again where it stood, as Undo
+ * puts it: each tile of it as it stood (its own tile, kind and way) on the land, the yard's own ground,
+ * no other's of them, and bare once Undo has taken away the pieces it takes away and let the pieces it
+ * keeps off the tiles they cover, but their own tiles. The one rule for an entry of every command.
  */
 function fitsBack(y: Yard, u: Undoing): boolean {
-  const stays = new Set(u.was.flatMap((s, k) => (((u.masks[k] ?? 0) & UP) === 0 ? [s.tile] : [])));
-  const clears = new Set(u.tiles.filter((i) => !stays.has(i)));
+  const kept = keptOn(u);
+  const gone = goneFrom(y, u, kept);
   const { w, h } = y.land;
-  return u.was.every((s) => {
-    if (stays.has(s.tile)) return true;
-    const tiles = tilesAt(s.kind, s.tile % w, Math.floor(s.tile / w), s.dir, w, h);
-    return tiles.every(
-      (t) => t >= 0 && ground(y, t % w, Math.floor(t / w)) === null && (y.kind[t] === NONE || clears.has(t)),
-    );
-  });
+  const taken = new Set<number>();
+  return u.was.every((s) =>
+    tilesAt(s.kind, s.tile % w, Math.floor(s.tile / w), s.dir, w, h).every((t) => {
+      if (t < 0 || taken.has(t) || ground(y, t % w, Math.floor(t / w)) !== null) return false;
+      taken.add(t);
+      const own = pieceOf(y, t);
+      return y.kind[t] === NONE || gone.has(own) || (kept.has(own) && (t !== own || own === s.tile));
+    }),
+  );
 }
 
 /** Takes away the piece on a tile, as the spade takes it: what it held goes, and one of the pieces to hand goes back to hand. */
@@ -639,21 +663,22 @@ function standBack(y: Yard, s: Setting): void {
 }
 
 /**
- * Puts back how the pieces on an entry's tiles stood: each the command changed where it stands has
- * back the settings it changed; the rest are taken away, and each piece it took up is stood again as
- * new, however like it what stands there now is. Every
- * tile a piece is stood on is one of the entry's, bare once what stands there is taken away, and no
- * step can refuse: it is done whole once begun.
+ * Puts back how the pieces on an entry's tiles stood: every piece on them it does not keep is taken
+ * away whole; each the command changed where it stands is kept, off the tiles it covers, has back the
+ * settings it changed, and is laid over its tiles again as it then faces; and each piece the command
+ * took up is stood again as new, however like it what stands there now is. Every tile a piece is
+ * stood on is bare by then (`fitsBack`), and no step can refuse: it is done whole once begun.
  */
 function putBack(y: Yard, u: Undoing): void {
-  const was = new Map(u.was.map((s, k) => [s.tile, { s, mask: u.masks[k] ?? 0 }]));
-  // The pieces the command did not take up: each still stands, and has back the settings it changed, if any.
-  const stays = new Set(u.tiles.filter((i) => was.has(i) && ((was.get(i)?.mask ?? 0) & UP) === 0));
-  for (const i of u.tiles) if (!stays.has(i) && y.kind[i] !== NONE) takeAway(y, i);
-  for (const { s, mask } of was.values()) {
-    if (stays.has(s.tile)) SETTINGS.forEach((part, n) => (mask >> 1) & (1 << n) && part.to(y, s.tile, part.of(s)));
-    else standBack(y, s);
-  }
+  const kept = keptOn(u);
+  for (const own of goneFrom(y, u, kept)) takeAway(y, own);
+  for (const own of kept) uncover(y, own);
+  u.was.forEach((s, k) => {
+    const mask = u.masks[k] ?? 0;
+    if (!kept.has(s.tile)) return standBack(y, s);
+    SETTINGS.forEach((part, n) => (mask >> 1) & (1 << n) && part.to(y, s.tile, part.of(s)));
+    cover(y, s.tile, s.kind, y.dir[s.tile] ?? 0);
+  });
   // A redwood felled stands again: every tile of the entry was one of its.
   if (u.flags & FELLED)
     for (const i of u.tiles) {
