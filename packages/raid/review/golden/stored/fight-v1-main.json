@@ -1,0 +1,35 @@
+{
+  "run": 3,
+  "way": "main",
+  "trail": 0,
+  "room": 2,
+  "kind": "spar",
+  "across": "member:00000000-0000-4000-8000-0000000060d2",
+  "result": "loss",
+  "margin": -0.876,
+  "seconds": 5.3,
+  "resolve": 13,
+  "level": 3,
+  "acorns": 5,
+  "party": {
+    "figures": [
+      { "kind": "crab7", "stars": 2, "seat": 2, "items": ["blackthorn"], "fed": 0 },
+      { "kind": "crab7", "stars": 2, "seat": 3, "items": [], "fed": 0 },
+      { "kind": "emberkit", "stars": 1, "seat": 4, "items": [], "fed": 0 }
+    ],
+    "traits": { "fang": 1 },
+    "boons": ["quickstudy"]
+  },
+  "against": {
+    "figures": [
+      { "kind": "crab7", "stars": 2, "seat": 2, "items": ["conker"], "fed": 0 },
+      { "kind": "slug", "stars": 2, "seat": 3, "items": [], "fed": 0 },
+      { "kind": "badger", "stars": 1, "seat": 4, "items": ["blackthorn", "hedgehog"], "fed": 0 },
+      { "kind": "emberkit", "stars": 2, "seat": 9, "items": [], "fed": 0 },
+      { "kind": "moth", "stars": 1, "seat": 22, "items": ["mothlantern"], "fed": 0 },
+      { "kind": "greg", "stars": 1, "seat": 23, "items": [], "fed": 4 }
+    ],
+    "traits": { "moss": 1, "bulwark": 1, "fang": 1, "greg": 1 },
+    "boons": ["secondwind"]
+  }
+}

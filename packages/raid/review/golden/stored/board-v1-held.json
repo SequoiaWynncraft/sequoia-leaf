@@ -1,0 +1,17 @@
+{
+  "who": "You",
+  "title": "",
+  "figures": [
+    { "kind": "emberkit", "stars": 3, "seat": 2, "items": ["wasptail", "blackthorn", "blackthorn"], "fed": 0 },
+    { "kind": "whitefox", "stars": 2, "seat": 3, "items": ["conker", "plume"], "fed": 0 },
+    { "kind": "whitefox", "stars": 1, "seat": 4, "items": [], "fed": 0 },
+    { "kind": "cindernewt", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+    { "kind": "heron", "stars": 1, "seat": 22, "items": ["wasptail"], "fed": 0 },
+    { "kind": "finch", "stars": 2, "seat": 23, "items": [], "fed": 0 },
+    { "kind": "crab12", "stars": 2, "seat": 24, "items": ["wasptail"], "fed": 0 },
+    { "kind": "drizzlefrog", "stars": 1, "seat": 25, "items": [], "fed": 0 },
+    { "kind": "heron", "stars": 1, "seat": 26, "items": [], "fed": 0 }
+  ],
+  "boons": [],
+  "might": 100
+}
