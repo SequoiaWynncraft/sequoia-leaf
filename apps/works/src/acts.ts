@@ -17,6 +17,12 @@ export function gradeOn(tool: Kind, i: number): number {
   return i >= 0 && S.world.kind[i] === tool ? Math.max(hand, S.world.grade[i] ?? 1) : hand;
 }
 
+/** The grade of the piece on a tile that the kind in hand would raise there, or nothing if it would raise none. */
+export function raisedOn(tool: Kind, i: number): number | undefined {
+  const stands = i >= 0 && S.world.kind[i] === tool ? (S.world.grade[i] ?? 0) : 0;
+  return stands > 0 && gradeInHand(tool) > stands ? stands : undefined;
+}
+
 /** For a sorter in hand, the side it sends to. */
 export const sideInHand = (tool: Kind): { right?: boolean } => (tool === SORTER ? { right: S.right } : {});
 

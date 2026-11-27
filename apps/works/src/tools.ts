@@ -58,7 +58,7 @@ import {
 import { close as closeCards } from "@sequoia-leaf/kit/card.ts";
 import { GOLD, SKY } from "@sequoia-leaf/kit/palette.ts";
 
-import { buildAct, gradeOn, groupAct, layAct } from "./acts.ts";
+import { buildAct, gradeOn, groupAct, layAct, raisedOn } from "./acts.ts";
 import { PAINTS, TILE } from "./art/belts.ts";
 import { OUT_OF_REACH, reachOf, withReach } from "./figure/reach.ts";
 import { float, flutter, puff, sparkle } from "./fx.ts";
@@ -81,7 +81,7 @@ import {
   type Tool,
   toolHooks,
 } from "./state.ts";
-import { comesUp, setWayIn, tunnelAim } from "./tunnel.ts";
+import { comesUp, setWayIn, tunnelAim, wayInAim } from "./tunnel.ts";
 import { runOut, stepWay } from "./ways.ts";
 import { coins, doNow } from "./yard.ts";
 
@@ -128,12 +128,6 @@ export function setTool(tool: Tool): void {
   if (tool !== null) closeCards();
   if (S.hover && tool !== null) aimAt(S.hover.x, S.hover.y);
   toolHooks.changed();
-}
-
-/** The grade of the piece on a tile that the kind in hand would raise there, or nothing if it would raise none. */
-function raisedOn(tool: Kind, i: number): number | undefined {
-  const stands = i >= 0 && S.world.kind[i] === tool ? (S.world.grade[i] ?? 0) : 0;
-  return stands > 0 && gradeInHand(tool) > stands ? stands : undefined;
 }
 
 /** Chooses the grade the kind in hand is built at: kept for that kind. */
@@ -190,7 +184,7 @@ export function aimAt(x: number, y: number): void {
     case "build": {
       const i = at(w, x, y);
       if (h.faced !== i) faceOver(h.kind, i);
-      go({ do: "aim", aim: buildAim(h.kind, x, y), faced: i });
+      go({ do: "aim", aim: pressAim(h.kind, x, y), faced: i });
     }
   }
 }
@@ -206,16 +200,22 @@ function faceOver(k: Kind, i: number): void {
   sideOver(k, i);
 }
 
+/** What a press with a kind in hand does on a tile, aimed: with the tunnel and no way in set, sets it there where it can (`wayInAim`); else builds. */
+const pressAim = (kind: Kind, x: number, y: number): Aim =>
+  (kind === TUNNEL ? wayInAim(x, y) : null) ?? buildAim(kind, x, y);
+
 /** What would come of building a kind on a tile, facing the way the hand faces: why not, the price, the grade, what it raises, a tunnel's far mouth. */
 function buildAim(kind: Kind, x: number, y: number): Aim {
   const w = S.world;
   const i = at(w, x, y);
-  const exit = kind === TUNNEL ? tunnelExit(w, x, y, S.dir) : null;
+  // Over a tunnel it is raised where it stands, by the mouths that stand; else it comes up where the rules dig it.
+  const exit = kind === TUNNEL && w.kind[i] !== TUNNEL ? tunnelExit(w, x, y, S.dir) : null;
+  const far = exit ? at(w, exit.x, exit.y) : kind === TUNNEL ? otherMouth(w, i) : -1;
   const grade = gradeOn(kind, i);
   const raises = raisedOn(kind, i);
   const why = reachOf(buildAct(kind, x, y)) ?? refusal(w, kind, x, y, coins(), S.dir, { grade });
   return {
-    ...aimed(x, y, why, priceAt(w, kind, x, y, grade), exit ? at(w, exit.x, exit.y) : -1),
+    ...aimed(x, y, why, priceAt(w, kind, x, y, grade), far),
     grade,
     ...(raises === undefined ? {} : { raises }),
   };
@@ -650,10 +650,13 @@ export function tapBelt(x: number, y: number): void {
   toolHooks.changed();
 }
 
-/** Where a finger's run starts, aimed: a clear tile as a belt would be, or a piece to start from, which stands as it is. */
+/**
+ * Where a finger's run starts, aimed as the one belt Build (or a second tap there) would lay on that
+ * tile: so on a machine it shows why a belt cannot go there, though the run tapped out next still
+ * starts where the machine hands things on (`runTo`).
+ */
 function startAt(x: number, y: number): void {
-  const aim = kindAt(S.world, x, y) !== NONE ? aimed(x, y, null, 0) : buildAim(BELT, x, y);
-  go({ do: "run", run: null, aim });
+  go({ do: "run", run: null, aim: buildAim(BELT, x, y) });
 }
 
 /** The run from where a finger's run starts (on a piece, the tile ahead of it) to a tile: the shortest clear way. */

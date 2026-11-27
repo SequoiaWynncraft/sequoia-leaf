@@ -88,7 +88,7 @@ describe("an aim", () => {
     expect(encode(S.world)).toBe(encode({ ...fake.leaf.yard, seed: null }));
   });
 
-  test("a tunnel aimed east, its far tile then taken, shows its far mouth where it will now come up, or that it cannot", async () => {
+  test("a tunnel aimed east, its far tile then taken, shows its far mouth where it will now come up, or none", async () => {
     const y = yardAt(2);
     build(y, BELT, ...xy(-5, -5), 0, Infinity);
     await opened(y, 1000);
@@ -102,7 +102,8 @@ describe("an aim", () => {
     done({ do: "build", kind: "belt", ...near(-3, -5), dir: 0 });
     done({ do: "build", kind: "belt", ...near(-2, -5), dir: 0 });
     keepAim();
-    expect([S.aim?.far, S.aim?.why]).toEqual([-1, "A tunnel needs a free tile to come up on, 1 to 3 tiles ahead"]);
+    // The click only sets where it goes in, which it still can, coming up another way: it is judged on that tile alone.
+    expect([S.aim?.far, S.aim?.why]).toEqual([-1, null]);
   });
 
   test("reads of the purse only whether it covers the cost, and by how much it falls short", async () => {

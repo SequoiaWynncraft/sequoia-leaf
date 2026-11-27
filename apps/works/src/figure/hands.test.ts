@@ -8,7 +8,18 @@
  */
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { BELT, build, create, LAND, MILL, type Piece, TUNNEL, type Yard, yardSolid } from "@sequoia-leaf/factory";
+import {
+  BELT,
+  build,
+  create,
+  LAND,
+  type Leg,
+  MILL,
+  type Piece,
+  TUNNEL,
+  type Yard,
+  yardSolid,
+} from "@sequoia-leaf/factory";
 import { deck } from "@sequoia-leaf/kit/card.ts";
 import { noKeysHeld } from "@sequoia-leaf/kit/keys.ts";
 
@@ -18,6 +29,7 @@ import { WORKS_KEYS } from "../keymap.ts";
 import { S, toolHooks, toPage } from "../state.ts";
 import { aimAt, confirm, hold, markEnd, markOver, markStart, setGrade, setTool, takeAway } from "../tools.ts";
 import { setWayIn } from "../tunnel.ts";
+import { handPrint } from "../ui/dock.ts";
 import { doNow } from "../yard.ts";
 import { beyondReach, OUT_OF_REACH, reachBox, reaches } from "./reach.ts";
 import { leave, placeYou, walkTo, you } from "./you.ts";
@@ -27,7 +39,7 @@ import { leave, placeYou, walkTo, you } from "./you.ts";
 const inert: () => unknown = new Proxy(() => inert, { get: () => inert, set: () => true });
 Object.defineProperty(globalThis, "document", { value: { createElement: () => inert }, configurable: true });
 const { following, pan, setCamera, setZoom, zoom } = await import("../camera.ts");
-const { initInput, letGo, stepInput } = await import("../input.ts");
+const { fingerTap, initInput, letGo, stepInput } = await import("../input.ts");
 
 useFakeLeaf();
 afterEach(() => {
@@ -44,10 +56,13 @@ function everywhere(): Yard {
 }
 /** The middle of a tile, in pixels of the art. */
 const mid = (x: number, y: number): { x: number; y: number } => ({ x: x * 16 + 8, y: y * 16 + 8 });
-/** Builds a piece from anywhere (no figure of yours stands in the yard yet), facing east, which must be built. */
-function stands(y: Yard, kind: Piece["kind"], x: number, z: number): void {
-  if (!build(y, kind, x, z, 0, Infinity).ok) throw new Error(`nothing built at ${x}, ${z}`);
+/** Builds a piece from anywhere (no figure of yours stands in the yard yet), facing east, which must be built; a tunnel passing under `span` tiles. */
+function stands(y: Yard, kind: Piece["kind"], x: number, z: number, span?: number): void {
+  if (!build(y, kind, x, z, 0, Infinity, span === undefined ? {} : { span }).ok)
+    throw new Error(`nothing built at ${x}, ${z}`);
 }
+/** A leg of a run of belt on row 9, heading east, at grade 2. */
+const beltAt = (x: number): Leg => ({ tunnel: false, x, y: 9, dir: 0, grade: 2 });
 /** Where you stand in Windfall Hollow, the north-west corner: tiles 0 to 31 across and 0 to 23 down are in reach. */
 const HOLLOW = mid(8, 6);
 /** Whether what is in hand is shown as it would go: its aim (or run) says nothing against it, and nor does any piece of it. */
@@ -142,7 +157,7 @@ describe("reach", () => {
     expect(reaches(0, 30)).toBe(false);
   });
 
-  test("a build, a run, a removal and a set-down out of reach are refused; raising, turning and painting are not limited", async () => {
+  test("a build, a run, a removal and a set-down out of reach are refused, a build over one of its kind too; turning and painting are not limited", async () => {
     const y = everywhere();
     await opened(y, 100_000);
     placeYou(mid(8, 6));
@@ -160,13 +175,13 @@ describe("reach", () => {
     ).toEqual(refused);
     expect(beyondReach({ do: "paint", x: far.x, y: far.y, tint: 2 })).toBeNull();
     expect(beyondReach({ do: "turn", x: far.x, y: far.y, dir: 1 })).toBeNull();
-    // A piece standing far away (built from the middle) may be raised where it stands, not taken away.
+    // A piece standing far away (built from the middle) is neither raised by a build nor taken away.
     leave();
     placeYou(mid(24, 21));
     expect("refused" in doNow({ do: "build", kind: MILL, x: far.x, y: far.y, dir: 0, grade: 1 })).toBe(false);
     leave();
     placeYou(mid(8, 6));
-    expect(beyondReach({ do: "build", kind: MILL, x: far.x, y: far.y, dir: 0, grade: 2 })).toBeNull();
+    expect(beyondReach({ do: "build", kind: MILL, x: far.x, y: far.y, dir: 0, grade: 2 })).toEqual(refused);
     expect(doNow({ do: "remove", x: far.x, y: far.y })).toEqual(refused);
     expect(doNow({ do: "clear", tiles: [far.y * y.land.w + far.x] })).toEqual(refused);
     // In reach, the rules decide.
@@ -196,8 +211,8 @@ describe("reach", () => {
 
   test("a tunnel whose far mouth is out of reach is refused, built and taken away, and its preview says so", async () => {
     const y = everywhere();
-    // A tunnel from 28 to 31 on row 10, wholly in reach of the Hollow; the one built is from 30 to 33.
-    stands(y, TUNNEL, 30, 10);
+    // A tunnel from 30 to 33 on row 10, its far mouth out of reach of the Hollow.
+    stands(y, TUNNEL, 30, 10, 2);
     await opened(y, 100_000);
     placeYou(HOLLOW);
     const far = { refused: "out_of_reach", why: OUT_OF_REACH };
@@ -253,22 +268,109 @@ describe("reach", () => {
     expect(S.world.kind[20 * y.land.w + 29]).toBe(TUNNEL);
   });
 
-  test("turning and raising a distant piece where it stands are gold, and done", async () => {
+  test("a piece built over one of its kind counts, out of reach too; the turn and grade commands do not", async () => {
     const y = everywhere();
     stands(y, BELT, 40, 9);
     await opened(y, 100_000);
     placeYou(HOLLOW);
+    // With the belt in hand, turning or raising the far belt is a build on its tile: coral, and refused.
     setTool(BELT);
     S.dir = 1;
     aimAt(40, 9);
-    expect(gold()).toBe(true);
-    expect(confirm()).toBe(true);
-    expect(S.world.dir[9 * y.land.w + 40]).toBe(1);
+    expect([gold(), aimOf(S.hand)?.why]).toEqual([false, OUT_OF_REACH]);
+    expect(confirm()).toBe(false);
     setGrade(2);
     aimAt(40, 9);
-    expect([gold(), aimOf(S.hand)?.raises]).toEqual([true, 1]);
+    expect([gold(), aimOf(S.hand)?.raises]).toEqual([false, 1]);
+    expect(confirm()).toBe(false);
+    expect([S.world.dir[9 * y.land.w + 40], S.world.grade[9 * y.land.w + 40]]).toEqual([0, 1]);
+    // Turning it (R, or its card) and the grade command put nothing down and take nothing up.
+    expect(beyondReach({ do: "upgrade", tiles: [9 * y.land.w + 40] })).toBeNull();
+    expect(doNow({ do: "turn", x: 40, y: 9, dir: 1 })).not.toHaveProperty("refused");
+    expect(S.world.dir[9 * y.land.w + 40]).toBe(1);
+  });
+
+  test("moving a tunnel's way in onto its far mouth, which would bring the far mouth out of reach, is coral and refused", async () => {
+    // The reviewer's case: an eastbound tunnel from 28 to 31; moved one tile on, it would come up at 34.
+    const y = everywhere();
+    stands(y, TUNNEL, 28, 11, 2);
+    await opened(y, 100_000);
+    placeYou(HOLLOW);
+    setTool("select");
+    markStart(28, 11);
+    markOver(31, 11);
+    markEnd();
+    hold("move");
+    // Its box is four tiles wide, aimed at its second: aimed at 32, its way in lands on 31.
+    aimAt(32, 11);
+    expect(S.group?.at[0]).toMatchObject({ x: 31, y: 11 });
+    expect(gold()).toBe(false);
+    expect(confirm()).toBe(false);
+    expect(S.world.kind[11 * y.land.w + 28]).toBe(TUNNEL);
+  });
+
+  test("a run of belt over standing belts counts every tile of it: re-laying far belts is refused", async () => {
+    const y = everywhere();
+    for (let x = 30; x <= 35; x++) stands(y, BELT, x, 9);
+    await opened(y, 100_000);
+    placeYou(HOLLOW);
+    const legs = [30, 31, 32, 33].map(beltAt);
+    expect(doNow({ do: "lay", legs })).toEqual({ refused: "out_of_reach", why: OUT_OF_REACH });
+    expect(doNow({ do: "lay", legs: legs.slice(0, 2) })).not.toHaveProperty("refused");
+  });
+
+  test("the tunnel's first click, which only sets where it goes in, is judged on that tile alone", async () => {
+    await opened(everywhere(), 100_000);
+    placeYou(HOLLOW);
+    setTool(TUNNEL);
+    S.dir = 0;
+    // East from 30, 12 it would come up at 32, out of reach; the click sets the way in, in reach.
+    aimAt(30, 12);
+    expect([gold(), aimOf(S.hand)?.far]).toEqual([true, 12 * S.world.land.w + 32]);
+    aimAt(32, 12);
+    expect(aimOf(S.hand)?.why).toBe(OUT_OF_REACH);
+    expect(setWayIn(30, 12)).toBe(true);
+  });
+
+  test("raising a standing tunnel shows the mouths that stand, and is judged on them", async () => {
+    const y = everywhere();
+    stands(y, TUNNEL, 30, 10, 2);
+    stands(y, TUNNEL, 27, 13, 2);
+    await opened(y, 100_000);
+    placeYou(HOLLOW);
+    setTool(TUNNEL);
+    setGrade(2);
+    S.dir = 0;
+    // From 30 to 33: its far mouth is out of reach.
+    aimAt(30, 10);
+    expect([aimOf(S.hand)?.far, aimOf(S.hand)?.why, aimOf(S.hand)?.raises]).toEqual([
+      10 * y.land.w + 33,
+      OUT_OF_REACH,
+      1,
+    ]);
+    expect(confirm()).toBe(false);
+    // From 27 to 30, wholly in reach: gold, and raised.
+    aimAt(27, 13);
+    expect([aimOf(S.hand)?.far, gold()]).toEqual([13 * y.land.w + 30, true]);
     expect(confirm()).toBe(true);
-    expect(S.world.grade[9 * y.land.w + 40]).toBe(2);
+    expect(S.world.grade[13 * y.land.w + 27]).toBe(2);
+  });
+
+  test("a phone's Build is judged on the belt it would lay: on a far mill it is not offered gold", async () => {
+    const y = everywhere();
+    stands(y, MILL, 40, 9);
+    await opened(y, 100_000);
+    placeYou(HOLLOW);
+    S.finger = true;
+    try {
+      setTool(BELT);
+      fingerTap(40, 9);
+      expect(handPrint().go).toEqual({ label: "Build", bad: true });
+      expect(confirm()).toBe(false);
+      expect(S.world.kind[9 * y.land.w + 40]).toBe(MILL);
+    } finally {
+      S.finger = false;
+    }
   });
 
   test("a card's Remove on a distant piece, with nothing in hand, says why", async () => {

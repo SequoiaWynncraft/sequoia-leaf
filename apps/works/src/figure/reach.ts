@@ -4,13 +4,14 @@
  * nothing is harder; on a bigger map you walk out to build far away.
  *
  * One rule, asked of a command: every tile it puts a piece on or takes one off must be in reach
- * (`footprint`): both mouths of a tunnel, a move's every piece where it leaves and where it lands, a
- * blueprint's every piece. A preview asks it of the very command its press would send (`acts.ts`),
- * and `doNow` asks it before the rules, so a gold preview is never refused and a coral one never
- * goes through. Changing a standing piece where it stands (turning it, raising its grade), a card's
- * settings, painting a line, undoing and putting back a plan of the whole yard touch no tile in this
- * sense, and are done from anywhere. Without a figure of yours (a visit, a review page's own yard)
- * nothing is out of reach.
+ * (`footprint`), whatever stood there before: both mouths of a tunnel, a move's every piece where it
+ * leaves and where it lands, a blueprint's every piece, every tile of a run of belt, a piece built
+ * over one of its kind. A preview asks it of the very command its press would send (`acts.ts`), and
+ * `doNow` asks it before the rules, so a gold preview is never refused and a coral one never goes
+ * through. Only commands that put nothing down and take nothing up are done from anywhere: turning a
+ * piece, raising grades with the grade command (Upgrade on a marked area or the whole yard), a card's
+ * settings, painting a line, undoing, and putting back a plan of the whole yard. Without a figure of
+ * yours (a visit, a review page's own yard) nothing is out of reach.
  *
  * It is the page's rule alone for now: Leaf does not know where you stand until visitors walk, and
  * building far away gains nothing over anyone else.
@@ -63,22 +64,22 @@ function taken(y: Yard, tiles: readonly number[]): number[] {
   return tilesOf(y, piecesAt(y, on));
 }
 
-/**
- * The tiles a piece set down changes: none where a piece of its kind already stands on its tile (that
- * one is only turned or raised, or its sorter's side set); else every tile it stands on (a tunnel's
- * far mouth too), and every tile of whatever it takes the place of.
- */
+/** The tiles a piece set down changes: every tile it stands on (a tunnel's far mouth too), and every tile of whatever stood there. */
 function setsDown(y: Yard, p: Piece): number[] {
-  const i = at(y, p.x, p.y);
-  if (i >= 0 && y.kind[i] === p.kind) return [];
   const tiles = tilesOf(y, [p]);
   return [...tiles, ...taken(y, tiles)];
 }
 
-/** The piece a build would stand: a tunnel with the span it comes up at, as the rules dig it. */
-function built(y: Yard, act: Extract<Act, { do: "build" }>): Piece {
+/**
+ * The tiles a build changes. Over a piece of its kind it sets that piece down again where it stands,
+ * raised or turned: every tile of it, a tunnel by the mouths that stand. Else the piece it stands (a
+ * tunnel coming up where the rules dig it), and whatever stood there.
+ */
+function built(y: Yard, act: Extract<Act, { do: "build" }>): number[] {
+  const i = at(y, act.x, act.y);
+  if (i >= 0 && y.kind[i] === act.kind) return taken(y, [i]);
   const exit = act.kind === TUNNEL ? tunnelExit(y, act.x, act.y, act.dir) : null;
-  return { kind: act.kind, x: act.x, y: act.y, dir: act.dir, span: exit?.span ?? 0 };
+  return setsDown(y, { kind: act.kind, x: act.x, y: act.y, dir: act.dir, span: exit?.span ?? 0 });
 }
 
 /**
@@ -88,7 +89,7 @@ function built(y: Yard, act: Extract<Act, { do: "build" }>): Piece {
  */
 export function footprint(y: Yard, act: Act): number[][] {
   const each = (pieces: readonly Piece[] | null): number[][] => (pieces ?? []).map((p) => setsDown(y, p));
-  if (act.do === "build") return [setsDown(y, built(y, act))];
+  if (act.do === "build") return [built(y, act)];
   if (act.do === "lay") return each(act.legs.map(legPiece));
   if (act.do === "stand") return each(act.pieces);
   if (act.do === "remove") return [taken(y, [at(y, act.x, act.y)])];

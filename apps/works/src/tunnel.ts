@@ -66,17 +66,39 @@ export function tunnelAim(from: Tile, faced: number, x: number, y: number): Aim 
 }
 
 /**
- * A click or tap with the tunnel in hand and no way in set, on a clear tile in reach it could go in
- * at, some way: its way in is set there, and nothing is built yet. Says whether it was set.
+ * Whether a press with the tunnel in hand and no way in set would set its way in on a tile: a clear
+ * tile in reach it could go in at, some way. Out of reach it is not set: the press builds there
+ * instead, which reach refuses, and says so.
  */
-export function setWayIn(x: number, y: number): boolean {
+function wayInFree(x: number, y: number): boolean {
   const w = S.world;
   const h = S.hand;
   const grade = gradeInHand(TUNNEL);
   const may = (d: Dir): boolean => refusal(w, TUNNEL, x, y, Infinity, d, { grade }) === null;
-  // Out of reach it is not set: the press builds there instead, which reach refuses, and says so.
   const free = kindAt(w, x, y) === NONE && reaches(x, y);
-  if (h.is !== "build" || h.kind !== TUNNEL || !free || !([0, 1, 2, 3] as const).some(may)) return false;
+  return h.is === "build" && h.kind === TUNNEL && free && ([0, 1, 2, 3] as const).some(may);
+}
+
+/**
+ * The tunnel in hand with no way in set, aimed at a tile where a press would set its way in: judged
+ * on that tile alone, since that press builds nothing. The far mouth shown is where it would come up
+ * the way it faces now, if it can. Nothing where the press would not set it: it would build there.
+ */
+export function wayInAim(x: number, y: number): Aim | null {
+  if (!wayInFree(x, y)) return null;
+  const w = S.world;
+  const grade = gradeInHand(TUNNEL);
+  const exit = tunnelExit(w, x, y, S.dir);
+  return { ...aimed(x, y, null, priceAt(w, TUNNEL, x, y, grade), exit ? at(w, exit.x, exit.y) : -1), grade };
+}
+
+/**
+ * A click or tap with the tunnel in hand and no way in set, on a clear tile in reach it could go in
+ * at, some way (`wayInFree`): its way in is set there, and nothing is built yet. Says whether it was set.
+ */
+export function setWayIn(x: number, y: number): boolean {
+  const w = S.world;
+  if (!wayInFree(x, y)) return false;
   moveHand({ do: "from", from: { x, y } });
   moveHand({ do: "aim", aim: tunnelAim({ x, y }, -1, x, y), faced: at(w, x, y) });
   yardSfx.pick();
