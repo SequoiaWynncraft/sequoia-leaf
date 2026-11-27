@@ -8,15 +8,15 @@
  * Every press knows how far it has gone from where it went down. Once past `MOVES` it is moving for
  * good: on bare ground it steers; on a thing it no longer asks, and drags as before.
  *
- * A finger resting on a thing, not on bare ground, asks what it is (`asked`); the line that shows
- * goes by itself after `CLEAR_MS` (`cleared`), unless another long press puts up its own first, or
- * the place changes and takes it away.
+ * A finger resting on a thing, not on bare ground, asks what it is (`asked`); the thing stays marked
+ * for `CLEAR_MS` (`cleared`), unless another long press marks its own first, or the place changes
+ * and takes it away. What it said stays until it is put away.
  */
 import { LONG_PRESS } from "@sequoia-leaf/kit/press.ts";
 import type { Release, Scope } from "@sequoia-leaf/kit/scope.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
-/** How long the line a long press puts up stays, in milliseconds. */
+/** How long the thing a long press asked about stays marked, in milliseconds. */
 export const CLEAR_MS = 2200;
 /** How far a press goes from where it went down before it is moving, in CSS pixels. */
 const MOVES = 10;
@@ -33,7 +33,7 @@ export interface World {
   cancel(): void;
   /** A finger has rested on a thing at a point. */
   asked(x: number, y: number): void;
-  /** The line that asking put up goes. */
+  /** The thing asked about is no longer marked. */
   cleared(): void;
 }
 
@@ -68,7 +68,7 @@ export interface WorldPress {
   toward(): Pt | null;
   /** The press is let go of without being let go of anywhere: the window lost the keyboard, a game was gone into. */
   letGo(): void;
-  /** Another place is on the stage: the press is let go of, and the line a long press left goes with the old place. */
+  /** Another place is on the stage: the press is let go of, and the mark a long press left goes with the old place. */
   newPlace(): void;
 }
 
@@ -78,7 +78,7 @@ export function worldPress(
   world: World,
 ): WorldPress {
   let press: Press = UP;
-  /** The line a long press left up, and its wait to go. */
+  /** The mark a long press left, and its wait to go. */
   let line = owner.child();
 
   /** The press ends, lifted at a point, or gone (null). Whatever way, its scope goes with it. */

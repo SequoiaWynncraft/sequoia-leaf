@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { type Action, Deck, type Description, type Open, partsOf, type View } from "./card.ts";
+import { type Action, Deck, type Description, type Open, partsOf, said, type View } from "./card.ts";
 import { press } from "./standin.ts";
 
 /** A deck with a view that only writes down what it was asked to draw. */
@@ -11,7 +11,9 @@ function table(): { deck: Deck; drawn: (string | null)[]; last: () => Open | nul
     render(open, d) {
       last = open;
       drawn.push(
-        open && d ? `${open.pinned ? "pinned" : "passing"} ${d.name}${open.stack.length > 1 ? " <" : ""}` : null,
+        open && d
+          ? `${open.pinned ? "pinned" : open.glance ? "glance" : "passing"} ${d.name}${open.stack.length > 1 ? " <" : ""}`
+          : null,
       );
     },
   };
@@ -53,17 +55,20 @@ describe("registering and describing", () => {
     expect(partsOf({ name: "Rock" }, true)).toEqual(["head"]);
     expect(partsOf({ name: "Rock", chips: [], rows: [{ label: "Used in", things: [] }] }, true)).toEqual(["head"]);
   });
-  test("the parts come in their order, and actions only on a pinned card", () => {
+  test("the parts come in their order, the glance first, and actions only on a pinned card", () => {
     const full: Description = {
       name: "Mill",
+      glance: "Saws a log into two planks",
       actions: [{ label: "Take away", on: () => {} }],
       rows: [{ label: "Makes", things: [{ ref: "item:plank" }] }],
       blocks: [{ title: "Saws", body: "One in, one out." }],
+      sections: [{ s: "sum", label: "Speed", rows: [{ label: "Mill", value: "1" }], total: "1" }],
       stats: [{ label: "Draws", value: "3" }],
       chips: [{ text: "Machine" }],
     };
-    expect(partsOf(full, true)).toEqual(["head", "chips", "stats", "blocks", "rows", "actions"]);
-    expect(partsOf(full, false)).toEqual(["head", "chips", "stats", "blocks", "rows"]);
+    expect(partsOf(full, true)).toEqual(["head", "glance", "chips", "stats", "sections", "blocks", "rows", "actions"]);
+    expect(partsOf(full, false)).toEqual(["head", "glance", "chips", "stats", "sections", "blocks", "rows"]);
+    expect(partsOf(full, true, true)).toEqual(["head", "glance"]);
   });
 });
 
@@ -104,6 +109,76 @@ describe("one card at a time", () => {
     deck.press("item:ingot", spot, "touch", B);
     expect(drawn).toEqual(["pinned Gear", "pinned Ingot"]);
     expect(deck.open?.via).toBe("touch");
+  });
+});
+
+describe("a glance, then the card", () => {
+  test("coming onto a thing shows its glance; resting there grows it into the card, in the same place", () => {
+    const { deck, drawn, last } = table();
+    deck.glance("item:gear", spot, "mouse", A);
+    deck.rest("item:gear", spot, "mouse", A);
+    expect(drawn).toEqual(["glance Gear", "passing Gear"]);
+    expect(last()?.at).toBe(spot);
+  });
+  test("a thing with no more than its glance shows whole at once, and a whole card is never shrunk back to a glance", () => {
+    const { deck, drawn } = table();
+    deck.glance("item:ingot", spot, "mouse", A);
+    deck.rest("item:gear", spot, "mouse", B);
+    deck.glance("item:gear", spot, "mouse", B);
+    expect(drawn).toEqual(["passing Ingot", "passing Gear", "passing Gear"]);
+  });
+  test("a click on a glance pins the whole card; a pinned card takes no glance", () => {
+    const { deck, drawn } = table();
+    deck.glance("item:gear", spot, "mouse", A);
+    deck.press("item:gear", spot, "mouse", A);
+    expect(deck.glance("item:ingot", spot, "mouse", B)).toBe(false);
+    expect(drawn).toEqual(["glance Gear", "pinned Gear"]);
+  });
+  test("held shut, no glance opens either", () => {
+    const { deck, drawn } = table();
+    deck.hold(true);
+    expect(deck.glance("item:gear", spot, "mouse", A)).toBe(false);
+    expect(drawn).toEqual([]);
+  });
+});
+
+describe("a tip's words", () => {
+  test("describe themselves: the name, and the line as the glance", () => {
+    const { deck } = table();
+    expect(deck.describe(said("Reroll", "New figures on the stall."))).toEqual({
+      name: "Reroll",
+      glance: "New figures on the stall.",
+    });
+    expect(deck.describe(said("Decorate"))).toEqual({ name: "Decorate" });
+    expect(deck.describe("said:not words")).toBeNull();
+  });
+  test("pinned and pressed again from the same place are put away, even when what they say has changed", () => {
+    const { deck } = table();
+    deck.press(said("Power", "12 of 20 used"), spot, "touch", A);
+    deck.press(said("Power", "13 of 20 used"), spot, "touch", A);
+    expect(deck.open).toBeNull();
+  });
+  test("pinned by the game itself, they stay pinned whatever was up, and say the new words", () => {
+    const { deck, drawn } = table();
+    deck.pin(said("Lamp", "Lights the square."), spot, "touch", A);
+    deck.pin(said("Bench", "Somewhere to sit."), spot, "touch", A);
+    deck.pin(said("Bench", "Somewhere to sit."), spot, "touch", A);
+    expect(drawn).toEqual(["pinned Lamp", "pinned Bench", "pinned Bench"]);
+  });
+  test("say new words in the card that is up, which stays as it was in every other way", () => {
+    const { deck, last } = table();
+    deck.rest(said("Settings (Esc)"), spot, "key", A);
+    deck.swap(said("Settings (F1)"));
+    expect(deck.describe(deck.shown() ?? "")?.name).toBe("Settings (F1)");
+    expect(last()?.via).toBe("key");
+  });
+  test("move with whoever showed them, and no one else's", () => {
+    const { deck } = table();
+    const moved = { x: 40, y: 40, w: 10, h: 10 };
+    deck.glance(said("Wrenly"), spot, "mouse", A);
+    expect(deck.moveTo(B, moved)).toBe(false);
+    expect(deck.moveTo(A, moved)).toBe(true);
+    expect(deck.open?.at).toBe(moved);
   });
 });
 

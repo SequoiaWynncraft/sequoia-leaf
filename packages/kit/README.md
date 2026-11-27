@@ -73,8 +73,8 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
 | `k-slot` (`lit`)                                                                                 | A hollow that holds one thing; as a button, one of a row to choose   |
 | `k-paper`                                                                                        | A page: letters, notes; in a panel it hangs on a brass nail          |
 | `k-say` (`left`)                                                                                 | Somebody speaking                                                    |
-| `k-tip` (`k-float`)                                                                              | A one-line hint while pointing at a thing (`tip.ts` places it)       |
-| `k-info` (`pinned`, `sheet`), `k-thing`                                                          | A thing's card, and the small picture of a thing (`card.ts`)         |
+| `k-tip` (`k-float`)                                                                              | A tip's thin wooden rim; floating, the frame every card wears        |
+| `k-info` (`glance`, `pinned`, `sheet`, `top`), `k-thing`                                         | A thing's card or tip, and the small picture of a thing (`card.ts`)  |
 | `k-btn` (`blue`, `green`, `leaf`, `wood`, `coral`, `slate`, `plum`; `sm`, `icon`, `wide`, `off`) | A button; with no colour named it is gold                            |
 | `k-tabs`                                                                                         | Wooden tabs on a rail; one is chosen (`aria-selected="true"`)        |
 | `k-i k-i-<name>`                                                                                 | A pixel icon; `--s` makes it larger by whole steps                   |
@@ -131,8 +131,8 @@ picture file.
 | `scope.ts`    | What a page, a panel or a press holds of the browser, let go of together (below)                    |
 | `pace.ts`     | A game's frames: each the screen shows while the member is at the page, 20 a second while not       |
 | `press.ts`    | A long press with a finger: resting on a thing asks what it is; cards and tips ask with it          |
-| `tip.ts`      | Tips: `tip(el, title, text)` shows a one-line hint on hover, focus and long press                   |
-| `card.ts`     | Cards: how anything in any game says what it is (below)                                             |
+| `tip.ts`      | Tips: `tip(el, title, text)`, a name and a line shown by the deck as every card is                  |
+| `card.ts`     | Cards: how anything in any game says what it is (below); `face.ts` draws one, `place.ts` places it  |
 | `dialog.ts`   | What opens over the page (a panel, a pinned card, a notice): `dialog(node, title, close)` (below)   |
 | `mark.ts`     | The mark of the town's own: a name in leaf green after the acorn, on a page or a canvas             |
 | `skin.ts`     | A walking figure and a face from a block-game skin sheet, or from a made-up look                    |
@@ -217,48 +217,66 @@ origin/main, or in CI the merge commit's first parent) fails, so a change cannot
 run budget` (`tools/budget.ts`) prints how many lines of source Bun builds for each page and the
 API, by workspace, and fails nothing.
 
-## Cards
+## Cards and tips
 
-Anything shown or named in any of the games explains itself the same way, in `card.ts`.
+Anything shown or named in any of the games explains itself the same way, in `card.ts`, and a tip
+is a card too: one box, one look, one placement, one behaviour.
 
 **What a game gives it.** Each kind of thing is registered once, `register(kind, describe)`, where
 `describe(id)` gives a description or null; from then on a thing is named by a reference,
-`"kind:id"` (`"item:gear"`, `"trait:ember"`). A description has a `name` and, all optional, an
-`icon` (a canvas, fitted to its slot by whole steps, or a kit icon), a `tag` under the name (read
-as a sentence if it ends with a stop), an
-`aside` at the right of the head (a price, stars), `chips` (labelled, each optionally a
-reference, and optionally a `hint`: a tip on it saying what it means), `stats` (label and value,
-three to a row, each optionally `raised` or `lowered`; with a text among them, a heading, they
-are a sheet instead, a line each with the number at the right),
-`blocks` (a bold title, a note at its right, words in the reading face; `line` puts them on one
-line, `lit` picks one out), `rows` (a small label and things, as icon and name, as
-pictures only, or as tiles; each may be lit, tagged, counted, given a note, locked with what opens
-it, or drawn as "this, an arrow, that") and `actions` (buttons, shown only on a pinned card).
+`"kind:id"` (`"item:gear"`, `"trait:ember"`). A description (`face.ts`) has a `name` and, all
+optional, an `icon` (a canvas, fitted to its slot by whole steps, or a kit icon), a `tag` under the
+name (read as a sentence if it ends with a stop), a `glance` (what it is or does in one line, shown
+first), an `aside` at the right of the head (a price, stars), `chips` (labelled, each a reference
+or a `hint`, a sentence that is then its own card), `stats` (label and value, three to a row, each
+optionally `raised` or `lowered`, a reference or a `hint`; with a text among them, a heading, they
+are a sheet instead, a line each with the number at the right), `sections` under labels
+(sentences whose named things are linked where their names are, a sum of rows to a total, each row
+linked to where it comes from, a table, a list of things), `blocks` (a bold title, a note at its
+right, words in the reading face; `line` puts them on one line, `lit` picks one out), `rows` (a
+small label and things, as icon and name, as pictures only, or as tiles; each may be lit, tagged,
+counted, given a note, locked with what opens it, or drawn as "this, an arrow, that") and
+`actions` (buttons, shown only on a pinned card; one showing only a picture says its `hint` when
+pointed at). Everything a card names has its own card. A tip's words, `tip(el, title, text)`, are
+a thing with no kind of its own (`said(title, text)`): a name and a glance.
 
 **How a thing becomes a target.** An element: `link(el, ref)`; with `{ acts: true }` for one that
 does something of its own when clicked (buys, picks up), and `{ side: true }` for a card to its
-side. `thing(ref)` is the standard small picture of a thing, icon and name, already linked: lists
-of things are built from it. Something drawn on a canvas: the game hit-tests and calls
+side. `tip(el, title, text)` links an element to its words, as acting when it is a control.
+`thing(ref)` is the standard small picture of a thing, icon and name, already linked: lists of
+things are built from it. Something drawn on a canvas: the game hit-tests and calls
 `point(ref | null, x, y, w, h)` as the pointer moves and `pick(ref | null, x, y, w, h)` on a click
-or tap; `surface(canvas)` tells the cards a press there is the game's to read.
+or tap; `surface(canvas)` tells the cards a press there is the game's to read; `tipAt(box, title,
+text, by)` (`{ pin: true }` for a long press) and `tipTo` say words about something drawn there.
 
-**How it behaves.** With a mouse, resting on a target shows its card beside it (above, else below,
-else to a side, kept on screen); leaving hides it; a click pins it, and a click on it again, a
-click elsewhere, its close button or Escape puts it away. With a finger a tap pins it (a long
-press, on a target that acts) as a sheet along the bottom, above the game's own bar (each game sets
-`--sheet-floor` to that bar's height); a tap elsewhere puts it away. Every pinned card has a close
-button in its head, and the town puts any card away as it goes through a door. A thing named
-inside an open card is followed instead: its card takes the place, with a back arrow. One card is
-up at a time. The keyboard: a focused target shows its card and Enter pins it. While the game
-drags something it calls `hold(true)`, and no card opens until `hold(false)`; `show(ref)` still
-shows what letting go would do. `watch(fn)` tells a game what is pointed at and what is pinned;
-`refresh()` draws the card again from a fresh description (under a held mouse button, once it
-lifts), and `settle()` puts it back beside its target after the page has been laid out again. A
-passing card, like a tip, goes when its target leaves the page or, unless the keyboard's focus
-showed it, when the mouse is on something else, even if the target was drawn again under the mouse
-and never had a `pointerleave` (`goesWith` in `tip.ts`).
+**How it behaves.** With a mouse, coming onto a target shows its glance at once (its head and its
+line, as wide as its words), and resting on it for a moment grows that into its card; leaving hides
+it; a click pins it, and a click on it again, a click elsewhere, its close button or Escape puts it
+away. With a finger a tap pins it (a long press, on a target that acts), and it stays until put
+away: a sheet the window's width along the bottom, above the game's own bar (each game sets
+`--sheet-floor` to that bar's height), or along the top, under what hangs from the game's top bar
+(`--sheet-top`, where that ends), where the bottom would cover the target; a tap elsewhere puts it
+away. Every pinned card has a close button in its head, and the town puts any
+card away as it goes through a door. Inside an open card, a thing pointed at says its glance beside
+it, and pressed is followed: its card takes the place, with a back arrow (a button that acts does
+its own thing). One card is up at a time. The keyboard: a focused target shows its card and Enter
+pins it. While the game drags something it calls `hold(true)`, and no card opens until
+`hold(false)`; `show(ref)` still shows what letting go would do. `watch(fn)` tells a game what is
+pointed at and what is pinned; `refresh()` draws the card again from a fresh description (under a
+held mouse button, once it lifts), and `settle()` puts it back beside its target after the page has
+been laid out again. A passing card goes when its target leaves the page or, unless the keyboard's
+focus showed it, when the mouse is on something else, even if the target was drawn again under the
+mouse and never had a `pointerleave`.
 
-The rules of all that (`Deck`, `partsOf`) touch no page and are tested in `card.test.ts`.
+**Where it goes** (`place.ts`, one rule): never over what it is about, always inside the window,
+floating over the page so that it moves nothing. Above the target where it fits whole, else below,
+else to a side (a side first with `side`), staying on the side it was on when drawn again; where it
+fits whole nowhere, in the largest room beside the target, no taller than that room, and it
+scrolls. A sheet goes along whichever edge does not cover the target.
+
+The rules of all that (`Deck`, `partsOf`, `place.ts`) touch no page and are tested in
+`card.test.ts` and `place.test.ts`; `review/tips.ts` checks the keyboard and a long press in a
+browser.
 
 ## Live, on the guild's server
 

@@ -4,5 +4,5 @@
     "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "types": ["bun"]
   },
-  "include": ["src", "tools", "demo"]
+  "include": ["src", "tools", "demo", "review"]
 }

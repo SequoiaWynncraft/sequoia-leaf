@@ -632,6 +632,24 @@ button.k-slot:hover {
   overflow-y: auto;
 }
 /*
+ * A glance (and a card that is no more than one: a tip): its head and its line, as wide as its
+ * words up to a card's width, its name in the name's face.
+ */
+.k-tip.k-info.glance {
+  width: max-content;
+  max-width: min(calc(var(--u) * 220), calc(100vw - 8px));
+  gap: calc(var(--u) * 2);
+  padding: calc(var(--u) * 3) calc(var(--u) * 4);
+}
+.k-info.glance .k-info-head .k-name {
+  font: var(--f-name);
+}
+/* What it is or does, in one line read first. */
+.k-info-glance {
+  margin: 0;
+  color: var(--k-cream);
+}
+/*
  * Asked for with a finger: a sheet along the bottom, the whole width, above the game's own bar
  * (`--sheet-floor`, its height). It has no rim at its sides: a beam along its top, pegged at each end.
  */
@@ -644,10 +662,24 @@ button.k-slot:hover {
   bottom: var(--sheet-floor, 0px);
   left: 0;
   width: 100%;
+  max-width: none;
   max-height: min(72vh, calc(100vh - var(--sheet-floor, 0px) - 8px));
   overflow-y: auto;
   transform: none;
-  padding-bottom: calc(var(--u) * 5 + env(safe-area-inset-bottom, 0px));
+  padding: calc(var(--u) * 4) calc(var(--u) * 5) calc(var(--u) * 5 + env(safe-area-inset-bottom, 0px));
+}
+/*
+ * Along the top, where along the bottom it would cover what it is about: under what hangs from the
+ * game's top bar (`--sheet-top`, where that ends), its beam under it.
+ */
+.k-tip.k-info.sheet.top {
+  top: var(--sheet-top, 0px);
+  bottom: auto;
+  max-height: min(72vh, calc(100vh - var(--sheet-top, 0px) - 8px));
+  border-width: 0 0 calc(var(--u) * 5);
+  border-image: var(--k-f-eave) 0 6 5 / 0 calc(var(--u) * 6) calc(var(--u) * 5);
+  box-shadow: 0 var(--u) 0 var(--k-ink);
+  padding: calc(var(--u) * 4 + env(safe-area-inset-top, 0px)) calc(var(--u) * 5) calc(var(--u) * 4);
 }
 .k-info-head {
   display: flex;
@@ -730,6 +762,75 @@ button.k-info-chip:hover .k-chip {
 }
 .k-info-stat > b {
   font: var(--f-name);
+}
+/* A number with a card of its own: pressed anywhere along it, its label underlined while pointed at. */
+button.k-info-stat {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+button.k-info-stat:hover .k-label,
+.k-named:hover {
+  color: var(--k-cream);
+  text-decoration: underline dotted var(--k-faint);
+  text-underline-offset: calc(var(--u) * 1.5);
+}
+/* A thing named in a sentence or a sum, which has its card: brighter than the words round it. */
+.k-named {
+  color: var(--k-cream);
+  text-decoration: underline dotted var(--k-bark);
+  text-underline-offset: calc(var(--u) * 1.5);
+}
+/* Sections: sentences, a sum to its total, a table, each under its label. */
+.k-info-secs {
+  gap: calc(var(--u) * 4);
+}
+.k-info-sec {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 2);
+}
+.k-info-line {
+  margin: 0;
+  color: var(--k-dim);
+}
+.k-info-line > .k-thing {
+  display: inline-flex;
+  margin-left: calc(var(--u) * 2);
+  vertical-align: middle;
+}
+.k-info-sum-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: calc(var(--u) * 4);
+  color: var(--k-dim);
+}
+.k-info-sum-row > b {
+  font: var(--f-name);
+  color: var(--k-cream);
+}
+.k-info-sum-row.total {
+  padding-top: calc(var(--u) * 2);
+  border-top: var(--u) solid var(--k-bark);
+}
+.k-info-sum-row.total > b {
+  color: var(--k-gold);
+}
+.k-info-table {
+  display: grid;
+  gap: var(--u) calc(var(--u) * 4);
+  align-items: baseline;
+}
+.k-info-table > span {
+  text-align: right;
+}
+.k-info-table > .first {
+  text-align: left;
+  color: var(--k-dim);
 }
 /*
  * Numbers under headings (somebody's, game by game) are a sheet: each game's name over a rule,

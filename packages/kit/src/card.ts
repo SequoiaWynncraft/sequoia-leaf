@@ -1,141 +1,54 @@
 /**
- * Cards: the one way anything in any of the games explains itself.
+ * Cards: the one way anything in any of the games explains itself, and the one tip.
  *
  * A game registers each kind of thing it has once (`register("item", describe)`), and from then on
  * names a thing by a reference, `"kind:id"`. Anything on the page can be made to stand for a thing
  * (`link`), `thing(ref)` is the standard small picture of one (its icon and name, already linked),
  * and something drawn on a canvas is told about with `point` and `pick` by the game's own
- * hit-testing.
+ * hit-testing. A tip's words (`tip.ts`) are a thing too, with no kind of its own (`said`).
  *
- * It behaves the same everywhere. With a mouse, resting on a thing for a moment shows its card
- * beside it; clicking pins it open, and clicking the thing again, clicking elsewhere, its close
- * button or Escape puts it away. With a finger a tap pins it, as a sheet along the bottom (above the
- * game's bar: `--sheet-floor`). A thing named inside an open card is itself a link: following it
- * shows its card in the same place with a back arrow. One card is up at a time. `hold(true)` keeps every card shut while the game is
- * dragging something, and `watch` tells a game which thing is pointed at or pinned.
+ * It behaves the same everywhere. With a mouse, coming onto a thing shows its glance beside it at
+ * once (its name and a line), and resting on it for a moment grows that into its card; clicking pins
+ * it open, and clicking the thing again, clicking elsewhere, its close button or Escape puts it away.
+ * The keyboard's focus shows the card, and Enter pins it. With a finger a tap pins it, and on a
+ * thing a tap uses (a button, a figure to buy) a long press does: as a sheet the window's width,
+ * along the bottom (above the game's bar: `--sheet-floor`) or along the top (under what hangs from
+ * the game's top bar: `--sheet-top`) where the bottom would cover the thing, and it stays until put
+ * away. A thing named inside an open card is itself a link:
+ * pointing at it says its glance, and following it shows its card in the same place with a back
+ * arrow. One card is up at a time, placed by one rule (`place.ts`): never over what it is about,
+ * always inside the window, floating over the page so it moves nothing. `hold(true)` keeps every card
+ * shut while the game is dragging something, and `watch` tells a game which thing is pointed at or pinned.
  *
- * The rules of that (`Deck`, `partsOf`) touch no page and are tested; the rest draws them.
+ * The rules of that (`Deck`) touch no page and are tested; the rest draws them (`face.ts`).
  */
 import { givingBack, layer } from "./dialog.ts";
-import { add, asking, asksAgain, el, icon, pressedTwice, type Spend, unheld } from "./dom.ts";
+import { pressedTwice, unheld } from "./dom.ts";
+import {
+  type Action,
+  actionSpend,
+  deep,
+  type Description,
+  drawCard,
+  type Entry,
+  type Face,
+  type Hands,
+  type Ref,
+  SAID,
+  saidOf,
+  thingOf,
+} from "./face.ts";
+import { beside, type Box, clear, sheet, type Side } from "./place.ts";
 import { longPress } from "./press.ts";
-import { scope } from "./scope.ts";
-import { goesWith, iconButton, tip, tipBeside, tipOff } from "./tip.ts";
+import { type Release, scope } from "./scope.ts";
 
-/** A thing, named as `"kind:id"`: `"item:gear"`, `"figure:barrow-gnome"`, `"trait:ember"`. */
-export type Ref = string;
-
-/** A small labelled chip, which may stand for a thing: "Kin", "Gnome 1/2". */
-export interface Chip {
-  readonly label?: string;
-  readonly text: string;
-  readonly icon?: Node | null;
-  /** A count after the words, as the trait strip shows it: "1/2". */
-  readonly count?: string;
-  readonly lit?: boolean;
-  readonly ref?: Ref;
-  /** A tip on it: what it means, in a sentence. */
-  readonly hint?: string;
-}
-
-/** A number with its label; raised (green) or lowered (coral) by something. */
-export interface Stat {
-  readonly label: string;
-  readonly value: string;
-  readonly mark?: "raised" | "lowered";
-}
-
-/** A bold title with a note at its right and words under it: an ability, what a machine does. */
-export interface Block {
-  readonly title?: string;
-  readonly note?: string;
-  readonly body?: string | Node;
-  /** Title, words and note on one line: a trait's steps. */
-  readonly line?: boolean;
-  /** Picked out: the step a party has reached. */
-  readonly lit?: boolean;
-}
-
-/** One thing in a row of a card. */
-export interface Entry {
-  readonly ref: Ref;
-  /** Picked out: one the member has, or fields. */
-  readonly lit?: boolean;
-  /** A small tag: "have", "bench", "stall". */
-  readonly tag?: string;
-  /** How many: "×2". */
-  readonly count?: string;
-  /** Something after the name: a price, how many are owed. */
-  readonly note?: string | Node;
-  /** It is made with this: the line shows that thing's icon, an arrow, then this thing. */
-  readonly from?: Ref;
-  /** Not to be had yet, and how it opens: shown as a dark outline with these words. */
-  readonly locked?: string;
-  /** Its own picture or name here, in place of the ones its card has. */
-  readonly icon?: Node;
-  readonly name?: string;
-}
-
-/** A small label and a list of things: "Made from", "Used in", "Every figure". */
-export interface Row {
-  readonly label: string;
-  readonly things: readonly Entry[];
-  /** `list` (icon and name, the usual), `icons` (pictures only) or `tiles` (a picture over its name). */
-  readonly look?: "list" | "icons" | "tiles";
-}
-
-/** A button at the foot of a pinned card. */
-export interface Action {
-  readonly label?: string;
-  readonly icon?: Node | null;
-  /** The kit's button classes after `k-btn` (`"wood sm"`, `"coral sm"`), or `"slot"` for a hollow holding an icon. */
-  readonly look?: string;
-  readonly lit?: boolean;
-  readonly off?: boolean;
-  /** After the words: what it pays or costs. */
-  readonly after?: Node | null;
-  /** A tip on it. */
-  readonly hint?: string;
-  readonly about?: string;
-  /**
-   * For what spends: its price, as `after` shows it, and the words its button says once pressed.
-   * The first press only changes the button's words to `again`; a second press does it, while the
-   * card stays on show at that price (`Deck.confirms`).
-   */
-  readonly ask?: { readonly again: string; readonly price: number };
-  readonly on: (button: HTMLButtonElement) => void;
-}
-
-/** What a thing says about itself. Only the name is needed. */
-export interface Description {
-  readonly name: string;
-  /** A canvas (sized to fit by the card) or an element, shown in a slot at the left of the head. */
-  readonly icon?: Node | null;
-  /** One line under the name: a role, a kind, "worked once". */
-  readonly tag?: string | Node;
-  /** What it is in a line, for the tip it gives inside another card: what an item adds. */
-  readonly brief?: string;
-  /** At the right of the head: a price, stars. */
-  readonly aside?: Node | string | null;
-  readonly chips?: readonly Chip[];
-  /** Numbers with their labels; a text among them is a heading over the numbers after it, and makes them a sheet. */
-  readonly stats?: readonly (Stat | string)[];
-  readonly blocks?: readonly Block[];
-  readonly rows?: readonly Row[];
-  readonly actions?: readonly Action[];
-  /** Part of it is still on its way (a person's numbers, from Leaf): its card is not shown until this settles, and is then asked for again. */
-  readonly coming?: Promise<unknown>;
-}
+export type { Action, Block, Chip, Description, Entry, Line, Part, Ref, Row, Section, Stat, SumRow } from "./face.ts";
+export { deep, partsOf, said } from "./face.ts";
 
 export type Describe = (id: string) => Description | null;
 
 /** A box on the page, in CSS pixels, for a card to sit beside. */
-export interface Spot {
-  readonly x: number;
-  readonly y: number;
-  readonly w: number;
-  readonly h: number;
-}
+export type Spot = Box;
 
 /** How a card was asked for. */
 export type Via = "mouse" | "touch" | "key";
@@ -154,6 +67,8 @@ export interface Open {
   readonly side: boolean;
   /** Shown by the game while it holds something, whatever `hold` says. */
   readonly preview: boolean;
+  /** Shows only its glance: the pointer came onto the thing and has not rested on it yet. */
+  readonly glance?: boolean;
 }
 
 export type Watcher = (pointed: Ref | null, pinned: Ref | null) => void;
@@ -168,29 +83,19 @@ const kindOf = (ref: Ref): [string, string] => {
   return at < 0 ? [ref, ""] : [ref.slice(0, at), ref.slice(at + 1)];
 };
 
-/** The parts a description makes, in the order a card shows them. Actions only on a pinned card. */
-export function partsOf(
-  d: Description,
-  pinned: boolean,
-): ("head" | "chips" | "stats" | "blocks" | "rows" | "actions")[] {
-  const parts: ("head" | "chips" | "stats" | "blocks" | "rows" | "actions")[] = ["head"];
-  if (d.chips && d.chips.length > 0) parts.push("chips");
-  if (d.stats && d.stats.length > 0) parts.push("stats");
-  if (d.blocks && d.blocks.length > 0) parts.push("blocks");
-  if (d.rows && d.rows.some((r) => r.things.length > 0)) parts.push("rows");
-  if (pinned && d.actions && d.actions.length > 0) parts.push("actions");
-  return parts;
-}
+/** Whether a reference is a tip's words (`said`), which belong to whoever said them. */
+export const isSaid = (ref: Ref | null | undefined): boolean =>
+  ref !== null && ref !== undefined && kindOf(ref)[0] === SAID;
 
-/** What an action that asks spends on: that action of that card, at its price. */
-const actionSpend = (card: Ref, a: Action): Spend => ({ on: `${card}|${a.label ?? ""}`, price: a.ask?.price ?? 0 });
+/** The same thing, from the same place: the same reference, or a tip's words, whatever they say now. */
+const sameThing = (a: Ref | undefined, b: Ref | undefined): boolean => a === b || (isSaid(a) && isSaid(b));
 
 /**
  * The rules of the cards, with no page in them: what is registered, which card is up and how it
- * got there, what is pointed at, and whether cards are held shut.
+ * got there, how deep it shows, what is pointed at, and whether cards are held shut.
  */
 export class Deck {
-  readonly kinds = new Map<string, Describe>();
+  readonly kinds = new Map<string, Describe>([[SAID, saidOf]]);
   open: Open | null = null;
   pointed: Ref | null = null;
   held = false;
@@ -286,17 +191,33 @@ export class Deck {
     this.#tell();
   }
 
-  /** The pointer has rested on a thing: its card shows beside it, unless one is pinned (or was clicked and is still coming) or cards are held. */
-  rest(ref: Ref, at: Spot | object, via: Via, from: object, side = false): boolean {
+  /** A passing card, unless one is pinned (or was clicked and is still coming) or cards are held; `glance`, only its glance where it has more. */
+  #pass(ref: Ref, at: Spot | object, via: Via, from: object, side: boolean, glance: boolean): boolean {
     if (this.held || this.open?.pinned || this.#awaited?.pinned) return false;
     const d = this.describe(ref);
     if (!d) {
       if (this.open) this.#set(null, null);
       return false;
     }
-    if (this.#wait(d, from, false, () => this.rest(ref, at, via, from, side))) return false;
-    this.#set({ stack: [ref], pinned: false, via, at, from, side, preview: false }, d);
+    if (this.#wait(d, from, false, () => this.#pass(ref, at, via, from, side, glance))) return false;
+    const o = this.open;
+    // Up already for this thing from here, as a whole card: drawn again (what it says may have changed), as deep as it was.
+    const whole = o !== null && o.from === from && sameThing(o.stack.at(-1), ref) && !o.glance;
+    this.#set(
+      { stack: [ref], pinned: false, via, at, from, side, preview: false, glance: glance && !whole && deep(d) },
+      d,
+    );
     return true;
+  }
+
+  /** The pointer has come onto a thing: its glance shows beside it at once. */
+  glance(ref: Ref, at: Spot | object, via: Via, from: object, side = false): boolean {
+    return this.#pass(ref, at, via, from, side, true);
+  }
+
+  /** The pointer has rested on a thing (or the keyboard is on it): its whole card shows beside it. */
+  rest(ref: Ref, at: Spot | object, via: Via, from: object, side = false): boolean {
+    return this.#pass(ref, at, via, from, side, false);
   }
 
   /** The pointer has left whatever `from` is: its passing card goes. */
@@ -312,19 +233,26 @@ export class Deck {
   press(ref: Ref, at: Spot | object, via: Via, from: object, side = false): boolean {
     if (this.held) return false;
     const o = this.open;
-    if (o?.pinned && o.from === from && o.stack.length === 1 && o.stack[0] === ref) {
+    if (o?.pinned && o.from === from && o.stack.length === 1 && sameThing(o.stack[0], ref)) {
       this.#set(null, null);
       return false;
     }
+    return this.pin(ref, at, via, from, side);
+  }
+
+  /** A thing's card is pinned open, whatever was up: pressed again, it stays. */
+  pin(ref: Ref, at: Spot | object, via: Via, from: object, side = false): boolean {
+    if (this.held) return false;
+    const o = this.open;
     const d = this.describe(ref);
     if (!d) return false;
-    if (this.#wait(d, from, true, () => this.press(ref, at, via, from, side))) return true;
+    if (this.#wait(d, from, true, () => this.pin(ref, at, via, from, side))) return true;
     // A passing card for the same thing stays where it is and is pinned.
     if (o && !o.pinned && o.from === from && o.stack.at(-1) === ref && via !== "touch") {
-      this.#set({ ...o, pinned: true, via, preview: false }, d);
+      this.#set({ ...o, pinned: true, via, preview: false, glance: false }, d);
       return true;
     }
-    this.#set({ stack: [ref], pinned: true, via, at, from, side, preview: false }, d);
+    this.#set({ stack: [ref], pinned: true, via, at, from, side, preview: false, glance: false }, d);
     return true;
   }
 
@@ -334,7 +262,7 @@ export class Deck {
     if (!o || o.stack.at(-1) === ref) return false;
     const d = this.describe(ref);
     if (!d) return false;
-    this.#set({ ...o, stack: [...o.stack, ref], pinned: true, preview: false }, d);
+    this.#set({ ...o, stack: [...o.stack, ref], pinned: true, preview: false, glance: false }, d);
     return true;
   }
 
@@ -349,6 +277,20 @@ export class Deck {
     return d !== null;
   }
 
+  /** The card on show is about this now (a tip's words have changed), as it was in every other way. */
+  swap(ref: Ref): void {
+    const o = this.open;
+    const d = o ? this.describe(ref) : null;
+    if (o && d) this.#set({ ...o, stack: [...o.stack.slice(0, -1), ref] }, d);
+  }
+
+  /** What `from` opened is beside another box now (a thing walking): whether it was, for the page to place it again. */
+  moveTo(from: object, at: Spot): boolean {
+    if (!this.open || this.open.from !== from) return false;
+    this.open = { ...this.open, at };
+    return true;
+  }
+
   /** Shows what dropping the thing in hand would do, while cards are otherwise held shut; with `side`, beside it. */
   preview(ref: Ref | null, at: Spot, from: object, side = false): void {
     const d = ref === null ? null : this.describe(ref);
@@ -356,7 +298,7 @@ export class Deck {
       if (this.open?.preview) this.#set(null, null);
       return;
     }
-    this.#set({ stack: [ref], pinned: false, via: "mouse", at, from, side, preview: true }, d);
+    this.#set({ stack: [ref], pinned: false, via: "mouse", at, from, side, preview: true, glance: false }, d);
   }
 
   /** Puts the card away; with `from`, only if that is who opened it. */
@@ -387,13 +329,40 @@ export class Deck {
 
 /** Who `point` and `pick` speak for: something drawn on a canvas. */
 const CANVAS = { canvas: true };
-/** How long the mouse rests on a thing before its card shows. */
+/** How long the mouse rests on a thing before its glance grows into its card. */
 const REST_MS = 220;
+/** The passing card's id, by which what it is about is described while it shows. */
+const TIP_ID = "k-tip";
+/** What can be pressed of itself: anything else that stands for a thing is made a button. */
+const CONTROLS = "button, a[href], input, select, textarea, summary";
+const nothing: Release = () => undefined;
 
-let node: HTMLElement | null = null;
-/** The card's corner when it was last placed, so a card followed to stays put. */
-let corner: { x: number; y: number } | null = null;
-let lastVia: Via = "mouse";
+/** What the page holds of the cards: the card on show and what it was drawn as, where it sits, the glance inside it, and the last pointer. */
+const page: {
+  node: HTMLElement | null;
+  drawn: Open | null;
+  corner: { x: number; y: number } | null;
+  side: Side | null;
+  layer: (() => void) | null;
+  peek: { node: HTMLElement; by: HTMLElement } | null;
+  described: Element | null;
+  via: Via;
+  pointing: Ref | null;
+  pointWait: Release;
+} = {
+  node: null,
+  drawn: null,
+  corner: null,
+  side: null,
+  layer: null,
+  peek: null,
+  described: null,
+  via: "mouse",
+  pointing: null,
+  pointWait: nothing,
+};
+/** The page's own listeners and waits. */
+const live = scope();
 
 const isSpot = (v: unknown): v is Spot =>
   typeof v === "object" && v !== null && "x" in v && "y" in v && "w" in v && "h" in v;
@@ -406,360 +375,194 @@ const spotOf = (at: Spot | object): Spot | null => {
   return isSpot(at) ? at : null;
 };
 
-/** Where a thing `size` long starts so it is inside `room`, as near `at` as it can be: its start first, if it cannot fit. */
-const within = (at: number, size: number, room: number): number => Math.max(4, Math.min(at, room - size - 4));
+/** A length a game sets on the page for the cards, in CSS pixels. */
+const setting = (name: string): number =>
+  Number.parseFloat(getComputedStyle(document.body).getPropertyValue(name)) || 0;
 
-/** Puts the card beside a box: above it where there is room, otherwise below, otherwise to a side. With `side`, to the right (or left) first. */
-function place(card: HTMLElement, spot: Spot, side: boolean): void {
-  const r = card.getBoundingClientRect();
-  const W = window.innerWidth;
-  const H = window.innerHeight;
-  const gap = 8;
-  const clampX = (x: number): number => within(x, r.width, W);
-  const clampY = (y: number): number => within(y, r.height, H);
-  const right = spot.x + spot.w + gap;
-  const left = spot.x - r.width - gap;
-  let x: number;
-  let y: number;
-  if (side && (right + r.width <= W - 4 || left >= 4)) {
-    x = right + r.width <= W - 4 ? right : left;
-    y = clampY(spot.y);
-  } else {
-    const above = spot.y - r.height - gap;
-    const below = spot.y + spot.h + gap;
-    x = clampX(spot.x + spot.w / 2 - r.width / 2);
-    if (above >= 4) y = above;
-    else if (below + r.height <= H - 4) y = below;
-    else {
-      // No room above or below: beside it, flipped to whichever side has room.
-      y = clampY(spot.y + spot.h / 2 - r.height / 2);
-      x = right + r.width <= W - 4 ? right : left >= 4 ? left : x;
-    }
-  }
-  corner = { x: Math.round(x), y: Math.round(y) };
-  card.style.transform = `translate(${corner.x}px, ${corner.y}px)`;
+/** The window, the game's bar along its bottom that a sheet stands on, and where what hangs from its top ends. */
+const room = (): { w: number; h: number; floor: number; ceiling: number } => ({
+  w: window.innerWidth,
+  h: window.innerHeight,
+  floor: setting("--sheet-floor"),
+  ceiling: setting("--sheet-top"),
+});
+
+/** Lets go of the pinned card's layer over the page (`dialog.ts`), where Escape puts it away and Tab stays in it. */
+const unpin = (): void => {
+  page.layer?.();
+  page.layer = null;
+};
+
+/** What the passing card describes, while it shows: nothing once it has gone. */
+function describedBy(by: object | null): void {
+  if (page.described?.getAttribute("aria-describedby") === TIP_ID) page.described.removeAttribute("aria-describedby");
+  page.described = by !== null && by instanceof Element ? by : null;
+  page.described?.setAttribute("aria-describedby", TIP_ID);
+}
+
+/** Puts a box at a corner, no taller than `most` (it scrolls, or shows what fits). */
+function putAt(box: HTMLElement, x: number, y: number, most: number, tall: number): void {
+  box.style.maxHeight = most < tall ? `${most}px` : "";
+  box.style.transform = `translate(${x}px, ${y}px)`;
 }
 
 /**
- * A canvas's picture fitted into a box `box` units square: by whole steps (at most `most`) where it
- * fits, and shrunk to the box where it does not.
+ * Places the card by the one rule (`place.ts`). `keep`: drawn again, it keeps its corner while that
+ * is still clear of its thing (a card followed to stays put); `follow`: it moves with its thing,
+ * on the side it was on; `new`: wherever the rule says first. A sheet goes to whichever edge does
+ * not cover its thing.
  */
-function fit(art: Node, box: number, most = 1): Node {
-  // One of the kit's own icons grows by its own whole steps.
-  if (art instanceof HTMLElement && art.classList.contains("k-i")) {
-    art.style.setProperty("--s", String(most));
-    return art;
+function placeCard(card: HTMLElement, o: Open, how: "keep" | "follow" | "new"): void {
+  const r0 = room();
+  const spot = spotOf(o.at);
+  card.style.maxHeight = "";
+  const r = card.getBoundingClientRect();
+  const size = { w: r.width, h: r.height };
+  if (card.classList.contains("sheet")) {
+    const s = sheet(r.height, spot, r0);
+    card.classList.toggle("top", s.edge === "top");
+    card.style.maxHeight = s.most < r.height ? `${s.most}px` : "";
+    page.corner = null;
+    return;
   }
-  if (!(art instanceof HTMLCanvasElement)) return art;
-  const c = document.createElement("canvas");
-  c.width = art.width;
-  c.height = art.height;
-  c.getContext("2d")?.drawImage(art, 0, 0);
-  c.className = "k-px";
-  const side = Math.max(art.width, art.height, 1);
-  const scale = side > box ? box / side : Math.min(most, Math.max(1, Math.floor(box / side)));
-  c.style.width = `calc(var(--u) * ${art.width * scale})`;
-  c.style.height = `calc(var(--u) * ${art.height * scale})`;
-  return c;
+  const c = page.corner;
+  if (c && ((how === "keep" && spot && clear(c, size, spot, r0)) || !spot)) {
+    const x = Math.round(Math.max(4, Math.min(c.x, r0.w - size.w - 4)));
+    const y = Math.round(Math.max(4, Math.min(c.y, r0.h - size.h - 4)));
+    page.corner = { x, y };
+    putAt(card, x, y, r0.h - 4 - y, size.h);
+    return;
+  }
+  if (!spot) return;
+  const p = beside(size, spot, r0, how === "new" || !page.side ? { side: o.side } : { side: o.side, was: page.side });
+  page.corner = { x: p.x, y: p.y };
+  page.side = p.side;
+  putAt(card, p.x, p.y, p.most, size.h);
 }
 
-const words = (v: string | Node, cls: string): HTMLElement =>
-  typeof v === "string" ? el("div", cls, { text: v }) : el("div", cls, {}, v);
-
-/** The class of the line under a card's name: a sentence (it ends with a stop) is read, anything else is in the game's face. */
-const tagLook = (v: string | Node): string =>
-  /[.?!]$/.test(typeof v === "string" ? v : (v.textContent ?? "")) ? "k-d" : "k-dim";
-
-function chipOf(c: Chip): HTMLElement {
-  const face = el(
-    "span",
-    `k-chip${c.lit ? " lit" : ""}`,
-    {},
-    c.icon ? fit(c.icon, 12) : null,
-    c.text,
-    c.count ? el("b", "k-info-count", { text: c.count }) : null,
-  );
-  const box = el(
-    c.ref ? "button" : "span",
-    "k-info-chip",
-    c.ref ? { type: "button", "aria-label": `${c.text}${c.label ? `, ${c.label.toLowerCase()}` : ""}` } : {},
-    c.label ? el("span", "k-label", { text: c.label }) : null,
-    face,
-  );
-  if (c.ref) link(box, c.ref);
-  if (c.hint) tip(box, c.text, c.hint);
-  return box;
+/** The glance of a thing pointed at inside the open card goes; with `by`, only that thing's. */
+function unpeek(by: HTMLElement | null = null): void {
+  if (!page.peek || (by && page.peek.by !== by)) return;
+  page.peek.node.remove();
+  if (page.peek.by.getAttribute("aria-describedby") === TIP_ID) page.peek.by.removeAttribute("aria-describedby");
+  page.peek = null;
 }
 
-function statOf(s: Stat): HTMLElement {
-  const tone = s.mark === "raised" ? "k-leafy" : s.mark === "lowered" ? "k-coral" : "";
-  return el("span", "k-info-stat", {}, el("span", "k-label", { text: s.label }), el("b", tone, { text: s.value }));
-}
-
-function blockOf(b: Block): HTMLElement {
-  const title = b.title ? el("b", "k-info-title", { text: b.title }) : null;
-  const note = b.note ? el("span", "k-info-note", { text: b.note }) : null;
-  const body = b.body === undefined ? null : words(b.body, "k-read k-info-body");
-  if (b.line) return el("div", `k-info-block line${b.lit ? " lit" : ""}`, {}, title, body, note);
-  return el(
-    "div",
-    `k-info-block${b.lit ? " lit" : ""}`,
-    {},
-    title || note ? el("div", "k-info-bhead", {}, title, note) : null,
-    body,
-  );
-}
-
-/** The small picture of a thing: its icon and name, linked, so every list of things looks and behaves alike. */
-export function thing(
-  ref: Ref,
-  opts: Omit<Entry, "ref" | "from" | "locked"> & { readonly bare?: boolean } = {},
-): HTMLElement {
+/** A thing pointed at inside the open card says its glance beside it: its name too, where only its picture shows. */
+function peekAt(target: HTMLElement, ref: Ref): void {
+  unpeek();
   const d = deck.describe(ref);
-  const name = opts.name ?? d?.name ?? ref;
-  const art = opts.icon ?? d?.icon ?? null;
-  const t = el(
-    "span",
-    `k-thing${opts.lit ? " lit" : ""}${opts.bare ? " bare" : ""}`,
-    opts.bare ? { "aria-label": name } : {},
-    art ? el("span", "k-thing-pic", {}, fit(art, 12)) : null,
-    opts.bare ? null : el("span", "k-thing-name", { text: name }),
-    opts.count ? el("b", "k-thing-count", { text: opts.count }) : null,
-    opts.note === undefined
-      ? null
-      : typeof opts.note === "string"
-        ? el("span", "k-thing-note k-s k-dim", { text: opts.note })
-        : opts.note,
-    opts.tag ? el("span", "k-thing-tag k-info-tagged", { text: opts.tag }) : null,
-  );
-  link(t, ref);
-  return t;
+  if (!d) return;
+  const line = d.glance ?? d.brief ?? "";
+  const name = (target.textContent ?? "").includes(d.name) ? "" : d.name;
+  if (!name && !line) return;
+  const face = { pinned: false, sheet: false, glance: true, back: false, card: ref };
+  const box = drawCard(line ? { name, glance: line } : { name }, face, hands);
+  box.id = TIP_ID;
+  box.classList.add("peek");
+  document.body.append(box);
+  const r = box.getBoundingClientRect();
+  const t = target.getBoundingClientRect();
+  const p = beside({ w: r.width, h: r.height }, { x: t.left, y: t.top, w: t.width, h: t.height }, room());
+  putAt(box, p.x, p.y, p.most, r.height);
+  target.setAttribute("aria-describedby", TIP_ID);
+  page.peek = { node: box, by: target };
 }
 
-function tileOf(e: Entry): HTMLElement {
-  const d = deck.describe(e.ref);
-  const name = e.name ?? d?.name ?? e.ref;
-  const art = e.icon ?? d?.icon ?? null;
-  const tile = el(
-    "span",
-    `k-slot k-info-tile${e.lit ? " lit" : ""}${e.locked ? " locked" : ""}`,
-    {},
-    el("span", "k-info-tile-pic", {}, art ? fit(art, 24) : null),
-    el("span", "k-s k-info-tile-name", { text: name }),
-    e.locked
-      ? icon("lock")
-      : e.note === undefined
-        ? null
-        : typeof e.note === "string"
-          ? el("span", "k-s", { text: e.note })
-          : e.note,
-    e.tag ? el("span", "k-info-tagged corner", { text: e.tag }) : null,
-  );
-  if (!e.locked) link(tile, e.ref);
-  return tile;
-}
+/** How an open card is drawn. */
+const faceOf = (o: Open): Face => ({
+  pinned: o.pinned,
+  sheet: o.pinned && o.via === "touch",
+  glance: o.glance ?? false,
+  back: o.stack.length > 1,
+  card: o.stack.at(-1) ?? "",
+});
 
-function entryOf(e: Entry, look: Row["look"]): HTMLElement {
-  if (look === "tiles") return tileOf(e);
-  if (look === "icons") {
-    const art = e.icon ?? deck.describe(e.ref)?.icon ?? null;
-    const s = el("span", `k-slot k-info-icon${e.lit ? " lit" : ""}`, {}, art ? fit(art, 12) : null);
-    link(s, e.ref);
-    return s;
+/** The same card again (pinned where it was, followed on, refreshed, its glance grown), which keeps its place as far as it can. */
+const sameCard = (prev: Open | null, o: Open): prev is Open =>
+  prev !== null && prev.from === o.from && sameThing(prev.stack[0], o.stack[0]) && prev.at === o.at;
+
+/** How the card is placed: the same card keeps its place, a glance grown follows its thing, anything else is placed anew. */
+const howPlaced = (prev: Open | null, o: Open): "keep" | "follow" | "new" =>
+  !sameCard(prev, o) ? "new" : prev.glance && !o.glance ? "follow" : "keep";
+
+/** The very card that was up, drawn again: the same card, showing the same thing (not one followed to from it). */
+const sameShown = (prev: Open | null, o: Open): boolean =>
+  sameCard(prev, o) && prev.stack.length === o.stack.length && sameThing(prev.stack.at(-1), o.stack.at(-1));
+
+/**
+ * The new card goes in beside the old before the old goes: taking the old one out takes the focus
+ * off a button pressed in it, and `replaceWith` would lose whatever followed the old. The very card
+ * that was up, drawn again (`again`, not one followed to from it), stays scrolled where it was, so
+ * what was under a finger is still under it, and whoever was on one of its buttons is still on it;
+ * another card in its place (followed to, gone back to) has the focus the old one had.
+ */
+function swapIn(was: HTMLElement | null, card: HTMLElement, again: boolean): void {
+  const scrolled = was?.scrollTop ?? 0;
+  const held = was ? [...was.querySelectorAll("button")].findIndex((b) => b === document.activeElement) : -1;
+  const focused = was?.contains(document.activeElement) ?? false;
+  if (was) {
+    was.before(card);
+    was.remove();
+  } else document.body.append(card);
+  if (!again) {
+    if (focused && card.hasAttribute("tabindex")) card.focus({ preventScroll: true });
+    return;
   }
-  const t = thing(e.ref, e);
-  if (!e.from) return t;
-  const other = deck.describe(e.from);
-  const pre = el(
-    "span",
-    "k-info-with",
-    { "aria-label": other?.name ?? e.from },
-    other?.icon ? fit(other.icon, 12) : null,
-  );
-  link(pre, e.from);
-  return el("span", `k-info-make${e.lit ? " lit" : ""}`, {}, pre, el("span", "k-dim k-pix", { text: "→" }), t);
+  card.scrollTop = scrolled;
+  card.querySelectorAll("button")[held]?.focus({ preventScroll: true });
 }
 
-function actionOf(a: Action, card: Ref): HTMLElement {
-  const slot = a.look === "slot";
-  const spend = actionSpend(card, a);
-  const ask = a.ask !== undefined && asking(spend) ? a.ask.again : null;
-  const face = slot ? [a.icon ? fit(a.icon, 12) : null] : [a.icon ?? null, a.label || null, a.after ?? null];
-  const b = el(
-    "button",
-    slot
-      ? `k-slot k-info-pin${a.lit ? " lit" : ""}`
-      : `k-btn ${a.look ?? "wood sm"}${a.off ? " off" : ""}${ask ? " asking" : ""}`,
-    { type: "button", "aria-label": a.label && slot ? (ask ?? a.label) : null },
-    // One that asks shows its question through the kit (`asksAgain`), in a slot as on a button.
-    ...(a.ask === undefined ? face : [asksAgain(spend, face, a.ask.again)]),
-  );
-  b.addEventListener("click", () => {
-    if (!deck.confirms(a, refresh)) return;
-    a.on(b);
-    // Done or refused, the button no longer asks.
-    if (a.ask !== undefined) deck.refresh();
-  });
-  if (a.hint) tip(b, a.hint, a.about ?? "");
-  return b;
+/** Nothing is up: the card, its place and its layer go. */
+function putAway(was: HTMLElement | null): void {
+  was?.remove();
+  page.corner = null;
+  page.side = null;
+  unpin();
 }
-
-/** A card, drawn from its description. */
-function drawCard(d: Description, o: Open): HTMLElement {
-  const sheet = o.pinned && o.via === "touch";
-  const card = el("div", `k-tip k-float k-info${o.pinned ? " pinned" : ""}${sheet ? " sheet" : ""}`, {
-    role: o.pinned ? "dialog" : "tooltip",
-    "aria-label": d.name,
-    tabindex: o.pinned ? -1 : null,
-  });
-  const backBtn =
-    o.stack.length > 1 ? iconButton("plum sm k-info-back", icon("back"), "Back", () => deck.back()) : null;
-  // A passing card keeps the close button's room, unseen, so that pinning it moves nothing: a name
-  // that fitted two lines beside no button would take three beside one.
-  const closeBtn = o.pinned
-    ? iconButton("wood sm k-info-x", icon("close"), "Close", () => deck.close())
-    : el("span", "k-btn wood icon sm k-info-x unseen", { "aria-hidden": "true" }, icon("close"));
-  for (const part of partsOf(d, o.pinned)) {
-    if (part === "head") {
-      add(
-        card,
-        el(
-          "div",
-          "k-info-head",
-          {},
-          backBtn,
-          d.icon ? el("span", "k-slot k-info-pic", {}, fit(d.icon, 40, 2)) : null,
-          el(
-            "div",
-            "k-info-who",
-            {},
-            el("b", "k-name", { text: d.name }),
-            d.tag === undefined ? null : words(d.tag, `${tagLook(d.tag)} k-info-tag`),
-          ),
-          d.aside ? el("span", "k-info-aside", {}, d.aside) : null,
-          closeBtn,
-        ),
-      );
-    } else if (part === "chips") add(card, el("div", "k-info-part k-info-chips", {}, ...(d.chips ?? []).map(chipOf)));
-    else if (part === "stats")
-      add(
-        card,
-        el(
-          "div",
-          // Under headings, the numbers are a sheet: a line each.
-          `k-info-part k-info-stats${(d.stats ?? []).some((s) => typeof s === "string") ? " listed" : ""}`,
-          {},
-          ...(d.stats ?? []).map((s) =>
-            typeof s === "string" ? el("span", "k-label k-info-over", { text: s }) : statOf(s),
-          ),
-        ),
-      );
-    else if (part === "blocks") add(card, el("div", "k-info-part k-info-blocks", {}, ...(d.blocks ?? []).map(blockOf)));
-    else if (part === "rows")
-      add(
-        card,
-        el(
-          "div",
-          "k-info-part k-info-rows",
-          {},
-          ...(d.rows ?? [])
-            .filter((r) => r.things.length > 0)
-            .map((r) =>
-              el(
-                "div",
-                `k-info-row k-look-${r.look ?? "list"}`,
-                {},
-                el("span", "k-label", { text: r.label }),
-                el("div", "k-info-things", {}, ...r.things.map((e) => entryOf(e, r.look))),
-                // What opens each locked one, read at the reading size under the tiles.
-                ...r.things.flatMap((e) =>
-                  r.look === "tiles" && e.locked
-                    ? [
-                        el(
-                          "div",
-                          "k-read k-dim k-info-how",
-                          {},
-                          el("b", "", { text: `${e.name ?? deck.describe(e.ref)?.name ?? e.ref}: ` }),
-                          e.locked,
-                        ),
-                      ]
-                    : [],
-                ),
-              ),
-            ),
-        ),
-      );
-    else
-      add(
-        card,
-        el("div", "k-info-part k-info-acts", {}, ...(d.actions ?? []).map((a) => actionOf(a, o.stack.at(-1) ?? ""))),
-      );
-  }
-  return card;
-}
-
-/** The card last drawn, to tell a card drawn again from a new one. */
-let drawn: Open | null = null;
-/** The pinned card's layer over the page (`dialog.ts`), where Escape puts it away and Tab stays in it: how to let go of it, while one is up. */
-let pinnedLayer: (() => void) | null = null;
-const unpin = (): void => {
-  pinnedLayer?.();
-  pinnedLayer = null;
-};
 
 const view: View = {
   render(o, d) {
-    const was = node;
-    const prev = drawn;
-    drawn = o;
-    node = null;
-    if (!o || !d) {
-      was?.remove();
-      corner = null;
-      unpin();
-      return;
+    const was = page.node;
+    const prev = page.drawn;
+    page.drawn = o;
+    page.node = null;
+    unpeek();
+    describedBy(null);
+    if (!o || !d) return putAway(was);
+    const card = drawCard(d, faceOf(o), hands);
+    swapIn(was, card, sameShown(prev, o));
+    page.node = card;
+    placeCard(card, o, howPlaced(prev, o));
+    if (!o.pinned) {
+      card.id = TIP_ID;
+      describedBy(o.from);
     }
-    const card = drawCard(d, o);
-    const scrolled = was?.scrollTop ?? 0;
-    const held = was ? [...was.querySelectorAll("button")].findIndex((b) => b === document.activeElement) : -1;
-    // The new card goes in beside the old before the old goes. Taking the old one out takes the
-    // focus off a button pressed in it, which puts away that button's tip; `replaceWith` puts the
-    // new card in before whatever followed the old, and when that was the tip, it was gone.
-    if (was) {
-      was.before(card);
-      was.remove();
-    } else document.body.append(card);
-    node = card;
-    // The same card again (pinned where it was, followed on, refreshed) keeps its corner as far as it fits.
-    const same = prev !== null && prev.from === o.from && prev.stack[0] === o.stack[0] && prev.at === o.at;
-    // The very card that was up, drawn again (not one followed to from it): it stays scrolled where it was,
-    // so what was under a finger is still under it, and whoever was on one of its buttons is still on it.
-    if (same && prev.stack.length === o.stack.length && prev.stack.at(-1) === o.stack.at(-1)) {
-      card.scrollTop = scrolled;
-      card.querySelectorAll("button")[held]?.focus({ preventScroll: true });
-    }
-    const spot = spotOf(o.at);
-    if (card.classList.contains("sheet")) {
-      corner = null;
-      card.style.transform = "";
-    } else if ((same || !spot) && corner) {
-      const r = card.getBoundingClientRect();
-      corner = {
-        x: Math.round(within(corner.x, r.width, window.innerWidth)),
-        y: Math.round(within(corner.y, r.height, window.innerHeight)),
-      };
-      card.style.transform = `translate(${corner.x}px, ${corner.y}px)`;
-    } else if (spot) place(card, spot, o.side);
     // A card newly pinned is a new layer, which gives the focus back to where it was before this card.
-    const fresh = !(prev?.pinned && same);
+    const fresh = !(prev?.pinned && sameCard(prev, o));
     if (!o.pinned || fresh) unpin();
-    if (o.pinned) pinnedLayer ??= layer(() => node, close);
-    if (o.pinned && o.via === "key" && fresh) card.focus({ preventScroll: true });
+    if (!o.pinned) return;
+    page.layer ??= layer(() => page.node, close);
+    if (o.via === "key" && fresh) card.focus({ preventScroll: true });
   },
 };
 
 /** The page's one deck. */
 export const deck = new Deck(view);
+
+/** What a card drawn on this page does with what is in it. */
+const hands: Hands = {
+  describe: (ref) => deck.describe(ref),
+  link: (target, ref, opts) => link(target, ref, opts),
+  act(a, b) {
+    if (!deck.confirms(a, refresh)) return;
+    a.on(b);
+    // Done or refused, the button no longer asks.
+    if (a.ask !== undefined) deck.refresh();
+  },
+  back: () => deck.back(),
+  close: () => deck.close(),
+};
 
 /** Registers a kind of thing: `describe(id)` gives its description, or null if there is no such thing. */
 export const register = (kind: string, describe: Describe): void => deck.register(kind, describe);
@@ -782,7 +585,14 @@ export const shown = (): { ref: Ref; pinned: boolean } | null => {
 };
 /** Whether an element is on the card that is up. */
 export const onCard = (target: EventTarget | null): boolean =>
-  target instanceof Node && (node?.contains(target) ?? false);
+  target instanceof Node && (page.node?.contains(target) ?? false);
+/** How the last card was asked for, by the last pointer down: for a card a game pins by itself. */
+export const lastVia = (): Via => page.via;
+/** The small picture of a thing: its icon and name, linked, so every list of things looks and behaves alike. */
+export const thing = (
+  ref: Ref,
+  opts: Omit<Entry, "ref" | "from" | "locked"> & { readonly bare?: boolean } = {},
+): HTMLElement => thingOf(hands, ref, opts);
 
 /** Options for `link`. */
 export interface LinkOpts {
@@ -793,74 +603,83 @@ export interface LinkOpts {
   readonly acts?: boolean;
   /** Its card goes to its side, not above or below it. */
   readonly side?: boolean;
+  /** It is a tip (`tip.ts`), which is no thing: a press on it puts any other card away, as a press on anything else does. */
+  readonly tip?: boolean;
 }
 
-/** Makes an element stand for a thing. Inside an open card, it is followed instead. */
-export function link(target: HTMLElement, ref: Ref, opts: LinkOpts = {}): void {
-  target.dataset.ref = ref;
+/** Makes something that is not a control a button, which a picture alone names by its thing. */
+function pressable(target: HTMLElement, ref: Ref): void {
+  if (target.matches(CONTROLS)) return;
+  if (!target.hasAttribute("role")) target.setAttribute("role", "button");
+  if (!target.hasAttribute("tabindex")) target.tabIndex = 0;
+  if (!target.textContent?.trim() && !target.hasAttribute("aria-label"))
+    target.setAttribute("aria-label", deck.describe(ref)?.name ?? ref);
+}
+
+/**
+ * Makes an element stand for a thing (`ref`, or what it is now, asked each time). Inside an open
+ * card, it says its glance when pointed at and is followed when pressed, unless it acts.
+ */
+export function link(target: HTMLElement, ref: Ref | (() => Ref), opts: LinkOpts = {}): void {
+  const now = typeof ref === "function" ? ref : (): Ref => ref;
+  if (opts.tip) target.dataset.tip = "";
+  else target.dataset.ref = now();
   target.classList.add("k-link");
-  // Something that is not a control already becomes a button, which a picture alone names by its thing.
-  if (!target.matches("button, a[href], input, select, textarea, summary")) {
-    if (!target.hasAttribute("role")) target.setAttribute("role", "button");
-    if (!target.hasAttribute("tabindex")) target.tabIndex = 0;
-    if (!target.textContent?.trim() && !target.hasAttribute("aria-label"))
-      target.setAttribute("aria-label", deck.describe(ref)?.name ?? ref);
-  }
-  let timer = 0;
-  const side = opts.side ?? false;
-  const inCard = (): boolean => node?.contains(target) ?? false;
-  /** Inside a card, a thing says in a plain tip what it is in a line, and its name where only its picture shows. */
-  const named = (): void => {
-    const d = inCard() ? deck.describe(ref) : null;
-    if (d) tipBeside(target, target.querySelector(".k-thing-name, .k-info-tile-name") ? "" : d.name, d.brief);
+  pressable(target, now());
+  const { acts = false, side = false, tip = false } = opts;
+  const own = scope();
+  const inCard = (): boolean => page.node?.contains(target) ?? false;
+  /** Tells the watchers what is pointed at: a thing, not a tip. */
+  const told = (r: Ref | null): void => {
+    if (!tip && (r !== null || deck.pointed === now())) deck.point(r);
   };
-  /** After a moment, if the mouse is still on it, its card shows. */
-  const rest = (): void => {
-    window.clearTimeout(timer);
-    timer = window.setTimeout(() => {
-      if (target.isConnected && target.matches(":hover")) deck.rest(ref, target, "mouse", target, side);
-    }, REST_MS);
+  let rested = nothing;
+  /** After a moment, if the mouse is still on it, its glance grows into its card. */
+  const later = (): void => {
+    rested();
+    rested = own.after(REST_MS, () => {
+      if (target.isConnected && target.matches(":hover")) deck.rest(now(), target, "mouse", target, side);
+    });
   };
-  target.addEventListener("pointerenter", (e) => {
+  own.on(target, "pointerenter", (e) => {
     if (e.pointerType !== "mouse") return;
-    deck.point(ref);
-    if (inCard()) {
-      named();
-      return;
-    }
-    rest();
+    told(now());
+    if (inCard()) return peekAt(target, now());
+    deck.glance(now(), target, "mouse", target, side);
+    later();
   });
-  target.addEventListener("pointerleave", (e) => {
-    window.clearTimeout(timer);
-    tipOff(target);
-    if (e.pointerType === "mouse" && deck.pointed === ref) deck.point(null);
+  own.on(target, "pointerleave", (e) => {
+    rested();
+    unpeek(target);
+    if (e.pointerType === "mouse") told(null);
     deck.leave(target);
   });
-  target.addEventListener("focus", () => {
-    if (!target.matches(":focus-visible") || inCard() || givingBack()) return;
-    deck.point(ref);
-    deck.rest(ref, target, "key", target, side);
+  own.on(target, "focus", () => {
+    if (!target.matches(":focus-visible") || givingBack()) return;
+    if (inCard()) return peekAt(target, now());
+    told(now());
+    deck.rest(now(), target, "key", target, side);
   });
-  target.addEventListener("blur", () => {
-    if (deck.pointed === ref) deck.point(null);
+  own.on(target, "blur", () => {
+    unpeek(target);
+    told(null);
     deck.leave(target);
   });
-  target.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" || (opts.acts && !inCard())) return;
+  own.on(target, "keydown", (e) => {
+    // Enter asks about it, and Space as well where it is no control (a control's Space is a click).
+    if (acts || !(e.key === "Enter" || (e.key === " " && !target.matches(CONTROLS)))) return;
     e.preventDefault();
-    if (inCard()) deck.follow(ref);
-    else deck.press(ref, target, "key", target, side);
+    if (inCard()) deck.follow(now());
+    else deck.press(now(), target, "key", target, side);
   });
-  target.addEventListener("pointerdown", () => {
-    window.clearTimeout(timer);
+  own.on(target, "pointerdown", () => rested());
+  // A finger asks about a thing that acts by resting on it: its card is pinned (inside a card, followed).
+  const asked = longPress(own, target, {
+    starts: (e) => e.pointerType !== "mouse" && acts,
+    asked: () => (inCard() ? deck.follow(now()) : deck.press(now(), target, "touch", target, side)),
   });
-  // A finger asks about a thing that acts by resting on it: its card is pinned. Each press is held
-  // in a scope of the thing's own, which goes with it.
-  const asked = longPress(scope(), target, {
-    starts: (e) => e.pointerType !== "mouse" && (opts.acts ?? false) && !inCard(),
-    asked: () => deck.press(ref, target, "touch", target, side),
-  });
-  target.addEventListener(
+  own.on(
+    target,
     "click",
     (e) => {
       // The tap that ends a long press was asking what the thing is, not using it.
@@ -869,56 +688,56 @@ export function link(target: HTMLElement, ref: Ref, opts: LinkOpts = {}): void {
         e.preventDefault();
         return;
       }
-      if (inCard()) {
-        e.preventDefault();
-        e.stopPropagation();
-        tipOff(target);
-        deck.follow(ref);
-        return;
-      }
-      if (opts.acts) {
-        deck.leave(target);
+      // Pressed with a pointer, it does its own thing and its passing card goes; the keyboard's stays with the focus.
+      if (acts) {
+        if (!inCard() && e.detail > 0) deck.leave(target);
         return;
       }
       // A thing shown inside something bigger that can be clicked (a pick) is asked about, not chosen.
       e.stopPropagation();
-      const via: Via = e.detail === 0 ? "key" : lastVia;
+      if (inCard()) {
+        e.preventDefault();
+        unpeek(target);
+        deck.follow(now());
+        return;
+      }
+      const via: Via = e.detail === 0 ? "key" : page.via;
       // Clicked shut with the mouse still on it: its card comes back as a passing one.
-      if (!deck.press(ref, target, via, target, side) && via === "mouse") rest();
+      if (!deck.press(now(), target, via, target, side) && via === "mouse") later();
     },
-    true,
+    { capture: true },
   );
 }
 
-let pointing: Ref | null = null;
-let pointTimer = 0;
 /**
- * Something drawn on a canvas is pointed at (or nothing is), in a box on the page: its card shows
- * after a moment, as for an element.
+ * Something drawn on a canvas is pointed at (or nothing is), in a box on the page: its glance shows
+ * at once, and its card after a moment, as for an element.
  */
 export function point(ref: Ref | null, x: number, y: number, w = 0, h = 0): void {
-  if (ref === pointing) return;
-  const was = pointing;
-  pointing = ref;
-  window.clearTimeout(pointTimer);
+  if (ref === page.pointing) return;
+  const was = page.pointing;
+  page.pointing = ref;
+  page.pointWait();
   deck.leave(CANVAS);
   // Leaving the canvas for a link: the link has already said what is pointed at.
   if (ref !== null) deck.point(ref);
   else if (deck.pointed === was) deck.point(null);
   if (ref === null) return;
-  pointTimer = window.setTimeout(() => {
-    if (pointing === ref) deck.rest(ref, { x, y, w, h }, "mouse", CANVAS);
-  }, REST_MS);
+  const spot = { x, y, w, h };
+  deck.glance(ref, spot, "mouse", CANVAS);
+  page.pointWait = live.after(REST_MS, () => {
+    if (page.pointing === ref) deck.rest(ref, spot, "mouse", CANVAS);
+  });
 }
 
 /** Something drawn on a canvas is clicked or tapped (or nothing is): its card is pinned, or put away if it was the one pinned. */
 export function pick(ref: Ref | null, x: number, y: number, w = 0, h = 0): boolean {
-  window.clearTimeout(pointTimer);
+  page.pointWait();
   if (ref === null) {
     deck.close(CANVAS);
     return false;
   }
-  return deck.press(ref, { x, y, w, h }, lastVia, CANVAS);
+  return deck.press(ref, { x, y, w, h }, page.via, CANVAS);
 }
 
 /** While the game holds something, shows what letting it go here would do (or nothing); with `side`, beside the box. */
@@ -940,43 +759,75 @@ export function surface(target: Pick<HTMLElement, "dataset">): void {
 /** The page has been laid out again: the card moves with what it is beside, or goes if that has gone. */
 export function settle(): void {
   const o = deck.open;
+  const node = page.node;
   if (!o || !node) return;
   if (o.at instanceof Element && !o.at.isConnected) {
     if (!o.pinned) deck.close();
     return;
   }
-  if (node.classList.contains("sheet") || (o.pinned && o.stack.length > 1)) return;
-  const spot = spotOf(o.at);
-  if (spot) place(node, spot, o.side);
+  // A card followed to stays where it is; a sheet goes to whichever edge keeps it off its thing now.
+  if (!node.classList.contains("sheet") && o.pinned && o.stack.length > 1) return;
+  placeCard(node, o, "follow");
+}
+
+/** What `from` opened (a canvas's card: `canvasCard`) is beside another box now: the view moved under it. It is placed again. */
+export function moveCard(from: object, spot: Spot): void {
+  if (!deck.moveTo(from, spot)) return;
+  // It is still the card that was drawn, now beside the new box.
+  page.drawn = deck.open;
+  settle();
+}
+
+/**
+ * Puts away the passing card once what it was shown for leaves the page or, unless it was shown for
+ * the keyboard's focus, once the mouse is on something outside it. A panel drawn again under a
+ * resting mouse takes its old buttons away with no `pointerleave`, so this is asked whenever the page
+ * changes and whenever the mouse comes onto something new.
+ */
+function sweep(on: EventTarget | null): void {
+  if (page.peek && !page.peek.by.isConnected) unpeek();
+  const o = deck.open;
+  if (!o || o.pinned || !(o.from instanceof Element)) return;
+  if (!o.from.isConnected || (o.via !== "key" && on instanceof Node && !o.from.contains(on))) deck.close(o.from);
 }
 
 if (typeof window !== "undefined") {
-  window.addEventListener(
+  live.on(
+    window,
     "pointerdown",
     (e) => {
-      lastVia = e.pointerType === "mouse" ? "mouse" : "touch";
+      page.via = e.pointerType === "mouse" ? "mouse" : "touch";
       if (!deck.open && !deck.waiting()) return;
       const t = e.target instanceof Element ? e.target : null;
-      if (t && node?.contains(t)) return;
-      // A thing that is a link, or a canvas a game points into, says for itself what a press means.
+      if (t && page.node?.contains(t)) return;
+      // What the card is for, a thing that is a link, or a canvas a game points into, says for itself what a press means.
+      const from = deck.open?.from;
+      if (t && from instanceof Element && from.contains(t)) return;
       if (t?.closest("[data-ref], [data-cards]")) return;
       deck.close();
     },
-    true,
+    { capture: true },
   );
-  window.addEventListener("keydown", (e) => {
+  live.on(window, "keydown", (e) => {
     // A pinned card is a layer, which has its Escape first (`dialog.ts`); this is for a passing one,
     // which holds no focus, so the focus stays where it is.
     // One press puts away one thing: an Escape something before took is not this card's.
     if (e.key !== "Escape" || e.defaultPrevented || (!deck.open && !deck.waiting())) return;
-    // The card took this Escape: a page listening after it should not put anything else away too.
-    e.preventDefault();
+    // A card took this Escape: a page listening after it should not put anything else away too. A
+    // tip's words go with an Escape the page hears as well, as they always have.
+    if (!isSaid(deck.shown())) e.preventDefault();
     deck.close();
   });
-  window.addEventListener("resize", settle);
-  // A passing card goes with the thing it was shown for, as a tip does: taken off the page (a pick chosen, a list drawn again) or left by the mouse.
-  goesWith(() => {
-    const o = deck.open;
-    return o && !o.pinned ? { by: o.from, key: o.via === "key", off: () => deck.close(o.from) } : null;
-  });
+  live.on(window, "resize", settle);
+  // A face that came late changes how long the words are: the card is placed again.
+  live.on(document.fonts, "loadingdone", settle);
+  live.on(
+    window,
+    "pointerover",
+    (e) => {
+      if (e.pointerType === "mouse") sweep(e.target);
+    },
+    { capture: true },
+  );
+  live.observe(document.documentElement, { childList: true, subtree: true }, () => sweep(null));
 }
