@@ -18,6 +18,7 @@
  *   c  clay                  a  sand            r  resin       v  salvage
  *   t  tar                   q  star crystal
  *   ~  the stream            T  a redwood (nothing is built on one)        D  the depot
+ *   =  a ford: the stream, with stepping stones across it that are walked over
  *
  * A letter of a thing the tables do not have yet is clear ground until they do (`land.ts`).
  */

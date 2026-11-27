@@ -18,12 +18,16 @@ function does(act: Act): string | null {
   return "refused" in did ? did.why : null;
 }
 
-/** Buys a plot: the undergrowth comes down from its signpost outwards, before the member's eyes. */
-export function buyLand(id: Plot): boolean {
+/**
+ * Buys a plot at the price the member was shown: the undergrowth comes down from its signpost
+ * outwards, before their eyes. If the price has changed since (another tab bought a plot), nothing is
+ * bought and the rules say what it costs now.
+ */
+export function buyLand(id: Plot, price: number): boolean {
   const w = S.world;
   const plot = w.land.plots.find((p) => p.plot === id);
   const sign = layout(w).signs.find((s) => s.plot.plot === id);
-  const no = plot ? does({ do: "buyPlot", plot: id }) : "There is no such plot";
+  const no = plot ? does({ do: "buyPlot", plot: id, price }) : "There is no such plot";
   if (!plot || no !== null) {
     yardSfx.no();
     toolHooks.said(`${no}.`);

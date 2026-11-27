@@ -235,7 +235,7 @@ function tilePrint(i: number): StandingPrint | GroundPrint | null {
   if (i < 0 || i >= w.kind.length) return null;
   const k = w.kind[i] ?? NONE;
   if (isKind(k)) return standingPrint(i, k);
-  if (w.land.water[i] === 1) return { card: "ground", ground: "stream" };
+  if (w.land.water[i] === 1) return { card: "ground", ground: "stream", ford: w.land.ford[i] === 1 };
   if (redwoodAt(w, i)) {
     const x = i % w.land.w;
     const y = Math.floor(i / w.land.w);

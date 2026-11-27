@@ -1158,8 +1158,10 @@ export class Builder {
     };
     const plot = y.land.plots
       .filter((p) => F.plotState(y, p.plot).state === "for sale" && holds(p))
-      .toSorted((a, b) => a.price - b.price || a.plot - b.plot)[0];
-    return plot !== undefined && this.cmd({ do: "buyPlot", plot: F.plotName(plot.plot) });
+      .toSorted((a, b) => F.plotPrice(y, a.plot) - F.plotPrice(y, b.plot) || a.plot - b.plot)[0];
+    return (
+      plot !== undefined && this.cmd({ do: "buyPlot", plot: F.plotName(plot.plot), price: F.plotPrice(y, plot.plot) })
+    );
   }
 
   // ---------- belts and power ----------

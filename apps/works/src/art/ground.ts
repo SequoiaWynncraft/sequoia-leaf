@@ -91,11 +91,7 @@ function streamOf(land: Land): (x: number, y: number, jx: number, jy: number, i:
   const dry = (x: number, y: number): boolean => land.water[tile(x, y)] !== 1;
   return (x, y, jx, jy, i) => {
     if (wetNear[i] !== 1) return null;
-    if (land.water[i] === 1) {
-      if (!ringed(jx, jy, 3, wet)) return WATER[2];
-      if (!ringed(jx, jy, 8, wet)) return WATER[1];
-      return (y & 3) === 0 && hash(x >> 2, y, 52) > 0.86 ? WATER[1] : WATER[0];
-    }
+    if (land.water[i] === 1) return waterAt(land.ford[tile(x, y)] === 1, x, y, jx, jy, wet);
     if (!ringed(jx, jy, 3, dry)) {
       const peb = hash(x >> 1, y >> 1, 53);
       return peb > 0.9 ? STONE[2] : peb > 0.8 ? STONE[1] : EARTH[2];
@@ -568,6 +564,38 @@ export function glint(g: Ctx, land: Land, tx: number, ty: number, sx: number, sy
   const x = sx + 2 + Math.floor(hash(tx, ty, 55) * 9);
   const y = sy + 2 + Math.floor(((k * 31 + t * 5) % 1) * 12);
   R(g, x, y, phase < 0.3 ? 3 : 2, 1, phase < 0.15 ? WATER[3] : WATER[2]);
+}
+
+/** A pixel of the stream: deep in the middle, lighter at its banks, a stepping stone where it is forded. */
+function waterAt(
+  forded: boolean,
+  x: number,
+  y: number,
+  jx: number,
+  jy: number,
+  wet: (x: number, y: number) => boolean,
+): string {
+  const stone = forded ? steppingStone(x & 15, y & 15) : null;
+  if (stone) return stone;
+  if (!ringed(jx, jy, 3, wet)) return WATER[2];
+  if (!ringed(jx, jy, 8, wet)) return WATER[1];
+  return (y & 3) === 0 && hash(x >> 2, y, 52) > 0.86 ? WATER[1] : WATER[0];
+}
+
+/** Three flat stones across a forded tile, corner to corner, each lit on its top left and dark on its foot: a pixel of one, or null. */
+function steppingStone(x: number, y: number): string | null {
+  for (const [cx, cy] of [
+    [3, 4],
+    [8, 8],
+    [13, 12],
+  ] as const) {
+    const dx = x - cx;
+    const dy = y - cy;
+    if (dx * dx * 0.6 + dy * dy > 4.5) continue;
+    if (dy >= 1.5) return STONE[0];
+    return dx + dy <= -2 ? STONE[2] : STONE[1];
+  }
+  return null;
 }
 
 /** The colour the view is cleared to before the floor is drawn. */

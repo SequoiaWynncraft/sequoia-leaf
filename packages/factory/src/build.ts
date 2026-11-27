@@ -4,6 +4,8 @@
  * piece may be or be set to is each kind's to say (`kinds/`): where it may stand, what it is laid
  * over, the other tiles it stands on, and what each command that sets something on a piece does.
  */
+import { coinsText } from "@sequoia-leaf/core";
+
 import { FELLING } from "./content/plots.ts";
 import { coverRefusal } from "./footprint.ts";
 import type { Setters } from "./kinds/kind.ts";
@@ -405,12 +407,18 @@ export function plotState(y: Yard, id: Plot): { state: "owned" | "for sale" | "n
   return { state: "for sale", why: null };
 }
 
-/** Why a plot cannot be bought with `coins` in the purse, or nothing if it can. */
-export function plotRefusal(y: Yard, id: Plot, coins: number): string | null {
+/**
+ * Why a plot cannot be bought at `shown` with `coins` in the purse, or nothing if it can. The price is
+ * the one the player was shown: a plot that rises costs more once another is bought (from another
+ * tab, or earlier in the same batch), and then it is not bought at all.
+ */
+export function plotRefusal(y: Yard, id: Plot, shown: number, coins: number): string | null {
   const { state, why } = plotState(y, id);
   if (state === "owned") return "You already own that plot";
   if (state === "not yet") return why;
-  return coins < plotPrice(y, id) ? "Not enough Coins" : null;
+  const now = plotPrice(y, id);
+  if (shown !== now) return `The price has changed: it is now ${coinsText(now)}`;
+  return coins < now ? "Not enough Coins" : null;
 }
 
 /**
@@ -441,9 +449,9 @@ export function fell(y: Yard, x: number, z: number, coins: number): Spent {
   return { ok: true, cost };
 }
 
-/** Buys a plot and says what it cost. */
-export function buyPlot(y: Yard, id: Plot, coins: number): Spent {
-  const why = plotRefusal(y, id, coins);
+/** Buys a plot at the price the player was shown, and says what it cost. */
+export function buyPlot(y: Yard, id: Plot, shown: number, coins: number): Spent {
+  const why = plotRefusal(y, id, shown, coins);
   if (why !== null) return { ok: false, why };
   // Its price before it is the yard's: owned, it would count toward its own rise.
   const cost = plotPrice(y, id);

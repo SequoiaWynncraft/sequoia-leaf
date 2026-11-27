@@ -12,7 +12,12 @@ import { itemRef } from "./refs.ts";
 
 /** A tile with nothing on it that has a card: the stream, or a redwood. */
 export type GroundPrint =
-  | { readonly card: "ground"; readonly ground: "stream" }
+  | {
+      readonly card: "ground";
+      readonly ground: "stream";
+      /** Stepping stones cross it here, and it is walked over. */
+      readonly ford: boolean;
+    }
   | {
       readonly card: "ground";
       readonly ground: "redwood";
@@ -47,7 +52,8 @@ export const AGAIN = "Press again to buy";
 
 /** What the land's cards do: buy a plot, fell a redwood, and say why a button will not do what it says, with its sound. */
 export interface LandHands {
-  buy(plot: Plot): boolean;
+  /** Buys a plot at the price its card shows. */
+  buy(plot: Plot, price: number): boolean;
   fell(x: number, y: number): boolean;
   refuse(why: string): void;
 }
@@ -55,8 +61,8 @@ export interface LandHands {
 export function groundCard(p: GroundPrint, hands: Pick<LandHands, "fell" | "refuse">): Description {
   if (p.ground === "stream")
     return {
-      name: "The stream",
-      tag: "Nothing can be built on it. A waterwheel beside it makes power, and a tunnel can go under it.",
+      name: p.ford ? "A ford" : "The stream",
+      tag: `${p.ford ? "Stepping stones across the stream. " : ""}Nothing can be built on it. A waterwheel beside it makes power, and a tunnel can go under it.`,
     };
   const fell = p.fell;
   return {
@@ -126,7 +132,7 @@ export function plotCard(p: PlotPrint, hands: Pick<LandHands, "buy" | "refuse">)
                   ask: { again: AGAIN, price: p.price },
                   on: () => {
                     // Bought, the card has nothing more to offer: it is put away, so it does not sit over the new land.
-                    if (hands.buy(p.plot)) close();
+                    if (hands.buy(p.plot, p.price)) close();
                   },
                 }
               : { on: () => hands.refuse("Not enough Coins") }),

@@ -5,7 +5,7 @@
  * sixteenths of a pixel so that a page and Leaf mean the same number by one.
  *
  * What is solid goes by the yard's tiles: off the map, land the yard has not bought (the fence keeps
- * to it), the stream, a standing redwood, the depot, and every piece but those that lie flat, which
+ * to it), the stream but where it is forded, a standing redwood, the depot, and every piece but those that lie flat, which
  * are walked over: what carries (`KindDef.carries`: belts, splitters, joiners, sorters and tunnel
  * mouths). A figure that something is built on is put on the nearest clear ground (`freed`), by the
  * same rule on every side.
@@ -68,7 +68,7 @@ export function yardSolid(y: Yard): Solid {
       const i = Math.floor(py / TILE_PX) * land.w + Math.floor(x / TILE_PX);
       const plot = land.plots[land.plot[i] ?? NONE];
       if (!plot || !y.plots.includes(plot.plot)) return OUTSIDE;
-      if (land.water[i] === 1) return WATER;
+      if (land.water[i] === 1 && land.ford[i] !== 1) return WATER;
       const k = y.kind[i] ?? NONE;
       return (k !== NONE && STANDS[k] === 1) || redwoodAt(y, i) ? IN_THE_WAY : null;
     },

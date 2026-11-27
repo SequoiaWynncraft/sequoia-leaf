@@ -12,7 +12,7 @@ import { describe, expect, test } from "bun:test";
 import * as F from "../src/index.ts";
 import { learn } from "./goals.ts";
 import { near, tileNear, xy } from "./near.ts";
-import { give, must } from "./yards.ts";
+import { buying, give, must } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 
@@ -26,7 +26,7 @@ const PRICES = [1000, 1500, 2200, 3300, 4900, 7300, 10_900, 16_300, 24_400, 36_6
 /** A yard in tier 5 that owns the Meadow, where a redwood stands, with nothing to undo: felling studied, unless said. */
 function meadow(felling = true): F.Yard {
   const y = F.create({ seed: 5, tier: 5 });
-  must(y, { do: "buyPlot", plot: "meadow" });
+  must(y, buying(y, "meadow"));
   if (felling) learn(y, FELLING);
   y.history = [];
   return y;
@@ -45,11 +45,7 @@ function everywhere(): F.Yard {
   for (let more = true; more;) {
     more = false;
     for (const p of y.land.plots)
-      if (
-        firstRing(p) &&
-        !y.plots.includes(p.plot) &&
-        !("refused" in give(y, { do: "buyPlot", plot: F.plotName(p.plot) }))
-      )
+      if (firstRing(p) && !y.plots.includes(p.plot) && !("refused" in give(y, buying(y, F.plotName(p.plot)))))
         more = true;
   }
   return y;
@@ -231,7 +227,7 @@ describe("a redwood felled, kept", () => {
 /** A yard with every goal done that owns the Meadow, its redwood felled and a belt where it stood, kept as a plan. */
 function planned(): F.Yard {
   const y = F.create({ seed: 5, tier: 6 });
-  must(y, { do: "buyPlot", plot: "meadow" });
+  must(y, buying(y, "meadow"));
   y.history = [];
   must(y, { do: "fell", ...TREE, id: "f-1" });
   must(y, { do: "build", kind: "belt", ...TREE, dir: 0, id: "b-1" });
@@ -257,7 +253,7 @@ describe("a plan of the whole yard", () => {
 
   test("put back never plants a redwood: kept before it was felled, it leaves the ground clear", () => {
     const y = F.create({ seed: 5, tier: 6 });
-    must(y, { do: "buyPlot", plot: "meadow" });
+    must(y, buying(y, "meadow"));
     must(y, { do: "build", kind: "mill", ...near(-3, -3), dir: 0 });
     must(y, { do: "saveYard", slot: 0 });
     must(y, { do: "fell", ...TREE });

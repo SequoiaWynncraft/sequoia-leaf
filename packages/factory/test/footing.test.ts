@@ -8,7 +8,7 @@ import { EDGE, IN_THE_WAY, OUTSIDE, TILE_PX, WATER } from "../src/footing.ts";
 import * as F from "../src/index.ts";
 import { learn } from "./goals.ts";
 import { near } from "./near.ts";
-import { must } from "./yards.ts";
+import { buying, must } from "./yards.ts";
 
 /** The middle of a tile as far east and south of the depot, in pixels of the art. */
 const mid = (dx: number, dy: number): F.Place => {
@@ -58,19 +58,33 @@ describe("what a figure walks over", () => {
     for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) expect(why(y, ox, oy)).toBe(IN_THE_WAY);
     // The Long Meadow, south of the yard, is not the yard's until it is bought; its redwood stands 2 west and 15 south of the depot.
     expect(why(y, -4, 12)).toBe(OUTSIDE);
-    must(y, { do: "buyPlot", plot: "meadow" });
+    must(y, buying(y, "meadow"));
     expect(why(y, -4, 12)).toBeNull();
     expect(why(y, -2, 15)).toBe(IN_THE_WAY);
     learn(y, F.goal("felling"));
     must(y, { do: "fell", ...near(-2, 15) });
     expect(why(y, -2, 15)).toBeNull();
-    must(y, { do: "buyPlot", plot: "stream" });
+    must(y, buying(y, "stream"));
     const stream = F.plot("stream");
     const wet = y.land.water.findIndex((w, i) => w === 1 && y.land.plots[y.land.plot[i] ?? F.NONE]?.plot === stream);
     expect(wet).toBeGreaterThanOrEqual(0);
     expect(why(y, (wet % y.land.w) - F.LAND.depot[0], Math.floor(wet / y.land.w) - F.LAND.depot[1])).toBe(WATER);
     expect(F.yardSolid(y).at(-1, 40)).toBe(EDGE);
     expect(F.yardSolid(y).at(40, y.land.h * TILE_PX)).toBe(EDGE);
+  });
+});
+
+describe("a ford", () => {
+  test("is walked over as ground, and is the stream to everything else: nothing is built on it", () => {
+    const y = yard();
+    for (const plot of ["grove", "seam"]) must(y, buying(y, plot));
+    const seam = F.LAND.plots.findIndex((p) => p.plot === F.plot("seam"));
+    const i = F.LAND.ford.findIndex((f, t) => f === 1 && F.LAND.plot[t] === seam);
+    const [x, z] = [i % F.LAND.w, Math.floor(i / F.LAND.w)];
+    expect([F.LAND.water[i], why(y, x - F.LAND.depot[0], z - F.LAND.depot[1])]).toEqual([1, null]);
+    expect(F.refusal(y, F.BELT, x, z, Infinity)).toBe("Nothing can be built on the stream");
+    // Beside it, the stream is as it was.
+    expect(why(y, x - F.LAND.depot[0], z - F.LAND.depot[1] - 1)).toBe(WATER);
   });
 });
 

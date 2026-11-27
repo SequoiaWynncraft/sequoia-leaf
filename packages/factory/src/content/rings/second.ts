@@ -147,7 +147,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
       "TT....~~.ooooo..",
       "TT....~~.ooooo..",
       "......~~oooooo..",
-      "......~~..ooo...",
+      "......==..ooo...",
       "..r...~~........",
       "rrrr~~~..TT.....",
       ".rr~~~...TT..o..",

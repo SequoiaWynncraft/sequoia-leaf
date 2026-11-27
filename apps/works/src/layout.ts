@@ -187,21 +187,64 @@ function signs(y: Yard, owned: readonly boolean[]): Sign[] {
           (p.y < plot.y + plot.h && plot.y < p.y + p.h && (p.x + p.w === plot.x || plot.x + plot.w === p.x))),
     );
     if (!next) return;
-    // The tile of this plot nearest the middle of the shared edge, stepped along it off water and roots.
-    const beside = next.x + next.w === plot.x || plot.x + plot.w === next.x;
-    // Three tiles along from the middle, to stand clear of the path and the gate.
-    const tx0 = beside ? (next.x < plot.x ? plot.x + 1 : plot.x + plot.w - 2) : plot.x + Math.floor(plot.w / 2) + 3;
-    const ty0 = beside ? plot.y + Math.floor(plot.h / 2) : next.y < plot.y ? plot.y + 1 : plot.y + plot.h - 2;
-    for (let k = 0; k < 8; k++) {
-      const step = k % 2 ? -Math.ceil(k / 2) : Math.ceil(k / 2);
-      const tx = beside ? tx0 : tx0 + step;
-      const ty = beside ? ty0 + step : ty0;
-      if (!clear(tx, ty)) continue;
-      out.push({ plot, price: plotPrice(y, plot.plot), x: tx * TILE + 8, y: ty * TILE + 14 });
-      return;
-    }
+    const [tx, ty] = signSpot(plot, next, clear);
+    out.push({ plot, price: plotPrice(y, plot.plot), x: tx * TILE + 8, y: ty * TILE + 14 });
   });
   return out;
+}
+
+/** A line of tiles along the edge a plot shares with the land beside it: where it starts, the way along it and the way in, and how long and deep the plot is that way. */
+interface Edge {
+  readonly x: number;
+  readonly y: number;
+  readonly along: readonly [number, number];
+  readonly inward: readonly [number, number];
+  readonly length: number;
+  readonly depth: number;
+}
+
+/** The edge `plot` shares with `next`, starting at the tile just inside it nearest the edge's middle (three tiles along, to stand clear of the path and the gate). */
+function edgeOf(plot: Plotted, next: Plotted): Edge {
+  if (next.x + next.w === plot.x || plot.x + plot.w === next.x) {
+    const east = next.x < plot.x;
+    const x = east ? plot.x + 1 : plot.x + plot.w - 2;
+    return {
+      x,
+      y: plot.y + Math.floor(plot.h / 2),
+      along: [0, 1],
+      inward: [east ? 1 : -1, 0],
+      length: plot.h,
+      depth: plot.w,
+    };
+  }
+  const south = next.y < plot.y;
+  const y = south ? plot.y + 1 : plot.y + plot.h - 2;
+  return {
+    x: plot.x + Math.floor(plot.w / 2) + 3,
+    y,
+    along: [1, 0],
+    inward: [0, south ? 1 : -1],
+    length: plot.w,
+    depth: plot.h,
+  };
+}
+
+/**
+ * Where a plot for sale's signpost stands: the first tile of the edge it shares with `next`, stepped
+ * along the whole edge off water and roots, then a row further in at a time. Where nothing is clear it
+ * stands at that first tile all the same: a plot for sale always has its sign.
+ */
+function signSpot(plot: Plotted, next: Plotted, clear: (tx: number, ty: number) => boolean): readonly [number, number] {
+  const e = edgeOf(plot, next);
+  for (let d = 0; d < e.depth; d++)
+    for (let k = 0; k < 2 * e.length; k++) {
+      const step = k % 2 ? -Math.ceil(k / 2) : Math.ceil(k / 2);
+      const tx = e.x + step * e.along[0] + d * e.inward[0];
+      const ty = e.y + step * e.along[1] + d * e.inward[1];
+      if (tx >= plot.x && ty >= plot.y && tx < plot.x + plot.w && ty < plot.y + plot.h && clear(tx, ty))
+        return [tx, ty];
+    }
+  return [e.x, e.y];
 }
 
 let kept: Layout | null = null;

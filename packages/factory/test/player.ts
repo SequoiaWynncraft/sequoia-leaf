@@ -5,7 +5,7 @@ import { expect } from "bun:test";
 
 import * as F from "../src/index.ts";
 import { rng } from "./random.ts";
-import { delivering } from "./yards.ts";
+import { buying, delivering } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 
@@ -203,7 +203,7 @@ export class Player {
       }
       case 17:
         // A plot it owns or may buy, one not for sale yet, or one there is none of.
-        return { do: "buyPlot", plot: this.pick([...this.plotsNear(), "seam", "moon"]) };
+        return buying(y, this.pick([...this.plotsNear(), "seam", "moon"]) ?? "moon");
       case 18:
         return { do: "take", node: this.pick([...F.NODES.map((n) => n.id), "nap"]) };
       case 19: {

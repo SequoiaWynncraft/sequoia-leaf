@@ -29,6 +29,11 @@ export interface Land {
   /** 1 where the stream runs. Nothing is built on it. */
   readonly water: Uint8Array;
   /**
+   * 1 on the stream where it is forded: stepping stones that are walked across. It is the stream for
+   * every other rule (nothing is built on it, a waterwheel beside it turns, a tunnel passes under it).
+   */
+  readonly ford: Uint8Array;
+  /**
    * Which redwood grows on each tile, as a place in `trees`, or -1. Whether it still stands is the
    * yard's to say (`redwoodAt`): a yard may fell one.
    */
@@ -51,19 +56,23 @@ export interface Land {
   readonly step: readonly [number, number, number, number];
 }
 
-/** The parts a land is made from, with `trunk` 1 on each tile a redwood grows on; the rest is worked out. */
-export type LandParts = Omit<Land, "edge" | "step" | "tree" | "trees" | "origin"> & { readonly trunk: Uint8Array };
+/** The parts a land is made from, with `trunk` 1 on each tile a redwood grows on (and `ford` none if not given); the rest is worked out. */
+export type LandParts = Omit<Land, "edge" | "step" | "tree" | "trees" | "origin" | "ford"> & {
+  readonly trunk: Uint8Array;
+  readonly ford?: Uint8Array;
+};
 
 export function landOf(parts: LandParts): Land {
-  const { trunk, ...rest } = parts;
+  const { trunk, ford: forded, ...rest } = parts;
   const { w, h } = parts;
+  const ford = forded ?? new Uint8Array(w * h);
   const edge = new Uint8Array(w * h);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++)
       edge[y * w + x] = (x === w - 1 ? 1 : 0) | (y === h - 1 ? 2 : 0) | (x === 0 ? 4 : 0) | (y === 0 ? 8 : 0);
   const yard = parts.plots.find((p) => p.plot === plot("yard"));
   const origin = [yard?.x ?? 0, yard?.y ?? 0] as const;
-  return { ...rest, ...redwoods(w, h, trunk, parts.plot), edge, step: [1, w, -1, -w], origin };
+  return { ...rest, ford, ...redwoods(w, h, trunk, parts.plot), edge, step: [1, w, -1, -w], origin };
 }
 
 /**
@@ -116,6 +125,7 @@ export function landFrom(infos: readonly PlotInfo<string>[], ids: readonly strin
   const isPlot = isPlotOf(ids);
   const deposit = new Uint8Array(w * h).fill(NONE);
   const water = new Uint8Array(w * h);
+  const ford = new Uint8Array(w * h);
   const trunk = new Uint8Array(w * h);
   const plotAt = new Uint8Array(w * h).fill(NONE);
   const depots: [number, number][] = [];
@@ -130,7 +140,8 @@ export function landFrom(infos: readonly PlotInfo<string>[], ids: readonly strin
         const letter = p.rows[y]?.[x] ?? ".";
         plotAt[i] = n;
         deposit[i] = DEPOSIT.get(letter) ?? NONE;
-        if (letter === "~") water[i] = 1;
+        if (letter === "~" || letter === "=") water[i] = 1;
+        if (letter === "=") ford[i] = 1;
         if (letter === "T") trunk[i] = 1;
         if (letter === "D") depots.push([x0 + x, y0 + y]);
       }
@@ -139,7 +150,7 @@ export function landFrom(infos: readonly PlotInfo<string>[], ids: readonly strin
   });
   // The depot is the nine tiles marked D; its middle is the fifth of them, reading across and down.
   const depot = depots[4] ?? [Math.floor(w / 2), Math.floor(h / 2)];
-  return landOf({ w, h, deposit, water, trunk, plot: plotAt, plots, depot });
+  return landOf({ w, h, deposit, water, ford, trunk, plot: plotAt, plots, depot });
 }
 
 /** The guild's land. */

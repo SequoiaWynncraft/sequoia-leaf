@@ -13,7 +13,7 @@ import { bareLand } from "./land.ts";
 import { near, xy } from "./near.ts";
 import { Player } from "./player.ts";
 import { rng } from "./random.ts";
-import { delivering, give, junctions, lay, must, saved, staged } from "./yards.ts";
+import { buying, delivering, give, junctions, lay, must, saved, staged } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 
@@ -27,8 +27,8 @@ function laid(seed = 1): F.Yard {
 /** Every plot the slice sells with the generator's pieces on it, tier 4 open (where an area may be upgraded), and nothing yet to undo. */
 function large(): F.Yard {
   const plots = F.PLOT_IDS.filter((p) => p !== "yard");
-  const buy = (gen: { cmd: (c: Rec) => boolean }): void => {
-    for (const plot of plots) gen.cmd({ do: "buyPlot", plot });
+  const buy = (gen: { y: F.Yard; cmd: (c: Rec) => boolean }): void => {
+    for (const plot of plots) gen.cmd(buying(gen.y, plot));
   };
   const y = generate(F.LAND, 600, 20_261_122, buy, F.create({ seed: 20_261_122, tier: 4 })).y;
   y.history = [];
@@ -169,7 +169,7 @@ function undoneAll(
   // Its owner there at its last tick, with nothing in its till or to undo: only the commands move
   // anything. It owns the Meadow where it may buy it.
   const y = start;
-  give(y, { do: "buyPlot", plot: "meadow" });
+  give(y, buying(y, "meadow"));
   y.till = 0;
   y.history = [];
   const r = rng(seed);

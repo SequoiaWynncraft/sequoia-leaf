@@ -38,6 +38,8 @@ import {
   LEAD,
   MILLI,
   play as playWorks,
+  plot as plotOf,
+  plotPrice,
   readAnswer,
   readCommand,
   readView as readYardView,
@@ -1984,7 +1986,7 @@ describe("an Undo in the Works", () => {
     // Alice's yard has tier 5's research done and owns the Meadow, as a staging step writes it over:
     // its redwood stands at 22, 33. She is given Coins enough to fell it.
     const w = createYard({ seed: 7, tier: 6 });
-    const read = readCommand({ tick: w.tick, do: "buyPlot", plot: "meadow" });
+    const read = readCommand({ tick: w.tick, do: "buyPlot", plot: "meadow", price: 300 });
     if (!read || "refused" in playWorks(w, read)) throw new Error("the Meadow was not bought");
     w.history = [];
     w.at = clock.now;
@@ -2018,6 +2020,44 @@ describe("an Undo in the Works", () => {
       { id: `u-${ids}`, refused: "cannot_undo" },
     ]);
     expect([await coinsOf(alice), redwoodAt(await yardShown(), tree)]).toEqual([300, false]);
+  });
+
+  it("buys a plot only at the price the page showed: of two plots of the new land in one batch, the second, risen by the first, is refused and charges nothing", async () => {
+    // Alice's yard has done tier 4's commission and owns today's nine plots, as a staging step writes it
+    // over. She is given Coins enough for both plots.
+    const w = createYard({ seed: 7, tier: 5 });
+    for (const plot of ["meadow", "bank", "stream", "grove", "seam", "quarry", "hollow", "pond"] as const) {
+      const read = readCommand({ tick: w.tick, do: "buyPlot", plot, price: plotPrice(w, plotOf(plot)) });
+      if (!read || "refused" in playWorks(w, read)) throw new Error(`${plot} was not bought`);
+    }
+    w.history = [];
+    w.at = clock.now;
+    await yardShown();
+    const text = FACTORY.encode(w);
+    await services.query(
+      (sql) =>
+        sql`UPDATE play_state SET rev = rev + 1, state = ${text}, updated_at = ${clock.now} WHERE player_id = ${alice}`,
+    );
+    const grant = { amount: 300_000, reason: "A test's grant", game: null, key: `grant:${alice}` };
+    await services.run(Coins.use((coins) => coins.post(alice, grant, clock.now)));
+    // Both at the prices one page showed: The Old Stand was 110,000 until The Old Workings was bought.
+    const { results } = await works([
+      { do: "buyPlot", plot: "workings", price: 100_000 },
+      { do: "buyPlot", plot: "stand", price: 110_000 },
+    ]);
+    expect(results).toEqual([
+      { id: `u-${ids - 1}`, notes: [] },
+      { id: `u-${ids}`, refused: "plot_not_for_sale" },
+    ]);
+    expect((await entries(alice)).slice(-1)).toEqual([
+      { amount: -100_000, reason: "A plot for the Works", game: "works", key: expect.any(String) },
+    ]);
+    expect(await coinsOf(alice)).toBe(200_300);
+    // Asked again at the price it is now, it is bought for that.
+    expect((await works([{ do: "buyPlot", plot: "stand", price: 126_000 }])).results).toEqual([
+      { id: `u-${ids}`, notes: [] },
+    ]);
+    expect([await coinsOf(alice), (await yardShown()).plots.length]).toEqual([74_300, 11]);
   });
 
   it("is refused whole when another game has spent the Coins it would take back since: the yard and the ledger as they were", async () => {

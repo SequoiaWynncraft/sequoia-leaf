@@ -7,7 +7,7 @@
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
-import { give, must, SAVES } from "./yards.ts";
+import { buying, give, must, SAVES } from "./yards.ts";
 
 type Holds = Partial<Record<"d" | "s" | "o" | "c" | "a" | "r" | "v" | "t" | "q" | "~", number>>;
 /** SPEC-2's table of the 40 plots: id, column, row, ring, base price, what it holds (by letter), redwoods, clear tiles. */
@@ -66,10 +66,10 @@ function plotted(id: F.PlotName): F.Plotted {
   if (!p) throw new Error(`no plot ${id} on the land`);
   return p;
 }
-/** How many of each letter a plot's rows hold. */
+/** How many of each letter a plot's rows hold, a ford counted as the stream it is. */
 function letters(rows: readonly string[]): Map<string, number> {
   const out = new Map<string, number>();
-  for (const row of rows) for (const c of row) out.set(c, (out.get(c) ?? 0) + 1);
+  for (const row of rows) for (const c of row.replaceAll("=", "~")) out.set(c, (out.get(c) ?? 0) + 1);
   return out;
 }
 /** A yard past tier 4's commission that owns today's nine plots, as the yards that have finished tier 4 do. */
@@ -78,13 +78,13 @@ function nine(): F.Yard {
   for (let more = true; more;) {
     const p = F.LAND.plots.find((q) => q.ring === 1 && F.plotState(y, q.plot).state === "for sale");
     more = p !== undefined;
-    if (p) must(y, { do: "buyPlot", plot: F.plotName(p.plot) });
+    if (p) must(y, buying(y, F.plotName(p.plot)));
   }
   return y;
 }
 /** Buys a plot with Coins enough, and gives what it cost. */
 function buy(y: F.Yard, id: F.PlotName): number {
-  const spent = F.buyPlot(y, F.plot(id), Infinity);
+  const spent = F.buyPlot(y, F.plot(id), F.plotPrice(y, F.plot(id)), Infinity);
   if (!spent.ok) throw new Error(spent.why);
   return spent.cost;
 }
@@ -162,6 +162,65 @@ describe("the 40 plots", () => {
   });
 });
 
+/** What a figure may stand on: every tile but the stream (where it is not forded), a standing redwood and the depot, on a yard that owns all the land. */
+function walkable(): (i: number) => boolean {
+  const y = F.create({ seed: 1, tier: 5 });
+  for (const p of F.LAND.plots) if (!y.plots.includes(p.plot)) y.plots.push(p.plot);
+  const solid = F.yardSolid(y);
+  return (i) => solid.at((i % F.LAND.w) * 16 + 8, Math.floor(i / F.LAND.w) * 16 + 8) === null;
+}
+/** The tiles of a plot, by its place in the land's list. */
+function tilesOf(p: F.Plotted): number[] {
+  const out: number[] = [];
+  for (let z = p.y; z < p.y + p.h; z++) for (let x = p.x; x < p.x + p.w; x++) out.push(z * F.LAND.w + x);
+  return out;
+}
+
+describe("every plot is of use whatever order the land is bought in", () => {
+  // A plot is bought only when it touches the yard's land, so with these two any land a yard owns is
+  // one walk, and from it everything is in reach (the plot stood on and the eight round it).
+  test("on each plot, the ground a figure may walk on is one piece: the stream is forded wherever it would cut one in two", () => {
+    const free = walkable();
+    const W = F.LAND.w;
+    for (const p of F.LAND.plots) {
+      const n = F.LAND.plots.indexOf(p);
+      const tiles = tilesOf(p).filter(free);
+      const seen = new Set(tiles.slice(0, 1));
+      const next = tiles.slice(0, 1);
+      for (let i = next.pop(); i !== undefined; i = next.pop())
+        for (const j of [i + 1, i - 1, i + W, i - W]) {
+          const across = Math.abs((j % W) - (i % W)) <= 1;
+          if (across && F.LAND.plot[j] === n && free(j) && !seen.has(j)) {
+            seen.add(j);
+            next.push(j);
+          }
+        }
+      expect([p.name, seen.size]).toEqual([p.name, tiles.length]);
+    }
+    // The fords: stepping stones on the stream, walked across, and the stream for every other rule.
+    const fords = F.LAND.ford.reduce((n, f) => n + f, 0);
+    expect([fords, F.LAND.ford.every((f, i) => f === 0 || F.LAND.water[i] === 1)]).toEqual([16, true]);
+  });
+
+  test("every two plots that touch are joined by ground a figure may walk on, across their shared edge", () => {
+    const free = walkable();
+    const W = F.LAND.w;
+    for (const a of F.LAND.plots)
+      for (const b of F.LAND.plots) {
+        if (a.plot >= b.plot || !F.touching(a, b)) continue;
+        const side = a.x + a.w === b.x || b.x + b.w === a.x;
+        const [first, second] = side ? (a.x < b.x ? [a, b] : [b, a]) : a.y < b.y ? [a, b] : [b, a];
+        const along = side
+          ? Array.from({ length: first.h }, (_, k) => [(first.y + k) * W + first.x + first.w - 1, 1] as const)
+          : Array.from({ length: first.w }, (_, k) => [(first.y + first.h - 1) * W + first.x + k, W] as const);
+        const joined = along.some(
+          ([i, step]) => free(i) && free(i + step) && F.LAND.plot[i + step] === F.LAND.plots.indexOf(second),
+        );
+        expect([a.name, b.name, joined]).toEqual([a.name, b.name, true]);
+      }
+  });
+});
+
 describe("the price of land", () => {
   test("every plot of the two new rings owned makes every one still to buy 15% dearer, in whole thousands: section 4.1's table", () => {
     const TABLE_41: readonly (readonly [number, number])[] = [
@@ -213,11 +272,29 @@ describe("the price of land", () => {
     expect(bought.reduce((sum, [, coins]) => sum + coins, 0)).toBe(1_196_420_000);
   });
 
-  test("the shortest way to The Crater costs 3,509,000; Skyfall Edge as the second, third and fourth plot bought", () => {
+  test("the cheapest way to The Crater after The Old Workings, each plot bought touching the land before it, costs 3,326,000; Skyfall Edge as the second, third and fourth plot", () => {
+    // Every order of buying is walkable (below), so the cheapest way is the cheapest order of plots
+    // that touch: searched, four at most after The Old Workings.
+    const crater = plotted("crater");
+    let best = { coins: Infinity, way: [] as string[] };
+    const search = (owned: readonly F.Plotted[], way: readonly string[], coins: number, left: number): void => {
+      if (coins >= best.coins) return;
+      if (owned.includes(crater)) best = { coins, way: [...way] };
+      else if (left > 0) {
+        const risen = owned.filter(F.rises).length;
+        for (const p of F.LAND.plots)
+          if (!owned.includes(p) && owned.some((q) => F.touching(p, q)))
+            search([...owned, p], [...way, p.name], coins + F.risen(p.price, risen), left - 1);
+      }
+    };
+    search([...F.LAND.plots.filter((p) => p.ring <= 1), plotted("workings")], ["The Old Workings"], 100_000, 4);
+    expect(best).toEqual({
+      coins: 3_326_000,
+      way: ["The Old Workings", "The Narrows", "The Scree", "The Tarn", "The Crater"],
+    });
     const y = nine();
-    const corner = (["workings", "narrows", "scree", "rim", "crater"] as const).map((id) => buy(y, id));
-    expect(corner).toEqual([100_000, 149_000, 251_000, 912_000, 2_097_000]);
-    expect(corner.reduce((a, b) => a + b, 0)).toBe(3_509_000);
+    const corner = (["workings", "narrows", "scree", "tarn", "crater"] as const).map((id) => buy(y, id));
+    expect(corner).toEqual([100_000, 149_000, 251_000, 729_000, 2_097_000]);
     const sky = nine();
     const prices: number[] = [];
     for (const id of ["workings", "flats", "weir"] as const) {
@@ -227,12 +304,27 @@ describe("the price of land", () => {
     expect(prices).toEqual([253_000, 290_000, 334_000]);
   });
 
+  test("a plot is bought only at the price the player was shown: risen since, it is refused, says what it costs now, and nothing is taken", () => {
+    const y = nine();
+    const till = y.till;
+    expect(give(y, { do: "buyPlot", plot: "workings", price: 100_000 })).not.toHaveProperty("refused");
+    // A second page still showed The Old Stand at 110,000.
+    expect(give(y, { do: "buyPlot", plot: "stand", price: 110_000 })).toEqual({
+      refused: "plot_not_for_sale",
+      why: "The price has changed: it is now 126,000 Coins",
+    });
+    expect([y.plots.includes(F.plot("stand")), y.till]).toEqual([false, till]);
+    // A buy that says no price is no command at all.
+    expect(F.readCommand({ tick: y.tick, do: "buyPlot", plot: "stand" })).toBeNull();
+    expect(give(y, { do: "buyPlot", plot: "stand", price: 126_000 })).not.toHaveProperty("refused");
+  });
+
   test("today's nine plots keep their prices and count for nothing; buying is never undone", () => {
     const y = F.create({ seed: 3, tier: 5 });
     expect(priceIn(y, "meadow")).toBe(300);
-    must(y, { do: "buyPlot", plot: "meadow" });
+    must(y, buying(y, "meadow"));
     expect(priceIn(y, "workings")).toBe(100_000);
-    must(y, { do: "buyPlot", plot: "workings" });
+    must(y, buying(y, "workings"));
     expect([priceIn(y, "pond"), priceIn(y, "acre")]).toEqual([5000, 276_000]);
     expect(give(y, { do: "undo", entry: y.history.at(-1)?.id ?? "" })).toHaveProperty("refused");
     expect(y.plots).toContain(F.plot("workings"));

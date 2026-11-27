@@ -113,7 +113,8 @@ export function stampOf(land: Land): string {
     h = Math.imul(h ^ v, 0x01000193);
   };
   for (const v of [land.w, land.h, ...land.depot]) mix(v);
-  for (const a of [land.deposit, land.water, land.tree, land.plot]) for (let i = 0; i < a.length; i++) mix(a[i] ?? 0);
+  for (const a of [land.deposit, land.water, land.ford, land.tree, land.plot])
+    for (let i = 0; i < a.length; i++) mix(a[i] ?? 0);
   for (const p of land.plots) for (const v of [p.plot, p.price, p.x, p.y, p.w, p.h]) mix(v);
   const stamp = `${RULES}.${(h >>> 0).toString(36)}`;
   STAMPS.set(land, stamp);

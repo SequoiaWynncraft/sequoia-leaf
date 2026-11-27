@@ -112,7 +112,8 @@ interface Carries {
   way: At & { readonly way: number; readonly open: boolean };
   first: At & { readonly way: number | null };
   wayIn: At & { readonly way: number; readonly on: boolean };
-  buyPlot: { readonly plot: Plot };
+  /** At the price the player was shown: refused if it is not the price now. */
+  buyPlot: { readonly plot: Plot; readonly price: number };
   /** Any tile of the redwood. */
   fell: At;
   take: { readonly node: Goal };
@@ -431,11 +432,11 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
     refused: "plot_not_for_sale",
     read: (v) => {
       const p = plotNamed(v.plot);
-      return p === null ? null : { do: "buyPlot", plot: p };
+      return p === null || !whole(v.price, Number.MAX_SAFE_INTEGER) ? null : { do: "buyPlot", plot: p, price: v.price };
     },
-    write: (a) => ({ plot: plotName(a.plot) }),
+    write: (a) => ({ plot: plotName(a.plot), price: a.price }),
     act: (y, a, coins, no) => {
-      const did = buyPlot(y, a.plot, coins);
+      const did = buyPlot(y, a.plot, a.price, coins);
       if (!did.ok) return no(did.why);
       return done(priced(y, did.cost, REASON.buyPlot), [
         { kind: LOGGED.worksPlot, data: { plot: plotName(a.plot), price: did.cost } },

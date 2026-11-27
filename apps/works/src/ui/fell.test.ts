@@ -7,7 +7,17 @@
  */
 import { expect, test } from "bun:test";
 
-import { at, buyPlot, create, fell as fellTree, goal, plot, redwoodAt, type Yard } from "@sequoia-leaf/factory";
+import {
+  at,
+  buyPlot,
+  create,
+  fell as fellTree,
+  goal,
+  plot,
+  plotPrice,
+  redwoodAt,
+  type Yard,
+} from "@sequoia-leaf/factory";
 import { learn } from "@sequoia-leaf/factory/test/goals.ts";
 import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 import { Deck } from "@sequoia-leaf/kit/card.ts";
@@ -27,7 +37,7 @@ useFakeLeaf();
 /** A yard in tier 5 that owns the Meadow, where a redwood stands at 22, 33: felling studied, unless said. */
 function meadow(felling = true): Yard {
   const y = create({ seed: 5, tier: 5 });
-  if (!buyPlot(y, plot("meadow"), Infinity).ok) throw new Error("the Meadow was not bought");
+  if (!buyPlot(y, plot("meadow"), 300, Infinity).ok) throw new Error("the Meadow was not bought");
   if (felling) learn(y, goal("felling"));
   return y;
 }
@@ -91,7 +101,8 @@ test("with a redwood felled before, the card's Fell is at the next one's price, 
   // Every plot it may buy, the Clay Bank among them, and the Clay Bank's redwood felled.
   for (let more = true; more;) {
     more = false;
-    for (const p of y.land.plots) if (!y.plots.includes(p.plot) && buyPlot(y, p.plot, Infinity).ok) more = true;
+    for (const p of y.land.plots)
+      if (!y.plots.includes(p.plot) && buyPlot(y, p.plot, plotPrice(y, p.plot), Infinity).ok) more = true;
   }
   if (!fellTree(y, ...xy(-14, -4), Infinity).ok) throw new Error("the Clay Bank's redwood was not felled");
   await opened(y, 5_000);

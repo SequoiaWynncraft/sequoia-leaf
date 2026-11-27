@@ -229,7 +229,7 @@ describe("whatever costs Coins", () => {
       () => place(...xy(-5, -2)),
       (cost) => `Not enough Coins: ${cost} short`,
     ],
-    ["a plot", () => undefined, () => buyLand(plot("meadow")), () => "Not enough Coins"],
+    ["a plot", () => undefined, () => buyLand(plot("meadow"), 300), () => "Not enough Coins"],
   ];
   for (const [name, aim, send, why] of ways)
     test(`${name}, aimed while the purse covered it, is refused with the rules' sentence once it does not, and nothing is sent`, async () => {

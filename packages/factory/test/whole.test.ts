@@ -9,7 +9,7 @@ import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
 import { near, xy } from "./near.ts";
-import { give, lay, must } from "./yards.ts";
+import { buying, give, lay, must } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 
@@ -38,7 +38,7 @@ function everything(seed = 1, rings = Infinity): F.Yard {
   for (let more = true; more;) {
     const p = F.PLOT_IDS.find((id) => within(id) && F.plotState(y, F.plot(id)).state === "for sale");
     more = p !== undefined;
-    if (p) must(y, { do: "buyPlot", plot: p });
+    if (p) must(y, buying(y, p));
   }
   return y;
 }

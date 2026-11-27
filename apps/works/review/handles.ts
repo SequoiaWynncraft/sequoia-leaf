@@ -16,6 +16,7 @@ import {
   NONE,
   PIECE_BYTES,
   plotNamed,
+  plotPrice,
   power,
   readCommand,
   stepTo,
@@ -346,7 +347,7 @@ export function installHandles(p: Page): void {
     },
     plot(id) {
       const plot = plotNamed(id);
-      return plot !== null && buyLand(plot);
+      return plot !== null && buyLand(plot, plotPrice(S.world, plot));
     },
     taught(ids) {
       p.restaged(ids);
