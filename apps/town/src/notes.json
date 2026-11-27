@@ -38,17 +38,8 @@
     ]
   },
   {
-    "id": "raid-item-tools",
-    "at": "2026-11-27T21:10Z",
-    "title": "The rack, Tongs and the Whetstone",
-    "lines": [
-      "In The Little Raid the rack shows each kind of item once, with how many you have, and anything on it can be dragged onto the stall to melt for acorns.",
-      "Tongs take back everything a figure holds, and a Whetstone turns each component and finished item it holds into another of the same sort; emblems stay. Both come from some rooms' picks, and one figure of each carousel holds Tongs."
-    ]
-  },
-  {
     "id": "works-tier-5-research",
-    "at": "2026-11-27T20:37Z",
+    "at": "2026-11-27T21:34Z",
     "title": "Tier 5's first research",
     "lines": [
       "In The Works, tier 5 has its first 3 research: Felling, A deep culvert and Wide mouths.",
@@ -66,6 +57,15 @@
         "head": "Also",
         "points": ["Felling a redwood cannot be undone, and its Coins do not come back."]
       }
+    ]
+  },
+  {
+    "id": "raid-item-tools",
+    "at": "2026-11-27T21:10Z",
+    "title": "The rack, Tongs and the Whetstone",
+    "lines": [
+      "In The Little Raid the rack shows each kind of item once, with how many you have, and anything on it can be dragged onto the stall to melt for acorns.",
+      "Tongs take back everything a figure holds, and a Whetstone turns each component and finished item it holds into another of the same sort; emblems stay. Both come from some rooms' picks, and one figure of each carousel holds Tongs."
     ]
   },
   {
