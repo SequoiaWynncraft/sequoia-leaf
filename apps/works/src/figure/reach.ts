@@ -3,11 +3,14 @@
  * and the eight round it. On the guild's land today that is the whole yard from its middle plot, so
  * nothing is harder; on a bigger map you walk out to build far away.
  *
- * Reach limits what changes what stands: building a piece (not raising or turning one where it
- * stands), laying a run, setting down pieces in hand, and taking pieces away, one or a marked area. A
- * card's settings, turning, painting a line (a line crosses the yard), raising a grade, undoing and
- * putting back a plan of the whole yard are done from anywhere. Without a figure of yours (a visit, a
- * review page's own yard) nothing is out of reach.
+ * One rule, asked of a command: every tile it puts a piece on or takes one off must be in reach
+ * (`footprint`): both mouths of a tunnel, a move's every piece where it leaves and where it lands, a
+ * blueprint's every piece. A preview asks it of the very command its press would send (`acts.ts`),
+ * and `doNow` asks it before the rules, so a gold preview is never refused and a coral one never
+ * goes through. Changing a standing piece where it stands (turning it, raising its grade), a card's
+ * settings, painting a line, undoing and putting back a plan of the whole yard touch no tile in this
+ * sense, and are done from anywhere. Without a figure of yours (a visit, a review page's own yard)
+ * nothing is out of reach.
  *
  * It is the page's rule alone for now: Leaf does not know where you stand until visitors walk, and
  * building far away gains nothing over anyone else.
@@ -16,11 +19,13 @@ import {
   type Act,
   at,
   blueprintAt,
-  NONE,
+  legPiece,
   type Piece,
   piecesAt,
   placed,
   tilesOf,
+  TUNNEL,
+  tunnelExit,
   type Turned,
   type Yard,
 } from "@sequoia-leaf/factory";
@@ -52,44 +57,66 @@ export function reaches(x: number, y: number, yard: Yard = S.world): boolean {
 /** Whether a tile, by its number, is within reach. */
 const tileReaches = (y: Yard, i: number): boolean => i < 0 || reaches(i % y.land.w, Math.floor(i / y.land.w), y);
 
-/** Why what is in hand cannot be used on a tile for reach, or null: the brush paints from anywhere, and an empty hand does nothing. */
-export function handReach(x: number, y: number): string | null {
-  const h = S.hand.is;
-  return h === "idle" || h === "paint" || reaches(x, y) ? null : OUT_OF_REACH;
+/** What standing on some tiles takes up: the pieces there, a tunnel by both its mouths. */
+function taken(y: Yard, tiles: readonly number[]): number[] {
+  const on = tiles.filter((i) => i >= 0);
+  return tilesOf(y, piecesAt(y, on));
 }
 
-/** Why pieces cannot be set down where they stand for reach, or null. */
-export const piecesReach = (pieces: readonly Piece[]): string | null =>
-  pieces.every((p) => reaches(p.x, p.y)) ? null : OUT_OF_REACH;
+/**
+ * The tiles a piece set down changes: none where a piece of its kind already stands on its tile (that
+ * one is only turned or raised, or its sorter's side set); else every tile it stands on (a tunnel's
+ * far mouth too), and every tile of whatever it takes the place of.
+ */
+function setsDown(y: Yard, p: Piece): number[] {
+  const i = at(y, p.x, p.y);
+  if (i >= 0 && y.kind[i] === p.kind) return [];
+  const tiles = tilesOf(y, [p]);
+  return [...tiles, ...taken(y, tiles)];
+}
 
-/** Each piece's reason it cannot stand where it would (`whys`), with reach first: what a group in hand shows. */
-export const withReach = (pieces: readonly Piece[], whys: readonly (string | null)[]): (string | null)[] =>
-  pieces.map((p, n) => (reaches(p.x, p.y) ? (whys[n] ?? null) : OUT_OF_REACH));
+/** The piece a build would stand: a tunnel with the span it comes up at, as the rules dig it. */
+function built(y: Yard, act: Extract<Act, { do: "build" }>): Piece {
+  const exit = act.kind === TUNNEL ? tunnelExit(y, act.x, act.y, act.dir) : null;
+  return { kind: act.kind, x: act.x, y: act.y, dir: act.dir, span: exit?.span ?? 0 };
+}
 
 /**
- * The tiles a command puts a piece on or takes one off: building a piece, laying a run, taking one or
- * a marked area away, and setting down pieces moved, copied or from a blueprint. Every other command
- * is done from anywhere, and touches none.
+ * What a command puts down and takes up, piece by piece: for each piece it builds, lays, sets down or
+ * takes away, the tiles that changes (in the order the pieces are set down, for pieces in hand).
+ * Every other command, and a plan of the whole yard put back, changes none.
  */
-function touched(y: Yard, act: Act): readonly number[] {
-  const dest = (pieces: readonly Piece[] | null): number[] => (pieces ? tilesOf(y, pieces) : []);
-  if (act.do === "build") {
-    const i = at(y, act.x, act.y);
-    // Over a piece of its kind it is only raised or turned where it stands.
-    return (y.kind[i] ?? NONE) === act.kind ? [] : [i];
+export function footprint(y: Yard, act: Act): number[][] {
+  const each = (pieces: readonly Piece[] | null): number[][] => (pieces ?? []).map((p) => setsDown(y, p));
+  if (act.do === "build") return [setsDown(y, built(y, act))];
+  if (act.do === "lay") return each(act.legs.map(legPiece));
+  if (act.do === "stand") return each(act.pieces);
+  if (act.do === "remove") return [taken(y, [at(y, act.x, act.y)])];
+  if (act.do === "clear") return piecesAt(y, act.tiles).map((p) => tilesOf(y, [p]));
+  if (act.do === "copy") return each(placed(piecesAt(y, act.tiles), act.turns, act.x, act.y));
+  if (act.do === "move") {
+    const from = piecesAt(y, act.tiles);
+    const to = placed(from, act.turns, act.x, act.y);
+    return from.map((p, n) => tilesOf(y, [p]).concat(to[n] ? setsDown(y, to[n]) : []));
   }
-  if (act.do === "lay") return act.legs.map((leg) => at(y, leg.x, leg.y));
-  if (act.do === "remove") return [at(y, act.x, act.y)];
-  if (act.do === "clear") return act.tiles;
-  if (act.do === "move") return [...act.tiles, ...dest(placed(piecesAt(y, act.tiles), act.turns, act.x, act.y))];
-  if (act.do === "copy") return dest(placed(piecesAt(y, act.tiles), act.turns, act.x, act.y));
-  // A plan of the whole yard goes back where it was kept, from anywhere.
   if (act.do === "placeBlueprint" && !y.blueprints[act.slot]?.whole)
-    return dest(blueprintAt(y, act.slot, act.turns, act.x, act.y));
+    return each(blueprintAt(y, act.slot, act.turns, act.x, act.y));
   return [];
 }
 
-/** The refusal of a command that puts a piece down or takes one up out of reach, or null: what `doNow` asks before the rules. */
+/** Why a command cannot be done for reach, or null: what a single preview, a run and `doNow` ask. */
+export function reachOf(act: Act, y: Yard = S.world): string | null {
+  return footprint(y, act).every((tiles) => tiles.every((i) => tileReaches(y, i))) ? null : OUT_OF_REACH;
+}
+
+/** For pieces in hand set down by a command, each piece's reason it cannot stand (`whys`), reach first. */
+export function withReach(act: Act, whys: readonly (string | null)[], y: Yard = S.world): (string | null)[] {
+  const out = footprint(y, act).map((tiles) => (tiles.every((i) => tileReaches(y, i)) ? null : OUT_OF_REACH));
+  return whys.map((why, n) => out[n] ?? why);
+}
+
+/** The refusal of a command out of reach, or null: what `doNow` asks before the rules. */
 export function beyondReach(act: Act, y: Yard = S.world): Turned | null {
-  return touched(y, act).every((i) => tileReaches(y, i)) ? null : { refused: REACH, why: OUT_OF_REACH };
+  const why = reachOf(act, y);
+  return why === null ? null : { refused: REACH, why };
 }

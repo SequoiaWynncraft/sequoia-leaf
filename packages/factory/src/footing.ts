@@ -53,12 +53,18 @@ export interface Place {
 export interface Solid {
   /** Why nothing may be at a point (pixels of the art), or null where it is clear. */
   at(x: number, y: number): string | null;
+  /** A number that changes whenever what is solid may have: whoever has worked something out from it knows to look again. */
+  version(): number;
 }
 
-/** What is solid in a yard as it stands now: read from its tiles each time it is asked, so a piece built or a plot bought counts at once. */
+/**
+ * What is solid in a yard as it stands now: read from its tiles each time it is asked, so a piece
+ * built or a plot bought counts at once. Its version is the rules' count of the yard's changes.
+ */
 export function yardSolid(y: Yard): Solid {
   const { land } = y;
   return {
+    version: () => y.rev,
     at(x: number, py: number): string | null {
       if (!(x >= 0 && py >= 0 && x < land.w * TILE_PX && py < land.h * TILE_PX)) return EDGE;
       const i = Math.floor(py / TILE_PX) * land.w + Math.floor(x / TILE_PX);

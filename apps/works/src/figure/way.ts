@@ -7,14 +7,17 @@
  * it and a step taken only where they also fit half way to the next (so nothing as thin as a post is
  * stepped through), and the way found is pulled taut, so the figure walks straight wherever it can.
  * A stretch of the way keeps half a pixel more from what is solid than feet need, so that a walker a
- * hair off its line still fits along it. The search looks at no more than `WAY_MOST` squares: where
- * the place cannot be reached within that (it is walled in, or very far round), the way leads as near
- * to it as the search came, and the walker looks again from there.
+ * hair off its line still fits along it. The search looks at no more squares than it is told: where
+ * the place cannot be reached within that (it is walled in), the way leads to the square nearest it
+ * that the search came to, and the walker looks again from there. Told every square of the land, it
+ * finds a way wherever there is one, and where there is none it leads as near as anyone can get.
  */
-import { blocked, FOOT, freed, type Place, type Solid, SQUARE, standOn, unsound } from "@sequoia-leaf/factory";
+import { blocked, FOOT, freed, type Place, type Solid, SQUARE, standOn, TILE_PX, unsound } from "@sequoia-leaf/factory";
 
-/** The most squares one search looks at: about a millisecond on a desktop. */
+/** The most squares one search looks at, unless told: about a millisecond on a desktop. A walker on a land asks for every square of it (`squaresOf`). */
 export const WAY_MOST = 3000;
+/** Every square of a land so many tiles across and down: a search told to look at that many finds a way wherever there is one. */
+export const squaresOf = (w: number, h: number): number => w * h * (TILE_PX / SQUARE) ** 2;
 /** The furthest a pulled-taut stretch reaches, in squares: bounds what pulling taut costs. */
 const TAUT_MOST = 48;
 /** The room a stretch of a way keeps: half a pixel more than feet need. */
@@ -181,10 +184,12 @@ export function findWay(solid: Solid, from: Place, to: Place, most = WAY_MOST): 
   let nearest = first;
   let nearestFar = apart(sx, sy, tx, ty);
   let found = false;
-  for (let looked = 0; looked < most; looked++) {
+  // Only squares looked at for the first time count against `most`: one waits again each time a cheaper way to it is found.
+  for (let looked = 0; looked < most;) {
     const cur = q.pop();
     if (cur < 0) break;
     if (q.done.has(cur)) continue;
+    looked++;
     q.done.add(cur);
     if (cur === target) {
       found = true;

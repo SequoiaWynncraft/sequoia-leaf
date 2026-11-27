@@ -10,6 +10,8 @@
 import { at, type Dir, DX, DY, kindAt, NONE, priceAt, refusal, TUNNEL, tunnelExit } from "@sequoia-leaf/factory";
 import { num } from "@sequoia-leaf/kit/say.ts";
 
+import { tunnelAct } from "./acts.ts";
+import { reaches, reachOf } from "./figure/reach.ts";
 import type { Tile } from "./hand.ts";
 import { aimed, landed, paid, refused } from "./outcome.ts";
 import { yardSfx } from "./sound.ts";
@@ -55,23 +57,26 @@ export function tunnelAim(from: Tile, faced: number, x: number, y: number): Aim 
   const here = x === from.x && y === from.y;
   if (faced !== at(w, x, y)) facing(from, x, y);
   const grade = gradeInHand(TUNNEL);
-  const why = here ? refusal(w, TUNNEL, from.x, from.y, coins(), S.dir, { grade }) : whyNot(from, x, y, grade);
-  const exit = here || why !== null ? tunnelExit(w, from.x, from.y, S.dir) : { x, y };
+  const rules = here ? refusal(w, TUNNEL, from.x, from.y, coins(), S.dir, { grade }) : whyNot(from, x, y, grade);
+  const exit = here || rules !== null ? tunnelExit(w, from.x, from.y, S.dir) : { x, y };
+  // Out of reach is judged on the very command `comesUp` would send for the far mouth shown.
+  const why = (exit && reachOf(tunnelAct(from, here, exit, grade))) ?? rules;
   const cost = priceAt(w, TUNNEL, from.x, from.y, grade);
   return { ...aimed(x, y, why, cost, exit ? at(w, exit.x, exit.y) : -1), grade };
 }
 
 /**
- * A click or tap with the tunnel in hand and no way in set, on a clear tile it could go in at, some
- * way: its way in is set there, and nothing is built yet. Says whether it was set.
+ * A click or tap with the tunnel in hand and no way in set, on a clear tile in reach it could go in
+ * at, some way: its way in is set there, and nothing is built yet. Says whether it was set.
  */
 export function setWayIn(x: number, y: number): boolean {
   const w = S.world;
   const h = S.hand;
   const grade = gradeInHand(TUNNEL);
   const may = (d: Dir): boolean => refusal(w, TUNNEL, x, y, Infinity, d, { grade }) === null;
-  if (h.is !== "build" || h.kind !== TUNNEL || kindAt(w, x, y) !== NONE || !([0, 1, 2, 3] as const).some(may))
-    return false;
+  // Out of reach it is not set: the press builds there instead, which reach refuses, and says so.
+  const free = kindAt(w, x, y) === NONE && reaches(x, y);
+  if (h.is !== "build" || h.kind !== TUNNEL || !free || !([0, 1, 2, 3] as const).some(may)) return false;
   moveHand({ do: "from", from: { x, y } });
   moveHand({ do: "aim", aim: tunnelAim({ x, y }, -1, x, y), faced: at(w, x, y) });
   yardSfx.pick();
@@ -97,15 +102,7 @@ export function comesUp(from: Tile, x: number, y: number): boolean {
     return false;
   }
   const out = { x: far % w.land.w, y: Math.floor(far / w.land.w) };
-  const grade = a.grade ?? 1;
-  const span = Math.abs(out.x - from.x) + Math.abs(out.y - from.y) - 1;
-  const { x: fx, y: fy } = from;
-  const here = x === fx && y === fy;
-  const did = doNow(
-    here
-      ? { do: "build", kind: TUNNEL, x: fx, y: fy, dir: S.dir, grade }
-      : { do: "lay", legs: [{ tunnel: true, x: fx, y: fy, dir: S.dir, span, grade }] },
-  );
+  const did = doNow(tunnelAct(from, x === from.x && y === from.y, out, a.grade ?? 1));
   if (refused(did)) return false;
   landed(from.x, from.y, false);
   landed(out.x, out.y, false, 0, true);

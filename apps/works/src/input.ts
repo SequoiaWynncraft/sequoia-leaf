@@ -6,8 +6,9 @@
  * (or the Build button) builds; an area is marked by tapping two opposite corners.
  *
  * In their own yard the member is somebody (`figure/you.ts`): the walking keys walk them, and Space
- * brings the view back to them; with nothing in hand a tap or a click on the ground walks there,
- * and one on a piece, a redwood or land for sale opens its card. Moving the view lets go of them.
+ * brings the view back to them; with nothing in hand a tap or a click on the ground walks there (and
+ * the view takes hold of them again), and one on a piece, a redwood or land for sale opens its card.
+ * Moving the view lets go of them.
  */
 
 import { at, BELT, NONE, redwoodAt } from "@sequoia-leaf/factory";
@@ -20,7 +21,7 @@ import { unlock } from "@sequoia-leaf/kit/sound.ts";
 
 import { holdView, pan, track, zoom } from "./camera.ts";
 import { callerAt } from "./events.ts";
-import { stepYou, walkTo, you } from "./figure/you.ts";
+import { halt, stepYou, walkTo, you } from "./figure/you.ts";
 import { aimOf } from "./hand.ts";
 import { WORKS_KEYS, type WorksAction } from "./keymap.ts";
 import { isWhole } from "./plans.ts";
@@ -213,7 +214,8 @@ function ask(tx: number, ty: number, pageX: number, pageY: number): void {
   }
   if (you() && !asksAbout(tx, ty)) {
     closeCard();
-    walkTo(p.x, p.y);
+    // A walk asked for takes hold of the view again, as the keys do: a phone has no Space.
+    if (walkTo(p.x, p.y)) holdView(false);
     return;
   }
   if (at(S.world, tx, ty) < 0) {
@@ -473,6 +475,8 @@ function escape(e: KeyboardEvent, enter: boolean): void {
  */
 export function letGo(): void {
   held.clear();
+  // A walk asked for by a tap stops too, as the keys held do.
+  halt();
   for (const d of downs.values()) d.hold.close();
   downs.clear();
   pinch = null;

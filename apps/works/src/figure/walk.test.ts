@@ -198,6 +198,33 @@ describe("what feet raise", () => {
   });
 });
 
+describe("shut in", () => {
+  test("with no clear ground left, a figure stays put, and looks for some again only when what is solid changes", () => {
+    // Everything solid but, once opened, the ground east of x = 200; the solid counts how often it is asked.
+    const ground = { version: 0, open: false, asked: 0 };
+    const solid: Solid = {
+      at: (x) => {
+        ground.asked++;
+        return ground.open && x > 200 ? null : "in-the-way";
+      },
+      version: () => ground.version,
+    };
+    const { c, feet: f } = figure({ x: 100, y: 100 });
+    c.step(1 / 60, solid);
+    expect([f.asides, c.x, c.y]).toEqual([0, 100, 100]);
+    // Idle frames ask only whether it still stands on something: no search for clear ground.
+    ground.asked = 0;
+    run(c, solid, 1);
+    expect(ground.asked).toBeLessThanOrEqual(60 * 6);
+    // Something is taken away: the yard changes, and it is put on the ground that opened.
+    ground.open = true;
+    ground.version++;
+    c.step(1 / 60, solid);
+    expect(f.asides).toBe(1);
+    expect(c.x).toBeGreaterThan(200);
+  });
+});
+
 describe("a tapped way", () => {
   test("goes round the machines in the way, never through one, and gets there", () => {
     const y = walled();

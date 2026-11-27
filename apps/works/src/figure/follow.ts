@@ -63,6 +63,16 @@ export class Follow {
     this.#apart.y = Math.round(this.#left.y);
   }
 
+  /**
+   * The view was moved under the figure it goes with, about the figure (a step of zoom): it goes on
+   * with the figure from where it is now, nothing moving at the next frame, as if it had taken hold here.
+   */
+  rebase(mid: Place): void {
+    if (!this.following) return;
+    this.following = false;
+    this.hold(mid);
+  }
+
   /** The player asks for the view back: it takes hold, and closes on the figure whether or not the figure walks. */
   home(mid: Place): void {
     this.hold(mid);

@@ -16,7 +16,6 @@
  */
 
 import {
-  type Act,
   at,
   BELT,
   boxOf,
@@ -59,11 +58,13 @@ import {
 import { close as closeCards } from "@sequoia-leaf/kit/card.ts";
 import { GOLD, SKY } from "@sequoia-leaf/kit/palette.ts";
 
+import { buildAct, gradeOn, groupAct, layAct } from "./acts.ts";
 import { PAINTS, TILE } from "./art/belts.ts";
+import { OUT_OF_REACH, reachOf, withReach } from "./figure/reach.ts";
 import { float, flutter, puff, sparkle } from "./fx.ts";
 import { aimOf, groupOf, markOf, runOf, type Tile } from "./hand.ts";
 import { keepsRight, sendsRight } from "./layout.ts";
-import { aimed, DUST, landed, paid, piecesReach, refused, withReach } from "./outcome.ts";
+import { aimed, DUST, landed, paid, refused } from "./outcome.ts";
 import { aimYard, isWhole, piecesInHand, pressYard } from "./plans.ts";
 import { yardSfx } from "./sound.ts";
 import {
@@ -129,14 +130,6 @@ export function setTool(tool: Tool): void {
   toolHooks.changed();
 }
 
-/**
- * The grade a kind in hand would stand at on a tile: the grade chosen for it, and over a piece of
- * its kind never lower than that piece's, which is then only turned.
- */
-function gradeOn(tool: Kind, i: number): number {
-  const hand = gradeInHand(tool);
-  return i >= 0 && S.world.kind[i] === tool ? Math.max(hand, S.world.grade[i] ?? 1) : hand;
-}
 /** The grade of the piece on a tile that the kind in hand would raise there, or nothing if it would raise none. */
 function raisedOn(tool: Kind, i: number): number | undefined {
   const stands = i >= 0 && S.world.kind[i] === tool ? (S.world.grade[i] ?? 0) : 0;
@@ -181,7 +174,7 @@ export function aimAt(x: number, y: number): void {
     case "remove": {
       const there = kindAt(w, x, y);
       const why = there === NONE ? "Nothing to remove here" : there === DEPOT ? "The depot cannot be removed" : null;
-      go({ do: "aim", aim: aimed(x, y, why, 0) });
+      go({ do: "aim", aim: aimed(x, y, reachOf({ do: "remove", x, y }) ?? why, 0) });
       return;
     }
     case "paint":
@@ -220,7 +213,7 @@ function buildAim(kind: Kind, x: number, y: number): Aim {
   const exit = kind === TUNNEL ? tunnelExit(w, x, y, S.dir) : null;
   const grade = gradeOn(kind, i);
   const raises = raisedOn(kind, i);
-  const why = refusal(w, kind, x, y, coins(), S.dir, { grade });
+  const why = reachOf(buildAct(kind, x, y)) ?? refusal(w, kind, x, y, coins(), S.dir, { grade });
   return {
     ...aimed(x, y, why, priceAt(w, kind, x, y, grade), exit ? at(w, exit.x, exit.y) : -1),
     grade,
@@ -270,7 +263,7 @@ export function place(x: number, y: number): boolean {
   // Over a piece of its kind of a lower grade: that piece is raised.
   const raised = raisedOn(tool, i) !== undefined;
   const cost = priceAt(w, tool, x, y, grade);
-  const did = doNow({ do: "build", kind: tool, x, y, dir: S.dir, grade, ...sideInHand(tool) });
+  const did = doNow(buildAct(tool, x, y));
   if ("refused" in did) {
     go({ do: "aim", aim: aimed(x, y, did.why, 0) });
     yardSfx.no();
@@ -323,10 +316,9 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
   const i = at(w, x, y);
   const did = doNow({ do: "remove", x, y });
   if ("refused" in did) {
-    if (!quiet) {
-      go({ do: "aim", aim: aimed(x, y, "refused" in did ? did.why : null, 0) });
-      yardSfx.no();
-    }
+    if (!quiet) go({ do: "aim", aim: aimed(x, y, did.why, 0) });
+    // Said where the player is looking, a card's Remove too; a sweep of the right button says only reach.
+    if (!quiet || did.why === OUT_OF_REACH) refused(did);
     return false;
   }
   const px = x * TILE + 8;
@@ -435,9 +427,6 @@ export function rotate(): void {
   keepAim(true);
   toolHooks.changed();
 }
-
-/** What a sorter in hand is built with: the side it sends to. Nothing for any other kind. */
-const sideInHand = (tool: Kind): { right?: boolean } => (tool === SORTER ? { right: S.right } : {});
 
 /** A sorter in hand, brought over a sorter, sends to that one's side, as it faces its way, until it is flipped. */
 function sideOver(tool: Kind, i: number): void {
@@ -550,7 +539,7 @@ function reckon(path: readonly Tile[]): void {
  */
 function runFrom(legs: Leg[], turns: Run["turns"], bad: string | null): Run {
   const pieces = legs.map(legPiece);
-  const why = piecesReach(pieces) ?? bad ?? standRefusal(S.world, pieces, coins());
+  const why = reachOf(layAct(legs, turns)) ?? bad ?? standRefusal(S.world, pieces, coins());
   return { legs, turns, cost: priceOf(S.world, pieces), why, yard: S.world, rev: S.world.rev, coins: coins() };
 }
 
@@ -612,8 +601,7 @@ export function commitRun(): boolean {
     return false;
   }
   // The first belt, already standing, turned to meet the run: all of it or none, with the run.
-  const [bend] = run.turns;
-  const did = doNow(bend ? { do: "lay", legs: run.legs, turn: bend } : { do: "lay", legs: run.legs });
+  const did = doNow(layAct(run.legs, run.turns));
   if ("refused" in did) {
     yardSfx.no();
     toolHooks.said(`${did.why}.`);
@@ -832,7 +820,7 @@ function aimGroup(x: number, y: number): void {
   const box = boxOf(placed(from, g.turns, 0, 0));
   const placedAt = placed(from, g.turns, x - ((box.w - 1) >> 1), y - ((box.h - 1) >> 1));
   const moving = g.as === "move";
-  const whys = withReach(placedAt, refusals(w, placedAt, moving ? tilesOf(w, from) : null));
+  const whys = withReach(groupAct(g, placedAt), refusals(w, placedAt, moving ? tilesOf(w, from) : null));
   const why = moving ? (whys.find((r) => r !== null) ?? null) : standRefusal(w, placedAt, coins(), whys);
   go({
     do: "group",
@@ -871,11 +859,7 @@ function setDown(): boolean {
   const moving = g.as === "move";
   // A copy over itself, just set down: nothing the rules would change, so nothing is sent.
   if (!moving && aim.why === null && stood.length === 0 && !changes) return false;
-  const act: Act =
-    typeof g.as === "number"
-      ? { do: "placeBlueprint", slot: g.as, turns: g.turns, x: box.x, y: box.y }
-      : { do: g.as, tiles: g.tiles, turns: g.turns, x: box.x, y: box.y };
-  const did = doNow(act);
+  const did = doNow(groupAct(g, g.at));
   if (refused(did)) return false;
   if (moving) {
     const [x1, y1] = [box.x + box.w - 1, box.y + box.h - 1];

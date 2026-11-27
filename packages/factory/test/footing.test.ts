@@ -68,8 +68,12 @@ describe("a figure something is built on", () => {
   test("is put on the nearest clear ground, off the tile and within a tile of it", () => {
     const y = yard();
     const at = mid(20, 20);
-    expect(F.freed(F.yardSolid(y), at.x, at.y)).toEqual(at);
+    const solid = F.yardSolid(y);
+    expect(F.freed(solid, at.x, at.y)).toEqual(at);
+    // What is solid says it may have changed, so that nobody keeps what was worked out from it before.
+    const version = solid.version();
     must(y, { do: "build", kind: "mill", x: 20, y: 20, dir: 0 });
+    expect(solid.version()).not.toBe(version);
     const out = F.freed(F.yardSolid(y), at.x, at.y);
     expect(F.unsound(F.yardSolid(y), out.x, out.y)).toBeNull();
     expect(Math.floor(out.x / TILE_PX) !== 20 || Math.floor(out.y / TILE_PX) !== 20).toBe(true);

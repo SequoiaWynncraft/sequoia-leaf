@@ -14,7 +14,7 @@ import type { Ground } from "./art/ground.ts";
 import { Follow } from "./figure/follow.ts";
 import { you } from "./figure/you.ts";
 import { corner, sizeBuffers } from "./scene.ts";
-import { S, seenFrom } from "./state.ts";
+import { S, seenFrom, toPage } from "./state.ts";
 import { farSteps, markSize, natural, tilePx, zoomFor } from "./zoom.ts";
 
 /** The view going with the member's figure. */
@@ -29,14 +29,18 @@ export const inset = { top: 0, bottom: 0, left: 0, right: 0 };
  */
 const SPILL = 96;
 
-let ground: Ground | null = null;
+/** What the camera reads of the yard's picture and the ground it lies on: their sizes, and where the page puts the picture. */
+type Picture = Pick<HTMLCanvasElement, "width" | "height"> & { readonly style: Pick<CSSStyleDeclaration, "transform"> };
+type Extent = Pick<Ground, "x" | "y" | "w" | "h">;
+
+let ground: Extent | null = null;
 /** Steps of zoom the member has asked for, over or under the size that suits the screen. */
 let steps = 0;
-let canvas: HTMLCanvasElement | null = null;
+let canvas: Picture | null = null;
 /** Where the camera is easing to, if it has been sent somewhere. */
 let goal: Pt | null = null;
 
-export function setCamera(c: HTMLCanvasElement, g: Ground): void {
+export function setCamera(c: Picture, g: Extent): void {
   canvas = c;
   ground = g;
 }
@@ -114,19 +118,24 @@ export function pan(dx: number, dy: number): void {
   bound();
 }
 
-/** Zooms a step in or out, keeping the point of the page under the pointer where it is. */
+/** Zooms a step in or out, keeping the point of the page under the pointer where it is (going with the figure, the figure). */
 export function zoom(by: number, pageX: number, pageY: number): boolean {
   const before = S.view.z;
+  // Going with the member's figure, it zooms about the figure instead, in this one step: the view
+  // goes on with the figure from where that leaves it, and nothing moves at the next frame.
+  const c = following() ? you() : null;
+  const about = c ? toPage(c.x, c.y) : { x: pageX, y: pageY };
   const k0 = S.view.dpr / before;
-  const wx = S.cam.x + pageX * k0;
-  const wy = S.cam.y + pageY * k0;
+  const wx = S.cam.x + about.x * k0;
+  const wy = S.cam.y + about.y * k0;
   steps += by;
   resize();
   const k1 = S.view.dpr / S.view.z;
-  S.cam.x = wx - pageX * k1;
-  S.cam.y = wy - pageY * k1;
+  S.cam.x = wx - about.x * k1;
+  S.cam.y = wy - about.y * k1;
   goal = null;
   bound();
+  if (c) follow.rebase(middleAt());
   return S.view.z !== before;
 }
 
@@ -195,10 +204,14 @@ export function holdView(home: boolean): void {
     if (home) look(c.x, c.y, true);
     return;
   }
+  if (home) follow.home(middleAt());
+  else follow.hold(middleAt());
+}
+
+/** The point of the yard in the middle of what the interface leaves clear. */
+function middleAt(): Pt {
   const m = middle();
-  const at = { x: S.cam.x + m.x, y: S.cam.y + m.y };
-  if (home) follow.home(at);
-  else follow.hold(at);
+  return { x: S.cam.x + m.x, y: S.cam.y + m.y };
 }
 
 /** Whether the view goes with the member's figure now. */

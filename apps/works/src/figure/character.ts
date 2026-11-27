@@ -15,7 +15,7 @@ import { blocked, freed, kept, type Place, RUN, type Solid, SUB, TILE_PX, unsoun
 import { type Dir, POSE, RUN as RUNNING, WALK as WALKING } from "@sequoia-leaf/kit/skin.ts";
 
 import { GAIT, HOP, REST } from "./feel.ts";
-import { findWay } from "./way.ts";
+import { findWay, WAY_MOST } from "./way.ts";
 
 /** Frames of getting nowhere after which a way is looked for again, and after which it is given up. */
 const LOST_AGAIN = 2;
@@ -158,6 +158,13 @@ export class Character extends Figure {
   #lost = 0;
   /** Seconds of frames too short to move in, saved up. */
   #owed = 0;
+  /** The most squares a search for its way looks at: as many as the land has, once a way is asked for on one. */
+  #most = WAY_MOST;
+  /**
+   * What was solid when something was built where it stands and no clear ground was found to put it
+   * on: it stays where it is, and no clear ground is looked for again until what is solid changes.
+   */
+  #shut: { readonly solid: Solid; readonly version: number } | null = null;
   /**
    * The part of its going that was too small for the sixteenths places are kept to, carried to its
    * next step: without it every step would be rounded the same way, and the pace would be a little
@@ -187,13 +194,24 @@ export class Character extends Figure {
     return this.#steer.dx !== 0 || this.#steer.dy !== 0;
   }
 
-  /** Sets off for a place, round whatever is solid; as near as it can get where there is no way. Gives back whether there is anywhere to go. */
-  goTo(solid: Solid, x: number, y: number): boolean {
-    const way = findWay(solid, this, { x, y });
+  /**
+   * Sets off for a place, round whatever is solid, looking at no more than `most` squares for its way
+   * (on a land, every square of it); as near as it can get where there is no way. Gives back whether
+   * there is anywhere to go.
+   */
+  goTo(solid: Solid, x: number, y: number, most = this.#most): boolean {
+    this.#most = most;
+    const way = findWay(solid, this, { x, y }, most);
     const runs = length(this, way.points) > GAIT.runFar;
     this.#lost = 0;
     this.#going = way.points.length === 0 ? null : { points: way.points, to: { x, y }, whole: way.whole, runs };
     return this.#going !== null;
+  }
+
+  /** It stops where it is going, by the keys or along a way: the yard is put away behind a menu. A run is pulled up as ever. */
+  halt(): void {
+    this.#steer = { dx: 0, dy: 0 };
+    this.#going = null;
   }
 
   /** Whether it is walking to a place, and the place its way ends at. */
@@ -273,7 +291,7 @@ export class Character extends Figure {
     const going = this.#going;
     if (going === null) return;
     const [x, y] = [this.x, this.y];
-    const next = findWay(solid, this, going.to);
+    const next = findWay(solid, this, going.to, this.#most);
     const end = next.points.at(-1);
     // A way that gets no nearer is the end of it.
     const nearer = end !== undefined && Math.hypot(end.x - x, end.y - y) > 4;
@@ -374,10 +392,11 @@ export class Character extends Figure {
 
   /** So many seconds' moving, never fewer than move it `LEAST_STEP`. */
   #moved(dt: number, solid: Solid): void {
-    // Something was built where it stands: it is put on the clear ground nearest.
-    if (unsound(solid, this.x, this.y) !== null) {
+    // Something was built where it stands: it is put on the clear ground nearest, or with none, stays.
+    if (unsound(solid, this.x, this.y) !== null && !this.#stillShut(solid)) {
       const out = freed(solid, this.x, this.y);
       if (out.x !== this.x || out.y !== this.y) this.aside(out.x, out.y);
+      else this.#shut = { solid, version: solid.version() };
     }
     const gone = this.#go(solid, dt);
     const was = this.moving;
@@ -387,8 +406,15 @@ export class Character extends Figure {
     if (this.moving ? this.#since >= TELL_EVERY : was) this.#say();
   }
 
+  /** Whether it was shut in where it stands with what is solid as it is now: no clear ground is looked for again. */
+  #stillShut(solid: Solid): boolean {
+    const shut = this.#shut;
+    return shut !== null && shut.solid === solid && shut.version === solid.version();
+  }
+
   /** Puts the character aside to a clear place, with a hop, and tells where. */
   aside(x: number, y: number): void {
+    this.#shut = null;
     this.put(x, y);
     this.hop();
     this.#tell(this.x, this.y);

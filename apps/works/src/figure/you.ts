@@ -17,6 +17,7 @@ import { S } from "../state.ts";
 import { Character } from "./character.ts";
 import { dot, Dust, floorOf } from "./dust.ts";
 import { SHADE } from "./feel.ts";
+import { squaresOf } from "./way.ts";
 
 /** Your figure, its look (once it has come), the dust its feet raise, and the plot it stands on (a place in the land's list, or `NONE`). */
 interface You {
@@ -101,9 +102,18 @@ export function backToDoor(): void {
   here.you?.character.put(at.x, at.y);
 }
 
-/** Sets off for a point of the yard, round whatever stands: as near as there is a way to. Gives back whether there is anywhere to go. */
+/**
+ * Sets off for a point of the yard, round whatever stands, looking at every square of the land for
+ * the way: as near as there is a way to. Gives back whether there is anywhere to go.
+ */
 export function walkTo(x: number, y: number): boolean {
-  return here.you?.character.goTo(solidOf(S.world), x, y) ?? false;
+  const { land } = S.world;
+  return here.you?.character.goTo(solidOf(S.world), x, y, squaresOf(land.w, land.h)) ?? false;
+}
+
+/** You stop where you were going: the yard is put away behind the settings menu, or the window lost the focus. */
+export function halt(): void {
+  here.you?.character.halt();
 }
 
 /** A frame of `dt` seconds: you go where the keys or your way take you, and your dust lives. Gives back whether the plot you stand on changed. */

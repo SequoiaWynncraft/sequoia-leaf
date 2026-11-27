@@ -1,30 +1,33 @@
 /**
  * Being somebody in your own yard, on the page: the walking keys walk you and the view goes with you;
- * a drag lets go of you and walking takes hold again; an empty-handed tap on the ground walks there and
- * one on a piece opens its card; and you build within reach, the plot you stand on and the eight round
- * it, and are refused "Out of reach." past it, with the aim showing why.
+ * a drag lets go of you, and walking or a tap-walk takes hold again; a zoom while it goes with you
+ * zooms about you; an empty-handed tap on the ground walks there and one on a piece opens its card;
+ * the settings menu stops a walk; and you put pieces down and take them up within reach, the plot you
+ * stand on and the eight round it, judged on the very command a press sends, so that what its
+ * preview shows (gold or coral, and the line over the dock) is what the press then does.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { BELT, create, LAND, MILL, type Yard } from "@sequoia-leaf/factory";
+import { BELT, build, create, LAND, MILL, type Piece, TUNNEL, type Yard, yardSolid } from "@sequoia-leaf/factory";
 import { deck } from "@sequoia-leaf/kit/card.ts";
 import { noKeysHeld } from "@sequoia-leaf/kit/keys.ts";
 
 import { opened, useFakeLeaf } from "../../test/fake-leaf.ts";
 import { aimOf } from "../hand.ts";
 import { WORKS_KEYS } from "../keymap.ts";
-import { S, toPage } from "../state.ts";
-import { aimAt, setTool } from "../tools.ts";
+import { S, toolHooks, toPage } from "../state.ts";
+import { aimAt, confirm, hold, markEnd, markOver, markStart, setGrade, setTool, takeAway } from "../tools.ts";
+import { setWayIn } from "../tunnel.ts";
 import { doNow } from "../yard.ts";
 import { beyondReach, OUT_OF_REACH, reachBox, reaches } from "./reach.ts";
-import { leave, placeYou, you } from "./you.ts";
+import { leave, placeYou, walkTo, you } from "./you.ts";
 
 // The camera's module draws onto canvases that are made as it loads (`scene.ts`): a document is there
 // first whose canvases take any drawing and keep none of it.
 const inert: () => unknown = new Proxy(() => inert, { get: () => inert, set: () => true });
 Object.defineProperty(globalThis, "document", { value: { createElement: () => inert }, configurable: true });
-const { following, pan } = await import("../camera.ts");
-const { initInput, stepInput } = await import("../input.ts");
+const { following, pan, setCamera, setZoom, zoom } = await import("../camera.ts");
+const { initInput, letGo, stepInput } = await import("../input.ts");
 
 useFakeLeaf();
 afterEach(() => {
@@ -41,6 +44,17 @@ function everywhere(): Yard {
 }
 /** The middle of a tile, in pixels of the art. */
 const mid = (x: number, y: number): { x: number; y: number } => ({ x: x * 16 + 8, y: y * 16 + 8 });
+/** Builds a piece from anywhere (no figure of yours stands in the yard yet), facing east, which must be built. */
+function stands(y: Yard, kind: Piece["kind"], x: number, z: number): void {
+  if (!build(y, kind, x, z, 0, Infinity).ok) throw new Error(`nothing built at ${x}, ${z}`);
+}
+/** Where you stand in Windfall Hollow, the north-west corner: tiles 0 to 31 across and 0 to 23 down are in reach. */
+const HOLLOW = mid(8, 6);
+/** Whether what is in hand is shown as it would go: its aim (or run) says nothing against it, and nor does any piece of it. */
+function gold(): boolean {
+  const a = S.run ?? aimOf(S.hand);
+  return a !== null && a.why === null && (S.group?.why.every((r) => r === null) ?? true);
+}
 /** A page for the input to listen on: a window, a document and the yard's canvas. */
 function canvasPage(): EventTarget {
   const win = Object.assign(new EventTarget(), {
@@ -75,6 +89,29 @@ function click(canvas: EventTarget, x: number, y: number): void {
     Object.assign(new Event(type), { pointerId: 1, pointerType: "mouse", button: 0, clientX: p.x, clientY: p.y });
   canvas.dispatchEvent(e("pointerdown"));
   canvas.dispatchEvent(e("pointerup"));
+}
+
+/** With Select, the piece on row 9 at `x` marked, taken in hand to move, and set down at `to`: whether it was shown gold, which is whether it went. */
+function moved(x: number, to: number): boolean {
+  setTool("select");
+  markStart(x, 9);
+  markOver(x, 9);
+  markEnd();
+  hold("move");
+  aimAt(to, 9);
+  const shown = gold();
+  expect(confirm()).toBe(shown);
+  return shown;
+}
+
+/** The blueprint in place 0 taken in hand and set down aimed at `x` on row 20: whether it was shown gold, which is whether it went. */
+function setPrint(x: number): boolean {
+  setTool("select");
+  hold(0);
+  aimAt(x, 20);
+  const shown = gold();
+  expect(confirm()).toBe(shown);
+  return shown;
 }
 
 describe("reach", () => {
@@ -138,23 +175,117 @@ describe("reach", () => {
 
   test("an aim out of reach says so, and its ghost shows it; the brush aims anywhere", async () => {
     await opened(everywhere(), 100_000);
-    placeYou(mid(8, 6));
+    placeYou(HOLLOW);
     setTool(MILL);
     aimAt(44, 33);
     expect(aimOf(S.hand)?.why).toBe(OUT_OF_REACH);
     aimAt(10, 8);
     expect(aimOf(S.hand)?.why).toBeNull();
-    setTool("remove");
-    aimAt(44, 33);
-    expect(aimOf(S.hand)?.why).toBe(OUT_OF_REACH);
     // Reach is said first: past it, what the rules would say there does not matter yet.
-    setTool(MILL);
     aimAt(40, 30);
     expect(aimOf(S.hand)?.why).toBe(OUT_OF_REACH);
-    // Without a figure (a visit, a review page's own yard) nothing is out of reach.
-    leave();
+    setTool("paint");
     aimAt(44, 33);
     expect(aimOf(S.hand)?.why).not.toBe(OUT_OF_REACH);
+    // Without a figure (a visit, a review page's own yard) nothing is out of reach.
+    leave();
+    setTool(MILL);
+    aimAt(44, 33);
+    expect(aimOf(S.hand)?.why).not.toBe(OUT_OF_REACH);
+  });
+
+  test("a tunnel whose far mouth is out of reach is refused, built and taken away, and its preview says so", async () => {
+    const y = everywhere();
+    // A tunnel from 28 to 31 on row 10, wholly in reach of the Hollow; the one built is from 30 to 33.
+    stands(y, TUNNEL, 30, 10);
+    await opened(y, 100_000);
+    placeYou(HOLLOW);
+    const far = { refused: "out_of_reach", why: OUT_OF_REACH };
+    expect(beyondReach({ do: "build", kind: TUNNEL, x: 30, y: 12, dir: 0, grade: 1 })).toEqual(far);
+    expect(doNow({ do: "lay", legs: [{ tunnel: true, x: 30, y: 12, dir: 0, span: 2, grade: 1 }] })).toEqual(far);
+    // With the tunnel in hand: in at 30, 12, up at 33, 12 is coral and refused; up at 31, 12 is gold and built.
+    setTool(TUNNEL);
+    expect(setWayIn(30, 12)).toBe(true);
+    aimAt(33, 12);
+    expect([gold(), aimOf(S.hand)?.why]).toEqual([false, OUT_OF_REACH]);
+    expect(confirm()).toBe(false);
+    // A way in out of reach is not set: nothing it could become is in reach.
+    setTool(TUNNEL);
+    expect(setWayIn(33, 14)).toBe(false);
+    expect(setWayIn(28, 14)).toBe(true);
+    aimAt(31, 14);
+    expect(gold()).toBe(true);
+    expect(confirm()).toBe(true);
+    // Taking the far one away is out of reach by its far mouth, with the spade as with a card's Remove.
+    setTool("remove");
+    aimAt(30, 10);
+    expect([gold(), aimOf(S.hand)?.why]).toEqual([false, OUT_OF_REACH]);
+    expect(doNow({ do: "remove", x: 30, y: 10 })).toEqual(far);
+    aimAt(28, 14);
+    expect(gold()).toBe(true);
+    expect(doNow({ do: "remove", x: 28, y: 14 })).not.toEqual(far);
+  });
+
+  test("a move: gold where it leaves and lands in reach, coral and refused where it leaves from out of reach", async () => {
+    const y = everywhere();
+    stands(y, MILL, 33, 9);
+    stands(y, MILL, 28, 9);
+    await opened(y, 100_000);
+    placeYou(HOLLOW);
+    expect(moved(33, 26)).toBe(false);
+    expect(S.world.kind[9 * y.land.w + 33]).toBe(MILL);
+    expect(moved(28, 26)).toBe(true);
+    expect(S.world.kind[9 * y.land.w + 26]).toBe(MILL);
+  });
+
+  test("a blueprint holding a tunnel: gold only with both its mouths in reach, and the press does as shown", async () => {
+    const y = everywhere();
+    stands(y, TUNNEL, 10, 18);
+    await opened(y, 100_000);
+    placeYou(HOLLOW);
+    expect(doNow({ do: "saveBlueprint", slot: 0, tiles: [18 * y.land.w + 10, 18 * y.land.w + 12] })).not.toHaveProperty(
+      "refused",
+    );
+    // Its box is three tiles wide, aimed at its middle: at 31 its far mouth would be at 32.
+    expect(setPrint(31)).toBe(false);
+    expect(S.world.kind[20 * y.land.w + 30]).not.toBe(TUNNEL);
+    expect(setPrint(30)).toBe(true);
+    expect(S.world.kind[20 * y.land.w + 29]).toBe(TUNNEL);
+  });
+
+  test("turning and raising a distant piece where it stands are gold, and done", async () => {
+    const y = everywhere();
+    stands(y, BELT, 40, 9);
+    await opened(y, 100_000);
+    placeYou(HOLLOW);
+    setTool(BELT);
+    S.dir = 1;
+    aimAt(40, 9);
+    expect(gold()).toBe(true);
+    expect(confirm()).toBe(true);
+    expect(S.world.dir[9 * y.land.w + 40]).toBe(1);
+    setGrade(2);
+    aimAt(40, 9);
+    expect([gold(), aimOf(S.hand)?.raises]).toEqual([true, 1]);
+    expect(confirm()).toBe(true);
+    expect(S.world.grade[9 * y.land.w + 40]).toBe(2);
+  });
+
+  test("a card's Remove on a distant piece, with nothing in hand, says why", async () => {
+    const y = everywhere();
+    stands(y, MILL, 40, 9);
+    await opened(y, 100_000);
+    placeYou(HOLLOW);
+    setTool(null);
+    const said: string[] = [];
+    const was = toolHooks.said;
+    toolHooks.said = (text) => said.push(text);
+    try {
+      expect(takeAway(40, 9)).toBe(false);
+      expect(said).toEqual(["Out of reach."]);
+    } finally {
+      toolHooks.said = was;
+    }
   });
 });
 
@@ -240,6 +371,104 @@ describe("the walking keys", () => {
     ]);
     expect(WORKS_KEYS.name("home")).toBe("Space");
     expect(WORKS_KEYS.shared()).toEqual([]);
+  });
+});
+
+/** A row of mills down x = 26 from `top` to the map's foot, every plot owned; from 25, 35 a tap at 27, 35 walks round it. */
+async function roundTheWall(top: number): Promise<void> {
+  const y = everywhere();
+  for (let z = top; z <= 35; z++) build(y, MILL, 26, z, 0, Infinity);
+  await opened(y);
+  canvasPage();
+  // Mills, and a redwood where none could be built: solid all the way down.
+  for (let z = top; z <= 35; z++) expect(yardSolid(S.world).at(mid(26, z).x, mid(26, z).y)).not.toBeNull();
+  const c = placeYou(mid(25, 35));
+  expect(walkTo(27 * 16 + 5, 35 * 16 + 9)).toBe(true);
+  for (let k = 0; k < 60 * 40 && c.going; k++) stepInput(1 / 60);
+  expect(c.tile).toEqual({ x: 27, y: 35 });
+}
+
+describe("a walk asked for by a tap", () => {
+  test("takes hold of the view again after a drag let go of it: a phone has no Space", async () => {
+    await opened(everywhere());
+    const canvas = canvasPage();
+    setTool(null);
+    placeYou(mid(24, 21));
+    stepInput(1 / 60);
+    pan(-120, -60);
+    expect(following()).toBe(false);
+    click(canvas, 30 * 16 + 5, 21 * 16 + 9);
+    expect([you()?.going, following()]).toEqual([true, true]);
+  });
+
+  test("stops when the settings menu comes up over the yard, as held keys do", async () => {
+    await opened(everywhere());
+    canvasPage();
+    const c = placeYou(mid(24, 21));
+    expect(walkTo(mid(40, 21).x, mid(40, 21).y)).toBe(true);
+    for (let k = 0; k < 10; k++) stepInput(1 / 60);
+    letGo();
+    for (let k = 0; k < 30; k++) stepInput(1 / 60);
+    const x = c.x;
+    for (let k = 0; k < 30; k++) stepInput(1 / 60);
+    expect([c.going, c.moving, c.x]).toEqual([false, false, x]);
+  });
+
+  test("finds its way round a wall from y = 4 to the map's foot: the reviewer's yard", async () => {
+    await roundTheWall(4);
+  });
+
+  test("and from y = 1, where 3,000 squares of search found nothing nearer than where you stand", async () => {
+    await roundTheWall(1);
+  });
+
+  test("with no way there at all, goes as near as anyone can get", async () => {
+    // A place shut in by mills on every side: walked to, you end beside them.
+    const y = everywhere();
+    for (let x = 9; x <= 13; x++) for (const z of [26, 30]) build(y, MILL, x, z, 0, Infinity);
+    for (let z = 27; z <= 29; z++) for (const x of [9, 13]) build(y, MILL, x, z, 0, Infinity);
+    await opened(y);
+    canvasPage();
+    const c = placeYou(mid(3, 28));
+    const to = mid(11, 28);
+    expect(walkTo(to.x, to.y)).toBe(true);
+    for (let k = 0; k < 60 * 20 && c.going; k++) stepInput(1 / 60);
+    // Three tiles from it, outside the ring, on whichever side is nearest: never standing where it began.
+    expect(c.going).toBe(false);
+    expect(Math.hypot(c.tile.x - 11, c.tile.y - 28)).toBe(3);
+  });
+});
+
+describe("a zoom while the view goes with you", () => {
+  test("zooms about you in one step: you stay where you are on the screen, then and at the next frame", async () => {
+    await opened(everywhere());
+    canvasPage();
+    setCamera(
+      { width: 320, height: 200, style: { transform: "" } },
+      { x: -56, y: -88, w: 48 * 16 + 112, h: 36 * 16 + 144 },
+    );
+    setZoom(0);
+    // The view fitted to this screen first, at the size that suits it.
+    zoom(0, 0, 0);
+    const c = placeYou(mid(24, 21));
+    for (let k = 0; k < 5; k++) stepInput(1 / 60);
+    expect(following()).toBe(true);
+    const z = S.view.z;
+    const before = toPage(c.x, c.y);
+    // The pointer is far from you: it is not what the zoom keeps.
+    expect(zoom(1, 10, 10)).toBe(true);
+    expect(S.view.z).toBeGreaterThan(z);
+    const after = toPage(c.x, c.y);
+    expect([Math.abs(after.x - before.x) <= 1, Math.abs(after.y - before.y) <= 1]).toEqual([true, true]);
+    const cam = { ...S.cam };
+    stepInput(1 / 60);
+    expect([Math.abs(S.cam.x - cam.x) < 1, Math.abs(S.cam.y - cam.y) < 1, following()]).toEqual([true, true, true]);
+    // Let go of, it zooms about the pointer as ever.
+    pan(-40, 0);
+    const under = { x: S.cam.x + 10 * (S.view.dpr / S.view.z), y: S.cam.y + 10 * (S.view.dpr / S.view.z) };
+    expect(zoom(-1, 10, 10)).toBe(true);
+    expect(Math.abs(S.cam.x + 10 * (S.view.dpr / S.view.z) - under.x)).toBeLessThan(1);
+    setZoom(0);
   });
 });
 

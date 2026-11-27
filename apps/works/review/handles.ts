@@ -57,12 +57,24 @@ import { closePanel, openPanel, type PanelId } from "../src/ui/panels.ts";
 import { $ } from "../src/ui/parts.ts";
 import { again, differences, doNow, screen, visitFollowing, yardReads } from "../src/yard.ts";
 
-/** Where you stand in your own yard, and how: your feet, the tile, whether you walk somewhere and the view goes with you, and what is in reach. */
+/** Where you stand in your own yard, and how: your feet, the tile, whether you walk somewhere and the view goes with you, what is in reach, and where your feet are on the page. */
 function yours(): Record<string, unknown> | null {
   const c = you();
   if (!c) return null;
   const { x, y, tile, going, running, speed, way, pose } = c;
-  return { x, y, tile, going, running, speed, way, pose, following: following(), reach: reachBox() };
+  return {
+    x,
+    y,
+    tile,
+    going,
+    running,
+    speed,
+    way,
+    pose,
+    following: following(),
+    reach: reachBox(),
+    page: toPage(x, y),
+  };
 }
 
 /** A goal's id, as a script reads it; null for none. */
