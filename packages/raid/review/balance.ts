@@ -2,25 +2,26 @@
  * Plays many whole runs with bots of different habits and prints how far each gets, room by room,
  * and which traits, figures and items do better or worse than the rest:
  *
- *     bun review/balance.ts [runs each] [trail 0-2] [section ...] [only=<habit>,...] [rows=<file>]
+ *     bun review/balance.ts [runs each] [trail 0-2] [section ...] [only=<habit>,...] [rows=<file>] [era=<release>]
  *
  * Sections: habits, rooms, traits, figures, items, suits, fights (all of them if none is named). It
  * is a gauge for tuning the tables in `src/game/content`, not a verdict: the bots are rough players.
  * `suits` is each figure with the finished items it held, worst first, beside the three a card
  * recommends for it. `rows` writes every fight of the habits that are trying to a file, one JSON line
- * each, as Leaf keeps a fight (`src/fought.ts`), for Leaf's `raid-stats.ts` to report on.
+ * each, as Leaf keeps a fight (`src/fought.ts`), for Leaf's `raid-stats.ts` to report on. `era`
+ * plays the catalogue as that release left it (`groot`: before Groot Night), every release by default.
  */
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts";
 import { CARELESS, fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
 import { GOOD_WITH } from "@sequoia-leaf/raid/content/advice.ts";
-import { BOON_IDS, type BoonId, boonIn } from "@sequoia-leaf/raid/content/boons.ts";
-import { catalogAt, everyFigure } from "@sequoia-leaf/raid/content/catalog.ts";
+import { type BoonId, boonIn } from "@sequoia-leaf/raid/content/boons.ts";
+import { available, catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { type FigureId, figureIn, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { FINISHED_IDS, type FinishedId, isFinishedId, itemName } from "@sequoia-leaf/raid/content/items.ts";
 import { holdItem } from "@sequoia-leaf/raid/content/recipes.ts";
-import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
+import { eraOf, LAST_ERA, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 import { ROOM_COUNT, ROOMS, TRAILS } from "@sequoia-leaf/raid/content/rooms.ts";
-import { CALLINGS, KINS, TRAIT_IDS, type TraitId, traitIn } from "@sequoia-leaf/raid/content/traits.ts";
+import { isCalling, isKin, type TraitId, traitIn } from "@sequoia-leaf/raid/content/traits.ts";
 import { resolveFight } from "@sequoia-leaf/raid/fight/engine.ts";
 import type { FightSetup, FightSummary } from "@sequoia-leaf/raid/fight/types.ts";
 import { fightRecord, margin } from "@sequoia-leaf/raid/fought.ts";
@@ -28,10 +29,12 @@ import { Tally } from "@sequoia-leaf/raid/rates.ts";
 import { beginFight, endingOf, foughtOf, startRun, takeTakings, traitsNow } from "@sequoia-leaf/raid/run.ts";
 import { onTrail } from "@sequoia-leaf/raid/way.ts";
 
-/** The catalogue with every release open: what these sims play. */
-const NOW = catalogAt(LAST_ERA);
-
 const args = process.argv.slice(2);
+/** The era played: as a release left it (`era=<release>`), or with every release open. */
+const asOf = RELEASES.find((r) => `era=${r.id}` === args.find((a) => a.startsWith("era=")));
+const ERA = asOf ? eraOf(asOf.id) : LAST_ERA;
+/** The catalogue these sims play: what is open in that era, which they walk, never a global list. */
+const NOW = catalogAt(ERA);
 const runs = Number(args[0] ?? 200);
 const trail = Number(args[1] ?? 0);
 const only = args
@@ -45,7 +48,14 @@ const shows = (name: string): boolean => sections.size === 0 || sections.has(nam
 const pct = (n: number): string => `${Math.round(n * 100)}%`.padStart(4);
 const tallies = <K extends string>(keys: readonly K[]): Map<K, Tally> => new Map(keys.map((k) => [k, new Tally()]));
 
-const EVERY: readonly Habit[] = [SENSIBLE, SAVER, ROLLER, ...KINS.map(fondOf), ...CALLINGS.map(fondOf), CARELESS];
+const EVERY: readonly Habit[] = [
+  SENSIBLE,
+  SAVER,
+  ROLLER,
+  ...NOW.ids.traits.filter(isKin).map(fondOf),
+  ...NOW.ids.traits.filter(isCalling).map(fondOf),
+  CARELESS,
+];
 const HABITS = EVERY.filter((h) => only === undefined || only.includes(h.name));
 /** The habits whose fights count toward the trait, figure and item tables: everyone who is trying. */
 const trying = (habit: Habit): boolean => !habit.careless;
@@ -53,7 +63,9 @@ const trying = (habit: Habit): boolean => !habit.careless;
 const byRoom = Array.from({ length: ROOM_COUNT }, () => new Tally());
 const byPlan = new Map<string, Tally>();
 const byTrait = new Map<string, Tally>();
-const byFigure = tallies<FigureId>(everyFigure());
+/** Everyone's figures open in the era played. */
+const EVERYONES = available(NOW, { for: "regular" });
+const byFigure = tallies<FigureId>(EVERYONES);
 const byFigureStars = new Map<string, Tally>();
 const byItem = tallies<FinishedId>(FINISHED_IDS);
 /**
@@ -84,7 +96,7 @@ function trySuits(setup: FightSetup, base: FightSummary): void {
     }
   });
 }
-const byBoon = tallies<BoonId>(BOON_IDS);
+const byBoon = tallies<BoonId>(NOW.ids.boons);
 const share = new Map<FigureId, { dealt: number; fights: number }>();
 const all = new Tally();
 let seconds = 0;
@@ -112,7 +124,7 @@ for (const habit of HABITS) {
   const line: Line = { name: habit.name, wing1: 0, wing2: 0, met: 0, beat: 0, rooms: 0, level: 0, ends: [] };
   for (let i = 0; i < ROOM_COUNT + 1; i++) line.ends.push(0);
   for (let n = 1; n <= runs; n++) {
-    const run = startRun(n * 7919 + 13, { era: LAST_ERA, way: onTrail(trail) });
+    const run = startRun(n * 7919 + 13, { era: ERA, way: onTrail(trail) });
     for (let guard = 0; guard < 200 && run.stage.phase !== "over"; guard++) {
       planRoom(run, habit);
       const room = run.room;
@@ -158,7 +170,7 @@ for (const habit of HABITS) {
       }
       for (const u of taken.fight.units) {
         if (u.side !== 0 || u.summoned || total <= 0) continue;
-        const kind = everyFigure().find((id) => id === u.kind);
+        const kind = EVERYONES.find((id) => id === u.kind);
         if (!kind) continue;
         const s = share.get(kind) ?? { dealt: 0, fights: 0 };
         s.dealt += u.dealt / total;
@@ -248,7 +260,7 @@ function table(title: string, rows: [string, Tally, string][]): void {
 }
 if (shows("traits")) {
   const rows: [string, Tally, string][] = [];
-  for (const trait of TRAIT_IDS) {
+  for (const trait of NOW.ids.traits) {
     for (let step = 1; step <= traitIn(NOW, trait).steps.length; step++) {
       const key = `${trait} ${step}`;
       const id: TraitId = trait;
@@ -264,7 +276,7 @@ if (shows("traits")) {
 if (shows("figures")) {
   table(
     "Figures fielded",
-    everyFigure().map((id): [FigureId, Tally, string] => {
+    EVERYONES.map((id): [FigureId, Tally, string] => {
       const s = share.get(id);
       const dealt = s && s.fights > 0 ? ` deals ${pct(s.dealt / s.fights).trim()}` : "";
       return [id, byFigure.get(id) ?? new Tally(), `${figureIn(NOW, id).tier} ${figureIn(NOW, id).name}${dealt}`];
@@ -284,7 +296,7 @@ if (shows("items")) {
   );
   table(
     "Boons held",
-    BOON_IDS.map((id): [BoonId, Tally, string] => [id, byBoon.get(id) ?? new Tally(), boonIn(NOW, id).name]),
+    NOW.ids.boons.map((id): [BoonId, Tally, string] => [id, byBoon.get(id) ?? new Tally(), boonIn(NOW, id).name]),
   );
 }
 /** A change in points of health left, signed, to one place. */
@@ -300,7 +312,7 @@ if (shows("suits")) {
     return t && t.n > 0 ? (t.sum / t.n) * 100 : Number.NaN;
   };
   let clashes = 0;
-  for (const id of everyFigure()) {
+  for (const id of EVERYONES) {
     const ranked = FINISHED_IDS.filter((item) => !Number.isNaN(gain(id, item))).toSorted(
       (a, b) => gain(id, a) - gain(id, b),
     );

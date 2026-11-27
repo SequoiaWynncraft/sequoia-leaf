@@ -14,7 +14,7 @@ import {
 
 import { SENSIBLE } from "./bot.ts";
 import { legal, type Predicted, type RaidCommand } from "./command.ts";
-import { catalogAt } from "./content/catalog.ts";
+import { catalogAt, everyShared } from "./content/catalog.ts";
 import { figureIn } from "./content/figures.ts";
 import { EMBLEM_IDS, grantOf } from "./content/items.ts";
 import { newLooks } from "./content/looks.ts";
@@ -54,7 +54,7 @@ import {
 } from "./run.ts";
 import { sparParty } from "./spar.ts";
 import { RAID_STATS } from "./stats.ts";
-import { CAT, EVERYONES, tableKeptAs } from "./testkit.ts";
+import { CAT, tableKeptAs } from "./testkit.ts";
 import { onTrail, wayOn } from "./way.ts";
 import { readNotes, readView } from "./wire.ts";
 
@@ -1106,7 +1106,10 @@ const EVERYTHING = [
   "pull:look:gilt",
   "pull:thing:fountain",
   "pull:headliner:banner-1",
-  ...EVERYONES.flatMap((id) => [`pull:figure:${id}`, ...[2, 3, 4, 5, 6, 7].map((n) => `copies:figure:${id}:${n}`)]),
+  // Everyone's figures of every release: the tests' moment (`ctx`) is past them all.
+  ...everyShared().flatMap((id) =>
+    [`pull:figure:${id}`].concat([2, 3, 4, 5, 6, 7].map((n) => `copies:figure:${id}:${n}`)),
+  ),
 ];
 
 /**
@@ -1159,7 +1162,7 @@ describe("the roster a member's awards come to", () => {
         "pull:figure:greg:2",
       ]),
     ).toEqual({ greg: 2, worm: 0, slug: 6, moth: 6 });
-    expect(rosterOf(EVERYTHING)).toEqual({ ...Object.fromEntries(EVERYONES.map((id) => [id, 6])), "banner-1": 0 });
+    expect(rosterOf(EVERYTHING)).toEqual({ ...Object.fromEntries(everyShared().map((id) => [id, 6])), "banner-1": 0 });
   });
   test("is shown on the page, and is nobody for a member who has pulled nothing", () => {
     const state = RAID.create(ctx(1));
@@ -1233,8 +1236,10 @@ describe("a run with the member's own figures", () => {
     expect(board?.slot).toBe("own:0:2");
     expect(RAID.meets?.(sent.state, { do: "take" })).toEqual({ slot: "own:0:3", avoid: [] });
     const met = metOf(board?.data);
-    const inOwn = opposition(catalogAt(LEGACY_ERA), 1, 2, 0, met, true);
-    const inMain = opposition(catalogAt(LEGACY_ERA), 1, 2, 0, met);
+    // Met in the era the run is in, which has everything its board holds.
+    const era = catalogAt(eraAt(ctx().now));
+    const inOwn = opposition(era, 1, 2, 0, met, true);
+    const inMain = opposition(era, 1, 2, 0, met);
     expect([inOwn.by, inMain.by]).toEqual([MEMBER, MEMBER]);
     expect(inOwn.figures.every((p) => p.level === 6)).toBe(true);
     expect(inMain.figures.every((p) => p.level === undefined)).toBe(true);

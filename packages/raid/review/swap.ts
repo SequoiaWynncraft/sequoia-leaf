@@ -1,7 +1,7 @@
 /**
  * How good a five-acorn figure is, measured by putting each into the same boards:
  *
- *     bun review/swap.ts [runs each habit] [figure,...]
+ *     bun review/swap.ts [runs each habit] [figure,...] [era=<release>]
  *
  * The bots play whole runs on the first trail, and every fight from room 5 on is kept as it was
  * set up. Each is then fought again with the board's cheapest figure swapped for the one measured,
@@ -22,9 +22,9 @@
 import { fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
 import { available, catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { type FigureId, figureIn, isFigureId, type Stars } from "@sequoia-leaf/raid/content/figures.ts";
-import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
+import { eraOf, LAST_ERA, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 import { ROOM_COUNT, worth } from "@sequoia-leaf/raid/content/rooms.ts";
-import { CALLINGS, KINS } from "@sequoia-leaf/raid/content/traits.ts";
+import { isCalling, isKin } from "@sequoia-leaf/raid/content/traits.ts";
 import { openFight, resolveFight } from "@sequoia-leaf/raid/fight/engine.ts";
 import type { FightSetup, FightSummary } from "@sequoia-leaf/raid/fight/types.ts";
 import { opposition } from "@sequoia-leaf/raid/foe.ts";
@@ -33,17 +33,32 @@ import type { Party, Placed } from "@sequoia-leaf/raid/party.ts";
 import { beginFight, startRun, takeTakings } from "@sequoia-leaf/raid/run.ts";
 import { onTrail } from "@sequoia-leaf/raid/way.ts";
 
-/** The catalogue with every release open: what these sims play. */
-const NOW = catalogAt(LAST_ERA);
-
 const args = process.argv.slice(2);
+/** The era played: as a release left it (`era=<release>`), or with every release open. */
+const asOf = RELEASES.find((r) => `era=${r.id}` === args.find((a) => a.startsWith("era=")));
+const ERA = asOf ? eraOf(asOf.id) : LAST_ERA;
+/** The catalogue these sims play. */
+const NOW = catalogAt(ERA);
 const runs = Number(args[0] ?? 60);
-const FIVES: readonly FigureId[] = available(catalogAt(LAST_ERA), { for: "stall", figures: { pool: "fair" }, tier: 5 });
-const measured: readonly FigureId[] = args[1] ? args[1].split(",").filter(isFigureId) : FIVES;
+// Every five-acorn figure on the stall, gaz's among them, and each open banner's headliner, once.
+const FIVES: readonly FigureId[] = [
+  ...new Set([
+    ...available(NOW, { for: "stall", figures: { pool: "fair" }, tier: 5 }),
+    ...NOW.banners.map((b) => b.headliner),
+  ]),
+];
+const measured: readonly FigureId[] =
+  args[1] && !args[1].startsWith("era=") ? args[1].split(",").filter(isFigureId) : FIVES;
 const STARS: readonly Stars[] = [1, 2, 3];
 /** The first room whose fights are kept: room 5, where a five-acorn figure can first be on a stall. */
 const FROM_ROOM = 4;
-const HABITS: readonly Habit[] = [SENSIBLE, SAVER, ROLLER, ...KINS.map(fondOf), ...CALLINGS.map(fondOf)];
+const HABITS: readonly Habit[] = [
+  SENSIBLE,
+  SAVER,
+  ROLLER,
+  ...NOW.ids.traits.filter(isKin).map(fondOf),
+  ...NOW.ids.traits.filter(isCalling).map(fondOf),
+];
 const MIDDLE_OUT = [3, 2, 4, 1, 5, 0, 6] as const;
 
 /** A free seat for a figure: the back row for a caster, the front row for anyone else, the next row along when that one is full. */
@@ -105,7 +120,7 @@ interface Kept {
 const kept: Kept[] = [];
 for (const habit of HABITS) {
   for (let n = 1; n <= runs; n++) {
-    const run = startRun(n * 7919 + 13, { era: LAST_ERA, way: onTrail(0) });
+    const run = startRun(n * 7919 + 13, { era: ERA, way: onTrail(0) });
     for (let guard = 0; guard < 200 && run.stage.phase !== "over"; guard++) {
       planRoom(run, habit);
       const room = run.room;
@@ -183,8 +198,8 @@ for (const kind of measured) {
         };
         const match: FightSetup = {
           seed: seed * 31 + room,
-          era: LAST_ERA,
-          sides: [ours, opposition(catalogAt(LAST_ERA), seed * 977 + room, room, 0)],
+          era: ERA,
+          sides: [ours, opposition(NOW, seed * 977 + room, room, 0)],
         };
         score.add(resolveFight(match), seated(match, seat));
       }

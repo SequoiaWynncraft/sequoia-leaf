@@ -65,9 +65,14 @@ describe("the releases", () => {
 
 describe("the catalogue", () => {
   test("draws in the order it drew in when eras came in, which each era only adds to; every figure has a release", () => {
-    // As they were drawn when eras came in: Seqwawa, of the expansion's first release, before the first banner's headliner.
-    expect(catalogAt(LEGACY_ERA).order).toEqual([...FIGURE_IDS, ...MEMBER_IDS]);
-    expect(catalogAt(eraOf("base")).order).toEqual([...FIGURE_IDS, ...MEMBER_IDS].filter((id) => id !== "seqwawa"));
+    // As they were drawn when eras came in: Seqwawa, of the expansion's first release, before the first
+    // banner's headliner; Groot Night's after all of them, everyone's first and then its headliner.
+    const night: readonly FigureId[] = ["peep", "crab31", "munch", "clutch", "crab8", "commodore"];
+    const drawn = [...FIGURE_IDS, ...MEMBER_IDS].filter((id) => !night.includes(id));
+    expect(catalogAt(LEGACY_ERA).order).toEqual(drawn);
+    expect(catalogAt(eraOf("base")).order).toEqual(drawn.filter((id) => id !== "seqwawa"));
+    expect(catalogAt(eraOf("groot-night")).order).toEqual([...drawn, ...night]);
+    expect(catalogAt(LAST_ERA).order).toEqual([...drawn, ...night]);
     // No era moves a figure past another; from the era live when eras came in, each only adds at the end.
     for (const [r, next] of RELEASES.slice(1).map((n, i) => [RELEASES[i] ?? n, n] as const)) {
       const [was, is] = [catalogAt(eraOf(r.id)), catalogAt(eraOf(next.id))];
@@ -145,7 +150,7 @@ const CASES: readonly Case[] = [
     suits: (f) => shared(f) && f.prize === rarity,
     from: joins,
   })),
-  // A banner's prizes are what it opened with; its headliner is its top prize.
+  // A banner's prizes are what it opened with, from its release on; its headliner is its top prize.
   ...BANNERS.flatMap((banner) =>
     RARITY_IDS.map((rarity): Case => ({
       name: `${banner.id}'s ${rarity}`,
@@ -154,7 +159,10 @@ const CASES: readonly Case[] = [
         rarity === "Yggdrasil"
           ? f.access !== "shared" && f.access.headliner === banner.id
           : shared(f) && f.prize === rarity,
-      from: (f) => (rarity === "Yggdrasil" || joins(f) <= releaseOf(banner.opens).at ? opens(f) : Infinity),
+      from: (f) =>
+        rarity === "Yggdrasil" || joins(f) <= releaseOf(banner.opens).at
+          ? Math.max(opens(f), releaseOf(banner.opens).at)
+          : Infinity,
     })),
   ),
   {

@@ -228,7 +228,7 @@ const PARTS: Readonly<Record<StandingKind, Part>> = {
       sfx.paper();
       nudge(q);
     },
-    extra: bang(20, -56, unread),
+    extra: bang(20, -56, () => unread(G.now)),
   },
   // The Tally, where the town keeps count: a mark over it until the member has looked.
   tally: {

@@ -14,6 +14,7 @@ import {
   type Counters,
   draw,
   EARLIER,
+  featuredOf,
   headliner,
   HISTORY,
   opensAt,
@@ -104,7 +105,8 @@ describe("a figure made while a banner is open", () => {
     const opens = Date.UTC(2026, 11, 8);
     const three = ["figure:greg", "figure:hearthcat", "figure:whitefox"];
     expect([treants("grove", T0), treants("grove", opens - 1)]).toEqual([three, three]);
-    expect(treants("grove", opens)).toEqual([...three, "figure:seqwawa"].toSorted());
+    // With Groot Night's own Treant, Crab #8, which joins as its release opens.
+    expect(treants("grove", opens)).toEqual([...three, "figure:seqwawa", "figure:crab8"].toSorted());
     // Lost on the 50/50, banner-1 pays out of the three it opened with.
     expect(treants("banner-1", opens - 1)).toEqual(three);
     // On the stall it is from the first.
@@ -148,7 +150,10 @@ describe("the prizes", () => {
     expect(everyones.filter((id) => !isThing(figureThing(id)))).toEqual([]);
     expect(BANNERS.filter(({ id }) => !isThing(memberThing(id)))).toEqual([]);
     // And each banner's headliner is a figure of the raid, which no `figure:` prize is.
-    expect(BANNERS.map((b) => [b.id, b.headliner])).toEqual([["banner-1", "banner-1"]]);
+    expect(BANNERS.map((b) => [b.id, b.headliner])).toEqual([
+      ["banner-1", "banner-1"],
+      ["groot-night", "commodore"],
+    ]);
     expect(every.filter((prize) => BANNERS.some((b) => prize === `figure:${b.headliner}`))).toEqual([]);
     expect(rarityOf("figure:greg")).toBe("Treant");
     expect(rarityOf("figure:seqwawa")).toBe("Treant");
@@ -234,7 +239,17 @@ describe("a pull", () => {
     expect(refused(s, pull("banner-1"), ctx(Date.UTC(2026, 11, 8)))).toBe("closed");
     expect(refused(s, pull("grove", 10, "leaf", Date.UTC(2030, 0, 1)), ctx(Date.UTC(2030, 0, 1)))).toBeNull();
     expect(PULLS.view(s, ctx()).open).toEqual([{ id: "banner-1", until: Date.UTC(2026, 11, 8) }]);
-    expect(PULLS.view(s, ctx(Date.UTC(2026, 11, 8))).open).toEqual([]);
+    // Groot Night opens as banner-1 closes, and closes two weeks later.
+    const night = { id: "groot-night", until: Date.UTC(2026, 11, 22) };
+    expect(PULLS.view(s, ctx(Date.UTC(2026, 11, 8) - 1)).open).toEqual([
+      { id: "banner-1", until: Date.UTC(2026, 11, 8) },
+    ]);
+    expect(PULLS.view(s, ctx(Date.UTC(2026, 11, 8))).open).toEqual([night]);
+    expect(PULLS.view(s, ctx(Date.UTC(2026, 11, 22))).open).toEqual([]);
+    expect(refused(s, pull("groot-night", 10, "leaf", Date.UTC(2026, 11, 8) - 1), ctx(Date.UTC(2026, 11, 8) - 1))).toBe(
+      "closed",
+    );
+    expect(refused(s, pull("groot-night", 10, "leaf", Date.UTC(2026, 11, 8)), ctx(Date.UTC(2026, 11, 8)))).toBeNull();
     // A banner these rules do not know (one retired, or never) is closed.
     expect(refused(s, pull("banner-9"))).toBe("closed");
     expect(PULLS.command({ ...pull("grove"), n: 5 })).toBeNull();
@@ -520,4 +535,81 @@ describe("a million pulls", () => {
       expect(rarities.filter((rarity) => Math.abs(got[rarity] / N - share[rarity]) >= 0.001)).toEqual([]);
     },
   );
+});
+
+/** The share of some prizes among what was drawn. */
+const share = (seen: Map<string, number>, of: readonly string[]): number =>
+  of.reduce((n, prize) => n + (seen.get(prize) ?? 0), 0) / [...seen.values()].reduce((a, b) => a + b, 0);
+
+describe("a banner's featured figures", () => {
+  const opens = Date.UTC(2026, 11, 8);
+  const cat = catalogAt(eraAt(opens));
+  const night = prizesOf(cat, "groot-night");
+  const featured = featuredOf(cat, "groot-night");
+  /** What many pulls draw of a rarity from Groot Night, from counters that make it that tier, with or without its featured figures. */
+  function drawn(rarity: Rarity, top: number, mid: number, favoured: readonly string[]): Map<string, number> {
+    const seen = new Map<string, number>();
+    for (let seed = 0; seed < 40_000; seed++) {
+      const d = draw(counters(top, mid, true), night, { rng: seed }, favoured);
+      if (d.rarity === rarity) seen.set(d.prize, (seen.get(d.prize) ?? 0) + 1);
+    }
+    return seen;
+  }
+
+  it("are Groot Night's six, in its pool from its opening; the grove and banner-1 have none", () => {
+    expect(featured.toSorted()).toEqual(
+      ["figure:crab8", "figure:clutch", "figure:crab31", "figure:munch", "figure:peep", "figure:seqwawa"].toSorted(),
+    );
+    expect([featuredOf(cat, "grove"), featuredOf(cat, "banner-1")]).toEqual([[], []]);
+    expect(featured.every((prize) => Object.values(night).flat().includes(prize))).toBe(true);
+    expect(RATES.featured).toBe(0.5);
+    // Before its release Groot Night has no prizes at all, so nothing featured.
+    expect(featuredOf(catalogAt(eraAt(opens - 1)), "groot-night")).toEqual([]);
+  });
+
+  it("are one of a pull's prizes of their rarity half the time, evenly, and anything of it the other half", () => {
+    // Sprite: Crab #31 and Munch of eight. 50% for them, and 2 in 8 of the rest: 62.5%, evenly.
+    const sprites = drawn("Sprite", 0, 0, featured);
+    expect(night.Sprite).toHaveLength(8);
+    expect(share(sprites, ["figure:crab31", "figure:munch"])).toBeCloseTo(0.5 + 0.5 * (2 / 8), 1);
+    expect((sprites.get("figure:crab31") ?? 0) / (sprites.get("figure:munch") ?? 1)).toBeCloseTo(1, 0);
+    // Leafkin: Peep of eight, 56%; Druid: Clutch of three, 67%.
+    expect(share(drawn("Leafkin", 0, 0, featured), ["figure:peep"])).toBeCloseTo(0.5 + 0.5 / 8, 1);
+    expect(share(drawn("Druid", 0, 9, featured), ["figure:clutch"])).toBeCloseTo(0.5 + 0.5 / 3, 1);
+    // Treant, from a lost 50/50 (owed is false here, so it is drawn): Crab #8 and Seqwawa of five, 70%.
+    const treant = new Map<string, number>();
+    for (let seed = 0; seed < 40_000; seed++) {
+      const d = draw(counters(79), night, { rng: seed }, featured);
+      if (d.rarity === "Treant") treant.set(d.prize, (treant.get(d.prize) ?? 0) + 1);
+    }
+    expect(night.Treant).toHaveLength(5);
+    expect(share(treant, ["figure:crab8", "figure:seqwawa"])).toBeCloseTo(0.5 + 0.5 * (2 / 5), 1);
+    // Without them the same pulls are even.
+    expect(share(drawn("Sprite", 0, 0, []), ["figure:crab31", "figure:munch"])).toBeCloseTo(2 / 8, 1);
+  });
+
+  it("leave a rarity with none of them drawn as the grove draws it, stream and all", () => {
+    for (let seed = 0; seed < 500; seed++) {
+      const [a, b] = [counters(10, 9), counters(10, 9)];
+      const [sa, sb] = [{ rng: seed }, { rng: seed }];
+      const both = draw(a, night, sa, featured);
+      const without = draw(b, night, sb);
+      if (both.rarity !== "Dryad") continue;
+      expect([both, a, sa]).toEqual([without, b, sb]);
+    }
+  });
+
+  it("favour a pull from Groot Night, and never one from the grove", () => {
+    let s = { ...fresh(), free: { waiting: 0, next: opens + DAY } };
+    const at = ctx(opens);
+    const notes: string[] = [];
+    for (let i = 0; i < 120; i++) {
+      const { state, notes: got } = done(s, pull("groot-night", 10, "leaf", opens), at);
+      s = state;
+      for (const n of got ?? []) if (n.rarity === "Sprite") notes.push(n.prize);
+    }
+    const favoured = notes.filter((p) => p === "figure:crab31" || p === "figure:munch").length / notes.length;
+    expect(favoured).toBeGreaterThan(0.5);
+    expect(favoured).toBeLessThan(0.75);
+  });
 });

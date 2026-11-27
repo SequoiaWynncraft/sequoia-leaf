@@ -392,9 +392,12 @@ const CampCaller = Schema.Struct({ id: Schema.String, name: Schema.String, guest
 /** Who likes the caller's camp, newest first, and who stayed in it this UTC week, last stay first: a hundred of each at most. */
 export const CampVisitors = Schema.Struct({ likes: Schema.Array(CampCaller), stays: Schema.Array(CampCaller) });
 
+/** A player a banner names, as the boards name players ("Someone" for one Leaf has no name for). */
+const Named = Schema.Struct({ id: Schema.String, name: Schema.String });
 /**
- * Every pull banner, with its dates and its headliner: the member Leaf's `banner_people` names for
- * it, named as the boards name players ("Someone" for one Leaf has no name for), or null for none yet.
+ * Every pull banner, with its dates, its headliner (the member Leaf's `banner_people` names for it,
+ * or null for none yet), and the players it calls besides, in order (`banner_called`: Groot Night's
+ * grooters, the first four seats; empty for none yet).
  */
 export const Banners = Schema.Struct({
   banners: Schema.Array(
@@ -402,7 +405,8 @@ export const Banners = Schema.Struct({
       id: Schema.String,
       from: Schema.String,
       until: Schema.String,
-      headliner: Schema.NullOr(Schema.Struct({ id: Schema.String, name: Schema.String })),
+      headliner: Schema.NullOr(Named),
+      called: Schema.Array(Named),
     }),
   ),
 });

@@ -4,7 +4,7 @@
  */
 import { FIGHT } from "../content/rooms.ts";
 import { distance, line, neighboursFor, walkLength, within } from "../hex.ts";
-import { emit, flight, foesWithin, hurt, HZ, later, leap, order, secs, unitAt } from "./core.ts";
+import { emit, flight, foesWithin, freeBeside, freeNear, hurt, HZ, later, leap, order, secs, unitAt } from "./core.ts";
 import { fly } from "./mind.ts";
 import type { DamageKind, Fight, Unit, Zone, ZoneKind } from "./types.ts";
 
@@ -67,6 +67,14 @@ export function pull(f: Fight, by: Unit, o: Unit): boolean {
   if (to === undefined) return false;
   leap(f, o, to, "pull");
   return true;
+}
+/** Somewhere to land beside an enemy: where it already stands if they touch, else a free hex on the far side, else the nearest free hex. */
+export function landingBy(f: Fight, u: Unit, target: Unit): number {
+  if (distance(u.cell, target.cell) <= 1) return u.cell;
+  const beside = freeBeside(f, u.side, target.cell, u.cell);
+  if (beside >= 0) return beside;
+  const near = freeNear(f, target.cell, 2);
+  return near >= 0 ? near : u.cell;
 }
 /** The free hex within some steps of a figure, or its own, with the most enemies touching it; its own wins a tie, then the nearest. */
 export function busiestHex(f: Fight, u: Unit, steps: number): number {

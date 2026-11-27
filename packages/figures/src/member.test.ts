@@ -8,8 +8,26 @@ test("a member headliner is found through the banner that names it, whatever the
   expect(memberOf("banner-1", BANNERS)).toBe("banner-1");
   // A banner of its own id naming a member figure of another id: Leaf's people are said by the banner.
   const rows: readonly Banner[] = [
-    { id: "a-later-banner", opens: "groot-night", from: 0, until: 1, headliner: "banner-1", look: "skin" },
-    { id: "the-sets-own", opens: "penguin-month", from: 0, until: 1, headliner: "greg", look: "set" },
+    {
+      id: "a-later-banner",
+      opens: "groot-night",
+      from: 0,
+      until: 1,
+      headliner: "banner-1",
+      look: "skin",
+      shows: "name",
+      featured: [],
+    },
+    {
+      id: "the-sets-own",
+      opens: "penguin-month",
+      from: 0,
+      until: 1,
+      headliner: "greg",
+      look: "set",
+      shows: "name",
+      featured: [],
+    },
   ];
   expect(memberOf("a-later-banner", rows)).toBe("banner-1");
   expect(memberOf("banner-1", rows)).toBeNull();

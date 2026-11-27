@@ -52,8 +52,8 @@ import {
 } from "./hud.ts";
 import { ask, mine, refusal, town } from "./leaf.ts";
 import type { Letter } from "./letter.ts";
-import { NOTES, type Part } from "./notes.ts";
-import { emote, EMOTE_NAMES } from "./players.ts";
+import { newestAt, type Part } from "./notes.ts";
+import { emote, EMOTE_NAMES, leafNow } from "./players.ts";
 import { icon, type Sprites } from "./sprites.ts";
 import { tallyPanel } from "./tallyui.ts";
 import { LOG, thingName, touchThing } from "./town.ts";
@@ -205,12 +205,12 @@ function notes(body: HTMLElement, on: QuestBoard): () => void {
 }
 
 /**
- * What has changed in the game: the ten newest notes, each its lines. A note with full notes has
- * Read more under them, which opens its parts in the same paper.
+ * What has changed in the game: the ten newest notes out by Leaf's clock, each its lines. A note
+ * with full notes has Read more under them, which opens its parts in the same paper.
  */
 function newsTab(list: HTMLElement): void {
   list.replaceChildren(
-    ...NOTES.slice(0, 10).map((n) =>
+    ...newestAt(leafNow()).map((n) =>
       el(
         "div",
         "k-paper quest",
@@ -248,7 +248,7 @@ function fullNotes(parts: readonly Part[]): HTMLElement[] {
 /** The quest board: its quests on one tab, and on the other what has changed in the game. */
 function board(body: HTMLElement, life: Scope): () => void {
   const list = el("div", "k-col");
-  const on = questBoard(life);
+  const on = questBoard(life, leafNow);
   let update: (() => void) | null = null;
   const { row, show } = tabs(TABS, (i) => {
     on.show(TABS[i] ?? "Quests");
@@ -258,7 +258,7 @@ function board(body: HTMLElement, life: Scope): () => void {
     else newsTab(list);
   });
   body.append(row, list);
-  show(TABS.indexOf(openingTab()));
+  show(TABS.indexOf(openingTab(leafNow())));
   return () => {
     update?.();
   };

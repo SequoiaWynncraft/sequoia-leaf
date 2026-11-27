@@ -262,6 +262,12 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("GET /v1/game/banners, no headliner yet", "GET", "/v1/game/banners");
   await leaf.query((sql) => sql`INSERT INTO banner_people (banner, player_id) VALUES ('banner-1', ${bob})`);
   await call("GET /v1/game/banners", "GET", "/v1/game/banners");
+  // Groot Night's grooters, in their seats: Bob second and Alice first, whatever order they went in.
+  await leaf.query(
+    (sql) =>
+      sql`INSERT INTO banner_called (banner, seat, player_id) VALUES ('groot-night', 2, ${bob}), ('groot-night', 1, ${alice})`,
+  );
+  await call("GET /v1/game/banners, a banner that calls", "GET", "/v1/game/banners");
   // A page left open after someone else signed in.
   await call("POST /v1/game/play/{game}, not you", "POST", "/v1/game/play/raid", { ...firstRoom, player: bob });
   // A raid run of Alice's, as the play service logs it.

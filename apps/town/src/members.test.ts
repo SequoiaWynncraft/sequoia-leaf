@@ -44,12 +44,26 @@ test("a banner's member is called by their name alone once Leaf says who, and dr
   world = standin({ "GET /v1/game/banners": () => ({ status: 200, body: said }) });
   const stood: string[] = [];
   const art = { stand: (id: string): number => stood.push(id) };
-  // Nobody yet: drawn as nobody, and named as no more than is known.
+  // Nobody yet: drawn as nobody, and named as no more than is known; Groot Night's by its title.
   await nameMembers(art);
-  expect([thingOf("member-banner-1")?.name, stood]).toEqual(["A guild member", ["member-banner-1"]]);
+  expect([thingOf("member-banner-1")?.name, thingOf("member-groot-night")?.name, stood]).toEqual([
+    "A guild member",
+    "Commodore",
+    ["member-banner-1", "member-groot-night"],
+  ]);
   // Leaf says who: their name and nothing else, drawn again as them; their skin is asked for by their id.
-  said = { banners: [{ id: "banner-1", headliner }] };
+  // Groot Night's member is drawn as them and keeps the title: never their name.
+  said = {
+    banners: [
+      { id: "banner-1", headliner },
+      { id: "groot-night", headliner: { id: "p-moss", name: "Mossy" } },
+    ],
+  };
   await nameMembers(art);
-  expect(thingOf("member-banner-1")?.name).toBe("Quillfeather");
-  expect(stood).toEqual(["member-banner-1", "member-banner-1", "member-banner-1"]);
+  expect([thingOf("member-banner-1")?.name, thingOf("member-groot-night")?.name]).toEqual([
+    "Quillfeather",
+    "Commodore",
+  ]);
+  expect(stood.filter((id) => id === "member-banner-1")).toHaveLength(3);
+  expect(stood.filter((id) => id === "member-groot-night")).toHaveLength(3);
 });

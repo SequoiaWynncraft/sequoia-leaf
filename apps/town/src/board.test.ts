@@ -17,7 +17,7 @@ import {
 } from "./board.ts";
 import type { Quest } from "./guild.ts";
 import { readQuests } from "./live.ts";
-import { type Note, NOTES } from "./notes.ts";
+import { type Note, noteAt, NOTES, notesAt } from "./notes.ts";
 
 /** The member's quests as Leaf really sends them, from the contract its own tests write. */
 const contract: unknown = await Bun.file(new URL("../../../contracts/leaf-api-v1.json", import.meta.url)).json();
@@ -108,6 +108,9 @@ describe("what a quest's note says it is", () => {
 const noteWords = (n: Note): string[] =>
   [n.title, ...n.lines].concat((n.more ?? []).flatMap((p) => [p.head].concat(p.points)));
 
+/** A moment of Leaf's clock after every note in the file is out. */
+const LATER = Math.max(...NOTES.map(noteAt)) + 1;
+
 describe("the board's news", () => {
   let world: Standin | null = null;
   afterEach(() => {
@@ -142,11 +145,12 @@ describe("the board's news", () => {
   });
 
   test("the news calls Worm, Moth, Rock, Greg and Orphion Graid, and Groot only the Nest of the Grootslangs", () => {
-    // The one note that says why names Groot as the Nest; the Groot Night banner is about the Nest too.
+    // The one note that says why names Groot as the Nest; the Groot Night banner is about the Nest
+    // too, and a grooter is one who raids it.
     const said = NOTES.flatMap((n) =>
       noteWords(n)
         .map((w) => w.replace("Groot is the Nest of the Grootslangs", ""))
-        .filter((w) => /groot(?!slang)(?! night)/i.test(w))
+        .filter((w) => /groot(?!slang)(?! night)(?!er)/i.test(w))
         .map((w) => `${n.id}: ${w}`),
     );
     expect(said).toEqual([]);
@@ -157,20 +161,38 @@ describe("the board's news", () => {
 
   test("news is unread, and the board opens on it, until the newest note is opened", () => {
     world = standin({});
-    expect(unread()).toBe(true);
-    expect(openingTab()).toBe("News");
-    readNews();
+    expect(unread(LATER)).toBe(true);
+    expect(openingTab(LATER)).toBe("News");
+    readNews(LATER);
     expect(world.store.getItem(SEEN)).toBe(NOTES[0]?.id ?? "");
-    expect(unread()).toBe(false);
-    expect(openingTab()).toBe("Quests");
+    expect(unread(LATER)).toBe(false);
+    expect(openingTab(LATER)).toBe("Quests");
   });
 
   test("a note newer than the one last opened is unread again", () => {
     world = standin({});
     world.store.setItem(SEEN, NOTES[1]?.id ?? "");
-    expect(unread()).toBe(true);
+    expect(unread(LATER)).toBe(true);
     world.store.setItem(SEEN, NOTES[0]?.id ?? "");
-    expect(unread()).toBe(false);
+    expect(unread(LATER)).toBe(false);
+  });
+
+  test("a note waits for its moment by Leaf's clock: not shown, not unread, not read until its `at`", () => {
+    world = standin({});
+    // Groot Night's note, merged ahead of the banner, which opens at midnight UTC on 8 December.
+    const night = NOTES.find((n) => n.id === "groot-night");
+    expect(night?.at).toBe("2026-12-08T00:00Z");
+    const at = Date.UTC(2026, 11, 8);
+    expect(notesAt(at - 1).map((n) => n.id)).not.toContain("groot-night");
+    expect(notesAt(at)[0]?.id).toBe("groot-night");
+    // Read a millisecond before, the news is read as it stood then; at the moment it is unread again.
+    readNews(at - 1);
+    expect(world.store.getItem(SEEN)).not.toBe("groot-night");
+    expect([unread(at - 1), openingTab(at - 1)]).toEqual([false, "Quests"]);
+    expect([unread(at), openingTab(at)]).toEqual([true, "News"]);
+    // Every note out by a moment is every note whose `at` has come, newest first.
+    for (const t of [at - 1, at, Date.UTC(2026, 10, 27, 14, 24)])
+      expect(notesAt(t)).toEqual(NOTES.filter((n) => noteAt(n) <= t));
   });
 });
 
@@ -185,7 +207,7 @@ describe("a paid reroll on the board", () => {
   const paid = { ...(QUESTS[0] ?? { id: "q" }), reroll: 100 };
 
   test("goes on its second press while Quests stays on show; a free one goes at once", () => {
-    const board = questBoard(scope());
+    const board = questBoard(scope(), () => LATER);
     board.show("Quests");
     expect(rerolled(board, paid, redraw)).toBe(false);
     expect(rerolled(board, paid, redraw)).toBe(true);
@@ -194,7 +216,7 @@ describe("a paid reroll on the board", () => {
   });
 
   test("pressed once, then News read and Quests shown again, only asks", () => {
-    const board = questBoard(scope());
+    const board = questBoard(scope(), () => LATER);
     board.show("Quests");
     expect(rerolled(board, paid, redraw)).toBe(false);
     board.show("News");
@@ -205,7 +227,7 @@ describe("a paid reroll on the board", () => {
 
   test("pressed once, then its price changes, only asks; and the board put away ends it", () => {
     const life = scope();
-    const board = questBoard(life);
+    const board = questBoard(life, () => LATER);
     board.show("Quests");
     expect(rerolled(board, paid, redraw)).toBe(false);
     expect(rerolled(board, { ...paid, reroll: 200 }, redraw)).toBe(false);

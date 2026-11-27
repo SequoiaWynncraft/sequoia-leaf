@@ -35,11 +35,13 @@ export async function meetMembers(seen: (banner: string, name: string, body: Bod
     if (figure) known(id, figure, figureIn(catalogAt(LAST_ERA), figure).name, nobody);
   }
   // Leaf says who by the banner; the figure they are is the one that banner names, whatever its id.
+  // A banner that shows a title (Groot Night's Commodore) keeps the figure's name: their skin, never their name.
   for (const { id, headliner } of readBanners((await ask("/v1/game/banners")).body) ?? []) {
     const figure = memberOf(id, BANNERS);
     if (!headliner || !figure) continue;
-    const { name } = headliner;
-    known(id, figure, name, bake(paintSkin(lookFor(name))));
+    const titled = BANNERS.find((b) => b.id === id)?.shows === "title";
+    const name = titled ? figureIn(catalogAt(LAST_ERA), figure).name : headliner.name;
+    known(id, figure, name, bake(paintSkin(lookFor(headliner.name))));
     skinFigure(headliner.id, (body) => known(id, figure, name, body));
   }
 }

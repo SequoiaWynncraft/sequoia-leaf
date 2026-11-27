@@ -16,7 +16,17 @@ const ctx: Ctx = {
   postcards: {},
 };
 const wire = (v: unknown): unknown => JSON.parse(JSON.stringify(v));
-const banner: Banner = BANNERS[0] ?? { id: "", opens: "base", from: 0, until: 0, headliner: "banner-1", look: "skin" };
+const banner: Banner = BANNERS[0] ?? {
+  id: "",
+  opens: "base",
+  from: 0,
+  until: 0,
+  headliner: "banner-1",
+  look: "skin",
+  shows: "name",
+  featured: [],
+};
+const night = BANNERS[1];
 
 test("a view and a pull's notes read back as Leaf made them, and nothing else reads", () => {
   const answer = PULLS.apply(
@@ -43,10 +53,21 @@ const sent = (headliner: unknown) => ({
     { id: "a-banner-these-rules-do-not-know", from: "", until: "", headliner: null },
   ],
 });
-test("the banners route reads into this package's banners, each with its headliner or none", () => {
+test("the banners route reads into this package's banners, each with its headliner or none, and whom it calls", () => {
   expect(readBanners(sent({ id: "mossback", name: "Mossback" }))).toEqual([
-    { ...banner, headliner: { id: "mossback", name: "Mossback" } },
+    { ...banner, headliner: { id: "mossback", name: "Mossback" }, called: [] },
   ]);
-  expect(readBanners(sent(null))).toEqual([{ ...banner, headliner: null }]);
+  expect(readBanners(sent(null))).toEqual([{ ...banner, headliner: null, called: [] }]);
   expect(readBanners({})).toBeNull();
+  // Groot Night calls four players besides its headliner, in order: grooterN is the Nth.
+  const calls = [
+    { id: "a", name: "Ash" },
+    { id: "b", name: "Birch" },
+  ];
+  const groot = { id: "groot-night", from: "", until: "", headliner: { id: "c", name: "Cedar" }, called: calls };
+  if (!night) throw new Error("no second banner");
+  expect(readBanners({ banners: [groot] })).toEqual([{ ...night, headliner: groot.headliner, called: calls }]);
+  // Anything but players there does not read.
+  expect(readBanners({ banners: [{ ...groot, called: [{ id: 1 }] }] })).toBeNull();
+  expect(readBanners({ banners: [{ ...groot, called: "Ash" }] })).toBeNull();
 });

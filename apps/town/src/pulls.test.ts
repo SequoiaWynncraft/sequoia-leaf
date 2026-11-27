@@ -48,8 +48,8 @@ const ERA = eraAt(T0);
 const GROVE_PRIZES = prizesOf(catalogAt(ERA), "grove");
 const BANNER_PRIZES = prizesOf(catalogAt(ERA), banner.id);
 /** A banner with a made-up headliner, and the same banner with nobody yet. */
-const WITH: BannerPerson[] = [{ ...banner, headliner: { id: "mossback", name: "Mossback" } }];
-const WITHOUT: BannerPerson[] = [{ ...banner, headliner: null }];
+const WITH: BannerPerson[] = [{ ...banner, headliner: { id: "mossback", name: "Mossback" }, called: [] }];
+const WITHOUT: BannerPerson[] = [{ ...banner, headliner: null, called: [] }];
 
 test("what a reveal says of a prize: its name, whether it is new, and the Seeds it gave; never how a 50/50 fell", () => {
   expect(
@@ -112,10 +112,12 @@ test("a banner whose headliner the set draws is shown at once: nobody has to be 
     until: banner.until,
     headliner: "greg",
     look: "set",
+    shows: "name",
+    featured: [],
   } as const;
   const open = { open: [{ id: penguins.id, until: penguins.until }], era: CAT.era };
   // Leaf's people name nobody for it; the set's own figure is the headliner, by its own name.
-  const people: BannerPerson[] = [{ id: penguins.id, from: 0, until: penguins.until, headliner: null }];
+  const people: BannerPerson[] = [{ id: penguins.id, from: 0, until: penguins.until, headliner: null, called: [] }];
   expect(showing(open, people, [penguins])).toEqual({
     id: penguins.id,
     until: penguins.until,
@@ -401,8 +403,8 @@ test("a view of a new era draws the Grove's words again, and the page asks Leaf 
 test("the clearing: the always-open pool's first three Treants on their stands, or a banner's own headliner the set draws", () => {
   const night = Date.UTC(2026, 11, 8);
   const view = PULLS.view(PULLS.create(ctxAt(night)), ctxAt(night));
-  // From 8 December the grove gives four Treants; three stand, and the prize book counts all four.
-  expect(prizeBook(view, GROVE).find(([rarity]) => rarity === "Treant")?.[1]).toHaveLength(4);
+  // From 8 December the grove gives five Treants, Seqwawa and Crab #8 with them; three stand, and the prize book counts all five.
+  expect(prizeBook(view, GROVE).find(([rarity]) => rarity === "Treant")?.[1]).toHaveLength(5);
   expect(clearing(view, null)).toHaveLength(3);
   const book = prizeBook(view, GROVE);
   expect(bookCount({ have: { "figure:seqwawa": 1, "figure:greg": 2, "look:baize": 1 } }, book)).toBe(

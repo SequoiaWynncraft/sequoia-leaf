@@ -4,7 +4,7 @@ import { catalogAt, everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
 import { figureIn } from "@sequoia-leaf/raid/content/figures.ts";
 import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 
-import { figureThing, footprint, KIND_NAMES, KINDS, memberThing, thingOf, THINGS } from "./things.ts";
+import { figureThing, footprint, isMemberThing, KIND_NAMES, KINDS, memberThing, thingOf, THINGS } from "./things.ts";
 
 /** The camp names the raid's figures as the catalogue with every release open has them. */
 const CAT = catalogAt(LAST_ERA);
@@ -19,7 +19,11 @@ describe("the catalogue", () => {
 
   test("every figure of the raid is a character: its name and its line from there, on 3 squares, mirrored by a turn", () => {
     const characters = THINGS.filter((t) => t.kind === "characters");
-    expect(characters.map((t) => t.id)).toEqual([...everyShared().map(figureThing), memberThing("banner-1")]);
+    expect(characters.map((t) => t.id)).toEqual([
+      ...everyShared().map(figureThing),
+      memberThing("banner-1"),
+      memberThing("groot-night"),
+    ]);
     for (const id of everyShared())
       expect(thingOf(figureThing(id))).toMatchObject({
         name: figureIn(CAT, id).name,
@@ -39,6 +43,14 @@ describe("the catalogue", () => {
     // Who they are is Leaf's to say: until the page hears, the name says no more than is true.
     expect(member?.name).toBe("A guild member");
     expect(thingOf("statue-banner-1")).toBeNull();
+    // Groot Night's member is a character too, named by the banner's title until and after the page hears.
+    expect(thingOf("member-groot-night")).toMatchObject({
+      kind: "characters",
+      w: 1,
+      d: 1,
+      about: "",
+      name: "Commodore",
+    });
   });
 
   test("every name can be kept in a record, and every thing takes some ground", () => {
@@ -47,7 +59,7 @@ describe("the catalogue", () => {
       expect(t.w).toBeGreaterThan(0);
       expect(t.d).toBeGreaterThan(0);
       expect(t.name.length).toBeGreaterThan(0);
-      expect(t.about.length > 0).toBe(t.id !== memberThing("banner-1"));
+      expect(t.about.length > 0).toBe(!isMemberThing(t.id));
     }
   });
 

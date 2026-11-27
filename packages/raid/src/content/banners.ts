@@ -11,6 +11,8 @@ import type { ReleaseId } from "./releases.ts";
 
 export interface Banner {
   readonly id: string;
+  /** What the banner is called, where it has a name of its own ("Groot Night"); one without goes by its headliner. */
+  readonly name?: string;
   readonly opens: ReleaseId;
   readonly from: number;
   readonly until: number;
@@ -24,6 +26,17 @@ export interface Banner {
    * (`banner_people`), who is all a page waits for before it shows the banner.
    */
   readonly look: Look;
+  /**
+   * What a skin's headliner is called: the member's name as Leaf says it (`name`), or (`title`) the
+   * name the rules give the figure, so that the member's skin is shown and never their name.
+   */
+  readonly shows: "name" | "title";
+  /**
+   * The figures a draw of their rarity favours in this banner's pulls (`RATES.featured`): one of
+   * them, evenly, half the time, and anything of that rarity otherwise. A rarity with none draws as
+   * the grove does. Never the headliner, who is the top prize already.
+   */
+  readonly featured: readonly FigureId[];
 }
 /** How a figure is drawn: by the set, or from a member's skin. */
 export type Look = "set" | "skin";
@@ -36,6 +49,21 @@ export const BANNERS: readonly Banner[] = [
     until: Date.UTC(2026, 11, 8),
     headliner: "banner-1",
     look: "skin",
+    shows: "name",
+    featured: [],
+  },
+  // Groot Night: the Nest's banner. Its headliner is drawn from a member's skin and shown as the
+  // Commodore; the four grooters he calls are four more members, in order (`called`, Leaf's).
+  {
+    id: "groot-night",
+    name: "Groot Night",
+    opens: "groot-night",
+    from: Date.UTC(2026, 11, 8),
+    until: Date.UTC(2026, 11, 22),
+    headliner: "commodore",
+    look: "skin",
+    shows: "title",
+    featured: ["crab8", "clutch", "crab31", "munch", "peep", "seqwawa"],
   },
 ];
 

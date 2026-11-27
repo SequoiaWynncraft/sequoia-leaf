@@ -47,8 +47,13 @@ function suits(cat: Catalog, kind: FigureId): readonly ComponentId[] {
       return ["glowcap", "glowcap", "plume", "chestnut"];
     case "mender":
       return ["glowcap", "chestnut", "bark"];
+    case "chorus":
+      return ["glowcap", "chestnut", "glowcap", "chestnut"];
   }
 }
+
+/** A class's figures in a title: "Sages", and for a name that ends in s, "Chorus figures". */
+const plural = (name: string): string => (name.endsWith("s") ? `${name} figures` : `${name}s`);
 
 /** A figure as far as its traits go, holding nothing: a partner's party is seated before it holds anything that counts. */
 const bare = (c: { readonly kind: FigureId }): Carrier => ({ kind: c.kind, items: [] });
@@ -150,7 +155,7 @@ export function sparParty(
   }));
   return {
     who,
-    title: `brought ${traitIn(cat, kin).name} ${traitIn(cat, calling).name}s`,
+    title: `brought ${traitIn(cat, kin).name} ${plural(traitIn(cat, calling).name)}`,
     figures,
     boons: [],
     might: 100,

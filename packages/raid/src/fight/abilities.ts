@@ -1,7 +1,8 @@
 /**
  * What each ability does on the board, keyed by whose it is. The names, sentences and numbers are
- * in `content/figures.ts`; each function here is that sentence carried out with the verbs from
- * `core.ts` and `moves.ts`. One gives back false when there is nothing to use it on yet, or it is
+ * in `content/figures.ts` and the releases' patches; each function here is that sentence carried
+ * out with the verbs from `core.ts` and `moves.ts`. A release's own abilities are a file of their
+ * own in `casts/` (Groot Night's), joined in here. One gives back false when there is nothing to use it on yet, or it is
  * not worth using yet (`mind.ts`), and the figure keeps its mana and carries on until it is.
  *
  * An ability works out how strong it is once, as it is used. Whatever it sends on its way lands
@@ -11,7 +12,8 @@
 import { abilityNumber, type UnitKind } from "../content/figures.ts";
 import { formNumber } from "../content/graid.ts";
 import { cone, distance, line, neighbours } from "../hex.ts";
-import { around, ids, say, spread } from "./cast.ts";
+import { around, type Cast, ids, say, spread } from "./cast.ts";
+import { GROOT_NIGHT_CASTS } from "./casts/groot-night.ts";
 import {
   alliesOf,
   brace,
@@ -45,11 +47,8 @@ import {
   taunt,
 } from "./core.ts";
 import { aim, crowd, drawnFoe, wanted, weakest } from "./mind.ts";
-import { busiestHex, channel, dash, dashTo, over, pull, send, telegraph, zone } from "./moves.ts";
+import { busiestHex, channel, dash, dashTo, landingBy, over, pull, send, telegraph, zone } from "./moves.ts";
 import type { Fight, Unit } from "./types.ts";
-
-/** An ability: the fight, whose it is, and its numbers at that figure's stars by name. */
-export type Cast = (f: Fight, u: Unit, n: (name: string) => number) => boolean;
 
 /** Everything touching it: damage, and something on top for each one hurt. */
 function splash(
@@ -70,16 +69,8 @@ function splash(
   }
   return total;
 }
-/** Somewhere to land beside an enemy: where it already stands if they touch, else a free hex on the far side, else the nearest free hex. */
-function landingBy(f: Fight, u: Unit, target: Unit): number {
-  if (distance(u.cell, target.cell) <= 1) return u.cell;
-  const beside = freeBeside(f, u.side, target.cell, u.cell);
-  if (beside >= 0) return beside;
-  const near = freeNear(f, target.cell, 2);
-  return near >= 0 ? near : u.cell;
-}
-
 export const CASTS: Partial<Record<UnitKind, Cast>> = {
+  ...GROOT_NIGHT_CASTS,
   // ---------- one acorn ----------
   emberkit: (f, u, n) => {
     const t = aim(f, u);

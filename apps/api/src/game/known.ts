@@ -17,7 +17,7 @@ const Known = Schema.Struct({ playerId: PlayerUuid });
  * those whose game said where they were in the last day, those listed on a
  * game's board (a guest's yard stays on it long after they were last here,
  * and everybody sees their name and face there), and the headliners of pull
- * banners (`banner_people`). Only they are asked of
+ * banners and whom they call (`banner_people`, `banner_called`). Only they are asked of
  * Mojang, so no one can make Leaf fetch and keep just any player's skin or
  * name. A database failure is a defect.
  */
@@ -37,6 +37,8 @@ export const knownAmong = (
         SELECT player_id AS playerId FROM standings WHERE ${sql.in("player_id", playerIds)}
         UNION
         SELECT player_id AS playerId FROM banner_people WHERE ${sql.in("player_id", playerIds)}
+        UNION
+        SELECT player_id AS playerId FROM banner_called WHERE ${sql.in("player_id", playerIds)}
       `.pipe(
         Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(Known))),
         Effect.map((rows) => new Set(rows.map((row) => row.playerId))),

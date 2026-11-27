@@ -13,12 +13,16 @@ export const TRAIT_COLOUR: Readonly<Record<TraitId, string>> = {
   gnome: SKY[4],
   // The gold that ties the four raids' colours (its icon); each true form's ring is its raid's own.
   graid: GOLD[2],
+  // Moss, with eggshell in its icon (Groot Night).
+  grooter: GREEN[1],
   bulwark: STONE[3],
   fang: "#f4a08c",
   slinger: GOLD[0],
   sage: SKY[3],
   mender: LEAF,
   sneak: SKY[2],
+  chorus: WATER[2],
   greg: GREEN[3],
   rooted: GREEN[2],
+  stowaway: STONE[2],
 };
