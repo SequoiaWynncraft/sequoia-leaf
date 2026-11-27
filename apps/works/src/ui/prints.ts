@@ -122,8 +122,8 @@ function itemPrint(k: Item): ItemPrint {
   return { card: "item", item: k, lock: RECIPE[k] ? locked(w.open, { make: k }) : null, found, asked };
 }
 
-/** A kind of piece at a grade: the first, unless the card names a higher or the piece stands at one. */
-function machinePrint(k: Kind, grade = 1): MachinePrint {
+/** A kind of piece at a grade: the first, unless the card names a higher or the piece stands at one; a tunnel priced by the tiles it runs under (`span`). */
+function machinePrint(k: Kind, grade = 1, span = 0): MachinePrint {
   const w = S.world;
   const key = S.visiting ? null : WORKS_KEYS.names("tool")[openTools().indexOf(k)];
   return {
@@ -132,7 +132,7 @@ function machinePrint(k: Kind, grade = 1): MachinePrint {
     grade,
     graded: isGraded(k) && (grade > 1 || highest(w.open, k) > 1),
     later: !draws(k),
-    price: grade > 1 ? price(k, grade) : costOf(w, k),
+    price: grade > 1 ? price(k, grade, span) : costOf(w, k, 1, w.spare, span),
     // The depot's power is what is open says it makes.
     gives: FIXED[k] === 1 ? w.open.depot : (GIVES[k] ?? 0),
     key: key ?? null,
@@ -186,7 +186,7 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     card: "standing",
     x,
     y,
-    machine: machinePrint(k, Math.max(1, grade)),
+    machine: machinePrint(k, Math.max(1, grade), w.span[i]),
     line: st?.line ?? null,
     trouble: st?.trouble ?? false,
     state: st?.state ?? null,

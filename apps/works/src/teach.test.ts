@@ -11,6 +11,7 @@ import {
   deliver,
   FOLIOS,
   GATHERER,
+  GOALS,
   highest,
   isNode,
   item,
@@ -166,6 +167,14 @@ describe("teaching each new idea, once, where it is met", () => {
     // A card open on a machine and a kind in hand say nothing more while every recipe is one of each and there is one grade.
     build(w, BENCH, ...xy(-3, -4), 0, 999);
     expect(nudge(w, new Set([...quiet, "tier"]), false, { picked: at(w, ...xy(-3, -4)), hand: BELT })).toBeNull();
+  });
+
+  test("a tier with research alone, no project and no commission yet, has no nudge to its screen", () => {
+    const w = create({ seed: 4, tier: 5 });
+    expect(GOALS.some((g) => g.tier === 5 && g.kind === "research")).toBe(true);
+    // Tier 5 has research alone so far; once it has a project or its commission, the nudge is back.
+    const onScreen = GOALS.some((g) => g.tier === 5 && (g.kind === "project" || g.kind === "commission"));
+    expect(nudge(w, new Set([...quiet, "study", "research", "first"]), false)?.id === "tier").toBe(onScreen);
   });
 
   test("a machine's numbers, the first time a card is open on one once the yard counts: over that machine", () => {

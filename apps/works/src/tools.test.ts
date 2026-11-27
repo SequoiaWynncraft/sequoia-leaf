@@ -66,6 +66,7 @@ import {
   undo,
   usable,
 } from "./tools.ts";
+import { comesUp, setWayIn, tunnelAim } from "./tunnel.ts";
 import { moveFrom, tileRef } from "./ui/card.ts";
 import { handPrint } from "./ui/dock.ts";
 import { printOf } from "./ui/prints.ts";
@@ -323,6 +324,35 @@ describe("a tunnel aimed", () => {
     setTool(kind("tunnel"));
     aimAt(...xy(-6, -5));
     expect(S.aim?.far).toBe(at(S.world, ...xy(-4, -5)));
+  });
+});
+
+describe("a tunnel through a deep culvert", () => {
+  test("is aimed as far as 12 tiles on, at 2 Coins more for each past 5; its card says what it cost, raises and gives back by the same", async () => {
+    // Every research of tier 5 done; a row clear for 14 tiles.
+    const fake = await opened(create({ seed: 5, tier: 6 }), 5000);
+    const w = S.world;
+    setTool(kind("tunnel"));
+    S.dir = 0;
+    const from = near(-7, -5);
+    expect(setWayIn(from.x, from.y)).toBe(true);
+    const aimed = (dx: number): unknown => {
+      const a = tunnelAim(from, -1, ...xy(-7 + dx, -5));
+      return [a.why, a.cost];
+    };
+    expect([aimed(6), aimed(7), aimed(13), aimed(14)]).toEqual([
+      [null, 12],
+      [null, 14],
+      [null, 26],
+      ["A tunnel passes under 1 to 12 tiles", 12],
+    ]);
+    expect(comesUp(from, ...xy(6, -5))).toBe(true);
+    await until(() => fake.leaf.commands.some((c) => isRecord(c) && c.do === "lay"));
+    const p = printOf(tileRef(at(w, from.x, from.y)));
+    if (p?.card !== "standing") throw new Error("no card");
+    expect([p.machine.price, p.raise?.cost, p.refund]).toEqual([26, 78 - 26, 26]);
+    // From its far mouth alike.
+    expect(printOf(tileRef(at(w, ...xy(6, -5))))).toMatchObject({ machine: { price: 26 }, refund: 26 });
   });
 });
 
