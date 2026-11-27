@@ -75,7 +75,8 @@ export const PAGE_FORGE = page("forge", 17);
  * part true where it holds: built and refused where they do not fit, fed on their backs and sides and
  * never their fronts, working and handing out of their ways out (the sifter its by-product out of its
  * second, and stopping while that one is blocked), standing as one from any tile, and removed, moved,
- * copied, blueprinted, coded, undone, kept and read back, checked and walked round.
+ * copied, blueprinted, coded, kept in a plan of the whole yard and put back, undone, kept and read
+ * back, checked and walked round.
  */
 export const PLAY_BIG = `import * as F from "./packages/factory/src/index.ts";
 import { act } from "./packages/factory/src/commands.ts";
@@ -172,6 +173,14 @@ const pieces = F.blueprintAt(printing, 1, 0, 4, 14) ?? [];
 out.blueprinted = F.stand(printing, pieces, Infinity).ok && covers(printing, SIFTER, 4, 14, 5, 15, 4, 14);
 const code = F.blueprintCode(printing.blueprints[1]);
 out.coded = code !== null && JSON.stringify(F.codePieces(code)) === JSON.stringify(F.piecesOf(printing.blueprints[1].pieces));
+
+// Kept in a plan of the whole yard (tier 5, where its research is done), taken away, and the plan put back: it stands again, whole, where it stood.
+const whole = F.create({ land, tier: 5, seed: 1 });
+F.build(whole, SIFTER, 20, 10, 0, Infinity);
+const planned = F.saveYard(whole, 1) === null;
+F.remove(whole, 21, 11);
+const print = whole.blueprints[1];
+out.wholeYard = planned && print !== null && F.placeYard(whole, print, Infinity).ok && covers(whole, SIFTER, 20, 10, 21, 11, 20, 10);
 
 // Undone: built by a command, then undone; removed by one, and stood again.
 const undoing = fresh();
@@ -276,6 +285,7 @@ export const PLAYED_BIG = Object.fromEntries(
     "saved",
     "blueprinted",
     "coded",
+    "wholeYard",
     "undoBuild",
     "undoRemove",
     "forgeBuilt",
