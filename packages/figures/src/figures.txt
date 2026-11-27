@@ -1290,6 +1290,47 @@ XXx.XXXXXXXMMXXXXXXX..
 ....XXXXxXXXxxXXXxXXx.
 ....XXXXXXXXxxXXXXXxx.
 
+# A stand-in until the page draws Seqwawa.
+seqwawa
+........yy........
+.......yYy........
+........y.........
+...wwwwwwwwwwww...
+..wnnwwwwwwwwnnw..
+..wwnwwnnnnwwnww..
+..wwwwwwwwwwwwww..
+..BBBBBBBBBBBBBB..
+..BbBBBbBBBbBBBB..
+..BbBBBbBBBbBBBB..
+..BbBkLLBBLLkBBB..
+..BbBBBbBBBbBBBB..
+..BbBBBbBBBbBBBB..
+..BbBBBbBBBbBBBB..
+.BBbBBBbBBBbBBBBB.
+BBbBBBBbBBBbBBBBBB
+NBBbBBNNBBBbBBNNBN
+N.NN..NN.NN..NN..N
+
+seqwawa cast
+.......y..y.......
+......yYyyYy......
+.......yYYy.......
+...wwwwwwwwwwww...
+..wnnwwwwwwwwnnw..
+..wwnwwnnnnwwnww..
+..wwwwwwwwwwwwww..
+..BBBBBBBBBBBBBB..
+..BbBBBbBBBbBBBB..
+..BbBBBbBBBbBBBB..
+..BbBkLLBBLLkBBB..
+..BbBBBbBBBbBBBB..
+..BbBBBbBBBbBBBB..
+..BbBBBbBBBbBBBB..
+.BBbBBBbBBBbBBBBB.
+BBbBBBBbBBBbBBBBBB
+NBBbBBNNBBBbBBNNBN
+N.NN..NN.NN..NN..N
+
 # ---------- the ones that are only ever summoned ----------
 
 glorplet

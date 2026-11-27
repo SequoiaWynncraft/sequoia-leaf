@@ -360,7 +360,7 @@ describe("what a card says about a figure", () => {
   });
   test("a trait's figures run cheapest first", () => {
     expect(membersOf("ember")).toEqual(["emberkit", "kettle", "cindernewt", "hearthcat"]);
-    expect(membersOf("fang")).toEqual(["emberkit", "crab7", "jay", "badger", "whitefox", "hearthcat"]);
+    expect(membersOf("fang")).toEqual(["emberkit", "crab7", "jay", "badger", "hearthcat"]);
   });
   test("where a figure is", () => {
     const run = startRun(3, { trail: 0 });

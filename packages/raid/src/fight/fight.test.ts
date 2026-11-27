@@ -290,7 +290,8 @@ describe("walking", () => {
   });
   test("from the back row, a figure that reaches further than two hexes attacks their front row without a step", () => {
     for (const id of FIGURE_IDS) {
-      if (FIGURES[id].range <= 2) continue;
+      // Seqwawa's reach only says where it sits: it never attacks.
+      if (FIGURES[id].range <= 2 || FIGURES[id].attack === 0) continue;
       const f = fightOf([at(id, 3, HOME_ROWS - 1)], [at("mud", 3, 0)]);
       stillSide(f, 1);
       const u = unitOf(f, id);

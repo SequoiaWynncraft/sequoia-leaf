@@ -29,6 +29,7 @@ import {
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, type RoomKind, ROOMS, sellPrice, TRAILS } from "./content/rooms.ts";
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
 import { type EndlessWay, extraChairs, foeOf, lastRoom, roomOf } from "./endless.ts";
+import type { Fed } from "./feed.ts";
 import { resolveFight } from "./fight/engine.ts";
 import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
 import { across } from "./foe.ts";
@@ -47,7 +48,7 @@ export interface Piece {
   kind: FigureId;
   stars: Stars;
   items: ItemId[];
-  /** How many times Greg has eaten. */
+  /** What Greg has eaten (`feed`): percent of his health he has gained for good. 0 for anyone else. */
   fed: number;
 }
 /** A place a figure can be: a seat on the party's half of the board (`row * 7 + col`, row 0 the front), or a place on the bench. */
@@ -209,7 +210,8 @@ export type Note =
   /** The fight, locked: both boards and its seed to play it from, and how it came out. */
   | { t: "fight"; room: number; seed: number; setup: FightSetup; outcome: FightSummary }
   | { t: "result"; room: number; result: FightResult; standing: [number, number] }
-  | { t: "fed"; piece: number; fed: number }
+  /** Greg ate a figure from the bench (`feed.ts`). */
+  | Fed
   | { t: "choice"; kind: Choice["kind"] }
   | { t: "room"; room: number; kind: RoomKind; who: string; title: string }
   | { t: "over"; won: boolean };
@@ -245,6 +247,10 @@ export const REFUSALS = {
   too_many_fielded: "There are more on the board than you can field.",
   no_fight: "There has been no fight yet.",
   no_such_room: "There is no such room.",
+  not_from_bench: "Greg only eats from the bench.",
+  not_greg: "Only Greg eats.",
+  greg_on_greg: "Greg does not eat Greg.",
+  greg_full: "Greg is full.",
 } as const;
 export type Why = keyof typeof REFUSALS;
 
@@ -582,7 +588,7 @@ export function merge(run: RunView, loose: Piece | null, notes: Note[]): void {
         keep.items = got.held;
         if (got.forged) remember(run.seen.forged, got.forged);
       }
-      keep.fed = Math.max(keep.fed, gone.fed);
+      keep.fed = Math.min(traitNumber("greg", "most", 1), keep.fed + gone.fed);
     }
     keep.stars = keep.stars === 1 ? 2 : 3;
     run.items.push(...spilled);
@@ -794,13 +800,6 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
     const cost = resolveLost(run, fight);
     run.resolve = Math.max(0, run.resolve - cost);
     notes.push({ t: "resolve", change: -cost, left: run.resolve });
-  }
-  // Greg has eaten something.
-  for (const p of run.board) {
-    if (p?.kind === "greg" && p.fed < traitNumber("greg", "most", 1)) {
-      p.fed++;
-      notes.push({ t: "fed", piece: p.id, fed: p.fed });
-    }
   }
   if (to === null) {
     run.stage = { phase: "over", ending: won && last ? "won" : "lost" };

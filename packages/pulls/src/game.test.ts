@@ -84,7 +84,7 @@ describe("the prizes", () => {
     expect([...PRIZES.Dryad, ...PRIZES.Druid].toSorted()).toEqual(priced(4).toSorted());
     expect(PRIZES.Dryad).toEqual(["figure:badger", "figure:fogowl", "figure:heron"]);
     expect(PRIZES.Druid).toEqual(["figure:crab40", "figure:apothecary"]);
-    expect(Object.values(PRIZES).map((list) => list.length)).toEqual([7, 7, 6, 3, 2, 3, 1]);
+    expect(Object.values(PRIZES).map((list) => list.length)).toEqual([7, 7, 6, 3, 2, 4, 1]);
     expect(PRIZES.Yggdrasil).toEqual(["headliner:banner-1"]);
     // The town has a thing to send for each figure, and for each banner's headliner.
     expect(FIGURE_IDS.filter((id) => !isThing(figureThing(id)))).toEqual([]);

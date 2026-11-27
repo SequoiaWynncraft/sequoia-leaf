@@ -89,7 +89,13 @@ export function weakest(foes: readonly Unit[]): Unit | undefined {
 // ---------- rule 1: a heal or a shield waits for somebody who needs it ----------
 
 /** Whose ability heals or shields friends, and how many hexes from it they may be. */
-const MENDS: Partial<Record<UnitKind, number>> = { mossmote: CELLS, kettle: CELLS, crab23: CELLS, apothecary: 2 };
+const MENDS: Partial<Record<UnitKind, number>> = {
+  mossmote: CELLS,
+  kettle: CELLS,
+  crab23: CELLS,
+  apothecary: 2,
+  seqwawa: CELLS,
+};
 /** Whether a figure's ability is worth using now: always, unless it mends and every friend it reaches is above `mendUnder`. */
 export function wanted(f: Fight, u: Unit): boolean {
   const reach = MENDS[u.kind];

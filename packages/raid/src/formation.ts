@@ -2,7 +2,8 @@
  * Where to stand: a plain, sensible way of seating a party on its half of the board. The bot uses
  * it, and so do the sparring partners. Sturdy close fighters go in the front row from the middle
  * out, anyone with reach goes behind them in the row its reach is for (`standRow`), and Sneaks that
- * are going to leap anyway wait at the back corners.
+ * are going to leap anyway wait at the back corners. Seqwawa, who never attacks, has the reach of
+ * the back row, and stays there.
  */
 import { type FigureId, FIGURES } from "./content/figures.ts";
 import { COLS, HOME_ROWS, standRow } from "./hex.ts";
@@ -56,9 +57,9 @@ export function arrange(party: readonly Standing[], leaping: boolean, closed: Re
   const far = everyone
     .filter((i) => spec(i).range > 1)
     .toSorted((a, b) => spec(a).range - spec(b).range || health(b) - health(a) || a - b);
-  // With nobody to stand in front, the sturdiest of the rest does.
+  // With nobody to stand in front, the sturdiest of the rest does: never one rooted to its hex (Seqwawa), which cannot go to anybody.
   if (close.length === 0 && far.length > 1) {
-    const sturdiest = far.toSorted((a, b) => health(b) - health(a) || a - b)[0];
+    const sturdiest = far.filter((i) => spec(i).rooted !== true).toSorted((a, b) => health(b) - health(a) || a - b)[0];
     if (sturdiest !== undefined) {
       far.splice(far.indexOf(sturdiest), 1);
       close.push(sturdiest);

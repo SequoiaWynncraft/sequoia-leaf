@@ -9,12 +9,12 @@
  */
 import { FIGHT } from "./rooms.ts";
 
-export const KINS = ["ember", "moss", "mist", "burrow", "feather", "crab", "gnome"] as const;
+export const KINS = ["ember", "moss", "mist", "burrow", "feather", "crab", "gnome", "groot"] as const;
 export type KinId = (typeof KINS)[number];
 export const CALLINGS = ["bulwark", "fang", "slinger", "sage", "mender", "sneak"] as const;
 export type CallingId = (typeof CALLINGS)[number];
 /** A trait of one figure's own. */
-export const OWN_TRAITS = ["greg"] as const;
+export const OWN_TRAITS = ["greg", "rooted"] as const;
 export type OwnTraitId = (typeof OWN_TRAITS)[number];
 export type TraitId = KinId | CallingId | OwnTraitId;
 export const TRAIT_IDS: readonly TraitId[] = [...KINS, ...CALLINGS, ...OWN_TRAITS];
@@ -50,14 +50,19 @@ export const TRAITS = {
   moss: {
     name: "Moss",
     sort: "kin",
-    steps: [2, 4],
+    steps: [2, 3, 4],
     gist: "Grows back.",
     text: [
       "The whole party regrows {regrow}% of its health every second.",
       "The whole party regrows {regrow}% of its health every second.",
+      "The whole party regrows {regrow}% of its health every second.",
     ],
-    short: ["Party regrows {regrow}% health/s.", "Party regrows {regrow}% health/s."],
-    n: { regrow: [1.2, 3] },
+    short: [
+      "Party regrows {regrow}% health/s.",
+      "Party regrows {regrow}% health/s.",
+      "Party regrows {regrow}% health/s.",
+    ],
+    n: { regrow: [1.2, 2, 3] },
   },
   mist: {
     name: "Mist",
@@ -191,14 +196,19 @@ export const TRAITS = {
   mender: {
     name: "Mender",
     sort: "calling",
-    steps: [2, 4],
+    steps: [2, 3, 4],
     gist: "Patches people up.",
     text: [
       "Menders' healing and shields count for {mending}% more.",
       "Menders' healing and shields count for {mending}% more.",
+      "Menders' healing and shields count for {mending}% more. Their healing past a friend's full health becomes a shield for {lasts} seconds, up to {over}% of that friend's health.",
     ],
-    short: ["Heals and shields +{mending}%.", "Heals and shields +{mending}%."],
-    n: { mending: [20, 35] },
+    short: [
+      "Heals and shields +{mending}%.",
+      "Heals and shields +{mending}%.",
+      "Heals, shields +{mending}%; overheal shields up to {over}%.",
+    ],
+    n: { mending: [20, 30, 35], over: [0, 0, 15], lasts: [0, 0, 4] },
   },
   sneak: {
     name: "Sneak",
@@ -212,14 +222,42 @@ export const TRAITS = {
     short: ["Leap to the back, first {hits} hits +{extra}%.", "Leap to the back, first {hits} hits +{extra}%."],
     n: { hits: [2, 3], extra: [40, 70] },
   },
+  groot: {
+    name: "Groot",
+    sort: "kin",
+    steps: [2, 3, 5],
+    gist: "Gets back up as the raiders tell it.",
+    text: [
+      "The first Groot figure to fall each fight gets back up {wait} second later in its true form, with {health}% of its health. A Groot figure in its true form has {more}% more attack and ability power.",
+      "Every Groot figure gets back up once a fight, {wait} second after it falls, in its true form, with {health}% of its health. A Groot figure in its true form has {more}% more attack and ability power.",
+      "Every Groot figure gets back up once a fight, {wait} second after it falls, in its true form, with {health}% of its health and its mana bar at least {mana}% full. A Groot figure in its true form has {more}% more attack and ability power.",
+    ],
+    short: [
+      "First Groot down rises in true form, {health}% health.",
+      "Every Groot rises once in true form, {health}% health.",
+      "Every Groot rises once: {health}% health, {mana}% mana.",
+    ],
+    n: { wait: [1, 1, 1], health: [15, 15, 30], every: [0, 1, 1], mana: [0, 0, 50], more: [10, 10, 10] },
+  },
   greg: {
     name: "Greg",
     sort: "own",
     steps: [1],
     gist: "There is one Greg.",
-    text: ["After every fight Greg is in, he has eaten something: +{grows}% health for good, up to {most} times."],
-    short: ["+{grows}% health per fight, up to {most} times."],
-    n: { grows: [3], most: [10] },
+    text: [
+      "Give Greg a figure from your bench: he eats it, and gains {grows}% health for good for each acorn it cost, up to {most}%.",
+    ],
+    short: ["Eats bench figures: +{grows}% health an acorn, to {most}%."],
+    n: { grows: [2], most: [40] },
+  },
+  rooted: {
+    name: "Rooted",
+    sort: "own",
+    steps: [1],
+    gist: "It was a tree first.",
+    text: ["Does not move or attack, cannot be pushed or pulled, and gains {mana} mana a second."],
+    short: ["Never moves or attacks; +{mana} mana a second."],
+    n: { mana: [12] },
   },
 } as const satisfies Record<TraitId, TraitSpec>;
 

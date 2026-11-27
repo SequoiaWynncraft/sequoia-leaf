@@ -63,10 +63,10 @@ describe("counting traits", () => {
       at("crab23", 2, 0),
       at("worm", 3, 0, 1, ["crabcharm"]),
     ]);
-    expect(countTraits(four.figures)).toMatchObject({ crab: 4, burrow: 1, sneak: 1 });
+    expect(countTraits(four.figures)).toMatchObject({ crab: 4, burrow: 1, sneak: 1, groot: 1 });
     expect(traitSteps(four).crab).toBe(2);
     // On the bench, where nobody else is, it is one of its kin alone.
-    expect(countTraits([{ kind: "worm", items: ["crabcharm"] }])).toEqual({ burrow: 1, sneak: 1, crab: 1 });
+    expect(countTraits([{ kind: "worm", items: ["crabcharm"] }])).toEqual({ burrow: 1, sneak: 1, groot: 1, crab: 1 });
   });
   test("two copies of one figure count once, however many emblems they hold", () => {
     const twins = [
@@ -74,7 +74,7 @@ describe("counting traits", () => {
       { kind: "worm", items: ["crabcharm", "mistcharm"] },
       { kind: "crab7", items: [] },
     ] satisfies Carrier[];
-    expect(countTraits(twins)).toEqual({ burrow: 1, sneak: 1, crab: 2, mist: 1, fang: 1 });
+    expect(countTraits(twins)).toEqual({ burrow: 1, sneak: 1, groot: 1, crab: 2, mist: 1, fang: 1 });
     // A copy holding nothing still counts the emblem the other copy holds, once.
     expect(
       countTraits([
@@ -85,7 +85,7 @@ describe("counting traits", () => {
   });
   test("a figure with a third trait counts toward all three", () => {
     const counts = countTraits(kinds("whitefox", "hearthcat", "greg"));
-    expect(counts).toEqual({ mist: 1, fang: 2, sage: 1, ember: 1, sneak: 1, moss: 1, bulwark: 1, greg: 1 });
+    expect(counts).toEqual({ mist: 1, sage: 1, groot: 2, ember: 1, sneak: 1, fang: 1, bulwark: 1, greg: 1 });
   });
   test("the states list what is on first", () => {
     const states = traitStates(kinds("crab7", "crab12", "emberkit"));
@@ -379,12 +379,12 @@ describe("callings", () => {
     expect(only(f.opening, "leap").length).toBe(0);
     expect(rowOf(unitOf(f, "worm").cell)).toBe(backRow(0));
   });
-  test("Greg: every time he has eaten he is a little bigger, up to a point", () => {
+  test("Greg: what he has eaten is a share of his health, for good, up to a point", () => {
     const hp = gregsHealth;
-    const grows = t("greg", "grows", 1);
     const most = t("greg", "most", 1);
+    expect(most).toBe(40);
     expect(hp(0)).toBe(FIGURES.greg.hp);
-    expect(hp(4)).toBe(Math.round(FIGURES.greg.hp * (1 + (4 * grows) / 100)));
+    expect(hp(12)).toBe(Math.round(FIGURES.greg.hp * 1.12));
     expect(hp(most + 50)).toBe(hp(most));
   });
 });

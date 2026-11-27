@@ -806,16 +806,12 @@ describe("the rooms", () => {
     expect(summariseRun(run)).toMatchObject({ ending: "left", cleared: 1 });
     expect(abandon(run)).toMatchObject({ ok: false, why: "The raid is over." });
   });
-  test("Greg eats after every fight he is in, up to a point", () => {
+  test("Greg eats nothing by himself after a fight: he is fed by hand (`feed.test.ts`)", () => {
     const run = winning();
     const greg = put(run, "greg", 10);
-    fight(run);
-    expect(greg.fed).toBe(1);
-    greg.fed = traitNumber("greg", "most", 1);
-    settle(run);
-    run.foe = structuredClone(PUSHOVER);
-    fight(run);
-    expect(greg.fed).toBe(traitNumber("greg", "most", 1));
+    const taken = fight(run);
+    expect(greg.fed).toBe(0);
+    expect(taken.notes.some((n) => n.t === "fed")).toBe(false);
   });
 });
 

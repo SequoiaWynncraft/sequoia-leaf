@@ -90,4 +90,6 @@ export const GOOD_WITH: Readonly<Record<FigureId, Three>> = {
   kettle: ["stewpot", "glowthorn", "lichen"],
   crab23: ["stewpot", "glowthorn", "lichen"],
   apothecary: ["glowthorn", "stewpot", "mothlantern"],
+  // Never attacks: what makes its ability stronger, or keeps it standing where it is rooted.
+  seqwawa: ["fairyring", "stewpot", "lichen"],
 };

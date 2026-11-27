@@ -154,6 +154,27 @@ GLLLLLLLG
 .GLLLLLG.
 ..GGGGG..
 
+# Stand-ins until the page draws the expansion.
+trait groot
+..yfffy..
+.ff...ff.
+yf.....fy
+f.......f
+yf.....fy
+.ff...ff.
+..yfffy..
+.........
+
+trait rooted
+...BBB...
+..BnnnB..
+..BnnnB..
+..BBBBB..
+.N.NBN.N.
+N..N.N..N
+..N...N..
+.........
+
 # ---------- items ----------
 
 item thorn

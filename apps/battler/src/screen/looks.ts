@@ -165,6 +165,8 @@ export const LOOKS: Partial<Record<UnitKind, Look>> = {
   greg: { wind: 12, body: "rise", mark: "sit", bump: 2 },
   whitefox: { wind: 10, body: "rear", gather: [GOLD[1], GOLD[2]], mark: "antlers", bump: 1 },
   hearthcat: { wind: 12, body: "stare", lunge: 6, mark: "bat", bump: 1 },
+  // A stand-in until the page draws No GG Left Behind.
+  seqwawa: { wind: 10, body: "still", gather: [GOLD[1], LEAF], mark: "tonic" },
   // ---------- a banner's member ----------
   "banner-1": {
     wind: 12,
@@ -223,6 +225,8 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
   greg: { n: -19, wave: "triangle", hiss: 200, slide: 0.5, vol: 0.14 },
   whitefox: { n: 19, wave: "sine", two: 7, vol: 0.09 },
   hearthcat: { n: 3, wave: "triangle", hiss: 2500, slide: 0.6 },
+  // A stand-in until the page draws No GG Left Behind.
+  seqwawa: { n: -7, wave: "sine", two: 12, hiss: 300, vol: 0.08 },
   // A low two-note stare, and a thump with a bell over it when it lands.
   "banner-1": {
     n: -14,
@@ -281,6 +285,8 @@ const KIN_PUFF: Readonly<Record<KinId, Puff>> = {
   feather: { cols: [PAPER[2], CREAM], drift: "down" },
   crab: { cols: ["#b0483a", PAPER[1]], drift: "out" },
   gnome: { cols: [SKY[4], PAPER[1]], drift: "out" },
+  // A stand-in until the page draws the expansion.
+  groot: { cols: [BARK[3], GOLD[1]], drift: "out" },
 };
 const SHELL: Puff = KIN_PUFF.crab;
 const LEAVES: Puff = { cols: [BARK[3], GREEN[3]], drift: "down" };

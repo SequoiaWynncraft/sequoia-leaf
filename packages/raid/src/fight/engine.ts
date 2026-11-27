@@ -6,17 +6,17 @@ import { chance, mix } from "@sequoia-leaf/core";
  * traits on; `stepFight` moves the clock one step and gives back what happened in it, for a screen;
  * `runFight` goes straight to the end, for the bot and for "skip".
  *
- * A step, in order: things in flight land; once a second burns, regrowth and dusk tick; then every
- * figure still up has its turn (uses its ability if its mana is full and it is worth using, else
- * attacks whoever it is after if they are in reach, else walks a hex toward them).
+ * A step, in order: things in flight land; once a second burns, regrowth, mana by the second and
+ * dusk tick; then every figure still up has its turn (uses its ability if its mana is full and it is
+ * worth using, else attacks whoever it is after if they are in reach, else walks a hex toward them).
  */
 import { boonNumber } from "../content/boons.ts";
 import { abilityNumber, FIGURES, isFigureId, specOf, type Stars, starScale } from "../content/figures.ts";
 import { carries, FINISHED, type FinishedId, type ItemId, itemStats } from "../content/items.ts";
 import { FIGHT, levelBoost } from "../content/rooms.ts";
-import { TRAIT_IDS, traitNumber } from "../content/traits.ts";
+import { traitNumber } from "../content/traits.ts";
 import { backRow, cellAt, colOf, distance, HOME_ROWS, seatCell, type Side, stepToward } from "../hex.ts";
-import { type Party, type Placed, traitSteps } from "../party.ts";
+import type { Party, Placed } from "../party.ts";
 import { cast } from "./abilities.ts";
 import {
   drawOf,
@@ -41,6 +41,7 @@ import {
 import { drawnFoe, fly, foesByDraw, onTarget } from "./mind.ts";
 import { slowNow } from "./moves.ts";
 import { attackReach, boardFor, ruleSeated, wildsOf } from "./rules.ts";
+import { switchOn } from "./switch.ts";
 import type { Fight, FightEvent, FightResult, FightSetup, FightSummary, Pending, StatusId, Unit } from "./types.ts";
 
 // ---------- sitting down ----------
@@ -137,7 +138,8 @@ function seat(f: Fight, side: Side, p: Placed, party: Party): Unit {
     armour += s.armour;
     ward += s.ward;
   }
-  if (p.kind === "greg") health += Math.min(p.fed, traitNumber("greg", "most", 1)) * traitNumber("greg", "grows", 1);
+  // What Greg has eaten: percent of his health, for good.
+  if (p.kind === "greg") health += Math.min(p.fed, traitNumber("greg", "most", 1));
   if (party.boons.includes("smallfry") && isFigureId(p.kind) && FIGURES[p.kind].tier <= 2) {
     health += boonNumber("smallfry", "boost");
     attack += boonNumber("smallfry", "boost");
@@ -153,6 +155,7 @@ function seat(f: Fight, side: Side, p: Placed, party: Party): Unit {
     summoned: false,
     owner: -1,
     items: p.items.slice(),
+    grown: star * might,
     maxHp: spec.hp * star * might * (1 + health / 100),
     attack: spec.attack * star * might * (1 + attack / 100),
     speed: spec.speed * (1 + speed / 100),
@@ -169,96 +172,6 @@ function seat(f: Fight, side: Side, p: Placed, party: Party): Unit {
     if (row === HOME_ROWS - 1) u.speed *= 1 + boonNumber("formation", "speed") / 100;
   }
   return u;
-}
-
-/** Switches a side's traits on, and says so. */
-function switchOn(f: Fight, side: Side, party: Party): void {
-  const steps = traitSteps(party);
-  f.traits[side] = steps;
-  const mine = f.units.filter((u) => u.side === side);
-  for (const trait of TRAIT_IDS) {
-    const step = steps[trait] ?? 0;
-    if (step <= 0) continue;
-    const v = (name: string): number => traitNumber(trait, name, step);
-    // Whoever carries it: as one of its own traits, or by an emblem it holds.
-    const members = mine.filter((u) => carries(u.kind, u.items, trait));
-    let touched = members;
-    switch (trait) {
-      case "ember":
-        if (v("whole") > 0) touched = mine;
-        for (const u of touched) u.ember = v("burn");
-        break;
-      case "moss":
-        touched = mine;
-        for (const u of mine) u.regrow += v("regrow");
-        break;
-      case "mist":
-        touched = mine;
-        for (const u of mine) {
-          u.ward += v("ward");
-          u.slip += v("slip");
-        }
-        break;
-      case "burrow":
-        for (const u of members) {
-          u.armour += v("armour");
-          u.digs = true;
-          u.digHeal = v("heal");
-          u.digLess = v("less");
-          u.digFor = v("lasts");
-        }
-        break;
-      case "feather":
-        for (const u of members) {
-          u.quicken = v("quicken");
-          u.quickMost = v("stacks");
-        }
-        break;
-      case "bulwark":
-        if (v("party") > 0) touched = mine;
-        for (const u of mine) u.armour += members.includes(u) ? v("armour") : v("party");
-        break;
-      case "fang":
-        for (const u of members) {
-          u.attack = Math.round(u.attack * (1 + v("attack") / 100));
-          u.crit += v("crit");
-        }
-        break;
-      case "slinger":
-        for (const u of members) {
-          u.range += v("reach");
-          u.focusBy = v("focus");
-          u.focusMost = v("most");
-        }
-        break;
-      case "sage":
-        for (const u of members) {
-          u.power += v("power");
-          u.manaMore += v("mana");
-        }
-        break;
-      case "mender":
-        for (const u of members) u.mending += v("mending");
-        break;
-      case "sneak":
-        for (const u of members) {
-          u.sneakHits = v("hits");
-          u.sneakBy = v("extra");
-        }
-        break;
-      case "gnome":
-        for (const u of members) {
-          u.maxHp = Math.round(u.maxHp * (1 + v("health") / 100));
-          u.hp = u.maxHp;
-        }
-        break;
-      case "crab":
-      case "greg":
-        // Roll call happens once everyone is seated; Greg does his part after the fight.
-        break;
-    }
-    emit(f, { t: "trait", side, trait, step, ids: touched.map((u) => u.id) });
-  }
 }
 
 /**
@@ -536,6 +449,7 @@ function everySecond(f: Fight): void {
       if (!u.alive) continue;
     }
     if (u.regrow > 0) heal(f, u, (u.maxHp * u.regrow) / 100, "regrow", null);
+    if (u.manaRate > 0) gainMana(u, u.manaRate);
     if (u.serveEvery > 0 && f.tick % u.serveEvery === 0) {
       const hungry = mostHurt(f, u.side, true)[0];
       if (hungry) {

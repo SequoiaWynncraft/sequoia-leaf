@@ -367,8 +367,10 @@ describe("a sparring room", () => {
   test("a draw costs both", () => {
     const t = structuredClone(until(started(41, 8), planning(2)));
     const [a, b] = t.pairs[0] ?? [0, 1];
-    // Two rocks: neither attacks, and dusk takes both in the same step.
+    // Two rocks and no boons, none to pick either: neither attacks, and dusk takes both in the same step.
     for (const s of [seat(t, a), seat(t, b)]) {
+      s.run.boons = [];
+      s.run.stage = { phase: "plan", picks: [] };
       s.run.bench = s.run.bench.map(() => null);
       s.run.board = s.run.board.map((_, i) =>
         i === 3 ? { id: s.run.nextId++, kind: "rock", stars: 1, items: [], fed: 0 } : null,
@@ -839,7 +841,7 @@ describe("a stored sitting", () => {
     };
     expect(spoiled(() => {})).toEqual(t);
     expect(decodeSitting("{")).toBeNull();
-    expect(decodeSitting(encodeSitting(t).replace('"v":1', '"v":9'))).toBeNull();
+    expect(decodeSitting(encodeSitting(t).replace('"v":2', '"v":9'))).toBeNull();
     expect(decodeSitting(encodeSitting(t).replace('"little-raid-sitting"', '"little-raid-table"'))).toBeNull();
     expect(spoiled((raw) => void (raw.rng = -1))).toBeNull();
     expect(spoiled((raw) => void raw.seats.pop())).toBeNull();

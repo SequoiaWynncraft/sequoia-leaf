@@ -64,7 +64,7 @@ export function sparParty(
   const kin: KinId = pick(s, KINS);
   const calling: CallingId = pick(s, CALLINGS);
   const likes = (id: FigureId): number =>
-    (FIGURES[id].kin === kin ? LIKES_KIN : 1) * (traitsOf(id).includes(calling) ? LIKES_CALLING : 1);
+    (traitsOf(id).includes(kin) ? LIKES_KIN : 1) * (traitsOf(id).includes(calling) ? LIKES_CALLING : 1);
   const levelOdds = STALL_ODDS[Math.min(STALL_ODDS.length, Math.max(1, strength.level)) - 1] ?? STALL_ODDS[0];
   /** How often the stall offers a figure's cost at the partner's level, out of a hundred. */
   const odds = (id: FigureId): number => levelOdds?.[FIGURES[id].tier - 1] ?? 0;

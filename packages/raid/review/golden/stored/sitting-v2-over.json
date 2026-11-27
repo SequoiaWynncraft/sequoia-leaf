@@ -1,0 +1,1324 @@
+{
+  "game": "little-raid-sitting",
+  "v": 2,
+  "rng": 1519039996,
+  "by": "00000000-0000-4000-8000-0000000060d3",
+  "room": 15,
+  "stage": { "at": "over", "ended": 1795803404150 },
+  "seats": [
+    {
+      "who": { "is": "member", "id": "00000000-0000-4000-8000-0000000060d3", "name": "Golden one" },
+      "run": {
+        "seed": 4094521732,
+        "rng": 1133843527,
+        "trail": 0,
+        "room": 14,
+        "stage": { "phase": "over", "ending": "lost" },
+        "resolve": 0,
+        "acorns": 3,
+        "streak": -1,
+        "level": 7,
+        "xp": 2,
+        "board": [
+          null,
+          null,
+          { "id": 6, "kind": "barrowgnome", "stars": 2, "items": [], "fed": 0 },
+          { "id": 15, "kind": "slug", "stars": 2, "items": [], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 38, "kind": "apothecary", "stars": 1, "items": [], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 20, "kind": "fogowl", "stars": 1, "items": ["thorn"], "fed": 0 },
+          null,
+          { "id": 35, "kind": "leafling", "stars": 1, "items": ["lichen", "glowcap"], "fed": 0 },
+          { "id": 4, "kind": "mossmote", "stars": 3, "items": ["glowcap", "fairyring", "honeycake"], "fed": 0 },
+          { "id": 30, "kind": "heron", "stars": 1, "items": [], "fed": 0 },
+          null,
+          { "id": 18, "kind": "bushgnome", "stars": 1, "items": ["conker"], "fed": 0 }
+        ],
+        "bench": [
+          { "id": 13, "kind": "barrowgnome", "stars": 2, "items": [], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "items": [],
+        "stall": ["crab23", "rock", "drizzlefrog", "crab12", "crab7"],
+        "held": false,
+        "rustles": 0,
+        "bought": 1,
+        "boons": ["extrachair", "smallfry", "secondwind"],
+        "foe": {
+          "who": "The forest",
+          "title": "The Crab Nobody Counted",
+          "figures": [
+            { "kind": "bigcrab", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+            { "kind": "crab", "stars": 3, "seat": 1, "items": [], "fed": 0 },
+            { "kind": "crab", "stars": 3, "seat": 5, "items": [], "fed": 0 },
+            { "kind": "crab", "stars": 2, "seat": 9, "items": [], "fed": 0 },
+            { "kind": "crab", "stars": 2, "seat": 11, "items": [], "fed": 0 },
+            { "kind": "toadstool", "stars": 3, "seat": 17, "items": [], "fed": 0 },
+            { "kind": "wasp", "stars": 3, "seat": 7, "items": [], "fed": 0 },
+            { "kind": "wasp", "stars": 3, "seat": 13, "items": [], "fed": 0 }
+          ],
+          "boons": [],
+          "might": 100
+        },
+        "record": [
+          { "room": 0, "kind": "trouble", "result": "win", "standing": [1, 0], "boss": null },
+          { "room": 1, "kind": "trouble", "result": "win", "standing": [2, 0], "boss": null },
+          { "room": 2, "kind": "spar", "result": "win", "standing": [4, 0], "boss": null },
+          { "room": 3, "kind": "spar", "result": "win", "standing": [2, 0], "boss": null },
+          { "room": 4, "kind": "boss", "result": "win", "standing": [5, 0], "boss": "oldbramble" },
+          { "room": 5, "kind": "spar", "result": "win", "standing": [2, 0], "boss": null },
+          { "room": 6, "kind": "trouble", "result": "win", "standing": [5, 0], "boss": null },
+          { "room": 7, "kind": "spar", "result": "win", "standing": [2, 0], "boss": null },
+          {
+            "room": 8,
+            "kind": "spar",
+            "result": "loss",
+            "standing": [0, 1],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d4"
+          },
+          { "room": 9, "kind": "boss", "result": "win", "standing": [5, 0], "boss": "hoardmagpie" },
+          { "room": 10, "kind": "spar", "result": "loss", "standing": [0, 7], "boss": null },
+          { "room": 11, "kind": "spar", "result": "loss", "standing": [0, 2], "boss": null },
+          { "room": 12, "kind": "trouble", "result": "win", "standing": [4, 0], "boss": null },
+          { "room": 13, "kind": "spar", "result": "win", "standing": [6, 0], "boss": null },
+          { "room": 14, "kind": "boss", "result": "loss", "standing": [0, 4], "boss": "bigcrab" }
+        ],
+        "nextId": 41,
+        "last": {
+          "seed": 3100795481,
+          "sides": [
+            {
+              "who": "Golden one",
+              "title": "",
+              "figures": [
+                { "kind": "barrowgnome", "stars": 2, "seat": 2, "items": [], "fed": 0 },
+                { "kind": "slug", "stars": 2, "seat": 3, "items": [], "fed": 0 },
+                { "kind": "apothecary", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+                { "kind": "fogowl", "stars": 1, "seat": 21, "items": ["thorn"], "fed": 0 },
+                { "kind": "leafling", "stars": 1, "seat": 23, "items": ["lichen", "glowcap"], "fed": 0 },
+                {
+                  "kind": "mossmote",
+                  "stars": 3,
+                  "seat": 24,
+                  "items": ["glowcap", "fairyring", "honeycake"],
+                  "fed": 0
+                },
+                { "kind": "heron", "stars": 1, "seat": 25, "items": [], "fed": 0 },
+                { "kind": "bushgnome", "stars": 1, "seat": 27, "items": ["conker"], "fed": 0 }
+              ],
+              "boons": ["smallfry", "secondwind"],
+              "might": 100,
+              "by": "00000000-0000-4000-8000-0000000060d3"
+            },
+            {
+              "who": "The forest",
+              "title": "The Crab Nobody Counted",
+              "figures": [
+                { "kind": "bigcrab", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+                { "kind": "crab", "stars": 3, "seat": 1, "items": [], "fed": 0 },
+                { "kind": "crab", "stars": 3, "seat": 5, "items": [], "fed": 0 },
+                { "kind": "crab", "stars": 2, "seat": 9, "items": [], "fed": 0 },
+                { "kind": "crab", "stars": 2, "seat": 11, "items": [], "fed": 0 },
+                { "kind": "toadstool", "stars": 3, "seat": 17, "items": [], "fed": 0 },
+                { "kind": "wasp", "stars": 3, "seat": 7, "items": [], "fed": 0 },
+                { "kind": "wasp", "stars": 3, "seat": 13, "items": [], "fed": 0 }
+              ],
+              "boons": [],
+              "might": 100
+            }
+          ]
+        },
+        "own": null,
+        "endless": null,
+        "wing": null,
+        "seen": {
+          "fielded": [],
+          "threeStars": ["mossmote"],
+          "forged": ["honeycake", "conker", "fairyring", "lichen"],
+          "topped": []
+        }
+      },
+      "shown": {
+        "who": "Golden one",
+        "title": "",
+        "figures": [
+          { "kind": "barrowgnome", "stars": 2, "seat": 2, "items": [], "fed": 0 },
+          { "kind": "slug", "stars": 2, "seat": 3, "items": [], "fed": 0 },
+          { "kind": "apothecary", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+          { "kind": "fogowl", "stars": 1, "seat": 21, "items": ["thorn"], "fed": 0 },
+          { "kind": "leafling", "stars": 1, "seat": 23, "items": ["lichen", "glowcap"], "fed": 0 },
+          { "kind": "mossmote", "stars": 3, "seat": 24, "items": ["glowcap", "fairyring", "honeycake"], "fed": 0 },
+          { "kind": "heron", "stars": 1, "seat": 25, "items": [], "fed": 0 },
+          { "kind": "bushgnome", "stars": 1, "seat": 27, "items": ["conker"], "fed": 0 }
+        ],
+        "boons": ["smallfry", "secondwind"],
+        "might": 100,
+        "by": "00000000-0000-4000-8000-0000000060d3"
+      },
+      "place": 3
+    },
+    {
+      "who": { "is": "member", "id": "00000000-0000-4000-8000-0000000060d4", "name": "Golden two" },
+      "run": {
+        "seed": 2671935353,
+        "rng": 651139801,
+        "trail": 0,
+        "room": 14,
+        "stage": { "phase": "over", "ending": "lost" },
+        "resolve": 0,
+        "acorns": 4,
+        "streak": -2,
+        "level": 6,
+        "xp": 24,
+        "board": [
+          null,
+          null,
+          { "id": 4, "kind": "crab7", "stars": 3, "items": ["glowthorn", "honeycake", "honeycake"], "fed": 0 },
+          { "id": 26, "kind": "hearthcat", "stars": 2, "items": ["wasptail", "mosscharm", "glowcap"], "fed": 0 },
+          { "id": 22, "kind": "emberkit", "stars": 3, "items": ["wasptail", "chestnut"], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 16, "kind": "crab23", "stars": 1, "items": [], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 20, "kind": "mossmote", "stars": 2, "items": [], "fed": 0 },
+          { "id": 8, "kind": "kettle", "stars": 2, "items": ["fairyring"], "fed": 0 },
+          null,
+          null,
+          null
+        ],
+        "bench": [
+          null,
+          { "id": 34, "kind": "crab7", "stars": 1, "items": [], "fed": 0 },
+          { "id": 35, "kind": "crab7", "stars": 1, "items": [], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "items": [],
+        "stall": [null, "crab23", "slug", "barrowgnome", "bushgnome"],
+        "held": false,
+        "rustles": 0,
+        "bought": 2,
+        "boons": ["basket", "headstart", "mosscharm"],
+        "foe": {
+          "who": "Rock",
+          "title": "",
+          "figures": [
+            { "kind": "badger", "stars": 2, "seat": 2, "items": ["wasptail"], "fed": 0 },
+            { "kind": "rock", "stars": 1, "seat": 3, "items": ["hollowlog", "hollowlog"], "fed": 0 },
+            { "kind": "cindernewt", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+            { "kind": "worm", "stars": 3, "seat": 21, "items": ["mothlantern", "conker", "mistcharm"], "fed": 0 },
+            { "kind": "moth", "stars": 2, "seat": 23, "items": [], "fed": 0 },
+            { "kind": "chickaree", "stars": 2, "seat": 24, "items": ["wasptail"], "fed": 0 },
+            { "kind": "hearthcat", "stars": 1, "seat": 27, "items": [], "fed": 0 }
+          ],
+          "boons": ["headstart"],
+          "might": 100
+        },
+        "record": [
+          { "room": 0, "kind": "trouble", "result": "win", "standing": [1, 0], "boss": null },
+          { "room": 1, "kind": "trouble", "result": "win", "standing": [2, 0], "boss": null },
+          { "room": 2, "kind": "spar", "result": "loss", "standing": [0, 1], "boss": null },
+          { "room": 3, "kind": "spar", "result": "loss", "standing": [0, 1], "boss": null },
+          { "room": 4, "kind": "boss", "result": "win", "standing": [3, 0], "boss": "oldbramble" },
+          { "room": 5, "kind": "spar", "result": "loss", "standing": [0, 4], "boss": null },
+          { "room": 6, "kind": "trouble", "result": "win", "standing": [4, 0], "boss": null },
+          { "room": 7, "kind": "spar", "result": "win", "standing": [5, 0], "boss": null },
+          {
+            "room": 8,
+            "kind": "spar",
+            "result": "win",
+            "standing": [1, 0],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d3"
+          },
+          { "room": 9, "kind": "boss", "result": "win", "standing": [5, 0], "boss": "hoardmagpie" },
+          { "room": 10, "kind": "spar", "result": "win", "standing": [4, 0], "boss": null },
+          { "room": 11, "kind": "spar", "result": "win", "standing": [6, 0], "boss": null },
+          { "room": 12, "kind": "trouble", "result": "win", "standing": [5, 0], "boss": null },
+          { "room": 13, "kind": "spar", "result": "win", "standing": [4, 0], "boss": null },
+          { "room": 14, "kind": "boss", "result": "loss", "standing": [0, 5], "boss": "bigcrab" },
+          { "room": 14, "kind": "spar", "result": "loss", "standing": [0, 6], "boss": null }
+        ],
+        "nextId": 36,
+        "last": {
+          "seed": 2484608656,
+          "sides": [
+            {
+              "who": "Golden two",
+              "title": "",
+              "figures": [
+                { "kind": "crab7", "stars": 3, "seat": 2, "items": ["glowthorn", "honeycake", "honeycake"], "fed": 0 },
+                { "kind": "hearthcat", "stars": 2, "seat": 3, "items": ["wasptail", "mosscharm", "glowcap"], "fed": 0 },
+                { "kind": "emberkit", "stars": 3, "seat": 4, "items": ["wasptail", "chestnut"], "fed": 0 },
+                { "kind": "crab23", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+                { "kind": "mossmote", "stars": 2, "seat": 23, "items": [], "fed": 0 },
+                { "kind": "kettle", "stars": 2, "seat": 24, "items": ["fairyring"], "fed": 0 }
+              ],
+              "boons": ["headstart"],
+              "might": 100,
+              "by": "00000000-0000-4000-8000-0000000060d4"
+            },
+            {
+              "who": "Rock",
+              "title": "",
+              "figures": [
+                { "kind": "badger", "stars": 2, "seat": 2, "items": ["wasptail", "hummingbird"], "fed": 0 },
+                { "kind": "rock", "stars": 1, "seat": 3, "items": ["hollowlog", "hollowlog"], "fed": 0 },
+                { "kind": "cindernewt", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+                { "kind": "worm", "stars": 3, "seat": 21, "items": ["mothlantern", "conker", "mistcharm"], "fed": 0 },
+                { "kind": "moth", "stars": 2, "seat": 23, "items": [], "fed": 0 },
+                { "kind": "chickaree", "stars": 2, "seat": 24, "items": ["wasptail"], "fed": 0 },
+                { "kind": "hearthcat", "stars": 1, "seat": 27, "items": [], "fed": 0 }
+              ],
+              "boons": ["headstart"],
+              "might": 100
+            }
+          ]
+        },
+        "own": null,
+        "endless": null,
+        "wing": null,
+        "seen": {
+          "fielded": [],
+          "threeStars": ["crab7", "emberkit"],
+          "forged": ["glowthorn", "honeycake", "wasptail", "fairyring"],
+          "topped": []
+        }
+      },
+      "shown": {
+        "who": "Golden two",
+        "title": "",
+        "figures": [
+          { "kind": "crab7", "stars": 3, "seat": 2, "items": ["glowthorn", "honeycake", "honeycake"], "fed": 0 },
+          { "kind": "hearthcat", "stars": 2, "seat": 3, "items": ["wasptail", "mosscharm", "glowcap"], "fed": 0 },
+          { "kind": "emberkit", "stars": 3, "seat": 4, "items": ["wasptail", "chestnut"], "fed": 0 },
+          { "kind": "crab23", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+          { "kind": "mossmote", "stars": 2, "seat": 23, "items": [], "fed": 0 },
+          { "kind": "kettle", "stars": 2, "seat": 24, "items": ["fairyring"], "fed": 0 }
+        ],
+        "boons": ["headstart"],
+        "might": 100,
+        "by": "00000000-0000-4000-8000-0000000060d4"
+      },
+      "place": 2
+    },
+    {
+      "who": { "is": "regular", "figure": "emberkit", "habit": "ember" },
+      "run": {
+        "seed": 1322483419,
+        "rng": 338861819,
+        "trail": 0,
+        "room": 8,
+        "stage": { "phase": "over", "ending": "lost" },
+        "resolve": 0,
+        "acorns": 2,
+        "streak": -2,
+        "level": 5,
+        "xp": 4,
+        "board": [
+          null,
+          null,
+          { "id": 19, "kind": "crab7", "stars": 2, "items": [], "fed": 0 },
+          { "id": 21, "kind": "badger", "stars": 1, "items": [], "fed": 0 },
+          { "id": 3, "kind": "emberkit", "stars": 2, "items": ["blackthorn", "hollowlog", "thorn"], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          { "id": 25, "kind": "cindernewt", "stars": 1, "items": [], "fed": 0 },
+          { "id": 12, "kind": "cindernewt", "stars": 1, "items": ["fairyring", "crabcharm"], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 5, "kind": "kettle", "stars": 1, "items": [], "fed": 0 },
+          null,
+          null,
+          null
+        ],
+        "bench": [
+          { "id": 15, "kind": "crab23", "stars": 1, "items": [], "fed": 0 },
+          { "id": 22, "kind": "kettle", "stars": 1, "items": [], "fed": 0 },
+          null,
+          null,
+          { "id": 7, "kind": "mossmote", "stars": 2, "items": [], "fed": 0 },
+          null,
+          null,
+          null,
+          null
+        ],
+        "items": [],
+        "stall": ["glorp", "fogowl", null, null, "emberkit"],
+        "held": false,
+        "rustles": 0,
+        "bought": 7,
+        "boons": ["extrachair", "crabcharm"],
+        "foe": {
+          "who": "Dusk Jay",
+          "title": "",
+          "figures": [
+            { "kind": "emberkit", "stars": 2, "seat": 2, "items": ["blackthorn", "plume"], "fed": 0 },
+            { "kind": "crab7", "stars": 3, "seat": 3, "items": ["blackthorn", "hummingbird"], "fed": 0 },
+            { "kind": "crab23", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+            { "kind": "mossmote", "stars": 1, "seat": 23, "items": [], "fed": 0 },
+            { "kind": "kettle", "stars": 1, "seat": 24, "items": [], "fed": 0 }
+          ],
+          "boons": [],
+          "might": 100
+        },
+        "record": [
+          { "room": 0, "kind": "trouble", "result": "win", "standing": [1, 0], "boss": null },
+          { "room": 1, "kind": "trouble", "result": "win", "standing": [1, 0], "boss": null },
+          { "room": 2, "kind": "spar", "result": "win", "standing": [3, 0], "boss": null },
+          { "room": 3, "kind": "spar", "result": "loss", "standing": [0, 4], "boss": null },
+          { "room": 4, "kind": "boss", "result": "win", "standing": [5, 0], "boss": "oldbramble" },
+          {
+            "room": 5,
+            "kind": "spar",
+            "result": "loss",
+            "standing": [0, 2],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d3"
+          },
+          { "room": 6, "kind": "trouble", "result": "win", "standing": [5, 0], "boss": null },
+          { "room": 7, "kind": "spar", "result": "loss", "standing": [0, 5], "boss": null },
+          { "room": 8, "kind": "spar", "result": "loss", "standing": [0, 3], "boss": null }
+        ],
+        "nextId": 28,
+        "last": {
+          "seed": 3040683072,
+          "sides": [
+            {
+              "who": "Emberkit",
+              "title": "",
+              "figures": [
+                { "kind": "crab7", "stars": 2, "seat": 2, "items": [], "fed": 0 },
+                { "kind": "badger", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+                { "kind": "emberkit", "stars": 2, "seat": 4, "items": ["blackthorn", "hollowlog", "thorn"], "fed": 0 },
+                { "kind": "cindernewt", "stars": 1, "seat": 9, "items": [], "fed": 0 },
+                { "kind": "cindernewt", "stars": 1, "seat": 10, "items": ["fairyring", "crabcharm"], "fed": 0 },
+                { "kind": "kettle", "stars": 1, "seat": 24, "items": [], "fed": 0 }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            {
+              "who": "Dusk Jay",
+              "title": "",
+              "figures": [
+                { "kind": "emberkit", "stars": 2, "seat": 2, "items": ["blackthorn", "plume"], "fed": 0 },
+                { "kind": "crab7", "stars": 3, "seat": 3, "items": ["blackthorn", "hummingbird"], "fed": 0 },
+                { "kind": "crab23", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+                { "kind": "mossmote", "stars": 1, "seat": 23, "items": [], "fed": 0 },
+                { "kind": "kettle", "stars": 1, "seat": 24, "items": [], "fed": 0 }
+              ],
+              "boons": [],
+              "might": 100
+            }
+          ]
+        },
+        "own": null,
+        "endless": null,
+        "wing": null,
+        "seen": { "fielded": [], "threeStars": [], "forged": ["hollowlog", "fairyring", "blackthorn"], "topped": [] }
+      },
+      "shown": {
+        "who": "Emberkit",
+        "title": "",
+        "figures": [
+          { "kind": "crab7", "stars": 2, "seat": 2, "items": [], "fed": 0 },
+          { "kind": "badger", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+          { "kind": "emberkit", "stars": 2, "seat": 4, "items": ["blackthorn", "hollowlog", "thorn"], "fed": 0 },
+          { "kind": "cindernewt", "stars": 1, "seat": 9, "items": [], "fed": 0 },
+          { "kind": "cindernewt", "stars": 1, "seat": 10, "items": ["fairyring", "crabcharm"], "fed": 0 },
+          { "kind": "kettle", "stars": 1, "seat": 24, "items": [], "fed": 0 }
+        ],
+        "boons": [],
+        "might": 100
+      },
+      "place": 7
+    },
+    {
+      "who": { "is": "regular", "figure": "hearthcat", "habit": "fang" },
+      "run": {
+        "seed": 2469454321,
+        "rng": 2461603037,
+        "trail": 0,
+        "room": 7,
+        "stage": { "phase": "over", "ending": "lost" },
+        "resolve": 0,
+        "acorns": 2,
+        "streak": -2,
+        "level": 5,
+        "xp": 2,
+        "board": [
+          null,
+          null,
+          { "id": 1, "kind": "emberkit", "stars": 2, "items": ["wasptail", "quilt", "wasptail"], "fed": 0 },
+          { "id": 3, "kind": "jay", "stars": 2, "items": ["embercharm", "chestnut"], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 16, "kind": "cindernewt", "stars": 1, "items": [], "fed": 0 },
+          { "id": 18, "kind": "apothecary", "stars": 1, "items": [], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 7, "kind": "kettle", "stars": 2, "items": [], "fed": 0 },
+          null,
+          null,
+          null
+        ],
+        "bench": [
+          { "id": 13, "kind": "emberkit", "stars": 1, "items": [], "fed": 0 },
+          { "id": 14, "kind": "emberkit", "stars": 1, "items": [], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "items": [],
+        "stall": ["bushgnome", "jay", "worm", "chickaree", null],
+        "held": false,
+        "rustles": 0,
+        "bought": 4,
+        "boons": ["embercharm", "quickstudy"],
+        "foe": {
+          "who": "Crab #12",
+          "title": "",
+          "figures": [
+            { "kind": "crab7", "stars": 2, "seat": 3, "items": ["burrowcharm"], "fed": 0 },
+            { "kind": "crab12", "stars": 1, "seat": 23, "items": [], "fed": 0 },
+            { "kind": "crab12", "stars": 2, "seat": 24, "items": ["hummingbird", "wasptail", "plume"], "fed": 0 },
+            { "kind": "chickaree", "stars": 1, "seat": 25, "items": [], "fed": 0 }
+          ],
+          "boons": ["secondwind"],
+          "might": 100
+        },
+        "record": [
+          { "room": 0, "kind": "trouble", "result": "win", "standing": [1, 0], "boss": null },
+          { "room": 1, "kind": "trouble", "result": "win", "standing": [2, 0], "boss": null },
+          { "room": 2, "kind": "spar", "result": "loss", "standing": [0, 3], "boss": null },
+          {
+            "room": 3,
+            "kind": "spar",
+            "result": "loss",
+            "standing": [0, 2],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d3"
+          },
+          { "room": 4, "kind": "boss", "result": "win", "standing": [2, 0], "boss": "oldbramble" },
+          { "room": 5, "kind": "spar", "result": "win", "standing": [1, 0], "boss": null },
+          { "room": 6, "kind": "trouble", "result": "loss", "standing": [0, 5], "boss": null },
+          { "room": 7, "kind": "spar", "result": "loss", "standing": [0, 4], "boss": null }
+        ],
+        "nextId": 19,
+        "last": {
+          "seed": 1707272140,
+          "sides": [
+            {
+              "who": "the Hearth Cat",
+              "title": "",
+              "figures": [
+                { "kind": "emberkit", "stars": 2, "seat": 2, "items": ["wasptail", "quilt", "wasptail"], "fed": 0 },
+                { "kind": "jay", "stars": 2, "seat": 3, "items": ["embercharm", "chestnut"], "fed": 0 },
+                { "kind": "cindernewt", "stars": 1, "seat": 9, "items": [], "fed": 0 },
+                { "kind": "apothecary", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+                { "kind": "kettle", "stars": 2, "seat": 24, "items": [], "fed": 0 }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            {
+              "who": "Crab #12",
+              "title": "",
+              "figures": [
+                { "kind": "crab7", "stars": 2, "seat": 3, "items": ["burrowcharm"], "fed": 0 },
+                { "kind": "chickaree", "stars": 1, "seat": 22, "items": [], "fed": 0 },
+                { "kind": "drizzlefrog", "stars": 1, "seat": 23, "items": ["glowcap"], "fed": 0 },
+                {
+                  "kind": "crab12",
+                  "stars": 2,
+                  "seat": 24,
+                  "items": ["hummingbird", "wasptail", "wasptail"],
+                  "fed": 0
+                },
+                { "kind": "crab12", "stars": 1, "seat": 25, "items": [], "fed": 0 }
+              ],
+              "boons": ["secondwind"],
+              "might": 100
+            }
+          ]
+        },
+        "own": null,
+        "endless": null,
+        "wing": null,
+        "seen": { "fielded": [], "threeStars": [], "forged": ["wasptail", "quilt"], "topped": [] }
+      },
+      "shown": {
+        "who": "the Hearth Cat",
+        "title": "",
+        "figures": [
+          { "kind": "emberkit", "stars": 2, "seat": 2, "items": ["wasptail", "quilt", "wasptail"], "fed": 0 },
+          { "kind": "jay", "stars": 2, "seat": 3, "items": ["embercharm", "chestnut"], "fed": 0 },
+          { "kind": "cindernewt", "stars": 1, "seat": 9, "items": [], "fed": 0 },
+          { "kind": "apothecary", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+          { "kind": "kettle", "stars": 2, "seat": 24, "items": [], "fed": 0 }
+        ],
+        "boons": [],
+        "might": 100
+      },
+      "place": 8
+    },
+    {
+      "who": { "is": "regular", "figure": "crab12", "habit": "crab" },
+      "run": {
+        "seed": 4095615325,
+        "rng": 572439463,
+        "trail": 0,
+        "room": 13,
+        "stage": { "phase": "over", "ending": "lost" },
+        "resolve": 0,
+        "acorns": 4,
+        "streak": -1,
+        "level": 6,
+        "xp": 20,
+        "board": [
+          null,
+          null,
+          { "id": 2, "kind": "crab7", "stars": 2, "items": ["burrowcharm"], "fed": 0 },
+          { "id": 27, "kind": "crab40", "stars": 1, "items": [], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 23, "kind": "crab23", "stars": 1, "items": ["lichen"], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 10, "kind": "crab12", "stars": 2, "items": ["hummingbird", "wasptail", "wasptail"], "fed": 0 },
+          { "id": 17, "kind": "crab12", "stars": 2, "items": ["wasptail", "thorn"], "fed": 0 },
+          { "id": 22, "kind": "chickaree", "stars": 2, "items": [], "fed": 0 },
+          null,
+          null
+        ],
+        "bench": [
+          null,
+          { "id": 28, "kind": "crab7", "stars": 2, "items": [], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "items": [],
+        "stall": ["crab12", "bushgnome", "leafling", "cindernewt", "kettle"],
+        "held": false,
+        "rustles": 0,
+        "bought": 1,
+        "boons": ["secondwind", "burrowcharm", "blanket"],
+        "foe": {
+          "who": "Golden one",
+          "title": "",
+          "figures": [
+            { "kind": "barrowgnome", "stars": 2, "seat": 2, "items": [], "fed": 0 },
+            { "kind": "slug", "stars": 2, "seat": 3, "items": [], "fed": 0 },
+            { "kind": "fogowl", "stars": 1, "seat": 21, "items": [], "fed": 0 },
+            { "kind": "leafling", "stars": 1, "seat": 23, "items": ["lichen", "glowcap"], "fed": 0 },
+            { "kind": "mossmote", "stars": 2, "seat": 24, "items": ["glowcap", "fairyring"], "fed": 0 },
+            { "kind": "heron", "stars": 1, "seat": 25, "items": [], "fed": 0 },
+            { "kind": "bushgnome", "stars": 1, "seat": 27, "items": ["conker"], "fed": 0 }
+          ],
+          "boons": ["smallfry", "secondwind"],
+          "might": 100,
+          "by": "00000000-0000-4000-8000-0000000060d3"
+        },
+        "record": [
+          { "room": 0, "kind": "trouble", "result": "win", "standing": [1, 0], "boss": null },
+          { "room": 1, "kind": "trouble", "result": "win", "standing": [2, 0], "boss": null },
+          { "room": 2, "kind": "spar", "result": "loss", "standing": [0, 2], "boss": null },
+          { "room": 3, "kind": "spar", "result": "win", "standing": [4, 0], "boss": null },
+          { "room": 4, "kind": "boss", "result": "win", "standing": [5, 0], "boss": "oldbramble" },
+          { "room": 5, "kind": "spar", "result": "win", "standing": [4, 0], "boss": null },
+          { "room": 6, "kind": "trouble", "result": "win", "standing": [2, 0], "boss": null },
+          { "room": 7, "kind": "spar", "result": "win", "standing": [4, 0], "boss": null },
+          {
+            "room": 8,
+            "kind": "spar",
+            "result": "loss",
+            "standing": [0, 5],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d4"
+          },
+          { "room": 9, "kind": "boss", "result": "win", "standing": [3, 0], "boss": "hoardmagpie" },
+          {
+            "room": 10,
+            "kind": "spar",
+            "result": "loss",
+            "standing": [0, 4],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d4"
+          },
+          { "room": 11, "kind": "spar", "result": "loss", "standing": [0, 3], "boss": null },
+          { "room": 12, "kind": "trouble", "result": "win", "standing": [2, 0], "boss": null },
+          {
+            "room": 13,
+            "kind": "spar",
+            "result": "loss",
+            "standing": [0, 6],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d3"
+          }
+        ],
+        "nextId": 30,
+        "last": {
+          "seed": 1104499517,
+          "sides": [
+            {
+              "who": "Golden one",
+              "title": "",
+              "figures": [
+                { "kind": "barrowgnome", "stars": 2, "seat": 2, "items": [], "fed": 0 },
+                { "kind": "slug", "stars": 2, "seat": 3, "items": [], "fed": 0 },
+                { "kind": "apothecary", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+                { "kind": "fogowl", "stars": 1, "seat": 21, "items": ["thorn"], "fed": 0 },
+                { "kind": "leafling", "stars": 1, "seat": 23, "items": ["lichen", "glowcap"], "fed": 0 },
+                { "kind": "mossmote", "stars": 2, "seat": 24, "items": ["glowcap", "fairyring"], "fed": 0 },
+                { "kind": "heron", "stars": 1, "seat": 25, "items": [], "fed": 0 },
+                { "kind": "bushgnome", "stars": 1, "seat": 27, "items": ["conker"], "fed": 0 }
+              ],
+              "boons": ["smallfry", "secondwind"],
+              "might": 100,
+              "by": "00000000-0000-4000-8000-0000000060d3"
+            },
+            {
+              "who": "Crab #12",
+              "title": "",
+              "figures": [
+                { "kind": "crab7", "stars": 2, "seat": 2, "items": ["burrowcharm"], "fed": 0 },
+                { "kind": "crab40", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+                { "kind": "crab23", "stars": 1, "seat": 10, "items": ["lichen"], "fed": 0 },
+                {
+                  "kind": "crab12",
+                  "stars": 2,
+                  "seat": 23,
+                  "items": ["hummingbird", "wasptail", "wasptail"],
+                  "fed": 0
+                },
+                { "kind": "crab12", "stars": 2, "seat": 24, "items": ["wasptail", "thorn"], "fed": 0 },
+                { "kind": "chickaree", "stars": 2, "seat": 25, "items": [], "fed": 0 }
+              ],
+              "boons": ["secondwind"],
+              "might": 100
+            }
+          ]
+        },
+        "own": null,
+        "endless": null,
+        "wing": null,
+        "seen": { "fielded": [], "threeStars": [], "forged": ["wasptail", "hummingbird", "lichen"], "topped": [] }
+      },
+      "shown": {
+        "who": "Crab #12",
+        "title": "",
+        "figures": [
+          { "kind": "crab7", "stars": 2, "seat": 2, "items": ["burrowcharm"], "fed": 0 },
+          { "kind": "crab40", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+          { "kind": "crab23", "stars": 1, "seat": 10, "items": ["lichen"], "fed": 0 },
+          { "kind": "crab12", "stars": 2, "seat": 23, "items": ["hummingbird", "wasptail", "wasptail"], "fed": 0 },
+          { "kind": "crab12", "stars": 2, "seat": 24, "items": ["wasptail", "thorn"], "fed": 0 },
+          { "kind": "chickaree", "stars": 2, "seat": 25, "items": [], "fed": 0 }
+        ],
+        "boons": ["secondwind"],
+        "might": 100
+      },
+      "place": 5
+    },
+    {
+      "who": { "is": "regular", "figure": "cindernewt", "habit": "ember" },
+      "run": {
+        "seed": 3564365020,
+        "rng": 178372842,
+        "trail": 0,
+        "room": 8,
+        "stage": { "phase": "over", "ending": "lost" },
+        "resolve": 0,
+        "acorns": 1,
+        "streak": -2,
+        "level": 5,
+        "xp": 4,
+        "board": [
+          null,
+          null,
+          { "id": 4, "kind": "emberkit", "stars": 2, "items": ["wasptail", "plume"], "fed": 0 },
+          { "id": 9, "kind": "jay", "stars": 2, "items": ["embercharm"], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 23, "kind": "cindernewt", "stars": 1, "items": [], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 18, "kind": "heron", "stars": 1, "items": [], "fed": 0 },
+          { "id": 11, "kind": "kettle", "stars": 2, "items": ["fairyring"], "fed": 0 },
+          null,
+          null,
+          null
+        ],
+        "bench": [
+          { "id": 8, "kind": "finch", "stars": 2, "items": [], "fed": 0 },
+          { "id": 1, "kind": "finch", "stars": 2, "items": ["hedgehog"], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "items": [],
+        "stall": ["crab12", null, "mossmote", "glorp", "rock"],
+        "held": false,
+        "rustles": 0,
+        "bought": 1,
+        "boons": ["embercharm", "formation"],
+        "foe": {
+          "who": "Rock",
+          "title": "",
+          "figures": [
+            { "kind": "worm", "stars": 3, "seat": 2, "items": ["mothlantern", "conker", "mistcharm"], "fed": 0 },
+            { "kind": "rock", "stars": 1, "seat": 3, "items": ["hollowlog", "hollowlog"], "fed": 0 },
+            { "kind": "moth", "stars": 2, "seat": 23, "items": [], "fed": 0 },
+            { "kind": "chickaree", "stars": 2, "seat": 24, "items": ["thorn"], "fed": 0 },
+            { "kind": "moth", "stars": 1, "seat": 25, "items": [], "fed": 0 }
+          ],
+          "boons": [],
+          "might": 100
+        },
+        "record": [
+          { "room": 0, "kind": "trouble", "result": "win", "standing": [1, 0], "boss": null },
+          { "room": 1, "kind": "trouble", "result": "win", "standing": [1, 0], "boss": null },
+          {
+            "room": 2,
+            "kind": "spar",
+            "result": "loss",
+            "standing": [0, 4],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d3"
+          },
+          {
+            "room": 3,
+            "kind": "spar",
+            "result": "win",
+            "standing": [1, 0],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d4"
+          },
+          { "room": 4, "kind": "boss", "result": "win", "standing": [2, 0], "boss": "oldbramble" },
+          { "room": 5, "kind": "spar", "result": "loss", "standing": [0, 4], "boss": null },
+          { "room": 6, "kind": "trouble", "result": "win", "standing": [3, 0], "boss": null },
+          {
+            "room": 7,
+            "kind": "spar",
+            "result": "loss",
+            "standing": [0, 2],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d3"
+          },
+          { "room": 8, "kind": "spar", "result": "loss", "standing": [0, 5], "boss": null }
+        ],
+        "nextId": 24,
+        "last": {
+          "seed": 1617959602,
+          "sides": [
+            {
+              "who": "Cinder Newt",
+              "title": "",
+              "figures": [
+                { "kind": "emberkit", "stars": 2, "seat": 2, "items": ["wasptail", "plume"], "fed": 0 },
+                { "kind": "jay", "stars": 2, "seat": 3, "items": ["embercharm"], "fed": 0 },
+                { "kind": "cindernewt", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+                { "kind": "heron", "stars": 1, "seat": 23, "items": [], "fed": 0 },
+                { "kind": "kettle", "stars": 2, "seat": 24, "items": ["fairyring"], "fed": 0 }
+              ],
+              "boons": ["formation"],
+              "might": 100
+            },
+            {
+              "who": "Rock",
+              "title": "",
+              "figures": [
+                { "kind": "worm", "stars": 3, "seat": 2, "items": ["mothlantern", "conker", "mistcharm"], "fed": 0 },
+                { "kind": "rock", "stars": 1, "seat": 3, "items": ["hollowlog", "hollowlog"], "fed": 0 },
+                { "kind": "moth", "stars": 2, "seat": 23, "items": [], "fed": 0 },
+                { "kind": "chickaree", "stars": 2, "seat": 24, "items": ["thorn"], "fed": 0 },
+                { "kind": "finch", "stars": 2, "seat": 25, "items": [], "fed": 0 }
+              ],
+              "boons": [],
+              "might": 100
+            }
+          ]
+        },
+        "own": null,
+        "endless": null,
+        "wing": null,
+        "seen": { "fielded": [], "threeStars": [], "forged": ["hedgehog", "wasptail", "fairyring"], "topped": [] }
+      },
+      "shown": {
+        "who": "Cinder Newt",
+        "title": "",
+        "figures": [
+          { "kind": "emberkit", "stars": 2, "seat": 2, "items": ["wasptail", "plume"], "fed": 0 },
+          { "kind": "jay", "stars": 2, "seat": 3, "items": ["embercharm"], "fed": 0 },
+          { "kind": "cindernewt", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+          { "kind": "heron", "stars": 1, "seat": 23, "items": [], "fed": 0 },
+          { "kind": "kettle", "stars": 2, "seat": 24, "items": ["fairyring"], "fed": 0 }
+        ],
+        "boons": ["formation"],
+        "might": 100
+      },
+      "place": 6
+    },
+    {
+      "who": { "is": "regular", "figure": "rock", "habit": "burrow" },
+      "run": {
+        "seed": 598450544,
+        "rng": 4185378063,
+        "trail": 0,
+        "room": 14,
+        "stage": { "phase": "over", "ending": "won" },
+        "resolve": 20,
+        "acorns": 12,
+        "streak": 16,
+        "level": 7,
+        "xp": 6,
+        "board": [
+          null,
+          null,
+          { "id": 29, "kind": "badger", "stars": 2, "items": ["wasptail", "hummingbird"], "fed": 0 },
+          { "id": 13, "kind": "rock", "stars": 1, "items": ["hollowlog", "hollowlog"], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 38, "kind": "cindernewt", "stars": 1, "items": [], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 2, "kind": "worm", "stars": 3, "items": ["mothlantern", "conker", "mistcharm"], "fed": 0 },
+          null,
+          { "id": 20, "kind": "moth", "stars": 2, "items": [], "fed": 0 },
+          { "id": 24, "kind": "chickaree", "stars": 2, "items": ["wasptail"], "fed": 0 },
+          null,
+          null,
+          { "id": 36, "kind": "hearthcat", "stars": 1, "items": [], "fed": 0 }
+        ],
+        "bench": [
+          null,
+          { "id": 41, "kind": "worm", "stars": 1, "items": [], "fed": 0 },
+          { "id": 12, "kind": "moth", "stars": 2, "items": [], "fed": 0 },
+          { "id": 30, "kind": "fogowl", "stars": 1, "items": ["plume"], "fed": 0 },
+          { "id": 39, "kind": "worm", "stars": 1, "items": [], "fed": 0 },
+          null,
+          null,
+          null,
+          null
+        ],
+        "items": [],
+        "stall": ["crab23", "jay", "jay", "lanterngnome", "jay"],
+        "held": false,
+        "rustles": 1,
+        "bought": 0,
+        "boons": ["mistcharm", "basket", "headstart"],
+        "foe": {
+          "who": "The forest",
+          "title": "The Crab Nobody Counted",
+          "figures": [
+            { "kind": "bigcrab", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+            { "kind": "crab", "stars": 3, "seat": 1, "items": [], "fed": 0 },
+            { "kind": "crab", "stars": 3, "seat": 5, "items": [], "fed": 0 },
+            { "kind": "crab", "stars": 2, "seat": 9, "items": [], "fed": 0 },
+            { "kind": "crab", "stars": 2, "seat": 11, "items": [], "fed": 0 },
+            { "kind": "toadstool", "stars": 3, "seat": 17, "items": [], "fed": 0 },
+            { "kind": "wasp", "stars": 3, "seat": 7, "items": [], "fed": 0 },
+            { "kind": "wasp", "stars": 3, "seat": 13, "items": [], "fed": 0 }
+          ],
+          "boons": [],
+          "might": 100
+        },
+        "record": [
+          { "room": 0, "kind": "trouble", "result": "win", "standing": [1, 0], "boss": null },
+          { "room": 1, "kind": "trouble", "result": "win", "standing": [2, 0], "boss": null },
+          { "room": 2, "kind": "spar", "result": "win", "standing": [2, 0], "boss": null },
+          { "room": 3, "kind": "spar", "result": "win", "standing": [3, 0], "boss": null },
+          { "room": 4, "kind": "boss", "result": "win", "standing": [4, 0], "boss": "oldbramble" },
+          {
+            "room": 5,
+            "kind": "spar",
+            "result": "win",
+            "standing": [4, 0],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d4"
+          },
+          { "room": 6, "kind": "trouble", "result": "win", "standing": [4, 0], "boss": null },
+          { "room": 7, "kind": "spar", "result": "win", "standing": [5, 0], "boss": null },
+          { "room": 8, "kind": "spar", "result": "win", "standing": [5, 0], "boss": null },
+          { "room": 9, "kind": "boss", "result": "win", "standing": [5, 0], "boss": "hoardmagpie" },
+          { "room": 10, "kind": "spar", "result": "win", "standing": [5, 0], "boss": null },
+          {
+            "room": 11,
+            "kind": "spar",
+            "result": "win",
+            "standing": [2, 0],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d3"
+          },
+          { "room": 12, "kind": "trouble", "result": "win", "standing": [6, 0], "boss": null },
+          { "room": 13, "kind": "spar", "result": "win", "standing": [6, 0], "boss": null },
+          { "room": 14, "kind": "boss", "result": "win", "standing": [6, 0], "boss": "bigcrab" },
+          {
+            "room": 14,
+            "kind": "spar",
+            "result": "win",
+            "standing": [6, 0],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d4"
+          }
+        ],
+        "nextId": 43,
+        "last": {
+          "seed": 2484608656,
+          "sides": [
+            {
+              "who": "Golden two",
+              "title": "",
+              "figures": [
+                { "kind": "crab7", "stars": 3, "seat": 2, "items": ["glowthorn", "honeycake", "honeycake"], "fed": 0 },
+                { "kind": "hearthcat", "stars": 2, "seat": 3, "items": ["wasptail", "mosscharm", "glowcap"], "fed": 0 },
+                { "kind": "emberkit", "stars": 3, "seat": 4, "items": ["wasptail", "chestnut"], "fed": 0 },
+                { "kind": "crab23", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+                { "kind": "mossmote", "stars": 2, "seat": 23, "items": [], "fed": 0 },
+                { "kind": "kettle", "stars": 2, "seat": 24, "items": ["fairyring"], "fed": 0 }
+              ],
+              "boons": ["headstart"],
+              "might": 100,
+              "by": "00000000-0000-4000-8000-0000000060d4"
+            },
+            {
+              "who": "Rock",
+              "title": "",
+              "figures": [
+                { "kind": "badger", "stars": 2, "seat": 2, "items": ["wasptail", "hummingbird"], "fed": 0 },
+                { "kind": "rock", "stars": 1, "seat": 3, "items": ["hollowlog", "hollowlog"], "fed": 0 },
+                { "kind": "cindernewt", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+                { "kind": "worm", "stars": 3, "seat": 21, "items": ["mothlantern", "conker", "mistcharm"], "fed": 0 },
+                { "kind": "moth", "stars": 2, "seat": 23, "items": [], "fed": 0 },
+                { "kind": "chickaree", "stars": 2, "seat": 24, "items": ["wasptail"], "fed": 0 },
+                { "kind": "hearthcat", "stars": 1, "seat": 27, "items": [], "fed": 0 }
+              ],
+              "boons": ["headstart"],
+              "might": 100
+            }
+          ]
+        },
+        "own": null,
+        "endless": null,
+        "wing": null,
+        "seen": {
+          "fielded": [],
+          "threeStars": ["worm"],
+          "forged": ["mothlantern", "conker", "hollowlog", "wasptail", "hummingbird"],
+          "topped": []
+        }
+      },
+      "shown": {
+        "who": "Rock",
+        "title": "",
+        "figures": [
+          { "kind": "badger", "stars": 2, "seat": 2, "items": ["wasptail", "hummingbird"], "fed": 0 },
+          { "kind": "rock", "stars": 1, "seat": 3, "items": ["hollowlog", "hollowlog"], "fed": 0 },
+          { "kind": "cindernewt", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+          { "kind": "worm", "stars": 3, "seat": 21, "items": ["mothlantern", "conker", "mistcharm"], "fed": 0 },
+          { "kind": "moth", "stars": 2, "seat": 23, "items": [], "fed": 0 },
+          { "kind": "chickaree", "stars": 2, "seat": 24, "items": ["wasptail"], "fed": 0 },
+          { "kind": "hearthcat", "stars": 1, "seat": 27, "items": [], "fed": 0 }
+        ],
+        "boons": ["headstart"],
+        "might": 100
+      },
+      "place": 1
+    },
+    {
+      "who": { "is": "regular", "figure": "jay", "habit": "fang" },
+      "run": {
+        "seed": 3202139146,
+        "rng": 1446660965,
+        "trail": 0,
+        "room": 13,
+        "stage": { "phase": "over", "ending": "lost" },
+        "resolve": 0,
+        "acorns": 4,
+        "streak": -1,
+        "level": 7,
+        "xp": 6,
+        "board": [
+          null,
+          { "id": 27, "kind": "hearthcat", "stars": 1, "items": ["plume"], "fed": 0 },
+          { "id": 32, "kind": "badger", "stars": 1, "items": [], "fed": 0 },
+          { "id": 1, "kind": "crab7", "stars": 3, "items": ["blackthorn", "hummingbird"], "fed": 0 },
+          { "id": 36, "kind": "badger", "stars": 1, "items": [], "fed": 0 },
+          { "id": 3, "kind": "emberkit", "stars": 2, "items": ["blackthorn", "plume"], "fed": 0 },
+          null,
+          null,
+          null,
+          { "id": 16, "kind": "crab23", "stars": 1, "items": [], "fed": 0 },
+          { "id": 26, "kind": "apothecary", "stars": 1, "items": ["fairyring", "glowcap"], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "bench": [
+          null,
+          { "id": 30, "kind": "jay", "stars": 1, "items": [], "fed": 0 },
+          { "id": 31, "kind": "jay", "stars": 1, "items": [], "fed": 0 },
+          { "id": 17, "kind": "kettle", "stars": 2, "items": [], "fed": 0 },
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "items": [],
+        "stall": ["worm", null, "fogowl", "crab12", null],
+        "held": false,
+        "rustles": 0,
+        "bought": 2,
+        "boons": ["quickstudy", "blanket", "windfall"],
+        "foe": {
+          "who": "Rock",
+          "title": "",
+          "figures": [
+            { "kind": "badger", "stars": 1, "seat": 2, "items": ["thorn"], "fed": 0 },
+            { "kind": "rock", "stars": 1, "seat": 3, "items": ["hollowlog", "hollowlog"], "fed": 0 },
+            { "kind": "worm", "stars": 3, "seat": 21, "items": ["mothlantern", "conker", "mistcharm"], "fed": 0 },
+            { "kind": "moth", "stars": 2, "seat": 23, "items": [], "fed": 0 },
+            { "kind": "chickaree", "stars": 2, "seat": 24, "items": ["wasptail"], "fed": 0 },
+            { "kind": "fogowl", "stars": 1, "seat": 27, "items": ["plume"], "fed": 0 }
+          ],
+          "boons": ["headstart"],
+          "might": 100
+        },
+        "record": [
+          { "room": 0, "kind": "trouble", "result": "win", "standing": [1, 0], "boss": null },
+          { "room": 1, "kind": "trouble", "result": "win", "standing": [2, 0], "boss": null },
+          {
+            "room": 2,
+            "kind": "spar",
+            "result": "win",
+            "standing": [1, 0],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d4"
+          },
+          { "room": 3, "kind": "spar", "result": "loss", "standing": [0, 3], "boss": null },
+          { "room": 4, "kind": "boss", "result": "win", "standing": [5, 0], "boss": "oldbramble" },
+          { "room": 5, "kind": "spar", "result": "loss", "standing": [0, 1], "boss": null },
+          { "room": 6, "kind": "trouble", "result": "win", "standing": [5, 0], "boss": null },
+          {
+            "room": 7,
+            "kind": "spar",
+            "result": "loss",
+            "standing": [0, 5],
+            "boss": null,
+            "met": "00000000-0000-4000-8000-0000000060d4"
+          },
+          { "room": 8, "kind": "spar", "result": "win", "standing": [3, 0], "boss": null },
+          { "room": 9, "kind": "boss", "result": "win", "standing": [4, 0], "boss": "hoardmagpie" },
+          { "room": 10, "kind": "spar", "result": "loss", "standing": [0, 5], "boss": null },
+          { "room": 11, "kind": "spar", "result": "win", "standing": [3, 0], "boss": null },
+          { "room": 12, "kind": "trouble", "result": "win", "standing": [4, 0], "boss": null },
+          { "room": 13, "kind": "spar", "result": "loss", "standing": [0, 6], "boss": null }
+        ],
+        "nextId": 37,
+        "last": {
+          "seed": 748518860,
+          "sides": [
+            {
+              "who": "Rock",
+              "title": "",
+              "figures": [
+                { "kind": "badger", "stars": 1, "seat": 2, "items": ["wasptail"], "fed": 0 },
+                { "kind": "rock", "stars": 1, "seat": 3, "items": ["hollowlog", "hollowlog"], "fed": 0 },
+                { "kind": "badger", "stars": 1, "seat": 4, "items": [], "fed": 0 },
+                { "kind": "worm", "stars": 3, "seat": 21, "items": ["mothlantern", "conker", "mistcharm"], "fed": 0 },
+                { "kind": "moth", "stars": 2, "seat": 23, "items": [], "fed": 0 },
+                { "kind": "chickaree", "stars": 2, "seat": 24, "items": ["wasptail"], "fed": 0 },
+                { "kind": "hearthcat", "stars": 1, "seat": 27, "items": [], "fed": 0 }
+              ],
+              "boons": ["headstart"],
+              "might": 100
+            },
+            {
+              "who": "Dusk Jay",
+              "title": "",
+              "figures": [
+                { "kind": "hearthcat", "stars": 1, "seat": 1, "items": ["plume"], "fed": 0 },
+                { "kind": "badger", "stars": 1, "seat": 2, "items": [], "fed": 0 },
+                { "kind": "crab7", "stars": 3, "seat": 3, "items": ["blackthorn", "hummingbird"], "fed": 0 },
+                { "kind": "badger", "stars": 1, "seat": 4, "items": [], "fed": 0 },
+                { "kind": "emberkit", "stars": 2, "seat": 5, "items": ["blackthorn", "plume"], "fed": 0 },
+                { "kind": "crab23", "stars": 1, "seat": 9, "items": [], "fed": 0 },
+                { "kind": "apothecary", "stars": 1, "seat": 10, "items": ["fairyring", "glowcap"], "fed": 0 }
+              ],
+              "boons": [],
+              "might": 100
+            }
+          ]
+        },
+        "own": null,
+        "endless": null,
+        "wing": null,
+        "seen": {
+          "fielded": [],
+          "threeStars": ["crab7"],
+          "forged": ["blackthorn", "hummingbird", "fairyring"],
+          "topped": []
+        }
+      },
+      "shown": {
+        "who": "Dusk Jay",
+        "title": "",
+        "figures": [
+          { "kind": "hearthcat", "stars": 1, "seat": 1, "items": ["plume"], "fed": 0 },
+          { "kind": "badger", "stars": 1, "seat": 2, "items": [], "fed": 0 },
+          { "kind": "crab7", "stars": 3, "seat": 3, "items": ["blackthorn", "hummingbird"], "fed": 0 },
+          { "kind": "badger", "stars": 1, "seat": 4, "items": [], "fed": 0 },
+          { "kind": "emberkit", "stars": 2, "seat": 5, "items": ["blackthorn", "plume"], "fed": 0 },
+          { "kind": "crab23", "stars": 1, "seat": 9, "items": [], "fed": 0 },
+          { "kind": "apothecary", "stars": 1, "seat": 10, "items": ["fairyring", "glowcap"], "fed": 0 }
+        ],
+        "boons": [],
+        "might": 100
+      },
+      "place": 4
+    }
+  ],
+  "pairs": [[1, 6]],
+  "odd": null,
+  "owed": [
+    { "key": "seat:0", "member": "00000000-0000-4000-8000-0000000060d3", "coins": 276 },
+    { "key": "seat:1", "member": "00000000-0000-4000-8000-0000000060d4", "coins": 276 }
+  ]
+}

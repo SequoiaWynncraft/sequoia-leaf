@@ -13,6 +13,7 @@ import { isLookKind, lookOf, readLooks } from "./content/looks.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS } from "./content/traits.ts";
 import { readWeek } from "./depths.ts";
+import type { Fed } from "./feed.ts";
 import type { RaidNote, RunView, TableView } from "./game.ts";
 import { type News, type Payout, readAlmanac, trailOpen } from "./outside.ts";
 import { OWNABLE, readRoster } from "./own.ts";
@@ -121,6 +122,18 @@ function newsOf(v: unknown): News {
   }
 }
 
+/** Greg ate a figure from the bench. */
+const fedOf = (n: Record<string, unknown>, what: string): Fed => ({
+  t: "fed",
+  piece: piece(n.piece),
+  fed: whole(n.fed, 0, 99, what),
+  gained: whole(n.gained, 0, 99, what),
+  ate: piece(n.ate),
+  kind: one(n.kind, isFigureId, what),
+  stars: one(n.stars, isStars, what),
+  from: spot(n.from, what),
+  items: each(n.items, isItemId, 3, what),
+});
 const isAcornsWhy = (v: unknown): v is AcornsWhy => ACORNS_WHYS.some((why) => why === v);
 const isResult = (v: unknown): v is "win" | "loss" | "draw" => v === "win" || v === "loss" || v === "draw";
 const isChoiceKind = (v: unknown): v is "starter" | "component" | "boon" | "rule" =>
@@ -225,7 +238,7 @@ function runNote(n: Record<string, unknown>): Note {
       };
     }
     case "fed":
-      return { t: "fed", piece: piece(n.piece), fed: whole(n.fed, 0, 99, what) };
+      return fedOf(n, what);
     case "choice":
       return { t: "choice", kind: one(n.kind, isChoiceKind, what) };
     case "room":

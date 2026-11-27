@@ -13,6 +13,7 @@
  * fragments.
  */
 import { type MemberId, MEMBERS } from "./members.ts";
+import { SEQWAWA } from "./seqwawa.ts";
 import type { CallingId, KinId, TraitId } from "./traits.ts";
 
 /** What health and attack are multiplied by at one, two and three stars. */
@@ -95,6 +96,7 @@ export const FIGURE_IDS = [
   "greg",
   "whitefox",
   "hearthcat",
+  "seqwawa",
 ] as const;
 /** A figure a member can field: one of the twenty-eight, or a banner's member (`members.ts`). */
 export type FigureId = (typeof FIGURE_IDS)[number] | MemberId;
@@ -151,7 +153,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     tier: 1,
     kin: "mist",
     calling: "sage",
-    extra: [],
+    extra: ["groot"],
     hp: 210,
     attack: 22,
     speed: 0.7,
@@ -173,7 +175,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     tier: 1,
     kin: "burrow",
     calling: "sneak",
-    extra: [],
+    extra: ["groot"],
     hp: 260,
     attack: 28,
     speed: 0.8,
@@ -485,7 +487,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     tier: 3,
     kin: "burrow",
     calling: "bulwark",
-    extra: [],
+    extra: ["groot"],
     hp: 820,
     attack: 0,
     speed: 0,
@@ -664,7 +666,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
   greg: {
     name: "Greg",
     tier: 5,
-    kin: "moss",
+    kin: "groot",
     calling: "bulwark",
     extra: ["greg"],
     hp: 880,
@@ -687,8 +689,8 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     name: "Orphion",
     tier: 5,
     kin: "mist",
-    calling: "fang",
-    extra: ["sage"],
+    calling: "sage",
+    extra: ["groot"],
     hp: 700,
     attack: 62,
     speed: 0.85,
@@ -727,6 +729,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     },
     quip: "Sits on the board. Things fall off.",
   },
+  seqwawa: SEQWAWA,
 };
 
 // ---------- the ones that are only ever summoned ----------
@@ -1050,22 +1053,17 @@ export const traitsOf = (kind: FigureId): readonly TraitId[] => {
 export function abilityNumber(kind: UnitKind, name: string, stars: Stars): number {
   return specOf(kind).ability?.n[name]?.[stars - 1] ?? 0;
 }
-/** Fills an ability's `{name}` gaps with its numbers at a number of stars. */
-function filled(ability: AbilitySpec, text: string, stars: Stars): string {
-  return text.replaceAll(/\{(\w+)\}/g, (whole: string, key: string) => {
-    const v = ability.n[key]?.[stars - 1];
+/** An ability's sentence (`text`) or card words (`short`) at a number of stars, its `{name}` gaps filled with its numbers. */
+function filled(kind: UnitKind, words: "text" | "short", stars: Stars): string {
+  const ability = specOf(kind).ability;
+  return (ability?.[words] ?? "").replaceAll(/\{(\w+)\}/g, (whole: string, key: string) => {
+    const v = ability?.n[key]?.[stars - 1];
     return v === undefined ? whole : String(v);
   });
 }
 /** What an ability does at a number of stars, in a sentence. */
-export function abilityText(kind: UnitKind, stars: Stars): string {
-  const ability = specOf(kind).ability;
-  return ability ? filled(ability, ability.text, stars) : "";
-}
+export const abilityText = (kind: UnitKind, stars: Stars): string => filled(kind, "text", stars);
 /** What an ability does at a number of stars, in a few words for a card. */
-export function abilityShort(kind: UnitKind, stars: Stars): string {
-  const ability = specOf(kind).ability;
-  return ability ? filled(ability, ability.short, stars) : "";
-}
+export const abilityShort = (kind: UnitKind, stars: Stars): string => filled(kind, "short", stars);
 /** The figures of a tier, in the order of the table. */
 export const figuresOfTier = (tier: Tier): FigureId[] => FIGURE_IDS.filter((id) => FIGURES[id].tier === tier);
