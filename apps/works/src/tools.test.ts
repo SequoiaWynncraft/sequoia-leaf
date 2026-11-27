@@ -50,6 +50,7 @@ import {
   dragLost,
   dragOver,
   hold,
+  keepAim,
   markEnd,
   markOver,
   markStart,
@@ -70,7 +71,7 @@ import { comesUp, setWayIn, tunnelAim } from "./tunnel.ts";
 import { moveFrom, tileRef } from "./ui/card.ts";
 import { handPrint } from "./ui/dock.ts";
 import { printOf } from "./ui/prints.ts";
-import { again, differences, doNow, runYard } from "./yard.ts";
+import { again, coins, differences, doNow, runYard } from "./yard.ts";
 
 useFakeLeaf();
 
@@ -353,6 +354,28 @@ describe("a tunnel through a deep culvert", () => {
     expect([p.machine.price, p.raise?.cost, p.refund]).toEqual([26, 78 - 26, 26]);
     // From its far mouth alike.
     expect(printOf(tileRef(at(w, ...xy(6, -5))))).toMatchObject({ machine: { price: 26 }, refund: 26 });
+  });
+});
+
+describe("a long tunnel the purse is short for", () => {
+  test("shows its own price and far mouth, and turns good once the purse covers it, with the pointer still", async () => {
+    await opened(create({ seed: 5, tier: 6 }), 15);
+    S.world.till = 0;
+    setTool(kind("tunnel"));
+    S.dir = 0;
+    const from = near(-7, -5);
+    expect(setWayIn(from.x, from.y)).toBe(true);
+    aimAt(...xy(6, -5));
+    expect([coins(), S.aim?.why, S.aim?.cost, S.aim?.far]).toEqual([
+      15,
+      "Not enough Coins",
+      26,
+      at(S.world, ...xy(6, -5)),
+    ]);
+    // The till earns what is short; the pointer has not moved.
+    S.world.till += 11 * MILLI;
+    keepAim();
+    expect([coins(), S.aim?.why, S.aim?.cost]).toEqual([26, null, 26]);
   });
 });
 
