@@ -82,6 +82,20 @@ export interface Standin {
 }
 
 /**
+ * Waits until something holds, a moment at a time, however long the machine takes to get there: a
+ * test waits for what it means to wait for, never for a guess of how long that takes. Past `ms` it
+ * fails, saying what it waited for.
+ */
+export async function until(holds: () => boolean, what: string, ms = 5000): Promise<void> {
+  const by = performance.now() + ms;
+  while (!holds()) {
+    if (performance.now() > by) throw new Error(`Waited ${ms} ms for ${what}`);
+    // oxlint-disable-next-line no-await-in-loop -- waiting on the page, a moment at a time
+    await Bun.sleep(1);
+  }
+}
+
+/**
  * Stands in for the outside world. `routes` maps `"GET /v1/game/hello"` (the path without its
  * query) to what it answers; anything else is a 404.
  */
