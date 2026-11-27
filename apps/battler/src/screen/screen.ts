@@ -120,11 +120,17 @@ export function playbackOf(run: RunView, fought: Fought, runs: number): Playback
   };
 }
 
-/** The run's last fight, to be watched again as it was fought; null for a run that has fought none. */
+/**
+ * Whether a run's last fight can be watched again now: it has fought a room, and it is planning one.
+ * A run in a fight Leaf has decided (picked up again after a reload) plays that fight instead.
+ */
+export const watchable = (run: Pick<RunView, "last" | "record" | "stage">): boolean =>
+  run.stage.phase === "plan" && run.last !== null && run.record.length > 0;
+/** The run's last fight, to be watched again as it was fought; null for a run that has fought none, or is not planning. */
 export function againOf(run: RunView, runs: number): Playback | null {
   const setup = run.last;
   const room = run.record.at(-1)?.room;
-  if (!setup || room === undefined) return null;
+  if (!setup || room === undefined || !watchable(run)) return null;
   const fought: Fought = { setup, outcome: resolveFight(setup) };
   return {
     key: `again:${runs}:${run.record.length}`,
@@ -188,7 +194,7 @@ function countedOut(screen: Screen, ev: Extract<Event, { e: "count" | "landed" |
 /** The run's last fight played again, from planning or the front page, while the run is planning a room. */
 function watched(screen: Screen, ev: Table): Screen {
   const play = ev.run && (screen.at === "plan" || screen.at === "front") ? againOf(ev.run, ev.runs) : null;
-  return play && ev.run?.stage.phase === "plan" ? { at: "fight", play } : screen;
+  return play ? { at: "fight", play } : screen;
 }
 
 /** Moves the screen on. Whatever does not apply where it is changes nothing. */

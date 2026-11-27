@@ -740,10 +740,10 @@ ended in room 8 (in room 9 with the last three winners kept and one met by the d
 `review/wilds.ts` holds each of the Wilds' rules against a plain wing: `bun review/wilds.ts 150`. Each
 bot plays the Wilds to room 40 at most, picking rules by its own plain rule, and wherever a rule is
 picked the wing after it is played seven times more from that moment, under each rule and under
-none. At 150 runs for each of 14 habits (6,356 wings), rooms won in a wing under each rule against the
+none. At 150 runs for each of 14 habits (6,354 wings), rooms won in a wing under each rule against the
 plain wing, in points, the widest for any habit: Stumps -3 to +2, Narrow Table -2 to +1, Long Table
 -3 to +4, Fog -5 to +2, Early Dusk -4 to +1, Elbow Room -4 to +1. Each rule is the better of the two
-offered 47% to 52% of the time. With eleven a side, Early Dusk ends 59% of the bots' fights in dusk
+offered 47% to 52% of the time. With eleven a side, Early Dusk ends 58% of the bots' fights in dusk
 (3% under no rule) and 2% in a draw (0%); regulars as strong as rooms 31 to 45 make them, 86% and 2%.
 
 `review/balance.ts` plays whole runs with the bot under different habits (sensible, a saver who

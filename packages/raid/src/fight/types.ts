@@ -205,9 +205,10 @@ export interface Fight {
   opening: FightEvent[];
   /** The traits each side has on, and at what step. */
   traits: [Partial<Record<TraitId, number>>, Partial<Record<TraitId, number>>];
-  /** Seconds of dusk so far, and the second it falls after. */
+  /** Seconds of dusk so far. */
   dusk: number;
-  readonly duskAt: number;
+  /** What the Wilds' rule sets in this fight (`rules.ts`): the second dusk falls after, and the furthest an attack reaches. */
+  readonly wilds: { readonly dusk: number; readonly reach: number };
 
   /** The list the step being worked out is writing to. */
   out: FightEvent[];

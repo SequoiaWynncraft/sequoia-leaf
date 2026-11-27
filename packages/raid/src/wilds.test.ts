@@ -10,7 +10,7 @@ import { RULE_IDS, type RuleId, WILDS } from "./content/wilds.ts";
 import { foeOf, roomAt } from "./endless.ts";
 import { HZ } from "./fight/core.ts";
 import { openFight, stepFight } from "./fight/engine.ts";
-import { closedCells } from "./fight/rules.ts";
+import { attackReach, closedCells } from "./fight/rules.ts";
 import type { Fight, FightEvent, FightRule, FightSetup } from "./fight/types.ts";
 import { arrange } from "./formation.ts";
 import { legal, RAID, type RaidNote, type Table } from "./game.ts";
@@ -29,7 +29,7 @@ import {
   takeTakings,
 } from "./run.ts";
 import { sparParty } from "./spar.ts";
-import { at, partyOfFigures } from "./testkit.ts";
+import { at, onCell, partyOfFigures, ready, stepUntil, stillSide, unitOf } from "./testkit.ts";
 import { closedNow, closedSeats, ruleOf, wingOf } from "./wing.ts";
 import { readNotes, readView } from "./wire.ts";
 
@@ -223,13 +223,36 @@ describe("each rule in the fight", () => {
     const fogged = shots({ id: "fog", stumps: [] });
     expect(fogged.length).toBeGreaterThan(0);
     expect(Math.max(...fogged)).toBeLessThanOrEqual(WILDS.fog);
-    expect(openFight(setupOf(far, far, { id: "fog", stumps: [] })).units.every((u) => u.range <= WILDS.fog)).toBe(true);
+    const f = openFight(setupOf(far, far, { id: "fog", stumps: [] }));
+    expect(f.units.every((u) => attackReach(f, u) <= WILDS.fog)).toBe(true);
+    // Each figure keeps its own reach, for its ability.
+    expect(Math.max(...f.units.map((u) => u.range))).toBeGreaterThan(WILDS.fog);
+  });
+  test("Fog leaves abilities their reach: a Drizzle Frog 3 hexes from a Rock casts at it, and does not attack it", () => {
+    const frogAt = 5 * 7 + 3;
+    const rockAt = 2 * 7 + 3;
+    expect(distance(frogAt, rockAt)).toBe(3);
+    const f = openFight({
+      seed: 3,
+      sides: [partyOfFigures([onCell("drizzlefrog", 0, frogAt)]), partyOfFigures([onCell("rock", 1, rockAt)])],
+      rule: { id: "fog", stumps: [] },
+    });
+    const frog = unitOf(f, "drizzlefrog", 0);
+    const rock = unitOf(f, "rock", 1);
+    stillSide(f, 1);
+    frog.rooted = true;
+    ready(frog);
+    const events = stepUntil(f, (e) => e.t === "cast" && e.id === frog.id, 60);
+    const cast = events.find((e) => e.t === "cast" && e.id === frog.id);
+    expect(cast?.t === "cast" ? cast.targets : []).toContain(rock.id);
+    expect(distance(frog.cell, rock.cell)).toBe(3);
+    expect(events.filter((e) => e.t === "shot" && e.id === frog.id && e.what === "attack")).toEqual([]);
   });
   test("Early Dusk: dusk falls after 12 seconds, not 30", () => {
     const sturdy: Placed[] = [at("crab40", 3, 0, 3), at("rock", 2, 0, 3), at("badger", 4, 0, 3)];
     const early = openFight(setupOf(sturdy, sturdy, { id: "dusk", stumps: [] }));
-    expect(early.duskAt).toBe(WILDS.dusk);
-    expect(openFight(setupOf(sturdy, sturdy)).duskAt).toBe(30);
+    expect(early.wilds.dusk).toBe(WILDS.dusk);
+    expect(openFight(setupOf(sturdy, sturdy)).wilds.dusk).toBe(30);
     // The first dusk event comes in the step of second 13 under the rule, and later without it.
     const secondOf = (rule?: FightRule): number => {
       const f = openFight(setupOf(sturdy, sturdy, rule));
@@ -263,7 +286,7 @@ describe("each rule in the fight", () => {
   test("a fight set up with no rule is played as it always was", () => {
     const a = playOut(setupOf(BRAWL, BRAWL));
     const f = openFight(setupOf(BRAWL, BRAWL));
-    expect(f.duskAt).toBe(30);
+    expect(f.wilds).toEqual({ dusk: 30, reach: Number.POSITIVE_INFINITY });
     expect(f.taken.every((v) => v >= -1)).toBe(true);
     expect(a.f.result).not.toBeNull();
   });

@@ -3,12 +3,14 @@ import { portrait } from "@sequoia-leaf/figures/sprites.ts";
  * The card that picks a run of the Wilds back up. Carrying on with it from the front page shows this
  * before the table: where the run is in its wing, the wing's rule, the boss waiting, the deepest room
  * ever, and how the last room went; then Carry on, Watch it again (the run's last fight, which the
- * run keeps), or back to the front page. No timer: a run never runs out.
+ * run keeps, while it is planning a room: `watchable`), or back to the front page. No timer: a run
+ * never runs out.
  */
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import type { RunView } from "@sequoia-leaf/raid";
 
 import { glyph } from "../art/icons.ts";
+import { watchable } from "../screen.ts";
 import { S, type Slot } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
 import { WAY_NAMES } from "./endless.ts";
@@ -67,7 +69,7 @@ export function backCard(go: BackAsks, run: RunView): HTMLElement {
       "k-row back-foot",
       {},
       el("button", "k-btn wood", { type: "button", id: "back-front", onclick: back }, icon("back"), "Back"),
-      run.last
+      watchable(run)
         ? el(
             "button",
             "k-btn blue",

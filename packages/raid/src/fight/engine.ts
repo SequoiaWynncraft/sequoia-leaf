@@ -40,7 +40,7 @@ import {
 } from "./core.ts";
 import { drawnFoe, fly, foesByDraw, onTarget } from "./mind.ts";
 import { slowNow } from "./moves.ts";
-import { boardFor, duskOf, ruleSeated } from "./rules.ts";
+import { attackReach, boardFor, ruleSeated, wildsOf } from "./rules.ts";
 import type { Fight, FightEvent, FightResult, FightSetup, FightSummary, Pending, StatusId, Unit } from "./types.ts";
 
 // ---------- sitting down ----------
@@ -271,8 +271,7 @@ function rollCall(f: Fight, side: Side): void {
   const crabs = f.units.filter((u) => u.side === side && carries(u.kind, u.items, "crab"));
   const anchor = crabs[0] ?? f.units.find((u) => u.side === side);
   if (!anchor) return;
-  let stars: Stars = 1;
-  for (const u of crabs) if (u.stars > stars) stars = u.stars;
+  const stars = crabs.reduce<Stars>((most, u) => (u.stars > most ? u.stars : most), 1);
   if (traitNumber("crab", "big", step) > 0) summon(f, "biguncounted", stars, side, freeNear(f, anchor.cell, 4), null);
   if (traitNumber("crab", "small", step) > 0) summon(f, "uncounted", stars, side, freeNear(f, anchor.cell, 4), null);
 }
@@ -307,7 +306,7 @@ export function openFight(setup: FightSetup): Fight {
     opening,
     traits: [{}, {}],
     dusk: 0,
-    duskAt: duskOf(setup),
+    wilds: wildsOf(setup),
     out: opening,
     pending: [],
     boons: [ours.boons, theirs.boons],
@@ -453,20 +452,21 @@ function choose(f: Fight, u: Unit): Unit | undefined {
  */
 function walk(f: Fight, u: Unit, t: Unit): Unit | undefined {
   if (u.rooted) return undefined;
+  const range = attackReach(f, u);
   const foes = foesByDraw(f, u);
   const cells = foes.map((o) => o.cell);
-  const way = (o: Unit, reach = u.range): number => stepToward(u.side, f.taken, u.cell, o.cell, reach, cells);
+  const way = (o: Unit, reach = range): number => stepToward(u.side, f.taken, u.cell, o.cell, reach, cells);
   let step = -1;
   for (const o of [t, foes.find((h) => h.id === u.target), ...foes]) {
     if (o === undefined) continue;
-    if (distance(u.cell, o.cell) <= u.range) return o;
+    if (distance(u.cell, o.cell) <= range) return o;
     step = way(o);
     if (step < 0) continue;
     if (o !== t) u.target = o.id;
     break;
   }
   // With no way to anybody it closes up on the one it is after, and then stands.
-  for (let reach = u.range + 1; step < 0 && reach < distance(u.cell, t.cell); reach++) step = way(t, reach);
+  for (let reach = range + 1; step < 0 && reach < distance(u.cell, t.cell); reach++) step = way(t, reach);
   if (step < 0) {
     u.busyUntil = f.tick + 3;
     return undefined;
@@ -522,7 +522,7 @@ function act(f: Fight, u: Unit): void {
   }
   const t = choose(f, u);
   if (!t) return;
-  const at = distance(u.cell, t.cell) <= u.range ? t : walk(f, u, t);
+  const at = distance(u.cell, t.cell) <= attackReach(f, u) ? t : walk(f, u, t);
   if (at && u.cool <= 0 && u.attack > 0) strike(f, u, at);
 }
 
@@ -544,8 +544,8 @@ function everySecond(f: Fight): void {
       }
     }
   }
-  if (second > f.duskAt) {
-    f.dusk = second - f.duskAt;
+  if (second > f.wilds.dusk) {
+    f.dusk = second - f.wilds.dusk;
     emit(f, { t: "dusk", n: f.dusk });
     for (const u of f.units) {
       if (u.alive) hurt(f, u, (u.maxHp * FIGHT.duskGrows * f.dusk) / 100, "true", "dusk", null);

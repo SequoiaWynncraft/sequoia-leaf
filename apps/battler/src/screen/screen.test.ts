@@ -4,7 +4,7 @@ import { type Ctx, isRefused } from "@sequoia-leaf/core";
 import { type Reply, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 import { RAID, type RaidCommand, type RaidNote, type RunView, type Table as Kept, tableView } from "@sequoia-leaf/raid";
 
-import { endedIn, type Event, playbackOf, type Screen, shownCounts, step, type Table } from "./screen.ts";
+import { endedIn, type Event, playbackOf, type Screen, shownCounts, step, type Table, watchable } from "./screen.ts";
 import { again, ask, go, openTable, S, tableNow } from "./state.ts";
 
 // ---------- a table played by the rules, for the screen to follow ----------
@@ -120,6 +120,30 @@ describe("the screen", () => {
     expect(after({ at: "plan", looking: true }, { e: "leaf", ...at(begun()) })).toEqual(planning);
   });
 
+  test("the last fight is watched again only while the run is planning, and then the room is planned again", () => {
+    let planning = must(must(begun(), { do: "fight" }).state, { do: "take" }).state;
+    // What the first room left to pick is picked: the next room is planned with nothing waiting.
+    for (let n = 0; n < 4 && (runOf(planning).stage.phase !== "plan" || picksWaiting(planning)); n++)
+      planning = must(planning, { do: "choose", option: 0 }).state;
+    expect(watchable(runOf(planning))).toBe(true);
+    const watching = after({ at: "front" }, { e: "watch", ...at(planning) });
+    if (watching.at !== "fight") throw new Error("not watching");
+    expect(watching.play.again).toBe(true);
+    expect(after(watching, { e: "played", key: watching.play.key })).toEqual({ at: "plan", looking: false });
+    // Picked up again in a fight Leaf has decided (a reload in the middle of one), the run keeps its
+    // last fight but is not planning: there is nothing to watch again, and the front page stays.
+    const fighting = must(planning, { do: "fight" }).state;
+    expect(runOf(fighting).last).not.toBeNull();
+    expect(watchable(runOf(fighting))).toBe(false);
+    expect(after({ at: "front" }, { e: "watch", ...at(fighting) })).toEqual({ at: "front" });
+    // Nor has a run that has fought no room yet.
+    expect(watchable(runOf(begun()))).toBe(false);
+    expect(after({ at: "plan", looking: false }, { e: "watch", ...at(begun()) })).toEqual({
+      at: "plan",
+      looking: false,
+    });
+  });
+
   test("a run that ends is shown at its end, from walking home or from the takings", () => {
     const home = must(must(must(begun(), { do: "fight" }).state, { do: "take" }).state, { do: "abandon" });
     const ended = endedIn(home.notes);
@@ -128,6 +152,12 @@ describe("the screen", () => {
     expect(after({ at: "over", ended }, { e: "sit", ...at(home.state) })).toEqual({ at: "front" });
   });
 });
+
+/** Whether a pick is waiting in the run in hand. */
+const picksWaiting = (state: Kept): boolean => {
+  const { stage } = runOf(state);
+  return stage.phase === "plan" && stage.picks.length > 0;
+};
 
 function fightOf(state: Kept) {
   const run = runOf(state);

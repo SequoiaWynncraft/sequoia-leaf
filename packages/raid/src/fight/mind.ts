@@ -11,6 +11,7 @@ import type { UnitKind } from "../content/figures.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { CELLS, distance } from "../hex.ts";
 import { foesOf, later, order, otherSide, targetable } from "./core.ts";
+import { attackReach } from "./rules.ts";
 import type { DamageKind, Fight, Unit } from "./types.ts";
 
 // ---------- rule 3: what is already on its way ----------
@@ -37,8 +38,9 @@ export const covered = (o: Unit): boolean => o.incoming > 0 && o.incoming >= o.h
 
 /** How near an enemy seems to a figure picking a target: its distance less its draw. */
 const seems = (from: number, o: Unit): number => distance(from, o.cell) - o.draw;
-/** Enemies in its reach first, those whose health is already covered after them, and the rest last. */
-const rank = (u: Unit, o: Unit): number => (distance(u.cell, o.cell) > u.range ? 2 : covered(o) ? 1 : 0);
+/** Enemies its attacks reach first, those whose health is already covered after them, and the rest last. */
+const rank = (f: Fight, u: Unit, o: Unit): number =>
+  distance(u.cell, o.cell) > attackReach(f, u) ? 2 : covered(o) ? 1 : 0;
 /**
  * The order a figure picks a new target in: enemies in its reach before the rest, so that it never
  * walks off while there is somebody it can hit, and of those, one whose health is already covered
@@ -46,32 +48,33 @@ const rank = (u: Unit, o: Unit): number => (distance(u.cell, o.cell) > u.range ?
  * to the hex that comes first for its side.
  */
 const pickOrder =
-  (u: Unit) =>
+  (f: Fight, u: Unit) =>
   (a: Unit, b: Unit): number =>
-    rank(u, a) - rank(u, b) ||
+    rank(f, u, a) - rank(f, u, b) ||
     seems(u.cell, a) - seems(u.cell, b) ||
     distance(u.cell, a.cell) - distance(u.cell, b.cell) ||
     order(u.side, a.cell) - order(u.side, b.cell);
 /** Enemies in the order a figure picks a new target (`pickOrder`). */
-export const foesByDraw = (f: Fight, u: Unit): Unit[] => foesOf(f, u.side).toSorted(pickOrder(u));
+export const foesByDraw = (f: Fight, u: Unit): Unit[] => foesOf(f, u.side).toSorted(pickOrder(f, u));
 /** The enemy a figure picks when it picks a new target: the first in `pickOrder`. */
 export function drawnFoe(f: Fight, u: Unit): Unit | undefined {
-  const first = pickOrder(u);
+  const first = pickOrder(f, u);
   let best: Unit | undefined;
   for (const o of f.units) {
     if (o.side !== u.side && targetable(f, o) && (!best || first(o, best) < 0)) best = o;
   }
   return best;
 }
-/** Whoever a figure is on already, while they are in its reach and their health is not already covered. */
+/** Whoever a figure is on already, while its attacks reach them and their health is not already covered. */
 export function onTarget(f: Fight, u: Unit): Unit | undefined {
   const t = f.units[u.target];
-  const keeps = t && t.side !== u.side && targetable(f, t) && distance(u.cell, t.cell) <= u.range;
+  const keeps = t && t.side !== u.side && targetable(f, t) && distance(u.cell, t.cell) <= attackReach(f, u);
   return keeps && !covered(t) ? t : undefined;
 }
 /**
  * Who a figure's ability is aimed at when the sentence says "its target": whoever it is attacking,
- * if still worth it (`onTarget`), else whoever it would pick to attack, if that one is in reach.
+ * if still worth it (`onTarget`), else whoever it would pick to attack, if that one is in its own
+ * reach (an ability reaches as far as its figure does, under Fog too).
  */
 export function aim(f: Fight, u: Unit): Unit | undefined {
   const picked = onTarget(f, u) ?? drawnFoe(f, u);
