@@ -185,8 +185,10 @@ export function readFight(v: unknown, at?: number): FightRecord | null {
 }
 
 /**
- * A fight's row as Leaf stores it (`readFight`), as the page plays it again: its setup, which plays
- * to the end Leaf decided while the rules are the ones it was decided by. Null for a row kept before
- * rows kept their setup (its record says `setup: null`), and for one that does not read.
+ * A fight's record (`readFight`: a row of `raid_fights` with its JSON columns decoded, as Leaf's
+ * `fightLines` gives one, never the row's text as SQLite returns it), as the page plays it again: its
+ * setup, which plays to the end Leaf decided while the rules are the ones it was decided by. Null for
+ * a row kept before rows kept their setup (its record says `setup: null`), and for one that does not
+ * read.
  */
 export const replayOf = (row: unknown, at?: number): FightSetup | null => readFight(row, at)?.setup ?? null;

@@ -3,13 +3,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { SqliteClient } from "@effect/sql-sqlite-bun";
 import { type Ctx, leaf, playerId } from "@sequoia-leaf/core";
 import { PULLS } from "@sequoia-leaf/pulls";
 import { eraAt } from "@sequoia-leaf/raid";
 import { Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
-import { fightLines, rowOf } from "../scripts/fight-lines.ts";
+import { fightColumns, fightLines, rowOf } from "../scripts/fight-lines.ts";
 import { AppConfig } from "../src/config.ts";
 import { Database } from "../src/db.ts";
 import { Ledger } from "../src/ledger/store.ts";
@@ -843,6 +844,33 @@ describe("the database", () => {
       ["own", "trail", 0, "own", eraAt(FOUGHT_AT), null],
       ["wilds", "wilds", 0, "fair", eraAt(LATER), null],
       ["deep", "deep", 0, "fair", eraAt(LATER), null],
+    ]);
+  });
+
+  it("exports the fights of a copy kept before the later columns, as the fight report reads a backup: those read as null", async () => {
+    const path = join(directory, "leaf.db");
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* beforeFightsWay(sql);
+        for (const [n, way] of ["main", "own"].entries()) yield* insertFight(sql, FOUGHT_AT + n, way);
+      }),
+    );
+    // Opened as the report opens a copy: read-only, nothing migrated.
+    const lines = await Effect.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const has = yield* fightColumns(sql);
+        expect(["course", "pool", "era", "setup"].filter((c) => has.has(c))).toEqual([]);
+        return Schema.decodeUnknownSync(Schema.Array(Schema.Struct({ line: Schema.String })))(
+          yield* fightLines(sql, has),
+        );
+      }).pipe(Effect.provide(SqliteClient.layer({ filename: path, readonly: true }))),
+    );
+    expect(lines.map(({ line }) => rowOf(line)?.fight).map((f) => f && [f.way, f.course, f.pool, f.setup])).toEqual([
+      ["main", "trail", "fair", null],
+      ["own", "trail", "own", null],
     ]);
   });
 
