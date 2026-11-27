@@ -157,5 +157,34 @@ export function clockLine(view: SittingView, now: number): string {
 
 /** What the page says of a table that closed before anybody started it. */
 export const CLOSED_UNSTARTED = "This table closed before it started.";
-/** Whether a sitting closed before it started: over, with nobody ever seated. */
-export const closedUnstarted = (view: SittingView): boolean => view.stage.at === "over" && view.seats.length === 0;
+/** What the page says when Leaf shows the member without a seat at a table the page held (they left it in another tab). */
+export const NOT_SEATED = "You are not at that table any more.";
+
+/** Whether Leaf's view of a sitting has the member in a seat: among those sat, before the start; with a seat of their own, after. */
+export const seatedAt = (view: SittingView, member: string): boolean =>
+  view.stage.at === "open" ? view.stage.sat.some((m) => m.id === member) : view.you !== null;
+/**
+ * Whether a sitting closed before it started, as it stands now (`view`) and stood before (`was`): it
+ * was open, and it is over with nobody ever seated, at its deadline, as the clock closes it. One
+ * emptied by its last member leaving ended before its deadline, and is not this.
+ */
+export function closedUnstarted(view: SittingView, was: SittingView): boolean {
+  return (
+    view.stage.at === "over" &&
+    view.seats.length === 0 &&
+    was.stage.at === "open" &&
+    view.stage.ended >= was.stage.until
+  );
+}
+
+/**
+ * Which place of the ring keeps the keyboard when the ring is drawn again (somebody took a figure):
+ * the one that had it while it still stands, else the next that does; none when none does.
+ */
+export function focusAfter(ring: readonly { readonly by: number | null }[], had: number): number | null {
+  for (let k = 0; k < ring.length; k++) {
+    const at = (had + k) % ring.length;
+    if (ring[at]?.by === null) return at;
+  }
+  return null;
+}

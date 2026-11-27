@@ -10,6 +10,7 @@ import {
   carouselEnds,
   clockText,
   facingLine,
+  focusAfter,
   ordinal,
   paidLines,
   placeText,
@@ -170,5 +171,18 @@ describe("what a room paid", () => {
     expect(paidLines("loss", before, after)).toEqual(["Room lost", "-4 health", "+6 acorns", `Level ${after.level}`]);
     expect(paidLines("win", before, { ...before, acorns: before.acorns + 3 })).toEqual(["Room won", "+3 acorns"]);
     expect(paidLines(null, before, before)).toEqual([]);
+  });
+});
+
+/** A ring of nine, with the places in `taken` taken. */
+const ring = (taken: number[]) => Array.from({ length: 9 }, (_, i) => ({ by: taken.includes(i) ? 3 : null }));
+
+describe("the ring drawn again", () => {
+  test("the figure that had the keyboard keeps it while it stands; taken, the next still standing has it", () => {
+    expect(focusAfter(ring([]), 4)).toBe(4);
+    expect(focusAfter(ring([1, 2]), 4)).toBe(4);
+    expect(focusAfter(ring([4]), 4)).toBe(5);
+    expect(focusAfter(ring([4, 5, 6, 7, 8]), 4)).toBe(0);
+    expect(focusAfter(ring([0, 1, 2, 3, 4, 5, 6, 7, 8]), 4)).toBeNull();
   });
 });

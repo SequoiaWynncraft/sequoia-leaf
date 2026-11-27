@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { type Reply, type Route, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
-import { newTable, type RaidNote, startRun, tableView } from "@sequoia-leaf/raid";
+import { foughtOf, newTable, type RaidNote, startRun, tableView } from "@sequoia-leaf/raid";
 import { advance } from "@sequoia-leaf/raid/sitting/clock.ts";
 import { type Call, command, openSitting } from "@sequoia-leaf/raid/sitting/commands.ts";
 import { CLOCK, type Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
@@ -11,8 +11,8 @@ import { sittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
 import { ask, go, onNotes, onRefused, openTable, S, tableNow } from "../state.ts";
 import { openLine } from "./line.ts";
-import { CLOSED_UNSTARTED } from "./reads.ts";
-import { liveLine, liveView, onDone, shownRun, sitAt, stepBack, takeUp } from "./seated.ts";
+import { CLOSED_UNSTARTED, NOT_SEATED } from "./reads.ts";
+import { liveLine, liveView, onDone, paidFor, shownRun, sitAt, stepBack, takeUp } from "./seated.ts";
 
 const ME = { id: "leaf-0", name: "Mossback" };
 const call = (now: number, seed: number): Call => ({ now, seed, player: ME });
@@ -145,4 +145,49 @@ test("a table that closed before it started lets the member go, and says so", as
   await line.read();
   expect(liveLine()).toBeNull();
   expect(told).toEqual([CLOSED_UNSTARTED]);
+});
+
+test("opened during a fight, the room's takings are told when the table goes on", async () => {
+  const { t } = planning();
+  const fight = advance(t, t.stage.at === "plan" ? t.stage.until : 0);
+  if (fight.stage.at !== "fight") throw new Error("not fighting");
+  const after = advance(fight, fight.stage.until);
+  world = standin({
+    "GET /v1/game/sittings/s3": { status: 200, body: answer("s3", 3, after, fight.stage.until + 10) },
+  });
+  const line = openLine(scope(), "s3", ME.id, answer("s3", 2, fight, fight.stage.until - 5000));
+  if (!line) throw new Error("no line");
+  takeUp(line);
+  // The page is opened now: the member sits down to the fight already being fought.
+  expect(sitAt()).toBe(true);
+  await line.read();
+  const view = liveView();
+  if (!view) throw new Error("no sitting");
+  const paid = paidFor(view);
+  const setOut = sittingView(fight, ME.id).run;
+  const fought = setOut ? foughtOf(setOut) : null;
+  if (!fought) throw new Error("the seat is not fighting");
+  expect(paid?.result).toBe(fought.outcome.result);
+  expect(paid?.lines[0]).toMatch(/^(Room won|Room lost|A draw)$/);
+  // Told once.
+  expect(paidFor(view)).toBeNull();
+});
+
+test("left in another tab: the next read shows the member without a seat, and the page lets the table go", async () => {
+  // Somebody opened the table, and the member sat; in another tab the member then got up.
+  const opened = openSitting({ now: 0, seed: 11, player: { id: "leaf-9", name: "Sootpaw" } });
+  const sat = command(opened, { do: "sit" }, call(10, 12));
+  if (!sat.ok) throw new Error(sat.why);
+  const left = command(sat.sitting, { do: "leave" }, call(20, 13));
+  if (!left.ok) throw new Error(left.why);
+  expect(left.sitting.stage.at).toBe("open");
+  world = standin({ "GET /v1/game/sittings/s4": { status: 200, body: answer("s4", 3, left.sitting, 30) } });
+  const line = openLine(scope(), "s4", ME.id, answer("s4", 2, sat.sitting, 15));
+  if (!line) throw new Error("no line");
+  takeUp(line);
+  const told: (string | null)[] = [];
+  onDone((why) => told.push(why));
+  await line.read();
+  expect(liveLine()).toBeNull();
+  expect(told).toEqual([NOT_SEATED]);
 });

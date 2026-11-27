@@ -22,20 +22,23 @@ import { ask, doNow, S } from "../src/screen/state.ts";
 const BLANK = tableView(newTable({ seed: 1 }), { awards: [], now: 0 });
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-/** Waits until the page's line has nothing waiting for Leaf. */
+/** Waits until the page's line has nothing waiting for Leaf; still waiting after 5 seconds, the tour stops. */
 async function settled(): Promise<string> {
   // oxlint-disable-next-line no-await-in-loop -- waiting on Leaf, a moment at a time
   for (let i = 0; i < 200 && liveLine()?.waiting(); i++) await wait(25);
+  if (liveLine()?.waiting()) throw new Error("Leaf did not answer the table's commands within 5 seconds");
   return "settled";
 }
 
 /** Moves Leaf's clock on by `ms`, and reads the sitting again. */
 async function later(ms: number): Promise<string> {
-  await askLeaf("/test/play/sittings", {
+  const moved = await askLeaf("/test/play/sittings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ stage: ms > 0 ? [{ later: ms }] : [] }),
   });
+  // Only the play server moves Leaf's clock: anywhere else, or failing, the tour stops here rather than shoot the wrong stage.
+  if (moved.status !== 200) throw new Error(`Leaf's clock did not move (${moved.status}): is this the play server?`);
   await liveLine()?.read();
   await settled();
   return state();

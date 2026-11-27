@@ -36,6 +36,8 @@ export const AFTER_DEADLINE = 150;
 
 export interface Line {
   readonly id: string;
+  /** Whose line it is: the member's Leaf id. */
+  readonly player: string;
   /** Leaf's view, with what is waiting for Leaf worked out on top. */
   readonly view: SittingView;
   /** Leaf's clock now, in its milliseconds, as near as the page can tell. */
@@ -48,7 +50,7 @@ export interface Line {
   /** Hears each time the view changes. */
   onView(fn: (view: SittingView) => void): void;
   onGone(fn: (why: Gone) => void): void;
-  /** Puts the line away: what is waiting is sent once more, and nothing is read again. */
+  /** Puts the line away: what is waiting is sent once more (and answered `gone` here), and nothing is read again. */
   close(): void;
 }
 
@@ -179,6 +181,8 @@ class SittingLine implements Line {
 
   close(): void {
     this.#flush();
+    // Whoever waits on a command hears that the line is put away: nothing is left waiting after leaving.
+    this.#settle("gone");
     this.#over = true;
     this.#scope.close();
   }
@@ -211,10 +215,14 @@ class SittingLine implements Line {
     if (this.#over) return;
     this.#over = true;
     this.#timer?.();
+    this.#settle(why);
+    for (const fn of this.#goners) fn(why);
+  }
+  /** Answers every command Leaf has not answered with why it never will be. */
+  #settle(why: string): void {
     for (const p of [...this.#batch, ...this.#queue]) p.answer({ refused: why, why: "" });
     this.#batch = [];
     this.#queue = [];
-    for (const fn of this.#goners) fn(why);
   }
   /** What an answer that is not the sitting says: gone, outdated (the page loads again), or to try again. */
   #trouble(status: number, body: unknown): "again" | "stop" {

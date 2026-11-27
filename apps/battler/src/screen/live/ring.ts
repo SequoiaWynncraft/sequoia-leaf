@@ -15,7 +15,7 @@ import { BOARD_W } from "../geometry.ts";
 import { boardToPage } from "../stage.ts";
 import { figPic, pic } from "../ui/cards.ts";
 import { figureRef } from "../ui/refs.ts";
-import { turnOf } from "./reads.ts";
+import { focusAfter, turnOf } from "./reads.ts";
 
 /** What the ring asks: to take the figure at a place. */
 const RING: { box: HTMLElement | null; key: string; take: ((offer: number) => void) | null } = {
@@ -62,6 +62,7 @@ export function renderRing(view: SittingView, now: number, busy: boolean): void 
   RING.key = key;
   box.classList.toggle("mine", mine);
   const n = stage.ring.length;
+  const had = focusedPlace(box);
   box.replaceChildren(
     ...stage.ring.map((offer, i) => {
       const spot = `--a:${(i / n) * 360 - 90}deg`;
@@ -86,4 +87,15 @@ export function renderRing(view: SittingView, now: number, busy: boolean): void 
       return button;
     }),
   );
+  // Drawn again while a figure in it had the keyboard: that one keeps it, or the next still standing.
+  const keep = had === null ? null : focusAfter(stage.ring, had);
+  if (keep !== null) box.querySelector<HTMLElement>(`[data-ring="${keep}"]`)?.focus({ preventScroll: true });
+}
+
+/** The place in the ring whose figure has the keyboard, if one has. */
+function focusedPlace(box: HTMLElement): number | null {
+  const at = document.activeElement;
+  return at instanceof HTMLElement && box.contains(at) && at.dataset.ring !== undefined
+    ? Number(at.dataset.ring)
+    : null;
 }

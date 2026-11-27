@@ -12,7 +12,7 @@
 import { GOLD, LEAF } from "@sequoia-leaf/kit/palette.ts";
 import { balance } from "@sequoia-leaf/kit/purse.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
-import { foughtOf, type RunView } from "@sequoia-leaf/raid";
+import { foughtOf } from "@sequoia-leaf/raid";
 import type { SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
 import { say } from "../fx.ts";
@@ -25,17 +25,18 @@ import { changed, go, hold, onScreen, S } from "../state.ts";
 import { toast } from "../ui/table.ts";
 import { buildHud, forgetScout, markTable, renderClock, renderPlayers } from "./hud.ts";
 import { buildPanels, hidePaper, paperUp, showEnd, showOut } from "./panels.ts";
-import { paidLines } from "./reads.ts";
 import { buildRing, renderRing } from "./ring.ts";
 import {
   atLiveTable,
   doneWithTable,
+  fightBegins,
   liveLine,
   liveView,
   mineOf,
   onDone,
   onLineGone,
   onSeatView,
+  paidFor,
   shownRun,
   sitAt,
   stepBack,
@@ -54,13 +55,11 @@ export interface LiveAsks {
 
 const L: {
   asks: LiveAsks | null;
-  /** The seat's run as it set out for the fight on screen: what the room paid is told against it. */
-  before: RunView | null;
   /** The papers shown already at this sitting. */
   told: Set<"out" | "end">;
   /** The purse's Coins when the member sat down at the table, to tell what the purse took. */
   coinsAt: number | null;
-} = { asks: null, before: null, told: new Set(), coinsAt: null };
+} = { asks: null, told: new Set(), coinsAt: null };
 
 /** Takes the figure at a place in the carousel's ring, its button showing Leaf is answering. */
 async function take(offer: number): Promise<void> {
@@ -75,12 +74,10 @@ const MIDDLE = { x: BOARD_W / 2, y: 84 };
 
 /** What the room paid, over the board, as the table goes on from a fight. */
 function sayPaid(view: SittingView): void {
-  const before = L.before;
-  const after = view.run;
-  L.before = null;
-  if (!before || !after) return;
-  const result = foughtOf(before)?.outcome.result ?? null;
-  const [head, ...rest] = paidLines(result, before, after);
+  const paid = paidFor(view);
+  if (!paid) return;
+  const { result } = paid;
+  const [head, ...rest] = paid.lines;
   if (head) say(MIDDLE.x, MIDDLE.y - 6, head, result === "win" ? GOLD[2] : "#e67967", { big: true, ttl: 2 });
   rest.forEach((line, i) => say(MIDDLE.x, MIDDLE.y + 14 + i * 12, line, LEAF, { ttl: 2.2 }));
   if (result === "win") snd.win();
@@ -100,7 +97,7 @@ function stageTable(view: SittingView, was: SittingView): void {
   const fought = view.stage.at === "fight" && mine.place === null && view.run ? foughtOf(view.run) : null;
   if (view.run && fought) {
     if (playingNow(S.screen, playbackOf(view.run, fought, S.runs).key)) return;
-    L.before = view.run;
+    fightBegins(view);
     return go({ e: "sit", run, runs: S.runs });
   }
   if (S.screen.at === "fight" || S.screen.at === "after") {
@@ -196,7 +193,6 @@ export function openLive(scope: Scope, asks: LiveAsks): void {
   onDone(() => {
     L.told = new Set();
     L.coinsAt = null;
-    L.before = null;
   });
   onScreen((before, now) => {
     if (now.at === "front" && before.at !== "front") steppedAway();

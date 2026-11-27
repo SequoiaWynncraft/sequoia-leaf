@@ -10,7 +10,7 @@
  * hears of it.
  */
 import { waitingLook } from "@sequoia-leaf/kit/play.ts";
-import type { RunView } from "@sequoia-leaf/raid";
+import { type FightResult, foughtOf, type RunView } from "@sequoia-leaf/raid";
 import { isSeatCommand, type SittingCommand } from "@sequoia-leaf/raid/sitting/commands.ts";
 import { sideOf } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import { predict, type SeatView, type SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
@@ -18,9 +18,13 @@ import { predict, type SeatView, type SittingView } from "@sequoia-leaf/raid/sit
 import { OWN } from "../sides.ts";
 import { changed, type Did, go, heldOff, hold, LIVE, refuse, S, type Seated, tellNotes } from "../state.ts";
 import type { Answer, Gone, Line } from "./line.ts";
-import { CLOSED_UNSTARTED, closedUnstarted, refusalWords } from "./reads.ts";
+import { CLOSED_UNSTARTED, closedUnstarted, NOT_SEATED, paidLines, refusalWords, seatedAt } from "./reads.ts";
 
-const L: { line: Line | null } = { line: null };
+const L: {
+  line: Line | null;
+  /** The seat's run as it set out for the fight it is in: what the room paid is told against it. */
+  before: RunView | null;
+} = { line: null, before: null };
 const viewHearers: ((view: SittingView, was: SittingView) => void)[] = [];
 const goneHearers: ((why: Gone) => void)[] = [];
 const doneHearers: ((why: string | null) => void)[] = [];
@@ -128,14 +132,39 @@ export async function takeFromRing(offer: number, waiting: Element | null = null
   return asked({ do: "pick", offer }, waiting);
 }
 
-/** Sits the member down at their seat: their commands go to it, and its fights are drawn from its side. False with no seat. */
+/** The seat's run, if it is in a fight at the table now. */
+function fighting(view: SittingView): RunView | null {
+  const run = view.stage.at === "fight" && mineOf(view)?.place === null ? view.run : null;
+  return run && foughtOf(run) ? run : null;
+}
+
+/**
+ * Sits the member down at their seat: their commands go to it, and its fights are drawn from its
+ * side. Coming in during a fight, the run as it set out is kept, so that what the room paid is told
+ * when the table goes on. False with no seat.
+ */
 export function sitAt(): boolean {
   const view = L.line?.view;
   const mine = view ? mineOf(view) : null;
-  if (!mine) return false;
+  if (!view || !mine) return false;
   OWN.side = (setup) => sideOf(setup, mine.who);
   LIVE.seat = SEAT;
+  L.before = fighting(view);
   return true;
+}
+
+/** A fight of the seat's is being played: its run as it set out is kept, to tell what the room paid. */
+export function fightBegins(view: SittingView): void {
+  L.before = fighting(view);
+}
+
+/** What the room paid, once the table has gone on from the fight the seat set out for (how it went, then the lines); null with no fight kept. */
+export function paidFor(view: SittingView): { result: FightResult | null; lines: string[] } | null {
+  const before = L.before;
+  L.before = null;
+  if (!before || !view.run) return null;
+  const result = foughtOf(before)?.outcome.result ?? null;
+  return { result, lines: paidLines(result, before, view.run) };
 }
 
 /** Back to the front page from the live table (from wherever the screen is: a fight's end too). */
@@ -149,22 +178,26 @@ export function doneWithTable(why: string | null = null): void {
   stepBack();
   L.line?.close();
   L.line = null;
+  L.before = null;
   for (const fn of doneHearers) fn(why);
 }
 
 /**
- * Takes up a sitting Leaf has shown the page, as the member's. A table that closed before it
- * started lets the member go at once, and says so.
+ * Takes up a sitting Leaf has shown the page, as the member's. Whenever Leaf's view shows them
+ * without a seat there, whatever the reason (they left in another tab; the table closed before it
+ * started), the page lets the sitting go and says why.
  */
 export function takeUp(line: Line): void {
   if (L.line) doneWithTable();
   L.line = line;
+  L.before = null;
   const seen = { view: line.view };
   line.onView((view) => {
     if (L.line !== line) return;
     const was = seen.view;
     seen.view = view;
-    if (closedUnstarted(view)) return doneWithTable(CLOSED_UNSTARTED);
+    // Leaf shows the member without a seat (left in another tab, or the table closed unstarted): the page lets it go.
+    if (!seatedAt(view, line.player)) return doneWithTable(closedUnstarted(view, was) ? CLOSED_UNSTARTED : NOT_SEATED);
     for (const fn of viewHearers) fn(view, was);
   });
   line.onGone((why) => {

@@ -203,7 +203,7 @@ Up to eight members at one table of the raid, on Leaf's clock (`/v1/game/sitting
 `sitting/`): everyone on their own board through the same rooms, sparring rooms in pairs, a
 carousel, regulars in the empty seats. The page is in `src/screen/live/`.
 
-- **On the front page** (Versus, Live tables, `live/tables.ts`): the tables open to sit at (who
+- **On the front page** (Versus, Live tables, `live/tables.ts` drawing what `live/listing.ts` knows): the tables open to sit at (who
   opened each, how many sat) with Sit down, and Open a table; once sat, the table's eight seats
   (an empty one says "A regular will sit here"), Start for whoever opened it and Leave for anyone;
   once started, Carry on and Leave the table (asked first: it is going out). The board is the
@@ -234,12 +234,16 @@ carousel, regulars in the empty seats. The page is in `src/screen/live/`.
 - **Being told**: the line (`live/line.ts`) reads the sitting with the `rev` it has at the stage's
   deadline, every 2 seconds while it is open or in a carousel, and as the page comes back; Leaf has
   no live room for sittings yet. An answer older than the revision the page holds (two reads
-  crossing) is let go. Commands go in batches with ids, sent again as they were after a failure. A
-  table that closed before anybody started it lets the member go, and the card says so.
+  crossing) is let go. Commands go in batches with ids, sent again as they were after a failure;
+  putting the line away answers whatever still waits. Whenever Leaf's view shows the member
+  without a seat (left in another tab, or the table closed before it started), the page lets the
+  table go and shows the list, saying why. The first read of the list is tried again until Leaf
+  answers it, and a list read asked before the member took up or let go of a table is not acted on.
 
 `live/reads.ts` holds the small questions (the clock's words, the players' rows, the carousel's
 turn, places in words), tested against sittings the rules play (`live/reads.test.ts`);
-`live/line.test.ts` and `live/seated.test.ts` play the line and the seat against the kit's stand-in Leaf.
+`live/line.test.ts`, `live/seated.test.ts` and `live/listing.test.ts` play the line, the seat and the card
+against the kit's stand-in Leaf.
 
 ## What Leaf keeps, and what the browser keeps
 

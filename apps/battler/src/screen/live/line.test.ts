@@ -69,3 +69,21 @@ test("two reads on their way at once: the older answer, coming last, does not ro
   line.close();
   held.close();
 });
+
+test("putting the line away answers every command still waiting, so nothing waits on it after leaving", async () => {
+  const [one] = revisions();
+  if (!one) throw new Error("no sitting");
+  world = standin({ "POST /v1/game/sittings/s1": () => new Promise<Reply>(() => undefined) });
+  const held = scope();
+  const line = openLine(held, "s1", "leaf-0", answer(1, one));
+  if (!line) throw new Error("no line");
+  const sent = line.send({ do: "start" });
+  const queued = line.send({ do: "leave" });
+  await until(() => (world?.sent.length ?? 0) > 0);
+  expect(line.waiting()).toBe(true);
+  line.close();
+  expect(await sent).toEqual({ refused: "gone", why: "" });
+  expect(await queued).toEqual({ refused: "gone", why: "" });
+  expect(line.waiting()).toBe(false);
+  held.close();
+});
