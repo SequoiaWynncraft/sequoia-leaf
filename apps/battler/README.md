@@ -121,7 +121,7 @@ kit's card: "The table needs the guild's server."
   ability goes off (each in a way of its own, with light gathering in), and sets off on a leap so
   that it comes down as its damage does. Each ability leaves its own mark and has its own sound.
   Figures squash and stretch as they hop, walk, land and are hit, take a sore edge when hit, and
-  tumble off their base and go in a puff of their own when they fall. A Groot figure that will get
+  tumble off their base and go in a puff of their own when they fall. A Graid figure that will get
   back up lies where it fell instead, and its true form rises in five beats on the fight's clock
   (`risetime.ts`, `rising.ts`): it lies a moment, the table dims to its hex, its raid's ring draws
   round it a gold stud at a time while friends lean away, it stands in its new shape as the ring

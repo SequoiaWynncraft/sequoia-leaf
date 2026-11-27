@@ -300,7 +300,7 @@ const KIN_PUFF: Readonly<Record<KinId, Puff>> = {
   crab: { cols: ["#b0483a", PAPER[1]], drift: "out" },
   gnome: { cols: [SKY[4], PAPER[1]], drift: "out" },
   // Gold, rising: what the raiders saw going back where it came from.
-  groot: { cols: [GOLD[1], GOLD[2], CREAM], drift: "up" },
+  graid: { cols: [GOLD[1], GOLD[2], CREAM], drift: "up" },
 };
 const SHELL: Puff = KIN_PUFF.crab;
 const LEAVES: Puff = { cols: [BARK[3], GREEN[3]], drift: "down" };

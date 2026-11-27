@@ -16,7 +16,7 @@
  * the fox are the town's, larger: `folkart.ts`, `sprites.ts` and `campart.ts` there.
  */
 import { type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
-import { hasTrueForm, type TrueFormId } from "@sequoia-leaf/raid/content/groot.ts";
+import { hasTrueForm, type TrueFormId } from "@sequoia-leaf/raid/content/graid.ts";
 import type { Form } from "@sequoia-leaf/raid/fight/types.ts";
 
 import text from "./figures.txt";
@@ -87,7 +87,7 @@ const KEPT: Readonly<Partial<Record<UnitKind, Omit<FigureArt, "rows" | "cast" | 
   bigcrab: { sym: true },
 };
 
-/** The same for Groot's true forms (`<figure> true` in `figures.txt`). */
+/** The same for Graid's true forms (`<figure> true` in `figures.txt`). */
 const KEPT_TRUE: Readonly<Record<TrueFormId, Omit<FigureArt, "rows" | "cast" | "alt">>> = {
   worm: { breath: 13 },
   moth: { flies: true },
@@ -98,7 +98,7 @@ const KEPT_TRUE: Readonly<Record<TrueFormId, Omit<FigureArt, "rows" | "cast" | "
 
 const ROWS = readRows(text);
 
-/** A figure's pictures, as itself or (one of Groot's five) in its true form: its rows from `figures.txt`, and what is kept of it here. */
+/** A figure's pictures, as itself or (one of Graid's five) in its true form: its rows from `figures.txt`, and what is kept of it here. */
 export function artOf(kind: UnitKind, form: Form = "plain"): FigureArt {
   const named = form === "true" && hasTrueForm(kind) ? `${kind} true` : kind;
   const cast = ROWS.get(`${named} cast`);

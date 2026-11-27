@@ -37,7 +37,7 @@ import {
 } from "./content/items.ts";
 import { type Era, isEra, LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, TRAIL_COUNT } from "./content/rooms.ts";
-import { isTraitId, TRAIT_IDS, traitNumber } from "./content/traits.ts";
+import { isTraitId, renamedTitle, renamedTraits, TRAIT_IDS, traitNumber } from "./content/traits.ts";
 import { isRuleId, RULE_IDS } from "./content/wilds.ts";
 import { lastRoom } from "./endless.ts";
 import type { FightResult, FightRule, FightSetup, FightSummary, Tally } from "./fight/types.ts";
@@ -238,7 +238,7 @@ function readFought(v: unknown): Fought {
 }
 function readFoe(v: unknown): Party {
   const foe = one(v, isParty, "who is waiting in the room");
-  return foe.figures.length === 0 ? bad("who is waiting in the room") : foe;
+  return foe.figures.length === 0 ? bad("who is waiting in the room") : { ...foe, title: renamedTitle(foe.title) };
 }
 
 /** Reading one part of a run: as it is, or what to put in its place if it does not read (`drawn`). */
@@ -347,7 +347,10 @@ function readParts(
         "the almanac notes",
       ),
       forged: unique(each(seen.forged, isFinishedId, FINISHED_IDS.length, "the almanac notes"), "the almanac notes"),
-      topped: unique(each(seen.topped, isTraitId, TRAIT_IDS.length, "the almanac notes"), "the almanac notes"),
+      topped: unique(
+        each(renamedTraits(seen.topped), isTraitId, TRAIT_IDS.length, "the almanac notes"),
+        "the almanac notes",
+      ),
     },
   };
   // The parts have to agree with each other, too.

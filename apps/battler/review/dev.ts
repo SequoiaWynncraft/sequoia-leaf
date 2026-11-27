@@ -5,7 +5,7 @@
  */
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 
-import { openGroot } from "./groot.ts";
+import { openGraid } from "./graid.ts";
 import { openHandle } from "./handle.ts";
 import { showSheet } from "./sheet.ts";
 import { openStandIn } from "./standin.ts";
@@ -21,5 +21,5 @@ if (new URLSearchParams(location.search).has("sheet")) {
   openHandle();
   openStandIn();
   openTablesHandle();
-  openGroot();
+  openGraid();
 }

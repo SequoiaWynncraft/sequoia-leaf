@@ -1,5 +1,5 @@
 /**
- * A Groot figure's true form rising, on the table, in five beats (`risetime.ts` says when): it lies
+ * A Graid figure's true form rising, on the table, in five beats (`risetime.ts` says when): it lies
  * a second where it fell; the table dims to its hex; its raid's ring (`rings.ts`) draws round it one
  * gold stud at a time while friends lean away; it stands in its new shape, the ring snaps shut, the
  * board bumps and a low horn sounds; and the ring stays, faint, under it until it falls again.
@@ -11,7 +11,7 @@
 import { GOLD, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
 import type { Fight, FightEvent } from "@sequoia-leaf/raid";
-import { hasTrueForm, TRUE_FORMS, type TrueFormId } from "@sequoia-leaf/raid/content/groot.ts";
+import { hasTrueForm, TRUE_FORMS, type TrueFormId } from "@sequoia-leaf/raid/content/graid.ts";
 
 import { clockNow, feetAt, fightNow, FOOT, FV, travel } from "./board.ts";
 import { burst, ring, say } from "./fx.ts";

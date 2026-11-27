@@ -59,7 +59,7 @@ export {
   type TrueForm,
   type TrueFormId,
   TRUE_FORMS,
-} from "./content/groot.ts";
+} from "./content/graid.ts";
 export { LORE } from "./content/lore.ts";
 export {
   CALLINGS,

@@ -317,7 +317,7 @@ function rise(ev: Events["rise"], at: number): void {
   const a = actor(ev.id);
   if (!a) return;
   a.form = ev.form;
-  if (ev.why === "groot") return risesUp(ev, at);
+  if (ev.why === "graid") return risesUp(ev, at);
   a.fallAt = Infinity;
   a.gone = false;
   a.rising = false;

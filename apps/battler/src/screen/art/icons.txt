@@ -154,9 +154,9 @@ GLLLLLLLG
 .GLLLLLG.
 ..GGGGG..
 
-# Groot: the four raids' colours (the Moth's purple, the Worm's moss, the Rock's strata, the
+# Graid: the four raids' colours (the Moth's purple, the Worm's moss, the Rock's strata, the
 # Anomaly's dark), tied by a gold stud at four points.
-trait groot
+trait graid
 ...yYy...
 .vv.y.GG.
 vv.....GG

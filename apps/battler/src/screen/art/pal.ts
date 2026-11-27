@@ -12,7 +12,7 @@ export const TRAIT_COLOUR: Readonly<Record<TraitId, string>> = {
   crab: "#b0483a",
   gnome: SKY[4],
   // The gold that ties the four raids' colours (its icon); each true form's ring is its raid's own.
-  groot: GOLD[2],
+  graid: GOLD[2],
   bulwark: STONE[3],
   fang: "#f4a08c",
   slinger: GOLD[0],

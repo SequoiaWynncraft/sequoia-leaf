@@ -7,7 +7,7 @@
 import { isFigureId } from "../content/figures.ts";
 import { isComponentId } from "../content/items.ts";
 import { isEra, LEGACY_ERA } from "../content/releases.ts";
-import { isTraitId } from "../content/traits.ts";
+import { isTraitId, renamedTrait } from "../content/traits.ts";
 import { isParty } from "../party.ts";
 import { endingOf } from "../run.ts";
 import { checkRun, fields, Nonsense, partyAsShare } from "../save.ts";
@@ -63,7 +63,11 @@ export function readWho(v: unknown): Who {
   const w = record(v, "whose a seat is");
   if (w.is === "member") return { is: "member", ...readMember(w) };
   if (w.is !== "regular") return bad("whose a seat is");
-  return { is: "regular", figure: one(w.figure, isFigureId, "a regular"), habit: one(w.habit, isTraitId, "a regular") };
+  return {
+    is: "regular",
+    figure: one(w.figure, isFigureId, "a regular"),
+    habit: one(renamedTrait(w.habit), isTraitId, "a regular"),
+  };
 }
 /** A seat, its run kept by a sitting of version 1 (`meals`) or since. */
 function readSeat(v: unknown, meals: boolean): Seat {

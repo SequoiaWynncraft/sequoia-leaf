@@ -1,10 +1,10 @@
 import { abilityNumber, specOf, type Stars, starScale, type UnitKind } from "../content/figures.ts";
 /**
  * Coming into a fight: a figure sitting down (`enter`), one summoned in the middle of it (`summon`),
- * and one getting back up (`getUp`): from Second Wind, from Groot (`grootFalls`, in its true form) or
+ * and one getting back up (`getUp`): from Second Wind, from Graid (`graidFalls`, in its true form) or
  * from Seqwawa's No GG Left Behind. Each writes down what it did as an event.
  */
-import { formNumber, hasTrueForm } from "../content/groot.ts";
+import { formNumber, hasTrueForm } from "../content/graid.ts";
 import { type ItemId, itemStats } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { traitNumber } from "../content/traits.ts";
@@ -262,14 +262,14 @@ function standTrue(u: Unit): void {
     u.attack = formNumber("rock", "attack") * u.grown * (1 + attack / 100);
     u.speed = formNumber("rock", "speed") * (1 + speed / 100);
   }
-  const more = 1 + traitNumber("groot", "more", 1) / 100;
+  const more = 1 + traitNumber("graid", "more", 1) / 100;
   u.attack = Math.round(u.attack * more);
   u.power *= more;
 }
-/** Groot's getting back up, a moment after falling: in its true form if it has one, with its share of health, and at the top step its share of a mana bar. */
-function grootUp(f: Fight, u: Unit, step: number): void {
+/** Graid's getting back up, a moment after falling: in its true form if it has one, with its share of health, and at the top step its share of a mana bar. */
+function graidUp(f: Fight, u: Unit, step: number): void {
   const form: Form = hasTrueForm(u.kind) ? "true" : u.form;
-  if (!getUp(f, u, (u.maxHp * traitNumber("groot", "health", step)) / 100, "groot", form)) {
+  if (!getUp(f, u, (u.maxHp * traitNumber("graid", "health", step)) / 100, "graid", form)) {
     // Nowhere to stand: it is down for good after all.
     f.standing[u.side]--;
     u.fellAt = f.tick;
@@ -278,19 +278,19 @@ function grootUp(f: Fight, u: Unit, step: number): void {
   }
   if (form === "true") standTrue(u);
   // At the top step, its mana bar at least this full.
-  u.mana = Math.max(u.mana, Math.round((u.manaFull * traitNumber("groot", "mana", step)) / 100));
+  u.mana = Math.max(u.mana, Math.round((u.manaFull * traitNumber("graid", "mana", step)) / 100));
 }
 /**
- * Groot, as a figure falls: one with its getting back up still to come (`rises`) gets back up a
- * moment later (`grootUp`), and meanwhile still counts as standing. At the first step, only the first
- * Groot figure of its side to fall does. Gives the steps until it gets back up, or 0 if it does not.
+ * Graid, as a figure falls: one with its getting back up still to come (`rises`) gets back up a
+ * moment later (`graidUp`), and meanwhile still counts as standing. At the first step, only the first
+ * Graid figure of its side to fall does. Gives the steps until it gets back up, or 0 if it does not.
  */
-export function grootFalls(f: Fight, u: Unit): number {
-  const step = f.traits[u.side].groot ?? 0;
+export function graidFalls(f: Fight, u: Unit): number {
+  const step = f.traits[u.side].graid ?? 0;
   if (!u.rises || step <= 0) return 0;
   u.rises = false;
-  if (traitNumber("groot", "every", step) <= 0) for (const o of f.units) if (o.side === u.side) o.rises = false;
-  const wait = secs(traitNumber("groot", "wait", step));
-  later(f, wait, () => grootUp(f, u, step));
+  if (traitNumber("graid", "every", step) <= 0) for (const o of f.units) if (o.side === u.side) o.rises = false;
+  const wait = secs(traitNumber("graid", "wait", step));
+  later(f, wait, () => graidUp(f, u, step));
   return wait;
 }

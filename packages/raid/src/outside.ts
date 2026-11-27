@@ -9,7 +9,7 @@ import { BOSS_IDS, type BossId, type FigureId, isBossId, isFigureId } from "./co
 import { FINISHED_IDS, type FinishedId, isFinishedId } from "./content/items.ts";
 import { PAYOUT } from "./content/keepsakes.ts";
 import { ROOM_COUNT, TRAIL_COUNT, TRAILS } from "./content/rooms.ts";
-import { isTraitId, TRAIT_IDS, type TraitId } from "./content/traits.ts";
+import { isTraitId, renamedTraits, TRAIT_IDS, type TraitId } from "./content/traits.ts";
 import { type Depths, noDepths, readDepths } from "./depths.ts";
 import type { RunSummary } from "./run.ts";
 
@@ -163,7 +163,7 @@ export function readAlmanac(a: unknown): Almanac | null {
   const fielded = uniqueList(a.fielded, isFigureId, everyFigure().length);
   const threeStars = uniqueList(a.threeStars, isFigureId, everyFigure().length);
   const forged = uniqueList(a.forged, isFinishedId, FINISHED_IDS.length);
-  const topped = uniqueList(a.topped, isTraitId, TRAIT_IDS.length);
+  const topped = uniqueList(renamedTraits(a.topped), isTraitId, TRAIT_IDS.length);
   // An almanac kept while some figures were locked lists those it opened; that list means nothing now.
   if (!fielded || !threeStars || !forged || !topped) return null;
   if (!Array.isArray(a.bosses) || a.bosses.length > 99 || !Array.isArray(a.best) || a.best.length > 99) return null;

@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import * as kit from "@sequoia-leaf/kit/palette.ts";
 import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
 import { SUMMON_IDS, TROUBLE_IDS } from "@sequoia-leaf/raid/content/figures.ts";
-import { TRUE_FORM_IDS } from "@sequoia-leaf/raid/content/groot.ts";
+import { TRUE_FORM_IDS } from "@sequoia-leaf/raid/content/graid.ts";
 
 import { artOf } from "./figures.ts";
 import { FIGURE_PAL, TOWNS_OWN } from "./pal.ts";
@@ -43,7 +43,7 @@ test("figures.txt names only the stump's figures and their other pictures, and e
   expect(kinds.filter((kind) => !named.includes(kind))).toEqual([]);
 });
 
-test("each of Groot's five has a true form, standing and casting, every row of a picture as wide as the rest", () => {
+test("each of Graid's five has a true form, standing and casting, every row of a picture as wide as the rest", () => {
   for (const id of TRUE_FORM_IDS) {
     const { rows, cast = [] } = artOf(id, "true");
     expect([id, rows.length > 0, cast.length > 0]).toEqual([id, true, true]);

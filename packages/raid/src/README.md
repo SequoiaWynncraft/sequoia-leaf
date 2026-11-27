@@ -60,15 +60,15 @@ bench.
 
 **Figures.** Twenty-nine, in five tiers of 7, 7, 6, 5 and 4. Each has health, attack, attacks a
 second, reach in hexes, armour, ward, a mana bar and one ability. Each has one kin and one calling;
-the four dearest carry a third trait, and so do the Worm, the Moth and the Rock (Groot). Nobody
+the four dearest carry a third trait, and so do the Worm, the Moth and the Rock (Graid). Nobody
 carries more than three.
 
 | Tier | Figure  | Kin            | Calling         | Health | Attack | Reach | Ability (one star)                                                                                                                                                                                         |
 | ---- | ------- | -------------- | --------------- | ------ | ------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1    | Flint   | Ember          | Fang            | 270    | 30     | 1     | **Do Not Move The Fire.** A spark jumps from its fire: 75 magic damage to its target and to whoever is standing behind it.                                                                                 |
 | 1    | Velvet  | Moss           | Mender          | 250    | 20     | 4     | **Cushion.** Tucks a cushion round whoever in the party is most hurt: a shield of 110 for 4 seconds.                                                                                                       |
-| 1    | Moth    | Mist + Groot   | Sage            | 210    | 22     | 4     | **Wing Dust.** Shakes its wings over its target: 80 magic damage to it and to every enemy touching it, and dust on those hexes for 2 seconds that does 20 magic damage a second to enemies there.          |
-| 1    | Worm    | Burrow + Groot | Sneak           | 260    | 28     | 1     | **Under And Up.** Goes under and comes up beside the enemy furthest away, biting it for 90 physical damage.                                                                                                |
+| 1    | Moth    | Mist + Graid   | Sage            | 210    | 22     | 4     | **Wing Dust.** Shakes its wings over its target: 80 magic damage to it and to every enemy touching it, and dust on those hexes for 2 seconds that does 20 magic damage a second to enemies there.          |
+| 1    | Worm    | Burrow + Graid | Sneak           | 260    | 28     | 1     | **Under And Up.** Goes under and comes up beside the enemy furthest away, biting it for 90 physical damage.                                                                                                |
 | 1    | Twig    | Feather        | Slinger         | 210    | 26     | 4     | **Seed Volley.** Spits 3 seeds at its target, 34 physical damage each. A seed whose target has fallen flies on at the nearest enemy.                                                                       |
 | 1    | Nipper  | Crab           | Fang            | 300    | 26     | 1     | **Pinch.** Pinches its target and does not let go: 85 physical damage, and it is stunned for 1.5 seconds.                                                                                                  |
 | 1    | Hodge   | Gnome          | Bulwark         | 320    | 20     | 1     | **Upend The Barrow.** Tips the barrow over and gets behind it: a shield of 120 for 4 seconds, and 40 physical damage to every enemy touching it.                                                           |
@@ -82,7 +82,7 @@ carries more than three.
 | 3    | Bud     | Moss           | Sage            | 390    | 30     | 4     | **Proper Instruction.** Tells the 2 friends nearest it how to do things properly: +22% attack for the rest of the fight.                                                                                   |
 | 3    | Toast   | Ember          | Sage            | 440    | 34     | 2     | **Warm Breath.** Breathes out over its target 3 times in 1 second, turning to it each time: 50 magic damage each time to every enemy in a cone two hexes deep.                                             |
 | 3    | Drizzle | Mist           | Slinger         | 370    | 44     | 4     | **One Big Drop.** Spits one big drop at its target: 190 magic damage, and a puddle on its hex and the hexes touching it for 3 seconds, where enemies are 30% slower.                                       |
-| 3    | Rock    | Burrow + Groot | Bulwark         | 820    | 0      | 1     | **It Is A Rock.** Does nothing, pointedly. For 4 seconds it takes 40% less from every hit, and whoever attacks it up close stubs a toe for 45 damage.                                                      |
+| 3    | Rock    | Burrow + Graid | Bulwark         | 820    | 0      | 1     | **It Is A Rock.** Does nothing, pointedly. For 4 seconds it takes 40% less from every hit, and whoever attacks it up close stubs a toe for 45 damage.                                                      |
 | 3    | Shrub   | Gnome          | Sneak           | 400    | 42     | 1     | **It Was A Bush.** Hides in its bush for 1 second, where nothing can reach it, then jumps out beside its target: 160 physical damage, and 50% more if the target was attacking somebody else.              |
 | 3    | Fuss    | Crab           | Mender          | 430    | 28     | 2     | **Plasters.** Hands out plasters to the 2 most hurt in the party: 140 health back each.                                                                                                                    |
 | 4    | Grudge  | Burrow         | Fang            | 720    | 58     | 1     | **Clear The Sett.** Turns right round with its claws out: 170 physical damage to every enemy touching it, and it heals for 30% of what lands.                                                              |
@@ -90,8 +90,8 @@ carries more than three.
 | 4    | Reed    | Feather        | Slinger         | 500    | 64     | 5     | **One Long Stab.** Marks a line 5 hexes long through its target, then 0.5 seconds later stabs along it: 220 physical damage to every enemy on it by then.                                                  |
 | 4    | Barge   | Crab           | Bulwark         | 850    | 40     | 1     | **In The Way.** Gets in everybody's way: pulls every enemy within two hexes 1 hex nearer, then a shield of 300 for 4 seconds, and they have to attack it for 3 seconds.                                    |
 | 4    | Dose    | Gnome          | Mender          | 540    | 34     | 2     | **Tonic For Everyone.** A spoonful each for itself and every friend within two hexes: 180 health back, and 25% faster attacks for 4 seconds.                                                               |
-| 5    | Greg    | Groot          | Bulwark + Greg  | 880    | 54     | 1     | **Greg Sits Down.** Greg jumps onto the free hex within 3 hexes that has the most enemies touching it, and sits down. Every enemy within two hexes takes 200 magic damage and is stunned for 1.25 seconds. |
-| 5    | Orphion | Mist + Groot   | Sage            | 700    | 62     | 1     | **Antlers Ring.** Its gold antlers ring: 160 magic damage to every enemy within two hexes, and the whole party attacks 12% faster for 4 seconds.                                                           |
+| 5    | Greg    | Graid          | Bulwark + Greg  | 880    | 54     | 1     | **Greg Sits Down.** Greg jumps onto the free hex within 3 hexes that has the most enemies touching it, and sits down. Every enemy within two hexes takes 200 magic damage and is stunned for 1.25 seconds. |
+| 5    | Orphion | Mist + Graid   | Sage            | 700    | 62     | 1     | **Antlers Ring.** Its gold antlers ring: 160 magic damage to every enemy within two hexes, and the whole party attacks 12% faster for 4 seconds.                                                           |
 | 5    | Vesta   | Ember          | Sneak + Fang    | 700    | 66     | 1     | **Off The Table.** Looks at its target, then bats it off its hex: 240 physical damage, knocked back 2 hexes, stunned for 1.5 seconds.                                                                      |
 | 5    | Seqwawa | Moss           | Mender + Rooted | 850    | 0      | 4     | **No GG Left Behind.** Every friend gets 140 health back. The last friend to fall, if it fell in the last 3 seconds, gets back up with 200 health.                                                         |
 
@@ -122,9 +122,10 @@ rooms (Greg 17, 34, 64; Orphion 14, 33, 49; Vesta 15, 26, 41).
 
 **Traits.** A trait switches on when the party fields enough _different_ figures that carry it;
 copies of one figure count once, however many emblems they hold. A figure carries its own traits
-and the kin of any emblem it holds. Every kin but Groot has four members, one of them at one acorn
-and one at two, so any kin can be started in the first rooms; Groot is the five named after the
-guild's raids (Worm, Moth, Rock, Greg, Orphion), and has no emblem yet.
+and the kin of any emblem it holds. Every kin but Graid has four members, one of them at one acorn
+and one at two, so any kin can be started in the first rooms; Graid (the guild's word for a guild
+raid) is the five named after the guild's raids (Worm, Moth, Rock, Greg, Orphion), and has no
+emblem yet.
 
 | Trait   | Steps   | What it does at its first step                                                                                                                                                            |
 | ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -141,13 +142,13 @@ guild's raids (Worm, Moth, Rock, Greg, Orphion), and has no emblem yet.
 | Sage    | 2, 4    | Sages' abilities are 25% stronger, and each of their attacks gives 3 more mana.                                                                                                           |
 | Mender  | 2, 3, 4 | Menders' healing and shields count for 20% more.                                                                                                                                          |
 | Sneak   | 2, 4    | When the fight starts, Sneaks leap to the enemy's back row, and their first 2 attacks do 40% more.                                                                                        |
-| Groot   | 2, 3, 5 | The first Groot figure to fall each fight gets back up 1 second later in its true form, with 15% of its health. A Groot figure in its true form has 10% more attack and ability power.    |
+| Graid   | 2, 3, 5 | The first Graid figure to fall each fight gets back up 1 second later in its true form, with 15% of its health. A Graid figure in its true form has 10% more attack and ability power.    |
 | Greg    | 1       | Give Greg a figure from your bench: he eats it, and gains 2% health for good for each acorn of its price (its cost times its copies), up to 40%.                                          |
 | Rooted  | 1       | Does not move or attack, cannot be pushed or pulled, and gains 12 mana a second.                                                                                                          |
 
 The later steps: Ember burns from the whole party's hits and hotter; Moss regrows 2% at three and
 3% at four; Mender counts for 30% at three, and at four for 35% with healing past a friend's full
-health becoming a shield for 4 seconds, up to 15% of their health; Groot gets every Groot figure
+health becoming a shield for 4 seconds, up to 15% of their health; Graid gets every Graid figure
 back up once at three, and at five with 30% of their health and their mana bar at least half full;
 Mist gives more ward and more slips; Burrow digs deeper; Feather quickens more; Crab's uncounted crab is a big
 one, and at five crabs (which takes a Crab emblem) a big one and a small one come; Gnomes have 20%
@@ -364,30 +365,30 @@ meanwhile. A member who has pulled no figure is refused (`nothing_pulled`).
 
 `TableView.roster` is the roster a run would start with now, for the front page and the almanac.
 
-## The expansion, release 1: Groot, Seqwawa, Greg fed by hand
+## The expansion, release 1: Graid, Seqwawa, Greg fed by hand
 
-The first release of `RAID-EXPANSION.md` (its section 7's "1. Groot"), with the names of
+The first release of `RAID-EXPANSION.md` (its section 7's first part), with the names of
 `RAID-NAMES.md` for everyone in the game today: the regulars sign as Greg, Vesta, Hodge, Nipper,
 Orphion and Moth, and a party stored under an old name or boss title still reads (`nowCalled` in
 `content/rooms.ts`). A crab's number is the tag on its shell, in its picture and its lore line
 (`content/lore.ts`, which now has a line for every figure and trait). The page says origin and class;
 in code the traits keep their words (`kin`, `calling`), so stored runs and the wire read as before.
 
-**Groot** (a kin, steps 2, 3, 5; `content/traits.ts`). A Groot figure carries `rises` from the
-start of a fight. When it falls (`fight/enter.ts`, `grootFalls`) it is down for a moment: its `fall`
+**Graid** (a kin, steps 2, 3, 5; `content/traits.ts`). A Graid figure carries `rises` from the
+start of a fight. When it falls (`fight/enter.ts`, `graidFalls`) it is down for a moment: its `fall`
 says `back`, the steps until it gets back up, and it still counts as standing meanwhile, so a side
-whose last figure is a falling Groot has not lost. One second later it gets back up (`getUp`, the
+whose last figure is a falling Graid has not lost. One second later it gets back up (`getUp`, the
 same verb Second Wind and Seqwawa use) on its hex, or the nearest free open hex anywhere on the
 board (`standOn`, beside where it fell when it can be), in its **true form**
-(`content/groot.ts`), with 15% of its health (30% at five), and at five its mana bar at least half
-full. At the first step only the first Groot figure of the side to fall does; from three on, every
-Groot figure, once. With no free hex on the board it stays down. A true form has 10% more attack and
+(`content/graid.ts`), with 15% of its health (30% at five), and at five its mana bar at least half
+full. At the first step only the first Graid figure of the side to fall does; from three on, every
+Graid figure, once. With no free hex on the board it stays down. A true form has 10% more attack and
 ability power and one change each: Real Worm's Under And Up also bites every other enemy
 touching where it comes up; Real Moth covers the hexes two from its target, damage and dust;
 Real Rock has 60 attack and attacks 0.6 times a second, grown by its stars and might and its
 items (`Unit.grown`), still rooted; Real Greg pulls every enemy within 3 hexes of where he sits 1
 hex nearer, nearest first, before the damage; Real Orphion gives the whole party 8% of its health
-back. A figure carrying Groot with no true form would get back up as itself.
+back. A figure carrying Graid with no true form would get back up as itself.
 
 **Seqwawa** (`content/seqwawa.ts`, id `seqwawa`): five acorns, on everyone's stall, Moss · Mender +
 Rooted, 850 health, no attack, reach 4 (only so it sits in the back row: it never attacks). **Rooted**
@@ -417,18 +418,18 @@ an old board's Greg reads his meals as percent, a little weaker, until it is rep
 
 **What the bot does.** It feeds Greg whatever it would otherwise sell while he can still eat
 (`sellSpare`), keeps Seqwawa off the front row (`formation.ts`: never the sturdiest stand-in for a
-missing front line), and values Groot as a trait like any other. `fondOf("groot")` is a habit, and
-the regulars may like Groot.
+missing front line), and values Graid as a trait like any other. `fondOf("graid")` is a habit, and
+the regulars may like Graid.
 
 ### What the page reads
 
 - **Forms in the fight.** Every unit has `form`, `"plain"` or `"true"`. It changes only by getting
   back up: the `rise` event carries it.
 - **`rise`**: `{ t: "rise", id, hp, why, form, cell }`. `why` is `"wind"` (Second Wind: it never fell,
-  it stays on its hex), `"groot"` (a moment after its `fall`, in its true form when it has one) or
+  it stays on its hex), `"graid"` (a moment after its `fall`, in its true form when it has one) or
   `"seqwawa"` (No GG Left Behind). `hp` is what it has now, `cell` where it stands. Seqwawa's cast lists
   the risen figure among its `targets` and its hex among its `cells`.
-- **`fall`** may carry `back`: the steps until a Groot figure gets back up. Meanwhile `alive` is false
+- **`fall`** may carry `back`: the steps until a Graid figure gets back up. Meanwhile `alive` is false
   and it stands nowhere.
 - **The pull** is a `leap` with `why: "pull"`, one hex nearer the puller, as Barge's was; a rooted
   figure (the Rock, Seqwawa) is never pulled or knocked back. Real Greg's pulls come after his own
@@ -667,7 +668,7 @@ While no member is still in, every wait is 0 (`later`): the regulars play straig
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `content/figures.ts`   | The 29 figures, the forest's trouble and bosses, and the summoned: names, numbers, ability sentences, quips            |
 | `content/seqwawa.ts`   | Seqwawa, kept beside the table so it does not grow                                                                     |
-| `content/groot.ts`     | Groot's true forms: names, the one change each, their numbers                                                          |
+| `content/graid.ts`     | Graid's true forms: names, the one change each, their numbers                                                          |
 | `content/lore.ts`      | Lore lines for the almanac: the expansion's so far                                                                     |
 | `content/members.ts`   | The banners' members: for each pull banner, a figure that is a guild member                                            |
 | `content/releases.ts`  | The releases, each at a moment of Leaf's clock, and the era (how many are open) at a moment                            |
@@ -684,7 +685,7 @@ While no member is still in, every wait is 0 (`later`): the regulars play straig
 | `fight/types.ts`       | What a figure in a fight looks like, and the events a step gives back                                                  |
 | `fight/clock.ts`       | The fight's clock and notebook: steps, `emit`, `later`                                                                 |
 | `fight/core.ts`        | The verbs: hurt, heal, shield, stun, slow, burn, taunt, hide, leap, knock back                                         |
-| `fight/enter.ts`       | Coming into a fight: sitting down, summoned, getting back up (Second Wind, Groot, Seqwawa)                             |
+| `fight/enter.ts`       | Coming into a fight: sitting down, summoned, getting back up (Second Wind, Graid, Seqwawa)                             |
 | `fight/switch.ts`      | Traits switching on as the parties sit down, one entry a trait                                                         |
 | `fight/cast.ts`        | An ability said out loud (`cast`), and the shapes of hexes it covers                                                   |
 | `fight/moves.ts`       | The verbs that move figures or take time: throw, dash, pull, zone, channel, telegraph                                  |
@@ -806,7 +807,7 @@ events of a step (`FightEvent` in `fight/types.ts`) are plain objects:
 - `zone` (hexes becoming somebody's slime, puddle or dust for some steps, and no longer),
   `telegraph` (the hexes an ability will land on, and in how many steps)
 - `heal`, `shield`, `status` (on and off), `boost`, `item` (an item doing its trick)
-- `fall` (with `back` for a Groot figure that will get back up), `rise` (Second Wind, Groot or
+- `fall` (with `back` for a Graid figure that will get back up), `rise` (Second Wind, Graid or
   Seqwawa: why, health, form and hex), `summon`, `trait`, `dusk`, `end`
 
 Headless Chromium draws about a frame a second, so a screen should keep its own handle for stepping
@@ -904,19 +905,19 @@ Crab (39% of runs won) and worst is Ember (17%). These figures lean on who choos
 that can afford a five-acorn figure is usually already doing well.
 
 **The expansion's release 1, measured** (`bun review/balance.ts 300 0`, `bun review/swap.ts 60`,
-first trail, before and after; "control" is the same build with Groot doing nothing). Fights last
+first trail, before and after; "control" is the same build with Graid doing nothing). Fights last
 16.6 seconds (16.3 before), dusk falls in 9.7% of the fights kept (8.3%), draws 0.3% (0.4%); in the
-50 fights where Moss 4, Mender 4 and Seqwawa met, dusk fell in 86% and none was a draw. Groot 2 is
-+2; Groot 3 +15, of which +10 is the figures (control); Groot 5 +46 in 46 fights. A Groot 5 board
+50 fights where Moss 4, Mender 4 and Seqwawa met, dusk fell in 86% and none was a draw. Graid 2 is
++2; Graid 3 +15, of which +10 is the figures (control); Graid 5 +46 in 46 fights. A Graid 5 board
 of 42 acorns' worth with no items beats the sensible bot's eight-figure boards from room 11 on (37,
-items and all) 73% of the time (39% with Groot doing nothing, 7% for another board of that worth).
-The Groot bot wins 79% of runs (73% control): the five are already among the best figures (Worm and
+items and all) 73% of the time (39% with Graid doing nothing, 7% for another board of that worth).
+The Graid bot wins 79% of runs (73% control): the five are already among the best figures (Worm and
 Moth the best one-acorn ones, Greg and Orphion +14 and +15). Moss 2, 3, 4: -1, -4, -3; Mender 2, 3,
 4: -2, +1, +18 (+15 before, with four Menders needed and no Seqwawa). Seqwawa swapped into the bots'
 boards at one star wins 80% of them and 46% of those the bots lost, between Vesta (78, 41)
-and Greg (85, 57); in the balance table it is +18. The design's first guesses moved: Groot gets back
+and Greg (85, 57); in the balance table it is +18. The design's first guesses moved: Graid gets back
 up with 15/15/30% (was 40/40/70) and a half-full mana bar at five (was full), and a true form is 10%
-stronger (was 25%), because at the first guesses the Groot bot won 92% of runs and Groot 5 beat
+stronger (was 25%), because at the first guesses the Graid bot won 92% of runs and Graid 5 beat
 92% of those boards; Mender's top step is 35% (was 40), as it was before; Seqwawa heals 140 (was 200)
 from a bar of 115 (was 100), because at 200 it stood with Greg in the swap and at +22.
 

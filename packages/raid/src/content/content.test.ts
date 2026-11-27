@@ -62,8 +62,8 @@ describe("the roster", () => {
     expect(new Set(names).size).toBe(names.length);
   });
   test("every kin has four members, on at least three tiers, starting cheap", () => {
-    // Groot is the five named after the guild's raids, a kin as a third trait for four of them.
-    for (const kin of KINS.filter((k) => k !== "groot")) {
+    // Graid is the five named after the guild's raids, a kin as a third trait for four of them.
+    for (const kin of KINS.filter((k) => k !== "graid")) {
       const members = FIGURE_IDS.filter((id) => FIGURES[id].kin === kin);
       expect(members.length).toBe(4);
       expect(new Set(members.map((id) => FIGURES[id].tier)).size).toBeGreaterThanOrEqual(3);
@@ -82,22 +82,22 @@ describe("the roster", () => {
       if (calling !== "fang") expect(members.length).toBeGreaterThanOrEqual(TRAITS[calling].steps.at(-1) ?? 0);
     }
   });
-  test("only the dearest carry a third trait, and the Groot figures; nobody more than three", () => {
+  test("only the dearest carry a third trait, and the Graid figures; nobody more than three", () => {
     for (const id of FIGURE_IDS) {
-      if (FIGURES[id].extra.length > 0 && FIGURES[id].tier < 5) expect(FIGURES[id].extra).toEqual(["groot"]);
+      if (FIGURES[id].extra.length > 0 && FIGURES[id].tier < 5) expect(FIGURES[id].extra).toEqual(["graid"]);
       expect(traitsOf(id).length).toBeLessThanOrEqual(3);
     }
   });
-  test("Groot is the five named after the guild's raids: Worm, Moth, Rock, Greg and Orphion", () => {
-    expect(FIGURE_IDS.filter((id) => traitsOf(id).includes("groot"))).toEqual([
+  test("Graid is the five named after the guild's raids: Worm, Moth, Rock, Greg and Orphion", () => {
+    expect(FIGURE_IDS.filter((id) => traitsOf(id).includes("graid"))).toEqual([
       "moth",
       "worm",
       "rock",
       "greg",
       "whitefox",
     ]);
-    expect(traitsOf("greg")).toEqual(["groot", "bulwark", "greg"]);
-    expect(traitsOf("whitefox")).toEqual(["mist", "sage", "groot"]);
+    expect(traitsOf("greg")).toEqual(["graid", "bulwark", "greg"]);
+    expect(traitsOf("whitefox")).toEqual(["mist", "sage", "graid"]);
     expect(traitsOf("seqwawa")).toEqual(["moss", "mender", "rooted"]);
     expect(FIGURE_IDS.filter((id) => traitsOf(id).includes("moss"))).toEqual([
       "mossmote",
@@ -164,7 +164,7 @@ describe("traits", () => {
     expect(stepFor("ember", 4)).toBe(2);
     expect(stepFor("bulwark", 6)).toBe(3);
     expect(stepFor("greg", 1)).toBe(1);
-    expect([1, 2, 3, 4, 5].map((n) => stepFor("groot", n))).toEqual([0, 1, 2, 2, 3]);
+    expect([1, 2, 3, 4, 5].map((n) => stepFor("graid", n))).toEqual([0, 1, 2, 2, 3]);
     expect([1, 2, 3, 4].map((n) => stepFor("moss", n))).toEqual([0, 1, 2, 3]);
     expect([1, 2, 3, 4].map((n) => stepFor("mender", n))).toEqual([0, 1, 2, 3]);
   });
@@ -252,8 +252,8 @@ describe("boons", () => {
     expect(BOON_IDS.length).toBeGreaterThanOrEqual(16);
     expect(BOON_IDS.length).toBeLessThanOrEqual(22);
     expect(BOON_IDS.filter((id) => BOONS[id].sort === "charm")).toEqual([...EMBLEM_IDS]);
-    // Every kin but Groot, whose emblem comes with its banner.
-    for (const kin of KINS) expect(EMBLEM_IDS.filter((id) => EMBLEMS[id] === kin).length).toBe(kin === "groot" ? 0 : 1);
+    // Every kin but Graid, whose emblem comes with its banner.
+    for (const kin of KINS) expect(EMBLEM_IDS.filter((id) => EMBLEMS[id] === kin).length).toBe(kin === "graid" ? 0 : 1);
     for (const id of BOON_IDS) expect(boonText(id)).not.toContain("{");
   });
 });

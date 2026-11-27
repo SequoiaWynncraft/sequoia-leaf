@@ -1,12 +1,12 @@
 /**
- * A figure on a card as it stands in a fight: as itself, or (one of Groot's five, got back up) in
+ * A figure on a card as it stands in a fight: as itself, or (one of Graid's five, got back up) in
  * its true form, with that form's name, its own attack, and the one change it brings. Nothing here
  * draws, so a card's words can be tested.
  */
 import { nameOf } from "@sequoia-leaf/figures/sprites.ts";
 import type { Form, Unit } from "@sequoia-leaf/raid";
 import { specOf, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
-import { formText, hasTrueForm, TRUE_FORMS } from "@sequoia-leaf/raid/content/groot.ts";
+import { formText, hasTrueForm, TRUE_FORMS } from "@sequoia-leaf/raid/content/graid.ts";
 
 /** The form a card shows: the unit's in a fight, else its plain one. */
 export const formOf = (u: Pick<Unit, "form"> | undefined): Form => u?.form ?? "plain";

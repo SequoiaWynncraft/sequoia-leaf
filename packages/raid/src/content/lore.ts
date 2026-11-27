@@ -16,7 +16,7 @@ export const LORE: Readonly<Partial<Record<FigureId | TraitId, string>>> = {
   feather: "From the low branches. They came for the crumbs.",
   crab: "From the pond's edge. They hold a roll call every evening; it never comes out right.",
   gnome: "From the stall. They carve the figures and will not be told they got Greg wrong.",
-  groot: "Carved from what the raiders said. A true form is what the raiders saw.",
+  graid: "Carved from what the raiders said. A true form is what the raiders saw.",
   // ---------- classes ----------
   bulwark: "The ones who are told to stand in front.",
   fang: "The ones who would rather settle it up close.",

@@ -6,7 +6,7 @@
 import { type BoonId, isBoonId } from "./content/boons.ts";
 import { ENDLESS_WAYS, type EndlessWay } from "./content/endless.ts";
 import { nowCalled, regularOf, type RoomKind } from "./content/rooms.ts";
-import { isTraitId, type TraitId } from "./content/traits.ts";
+import { isTraitId, renamedTrait, type TraitId } from "./content/traits.ts";
 import { roomAt } from "./endless.ts";
 import type { FightResult, FightSummary } from "./fight/types.ts";
 import { isPlaced, type Party, type Placed, traitSteps } from "./party.ts";
@@ -102,7 +102,8 @@ function readSide(v: unknown): FoughtSide | null {
   if (!isRecord(v) || !Array.isArray(v.figures) || !v.figures.every(isPlaced) || !isRecord(v.traits)) return null;
   if (!Array.isArray(v.boons) || !v.boons.every(isBoonId)) return null;
   const traits: Partial<Record<TraitId, number>> = {};
-  for (const [id, step] of Object.entries(v.traits)) {
+  for (const [kept, step] of Object.entries(v.traits)) {
+    const id = renamedTrait(kept);
     if (!isTraitId(id) || !whole(step) || step === 0) return null;
     traits[id] = step;
   }

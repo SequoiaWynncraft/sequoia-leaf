@@ -22,10 +22,10 @@ export type FightResult = "win" | "loss" | "draw";
 export type LeapWhy = "sneak" | "ability" | "knocked" | "dash" | "pull";
 /** What a zone is: slime and puddles slow whoever stands in them, dust hurts them every second. */
 export type ZoneKind = "slime" | "puddle" | "dust";
-/** How a figure stands in a fight: as itself, or (a Groot figure that got back up) in its true form (`content/groot.ts`). */
+/** How a figure stands in a fight: as itself, or (a Graid figure that got back up) in its true form (`content/graid.ts`). */
 export type Form = "plain" | "true";
-/** Why a figure got back up: Second Wind, Groot, or Seqwawa's No GG Left Behind. */
-export type RiseWhy = "wind" | "groot" | "seqwawa";
+/** Why a figure got back up: Second Wind, Graid, or Seqwawa's No GG Left Behind. */
+export type RiseWhy = "wind" | "graid" | "seqwawa";
 
 /** Everything a fight needs: two parties and a seed, its era, and the Wilds' rule it is played under. The same setup always gives the same fight. */
 export interface FightSetup {
@@ -101,11 +101,11 @@ export interface Unit {
   attacks: number;
   rooted: boolean;
   steady: boolean;
-  /** Plain, or its true form once a Groot figure has got back up. */
+  /** Plain, or its true form once a Graid figure has got back up. */
   form: Form;
   /** Mana it gains every second, whatever it does (Rooted). */
   manaRate: number;
-  /** Groot: it still has its getting back up to come, once it falls. */
+  /** Graid: it still has its getting back up to come, once it falls. */
   rises: boolean;
   /** The step it fell, while it is down for good; -1 while it is up, or down and getting back up. */
   fellAt: number;
@@ -301,11 +301,11 @@ export type FightEvent =
   | { t: "telegraph"; id: number; cells: number[]; ticks: number }
   /** A lasting change for the rest of the fight. */
   | { t: "boost"; id: number; by: number; stat: "attack"; amount: number }
-  /** Falls. A Groot figure that will get back up says in how many steps (`back`); it still counts as standing meanwhile. */
+  /** Falls. A Graid figure that will get back up says in how many steps (`back`); it still counts as standing meanwhile. */
   | { t: "fall"; id: number; by: number; cell: number; back?: number }
   /**
    * Gets back up, on `cell`, with `hp`, in `form`: from Second Wind as it would have fallen (it never
-   * did), or a moment after falling, by Groot (in its true form) or by Seqwawa.
+   * did), or a moment after falling, by Graid (in its true form) or by Seqwawa.
    */
   | { t: "rise"; id: number; hp: number; why: RiseWhy; form: Form; cell: number }
   | { t: "summon"; id: number; by: number; kind: UnitKind; cell: number; side: Side }

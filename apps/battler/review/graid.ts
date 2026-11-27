@@ -1,5 +1,5 @@
 /**
- * For looking at Groot and Seqwawa in a fight from outside (`window.groot`), beside the tours'
+ * For looking at Graid and Seqwawa in a fight from outside (`window.graid`), beside the tours'
  * handle: `watch()` plays a fight on the table as `window.raid.watch` does and keeps its setup, so
  * that `moments()` can say, from a copy of the same fight played to its end, the steps a tour stops
  * at: each true form's fall (and in how many steps it is back up), each rise, and each of Seqwawa's
@@ -37,7 +37,7 @@ function seated(kinds: readonly string[], stars: 1 | 2 | 3): FightSetup["sides"]
   return { who: "watched", title: "", figures, boons: [], might: 100 };
 }
 
-const groot = {
+const graid = {
   /** Plays a fight on the table between two parties of the figures named; the table must be planning. */
   watch(ours: string[], theirs: string[], stars: 1 | 2 | 3 = 1, seed = 1): string {
     if (S.screen.at !== "plan") return "not planning";
@@ -66,10 +66,10 @@ const groot = {
 
 declare global {
   interface Window {
-    groot?: typeof groot;
+    graid?: typeof graid;
   }
 }
 
-export function openGroot(): void {
-  window.groot = groot;
+export function openGraid(): void {
+  window.graid = graid;
 }

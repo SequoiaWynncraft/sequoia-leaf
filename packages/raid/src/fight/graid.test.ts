@@ -1,12 +1,12 @@
 /**
- * The expansion's first release in a fight, each part against its own sentence: Groot getting back
+ * The expansion's first release in a fight, each part against its own sentence: Graid getting back
  * up in its true form, the five true forms, Rooted and the pull, Seqwawa's No GG Left Behind, and
  * Moss and Mender at 2, 3 and 4.
  */
 import { describe, expect, test } from "bun:test";
 
 import { abilityNumber, FIGURES, type UnitKind } from "../content/figures.ts";
-import { formNumber } from "../content/groot.ts";
+import { formNumber } from "../content/graid.ts";
 import { LEGACY_ERA } from "../content/releases.ts";
 import { traitNumber } from "../content/traits.ts";
 import { distance, neighbours, SEATS } from "../hex.ts";
@@ -48,22 +48,22 @@ function idle(u: Unit): Unit {
   return u;
 }
 
-describe("Groot", () => {
+describe("Graid", () => {
   test("is the five named after the raids, at 2, 3 and 5; nobody has a rise to come without it", () => {
     expect(unitOf(ours("worm", "moth"), "worm").rises).toBe(true);
     expect(unitOf(ours("worm", "emberkit"), "worm").rises).toBe(false);
-    expect(ours("worm", "moth").traits[0].groot).toBe(1);
-    expect(ours("worm", "moth", "rock").traits[0].groot).toBe(2);
-    expect(ours("worm", "moth", "rock", "greg", "whitefox").traits[0].groot).toBe(3);
+    expect(ours("worm", "moth").traits[0].graid).toBe(1);
+    expect(ours("worm", "moth", "rock").traits[0].graid).toBe(2);
+    expect(ours("worm", "moth", "rock", "greg", "whitefox").traits[0].graid).toBe(3);
   });
 
-  test("(2) the first Groot figure to fall gets back up 1 second later in its true form, with its share of health; the next stays down", () => {
+  test("(2) the first Graid figure to fall gets back up 1 second later in its true form, with its share of health; the next stays down", () => {
     const f = ours("worm", "moth");
     const worm = unitOf(f, "worm");
     const moth = unitOf(f, "moth");
     const standing = f.standing[0];
     const down = fell(f, worm);
-    expect(only(down, "fall")[0]).toMatchObject({ id: worm.id, back: secs(t("groot", "wait", 1)) });
+    expect(only(down, "fall")[0]).toMatchObject({ id: worm.id, back: secs(t("graid", "wait", 1)) });
     expect(worm.alive).toBe(false);
     // Down for the moment, it still counts as standing.
     expect(f.standing[0]).toBe(standing);
@@ -73,8 +73,8 @@ describe("Groot", () => {
       {
         t: "rise",
         id: worm.id,
-        hp: Math.round((worm.maxHp * t("groot", "health", 1)) / 100),
-        why: "groot",
+        hp: Math.round((worm.maxHp * t("graid", "health", 1)) / 100),
+        why: "graid",
         form: "true",
         cell: worm.cell,
       },
@@ -87,13 +87,13 @@ describe("Groot", () => {
     expect(moth.alive).toBe(false);
   });
 
-  test("(3) every Groot figure gets back up, once a fight", () => {
+  test("(3) every Graid figure gets back up, once a fight", () => {
     const f = ours("worm", "moth", "rock");
     const [worm, moth, rock] = [unitOf(f, "worm"), unitOf(f, "moth"), unitOf(f, "rock")];
     for (const u of [worm, moth, rock]) fell(f, u);
     const up = only(steps(f, secs(1)), "rise");
     expect(inOrder(up.map((r) => r.id))).toEqual(inOrder([worm.id, moth.id, rock.id]));
-    expect(up.every((r) => r.why === "groot" && r.form === "true")).toBe(true);
+    expect(up.every((r) => r.why === "graid" && r.form === "true")).toBe(true);
     // Once: down again, it stays down.
     expect(only(fell(f, worm), "fall")[0]?.back).toBeUndefined();
     expect(only(steps(f, secs(2)), "rise")).toEqual([]);
@@ -109,10 +109,10 @@ describe("Groot", () => {
       stepUntil(f, (e) => e.t === "rise"),
       "rise",
     )[0];
-    expect(up?.hp).toBe(Math.round((moth.maxHp * t("groot", "health", 3)) / 100));
-    expect(t("groot", "health", 3)).toBeGreaterThan(t("groot", "health", 2));
-    expect(moth.mana).toBe(Math.round((moth.manaFull * t("groot", "mana", 3)) / 100));
-    expect(t("groot", "mana", 3)).toBe(50);
+    expect(up?.hp).toBe(Math.round((moth.maxHp * t("graid", "health", 3)) / 100));
+    expect(t("graid", "health", 3)).toBeGreaterThan(t("graid", "health", 2));
+    expect(moth.mana).toBe(Math.round((moth.manaFull * t("graid", "mana", 3)) / 100));
+    expect(t("graid", "mana", 3)).toBe(50);
   });
 
   test("a figure in its true form has more attack and ability power; the Rock, Standing, attacks", () => {
@@ -123,7 +123,7 @@ describe("Groot", () => {
     fell(f, worm);
     fell(f, rock);
     steps(f, secs(1));
-    const more = 1 + t("groot", "more", 1) / 100;
+    const more = 1 + t("graid", "more", 1) / 100;
     expect(more).toBeGreaterThan(1);
     expect(worm.attack).toBe(Math.round(attack * more));
     expect(worm.power).toBeCloseTo(power * more);
@@ -182,7 +182,7 @@ describe("Groot", () => {
     expect(playsAsKept({ setup, outcome })).toBe(true);
     const rises = only(recorded.steps.flat(), "rise");
     expect(rises.length).toBeGreaterThan(0);
-    expect(rises.every((r) => r.why === "groot" && r.form === "true")).toBe(true);
+    expect(rises.every((r) => r.why === "graid" && r.form === "true")).toBe(true);
   });
 });
 

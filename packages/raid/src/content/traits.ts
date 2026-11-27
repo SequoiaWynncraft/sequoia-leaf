@@ -9,7 +9,7 @@
  */
 import { FIGHT } from "./rooms.ts";
 
-export const KINS = ["ember", "moss", "mist", "burrow", "feather", "crab", "gnome", "groot"] as const;
+export const KINS = ["ember", "moss", "mist", "burrow", "feather", "crab", "gnome", "graid"] as const;
 export type KinId = (typeof KINS)[number];
 export const CALLINGS = ["bulwark", "fang", "slinger", "sage", "mender", "sneak"] as const;
 export type CallingId = (typeof CALLINGS)[number];
@@ -222,20 +222,20 @@ export const TRAITS = {
     short: ["Leap to the back, first {hits} hits +{extra}%.", "Leap to the back, first {hits} hits +{extra}%."],
     n: { hits: [2, 3], extra: [40, 70] },
   },
-  groot: {
-    name: "Groot",
+  graid: {
+    name: "Graid",
     sort: "kin",
     steps: [2, 3, 5],
     gist: "Gets back up as the raiders tell it.",
     text: [
-      "The first Groot figure to fall each fight gets back up {wait} second later in its true form, with {health}% of its health. A Groot figure in its true form has {more}% more attack and ability power.",
-      "Every Groot figure gets back up once a fight, {wait} second after it falls, in its true form, with {health}% of its health. A Groot figure in its true form has {more}% more attack and ability power.",
-      "Every Groot figure gets back up once a fight, {wait} second after it falls, in its true form, with {health}% of its health and its mana bar at least {mana}% full. A Groot figure in its true form has {more}% more attack and ability power.",
+      "The first Graid figure to fall each fight gets back up {wait} second later in its true form, with {health}% of its health. A Graid figure in its true form has {more}% more attack and ability power.",
+      "Every Graid figure gets back up once a fight, {wait} second after it falls, in its true form, with {health}% of its health. A Graid figure in its true form has {more}% more attack and ability power.",
+      "Every Graid figure gets back up once a fight, {wait} second after it falls, in its true form, with {health}% of its health and its mana bar at least {mana}% full. A Graid figure in its true form has {more}% more attack and ability power.",
     ],
     short: [
-      "First Groot down rises in true form, {health}% health.",
-      "Every Groot rises once in true form, {health}% health.",
-      "Every Groot rises once: {health}% health, {mana}% mana.",
+      "First Graid down rises in true form, {health}% health.",
+      "Every Graid rises once in true form, {health}% health.",
+      "Every Graid rises once: {health}% health, {mana}% mana.",
     ],
     n: { wait: [1, 1, 1], health: [15, 15, 30], every: [0, 1, 1], mana: [0, 0, 50], more: [10, 10, 10] },
   },
@@ -300,6 +300,27 @@ export const traitShort = (id: TraitId, step: number): string => stepWords(id, s
  */
 export const CALLING_DRAW: Readonly<Partial<Record<CallingId, number>>> = { bulwark: 1, sneak: -1 };
 export const isTraitId = (v: unknown): v is TraitId => typeof v === "string" && Object.hasOwn(TRAITS, v);
+/**
+ * Traits a table, sitting or fight row may have kept from before a rename, by their old id: what
+ * each is now, and the name it had. Groot became Graid (27 November 2026), since in the guild Groot
+ * is the Nest of the Grootslangs and a graid is any guild raid. A reader passes a kept id through
+ * `renamedTrait` before `isTraitId`, and a kept sparring partner's title through `renamedTitle`.
+ */
+const RENAMED: Readonly<Record<string, { now: TraitId; name: string }>> = {
+  groot: { now: "graid", name: "Groot" },
+};
+/** A kept trait id as it is now (`RENAMED`); anything else as it is, for the reader to judge. */
+export const renamedTrait = (v: unknown): unknown =>
+  typeof v === "string" && Object.hasOwn(RENAMED, v) ? (RENAMED[v]?.now ?? v) : v;
+/** A kept list of trait ids, each as it is now (`renamedTrait`); anything not a list as it is. */
+export const renamedTraits = (v: unknown): unknown => (Array.isArray(v) ? v.map(renamedTrait) : v);
+/** A sparring partner's title (`spar.ts`, "brought Moss Sages") kept under a trait's old name, as it reads now. */
+export function renamedTitle(title: string): string {
+  for (const { now, name } of Object.values(RENAMED))
+    if (title.startsWith(`brought ${name} `))
+      return `brought ${TRAITS[now].name} ${title.slice(`brought ${name} `.length)}`;
+  return title;
+}
 export const isKin = (v: TraitId): v is KinId => TRAITS[v].sort === "kin";
 export const isCalling = (v: TraitId): v is CallingId => TRAITS[v].sort === "calling";
 /** What carrying a trait adds to a figure's draw: a calling's own, else 0. */

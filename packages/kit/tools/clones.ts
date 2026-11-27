@@ -9,7 +9,7 @@
  * files, how many runs they share, which may only go down as the copies go. A new pair, or more
  * shared between a pair, fails.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { root } from "./graph.ts";
@@ -26,10 +26,13 @@ export function tokens(text: string): string[] {
   return [...text.matchAll(TOKEN)].flatMap((m) => (m[2] === undefined ? [] : [m[2]]));
 }
 
-/** Every tracked file, from the root. */
+/** Every tracked file still on disk, from the root: one deleted or renamed but not yet staged is gone. */
 function tracked(): string[] {
   const out = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root, stdout: "pipe" });
-  return out.stdout.toString().split("\0").filter(Boolean);
+  return out.stdout
+    .toString()
+    .split("\0")
+    .filter((f) => f !== "" && existsSync(join(root, f)));
 }
 
 /** The workspace a file is in: `apps/town`, `packages/kit`. */

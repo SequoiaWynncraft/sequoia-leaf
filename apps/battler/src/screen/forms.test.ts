@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { formText } from "@sequoia-leaf/raid/content/groot.ts";
+import { formText } from "@sequoia-leaf/raid/content/graid.ts";
 import { at, fightOf, unitOf } from "@sequoia-leaf/raid/testkit.ts";
 
 import { attacks, formLines, formOf, shownName } from "./forms.ts";

@@ -47,7 +47,7 @@ const SETUPS: readonly FightSetup[] = [
   setupOf(EVERYONES.slice(0, 8), EVERYONES.slice(8, 16), 1),
   setupOf(EVERYONES.slice(16, 24), EVERYONES.slice(0, 8), 2, 2),
   setupOf([...EVERYONES.slice(24), "banner-1", "glorp", "worm", "fogowl"], EVERYONES.slice(8, 16), 3, 2),
-  // Groot at five, falling and rising in true forms, and Seqwawa standing them back up.
+  // Graid at five, falling and rising in true forms, and Seqwawa standing them back up.
   setupOf(["worm", "moth", "rock", "greg", "whitefox", "seqwawa"], EVERYONES.slice(18, 26), 5, 2),
   setupOf(
     EVERYONES.slice(8, 16),
