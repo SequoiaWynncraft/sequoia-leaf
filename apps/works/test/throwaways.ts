@@ -389,7 +389,9 @@ console.log(JSON.stringify(out));
  */
 export const PAGE_BIG = `import * as F from "./packages/factory/src/index.ts";
 import { bareLand } from "./packages/factory/test/land.ts";
+import { withArm } from "./apps/works/src/art/belts.ts";
 import { aimBox, drawnFrom, pieceBox } from "./apps/works/src/big.ts";
+import { beltArms } from "./apps/works/src/kinds/carrier.ts";
 import { asIf } from "./apps/works/src/layout.ts";
 import { pickFrom, turnAt } from "./apps/works/src/tools.ts";
 import { footprint } from "./apps/works/src/figure/reach.ts";
@@ -431,11 +433,19 @@ const CHUTE = F.kindNamed("chute");
 F.build(y, CHUTE, 14, 14, 0, Infinity);
 const relaid = footprint(y, { do: "build", kind: CHUTE, x: 14, y: 14, dir: 1 }).flat();
 const reachTurned = [[13, 14], [13, 15], [14, 13], [15, 15]].every(([x, z]) => relaid.includes(F.at(y, x, z)));
+// A sifter on (4, 4) facing east hands sand out of (5, 4) and clay out of (5, 5), each east: a belt by
+// each, turned across it (north, south), is drawn fed from the west, as each takes from it.
+F.build(y, SIFTER, 4, 4, 0, Infinity);
+F.build(y, F.BELT, 6, 4, 3, Infinity);
+F.build(y, F.BELT, 6, 5, 1, Infinity);
+const fedFromWest = (x, z, d) => beltArms(y, F.at(y, x, z), false) === withArm(withArm(0, d, 2), 2, 1);
+const portArms = fedFromWest(6, 4, 3) && fedFromWest(6, 5, 1);
 console.log(
   JSON.stringify({
     preview: laid(preview) === laid(built) && previewOnce === 2,
     pointerPiece: picked && turnedOn,
     reachTurned,
+    portArms,
     aimBoxes: boxes[0] === JSON.stringify({ x: 9, y: 4, w: 3, h: 3 }) && boxes[1] === JSON.stringify({ x: 19, y: 9, w: 3, h: 3 }),
     docked: DRAWN.includes(FORGE) && DRAWN.includes(SIFTER),
     card: tiles.every((t) => refAt(t % 34, Math.floor(t / 34)) === tileRef(own)),
@@ -454,6 +464,7 @@ export const PAGED_BIG = Object.fromEntries(
     "aimBoxes",
     "pointerPiece",
     "reachTurned",
+    "portArms",
     "docked",
     "card",
     "drawnOnce",

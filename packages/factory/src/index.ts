@@ -73,6 +73,7 @@ export {
   type Kit,
   KIT,
   nextOf,
+  portTo,
   type Power,
   power,
   rewire,
