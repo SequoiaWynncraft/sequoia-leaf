@@ -176,7 +176,7 @@ export interface FigureExtras {
 
 const NAMES = { health: "Health", attack: "Attack", speed: "Speed", reach: "Reach", armour: "Armour", ward: "Ward" };
 
-/** A figure's numbers for its card: raised by what it holds, belongs to or its level in green, lowered in coral. */
+/** A figure's numbers for its card: raised by what it holds, belongs to or its level in green, lowered in coral, and armour and ward cracked by a Grooter with a cracked edge. */
 function statsOf(cat: Catalog, kind: UnitKind, stars: Stars, extras: FigureExtras, level: number): Stat[] {
   const u = extras.unit;
   const plain = plainNumbers(cat, kind, stars);
@@ -194,6 +194,8 @@ function statsOf(cat: Catalog, kind: UnitKind, stars: Stars, extras: FigureExtra
           : whole(now[key]);
     const d = now[key] - plain[key];
     const moved = Math.abs(d) < (key === "speed" ? 0.005 : 0.5) ? 0 : d;
+    if (u && u.cracked > 0 && (key === "armour" || key === "ward"))
+      return { label: NAMES[key], value, mark: "cracked" };
     return moved === 0
       ? { label: NAMES[key], value }
       : { label: NAMES[key], value, mark: moved > 0 ? "raised" : "lowered" };

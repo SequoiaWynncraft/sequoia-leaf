@@ -23,6 +23,7 @@ import { clamp, type Ctx, lerp } from "@sequoia-leaf/kit/util.ts";
 
 import { burst, motes, pop, ring, streak } from "./fx.ts";
 import type { Pt } from "./geometry.ts";
+import { leave } from "./litter.ts";
 import type { MarkId, Puff, Thrown } from "./looks.ts";
 import { V } from "./stage.ts";
 
@@ -70,6 +71,13 @@ const ROWS = {
   swipe: ["..cc", ".c..", "c..."],
   glint: [".G.", "GcG", ".G."],
   wisp: ["S.", ".S", "S."],
+  // Peep's hat, the top of its shell, its broken rim down.
+  cap: [".ccc.", "ccccp", "c.c.p"],
+  egg: [".cc.", "cccp", "cccp", ".pp."],
+  // A bite: the arch of teeth Munch leaves, two pixels thick (a Fang's crescent, drawn at the target).
+  bite: [".ccc.", "cc.cc", "c...c"],
+  // A note rising over a friend given mana (Chorus).
+  note: [".g", ".g", "gg"],
 } as const satisfies Record<string, readonly string[]>;
 type Art = keyof typeof ROWS;
 
@@ -105,8 +113,16 @@ export interface Shot {
 /** How high a thrown thing arcs over a distance in pixels: lobbed things high, a beam not at all. */
 export function arcOf(look: Thrown | null, far: number): number {
   if (look === "beam" || look === "runner" || look === "bolt") return 0;
-  if (look === "cone" || look === "cushion" || look === "tea" || look === "plaster" || look === "spoon")
+  if (
+    look === "cone" ||
+    look === "cushion" ||
+    look === "tea" ||
+    look === "plaster" ||
+    look === "spoon" ||
+    look === "cap"
+  )
     return 6 + far * 0.18;
+  if (look === "egg") return 2;
   return look === "pebble" ? 3 + far * 0.06 : 3;
 }
 
@@ -134,6 +150,12 @@ export function drawShot(g: Ctx, s: Shot, c: number): void {
   const p = pointAt(s, k);
   const x = Math.round(p.x);
   const y = Math.round(p.y);
+  // A Slinger's thing has its shadow on the board under it as it flies.
+  if (s.look === "cap") {
+    g.globalAlpha = 0.3;
+    R(g, Math.round(V.bx + lerp(s.from.x, s.to.x, k)) - 2, Math.round(V.by + lerp(s.from.y, s.to.y, k)) + 8, 5, 1, INK);
+    g.globalAlpha = 1;
+  }
   // A streak behind it for some.
   if (s.trail || s.look === "beam")
     for (let i = 1; i <= 3; i++) {
@@ -343,6 +365,37 @@ export const MARKS: Readonly<Record<MarkId, (m: At) => void>> = {
   crabbier: (m) => {
     for (const c of m.hit) pop(art("snip"), c.x, c.y - 10, "stick", 0.3);
     burst(m.from.x, m.from.y - 10, 8, [CRAB, CREAM], { speed: 30, ttl: 0.3 });
+  },
+  // Peep's hat shatters on whoever it was thrown at; three chips of it stay on their hex for the fight.
+  chips: (m) => {
+    burst(chest(m).x, chest(m).y, 8, [CREAM, PAPER[1]], { speed: 34, ttl: 0.3 });
+    leave("chips", { x: m.x, y: m.y }, 3);
+  },
+  // One bite of Munch's, where it lands: the arch of teeth, and a chip of shell thrown onto the pile.
+  bites: (m) => {
+    pop(art("bite"), chest(m).x, chest(m).y, "stick", 0.25);
+    burst(chest(m).x, chest(m).y, 4, [CREAM, GREEN[3]], { speed: 30, ttl: 0.25 });
+    leave("chips", { x: m.x, y: m.y });
+  },
+  // Clutch's egg cracking where it rolled to (`summon` rolls it and stands the Hatchling up).
+  hatch: (m) => burst(m.x, m.y - 3, 5, [CREAM, PAPER[1]], { speed: 24, toward: UP, spread: 1.6, ttl: 0.3 }),
+  // Crab #31's clack: two arcs closing over it (a Crab's), one thin arc out to every friend, and a note over each.
+  clack: (m) => {
+    pop(art("snip"), m.from.x, m.from.y - 20, "stick", 0.3);
+    const far = Math.max(8, ...m.hit.map((h) => Math.hypot(h.x - m.from.x, h.y - m.from.y)));
+    ring(m.from.x, m.from.y - 6, far, "#e88fb4", 0.35);
+    m.hit.forEach((h, i) => pop(art("note"), h.x + 4, h.y - 22 - i, "rise", 0.6));
+  },
+  // Crab #8 comes up beside them: one pinch, two arcs closing.
+  nothere: (m) => {
+    for (const h of m.hit.length > 0 ? m.hit : [m]) {
+      pop(art("snip"), h.x, h.y - 10, "stick", 0.3);
+      burst(h.x, h.y - 8, 6, [CRAB, CREAM], { speed: 32, ttl: 0.3 });
+    }
+  },
+  // The Commodore's call lands: a ring of gold on every place he called to.
+  called: (m) => {
+    for (const c of m.cells) ring(c.x, c.y, 9, GOLD[2], 0.3);
   },
   // Seqwawa's roots flash under everyone it reached (`roots.ts` draws the roots): leaves come up off each.
   roots: (m) => {

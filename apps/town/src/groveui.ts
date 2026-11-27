@@ -32,13 +32,13 @@ import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
 import { catalogOf } from "@sequoia-leaf/raid/content/catalog.ts";
 import type { Era } from "@sequoia-leaf/raid/content/releases.ts";
 
+import { bannerHead, rulesFor } from "./grovefeatured.ts";
 import { $, button, pic, slot } from "./hud.ts";
 import {
   bookCount,
   cannotPull,
   chances,
   clearing,
-  dayAndTime,
   EVERGREEN,
   GROVE,
   type GroveState,
@@ -51,7 +51,6 @@ import {
   prizeBook,
   prizeName,
   pullSpend,
-  rules,
   type Showing,
   viewKey,
 } from "./pulls.ts";
@@ -105,7 +104,7 @@ function refused(b: HTMLElement, why: string): void {
 function poolChoices(open: Showing | null, host: GroveHost): Choices<string> {
   const pools = open
     ? [
-        { id: open.id, name: open.name },
+        { id: open.id, name: open.title },
         { id: GROVE, name: EVERGREEN },
       ]
     : [];
@@ -243,7 +242,7 @@ export function makeGroveUi(host: GroveHost) {
     keepingFocus(words, () =>
       words.replaceChildren(
         // Only beside a banner does the always-open pool need saying.
-        ...(open ? [el("div", "k-over", { text: b ? `Until ${dayAndTime(b.until)}` : "Always open" })] : []),
+        ...bannerHead(v, open, b),
         el(
           "div",
           "k-plaque grove-pity",
@@ -377,7 +376,7 @@ export function makeGroveUi(host: GroveHost) {
         }),
       ),
     );
-    if (ruled) for (const line of rules(b ? b.name : null)) body.append(el("div", "k-read", { text: line }));
+    if (ruled) for (const line of rulesFor(v, b)) body.append(el("div", "k-read", { text: line }));
     for (const [rarity, list] of listed.toReversed()) {
       body.append(
         el("div", "k-row", {}, plate(rarity), el("span", "k-dim", { text: percent(shown[rarity]) })),
@@ -493,7 +492,7 @@ export function makeGroveUi(host: GroveHost) {
     },
     panelOpen: (): boolean => book !== null,
     /** The name of the pool on show, as the picture writes it. */
-    poolName: (): string => onBanner()?.name ?? EVERGREEN,
+    poolName: (): string => onBanner()?.title ?? EVERGREEN,
     /** Who stands in the clearing of the pool on show (`clearing`). */
     treants: (): readonly string[] => clearing(host.view(), onBanner()),
     /** The frame is `w` by `h` art pixels, `scale` CSS pixels to each, upright or not, `left` and `top` CSS pixels in from the window's corner. */

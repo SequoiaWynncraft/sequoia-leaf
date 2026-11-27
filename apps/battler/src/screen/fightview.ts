@@ -1,5 +1,13 @@
 import { moveAt } from "@sequoia-leaf/figures/move.ts";
-import { type BaseLook, beatAt, drawStanding, drawStars, framesOf, hoverAt } from "@sequoia-leaf/figures/sprites.ts";
+import {
+  type BaseLook,
+  beatAt,
+  drawStanding,
+  drawStars,
+  framesOf,
+  hoverAt,
+  isPersonId,
+} from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The fight, played on the table from the rules' own steps (`playback.ts`), with the lead-in the
  * table gives each blow (`fightshow.ts`). The rules decide everything; this plays it on, draws
@@ -21,6 +29,7 @@ import { seatCell } from "@sequoia-leaf/raid/hex.ts";
 import { stanceOf } from "./acting.ts";
 import { hexMark } from "./art/table.ts";
 import { clockNow, feetAt, FV, shownCell } from "./board.ts";
+import { drawCalls } from "./call.ts";
 import { begin, show, stepShown } from "./fightshow.ts";
 import { burst, pace } from "./fx.ts";
 import { cellXY, HEX_H, HEX_W, type Pt } from "./geometry.ts";
@@ -31,6 +40,7 @@ import { leadOf } from "./looks.ts";
 import { drawShot } from "./marks.ts";
 import { type Actor, actorFor, poseOf } from "./motion.ts";
 import { advance, openPlayback, playOut } from "./playback.ts";
+import { drawShells, inShell } from "./shell.ts";
 import { OWN } from "./sides.ts";
 import { snd } from "./sounds.ts";
 import { drawSpells } from "./spells.ts";
@@ -278,8 +288,8 @@ function drawStatus(g: Ctx, a: Actor, x: number, y: number, tall: number, tick: 
   }
 }
 
-/** Health under a figure's feet, with its shield over it and its mana beneath. */
-function drawBars(g: Ctx, a: Actor, x: number, y: number): void {
+/** Health under a figure's feet, with its shield over it and its mana beneath, which ticks bright as a friend gives it mana. */
+function drawBars(g: Ctx, a: Actor, x: number, y: number, c: number): void {
   const u = a.unit;
   const w = isBossId(u.kind) ? 26 : 14;
   const left = x - w / 2;
@@ -293,8 +303,12 @@ function drawBars(g: Ctx, a: Actor, x: number, y: number): void {
   if (u.manaFull > 0) {
     R(g, left, top + 3, w, 1, "#211228");
     R(g, left, top + 3, Math.round(clamp(u.mana / u.manaFull, 0, 1) * w), 1, WATER[3]);
+    if (c - a.giftAt < GIFT) R(g, left, top + 3, Math.round(clamp(u.mana / u.manaFull, 0, 1) * w), 1, CREAM);
   }
 }
+
+/** Steps a mana bar shows bright after a friend gives it mana. */
+const GIFT = 6;
 
 /** Gone to ground: a mound of earth where it went under. */
 function drawMound(g: Ctx, x: number, y: number): void {
@@ -326,6 +340,8 @@ function standing(g: Ctx, cat: Catalog, a: Actor, c: number, tick: number): Stan
     x: a.x,
     y: a.y - back,
     draw: () => {
+      // Crab #8 is a shut shell while it hides; anyone else has gone to ground.
+      if (hidden && inShell(u.kind)) return drawStanding(g, cat, u.kind, x, y, "plain", { pose: "cast", left });
       if (hidden || sunk) return drawMound(g, x, ground);
       // Off the ground, its shadow stays on it.
       if (p.lift > 2) {
@@ -343,6 +359,7 @@ function standing(g: Ctx, cat: Catalog, a: Actor, c: number, tick: number): Stan
         flash: p.tint === "flash",
         hurt: p.tint === "hurt",
         lit: shine.lit,
+        ...carried(a, c),
         ...(act ? { act } : { bend: { sx: p.sx, sy: p.sy, lean: left ? -p.lean : p.lean, turn: p.turn } }),
       });
       // What it holds follows it about, under its health bar, and falls with it.
@@ -355,10 +372,23 @@ function standing(g: Ctx, cat: Catalog, a: Actor, c: number, tick: number): Stan
       const f = framesOf(u.kind, false, a.form);
       const tall = (p.cast ? Math.max(f.tall, f.castTall) : f.tall) + Math.max(0, p.sy);
       drawStatus(g, a, x, y - hover, tall, tick);
-      if (u.stars > 1) drawStars(g, u.stars, x, y - 3 - hover - tall);
-      drawBars(g, a, x, y);
+      // A grooter called is a person, on a summon's base, with no stars.
+      if (u.stars > 1 && !(u.summoned && isPersonId(u.kind))) drawStars(g, u.stars, x, y - 3 - hover - tall);
+      drawBars(g, a, x, y, c);
     },
   };
+}
+
+/**
+ * How much of what it carries a figure has now: Clutch's eggs, one fewer for each of its Hatchlings
+ * standing, rocking one after another; nothing to say for anyone who carries nothing.
+ */
+function carried(a: Actor, c: number): { carries: { n: number; rock: number } } | null {
+  if (!framesOf(a.unit.kind).carries) return null;
+  const up = FV.actors.filter((o) => o?.unit.owner === a.unit.id && o.unit.alive && c >= o.bornAt).length;
+  const n = Math.max(0, framesOf(a.unit.kind).carries - up);
+  const turn = Math.floor((V.t * 2 + a.phase * 3) % (n + 2));
+  return { carries: { n, rock: turn < n ? turn : -1 } };
 }
 
 /** Adds everyone in the fight to the list of things standing on the table. */
@@ -403,6 +433,8 @@ export function drawFightAir(g: Ctx): void {
   }
   g.globalAlpha = 1;
   drawSpells(g);
+  drawCalls(g);
+  drawShells(g);
 }
 
 /** The item a figure in the fight holds under a point measured from the board's corner. */

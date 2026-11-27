@@ -661,6 +661,25 @@
       .grove-pulls {
         margin-top: auto;
       }
+      /* A banner with featured figures: its headliner's traits and ability, and the featured row. */
+      #grove .grove-headliner {
+        display: flex;
+        flex-direction: column;
+        align-items: inherit;
+        gap: var(--u);
+        padding: var(--u) calc(var(--u) * 4);
+        max-width: calc(var(--u) * 150);
+      }
+      .grove-featured {
+        display: flex;
+        flex-direction: column;
+        align-items: inherit;
+        gap: var(--u);
+      }
+      .grove-featured canvas {
+        height: calc(var(--u) * 28);
+        image-rendering: pixelated;
+      }
       /* A pull's button: what it is over what it costs, and its question in the same room. */
       .grove-pull,
       .grove-pull .k-asks > span {

@@ -4,7 +4,17 @@ import { type Ctx, isRefused } from "@sequoia-leaf/core";
 import { pressedTwice } from "@sequoia-leaf/kit/dom.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { press } from "@sequoia-leaf/kit/standin.ts";
-import { BANNERS, draw, EARLIER, headliner, prizesOf, PULLS, type Rarity, RATES } from "@sequoia-leaf/pulls";
+import {
+  type Banner,
+  BANNERS,
+  draw,
+  EARLIER,
+  headliner,
+  prizesOf,
+  PULLS,
+  type Rarity,
+  RATES,
+} from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
 import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { eraAt, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
@@ -41,7 +51,16 @@ import {
   viewKey,
 } from "./pulls.ts";
 
-const banner = BANNERS[0] ?? { id: "banner-1", opens: "base", from: 0, until: 0, headliner: "banner-1", look: "skin" };
+const banner: Banner = BANNERS[0] ?? {
+  id: "banner-1",
+  opens: "base",
+  from: 0,
+  until: 0,
+  headliner: "banner-1",
+  look: "skin",
+  shows: "name",
+  featured: [],
+};
 /** Wednesday 25 November 2026, 12:00 UTC: banner-1 is open, and its era; what its pools give then. */
 const T0 = Date.UTC(2026, 10, 25, 12);
 const ERA = eraAt(T0);
@@ -96,6 +115,7 @@ test("a banner is shown only while Leaf's view has it open, a member's once Leaf
     id: banner.id,
     until: banner.until,
     name: "Mossback",
+    title: "Mossback",
     person: { id: "mossback", name: "Mossback" },
     headliner: banner.headliner,
   });
@@ -122,11 +142,23 @@ test("a banner whose headliner the set draws is shown at once: nobody has to be 
     id: penguins.id,
     until: penguins.until,
     name: "Greg",
+    title: "Greg",
     person: null,
     headliner: "greg",
   });
   // A member's banner still waits for Leaf to say who.
   expect(showing(open, people, [{ ...penguins, look: "skin" }])).toBeNull();
+});
+
+test("a banner that shows its headliner by a title is called by its own name, the headliner by the rules', and the member only lends a skin", () => {
+  const night = { ...banner, id: "a-title-banner", name: "A Night Of It", shows: "title" } as const;
+  const open = { open: [{ id: night.id, until: night.until }], era: CAT.era };
+  const lent: BannerPerson = { ...night, headliner: { id: "mossback", name: "Mossback" }, called: [] };
+  const shown = showing(open, [lent], [night]);
+  expect([shown?.title, shown?.name, shown?.person?.id]).toEqual(["A Night Of It", "A guild member", "mossback"]);
+  expect(bannerLine(shown, "UTC")).toBe("A Night Of It is open until 8 December, 00:00.");
+  // Until Leaf says whose skin it is, it waits, as any member's banner does.
+  expect(showing(open, [{ ...lent, headliner: null }], [night])).toBeNull();
 });
 
 test("the chances shown are what RATES makes of a pull with no guarantee near", () => {

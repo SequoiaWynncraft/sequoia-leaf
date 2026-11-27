@@ -179,6 +179,42 @@ dG..G..Gd
 G...G...G
 .........
 
+# Grooter: an egg cracked round its middle, moss showing through the crack.
+trait grooter
+...www...
+..wwwww..
+.wwwwwwc.
+.wwwwwwc.
+.wlwlwlc.
+wlwlwlwlc
+wwwwwwwcc
+.cwwwwcc.
+..ccccc..
+
+# Chorus: one note.
+trait chorus
+.....MMM.
+.....MwMM
+.....M..M
+.....M...
+.....M...
+..MMMM...
+.MwMMM...
+.MMMM....
+..MM.....
+
+# Stowaway: a crate with a crab's eyes over the lid.
+trait stowaway
+..w...w..
+..r...r..
+.NNNNNNN.
+.nnnnnnn.
+.nbbbbbn.
+.nNbbbNn.
+.nbNbNbn.
+.nbbNbbn.
+.nnnnnnn.
+
 # ---------- items ----------
 
 item thorn

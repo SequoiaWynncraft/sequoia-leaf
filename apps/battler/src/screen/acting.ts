@@ -14,6 +14,7 @@ import {
   gathering,
   pushing,
   recoiling,
+  ringing,
   standing,
   throwing,
   walking,
@@ -21,8 +22,10 @@ import {
 import { handOf, handsOf, type Stance } from "@sequoia-leaf/figures/rig.ts";
 import { rigOf } from "@sequoia-leaf/figures/sprites.ts";
 import { clamp } from "@sequoia-leaf/kit/util.ts";
+import type { UnitKind } from "@sequoia-leaf/raid";
 
 import type { Pt } from "./geometry.ts";
+import { LOOKS } from "./looks.ts";
 import type { Actor } from "./motion.ts";
 
 /** The angle an arm is held at to point at somebody `dx`, `dy` pixels away: between a little below level and well above it. */
@@ -44,8 +47,18 @@ const suffering: Clip = (a, c, tick) => {
   if (hurt >= 0 && hurt < 5) return recoiling(hurt, a.hx < 0, a.hard);
   return a.unit.stunUntil > tick ? dazed(c) : null;
 };
+/** One who rings for somebody (the Commodore): the bell arm up over the wind-up, held while nobody has come, let down after. */
+const rings = (kind: UnitKind): boolean => LOOKS[kind]?.lands === "call";
+const ringFor: Clip = (a, c) => {
+  const h = a.held;
+  if (h && c < h.lands + SPENT) return ringing(1, c - h.at, clamp((c - h.lands) / SPENT, 0, 1), h.left);
+  const w = a.wind;
+  if (!w || c < w.from || c >= w.at) return null;
+  return ringing((c - w.from) / Math.max(1e-9, w.at - w.from), -1, 0, a.left);
+};
 /** Its ability: gathering it at the hip, holding it there until it lands, pushing it out at whoever it is for; or throwing it out, for one that lands at once. */
-const casting: Clip = (a, c) => {
+const casting: Clip = (a, c, tick) => {
+  if (rings(a.unit.kind)) return ringFor(a, c, tick);
   const h = a.held;
   if (h && c < h.lands) return charging(c - h.at, h.lands - c, h.left);
   if (h && c < h.lands + SPENT) return pushing(c - h.lands, h.left, h.aim);

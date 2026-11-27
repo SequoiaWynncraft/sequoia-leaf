@@ -62,14 +62,15 @@ export function readNotes(v: unknown): PullsNote[] | null {
   return notes;
 }
 
-/** A player a banner names, as Leaf names players. */
+/** A player Leaf names: their Leaf id and the name they go by. */
 export interface Named {
   readonly id: string;
   readonly name: string;
 }
 /**
  * A banner as `GET /v1/game/banners` gives it: its dates in Leaf's clock, its headliner if it has
- * one, and the players it calls, in order (Groot Night's grooters: `grooterN` is `called[N - 1]`).
+ * one, and the players it calls, in order (Groot Night's grooters: `grooterN` is `called[N - 1]`),
+ * none until they are put in.
  */
 export interface BannerPerson {
   readonly id: string;
@@ -78,7 +79,8 @@ export interface BannerPerson {
   readonly headliner: Named | null;
   readonly called: readonly Named[];
 }
-const isNamed = (v: unknown): v is Named => isRecord(v) && typeof v.id === "string" && typeof v.name === "string";
+const readNamed = (v: unknown): Named | null =>
+  isRecord(v) && typeof v.id === "string" && typeof v.name === "string" ? { id: v.id, name: v.name } : null;
 
 /** The banners route's answer: the banners these rules know, each with its headliner. Null for anything else. */
 export function readBanners(v: unknown): BannerPerson[] | null {
@@ -88,12 +90,12 @@ export function readBanners(v: unknown): BannerPerson[] | null {
     if (!isRecord(b)) return null;
     const banner = BANNERS.find(({ id }) => id === b.id);
     if (!banner) continue;
-    const h = b.headliner;
-    const headliner = isNamed(h) ? { id: h.id, name: h.name } : null;
-    // A Leaf from before banners called anyone says nothing of it: nobody.
+    // A Leaf from before banners called anyone says nothing of it: nobody is called yet.
     const said = b.called ?? [];
-    if (!Array.isArray(said) || !said.every(isNamed)) return null;
-    out.push({ ...banner, headliner, called: said.map(({ id, name }) => ({ id, name })) });
+    if (!Array.isArray(said)) return null;
+    const called = said.map(readNamed);
+    if (called.some((c) => c === null)) return null;
+    out.push({ ...banner, headliner: readNamed(b.headliner), called: called.filter((c) => c !== null) });
   }
   return out;
 }

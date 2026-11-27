@@ -27,11 +27,11 @@ export interface Chip {
   readonly hint?: string;
 }
 
-/** A number with its label; raised (green) or lowered (coral) by something. */
+/** A number with its label; raised (green) or lowered (coral) by something, or lowered by a crack (coral, its edge cracked). */
 export interface Stat {
   readonly label: string;
   readonly value: string;
-  readonly mark?: "raised" | "lowered";
+  readonly mark?: "raised" | "lowered" | "cracked";
   /** The thing it is: its card says where the number comes from. */
   readonly ref?: Ref;
   /** What it means, in a sentence, where it has no thing of its own: its own card, with its label as the name. */
@@ -297,7 +297,7 @@ function chipOf(c: Chip, h: Hands): HTMLElement {
 }
 
 function statOf(s: Stat, h: Hands): HTMLElement {
-  const tone = s.mark === "raised" ? "k-leafy" : s.mark === "lowered" ? "k-coral" : "";
+  const tone = s.mark === "raised" ? "k-leafy" : s.mark === "cracked" ? "k-coral k-cracked" : s.mark ? "k-coral" : "";
   const ref = s.ref ?? (s.hint ? said(s.label, s.hint) : null);
   const box = el(
     ref ? "button" : "span",

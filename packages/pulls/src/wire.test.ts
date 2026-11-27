@@ -47,9 +47,9 @@ test("a view and a pull's notes read back as Leaf made them, and nothing else re
   expect(readNotes([{ t: "pull", prize: "thing:fountain", rarity: "Leafkin", have: 1 }])).toBeNull();
 });
 
-const sent = (headliner: unknown) => ({
+const sent = (headliner: unknown, called?: unknown) => ({
   banners: [
-    { id: "banner-1", from: "2026-11-23T00:00:00.000Z", until: "2026-12-08T00:00:00.000Z", headliner },
+    { id: "banner-1", from: "2026-11-23T00:00:00.000Z", until: "2026-12-08T00:00:00.000Z", headliner, called },
     { id: "a-banner-these-rules-do-not-know", from: "", until: "", headliner: null },
   ],
 });
@@ -70,4 +70,13 @@ test("the banners route reads into this package's banners, each with its headlin
   // Anything but players there does not read.
   expect(readBanners({ banners: [{ ...groot, called: [{ id: 1 }] }] })).toBeNull();
   expect(readBanners({ banners: [{ ...groot, called: "Ash" }] })).toBeNull();
+});
+
+test("a banner's called players read in order; a list with anything but players in it is not these rules'", () => {
+  const two = [
+    { id: "p1", name: "Fernwhistle" },
+    { id: "p2", name: "Nettlebark" },
+  ];
+  expect(readBanners(sent(null, two))).toEqual([{ ...banner, headliner: null, called: two }]);
+  expect(readBanners(sent(null, [{ id: "p1" }]))).toBeNull();
 });
