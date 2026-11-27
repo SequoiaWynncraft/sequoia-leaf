@@ -67,9 +67,11 @@ export const GamePlayHandlers = HttpApiBuilder.group(LeafApi, "gamePlay", (handl
             if (payload.player !== identity.playerId) {
               return yield* notYou;
             }
-            // A page playing by other rules than Leaf's (or not saying, from before pages said) names
-            // places and things as those rules have them: none of its commands is done (`asRead`).
-            if (payload.rules !== played.rules) {
+            // A page playing by other rules than Leaf's names places and things as those rules have
+            // them: none of its commands is done (`asRead`). A page from before pages said their rules
+            // says none and is done as before: answered with Leaf's rules, it loads again if they are
+            // not its own, and a page of a game whose rules have not changed has nothing to load.
+            if (payload.rules !== undefined && payload.rules !== played.rules) {
               return yield* asRead(yield* play.open(playingOf(identity), played, undefined), played);
             }
             const batch = yield* play.send(playingOf(identity), played, payload.commands);

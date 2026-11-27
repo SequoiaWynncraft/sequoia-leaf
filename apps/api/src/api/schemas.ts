@@ -256,7 +256,8 @@ export const PlayShown = Schema.Struct({
 /**
  * Commands for a game, done in order, from the player the page believes it is (`player`), by the
  * rules the page plays by (`rules`, the version Leaf's answers carry). Each has an `id` the page
- * made, unique among its commands. A page from before pages said their rules says none.
+ * made, unique among its commands. A page from before pages said their rules says none, and its
+ * batch is done as before.
  */
 export const PlayBody = Schema.Struct({
   player: Schema.String,

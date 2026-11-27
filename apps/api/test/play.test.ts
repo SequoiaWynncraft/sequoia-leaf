@@ -1733,7 +1733,7 @@ const yardShown = async (): Promise<Yard> =>
   yardOf(Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json()).state).yard;
 
 describe("a page playing by other rules than Leaf's", () => {
-  it("has none of its batch done, from a land other than Leaf's or saying no rules: it is answered as a read, with Leaf's rules", async () => {
+  it("has none of its batch done, from a land other than Leaf's: it is answered as a read, with Leaf's rules", async () => {
     const opening = await send("GET", "/v1/game/play/works");
     const { clock: tick } = yardOf(Schema.decodeUnknownSync(Shown)(await opening.json()).state);
     const built = await send("POST", "/v1/game/play/works", {
@@ -1752,9 +1752,14 @@ describe("a page playing by other rules than Leaf's", () => {
     };
     const answered = { answer: [200, [], GAMES.works.rules], kept: before };
     expect(await remove("a-page-of-other-rules")).toEqual(answered);
-    // A page from before pages said their rules.
-    expect(await remove(undefined)).toEqual(answered);
     expect((await yardShown()).kind[tileNear(-4, -3)]).toBe(BELT);
+    // A page from before pages said their rules (a raid or town tab open across the deploy that
+    // brought this in, whose rules did not change) has its batch done as before, with Leaf's rules.
+    const legacy = await remove(undefined);
+    expect(legacy.answer[0]).toBe(200);
+    expect(legacy.answer[1]).toHaveLength(1);
+    expect(legacy.answer[2]).toBe(GAMES.works.rules);
+    expect((await yardShown()).kind[tileNear(-4, -3)]).not.toBe(BELT);
   });
 });
 
