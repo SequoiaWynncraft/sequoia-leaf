@@ -9,8 +9,9 @@
  * The banner closes on 19 January, where the next release opens (`up-the-tree-ends`, which brings
  * nothing).
  *
- * Five more figures on the stall make copies rarer, so Vi, Flop and Bhlue are a little stronger than
- * their tier (`review/balance.ts`, beside it with `era=penguin-month`). Leetanns is on everyone's
+ * Vi, Flop and Bhlue are a little stronger than their tier, made for a thinner stall; with the five
+ * it retires (`RAID-SETS.md`) the bots still clear the trail within the base's band
+ * (`review/balance.ts`, beside it with `era=gaz-stall`). Leetanns is on everyone's
  * stall while its banner is open, so it sits between Vesta and Greg at one star (`review/swap.ts`).
  */
 import type { BoonSpec } from "../boons.ts";
@@ -34,6 +35,9 @@ const branch: BoonSpec = {
 export const UP_THE_TREE: Patch = {
   release: "up-the-tree",
   figures: {
+    // Out of normal mode from this release: the Grooters after two sets (Peep, Munch, Clutch), Brew, the
+    // last Ember, and Orphion, whose seat Unc takes.
+    retire: ["peep", "kettle", "munch", "clutch", "whitefox"],
     add: {
       // The dev: gives a cast back to whichever friend cast last.
       vi: {

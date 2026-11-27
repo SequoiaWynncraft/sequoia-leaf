@@ -23,6 +23,7 @@ import {
   catalogAt,
   everyFigure,
   type Figure,
+  PATCHES,
   type Purpose,
   RARITY_IDS,
   type Roster,
@@ -123,23 +124,34 @@ const EVERYTHING: Roster = Object.fromEntries(everyFigure().map((id) => [id, 0])
 const shared = (f: Figure): boolean => f.access === "shared";
 /** Whether a banner is open at a moment of Leaf's clock, by its own dates. */
 const openAt = (banner: Banner, t: number): boolean => banner.from <= t && t < banner.until;
-/** One of everyone's figures at a moment: a grove figure always, a banner's headliner while its banner is open. */
-function everyones({ access }: Figure, t: number): boolean {
-  return access === "shared" || BANNERS.some((b) => b.id === access.headliner && openAt(b, t));
+/** Whether a grove figure is out of normal mode at a moment: the last release open then to name it retired it. */
+function retiredAt(id: FigureId, t: number): boolean {
+  let out = false;
+  for (const r of RELEASES.filter((each) => each.at <= t)) {
+    const figures = PATCHES.find((p) => p.release === r.id)?.figures;
+    if (figures?.retire?.includes(id)) out = true;
+    if (figures?.return?.includes(id)) out = false;
+  }
+  return out;
+}
+/** One of everyone's figures at a moment: a grove figure not retired then, a banner's headliner while its banner is open. */
+function everyones({ access }: Figure, t: number, id: FigureId): boolean {
+  if (access === "shared") return !retiredAt(id, t);
+  return BANNERS.some((b) => b.id === access.headliner && openAt(b, t));
 }
 
 /** A draw, and what it should give at a moment: every figure that suits it, once it is open (or has joined the pulls). */
 interface Case {
   readonly name: string;
   readonly purpose: Purpose;
-  readonly suits: (f: Figure, t: number) => boolean;
+  readonly suits: (f: Figure, t: number, id: FigureId) => boolean;
   readonly from: (f: Figure) => number;
 }
 const CASES: readonly Case[] = [
   ...TIERS.map((tier): Case => ({
     name: `the stall at ${tier} acorns`,
     purpose: { for: "stall", holds: [], figures: { pool: "fair" }, tier },
-    suits: (f, t) => everyones(f, t) && f.tier === tier,
+    suits: (f, t, id) => everyones(f, t, id) && f.tier === tier,
     from: opens,
   })),
   ...TIERS.map((tier): Case => ({
@@ -151,14 +163,14 @@ const CASES: readonly Case[] = [
   {
     name: "the first pick",
     purpose: { for: "starter" },
-    suits: (f, t) => everyones(f, t) && f.tier === 1,
+    suits: (f, t, id) => everyones(f, t, id) && f.tier === 1,
     from: opens,
   },
   { name: "a regular", purpose: { for: "regular" }, suits: everyones, from: opens },
   ...TIERS.map((tier): Case => ({
     name: `the carousel at ${tier} acorns`,
     purpose: { for: "carousel", tier },
-    suits: (f, t) => everyones(f, t) && f.tier === tier,
+    suits: (f, t, id) => everyones(f, t, id) && f.tier === tier,
     from: opens,
   })),
   ...RARITY_IDS.map((rarity): Case => ({
@@ -192,7 +204,13 @@ const CASES: readonly Case[] = [
   {
     name: "the almanac, every figure pulled",
     purpose: { for: "almanac", roster: EVERYTHING },
-    suits: () => true,
+    suits: (f, t, id) => !(shared(f) && retiredAt(id, t)),
+    from: opens,
+  },
+  {
+    name: "the almanac's collection, every figure pulled",
+    purpose: { for: "collection", roster: EVERYTHING },
+    suits: (f, t, id) => shared(f) && retiredAt(id, t),
     from: opens,
   },
 ];
@@ -203,7 +221,7 @@ function differing(eras: (era: Era) => Catalog, ever: Catalog): string[] {
     CASES.flatMap((c) => {
       const want = ever.order.filter((id) => {
         const f = ever.figures[id];
-        return f !== undefined && c.suits(f, t) && c.from(f) <= t;
+        return f !== undefined && c.suits(f, t, id) && c.from(f) <= t;
       });
       const got = available(eras(eraAt(t)), c.purpose);
       return abc(got).join() === abc(want).join() ? [] : [`${c.name}, ${said}: ${got.join(" ")} for ${want.join(" ")}`];
@@ -214,12 +232,12 @@ function differing(eras: (era: Era) => Catalog, ever: Catalog): string[] {
 /**
  * A made-up spread of the same figures over the releases: Greg with the expansion's first (open
  * at once, but in the pulls only from the next release, as a figure made during a banner is), the
- * Reed Heron and the Emberkit with Groot Night, the Jay with Penguin Month, the Rock in January.
+ * Reed Heron and Velvet with Groot Night, the Jay with Penguin Month, the Rock in January.
  */
 const MOVED: Partial<Record<FigureId, ReleaseId>> = {
   greg: "groot",
   heron: "groot-night",
-  emberkit: "groot-night",
+  mossmote: "groot-night",
   jay: "penguin-month",
   rock: "up-the-tree",
 };
@@ -233,7 +251,8 @@ function madeUp(era: Era): Catalog {
       const since = MOVED[id] ?? f?.since;
       if (!f || since !== release) continue;
       // Who is everyone's is the era's own, by the banners' dates.
-      figures[id] = { ...f, since, everyones: catalogAt(era).figures[id]?.everyones ?? f.everyones };
+      const now = catalogAt(era).figures[id];
+      figures[id] = { ...f, since, everyones: now?.everyones ?? f.everyones, retired: now?.retired ?? f.retired };
       order.push(id);
     }
   }
@@ -344,7 +363,7 @@ describe("a millisecond before each release, and at it", () => {
       "heron",
     );
     expect(available(at, { for: "exchange" })).toContain("heron");
-    expect(available(at, { for: "starter" })).toContain("emberkit");
+    expect(available(at, { for: "starter" })).toContain("mossmote");
   });
 });
 

@@ -324,16 +324,16 @@ export type Purpose =
 
 /**
  * Who a stall sells at a cost: the set, and each retired figure the run holds (`holds`), so a run
- * finishes starring what it has but starts none; with the member's own, every one-acorn grove
- * figure, and above that only the roster's, the set or not.
+ * finishes starring what it has but starts none. With the member's own: the roster's, the set or
+ * not, and at one acorn the set's (and a retired one held) to anyone.
  */
 function stall(cat: Catalog, figures: Figures, tier: Tier, holds: readonly FigureId[]): FigureId[] {
   return cat.order.filter((id) => {
     const f = cat.figures[id];
     if (f?.tier !== tier) return false;
-    if (figures.pool === "fair") return f.everyones || (f.retired && holds.includes(id));
-    const owned = figures.roster[id] !== undefined;
-    return owned || (tier === 1 && f.access === "shared");
+    const sold = f.everyones || (f.retired && holds.includes(id));
+    if (figures.pool === "fair") return sold;
+    return figures.roster[id] !== undefined || (tier === 1 && sold);
   });
 }
 
@@ -374,6 +374,35 @@ export function available(cat: Catalog, p: Purpose): readonly FigureId[] {
     case "collection":
       return cat.order.filter((id) => retired(id) && p.roster[id] !== undefined);
   }
+}
+
+// ---------- how far the set reaches a trait ----------
+
+/**
+ * How far normal mode reaches a trait in a catalogue's era: the set's figures that carry it, and one
+ * more for an emblem the era has that grants it (`emblems`). No list is kept of it: it is the set's
+ * and the era's emblems, as they are.
+ */
+export function reachOf(cat: Catalog, trait: TraitId, emblems = true): number {
+  const members = cat.order.filter((id) => {
+    const f = cat.figures[id];
+    return f?.everyones === true && (f.kin === trait || f.calling === trait || f.extra.includes(trait));
+  }).length;
+  const emblem = emblems && cat.ids.emblems.some((e) => cat.items[e]?.grants === trait);
+  return members + (emblem ? 1 : 0);
+}
+/** Whether the set's figures alone reach a trait's first step: what a regular's favourites and a fond bot are of. */
+export const reachedByFigures = (cat: Catalog, trait: TraitId): boolean =>
+  reachOf(cat, trait, false) >= (cat.traits[trait]?.steps[0] ?? Infinity);
+/**
+ * How many of a trait's steps normal mode shows, on its chip and in the almanac: those the set
+ * reaches (`reachOf`), and any further one a party has lit (`lit`); the first always, so a chip has
+ * a step to count to. The rules keep every step, and a raid with the member's own figures shows them all.
+ */
+export function stepsShown(cat: Catalog, trait: TraitId, lit = 0): number {
+  const steps = cat.traits[trait]?.steps ?? [];
+  const reach = reachOf(cat, trait);
+  return Math.min(steps.length, Math.max(1, lit, steps.filter((need) => need <= reach).length));
 }
 
 // ---------- figures as prizes ----------

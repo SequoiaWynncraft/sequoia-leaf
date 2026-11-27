@@ -11,6 +11,7 @@ import { type Choice, choices } from "@sequoia-leaf/kit/choices.ts";
 import { el } from "@sequoia-leaf/kit/dom.ts";
 import {
   available,
+  type Catalog,
   catalogAt,
   catalogOf,
   type Era,
@@ -21,7 +22,9 @@ import {
   LEVELS,
   type RunView,
   stallOdds,
+  stepsShown,
   type TraitId,
+  traitIn,
   type UnitKind,
   wayOn,
   wayWords,
@@ -61,6 +64,14 @@ export const collectionHere = (era: Era = S.era): readonly FigureId[] =>
  */
 export const figuresAt = (run: (Pick<RunView, "era"> & Partial<Pick<RunView, "way">>) | null): readonly FigureId[] =>
   run?.way?.figures.pool === "own" ? [...figuresHere(run.era), ...collectionHere(run.era)] : figuresHere(run?.era);
+/**
+ * A trait's steps as the table shows them: every one in a raid with the member's own figures; else
+ * as far as the era's set reaches, and one a party has lit (`lit`) past that (`stepsShown`).
+ */
+export const stepsHere = (cat: Catalog, id: TraitId, run: Pick<RunView, "way"> | null, lit = 0): readonly number[] => {
+  const steps = traitIn(cat, id).steps;
+  return run?.way.figures.pool === "own" ? steps : steps.slice(0, stepsShown(cat, id, lit));
+};
 /** The almanac's traits: those open in the era of Leaf's view, in their own order. */
 export const traitsHere = (): readonly TraitId[] => catalogOf(S).ids.traits;
 /** Everyone's figures, as Leaf's era has them: what the almanac counts fielded among. */
@@ -114,7 +125,7 @@ export function waysOf(
     unshown(setsOutOwn()),
     el("b", "", { text: `You have ${pulled()} of ${figuresHere().length + collectionHere().length} figures.` }),
     el("span", "", {
-      text: `In these raids you are offered every 1-acorn figure to buy with acorns, and other figures only if you have pulled them at the Grove. Each copy of a figure you have pulled after the first is 1 level: ${LEVELS.boost}% more health and attack, up to level ${LEVELS.most}.`,
+      text: `In these raids you are offered the 1-acorn figures every raid has, and other figures only if you have pulled them at the Grove. Each copy of a figure you have pulled after the first is 1 level: ${LEVELS.boost}% more health and attack, up to level ${LEVELS.most}.`,
     }),
     el("span", "", { text: countedLine(endless) }),
   );

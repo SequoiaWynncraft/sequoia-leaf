@@ -38,7 +38,7 @@ import {
 } from "./items.ts";
 import { MEMBER_IDS } from "./members.ts";
 import { combine, holdItem } from "./recipes.ts";
-import { eraOf, LAST_ERA, LEGACY_ERA } from "./releases.ts";
+import { eraOf, LAST_ERA, LEGACY_ERA, RELEASES } from "./releases.ts";
 
 /** Everyone's figures of a tier, as the carousel would ring them, in an era (the tests' own, `LEGACY_ERA`, unless said). */
 const figuresOfTier = (tier: Tier, cat = catalogAt(LEGACY_ERA)): readonly FigureId[] =>
@@ -59,13 +59,26 @@ const mean = (tier: 1 | 2 | 3 | 4 | 5, cat = CAT): number => {
 };
 
 describe("the roster", () => {
-  test("is twenty-nine figures in five tiers, 7, 7, 6, 5, 4; with Groot Night, 8, 7, 8, 6, 5; with Penguin Month 9, 8, 9, 8, 5; with Up The Tree 10, 9, 10, 9, 6; each banner's headliner while open", () => {
-    expect(TIERS.map((tier) => figuresOfTier(tier).length)).toEqual([7, 7, 6, 5, 4]);
+  test("every era's set is twenty-nine figures, 7, 7, 6, 5, 4, besides an open banner's headliner; every class has one at 1 or 2 acorns and one at 3 to 5", () => {
     expect(FIGURE_IDS.length).toBe(46);
-    expect(TIERS.map((tier) => figuresOfTier(tier, catalogAt(eraOf("groot-night"))).length)).toEqual([8, 7, 8, 6, 6]);
-    expect(TIERS.map((tier) => figuresOfTier(tier, catalogAt(eraOf("penguin-month"))).length)).toEqual([9, 8, 9, 8, 6]);
-    expect(TIERS.map((tier) => figuresOfTier(tier, catalogAt(eraOf("up-the-tree"))).length)).toEqual([10, 9, 10, 9, 7]);
-    expect(TIERS.map((tier) => figuresOfTier(tier, EVERY).length)).toEqual([10, 9, 10, 9, 6]);
+    // From the era live when eras came in: the base's own, before Seqwawa, is live at no moment.
+    for (const r of RELEASES.filter((each) => eraOf(each.id) >= LEGACY_ERA)) {
+      const cat = catalogAt(eraOf(r.id));
+      const set = available(cat, { for: "regular" }).filter((id) => figureIn(cat, id).access === "shared");
+      expect([r.id, TIERS.map((tier) => set.filter((id) => figureIn(cat, id).tier === tier).length)]).toEqual([
+        r.id,
+        [7, 7, 6, 5, 4],
+      ]);
+      const short = CALLINGS.filter((c) => cat.ids.traits.includes(c)).filter((calling) => {
+        const tiers = set.filter((id) => traitsOf(cat, id).includes(calling)).map((id) => figureIn(cat, id).tier);
+        return !tiers.some((t) => t <= 2) || !tiers.some((t) => t >= 3);
+      });
+      expect([r.id, short]).toEqual([r.id, []]);
+    }
+    // Every figure is still in the catalogue: the pulls, the exchange and own-figure raids have the retired.
+    expect(TIERS.map((tier) => EVERY.order.filter((id) => figureIn(EVERY, id).tier === tier).length)).toEqual([
+      10, 9, 10, 9, 10,
+    ]);
   });
   test("everyone has a name of their own; the Commodore's four grooters are one figure", () => {
     const specs = new Set(EVERYONE.map((kind) => specOf(EVERY, kind)));
@@ -76,7 +89,7 @@ describe("the roster", () => {
   test("every kin has four members, on at least three tiers, starting cheap", () => {
     // Graid is the five named after the guild's raids, a kin as a third trait for four of them.
     // Crab has six from Groot Night; Grooter three and the Commodore, with no two-acorn figure, so
-    // that its cracking is not on in the first rooms. Gnome six from Penguin Month, with steps at 3 and 5.
+    // that its cracking is not on in the first rooms. Gnome six from Penguin Month, its steps still at 2 and 4.
     // Up The Tree: Canopy five, Leetanns among them; Feather five with Unc.
     const many: Readonly<Partial<Record<string, number>>> = { crab: 6, grooter: 3, gnome: 6, canopy: 5, feather: 5 };
     for (const kin of KINS.filter((k) => k !== "graid")) {

@@ -16,9 +16,9 @@ import type { Patch } from "./patch.ts";
 import { type Era, eraAt, eraOf, type ReleaseId, RELEASES } from "./releases.ts";
 
 /**
- * The made-up lists: Groot Night retires one of the base's figures at each cost it brings one at
- * (Worm, Leafling, Rock, Reed Heron, Hearth Cat); Penguin Month retires the Kettle and brings the
- * Reed Heron back.
+ * The made-up lists, in place of the real ones of those two releases: Groot Night retires one of the
+ * base's figures at each cost it brings one at (Worm, Bud, Rock, Reed, Vesta); Penguin Month
+ * retires Mosey and brings Reed back.
  */
 const NIGHT: readonly FigureId[] = ["worm", "leafling", "rock", "heron", "hearthcat"];
 /** Which figures each release retires and brings back. */
@@ -27,7 +27,7 @@ type Lists = Partial<
 >;
 const LISTS: Lists = {
   "groot-night": { retire: [...NIGHT] },
-  "penguin-month": { retire: ["kettle"], return: ["heron"] },
+  "penguin-month": { retire: ["slug"], return: ["heron"] },
 };
 const listed = (patches: readonly Patch[], lists: Lists): Patch[] =>
   patches.map((p) => {
@@ -61,7 +61,15 @@ const worm = (stars: Stars): { kind: FigureId; stars: Stars } => ({ kind: "worm"
 /** Whether the stall with everyone's figures offers a run the Worm, by what it holds. */
 const offered = (c: Catalog, run: Holding): boolean =>
   available(c, { for: "stall", holds: heldOf(run), figures: { pool: "fair" }, tier: 1 }).includes("worm");
-const OWN: Roster = Object.fromEntries([...NIGHT, "kettle"].map((id) => [id, 2]));
+const OWN: Roster = Object.fromEntries([...NIGHT, "slug"].map((id) => [id, 2]));
+/** Whether a run with the member's own figures is offered the Worm, by its roster and what it holds. */
+const ones = (c: Catalog, roster: Roster, holds: readonly FigureId[] = []): boolean =>
+  available(c, { for: "stall", holds, figures: { pool: "own", roster }, tier: 1 }).includes("worm");
+/** The figures out of normal mode as a release opens. */
+const out = (release: ReleaseId): FigureId[] => {
+  const c = catalogAt(eraOf(release));
+  return c.order.filter((id) => c.figures[id]?.retired).toSorted();
+};
 const tierOf = (c: Catalog, id: FigureId) => c.figures[id]?.tier ?? 1;
 
 describe("a release that retires", () => {
@@ -87,18 +95,22 @@ describe("a release that retires", () => {
     expect([among(before, { for: "starter" }, NIGHT), among(then, { for: "starter" }, NIGHT)]).toEqual([["worm"], []]);
   });
 
-  test("a run with the member's own figures sells what they own, at its level; every one-acorn grove figure as before", () => {
+  test("a run with the member's own figures sells what they own, at its level; the set's one-acorn figures to anyone", () => {
     for (const c of [before, then]) {
       for (const id of NIGHT) {
         expect(
           available(c, { for: "stall", holds: [], figures: { pool: "own", roster: OWN }, tier: tierOf(c, id) }),
         ).toContain(id);
       }
-      expect(available(c, { for: "stall", holds: [], figures: { pool: "own", roster: {} }, tier: 1 })).toContain(
-        "worm",
-      );
       expect(among(c, { for: "stall", holds: [], figures: { pool: "own", roster: {} }, tier: 4 }, NIGHT)).toEqual([]);
     }
+    // The Worm, out of the set, only to whoever pulled it, or while the run holds one to star.
+    expect([ones(before, {}), ones(then, {}), ones(then, OWN), ones(then, {}, ["worm"])]).toEqual([
+      true,
+      false,
+      true,
+      true,
+    ]);
     // A board of them stands for a run with the member's own figures, and for none with everyone's.
     const board = { player: "p", name: "A member", of: 1, data: partyOfFigures([placed("hearthcat", 3, 0)]) };
     expect([
@@ -141,7 +153,9 @@ describe("a release that retires", () => {
     for (const id of NIGHT) {
       expect([then.figures[id]?.retired, then.figures[id]?.everyones]).toEqual([true, false]);
       const [made, real] = [then.figures[id], catalogAt(then.era).figures[id]];
-      expect(made && { ...made, retired: false, everyones: true }).toEqual(real);
+      expect(made && { ...made, retired: false, everyones: true }).toEqual(
+        real && { ...real, retired: false, everyones: true },
+      );
     }
   });
 
@@ -178,16 +192,16 @@ describe("a release that retires", () => {
 
 describe("a release that brings one back", () => {
   const [before, then] = around("penguin-month");
-  test("the Reed Heron is back in everyone's ways and out of the collection; the Kettle leaves", () => {
+  test("Reed is back in everyone's ways and out of the collection; Mosey leaves", () => {
     expect([fair(before, 4).includes("heron"), fair(then, 4).includes("heron")]).toEqual([false, true]);
-    expect([fair(before, 2).includes("kettle"), fair(then, 2).includes("kettle")]).toEqual([true, false]);
+    expect([fair(before, 2).includes("slug"), fair(then, 2).includes("slug")]).toEqual([true, false]);
     expect([
       available(before, { for: "regular" }).includes("heron"),
       available(then, { for: "regular" }).includes("heron"),
     ]).toEqual([false, true]);
     expect(available(then, { for: "collection", roster: OWN })).toEqual([
       "worm",
-      "kettle",
+      "slug",
       "leafling",
       "rock",
       "hearthcat",
@@ -201,20 +215,33 @@ describe("a release that brings one back", () => {
 describe("the lists", () => {
   test("change nothing before the first release that has one", () => {
     for (const n of ERAS.filter((e) => e < eraOf("groot-night"))) expect(strip(cat(n))).toEqual(strip(catalogAt(n)));
-    // After it, only who is everyone's moves, and only for the figures on the lists.
+    // After it, only who is everyone's moves, and only for figures on a list, made-up or real.
+    const LISTED = new Set<FigureId>([
+      ...NIGHT,
+      "slug",
+      ...PATCHES.flatMap((p) => [...(p.figures?.retire ?? []), ...(p.figures?.return ?? [])]),
+    ]);
     for (const n of ERAS.filter((e) => e >= eraOf("groot-night"))) {
       const [made, real] = [cat(n), catalogAt(n)];
       const moved = made.order.filter((id) => made.figures[id]?.everyones !== real.figures[id]?.everyones);
-      expect(moved.every((id) => [...NIGHT, "kettle"].includes(id))).toBe(true);
+      expect(moved.every((id) => LISTED.has(id))).toBe(true);
       expect(made.order).toEqual(real.order);
     }
   });
 
-  test("the content as it stands retires nobody", () => {
-    for (const n of ERAS) {
-      const c = catalogAt(n);
-      expect(c.order.filter((id) => c.figures[id]?.retired)).toEqual([]);
-    }
+  test("the content retires RAID-SETS.md's lists: nobody before Groot Night, then five a release", () => {
+    const night: FigureId[] = ["emberkit", "cindernewt", "bushgnome", "heron", "hearthcat"];
+    const penguins: FigureId[] = [...night, "barrowgnome", "glorp", "drizzlefrog", "fogowl", "apothecary"];
+    const tree: FigureId[] = [...penguins, "peep", "kettle", "munch", "clutch", "whitefox"];
+    expect(RELEASES.map((r) => [r.id, out(r.id)])).toEqual([
+      ["base", []],
+      ["groot", []],
+      ["gaz-stall", []],
+      ["groot-night", night.toSorted()],
+      ["penguin-month", penguins.toSorted()],
+      ["up-the-tree", tree.toSorted()],
+      ["up-the-tree-ends", tree.toSorted()],
+    ]);
   });
 
   const WRONG: readonly (readonly [string, Lists, string])[] = [

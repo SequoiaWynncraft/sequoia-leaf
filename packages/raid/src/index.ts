@@ -18,6 +18,7 @@ export {
   type Purpose,
   type Rarity,
   RARITY_IDS,
+  stepsShown,
 } from "./content/catalog.ts";
 export { type Era, eraAt, eraOf, isEra, LAST_ERA, LEGACY_ERA, type ReleaseId, RELEASES } from "./content/releases.ts";
 export { type Banner, BANNERS, GROVE } from "./content/banners.ts";

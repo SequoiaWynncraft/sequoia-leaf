@@ -17,7 +17,7 @@ import { CARELESS, fondOf, type Habit, planWith, ROLLER, SAVER, SENSIBLE } from 
 import { act } from "@sequoia-leaf/raid/command.ts";
 import { GOOD_WITH } from "@sequoia-leaf/raid/content/advice.ts";
 import { type BoonId, boonIn } from "@sequoia-leaf/raid/content/boons.ts";
-import { available, catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
+import { available, catalogAt, reachedByFigures } from "@sequoia-leaf/raid/content/catalog.ts";
 import { type FigureId, figureIn, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { FINISHED_IDS, type FinishedId, isFinishedId, itemName } from "@sequoia-leaf/raid/content/items.ts";
 import { holdItem } from "@sequoia-leaf/raid/content/recipes.ts";
@@ -64,8 +64,15 @@ const EVERY: readonly Habit[] = [
   SENSIBLE,
   SAVER,
   ROLLER,
-  ...NOW.ids.traits.filter(isKin).map(fondOf),
-  ...NOW.ids.traits.filter(isCalling).map(fondOf),
+  // Fond of a trait the era's set reaches by figures: a bot fond of one it does not is no result.
+  ...NOW.ids.traits
+    .filter(isKin)
+    .filter((t) => reachedByFigures(NOW, t))
+    .map(fondOf),
+  ...NOW.ids.traits
+    .filter(isCalling)
+    .filter((t) => reachedByFigures(NOW, t))
+    .map(fondOf),
   CARELESS,
 ];
 const HABITS = EVERY.filter((h) => only === undefined || only.includes(h.name));

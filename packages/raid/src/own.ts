@@ -66,8 +66,8 @@ export const heldOf = (run: Holding): FigureId[] =>
 /**
  * Who the stall may offer at a cost, as the run's era has them: on the main way the set's figures
  * of that cost, and each retired one the run still holds a copy of to star up; in a run with the
- * member's own figures every one-acorn figure, and above one acorn those of its roster, a banner's
- * headliner among them.
+ * member's own figures those of its roster, a banner's headliner among them, and at one acorn the
+ * set's to anyone.
  */
 export const stallPool = (run: OnWay & Holding & { readonly era: Era }, tier: Tier): readonly FigureId[] =>
   available(catalogOf(run), { for: "stall", figures: run.way.figures, tier, holds: heldOf(run) });

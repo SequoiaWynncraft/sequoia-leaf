@@ -20,7 +20,7 @@
  * is a gauge: the bots are rough players, and every board here was built without the figure.
  */
 import { fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
-import { available, catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
+import { available, catalogAt, reachedByFigures } from "@sequoia-leaf/raid/content/catalog.ts";
 import { type FigureId, figureIn, isFigureId, type Stars } from "@sequoia-leaf/raid/content/figures.ts";
 import { eraOf, LAST_ERA, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 import { ROOM_COUNT, worth } from "@sequoia-leaf/raid/content/rooms.ts";
@@ -56,8 +56,15 @@ const HABITS: readonly Habit[] = [
   SENSIBLE,
   SAVER,
   ROLLER,
-  ...NOW.ids.traits.filter(isKin).map(fondOf),
-  ...NOW.ids.traits.filter(isCalling).map(fondOf),
+  // Fond of a trait the era's set reaches by figures: a bot fond of one it does not is no result.
+  ...NOW.ids.traits
+    .filter(isKin)
+    .filter((t) => reachedByFigures(NOW, t))
+    .map(fondOf),
+  ...NOW.ids.traits
+    .filter(isCalling)
+    .filter((t) => reachedByFigures(NOW, t))
+    .map(fondOf),
 ];
 const MIDDLE_OUT = [3, 2, 4, 1, 5, 0, 6] as const;
 

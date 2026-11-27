@@ -2,9 +2,9 @@
  * Penguin Month, the penguins' banner (22 December 2026). A new origin, Huddle, whose figures that
  * start the fight touching share one shield: Dibs, Jet, Flurry, Larp as a third trait, and Yule,
  * the set's own healer, who puts friends in a bubble. Pomp, a gnome with a trumpet, Chorus's fifth.
- * Gnome steps at 3 and 5, Sage gains a third at 6 and Chorus a fourth at 5. A sixth component, the
- * Carving Knife, which turns up only after a boss and makes a class emblem with any other component,
- * or An Extra Chair with a second Knife.
+ * Gnome stays at 2 and 4, with three Gnomes in the set (`RAID-SETS.md`). Sage gains a third step at
+ * 6 and Chorus a fourth at 5. A sixth component, the Carving Knife, which turns up only after a boss
+ * and makes a class emblem with any other component, or An Extra Chair with a second Knife.
  */
 import { charm, EMBLEM } from "../charms.ts";
 import { type ComponentId, emblem, type ItemSpec, NO_STATS } from "../items.ts";
@@ -20,6 +20,9 @@ const wooden = (grants: TraitId, name: string, half: readonly [ComponentId, Comp
 export const PENGUIN_MONTH: Patch = {
   release: "penguin-month",
   figures: {
+    // Out of normal mode from this release: Hodge, Glorp, Drizzle, Eaves and Dose, each as the figure that
+    // takes its job arrives (Dibs, Jet, Larp, Pomp, and Flurry's seat).
+    retire: ["barrowgnome", "glorp", "drizzlefrog", "fogowl", "apothecary"],
     add: {
       // Shields itself and whoever is most hurt beside it.
       dibs: {
@@ -28,8 +31,8 @@ export const PENGUIN_MONTH: Patch = {
         kin: "huddle",
         calling: "bulwark",
         extra: [],
-        hp: 350,
-        attack: 26,
+        hp: 310,
+        attack: 20,
         speed: 0.6,
         range: 1,
         armour: 25,
@@ -77,8 +80,8 @@ export const PENGUIN_MONTH: Patch = {
         kin: "gnome",
         calling: "slinger",
         extra: ["huddle"],
-        hp: 420,
-        attack: 44,
+        hp: 380,
+        attack: 40,
         speed: 0.75,
         range: 4,
         armour: 20,
@@ -88,7 +91,7 @@ export const PENGUIN_MONTH: Patch = {
           name: "Snowball Fight",
           shape: "bolt",
           text: "Throws {balls} snowballs, each at a different enemy in its reach where it can: {damage} physical damage each.",
-          n: { balls: [4, 4, 5], damage: [65, 115, 205] },
+          n: { balls: [4, 4, 5], damage: [55, 95, 170] },
           short: "{balls} snowballs, {damage} physical each.",
         },
         quip: "Is a penguin. Ask it.",
@@ -120,7 +123,7 @@ export const PENGUIN_MONTH: Patch = {
         prize: "Druid",
         stands: "touching",
       },
-      // No penguin: Gnome at 3 and 5, and Chorus's fifth.
+      // No penguin: a Gnome, and Chorus's fifth.
       pomp: {
         name: "Pomp",
         tier: 4,
@@ -193,8 +196,6 @@ export const PENGUIN_MONTH: Patch = {
       },
     },
     change: {
-      // Gnome at 3 and 5: a little more health for the third it now takes.
-      gnome: { steps: [3, 5], n: { win: [1, 3], loss: [1, 2], health: [15, 25] } },
       sage: {
         steps: [2, 4, 6],
         text: [

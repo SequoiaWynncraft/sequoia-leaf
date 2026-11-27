@@ -93,7 +93,7 @@ import { pieces as richPieces } from "../rich.ts";
 import { catalogFor, doNow, S } from "../state.ts";
 import { chairsSaid } from "./endless.ts";
 import { feedActions } from "./feedtarget.ts";
-import { figuresAt, levelOnCard, oddsStats } from "./own.ts";
+import { figuresAt, levelOnCard, oddsStats, stepsHere } from "./own.ts";
 import { figureRef, itemRef, pieceRef, traitRef } from "./refs.ts";
 import { itemsOf, wantedBy } from "./suits.ts";
 import { toolDesc, withMelt } from "./toolcard.ts";
@@ -343,8 +343,9 @@ export function traitDesc(cat: Catalog, id: TraitId, run: RunView | null, lore =
   const state = run ? ownTraitCount(run, id) : null;
   const count = state?.count ?? 0;
   const step = state?.step ?? 0;
-  const next = spec.steps.findIndex((need) => need > count);
-  const blocks: Block[] = spec.steps.map((need, i) => {
+  const steps = stepsHere(cat, id, run, step);
+  const next = steps.findIndex((need) => need > count);
+  const blocks: Block[] = steps.map((need, i) => {
     const more = run && i === next ? need - count : 0;
     return {
       line: true,
@@ -358,7 +359,7 @@ export function traitDesc(cat: Catalog, id: TraitId, run: RunView | null, lore =
   const draw = traitDraw(id);
   const draws = drawName(draw);
   if (draws) blocks.unshift({ body: rich(`${draws}: enemies pick them as if ${drawReach(draw)}.`) });
-  if (lore) spec.steps.forEach((need, i) => blocks.push({ title: `${need}`, body: traitText(cat, id, i + 1) }));
+  if (lore) steps.forEach((need, i) => blocks.push({ title: `${need}`, body: traitText(cat, id, i + 1) }));
   return {
     name: spec.name,
     icon: traitIcon(id),

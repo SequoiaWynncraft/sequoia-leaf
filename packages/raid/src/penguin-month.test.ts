@@ -107,7 +107,7 @@ function across(room: number): ReturnType<typeof startRun> {
 }
 
 describe("a fight settles in the era it was locked in", () => {
-  test("the gnomes pay as Gnome was when it set out: two are a step before 22 December, none after", () => {
+  test("the gnomes pay for a fight locked before 22 December and settled after: two are a step", () => {
     const run = across(1);
     const taken = takeTakings(run);
     expect(taken.ok).toBe(true);

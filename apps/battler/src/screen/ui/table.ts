@@ -41,7 +41,7 @@ import { busy, catalogFor, S } from "../state.ts";
 import { acorns, figPic, figureRef, pic, traitRef, unitRef } from "./cards.ts";
 import { stallDrawn, traitsDrawn, twins } from "./drawn.ts";
 import { forgetLight, paintLight } from "./lit.ts";
-import { oddsRow, runTag, waySign } from "./own.ts";
+import { oddsRow, runTag, stepsHere, waySign } from "./own.ts";
 import { forgetRack, renderRack } from "./rack.ts";
 import { forgetRackPlace, placeRack } from "./rackfold.ts";
 import { chairsTag, chairsTaken, forgetTrack, renderTrack, trackPlaque } from "./rooms.ts";
@@ -261,10 +261,11 @@ function renderTraits(run: RunView): void {
   for (const [trait, chip] of chips) if (!wanted.has(trait)) chip.remove();
   states.forEach((state, i) => {
     const spec = traitIn(catalogOf(run), state.trait);
-    const next = spec.steps.find((need) => need > state.count) ?? spec.steps[spec.steps.length - 1] ?? 1;
+    const steps = stepsHere(catalogOf(run), state.trait, run, state.step);
+    const next = steps.find((need) => need > state.count) ?? steps[steps.length - 1] ?? 1;
     const chip = chipFor(state.trait);
     chip.classList.toggle("lit", state.step > 0);
-    chip.classList.toggle("top", state.step >= spec.steps.length);
+    chip.classList.toggle("top", state.step >= steps.length);
     // On a phone the chip shows no name: it is said all the same.
     chip.setAttribute("aria-label", `${spec.name} ${state.count}/${next}`);
     chip.replaceChildren(
