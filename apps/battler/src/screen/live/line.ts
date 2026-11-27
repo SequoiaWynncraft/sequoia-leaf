@@ -12,7 +12,9 @@
  *   its stage's deadline passes, as the page comes back, and as the page comes into the live room
  *   (`liveMoved`: what was said before was not heard); and every `POLL_EVERY` while the page is not
  *   in it (`heard.ts`). Each read sends the `rev` the page has. A read answered while a command was
- *   on its way is let go: the command's answer is newer.
+ *   on its way is let go: the command's answer is newer. A read that fails leaves what it was for
+ *   owed (a word Leaf said, a deadline passed), and the next goes on the kit's timer (`RETRY`),
+ *   longer each time, until one lands, whether or not the page is in the live room.
  * - A sitting Leaf no longer has, or cannot read, or a member signed out, ends the line (`onGone`).
  */
 import { MOST_COMMANDS, readBalances } from "@sequoia-leaf/core";
@@ -121,8 +123,10 @@ class SittingLine implements Line {
   readonly #next = ids();
   /** Whether the page is in the live room, hearing Leaf say when the sitting moves on. */
   readonly #live: () => boolean;
-  /** The newest `rev` Leaf has said the sitting is at. */
+  /** The newest `rev` Leaf has said the sitting is at: owed a read until one at it or later lands. */
   #heard = -1;
+  /** Reads that failed in a row since the last one landed: the next waits `RETRY` for them. */
+  #misses = 0;
   /** Reads the sitting once for the words that come close together, if the page is behind them still. */
   readonly #nudged: () => void;
   #base: SittingView;
@@ -189,7 +193,9 @@ class SittingLine implements Line {
     const reply = await ask(`${this.#path}?rev=${this.#rev}`);
     if (this.#over || sent !== this.#sent) return;
     if (reply.status !== 200) {
-      if (this.#trouble(reply.status, reply.body) === "again") this.#plan();
+      if (this.#trouble(reply.status, reply.body) !== "again") return;
+      this.#misses++;
+      this.#plan();
       return;
     }
     const answer = readAnswer(reply.body);
@@ -228,6 +234,7 @@ class SittingLine implements Line {
    */
   #took(answer: Read): void {
     if (answer.rev < this.#rev) return;
+    this.#misses = 0;
     this.#skew = answer.leafNow - outside.now();
     if (answer.view && answer.rev > this.#rev) this.#base = answer.view;
     this.#rev = answer.rev;
@@ -265,14 +272,20 @@ class SittingLine implements Line {
     else return "again";
     return "stop";
   }
-  /** Reads the sitting again at its deadline, and every `POLL_EVERY` while the page is not in the live room. */
+  /**
+   * Reads the sitting again at its deadline, and every `POLL_EVERY` while the page is not in the live
+   * room; after reads that failed, what is owed (a word Leaf said) at once, and nothing sooner than
+   * the kit's timer allows for them.
+   */
   #plan(): void {
     this.#timer?.();
     this.#timer = null;
     if (this.#over) return;
     const due = deadlineOf(this.#base);
     const toDeadline = due === null ? Infinity : due - this.now() + AFTER_DEADLINE;
-    const wait = Math.min(this.#live() ? Infinity : POLL_EVERY, Math.max(AFTER_DEADLINE, toDeadline));
+    const owed = this.#misses > 0 && this.#heard > this.#rev ? 0 : Infinity;
+    const soonest = Math.min(owed, this.#live() ? Infinity : POLL_EVERY, Math.max(AFTER_DEADLINE, toDeadline));
+    const wait = this.#misses > 0 ? Math.max(soonest, backoff(RETRY, this.#misses - 1)) : soonest;
     if (Number.isFinite(wait)) this.#timer = this.#scope.after(wait, () => void this.read());
   }
 

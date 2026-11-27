@@ -6,7 +6,9 @@
  * The page holds its live connection while the member has a table or the card is up (`heard.ts`).
  * While the card is up and the member sits nowhere, the list is read when Leaf says it changed (once
  * for words close together), when the soonest of its tables closes, after a table the member was at,
- * as the page comes into the live room, and every `POLL_EVERY` while it is not in it. The first read,
+ * as the page comes into the live room, and every `POLL_EVERY` while it is not in it. A read that
+ * fails leaves Leaf's word owed, and the next goes on the kit's timer (`RETRY`), longer each time,
+ * until one lands, whether or not the page is in the live room. The first read,
  * which gives a member who sits at a table their sitting back, is tried again on the kit's timer
  * until Leaf answers it, whether or not the card is up. Whatever was asked of Leaf before the
  * member took up or let go of a sitting (`T.gen` moves on) is not acted on when it answers: a list
@@ -48,6 +50,9 @@ export const T: {
   /** When the list was last asked for, and when the soonest of its tables closes (the page's clock). */
   listAt: number;
   closesAt: number | null;
+  /** Reads of the list that failed in a row, and the soonest the next may go after them (the page's clock). */
+  misses: number;
+  retryAt: number;
   /** Whether the card is up. */
   shown: () => boolean;
 } = {
@@ -64,6 +69,8 @@ export const T: {
   stale: false,
   listAt: -Infinity,
   closesAt: null,
+  misses: 0,
+  retryAt: -Infinity,
   shown: () => false,
 };
 
@@ -100,11 +107,19 @@ function readListed(body: unknown): { open: Listed[]; yours: string | null; clos
  */
 export async function readList(): Promise<boolean> {
   const asked = T.gen;
+  const owed = T.stale;
   T.stale = false;
   T.listAt = outside.now();
   const answer = await ask("/v1/game/sittings");
   const listed = answer.status === 200 ? readListed(answer.body) : null;
-  if (!listed) return false;
+  if (!listed) {
+    // What Leaf said is still owed a read, which waits the kit's timer.
+    T.stale ||= owed;
+    T.retryAt = outside.now() + backoff(RETRY, T.misses++);
+    return false;
+  }
+  T.misses = 0;
+  T.retryAt = -Infinity;
   // Asked before the member took up or let go of a sitting: it is old news.
   if (asked !== T.gen) return true;
   const before = JSON.stringify(T.open);
@@ -247,8 +262,12 @@ export function knowTables(scope: Scope, me: { id: string; name: string }, redra
 /** Whether the member is looking at the list: the card is up, and they follow no table. */
 const looking = (): boolean => !liveLine() && T.shown();
 
-/** Whether the list is due a read at `now`: it may be behind Leaf's, the page is not hearing (and it is `POLL_EVERY` old), or a table on it has closed. */
+/**
+ * Whether the list is due a read at `now`: it may be behind Leaf's, the page is not hearing (and it
+ * is `POLL_EVERY` old), or a table on it has closed; and the kit's timer allows one after reads that failed.
+ */
 function listDue(now: number): boolean {
+  if (now < T.retryAt) return false;
   if (T.stale) return true;
   if (!hearing()) return now - T.listAt >= POLL_EVERY;
   return T.closesAt !== null && now >= T.closesAt;
@@ -282,7 +301,7 @@ export function followTables(
  */
 function followHeard(scope: Scope): void {
   const soon = gathered(scope, () => {
-    if (looking() && T.stale) void readList();
+    if (looking() && T.stale && outside.now() >= T.retryAt) void readList();
   });
   const stale = (): void => {
     T.stale = true;

@@ -1,5 +1,6 @@
-import { afterEach, expect, jest, test } from "bun:test";
+import { afterEach, expect, jest, spyOn, test } from "bun:test";
 
+import { RETRY } from "@sequoia-leaf/kit/play.ts";
 import type { LiveEars, LiveRoom } from "@sequoia-leaf/kit/realtime.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { type Reply, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
@@ -283,6 +284,88 @@ test("a table on the list is read again as it closes, by Leaf's clock rather tha
   // Nothing more to close: nothing more read.
   await pass(60_000);
   expect(lists()).toBe(3);
+  held.close();
+  T.shown = () => false;
+});
+
+test("a read a word started that fails is owed: tried again on the kit's timer, longer each time, until it lands, in the live room all along", async () => {
+  jest.useFakeTimers();
+  const [one, two] = revisions();
+  if (!one || !two) throw new Error("no sitting");
+  const replies: Reply[] = ["offline", { status: 503, body: { code: "identity_unavailable" } }];
+  world = standin({ "GET /v1/game/sittings/s1": () => replies.shift() ?? { status: 200, body: answer(2, two) } });
+  // An open sitting, whose deadline is half an hour off: nothing but the word owes a read.
+  const line = openLine(scope(), "s1", ME.id, answer(1, one), () => true);
+  if (!line) throw new Error("no line");
+  // The kit's waits with no chance added: exactly its first, then twice that.
+  const chance = spyOn(Math, "random").mockReturnValue(0);
+  line.heard(2);
+  jest.advanceTimersByTime(GATHER_MS);
+  await landed();
+  expect(reads()).toHaveLength(1);
+  // The first failed: the next comes after the kit's first wait, and no sooner.
+  jest.advanceTimersByTime(RETRY.first - 1);
+  await landed();
+  expect(reads()).toHaveLength(1);
+  jest.advanceTimersByTime(1);
+  await landed();
+  expect(reads()).toHaveLength(2);
+  // That failed too: the next waits twice as long.
+  jest.advanceTimersByTime(RETRY.first * 2 - 1);
+  await landed();
+  expect(reads()).toHaveLength(2);
+  jest.advanceTimersByTime(1);
+  await landed();
+  expect(reads()).toHaveLength(3);
+  chance.mockRestore();
+  expect(line.view).toEqual(sittingView(two, ME.id));
+  // Landed: nothing is owed, and nothing more is read for a minute.
+  jest.advanceTimersByTime(60_000);
+  await landed();
+  expect(reads()).toHaveLength(3);
+  line.close();
+});
+
+test("a list read Leaf's word started that fails is owed: tried again on the kit's timer until it lands, in the live room all along", async () => {
+  jest.useFakeTimers();
+  const fake = fakeRoom();
+  const replies: Reply[] = [];
+  world = standin({
+    "GET /v1/game/sittings": (): Reply =>
+      replies.shift() ?? { status: 200, body: { now: new Date(0).toISOString(), open: [], yours: null } },
+  });
+  const lists = (): number => (world?.sent ?? []).filter((s) => s.path === "/v1/game/sittings").length;
+  const held = scope();
+  followTables(
+    held,
+    ME,
+    () => undefined,
+    () => true,
+  );
+  await pass(1000);
+  fake.ears().welcome?.(1, "sittings/1", [], false);
+  await pass(GATHER_MS);
+  expect(lists()).toBe(2);
+  // Leaf says the list changed; the read for it fails, and so does the next. The kit's waits with
+  // half the chance added: 562.5 ms, then 1125 ms, looked at once a second.
+  const chance = spyOn(Math, "random").mockReturnValue(0.5);
+  replies.push("offline", "offline");
+  fake.ears().nudged?.({ t: "sittings" });
+  await pass(GATHER_MS);
+  expect(lists()).toBe(3);
+  expect(T.stale).toBe(true);
+  await pass(1000);
+  expect(lists()).toBe(4);
+  // The second wait is twice the first: no read in the second after it, one by the end of the next.
+  await pass(1000);
+  expect(lists()).toBe(4);
+  await pass(1000);
+  expect(lists()).toBe(5);
+  expect([T.stale, T.misses]).toEqual([false, 0]);
+  chance.mockRestore();
+  // Landed: nothing more is read for a minute.
+  await pass(60_000);
+  expect(lists()).toBe(5);
   held.close();
   T.shown = () => false;
 });
