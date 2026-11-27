@@ -1,5 +1,43 @@
 [
   {
+    "id": "penguin-month",
+    "at": "2026-12-22T00:00Z",
+    "title": "Penguin Month",
+    "lines": [
+      "Penguin Month is open until 5 January: Yule is its top prize, and of the pulls that give the rarity of Flurry, Pomp, Larp, Jet or Dibs, half give one of them and half another figure of that rarity.",
+      "In The Little Raid, Huddle is a new origin: Huddle figures that start the fight touching share one shield. The Carving Knife is a new component that turns up after a boss."
+    ],
+    "more": [
+      {
+        "head": "New figures",
+        "points": [
+          "Dibs (1 acorn, Huddle Bulwark) gives itself and the most hurt friend touching it a shield of 90 for 4 seconds.",
+          "Jet (2 acorns, Huddle Sneak) slides along a line through its target: 100 physical damage to every enemy on it, and ice there for 3 seconds where enemies are 30% slower.",
+          "Larp (3 acorns, Gnome Slinger, and Huddle) throws 4 snowballs, each at a different enemy in its reach where it can: 65 physical damage each.",
+          "Flurry (4 acorns, Huddle Sage) brings snow for 4 seconds on the enemy in its reach with the most enemies touching it, and the hexes touching that one: 60 magic damage a second there, and enemies there are 25% slower.",
+          "Pomp (4 acorns, Gnome Chorus) gives every friend in its row 30 mana, and they attack 25% faster for 4 seconds.",
+          "Yule, Penguin Month's top prize (5 acorns, Huddle Mender), puts the most hurt friend in a bubble for 2 seconds: nothing can hurt them and they do nothing. They come out with 520 health back and a full mana bar. Each later use bubbles 1 more friend, up to 3. While Penguin Month is open, Yule can be bought in every raid."
+        ]
+      },
+      {
+        "head": "Traits",
+        "points": [
+          "Huddle: with 2 and 4, Huddle figures that start the fight touching share one shield, worth 25% and 35% of their health added together. With 5 it comes back once, 6 seconds after it breaks, worth 35% of the health of those still up.",
+          "Gnome needs 3 and 5 now, not 2 and 4: with 3, Gnome figures have 15% more health and you find 1 acorn after every room; with 5, 25% more health, 3 acorns after a win and 2 after a loss.",
+          "Sage has a third step at 6: abilities 90% stronger, and each attack gives 7 more mana.",
+          "Chorus has a fourth step at 5: the party gains 4 mana a second, and Chorus figures 8."
+        ]
+      },
+      {
+        "head": "Items",
+        "points": [
+          "The Carving Knife: after you beat a boss, the second pick of components always has it. With any other component it makes an emblem of a class, with that component's stat: Wooden Tooth (Thorn, Fang), Wooden Sling (Plume, Slinger), Wooden Spectacles (Glowcap, Sage), Wooden Buckler (Bark, Bulwark) and Wooden Spoon (Chestnut, Mender). Two Knives make An Extra Chair.",
+          "Guild Onesie: a new charm, for Huddle."
+        ]
+      }
+    ]
+  },
+  {
     "id": "groot-night",
     "at": "2026-12-08T00:00Z",
     "title": "Groot Night",

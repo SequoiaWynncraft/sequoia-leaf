@@ -96,6 +96,9 @@ const MENDS: Partial<Record<UnitKind, number>> = {
   crab23: CELLS,
   apothecary: 2,
   seqwawa: CELLS,
+  // Penguin Month: Dibs shields itself and a friend touching it; Yule bubbles anyone.
+  dibs: 1,
+  yule: CELLS,
 };
 /**
  * Whether a figure's ability is worth using now: always, unless it mends and every friend it reaches

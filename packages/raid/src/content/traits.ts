@@ -15,7 +15,18 @@ import type { Catalog } from "./catalog.ts";
 import { opened } from "./patch.ts";
 import { FIGHT } from "./rooms.ts";
 
-export const KINS = ["ember", "moss", "mist", "burrow", "feather", "crab", "gnome", "graid", "grooter"] as const;
+export const KINS = [
+  "ember",
+  "moss",
+  "mist",
+  "burrow",
+  "feather",
+  "crab",
+  "gnome",
+  "graid",
+  "grooter",
+  "huddle",
+] as const;
 export type KinId = (typeof KINS)[number];
 export const CALLINGS = ["bulwark", "fang", "slinger", "sage", "mender", "sneak", "chorus"] as const;
 export type CallingId = (typeof CALLINGS)[number];

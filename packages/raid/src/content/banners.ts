@@ -66,6 +66,18 @@ export const BANNERS: readonly Banner[] = [
     shows: "title",
     featured: ["crab8", "clutch", "crab31", "munch", "peep", "seqwawa"],
   },
+  // Penguin Month: the penguins' banner. Its headliner, Yule, is the set's own and drawn by it.
+  {
+    id: "penguin-month",
+    name: "Penguin Month",
+    opens: "penguin-month",
+    from: Date.UTC(2026, 11, 22),
+    until: Date.UTC(2027, 0, 5),
+    headliner: "yule",
+    look: "set",
+    shows: "title",
+    featured: ["flurry", "pomp", "larp", "jet", "dibs"],
+  },
 ];
 
 /** The pool that is always open, with no headliner. */

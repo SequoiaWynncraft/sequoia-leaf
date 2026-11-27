@@ -9,7 +9,7 @@ import { type FigureId, figureIn, type Tier } from "../content/figures.ts";
  * Every seat is a `Run`, and goes through the run's own rooms by the run's own rules. The sitting
  * adds what is shared: the clock, who fights whom, the carousel, who is out and in what place.
  */
-import { type ComponentId, isComponentId } from "../content/items.ts";
+import { type ComponentId, drawnComponents, isComponentId } from "../content/items.ts";
 import type { Era } from "../content/releases.ts";
 import { FIGHT, REGULARS, type RoomKind, ROOMS } from "../content/rooms.ts";
 import type { TraitId } from "../content/traits.ts";
@@ -58,7 +58,7 @@ export const CAROUSELS: readonly (readonly Tier[])[] = [
   [3, 3, 3, 4, 4, 4, 4, 5, 5],
 ];
 /** The components the ring's figures hold are dealt from: two of each. */
-export const ringItems = (cat: Catalog): readonly ComponentId[] => [...cat.ids.components, ...cat.ids.components];
+export const ringItems = (cat: Catalog): readonly ComponentId[] => [...drawnComponents(cat), ...drawnComponents(cat)];
 /** What a figure of a ring may hold: a component, or the Tongs. */
 export type RingItem = ComponentId | "tongs";
 export const isRingItem = (v: unknown): v is RingItem => isComponentId(v) || v === "tongs";

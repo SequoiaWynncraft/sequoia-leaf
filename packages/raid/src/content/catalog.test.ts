@@ -67,13 +67,15 @@ describe("the releases", () => {
 describe("the catalogue", () => {
   test("draws in the order it drew in when eras came in, which each era only adds to; every figure has a release", () => {
     // As they were drawn when eras came in: Seqwawa, of the expansion's first release, before the first
-    // banner's headliner; Groot Night's after all of them, everyone's first and then its headliner.
+    // banner's headliner; Groot Night's after all of them, everyone's first and then its headliner; then Penguin Month's.
     const night: readonly FigureId[] = ["peep", "crab31", "munch", "clutch", "crab8", "commodore"];
-    const drawn = [...FIGURE_IDS, ...MEMBER_IDS].filter((id) => !night.includes(id));
+    const penguins: readonly FigureId[] = ["dibs", "jet", "larp", "flurry", "pomp", "yule"];
+    const drawn = [...FIGURE_IDS, ...MEMBER_IDS].filter((id) => !night.includes(id) && !penguins.includes(id));
     expect(catalogAt(LEGACY_ERA).order).toEqual(drawn);
     expect(catalogAt(eraOf("base")).order).toEqual(drawn.filter((id) => id !== "seqwawa"));
     expect(catalogAt(eraOf("groot-night")).order).toEqual([...drawn, ...night]);
-    expect(catalogAt(LAST_ERA).order).toEqual([...drawn, ...night]);
+    expect(catalogAt(eraOf("penguin-month")).order).toEqual([...drawn, ...night, ...penguins]);
+    expect(catalogAt(LAST_ERA).order).toEqual([...drawn, ...night, ...penguins]);
     // No era moves a figure past another; from the era live when eras came in, each only adds at the end.
     for (const [r, next] of RELEASES.slice(1).map((n, i) => [RELEASES[i] ?? n, n] as const)) {
       const [was, is] = [catalogAt(eraOf(r.id)), catalogAt(eraOf(next.id))];
@@ -276,7 +278,7 @@ describe("a headliner is everyone's only while its banner is open", () => {
       all(),
       all("banner-1"),
       all("commodore"),
-      all(),
+      all("yule"),
       all(),
     ]);
   });

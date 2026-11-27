@@ -17,7 +17,8 @@ import { isFigureId, traitsOf, type UnitKind } from "./figures.ts";
 import { opened } from "./patch.ts";
 import { type TraitId, traitIn } from "./traits.ts";
 
-export const COMPONENT_IDS = ["thorn", "plume", "glowcap", "bark", "chestnut"] as const;
+/** The five plain components, and the Carving Knife (Penguin Month), which turns up only after a boss (`turnsUp`). */
+export const COMPONENT_IDS = ["thorn", "plume", "glowcap", "bark", "chestnut", "knife"] as const;
 export type ComponentId = (typeof COMPONENT_IDS)[number];
 
 /** What an item adds: percent of attack, of attack speed and of health; points of ability power, armour and ward. */
@@ -50,7 +51,10 @@ export const FINISHED_IDS = [
   "hoard",
 ] as const;
 export type FinishedId = (typeof FINISHED_IDS)[number];
-/** The emblems a charm gives have the ids of the charm boons that give them (`BoonSpec.gives`). */
+/**
+ * The emblems: one a charm gives has the id of the charm boon that gives it (`BoonSpec.gives`); one
+ * the Carving Knife makes with a component (`made`) is given by no charm.
+ */
 export const EMBLEM_IDS = [
   "embercharm",
   "mosscharm",
@@ -63,6 +67,12 @@ export const EMBLEM_IDS = [
   "choruscharm",
   "graidcharm",
   "sneakcharm",
+  "huddlecharm",
+  "woodentooth",
+  "woodensling",
+  "woodenspectacles",
+  "woodenbuckler",
+  "woodenspoon",
 ] as const;
 export type EmblemId = (typeof EMBLEM_IDS)[number];
 export type ItemId = ComponentId | FinishedId | EmblemId;
@@ -78,6 +88,8 @@ export interface ItemSpec {
   readonly grants?: TraitId;
   /** The two items that make it when they meet (`combine`), either way round. */
   readonly made?: readonly [ComponentId, ComponentId];
+  /** For a component that is never drawn as the others are: where it turns up instead (the Knife, after a boss). */
+  readonly turnsUp?: "boss";
   /** What it does besides its stats and its trait, in a sentence, with `{name}` filled from `n`; empty for nothing. */
   readonly text: string;
   /** The same in a few words for a card on the table, filled the same way. */
@@ -257,6 +269,10 @@ export const isItemId = (v: unknown): v is ItemId => isComponentId(v) || isFinis
 /** The sort an id's list gives it: what its spec must say. */
 export const sortOf = (id: ItemId): ItemSpec["sort"] =>
   isComponentId(id) ? "component" : isFinishedId(id) ? "finished" : "emblem";
+
+/** The components a pick, a basket or the carousel draws from: all a catalogue has open but those that turn up elsewhere. */
+export const drawnComponents = (cat: Catalog): readonly ComponentId[] =>
+  cat.ids.components.filter((id) => itemIn(cat, id).turnsUp === undefined);
 
 /** An item as a catalogue has it. */
 export const itemIn = (cat: Catalog, id: ItemId): ItemSpec => opened(cat.items, id, cat.era);

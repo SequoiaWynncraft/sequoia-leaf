@@ -76,6 +76,9 @@ export interface FigureSpec extends UnitSpec {
   readonly extra: readonly TraitId[];
 }
 
+/** Groot Night's and Penguin Month's, each in the order its release brought them. */
+const NIGHT_IDS = ["peep", "crab31", "munch", "clutch", "crab8"] as const;
+const PENGUIN_IDS = ["dibs", "jet", "larp", "flurry", "pomp", "yule"] as const;
 export const FIGURE_IDS = [
   "emberkit",
   "mossmote",
@@ -106,11 +109,8 @@ export const FIGURE_IDS = [
   "whitefox",
   "hearthcat",
   "seqwawa",
-  "peep",
-  "crab31",
-  "munch",
-  "clutch",
-  "crab8",
+  ...NIGHT_IDS,
+  ...PENGUIN_IDS,
 ] as const;
 /** A figure a member can field: one of everyone's, or a banner's member (`members.ts`). */
 export type FigureId = (typeof FIGURE_IDS)[number] | MemberId;

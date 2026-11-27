@@ -5,7 +5,7 @@
 import { below, pick, shuffled, type Stream } from "@sequoia-leaf/core";
 
 import { catalogOf, type Era } from "./content/catalog.ts";
-import type { ComponentId } from "./content/items.ts";
+import { type ComponentId, drawnComponents, itemIn } from "./content/items.ts";
 import { ECONOMY, type RoomKind } from "./content/rooms.ts";
 import { TOOL_IDS, TOOL_ODDS, type ToolId } from "./content/tools.ts";
 import { slotOf, type Way } from "./way.ts";
@@ -25,21 +25,28 @@ type Leaving = {
 
 /** So many components on offer, all different, by the run's dice. */
 export const componentOptions = (run: Drawing, count: number): Pickable[] =>
-  shuffled(run, catalogOf(run).ids.components).slice(0, count);
+  shuffled(run, drawnComponents(catalogOf(run))).slice(0, count);
+/** The components that turn up only after a boss is beaten (the Carving Knife), in the run's era. */
+const afterBoss = (run: Drawing): ComponentId[] => {
+  const cat = catalogOf(run);
+  return cat.ids.components.filter((id) => itemIn(cat, id).turnsUp === "boss");
+};
 
 /**
  * The picks of components a room leaves (`Room.picks`), with the tools it gives (`TOOL_ODDS`): in an
  * endless run past room 15, every tenth room's first pick is of tools instead (a sparring room, which
  * leaves none, leaves that one); else one boss room in two has a tool in place of one component of
- * its first pick, and one trouble room in ten has its pick of tools instead. The dice are the run's.
+ * its first pick, and one trouble room in ten has its pick of tools instead. The second pick after
+ * a boss is beaten has each component that turns up there (the Carving Knife) as one of its options.
+ * The dice are the run's.
  */
 export function roomPicks(run: Drawing, room: Leaving, won: boolean): ComponentPick[] {
   const n = won ? room.picks.won : room.picks.lost;
   const count = won ? ECONOMY.componentsWon : ECONOMY.componentsLost;
-  const picks = Array.from({ length: n }, (): ComponentPick => ({
-    kind: "component",
-    options: componentOptions(run, count),
-  }));
+  const picks = Array.from({ length: n }, (_, i): ComponentPick => {
+    const there = won && room.kind === "boss" && i === 1 ? afterBoss(run) : [];
+    return { kind: "component", options: [...componentOptions(run, count - there.length), ...there] };
+  });
   const tools: ComponentPick = { kind: "component", options: [...TOOL_IDS] };
   const at = room.at + 1;
   if (slotOf(run.way) === "endless" && at > TOOL_ODDS.endlessPast && at % TOOL_ODDS.endlessEvery === 0)

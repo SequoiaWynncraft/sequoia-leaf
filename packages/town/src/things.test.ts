@@ -33,7 +33,14 @@ describe("the catalogue", () => {
       ...everyShared().map(figureThing),
       memberThing("banner-1"),
       memberThing("groot-night"),
+      memberThing("penguin-month"),
     ]);
+    // Yule, drawn by the set, is a figure on 3 squares with its line.
+    expect(thingOf(memberThing("penguin-month"))).toMatchObject({
+      name: "Yule",
+      w: 3,
+      about: "Runs the bath. Does not get in.",
+    });
     for (const id of everyShared())
       expect(thingOf(figureThing(id))).toMatchObject({
         name: figureIn(CAT, id).name,
@@ -69,7 +76,8 @@ describe("the catalogue", () => {
       expect(t.w).toBeGreaterThan(0);
       expect(t.d).toBeGreaterThan(0);
       expect(t.name.length).toBeGreaterThan(0);
-      expect(t.about.length > 0).toBe(!isMemberThing(t.id));
+      // A member has no line about them, but the one the set draws (Yule), which has its own.
+      expect(t.about.length > 0).toBe(!isMemberThing(t.id) || t.id === "member-penguin-month");
     }
   });
 
@@ -120,9 +128,15 @@ describe("what is open of the camp's things", () => {
           "figure-crab31",
           "figure-crab8",
           "member-groot-night",
+          "figure-dibs",
+          "figure-jet",
+          "figure-larp",
+          "figure-flurry",
+          "figure-pomp",
+          "member-penguin-month",
         ].includes(id),
       ),
     ).toEqual([]);
-    expect(shown.length).toBe(THINGS.length - 6);
+    expect(shown.length).toBe(THINGS.length - 12);
   });
 });

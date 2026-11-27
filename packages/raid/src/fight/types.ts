@@ -24,7 +24,7 @@ export type FightResult = "win" | "loss" | "draw";
 /** Why somebody changed hex without walking: a Sneak's opening leap, an ability, knocked back, dashing, or pulled. */
 export type LeapWhy = "sneak" | "ability" | "knocked" | "dash" | "pull";
 /** What a zone is: slime and puddles slow whoever stands in them, dust hurts them every second. */
-export type ZoneKind = "slime" | "puddle" | "dust";
+export type ZoneKind = "slime" | "puddle" | "dust" | "ice" | "snow";
 /** How a figure stands in a fight: as itself, or (a Graid figure that got back up) in its true form (`content/graid.ts`). */
 export type Form = "plain" | "true";
 /** Why a figure got back up: Second Wind, Graid, or Seqwawa's No GG Left Behind. */
@@ -134,6 +134,8 @@ export interface Unit {
   bracedUntil: number;
   bracedBy: number;
   stub: number;
+  /** The group whose one shield it shares (`Fight.pools`, Huddle); -1 for none. */
+  pool: number;
 
   // From traits (`effects.ts`).
   /** Starts the fight by getting round the back: a Sneak with its trait on, and a magpie. */
@@ -216,6 +218,18 @@ export interface Zone {
   readonly damage: number;
 }
 
+/**
+ * One shield a group of figures shares: a hit on any of them takes from it, after the figure's own
+ * shield. It lasts until it is broken, and may come back once, `wait` steps after, worth `back`
+ * percent of the health of those of the group still up.
+ */
+export interface Pool {
+  left: number;
+  readonly ids: readonly number[];
+  back: number;
+  readonly wait: number;
+}
+
 /** Something on its way that lands at a step. */
 export interface Pending {
   at: number;
@@ -256,6 +270,8 @@ export interface Fight {
   pending: Pending[];
   boons: [readonly BoonId[], readonly BoonId[]];
   might: [number, number];
+  /** Each group's one shield (Huddle), by its place here: a figure's `pool`. */
+  pools: Pool[];
   /** Whether each side still has its Second Wind. */
   wind: [boolean, boolean];
   /** What every burn is (Ember's numbers): how many steps it lasts, and how much weaker healing is on the burning. */
@@ -333,6 +349,8 @@ export type FightEvent =
   | { t: "summon"; id: number; by: number; kind: UnitKind; cell: number; side: Side }
   /** A trait switches on as the fight starts, with who it touches. */
   | { t: "trait"; side: Side; trait: TraitId; step: number; ids: number[] }
+  /** A group's one shield is made, drained, broken (`on` false) or back, with what it holds now. */
+  | { t: "pool"; group: number; ids: number[]; left: number; on: boolean }
   /** An item does its trick. */
   | { t: "item"; id: number; item: ItemId }
   /** Dusk falls, or deepens: its `n`th second. */

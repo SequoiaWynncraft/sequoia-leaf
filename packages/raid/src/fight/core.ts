@@ -11,7 +11,7 @@ import { carriedTraits, type ItemId, itemNumber } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { traitDraw } from "../content/traits.ts";
 import { distance, line, mirror, neighboursFor, type Side } from "../hex.ts";
-import { emit, FOREVER, secs } from "./clock.ts";
+import { emit, FOREVER, later, secs } from "./clock.ts";
 import { whenFalls, whenFell, whenHurt, whenStruck } from "./hooks.ts";
 import type { DamageKind, DamageSource, Fight, HealSource, LeapWhy, Unit } from "./types.ts";
 
@@ -294,12 +294,12 @@ export function brace(f: Fight, target: Unit, percent: number, stub: number, sec
   target.bracedUntil = Math.max(target.bracedUntil, f.tick + ticks);
   emit(f, { t: "status", id: target.id, status: "braced", on: true, ticks, amount: target.bracedBy, by: target.id });
 }
-/** Goes where nothing can reach it for a while. */
-export function hide(f: Fight, u: Unit, ticks: number): void {
+/** Goes where nothing can reach it for a while: of itself, or put there by a friend (`by`, Yule's bubble). */
+export function hide(f: Fight, u: Unit, ticks: number, by: Unit = u): void {
   if (!u.alive || ticks <= 0) return;
   u.hiddenUntil = f.tick + ticks;
   u.tauntUntil = 0;
-  emit(f, { t: "status", id: u.id, status: "hidden", on: true, ticks, amount: 0, by: u.id });
+  emit(f, { t: "status", id: u.id, status: "hidden", on: true, ticks, amount: 0, by: by.id });
 }
 
 // ---------- healing and shields ----------
@@ -345,6 +345,41 @@ function shieldOn(f: Fight, target: Unit, n: number, seconds: number, by: Unit |
   return n;
 }
 
+/**
+ * Gives a group one shield to share (`Pool`), worth `left`, which comes back once `wait` seconds
+ * after it breaks, worth `back` percent of the health of those of it still up (0: never).
+ */
+export function poolUp(f: Fight, group: readonly Unit[], left: number, back: number, wait: number): void {
+  if (group.length === 0 || left <= 0) return;
+  const at = f.pools.length;
+  const ids = group.map((u) => u.id);
+  f.pools.push({ left: Math.round(left), ids, back, wait: secs(wait) });
+  for (const u of group) u.pool = at;
+  emit(f, { t: "pool", group: at, ids: [...ids], left: Math.round(left), on: true });
+}
+/** What a figure's group's shield takes of a hit of `n`: all of it while it holds that much. Gives back what it took. */
+function drain(f: Fight, u: Unit, n: number): number {
+  const pool = f.pools[u.pool];
+  if (!pool || pool.left <= 0 || n <= 0) return 0;
+  const took = Math.min(pool.left, n);
+  pool.left -= took;
+  const group = u.pool;
+  emit(f, { t: "pool", group, ids: [...pool.ids], left: pool.left, on: pool.left > 0 });
+  if (pool.left === 0 && pool.back > 0) {
+    const back = pool.back;
+    pool.back = 0;
+    later(f, pool.wait, () => {
+      const up = pool.ids.flatMap((id) => {
+        const o = f.units[id];
+        return o?.alive ? [o] : [];
+      });
+      pool.left = Math.round((up.reduce((sum, o) => sum + o.maxHp, 0) * back) / 100);
+      if (pool.left > 0) emit(f, { t: "pool", group, ids: [...pool.ids], left: pool.left, on: true });
+    });
+  }
+  return took;
+}
+
 // ---------- hurting ----------
 
 /** The armour a hit of a kind meets: an attack by one that pierces meets less of it. */
@@ -377,10 +412,12 @@ export function hurt(
   if (direct && target.bracedUntil > f.tick) amount *= 1 - target.bracedBy / 100;
   const n = Math.max(1, Math.round(amount));
   let soaked = 0;
-  if (target.shield > 0) {
+  const shielded = target.shield > 0;
+  if (shielded) {
     soaked = Math.min(target.shield, n);
     target.shield -= soaked;
   }
+  soaked += drain(f, target, n - soaked);
   const had = Math.max(0, target.hp);
   target.hp -= n - soaked;
   target.taken += n;
@@ -400,7 +437,7 @@ export function hurt(
     hp: Math.max(0, target.hp),
     shield: target.shield,
   });
-  if (soaked > 0 && target.shield === 0) {
+  if (shielded && target.shield === 0) {
     emit(f, { t: "status", id: target.id, status: "shield", on: false, ticks: 0, amount: 0, by: -1 });
   }
   if (direct && by && target.hp > 0) leaves(f, target, by);

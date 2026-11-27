@@ -18,6 +18,7 @@ export const LORE: Readonly<Partial<Record<FigureId | TraitId, string>>> = {
   gnome: "From the stall. They carve the figures and will not be told they got Greg wrong.",
   graid: "Carved from what the raiders said. A true form is what the raiders saw.",
   grooter: "From the nest raid, the one they run every night. Carved from what the grooters said was in there.",
+  huddle: "From the winter the pond froze. The guild came home in onesies; some had penguins in them.",
   // ---------- classes ----------
   bulwark: "The ones who are told to stand in front.",
   fang: "The ones who would rather settle it up close.",
@@ -37,6 +38,7 @@ export const LORE: Readonly<Partial<Record<FigureId | TraitId, string>>> = {
   finch: "Sings before every raid, whether or not there is one.",
   crab7: "Its tag says 7. Answers to it, most evenings.",
   barrowgnome: "Brings the wood the figures are carved from.",
+  dibs: "The first to arrive. Says the others are coming.",
   peep: "Hatched halfway on the stump and stopped there. Nobody told the gnomes what comes out of the eggs, so they carved something green.",
   // ---------- two acorns ----------
   kettle: "Left on the fire by a raider who went back to Wynn. It whistles for them.",
@@ -46,6 +48,7 @@ export const LORE: Readonly<Partial<Record<FigureId | TraitId, string>>> = {
   jay: "Lost a crumb to Twig in the spring. Has not let it go.",
   crab12: "Its tag says 12. It says it was 11. Skims pebbles on the pond, where the others live.",
   lanterngnome: "Lights the lanterns round the stump at dusk, so the raids can be told.",
+  jet: "Found that the frozen pond was faster. Never stood up again.",
   // ---------- three acorns ----------
   leafling: "Sprouted on the stump. Believes the stump is its.",
   cindernewt: "Lives under the campfire's logs. Comes out when they are moved.",
@@ -54,6 +57,7 @@ export const LORE: Readonly<Partial<Record<FigureId | TraitId, string>>> = {
   bushgnome: "Carves in the bush so nobody sees the figures before they are done.",
   crab23: "Its tag says 23. Keeps the colony's plasters. The colony needs a lot of plasters.",
   crab31: "Its tag says 31. Keeps time for the roll call. The count is still wrong.",
+  larp: "Found a onesie after penguin month. It fit.",
   munch:
     "The grooters said something in there eats you shell and all. The gnomes carved the mouth and ran out of wood for the rest.",
   // ---------- four acorns ----------
@@ -62,6 +66,8 @@ export const LORE: Readonly<Partial<Record<FigureId | TraitId, string>>> = {
   heron: "Stands in the pond all day. The crabs count it, to be safe.",
   crab40: "Its tag says 40. The widest crab. Roll call starts with it.",
   apothecary: "Makes the tonic from what grows on the stump.",
+  flurry: "Carries the winter it came from. The stump is inside.",
+  pomp: "Plays whenever a raider comes home with something.",
   clutch: "The raiders said the Nest. The gnomes carved a nest. It has eggs in, so it must be right.",
   // ---------- five acorns ----------
   greg: 'What the raiders call the nameless one. The gnomes asked what it did. "It eats." Offerings go missing near him.',
@@ -69,6 +75,7 @@ export const LORE: Readonly<Partial<Record<FigureId | TraitId, string>>> = {
   hearthcat: "Sleeps by the campfire. Came to the table to push things off it.",
   seqwawa: "What is left of the guild's own tree. It is still growing.",
   crab8: "Nobody knows who Crab #8 is. It is at every raid.",
+  yule: "Wears the hat all year. Says it is nearly December.",
   // ---------- a banner's member ----------
   commodore: "Asks if anyone is raiding. Somebody always is.",
 };

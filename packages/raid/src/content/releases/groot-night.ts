@@ -13,25 +13,10 @@
  * `era=gaz-stall`).
  */
 import type { BoonSpec } from "../boons.ts";
+import { charm, EMBLEM } from "../charms.ts";
 import { emblem, type ItemId, type ItemSpec, NO_STATS } from "../items.ts";
 import type { Patch } from "../patch.ts";
 
-/** What every emblem adds of its own from Groot Night. */
-const EMBLEM = { health: 10 } as const;
-
-/** A charm boon from Groot Night: the emblem it gives, with its health, and the trait it grants. */
-function charm(gives: ItemId, name: string, trait: string, quip: string): BoonSpec {
-  const a = /^[AEIOU]/.test(trait) ? "an" : "a";
-  return {
-    name,
-    sort: "charm",
-    gives,
-    text: `An emblem for one figure to hold, with +${EMBLEM.health}% health: it is ${a} ${trait} as well, and counts as one more ${trait}.`,
-    short: `Gives an emblem: +${EMBLEM.health}% health, ${a} ${trait} too.`,
-    n: {},
-    quip,
-  };
-}
 /** A charm the base brought, as Groot Night words it: the same, with its emblem's health. */
 function worded(gives: ItemId, trait: string): Partial<BoonSpec> {
   const { text, short } = charm(gives, "", trait, "");

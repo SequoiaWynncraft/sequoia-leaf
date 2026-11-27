@@ -20,7 +20,7 @@ import { chairsOn, overfills } from "./chairs.ts";
 import { type BoonId, boonIn, boonNumber, boonOr, FIGHT_BOONS, giftOf, giftsTrait } from "./content/boons.ts";
 import { type Catalog, catalogOf, type Era } from "./content/catalog.ts";
 import { type BossId, type FigureId, figureIn, type Stars, traitsOf } from "./content/figures.ts";
-import type { FinishedId, ItemId } from "./content/items.ts";
+import { drawnComponents, type FinishedId, type ItemId } from "./content/items.ts";
 import { holdItem } from "./content/recipes.ts";
 import { ECONOMY, MAX_LEVEL, type RoomKind, sellPrice } from "./content/rooms.ts";
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
@@ -498,7 +498,7 @@ export function choose(run: Run, option: number): Done {
       run.acorns += amount;
       notes.push({ t: "acorns", why: "windfall", amount });
     } else if (boon === "basket") {
-      const items = Array.from({ length: boonNumber(cat, boon, "components") }, () => pick(run, cat.ids.components));
+      const items = Array.from({ length: boonNumber(cat, boon, "components") }, () => pick(run, drawnComponents(cat)));
       run.rack = withAll(run.rack, items);
       notes.push({ t: "items", why: "basket", items });
     } else if (boon === "blanket") {

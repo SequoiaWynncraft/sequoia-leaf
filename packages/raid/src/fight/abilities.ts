@@ -14,6 +14,7 @@ import { formNumber } from "../content/graid.ts";
 import { cone, distance, line, neighbours } from "../hex.ts";
 import { around, type Cast, ids, say, spread } from "./cast.ts";
 import { GROOT_NIGHT_CASTS } from "./casts/groot-night.ts";
+import { PENGUIN_MONTH_CASTS } from "./casts/penguin-month.ts";
 import {
   alliesOf,
   brace,
@@ -71,6 +72,7 @@ function splash(
 }
 export const CASTS: Partial<Record<UnitKind, Cast>> = {
   ...GROOT_NIGHT_CASTS,
+  ...PENGUIN_MONTH_CASTS,
   // ---------- one acorn ----------
   emberkit: (f, u, n) => {
     const t = aim(f, u);

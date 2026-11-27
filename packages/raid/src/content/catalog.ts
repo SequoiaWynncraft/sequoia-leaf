@@ -32,6 +32,7 @@ import { BASE } from "./releases/base.ts";
 import { GAZ_STALL } from "./releases/gaz-stall.ts";
 import { GROOT_NIGHT } from "./releases/groot-night.ts";
 import { GROOT } from "./releases/groot.ts";
+import { PENGUIN_MONTH } from "./releases/penguin-month.ts";
 import { TRAIT_IDS, type TraitId, type TraitSpec } from "./traits.ts";
 
 export type { FigureId } from "./figures.ts";
@@ -69,7 +70,7 @@ export interface Figure extends FigureSpec {
 }
 
 /** Every release's patch, in the order the releases open. A release with nothing in it yet has none. */
-const PATCHES: readonly Patch[] = [BASE, GROOT, GAZ_STALL, GROOT_NIGHT];
+const PATCHES: readonly Patch[] = [BASE, GROOT, GAZ_STALL, GROOT_NIGHT, PENGUIN_MONTH];
 
 /** Every figure any release may bring, in the order a release's arrivals are drawn in. */
 const ALL_FIGURES: readonly FigureId[] = [...FIGURE_IDS, ...MEMBER_IDS];

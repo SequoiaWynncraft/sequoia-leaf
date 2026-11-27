@@ -28,6 +28,7 @@ import type { RuleId } from "./content/wilds.ts";
 import { lastRoom } from "./endless.ts";
 import { arrange } from "./formation.ts";
 import { SEATS } from "./hex.ts";
+import { isKnife, knifeUse, raisesStep, useKnives, type Worth } from "./knife.ts";
 import { chairsUsed, countTraits } from "./party.ts";
 import { countOn, kindsOn } from "./racks.ts";
 import { roomsFought } from "./record.ts";
@@ -132,6 +133,11 @@ const tierWorth = (cat: Catalog, kind: FigureId): number => {
 };
 const worthOf = (cat: Catalog, habit: Habit, kind: FigureId, stars: Stars): number =>
   (TIER_WORTH[tierWorth(cat, kind) - 1] ?? 1) * (STAR_WORTH[stars - 1] ?? 1) * (0.7 + 0.3 * liking(cat, habit, kind));
+/** A figure on a run's board, worth as a habit has it: what the Knife's play (`knife.ts`) weighs. */
+const worthIn =
+  (habit: Habit): Worth =>
+  (run, p) =>
+    worthOf(catalogOf(run), habit, p.kind, p.stars);
 
 /** How good a set of figures is as a party: what each is worth, and something for every trait step switched on. */
 function partyScore(cat: Catalog, habit: Habit, party: readonly Piece[]): number {
@@ -201,6 +207,7 @@ const BOON_LIKES: Record<BoonId, number> = {
   gnomecharm: 3,
   grootercharm: 3,
   choruscharm: 3,
+  huddlecharm: 3,
   graidcharm: 3,
   sneakcharm: 3,
 };
@@ -235,6 +242,8 @@ function likesRule(run: RunView, rule: RuleId): number {
   return rule === "fog" ? lean : rule === "long" ? -lean : 0;
 }
 function likesComponent(run: RunView, item: ComponentId): number {
+  // The Carving Knife, when it has a use: an emblem that puts a step on now, or with a second one an extra chair.
+  if (isKnife(run, item)) return knifeUse(run, item, worthIn(SENSIBLE)) ? 10 : 0;
   const own = pieces(run);
   const loose = own.some((p) => p.items.some(isComponentId)) || kindsOn(run.rack).some(isComponentId);
   const casters = own.filter(
@@ -446,20 +455,6 @@ function fits(cat: Catalog, p: Piece, suits: Suits): number {
 /** Whether an emblem is any use on a figure: a False Moustache is not on one rooted to its hex, which never leaps. */
 const emblemSuits = (cat: Catalog, p: Piece, item: EmblemId): boolean =>
   !(item === "sneakcharm" && specOf(cat, p.kind).rooted === true);
-/** Whether a figure on the board holding an emblem would put its trait's step on: it counts once a figure, so not on a twin of one that carries it. */
-function raisesStep(run: RunView, p: Piece, item: EmblemId): boolean {
-  const cat = catalogOf(run);
-  const board = run.board.flatMap((b) => (b ? [b] : []));
-  const trait = cat.items[item]?.grants;
-  if (trait === undefined) return false;
-  const before = countTraits(cat, board)[trait] ?? 0;
-  const after =
-    countTraits(
-      cat,
-      board.map((b) => (b === p ? { kind: b.kind, items: [...b.items, item] } : b)),
-    )[trait] ?? 0;
-  return stepFor(cat, trait, after) > stepFor(cat, trait, before);
-}
 /** A component or a finished item: what it hands out first. */
 const isMade = (item: RackItem | undefined): item is ComponentId | FinishedId =>
   isComponentId(item) || isFinishedId(item);
@@ -481,9 +476,10 @@ function takerOf(run: RunView, habit: Habit, item: ComponentId | FinishedId): nu
   return best;
 }
 function handOutItems<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): void {
-  // Components and finished items first, in the rack's order, until the first nobody on the board can take.
+  useKnives(run, hands, worthIn(habit));
+  // Components and finished items first, in the rack's order, until the first nobody on the board can take; a Knife waits.
   for (let guard = 0; guard < 30; guard++) {
-    const item = kindsOn(run.rack).find(isMade);
+    const item = kindsOn(run.rack).find((i) => isMade(i) && !isKnife(run, i));
     const best = item === undefined ? -1 : takerOf(run, habit, item);
     if (item === undefined || best < 0 || !hands(run, { do: "give", item, to: { on: "board", at: best } }).ok) break;
   }

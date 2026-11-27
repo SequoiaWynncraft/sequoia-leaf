@@ -118,8 +118,10 @@ describe("the twenty-eight", () => {
     expect(BANNERS.map((b) => [b.id, b.shows, figureIn(every, b.headliner).name])).toEqual([
       ["banner-1", "name", "A guild member"],
       ["groot-night", "title", "Commodore"],
+      ["penguin-month", "title", "Yule"],
     ]);
-    for (const b of BANNERS) expect([isMemberId(b.headliner), b.look]).toEqual([true, "skin"]);
+    // A member's figure is drawn from their skin; the set's own (Yule) is no member's.
+    for (const b of BANNERS) expect([b.id, isMemberId(b.headliner)]).toEqual([b.id, b.look === "skin"]);
   });
 });
 

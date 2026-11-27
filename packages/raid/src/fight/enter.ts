@@ -71,6 +71,7 @@ const PLAIN = {
   bracedUntil: 0,
   bracedBy: 0,
   stub: 0,
+  pool: -1,
   leaps: false,
   ember: 0,
   quicken: 0,
