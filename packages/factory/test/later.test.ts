@@ -8,6 +8,7 @@
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
+import { beforeReach } from "./goals.ts";
 import { Player } from "./player.ts";
 import { bare, TIER5, tunnel } from "./tier5.ts";
 import { generated, must, saved, SAVES, staged } from "./yards.ts";
@@ -32,14 +33,14 @@ describe("the version a yard is kept as", () => {
       expect([F.keptLater(text, y.land), F.decode(text, y.land) !== null]).toEqual([false, true]);
     });
 
-  test("one holding nothing of tier 5 is kept as version 9: every staged yard, every kept save, a tunnel of 5 tiles", () => {
+  test("one holding nothing past version 10 is kept as version 9: every staged yard and kept save without Long reach, a tunnel of 5 tiles", () => {
     const yards = [
       ...(["new", "small", "mid", "gate", "large"] as const).map((n) => staged(n)),
       ...SAVES.map(saved),
       generated().y,
-    ];
+    ].map(beforeReach);
     for (const y of yards) expect(record(F.encode(y)).v).toBe(F.PLACED);
-    const y = bare();
+    const y = beforeReach(bare());
     must(y, tunnel(2, 4, 5));
     expect(record(F.encode(y)).v).toBe(F.PLACED);
   });

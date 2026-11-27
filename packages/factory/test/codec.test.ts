@@ -8,6 +8,7 @@ import { describe, expect, test } from "bun:test";
 
 import { unpackCells } from "../src/cells.ts";
 import * as F from "../src/index.ts";
+import { beforeReach } from "./goals.ts";
 import { bareLand } from "./land.ts";
 import { delivering, flatOut, generated, must } from "./yards.ts";
 
@@ -83,9 +84,9 @@ describe("a yard kept before the rules stopped counting a pace", () => {
   });
 });
 
-/** A line of grade II belt from a crate into the depot through a splitter, a sorter and a joiner, all three at grade I, and a blueprint of it. */
+/** A line of grade II belt from a crate into the depot through a splitter, a sorter and a joiner, all three at grade I, and a blueprint of it; nothing past version 10 known. */
 function line(): F.Yard {
-  const y = F.create({ land: bareLand(13, 9, [], [9, 4]), tier: 4, seed: 1 });
+  const y = beforeReach(F.create({ land: bareLand(13, 9, [], [9, 4]), tier: 4, seed: 1 }));
   must(y, { do: "build", kind: "crate", x: 1, y: 4, dir: 0 });
   for (const [x, kind] of [
     [2, "belt"],

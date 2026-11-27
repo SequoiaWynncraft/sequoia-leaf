@@ -238,4 +238,22 @@ export const RESEARCH: readonly ResearchInfo[] = [
     needs: ["deepculvert"],
     unlocks: { mouths: true },
   },
+  // Reach, for building far from where you stand (`Unlocks.range`).
+  {
+    id: "longreach",
+    tier: 3,
+    name: "Long reach",
+    what: "You can build up to 2 plots away from the plot you stand on, up from 1.",
+    cost: { timber: 150 },
+    unlocks: { range: 2 },
+  },
+  {
+    id: "longerreach",
+    tier: 5,
+    name: "Longer reach",
+    what: "You can build up to 3 plots away from the plot you stand on, up from 2.",
+    cost: { timber: 6000, brass: 4000 },
+    needs: ["longreach"],
+    unlocks: { range: 3 },
+  },
 ];

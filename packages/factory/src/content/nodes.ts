@@ -52,7 +52,15 @@ export interface Unlocks {
   readonly felling?: true;
   /** A tunnel's way-in mouth takes things in from its left and right, as well as from behind. */
   readonly mouths?: true;
+  /**
+   * How many plots out from the plot you stand on you build: 1 is the plots round it. `ANYWHERE` is
+   * every plot of any land.
+   */
+  readonly range?: number;
 }
+
+/** A range that takes in every plot of any land: building from anywhere. */
+export const ANYWHERE = 255;
 
 /** What a new yard has. */
 export const START: Unlocks = {
@@ -60,6 +68,7 @@ export const START: Unlocks = {
   plots: ["yard"],
   crate: 32,
   reach: 100,
+  range: 1,
   depot: 20,
   away: 8,
   hooks: 3,

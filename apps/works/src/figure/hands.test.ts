@@ -13,10 +13,12 @@ import {
   build,
   CRATE,
   create,
+  goal,
   LAND,
   type Leg,
   MILL,
   type Piece,
+  reopen,
   TUNNEL,
   type Yard,
   yardSolid,
@@ -49,10 +51,12 @@ afterEach(() => {
   Reflect.deleteProperty(globalThis, "HTMLElement");
 });
 
-/** A yard at tier 4 that owns every plot of the guild's land. */
+/** A yard at tier 4 that owns every plot of the guild's land, without Long reach: the plot stood on and the eight round it. */
 function everywhere(): Yard {
   const y = create({ seed: 6, tier: 4 });
   y.plots = LAND.plots.map((p) => p.plot);
+  y.done = y.done.filter((g) => g !== goal("longreach"));
+  reopen(y);
   return y;
 }
 /** The middle of a tile, in pixels of the art. */

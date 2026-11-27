@@ -375,7 +375,12 @@ const historyOnly = fresh();
 act(historyOnly, { do: "build", kind: FORGE, x: 20, y: 10, dir: 0 }, Infinity, "h1");
 act(historyOnly, { do: "remove", x: 20, y: 10 }, Infinity, "h2");
 const wide = [planOnly, printOnly, historyOnly];
-const versions = [...wide, fresh()].map((v) => JSON.parse(F.encode(v)).v);
+// The yard alone, with Long reach forgotten: nothing past what a Leaf of version 10 knew.
+const plain = fresh();
+plain.done = plain.done.filter((g) => F.GOALS[g]?.id !== "longreach");
+plain.told = Math.min(plain.told, plain.done.length);
+F.reopen(plain);
+const versions = [...wide, plain].map((v) => JSON.parse(F.encode(v)).v);
 out.keptWide =
   JSON.stringify(versions) === JSON.stringify([F.VERSION, F.VERSION, F.VERSION, F.PLACED]) &&
   wide.every((v) => !v.kind.some((k) => k > 15 && k !== F.NONE));
