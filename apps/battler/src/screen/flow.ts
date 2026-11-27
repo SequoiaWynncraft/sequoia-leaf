@@ -62,7 +62,7 @@ export async function startNew(trail: number, own = false): Promise<boolean> {
 
 /** Sets out on an endless run, one way or the other, beside the run in hand (which is not touched). Says whether it did. */
 export async function startEndless(way: EndlessWay): Promise<boolean> {
-  const did = await ask({ do: "endless", way }, document.getElementById("start"));
+  const did = await ask({ do: "start", course: way }, document.getElementById("start"));
   if (!did?.ok) return false;
   sitDown("endless");
   return true;

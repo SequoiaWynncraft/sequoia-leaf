@@ -15,8 +15,8 @@
  * Only the member's view settings stay in the browser (`keep.ts`).
  *
  * Leaf's table keeps two runs, the run in hand and the endless run beside it; the table plays one of
- * them at a time (`S.slot`), and every command for a run is aimed at that one (`endless: true` for
- * the endless run).
+ * them at a time (`S.slot`), and every command for a run is aimed at that one (`slot: "endless"`
+ * for the endless run).
  *
  * What the table is showing is one value (`S.screen`, `screen.ts`), moved on only by `go`, which
  * also asks Leaf for a room's takings once its fight has been played; whoever animates the table
@@ -37,6 +37,7 @@ import {
   refusalText,
   type Roster,
   type RunView,
+  type Slot,
   type TableView,
 } from "@sequoia-leaf/raid";
 
@@ -44,7 +45,7 @@ import { keepPrefs, newPrefs, type Prefs, readPrefs } from "./keep.ts";
 import { endedOf, type Event, type Screen, step, type Table } from "./screen.ts";
 
 /** Which of the table's two runs the page plays: the run in hand, or the endless run beside it. */
-export type Slot = "main" | "endless";
+export type { Slot } from "@sequoia-leaf/raid";
 
 export const S: {
   /** The run the table plays (`slot`), as the page's copy; while the screen shows a run that has ended, that run. */
@@ -177,7 +178,7 @@ export function playSlot(slot: Slot): void {
 
 /** A command as it is sent: one for a run is aimed at the run the table plays. */
 const aimed = (command: RaidCommand): RaidCommand =>
-  S.slot === "endless" && isRunCommand(command) ? { ...command, endless: true } : command;
+  S.slot === "endless" && isRunCommand(command) ? { ...command, slot: "endless" } : command;
 
 let moving = false;
 const moves: Event[] = [];

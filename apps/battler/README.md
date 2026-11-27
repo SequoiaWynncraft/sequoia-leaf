@@ -311,7 +311,7 @@ events already looked at for a room taken (`raid.taken.v1:<Leaf id>`, `ui/woods.
 to them once, and another member on the same browser has their own.
 
 The table keeps two runs, the run in hand and the endless run, and the page plays one at a time
-(`S.slot`): every command for a run goes to that one (`endless: true` for the endless run). A
+(`S.slot`): every command for a run goes to that one (`slot: "endless"` for the endless run). A
 strip's Carry on sits down to its run; End this raid ends that one.
 
 ## In the town's frame

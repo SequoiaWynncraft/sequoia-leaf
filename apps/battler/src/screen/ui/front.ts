@@ -270,7 +270,7 @@ function footOfCard(go: FrontAsks, mode: Mode, at: At): HTMLElement {
   const run = mode.run(at);
   const setOut = (): void => {
     const c = mode.setOut?.(at);
-    if (c?.do === "endless") go.endless(c.way);
+    if (c && "course" in c) go.endless(c.course);
     else if (c) go.start(c.trail, c.own === true);
   };
   const start = (words: string, look: string): HTMLElement =>

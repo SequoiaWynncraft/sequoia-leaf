@@ -2,14 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import type { Ctx, Done, Met } from "@sequoia-leaf/core";
 
-import { type RaidCommand, readCommand } from "./command.ts";
+import type { RaidCommand } from "./command.ts";
 import { ENDLESS } from "./content/endless.ts";
 import type { FigureId, Stars } from "./content/figures.ts";
 import { ROOM_COUNT, ROOMS } from "./content/rooms.ts";
 import { depthSlot, paidFor, reached, weekAt } from "./depths.ts";
 import { foeOf, heldRoom, heldSlot, roomAt, sparAt } from "./endless.ts";
 import { opposition } from "./foe.ts";
-import { meets, RAID, type RaidNote, type Table, TABLE_VERSION } from "./game.ts";
+import { meets, RAID, type RaidNote, readCommand, type Table, TABLE_VERSION } from "./game.ts";
 import { payout } from "./outside.ts";
 import {
   beginFight,
@@ -234,7 +234,7 @@ describe("the endless run at the table", () => {
     let s = must(RAID.create(ctx()), { do: "start", trail: 0 }).state;
     s = must(s, { do: "choose", option: 0 }).state;
     const run = s.run;
-    const done = must(s, { do: "endless", way: "wilds" });
+    const done = must(s, { do: "start", course: "wilds" });
     expect(done.notes).toContainEqual({ t: "started", trail: 0, run: 1, endless: "wilds" });
     s = done.state;
     expect(s.endless?.endless).toBe("wilds");
@@ -244,31 +244,33 @@ describe("the endless run at the table", () => {
   });
   test("a command for a run acts on the endless run when it says so, and on the run in hand when not", () => {
     let s = must(RAID.create(ctx()), { do: "start", trail: 0 }).state;
-    s = must(s, { do: "endless", way: "deep" }).state;
-    s = must(s, { do: "choose", option: 1, endless: true }).state;
+    s = must(s, { do: "start", course: "deep" }).state;
+    s = must(s, { do: "choose", option: 1, slot: "endless" }).state;
     expect(s.endless?.board.some((p) => p !== null)).toBe(true);
     expect(s.run?.board.every((p) => p === null)).toBe(true);
     const predicted = RAID.view(s, ctx());
     expect(predicted.endless?.endless).toBe("deep");
   });
   test("an endless run that has fought no room is not put down, nor walked home from", () => {
-    const s = must(RAID.create(ctx()), { do: "endless", way: "wilds" }).state;
-    expect(RAID.apply(s, { do: "endless", way: "deep" }, ctx())).toEqual({ refused: "unfought" });
-    expect(RAID.apply(s, { do: "abandon", endless: true }, ctx())).toEqual({ refused: "unfought" });
+    const s = must(RAID.create(ctx()), { do: "start", course: "wilds" }).state;
+    expect(RAID.apply(s, { do: "start", course: "deep" }, ctx())).toEqual({ refused: "unfought" });
+    expect(RAID.apply(s, { do: "abandon", slot: "endless" }, ctx())).toEqual({ refused: "unfought" });
     expect(isDone(RAID.apply(s, { do: "start", trail: 0 }, ctx()))).toBe(true);
   });
   test("is kept and read back, and a table kept before there were endless runs reads with none", () => {
-    let s = must(RAID.create(ctx()), { do: "endless", way: "deep" }).state;
-    s = must(s, { do: "choose", option: 0, endless: true }).state;
+    let s = must(RAID.create(ctx()), { do: "start", course: "deep" }).state;
+    s = must(s, { do: "choose", option: 0, slot: "endless" }).state;
     expect(JSON.parse(RAID.encode(s))).toMatchObject({ v: TABLE_VERSION });
     expect(RAID.decode(RAID.encode(s))).toEqual(s);
     const old = { ...JSON.parse(RAID.encode(s)), v: 2, endless: undefined, ventures: undefined, week: undefined };
     expect(RAID.decode(JSON.stringify(old))).toMatchObject({ endless: null, ventures: 0, week: { at: 0 } });
   });
-  test("reads `endless` off the wire for a run's commands, and setting out on one", () => {
-    expect(readCommand({ do: "buy", offer: 2, endless: true })).toEqual({ do: "buy", offer: 2, endless: true });
+  test("reads the endless slot off the wire for a run's commands, and setting out on one, as either was ever said", () => {
+    expect(readCommand({ do: "buy", offer: 2, slot: "endless" })).toEqual({ do: "buy", offer: 2, slot: "endless" });
+    expect(readCommand({ do: "buy", offer: 2, endless: true })).toEqual({ do: "buy", offer: 2, slot: "endless" });
     expect(readCommand({ do: "buy", offer: 2, endless: "yes" })).toEqual({ do: "buy", offer: 2 });
-    expect(readCommand({ do: "endless", way: "wilds" })).toEqual({ do: "endless", way: "wilds" });
+    expect(readCommand({ do: "start", course: "wilds" })).toEqual({ do: "start", course: "wilds" });
+    expect(readCommand({ do: "endless", way: "wilds" })).toEqual({ do: "start", course: "wilds" });
     expect(readCommand({ do: "endless", way: "lost" })).toBeNull();
     expect(readCommand({ do: "start", trail: 0, endless: true })).toEqual({ do: "start", trail: 0 });
   });
@@ -278,11 +280,11 @@ describe("what a room won in an endless run leaves", () => {
   test("a take into a held room meets whoever holds it; the Wilds and a run of fifteen rooms meet no holder", () => {
     const deep = strong(startRun(4, { endless: "deep" }), 16);
     fought(deep);
-    expect(meets(table(deep), { do: "take", endless: true })).toEqual({ slot: heldSlot(17), avoid: [], held: true });
+    expect(meets(table(deep), { do: "take", slot: "endless" })).toEqual({ slot: heldSlot(17), avoid: [], held: true });
     expect(meets(table(deep), { do: "take" })).toBeNull();
     const wilds = strong(startRun(4, { endless: "wilds" }), 16);
     fought(wilds);
-    expect(meets(table(wilds), { do: "take", endless: true })).toBeNull();
+    expect(meets(table(wilds), { do: "take", slot: "endless" })).toBeNull();
   });
   test("a room held and won is held by the board that won it; a depth past the best is left for the boards", () => {
     const run = strong(startRun(4, { endless: "deep" }), 17);

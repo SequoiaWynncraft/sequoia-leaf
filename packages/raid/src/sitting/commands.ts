@@ -7,8 +7,8 @@
  */
 import { mix } from "@sequoia-leaf/core";
 
-import { isPlanning, type PlanningCommand, readCommand as readRunCommand } from "../command.ts";
-import { act } from "../game.ts";
+import { act, isPlanning, type PlanningCommand, readRunCommand } from "../command.ts";
+import { isRecord, isWhole } from "../party.ts";
 import { abandon, type Note } from "../run.ts";
 import { hasTaken, take } from "./carousel.ts";
 import { advance, begin, gone } from "./clock.ts";
@@ -42,23 +42,8 @@ export type SittingCommand =
   | { do: "start" }
   /** Take the figure at a place in the carousel's ring. */
   | { do: "pick"; offer: number }
-  /** The run's own planning commands, for the caller's seat; the rest of a run's are the clock's (`WHOSE`). */
+  /** The run's own planning commands, for the caller's seat; the rest of a run's are the clock's (its spec's `whose`). */
   | PlanningCommand;
-
-/** A command off the wire, or null. */
-export function readCommand(v: unknown): SittingCommand | null {
-  if (typeof v === "object" && v !== null && "do" in v) {
-    if (v.do === "sit" || v.do === "leave" || v.do === "start") return { do: v.do };
-    if (v.do === "pick") {
-      const offer = "offer" in v ? v.offer : null;
-      return typeof offer === "number" && Number.isInteger(offer) && offer >= 0 && offer < 64
-        ? { do: "pick", offer }
-        : null;
-    }
-  }
-  const c = readRunCommand(v);
-  return c && isPlanning(c) ? c : null;
-}
 
 type Did = { ok: true; notes: Note[] } | Refusal;
 /** A command answered: the sitting after it and what happened in the caller's run, or the refusal and the sitting only brought to the moment. */
@@ -149,22 +134,41 @@ function plan(t: Sitting, c: PlanningCommand, { player, seed }: Call): Did {
   const seat = seatOf(t, player.id);
   if (!seat) return refuse("not_seated");
   seat.run.rng = mix(seat.run.rng, seed);
-  return act(seat.run, c, undefined);
+  return act(seat.run, c);
 }
 
-function carryOut(t: Sitting, c: SittingCommand, call: Call): Did {
-  if (isPlanning(c)) return plan(t, c, call);
-  switch (c.do) {
-    case "sit":
-      return sit(t, call);
-    case "leave":
-      return leave(t, call);
-    case "start":
-      return start(t, call);
-    case "pick":
-      return pickOffer(t, c.offer, call);
-  }
+// ---------- the sitting's own commands ----------
+
+/** One of the sitting's own commands, said once: how it is read off the wire, and what it does at a moment. */
+interface SeatSpec<C extends SittingCommand> {
+  readonly read: (v: Record<string, unknown>) => C | null;
+  readonly run: (t: Sitting, c: C, call: Call) => Did;
 }
+type SeatDo = Exclude<SittingCommand, PlanningCommand>["do"];
+type SeatCommandOf<D extends SeatDo> = Extract<SittingCommand, { do: D }>;
+
+const SEAT: { readonly [D in SeatDo]: SeatSpec<SeatCommandOf<D>> } = {
+  sit: { read: () => ({ do: "sit" }), run: (t, _, call) => sit(t, call) },
+  leave: { read: () => ({ do: "leave" }), run: (t, _, call) => leave(t, call) },
+  start: { read: () => ({ do: "start" }), run: (t, _, call) => start(t, call) },
+  pick: {
+    read: (v) => (isWhole(v.offer, 0, 63) ? { do: "pick", offer: v.offer } : null),
+    run: (t, c, call) => pickOffer(t, c.offer, call),
+  },
+};
+const seatSpec = <D extends SeatDo>(name: D): SeatSpec<SeatCommandOf<D>> => SEAT[name];
+const isSeatDo = (name: unknown): name is SeatDo => typeof name === "string" && Object.hasOwn(SEAT, name);
+
+/** A command off the wire, or null: the sitting's own, or one of the run's a member plans with. */
+export function readCommand(v: unknown): SittingCommand | null {
+  if (!isRecord(v)) return null;
+  if (isSeatDo(v.do)) return seatSpec(v.do).read(v);
+  const c = readRunCommand(v);
+  return c && isPlanning(c) ? c : null;
+}
+
+const carryOut = (t: Sitting, c: SittingCommand, call: Call): Did =>
+  isPlanning(c) ? plan(t, c, call) : seatSpec(c.do).run(t, c, call);
 
 /**
  * Does a command at a moment. The sitting given is not changed. Done, the answer's sitting is the

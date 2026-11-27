@@ -24,7 +24,8 @@
  *   never again. Each must read for ever.
  *
  * What a golden hashes is what the rules did (who stood where, what was drawn, what came of it), never
- * how a run or a table is stored, so a change of shape alone changes no golden but `keys.txt`.
+ * how a run or a table is stored, so a change of shape alone changes no golden but `keys.txt`. A
+ * command is hashed as the table reads it (`RAID.command`), never as it was spelt on the wire.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 
@@ -503,7 +504,7 @@ class Playing {
     const ctx: Ctx = { ...ctxOf(mix(mix(SEED, this.n), this.sent++)), ...(met && { met }) };
     const done = RAID.apply(this.table, c, ctx);
     if (isRefused(done)) {
-      this.draws.add(["refused", raw, done.refused]);
+      this.draws.add(["refused", c, done.refused]);
       return false;
     }
     this.table = done.state;
@@ -511,7 +512,7 @@ class Playing {
     for (const pay of done.coins ?? []) this.coins += pay.amount;
     const run = this.run;
     const { keep = [], log = [] } = done;
-    this.draws.add([raw, done.coins ?? [], keep.map(keptOf), log.map((l) => l.kind), run && runState(run)]);
+    this.draws.add([c, done.coins ?? [], keep.map(keptOf), log.map((l) => l.kind), run && runState(run)]);
     watch(this.seen, this.way, c.do, this.table, run, keep, log);
     return true;
   }

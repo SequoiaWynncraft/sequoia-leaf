@@ -87,7 +87,7 @@ export interface Board {
 
 export type ModeId = "trails" | "endless" | "deep" | "live";
 /** What setting out sends Leaf: a trail's run, or an endless run. */
-export type SetOut = Extract<RaidCommand, { do: "start" | "endless" }>;
+export type SetOut = Extract<RaidCommand, { do: "start" }>;
 export interface Mode {
   readonly id: ModeId;
   readonly category: CategoryId;
@@ -167,7 +167,7 @@ const endlessMode = (id: ModeId, way: EndlessWay, text: string, title: string): 
   name: WAY_NAMES[way],
   text,
   closed: (at) => otherWay(at, way).closed,
-  setOut: () => ({ do: "endless", way }),
+  setOut: () => ({ do: "start", course: way }),
   run: (at) => endlessOn(at, way),
   board: (at) => {
     const span: Span = way === "deep" ? "week" : at.span;

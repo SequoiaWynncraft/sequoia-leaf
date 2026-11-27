@@ -13,7 +13,7 @@ import {
 } from "@sequoia-leaf/core";
 
 import { SENSIBLE } from "./bot.ts";
-import { type Predicted, type RaidCommand, readCommand } from "./command.ts";
+import { legal, type Predicted, type RaidCommand } from "./command.ts";
 import { FIGURE_IDS, FIGURES } from "./content/figures.ts";
 import { EMBLEM_IDS, EMBLEMS } from "./content/items.ts";
 import { newLooks } from "./content/looks.ts";
@@ -24,11 +24,11 @@ import { readFight } from "./fought.ts";
 import {
   decodeTable,
   encodeTable,
-  legal,
   planCommands,
   predict,
   RAID,
   type RaidNote,
+  readCommand,
   refusalText,
   runView,
   type Table,

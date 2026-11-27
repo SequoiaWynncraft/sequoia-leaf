@@ -53,7 +53,7 @@ export const woodsAway = (): void => void (woods.taken = []);
 /** The endless way a mode sets out on, if it is one. */
 const wayOf = (mode: Mode, at: At): EndlessWay | null => {
   const c = mode.setOut?.(at);
-  return c?.do === "endless" ? c.way : null;
+  return c && "course" in c ? c.course : null;
 };
 
 /** Whether two things read from Leaf are the same, to draw the page again only when one changed. */

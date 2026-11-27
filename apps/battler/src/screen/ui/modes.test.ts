@@ -111,8 +111,8 @@ describe("the button a mode shows", () => {
 
 describe("the endless ways", () => {
   test("Set out sends an endless run of the way, whatever trail is chosen", () => {
-    expect(THE_WILDS.setOut?.(at({ trail: 2, own: true }))).toEqual({ do: "endless", way: "wilds" });
-    expect(THE_DEEP_WOODS.setOut?.(at())).toEqual({ do: "endless", way: "deep" });
+    expect(THE_WILDS.setOut?.(at({ trail: 2, own: true }))).toEqual({ do: "start", course: "wilds" });
+    expect(THE_DEEP_WOODS.setOut?.(at())).toEqual({ do: "start", course: "deep" });
   });
 
   test("each has the endless run as its run when it set out that way, and the trails keep the run in hand", () => {

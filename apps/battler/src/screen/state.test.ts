@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { type Reply, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
-import { RAID, type RaidCommand, type Table } from "@sequoia-leaf/raid";
+import { COMMANDS, RAID, type RaidCommand, type Table } from "@sequoia-leaf/raid";
+import { EVERY_PLANNING } from "@sequoia-leaf/raid/testkit.ts";
 
 import { ask, busy, doNow, onHeld, onRefused, openTable, playSlot, S, tableNow, waitingForLeaf } from "./state.ts";
 
@@ -20,7 +21,7 @@ function fakeLeaf() {
     awards: [],
     postcards: {},
   });
-  const leaf = { state: RAID.create(ctx()), rev: 0, seen: new Map<string, unknown>(), posts: 0 };
+  const leaf = { state: RAID.create(ctx()), rev: 0, seen: new Map<string, unknown>(), posts: 0, sent: [] as unknown[] };
   /** Does a command as Leaf would, from another page of the member's. */
   const elsewhere = (command: RaidCommand): void => {
     const done = RAID.apply(leaf.state, command, ctx());
@@ -33,6 +34,7 @@ function fakeLeaf() {
     leaf.posts += 1;
     const commands = isRecord(sent.body) && Array.isArray(sent.body.commands) ? sent.body.commands : [];
     const before = RAID.encode(leaf.state);
+    leaf.sent.push(...commands);
     const results = commands.map((c: unknown) => {
       const id = isRecord(c) && typeof c.id === "string" ? c.id : "";
       const answered = leaf.seen.get(id);
@@ -191,7 +193,7 @@ describe("the table, on Leaf", () => {
     // The run in hand, but for its dice (Leaf stirs every run's with each command).
     const kept = () => ({ ...fake.leaf.state.run, rng: 0 });
     const inHand = structuredClone(kept());
-    expect((await ask({ do: "endless", way: "deep" }))?.ok).toBe(true);
+    expect((await ask({ do: "start", course: "deep" }))?.ok).toBe(true);
     // Setting out on it leaves the table on the run in hand until the page sits down to the endless one.
     expect(S.run?.endless).toBeNull();
     expect(S.laid.endless?.endless).toBe("deep");
@@ -219,4 +221,28 @@ describe("the table, on Leaf", () => {
     await until(() => S.run?.bench.some((p) => p !== null) === true);
     expect(S.run?.bench.some((p) => p !== null)).toBe(true);
   });
+});
+
+/** A command as the page sent it, without the id it was sent under. */
+const unsent = (v: unknown): unknown =>
+  isRecord(v) ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== "id")) : v;
+
+describe("every planning command of a run", () => {
+  for (const { c, ready } of EVERY_PLANNING) {
+    for (const slot of ["main", "endless"] as const) {
+      test(`${c.do} at the ${slot} run: done at once or asked by its spec, and sent aimed at it`, async () => {
+        const fake = fakeLeaf();
+        fake.elsewhere({ do: "start", trail: 0 });
+        fake.elsewhere({ do: "start", course: "deep" });
+        for (const run of [fake.leaf.state.run, fake.leaf.state.endless]) if (run) ready(run);
+        world = standin(fake.routes);
+        expect(await openTable("p", () => undefined)).toBeNull();
+        playSlot(slot);
+        const did = COMMANDS[c.do].draws ? await ask(c) : doNow(c);
+        expect(did?.ok).toBe(true);
+        await until(() => !waitingForLeaf());
+        expect(fake.leaf.sent.map(unsent)).toEqual([slot === "main" ? c : { ...c, slot }]);
+      });
+    }
+  }
 });

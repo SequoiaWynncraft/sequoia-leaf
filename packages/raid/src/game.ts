@@ -20,24 +20,27 @@ import {
   LOGGED,
   type Logged,
   type Meeting,
-  type Met,
   mix,
   type Refused,
 } from "@sequoia-leaf/core";
 
 import { type Habit, type Hands, planWith } from "./bot.ts";
 import {
+  act,
   type Aimed,
-  forEndless,
+  aimedAt,
   isPredicted,
-  type Predicted,
+  isRunCommand,
+  plan,
   type RaidCommand,
-  readCommand,
-  type RunCommand,
+  readAimed,
+  type Slot,
+  type TableCommand,
 } from "./command.ts";
-import type { EndlessWay } from "./content/endless.ts";
+import { type EndlessWay, isEndlessWay } from "./content/endless.ts";
 import {
   isBoughtLook,
+  isLookKind,
   type LookId,
   type LookKind,
   LOOKS,
@@ -48,10 +51,9 @@ import {
   wear,
   wornOf,
 } from "./content/looks.ts";
-import { ROOMS } from "./content/rooms.ts";
+import { ROOMS, TRAIL_COUNT } from "./content/rooms.ts";
 import { paidFor, reached, readWeek, type Week, weekAt } from "./depths.ts";
 import { heldSlot, isHeld, roomAt } from "./endless.ts";
-import { feed } from "./feed.ts";
 import { boardSlot, metLately } from "./foe.ts";
 import { fightRecord } from "./fought.ts";
 import {
@@ -68,36 +70,22 @@ import {
 import { type Roster, rosterOf } from "./own.ts";
 import { isRecord, isWhole } from "./party.ts";
 import { postcard } from "./postcard.ts";
-import { forgeItems } from "./rack.ts";
 import {
   abandon,
-  beginFight,
-  buy,
-  buyXp,
   type Choice,
-  choose,
-  type Done as RunDone,
   fieldCap,
   type Fought,
   foughtOf,
-  giveItem,
-  hold,
-  move,
   type Note,
-  redraw,
   refusal,
   REFUSALS,
   type Run,
   type RunSummary,
   type RunView,
-  rustle,
-  sell,
   type Stage,
   startRun,
   summariseRun,
   takenTo,
-  takeTakings,
-  toBench,
   type Why,
   whyText,
 } from "./run.ts";
@@ -241,48 +229,9 @@ export function tableView(state: Table, ctx: Pick<Ctx, "awards" | "now">): Table
 type Answer = Done<Table, RaidNote> | Refused;
 const no = (code: TableWhy | Why): Refused => ({ refused: code });
 
-/** A command that draws nothing, on a run with or without its streams: Leaf's, or the page's copy. */
-export function plan(run: RunView, c: Predicted): RunDone {
-  switch (c.do) {
-    case "buy":
-      return buy(run, c.offer);
-    case "sell":
-      return sell(run, c.from);
-    case "feed":
-      return feed(run, c.from, c.to);
-    case "move":
-      return move(run, c.from, c.to);
-    case "bench":
-      return toBench(run, c.seat);
-    case "hold":
-      return hold(run, c.on);
-    case "xp":
-      return buyXp(run);
-    case "give":
-      return giveItem(run, c.item, c.to);
-    case "forge":
-      return forgeItems(run, c.item, c.with);
-  }
-}
-
-/** A run action, on the run in hand; `met` is another member's board that a `take` meets (`Ctx.met`). */
-export function act(run: Run, c: RunCommand, met: Met | undefined): RunDone {
-  if (isPredicted(c)) return plan(run, c);
-  switch (c.do) {
-    case "choose":
-      return choose(run, c.option);
-    case "redraw":
-      return redraw(run);
-    case "rustle":
-      return rustle(run);
-    case "fight":
-      return beginFight(run);
-    case "take":
-      return takeTakings(run, met);
-    case "abandon":
-      return abandon(run);
-  }
-}
+/** The run a table keeps in a slot, or the page's copy of it. */
+const heldIn = <R>(s: { run: R | null; endless: R | null }, slot: Slot): R | null =>
+  slot === "endless" ? s.endless : s.run;
 
 /**
  * A run that has ended: written into the almanac, let go of, and paid for under its number (an
@@ -327,7 +276,9 @@ function putDown(s: Table, run: Run | null, notes: RaidNote[], log: Logged[], ro
   return finish(s, run, notes, log, room);
 }
 
-function setOut(s: Table, { trail, own: asked }: Extract<RaidCommand, { do: "start" }>, ctx: Ctx): Answer {
+type SetOut = Extract<TableCommand, { do: "start" }>;
+
+function setOut(s: Table, { trail, own: asked }: Exclude<SetOut, { course: EndlessWay }>, ctx: Ctx): Answer {
   // The main way is never told what the member has pulled.
   const own: Roster | null = asked ? rosterOf(ctx.awards) : null;
   if (own && Object.keys(own).length === 0) return no("nothing_pulled");
@@ -343,7 +294,7 @@ function setOut(s: Table, { trail, own: asked }: Extract<RaidCommand, { do: "sta
 }
 
 /** Setting out on an endless run, beside the run in hand: on the first trail, the fair game's figures. */
-function setOutEndless(s: Table, { way }: Extract<RaidCommand, { do: "endless" }>, ctx: Ctx): Answer {
+function setOutEndless(s: Table, { course: way }: Extract<SetOut, { course: EndlessWay }>, ctx: Ctx): Answer {
   const notes: RaidNote[] = [];
   const log: Logged[] = [];
   const coins = putDown(s, s.endless, notes, log, ctx.room);
@@ -369,14 +320,14 @@ function kept(s: Table, run: Run, decided: Fought, ctx: Ctx): Kept[] {
 }
 
 function play(s: Table, c: Aimed, ctx: Ctx): Answer {
-  const run = forEndless(c) ? s.endless : s.run;
+  const run = heldIn(s, aimedAt(c));
   if (!run) return no("no_run");
   const room = run.record.length;
   // The takings are paid from the fight as it was decided when the party set out, against whoever was across.
   const before = foughtOf(run);
   const seconds = before?.outcome.seconds ?? 0;
   const across = before?.setup.sides[1].by;
-  const done = act(run, c, ctx.met);
+  const done = act(run, c, { met: ctx.met });
   if (!done.ok) return no(done.code);
   const notes: RaidNote[] = [...done.notes];
   // Every fight decided, kept whole for the staff's analysis.
@@ -411,8 +362,8 @@ function play(s: Table, c: Aimed, ctx: Ctx): Answer {
  * holds a room held (`isHeld`, `heldSlot`), the member too, and nobody's anywhere else.
  */
 export function meets(state: Table, c: RaidCommand): Meeting | null {
-  const run = forEndless(c) ? state.endless : state.run;
-  const to = c.do === "take" && run ? takenTo(run) : null;
+  const run = c.do === "take" ? heldIn(state, aimedAt(c)) : null;
+  const to = run && takenTo(run);
   if (!run || to === null || roomAt(to)?.kind !== "spar") return null;
   if (run.endless) return isHeld(run, to) ? { slot: heldSlot(to), avoid: [], held: true } : null;
   return { slot: boardSlot(run.trail, to, run.own !== null), avoid: metLately(run.record, run.foe) };
@@ -423,32 +374,95 @@ export function meets(state: Table, c: RaidCommand): Meeting | null {
  * home is refused, so that a run's opening cannot be drawn again and again for free.
  */
 export const unfought = (run: Pick<Run, "record">): boolean => run.record.length === 0;
-/** Whether a command would put down a run that has fought no room yet (`unfought`): the endless run's, or the run in hand's. */
+/** The slot a run is set out in. */
+const setOutIn = (c: SetOut): Slot => ("course" in c ? "endless" : "main");
+/** Whether a command would put down a run that has fought no room yet (`unfought`): setting out afresh in its slot, or walking home. */
 function putsDownUnfought(s: Table, c: RaidCommand): boolean {
-  const run = c.do === "endless" || forEndless(c) ? s.endless : s.run;
-  return (c.do === "start" || c.do === "endless" || c.do === "abandon") && run !== null && unfought(run);
+  const slot = c.do === "start" ? setOutIn(c) : c.do === "abandon" ? aimedAt(c) : null;
+  const run = slot && heldIn(s, slot);
+  return run !== null && unfought(run);
 }
 
 export function applyCommand(state: Table, c: RaidCommand, ctx: Ctx): Answer {
-  if (c.do === "start" && !trailOpen(state.almanac, c.trail)) return no("trail_closed");
+  if (c.do === "start" && !("course" in c) && !trailOpen(state.almanac, c.trail)) return no("trail_closed");
   if (putsDownUnfought(state, c)) return no("unfought");
   const s = structuredClone(state);
   // Leaf's dice, stirred into every stream before anything is drawn.
   s.rng = mix(s.rng, ctx.seed);
   for (const run of [s.run, s.endless]) if (run) run.rng = mix(run.rng, ctx.seed);
-  if (c.do === "start") return setOut(s, c, ctx);
-  if (c.do === "endless") return setOutEndless(s, c, ctx);
-  if (c.do === "trail") {
-    if (!trailOpen(s.almanac, c.trail)) return no("trail_closed");
-    s.trail = c.trail;
-    return { state: s, notes: [{ t: "trail", trail: c.trail }] };
-  }
-  if (c.do === "look" || c.do === "buyLook") return dress(s, c);
-  return play(s, c, ctx);
+  return isRunCommand(c) ? play(s, c, ctx) : doTable(s, c, ctx);
+}
+
+// ---------- the table's own commands ----------
+
+/** One of the table's own commands, said once: how it is read off the wire, and what it does to the table. */
+interface TableSpec<C extends TableCommand> {
+  readonly read: (v: Record<string, unknown>) => C | null;
+  readonly run: (s: Table, c: C, ctx: Ctx) => Answer;
+}
+type TableDo = TableCommand["do"];
+type TableCommandOf<D extends TableDo> = Extract<TableCommand, { do: D }>;
+
+const trailOf = (v: unknown): number | null => (isWhole(v, 0, TRAIL_COUNT - 1) ? v : null);
+const lookOf = (v: Record<string, unknown>): { kind: LookKind; look: string } | null =>
+  isLookKind(v.kind) && typeof v.look === "string" && v.look.length <= 32 ? { kind: v.kind, look: v.look } : null;
+
+/**
+ * Setting out off the wire: on a trail (`course: "trail"`, or none), with the member's own figures
+ * when `own` is true; or on an endless run (`course: "wilds"` or `"deep"`), with the fair game's.
+ */
+function readStart(v: Record<string, unknown>): SetOut | null {
+  const course = v.course ?? "trail";
+  if (course !== "trail") return isEndlessWay(course) && v.own !== true ? { do: "start", course } : null;
+  const trail = trailOf(v.trail);
+  return trail === null ? null : v.own === true ? { do: "start", trail, own: true } : { do: "start", trail };
+}
+
+const TABLE: { readonly [D in TableDo]: TableSpec<TableCommandOf<D>> } = {
+  start: { read: readStart, run: (s, c, ctx) => ("course" in c ? setOutEndless(s, c, ctx) : setOut(s, c, ctx)) },
+  trail: {
+    read: (v) => {
+      const trail = trailOf(v.trail);
+      return trail === null ? null : { do: "trail", trail };
+    },
+    run: (s, c) => {
+      if (!trailOpen(s.almanac, c.trail)) return no("trail_closed");
+      s.trail = c.trail;
+      return { state: s, notes: [{ t: "trail", trail: c.trail }] };
+    },
+  },
+  look: {
+    read: (v) => {
+      const look = lookOf(v);
+      return look && { do: "look", ...look };
+    },
+    run: (s, c) => dress(s, c),
+  },
+  buyLook: {
+    read: (v) => {
+      const look = lookOf(v);
+      return look && { do: "buyLook", ...look };
+    },
+    run: (s, c) => dress(s, c),
+  },
+};
+const tableSpec = <D extends TableDo>(name: D): TableSpec<TableCommandOf<D>> => TABLE[name];
+const isTableDo = (name: unknown): name is TableDo => typeof name === "string" && Object.hasOwn(TABLE, name);
+const doTable = (s: Table, c: TableCommand, ctx: Ctx): Answer => tableSpec(c.do).run(s, c, ctx);
+
+/**
+ * A command off the wire, or null. A command for a run is for the slot it says (`slot`, or the old
+ * `endless: true`), and none is the main run. Setting out on an endless run is still read as it was
+ * once sent, `{ do: "endless", way }`. Fields a command does not use (its id) are let be.
+ */
+export function readCommand(v: unknown): RaidCommand | null {
+  if (!isRecord(v)) return null;
+  if (v.do === "endless") return readStart({ course: v.way });
+  return isTableDo(v.do) ? tableSpec(v.do).read(v) : readAimed(v);
 }
 
 /** Puts an owned look on the table, or buys one with Leaf and puts it on. */
-function dress(s: Table, c: Extract<RaidCommand, { do: "look" | "buyLook" }>): Answer {
+function dress(s: Table, c: TableCommandOf<"look" | "buyLook">): Answer {
   const spec = LOOKS[c.kind].find((l) => l.id === c.look);
   if (!spec) return no("no_such_look");
   if (c.do === "look") {
@@ -475,19 +489,15 @@ export function predict(
   c: RaidCommand,
 ): { view: TableView; notes: RaidNote[] } | { refused: string } | null {
   if (!isPredicted(c)) return null;
-  const held = forEndless(c) ? view.endless : view.run;
+  const slot = aimedAt(c);
+  const held = heldIn(view, slot);
   if (!held) return { refused: "no_run" };
   const run = structuredClone(held);
   const done = plan(run, c);
+  if (!done) return null;
   if (!done.ok) return { refused: done.code };
-  return { view: forEndless(c) ? { ...view, endless: run } : { ...view, run }, notes: done.notes };
+  return { view: slot === "endless" ? { ...view, endless: run } : { ...view, run }, notes: done.notes };
 }
-
-/**
- * Whether a command that draws nothing would be done to a run as it stands: the rules asked, on a
- * copy, so that a page lights only what Leaf would do and never works the rules out again.
- */
-export const legal = (run: RunView, c: Predicted): boolean => plan(structuredClone(run), c).ok;
 
 /**
  * The commands the bot would send to plan the room that is up, worked out on the page's copy: of
@@ -501,28 +511,15 @@ export function planCommands(view: TableView, habit: Habit, endless = false): Ra
   if (held?.stage.phase !== "plan") return [];
   const run = structuredClone(held);
   const out: Aimed[] = [];
-  const wrote = <T extends { ok: boolean }>(done: T, c: Aimed): T => {
-    if (done.ok) out.push(c);
-    return done;
-  };
-  const hands: Hands<RunView> = {
-    // Written down but not done here: the bot stops at it, and plans the rest once Leaf has answered.
-    choose: (_, option) => {
-      out.push({ do: "choose", option });
-      return refusal("nothing_to_choose");
-    },
-    buy: (r, offer) => wrote(buy(r, offer), { do: "buy", offer }),
-    sell: (r, from) => wrote(sell(r, from), { do: "sell", from }),
-    feed: (r, from, to) => wrote(feed(r, from, to), { do: "feed", from, to }),
-    move: (r, from, to) => wrote(move(r, from, to), { do: "move", from, to }),
-    toBench: (r, seat) => wrote(toBench(r, seat), { do: "bench", seat }),
-    rustle: () => refusal("not_enough_acorns"),
-    buyXp: (r) => wrote(buyXp(r), { do: "xp" }),
-    giveItem: (r, item, to) => wrote(giveItem(r, item, to), { do: "give", item, to }),
+  const hands: Hands<RunView> = (r, c) => {
+    const done = plan(r, c);
+    if (done?.ok || (!done && c.do === "choose")) out.push(endless ? { ...c, slot: "endless" } : c);
+    // What draws is Leaf's to do: a pick is written down and the bot plans the rest once Leaf has answered; a rustle, never.
+    return done ?? refusal(c.do === "choose" ? "nothing_to_choose" : "not_enough_acorns");
   };
   // The page's own stream for the bot's habits: the run's is Leaf's.
   planWith(run, habit, hands, { rng: mix(endless ? view.ventures : view.runs, 9000 + run.record.length) });
-  return endless ? out.map((c): Aimed => ({ ...c, endless: true })) : out;
+  return out;
 }
 
 // ---------- keeping it ----------

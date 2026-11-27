@@ -422,7 +422,7 @@ the regulars may like Groot.
 - **The pull** is a `leap` with `why: "pull"`, one hex nearer the puller, as Barge's was; a rooted
   figure (the Rock, Seqwawa) is never pulled or knocked back. Real Greg's pulls come after his own
   `leap` and before his `hit`s.
-- **The feed command**: `{ do: "feed", from: Spot, to: Spot }`, with `endless: true` for the endless
+- **The feed command**: `{ do: "feed", from: Spot, to: Spot }`, with `slot: "endless"` for the endless
   run, and accepted from a seat at a live table. It draws nothing, so a page may `predict` it, and
   `mealFor(run, from, to)` says what a meal would add (or why not) before it is sent. Its answer is one
   note, `{ t: "fed", piece, fed, gained, ate, kind, stars, from, items }`: Greg's number and what he has
@@ -436,9 +436,10 @@ the regulars may like Groot.
 ## Endless runs (`endless.ts`, `depths.ts`, `content/endless.ts`)
 
 A table keeps a second run beside the run in hand: the endless run. Each is picked up and put down
-on its own. `{ do: "endless", way }` sets out on one (an endless run in hand is put down first, as
-walking home, once it has fought a room), and every command for a run acts on the endless run when
-it says `endless: true`. It is the fair game on the first trail: the 28 figures, nothing owned.
+on its own. `{ do: "start", course: way }` sets out on one (an endless run in hand is put down
+first, as walking home, once it has fought a room), and every command for a run acts on the endless
+run when it says `slot: "endless"`. What older pages send is still read the same:
+`{ do: "endless", way }` and `endless: true`. It is the fair game on the first trail: the 28 figures, nothing owned.
 
 - **Rooms.** The fifteen of the first trail, and after them the fifteen again (`CYCLE`), the same
   kinds in the same order, for ever (`roomAt`). An endless run has no last room (`lastRoom`): winning
@@ -517,6 +518,12 @@ components on the rack, `{ do: "forge", item, with }`: the item is made at `item
 (boards locked, the fight decided; its note carries both boards, the seed and the outcome), `take`
 and `abandon`. A run that has fought no room yet is never put down: `start` and `abandon` then leave
 it as it is, drawing, paying and logging nothing, so that an opening cannot be drawn again for free.
+Each command of a run is one spec in `command.ts`'s `COMMANDS`: how it is read off the wire, whose
+it is at a live table (`whose`: the member's to plan with, or the clock's), whether the page may do
+it at once (`draws: false`), and what it does to the run. Leaf's table, a seat, the page's
+predictions, the bot's hands (`Hands`) and `planCommands` all do a command by its spec, so a command
+cannot be missing from one of them. The table's own commands, and a sitting's, are two more small
+tables of the same shape (`game.ts`, `sitting/commands.ts`).
 A refusal is a code (`REFUSALS` in `run.ts`, `TABLE_REFUSALS`), and `refusalText`
 gives the sentence the page shows.
 
@@ -537,7 +544,7 @@ they are handed.
 What the page is shown (`TableView`) is the table without its streams, the run's seed, or what the
 picks waiting behind the first will offer. `readView` and `readNotes` (`wire.ts`) read what Leaf
 sends back into these types, field by field. `predict` works out on the page's copy the commands
-that draw nothing (`PREDICTED`: moving, benching, selling, handing over, forging on the rack, holding the stall, buying, experience), exactly
+that draw nothing (their spec's `draws: false`: moving, benching, selling, handing over, forging on the rack, holding the stall, buying, experience), exactly
 as Leaf will; `planCommands` has the bot plan a room on the page's copy and gives back the commands
 it would send. `encodeTable` and `decodeTable` are the table as Leaf stores it.
 
@@ -585,8 +592,7 @@ While no member is still in, every wait is 0 (`later`): the regulars play straig
   (before the start the seat is free again, and the next to have sat becomes the opener; after it
   the seat is out, in the last place among those in); `start` (the opener only; regulars take the
   empty seats); `pick` (an offer of the carousel's ring); and the run's own planning commands
-  (`choose`, `redraw`, `buy`, `sell`, `move`, `bench`, `rustle`, `hold`, `xp`, `give`), done to the
-  caller's seat by `game.ts`'s `act`, in planning only. `fight`, `take`, setting out and walking
+  (those whose spec says `whose: "plan"`), done to the caller's seat by `command.ts`'s `act`, in planning only. `fight`, `take`, setting out and walking
   home are the clock's. That a member is at one sitting at a time is Leaf's to keep.
 - `sittingView(sitting, viewer)` (`view.ts`): the stage and when it ends, the room and its kind,
   every seat's name, resolve, level, streak, place, whom it faces in a sparring room, its board as
@@ -681,7 +687,7 @@ While no member is still in, every wait is 0 (`later`): the regulars play straig
 | `outside.ts`           | Payout, almanac, trails                                                                                                |
 | `content/looks.ts`     | How the table may look: cloths, lanterns, bases                                                                        |
 | `game.ts`              | The table as Leaf plays it: state, what the page is shown, predictions                                                 |
-| `command.ts`           | Everything a player can do at the table, and reading a command off the wire                                            |
+| `command.ts`           | Everything a player can do at the table: one spec a command of a run (`COMMANDS`), and reading one off the wire        |
 | `endless.ts`           | Endless runs: the rooms after the fifteenth, the forest growing, chairs, regulars by depth, the Deep Woods' held rooms |
 | `depths.ts`            | How deep endless runs go: the deepest rooms ever and this week, what a won room leaves, what one is paid for           |
 | `content/endless.ts`   | The endless runs' numbers: growth, chairs, the first held room, regulars after room 15, the rooms that come round      |
