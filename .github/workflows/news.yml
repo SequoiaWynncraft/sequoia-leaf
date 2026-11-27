@@ -19,6 +19,9 @@ on:
     paths: [apps/town/src/notes.json]
   schedule:
     - cron: "11,41 * * * *"
+  # GitHub may start a timed run late or not at all; a note due at a moment (a banner's) can also be
+  # posted by starting this by hand or from a scheduled job (`gh workflow run news.yml`).
+  workflow_dispatch:
 
 permissions:
   contents: read
