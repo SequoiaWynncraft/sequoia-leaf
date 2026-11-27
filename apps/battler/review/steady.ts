@@ -83,9 +83,9 @@ const staged = (code: string): Step => [
   "eval",
   `(async () => { const r = window.raid; window.shifts.hold(true); try { ${code} await r.settled(); } catch (e) { return "${FAIL} staging: " + e; } finally { window.shifts.hold(false); } return "staged"; })()`,
 ];
-/** A button pressed as a member does, brought into view first if it is not. */
+/** A button pressed as a member does, brought into the middle of its scroller first (clear of a foot held at its edge). */
 const press = (selector: string, ms: number): Step[] => [
-  ["eval", `document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({ block: "nearest" }), "ok"`],
+  ["eval", `document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({ block: "center" }), "ok"`],
   ["wait", 150],
   ["click", selector],
   ["move", 2, 2],
