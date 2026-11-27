@@ -46,7 +46,7 @@ function project(): F.Yard {
 /** Each kind of tier 5 progress, a yard of it alone. */
 export const TIER5: Readonly<Record<string, () => F.Yard>> = {
   "a plot of the second ring bought": () => {
-    const y = F.create({ seed: 1, tier: 5 });
+    const y = beforeReach(F.create({ seed: 1, tier: 5 }));
     for (const plot of ["meadow", "workings"]) must(y, buying(y, plot));
     y.history = [];
     return y;
