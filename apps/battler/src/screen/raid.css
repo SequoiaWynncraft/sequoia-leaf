@@ -61,7 +61,9 @@ button.k-chip {
 #hud > * {
   pointer-events: auto;
 }
+/* The purse, the health and the corner never give way in a narrow window; what is between them does. */
 #purse {
+  flex-shrink: 0;
   display: flex;
   gap: calc(var(--u) * 5);
   padding: var(--u) calc(var(--u) * 3);
@@ -73,8 +75,12 @@ button.k-chip {
   padding: var(--u) calc(var(--u) * 2);
 }
 #way {
+  min-width: 0;
+  overflow: hidden;
   padding: calc(var(--u) * 2) calc(var(--u) * 3);
   font: var(--f-ui);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 /* Past the fifteenth room of an endless run, the room it is in, before the pips. */
 #track > .deep {
@@ -124,6 +130,7 @@ button.k-chip {
   margin-top: var(--k-hang);
 }
 #resolve {
+  flex-shrink: 0;
   margin-left: auto;
   display: flex;
   align-items: center;
@@ -132,6 +139,7 @@ button.k-chip {
   background: none;
 }
 #corner {
+  flex-shrink: 0;
   display: flex;
   gap: calc(var(--u) * 2);
 }
@@ -387,7 +395,7 @@ body[data-picking="yes"] #foe {
   /* A member's name may be one long word: it goes onto the next line there. */
   overflow-wrap: anywhere;
 }
-/* The price over the trait signs, in a room of one height whether a figure has one trait or three. */
+/* The price over the trait signs, from the left, in a room of one height whether a figure has one trait or three. */
 .offer .foot {
   display: flex;
   flex-direction: column;
@@ -768,8 +776,9 @@ body[data-picking="yes"] #foe {
   position: sticky;
   bottom: 0;
 }
-#lastfight[hidden] {
-  display: none;
+/* Not there to press (no fight yet, a fight on, a pick waiting), it holds its room in the bar unseen. */
+#lastfight[data-off] {
+  visibility: hidden;
 }
 #speeds > .k-btn {
   min-width: calc(var(--u) * 22);
@@ -873,12 +882,16 @@ body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
 
 /* ---------- three cards on the table ---------- */
 
+/*
+ * Hung from the same place whatever the pick and whether its cards are up or put down: the title,
+ * and Hide or Show under it, never move; the cards hang under them, as long as they are.
+ */
 #picks {
   position: fixed;
   z-index: 25;
   left: 50%;
-  top: var(--table-mid, 45%);
-  translate: -50% -50%;
+  top: calc(var(--top) + var(--k-hang) + var(--u) * 26);
+  translate: -50% 0;
   width: min(calc(100vw - var(--u) * 8), calc(var(--u) * 380));
   display: flex;
   flex-direction: column;
@@ -893,18 +906,16 @@ body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
   padding: var(--u) calc(var(--u) * 5);
 }
 #picks .foot {
+  order: 1;
   justify-content: center;
   gap: calc(var(--u) * 3);
 }
 /* The cards put down: the table is in view, and the title and Show wait at the top. */
-#picks.down {
-  top: calc(var(--top) + var(--k-hang) + var(--u) * 26);
-  translate: -50% 0;
-}
 #picks.down :is(.cards, #redraw) {
   display: none;
 }
 #picks .cards {
+  order: 2;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: calc(var(--u) * 3);
@@ -1140,6 +1151,10 @@ b.dmg.true {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+}
+/* A page's title bar keeps its height however much its body holds: a long body scrolls, it never squeezes the roof. */
+.page > .k-head {
+  flex-shrink: 0;
 }
 .page.wide {
   width: min(100%, calc(var(--u) * 304));
@@ -1408,9 +1423,14 @@ body[data-rule] #says {
 .run > .stack:last-child {
   flex: none;
 }
-/* As tall as the panel leaves them, and taller when what they hold needs it. */
+/*
+ * As tall as the panel leaves them, and never less than 200 units (the body scrolls then), whatever
+ * they hold: each column scrolls in its own height, so a category with more modes moves nothing.
+ */
 .menu-cols {
-  flex: 1 0 auto;
+  flex: 1 0 calc(var(--u) * 200);
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
   display: grid;
   grid-template-columns: calc(var(--u) * 84) minmax(0, 1fr) calc(var(--u) * 136);
   gap: calc(var(--u) * 4);
@@ -1539,6 +1559,126 @@ body[data-rule] #says {
   }
 }
 
+/*
+ * A window too narrow (not a phone) for the top bar with Last fight's words: its picture alone, its
+ * words for a screen reader, so the bar has room for it and the health and the corner never slide.
+ */
+@media (min-width: 621px) and (max-width: 959px) and (min-aspect-ratio: 4/5) {
+  #hud {
+    gap: calc(var(--u) * 2);
+  }
+  #lastfight > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/*
+ * Narrower still (not a phone): the track a box five rooms wide, the wing the run is in (its five
+ * rooms, which hold still until the next wing), so that the corner stays in the window down to the
+ * narrowest.
+ */
+@media (min-width: 621px) and (max-width: 839px) and (min-aspect-ratio: 4/5) {
+  #hud {
+    gap: var(--u);
+  }
+  #track {
+    flex: none;
+    width: calc(var(--u) * 58);
+    overflow: hidden;
+  }
+  #track .pip.now ~ .pip.wing,
+  #track .pip.now ~ .pip.wing ~ .pip,
+  #track .pip:has(~ .pip.wing ~ .pip.now),
+  #track .pip:has(~ .pip.wing.now) {
+    display: none;
+  }
+}
+/*
+ * A narrow phone: Last fight by its picture, beside the corner and the way's sign on one row; and an
+ * endless run's track, with its room before the pips, the wing it is in.
+ */
+@media (max-width: 400px) {
+  #lastfight > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  #track {
+    max-width: 100%;
+    overflow: hidden;
+  }
+  #track:has(> .deep) .pip.now ~ .pip.wing,
+  #track:has(> .deep) .pip.now ~ .pip.wing ~ .pip,
+  #track:has(> .deep) .pip:has(~ .pip.wing ~ .pip.now),
+  #track:has(> .deep) .pip:has(~ .pip.wing.now) {
+    display: none;
+  }
+}
+
+/*
+ * A phone, or a window too narrow for five stall cards as wide as a phone's between three columns of
+ * buttons and boxes (a small window, the town's door frame: under 960 pixels): the stall the whole
+ * width, the purse, the level and the buttons in two rows of one height under it, by their pictures.
+ */
+@media (max-aspect-ratio: 4/5), (max-width: 959px) {
+  #plan {
+    grid-template-columns: 1fr 1fr 1fr calc(var(--u) * 20);
+    grid-template-rows: auto calc(var(--u) * 27) calc(var(--u) * 20);
+    grid-template-areas:
+      "stall stall stall stall"
+      "acorns level level hold"
+      "rustle levelup setout setout";
+    gap: calc(var(--u) * 2);
+    padding: var(--u);
+  }
+  #stall {
+    gap: var(--u);
+  }
+  .offer {
+    padding: calc(var(--u) * 3) var(--u) var(--u);
+  }
+  /* Five to a row: a name is small here, where the usual size cannot fit. */
+  .offer .name {
+    font: var(--f-small);
+    height: calc(var(--t-s) * 2.4);
+    overflow-wrap: anywhere;
+  }
+  #acorns,
+  #level {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: var(--u) calc(var(--u) * 3);
+  }
+  #level .k-bar {
+    width: calc(var(--u) * 24);
+  }
+  #level .fielded,
+  #level .odds,
+  #acorns .interest {
+    display: none;
+  }
+  #plan > .k-btn {
+    min-height: calc(var(--u) * 20);
+    padding-inline: calc(var(--u) * 2);
+  }
+  #setout {
+    min-width: 0;
+  }
+  #plan .wide-only {
+    display: none;
+  }
+}
+
 /* ---------- a phone held upright: its own arrangement ---------- */
 
 @media (max-aspect-ratio: 4/5), (max-width: 620px) {
@@ -1626,59 +1766,11 @@ body[data-rule] #says {
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  #plan {
-    grid-template-columns: 1fr 1fr 1fr calc(var(--u) * 20);
-    grid-template-rows: auto calc(var(--u) * 27) calc(var(--u) * 20);
-    grid-template-areas:
-      "stall stall stall stall"
-      "acorns level level hold"
-      "rustle levelup setout setout";
-    gap: calc(var(--u) * 2);
-    padding: var(--u);
-  }
-  #stall {
-    gap: var(--u);
-  }
-  .offer {
-    padding: calc(var(--u) * 3) var(--u) var(--u);
-  }
   /* A figure's card: its level and stars over its price, which leaves its name the width a member's name needs. */
   .fside .k-row.tight {
     flex-wrap: wrap;
     justify-content: flex-end;
     max-width: calc(var(--u) * 30);
-  }
-  /* Five to a row on a phone: a name is small there, where the usual size cannot fit. */
-  .offer .name {
-    font: var(--f-small);
-    height: calc(var(--t-s) * 2.4);
-    overflow-wrap: anywhere;
-  }
-  .offer .foot {
-    align-items: center;
-  }
-  #acorns,
-  #level {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    min-width: 0;
-    gap: var(--u) calc(var(--u) * 3);
-  }
-  #level .k-bar {
-    width: calc(var(--u) * 24);
-  }
-  #level .fielded,
-  #level .odds,
-  #acorns .interest {
-    display: none;
-  }
-  #plan > .k-btn {
-    min-height: calc(var(--u) * 20);
-    padding-inline: calc(var(--u) * 2);
-  }
-  #setout {
-    min-width: 0;
   }
   #fightbar {
     gap: calc(var(--u) * 2);
@@ -1761,10 +1853,8 @@ body[data-rule] #says {
     min-height: 0;
   }
 
-  #picks,
-  #picks.down {
+  #picks {
     top: calc(var(--top) + var(--u) * 46);
-    translate: -50% 0;
     gap: calc(var(--u) * 2);
   }
   #pickhide {
@@ -1806,6 +1896,19 @@ body[data-rule] #says {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
+  .summary .cols {
+    grid-template-columns: minmax(0, 1fr);
+    gap: calc(var(--u) * 2);
+  }
+  .swatch {
+    --fs: 2;
+  }
+}
+/*
+ * The front page one part under another on a phone, and in a window too narrow for its three columns
+ * side by side (under 960 pixels, as the stall's arrangement above).
+ */
+@media (max-aspect-ratio: 4/5), (max-width: 959px) {
   /* The front page one part under another, all of it scrolling: the categories a row of tabs, their modes a row under them. */
   /* Held at the top of the window: a shorter page never moves what is above its card. */
   #modal[data-page="front"] {
@@ -1832,6 +1935,7 @@ body[data-rule] #says {
   }
   #modal[data-page="front"] .mode > .mode-opts {
     flex: 1 1 0;
+    overflow: hidden auto;
   }
   .mode-head .stack > .other {
     display: none;
@@ -1848,8 +1952,7 @@ body[data-rule] #says {
     flex: none;
   }
   .picker,
-  .board,
-  .mode-opts {
+  .board {
     overflow: visible;
   }
   .cats {
@@ -1910,13 +2013,6 @@ body[data-rule] #says {
   }
   .menu-foot > #leave {
     flex-basis: 100%;
-  }
-  .summary .cols {
-    grid-template-columns: minmax(0, 1fr);
-    gap: calc(var(--u) * 2);
-  }
-  .swatch {
-    --fs: 2;
   }
 }
 /* Asked for less motion: nothing bobs, pokes or flashes on its own; the figures still move as the fight goes. */

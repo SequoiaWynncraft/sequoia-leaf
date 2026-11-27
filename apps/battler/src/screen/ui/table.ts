@@ -110,7 +110,7 @@ export function buildTable(a: Asks): void {
   const last = el(
     "button",
     "k-btn wood sm",
-    { id: "lastfight", type: "button", onclick: a.lastFight, hidden: true },
+    { id: "lastfight", type: "button", onclick: a.lastFight, "data-off": "" },
     pic(glyph("swords")),
     el("span", "", { text: "Last fight" }),
   );
@@ -528,7 +528,8 @@ export function renderTable(): void {
   if (plan) plan.inert = picking;
   renderTrack(run);
   const last = byId("lastfight");
-  if (last) last.hidden = S.screen.at !== "plan" || run.last === null || picksOf(run).length > 0;
+  // Off rather than gone: its room in the bar is held, so the health and the corner never slide.
+  if (last) last.toggleAttribute("data-off", S.screen.at !== "plan" || run.last === null || picksOf(run).length > 0);
   renderResolve(run);
   renderTraits(run);
   renderRack(run);

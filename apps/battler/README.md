@@ -498,19 +498,22 @@ card is up after each.
 `review/steady.ts` is the steadiness check, and fails on anything that moves by itself:
 
 ```sh
-bun review/steady.ts <out-dir>            # the front page and the table, at 1280x760 and 390x844
+bun review/steady.ts <out-dir>            # the front page and the table, at 1280x760, 390x844, 640x480, 900x600 and 360x640
 bun review/steady.ts <out-dir> front      # or one of the two
 bun review/steady.ts <out-dir> table
+bun review/steady.ts <out-dir> small narrow   # or some of the sizes (desktop, phone, small, narrow, mini)
 ```
 
 It walks the front page (its first paint while Leaf's reads are out, every category and mode, the
-strips, the Versus card as tables open, fill and go, a room taken, Set out, End this raid and the
-end page) and the table (buying, a star-up, selling, moving, Buy XP, Hold, items, more than fifty
+strips, the Versus card as tables open, fill and go and with twelve open, a room taken, Set out,
+End this raid and the end page) and the table (buying, a star-up, selling, moving, Buy XP, Hold, items, more than fifty
 rerolls, the purse crossing 10 and 100, a fight, its takings and the next room, the chairs of an
-endless board, the member's own figures), with the page's reads from Leaf answered late as over a
+endless board, the Wilds' rule pick, boards and fight line under a rule and the card that picks a
+run of the Wilds back up, the member's own figures), with the page's reads from Leaf answered late as over a
 real connection (`review/shifts.ts`, on the tours' page with `?steady`). It fails on a part that
 moved while nothing was scrolled, on the panel along the bottom changing size, and on the table
-being fitted again (its zoom, or where the board sits) while the window stayed the same; and prints
+being fitted again (its zoom, or where the board sits) while the window stayed the same, and on the
+top bar's corner (help, settings, the front page) leaving the window; and prints
 each shift with the parts that moved, beside a picture of each moment. It needs Chromium, which
 `bun run verify` does not have: run it by hand before a change to the front page or the table's
 panels lands.

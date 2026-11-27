@@ -50,7 +50,8 @@ export function pipsOf(run: RunView, tag: "button" | "span"): HTMLElement[] {
     const state = outcomeOf(run, i);
     const here = tag === "button" && i === run.room && run.stage.phase !== "over" && state !== "won";
     const wing = i % ROOM_COUNT > 0 && roomAt(i - 1)?.wing !== room.wing ? " wing" : "";
-    const cls = `k-slot pip ${room.kind} ${here ? "here lit" : state}${wing}`.trim();
+    // `now`: the room the run is in, won or not, which a narrow window's track shows the wing of.
+    const cls = `k-slot pip ${room.kind} ${here ? "here lit" : state}${wing}${i === run.room ? " now" : ""}`.trim();
     return [el(tag, cls, tag === "button" ? { type: "button" } : {}, pic(roomIcon(room.kind)))];
   });
 }

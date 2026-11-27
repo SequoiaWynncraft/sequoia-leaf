@@ -1,13 +1,15 @@
 /**
- * The steadiness check: `bun review/steady.ts [<out-dir>] [front | table]`. It walks the raid's front
- * page and the screens it opens, and the table through planning and a fight, at 1280x760 and at
- * 390x844 (or the one part named), as a tour against a play server of its own (`tour.ts`, on the
- * tours' page with `?steady`, which records what moves: `shifts.ts`), with Leaf's reads coming back
- * late as over a real connection; prints every shift with its score and the parts that moved, keeps
- * them in `<out-dir>/shifts.json` beside a picture of each moment, and fails on any shift at all: a
- * part that moved by itself, the bottom panel's frame changing size, or the stage fitted again (its
- * zoom, or where the board is) while the window stayed the same. The walk never scrolls but to
- * bring a button into view, so nothing it records is the member's own scrolling.
+ * The steadiness check: `bun review/steady.ts [<out-dir>] [front | table] [desktop | phone | small |
+ * narrow | mini]`. It walks the raid's front page and the screens it opens, and the table through
+ * planning and a fight, at 1280x760, 390x844, 640x480, 900x600 and 360x640 (or the parts and sizes
+ * named), as a tour against a play server of its own (`tour.ts`, on the tours' page with `?steady`,
+ * which records what moves: `shifts.ts`), with Leaf's reads coming back late as over a real
+ * connection; prints every shift with its score and the parts that moved, keeps them in
+ * `<out-dir>/shifts.json` beside a picture of each moment, and fails on any shift at all: a part that
+ * moved by itself, the bottom panel's frame changing size, or the stage fitted again (its zoom, or
+ * where the board is) while the window stayed the same; and on the top bar's corner (help, settings,
+ * the front page) not wholly in the window. The walk never scrolls but to bring a button into view,
+ * so nothing it records is the member's own scrolling.
  *
  * The front page: the first paint, while Leaf's reads are out and once they are back, and drawn
  * again; each category and mode, the Wilds' two boards and a trail not open yet; the strip with no
@@ -23,7 +25,7 @@ import { join, resolve } from "node:path";
 
 import type { Shift } from "./shifts.ts";
 
-const BY: ReadonlySet<unknown> = new Set(["browser", "page", "stage"]);
+const BY: ReadonlySet<unknown> = new Set(["browser", "page", "stage", "fit"]);
 /** A shift as the page wrote it down. */
 const isShift = (s: unknown): s is Shift =>
   typeof s === "object" &&
@@ -46,7 +48,11 @@ const PARTS: readonly Part[] = ["front", "table"];
 const given = process.argv.slice(2);
 const only = PARTS.filter((p) => given.includes(p));
 const walked = only.length > 0 ? only : PARTS;
-const out = resolve(given.find((a) => !PARTS.some((p) => p === a)) ?? join(tmpdir(), "raid-steady"));
+/** The sizes named, if any: `desktop`, `phone`, `small`, `narrow`, `mini` (`SIZES`). */
+const SIZE_NAMES: ReadonlySet<string> = new Set(["desktop", "phone", "small", "narrow", "mini"]);
+const out = resolve(
+  given.find((a) => !PARTS.some((p) => p === a) && !SIZE_NAMES.has(a)) ?? join(tmpdir(), "raid-steady"),
+);
 mkdirSync(out, { recursive: true });
 
 /** Leaf's reads, late by the start of their path: the rooms held and a member's events later still, to come in once a card is up. */
@@ -83,6 +89,17 @@ const asOther = (who: keyof typeof OTHERS, path: string, body: Record<string, un
   `(async () => { const res = await fetch(${path}, { method: "POST", credentials: "omit", headers: { Authorization: "Bearer as-${who}", "Content-Type": "application/json" }, body: JSON.stringify(${JSON.stringify({ player: OTHERS[who], ...body })}) }); const b = await res.json(); if (typeof b.id === "string") sessionStorage.setItem("steady.table", b.id); return res.status; })()`,
 ];
 const TABLE = "`/v1/game/sittings/${sessionStorage.getItem('steady.table')}`";
+/** The open tables' list as Leaf gives it, with twelve on it: more than the Versus card holds. */
+const TWELVE = {
+  now: "2026-11-27T12:00:00Z",
+  yours: null,
+  open: Array.from({ length: 12 }, (_, i) => ({
+    id: `steady-${i}`,
+    by: { name: `Member ${i + 1}` },
+    sat: 1 + (i % 7),
+    closes: "2026-11-27T12:30:00Z",
+  })),
+};
 
 /** A press on the table as a member makes it, then what moved, under a name. */
 const tap = (selector: string, at: string, ms = 900): Step[] => [
@@ -114,7 +131,8 @@ const onBoard = `r.party().find((x) => x.on === "board")`;
  * The table while planning, and on through a fight: buying, a star-up, selling, moving and swapping
  * figures, Buy XP to a level up, Hold, items handed over and forged; more than fifty rerolls on the
  * first room's board and fuller ones later, the purse crossing 10 and 100 both ways; a fight, its
- * takings and the next room; and the stall with the member's own figures and their levels.
+ * takings and the next room; the chairs of an endless board; the Wilds' rules (`wildsWalk`); and the
+ * stall with the member's own figures and their levels.
  */
 function tableWalk(shot: (what: string) => Step): Step[] {
   return [
@@ -178,12 +196,54 @@ function tableWalk(shot: (what: string) => Step): Step[] {
       take(`an endless board with ${chairs} chairs`),
       shot(`29-chairs-${chairs}`),
     ]),
+    ...wildsWalk(shot),
     staged(
       `await r.fresh(); r.taught(); await r.pulled(${JSON.stringify(PULLED)}); await r.start(5, 0, true); await r.plan(); await r.acorns(60);`,
     ),
     ["wait", 1500],
     ...rerolls("reroll x12: the member's own figures, with levels", 12),
     shot("28-own"),
+  ];
+}
+
+/**
+ * The Wilds' rules: the pick after room 5's boss (two cards, one picked), planning under Stumps,
+ * Narrow Table and Long Table, a fight under a rule with its line over the bench, its end and the
+ * next room; and from the front page the card that picks the run back up, Watch it again and Carry on.
+ */
+function wildsWalk(shot: (what: string) => Step): Step[] {
+  return [
+    staged(`await r.fresh(); r.taught(); await r.endless("wilds", 4, 80); await r.bot(1);`),
+    ["wait", 1500],
+    take("the Wilds: the rule pick after the boss"),
+    shot("30-rule-pick"),
+    ...tap('#picks .pick[data-pick="0"]', "a rule picked", 1500),
+    shot("31-rule-picked"),
+    ...act(`return await r.rule("stumps");`, "planning under Stumps", 1500),
+    shot("32-stumps"),
+    ...act(`return await r.rule("narrow");`, "planning under Narrow Table", 1500),
+    shot("33-narrow"),
+    ...act(`return await r.rule("long");`, "planning under Long Table", 1500),
+    shot("34-long"),
+    staged(`for (let i = 0; i < 4 && r.state().choice; i++) await r.send({ do: "choose", option: 0 });`),
+    ["wait", 900],
+    ...tap("#setout", "a fight under Long Table: the rule's line", 1500),
+    shot("35-rule-line"),
+    ...act(`r.skip(60); return await r.settled();`, "the fight under the rule ends", 2500),
+    ...act(`return r.carry();`, "the next room under the rule", 2500),
+    ...act(`return r.to("front");`, "the front page with a run of the Wilds", 1500),
+    ...press("#carryon-endless", 1200),
+    take("the Wilds' return card"),
+    shot("36-return-card"),
+    ...press("#back-watch", 3000),
+    take("Watch it again"),
+    shot("37-watch-again"),
+    ...act(`r.skip(60); return await r.settled();`, "watched to its end", 2500),
+    ...act(`return r.to("front");`, "the front page again", 1500),
+    ...press("#carryon-endless", 1200),
+    ...press("#back-carry", 1500),
+    take("Carry on from the return card"),
+    shot("38-carried-on"),
   ];
 }
 
@@ -308,12 +368,20 @@ function frontWalk(shot: (what: string) => Step): Step[] {
     shot("19-end-ask-endless"),
     ...press("#keepplaying-endless", 1200),
     take("Keep playing"),
+    reload({ "/v1/game/sittings": TWELVE }),
+    ["wait", 3500],
+    ...press("#k-ways-to-play-versus", 2600),
+    take("Versus: twelve open tables"),
+    shot("20-twelve-tables"),
   ];
 }
 
 const SIZES = [
   ["desktop", 1280, 760],
   ["phone", 390, 844],
+  ["small", 640, 480],
+  ["narrow", 900, 600],
+  ["mini", 360, 640],
 ] as const;
 
 /** What one size's walk recorded: each moment's shifts, by name, in order. */
@@ -346,7 +414,8 @@ async function run(name: string, w: number, h: number): Promise<{ moments: [stri
 
 const report: Record<string, [string, Shift[]][]> = {};
 let steady = true;
-for (const [name, w, h] of SIZES) {
+const named = SIZES.filter(([n]) => given.includes(n));
+for (const [name, w, h] of named.length > 0 ? named : SIZES) {
   // oxlint-disable-next-line no-await-in-loop -- one browser and play server at a time, so timing is the page's own
   const { moments, ok } = await run(name, w, h);
   report[name] = moments;

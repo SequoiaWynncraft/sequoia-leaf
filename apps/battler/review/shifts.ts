@@ -4,7 +4,7 @@
  *
  * - the pages' own, since a page or the stall is drawn again whole (`renderPages` puts a new tree in
  *   `#modal`, a reroll a new stall in `#bottom`), and the browser does not count a new node as moved:
- *   every frame, each part of `#modal`, `#bottom` and `#rack` is found again by where it is in the
+ *   every frame, each part of `#hud`, `#modal`, `#bottom`, `#rack` and `#picks` is found again by where it is in the
  *   page (its id, else its tag and classes and which of its kind it is under its parent), and one
  *   that was there the frame before and has moved by a pixel or more is a shift, scored as the
  *   browser scores one (the share of the window the parts moved over, times the furthest any moved,
@@ -14,8 +14,9 @@
  *
  * The stage is watched too: its zoom and where the board sits must not change while the window does
  * not (the table is fitted above the bottom panel). Neither recorder counts a control's own press
- * look (a card or a button sinking under the finger), nor a different thing of its own size put in
- * a part's place (another figure on the stall); the bottom panel's frame must keep its size as well.
+ * look (a card or a button sinking under the finger), nor a different thing put in a part's place
+ * (another figure on the stall, another mode's words); the bottom panel's frame must keep its size
+ * as well.
  * `window.shifts.take(at)` gives every shift since the last one taken, as text; `hold(true)` stops
  * both while a moment is staged that a member reaches by another page, and `hold(false)` starts them
  * again from the next frame. A frame in which anything scrolled is not compared with the one before:
@@ -38,7 +39,7 @@ interface Box {
 /** A shift: its score, which recorder saw it, whether a press came just before it, and the parts that moved most. */
 export interface Shift {
   readonly score: number;
-  readonly by: "browser" | "page" | "stage";
+  readonly by: "browser" | "page" | "stage" | "fit";
   readonly input: boolean;
   readonly parts: readonly string[];
 }
@@ -49,8 +50,9 @@ declare global {
   }
 }
 
-/** Classes that say how a part is, not which it is: the same part chosen or not, an offer of any tier. */
-const STATES = /^(chosen|lit|done|on|off|down|cant|ready|k-rise|k-bump|woke|tlit|thop|tdim|t\d)$/;
+/** Classes that say how a part is, not which it is: the same part chosen or not, an offer of any tier, a room won or not. */
+const STATES =
+  /^(chosen|lit|done|on|off|down|cant|ready|k-rise|k-bump|woke|tlit|thop|tdim|t\d|won|lost|drawn|here|now)$/;
 /**
  * The frame of the bottom panel, whose size must hold too, not only its place: the stage is fitted
  * above it, so a pixel more there re-frames the table. And each slot of the stall.
@@ -66,7 +68,7 @@ const isSource = (s: unknown): s is Source =>
   isRecord(s) && "node" in s && s.previousRect instanceof DOMRectReadOnly && s.currentRect instanceof DOMRectReadOnly;
 
 /** The parts of the page drawn again whole, which the pages' recorder watches. */
-const ROOTS = ["modal", "bottom", "rack"];
+const ROOTS = ["hud", "modal", "bottom", "rack", "picks"];
 /** The parts that moved most, as a shift lists them. */
 const MOST_PARTS = 4;
 
@@ -117,7 +119,8 @@ function parts(
       const childKey = child.id ? step : `${key}/${step}:${n}`;
       if (!still(child)) continue;
       const box = boxOf(child.getBoundingClientRect());
-      if (box.w === 0 && box.h === 0) continue;
+      // Nothing to see (an empty bar of a tally, a part held unseen): nothing to move.
+      if (box.w < 1 || box.h < 1 || getComputedStyle(child).visibility === "hidden") continue;
       found.set(childKey, { node: child, box });
       scrolled += child.scrollTop + child.scrollLeft;
       visit(child, childKey);
@@ -177,6 +180,13 @@ const frames = (n: number): Promise<void> =>
     next(n);
   });
 
+/** The top bar's corner (help, settings, the front page) out of the window: not a move, but as bad. */
+const corner = (): Shift[] => {
+  const box = document.getElementById("corner")?.getBoundingClientRect();
+  const out = box && box.width > 0 && (box.right > innerWidth + 0.5 || box.left < -0.5);
+  return out ? [{ score: 1, by: "fit", input: false, parts: [`#corner ${boxText(boxOf(box))} in ${innerWidth}`] }] : [];
+};
+
 /** Reads from Leaf answer late, or are answered here, as the tab's `sessionStorage` says (`shifts.slow`, `shifts.fake`). */
 function slowReads(): void {
   const slow = kept("shifts.slow");
@@ -223,8 +233,13 @@ export function recordShifts(): void {
     until: 0,
     at: -Infinity,
   };
+  /** The control pressed: the outermost, as a press on a line inside a card is a press on the card too (`:active`). */
+  const outermost = (node: Element | null): Element | null => {
+    const outer = node?.parentElement?.closest(CONTROLS) ?? null;
+    return outer ? outermost(outer) : node;
+  };
   const down = (target: EventTarget | null): void => {
-    const control = target instanceof Element ? target.closest(CONTROLS) : null;
+    const control = outermost(target instanceof Element ? target.closest(CONTROLS) : null);
     Object.assign(press, {
       control,
       key: control ? (keyOf.get(control) ?? null) : null,
@@ -292,12 +307,12 @@ export function recordShifts(): void {
     const was = before.get(key);
     const frame = FRAME.test(key);
     const pressed = ownPress(key);
-    if (!was || (!frame && pressed) || getComputedStyle(p.node).visibility === "hidden") return [];
+    if (!was || (!frame && pressed)) return [];
     // A frame's part under the finger may sink (its press look), never change size.
     const far = pressed ? 0 : Math.max(Math.abs(p.box.x - was.box.x), Math.abs(p.box.y - was.box.y));
     const grew = Math.max(Math.abs(p.box.w - was.box.w), Math.abs(p.box.h - was.box.h));
-    // A different thing in the same place (another figure on the stall, another mode's words), of its own size, is not a move.
-    if (!frame && grew >= 1 && was.node !== p.node && shows(was.node) !== shows(p.node)) return [];
+    // A different thing in the same place (another figure on the stall, another mode's words) is not a move.
+    if (!frame && was.node !== p.node && shows(was.node) !== shows(p.node)) return [];
     const by = frame ? Math.max(far, grew) : far;
     return by >= 1 ? [{ key, p, was: was.box, far: by }] : [];
   };
@@ -342,7 +357,7 @@ export function recordShifts(): void {
   window.shifts = {
     async take(at) {
       await frames(3);
-      return JSON.stringify({ at, shifts: shifts.splice(0) });
+      return JSON.stringify({ at, shifts: [...shifts.splice(0), ...corner()] });
     },
     hold(on) {
       last.held = on;
