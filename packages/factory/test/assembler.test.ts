@@ -185,6 +185,35 @@ describe("the assembler", () => {
     expect(said?.line.startsWith("Full of glass and waiting for")).toBe(true);
   });
 
+  test("a run of belt aimed at any of its tiles ends at the nearest tile-side that takes things in, facing any way", () => {
+    for (const d of [0, 1, 2, 3] as const) {
+      const y = yard();
+      expect(F.build(y, ASSEMBLER, 14, 10, d, Infinity).ok).toBe(true);
+      // From the west, from the north: aimed at its middle and at a corner.
+      for (const [from, aim] of [
+        [
+          [6, 10],
+          [14, 10],
+        ],
+        [
+          [14, 2],
+          [15, 11],
+        ],
+      ] as const) {
+        const legs = F.route(y, from, aim, { tunnels: false });
+        const last = legs?.at(-1);
+        const into = last ? tile(y, last.x + (F.DX[last.dir] ?? 0), last.y + (F.DY[last.dir] ?? 0)) : -1;
+        expect([d, from, legs !== null, into >= 0 && F.pieceOf(y, into) === tile(y, 14, 10)]).toEqual([
+          d,
+          from,
+          true,
+          true,
+        ]);
+        expect(last && F.takes(y, into, tile(y, last.x, last.y))).toBe(true);
+      }
+    }
+  });
+
   test("keeps 9 times what a bench keeps of each part, and tips out what it no longer keeps when told otherwise", () => {
     const plank = F.item("plank");
     const hamper = F.item("hamper");

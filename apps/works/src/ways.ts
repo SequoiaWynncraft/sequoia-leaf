@@ -3,7 +3,7 @@
  * steps open, first (once a way may be put first), shut, in (once ways in are unlocked), and open
  * again. Worked out from the yard alone; `tools.ts` sends what it says.
  */
-import { type Act, ahead, locked, RULES, wayOut, type Yard } from "@sequoia-leaf/factory";
+import { type Act, ahead, BIG, locked, nextOf, NONE, pieceOf, RULES, wayOut, type Yard } from "@sequoia-leaf/factory";
 
 /** Whether a kind's ways out are each set open, first, shut or in (its rules' `set.way`: a splitter). */
 const setsWays = (k: number): boolean => RULES[k]?.set.way !== undefined;
@@ -11,9 +11,11 @@ const setsWays = (k: number): boolean => RULES[k]?.set.way !== undefined;
 /**
  * The tile a finger's run of belt from the piece on a tile begins on: where it hands things on. For
  * a splitter, its first way out that sends (ahead, left, right), not one shut or taking things in;
+ * for a piece of more than one tile, from whichever of its tiles, the tile past its first way out;
  * for the rest, the tile ahead, a sorter's too, whatever it is set to. -1 for none.
  */
 export function runOut(w: Yard, i: number): number {
+  if (BIG[w.kind[i] ?? NONE] === 1) return nextOf(w, pieceOf(w, i));
   if (!setsWays(w.kind[i] ?? -1)) return ahead(w, i);
   for (let way = 0; way < 3; way++) {
     const to = wayOut(w, i, way);
