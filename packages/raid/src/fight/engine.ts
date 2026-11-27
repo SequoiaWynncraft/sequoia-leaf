@@ -86,6 +86,7 @@ export function openFight(setup: FightSetup, cat = catalogOf(setup), hooks: Tabl
     units: [],
     taken,
     zones: taken.map(() => null),
+    pools: [],
     standing: [0, 0],
     over: false,
     result: null,

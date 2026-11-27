@@ -4,15 +4,21 @@
  * out, anyone with reach goes behind them in the row its reach is for (`standRow`), and Sneaks that
  * are going to leap anyway wait at the back corners. Seqwawa, who never attacks, has the reach of
  * the back row, and stays there. A figure whose release says where it would rather sit (`stands`)
- * sits there instead.
+ * sits there instead: one that sits touching (`touching`, Huddle) moves to the free seat touching the
+ * most figures of its origin, so that they start the fight in one group round the frontmost of them;
+ * one that plays to its row (`row`) moves to the row with the most mana bars, last of all.
  */
 import type { Catalog } from "./content/catalog.ts";
 import { type FigureId, figureIn } from "./content/figures.ts";
+import { carriedTraits, type ItemId } from "./content/items.ts";
+import { KINS, type TraitId } from "./content/traits.ts";
 import { besideOf, COLS, HOME_ROWS, standRow } from "./hex.ts";
 
 /** Columns from the middle out. */
 const MIDDLE_OUT = [3, 2, 4, 1, 5, 0, 6] as const;
 const NONE: ReadonlySet<number> = new Set();
+/** Where a column comes from the middle out. */
+const middleRank = (col: number): number => MIDDLE_OUT.findIndex((c) => c === col);
 /** Columns from the edges in. */
 const EDGES_IN = [0, 6, 1, 5, 2, 4, 3] as const;
 
@@ -20,6 +26,8 @@ export interface Standing {
   kind: FigureId;
   /** Health with stars counted in, for who goes in front. */
   health: number;
+  /** What it holds: an emblem's origin counts for where it sits (a Guild Onesie's Huddle sits touching). */
+  items?: readonly ItemId[];
 }
 
 /**
@@ -118,5 +126,93 @@ export function arrange(
     taken.add(best);
     seats[i] = best;
   }
+  sitTouching(cat, party, seats, taken, free);
+  sitInRow(cat, party, seats, taken, free);
   return seats;
+}
+
+/**
+ * Those who play to their row move to the row of the half with the most mana bars of the others in
+ * it, middle out; ties go to the row its reach gives, then further back. One already in such a row,
+ * or with no free seat in it, stays.
+ */
+function sitInRow(
+  cat: Catalog,
+  party: readonly Standing[],
+  seats: number[],
+  taken: Set<number>,
+  free: (seat: number) => boolean,
+): void {
+  const spec = (i: number) => figureIn(cat, party[i]?.kind ?? "rock");
+  for (const [i, was] of seats.entries()) {
+    if (was < 0 || spec(i).stands !== "row") continue;
+    const bars = (row: number): number =>
+      seats.filter((s, j) => j !== i && s >= 0 && Math.floor(s / COLS) === row && spec(j).mana[1] > 0).length;
+    const home = standRow(spec(i).range);
+    const best = Array.from({ length: HOME_ROWS }, (_, row) => row).toSorted(
+      (a, b) => bars(b) - bars(a) || Math.abs(a - home) - Math.abs(b - home) || b - a,
+    )[0];
+    if (best === undefined || bars(Math.floor(was / COLS)) >= bars(best)) continue;
+    const seat = MIDDLE_OUT.map((col) => best * COLS + col).find(free);
+    if (seat === undefined) continue;
+    taken.delete(was);
+    taken.add(seat);
+    seats[i] = seat;
+  }
+}
+
+/** A figure's origins: its kin, a kin it carries as a third trait (Larp's Huddle), and one an emblem it holds grants. */
+const originsOf = (cat: Catalog, s: Standing | undefined): TraitId[] =>
+  s ? carriedTraits(cat, s.kind, s.items ?? []).filter((t) => KINS.some((k) => k === t)) : [];
+/** The origins whose figures sit touching: those every figure that sits touching carries (Huddle). */
+function touchingOrigins(cat: Catalog): TraitId[] {
+  const lists = cat.order
+    .filter((id) => figureIn(cat, id).stands === "touching")
+    .map((kind) => originsOf(cat, { kind, health: 0 }));
+  return (lists[0] ?? []).filter((t) => lists.every((l) => l.includes(t)));
+}
+/**
+ * Those who sit touching move, frontmost first, to the free seat touching the most of those of their
+ * origin already where they will stay; the first of an origin stays where it sat, and so does one
+ * already touching one of its own. Ties go to the row its reach gives, then to the middle.
+ */
+function sitTouching(
+  cat: Catalog,
+  party: readonly Standing[],
+  seats: number[],
+  taken: Set<number>,
+  free: (seat: number) => boolean,
+): void {
+  const kind = (i: number): FigureId => party[i]?.kind ?? "rock";
+  // Whoever sits touching, and whoever carries an origin of theirs by an emblem.
+  const huddles = touchingOrigins(cat);
+  const sitsTouching = (i: number): boolean =>
+    figureIn(cat, kind(i)).stands === "touching" || originsOf(cat, party[i]).some((t) => huddles.includes(t));
+  const movers = party
+    .map((_, i) => i)
+    .filter((i) => sitsTouching(i) && (seats[i] ?? -1) >= 0)
+    .toSorted((a, b) => Math.floor((seats[a] ?? 0) / COLS) - Math.floor((seats[b] ?? 0) / COLS) || a - b);
+  const settled: number[] = [];
+  const allOf = (origins: readonly TraitId[]): number[] =>
+    settled.filter((j) => originsOf(cat, party[j]).some((t) => origins.includes(t))).map((j) => seats[j] ?? -1);
+  for (const i of movers) {
+    const was = seats[i] ?? -1;
+    const own = allOf(originsOf(cat, party[i]));
+    const touches = (seat: number): number => besideOf(seat).filter((s) => own.includes(s)).length;
+    settled.push(i);
+    if (own.length === 0 || touches(was) > 0) continue;
+    const home = standRow(figureIn(cat, kind(i)).range);
+    const best = Array.from({ length: HOME_ROWS * COLS }, (_, n) => n)
+      .filter((seat) => free(seat) && touches(seat) > 0)
+      .toSorted(
+        (a, b) =>
+          touches(b) - touches(a) ||
+          Math.abs(Math.floor(a / COLS) - home) - Math.abs(Math.floor(b / COLS) - home) ||
+          middleRank(a % COLS) - middleRank(b % COLS),
+      )[0];
+    if (best === undefined) continue;
+    taken.delete(was);
+    taken.add(best);
+    seats[i] = best;
+  }
 }

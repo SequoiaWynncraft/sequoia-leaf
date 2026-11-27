@@ -18,9 +18,9 @@ import { draw32, type Met, mix, pick } from "@sequoia-leaf/core";
 
 import { chairsOn, overfills } from "./chairs.ts";
 import { type BoonId, boonIn, boonNumber, boonOr, FIGHT_BOONS, giftOf, giftsTrait } from "./content/boons.ts";
-import { type Catalog, catalogOf, type Era } from "./content/catalog.ts";
+import { type Catalog, catalogAt, catalogOf, type Era } from "./content/catalog.ts";
 import { type BossId, type FigureId, figureIn, type Stars, traitsOf } from "./content/figures.ts";
-import type { FinishedId, ItemId } from "./content/items.ts";
+import { drawnComponents, type FinishedId, type ItemId } from "./content/items.ts";
 import { holdItem } from "./content/recipes.ts";
 import { ECONOMY, MAX_LEVEL, type RoomKind, sellPrice } from "./content/rooms.ts";
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
@@ -498,7 +498,7 @@ export function choose(run: Run, option: number): Done {
       run.acorns += amount;
       notes.push({ t: "acorns", why: "windfall", amount });
     } else if (boon === "basket") {
-      const items = Array.from({ length: boonNumber(cat, boon, "components") }, () => pick(run, cat.ids.components));
+      const items = Array.from({ length: boonNumber(cat, boon, "components") }, () => pick(run, drawnComponents(cat)));
       run.rack = withAll(run.rack, items);
       notes.push({ t: "items", why: "basket", items });
     } else if (boon === "blanket") {
@@ -789,7 +789,8 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   }
 
   // Acorns: the room's pay, the streak, interest on what was held before any of it; then what the traits do (the gnomes').
-  const cat = catalogOf(run);
+  // Everything the fight earns is by the catalogue of the era it was locked in, never the clock's.
+  const cat = catalogAt(setup.era);
   const paid: [AcornsWhy, number][] = [
     ["room", ECONOMY.roomAcorns],
     ["win", won ? ECONOMY.winAcorns : 0],
@@ -807,8 +808,8 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   gainXp(run, xp, notes);
 
   // Things to choose: a Wilds rule after a boss, then the room's picks (`Room.picks`): components, and a boon after some rooms.
-  const picks: Choice[] = [...rulePicks(run, run.room), ...roomPicks(run, room, won)];
-  if (room.picks.boon) picks.push({ kind: "boon", options: boonOptions(run, []), redraws: ECONOMY.boonRedraws });
+  const picks: Choice[] = [...rulePicks(run, run.room), ...roomPicks(run, room, won, cat)];
+  if (room.picks.boon) picks.push({ kind: "boon", options: boonOptions(run, [], cat), redraws: ECONOMY.boonRedraws });
 
   // On to the next room. The last one is fought again until it is won or resolve runs out.
   run.room = to;

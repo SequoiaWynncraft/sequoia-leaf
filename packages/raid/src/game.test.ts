@@ -14,6 +14,7 @@ import {
 
 import { SENSIBLE } from "./bot.ts";
 import { legal, type Predicted, type RaidCommand } from "./command.ts";
+import { isBoonId } from "./content/boons.ts";
 import { catalogAt, everyShared } from "./content/catalog.ts";
 import { figureIn } from "./content/figures.ts";
 import { EMBLEM_IDS, grantOf, isItemId } from "./content/items.ts";
@@ -62,8 +63,11 @@ import { readNotes, readView } from "./wire.ts";
 const PLAYER = { id: "10000000-0000-0000-0000-000000000001", guest: false };
 let rolls = 0;
 /** Leaf's word on each call: its clock, the player, and fresh dice (counted, so a test can repeat them). */
+/** The tests' moment, past every release, and its catalogue: what a run started then plays by. */
+const NOW = 1_800_000_000_000;
+const NOW_CAT = catalogAt(eraAt(NOW));
 const ctx = (seed = (rolls += 0x9e3779b1) >>> 0): Ctx => ({
-  now: 1_800_000_000_000,
+  now: NOW,
   player: PLAYER,
   seed,
   room: 1e9,
@@ -584,7 +588,11 @@ describe("what the page may show before Leaf answers", () => {
     let state = planned(started(5));
     state = must(state, { do: "fight" }).state;
     state = must(state, { do: "take" }).state;
-    state = must(state, { do: "choose", option: 0 }).state;
+    // The first component on offer; the dice this test is handed may have made the pick one of tools.
+    const options = state.held.main?.stage.phase === "plan" ? (state.held.main.stage.picks[0]?.options ?? []) : [];
+    state = must(state, { do: "choose", option: Math.max(0, options.findIndex(isItemId)) }).state;
+    if (kindsOn(state.held.main?.rack ?? {}).every((k) => !isItemId(k)) && state.held.main)
+      state.held.main.rack = { ...state.held.main.rack, thorn: 1 };
     const seat = state.held.main?.board.findIndex((p) => p !== null) ?? -1;
     const offer = state.held.main?.stall.findIndex((k) => k !== null) ?? -1;
     const same = (c: RaidCommand): void => {
@@ -649,7 +657,9 @@ describe("an emblem handed to a figure of its kin already", () => {
     const figure = run ? pieces(run)[0] : undefined;
     const spot = run && figure ? spotOf(run, figure.id) : null;
     if (!run || !figure || !spot) throw new Error("nobody to hand it to");
-    const own = EMBLEM_IDS.find((id) => grantOf(CAT, id) === figureIn(CAT, figure.kind).kin);
+    const own = EMBLEM_IDS.flatMap((id) => (isBoonId(id) ? [id] : [])).find(
+      (id) => grantOf(NOW_CAT, id) === figureIn(NOW_CAT, figure.kind).kin,
+    );
     if (!own) throw new Error("no emblem of its kin");
     run.boons = [own];
     run.rack = { [own]: 1 };
@@ -1183,11 +1193,12 @@ describe("the roster a member's awards come to", () => {
 
 describe("the main way", () => {
   test("plays the same, draw for draw, whatever the player has pulled", () => {
-    const plain = walked([], false, 6);
-    const rich = walked(EVERYTHING, false, 6);
+    // Four rooms: the run is still going after them, however its dice fall.
+    const plain = walked([], false, 4);
+    const rich = walked(EVERYTHING, false, 4);
     expect(rich).toEqual(plain);
     expect(rich.state.held.main?.way).toEqual(onTrail(0));
-    expect(rich.state.held.main?.record.length).toBe(6);
+    expect(rich.state.held.main?.record.length).toBe(4);
     const fights = rich.notes.flatMap((n) => (n.t === "fight" ? n.setup.sides : []));
     expect(fights.flatMap((party) => party.figures).some((p) => "level" in p)).toBe(false);
     expect(rich.log.some((l) => "own" in l.data)).toBe(false);

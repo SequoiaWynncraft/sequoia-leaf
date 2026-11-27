@@ -153,6 +153,7 @@ describe("the prizes", () => {
     expect(BANNERS.map((b) => [b.id, b.headliner])).toEqual([
       ["banner-1", "banner-1"],
       ["groot-night", "commodore"],
+      ["penguin-month", "yule"],
     ]);
     expect(every.filter((prize) => BANNERS.some((b) => prize === `figure:${b.headliner}`))).toEqual([]);
     expect(rarityOf("figure:greg")).toBe("Treant");
@@ -245,7 +246,11 @@ describe("a pull", () => {
       { id: "banner-1", until: Date.UTC(2026, 11, 8) },
     ]);
     expect(PULLS.view(s, ctx(Date.UTC(2026, 11, 8))).open).toEqual([night]);
-    expect(PULLS.view(s, ctx(Date.UTC(2026, 11, 22))).open).toEqual([]);
+    // Penguin Month as Groot Night closes, until 5 January.
+    const penguins = { id: "penguin-month", until: Date.UTC(2027, 0, 5) };
+    expect(PULLS.view(s, ctx(Date.UTC(2026, 11, 22) - 1)).open).toEqual([night]);
+    expect(PULLS.view(s, ctx(Date.UTC(2026, 11, 22))).open).toEqual([penguins]);
+    expect(PULLS.view(s, ctx(Date.UTC(2027, 0, 5))).open).toEqual([]);
     expect(refused(s, pull("groot-night", 10, "leaf", Date.UTC(2026, 11, 8) - 1), ctx(Date.UTC(2026, 11, 8) - 1))).toBe(
       "closed",
     );
@@ -621,5 +626,49 @@ describe("a banner's featured figures", () => {
     const favoured = notes.filter((p) => p === "figure:crab31" || p === "figure:munch").length / notes.length;
     expect(favoured).toBeGreaterThan(0.5);
     expect(favoured).toBeLessThan(0.75);
+  });
+});
+
+describe("Penguin Month's featured figures", () => {
+  const opens = Date.UTC(2026, 11, 22);
+  const cat = catalogAt(eraAt(opens));
+  const penguins = prizesOf(cat, "penguin-month");
+  const featured = featuredOf(cat, "penguin-month").map((f) => f.prize);
+  /** How often a rarity's draws from Penguin Month, from counters that make it that tier, are some prizes. */
+  function shareOf(rarity: Rarity, top: number, mid: number, of: readonly string[], favoured = featured): number {
+    const seen = new Map<string, number>();
+    for (let seed = 0; seed < 40_000; seed++) {
+      const d = draw(counters(top, mid, true), penguins, { rng: seed }, favoured);
+      if (d.rarity === rarity) seen.set(d.prize, (seen.get(d.prize) ?? 0) + 1);
+    }
+    return share(seen, of);
+  }
+
+  it("are its five, one of each rarity but the top two, from its opening: no Treant is featured", () => {
+    expect(featuredOf(cat, "penguin-month").map((f) => [f.id, f.rarity])).toEqual([
+      ["flurry", "Druid"],
+      ["pomp", "Dryad"],
+      ["larp", "Sprite"],
+      ["jet", "Sapling"],
+      ["dibs", "Leafkin"],
+    ]);
+    expect(featuredOf(catalogAt(eraAt(opens - 1)), "penguin-month")).toEqual([]);
+    expect(penguins.Yggdrasil).toEqual(["headliner:penguin-month"]);
+  });
+
+  it("are half of a draw of their rarity; a Treant is drawn as the grove draws it", () => {
+    expect(shareOf("Leafkin", 0, 0, ["figure:dibs"])).toBeCloseTo(0.5, 1);
+    expect(shareOf("Sprite", 0, 0, ["figure:larp"])).toBeCloseTo(0.5, 1);
+    expect(shareOf("Druid", 0, 9, ["figure:flurry"])).toBeCloseTo(0.5, 1);
+    // Without them, one of a rarity's prizes evenly.
+    expect(shareOf("Leafkin", 0, 0, ["figure:dibs"], [])).toBeCloseTo(1 / penguins.Leafkin.length, 1);
+    for (let seed = 0; seed < 500; seed++) {
+      const [a, b] = [counters(79), counters(79)];
+      const [sa, sb] = [{ rng: seed }, { rng: seed }];
+      const both = draw(a, penguins, sa, featured);
+      const without = draw(b, penguins, sb);
+      if (both.rarity !== "Treant") continue;
+      expect([both, a, sa]).toEqual([without, b, sb]);
+    }
   });
 });

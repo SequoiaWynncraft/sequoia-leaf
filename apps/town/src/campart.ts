@@ -11,7 +11,7 @@ import { type Body, type Dir, FOOT_X, FOOT_Y, FRAME_H, FRAME_W } from "@sequoia-
 import { type Ctx, hash, makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { everySetDrawn, type FigureId } from "@sequoia-leaf/raid/content/catalog.ts";
 import type { PetId } from "@sequoia-leaf/town/camp.ts";
-import { figureThing, isMemberThing, THINGS } from "@sequoia-leaf/town/things.ts";
+import { figureThing, isMemberThing, SET_MEMBERS, THINGS } from "@sequoia-leaf/town/things.ts";
 
 import { dirOf } from "./actors.ts";
 import { drawFern } from "./ground.ts";
@@ -1527,11 +1527,11 @@ export function makeCampArt(s: Sprites): CampArt {
     members.set(id, (body) => {
       for (const { dir, g } of ways.flat()) {
         g.clearRect(0, 0, FRAME_W, FRAME_H);
-        const standing = body.frames[dir]?.[0];
-        if (standing) g.drawImage(standing, 0, 0);
+        for (const standing of body.frames[dir]?.slice(0, 1) ?? []) g.drawImage(standing, 0, 0);
       }
     });
   }
+  for (const [id, figure] of SET_MEMBERS) things[id] = character(figure);
   // Anything the catalogue has that has no picture yet stands in as a crate, so nothing is ever unseen.
   const undrawn = THINGS.filter((t) => !things[t.id]).map((t) => t.id);
   for (const id of undrawn) things[id] = one(s.crate);

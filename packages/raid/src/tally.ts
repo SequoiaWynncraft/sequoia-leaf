@@ -64,7 +64,7 @@ const blank = (id: number): Did => ({
 /** Every figure an event names: whoever it is about, and whoever it was aimed at or done by. */
 function named(ev: FightEvent): number[] {
   if (ev.t === "cast") return [ev.id, ...ev.targets];
-  if (ev.t === "trait") return ev.ids;
+  if (ev.t === "trait" || ev.t === "pool") return ev.ids;
   if (ev.t === "dusk" || ev.t === "end") return [];
   if ("target" in ev) return [ev.id, ev.target];
   return "by" in ev ? [ev.id, ev.by] : [ev.id];

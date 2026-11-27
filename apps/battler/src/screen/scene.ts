@@ -17,6 +17,7 @@ import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 import { itemPic, levelPic } from "./art/icons.ts";
 import { drawLife } from "./art/place.ts";
 import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
+import { drawBubblesUnder } from "./bubble.ts";
 import { drawCallsUnder } from "./call.ts";
 import { drawClosed } from "./closed.ts";
 import { drawFightMarks } from "./fightmarks.ts";
@@ -409,6 +410,7 @@ function drawTable(g: Ctx): void {
   drawSeals(g);
   drawCallsUnder(g);
   drawShellsUnder(g);
+  drawBubblesUnder(g);
   const list: Standing[] = [];
   if (fighting) drawFight(g, list);
   else {

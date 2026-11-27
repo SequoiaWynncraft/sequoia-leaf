@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import * as kit from "@sequoia-leaf/kit/palette.ts";
-import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
+import { everySetDrawn, everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
 import { SUMMON_IDS, TROUBLE_IDS } from "@sequoia-leaf/raid/content/figures.ts";
 import { TRUE_FORM_IDS } from "@sequoia-leaf/raid/content/graid.ts";
 
@@ -11,10 +11,10 @@ import { readRows } from "./rows.ts";
 import { isPersonId } from "./sprites.ts";
 
 /** Everyone on the board typed as rows: all but the people, who are drawn from a member's skin. */
-const TYPED = [...everyShared(), ...SUMMON_IDS, ...TROUBLE_IDS].filter((id) => !isPersonId(id));
+const TYPED = [...everySetDrawn(), ...SUMMON_IDS, ...TROUBLE_IDS].filter((id) => !isPersonId(id));
 
-test("every figure a member can own has its pictures, standing and casting", () => {
-  const missing = everyShared().filter((id) => artOf(id).rows.length === 0 || (artOf(id).cast ?? []).length === 0);
+test("every figure a member can own that the set draws has its pictures, standing and casting", () => {
+  const missing = everySetDrawn().filter((id) => artOf(id).rows.length === 0 || (artOf(id).cast ?? []).length === 0);
   expect(missing).toEqual([]);
 });
 
@@ -95,4 +95,11 @@ test("what a figure carries sits inside its pictures, standing and casting, and 
     { n: 2, rock: 1 },
   );
   expect(laid).toEqual(["ab..", "..ab", "...."]);
+});
+
+test("Jet lies flat, so it falls belly up where it lies; everyone else tips onto its side", () => {
+  expect(TYPED.filter((id) => artOf(id).flat === true)).toEqual(["jet"]);
+  // Its standing picture is wider than it is tall, as one lying on its belly is.
+  const { rows } = artOf("jet");
+  expect((rows[0]?.length ?? 0) > rows.length).toBe(true);
 });

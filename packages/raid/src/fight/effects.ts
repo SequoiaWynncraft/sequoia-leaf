@@ -10,7 +10,7 @@ import { figureIn, isFigureId, specOf, type Stars, type UnitKind } from "../cont
 import { formNumber, hasTrueForm } from "../content/graid.ts";
 import { type ItemId, itemStats } from "../content/items.ts";
 import { type TraitId, traitNumber } from "../content/traits.ts";
-import { COLS, HOME_ROWS, within } from "../hex.ts";
+import { COLS, groupsTouching, HOME_ROWS, within } from "../hex.ts";
 import {
   brace,
   emit,
@@ -22,6 +22,7 @@ import {
   hurt,
   later,
   mostHurt,
+  poolUp,
   powered,
   secs,
   shieldUp,
@@ -149,6 +150,17 @@ const TRAITS: Readonly<Record<TraitId, Hooks>> = {
     }),
   },
   crab: { seated: rollCall },
+  // Each group of its carriers that start the fight touching shares one shield, before the Sneaks leap.
+  huddle: {
+    seated: (f, { members, v }) => {
+      const up = members.filter((u) => u.alive);
+      for (const places of groupsTouching(up.map((u) => u.cell))) {
+        const group = places.flatMap((i) => (up[i] ? [up[i]] : []));
+        if (group.length < 2) continue;
+        poolUp(f, group, (group.reduce((sum, u) => sum + u.maxHp, 0) * v("share")) / 100, v("back"), v("wait"));
+      }
+    },
+  },
   gnome: {
     on: each((u, v) => {
       u.maxHp = Math.round(u.maxHp * (1 + v("health") / 100));

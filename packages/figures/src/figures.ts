@@ -31,6 +31,8 @@ export interface FigureArt {
   readonly alt?: readonly string[];
   /** The row that folds when it breathes in, counted from the top. */
   readonly breath?: number;
+  /** Lies flat already (Jet, on its belly): it falls by turning belly up where it lies, not by tipping onto its side. */
+  readonly flat?: true;
   /** Hovers: its shadow is small and it bobs rather than breathes. */
   readonly flies?: true;
   /** Has something written on it, so it is never mirrored to face the other way. */
@@ -95,6 +97,7 @@ const KEPT: Readonly<Partial<Record<UnitKind, Omit<FigureArt, "rows" | "cast" | 
   jay: { breath: 12, head: 2 },
   crab12: { sym: true },
   lanterngnome: { breath: 15, head: 5 },
+  jet: { flat: true },
   leafling: { breath: 16, head: 3 },
   cindernewt: { breath: 9 },
   drizzlefrog: { breath: 10, head: 2 },
@@ -103,6 +106,7 @@ const KEPT: Readonly<Partial<Record<UnitKind, Omit<FigureArt, "rows" | "cast" | 
   crab23: { sym: true },
   munch: { breath: 12, head: 1 },
   crab31: { sym: true },
+  larp: { head: 3 },
   badger: { breath: 9 },
   fogowl: { breath: 15, head: 2 },
   heron: { breath: 12 },
@@ -110,11 +114,13 @@ const KEPT: Readonly<Partial<Record<UnitKind, Omit<FigureArt, "rows" | "cast" | 
   apothecary: { breath: 14, head: 2 },
   // A nest does not breathe: its eggs rock.
   clutch: { breath: 99 },
+  pomp: { head: 2 },
   greg: { breath: 14, head: 2 },
   whitefox: { breath: 18, head: 5 },
   hearthcat: { breath: 15, head: 1 },
   seqwawa: { head: 3, room: 25 },
   crab8: { sym: true, feet: 6 },
+  yule: { head: 1 },
   glorplet: { breath: 2 },
   uncounted: { sym: true },
   biguncounted: { sym: true },

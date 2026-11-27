@@ -5,7 +5,7 @@
  */
 import { BANNERS } from "@sequoia-leaf/raid/content/banners.ts";
 import { type Catalog, catalogAt, everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
-import type { FigureId } from "@sequoia-leaf/raid/content/figures.ts";
+import { type FigureId, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { eraOf, LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 
 /**
@@ -102,6 +102,20 @@ function thing(
 
 /** The camp thing one of The Little Raid's figures is. */
 export const figureThing = (figure: string): string => `figure-${figure}`;
+/** The banners' headliners the set draws (Yule), by their member's thing: drawn as their own figure, not from a skin. */
+export const SET_MEMBERS: readonly (readonly [thing: string, figure: FigureId])[] = BANNERS.flatMap((b) =>
+  b.look === "set" ? [[`member-${b.id}`, b.headliner] as const] : [],
+);
+/**
+ * The figure of the raid a camp's character is: a figure's carving, or a banner's headliner the set
+ * draws (Yule); null for anything else, a member drawn from a skin among them.
+ */
+export function figureOfThing(of: Pick<Thing, "id" | "kind">): FigureId | null {
+  if (of.kind !== "characters") return null;
+  const set = SET_MEMBERS.find(([id]) => id === of.id)?.[1];
+  const id = of.id.slice("figure-".length);
+  return set ?? (of.id.startsWith("figure-") && isFigureId(id) ? id : null);
+}
 /** The camp thing a pull banner's member is, and whether a thing is one. */
 export const memberThing = (banner: string): string => `member-${banner}`;
 export const isMemberThing = (id: string): boolean => id.startsWith(memberThing(""));
@@ -333,11 +347,25 @@ export const THINGS: readonly Thing[] = [
   ),
 
   // A banner's member, one for each of the pull game's banners: a person, who takes a person's square.
-  // Only Leaf knows who; the page gives the thing their name and draws them (`members.ts`).
-  ...BANNERS.map(({ id, headliner }) =>
-    thing(memberThing(id), asBrought(headliner).name, "characters", 1, 1, "", "Hops and looks at you.", {
-      turns: "flip",
-    }),
+  // Only Leaf knows who; the page gives the thing their name and draws them (`members.ts`). A headliner
+  // the set draws (Yule) is a figure like the others, on 3 squares with its line.
+  ...BANNERS.map(({ id, headliner, look }) =>
+    look === "set"
+      ? thing(
+          memberThing(id),
+          asBrought(headliner).name,
+          "characters",
+          3,
+          1,
+          asBrought(headliner).quip,
+          "Says its line.",
+          {
+            turns: "flip",
+          },
+        )
+      : thing(memberThing(id), asBrought(headliner).name, "characters", 1, 1, "", "Hops and looks at you.", {
+          turns: "flip",
+        }),
   ),
 ];
 

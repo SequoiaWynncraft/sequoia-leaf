@@ -67,6 +67,7 @@ export const GOOD_WITH: Readonly<Record<FigureId, Three>> = {
   crab40: ["hedgehog", "hoard", "hollowlog"],
   greg: ["hoard", "hollowlog", "lichen"],
   clutch: ["hoard", "hollowlog", "lichen"],
+  dibs: ["hoard", "hollowlog", "hedgehog"],
   // Fighters: Thorn with Chestnut or Plume.
   emberkit: ["conker", "honeycake", "wasptail"],
   crab7: ["conker", "honeycake", "wasptail"],
@@ -80,6 +81,7 @@ export const GOOD_WITH: Readonly<Record<FigureId, Three>> = {
   bushgnome: ["honeycake", "lichen", "hollowlog"],
   hearthcat: ["honeycake", "conker", "lichen"],
   crab8: ["honeycake", "conker", "wasptail"],
+  jet: ["honeycake", "conker", "wasptail"],
   // Ranged: Thorn and Plume.
   finch: ["wasptail", "honeycake", "hummingbird"],
   chickaree: ["wasptail", "mothlantern", "conker"],
@@ -87,20 +89,24 @@ export const GOOD_WITH: Readonly<Record<FigureId, Three>> = {
   drizzlefrog: ["wasptail", "mothlantern", "honeycake"],
   heron: ["wasptail", "mothlantern", "conker"],
   peep: ["wasptail", "mothlantern", "conker"],
+  larp: ["wasptail", "hummingbird", "mothlantern"],
   // Casters: Glowcap, with Plume where the ability comes round often.
   moth: ["mothlantern", "glowthorn", "lichen"],
   lanterngnome: ["fairyring", "mothlantern", "glowthorn"],
   leafling: ["stewpot", "lichen", "glowthorn"],
   cindernewt: ["glowthorn", "lichen", "stewpot"],
+  flurry: ["mothlantern", "glowthorn", "fairyring"],
   "banner-1": ["fairyring", "mothlantern", "glowthorn"],
   // Healers: Glowcap, with Chestnut.
   mossmote: ["stewpot", "glowthorn", "mothlantern"],
   kettle: ["stewpot", "glowthorn", "lichen"],
   crab23: ["stewpot", "glowthorn", "lichen"],
   apothecary: ["glowthorn", "stewpot", "mothlantern"],
+  yule: ["mothlantern", "stewpot", "fairyring"],
   // Support: Glowcap, with Chestnut, to keep the mana coming and stand while it does.
   crab31: ["stewpot", "mothlantern", "lichen"],
   commodore: ["fairyring", "mothlantern", "stewpot"],
+  pomp: ["mothlantern", "stewpot", "lichen"],
   // Never attacks: what makes its ability stronger, or keeps it standing where it is rooted.
   seqwawa: ["fairyring", "stewpot", "lichen"],
 };

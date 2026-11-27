@@ -27,15 +27,7 @@ import { mix } from "@sequoia-leaf/core";
 import { BOON_IDS, type BoonId, isBoonId } from "./content/boons.ts";
 import { catalogOf, everyFigure } from "./content/catalog.ts";
 import { type FigureId, isBossId, isFigureId, isStars, isUnitKind } from "./content/figures.ts";
-import {
-  type EmblemId,
-  FINISHED_IDS,
-  isComponentId,
-  isEmblemId,
-  isFinishedId,
-  isItemId,
-  type ItemId,
-} from "./content/items.ts";
+import { FINISHED_IDS, isComponentId, isEmblemId, isFinishedId, isItemId, type ItemId } from "./content/items.ts";
 import { holdItem } from "./content/recipes.ts";
 import { type Era, isEra, LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, MOST_ROOMS, ROOM_COUNT } from "./content/rooms.ts";
@@ -107,14 +99,15 @@ function readRackOf(
   tooled: boolean,
 ): Rack {
   let rack = readRack(r);
-  const emblems = (): EmblemId[] => [...kindsOn(rack).filter(isEmblemId), ...held.filter(isEmblemId)];
+  // The emblems a charm gives; one the Carving Knife made is no boon's, and may be more than one.
+  const emblems = () => [...kindsOn(rack), ...held].flatMap((id) => (isEmblemId(id) && isBoonId(id) ? [id] : []));
   // A charm taken before a charm was an emblem has none anywhere: it is put on the item bench.
   if (!tooled)
     for (const boon of boons)
       if (isEmblemId(boon) && countOn(rack, boon) === 0 && !held.includes(boon)) rack = counted(rack, boon, 1);
-  // Every emblem is its charm's, and there is one of each.
+  // Every emblem a charm gives is its charm's, and there is one of each.
   if (emblems().some((emblem) => !boons.includes(emblem))) bad("the emblems");
-  if (kindsOn(rack).some((id) => isEmblemId(id) && countOn(rack, id) > 1)) bad("the emblems");
+  if (kindsOn(rack).some((id) => isEmblemId(id) && isBoonId(id) && countOn(rack, id) > 1)) bad("the emblems");
   unique(emblems(), "the emblems");
   return rack;
 }

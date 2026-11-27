@@ -21,10 +21,12 @@ export interface Part<K extends string, V> {
 
 /**
  * Where a figure sits when not where its reach puts it (`formation.ts`): beside the two friends with
- * the dearest mana bars, to give them mana (`mana`), or where two free seats beside it are kept for
- * what it calls (`room`).
+ * the dearest mana bars, to give them mana (`mana`); where two free seats beside it are kept for
+ * what it calls (`room`); in the row its reach gives, beside another carrier of its origin, so
+ * that they start the fight touching (`touching`, Huddle); or in the row with the most mana bars, which
+ * its ability fills (`row`, Pomp).
  */
-export type Stands = "mana" | "room";
+export type Stands = "mana" | "room" | "touching" | "row";
 
 /** A figure as a release brings it: its words and numbers, and what the pulls give it as. */
 export interface Arrival extends FigureSpec {

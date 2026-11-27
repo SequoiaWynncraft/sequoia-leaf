@@ -101,7 +101,7 @@ describe("nobody wastes a blow on the fallen", () => {
     const finch = unitOf(f, "finch");
     expect(drawnFoe(f, finch)?.id).toBe(near.id);
     fly(f, near, 50, "true", 10, () => {});
-    expect(covered(near)).toBe(true);
+    expect(covered(f, near)).toBe(true);
     expect(drawnFoe(f, finch)?.id).toBe(other.id);
     // With nobody else in reach, it is picked all the same.
     leap(f, other, cellAt(6, 0), "ability");
@@ -115,7 +115,7 @@ describe("nobody wastes a blow on the fallen", () => {
     finch.target = near.id;
     fly(f, near, 50, "physical", 30, () => {});
     // Physical damage meets armour: 50 against no armour covers 50 health.
-    expect(covered(near)).toBe(true);
+    expect(covered(f, near)).toBe(true);
     const shot = only(steps(f, 1), "shot")[0];
     expect(shot?.target).toBe(other.id);
   });

@@ -33,3 +33,14 @@ export function fateOf(
  * that is out from under it.
  */
 export const stillCaught = (h: Hung, fellAt: number, c: number): boolean => fellAt >= h.lands || fellAt > c;
+
+/** Steps between one of Yule's bubbles closing and the next, when one bath shuts several friends in (0.15 seconds). */
+export const APART = 3;
+/**
+ * How the `i`th friend of a bath hung at `h` is drawn at the fight's clock `c`: as itself until its
+ * own bubble closes, though the rules have hidden it since the bath began; in its bubble until the
+ * bath lands; and as itself again from then.
+ */
+export function bathOf(h: Hung, i: number, c: number): "itself" | "bubble" {
+  return c >= h.at + i * APART && c < h.lands ? "bubble" : "itself";
+}

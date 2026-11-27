@@ -107,6 +107,32 @@ export const distance = (a: number, b: number): number => distances[a * CELLS + 
 /** Whether two hexes touch. */
 export const touching = (a: number, b: number): boolean => distance(a, b) === 1;
 
+/**
+ * The groups some hexes make by touching: each the hexes reachable from one another a touch at a
+ * time, as places in `cells`, each group in the order given and the groups in the order of their
+ * first. A hex touching no other is a group of one.
+ */
+export function groupsTouching(cells: readonly number[]): number[][] {
+  const group = cells.map(() => -1);
+  const out: number[][] = [];
+  cells.forEach((_, start) => {
+    if (group[start] !== -1) return;
+    const members = [start];
+    group[start] = out.length;
+    for (let i = 0; i < members.length; i++) {
+      const at = cells[members[i] ?? 0] ?? -1;
+      cells.forEach((cell, j) => {
+        if (group[j] === -1 && touching(at, cell)) {
+          group[j] = out.length;
+          members.push(j);
+        }
+      });
+    }
+    out.push(members.toSorted((a, b) => a - b));
+  });
+  return out;
+}
+
 /** Every hex within some steps of one, nearest first, itself left out. */
 export function within(cell: number, steps: number): number[] {
   const out: number[] = [];

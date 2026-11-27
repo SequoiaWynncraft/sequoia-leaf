@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { CASTS } from "../fight/abilities.ts";
 import { COLS, HOME_ROWS } from "../hex.ts";
 import type { Carrier } from "../party.ts";
-import { BOON_IDS, boonIn, boonText, giftOf } from "./boons.ts";
+import { BOON_IDS, boonIn, boonText, giftOf, isBoonId } from "./boons.ts";
 import { available, catalogAt } from "./catalog.ts";
 import {
   abilityText,
@@ -22,11 +22,13 @@ import {
 } from "./figures.ts";
 import {
   COMPONENT_IDS,
+  drawnComponents,
   EMBLEM_IDS,
   emblemTrait,
   FINISHED_IDS,
   halvesOf,
   HOLDS,
+  isEmblemId,
   type ItemId,
   itemIn,
   itemName,
@@ -57,11 +59,12 @@ const mean = (tier: 1 | 2 | 3 | 4 | 5, cat = CAT): number => {
 };
 
 describe("the roster", () => {
-  test("is twenty-nine figures in five tiers, 7, 7, 6, 5, 4; with Groot Night, 8, 7, 8, 6, 5, and its banner's Commodore while open", () => {
+  test("is twenty-nine figures in five tiers, 7, 7, 6, 5, 4; with Groot Night, 8, 7, 8, 6, 5, and with Penguin Month 9, 8, 9, 8, 5; each banner's headliner while open", () => {
     expect(TIERS.map((tier) => figuresOfTier(tier).length)).toEqual([7, 7, 6, 5, 4]);
-    expect(FIGURE_IDS.length).toBe(34);
+    expect(FIGURE_IDS.length).toBe(40);
     expect(TIERS.map((tier) => figuresOfTier(tier, catalogAt(eraOf("groot-night"))).length)).toEqual([8, 7, 8, 6, 6]);
-    expect(TIERS.map((tier) => figuresOfTier(tier, EVERY).length)).toEqual([8, 7, 8, 6, 5]);
+    expect(TIERS.map((tier) => figuresOfTier(tier, catalogAt(eraOf("penguin-month"))).length)).toEqual([9, 8, 9, 8, 6]);
+    expect(TIERS.map((tier) => figuresOfTier(tier, EVERY).length)).toEqual([9, 8, 9, 8, 5]);
   });
   test("everyone has a name of their own; the Commodore's four grooters are one figure", () => {
     const specs = new Set(EVERYONE.map((kind) => specOf(EVERY, kind)));
@@ -72,8 +75,8 @@ describe("the roster", () => {
   test("every kin has four members, on at least three tiers, starting cheap", () => {
     // Graid is the five named after the guild's raids, a kin as a third trait for four of them.
     // Crab has six from Groot Night; Grooter three and the Commodore, with no two-acorn figure, so
-    // that its cracking is not on in the first rooms.
-    const many: Readonly<Partial<Record<string, number>>> = { crab: 6, grooter: 3 };
+    // that its cracking is not on in the first rooms. Gnome six from Penguin Month, with steps at 3 and 5.
+    const many: Readonly<Partial<Record<string, number>>> = { crab: 6, grooter: 3, gnome: 6 };
     for (const kin of KINS.filter((k) => k !== "graid")) {
       const members = FIGURE_IDS.filter((id) => figureIn(EVERY, id).kin === kin);
       expect([kin, members.length]).toEqual([kin, many[kin] ?? 4]);
@@ -90,8 +93,8 @@ describe("the roster", () => {
     for (const calling of CALLINGS) {
       const members = FIGURE_IDS.filter((id) => traitsOf(EVERY, id).includes(calling));
       expect(members.length).toBeGreaterThanOrEqual(4);
-      // Bulwark has seven with Clutch.
-      expect(members.length).toBeLessThanOrEqual(calling === "bulwark" ? 7 : 6);
+      // Bulwark has eight with Clutch and Dibs, Slinger seven with Larp.
+      expect(members.length).toBeLessThanOrEqual(calling === "bulwark" ? 8 : 7);
       expect(new Set(members.map((id) => figureIn(EVERY, id).tier)).size).toBeGreaterThanOrEqual(3);
       // Fang's top step is reachable again: Munch is the sixth, since Orphion left it for Sage.
       expect(members.length).toBeGreaterThanOrEqual(traitIn(EVERY, calling).steps.at(-1) ?? 0);
@@ -101,12 +104,13 @@ describe("the roster", () => {
       "kettle",
       "drizzlefrog",
       "crab31",
+      "pomp",
     ]);
   });
-  test("only the dearest carry a third trait, and the Graid figures and three Chorus; nobody more than three", () => {
+  test("only the dearest carry a third trait, and the Graid figures, three Chorus and Larp's Huddle; nobody more than three", () => {
     for (const id of FIGURE_IDS) {
       const { extra, tier } = figureIn(EVERY, id);
-      if (extra.length > 0 && tier < 5) expect([["graid"], ["chorus"]]).toContainEqual([...extra]);
+      if (extra.length > 0 && tier < 5) expect([["graid"], ["chorus"], ["huddle"]]).toContainEqual([...extra]);
       expect(traitsOf(EVERY, id).length).toBeLessThanOrEqual(3);
     }
   });
@@ -168,8 +172,8 @@ describe("the roster", () => {
 });
 
 describe("traits", () => {
-  test("there are nine kins and seven callings: Grooter and Chorus from Groot Night", () => {
-    expect(KINS.length).toBe(9);
+  test("there are ten kins and seven callings: Grooter and Chorus from Groot Night, Huddle from Penguin Month", () => {
+    expect(KINS.length).toBe(10);
     expect(CALLINGS.length).toBe(7);
     expect(CAT.ids.traits).not.toContain("grooter");
     expect(CAT.ids.traits).not.toContain("chorus");
@@ -198,20 +202,39 @@ describe("traits", () => {
 });
 
 describe("items", () => {
-  test("five components make fifteen things, one for every pair", () => {
-    expect(COMPONENT_IDS.length).toBe(5);
+  test("five components make fifteen things, one for every pair; the Knife makes a class emblem with each, and with itself An Extra Chair", () => {
+    expect(COMPONENT_IDS.length).toBe(6);
+    expect(drawnComponents(EVERY)).toEqual(CAT.ids.components);
     expect(FINISHED_IDS.length).toBe(15);
     const made = new Set<string>();
-    for (const a of COMPONENT_IDS) {
-      for (const b of COMPONENT_IDS) {
+    for (const a of CAT.ids.components) {
+      for (const b of CAT.ids.components) {
         expect(combine(CAT, a, b)).toEqual(combine(CAT, b, a));
         made.add(combine(CAT, a, b)?.id ?? "nothing");
       }
     }
     expect(made.size).toBe(15);
+    const knife = CAT.ids.components.map((c) => combine(EVERY, "knife", c));
+    expect(
+      knife.map((m) => [m?.id, m?.gives === "item" && isEmblemId(m.id) ? emblemTrait(EVERY, m.id) : null]),
+    ).toEqual([
+      ["woodentooth", "fang"],
+      ["woodensling", "slinger"],
+      ["woodenspectacles", "sage"],
+      ["woodenbuckler", "bulwark"],
+      ["woodenspoon", "mender"],
+    ]);
+    // Each keeps its component's stat, and has none of its own.
+    for (const c of CAT.ids.components) {
+      const m = combine(EVERY, "knife", c);
+      if (m?.gives === "item") expect(itemStats(EVERY, m.id)).toEqual(itemIn(EVERY, c).stats);
+    }
+    expect(combine(EVERY, "knife", "knife")).toEqual({ gives: "boon", id: "extrachair" });
+    expect(combine(catalogAt(eraOf("groot-night")), "thorn", "knife")).toBeNull();
   });
-  test("each component is a single stat", () => {
-    for (const id of COMPONENT_IDS) {
+  test("each component is a single stat, but the Knife, which has none", () => {
+    expect(itemStats(EVERY, "knife")).toEqual({ attack: 0, speed: 0, power: 0, armour: 0, ward: 0, health: 0 });
+    for (const id of CAT.ids.components) {
       const s = itemIn(CAT, id).stats;
       const kinds = [s.attack, s.speed, s.power, s.armour + s.ward, s.health].filter((n) => n > 0);
       expect(kinds.length).toBe(1);
@@ -282,7 +305,7 @@ describe("items", () => {
   });
   test("an emblem adds no stats until Groot Night, and 10% health from it; it is named and quipped as the charm that gives it", () => {
     for (const cat of [CAT, EVERY])
-      for (const id of cat.ids.emblems) {
+      for (const id of cat.ids.emblems.flatMap((e) => (isBoonId(e) ? [e] : []))) {
         const health = cat === CAT ? 0 : 10;
         expect(itemStats(cat, id)).toEqual({ attack: 0, speed: 0, power: 0, armour: 0, ward: 0, health });
         expect(itemName(cat, id)).toBe(boonIn(cat, id).name);
@@ -296,19 +319,24 @@ describe("items", () => {
 describe("boons", () => {
   test("there are about twenty, with a charm for every kin, each giving the emblem of its own id", () => {
     expect(BOON_IDS.length).toBeGreaterThanOrEqual(16);
-    expect(BOON_IDS.length).toBeLessThanOrEqual(24);
-    expect(BOON_IDS.filter((id) => boonIn(EVERY, id).sort === "charm")).toEqual([...EMBLEM_IDS]);
-    expect(BOON_IDS.flatMap((id) => giftOf(EVERY, id))).toEqual([...EMBLEM_IDS]);
+    expect(BOON_IDS.length).toBeLessThanOrEqual(25);
+    // Every emblem but those the Knife makes, which no charm gives.
+    const charmed = EMBLEM_IDS.flatMap((id) => (isBoonId(id) && itemIn(EVERY, id).made === undefined ? [id] : []));
+    expect(charmed.length).toBe(EMBLEM_IDS.filter((id) => itemIn(EVERY, id).made === undefined).length);
+    expect(BOON_IDS.filter((id) => boonIn(EVERY, id).sort === "charm")).toEqual([...charmed]);
+    expect(BOON_IDS.flatMap((id) => giftOf(EVERY, id))).toEqual([...charmed]);
     // Every kin but Graid in the tests' own era; Graid's comes with Groot Night, with Grooter's and two classes'.
     for (const kin of KINS) {
       const emblems = (cat: typeof CAT) => cat.ids.emblems.filter((id) => emblemTrait(cat, id) === kin);
       expect([kin, emblems(EVERY).length]).toEqual([kin, 1]);
       if (CAT.traits[kin]) expect([kin, emblems(CAT).length]).toEqual([kin, kin === "graid" ? 0 : 1]);
     }
-    expect(EVERY.ids.emblems.map((id) => emblemTrait(EVERY, id)).filter((t) => CALLINGS.some((c) => c === t))).toEqual([
-      "chorus",
-      "sneak",
-    ]);
+    expect(
+      EVERY.ids.emblems
+        .filter(isBoonId)
+        .map((id) => emblemTrait(EVERY, id))
+        .filter((t) => CALLINGS.some((c) => c === t)),
+    ).toEqual(["chorus", "sneak"]);
     for (const id of BOON_IDS) expect(boonText(EVERY, id)).not.toContain("{");
   });
 });
