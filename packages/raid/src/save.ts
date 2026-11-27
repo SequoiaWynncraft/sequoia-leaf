@@ -80,6 +80,12 @@ function unique<T>(items: T[], what: string): T[] {
 const UINT = 0xffffffff;
 /** The most of anything a run could keep, whatever the numbers: room for them to grow. */
 const ROOMY = 999;
+/**
+ * The most loose items a run's item bench may hold: components never stop coming in an endless run
+ * (about two in three rooms), so this is no limit a player meets. The rack kept as counts by kind
+ * replaces it.
+ */
+const MOST_ITEMS = 100_000;
 
 // ---------- the shape ----------
 
@@ -368,7 +374,7 @@ function readParts(
   if (board.length !== SEATS) bad("the board");
   const ids = [...board, ...bench].flatMap((p) => (p ? [p.id] : []));
   unique(ids, "the figures' numbers");
-  const items = each(r.items, isItemId, 400, "the item bench");
+  const items = each(r.items, isItemId, MOST_ITEMS, "the item bench");
   const held = [...board, ...bench].flatMap((p) => p?.items ?? []);
   // A charm taken before a charm was an emblem has none anywhere: it is put on the item bench.
   for (const boon of boons) if (isEmblemId(boon) && !items.includes(boon) && !held.includes(boon)) items.push(boon);
