@@ -1,8 +1,10 @@
 /**
  * The assembler on the page: a crafting hall drawn once over its nine tiles (`art/assembler.ts`), its
- * doors open on a hammer at work and its glass lit cream while it makes, shut and dark at rest. Its
- * card is a machine's: it can be told one thing to make, and says what it makes a minute.
+ * doors open on a hammer at work and its glass lit cream while it makes (or what it made waits to
+ * leave), shut and dark at rest. Its card is a machine's: it can be told one thing to make, and says
+ * what it makes a minute.
  */
+import { isItem } from "@sequoia-leaf/factory";
 import { BARK, CREAM, PAPER } from "@sequoia-leaf/kit/palette.ts";
 
 import { hallOf } from "../art/assembler.ts";
@@ -18,7 +20,10 @@ export const assembler: KindPage = {
   ...MACHINE,
   picture: (_p, grade) => hallOf(1, Math.max(1, grade), false, 0).c,
   draw(_art, _y, at) {
-    const { i, cx, foot, z, a, working } = at;
+    const { i, cx, foot, z, a } = at;
+    // Busy while it works, and while what it made waits for room ahead: a hall that makes more than its
+    // belt carries spends most of its time so, and would blink if only its working ticks were lit.
+    const working = at.working || (at.real && at.powered && isItem(at.out));
     const step = working ? Math.floor(at.t * BEAT) % 4 : 0;
     at.stand(hallOf(at.d, Math.max(1, at.grade), working, step), cx, foot, z, a);
     if (at.real) {
