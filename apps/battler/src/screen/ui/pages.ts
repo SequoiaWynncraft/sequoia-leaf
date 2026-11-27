@@ -1,9 +1,9 @@
-import { nameOf, portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The pages that sit over the table: the front page before a run, the almanac of everything met so
  * far, how to play, the looks for the table that Leaf buys, and the paper at a run's end. One is up
- * at a time.
+ * at a time. The front page is its own (`front.ts`).
  */
+import { nameOf, portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { type Choice, choices } from "@sequoia-leaf/kit/choices.ts";
 import { add, amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
@@ -39,7 +39,6 @@ import {
   TRAIT_IDS,
   TRAITS,
   tryOn,
-  unfought,
   wornOf,
 } from "@sequoia-leaf/raid";
 
@@ -49,7 +48,8 @@ import { endedOf } from "../screen.ts";
 import { snd } from "../sounds.ts";
 import { ask, S } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
-import { figuresHere, nothingNew, pulledLine, pulledTag, runTag, setsOutOwn, wayPrefix, waysOf } from "./own.ts";
+import { frontAway, frontBody } from "./front.ts";
+import { figuresHere, nothingNew, pulledLine, pulledTag, runTag, unshown } from "./own.ts";
 
 export type PageId = "front" | "almanac" | "howto" | "looks" | "summary";
 
@@ -71,7 +71,6 @@ let shownKey = "";
 let tab: AlmanacTab = "figures";
 /** The look being tried on in the looks page, before it is bought or worn. */
 let trying: { kind: LookKind; id: LookId } | null = null;
-let sureHome = false;
 /** What had the keyboard when a page was opened over the table: it has it back when the page goes. */
 let opener: HTMLElement | null = null;
 
@@ -84,7 +83,7 @@ export const pageOver = (): boolean => extra !== null;
 export function showPage(id: PageId | null): void {
   if (id && !extra) opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   extra = id;
-  sureHome = false;
+  frontAway();
   if (id) snd.open();
   else snd.close();
   renderPages(true);
@@ -128,182 +127,6 @@ function partyRow(run: RunView): HTMLElement {
     row.append(who);
   }
   return row;
-}
-
-// ---------- the front page ----------
-
-/** Picks the trail to set out on next: Leaf keeps it. */
-async function pickTrail(trail: number, card: Element | null): Promise<void> {
-  await ask({ do: "trail", trail }, card);
-  renderPages(true);
-}
-
-function front(): HTMLElement {
-  const run = S.run;
-  const body = el("div", "k-body k-scroll", {});
-  if (run && run.stage.phase !== "over") {
-    const going = el(
-      "div",
-      "k-card going",
-      {},
-      el(
-        "div",
-        "k-col k-grow tight",
-        {},
-        el("b", "k-gold", { text: "A raid is laid out" }),
-        el("span", "k-dim", {
-          text: `${wayPrefix(run)}Room ${run.room + 1} of ${ROOM_COUNT}, ${TRAILS[run.trail]?.name ?? ""}. Health ${run.resolve}.`,
-        }),
-        partyRow(run),
-      ),
-    );
-    add(
-      body,
-      going,
-      el(
-        "button",
-        "k-btn wide",
-        { type: "button", id: "carryon", onclick: () => asks?.carryOn() },
-        pic(glyph("play")),
-        "Carry on",
-      ),
-    );
-    // A raid that has fought no room yet is not put down: it is the one set out on, until its first room.
-    const kept = unfought(run);
-    add(
-      body,
-      kept
-        ? el("span", "k-read k-dim", { text: "You can go home once the first room is fought." })
-        : sureHome
-          ? el(
-              "div",
-              "k-row",
-              {},
-              el("span", "k-d k-grow", { text: "Go home now? You are paid for the rooms you won." }),
-              el("button", "k-btn coral sm", { type: "button", onclick: () => asks?.goHome() }, "Go home"),
-              el(
-                "button",
-                "k-btn wood sm",
-                {
-                  type: "button",
-                  onclick: () => {
-                    sureHome = false;
-                    renderPages(true);
-                  },
-                },
-                "Stay",
-              ),
-            )
-          : el(
-              "button",
-              "k-btn wood sm",
-              {
-                type: "button",
-                id: "gohome",
-                onclick: () => {
-                  sureHome = true;
-                  renderPages(true);
-                },
-              },
-              "Go home early",
-            ),
-    );
-    add(body, el("hr", "k-rule"));
-  }
-  // The raid laid out, while it has fought no room, stays the one set out on.
-  const keep = run !== null && run.stage.phase !== "over" && unfought(run);
-  add(body, ...waysOf(keep, () => renderPages(true)));
-  const trails = el("div", "trails", { role: "radiogroup" });
-  for (let i = 0; i < TRAIL_COUNT; i++) {
-    const t = TRAILS[i];
-    if (!t) continue;
-    const open = trailOpen(S.almanac, i);
-    const best = S.almanac.best[i] ?? 0;
-    const card = el(
-      "button",
-      `k-card trail${open ? "" : " done"}`,
-      {
-        type: "button",
-        role: "radio",
-        "aria-selected": String(S.trail === i && open),
-        "aria-checked": String(S.trail === i && open),
-        onclick: (e: Event) => {
-          if (!open) {
-            snd.no();
-            return;
-          }
-          snd.tap();
-          // The trail picked is Leaf's to keep: it is the one set out on next, on any page.
-          void pickTrail(i, e.currentTarget instanceof Element ? e.currentTarget : null);
-        },
-      },
-      open ? pic(roomIcon(i === 0 ? "trouble" : i === 1 ? "spar" : "boss"), 2) : icon("lock", 2),
-      el(
-        "div",
-        "k-col k-grow tight",
-        {},
-        el("b", "", { text: t.name }),
-        el("span", "k-d", { text: open ? t.text : `Clear ${TRAILS[i - 1]?.name ?? "the one before"} first.` }),
-        best > 0
-          ? el("span", "k-dim", { text: `Furthest: room ${best}. Pays ${t.pays}%.` })
-          : open && t.pays > 100
-            ? el("span", "k-dim", { text: `Pays ${t.pays}%.` })
-            : null,
-      ),
-    );
-    trails.append(card);
-  }
-  add(body, trails);
-  if (!keep)
-    add(
-      body,
-      el(
-        "button",
-        `k-btn wide${run ? " wood" : ""}`,
-        { type: "button", id: "start", onclick: () => asks?.start(S.trail, setsOutOwn()) },
-        pic(glyph("swords")),
-        run ? "New raid" : "Set out",
-      ),
-    );
-  if (run && !keep) add(body, el("span", "k-read k-dim", { text: "A new raid ends the one you are on." }));
-  add(
-    body,
-    el("hr", "k-rule"),
-    el(
-      "div",
-      "k-row three",
-      {},
-      el(
-        "button",
-        "k-btn wood sm",
-        { type: "button", id: "toalmanac", onclick: () => showPage("almanac") },
-        pic(glyph("book")),
-        "Almanac",
-      ),
-      el(
-        "button",
-        "k-btn wood sm",
-        { type: "button", id: "tohowto", onclick: () => showPage("howto") },
-        pic(glyph("help")),
-        "How to play",
-      ),
-      el(
-        "button",
-        "k-btn wood sm",
-        { type: "button", id: "tolooks", onclick: () => showPage("looks") },
-        pic(glyph("brush")),
-        "Table looks",
-      ),
-    ),
-    el(
-      "button",
-      "k-btn wood wide",
-      { type: "button", id: "leave", onclick: () => asks?.leave() },
-      icon("back"),
-      "Leave the table",
-    ),
-  );
-  return panel("The Little Raid", pic(glyph("swords")), body, false, "front");
 }
 
 // ---------- the almanac ----------
@@ -539,7 +362,7 @@ function lookLine(kind: LookKind, spec: (typeof LOOKS)[LookKind][number], shown:
   return el(
     "div",
     "k-card",
-    shown ? {} : { "aria-hidden": "true", inert: "" },
+    unshown(shown),
     el("div", "k-col k-grow tight", {}, el("b", "k-gold", { text: spec.name }), el("span", "k-d", { text: spec.text })),
     act,
   );
@@ -556,7 +379,7 @@ function looks(): HTMLElement {
     body,
     el(
       "div",
-      "lookinfo",
+      "stack",
       {},
       ...LOOK_KINDS.flatMap((kind) =>
         LOOKS[kind].map((l) => lookLine(kind, l, kind === tried.kind && l.id === tried.id)),
@@ -683,6 +506,17 @@ function summary(): HTMLElement | null {
   return paper;
 }
 
+/** The front page in its panel, once the page has been told what it asks for. */
+const frontPage = (): HTMLElement | null =>
+  asks &&
+  panel(
+    "The Little Raid",
+    pic(glyph("swords")),
+    frontBody({ ...asks, open: showPage, redraw: () => renderPages(true) }),
+    false,
+    "front",
+  );
+
 /** Shows whichever page is due, or none. */
 export function renderPages(force = false): void {
   const box = document.getElementById("modal");
@@ -703,7 +537,7 @@ export function renderPages(force = false): void {
   }
   const node =
     id === "front"
-      ? front()
+      ? frontPage()
       : id === "almanac"
         ? almanac()
         : id === "howto"

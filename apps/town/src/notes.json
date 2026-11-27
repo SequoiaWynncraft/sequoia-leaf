@@ -1,5 +1,14 @@
 [
   {
+    "id": "raid-menu",
+    "at": "2026-11-27T00:12Z",
+    "title": "A new front page at the stump",
+    "lines": [
+      "The Little Raid's front page has the ways to play on the left, the one you chose in the middle with its Set out, and your records on the right: the furthest room on each trail and how many trails you have cleared.",
+      "A raid you are on is along the top, with Carry on."
+    ]
+  },
+  {
     "id": "raid-gaz-balance",
     "at": "2026-11-26T23:49Z",
     "title": "gaz catches the back line",
