@@ -5,7 +5,8 @@
  * are going to leap anyway wait at the back corners. Seqwawa, who never attacks, has the reach of
  * the back row, and stays there. A figure whose release says where it would rather sit (`stands`)
  * sits there instead: one that sits touching (`touching`, Huddle) moves to the free seat touching the
- * most figures of its origin, so that they start the fight in one group round the frontmost of them.
+ * most figures of its origin, so that they start the fight in one group round the frontmost of them;
+ * one that plays to its row (`row`) moves to the row with the most mana bars, last of all.
  */
 import type { Catalog } from "./content/catalog.ts";
 import { type FigureId, figureIn } from "./content/figures.ts";
@@ -123,7 +124,38 @@ export function arrange(
     seats[i] = best;
   }
   sitTouching(cat, party, seats, taken, free);
+  sitInRow(cat, party, seats, taken, free);
   return seats;
+}
+
+/**
+ * Those who play to their row move to the row of the half with the most mana bars of the others in
+ * it, middle out; ties go to the row its reach gives, then further back. One already in such a row,
+ * or with no free seat in it, stays.
+ */
+function sitInRow(
+  cat: Catalog,
+  party: readonly Standing[],
+  seats: number[],
+  taken: Set<number>,
+  free: (seat: number) => boolean,
+): void {
+  const spec = (i: number) => figureIn(cat, party[i]?.kind ?? "rock");
+  for (const [i, was] of seats.entries()) {
+    if (was < 0 || spec(i).stands !== "row") continue;
+    const bars = (row: number): number =>
+      seats.filter((s, j) => j !== i && s >= 0 && Math.floor(s / COLS) === row && spec(j).mana[1] > 0).length;
+    const home = standRow(spec(i).range);
+    const best = Array.from({ length: HOME_ROWS }, (_, row) => row).toSorted(
+      (a, b) => bars(b) - bars(a) || Math.abs(a - home) - Math.abs(b - home) || b - a,
+    )[0];
+    if (best === undefined || bars(Math.floor(was / COLS)) >= bars(best)) continue;
+    const seat = MIDDLE_OUT.map((col) => best * COLS + col).find(free);
+    if (seat === undefined) continue;
+    taken.delete(was);
+    taken.add(seat);
+    seats[i] = seat;
+  }
 }
 
 /** A figure's origins: its kin, and a kin it carries as a third trait (Larp's Huddle). */

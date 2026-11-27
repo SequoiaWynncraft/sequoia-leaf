@@ -143,6 +143,7 @@ export const PENGUIN_MONTH: Patch = {
         },
         quip: "Loud. On purpose.",
         prize: "Dryad",
+        stands: "row",
       },
       // The set's own: drawn by the set, and on everyone's stall while its banner is open.
       yule: {

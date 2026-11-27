@@ -103,6 +103,16 @@ describe("the Carving Knife", () => {
   });
 });
 
+/** Seats for a party as the bot seats it, in Penguin Month's era. */
+const seated = (party: readonly FigureId[]): number[] =>
+  arrange(
+    PM,
+    party.map((kind) => ({ kind, health: specOf(PM, kind).hp })),
+    false,
+  );
+/** The row of its own half a seat is in, 0 the front. */
+const rowOfSeat = (s: number): number => Math.floor(s / 7);
+
 describe("the bot", () => {
   test("seats Huddle figures touching, round the frontmost of them, Jet in the group rather than a corner", () => {
     const party: FigureId[] = ["dibs", "jet", "flurry", "yule", "finch", "badger"];
@@ -123,6 +133,18 @@ describe("the bot", () => {
       false,
     );
     expect(besideOf(withLarp[0] ?? -1)).toContain(withLarp[1] ?? -2);
+  });
+  test("seats Pomp in the row with the most mana bars, which its fanfare fills; with most at the back it stays there", () => {
+    // Three close fighters in front, and one with reach behind them: Pomp joins the front.
+    const front: FigureId[] = ["pomp", "badger", "crab40", "crab7", "finch"];
+    const inFront = seated(front);
+    expect(rowOfSeat(inFront[0] ?? -1)).toBe(rowOfSeat(inFront[1] ?? -2));
+    expect(inFront.slice(1, 4).every((s) => rowOfSeat(s) === 0)).toBe(true);
+    // Most of them at the back: Pomp stays in the row its reach gives.
+    const back: FigureId[] = ["pomp", "badger", "finch", "heron", "lanterngnome"];
+    const atBack = seated(back);
+    expect(rowOfSeat(atBack[0] ?? -1)).toBe(3);
+    expect(new Set(inFront).size).toBe(front.length);
   });
   test("makes An Extra Chair of two Knives, and a class emblem where it puts a step on", () => {
     const run = startRun(11, { era: PENGUINS });

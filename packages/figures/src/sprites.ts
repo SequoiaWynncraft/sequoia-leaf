@@ -128,6 +128,15 @@ function tipped(src: HTMLCanvasElement, left: boolean): HTMLCanvasElement {
   return c;
 }
 
+/** A picture turned upside down where it lies: how one that already lies flat falls (belly up). */
+function turnedOver(src: HTMLCanvasElement): HTMLCanvasElement {
+  const { c, g } = makeCanvas(src.width, src.height);
+  g.translate(0, src.height);
+  g.scale(1, -1);
+  g.drawImage(src, 0, 0);
+  return c;
+}
+
 const edged = (c: HTMLCanvasElement): HTMLCanvasElement => outlined(c, INK);
 /** The pale colour a figure flashes when it is hit. */
 const FLASH = "#fff8e0";
@@ -253,7 +262,9 @@ function bake(kind: UnitKind, form: Form, carried: Carried | null): { right: Fra
     flies: art.flies === true,
     carries: prop?.at.length ?? 0,
   };
-  const right: Frames = { ...base, fallen: tipped(idleA, false) };
+  const fall = (pic: HTMLCanvasElement, left: boolean): HTMLCanvasElement =>
+    art.flat ? turnedOver(pic) : tipped(pic, left);
+  const right: Frames = { ...base, fallen: fall(idleA, false) };
   if (art.sym) return { right, left: right };
   const left: Frames = {
     ...base,
@@ -263,7 +274,7 @@ function bake(kind: UnitKind, form: Form, carried: Carried | null): { right: Fra
     hurt: flipped(base.hurt),
     dark: flipped(base.dark),
     ax: base.w - base.ax,
-    fallen: tipped(flipped(idleA), true),
+    fallen: fall(flipped(idleA), true),
   };
   return { right, left };
 }

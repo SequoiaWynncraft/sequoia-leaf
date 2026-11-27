@@ -96,3 +96,10 @@ test("what a figure carries sits inside its pictures, standing and casting, and 
   );
   expect(laid).toEqual(["ab..", "..ab", "...."]);
 });
+
+test("Jet lies flat, so it falls belly up where it lies; everyone else tips onto its side", () => {
+  expect(TYPED.filter((id) => artOf(id).flat === true)).toEqual(["jet"]);
+  // Its standing picture is wider than it is tall, as one lying on its belly is.
+  const { rows } = artOf("jet");
+  expect((rows[0]?.length ?? 0) > rows.length).toBe(true);
+});

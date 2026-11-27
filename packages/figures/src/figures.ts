@@ -31,6 +31,8 @@ export interface FigureArt {
   readonly alt?: readonly string[];
   /** The row that folds when it breathes in, counted from the top. */
   readonly breath?: number;
+  /** Lies flat already (Jet, on its belly): it falls by turning belly up where it lies, not by tipping onto its side. */
+  readonly flat?: true;
   /** Hovers: its shadow is small and it bobs rather than breathes. */
   readonly flies?: true;
   /** Has something written on it, so it is never mirrored to face the other way. */
@@ -95,6 +97,7 @@ const KEPT: Readonly<Partial<Record<UnitKind, Omit<FigureArt, "rows" | "cast" | 
   jay: { breath: 12, head: 2 },
   crab12: { sym: true },
   lanterngnome: { breath: 15, head: 5 },
+  jet: { flat: true },
   leafling: { breath: 16, head: 3 },
   cindernewt: { breath: 9 },
   drizzlefrog: { breath: 10, head: 2 },
