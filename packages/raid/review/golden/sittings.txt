@@ -7,7 +7,7 @@ sitting regulars seat 4 | jay, fond of fang: place 3, WWLWWWWLWWLWWWLL, resolve 
 sitting regulars seat 5 | drizzlefrog, fond of slinger: place 7, WWLLWLWLWWWL, resolve 0, level 6 | end ed89260741db
 sitting regulars seat 6 | worm, fond of graid: place 8, WWLWWLLWLWL, resolve 0, level 6 | end 1bcb01aafa83
 sitting regulars seat 7 | crab12, fond of crab: place 2, WWWLWLWWWWWWWLWLL, resolve 0, level 7 | end 3c2c9154fbc3
-sitting members | 17 rooms, over after 696s, 2 owed | draws ecc87d1bc2e4 end 95a29480c86e
+sitting members | 17 rooms, over after 696s, 2 owed | draws 546b9285230c end 95a29480c86e
 sitting members seat 0 | Golden one: place 6, WWLLWWWLLWL, resolve 0, level 6 | end 54d3e8456ae9
 sitting members seat 1 | Golden two: place 8, WWLLLL, resolve 0, level 4 | end a0cd6b30aad3
 sitting members seat 2 | bushgnome, fond of sneak: place 7, WWWLWLLWL, resolve 0, level 5 | end b372b5ba3d46

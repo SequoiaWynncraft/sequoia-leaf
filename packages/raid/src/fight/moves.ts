@@ -17,6 +17,7 @@ import {
   leap,
   order,
   secs,
+  targetable,
   unitAt,
 } from "./core.ts";
 import { fly } from "./mind.ts";
@@ -73,7 +74,7 @@ export function dashTo(f: Fight, u: Unit, t: Unit): number {
 }
 /** Pulls an enemy one hex toward a figure, the straight way if that hex is free, else another hex nearer it. A Rock stays; so does anything too big. */
 export function pull(f: Fight, by: Unit, o: Unit): boolean {
-  if (!o.alive || o.rooted || o.steady) return false;
+  if (!targetable(f, o) || o.rooted || o.steady) return false;
   const near = distance(o.cell, by.cell);
   const to = [...line(o.cell, by.cell, 1), ...neighboursFor(by.side, o.cell)].find(
     (c) => f.taken[c] === -1 && distance(c, by.cell) < near,

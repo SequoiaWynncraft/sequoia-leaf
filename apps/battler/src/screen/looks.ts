@@ -394,6 +394,19 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
 };
 
 /** What a figure throws when it only attacks: a small thing of a colour (`"own"`: its own, as `livery.ts` has it), some with a streak behind, a few a thing of their own (`shot`). */
+/**
+ * What a shot looks like as it flies: an ability's own look, or else the figure's attack look, or a
+ * plain one. A card only when Leaf's shot names its suit: the page never invents one, and a card
+ * look on a shot without a suit flies plain.
+ */
+export function shotLook(
+  ev: { readonly what: "attack" | "ability"; readonly card?: unknown },
+  kind: UnitKind,
+): Thrown | null {
+  if (ev.card !== undefined) return "card";
+  const look = (ev.what === "ability" ? LOOKS[kind]?.shot : undefined) ?? ATTACK_SHOT[kind]?.shot ?? null;
+  return look === "card" ? null : look;
+}
 export const ATTACK_SHOT: Partial<
   Record<UnitKind, { readonly col: string; readonly trail?: boolean; readonly shot?: Thrown }>
 > = {
@@ -417,8 +430,8 @@ export const ATTACK_SHOT: Partial<
   vi: { col: GOLD[1] },
   crab31: { col: STONE[3] },
   heron: { col: CREAM, trail: true },
-  // A card of its suit, curving to whoever the suit picks.
-  ace: { col: CREAM, shot: "card" },
+  // A small pale thing; a card only when Leaf says the attack was one (`shotLook`).
+  ace: { col: CREAM },
   // A chip of the post.
   unc: { col: BARK[3] },
   apothecary: { col: SKY[4] },

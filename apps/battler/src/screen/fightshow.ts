@@ -25,13 +25,14 @@ import { TRAIT_COLOUR } from "./art/pal.ts";
 import { clockNow, colourOf, face, feetAt, fightNow, FV, travel } from "./board.ts";
 import { bubbleSays, hangBubble, stepBubbles } from "./bubble.ts";
 import { hangCall, stepCalls } from "./call.ts";
+import { dealing, flying } from "./dealt.ts";
 import { showMark } from "./fightmarks.ts";
 import { burst, gather, motes, ring, say } from "./fx.ts";
 import type { Pt } from "./geometry.ts";
 import { pooled } from "./litter.ts";
 import { ownOf } from "./livery.ts";
-import { ATTACK_SHOT, type Look, LOOKS, puffOf, VOICES } from "./looks.ts";
-import { arcOf, type At, dealing, MARKS, puff, type Shot } from "./marks.ts";
+import { ATTACK_SHOT, type Look, LOOKS, puffOf, shotLook, VOICES } from "./looks.ts";
+import { arcOf, type At, CARD_DRAWN, MARKS, puff, type Shot } from "./marks.ts";
 import { type Actor, TUMBLE } from "./motion.ts";
 import type { Cue, Lead } from "./playback.ts";
 import { fallsToRise, isRising, risesUp, stepRisings } from "./rising.ts";
@@ -93,9 +94,7 @@ function throwAt(
     dur: Math.max(1, dur),
     arc: arcOf(look, Math.hypot(end.x - from.x, end.y - from.y)),
     look,
-    col: o.col ?? STONE[3],
-    trail: o.trail ?? false,
-    land: o.land ?? null,
+    ...flying(o),
   });
 }
 
@@ -222,10 +221,10 @@ const ON: On = {
     const own = ev.what === "ability" ? LOOKS[a.unit.kind] : undefined;
     const small = ATTACK_SHOT[a.unit.kind];
     const mark = own && t ? markAt(cat, a, t) : null;
-    throwAt(handOr(a, at, from), ev.target, feetAt(ev.to), at, ev.ticks, own?.shot ?? small?.shot ?? null, {
+    throwAt(handOr(a, at, from), ev.target, feetAt(ev.to), at, ev.ticks, shotLook(ev, a.unit.kind), {
       col: coloursOf(cat, a.unit.kind, small?.col)?.[0] ?? STONE[3],
       trail: small?.trail ?? false,
-      ...dealing(ev, standsAt(t), mark),
+      ...dealing(ev, () => standsAt(actor(ev.target)), mark, CARD_DRAWN),
     });
     snd.shot();
   },

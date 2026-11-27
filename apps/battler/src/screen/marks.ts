@@ -20,8 +20,9 @@ import {
  */
 import { bitmap, outlined, R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, lerp } from "@sequoia-leaf/kit/util.ts";
-import type { FightEvent, Suit } from "@sequoia-leaf/raid";
+import type { Suit } from "@sequoia-leaf/raid";
 
+import type { CardDrawn } from "./dealt.ts";
 import { lightRow } from "./fightmarks.ts";
 import { burst, motes, pop, ring, streak } from "./fx.ts";
 import type { Pt } from "./geometry.ts";
@@ -126,24 +127,11 @@ export function pipPic(suit: Suit): HTMLCanvasElement {
   return c;
 }
 
-/**
- * What is seen where a shot lands on whoever stands at `t`, and for one of Ace's cards its suit as it
- * flies: its pip comes off them at twice the size, and a Full Deck's card sticks in their hex.
- */
-export function dealing(
-  ev: Extract<FightEvent, { t: "shot" }>,
-  t: (Pt & { readonly tall: number }) | null,
-  mark: (() => void) | null,
-): Pick<Shot, "land" | "card"> {
-  const suit = ev.card;
-  if (!suit || !t) return { land: mark };
-  const land = (): void => {
-    mark?.();
-    pop(pipPic(suit), t.x, t.y - t.tall - 4, "stick", 0.3);
-    if (ev.what === "ability") stick({ x: t.x, y: t.y }, suit);
-  };
-  return { land, card: suit };
-}
+/** A card landing, drawn (`dealt.ts`): its pip at twice the size off whoever it lands on, and a Full Deck's card stuck in their hex. */
+export const CARD_DRAWN: CardDrawn = {
+  pip: (suit, on) => pop(pipPic(suit), on.x, on.y - on.tall - 4, "stick", 0.3),
+  stick: (suit, on) => stick({ x: on.x, y: on.y }, suit),
+};
 
 // ---------- things thrown ----------
 
@@ -223,24 +211,30 @@ export function drawShot(g: Ctx, s: Shot, c: number): void {
       const q = pointAt(s, clamp(k - i * 0.07, 0, 1));
       R(g, Math.round(q.x), Math.round(q.y), 1, 1, s.look === "beam" ? GOLD[1] : s.col);
     }
-  if (s.look === null || s.look === "beam") {
-    // A small edged thing.
-    R(g, x - 1, y - 1, 3, 3, INK);
-    R(g, x, y, 1, 1, s.look === "beam" ? GOLD[2] : s.col);
-  } else if (s.look === "bolt") {
+  if (s.look === null || s.look === "beam") speck(g, x, y, s.look === "beam" ? GOLD[2] : s.col);
+  else if (s.look === "bolt") {
     // A cross of its thrower's colour with a bright middle.
     R(g, x - 2, y - 1, 5, 3, INK);
     R(g, x - 1, y - 2, 3, 5, INK);
     R(g, x - 1, y, 3, 1, s.col);
     R(g, x, y - 1, 1, 3, s.col);
     R(g, x, y, 1, 1, GOLD[2]);
-  } else if (s.look === "card") card(g, x, y + 2, s.card ?? "spades");
-  else if (s.look === "dust") swirl(g, x, y, c, [CREAM, WATER[3]]);
+  } else if (s.look === "card") {
+    // Only one Leaf named the suit of is a card; anything else flies as a speck.
+    if (s.card) card(g, x, y + 2, s.card);
+    else speck(g, x, y, s.col);
+  } else if (s.look === "dust") swirl(g, x, y, c, [CREAM, WATER[3]]);
   else if (s.look === "gust") swirl(g, x, y, c * 1.6, [CREAM, WATER[3]]);
   else {
     const pic = art(s.look);
     g.drawImage(pic, Math.round(x - pic.width / 2), Math.round(y - pic.height / 2));
   }
+}
+
+/** A small edged thing of a colour. */
+function speck(g: Ctx, x: number, y: number, col: string): void {
+  R(g, x - 1, y - 1, 3, 3, INK);
+  R(g, x, y, 1, 1, col);
 }
 
 // ---------- where abilities go off ----------

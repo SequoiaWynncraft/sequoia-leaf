@@ -67,7 +67,7 @@
     "packages/kit/src/skin.ts": 49,
     "packages/pulls/src/game.ts": 21,
     "packages/raid/src/bot.ts": 22,
-    "packages/raid/src/fight/core.ts": 23,
+    "packages/raid/src/fight/core.ts": 22,
     "packages/raid/src/fight/engine.ts": 22,
     "packages/raid/src/outside.ts": 19,
     "packages/raid/src/run.ts": 39,

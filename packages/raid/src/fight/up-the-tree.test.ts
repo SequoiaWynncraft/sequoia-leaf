@@ -13,7 +13,8 @@ import { type TraitId, traitNumber } from "../content/traits.ts";
 import { cellAt, distance, neighbours, rowOf } from "../hex.ts";
 import type { Placed } from "../party.ts";
 import { onCell, only, partyOfFigures, ready, steps, stepUntil, still, unitOf } from "../testkit.ts";
-import { hurt, HZ, stun } from "./core.ts";
+import { cardFor } from "./casts/up-the-tree.ts";
+import { giveMana, heal, hide, hurt, HZ, knockBack, leap, shieldUp, stun } from "./core.ts";
 import { openFight } from "./engine.ts";
 import type { Fight, FightEvent, Unit } from "./types.ts";
 
@@ -48,6 +49,11 @@ const foeAt = (f: Fight, cell: number): Unit => {
   if (!u) throw new Error(`nobody of theirs on ${cell}`);
   return u;
 };
+/** Takes every shield off a figure. */
+const unshield = (u: Unit): void => {
+  u.shield = 0;
+  u.shields = [];
+};
 const castBy = (u: Unit) => (e: FightEvent) => e.t === "cast" && e.id === u.id;
 const statusOf = (events: readonly FightEvent[], who: Unit, status: string) =>
   only(events, "status").filter((e) => e.id === who.id && e.status === status);
@@ -73,7 +79,7 @@ describe("Canopy", () => {
     expect(them.map((u) => u.shield)).toEqual(them.map((u) => Math.round((u.maxHp * t("canopy", "shield", 1)) / 100)));
     expect(them.map((u, i) => u.mana - (mana[i] ?? 0))).toEqual(them.map((u) => Math.min(30, u.manaFull)));
     // The shield lasts until it breaks.
-    expect(them.every((u) => u.shieldUntil > 1000 * HZ)).toBe(true);
+    expect(them.every((u) => u.shields.every((g) => g.until > 1000 * HZ))).toBe(true);
   });
   test("at 5: a shield of 35%, and a full mana bar", () => {
     const { f, them } = canopy(5);
@@ -175,10 +181,24 @@ describe("Bhlue, Firewall", () => {
     const { f, row, foe, u } = walled();
     const [a] = row;
     if (!a) throw new Error("nobody");
-    a.shield = 0;
+    unshield(a);
     expect(hurt(f, a, 50, "true", "attack", foe)).toBe(50);
     expect(hurt(f, a, 50, "true", "ability", u)).toBe(50);
     expect(a.walledUntil).toBeGreaterThan(f.tick);
+  });
+  test("ends when Bhlue falls: the next enemy ability lands, and the wall says it is down", () => {
+    const { f, u, row, foe } = walled();
+    const a = row.find((o) => o.id !== u.id);
+    if (!a) throw new Error("nobody");
+    hurt(f, u, 1_000_000, "true", "attack", foe);
+    expect(u.alive).toBe(false);
+    unshield(a);
+    expect(hurt(f, a, 50, "true", "ability", foe)).toBe(50);
+    const { f: g, u: bhlue, row: other } = walled();
+    const b = other.find((o) => o.id !== bhlue.id);
+    if (!b) throw new Error("nobody");
+    hurt(g, bhlue, 1_000_000, "true", "attack", unitOf(g, "mud", 1));
+    expect(statusOf(steps(g, 1), b, "firewall").map((e) => e.on)).toEqual([false]);
   });
   test("after 4 seconds a wall that blocked nothing is down, and says so", () => {
     const { f, row, foe } = walled();
@@ -186,7 +206,7 @@ describe("Bhlue, Firewall", () => {
     if (!a) throw new Error("nobody");
     const events = steps(f, 4 * HZ);
     expect(statusOf(events, a, "firewall").map((e) => e.on)).toEqual([false]);
-    a.shield = 0;
+    unshield(a);
     expect(hurt(f, a, 50, "true", "ability", foe)).toBe(50);
   });
 });
@@ -271,6 +291,71 @@ describe("Ace", () => {
   });
 });
 
+describe("Ace's cards land or do nothing", () => {
+  test("a club whose target hid while it flew takes no mana, nor does a Full Deck's", () => {
+    const { f, u, full } = table();
+    u.attacks = 3;
+    stepUntil(f, (e) => e.t === "shot" && e.id === u.id && e.card === "clubs");
+    hide(f, full, 5 * HZ);
+    const had = full.mana;
+    const flew = steps(f, 2 * HZ);
+    expect([only(flew, "drain").length, full.mana]).toEqual([0, had]);
+    const deck = table();
+    deck.u.manaFull = 80;
+    ready(deck.u);
+    stepUntil(deck.f, castBy(deck.u));
+    hide(deck.f, deck.full, 5 * HZ);
+    expect(only(steps(deck.f, 2 * HZ), "drain")).toEqual([]);
+  });
+  test("an item's extra hit throws a second card: Wasp-Tail's every third attack", () => {
+    const f = tree([onCell("ace", 0, HOME, 1, ["wasptail"])], [onCell("mud", 1, cellAt(3, 2))]);
+    still(unitOf(f, "mud", 1), 1000);
+    const u = unitOf(f, "ace");
+    u.manaFull = 0;
+    const cards = (): number => {
+      const events = stepUntil(f, (e) => e.t === "shot" && e.id === u.id);
+      return only([...events, ...steps(f, 4)], "shot").filter((e) => e.id === u.id).length;
+    };
+    expect([cards(), cards(), cards()]).toEqual([1, 1, 2]);
+  });
+});
+
+describe("hidden means out of reach, of foes and friends alike", () => {
+  test("nothing heals, shields, gives mana to, pushes or deals a heart to a figure that is hidden", () => {
+    const { f, u, friend } = table();
+    hide(f, friend, 5 * HZ);
+    expect(cardFor(f, u, "hearts")).toBeUndefined();
+    const cell = friend.cell;
+    expect([
+      heal(f, friend, 100, "card", u),
+      shieldUp(f, friend, 100, 0, u),
+      giveMana(f, friend, 10, u),
+      knockBack(f, friend, u, 2),
+    ]).toEqual([0, 0, 0, 0]);
+    expect([friend.cell, friend.shield]).toEqual([cell, 0]);
+  });
+});
+
+describe("shields keep their own clocks", () => {
+  test("a Firewall's 4 seconds run out on their own, and leave the tree's shield up, whichever came first", () => {
+    for (const forever of [true, false]) {
+      const { f, friend: a, low } = table();
+      if (forever) shieldUp(f, a, 100, 0, null);
+      shieldUp(f, a, 180, 4, a);
+      if (!forever) shieldUp(f, a, 100, 0, null);
+      // A hit of 50 takes from the one that runs out first.
+      hurt(f, a, 50, "true", "attack", low);
+      steps(f, 4 * HZ + 1);
+      expect(a.shield).toBe(100);
+    }
+  });
+  test("a figure's shields are its own: none on anyone else, in this fight or the next", () => {
+    const { f, friend, low } = table();
+    shieldUp(f, friend, 100, 4, friend);
+    expect([low.shields, table().friend.shields]).toEqual([[], []]);
+  });
+});
+
 describe("Unc, Knock On Wood", () => {
   test("pecks its target 8 times over 3 seconds; if it falls the rest go to the enemy nearest where it fell", () => {
     const { f, u } = scene("unc", [NEAR, cellAt(4, 3), FAR]);
@@ -282,6 +367,17 @@ describe("Unc, Knock On Wood", () => {
     const pecks = only(events, "hit").filter((e) => e.by === u.id && e.source === "ability");
     const next = foeAt(f, cellAt(4, 3));
     expect(pecks.filter((e) => e.id === next.id).length).toBe(n("unc", "pecks") - 1);
+  });
+  test("goes on from where its target fell, though it had moved since the last peck", () => {
+    const { f, u } = scene("unc", [NEAR, cellAt(4, 3), cellAt(1, 1)]);
+    const [first, wasBeside, nowBeside] = [foeAt(f, NEAR), foeAt(f, cellAt(4, 3)), foeAt(f, cellAt(1, 1))];
+    stepUntil(f, castBy(u));
+    stepUntil(f, (e) => e.t === "hit" && e.by === u.id);
+    leap(f, first, cellAt(1, 2), "pull");
+    hurt(f, first, 1_000_000, "true", "attack", null);
+    const next = stepUntil(f, (e) => e.t === "hit" && e.by === u.id && e.source === "ability");
+    expect(only(next, "hit").find((e) => e.by === u.id)?.id).toBe(nowBeside.id);
+    expect(wasBeside.hp).toBe(wasBeside.maxHp);
   });
 });
 
@@ -327,6 +423,47 @@ describe("Leetanns, Gathering Run", () => {
       .map((e) => e.id);
     expect(hit.length).toBeGreaterThanOrEqual(2);
     expect(only(reaped, "heal").some((e) => e.id === u.id && e.source === "leech")).toBe(true);
+  });
+  test("the rod hooks whoever it can with nobody in reach of its swing", () => {
+    const { f, u } = scene("leetanns", [FAR]);
+    const far = foeAt(f, FAR);
+    far.rooted = false;
+    u.turn = 2;
+    const events = steps(f, 3);
+    expect(events.find(castBy(u))).toMatchObject({ tool: "rod" });
+    expect(distance(u.cell, far.cell)).toBe(1);
+  });
+  test("the pickaxe's armour comes back on time, though its figure was down at that moment", () => {
+    const { f, u } = scene("leetanns", [NEAR]);
+    const under = foeAt(f, NEAR);
+    under.armour = 40;
+    u.turn = 1;
+    stepUntil(f, castBy(u));
+    expect(under.armour).toBe(20);
+    under.alive = false;
+    steps(f, 5 * HZ);
+    under.alive = true;
+    expect([under.armour, under.sundered]).toEqual([40, 0]);
+  });
+  test("a pickaxe again at the very step the last one runs out halves the armour as it is, given back", () => {
+    // Leetanns steps before whoever it swings at (a hex further up the board), so its swing comes
+    // before anything else of theirs at that step.
+    const f = tree([onCell("mud", 0, HOME)], [onCell("leetanns", 1, NEAR)]);
+    const [under, u] = [still(unitOf(f, "mud")), unitOf(f, "leetanns", 1)];
+    expect(u.id).toBeLessThan(under.id);
+    under.armour = 40;
+    u.attack = 0;
+    ready(u);
+    u.turn = 1;
+    stepUntil(f, castBy(u));
+    u.mana = 0;
+    while (f.tick < under.sunderedUntil - 1) steps(f, 1);
+    ready(u);
+    [u.turn, u.busyUntil, u.cool] = [1, 0, 0];
+    expect(steps(f, 1).find(castBy(u))).toMatchObject({ tool: "pickaxe" });
+    expect([under.armour, under.sundered]).toEqual([20, 20]);
+    steps(f, 5 * HZ);
+    expect([under.armour, under.sundered]).toEqual([40, 0]);
   });
   test("with nobody to hook, the rod's turn passes to the scythe, and the axe is next", () => {
     const { f, u } = scene("leetanns", [NEAR]);

@@ -16,7 +16,7 @@ import { FIGHT, levelBoost } from "../content/rooms.ts";
 import { distance, seatCell, type Side, stepToward } from "../hex.ts";
 import { type Party, type Placed, traitSteps } from "../party.ts";
 import { cast } from "./abilities.ts";
-import { dealCard } from "./casts/up-the-tree.ts";
+import { dealCard, wallEnds } from "./casts/up-the-tree.ts";
 import {
   drawOf,
   emit,
@@ -29,6 +29,7 @@ import {
   hurt,
   HZ,
   otherSide,
+  shieldsRunOut,
   targetable,
 } from "./core.ts";
 import { burnOf, HOOKS } from "./effects.ts";
@@ -164,11 +165,12 @@ const blowOf = (u: Unit): Blow => ({ attack: u.attack, crit: u.crit, kind: "phys
  * are rolled as it arrives, in that order, so a fight draws its chances in the order it always has;
  * the odds of landing hard are its maker's when it was made.
  */
-function land(f: Fight, u: Unit, t: Unit, upClose: boolean, blow: Blow): void {
-  if (!targetable(f, t)) return;
+/** Lands one hit of an attack, and all that rides on it: what it dealt, 0 for one that did not land (slipped, blocked, hidden), which then does nothing more. */
+function land(f: Fight, u: Unit, t: Unit, upClose: boolean, blow: Blow): number {
+  if (!targetable(f, t)) return 0;
   if (t.slip > 0 && chance(f) * 100 < t.slip) {
     emit(f, { t: "slip", id: t.id, by: u.id });
-    return;
+    return 0;
   }
   let amount = blow.attack;
   let hard = false;
@@ -192,7 +194,7 @@ function land(f: Fight, u: Unit, t: Unit, upClose: boolean, blow: Blow): void {
     amount *= 1 + (u.focus * u.focusBy) / 100;
   }
   const dealt = hurt(f, t, amount, blow.kind, "attack", u, hard);
-  if (dealt <= 0) return;
+  if (dealt <= 0) return 0;
   if (u.leech > 0) heal(f, u, (dealt * u.leech) / 100, "leech", null);
   if (u.clip > 0) {
     const beside = foesWithin(f, u.side, t.cell, 1).find((o) => o.id !== t.id);
@@ -203,6 +205,7 @@ function land(f: Fight, u: Unit, t: Unit, upClose: boolean, blow: Blow): void {
     if (back > 0) hurt(f, u, back, "physical", "thorns", t);
     if (t.prickle > 0 && u.alive) hurt(f, u, (t.maxHp * t.prickle) / 100, "magic", "thorns", t);
   }
+  return dealt;
 }
 
 function strike(f: Fight, u: Unit, t: Unit): void {
@@ -212,11 +215,9 @@ function strike(f: Fight, u: Unit, t: Unit): void {
   gainMana(u, FIGHT.manaAttack + u.manaMore);
   const hits = 1 + whenAttacks(f, u);
   const blow = blowOf(u);
-  // An ace goes to whoever its suit picks, landing as an attack (`dealCard`); with nobody to pick it is a plain attack.
-  if (
-    u.deals === "aces" &&
-    dealCard(f, u, blow.attack, (o, attack, kind) => land(f, u, o, false, { ...blow, attack, kind }))
-  ) {
+  // An ace goes to whoever its suit picks, a card for each hit, landing as an attack (`dealCard`); with nobody to pick it is a plain attack.
+  const card = (o: Unit, attack: number, kind: DamageKind): number => land(f, u, o, false, { ...blow, attack, kind });
+  if (u.deals === "aces" && dealCard(f, u, blow.attack, hits, card)) {
     if (u.quicken > 0 && u.quick < u.quickMost) u.quick++;
     return;
   }
@@ -297,23 +298,22 @@ function expire(f: Fight, u: Unit): void {
   if (u.tauntUntil === now) off(f, u, "taunt");
   if (u.hasteUntil === now) off(f, u, "haste");
   if (u.bracedUntil === now) off(f, u, "braced");
-  if (u.shieldUntil === now && u.shield > 0) {
-    u.shield = 0;
-    off(f, u, "shield");
-  }
+  if (shieldsRunOut(f, u)) off(f, u, "shield");
   if (u.hiddenUntil === now) off(f, u, "hidden");
-  if (u.walledUntil === now) off(f, u, "firewall");
-  if (u.sunderedUntil === now) {
-    u.armour += u.sundered;
-    u.sundered = 0;
-    off(f, u, "sundered");
-  }
+  if (wallEnds(f, u)) off(f, u, "firewall");
+}
+/** Timed changes to a figure's numbers that end at this step end, up or down: the pickaxe's armour comes back. */
+function restore(f: Fight, u: Unit): void {
+  if (u.sunderedUntil !== f.tick) return;
+  u.armour += u.sundered;
+  u.sundered = 0;
+  off(f, u, "sundered");
 }
 
 function act(f: Fight, u: Unit): void {
   const now = f.tick;
   // Hidden or stunned: nothing until it ends.
-  if (Math.max(u.hiddenUntil, u.stunUntil) > now) return;
+  if (!targetable(f, u) || u.stunUntil > now) return;
   if (u.cool > 0) u.cool -= 1;
   if (u.busyUntil > now) return;
   if (u.manaFull > 0 && u.mana >= u.manaFull && cast(f, u)) {
@@ -368,6 +368,8 @@ function judge(f: Fight): void {
 
 function advance(f: Fight): void {
   f.tick++;
+  // What runs out at this step runs out before anything else happens in it, whoever is up.
+  for (const u of f.units) restore(f, u);
   if (f.pending.length > 0) {
     const due: Pending[] = [];
     const rest: Pending[] = [];

@@ -143,6 +143,16 @@ describe("saving a run", () => {
     }
     expect(a.record.length).toBeGreaterThan(5);
   });
+  test("a figure that has fought more fights than any raid has rooms loads: a Crafter deep in an endless run", () => {
+    const run = startRun(4, { era: LEGACY_ERA });
+    choose(run, 0);
+    const first = pieces(run)[0];
+    if (!first) throw new Error("nobody");
+    first.fights = 1_000_000;
+    const loaded = loadRun(saveRun(run));
+    if (!loaded.ok) throw new Error(loaded.why);
+    expect(pieces(loaded.run)[0]?.fights).toBe(1_000_000);
+  });
   test("a run saved before its first pick, and one saved in the middle of a fight, load too", () => {
     const fresh = startRun(5, { era: LEGACY_ERA });
     expect(reload(fresh)).toEqual(fresh);

@@ -146,7 +146,7 @@ function readPiece(v: unknown, nextId: number, meals: boolean): Piece | null {
     items: readItems(p.items, "what a figure holds"),
     fed: fedOf(p.fed, meals),
     // Kept from the version that brought Crafter; none before it.
-    fights: p.fights === undefined ? 0 : whole(p.fights, 0, ROOMY, "the fights a figure has fought"),
+    fights: p.fights === undefined ? 0 : whole(p.fights, 0, MOST, "the fights a figure has fought"),
   };
 }
 /**

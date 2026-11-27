@@ -62,38 +62,39 @@ export function cardFor(f: Fight, u: Unit, suit: Suit): Unit | undefined {
   return foes.toSorted((a, b) => by(a) - by(b) || tied(u)(a, b))[0];
 }
 
-/** What a card does where it lands: hearts heal what it would have done; the rest hurt, a spade harder, a diamond through armour; a club takes mana too. */
-function landCard(
-  f: Fight,
-  u: Unit,
-  t: Unit,
-  suit: Suit,
-  amount: number,
-  land: (o: Unit, raw: number, kind: DamageKind) => void,
-): void {
+/** Lands a card on a figure as an attack or an ability does, of a kind: what it dealt, 0 for a hit that did not land (slipped, blocked, hidden). */
+type Lands = (o: Unit, raw: number, kind: DamageKind) => number;
+
+/**
+ * What a card does where it lands: hearts heal what it would have done; the rest hurt, a spade
+ * harder, a diamond through armour; a club takes mana too, if it landed. One that does not land
+ * does nothing.
+ */
+function landCard(f: Fight, u: Unit, t: Unit, suit: Suit, amount: number, land: Lands): void {
   if (suit === "hearts") {
     heal(f, t, amount, "card", u);
     return;
   }
-  land(t, suit === "spades" ? amount * (1 + SPADE_MORE / 100) : amount, suit === "diamonds" ? "true" : "physical");
-  if (suit !== "clubs" || !t.alive || t.manaFull <= 0) return;
+  const kind = suit === "diamonds" ? "true" : "physical";
+  const dealt = land(t, suit === "spades" ? amount * (1 + SPADE_MORE / 100) : amount, kind);
+  if (dealt <= 0 || suit !== "clubs" || !t.alive || t.manaFull <= 0) return;
   const taken = Math.min(CLUB_DRAIN, Math.floor(t.mana));
   if (taken <= 0) return;
   t.mana -= taken;
   emit(f, { t: "drain", id: t.id, by: u.id, amount: taken });
 }
 
-/** Throws a card of a suit at `t`: it flies as a shot that says its suit, and lands as the suit says. */
+/** Throws a card of a suit at `t`, `after` steps later than it would fly: a shot that says its suit, landing as the suit says. */
 function throwCard(
   f: Fight,
   u: Unit,
   t: Unit,
-  suit: Suit,
-  amount: number,
+  card: { suit: Suit; amount: number; after: number },
   what: "attack" | "ability",
-  land: (o: Unit, raw: number, kind: DamageKind) => void,
+  land: Lands,
 ): void {
-  const ticks = flight(u.cell, t.cell);
+  const { suit, amount } = card;
+  const ticks = flight(u.cell, t.cell) + card.after;
   emit(f, { t: "shot", id: u.id, target: t.id, from: u.cell, to: t.cell, ticks, what, card: suit });
   if (suit === "hearts") later(f, ticks, () => landCard(f, u, t, suit, amount, land));
   else fly(f, t, amount, suit === "diamonds" ? "true" : "physical", ticks, () => landCard(f, u, t, suit, amount, land));
@@ -101,33 +102,46 @@ function throwCard(
 
 /**
  * Ace's attack, dealt as an ace: the suit is its attack's count in fours, and the card goes to the
- * one its suit picks in its reach. `land` lands it as an attack does (slips, hard hits, focus), of a
- * kind. False with nobody to pick: then it is a plain attack on its usual target.
+ * one its suit picks in its reach, once for each hit the attack has (an item's extra hits too, two
+ * steps apart). `land` lands it as an attack does (slips, hard hits, focus, riders), of a kind. False
+ * with nobody to pick: then it is a plain attack on its usual target.
  */
-export function dealCard(
-  f: Fight,
-  u: Unit,
-  amount: number,
-  land: (o: Unit, raw: number, kind: DamageKind) => void,
-): boolean {
+export function dealCard(f: Fight, u: Unit, amount: number, hits: number, land: Lands): boolean {
   const suit = SUITS[(u.attacks - 1) % SUITS.length] ?? "spades";
   const to = cardFor(f, u, suit);
   if (!to) return false;
-  throwCard(f, u, to, suit, amount, "attack", land);
+  for (let n = 0; n < hits; n++) throwCard(f, u, to, { suit, amount, after: n * 2 }, "attack", land);
   return true;
 }
 
 // ---------- Firewall ----------
 
+/** Whether the Bhlue who gave a figure its wall is still standing: up, and not fallen since. */
+const giverStands = (f: Fight, u: Unit): boolean => {
+  const giver = f.units[u.walledBy];
+  return giver !== undefined && giver.alive && giver.downs === u.wallLife;
+};
+
+/**
+ * A figure's wall ends at this step if its time is up or the Bhlue who gave it has fallen: gives back
+ * whether it did (then the engine says so).
+ */
+export function wallEnds(f: Fight, u: Unit): boolean {
+  if (u.walledUntil <= 0) return false;
+  if (u.walledUntil > f.tick && giverStands(f, u)) return false;
+  u.walledUntil = 0;
+  return true;
+}
+
 /**
  * What a Firewall arms on those it walls (`struck`): the first enemy ability to land on one of them
- * while its wall is up is blocked, and so is anything else that enemy lands on it in the same step.
- * Then the wall is gone. Attacks are never asked.
+ * while its wall is up and its Bhlue stands is blocked, and so is anything else that enemy lands on
+ * it in the same step. Then the wall is gone. Attacks are never asked.
  */
 const WALL: Hooks = {
   struck: (f, u, by) => {
     if (u.wallAt === f.tick && u.wallBy === by.id) return true;
-    if (u.walledUntil <= f.tick) return false;
+    if (u.walledUntil <= f.tick || !giverStands(f, u)) return false;
     u.walledUntil = 0;
     u.wallBy = by.id;
     u.wallAt = f.tick;
@@ -139,10 +153,11 @@ const WALL: Hooks = {
 
 // ---------- the pickaxe ----------
 
-/** Halves a figure's armour for some steps, given back after (`expire` in the engine); one already halved only stays so longer. */
+/** Halves the armour of a figure the pickaxe landed on for some steps, given back after (`restore` in the engine, up or down); one already halved only stays so longer. */
 function sunder(f: Fight, t: Unit, ticks: number, by: Unit): void {
-  if (!targetable(f, t) || blocks(f, t, by)) return;
   if (t.sunderedUntil <= f.tick) {
+    // One that ran out at this step and is not given back yet is given back first.
+    t.armour += t.sundered;
     t.sundered = Math.floor(t.armour / 2);
     t.armour -= t.sundered;
   }
@@ -161,21 +176,15 @@ function hooked(f: Fight, u: Unit): { o: Unit; to: number } | null {
   return null;
 }
 
-/** What a tool does as it comes down, at the numbers of its owner's stars (`n`). */
-function swing(
-  f: Fight,
-  u: Unit,
-  tool: Gear,
-  t: Unit,
-  rod: { o: Unit; to: number } | null,
-  n: (name: string) => number,
-): void {
+/** What a tool does as it comes down on `on` (the one it hooks, for the rod), at the numbers of its owner's stars (`n`). */
+function swing(f: Fight, u: Unit, tool: Gear, on: { o: Unit; to: number }, n: (name: string) => number): void {
+  const t = on.o;
   if (tool === "axe") {
     if (hurt(f, t, powered(u, n("chop")), "physical", "ability", u) > 0) knockBack(f, t, u, n("push"));
   } else if (tool === "pickaxe") {
     if (hurt(f, t, powered(u, n("mine")), "physical", "ability", u) > 0) sunder(f, t, secs(n("lasts")), u);
-  } else if (rod) {
-    if (!blocks(f, rod.o, u)) leap(f, rod.o, rod.to, "pull");
+  } else if (tool === "rod") {
+    if (!blocks(f, t, u)) leap(f, t, on.to, "pull");
   } else {
     let reaped = 0;
     for (const o of foesWithin(f, u.side, u.cell, 1))
@@ -252,6 +261,8 @@ export const UP_THE_TREE_CASTS: Partial<Record<UnitKind, Cast>> = {
     for (const o of row) {
       shieldUp(f, o, powered(u, n("shield")), n("lasts"), u);
       o.walledUntil = f.tick + lasts;
+      o.walledBy = u.id;
+      o.wallLife = u.downs;
       o.wallBy = -1;
       o.wallAt = -1;
       emit(f, { t: "status", id: o.id, status: "firewall", on: true, ticks: lasts, amount: 0, by: u.id });
@@ -273,10 +284,8 @@ export const UP_THE_TREE_CASTS: Partial<Record<UnitKind, Cast>> = {
       cards.flatMap((c) => (c.to ? [c.to.id] : [])),
       0,
     );
-    const land = (o: Unit, raw: number, kind: DamageKind): void => {
-      hurt(f, o, raw, kind, "ability", u);
-    };
-    for (const c of cards) if (c.to) throwCard(f, u, c.to, c.suit, damage, "ability", land);
+    const land: Lands = (o, raw, kind) => hurt(f, o, raw, kind, "ability", u);
+    for (const c of cards) if (c.to) throwCard(f, u, c.to, { suit: c.suit, amount: damage, after: 0 }, "ability", land);
     return true;
   },
 
@@ -288,30 +297,30 @@ export const UP_THE_TREE_CASTS: Partial<Record<UnitKind, Cast>> = {
     const pecks = over(n("lasts"), n("pecks"));
     say(f, u, [t.cell], [t.id], 0, pecks);
     let on = t;
-    let where = t.cell;
     channel(f, u, pecks, () => {
       if (!targetable(f, on)) {
-        const next = foesByDistance(f, u.side, where)[0];
+        // From where it fell (or hid), wherever it had got to since the last peck.
+        const next = foesByDistance(f, u.side, on.cell)[0];
         if (!next) return;
         on = next;
       }
-      where = on.cell;
       hurt(f, on, damage, "physical", "ability", u);
     });
     return true;
   },
 
-  // The next tool in turn; with nobody to hook, the rod's turn passes to the scythe.
+  // The next tool in turn. The rod hooks whoever it can, an enemy in its target's reach or not; with
+  // nobody to hook, its turn passes to the scythe. The rest need a target to swing at.
   leetanns: (f, u, n) => {
-    const t = aim(f, u);
-    if (!t) return false;
     let tool = GEAR[u.turn % GEAR.length] ?? "axe";
     const rod = tool === "rod" ? hooked(f, u) : null;
     if (tool === "rod" && !rod) tool = "scythe";
+    const t = aim(f, u);
+    const on = rod ?? (t ? { o: t, to: t.cell } : null);
+    if (!on) return false;
     u.turn = (GEAR.indexOf(tool) + 1) % GEAR.length;
-    const touching = foesWithin(f, u.side, u.cell, 1);
-    const on = tool === "scythe" ? touching : rod ? [rod.o] : [t];
-    const cells = tool === "scythe" ? [...neighbours(u.cell)] : on.map((o) => o.cell);
+    const hit = tool === "scythe" ? foesWithin(f, u.side, u.cell, 1) : [on.o];
+    const cells = tool === "scythe" ? [...neighbours(u.cell)] : [on.o.cell];
     emit(f, {
       t: "cast",
       id: u.id,
@@ -319,11 +328,11 @@ export const UP_THE_TREE_CASTS: Partial<Record<UnitKind, Cast>> = {
       name: specOf(f.cat, u.kind).ability?.name ?? "",
       shape: "bolt",
       cells,
-      targets: ids(on),
+      targets: ids(hit),
       ticks: 0,
       tool,
     });
-    swing(f, u, tool, t, rod, n);
+    swing(f, u, tool, on, n);
     return true;
   },
 };

@@ -6,15 +6,17 @@
  */
 import { describe, expect, test } from "bun:test";
 
+import { planRoom, SENSIBLE } from "./bot.ts";
 import { BANNERS, GROVE } from "./content/banners.ts";
 import { available, catalogAt, type Purpose, type Roster } from "./content/catalog.ts";
-import { type FigureId, specOf, type TIERS } from "./content/figures.ts";
+import { type FigureId, specOf, type Stars, type TIERS } from "./content/figures.ts";
 import { eraAt, eraOf } from "./content/releases.ts";
 import { resolveFight } from "./fight/engine.ts";
 import { ROOM_HOOKS } from "./fight/hooks.ts";
 import type { FightSetup } from "./fight/types.ts";
 import { arrange } from "./formation.ts";
 import { COLS, standRow } from "./hex.ts";
+import type { Piece } from "./piece.ts";
 import { rackSize } from "./racks.ts";
 import { type Fought, newPiece, startRun } from "./run.ts";
 import { at as seated, partyOfFigures } from "./testkit.ts";
@@ -135,7 +137,50 @@ describe("Crafter", () => {
   });
 });
 
+/** What the bot fields at level 3 in Up The Tree's era with nothing to spend, holding these (the board's, then the bench's). */
+function fields(board: readonly [FigureId, Stars][], bench: readonly [FigureId, Stars][]): FigureId[] {
+  const run = startRun(3, { era: eraOf("up-the-tree") });
+  run.level = 3;
+  run.acorns = 0;
+  run.stall = run.stall.map(() => null);
+  const put = (on: (Piece | null)[], held: typeof board): void => {
+    on.fill(null);
+    held.forEach(([kind, stars], i) => {
+      const p = newPiece(run, kind);
+      p.stars = stars;
+      on[i] = p;
+    });
+  };
+  put(run.board, board);
+  put(run.bench, bench);
+  planRoom(run, SENSIBLE);
+  return run.board.flatMap((p) => (p ? [p.kind] : []));
+}
+
 describe("the bot", () => {
+  test("fields an owned Leetanns every fight, for Crafter, over figures worth more", () => {
+    const fielded = fields(
+      [
+        ["crab40", 2],
+        ["flurry", 2],
+        ["heron", 2],
+      ],
+      [["leetanns", 1]],
+    );
+    expect(fielded).toContain("leetanns");
+  });
+  test("counts Canopy as worth having only with two that stay on the board in front", () => {
+    const canopy: FigureId[] = ["vi", "flop", "bhlue"];
+    const fielded = fields(
+      canopy.map((kind) => [kind, 1]),
+      [
+        ["chickaree", 1],
+        ["lanterngnome", 1],
+      ],
+    );
+    expect(fielded.filter((kind) => canopy.includes(kind)).length).toBeLessThan(3);
+  });
+
   test("seats Bhlue in the row with the most friends it still reaches from, and stays put with none better", () => {
     const cat = catalogAt(eraOf("up-the-tree"));
     const seat = (party: FigureId[]): number[] =>

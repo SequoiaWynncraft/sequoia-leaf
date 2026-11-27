@@ -134,7 +134,8 @@ export interface Unit {
   burnBy: number;
   burnFrom: number;
   burnDamp: number;
-  shieldUntil: number;
+  /** Each shield on it, with what is left of it and the step it runs out at: `shield` is all they hold together. */
+  shields: ShieldGrant[];
   tauntUntil: number;
   tauntBy: number;
   hiddenUntil: number;
@@ -195,8 +196,14 @@ export interface Unit {
   deals: Deals;
   /** Leetanns: which of its tools it swings next (`TOOLS`). */
   turn: number;
-  /** Firewall: on until this step; and the enemy whose ability it blocked, and at which step, so that the rest of what lands that step is blocked too. */
+  /**
+   * Firewall: on until this step; the Bhlue who gave it, and how often that Bhlue had fallen then, so
+   * that it ends when its giver falls; and the enemy whose ability it blocked, and at which step, so
+   * that the rest of what lands that step is blocked too.
+   */
   walledUntil: number;
+  walledBy: number;
+  wallLife: number;
   wallBy: number;
   wallAt: number;
   /** Its armour halved (a pickaxe) until this step, and the armour taken, to give back. */
@@ -300,6 +307,12 @@ export interface Fight {
   readonly burning: { readonly lasts: number; readonly damp: number };
   /** Every trait's, item's, boon's and figure's hooks, as each side armed them (`hooks.ts`). */
   readonly hooks: Hooked;
+}
+
+/** One shield given to a figure: what is left of it, and the step it runs out at (`FOREVER`: when it breaks). */
+export interface ShieldGrant {
+  left: number;
+  readonly until: number;
 }
 
 /** One thing that happened, in the order it happened. Figures are named by `id`; hexes are fight cells. */
