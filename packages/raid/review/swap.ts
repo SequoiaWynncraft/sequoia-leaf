@@ -43,7 +43,7 @@ const runs = Number(args[0] ?? 60);
 // Every five-acorn figure on the stall, gaz's among them, and each open banner's headliner, once.
 const FIVES: readonly FigureId[] = [
   ...new Set([
-    ...available(NOW, { for: "stall", figures: { pool: "fair" }, tier: 5 }),
+    ...available(NOW, { for: "stall", holds: [], figures: { pool: "fair" }, tier: 5 }),
     ...NOW.banners.map((b) => b.headliner),
   ]),
 ];

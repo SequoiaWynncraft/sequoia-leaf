@@ -1167,7 +1167,7 @@ describe("the stall of a run with the member's own figures", () => {
     const run = startRun(3, { era: LEGACY_ERA, way: onTrail(0, { slug: 0, badger: 1, greg: 0 }) });
     run.level = MAX_LEVEL;
     expect(stallOdds(run)).toEqual([odds[0], odds[1], 0, odds[3], odds[4]]);
-    expect(stallOdds({ level: MAX_LEVEL, way: onTrail(0), era: LEGACY_ERA })).toEqual([...odds]);
+    expect(stallOdds({ level: MAX_LEVEL, way: onTrail(0), era: LEGACY_ERA, board: [], bench: [] })).toEqual([...odds]);
   });
   test("a whole roster: the stall and everything else are drawn as on the main way", () => {
     const whole: Roster = Object.fromEntries(EVERYONES.map((id) => [id, 0]));

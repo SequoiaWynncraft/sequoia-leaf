@@ -138,13 +138,13 @@ interface Case {
 const CASES: readonly Case[] = [
   ...TIERS.map((tier): Case => ({
     name: `the stall at ${tier} acorns`,
-    purpose: { for: "stall", figures: { pool: "fair" }, tier },
+    purpose: { for: "stall", holds: [], figures: { pool: "fair" }, tier },
     suits: (f, t) => everyones(f, t) && f.tier === tier,
     from: opens,
   })),
   ...TIERS.map((tier): Case => ({
     name: `the stall at ${tier} acorns, with every figure pulled`,
-    purpose: { for: "stall", figures: { pool: "own", roster: EVERYTHING }, tier },
+    purpose: { for: "stall", holds: [], figures: { pool: "own", roster: EVERYTHING }, tier },
     suits: (f) => f.tier === tier,
     from: opens,
   })),
@@ -251,7 +251,7 @@ function everyonesWays(cat: Catalog): Record<string, FigureId[]> {
     cat.figures[id] !== undefined &&
     boardMet(cat, { player: "p", name: "A member", of: 1, data: partyOfFigures([placed(id, 3, 0)]) }) !== null;
   return {
-    stall: of(available(cat, { for: "stall", figures: { pool: "fair" }, tier: 5 })),
+    stall: of(available(cat, { for: "stall", holds: [], figures: { pool: "fair" }, tier: 5 })),
     regular: of(available(cat, { for: "regular" })),
     carousel: of(available(cat, { for: "carousel", tier: 5 })),
     starter: of(available(cat, { for: "starter" })),
@@ -306,7 +306,7 @@ describe("a headliner is everyone's only while its banner is open", () => {
     for (const r of RELEASES) {
       const cat = catalogAt(eraOf(r.id));
       const own = (roster: Roster): readonly FigureId[] =>
-        available(cat, { for: "stall", figures: { pool: "own", roster }, tier: 5 });
+        available(cat, { for: "stall", holds: [], figures: { pool: "own", roster }, tier: 5 });
       expect([own({ "banner-1": 2 }), own({ greg: 0 })]).toEqual([["banner-1"], ["greg"]]);
       expect(available(cat, { for: "almanac", roster: { "banner-1": 2 } })).toContain("banner-1");
       const board = { player: "p", name: "A member", of: 1, data: partyOfFigures([placed("banner-1", 3, 0, 1)]) };
@@ -330,7 +330,7 @@ describe("a millisecond before each release, and at it", () => {
     expect(differing(madeUp, madeUp(LAST_ERA))).toEqual([]);
     const night = releaseOf("groot-night").at;
     const [before, at] = [madeUp(eraAt(night - 1)), madeUp(eraAt(night))];
-    const five: Purpose = { for: "stall", figures: { pool: "fair" }, tier: 5 };
+    const five: Purpose = { for: "stall", holds: [], figures: { pool: "fair" }, tier: 5 };
     const treants: Purpose = { for: "pull", pool: GROVE, rarity: "Treant" };
     // Greg is on the stall from the first, and in the pulls only from the next release.
     expect([available(before, five).includes("greg"), available(before, treants).includes("greg")]).toEqual([
@@ -390,7 +390,9 @@ describe("picked up across a release", () => {
       const taken = done(later, { do: "take" }, at);
       expect([taken.held.main?.era, taken.held.main?.last?.era]).toEqual([now, old]);
       const sold = new Set(
-        TIERS.flatMap((tier) => available(catalogAt(now), { for: "stall", figures: { pool: "fair" }, tier })),
+        TIERS.flatMap((tier) =>
+          available(catalogAt(now), { for: "stall", holds: [], figures: { pool: "fair" }, tier }),
+        ),
       );
       expect((taken.held.main?.stall ?? []).filter((kind) => kind !== null && !sold.has(kind))).toEqual([]);
     },

@@ -5,7 +5,7 @@
  * figures has none, and reads nothing a member owns.
  */
 import { available, catalogOf, figureOf, type Roster } from "./content/catalog.ts";
-import { type FigureId, isFigureId, type Tier, TIERS } from "./content/figures.ts";
+import { type FigureId, isFigureId, type Stars, type Tier, TIERS } from "./content/figures.ts";
 import type { Era } from "./content/releases.ts";
 import { LEVELS, STALL_ODDS } from "./content/rooms.ts";
 import type { Way } from "./content/ways.ts";
@@ -54,19 +54,29 @@ export function placedOf(run: OnWay, p: Omit<Placed, "seat" | "level"> & { kind:
   return { kind: p.kind, stars: p.stars, seat, items: p.items.slice(), fed: p.fed, ...(level > 0 && { level }) };
 }
 
+/** A run's board and bench: the copies it holds. */
+export interface Holding {
+  readonly board: readonly ({ readonly kind: FigureId; readonly stars: Stars } | null)[];
+  readonly bench: readonly ({ readonly kind: FigureId; readonly stars: Stars } | null)[];
+}
+/** The figures a run holds a copy of that can still star up: on its board or bench, under three stars. */
+export const heldOf = (run: Holding): FigureId[] =>
+  [...run.board, ...run.bench].flatMap((p) => (p && p.stars < 3 ? [p.kind] : []));
+
 /**
- * Who the stall may offer at a cost, as the run's era has them: on the main way everyone's figures
- * of that cost; in a run with the member's own figures every one-acorn figure, and above one acorn
- * those of its roster, a banner's headliner among them.
+ * Who the stall may offer at a cost, as the run's era has them: on the main way the set's figures
+ * of that cost, and each retired one the run still holds a copy of to star up; in a run with the
+ * member's own figures every one-acorn figure, and above one acorn those of its roster, a banner's
+ * headliner among them.
  */
-export const stallPool = (run: OnWay & { readonly era: Era }, tier: Tier): readonly FigureId[] =>
-  available(catalogOf(run), { for: "stall", figures: run.way.figures, tier });
+export const stallPool = (run: OnWay & Holding & { readonly era: Era }, tier: Tier): readonly FigureId[] =>
+  available(catalogOf(run), { for: "stall", figures: run.way.figures, tier, holds: heldOf(run) });
 
 /**
  * The stall's odds at a run's level, a weight for each cost from one acorn up: the table's, with
  * nothing for a cost nobody can be offered at, so that its share goes to the others.
  */
-export function stallOdds(run: OnWay & { readonly level: number; readonly era: Era }): number[] {
+export function stallOdds(run: OnWay & Holding & { readonly level: number; readonly era: Era }): number[] {
   const odds = STALL_ODDS[Math.min(run.level, STALL_ODDS.length) - 1] ?? STALL_ODDS[0] ?? [];
   return odds.map((weight, i) => {
     const tier = TIERS[i];

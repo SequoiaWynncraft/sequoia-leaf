@@ -98,7 +98,9 @@ describe("the twenty-eight", () => {
   test("stay twenty-nine: a banner's member is a figure, and not one of them", () => {
     expect(EVERYONES.length).toBe(29);
     expect(CAT.order).toEqual([...EVERYONES, ...HEADLINERS]);
-    const stall: readonly string[] = TIERS.flatMap((tier) => stallPool({ way: onTrail(0), era: LEGACY_ERA }, tier));
+    const stall: readonly string[] = TIERS.flatMap((tier) =>
+      stallPool({ way: onTrail(0), era: LEGACY_ERA, board: [], bench: [] }, tier),
+    );
     expect(stall).toEqual([...EVERYONES]);
     for (const id of HEADLINERS) {
       expect(stall).not.toContain(id);

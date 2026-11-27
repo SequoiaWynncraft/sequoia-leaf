@@ -110,7 +110,7 @@ describe("a figure made while a banner is open", () => {
     // Lost on the 50/50, banner-1 pays out of the three it opened with.
     expect(treants("banner-1", opens - 1)).toEqual(three);
     // On the stall it is from the first.
-    expect(available(CAT, { for: "stall", figures: { pool: "fair" }, tier: 5 })).toContain("seqwawa");
+    expect(available(CAT, { for: "stall", holds: [], figures: { pool: "fair" }, tier: 5 })).toContain("seqwawa");
   });
 });
 

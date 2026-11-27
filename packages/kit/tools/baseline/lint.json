@@ -109,7 +109,7 @@
     "apps/api/src/quests/store.ts": 173,
     "apps/battler/src/screen/art/table.ts": 147,
     "apps/battler/src/screen/flow.ts": 91,
-    "apps/battler/src/screen/ui/pages.ts": 118,
+    "apps/battler/src/screen/ui/pages.ts": 112,
     "apps/battler/src/screen/ui/table.ts": 118,
     "apps/battler/src/screen/ui/tally.ts": 152,
     "apps/town/src/campart.ts": 115,

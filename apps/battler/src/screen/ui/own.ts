@@ -32,6 +32,8 @@ import { changed, onChange, S } from "../state.ts";
 
 /** What each way of setting out is called, as to its figures (`wayWords`): every figure, or those the member has pulled. */
 const wayName = (own: boolean): string => wayWords(wayOn({ id: "trail", trail: 0 }, own ? {} : null)).figures;
+/** What the two ways are called, as to their figures. */
+export const [ALL_FIGURES, YOUR_FIGURES] = [wayName(false), wayName(true)];
 /** Whether a run set out with the member's own figures. */
 const isOwn = (run: RunView): boolean => run.way.figures.pool === "own";
 const NOT_COUNTED = "Not counted for the board or the almanac.";
@@ -45,14 +47,20 @@ const picked = { own: false };
 /** How many figures the member has pulled. */
 const pulled = (): number => Object.keys(S.roster).length;
 /**
- * The figures there are for this member, as Leaf's era has them: everyone's, and each banner's
- * headliner they have pulled. What "of 28 figures" counts, the almanac's tiles, and who a trait's
- * card lists.
+ * The figures there are for this member, as Leaf's era has them: the set, and each banner's
+ * headliner they have pulled. The almanac's tiles, and who a trait's card lists.
  */
 export const figuresHere = (era: Era = S.era): readonly FigureId[] =>
   available(catalogAt(era), { for: "almanac", roster: S.roster });
-/** The figures for the table on screen: in the era of its run (a seat's is its sitting's), or of Leaf's view with none. */
-export const figuresAt = (run: Pick<RunView, "era"> | null): readonly FigureId[] => figuresHere(run?.era);
+/** The member's own figures out of normal mode in an era: the almanac's "In your collection". */
+export const collectionHere = (era: Era = S.era): readonly FigureId[] =>
+  available(catalogAt(era), { for: "collection", roster: S.roster });
+/**
+ * The figures for the table on screen: in the era of its run (a seat's is its sitting's), or of
+ * Leaf's view with none; a run with the member's own figures has their collection too.
+ */
+export const figuresAt = (run: (Pick<RunView, "era"> & Partial<Pick<RunView, "way">>) | null): readonly FigureId[] =>
+  run?.way?.figures.pool === "own" ? [...figuresHere(run.era), ...collectionHere(run.era)] : figuresHere(run?.era);
 /** The almanac's traits: those open in the era of Leaf's view, in their own order. */
 export const traitsHere = (): readonly TraitId[] => catalogOf(S).ids.traits;
 /** Everyone's figures, as Leaf's era has them: what the almanac counts fielded among. */
@@ -104,7 +112,7 @@ export function waysOf(
     "div",
     "k-col tight k-read",
     unshown(setsOutOwn()),
-    el("b", "", { text: `You have ${pulled()} of ${figuresHere().length} figures.` }),
+    el("b", "", { text: `You have ${pulled()} of ${figuresHere().length + collectionHere().length} figures.` }),
     el("span", "", {
       text: `In these raids you are offered every 1-acorn figure to buy with acorns, and other figures only if you have pulled them at the Grove. Each copy of a figure you have pulled after the first is 1 level: ${LEVELS.boost}% more health and attack, up to level ${LEVELS.most}.`,
     }),
@@ -171,7 +179,9 @@ export function levelOnCard(kind: UnitKind, shown: Shown): { level: number; tag:
 }
 
 /** What a reroll brings at a run's level: each cost that can come, from one acorn up, with its share of a hundred. */
-function oddsShares(run: Pick<RunView, "way" | "level" | "era">): { cost: number; share: string }[] {
+function oddsShares(
+  run: Pick<RunView, "way" | "level" | "era" | "board" | "bench">,
+): { cost: number; share: string }[] {
   const odds = stallOdds(run);
   const total = Math.max(
     1,
@@ -180,7 +190,7 @@ function oddsShares(run: Pick<RunView, "way" | "level" | "era">): { cost: number
   return odds.flatMap((w, i) => (w > 0 ? [{ cost: i + 1, share: `${Math.round((w * 100) / total)}%` }] : []));
 }
 /** The same as a row for the level's plaque, each share in its cost's colour; and as the numbers of the level's card. */
-export const oddsRow = (run: Pick<RunView, "way" | "level" | "era">): HTMLElement =>
+export const oddsRow = (run: Pick<RunView, "way" | "level" | "era" | "board" | "bench">): HTMLElement =>
   el("span", "odds", {}, ...oddsShares(run).map(({ cost, share }) => el("span", `t${cost}`, { text: share })));
 export const oddsStats = (run: RunView): { label: string; value: string }[] =>
   oddsShares(run).map(({ cost, share }) => ({ label: `${cost}-acorn figures`, value: share }));

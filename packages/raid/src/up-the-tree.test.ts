@@ -31,13 +31,14 @@ describe("Up The Tree opens on Leaf's clock", () => {
   const TIER_LIST = [1, 2, 3, 4, 5] as const;
   const PURPOSES: readonly (readonly [string, Purpose, readonly FigureId[]])[] = [
     ...TIER_LIST.map(
-      (tier) => [`the stall at ${tier}`, { for: "stall", figures: { pool: "fair" }, tier }, EVERYONES] as const,
+      (tier) =>
+        [`the stall at ${tier}`, { for: "stall", holds: [], figures: { pool: "fair" }, tier }, EVERYONES] as const,
     ),
     ...TIER_LIST.map(
       (tier) =>
         [
           `the own stall at ${tier}`,
-          { for: "stall", figures: { pool: "own", roster: ALL }, tier },
+          { for: "stall", holds: [], figures: { pool: "own", roster: ALL }, tier },
           [...EVERYONES, "leetanns"],
         ] as const,
     ),
@@ -64,7 +65,8 @@ describe("Up The Tree opens on Leaf's clock", () => {
   );
   test("each figure where it belongs at the moment: its cost, its rarity, and Leetanns on everyone's stall", () => {
     const at = catalogAt(eraAt(OPENS));
-    const sold = (tier: (typeof TIERS)[number]) => available(at, { for: "stall", figures: { pool: "fair" }, tier });
+    const sold = (tier: (typeof TIERS)[number]) =>
+      available(at, { for: "stall", holds: [], figures: { pool: "fair" }, tier });
     expect(TIER_LIST.map((tier) => sold(tier).filter((id) => EVERYONES.includes(id) || id === "leetanns"))).toEqual([
       ["vi"],
       ["flop"],
@@ -84,14 +86,14 @@ describe("Up The Tree opens on Leaf's clock", () => {
   });
 });
 
-const five: Purpose = { for: "stall", figures: { pool: "fair" }, tier: 5 };
+const five: Purpose = { for: "stall", holds: [], figures: { pool: "fair" }, tier: 5 };
 /** Whether Leetanns is on everyone's five-acorn stall at a moment of Leaf's clock. */
 const has = (t: number): boolean => available(catalogAt(eraAt(t)), five).includes("leetanns");
 
 describe("Leetanns is everyone's for its banner's two weeks", () => {
   test("not a millisecond before 5 January, from it, and not from 19 January; whoever pulled it keeps it", () => {
     expect([has(OPENS - 1), has(OPENS), has(CLOSES - 1), has(CLOSES)]).toEqual([false, true, true, false]);
-    const own: Purpose = { for: "stall", figures: { pool: "own", roster: { leetanns: 1 } }, tier: 5 };
+    const own: Purpose = { for: "stall", holds: [], figures: { pool: "own", roster: { leetanns: 1 } }, tier: 5 };
     expect(available(catalogAt(eraAt(CLOSES)), own)).toContain("leetanns");
   });
   test("the release that closes it brings nothing", () => {

@@ -3,7 +3,9 @@
  * makes to those that came before (`change`, field by field). Words and numbers only. The
  * catalogue of an era is the base and every patch open by then, folded in order (`catalog.ts`), so
  * a number that changes on a date is a `change` in that date's patch and nothing else. Who a figure
- * is for is not a patch's: a banner's headliner is one of everyone's while its banner is open.
+ * is for is not a patch's, but for one thing: a release may take everyone's figures out of normal
+ * mode (`retire`) and bring them back (`return`). A banner's headliner is one of everyone's while
+ * its banner is open.
  */
 import type { BoonId, BoonSpec } from "./boons.ts";
 import type { Rarity } from "./catalog.ts";
@@ -40,9 +42,22 @@ export interface Arrival extends FigureSpec {
   readonly stands?: Stands;
 }
 
+/**
+ * What a release does to the figures: brings them, changes them, and takes grove figures out of
+ * normal mode, the ways with everyone's figures, or brings them back. A figure out of normal mode
+ * is still the pulls' and the exchange's, and a run with the member's own figures still sells it
+ * to whoever pulled it (`catalog.ts`'s `available`).
+ */
+export interface Figures extends Part<FigureId, Arrival> {
+  /** Grove figures out before this release that leave normal mode as it opens. */
+  readonly retire?: readonly FigureId[];
+  /** Figures an earlier release took out of normal mode that come back to it as this one opens. */
+  readonly return?: readonly FigureId[];
+}
+
 export interface Patch {
   readonly release: ReleaseId;
-  readonly figures?: Part<FigureId, Arrival>;
+  readonly figures?: Figures;
   readonly traits?: Part<TraitId, TraitSpec>;
   /** Items of every sort: components, finished items, emblems. */
   readonly items?: Part<ItemId, ItemSpec>;
