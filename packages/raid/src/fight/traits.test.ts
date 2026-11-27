@@ -2,14 +2,15 @@
 import { describe, expect, test } from "bun:test";
 
 import { boonNumber } from "../content/boons.ts";
-import { abilityNumber, FIGURES, specOf, type UnitKind } from "../content/figures.ts";
+import { abilityNumber, figureIn, specOf, type UnitKind } from "../content/figures.ts";
 import { FIGHT } from "../content/rooms.ts";
-import { traitNumber } from "../content/traits.ts";
+import { type TraitId, traitNumber } from "../content/traits.ts";
 import { backRow, cellAt, distance, rowOf } from "../hex.ts";
 import { type Carrier, countTraits, traitStates, traitSteps } from "../party.ts";
 import {
   abc,
   at,
+  CAT,
   fightOf,
   inOrder,
   onCell,
@@ -25,13 +26,13 @@ import {
 import { brace, heal, hurt, HZ, shieldUp } from "./core.ts";
 import { speedNow } from "./engine.ts";
 
-const t = traitNumber;
+const t = (id: TraitId, name: string, step: number): number => traitNumber(CAT, id, name, step);
 /** Figures holding nothing, as far as their traits go. */
 const kinds = (...list: UnitKind[]): Carrier[] => list.map((kind) => ({ kind, items: [] }));
 /** What Gnome multiplies a gnome's health by at a step. */
 const gnomeHealth = (step: number) => 1 + t("gnome", "health", step) / 100;
 /** One of It Is A Rock's numbers at one star. */
-const rockSays = (name: string) => abilityNumber("rock", name, 1);
+const rockSays = (name: string) => abilityNumber(CAT, "rock", name, 1);
 /** Greg's health at the start of a fight, having eaten a number of times. */
 const gregsHealth = (fed: number): number => {
   const f = fightOf([{ kind: "greg", stars: 1, seat: 3, items: [], fed }], [at("mud", 3, 3)]);
@@ -40,33 +41,39 @@ const gregsHealth = (fed: number): number => {
 
 describe("counting traits", () => {
   test("a trait counts each different figure once, however many copies are fielded", () => {
-    const counts = countTraits(kinds("crab7", "crab7", "crab7", "emberkit"));
+    const counts = countTraits(CAT, kinds("crab7", "crab7", "crab7", "emberkit"));
     expect(counts.crab).toBe(1);
     expect(counts.fang).toBe(2);
     expect(counts.ember).toBe(1);
-    const on = traitSteps(partyOfFigures([at("crab7", 0, 0), at("crab7", 1, 0), at("crab7", 2, 0)]));
+    const on = traitSteps(CAT, partyOfFigures([at("crab7", 0, 0), at("crab7", 1, 0), at("crab7", 2, 0)]));
     expect(on.crab).toBeUndefined();
     expect(on.fang).toBeUndefined();
   });
   test("two different figures of a kin switch it on; the forest's trouble and summons count for nothing", () => {
     const on = traitSteps(
+      CAT,
       partyOfFigures([at("crab7", 0, 0), at("crab12", 1, 0), at("crab", 2, 0), at("uncounted", 3, 0)]),
     );
     expect(on.crab).toBe(1);
-    expect(countTraits(kinds("crab", "uncounted", "glorplet", "gnat"))).toEqual({});
+    expect(countTraits(CAT, kinds("crab", "uncounted", "glorplet", "gnat"))).toEqual({});
   });
   test("a figure holding an emblem carries its kin as well, and counts as one more of it", () => {
-    expect(traitSteps(partyOfFigures([at("crab7", 0, 0), at("worm", 1, 0, 1, ["crabcharm"])])).crab).toBe(1);
+    expect(traitSteps(CAT, partyOfFigures([at("crab7", 0, 0), at("worm", 1, 0, 1, ["crabcharm"])])).crab).toBe(1);
     const four = partyOfFigures([
       at("crab7", 0, 0),
       at("crab12", 1, 0),
       at("crab23", 2, 0),
       at("worm", 3, 0, 1, ["crabcharm"]),
     ]);
-    expect(countTraits(four.figures)).toMatchObject({ crab: 4, burrow: 1, sneak: 1, graid: 1 });
-    expect(traitSteps(four).crab).toBe(2);
+    expect(countTraits(CAT, four.figures)).toMatchObject({ crab: 4, burrow: 1, sneak: 1, graid: 1 });
+    expect(traitSteps(CAT, four).crab).toBe(2);
     // On the bench, where nobody else is, it is one of its kin alone.
-    expect(countTraits([{ kind: "worm", items: ["crabcharm"] }])).toEqual({ burrow: 1, sneak: 1, graid: 1, crab: 1 });
+    expect(countTraits(CAT, [{ kind: "worm", items: ["crabcharm"] }])).toEqual({
+      burrow: 1,
+      sneak: 1,
+      graid: 1,
+      crab: 1,
+    });
   });
   test("two copies of one figure count once, however many emblems they hold", () => {
     const twins = [
@@ -74,21 +81,21 @@ describe("counting traits", () => {
       { kind: "worm", items: ["crabcharm", "mistcharm"] },
       { kind: "crab7", items: [] },
     ] satisfies Carrier[];
-    expect(countTraits(twins)).toEqual({ burrow: 1, sneak: 1, graid: 1, crab: 2, mist: 1, fang: 1 });
+    expect(countTraits(CAT, twins)).toEqual({ burrow: 1, sneak: 1, graid: 1, crab: 2, mist: 1, fang: 1 });
     // A copy holding nothing still counts the emblem the other copy holds, once.
     expect(
-      countTraits([
+      countTraits(CAT, [
         { kind: "worm", items: [] },
         { kind: "worm", items: ["crabcharm"] },
       ]).crab,
     ).toBe(1);
   });
   test("a figure with a third trait counts toward all three", () => {
-    const counts = countTraits(kinds("whitefox", "hearthcat", "greg"));
+    const counts = countTraits(CAT, kinds("whitefox", "hearthcat", "greg"));
     expect(counts).toEqual({ mist: 1, sage: 1, graid: 2, ember: 1, sneak: 1, fang: 1, bulwark: 1, greg: 1 });
   });
   test("the states list what is on first", () => {
-    const states = traitStates(kinds("crab7", "crab12", "emberkit"));
+    const states = traitStates(CAT, kinds("crab7", "crab12", "emberkit"));
     expect(states[0]?.step).toBe(1);
     expect(abc(states.filter((s) => s.step > 0).map((s) => s.trait))).toEqual(["crab", "fang"]);
     expect(states.find((s) => s.trait === "ember")).toEqual({ trait: "ember", count: 1, step: 0 });
@@ -147,7 +154,7 @@ describe("kins", () => {
   test("Mist: the whole party gains ward, and some attacks slip past it", () => {
     const f = fightOf([at("crab7", 3, 0)], [at("moth", 3, 0), at("glorp", 2, 0), at("mud", 4, 0)]);
     const mud = unitOf(f, "mud", 1);
-    expect(mud.ward).toBe(specOf("mud").ward + t("mist", "ward", 1));
+    expect(mud.ward).toBe(specOf(CAT, "mud").ward + t("mist", "ward", 1));
     expect(mud.slip).toBe(t("mist", "slip", 1));
     // Count them: a still target with Mist's slip, attacked every step until dusk.
     stillSide(f, 1);
@@ -169,8 +176,8 @@ describe("kins", () => {
     stillSide(f, 1);
     const worm = unitOf(f, "worm");
     const foe = unitOf(f, "mud", 1);
-    expect(worm.armour).toBe(FIGURES.worm.armour + t("burrow", "armour", 1));
-    expect(unitOf(f, "crab7").armour).toBe(FIGURES.crab7.armour);
+    expect(worm.armour).toBe(figureIn(CAT, "worm").armour + t("burrow", "armour", 1));
+    expect(unitOf(f, "crab7").armour).toBe(figureIn(CAT, "crab7").armour);
     worm.manaFull = 0;
     f.out = [];
     hurt(f, worm, worm.maxHp * 0.6, "true", "attack", foe);
@@ -207,7 +214,7 @@ describe("kins", () => {
   test("Burrow: a Burrow emblem's holder digs in like the rest", () => {
     const f = fightOf([at("worm", 3, 0), at("crab7", 2, 0, 1, ["burrowcharm"])], [at("mud", 3, 3)]);
     const crab = unitOf(f, "crab7");
-    expect(crab.armour).toBe(FIGURES.crab7.armour + t("burrow", "armour", 1));
+    expect(crab.armour).toBe(figureIn(CAT, "crab7").armour + t("burrow", "armour", 1));
     expect(crab.digs).toBe(true);
   });
   test("Burrow: a Rock that digs in during It Is A Rock keeps the stronger brace, its sting and its end", () => {
@@ -271,34 +278,34 @@ describe("kins", () => {
   });
   test("Gnome: Gnome figures have more health, more at the second step; nobody else does", () => {
     const two = fightOf([at("barrowgnome", 3, 0), at("lanterngnome", 3, 2), at("finch", 2, 2)], [at("mud", 3, 3)]);
-    expect(unitOf(two, "barrowgnome").maxHp).toBe(Math.round(FIGURES.barrowgnome.hp * gnomeHealth(1)));
+    expect(unitOf(two, "barrowgnome").maxHp).toBe(Math.round(figureIn(CAT, "barrowgnome").hp * gnomeHealth(1)));
     expect(unitOf(two, "barrowgnome").hp).toBe(unitOf(two, "barrowgnome").maxHp);
-    expect(unitOf(two, "finch").maxHp).toBe(FIGURES.finch.hp);
+    expect(unitOf(two, "finch").maxHp).toBe(figureIn(CAT, "finch").hp);
     const four = fightOf(
       [at("barrowgnome", 3, 0), at("lanterngnome", 3, 2), at("bushgnome", 2, 0), at("apothecary", 2, 2)],
       [at("mud", 3, 3)],
     );
-    expect(unitOf(four, "apothecary").maxHp).toBe(Math.round(FIGURES.apothecary.hp * gnomeHealth(2)));
+    expect(unitOf(four, "apothecary").maxHp).toBe(Math.round(figureIn(CAT, "apothecary").hp * gnomeHealth(2)));
   });
 });
 
 describe("callings", () => {
   test("Bulwark: armour for Bulwarks, and at the second step some for everyone else", () => {
     const two = fightOf([at("barrowgnome", 3, 0), at("slug", 2, 0), at("finch", 3, 2)], [at("mud", 3, 3)]);
-    expect(unitOf(two, "slug").armour).toBe(FIGURES.slug.armour + t("bulwark", "armour", 1));
-    expect(unitOf(two, "finch").armour).toBe(FIGURES.finch.armour);
+    expect(unitOf(two, "slug").armour).toBe(figureIn(CAT, "slug").armour + t("bulwark", "armour", 1));
+    expect(unitOf(two, "finch").armour).toBe(figureIn(CAT, "finch").armour);
     const four = fightOf(
       [at("barrowgnome", 3, 0), at("slug", 2, 0), at("glorp", 4, 0), at("crab40", 1, 0), at("finch", 3, 2)],
       [at("mud", 3, 3)],
     );
-    expect(unitOf(four, "slug").armour).toBe(FIGURES.slug.armour + t("bulwark", "armour", 2));
-    expect(unitOf(four, "finch").armour).toBe(FIGURES.finch.armour + t("bulwark", "party", 2));
+    expect(unitOf(four, "slug").armour).toBe(figureIn(CAT, "slug").armour + t("bulwark", "armour", 2));
+    expect(unitOf(four, "finch").armour).toBe(figureIn(CAT, "finch").armour + t("bulwark", "party", 2));
   });
   test("Fang: more attack, and some attacks land hard for half as much again", () => {
     const f = fightOf([at("crab7", 3, 0), at("emberkit", 2, 0)], [at("mud", 3, 0)]);
     stillSide(f, 1);
     const crab = unitOf(f, "crab7");
-    expect(crab.attack).toBe(Math.round(FIGURES.crab7.attack * (1 + t("fang", "attack", 1) / 100)));
+    expect(crab.attack).toBe(Math.round(figureIn(CAT, "crab7").attack * (1 + t("fang", "attack", 1) / 100)));
     expect(crab.crit).toBe(t("fang", "crit", 1));
     for (const u of f.units) u.manaFull = 0;
     unitOf(f, "emberkit").attack = 0;
@@ -315,7 +322,7 @@ describe("callings", () => {
     const f = fightOf([at("finch", 3, 2), at("chickaree", 2, 2)], [at("mud", 3, 0)]);
     stillSide(f, 1);
     const finch = unitOf(f, "finch");
-    expect(finch.range).toBe(FIGURES.finch.range + t("slinger", "reach", 1));
+    expect(finch.range).toBe(figureIn(CAT, "finch").range + t("slinger", "reach", 1));
     for (const u of f.units) u.manaFull = 0;
     unitOf(f, "chickaree").attack = 0;
     const hits = only(steps(f, 12 * HZ), "hit").filter((e) => e.by === finch.id);
@@ -339,7 +346,7 @@ describe("callings", () => {
     moth.mana = moth.manaFull;
     const cast = stepUntil(f, (e) => e.t === "hit" && e.source === "ability");
     const dust = only(cast, "hit").find((e) => e.source === "ability");
-    const plain = specOf("moth").ability?.n.damage?.[0] ?? 0;
+    const plain = specOf(CAT, "moth").ability?.n.damage?.[0] ?? 0;
     expect(dust?.amount).toBe(Math.round((plain * (100 + t("sage", "power", 1))) / 100));
   });
   test("Mender: their healing and shields count for more", () => {
@@ -383,8 +390,8 @@ describe("callings", () => {
     const hp = gregsHealth;
     const most = t("greg", "most", 1);
     expect(most).toBe(40);
-    expect(hp(0)).toBe(FIGURES.greg.hp);
-    expect(hp(12)).toBe(Math.round(FIGURES.greg.hp * 1.12));
+    expect(hp(0)).toBe(figureIn(CAT, "greg").hp);
+    expect(hp(12)).toBe(Math.round(figureIn(CAT, "greg").hp * 1.12));
     expect(hp(most + 50)).toBe(hp(most));
   });
 });
@@ -392,29 +399,31 @@ describe("callings", () => {
 describe("boons that travel into a fight", () => {
   test("Head Start: everyone starts with more mana", () => {
     const f = fightOf([at("crab7", 3, 0)], [at("mud", 3, 3)], { ours: { boons: ["headstart"] } });
-    expect(unitOf(f, "crab7").mana).toBe(FIGURES.crab7.mana[0] + boonNumber("headstart", "mana"));
+    expect(unitOf(f, "crab7").mana).toBe(figureIn(CAT, "crab7").mana[0] + boonNumber(CAT, "headstart", "mana"));
   });
   test("Tidy Formation: armour in the front row, quicker attacks in the back row", () => {
     const f = fightOf([at("crab7", 3, 0), at("emberkit", 3, 1), at("finch", 3, 3)], [at("mud", 3, 3)], {
       ours: { boons: ["formation"] },
     });
     // Crab #7 and Emberkit are both Fangs, which changes neither armour nor speed.
-    expect(unitOf(f, "crab7").armour).toBe(FIGURES.crab7.armour + boonNumber("formation", "armour"));
-    expect(unitOf(f, "emberkit").armour).toBe(FIGURES.emberkit.armour);
-    expect(unitOf(f, "finch").speed).toBeCloseTo(FIGURES.finch.speed * (1 + boonNumber("formation", "speed") / 100));
-    expect(unitOf(f, "crab7").speed).toBe(FIGURES.crab7.speed);
+    expect(unitOf(f, "crab7").armour).toBe(figureIn(CAT, "crab7").armour + boonNumber(CAT, "formation", "armour"));
+    expect(unitOf(f, "emberkit").armour).toBe(figureIn(CAT, "emberkit").armour);
+    expect(unitOf(f, "finch").speed).toBeCloseTo(
+      figureIn(CAT, "finch").speed * (1 + boonNumber(CAT, "formation", "speed") / 100),
+    );
+    expect(unitOf(f, "crab7").speed).toBe(figureIn(CAT, "crab7").speed);
   });
   test("Small Fry: one- and two-acorn figures are sturdier and hit harder; dearer ones are as they were", () => {
     const f = fightOf([at("crab7", 3, 0), at("badger", 2, 0)], [at("mud", 3, 3)], { ours: { boons: ["smallfry"] } });
-    const more = 1 + boonNumber("smallfry", "boost") / 100;
-    expect(unitOf(f, "crab7").maxHp).toBe(Math.round(FIGURES.crab7.hp * more));
-    expect(unitOf(f, "badger").maxHp).toBe(FIGURES.badger.hp);
+    const more = 1 + boonNumber(CAT, "smallfry", "boost") / 100;
+    expect(unitOf(f, "crab7").maxHp).toBe(Math.round(figureIn(CAT, "crab7").hp * more));
+    expect(unitOf(f, "badger").maxHp).toBe(figureIn(CAT, "badger").hp);
   });
   test("the same things on the other side of the table work the same way", () => {
     const f = fightOf([at("mud", 3, 3)], [at("crab7", 3, 0), at("crab12", 3, 2), at("worm", 2, 2, 1, ["crabcharm"])], {
       theirs: { boons: ["headstart"] },
     });
-    expect(unitOf(f, "crab7", 1).mana).toBe(FIGURES.crab7.mana[0] + boonNumber("headstart", "mana"));
+    expect(unitOf(f, "crab7", 1).mana).toBe(figureIn(CAT, "crab7").mana[0] + boonNumber(CAT, "headstart", "mana"));
     expect(unitsOf(f, "uncounted", 1).length).toBe(1);
     expect(f.traits[1].crab).toBe(1);
     // Three crabs' worth with the emblem is still the first step: the second wants four.

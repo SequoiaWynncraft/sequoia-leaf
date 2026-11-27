@@ -5,9 +5,10 @@
  * a sparring room's party, a regular's or another member's board, is one stored and sent as it is.
  */
 import { type BoonId, isBoonId } from "./content/boons.ts";
+import type { Catalog } from "./content/catalog.ts";
 import {
   type FigureId,
-  FIGURES,
+  figureIn,
   isFigureId,
   isStars,
   isUnitKind,
@@ -58,12 +59,12 @@ export interface Carrier {
  * How many of each trait a party fields: one for each *different* figure that carries it, by its
  * own traits or by an emblem any copy of it holds. Two copies of one figure count once.
  */
-export function countTraits(figures: readonly Carrier[]): TraitCounts {
+export function countTraits(cat: Catalog, figures: readonly Carrier[]): TraitCounts {
   const carried = new Map<FigureId, Set<TraitId>>();
   for (const p of figures) {
     if (!isFigureId(p.kind)) continue;
     const traits = carried.get(p.kind) ?? new Set<TraitId>();
-    for (const trait of carriedTraits(p.kind, p.items)) traits.add(trait);
+    for (const trait of carriedTraits(cat, p.kind, p.items)) traits.add(trait);
     carried.set(p.kind, traits);
   }
   const counts: TraitCounts = {};
@@ -77,21 +78,21 @@ export interface TraitState {
   step: number;
 }
 /** Every trait some figures carry, with its count and the step that puts it on; the switched-on ones first. */
-export function traitStates(figures: readonly Carrier[]): TraitState[] {
-  const counts = countTraits(figures);
+export function traitStates(cat: Catalog, figures: readonly Carrier[]): TraitState[] {
+  const counts = countTraits(cat, figures);
   const out: TraitState[] = [];
   for (const trait of TRAIT_IDS) {
     const count = counts[trait] ?? 0;
-    if (count > 0) out.push({ trait, count, step: stepFor(trait, count) });
+    if (count > 0) out.push({ trait, count, step: stepFor(cat, trait, count) });
   }
   return out.toSorted((a, b) => b.step - a.step || b.count - a.count);
 }
 /** The steps a party's traits are on, with nothing for those that are off. */
-export function traitSteps(party: Pick<Party, "figures">): Partial<Record<TraitId, number>> {
-  const counts = countTraits(party.figures);
+export function traitSteps(cat: Catalog, party: Pick<Party, "figures">): Partial<Record<TraitId, number>> {
+  const counts = countTraits(cat, party.figures);
   const steps: Partial<Record<TraitId, number>> = {};
   for (const trait of TRAIT_IDS) {
-    const step = stepFor(trait, counts[trait] ?? 0);
+    const step = stepFor(cat, trait, counts[trait] ?? 0);
     if (step > 0) steps[trait] = step;
   }
   return steps;
@@ -139,10 +140,10 @@ export function isParty(v: unknown): v is Party {
 }
 
 /** What a party has had spent on its figures, in acorns: a rough measure of how strong it is. */
-export function partyWorth(party: Pick<Party, "figures">): number {
+export function partyWorth(cat: Catalog, party: Pick<Party, "figures">): number {
   let total = 0;
   for (const p of party.figures) {
-    if (isFigureId(p.kind)) total += FIGURES[p.kind].tier * (p.stars === 1 ? 1 : p.stars === 2 ? 3 : 9);
+    if (isFigureId(p.kind)) total += figureIn(cat, p.kind).tier * (p.stars === 1 ? 1 : p.stars === 2 ? 3 : 9);
   }
   return total;
 }

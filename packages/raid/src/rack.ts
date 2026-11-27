@@ -1,3 +1,4 @@
+import { catalogOf } from "./content/catalog.ts";
 /**
  * The rack: the items nobody is holding. Two components on it forge there, into the finished item
  * a figure would have made of them, to hand over afterwards. (Handing an item over is `giveItem`,
@@ -18,7 +19,7 @@ export function forgeItems(run: RunView, at: number, other: number): Done {
   const b = run.items[other];
   if (a === undefined || b === undefined) return refusal("no_such_item");
   if (at === other || !isComponentId(a) || !isComponentId(b)) return refusal("two_components");
-  const item = forge(a, b);
+  const item = forge(catalogOf(run), a, b);
   run.items[at] = item;
   run.items.splice(other, 1);
   remember(run.seen.forged, item);

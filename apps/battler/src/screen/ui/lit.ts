@@ -14,7 +14,7 @@ import { type TraitId, traitsOf } from "@sequoia-leaf/raid";
 import { forget, light, lightUp, litTrait } from "../light.ts";
 import { snd } from "../sounds.ts";
 import { V } from "../stage.ts";
-import { prefsChanged, S } from "../state.ts";
+import { catalogNow, prefsChanged, S } from "../state.ts";
 import { traitOfRef } from "./cards.ts";
 
 /** The trait the stall and the chips were last marked for, so a change can hop. */
@@ -31,7 +31,7 @@ export function paintLight(): void {
   }
   for (const offer of document.querySelectorAll<HTMLElement>("#stall [data-offer]")) {
     const kind = S.run?.stall[Number(offer.dataset.offer)];
-    const has = lit !== null && kind !== null && kind !== undefined && traitsOf(kind).includes(lit);
+    const has = lit !== null && kind !== null && kind !== undefined && traitsOf(catalogNow(), kind).includes(lit);
     offer.classList.toggle("tlit", has);
     offer.classList.toggle("tdim", lit !== null && !has);
     if (has && changed) replay(offer, "thop");

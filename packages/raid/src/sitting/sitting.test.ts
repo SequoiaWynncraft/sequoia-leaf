@@ -4,7 +4,7 @@ import { below, draw32, mix, type Stream } from "@sequoia-leaf/core";
 
 import { planRoom, SENSIBLE } from "../bot.ts";
 import { COMMANDS } from "../command.ts";
-import { type FigureId, FIGURES } from "../content/figures.ts";
+import { type FigureId, figureIn } from "../content/figures.ts";
 import { forge } from "../content/items.ts";
 import { PAYOUT } from "../content/keepsakes.ts";
 import { newLooks } from "../content/looks.ts";
@@ -27,7 +27,7 @@ import {
   startRun,
   summariseRun,
 } from "../run.ts";
-import { EVERYONES } from "../testkit.ts";
+import { CAT, EVERYONES } from "../testkit.ts";
 import { hasTaken, join } from "./carousel.ts";
 import { advance, pairings } from "./clock.ts";
 import { type Answer, type Call, command, openSitting, paidOff, readCommand, type SittingCommand } from "./commands.ts";
@@ -470,7 +470,7 @@ describe("the carousel", () => {
     const t = started(51, 3);
     if (t.stage.at !== "carousel") throw new Error("no carousel");
     expect(t.stage.until).toBe(START + CLOCK.together);
-    expect(t.stage.ring.map((offer) => FIGURES[offer.kind].tier)).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1]);
+    expect(t.stage.ring.map((offer) => figureIn(CAT, offer.kind).tier)).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1]);
     expect(t.stage.open).toBe(CHAIRS);
     // The regulars wait for the members: the whole ring is there to choose from.
     expect(t.stage.ring.every((offer) => offer.by === null)).toBe(true);
@@ -502,7 +502,7 @@ describe("the carousel", () => {
       carousels++;
       const { turns, ring } = t.stage;
       expect(BOSS_ROOMS).toContain(before.room);
-      expect(ring.map((offer) => FIGURES[offer.kind].tier)).toEqual([2, 2, 2, 2, 2, 3, 3, 3, 3]);
+      expect(ring.map((offer) => figureIn(CAT, offer.kind).tier)).toEqual([2, 2, 2, 2, 2, 3, 3, 3, 3]);
       expect(new Set(ring.map((offer) => offer.kind)).size).toBe(ring.length);
       expect(turns).toEqual(
         seatsIn(t)
@@ -564,7 +564,7 @@ describe("the carousel", () => {
     const run = startRun(5, { era: LEGACY_ERA });
     choose(run, 0);
     const [starter] = pieces(run);
-    const others = EVERYONES.filter((kind) => kind !== starter?.kind && FIGURES[kind].tier === 2);
+    const others = EVERYONES.filter((kind) => kind !== starter?.kind && figureIn(CAT, kind).tier === 2);
     const [twin = "kettle", ...rest] = others;
     const kinds: FigureId[] = [twin, twin, ...rest, "leafling", "rock", "badger"];
     for (const kind of kinds.slice(0, ECONOMY.bench)) join(run, kind, "bark");
@@ -574,7 +574,7 @@ describe("the carousel", () => {
     const acorns = run.acorns;
     expect(join(run, "greg", "plume")).toEqual([]);
     expect(pieces(run).length).toBe(1 + ECONOMY.bench);
-    expect(run.acorns).toBe(acorns + FIGURES.greg.tier);
+    expect(run.acorns).toBe(acorns + figureIn(CAT, "greg").tier);
     expect(run.items).toEqual(["plume"]);
     // The third of a kind joins the two there, with what it held.
     const notes = join(run, twin, "thorn");
@@ -583,7 +583,7 @@ describe("the carousel", () => {
       pieces(run)
         .filter((p) => p.kind === twin)
         .map((p) => [p.stars, p.items]),
-    ).toEqual([[2, [forge("bark", "bark"), "thorn"]]]);
+    ).toEqual([[2, [forge(CAT, "bark", "bark"), "thorn"]]]);
     expect(pieces(run).length).toBe(ECONOMY.bench);
   });
 });
@@ -669,7 +669,7 @@ describe("what people do", () => {
     expect(readCommand({ ...forging, id: "x" })).toEqual(forging);
     const answer = command(t, forging, call(now, 8, 1));
     if (!answer.ok) throw new Error(answer.code);
-    expect(seat(answer.sitting, 1).run.items).toEqual([forge("bark", "thorn")]);
+    expect(seat(answer.sitting, 1).run.items).toEqual([forge(CAT, "bark", "thorn")]);
     expect(predict(sittingView(t, member(1).id), forging)).toEqual({
       view: sittingView(answer.sitting, member(1).id),
       notes: answer.notes,

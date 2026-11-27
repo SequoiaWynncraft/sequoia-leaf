@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import { boonNumber } from "../content/boons.ts";
-import { FIGURES, specOf, starScale } from "../content/figures.ts";
+import { figureIn, specOf, starScale } from "../content/figures.ts";
 import { LEGACY_ERA } from "../content/releases.ts";
 import { FIGHT, levelBoost, LEVELS } from "../content/rooms.ts";
 import { traitNumber } from "../content/traits.ts";
 import { backRow, CELLS, cellSeat, distance, HOME_ROWS, rowOf, seatCell } from "../hex.ts";
 import {
   at,
+  CAT,
   EVERYONES,
   fightOf,
   inOrder,
@@ -121,7 +122,7 @@ describe("sitting down", () => {
   test("stars multiply health and attack", () => {
     const f = fightOf([at("emberkit", 0, 0, 1), at("emberkit", 2, 0, 2), at("emberkit", 4, 0, 3)], [at("gnat", 3, 3)]);
     const [one, two, three] = unitsOf(f, "emberkit", 0);
-    const base = FIGURES.emberkit;
+    const base = figureIn(CAT, "emberkit");
     expect(one?.maxHp).toBe(base.hp);
     expect(two?.maxHp).toBe(Math.round(base.hp * starScale(2)));
     expect(three?.maxHp).toBe(Math.round(base.hp * starScale(3)));
@@ -130,8 +131,8 @@ describe("sitting down", () => {
   });
   test("a party's might scales its health and attack", () => {
     const f = fightOf([at("crab7", 3, 0)], [at("mud", 3, 0)], { theirs: { might: 150 } });
-    expect(unitOf(f, "mud", 1).maxHp).toBe(Math.round(specOf("mud").hp * 1.5));
-    expect(unitOf(f, "mud", 1).attack).toBe(Math.round(specOf("mud").attack * 1.5));
+    expect(unitOf(f, "mud", 1).maxHp).toBe(Math.round(specOf(CAT, "mud").hp * 1.5));
+    expect(unitOf(f, "mud", 1).attack).toBe(Math.round(specOf(CAT, "mud").attack * 1.5));
   });
   test("an empty side has lost before it starts", () => {
     const f = fightOf([], [at("gnat", 3, 0)]);
@@ -295,7 +296,7 @@ describe("walking", () => {
   test("from the back row, a figure that reaches further than two hexes attacks their front row without a step", () => {
     for (const id of EVERYONES) {
       // Seqwawa's reach only says where it sits: it never attacks.
-      if (FIGURES[id].range <= 2 || FIGURES[id].attack === 0) continue;
+      if (figureIn(CAT, id).range <= 2 || figureIn(CAT, id).attack === 0) continue;
       const f = fightOf([at(id, 3, HOME_ROWS - 1)], [at("mud", 3, 0)]);
       stillSide(f, 1);
       const u = unitOf(f, id);
@@ -392,7 +393,7 @@ describe("statuses", () => {
   test("a burn takes a share of health every second, and makes healing weaker", () => {
     const { f, mud, crab } = duel();
     crab.attack = 0;
-    const lasts = traitNumber("ember", "lasts", 1);
+    const lasts = traitNumber(CAT, "ember", "lasts", 1);
     burn(f, mud, 2, crab);
     const events = steps(f, lasts * HZ + 5);
     const burns = only(events, "hit").filter((e) => e.source === "burn");
@@ -403,7 +404,7 @@ describe("statuses", () => {
     // Healing: plain once the fire is out, weaker while it burns.
     expect(heal(f, mud, 50, "ability", null)).toBe(50);
     burn(f, mud, 2, crab);
-    expect(heal(f, mud, 20, "ability", null)).toBe(20 * (1 - traitNumber("ember", "damp", 1) / 100));
+    expect(heal(f, mud, 20, "ability", null)).toBe(20 * (1 - traitNumber(CAT, "ember", "damp", 1) / 100));
   });
   test("a shield takes the damage first, and runs out", () => {
     const { f, mud } = duel();
@@ -475,23 +476,23 @@ describe("draw: who a figure goes for", () => {
   }
 
   test("a figure's draw is its callings and items, from -1 to +2", () => {
-    expect(drawOf("crab7", [])).toBe(0);
-    expect(drawOf("barrowgnome", [])).toBe(1);
-    expect(drawOf("greg", [])).toBe(1);
-    expect(drawOf("worm", [])).toBe(-1);
-    expect(drawOf("hearthcat", [])).toBe(-1);
-    expect(drawOf("whitefox", [])).toBe(0);
-    expect(drawOf("crab7", ["stump"])).toBe(1);
-    expect(drawOf("crab7", ["stump", "bark"])).toBe(1);
-    expect(drawOf("barrowgnome", ["stump"])).toBe(2);
-    expect(drawOf("worm", ["stump"])).toBe(0);
+    expect(drawOf(CAT, "crab7", [])).toBe(0);
+    expect(drawOf(CAT, "barrowgnome", [])).toBe(1);
+    expect(drawOf(CAT, "greg", [])).toBe(1);
+    expect(drawOf(CAT, "worm", [])).toBe(-1);
+    expect(drawOf(CAT, "hearthcat", [])).toBe(-1);
+    expect(drawOf(CAT, "whitefox", [])).toBe(0);
+    expect(drawOf(CAT, "crab7", ["stump"])).toBe(1);
+    expect(drawOf(CAT, "crab7", ["stump", "bark"])).toBe(1);
+    expect(drawOf(CAT, "barrowgnome", ["stump"])).toBe(2);
+    expect(drawOf(CAT, "worm", ["stump"])).toBe(0);
     // Never above +2, however much it holds.
-    expect(drawOf("barrowgnome", ["stump", "stump"])).toBe(FIGHT.drawMost);
-    expect(drawOf("barrowgnome", ["stump", "stump", "stump"])).toBe(FIGHT.drawMost);
+    expect(drawOf(CAT, "barrowgnome", ["stump", "stump"])).toBe(FIGHT.drawMost);
+    expect(drawOf(CAT, "barrowgnome", ["stump", "stump", "stump"])).toBe(FIGHT.drawMost);
     // The forest's own and the summoned carry no calling.
-    expect(drawOf("gnat", [])).toBe(0);
-    expect(drawOf("bigcrab", [])).toBe(0);
-    expect(drawOf("glorplet", [])).toBe(0);
+    expect(drawOf(CAT, "gnat", [])).toBe(0);
+    expect(drawOf(CAT, "bigcrab", [])).toBe(0);
+    expect(drawOf(CAT, "glorplet", [])).toBe(0);
     const f = fightOf([at("barrowgnome", 3, 0, 1, ["stump"]), at("worm", 2, 0)], [at("gnat", 3, 0)]);
     expect(unitOf(f, "barrowgnome").draw).toBe(2);
     expect(unitOf(f, "worm").draw).toBe(-1);
@@ -638,7 +639,7 @@ describe("falling", () => {
     f.out = [];
     hurt(f, crab, 9999, "true", "item", null);
     expect(crab.alive).toBe(true);
-    expect(crab.hp).toBe(Math.round((crab.maxHp * boonNumber("secondwind", "health")) / 100));
+    expect(crab.hp).toBe(Math.round((crab.maxHp * boonNumber(CAT, "secondwind", "health")) / 100));
     expect(f.out.some((e) => e.t === "rise" && e.id === crab.id)).toBe(true);
     hurt(f, kit, 9999, "true", "item", null);
     expect(kit.alive).toBe(false);
@@ -670,7 +671,7 @@ function levelled(seed: number): FightSetup {
 describe("a level", () => {
   test("is 3% more health and attack, 18% at most, multiplied with stars and with what items add", () => {
     expect([LEVELS.boost, LEVELS.most, levelBoost(3), levelBoost(LEVELS.most)]).toEqual([3, 6, 9, 18]);
-    const { hp, attack } = specOf("badger");
+    const { hp, attack } = specOf(CAT, "badger");
     // Two stars, Winter Hoard's +30% health and Blackthorn Sprig's +30% attack.
     for (let level = 0; level <= LEVELS.most; level++) {
       const more = starScale(2) * (1 + (3 * level) / 100);

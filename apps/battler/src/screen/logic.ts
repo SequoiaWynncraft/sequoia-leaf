@@ -8,6 +8,8 @@ import { mix } from "@sequoia-leaf/core";
 import {
   boonNumber,
   buy,
+  type Catalog,
+  catalogOf,
   COMPONENT_IDS,
   type ComponentId,
   countTraits,
@@ -17,7 +19,7 @@ import {
   fielded,
   type FightResult,
   type FigureId,
-  FIGURES,
+  figureIn,
   type FinishedId,
   forge,
   holdItem,
@@ -42,7 +44,7 @@ import {
   starScale,
   stepFor,
   type TraitId,
-  TRAITS,
+  traitIn,
   traitsNow,
   traitsOf,
   type UnitKind,
@@ -97,16 +99,16 @@ export const canBuy = (run: RunView, offer: number): boolean => legal(run, { do:
 export type Handing =
   { can: false } | { can: true; forged: null } | { can: true; forged: FinishedId; with: ComponentId };
 
-export function handing(piece: Pick<Piece, "kind" | "items">, item: ItemId): Handing {
-  const got = holdItem(piece, item);
+export function handing(cat: Catalog, piece: Pick<Piece, "kind" | "items">, item: ItemId): Handing {
+  const got = holdItem(cat, piece, item);
   if ("refused" in got) return { can: false };
   if (got.forged && got.with) return { can: true, forged: got.forged, with: got.with };
   return { can: true, forged: null };
 }
 
 /** What a component makes with each of the five components. */
-export function recipesOf(item: ComponentId): { with: ComponentId; makes: FinishedId }[] {
-  return COMPONENT_IDS.map((other) => ({ with: other, makes: forge(item, other) }));
+export function recipesOf(cat: Catalog, item: ComponentId): { with: ComponentId; makes: FinishedId }[] {
+  return COMPONENT_IDS.map((other) => ({ with: other, makes: forge(cat, item, other) }));
 }
 
 /** What a component would make with each *other* loose component the party has, without repeats. */
@@ -122,7 +124,7 @@ export function combosWithHeld(
   for (const p of pieces(run)) {
     for (const held of p.items) if (isComponentId(held) && !others.includes(held)) others.push(held);
   }
-  return others.map((other) => ({ with: other, makes: forge(item, other) }));
+  return others.map((other) => ({ with: other, makes: forge(catalogOf(run), item, other) }));
 }
 
 /** The purse as it is counted: whole piles of savings that are earning, loose acorns, and what the piles will pay. */
@@ -141,7 +143,9 @@ export interface Savings {
 export function savings(run: RunView): Savings {
   const most = interestCap(run);
   const pays = interestNow(run);
-  const per = run.boons.includes("deeppockets") ? boonNumber("deeppockets", "per") : ECONOMY.interestPer;
+  const per = run.boons.includes("deeppockets")
+    ? boonNumber(catalogOf(run), "deeppockets", "per")
+    : ECONOMY.interestPer;
   const piles = Math.min(most, Math.floor(run.acorns / per));
   return {
     per,
@@ -279,8 +283,8 @@ export interface Numbers {
 export const NUMBER_KEYS = ["health", "attack", "speed", "reach", "armour", "ward"] as const;
 
 /** A figure's own numbers at a number of stars and a level, before anything it holds or belongs to. */
-export function plainNumbers(kind: UnitKind, stars: Stars, level = 0): Numbers {
-  const spec = specOf(kind);
+export function plainNumbers(cat: Catalog, kind: UnitKind, stars: Stars, level = 0): Numbers {
+  const spec = specOf(cat, kind);
   const star = starScale(stars) * (1 + levelBoost(level) / 100);
   return {
     health: Math.round(spec.hp * star),
@@ -330,14 +334,15 @@ export interface TraitCount {
   next: number;
   step: number;
 }
-export function traitCount(party: Pick<Party, "figures">, trait: TraitId): TraitCount {
-  const counts = countTraits(party.figures);
+export function traitCount(cat: Catalog, party: Pick<Party, "figures">, trait: TraitId): TraitCount {
+  const counts = countTraits(cat, party.figures);
   const count = counts[trait] ?? 0;
-  const steps = TRAITS[trait].steps;
-  return { count, next: steps.find((need) => need > count) ?? steps.at(-1) ?? 1, step: stepFor(trait, count) };
+  const { steps } = traitIn(cat, trait);
+  return { count, next: steps.find((need) => need > count) ?? steps.at(-1) ?? 1, step: stepFor(cat, trait, count) };
 }
 /** The same for the member's party as it is fielded now. */
-export const ownTraitCount = (run: RunView, trait: TraitId): TraitCount => traitCount(partyOf(run), trait);
+export const ownTraitCount = (run: RunView, trait: TraitId): TraitCount =>
+  traitCount(catalogOf(run), partyOf(run), trait);
 
 /** Where the member has a figure just now: fielded, on the bench, on the stall, or nowhere. */
 export function whereIs(run: RunView, kind: FigureId): "board" | "bench" | "stall" | null {
@@ -348,8 +353,10 @@ export function whereIs(run: RunView, kind: FigureId): "board" | "bench" | "stal
 }
 
 /** Every figure of a trait among some, cheapest first, in their own order within a tier. */
-export const membersOf = (trait: TraitId, among: readonly FigureId[]): FigureId[] =>
-  among.filter((id) => traitsOf(id).includes(trait)).toSorted((a, b) => FIGURES[a].tier - FIGURES[b].tier);
+export const membersOf = (cat: Catalog, trait: TraitId, among: readonly FigureId[]): FigureId[] =>
+  among
+    .filter((id) => traitsOf(cat, id).includes(trait))
+    .toSorted((a, b) => figureIn(cat, a).tier - figureIn(cat, b).tier);
 
 /** A name at the start of a sentence or a line: "a Moth" is "A Moth" there. */
 export const opening = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);

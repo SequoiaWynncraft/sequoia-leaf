@@ -4,8 +4,12 @@
  * and what touching it shows are the town page's (`campart.ts`, `camptouch.ts`).
  */
 import { BANNERS } from "@sequoia-leaf/raid/content/banners.ts";
-import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
-import { FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
+import { catalogAt, everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
+import { figureIn } from "@sequoia-leaf/raid/content/figures.ts";
+import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
+
+/** The raid's figures with every release open: the camp can hold a carving of any of them (`everyShared`), named as they are there. */
+const RAID = catalogAt(LAST_ERA);
 
 export const KINDS = [
   "home",
@@ -315,7 +319,7 @@ export const THINGS: readonly Thing[] = [
   // The Little Raid's figures, won at the Grove: each has its name and its line from there. A figure's
   // picture is 20 to 24 pixels wide and a square is 8, so each takes 3 squares.
   ...everyShared().map((id) =>
-    thing(figureThing(id), FIGURES[id].name, "characters", 3, 1, FIGURES[id].quip, "Says its line.", {
+    thing(figureThing(id), figureIn(RAID, id).name, "characters", 3, 1, figureIn(RAID, id).quip, "Says its line.", {
       turns: "flip",
     }),
   ),
@@ -323,7 +327,7 @@ export const THINGS: readonly Thing[] = [
   // A banner's member, one for each of the pull game's banners: a person, who takes a person's square.
   // Only Leaf knows who; the page gives the thing their name and draws them (`members.ts`).
   ...BANNERS.map(({ id, headliner }) =>
-    thing(memberThing(id), FIGURES[headliner].name, "characters", 1, 1, "", "Hops and looks at you.", {
+    thing(memberThing(id), figureIn(RAID, headliner).name, "characters", 1, 1, "", "Hops and looks at you.", {
       turns: "flip",
     }),
   ),

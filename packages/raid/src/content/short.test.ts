@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import { COLS, distance, seatCell } from "../hex.ts";
+import { CAT } from "../testkit.ts";
 import { drawName, drawTip, GOOD_WITH, placeOf, roleLine, ROLES } from "./advice.ts";
 import { BOON_IDS, boonShort, boonText } from "./boons.ts";
 import {
   abilityShort,
   abilityText,
   FIGURE_IDS,
-  FIGURES,
+  figureIn,
   specOf,
   type Stars,
   SUMMON_IDS,
@@ -16,7 +17,7 @@ import {
 } from "./figures.ts";
 import { FINISHED_IDS, isFinishedId, ITEM_IDS, itemShort, itemText } from "./items.ts";
 import { MEMBER_IDS } from "./members.ts";
-import { TRAIT_IDS, TRAITS, traitShort, traitText } from "./traits.ts";
+import { TRAIT_IDS, traitIn, traitShort, traitText } from "./traits.ts";
 
 /** The longest a fragment may be and still fit one line of a card. */
 const FRAGMENT = 48;
@@ -57,56 +58,56 @@ const EVERYONE: readonly UnitKind[] = [...FIGURE_IDS, ...MEMBER_IDS, ...SUMMON_I
 describe("short forms", () => {
   test("every ability has one, at every number of stars", () => {
     for (const kind of EVERYONE) {
-      if (!specOf(kind).ability) continue;
+      if (!specOf(CAT, kind).ability) continue;
       for (const stars of STARS)
-        checkShort(`${kind} at ${stars}`, abilityShort(kind, stars), abilityText(kind, stars), 2);
+        checkShort(`${kind} at ${stars}`, abilityShort(CAT, kind, stars), abilityText(CAT, kind, stars), 2);
     }
   });
   test("every trait step has one, of one fragment", () => {
     for (const id of TRAIT_IDS) {
-      expect(TRAITS[id].short.length).toBe(TRAITS[id].steps.length);
-      for (let step = 1; step <= TRAITS[id].steps.length; step++)
-        checkShort(`${id} step ${step}`, traitShort(id, step), traitText(id, step), 1);
+      expect(traitIn(CAT, id).short.length).toBe(traitIn(CAT, id).steps.length);
+      for (let step = 1; step <= traitIn(CAT, id).steps.length; step++)
+        checkShort(`${id} step ${step}`, traitShort(CAT, id, step), traitText(CAT, id, step), 1);
     }
   });
   test("every item has one", () => {
-    for (const id of ITEM_IDS) checkShort(id, itemShort(id), itemText(id), 2);
+    for (const id of ITEM_IDS) checkShort(id, itemShort(CAT, id), itemText(CAT, id), 2);
   });
   test("every boon has one", () => {
-    for (const id of BOON_IDS) checkShort(id, boonShort(id), boonText(id), 2);
+    for (const id of BOON_IDS) checkShort(id, boonShort(CAT, id), boonText(CAT, id), 2);
   });
   test("the numbers are the ones for the stars asked for", () => {
-    expect(abilityShort("barrowgnome", 2)).toBe("Shield 210 for 4s. 70 physical to adjacent enemies.");
-    expect(abilityShort("kettle", 1)).toBe("3 sips over 1s to most hurt ally, 50 each.");
-    expect(abilityShort("rock", 1)).toBe("Takes 40% less damage for 4s. Enemies hitting it up close take 45.");
-    expect(traitShort("ember", 1)).toBe("Ember hits burn, 2% health/s for 4s.");
-    expect(traitShort("ember", 2)).toBe("Whole party's hits burn, 4%/s.");
+    expect(abilityShort(CAT, "barrowgnome", 2)).toBe("Shield 210 for 4s. 70 physical to adjacent enemies.");
+    expect(abilityShort(CAT, "kettle", 1)).toBe("3 sips over 1s to most hurt ally, 50 each.");
+    expect(abilityShort(CAT, "rock", 1)).toBe("Takes 40% less damage for 4s. Enemies hitting it up close take 45.");
+    expect(traitShort(CAT, "ember", 1)).toBe("Ember hits burn, 2% health/s for 4s.");
+    expect(traitShort(CAT, "ember", 2)).toBe("Whole party's hits burn, 4%/s.");
   });
 });
 
 describe("advice for the cards", () => {
   test("a card says a figure's role, where it stands, and its draw", () => {
     for (const id of [...FIGURE_IDS, ...MEMBER_IDS])
-      expect(roleLine(id)).toStartWith(`${ROLES[FIGURES[id].calling]} · ${placeOf(id)}`);
-    expect(roleLine("emberkit")).toBe("Fighter · front row");
-    expect(roleLine("barrowgnome")).toBe("Tank · front row · draws fire");
-    expect(roleLine("worm")).toBe("Assassin · leaps to the enemy back row · avoids fire");
-    expect(roleLine("moth")).toBe("Caster · back row");
-    expect(roleLine("cindernewt")).toBe("Caster · second row");
+      expect(roleLine(CAT, id)).toStartWith(`${ROLES[figureIn(CAT, id).calling]} · ${placeOf(CAT, id)}`);
+    expect(roleLine(CAT, "emberkit")).toBe("Fighter · front row");
+    expect(roleLine(CAT, "barrowgnome")).toBe("Tank · front row · draws fire");
+    expect(roleLine(CAT, "worm")).toBe("Assassin · leaps to the enemy back row · avoids fire");
+    expect(roleLine(CAT, "moth")).toBe("Caster · back row");
+    expect(roleLine(CAT, "cindernewt")).toBe("Caster · second row");
   });
   test("seated where its card says, every figure reaches the enemy's front line", () => {
     const rows = ["front row", "second row", "third row", "back row"];
     const theirFront = Array.from({ length: COLS }, (_, col) => seatCell(1, col));
     for (const id of [...FIGURE_IDS, ...MEMBER_IDS]) {
-      if (FIGURES[id].calling === "sneak") continue;
-      const row = rows.indexOf(placeOf(id));
+      if (figureIn(CAT, id).calling === "sneak") continue;
+      const row = rows.indexOf(placeOf(CAT, id));
       expect(row, id).toBeGreaterThanOrEqual(0);
       for (let col = 0; col < COLS; col++) {
         const from = seatCell(0, row * COLS + col);
         expect(
           Math.min(...theirFront.map((cell) => distance(from, cell))),
           `${id} in column ${col}`,
-        ).toBeLessThanOrEqual(FIGURES[id].range);
+        ).toBeLessThanOrEqual(figureIn(CAT, id).range);
       }
     }
   });

@@ -26,7 +26,7 @@ import {
   RARITY_IDS,
   type Roster,
 } from "./catalog.ts";
-import { FIGURE_IDS, type FigureId, FIGURES, TIERS } from "./figures.ts";
+import { FIGURE_IDS, type FigureId, isFigureId, TIERS } from "./figures.ts";
 import { MEMBER_IDS } from "./members.ts";
 import { type Era, eraAt, eraOf, LAST_ERA, LEGACY_ERA, type ReleaseId, RELEASES } from "./releases.ts";
 
@@ -66,8 +66,9 @@ describe("the catalogue", () => {
       expect(is.order.filter((id) => was.order.includes(id))).toEqual([...was.order]);
       if (was.era >= LEGACY_ERA) expect(is.order.slice(0, was.order.length)).toEqual([...was.order]);
     }
-    expect(abc(everyFigure())).toEqual(abc(Object.keys(FIGURES)));
-    for (const id of everyFigure()) expect(catalogAt(LAST_ERA).figures[id]).toMatchObject(FIGURES[id]);
+    // Every figure stored data may name (`isFigureId`) is in the catalogue with every release open, and nothing else is.
+    expect(abc(everyFigure())).toEqual(abc([...FIGURE_IDS, ...MEMBER_IDS]));
+    expect(everyFigure().every(isFigureId)).toBe(true);
   });
   test("gives each figure the rarity the pulls give it as, and a banner's headliner to whoever pulls it", () => {
     const base = catalogAt(eraOf("base"));
@@ -197,7 +198,7 @@ function madeUp(era: Era): Catalog {
       order.push(id);
     }
   }
-  return { era, figures, order, banners: catalogAt(era).banners };
+  return { ...catalogAt(era), figures, order };
 }
 
 describe("a millisecond before each release, and at it", () => {

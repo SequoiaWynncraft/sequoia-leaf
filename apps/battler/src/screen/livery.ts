@@ -8,6 +8,7 @@ import { rigOf } from "@sequoia-leaf/figures/sprites.ts";
 import { CREAM, GOLD } from "@sequoia-leaf/kit/palette.ts";
 import { lightOf, PALE, type Tone } from "@sequoia-leaf/kit/tones.ts";
 import type { UnitKind } from "@sequoia-leaf/raid";
+import type { Catalog } from "@sequoia-leaf/raid/content/catalog.ts";
 
 import { colourOf } from "./board.ts";
 
@@ -29,10 +30,10 @@ export function liveryFrom(tones: readonly Tone[]): Livery {
 const worn = new WeakMap<object, Livery>();
 
 /** A figure's own colours: a person's from their skin as it is now, anyone else's from their kin. */
-export function liveryOf(kind: UnitKind): Livery {
+export function liveryOf(cat: Catalog, kind: UnitKind): Livery {
   const body = rigOf(kind);
   if (!body) {
-    const col = colourOf(kind);
+    const col = colourOf(cat, kind);
     return { main: [col, col], trim: [col, col], core: [GOLD[1], CREAM], spark: [col, CREAM] };
   }
   let l = worn.get(body);
@@ -44,7 +45,7 @@ export function liveryOf(kind: UnitKind): Livery {
 }
 
 /** A figure's own colours as a list, for sparks: the bright one of each. */
-export const ownOf = (kind: UnitKind): readonly string[] => {
-  const l = liveryOf(kind);
+export const ownOf = (cat: Catalog, kind: UnitKind): readonly string[] => {
+  const l = liveryOf(cat, kind);
   return [l.main[1], l.trim[1], l.core[1], l.spark[1]];
 };

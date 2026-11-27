@@ -1,8 +1,12 @@
 /**
- * Who is on the stump: the twenty-eight carved figures a member can buy at the stall, the forest's
- * trouble and its three bosses, and the few that only ever turn up by being summoned. Words and
- * numbers only; what an ability does on the board is in `fight/abilities.ts`, keyed by the same
- * name as its owner here.
+ * Who is on the stump: the carved figures a member can buy at the stall, the forest's trouble and
+ * its three bosses, and the few that only ever turn up by being summoned. Words and numbers only;
+ * what an ability does on the board is in `fight/abilities.ts`, keyed by the same name as its owner
+ * here.
+ *
+ * The figures here are the twenty-eight the raid opened with and the first banner's member, as the
+ * base release brought them (`releases/base.ts`); later releases bring more and change these in
+ * their patches (`releases/`). A figure is read from a catalogue (`catalog.ts`), as its era has it.
  *
  * Every number is for one star. Two stars multiply health and attack by `STAR[1]`, three by
  * `STAR[2]`; an ability's own numbers are written out for each star. In an ability's sentence,
@@ -12,8 +16,9 @@
  * and `short` is what a card on the table shows: effects and numbers only, in at most two short
  * fragments.
  */
-import { type MemberId, MEMBERS } from "./members.ts";
-import { SEQWAWA } from "./seqwawa.ts";
+import type { Catalog, Figure } from "./catalog.ts";
+import { MEMBER_IDS, type MemberId, MEMBERS } from "./members.ts";
+import { opened } from "./patch.ts";
 import type { CallingId, KinId, TraitId } from "./traits.ts";
 
 /** What health and attack are multiplied by at one, two and three stars. */
@@ -101,7 +106,8 @@ export const FIGURE_IDS = [
 /** A figure a member can field: one of the twenty-eight, or a banner's member (`members.ts`). */
 export type FigureId = (typeof FIGURE_IDS)[number] | MemberId;
 
-export const FIGURES: Record<FigureId, FigureSpec> = {
+/** The figures the base release brought, as it brought them: read only by its patch (`releases/base.ts`). */
+export const BASE_FIGURES: Readonly<Partial<Record<FigureId, FigureSpec>>> = {
   ...MEMBERS,
   // ---------- one acorn ----------
   emberkit: {
@@ -153,7 +159,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     tier: 1,
     kin: "mist",
     calling: "sage",
-    extra: ["graid"],
+    extra: [],
     hp: 210,
     attack: 22,
     speed: 0.7,
@@ -175,7 +181,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     tier: 1,
     kin: "burrow",
     calling: "sneak",
-    extra: ["graid"],
+    extra: [],
     hp: 260,
     attack: 28,
     speed: 0.8,
@@ -487,7 +493,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     tier: 3,
     kin: "burrow",
     calling: "bulwark",
-    extra: ["graid"],
+    extra: [],
     hp: 820,
     attack: 0,
     speed: 0,
@@ -666,7 +672,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
   greg: {
     name: "Greg",
     tier: 5,
-    kin: "graid",
+    kin: "moss",
     calling: "bulwark",
     extra: ["greg"],
     hp: 880,
@@ -689,8 +695,8 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     name: "Orphion",
     tier: 5,
     kin: "mist",
-    calling: "sage",
-    extra: ["graid"],
+    calling: "fang",
+    extra: ["sage"],
     hp: 700,
     attack: 62,
     speed: 0.85,
@@ -729,7 +735,6 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     },
     quip: "Sits on the board. Things fall off.",
   },
-  seqwawa: SEQWAWA,
 };
 
 // ---------- the ones that are only ever summoned ----------
@@ -1032,36 +1037,39 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
 // ---------- everyone ----------
 
 export type UnitKind = FigureId | SummonId | TroubleId;
-const has = <K extends string>(table: Readonly<Record<K, unknown>>, v: unknown): v is K =>
-  typeof v === "string" && Object.hasOwn(table, v);
-export const isFigureId = (v: unknown): v is FigureId => has(FIGURES, v);
-export const isSummonId = (v: unknown): v is SummonId => has(SUMMONS, v);
-export const isTroubleId = (v: unknown): v is TroubleId => has(TROUBLE, v);
-/** The numbers and words for anyone who can stand on the board. */
-const EVERYONE: Record<UnitKind, UnitSpec> = { ...FIGURES, ...SUMMONS, ...TROUBLE };
-export const specOf = (kind: UnitKind): UnitSpec => EVERYONE[kind];
-export const isUnitKind = (v: unknown): v is UnitKind => has(EVERYONE, v);
+const EVERY_FIGURE: ReadonlySet<string> = new Set([...FIGURE_IDS, ...MEMBER_IDS]);
+/** Whether stored data names a figure: one any release has, open or not (`everyFigure`). */
+export const isFigureId = (v: unknown): v is FigureId => typeof v === "string" && EVERY_FIGURE.has(v);
+export const isSummonId = (v: unknown): v is SummonId => typeof v === "string" && Object.hasOwn(SUMMONS, v);
+export const isTroubleId = (v: unknown): v is TroubleId => typeof v === "string" && Object.hasOwn(TROUBLE, v);
+export const isUnitKind = (v: unknown): v is UnitKind => isFigureId(v) || isSummonId(v) || isTroubleId(v);
 export const isBossId = (v: unknown): v is BossId => BOSS_IDS.some((b) => b === v);
 export const isStars = (v: unknown): v is Stars => v === 1 || v === 2 || v === 3;
 
+/** A figure as a catalogue has it. */
+export const figureIn = (cat: Catalog, id: FigureId): Figure => opened(cat.figures, id, cat.era);
+/** The numbers and words for anyone who can stand on the board: a figure as the catalogue has it. */
+export const specOf = (cat: Catalog, kind: UnitKind): UnitSpec =>
+  isFigureId(kind) ? figureIn(cat, kind) : isSummonId(kind) ? SUMMONS[kind] : TROUBLE[kind];
+
 /** A figure's traits: its kin, its calling, and a third if it has one. */
-export const traitsOf = (kind: FigureId): readonly TraitId[] => {
-  const f = FIGURES[kind];
+export const traitsOf = (cat: Catalog, kind: FigureId): readonly TraitId[] => {
+  const f = figureIn(cat, kind);
   return [f.kin, f.calling, ...f.extra];
 };
 /** One of an ability's numbers at a number of stars; 0 if it has no such number. */
-export function abilityNumber(kind: UnitKind, name: string, stars: Stars): number {
-  return specOf(kind).ability?.n[name]?.[stars - 1] ?? 0;
+export function abilityNumber(cat: Catalog, kind: UnitKind, name: string, stars: Stars): number {
+  return specOf(cat, kind).ability?.n[name]?.[stars - 1] ?? 0;
 }
 /** An ability's sentence (`text`) or card words (`short`) at a number of stars, its `{name}` gaps filled with its numbers. */
-function filled(kind: UnitKind, words: "text" | "short", stars: Stars): string {
-  const ability = specOf(kind).ability;
+function filled(cat: Catalog, kind: UnitKind, words: "text" | "short", stars: Stars): string {
+  const ability = specOf(cat, kind).ability;
   return (ability?.[words] ?? "").replaceAll(/\{(\w+)\}/g, (whole: string, key: string) => {
     const v = ability?.n[key]?.[stars - 1];
     return v === undefined ? whole : String(v);
   });
 }
 /** What an ability does at a number of stars, in a sentence. */
-export const abilityText = (kind: UnitKind, stars: Stars): string => filled(kind, "text", stars);
+export const abilityText = (cat: Catalog, kind: UnitKind, stars: Stars): string => filled(cat, kind, "text", stars);
 /** What an ability does at a number of stars, in a few words for a card. */
-export const abilityShort = (kind: UnitKind, stars: Stars): string => filled(kind, "short", stars);
+export const abilityShort = (cat: Catalog, kind: UnitKind, stars: Stars): string => filled(cat, kind, "short", stars);

@@ -8,12 +8,13 @@ import { below, mix, pick, type Stream } from "@sequoia-leaf/core";
  */
 import { act, type PlanningCommand } from "./command.ts";
 import type { BoonId } from "./content/boons.ts";
-import { type FigureId, FIGURES, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
+import { type Catalog, catalogOf } from "./content/catalog.ts";
+import { type FigureId, figureIn, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
 import {
   type ComponentId,
-  EMBLEMS,
-  FINISHED,
+  emblemKin,
   type FinishedId,
+  finishedIn,
   holdItem,
   isComponentId,
   isEmblemId,
@@ -111,27 +112,29 @@ const STAR_WORTH = [1, 1.9, 3.6] as const;
 /** Which of the cheapest it would rather set out with, all else equal: ones that can stand alone. */
 const STARTERS: readonly FigureId[] = ["crab7", "emberkit", "barrowgnome", "worm", "finch", "moth", "mossmote"];
 
-const liking = (habit: Habit, kind: FigureId): number => {
+const liking = (cat: Catalog, habit: Habit, kind: FigureId): number => {
   let most = 0;
-  for (const trait of traitsOf(kind)) most = Math.max(most, habit.taste[trait] ?? 1);
+  for (const trait of traitsOf(cat, kind)) most = Math.max(most, habit.taste[trait] ?? 1);
   return most;
 };
-const worthOf = (habit: Habit, kind: FigureId, stars: Stars): number =>
-  (TIER_WORTH[FIGURES[kind].tier - 1] ?? 1) * (STAR_WORTH[stars - 1] ?? 1) * (0.7 + 0.3 * liking(habit, kind));
+const worthOf = (cat: Catalog, habit: Habit, kind: FigureId, stars: Stars): number =>
+  (TIER_WORTH[figureIn(cat, kind).tier - 1] ?? 1) *
+  (STAR_WORTH[stars - 1] ?? 1) *
+  (0.7 + 0.3 * liking(cat, habit, kind));
 
 /** How good a set of figures is as a party: what each is worth, and something for every trait step switched on. */
-function partyScore(habit: Habit, party: readonly Piece[]): number {
+function partyScore(cat: Catalog, habit: Habit, party: readonly Piece[]): number {
   let score = 0;
-  for (const p of party) score += worthOf(habit, p.kind, p.stars);
-  const counts = countTraits(party);
+  for (const p of party) score += worthOf(cat, habit, p.kind, p.stars);
+  const counts = countTraits(cat, party);
   for (const trait of TRAIT_IDS) {
-    const step = stepFor(trait, counts[trait] ?? 0);
+    const step = stepFor(cat, trait, counts[trait] ?? 0);
     if (step > 0) score += step * 1.1 * (habit.taste[trait] ?? 1);
   }
   return score;
 }
 /** The best party of a size it can find among some figures: one at a time, whoever adds most. */
-function bestParty(habit: Habit, all: readonly Piece[], size: number): Piece[] {
+function bestParty(cat: Catalog, habit: Habit, all: readonly Piece[], size: number): Piece[] {
   const party: Piece[] = [];
   const rest = all.slice();
   while (party.length < size && rest.length > 0) {
@@ -141,7 +144,7 @@ function bestParty(habit: Habit, all: readonly Piece[], size: number): Piece[] {
       const p = rest[i];
       if (!p) continue;
       party.push(p);
-      const score = partyScore(habit, party);
+      const score = partyScore(cat, habit, party);
       party.pop();
       if (score > bestScore) {
         best = i;
@@ -188,15 +191,20 @@ const BOON_LIKES: Record<BoonId, number> = {
 function likesBoon(run: RunView, habit: Habit, boon: BoonId): number {
   let score = BOON_LIKES[boon];
   if (isEmblemId(boon)) {
-    const kin = EMBLEMS[boon];
-    const count = countTraits(run.board.flatMap((p) => (p ? [p] : [])))[kin] ?? 0;
-    if (stepFor(kin, count + 1) > stepFor(kin, count)) score += 5;
+    const kin = emblemKin(catalogOf(run), boon);
+    const count =
+      countTraits(
+        catalogOf(run),
+        run.board.flatMap((p) => (p ? [p] : [])),
+      )[kin] ?? 0;
+    if (stepFor(catalogOf(run), kin, count + 1) > stepFor(catalogOf(run), kin, count)) score += 5;
     score *= habit.taste[kin] ?? 1;
   }
   if (boon === "blanket" && run.resolve <= 12) score += 3;
   if (boon === "deeppockets" && habit.levels === "keen") score += 3;
   if ((boon === "regular" || boon === "widestall") && habit.rustles > 4) score += 3;
-  if (boon === "smallfry") score = run.board.filter((p) => p && FIGURES[p.kind].tier <= 2).length * 1.3;
+  if (boon === "smallfry")
+    score = run.board.filter((p) => p && figureIn(catalogOf(run), p.kind).tier <= 2).length * 1.3;
   return score;
 }
 /**
@@ -205,14 +213,16 @@ function likesBoon(run: RunView, habit: Habit, boon: BoonId): number {
  * above any other (the first card, then).
  */
 function likesRule(run: RunView, rule: RuleId): number {
-  const reach = run.board.flatMap((p) => (p ? [FIGURES[p.kind].range] : []));
+  const reach = run.board.flatMap((p) => (p ? [figureIn(catalogOf(run), p.kind).range] : []));
   const lean = reach.filter((r) => r <= 1).length - reach.filter((r) => r >= 3).length;
   return rule === "fog" ? lean : rule === "long" ? -lean : 0;
 }
 function likesComponent(run: RunView, item: ComponentId): number {
   const own = pieces(run);
   const loose = own.some((p) => p.items.some(isComponentId)) || run.items.some(isComponentId);
-  const casters = own.filter((p) => FIGURES[p.kind].calling === "sage" || FIGURES[p.kind].calling === "mender").length;
+  const casters = own.filter(
+    (p) => figureIn(catalogOf(run), p.kind).calling === "sage" || figureIn(catalogOf(run), p.kind).calling === "mender",
+  ).length;
   const base = item === "glowcap" ? 2 + casters * 0.4 : item === "thorn" || item === "plume" ? 3 : 2.6;
   return base + (loose ? 0.2 : 0);
 }
@@ -228,7 +238,7 @@ function settleChoices<R extends RunView>(run: R, habit: Habit, s: Stream, hands
         let score = 0;
         if (choice.kind === "starter") {
           const kind = choice.options[i];
-          if (kind !== undefined) score = liking(habit, kind) * 10 - STARTERS.indexOf(kind);
+          if (kind !== undefined) score = liking(catalogOf(run), habit, kind) * 10 - STARTERS.indexOf(kind);
         } else if (choice.kind === "boon") {
           const boon = choice.options[i];
           if (boon !== undefined) score = likesBoon(run, habit, boon);
@@ -254,14 +264,14 @@ function wants(run: RunView, habit: Habit, kind: FigureId, before: number): numb
   const cap = fieldCap(run);
   const twins = own.filter((p) => p.kind === kind && p.stars === 1).length;
   const better = own.some((p) => p.kind === kind && p.stars > 1);
-  if (twins >= 2) return 6 + FIGURES[kind].tier * habit.chases;
+  if (twins >= 2) return 6 + figureIn(catalogOf(run), kind).tier * habit.chases;
   const guest: Piece = { id: -1, kind, stars: 1, items: [], fed: 0 };
-  const after = partyScore(habit, bestParty(habit, [...own, guest], cap));
+  const after = partyScore(catalogOf(run), habit, bestParty(catalogOf(run), habit, [...own, guest], cap));
   return after - before + (twins === 1 ? 0.7 * habit.chases : 0) + (better ? 0.4 * habit.chases : 0);
 }
 /** Where a Greg is who can still eat, the board's before the bench's; null for none. */
 function hungryGreg(run: RunView): Spot | null {
-  const most = traitNumber("greg", "most", 1);
+  const most = traitNumber(catalogOf(run), "greg", "most", 1);
   const seat = run.board.findIndex((p) => p?.kind === "greg" && p.fed < most);
   if (seat >= 0) return { on: "board", at: seat };
   const slot = run.bench.findIndex((p) => p?.kind === "greg" && p.fed < most);
@@ -273,13 +283,13 @@ function hungryGreg(run: RunView): Spot | null {
  */
 function sellSpare<R extends RunView>(run: R, habit: Habit, keep: number, hands: Hands<R>): boolean {
   const own = pieces(run);
-  const best = new Set(bestParty(habit, own, fieldCap(run)).map((p) => p.id));
+  const best = new Set(bestParty(catalogOf(run), habit, own, fieldCap(run)).map((p) => p.id));
   let worst = -1;
   let worstScore = Infinity;
   run.bench.forEach((p, slot) => {
     if (!p || best.has(p.id)) return;
     const twins = own.filter((o) => o.kind === p.kind && o.stars === p.stars).length;
-    const score = worthOf(habit, p.kind, p.stars) + (twins > 1 ? 2 * habit.chases : 0);
+    const score = worthOf(catalogOf(run), habit, p.kind, p.stars) + (twins > 1 ? 2 * habit.chases : 0);
     if (score < worstScore) {
       worst = slot;
       worstScore = score;
@@ -298,7 +308,7 @@ function shop<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): void {
     // The offer it wants most, if it can pay for it.
     let best = -1;
     let bestWant = 0;
-    const before = partyScore(habit, bestParty(habit, pieces(run), fieldCap(run)));
+    const before = partyScore(catalogOf(run), habit, bestParty(catalogOf(run), habit, pieces(run), fieldCap(run)));
     run.stall.forEach((kind, i) => {
       if (!kind) return;
       const cost = priceOf(run, i);
@@ -354,12 +364,13 @@ function shopCarelessly<R extends RunView>(run: R, s: Stream, hands: Hands<R>): 
 
 function seatParty<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): void {
   const own = pieces(run);
-  const party = bestParty(habit, own, fieldCap(run));
-  const counts = countTraits(party);
+  const party = bestParty(catalogOf(run), habit, own, fieldCap(run));
+  const counts = countTraits(catalogOf(run), party);
   const closed = closedNow(run);
   const seats = arrange(
-    party.map((p) => ({ kind: p.kind, health: specOf(p.kind).hp * starScale(p.stars) })),
-    stepFor("sneak", counts.sneak ?? 0) > 0,
+    catalogOf(run),
+    party.map((p) => ({ kind: p.kind, health: specOf(catalogOf(run), p.kind).hp * starScale(p.stars) })),
+    stepFor(catalogOf(run), "sneak", counts.sneak ?? 0) > 0,
     closed,
   );
   const want = new Map<number, number>();
@@ -394,13 +405,13 @@ function seatCarelessly<R extends RunView>(run: R, s: Stream, hands: Hands<R>): 
 }
 
 type Suits = "hitter" | "caster" | "wall";
-const suitOf = (item: ComponentId | FinishedId): Suits => {
-  const part: ComponentId = isComponentId(item) ? item : FINISHED[item].made[0];
+const suitOf = (cat: Catalog, item: ComponentId | FinishedId): Suits => {
+  const part: ComponentId = isComponentId(item) ? item : finishedIn(cat, item).made[0];
   return part === "thorn" || part === "plume" ? "hitter" : part === "glowcap" ? "caster" : "wall";
 };
 /** How well a figure suits a kind of item: more is better, 0 is not at all. */
-function fits(p: Piece, suits: Suits): number {
-  const f = FIGURES[p.kind];
+function fits(cat: Catalog, p: Piece, suits: Suits): number {
+  const f = figureIn(cat, p.kind);
   if (suits === "hitter") {
     if (f.attack === 0) return 0;
     return f.calling === "fang" || f.calling === "slinger" || f.calling === "sneak"
@@ -418,14 +429,14 @@ function handOutItems<R extends RunView>(run: R, habit: Habit, hands: Hands<R>):
     const at = run.items.findIndex((item) => !isEmblemId(item));
     const item = run.items[at];
     if (item === undefined || isEmblemId(item)) break;
-    const suits = suitOf(item);
+    const suits = suitOf(catalogOf(run), item);
     let best = -1;
     let bestScore = 0;
     run.board.forEach((p, seat) => {
-      if (!p || "refused" in holdItem(p, item)) return;
+      if (!p || "refused" in holdItem(catalogOf(run), p, item)) return;
       // Somebody already holding a loose component can forge with it now.
       const forges = isComponentId(item) && p.items.some(isComponentId) ? 1.5 : 1;
-      const score = fits(p, suits) * forges * worthOf(habit, p.kind, p.stars);
+      const score = fits(catalogOf(run), p, suits) * forges * worthOf(catalogOf(run), habit, p.kind, p.stars);
       if (score > bestScore) {
         best = seat;
         bestScore = score;
@@ -440,8 +451,8 @@ function handOutItems<R extends RunView>(run: R, habit: Habit, hands: Hands<R>):
     let best = -1;
     let bestScore = 0;
     run.board.forEach((p, seat) => {
-      if (!p || "refused" in holdItem(p, item)) return;
-      const score = worthOf(habit, p.kind, p.stars);
+      if (!p || "refused" in holdItem(catalogOf(run), p, item)) return;
+      const score = worthOf(catalogOf(run), habit, p.kind, p.stars);
       if (score > bestScore) {
         best = seat;
         bestScore = score;

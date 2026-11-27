@@ -3,6 +3,7 @@
  * the plain events a step gives back for a screen to show.
  */
 import type { BoonId } from "../content/boons.ts";
+import type { Catalog } from "../content/catalog.ts";
 import type { Shape, Stars, UnitKind } from "../content/figures.ts";
 import type { ItemId } from "../content/items.ts";
 import type { Era } from "../content/releases.ts";
@@ -209,6 +210,8 @@ export interface Pending {
 
 export interface Fight {
   readonly seed: number;
+  /** The catalogue of its setup's era: every figure's, trait's, item's and boon's numbers, as they were when it was locked. */
+  readonly cat: Catalog;
   /** The random stream. */
   rng: number;
   /** Steps since the fight began. */

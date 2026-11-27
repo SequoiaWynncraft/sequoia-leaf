@@ -10,19 +10,19 @@ import { add, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import {
   abilityShort,
   type BoonId,
-  BOONS,
+  boonIn,
   boonShort,
   type Choice,
   type ComponentId,
-  COMPONENTS,
+  componentIn,
   type FigureId,
-  FIGURES,
+  figureIn,
   itemAdds,
   picksOf,
   pieces,
   roleLine,
   type RunView,
-  TRAITS,
+  traitIn,
   traitsOf,
 } from "@sequoia-leaf/raid";
 
@@ -31,7 +31,7 @@ import { fly } from "../fx.ts";
 import { signal } from "../signals.ts";
 import { snd } from "../sounds.ts";
 import { boardSpot } from "../stage.ts";
-import { ask, S } from "../state.ts";
+import { ask, catalogNow, S } from "../state.ts";
 import { boonRef, figureRef, itemRef, makesLines, pic, rich, traitRef } from "./cards.ts";
 import { bossAhead, ruleCard } from "./rulecards.ts";
 import { wantedBy } from "./suits.ts";
@@ -58,23 +58,23 @@ function art(c: HTMLCanvasElement, ref: string): HTMLElement {
 }
 
 function starterCard(kind: FigureId): HTMLElement[] {
-  const spec = FIGURES[kind];
+  const spec = figureIn(catalogNow(), kind);
   return [
     art(portrait(kind), figureRef(kind)),
     el("b", "k-gold", { text: spec.name }),
-    el("div", "k-dim", { text: roleLine(kind) }),
+    el("div", "k-dim", { text: roleLine(catalogNow(), kind) }),
     el(
       "div",
       "k-wrap",
       {},
-      ...traitsOf(kind).map((t) => {
-        const chip = el("span", "k-chip", {}, pic(traitIcon(t)), TRAITS[t].name);
+      ...traitsOf(catalogNow(), kind).map((t) => {
+        const chip = el("span", "k-chip", {}, pic(traitIcon(t)), traitIn(catalogNow(), t).name);
         link(chip, traitRef(t), { acts: true });
         return chip;
       }),
     ),
     el("b", "", { text: spec.ability?.name ?? "" }),
-    rich(abilityShort(kind, 1)),
+    rich(abilityShort(catalogNow(), kind, 1)),
   ];
 }
 /**
@@ -97,19 +97,19 @@ function componentCard(run: RunView, item: ComponentId): (HTMLElement | null)[] 
   );
   return [
     art(itemIcon(item), itemRef(item)),
-    el("b", "k-gold", { text: COMPONENTS[item].name }),
-    rich(itemAdds(item).join(" · ")),
+    el("b", "k-gold", { text: componentIn(catalogNow(), item).name }),
+    rich(itemAdds(catalogNow(), item).join(" · ")),
     wantedBy(run, item),
     el("div", "makeslist", {}, ...lines),
   ];
 }
 function boonCardParts(boon: BoonId): HTMLElement[] {
-  const spec = BOONS[boon];
+  const spec = boonIn(catalogNow(), boon);
   return [
     art(boonIcon(boon), boonRef(boon)),
     el("b", "k-gold", { text: spec.name }),
     el("div", "k-dim", { text: spec.sort === "charm" ? "A charm" : "A boon" }),
-    rich(boonShort(boon)),
+    rich(boonShort(catalogNow(), boon)),
   ];
 }
 

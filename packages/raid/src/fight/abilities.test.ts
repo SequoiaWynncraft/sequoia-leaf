@@ -6,11 +6,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { abilityNumber, type Stars, type UnitKind } from "../content/figures.ts";
-import { FINISHED, type ItemId, itemStats } from "../content/items.ts";
+import { finishedIn, type ItemId, itemStats } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { cellAt, cone, distance, line, neighbours, rowOf, within } from "../hex.ts";
 import type { Placed } from "../party.ts";
-import { fightOf, inOrder, onCell, only, ready, steps, stepUntil, still, unitOf } from "../testkit.ts";
+import { CAT, fightOf, inOrder, onCell, only, ready, steps, stepUntil, still, unitOf } from "../testkit.ts";
 import { getUp, hurt, HZ, leap as moveTo, targetable } from "./core.ts";
 import { speedNow } from "./engine.ts";
 import { slowNow } from "./moves.ts";
@@ -24,7 +24,7 @@ const TWO = cellAt(3, 2);
 const THREE = cellAt(3, 1);
 const FOUR = cellAt(3, 0);
 
-const n = (kind: UnitKind, name: string, stars: Stars = 1): number => abilityNumber(kind, name, stars);
+const n = (kind: UnitKind, name: string, stars: Stars = 1): number => abilityNumber(CAT, kind, name, stars);
 const STARS: readonly Stars[] = [1, 2, 3];
 /** An ability's number at some ability power, as it lands on a target with no armour or ward. */
 const at = (amount: number, power: number): number => Math.round((amount * power) / 100);
@@ -794,7 +794,7 @@ describe("an ability in flight keeps the strength it was used with", () => {
   // A Fairy Ring makes its holder's ability power grow the moment its ability is used, before
   // anything the ability sent has landed: the use it grew after keeps the strength it had.
   const RING: ItemId[] = ["fairyring"];
-  const GROW = FINISHED.fairyring.n.grow ?? 0;
+  const GROW = finishedIn(CAT, "fairyring").n.grow ?? 0;
   /** The caster's ring went off, and only after that did anything the ability sent arrive. */
   function grewFirst(events: readonly FightEvent[], u: Unit, start: number, arrived: FightEvent["t"]): void {
     const grew = events.findIndex((e) => e.t === "item" && e.id === u.id && e.item === "fairyring");
@@ -807,7 +807,7 @@ describe("an ability in flight keeps the strength it was used with", () => {
     const { f, u } = scene("moth", [TWO, THREE], { items: RING });
     u.target = foeAt(f, TWO).id;
     const start = u.power;
-    expect(start).toBe(100 + itemStats("fairyring").power);
+    expect(start).toBe(100 + itemStats(CAT, "fairyring").power);
     const first = stepUntil(f, (e) => e.t === "hit");
     grewFirst(first, u, start, "hit");
     for (const cell of [TWO, THREE]) {

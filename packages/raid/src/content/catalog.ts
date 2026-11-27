@@ -1,18 +1,37 @@
 /**
- * What exists, when. A catalogue is the raid's figures as they stand at an era (how many releases
- * are open, `releases.ts`): each with the release it came with, who may have it, and what the pulls
- * give it as. `available` is the one door to them: what a stall, a starter pick, a regular, a
- * carousel, a pull, the exchange or the almanac may draw from. There is no list of figures to read
- * but its answers, so what exists cannot be asked without when.
+ * What exists, when. A catalogue is the raid's figures, traits, items and boons as they stand at an
+ * era (how many releases are open, `releases.ts`): the base and every release's patch open by then,
+ * folded in order (`patch.ts`, `releases/`). Each figure carries the release it came with, who may
+ * have it, and what the pulls give it as. There is no table of them to read but a catalogue's, so
+ * what exists, and what its numbers are, cannot be asked without when.
  *
- * A run, a table, a sitting, a fight's setup and the views Leaf sends each carry their era, and
- * `catalogOf` reads the catalogue from it: never from a clock.
+ * `available` is the one door to which figures a draw may draw: a stall, a starter pick, a regular,
+ * a carousel, a pull, the exchange or the almanac. A run, a table, a sitting, a fight's setup and the
+ * views Leaf sends each carry their era, and `catalogOf` reads the catalogue from it: never from a
+ * clock.
  */
 import { type Banner, BANNERS, GROVE, type Look } from "./banners.ts";
-import { type FigureId, FIGURES, type FigureSpec, type Tier } from "./figures.ts";
+import { BOON_IDS, type BoonId, type BoonSpec } from "./boons.ts";
+import { FIGURE_IDS, type FigureId, type FigureSpec, type Tier } from "./figures.ts";
+import {
+  COMPONENT_IDS,
+  type ComponentId,
+  type ComponentSpec,
+  EMBLEM_IDS,
+  type EmblemId,
+  FINISHED_IDS,
+  type FinishedId,
+  type FinishedSpec,
+} from "./items.ts";
+import { MEMBER_IDS } from "./members.ts";
+import { type Arrival, fields, fold, type Patch } from "./patch.ts";
 import { type Era, eraOf, LAST_ERA, pullsEra, type ReleaseId, RELEASES } from "./releases.ts";
+import { BASE } from "./releases/base.ts";
+import { GROOT } from "./releases/groot.ts";
+import { type KinId, TRAIT_IDS, type TraitId, type TraitSpec } from "./traits.ts";
 
 export type { FigureId } from "./figures.ts";
+export type { Era } from "./releases.ts";
 
 /** What a pull gives a prize as, commonest first, named after the guild's ranks. */
 export const RARITY_IDS = ["Leafkin", "Sapling", "Sprite", "Dryad", "Druid", "Treant", "Yggdrasil"] as const;
@@ -32,32 +51,48 @@ export interface Figure extends FigureSpec {
   readonly look: Look;
 }
 
-/**
- * The figures each release brings to everyone, by their rarity as prizes. A release's banners'
- * headliners come with it (`BANNERS`).
- */
-const SHARED: { readonly [R in ReleaseId]: readonly (readonly [Rarity, readonly FigureId[]])[] } = {
-  base: [
-    ["Leafkin", ["emberkit", "mossmote", "moth", "worm", "finch", "crab7", "barrowgnome"]],
-    ["Sapling", ["kettle", "slug", "glorp", "chickaree", "jay", "crab12", "lanterngnome"]],
-    ["Sprite", ["leafling", "cindernewt", "drizzlefrog", "rock", "bushgnome", "crab23"]],
-    ["Dryad", ["badger", "fogowl", "heron"]],
-    ["Druid", ["crab40", "apothecary"]],
-    ["Treant", ["greg", "whitefox", "hearthcat"]],
-  ],
-  // The expansion's first: Seqwawa (`seqwawa.ts`), on everyone's stall at once, and in the pulls with the next release.
-  groot: [["Treant", ["seqwawa"]]],
-  "groot-night": [],
-  "penguin-month": [],
-  "up-the-tree": [],
-};
+/** Every release's patch, in the order the releases open. A release with nothing in it yet has none. */
+const PATCHES: readonly Patch[] = [BASE, GROOT];
 
+/** Every figure any release may bring, in the order a release's arrivals are drawn in. */
+const ALL_FIGURES: readonly FigureId[] = [...FIGURE_IDS, ...MEMBER_IDS];
 /**
  * The order draws were made in when eras came in. Every figure after these comes in the order its
  * release brings it, after all of them, so the order only grows at its end and a draw never
  * changes because a list was reordered.
  */
-const DRAWN: readonly FigureId[] = [...SHARED.base.flatMap(([, ids]) => ids), "seqwawa", "banner-1"];
+const DRAWN: readonly FigureId[] = [
+  "emberkit",
+  "mossmote",
+  "moth",
+  "worm",
+  "finch",
+  "crab7",
+  "barrowgnome",
+  "kettle",
+  "slug",
+  "glorp",
+  "chickaree",
+  "jay",
+  "crab12",
+  "lanterngnome",
+  "leafling",
+  "cindernewt",
+  "drizzlefrog",
+  "rock",
+  "bushgnome",
+  "crab23",
+  "badger",
+  "fogowl",
+  "heron",
+  "crab40",
+  "apothecary",
+  "greg",
+  "whitefox",
+  "hearthcat",
+  "seqwawa",
+  "banner-1",
+] as const satisfies readonly FigureId[];
 
 export interface Catalog {
   readonly era: Era;
@@ -65,30 +100,74 @@ export interface Catalog {
   readonly figures: Readonly<Partial<Record<FigureId, Figure>>>;
   /** The order draws are made in: only ever added to at its end (`DRAWN`). */
   readonly order: readonly FigureId[];
+  readonly traits: Readonly<Partial<Record<TraitId, TraitSpec>>>;
+  readonly components: Readonly<Partial<Record<ComponentId, ComponentSpec>>>;
+  readonly finished: Readonly<Partial<Record<FinishedId, FinishedSpec>>>;
+  /** The kin each emblem makes its holder. */
+  readonly emblems: Readonly<Partial<Record<EmblemId, KinId>>>;
+  readonly boons: Readonly<Partial<Record<BoonId, BoonSpec>>>;
   /** The banners whose release is open. */
   readonly banners: readonly Banner[];
 }
 
-function build(era: Era): Catalog {
-  const figures: Partial<Record<FigureId, Figure>> = {};
+/**
+ * Who may have a figure a release brings, and how it is drawn: everyone, by the set; or whoever
+ * pulled it, as its banner says, if a banner that release opens has it as its headliner.
+ */
+function whoseOf(id: FigureId, since: ReleaseId): { readonly access: Access; readonly look: Look } {
+  const banner = BANNERS.find((b) => b.headliner === id);
+  if (!banner) return { access: "shared", look: "set" };
+  if (banner.opens !== since) throw new Error(`${banner.id}'s headliner comes with ${since}, not with its banner`);
+  return { access: { headliner: banner.id }, look: banner.look };
+}
+
+/**
+ * The catalogue of every era, from the base and the patches given (each release's, in the order
+ * the releases open): one era's catalogue is the one before it with that release's patch folded in.
+ */
+export function catalogsOf(patches: readonly Patch[]): readonly Catalog[] {
+  const out: Catalog[] = [];
+  let arrived: Partial<Record<FigureId, Arrival>> = {};
+  const since: Partial<Record<FigureId, ReleaseId>> = {};
   const came: FigureId[] = [];
   const banners: Banner[] = [];
-  for (const { id: since } of RELEASES.slice(0, era)) {
-    const arrive = (id: FigureId, access: Access, prize: Rarity, look: Look): void => {
-      figures[id] = { ...FIGURES[id], since, access, prize, look };
+  let was: Omit<Catalog, "era" | "figures" | "order" | "banners"> = {
+    traits: {},
+    components: {},
+    finished: {},
+    emblems: {},
+    boons: {},
+  };
+  for (const { id: release } of RELEASES) {
+    const found = patches.filter((p) => p.release === release);
+    if (found.length > 1) throw new Error(`${release} has ${found.length} patches`);
+    const patch = found[0];
+    const before = arrived;
+    arrived = fold(ALL_FIGURES, before, patch?.figures, fields);
+    for (const id of ALL_FIGURES.filter((f) => arrived[f] && !before[f])) {
+      since[id] = release;
       came.push(id);
-    };
-    for (const [prize, ids] of SHARED[since]) for (const id of ids) arrive(id, "shared", prize, "set");
-    for (const banner of BANNERS.filter((b) => b.opens === since)) {
-      banners.push(banner);
-      arrive(banner.headliner, { headliner: banner.id }, "Yggdrasil", banner.look);
     }
+    was = {
+      traits: fold(TRAIT_IDS, was.traits, patch?.traits, fields),
+      components: fold(COMPONENT_IDS, was.components, patch?.components, fields),
+      finished: fold(FINISHED_IDS, was.finished, patch?.finished, fields),
+      emblems: fold(EMBLEM_IDS, was.emblems, patch?.emblems, (_, kin) => kin),
+      boons: fold(BOON_IDS, was.boons, patch?.boons, fields),
+    };
+    const figures: Partial<Record<FigureId, Figure>> = {};
+    for (const id of came) {
+      const [f, from] = [arrived[id], since[id]];
+      if (f && from) figures[id] = { ...f, since: from, ...whoseOf(id, from) };
+    }
+    const order = [...DRAWN.filter((id) => figures[id]), ...came.filter((id) => !DRAWN.includes(id))];
+    banners.push(...BANNERS.filter((b) => b.opens === release));
+    out.push({ era: eraOf(release), figures, order, ...was, banners: [...banners] });
   }
-  const order = [...DRAWN.filter((id) => figures[id]), ...came.filter((id) => !DRAWN.includes(id))];
-  return { era, figures, order, banners };
+  return out;
 }
 /** One catalogue an era, made once. */
-const CATALOGS: readonly Catalog[] = RELEASES.map(({ id }) => build(eraOf(id)));
+const CATALOGS: readonly Catalog[] = catalogsOf(PATCHES);
 
 /** The catalogue of an era. */
 export function catalogAt(era: Era): Catalog {

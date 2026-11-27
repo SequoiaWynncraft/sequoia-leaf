@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { BOSS_IDS, type BossId, FIGURES } from "./content/figures.ts";
+import { BOSS_IDS, type BossId, figureIn } from "./content/figures.ts";
 import { FINISHED_IDS } from "./content/items.ts";
 import { PAYOUT } from "./content/keepsakes.ts";
 import { LEGACY_ERA } from "./content/releases.ts";
@@ -8,7 +8,7 @@ import { ROOM_COUNT, TRAILS } from "./content/rooms.ts";
 import { TRAIT_IDS } from "./content/traits.ts";
 import { type Almanac, newAlmanac, payout, readAlmanac, recordRun, trailCleared, trailOpen } from "./outside.ts";
 import { type RunSummary, startRun } from "./run.ts";
-import { EVERYONES } from "./testkit.ts";
+import { CAT, EVERYONES } from "./testkit.ts";
 
 const summary = (more: Partial<RunSummary> = {}): RunSummary => ({
   trail: 0,
@@ -155,7 +155,9 @@ describe("the open table", () => {
     expect(loadAlmanac(saveAlmanac(fresh))).toEqual(fresh);
     // A run takes nothing from the almanac: the same seed is the same run, stall and all, for both.
     expect(startRun(6, { era: LEGACY_ERA })).toEqual(startRun(6, { era: LEGACY_ERA }));
-    expect(startRun(6, { era: LEGACY_ERA }).stall.every((id) => id === null || FIGURES[id] !== undefined)).toBe(true);
+    expect(startRun(6, { era: LEGACY_ERA }).stall.every((id) => id === null || figureIn(CAT, id) !== undefined)).toBe(
+      true,
+    );
   });
   test("a run never opens anything", () => {
     const everything = recordRun(newAlmanac(), { ...WON, topped: ["mender"] });

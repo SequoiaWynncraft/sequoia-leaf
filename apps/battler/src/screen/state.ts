@@ -25,6 +25,8 @@
 import { makeHold, openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/kit/play.ts";
 import {
   type Almanac,
+  type Catalog,
+  catalogOf,
   type Era,
   isRunCommand,
   LEGACY_ERA,
@@ -85,6 +87,14 @@ export const S: {
   prefs: newPrefs(),
   screen: { at: "front" },
 };
+
+/**
+ * The catalogue the page reads a figure's, trait's, item's or boon's words by when it has no run or
+ * fight in hand: the newest era Leaf has said, its view's or the run on the table's. Eras only add,
+ * so whatever the page shows (the almanac's figures, what a run drew) is open in it. Never the
+ * page's own clock.
+ */
+export const catalogNow = (): Catalog => catalogOf(S.run && S.run.era > S.era ? S.run : S);
 
 /** What a command did: its notes, or the sentence it was turned down with. */
 export type Did = { ok: true; notes: RaidNote[] } | { ok: false; why: string };

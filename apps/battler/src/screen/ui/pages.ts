@@ -17,8 +17,8 @@ import {
   type EndlessWay,
   FIGHT,
   type FigureId,
-  FINISHED,
   FINISHED_IDS,
+  finishedIn,
   isMemberId,
   itemName,
   LOOK_KINDS,
@@ -34,7 +34,7 @@ import {
   trailOpen,
   TRAILS,
   TRAIT_IDS,
-  TRAITS,
+  traitIn,
   tryOn,
   wornOf,
 } from "@sequoia-leaf/raid";
@@ -42,7 +42,7 @@ import {
 import { glyph, itemIcon, traitIcon } from "../art/icons.ts";
 import { paintLook } from "../art/place.ts";
 import { snd } from "../sounds.ts";
-import { ask, pagesKey, S, type Slot } from "../state.ts";
+import { ask, catalogNow, pagesKey, S, type Slot } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
 import { summary } from "./ended.ts";
 import { frontAway, frontBody } from "./front.ts";
@@ -132,7 +132,7 @@ function figureTile(id: FigureId): HTMLElement {
     `k-card tile${met ? "" : " unmet"}`,
     { type: "button", "aria-label": met ? null : "Not met" },
     pic(portrait(id, { dark: !met }), 2),
-    met ? el("span", "k-s", { text: nameOf(id) }) : null,
+    met ? el("span", "k-s", { text: nameOf(catalogNow(), id) }) : null,
     starred ? pic(starsPic(3), 1, "badge") : null,
     pulledTag(id),
   );
@@ -185,8 +185,8 @@ function almanac(): HTMLElement {
           "div",
           "k-col k-grow tight",
           {},
-          el("b", "", { text: TRAITS[id].name }),
-          el("span", "k-d", { text: TRAITS[id].gist }),
+          el("b", "", { text: traitIn(catalogNow(), id).name }),
+          el("span", "k-d", { text: traitIn(catalogNow(), id).gist }),
         ),
         a.topped.includes(id) ? icon("check") : null,
       );
@@ -203,7 +203,7 @@ function almanac(): HTMLElement {
         "k-card tile",
         { type: "button" },
         pic(itemIcon(id), 2),
-        el("span", "k-s", { text: itemName(id) }),
+        el("span", "k-s", { text: itemName(catalogNow(), id) }),
       );
       link(tile, `item:${id}/lore`);
       comps.append(tile);
@@ -211,13 +211,13 @@ function almanac(): HTMLElement {
     const made = el("div", "tiles small", {});
     for (const id of FINISHED_IDS) {
       const have = a.forged.includes(id);
-      const [x, y] = FINISHED[id].made;
+      const [x, y] = finishedIn(catalogNow(), id).made;
       const tile = el(
         "button",
         `k-card tile${have ? "" : " unmet"}`,
         { type: "button", "aria-label": have ? null : "Not made" },
         have ? pic(itemIcon(id), 2) : el("span", "pair", {}, pic(itemIcon(x)), pic(itemIcon(y))),
-        have ? el("span", "k-s", { text: itemName(id) }) : null,
+        have ? el("span", "k-s", { text: itemName(catalogNow(), id) }) : null,
       );
       link(tile, `item:${id}/lore`);
       made.append(tile);
@@ -255,7 +255,7 @@ function almanac(): HTMLElement {
                 el(
                   "div",
                   "who",
-                  { title: beaten.includes(boss) ? specOf(boss).name : "" },
+                  { title: beaten.includes(boss) ? specOf(catalogNow(), boss).name : "" },
                   pic(portrait(boss, { dark: !beaten.includes(boss) })),
                 ),
               ),

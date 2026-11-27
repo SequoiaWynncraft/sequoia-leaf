@@ -5,7 +5,8 @@
  * are going to leap anyway wait at the back corners. Seqwawa, who never attacks, has the reach of
  * the back row, and stays there.
  */
-import { type FigureId, FIGURES } from "./content/figures.ts";
+import type { Catalog } from "./content/catalog.ts";
+import { type FigureId, figureIn } from "./content/figures.ts";
 import { COLS, HOME_ROWS, standRow } from "./hex.ts";
 
 /** Columns from the middle out. */
@@ -25,7 +26,12 @@ export interface Standing {
  * the fight starts; if not, they line up with the other close fighters. Nobody sits on a seat a
  * room closes (`closed`, `room.ts`).
  */
-export function arrange(party: readonly Standing[], leaping: boolean, closed: ReadonlySet<number> = NONE): number[] {
+export function arrange(
+  cat: Catalog,
+  party: readonly Standing[],
+  leaping: boolean,
+  closed: ReadonlySet<number> = NONE,
+): number[] {
   const seats = party.map(() => -1);
   const taken = new Set<number>();
   const sit = (who: number, row: number, cols: readonly number[]): boolean => {
@@ -43,7 +49,7 @@ export function arrange(party: readonly Standing[], leaping: boolean, closed: Re
     for (const row of rows) if (sit(who, row, cols)) return;
     for (let row = 0; row < HOME_ROWS; row++) if (sit(who, row, cols)) return;
   };
-  const spec = (i: number) => FIGURES[party[i]?.kind ?? "rock"];
+  const spec = (i: number) => figureIn(cat, party[i]?.kind ?? "rock");
   const health = (i: number): number => party[i]?.health ?? 0;
   const everyone = party.map((_, i) => i);
   const isSneak = (i: number): boolean => leaping && spec(i).calling === "sneak";

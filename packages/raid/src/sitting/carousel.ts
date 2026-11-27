@@ -34,7 +34,7 @@ export function join(run: Run, kind: FigureId, item: ComponentId): Note[] {
   if (fielded(run) === 0) run.board[Math.floor(COLS / 2)] = piece;
   else if (slot >= 0) run.bench[slot] = piece;
   else if (twins < 2) {
-    run.acorns += sellValue(piece);
+    run.acorns += sellValue(catalogOf(run), piece);
     run.items.push(item);
     return [];
   }

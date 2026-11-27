@@ -1,6 +1,6 @@
 /**
  * The banners' members: for each pull banner, a figure of the raid that is a guild member. It is
- * written like any figure (`figures.ts` puts these among `FIGURES`). Its rules are made for the
+ * written like any figure (`figures.ts` puts these among the base's figures). Its rules are made for the
  * member the banner is about (the first banner's is gaz, whose line its ability is named after),
  * but the name and the picture are not kept here: who a banner's member is comes from Leaf, and
  * the page gives the figure their name and their picture.

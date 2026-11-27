@@ -4,10 +4,11 @@
  * made of these, and each one writes down what it did as an event.
  */
 import { boonNumber } from "../content/boons.ts";
+import type { Catalog } from "../content/catalog.ts";
 import { abilityNumber, isFigureId, specOf, traitsOf, type UnitKind } from "../content/figures.ts";
-import { FINISHED, isFinishedId, type ItemId } from "../content/items.ts";
+import { finishedNumber, isFinishedId, type ItemId } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
-import { traitDraw, traitNumber, TRAITS } from "../content/traits.ts";
+import { traitDraw, traitNumber } from "../content/traits.ts";
 import { distance, line, mirror, neighboursFor, type Side, within } from "../hex.ts";
 import { emit, FOREVER, secs } from "./clock.ts";
 import { freeNear, getUp, graidFalls, summon } from "./enter.ts";
@@ -46,10 +47,10 @@ export function alliesOf(f: Fight, side: Side): Unit[] {
  * A figure's draw: what its callings and the items it holds add up to, kept between the fight's
  * least and most. The forest's own carry no calling, so theirs is 0.
  */
-export function drawOf(kind: UnitKind, items: readonly ItemId[]): number {
+export function drawOf(cat: Catalog, kind: UnitKind, items: readonly ItemId[]): number {
   let draw = 0;
-  if (isFigureId(kind)) for (const t of traitsOf(kind)) draw += traitDraw(t);
-  for (const item of items) if (isFinishedId(item)) draw += FINISHED[item].n.draw ?? 0;
+  if (isFigureId(kind)) for (const t of traitsOf(cat, kind)) draw += traitDraw(t);
+  for (const item of items) if (isFinishedId(item)) draw += finishedNumber(cat, item, "draw");
   return Math.min(FIGHT.drawMost, Math.max(FIGHT.drawLeast, draw));
 }
 /** The enemy nearest a figure, whatever its draw; ties go to the hex that comes first for its side. */
@@ -189,16 +190,18 @@ export function slow(f: Fight, target: Unit, percent: number, seconds: number, b
   target.slowUntil = Math.max(target.slowUntil, f.tick + ticks);
   emit(f, { t: "status", id: target.id, status: "slow", on: true, ticks, amount: target.slowBy, by: by?.id ?? -1 });
 }
-const BURN_FOR = secs(TRAITS.ember.n.lasts[0]);
-const BURN_DAMP = TRAITS.ember.n.damp[0];
-/** Sets something alight: a share of its health every second, and weaker healing meanwhile. Burning again keeps the hotter fire. */
+/**
+ * Sets something alight: a share of its health every second, and weaker healing meanwhile, for as
+ * long as Ember's first step says. Burning again keeps the hotter fire.
+ */
 export function burn(f: Fight, target: Unit, percent: number, by: Unit | null): void {
   if (!targetable(f, target) || percent <= 0) return;
+  const burnFor = secs(traitNumber(f.cat, "ember", "lasts", 1));
   const running = target.burnUntil > f.tick;
   const hotter = !running || percent > target.burnBy;
   target.burnBy = running ? Math.max(target.burnBy, percent) : percent;
-  target.burnUntil = f.tick + BURN_FOR;
-  target.burnDamp = BURN_DAMP;
+  target.burnUntil = f.tick + burnFor;
+  target.burnDamp = traitNumber(f.cat, "ember", "damp", 1);
   if (by) target.burnFrom = by.id;
   if (hotter) {
     emit(f, {
@@ -206,7 +209,7 @@ export function burn(f: Fight, target: Unit, percent: number, by: Unit | null): 
       id: target.id,
       status: "burn",
       on: true,
-      ticks: BURN_FOR,
+      ticks: burnFor,
       amount: target.burnBy,
       by: by?.id ?? -1,
     });
@@ -272,10 +275,10 @@ export function heal(f: Fight, target: Unit, raw: number, source: HealSource, by
  */
 function overflow(f: Fight, target: Unit, extra: number, by: Unit): void {
   const step = f.traits[by.side].mender ?? 0;
-  const room = Math.floor((target.maxHp * traitNumber("mender", "over", step)) / 100 - target.shield);
+  const room = Math.floor((target.maxHp * traitNumber(f.cat, "mender", "over", step)) / 100 - target.shield);
   // The healer's shield: theirs to count, already as strong as Mender makes it.
   if (Math.min(extra, room) >= 1)
-    shieldOn(f, target, Math.round(Math.min(extra, room)), traitNumber("mender", "lasts", step), by);
+    shieldOn(f, target, Math.round(Math.min(extra, room)), traitNumber(f.cat, "mender", "lasts", step), by);
 }
 /** Puts a shield up, or adds to the one there. `seconds` of 0 lasts until it is broken. */
 export function shieldUp(f: Fight, target: Unit, raw: number, seconds: number, by: Unit | null): number {
@@ -373,7 +376,7 @@ function answer(f: Fight, u: Unit): void {
   if (u.kind === "bigcrab" && !u.called && u.hp * 2 < u.maxHp) {
     // The big crab calls the roll.
     u.called = true;
-    const crabs = abilityNumber("bigcrab", "crabs", u.stars);
+    const crabs = abilityNumber(f.cat, "bigcrab", "crabs", u.stars);
     for (let i = 0; i < crabs; i++) summon(f, "uncounted", 2, u.side, freeNear(f, u.cell), u);
   }
 }
@@ -382,7 +385,7 @@ function fall(f: Fight, u: Unit, by: Unit | null): void {
   if (f.wind[u.side] && !u.summoned) {
     // Second Wind: the first to fall gets back up, with whatever was on it shaken off.
     f.wind[u.side] = false;
-    getUp(f, u, (u.maxHp * boonNumber("secondwind", "health")) / 100, "wind");
+    getUp(f, u, (u.maxHp * boonNumber(f.cat, "secondwind", "health")) / 100, "wind");
     return;
   }
   // A Graid figure with its getting back up to come is down for a moment, and still counts as standing.
@@ -400,13 +403,13 @@ function fall(f: Fight, u: Unit, by: Unit | null): void {
   emit(f, { t: "fall", id: u.id, by: by?.id ?? -1, cell: u.cell, ...(back > 0 && { back }) });
   if (u.kind === "toadstool") {
     // It puffs as it goes: said as an ability, so that a screen can show the spores spreading.
-    const spores = powered(u, abilityNumber("toadstool", "damage", u.stars));
+    const spores = powered(u, abilityNumber(f.cat, "toadstool", "damage", u.stars));
     const caught = foesWithin(f, u.side, u.cell, 2);
     emit(f, {
       t: "cast",
       id: u.id,
       kind: u.kind,
-      name: specOf(u.kind).ability?.name ?? "",
+      name: specOf(f.cat, u.kind).ability?.name ?? "",
       shape: "ring",
       cells: [u.cell, ...within(u.cell, 2)],
       targets: caught.map((o) => o.id),

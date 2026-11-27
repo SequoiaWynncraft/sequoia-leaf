@@ -15,6 +15,7 @@
 import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
 import { balance } from "@sequoia-leaf/kit/purse.ts";
 import {
+  catalogAt,
   type EndlessWay,
   HZ,
   isBossId,
@@ -398,7 +399,7 @@ export function openHandle(): void {
       const seated = (kinds: string[]) => {
         const used = new Map<number, number>();
         return kinds.filter(isUnitKind).map((kind) => {
-          const range = specOf(kind).range;
+          const range = specOf(catalogAt(LAST_ERA), kind).range;
           const row = range <= 1 ? 0 : range === 2 ? 1 : 3;
           const col = used.get(row) ?? 0;
           used.set(row, col + 1);

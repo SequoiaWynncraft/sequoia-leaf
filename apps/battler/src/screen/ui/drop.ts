@@ -15,7 +15,7 @@ import type { Marks, Seen } from "../gesture.ts";
 import { type Drop, dropOf, wanters } from "../making.ts";
 import { snd } from "../sounds.ts";
 import { boardSpot } from "../stage.ts";
-import { doNow, S } from "../state.ts";
+import { catalogNow, doNow, S } from "../state.ts";
 import { itemDesc } from "./cards.ts";
 import { dropOfId, itemOfRef } from "./refs.ts";
 
@@ -31,7 +31,7 @@ export const rackSlot = (at: number): HTMLElement | null =>
 function tipOf(drop: Drop, done: () => void): Description {
   if (drop.does === "nothing")
     return {
-      name: itemName(drop.item),
+      name: itemName(catalogNow(), drop.item),
       icon: itemIcon(drop.item),
       blocks: [{ body: el("span", "k-coral", { text: drop.why }) }],
     };

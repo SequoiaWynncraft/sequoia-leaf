@@ -7,7 +7,8 @@
 import type { BaseLook } from "@sequoia-leaf/figures/sprites.ts";
 import { GREEN } from "@sequoia-leaf/kit/palette.ts";
 import type { Fight, FightEvent, TraitId } from "@sequoia-leaf/raid";
-import { FIGURES, isFigureId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
+import type { Catalog } from "@sequoia-leaf/raid/content/catalog.ts";
+import { figureIn, isFigureId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { mirror, type Side } from "@sequoia-leaf/raid/hex.ts";
 
 import { TRAIT_COLOUR } from "./art/pal.ts";
@@ -88,7 +89,8 @@ export const feetAt = (cell: number): Pt => {
   return { x: p.x, y: p.y + FOOT };
 };
 /** The colour an ability is drawn in: its owner's kin, or moss green for the forest's own. */
-export const colourOf = (kind: UnitKind): string => (isFigureId(kind) ? TRAIT_COLOUR[FIGURES[kind].kin] : GREEN[3]);
+export const colourOf = (cat: Catalog, kind: UnitKind): string =>
+  isFigureId(kind) ? TRAIT_COLOUR[figureIn(cat, kind).kin] : GREEN[3];
 
 /** Sends a figure from where it is drawn to a spot, over `ticks` steps from `t0`, in an arc; `under` goes under the board on the way. */
 export function travel(a: Actor, to: Pt, t0: number, ticks: number, arc: number, under = false): void {

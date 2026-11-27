@@ -11,8 +11,9 @@ import { chance, mix } from "@sequoia-leaf/core";
  * worth using, else attacks whoever it is after if they are in reach, else walks a hex toward them).
  */
 import { boonNumber } from "../content/boons.ts";
-import { abilityNumber, FIGURES, isFigureId, specOf, type Stars, starScale } from "../content/figures.ts";
-import { carries, FINISHED, type FinishedId, type ItemId, itemStats } from "../content/items.ts";
+import { catalogOf } from "../content/catalog.ts";
+import { abilityNumber, figureIn, isFigureId, specOf, type Stars, starScale } from "../content/figures.ts";
+import { carries, type FinishedId, finishedNumber, type ItemId, itemStats } from "../content/items.ts";
 import { FIGHT, levelBoost } from "../content/rooms.ts";
 import { traitNumber } from "../content/traits.ts";
 import { backRow, cellAt, colOf, distance, HOME_ROWS, seatCell, type Side, stepToward } from "../hex.ts";
@@ -46,11 +47,9 @@ import type { Fight, FightEvent, FightResult, FightSetup, FightSummary, Pending,
 
 // ---------- sitting down ----------
 
-/** One of a finished item's numbers. */
-const itemNumber = (id: FinishedId, name: string): number => FINISHED[id].n[name] ?? 0;
-
 /** What an item does besides its stats, as numbers on whoever holds it. */
-function equip(u: Unit, item: ItemId): void {
+function equip(f: Fight, u: Unit, item: ItemId): void {
+  const itemNumber = (id: FinishedId, name: string): number => finishedNumber(f.cat, id, name);
   switch (item) {
     case "blackthorn":
       u.pierce = itemNumber(item, "pierce");
@@ -121,7 +120,7 @@ function equip(u: Unit, item: ItemId): void {
 
 /** Puts one of a party's figures on its hex, with its stars, its level, its items and its party's boons counted in. */
 function seat(f: Fight, side: Side, p: Placed, party: Party): Unit {
-  const spec = specOf(p.kind);
+  const spec = specOf(f.cat, p.kind);
   const might = party.might / 100;
   let health = 0;
   let attack = 0;
@@ -130,7 +129,7 @@ function seat(f: Fight, side: Side, p: Placed, party: Party): Unit {
   let armour = 0;
   let ward = 0;
   for (const item of p.items) {
-    const s = itemStats(item);
+    const s = itemStats(f.cat, item);
     health += s.health;
     attack += s.attack;
     speed += s.speed;
@@ -139,10 +138,10 @@ function seat(f: Fight, side: Side, p: Placed, party: Party): Unit {
     ward += s.ward;
   }
   // What Greg has eaten: percent of his health, for good.
-  if (p.kind === "greg") health += Math.min(p.fed, traitNumber("greg", "most", 1));
-  if (party.boons.includes("smallfry") && isFigureId(p.kind) && FIGURES[p.kind].tier <= 2) {
-    health += boonNumber("smallfry", "boost");
-    attack += boonNumber("smallfry", "boost");
+  if (p.kind === "greg") health += Math.min(p.fed, traitNumber(f.cat, "greg", "most", 1));
+  if (party.boons.includes("smallfry") && isFigureId(p.kind) && figureIn(f.cat, p.kind).tier <= 2) {
+    health += boonNumber(f.cat, "smallfry", "boost");
+    attack += boonNumber(f.cat, "smallfry", "boost");
   }
   const star = starScale(p.stars) * (1 + levelBoost(p.level ?? 0) / 100);
   const u = enter(f, {
@@ -163,13 +162,13 @@ function seat(f: Fight, side: Side, p: Placed, party: Party): Unit {
   });
   u.armour += armour;
   u.ward += ward;
-  u.draw = drawOf(p.kind, p.items);
-  for (const item of p.items) equip(u, item);
-  if (party.boons.includes("headstart")) gainMana(u, boonNumber("headstart", "mana"));
+  u.draw = drawOf(f.cat, p.kind, p.items);
+  for (const item of p.items) equip(f, u, item);
+  if (party.boons.includes("headstart")) gainMana(u, boonNumber(f.cat, "headstart", "mana"));
   if (party.boons.includes("formation")) {
     const row = Math.floor(p.seat / 7);
-    if (row === 0) u.armour += boonNumber("formation", "armour");
-    if (row === HOME_ROWS - 1) u.speed *= 1 + boonNumber("formation", "speed") / 100;
+    if (row === 0) u.armour += boonNumber(f.cat, "formation", "armour");
+    if (row === HOME_ROWS - 1) u.speed *= 1 + boonNumber(f.cat, "formation", "speed") / 100;
   }
   return u;
 }
@@ -181,12 +180,14 @@ function seat(f: Fight, side: Side, p: Placed, party: Party): Unit {
 function rollCall(f: Fight, side: Side): void {
   const step = f.traits[side].crab ?? 0;
   if (step <= 0) return;
-  const crabs = f.units.filter((u) => u.side === side && carries(u.kind, u.items, "crab"));
+  const crabs = f.units.filter((u) => u.side === side && carries(f.cat, u.kind, u.items, "crab"));
   const anchor = crabs[0] ?? f.units.find((u) => u.side === side);
   if (!anchor) return;
   const stars = crabs.reduce<Stars>((most, u) => (u.stars > most ? u.stars : most), 1);
-  if (traitNumber("crab", "big", step) > 0) summon(f, "biguncounted", stars, side, freeNear(f, anchor.cell, 4), null);
-  if (traitNumber("crab", "small", step) > 0) summon(f, "uncounted", stars, side, freeNear(f, anchor.cell, 4), null);
+  if (traitNumber(f.cat, "crab", "big", step) > 0)
+    summon(f, "biguncounted", stars, side, freeNear(f, anchor.cell, 4), null);
+  if (traitNumber(f.cat, "crab", "small", step) > 0)
+    summon(f, "uncounted", stars, side, freeNear(f, anchor.cell, 4), null);
 }
 
 /** Sneaks with their trait on, and magpies always, start by getting round the back. */
@@ -208,6 +209,7 @@ export function openFight(setup: FightSetup): Fight {
   const opening: FightEvent[] = [];
   const f: Fight = {
     seed,
+    cat: catalogOf(setup),
     rng: mix(seed, 0x51ed),
     tick: 0,
     units: [],
@@ -242,7 +244,7 @@ export function openFight(setup: FightSetup): Fight {
   ruleSeated(f, setup);
   for (const u of f.units) {
     if (u.kind === "crab" || u.kind === "bigcrab") {
-      shieldUp(f, u, powered(u, abilityNumber(u.kind, "shell", u.stars)), 0, null);
+      shieldUp(f, u, powered(u, abilityNumber(f.cat, u.kind, "shell", u.stars)), 0, null);
     }
   }
   for (const side of order) rollCall(f, side);

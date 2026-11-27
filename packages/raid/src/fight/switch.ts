@@ -112,15 +112,15 @@ const ON: Readonly<Record<TraitId, On>> = {
 
 /** Switches a side's traits on, in the order of `TRAIT_IDS`, and says so. */
 export function switchOn(f: Fight, side: Side, party: Party): void {
-  const steps = traitSteps(party);
+  const steps = traitSteps(f.cat, party);
   f.traits[side] = steps;
   const mine = f.units.filter((u) => u.side === side);
   for (const trait of TRAIT_IDS) {
     const step = steps[trait] ?? 0;
     if (step <= 0) continue;
     // Whoever carries it: as one of its own traits, or by an emblem it holds.
-    const members = mine.filter((u) => carries(u.kind, u.items, trait));
-    const touched = ON[trait]({ mine, members, v: (name) => traitNumber(trait, name, step) });
+    const members = mine.filter((u) => carries(f.cat, u.kind, u.items, trait));
+    const touched = ON[trait]({ mine, members, v: (name) => traitNumber(f.cat, trait, name, step) });
     emit(f, { t: "trait", side, trait, step, ids: touched.map((u) => u.id) });
   }
 }

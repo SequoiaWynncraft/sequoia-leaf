@@ -14,7 +14,7 @@ import { type BaseLook, beatAt, drawStanding, drawStars, framesOf, hoverAt } fro
 import { CREAM, EARTH, GOLD, GREEN, INK, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
-import { type FightEvent, type FightSetup, HZ, type Unit } from "@sequoia-leaf/raid";
+import { type Catalog, type FightEvent, type FightSetup, HZ, type Unit } from "@sequoia-leaf/raid";
 import { isBossId } from "@sequoia-leaf/raid/content/figures.ts";
 import { seatCell } from "@sequoia-leaf/raid/hex.ts";
 
@@ -168,8 +168,8 @@ function play(dt: number): void {
     for (let x = 6; x < 150; x += 12)
       burst(x, 60, 2, ["#cbb894", CREAM], { speed: 16, ttl: 0.35, toward: -Math.PI / 2, spread: 2 });
   }
-  for (const lead of moved.begun) begin(lead);
-  for (const cue of moved.happened) show(cue);
+  for (const lead of moved.begun) begin(lead, pb.fight.cat);
+  for (const cue of moved.happened) show(cue, pb.fight.cat);
   if (pb.clock >= 0) FV.stage = "run";
   if (pb.fight.over) {
     pb.clock = Math.max(pb.clock, pb.fight.tick);
@@ -201,7 +201,7 @@ export function stepFightView(dt: number): void {
     }
     a.hpShown += (a.unit.hp - a.hpShown) * Math.min(1, dt * 10 * FV.speed);
   }
-  stepShown(c);
+  stepShown(c, pb.fight.cat);
   FV.flashes = FV.flashes.filter((fl) => c < fl.t0 + 10);
   FV.signs = FV.signs.filter((p) => c < p.t0 + 16);
 }
@@ -303,7 +303,7 @@ function drawMound(g: Ctx, x: number, y: number): void {
 }
 
 /** One figure in the fight as it stands on the table now, if it is on it. */
-function standing(g: Ctx, a: Actor, c: number, tick: number): Standing | null {
+function standing(g: Ctx, cat: Catalog, a: Actor, c: number, tick: number): Standing | null {
   const u = a.unit;
   if (c < a.bornAt || a.gone) return null;
   const p = poseOf(a, c);
@@ -312,7 +312,7 @@ function standing(g: Ctx, a: Actor, c: number, tick: number): Standing | null {
   const sunk = a.move?.under === true && Math.abs(moveAt(a.move, c).k - 0.5) < 0.35;
   // While the halves are still apart, the far party stands back with its half.
   const back = u.side === FV.ours ? 0 : Math.round(V.gap);
-  const shine = shineOf(u.kind, u.items, a.x, V.t);
+  const shine = shineOf(cat, u.kind, u.items, a.x, V.t);
   const x = Math.round(V.bx + a.x + p.dx);
   const ground = Math.round(V.by + a.y + p.dy - back);
   const y = Math.round(ground - p.lift - shine.hop);
@@ -332,7 +332,7 @@ function standing(g: Ctx, a: Actor, c: number, tick: number): Standing | null {
       }
       g.globalAlpha = p.alpha * (shine.dim ? DIM : 1);
       // The member's figures stand on the bases they chose; the forest's, and what is summoned, on plain ones.
-      drawStanding(g, u.kind, x, y, u.side === FV.ours ? FV.bases : "plain", {
+      drawStanding(g, cat, u.kind, x, y, u.side === FV.ours ? FV.bases : "plain", {
         form: a.form,
         hover: hover + p.rise,
         pose: p.cast ? "cast" : "idle",
@@ -378,7 +378,7 @@ export function drawFight(g: Ctx, list: Standing[]): void {
   }
   g.globalAlpha = 1;
   for (const a of FV.actors) {
-    const s = a ? standing(g, a, c, pb.fight.tick) : null;
+    const s = a ? standing(g, pb.fight.cat, a, c, pb.fight.tick) : null;
     if (s) list.push(s);
   }
 }

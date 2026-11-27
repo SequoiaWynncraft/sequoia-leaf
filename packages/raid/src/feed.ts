@@ -7,7 +7,8 @@
  * come back. What Greg has gained lives on that Greg (`Piece.fed`): copies merging into a star keep
  * the sum of theirs, up to the most, and selling him loses it.
  */
-import { type FigureId, FIGURES, type Stars } from "./content/figures.ts";
+import { catalogOf } from "./content/catalog.ts";
+import { type FigureId, figureIn, type Stars } from "./content/figures.ts";
 import type { ItemId } from "./content/items.ts";
 import { worth } from "./content/rooms.ts";
 import { traitNumber } from "./content/traits.ts";
@@ -46,11 +47,15 @@ export function mealFor(run: RunView, from: Spot, to: Spot): { ok: true; gained:
   if (!meal || !greg) return refusal("nobody_there");
   if (greg.kind !== "greg") return refusal("not_greg");
   if (meal.kind === "greg") return refusal("greg_on_greg");
-  const most = traitNumber("greg", "most", 1);
+  const cat = catalogOf(run);
+  const most = traitNumber(cat, "greg", "most", 1);
   if (greg.fed >= most) return refusal("greg_full");
   return {
     ok: true,
-    gained: Math.min(most - greg.fed, worth(FIGURES[meal.kind].tier, meal.stars) * traitNumber("greg", "grows", 1)),
+    gained: Math.min(
+      most - greg.fed,
+      worth(figureIn(cat, meal.kind).tier, meal.stars) * traitNumber(cat, "greg", "grows", 1),
+    ),
   };
 }
 

@@ -21,7 +21,8 @@ import {
   WATER,
 } from "@sequoia-leaf/kit/palette.ts";
 import type { Fight, FightEvent } from "@sequoia-leaf/raid";
-import { FIGURES, isFigureId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
+import type { Catalog } from "@sequoia-leaf/raid/content/catalog.ts";
+import { figureIn, isFigureId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import type { KinId } from "@sequoia-leaf/raid/content/traits.ts";
 
 /**
@@ -323,8 +324,8 @@ const PUFFS: Partial<Record<UnitKind, Puff>> = {
   glorplet: KIN_PUFF.mist,
 };
 /** The puff a figure of a kind leaves; plain dust for anyone with nothing of their own. */
-export const puffOf = (kind: UnitKind): Puff =>
-  PUFFS[kind] ?? (isFigureId(kind) ? KIN_PUFF[FIGURES[kind].kin] : { cols: [PAPER[1], EARTH[2]], drift: "out" });
+export const puffOf = (cat: Catalog, kind: UnitKind): Puff =>
+  PUFFS[kind] ?? (isFigureId(kind) ? KIN_PUFF[figureIn(cat, kind).kin] : { cols: [PAPER[1], EARTH[2]], drift: "out" });
 
 /** Steps before a blow lands that its owner begins it: drawing back, then the lunge that peaks as it lands. */
 export const SWING_LEAD = 4;

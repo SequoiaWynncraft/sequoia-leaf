@@ -10,7 +10,7 @@ import type { Ctx, Met } from "@sequoia-leaf/core";
 
 import { GOOD_WITH } from "./content/advice.ts";
 import { BANNERS } from "./content/banners.ts";
-import { abilityNumber, abilityText, type FigureId, FIGURES, type Stars, TIERS } from "./content/figures.ts";
+import { abilityNumber, abilityText, type FigureId, figureIn, type Stars, TIERS } from "./content/figures.ts";
 import { isMemberId, MEMBERS } from "./content/members.ts";
 import { LEGACY_ERA } from "./content/releases.ts";
 import { MAX_LEVEL, ROOMS, STALL_ODDS, TRAIL_COUNT } from "./content/rooms.ts";
@@ -95,13 +95,14 @@ describe("the twenty-eight", () => {
     expect(stall).toEqual([...EVERYONES]);
     for (const id of HEADLINERS) {
       expect(stall).not.toContain(id);
-      expect(isMemberId(id) && FIGURES[id] === MEMBERS[id]).toBe(true);
-      expect([FIGURES[id].tier, FIGURES[id].extra, new Set(GOOD_WITH[id]).size]).toEqual([5, [], 3]);
+      expect(isMemberId(id)).toBe(true);
+      if (isMemberId(id)) expect(figureIn(CAT, id)).toMatchObject(MEMBERS[id]);
+      expect([figureIn(CAT, id).tier, figureIn(CAT, id).extra, new Set(GOOD_WITH[id]).size]).toEqual([5, [], 3]);
     }
     expect(HEADLINERS.every(isMemberId) && !EVERYONES.some(isMemberId)).toBe(true);
   });
   test("a banner's member is nobody in particular: its name is what any guild member is", () => {
-    for (const id of HEADLINERS) expect(FIGURES[id].name).toBe("A guild member");
+    for (const id of HEADLINERS) expect(figureIn(CAT, id).name).toBe("A guild member");
   });
 });
 
@@ -195,11 +196,16 @@ describe("a run with the member's own figures", () => {
     expect(giveItem(run, 0, { on: "board", at: 8 }).ok).toBe(true);
     expect(giveItem(run, 0, { on: "board", at: 8 }).ok).toBe(true);
     expect(piece.items).toEqual(["stewpot"]);
-    const traits = traitStates([piece]).map((t) => t.trait);
+    const traits = traitStates(CAT, [piece]).map((t) => t.trait);
     expect(traits.toSorted()).toEqual(["feather", "sage"]);
     // With one more Sage on the board the calling switches on, the member counted.
     run.board[9] = { id: run.nextId++, kind: "moth", stars: 1, items: [], fed: 0 };
-    expect(traitStates(run.board.flatMap((p) => (p ? [p] : []))).find((t) => t.trait === "sage")?.step).toBe(1);
+    expect(
+      traitStates(
+        CAT,
+        run.board.flatMap((p) => (p ? [p] : [])),
+      ).find((t) => t.trait === "sage")?.step,
+    ).toBe(1);
     expect(sell(run, { on: "board", at: 8 }).ok).toBe(true);
     expect(run.acorns).toBe(99 - 45 + 43);
   });
@@ -249,7 +255,7 @@ describe("a table kept in a run with a banner's member", () => {
 
 // ---------- its ability ----------
 
-const n = (name: string, stars: Stars): number => abilityNumber(UNIT, name, stars);
+const n = (name: string, stars: Stars): number => abilityNumber(CAT, UNIT, name, stars);
 const HOME = cellAt(3, 4);
 const FAR = cellAt(0, 7);
 
@@ -319,9 +325,9 @@ describe("I heard you weren't graiding.", () => {
     },
   );
   test("its sentence says so, with the numbers for its stars", () => {
-    expect(abilityText(UNIT, 1)).toBe(SENTENCE("2", 550));
-    expect(abilityText(UNIT, 2)).toBe(SENTENCE("2.5", 950));
-    expect(abilityText(UNIT, 3)).toBe(SENTENCE("3.5", 2200));
+    expect(abilityText(CAT, UNIT, 1)).toBe(SENTENCE("2", 550));
+    expect(abilityText(CAT, UNIT, 2)).toBe(SENTENCE("2.5", 950));
+    expect(abilityText(CAT, UNIT, 3)).toBe(SENTENCE("3.5", 2200));
     expect(MEMBERS[UNIT].mana).toEqual([50, 80]);
   });
   test("of enemies who have taken the same, it picks the one who has dealt the least", () => {

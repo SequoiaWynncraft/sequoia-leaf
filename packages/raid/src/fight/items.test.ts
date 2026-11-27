@@ -1,18 +1,18 @@
 /** Every item, checked against its own sentence as it plays out in a fight. */
 import { describe, expect, test } from "bun:test";
 
-import { FIGURES } from "../content/figures.ts";
-import { COMPONENTS, FINISHED, type FinishedId, type ItemId, itemStats } from "../content/items.ts";
+import { figureIn } from "../content/figures.ts";
+import { componentIn, type FinishedId, finishedIn, type ItemId, itemStats } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { cellAt } from "../hex.ts";
-import { fightOf, onCell, only, ready, steps, stepUntil, still, stillSide, unitOf } from "../testkit.ts";
+import { CAT, fightOf, onCell, only, ready, steps, stepUntil, still, stillSide, unitOf } from "../testkit.ts";
 import { hurt, HZ, stun } from "./core.ts";
 import type { Fight, Unit } from "./types.ts";
 
 const HOME = cellAt(3, 4);
 const NEAR = cellAt(3, 3);
 const BESIDE = cellAt(2, 3);
-const num = (id: FinishedId, name: string): number => FINISHED[id].n[name] ?? 0;
+const num = (id: FinishedId, name: string): number => finishedIn(CAT, id).n[name] ?? 0;
 
 /** A Crab #7 holding some items, facing a plain target; it only attacks unless told otherwise. */
 function holder(items: ItemId[], kind: "crab7" | "finch" | "moth" = "crab7"): { f: Fight; u: Unit; target: Unit } {
@@ -28,23 +28,27 @@ function holder(items: ItemId[], kind: "crab7" | "finch" | "moth" = "crab7"): { 
 
 describe("components", () => {
   test("each adds its one stat", () => {
-    const base = FIGURES.crab7;
-    expect(holder(["thorn"]).u.attack).toBe(Math.round(base.attack * (1 + COMPONENTS.thorn.stats.attack / 100)));
-    expect(holder(["plume"]).u.speed).toBeCloseTo(base.speed * (1 + COMPONENTS.plume.stats.speed / 100));
-    expect(holder(["glowcap"]).u.power).toBe(100 + COMPONENTS.glowcap.stats.power);
-    expect(holder(["bark"]).u.armour).toBe(base.armour + COMPONENTS.bark.stats.armour);
-    expect(holder(["bark"]).u.ward).toBe(base.ward + COMPONENTS.bark.stats.ward);
-    expect(holder(["chestnut"]).u.maxHp).toBe(Math.round(base.hp * (1 + COMPONENTS.chestnut.stats.health / 100)));
+    const base = figureIn(CAT, "crab7");
+    expect(holder(["thorn"]).u.attack).toBe(
+      Math.round(base.attack * (1 + componentIn(CAT, "thorn").stats.attack / 100)),
+    );
+    expect(holder(["plume"]).u.speed).toBeCloseTo(base.speed * (1 + componentIn(CAT, "plume").stats.speed / 100));
+    expect(holder(["glowcap"]).u.power).toBe(100 + componentIn(CAT, "glowcap").stats.power);
+    expect(holder(["bark"]).u.armour).toBe(base.armour + componentIn(CAT, "bark").stats.armour);
+    expect(holder(["bark"]).u.ward).toBe(base.ward + componentIn(CAT, "bark").stats.ward);
+    expect(holder(["chestnut"]).u.maxHp).toBe(
+      Math.round(base.hp * (1 + componentIn(CAT, "chestnut").stats.health / 100)),
+    );
     expect(holder([]).u.attack).toBe(base.attack);
   });
   test("a finished item gives both halves' stats, and three items add up", () => {
-    const base = FIGURES.crab7;
+    const base = figureIn(CAT, "crab7");
     const { u } = holder(["wasptail", "hedgehog", "hoard"]);
-    const attack = itemStats("wasptail").attack + itemStats("hedgehog").attack;
+    const attack = itemStats(CAT, "wasptail").attack + itemStats(CAT, "hedgehog").attack;
     expect(u.attack).toBe(Math.round(base.attack * (1 + attack / 100)));
-    expect(u.speed).toBeCloseTo(base.speed * (1 + itemStats("wasptail").speed / 100));
-    expect(u.armour).toBe(base.armour + itemStats("hedgehog").armour);
-    expect(u.maxHp).toBe(Math.round(base.hp * (1 + itemStats("hoard").health / 100)));
+    expect(u.speed).toBeCloseTo(base.speed * (1 + itemStats(CAT, "wasptail").speed / 100));
+    expect(u.armour).toBe(base.armour + itemStats(CAT, "hedgehog").armour);
+    expect(u.maxHp).toBe(Math.round(base.hp * (1 + itemStats(CAT, "hoard").health / 100)));
     expect(u.items).toEqual(["wasptail", "hedgehog", "hoard"]);
   });
 });
@@ -87,7 +91,7 @@ describe("finished items", () => {
     const { f, u } = holder(["glowthorn"]);
     u.manaFull = 500;
     stepUntil(f, (e) => e.t === "swing");
-    expect(u.mana).toBe(FIGURES.crab7.mana[0] + FIGHT.manaAttack + num("glowthorn", "mana"));
+    expect(u.mana).toBe(figureIn(CAT, "crab7").mana[0] + FIGHT.manaAttack + num("glowthorn", "mana"));
   });
   test("Hedgehog Coat: whoever attacks it up close takes magic damage worth a share of the wearer's health", () => {
     const f = fightOf([onCell("crab7", 0, HOME, 1, ["hedgehog"])], [onCell("gnat", 1, NEAR)]);
@@ -114,14 +118,14 @@ describe("finished items", () => {
     expect(hits[1]?.amount).toBe(Math.round((u.attack * num("conker", "clip")) / 100));
   });
   test("Hummingbird Charm: reaches a hex further", () => {
-    expect(holder(["hummingbird"]).u.range).toBe(FIGURES.crab7.range + num("hummingbird", "reach"));
-    expect(holder(["hummingbird"], "finch").u.range).toBe(FIGURES.finch.range + 1);
+    expect(holder(["hummingbird"]).u.range).toBe(figureIn(CAT, "crab7").range + num("hummingbird", "reach"));
+    expect(holder(["hummingbird"], "finch").u.range).toBe(figureIn(CAT, "finch").range + 1);
   });
   test("Moth Lantern: starts with its mana bar half full", () => {
     const f = fightOf([onCell("moth", 0, HOME, 1, ["mothlantern"])], [onCell("mud", 1, NEAR)]);
     const moth = unitOf(f, "moth");
     expect(moth.mana).toBe(Math.round((moth.manaFull * num("mothlantern", "head")) / 100));
-    expect(moth.mana).toBeGreaterThan(FIGURES.moth.mana[0]);
+    expect(moth.mana).toBeGreaterThan(figureIn(CAT, "moth").mana[0]);
   });
   test("Quilted Vest: some attacks slip past it", () => {
     expect(holder(["quilt"]).u.slip).toBe(num("quilt", "slip"));
@@ -152,8 +156,8 @@ describe("finished items", () => {
     const crab = unitOf(f, "crab7");
     crab.attack = 0;
     const start = crab.power;
-    expect(start).toBe(100 + itemStats("fairyring").power);
-    const damage = FIGURES.crab7.ability?.n.damage?.[0] ?? 0;
+    expect(start).toBe(100 + itemStats(CAT, "fairyring").power);
+    const damage = figureIn(CAT, "crab7").ability?.n.damage?.[0] ?? 0;
     const first = only(steps(ready(crab) && f, 1), "hit")[0];
     expect(first?.amount).toBe(Math.round((damage * start) / 100));
     expect(crab.power).toBe(start + num("fairyring", "grow"));

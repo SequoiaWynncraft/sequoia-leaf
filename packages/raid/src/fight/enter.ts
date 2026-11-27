@@ -114,7 +114,7 @@ const PLAIN = {
 
 /** Puts a figure on the board. Whoever calls this has made sure the hex is free. */
 export function enter(f: Fight, s: Start): Unit {
-  const spec = specOf(s.kind);
+  const spec = specOf(f.cat, s.kind);
   const maxHp = Math.max(1, Math.round(s.maxHp));
   const attack = Math.max(0, Math.round(s.attack));
   const u: Unit = {
@@ -144,7 +144,7 @@ export function enter(f: Fight, s: Start): Unit {
     rooted: spec.rooted === true,
     steady: spec.steady === true,
     // Only the brambles have a number for it.
-    thorns: (abilityNumber(s.kind, "thorns", s.stars) * s.power) / 100,
+    thorns: (abilityNumber(f.cat, s.kind, "thorns", s.stars) * s.power) / 100,
   };
   f.units.push(u);
   f.taken[s.cell] = u.id;
@@ -165,7 +165,7 @@ export function summon(
   numbers: { hp?: number; attack?: number } = {},
 ): Unit | undefined {
   if (cell < 0 || f.taken[cell] !== -1) return undefined;
-  const spec = specOf(kind);
+  const spec = specOf(f.cat, kind);
   const might = f.might[side] / 100;
   const u = enter(f, {
     side,
@@ -250,35 +250,35 @@ export function getUp(f: Fight, u: Unit, hp: number, why: RiseWhy, form: Form = 
 }
 
 /** Stands a figure in its true form: more attack and ability power, and the Rock its own attack. */
-function standTrue(u: Unit): void {
+function standTrue(f: Fight, u: Unit): void {
   if (u.kind === "rock") {
     // Real Rock attacks: its form's numbers, grown and held as a figure's own are.
     let attack = 0;
     let speed = 0;
     for (const item of u.items) {
-      attack += itemStats(item).attack;
-      speed += itemStats(item).speed;
+      attack += itemStats(f.cat, item).attack;
+      speed += itemStats(f.cat, item).speed;
     }
     u.attack = formNumber("rock", "attack") * u.grown * (1 + attack / 100);
     u.speed = formNumber("rock", "speed") * (1 + speed / 100);
   }
-  const more = 1 + traitNumber("graid", "more", 1) / 100;
+  const more = 1 + traitNumber(f.cat, "graid", "more", 1) / 100;
   u.attack = Math.round(u.attack * more);
   u.power *= more;
 }
 /** Graid's getting back up, a moment after falling: in its true form if it has one, with its share of health, and at the top step its share of a mana bar. */
 function graidUp(f: Fight, u: Unit, step: number): void {
   const form: Form = hasTrueForm(u.kind) ? "true" : u.form;
-  if (!getUp(f, u, (u.maxHp * traitNumber("graid", "health", step)) / 100, "graid", form)) {
+  if (!getUp(f, u, (u.maxHp * traitNumber(f.cat, "graid", "health", step)) / 100, "graid", form)) {
     // Nowhere to stand: it is down for good after all.
     f.standing[u.side]--;
     u.fellAt = f.tick;
     u.fallNo = ++f.falls;
     return;
   }
-  if (form === "true") standTrue(u);
+  if (form === "true") standTrue(f, u);
   // At the top step, its mana bar at least this full.
-  u.mana = Math.max(u.mana, Math.round((u.manaFull * traitNumber("graid", "mana", step)) / 100));
+  u.mana = Math.max(u.mana, Math.round((u.manaFull * traitNumber(f.cat, "graid", "mana", step)) / 100));
 }
 /**
  * Graid, as a figure falls: one with its getting back up still to come (`rises`) gets back up a
@@ -289,8 +289,8 @@ export function graidFalls(f: Fight, u: Unit): number {
   const step = f.traits[u.side].graid ?? 0;
   if (!u.rises || step <= 0) return 0;
   u.rises = false;
-  if (traitNumber("graid", "every", step) <= 0) for (const o of f.units) if (o.side === u.side) o.rises = false;
-  const wait = secs(traitNumber("graid", "wait", step));
+  if (traitNumber(f.cat, "graid", "every", step) <= 0) for (const o of f.units) if (o.side === u.side) o.rises = false;
+  const wait = secs(traitNumber(f.cat, "graid", "wait", step));
   later(f, wait, () => graidUp(f, u, step));
   return wait;
 }

@@ -15,9 +15,8 @@ import * as looks from "./content/looks.ts";
 import * as lore from "./content/lore.ts";
 import * as members from "./content/members.ts";
 import * as releases from "./content/releases.ts";
-import { RELEASES } from "./content/releases.ts";
+import { eraOf, LAST_ERA, RELEASES } from "./content/releases.ts";
 import * as rooms from "./content/rooms.ts";
-import * as seqwawa from "./content/seqwawa.ts";
 import * as traits from "./content/traits.ts";
 import { topStep, TRAIT_IDS, traitShort, traitText } from "./content/traits.ts";
 import * as wilds from "./content/wilds.ts";
@@ -61,15 +60,21 @@ const CONTENT = [
   members,
   releases,
   rooms,
-  seqwawa,
   traits,
   wilds,
+  // Every figure, trait, item and boon is in a catalogue: each era's, every release's patch folded in.
+  ...RELEASES.map((r) => catalog.catalogAt(eraOf(r.id))),
 ];
+/** The catalogue with every release open: every trait there is. */
+const EVERY = catalog.catalogAt(LAST_ERA);
 
 describe("Groot, renamed Graid", () => {
   test("no text a player reads says Groot, but the Groot Night banner", () => {
     const sentences = TRAIT_IDS.flatMap((id) =>
-      Array.from({ length: topStep(id) }, (_, i) => [traitText(id, i + 1), traitShort(id, i + 1)]).flat(),
+      Array.from({ length: topStep(EVERY, id) }, (_, i) => [
+        traitText(EVERY, id, i + 1),
+        traitShort(EVERY, id, i + 1),
+      ]).flat(),
     );
     const said = [
       ...CONTENT.flatMap((m) => strings(m)),
@@ -78,7 +83,7 @@ describe("Groot, renamed Graid", () => {
       readFileSync(new URL("README.md", import.meta.url), "utf8"),
     ];
     expect(said.filter((s) => SAYS_GROOT.test(s) && !RELEASE_IDS.has(s))).toEqual([]);
-    expect(traits.TRAITS.graid.name).toBe("Graid");
+    expect(traits.traitIn(EVERY, "graid").name).toBe("Graid");
     expect(SAYS_GROOT.test("Groot Night") || SAYS_GROOT.test("Nest of the Grootslangs")).toBe(false);
     expect(SAYS_GROOT.test("Every Groot figure gets back up")).toBe(true);
   });

@@ -14,7 +14,7 @@ import {
   traitNumber,
 } from "@sequoia-leaf/raid";
 import { REGULARS } from "@sequoia-leaf/raid/content/rooms.ts";
-import { EVERYONES } from "@sequoia-leaf/raid/testkit.ts";
+import { CAT, EVERYONES } from "@sequoia-leaf/raid/testkit.ts";
 
 import {
   acrossName,
@@ -144,22 +144,22 @@ const finch = (items: ItemId[]): Pick<Piece, "kind" | "items"> => ({ kind: "finc
 
 describe("handing an item over", () => {
   test("a first component is simply held", () => {
-    expect(handing(finch([]), "thorn")).toEqual({ can: true, forged: null });
+    expect(handing(CAT, finch([]), "thorn")).toEqual({ can: true, forged: null });
   });
   test("a second component forges with the first, and says with what", () => {
-    expect(handing(finch(["thorn"]), "plume")).toEqual({ can: true, forged: "wasptail", with: "thorn" });
-    expect(handing(finch(["hoard", "bark"]), "bark")).toEqual({ can: true, forged: "stump", with: "bark" });
+    expect(handing(CAT, finch(["thorn"]), "plume")).toEqual({ can: true, forged: "wasptail", with: "thorn" });
+    expect(handing(CAT, finch(["hoard", "bark"]), "bark")).toEqual({ can: true, forged: "stump", with: "bark" });
   });
   test("a figure holding three finished items takes no more", () => {
-    expect(handing(finch(["hoard", "stump", "quilt"]), "thorn")).toEqual({ can: false });
+    expect(handing(CAT, finch(["hoard", "stump", "quilt"]), "thorn")).toEqual({ can: false });
   });
   test("an emblem is simply held, and not by a figure of its kin already, so that figure is not lit to take it", () => {
-    expect(handing(finch(["thorn"]), "crabcharm")).toEqual({ can: true, forged: null });
-    expect(handing(finch([]), "feathercharm")).toEqual({ can: false });
-    expect(handing(finch(["crabcharm"]), "crabcharm")).toEqual({ can: false });
+    expect(handing(CAT, finch(["thorn"]), "crabcharm")).toEqual({ can: true, forged: null });
+    expect(handing(CAT, finch([]), "feathercharm")).toEqual({ can: false });
+    expect(handing(CAT, finch(["crabcharm"]), "crabcharm")).toEqual({ can: false });
   });
   test("every component makes something with each of the five", () => {
-    const made = recipesOf("glowcap");
+    const made = recipesOf(CAT, "glowcap");
     expect(made.map((r) => r.with)).toEqual(["thorn", "plume", "glowcap", "bark", "chestnut"]);
     expect(made.map((r) => r.makes)).toEqual(["glowthorn", "mothlantern", "fairyring", "lichen", "stewpot"]);
   });
@@ -338,10 +338,10 @@ describe("what a card says about a figure", () => {
     run.bench.fill(null);
     run.board[0] = { id: 1, kind: "barrowgnome", stars: 1, items: ["stump"], fed: 0 };
     run.board[1] = { id: 2, kind: "slug", stars: 1, items: [], fed: 0 };
-    const plain = plainNumbers("barrowgnome", 1);
+    const plain = plainNumbers(CAT, "barrowgnome", 1);
     const now = pieceNumbers(run, { on: "board", at: 0 });
     // Stump Shield's 40 armour and two Bulwarks' own.
-    expect(now?.armour).toBe(plain.armour + 40 + traitNumber("bulwark", "armour", 1));
+    expect(now?.armour).toBe(plain.armour + 40 + traitNumber(CAT, "bulwark", "armour", 1));
     expect(now?.health).toBe(plain.health);
     // On the bench the trait does not count, the item still does.
     run.bench[0] = run.board[0];
@@ -361,8 +361,8 @@ describe("what a card says about a figure", () => {
     expect(ownTraitCount(run, "ember")).toEqual({ count: 3, next: 4, step: 1 });
   });
   test("a trait's figures run cheapest first", () => {
-    expect(membersOf("ember", EVERYONES)).toEqual(["emberkit", "kettle", "cindernewt", "hearthcat"]);
-    expect(membersOf("fang", EVERYONES)).toEqual(["emberkit", "crab7", "jay", "badger", "hearthcat"]);
+    expect(membersOf(CAT, "ember", EVERYONES)).toEqual(["emberkit", "kettle", "cindernewt", "hearthcat"]);
+    expect(membersOf(CAT, "fang", EVERYONES)).toEqual(["emberkit", "crab7", "jay", "badger", "hearthcat"]);
   });
   test("where a figure is", () => {
     const run = startRun(3, { era: LEGACY_ERA, trail: 0 });

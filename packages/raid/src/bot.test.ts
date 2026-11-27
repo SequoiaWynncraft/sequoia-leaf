@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { CARELESS, fondOf, type Habit, planRoom, playRoom, playRun, ROLLER, SAVER, SENSIBLE } from "./bot.ts";
-import { FIGURES } from "./content/figures.ts";
+import { figureIn } from "./content/figures.ts";
 import { HOLDS, isComponentId } from "./content/items.ts";
 import { LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT } from "./content/rooms.ts";
@@ -21,7 +21,7 @@ import {
   traitsNow,
 } from "./run.ts";
 import { checkRun } from "./save.ts";
-import { EVERYONES } from "./testkit.ts";
+import { CAT, EVERYONES } from "./testkit.ts";
 
 /** Everything that must be true of a run however it has been played. */
 function expectSound(run: Run): void {
@@ -56,7 +56,7 @@ const share = (habit: Habit, kin: string): number => {
     const run = playRun(seed * 31, habit, { era: LEGACY_ERA });
     for (const kind of run.seen.fielded) {
       all++;
-      if (FIGURES[kind].kin === kin) fond++;
+      if (figureIn(CAT, kind).kin === kin) fond++;
     }
   }
   return fond / all;

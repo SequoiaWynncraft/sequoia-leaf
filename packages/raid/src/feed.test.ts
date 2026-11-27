@@ -26,8 +26,9 @@ import { advance } from "./sitting/clock.ts";
 import { command, openSitting, readCommand as readSittingCommand } from "./sitting/commands.ts";
 import { decodeSitting, encodeSitting, SITTING_VERSION } from "./sitting/keep.ts";
 import type { Sitting } from "./sitting/sitting.ts";
+import { CAT } from "./testkit.ts";
 
-const MOST = traitNumber("greg", "most", 1);
+const MOST = traitNumber(CAT, "greg", "most", 1);
 const board = (at: number): Spot => ({ on: "board", at });
 const bench = (at: number): Spot => ({ on: "bench", at });
 
@@ -232,8 +233,8 @@ const benchOf = (text: string): number =>
   decodeSitting(text)?.seats.find((s) => s.who.is === "member")?.run.bench[8]?.fed ?? -1;
 
 test("Greg's card and almanac say a meal is worth its price, its cost times its copies, not what was paid", () => {
-  expect(traitText("greg", 1)).toContain("for each acorn of its price (its cost times its copies)");
-  expect(traitShort("greg", 1)).toBe("Eats: +2% health per acorn of price, up to 40%.");
+  expect(traitText(CAT, "greg", 1)).toContain("for each acorn of its price (its cost times its copies)");
+  expect(traitShort(CAT, "greg", 1)).toBe("Eats: +2% health per acorn of price, up to 40%.");
 });
 
 /** What the Greg in a run's parties has eaten: who waits in the room, then each side of the last fight. */

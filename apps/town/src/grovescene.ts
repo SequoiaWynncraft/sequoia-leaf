@@ -21,6 +21,7 @@ import { noise, note, penta, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
 import { BANNERS, type PullsCommand, type PullsNote, type PullsView, RARITIES } from "@sequoia-leaf/pulls";
 import { type BannerPerson, readBanners, readNotes, readView } from "@sequoia-leaf/pulls/wire.ts";
+import { catalogOf } from "@sequoia-leaf/raid/content/catalog.ts";
 
 import type { CampArt } from "./campart.ts";
 import { G, hooks } from "./game.ts";
@@ -334,7 +335,7 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
 
   const shownOf = (drawn: PullsNote): Shown => ({
     note: drawn,
-    says: revealOf(drawn, banners),
+    says: revealOf(catalogOf(view()), drawn, banners),
     finish: FINISH[tierOf(drawn.rarity)],
     tones: tonesOf(RARITIES[drawn.rarity].colour),
     pic: pic.picture(drawn.prize),

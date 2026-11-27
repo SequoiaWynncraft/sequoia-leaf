@@ -11,12 +11,12 @@ import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { balance, watch } from "@sequoia-leaf/kit/purse.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import {
-  BOONS,
+  boonIn,
   ECONOMY,
   fieldCap,
   fielded,
   type FigureId,
-  FIGURES,
+  figureIn,
   type ItemId,
   itemName,
   MAX_LEVEL,
@@ -26,9 +26,8 @@ import {
   type RunView,
   rustleCost,
   tally,
-  topStep,
   type TraitId,
-  TRAITS,
+  traitIn,
   traitsNow,
   traitsOf,
 } from "@sequoia-leaf/raid";
@@ -42,7 +41,7 @@ import { light } from "../light.ts";
 import { acrossName, canBuy, savings, TraitWatch } from "../logic.ts";
 import { facing, shownCounts } from "../screen.ts";
 import { artPx, place, V } from "../stage.ts";
-import { busy, S } from "../state.ts";
+import { busy, catalogNow, S } from "../state.ts";
 import { acorns, boonRef, figPic, figureRef, itemRef, pic, traitRef, unitRef } from "./cards.ts";
 import { forgetLight, paintLight } from "./lit.ts";
 import { oddsRow, runTag, waySign } from "./own.ts";
@@ -260,12 +259,11 @@ function renderTraits(run: RunView): void {
   const wanted = new Set(states.map((t) => t.trait));
   for (const [trait, chip] of chips) if (!wanted.has(trait)) chip.remove();
   states.forEach((state, i) => {
-    const spec = TRAITS[state.trait];
+    const spec = traitIn(catalogNow(), state.trait);
     const next = spec.steps.find((need) => need > state.count) ?? spec.steps[spec.steps.length - 1] ?? 1;
-    const top = state.step >= topStep(state.trait);
     const chip = chipFor(state.trait);
     chip.classList.toggle("lit", state.step > 0);
-    chip.classList.toggle("top", top);
+    chip.classList.toggle("top", state.step >= spec.steps.length);
     // On a phone the chip shows no name: it is said all the same.
     chip.setAttribute("aria-label", `${spec.name} ${state.count}/${next}`);
     chip.replaceChildren(
@@ -294,7 +292,7 @@ function renderRack(run: RunView): void {
       const slot = el(
         "button",
         "k-slot item",
-        { type: "button", "data-item": at, "aria-label": itemName(item) },
+        { type: "button", "data-item": at, "aria-label": itemName(catalogNow(), item) },
         pic(itemIcon(item)),
       );
       // Tapping an item picks it up to give it; a finger kept on it asks what it is. Its card goes beside the rack.
@@ -306,7 +304,8 @@ function renderRack(run: RunView): void {
   if (run.boons.length > 0) {
     const boons = el("div", "k-plaque boons", {});
     for (const boon of run.boons) {
-      const slot = el("button", "k-slot boon", { type: "button", "aria-label": BOONS[boon].name }, pic(boonIcon(boon)));
+      const { name } = boonIn(catalogNow(), boon);
+      const slot = el("button", "k-slot boon", { type: "button", "aria-label": name }, pic(boonIcon(boon)));
       link(slot, boonRef(boon));
       boons.append(slot);
     }
@@ -345,22 +344,22 @@ function renderStall(run: RunView): void {
       stall.append(el("div", "k-slot offer gone", {}));
       return;
     }
-    const spec = FIGURES[kind];
+    const spec = figureIn(catalogNow(), kind);
     const price = priceOf(run, i);
     const have = twins(run, kind);
     const owned = pieces(run).some((p) => p.kind === kind);
     const card = el(
       "button",
       `k-card offer t${spec.tier}${canBuy(run, i) ? "" : " cant"}${have >= 2 ? " lit" : ""}`,
-      { type: "button", "data-offer": i, "aria-label": `${nameOf(kind)}, ${acornsSaid(price)}` },
+      { type: "button", "data-offer": i, "aria-label": `${nameOf(catalogNow(), kind)}, ${acornsSaid(price)}` },
       el("div", "art", { style: `height: calc(var(--u) * ${portraitRoom()} * var(--fs))` }, figPic(portrait(kind))),
-      el("div", "name", { text: nameOf(kind) }),
+      el("div", "name", { text: nameOf(catalogNow(), kind) }),
       el(
         "div",
         "foot",
         {},
         el("span", `k-cur${price < spec.tier ? " cut" : ""}`, {}, icon("acorn"), String(price)),
-        el("span", "signs", {}, ...traitsOf(kind).map((t) => pic(traitIcon(t)))),
+        el("span", "signs", {}, ...traitsOf(catalogNow(), kind).map((t) => pic(traitIcon(t)))),
       ),
       owned
         ? el("span", `have${have >= 2 ? " ready" : ""}`, { text: have >= 2 ? "3!" : have === 1 ? "2" : "+" })

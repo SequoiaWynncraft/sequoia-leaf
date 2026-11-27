@@ -5,6 +5,7 @@
  */
 import { nameOf } from "@sequoia-leaf/figures/sprites.ts";
 import type { Form, Unit } from "@sequoia-leaf/raid";
+import type { Catalog } from "@sequoia-leaf/raid/content/catalog.ts";
 import { specOf, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { formText, hasTrueForm, TRUE_FORMS } from "@sequoia-leaf/raid/content/graid.ts";
 
@@ -16,12 +17,13 @@ const isTrue = (kind: UnitKind, u: Pick<Unit, "form"> | undefined): boolean =>
   formOf(u) === "true" && hasTrueForm(kind);
 
 /** What a card calls it: its true form's name once it has got back up in it ("Real Rock"), else its own. */
-export const shownName = (kind: UnitKind, u?: Pick<Unit, "form">): string =>
-  isTrue(kind, u) && hasTrueForm(kind) ? TRUE_FORMS[kind].name : nameOf(kind);
+export const shownName = (cat: Catalog, kind: UnitKind, u?: Pick<Unit, "form">): string =>
+  isTrue(kind, u) && hasTrueForm(kind) ? TRUE_FORMS[kind].name : nameOf(cat, kind);
 
 /** Whether it attacks: as a fight has it now (Real Rock does), else as its figure does. */
-export const attacks = (kind: UnitKind, u?: Pick<Unit, "speed">): boolean => (u ? u.speed : specOf(kind).speed) > 0;
+export const attacks = (cat: Catalog, kind: UnitKind, u?: Pick<Unit, "speed">): boolean =>
+  (u ? u.speed : specOf(cat, kind).speed) > 0;
 
 /** The one change its true form brings, as a line for its card ("Real Moth: Wing Dust covers..."); none as itself. */
-export const formLines = (kind: UnitKind, u?: Pick<Unit, "form">): string[] =>
-  isTrue(kind, u) ? [`${shownName(kind, u)}: ${formText(kind)}`] : [];
+export const formLines = (cat: Catalog, kind: UnitKind, u?: Pick<Unit, "form">): string[] =>
+  isTrue(kind, u) ? [`${shownName(cat, kind, u)}: ${formText(kind)}`] : [];

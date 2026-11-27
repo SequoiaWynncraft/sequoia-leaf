@@ -14,9 +14,9 @@ import { CORAL, GOLD, GREEN, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, flipped, outlined, rgb } from "@sequoia-leaf/kit/pix.ts";
 import { bake as walking, type Body, NOBODY, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
-import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
+import { type Catalog, everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
 import {
-  FIGURES,
+  figureIn,
   isBossId,
   isFigureId,
   isSummonId,
@@ -161,8 +161,8 @@ function person(body: Body): { right: Frames; left: Frames } {
 
 /** Who each banner's member is, once somebody has said (`wear`): their name, the figure they are drawn from, and how many times it has been said. */
 const worn = new Map<UnitKind, { readonly name: string; readonly body: Body; readonly said: number }>();
-/** What anyone on the stump is called: a banner's member by the member's own name, everyone else as the rules name them. */
-export const nameOf = (kind: UnitKind): string => worn.get(kind)?.name ?? specOf(kind).name;
+/** What anyone on the stump is called: a banner's member by the member's own name, everyone else as the catalogue names them. */
+export const nameOf = (cat: Catalog, kind: UnitKind): string => worn.get(kind)?.name ?? specOf(cat, kind).name;
 /**
  * A word for how a figure is shown now, which changes when its name or its pictures do: for whoever
  * keeps something drawn of it. Nobody (an empty place) is shown as nothing.
@@ -412,9 +412,9 @@ function baseOf(tones: Tones, big: boolean, look: BaseLook): HTMLCanvasElement {
   return c;
 }
 
-/** The colours of the base a figure stands on: its price for one a member can own. */
-export function tonesOf(kind: UnitKind): Tones {
-  if (isFigureId(kind)) return TIER_TONES[FIGURES[kind].tier - 1] ?? FOREST_TONES;
+/** The colours of the base a figure stands on: its price, as the catalogue has it, for one a member can own. */
+export function tonesOf(cat: Catalog, kind: UnitKind): Tones {
+  if (isFigureId(kind)) return TIER_TONES[figureIn(cat, kind).tier - 1] ?? FOREST_TONES;
   return isSummonId(kind) ? SUMMON_TONES : FOREST_TONES;
 }
 /** Whether a figure is one of the big ones. */
@@ -427,13 +427,14 @@ export const isBig = (kind: UnitKind): boolean => isBossId(kind);
  */
 export function drawStanding(
   g: Ctx,
+  cat: Catalog,
   kind: UnitKind,
   x: number,
   y: number,
   base: BaseLook,
   o: Shown & { hover?: number } = {},
 ): void {
-  const c = baseOf(tonesOf(kind), isBig(kind), isFigureId(kind) ? base : "plain");
+  const c = baseOf(tonesOf(cat, kind), isBig(kind), isFigureId(kind) ? base : "plain");
   g.drawImage(c, Math.round(x) - Math.floor(c.width / 2), Math.round(y) - Math.floor(c.height / 2) - 1);
   drawFigure(g, kind, x, y - 2 - (o.hover ?? 0), o);
 }

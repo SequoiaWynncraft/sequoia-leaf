@@ -11,6 +11,7 @@
  */
 import type { Met } from "@sequoia-leaf/core";
 import { CARELESS, fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
+import { catalogOf } from "@sequoia-leaf/raid/content/catalog.ts";
 import { ENDLESS, type EndlessWay } from "@sequoia-leaf/raid/content/endless.ts";
 import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import { ROOM_COUNT } from "@sequoia-leaf/raid/content/rooms.ts";
@@ -116,11 +117,11 @@ for (let n = 0; n < total; n++) {
     if (counted && room >= ROOM_COUNT - 3) {
       const [ours, theirs] = begun.setup.sides;
       const w = worth.get(room) ?? { ours: 0, theirs: 0, items: 0, theirItems: 0, n: 0, m: 0 };
-      w.ours += partyWorth(ours);
+      w.ours += partyWorth(catalogOf(run), ours);
       w.items += ours.figures.reduce((k, p) => k + p.items.length, 0);
       w.n++;
       if (roomAt(room)?.kind === "spar" && theirs.by === undefined) {
-        w.theirs += partyWorth(theirs);
+        w.theirs += partyWorth(catalogOf(run), theirs);
         w.theirItems += theirs.figures.reduce((k, p) => k + p.items.length, 0);
         w.m++;
       }

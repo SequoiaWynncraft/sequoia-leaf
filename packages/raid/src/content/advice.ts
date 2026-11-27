@@ -9,7 +9,8 @@
  * fights again with each figure given each item, and none of these is among a figure's three worst.
  */
 import { standRow } from "../hex.ts";
-import { type FigureId, FIGURES } from "./figures.ts";
+import type { Catalog } from "./catalog.ts";
+import { type FigureId, figureIn } from "./figures.ts";
 import type { FinishedId } from "./items.ts";
 import { type CallingId, traitDraw } from "./traits.ts";
 
@@ -29,8 +30,10 @@ const ROW_NAMES = ["front row", "second row", "third row", "back row"] as const;
  * Where a figure fights from: the furthest row back from which its reach meets the enemy's front
  * line (`standRow`), so that seated there it attacks without walking. A Sneak leaps from anywhere.
  */
-export const placeOf = (id: FigureId): string =>
-  FIGURES[id].calling === "sneak" ? "leaps to the enemy back row" : (ROW_NAMES[standRow(FIGURES[id].range)] ?? "");
+export function placeOf(cat: Catalog, id: FigureId): string {
+  const { calling, range } = figureIn(cat, id);
+  return calling === "sneak" ? "leaps to the enemy back row" : (ROW_NAMES[standRow(range)] ?? "");
+}
 
 /** What a figure's draw is called on its card: "Draws fire", "Draws fire ×2", "Avoids fire"; nothing for 0. */
 export function drawName(draw: number): string | null {
@@ -46,10 +49,10 @@ export const drawTip = (draw: number): string =>
   `Enemies pick their target as if this figure stood ${drawReach(draw)}.`;
 
 /** The line a card shows under a figure's name: `Tank · front row · draws fire`. */
-export function roleLine(id: FigureId): string {
-  const { calling } = FIGURES[id];
+export function roleLine(cat: Catalog, id: FigureId): string {
+  const { calling } = figureIn(cat, id);
   const draw = drawName(traitDraw(calling));
-  return [ROLES[calling], placeOf(id), ...(draw ? [draw.toLowerCase()] : [])].join(" · ");
+  return [ROLES[calling], placeOf(cat, id), ...(draw ? [draw.toLowerCase()] : [])].join(" · ");
 }
 
 export type Three = readonly [FinishedId, FinishedId, FinishedId];

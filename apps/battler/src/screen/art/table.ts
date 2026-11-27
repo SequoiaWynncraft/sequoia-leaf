@@ -11,7 +11,7 @@ import { drawStanding } from "@sequoia-leaf/figures/sprites.ts";
 import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, ell, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, hash, makeCanvas, vnoise } from "@sequoia-leaf/kit/util.ts";
-import type { ClothId, LanternId, Looks } from "@sequoia-leaf/raid";
+import { catalogAt, type ClothId, type LanternId, LAST_ERA, type Looks } from "@sequoia-leaf/raid";
 import type { UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { COLS, HOME_ROWS } from "@sequoia-leaf/raid/hex.ts";
 
@@ -567,7 +567,7 @@ export function paintSwatch(looks: Dressing, wood = swatchRings, post?: PostTone
     ["glorp", 76, 45],
   ];
   for (const [kind, x, y] of stand) {
-    drawStanding(g, kind, x, y, looks.bases);
+    drawStanding(g, catalogAt(LAST_ERA), kind, x, y, looks.bases);
   }
   drawPost(g, 9, 56, 1, looks.lantern, post);
   g.globalCompositeOperation = "lighter";

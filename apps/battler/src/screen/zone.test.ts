@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { choose, LEGACY_ERA, placeOf, type RunView, startRun, wingOf } from "@sequoia-leaf/raid";
-import { type FigureId, FIGURES, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
+import { choose, eraOf, LEGACY_ERA, placeOf, type RunView, startRun, wingOf } from "@sequoia-leaf/raid";
+import { type Catalog, catalogsOf } from "@sequoia-leaf/raid/content/catalog.ts";
+import type { FigureId } from "@sequoia-leaf/raid/content/figures.ts";
+import { BASE } from "@sequoia-leaf/raid/content/releases/base.ts";
+import { GROOT } from "@sequoia-leaf/raid/content/releases/groot.ts";
+import { CAT } from "@sequoia-leaf/raid/testkit.ts";
 
 import { type Gesture, type HandEvent, handStep, type Held, IDLE, marksOf } from "./gesture.ts";
 import { zoneRows } from "./zone.ts";
@@ -27,11 +31,21 @@ const move: HandEvent = { e: "move", pointer: 1, x: 80, y: 115, over: { on: "boa
 
 describe("the rows a figure in the hand belongs in", () => {
   test("are the ones its card names: the front two for front or second row, the back two for back row, none for a leap", () => {
-    for (const id of Object.keys(FIGURES).filter(isFigureId)) {
-      const place = placeOf(id);
+    for (const id of CAT.order) {
+      const place = placeOf(CAT, id);
       const rows = place === "front row" || place === "second row" ? [0, 1] : place === "back row" ? [2, 3] : [];
-      expect([id, zoneRows(id)]).toEqual([id, rows]);
+      expect([id, zoneRows(CAT, id)]).toEqual([id, rows]);
     }
+  });
+
+  test("are read in the run's catalogue: a release that gives a figure more reach moves its rows from that era", () => {
+    // Twig made up as reaching 1 hex from Penguin Month: its rows are the front two from then, and the back two before.
+    const eras = catalogsOf([BASE, GROOT, { release: "penguin-month", figures: { change: { finch: { range: 1 } } } }]);
+    const at = (era: number): Catalog => eras[era - 1] ?? CAT;
+    expect(zoneRows(at(eraOf("groot-night")), "finch")).toEqual([2, 3]);
+    expect(zoneRows(at(eraOf("penguin-month")), "finch")).toEqual([0, 1]);
+    // A figure the catalogue does not have belongs in no rows: Seqwawa before the expansion.
+    expect(zoneRows(at(eraOf("base")), "seqwawa")).toEqual([]);
   });
 
   test("light while a figure is carried or tapped, following its row, and go when it is put down or called off", () => {

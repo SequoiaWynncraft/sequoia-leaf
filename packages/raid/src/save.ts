@@ -21,12 +21,12 @@
 import { mix } from "@sequoia-leaf/core";
 
 import { BOON_IDS, type BoonId, isBoonId } from "./content/boons.ts";
-import { everyFigure } from "./content/catalog.ts";
+import { catalogOf, everyFigure } from "./content/catalog.ts";
 import { type EndlessWay, isEndlessWay } from "./content/endless.ts";
 import { type FigureId, isBossId, isFigureId, isStars, isUnitKind } from "./content/figures.ts";
 import {
   carries,
-  EMBLEMS,
+  emblemKin,
   FINISHED_IDS,
   HOLDS,
   isComponentId,
@@ -465,7 +465,7 @@ function settle(run: Run): void {
     const free = bench.indexOf(null);
     if (free >= 0) bench[free] = piece;
     else {
-      run.acorns += sellValue(piece);
+      run.acorns += sellValue(catalogOf(run), piece);
       run.items.push(...piece.items);
     }
   }
@@ -476,11 +476,11 @@ function settle(run: Run): void {
       const fits =
         held.length < HOLDS &&
         !(isComponentId(item) && held.some(isComponentId)) &&
-        !(isEmblemId(item) && carries(piece.kind, held, EMBLEMS[item]));
+        !(isEmblemId(item) && carries(catalogOf(run), piece.kind, held, emblemKin(catalogOf(run), item)));
       (fits ? held : run.items).push(item);
     }
     piece.items = held;
-    piece.fed = piece.kind === "greg" ? Math.min(piece.fed, traitNumber("greg", "most", 1)) : 0;
+    piece.fed = piece.kind === "greg" ? Math.min(piece.fed, traitNumber(catalogOf(run), "greg", "most", 1)) : 0;
   }
   for (const choice of picksOf(run)) {
     if (choice.kind === "boon") choice.redraws = Math.min(choice.redraws, ECONOMY.boonRedraws);

@@ -19,19 +19,20 @@ import {
   abilityShort,
   abilityText,
   type BoonId,
-  BOONS,
+  boonIn,
   boonShort,
   carriedTraits,
+  catalogOf,
   type ComponentId,
   drawName,
   drawOf,
   drawReach,
   drawTip,
   ECONOMY,
-  EMBLEMS,
+  emblemKin,
   type FigureId,
-  FIGURES,
-  FINISHED,
+  figureIn,
+  finishedIn,
   isBoonId,
   isComponentId,
   isEmblemId,
@@ -55,7 +56,7 @@ import {
   type Stars,
   traitDraw,
   type TraitId,
-  TRAITS,
+  traitIn,
   traitShort,
   traitText,
   type Unit,
@@ -85,7 +86,7 @@ import {
   whereIs,
 } from "../logic.ts";
 import { pieces as richPieces } from "../rich.ts";
-import { doNow, S } from "../state.ts";
+import { catalogNow, doNow, S } from "../state.ts";
 import { chairsSaid } from "./endless.ts";
 import { feedActions } from "./feedtarget.ts";
 import { figuresAt, levelOnCard, oddsStats } from "./own.ts";
@@ -176,14 +177,14 @@ const NAMES = { health: "Health", attack: "Attack", speed: "Speed", reach: "Reac
 /** A figure's numbers for its card: raised by what it holds, belongs to or its level in green, lowered in coral. */
 function statsOf(kind: UnitKind, stars: Stars, extras: FigureExtras, level: number): Stat[] {
   const u = extras.unit;
-  const plain = plainNumbers(kind, stars);
+  const plain = plainNumbers(catalogNow(), kind, stars);
   const now: Numbers = u
     ? { health: u.maxHp, attack: u.attack, speed: u.speed, reach: u.range, armour: u.armour, ward: u.ward }
-    : (extras.numbers ?? plainNumbers(kind, stars, level));
+    : (extras.numbers ?? plainNumbers(catalogNow(), kind, stars, level));
   return NUMBER_KEYS.map((key) => {
     const value =
       key === "speed"
-        ? attacks(kind, u)
+        ? attacks(catalogNow(), kind, u)
           ? `${now.speed.toFixed(2)}/s`
           : "none"
         : key === "health" && u
@@ -199,21 +200,21 @@ function statsOf(kind: UnitKind, stars: Stars, extras: FigureExtras, level: numb
 
 /** Any figure: its role, its traits, its numbers, its ability in a few words, and the items that suit it. */
 export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = {}): Description {
-  const spec = specOf(kind);
+  const spec = specOf(catalogNow(), kind);
   const u = extras.unit;
-  const figure = isFigureId(kind) ? FIGURES[kind] : null;
+  const figure = isFigureId(kind) ? figureIn(catalogNow(), kind) : null;
 
   const count = (t: TraitId): TraitCount | null =>
-    extras.party ? traitCount(extras.party, t) : extras.run ? ownTraitCount(extras.run, t) : null;
+    extras.party ? traitCount(catalogNow(), extras.party, t) : extras.run ? ownTraitCount(extras.run, t) : null;
   const items = extras.items ?? u?.items ?? [];
   // Its own traits, then the kin of any emblem it holds.
-  const [kin, calling, ...more] = carriedTraits(kind, items);
+  const [kin, calling, ...more] = carriedTraits(catalogNow(), kind, items);
   const chip = (t: TraitId | undefined, label: string): Chip | null => {
     if (!t) return null;
     const c = count(t);
     return {
       label,
-      text: TRAITS[t].name,
+      text: traitIn(catalogNow(), t).name,
       icon: traitIcon(t),
       ...(c ? { count: `${c.count}/${c.next}`, lit: c.step > 0 } : {}),
       ref: traitRef(t),
@@ -227,13 +228,13 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
     blocks.push({
       title: spec.ability.name,
       ...(spec.mana[1] > 0 ? { note: `mana ${spec.mana[1]}` } : {}),
-      body: rich(abilityShort(kind, stars)),
+      body: rich(abilityShort(catalogNow(), kind, stars)),
     });
   // In its true form, the one change that form brings.
-  blocks.push(...formLines(kind, u).map((body) => ({ body })));
-  if (kind === "greg" && (extras.fed ?? 0) > 0) blocks.push({ body: fedLine(extras.fed ?? 0) });
+  blocks.push(...formLines(catalogNow(), kind, u).map((body) => ({ body })));
+  if (kind === "greg" && (extras.fed ?? 0) > 0) blocks.push({ body: fedLine(catalogNow(), extras.fed ?? 0) });
   if (extras.lore) {
-    if (spec.ability) blocks.push({ body: abilityText(kind, stars) });
+    if (spec.ability) blocks.push({ body: abilityText(catalogNow(), kind, stars) });
     blocks.push({ body: el("i", "k-dim quip", { text: spec.quip }) });
   }
 
@@ -243,11 +244,11 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
   const piece = sale && run ? pieces(run).find((p) => p.id === sale.id) : undefined;
   const held = itemsOf(kind, items, run, piece);
   blocks.push(...held.blocks);
-  const draw = u ? u.draw : drawOf(kind, items);
+  const draw = u ? u.draw : drawOf(catalogNow(), kind, items);
   return {
-    name: shownName(kind, u),
+    name: shownName(catalogNow(), kind, u),
     icon: portrait(kind, { form: formOf(u) }),
-    tag: isFigureId(kind) ? roleLine(kind) : "",
+    tag: isFigureId(kind) ? roleLine(catalogNow(), kind) : "",
     aside: el(
       "span",
       "fside",
@@ -284,17 +285,19 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
 }
 
 /** What selling a figure gives: its acorns, and the pictures of the items it holds, which go back to the rack as they are. */
-function soldFor(piece: { readonly items: readonly ItemId[] } & Parameters<typeof sellValue>[0]): HTMLElement {
+function soldFor(piece: { readonly items: readonly ItemId[] } & Parameters<typeof sellValue>[1]): HTMLElement {
   const back =
     piece.items.length > 0
       ? el(
           "span",
           "k-row tight",
-          { "aria-label": `and ${piece.items.map(itemName).join(", ")} back to the rack` },
+          {
+            "aria-label": `and ${piece.items.map((item) => itemName(catalogNow(), item)).join(", ")} back to the rack`,
+          },
           ...piece.items.map((item) => pic(itemIcon(item))),
         )
       : null;
-  return el("span", "k-row tight", {}, acorns(`+${sellValue(piece)}`), back);
+  return el("span", "k-row tight", {}, acorns(`+${sellValue(catalogNow(), piece)}`), back);
 }
 
 /** The chip after a figure's traits saying how it draws enemies' eyes, with a tip; none for a draw of 0. */
@@ -316,16 +319,18 @@ function member(id: FigureId, run: RunView | null): Entry {
   return {
     ref: own ? pieceRef(own.id) : figureRef(id),
     lit: where === "board",
-    name: nameOf(id),
+    name: nameOf(catalogNow(), id),
     icon: portrait(id),
-    note: acorns(FIGURES[id].tier),
+    note: acorns(figureIn(catalogNow(), id).tier),
     ...(where === "bench" || where === "stall" ? { tag: where } : {}),
   };
 }
 
 /** A trait: what it is, its steps (the one reached lit, the next saying how many more), and every figure that carries it. */
 export function traitDesc(id: TraitId, run: RunView | null, lore = false): Description {
-  const spec = TRAITS[id];
+  // The run's era (a seat's is its sitting's), or Leaf's view's with none: who carries it is counted in the same.
+  const cat = catalogOf(run ?? S);
+  const spec = traitIn(cat, id);
   const state = run ? ownTraitCount(run, id) : null;
   const count = state?.count ?? 0;
   const step = state?.step ?? 0;
@@ -335,7 +340,7 @@ export function traitDesc(id: TraitId, run: RunView | null, lore = false): Descr
     return {
       line: true,
       title: String(need),
-      body: rich(traitShort(id, i + 1)),
+      body: rich(traitShort(cat, id, i + 1)),
       lit: step === i + 1,
       ...(more > 0 ? { note: `${more} more` } : {}),
     };
@@ -344,7 +349,7 @@ export function traitDesc(id: TraitId, run: RunView | null, lore = false): Descr
   const draw = traitDraw(id);
   const draws = drawName(draw);
   if (draws) blocks.unshift({ body: rich(`${draws}: enemies pick them as if ${drawReach(draw)}.`) });
-  if (lore) spec.steps.forEach((need, i) => blocks.push({ title: `${need}`, body: traitText(id, i + 1) }));
+  if (lore) spec.steps.forEach((need, i) => blocks.push({ title: `${need}`, body: traitText(cat, id, i + 1) }));
   return {
     name: spec.name,
     icon: traitIcon(id),
@@ -357,7 +362,9 @@ export function traitDesc(id: TraitId, run: RunView | null, lore = false): Descr
       state ? el("b", "", { text: `${count}/${state.next}` }) : null,
     ),
     blocks,
-    rows: [{ label: "Every figure", look: "tiles", things: membersOf(id, figuresAt(run)).map((f) => member(f, run)) }],
+    rows: [
+      { label: "Every figure", look: "tiles", things: membersOf(cat, id, figuresAt(run)).map((f) => member(f, run)) },
+    ],
   };
 }
 
@@ -365,19 +372,21 @@ export function traitDesc(id: TraitId, run: RunView | null, lore = false): Descr
 
 /** What an item adds, in numbers, on a line (an emblem adds none); and what it does. */
 export const itemWords = (id: ItemId): HTMLElement => {
-  const adds = itemAdds(id);
+  const adds = itemAdds(catalogNow(), id);
   return el(
     "div",
     "",
     {},
     adds.length > 0 ? rich(adds.join(" · "), "adds") : null,
-    isComponentId(id) ? null : rich(itemShort(id)),
+    isComponentId(id) ? null : rich(itemShort(catalogNow(), id)),
   );
 };
 
 /** What an item is in a line, for a tip: what it adds, and what it does unless that is all it does. */
 const itemBrief = (id: ItemId): string =>
-  [itemAdds(id).join(" · "), isComponentId(id) ? "" : itemShort(id)].filter((part) => part !== "").join(". ");
+  [itemAdds(catalogNow(), id).join(" · "), isComponentId(id) ? "" : itemShort(catalogNow(), id)]
+    .filter((part) => part !== "")
+    .join(". ");
 
 /**
  * An item: what it adds and does, and what it is made of or makes (or for an emblem, its kin). A
@@ -387,29 +396,29 @@ const itemBrief = (id: ItemId): string =>
 export function itemDesc(id: ItemId, run: RunView | null, itemAt = -1, lore = false): Description {
   const blocks: Block[] = [{ body: itemWords(id) }];
   if (lore) {
-    blocks.push({ body: itemText(id) });
-    blocks.push({ body: el("i", "k-dim quip", { text: itemQuip(id) }) });
+    blocks.push({ body: itemText(catalogNow(), id) });
+    blocks.push({ body: el("i", "k-dim quip", { text: itemQuip(catalogNow(), id) }) });
   }
   if (isEmblemId(id)) {
-    const kin = EMBLEMS[id];
+    const kin = emblemKin(catalogNow(), id);
     return {
-      name: itemName(id),
+      name: itemName(catalogNow(), id),
       icon: itemIcon(id),
       brief: itemBrief(id),
       tag: "An emblem",
       blocks,
-      chips: [{ label: "Origin", text: TRAITS[kin].name, icon: traitIcon(kin), ref: traitRef(kin) }],
+      chips: [{ label: "Origin", text: traitIn(catalogNow(), kin).name, icon: traitIcon(kin), ref: traitRef(kin) }],
     };
   }
   return {
-    name: itemName(id),
+    name: itemName(catalogNow(), id),
     icon: itemIcon(id),
     brief: itemBrief(id),
     tag: isComponentId(id) ? "A component" : "A finished item",
     blocks,
     rows: isComponentId(id)
       ? [{ label: "With", things: makesLines(id, run, itemAt) }]
-      : [{ label: "Made from", things: FINISHED[id].made.map((c) => ({ ref: itemRef(c) })) }],
+      : [{ label: "Made from", things: finishedIn(catalogNow(), id).made.map((c) => ({ ref: itemRef(c) })) }],
   };
 }
 
@@ -429,21 +438,23 @@ export function makesLines(id: ItemId, run: RunView | null, itemAt = -1): Entry[
       ...(by ? { note: by } : {}),
     };
   };
-  return recipesOf(id)
+  return recipesOf(catalogNow(), id)
     .map(line)
     .toSorted((a, b) => weight(b) - weight(a));
 }
 
 export function boonDesc(id: BoonId): Description {
-  const spec = BOONS[id];
-  const kin = isEmblemId(id) ? EMBLEMS[id] : undefined;
+  const spec = boonIn(catalogNow(), id);
+  const kin = isEmblemId(id) ? emblemKin(catalogNow(), id) : undefined;
   return {
     name: spec.name,
     icon: boonIcon(id),
-    brief: boonShort(id),
+    brief: boonShort(catalogNow(), id),
     tag: spec.sort === "charm" ? "A charm" : "A boon",
-    blocks: [{ body: rich(boonShort(id)) }],
-    chips: kin ? [{ label: "Counts for", text: TRAITS[kin].name, icon: traitIcon(kin), ref: traitRef(kin) }] : [],
+    blocks: [{ body: rich(boonShort(catalogNow(), id)) }],
+    chips: kin
+      ? [{ label: "Counts for", text: traitIn(catalogNow(), kin).name, icon: traitIcon(kin), ref: traitRef(kin) }]
+      : [],
   };
 }
 

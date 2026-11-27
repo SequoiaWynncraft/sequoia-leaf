@@ -1,4 +1,5 @@
-import { type FigureId, FIGURES, type Tier } from "../content/figures.ts";
+import { type Catalog, catalogOf } from "../content/catalog.ts";
+import { type FigureId, figureIn, type Tier } from "../content/figures.ts";
 /**
  * A sitting: The Little Raid played by up to eight at once, on Leaf's clock. (The design calls it a
  * live table; `Table` is Leaf's solo table in `game.ts`, so here it is a sitting.) This file is what
@@ -133,18 +134,23 @@ export const kindOf = (room: number): RoomKind => ROOMS[room]?.kind ?? "spar";
 export const planMs = (room: number): number => (room < CLOCK.early ? CLOCK.plan : CLOCK.planLater);
 
 /** The name a seat goes by: the member's, or the figure's as a regular. */
-export const nameOf = (who: Who): string =>
-  who.is === "member" ? who.name : (REGULARS.find((r) => r.kind === who.figure)?.name ?? FIGURES[who.figure].name);
+export const nameOf = (cat: Catalog, who: Who): string =>
+  who.is === "member"
+    ? who.name
+    : (REGULARS.find((r) => r.kind === who.figure)?.name ?? figureIn(cat, who.figure).name);
 
 /** A seat's board as it would go into a fight now, signed with its name, and with the member's id. */
 export function signed({ who, run }: Pick<Seat, "who" | "run">): Party {
-  return { ...partyOf(run), who: nameOf(who), ...(who.is === "member" && { by: who.id }) };
+  return { ...partyOf(run), who: nameOf(catalogOf(run), who), ...(who.is === "member" && { by: who.id }) };
 }
 
 /** Which side of a fight's setup is a seat's own: 1 for the away seat of a pair, whose board is across; else 0. */
 export function sideOf(setup: FightSetup, who: Who): Side {
   const across = setup.sides[1];
-  const theirs = who.is === "member" ? across.by === who.id : across.by === undefined && across.who === nameOf(who);
+  const theirs =
+    who.is === "member"
+      ? across.by === who.id
+      : across.by === undefined && across.who === nameOf(catalogOf(setup), who);
   return theirs ? 1 : 0;
 }
 

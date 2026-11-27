@@ -19,6 +19,7 @@ import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 import { FV } from "../board.ts";
 import { acrossName } from "../logic.ts";
 import { snd } from "../sounds.ts";
+import { catalogNow } from "../state.ts";
 import { pic } from "./cards.ts";
 import { headOf } from "./heads.ts";
 
@@ -139,7 +140,7 @@ export function tallyView(refOf: (id: number) => string, cls = ""): TallyView {
       "tv-row",
       { "data-kind": u.kind, "data-id": u.id, tabindex: "0" },
       el("span", "tv-pic", {}, pic(headOf(u.kind))),
-      el("span", "tv-name", { text: nameOf(u.kind) }),
+      el("span", "tv-name", { text: nameOf(catalogNow(), u.kind) }),
       bar,
       n,
       star,

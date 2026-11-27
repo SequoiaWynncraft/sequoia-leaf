@@ -12,8 +12,9 @@
 import { framesOf } from "@sequoia-leaf/figures/sprites.ts";
 import { CREAM, EARTH, GOLD, GREEN, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { type FightEvent, HZ, type TraitId, type UnitKind } from "@sequoia-leaf/raid";
-import { FIGURES, isBossId, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
-import { TRAITS } from "@sequoia-leaf/raid/content/traits.ts";
+import type { Catalog } from "@sequoia-leaf/raid/content/catalog.ts";
+import { figureIn, isBossId, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
+import { traitIn } from "@sequoia-leaf/raid/content/traits.ts";
 import { distance } from "@sequoia-leaf/raid/hex.ts";
 
 import { aimAt, handAt } from "./acting.ts";
@@ -88,7 +89,7 @@ function throwAt(
 }
 
 /** Where an ability is seen going off, for its mark: on whoever it is aimed at, where its owner lands or calls something up, or about its owner. */
-function atOf(ev: Extract<FightEvent, { t: "cast" }>): At | null {
+function atOf(cat: Catalog, ev: Extract<FightEvent, { t: "cast" }>): At | null {
   const a = actor(ev.id);
   if (!a) return null;
   const aimed = actor(ev.targets[0] ?? -1);
@@ -105,8 +106,8 @@ function atOf(ev: Extract<FightEvent, { t: "cast" }>): At | null {
       const o = actor(id);
       return o ? [{ x: o.x, y: o.y }] : [];
     }),
-    col: colourOf(ev.kind),
-    own: ownOf(ev.kind),
+    col: colourOf(cat, ev.kind),
+    own: ownOf(cat, ev.kind),
     shiny: (aimed?.unit.items.length ?? 0) > 0,
   };
 }
@@ -119,7 +120,7 @@ const OWN_LEADS: Partial<Record<UnitKind, (l: Lead, ev: Extract<FightEvent, { t:
 };
 
 /** Winding up for an ability: the body as its look says, light gathering in, a lunge or what it throws ahead. */
-function windUp(l: Lead, ev: Extract<FightEvent, { t: "cast" }>): void {
+function windUp(cat: Catalog, l: Lead, ev: Extract<FightEvent, { t: "cast" }>): void {
   const a = actor(ev.id);
   const look = LOOKS[ev.kind];
   if (!a || !look) return;
@@ -127,7 +128,7 @@ function windUp(l: Lead, ev: Extract<FightEvent, { t: "cast" }>): void {
   const goes = l.at - (look.leap ?? 0);
   a.wind = { from: l.from, at: goes, body: look.body };
   if (t && t !== a) face(a, t);
-  const drawn = coloursOf(ev.kind, look.gather);
+  const drawn = coloursOf(cat, ev.kind, look.gather);
   if (drawn) gather(a.x, a.y - Math.round(tallOf(a) / 2), 8, drawn, (goes - l.from) / HZ);
   if (look.body === "dig") burst(a.x, a.y, 6, [EARTH[1], EARTH[2]], { speed: 20, toward: UP, spread: 2, ttl: 0.4 });
   if (look.lunge && t) blowAt(a, t, l.at - 4, l.at, look.lunge, look.lunge >= 6 ? 4 : 0);
@@ -142,10 +143,10 @@ function throwAhead(l: Lead, ev: Extract<FightEvent, { t: "cast" }>, a: Actor, w
   for (const id of to) throwAt(chestOf(a), id, feetAt(ev.cells[0] ?? a.unit.cell), l.at - fly, fly, what);
 }
 
-/** Begins the lead-in to something about to happen. */
-export function begin(l: Lead): void {
+/** Begins the lead-in to something about to happen, in a fight played by the catalogue `cat`. */
+export function begin(l: Lead, cat: Catalog): void {
   const ev = l.ev;
-  if (ev.t === "cast") windUp(l, ev);
+  if (ev.t === "cast") windUp(cat, l, ev);
   else if (ev.t === "swing") {
     const a = actor(ev.id);
     const t = actor(ev.target);
@@ -165,7 +166,8 @@ export function begin(l: Lead): void {
 // ---------- what happens ----------
 
 type Events = { [K in FightEvent["t"]]: Extract<FightEvent, { t: K }> };
-type On = { [K in keyof Events]: (ev: Events[K], at: number) => void };
+/** What is drawn for each kind of event, at the step it happened, read by the catalogue the fight is played by. */
+type On = { [K in keyof Events]: (ev: Events[K], at: number, cat: Catalog) => void };
 
 const ON: On = {
   move: (ev, at) => {
@@ -196,7 +198,7 @@ const ON: On = {
     if (a && t && (!a.blow || a.blow.at !== at)) blowAt(a, t, at - 1, at, 5);
     snd.swing();
   },
-  shot: (ev, at) => {
+  shot: (ev, at, cat) => {
     const a = actor(ev.id);
     if (!a) return;
     const t = actor(ev.target);
@@ -204,9 +206,9 @@ const ON: On = {
     const from = feetAt(ev.from);
     const own = ev.what === "ability" ? LOOKS[a.unit.kind] : undefined;
     const small = ATTACK_SHOT[a.unit.kind];
-    const mark = own && t ? markAt(a, t) : null;
+    const mark = own && t ? markAt(cat, a, t) : null;
     throwAt(handOr(a, at, from), ev.target, feetAt(ev.to), at, ev.ticks, own?.shot ?? small?.shot ?? null, {
-      col: coloursOf(a.unit.kind, small?.col)?.[0] ?? STONE[3],
+      col: coloursOf(cat, a.unit.kind, small?.col)?.[0] ?? STONE[3],
       trail: small?.trail ?? false,
       land: mark,
     });
@@ -224,7 +226,7 @@ const ON: On = {
     burst(a.x, a.y - 8, 4, [WATER[3], CREAM], { speed: 20, ttl: 0.3, grav: 0 });
     snd.slip();
   },
-  cast: (ev, at) => cast(ev, at),
+  cast: (ev, at, cat) => cast(cat, ev, at),
   heal: (ev) => {
     const a = actor(ev.id);
     if (!a) return;
@@ -263,8 +265,8 @@ const ON: On = {
     fallsToRise(ev, at);
   },
   rise: (ev, at) => rise(ev, at),
-  summon: (ev, at) => summon(ev, at),
-  trait: (ev, at) => trait(ev, at),
+  summon: (ev, at, cat) => summon(cat, ev, at),
+  trait: (ev, at, cat) => trait(cat, ev, at),
   item: (ev, at) => {
     const a = actor(ev.id);
     if (a) FV.signs.push({ pic: itemPic(ev.item), id: a.unit.id, t0: at });
@@ -283,8 +285,12 @@ const ON: On = {
 };
 
 /** The colours a look names: its owner's own (`livery.ts`) for `"own"`. */
-function coloursOf(kind: UnitKind, named: string | readonly string[] | undefined): readonly string[] | undefined {
-  if (named === "own") return ownOf(kind);
+function coloursOf(
+  cat: Catalog,
+  kind: UnitKind,
+  named: string | readonly string[] | undefined,
+): readonly string[] | undefined {
+  if (named === "own") return ownOf(cat, kind);
   return typeof named === "string" ? [named] : named;
 }
 
@@ -293,9 +299,9 @@ const handOr = (a: Actor, at: number, from: Pt): Pt =>
   handAt(a, at, fightNow()?.tick ?? 0) ?? { x: from.x, y: from.y - 11 };
 
 /** The mark a thrown ability leaves where it lands on `t`. */
-function markAt(a: Actor, t: Actor): () => void {
+function markAt(cat: Catalog, a: Actor, t: Actor): () => void {
   const look = LOOKS[a.unit.kind];
-  const col = colourOf(a.unit.kind);
+  const col = colourOf(cat, a.unit.kind);
   return () => {
     if (!look) return;
     const spot = { x: t.x, y: t.y };
@@ -306,7 +312,7 @@ function markAt(a: Actor, t: Actor): () => void {
       cells: [spot],
       hit: [spot],
       col,
-      own: ownOf(a.unit.kind),
+      own: ownOf(cat, a.unit.kind),
       shiny: t.unit.items.length > 0,
     });
   };
@@ -371,10 +377,10 @@ function struck(a: Actor, ev: Events["hit"], at: number): void {
   if (ev.source === "ability" && countHit(ev.by, at) === 2) weigh("many");
 }
 
-function cast(ev: Events["cast"], at: number): void {
+function cast(cat: Catalog, ev: Events["cast"], at: number): void {
   const a = actor(ev.id);
   if (!a) return;
-  const col = colourOf(ev.kind);
+  const col = colourOf(cat, ev.kind);
   const look = LOOKS[ev.kind];
   // A Toadstool says its spores as it falls: it stays fallen.
   if (a.fallAt > at) a.castUntil = at + 9;
@@ -384,8 +390,8 @@ function cast(ev: Events["cast"], at: number): void {
   for (const cell of ev.cells) FV.flashes.push({ cell, t0: at + distance(a.unit.cell, cell) * 1.5, col });
   // Its name, small, so that it never covers what it does.
   if (ev.name) say(a.x, a.y - framesOf(ev.kind).tall - 8, ev.name, col, { small: true, ttl: 0.8, rise: 6 });
-  if (look?.lands) hold(ev, look, a, t, at);
-  else if (look) goesOff(ev, look);
+  if (look?.lands) hold(cat, ev, look, a, t, at);
+  else if (look) goesOff(cat, ev, look);
   snd.ability(VOICES[ev.kind] ?? { n: 12, wave: "triangle" });
 }
 
@@ -394,20 +400,20 @@ function cast(ev: Events["cast"], at: number): void {
  * whoever it is for (a person points at them), and its seal and lance hang on them (`spells.ts`).
  * All of it is counted from the step it went off at, `at`.
  */
-function hold(ev: Events["cast"], look: Look, a: Actor, t: Actor | undefined, at: number): void {
+function hold(cat: Catalog, ev: Events["cast"], look: Look, a: Actor, t: Actor | undefined, at: number): void {
   showMark({ t: "telegraph", id: ev.id, cells: ev.cells, ticks: ev.ticks }, MARKED);
   if (t) a.held = { at, lands: at + ev.ticks, aim: aimAt(t.x - a.x, t.y - a.y), left: a.left };
   hang(ev.kind, { by: ev.id, to: ev.targets[0] ?? -1 }, at, ev.ticks, () => {
-    for (const cell of ev.cells) FV.flashes.push({ cell, t0: at + ev.ticks, col: colourOf(ev.kind) });
-    goesOff(ev, look);
+    for (const cell of ev.cells) FV.flashes.push({ cell, t0: at + ev.ticks, col: colourOf(cat, ev.kind) });
+    goesOff(cat, ev, look);
     const landing = VOICES[ev.kind]?.lands;
     if (landing) snd.ability(landing);
   });
 }
 
 /** An ability going off: its mark (a thrown one leaves its mark where each thing lands instead), and the weight it lands with. */
-function goesOff(ev: Events["cast"], look: Look): void {
-  const where = atOf(ev);
+function goesOff(cat: Catalog, ev: Events["cast"], look: Look): void {
+  const where = atOf(cat, ev);
   if (where && !look.shot) MARKS[look.mark](where);
   if (look.bump) bump(look.bump);
   const stop = look.stop ?? (look.bump ? "big" : null);
@@ -438,7 +444,7 @@ function status(ev: Events["status"], at: number): void {
   else if (ev.status === "braced") ring(a.x, a.y, 11, STONE[3], 0.35);
 }
 
-function summon(ev: Events["summon"], at: number): void {
+function summon(cat: Catalog, ev: Events["summon"], at: number): void {
   const u = FV.pb?.fight.units[ev.id];
   if (!u) return;
   const from = actor(ev.by);
@@ -460,13 +466,13 @@ function summon(ev: Events["summon"], at: number): void {
     a.y = spot.y;
     a.move = null;
   }
-  burst(spot.x, spot.y - 4, 10, [colourOf(ev.kind), CREAM], { speed: 28, ttl: 0.4 });
+  burst(spot.x, spot.y - 4, 10, [colourOf(cat, ev.kind), CREAM], { speed: 28, ttl: 0.4 });
   if (ev.kind === "uncounted" || ev.kind === "biguncounted")
     say(spot.x, spot.y - 16, "Nobody counted this one.", CREAM, { ttl: 1.3 });
   snd.summon();
 }
 
-function trait(ev: Events["trait"], at: number): void {
+function trait(cat: Catalog, ev: Events["trait"], at: number): void {
   const col = TRAIT_COLOUR[ev.trait];
   ev.ids.forEach((id, i) => {
     const a = actor(id);
@@ -477,9 +483,15 @@ function trait(ev: Events["trait"], at: number): void {
   const first = actor(ev.ids[0] ?? -1);
   if (first) {
     FV.signs.push({ pic: traitPic(ev.trait), id: first.unit.id, t0: at });
-    say(first.x, first.y - tallOf(first) - 14, `${TRAITS[ev.trait].name}${ev.step > 1 ? ` ${ev.step}` : ""}`, col, {
-      ttl: 1,
-    });
+    say(
+      first.x,
+      first.y - tallOf(first) - 14,
+      `${traitIn(cat, ev.trait).name}${ev.step > 1 ? ` ${ev.step}` : ""}`,
+      col,
+      {
+        ttl: 1,
+      },
+    );
   }
   if (ev.side === FV.ours) {
     FV.woke?.(ev.trait);
@@ -487,12 +499,12 @@ function trait(ev: Events["trait"], at: number): void {
   }
 }
 
-/** Shows one thing the rules say happened, at the step it happened. */
-export function show(cue: Cue): void {
+/** Shows one thing the rules say happened, at the step it happened, in a fight played by the catalogue `cat`. */
+export function show(cue: Cue, cat: Catalog): void {
   FV.seen.push(cue.ev);
   // Zones, marked lines and pulls are drawn by their own file, which reads the fight as it goes on.
   if (showMark(cue.ev, MARKED)) return;
-  on(cue.ev.t, cue.ev, cue.at);
+  on(cue.ev.t, cue.ev, cue.at, cat);
 }
 /** The fight as the marks see it: always the one on show, at its clock. */
 const MARKED = {
@@ -506,14 +518,14 @@ const MARKED = {
     return clockNow();
   },
 };
-function on<K extends keyof Events>(t: K, ev: Events[K], at: number): void {
-  ON[t](ev, at);
+function on<K extends keyof Events>(t: K, ev: Events[K], at: number, cat: Catalog): void {
+  ON[t](ev, at, cat);
 }
 
 // ---------- every moment ----------
 
 /** Things thrown follow whoever they are thrown at, and land; a fallen figure, its tumble over, goes in a puff. */
-export function stepShown(c: number): void {
+export function stepShown(c: number, cat: Catalog): void {
   stepSpells(c);
   stepRisings(c);
   stepRoots(c);
@@ -528,8 +540,8 @@ export function stepShown(c: number): void {
   for (const a of FV.actors) {
     if (!a || a.gone || isRising(a) || c < a.fallAt + TUMBLE) continue;
     a.gone = true;
-    const big = isBossId(a.unit.kind) || (isFigureId(a.unit.kind) && FIGURES[a.unit.kind].tier === 5);
-    puff(a.x + a.tumble * 6, a.y, puffOf(a.unit.kind), big);
+    const big = isBossId(a.unit.kind) || (isFigureId(a.unit.kind) && figureIn(cat, a.unit.kind).tier === 5);
+    puff(a.x + a.tumble * 6, a.y, puffOf(cat, a.unit.kind), big);
   }
 }
 

@@ -3,7 +3,7 @@
  * clock's words, the players down the side, whom the member faces, the carousel's turn, a place in
  * words, and what a room paid. Nothing here reads a clock: `now` is Leaf's, given.
  */
-import { ECONOMY, type FightResult, FIGURES, refusalText, type RunView } from "@sequoia-leaf/raid";
+import { catalogOf, ECONOMY, type FightResult, figureIn, refusalText, type RunView } from "@sequoia-leaf/raid";
 import { CHAIRS, CLOCK, SITTING_REFUSALS } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import type { SeatView, SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
@@ -140,7 +140,7 @@ export function turnLine(view: SittingView, now: number): string {
   const turn = turnOf(view, now);
   if (turn.at === "taken") {
     const offer = stage.ring[turn.offer];
-    return offer ? `You took ${FIGURES[offer.kind].name}.` : "";
+    return offer ? `You took ${figureIn(catalogOf(view), offer.kind).name}.` : "";
   }
   if (turn.at === "choosing")
     return stage.open === stage.turns.length && view.room === 0

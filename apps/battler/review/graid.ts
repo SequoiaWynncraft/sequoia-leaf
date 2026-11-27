@@ -5,7 +5,7 @@
  * at: each true form's fall (and in how many steps it is back up), each rise, and each of Seqwawa's
  * casts.
  */
-import { type FightSetup, LAST_ERA, openFight, stepFight } from "@sequoia-leaf/raid";
+import { catalogAt, type FightSetup, LAST_ERA, openFight, stepFight } from "@sequoia-leaf/raid";
 import { isUnitKind, specOf } from "@sequoia-leaf/raid/content/figures.ts";
 import { COLS } from "@sequoia-leaf/raid/hex.ts";
 
@@ -28,7 +28,7 @@ const kept: { setup: FightSetup | null } = { setup: null };
 function seated(kinds: readonly string[], stars: 1 | 2 | 3): FightSetup["sides"][0] {
   const used = new Map<number, number>();
   const figures = kinds.filter(isUnitKind).map((kind) => {
-    const range = specOf(kind).range;
+    const range = specOf(catalogAt(LAST_ERA), kind).range;
     const row = range <= 1 ? 0 : range === 2 ? 1 : 3;
     const col = used.get(row) ?? 0;
     used.set(row, col + 1);
