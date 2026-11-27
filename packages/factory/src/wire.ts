@@ -216,7 +216,9 @@ export function accepts(y: Yard, to: number, n: number, side: number, wire: Wire
   // A machine's, which most of what is not a belt is, by its own name (`tick.ts` says why).
   if (takesIt === makerWants && roomFor === makerRoom)
     return makerWants(KIT, y, own, n) && makerRoom(KIT, y, own, n, side, wire);
-  return takesIt !== undefined && roomFor !== undefined && takesIt(KIT, y, own, n) && roomFor(KIT, y, own, n, side, wire);
+  return (
+    takesIt !== undefined && roomFor !== undefined && takesIt(KIT, y, own, n) && roomFor(KIT, y, own, n, side, wire)
+  );
 }
 
 /** Hands the thing `n` to the tile at `to` from its side `side`, `over` eighths past the edge of the tile it came from. */
