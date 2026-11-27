@@ -71,6 +71,14 @@ export const TINTS = 6;
 
 export const ITEM_COUNT = ITEMS.length;
 export const KIND_COUNT = KINDS.length;
+/** The bits a kind is kept in, in a saved piece's first byte and in an Undo entry's: step F3 of tiers 5 to 8 widens them. */
+export const KIND_BITS = 4;
+/** A kind as it is kept, in its bits: one past them is no yard's yet, and is refused out loud rather than kept as another. */
+export function keptKind(kind: number): number {
+  if (kind >= 1 << KIND_BITS)
+    throw new Error(`kind ${kind} does not fit in the ${KIND_BITS} bits a save keeps a kind in`);
+  return kind;
+}
 
 export const BELT = kind("belt");
 export const GATHERER = kind("gatherer");

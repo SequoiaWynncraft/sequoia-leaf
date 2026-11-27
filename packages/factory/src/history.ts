@@ -79,7 +79,7 @@ import {
 } from "./pieces.ts";
 import { REASON } from "./reasons.ts";
 import { legPiece } from "./route.ts";
-import { FIXED, gradeOf, isKind, type Kind, NONE, SHUTS, SPANS } from "./tables.ts";
+import { FIXED, gradeOf, isKind, keptKind, type Kind, NONE, SHUTS, SPANS } from "./tables.ts";
 import { changed, type Entry, holderOf, place, redwoodAt, standingTree, tunnelRow, vacate, type Yard } from "./yard.ts";
 
 /** The version of the Works' rules this was built with: the one the page and Leaf compare. */
@@ -239,7 +239,7 @@ function packSettings(o: Writer, was: readonly Setting[]): void {
       [32, s.span === 0 ? undefined : s.span + 8],
     ];
     const f = parts.reduce((m, [bit, v]) => (v === undefined ? m : m | bit), 0);
-    o.byte(s.kind | (s.dir << 4) | (s.free ? 64 : 0) | (f === 0 ? 0 : 128));
+    o.byte(keptKind(s.kind) | (s.dir << 4) | (s.free ? 64 : 0) | (f === 0 ? 0 : 128));
     if (f !== 0) o.byte(f);
     for (const [, v] of parts) if (v !== undefined) o.byte(v);
   }

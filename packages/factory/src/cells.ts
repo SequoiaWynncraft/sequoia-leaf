@@ -25,7 +25,7 @@
 import { Reader, Writer } from "./bytes.ts";
 import { RULES } from "./kinds/list.ts";
 import { waysOn } from "./pieces.ts";
-import { ALL_ITEMS, CARRIES, FIXED, type Goal, isItem, NONE, SHUTS, SPAN_MOST, TINTS } from "./tables.ts";
+import { ALL_ITEMS, CARRIES, FIXED, type Goal, isItem, keptKind, NONE, SHUTS, SPAN_MOST, TINTS } from "./tables.ts";
 import { KIT } from "./wire.ts";
 import { held, holderOf, type Holders, tunnelOf, type Yard } from "./yard.ts";
 
@@ -185,15 +185,10 @@ function writeNumbers(o: Writer, p: KeptPiece, parts: typeof EARLY | typeof LATE
   }
 }
 
-/** The bits a piece's kind is kept in, in its first byte: a kind past them is no yard's yet (step F3 of tiers 5 to 8 widens them). */
-const KIND_BITS = 4;
-
 /** Writes a kept piece, from its first byte. */
 function writeKept(o: Writer, p: KeptPiece): void {
-  if (p.kind >= 1 << KIND_BITS)
-    throw new Error(`kind ${p.kind} does not fit in the ${KIND_BITS} bits a save keeps a kind in`);
   const f = partsOf(p);
-  o.byte(p.kind | (p.dir << 4) | (p.item === undefined ? 0 : 64) | (f === 0 ? 0 : 128));
+  o.byte(keptKind(p.kind) | (p.dir << 4) | (p.item === undefined ? 0 : 64) | (f === 0 ? 0 : 128));
   if (p.item !== undefined) {
     o.byte(p.item);
     o.byte((p.prog ?? 0) | ((p.via ?? 0) << 4));

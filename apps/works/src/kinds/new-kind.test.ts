@@ -8,8 +8,8 @@
  * numbers, its map colour and its lamp from its module. Anything else that had to change to have a
  * kind fails here.
  *
- * A save keeps a kind in 4 bits (step F3 of tiers 5 to 8 widens them), so a 17th kind is refused
- * there, out loud.
+ * A save keeps a kind in 4 bits, and so does an Undo entry (step F3 of tiers 5 to 8 widens them), so
+ * a 17th kind is refused in both, out loud, rather than kept as another kind.
  */
 import { describe, expect, test } from "bun:test";
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -141,6 +141,7 @@ function bun(at: string, ...args: string[]): { ok: boolean; out: string } {
 
 /** What plays the sieve by the rules, in the copy. */
 const PLAY = `import * as F from "./packages/factory/src/index.ts";
+import { act } from "./packages/factory/src/commands.ts";
 import { bareLand } from "./packages/factory/test/land.ts";
 
 const k = F.kindNamed("sieve");
@@ -166,6 +167,14 @@ try {
 } catch (e) {
   kept = String(e);
 }
+// Undo keeps what a command took up, its kind in the same bits.
+F.build(y, k, 5, 7, 0, Infinity);
+let undoKept = "";
+try {
+  act(y, { do: "remove", x: 5, y: 7 }, Infinity, "a1");
+} catch (e) {
+  undoKept = String(e);
+}
 console.log(
   JSON.stringify({
     built,
@@ -179,6 +188,7 @@ console.log(
     over: F.refusal(y, k, 10, 4, Infinity, 1),
     refund: F.remove(y, 10, 4),
     kept: kept.includes("4 bits"),
+    undoKept: undoKept.includes("4 bits"),
   }),
 );
 `;
@@ -240,6 +250,7 @@ describe("a new kind of piece", () => {
         over: null,
         refund: { ok: true, refund: 5 },
         kept: true,
+        undoKept: true,
       });
       writeFileSync(join(at, "page.ts"), PAGE);
       const paged = bun(at, "page.ts");
