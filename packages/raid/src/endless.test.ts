@@ -9,8 +9,8 @@ import type { FigureId, Stars } from "./content/figures.ts";
 import { eraOf, LEGACY_ERA } from "./content/releases.ts";
 import { ROOM_COUNT, ROOMS } from "./content/rooms.ts";
 import { depthSlot, paidFor, reached, weekAt } from "./depths.ts";
-import { foeOf, heldRoom, heldSlot, roomAt, sparAt } from "./endless.ts";
-import { boardMet, opposition } from "./foe.ts";
+import { heldRoom, heldSlot, roomAt, sparAt } from "./endless.ts";
+import { boardMet, foeOf, opposition } from "./foe.ts";
 import { meets, RAID, type RaidNote, readCommand, type Table, TABLE_VERSION } from "./game.ts";
 import { payout } from "./outside.ts";
 import {

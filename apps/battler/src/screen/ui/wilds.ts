@@ -13,10 +13,11 @@ import {
   picksOf,
   pieces,
   type RaidNote,
+  ROOM_RULES,
   roomAt,
+  roomOf,
+  type RoomRun,
   type RuleId,
-  ruleOf,
-  RULES,
   type RunView,
   WILDS,
   wingEnd,
@@ -25,11 +26,11 @@ import {
 import { nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
 /** A rule as one line: its name, then what it does. */
-export const ruleSaid = (rule: RuleId): string => `${RULES[rule].name}: ${RULES[rule].text}`;
-/** The rule the room a run is in is played under, as one line; null under none. */
-export const ruleLine = (run: Pick<RunView, "room" | "wing">): string | null => {
-  const rule = ruleOf(run);
-  return rule ? ruleSaid(rule.id) : null;
+export const ruleSaid = (rule: RuleId): string => `${ROOM_RULES[rule].name}: ${ROOM_RULES[rule].text}`;
+/** The rules a room of a run is played under (by default the one it is in, `roomOf`), as one line; null under none. */
+export const ruleLine = (run: RoomRun, at = run.room): string | null => {
+  const { named } = roomOf(run, at);
+  return named.length > 0 ? named.map(ruleSaid).join(" ") : null;
 };
 
 /** The first and last rooms of the wing a room is in, counting from 1. */

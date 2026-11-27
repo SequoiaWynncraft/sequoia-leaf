@@ -8,7 +8,7 @@ import { portrait } from "@sequoia-leaf/figures/sprites.ts";
  */
 import { el } from "@sequoia-leaf/kit/dom.ts";
 import { type Release, scope } from "@sequoia-leaf/kit/scope.ts";
-import { type RaidNote, type RuleId, RULES } from "@sequoia-leaf/raid";
+import { type RaidNote, ROOM_RULES, type RuleId } from "@sequoia-leaf/raid";
 
 import { ruleShown } from "../closed.ts";
 import { onChange, S } from "../state.ts";
@@ -17,8 +17,8 @@ import { bossOfWing, ruleSaid, shiftedLine } from "./wilds.ts";
 
 /** A rule's card on the pick: its name and its sentence. */
 export const ruleCard = (rule: RuleId): HTMLElement[] => [
-  el("b", "k-gold", { text: RULES[rule].name }),
-  el("p", "k-d", { text: RULES[rule].text }),
+  el("b", "k-gold", { text: ROOM_RULES[rule].name }),
+  el("p", "k-d", { text: ROOM_RULES[rule].text }),
 ];
 
 /** Beside the cards, the boss the wing ends with, so both can be judged against it. */
@@ -47,9 +47,9 @@ export function bossAhead(room: number): HTMLElement {
 export function ruleSign(): HTMLElement {
   const sign = el("div", "k-plaque", { id: "rule", hidden: true });
   onChange(() => {
-    const rule = S.run && S.screen.at === "fight" ? ruleShown(S.run) : null;
-    sign.hidden = rule === null;
-    if (rule) sign.textContent = ruleSaid(rule.id);
+    const shown = S.run && S.screen.at === "fight" ? ruleShown(S.run) : null;
+    sign.hidden = shown === null;
+    if (shown) sign.textContent = shown.named.map(ruleSaid).join(" ");
     placeRule();
     showShifted();
   });

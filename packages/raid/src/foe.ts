@@ -6,14 +6,20 @@
 import { below, type Met, mix, pick } from "@sequoia-leaf/core";
 
 import { boonNumber, FIGHT_BOONS } from "./content/boons.ts";
-import type { Catalog } from "./content/catalog.ts";
+import { type Catalog, catalogOf } from "./content/catalog.ts";
+import { ENDLESS } from "./content/endless.ts";
 import { type BossId, isBossId, isFigureId } from "./content/figures.ts";
 import { isMemberId } from "./content/members.ts";
-import { LEVELS, MAX_LEVEL, type Room, ROOMS, type SparStrength, TRAILS } from "./content/rooms.ts";
+import { LEVELS, MAX_LEVEL, ROOMS, type RoomSpec, type SparStrength, TRAILS } from "./content/rooms.ts";
+import { shut } from "./content/rules.ts";
+import { isHeld, roomAt, sparAt } from "./endless.ts";
 import type { FightResult, FightSummary } from "./fight/types.ts";
 import { COLS } from "./hex.ts";
 import { isParty, type Party, type Placed } from "./party.ts";
+import { roomOf, type RoomRun } from "./room.ts";
+import type { Run } from "./run.ts";
 import { sparParty } from "./spar.ts";
+import { seatOpen } from "./wing.ts";
 
 /**
  * Where a member's board for a room is left for other members to meet (`Done.keep`, `Ctx.met`): its
@@ -111,6 +117,28 @@ export function opposition(
   return forest(seed, roomIndex, room, trailIndex);
 }
 
+/**
+ * Who is waiting in the room a run is in, from the room's seed: for a run that is not endless, as
+ * `opposition` has it. In an endless run, the forest as strong as the room says (`Room.might`); in
+ * a sparring room a regular as strong as `sparAt` says, but in a room held (`isHeld`) the board of
+ * the member who holds it, when Leaf hands one over (`met`) and it is one a member could have
+ * fielded (`boardMet`). Nobody sits on a seat the room closes (`Room.rules`): the regular is seated
+ * round them, and the forest's plan moves anyone on one to the nearest open seat (`seatOpen`).
+ */
+export function foeOf(run: Pick<Run, "trail" | "era" | "own"> & RoomRun, seed: number, met?: Met): Party {
+  if (!run.endless) return opposition(catalogOf(run), seed, run.room, run.trail, met, run.own !== null);
+  const room = roomOf(run);
+  const closed = shut(room.rules);
+  const spec = roomAt(run.room);
+  if (spec && room.kind !== "spar") {
+    const party = forest(seed, run.room, spec, run.trail, room.might);
+    return { ...party, figures: seatOpen(party.figures, closed) };
+  }
+  const regular = regularAt(catalogOf(run), seed, run.room, run.trail, sparAt(run.room), closed);
+  const held = isHeld(run, run.room) && met ? boardMet(catalogOf(run), met, false, ENDLESS.chairs) : null;
+  return held ?? regular;
+}
+
 /** The most a party's might can be (`isParty`). */
 const MIGHT_MOST = 1000;
 
@@ -118,7 +146,7 @@ const MIGHT_MOST = 1000;
  * The forest's trouble or boss in a room, at the trail's strength, and `grown` percent of that
  * (an endless run's rooms after the fifteenth).
  */
-export function forest(seed: number, roomIndex: number, room: Room, trailIndex: number, grown = 100): Party {
+export function forest(seed: number, roomIndex: number, room: RoomSpec, trailIndex: number, grown = 100): Party {
   const trail = TRAILS[trailIndex] ?? TRAILS[0];
   const plan = pick({ rng: mix(seed, 300 + roomIndex) }, room.plans);
   const figures: Placed[] = [];

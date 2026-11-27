@@ -69,12 +69,12 @@ describe("the card that picks a run of the Wilds back up", () => {
 
 describe("the rule's words", () => {
   test("a rule holds on the room's card only in its own wing", () => {
-    const wing = { rule: "elbow" as const, at: 1, stumps: [] };
-    expect(ruleLine({ room: 7, wing })).toBe(
-      "Elbow Room: A figure that starts with no friend touching it has 30% more attack.",
-    );
-    expect(ruleLine({ room: 10, wing })).toBeNull();
-    expect(ruleLine({ room: 7, wing: null })).toBeNull();
+    const run = runAt(7, null);
+    run.wing = { rule: "elbow", at: 1, stumps: [] };
+    expect(ruleLine(run)).toBe("Elbow Room: A figure that starts with no friend touching it has 30% more attack.");
+    expect(ruleLine(run, 10)).toBeNull();
+    run.wing = null;
+    expect(ruleLine(run)).toBeNull();
   });
   test("the pick is titled with its wing's rooms, and the boss beside it is the wing's last room's", () => {
     expect(ruleTitle(5)).toBe("A rule for rooms 6 to 10");

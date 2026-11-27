@@ -1,14 +1,24 @@
 /**
- * The Wilds' rules drawn: the hexes a rule closes, on the board where they are, and a small picture
- * of the board under each rule for its card on the pick. On the board, a stump on each of Stumps'
- * hexes, Narrow Table's outside columns grown over, and Long Table's front rows bare while planning
- * (once a fight is on they are open). In a fight the rule it was set up with says which hexes; while
- * planning, the room's rule (`ruleOf`). Nothing is drawn under no rule.
+ * The Wilds' rules drawn: the hexes a room's rules close, on the board where they are, and a small
+ * picture of the board under each rule for its card on the pick. On the board, a stump on each of
+ * Stumps' hexes, Narrow Table's outside columns grown over, and Long Table's front rows bare while
+ * planning (once a fight is on they are open). In a fight what its setup was bound by says which
+ * hexes; while planning, the room's (`roomOf`). Nothing is drawn under no rule.
  */
 import { BARK, CORAL, CREAM, EARTH, GOLD, GREEN, INK, PAPER, SKY, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, makeCanvas } from "@sequoia-leaf/kit/util.ts";
-import { closedCells, closedSeats, type FightRule, type RuleId, ruleOf, type RunView } from "@sequoia-leaf/raid";
+import {
+  closedCells,
+  type FightRules,
+  ROOM_RULES,
+  roomOf,
+  ruled,
+  type RuleId,
+  rulesOf,
+  type RunView,
+  shut,
+} from "@sequoia-leaf/raid";
 import { COLS, HOME_ROWS, ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 
 import { hexMark } from "./art/table.ts";
@@ -59,26 +69,35 @@ function put(g: Ctx, mark: HTMLCanvasElement, cell: number): void {
   g.drawImage(mark, Math.round(V.bx + p.x - HEX_W / 2), Math.round(V.by + p.y - HEX_H / 2));
 }
 
-/** The rule of the fight on the table, if one is shown; else the rule of the room being planned. */
-export function ruleShown(run: RunView): FightRule | null {
+/** The rules shown and what they set: the fight's on the table, if one is shown; else the room's being planned. Null under none. */
+export function ruleShown(run: RunView): { named: readonly RuleId[]; rules: FightRules } | null {
   const s = S.screen;
-  if (fightOn()) return s.at === "fight" || s.at === "after" ? (s.play.fought.setup.rule ?? null) : null;
-  return ruleOf(run);
+  if (fightOn()) {
+    if (s.at !== "fight" && s.at !== "after") return null;
+    const { setup } = s.play.fought;
+    return setup.named?.length ? { named: setup.named, rules: rulesOf(setup) } : null;
+  }
+  const room = roomOf(run);
+  return room.named.length > 0 ? room : null;
 }
 
-/** The hexes the rule shown closes, drawn over the board and under everyone on it. */
-export function drawClosed(g: Ctx, run: RunView): void {
-  const rule = ruleShown(run);
-  if (!rule) return;
+/** How a hex closed all fight long looks: a stump under Stumps, grown over under Narrow Table, else bare. */
+function closedMark(named: readonly RuleId[]): HTMLCanvasElement {
   MARKS.stump ??= stumpMark();
   MARKS.shut ??= shutMark();
-  MARKS.bare ??= hexMark("#1a0f1e66", "#1a0f1e99");
-  const mark = rule.id === "stumps" ? MARKS.stump : rule.id === "narrow" ? MARKS.shut : MARKS.bare;
-  if (fightOn()) {
-    for (const cell of closedCells(rule)) put(g, mark, shownCell(cell));
-    return;
-  }
-  for (const seat of closedSeats(rule)) for (const side of [0, 1] as const) put(g, mark, seatCell(side, seat));
+  return named.includes("stumps") ? MARKS.stump : named.includes("narrow") ? MARKS.shut : bareMark();
+}
+const bareMark = (): HTMLCanvasElement => (MARKS.bare ??= hexMark("#1a0f1e66", "#1a0f1e99"));
+
+/** The hexes the rules shown close, drawn over the board and under everyone on it: in a fight those closed all fight long, while planning those closed only for sitting down too. */
+export function drawClosed(g: Ctx, run: RunView): void {
+  const shown = ruleShown(run);
+  if (!shown) return;
+  const mark = closedMark(shown.named);
+  for (const cell of closedCells(shown.rules)) put(g, mark, fightOn() ? shownCell(cell) : cell);
+  if (fightOn()) return;
+  const bare = bareMark();
+  for (const seat of shown.rules.closedToSit) for (const side of [0, 1] as const) put(g, bare, seatCell(side, seat));
 }
 
 // ---------- the rule's picture ----------
@@ -104,14 +123,14 @@ const SOME: Readonly<Record<RuleId, { closed: readonly number[]; ours: readonly 
 /** A small picture of the board under a rule: its closed hexes, figures on both halves, and what it does to them. */
 export function rulePic(rule: RuleId): HTMLCanvasElement {
   const { c, g } = makeCanvas(COLS * CELL + 4, ROWS * LINE + SPLIT + 2);
-  const shut = closedSeats({ id: rule, stumps: [...SOME.stumps.closed] });
+  const closed = shut(ruled(ROOM_RULES[rule].sets(SOME.stumps.closed)));
   const ours = SOME[rule].ours;
   for (let row = 0; row < ROWS; row++) {
     for (let col = 0; col < COLS; col++) {
       const { x, y } = at(col, row);
       const near = row >= HOME_ROWS;
       const seat = near ? (row - HOME_ROWS) * COLS + col : (HOME_ROWS - 1 - row) * COLS + (COLS - 1 - col);
-      const ground = shut.has(seat)
+      const ground = closed.has(seat)
         ? rule === "stumps"
           ? BARK[2]
           : rule === "narrow"
@@ -119,7 +138,7 @@ export function rulePic(rule: RuleId): HTMLCanvasElement {
             : EARTH[0]
         : PAPER[0];
       R(g, x, y, CELL - 1, LINE - 1, ground);
-      if (!ours.includes(seat) || shut.has(seat)) continue;
+      if (!ours.includes(seat) || closed.has(seat)) continue;
       R(g, x + 1, y, 2, 2, near ? CREAM : CORAL);
     }
   }

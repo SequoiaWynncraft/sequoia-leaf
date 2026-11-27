@@ -12,12 +12,12 @@ import {
   ECONOMY,
   ENDLESS,
   fieldCap,
-  grownAt,
   isHeld,
   lastRoom,
   type Room,
   ROOM_COUNT,
   roomAt,
+  roomOf,
   type RunView,
 } from "@sequoia-leaf/raid";
 import { nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
@@ -129,10 +129,11 @@ function gives(index: number, room: Room, run: RunView): string {
   return `Win: pick 1 of ${ECONOMY.componentsWon} components, twice. ${lose}${chair}`;
 }
 
-/** A room on the track: what kind it is, who is or was there, what it gives, and in an endless run how much the forest has grown in it and the Wilds' rule. */
+/** A room on the track (`roomOf`): what kind it is, who is or was there, what it gives, and in an endless run how much the forest has grown in it and the Wilds' rule. */
 function roomDesc(index: number, run: RunView): Description | null {
-  const room = roomAt(index);
-  if (!room || index > lastRoom(run)) return null;
+  const spec = roomAt(index);
+  if (!spec || index > lastRoom(run)) return null;
+  const room = roomOf(run, index);
   const state = outcomeOf(run, index);
   const here = run.room === index && run.stage.phase !== "over";
   const kind = room.kind === "spar" ? "Sparring" : room.kind === "boss" ? "A boss" : "Trouble";
@@ -141,15 +142,15 @@ function roomDesc(index: number, run: RunView): Description | null {
     state === "won" ? "Won." : state === "lost" ? "Lost." : state === "drawn" ? "A draw." : gives(index, room, run),
     ECONOMY.boonRooms.some((r) => r === index) ? "A boon after it, won or lost." : null,
     run.endless && index >= ROOM_COUNT && room.kind !== "spar"
-      ? `+${Math.round(grownAt(index) - 100)}% health and attack.`
+      ? `+${Math.round(room.might - 100)}% health and attack.`
       : null,
     // The Wilds' rule for the wing the room is in, while it holds.
-    ruleLine({ room: index, wing: run.wing }),
+    ruleLine(run, index),
   ];
   return {
     name: `Room ${index + 1}`,
     icon: roomIcon(room.kind),
-    tag: `${kind}, wing ${room.wing}.`,
+    tag: `${kind}, wing ${spec.wing}.`,
     blocks: [{ body: lines.filter((l) => l !== null).join(" ") }],
   };
 }

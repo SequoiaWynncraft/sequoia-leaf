@@ -24,6 +24,7 @@ import type { RuleId } from "./content/wilds.ts";
 import { arrange } from "./formation.ts";
 import { SEATS } from "./hex.ts";
 import { countTraits } from "./party.ts";
+import { closedNow } from "./room.ts";
 import {
   beginFight,
   type Done,
@@ -42,7 +43,6 @@ import {
   type Taken,
   takeTakings,
 } from "./run.ts";
-import { closedNow } from "./wing.ts";
 
 /**
  * How the bot plans, on a run `R`: a member's planning command, done. Played directly it is done to

@@ -119,7 +119,8 @@ export interface SparStrength {
   /** Deep enough that a member could have found the copies for any star, however seldom the stall offers the figure. */
   readonly anyStars?: boolean;
 }
-export interface Room {
+/** One of the rooms a way goes through, as the content has it (`room.ts` says what binds it for a run). */
+export interface RoomSpec {
   readonly kind: RoomKind;
   readonly wing: 1 | 2 | 3;
   /** For trouble and bosses: what may be waiting. One is drawn. */
@@ -128,16 +129,16 @@ export interface Room {
   readonly spar: SparStrength | null;
 }
 
-const trouble = (wing: 1 | 2 | 3, ...plans: Plan[]): Room => ({ kind: "trouble", wing, plans, spar: null });
-const boss = (wing: 1 | 2 | 3, ...plans: Plan[]): Room => ({ kind: "boss", wing, plans, spar: null });
-const spar = (wing: 1 | 2 | 3, level: number, spent: number, components: number): Room => ({
+const trouble = (wing: 1 | 2 | 3, ...plans: Plan[]): RoomSpec => ({ kind: "trouble", wing, plans, spar: null });
+const boss = (wing: 1 | 2 | 3, ...plans: Plan[]): RoomSpec => ({ kind: "boss", wing, plans, spar: null });
+const spar = (wing: 1 | 2 | 3, level: number, spent: number, components: number): RoomSpec => ({
   kind: "spar",
   wing,
   plans: [],
   spar: { level, spent, components },
 });
 
-export const ROOMS: readonly Room[] = [
+export const ROOMS: readonly RoomSpec[] = [
   // ---------- the first wing ----------
   trouble(
     1,

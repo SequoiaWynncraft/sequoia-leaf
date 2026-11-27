@@ -37,13 +37,15 @@ import {
 } from "./content/items.ts";
 import { type Era, isEra, LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, TRAIL_COUNT } from "./content/rooms.ts";
+import { type FightRules, ROOM_RULES, ruled } from "./content/rules.ts";
 import { isTraitId, renamedTitle, renamedTraits, TRAIT_IDS, traitNumber } from "./content/traits.ts";
 import { isRuleId, RULE_IDS } from "./content/wilds.ts";
 import { lastRoom } from "./endless.ts";
-import type { FightResult, FightRule, FightSetup, FightSummary, Tally } from "./fight/types.ts";
+import type { FightResult, FightSetup, FightSummary, Tally } from "./fight/types.ts";
 import { SEATS } from "./hex.ts";
 import { readRoster, type Roster } from "./own.ts";
 import { isParty, type Party } from "./party.ts";
+import { setupRules } from "./room.ts";
 import {
   type Choice,
   fielded,
@@ -160,22 +162,49 @@ function readRecord(v: unknown, room: number): RoomRecord {
 const isMemberRef = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 64;
 
 const isSeat = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0 && v < SEATS;
-/** A Wilds rule a fight is played under: one these rules have, and its stumps. */
-function readFightRule(v: unknown, what: string): FightRule {
+/** Seats, each once. */
+const readSeats = (v: unknown, what: string): number[] => unique(each(v, isSeat, SEATS, what), what);
+/** What binds a fight as its setup keeps it (`FightSetup.rules`): the seats it closes, and the numbers it sets apart from plain. */
+function readRules(v: unknown, what: string): Partial<FightRules> {
   const r = record(v, what);
-  return { id: one(r.id, isRuleId, what), stumps: unique(each(r.stumps, isSeat, SEATS, what), what) };
+  const set: { -readonly [K in keyof FightRules]?: FightRules[K] } = {};
+  if (r.closed !== undefined) set.closed = readSeats(r.closed, what);
+  if (r.closedToSit !== undefined) set.closedToSit = readSeats(r.closedToSit, what);
+  if (r.reach !== undefined) set.reach = whole(r.reach, 0, ROOMY, what);
+  if (r.dusk !== undefined) set.dusk = whole(r.dusk, 0, ROOMY, what);
+  if (r.alone !== undefined) set.alone = whole(r.alone, 0, ROOMY, what);
+  return set;
+}
+/**
+ * What binds a fight and the rules named, as its setup keeps them. One kept before a setup kept its
+ * rules by what they set (a table before version 7) names its one rule by id and its stumps: it is
+ * read as that rule's row sets it from them. One set up before there were rules has neither.
+ */
+function readRuled(r: Record<string, unknown>, what: string): Pick<FightSetup, "rules" | "named"> {
+  if (r.rule !== undefined) {
+    const rule = record(r.rule, what);
+    const id = one(rule.id, isRuleId, what);
+    return setupRules({ rules: ruled(ROOM_RULES[id].sets(readSeats(rule.stumps, what))), named: [id] });
+  }
+  return {
+    ...(r.rules !== undefined && { rules: readRules(r.rules, what) }),
+    ...(r.named !== undefined && { named: unique(each(r.named, isRuleId, RULE_IDS.length, what), what) }),
+  };
 }
 /** An era as a run or a setup keeps it; one kept before there were eras is of the era live then. */
 const readEra = (v: unknown, what: string): Era => (v === undefined ? LEGACY_ERA : one(v, isEra, what));
-/** A fight's setup: a seed, its era and two parties, and the Wilds rule it is played under. One set up before there were rules has none. */
+/** A fight's setup: a seed, its era and two parties, and what binds its room (`readRuled`). */
 function readSetup(v: unknown, what: string): FightSetup {
   const r = record(v, what);
   const sides = list(r.sides, 2, what);
   const ours = one(sides[0], isParty, what);
   const theirs = one(sides[1], isParty, what);
-  const setup: FightSetup = { seed: whole(r.seed, 0, UINT, what), era: readEra(r.era, what), sides: [ours, theirs] };
-  if (r.rule !== undefined) setup.rule = readFightRule(r.rule, what);
-  return setup;
+  return {
+    seed: whole(r.seed, 0, UINT, what),
+    era: readEra(r.era, what),
+    sides: [ours, theirs],
+    ...readRuled(r, what),
+  };
 }
 /**
  * The rule a run of the Wilds picked for a wing. A run kept before there were rules has none. So
@@ -189,7 +218,7 @@ function readWing(v: unknown, shown: boolean): Wing | null {
   return {
     rule: w.rule,
     at: whole(w.at, 0, ROOMY, "the wing's rule"),
-    stumps: unique(each(w.stumps, isSeat, SEATS, "the stumps"), "the stumps"),
+    stumps: readSeats(w.stumps, "the stumps"),
   };
 }
 /** The last fight's setup. A run saved before it was kept has none. */
