@@ -555,7 +555,7 @@
       "rev": 0,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "era": 2,
+        "era": 3,
         "begun": {
           "main": 0,
           "endless": 0
@@ -639,14 +639,14 @@
       "rev": 1,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "era": 2,
+        "era": 3,
         "begun": {
           "main": 1,
           "endless": 0
         },
         "held": {
           "main": {
-            "era": 2,
+            "era": 3,
             "way": {
               "course": {
                 "id": "trail",
@@ -839,14 +839,14 @@
       "rev": 1,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "era": 2,
+        "era": 3,
         "begun": {
           "main": 1,
           "endless": 0
         },
         "held": {
           "main": {
-            "era": 2,
+            "era": 3,
             "way": {
               "course": {
                 "id": "trail",
@@ -1025,14 +1025,14 @@
       "rev": 1,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "era": 2,
+        "era": 3,
         "begun": {
           "main": 1,
           "endless": 0
         },
         "held": {
           "main": {
-            "era": 2,
+            "era": 3,
             "way": {
               "course": {
                 "id": "trail",
@@ -1258,14 +1258,14 @@
       "rev": 2,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "era": 2,
+        "era": 3,
         "begun": {
           "main": 1,
           "endless": 0
         },
         "held": {
           "main": {
-            "era": 2,
+            "era": 3,
             "way": {
               "course": {
                 "id": "trail",
@@ -1446,14 +1446,14 @@
       "rev": 2,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "era": 2,
+        "era": 3,
         "begun": {
           "main": 1,
           "endless": 0
         },
         "held": {
           "main": {
-            "era": 2,
+            "era": 3,
             "way": {
               "course": {
                 "id": "trail",
@@ -1634,7 +1634,7 @@
       "rev": 0,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "era": 2,
+        "era": 3,
         "begun": {
           "main": 0,
           "endless": 0
@@ -1852,7 +1852,7 @@
             "till": 0
           }
         },
-        "era": 2
+        "era": 3
       },
       "purse": {
         "coins": 300,
@@ -2028,7 +2028,7 @@
             "till": 0
           }
         },
-        "era": 2
+        "era": 3
       },
       "purse": {
         "coins": 275,
@@ -2489,7 +2489,7 @@
           "mail": []
         },
         "doors": {},
-        "era": 2
+        "era": 3
       },
       "purse": {
         "coins": 300,
@@ -2817,14 +2817,14 @@
       "rev": 3,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "era": 2,
+        "era": 3,
         "begun": {
           "main": 1,
           "endless": 1
         },
         "held": {
           "main": {
-            "era": 2,
+            "era": 3,
             "way": {
               "course": {
                 "id": "trail",
@@ -2921,7 +2921,7 @@
             }
           },
           "endless": {
-            "era": 2,
+            "era": 3,
             "way": {
               "course": {
                 "id": "wilds"
@@ -3356,7 +3356,7 @@
       "rev": 0,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "era": 2,
+        "era": 3,
         "by": "10000000-0000-0000-0000-000000000001",
         "stage": {
           "at": "open",
@@ -3423,7 +3423,7 @@
       "rev": 1,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "era": 2,
+        "era": 3,
         "by": "10000000-0000-0000-0000-000000000001",
         "stage": {
           "at": "open",
@@ -3478,7 +3478,7 @@
       "rev": 1,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "era": 2,
+        "era": 3,
         "by": "10000000-0000-0000-0000-000000000001",
         "stage": {
           "at": "open",
@@ -3561,40 +3561,20 @@
       "rev": 2,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "era": 2,
+        "era": 3,
         "by": "10000000-0000-0000-0000-000000000001",
         "stage": {
           "at": "carousel",
           "until": 1795611312000,
           "ring": [
             {
-              "kind": "emberkit",
-              "item": "glowcap",
-              "by": null
-            },
-            {
               "kind": "worm",
-              "item": "thorn",
-              "by": null
-            },
-            {
-              "kind": "barrowgnome",
               "item": "plume",
               "by": null
             },
             {
-              "kind": "finch",
-              "item": "chestnut",
-              "by": null
-            },
-            {
-              "kind": "moth",
-              "item": "bark",
-              "by": null
-            },
-            {
-              "kind": "mossmote",
-              "item": "bark",
+              "kind": "emberkit",
+              "item": "plume",
               "by": null
             },
             {
@@ -3603,13 +3583,33 @@
               "by": null
             },
             {
+              "kind": "barrowgnome",
+              "item": "glowcap",
+              "by": null
+            },
+            {
+              "kind": "mossmote",
+              "item": "bark",
+              "by": null
+            },
+            {
+              "kind": "moth",
+              "item": "bark",
+              "by": null
+            },
+            {
               "kind": "finch",
               "item": "thorn",
               "by": null
             },
             {
               "kind": "moth",
-              "item": "plume",
+              "item": "chestnut",
+              "by": null
+            },
+            {
+              "kind": "barrowgnome",
+              "item": "thorn",
               "by": null
             }
           ],
@@ -3666,17 +3666,17 @@
           {
             "who": {
               "is": "regular",
-              "figure": "heron",
-              "habit": "slinger"
+              "figure": "drizzlefrog",
+              "habit": "mist"
             },
-            "name": "Reed",
+            "name": "Drizzle",
             "resolve": 20,
             "level": 1,
             "streak": 0,
             "place": null,
             "faces": null,
             "board": {
-              "who": "Reed",
+              "who": "Drizzle",
               "title": "",
               "figures": [],
               "boons": [],
@@ -3687,17 +3687,17 @@
           {
             "who": {
               "is": "regular",
-              "figure": "jay",
-              "habit": "feather"
+              "figure": "glorp",
+              "habit": "bulwark"
             },
-            "name": "Huff",
+            "name": "Glorp",
             "resolve": 20,
             "level": 1,
             "streak": 0,
             "place": null,
             "faces": null,
             "board": {
-              "who": "Huff",
+              "who": "Glorp",
               "title": "",
               "figures": [],
               "boons": [],
@@ -3709,7 +3709,7 @@
             "who": {
               "is": "regular",
               "figure": "mossmote",
-              "habit": "mender"
+              "habit": "moss"
             },
             "name": "Velvet",
             "resolve": 20,
@@ -3729,17 +3729,17 @@
           {
             "who": {
               "is": "regular",
-              "figure": "cindernewt",
-              "habit": "ember"
+              "figure": "jay",
+              "habit": "fang"
             },
-            "name": "Toast",
+            "name": "Huff",
             "resolve": 20,
             "level": 1,
             "streak": 0,
             "place": null,
             "faces": null,
             "board": {
-              "who": "Toast",
+              "who": "Huff",
               "title": "",
               "figures": [],
               "boons": [],
@@ -3750,17 +3750,17 @@
           {
             "who": {
               "is": "regular",
-              "figure": "finch",
-              "habit": "slinger"
+              "figure": "rock",
+              "habit": "bulwark"
             },
-            "name": "Twig",
+            "name": "Rock",
             "resolve": 20,
             "level": 1,
             "streak": 0,
             "place": null,
             "faces": null,
             "board": {
-              "who": "Twig",
+              "who": "Rock",
               "title": "",
               "figures": [],
               "boons": [],
@@ -3772,7 +3772,7 @@
             "who": {
               "is": "regular",
               "figure": "crab12",
-              "habit": "slinger"
+              "habit": "crab"
             },
             "name": "Crab #12",
             "resolve": 20,
@@ -3792,7 +3792,7 @@
         ],
         "you": 0,
         "run": {
-          "era": 2,
+          "era": 3,
           "way": {
             "course": {
               "id": "trail",
@@ -3808,7 +3808,7 @@
             "picks": [
               {
                 "kind": "starter",
-                "options": ["barrowgnome", "emberkit", "crab7"]
+                "options": ["barrowgnome", "crab7", "finch"]
               }
             ]
           },
@@ -3849,7 +3849,7 @@
           ],
           "bench": [null, null, null, null, null, null, null, null, null],
           "items": [],
-          "stall": ["worm", "mossmote", "worm", "worm", "barrowgnome"],
+          "stall": ["barrowgnome", "emberkit", "crab7", "worm", "crab7"],
           "held": false,
           "rustles": 1,
           "bought": 0,

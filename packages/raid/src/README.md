@@ -97,9 +97,11 @@ carries more than three.
 
 **A banner's member.** Each pull banner has one more figure, which is a guild member
 (`content/members.ts`, by the banner's id; the banner names it as its headliner, `content/banners.ts`).
-It is a figure like any other, at five acorns, and not one of everyone's figures (`access` in the
-catalogue): the main way's stall never offers it, no regular brings it, a board holding it is not
-met on the main way, and the almanac does not count it. Only a run with the member's own figures sells it, to a member who has pulled it (below). Its
+It is a figure like any other, at five acorns. Its `access` in the catalogue is its banner's: only
+its banner's pulls give it, so a run with the member's own figures sells it only to a member who has
+pulled it, at its level (below). It is one of everyone's figures (`everyones`) once a release's patch
+says so: then every way with everyone's figures sells it, the regulars bring it, the carousel has it
+and the almanac counts it, with no level. The first banner's is everyone's from `gaz-stall`. Its
 name in the rules is "A guild member"; the page gives it the member's name and their picture. Its
 rules are made for the member: the first banner's is gaz, a Sage whose ability is his own line.
 
@@ -345,7 +347,7 @@ table, a run, a sitting, a fight's setup and every view carry their era (`catalo
 from its clock before every command and at each of a sitting's deadlines, at the deadline's own
 moment, and the page reads the era Leaf sent. A run moves into a new era with its next command;
 what it drew before stays as drawn, and a fight is its setup's era's for ever. A release opened
-while a banner is open (`joins: "next"`) joins the pulls with the next release, so a banner's
+while a banner is open (`joins: "next"`) joins the pulls with the next release that joins as it opens, so a banner's
 prizes are what it opened with.
 
 **Two ways to set out.** `start` says which: with all figures (what everything above describes), or
@@ -683,63 +685,63 @@ While no member is still in, every wait is 0 (`later`): the regulars play straig
 
 ## What is where
 
-| File                   | What it holds                                                                                                          |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `content/figures.ts`   | The base's figures, the forest's trouble and bosses, and the summoned: names, numbers, ability sentences, quips        |
-| `content/graid.ts`     | Graid's true forms: names, the one change each, their numbers                                                          |
-| `content/lore.ts`      | Lore lines for the almanac: the expansion's so far                                                                     |
-| `content/members.ts`   | The banners' members: for each pull banner, a figure that is a guild member                                            |
-| `content/releases.ts`  | The releases, each at a moment of Leaf's clock, and the era (how many are open) at a moment                            |
-| `content/catalog.ts`   | What each era has, the patches folded, and `available`: the only list of figures for a draw, the pulls and the almanac |
-| `content/patch.ts`     | What a release's patch is, and how one era's kind of thing folds into the next                                         |
-| `content/releases/`    | Each release's patch: the base (its tables are the files below) and release 1 (Seqwawa, Graid, Moss and Mender 2/3/4)  |
-| `content/banners.ts`   | The pull banners: the release each opens with, its dates, its headliner                                                |
-| `content/traits.ts`    | Kins and callings, the base's steps, sentences and numbers, and reading them from a catalogue                          |
-| `content/items.ts`     | The base's components, finished items and emblems; what forges into what and how a figure holds them, by a catalogue   |
-| `content/boons.ts`     | The base's boons, and reading them from a catalogue                                                                    |
-| `content/rooms.ts`     | Acorns, levels, stall odds, the fight's clock, the fifteen rooms and their plans, sparring strength, trails, regulars  |
-| `content/keepsakes.ts` | The payout                                                                                                             |
-| `content/advice.ts`    | What kind of fighter each calling makes and where it stands, and three finished items that suit each figure            |
-| `hex.ts`               | The board: cells and seats, distance, neighbours, lines, cones, rings, finding a way round                             |
-| `party.ts`             | A party as plain data, and trait counting                                                                              |
-| `fight/types.ts`       | What a figure in a fight looks like, and the events a step gives back                                                  |
-| `fight/clock.ts`       | The fight's clock and notebook: steps, `emit`, `later`                                                                 |
-| `fight/core.ts`        | The verbs: hurt, heal, shield, stun, slow, burn, taunt, hide, leap, knock back                                         |
-| `fight/enter.ts`       | Coming into a fight: sitting down, summoned, getting back up (Second Wind, Graid, Seqwawa)                             |
-| `fight/switch.ts`      | Traits switching on as the parties sit down, one entry a trait                                                         |
-| `fight/cast.ts`        | An ability said out loud (`cast`), and the shapes of hexes it covers                                                   |
-| `fight/moves.ts`       | The verbs that move figures or take time: throw, dash, pull, zone, channel, telegraph                                  |
-| `fight/mind.ts`        | How a figure thinks: who it goes for, what is already on its way, when a heal or an area ability is worth using        |
-| `fight/abilities.ts`   | Each ability, written with those verbs                                                                                 |
-| `fight/engine.ts`      | Seating, items switching on, the clock, the end                                                                        |
-| `formation.ts`         | A plain way of seating a party, used by the bot and the sparring partners                                              |
-| `spar.ts`              | The regulars' parties for sparring                                                                                     |
-| `foe.ts`               | Who waits in a room: the forest's trouble, a regular's party, or another member's board                                |
-| `run.ts`               | The run and every action on it                                                                                         |
-| `feed.ts`              | Feeding Greg a figure from the bench                                                                                   |
-| `rack.ts`              | Two components forged on the rack                                                                                      |
-| `save.ts`              | A run read back from plain data: shape first, then today's numbers                                                     |
-| `outside.ts`           | Payout, almanac, trails                                                                                                |
-| `content/looks.ts`     | How the table may look: cloths, lanterns, bases                                                                        |
-| `game.ts`              | The table as Leaf plays it: state, what the page is shown, predictions                                                 |
-| `command.ts`           | Everything a player can do at the table: one spec a command of a run (`COMMANDS`), and reading one off the wire        |
-| `endless.ts`           | Endless runs: the rooms after the fifteenth, the forest growing, chairs, regulars by depth, the Deep Woods' held rooms |
-| `depths.ts`            | How deep endless runs go: the deepest rooms ever and this week, what a won room leaves, what one is paid for           |
-| `content/endless.ts`   | The endless runs' numbers: growth, chairs, the first held room, regulars after room 15, the rooms that come round      |
-| `wilds.ts`             | The Wilds' rules in a run: the pick after a boss, taking a rule, each room laid out under it                           |
-| `room.ts`              | The room a run is in (`roomOf`): its kind, what binds it, the forest's might, the chairs, the picks it leaves          |
-| `wing.ts`              | The rule picked for a wing, which rooms a wing is, the nearest open seat                                               |
-| `fight/rules.ts`       | What binds a fight, played: closed hexes, the furthest an attack reaches, dusk, a figure alone                         |
-| `content/rules.ts`     | Each rule a room may be played under as a row: its words, what it draws and what it sets; `bind`                       |
-| `content/wilds.ts`     | The Wilds' rules: their ids and numbers                                                                                |
-| `wire.ts`              | Reading Leaf's view and notes back                                                                                     |
-| `sitting/`             | Eight at once on Leaf's clock: the state, the clock, the carousel, commands, what a page is shown, storing it          |
-| `tally.ts`             | What every figure did in a fight, read from its events                                                                 |
-| `fought.ts`            | A fight's record, as Leaf keeps it for the staff, and the margin it was won or lost by                                 |
-| `rates.ts`             | How often fights are won, beside the same rooms, for the reports                                                       |
-| `bot.ts`               | A player with habits                                                                                                   |
-| `index.ts`             | Everything a screen needs, in one place                                                                                |
-| `testkit.ts`           | Helpers for the tests only                                                                                             |
+| File                   | What it holds                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `content/figures.ts`   | The base's figures, the forest's trouble and bosses, and the summoned: names, numbers, ability sentences, quips                |
+| `content/graid.ts`     | Graid's true forms: names, the one change each, their numbers                                                                  |
+| `content/lore.ts`      | Lore lines for the almanac: the expansion's so far                                                                             |
+| `content/members.ts`   | The banners' members: for each pull banner, a figure that is a guild member                                                    |
+| `content/releases.ts`  | The releases, each at a moment of Leaf's clock, and the era (how many are open) at a moment                                    |
+| `content/catalog.ts`   | What each era has, the patches folded, and `available`: the only list of figures for a draw, the pulls and the almanac         |
+| `content/patch.ts`     | What a release's patch is, and how one era's kind of thing folds into the next                                                 |
+| `content/releases/`    | Each release's patch: the base (its tables are the files below) release 1 (Seqwawa, Graid, Moss and Mender 2/3/4), `gaz-stall` |
+| `content/banners.ts`   | The pull banners: the release each opens with, its dates, its headliner                                                        |
+| `content/traits.ts`    | Kins and callings, the base's steps, sentences and numbers, and reading them from a catalogue                                  |
+| `content/items.ts`     | The base's components, finished items and emblems; what forges into what and how a figure holds them, by a catalogue           |
+| `content/boons.ts`     | The base's boons, and reading them from a catalogue                                                                            |
+| `content/rooms.ts`     | Acorns, levels, stall odds, the fight's clock, the fifteen rooms and their plans, sparring strength, trails, regulars          |
+| `content/keepsakes.ts` | The payout                                                                                                                     |
+| `content/advice.ts`    | What kind of fighter each calling makes and where it stands, and three finished items that suit each figure                    |
+| `hex.ts`               | The board: cells and seats, distance, neighbours, lines, cones, rings, finding a way round                                     |
+| `party.ts`             | A party as plain data, and trait counting                                                                                      |
+| `fight/types.ts`       | What a figure in a fight looks like, and the events a step gives back                                                          |
+| `fight/clock.ts`       | The fight's clock and notebook: steps, `emit`, `later`                                                                         |
+| `fight/core.ts`        | The verbs: hurt, heal, shield, stun, slow, burn, taunt, hide, leap, knock back                                                 |
+| `fight/enter.ts`       | Coming into a fight: sitting down, summoned, getting back up (Second Wind, Graid, Seqwawa)                                     |
+| `fight/switch.ts`      | Traits switching on as the parties sit down, one entry a trait                                                                 |
+| `fight/cast.ts`        | An ability said out loud (`cast`), and the shapes of hexes it covers                                                           |
+| `fight/moves.ts`       | The verbs that move figures or take time: throw, dash, pull, zone, channel, telegraph                                          |
+| `fight/mind.ts`        | How a figure thinks: who it goes for, what is already on its way, when a heal or an area ability is worth using                |
+| `fight/abilities.ts`   | Each ability, written with those verbs                                                                                         |
+| `fight/engine.ts`      | Seating, items switching on, the clock, the end                                                                                |
+| `formation.ts`         | A plain way of seating a party, used by the bot and the sparring partners                                                      |
+| `spar.ts`              | The regulars' parties for sparring                                                                                             |
+| `foe.ts`               | Who waits in a room: the forest's trouble, a regular's party, or another member's board                                        |
+| `run.ts`               | The run and every action on it                                                                                                 |
+| `feed.ts`              | Feeding Greg a figure from the bench                                                                                           |
+| `rack.ts`              | Two components forged on the rack                                                                                              |
+| `save.ts`              | A run read back from plain data: shape first, then today's numbers                                                             |
+| `outside.ts`           | Payout, almanac, trails                                                                                                        |
+| `content/looks.ts`     | How the table may look: cloths, lanterns, bases                                                                                |
+| `game.ts`              | The table as Leaf plays it: state, what the page is shown, predictions                                                         |
+| `command.ts`           | Everything a player can do at the table: one spec a command of a run (`COMMANDS`), and reading one off the wire                |
+| `endless.ts`           | Endless runs: the rooms after the fifteenth, the forest growing, chairs, regulars by depth, the Deep Woods' held rooms         |
+| `depths.ts`            | How deep endless runs go: the deepest rooms ever and this week, what a won room leaves, what one is paid for                   |
+| `content/endless.ts`   | The endless runs' numbers: growth, chairs, the first held room, regulars after room 15, the rooms that come round              |
+| `wilds.ts`             | The Wilds' rules in a run: the pick after a boss, taking a rule, each room laid out under it                                   |
+| `room.ts`              | The room a run is in (`roomOf`): its kind, what binds it, the forest's might, the chairs, the picks it leaves                  |
+| `wing.ts`              | The rule picked for a wing, which rooms a wing is, the nearest open seat                                                       |
+| `fight/rules.ts`       | What binds a fight, played: closed hexes, the furthest an attack reaches, dusk, a figure alone                                 |
+| `content/rules.ts`     | Each rule a room may be played under as a row: its words, what it draws and what it sets; `bind`                               |
+| `content/wilds.ts`     | The Wilds' rules: their ids and numbers                                                                                        |
+| `wire.ts`              | Reading Leaf's view and notes back                                                                                             |
+| `sitting/`             | Eight at once on Leaf's clock: the state, the clock, the carousel, commands, what a page is shown, storing it                  |
+| `tally.ts`             | What every figure did in a fight, read from its events                                                                         |
+| `fought.ts`            | A fight's record, as Leaf keeps it for the staff, and the margin it was won or lost by                                         |
+| `rates.ts`             | How often fights are won, beside the same rooms, for the reports                                                               |
+| `bot.ts`               | A player with habits                                                                                                           |
+| `index.ts`             | Everything a screen needs, in one place                                                                                        |
+| `testkit.ts`           | Helpers for the tests only                                                                                                     |
 
 Tuning the game is editing the files in `content/`. The sentences shown to players are built from
 the same numbers the fight reads (`abilityText`, `traitText`, `itemText`, `boonText`), so a changed

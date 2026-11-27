@@ -39,10 +39,11 @@ const MOMENTS = DATED.flatMap((r) => [
 ]);
 
 describe("the releases", () => {
-  test("open in order on Leaf's clock: the base and the expansion's first at once, each banner's on its day", () => {
+  test("open in order on Leaf's clock: the base, the expansion's first and gaz-stall at once, each banner's on its day", () => {
     expect(RELEASES.map((r) => [r.id, r.at])).toEqual([
       ["base", 0],
       ["groot", 0],
+      ["gaz-stall", 0],
       ["groot-night", Date.UTC(2026, 11, 8)],
       ["penguin-month", Date.UTC(2026, 11, 22)],
       ["up-the-tree", Date.UTC(2027, 0, 5)],
@@ -51,7 +52,14 @@ describe("the releases", () => {
       const before = RELEASES.indexOf(r);
       expect([eraAt(r.at - 1), eraAt(r.at)].map(Number)).toEqual([before, before + 1]);
     }
-    expect([eraAt(0), LEGACY_ERA, LAST_ERA, eraAt(Number.MAX_SAFE_INTEGER)].map(Number)).toEqual([2, 2, 5, 5]);
+    // What no era means stays the era of the expansion's first release, whatever opens after it.
+    expect([eraAt(0), LEGACY_ERA, LAST_ERA, eraAt(Number.MAX_SAFE_INTEGER)]).toEqual([
+      eraOf("gaz-stall"),
+      eraOf("groot"),
+      eraOf("up-the-tree"),
+      eraOf("up-the-tree"),
+    ]);
+    expect(Number(LEGACY_ERA)).toBe(2);
   });
 });
 
@@ -87,16 +95,21 @@ describe("the catalogue", () => {
 
 // ---------- every draw, a millisecond before a release and at it ----------
 
-/** When a figure is first open: as its release opens. When it joins the pulls: then, or as the next release opens. */
+/**
+ * When a figure is first open: as its release opens. When it joins the pulls: then, or as the next
+ * release that joins as it opens does.
+ */
 const opens = (f: Figure): number => releaseOf(f.since).at;
 function joins(f: Figure): number {
   const at = RELEASES.findIndex((r) => r.id === f.since);
   const r = RELEASES[at];
-  return r?.joins === "opening" ? r.at : (RELEASES[at + 1]?.at ?? Infinity);
+  return r?.joins === "opening" ? r.at : (RELEASES.slice(at + 1).find((n) => n.joins === "opening")?.at ?? Infinity);
 }
 /** A roster of every figure there is. */
 const EVERYTHING: Roster = Object.fromEntries(everyFigure().map((id) => [id, 0]));
 const shared = (f: Figure): boolean => f.access === "shared";
+/** One of everyone's figures: in the real catalogues and the made-up spread, every one is by the first moment looked at. */
+const everyones = (f: Figure): boolean => f.everyones;
 
 /** A draw, and what it should give at a moment: every figure that suits it, once it is open (or has joined the pulls). */
 interface Case {
@@ -109,7 +122,7 @@ const CASES: readonly Case[] = [
   ...TIERS.map((tier): Case => ({
     name: `the stall at ${tier} acorns`,
     purpose: { for: "stall", figures: { pool: "fair" }, tier },
-    suits: (f) => shared(f) && f.tier === tier,
+    suits: (f) => everyones(f) && f.tier === tier,
     from: opens,
   })),
   ...TIERS.map((tier): Case => ({
@@ -118,12 +131,12 @@ const CASES: readonly Case[] = [
     suits: (f) => f.tier === tier,
     from: opens,
   })),
-  { name: "the first pick", purpose: { for: "starter" }, suits: (f) => shared(f) && f.tier === 1, from: opens },
-  { name: "a regular", purpose: { for: "regular" }, suits: shared, from: opens },
+  { name: "the first pick", purpose: { for: "starter" }, suits: (f) => everyones(f) && f.tier === 1, from: opens },
+  { name: "a regular", purpose: { for: "regular" }, suits: everyones, from: opens },
   ...TIERS.map((tier): Case => ({
     name: `the carousel at ${tier} acorns`,
     purpose: { for: "carousel", tier },
-    suits: (f) => shared(f) && f.tier === tier,
+    suits: (f) => everyones(f) && f.tier === tier,
     from: opens,
   })),
   ...RARITY_IDS.map((rarity): Case => ({
@@ -150,7 +163,7 @@ const CASES: readonly Case[] = [
     suits: (f) => shared(f) && (f.prize === "Dryad" || f.prize === "Druid"),
     from: joins,
   },
-  { name: "the almanac", purpose: { for: "almanac", roster: {} }, suits: shared, from: opens },
+  { name: "the almanac", purpose: { for: "almanac", roster: {} }, suits: everyones, from: opens },
   {
     name: "the almanac, every figure pulled",
     purpose: { for: "almanac", roster: EVERYTHING },
@@ -201,6 +214,38 @@ function madeUp(era: Era): Catalog {
   // Its earlier eras are the made-up spread's too: what a banner's pool was when it opened.
   return { ...catalogAt(era), figures, order, earlier: madeUp };
 }
+
+/** Whether everyone's stall at five acorns, their regulars, their carousel and the almanac have the first banner's headliner. */
+const everyonesWays = (cat: Catalog): boolean[] => [
+  available(cat, { for: "stall", figures: { pool: "fair" }, tier: 5 }).includes("banner-1"),
+  available(cat, { for: "regular" }).includes("banner-1"),
+  available(cat, { for: "carousel", tier: 5 }).includes("banner-1"),
+  available(cat, { for: "almanac", roster: {} }).includes("banner-1"),
+];
+describe("gaz-stall", () => {
+  test("makes the first banner's headliner one of everyone's figures: before it, only an owner's", () => {
+    const [before, at] = [catalogAt(LEGACY_ERA), catalogAt(eraOf("gaz-stall"))];
+    expect([everyonesWays(before), everyonesWays(at)]).toEqual([
+      [false, false, false, false],
+      [true, true, true, true],
+    ]);
+    // With the member's own figures, it is sold to whoever pulled it, at either era, and to nobody else.
+    for (const cat of [before, at]) {
+      const own = (roster: Roster): readonly FigureId[] =>
+        available(cat, { for: "stall", figures: { pool: "own", roster }, tier: 5 });
+      expect([own({ "banner-1": 2 }), own({ greg: 0 })]).toEqual([["banner-1"], ["greg"]]);
+    }
+    // It is still its banner's prize, and nothing else's; and Seqwawa still joins the pulls on 8 December.
+    expect([before, at].map((cat) => cat.figures["banner-1"]?.access)).toEqual([
+      { headliner: "banner-1" },
+      { headliner: "banner-1" },
+    ]);
+    expect(available(at, { for: "pull", pool: GROVE, rarity: "Treant" })).not.toContain("seqwawa");
+    expect(available(catalogAt(eraOf("groot-night")), { for: "pull", pool: GROVE, rarity: "Treant" })).toContain(
+      "seqwawa",
+    );
+  });
+});
 
 describe("a millisecond before each release, and at it", () => {
   test("every stall, first pick, regular, carousel, pull, the exchange and the almanac give what is open then", () => {

@@ -9,7 +9,6 @@ import { boonNumber, FIGHT_BOONS } from "./content/boons.ts";
 import { type Catalog, catalogOf } from "./content/catalog.ts";
 import { ENDLESS } from "./content/endless.ts";
 import { type BossId, isBossId, isFigureId } from "./content/figures.ts";
-import { isMemberId } from "./content/members.ts";
 import { LEVELS, MAX_LEVEL, ROOMS, type RoomSpec, type SparStrength, TRAILS } from "./content/rooms.ts";
 import { shut } from "./content/rules.ts";
 import { isHeld, sparAt } from "./endless.ts";
@@ -45,14 +44,15 @@ function asMet(p: Placed, levels: boolean): Placed {
  * Another member's board as Leaf hands it over (`Ctx.met`), as the party across the table: only one
  * a member could have fielded (of the stall's own figures, taking one chair to `mostFielded`, and
  * `chairs` more for a board of an endless run), every figure of it open in the era of the run that
- * meets it (`cat`), signed with the member's name and id. A banner's member stands only on a board
- * met by a run with the member's own figures (`levels`). Null for anything else: the regular stays.
+ * meets it (`cat`), signed with the member's name and id. A figure that is not one of everyone's
+ * (`Figure.everyones`) stands only on a board met by a run with the member's own figures (`levels`).
+ * Null for anything else: the regular stays.
  */
 export function boardMet(cat: Catalog, met: Met, levels = false, chairs = 0): Party | null {
   const { data } = met;
   if (!isParty(data) || data.figures.length === 0) return null;
   const fits = (kind: string): boolean =>
-    isFigureId(kind) && cat.figures[kind] !== undefined && (levels || !isMemberId(kind));
+    isFigureId(kind) && cat.figures[kind] !== undefined && (levels || cat.figures[kind].everyones);
   if (!data.figures.every((p) => fits(p.kind))) return null;
   if (chairsUsed(cat, data.figures) > mostFielded(cat) + chairs) return null;
   const board: Party = {

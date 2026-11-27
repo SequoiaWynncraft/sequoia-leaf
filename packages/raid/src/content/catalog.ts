@@ -29,6 +29,7 @@ import { MEMBER_IDS } from "./members.ts";
 import { type Arrival, fields, fold, type Patch } from "./patch.ts";
 import { type Era, eraOf, LAST_ERA, pullsEra, type ReleaseId, RELEASES } from "./releases.ts";
 import { BASE } from "./releases/base.ts";
+import { GAZ_STALL } from "./releases/gaz-stall.ts";
 import { GROOT } from "./releases/groot.ts";
 import { TRAIT_IDS, type TraitId, type TraitSpec } from "./traits.ts";
 
@@ -39,24 +40,32 @@ export type { Era } from "./releases.ts";
 export const RARITY_IDS = ["Leafkin", "Sapling", "Sprite", "Dryad", "Druid", "Treant", "Yggdrasil"] as const;
 export type Rarity = (typeof RARITY_IDS)[number];
 
-/** Who may have a figure: everyone, or, for a banner's headliner, whoever pulled it. */
+/**
+ * How a member comes to have a figure of their own, for a run with their own figures and the camp:
+ * from the grove's pulls, or, for a banner's headliner, from that banner only.
+ */
 export type Access = "shared" | { readonly headliner: Banner["id"] };
 
 /**
- * A figure as a catalogue has it: its words and numbers, the release it came with, who may have it,
- * its rarity as a prize, how it is drawn (everyone's by the set; a headliner as its banner says),
- * and the chairs it takes on a board (`chairsUsed`).
+ * A figure as a catalogue has it: its words and numbers, the release it came with, how it is had,
+ * whether it is one of everyone's figures, its rarity as a prize, how it is drawn (everyone's by the
+ * set; a headliner as its banner says), and the chairs it takes on a board (`chairsUsed`).
+ *
+ * `everyones`: whether the ways with everyone's figures have it, whoever pulled what: their stall,
+ * first pick, regulars, carousel, the boards they meet, and the almanac. Every figure the grove's
+ * pulls give is; a banner's headliner is not, until a patch's `change` says it is (`patch.ts`).
  */
 export interface Figure extends FigureSpec {
   readonly since: ReleaseId;
   readonly access: Access;
+  readonly everyones: boolean;
   readonly prize: Rarity;
   readonly look: Look;
   readonly chairs: 0 | 1;
 }
 
 /** Every release's patch, in the order the releases open. A release with nothing in it yet has none. */
-const PATCHES: readonly Patch[] = [BASE, GROOT];
+const PATCHES: readonly Patch[] = [BASE, GROOT, GAZ_STALL];
 
 /** Every figure any release may bring, in the order a release's arrivals are drawn in. */
 const ALL_FIGURES: readonly FigureId[] = [...FIGURE_IDS, ...MEMBER_IDS];
@@ -132,14 +141,22 @@ const present = <K extends string>(ids: readonly K[], table: Readonly<Partial<Re
   ids.filter((id) => table[id] !== undefined);
 
 /**
- * Who may have a figure a release brings, and how it is drawn: everyone, by the set; or whoever
- * pulled it, as its banner says, if a banner that release opens has it as its headliner.
+ * How a figure a release brings is had, and how it is drawn: from the grove, by the set; or from its
+ * banner, as the banner says, if a banner that release opens has it as its headliner. And whether it
+ * is one of everyone's: a grove figure always, a headliner as its patches say (`Arrival.everyones`).
  */
-function whoseOf(id: FigureId, since: ReleaseId): { readonly access: Access; readonly look: Look } {
+function whoseOf(
+  id: FigureId,
+  since: ReleaseId,
+  f: Arrival,
+): { readonly access: Access; readonly look: Look; readonly everyones: boolean } {
   const banner = BANNERS.find((b) => b.headliner === id);
-  if (!banner) return { access: "shared", look: "set" };
+  if (!banner) {
+    if (f.everyones === false) throw new Error(`${id} is the grove's, so it is everyone's`);
+    return { access: "shared", look: "set", everyones: true };
+  }
   if (banner.opens !== since) throw new Error(`${banner.id}'s headliner comes with ${since}, not with its banner`);
-  return { access: { headliner: banner.id }, look: banner.look };
+  return { access: { headliner: banner.id }, look: banner.look, everyones: f.everyones ?? false };
 }
 
 /** Checks every item is of the sort its id's list says: a mistake in the content stops the catalogue being made. */
@@ -180,7 +197,7 @@ export function catalogsOf(patches: readonly Patch[]): readonly Catalog[] {
     const figures: Partial<Record<FigureId, Figure>> = {};
     for (const id of came) {
       const [f, from] = [arrived[id], since[id]];
-      if (f && from) figures[id] = { ...f, since: from, ...whoseOf(id, from), chairs: f.chairs ?? 1 };
+      if (f && from) figures[id] = { ...f, since: from, ...whoseOf(id, from, f), chairs: f.chairs ?? 1 };
     }
     const order = [...DRAWN.filter((id) => figures[id]), ...came.filter((id) => !DRAWN.includes(id))];
     banners.push(...BANNERS.filter((b) => b.opens === release));
@@ -215,10 +232,10 @@ export const catalogOf = (held: { readonly era: Era }): Catalog => catalogAt(hel
 
 /** Every figure any release has: what stored data may name, never what anything offers. */
 export const everyFigure = (): readonly FigureId[] => catalogAt(LAST_ERA).order;
-/** Every figure any release brings everyone, no headliner: what the camp can hold a carving of. */
 /** Every figure any release has that the set draws: everyone's, and each headliner of the set's own. */
 export const everySetDrawn = (): readonly FigureId[] =>
   catalogAt(LAST_ERA).order.filter((id) => catalogAt(LAST_ERA).figures[id]?.look === "set");
+/** Every figure any release brings the grove, no headliner: what the camp can hold a carving of. */
 export const everyShared = (): readonly FigureId[] =>
   catalogAt(LAST_ERA).order.filter((id) => catalogAt(LAST_ERA).figures[id]?.access === "shared");
 
@@ -247,7 +264,7 @@ function stall(cat: Catalog, figures: Figures, tier: Tier): FigureId[] {
   return cat.order.filter((id) => {
     const f = cat.figures[id];
     if (f?.tier !== tier) return false;
-    if (figures.pool === "fair") return f.access === "shared";
+    if (figures.pool === "fair") return f.everyones;
     const owned = figures.roster[id] !== undefined;
     return owned || (tier === 1 && f.access === "shared");
   });
@@ -269,15 +286,15 @@ function prizes(cat: Catalog, pool: string, rarity: Rarity): FigureId[] {
 
 /** The figures open at a catalogue's era that a draw may draw from, in the catalogue's order. */
 export function available(cat: Catalog, p: Purpose): readonly FigureId[] {
-  const shared = (id: FigureId): boolean => cat.figures[id]?.access === "shared";
-  const costs = (tier: Tier) => (id: FigureId) => shared(id) && cat.figures[id]?.tier === tier;
+  const everyones = (id: FigureId): boolean => cat.figures[id]?.everyones === true;
+  const costs = (tier: Tier) => (id: FigureId) => everyones(id) && cat.figures[id]?.tier === tier;
   switch (p.for) {
     case "stall":
       return stall(cat, p.figures, p.tier);
     case "starter":
       return cat.order.filter(costs(1));
     case "regular":
-      return cat.order.filter(shared);
+      return cat.order.filter(everyones);
     case "carousel":
       return cat.order.filter(costs(p.tier));
     case "pull":
@@ -285,7 +302,7 @@ export function available(cat: Catalog, p: Purpose): readonly FigureId[] {
     case "exchange":
       return [...prizes(cat, GROVE, "Dryad"), ...prizes(cat, GROVE, "Druid")];
     case "almanac":
-      return cat.order.filter((id) => shared(id) || p.roster[id] !== undefined);
+      return cat.order.filter((id) => everyones(id) || p.roster[id] !== undefined);
   }
 }
 

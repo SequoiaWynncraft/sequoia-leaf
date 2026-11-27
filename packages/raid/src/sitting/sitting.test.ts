@@ -273,13 +273,15 @@ describe("how a sitting ends", () => {
   test("who goes out in the same room is placed by the resolve they had before it, then by seat, below everyone still in", () => {
     let together = 0;
     for (const [before, after] of STEPS) {
-      const out = before.seats.flatMap((s, i) => (s.place === null && seat(after, i).place !== null ? [i] : []));
+      // Out is at 0 resolve: the one seat left in when the sitting ends is placed first, and is not out.
+      const out = before.seats.flatMap((s, i) =>
+        s.place === null && seat(after, i).place !== null && seat(after, i).run.resolve === 0 ? [i] : [],
+      );
       if (before.stage.at !== "fight" || out.length === 0) continue;
-      const left = seatsIn(after).length;
       const order = out.toSorted((a, b) => seat(before, b).run.resolve - seat(before, a).run.resolve || a - b);
       const placed = order.map((i) => seat(after, i).place);
-      // One left in at the end takes the first place; else those out fill the places below those in.
-      const first = after.stage.at === "over" && left === 0 ? 1 : seatsIn(before).length - out.length + 1;
+      // Those out fill the places below everyone in before the room who is not: all of them, if nobody is.
+      const first = seatsIn(before).length - out.length + 1;
       expect(placed).toEqual(order.map((_, i) => first + i));
       if (out.length > 1) together++;
     }

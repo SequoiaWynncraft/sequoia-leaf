@@ -5,12 +5,14 @@
  * the day. An era is how many releases are open: it only grows.
  *
  * `joins` is when a release's figures join the pulls: as it opens, or (`next`) as the next release
- * opens, for one that opens while a banner is open, so that a banner's prizes stay what it opened
- * with. The expansion's first release opens on merge, during the first banner.
+ * that joins as it opens does, for one that opens while a banner is open, so that a banner's prizes
+ * stay what it opened with. The expansion's first release opens on merge, during the first banner,
+ * and so does `gaz-stall`, which puts the first banner's headliner on everyone's stall.
  */
 export const RELEASES = [
   { id: "base", at: 0, joins: "opening" },
   { id: "groot", at: 0, joins: "next" },
+  { id: "gaz-stall", at: 0, joins: "next" },
   { id: "groot-night", at: Date.UTC(2026, 11, 8), joins: "opening" },
   { id: "penguin-month", at: Date.UTC(2026, 11, 22), joins: "opening" },
   { id: "up-the-tree", at: Date.UTC(2027, 0, 5), joins: "opening" },
@@ -44,5 +46,9 @@ export const eraOf = (release: ReleaseId): Era => era(RELEASES.findIndex((r) => 
  */
 export const LEGACY_ERA: Era = eraOf("groot");
 
-/** The era the pulls draw from at an era: all of it, but a newest release whose figures join with the next. */
-export const pullsEra = (at: Era): Era => (RELEASES[at - 1]?.joins === "next" ? era(at - 1) : at);
+/** The era the pulls draw from at an era: all of it, but the newest releases whose figures join with a later one. */
+export function pullsEra(at: Era): Era {
+  let n: number = at;
+  while (n > 1 && RELEASES[n - 1]?.joins === "next") n--;
+  return era(n);
+}
