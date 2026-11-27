@@ -63,7 +63,7 @@ export * from "./tables.ts";
 export { step } from "./tick.ts";
 export * from "./unlocks.ts";
 export { placeYard, saveYard, type YardPlan, yardPlan, yardRefusal } from "./whole.ts";
-export { type KindPower, type PowerSummary, powerSummary } from "./supply.ts";
+export { type KindGives, type KindPower, type PowerSummary, powerSummary } from "./supply.ts";
 export * from "./tiles.ts";
 export {
   ahead,

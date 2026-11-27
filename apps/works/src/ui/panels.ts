@@ -7,10 +7,8 @@
 
 import {
   ALL_GOALS,
-  BOILER,
   counting,
   type Counts,
-  GIVES,
   type Goal,
   GOALS,
   isFilled,
@@ -22,7 +20,6 @@ import {
   TICK_MS,
   tierName,
   unlockedBy,
-  WHEEL,
 } from "@sequoia-leaf/factory";
 import { amount, asking, asksAgain, el, icon, pressedTwice, replay, type Spend } from "@sequoia-leaf/kit/dom.ts";
 import { num, whole } from "@sequoia-leaf/kit/say.ts";
@@ -304,19 +301,26 @@ const row = (name: string, about: string, n: number, lit = false): HTMLElement[]
   el("span", lit ? "num k-gold" : "num", { text: String(n) }),
 ];
 
+/** A row of the power book: what it is of, what it says of them, and the power they give or draw. */
+interface PowerRow {
+  readonly kind: Kind;
+  readonly about: string;
+  readonly n: number;
+}
+
 /**
  * What the power book prints, as the rules' `powerSummary` counts it: the power made and used, and
- * the speed when short; what the depot gives; the waterwheels turning and out of reach; the boilers
- * burning and cold; and for each kind that draws, how many are in reach and in the dark, what one
- * draws at its grade (from the least to the most, where grades differ), and what those in reach draw.
+ * the speed when short; what the depot gives; for each kind that gives power, how many give it now
+ * (waterwheels turning, boilers burning) and how many stand idle (out of reach, cold), and the power
+ * they give; and for each kind that draws, how many are in reach and in the dark, what one draws at
+ * its grade (from the least to the most, where grades differ), and what those in reach draw.
  */
 export function powerPrint(): {
   readonly supply: number;
   readonly demand: number;
   readonly speed: number;
   readonly depot: number;
-  readonly wheels: { readonly turning: number; readonly away: number };
-  readonly boilers: { readonly burning: number; readonly cold: number; readonly dark: number };
+  readonly gives: readonly PowerRow[];
   readonly draws: readonly { readonly kind: Kind; readonly about: string; readonly drawn: number }[];
 } {
   const s = powerSummary(S.world);
@@ -325,8 +329,10 @@ export function powerPrint(): {
     demand: s.demand,
     speed: s.speed,
     depot: s.depot,
-    wheels: s.wheels,
-    boilers: s.boilers,
+    gives: s.gives.map((g) => {
+      const [giving, idle] = g.burns ? ["burning", "cold"] : ["turning", "out of reach"];
+      return { kind: g.kind, about: `${g.giving} ${giving}${g.idle ? `, ${g.idle} ${idle}` : ""}`, n: g.gives };
+    }),
     draws: s.draws.map((d) => {
       const [least, most] = d.each;
       const each = least === most ? num(least) : `${num(least)} to ${num(most)}`;
@@ -345,22 +351,10 @@ export function powerPrint(): {
 
 function powerBook(_art: Art, body: HTMLElement): () => void {
   const draw = (p: ReturnType<typeof powerPrint>): void => {
-    const { turning, away } = p.wheels;
-    const { burning, cold, dark: far } = p.boilers;
     const short = p.speed < 100;
     const gives = [
       ...row("The depot", "always", p.depot, true),
-      ...(turning + away > 0
-        ? row(
-            "Waterwheels",
-            `${turning} turning${away ? `, ${away} out of reach` : ""}`,
-            turning * (GIVES[WHEEL] ?? 0),
-            true,
-          )
-        : []),
-      ...(burning + cold + far > 0
-        ? row("Boilers", `${burning} burning${cold ? `, ${cold} cold` : ""}`, burning * (GIVES[BOILER] ?? 0), true)
-        : []),
+      ...p.gives.flatMap((g) => row(plural(KIND_INFO[g.kind]?.name ?? ""), g.about, g.n, true)),
     ];
     const draws = p.draws.flatMap((d) => row(plural(KIND_INFO[d.kind]?.name ?? ""), d.about, d.drawn));
     body.replaceChildren(

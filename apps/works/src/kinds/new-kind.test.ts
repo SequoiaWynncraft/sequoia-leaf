@@ -1,11 +1,15 @@
 /**
  * A new kind of piece is one module of the rules and one of the page, each with its line in its
- * registry, and nothing else changes. The test proves it on a copy of the repository: it adds a
- * throwaway kind (a sieve, which lets each item through after a second where power reaches it) as
- * those two modules and those two lines, and nothing else; then the copy type-checks, the sieve plays
- * by the rules beside the other kinds (built, fed, worked, handed on, standing and said, counted a
- * minute, priced and taken up), and the page builds it, counts it in the dock and draws its card's
- * numbers, its map colour and its lamp from its module. Anything else that had to change to have a
+ * registry, and nothing else changes. The lines are by design: a list's order is the kinds' numbers,
+ * kept by hand and only ever added to, so a kind is numbered where a person put it and never moves.
+ *
+ * The test proves it on a copy of the repository: it adds a throwaway kind (a sieve, which lets each
+ * item through after a second where power reaches it) as those two modules and those two lines, and
+ * nothing else; then the copy type-checks, the sieve plays by the rules beside the other kinds (built,
+ * fed, worked, handed on, standing and said, counted a minute, priced and taken up), and the page
+ * builds it, counts it in the dock and draws its card's numbers, its map colour and its lamp from its
+ * module. A second throwaway (a furnace, which burns for power at ten boilers' worth) is counted as
+ * its own in the power book, beside a boiler gone cold. Anything else that had to change to have a
  * kind fails here.
  *
  * A save keeps a kind in 4 bits, and so does an Undo entry (step F3 of tiers 5 to 8 widens them), so
@@ -218,23 +222,81 @@ console.log(
 );
 `;
 
+/** A second throwaway kind, which burns for power as a boiler does: a furnace, ten boilers' worth. */
+const RULES_FURNACE = `/** A throwaway kind for the test that a second kind that burns for power is counted as its own. */
+import { BURNER } from "./burner.ts";
+import { kind } from "./kind.ts";
+
+export const furnace = kind({
+  name: "furnace",
+  info: { name: "Furnace", cost: 50, draw: 0, gives: 300, what: "Burns deadfall for a great deal of power." },
+  holds: true,
+  burns: { fuel: "deadfall", ticks: 100, holds: 4 },
+  rules: BURNER,
+});
+`;
+
+/** The furnace on the page: as little as a kind may have. */
+const PAGE_FURNACE = `/** A throwaway kind for the test that a second kind that burns for power is counted as its own. */
+import { bm } from "../art/pal.ts";
+import type { KindPage } from "./kind.ts";
+
+export const furnace: KindPage = { picture: () => bm(["nn", "nn"], 2, 2).c, dock: 16 };
+`;
+
+/** A furnace burning beside a boiler gone cold, in the copy: the rules' power book, and the page's rows of it. */
+const BURN = `import * as F from "./packages/factory/src/index.ts";
+import { bareLand } from "./packages/factory/test/land.ts";
+import { S } from "./apps/works/src/state.ts";
+import { plural, powerPrint } from "./apps/works/src/ui/panels.ts";
+
+const k = F.kindNamed("furnace");
+if (k === null) throw new Error("no furnace");
+const y = F.create({ land: bareLand(20, 9, [], [15, 4]), tier: 4, seed: 1 });
+y.open.kinds[k] = 1;
+for (const [kind, x] of [[k, 10], [F.BOILER, 12]]) if (!F.build(y, kind, x, 4, 0, Infinity).ok) throw new Error("not built");
+F.put(y.holders, F.holderOf(y, F.at(y, 10, 4)), F.item("deadfall"));
+F.step(y);
+S.world = y;
+const s = F.powerSummary(y);
+const p = powerPrint();
+console.log(
+  JSON.stringify({
+    burnt: s.supply - s.depot,
+    gives: s.gives.map((g) => ({ ...g, kind: F.KINDS[g.kind] })),
+    rows: p.gives.map((g) => [plural(F.KIND_INFO[g.kind]?.name ?? ""), g.about, g.n]),
+  }),
+);
+`;
+
+/**
+ * Adds a kind to the copy at `at` as a kind is added: its module of the rules and its module of the
+ * page, and its line in each list after the last. The lists' order is the kinds' numbers, kept by hand
+ * and only ever added to, so a new kind's lines are two more than its modules.
+ */
+function addKind(at: string, name: string, rules: string, page: string): void {
+  writeFileSync(join(at, `packages/factory/src/kinds/${name}.ts`), rules);
+  writeFileSync(join(at, `apps/works/src/kinds/${name}.ts`), page);
+  for (const list of ["packages/factory/src/kinds/list.ts", "apps/works/src/kinds/index.ts"]) {
+    addAfter(join(at, list), /^import \{ \w+ \} from "\.\/\w+\.ts";$/, `import { ${name} } from "./${name}.ts";`);
+    addAfter(join(at, list), /^ {2}\w+,$/, `  ${name},`);
+  }
+}
+
+/** The copy type-checks: the rules, their tests and the page. */
+function checks(at: string): void {
+  for (const project of ["packages/factory", "packages/factory/tsconfig.test.json", "apps/works"]) {
+    const checked = bun(at, "check", "-p", project, "--no-pretty");
+    expect([project, checked.ok ? "" : checked.out]).toEqual([project, ""]);
+  }
+}
+
 describe("a new kind of piece", () => {
   test("is one module of the rules and one of the page, and a line in each list: nothing else changes", () => {
     const at = copy();
     try {
-      writeFileSync(join(at, "packages/factory/src/kinds/sieve.ts"), RULES_SIEVE);
-      const list = join(at, "packages/factory/src/kinds/list.ts");
-      addAfter(list, /^import \{ \w+ \} from "\.\/\w+\.ts";$/, 'import { sieve } from "./sieve.ts";');
-      addAfter(list, /^ {2}\w+,$/, "  sieve,");
-      writeFileSync(join(at, "apps/works/src/kinds/sieve.ts"), PAGE_SIEVE);
-      const pages = join(at, "apps/works/src/kinds/index.ts");
-      addAfter(pages, /^import \{ \w+ \} from "\.\/\w+\.ts";$/, 'import { sieve } from "./sieve.ts";');
-      addAfter(pages, /^ {2}\w+,$/, "  sieve,");
-
-      for (const project of ["packages/factory", "packages/factory/tsconfig.test.json", "apps/works"]) {
-        const checked = bun(at, "check", "-p", project, "--no-pretty");
-        expect([project, checked.ok ? "" : checked.out]).toEqual([project, ""]);
-      }
+      addKind(at, "sieve", RULES_SIEVE, PAGE_SIEVE);
+      checks(at);
       writeFileSync(join(at, "play.ts"), PLAY);
       const played = bun(at, "play.ts");
       expect(played.out).not.toContain("error");
@@ -259,6 +321,29 @@ describe("a new kind of piece", () => {
         pace: "60 /min",
         colour: true,
         lamp: true,
+      });
+    } finally {
+      rmSync(at, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  test("that burns for power is its own row in the power book, at its own power, beside the boilers", () => {
+    const at = copy();
+    try {
+      addKind(at, "furnace", RULES_FURNACE, PAGE_FURNACE);
+      checks(at);
+      writeFileSync(join(at, "burn.ts"), BURN);
+      const burnt = bun(at, "burn.ts");
+      expect(JSON.parse(burnt.out.trim().split("\n").at(-1) ?? "{}")).toEqual({
+        burnt: 300,
+        gives: [
+          { kind: "boiler", burns: true, giving: 0, idle: 1, dark: 0, gives: 0 },
+          { kind: "furnace", burns: true, giving: 1, idle: 0, dark: 0, gives: 300 },
+        ],
+        rows: [
+          ["Boilers", "0 burning, 1 cold", 0],
+          ["Furnaces", "1 burning", 300],
+        ],
       });
     } finally {
       rmSync(at, { recursive: true, force: true });
