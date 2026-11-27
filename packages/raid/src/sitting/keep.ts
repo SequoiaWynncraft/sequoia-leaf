@@ -29,6 +29,8 @@ import {
 
 const GAME = "little-raid-sitting";
 /**
+ * 8: each seat's run keeps the fights each figure has fought on the board (`Piece.fights`, Crafter's
+ * count); one of an older version has fought none.
  * 7: a seat's run keeps its rack as how many of each kind (`Run.rack`), where it kept a list
  * (`items`); the rack and the picks may hold tools (`content/tools.ts`), and a ring's figure may hold
  * Tongs. 6: a carousel keeps when the turn of the last let in is up (`ends`), planning the members' seats
@@ -42,8 +44,8 @@ const GAME = "little-raid-sitting";
  * three fields; one of versions 1 and 2 is of `LEGACY_ERA`; one of versions 1 to 4 keeps every room
  * of each run as an object.
  */
-export const SITTING_VERSION = 7;
-const READS: readonly number[] = [1, 2, 3, 4, 5, 6, SITTING_VERSION];
+export const SITTING_VERSION = 8;
+const READS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, SITTING_VERSION];
 
 export const encodeSitting = (t: Sitting): string =>
   JSON.stringify({

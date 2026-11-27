@@ -1,5 +1,40 @@
 [
   {
+    "id": "up-the-tree",
+    "at": "2027-01-05T00:00Z",
+    "title": "Up The Tree",
+    "lines": [
+      "Up The Tree is open until 19 January: Leetanns is its top prize, and of the pulls that give the rarity of Unc, Ace, Bhlue, Flop or Vi, half give one of them and half another figure of that rarity.",
+      "In The Little Raid, Canopy is a new origin whose figures start the fight up the tree, where nothing reaches them, and drop to their seats with a shield and mana."
+    ],
+    "more": [
+      {
+        "head": "New figures",
+        "points": [
+          "Vi (1 acorn, Canopy Chorus) gives the friend who used an ability most recently 50 mana.",
+          "Flop (2 acorns, Canopy Bulwark) falls over for 2 seconds, where nothing reaches it, then gets up with 40% of its health back, and every enemy within 2 hexes has to attack it for 2 seconds.",
+          "Bhlue (3 acorns, Canopy Mender) gives every friend in its row a shield of 180 for 4 seconds, and blocks the first enemy ability to hit each of them in that time.",
+          "Ace (4 acorns, Canopy Slinger) deals its attacks as aces, in turn: spades to the enemy with the least health, 40% harder; hearts heal the most hurt friend; diamonds to the enemy with the most armour, through it; clubs to the enemy with the most mana, taking 15 of it. Full Deck throws all four at once, 110 damage each.",
+          "Unc (5 acorns, Feather Slinger, and Canopy) pecks its target 8 times in 3 seconds, 82 damage each; if it falls, the rest go to the enemy nearest where it fell.",
+          "Leetanns, Up The Tree's top prize (5 acorns, Canopy Fang and Crafter), swings its tools in turn: the axe does 380 damage and pushes its target 1 hex, the pickaxe does 380 damage and halves its target's armour for 5 seconds, the rod pulls the enemy furthest away to a hex beside it, and the scythe does 290 damage to every enemy beside it and heals it for half of that. While Up The Tree is open, Leetanns can be bought in every raid."
+        ]
+      },
+      {
+        "head": "Traits",
+        "points": [
+          "Canopy: with 3, Canopy figures start the fight up the tree for 2 seconds, then drop with a shield of 20% of their health and 30 mana; with 5, a shield of 35% and a full mana bar.",
+          "Crafter (Leetanns): after every 3 fights it fights on the board, a component is added to your rack.",
+          "Feather now has 4 steps: with 2, 3, 4 and 5, 4%, 6%, 8% and 11% faster after every attack.",
+          "Slinger has a third step: with 6, 20% more than the last on the same target."
+        ]
+      },
+      {
+        "head": "Emblems",
+        "points": ["A Good Branch: its holder is a Canopy as well."]
+      }
+    ]
+  },
+  {
     "id": "penguin-month",
     "at": "2026-12-22T00:00Z",
     "title": "Penguin Month",

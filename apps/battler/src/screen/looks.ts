@@ -64,7 +64,8 @@ export type Thrown =
   | "bolt"
   | "cap"
   | "egg"
-  | "snowball";
+  | "snowball"
+  | "card";
 
 /** The mark an ability leaves where it goes off (`marks.ts`). */
 export type MarkId =
@@ -118,7 +119,13 @@ export type MarkId =
   | "splat"
   | "snowfall"
   | "fanfare"
-  | "bubble";
+  | "bubble"
+  | "reload"
+  | "dead"
+  | "bricks"
+  | "pip"
+  | "rings"
+  | "gathered";
 
 /** An ability's own sound: a note (semitones from A), its timbre, a second note after it, a breath of noise (its pitch), a slide, how loud; and for one that lands later, its sound then. */
 export interface Voice {
@@ -164,6 +171,14 @@ export interface Look {
   readonly each?: true;
   /** What it gives whoever it is for that their bars show: mana, which ticks up on the bar. */
   readonly gives?: "mana";
+  /** While it hides it lies on its hex as its cast picture (Flop playing dead), rather than going to ground. */
+  readonly hides?: "pose";
+  /**
+   * Its catch and dread come in its own lead-in, with nothing the rules hold back (`aimed.ts`): Unc
+   * drumming on its target's hex, Leetanns swinging its tool. The weight of a drum comes on its
+   * last peck.
+   */
+  readonly aimed?: "drum" | "swing";
   /** A big moment: how far the board bumps, in art pixels at 1x (1 for most, 2 for the biggest). */
   readonly bump?: number;
   /** Seconds the fight's clock holds as it goes off, at 1x; a big moment holds as long as `STOP.big` unless it says. */
@@ -187,6 +202,8 @@ export const LOOKS: Partial<Record<UnitKind, Look>> = {
   peep: { wind: 6, body: "lean", shot: "cap", mark: "chips" },
   // Two pats, and a low bank of snow set down on the enemy's side of its hex and its friend's.
   dibs: { wind: 6, body: "puff", mark: "bank" },
+  // One key, the duck squeaks, a thin arc goes to the friend and their bar ticks up.
+  vi: { wind: 4, body: "still", mark: "reload", gives: "mana" },
   // ---------- two acorns ----------
   kettle: { wind: 8, body: "wobble", gather: [CREAM, STONE[3]], shot: "tea", mark: "steam" },
   slug: { wind: 8, body: "puff", mark: "slime" },
@@ -197,6 +214,8 @@ export const LOOKS: Partial<Record<UnitKind, Look>> = {
   lanterngnome: { wind: 8, body: "rear", gather: [GOLD[1], GOLD[2]], shot: "beam", mark: "lamplight" },
   // Rocks back, then is gone along the line on its belly; the lane it slid down is left as ice.
   jet: { wind: 4, body: "crouch", leap: 6, mark: "lane", slides: true },
+  // Keels over at once and lies there, paws up, while nothing reaches it.
+  flop: { wind: 4, body: "wobble", mark: "dead", hides: "pose" },
   // ---------- three acorns ----------
   leafling: { wind: 8, body: "rear", mark: "advice" },
   cindernewt: { wind: 8, body: "puff", gather: [CORAL, GOLD[1]], mark: "breath" },
@@ -210,6 +229,8 @@ export const LOOKS: Partial<Record<UnitKind, Look>> = {
   crab31: { wind: 6, body: "rear", mark: "clack", gives: "mana" },
   // Scoops, then throws them one after another, each on its own arc with its shadow under it.
   larp: { wind: 6, body: "crouch", shot: "snowball", mark: "splat" },
+  // Flips the laptop open; a low wall of bricks settles in front of each friend in its row (`walls.ts`).
+  bhlue: { wind: 6, body: "rise", mark: "bricks" },
   // ---------- four acorns ----------
   badger: { wind: 8, body: "spin", mark: "claws" },
   fogowl: { wind: 6, body: "fade", leap: 8, mark: "fog" },
@@ -222,6 +243,8 @@ export const LOOKS: Partial<Record<UnitKind, Look>> = {
   flurry: { wind: 8, body: "shake", mark: "snowfall" },
   // Leans back and blows: thin arcs run both ways along its row, and the row is lit end to end.
   pomp: { wind: 8, body: "lean", gather: [GOLD[1], GOLD[2]], mark: "fanfare", gives: "mana" },
+  // Fans the four out at once; each curves to its target and sticks in its hex.
+  ace: { wind: 6, body: "lean", shot: "card", mark: "pip" },
   // ---------- five acorns ----------
   greg: { wind: 12, body: "rise", mark: "sit", bump: 2 },
   whitefox: { wind: 10, body: "rear", gather: [GOLD[1], GOLD[2]], mark: "antlers", bump: 1 },
@@ -232,6 +255,8 @@ export const LOOKS: Partial<Record<UnitKind, Look>> = {
   yule: { wind: 12, body: "puff", gather: [WATER[3], CREAM], mark: "bubble", lands: "bubble", bump: 1, stop: 0.12 },
   // Into its shell; the one with the least health is marked; out beside them on a hard cut, one pinch.
   crab8: { wind: 10, body: "crouch", lunge: 5, mark: "nothere", lands: "shell", cut: true, bump: 1, stop: 0.12 },
+  // Leans back on its post; one peck alone rings the wood under its target; the dread; the roll, a ring a peck.
+  unc: { wind: 24, body: "lean", mark: "rings", each: true, aimed: "drum" },
   // ---------- a banner's member ----------
   "banner-1": {
     wind: 12,
@@ -244,6 +269,8 @@ export const LOOKS: Partial<Record<UnitKind, Look>> = {
   },
   // Rings for the grooters: the empty places beside him marked, a note over each, then they run in.
   commodore: { wind: 12, body: "rear", gather: "own", mark: "called", lands: "call", bump: 2, stop: 0.12 },
+  // Draws the next tool, points it, holds it at the top of the swing, brings it down; a chip of what it gathered.
+  leetanns: { wind: 22, body: "rear", gather: "own", mark: "gathered", aimed: "swing", bump: 2, stop: 0.12 },
   // ---------- the forest's own ----------
   wasp: { wind: 6, body: "shake", lunge: 5, mark: "sting" },
   puddle: { wind: 6, body: "wobble", mark: "splash" },
@@ -271,6 +298,8 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
   peep: { n: 24, wave: "square", two: 5, vol: 0.04 },
   // Two soft pats in the snow.
   dibs: { n: -5, wave: "triangle", two: 0, hiss: 900, vol: 0.05 },
+  // A key, and the duck's squeak.
+  vi: { n: 27, wave: "square", two: 5, slide: 1.3, vol: 0.04 },
   // ---------- two acorns ----------
   kettle: { n: 14, wave: "sine", two: 4, hiss: 5000, slide: 1.3, vol: 0.05 },
   slug: { n: -9, wave: "sine", hiss: 600, slide: 0.7 },
@@ -281,6 +310,8 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
   lanterngnome: { n: 14, wave: "sine", two: 5 },
   // A long hiss of ice under a belly.
   jet: { n: 10, wave: "sine", hiss: 4200, slide: 0.6, vol: 0.05 },
+  // A soft thump as it keels over.
+  flop: { n: -14, wave: "sine", hiss: 500, slide: 0.6, vol: 0.06 },
   // ---------- three acorns ----------
   leafling: { n: 7, wave: "triangle", two: 4 },
   cindernewt: { n: -2, wave: "sawtooth", hiss: 1500, slide: 0.8, vol: 0.06 },
@@ -294,6 +325,8 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
   crab31: { n: 15, wave: "triangle", two: 7, hiss: 3200, vol: 0.06 },
   // A packed crunch of snow.
   larp: { n: 2, wave: "triangle", hiss: 2600, slide: 0.8, vol: 0.05 },
+  // The lid's click, and bricks settling.
+  bhlue: { n: 5, wave: "triangle", two: -7, hiss: 900, vol: 0.06 },
   // ---------- four acorns ----------
   badger: { n: -7, wave: "sawtooth", hiss: 1800, slide: 0.7, vol: 0.06 },
   fogowl: { n: -3, wave: "sine", two: -5, hiss: 900 },
@@ -306,6 +339,8 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
   flurry: { n: 26, wave: "sine", two: -5, hiss: 7000, slide: 0.7, vol: 0.04 },
   // Three bright notes up.
   pomp: { n: 12, wave: "square", two: 7, slide: 1.06, vol: 0.06 },
+  // A riffle.
+  ace: { n: 17, wave: "square", hiss: 6000, slide: 1.2, vol: 0.04 },
   // ---------- five acorns ----------
   greg: { n: -19, wave: "triangle", hiss: 200, slide: 0.5, vol: 0.14 },
   whitefox: { n: 19, wave: "sine", two: 7, vol: 0.09 },
@@ -323,6 +358,8 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
   },
   // Nothing much as it goes in; a snap as it comes up.
   crab8: { n: -12, wave: "sine", vol: 0.03, lands: { n: 10, wave: "square", hiss: 2400, slide: 0.6, vol: 0.08 } },
+  // One knock on the wood (each peck of the roll knocks again, `aimed.ts`).
+  unc: { n: -2, wave: "square", hiss: 1500, vol: 0.06 },
   // A low two-note stare, and a thump with a bell over it when it lands.
   "banner-1": {
     n: -14,
@@ -341,6 +378,8 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
     vol: 0.09,
     lands: { n: -10, wave: "triangle", hiss: 900, slide: 0.7, vol: 0.12 },
   },
+  // A swing through the air and a heavy chop.
+  leetanns: { n: -9, wave: "triangle", hiss: 1200, slide: 0.6, vol: 0.1 },
   // ---------- the forest's own ----------
   wasp: { n: 21, wave: "sawtooth", slide: 0.8, vol: 0.04 },
   puddle: { n: 0, wave: "sine", hiss: 1200, slide: 0.6 },
@@ -355,6 +394,19 @@ export const VOICES: Partial<Record<UnitKind, Voice>> = {
 };
 
 /** What a figure throws when it only attacks: a small thing of a colour (`"own"`: its own, as `livery.ts` has it), some with a streak behind, a few a thing of their own (`shot`). */
+/**
+ * What a shot looks like as it flies: an ability's own look, or else the figure's attack look, or a
+ * plain one. A card only when Leaf's shot names its suit: the page never invents one, and a card
+ * look on a shot without a suit flies plain.
+ */
+export function shotLook(
+  ev: { readonly what: "attack" | "ability"; readonly card?: unknown },
+  kind: UnitKind,
+): Thrown | null {
+  if (ev.card !== undefined) return "card";
+  const look = (ev.what === "ability" ? LOOKS[kind]?.shot : undefined) ?? ATTACK_SHOT[kind]?.shot ?? null;
+  return look === "card" ? null : look;
+}
 export const ATTACK_SHOT: Partial<
   Record<UnitKind, { readonly col: string; readonly trail?: boolean; readonly shot?: Thrown }>
 > = {
@@ -374,8 +426,14 @@ export const ATTACK_SHOT: Partial<
   flurry: { col: WATER[3] },
   pomp: { col: GOLD[2], trail: true },
   yule: { col: WATER[3] },
+  // A squeak of the duck's colour.
+  vi: { col: GOLD[1] },
   crab31: { col: STONE[3] },
   heron: { col: CREAM, trail: true },
+  // A small pale thing; a card only when Leaf says the attack was one (`shotLook`).
+  ace: { col: CREAM },
+  // A chip of the post.
+  unc: { col: BARK[3] },
   apothecary: { col: SKY[4] },
   "banner-1": { col: "own", trail: true, shot: "bolt" },
   // A thrown ring of his bell.
@@ -403,6 +461,8 @@ const KIN_PUFF: Readonly<Record<KinId, Puff>> = {
   grooter: { cols: [CREAM, PAPER[1], GREEN[3]], drift: "out" },
   // Snow, settling.
   huddle: { cols: [CREAM, WATER[3]], drift: "down" },
+  // Russet fur and leaves, coming down out of the tree.
+  canopy: { cols: [CORAL, BARK[2], GREEN[3]], drift: "down" },
 };
 const SHELL: Puff = KIN_PUFF.crab;
 const LEAVES: Puff = { cols: [BARK[3], GREEN[3]], drift: "down" };
@@ -425,10 +485,21 @@ const PUFFS: Partial<Record<UnitKind, Puff>> = {
   glorplet: KIN_PUFF.mist,
   hatchling: KIN_PUFF.grooter,
   clutch: { cols: [BARK[2], BARK[4], CREAM], drift: "out" },
+  unc: { cols: [INK, CREAM, CORAL], drift: "down" },
 };
 /** The puff a figure of a kind leaves; plain dust for anyone with nothing of their own. */
 export const puffOf = (cat: Catalog, kind: UnitKind): Puff =>
   PUFFS[kind] ?? (isFigureId(kind) ? KIN_PUFF[figureIn(cat, kind).kin] : { cols: [PAPER[1], EARTH[2]], drift: "out" });
+
+/**
+ * When each beat of an ability aimed in its own lead-in begins (`aimed.ts`), in steps before it goes
+ * off: the catch, and the dread (0.4 seconds); and the steps its aftermath lasts after. Its wind-up
+ * is the rest of its `wind`, 0.6 seconds.
+ */
+export const AIMED = {
+  drum: { catch: 12, dread: 8, after: 10 },
+  swing: { catch: 10, dread: 8, after: 10 },
+} as const;
 
 /** Steps before a blow lands that its owner begins it: drawing back, then the lunge that peaks as it lands. */
 export const SWING_LEAD = 4;

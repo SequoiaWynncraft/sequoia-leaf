@@ -39,6 +39,7 @@ export const BOON_IDS = [
   "graidcharm",
   "sneakcharm",
   "huddlecharm",
+  "canopycharm",
 ] as const;
 export type BoonId = (typeof BOON_IDS)[number];
 

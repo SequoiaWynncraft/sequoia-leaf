@@ -18,19 +18,21 @@ import { traitIn } from "@sequoia-leaf/raid/content/traits.ts";
 import { distance } from "@sequoia-leaf/raid/hex.ts";
 
 import { aimAt, handAt } from "./acting.ts";
+import { aimAhead, pecked, reaped, stepAims } from "./aimed.ts";
 import { turnsUp } from "./arrivals.ts";
 import { itemPic, traitPic } from "./art/icons.ts";
 import { TRAIT_COLOUR } from "./art/pal.ts";
 import { clockNow, colourOf, face, feetAt, fightNow, FV, travel } from "./board.ts";
 import { bubbleSays, hangBubble, stepBubbles } from "./bubble.ts";
 import { hangCall, stepCalls } from "./call.ts";
+import { dealing, flying } from "./dealt.ts";
 import { showMark } from "./fightmarks.ts";
 import { burst, gather, motes, ring, say } from "./fx.ts";
 import type { Pt } from "./geometry.ts";
-import { cracked, pooled } from "./litter.ts";
+import { pooled } from "./litter.ts";
 import { ownOf } from "./livery.ts";
-import { ATTACK_SHOT, type Look, LOOKS, puffOf, VOICES } from "./looks.ts";
-import { arcOf, type At, MARKS, puff, type Shot } from "./marks.ts";
+import { ATTACK_SHOT, type Look, LOOKS, puffOf, shotLook, VOICES } from "./looks.ts";
+import { arcOf, type At, CARD_DRAWN, MARKS, puff, type Shot } from "./marks.ts";
 import { type Actor, TUMBLE } from "./motion.ts";
 import type { Cue, Lead } from "./playback.ts";
 import { fallsToRise, isRising, risesUp, stepRisings } from "./rising.ts";
@@ -38,6 +40,8 @@ import { reachOut, rootsUp, stepRoots } from "./roots.ts";
 import { cutTo, hangShell, stepShells } from "./shell.ts";
 import { snd } from "./sounds.ts";
 import { hang, stepSpells } from "./spells.ts";
+import { hides, statusOff, treeStatus } from "./statuses.ts";
+import { blocked } from "./walls.ts";
 import { bump, weigh } from "./weight.ts";
 
 /** The kinds of damage, coloured as the cards colour their words: coral, rose, cream. */
@@ -46,6 +50,9 @@ const UP = -Math.PI / 2;
 
 const actor = (id: number): Actor | undefined => FV.actors[id];
 const tallOf = (a: Actor): number => framesOf(a.unit.kind, false, a.form).tall;
+/** Where somebody stands and how tall, for what lands on them; nobody, for nobody. */
+const standsAt = (a: Actor | undefined): (Pt & { tall: number }) | null =>
+  a ? { x: a.x, y: a.y, tall: tallOf(a) } : null;
 const chestOf = (a: Actor): Pt => ({ x: a.x, y: a.y - Math.round(tallOf(a) / 2) });
 
 /** How many of an ability's hits have landed this step, by whose it is: two or more is weight. */
@@ -87,9 +94,7 @@ function throwAt(
     dur: Math.max(1, dur),
     arc: arcOf(look, Math.hypot(end.x - from.x, end.y - from.y)),
     look,
-    col: o.col ?? STONE[3],
-    trail: o.trail ?? false,
-    land: o.land ?? null,
+    ...flying(o),
   });
 }
 
@@ -119,9 +124,11 @@ function atOf(cat: Catalog, ev: Extract<FightEvent, { t: "cast" }>): At | null {
 
 // ---------- lead-ins ----------
 
-/** Lead-ins of an ability's own, besides its body's and what it throws: Seqwawa's roots running out. */
+/** Lead-ins of an ability's own, besides its body's and what it throws: Seqwawa's roots running out, the catch and dread of Unc's drum and Leetanns' swing. */
 const OWN_LEADS: Partial<Record<UnitKind, (l: Lead, ev: Extract<FightEvent, { t: "cast" }>) => void>> = {
   seqwawa: reachOut,
+  unc: aimAhead,
+  leetanns: aimAhead,
 };
 
 /** Winding up for an ability: the body as its look says, light gathering in, a lunge or what it throws ahead. */
@@ -214,14 +221,20 @@ const ON: On = {
     const own = ev.what === "ability" ? LOOKS[a.unit.kind] : undefined;
     const small = ATTACK_SHOT[a.unit.kind];
     const mark = own && t ? markAt(cat, a, t) : null;
-    throwAt(handOr(a, at, from), ev.target, feetAt(ev.to), at, ev.ticks, own?.shot ?? small?.shot ?? null, {
+    throwAt(handOr(a, at, from), ev.target, feetAt(ev.to), at, ev.ticks, shotLook(ev, a.unit.kind), {
       col: coloursOf(cat, a.unit.kind, small?.col)?.[0] ?? STONE[3],
       trail: small?.trail ?? false,
-      land: mark,
+      ...dealing(ev, () => standsAt(actor(ev.target)), mark, CARD_DRAWN),
     });
     snd.shot();
   },
   hit: (ev, at) => hit(ev, at),
+  block: (ev, at) => blocked(ev.id, at),
+  // Mana taken off it: a small number in the mana bar's colour, under its feet.
+  drain: (ev) => {
+    const a = actor(ev.id);
+    if (a) say(a.x + 8, a.y + 8, `-${ev.amount}`, WATER[3], { small: true, ttl: 0.6, rise: 4 });
+  },
   slip: (ev, at) => {
     const a = actor(ev.id);
     if (!a) return;
@@ -326,11 +339,14 @@ function markAt(cat: Catalog, a: Actor, t: Actor): () => void {
   };
 }
 
-/** Where a hit of an ability whose mark each of its hits leaves (Munch's bites) lands, that mark. */
+/** Where a hit of an ability whose mark each of its hits leaves (Munch's bites, Unc's pecks) lands, that mark; a drum's last peck has its weight. */
 function eachMark(ev: Events["hit"], t: Actor): void {
   const by = actor(ev.by);
   const cat = FV.pb?.fight.cat;
-  if (by && cat && ev.source === "ability" && LOOKS[by.unit.kind]?.each) markAt(cat, by, t)();
+  const look = by ? LOOKS[by.unit.kind] : undefined;
+  if (!by || !cat || ev.source !== "ability" || !look?.each) return;
+  markAt(cat, by, t)();
+  if (look.aimed === "drum") pecked(ev.by);
 }
 
 /** Back up: a true form rising (`rising.ts`), the fallen one Seqwawa's roots stand up (`roots.ts`), or a Second Wind. */
@@ -410,6 +426,7 @@ function cast(cat: Catalog, ev: Events["cast"], at: number): void {
   if (ev.name) say(a.x, a.y - framesOf(ev.kind).tall - 8, ev.name, col, { small: true, ttl: 0.8, rise: 6 });
   if (look?.lands) hold(cat, ev, look, a, t, at);
   else if (look) goesOff(cat, ev, look);
+  if (ev.tool === "scythe") reaped(a);
   snd.ability(VOICES[ev.kind] ?? { n: 12, wave: "triangle" });
 }
 
@@ -458,28 +475,17 @@ function status(ev: Events["status"], at: number): void {
   const a = actor(ev.id);
   // A bubble of Yule's is drawn by `bubble.ts`, never as going to ground.
   if (!a || bubbleSays(ev)) return;
-  if (!ev.on) {
-    if (ev.status === "shield") burst(a.x, a.y - 9, 8, [WATER[3], CREAM], { speed: 34, ttl: 0.35 });
-    else if (ev.status === "hidden") {
-      burst(a.x, a.y, 10, [EARTH[1], EARTH[2], EARTH[0]], { speed: 34, ttl: 0.45, toward: UP, spread: 2 });
-      a.hopAt = at;
-      snd.dig();
-    }
-    return;
-  }
+  if (!ev.on) return statusOff(a, ev, at);
   if (ev.status === "stun") snd.stun();
   else if (ev.status === "burn") burst(a.x, a.y - 4, 6, ["#e67967", GOLD[1]], { speed: 20, grav: -30, ttl: 0.4 });
   else if (ev.status === "slow") burst(a.x, a.y - 2, 5, [WATER[2], WATER[3]], { speed: 14, ttl: 0.5 });
   else if (ev.status === "taunt") say(a.x, a.y - tallOf(a) - 2, "!", "#e67967", { big: true, ttl: 0.6 });
-  else if (ev.status === "hidden") {
-    burst(a.x, a.y, 10, [EARTH[1], EARTH[2], EARTH[0]], { speed: 30, ttl: 0.45, toward: UP, spread: 2 });
-    snd.dig();
-  } else if (ev.status === "haste")
+  else if (ev.status === "hidden") hides(a, at);
+  else if (ev.status === "haste")
     burst(a.x, a.y - 6, 6, [CREAM, GOLD[2]], { speed: 26, grav: -50, ttl: 0.4, toward: UP, spread: 0.6 });
   else if (ev.status === "braced") ring(a.x, a.y, 11, STONE[3], 0.35);
-  else if (ev.status === "cracked") cracked(a, ev.amount);
+  else treeStatus(a, ev, at);
 }
-
 function trait(cat: Catalog, ev: Events["trait"], at: number): void {
   const col = TRAIT_COLOUR[ev.trait];
   ev.ids.forEach((id, i) => {
@@ -536,6 +542,7 @@ function on<K extends keyof Events>(t: K, ev: Events[K], at: number, cat: Catalo
 export function stepShown(c: number, cat: Catalog): void {
   stepSpells(c);
   stepCalls(c);
+  stepAims(c);
   stepShells(c);
   stepBubbles(c);
   stepRisings(c);

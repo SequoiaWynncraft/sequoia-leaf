@@ -35,6 +35,7 @@ describe("the catalogue", () => {
       memberThing("banner-1"),
       memberThing("groot-night"),
       memberThing("penguin-month"),
+      memberThing("up-the-tree"),
     ]);
     // A character is its figure: Yule's camp thing too, which says its line and stands as its figure does; a skin's member is none.
     expect(figureOfThing({ id: memberThing("penguin-month"), kind: "characters" })).toBe("yule");
@@ -81,8 +82,10 @@ describe("the catalogue", () => {
       expect(t.w).toBeGreaterThan(0);
       expect(t.d).toBeGreaterThan(0);
       expect(t.name.length).toBeGreaterThan(0);
-      // A member has no line about them, but the one the set draws (Yule), which has its own.
-      expect(t.about.length > 0).toBe(!isMemberThing(t.id) || t.id === "member-penguin-month");
+      // A member has no line about them, but the ones the set draws (Yule, Leetanns), which have their own.
+      expect(t.about.length > 0).toBe(
+        !isMemberThing(t.id) || t.id === "member-penguin-month" || t.id === "member-up-the-tree",
+      );
     }
   });
 
@@ -139,9 +142,15 @@ describe("what is open of the camp's things", () => {
           "figure-flurry",
           "figure-pomp",
           "member-penguin-month",
+          "figure-vi",
+          "figure-flop",
+          "figure-bhlue",
+          "figure-ace",
+          "figure-unc",
+          "member-up-the-tree",
         ].includes(id),
       ),
     ).toEqual([]);
-    expect(shown.length).toBe(THINGS.length - 12);
+    expect(shown.length).toBe(THINGS.length - 18);
   });
 });

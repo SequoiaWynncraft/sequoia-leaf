@@ -17,6 +17,8 @@ export const RELEASES = [
   { id: "groot-night", at: Date.UTC(2026, 11, 8), joins: "opening" },
   { id: "penguin-month", at: Date.UTC(2026, 11, 22), joins: "opening" },
   { id: "up-the-tree", at: Date.UTC(2027, 0, 5), joins: "opening" },
+  // Brings nothing: Up The Tree's banner closes as it opens (`banners.ts`).
+  { id: "up-the-tree-ends", at: Date.UTC(2027, 0, 19), joins: "opening" },
 ] as const;
 export type ReleaseId = (typeof RELEASES)[number]["id"];
 

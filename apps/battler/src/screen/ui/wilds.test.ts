@@ -91,8 +91,8 @@ describe("the rule's words", () => {
   });
   test("figures moved off closed hexes are named in one line", () => {
     const run = startRun(3, { era: LEGACY_ERA, way: wayOn({ id: "wilds" }) });
-    run.board[4] = { id: 50, kind: "rock", stars: 1, items: [], fed: 0 };
-    run.bench[0] = { id: 51, kind: "finch", stars: 1, items: [], fed: 0 };
+    run.board[4] = { id: 50, kind: "rock", stars: 1, items: [], fed: 0, fights: 0 };
+    run.bench[0] = { id: 51, kind: "finch", stars: 1, items: [], fed: 0, fights: 0 };
     const notes: RaidNote[] = [
       { t: "shifted", piece: 50, from: 0, to: { on: "board", at: 4 } },
       { t: "shifted", piece: 51, from: 6, to: { on: "bench", at: 0 } },

@@ -17,6 +17,8 @@ export const TRAIT_COLOUR: Readonly<Record<TraitId, string>> = {
   grooter: PAPER[2],
   // The pond in winter: the penguins' backs.
   huddle: WATER[2],
+  // Russet: a red panda's, up the tree.
+  canopy: BARK[3],
   bulwark: STONE[3],
   fang: "#f4a08c",
   slinger: GOLD[0],
@@ -27,4 +29,6 @@ export const TRAIT_COLOUR: Readonly<Record<TraitId, string>> = {
   greg: GREEN[3],
   rooted: GREEN[2],
   stowaway: BARK[4],
+  // The stone of a tool's head.
+  crafter: STONE[2],
 };

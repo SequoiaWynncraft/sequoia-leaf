@@ -110,7 +110,7 @@ describe("the twenty-eight", () => {
     }
     expect(HEADLINERS.every(isMemberId) && !EVERYONES.some(isMemberId)).toBe(true);
   });
-  test("a banner's member is nobody in particular: its name is what any guild member is, or its banner's title", () => {
+  test("a banner's member is nobody in particular: its name is what any guild member is, or its banner's title; a set headliner is named by the set", () => {
     for (const id of HEADLINERS) expect(figureIn(CAT, id).name).toBe("A guild member");
     // Every banner's, with every release open: a banner that shows its member by name is "A guild
     // member" in the rules; one that shows a title has that title, and the member's skin, never their name.
@@ -119,6 +119,7 @@ describe("the twenty-eight", () => {
       ["banner-1", "name", "A guild member"],
       ["groot-night", "title", "Commodore"],
       ["penguin-month", "title", "Yule"],
+      ["up-the-tree", "title", "Leetanns"],
     ]);
     // A member's figure is drawn from their skin; the set's own (Yule) is no member's.
     for (const b of BANNERS) expect([b.id, isMemberId(b.headliner)]).toEqual([b.id, b.look === "skin"]);
@@ -269,7 +270,7 @@ describe("a run with the member's own figures", () => {
     // Only a banner's own prize is its member: nothing else names one.
     expect(rosterOf(["pull:figure:banner-1", "pull:headliner:greg", "copies:headliner:banner-9:2"])).toEqual({});
     const run = setOut(HAS, true);
-    run.board[3] = { id: run.nextId++, kind: UNIT, stars: 1, items: [], fed: 0 };
+    run.board[3] = { id: run.nextId++, kind: UNIT, stars: 1, items: [], fed: 0, fights: 0 };
     expect(levelOf(run, UNIT)).toBe(3);
     expect(partyOf(run).figures.find((p) => p.kind === UNIT)?.level).toBe(3);
     expect(isParty(JSON.parse(JSON.stringify(partyOf(run))))).toBe(true);
@@ -297,7 +298,7 @@ describe("a run with the member's own figures", () => {
     const traits = traitStates(CAT, [piece]).map((t) => t.trait);
     expect(traits.toSorted()).toEqual(["feather", "sage"]);
     // With one more Sage on the board the calling switches on, the member counted.
-    run.board[9] = { id: run.nextId++, kind: "moth", stars: 1, items: [], fed: 0 };
+    run.board[9] = { id: run.nextId++, kind: "moth", stars: 1, items: [], fed: 0, fights: 0 };
     expect(
       traitStates(
         CAT,

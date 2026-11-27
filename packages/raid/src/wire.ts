@@ -21,7 +21,16 @@ import type { RaidNote, RunView, TableView } from "./game.ts";
 import { type News, type Payout, readAlmanac, trailOpen } from "./outside.ts";
 import { readRoster } from "./own.ts";
 import { isRackItem } from "./racks.ts";
-import { ACORNS_WHYS, type AcornsWhy, type Ending, type Note, type RunSummary, type Spot } from "./run.ts";
+import {
+  ACORNS_WHYS,
+  type AcornsWhy,
+  type Ending,
+  ITEMS_WHYS,
+  type ItemsWhy,
+  type Note,
+  type RunSummary,
+  type Spot,
+} from "./run.ts";
 import { fields, Nonsense, readRunView } from "./save.ts";
 import { type Slot, slotOf } from "./way.ts";
 
@@ -145,6 +154,7 @@ const fedOf = (n: Record<string, unknown>, what: string): Fed => ({
   items: each(n.items, isItemId, 3, what),
 });
 const isAcornsWhy = (v: unknown): v is AcornsWhy => ACORNS_WHYS.some((why) => why === v);
+const isItemsWhy = (v: unknown): v is ItemsWhy => ITEMS_WHYS.some((why) => why === v);
 const isResult = (v: unknown): v is "win" | "loss" | "draw" => v === "win" || v === "loss" || v === "draw";
 const isChoiceKind = (v: unknown): v is "starter" | "component" | "boon" | "rule" =>
   v === "starter" || v === "component" || v === "boon" || v === "rule";
@@ -222,8 +232,7 @@ function runNote(n: Record<string, unknown>): Note {
     case "acorns":
       return { t: "acorns", why: one(n.why, isAcornsWhy, what), amount: whole(n.amount, 0, 999, what) };
     case "items":
-      if (n.why !== "basket" && n.why !== "charm") return bad(what);
-      return { t: "items", why: n.why, items: each(n.items, isItemId, 8, what) };
+      return { t: "items", why: one(n.why, isItemsWhy, what), items: each(n.items, isItemId, 8, what) };
     case "resolve":
       return {
         t: "resolve",

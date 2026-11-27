@@ -20,8 +20,19 @@ export { enter, freeNear, getUp, lastFallen, type Start, summon } from "./enter.
 
 /** An amount made bigger by its owner's ability power. */
 export const powered = (u: Unit, amount: number): number => (amount * u.power) / 100;
-/** Whether anything can be aimed at it: up, and not underground. */
+/**
+ * Whether a figure is there for anyone else at all: up, and not hidden (underground, up the tree,
+ * playing dead, in a shell or a bubble). The one rule for hiding: nothing else, foe or friend, aims
+ * at, hits, heals, shields, gives mana to, moves, pushes, pulls, cracks or slows one that is not;
+ * and it does not act.
+ */
 export const targetable = (f: Fight, u: Unit): boolean => u.alive && u.hiddenUntil <= f.tick;
+/**
+ * Whether what `by` does reaches a figure: the hiding rule (`targetable`), but what a figure does to
+ * itself, or has of itself (given by nobody: an item's shield, a burrow's healing), reaches it hidden.
+ */
+export const reaches = (f: Fight, u: Unit, by: Unit | null): boolean =>
+  by === null || by.id === u.id ? u.alive : targetable(f, u);
 /** Whether what an enemy's ability lands on a figure is blocked (`struck`). A friend's never is. */
 export const blocks = (f: Fight, target: Unit, by: Unit | null): boolean =>
   by !== null && by.side !== target.side && whenStruck(f, target, by);
@@ -41,10 +52,10 @@ export function foesOf(f: Fight, side: Side): Unit[] {
   for (const o of f.units) if (o.side !== side && targetable(f, o)) out.push(o);
   return out;
 }
-/** Everyone on a side who is still up. */
+/** Everyone on a side a friend can reach: up, and not hidden. */
 export function alliesOf(f: Fight, side: Side): Unit[] {
   const out: Unit[] = [];
-  for (const o of f.units) if (o.side === side && o.alive) out.push(o);
+  for (const o of f.units) if (o.side === side && targetable(f, o)) out.push(o);
   return out;
 }
 /**
@@ -64,7 +75,7 @@ export function nearestFoe(f: Fight, u: Unit): Unit | undefined {
   let bestAway = 99;
   let bestOrder = 0;
   for (const o of f.units) {
-    if (o.side === u.side || !o.alive || o.hiddenUntil > f.tick) continue;
+    if (o.side === u.side || !targetable(f, o)) continue;
     const away = distance(u.cell, o.cell);
     const at = order(u.side, o.cell);
     if (away < bestAway || (away === bestAway && at < bestOrder)) {
@@ -81,7 +92,7 @@ export function farthestFoe(f: Fight, u: Unit): Unit | undefined {
   let bestAway = -1;
   let bestOrder = 0;
   for (const o of f.units) {
-    if (o.side === u.side || !o.alive || o.hiddenUntil > f.tick) continue;
+    if (o.side === u.side || !targetable(f, o)) continue;
     const away = distance(u.cell, o.cell);
     const at = order(u.side, o.cell);
     if (away > bestAway || (away === bestAway && at < bestOrder)) {
@@ -102,7 +113,7 @@ export function foesByDistance(f: Fight, side: Side, cell: number): Unit[] {
 export function foesWithin(f: Fight, side: Side, cell: number, steps: number): Unit[] {
   const out: Unit[] = [];
   for (const o of f.units) {
-    if (o.side !== side && o.alive && o.hiddenUntil <= f.tick && distance(cell, o.cell) <= steps) out.push(o);
+    if (o.side !== side && targetable(f, o) && distance(cell, o.cell) <= steps) out.push(o);
   }
   return out;
 }
@@ -115,11 +126,11 @@ export function foesOn(f: Fight, side: Side, cells: readonly number[]): Unit[] {
   }
   return out;
 }
-/** A side's own, most hurt first (by share of health left). With `hurtOnly`, those at full health are left out. */
+/** A side's own a friend can reach, most hurt first (by share of health left). With `hurtOnly`, those at full health are left out. */
 export function mostHurt(f: Fight, side: Side, hurtOnly: boolean): Unit[] {
   const out: Unit[] = [];
   for (const o of f.units) {
-    if (o.side === side && o.alive && (!hurtOnly || o.hp < o.maxHp)) out.push(o);
+    if (o.side === side && targetable(f, o) && (!hurtOnly || o.hp < o.maxHp)) out.push(o);
   }
   return out.toSorted((a, b) => a.hp * b.maxHp - b.hp * a.maxHp || a.id - b.id);
 }
@@ -154,7 +165,7 @@ export function leap(f: Fight, u: Unit, to: number, why: LeapWhy): void {
 }
 /** Pushes a figure straight away from whoever pushes it, as far as there are free hexes, up to a number. A Rock stays; so does anything too big. */
 export function knockBack(f: Fight, target: Unit, by: Unit, hexes: number): number {
-  if (!target.alive || target.rooted || target.steady || hexes <= 0) return 0;
+  if (!reaches(f, target, by) || target.rooted || target.steady || hexes <= 0) return 0;
   const from = by.cell;
   const reach = distance(from, target.cell);
   const path = line(from, target.cell, reach + hexes);
@@ -182,7 +193,7 @@ export function gainMana(u: Unit, amount: number): void {
  * back what it received.
  */
 export function giveMana(f: Fight, to: Unit, n: number, by: Unit): number {
-  if (to.id === by.id || to.manaFull <= 0 || !to.alive || n <= 0) return 0;
+  if (to.id === by.id || to.manaFull <= 0 || !reaches(f, to, by) || n <= 0) return 0;
   to.gifts = to.gifts.filter((g) => f.tick - g.at < secs(FIGHT.giftOver));
   const given = to.gifts.reduce((sum, g) => sum + g.n, 0);
   const amount = Math.min(n, FIGHT.giftMost - given);
@@ -244,7 +255,7 @@ export function slow(f: Fight, target: Unit, percent: number, seconds: number, b
  * long as a burn lasts (`Fight.burning`). Burning again keeps the hotter fire.
  */
 export function burn(f: Fight, target: Unit, percent: number, by: Unit | null): void {
-  if (!targetable(f, target) || percent <= 0) return;
+  if (!reaches(f, target, by) || percent <= 0) return;
   const burnFor = f.burning.lasts;
   const running = target.burnUntil > f.tick;
   const hotter = !running || percent > target.burnBy;
@@ -273,7 +284,7 @@ export function taunt(f: Fight, target: Unit, seconds: number, by: Unit): void {
   emit(f, { t: "status", id: target.id, status: "taunt", on: true, ticks, amount: 0, by: by.id });
 }
 export function haste(f: Fight, target: Unit, percent: number, seconds: number, by: Unit | null): void {
-  if (!target.alive || percent <= 0) return;
+  if (!targetable(f, target) || percent <= 0) return;
   const ticks = secs(seconds);
   const running = target.hasteUntil > f.tick;
   target.hasteBy = running ? Math.max(target.hasteBy, percent) : percent;
@@ -305,7 +316,7 @@ export function hide(f: Fight, u: Unit, ticks: number, by: Unit = u): void {
 // ---------- healing and shields ----------
 
 export function heal(f: Fight, target: Unit, raw: number, source: HealSource, by: Unit | null): number {
-  if (!target.alive || raw <= 0) return 0;
+  if (!reaches(f, target, by) || raw <= 0) return 0;
   const mended = by !== null && by.mending > 0 && (source === "ability" || source === "item");
   let amount = raw;
   if (mended) amount *= 1 + by.mending / 100;
@@ -329,20 +340,40 @@ function overflow(f: Fight, target: Unit, extra: number, by: Unit): void {
 }
 /** Puts a shield up, or adds to the one there. `seconds` of 0 lasts until it is broken. */
 export function shieldUp(f: Fight, target: Unit, raw: number, seconds: number, by: Unit | null): number {
-  if (!target.alive) return 0;
+  if (!reaches(f, target, by)) return 0;
   let amount = raw;
   if (by && by.mending > 0) amount *= 1 + by.mending / 100;
   return shieldOn(f, target, Math.round(amount), seconds, by);
 }
-/** Puts a shield of `n` up as it is, given by `by` (nobody for one a figure has of itself), and says so. */
+/** Puts a shield of `n` up as it is, given by `by` (nobody for one a figure has of itself), on its own clock, and says so. */
 function shieldOn(f: Fight, target: Unit, n: number, seconds: number, by: Unit | null): number {
   if (n <= 0) return 0;
   const ticks = secs(seconds);
-  const until = ticks <= 0 ? FOREVER : f.tick + ticks;
-  target.shieldUntil = target.shield > 0 ? Math.max(target.shieldUntil, until) : until;
+  target.shields.push({ left: n, until: ticks <= 0 ? FOREVER : f.tick + ticks });
   target.shield += n;
   emit(f, { t: "shield", id: target.id, by: by?.id ?? -1, amount: n, shield: target.shield, ticks });
   return n;
+}
+
+/** Takes up to `n` off a figure's shields, the one that runs out soonest first; gives back what they took. */
+function soak(u: Unit, n: number): number {
+  let left = n;
+  for (const g of u.shields.toSorted((a, b) => a.until - b.until)) {
+    const took = Math.min(g.left, left);
+    g.left -= took;
+    left -= took;
+  }
+  u.shields = u.shields.filter((g) => g.left > 0);
+  u.shield -= n - left;
+  return n - left;
+}
+/** The shields whose clocks run out at this step go, each on its own. Gives back whether that left it with none. */
+export function shieldsRunOut(f: Fight, u: Unit): boolean {
+  const going = u.shields.filter((g) => g.until <= f.tick);
+  if (going.length === 0) return false;
+  u.shields = u.shields.filter((g) => g.until > f.tick);
+  for (const g of going) u.shield -= g.left;
+  return u.shield <= 0;
 }
 
 /**
@@ -400,7 +431,7 @@ export function hurt(
   by: Unit | null,
   hard = false,
 ): number {
-  if (!target.alive || target.hiddenUntil > f.tick || raw <= 0) return 0;
+  if (!targetable(f, target) || raw <= 0) return 0;
   if (source === "ability" && blocks(f, target, by)) return 0;
   const direct = source === "attack" || source === "ability";
   let amount = raw;
@@ -413,10 +444,7 @@ export function hurt(
   const n = Math.max(1, Math.round(amount));
   let soaked = 0;
   const shielded = target.shield > 0;
-  if (shielded) {
-    soaked = Math.min(target.shield, n);
-    target.shield -= soaked;
-  }
+  if (shielded) soaked = soak(target, n);
   soaked += drain(f, target, n - soaked);
   const had = Math.max(0, target.hp);
   target.hp -= n - soaked;
@@ -462,6 +490,7 @@ function fall(f: Fight, u: Unit, by: Unit | null): void {
   u.downs++;
   u.hp = 0;
   u.shield = 0;
+  u.shields = [];
   if (f.taken[u.cell] === u.id) f.taken[u.cell] = -1;
   if (back === 0) {
     f.standing[u.side]--;

@@ -52,7 +52,7 @@ function begun(seed = 5): Run {
 }
 /** Puts a figure straight onto the bench or the board, as if it had been bought. */
 function put(run: Run, kind: FigureId, on: "board" | "bench", at: number, items: ItemId[] = []): Piece {
-  const piece: Piece = { id: run.nextId++, kind, stars: 1, items, fed: 0 };
+  const piece: Piece = { id: run.nextId++, kind, stars: 1, items, fed: 0, fights: 0 };
   if (on === "board") run.board[at] = piece;
   else run.bench[at] = piece;
   return piece;
@@ -128,8 +128,8 @@ describe("whether an offer can be bought", () => {
     if (!kind) throw new Error("the stall is empty");
     for (let i = 0; i < 9; i++) put(run, kind === "rock" ? "worm" : "rock", "bench", i);
     expect(canBuy(run, 0)).toBe(false);
-    run.bench[0] = { id: run.nextId++, kind, stars: 1, items: [], fed: 0 };
-    run.bench[1] = { id: run.nextId++, kind, stars: 1, items: [], fed: 0 };
+    run.bench[0] = { id: run.nextId++, kind, stars: 1, items: [], fed: 0, fights: 0 };
+    run.bench[1] = { id: run.nextId++, kind, stars: 1, items: [], fed: 0, fights: 0 };
     expect(canBuy(run, 0)).toBe(true);
     expect(buy(run, 0).ok).toBe(true);
   });
@@ -337,8 +337,8 @@ describe("what a card says about a figure", () => {
     run.stage = { phase: "plan", picks: [] };
     run.board.fill(null);
     run.bench.fill(null);
-    run.board[0] = { id: 1, kind: "barrowgnome", stars: 1, items: ["stump"], fed: 0 };
-    run.board[1] = { id: 2, kind: "slug", stars: 1, items: [], fed: 0 };
+    run.board[0] = { id: 1, kind: "barrowgnome", stars: 1, items: ["stump"], fed: 0, fights: 0 };
+    run.board[1] = { id: 2, kind: "slug", stars: 1, items: [], fed: 0, fights: 0 };
     const plain = plainNumbers(CAT, "barrowgnome", 1);
     const now = pieceNumbers(run, { on: "board", at: 0 });
     // Stump Shield's 40 armour and two Bulwarks' own.
@@ -352,13 +352,13 @@ describe("what a card says about a figure", () => {
   test("a trait's count and next step, as the strip shows them", () => {
     const run = startRun(3, { era: LEGACY_ERA, way: onTrail(0) });
     run.board.fill(null);
-    run.board[0] = { id: 1, kind: "emberkit", stars: 1, items: [], fed: 0 };
+    run.board[0] = { id: 1, kind: "emberkit", stars: 1, items: [], fed: 0, fights: 0 };
     expect(ownTraitCount(run, "ember")).toEqual({ count: 1, next: 2, step: 0 });
-    run.board[1] = { id: 2, kind: "kettle", stars: 1, items: [], fed: 0 };
+    run.board[1] = { id: 2, kind: "kettle", stars: 1, items: [], fed: 0, fights: 0 };
     expect(ownTraitCount(run, "ember")).toEqual({ count: 2, next: 4, step: 1 });
     expect(ownTraitCount(run, "sage")).toEqual({ count: 0, next: 2, step: 0 });
     // A Finch holding an Ember emblem is a third Ember.
-    run.board[2] = { id: 3, kind: "finch", stars: 1, items: ["embercharm"], fed: 0 };
+    run.board[2] = { id: 3, kind: "finch", stars: 1, items: ["embercharm"], fed: 0, fights: 0 };
     expect(ownTraitCount(run, "ember")).toEqual({ count: 3, next: 4, step: 1 });
   });
   test("a trait's figures run cheapest first", () => {
@@ -370,8 +370,8 @@ describe("what a card says about a figure", () => {
     run.board.fill(null);
     run.bench.fill(null);
     run.stall = ["moth", null, null, null, null];
-    run.board[0] = { id: 1, kind: "emberkit", stars: 1, items: [], fed: 0 };
-    run.bench[2] = { id: 2, kind: "worm", stars: 1, items: [], fed: 0 };
+    run.board[0] = { id: 1, kind: "emberkit", stars: 1, items: [], fed: 0, fights: 0 };
+    run.bench[2] = { id: 2, kind: "worm", stars: 1, items: [], fed: 0, fights: 0 };
     expect(whereIs(run, "emberkit")).toBe("board");
     expect(whereIs(run, "worm")).toBe("bench");
     expect(whereIs(run, "moth")).toBe("stall");

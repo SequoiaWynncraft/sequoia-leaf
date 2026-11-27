@@ -12,13 +12,16 @@
  *
  * After a room, on the run, a trait acts through `ROOM_HOOKS`.
  */
+import { pick } from "@sequoia-leaf/core";
+
 import type { BoonId } from "../content/boons.ts";
 import { type Catalog, catalogAt } from "../content/catalog.ts";
 import { abilityNumber, type UnitKind } from "../content/figures.ts";
-import type { ItemId, ItemStats } from "../content/items.ts";
+import { carries, type ItemId, type ItemStats } from "../content/items.ts";
 import { type TraitId, traitNumber } from "../content/traits.ts";
 import type { Side } from "../hex.ts";
 import type { Placed } from "../party.ts";
+import { withAll } from "../racks.ts";
 import type { Fought, Note, Run } from "../run.ts";
 import type { Fight, Unit } from "./types.ts";
 
@@ -75,8 +78,8 @@ export interface Tables {
   readonly kinds: Readonly<Partial<Record<UnitKind, Hooks>>>;
 }
 
-/** Where a hook comes from. */
-export type From = "trait" | "item" | "boon" | "kind";
+/** Where a hook comes from: a trait, an item, a boon, a figure's own, or an ability that armed it during the fight (a Firewall). */
+export type From = "trait" | "item" | "boon" | "kind" | "ability";
 const PLAIN = ["trait", "item", "boon", "kind"] as const;
 /**
  * The order each moment asks: traits in the catalogue's order, items figure by figure and each
@@ -91,7 +94,7 @@ export const ORDER: Readonly<Record<Moment, readonly From[]>> = {
   second: PLAIN,
   attacks: PLAIN,
   casts: PLAIN,
-  struck: PLAIN,
+  struck: [...PLAIN, "ability"],
   hurt: PLAIN,
   falls: ["boon", "trait", "item", "kind"],
   fell: PLAIN,
@@ -161,6 +164,12 @@ export function arm(f: Fight, side: Side, mine: readonly Unit[], armed: readonly
   f.hooks.asked = notAsked();
 }
 
+/** Arms one more hook on a side during the fight, armed by an ability: asked after everything armed as the side sat down. */
+export function armMore(f: Fight, side: Side, more: Armed): void {
+  const { mine, armed } = f.hooks.sides[side];
+  arm(f, side, mine, [...armed, more]);
+}
+
 /** What a figure's own hooks are handed: itself, its side's figures, and its ability's numbers at its stars. */
 export const ownOf = (f: Fight, u: Unit, mine = f.hooks.sides[u.side].mine): Switching => ({
   side: u.side,
@@ -227,6 +236,20 @@ export function whenFell(f: Fight, u: Unit): void {
 /** What a trait does on the run after a room, at the step the board has it, by the catalogue of the fight's era: the notes it gives. */
 export type RoomHook = (run: Run, fight: Fought, step: number, cat: Catalog) => Note[];
 export const ROOM_HOOKS: Readonly<Partial<Record<TraitId, RoomHook>>> = {
+  // Each figure that carries it and fought on the board counts the fight; every few, a component for the rack.
+  crafter: (run, _fight, step, cat) => {
+    const every = traitNumber(cat, "crafter", "every", step);
+    const notes: Note[] = [];
+    for (const p of run.board) {
+      if (!p || !carries(cat, p.kind, p.items, "crafter")) continue;
+      p.fights++;
+      if (every <= 0 || p.fights % every !== 0) continue;
+      const item = pick(run, cat.ids.components);
+      run.rack = withAll(run.rack, [item]);
+      notes.push({ t: "items", why: "crafter", items: [item] });
+    }
+    return notes;
+  },
   // The gnomes find acorns, more for a win.
   gnome: (run, fight, step, cat) => {
     const won = fight.outcome.result === "win";

@@ -157,7 +157,7 @@ function named(call: Call, c: number): void {
 }
 
 /** Gold corners round a place on the board, a screen point at its middle, closing in as they are put down. */
-function placeCorners(g: Ctx, x: number, y: number, since: number): void {
+export function hexCorners(g: Ctx, x: number, y: number, since: number): void {
   const out = Math.max(0, 3 - Math.floor(since)) * 2;
   for (const sx of [-1, 1] as const)
     for (const sy of [-1, 1] as const) {
@@ -202,7 +202,7 @@ export function drawCalls(g: Ctx): void {
     call.places.forEach((p, i) => {
       const x = Math.round(V.bx + p.x);
       const y = Math.round(V.by + p.y) - FOOT;
-      placeCorners(g, x, y, since);
+      hexCorners(g, x, y, since);
       if (call.landed || i >= call.notes) return;
       const risen = clamp((c - call.hung.at) / 8 - i, 0, 1);
       note(g, x, y - 12 - Math.round(risen * NOTE_RISE) - i * HIGHER);

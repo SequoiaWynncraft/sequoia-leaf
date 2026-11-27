@@ -68,6 +68,7 @@ export const GOOD_WITH: Readonly<Record<FigureId, Three>> = {
   greg: ["hoard", "hollowlog", "lichen"],
   clutch: ["hoard", "hollowlog", "lichen"],
   dibs: ["hoard", "hollowlog", "hedgehog"],
+  flop: ["hoard", "hollowlog", "hedgehog"],
   // Fighters: Thorn with Chestnut or Plume.
   emberkit: ["conker", "honeycake", "wasptail"],
   crab7: ["conker", "honeycake", "wasptail"],
@@ -75,6 +76,7 @@ export const GOOD_WITH: Readonly<Record<FigureId, Three>> = {
   badger: ["conker", "honeycake", "wasptail"],
   munch: ["conker", "honeycake", "wasptail"],
   whitefox: ["mothlantern", "honeycake", "glowthorn"],
+  leetanns: ["conker", "honeycake", "lichen"],
   // Assassins: the same, though the ones that leap into the back row live longer for a shield.
   worm: ["honeycake", "conker", "wasptail"],
   fogowl: ["honeycake", "wasptail", "conker"],
@@ -90,6 +92,8 @@ export const GOOD_WITH: Readonly<Record<FigureId, Three>> = {
   heron: ["wasptail", "mothlantern", "conker"],
   peep: ["wasptail", "mothlantern", "conker"],
   larp: ["wasptail", "hummingbird", "mothlantern"],
+  ace: ["wasptail", "mothlantern", "conker"],
+  unc: ["wasptail", "honeycake", "mothlantern"],
   // Casters: Glowcap, with Plume where the ability comes round often.
   moth: ["mothlantern", "glowthorn", "lichen"],
   lanterngnome: ["fairyring", "mothlantern", "glowthorn"],
@@ -107,6 +111,8 @@ export const GOOD_WITH: Readonly<Record<FigureId, Three>> = {
   crab31: ["stewpot", "mothlantern", "lichen"],
   commodore: ["fairyring", "mothlantern", "stewpot"],
   pomp: ["mothlantern", "stewpot", "lichen"],
+  bhlue: ["stewpot", "mothlantern", "lichen"],
+  vi: ["mothlantern", "stewpot", "lichen"],
   // Never attacks: what makes its ability stronger, or keeps it standing where it is rooted.
   seqwawa: ["fairyring", "stewpot", "lichen"],
 };

@@ -374,7 +374,7 @@ describe("a sparring room", () => {
       s.run.stage = { phase: "plan", picks: [] };
       s.run.bench = s.run.bench.map(() => null);
       s.run.board = s.run.board.map((_, i) =>
-        i === 3 ? { id: s.run.nextId++, kind: "rock", stars: 1, items: [], fed: 0 } : null,
+        i === 3 ? { id: s.run.nextId++, kind: "rock", stars: 1, items: [], fed: 0, fights: 0 } : null,
       );
     }
     const fought = advance(t, deadline(t));

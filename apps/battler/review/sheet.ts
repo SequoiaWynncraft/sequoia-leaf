@@ -1,10 +1,11 @@
-import { CALLED, drawFigure, drawStanding, drawStars, framesOf, wear } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * A contact sheet of every figure with its name, for looking at the art large while drawing it:
  * open the page with `?sheet`. Each is shown standing on its base, then using its ability, then
- * tipped over. `?sheet=peep,greg` shows only those, side by side, and `&zoom=6` at that size; the
+ * tipped over, and one that swings a tool at each beat of its swing. `?sheet=peep,greg` shows only those, side by side, and `&zoom=6` at that size; the
  * people among them (the Commodore, his grooters) wear the review's skins (`crew.ts`).
  */
+import { SWING_PICTURES, type SwingPicture } from "@sequoia-leaf/figures/figures.ts";
+import { CALLED, drawFigure, drawStanding, drawStars, framesOf, wear } from "@sequoia-leaf/figures/sprites.ts";
 import { BARK, CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import { bake } from "@sequoia-leaf/kit/skin.ts";
 import { write } from "@sequoia-leaf/kit/text.ts";
@@ -17,6 +18,9 @@ import { COMMODORE, crewSheet, GROOTERS } from "./crew.ts";
 
 /** Every release open: the sheet draws everyone any release has. */
 const NOW = catalogAt(LAST_ERA);
+
+/** The beats of a swing a figure has pictures of its own for: drawn back, at the top, brought down. */
+const swingsOf = (kind: UnitKind): SwingPicture[] => SWING_PICTURES.filter((b) => framesOf(kind).beats[b]);
 
 export function showSheet(only: readonly string[] = [], zoom = 3): void {
   const every: UnitKind[] = [...everyFigure(), ...SUMMON_IDS, ...TROUBLE_IDS];
@@ -36,7 +40,7 @@ export function showSheet(only: readonly string[] = [], zoom = 3): void {
   let rowH = 0;
   for (const kind of kinds) {
     const f = framesOf(kind);
-    const w = Math.max(60, f.w * 2 + f.fallen.width + 14);
+    const w = Math.max(60, f.w * 2 + f.fallen.width + 14) + swingsOf(kind).length * (f.w + 2);
     const h = Math.max(46, f.h + 22);
     if (x + w > wide) {
       x = 0;
@@ -61,7 +65,12 @@ export function showSheet(only: readonly string[] = [], zoom = 3): void {
     drawStars(g, isFigureId(cell.kind) ? 2 : 1, a, foot - f.tall - 2);
     const b = a + f.w + 2;
     drawStanding(g, NOW, cell.kind, b, foot, "plain", { pose: "cast", left: true });
-    drawFigure(g, cell.kind, b + f.w / 2 + f.fallen.width / 2 + 2, foot, { pose: "fallen" });
+    const fell = b + f.w / 2 + f.fallen.width / 2 + 2;
+    drawFigure(g, cell.kind, fell, foot, { pose: "fallen" });
+    // A figure that swings a tool, at each beat of its swing that has a picture of its own.
+    swingsOf(cell.kind).forEach((swing, i) => {
+      drawStanding(g, NOW, cell.kind, fell + f.fallen.width / 2 + 4 + f.ax + i * (f.w + 2), foot, "plain", { swing });
+    });
   }
   const big = makeCanvas(small.c.width * zoom, small.c.height * zoom);
   big.g.drawImage(small.c, 0, 0, big.c.width, big.c.height);

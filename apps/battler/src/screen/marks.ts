@@ -20,13 +20,16 @@ import {
  */
 import { bitmap, outlined, R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, lerp } from "@sequoia-leaf/kit/util.ts";
+import type { Suit } from "@sequoia-leaf/raid";
 
+import type { CardDrawn } from "./dealt.ts";
 import { lightRow } from "./fightmarks.ts";
 import { burst, motes, pop, ring, streak } from "./fx.ts";
 import type { Pt } from "./geometry.ts";
 import { leave } from "./litter.ts";
 import type { MarkId, Puff, Thrown } from "./looks.ts";
 import { V } from "./stage.ts";
+import { card, PIPS, ringOut, stick } from "./woodwork.ts";
 
 const UP = -Math.PI / 2;
 const CRAB = "#b0483a";
@@ -95,6 +98,41 @@ function art(name: Art): HTMLCanvasElement {
   return c;
 }
 
+const pips = new Map<Suit, HTMLCanvasElement>();
+/** A card's pip at twice its size, edged: what is seen where a card lands. */
+export function pipPic(suit: Suit): HTMLCanvasElement {
+  let c = pips.get(suit);
+  if (!c) {
+    const ink = suit === "hearts" || suit === "diamonds" ? "o" : "i";
+    const rows = ["....", "....", "....", "...."].map((r) => r.split(""));
+    for (const [x, y] of PIPS[suit])
+      for (const [dx, dy] of [
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [1, 1],
+      ] as const) {
+        const row = rows[y * 2 + dy];
+        if (row) row[x * 2 + dx] = ink;
+      }
+    c = outlined(
+      bitmap(
+        rows.map((r) => r.join("")),
+        { ...INKS, i: INK },
+      ),
+      INK,
+    );
+    pips.set(suit, c);
+  }
+  return c;
+}
+
+/** A card landing, drawn (`dealt.ts`): its pip at twice the size off whoever it lands on, and a Full Deck's card stuck in their hex. */
+export const CARD_DRAWN: CardDrawn = {
+  pip: (suit, on) => pop(pipPic(suit), on.x, on.y - on.tall - 4, "stick", 0.3),
+  stick: (suit, on) => stick({ x: on.x, y: on.y }, suit),
+};
+
 // ---------- things thrown ----------
 
 /** Something thrown, flying on the fight's clock from `t0` for `dur` steps; at whoever it is thrown at (`target`, followed as they move), else to `to`. */
@@ -111,6 +149,8 @@ export interface Shot {
   trail: boolean;
   /** What is seen where it lands. */
   land: (() => void) | null;
+  /** One of Ace's cards: its suit, shown as it flies. */
+  card?: Suit;
 }
 
 /** How high a thrown thing arcs over a distance in pixels: lobbed things high, a beam not at all. */
@@ -127,6 +167,8 @@ export function arcOf(look: Thrown | null, far: number): number {
   )
     return 6 + far * 0.18;
   if (look === "egg") return 2;
+  // A card curves to whoever it is for, never straight.
+  if (look === "card") return 4 + far * 0.12;
   return look === "pebble" ? 3 + far * 0.06 : 3;
 }
 
@@ -147,6 +189,9 @@ function swirl(g: Ctx, x: number, y: number, c: number, cols: readonly string[])
     );
 }
 
+/** What has its shadow under it as it flies: Peep's hat, Larp's snowballs, Ace's cards. */
+const SHADOWED = new Set<Thrown | null>(["cap", "snowball", "card"]);
+
 /** Draws something in flight at the fight's clock `c`. */
 export function drawShot(g: Ctx, s: Shot, c: number): void {
   const k = clamp((c - s.t0) / s.dur, 0, 1);
@@ -155,7 +200,7 @@ export function drawShot(g: Ctx, s: Shot, c: number): void {
   const x = Math.round(p.x);
   const y = Math.round(p.y);
   // A Slinger's thing has its shadow on the board under it as it flies.
-  if (s.look === "cap" || s.look === "snowball") {
+  if (SHADOWED.has(s.look)) {
     g.globalAlpha = 0.3;
     R(g, Math.round(V.bx + lerp(s.from.x, s.to.x, k)) - 2, Math.round(V.by + lerp(s.from.y, s.to.y, k)) + 8, 5, 1, INK);
     g.globalAlpha = 1;
@@ -166,23 +211,30 @@ export function drawShot(g: Ctx, s: Shot, c: number): void {
       const q = pointAt(s, clamp(k - i * 0.07, 0, 1));
       R(g, Math.round(q.x), Math.round(q.y), 1, 1, s.look === "beam" ? GOLD[1] : s.col);
     }
-  if (s.look === null || s.look === "beam") {
-    // A small edged thing.
-    R(g, x - 1, y - 1, 3, 3, INK);
-    R(g, x, y, 1, 1, s.look === "beam" ? GOLD[2] : s.col);
-  } else if (s.look === "bolt") {
+  if (s.look === null || s.look === "beam") speck(g, x, y, s.look === "beam" ? GOLD[2] : s.col);
+  else if (s.look === "bolt") {
     // A cross of its thrower's colour with a bright middle.
     R(g, x - 2, y - 1, 5, 3, INK);
     R(g, x - 1, y - 2, 3, 5, INK);
     R(g, x - 1, y, 3, 1, s.col);
     R(g, x, y - 1, 1, 3, s.col);
     R(g, x, y, 1, 1, GOLD[2]);
+  } else if (s.look === "card") {
+    // Only one Leaf named the suit of is a card; anything else flies as a speck.
+    if (s.card) card(g, x, y + 2, s.card);
+    else speck(g, x, y, s.col);
   } else if (s.look === "dust") swirl(g, x, y, c, [CREAM, WATER[3]]);
   else if (s.look === "gust") swirl(g, x, y, c * 1.6, [CREAM, WATER[3]]);
   else {
     const pic = art(s.look);
     g.drawImage(pic, Math.round(x - pic.width / 2), Math.round(y - pic.height / 2));
   }
+}
+
+/** A small edged thing of a colour. */
+function speck(g: Ctx, x: number, y: number, col: string): void {
+  R(g, x - 1, y - 1, 3, 3, INK);
+  R(g, x, y, 1, 1, col);
 }
 
 // ---------- where abilities go off ----------
@@ -435,6 +487,31 @@ export const MARKS: Readonly<Record<MarkId, (m: At) => void>> = {
       burst(h.x, h.y - 8, 10, [WATER[3], CREAM], { speed: 34, ttl: 0.35, grav: 40 });
       leave("ring", h);
     }
+  },
+  // Vi's key: the duck squeaks (gold off the lid), a thin arc out to the friend (their bar ticks up, `gives`).
+  reload: (m) => {
+    burst(m.from.x + 6, m.from.y - 14, 3, [GOLD[1], GOLD[2]], { speed: 18, ttl: 0.25, toward: UP, spread: 1 });
+    for (const h of m.hit)
+      streak({ x: m.from.x + 6, y: m.from.y - 12 }, { x: h.x, y: h.y - 10 }, WATER[3], WATER[2], 0.3);
+  },
+  // Flop keels over: a puff of dust off the board as it lands on its back.
+  dead: (m) =>
+    burst(m.from.x, m.from.y, 6, [PAPER[1], CREAM], { speed: 20, toward: UP, spread: 2.4, ttl: 0.3, above: false }),
+  // The bricks settling in front of each friend in the row (`walls.ts` keeps them up): dust off each.
+  bricks: (m) => {
+    for (const h of m.hit)
+      burst(h.x + 6, h.y, 4, [CORAL, BARK[3], PAPER[1]], { speed: 18, toward: UP, spread: 1.6, ttl: 0.3 });
+  },
+  // A card lands: a pale puff (the pip comes large off it, `fightshow.ts`).
+  pip: (m) => burst(chest(m).x, chest(m).y, 4, [CREAM, PAPER[1]], { speed: 22, ttl: 0.25 }),
+  // A peck of Unc's roll: chips of wood, and one more ring in the wood under them, out from the last.
+  rings: (m) => {
+    burst(m.x, m.y - 2, 3, [BARK[3], PAPER[1]], { speed: 20, toward: UP, spread: 1.4, ttl: 0.25 });
+    ringOut({ x: m.x, y: m.y });
+  },
+  // Leetanns' tool comes down: a crescent through whoever it is for (`aimed.ts` leaves the chip).
+  gathered: (m) => {
+    for (const h of m.hit.length > 0 ? m.hit : [m]) pop(art("swipe"), h.x, h.y - 10, "stick", 0.25);
   },
   // Seqwawa's roots flash under everyone it reached (`roots.ts` draws the roots): leaves come up off each.
   roots: (m) => {

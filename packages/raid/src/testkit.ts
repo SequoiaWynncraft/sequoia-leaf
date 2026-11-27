@@ -80,6 +80,7 @@ export function still(u: Unit, health = 100_000): Unit {
   u.maxHp = health;
   u.hp = health;
   u.shield = 0;
+  u.shields = [];
   u.digs = false;
   return u;
 }

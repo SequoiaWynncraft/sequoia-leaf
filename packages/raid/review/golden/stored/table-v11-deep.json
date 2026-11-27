@@ -1,0 +1,372 @@
+{
+  "game": "little-raid-table",
+  "v": 11,
+  "rng": 1289237052,
+  "era": 3,
+  "begun": { "main": 2, "endless": 1 },
+  "held": {
+    "main": null,
+    "endless": {
+      "seed": 291753063,
+      "rng": 4137381832,
+      "era": 3,
+      "way": { "course": { "id": "deep" }, "figures": { "pool": "fair" } },
+      "room": 15,
+      "stage": {
+        "phase": "fight",
+        "fight": {
+          "setup": {
+            "seed": 1381214963,
+            "era": 3,
+            "sides": [
+              {
+                "who": "You",
+                "title": "",
+                "figures": [
+                  { "kind": "slug", "stars": 1, "seat": 1, "items": [], "fed": 0 },
+                  { "kind": "rock", "stars": 1, "seat": 2, "items": [], "fed": 0 },
+                  { "kind": "greg", "stars": 1, "seat": 3, "items": [], "fed": 10 },
+                  { "kind": "glorp", "stars": 2, "seat": 4, "items": [], "fed": 0 },
+                  { "kind": "fogowl", "stars": 1, "seat": 5, "items": ["blackthorn", "wasptail"], "fed": 0 },
+                  { "kind": "apothecary", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+                  { "kind": "lanterngnome", "stars": 2, "seat": 23, "items": ["fairyring", "fairyring"], "fed": 0 },
+                  { "kind": "seqwawa", "stars": 1, "seat": 24, "items": ["glowcap"], "fed": 0 },
+                  { "kind": "moth", "stars": 2, "seat": 25, "items": [], "fed": 0 }
+                ],
+                "boons": ["headstart"],
+                "might": 100
+              },
+              {
+                "who": "The forest",
+                "title": "A few gnats",
+                "figures": [
+                  { "kind": "gnat", "stars": 1, "seat": 2, "items": [], "fed": 0 },
+                  { "kind": "gnat", "stars": 1, "seat": 4, "items": [], "fed": 0 }
+                ],
+                "boons": [],
+                "might": 105
+              }
+            ]
+          },
+          "outcome": {
+            "result": "win",
+            "ticks": 9,
+            "seconds": 0.45,
+            "standing": [9, 0],
+            "dusk": false,
+            "units": [
+              {
+                "id": 0,
+                "side": 1,
+                "kind": "gnat",
+                "stars": 1,
+                "summoned": false,
+                "alive": false,
+                "hp": 0,
+                "maxHp": 116,
+                "dealt": 10,
+                "taken": 140,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 1,
+                "side": 0,
+                "kind": "slug",
+                "stars": 1,
+                "summoned": false,
+                "alive": true,
+                "hp": 430,
+                "maxHp": 430,
+                "dealt": 24,
+                "taken": 0,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 2,
+                "side": 1,
+                "kind": "gnat",
+                "stars": 1,
+                "summoned": false,
+                "alive": false,
+                "hp": 0,
+                "maxHp": 116,
+                "dealt": 8,
+                "taken": 155,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 3,
+                "side": 0,
+                "kind": "rock",
+                "stars": 1,
+                "summoned": false,
+                "alive": true,
+                "hp": 820,
+                "maxHp": 820,
+                "dealt": 0,
+                "taken": 0,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 4,
+                "side": 0,
+                "kind": "greg",
+                "stars": 1,
+                "summoned": false,
+                "alive": true,
+                "hp": 960,
+                "maxHp": 968,
+                "dealt": 54,
+                "taken": 8,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 5,
+                "side": 0,
+                "kind": "glorp",
+                "stars": 2,
+                "summoned": false,
+                "alive": true,
+                "hp": 710,
+                "maxHp": 720,
+                "dealt": 50,
+                "taken": 10,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 6,
+                "side": 0,
+                "kind": "fogowl",
+                "stars": 1,
+                "summoned": false,
+                "alive": true,
+                "hp": 560,
+                "maxHp": 560,
+                "dealt": 90,
+                "taken": 0,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 7,
+                "side": 0,
+                "kind": "apothecary",
+                "stars": 1,
+                "summoned": false,
+                "alive": true,
+                "hp": 594,
+                "maxHp": 594,
+                "dealt": 34,
+                "taken": 0,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 8,
+                "side": 0,
+                "kind": "lanterngnome",
+                "stars": 2,
+                "summoned": false,
+                "alive": true,
+                "hp": 515,
+                "maxHp": 515,
+                "dealt": 43,
+                "taken": 0,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 9,
+                "side": 0,
+                "kind": "seqwawa",
+                "stars": 1,
+                "summoned": false,
+                "alive": true,
+                "hp": 850,
+                "maxHp": 850,
+                "dealt": 0,
+                "taken": 0,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 10,
+                "side": 0,
+                "kind": "moth",
+                "stars": 2,
+                "summoned": false,
+                "alive": true,
+                "hp": 378,
+                "maxHp": 378,
+                "dealt": 0,
+                "taken": 0,
+                "healed": 0,
+                "casts": 0
+              }
+            ]
+          }
+        }
+      },
+      "resolve": 13,
+      "acorns": 22,
+      "streak": 4,
+      "level": 8,
+      "xp": 0,
+      "board": [
+        null,
+        { "id": 36, "kind": "slug", "stars": 1, "items": [], "fed": 0, "fights": 0 },
+        { "id": 11, "kind": "rock", "stars": 1, "items": [], "fed": 0, "fights": 0 },
+        { "id": 34, "kind": "greg", "stars": 1, "items": [], "fed": 10, "fights": 0 },
+        { "id": 12, "kind": "glorp", "stars": 2, "items": [], "fed": 0, "fights": 0 },
+        { "id": 28, "kind": "fogowl", "stars": 1, "items": ["blackthorn", "wasptail"], "fed": 0, "fights": 0 },
+        null,
+        null,
+        null,
+        null,
+        { "id": 31, "kind": "apothecary", "stars": 1, "items": [], "fed": 0, "fights": 0 },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        { "id": 7, "kind": "lanterngnome", "stars": 2, "items": ["fairyring", "fairyring"], "fed": 0, "fights": 0 },
+        { "id": 33, "kind": "seqwawa", "stars": 1, "items": ["glowcap"], "fed": 0, "fights": 0 },
+        { "id": 3, "kind": "moth", "stars": 2, "items": [], "fed": 0, "fights": 0 },
+        null,
+        null
+      ],
+      "bench": [null, null, null, null, null, null, null, null, null],
+      "rack": { "whetstone": 1 },
+      "stall": ["drizzlefrog", null, "apothecary", "bushgnome", "crab40"],
+      "held": false,
+      "rustles": 0,
+      "bought": 2,
+      "boons": ["quickstudy", "extrachair", "headstart"],
+      "foe": {
+        "who": "The forest",
+        "title": "A few gnats",
+        "figures": [
+          { "kind": "gnat", "stars": 1, "seat": 2, "items": [], "fed": 0 },
+          { "kind": "gnat", "stars": 1, "seat": 4, "items": [], "fed": 0 }
+        ],
+        "boons": [],
+        "might": 105
+      },
+      "record": [
+        [0, "trouble", "win", 1, 0, null],
+        [1, "trouble", "win", 2, 0, null],
+        [2, "spar", "win", 3, 0, null],
+        [3, "spar", "win", 3, 0, null],
+        [4, "boss", "win", 3, 0, "oldbramble"],
+        [5, "spar", "loss", 0, 1, null],
+        [6, "trouble", "win", 7, 0, null],
+        [7, "spar", "win", 3, 0, null],
+        [8, "spar", "win", 4, 0, null],
+        [9, "boss", "win", 5, 0, "hoardmagpie"],
+        [10, "spar", "loss", 0, 2, null],
+        [11, "spar", "win", 8, 0, null],
+        [12, "trouble", "win", 9, 0, null],
+        [13, "spar", "win", 7, 0, null],
+        [14, "boss", "win", 5, 0, "bigcrab"]
+      ],
+      "before": {
+        "fought": 0,
+        "won": 0,
+        "lost": 0,
+        "furthest": 0,
+        "deepest": 0,
+        "cleared": [],
+        "bosses": [],
+        "bossesPast": 0,
+        "met": []
+      },
+      "nextId": 38,
+      "last": {
+        "seed": 3231327386,
+        "era": 3,
+        "sides": [
+          {
+            "who": "You",
+            "title": "",
+            "figures": [
+              { "kind": "fogowl", "stars": 1, "seat": 1, "items": ["blackthorn", "wasptail"], "fed": 0 },
+              { "kind": "rock", "stars": 1, "seat": 2, "items": [], "fed": 0 },
+              { "kind": "greg", "stars": 1, "seat": 3, "items": [], "fed": 8 },
+              { "kind": "glorp", "stars": 2, "seat": 4, "items": [], "fed": 0 },
+              { "kind": "apothecary", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+              { "kind": "lanterngnome", "stars": 2, "seat": 23, "items": ["fairyring", "glowcap"], "fed": 0 },
+              { "kind": "seqwawa", "stars": 1, "seat": 24, "items": [], "fed": 0 },
+              { "kind": "moth", "stars": 2, "seat": 25, "items": [], "fed": 0 }
+            ],
+            "boons": ["headstart"],
+            "might": 100
+          },
+          {
+            "who": "The forest",
+            "title": "The Crab Nobody Counted",
+            "figures": [
+              { "kind": "bigcrab", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+              { "kind": "crab", "stars": 3, "seat": 1, "items": [], "fed": 0 },
+              { "kind": "crab", "stars": 3, "seat": 5, "items": [], "fed": 0 },
+              { "kind": "crab", "stars": 2, "seat": 9, "items": [], "fed": 0 },
+              { "kind": "crab", "stars": 2, "seat": 11, "items": [], "fed": 0 },
+              { "kind": "toadstool", "stars": 3, "seat": 17, "items": [], "fed": 0 },
+              { "kind": "wasp", "stars": 3, "seat": 7, "items": [], "fed": 0 },
+              { "kind": "wasp", "stars": 3, "seat": 13, "items": [], "fed": 0 }
+            ],
+            "boons": [],
+            "might": 100
+          }
+        ]
+      },
+      "wing": null,
+      "seen": {
+        "fielded": [
+          "emberkit",
+          "worm",
+          "moth",
+          "lanterngnome",
+          "rock",
+          "glorp",
+          "barrowgnome",
+          "bushgnome",
+          "fogowl",
+          "apothecary",
+          "greg",
+          "seqwawa",
+          "slug"
+        ],
+        "threeStars": [],
+        "forged": ["wasptail", "fairyring", "blackthorn"],
+        "topped": ["greg", "rooted"]
+      }
+    }
+  },
+  "almanac": {
+    "fielded": [],
+    "threeStars": [],
+    "forged": [],
+    "topped": [],
+    "bosses": [["bigcrab"], ["bigcrab"], []],
+    "best": [15, 15, 0],
+    "runs": 2,
+    "deepest": { "wilds": 0, "deep": 16 }
+  },
+  "trail": 0,
+  "looks": { "place": "clearing", "cloth": "bare", "lantern": "iron", "bases": "plain", "owned": [] },
+  "week": { "at": 1795392000000, "deepest": { "wilds": 0, "deep": 16 } },
+  "apart": { "deepest": { "wilds": 0, "deep": 0 }, "week": { "at": 0, "deepest": { "wilds": 0, "deep": 0 } } }
+}

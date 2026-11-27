@@ -2,7 +2,8 @@
  * Every figure on the stump, typed out as rows of letters (the letters are colours in `pal.ts`), kept
  * as text in `figures.txt`. Each has a picture for standing and, for the ones a member can own and
  * the bosses, one for using its ability (`cast`). `alt` is a second standing picture for things that
- * flap or wobble; without one a figure breathes by sinking a pixel at its `breath` row.
+ * flap or wobble; without one a figure breathes by sinking a pixel at its `breath` row. A figure
+ * that falls in a way of its own has a picture for it (`fall`); anyone else tips over.
  *
  * All of them face right. A dark edge is added when they are baked (`sprites.ts`).
  *
@@ -24,11 +25,20 @@ import type { Form } from "@sequoia-leaf/raid/fight/types.ts";
 
 import text from "./figures.txt";
 import { readRows } from "./rows.ts";
+import type { HowHeld, Swing } from "./tools.ts";
 
 export interface FigureArt {
   readonly rows: readonly string[];
   readonly cast?: readonly string[];
   readonly alt?: readonly string[];
+  /** How it lies once it has fallen, where that is its own (Bhlue slumped over its laptop); without one it tips over. */
+  readonly fall?: readonly string[];
+  /** For one that drums (Unc), its head back, shown by turns with its cast every step while it drums. */
+  readonly peck?: readonly string[];
+  /** For one that swings a tool (Leetanns), its picture at each beat of a swing but the point, which is its cast. */
+  readonly beats?: Partial<Record<SwingPicture, readonly string[]>>;
+  /** Where what it holds is in each of its pictures (`tools.ts`). */
+  readonly grips?: Partial<Record<Pictured, Grip>>;
   /** The row that folds when it breathes in, counted from the top. */
   readonly breath?: number;
   /** Lies flat already (Jet, on its belly): it falls by turning belly up where it lies, not by tipping onto its side. */
@@ -48,6 +58,17 @@ export interface FigureArt {
 }
 /** A column and a row of a picture, from its top left. */
 export type Spot = readonly [x: number, y: number];
+/** The beats of a swing that have a picture of their own: drawn back, at the top, brought down. */
+export type SwingPicture = Exclude<Swing, "point">;
+export const SWING_PICTURES: readonly SwingPicture[] = ["draw", "top", "down"];
+/** A figure's pictures that can have something in hand: standing, casting, and the beats of a swing. */
+export type Pictured = "rows" | "cast" | SwingPicture;
+export const PICTURED: readonly Pictured[] = ["rows", "cast", ...SWING_PICTURES];
+/** Where a figure has what it holds in one of its pictures: the pixel in its paw, and how the tool lies there. */
+export interface Grip {
+  readonly at: Spot;
+  readonly how: HowHeld;
+}
 export interface Prop {
   readonly rows: readonly string[];
   readonly at: readonly Spot[];
@@ -81,7 +102,9 @@ export function carrying(rows: readonly string[], prop: readonly string[], at: r
 type Places = Pick<Prop, "at" | "castAt">;
 
 /** What a figure's pictures say beside their rows: where it breathes, where its head starts, whether it flies or has writing on it. */
-const KEPT: Readonly<Partial<Record<UnitKind, Omit<FigureArt, "rows" | "cast" | "alt" | "prop">>>> = {
+/** What is kept of a figure beside its pictures. */
+type Kept = Omit<FigureArt, "rows" | "cast" | "alt" | "fall" | "prop" | "beats" | "peck">;
+const KEPT: Readonly<Partial<Record<UnitKind, Kept>>> = {
   emberkit: { breath: 12, head: 2 },
   mossmote: { breath: 13, head: 3 },
   moth: { flies: true },
@@ -90,12 +113,14 @@ const KEPT: Readonly<Partial<Record<UnitKind, Omit<FigureArt, "rows" | "cast" | 
   crab7: { sym: true },
   barrowgnome: { breath: 14, head: 2 },
   peep: { head: 4 },
+  vi: { breath: 13 },
   kettle: { head: 3 },
   slug: { breath: 9 },
   glorp: { breath: 10 },
   chickaree: { breath: 14, head: 1 },
   jay: { breath: 12, head: 2 },
   crab12: { sym: true },
+  flop: { breath: 9 },
   lanterngnome: { breath: 15, head: 5 },
   jet: { flat: true },
   leafling: { breath: 16, head: 3 },
@@ -107,6 +132,7 @@ const KEPT: Readonly<Partial<Record<UnitKind, Omit<FigureArt, "rows" | "cast" | 
   munch: { breath: 12, head: 1 },
   crab31: { sym: true },
   larp: { head: 3 },
+  bhlue: { breath: 12 },
   badger: { breath: 9 },
   fogowl: { breath: 15, head: 2 },
   heron: { breath: 12 },
@@ -115,12 +141,26 @@ const KEPT: Readonly<Partial<Record<UnitKind, Omit<FigureArt, "rows" | "cast" | 
   // A nest does not breathe: its eggs rock.
   clutch: { breath: 99 },
   pomp: { head: 2 },
+  ace: { breath: 12 },
   greg: { breath: 14, head: 2 },
   whitefox: { breath: 18, head: 5 },
   hearthcat: { breath: 15, head: 1 },
   seqwawa: { head: 3, room: 25 },
   crab8: { sym: true, feet: 6 },
   yule: { head: 1 },
+  // A stump does not breathe: its bird cocks its head.
+  unc: { breath: 99 },
+  // Its tool in its paw: at its side, behind its head drawn back, pointed ahead, straight up, brought down.
+  leetanns: {
+    breath: 12,
+    grips: {
+      rows: { at: [15, 14], how: "side" },
+      cast: { at: [17, 10], how: "forward" },
+      draw: { at: [1, 1], how: "side" },
+      top: { at: [15, 0], how: "up" },
+      down: { at: [18, 16], how: "forward" },
+    },
+  },
   glorplet: { breath: 2 },
   uncounted: { sym: true },
   biguncounted: { sym: true },
@@ -141,7 +181,7 @@ const KEPT: Readonly<Partial<Record<UnitKind, Omit<FigureArt, "rows" | "cast" | 
 };
 
 /** The same for Graid's true forms (`<figure> true` in `figures.txt`). */
-const KEPT_TRUE: Readonly<Record<TrueFormId, Omit<FigureArt, "rows" | "cast" | "alt">>> = {
+const KEPT_TRUE: Readonly<Record<TrueFormId, Kept>> = {
   worm: { breath: 13 },
   moth: { flies: true },
   rock: { breath: 9 },
@@ -173,12 +213,23 @@ export function artOf(kind: UnitKind, form: Form = "plain"): FigureArt {
   const named = form === "true" && hasTrueForm(kind) ? `${kind} true` : kind;
   const cast = ROWS.get(`${named} cast`);
   const alt = ROWS.get(`${named} alt`);
+  const fall = ROWS.get(`${named} fall`);
+  const peck = ROWS.get(`${named} peck`);
+  const beats = Object.fromEntries(
+    SWING_PICTURES.flatMap((b) => {
+      const rows = ROWS.get(`${named} ${b}`);
+      return rows ? [[b, rows]] : [];
+    }),
+  );
   const prop = ROWS.get(`${named} prop`);
   const places = CARRIES[kind];
   return {
     rows: ROWS.get(named) ?? [],
     ...(cast ? { cast } : {}),
     ...(alt ? { alt } : {}),
+    ...(fall ? { fall } : {}),
+    ...(peck ? { peck } : {}),
+    ...(Object.keys(beats).length > 0 ? { beats } : {}),
     ...(prop && places ? { prop: { rows: prop, ...places } } : {}),
     ...(named === kind ? KEPT[kind] : hasTrueForm(kind) ? KEPT_TRUE[kind] : {}),
   };

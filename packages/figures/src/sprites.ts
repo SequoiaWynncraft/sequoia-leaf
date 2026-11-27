@@ -28,9 +28,20 @@ import {
 import { isMemberId, type MemberId } from "@sequoia-leaf/raid/content/members.ts";
 import type { Form } from "@sequoia-leaf/raid/fight/types.ts";
 
-import { artOf, type Carried, carrying } from "./figures.ts";
+import {
+  artOf,
+  type Carried,
+  carrying,
+  type FigureArt,
+  type Grip,
+  PICTURED,
+  type Pictured,
+  SWING_PICTURES,
+  type SwingPicture,
+} from "./figures.ts";
 import { FOREST_TONES, PAL, SUMMON_TONES, TIER_TONES, type Tones } from "./pal.ts";
 import { handOf, REST, RIG, rigPic, type Stance } from "./rig.ts";
+import { inHandOf, type Swing } from "./tools.ts";
 
 export type Pose = "idle" | "cast" | "fallen";
 
@@ -59,6 +70,12 @@ export interface Frames {
   readonly flies: boolean;
   /** How many things it carries when it has all of them (`Shown.carries`): Clutch's eggs. */
   readonly carries: number;
+  /** For one that swings a tool, its picture at each beat of a swing but the point (its cast). */
+  readonly beats: Partial<Record<SwingPicture, HTMLCanvasElement>>;
+  /** Where what it holds is in each of its pictures, from the picture's top left. */
+  readonly grips: Partial<Record<Pictured, Grip>>;
+  /** For one that drums (Unc), its head back: shown by turns with its cast while it drums. */
+  readonly peck: HTMLCanvasElement | null;
 }
 
 const widthOf = (rows: readonly string[]): number => rows.reduce((m, r) => Math.max(m, r.length), 1);
@@ -170,6 +187,9 @@ function person(body: Body): { right: Frames; left: Frames } {
       room: RIG.tall,
       flies: false,
       carries: 0,
+      beats: {},
+      grips: {},
+      peck: null,
     };
   };
   return { right: facing(false), left: facing(true) };
@@ -180,27 +200,6 @@ export const CALLED = GROOTER_IDS;
 /** Anyone on the stump drawn as a person from a member's skin: a banner's member, or a grooter called. */
 export type PersonId = MemberId | (typeof CALLED)[number];
 export const isPersonId = (v: unknown): v is PersonId => isMemberId(v) || CALLED.some((id) => id === v);
-
-/**
- * What a person carries in their leading hand, hanging from it wherever the hand is (`handOf`):
- * the Commodore's brass hand bell, his Chorus instrument.
- */
-const IN_HAND: Readonly<Partial<Record<PersonId, readonly string[]>>> = {
-  commodore: ["..n..", ".yYy.", "yyYyy", "..o.."],
-};
-const inHand = new Map<PersonId, HTMLCanvasElement>();
-/** The thing a person carries, edged, made the first time it is asked for; null for one with nothing in hand. */
-function inHandOf(kind: UnitKind): HTMLCanvasElement | null {
-  if (!isPersonId(kind)) return null;
-  const rows = IN_HAND[kind];
-  if (!rows) return null;
-  let c = inHand.get(kind);
-  if (!c) {
-    c = edged(bitmap(rows, PAL));
-    inHand.set(kind, c);
-  }
-  return c;
-}
 
 /** Who each person on the stump is, once somebody has said (`wear`): their name, the figure they are drawn from, and how many times it has been said. */
 const worn = new Map<UnitKind, { readonly name: string; readonly body: Body; readonly said: number }>();
@@ -234,8 +233,7 @@ function bake(kind: UnitKind, form: Form, carried: Carried | null): { right: Fra
     b: carry(art.alt ?? (art.flies ? art.rows : breathe(art.rows, at))),
     cast: carry(art.cast ?? rear(art.rows, at), true),
   };
-  const w = Math.max(widthOf(lists.a), widthOf(lists.b), widthOf(lists.cast));
-  const h = Math.max(lists.a.length, lists.b.length, lists.cast.length);
+  const { w, h } = sizeOf([lists.a, lists.b, lists.cast], art);
   /** A list of rows on a canvas the size of the largest, standing on its bottom edge. */
   const plain = (rows: readonly string[]): HTMLCanvasElement => {
     const { c, g } = makeCanvas(w, h);
@@ -264,7 +262,9 @@ function bake(kind: UnitKind, form: Form, carried: Carried | null): { right: Fra
   };
   const fall = (pic: HTMLCanvasElement, left: boolean): HTMLCanvasElement =>
     art.flat ? turnedOver(pic) : tipped(pic, left);
-  const right: Frames = { ...base, fallen: fall(idleA, false) };
+  const fallen = fallenOf(art.fall, plain, idleA, fall);
+  const swing = swingOf(art, lists, plain, w + 2, h);
+  const right: Frames = { ...base, fallen: fallen.right, ...swing.right };
   if (art.sym) return { right, left: right };
   const left: Frames = {
     ...base,
@@ -274,9 +274,63 @@ function bake(kind: UnitKind, form: Form, carried: Carried | null): { right: Fra
     hurt: flipped(base.hurt),
     dark: flipped(base.dark),
     ax: base.w - base.ax,
-    fallen: fall(flipped(idleA), true),
+    fallen: fallen.left,
+    ...swing.left,
   };
   return { right, left };
+}
+
+/** The size of the largest of a figure's pictures, its swing's and its drum's too: what they all stand on. */
+function sizeOf(lists: readonly (readonly string[])[], art: FigureArt): { w: number; h: number } {
+  const all = [...lists, ...Object.values(art.beats ?? {}), ...(art.peck ? [art.peck] : [])];
+  return { w: Math.max(...all.map(widthOf)), h: Math.max(...all.map((rows) => rows.length)) };
+}
+
+type SwingFrames = Pick<Frames, "beats" | "grips" | "peck">;
+/**
+ * A figure's pictures at the beats of a swing and a drum's head back, and where what it holds is in each of its pictures,
+ * facing right and left: a grip's pixel of its rows is a pixel of the edged canvas they stand on.
+ */
+function swingOf(
+  art: FigureArt,
+  lists: { readonly a: readonly string[]; readonly cast: readonly string[] },
+  plain: (rows: readonly string[]) => HTMLCanvasElement,
+  wide: number,
+  h: number,
+): { right: SwingFrames; left: SwingFrames } {
+  const rowsOf = (p: Pictured): readonly string[] =>
+    p === "rows" ? lists.a : p === "cast" ? lists.cast : (art.beats?.[p] ?? lists.cast);
+  const peck = art.peck ? edged(plain(art.peck)) : null;
+  const right: SwingFrames = { beats: {}, grips: {}, peck };
+  const left: SwingFrames = { beats: {}, grips: {}, peck: peck && flipped(peck) };
+  for (const b of SWING_PICTURES) {
+    const rows = art.beats?.[b];
+    if (!rows) continue;
+    const pic = edged(plain(rows));
+    right.beats[b] = pic;
+    left.beats[b] = flipped(pic);
+  }
+  for (const p of PICTURED) {
+    const grip = art.grips?.[p];
+    if (!grip) continue;
+    const x = 1 + grip.at[0];
+    const y = 1 + h - rowsOf(p).length + grip.at[1];
+    right.grips[p] = { at: [x, y], how: grip.how };
+    left.grips[p] = { at: [wide - 1 - x, y], how: grip.how };
+  }
+  return { right, left };
+}
+
+/** How a figure lies once fallen, facing right and left: as its own picture says (`fall`), or as it falls (tipped over, or turned over for a flat one). */
+function fallenOf(
+  rows: readonly string[] | undefined,
+  plain: (rows: readonly string[]) => HTMLCanvasElement,
+  idle: HTMLCanvasElement,
+  fall: (pic: HTMLCanvasElement, left: boolean) => HTMLCanvasElement,
+): { right: HTMLCanvasElement; left: HTMLCanvasElement } {
+  const own = rows ? edged(plain(rows)) : null;
+  if (own) return { right: own, left: flipped(own) };
+  return { right: fall(idle, false), left: fall(flipped(idle), true) };
 }
 
 const baked = new Map<string, { right: Frames; left: Frames }>();
@@ -337,6 +391,12 @@ export interface Shown {
   act?: Stance;
   /** How much of what it carries it has now (Clutch's eggs); all of it unless said. */
   carries?: Carried;
+  /** Which of the things it carries in turn is in its hand now (Leetanns' tools); the first unless said. */
+  holds?: number;
+  /** The beat of a swing it is at, in that beat's picture, held through any blow (Leetanns). */
+  swing?: Swing;
+  /** Casting, its head back (`Frames.peck`) rather than down: the other of a drum's two pictures. */
+  peck?: boolean;
 }
 
 const gilt = new Map<HTMLCanvasElement, HTMLCanvasElement>();
@@ -377,6 +437,12 @@ function struckOf(pic: HTMLCanvasElement): { flash: HTMLCanvasElement; hurt: HTM
   return s;
 }
 
+/** A picture of a moment held through any blow: a beat of a swing, or a drum's head back; null for neither. */
+function heldPic(f: Frames, o: Shown): HTMLCanvasElement | null {
+  if (o.swing) return o.swing === "point" ? f.cast : (f.beats[o.swing] ?? f.cast);
+  return o.peck ? f.peck : null;
+}
+
 /** The picture a figure is drawn as now. */
 function shownPic(kind: UnitKind, f: Frames, o: Shown): HTMLCanvasElement {
   if (o.dark) return f.dark;
@@ -385,7 +451,32 @@ function shownPic(kind: UnitKind, f: Frames, o: Shown): HTMLCanvasElement {
     const posed = rigPic(body, o.act);
     return o.flash ? struckOf(posed).flash : o.hurt ? struckOf(posed).hurt : posed;
   }
+  const held = heldPic(f, o);
+  if (held) return held;
   return o.flash ? f.flash : o.hurt ? f.hurt : o.pose === "cast" ? f.cast : f.idle[o.beat ?? 0];
+}
+
+/** The picture of its that a figure is shown in, for where it holds what it holds. */
+const picturedOf = (o: Shown): Pictured =>
+  o.swing ? (o.swing === "point" ? "cast" : o.swing) : o.pose === "cast" ? "cast" : "rows";
+
+/**
+ * What a figure has in hand, by its grip, drawn over it: a person's where their hand is now (straight
+ * up over the head at the top of a swing), anyone else's where its picture says.
+ */
+function drawHeld(g: Ctx, kind: UnitKind, f: Frames, o: Shown, px: number, py: number): void {
+  if (o.dark) return;
+  const left = o.left ?? false;
+  if (rigOf(kind)) {
+    const stance = o.act ?? { ...(o.pose === "cast" ? CASTING : REST), left };
+    const held = inHandOf(kind, o.holds ?? 0, stance.arm >= 8 ? "up" : "side", false);
+    const hand = handOf(stance);
+    if (held) g.drawImage(held.pic, px + hand.x - held.grip[0], py + hand.y - held.grip[1]);
+    return;
+  }
+  const grip = f.grips[picturedOf(o)];
+  const held = grip ? inHandOf(kind, o.holds ?? 0, grip.how, left) : null;
+  if (grip && held) g.drawImage(held.pic, px - f.ax + grip.at[0] - held.grip[0], py - f.ay + grip.at[1] - held.grip[1]);
 }
 
 /** Draws a figure with its feet at `x`, `y`. */
@@ -401,12 +492,7 @@ export function drawFigure(g: Ctx, kind: UnitKind, x: number, y: number, o: Show
     const bend = o.act ? undefined : o.bend;
     if (o.lit) place(g, gilded(pic), px, py, f.ax + 1, f.ay + 1, bend);
     else place(g, pic, px, py, f.ax, f.ay, bend);
-    // What a person carries hangs from their hand, its handle in it.
-    const held = o.dark ? null : inHandOf(kind);
-    if (held) {
-      const hand = handOf(o.act ?? { ...(o.pose === "cast" ? CASTING : REST), left: o.left ?? false });
-      g.drawImage(held, px + hand.x - Math.floor(held.width / 2), py + hand.y - 1);
-    }
+    drawHeld(g, kind, f, o, px, py);
   }
   if (o.alpha !== undefined) g.globalAlpha = 1;
 }

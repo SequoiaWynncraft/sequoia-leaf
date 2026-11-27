@@ -35,6 +35,7 @@ import { COLS, SEATS } from "./hex.ts";
 import { handOver, takeMade } from "./made.ts";
 import { placedOf } from "./own.ts";
 import { type Party, type TraitState, traitStates, traitSteps } from "./party.ts";
+import { newPiece, type Piece } from "./piece.ts";
 import { counted, countOn, type Rack, type RackNote, withAll } from "./racks.ts";
 import { keepRoom, noRooms, type RoomRecord, type RoomTotals, totalsOf } from "./record.ts";
 import { componentOptions, type ComponentPick, type Pickable, roomPicks } from "./rewards.ts";
@@ -45,16 +46,8 @@ import type { Wing } from "./wing.ts";
 
 // ---------- what a run is ----------
 
-/** One figure the party owns. */
-export interface Piece {
-  /** Its own number in this run, so a screen can follow it about. */
-  id: number;
-  kind: FigureId;
-  stars: Stars;
-  items: ItemId[];
-  /** What Greg has eaten (`feed`): percent of his health he has gained for good. 0 for anyone else. */
-  fed: number;
-}
+export { newPiece, type Piece } from "./piece.ts";
+
 /** A place a figure can be: a seat on the party's half of the board (`row * 7 + col`, row 0 the front), or a place on the bench. */
 export interface Spot {
   on: "board" | "bench";
@@ -168,6 +161,9 @@ export function playsAsKept({ setup, outcome }: Fought): boolean {
 
 /** Why acorns were paid: the room, a win, savings, gnomes, a streak, or Windfall. */
 export type AcornsWhy = "room" | "win" | "interest" | "gnomes" | "streak" | "windfall";
+/** Why items came to the rack: a boon (Basket), a charm, or a Crafter's fights. */
+export type ItemsWhy = "basket" | "charm" | "crafter";
+export const ITEMS_WHYS: readonly ItemsWhy[] = ["basket", "charm", "crafter"];
 export const ACORNS_WHYS: readonly AcornsWhy[] = ["room", "win", "interest", "gnomes", "streak", "windfall"];
 
 /** What happened, for a screen to show. Figures are named by `piece`, their own number in the run. */
@@ -202,8 +198,8 @@ export type Note =
   /** Two items on the rack made an item (`combine`), which is on it now. */
   | { t: "made"; item: ItemId }
   | { t: "acorns"; why: AcornsWhy; amount: number }
-  /** Items put on the item bench by a boon: A Basket On The Stump's components, or a charm's emblem. */
-  | { t: "items"; why: "basket" | "charm"; items: ItemId[] }
+  /** Items put on the rack by a boon (A Basket On The Stump's components), a charm (its emblem), or a Crafter's fights. */
+  | { t: "items"; why: ItemsWhy; items: ItemId[] }
   /** Something melted, the Tongs or a Whetstone used (`racks.ts`). */
   | RackNote
   | { t: "resolve"; change: number; left: number }
@@ -371,9 +367,6 @@ export function boonOptions(run: Run, not: readonly BoonId[], cat = catalogOf(ru
     if (boonIn(cat, id).sort === "charm") charm = true;
   }
   return out;
-}
-export function newPiece(run: RunView, kind: FigureId): Piece {
-  return { id: run.nextId++, kind, stars: 1, items: [], fed: 0 };
 }
 export function remember<T>(list: T[], v: T): void {
   if (!list.includes(v)) list.push(v);
@@ -569,6 +562,7 @@ export function merge(run: RunView, loose: Piece | null, notes: Note[]): void {
       else spare = null;
       for (const item of gone.items) if (!handOver(run, keep, item, notes)) spilled.push(item);
       keep.fed = Math.min(traitNumber(catalogOf(run), "greg", "most", 1), keep.fed + gone.fed);
+      keep.fights = Math.max(keep.fights, gone.fights);
     }
     keep.stars = keep.stars === 1 ? 2 : 3;
     run.rack = withAll(run.rack, spilled);

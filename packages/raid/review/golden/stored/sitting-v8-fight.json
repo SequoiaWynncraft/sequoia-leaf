@@ -1,0 +1,1388 @@
+{
+  "game": "little-raid-sitting",
+  "v": 8,
+  "rng": 2166028266,
+  "era": 3,
+  "by": "00000000-0000-4000-8000-0000000060d3",
+  "room": 0,
+  "stage": { "at": "fight", "until": 1795802469900, "done": [] },
+  "seats": [
+    {
+      "who": { "is": "member", "id": "00000000-0000-4000-8000-0000000060d3", "name": "Golden one" },
+      "run": {
+        "seed": 2671935353,
+        "rng": 3096057887,
+        "era": 3,
+        "way": { "course": { "id": "trail", "trail": 0 }, "figures": { "pool": "fair" } },
+        "room": 0,
+        "stage": {
+          "phase": "fight",
+          "fight": {
+            "setup": {
+              "seed": 2482070947,
+              "era": 3,
+              "sides": [
+                {
+                  "who": "Golden one",
+                  "title": "",
+                  "figures": [{ "kind": "mossmote", "stars": 2, "seat": 24, "items": ["thorn"], "fed": 0 }],
+                  "boons": [],
+                  "might": 100,
+                  "by": "00000000-0000-4000-8000-0000000060d3"
+                },
+                {
+                  "who": "The forest",
+                  "title": "Gnats, in no particular order",
+                  "figures": [
+                    { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+                    { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+                  ],
+                  "boons": [],
+                  "might": 100
+                }
+              ]
+            },
+            "outcome": {
+              "result": "win",
+              "ticks": 155,
+              "seconds": 7.75,
+              "standing": [1, 0],
+              "dusk": false,
+              "units": [
+                {
+                  "id": 0,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 39,
+                  "taken": 123,
+                  "healed": 0,
+                  "casts": 0
+                },
+                {
+                  "id": 1,
+                  "side": 0,
+                  "kind": "mossmote",
+                  "stars": 2,
+                  "summoned": false,
+                  "alive": true,
+                  "hp": 372,
+                  "maxHp": 450,
+                  "dealt": 246,
+                  "taken": 130,
+                  "healed": 0,
+                  "casts": 1
+                },
+                {
+                  "id": 2,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 91,
+                  "taken": 123,
+                  "healed": 0,
+                  "casts": 0
+                }
+              ]
+            }
+          }
+        },
+        "resolve": 20,
+        "acorns": 0,
+        "streak": 0,
+        "level": 1,
+        "xp": 0,
+        "board": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 1, "kind": "mossmote", "stars": 2, "items": ["thorn"], "fed": 0, "fights": 0 },
+          null,
+          null,
+          null
+        ],
+        "bench": [null, null, null, null, null, null, null, null, null],
+        "rack": {},
+        "stall": ["worm", "finch", "mossmote", "moth", "emberkit"],
+        "held": false,
+        "rustles": 0,
+        "bought": 2,
+        "boons": [],
+        "foe": {
+          "who": "The forest",
+          "title": "Gnats, in no particular order",
+          "figures": [
+            { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+            { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+          ],
+          "boons": [],
+          "might": 100
+        },
+        "record": [],
+        "before": {
+          "fought": 0,
+          "won": 0,
+          "lost": 0,
+          "furthest": 0,
+          "deepest": 0,
+          "cleared": [],
+          "bosses": [],
+          "bossesPast": 0,
+          "met": []
+        },
+        "nextId": 4,
+        "last": null,
+        "wing": null,
+        "seen": { "fielded": [], "threeStars": [], "forged": [], "topped": [] }
+      },
+      "shown": {
+        "who": "Golden one",
+        "title": "",
+        "figures": [{ "kind": "mossmote", "stars": 2, "seat": 24, "items": ["thorn"], "fed": 0 }],
+        "boons": [],
+        "might": 100,
+        "by": "00000000-0000-4000-8000-0000000060d3"
+      },
+      "place": null
+    },
+    {
+      "who": { "is": "member", "id": "00000000-0000-4000-8000-0000000060d4", "name": "Golden two" },
+      "run": {
+        "seed": 1322483419,
+        "rng": 1249191177,
+        "era": 3,
+        "way": { "course": { "id": "trail", "trail": 0 }, "figures": { "pool": "fair" } },
+        "room": 0,
+        "stage": {
+          "phase": "fight",
+          "fight": {
+            "setup": {
+              "seed": 2152160613,
+              "era": 3,
+              "sides": [
+                {
+                  "who": "Golden two",
+                  "title": "",
+                  "figures": [{ "kind": "emberkit", "stars": 1, "seat": 3, "items": ["bark"], "fed": 0 }],
+                  "boons": [],
+                  "might": 100,
+                  "by": "00000000-0000-4000-8000-0000000060d4"
+                },
+                {
+                  "who": "The forest",
+                  "title": "Gnats, in no particular order",
+                  "figures": [
+                    { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+                    { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+                  ],
+                  "boons": [],
+                  "might": 100
+                }
+              ]
+            },
+            "outcome": {
+              "result": "win",
+              "ticks": 135,
+              "seconds": 6.75,
+              "standing": [1, 0],
+              "dusk": false,
+              "units": [
+                {
+                  "id": 0,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 50,
+                  "taken": 120,
+                  "healed": 0,
+                  "casts": 0
+                },
+                {
+                  "id": 1,
+                  "side": 0,
+                  "kind": "emberkit",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": true,
+                  "hp": 150,
+                  "maxHp": 270,
+                  "dealt": 255,
+                  "taken": 120,
+                  "healed": 0,
+                  "casts": 1
+                },
+                {
+                  "id": 2,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 70,
+                  "taken": 135,
+                  "healed": 0,
+                  "casts": 0
+                }
+              ]
+            }
+          }
+        },
+        "resolve": 20,
+        "acorns": 1,
+        "streak": 0,
+        "level": 1,
+        "xp": 0,
+        "board": [
+          null,
+          null,
+          null,
+          { "id": 1, "kind": "emberkit", "stars": 1, "items": ["bark"], "fed": 0, "fights": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "bench": [
+          { "id": 2, "kind": "emberkit", "stars": 1, "items": [], "fed": 0, "fights": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "rack": {},
+        "stall": ["worm", "worm", "mossmote", "worm", "mossmote"],
+        "held": false,
+        "rustles": 0,
+        "bought": 1,
+        "boons": [],
+        "foe": {
+          "who": "The forest",
+          "title": "Gnats, in no particular order",
+          "figures": [
+            { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+            { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+          ],
+          "boons": [],
+          "might": 100
+        },
+        "record": [],
+        "before": {
+          "fought": 0,
+          "won": 0,
+          "lost": 0,
+          "furthest": 0,
+          "deepest": 0,
+          "cleared": [],
+          "bosses": [],
+          "bossesPast": 0,
+          "met": []
+        },
+        "nextId": 3,
+        "last": null,
+        "wing": null,
+        "seen": { "fielded": [], "threeStars": [], "forged": [], "topped": [] }
+      },
+      "shown": {
+        "who": "Golden two",
+        "title": "",
+        "figures": [{ "kind": "emberkit", "stars": 1, "seat": 3, "items": ["bark"], "fed": 0 }],
+        "boons": [],
+        "might": 100,
+        "by": "00000000-0000-4000-8000-0000000060d4"
+      },
+      "place": null
+    },
+    {
+      "who": { "is": "regular", "figure": "bushgnome", "habit": "sneak" },
+      "run": {
+        "seed": 2469454321,
+        "rng": 3180108804,
+        "era": 3,
+        "way": { "course": { "id": "trail", "trail": 0 }, "figures": { "pool": "fair" } },
+        "room": 0,
+        "stage": {
+          "phase": "fight",
+          "fight": {
+            "setup": {
+              "seed": 1514736876,
+              "era": 3,
+              "sides": [
+                {
+                  "who": "Shrub",
+                  "title": "",
+                  "figures": [{ "kind": "crab7", "stars": 2, "seat": 3, "items": ["bark"], "fed": 0 }],
+                  "boons": [],
+                  "might": 100
+                },
+                {
+                  "who": "The forest",
+                  "title": "Gnats, in no particular order",
+                  "figures": [
+                    { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+                    { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+                  ],
+                  "boons": [],
+                  "might": 100
+                }
+              ]
+            },
+            "outcome": {
+              "result": "win",
+              "ticks": 114,
+              "seconds": 5.7,
+              "standing": [1, 0],
+              "dusk": false,
+              "units": [
+                {
+                  "id": 0,
+                  "side": 0,
+                  "kind": "crab7",
+                  "stars": 2,
+                  "summoned": false,
+                  "alive": true,
+                  "hp": 450,
+                  "maxHp": 540,
+                  "dealt": 338,
+                  "taken": 90,
+                  "healed": 0,
+                  "casts": 1
+                },
+                {
+                  "id": 1,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 36,
+                  "taken": 141,
+                  "healed": 0,
+                  "casts": 0
+                },
+                {
+                  "id": 2,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 54,
+                  "taken": 197,
+                  "healed": 0,
+                  "casts": 0
+                }
+              ]
+            }
+          }
+        },
+        "resolve": 20,
+        "acorns": 0,
+        "streak": 0,
+        "level": 1,
+        "xp": 0,
+        "board": [
+          null,
+          null,
+          null,
+          { "id": 1, "kind": "crab7", "stars": 2, "items": ["bark"], "fed": 0, "fights": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "bench": [null, null, null, null, null, null, null, null, null],
+        "rack": {},
+        "stall": ["worm", "worm", "worm", "finch", "worm"],
+        "held": false,
+        "rustles": 0,
+        "bought": 2,
+        "boons": [],
+        "foe": {
+          "who": "The forest",
+          "title": "Gnats, in no particular order",
+          "figures": [
+            { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+            { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+          ],
+          "boons": [],
+          "might": 100
+        },
+        "record": [],
+        "before": {
+          "fought": 0,
+          "won": 0,
+          "lost": 0,
+          "furthest": 0,
+          "deepest": 0,
+          "cleared": [],
+          "bosses": [],
+          "bossesPast": 0,
+          "met": []
+        },
+        "nextId": 4,
+        "last": null,
+        "wing": null,
+        "seen": { "fielded": [], "threeStars": [], "forged": [], "topped": [] }
+      },
+      "shown": {
+        "who": "Shrub",
+        "title": "",
+        "figures": [{ "kind": "crab7", "stars": 2, "seat": 3, "items": ["bark"], "fed": 0 }],
+        "boons": [],
+        "might": 100
+      },
+      "place": null
+    },
+    {
+      "who": { "is": "regular", "figure": "emberkit", "habit": "ember" },
+      "run": {
+        "seed": 4095615325,
+        "rng": 3897381707,
+        "era": 3,
+        "way": { "course": { "id": "trail", "trail": 0 }, "figures": { "pool": "fair" } },
+        "room": 0,
+        "stage": {
+          "phase": "fight",
+          "fight": {
+            "setup": {
+              "seed": 2299957138,
+              "era": 3,
+              "sides": [
+                {
+                  "who": "Flint",
+                  "title": "",
+                  "figures": [{ "kind": "emberkit", "stars": 1, "seat": 3, "items": [], "fed": 0 }],
+                  "boons": [],
+                  "might": 100
+                },
+                {
+                  "who": "The forest",
+                  "title": "Gnats, in no particular order",
+                  "figures": [
+                    { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+                    { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+                  ],
+                  "boons": [],
+                  "might": 100
+                }
+              ]
+            },
+            "outcome": {
+              "result": "win",
+              "ticks": 162,
+              "seconds": 8.1,
+              "standing": [1, 0],
+              "dusk": false,
+              "units": [
+                {
+                  "id": 0,
+                  "side": 0,
+                  "kind": "emberkit",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": true,
+                  "hp": 126,
+                  "maxHp": 270,
+                  "dealt": 285,
+                  "taken": 144,
+                  "healed": 0,
+                  "casts": 1
+                },
+                {
+                  "id": 1,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 48,
+                  "taken": 165,
+                  "healed": 0,
+                  "casts": 0
+                },
+                {
+                  "id": 2,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 96,
+                  "taken": 120,
+                  "healed": 0,
+                  "casts": 0
+                }
+              ]
+            }
+          }
+        },
+        "resolve": 20,
+        "acorns": 0,
+        "streak": 0,
+        "level": 1,
+        "xp": 0,
+        "board": [
+          null,
+          null,
+          null,
+          { "id": 2, "kind": "emberkit", "stars": 1, "items": [], "fed": 0, "fights": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "bench": [
+          { "id": 1, "kind": "barrowgnome", "stars": 1, "items": ["thorn"], "fed": 0, "fights": 0 },
+          { "id": 3, "kind": "emberkit", "stars": 1, "items": [], "fed": 0, "fights": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "rack": {},
+        "stall": ["moth", "crab7", "crab7", "emberkit", "mossmote"],
+        "held": false,
+        "rustles": 0,
+        "bought": 2,
+        "boons": [],
+        "foe": {
+          "who": "The forest",
+          "title": "Gnats, in no particular order",
+          "figures": [
+            { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+            { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+          ],
+          "boons": [],
+          "might": 100
+        },
+        "record": [],
+        "before": {
+          "fought": 0,
+          "won": 0,
+          "lost": 0,
+          "furthest": 0,
+          "deepest": 0,
+          "cleared": [],
+          "bosses": [],
+          "bossesPast": 0,
+          "met": []
+        },
+        "nextId": 4,
+        "last": null,
+        "wing": null,
+        "seen": { "fielded": [], "threeStars": [], "forged": [], "topped": [] }
+      },
+      "shown": {
+        "who": "Flint",
+        "title": "",
+        "figures": [{ "kind": "emberkit", "stars": 1, "seat": 3, "items": [], "fed": 0 }],
+        "boons": [],
+        "might": 100
+      },
+      "place": null
+    },
+    {
+      "who": { "is": "regular", "figure": "seqwawa", "habit": "moss" },
+      "run": {
+        "seed": 3564365020,
+        "rng": 2224491146,
+        "era": 3,
+        "way": { "course": { "id": "trail", "trail": 0 }, "figures": { "pool": "fair" } },
+        "room": 0,
+        "stage": {
+          "phase": "fight",
+          "fight": {
+            "setup": {
+              "seed": 2942523403,
+              "era": 3,
+              "sides": [
+                {
+                  "who": "Seqwawa",
+                  "title": "",
+                  "figures": [{ "kind": "mossmote", "stars": 1, "seat": 24, "items": [], "fed": 0 }],
+                  "boons": [],
+                  "might": 100
+                },
+                {
+                  "who": "The forest",
+                  "title": "Gnats, in no particular order",
+                  "figures": [
+                    { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+                    { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+                  ],
+                  "boons": [],
+                  "might": 100
+                }
+              ]
+            },
+            "outcome": {
+              "result": "win",
+              "ticks": 340,
+              "seconds": 17,
+              "standing": [1, 0],
+              "dusk": false,
+              "units": [
+                {
+                  "id": 0,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 91,
+                  "taken": 120,
+                  "healed": 0,
+                  "casts": 0
+                },
+                {
+                  "id": 1,
+                  "side": 0,
+                  "kind": "mossmote",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": true,
+                  "hp": 133,
+                  "maxHp": 250,
+                  "dealt": 240,
+                  "taken": 299,
+                  "healed": 0,
+                  "casts": 3
+                },
+                {
+                  "id": 2,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 208,
+                  "taken": 120,
+                  "healed": 0,
+                  "casts": 0
+                }
+              ]
+            }
+          }
+        },
+        "resolve": 20,
+        "acorns": 0,
+        "streak": 0,
+        "level": 1,
+        "xp": 0,
+        "board": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 3, "kind": "mossmote", "stars": 1, "items": [], "fed": 0, "fights": 0 },
+          null,
+          null,
+          null
+        ],
+        "bench": [
+          { "id": 2, "kind": "finch", "stars": 1, "items": [], "fed": 0, "fights": 0 },
+          { "id": 1, "kind": "finch", "stars": 1, "items": ["chestnut"], "fed": 0, "fights": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "rack": {},
+        "stall": ["worm", "moth", "crab7", "finch", "crab7"],
+        "held": false,
+        "rustles": 0,
+        "bought": 2,
+        "boons": [],
+        "foe": {
+          "who": "The forest",
+          "title": "Gnats, in no particular order",
+          "figures": [
+            { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+            { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+          ],
+          "boons": [],
+          "might": 100
+        },
+        "record": [],
+        "before": {
+          "fought": 0,
+          "won": 0,
+          "lost": 0,
+          "furthest": 0,
+          "deepest": 0,
+          "cleared": [],
+          "bosses": [],
+          "bossesPast": 0,
+          "met": []
+        },
+        "nextId": 4,
+        "last": null,
+        "wing": null,
+        "seen": { "fielded": [], "threeStars": [], "forged": [], "topped": [] }
+      },
+      "shown": {
+        "who": "Seqwawa",
+        "title": "",
+        "figures": [{ "kind": "mossmote", "stars": 1, "seat": 24, "items": [], "fed": 0 }],
+        "boons": [],
+        "might": 100
+      },
+      "place": null
+    },
+    {
+      "who": { "is": "regular", "figure": "crab12", "habit": "crab" },
+      "run": {
+        "seed": 598450544,
+        "rng": 639221734,
+        "era": 3,
+        "way": { "course": { "id": "trail", "trail": 0 }, "figures": { "pool": "fair" } },
+        "room": 0,
+        "stage": {
+          "phase": "fight",
+          "fight": {
+            "setup": {
+              "seed": 3411379813,
+              "era": 3,
+              "sides": [
+                {
+                  "who": "Crab #12",
+                  "title": "",
+                  "figures": [{ "kind": "emberkit", "stars": 1, "seat": 3, "items": ["plume"], "fed": 0 }],
+                  "boons": [],
+                  "might": 100
+                },
+                {
+                  "who": "The forest",
+                  "title": "Gnats, in no particular order",
+                  "figures": [
+                    { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+                    { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+                  ],
+                  "boons": [],
+                  "might": 100
+                }
+              ]
+            },
+            "outcome": {
+              "result": "win",
+              "ticks": 141,
+              "seconds": 7.05,
+              "standing": [1, 0],
+              "dusk": false,
+              "units": [
+                {
+                  "id": 0,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 48,
+                  "taken": 165,
+                  "healed": 0,
+                  "casts": 0
+                },
+                {
+                  "id": 1,
+                  "side": 0,
+                  "kind": "emberkit",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": true,
+                  "hp": 138,
+                  "maxHp": 270,
+                  "dealt": 285,
+                  "taken": 132,
+                  "healed": 0,
+                  "casts": 1
+                },
+                {
+                  "id": 2,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 84,
+                  "taken": 120,
+                  "healed": 0,
+                  "casts": 0
+                }
+              ]
+            }
+          }
+        },
+        "resolve": 20,
+        "acorns": 1,
+        "streak": 0,
+        "level": 1,
+        "xp": 0,
+        "board": [
+          null,
+          null,
+          null,
+          { "id": 1, "kind": "emberkit", "stars": 1, "items": ["plume"], "fed": 0, "fights": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "bench": [
+          { "id": 2, "kind": "emberkit", "stars": 1, "items": [], "fed": 0, "fights": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "rack": {},
+        "stall": ["mossmote", "finch", "moth", "finch", "finch"],
+        "held": false,
+        "rustles": 0,
+        "bought": 1,
+        "boons": [],
+        "foe": {
+          "who": "The forest",
+          "title": "Gnats, in no particular order",
+          "figures": [
+            { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+            { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+          ],
+          "boons": [],
+          "might": 100
+        },
+        "record": [],
+        "before": {
+          "fought": 0,
+          "won": 0,
+          "lost": 0,
+          "furthest": 0,
+          "deepest": 0,
+          "cleared": [],
+          "bosses": [],
+          "bossesPast": 0,
+          "met": []
+        },
+        "nextId": 3,
+        "last": null,
+        "wing": null,
+        "seen": { "fielded": [], "threeStars": [], "forged": [], "topped": [] }
+      },
+      "shown": {
+        "who": "Crab #12",
+        "title": "",
+        "figures": [{ "kind": "emberkit", "stars": 1, "seat": 3, "items": ["plume"], "fed": 0 }],
+        "boons": [],
+        "might": 100
+      },
+      "place": null
+    },
+    {
+      "who": { "is": "regular", "figure": "barrowgnome", "habit": "bulwark" },
+      "run": {
+        "seed": 3202139146,
+        "rng": 1364236371,
+        "era": 3,
+        "way": { "course": { "id": "trail", "trail": 0 }, "figures": { "pool": "fair" } },
+        "room": 0,
+        "stage": {
+          "phase": "fight",
+          "fight": {
+            "setup": {
+              "seed": 2358541386,
+              "era": 3,
+              "sides": [
+                {
+                  "who": "Hodge",
+                  "title": "",
+                  "figures": [{ "kind": "barrowgnome", "stars": 1, "seat": 3, "items": [], "fed": 0 }],
+                  "boons": [],
+                  "might": 100
+                },
+                {
+                  "who": "The forest",
+                  "title": "Gnats, in no particular order",
+                  "figures": [
+                    { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+                    { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+                  ],
+                  "boons": [],
+                  "might": 100
+                }
+              ]
+            },
+            "outcome": {
+              "result": "win",
+              "ticks": 235,
+              "seconds": 11.75,
+              "standing": [1, 0],
+              "dusk": false,
+              "units": [
+                {
+                  "id": 0,
+                  "side": 0,
+                  "kind": "barrowgnome",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": true,
+                  "hp": 177,
+                  "maxHp": 320,
+                  "dealt": 240,
+                  "taken": 198,
+                  "healed": 0,
+                  "casts": 1
+                },
+                {
+                  "id": 1,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 66,
+                  "taken": 120,
+                  "healed": 0,
+                  "casts": 0
+                },
+                {
+                  "id": 2,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 132,
+                  "taken": 120,
+                  "healed": 0,
+                  "casts": 0
+                }
+              ]
+            }
+          }
+        },
+        "resolve": 20,
+        "acorns": 0,
+        "streak": 0,
+        "level": 1,
+        "xp": 0,
+        "board": [
+          null,
+          null,
+          null,
+          { "id": 3, "kind": "barrowgnome", "stars": 1, "items": [], "fed": 0, "fights": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "bench": [
+          { "id": 2, "kind": "worm", "stars": 1, "items": [], "fed": 0, "fights": 0 },
+          { "id": 1, "kind": "worm", "stars": 1, "items": ["plume"], "fed": 0, "fights": 0 },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "rack": {},
+        "stall": ["moth", "finch", "mossmote", "barrowgnome", "barrowgnome"],
+        "held": false,
+        "rustles": 0,
+        "bought": 2,
+        "boons": [],
+        "foe": {
+          "who": "The forest",
+          "title": "Gnats, in no particular order",
+          "figures": [
+            { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+            { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+          ],
+          "boons": [],
+          "might": 100
+        },
+        "record": [],
+        "before": {
+          "fought": 0,
+          "won": 0,
+          "lost": 0,
+          "furthest": 0,
+          "deepest": 0,
+          "cleared": [],
+          "bosses": [],
+          "bossesPast": 0,
+          "met": []
+        },
+        "nextId": 4,
+        "last": null,
+        "wing": null,
+        "seen": { "fielded": [], "threeStars": [], "forged": [], "topped": [] }
+      },
+      "shown": {
+        "who": "Hodge",
+        "title": "",
+        "figures": [{ "kind": "barrowgnome", "stars": 1, "seat": 3, "items": [], "fed": 0 }],
+        "boons": [],
+        "might": 100
+      },
+      "place": null
+    },
+    {
+      "who": { "is": "regular", "figure": "lanterngnome", "habit": "sage" },
+      "run": {
+        "seed": 791482079,
+        "rng": 702975351,
+        "era": 3,
+        "way": { "course": { "id": "trail", "trail": 0 }, "figures": { "pool": "fair" } },
+        "room": 0,
+        "stage": {
+          "phase": "fight",
+          "fight": {
+            "setup": {
+              "seed": 2661301421,
+              "era": 3,
+              "sides": [
+                {
+                  "who": "Wick",
+                  "title": "",
+                  "figures": [{ "kind": "moth", "stars": 2, "seat": 24, "items": ["glowcap"], "fed": 0 }],
+                  "boons": [],
+                  "might": 100
+                },
+                {
+                  "who": "The forest",
+                  "title": "Gnats, in no particular order",
+                  "figures": [
+                    { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+                    { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+                  ],
+                  "boons": [],
+                  "might": 100
+                }
+              ]
+            },
+            "outcome": {
+              "result": "win",
+              "ticks": 90,
+              "seconds": 4.5,
+              "standing": [1, 0],
+              "dusk": false,
+              "units": [
+                {
+                  "id": 0,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 39,
+                  "taken": 120,
+                  "healed": 0,
+                  "casts": 0
+                },
+                {
+                  "id": 1,
+                  "side": 0,
+                  "kind": "moth",
+                  "stars": 2,
+                  "summoned": false,
+                  "alive": true,
+                  "hp": 300,
+                  "maxHp": 378,
+                  "dealt": 328,
+                  "taken": 78,
+                  "healed": 0,
+                  "casts": 1
+                },
+                {
+                  "id": 2,
+                  "side": 1,
+                  "kind": "gnat",
+                  "stars": 1,
+                  "summoned": false,
+                  "alive": false,
+                  "hp": 0,
+                  "maxHp": 110,
+                  "dealt": 39,
+                  "taken": 208,
+                  "healed": 0,
+                  "casts": 0
+                }
+              ]
+            }
+          }
+        },
+        "resolve": 20,
+        "acorns": 0,
+        "streak": 0,
+        "level": 1,
+        "xp": 0,
+        "board": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          { "id": 1, "kind": "moth", "stars": 2, "items": ["glowcap"], "fed": 0, "fights": 0 },
+          null,
+          null,
+          null
+        ],
+        "bench": [null, null, null, null, null, null, null, null, null],
+        "rack": {},
+        "stall": [null, "mossmote", "crab7", "mossmote", null],
+        "held": false,
+        "rustles": 0,
+        "bought": 2,
+        "boons": [],
+        "foe": {
+          "who": "The forest",
+          "title": "Gnats, in no particular order",
+          "figures": [
+            { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+            { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+          ],
+          "boons": [],
+          "might": 100
+        },
+        "record": [],
+        "before": {
+          "fought": 0,
+          "won": 0,
+          "lost": 0,
+          "furthest": 0,
+          "deepest": 0,
+          "cleared": [],
+          "bosses": [],
+          "bossesPast": 0,
+          "met": []
+        },
+        "nextId": 4,
+        "last": null,
+        "wing": null,
+        "seen": { "fielded": [], "threeStars": [], "forged": [], "topped": [] }
+      },
+      "shown": {
+        "who": "Wick",
+        "title": "",
+        "figures": [{ "kind": "moth", "stars": 2, "seat": 24, "items": ["glowcap"], "fed": 0 }],
+        "boons": [],
+        "might": 100
+      },
+      "place": null
+    }
+  ],
+  "pairs": [],
+  "odd": null,
+  "owed": []
+}

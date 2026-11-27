@@ -147,7 +147,7 @@ function poised(roster: Roster | null = null): string {
   const run = table?.held.endless;
   if (!table || !run) throw new Error("the fixture has no endless run");
   run.board = run.board.map((_, seat) =>
-    seat < 5 ? { id: 900 + seat, kind: "greg", stars: 3, items: [], fed: 0 } : null,
+    seat < 5 ? { id: 900 + seat, kind: "greg", stars: 3, items: [], fed: 0, fights: 0 } : null,
   );
   run.nextId = 1000;
   run.level = 8;

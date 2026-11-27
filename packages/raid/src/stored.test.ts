@@ -296,7 +296,7 @@ describe("a table stored under other numbers", () => {
     );
     expect(shorter.bench).toHaveLength(ECONOMY.bench);
     // A bench twice as long with a figure at its far end, and every place before it taken.
-    const extra: Piece = { id: base.nextId, kind: "worm", stars: 1, items: [], fed: 0 };
+    const extra: Piece = { id: base.nextId, kind: "worm", stars: 1, items: [], fed: 0, fights: 0 };
     const crowded = runOf(
       read(
         shifted("planning.json", (raw) => {
@@ -357,7 +357,7 @@ describe("a table stored under other numbers", () => {
         shifted("long-time.json", (raw) => {
           const someone = raw.run.board.find((p) => p !== null);
           if (someone) someone.fed = 3;
-          raw.run.bench[0] = { id: raw.run.nextId, kind: "greg", stars: 1, items: [], fed: 40 };
+          raw.run.bench[0] = { id: raw.run.nextId, kind: "greg", stars: 1, items: [], fed: 40, fights: 0 };
           raw.run.nextId += 1;
         }),
       ),

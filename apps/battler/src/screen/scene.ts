@@ -14,6 +14,7 @@ import { type FigureId, isBossId, type UnitKind } from "@sequoia-leaf/raid/conte
 import { regularOf, ROOMS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 
+import { drawAimsUnder } from "./aimed.ts";
 import { itemPic, levelPic } from "./art/icons.ts";
 import { drawLife } from "./art/place.ts";
 import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
@@ -39,6 +40,7 @@ import { snd } from "./sounds.ts";
 import { drawSeals } from "./spells.ts";
 import { boardHalves, place, type Standing, V } from "./stage.ts";
 import { catalogFor, S } from "./state.ts";
+import { drawWoodwork } from "./woodwork.ts";
 import { drawZone } from "./zone.ts";
 
 /** When the board was last found full, for flashing its count. */
@@ -405,12 +407,14 @@ function drawTable(g: Ctx): void {
   drawFxUnder(g);
   drawFightMarks(g);
   drawLitter(g);
+  drawWoodwork(g);
   drawRoots(g);
   drawRisings(g);
   drawSeals(g);
   drawCallsUnder(g);
   drawShellsUnder(g);
   drawBubblesUnder(g);
+  drawAimsUnder(g);
   const list: Standing[] = [];
   if (fighting) drawFight(g, list);
   else {

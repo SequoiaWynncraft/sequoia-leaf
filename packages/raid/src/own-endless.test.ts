@@ -54,7 +54,7 @@ function strong(way: Way, room: number): Run {
   run.board = run.board.map(() => null);
   best.forEach((kind, i) => {
     const stars: Stars = 3;
-    run.board[i < 5 ? i + 1 : 14 + i] = { id: 100 + i, kind, stars, items: [], fed: 0 };
+    run.board[i < 5 ? i + 1 : 14 + i] = { id: 100 + i, kind, stars, items: [], fed: 0, fights: 0 };
   });
   run.level = 8;
   run.room = room;

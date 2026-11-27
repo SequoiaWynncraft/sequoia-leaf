@@ -17,6 +17,7 @@ export const LORE: Readonly<Partial<Record<FigureId | TraitId, string>>> = {
   crab: "From the pond's edge. They hold a roll call every evening; it never comes out right.",
   gnome: "From the stall. They carve the figures and will not be told they got Greg wrong.",
   graid: "Carved from what the raiders said. A true form is what the raiders saw.",
+  canopy: "From up the sequoia. They watch every raid and have opinions.",
   grooter: "From the nest raid, the one they run every night. Carved from what the grooters said was in there.",
   huddle: "From the winter the pond froze. The guild came home in onesies; some had penguins in them.",
   // ---------- classes ----------
@@ -30,6 +31,7 @@ export const LORE: Readonly<Partial<Record<FigureId | TraitId, string>>> = {
   // ---------- one figure's own (Greg's trait shares his line) ----------
   rooted: "It was a tree before it was a figure and sees no reason to move.",
   stowaway: "On every list and in no seat.",
+  crafter: "Makes what the raid needs. Nobody asked.",
   // ---------- one acorn ----------
   emberkit: "Born in the campfire. Has never left it; the fire comes along.",
   mossmote: "A clump of the stump's moss that learned to tuck people in.",
@@ -39,12 +41,14 @@ export const LORE: Readonly<Partial<Record<FigureId | TraitId, string>>> = {
   crab7: "Its tag says 7. Answers to it, most evenings.",
   barrowgnome: "Brings the wood the figures are carved from.",
   dibs: "The first to arrive. Says the others are coming.",
+  vi: "Came down the tree for the stories. Stayed to fix the table.",
   peep: "Hatched halfway on the stump and stopped there. Nobody told the gnomes what comes out of the eggs, so they carved something green.",
   // ---------- two acorns ----------
   kettle: "Left on the fire by a raider who went back to Wynn. It whistles for them.",
   slug: "Crossed the stump once. It took a season.",
   glorp: "Came out of the pond. More of it is still in there.",
   chickaree: "Buries cones under the roots for a winter that has not come.",
+  flop: "Fell out of the canopy during a raid story. Was fine. Does it on purpose now.",
   jay: "Lost a crumb to Twig in the spring. Has not let it go.",
   crab12: "Its tag says 12. It says it was 11. Skims pebbles on the pond, where the others live.",
   lanterngnome: "Lights the lanterns round the stump at dusk, so the raids can be told.",
@@ -56,6 +60,7 @@ export const LORE: Readonly<Partial<Record<FigureId | TraitId, string>>> = {
   rock: "What the raiders call the canyon raid. The gnomes brought a rock.",
   bushgnome: "Carves in the bush so nobody sees the figures before they are done.",
   crab23: "Its tag says 23. Keeps the colony's plasters. The colony needs a lot of plasters.",
+  bhlue: "Watches the tree's back door. It is always somebody.",
   crab31: "Its tag says 31. Keeps time for the roll call. The count is still wrong.",
   larp: "Found a onesie after penguin month. It fit.",
   munch:
@@ -68,6 +73,7 @@ export const LORE: Readonly<Partial<Record<FigureId | TraitId, string>>> = {
   apothecary: "Makes the tonic from what grows on the stump.",
   flurry: "Carries the winter it came from. The stump is inside.",
   pomp: "Plays whenever a raider comes home with something.",
+  ace: "Came down the tree with a deck. Has not said where the other 48 are.",
   clutch: "The raiders said the Nest. The gnomes carved a nest. It has eggs in, so it must be right.",
   // ---------- five acorns ----------
   greg: 'What the raiders call the nameless one. The gnomes asked what it did. "It eats." Offerings go missing near him.',
@@ -76,6 +82,8 @@ export const LORE: Readonly<Partial<Record<FigureId | TraitId, string>>> = {
   seqwawa: "What is left of the guild's own tree. It is still growing.",
   crab8: "Nobody knows who Crab #8 is. It is at every raid.",
   yule: "Wears the hat all year. Says it is nearly December.",
+  unc: "Was knocking on this tree before it was a stump.",
+  leetanns: "Lives at the top of the tree. Comes down with every tool there is.",
   // ---------- a banner's member ----------
   commodore: "Asks if anyone is raiding. Somebody always is.",
 };

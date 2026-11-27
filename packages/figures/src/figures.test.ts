@@ -39,7 +39,7 @@ test("figures.txt names only the stump's figures and their other pictures, and e
   const named = [...readRows(await Bun.file(new URL("figures.txt", import.meta.url)).text()).keys()];
   const forms: readonly string[] = TRUE_FORM_IDS;
   const stray = (name: string): boolean => {
-    const [kind = "", second] = name.replace(/ (cast|alt|prop)$/, "").split(" ");
+    const [kind = "", second] = name.replace(/ (cast|alt|fall|peck|draw|top|down|prop)$/, "").split(" ");
     return second === undefined ? !kinds.includes(kind) : second !== "true" || !forms.includes(kind);
   };
   expect(named.filter(stray)).toEqual([]);

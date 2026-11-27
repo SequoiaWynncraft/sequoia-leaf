@@ -78,6 +78,19 @@ export const BANNERS: readonly Banner[] = [
     shows: "title",
     featured: ["flurry", "pomp", "larp", "jet", "dibs"],
   },
+  // Up The Tree: Leetanns, the set's own red panda with every tool there is. It closes as
+  // `up-the-tree-ends` opens, a release that brings nothing but the close.
+  {
+    id: "up-the-tree",
+    name: "Up The Tree",
+    opens: "up-the-tree",
+    from: Date.UTC(2027, 0, 5),
+    until: Date.UTC(2027, 0, 19),
+    headliner: "leetanns",
+    look: "set",
+    shows: "title",
+    featured: ["unc", "ace", "bhlue", "flop", "vi"],
+  },
 ];
 
 /** The pool that is always open, with no headliner. */

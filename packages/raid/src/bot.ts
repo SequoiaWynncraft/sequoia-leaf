@@ -12,6 +12,7 @@ import { type BoonId, giftsTrait } from "./content/boons.ts";
 import { type Catalog, catalogOf } from "./content/catalog.ts";
 import { type FigureId, figureIn, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
 import {
+  carriedTraits,
   type ComponentId,
   type EmblemId,
   type FinishedId,
@@ -139,12 +140,26 @@ const worthIn =
   (run, p) =>
     worthOf(catalogOf(run), habit, p.kind, p.stars);
 
+/**
+ * Traits whose figures leave the board for a while at the start of a fight (Canopy, up the tree):
+ * worth a step only with this many others that stay on the board in front (reach 1) meanwhile.
+ */
+const LEAVES_THE_BOARD: Readonly<Partial<Record<TraitId, number>>> = { canopy: 2 };
+/** A trait whose figure is fielded in every fight once owned, whatever else it is worth (Crafter counts fights on the board). */
+const ALWAYS_FIELDED: TraitId = "crafter";
+
+/** How many of a party stay on the board in front while those with a trait are away. */
+const staysInFront = (cat: Catalog, party: readonly Piece[], trait: TraitId): number =>
+  party.filter((p) => specOf(cat, p.kind).range <= 1 && !carriedTraits(cat, p.kind, p.items).includes(trait)).length;
+
 /** How good a set of figures is as a party: what each is worth, and something for every trait step switched on. */
 function partyScore(cat: Catalog, habit: Habit, party: readonly Piece[]): number {
   let score = 0;
   for (const p of party) score += worthOf(cat, habit, p.kind, p.stars);
   const counts = countTraits(cat, party);
   for (const trait of cat.ids.traits) {
+    const front = LEAVES_THE_BOARD[trait];
+    if (front !== undefined && staysInFront(cat, party, trait) < front) continue;
     const step = stepFor(cat, trait, counts[trait] ?? 0);
     if (step > 0) score += step * 1.1 * (habit.taste[trait] ?? 1);
   }
@@ -154,6 +169,11 @@ function partyScore(cat: Catalog, habit: Habit, party: readonly Piece[]): number
 function bestParty(cat: Catalog, habit: Habit, all: readonly Piece[], chairs: number): Piece[] {
   const party: Piece[] = [];
   const rest = all.slice();
+  // An owned Crafter first, its best copy: it counts only the fights it is on the board for.
+  const crafter = rest
+    .filter((p) => traitsOf(cat, p.kind).includes(ALWAYS_FIELDED))
+    .toSorted((a, b) => b.stars - a.stars)[0];
+  if (crafter && chairs > 0) party.push(...rest.splice(rest.indexOf(crafter), 1));
   while (rest.length > 0) {
     let best = -1;
     let bestScore = -1;
@@ -210,6 +230,7 @@ const BOON_LIKES: Record<BoonId, number> = {
   huddlecharm: 3,
   graidcharm: 3,
   sneakcharm: 3,
+  canopycharm: 3,
 };
 function likesBoon(run: RunView, habit: Habit, boon: BoonId): number {
   let score = BOON_LIKES[boon];
@@ -294,7 +315,7 @@ function wants(run: RunView, habit: Habit, kind: FigureId, before: number): numb
   const twins = own.filter((p) => p.kind === kind && p.stars === 1).length;
   const better = own.some((p) => p.kind === kind && p.stars > 1);
   if (twins >= 2) return 6 + figureIn(catalogOf(run), kind).tier * habit.chases;
-  const guest: Piece = { id: -1, kind, stars: 1, items: [], fed: 0 };
+  const guest: Piece = { id: -1, kind, stars: 1, items: [], fed: 0, fights: 0 };
   const after = partyScore(catalogOf(run), habit, bestParty(catalogOf(run), habit, [...own, guest], cap));
   return after - before + (twins === 1 ? 0.7 * habit.chases : 0) + (better ? 0.4 * habit.chases : 0);
 }

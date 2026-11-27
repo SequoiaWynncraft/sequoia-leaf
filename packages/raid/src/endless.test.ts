@@ -54,7 +54,7 @@ function strong(run: Run, room: number): Run {
   run.board = run.board.map(() => null);
   best.forEach((kind, i) => {
     const stars: Stars = 3;
-    run.board[i < 5 ? i + 1 : 14 + i] = { id: 100 + i, kind, stars, items: [], fed: 0 };
+    run.board[i < 5 ? i + 1 : 14 + i] = { id: 100 + i, kind, stars, items: [], fed: 0, fights: 0 };
   });
   run.level = 8;
   run.room = room;
@@ -148,7 +148,9 @@ describe("an endless run goes on", () => {
     expect(run.room).toBe(ROOM_COUNT);
     expect(run.stage.phase).toBe("plan");
     // A party of one Moth, with 1 resolve left, deep down: the room is lost and the run is over.
-    run.board = run.board.map((_, i) => (i === 3 ? { id: 1, kind: "moth", stars: 1, items: [], fed: 0 } : null));
+    run.board = run.board.map((_, i) =>
+      i === 3 ? { id: 1, kind: "moth", stars: 1, items: [], fed: 0, fights: 0 } : null,
+    );
     run.resolve = 1;
     run.room = 40;
     run.stage = { phase: "plan", picks: [] };

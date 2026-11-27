@@ -26,12 +26,13 @@ export const KINS = [
   "graid",
   "grooter",
   "huddle",
+  "canopy",
 ] as const;
 export type KinId = (typeof KINS)[number];
 export const CALLINGS = ["bulwark", "fang", "slinger", "sage", "mender", "sneak", "chorus"] as const;
 export type CallingId = (typeof CALLINGS)[number];
 /** A trait of one figure's own. */
-export const OWN_TRAITS = ["greg", "rooted", "stowaway"] as const;
+export const OWN_TRAITS = ["greg", "rooted", "stowaway", "crafter"] as const;
 export type OwnTraitId = (typeof OWN_TRAITS)[number];
 export type TraitId = KinId | CallingId | OwnTraitId;
 export const TRAIT_IDS: readonly TraitId[] = [...KINS, ...CALLINGS, ...OWN_TRAITS];

@@ -73,6 +73,7 @@ export const EMBLEM_IDS = [
   "woodenspectacles",
   "woodenbuckler",
   "woodenspoon",
+  "canopycharm",
 ] as const;
 export type EmblemId = (typeof EMBLEM_IDS)[number];
 export type ItemId = ComponentId | FinishedId | EmblemId;

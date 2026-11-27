@@ -60,12 +60,12 @@ function started(seed = 1): Run {
 }
 /** Puts a figure straight onto the board or bench, as if it had been bought and moved there. */
 function put(run: Run, kind: FigureId, seat: number, stars: Stars = 1, items: ItemId[] = []): Piece {
-  const piece: Piece = { id: run.nextId++, kind, stars, items, fed: 0 };
+  const piece: Piece = { id: run.nextId++, kind, stars, items, fed: 0, fights: 0 };
   run.board[seat] = piece;
   return piece;
 }
 function onBench(run: Run, kind: FigureId, slot: number, stars: Stars = 1, items: ItemId[] = []): Piece {
-  const piece: Piece = { id: run.nextId++, kind, stars, items, fed: 0 };
+  const piece: Piece = { id: run.nextId++, kind, stars, items, fed: 0, fights: 0 };
   run.bench[slot] = piece;
   return piece;
 }

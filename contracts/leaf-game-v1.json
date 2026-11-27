@@ -675,7 +675,8 @@
                 "kind": "barrowgnome",
                 "stars": 1,
                 "items": [],
-                "fed": 0
+                "fed": 0,
+                "fights": 0
               },
               null,
               null,
@@ -886,7 +887,8 @@
                 "kind": "barrowgnome",
                 "stars": 1,
                 "items": [],
-                "fed": 0
+                "fed": 0,
+                "fights": 0
               },
               null,
               null,
@@ -1083,7 +1085,8 @@
                 "kind": "barrowgnome",
                 "stars": 1,
                 "items": [],
-                "fed": 0
+                "fed": 0,
+                "fights": 0
               },
               null,
               null,
@@ -1327,7 +1330,8 @@
                 "kind": "barrowgnome",
                 "stars": 1,
                 "items": [],
-                "fed": 0
+                "fed": 0,
+                "fights": 0
               },
               null,
               null,
@@ -1526,7 +1530,8 @@
                 "kind": "barrowgnome",
                 "stars": 1,
                 "items": [],
-                "fed": 0
+                "fed": 0,
+                "fights": 0
               },
               null,
               null,
@@ -2949,7 +2954,8 @@
                 "kind": "barrowgnome",
                 "stars": 1,
                 "items": [],
-                "fed": 0
+                "fed": 0,
+                "fights": 0
               },
               null,
               null,

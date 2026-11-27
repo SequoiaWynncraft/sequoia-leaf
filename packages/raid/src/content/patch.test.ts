@@ -152,14 +152,21 @@ describe("the fold", () => {
         if (gives) expect(cat.items[gives]).toBeDefined();
       }
       for (const id of cat.order) for (const t of traitsOf(cat, id)) expect(cat.traits[t]).toBeDefined();
-      // Items and boons are the base's, from Groot Night its four emblems and their charms, and from Penguin Month the
-      // Knife, its five emblems, and the Guild Onesie and its charm; a release that brings one adds it here.
+      // Items and boons are the base's, from Groot Night its four emblems and their charms, from Penguin Month the
+      // Knife, its five emblems, and the Guild Onesie and its charm, and from Up The Tree A Good Branch and its
+      // charm; a release that brings one adds it here.
       const night = cat.era >= eraOf("groot-night") ? 4 : 0;
       const penguin = cat.era >= eraOf("penguin-month") ? 1 : 0;
-      const counts: number[] = [5 + penguin, FINISHED_IDS.length, 7 + night + 6 * penguin, 20 + night + penguin];
+      const tree = cat.era >= eraOf("up-the-tree") ? 1 : 0;
+      const counts: number[] = [
+        5 + penguin,
+        FINISHED_IDS.length,
+        7 + night + 6 * penguin + tree,
+        20 + night + penguin + tree,
+      ];
       const { components, finished, emblems, boons } = cat.ids;
       expect([components, finished, emblems, boons].map((kind) => kind.length)).toEqual(counts);
-      expect([COMPONENT_IDS.length, EMBLEM_IDS.length, BOON_IDS.length]).toEqual([6, 17, 25]);
+      expect([COMPONENT_IDS.length, EMBLEM_IDS.length, BOON_IDS.length]).toEqual([6, 18, 26]);
     }
   });
 });

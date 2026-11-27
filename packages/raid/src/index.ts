@@ -190,6 +190,7 @@ export { sparParty } from "./spar.ts";
 // The fight.
 export { openFight, recordFight, resolveFight, runFight, speedNow, stepFight, summarise } from "./fight/engine.ts";
 export { drawOf, HZ } from "./fight/core.ts";
+export { type Deals, GEAR, type Gear, type Suit, SUITS } from "./fight/types.ts";
 export type {
   DamageKind,
   DamageSource,

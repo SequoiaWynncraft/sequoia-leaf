@@ -31,7 +31,7 @@ function planning(seed = 1): Run {
   return run;
 }
 function put(run: Run, spot: Spot, kind: FigureId, stars: Stars = 1, items: ItemId[] = [], fed = 0): Piece {
-  const piece: Piece = { id: run.nextId++, kind, stars, items, fed };
+  const piece: Piece = { id: run.nextId++, kind, stars, items, fed, fights: 0 };
   (spot.on === "board" ? run.board : run.bench)[spot.at] = piece;
   return piece;
 }

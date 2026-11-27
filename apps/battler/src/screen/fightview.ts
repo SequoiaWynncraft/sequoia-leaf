@@ -8,6 +8,7 @@ import {
   hoverAt,
   isPersonId,
 } from "@sequoia-leaf/figures/sprites.ts";
+import type { Swing } from "@sequoia-leaf/figures/tools.ts";
 /**
  * The fight, played on the table from the rules' own steps (`playback.ts`), with the lead-in the
  * table gives each blow (`fightshow.ts`). The rules decide everything; this plays it on, draws
@@ -27,17 +28,19 @@ import { isBossId } from "@sequoia-leaf/raid/content/figures.ts";
 import { seatCell } from "@sequoia-leaf/raid/hex.ts";
 
 import { stanceOf } from "./acting.ts";
+import { drawAims, drumNow, swingNow, toolNow } from "./aimed.ts";
 import { hexMark } from "./art/table.ts";
 import { clockNow, feetAt, FV, shownCell } from "./board.ts";
 import { drawBubbled, waitsForBubble } from "./bubble.ts";
 import { drawCalls } from "./call.ts";
+import { drawCanopy, hanging } from "./canopy.ts";
 import { begin, show, stepShown } from "./fightshow.ts";
 import { burst, pace } from "./fx.ts";
 import { cellXY, HEX_H, HEX_W, type Pt } from "./geometry.ts";
 import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
 import type { Speed } from "./keep.ts";
 import { DIM, shineOf } from "./light.ts";
-import { leadOf } from "./looks.ts";
+import { leadOf, LOOKS } from "./looks.ts";
 import { drawShot } from "./marks.ts";
 import { type Actor, actorFor, poseOf } from "./motion.ts";
 import { advance, openPlayback, playOut } from "./playback.ts";
@@ -46,6 +49,7 @@ import { OWN } from "./sides.ts";
 import { snd } from "./sounds.ts";
 import { drawSpells } from "./spells.ts";
 import { type Standing, V } from "./stage.ts";
+import { drawWalls } from "./walls.ts";
 
 const marksByColour = new Map<string, HTMLCanvasElement>();
 function markOf(col: string): HTMLCanvasElement {
@@ -332,6 +336,24 @@ function drawMound(g: Ctx, x: number, y: number): void {
   R(g, x - 4, y - 1, 2, 1, EARTH[0]);
 }
 
+/** The beat of a swing it is at, held in its picture; nothing for one not swinging. */
+function swingOf(a: Actor, c: number): { swing: Swing } | null {
+  const swing = swingNow(a, c);
+  return swing ? { swing } : null;
+}
+
+/**
+ * One hidden where it is: up the tree it is on its branch (`canopy.ts`, which draws it); Crab #8 is a
+ * shut shell, and Flop lies playing dead; anyone else has gone to ground.
+ */
+function drawHidden(g: Ctx, cat: Catalog, a: Actor, at: { x: number; y: number; ground: number; left: boolean }): void {
+  const kind = a.unit.kind;
+  if (hanging(a)) return;
+  if (inShell(kind) || LOOKS[kind]?.hides === "pose")
+    return drawStanding(g, cat, kind, at.x, at.y, "plain", { pose: "cast", left: at.left });
+  drawMound(g, at.x, at.ground);
+}
+
 /** One figure in the fight as it stands on the table now, if it is on it. */
 function standing(g: Ctx, cat: Catalog, a: Actor, c: number, tick: number): Standing | null {
   const u = a.unit;
@@ -355,10 +377,10 @@ function standing(g: Ctx, cat: Catalog, a: Actor, c: number, tick: number): Stan
     x: a.x,
     y: a.y - back,
     draw: () => {
-      // Crab #8 is a shut shell while it hides; a friend of Yule's is in a bubble; anyone else has gone to ground.
+      // A friend of Yule's is in a bubble; anyone else hidden is drawn where it hides (`drawHidden`).
       if (hidden && drawBubbled(g, a, x, ground)) return;
-      if (hidden && inShell(u.kind)) return drawStanding(g, cat, u.kind, x, y, "plain", { pose: "cast", left });
-      if (hidden || sunk) return drawMound(g, x, ground);
+      if (hidden) return drawHidden(g, cat, a, { x, y, ground, left });
+      if (sunk) return drawMound(g, x, ground);
       // Off the ground, its shadow stays on it.
       if (p.lift > 2) {
         g.fillStyle = "rgba(26,15,30,0.3)";
@@ -376,6 +398,9 @@ function standing(g: Ctx, cat: Catalog, a: Actor, c: number, tick: number): Stan
         hurt: p.tint === "hurt",
         lit: shine.lit,
         ...carried(a, c),
+        holds: toolNow(a, c),
+        ...swingOf(a, c),
+        ...drumNow(a, c),
         ...(act ? { act } : { bend: { sx: p.sx, sy: p.sy, lean: left ? -p.lean : p.lean, turn: p.turn } }),
       });
       // What it holds follows it about, under its health bar, and falls with it.
@@ -451,6 +476,9 @@ export function drawFightAir(g: Ctx): void {
   drawSpells(g);
   drawCalls(g);
   drawShells(g);
+  drawAims(g);
+  drawWalls(g);
+  drawCanopy(g);
 }
 
 /** The item a figure in the fight holds under a point measured from the board's corner. */
