@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { EARNINGS, type PlayerId, playerId } from "@sequoia-leaf/core";
 import { payout, summariseRun } from "@sequoia-leaf/raid";
 import { advance } from "@sequoia-leaf/raid/sitting/clock.ts";
-import { decodeSitting } from "@sequoia-leaf/raid/sitting/keep.ts";
+import { decodeSitting, SITTING_VERSION } from "@sequoia-leaf/raid/sitting/keep.ts";
 import { CLOCK, type Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import { Effect, Option, Schema } from "effect";
 import type { SqlClient } from "effect/sql";
@@ -98,6 +98,14 @@ async function stored(
 }
 const rowsOf = <A>(statement: (sql: SqlClient.SqlClient) => Effect.Effect<ReadonlyArray<A>, unknown>, on = services) =>
   on.query(statement);
+/** A sitting's whole row. */
+const rowOf = (id: string) => rowsOf((sql) => sql`SELECT * FROM raid_sittings WHERE id = ${id}`);
+/** Stores a sitting's text again as `change` leaves it. */
+async function rewrite(id: string, change: (raw: Record<string, unknown>) => void) {
+  const raw: Record<string, unknown> = JSON.parse((await stored(id)).text);
+  change(raw);
+  await services.query((sql) => sql`UPDATE raid_sittings SET state = ${JSON.stringify(raw)} WHERE id = ${id}`);
+}
 const seats = (on = services) =>
   rowsOf((sql) => sql`SELECT player_id AS player, sitting FROM raid_sitting_seats ORDER BY player_id`, on);
 const sittingCoins = (on = services) =>
@@ -425,6 +433,31 @@ describe("The clock", () => {
     expect(await seats()).toEqual([]);
     clock.now += MINUTE + 1;
     expect(await open(alice)).toMatchObject({ status: 200 });
+  });
+
+  it("leaves a sitting a newer Leaf stored as it is, through the sweep and a read; one of its own version that does not read it shelves", async () => {
+    // Mid-play, as a newer Leaf beside this one in a deploy kept it; and one of this version spoilt.
+    const newer = await opened(alice);
+    await act(newer, alice, [{ id: "a-0", do: "start" }]);
+    const spoilt = await opened(bob);
+    await act(spoilt, carol, [{ id: "c-0", do: "sit" }]);
+    await rewrite(newer, (raw) => (raw["v"] = SITTING_VERSION + 1));
+    await rewrite(spoilt, (raw) => (raw["rng"] = -1));
+    const before = await rowOf(newer);
+    clock.now = T0 + 24 * 60 * MINUTE;
+    expect(await sweep()).toBe(2);
+    const updating = {
+      status: 503,
+      body: { code: "sitting_updating", message: "This table is being updated. Try again in a moment." },
+    };
+    expect(await look(newer, alice)).toEqual(updating);
+    expect(await act(newer, alice, [{ id: "a-1", do: "start" }])).toEqual(updating);
+    expect(await rowOf(newer)).toEqual(before);
+    expect(await seats()).toEqual([{ player: alice, sitting: newer }]);
+    expect(await rowsOf((sql) => sql`SELECT stage FROM raid_sittings WHERE id = ${spoilt}`)).toEqual([
+      { stage: "over" },
+    ]);
+    expect(await look(spoilt, bob)).toMatchObject({ status: 409, body: { code: "state_unreadable" } });
   });
 });
 

@@ -63,6 +63,7 @@ import {
   readNotes,
   readView,
   SENSIBLE,
+  TABLE_VERSION,
   type TableView,
 } from "@sequoia-leaf/raid";
 import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
@@ -3522,6 +3523,19 @@ describe("what each state tells the town", () => {
     expect((await townNow()).doors).toEqual({});
     expect(await dueOf("raid")).toBeNull();
     await services.query((sql) => sql`DELETE FROM play_state WHERE player_id = ${alice} AND game = 'raid'`);
+    expect(await services.query((sql) => sql`SELECT count(*) AS n FROM play_postcards`)).toEqual([{ n: 0 }]);
+  });
+
+  it("leaves a state a newer Leaf stored as it is: still due, told nothing, through a tend and a read", async () => {
+    const table = RAID.encode(RAID.create(ctxAt(T0)));
+    await keepTable(T0, table.replace(`"v":${TABLE_VERSION},`, `"v":${TABLE_VERSION + 1},`));
+    const before = await services.query((sql) => sql`SELECT * FROM play_state WHERE player_id = ${alice}`);
+    clock.now += MINUTE;
+    await tending();
+    const opening = await send("GET", "/v1/game/play/raid");
+    expect([opening.status, await codeOf(opening)]).toEqual([409, "state_unreadable"]);
+    expect(await services.query((sql) => sql`SELECT * FROM play_state WHERE player_id = ${alice}`)).toEqual(before);
+    expect(await dueOf("raid")).toBe(T0);
     expect(await services.query((sql) => sql`SELECT count(*) AS n FROM play_postcards`)).toEqual([{ n: 0 }]);
   });
 });

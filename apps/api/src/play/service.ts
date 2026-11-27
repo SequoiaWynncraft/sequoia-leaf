@@ -35,7 +35,7 @@ import { Watchers } from "../live/watchers.ts";
 import { type CommandOutcome, type JobPhase, playCommands, playJobSeconds } from "../metrics.ts";
 import { type CoinEntry, Coins, payable } from "./coins.ts";
 import { Copies } from "./copies.ts";
-import { type Attempt, ctxOf, type Given, type Held, NOTHING_GIVEN, type Played, toRoom, unreadable } from "./games.ts";
+import { type Attempt, ctxOf, type Given, type Held, NOTHING_GIVEN, type Played, toRoom, unread } from "./games.ts";
 import { type Keeping, keptPieces } from "./kept.ts";
 import { PlayPace } from "./pace.ts";
 import { nextSlice } from "./slices.ts";
@@ -509,10 +509,10 @@ export class Play extends Context.Service<
           lane.copy = undefined;
           const { rev, state: text, guest, born, dueAt, postcard } = found.value;
           const held = coded(job, () => played.read(text, postcard));
-          if (held === null) yield* unreadable(played.id, player, rev, "it is kept as it is");
-          // A state stored due that rests (`rests`), or does not read, is due none until it is written again.
-          if (dueAt !== null && (held === null || rests(held, player, guest)))
-            yield* inSqlite(job, store.rest(player, played.id, rev, held !== null));
+          const rest =
+            held === null ? yield* unread(played, player, rev, text) : dueAt !== null && rests(held, player, guest);
+          // A state stored due that rests (`rests`), or does not read but for a newer Leaf's (`unread`), is due none until it is written again.
+          if (dueAt !== null && rest) yield* inSqlite(job, store.rest(player, played.id, rev, held !== null));
           return held && (lane.copy = { rev, text, guest, born, at, held, unsaved: false, stood: held.standing() });
         });
 
