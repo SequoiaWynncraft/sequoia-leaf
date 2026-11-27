@@ -114,7 +114,7 @@ function across(run: RunView): string {
     return run.foe.by === member()?.id
       ? "Held by you: your board at this room."
       : `Held by ${run.foe.who}: ${run.foe.title}.`;
-  return `${run.foe.who}${run.foe.title ? `: ${nowCalled(run.foe.title)}` : ""}.`;
+  return `${acrossName(run.foe)}${run.foe.title ? `: ${nowCalled(run.foe.title)}` : ""}.`;
 }
 
 /** What a room not yet fought gives, by its kind; in an endless run, the chair a boss past the fifteenth room adds. */

@@ -998,7 +998,7 @@ describe("who is waiting", () => {
     expect(ROOMS[0]?.plans.map((p) => p.name)).toContain(a.title);
     expect(isParty(a)).toBe(true);
     const boss = opposition(catalogAt(LEGACY_ERA), 77, 14, 0);
-    expect(boss.title).toBe("Zero");
+    expect(boss.title).toBe("The Crab Nobody Counted");
     expect(boss.figures[0]?.kind).toBe("bigcrab");
   });
   test("harder trails bring more of it, and stronger", () => {

@@ -215,7 +215,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Small. Loud. Has a twig and is not afraid to use it.",
   },
   crab7: {
-    name: "Nipper",
+    name: "Crab #7",
     tier: 1,
     kin: "crab",
     calling: "fang",
@@ -371,7 +371,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Has a complaint. Has several.",
   },
   crab12: {
-    name: "Skip",
+    name: "Crab #12",
     tier: 2,
     kin: "crab",
     calling: "slinger",
@@ -528,7 +528,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "It is a bush. Pay it no mind.",
   },
   crab23: {
-    name: "Fuss",
+    name: "Crab #23",
     tier: 3,
     kin: "crab",
     calling: "mender",
@@ -618,7 +618,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Stands on one leg. The other is for emergencies.",
   },
   crab40: {
-    name: "Barge",
+    name: "Crab #40",
     tier: 4,
     kin: "crab",
     calling: "bulwark",
@@ -750,7 +750,7 @@ export const SUMMONS: Record<SummonId, UnitSpec> = {
     quip: "A bit of Glorp, out on its own.",
   },
   uncounted: {
-    name: "Miscount",
+    name: "Crab #??",
     hp: 300,
     attack: 28,
     speed: 0.7,
@@ -762,7 +762,7 @@ export const SUMMONS: Record<SummonId, UnitSpec> = {
     quip: "Was not on the list. Is here anyway.",
   },
   biguncounted: {
-    name: "Big Miscount",
+    name: "Big Crab #??",
     hp: 600,
     attack: 44,
     speed: 0.65,
@@ -1009,7 +1009,7 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
     quip: "Everything in the hoard was yours once.",
   },
   bigcrab: {
-    name: "Zero",
+    name: "The Crab Nobody Counted",
     hp: 5400,
     attack: 130,
     speed: 0.7,

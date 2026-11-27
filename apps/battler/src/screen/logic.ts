@@ -47,7 +47,7 @@ import {
   traitsOf,
   type UnitKind,
 } from "@sequoia-leaf/raid";
-import { regularOf, REGULARS } from "@sequoia-leaf/raid/content/rooms.ts";
+import { nowCalled, regularOf, REGULARS } from "@sequoia-leaf/raid/content/rooms.ts";
 
 /** Where a figure picked up from `from` may be put down: free seats, free hollows, and places it would swap into. */
 export interface Reach {
@@ -354,11 +354,12 @@ export const membersOf = (trait: TraitId, among: readonly FigureId[]): FigureId[
 /** A name at the start of a sentence or a line: "a Moth" is "A Moth" there. */
 export const opening = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
 /**
- * The name of the party across the table as a sentence starts with it: a regular's as it is called
- * now ("Vesta", for a party stored under its old name), a member's (`Party.by`) and the forest's as
- * they are written.
+ * The name of the party across the table as a sentence starts with it: a regular's or a figure's as
+ * it is called now ("Vesta", "Crab #12", for a party stored under an old name), a member's
+ * (`Party.by`) and the forest's as they are written.
  */
-export const acrossName = (party: Pick<Party, "who" | "by">): string => regularOf(party)?.name ?? party.who;
+export const acrossName = (party: Pick<Party, "who" | "by">): string =>
+  party.by === undefined ? nowCalled(party.who) : party.who;
 
 /** The title of a fight's sheet: how it went and how long it took, "Room won · 14 s". */
 export function fightTitle(result: FightResult, ticks: number): string {
