@@ -24,7 +24,7 @@ import { hash, makeCanvas, must, vnoise } from "@sequoia-leaf/kit/util.ts";
 import { pageOf } from "../kinds/index.ts";
 import type { Parts } from "../kinds/kind.ts";
 import { arms, TILE } from "./belts.ts";
-import { type Ground, paintGround } from "./ground.ts";
+import { type Ground, makeGround } from "./ground.ts";
 import { type ItemArt, makeItems, makePlain } from "./items.ts";
 import { type Machines, makeMachines } from "./machines.ts";
 import { headsOn, meeting } from "./meeting.ts";
@@ -56,6 +56,8 @@ export interface Art {
   /** A crate as it is carried out of the gate. */
   parcel: Sprite;
   sign: (price: number) => Sprite;
+  /** A note pinned on the depot's board for an order, and one for an order filled. */
+  notes: readonly [HTMLCanvasElement, HTMLCanvasElement];
   /**
    * What lies over a sorter's tile, facing a way: its gate, the arrowhead on the side it sends to
    * (its right with `right`, else its left), and the board that shows the thing it sends there;
@@ -211,6 +213,18 @@ export const DEPOT_PIC = [
   "ssshSSSryYYyrSshSSSS",
 ];
 
+/** The notes on the depot's board: paper with a line written on it, and gold for an order filled. */
+function boardNotes(): readonly [HTMLCanvasElement, HTMLCanvasElement] {
+  const a = makeCanvas(2, 4);
+  R(a.g, 0, 0, 2, 4, CREAM);
+  R(a.g, 0, 1, 1, 1, "#a35d3b");
+  R(a.g, 0, 3, 2, 1, "#cbb894");
+  const b = makeCanvas(2, 4);
+  R(b.g, 0, 0, 2, 4, GOLD[2]);
+  R(b.g, 0, 3, 2, 1, GOLD[0]);
+  return [a.c, b.c];
+}
+
 /** A copy of each kind's picture, for a button or a card. */
 function icons(parts: Parts): Art["icon"] {
   return (kind, grade = 1, carrying = thing("plank")) => {
@@ -226,7 +240,7 @@ export function makeArt(land: Land): Art {
   const item = makeItems();
   const sorter = sorterTops(makePlain());
   return {
-    ground: paintGround(land),
+    ground: makeGround(land),
     item,
     m,
     trunks: redwoods(land),
@@ -244,6 +258,7 @@ export function makeArt(land: Land): Art {
     zed: bm(["www", ".w.", "www"], 1, 3),
     parcel: bm(["NNNNNNN", "NnnynnN", "nnnynnb", "nnnnnnb", "nbbbbbb"], 3, 5),
     sign: signMaker(),
+    notes: boardNotes(),
     sorter,
     waysIn: meeting(m, arms(2, 2, 1, 1), headsOn(m, [0, 2]), 1),
     icon: icons({ m, item, sorter, depot: bm(DEPOT_PIC, 0, 0).c }),

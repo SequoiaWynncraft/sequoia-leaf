@@ -10,6 +10,7 @@
  * them. It is drawn whole or not at all: one two pixels across is one across for the last third of
  * its life, and then it is gone.
  */
+import { rgb as channels } from "@sequoia-leaf/kit/pix.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
@@ -68,13 +69,14 @@ export function dot(colour: string, size: number): HTMLCanvasElement {
 /** The colour of the floor at a point, red, green and blue; nothing where there is no floor. */
 export type Floor = (x: number, y: number) => readonly [number, number, number] | null;
 
-/** The yard's floor as its kept picture has it (`art/ground.ts`): the picture a figure walks on. */
+/**
+ * The yard's floor as the yard keeps it (`art/ground.ts`): the picture a figure walks on, its own
+ * colour under whatever lies on it, worked out for the one pixel under a foot.
+ */
 export function floorOf(ground: Ground): Floor {
   return (x, y) => {
-    const [px, py] = [Math.floor(x - ground.x), Math.floor(y - ground.y)];
-    if (px < 0 || py < 0 || px >= ground.w || py >= ground.h) return null;
-    const d = ground.owned.getContext("2d")?.getImageData(px, py, 1, 1).data;
-    return d ? [d[0] ?? 0, d[1] ?? 0, d[2] ?? 0] : null;
+    const col = ground.colour(Math.floor(x), Math.floor(y));
+    return col === null ? null : channels(col);
   };
 }
 

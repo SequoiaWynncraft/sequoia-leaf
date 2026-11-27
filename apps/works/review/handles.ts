@@ -112,6 +112,12 @@ declare global {
        * how many pieces are on it. The yard is run that far ahead of Leaf, and waits there for it.
        */
       bench: (frames: number, hz?: number) => { ms: Record<string, number>; picture: Pt; pieces: number };
+      /**
+       * A frame after each move, one after another as the screen would show them: a move puts the
+       * middle of the view on a tile (`[x, y]`) or zooms a step (`1` in, `-1` out). Says each frame's
+       * milliseconds by part, its whole, and the step it was drawn at.
+       */
+      sweep: (moves: readonly ([number, number] | number)[]) => { ms: Record<string, number>; z: number }[];
       pick: (tool: Named, dir?: Dir) => void;
       /** Chooses the grade the kind in hand is built at, as its button over the toolbar does. */
       grade: (grade: number) => void;
@@ -243,6 +249,27 @@ export function installHandles(p: Page): void {
       S.world = yard;
       p.hold(held, lead);
       return { ms, picture: { x: picture.width, y: picture.height }, pieces };
+    },
+    sweep(moves) {
+      const was = spent.on;
+      const kept = spent.ms;
+      spent.on = true;
+      const out = moves.map((move) => {
+        if (typeof move === "number") zoom(move, window.innerWidth / 2, window.innerHeight / 2);
+        else look(move[0] * TILE + 8, move[1] * TILE + 8, true);
+        spent.ms = {};
+        const began = performance.now();
+        lap();
+        p.advance(1 / 60, null);
+        lap("page");
+        p.draw(0);
+        taken.drawImage(picture, 0, 0);
+        lap("flush");
+        return { ms: { ...spent.ms, whole: performance.now() - began }, z: S.view.z };
+      });
+      spent.on = was;
+      spent.ms = kept;
+      return out;
     },
     pick(name, dir) {
       if (dir !== undefined) S.dir = dir;

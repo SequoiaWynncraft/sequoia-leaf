@@ -10,7 +10,7 @@
  */
 import { type Land, NONE, type Place, type Solid, TILE_PX, type Yard, yardSolid } from "@sequoia-leaf/factory";
 import { bake, type Body, FOOT_X, FOOT_Y, lookFor, paintSkin, posed, skinFigure } from "@sequoia-leaf/kit/skin.ts";
-import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
+import { makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
 
 import type { Ground } from "../art/ground.ts";
 import { S } from "../state.ts";
@@ -86,14 +86,19 @@ export function leave(): void {
  */
 export function arrive(who: { readonly id: string; readonly name: string }, ground: Ground): boolean {
   if (S.visiting || S.alone) return false;
-  placeYou(doorOf(S.world.land), ground);
-  const mine = here.you;
-  if (!mine) return false;
-  mine.body = bake(paintSkin(lookFor(who.name)));
+  const mine = comeIn(who.name, ground);
   skinFigure(who.id, (body) => {
     mine.body = body;
   });
   return true;
+}
+
+/** You stand at the depot's door wearing the look the town gives `name` with no skin: as you arrive, and on a review page's own yard. */
+export function comeIn(name: string, ground: Ground | null): You {
+  placeYou(doorOf(S.world.land), ground);
+  const mine = must(here.you, "you, just placed");
+  mine.body = bake(paintSkin(lookFor(name)));
+  return mine;
 }
 
 /** You are put back at the depot's door, as when the Works opens: a yard was put in place of the one you stood in. */

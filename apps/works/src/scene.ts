@@ -8,8 +8,10 @@
  * ground exactly as far as power reaches, and dim together when the yard is short of it.
  *
  * Most of a frame is what the last one showed, so what stays is kept and only what moved is drawn:
- * the floor as one picture, each kind of belt laid in one go, everything that stands up on a
- * picture that is mended where something changed, and the lines between pylons on another.
+ * the floor in patches painted near the view (`floor.ts`), each kind of belt laid in one go,
+ * everything that stands up on a picture round the view that is mended where something changed
+ * (`around.ts`), and the lines between pylons in patches of their own (`wires.ts`). Nothing kept is
+ * as large as the land, so a frame costs the same on any size of land.
  */
 
 import {
@@ -42,16 +44,18 @@ import { CORAL, CREAM, GOLD, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { bubble, bubbleSize, wrap } from "@sequoia-leaf/kit/signs.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
-import { clamp, type Ctx, hash, makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { clamp, type Ctx, makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { walkers } from "./actors.ts";
+import { Around } from "./around.ts";
 import { type Arms, beltTile, marksOf, PAINTS, ride, STEPS, TILE, woodOf } from "./art/belts.ts";
-import { BEYOND, glint, type Ground } from "./art/ground.ts";
+import { type Box, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
 import { DEPOT as DEPOT_ART, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
 import { aimBox, boxIn, drawnFrom, heldIn, markCovers, pointersOn } from "./big.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
+import { Floor, handsNow } from "./floor.ts";
 import { bits, floaters, rings } from "./fx.ts";
 import { heldBox, heldMarks } from "./held.ts";
 import { straight } from "./kinds/carrier.ts";
@@ -65,6 +69,7 @@ import { pinMark } from "./pinned.ts";
 import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, standsOn, tileNudge } from "./state.ts";
 import { cameFrom, dirAt, hooded } from "./tiles.ts";
 import { drawShades, eachTrunk } from "./trees.ts";
+import { Wires } from "./wires.ts";
 
 /** What the frame needs to know about the moment: how far into the next tick it is, and how the yard is going. */
 export interface Moment {
@@ -101,13 +106,6 @@ let markSize = 1;
 let lost = 0;
 /** The browser took the kept pictures' memory back, or the page was put away: nothing kept is trusted. */
 export const wipe = (): void => void lost++;
-/** A picture as big as the ground, kept between frames. */
-function sheet(gr: Ground): { c: HTMLCanvasElement; g: Ctx } {
-  const made = makeCanvas(gr.w, gr.h, true);
-  made.c.addEventListener("contextrestored", wipe);
-  return made;
-}
-
 function radial(size: number, stops: readonly (readonly [number, string])[]): HTMLCanvasElement {
   const { c, g } = makeCanvas(size, size);
   const gr = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
@@ -156,15 +154,22 @@ function pool(g: Ctx, src: HTMLCanvasElement, x: number, y: number, r: number): 
   g.drawImage(at, x + edge, y + edge);
 }
 
+/** A kept picture made `w` by `h`, if it is not already. */
+function fit(b: { c: HTMLCanvasElement; g: Ctx }, w: number, h: number): void {
+  if (b.c.width === w && b.c.height === h) return;
+  b.c.width = w;
+  b.c.height = h;
+  b.g.imageSmoothingEnabled = false;
+}
+
+/** The picture's size; the dusk is made as large when it is next laid. */
 export function sizeBuffers(w: number, h: number, marks: number): void {
   markSize = marks;
-  for (const b of [buf, dusk]) {
-    if (b.c.width === w && b.c.height === h) continue;
-    b.c.width = w;
-    b.c.height = h;
-    b.g.imageSmoothingEnabled = false;
-  }
+  fit(buf, w, h);
 }
+
+/** Whether the page has laid its floor yet: the first time paints the view before laying it. */
+const opened = { yet: false };
 
 // ---------- things that stand up, far to near ----------
 
@@ -215,8 +220,8 @@ const known = new Map<HTMLCanvasElement, number>();
 const float = new Float64Array(1);
 const halves = new Uint32Array(float.buffer);
 let stood: {
-  c: HTMLCanvasElement;
-  g: Ctx;
+  /** The picture, kept round the view (`around.ts`). */
+  around: Around;
   cols: number;
   rows: number;
   /** What stood over each tile's worth of the picture when it was last drawn, and now: a sum that changes when anything there does. */
@@ -227,23 +232,38 @@ let stood: {
 } | null = null;
 
 /**
- * Everything listed, far to near, on a picture as big as the ground that is kept between frames.
- * Only the tiles where something listed has changed since the last frame (another pose, a step,
- * come or gone) are wiped and drawn again, with the part of whatever else stands over them.
+ * Everything listed, far to near, on a picture of the yard round the view kept between frames. Only
+ * the tiles where something listed has changed since the last frame (another pose, a step, come or
+ * gone), or that have come into the picture as the view moved, are wiped and drawn again, with the
+ * part of whatever else stands over them.
  */
-function standing(gr: Ground): HTMLCanvasElement {
+function standing(gr: Ground, view: Box): Around {
   if (!stood) {
     const cols = Math.ceil(gr.w / TILE);
     const rows = Math.ceil(gr.h / TILE);
     const tiles = (): Uint32Array => new Uint32Array(cols * rows);
-    stood = { ...sheet(gr), cols, rows, was: tiles(), now: tiles(), torn: new Uint8Array(cols * rows), lost: -1 };
+    const around = new Around(wipe);
+    stood = { around, cols, rows, was: tiles(), now: tiles(), torn: new Uint8Array(cols * rows), lost: -1 };
   }
   const k = stood;
-  const { g, cols, rows, now, was, torn } = k;
+  const { cols, rows, now, was, torn } = k;
   if (k.lost !== lost) {
     k.lost = lost;
-    was.fill(1);
+    k.around.wipe();
   }
+  const came = k.around.follow(view, 2 * TILE, TILE, gr.x, gr.y);
+  if (!came) was.fill(1);
+  else
+    for (const b of came) {
+      const x0 = clamp(Math.floor((b.x - gr.x) / TILE), 0, cols);
+      const x1 = clamp(Math.ceil((b.x + b.w - gr.x) / TILE), 0, cols);
+      for (
+        let ty = clamp(Math.floor((b.y - gr.y) / TILE), 0, rows);
+        ty < clamp(Math.ceil((b.y + b.h - gr.y) / TILE), 0, rows);
+        ty++
+      )
+        was.fill(1, ty * cols + x0, ty * cols + x1);
+    }
   now.fill(0);
   for (let n = 0; n < used; n++) {
     const d = listed[n];
@@ -273,9 +293,15 @@ function standing(gr: Ground): HTMLCanvasElement {
   }
   k.was = now;
   k.now = was;
-  if (changed === 0) return k.c;
-  // Few tiles: only they are drawn on. Many (a yard just opened, a long way looked across): all of it.
-  const all = changed * 6 >= now.length;
+  if (changed > 0) mendTorn(gr, k.around, changed * 6 >= now.length);
+  return k.around;
+}
+
+/** Draws again what stands over the tiles torn: few, only they; many (a yard just opened, a long way looked across), all of it. */
+function mendTorn(gr: Ground, around: Around, all: boolean): void {
+  const k = stood;
+  if (!k) return;
+  const { cols, torn } = k;
   order.length = 0;
   for (let n = 0; n < used; n++) {
     const d = listed[n];
@@ -286,36 +312,19 @@ function standing(gr: Ground): HTMLCanvasElement {
     if (over) order.push(d);
   }
   order.sort((p, q) => p.z - q.z);
-  if (all) mend(g, gr, 0, 0, k.c.width, k.c.height);
+  if (all) around.mend(gr, order);
   else
-    for (let i = 0; i < now.length; i++) {
+    for (let i = 0; i < torn.length; i++) {
       if (torn[i] !== 1) continue;
       // A run of torn tiles along a row is mended as one.
       let run = 1;
       while ((i + run) % cols !== 0 && torn[i + run] === 1) run++;
-      const left = (i % cols) * TILE;
-      const top = Math.floor(i / cols) * TILE;
-      mend(g, gr, left, top, left + run * TILE, top + TILE);
+      around.mend(
+        { x: (i % cols) * TILE + gr.x, y: Math.floor(i / cols) * TILE + gr.y, w: run * TILE, h: TILE },
+        order,
+      );
       i += run - 1;
     }
-  g.globalAlpha = 1;
-  return k.c;
-}
-
-/** Wipes a part of the kept picture, and draws again the part of each thing in `order` that lies in it. */
-function mend(g: Ctx, gr: Ground, left: number, top: number, right: number, bottom: number): void {
-  g.clearRect(left, top, right - left, bottom - top);
-  for (const d of order) {
-    const x = d.x - gr.x;
-    const y = d.y - gr.y;
-    const l = Math.max(x, left);
-    const t = Math.max(y, top);
-    const wide = Math.min(x + d.c.width, right) - l;
-    const high = Math.min(y + d.c.height, bottom) - t;
-    if (wide <= 0 || high <= 0) continue;
-    g.globalAlpha = d.a;
-    g.drawImage(d.c, l - x, t - y, wide, high, l, t, wide, high);
-  }
 }
 const stand = (s: Sprite, x: number, y: number, z: number, a = 1): void => {
   put(s.c, x - s.ax, y - s.ay, z, a);
@@ -553,142 +562,8 @@ function grown(s: Sprite): Sprite {
   return made;
 }
 
-const WIRE = "#2a1519";
-/** A line between two pylons: each pixel along its sag in the yard's pixels, which of them no other line crosses, and where its glint last was. */
-interface Line {
-  xs: Int16Array;
-  ys: Int16Array;
-  alone: Uint8Array;
-  lit: number;
-}
-let strung: {
-  c: HTMLCanvasElement;
-  g: Ctx;
-  of: Layout | null;
-  lost: number;
-  lines: Line[];
-  /** The pixels more than one stretch of line lies on, as line and place along it, in the order they are drawn. */
-  shared: number[];
-  /** Where each line was made fast when they were drawn: its two ends, across and down. */
-  ends: string;
-} | null = null;
-
-/**
- * The sagging lines between pylons, with a glint running along each. The lines are drawn once for
- * each change to the yard and kept, as dark pixels that go on the picture faint; a glint is cut out
- * of the kept line where it is now and put back where it was. A pixel two stretches of line lie on
- * is darker for it, so those few are drawn every frame, in their order.
- */
-function wires(g: Ctx, gr: Ground, L: Layout, cx: number, cy: number): void {
-  const s = (strung ??= { ...sheet(gr), of: null, lost: -1, lines: [], shared: [], ends: "" });
-  const ends = s.of === L ? s.ends : L.wires.join();
-  s.of = L;
-  if (ends !== s.ends || s.lost !== lost) {
-    s.ends = ends;
-    s.lost = lost;
-    const hits = new Map<number, number>();
-    const at = (line: Line, k: number): number => ((line.ys[k] ?? 0) + 4096) * 8192 + (line.xs[k] ?? 0) + 4096;
-    s.lines = [];
-    for (let w = 0; w + 3 < L.wires.length; w += 4) {
-      const [ax = 0, ay = 0, bx = 0, by = 0] = L.wires.subarray(w, w + 4);
-      const len = Math.hypot(bx - ax, by - ay);
-      const n = Math.max(2, Math.round(len / 1.2));
-      const sag = Math.min(9, len * 0.07);
-      const line = { xs: new Int16Array(n + 1), ys: new Int16Array(n + 1), alone: new Uint8Array(n + 1), lit: -9 };
-      for (let k = 0; k <= n; k++) {
-        const u = k / n;
-        line.xs[k] = Math.round(ax + (bx - ax) * u);
-        line.ys[k] = Math.round(ay + (by - ay) * u + sag * 4 * u * (1 - u));
-        hits.set(at(line, k), (hits.get(at(line, k)) ?? 0) + 1);
-      }
-      s.lines.push(line);
-    }
-    s.shared = [];
-    s.g.clearRect(0, 0, gr.w, gr.h);
-    s.g.fillStyle = WIRE;
-    s.lines.forEach((line, n) => {
-      for (let k = 0; k < line.xs.length; k++) {
-        if (hits.get(at(line, k)) !== 1) s.shared.push(n, k);
-        else {
-          line.alone[k] = 1;
-          s.g.fillRect((line.xs[k] ?? 0) - gr.x, (line.ys[k] ?? 0) - gr.y, 1, 1);
-        }
-      }
-    });
-  }
-  s.g.fillStyle = WIRE;
-  for (let n = 0; n < s.lines.length; n++) {
-    const line = s.lines[n];
-    if (!line) continue;
-    // The glint starts from a different place on every line, by where the line is on the screen.
-    const ax = L.wires[n * 4] ?? 0;
-    const ay = L.wires[n * 4 + 1] ?? 0;
-    const spot = Math.floor(((S.t * 0.7 + hash(ax - cx + corner.x, ay - cy + corner.y, 9)) % 1) * (line.xs.length - 1));
-    if (spot === line.lit) continue;
-    for (let k = line.lit - 1; k <= line.lit + 1; k++)
-      if (line.alone[k] === 1) s.g.fillRect((line.xs[k] ?? 0) - gr.x, (line.ys[k] ?? 0) - gr.y, 1, 1);
-    for (let k = spot - 1; k <= spot + 1; k++)
-      if (line.alone[k] === 1) s.g.clearRect((line.xs[k] ?? 0) - gr.x, (line.ys[k] ?? 0) - gr.y, 1, 1);
-    line.lit = spot;
-  }
-  g.globalAlpha = 0.6;
-  blit(g, s.c, cx - gr.x, cy - gr.y, g.canvas.width, g.canvas.height, 0, 0);
-  // A pixel at a time, a thousand or more of them on a large yard: the colour is given only when it
-  // changes, as reading a colour again for each pixel costs more than drawing it.
-  g.fillStyle = GOLD[2];
-  for (const line of s.lines)
-    for (let k = line.lit - 1; k <= line.lit + 1; k++)
-      if (line.alone[k] === 1) g.fillRect((line.xs[k] ?? 0) - cx, (line.ys[k] ?? 0) - cy, 1, 1);
-  let fill: string = GOLD[2];
-  for (let j = 0; j < s.shared.length; j += 2) {
-    const line = s.lines[s.shared[j] ?? 0];
-    const k = s.shared[j + 1] ?? 0;
-    if (!line) continue;
-    const col = Math.abs(k - line.lit) < 2 ? GOLD[2] : WIRE;
-    if (col !== fill) {
-      g.fillStyle = col;
-      fill = col;
-    }
-    g.fillRect((line.xs[k] ?? 0) - cx, (line.ys[k] ?? 0) - cy, 1, 1);
-  }
-  g.globalAlpha = 1;
-}
-
-function blit(
-  g: Ctx,
-  src: HTMLCanvasElement,
-  sx: number,
-  sy: number,
-  w: number,
-  h: number,
-  dx: number,
-  dy: number,
-): void {
-  // Only the part that is both in the source and on the picture.
-  const x0 = Math.max(0, sx, sx - dx);
-  const y0 = Math.max(0, sy, sy - dy);
-  const x1 = Math.min(src.width, sx + w, sx - dx + g.canvas.width);
-  const y1 = Math.min(src.height, sy + h, sy - dy + g.canvas.height);
-  if (x1 <= x0 || y1 <= y0) return;
-  g.drawImage(src, x0, y0, x1 - x0, y1 - y0, dx + x0 - sx, dy + y0 - sy, x1 - x0, y1 - y0);
-}
-
-let note: HTMLCanvasElement | null = null;
-let noteDone: HTMLCanvasElement | null = null;
-function notes(): readonly [HTMLCanvasElement, HTMLCanvasElement] {
-  if (!note || !noteDone) {
-    const a = makeCanvas(2, 4);
-    R(a.g, 0, 0, 2, 4, CREAM);
-    R(a.g, 0, 1, 1, 1, "#a35d3b");
-    R(a.g, 0, 3, 2, 1, "#cbb894");
-    const b = makeCanvas(2, 4);
-    R(b.g, 0, 0, 2, 4, GOLD[2]);
-    R(b.g, 0, 3, 2, 1, GOLD[0]);
-    note = a.c;
-    noteDone = b.c;
-  }
-  return [note, noteDone];
-}
+/** The lines between pylons (`wires.ts`). */
+const wiring = new Wires(wipe);
 
 // ---------- many pieces at once: the area marked, and the pieces in hand ----------
 
@@ -806,36 +681,18 @@ function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, 
   corners(g, box.x * TILE - cx, box.y * TILE - cy, box.w * TILE, box.h * TILE, bad ? CORAL : GOLD[2], true);
 }
 
-/**
- * The floor as the yard has it now: the forest's, with the yard's own over every plot it owns and
- * has cleared. It is painted again when those plots are not the ones it was painted for.
- */
-let floored: {
-  c: HTMLCanvasElement;
-  g: Ctx;
-  of: Layout | null;
-  clearing: number;
-  plots: string;
-  lost: number;
-} | null = null;
-function floor(gr: Ground, L: Layout): HTMLCanvasElement {
-  const f = (floored ??= { ...sheet(gr), of: null, clearing: 0, plots: "", lost: -1 });
-  if (f.of === L && f.clearing === S.clearing.size && f.lost === lost) return f.c;
-  const cleared = L.yard.land.plots.filter((plot, n) => L.owned[n] && !S.clearing.has(plot.plot));
-  const plots = cleared.map((plot) => plot.plot).join();
-  const painted = plots === f.plots && f.lost === lost;
-  f.of = L;
-  f.clearing = S.clearing.size;
-  f.plots = plots;
-  f.lost = lost;
-  if (painted) return f.c;
-  f.g.drawImage(gr.wild, 0, 0);
-  for (const plot of cleared) {
-    const x = plot.x * TILE - gr.x;
-    const y = plot.y * TILE - gr.y;
-    f.g.drawImage(gr.owned, x, y, plot.w * TILE, plot.h * TILE, x, y, plot.w * TILE, plot.h * TILE);
+/** How many patches of the floor are still to be painted, for a review page waiting for the land to fill in. */
+export const floorWaiting = (): number | null => floored?.floor.waiting ?? null;
+
+/** The floor on the screen (`floor.ts`): for the ground it was opened on, and the count of losses it last saw. */
+let floored: { gr: Ground; floor: Floor; lost: number } | null = null;
+function floorFor(gr: Ground): Floor {
+  if (floored?.gr !== gr) floored = { gr, floor: new Floor(gr, wipe), lost };
+  if (floored.lost !== lost) {
+    floored.lost = lost;
+    floored.floor.wipe();
   }
-  return f.c;
+  return floored.floor;
 }
 
 /** Tiles that all show the same picture, as one outline in the yard's pixels: the picture fills them in one go. */
@@ -932,6 +789,8 @@ interface Frame {
   readonly g: Ctx;
   readonly W: number;
   readonly H: number;
+  /** The picture's box of the yard: `cx`, `cy`, `W`, `H`. */
+  readonly view: Box;
   readonly cx: number;
   readonly cy: number;
   readonly w: Yard;
@@ -957,6 +816,7 @@ const depotAt = (f: Frame): { dx: number; dfoot: number } => ({
  * what it draws reaches.
  */
 export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
+  const began = performance.now();
   const g = buf.g;
   const W = buf.c.width;
   const H = buf.c.height;
@@ -967,11 +827,18 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
   const w = S.world;
   const L: Layout = layout(w);
   if (S.view.z < 1) {
-    // Further out than a screen pixel for each of the yard's, the yard is its plan (`far.ts`).
+    // Further out than a screen pixel for each of the yard's, the yard is its plan (`far.ts`); what
+    // only the picture near uses is let go of until the view comes back in.
+    fit(dusk, 1, 1);
+    stood?.around.release();
+    wiring.release();
     const [dx, dy] = drawPlan(g, w, L, corner.x, corner.y);
     lap("plan");
     drawPlanMarks(g, w, dx, dy);
     lap("marks");
+    // The land is painted ahead all the same, for when the view comes back in.
+    floorFor(art.ground).plan(handsNow(L, S.clearing), { x: S.cam.x + S.view.w / 2, y: S.cam.y + S.view.h / 2 }, began);
+    lap("painting");
     return buf.c;
   }
   if (w !== drawn) carry(w);
@@ -984,6 +851,7 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     g,
     W,
     H,
+    view: { x: cx, y: cy, w: W, h: H },
     cx,
     cy,
     w,
@@ -1005,33 +873,32 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
   lap("dusk");
   marksLayer(f);
   lap("marks");
+  // In what is left of the frame, the floor that is missing.
+  floorFor(art.ground).paintSpare(began);
+  lap("painting");
   return buf.c;
 }
 
 /** The floor: the forest's everywhere, the yard's own over it where the land is the yard's, the stream's glints and the rings things land with. */
 function floorLayer(f: Frame): void {
-  const { g, W, H, cx, cy, L, tx0, ty0, tx1, ty1 } = f;
+  const { g, W, H, cx, cy, L, tx0, ty0, tx1, ty1, view } = f;
   const { land } = f.w;
-  const gr = f.art.ground;
-  if (cx < gr.x || cy < gr.y || cx + W > gr.x + gr.w || cy + H > gr.y + gr.h) {
-    g.fillStyle = BEYOND;
-    g.fillRect(0, 0, W, H);
+  const floor = floorFor(f.art.ground);
+  // Bought a moment ago: the cleared ground opens out from the signpost, over the forest's floor.
+  const hands = handsNow(L, S.clearing);
+  floor.lay(g, view, hands, !opened.yet);
+  opened.yet = true;
+  for (const n of hands.clearing) {
+    const plot = land.plots[n];
+    const at = plot && S.clearing.get(plot.plot);
+    if (!at) continue;
+    g.save();
+    g.beginPath();
+    g.arc(at.x - cx, at.y - cy, Math.max(1, (S.t - at.at) * 260), 0, Math.PI * 2);
+    g.clip();
+    floor.layClearing(g, view, n);
+    g.restore();
   }
-  blit(g, floor(gr, L), cx - gr.x, cy - gr.y, W, H, 0, 0);
-  if (S.clearing.size > 0)
-    for (const plot of land.plots) {
-      // Bought a moment ago: the cleared ground opens out from the signpost.
-      const clearing = S.clearing.get(plot.plot);
-      if (!clearing) continue;
-      const px = plot.x * TILE;
-      const py = plot.y * TILE;
-      g.save();
-      g.beginPath();
-      g.arc(clearing.x - cx, clearing.y - cy, Math.max(1, (S.t - clearing.at) * 260), 0, Math.PI * 2);
-      g.clip();
-      blit(g, gr.owned, px - gr.x, py - gr.y, plot.w * TILE, plot.h * TILE, px - cx, py - cy);
-      g.restore();
-    }
 
   drawShades(g, f.art, cx, cy, W, H);
   for (let ty = ty0; ty <= ty1; ty++)
@@ -1142,7 +1009,7 @@ function standingLayer(f: Frame): void {
   const dt = dfoot - ds.ay;
   if (dl < W && dl + ds.c.width > 0 && dt < H && dfoot > -8) {
     stand(ds, dx, dfoot, dz);
-    const [paper, done] = notes();
+    const [paper, done] = art.notes;
     for (let n = 0; n < w.board.length; n++) {
       const o = w.board[n];
       if (o)
@@ -1195,7 +1062,7 @@ function standingLayer(f: Frame): void {
   // The gnomes, and the member in their own yard.
   eachPerson(art, cx, cy, put);
 
-  blit(g, standing(gr), cx - gr.x, cy - gr.y, W, H, 0, 0);
+  standing(gr, f.view).lay(g, f.view);
 
   // What the depot takes in hops over the sill and is gone; what a cart stop takes hops into its cart, which rolls under with it.
   for (let n = 0; n < L.intoDepot.length; n++) {
@@ -1240,7 +1107,7 @@ function standingLayer(f: Frame): void {
     g.globalAlpha = 1;
   }
 
-  wires(g, gr, L, cx, cy);
+  wiring.draw(g, f.view, L, corner, lost);
 
   for (const b of bits) {
     if (b.glow) continue;
@@ -1263,6 +1130,7 @@ function lamps(f: Frame): void {
 function lampLayer(f: Frame): void {
   const { g, W, H, cx, cy } = f;
   lamps(f);
+  fit(dusk, W, H);
   const d = dusk.g;
   d.globalCompositeOperation = "copy";
   d.globalAlpha = 1;

@@ -95,16 +95,34 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
  * is how many rows from the top are lost in the canopy's shade; `fade` rows at the very top thin
  * out to nothing, so that a trunk standing in the yard does not hide what is behind it.
  */
+/** How big a trunk `hw` wide and `height` tall is, and where its foot is in its picture (`trunk`). */
+export function trunkBox(hw: number, height: number): { w: number; h: number; ax: number; ay: number } {
+  const w = (hw + Math.round(hw * 0.5)) * 2 + 4;
+  return { w, h: height, ax: Math.round(w / 2), ay: height - 1 };
+}
+
 export function trunk(hw: number, height: number, seed: number, dim: number, fade = 0): Sprite {
+  const { w, ax, ay } = trunkBox(hw, height);
+  return { c: paint(w, height, trunkPixel(hw, height, seed, dim, fade)), ax, ay };
+}
+
+/** The colour of each pixel of a trunk's picture (`trunk`), or null where it is clear. */
+export function trunkPixel(
+  hw: number,
+  height: number,
+  seed: number,
+  dim: number,
+  fade = 0,
+): (x: number, y: number) => string | null {
   const flare = Math.round(hw * 0.5);
   const rootH = hw * 1.5;
-  const w = (hw + flare) * 2 + 4;
+  const { w } = trunkBox(hw, height);
   const cx = w / 2;
   const half = (y: number): number =>
     hw + flare * clamp((y - (height - rootH)) / rootH, 0, 1) ** 2.6 + Math.sin(y * 0.021 + seed) * 1.4;
   const foot = (x: number): number =>
     height - 2 - 3.2 * (0.5 + 0.5 * Math.sin(x * 0.2 + seed * 2.1)) - 2 * (0.5 + 0.5 * Math.sin(x * 0.57 + seed));
-  const c = paint(w, height, (x, y) => {
+  return (x, y) => {
     const hf = half(y);
     const off = Math.abs(x + 0.5 - cx);
     if (off >= hf || y > foot(x)) return null;
@@ -119,25 +137,31 @@ export function trunk(hw: number, height: number, seed: number, dim: number, fad
     idx -= clamp((dim - y) / 46, 0, 4);
     if (off > hf - 1.3 || y > foot(x) - 1) idx = Math.min(idx, 1.4);
     return tone(TRUNK_RAMP, idx);
-  });
-  return { c, ax: Math.round(cx), ay: height - 1 };
+  };
 }
 
-/** The dark ferns along the near edge of the clearing, `w` pixels wide. */
-export function nearFerns(w: number, h: number): HTMLCanvasElement {
-  const { c, g } = makeCanvas(w, h);
+/** The dark ferns along the near edge of the clearing, `w` pixels wide: `wide` of them from `from` across, a fern a step. */
+export function* nearFerns(w: number, h: number, from = 0, wide = w): Generator<void, HTMLCanvasElement, undefined> {
+  const { c, g } = makeCanvas(wide, h);
+  g.translate(-from, 0);
   const floor = g.createLinearGradient(0, h * 0.25, 0, h * 0.7);
   floor.addColorStop(0, "rgba(20,31,28,0)");
   floor.addColorStop(1, "rgba(20,31,28,1)");
   g.fillStyle = floor;
   g.fillRect(0, h * 0.25, w, h);
+  // A fern reaches less than 48 pixels either way from its foot: those further from the part drawn are left out.
+  const shows = (x: number): boolean => x > from - 48 && x < from + wide + 48;
   for (let i = 0; i * 22 < w + 22; i++) {
     const x = 6 + i * 22 + Math.round((hash(i, 2, 84) - 0.5) * 10);
+    if (!shows(x)) continue;
     drawFern(g, x, h * 0.55 + Math.round(hash(i, 4, 86) * 8), 18 + hash(i, 3, 85) * 10, [DEEP[1], DEEP[2]], 100 + i);
+    yield;
   }
   for (let i = 0; i * 34 < w + 34; i++) {
     const x = i * 34 + Math.round(hash(i, 5, 87) * 16);
+    if (!shows(x)) continue;
     drawFern(g, x, h * 0.8 + Math.round(hash(i, 6, 88) * 6), 24 + hash(i, 7, 89) * 8, [DEEP[0], DEEP[1]], 200 + i);
+    yield;
   }
   return c;
 }

@@ -400,10 +400,10 @@ async function boot(): Promise<Page | null> {
     // In the town, the town says when the member's Leaf changes; opened on its own, the yard listens itself.
     keepLeaf();
   }
+  // A phone may empty the pictures the frame keeps while the page is put away: each says so itself
+  // (`contextrestored`), and only then is it drawn again, so coming back shows what was painted.
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") keepSettings();
-    // A phone may empty the pictures the frame keeps while the page is put away.
-    else wipe();
   });
 
   callers();

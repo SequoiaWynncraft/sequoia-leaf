@@ -98,7 +98,7 @@ describe("a ring of plots round the land", () => {
 });
 
 describe("the version of the Works' rules", () => {
-  test("covers the land: the plots table and the land made from it are modules the rules run", () => {
+  test("covers the land: the plots table, its rings and the land made from it are modules the rules run", () => {
     const root = join(import.meta.dir, "..", "..", "..");
     const file = (path: string): string | null => {
       try {
@@ -109,7 +109,11 @@ describe("the version of the Works' rules", () => {
     };
     const modules = [...rulesModules("works", file).keys()];
     expect(modules).toEqual(
-      expect.arrayContaining(["packages/factory/src/content/plots.ts", "packages/factory/src/land.ts"]),
+      expect.arrayContaining([
+        "packages/factory/src/content/plots.ts",
+        "packages/factory/src/content/rings/first.ts",
+        "packages/factory/src/land.ts",
+      ]),
     );
   });
 });
