@@ -516,30 +516,40 @@ export function deleteBlueprint(y: Yard, slot: number): boolean {
 
 // ---------- raising an area ----------
 
-/** The pieces on some tiles that can be raised: of a kind with a grade, below the highest the yard may build of it. */
-const raisable = (y: Yard, tiles: readonly number[]): Piece[] =>
-  piecesAt(y, tiles).filter((p) => isGraded(p.kind) && (p.grade ?? 1) < highest(y.open, p.kind));
+/** The grade each piece is raised to: the highest the yard may build of its kind, or with `to`, that grade (a card's Upgrade, one grade up). */
+const raisedTo = (y: Yard, p: Piece, to?: number): number => to ?? highest(y.open, p.kind);
 
-/** What raising every piece on some tiles to the highest grade the yard may build of its kind costs. */
-export const upgradePrice = (y: Yard, tiles: readonly number[]): number =>
-  raisable(y, tiles).reduce(
-    (sum, p) => sum + price(p.kind, highest(y.open, p.kind), p.span) - price(p.kind, gradeOf(p.kind, p.grade), p.span),
+/** The pieces on some tiles that can be raised: of a kind with a grade, below the grade they would be raised to, which the yard may build. */
+const raisable = (y: Yard, tiles: readonly number[], to?: number): Piece[] =>
+  piecesAt(y, tiles).filter((p) => {
+    const g = raisedTo(y, p, to);
+    return isGraded(p.kind) && (p.grade ?? 1) < g && g <= highest(y.open, p.kind);
+  });
+
+/** What raising every piece on some tiles to the highest grade the yard may build of its kind (or to `to`) costs. */
+export const upgradePrice = (y: Yard, tiles: readonly number[], to?: number): number =>
+  raisable(y, tiles, to).reduce(
+    (sum, p) => sum + price(p.kind, raisedTo(y, p, to), p.span) - price(p.kind, gradeOf(p.kind, p.grade), p.span),
     0,
   );
 
 /** Why the pieces on some tiles cannot be raised with `coins` in the purse, or nothing if they can. */
-export function upgradeRefusal(y: Yard, tiles: readonly number[], coins: number): string | null {
-  if (raisable(y, tiles).length === 0) return "Nothing here can be raised";
-  const short = upgradePrice(y, tiles) - coins;
+export function upgradeRefusal(y: Yard, tiles: readonly number[], coins: number, to?: number): string | null {
+  if (raisable(y, tiles, to).length === 0) return "Nothing here can be raised";
+  const short = upgradePrice(y, tiles, to) - coins;
   return short > 0 ? `Not enough Coins: ${short} short` : null;
 }
 
-/** Raises every piece on some tiles that can be raised to the highest grade the yard may build of its kind, all of them or none, and says what it cost. */
-export function upgrade(y: Yard, tiles: readonly number[], coins: number): Spent {
-  const why = upgradeRefusal(y, tiles, coins);
+/**
+ * Raises every piece on some tiles that can be raised to the highest grade the yard may build of its
+ * kind, or with `to` to that grade, all of them or none, and says what it cost: each is laid again
+ * where it stands, as a build over it at that grade lays it, for the same Coins.
+ */
+export function upgrade(y: Yard, tiles: readonly number[], coins: number, to?: number): Spent {
+  const why = upgradeRefusal(y, tiles, coins, to);
   if (why !== null) return { ok: false, why };
-  const cost = upgradePrice(y, tiles);
-  for (const p of raisable(y, tiles))
-    setDown(y, p.kind, p.x, p.y, p.dir, Infinity, { grade: highest(y.open, p.kind), span: p.span });
+  const cost = upgradePrice(y, tiles, to);
+  for (const p of raisable(y, tiles, to))
+    setDown(y, p.kind, p.x, p.y, p.dir, Infinity, { grade: raisedTo(y, p, to), span: p.span });
   return { ok: true, cost };
 }

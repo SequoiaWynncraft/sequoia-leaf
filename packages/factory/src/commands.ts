@@ -102,7 +102,8 @@ interface Carries {
   copy: At & { readonly tiles: readonly number[]; readonly turns: Dir };
   remove: At;
   clear: { readonly tiles: readonly number[] };
-  upgrade: { readonly tiles: readonly number[] };
+  /** With `grade`, raised to it, not the highest; for one tile (a card's Upgrade) with no tool. */
+  upgrade: { readonly tiles: readonly number[]; readonly grade?: number };
   saveBlueprint: { readonly slot: number; readonly tiles: readonly number[] };
   /** Every piece in the yard, as a plan of the whole yard (`whole.ts`). */
   saveYard: { readonly slot: number };
@@ -333,10 +334,10 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
   },
   upgrade: {
     refused: "cannot_upgrade",
-    lock: needs({ use: "upgrade" }),
-    read: (_v, f) => f.tiles && { do: "upgrade", tiles: f.tiles },
-    write: (a) => ({ tiles: a.tiles }),
-    act: (y, a, coins, no) => spent(y, upgrade(y, a.tiles, coins), REASON.upgrade, no),
+    lock: (a) => (a.grade !== undefined && a.tiles.length === 1 ? null : { use: "upgrade" }),
+    read: (_v, f) => f.tiles && f.grade && { do: "upgrade", tiles: f.tiles, ...f.grade },
+    write: (a) => ({ tiles: a.tiles, ...(a.grade === undefined ? {} : { grade: a.grade }) }),
+    act: (y, a, coins, no) => spent(y, upgrade(y, a.tiles, coins, a.grade), REASON.upgrade, no),
   },
   saveBlueprint: {
     refused: "cannot_save_blueprint",

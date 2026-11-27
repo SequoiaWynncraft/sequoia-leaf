@@ -74,6 +74,8 @@ export interface Fields {
   readonly item: Item | null | undefined;
   readonly tiles: readonly number[] | null;
   readonly slot: number | null;
+  /** A grade the command may say or leave out: as said, nothing when left out, or null for one that is no grade. */
+  readonly grade: { readonly grade?: number } | null;
 }
 export function fieldsOf(v: Record<string, unknown>): Fields {
   return {
@@ -84,8 +86,10 @@ export function fieldsOf(v: Record<string, unknown>): Fields {
         ? v.tiles
         : null,
     slot: whole(v.slot, BLUEPRINTS_MOST - 1) ? v.slot : null,
+    grade: v.grade === undefined ? {} : graded(gradeOf(v.grade)),
   };
 }
+const graded = (grade: number | null): { readonly grade: number } | null => (grade === null ? null : { grade });
 
 /** A piece as the wire names it: its kind, and what it is set to make. */
 export const named = (p: Piece): Record<string, unknown> => ({

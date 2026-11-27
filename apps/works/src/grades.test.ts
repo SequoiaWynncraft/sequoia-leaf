@@ -262,7 +262,7 @@ describe("a piece set down over one of its kind", () => {
     const fake = await opened(y, 0);
     const said = listen();
     expect(raiseAt(...xy(-4, -2))).toBe(false);
-    expect(said).toEqual(["Not enough Coins."]);
+    expect(said).toEqual(["Not enough Coins: 2 short."]);
     expect(grades([-4], -2)).toEqual([1]);
     coinsAre(1000);
     expect(raiseAt(...xy(-4, -2))).toBe(true);
