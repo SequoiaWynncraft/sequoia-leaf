@@ -222,3 +222,9 @@ export function forgetScout(): void {
   HUD.open = null;
   if (HUD.scout) HUD.scout.hidden = true;
 }
+
+/** Marks the page as at a live table, and at which stage of it (`live.css` lays it out by that); null for away from it. */
+export function markTable(stage: string | null): void {
+  if (stage === null) delete document.body.dataset.live;
+  else document.body.dataset.live = stage;
+}

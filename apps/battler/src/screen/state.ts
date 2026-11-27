@@ -84,7 +84,7 @@ export const S: {
 export type Did = { ok: true; notes: RaidNote[] } | { ok: false; why: string };
 
 /**
- * The member at a live table (`live/seat.ts`), while they are at it: the run the table shows, what
+ * The member at a live table (`live/seated.ts`), while they are at it: the run the table shows, what
  * the screen sits down to, and where their commands go instead of Leaf's solo table. The front page
  * is the solo table's, so stepping back to it lets the seat go (the live table is kept).
  */

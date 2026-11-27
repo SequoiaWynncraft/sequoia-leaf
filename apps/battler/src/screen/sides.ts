@@ -1,7 +1,7 @@
 /**
  * Which side of a fight is the member's own. At the solo table it is always the first; at a live
  * table, the away seat of a sparring pair is the second side of the one fight the pair fights, and
- * the seat says so (`live/seat.ts` sets `OWN.side` while the member is at it). The fight is drawn
+ * the seat says so (`live/seated.ts` sets `OWN.side` while the member is at it). The fight is drawn
  * from that side (the near half, "You" in the tally), and played to the outcome turned back to the
  * first side, as Leaf decided it.
  */

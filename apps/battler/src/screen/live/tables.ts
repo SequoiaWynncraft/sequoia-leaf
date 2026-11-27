@@ -21,7 +21,8 @@ import { pic } from "../ui/cards.ts";
 import type { TablesRecord } from "../ui/modes.ts";
 import { type Line, openLine } from "./line.ts";
 import { placeText, refusalWords } from "./reads.ts";
-import { doneWithTable, enterTable, liveLine, liveView, onDone, takeUp } from "./seat.ts";
+import { enterTable } from "./seat.ts";
+import { doneWithTable, liveLine, liveView, onDone, takeUp } from "./seated.ts";
 
 /** A table open to sit at, as Leaf lists it. */
 interface Listed {
@@ -328,9 +329,12 @@ export function openTables(scope: Scope, me: { id: string; name: string }, redra
   T.scope = scope;
   T.me = me;
   T.redraw = redraw;
-  // A table over has a place in the record: it is read again.
-  onDone(() => {
+  // Done with a table: the list again, and why when the page says so; a table over has a place in the record, read again.
+  onDone((why) => {
     T.recordAt = -Infinity;
+    T.leaving = false;
+    if (why !== null) T.why = why;
+    T.redraw();
   });
   void readList();
   scope.every(LIST_EVERY, () => {

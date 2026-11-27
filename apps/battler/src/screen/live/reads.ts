@@ -154,3 +154,8 @@ export function clockLine(view: SittingView, now: number): string {
   if (view.stage.at === "carousel") return turnLine(view, now);
   return view.stage.at === "plan" || view.stage.at === "fight" ? (facingLine(view) ?? "") : "";
 }
+
+/** What the page says of a table that closed before anybody started it. */
+export const CLOSED_UNSTARTED = "This table closed before it started.";
+/** Whether a sitting closed before it started: over, with nobody ever seated. */
+export const closedUnstarted = (view: SittingView): boolean => view.stage.at === "over" && view.seats.length === 0;

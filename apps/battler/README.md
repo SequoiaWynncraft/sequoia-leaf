@@ -209,9 +209,11 @@ carousel, regulars in the empty seats. The page is in `src/screen/live/`.
   once started, Carry on and Leave the table (asked first: it is going out). The board is the
   member's record: played, won, in the first four. A table started is a strip along the top too,
   with Carry on, as a run in hand is; a member who closed the page finds it there again.
-- **At the table** the shared table is driven by the seat's run as Leaf shows it (`live/seat.ts`
+- **At the table** the shared table is driven by the seat's run as Leaf shows it (`live/seated.ts`
   sets `LIVE.seat` in `state.ts`, which then sends the member's commands to the sitting and draws
-  their run; the front page lets it go). Planning predicts what the solo table predicts, and Leaf's
+  their run; the front page lets it go; `live/seat.ts` draws the rest). Leaf's answer to a command
+  touches the table only while the member is still at that seat (`ours`): one that comes after they
+  stepped back is the line's alone, and the solo raid never hears of it. Planning predicts what the solo table predicts, and Leaf's
   answer wins. Set out is not there: the clock sets out. Along the top the clock (`live/hud.ts`):
   the stage, the seconds left of it counted to the sitting's own deadline, and under it whom the
   member faces or the carousel's turn. Down the right the players in seat order, each with a bar
@@ -231,11 +233,13 @@ carousel, regulars in the empty seats. The page is in `src/screen/live/`.
   payout, and what the purse took if less), watching on or leaving; and every place.
 - **Being told**: the line (`live/line.ts`) reads the sitting with the `rev` it has at the stage's
   deadline, every 2 seconds while it is open or in a carousel, and as the page comes back; Leaf has
-  no live room for sittings yet. Commands go in batches with ids, sent again as they were after a
-  failure.
+  no live room for sittings yet. An answer older than the revision the page holds (two reads
+  crossing) is let go. Commands go in batches with ids, sent again as they were after a failure. A
+  table that closed before anybody started it lets the member go, and the card says so.
 
 `live/reads.ts` holds the small questions (the clock's words, the players' rows, the carousel's
-turn, places in words), tested against sittings the rules play (`live/reads.test.ts`).
+turn, places in words), tested against sittings the rules play (`live/reads.test.ts`);
+`live/line.test.ts` and `live/seated.test.ts` play the line and the seat against the kit's stand-in Leaf.
 
 ## What Leaf keeps, and what the browser keeps
 

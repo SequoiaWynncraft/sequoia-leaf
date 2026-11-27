@@ -14,7 +14,8 @@ import { newTable, planCommands, type RaidCommand, SENSIBLE, tableView } from "@
 
 import { scoutSeat } from "../src/screen/live/hud.ts";
 import { clockText, turnOf } from "../src/screen/live/reads.ts";
-import { enterTable, liveLine, liveView, takeFromRing } from "../src/screen/live/seat.ts";
+import { enterTable } from "../src/screen/live/seat.ts";
+import { liveLine, liveView, takeFromRing } from "../src/screen/live/seated.ts";
 import { OWN } from "../src/screen/sides.ts";
 import { ask, doNow, S } from "../src/screen/state.ts";
 

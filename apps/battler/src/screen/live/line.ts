@@ -187,16 +187,25 @@ class SittingLine implements Line {
   #rebuild(): SittingView {
     return [...this.#batch, ...this.#queue].reduce((v, p) => p.predict?.(v) ?? v, this.#base);
   }
+  /**
+   * Takes Leaf's answer, unless it is older than the sitting the page holds: two reads on their way at
+   * once (a deadline's and the page coming back) may be answered in either order, and the older
+   * answer must not roll the table back. Only a newer revision replaces the view; the same one only
+   * says Leaf's clock again.
+   */
   #took(answer: Read): void {
+    if (answer.rev < this.#rev) return;
     this.#skew = answer.leafNow - outside.now();
+    if (answer.view && answer.rev > this.#rev) this.#base = answer.view;
     this.#rev = answer.rev;
-    if (answer.view) {
-      this.#base = answer.view;
-      const shown = JSON.stringify(this.#copy);
-      this.#copy = this.#rebuild();
-      if (JSON.stringify(this.#copy) !== shown) for (const fn of this.#viewers) fn(this.#copy);
-    }
+    this.#show();
     this.#plan();
+  }
+  /** The view again from Leaf's and what still waits on it; whoever hears is told if it changed. */
+  #show(): void {
+    const shown = JSON.stringify(this.#copy);
+    this.#copy = this.#rebuild();
+    if (JSON.stringify(this.#copy) !== shown) for (const fn of this.#viewers) fn(this.#copy);
   }
   #gone(why: Gone): void {
     if (this.#over) return;
@@ -253,11 +262,9 @@ class SittingLine implements Line {
   #answered(batch: Pending[], answer: Read | null): void {
     this.#batch = [];
     this.#tries = 0;
+    // The batch no longer waits: the view is Leaf's again, with what is still queued on top.
     if (answer) this.#took(answer);
-    else {
-      this.#copy = this.#rebuild();
-      for (const fn of this.#viewers) fn(this.#copy);
-    }
+    this.#show();
     for (const p of batch)
       p.answer(
         answer ? answerOf(answer.results, p.id) : { refused: "invalid_command", why: "Leaf would not take that." },
