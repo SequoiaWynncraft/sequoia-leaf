@@ -3,7 +3,8 @@
  * it, and so do the sparring partners. Sturdy close fighters go in the front row from the middle
  * out, anyone with reach goes behind them in the row its reach is for (`standRow`), and Sneaks that
  * are going to leap anyway wait at the back corners. Seqwawa, who never attacks, has the reach of
- * the back row, and stays there.
+ * the back row, and stays there. A figure whose release says where it would rather sit (`stands`)
+ * sits there instead.
  */
 import type { Catalog } from "./content/catalog.ts";
 import { type FigureId, figureIn } from "./content/figures.ts";
@@ -14,12 +15,6 @@ const MIDDLE_OUT = [3, 2, 4, 1, 5, 0, 6] as const;
 const NONE: ReadonlySet<number> = new Set();
 /** Columns from the edges in. */
 const EDGES_IN = [0, 6, 1, 5, 2, 4, 3] as const;
-/**
- * Figures that sit for what their ability does, not only for their reach: beside the two friends
- * with the dearest mana bars, to give them mana (`mana`), or with two free seats beside them for
- * what they call (`room`).
- */
-const SITS: Readonly<Partial<Record<FigureId, "mana" | "room">>> = { crab31: "mana", commodore: "room" };
 
 export interface Standing {
   kind: FigureId;
@@ -72,7 +67,7 @@ export function arrange(
   // With nobody to stand in front, the sturdiest of the rest does: never one rooted to its hex (Seqwawa), which cannot go to anybody, nor one who calls others to him (the Commodore).
   if (close.length === 0 && far.length > 1) {
     const sturdiest = far
-      .filter((i) => spec(i).rooted !== true && SITS[party[i]?.kind ?? "rock"] !== "room")
+      .filter((i) => spec(i).rooted !== true && spec(i).stands !== "room")
       .toSorted((a, b) => health(b) - health(a) || a - b)[0];
     if (sturdiest !== undefined) {
       far.splice(far.indexOf(sturdiest), 1);
@@ -83,7 +78,7 @@ export function arrange(
   // One who calls others sits first, as far back as it reaches from, where two seats beside it are
   // free, and they are kept free while the rest sit down.
   const kept: number[] = [];
-  for (const i of far.filter((f) => SITS[party[f]?.kind ?? "rock"] === "room")) {
+  for (const i of far.filter((f) => spec(f).stands === "room")) {
     const rows = [standRow(spec(i).range), standRow(spec(i).range) - 1];
     const seat = rows
       .flatMap((row) => MIDDLE_OUT.map((col) => row * COLS + col))
@@ -103,7 +98,7 @@ export function arrange(
   for (const i of sneaks) sitIn(i, [3, 2], EDGES_IN);
   for (const s of kept) taken.delete(s);
   // One who gives mana moves to the free seat touching the most of the two dearest mana bars, the furthest back of those.
-  for (const i of everyone.filter((f) => SITS[party[f]?.kind ?? "rock"] === "mana")) {
+  for (const i of everyone.filter((f) => spec(f).stands === "mana")) {
     const dearest = new Set(
       everyone
         .filter((f) => f !== i && spec(f).mana[1] > 0)

@@ -424,7 +424,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     if (!t) return false;
     say(f, u, [t.cell], [t.id], 0);
     hurt(f, t, powered(u, n("damage")), "physical", "ability", u);
-    knockBack(f, t, u.cell, n("push"));
+    knockBack(f, t, u, n("push"));
     stun(f, t, n("stun"), u);
     return true;
   },
@@ -465,7 +465,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     say(f, u, [t.cell], [t.id], flight(u.cell, t.cell));
     const land = (): void => {
       hurt(f, t, damage, "magic", "ability", u);
-      knockBack(f, t, u.cell, n("push"));
+      knockBack(f, t, u, n("push"));
       slow(f, t, n("slow"), n("lasts"), u);
     };
     send(f, u, u.cell, t, land, 0, [damage, "magic"]);

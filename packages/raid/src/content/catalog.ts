@@ -26,7 +26,7 @@ import {
   sortOf,
 } from "./items.ts";
 import { MEMBER_IDS } from "./members.ts";
-import { type Arrival, fields, fold, type Patch } from "./patch.ts";
+import { type Arrival, fields, fold, type Patch, type Stands } from "./patch.ts";
 import { type Era, eraOf, LAST_ERA, pullsEra, type ReleaseId, RELEASES } from "./releases.ts";
 import { BASE } from "./releases/base.ts";
 import { GAZ_STALL } from "./releases/gaz-stall.ts";
@@ -64,6 +64,8 @@ export interface Figure extends FigureSpec {
   readonly prize: Rarity;
   readonly look: Look;
   readonly chairs: 0 | 1;
+  /** Where it would rather sit (`formation.ts`); without one, by its reach. */
+  readonly stands?: Stands;
 }
 
 /** Every release's patch, in the order the releases open. A release with nothing in it yet has none. */

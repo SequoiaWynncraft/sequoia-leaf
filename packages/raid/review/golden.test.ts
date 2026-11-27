@@ -15,6 +15,9 @@ import { CAT } from "@sequoia-leaf/raid/testkit.ts";
 
 import {
   differences,
+  ERA_GOLDENS,
+  eraFightLines,
+  eraSetup,
   fightLine,
   fightLines,
   goldenSetup,
@@ -32,6 +35,8 @@ import {
   STORED,
   VERSIONS,
   written,
+  writtenEra,
+  writtenEraPool,
   writtenPins,
   writtenPool,
 } from "./golden.ts";
@@ -78,6 +83,25 @@ describe("the golden fights", () => {
     expect([...pool.figures, ...pool.troubles, ...items].filter((id) => !fielded.has(id))).toEqual([]);
     expect(pool.boons.filter((id) => !brought.has(id))).toEqual([]);
     expect(figures.some((p) => (p.level ?? 0) > 0) && figures.some((p) => p.fed > 0)).toBe(true);
+  });
+});
+
+describe("the golden fights at the latest eras", () => {
+  test.each([...ERA_GOLDENS])("at %s, each plays as written, its setup and every event", (release) => {
+    expect(writtenEra(release)).toHaveLength(100);
+    expect(differences(writtenEra(release), eraFightLines(writtenEraPool(release), release))).toEqual([]);
+  });
+  test.each([...ERA_GOLDENS])("at %s, each kept as a fight's row plays again from it to every event", (release) => {
+    const at = writtenEraPool(release);
+    const run = startRun(1, { era: CAT.era });
+    const replayed = Array.from({ length: 100 }, (_, n) => {
+      const setup = eraSetup(at, release, n);
+      const row: unknown = JSON.parse(JSON.stringify(fightRecord(1, run, { setup, outcome: resolveFight(setup) })));
+      const kept = replayOf(row);
+      if (!kept) throw new Error(`fight ${n} at ${release} kept as a row does not play again`);
+      return fightLine(at, n, kept);
+    });
+    expect(differences(writtenEra(release), replayed)).toEqual([]);
   });
 });
 

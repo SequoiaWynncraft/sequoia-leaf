@@ -28,6 +28,7 @@ import { drawOffer, starters } from "./draws.ts";
 import { lastRoom } from "./endless.ts";
 import type { Fed } from "./feed.ts";
 import { resolveFight } from "./fight/engine.ts";
+import { afterRoom } from "./fight/hooks.ts";
 import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
 import { across, foeOf } from "./foe.ts";
 import { COLS, SEATS } from "./hex.ts";
@@ -784,20 +785,20 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
     return { ok: true, notes, fight };
   }
 
-  // Acorns: the room's pay, the streak, interest on what was held before any of it, and the gnomes.
+  // Acorns: the room's pay, the streak, interest on what was held before any of it; then what the traits do (the gnomes').
   const cat = catalogOf(run);
   const paid: [AcornsWhy, number][] = [
     ["room", ECONOMY.roomAcorns],
     ["win", won ? ECONOMY.winAcorns : 0],
     ["streak", streakPay(run.streak)],
     ["interest", interestNow(run)],
-    ["gnomes", traitNumber(cat, "gnome", won ? "win" : "loss", traitSteps(cat, partyOf(run)).gnome ?? 0)],
   ];
   for (const [why, amount] of paid) {
     if (amount <= 0) continue;
     notes.push({ t: "acorns", why, amount });
     run.acorns += amount;
   }
+  notes.push(...afterRoom(run, stage.fight, traitSteps(cat, partyOf(run))));
   const xp = boonOr(cat, run.boons, "quickstudy", "xp", ECONOMY.xpRoom);
   notes.push({ t: "xp", gained: xp, cost: 0 });
   gainXp(run, xp, notes);
@@ -819,8 +820,7 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   else restock(run);
   notes.push(...enterRoom(run, draw32(run), met));
   notes.push({ t: "room", room: run.room, kind: roomOf(run).kind, who: run.foe.who, title: run.foe.title });
-  const waiting = picks[0];
-  if (waiting) notes.push({ t: "choice", kind: waiting.kind });
+  if (picks[0]) notes.push({ t: "choice", kind: picks[0].kind });
   return { ok: true, notes, fight };
 }
 

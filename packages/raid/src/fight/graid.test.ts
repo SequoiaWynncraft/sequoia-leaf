@@ -311,7 +311,7 @@ describe("Rooted and the pull", () => {
     const crab = unitOf(f, "crab40");
     const cell = seq.cell;
     expect(pull(f, crab, seq)).toBe(false);
-    expect(knockBack(f, seq, crab.cell, 2)).toBe(0);
+    expect(knockBack(f, seq, crab, 2)).toBe(0);
     expect(seq.cell).toBe(cell);
     // Anyone else is pulled.
     expect(pull(f, crab, idle(unitOf(f, "mud", 1)))).toBe(true);

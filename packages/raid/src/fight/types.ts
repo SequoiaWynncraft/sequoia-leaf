@@ -12,6 +12,7 @@ import type { TraitId } from "../content/traits.ts";
 import type { RuleId } from "../content/wilds.ts";
 import type { Side } from "../hex.ts";
 import type { Party } from "../party.ts";
+import type { Hooked } from "./hooks.ts";
 
 export type DamageKind = "physical" | "magic" | "true";
 /** Where damage came from. Only attacks and abilities fill mana and set off the things that answer a hit. */
@@ -134,7 +135,9 @@ export interface Unit {
   bracedBy: number;
   stub: number;
 
-  // From traits.
+  // From traits (`effects.ts`).
+  /** Starts the fight by getting round the back: a Sneak with its trait on, and a magpie. */
+  leaps: boolean;
   /** Ember: the burn its hits leave. */
   ember: number;
   /** Feather: percent faster for each attack made, how many attacks count, and how many have. */
@@ -148,8 +151,10 @@ export interface Unit {
   focus: number;
   /** Sage and Glowthorn: more mana an attack. */
   manaMore: number;
-  /** Mender: percent more healing and shielding. */
+  /** Mender: percent more healing and shielding; and healing past a friend's full health as a shield, up to this percent of that friend's health, for these seconds. */
   mending: number;
+  overheal: number;
+  overhealFor: number;
   /** Sneak: attacks left that land hard, and how much harder. */
   sneakHits: number;
   sneakBy: number;
@@ -253,6 +258,10 @@ export interface Fight {
   might: [number, number];
   /** Whether each side still has its Second Wind. */
   wind: [boolean, boolean];
+  /** What every burn is (Ember's numbers): how many steps it lasts, and how much weaker healing is on the burning. */
+  readonly burning: { readonly lasts: number; readonly damp: number };
+  /** Every trait's, item's, boon's and figure's hooks, as each side armed them (`hooks.ts`). */
+  readonly hooks: Hooked;
 }
 
 /** One thing that happened, in the order it happened. Figures are named by `id`; hexes are fight cells. */
