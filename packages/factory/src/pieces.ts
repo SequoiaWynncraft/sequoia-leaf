@@ -37,11 +37,11 @@ import {
   type Kind,
   LINED,
   locked,
+  makesThing,
   MOST,
   NONE,
   type Open,
   price,
-  RECIPE,
   SHUTS,
   SPANS,
 } from "./tables.ts";
@@ -255,7 +255,7 @@ export function priceOf(
  */
 export const pieceRefusal = (open: Open, p: Piece): string | null =>
   locked(open, { build: p.kind, grade: p.grade }) ??
-  (p.recipe !== undefined && RECIPE[p.recipe]?.by === p.kind ? locked(open, { make: p.recipe }) : null) ??
+  (p.recipe !== undefined && makesThing(p.kind, p.recipe) ? locked(open, { make: p.recipe }) : null) ??
   ((p.tint ?? 0) > 0 ? locked(open, { use: "paint" }) : null) ??
   RULES[p.kind]?.locks(KIT, open, p) ??
   null;

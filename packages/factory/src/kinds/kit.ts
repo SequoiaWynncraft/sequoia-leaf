@@ -43,6 +43,11 @@ export interface Kit {
   readonly isMaker: typeof Tables.isMaker;
   readonly drawnAt: typeof Tables.drawnAt;
   readonly holdsMost: typeof Tables.holdsMost;
+  readonly partsKept: typeof Tables.partsKept;
+  readonly timesOf: typeof Tables.timesOf;
+  readonly makesThing: typeof Tables.makesThing;
+  readonly TIMES_MOST: typeof Tables.TIMES_MOST;
+  readonly BUFFER: number;
   readonly locked: typeof Tables.locked;
   readonly recipesFor: typeof Tables.recipesFor;
   readonly makes: typeof Planner.makes;

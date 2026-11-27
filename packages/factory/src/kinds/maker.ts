@@ -1,14 +1,15 @@
 /**
  * The machines' way of playing, shared by every kind that makes things by recipes (the mill, the
- * bench, the workshop): which parts it takes in and how many (`room`), choosing and making a recipe,
+ * bench, the workshop, the assembler): which parts it takes in and how many (`room`), choosing and making a recipe,
  * the recipe it works toward (`aim`), how it stands and the words for it, what it makes and needs a
  * minute, being told to make one thing, and what a kept one may be put back holding and making.
  *
  * A machine makes, and takes parts in for, only the recipes the plumbing says it may (`Wire.recipes`,
- * asked of `locked` when the plumbing is worked out).
+ * asked of `locked` when the plumbing is worked out). One that makes what other machines make (`KindDef.as`)
+ * works on their recipes as many times as fast as it is of them, and keeps as many times their parts
+ * (`timesOf`, `partsKept`).
  */
 import type { KeptPiece } from "../cells.ts";
-import { BUFFER } from "../content/machines.ts";
 import type { Kept } from "../pieces.ts";
 import type { Item, Recipe } from "../tables.ts";
 import type { Counts, Holders, Wire, Yard } from "../yard.ts";
@@ -39,20 +40,22 @@ export function wants(k: Kit, y: Yard, i: number, n: number): boolean {
 
 /**
  * Whether it has room for the thing `n`: it takes a thing that some recipe it may make uses together
- * with everything it holds, while it holds fewer than `BUFFER` of the fewest of it any such recipe takes.
+ * with everything it holds, while it holds fewer than it keeps (`partsKept`) of the fewest of it any such
+ * recipe takes.
  */
 export function room(k: Kit, y: Yard, i: number, n: number, _side: number, wire: Wire): boolean {
   const r = k.holderOf(y, i);
-  const recipes = wire.recipes[y.kind[i] ?? k.NONE] ?? NO_RECIPES;
+  const kind = y.kind[i] ?? k.NONE;
+  const recipes = wire.recipes[kind] ?? NO_RECIPES;
   const only = y.set[i] ?? k.NONE;
   let least = 0;
   for (let c = 0; c < recipes.length; c++) {
     const rec = recipes[c];
     if (!rec || (only !== k.NONE && rec.out !== only)) continue;
-    const need = needWith(k, y.holders, r, rec, n);
+    const need = needWith(k, y.holders, r, rec, n) * k.timesOf(kind, rec);
     if (need > 0 && (least === 0 || need < least)) least = need;
   }
-  return (y.holders.stock[r * k.ITEM_COUNT + n] ?? 0) < BUFFER * least;
+  return (y.holders.stock[r * k.ITEM_COUNT + n] ?? 0) < k.BUFFER * least;
 }
 
 /** How many of the thing `n` a recipe takes, where it uses everything the holder's row `r` holds; 0 where it does not. */
@@ -85,7 +88,7 @@ export function work(k: Kit, y: Yard, i: number, r: number, speed: number, wire:
   if (h.making[r] === k.NONE && !begin(k, y, i, r, wire)) return;
   const rec = k.RECIPE[h.making[r] ?? k.NONE];
   if (!rec) return;
-  h.work[r] = (h.work[r] ?? 0) + speed;
+  h.work[r] = (h.work[r] ?? 0) + speed * k.timesOf(y.kind[i] ?? k.NONE, rec);
   if ((h.work[r] ?? 0) >= rec.work) {
     h.work[r] = (h.work[r] ?? 0) - rec.work;
     for (let p = 0; p < rec.from.length; p++) k.take(h, r, rec.from[p] ?? k.NONE, rec.need[p] ?? 1);
@@ -147,11 +150,11 @@ function condition(k: Kit, y: Yard, i: number, lit: boolean): number {
   if (!rec) return as("idle", (h.count[r] ?? 0) > 0);
   let missing = false;
   let full = false;
+  const kind = y.kind[i] ?? k.NONE;
   for (let p = 0; p < rec.from.length; p++) {
     const have = k.held(h, r, rec.from[p] ?? k.NONE);
-    const need = rec.need[p] ?? 1;
-    if (have < need) missing = true;
-    if (have >= BUFFER * need) full = true;
+    if (have < (rec.need[p] ?? 1)) missing = true;
+    if (have >= k.partsKept(kind, rec, p)) full = true;
   }
   return !missing ? as("working") : full ? as("starved", true) : as("waiting");
 }
@@ -191,7 +194,7 @@ function words(k: Kit, y: Yard, i: number, state: string): Words {
     return { line: h.count[r] === 0 ? "Waiting for items." : `Holds ${holding(k, y, r)}. No recipe combines these.` };
   if (state === "working") return { line: `Making ${many(k, rec.out)}${slow(k, y)}.` };
   const missing = rec.from.filter((n, p) => k.held(h, r, n) < (rec.need[p] ?? 1));
-  const full = rec.from.find((n, p) => k.held(h, r, n) >= BUFFER * (rec.need[p] ?? 1));
+  const full = rec.from.find((n, p) => k.held(h, r, n) >= k.partsKept(y.kind[i] ?? k.NONE, rec, p));
   if (state === "starved" && full !== undefined)
     return {
       line: `Full of ${many(k, full)} and waiting for ${list(k, missing)}. If both come in on one belt, the ${many(k, full)} will be blocking it.`,
@@ -224,11 +227,11 @@ export function keepsFor(k: Kit, y: Yard, i: number): readonly Recipe[] {
 }
 
 /** How many of a thing a machine may hold: as many as it keeps for what it may make. */
-const most = (k: Kit, y: Yard, i: number, n: number): number => k.holdsMost(keepsFor(k, y, i), n);
+const most = (k: Kit, y: Yard, i: number, n: number): number => k.holdsMost(y.kind[i] ?? k.NONE, keepsFor(k, y, i), n);
 
 /** Whether the machine on a tile may make a thing in the yard: its recipe is the machine's, and unlocked. */
 const mayMake = (k: Kit, y: Yard, i: number, n: number | undefined): n is Item =>
-  n !== undefined && k.isItem(n) && k.RECIPE[n]?.by === y.kind[i] && k.locked(y.open, { make: n }) === null;
+  n !== undefined && k.isItem(n) && k.makesThing(y.kind[i] ?? k.NONE, n) && k.locked(y.open, { make: n }) === null;
 
 /**
  * Puts back what a kept machine was told to make, held and was doing, only as the rules let it be now:
@@ -252,7 +255,8 @@ function onto(k: Kit, y: Yard, i: number, r: number, o: KeptPiece): void {
     // What a machine is making is what it last began (`lastRecipe`), though no save keeps that apart.
     h.last[r] = making;
   }
-  workOnto(k, y, r, o, making === k.NONE ? Math.max(...k.PACE) : (k.RECIPE[making]?.work ?? 0));
+  const fastest = Math.max(...k.PACE) * (k.TIMES_MOST[y.kind[i] ?? k.NONE] ?? 1);
+  workOnto(k, y, r, o, making === k.NONE ? fastest : (k.RECIPE[making]?.work ?? 0));
 }
 
 /**
@@ -260,7 +264,7 @@ function onto(k: Kit, y: Yard, i: number, r: number, o: KeptPiece): void {
  * beyond what it keeps for that (`keepsFor`, `holdsMost`) is tipped out. Says why it could not, or nothing.
  */
 function tell(k: Kit, y: Yard, i: number, out: Item | null): string | null {
-  if (out !== null && k.RECIPE[out]?.by !== y.kind[i]) return "That cannot make it";
+  if (out !== null && !k.makesThing(y.kind[i] ?? k.NONE, out)) return "That cannot make it";
   const lock = out === null ? null : k.locked(y.open, { make: out });
   if (lock !== null) return lock;
   const h = y.holders;
@@ -270,16 +274,15 @@ function tell(k: Kit, y: Yard, i: number, out: Item | null): string | null {
   h.work[r] = 0;
   h.idle[r] = 0;
   const kept = keepsFor(k, y, i);
-  for (const n of k.ALL_ITEMS) k.take(h, r, n, k.held(h, r, n) - k.holdsMost(kept, n));
+  const kind = y.kind[i] ?? k.NONE;
+  for (const n of k.ALL_ITEMS) k.take(h, r, n, k.held(h, r, n) - k.holdsMost(kind, kept, n));
   k.changed(y);
   return null;
 }
 
 /** What a machine keeps in a blueprint or a copy: what it is told to make, if its recipe is the machine's; its grade. */
 const keeps = (k: Kit, kind: number, v: Unchecked): Kept => ({
-  ...(typeof v.recipe === "number" && k.isItem(v.recipe) && k.RECIPE[v.recipe]?.by === kind
-    ? { recipe: v.recipe }
-    : {}),
+  ...(typeof v.recipe === "number" && k.makesThing(kind, v.recipe) ? { recipe: v.recipe } : {}),
   ...gradeKept(k, v),
 });
 

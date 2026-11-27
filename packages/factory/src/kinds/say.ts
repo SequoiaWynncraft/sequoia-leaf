@@ -130,6 +130,10 @@ export function rateOf(k: Kit, y: Yard, i: number, recipe: Recipe | null): Machi
   const lit = kind !== k.NONE && k.litAt(y, i);
   const share = lit ? k.pace(y) : 0;
   const own = k.isKind(kind) && (k.WORK_OF[kind] ?? 0) > 0;
-  const nominal = own ? k.makes(kind, grade, null) : k.isMaker(kind) && recipe ? k.makes(recipe.by, grade, recipe) : 0;
+  const nominal = own
+    ? k.makes(kind, grade, null)
+    : k.isKind(kind) && k.isMaker(kind) && recipe
+      ? k.makes(kind, grade, recipe)
+      : 0;
   return { nominal, share, effective: nominal * share, draw: lit ? k.drawnAt(kind, grade) / k.HALF : 0 };
 }

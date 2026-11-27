@@ -136,34 +136,54 @@ export const knownAt10 = (n: KeptNames): boolean =>
   every(n.plots, (id) => AT_10.plots.has(id)) &&
   n.span <= KNOWN_AT_10.span;
 
+/** How many kinds the last Leaf of version 10 had: a kind numbered past them is a later one's. */
+const KINDS_AT_10 = KNOWN_AT_10.kinds.length;
 /**
- * Whether these tables have a thing, kind or plot the last Leaf of version 10 did not, each by the
- * number it gave it: then whether a yard keeps anything past it is the whole scan's to say (`knownAt10`).
+ * Whether these tables have a thing or plot the last Leaf of version 10 did not, each by the number
+ * it gave it, or number its kinds otherwise than it did: then whether a yard keeps anything past it is
+ * the whole scan's to say (`knownAt10`). Kinds added after its own are asked cheaply (`pastTen`).
  */
 export const WIDER =
   ALL_ITEMS.some((n) => KNOWN_AT_10.items[n] !== itemName(n)) ||
-  ALL_KINDS.some((k) => KNOWN_AT_10.kinds[k] !== kindName(k)) ||
+  ALL_KINDS.some((k) => k < KINDS_AT_10 && KNOWN_AT_10.kinds[k] !== kindName(k)) ||
+  ALL_KINDS.length < KINDS_AT_10 ||
   PLOT_IDS.some((id) => !AT_10.plots.has(id));
 /** 1 for each goal the last Leaf of version 10 did not have. */
 const LATER_GOAL = Uint8Array.from(GOALS, (g) => (AT_10.goals.has(g.id) ? 0 : 1));
 
-/** Whether a blueprint's pieces (`PIECE_BYTES` each, the span fifth) hold a tunnel past so many tiles. */
+/**
+ * Whether a blueprint's pieces (`PIECE_BYTES` each, the kind first and the span fifth) hold a kind
+ * past that Leaf's, or a tunnel past so many tiles.
+ */
 function printPast(pieces: Uint8Array, most: number): boolean {
-  for (let at = 4; at < pieces.length; at += PIECE_BYTES) if ((pieces[at] ?? 0) > most) return true;
+  for (let at = 0; at < pieces.length; at += PIECE_BYTES)
+    if ((pieces[at] ?? 0) >= KINDS_AT_10 || (pieces[at + 4] ?? 0) > most) return true;
+  return false;
+}
+
+/** Whether a piece of a kind past that Leaf's stands in a yard. */
+function kindPast(y: Yard): boolean {
+  if (ALL_KINDS.length <= KINDS_AT_10) return false;
+  for (const k of y.kind) if (k >= KINDS_AT_10 && k !== NONE) return true;
   return false;
 }
 
 /**
  * Whether a yard keeps anything the last Leaf of version 10 did not know, while these tables have no
- * thing, kind or plot past it (`WIDER`): a goal done, held, in line or given anything that Leaf did not
- * have, or a tunnel past its longest, standing, in a blueprint or plan, or in what Undo would stand
- * again. Each part stops at the first it finds; it says what the whole scan says (`knownAt10`).
+ * thing or plot past it and number its kinds as it did (`WIDER`): a goal done, held, in line or given
+ * anything that Leaf did not have, or a kind past its own or a tunnel past its longest, standing, in a
+ * blueprint or plan, or in what Undo would stand again. Each part stops at the first it finds; it
+ * says what the whole scan says (`knownAt10`).
  */
 export function pastTen(y: Yard): boolean {
   const goals = [...y.done, ...y.line, ...y.queue, y.hand];
   if (goals.some((g) => LATER_GOAL[g] === 1) || y.got.some((got, g) => got && LATER_GOAL[g] === 1)) return true;
   const most = KNOWN_AT_10.span;
-  if (SPAN_MOST <= most) return false;
+  if (SPAN_MOST <= most && ALL_KINDS.length <= KINDS_AT_10) return false;
+  if (kindPast(y)) return true;
   for (const s of y.span) if (s > most || s < -most) return true;
-  return y.blueprints.some((b) => b !== null && printPast(b.pieces, most)) || y.history.some((e) => e.span > most);
+  return (
+    y.blueprints.some((b) => b !== null && printPast(b.pieces, most)) ||
+    y.history.some((e) => e.span > most || e.top >= KINDS_AT_10)
+  );
 }

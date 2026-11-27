@@ -140,6 +140,8 @@ export interface Entry {
   readonly bytes: Uint8Array;
   /** The most tiles any piece it would stand again passes under: what keeping it asks, without reading it again. */
   readonly span: number;
+  /** The highest kind, by its number, of any piece it would stand again, -1 for none: what keeping it asks too. */
+  readonly top: number;
 }
 
 /** A piece kept in a blueprint, 10 bytes: kind, x, y, way, span, recipe, open, tint, a splitter's ways or a sorter's side (`packWays`), grade. */

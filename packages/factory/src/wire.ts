@@ -1,3 +1,4 @@
+import { BUFFER } from "./content/machines.ts";
 import { keep } from "./kinds/holder.ts";
 import type { Kit } from "./kinds/kit.ts";
 import { anything, empty, lay } from "./kinds/line.ts";
@@ -41,12 +42,16 @@ import {
   ITEM_INFO,
   type Kind,
   locked,
+  makesThing,
   NONE,
   PACE,
+  partsKept,
   RECIPE,
   recipesFor,
   SPAN_MOST,
   SPANS,
+  TIMES_MOST,
+  timesOf,
   TINTED,
   TINTS,
   TOP,
@@ -498,6 +503,11 @@ export const KIT: Kit = {
   isMaker,
   drawnAt,
   holdsMost,
+  partsKept,
+  timesOf,
+  makesThing,
+  TIMES_MOST,
+  BUFFER,
   locked,
   recipesFor,
   makes,

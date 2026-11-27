@@ -238,6 +238,14 @@ export const RESEARCH: readonly ResearchInfo[] = [
     needs: ["deepculvert"],
     unlocks: { mouths: true },
   },
+  {
+    id: "assembler",
+    tier: 5,
+    name: "The assembler",
+    what: "Unlocks the assembler: 3 by 3 tiles. It makes anything a bench or a workshop makes, as fast as 9 of them.",
+    cost: { timber: 8000, brass: 6000 },
+    unlocks: { kinds: ["assembler"], grades: { assembler: 3 } },
+  },
   // Reach, for building far from where you stand (`Unlocks.range`).
   {
     id: "longreach",
