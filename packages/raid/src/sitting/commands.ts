@@ -7,7 +7,7 @@
  */
 import { mix } from "@sequoia-leaf/core";
 
-import { readCommand as readRunCommand, type RunCommand } from "../command.ts";
+import { isPlanning, type PlanningCommand, readCommand as readRunCommand } from "../command.ts";
 import { act } from "../game.ts";
 import { abandon, type Note } from "../run.ts";
 import { hasTaken, take } from "./carousel.ts";
@@ -33,11 +33,6 @@ export interface Call {
   readonly player: Member;
 }
 
-/** The run's own commands a seat plans with. Setting out, the fight, the takings and walking home are the sitting's, on the clock. */
-const SEAT_DOES = ["choose", "redraw", "buy", "sell", "move", "bench", "rustle", "hold", "xp", "give"] as const;
-export type SeatCommand = Extract<RunCommand, { do: (typeof SEAT_DOES)[number] }>;
-export const isSeatCommand = (c: { do: string }): c is SeatCommand => SEAT_DOES.some((name) => name === c.do);
-
 export type SittingCommand =
   /** Sit down at an open sitting. The eighth to sit starts it. */
   | { do: "sit" }
@@ -47,7 +42,8 @@ export type SittingCommand =
   | { do: "start" }
   /** Take the figure at a place in the carousel's ring. */
   | { do: "pick"; offer: number }
-  | SeatCommand;
+  /** The run's own planning commands, for the caller's seat; the rest of a run's are the clock's (`WHOSE`). */
+  | PlanningCommand;
 
 /** A command off the wire, or null. */
 export function readCommand(v: unknown): SittingCommand | null {
@@ -61,7 +57,7 @@ export function readCommand(v: unknown): SittingCommand | null {
     }
   }
   const c = readRunCommand(v);
-  return c && isSeatCommand(c) ? c : null;
+  return c && isPlanning(c) ? c : null;
 }
 
 type Did = { ok: true; notes: Note[] } | Refusal;
@@ -147,7 +143,7 @@ function pickOffer(t: Sitting, offer: number, { player }: Call): Did {
 }
 
 /** One of the run's own commands, done to the caller's seat by the code Leaf's solo table uses. A seat that is out is refused by its run, which is over. */
-function plan(t: Sitting, c: SeatCommand, { player, seed }: Call): Did {
+function plan(t: Sitting, c: PlanningCommand, { player, seed }: Call): Did {
   const stop = notPlanning(t.stage.at);
   if (stop) return refuse(stop);
   const seat = seatOf(t, player.id);
@@ -157,7 +153,7 @@ function plan(t: Sitting, c: SeatCommand, { player, seed }: Call): Did {
 }
 
 function carryOut(t: Sitting, c: SittingCommand, call: Call): Did {
-  if (isSeatCommand(c)) return plan(t, c, call);
+  if (isPlanning(c)) return plan(t, c, call);
   switch (c.do) {
     case "sit":
       return sit(t, call);
