@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { planRoom, SENSIBLE } from "./bot.ts";
 import { figureIn } from "./content/figures.ts";
-import { FINISHED_IDS, isEmblemId } from "./content/items.ts";
+import { COMPONENT_IDS, FINISHED_IDS, isEmblemId } from "./content/items.ts";
 import { LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY } from "./content/rooms.ts";
 import { TRAIT_IDS } from "./content/traits.ts";
@@ -68,6 +68,13 @@ const refused = (text: string): string => {
 };
 
 describe("saving a run", () => {
+  test("a deep endless run's item bench of a thousand components and more still loads", () => {
+    const run = midRun(7, 3);
+    const deep = tampered(run, (raw) => {
+      raw.items = Array.from({ length: 5_000 }, (_, i) => COMPONENT_IDS[i % COMPONENT_IDS.length]);
+    });
+    expect(mustLoad(deep).items.length).toBe(5_000);
+  });
   test("a run saves to a string and loads back identical, at every point of a raid", () => {
     for (const rooms of [0, 1, 3, 6, 10]) {
       const run = midRun(31, rooms);
