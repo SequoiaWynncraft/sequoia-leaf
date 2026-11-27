@@ -11,6 +11,9 @@
  *
  * - `fights.txt`: 500 seeded fights, each set up from the ids in `pool.txt` alone, so content added
  *   later changes none of them; by a hash of the setup and one of every event;
+ * - `fights-<release>.txt`: 100 more at each of the latest eras (`ERA_GOLDENS`), set up from that
+ *   era's own `pool-<release>.txt` and played by its catalogue, so the numbers a release changed are
+ *   pinned too;
  * - `runs.txt`: 100 runs for each of the bot's four habits, over the trails, the member's own figures
  *   and both endless ways, each from a table of its own and played by the table's commands off the
  *   wire as Leaf takes them, the bot planning as the page's does (`planCommands`); by a hash of what
@@ -48,7 +51,7 @@ import { FIGHT_BOONS, isBoonId } from "@sequoia-leaf/raid/content/boons.ts";
 import { catalogAt, everyFigure } from "@sequoia-leaf/raid/content/catalog.ts";
 import { isUnitKind, type Stars, traitsOf, TROUBLE_IDS } from "@sequoia-leaf/raid/content/figures.ts";
 import { COMPONENT_IDS, FINISHED_IDS, grantOf, isItemId, type ItemId } from "@sequoia-leaf/raid/content/items.ts";
-import { LAST_ERA, LEGACY_ERA } from "@sequoia-leaf/raid/content/releases.ts";
+import { type Era, eraOf, LAST_ERA, LEGACY_ERA, type ReleaseId } from "@sequoia-leaf/raid/content/releases.ts";
 import { LEVELS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { TRAIT_IDS, traitNumber } from "@sequoia-leaf/raid/content/traits.ts";
 import { recordFight } from "@sequoia-leaf/raid/fight/engine.ts";
@@ -356,9 +359,9 @@ function troubleFor(pool: Pool, s: Stream): Placed[] {
   }));
 }
 
-/** The `n`th golden fight's setup: drawn from its own stream and the pool alone. */
-export function goldenSetup(pool: Pool, n: number): FightSetup {
-  const s: Stream = { rng: mix(SEED, n) };
+/** The `n`th golden fight's setup: drawn from its own stream and the pool alone, at an era (the legacy one but for `ERA_GOLDENS`). */
+export function goldenSetup(pool: Pool, n: number, era: Era = LEGACY_ERA, seed = SEED): FightSetup {
+  const s: Stream = { rng: mix(seed, n) };
   const traits = Object.keys(pool.traits);
   const theme = (k: number): string => traits[(n + k * 5) % traits.length] ?? "";
   const size = (): number => (n % 10 === 9 ? 1 + below(s, 2) : 3 + below(s, 6));
@@ -374,7 +377,7 @@ export function goldenSetup(pool: Pool, n: number): FightSetup {
     n % 3 === 0
       ? side("forest", troubleFor(pool, s), 100 + 10 * below(s, 11))
       : side("away", figuresFor(pool, s, size(), theme(1), n % 4 === 3), 100);
-  return { seed: draw32(s), era: LEGACY_ERA, sides: [home, away] };
+  return { seed: draw32(s), era, sides: [home, away] };
 }
 
 /** The `n`th golden fight's line, played from its setup (`setup`: as the pool sets it up, unless given one kept). */
@@ -389,6 +392,34 @@ export function fightLine(pool: Pool, n: number, setup = goldenSetup(pool, n)): 
   };
 }
 export const fightLines = (pool: Pool): Line[] => Array.from({ length: FIGHTS }, (_, n) => fightLine(pool, n));
+
+// ---------- 100 fights at each of the latest eras ----------
+
+/** The releases whose eras have fights pinned of their own, each from that era's pool and played by its catalogue. */
+export const ERA_GOLDENS = ["gaz-stall", "groot-night"] as const satisfies readonly ReleaseId[];
+export type EraGolden = (typeof ERA_GOLDENS)[number];
+const ERA_FIGHTS = 100;
+
+/** The pool as a release's era has it open: everything there then, and nothing later. */
+export function poolAt(release: EraGolden): Pool {
+  const cat = catalogAt(eraOf(release));
+  return {
+    figures: [...cat.order],
+    troubles: [...TROUBLE_IDS],
+    traits: Object.fromEntries(cat.ids.traits.map((t) => [t, cat.order.filter((f) => traitsOf(cat, f).includes(t))])),
+    components: [...cat.ids.components],
+    finished: [...cat.ids.finished],
+    emblems: Object.fromEntries(cat.ids.emblems.map((id) => [id, grantOf(cat, id) ?? ""])),
+    boons: FIGHT_BOONS.filter((b) => cat.ids.boons.includes(b)),
+    level: LEVELS.most,
+    fed: traitNumber(cat, "greg", "most", 1),
+  };
+}
+/** The `n`th fight pinned at a release's era: set up as a golden fight is, from a stream of that era's own. */
+export const eraSetup = (pool: Pool, release: EraGolden, n: number): FightSetup =>
+  goldenSetup(pool, n, eraOf(release), mix(SEED, eraOf(release)));
+export const eraFightLines = (pool: Pool, release: EraGolden): Line[] =>
+  Array.from({ length: ERA_FIGHTS }, (_, n) => fightLine(pool, n, eraSetup(pool, release, n)));
 
 // ---------- 100 runs a habit, played at a table ----------
 
@@ -799,6 +830,8 @@ const read = (name: string): string =>
 export const writtenPool = (): Pool => readPool(read("pool.txt"));
 export const written = (name: "fights" | "runs" | "sittings"): Line[] => readLines(read(`${name}.txt`));
 export const writtenPins = (): Pins => readPins(read("keys.txt"));
+export const writtenEraPool = (release: EraGolden): Pool => readPool(read(`pool-${release}.txt`));
+export const writtenEra = (release: EraGolden): Line[] => readLines(read(`fights-${release}.txt`));
 
 export function goldensNow(pool: Pool): Goldens {
   const seen = new Seen();
@@ -823,6 +856,12 @@ if (import.meta.main) {
   report("fights", written("fights"), now.fights);
   report("runs", written("runs"), now.runs);
   report("sittings", written("sittings"), now.sittings);
+  const eras = ERA_GOLDENS.map((release) => {
+    const at = fresh || read(`pool-${release}.txt`) === "" ? poolAt(release) : writtenEraPool(release);
+    const lines = eraFightLines(at, release);
+    report(`fights at ${release}`, writtenEra(release), lines);
+    return { release, at, lines };
+  });
   const { pins, refused } = pinned(writtenPins(), now.keys);
   const unpinned = SHAPES.filter((s) => !writtenPins().get(s)?.has(VERSIONS[s]));
   console.log(
@@ -844,6 +883,10 @@ if (import.meta.main) {
     writeFileSync(new URL("runs.txt", GOLDEN), linesText(now.runs));
     writeFileSync(new URL("sittings.txt", GOLDEN), linesText(now.sittings));
     writeFileSync(new URL("keys.txt", GOLDEN), pinsText(pins));
+    for (const { release, at, lines } of eras) {
+      writeFileSync(new URL(`pool-${release}.txt`, GOLDEN), poolText(at));
+      writeFileSync(new URL(`fights-${release}.txt`, GOLDEN), linesText(lines));
+    }
     for (const [name, text] of rows) writeFileSync(new URL(name, STORED), formatted(name, text));
     console.log("Written. Say why in the PR's description.");
   }
