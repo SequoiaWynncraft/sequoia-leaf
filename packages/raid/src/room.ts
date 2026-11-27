@@ -11,6 +11,7 @@ import { apart, bind, type FightRules, PLAIN_RULES, ROOM_RULES, ruled, shut } fr
 import type { RuleId } from "./content/wilds.ts";
 import { extraChairs } from "./endless.ts";
 import type { FightSetup } from "./fight/types.ts";
+import { foughtAt } from "./record.ts";
 import type { RunView } from "./run.ts";
 import { courseOf } from "./way.ts";
 import { wingOf } from "./wing.ts";
@@ -32,7 +33,7 @@ export interface Room {
 }
 
 /** What `roomOf` reads of a run. */
-export type RoomRun = Pick<RunView, "room" | "wing" | "way" | "level" | "boons" | "record" | "era">;
+export type RoomRun = Pick<RunView, "room" | "wing" | "way" | "level" | "boons" | "record" | "before" | "era">;
 
 /** The picks of components each kind of room leaves: a boss two when it is won, sparring none. */
 const COMPONENT_PICKS: Readonly<Record<RoomKind, { readonly won: number; readonly lost: number }>> = {
@@ -66,7 +67,7 @@ export function roomOf(run: RoomRun, at = run.room): Room {
     chairs: run.level + extraChairs(run),
     picks: {
       ...COMPONENT_PICKS[kind],
-      boon: ECONOMY.boonRooms.some((r) => r === at) && !run.record.some((r) => r.room === at),
+      boon: ECONOMY.boonRooms.some((r) => r === at) && !foughtAt(run, at),
     },
   };
 }

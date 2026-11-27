@@ -272,6 +272,8 @@ export {
 export { forgeItems } from "./rack.ts";
 export { type Fed, feed, mealFor } from "./feed.ts";
 export { boardMet, opposition } from "./foe.ts";
+// A run's record: its last rooms in full, the rest as totals.
+export { KEPT_ROOMS, keepRoom, roomsFought, type RoomTotals, totalsOf } from "./record.ts";
 
 // The endless runs: the Wilds and the Deep Woods.
 export { ENDLESS, ENDLESS_WAYS, type EndlessWay, isEndlessWay } from "./content/endless.ts";

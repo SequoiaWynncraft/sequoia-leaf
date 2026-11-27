@@ -36,6 +36,7 @@ import {
   type Piece,
   pieces,
   placedOf,
+  roomsFought,
   type RunView,
   specOf,
   type Spot,
@@ -386,4 +387,5 @@ export function watchersOf(runNumber: number, across: Pick<Party, "who" | "by">)
 }
 
 /** Which walk-in the far party is on: one for each room met, and again each time a room is fought again. */
-export const arrivalOf = (run: Pick<RunView, "room" | "record">): string => `${run.room}:${run.record.length}`;
+export const arrivalOf = (run: Pick<RunView, "room" | "record" | "before">): string =>
+  `${run.room}:${roomsFought(run)}`;

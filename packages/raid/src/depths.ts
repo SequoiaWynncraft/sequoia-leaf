@@ -9,7 +9,8 @@ import { type Kept, utcWeekStart } from "@sequoia-leaf/core";
 
 import { ENDLESS_WAYS, type EndlessWay, isEndlessWay } from "./content/endless.ts";
 import { isHeld } from "./endless.ts";
-import type { Fought, Run, RunSummary, RunView } from "./run.ts";
+import { type Recorded, totalsOf } from "./record.ts";
+import type { Fought, Run, RunSummary } from "./run.ts";
 import { counts, courseOf, lanes } from "./way.ts";
 
 /** The deepest room won in each endless way, counting from 1; 0 for none. */
@@ -100,8 +101,8 @@ export function reached(
  * that pay, having won the last of them, is paid as a run of fifteen rooms that won, though it went
  * on. Its rooms and bosses are counted only to there (`summariseRun`).
  */
-export function paidFor(run: Pick<RunView, "way" | "record">, summary: RunSummary): RunSummary {
+export function paidFor(run: Recorded, summary: RunSummary): RunSummary {
   const { last, paysThrough } = courseOf(run.way);
-  const won = run.record.some((r) => r.room === paysThrough - 1 && r.result === "win");
+  const won = totalsOf(run).cleared.includes(paysThrough - 1);
   return last >= paysThrough && won ? { ...summary, ending: "won" } : summary;
 }

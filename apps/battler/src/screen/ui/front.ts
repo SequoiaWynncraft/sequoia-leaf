@@ -10,7 +10,17 @@ import { choices, stepped } from "@sequoia-leaf/kit/choices.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { ask as fetchLeaf } from "@sequoia-leaf/kit/net.ts";
 import { type Board as Standings, readBoard } from "@sequoia-leaf/kit/person.ts";
-import { lastRoom, ROOM_COUNT, type RunView, slotOf, TRAILS, unfought, type Way, wayWords } from "@sequoia-leaf/raid";
+import {
+  lastRoom,
+  ROOM_COUNT,
+  type RunView,
+  slotOf,
+  summariseRun,
+  TRAILS,
+  unfought,
+  type Way,
+  wayWords,
+} from "@sequoia-leaf/raid";
 
 import { type Glyph, glyph, roomIcon } from "../art/icons.ts";
 import { paintLook } from "../art/place.ts";
@@ -118,7 +128,7 @@ function homeOf(go: FrontAsks, run: RunView): HTMLElement {
       "End this raid",
     );
   // What it is paid for: the rooms won of the fifteen (an endless run's deeper rooms pay nothing).
-  const won = run.record.filter((r) => r.result === "win" && r.room < ROOM_COUNT).length;
+  const won = summariseRun(run).cleared;
   return el(
     "div",
     "k-row ask",

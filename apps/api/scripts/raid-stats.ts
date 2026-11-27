@@ -24,7 +24,7 @@ import { compOf, placeOf, Tally } from "@sequoia-leaf/raid/rates.ts";
 import { Effect, FileSystem, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
-import { fightLines, type Row, rowOf } from "./fight-lines.ts";
+import { fightColumns, fightLines, type Row, rowOf } from "./fight-lines.ts";
 
 const args = process.argv.slice(2);
 const option = (name: string): string | undefined => args.find((a) => a.startsWith(`${name}=`))?.slice(name.length + 1);
@@ -38,10 +38,12 @@ const exportTo = option("export");
 const linesOf = (file: string) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    // A copy from before a later migration lacks its columns: those read as null.
+    const has = yield* fightColumns(sql);
     const all = SqlSchema.findAll({
       Request: Schema.Void,
       Result: Schema.Struct({ line: Schema.String }),
-      execute: () => fightLines(sql),
+      execute: () => fightLines(sql, has),
     });
     return (yield* all(undefined)).map((row) => row.line);
   }).pipe(Effect.provide(SqliteClient.layer({ filename: file, readonly: true })));

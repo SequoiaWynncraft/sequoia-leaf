@@ -20,6 +20,7 @@ import { lastRoom } from "./endless.ts";
 import { arrange } from "./formation.ts";
 import { SEATS } from "./hex.ts";
 import { chairsUsed, countTraits } from "./party.ts";
+import { roomsFought } from "./record.ts";
 import { closedNow } from "./room.ts";
 import {
   beginFight,
@@ -462,7 +463,7 @@ function handOutItems<R extends RunView>(run: R, habit: Habit, hands: Hands<R>):
 
 /** Does everything a player does before a fight, with the run's own actions, its habits drawn from the run's seed. */
 export function planRoom(run: Run, habit: Habit): void {
-  planWith(run, habit, DIRECT, { rng: mix(run.seed, 9000 + run.record.length) });
+  planWith(run, habit, DIRECT, { rng: mix(run.seed, 9000 + roomsFought(run)) });
 }
 /**
  * Does everything a player does before a fight, with `hands`, its habits drawn from `s`: settles

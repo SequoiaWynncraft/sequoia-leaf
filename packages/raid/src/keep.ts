@@ -10,6 +10,7 @@ import { readApart, readWeek } from "./depths.ts";
 import type { Table } from "./game.ts";
 import { readAlmanac, trailOpen } from "./outside.ts";
 import { isRecord, isWhole } from "./party.ts";
+import { storedRun } from "./record.ts";
 import type { Run } from "./run.ts";
 import { checkRun } from "./save.ts";
 import { type Slot, slotOf } from "./way.ts";
@@ -18,7 +19,9 @@ const UINT = 0xffffffff;
 
 const GAME = "little-raid-table";
 /**
- * 8: the table keeps its runs by slot (`held`) with the runs begun in each (`begun`), where it kept
+ * 9: each run's record keeps its last rooms (`KEPT_ROOMS`), as rows of values (`roomRow`), and the
+ * rooms before them as totals (`Run.before`), where it kept every room as an object; one of versions
+ * 1 to 8 has its rooms past the last `KEPT_ROOMS` folded as it is read. 8: the table keeps its runs by slot (`held`) with the runs begun in each (`begun`), where it kept
  * `run` and `endless` beside `runs` and `ventures`; each run keeps how it set out as one value
  * (`Run.way`), where it kept `trail`, `own` and `endless`; and the deepest rooms won with the
  * member's own figures are kept apart (`apart`). 7: a fight's setup keeps what binds it by what the
@@ -33,8 +36,8 @@ const GAME = "little-raid-table";
  * of versions 1 to 4 has Greg's meals at 3% each, and one of versions 1 to 3 has no rules, so a run
  * of the Wilds past room 5 picks one at its next boss.
  */
-export const TABLE_VERSION = 8;
-const READS = [1, 2, 3, 4, 5, 6, 7, TABLE_VERSION] as const;
+export const TABLE_VERSION = 9;
+const READS = [1, 2, 3, 4, 5, 6, 7, 8, TABLE_VERSION] as const;
 
 export const encodeTable = (state: Table): string =>
   JSON.stringify({
@@ -43,7 +46,10 @@ export const encodeTable = (state: Table): string =>
     rng: state.rng,
     era: state.era,
     begun: state.begun,
-    held: state.held,
+    held: {
+      main: state.held.main && storedRun(state.held.main),
+      endless: state.held.endless && storedRun(state.held.endless),
+    },
     almanac: state.almanac,
     trail: state.trail,
     looks: state.looks,
@@ -56,7 +62,7 @@ export const encodeTable = (state: Table): string =>
  * have been kept (one over, one of another slot, one with no number of `begun`), is let go of.
  */
 function keptRun(v: unknown, version: number, begun: number, slot: Slot): Run | null {
-  const read = v === null || v === undefined ? null : checkRun(v, version === 1, version < 5);
+  const read = v === null || v === undefined ? null : checkRun(v, version === 1, version < 5, version >= 9);
   if (!read?.ok || read.run.stage.phase === "over" || begun <= 0) return null;
   return slotOf(read.run.way) === slot ? read.run : null;
 }

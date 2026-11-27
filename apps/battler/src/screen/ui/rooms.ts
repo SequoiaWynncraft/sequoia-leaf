@@ -19,6 +19,7 @@ import {
   ROOM_COUNT,
   roomAt,
   roomOf,
+  roomsFought,
   type RunView,
 } from "@sequoia-leaf/raid";
 import { nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
@@ -82,7 +83,7 @@ export function trackPlaque(): HTMLElement {
 export function renderTrack(run: RunView): void {
   const track = document.getElementById("track");
   if (!track) return;
-  const key = `${S.runs}:${run.way.course.id}:${run.room}:${run.stage.phase}:${run.record.map((r) => r.result[0]).join("")}`;
+  const key = `${S.runs}:${run.way.course.id}:${run.room}:${run.stage.phase}:${roomsFought(run)}`;
   if (key === drawn.key) return;
   drawn.key = key;
   const pips = pipsOf(run, "button");

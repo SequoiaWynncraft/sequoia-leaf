@@ -15,6 +15,7 @@ import {
   type RunSummary,
   type RunView,
   specOf,
+  totalsOf,
   TRAILS,
   traitIn,
   type Way,
@@ -55,15 +56,14 @@ function howFar(run: RunView, sum: RunSummary): HTMLElement[] {
     const rooms = `${sum.cleared} room${sum.cleared === 1 ? "" : "s"}`;
     return [el("div", "", { text: `${TRAILS[sum.trail]?.name ?? ""}: ${rooms} won, as far as room ${sum.reached}.` })];
   }
-  const wins = run.record.filter((r) => r.result === "win");
-  const deepest = Math.max(0, ...wins.map((r) => r.room + 1));
+  const { won, deepest } = totalsOf(run);
   // The member's deepest with the figures the run set out with: everyone's, or their own, kept apart.
   const own = run.way.figures.pool === "own";
   const ever = (own ? S.apart.deepest : S.almanac.deepest)[course.id];
   const week = (own ? S.apart.week : S.week).deepest[course.id];
   const name = own ? `${wayWords(run.way).name}, ${wayWords(run.way).figures.toLowerCase()}` : wayWords(run.way).name;
   return [
-    el("div", "", { text: `${name}: ${wins.length} rooms won, as deep as room ${deepest}.` }),
+    el("div", "", { text: `${name}: ${won} rooms won, as deep as room ${deepest}.` }),
     ever > 0 ? el("div", "k-gold", { text: `Your deepest: room ${ever} ever, room ${week} this week.` }) : null,
   ].filter((e) => e !== null);
 }

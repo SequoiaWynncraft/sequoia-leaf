@@ -13,6 +13,7 @@ import { isEra, LEGACY_ERA } from "../content/releases.ts";
 import { MOST_ROOMS } from "../content/rooms.ts";
 import { isTraitId, renamedTrait } from "../content/traits.ts";
 import { isParty } from "../party.ts";
+import { storedRun } from "../record.ts";
 import { endingOf } from "../run.ts";
 import { checkRun, fields, Nonsense, partyAsShare } from "../save.ts";
 import {
@@ -28,14 +29,16 @@ import {
 
 const GAME = "little-raid-sitting";
 /**
- * 4: each seat's run keeps how it set out as one value (`Run.way`), where it kept `trail`, `own` and
+ * 5: each seat's run keeps its record as a table of version 9 does: its last rooms as rows, the
+ * rooms before them as totals. 4: each seat's run keeps how it set out as one value (`Run.way`), where it kept `trail`, `own` and
  * `endless`. 3: the sitting, each seat's run and each fight's setup keep their era. 2: what Greg has
  * eaten is a share of his health (`feed`), where it was meals of 3% each; its runs keep the Wilds'
  * wing as version 1's did. A sitting of versions 1 to 3 is read as well, each run's way from its
- * three fields; one of versions 1 and 2 is of `LEGACY_ERA`.
+ * three fields; one of versions 1 and 2 is of `LEGACY_ERA`; one of versions 1 to 4 keeps every room
+ * of each run as an object.
  */
-export const SITTING_VERSION = 4;
-const READS: readonly number[] = [1, 2, 3, SITTING_VERSION];
+export const SITTING_VERSION = 5;
+const READS: readonly number[] = [1, 2, 3, 4, SITTING_VERSION];
 
 export const encodeSitting = (t: Sitting): string =>
   JSON.stringify({
@@ -46,7 +49,7 @@ export const encodeSitting = (t: Sitting): string =>
     by: t.by,
     room: t.room,
     stage: t.stage,
-    seats: t.seats,
+    seats: t.seats.map((seat) => ({ ...seat, run: storedRun(seat.run) })),
     pairs: t.pairs,
     odd: t.odd,
     owed: t.owed,
@@ -75,10 +78,10 @@ export function readWho(v: unknown): Who {
     habit: one(renamedTrait(w.habit), isTraitId, "a regular"),
   };
 }
-/** A seat, its run kept by a sitting of version 1 (`meals`) or since. */
-function readSeat(v: unknown, meals: boolean): Seat {
+/** A seat, its run kept by a sitting of version 1 (`meals`) or since, its record as rows (`rows`: since version 5) or not. */
+function readSeat(v: unknown, meals: boolean, rows: boolean): Seat {
   const s = record(v, "a seat");
-  const run = checkRun(s.run, false, meals);
+  const run = checkRun(s.run, false, meals, rows);
   if (!run.ok) return bad("a seat's run");
   const shown = one(s.shown, isParty, "a seat's board");
   return {
@@ -174,7 +177,9 @@ function read(v: unknown): Sitting {
     by: text(r.by, 64, "who opened it"),
     room: whole(r.room, 0, MOST_ROOMS, "the room"),
     stage: readStage(r.stage),
-    seats: list(r.seats, CHAIRS, "the seats").map((seat) => readSeat(seat, r.v === 1)),
+    seats: list(r.seats, CHAIRS, "the seats").map((seat) =>
+      readSeat(seat, r.v === 1, typeof r.v === "number" && r.v >= 5),
+    ),
     pairs,
     odd: r.odd === null ? null : readTwo(r.odd, "the odd one out"),
     owed: list(r.owed, CHAIRS, "what is owed").map(readOwed),

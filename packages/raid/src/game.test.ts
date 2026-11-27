@@ -21,7 +21,7 @@ import { newLooks } from "./content/looks.ts";
 import { eraAt, LEGACY_ERA } from "./content/releases.ts";
 import { LEVELS, MAX_LEVEL, regularOf, ROOMS } from "./content/rooms.ts";
 import { resolveFight } from "./fight/engine.ts";
-import { MET_APART, opposition } from "./foe.ts";
+import { opposition } from "./foe.ts";
 import { readFight } from "./fought.ts";
 import {
   decodeTable,
@@ -40,6 +40,7 @@ import {
 import { beatenBosses, payout, recordRun, trailCleared, trailOpen } from "./outside.ts";
 import { rosterOf } from "./own.ts";
 import { isParty, type Party, traitSteps } from "./party.ts";
+import { MET_APART, noRooms } from "./record.ts";
 import {
   fieldCap,
   foughtOf,
@@ -518,7 +519,7 @@ describe("keeping a table", () => {
     const state = planned(started(9));
     const run = state.held.main;
     if (!run) throw new Error("no run");
-    const stored = tableKeptAs(RAID.encode(state), TABLE_VERSION - 1);
+    const stored = tableKeptAs(RAID.encode(state), 7);
     // The charm among the boons, no emblem anywhere, and the foe with the old `charms`.
     const old = JSON.stringify({
       ...stored,
@@ -1046,6 +1047,7 @@ describe("another member's board in a sparring room", () => {
         level: MAX_LEVEL,
         boons: ["extrachair"],
         record: [],
+        before: noRooms(),
         way: onTrail(0),
         era: CAT.era,
       }),
@@ -1278,7 +1280,7 @@ const fightsOf = (done: Done<Table, RaidNote>) =>
   (done.log ?? []).filter((l) => l.kind === "raid_fight").map((l) => readFight(wire(l.data)));
 
 describe("every fight decided, kept for the staff", () => {
-  test("a fight logs one record: the party it was decided from, and how it came out; its takings log none", () => {
+  test("a fight logs one record: the party it was decided from, how it came out, and its setup; its takings log none", () => {
     const sent = must(planned(started(5)), { do: "fight" });
     const decided = fought(sent.state);
     if (!decided) throw new Error("no fight");
@@ -1305,6 +1307,7 @@ describe("every fight decided, kept for the staff", () => {
         acorns: runOf(sent.state).acorns,
         party: { figures: ours.figures, traits: traitSteps(CAT, ours), boons: [] },
         against: null,
+        setup: decided.setup,
       },
     ]);
     expect(fightsOf(taken)).toEqual([]);

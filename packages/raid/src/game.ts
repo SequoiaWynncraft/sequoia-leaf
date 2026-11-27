@@ -54,7 +54,6 @@ import { type Era, eraAt } from "./content/releases.ts";
 import { TRAIL_COUNT } from "./content/rooms.ts";
 import { type Apart, type Depths, noApart, paidFor, reached, readWeek, type Week, weekAt } from "./depths.ts";
 import { isHeld } from "./endless.ts";
-import { metLately } from "./foe.ts";
 import { fightRecord } from "./fought.ts";
 import { decodeTable, encodeTable } from "./keep.ts";
 import {
@@ -70,6 +69,7 @@ import {
 import { type Roster, rosterOf } from "./own.ts";
 import { isRecord, isWhole } from "./party.ts";
 import { postcard } from "./postcard.ts";
+import { metLately, roomsFought } from "./record.ts";
 import {
   abandon,
   type Choice,
@@ -215,6 +215,7 @@ export function runView(run: RunView): RunView {
     boons: run.boons,
     foe: run.foe,
     record: run.record,
+    before: run.before,
     nextId: run.nextId,
     last: run.last,
     wing: run.wing,
@@ -354,7 +355,7 @@ function play(s: Table, c: Aimed, ctx: Ctx): Answer {
   if (!run) return no("no_run");
   // The run moves now: it draws from the era it is moved in.
   run.era = s.era;
-  const room = run.record.length;
+  const rooms = roomsFought(run);
   // The takings are paid from the fight as it was decided when the party set out, against whoever was across.
   const before = foughtOf(run);
   const seconds = before?.outcome.seconds ?? 0;
@@ -365,7 +366,8 @@ function play(s: Table, c: Aimed, ctx: Ctx): Answer {
   // Every fight decided, kept whole for the staff's analysis.
   const decided = c.do === "fight" ? foughtOf(run) : null;
   const log: Logged[] = decided ? [{ kind: LOGGED.raidFight, data: fightRecord(s.begun[slot], run, decided) }] : [];
-  const fought = run.record[room];
+  // The room the takings wrote down, the newest in the record.
+  const fought = roomsFought(run) > rooms ? run.record.at(-1) : undefined;
   if (c.do === "take" && fought) {
     log.push({
       kind: LOGGED.raidRoom,
@@ -400,14 +402,14 @@ export function meets(state: Table, c: RaidCommand): Meeting | null {
   const held = isHeld(run, to) ? lane.held(to) : null;
   if (held !== null) return { slot: held, avoid: [], held: true };
   const board = lane.board(to);
-  return board === null ? null : { slot: board, avoid: metLately(run.record, run.foe) };
+  return board === null ? null : { slot: board, avoid: metLately(run, run.foe) };
 }
 
 /**
  * Whether a run has fought no room yet. Such a run is not put down: setting out afresh or walking
  * home is refused, so that a run's opening cannot be drawn again and again for free.
  */
-export const unfought = (run: Pick<Run, "record">): boolean => run.record.length === 0;
+export const unfought = (run: Pick<Run, "record" | "before">): boolean => roomsFought(run) === 0;
 /** Whether a command would put down a run that has fought no room yet (`unfought`): setting out afresh in its slot, or walking home. */
 function putsDownUnfought(s: Table, c: RaidCommand): boolean {
   const slot = c.do === "start" ? setOutIn(c) : c.do === "abandon" ? aimedAt(c) : null;
@@ -568,7 +570,7 @@ export function planCommands(view: TableView, habit: Habit, slot: Slot = "main")
     return done ?? refusal(c.do === "choose" ? "nothing_to_choose" : "not_enough_acorns");
   };
   // The page's own stream for the bot's habits: the run's is Leaf's.
-  planWith(run, habit, hands, { rng: mix(view.begun[slot], 9000 + run.record.length) });
+  planWith(run, habit, hands, { rng: mix(view.begun[slot], 9000 + roomsFought(run)) });
   return out;
 }
 

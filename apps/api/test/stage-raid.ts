@@ -29,6 +29,7 @@ import {
   isFinishedId,
   isMemberId,
   isRuleId,
+  keepRoom,
   lanes,
   layOutAfresh,
   LEGACY_ERA,
@@ -72,7 +73,7 @@ function venture(table: Table, v: Record<string, unknown>, own: Roster): Run | n
   table.held.endless = run;
   if (room === 0) return run;
   for (let i = 0; i < room; i++)
-    run.record.push({ room: i, kind: roomAt(i)?.kind ?? "spar", result: "win", standing: [3, 0], boss: null });
+    keepRoom(run, { room: i, kind: roomAt(i)?.kind ?? "spar", result: "win", standing: [3, 0], boss: null });
   run.room = room;
   run.level = whole(v.level, 1, MAX_LEVEL) ?? MAX_LEVEL;
   run.acorns = whole(v.acorns, 0, 999) ?? 50;

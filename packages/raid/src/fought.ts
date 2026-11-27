@@ -1,17 +1,18 @@
 /**
  * A room fought, as Leaf keeps it for the staff's analysis (`raid_fight`, Leaf's `raid_fights`): which
- * run and room, how the run set out, who was across, how it came out, and both parties as they
- * fought. One is written for every fight decided, on every way of setting out; nothing a player sees
- * reads it.
+ * run and room, how the run set out, who was across, how it came out, both parties as they fought,
+ * and the fight's setup, from which it plays again exactly as it was decided (`replayOf`). One is
+ * written for every fight decided, on every way of setting out.
  */
 import { type BoonId, isBoonId } from "./content/boons.ts";
 import { type Catalog, catalogOf } from "./content/catalog.ts";
 import { type Era, eraAt, isEra, LEGACY_ERA } from "./content/releases.ts";
 import { nowCalled, regularOf, type RoomKind, type RoomSpec } from "./content/rooms.ts";
 import { isTraitId, renamedTrait, type TraitId } from "./content/traits.ts";
-import type { FightResult, FightSummary } from "./fight/types.ts";
+import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
 import { isPlaced, type Party, type Placed, traitSteps } from "./party.ts";
 import { type Fought, resolveLost, type Run } from "./run.ts";
+import { fields, Nonsense } from "./save.ts";
 import { type CourseId, courseOf, type OldWay, oldWayOf, type Pool, wayLogged, wayOfLogged } from "./way.ts";
 
 /** A party as it fought: its figures as they stood, the traits they switched on with their steps, and its boons. */
@@ -49,6 +50,12 @@ export type FightRecord = {
   party: FoughtSide;
   /** A regular's or a member's party; null for the forest's. */
   against: FoughtSide | null;
+  /**
+   * What the fight was decided from, as a run keeps its last fight's: its seed, its era, both parties
+   * whole, and what bound its room (`FightRules`, and the rules named). Null for a fight kept before
+   * records kept it: that one cannot be played again.
+   */
+  setup: FightSetup | null;
 };
 
 /** Health left on one side as a share of what its own figures came with; the summoned are left out. */
@@ -99,6 +106,7 @@ export function fightRecord(runs: number, run: Run, { setup, outcome }: Fought):
     acorns: run.acorns,
     party: sideOf(catalogOf(setup), ours, run.boons),
     against: kind === "spar" ? sideOf(catalogOf(setup), theirs, theirs.boons) : null,
+    setup,
   };
 }
 
@@ -150,6 +158,17 @@ function howOf(
   return { result, margin: by, seconds, resolve, level, acorns };
 }
 
+/** A record's setup read back as a run's last fight is (`fields.setup`); none for one kept before records kept it; undefined for one that does not read. */
+function setupOf(v: unknown): FightSetup | null | undefined {
+  if (v === undefined || v === null) return null;
+  try {
+    return fields.setup(v, "the fight's setup");
+  } catch (err) {
+    if (err instanceof Nonsense) return undefined;
+    throw err;
+  }
+}
+
 /**
  * A fight's record read back, as Leaf stores it or a report reads it, checked as the rules have it;
  * null for anything else. `at` is when its row was written, where the reader has it.
@@ -160,6 +179,16 @@ export function readFight(v: unknown, at?: number): FightRecord | null {
   const how = howOf(v);
   const party = readSide(v.party);
   const against = v.against === null ? null : readSide(v.against);
+  const setup = setupOf(v.setup);
   if (where === null || how === null || party === null || (against === null && v.against !== null)) return null;
-  return { ...where, ...how, party, against };
+  return setup === undefined ? null : { ...where, ...how, party, against, setup };
 }
+
+/**
+ * A fight's record (`readFight`: a row of `raid_fights` with its JSON columns decoded, as Leaf's
+ * `fightLines` gives one, never the row's text as SQLite returns it), as the page plays it again: its
+ * setup, which plays to the end Leaf decided while the rules are the ones it was decided by. Null for
+ * a row kept before rows kept their setup (its record says `setup: null`), and for one that does not
+ * read.
+ */
+export const replayOf = (row: unknown, at?: number): FightSetup | null => readFight(row, at)?.setup ?? null;

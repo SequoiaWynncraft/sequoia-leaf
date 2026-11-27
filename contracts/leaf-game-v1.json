@@ -732,6 +732,17 @@
               "might": 100
             },
             "record": [],
+            "before": {
+              "fought": 0,
+              "won": 0,
+              "lost": 0,
+              "furthest": 0,
+              "deepest": 0,
+              "cleared": [],
+              "bosses": [],
+              "bossesPast": 0,
+              "met": []
+            },
             "nextId": 2,
             "last": null,
             "wing": null,
@@ -932,6 +943,17 @@
               "might": 100
             },
             "record": [],
+            "before": {
+              "fought": 0,
+              "won": 0,
+              "lost": 0,
+              "furthest": 0,
+              "deepest": 0,
+              "cleared": [],
+              "bosses": [],
+              "bossesPast": 0,
+              "met": []
+            },
             "nextId": 2,
             "last": null,
             "wing": null,
@@ -1118,6 +1140,17 @@
               "might": 100
             },
             "record": [],
+            "before": {
+              "fought": 0,
+              "won": 0,
+              "lost": 0,
+              "furthest": 0,
+              "deepest": 0,
+              "cleared": [],
+              "bosses": [],
+              "bossesPast": 0,
+              "met": []
+            },
             "nextId": 2,
             "last": null,
             "wing": null,
@@ -1351,6 +1384,17 @@
               "might": 100
             },
             "record": [],
+            "before": {
+              "fought": 0,
+              "won": 0,
+              "lost": 0,
+              "furthest": 0,
+              "deepest": 0,
+              "cleared": [],
+              "bosses": [],
+              "bossesPast": 0,
+              "met": []
+            },
             "nextId": 2,
             "last": null,
             "wing": null,
@@ -1539,6 +1583,17 @@
               "might": 100
             },
             "record": [],
+            "before": {
+              "fought": 0,
+              "won": 0,
+              "lost": 0,
+              "furthest": 0,
+              "deepest": 0,
+              "cleared": [],
+              "bosses": [],
+              "bossesPast": 0,
+              "met": []
+            },
             "nextId": 2,
             "last": null,
             "wing": null,
@@ -2910,6 +2965,17 @@
               "might": 100
             },
             "record": [],
+            "before": {
+              "fought": 0,
+              "won": 0,
+              "lost": 0,
+              "furthest": 0,
+              "deepest": 0,
+              "cleared": [],
+              "bosses": [],
+              "bossesPast": 0,
+              "met": []
+            },
             "nextId": 2,
             "last": null,
             "wing": null,
@@ -3005,6 +3071,17 @@
               "might": 100
             },
             "record": [],
+            "before": {
+              "fought": 0,
+              "won": 0,
+              "lost": 0,
+              "furthest": 0,
+              "deepest": 0,
+              "cleared": [],
+              "bosses": [],
+              "bossesPast": 0,
+              "met": []
+            },
             "nextId": 1,
             "last": null,
             "wing": null,
@@ -3877,6 +3954,17 @@
             "might": 100
           },
           "record": [],
+          "before": {
+            "fought": 0,
+            "won": 0,
+            "lost": 0,
+            "furthest": 0,
+            "deepest": 0,
+            "cleared": [],
+            "bosses": [],
+            "bossesPast": 0,
+            "met": []
+          },
           "nextId": 1,
           "last": null,
           "wing": null,

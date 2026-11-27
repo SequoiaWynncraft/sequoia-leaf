@@ -300,10 +300,11 @@ export const ROOMS: readonly RoomSpec[] = [
 ];
 export const ROOM_COUNT = ROOMS.length;
 /**
- * The most rooms a run is read with, and so the most a streak or a record runs to: an endless run
- * has no last room, and this is past any a run could reach, so no run the rules make is refused.
+ * The most rooms a run is read with, and so the most a streak or a count of rooms runs to: an endless
+ * run has no last room, so any whole number counts exactly. A run's record keeps its last rooms
+ * alone (`record.ts`), so a run deep in an endless way is as small as one at its fifteenth room.
  */
-export const MOST_ROOMS = 1_000_000;
+export const MOST_ROOMS = Number.MAX_SAFE_INTEGER;
 /** The rooms a wing ends on, counting from 0. */
 export const BOSS_ROOMS: readonly number[] = ROOMS.flatMap((room, i) => (room.kind === "boss" ? [i] : []));
 
