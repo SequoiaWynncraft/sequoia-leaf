@@ -109,8 +109,10 @@ export const artPx = (): number => V.z / V.dpr;
 export const place = (): Place => ({ w: V.w, h: V.h, bx: V.bx, by: V.by });
 
 /**
- * Works out the size of an art pixel and where the board goes, from the room the interface
- * leaves between the bar along the top and the stall along the bottom.
+ * Works out the size of an art pixel and where the board goes, from the window: the room above the
+ * panel along the bottom, which has one height for each size of window whatever it holds (raid.css),
+ * so that nothing done on the table fits the table again. Done when the page opens and when the
+ * window changes size, never because something in the interface did.
  */
 export function layout(): void {
   if (!view || !overCanvas) return;
@@ -217,17 +219,6 @@ export function open(h: Hooks): void {
     window.clearTimeout(waiting);
     waiting = window.setTimeout(layout, 60);
   });
-  // The stall grows and shrinks with what is on it; the table keeps clear of it.
-  const bottom = document.getElementById("bottom");
-  let bottomTop = -1;
-  if (bottom) {
-    new ResizeObserver(() => {
-      const top = Math.round(bottom.getBoundingClientRect().top);
-      if (top === bottomTop) return;
-      bottomTop = top;
-      layout();
-    }).observe(bottom);
-  }
   layout();
   paced(scope(), frame).wake();
 }

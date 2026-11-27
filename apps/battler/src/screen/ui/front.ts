@@ -46,7 +46,7 @@ import {
   trailClosed,
 } from "./modes.ts";
 import { choosesFigures, setsOutOwn, unshown, wayPrefix, waysOf } from "./own.ts";
-import { readNow, readWoods, spanTabs, takenLine, woodsAt, woodsAway, woodsOpts } from "./woods.ts";
+import { readNow, readWoods, spanTabs, woodsAt, woodsAway, woodsOpts } from "./woods.ts";
 
 /** What the front page asks of the rest of the page. */
 export interface FrontAsks {
@@ -111,66 +111,102 @@ const atNow = (): At => ({
 /** A button's id for a run: as it is for the run in hand, and with `-endless` for the endless run. */
 const idFor = (id: string, slot: Slot): string => (slot === "main" ? id : `${id}-${slot}`);
 
-/** Ending a run before its last room: asked first, and not before its first room is fought (the rules' `unfought`). */
+/** Ending a run before its last room: not before its first room is fought (the rules' `unfought`), and asked first (`strip`). */
 function homeOf(go: FrontAsks, run: RunView): HTMLElement {
   if (unfought(run))
     return el("span", "k-read k-dim", { text: "You can end this raid once its first room is fought." });
   const slot = slotOf(run.way);
-  const asking = (on: boolean) => (): void => {
-    kept.home = on ? slot : null;
-    go.redraw();
-  };
-  if (kept.home !== slot)
-    return el(
-      "button",
-      "k-btn coral sm",
-      { type: "button", id: idFor("gohome", slot), onclick: asking(true) },
-      "End this raid",
-    );
-  // What it is paid for: the rooms won of the fifteen (an endless run's deeper rooms pay nothing).
-  const won = summariseRun(run).cleared;
   return el(
-    "div",
-    "k-row ask",
-    {},
-    el("span", "k-d", {
-      text: `End this raid now? You are paid for the ${won} ${won === 1 ? "room" : "rooms"} you won.`,
-    }),
-    el("button", "k-btn coral sm", { type: "button", onclick: () => go.goHome(slot) }, "End raid"),
-    el("button", "k-btn wood sm", { type: "button", onclick: asking(false) }, "Keep playing"),
+    "button",
+    "k-btn coral sm",
+    { type: "button", id: idFor("gohome", slot), onclick: () => askHome(go, slot, true) },
+    "End this raid",
   );
 }
 
-/** A run laid out, on one line: what it is (its trail, or its endless way: `wayWords`), its room and health, ending it, and carrying on. */
+/** Asks whether to end a run, or stops asking: drawn again with the keyboard on End raid, or back on End this raid. */
+function askHome(go: FrontAsks, slot: Slot, on: boolean): void {
+  kept.home = on ? slot : null;
+  go.redraw();
+  document.getElementById(idFor(on ? "endraid" : "gohome", slot))?.focus({ preventScroll: true });
+}
+
+/**
+ * A run laid out, on one line: what it is (its trail, or its endless way: `wayWords`), its room and
+ * health, ending it, and carrying on. Ending it is asked in the same place: the question where the
+ * run's line is and its two answers where its buttons are, both held there all along, so the row is
+ * one height before, while and after it is asked.
+ */
 function strip(go: FrontAsks, run: RunView): HTMLElement {
   const slot = slotOf(run.way);
   const where =
     lastRoom(run) === Infinity
       ? `${wayPrefix(run)}${endlessWhere(run)}`
       : `${wayPrefix(run)}Room ${run.room + 1} of ${ROOM_COUNT}. Health ${run.resolve}.`;
+  const asking = kept.home === slot && !unfought(run);
+  // What it is paid for: the rooms won of the fifteen (an endless run's deeper rooms pay nothing).
+  const won = summariseRun(run).cleared;
+  const askable = !unfought(run);
+  const name = wayWords(run.way).name;
   return el(
     "div",
     "k-card lit run",
     {},
     el(
       "div",
-      "what k-grow",
+      "stack k-grow",
       {},
-      el("b", "k-gold", { text: wayWords(run.way).name }),
-      el("span", "k-dim", { text: where }),
+      el(
+        "div",
+        "what",
+        unshown(!asking),
+        // Each on one line, cut where the row is too narrow, and said whole to the pointer.
+        el("b", "k-gold", { text: name, title: name }),
+        el("span", "k-dim", { text: where, title: where }),
+      ),
+      askable
+        ? el("span", "k-d ask", {
+            text: `End this raid now? You are paid for the ${won} ${won === 1 ? "room" : "rooms"} you won.`,
+            ...unshown(asking),
+          })
+        : null,
     ),
     el(
       "div",
-      "k-row acts",
+      "stack",
       {},
-      homeOf(go, run),
       el(
-        "button",
-        "k-btn sm",
-        { type: "button", id: idFor("carryon", slot), onclick: () => go.carryOn(slot) },
-        pic(glyph("play")),
-        "Carry on",
+        "div",
+        "k-row acts",
+        unshown(!asking),
+        homeOf(go, run),
+        el(
+          "button",
+          "k-btn sm",
+          { type: "button", id: idFor("carryon", slot), onclick: () => go.carryOn(slot) },
+          pic(glyph("play")),
+          "Carry on",
+        ),
       ),
+      askable
+        ? el(
+            "div",
+            "k-row acts",
+            unshown(asking),
+            el(
+              "button",
+              "k-btn coral sm",
+              { type: "button", id: idFor("endraid", slot), onclick: () => go.goHome(slot) },
+              "End raid",
+            ),
+            el(
+              "button",
+              "k-btn wood sm",
+              { type: "button", id: idFor("keepplaying", slot), onclick: () => askHome(go, slot, false) },
+              "Keep playing",
+            ),
+          )
+        : null,
     ),
   );
 }
@@ -272,7 +308,10 @@ function trailsOf(go: FrontAsks, at: At): HTMLElement[] {
   return [group, el("div", "stack", {}, ...about)];
 }
 
-/** Set out, or carry on with the run laid out (and beside it New raid); under them, why not or what a new raid ends. */
+/**
+ * Set out, or carry on with the run laid out, the whole width of the card whichever it is; under it,
+ * why not, or New raid and what it ends, on a line of one height either way.
+ */
 function footOfCard(go: FrontAsks, mode: Mode, at: At): HTMLElement {
   const foot = footOf(mode, at);
   const run = mode.run(at);
@@ -296,7 +335,6 @@ function footOfCard(go: FrontAsks, mode: Mode, at: At): HTMLElement {
       "div",
       "k-row",
       {},
-      foot.anew ? start("New raid", "wood") : null,
       foot.button === "setOut"
         ? start("Set out", "")
         : el(
@@ -307,14 +345,21 @@ function footOfCard(go: FrontAsks, mode: Mode, at: At): HTMLElement {
             "Carry on",
           ),
     ),
-    el("p", "k-d", { text: foot.line ?? "" }),
+    el(
+      "div",
+      "k-row line",
+      {},
+      foot.anew ? start("New raid", "wood sm") : null,
+      el("p", "k-d", { text: foot.line ?? "" }),
+    ),
   );
 }
 
 /**
  * The chosen mode: its name, what it is, a picture of the table, its options, and its foot. The
- * words of every mode shown in its category are laid in one place, the others hidden, so choosing
- * between them moves nothing.
+ * words of every mode shown are laid in one place, the others hidden, so the card's head is the
+ * same height whichever is chosen and choosing moves nothing (a phone holds only the category's,
+ * in a card of one height: `other`, raid.css).
  */
 function card(go: FrontAsks, mode: Mode, at: At, shown: readonly Mode[]): HTMLElement {
   const run = mode.run(at);
@@ -343,17 +388,15 @@ function card(go: FrontAsks, mode: Mode, at: At, shown: readonly Mode[]): HTMLEl
         "div",
         "stack",
         {},
-        ...shown
-          .filter((m) => m.category === mode.category)
-          .map((m) =>
-            el(
-              "div",
-              "k-col tight",
-              unshown(m === mode),
-              el("h2", "k-title big", { text: m.name }),
-              el("p", "k-d", { text: m.text }),
-            ),
+        ...shown.map((m) =>
+          el(
+            "div",
+            m.category === mode.category ? "k-col tight" : "k-col tight other",
+            unshown(m === mode),
+            el("h2", "k-title big", { text: m.name }),
+            el("p", "k-d", { text: m.text }),
           ),
+        ),
       ),
     ),
     el("div", "mode-opts k-scroll", {}, ...options),
@@ -375,9 +418,11 @@ const boardRow = (r: BoardRow): HTMLElement =>
   );
 
 /**
- * A board: whose figures it counts, to a member who can choose them; its title (and under it,
- * `tabs`, the boards to choose between), its rows (the member's own lit), and the member's own
- * under them when it is below them; one with nobody on it says so.
+ * A board: whose figures it counts, to a member who can choose them (the line held on every board for
+ * them, unseen where a board does not count by figures, so its title and rows never move); its
+ * title; its rows (the member's own lit) and the member's own under them when it is below them, in a
+ * box of their own that scrolls; one with nobody on it says so. Under the rows, `tabs`, the boards to
+ * choose between: a board with tabs starts its rows where one without does.
  */
 export function boardOf(board: Board, tabs: HTMLElement | null = null): HTMLElement {
   const { top, under } = listed(board, BOARD_MOST);
@@ -386,12 +431,19 @@ export function boardOf(board: Board, tabs: HTMLElement | null = null): HTMLElem
     "section",
     "k-card board",
     { "aria-label": figures ? `${board.title}, ${figures.toLowerCase()}` : board.title },
-    figures ? el("div", "k-label", { text: figures }) : null,
+    choosesFigures()
+      ? el("div", "k-label figures", { text: figures ?? "All figures", ...unshown(figures !== null) })
+      : null,
     el("h2", "k-title", { text: board.title }),
+    el(
+      "div",
+      "board-rows k-scroll",
+      {},
+      ...top.map(boardRow),
+      ...(under ? [el("hr", "k-rule"), boardRow(under)] : []),
+      top.length === 0 && !under ? el("p", "k-dim", { text: "Nobody yet." }) : null,
+    ),
     tabs,
-    ...top.map(boardRow),
-    ...(under ? [el("hr", "k-rule"), boardRow(under)] : []),
-    top.length === 0 && !under ? el("p", "k-dim", { text: "Nobody yet." }) : null,
   );
 }
 
@@ -446,19 +498,24 @@ export function frontBody(asked: FrontAsks): HTMLElement {
   readWoods(mode, at, go.redraw);
   const runs = laidOut(at);
   const live = liveStrip();
+  // The strips, the categories, the card and the board scroll between the title bar and the foot.
   return el(
     "div",
     "k-body menu",
     {},
-    takenLine(),
-    runs.length > 0 || live ? el("div", "runs", {}, ...runs.map((r) => strip(go, r.run)), live) : null,
     el(
       "div",
-      "menu-cols",
+      "menu-mid k-scroll",
       {},
-      picker(go, shown, mode),
-      card(go, mode, at, shown),
-      boardOf(mode.board(at), spanTabs(mode, at, go.redraw)),
+      runs.length > 0 || live ? el("div", "runs", {}, ...runs.map((r) => strip(go, r.run)), live) : null,
+      el(
+        "div",
+        "menu-cols",
+        {},
+        picker(go, shown, mode),
+        card(go, mode, at, shown),
+        boardOf(mode.board(at), spanTabs(mode, at, go.redraw)),
+      ),
     ),
     bottom(go),
   );
