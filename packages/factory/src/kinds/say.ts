@@ -60,31 +60,44 @@ export function slow(k: Kit, y: Yard): string {
   return share < 1 ? `, at ${Math.floor(share * 100)}% of its pace: the yard is short of power` : "";
 }
 
-/** Whether the piece at `to` could ever take a thing from the tile `i`, handed it there: by that side, and that thing. A full belt or machine still counts. */
-const takes = (k: Kit, y: Yard, i: number, to: number, n: Item): boolean => k.takes(y, to, i) && k.wants(y, to, n);
-
-/** Whether what stands where a piece sends a thing could ever take it: yes, nothing stands there, or never. */
-function takenAhead(k: Kit, y: Yard, i: number, n: Item): "yes" | "nothing" | "never" {
+/**
+ * Where the piece on its own tile `i` sends a thing held ready: each tile it leaves from and the tile it
+ * goes to. One of one tile sends from its tile, ahead or by the ways it sends the thing `n` by; one of
+ * more sends from each way out that sends its finished thing (or, with `also`, its by-product).
+ */
+function sendings(k: Kit, y: Yard, i: number, n: Item, also: boolean): { from: number; to: number }[] {
+  const outs = k.outsOf(y, i);
+  if (outs.length > 0)
+    return outs.flatMap((o, p) =>
+      o.also === also ? [{ from: i + o.dx + o.dy * y.land.w, to: k.portTo(y, i, p) }] : [],
+    );
   const ways = k.waysOf(y.kind[i] ?? k.NONE);
-  const sends = ways > 0 ? k.sendsOf(y, i, n) : 1;
+  if (ways === 0) return [{ from: i, to: k.nextOf(y, i) }];
+  const sends = k.sendsOf(y, i, n);
+  return [0, 1, 2].filter((w) => w < ways && ((sends >> w) & 1) === 1).map((w) => ({ from: i, to: k.wayOut(y, i, w) }));
+}
+
+/**
+ * Whether what stands where a piece sends a thing could ever take it, from the tile it leaves by: yes,
+ * nothing stands there, or never. A full belt or machine still counts.
+ */
+function takenAhead(k: Kit, y: Yard, i: number, n: Item, also = false): "yes" | "nothing" | "never" {
   let found: "nothing" | "never" = "nothing";
-  for (let w = 0; w < Math.max(1, ways); w++) {
-    if (((sends >> w) & 1) === 0) continue;
-    const to = ways > 0 ? k.wayOut(y, i, w) : k.nextOf(y, i);
+  for (const { from, to } of sendings(k, y, i, n, also)) {
     if (to < 0 || (y.kind[to] ?? k.NONE) === k.NONE) continue;
     found = "never";
-    if (takes(k, y, i, to, n)) return "yes";
+    if (k.takes(y, to, from) && k.wants(y, to, n)) return "yes";
   }
   return found;
 }
 
-/** The state of a piece holding a thing ready with nowhere to go: waiting if what stands there takes it, else blocked. */
-export const stuckAs = (k: Kit, y: Yard, i: number, n: Item): number =>
-  takenAhead(k, y, i, n) === "yes" ? as("waiting") : as("blocked", true);
+/** The state of a piece holding a thing ready with nowhere to go (with `also`, its by-product): waiting if what stands there takes it, else blocked. */
+export const stuckAs = (k: Kit, y: Yard, i: number, n: Item, also = false): number =>
+  takenAhead(k, y, i, n, also) === "yes" ? as("waiting") : as("blocked", true);
 
-/** Why a thing held ready has nowhere to go, in words: what stands ahead never takes it, or nothing does. */
-export function nowhere(k: Kit, y: Yard, i: number, n: Item): string {
-  if (takenAhead(k, y, i, n) === "never") return `The piece it points at does not take ${many(k, n)}.`;
+/** Why a thing held ready (with `also`, a by-product) has nowhere to go, in words: what stands ahead never takes it, or nothing does. */
+export function nowhere(k: Kit, y: Yard, i: number, n: Item, also = false): string {
+  if (takenAhead(k, y, i, n, also) === "never") return `The piece it points at does not take ${many(k, n)}.`;
   // Only a splitter has ways to shut, or to take things in by.
   const shut = y.shut[i] ?? 0;
   const closed = shut | (y.ins[i] ?? 0);

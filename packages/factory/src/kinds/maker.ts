@@ -17,7 +17,7 @@ import { gradeKept } from "./kept.ts";
 import type { Hooks, Unchecked, Words } from "./kind.ts";
 import type { Kit } from "./kit.ts";
 import { aheadOf, everySide } from "./line.ts";
-import { as, asItem, holding, list, many, NO_POWER, nowhere, rateOf, slow, stuckAs } from "./say.ts";
+import { as, asItem, holding, list, many, NO_POWER, nowhere, rateOf, slow, stuckAs, TROUBLE } from "./say.ts";
 
 const NO_RECIPES: readonly Recipe[] = [];
 
@@ -140,8 +140,8 @@ function condition(k: Kit, y: Yard, i: number, lit: boolean): number {
   if (!lit) return as("unpowered", true);
   const h = y.holders;
   const r = k.holderOf(y, i);
-  const out = h.out[r] ?? k.NONE;
-  if (k.isItem(out)) return stuckAs(k, y, i, out);
+  const held = heldOut(k, y, i, r);
+  if (held) return stuckAs(k, y, i, held.n, held.also);
   if (k.isItem(h.making[r] ?? k.NONE)) return as("working");
   const rec = aim(k, y, i);
   if (!rec) return as("idle", (h.count[r] ?? 0) > 0);
@@ -156,10 +156,24 @@ function condition(k: Kit, y: Yard, i: number, lit: boolean): number {
   return !missing ? as("working") : full ? as("starved", true) : as("waiting");
 }
 
-/** What a machine holds ready with nowhere to send it says, for one that hands on ahead. */
-export function outWords(k: Kit, y: Yard, i: number, state: string, out: Item): Words {
+/**
+ * What a machine holds ready to leave that it is to be told by: its finished thing or its by-product,
+ * whichever cannot leave by its way out (the by-product only when the thing can), else the one it holds.
+ */
+function heldOut(k: Kit, y: Yard, i: number, r: number): { n: Item; also: boolean } | null {
+  const out = asItem(k, y.holders.out[r] ?? k.NONE);
+  const also = asItem(k, y.holders.also[r] ?? k.NONE);
+  const thing = out === null ? null : { n: out, also: false };
+  const beside = also === null ? null : { n: also, also: true };
+  if (thing && beside && stuckAs(k, y, i, thing.n) < TROUBLE && stuckAs(k, y, i, beside.n, true) >= TROUBLE)
+    return beside;
+  return thing ?? beside;
+}
+
+/** What a machine holds ready with nowhere to send it says (with `also`, its by-product), for one that hands on ahead or by its ways out. */
+export function outWords(k: Kit, y: Yard, i: number, state: string, out: Item, also = false): Words {
   return state === "blocked"
-    ? { line: nowhere(k, y, i, out), stuck: out }
+    ? { line: nowhere(k, y, i, out, also), stuck: out }
     : { line: `Waiting: no room ahead for its ${many(k, out)}.` };
 }
 
@@ -168,8 +182,8 @@ function words(k: Kit, y: Yard, i: number, state: string): Words {
   if (state === "unpowered") return { line: NO_POWER };
   const h = y.holders;
   const r = k.holderOf(y, i);
-  const out = asItem(k, h.out[r] ?? k.NONE);
-  if (out !== null) return outWords(k, y, i, state, out);
+  const held = heldOut(k, y, i, r);
+  if (held) return outWords(k, y, i, state, held.n, held.also);
   const making = asItem(k, h.making[r] ?? k.NONE);
   if (making !== null) return { line: `Making ${many(k, making)}${slow(k, y)}.` };
   const rec = aim(k, y, i);

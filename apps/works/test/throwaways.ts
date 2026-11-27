@@ -177,6 +177,9 @@ out.solid = [[20, 10], [21, 11]].every(([x, z]) => F.yardSolid(y).at(x * 16 + 8,
 const stuck = sifting(false);
 run(stuck, 600);
 out.stops = (stuck.depot[F.item("sand")] ?? 0) === 1;
+// It says so, of its clay and its way out for it, and is in trouble.
+const said = F.status(stuck, tile(stuck, 21, 11));
+out.saysBlocked = said?.state === "blocked" && said.trouble && said.stuck === F.item("clay") && said.line.includes("clay");
 belts(stuck, 22, 24, 11);
 run(stuck, 600);
 out.goesOn = (stuck.depot[F.item("sand")] ?? 0) > 5;
@@ -246,6 +249,20 @@ belts(forge, 22, 24, 10);
 out.forgeRefusesFront = !F.takes(forge, tile(forge, 21, 9), tile(forge, 22, 9));
 run(forge, 900);
 out.resin = (forge.depot[F.item("resin")] ?? 0) > 5;
+// A forge whose way out leads onto a belt that leads nowhere waits for room on it once it is full: the
+// belt takes from the tile its resin leaves by, so it is no trouble.
+const dead = fresh();
+for (const [x, z, d, raw] of [[17, 10, 0, "deadfall"], [20, 7, 1, "stone"]]) {
+  F.build(dead, F.CRATE, x, z, d, Infinity);
+  for (let n = 0; n < 40; n++) F.put(dead.holders, F.holderOf(dead, tile(dead, x, z)), F.item(raw));
+}
+F.build(dead, F.BELT, 18, 10, 0, Infinity);
+F.build(dead, F.BELT, 20, 8, 1, Infinity);
+F.build(dead, FORGE, 20, 10, 0, Infinity);
+F.build(dead, F.BELT, 22, 10, 0, Infinity);
+run(dead, 900);
+const waits = F.status(dead, tile(dead, 20, 10));
+out.saysWaiting = dead.item[tile(dead, 22, 10)] === F.item("resin") && waits?.state === "waiting" && !waits.trouble;
 const forgeRead = F.decode(F.encode(forge), land);
 out.forgeReadBack = forgeRead !== null && F.check(forgeRead) === F.check(forge);
 out.forgeRemoved = F.remove(forge, 19, 9).ok && bare(forge, 19, 9, 21, 11);
@@ -400,5 +417,7 @@ export const PLAYED_BIG = Object.fromEntries(
     "keptWide",
     "undoFits",
     "undoStarter",
+    "saysBlocked",
+    "saysWaiting",
   ].map((k) => [k, true]),
 );
