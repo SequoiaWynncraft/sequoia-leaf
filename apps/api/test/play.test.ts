@@ -1821,6 +1821,46 @@ describe("a blueprint code in the Works", () => {
   });
 });
 
+describe("the assembler in the Works", () => {
+  it("is built, told what to make and raised from its card by Leaf as the page does it, to the same check, for 400 and then 800 Coins", async () => {
+    // Alice's yard has tier 5's research done, the assembler with it, as a staging step writes it over.
+    await yardShown();
+    const w = createYard({ seed: 7, tier: 6 });
+    w.history = [];
+    w.at = clock.now;
+    const text = FACTORY.encode(w);
+    await services.query(
+      (sql) =>
+        sql`UPDATE play_state SET rev = rev + 1, state = ${text}, updated_at = ${clock.now} WHERE player_id = ${alice}`,
+    );
+    const grant = { amount: 1200, reason: "A test's grant", game: null, key: `grant:${alice}` };
+    await services.run(Coins.use((coins) => coins.post(alice, grant, clock.now)));
+    const opening = Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json());
+    const { clock: tick, yard: copy } = yardOf(opening.state);
+    const own = tileNear(-6, -4);
+    const commands = [
+      { id: "a-1", do: "build", kind: "assembler", ...near(-6, -4), dir: 0, tick },
+      { id: "a-2", do: "recipe", ...near(-5, -3), item: "lantern", tick },
+      { id: "a-3", do: "upgrade", tiles: [tileNear(-7, -5)], grade: 2, kind: "assembler", from: 1, tick },
+    ];
+    const answered = await send("POST", "/v1/game/play/works", { commands });
+    const { results, state } = Schema.decodeUnknownSync(Answered)(await answered.json());
+    expect(results).toEqual(commands.map((c) => ({ id: c.id, notes: [] })));
+    // The page's copy, the same commands done to it at the same tick.
+    for (const c of commands) {
+      const read = readCommand(c);
+      if (!read || "refused" in playWorks(copy, read)) throw new Error(`${c.id} was not done on the copy`);
+    }
+    expect([state.tick, state.check]).toEqual([tick, check(copy)]);
+    const yard = await yardShown();
+    expect([yard.kind[own], yard.grade[own], yard.set[own]]).toEqual([copy.kind[own], 2, item("lantern")]);
+    expect((await entries(alice)).slice(-2).map((e) => [e.amount, e.reason])).toEqual([
+      [-400, "Built in the Works"],
+      [-800, "Upgraded in the Works"],
+    ]);
+  });
+});
+
 describe("an Undo in the Works", () => {
   let ids = 0;
   /** The Works' commands from Alice's page, each with an id of its own, at Leaf's tick now, and what each came to. */

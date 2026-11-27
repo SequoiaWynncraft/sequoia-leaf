@@ -453,15 +453,10 @@ describe("a new kind of piece", () => {
       expect(JSON.parse(there.out.trim().split("\n").at(-1) ?? "{}")).toEqual(
         Object.fromEntries(STAGES.map((s) => [s, check(staged(s))])),
       );
-      // The random player picks a kind to build from every kind's name, so with one more it would build
-      // otherwise; told to pick from those it picked from, it plays what the record was made with.
+      // The random player names only the first sixteen kinds when it builds by any name, so one more
+      // changes nothing it plays: it plays what the record was made with.
       const player = join(at, "packages/factory/test/player.ts");
-      const picks = `this.pick([...F.KINDS, "cart"])`;
-      expect(readFileSync(player, "utf8")).toContain(picks);
-      writeFileSync(
-        player,
-        readFileSync(player, "utf8").replace(picks, `this.pick([...F.KINDS.filter((k) => k !== "sieve"), "cart"])`),
-      );
+      expect(readFileSync(player, "utf8")).toContain(`this.pick([...F.KINDS.slice(0, 16), "cart"])`);
       const replays = bun(at, "test", "packages/factory/test/replays.test.ts");
       expect([replays.ok, replays.out.includes(" 0 fail")]).toEqual([true, true]);
     } finally {

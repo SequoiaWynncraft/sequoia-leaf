@@ -9,6 +9,8 @@
  */
 import {
   aim,
+  carried,
+  carries,
   DOES,
   feeders,
   GATHERING,
@@ -16,12 +18,14 @@ import {
   highest,
   holderOf,
   isItem,
+  isKind,
   type Item,
   ITEM_INFO,
   type Kind,
   locked,
   machineRate,
   needs,
+  nextOf,
   NONE,
   RECIPES_N,
   status,
@@ -83,15 +87,25 @@ export interface FlowPart {
  * minute, as the rules' `machineRate` says it now. Short of power (`slow`), it makes what it makes
  * now, and its parts are of the same moment; where power does not reach it (`dark`), that is nothing.
  * While it waits for its parts (`waiting`), those it holds too few of are short. Until the yard
- * counts (`counts`), its parts have no numbers a minute, as every recipe is one of each.
+ * counts (`counts`), its parts have no numbers a minute, as every recipe is one of each. Where it makes
+ * more a minute than the belt it hands to carries, `most` is what that belt carries; else null.
  */
 export interface Flow {
   readonly out: Item;
   readonly perMinute: number;
+  readonly most: number | null;
   readonly slow: boolean;
   readonly dark: boolean;
   readonly waiting: boolean;
   readonly parts: readonly FlowPart[];
+}
+
+/** What the belt (or what else carries) a machine hands to carries a minute, where that is less than it makes; else null. */
+function carriedOn(w: Yard, i: number, makes: number): number | null {
+  const to = nextOf(w, i);
+  const k = to < 0 ? NONE : (w.kind[to] ?? NONE);
+  const most = carries(k) ? carried(w.grade[to] ?? 1) : Infinity;
+  return makes > most ? most : null;
 }
 
 /** The recipe of the machine standing on a tile, or null for a piece with none in mind. */
@@ -99,15 +113,18 @@ export function flowOf(w: Yard, i: number, counts: boolean): Flow | null {
   const recipe = aim(w, i);
   if (!recipe) return null;
   const grade = w.grade[i] ?? 0;
+  const by = w.kind[i] ?? recipe.by;
+  const maker = isKind(by) ? by : recipe.by;
   const { share, effective } = machineRate(w, i, recipe);
   const h = w.holders;
   const r = holderOf(w, i);
   const state = status(w, i)?.state;
-  const first = feeders(grade, recipe, 1);
-  const rates = needs(grade, recipe);
+  const first = feeders(grade, recipe, 1, maker);
+  const rates = needs(grade, recipe, maker);
   return {
     out: recipe.out,
     perMinute: effective,
+    most: carriedOn(w, i, effective),
     slow: share < 1,
     dark: state === "unpowered",
     waiting: state === "waiting" || state === "starved",
@@ -124,7 +141,7 @@ export function flowOf(w: Yard, i: number, counts: boolean): Flow | null {
             ? {
                 kind: by.kind,
                 count: by.count,
-                top: top > 1 ? { grade: top, count: feeders(grade, recipe, top)[part]?.count ?? 0 } : null,
+                top: top > 1 ? { grade: top, count: feeders(grade, recipe, top, maker)[part]?.count ?? 0 } : null,
               }
             : null,
       };

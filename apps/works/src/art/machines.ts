@@ -21,7 +21,7 @@ function tile(h: number, draw: (g: Ctx) => void, w = 16): Sprite {
 
 // ---------- surfaces, as the town draws them ----------
 
-function planks(g: Ctx, x: number, y: number, w: number, h: number, seed: number): void {
+export function planks(g: Ctx, x: number, y: number, w: number, h: number, seed: number): void {
   for (let bx = x; bx < x + w; bx += 4) {
     const v = hash(bx, 7, seed);
     const bw = Math.min(3, x + w - bx);
@@ -49,10 +49,10 @@ function stones(g: Ctx, x: number, y: number, w: number, h: number, seed: number
   }
 }
 
-const PURPLE = [SKY[0], SKY[1], SKY[2], SKY[3]] as const;
+export const PURPLE = [SKY[0], SKY[1], SKY[2], SKY[3]] as const;
 
 /** Rows of shingles on a roof that narrows towards its ridge. `cols`: shadow, two body tones, light. */
-function shingles(
+export function shingles(
   g: Ctx,
   x: number,
   y: number,
@@ -78,7 +78,7 @@ function shingles(
 }
 
 /** A doorway with a rounded head. */
-function arch(g: Ctx, x: number, y: number, w: number, h: number, col: string): void {
+export function arch(g: Ctx, x: number, y: number, w: number, h: number, col: string): void {
   R(g, x + 3, y, w - 6, 1, col);
   R(g, x + 2, y + 1, w - 4, 1, col);
   R(g, x + 1, y + 2, w - 2, 1, col);
@@ -86,7 +86,7 @@ function arch(g: Ctx, x: number, y: number, w: number, h: number, col: string): 
 }
 
 /** A toothed wheel; `turn` is how far round it has gone, as a share of one tooth. */
-function gear(
+export function gear(
   g: Ctx,
   cx: number,
   cy: number,
@@ -246,7 +246,7 @@ const BRASS = [GOLD[0], GOLD[1], GOLD[2]] as const;
  * becomes the same step of `IRON`, in place, over the whole picture drawn so far; with `stone`, its
  * stone too (a kiln's foot and chimney, a tunnel's hood). Its brass stays brass.
  */
-function ironClad(g: Ctx, grade: number, stone = false): void {
+export function ironClad(g: Ctx, grade: number, stone = false): void {
   if (grade < 3) return;
   const from = [...BARK, ...(stone ? STONE : [])].map(rgb);
   const to = [...IRON, ...(stone ? IRON.slice(1) : [])].map(rgb);
@@ -269,7 +269,7 @@ function ironClad(g: Ctx, grade: number, stone = false): void {
  * What a machine of the second grade and up wears: a brass band, two pixels deep, across it from `x`
  * for `w` at row `y`, and a small plate at (`px`, `py`). Grade 1 wears nothing.
  */
-function fitted(g: Ctx, grade: number, x: number, y: number, w: number, px: number, py: number): void {
+export function fitted(g: Ctx, grade: number, x: number, y: number, w: number, px: number, py: number): void {
   if (grade < 2) return;
   R(g, x, y, w, 2, BRASS[0]);
   R(g, x, y, w, 1, BRASS[1]);
