@@ -3,8 +3,10 @@ import { describe, expect, test } from "bun:test";
 import type { Ctx, Done, Met } from "@sequoia-leaf/core";
 
 import type { RaidCommand } from "./command.ts";
+import { catalogAt } from "./content/catalog.ts";
 import { ENDLESS } from "./content/endless.ts";
 import type { FigureId, Stars } from "./content/figures.ts";
+import { LEGACY_ERA } from "./content/releases.ts";
 import { ROOM_COUNT, ROOMS } from "./content/rooms.ts";
 import { depthSlot, paidFor, reached, weekAt } from "./depths.ts";
 import { foeOf, heldRoom, heldSlot, roomAt, sparAt } from "./endless.ts";
@@ -76,7 +78,12 @@ const won = (room: number) => ({
   boss: roomAt(room)?.kind === "boss" ? ("oldbramble" as const) : null,
 });
 /** A member's board, as Leaf hands it over. */
-const board = (who: string): Met => ({ player: who, name: who, data: partyOf(strong(startRun(2), 3)), of: 1 });
+const board = (who: string): Met => ({
+  player: who,
+  name: who,
+  data: partyOf(strong(startRun(2, { era: LEGACY_ERA }), 3)),
+  of: 1,
+});
 /** The fight a run sets out to, as decided. */
 const fought = (run: Run) => {
   beginFight(run);
@@ -94,7 +101,7 @@ describe("an endless run's rooms", () => {
     }
   });
   test("the forest after the fifteenth is 5% stronger for each room past it, compounding", () => {
-    const run = startRun(3, { endless: "wilds" });
+    const run = startRun(3, { era: LEGACY_ERA, endless: "wilds" });
     for (const room of [15, 16, 19, 29, 42]) {
       run.room = room;
       const foe = foeOf(run, 99);
@@ -108,23 +115,28 @@ describe("an endless run's rooms", () => {
     expect([17, 18, 20, 23, 25, 28, 30, 60].map((room) => sparAt(room).level)).toEqual([8, 8, 9, 9, 10, 10, 11, 11]);
     expect(sparAt(18).spent).toBeGreaterThan(sparAt(17).spent);
     expect(sparAt(13)).toEqual(ROOMS[13]?.spar ?? { level: 0, spent: 0, components: 0 });
-    const run = startRun(3, { endless: "wilds" });
+    const run = startRun(3, { era: LEGACY_ERA, endless: "wilds" });
     run.room = 33;
     expect(foeOf(run, 5).figures).toHaveLength(11);
   });
   test("a run of fifteen rooms meets exactly what it always did", () => {
-    const met: Met = { player: OTHER, name: "Mossback", data: partyOf(strong(startRun(1), 3)), of: 2 };
+    const met: Met = {
+      player: OTHER,
+      name: "Mossback",
+      data: partyOf(strong(startRun(1, { era: LEGACY_ERA }), 3)),
+      of: 2,
+    };
     for (let room = 0; room < ROOM_COUNT; room++) {
-      const run = startRun(4, { trail: 1 });
+      const run = startRun(4, { era: LEGACY_ERA, trail: 1 });
       run.room = room;
-      expect(foeOf(run, 77, met)).toEqual(opposition(77, room, 1, met));
+      expect(foeOf(run, 77, met)).toEqual(opposition(catalogAt(LEGACY_ERA), 77, room, 1, met));
     }
   });
 });
 
 describe("an endless run goes on", () => {
   test("winning the fifteenth room moves it on to the sixteenth, and only resolve ends it", () => {
-    const run = strong(startRun(5, { endless: "wilds" }), ROOM_COUNT - 1);
+    const run = strong(startRun(5, { era: LEGACY_ERA, endless: "wilds" }), ROOM_COUNT - 1);
     expect(beginFight(run).ok).toBe(true);
     expect(foughtOf(run)?.outcome.result).toBe("win");
     expect(takenTo(run)).toBe(ROOM_COUNT);
@@ -142,7 +154,7 @@ describe("an endless run goes on", () => {
     expect(endingOf(run)).toBe("lost");
   });
   test("a run of fifteen rooms still ends when the fifteenth is won", () => {
-    const run = strong(startRun(5), ROOM_COUNT - 1);
+    const run = strong(startRun(5, { era: LEGACY_ERA }), ROOM_COUNT - 1);
     beginFight(run);
     expect(takenTo(run)).toBeNull();
     takeTakings(run);
@@ -152,7 +164,7 @@ describe("an endless run goes on", () => {
 
 describe("chairs", () => {
   test("each boss beaten after the fifteenth room is one more figure fielded, three at most", () => {
-    const run = startRun(6, { endless: "deep" });
+    const run = startRun(6, { era: LEGACY_ERA, endless: "deep" });
     run.level = 8;
     expect(fieldCap(run)).toBe(8);
     run.record.push(boss(4, true), boss(19, false));
@@ -165,7 +177,7 @@ describe("chairs", () => {
     expect(fieldCap(run)).toBe(9 + ENDLESS.chairs);
   });
   test("a run of fifteen rooms has none", () => {
-    const run = startRun(6);
+    const run = startRun(6, { era: LEGACY_ERA });
     run.level = 8;
     run.record.push(boss(19, true), boss(24, true));
     expect(fieldCap(run)).toBe(8);
@@ -174,17 +186,17 @@ describe("chairs", () => {
 
 describe("Coins for an endless run", () => {
   test("only rooms 1 to 15 pay, as a first-trail run that won them pays", () => {
-    const deep = startRun(8, { endless: "deep" });
+    const deep = startRun(8, { era: LEGACY_ERA, endless: "deep" });
     deep.record = Array.from({ length: 40 }, (_, room) => won(room));
     deep.stage = { phase: "over", ending: "lost" };
-    const first = startRun(8);
+    const first = startRun(8, { era: LEGACY_ERA });
     first.record = Array.from({ length: ROOM_COUNT }, (_, room) => won(room));
     first.stage = { phase: "over", ending: "won" };
     expect(payout(paidFor(deep, summariseRun(deep)))).toEqual(payout(summariseRun(first)));
     expect(payout(summariseRun(first)).coins).toBe(16 * 15 + 50 + 120);
   });
   test("one that did not win the fifteenth room is not paid the win", () => {
-    const deep = startRun(8, { endless: "wilds" });
+    const deep = startRun(8, { era: LEGACY_ERA, endless: "wilds" });
     deep.record = Array.from({ length: 10 }, (_, room) => won(room));
     deep.stage = { phase: "over", ending: "lost" };
     expect(paidFor(deep, summariseRun(deep)).ending).toBe("lost");
@@ -193,30 +205,30 @@ describe("Coins for an endless run", () => {
 
 describe("rooms held in the Deep Woods", () => {
   test("from the sixteenth room a sparring room is the board of whoever holds it, the member's own too", () => {
-    const run = startRun(9, { endless: "deep" });
+    const run = startRun(9, { era: LEGACY_ERA, endless: "deep" });
     run.room = 17;
     expect(foeOf(run, 4, board(OTHER))).toMatchObject({ by: OTHER, who: OTHER, title: "their board at this room" });
     expect(foeOf(run, 4, board(ME)).by).toBe(ME);
   });
   test("is a regular while nobody holds it, before the sixteenth room, and in the Wilds", () => {
-    const run = startRun(9, { endless: "deep" });
+    const run = startRun(9, { era: LEGACY_ERA, endless: "deep" });
     run.room = 17;
     const regular = foeOf(run, 4);
     expect(regular.by).toBeUndefined();
     expect(regular.figures).toHaveLength(sparAt(17).level);
     run.room = 12;
     expect(foeOf(run, 4, board(OTHER)).by).toBeUndefined();
-    const wilds = startRun(9, { endless: "wilds" });
+    const wilds = startRun(9, { era: LEGACY_ERA, endless: "wilds" });
     wilds.room = 17;
     expect(foeOf(wilds, 4, board(OTHER))).toEqual(regular);
   });
   test("a held board may field its chairs, and no more", () => {
-    const run = startRun(9, { endless: "deep" });
+    const run = startRun(9, { era: LEGACY_ERA, endless: "deep" });
     run.room = 33;
     const wide = (n: number): Met => ({
       ...board(OTHER),
       data: {
-        ...partyOf(startRun(1)),
+        ...partyOf(startRun(1, { era: LEGACY_ERA })),
         figures: Array.from({ length: n }, (_, seat) => ({ kind: "moth", stars: 1, seat, items: [], fed: 0 })),
       },
     });
@@ -278,16 +290,16 @@ describe("the endless run at the table", () => {
 
 describe("what a room won in an endless run leaves", () => {
   test("a take into a held room meets whoever holds it; the Wilds and a run of fifteen rooms meet no holder", () => {
-    const deep = strong(startRun(4, { endless: "deep" }), 16);
+    const deep = strong(startRun(4, { era: LEGACY_ERA, endless: "deep" }), 16);
     fought(deep);
     expect(meets(table(deep), { do: "take", slot: "endless" })).toEqual({ slot: heldSlot(17), avoid: [], held: true });
     expect(meets(table(deep), { do: "take" })).toBeNull();
-    const wilds = strong(startRun(4, { endless: "wilds" }), 16);
+    const wilds = strong(startRun(4, { era: LEGACY_ERA, endless: "wilds" }), 16);
     fought(wilds);
     expect(meets(table(wilds), { do: "take", slot: "endless" })).toBeNull();
   });
   test("a room held and won is held by the board that won it; a depth past the best is left for the boards", () => {
-    const run = strong(startRun(4, { endless: "deep" }), 17);
+    const run = strong(startRun(4, { era: LEGACY_ERA, endless: "deep" }), 17);
     const f = fought(run);
     const s = { ever: { wilds: 0, deep: 12 }, week: weekAt({ at: 0, deepest: { wilds: 0, deep: 0 } }, NOW) };
     expect(reached(s, run, f, false)).toEqual([
@@ -299,7 +311,7 @@ describe("what a room won in an endless run leaves", () => {
     expect(reached(s, run, f, false)).toEqual([{ slot: heldSlot(17), data: f.setup.sides[0], held: true }]);
   });
   test("a guest's deepest are written down, and nothing is left", () => {
-    const run = strong(startRun(4, { endless: "wilds" }), 20);
+    const run = strong(startRun(4, { era: LEGACY_ERA, endless: "wilds" }), 20);
     const s = { ever: { wilds: 0, deep: 0 }, week: { at: 0, deepest: { wilds: 0, deep: 0 } } };
     expect(reached(s, run, fought(run), true)).toEqual([]);
     expect(s.ever.wilds).toBe(21);

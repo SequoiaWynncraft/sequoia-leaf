@@ -9,6 +9,7 @@ import {
   giveItem,
   GOOD_WITH,
   type ItemId,
+  LEGACY_ERA,
   newAlmanac,
   newLooks,
   type Piece,
@@ -23,7 +24,7 @@ import { commandsFor, dropOf, type Offer, offerOf, offersFor, onOffer, pairsOf, 
 
 /** A run in its first room with these figures on the board from seat 0 (each holding what is said), and this rack. */
 function planning(figures: [FigureId, ItemId[]][], rack: ItemId[] = [], benched: [FigureId, ItemId[]][] = []): RunView {
-  const run = startRun(5);
+  const run = startRun(5, { era: LEGACY_ERA });
   choose(run, 0);
   run.board.fill(null);
   const piece = ([kind, items]: [FigureId, ItemId[]]): Piece => ({ id: run.nextId++, kind, stars: 1, items, fed: 0 });
@@ -121,6 +122,7 @@ describe("what a figure's card offers", () => {
       trail: 0,
       looks: plainLooks,
       roster: {},
+      era: LEGACY_ERA,
     };
     const commands: RaidCommand[] = commandsFor(run, offerOf(run, first(run), "hoard"), { on: "board", at: 0 });
     expect(commands).toEqual([

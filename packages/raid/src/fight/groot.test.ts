@@ -7,6 +7,7 @@ import { describe, expect, test } from "bun:test";
 
 import { abilityNumber, FIGURES, type UnitKind } from "../content/figures.ts";
 import { formNumber } from "../content/groot.ts";
+import { LEGACY_ERA } from "../content/releases.ts";
 import { traitNumber } from "../content/traits.ts";
 import { distance, neighbours, SEATS } from "../hex.ts";
 import { playsAsKept } from "../run.ts";
@@ -169,6 +170,7 @@ describe("Groot", () => {
   test("a fight with figures getting back up plays the same, step by step or straight to its end", () => {
     const setup = {
       seed: 11,
+      era: LEGACY_ERA,
       sides: [
         partyOfFigures([at("worm", 2, 0), at("moth", 3, 3), at("rock", 3, 0), at("greg", 4, 0), at("whitefox", 1, 0)]),
         partyOfFigures([at("badger", 2, 0, 3), at("badger", 4, 0, 3), at("fogowl", 3, 0, 2)]),

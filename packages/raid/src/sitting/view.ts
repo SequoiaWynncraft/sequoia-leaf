@@ -4,6 +4,7 @@
  * pick drawn and not yet offered, and of another seat's board only what it locked last.
  */
 import { isPredicted, plan } from "../command.ts";
+import type { Era } from "../content/releases.ts";
 import type { RoomKind } from "../content/rooms.ts";
 import type { FightSetup } from "../fight/types.ts";
 import { runView } from "../game.ts";
@@ -30,6 +31,8 @@ export interface SeatView {
 }
 
 export interface SittingView {
+  /** The sitting's era: what the page reads the catalogue by (`catalogOf`). */
+  era: Era;
   /** The Leaf id of whoever opened it. */
   by: string;
   /** Where it stands and when that ends; in a carousel the ring, who took what, and whose turn it is (`turns` up to `open`). */
@@ -48,6 +51,7 @@ export function sittingView(t: Sitting, viewer: string | null): SittingView {
   const fights = t.stage.at === "fight";
   const paired = (fights || t.stage.at === "plan") && kindOf(t.room) === "spar";
   return {
+    era: t.era,
     by: t.by,
     stage: t.stage,
     room: t.room,
@@ -82,6 +86,8 @@ export function predict(
   if (stop) return { refused: stop };
   if (!view.run) return { refused: "not_seated" };
   const run = structuredClone(view.run);
+  // The seat plans in the sitting's era, as it does at Leaf.
+  run.era = view.era;
   const done = plan(run, c);
   if (!done) return null;
   if (!done.ok) return { refused: done.code };

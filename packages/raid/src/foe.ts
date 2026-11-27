@@ -6,6 +6,7 @@
 import { below, type Met, mix, pick } from "@sequoia-leaf/core";
 
 import { boonNumber, FIGHT_BOONS } from "./content/boons.ts";
+import type { Catalog } from "./content/catalog.ts";
 import { type BossId, isBossId, isFigureId } from "./content/figures.ts";
 import { isMemberId } from "./content/members.ts";
 import { LEVELS, MAX_LEVEL, type Room, ROOMS, type SparStrength, TRAILS } from "./content/rooms.ts";
@@ -66,16 +67,24 @@ export function boardMet(met: Met, levels = false, chairs = 0): Party | null {
 
 /** A regular's party for a sparring room, from the room's seed: as strong as the room says, or as `strength` says; off the `closed` seats. */
 export const regularAt = (
+  cat: Catalog,
   seed: number,
   roomIndex: number,
   trailIndex: number,
   strength?: SparStrength,
   closed?: ReadonlySet<number>,
-): Party => sparParty(mix(seed, 700 + roomIndex), roomIndex, trailIndex, strength, closed);
+): Party => sparParty(cat, mix(seed, 700 + roomIndex), roomIndex, trailIndex, strength, closed);
 
 /** Who is waiting in a sparring room: a regular, or the board Leaf handed over (`met`), the regular being one of the crowd. */
-function sparring(seed: number, roomIndex: number, trailIndex: number, met: Met | undefined, levels: boolean): Party {
-  const regular = regularAt(seed, roomIndex, trailIndex);
+function sparring(
+  cat: Catalog,
+  seed: number,
+  roomIndex: number,
+  trailIndex: number,
+  met: Met | undefined,
+  levels: boolean,
+): Party {
+  const regular = regularAt(cat, seed, roomIndex, trailIndex);
   const board = met === undefined ? null : boardMet(met, levels);
   if (board === null || met === undefined) return regular;
   return below({ rng: mix(seed, 900 + roomIndex) }, met.of + 1) < met.of ? board : regular;
@@ -87,9 +96,16 @@ function sparring(seed: number, roomIndex: number, trailIndex: number, met: Met 
  * of members who left a board there: one draw from the room's stream makes it the member's board
  * `met.of` times in `met.of + 1`. The regular's party is the same for a seed whatever is met.
  */
-export function opposition(seed: number, roomIndex: number, trailIndex: number, met?: Met, levels = false): Party {
+export function opposition(
+  cat: Catalog,
+  seed: number,
+  roomIndex: number,
+  trailIndex: number,
+  met?: Met,
+  levels = false,
+): Party {
   const room = ROOMS[roomIndex];
-  if (!room || room.kind === "spar") return sparring(seed, roomIndex, trailIndex, met, levels);
+  if (!room || room.kind === "spar") return sparring(cat, seed, roomIndex, trailIndex, met, levels);
   return forest(seed, roomIndex, room, trailIndex);
 }
 

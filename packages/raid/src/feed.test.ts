@@ -7,14 +7,24 @@ import { planRoom, SENSIBLE } from "./bot.ts";
 import type { RunCommand } from "./command.ts";
 import type { FigureId, Stars } from "./content/figures.ts";
 import type { ItemId } from "./content/items.ts";
+import { LEGACY_ERA } from "./content/releases.ts";
 import { traitNumber, traitShort, traitText } from "./content/traits.ts";
 import { feed } from "./feed.ts";
-import { applyCommand, decodeTable, encodeTable, newTable, predict, readCommand, tableView } from "./game.ts";
+import {
+  applyCommand,
+  decodeTable,
+  encodeTable,
+  newTable,
+  predict,
+  readCommand,
+  TABLE_VERSION,
+  tableView,
+} from "./game.ts";
 import { merge, type Note, type Piece, pieces, type Run, sell, type Spot, startRun } from "./run.ts";
 import { checkRun } from "./save.ts";
 import { advance } from "./sitting/clock.ts";
 import { command, openSitting, readCommand as readSittingCommand } from "./sitting/commands.ts";
-import { decodeSitting, encodeSitting } from "./sitting/keep.ts";
+import { decodeSitting, encodeSitting, SITTING_VERSION } from "./sitting/keep.ts";
 import type { Sitting } from "./sitting/sitting.ts";
 
 const MOST = traitNumber("greg", "most", 1);
@@ -23,7 +33,7 @@ const bench = (at: number): Spot => ({ on: "bench", at });
 
 /** A run planning its first room with nothing waiting to be chosen and nothing on the board. */
 function planning(seed = 1): Run {
-  const run = startRun(seed);
+  const run = startRun(seed, { era: LEGACY_ERA });
   run.stage = { phase: "plan", picks: [] };
   return run;
 }
@@ -241,28 +251,28 @@ describe("a run kept when Greg ate after every fight", () => {
     expect(gregOf(checkRun(kept(30), false, false))).toBe(30);
   });
   test("a table of version 4 (the Wilds' wing, before feeding) is read as meals and kept as a share: read again, it is the same", () => {
-    const table = newTable({ seed: 3 });
+    const table = newTable({ seed: 3, now: 0 });
     const run = planning();
     run.record = [{ room: 0, kind: "trouble", result: "win", standing: [1, 0], boss: null }];
     put(run, board(3), "greg", 1, [], 10);
     table.run = run;
     table.runs = 1;
-    const v5 = encodeTable(table);
+    const text = encodeTable(table);
     for (const before of [4, 3]) {
-      const stored = v5.replace('"v":5', `"v":${before}`);
-      expect(stored).not.toBe(v5);
+      const stored = text.replace(`"v":${TABLE_VERSION}`, `"v":${before}`);
+      expect(stored).not.toBe(text);
       const old = decodeTable(stored);
       expect(old?.run?.board[3]?.fed).toBe(30);
       expect(decodeTable(encodeTable(old ?? table))?.run?.board[3]?.fed).toBe(30);
     }
-    expect(decodeTable(v5)?.run?.board[3]?.fed).toBe(10);
+    expect(decodeTable(text)?.run?.board[3]?.fed).toBe(10);
   });
   test("so is a sitting of version 1", () => {
     const { t, run } = sittingPlanning();
     put(run, bench(8), "greg", 1, [], 10);
-    const v2 = encodeSitting(t);
-    expect(benchOf(v2)).toBe(10);
-    expect(benchOf(v2.replace('"v":2', '"v":1'))).toBe(30);
+    const text = encodeSitting(t);
+    expect(benchOf(text)).toBe(10);
+    expect(benchOf(text.replace(`"v":${SITTING_VERSION}`, '"v":1'))).toBe(30);
   });
   test("so is a Greg in the run's parties: who waits in the room, and the last fight's sides", () => {
     const greg = { kind: "greg" as const, stars: 1 as const, seat: 3, items: [], fed: 10 };
@@ -270,7 +280,7 @@ describe("a run kept when Greg ate after every fight", () => {
     const run = planning();
     put(run, board(3), "worm");
     run.foe = party;
-    run.last = { seed: 1, sides: [party, party] };
+    run.last = { seed: 1, era: LEGACY_ERA, sides: [party, party] };
     const raw = JSON.parse(JSON.stringify(run));
     expect(fedIn(checkRun(raw, false, true))).toEqual([30, 30, 30]);
     expect(fedIn(checkRun(raw, false, false))).toEqual([10, 10, 10]);
@@ -280,8 +290,8 @@ describe("a run kept when Greg ate after every fight", () => {
     const seat = t.seats.find((s) => s.who.is === "member");
     if (!seat) throw new Error("no member");
     seat.shown = { ...seat.shown, figures: [{ kind: "greg", stars: 1, seat: 3, items: [], fed: 10 }] };
-    const v2 = encodeSitting(t);
-    expect(shownOf(v2)).toBe(10);
-    expect(shownOf(v2.replace('"v":2', '"v":1'))).toBe(30);
+    const text = encodeSitting(t);
+    expect(shownOf(text)).toBe(10);
+    expect(shownOf(text.replace(`"v":${SITTING_VERSION}`, '"v":1'))).toBe(30);
   });
 });

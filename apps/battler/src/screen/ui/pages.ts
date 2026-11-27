@@ -16,7 +16,6 @@ import {
   ECONOMY,
   type EndlessWay,
   FIGHT,
-  FIGURE_IDS,
   type FigureId,
   FINISHED,
   FINISHED_IDS,
@@ -48,7 +47,7 @@ import { ask, laidKey, S, type Slot } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
 import { summary } from "./ended.ts";
 import { frontAway, frontBody } from "./front.ts";
-import { figuresHere, pulledLine, pulledTag, unshown } from "./own.ts";
+import { everyonesFigures, figuresHere, pulledLine, pulledTag, unshown } from "./own.ts";
 import { frontShown } from "./woods.ts";
 
 export type PageId = "front" | "almanac" | "howto" | "looks" | "summary";
@@ -170,7 +169,7 @@ function almanac(): HTMLElement {
     add(
       page,
       el("div", "k-dim", {
-        text: `${a.fielded.length} of ${FIGURE_IDS.length} fielded. ${a.threeStars.length} taken to three stars.${pulledLine()}`,
+        text: `${a.fielded.length} of ${everyonesFigures().length} fielded. ${a.threeStars.length} taken to three stars.${pulledLine()}`,
       }),
     );
     add(page, el("div", "tiles", {}, ...figuresHere().map(figureTile)));

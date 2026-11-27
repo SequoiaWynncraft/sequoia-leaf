@@ -101,8 +101,8 @@
     "apps/works/src/tools.ts": 724,
     "apps/works/src/ui/cards.ts": 589,
     "packages/kit/src/card.ts": 623,
-    "packages/raid/src/content/figures.ts": 1007,
-    "packages/raid/src/run.ts": 697,
+    "packages/raid/src/content/figures.ts": 1006,
+    "packages/raid/src/run.ts": 696,
     "packages/town/src/game.ts": 550
   },
   "max-lines-per-function": {
@@ -130,7 +130,7 @@
     "apps/town/src/grovepicture.ts": 1138,
     "apps/town/src/grovescene.ts": 354,
     "apps/town/src/grovestage.ts": 199,
-    "apps/town/src/groveui.ts": 300,
+    "apps/town/src/groveui.ts": 298,
     "apps/town/src/hud.ts": 103,
     "apps/town/src/live.ts": 167,
     "apps/town/src/main.ts": 352,

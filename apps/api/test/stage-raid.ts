@@ -19,6 +19,7 @@
 import { type PlayerId, utcWeekStart } from "@sequoia-leaf/core";
 import {
   boardMet,
+  catalogAt,
   depthSlot,
   ENDLESS,
   heldSlot,
@@ -29,6 +30,7 @@ import {
   isMemberId,
   isRuleId,
   layOutAfresh,
+  LEGACY_ERA,
   MAX_LEVEL,
   RAID,
   roomAt,
@@ -60,7 +62,7 @@ function venture(table: Table, v: Record<string, unknown>): Run | null {
   if (!isEndlessWay(v.way)) return null;
   const seed = whole(v.seed, 0, 0xffffffff) ?? 1;
   const room = whole(v.room, 0, 200) ?? 0;
-  const run = startRun(seed, { endless: v.way });
+  const run = startRun(seed, { era: LEGACY_ERA, endless: v.way });
   table.ventures += 1;
   table.endless = run;
   if (room === 0) return run;
@@ -89,7 +91,7 @@ function step(table: Table, op: Record<string, unknown>, made: number[], own: Ro
     const seed = whole(op.start.seed, 0, 0xffffffff) ?? 1;
     const trail = whole(op.start.trail, 0, TRAIL_COUNT - 1) ?? 0;
     table.runs += 1;
-    table.run = startRun(seed, op.start.own === true ? { trail, own } : { trail });
+    table.run = startRun(seed, { era: LEGACY_ERA, ...(op.start.own === true ? { trail, own } : { trail }) });
     table.trail = trail;
     made.push(table.runs);
     return;
@@ -149,7 +151,7 @@ export const stageWoods = (others: readonly PlayerId[], ops: readonly unknown[],
       const room = whole(hold?.room, 0, 200);
       const player = others[whole(hold?.by, 0, others.length - 1) ?? 0];
       if (room === null || player === undefined) continue;
-      yield* keep(player, heldSlot(room), sparParty(7 + room, room, 0, sparAt(room)), now);
+      yield* keep(player, heldSlot(room), sparParty(catalogAt(LEGACY_ERA), 7 + room, room, 0, sparAt(room)), now);
     }
   });
 

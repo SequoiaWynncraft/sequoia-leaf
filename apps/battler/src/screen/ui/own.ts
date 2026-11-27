@@ -9,8 +9,9 @@ import type { Block } from "@sequoia-leaf/kit/card.ts";
 import { type Choice, choices } from "@sequoia-leaf/kit/choices.ts";
 import { el } from "@sequoia-leaf/kit/dom.ts";
 import {
+  available,
+  catalogOf,
   type FigureId,
-  figuresFor,
   isFigureId,
   levelBoost,
   levelOf,
@@ -32,10 +33,13 @@ const picked = { own: false };
 /** How many figures the member has pulled. */
 const pulled = (): number => Object.keys(S.roster).length;
 /**
- * The figures there are for this member: the twenty-eight, and each banner's member they have
- * pulled. What "of 28 figures" counts, the almanac's tiles, and who a trait's card lists.
+ * The figures there are for this member, as Leaf's era has them: everyone's, and each banner's
+ * headliner they have pulled. What "of 28 figures" counts, the almanac's tiles, and who a trait's
+ * card lists.
  */
-export const figuresHere = (): readonly FigureId[] => figuresFor(S.roster);
+export const figuresHere = (): readonly FigureId[] => available(catalogOf(S), { for: "almanac", roster: S.roster });
+/** Everyone's figures, as Leaf's era has them: what the almanac counts fielded among. */
+export const everyonesFigures = (): readonly FigureId[] => available(catalogOf(S), { for: "almanac", roster: {} });
 /** Asks who each banner's member is, and draws the page again each time one is better known. */
 export const meetMember = (): Promise<void> => meetMembers(changed);
 /** Whether the front page sets out with the member's own figures: never for a member who has pulled none. */
@@ -141,7 +145,7 @@ export function levelOnCard(kind: UnitKind, shown: Shown): { level: number; tag:
 }
 
 /** What a reroll brings at a run's level: each cost that can come, from one acorn up, with its share of a hundred. */
-function oddsShares(run: Pick<RunView, "own" | "level">): { cost: number; share: string }[] {
+function oddsShares(run: Pick<RunView, "own" | "level" | "era">): { cost: number; share: string }[] {
   const odds = stallOdds(run);
   const total = Math.max(
     1,
@@ -150,7 +154,7 @@ function oddsShares(run: Pick<RunView, "own" | "level">): { cost: number; share:
   return odds.flatMap((w, i) => (w > 0 ? [{ cost: i + 1, share: `${Math.round((w * 100) / total)}%` }] : []));
 }
 /** The same as a row for the level's plaque, each share in its cost's colour; and as the numbers of the level's card. */
-export const oddsRow = (run: Pick<RunView, "own" | "level">): HTMLElement =>
+export const oddsRow = (run: Pick<RunView, "own" | "level" | "era">): HTMLElement =>
   el("span", "odds", {}, ...oddsShares(run).map(({ cost, share }) => el("span", `t${cost}`, { text: share })));
 export const oddsStats = (run: RunView): { label: string; value: string }[] =>
   oddsShares(run).map(({ cost, share }) => ({ label: `${cost}-acorn figures`, value: share }));

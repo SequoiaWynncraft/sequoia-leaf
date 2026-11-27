@@ -27,7 +27,7 @@ import { whole } from "@sequoia-leaf/kit/say.ts";
 import { type Scope, scope } from "@sequoia-leaf/kit/scope.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tipAt } from "@sequoia-leaf/kit/tip.ts";
-import { headliner, PRIZES, type PullsView, RARITIES, type Rarity, RATES } from "@sequoia-leaf/pulls";
+import { type PullsView, RARITIES, type Rarity, RATES } from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
 
 import { $, button, pic, slot } from "./hud.ts";
@@ -44,9 +44,10 @@ import {
   past,
   percent,
   pityLine,
+  poolPrizes,
+  prizeBook,
   prizeName,
   pullSpend,
-  RARITY_NAMES,
   rules,
   type Showing,
 } from "./pulls.ts";
@@ -348,10 +349,9 @@ export function makeGroveUi(host: GroveHost) {
     const v = host.view();
     const b = onBanner();
     const shown = chances(b !== null);
-    /** The prizes this pool can give, by rarity. */
-    const listOf = (rarity: Rarity): readonly string[] =>
-      shown[rarity] === 0 ? [] : rarity === "Yggdrasil" ? (b ? [headliner(b.id)] : []) : PRIZES[rarity];
-    const all = RARITY_NAMES.flatMap(listOf);
+    /** The prizes this pool can give, by rarity, in the era of Leaf's view. */
+    const listed = prizeBook(v, b ? b.id : GROVE);
+    const all = listed.flatMap(([, list]) => list);
     body.append(
       el(
         "div",
@@ -373,9 +373,7 @@ export function makeGroveUi(host: GroveHost) {
       ),
     );
     if (ruled) for (const line of rules(b ? b.person.name : null)) body.append(el("div", "k-read", { text: line }));
-    for (const rarity of RARITY_NAMES.toReversed()) {
-      if (shown[rarity] === 0) continue;
-      const list = listOf(rarity);
+    for (const [rarity, list] of listed.toReversed()) {
       body.append(
         el("div", "k-row", {}, plate(rarity), el("span", "k-dim", { text: percent(shown[rarity]) })),
         el(
@@ -402,7 +400,7 @@ export function makeGroveUi(host: GroveHost) {
   function seeds(body: HTMLElement, life: Scope): void {
     const v = host.view();
     body.append(el("div", "k-title", {}, "Seeds: ", el("span", "k-leafy", { text: whole(v.seeds) })));
-    for (const o of offers(v, PRIZES)) {
+    for (const o of offers(v)) {
       const spend: Spend = { on: `seeds:${o.prize}`, price: o.price };
       const buy = button(
         `green sm${asking(spend) ? " asking" : ""}${o.enough ? "" : " off"}`,
@@ -503,6 +501,11 @@ export function makeGroveUi(host: GroveHost) {
     panelOpen: (): boolean => book !== null,
     /** The name of the pool on show, as the picture writes it. */
     poolName: (): string => onBanner()?.person.name ?? EVERGREEN,
+    /**
+     * Who stands in the always-open pool's clearing, one a stand: its first three Treants in the era
+     * of Leaf's view. One past them (Seqwawa, from 8 December) is in the prize book, not the clearing.
+     */
+    treants: (): readonly string[] => poolPrizes(host.view(), GROVE).Treant.slice(0, 3),
     /** The frame is `w` by `h` art pixels, `scale` CSS pixels to each, upright or not, `left` and `top` CSS pixels in from the window's corner. */
     fit(w: number, h: number, scale: number, tall: boolean, left: number, top: number): void {
       stage.style.cssText = `left:${left}px;top:${top}px;width:${w * scale}px;height:${h * scale}px;--g:${scale}px;--fx:${left}px;--fy:${top}px`;

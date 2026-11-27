@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { LEGACY_ERA } from "./content/releases.ts";
 import { heal, hurt, shieldUp } from "./fight/core.ts";
 import { openFight, recordFight, stepFight } from "./fight/engine.ts";
 import type { Fight, FightEvent, FightSetup } from "./fight/types.ts";
@@ -127,7 +128,11 @@ describe("the tally", () => {
     expect(rowOf(rows, mud.id).felled).toBe(1);
   });
   test("figures that have done nothing yet are there when asked for", () => {
-    const f = openFight({ seed: 1, sides: [partyOfFigures([at("rock", 3, 0)]), partyOfFigures([at("rock", 3, 0)])] });
+    const f = openFight({
+      seed: 1,
+      era: LEGACY_ERA,
+      sides: [partyOfFigures([at("rock", 3, 0)]), partyOfFigures([at("rock", 3, 0)])],
+    });
     const rows = tally([], [0, 1]);
     expect(rows.map((r) => r.id)).toEqual([0, 1]);
     expect(rows.every((r) => measureOf(r, "damage") === 0 && r.stood)).toBe(true);
@@ -136,6 +141,7 @@ describe("the tally", () => {
   test("over a whole fight it agrees with what the fight counted for itself", () => {
     const setup: FightSetup = {
       seed: 5,
+      era: LEGACY_ERA,
       sides: [
         partyOfFigures([
           at("crab7", 3, 0, 2, ["wasptail"]),

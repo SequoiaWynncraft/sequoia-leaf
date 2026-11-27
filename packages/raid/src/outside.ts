@@ -4,7 +4,8 @@
  * nothing here needs the run itself, a clock or a calendar. None of it changes what the stall
  * offers: every figure is there for everyone.
  */
-import { BOSS_IDS, type BossId, FIGURE_IDS, type FigureId, isBossId, isFigureId } from "./content/figures.ts";
+import { everyFigure } from "./content/catalog.ts";
+import { BOSS_IDS, type BossId, type FigureId, isBossId, isFigureId } from "./content/figures.ts";
 import { FINISHED_IDS, type FinishedId, isFinishedId } from "./content/items.ts";
 import { PAYOUT } from "./content/keepsakes.ts";
 import { ROOM_COUNT, TRAIL_COUNT, TRAILS } from "./content/rooms.ts";
@@ -159,8 +160,8 @@ function uniqueList<T>(v: unknown, is: (x: unknown) => x is T, most: number): T[
  */
 export function readAlmanac(a: unknown): Almanac | null {
   if (!isRecord(a)) return null;
-  const fielded = uniqueList(a.fielded, isFigureId, FIGURE_IDS.length);
-  const threeStars = uniqueList(a.threeStars, isFigureId, FIGURE_IDS.length);
+  const fielded = uniqueList(a.fielded, isFigureId, everyFigure().length);
+  const threeStars = uniqueList(a.threeStars, isFigureId, everyFigure().length);
   const forged = uniqueList(a.forged, isFinishedId, FINISHED_IDS.length);
   const topped = uniqueList(a.topped, isTraitId, TRAIT_IDS.length);
   // An almanac kept while some figures were locked lists those it opened; that list means nothing now.

@@ -14,9 +14,11 @@ import {
 
 import { SENSIBLE } from "./bot.ts";
 import { legal, type Predicted, type RaidCommand } from "./command.ts";
-import { FIGURE_IDS, FIGURES } from "./content/figures.ts";
+import { catalogAt } from "./content/catalog.ts";
+import { FIGURES } from "./content/figures.ts";
 import { EMBLEM_IDS, EMBLEMS } from "./content/items.ts";
 import { newLooks } from "./content/looks.ts";
+import { eraAt, LEGACY_ERA } from "./content/releases.ts";
 import { LEVELS, MAX_LEVEL, regularOf, ROOMS } from "./content/rooms.ts";
 import { resolveFight } from "./fight/engine.ts";
 import { MET_APART, opposition } from "./foe.ts";
@@ -51,6 +53,7 @@ import {
 } from "./run.ts";
 import { sparParty } from "./spar.ts";
 import { RAID_STATS } from "./stats.ts";
+import { EVERYONES } from "./testkit.ts";
 import { readNotes, readView } from "./wire.ts";
 
 const PLAYER = { id: "10000000-0000-0000-0000-000000000001", guest: false };
@@ -103,7 +106,10 @@ describe("a new player's table", () => {
     expect(state.run).toBeNull();
     expect(state.runs).toBe(0);
     expect(state.looks).toEqual(newLooks());
+    // It is of the era Leaf's clock is in, and so is the page's view of it.
+    expect(state.era).toBe(eraAt(ctx().now));
     expect(RAID.view(state, ctx())).toEqual({
+      era: state.era,
       runs: 0,
       run: null,
       endless: null,
@@ -1006,9 +1012,9 @@ describe("another member's board in a sparring room", () => {
   test("the regular's party for a seed is the one it was before a member's board could be met", () => {
     for (const seed of [1, 77, 4242]) {
       for (const room of [2, 3, 5, 13]) {
-        const before = sparParty(mix(seed, 700 + room), room, 1);
-        expect(opposition(seed, room, 1)).toEqual(before);
-        expect(opposition(seed, room, 1, metOf("not a board"))).toEqual(before);
+        const before = sparParty(catalogAt(LEGACY_ERA), mix(seed, 700 + room), room, 1);
+        expect(opposition(catalogAt(LEGACY_ERA), seed, room, 1)).toEqual(before);
+        expect(opposition(catalogAt(LEGACY_ERA), seed, room, 1, metOf("not a board"))).toEqual(before);
       }
     }
   });
@@ -1016,7 +1022,10 @@ describe("another member's board in a sparring room", () => {
     const board = keptBoard();
     const share = (of: number): number => {
       const seeds = Array.from({ length: 600 }, (_, n) => n + 1);
-      return seeds.filter((seed) => opposition(seed, 2, 0, metOf(board, of)).by === MEMBER).length / seeds.length;
+      return (
+        seeds.filter((seed) => opposition(catalogAt(LEGACY_ERA), seed, 2, 0, metOf(board, of)).by === MEMBER).length /
+        seeds.length
+      );
     };
     expect(Math.abs(share(1) - 1 / 2)).toBeLessThan(0.06);
     expect(Math.abs(share(3) - 3 / 4)).toBeLessThan(0.06);
@@ -1049,7 +1058,7 @@ const EVERYTHING = [
   "pull:look:gilt",
   "pull:thing:fountain",
   "pull:headliner:banner-1",
-  ...FIGURE_IDS.flatMap((id) => [`pull:figure:${id}`, ...[2, 3, 4, 5, 6, 7].map((n) => `copies:figure:${id}:${n}`)]),
+  ...EVERYONES.flatMap((id) => [`pull:figure:${id}`, ...[2, 3, 4, 5, 6, 7].map((n) => `copies:figure:${id}:${n}`)]),
 ];
 
 /**
@@ -1102,7 +1111,7 @@ describe("the roster a member's awards come to", () => {
         "pull:figure:greg:2",
       ]),
     ).toEqual({ greg: 2, worm: 0, slug: 6, moth: 6 });
-    expect(rosterOf(EVERYTHING)).toEqual({ ...Object.fromEntries(FIGURE_IDS.map((id) => [id, 6])), "banner-1": 0 });
+    expect(rosterOf(EVERYTHING)).toEqual({ ...Object.fromEntries(EVERYONES.map((id) => [id, 6])), "banner-1": 0 });
   });
   test("is shown on the page, and is nobody for a member who has pulled nothing", () => {
     const state = RAID.create(ctx(1));
@@ -1173,8 +1182,8 @@ describe("a run with the member's own figures", () => {
     expect(board?.slot).toBe("own:0:2");
     expect(RAID.meets?.(sent.state, { do: "take" })).toEqual({ slot: "own:0:3", avoid: [] });
     const met = metOf(board?.data);
-    const inOwn = opposition(1, 2, 0, met, true);
-    const inMain = opposition(1, 2, 0, met);
+    const inOwn = opposition(catalogAt(LEGACY_ERA), 1, 2, 0, met, true);
+    const inMain = opposition(catalogAt(LEGACY_ERA), 1, 2, 0, met);
     expect([inOwn.by, inMain.by]).toEqual([MEMBER, MEMBER]);
     expect(inOwn.figures.every((p) => p.level === 6)).toBe(true);
     expect(inMain.figures.every((p) => p.level === undefined)).toBe(true);

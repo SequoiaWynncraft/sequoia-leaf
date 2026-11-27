@@ -45,15 +45,16 @@ import {
 } from "@sequoia-leaf/core";
 import { CARELESS, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
 import { FIGHT_BOONS, isBoonId } from "@sequoia-leaf/raid/content/boons.ts";
+import { everyFigure } from "@sequoia-leaf/raid/content/catalog.ts";
 import { isUnitKind, type Stars, traitsOf, TROUBLE_IDS } from "@sequoia-leaf/raid/content/figures.ts";
 import { COMPONENT_IDS, EMBLEMS, FINISHED_IDS, isItemId, type ItemId } from "@sequoia-leaf/raid/content/items.ts";
+import { LEGACY_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import { LEVELS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { TRAIT_IDS, traitNumber } from "@sequoia-leaf/raid/content/traits.ts";
 import { recordFight } from "@sequoia-leaf/raid/fight/engine.ts";
 import type { FightSetup, FightSummary } from "@sequoia-leaf/raid/fight/types.ts";
 import { meets, planCommands, RAID, type RaidNote, type Table, TABLE_VERSION } from "@sequoia-leaf/raid/game.ts";
 import { SEATS } from "@sequoia-leaf/raid/hex.ts";
-import { OWNABLE } from "@sequoia-leaf/raid/own.ts";
 import { isParty, type Party, type Placed } from "@sequoia-leaf/raid/party.ts";
 import type { Choice, Fought, Piece, RoomRecord, Run, RunView, Stage } from "@sequoia-leaf/raid/run.ts";
 import { advance, begin } from "@sequoia-leaf/raid/sitting/clock.ts";
@@ -252,9 +253,9 @@ export interface Pool {
 
 /** The pool as the content has it now: the goldens' only read of the content's lists. */
 export const poolNow = (): Pool => ({
-  figures: [...OWNABLE],
+  figures: [...everyFigure()],
   troubles: [...TROUBLE_IDS],
-  traits: Object.fromEntries(TRAIT_IDS.map((t) => [t, OWNABLE.filter((f) => traitsOf(f).includes(t))])),
+  traits: Object.fromEntries(TRAIT_IDS.map((t) => [t, everyFigure().filter((f) => traitsOf(f).includes(t))])),
   components: [...COMPONENT_IDS],
   finished: [...FINISHED_IDS],
   emblems: { ...EMBLEMS },
@@ -370,7 +371,7 @@ export function goldenSetup(pool: Pool, n: number): FightSetup {
     n % 3 === 0
       ? side("forest", troubleFor(pool, s), 100 + 10 * below(s, 11))
       : side("away", figuresFor(pool, s, size(), theme(1), n % 4 === 3), 100);
-  return { seed: draw32(s), sides: [home, away] };
+  return { seed: draw32(s), era: LEGACY_ERA, sides: [home, away] };
 }
 
 export function fightLine(pool: Pool, n: number): Line {

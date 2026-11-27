@@ -517,7 +517,7 @@ export function registerCards(): void {
       level: foe.level ?? 0,
       whose: `${acrossName(run.foe)}'s`,
       party: run.foe,
-      numbers: startNumbers(run.foe, foe.seat),
+      numbers: startNumbers(run.era, run.foe, foe.seat),
     });
   });
   register("unit", (raw) => {

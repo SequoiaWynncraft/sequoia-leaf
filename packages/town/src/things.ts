@@ -3,8 +3,9 @@
  * takes and what it does. Where it is sold and for how much is in `catalogue.ts`; how each is drawn
  * and what touching it shows are the town page's (`campart.ts`, `camptouch.ts`).
  */
-import { FIGURE_IDS, FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
-import { MEMBER_IDS } from "@sequoia-leaf/raid/content/members.ts";
+import { BANNERS } from "@sequoia-leaf/raid/content/banners.ts";
+import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
+import { FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
 
 export const KINDS = [
   "home",
@@ -313,7 +314,7 @@ export const THINGS: readonly Thing[] = [
 
   // The Little Raid's figures, won at the Grove: each has its name and its line from there. A figure's
   // picture is 20 to 24 pixels wide and a square is 8, so each takes 3 squares.
-  ...FIGURE_IDS.map((id) =>
+  ...everyShared().map((id) =>
     thing(figureThing(id), FIGURES[id].name, "characters", 3, 1, FIGURES[id].quip, "Says its line.", {
       turns: "flip",
     }),
@@ -321,8 +322,10 @@ export const THINGS: readonly Thing[] = [
 
   // A banner's member, one for each of the pull game's banners: a person, who takes a person's square.
   // Only Leaf knows who; the page gives the thing their name and draws them (`members.ts`).
-  ...MEMBER_IDS.map((id) =>
-    thing(memberThing(id), FIGURES[id].name, "characters", 1, 1, "", "Hops and looks at you.", { turns: "flip" }),
+  ...BANNERS.map(({ id, headliner }) =>
+    thing(memberThing(id), FIGURES[headliner].name, "characters", 1, 1, "", "Hops and looks at you.", {
+      turns: "flip",
+    }),
   ),
 ];
 

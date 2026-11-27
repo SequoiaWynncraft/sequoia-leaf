@@ -3,6 +3,8 @@
  * a command gave, and the banners with whoever each one's headliner is. Anything these rules could
  * not have made reads as null, and the page loads again.
  */
+import { isEra } from "@sequoia-leaf/raid/content/releases.ts";
+
 import { BANNERS, decodePulls, type Fifty, PULLS_VERSION, type PullsNote, type PullsView, rarityOf } from "./game.ts";
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -11,7 +13,8 @@ const isFifty = (v: unknown): v is Fifty => v === "won" || v === "lost" || v ===
 /** The view, read as the state is read from what Leaf stored (the stream it leaves out stands at 0). */
 export function readView(v: unknown): PullsView | null {
   if (!isRecord(v) || !Array.isArray(v.open)) return null;
-  const { open, ...state } = v;
+  const { open, era, ...state } = v;
+  if (!isEra(era)) return null;
   const kept = decodePulls(JSON.stringify({ ...state, game: "pulls", v: PULLS_VERSION, rng: 0 }));
   if (!kept) return null;
   const banners: PullsView["open"] = [];
@@ -27,6 +30,7 @@ export function readView(v: unknown): PullsView | null {
     history: kept.history,
     pulls: kept.pulls,
     open: banners,
+    era,
   };
 }
 

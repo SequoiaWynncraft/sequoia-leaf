@@ -6,6 +6,7 @@
  */
 import { wear } from "@sequoia-leaf/figures/sprites.ts";
 import { bake } from "@sequoia-leaf/kit/skin.ts";
+import { LAST_ERA } from "@sequoia-leaf/raid";
 import { isUnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 
 import { fightEvents, fightUnits, startFight } from "../src/screen/fightview.ts";
@@ -37,7 +38,12 @@ const standin = {
       boons: [],
       might: 100,
     });
-    startFight({ seed, sides: [party(ours), party(theirs)] }, S.prefs.speed, S.looks.bases, () => undefined);
+    startFight(
+      { seed, era: LAST_ERA, sides: [party(ours), party(theirs)] },
+      S.prefs.speed,
+      S.looks.bases,
+      () => undefined,
+    );
     // The page as it is in a fight: the plate naming who is across the table is out of the way.
     document.body.dataset.mode = "fight";
     return "watching";

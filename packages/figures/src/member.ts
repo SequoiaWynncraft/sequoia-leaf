@@ -10,8 +10,9 @@
 import { ask } from "@sequoia-leaf/kit/net.ts";
 import { bake, type Body, lookFor, NOBODY, paintSkin, skinFigure } from "@sequoia-leaf/kit/skin.ts";
 import { readBanners } from "@sequoia-leaf/pulls/wire.ts";
+import { BANNERS } from "@sequoia-leaf/raid/content/banners.ts";
 import { specOf } from "@sequoia-leaf/raid/content/figures.ts";
-import { isMemberId, MEMBER_IDS, type MemberId } from "@sequoia-leaf/raid/content/members.ts";
+import { isMemberId, type MemberId } from "@sequoia-leaf/raid/content/members.ts";
 
 import { wear } from "./sprites.ts";
 
@@ -26,7 +27,7 @@ export async function meetMembers(seen: (banner: MemberId, name: string, body: B
     seen(banner, name, body);
   };
   const nobody = bake(paintSkin(NOBODY));
-  for (const banner of MEMBER_IDS) known(banner, specOf(banner).name, nobody);
+  for (const { headliner } of BANNERS) if (isMemberId(headliner)) known(headliner, specOf(headliner).name, nobody);
   for (const { id, headliner } of readBanners((await ask("/v1/game/banners")).body) ?? []) {
     if (!headliner || !isMemberId(id)) continue;
     const { name } = headliner;

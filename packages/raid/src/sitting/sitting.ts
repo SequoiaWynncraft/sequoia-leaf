@@ -9,6 +9,7 @@ import { type FigureId, FIGURES, type Tier } from "../content/figures.ts";
  * adds what is shared: the clock, who fights whom, the carousel, who is out and in what place.
  */
 import { COMPONENT_IDS, type ComponentId } from "../content/items.ts";
+import type { Era } from "../content/releases.ts";
 import { FIGHT, REGULARS, type RoomKind, ROOMS } from "../content/rooms.ts";
 import type { TraitId } from "../content/traits.ts";
 import type { FightSetup, FightSummary } from "../fight/types.ts";
@@ -102,6 +103,8 @@ export interface Owed {
 export interface Sitting {
   /** The sitting's own stream: everything it draws comes from it. */
   rng: number;
+  /** The era of its last deadline, at that deadline's own moment (or of its opening, or its start): what it and every seat's run draw from. */
+  era: Era;
   /** The Leaf id of whoever opened it, who may start it. */
   by: string;
   /** The room being planned or fought, counting from 0, or during a carousel the room after it. Past the fifteenth they are sparring rooms. */

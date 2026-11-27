@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { BOSS_IDS, type BossId, FIGURE_IDS, FIGURES } from "./content/figures.ts";
+import { BOSS_IDS, type BossId, FIGURES } from "./content/figures.ts";
 import { FINISHED_IDS } from "./content/items.ts";
 import { PAYOUT } from "./content/keepsakes.ts";
+import { LEGACY_ERA } from "./content/releases.ts";
 import { ROOM_COUNT, TRAILS } from "./content/rooms.ts";
 import { TRAIT_IDS } from "./content/traits.ts";
 import { type Almanac, newAlmanac, payout, readAlmanac, recordRun, trailCleared, trailOpen } from "./outside.ts";
 import { type RunSummary, startRun } from "./run.ts";
+import { EVERYONES } from "./testkit.ts";
 
 const summary = (more: Partial<RunSummary> = {}): RunSummary => ({
   trail: 0,
@@ -141,8 +143,8 @@ describe("the open table", () => {
     const fresh = newAlmanac();
     const full = {
       ...newAlmanac(),
-      fielded: [...FIGURE_IDS],
-      threeStars: [...FIGURE_IDS],
+      fielded: [...EVERYONES],
+      threeStars: [...EVERYONES],
       forged: [...FINISHED_IDS],
       topped: [...TRAIT_IDS],
       bosses: TRAILS.map(() => BOSS_IDS.slice()),
@@ -152,8 +154,8 @@ describe("the open table", () => {
     expect(loadAlmanac(saveAlmanac(full))).toEqual(full);
     expect(loadAlmanac(saveAlmanac(fresh))).toEqual(fresh);
     // A run takes nothing from the almanac: the same seed is the same run, stall and all, for both.
-    expect(startRun(6)).toEqual(startRun(6));
-    expect(startRun(6).stall.every((id) => id === null || FIGURES[id] !== undefined)).toBe(true);
+    expect(startRun(6, { era: LEGACY_ERA })).toEqual(startRun(6, { era: LEGACY_ERA }));
+    expect(startRun(6, { era: LEGACY_ERA }).stall.every((id) => id === null || FIGURES[id] !== undefined)).toBe(true);
   });
   test("a run never opens anything", () => {
     const everything = recordRun(newAlmanac(), { ...WON, topped: ["mender"] });
@@ -176,8 +178,8 @@ describe("keeping the almanac", () => {
   test("an almanac with every figure, every finished item and every trait in it loads back the same", () => {
     const almanac = {
       ...newAlmanac(),
-      fielded: [...FIGURE_IDS],
-      threeStars: [...FIGURE_IDS],
+      fielded: [...EVERYONES],
+      threeStars: [...EVERYONES],
       forged: [...FINISHED_IDS],
       topped: [...TRAIT_IDS],
       bosses: TRAILS.map(() => BOSS_IDS.slice()),

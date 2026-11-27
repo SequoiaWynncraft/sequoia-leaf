@@ -8,6 +8,7 @@
 import { mix } from "@sequoia-leaf/core";
 
 import { act, isPlanning, type PlanningCommand, readRunCommand } from "../command.ts";
+import { eraAt } from "../content/releases.ts";
 import { isRecord, isWhole } from "../party.ts";
 import { abandon, type Note } from "../run.ts";
 import { hasTaken, take } from "./carousel.ts";
@@ -59,6 +60,7 @@ const seatOf = (t: Sitting, id: string): Seat | undefined =>
 export function openSitting(call: Call): Sitting {
   return {
     rng: mix(call.seed >>> 0, 0x5171),
+    era: eraAt(call.now),
     by: call.player.id,
     room: 0,
     stage: { at: "open", until: call.now + CLOCK.open, sat: [asMember(call.player)] },
@@ -134,6 +136,8 @@ function plan(t: Sitting, c: PlanningCommand, { player, seed }: Call): Did {
   const seat = seatOf(t, player.id);
   if (!seat) return refuse("not_seated");
   seat.run.rng = mix(seat.run.rng, seed);
+  // A seat plans in the sitting's era: the one its room was laid out in.
+  seat.run.era = t.era;
   return act(seat.run, c);
 }
 

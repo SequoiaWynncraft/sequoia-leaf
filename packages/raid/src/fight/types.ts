@@ -5,6 +5,7 @@
 import type { BoonId } from "../content/boons.ts";
 import type { Shape, Stars, UnitKind } from "../content/figures.ts";
 import type { ItemId } from "../content/items.ts";
+import type { Era } from "../content/releases.ts";
 import type { TraitId } from "../content/traits.ts";
 import type { RuleId } from "../content/wilds.ts";
 import type { Side } from "../hex.ts";
@@ -26,9 +27,11 @@ export type Form = "plain" | "true";
 /** Why a figure got back up: Second Wind, Groot, or Seqwawa's No GG Left Behind. */
 export type RiseWhy = "wind" | "groot" | "seqwawa";
 
-/** Everything a fight needs: two parties and a seed, and the Wilds' rule it is played under. The same setup always gives the same fight. */
+/** Everything a fight needs: two parties and a seed, its era, and the Wilds' rule it is played under. The same setup always gives the same fight. */
 export interface FightSetup {
   seed: number;
+  /** The era it was locked in (`releases.ts`): it is played by that era's catalogue for ever. */
+  era: Era;
   /** The party at the table first, then the one across from it. */
   sides: [Party, Party];
   /** The Wilds' rule (`rules.ts`); absent for a fight under none. */

@@ -1,0 +1,305 @@
+{
+  "game": "little-raid-table",
+  "v": 6,
+  "rng": 4072709072,
+  "era": 2,
+  "runs": 3,
+  "run": {
+    "seed": 2028982420,
+    "rng": 4001485419,
+    "era": 2,
+    "trail": 0,
+    "room": 2,
+    "stage": {
+      "phase": "fight",
+      "fight": {
+        "setup": {
+          "seed": 1972962955,
+          "era": 2,
+          "sides": [
+            {
+              "who": "You",
+              "title": "",
+              "figures": [
+                { "kind": "crab7", "stars": 2, "seat": 2, "items": ["blackthorn"], "fed": 0 },
+                { "kind": "crab7", "stars": 2, "seat": 3, "items": [], "fed": 0 },
+                { "kind": "emberkit", "stars": 1, "seat": 4, "items": [], "fed": 0 }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            {
+              "who": "Another member",
+              "by": "00000000-0000-4000-8000-0000000060d2",
+              "title": "their board at this room",
+              "figures": [
+                { "kind": "crab7", "stars": 2, "seat": 2, "items": ["conker"], "fed": 0 },
+                { "kind": "slug", "stars": 2, "seat": 3, "items": [], "fed": 0 },
+                { "kind": "badger", "stars": 1, "seat": 4, "items": ["blackthorn", "hedgehog"], "fed": 0 },
+                { "kind": "emberkit", "stars": 2, "seat": 9, "items": [], "fed": 0 },
+                { "kind": "moth", "stars": 1, "seat": 22, "items": ["mothlantern"], "fed": 0 },
+                { "kind": "greg", "stars": 1, "seat": 23, "items": [], "fed": 4 }
+              ],
+              "boons": ["secondwind"],
+              "might": 100
+            }
+          ]
+        },
+        "outcome": {
+          "result": "loss",
+          "ticks": 105,
+          "seconds": 5.25,
+          "standing": [0, 6],
+          "dusk": false,
+          "units": [
+            {
+              "id": 0,
+              "side": 1,
+              "kind": "crab7",
+              "stars": 2,
+              "summoned": false,
+              "alive": true,
+              "hp": 621,
+              "maxHp": 621,
+              "dealt": 261,
+              "taken": 0,
+              "healed": 0,
+              "casts": 0
+            },
+            {
+              "id": 1,
+              "side": 0,
+              "kind": "crab7",
+              "stars": 2,
+              "summoned": false,
+              "alive": false,
+              "hp": 0,
+              "maxHp": 540,
+              "dealt": 301,
+              "taken": 579,
+              "healed": 0,
+              "casts": 1
+            },
+            {
+              "id": 2,
+              "side": 1,
+              "kind": "slug",
+              "stars": 2,
+              "summoned": false,
+              "alive": true,
+              "hp": 514,
+              "maxHp": 774,
+              "dealt": 196,
+              "taken": 260,
+              "healed": 0,
+              "casts": 1
+            },
+            {
+              "id": 3,
+              "side": 0,
+              "kind": "crab7",
+              "stars": 2,
+              "summoned": false,
+              "alive": false,
+              "hp": 0,
+              "maxHp": 540,
+              "dealt": 214,
+              "taken": 559,
+              "healed": 0,
+              "casts": 1
+            },
+            {
+              "id": 4,
+              "side": 1,
+              "kind": "badger",
+              "stars": 1,
+              "summoned": false,
+              "alive": true,
+              "hp": 419,
+              "maxHp": 720,
+              "dealt": 435,
+              "taken": 301,
+              "healed": 0,
+              "casts": 0
+            },
+            {
+              "id": 5,
+              "side": 0,
+              "kind": "emberkit",
+              "stars": 1,
+              "summoned": false,
+              "alive": false,
+              "hp": 0,
+              "maxHp": 270,
+              "dealt": 46,
+              "taken": 303,
+              "healed": 0,
+              "casts": 0
+            },
+            {
+              "id": 6,
+              "side": 1,
+              "kind": "emberkit",
+              "stars": 2,
+              "summoned": false,
+              "alive": true,
+              "hp": 486,
+              "maxHp": 486,
+              "dealt": 142,
+              "taken": 0,
+              "healed": 0,
+              "casts": 0
+            },
+            {
+              "id": 7,
+              "side": 1,
+              "kind": "moth",
+              "stars": 1,
+              "summoned": false,
+              "alive": true,
+              "hp": 210,
+              "maxHp": 210,
+              "dealt": 278,
+              "taken": 0,
+              "healed": 0,
+              "casts": 1
+            },
+            {
+              "id": 8,
+              "side": 1,
+              "kind": "greg",
+              "stars": 1,
+              "summoned": false,
+              "alive": true,
+              "hp": 915,
+              "maxHp": 915,
+              "dealt": 129,
+              "taken": 0,
+              "healed": 0,
+              "casts": 0
+            }
+          ]
+        }
+      }
+    },
+    "resolve": 20,
+    "acorns": 5,
+    "streak": 2,
+    "level": 3,
+    "xp": 0,
+    "board": [
+      null,
+      null,
+      { "id": 1, "kind": "crab7", "stars": 2, "items": ["blackthorn"], "fed": 0 },
+      { "id": 6, "kind": "crab7", "stars": 2, "items": [], "fed": 0 },
+      { "id": 4, "kind": "emberkit", "stars": 1, "items": [], "fed": 0 },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "bench": [
+      null,
+      { "id": 9, "kind": "emberkit", "stars": 1, "items": [], "fed": 0 },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "items": [],
+    "stall": ["worm", null, "worm", "barrowgnome", null],
+    "held": false,
+    "rustles": 1,
+    "bought": 2,
+    "boons": ["quickstudy"],
+    "foe": {
+      "who": "Another member",
+      "by": "00000000-0000-4000-8000-0000000060d2",
+      "title": "their board at this room",
+      "figures": [
+        { "kind": "crab7", "stars": 2, "seat": 2, "items": ["conker"], "fed": 0 },
+        { "kind": "slug", "stars": 2, "seat": 3, "items": [], "fed": 0 },
+        { "kind": "badger", "stars": 1, "seat": 4, "items": ["blackthorn", "hedgehog"], "fed": 0 },
+        { "kind": "emberkit", "stars": 2, "seat": 9, "items": [], "fed": 0 },
+        { "kind": "moth", "stars": 1, "seat": 22, "items": ["mothlantern"], "fed": 0 },
+        { "kind": "greg", "stars": 1, "seat": 23, "items": [], "fed": 4 }
+      ],
+      "boons": ["secondwind"],
+      "might": 100
+    },
+    "record": [
+      { "room": 0, "kind": "trouble", "result": "win", "standing": [1, 0], "boss": null },
+      { "room": 1, "kind": "trouble", "result": "win", "standing": [2, 0], "boss": null }
+    ],
+    "nextId": 10,
+    "last": {
+      "seed": 2092774278,
+      "era": 2,
+      "sides": [
+        {
+          "who": "You",
+          "title": "",
+          "figures": [
+            { "kind": "emberkit", "stars": 1, "seat": 2, "items": [], "fed": 0 },
+            { "kind": "crab7", "stars": 2, "seat": 3, "items": ["thorn"], "fed": 0 }
+          ],
+          "boons": [],
+          "might": 100
+        },
+        {
+          "who": "The forest",
+          "title": "Gnats in the brambles",
+          "figures": [
+            { "kind": "bramble", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+            { "kind": "gnat", "stars": 1, "seat": 2, "items": [], "fed": 0 },
+            { "kind": "gnat", "stars": 1, "seat": 4, "items": [], "fed": 0 },
+            { "kind": "gnat", "stars": 1, "seat": 10, "items": [], "fed": 0 }
+          ],
+          "boons": [],
+          "might": 100
+        }
+      ]
+    },
+    "own": null,
+    "endless": null,
+    "wing": null,
+    "seen": { "fielded": ["crab7", "emberkit"], "threeStars": [], "forged": ["blackthorn"], "topped": [] }
+  },
+  "endless": null,
+  "ventures": 0,
+  "almanac": {
+    "fielded": [],
+    "threeStars": [],
+    "forged": [],
+    "topped": [],
+    "bosses": [["bigcrab"], ["bigcrab"], []],
+    "best": [15, 15, 0],
+    "runs": 2,
+    "deepest": { "wilds": 0, "deep": 0 }
+  },
+  "trail": 0,
+  "looks": { "place": "clearing", "cloth": "bare", "lantern": "iron", "bases": "plain", "owned": [] },
+  "week": { "at": 0, "deepest": { "wilds": 0, "deep": 0 } }
+}

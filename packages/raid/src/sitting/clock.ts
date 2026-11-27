@@ -8,7 +8,9 @@
 import { draw32, pick, shuffled } from "@sequoia-leaf/core";
 
 import { fondOf, planRoom } from "../bot.ts";
-import { FIGURE_IDS, traitsOf } from "../content/figures.ts";
+import { available, catalogOf } from "../content/catalog.ts";
+import { traitsOf } from "../content/figures.ts";
+import { eraAt } from "../content/releases.ts";
 import { BOSS_ROOMS, ROOM_COUNT } from "../content/rooms.ts";
 import { resolveFight } from "../fight/engine.ts";
 import type { FightSetup } from "../fight/types.ts";
@@ -55,13 +57,14 @@ import {
  * every seat gets a run of its own, and the first carousel is laid out.
  */
 export function begin(t: Sitting, sat: readonly Member[], at: number): void {
-  const regulars = shuffled(t, FIGURE_IDS).slice(0, CHAIRS - sat.length);
+  t.era = eraAt(at);
+  const regulars = shuffled(t, available(catalogOf(t), { for: "regular" })).slice(0, CHAIRS - sat.length);
   const whos: Who[] = [
     ...sat.map((member): Who => ({ is: "member", id: member.id, name: member.name })),
     ...regulars.map((figure): Who => ({ is: "regular", figure, habit: pick(t, traitsOf(figure)) })),
   ];
   t.seats = whos.map((who) => {
-    const run = startRun(draw32(t), { trail: TRAIL });
+    const run = startRun(draw32(t), { era: t.era, trail: TRAIL });
     return { who, run, shown: signed({ who, run }), place: null };
   });
   t.room = 0;
@@ -126,7 +129,7 @@ export function layRoom(t: Sitting, at: number): void {
     }
     if (t.odd) meet(t.odd[0], t.odd[1]);
   } else {
-    const forest = opposition(draw32(t), t.room, TRAIL);
+    const forest = opposition(catalogOf(t), draw32(t), t.room, TRAIL);
     for (const { run } of seatsIn(t)) run.foe = structuredClone(forest);
   }
   t.stage = { at: "plan", until: later(t, at, planMs(t.room)) };
@@ -147,7 +150,11 @@ function ready(run: Run): void {
  * same setup, with how it came out for that side. Gives back how many steps it lasted.
  */
 function fight(t: Sitting, home: Seat, across: Party, away: Seat | null): number {
-  const setup: FightSetup = { seed: draw32(t), sides: [structuredClone(home.shown), structuredClone(across)] };
+  const setup: FightSetup = {
+    seed: draw32(t),
+    era: t.era,
+    sides: [structuredClone(home.shown), structuredClone(across)],
+  };
   const outcome = resolveFight(setup);
   home.run.stage = { phase: "fight", fight: { setup, outcome } };
   if (away) away.run.stage = { phase: "fight", fight: { setup: structuredClone(setup), outcome: sided(outcome, 1) } };
@@ -263,9 +270,11 @@ function takings(t: Sitting, at: number): void {
 
 const due = (t: Sitting, now: number): boolean => t.stage.at !== "over" && t.stage.until <= now;
 
-/** Does the deadline a sitting stands at, at its own moment. */
+/** Does the deadline a sitting stands at, at its own moment: in that moment's era, which every seat's run moves into. */
 function step(t: Sitting): void {
   const { stage } = t;
+  if (stage.at !== "over") t.era = eraAt(stage.until);
+  for (const { run } of t.seats) run.era = t.era;
   switch (stage.at) {
     case "open":
       t.stage = { at: "over", ended: stage.until };

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { planRoom, SENSIBLE, startRun } from "@sequoia-leaf/raid";
+import { LEGACY_ERA, planRoom, SENSIBLE, startRun } from "@sequoia-leaf/raid";
 import { advance } from "@sequoia-leaf/raid/sitting/clock.ts";
 import { type Call, command, openSitting } from "@sequoia-leaf/raid/sitting/commands.ts";
 import { CHAIRS, CLOCK, type Member, seatsIn, type Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
@@ -166,7 +166,7 @@ describe("the carousel's turn", () => {
 
 describe("what a room paid", () => {
   test("how it went, then health, acorns and a level, as the run changed", () => {
-    const before = startRun(1);
+    const before = startRun(1, { era: LEGACY_ERA });
     const after = { ...before, resolve: before.resolve - 4, acorns: before.acorns + 6, level: before.level + 1 };
     expect(paidLines("loss", before, after)).toEqual(["Room lost", "-4 health", "+6 acorns", `Level ${after.level}`]);
     expect(paidLines("win", before, { ...before, acorns: before.acorns + 3 })).toEqual(["Room won", "+3 acorns"]);

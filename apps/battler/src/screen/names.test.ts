@@ -3,7 +3,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { abilityText, refusalText, TRAIT_IDS } from "@sequoia-leaf/raid";
-import { BOSS_IDS, FIGURE_IDS, specOf, SUMMON_IDS } from "@sequoia-leaf/raid/content/figures.ts";
+import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
+import { BOSS_IDS, specOf, SUMMON_IDS } from "@sequoia-leaf/raid/content/figures.ts";
 import { TRUE_FORM_IDS, TRUE_FORMS } from "@sequoia-leaf/raid/content/groot.ts";
 import { LORE } from "@sequoia-leaf/raid/content/lore.ts";
 import { HANDLES, nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
@@ -130,7 +131,7 @@ function stringsIn(code: string): string[] {
 
 describe("the names", () => {
   test("every figure, summon and boss in the game today has its name from the list, ids unchanged", () => {
-    const ids = [...FIGURE_IDS, ...SUMMON_IDS, ...BOSS_IDS];
+    const ids = [...everyShared(), ...SUMMON_IDS, ...BOSS_IDS];
     expect(ids.filter((id) => NAMES[id] === undefined)).toEqual([]);
     expect(ids.filter((id) => specOf(id).name !== NAMES[id])).toEqual([]);
   });
@@ -173,7 +174,7 @@ describe("the names", () => {
       );
     });
     expect(left).toEqual([]);
-    expect(FIGURE_IDS.filter((id) => OLD.some((old) => abilityText(id, 1).includes(old)))).toEqual([]);
+    expect(everyShared().filter((id) => OLD.some((old) => abilityText(id, 1).includes(old)))).toEqual([]);
   });
 });
 

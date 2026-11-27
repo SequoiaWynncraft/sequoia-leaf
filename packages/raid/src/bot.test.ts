@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { CARELESS, fondOf, type Habit, planRoom, playRoom, playRun, ROLLER, SAVER, SENSIBLE } from "./bot.ts";
 import { FIGURES } from "./content/figures.ts";
 import { HOLDS, isComponentId } from "./content/items.ts";
+import { LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT } from "./content/rooms.ts";
 import { KINS } from "./content/traits.ts";
 import { newAlmanac, payout, recordRun } from "./outside.ts";
@@ -14,13 +15,13 @@ import {
   picksOf,
   pieces,
   type Run,
-  STALL_POOL,
   startRun,
   summariseRun,
   takeTakings,
   traitsNow,
 } from "./run.ts";
 import { checkRun } from "./save.ts";
+import { EVERYONES } from "./testkit.ts";
 
 /** Everything that must be true of a run however it has been played. */
 function expectSound(run: Run): void {
@@ -36,7 +37,7 @@ function expectSound(run: Run): void {
   for (const p of own) {
     expect(p.items.length).toBeLessThanOrEqual(HOLDS);
     expect(p.items.filter(isComponentId).length).toBeLessThanOrEqual(1);
-    expect(STALL_POOL).toContain(p.kind);
+    expect(EVERYONES).toContain(p.kind);
   }
   // Three of a kind never sit unmerged.
   const counts = new Map<string, number>();
@@ -52,7 +53,7 @@ const share = (habit: Habit, kin: string): number => {
   let fond = 0;
   let all = 0;
   for (let seed = 1; seed <= 12; seed++) {
-    const run = playRun(seed * 31, habit);
+    const run = playRun(seed * 31, habit, { era: LEGACY_ERA });
     for (const kind of run.seen.fielded) {
       all++;
       if (FIGURES[kind].kin === kin) fond++;
@@ -66,7 +67,7 @@ describe("the bot plays by the rules", () => {
   test("every habit plays whole runs to an end, and the run is sound after every room", () => {
     for (const habit of habits) {
       for (const seed of [1, 2, 3]) {
-        const run = startRun(seed * 101);
+        const run = startRun(seed * 101, { era: LEGACY_ERA });
         let rooms = 0;
         while (run.stage.phase !== "over") {
           planRoom(run, habit);
@@ -83,12 +84,12 @@ describe("the bot plays by the rules", () => {
     }
   });
   test("the same seed and habit play the same run", () => {
-    expect(playRun(55, SENSIBLE)).toEqual(playRun(55, SENSIBLE));
-    expect(playRun(55, CARELESS)).toEqual(playRun(55, CARELESS));
-    expect(playRun(55, SENSIBLE)).not.toEqual(playRun(56, SENSIBLE));
+    expect(playRun(55, SENSIBLE, { era: LEGACY_ERA })).toEqual(playRun(55, SENSIBLE, { era: LEGACY_ERA }));
+    expect(playRun(55, CARELESS, { era: LEGACY_ERA })).toEqual(playRun(55, CARELESS, { era: LEGACY_ERA }));
+    expect(playRun(55, SENSIBLE, { era: LEGACY_ERA })).not.toEqual(playRun(56, SENSIBLE, { era: LEGACY_ERA }));
   });
   test("it fields as many as it may, once it owns them", () => {
-    const run = startRun(9);
+    const run = startRun(9, { era: LEGACY_ERA });
     for (let i = 0; i < 6 && run.stage.phase !== "over"; i++) {
       planRoom(run, SENSIBLE);
       if (pieces(run).length >= fieldCap(run)) expect(fielded(run)).toBe(fieldCap(run));
@@ -108,8 +109,8 @@ describe("the bot plays by the rules", () => {
     let rollerStars = 0;
     let saverStars = 0;
     for (let seed = 1; seed <= 12; seed++) {
-      const roller = playRun(seed * 17, ROLLER);
-      const saver = playRun(seed * 17, SAVER);
+      const roller = playRun(seed * 17, ROLLER, { era: LEGACY_ERA });
+      const saver = playRun(seed * 17, SAVER, { era: LEGACY_ERA });
       rollerLevel += roller.level;
       saverLevel += saver.level;
       rollerStars += roller.seen.threeStars.length;
@@ -122,13 +123,13 @@ describe("the bot plays by the rules", () => {
     let sensible = 0;
     let careless = 0;
     for (let seed = 1; seed <= 12; seed++) {
-      sensible += summariseRun(playRun(seed * 13, SENSIBLE)).cleared;
-      careless += summariseRun(playRun(seed * 13, CARELESS)).cleared;
+      sensible += summariseRun(playRun(seed * 13, SENSIBLE, { era: LEGACY_ERA })).cleared;
+      careless += summariseRun(playRun(seed * 13, CARELESS, { era: LEGACY_ERA })).cleared;
     }
     expect(sensible).toBeGreaterThan(careless * 2);
   });
   test("it switches traits on, makes items and takes boons along the way", () => {
-    const run = startRun(4);
+    const run = startRun(4, { era: LEGACY_ERA });
     let traits = 0;
     while (run.stage.phase !== "over") {
       planRoom(run, SENSIBLE);
@@ -147,7 +148,7 @@ describe("a whole life of raids", () => {
     let almanac = newAlmanac();
     let coins = 0;
     for (let seed = 1; seed <= 8; seed++) {
-      const run = playRun(seed * 7, SENSIBLE);
+      const run = playRun(seed * 7, SENSIBLE, { era: LEGACY_ERA });
       const summary = summariseRun(run);
       coins += payout(summary).coins;
       almanac = recordRun(almanac, summary).almanac;

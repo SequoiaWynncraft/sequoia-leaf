@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { LEGACY_ERA } from "./content/releases.ts";
 import { RAID } from "./game.ts";
 import { newAlmanac } from "./outside.ts";
 import { choose, startRun } from "./run.ts";
@@ -22,7 +23,7 @@ describe("the table's postcard for the town", () => {
   });
 
   test("a raid under way says where it got to, and a table raided before says so once it is over", () => {
-    const run = startRun(5);
+    const run = startRun(5, { era: LEGACY_ERA });
     choose(run, 0);
     run.room = 4;
     const table = { ...RAID.create(ctx), run, almanac: { ...newAlmanac(), runs: 3 } };

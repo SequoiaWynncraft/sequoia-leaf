@@ -12,10 +12,10 @@ import {
   type ComponentId,
   countTraits,
   ECONOMY,
+  type Era,
   fieldCap,
   fielded,
   type FightResult,
-  FIGURE_IDS,
   type FigureId,
   FIGURES,
   type FinishedId,
@@ -299,8 +299,8 @@ const EMPTY: Party = { who: "", title: "", figures: [], boons: [], might: 100 };
  * board, the traits its party switches on. Asked of the fight itself, so the card can never say
  * other than what happens.
  */
-export function startNumbers(party: Party, seat: number, against: Party = EMPTY): Numbers | null {
-  const fight = openFight({ seed: 1, sides: [party, against] });
+export function startNumbers(era: Era, party: Party, seat: number, against: Party = EMPTY): Numbers | null {
+  const fight = openFight({ seed: 1, era, sides: [party, against] });
   const u = fight.units.find((x) => x.side === 0 && !x.summoned && x.seat === seat);
   if (!u) return null;
   return {
@@ -315,12 +315,12 @@ export function startNumbers(party: Party, seat: number, against: Party = EMPTY)
 
 /** The numbers of one of the member's own figures: on the board with the party's traits, on the bench with only what it holds. */
 export function pieceNumbers(run: RunView, spot: Spot): Numbers | null {
-  if (spot.on === "board") return startNumbers(partyOf(run), spot.at);
+  if (spot.on === "board") return startNumbers(run.era, partyOf(run), spot.at);
   const piece = run.bench[spot.at];
   if (!piece) return null;
   // Alone, in the middle row: nobody to share a trait with, and no row of Tidy Formation's.
   const alone: Party = { ...partyOf(run), figures: [placedOf(run, piece, 7)] };
-  return startNumbers(alone, 7);
+  return startNumbers(run.era, alone, 7);
 }
 
 /** How a trait stands for a party: how many it fields, and how many the next step needs. */
@@ -347,8 +347,8 @@ export function whereIs(run: RunView, kind: FigureId): "board" | "bench" | "stal
   return null;
 }
 
-/** Every figure of a trait among some (all twenty-eight, unless said), cheapest first, in their own order within a tier. */
-export const membersOf = (trait: TraitId, among: readonly FigureId[] = FIGURE_IDS): FigureId[] =>
+/** Every figure of a trait among some, cheapest first, in their own order within a tier. */
+export const membersOf = (trait: TraitId, among: readonly FigureId[]): FigureId[] =>
   among.filter((id) => traitsOf(id).includes(trait)).toSorted((a, b) => FIGURES[a].tier - FIGURES[b].tier);
 
 /** A name at the start of a sentence or a line: "a Moth" is "A Moth" there. */

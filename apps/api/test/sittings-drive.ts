@@ -72,7 +72,7 @@ export function seen(answer: unknown): Seen {
 }
 
 /** The page's view of a solo table the bot's planning is worked out on: only its run and its count of runs are read. */
-const BLANK = tableView(newTable({ seed: 1 }), { awards: [], now: 0 });
+const BLANK = tableView(newTable({ seed: 1, now: 0 }), { awards: [], now: 0 });
 
 /** One member's turn at the sitting as it stands: their pick in a carousel, or their room planned. Gives back the sitting after. */
 async function turn(reach: Reach, id: string, { player, session }: Seated, next: () => string): Promise<Seen> {

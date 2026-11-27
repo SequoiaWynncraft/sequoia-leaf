@@ -5,7 +5,7 @@
  * at: each true form's fall (and in how many steps it is back up), each rise, and each of Seqwawa's
  * casts.
  */
-import { type FightSetup, openFight, stepFight } from "@sequoia-leaf/raid";
+import { type FightSetup, LAST_ERA, openFight, stepFight } from "@sequoia-leaf/raid";
 import { isUnitKind, specOf } from "@sequoia-leaf/raid/content/figures.ts";
 import { COLS } from "@sequoia-leaf/raid/hex.ts";
 
@@ -41,7 +41,7 @@ const groot = {
   /** Plays a fight on the table between two parties of the figures named; the table must be planning. */
   watch(ours: string[], theirs: string[], stars: 1 | 2 | 3 = 1, seed = 1): string {
     if (S.screen.at !== "plan") return "not planning";
-    const setup: FightSetup = { seed, sides: [seated(ours, stars), seated(theirs, stars)] };
+    const setup: FightSetup = { seed, era: LAST_ERA, sides: [seated(ours, stars), seated(theirs, stars)] };
     kept.setup = setup;
     startFight(setup, S.prefs.speed, S.looks.bases, () => undefined);
     document.body.dataset.mode = "fight";

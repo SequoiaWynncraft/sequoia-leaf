@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { type PlayerId, playerId } from "@sequoia-leaf/core";
 import { planCommands, type RaidCommand, readNotes, readView, SENSIBLE, type TableView } from "@sequoia-leaf/raid";
-import { FIGURE_IDS, FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
+import { FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
 import { type FightRecord, readFight } from "@sequoia-leaf/raid/fought.ts";
+import { EVERYONES } from "@sequoia-leaf/raid/testkit.ts";
 import { Schema } from "effect";
 
 import { GAMES } from "../src/play/games.ts";
@@ -117,7 +118,7 @@ describe("each fight decided", () => {
   });
 
   it("on the member's own figures, says so, with each figure's level", async () => {
-    const tier1 = FIGURE_IDS.filter((id) => FIGURES[id].tier === 1);
+    const tier1 = EVERYONES.filter((id) => FIGURES[id].tier === 1);
     const awards = tier1.flatMap((id) =>
       [1, 2, 3, 4, 5, 6, 7].map((n) => (n === 1 ? `pull:figure:${id}` : `copies:figure:${id}:${n}`)),
     );

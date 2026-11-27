@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { type Party, type RaidNote, type RunView, startRun, wingOf } from "@sequoia-leaf/raid";
+import { LEGACY_ERA, type Party, type RaidNote, type RunView, startRun, wingOf } from "@sequoia-leaf/raid";
 
 import { backLines, bossOfWing, ruleLine, ruleTitle, shiftedLine } from "./wilds.ts";
 
@@ -13,13 +13,13 @@ const party = (who: string, title: string, boss = false): Party => ({
 });
 /** A run of the Wilds in a room (from 0), its last room fought against a party with a result. */
 function runAt(room: number, across: Party | null, result: "win" | "loss" | "draw" = "loss"): RunView {
-  const run = startRun(3, { endless: "wilds" });
+  const run = startRun(3, { era: LEGACY_ERA, endless: "wilds" });
   run.room = room;
   run.resolve = 9;
   run.stage = { phase: "plan", picks: [] };
   if (across) {
     run.record.push({ room: room - 1, kind: "spar", result, standing: [0, 2], boss: null });
-    run.last = { seed: 1, sides: [party("You", ""), across] };
+    run.last = { seed: 1, era: LEGACY_ERA, sides: [party("You", ""), across] };
   }
   return run;
 }
@@ -83,7 +83,7 @@ describe("the rule's words", () => {
     expect(bossOfWing(10)).toEqual({ room: 15, name: "Zero", kind: "bigcrab" });
   });
   test("figures moved off closed hexes are named in one line", () => {
-    const run = startRun(3, { endless: "wilds" });
+    const run = startRun(3, { era: LEGACY_ERA, endless: "wilds" });
     run.board[4] = { id: 50, kind: "rock", stars: 1, items: [], fed: 0 };
     run.bench[0] = { id: 51, kind: "finch", stars: 1, items: [], fed: 0 };
     const notes: RaidNote[] = [

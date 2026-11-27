@@ -1,9 +1,10 @@
 /**
  * Pulls as Leaf plays them: each pull draws a prize from a pool at the odds in `RATES`, with counters
  * that make a top-tier prize certain by the 80th pull and a mid-tier one by the 10th. A prize is one
- * of The Little Raid's figures, or a banner's headliner. `grove` is always open; a banner is open
- * between its dates, and its top tier holds its headliner. Every pull also gives Seeds, which buy a
- * mid-tier prize the player does not have.
+ * of The Little Raid's figures, or a banner's headliner, as the raid's catalogue gives them at the
+ * era Leaf's clock is in (`available`): this game has no list of its own, of prizes or of banners.
+ * `grove` is always open; a banner is open between its dates, and its top tier holds its headliner.
+ * Every pull also gives Seeds, which buy a mid-tier prize the player does not have.
  *
  * Every draw comes from the state's stream, stirred with Leaf's dice (`Ctx.seed`) before a pull, so
  * nothing a player has seen says what comes next. The page is never shown the stream.
@@ -22,7 +23,19 @@ import {
   type Refused,
   type Stream,
 } from "@sequoia-leaf/core";
-import { FIGURE_IDS, type FigureId, FIGURES, type Tier as Price } from "@sequoia-leaf/raid/content/figures.ts";
+import { BANNERS, GROVE } from "@sequoia-leaf/raid/content/banners.ts";
+import {
+  available,
+  type Catalog,
+  catalogAt,
+  prizeOf,
+  prizeRarities,
+  type Rarity,
+} from "@sequoia-leaf/raid/content/catalog.ts";
+import { type Era, eraAt } from "@sequoia-leaf/raid/content/releases.ts";
+
+export { type Banner, BANNERS } from "@sequoia-leaf/raid/content/banners.ts";
+export type { Rarity } from "@sequoia-leaf/raid/content/catalog.ts";
 
 // ---------- what is won ----------
 
@@ -35,8 +48,7 @@ export const RARITIES = {
   Druid: { tier: "mid", colour: "#a3bc4e" },
   Treant: { tier: "top", colour: "#dd7350" },
   Yggdrasil: { tier: "top", colour: "#e8a33d" },
-} as const;
-export type Rarity = keyof typeof RARITIES;
+} as const satisfies Readonly<Record<Rarity, { readonly tier: string; readonly colour: string }>>;
 export type Tier = (typeof RARITIES)[Rarity]["tier"];
 
 /** Every number of the pulls, as the page shows them. */
@@ -70,59 +82,29 @@ export function topChance(top: number): number {
   return top <= rampAfter ? base : base + ((1 - base) * (top - rampAfter)) / (certainAt - rampAfter);
 }
 
-/** A banner, open by Leaf's clock from `from` until `until`. */
-export interface Banner {
-  readonly id: string;
-  readonly from: number;
-  readonly until: number;
-}
-
-export const BANNERS: readonly Banner[] = [
-  { id: "banner-1", from: Date.UTC(2026, 10, 23), until: Date.UTC(2026, 11, 8) },
-];
-
 /** A banner's headliner, as a prize. */
 export const headliner = (banner: string): string => `headliner:${banner}`;
 
 /**
- * Figures made while a banner was open, with their rarity and the moment of Leaf's clock they join
- * the pools: when the next banner opens. A banner's prizes are what it opened with, so a new figure
- * does not cut the share of the ones there mid-banner. Seqwawa came with the expansion's first
- * release, during banner-1.
+ * What a pool gives, by rarity, at a catalogue's era: `figure:` is one of the raid's figures, and
+ * `headliner:` a banner's headliner (`prizeOf`). The camp is sent a figure once, as the town's
+ * `figure-<id>`, and for a headliner the member themself (`member-<banner>`).
  */
-const JOINS: readonly { readonly prize: string; readonly rarity: Rarity; readonly at: number }[] = [
-  { prize: "figure:seqwawa", rarity: "Treant", at: Date.UTC(2026, 11, 8) },
-];
-/** The figures of one of the raid's five prices, as prizes, but for those that join later (`JOINS`). */
-const figures = (price: Price): string[] =>
-  FIGURE_IDS.filter((id) => FIGURES[id].tier === price)
-    .map((id) => `figure:${id}`)
-    .filter((prize) => !JOINS.some((j) => j.prize === prize));
-/** The figures of the raid's fourth price that are Druid; the others of that price are Dryad. */
-const DRUID: readonly FigureId[] = ["crab40", "apothecary"];
-const druid = DRUID.map((id) => `figure:${id}`);
-
-/**
- * Every prize, by rarity, as banner-1 opened with them: `figure:` is one of the raid's figures, by
- * its price there, and `headliner:` a banner's headliner. The camp is sent a figure once, as the
- * town's `figure-<id>`, and for a headliner the member themself (`member-<banner>`). What a pull
- * draws from at a moment is `prizesAt`.
- */
-export const PRIZES: Readonly<Record<Rarity, readonly string[]>> = {
-  Leafkin: figures(1),
-  Sapling: figures(2),
-  Sprite: figures(3),
-  Dryad: figures(4).filter((prize) => !druid.includes(prize)),
-  Druid: druid,
-  Treant: figures(5),
-  Yggdrasil: BANNERS.map(({ id }) => headliner(id)),
-};
-
-/** The prizes of a rarity in the pools at a moment of Leaf's clock: `PRIZES`, and what has joined by then (`JOINS`). */
-export const prizesAt = (rarity: Rarity, now: number): readonly string[] => [
-  ...PRIZES[rarity],
-  ...JOINS.filter((j) => j.rarity === rarity && j.at <= now).map((j) => j.prize),
-];
+export type Prizes = Readonly<Record<Rarity, readonly string[]>>;
+export function prizesOf(cat: Catalog, pool: string): Prizes {
+  const of = (rarity: Rarity): string[] => available(cat, { for: "pull", pool, rarity }).map(prizeOf);
+  return {
+    Leafkin: of("Leafkin"),
+    Sapling: of("Sapling"),
+    Sprite: of("Sprite"),
+    Dryad: of("Dryad"),
+    Druid: of("Druid"),
+    Treant: of("Treant"),
+    Yggdrasil: of("Yggdrasil"),
+  };
+}
+/** What Seeds buy at a catalogue's era, had or not: every mid-tier prize of the grove. */
+export const forSeeds = (cat: Catalog): readonly string[] => available(cat, { for: "exchange" }).map(prizeOf);
 
 const once = (kind: "thing" | "look", ids: string): string[] => ids.split(" ").map((id) => `${kind}:${id}`);
 /**
@@ -143,13 +125,13 @@ export const EARLIER: Readonly<Partial<Record<Rarity, readonly string[]>>> = {
 };
 
 const isRarity = (v: string): v is Rarity => Object.hasOwn(RARITIES, v);
-const RARITY_OF = new Map(
-  Object.keys(RARITIES)
+/** Every figure of any release as a prize (`prizeRarities`), and what was a prize earlier, with its rarity. */
+const RARITY_OF = new Map<string, Rarity>([
+  ...prizeRarities(),
+  ...Object.keys(RARITIES)
     .filter(isRarity)
-    .flatMap((rarity) =>
-      [...prizesAt(rarity, Infinity), ...(EARLIER[rarity] ?? [])].map((prize): [string, Rarity] => [prize, rarity]),
-    ),
-);
+    .flatMap((rarity) => (EARLIER[rarity] ?? []).map((prize): [string, Rarity] => [prize, rarity])),
+]);
 /**
  * The rarity of a prize, or of what was one earlier: a headliner's, of any banner (one since retired
  * is still Yggdrasil); undefined for anything else.
@@ -203,8 +185,11 @@ const awardsOf = (prize: string, n: number): string[] =>
 /** How many pulls the history keeps. */
 export const HISTORY = 200;
 
-/** What the player's page is given: everything but the stream, and the banners open now, until when. */
-export type PullsView = Omit<Pulls, "rng"> & { open: { id: string; until: number }[] };
+/**
+ * What the player's page is given: everything but the stream, the banners open now and until when,
+ * and the era Leaf's clock is in, which the page reads what each pool gives by (`prizesOf`).
+ */
+export type PullsView = Omit<Pulls, "rng"> & { open: { id: string; until: number }[]; era: Era };
 
 // ---------- commands ----------
 
@@ -266,27 +251,26 @@ export function readCommand(v: unknown): PullsCommand | null {
 /** Whether a pool is open at a moment of Leaf's clock: `grove` always, a banner between its dates. */
 export function isOpen(pool: string, now: number): boolean {
   const banner = BANNERS.find(({ id }) => id === pool);
-  return pool === "grove" || (banner !== undefined && banner.from <= now && now < banner.until);
+  return pool === GROVE || (banner !== undefined && banner.from <= now && now < banner.until);
 }
 
 /**
- * One pull at a moment of Leaf's clock (`now`, for what is in the pools then), moving a kind of
- * pool's counters and the stream on: from a banner whose headliner is `headline`, or from `grove`
- * when it is null.
+ * One pull from a pool's prizes (`prizesOf`), moving a kind of pool's counters and the stream on:
+ * from a banner, whose top tier holds its headliner, or from `grove`, whose holds none.
  */
-export function draw(c: Counters, headline: string | null, s: Stream, now: number): Drawn {
+export function draw(c: Counters, prizes: Prizes, s: Stream): Drawn {
   c.top += 1;
   c.mid += 1;
   const { top } = c;
   if (chance(s) < topChance(top)) {
     c.top = 0;
     c.mid = 0;
-    const treant = prizesAt("Treant", now);
-    if (headline === null) return { prize: pick(s, treant), rarity: "Treant", top };
+    const headline = prizes.Yggdrasil[0];
+    if (headline === undefined) return { prize: pick(s, prizes.Treant), rarity: "Treant", top };
     const fifty: Fifty = c.owed ? "owed" : chance(s) < RATES.top.headliner ? "won" : "lost";
     c.owed = fifty === "lost";
     return fifty === "lost"
-      ? { prize: pick(s, treant), rarity: "Treant", top, fifty }
+      ? { prize: pick(s, prizes.Treant), rarity: "Treant", top, fifty }
       : { prize: headline, rarity: "Yggdrasil", top, fifty };
   }
   const { mid, filler } = RATES;
@@ -298,7 +282,7 @@ export function draw(c: Counters, headline: string | null, s: Stream, now: numbe
     const roll = chance(s) * (filler.Leafkin + filler.Sapling + filler.Sprite);
     rarity = roll < filler.Leafkin ? "Leafkin" : roll < filler.Leafkin + filler.Sapling ? "Sapling" : "Sprite";
   }
-  return { prize: pick(s, prizesAt(rarity, now)), rarity, top };
+  return { prize: pick(s, prizes[rarity]), rarity, top };
 }
 
 type Answer = Done<Pulls, PullsNote> | Refused;
@@ -321,8 +305,10 @@ function pull(state: Pulls, c: Extract<PullsCommand, { do: "pull" }>, ctx: Ctx):
   // Leaf's dice, stirred into the stream before anything is drawn.
   s.rng = mix(s.rng, ctx.seed);
   if (c.with === "free") s.free.waiting -= c.n;
-  const grove = c.pool === "grove";
+  const grove = c.pool === GROVE;
   const counters = grove ? s.counters.grove : s.counters.banner;
+  // What the pool gives in the era Leaf's clock is in.
+  const prizes = prizesOf(catalogAt(eraAt(ctx.now)), c.pool);
   const spend = {
     amount: c.n * RATES.leaf,
     reason: `Pulls: ${c.n} in ${c.pool}`,
@@ -332,7 +318,7 @@ function pull(state: Pulls, c: Extract<PullsCommand, { do: "pull" }>, ctx: Ctx):
   const notes: PullsNote[] = [];
   const log: Logged[] = [];
   for (let i = 0; i < c.n; i++) {
-    const drawn = draw(counters, grove ? null : headliner(c.pool), s, ctx.now);
+    const drawn = draw(counters, prizes, s);
     const { prize, rarity, top } = drawn;
     const tier = RARITIES[rarity].tier;
     const have = (s.have[prize] ?? 0) + 1;
@@ -351,9 +337,10 @@ function pull(state: Pulls, c: Extract<PullsCommand, { do: "pull" }>, ctx: Ctx):
   return { state: s, notes, log, leaf: c.with === "leaf" ? [spend] : [] };
 }
 
-function exchange(state: Pulls, prize: string): Answer {
+function exchange(state: Pulls, prize: string, now: number): Answer {
   const rarity = RARITY_OF.get(prize);
-  if ((rarity !== "Dryad" && rarity !== "Druid") || !PRIZES[rarity].includes(prize)) return no("not_for_seeds");
+  const offered = forSeeds(catalogAt(eraAt(now))).includes(prize);
+  if ((rarity !== "Dryad" && rarity !== "Druid") || !offered) return no("not_for_seeds");
   if (state.have[prize] !== undefined) return no("owned");
   const price = RATES.exchange[rarity];
   if (state.seeds < price) return no("not_enough_seeds");
@@ -364,7 +351,7 @@ function exchange(state: Pulls, prize: string): Answer {
 }
 
 export const applyCommand = (state: Pulls, c: PullsCommand, ctx: Ctx): Answer =>
-  c.do === "pull" ? pull(state, c, ctx) : exchange(state, c.prize);
+  c.do === "pull" ? pull(state, c, ctx) : exchange(state, c.prize, ctx.now);
 
 /** The free pulls fallen due by Leaf's clock. Nothing else passes with time. */
 export function advance(s: Pulls, ctx: Pick<Ctx, "now">): Pulls {
@@ -382,6 +369,7 @@ export const pullsView = (s: Pulls, now: number): PullsView => ({
   history: s.history,
   pulls: s.pulls,
   open: BANNERS.filter(({ id }) => isOpen(id, now)).map(({ id, until }) => ({ id, until })),
+  era: eraAt(now),
 });
 
 // ---------- keeping it ----------

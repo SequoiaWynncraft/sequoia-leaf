@@ -15,7 +15,7 @@ const ctx: Ctx = {
   postcards: {},
 };
 const wire = (v: unknown): unknown => JSON.parse(JSON.stringify(v));
-const banner: Banner = BANNERS[0] ?? { id: "", from: 0, until: 0 };
+const banner: Banner = BANNERS[0] ?? { id: "", opens: "base", from: 0, until: 0, headliner: "banner-1" };
 
 test("a view and a pull's notes read back as Leaf made them, and nothing else reads", () => {
   const answer = PULLS.apply(PULLS.create(ctx), { do: "pull", pool: "banner-1", n: 10, with: "leaf" }, ctx);

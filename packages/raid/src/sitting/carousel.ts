@@ -8,7 +8,8 @@
  */
 import { pick, shuffled } from "@sequoia-leaf/core";
 
-import { type FigureId, figuresOfTier, type Tier } from "../content/figures.ts";
+import { available, catalogOf } from "../content/catalog.ts";
+import type { FigureId, Tier } from "../content/figures.ts";
 import type { ComponentId } from "../content/items.ts";
 import { COLS } from "../hex.ts";
 import { fielded, merge, newPiece, type Note, pieces, type Run, sellValue } from "../run.ts";
@@ -86,7 +87,7 @@ export function layCarousel(t: Sitting, at: number, costs: readonly Tier[], toge
   const piles = new Map<Tier, FigureId[]>();
   const ring = costs.flatMap((tier, i): Offer[] => {
     const pile = piles.get(tier) ?? [];
-    if (pile.length === 0) pile.push(...shuffled(t, figuresOfTier(tier)));
+    if (pile.length === 0) pile.push(...shuffled(t, available(catalogOf(t), { for: "carousel", tier })));
     piles.set(tier, pile);
     const kind = pile.pop();
     const item = items[i % items.length];

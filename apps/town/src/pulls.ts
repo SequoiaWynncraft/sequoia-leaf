@@ -9,6 +9,9 @@ import { exact, whole } from "@sequoia-leaf/core";
 import type { Spend } from "@sequoia-leaf/kit/dom.ts";
 import {
   type Counters,
+  forSeeds,
+  type Prizes,
+  prizesOf,
   type Pulled,
   type PullsNote,
   type PullsView,
@@ -20,12 +23,14 @@ import {
   topChance,
 } from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
+import { GROVE } from "@sequoia-leaf/raid/content/banners.ts";
+import { catalogOf } from "@sequoia-leaf/raid/content/catalog.ts";
 import { FIGURES, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { LOOK_KINDS, LOOKS } from "@sequoia-leaf/raid/content/looks.ts";
 import { thingOf } from "@sequoia-leaf/town/things.ts";
 
-/** The pool that is always open, and what the page calls it. */
-export const GROVE = "grove";
+/** The pool that is always open (the raid's catalogue names it), and what the page calls it. */
+export { GROVE };
 export const EVERGREEN = "Evergreen";
 
 export const RARITY_NAMES = Object.keys(RARITIES).filter((r): r is Rarity => Object.hasOwn(RARITIES, r));
@@ -261,20 +266,28 @@ export interface Offer {
   readonly enough: boolean;
 }
 
-/** Every prize that can be had for Seeds, cheapest first, with whether the player has it or the Seeds for it. */
-export function offers(
-  view: Pick<PullsView, "have" | "seeds">,
-  prizes: Readonly<Record<Rarity, readonly string[]>>,
-): Offer[] {
-  return (["Dryad", "Druid"] as const).flatMap((rarity) =>
-    prizes[rarity].map((prize) => ({
-      prize,
-      rarity,
-      price: RATES.exchange[rarity],
-      owned: view.have[prize] !== undefined,
-      enough: view.seeds >= RATES.exchange[rarity],
-    })),
+/** What a pool gives, by rarity, in the era Leaf's view is of (`prizesOf`): never by the page's own clock. */
+export const poolPrizes = (view: Pick<PullsView, "era">, pool: string): Prizes => prizesOf(catalogOf(view), pool);
+/**
+ * What the prize book lists for a pool, the rarest last: each rarity the pool can come up with
+ * (`chances`), and what Leaf draws of it in the era of Leaf's view. What its count is of.
+ */
+export function prizeBook(view: Pick<PullsView, "era">, pool: string): [Rarity, readonly string[]][] {
+  const shown = chances(pool !== GROVE);
+  const given = poolPrizes(view, pool);
+  return RARITY_NAMES.flatMap((rarity): [Rarity, readonly string[]][] =>
+    shown[rarity] === 0 ? [] : [[rarity, given[rarity]]],
   );
+}
+
+/** Every prize that can be had for Seeds in the view's era, cheapest first, with whether the player has it or the Seeds for it. */
+export function offers(view: Pick<PullsView, "have" | "seeds" | "era">): Offer[] {
+  return forSeeds(catalogOf(view)).flatMap((prize): Offer[] => {
+    const rarity = rarityOf(prize);
+    if (rarity !== "Dryad" && rarity !== "Druid") return [];
+    const price = RATES.exchange[rarity];
+    return [{ prize, rarity, price, owned: view.have[prize] !== undefined, enough: view.seeds >= price }];
+  });
 }
 
 /** A pull as the history lists it, newest first: for a top prize, the pull it came on, of the pull on which one is certain. */

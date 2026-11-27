@@ -2,12 +2,12 @@ import { expect, test } from "bun:test";
 
 import { artOf } from "@sequoia-leaf/figures/figures.ts";
 import { TOWNS_OWN } from "@sequoia-leaf/figures/pal.ts";
-import { FIGURE_IDS } from "@sequoia-leaf/raid/content/figures.ts";
+import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
 import { CELL } from "@sequoia-leaf/town/map/grid.ts";
 import { figureThing, thingOf } from "@sequoia-leaf/town/things.ts";
 
 test("every figure of the raid has a thing for the camp and a picture no wider than the ground it takes", () => {
-  const wrong = FIGURE_IDS.filter((id) => {
+  const wrong = everyShared().filter((id) => {
     const thing = thingOf(figureThing(id));
     // Its rows as typed, and the dark edge the baking adds on either side.
     const wide = Math.max(0, ...artOf(id).rows.map((row) => row.length)) + 2;

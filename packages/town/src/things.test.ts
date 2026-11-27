@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { FIGURE_IDS, FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
+import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
+import { FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
 
 import { figureThing, footprint, KIND_NAMES, KINDS, memberThing, thingOf, THINGS } from "./things.ts";
 
@@ -14,8 +15,8 @@ describe("the catalogue", () => {
 
   test("every figure of the raid is a character: its name and its line from there, on 3 squares, mirrored by a turn", () => {
     const characters = THINGS.filter((t) => t.kind === "characters");
-    expect(characters.map((t) => t.id)).toEqual([...FIGURE_IDS.map(figureThing), memberThing("banner-1")]);
-    for (const id of FIGURE_IDS)
+    expect(characters.map((t) => t.id)).toEqual([...everyShared().map(figureThing), memberThing("banner-1")]);
+    for (const id of everyShared())
       expect(thingOf(figureThing(id))).toMatchObject({
         name: FIGURES[id].name,
         about: FIGURES[id].quip,

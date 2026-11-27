@@ -4,6 +4,7 @@
  * each board as a party, each fight as a setup, and the viewer's run as a page is shown a run.
  * Anything else is a view these rules could not have made: null.
  */
+import { isEra } from "../content/releases.ts";
 import { isParty } from "../party.ts";
 import { fields, Nonsense, readRunView } from "../save.ts";
 import { readStage, readWho } from "./keep.ts";
@@ -42,6 +43,7 @@ export function readSittingView(v: unknown): SittingView | null {
     const run = r.run === null ? null : (readRunView(r.run) ?? bad("your run"));
     if ((you === null) !== (run === null)) bad("your run");
     return {
+      era: one(r.era, isEra, "the era"),
       by: text(r.by, "who opened it"),
       stage: readStage(r.stage),
       room: whole(r.room, 0, 999, "the room"),

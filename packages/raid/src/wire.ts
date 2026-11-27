@@ -1,4 +1,5 @@
 import { BOON_IDS, isBoonId } from "./content/boons.ts";
+import { everyFigure } from "./content/catalog.ts";
 import { isEndlessWay } from "./content/endless.ts";
 /**
  * Reading back what Leaf sends the page: the table's view and the notes of each command, field by
@@ -10,13 +11,14 @@ import { isEndlessWay } from "./content/endless.ts";
 import { BOSS_IDS, isBossId, isFigureId, isStars } from "./content/figures.ts";
 import { FINISHED_IDS, isComponentId, isFinishedId, isItemId } from "./content/items.ts";
 import { isLookKind, lookOf, readLooks } from "./content/looks.ts";
+import { isEra } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS } from "./content/traits.ts";
 import { readWeek } from "./depths.ts";
 import type { Fed } from "./feed.ts";
 import type { RaidNote, RunView, TableView } from "./game.ts";
 import { type News, type Payout, readAlmanac, trailOpen } from "./outside.ts";
-import { OWNABLE, readRoster } from "./own.ts";
+import { readRoster } from "./own.ts";
 import { ACORNS_WHYS, type AcornsWhy, type Ending, type Note, type RunSummary, type Spot } from "./run.ts";
 import { fields, Nonsense, readRunView } from "./save.ts";
 
@@ -48,6 +50,7 @@ export function readView(v: unknown): TableView | null {
     const trail = whole(r.trail, 0, TRAIL_COUNT - 1, "the trail");
     if (!trailOpen(almanac, trail)) bad("the trail");
     return {
+      era: one(r.era, isEra, "the era"),
       runs: whole(r.runs, 0, 1_000_000_000, "the runs"),
       run: heldOf(r.run, false),
       endless: heldOf(r.endless, true),
@@ -80,8 +83,8 @@ function summaryOf(v: unknown): RunSummary {
     cleared: whole(s.cleared, 0, ROOM_COUNT, what),
     reached: whole(s.reached, 0, ROOM_COUNT, what),
     bosses: each(s.bosses, isBossId, BOSS_IDS.length, what),
-    fielded: each(s.fielded, isFigureId, OWNABLE.length, what),
-    threeStars: each(s.threeStars, isFigureId, OWNABLE.length, what),
+    fielded: each(s.fielded, isFigureId, everyFigure().length, what),
+    threeStars: each(s.threeStars, isFigureId, everyFigure().length, what),
     forged: each(s.forged, isFinishedId, FINISHED_IDS.length, what),
     topped: each(s.topped, isTraitId, TRAIT_IDS.length, what),
   };
