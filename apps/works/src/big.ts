@@ -3,9 +3,10 @@
  * it is drawn (once, from its own tile, over the box), where its ways out are, and the box its marks
  * go round. A piece of one tile is its tile, and nothing here changes how it is drawn.
  */
-import { cornerOf, DX, DY, FACING, OWN, pieceOf, sizeOf, type Yard } from "@sequoia-leaf/factory";
+import { cornerOf, DX, DY, FACING, isItem, NONE, OWN, pieceOf, sizeOf, type Yard } from "@sequoia-leaf/factory";
 
 import { TILE } from "./art/belts.ts";
+import type { Art } from "./art/index.ts";
 import type { Drawn } from "./kinds/kind.ts";
 
 /** A box of tiles: its top-left corner and its size, in tiles. */
@@ -69,4 +70,37 @@ export function waysOutOf(at: Drawn, k: number, d: number): WayOut[] {
     d: o.way,
     also: o.also,
   }));
+}
+
+/**
+ * The brass pointer on each way out of a piece drawn (`at`), lit while it is in hand or its card is
+ * open; with `holding`, what waits there to leave (its finished thing, or at a by-product's way out
+ * its by-product).
+ */
+export function pointersOn(art: Art, at: Drawn, k: number, holding: boolean, lit: boolean): void {
+  for (const way of waysOutOf(at, k, at.d)) {
+    const p = (lit ? art.m.pointerLit : art.m.pointer)[way.d];
+    if (p) at.put(p, way.x - Math.floor(p.width / 2), way.y - Math.floor(p.height / 2), at.z + 0.4, at.a);
+    const sends = way.also ? at.also : at.out;
+    if (!at.real || !holding || !isItem(sends)) continue;
+    const pic = art.item(sends);
+    const [dx, dy] = [DX[way.d] ?? 0, DY[way.d] ?? 0];
+    at.put(
+      pic,
+      way.x - dx * 4 - Math.floor(pic.width / 2),
+      way.y - dy * 4 - Math.floor(pic.height / 2) - 2,
+      at.z + 0.5,
+    );
+  }
+}
+
+/** Sets what a piece drawn holds and is doing, from its row in `holders` (`r`, -1 for one with none or not yet built). */
+export function heldIn(at: Drawn, y: Yard, r: number): void {
+  const h = y.holders;
+  const has = r >= 0;
+  at.r = r;
+  at.out = has ? (h.out[r] ?? NONE) : NONE;
+  at.also = has ? (h.also[r] ?? NONE) : NONE;
+  at.making = has ? (h.making[r] ?? NONE) : NONE;
+  at.work = has ? (h.work[r] ?? 0) : 0;
 }

@@ -334,7 +334,7 @@ export function before(y: Yard, a: Act): Before | null {
   const near = reach(y, a);
   if (!near) return null;
   // A tunnel's mouths go together, and every tile of a piece of more than one; the depot never changes.
-  const mouths = near.flatMap((i) => (i < 0 ? [] : [...piecesTiles(y, i), otherMouth(y, i)]));
+  const mouths = near.flatMap((i) => (i < 0 ? [] : piecesTiles(y, i).concat(otherMouth(y, i))));
   const tiles = [...new Set(mouths)].filter((i) => i >= 0 && FIXED[y.kind[i] ?? NONE] !== 1).toSorted((i, j) => i - j);
   const was = new Map(tiles.flatMap((i) => [settingAt(y, i) ?? []].flat().map((s) => [i, s] as const)));
   const made = tiles.map((i) => y.made[i] ?? 0);

@@ -201,17 +201,26 @@ export function within(y: Yard, x0: number, y0: number, x1: number, y1: number):
     for (let x = Math.max(0, x0); x <= Math.min(y.land.w - 1, x1); x++) {
       const i = at(y, x, z);
       const k = y.kind[i] ?? NONE;
-      if (k === NONE || FIXED[k] === 1 || (y.part[i] !== 0 && y.part[i] !== OWN)) continue;
-      if (isBig(k)) {
-        if (cellsOf({ kind: k, x, y: z, dir: (y.dir[i] ?? 0) & 3, span: 0 }).every(inside)) out.push(i);
-        continue;
-      }
-      const span = y.span[i] ?? 0;
-      const d = y.dir[i] ?? 0;
-      const far = (Math.abs(span) + 1) * Math.sign(span);
-      if (inside([x + (DX[d] ?? 0) * far, z + (DY[d] ?? 0) * far])) out.push(i);
+      if (k !== NONE && FIXED[k] !== 1 && (y.part[i] === 0 || y.part[i] === OWN) && wholeIn(y, i, x, z, inside))
+        out.push(i);
     }
   return out;
+}
+
+/** Whether every tile of the piece standing on (x, z), its tile `i`, is one `inside` says: a tunnel's other mouth too, whichever is named. */
+function wholeIn(
+  y: Yard,
+  i: number,
+  x: number,
+  z: number,
+  inside: (at: readonly [number, number]) => boolean,
+): boolean {
+  const k = y.kind[i] ?? NONE;
+  const d = (y.dir[i] ?? 0) & 3;
+  if (isBig(k)) return cellsOf({ kind: k, x, y: z, dir: d, span: 0 }).every(inside);
+  const span = y.span[i] ?? 0;
+  const far = (Math.abs(span) + 1) * Math.sign(span);
+  return inside([x + (DX[d] ?? 0) * far, z + (DY[d] ?? 0) * far]);
 }
 
 /**

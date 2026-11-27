@@ -120,9 +120,11 @@ describe("what a piece takes, apart from the side", () => {
   });
 });
 
+/** Whether a kind has a way out that sends a by-product. */
+const sendsAlso = (k: number): boolean => F.FACING[k]?.[0]?.outs.some((o) => o.also) ?? false;
+
 describe("ways out as data", () => {
   test("a recipe that makes a by-product is made only by a kind with a way out for it, so it can always leave", () => {
-    const sendsAlso = (k: number): boolean => F.FACING[k]?.[0]?.outs.some((o) => o.also) ?? false;
     expect(F.RECIPES_N.filter((r) => r.also !== F.NONE && !sendsAlso(r.by)).map((r) => F.ITEMS[r.out])).toEqual([]);
   });
 

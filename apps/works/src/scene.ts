@@ -51,7 +51,7 @@ import { BEYOND, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
 import { DEPOT as DEPOT_ART, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
-import { type Box, boxAt, boxIn, drawnFrom, pieceBox, waysOutOf } from "./big.ts";
+import { boxAt, boxIn, drawnFrom, heldIn, pieceBox, pointersOn } from "./big.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
 import { bits, floaters, rings } from "./fx.ts";
 import { heldBox, heldMarks } from "./held.ts";
@@ -60,6 +60,7 @@ import { pageOf } from "./kinds/index.ts";
 import type { Drawn, KindPage } from "./kinds/kind.ts";
 import { lampsIn } from "./lamps.ts";
 import { armsAt, asIf, type Layout, layout, pylonTop } from "./layout.ts";
+import { boxCorners, corners, pixelRing } from "./marks.ts";
 import { eachPerson } from "./people.ts";
 import { pinMark } from "./pinned.ts";
 import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, standsOn, tileNudge } from "./state.ts";
@@ -494,8 +495,6 @@ function piece(
   // A piece of more than one tile standing is drawn once, from its own tile, over every tile it covers.
   if (!page?.draw || (real && !drawnFrom(y, i))) return;
   const c = real ? reading(y, i) : -1;
-  const h = y.holders;
-  const r = real ? holderOf(y, i) : -1;
   onTile.i = i;
   onTile.d = d;
   onTile.grade = grade;
@@ -509,11 +508,7 @@ function piece(
   onTile.ghost = ghost;
   onTile.powered = !real || litAt(y, i);
   onTile.working = c >= 0 && c % TROUBLE === WORKING;
-  onTile.r = r;
-  onTile.out = r >= 0 ? (h.out[r] ?? NONE) : NONE;
-  onTile.also = r >= 0 ? (h.also[r] ?? NONE) : NONE;
-  onTile.making = r >= 0 ? (h.making[r] ?? NONE) : NONE;
-  onTile.work = r >= 0 ? (h.work[r] ?? 0) : 0;
+  heldIn(onTile, y, real ? holderOf(y, i) : -1);
   onTile.t = S.t;
   onTile.pace = now.pace;
   onTile.seenX = seenX;
@@ -531,25 +526,10 @@ function piece(
  * has lasted.
  */
 function wear(art: Art, page: KindPage, k: number, c: number, head: number): void {
-  const { i, d, x, top, cx, z, a, real, out } = onTile;
+  const { i, x, top, cx, z, a, real } = onTile;
   const pip = art.m.pips[onTile.grade - 2];
   if (pip) put(pip, x, top, z + 0.55, a);
-  // On each way out (ahead, or each of a piece of more than one tile's), with what it holds to send there.
-  for (const way of page.pointer ? waysOutOf(onTile, k, d) : []) {
-    const p = (onTile.ghost > 0 || S.picked === i ? art.m.pointerLit : art.m.pointer)[way.d];
-    const [ex, ey, wd] = [way.x, way.y, way.d];
-    if (p) put(p, ex - Math.floor(p.width / 2), ey - Math.floor(p.height / 2), z + 0.4, a);
-    const sends = way.also ? onTile.also : out;
-    if (real && isItem(sends) && page.pointer === "holding") {
-      const pic = art.item(sends);
-      put(
-        pic,
-        ex - (DX[wd] ?? 0) * 4 - Math.floor(pic.width / 2),
-        ey - (DY[wd] ?? 0) * 4 - Math.floor(pic.height / 2) - 2,
-        z + 0.5,
-      );
-    }
-  }
+  if (page.pointer) pointersOn(art, onTile, k, page.pointer === "holding", onTile.ghost > 0 || S.picked === i);
   if (!real) return;
   // Trouble that has lasted says so over the machine's head: but over one that shows where power does not reach in its own way.
   if (troubled(i) && !(page.sleeps && !onTile.powered)) {
@@ -557,10 +537,6 @@ function wear(art: Art, page: KindPage, k: number, c: number, head: number): voi
     stand(badge, cx, head - 2 - Math.round(Math.abs(Math.sin(S.t * 4 + i)) * 2), z + 0.6);
   }
 }
-
-/** Corners that breathe round a box of tiles: a piece in hand, or one aimed at with the spade. */
-const boxCorners = (g: Ctx, b: Box, cx: number, cy: number, col: string): void =>
-  corners(g, b.x * TILE - cx, b.y * TILE - cy, b.w * TILE, b.h * TILE, col, true);
 
 const big = new Map<Sprite, Sprite>();
 /**
@@ -576,33 +552,6 @@ function grown(s: Sprite): Sprite {
     big.set(s, (made = { c, ax: s.ax * markSize, ay: s.ay * markSize }));
   }
   return made;
-}
-
-function pixelRing(g: Ctx, x: number, y: number, rx: number, ry: number, col: string, gap = 1): void {
-  const n = Math.max(8, Math.round((rx + ry) * 1.6));
-  g.fillStyle = col;
-  for (let i = 0; i < n; i += gap) {
-    const a = (i / n) * Math.PI * 2;
-    g.fillRect(Math.round(x + Math.cos(a) * rx), Math.round(y + Math.sin(a) * ry), 1, 1);
-  }
-}
-
-/** Gold (or coral) corners round a box in the picture: it is being pointed at. */
-function corners(g: Ctx, x: number, y: number, w: number, h: number, col: string, breathe: boolean): void {
-  const k = breathe && Math.sin(S.t * 6) > 0 ? 1 : 0;
-  const x0 = x - 1 + k;
-  const y0 = y - 1 + k;
-  const x1 = x + w - k;
-  const y1 = y + h - k;
-  for (const [px, py, dx, dy] of [
-    [x0, y0, 1, 1],
-    [x1, y0, -1, 1],
-    [x0, y1, 1, -1],
-    [x1, y1, -1, -1],
-  ] as const) {
-    R(g, dx > 0 ? px : px - 3, py, 4, 1, col);
-    R(g, px, dy > 0 ? py : py - 3, 1, 4, col);
-  }
 }
 
 const WIRE = "#2a1519";
@@ -838,7 +787,8 @@ function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, 
     const yard = asIf(w, grp);
     for (const p of grp.at) {
       for (const i of tilesOf(yard, [p])) {
-        if (i < 0) continue;
+        // Each piece once, from its own tile: none for a tile off the map.
+        if (!drawnFrom(yard, i)) continue;
         const x = (i % yard.land.w) * TILE + ox;
         const top = Math.floor(i / yard.land.w) * TILE + oy;
         const k = yard.kind[i] ?? NONE;
@@ -850,7 +800,7 @@ function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, 
         if (over) h.drawImage(over, x, top);
         const pip = over ? art.m.pips[grade - 2] : undefined;
         if (pip) h.drawImage(pip, x, top);
-        if (drawnFrom(yard, i)) piece(art, yard, i, k, d, grade, yard.span[i] ?? 0, p.open ?? true, x, top, now, 1);
+        piece(art, yard, i, k, d, grade, yard.span[i] ?? 0, p.open ?? true, x, top, now, 1);
       }
     }
     for (const d of listed.slice(mark, used).toSorted((p, q) => p.z - q.z)) h.drawImage(d.c, d.x - camX, d.y - camY);

@@ -210,13 +210,13 @@ export function accepts(y: Yard, to: number, n: number, side: number, wire: Wire
   const k = y.kind[to] ?? NONE;
   if (PLAIN[k] === 1) return y.item[to] === NONE;
   // A piece of more than one tile takes on the tile handed to, by its ports (`Wire.taken`), and as itself.
-  const at = pieceOf(y, to);
+  const own = pieceOf(y, to);
   const takesIt = WANTS[k];
   const roomFor = ROOM[k];
   // A machine's, which most of what is not a belt is, by its own name (`tick.ts` says why).
   if (takesIt === makerWants && roomFor === makerRoom)
-    return makerWants(KIT, y, at, n) && makerRoom(KIT, y, at, n, side, wire);
-  return takesIt !== undefined && roomFor !== undefined && takesIt(KIT, y, at, n) && roomFor(KIT, y, at, n, side, wire);
+    return makerWants(KIT, y, own, n) && makerRoom(KIT, y, own, n, side, wire);
+  return takesIt !== undefined && roomFor !== undefined && takesIt(KIT, y, own, n) && roomFor(KIT, y, own, n, side, wire);
 }
 
 /** Hands the thing `n` to the tile at `to` from its side `side`, `over` eighths past the edge of the tile it came from. */
@@ -228,10 +228,10 @@ function handTo(y: Yard, to: number, n: number, side: number, over: number, wire
     y.via[to] = 1 + side;
     return;
   }
-  const at = pieceOf(y, to);
+  const own = pieceOf(y, to);
   const give = GIVE[k];
-  if (give === keep) keep(KIT, y, at, n, side, over, wire);
-  else if (give) give(KIT, y, at, n, side, over, wire);
+  if (give === keep) keep(KIT, y, own, n, side, over, wire);
+  else if (give) give(KIT, y, own, n, side, over, wire);
 }
 
 /**
@@ -319,15 +319,15 @@ export function sendOut(y: Yard, i: number, r: number, wire: Wire): void {
  */
 export function sendPort(y: Yard, i: number, r: number, port: number, wire: Wire): boolean {
   const o = outsOf(y, i)[port];
-  const held = o?.also ? y.holders.also : y.holders.out;
-  const n = held[r] ?? NONE;
+  const slot = o?.also ? y.holders.also : y.holders.out;
+  const n = slot[r] ?? NONE;
   if (!o || n === NONE) return false;
   const w = y.land.w;
   const to = toward(y.land, i + o.dx + o.dy * w, o.way);
   const side = (o.way + 2) & 3;
   if (!accepts(y, to, n, side, wire)) return false;
   handTo(y, to, n, side, 0, wire);
-  held[r] = NONE;
+  slot[r] = NONE;
   roomRound(y, i, wire.waiting);
   return true;
 }

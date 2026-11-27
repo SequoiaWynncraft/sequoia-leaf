@@ -165,32 +165,36 @@ export function check(y: Yard): number {
     tally(o.want);
     tally(o.filled);
   }
-  const { kind, holders: hs, tunnels: ts } = y;
+  const { kind } = y;
   for (let i = 0; i < kind.length; i++) {
     const k = kind[i] ?? NONE;
-    if (k === NONE) continue;
-    mix(tileFromCorner(y.land, i));
-    mix(pieceWord(y, i));
-    // A kind past 15 mixes in its bits above four apart, so a yard of none checks as it always did.
-    if (k > 15) mix(0x20000 | (k >> 4));
-    mix(settingsWord(y, i));
-    const t = tunnelOf(y, i);
-    if (t >= 0) {
-      for (let s = t * SPAN_MOST; s < t * SPAN_MOST + SPAN_MOST; s++)
-        mix((ts.under[s] ?? 0) | ((ts.along[s] ?? 0) << 8));
-      continue;
-    }
-    const r = holderOf(y, i);
-    if (r < 0) continue;
-    mix((hs.out[r] ?? 0) | ((hs.making[r] ?? 0) << 8) | ((hs.fuel[r] ?? 0) << 16) | ((hs.open[r] ?? 0) << 24));
-    // A by-product held is mixed in only where there is one, so a yard of pieces that make none checks as before.
-    if (hs.also[r] !== NONE) mix(0x10000 | (hs.also[r] ?? 0));
-    mix((hs.kinds[r] ?? 0) | ((hs.count[r] ?? 0) << 8));
-    mix(hs.work[r] ?? 0);
-    for (let n = 0; n < ITEM_COUNT; n++) {
-      const c = hs.stock[r * ITEM_COUNT + n] ?? 0;
-      if (c > 0) mix(n | (c << 8));
-    }
+    if (k !== NONE) mixPiece(y, i, k, mix);
   }
   return h >>> 0;
+}
+
+/** Mixes in the piece on a tile (its kind `k`): where it is, its parts and settings, and what its tunnel or its holder holds. */
+function mixPiece(y: Yard, i: number, k: number, mix: (v: number) => void): void {
+  const { holders: hs, tunnels: ts } = y;
+  mix(tileFromCorner(y.land, i));
+  mix(pieceWord(y, i));
+  // A kind past 15 mixes in its bits above four apart, so a yard of none checks as it always did.
+  if (k > 15) mix(0x20000 | (k >> 4));
+  mix(settingsWord(y, i));
+  const t = tunnelOf(y, i);
+  if (t >= 0) {
+    for (let s = t * SPAN_MOST; s < t * SPAN_MOST + SPAN_MOST; s++) mix((ts.under[s] ?? 0) | ((ts.along[s] ?? 0) << 8));
+    return;
+  }
+  const r = holderOf(y, i);
+  if (r < 0) return;
+  mix((hs.out[r] ?? 0) | ((hs.making[r] ?? 0) << 8) | ((hs.fuel[r] ?? 0) << 16) | ((hs.open[r] ?? 0) << 24));
+  // A by-product held is mixed in only where there is one, so a yard of pieces that make none checks as before.
+  if (hs.also[r] !== NONE) mix(0x10000 | (hs.also[r] ?? 0));
+  mix((hs.kinds[r] ?? 0) | ((hs.count[r] ?? 0) << 8));
+  mix(hs.work[r] ?? 0);
+  for (let n = 0; n < ITEM_COUNT; n++) {
+    const c = hs.stock[r * ITEM_COUNT + n] ?? 0;
+    if (c > 0) mix(n | (c << 8));
+  }
 }
