@@ -293,15 +293,19 @@ export function recordShifts(): void {
    * The stage as fitted (its zoom and where the board is), the window it was fitted to, and when that
    * last changed: from the page's load, so that the first window seen is a resize too, settling.
    */
-  const stage = { fit: "", window: "", resized: performance.now() };
+  const stage = { fit: "", window: "", resized: Number.NEGATIVE_INFINITY };
   /** The stage fitted again while the window stayed as it was: the whole table moves. */
   const watchStage = (): void => {
     // From when the page is up (its handle is opened after the stage is first fitted).
     if (!window.raid) return;
     const size = `${innerWidth}x${innerHeight}`;
     const fit = `zoom ${V.z}, board at ${V.bx},${V.by} of ${V.w}x${V.h}`;
-    // A window other than the last (the first one seen too) is a resize: the stage is fitted again within a second.
-    if (size !== stage.window) Object.assign(stage, { window: size, resized: performance.now() });
+    // A change from a known window size is a resize: the stage is fitted again within a second. The
+    // first size seen is only the baseline, so a refit right after the page is up still counts.
+    if (size !== stage.window) {
+      if (stage.window) stage.resized = performance.now();
+      stage.window = size;
+    }
     if (stage.fit && fit !== stage.fit && !last.held && performance.now() - stage.resized > 1000)
       shifts.push({ score: 1, by: "stage", input: recent(), parts: [`${stage.fit} > ${fit}`] });
     stage.fit = fit;
