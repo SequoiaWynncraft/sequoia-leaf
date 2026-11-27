@@ -13,6 +13,7 @@ import { RAID, type Table, TABLE_VERSION } from "./game.ts";
 import { type Choice, type Fought, foughtOf, type Phase, picksOf, type Piece, type Run } from "./run.ts";
 import { CAT } from "./testkit.ts";
 import { wayOn } from "./way.ts";
+import { readView } from "./wire.ts";
 
 /**
  * Tables as Leaf stores them, made by the rules of earlier versions and frozen in `../stored`. Each
@@ -83,6 +84,7 @@ describe("every stored table kept as a fixture", () => {
       "picks-waiting.json",
       "planning.json",
       "starter-waiting.json",
+      "wilds-past-room-400.json",
       "wilds-past-room-5.json",
       "wilds-rule.json",
     ]);
@@ -100,6 +102,26 @@ describe("a table kept with an endless run", () => {
     expect(table.almanac.deepest.deep).toBe(18);
     const done = RAID.apply(table, { do: "take", slot: "endless" }, ctx());
     expect(isRefused(done) ? done.refused : done.state.held.endless?.room).toBe(18);
+  });
+});
+
+/** The table as the page reads what Leaf shows of it, through JSON as it goes. */
+const shown = (table: Table) => readView(JSON.parse(JSON.stringify(RAID.view(table, ctx()))));
+describe("a table kept with an endless run past its four hundredth room", () => {
+  test("keeps the run, the page reads it, and it plays on to the next room", () => {
+    const table = read(fixture("wilds-past-room-400.json"));
+    expect(table.held.endless).toMatchObject({ way: wayOn({ id: "wilds" }), room: 401, streak: 401 });
+    expect(table.held.endless?.record).toHaveLength(401);
+    expect(shown(table)?.held.endless).toMatchObject({ room: 401, streak: 401 });
+    let now = table;
+    for (const c of ["fight", "take"] as const) {
+      const done = RAID.apply(now, { do: c, slot: "endless" }, ctx());
+      if (isRefused(done)) throw new Error(`${c} was refused: ${done.refused}`);
+      now = done.state;
+    }
+    expect(now.held.endless?.room).toBe(402);
+    expect(shown(now)?.held.endless?.room).toBe(402);
+    expect(read(RAID.encode(now)).held.endless?.room).toBe(402);
   });
 });
 

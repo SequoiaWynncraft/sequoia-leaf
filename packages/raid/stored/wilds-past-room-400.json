@@ -1,0 +1,3643 @@
+{
+  "game": "little-raid-table",
+  "v": 8,
+  "rng": 1234567890,
+  "era": 2,
+  "begun": {
+    "main": 55,
+    "endless": 1
+  },
+  "held": {
+    "main": null,
+    "endless": {
+      "seed": 2468013579,
+      "rng": 1357924680,
+      "era": 2,
+      "way": {
+        "course": {
+          "id": "wilds"
+        },
+        "figures": {
+          "pool": "fair"
+        }
+      },
+      "room": 401,
+      "stage": {
+        "phase": "plan",
+        "picks": []
+      },
+      "resolve": 20,
+      "acorns": 4173,
+      "streak": 401,
+      "level": 8,
+      "xp": 0,
+      "board": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        {
+          "id": 35,
+          "kind": "whitefox",
+          "stars": 3,
+          "items": ["glowthorn", "conker", "mothlantern"],
+          "fed": 0
+        },
+        {
+          "id": 18,
+          "kind": "badger",
+          "stars": 3,
+          "items": ["honeycake", "conker", "wasptail"],
+          "fed": 0
+        },
+        {
+          "id": 37,
+          "kind": "rock",
+          "stars": 3,
+          "items": ["lichen", "hoard", "hollowlog"],
+          "fed": 0
+        },
+        {
+          "id": 43,
+          "kind": "greg",
+          "stars": 3,
+          "items": ["lichen", "hoard", "hollowlog"],
+          "fed": 40
+        },
+        {
+          "id": 2,
+          "kind": "worm",
+          "stars": 3,
+          "items": ["honeycake", "conker", "honeycake"],
+          "fed": 0
+        },
+        {
+          "id": 30,
+          "kind": "hearthcat",
+          "stars": 3,
+          "items": ["wasptail", "honeycake", "conker"],
+          "fed": 0
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        {
+          "id": 71,
+          "kind": "leafling",
+          "stars": 3,
+          "items": ["mothlantern", "stewpot", "stewpot"],
+          "fed": 0
+        },
+        {
+          "id": 46,
+          "kind": "seqwawa",
+          "stars": 3,
+          "items": ["stewpot", "stewpot", "mothlantern"],
+          "fed": 0
+        },
+        {
+          "id": 62,
+          "kind": "apothecary",
+          "stars": 3,
+          "items": ["mothlantern", "stewpot", "wasptail"],
+          "fed": 0
+        },
+        {
+          "id": 86,
+          "kind": "cindernewt",
+          "stars": 3,
+          "items": ["wasptail", "stewpot", "wasptail"],
+          "fed": 0
+        },
+        null,
+        null,
+        {
+          "id": 7,
+          "kind": "moth",
+          "stars": 3,
+          "items": ["hummingbird", "mothlantern", "fairyring"],
+          "fed": 0
+        }
+      ],
+      "bench": [
+        {
+          "id": 118,
+          "kind": "whitefox",
+          "stars": 3,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "id": 127,
+          "kind": "whitefox",
+          "stars": 3,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "id": 164,
+          "kind": "whitefox",
+          "stars": 3,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "id": 192,
+          "kind": "whitefox",
+          "stars": 3,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "id": 201,
+          "kind": "whitefox",
+          "stars": 3,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "id": 212,
+          "kind": "whitefox",
+          "stars": 3,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "id": 222,
+          "kind": "whitefox",
+          "stars": 2,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "id": 225,
+          "kind": "whitefox",
+          "stars": 2,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "id": 228,
+          "kind": "whitefox",
+          "stars": 1,
+          "items": [],
+          "fed": 0
+        }
+      ],
+      "items": [
+        "hummingbird",
+        "wasptail",
+        "lichen",
+        "wasptail",
+        "conker",
+        "mothlantern",
+        "hollowlog",
+        "wasptail",
+        "lichen",
+        "stewpot",
+        "stewpot",
+        "wasptail",
+        "stewpot",
+        "hollowlog",
+        "honeycake",
+        "mothlantern",
+        "hollowlog",
+        "hedgehog",
+        "hollowlog",
+        "wasptail",
+        "stump",
+        "thorn",
+        "thorn",
+        "plume",
+        "glowcap",
+        "chestnut",
+        "chestnut",
+        "thorn",
+        "glowcap",
+        "chestnut",
+        "chestnut",
+        "chestnut",
+        "thorn",
+        "chestnut",
+        "thorn",
+        "chestnut",
+        "chestnut",
+        "glowcap",
+        "thorn",
+        "bark",
+        "plume",
+        "bark",
+        "glowcap",
+        "glowcap",
+        "plume",
+        "glowcap",
+        "glowcap",
+        "plume",
+        "bark",
+        "glowcap",
+        "chestnut",
+        "bark",
+        "chestnut",
+        "thorn",
+        "plume",
+        "bark",
+        "thorn",
+        "chestnut",
+        "chestnut",
+        "thorn",
+        "bark",
+        "thorn",
+        "glowcap",
+        "bark",
+        "glowcap",
+        "chestnut",
+        "glowcap",
+        "thorn",
+        "plume",
+        "bark",
+        "glowcap",
+        "thorn",
+        "thorn",
+        "plume",
+        "glowcap",
+        "chestnut",
+        "plume",
+        "plume",
+        "plume",
+        "thorn",
+        "glowcap",
+        "chestnut",
+        "plume",
+        "chestnut",
+        "bark",
+        "bark",
+        "plume",
+        "bark",
+        "plume",
+        "glowcap",
+        "thorn",
+        "bark",
+        "glowcap",
+        "bark",
+        "bark",
+        "chestnut",
+        "glowcap",
+        "plume",
+        "plume",
+        "chestnut",
+        "plume",
+        "glowcap",
+        "glowcap",
+        "plume",
+        "chestnut",
+        "plume",
+        "plume",
+        "chestnut",
+        "bark",
+        "glowcap",
+        "thorn",
+        "bark",
+        "thorn",
+        "chestnut",
+        "plume",
+        "chestnut",
+        "bark",
+        "glowcap",
+        "chestnut",
+        "bark",
+        "plume",
+        "chestnut",
+        "glowcap",
+        "thorn",
+        "plume",
+        "thorn",
+        "bark",
+        "bark",
+        "plume",
+        "thorn",
+        "bark",
+        "thorn",
+        "chestnut",
+        "plume",
+        "glowcap",
+        "plume",
+        "glowcap",
+        "plume",
+        "plume",
+        "chestnut",
+        "glowcap",
+        "glowcap",
+        "glowcap",
+        "plume",
+        "chestnut",
+        "glowcap",
+        "plume",
+        "chestnut",
+        "bark",
+        "plume",
+        "bark",
+        "glowcap",
+        "chestnut",
+        "plume",
+        "thorn",
+        "bark",
+        "chestnut",
+        "chestnut",
+        "chestnut",
+        "thorn",
+        "glowcap",
+        "plume",
+        "bark",
+        "bark",
+        "plume",
+        "thorn",
+        "chestnut",
+        "bark",
+        "chestnut",
+        "glowcap",
+        "thorn",
+        "plume",
+        "bark",
+        "chestnut",
+        "thorn",
+        "bark",
+        "thorn",
+        "bark",
+        "glowcap",
+        "plume"
+      ],
+      "stall": ["emberkit", "moth", "crab7", "leafling", "drizzlefrog"],
+      "held": false,
+      "rustles": 1,
+      "bought": 0,
+      "boons": ["quickstudy", "deeppockets", "formation"],
+      "foe": {
+        "who": "Crab #7",
+        "title": "brought Burrow Sneaks",
+        "figures": [
+          {
+            "kind": "worm",
+            "stars": 3,
+            "seat": 21,
+            "items": ["conker"],
+            "fed": 0
+          },
+          {
+            "kind": "chickaree",
+            "stars": 3,
+            "seat": 23,
+            "items": ["mothlantern"],
+            "fed": 0
+          },
+          {
+            "kind": "finch",
+            "stars": 3,
+            "seat": 25,
+            "items": ["wasptail"],
+            "fed": 0
+          },
+          {
+            "kind": "rock",
+            "stars": 3,
+            "seat": 9,
+            "items": ["conker"],
+            "fed": 0
+          },
+          {
+            "kind": "hearthcat",
+            "stars": 3,
+            "seat": 27,
+            "items": ["honeycake", "wasptail"],
+            "fed": 0
+          },
+          {
+            "kind": "moth",
+            "stars": 3,
+            "seat": 22,
+            "items": ["fairyring"],
+            "fed": 0
+          },
+          {
+            "kind": "heron",
+            "stars": 3,
+            "seat": 26,
+            "items": ["hummingbird"],
+            "fed": 0
+          },
+          {
+            "kind": "leafling",
+            "stars": 3,
+            "seat": 24,
+            "items": ["mothlantern"],
+            "fed": 0
+          },
+          {
+            "kind": "badger",
+            "stars": 3,
+            "seat": 8,
+            "items": ["wasptail"],
+            "fed": 0
+          },
+          {
+            "kind": "crab40",
+            "stars": 3,
+            "seat": 10,
+            "items": ["stump"],
+            "fed": 0
+          },
+          {
+            "kind": "slug",
+            "stars": 3,
+            "seat": 11,
+            "items": ["hollowlog"],
+            "fed": 0
+          }
+        ],
+        "boons": [],
+        "might": 100
+      },
+      "record": [
+        {
+          "room": 0,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [1, 0],
+          "boss": null
+        },
+        {
+          "room": 1,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [2, 0],
+          "boss": null
+        },
+        {
+          "room": 2,
+          "kind": "spar",
+          "result": "win",
+          "standing": [2, 0],
+          "boss": null
+        },
+        {
+          "room": 3,
+          "kind": "spar",
+          "result": "win",
+          "standing": [3, 0],
+          "boss": null
+        },
+        {
+          "room": 4,
+          "kind": "boss",
+          "result": "win",
+          "standing": [4, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 5,
+          "kind": "spar",
+          "result": "win",
+          "standing": [4, 0],
+          "boss": null
+        },
+        {
+          "room": 6,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [4, 0],
+          "boss": null
+        },
+        {
+          "room": 7,
+          "kind": "spar",
+          "result": "win",
+          "standing": [3, 0],
+          "boss": null
+        },
+        {
+          "room": 8,
+          "kind": "spar",
+          "result": "win",
+          "standing": [3, 0],
+          "boss": null
+        },
+        {
+          "room": 9,
+          "kind": "boss",
+          "result": "win",
+          "standing": [2, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 10,
+          "kind": "spar",
+          "result": "win",
+          "standing": [4, 0],
+          "boss": null
+        },
+        {
+          "room": 11,
+          "kind": "spar",
+          "result": "win",
+          "standing": [3, 0],
+          "boss": null
+        },
+        {
+          "room": 12,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [4, 0],
+          "boss": null
+        },
+        {
+          "room": 13,
+          "kind": "spar",
+          "result": "win",
+          "standing": [6, 0],
+          "boss": null
+        },
+        {
+          "room": 14,
+          "kind": "boss",
+          "result": "win",
+          "standing": [6, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 15,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": null
+        },
+        {
+          "room": 16,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": null
+        },
+        {
+          "room": 17,
+          "kind": "spar",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": null
+        },
+        {
+          "room": 18,
+          "kind": "spar",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": null
+        },
+        {
+          "room": 19,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 20,
+          "kind": "spar",
+          "result": "win",
+          "standing": [5, 0],
+          "boss": null
+        },
+        {
+          "room": 21,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": null
+        },
+        {
+          "room": 22,
+          "kind": "spar",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": null
+        },
+        {
+          "room": 23,
+          "kind": "spar",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": null
+        },
+        {
+          "room": 24,
+          "kind": "boss",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 25,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 26,
+          "kind": "spar",
+          "result": "win",
+          "standing": [3, 0],
+          "boss": null
+        },
+        {
+          "room": 27,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 28,
+          "kind": "spar",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": null
+        },
+        {
+          "room": 29,
+          "kind": "boss",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 30,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 31,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 32,
+          "kind": "spar",
+          "result": "win",
+          "standing": [6, 0],
+          "boss": null
+        },
+        {
+          "room": 33,
+          "kind": "spar",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": null
+        },
+        {
+          "room": 34,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 35,
+          "kind": "spar",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": null
+        },
+        {
+          "room": 36,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 37,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 38,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 39,
+          "kind": "boss",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 40,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 41,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 42,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 43,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 44,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 45,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 46,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 47,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 48,
+          "kind": "spar",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": null
+        },
+        {
+          "room": 49,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 50,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 51,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 52,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 53,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 54,
+          "kind": "boss",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 55,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 56,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 57,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 58,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 59,
+          "kind": "boss",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 60,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 61,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 62,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 63,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 64,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 65,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 66,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 67,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 68,
+          "kind": "spar",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": null
+        },
+        {
+          "room": 69,
+          "kind": "boss",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 70,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 71,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 72,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 73,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 74,
+          "kind": "boss",
+          "result": "win",
+          "standing": [1, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 75,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 76,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 77,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 78,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 79,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 80,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 81,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 82,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 83,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 84,
+          "kind": "boss",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 85,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 86,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 87,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 88,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 89,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 90,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 91,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 92,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 93,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 94,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 95,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 96,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 97,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 98,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 99,
+          "kind": "boss",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 100,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 101,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 102,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": null
+        },
+        {
+          "room": 103,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 104,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 105,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 106,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 107,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 108,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 109,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 110,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 111,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 112,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 113,
+          "kind": "spar",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": null
+        },
+        {
+          "room": 114,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 115,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 116,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 117,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": null
+        },
+        {
+          "room": 118,
+          "kind": "spar",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": null
+        },
+        {
+          "room": 119,
+          "kind": "boss",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 120,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 121,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 122,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 123,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 124,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 125,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 126,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 127,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 128,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 129,
+          "kind": "boss",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 130,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 131,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 132,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 133,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 134,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 135,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 136,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 137,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 138,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 139,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 140,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 141,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 142,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 143,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 144,
+          "kind": "boss",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 145,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 146,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 147,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": null
+        },
+        {
+          "room": 148,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 149,
+          "kind": "boss",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 150,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 151,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 152,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 153,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 154,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 155,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 156,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 157,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 158,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 159,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 160,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 161,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 162,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 163,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 164,
+          "kind": "boss",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 165,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 166,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 167,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 168,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 169,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 170,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 171,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 172,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 173,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 174,
+          "kind": "boss",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 175,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 176,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 177,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": null
+        },
+        {
+          "room": 178,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 179,
+          "kind": "boss",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 180,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 181,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 182,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 183,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 184,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 185,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 186,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 187,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 188,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 189,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 190,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 191,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 192,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": null
+        },
+        {
+          "room": 193,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 194,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 195,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 196,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 197,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 198,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 199,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 200,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 201,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 202,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 203,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 204,
+          "kind": "boss",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 205,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 206,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 207,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": null
+        },
+        {
+          "room": 208,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 209,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 210,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 211,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 212,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 213,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 214,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 215,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 216,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 217,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 218,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 219,
+          "kind": "boss",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 220,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 221,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 222,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 223,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 224,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 225,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 226,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 227,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 228,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 229,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 230,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 231,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 232,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 233,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 234,
+          "kind": "boss",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 235,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 236,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 237,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 238,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 239,
+          "kind": "boss",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 240,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 241,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 242,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 243,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 244,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 245,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 246,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 247,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 248,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 249,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 250,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 251,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 252,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 253,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 254,
+          "kind": "boss",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 255,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 256,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 257,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 258,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 259,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 260,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 261,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 262,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 263,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 264,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 265,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 266,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 267,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": null
+        },
+        {
+          "room": 268,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 269,
+          "kind": "boss",
+          "result": "win",
+          "standing": [6, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 270,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 271,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 272,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 273,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 274,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 275,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 276,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 277,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 278,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 279,
+          "kind": "boss",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 280,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 281,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 282,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 283,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 284,
+          "kind": "boss",
+          "result": "win",
+          "standing": [6, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 285,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 286,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 287,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 288,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 289,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 290,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 291,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 292,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 293,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 294,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 295,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 296,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 297,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 298,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 299,
+          "kind": "boss",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 300,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 301,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 302,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 303,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 304,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 305,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 306,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 307,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 308,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 309,
+          "kind": "boss",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 310,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 311,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 312,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 313,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 314,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 315,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 316,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 317,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 318,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 319,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 320,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 321,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 322,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 323,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 324,
+          "kind": "boss",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 325,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 326,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 327,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 328,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 329,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 330,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 331,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 332,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 333,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 334,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 335,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 336,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 337,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 338,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 339,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 340,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 341,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 342,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 343,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 344,
+          "kind": "boss",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 345,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 346,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 347,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 348,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 349,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 350,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 351,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 352,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 353,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 354,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 355,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 356,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 357,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 358,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 359,
+          "kind": "boss",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 360,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 361,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 362,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 363,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 364,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 365,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 366,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 367,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 368,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 369,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 370,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 371,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 372,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 373,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 374,
+          "kind": "boss",
+          "result": "win",
+          "standing": [7, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 375,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 376,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 377,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 378,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 379,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 380,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 381,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 382,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 383,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 384,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 385,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 386,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 387,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 388,
+          "kind": "spar",
+          "result": "win",
+          "standing": [10, 0],
+          "boss": null
+        },
+        {
+          "room": 389,
+          "kind": "boss",
+          "result": "win",
+          "standing": [9, 0],
+          "boss": "bigcrab"
+        },
+        {
+          "room": 390,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 391,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 392,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 393,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 394,
+          "kind": "boss",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": "oldbramble"
+        },
+        {
+          "room": 395,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 396,
+          "kind": "trouble",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 397,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 398,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        },
+        {
+          "room": 399,
+          "kind": "boss",
+          "result": "win",
+          "standing": [8, 0],
+          "boss": "hoardmagpie"
+        },
+        {
+          "room": 400,
+          "kind": "spar",
+          "result": "win",
+          "standing": [11, 0],
+          "boss": null
+        }
+      ],
+      "nextId": 229,
+      "last": {
+        "seed": 987654321,
+        "era": 2,
+        "sides": [
+          {
+            "who": "You",
+            "title": "",
+            "figures": [
+              {
+                "kind": "whitefox",
+                "stars": 3,
+                "seat": 7,
+                "items": ["glowthorn", "conker", "mothlantern"],
+                "fed": 0
+              },
+              {
+                "kind": "badger",
+                "stars": 3,
+                "seat": 8,
+                "items": ["honeycake", "conker", "wasptail"],
+                "fed": 0
+              },
+              {
+                "kind": "rock",
+                "stars": 3,
+                "seat": 9,
+                "items": ["lichen", "hoard", "hollowlog"],
+                "fed": 0
+              },
+              {
+                "kind": "greg",
+                "stars": 3,
+                "seat": 10,
+                "items": ["lichen", "hoard", "hollowlog"],
+                "fed": 40
+              },
+              {
+                "kind": "worm",
+                "stars": 3,
+                "seat": 11,
+                "items": ["honeycake", "conker", "honeycake"],
+                "fed": 0
+              },
+              {
+                "kind": "hearthcat",
+                "stars": 3,
+                "seat": 12,
+                "items": ["wasptail", "honeycake", "conker"],
+                "fed": 0
+              },
+              {
+                "kind": "leafling",
+                "stars": 3,
+                "seat": 21,
+                "items": ["mothlantern", "stewpot", "stewpot"],
+                "fed": 0
+              },
+              {
+                "kind": "seqwawa",
+                "stars": 3,
+                "seat": 22,
+                "items": ["stewpot", "stewpot", "mothlantern"],
+                "fed": 0
+              },
+              {
+                "kind": "apothecary",
+                "stars": 3,
+                "seat": 23,
+                "items": ["mothlantern", "stewpot", "wasptail"],
+                "fed": 0
+              },
+              {
+                "kind": "cindernewt",
+                "stars": 3,
+                "seat": 24,
+                "items": ["wasptail", "stewpot", "wasptail"],
+                "fed": 0
+              },
+              {
+                "kind": "moth",
+                "stars": 3,
+                "seat": 27,
+                "items": ["hummingbird", "mothlantern", "fairyring"],
+                "fed": 0
+              }
+            ],
+            "boons": ["formation"],
+            "might": 100
+          },
+          {
+            "who": "Hodge",
+            "title": "brought Ember Sages",
+            "figures": [
+              {
+                "kind": "crab7",
+                "stars": 3,
+                "seat": 11,
+                "items": ["honeycake"],
+                "fed": 0
+              },
+              {
+                "kind": "heron",
+                "stars": 3,
+                "seat": 22,
+                "items": ["mothlantern"],
+                "fed": 0
+              },
+              {
+                "kind": "worm",
+                "stars": 3,
+                "seat": 21,
+                "items": ["blackthorn"],
+                "fed": 0
+              },
+              {
+                "kind": "crab40",
+                "stars": 3,
+                "seat": 8,
+                "items": ["hollowlog"],
+                "fed": 0
+              },
+              {
+                "kind": "cindernewt",
+                "stars": 3,
+                "seat": 10,
+                "items": ["fairyring"],
+                "fed": 0
+              },
+              {
+                "kind": "seqwawa",
+                "stars": 3,
+                "seat": 24,
+                "items": ["hollowlog", "fairyring"],
+                "fed": 0
+              },
+              {
+                "kind": "kettle",
+                "stars": 3,
+                "seat": 23,
+                "items": ["hollowlog"],
+                "fed": 0
+              },
+              {
+                "kind": "jay",
+                "stars": 3,
+                "seat": 7,
+                "items": ["conker"],
+                "fed": 0
+              },
+              {
+                "kind": "crab23",
+                "stars": 3,
+                "seat": 9,
+                "items": ["hoard"],
+                "fed": 0
+              },
+              {
+                "kind": "crab12",
+                "stars": 3,
+                "seat": 25,
+                "items": ["mothlantern"],
+                "fed": 0
+              },
+              {
+                "kind": "fogowl",
+                "stars": 3,
+                "seat": 27,
+                "items": ["wasptail"],
+                "fed": 0
+              }
+            ],
+            "boons": [],
+            "might": 100
+          }
+        ],
+        "rules": {
+          "closedToSit": [0, 1, 2, 3, 4, 5, 6]
+        },
+        "named": ["long"]
+      },
+      "wing": {
+        "rule": "long",
+        "at": 80,
+        "stumps": []
+      },
+      "seen": {
+        "fielded": [
+          "worm",
+          "moth",
+          "crab7",
+          "glorp",
+          "badger",
+          "leafling",
+          "drizzlefrog",
+          "hearthcat",
+          "cindernewt",
+          "whitefox",
+          "rock",
+          "greg",
+          "seqwawa",
+          "apothecary",
+          "crab40",
+          "fogowl",
+          "heron"
+        ],
+        "threeStars": [
+          "worm",
+          "moth",
+          "badger",
+          "rock",
+          "seqwawa",
+          "whitefox",
+          "hearthcat",
+          "apothecary",
+          "leafling",
+          "greg",
+          "cindernewt",
+          "crab40",
+          "fogowl",
+          "heron"
+        ],
+        "forged": [
+          "hummingbird",
+          "honeycake",
+          "mothlantern",
+          "glowthorn",
+          "fairyring",
+          "conker",
+          "stewpot",
+          "lichen",
+          "wasptail",
+          "hoard",
+          "hollowlog",
+          "hedgehog",
+          "stump"
+        ],
+        "topped": ["sage", "graid", "greg", "rooted"]
+      }
+    }
+  },
+  "almanac": {
+    "fielded": [
+      "emberkit",
+      "worm",
+      "glorp",
+      "barrowgnome",
+      "moth",
+      "lanterngnome",
+      "cindernewt",
+      "bushgnome",
+      "greg",
+      "leafling",
+      "hearthcat",
+      "mossmote",
+      "whitefox",
+      "finch",
+      "chickaree",
+      "rock",
+      "badger",
+      "jay",
+      "fogowl",
+      "crab12",
+      "kettle",
+      "crab7",
+      "crab23",
+      "heron",
+      "crab40",
+      "slug",
+      "apothecary",
+      "drizzlefrog"
+    ],
+    "threeStars": [
+      "finch",
+      "mossmote",
+      "emberkit",
+      "crab7",
+      "worm",
+      "barrowgnome",
+      "crab12",
+      "moth",
+      "glorp",
+      "kettle",
+      "cindernewt",
+      "slug",
+      "lanterngnome",
+      "jay",
+      "chickaree",
+      "bushgnome",
+      "rock",
+      "drizzlefrog",
+      "crab23",
+      "leafling"
+    ],
+    "forged": [
+      "glowthorn",
+      "stump",
+      "hoard",
+      "conker",
+      "wasptail",
+      "hummingbird",
+      "hollowlog",
+      "blackthorn",
+      "stewpot",
+      "mothlantern",
+      "quilt",
+      "honeycake",
+      "lichen",
+      "hedgehog",
+      "fairyring"
+    ],
+    "topped": [
+      "sage",
+      "greg",
+      "burrow",
+      "feather",
+      "crab",
+      "ember",
+      "gnome",
+      "moss",
+      "mender",
+      "bulwark",
+      "slinger",
+      "fang",
+      "sneak",
+      "mist"
+    ],
+    "bosses": [
+      ["oldbramble", "hoardmagpie", "bigcrab"],
+      ["oldbramble", "hoardmagpie", "bigcrab"],
+      ["oldbramble", "hoardmagpie", "bigcrab"]
+    ],
+    "best": [15, 15, 15],
+    "runs": 45,
+    "deepest": {
+      "wilds": 401,
+      "deep": 0
+    }
+  },
+  "trail": 0,
+  "looks": {
+    "place": "clearing",
+    "cloth": "gingham",
+    "lantern": "iron",
+    "bases": "plain",
+    "owned": ["gingham"]
+  },
+  "week": {
+    "at": 1795392000000,
+    "deepest": {
+      "wilds": 401,
+      "deep": 0
+    }
+  },
+  "apart": {
+    "deepest": {
+      "wilds": 0,
+      "deep": 0
+    },
+    "week": {
+      "at": 0,
+      "deepest": {
+        "wilds": 0,
+        "deep": 0
+      }
+    }
+  }
+}

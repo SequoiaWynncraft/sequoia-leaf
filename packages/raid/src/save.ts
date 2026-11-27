@@ -27,7 +27,7 @@ import { type FigureId, isBossId, isFigureId, isStars, isUnitKind } from "./cont
 import { FINISHED_IDS, isComponentId, isEmblemId, isFinishedId, isItemId, type ItemId } from "./content/items.ts";
 import { holdItem } from "./content/recipes.ts";
 import { type Era, isEra, LEGACY_ERA } from "./content/releases.ts";
-import { ECONOMY, MAX_LEVEL } from "./content/rooms.ts";
+import { ECONOMY, MAX_LEVEL, MOST_ROOMS } from "./content/rooms.ts";
 import { type FightRules, ROOM_RULES, ruled } from "./content/rules.ts";
 import { isTraitId, renamedTitle, renamedTraits, TRAIT_IDS, traitNumber } from "./content/traits.ts";
 import { isRuleId, RULE_IDS } from "./content/wilds.ts";
@@ -210,7 +210,7 @@ function readWing(v: unknown, shown: boolean): Wing | null {
   if (!isRuleId(w.rule)) return shown ? bad("the wing's rule") : null;
   return {
     rule: w.rule,
-    at: whole(w.at, 0, ROOMY, "the wing's rule"),
+    at: whole(w.at, 0, MOST_ROOMS, "the wing's rule"),
     stumps: readSeats(w.stumps, "the stumps"),
   };
 }
@@ -313,7 +313,7 @@ function readParts(
     }
   };
   const boons: BoonId[] = unique(each(r.boons, isBoonId, BOON_IDS.length, "the boons"), "the boons");
-  const room = whole(r.room, 0, ROOMY, "the room");
+  const room = whole(r.room, 0, MOST_ROOMS, "the room");
   const nextId = whole(r.nextId, 1, 1_000_000, "the figures' numbers");
   const board = list(r.board, SEATS, "the board").map((x) => readPiece(x, nextId, meals));
   const bench = list(r.bench, ROOMY, "the bench").map((x) => readPiece(x, nextId, meals));
@@ -338,7 +338,7 @@ function readParts(
     resolve: whole(r.resolve, 0, ROOMY, "the resolve"),
     acorns: whole(r.acorns, 0, 100_000, "the acorns"),
     // A run saved before streaks were kept has none.
-    streak: r.streak === undefined ? 0 : whole(r.streak, -400, 400, "the streak"),
+    streak: r.streak === undefined ? 0 : whole(r.streak, -MOST_ROOMS, MOST_ROOMS, "the streak"),
     level: whole(r.level, 1, ROOMY, "the level"),
     xp: whole(r.xp, 0, 100_000, "the experience"),
     board,
@@ -356,7 +356,7 @@ function readParts(
     bought: whole(r.bought, 0, 10_000, "the figures bought"),
     boons,
     foe: drawn(() => readFoe(r.foe), { who: "", title: "", figures: [], boons: [], might: 100 }),
-    record: list(r.record, 400, "the record").map((x) => readRecord(x, room)),
+    record: list(r.record, MOST_ROOMS, "the record").map((x) => readRecord(x, room)),
     nextId,
     last: drawn(() => readLast(r.last), null, false),
     wing: readWing(r.wing, shown),
