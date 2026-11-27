@@ -259,6 +259,9 @@ export const askAgain = (v: PullsView, now: number): boolean =>
   (v.free.waiting < RATES.free.most && now >= v.free.next) ||
   eraAt(now) !== v.era ||
   BANNERS.some(({ id }) => isOpen(id, now) !== v.open.some((b) => b.id === id));
+/** Whether the Grove asks Leaf for the pulls now: a minute after it last asked at the soonest, when it has none or one is due (`askAgain`). */
+export const asksNow = (v: PullsView | null, now: number, asked: number): boolean =>
+  now - asked >= 60_000 && (v === null || askAgain(v, now));
 
 /** A time as the page writes it, in the player's own zone (or `zone`): "8 December, 01:00". */
 export function dayAndTime(at: number, zone?: string): string {

@@ -49,7 +49,7 @@ import { makeGroveUi } from "./groveui.ts";
 import { hush } from "./hud.ts";
 import { troubleCard } from "./leaf.ts";
 import {
-  askAgain,
+  asksNow,
   bannerLine,
   GROVE,
   type GroveState,
@@ -274,19 +274,18 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
    */
   function keepFresh(): void {
     const now = Date.now();
-    if (!askAgain(view(), now) || now - asked < 60_000) return;
+    if (!asksNow(play?.state ?? null, now, asked)) return;
     asked = now;
-    void Promise.all([play?.refresh(), meetBanners()]).then(settle);
+    void (play ? Promise.all([play.refresh(), meetBanners()]).then(settle) : open());
   }
 
-  /** The banner open now and whose it is, in a line, for the Grove's card in town; asks Leaf whose, if it does not know. */
+  /**
+   * The banner open now and whose it is, in a line, for the Grove's card in town. What is open is
+   * Leaf's to say: the pulls are asked for here, and again as `asksNow` says, in town as in the Grove.
+   */
   hooks.groveBanner = (): string | null => {
     void meetBanners();
-    // What is open is Leaf's to say: until it has sent the pulls, asked for here a minute apart at most, nothing is said.
-    if (!play && Date.now() - asked >= 60_000) {
-      asked = Date.now();
-      void open();
-    }
+    keepFresh();
     return play ? bannerLine(showing(play.state, banners, BANNERS)) : null;
   };
 

@@ -11,6 +11,7 @@ import { eraAt, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 
 import {
   askAgain,
+  asksNow,
   bannerLine,
   bookCount,
   cannotPull,
@@ -407,4 +408,21 @@ test("the clearing: the always-open pool's first three Treants on their stands, 
   );
   const shown = showing({ open: [{ id: banner.id, until: banner.until }] }, WITH, BANNERS);
   expect(clearing(view, shown)).toHaveLength(3);
+});
+
+test("a town left open across a banner's closing asks Leaf again once it is due, and then says no banner", () => {
+  const ends = banner.until;
+  const state = PULLS.create(ctxAt(ends - 120_000));
+  const before = PULLS.view(state, ctxAt(ends - 120_000));
+  const card = (v: typeof before) => bannerLine(showing(v, WITH, BANNERS), "UTC");
+  expect(card(before)).toBe("Mossback's banner is open until 8 December, 00:00.");
+  // Asked two minutes before it ends: nothing is due until it ends, and then not sooner than a minute after asking.
+  const asked = ends - 120_000;
+  expect(asksNow(before, ends - 1, asked)).toBe(false);
+  expect(asksNow(before, ends, ends - 30_000)).toBe(false);
+  expect(asksNow(before, ends, asked)).toBe(true);
+  // What Leaf answers then is what the card says: the banner has ended.
+  expect(card(PULLS.view(state, ctxAt(ends)))).toBeNull();
+  // With no pulls yet the card asks, a minute apart at most.
+  expect([asksNow(null, ends, ends - 60_000), asksNow(null, ends, ends - 59_999)]).toEqual([true, false]);
 });
