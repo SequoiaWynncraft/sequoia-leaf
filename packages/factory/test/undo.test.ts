@@ -86,24 +86,62 @@ const undo = (y: F.Yard, purse = Infinity): ReturnType<typeof F.play> =>
   play(y, { do: "undo", entry: y.history.at(-1)?.id ?? "" }, purse);
 
 /** What the Coins of a command come to with as many as it may take: what a purse must hold for it. */
-function priceOf(y: F.Yard, c: Rec): number {
-  const copy = F.decode(F.encode(y), y.land);
+function priceOf(y: F.Yard, c: Rec, spare: F.Yard | null = null): { price: number; spare: F.Yard | null } {
+  const copy = spare ?? F.decode(F.encode(y), y.land);
   if (!copy) throw new Error("the yard does not read back");
-  return Math.max(0, -coinsOf(play(copy, c)));
+  const did = play(copy, c);
+  // Refused, the command changed nothing: the copy is still the yard read back.
+  return { price: Math.max(0, -coinsOf(did)), spare: "refused" in did ? copy : null };
 }
 
-/** Says the yard is in the form reading it back gives: the same text, and the same check. */
-function readsBack(y: F.Yard): void {
-  const back = F.decode(F.encode(y), y.land);
-  expect(back && [F.encode(back), F.check(back)]).toEqual([F.encode(y), F.check(y)]);
+/** Says the yard is in the form reading it back gives: the same text, and the same check. Gives the yard read back. */
+function readsBack(y: F.Yard): F.Yard {
+  const text = F.encode(y);
+  const back = F.decode(text, y.land);
+  if (!back) throw new Error("the yard does not read back");
+  expect([F.encode(back), F.check(back)]).toEqual([text, F.check(y)]);
+  return back;
+}
+
+/**
+ * The tiles of the plots a yard owns: every tile a command can stand a piece on or take one from, and
+ * so all a step can touch (`tilesOff` says nothing else on the map moved).
+ */
+function ownTiles(y: F.Yard): number[] {
+  return y.land.plots
+    .flatMap((p) => {
+      if (!y.plots.includes(p.plot)) return [];
+      return Array.from({ length: p.w * p.h }, (_, k) => (p.y + Math.floor(k / p.w)) * y.land.w + p.x + (k % p.w));
+    })
+    .toSorted((a, b) => a - b);
+}
+
+/** How many pieces stand anywhere on the map: with the pieces of a yard's own tiles, a piece anywhere else would show. */
+function piecesOnMap(y: F.Yard): number {
+  let n = 0;
+  for (const k of y.kind) if (F.isKind(k)) n++;
+  return n;
 }
 
 /** How every piece stands, as the player set it, the pieces to hand and the redwoods felled: all Undo puts back. */
 function settings(y: F.Yard): string {
-  const pieces = [...y.kind.keys()].flatMap((i) =>
+  const pieces = ownTiles(y).flatMap((i) =>
     F.isKind(y.kind[i] ?? F.NONE) ? [[i, y.kind[i], y.dir[i], y.span[i], y.free[i], F.keptAt(y, i)]] : [],
   );
-  return JSON.stringify([pieces, Array.from(y.spare), Array.from(y.felled)]);
+  return JSON.stringify([piecesOnMap(y), pieces, Array.from(y.spare), Array.from(y.felled)]);
+}
+
+/** Whether anything stands on a tile, or is carried or under way there. */
+const busy = (y: F.Yard, i: number): boolean =>
+  F.isKind(y.kind[i] ?? F.NONE) || y.item[i] !== F.NONE || y.prog[i] !== 0;
+
+/** The tiles off the yard's own plots on which anything stands, carries or is under way, in either of two yards: none, ever. */
+function tilesOff(was: F.Yard, now: F.Yard): number[] {
+  const own = new Uint8Array(now.kind.length);
+  for (const i of ownTiles(now)) own[i] = 1;
+  const off: number[] = [];
+  for (let i = 0; i < now.kind.length; i++) if (own[i] !== 1 && (busy(was, i) || busy(now, i))) off.push(i);
+  return off;
 }
 
 /** What the piece on a tile carries, holds and is doing: its running state, none of which Undo sets. */
@@ -133,7 +171,8 @@ function isNew(y: F.Yard, i: number): boolean {
  * moving forgets.
  */
 function ranOn(was: F.Yard, now: F.Yard, moved: boolean, took: ReadonlySet<number>): void {
-  const tiles = [...now.kind.keys()];
+  expect(tilesOff(was, now)).toEqual([]);
+  const tiles = ownTiles(now);
   if (moved) {
     const carried = (y: F.Yard): string[] =>
       tiles
@@ -146,11 +185,15 @@ function ranOn(was: F.Yard, now: F.Yard, moved: boolean, took: ReadonlySet<numbe
   // Exactly the pieces the command took up are stood again, each new, however like what stood in their place.
   const remade = tiles.filter((t) => now.made[t] !== was.made[t] && now.kind[t] !== F.NONE);
   expect(remade).toEqual([...took].toSorted((p, q) => p - q));
-  for (const i of remade) expect([i, isNew(now, i)]).toEqual([i, true]);
-  for (const i of tiles.filter((t) => now.kind[t] === was.kind[t] && !took.has(t))) {
+  expect(remade.filter((i) => !isNew(now, i))).toEqual([]);
+  // Every other tile of the yard's own, empty or not, as it was: looked over in one pass, any tile
+  // whose running state is not its own named.
+  const unlike = tiles.filter((i) => {
+    if (now.kind[i] !== was.kind[i] || took.has(i)) return false;
     const cursor = (now.ins[i] ?? 0) !== 0 && (was.ins[i] ?? 0) !== 0;
-    expect([i, running(now, i, cursor)]).toEqual([i, running(was, i, cursor)]);
-  }
+    return !Bun.deepEquals(running(now, i, cursor), running(was, i, cursor));
+  });
+  expect(unlike).toEqual([]);
 }
 
 /**
@@ -164,7 +207,7 @@ function ranOn(was: F.Yard, now: F.Yard, moved: boolean, took: ReadonlySet<numbe
 function undoneAll(
   start: F.Yard,
   seed: number,
-  ticks: (y: F.Yard, r: () => number) => void = () => {},
+  ticks: ((y: F.Yard, r: () => number) => void) | null = null,
 ): { kinds: Set<string>; short: number; undone: number } {
   // Its owner there at its last tick, with nothing in its till or to undo: only the commands move
   // anything. It owns the Meadow where it may buy it.
@@ -180,10 +223,15 @@ function undoneAll(
   y.seen = F.here(y);
   const first = settings(y);
   const done: { stood: string; coins: number; kind: string; took: Set<number> }[] = [];
+  // The yard read back after its last command or Undo, while nothing has changed it since: what a
+  // command's price is found on, and what the yard was before an Undo.
+  let spare: F.Yard | null = null;
   for (let k = 0; k < 600 && done.length < 18; k++) {
     const c: Rec = { ...p.command(), id: `c-${seed}-${k}` };
     if (!UNDONE.has(String(c.do)) || !F.readCommand({ tick: y.tick, ...c })) continue;
-    const price = priceOf(y, c);
+    const priced = priceOf(y, c, spare);
+    const price = priced.price;
+    spare = priced.spare;
     if (price > 0 && r() < 0.3) {
       const was = F.encode(y);
       expect(play(y, c, price - 1)).toMatchObject({ refused: expect.any(String) });
@@ -193,20 +241,23 @@ function undoneAll(
     const length = y.history.length;
     // What the command takes up, it clears the tile of (`made`): whatever it stands there in its place.
     const made = Uint8Array.from(y.made);
-    const had = [...y.kind.keys()].filter((i) => F.isKind(y.kind[i] ?? F.NONE) && y.kind[i] !== F.DEPOT);
+    const had = ownTiles(y).filter((i) => F.isKind(y.kind[i] ?? F.NONE) && y.kind[i] !== F.DEPOT);
     const did = play(y, c, price);
     if ("refused" in did) continue;
-    readsBack(y);
+    spare = readsBack(y);
     const took = new Set(had.filter((i) => y.made[i] !== made[i]));
     // A command that changed nothing keeps no entry; none here is over the cap.
     if (y.history.at(-1)?.id === c.id) done.push({ stood, coins: coinsOf(did), kind: String(c.do), took });
     expect([y.history.length, y.history.length - length]).toEqual([done.length, y.history.at(-1)?.id === c.id ? 1 : 0]);
-    ticks(y, r);
+    if (ticks) {
+      ticks(y, r);
+      spare = null;
+    }
   }
   let short = 0;
   const kinds = new Set<string>();
   for (const was of done.toReversed()) {
-    const before = F.decode(F.encode(y), y.land);
+    const before = spare ?? F.decode(F.encode(y), y.land);
     if (!before) throw new Error("the yard does not read back");
     // A copy read back stands every piece anew: what each tile was cleared to so far is this yard's own.
     before.made.set(y.made);
@@ -222,7 +273,7 @@ function undoneAll(
     }
     const did = shortBy ? undo(y, Number(shortBy[1])) : free;
     expect(did).not.toHaveProperty("refused");
-    readsBack(y);
+    spare = readsBack(y);
     expect(settings(y)).toBe(was.stood);
     // Each Undo moves back just what its own command moved.
     expect([was.kind, coinsOf(did)]).toEqual([was.kind, 0 - was.coins]);
