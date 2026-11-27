@@ -14,6 +14,7 @@ import { MAX_LEVEL, type Room, ROOM_COUNT, ROOMS, type SparStrength } from "./co
 import { boardMet, forest, opposition, regularAt } from "./foe.ts";
 import type { Party } from "./party.ts";
 import type { RoomRecord, Run } from "./run.ts";
+import { closedNow, seatOpen } from "./wing.ts";
 
 export type { EndlessWay } from "./content/endless.ts";
 
@@ -88,12 +89,18 @@ export function heldRoom(slot: string): number | null {
  * `opposition` has it. In an endless run, the forest grown for the room (`grownAt`); in a sparring
  * room a regular as strong as `sparAt` says, but in a room held (`isHeld`) the board of the member
  * who holds it, when Leaf hands one over (`met`) and it is one a member could have fielded (`boardMet`).
+ * Under a Wilds rule nobody sits on a seat it closes: the regular is seated round them, and the
+ * forest's plan moves anyone on one to the nearest open seat (`seatOpen`).
  */
-export function foeOf(run: Pick<Run, "room" | "trail"> & Way, seed: number, met?: Met): Party {
+export function foeOf(run: Pick<Run, "room" | "trail" | "wing"> & Way, seed: number, met?: Met): Party {
   if (!run.endless) return opposition(seed, run.room, run.trail, met, run.own !== null);
   const room = roomAt(run.room);
-  if (room && room.kind !== "spar") return forest(seed, run.room, room, run.trail, grownAt(run.room));
-  const regular = regularAt(seed, run.room, run.trail, sparAt(run.room));
+  const closed = closedNow(run);
+  if (room && room.kind !== "spar") {
+    const party = forest(seed, run.room, room, run.trail, grownAt(run.room));
+    return { ...party, figures: seatOpen(party.figures, closed) };
+  }
+  const regular = regularAt(seed, run.room, run.trail, sparAt(run.room), closed);
   const held = isHeld(run, run.room) && met ? boardMet(met, false, ENDLESS.chairs) : null;
   return held ?? regular;
 }

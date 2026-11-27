@@ -57,6 +57,8 @@ export type PageId = "front" | "almanac" | "howto" | "looks" | "summary";
 export interface PageAsks {
   /** Sit down to the run in a slot: the run in hand, or the endless run. */
   carryOn: (slot: Slot) => void;
+  /** Sit down to the run in a slot and watch its last fight again. */
+  watch: (slot: Slot) => void;
   /** Set out on a trail, with all figures or (`own`) the member's own. */
   start: (trail: number, own: boolean) => void;
   /** Set out on an endless run, one way or the other. */

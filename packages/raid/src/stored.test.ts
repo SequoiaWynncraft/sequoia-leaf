@@ -79,6 +79,8 @@ describe("every stored table kept as a fixture", () => {
       "picks-waiting.json",
       "planning.json",
       "starter-waiting.json",
+      "wilds-past-room-5.json",
+      "wilds-rule.json",
     ]);
   });
 });

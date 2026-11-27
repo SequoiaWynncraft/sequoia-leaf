@@ -16,6 +16,7 @@ import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 import { itemPic, levelPic } from "./art/icons.ts";
 import { drawLife } from "./art/place.ts";
 import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
+import { drawClosed } from "./closed.ts";
 import { drawFightMarks } from "./fightmarks.ts";
 import { drawFight, drawFightAir, fightBump, fightHeldUnder, fightOn } from "./fightview.ts";
 import { burst, drawFlyers, drawFxOver, drawFxUnder, wordsFx } from "./fx.ts";
@@ -26,6 +27,7 @@ import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
 import { DIM, shineOf } from "./light.ts";
 import { arrivalOf, handing, watchersOf } from "./logic.ts";
 import { aloft, FOOT, type Pawn, pawns, spotOfPawn } from "./pawns.ts";
+import { facing } from "./screen.ts";
 import { snd } from "./sounds.ts";
 import { drawSeals } from "./spells.ts";
 import { boardHalves, place, type Standing, V } from "./stage.ts";
@@ -330,7 +332,8 @@ function drawTable(g: Ctx): void {
   drawLife(g, place(), V.t, S.looks.place);
   const run = S.run;
   if (!run || S.screen.at === "front" || S.screen.at === "over") return;
-  drawPeople(g, run);
+  drawClosed(g, run);
+  drawPeople(g, facing(S.screen, run));
   const fighting = fightOn();
   if (!fighting) {
     drawCap(g, run);

@@ -7,7 +7,7 @@
     "apps/battler/src/screen/logic.ts": 27,
     "apps/battler/src/screen/pawns.ts": 17,
     "apps/battler/src/screen/scene.ts": 18,
-    "apps/battler/src/screen/screen.ts": 35,
+    "apps/battler/src/screen/screen.ts": 28,
     "apps/battler/src/screen/ui/cards.ts": 24,
     "apps/battler/src/screen/ui/fightsheet.ts": 19,
     "apps/battler/src/screen/ui/nudge.ts": 20,

@@ -9,6 +9,7 @@ import { COLS, HOME_ROWS, standRow } from "./hex.ts";
 
 /** Columns from the middle out. */
 const MIDDLE_OUT = [3, 2, 4, 1, 5, 0, 6] as const;
+const NONE: ReadonlySet<number> = new Set();
 /** Columns from the edges in. */
 const EDGES_IN = [0, 6, 1, 5, 2, 4, 3] as const;
 
@@ -20,15 +21,16 @@ export interface Standing {
 
 /**
  * A seat for each of a party, in the order given. `leaping` says whether its Sneaks will leap when
- * the fight starts; if not, they line up with the other close fighters.
+ * the fight starts; if not, they line up with the other close fighters. Nobody sits on a seat a
+ * Wilds rule has `closed` (`wing.ts`).
  */
-export function arrange(party: readonly Standing[], leaping: boolean): number[] {
+export function arrange(party: readonly Standing[], leaping: boolean, closed: ReadonlySet<number> = NONE): number[] {
   const seats = party.map(() => -1);
   const taken = new Set<number>();
   const sit = (who: number, row: number, cols: readonly number[]): boolean => {
     for (const col of cols) {
       const seat = row * COLS + col;
-      if (taken.has(seat)) continue;
+      if (taken.has(seat) || closed.has(seat)) continue;
       taken.add(seat);
       seats[who] = seat;
       return true;

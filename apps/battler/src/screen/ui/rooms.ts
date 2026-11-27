@@ -26,6 +26,7 @@ import { roomIcon } from "../art/icons.ts";
 import { opening } from "../logic.ts";
 import { S } from "../state.ts";
 import { pic } from "./cards.ts";
+import { ruleLine } from "./wilds.ts";
 
 /** The rooms the track shows, counting from 0: the fifteen the run is among (for an endless run past the fifteenth, those it has come round to). */
 export function roomsShown(run: Pick<RunView, "room">): number[] {
@@ -128,7 +129,7 @@ function gives(index: number, room: Room, run: RunView): string {
   return `Win: pick 1 of ${ECONOMY.componentsWon} components, twice. ${lose}${chair}`;
 }
 
-/** A room on the track: what kind it is, who is or was there, what it gives, and in an endless run how much the forest has grown in it. */
+/** A room on the track: what kind it is, who is or was there, what it gives, and in an endless run how much the forest has grown in it and the Wilds' rule. */
 function roomDesc(index: number, run: RunView): Description | null {
   const room = roomAt(index);
   if (!room || index > lastRoom(run)) return null;
@@ -142,6 +143,8 @@ function roomDesc(index: number, run: RunView): Description | null {
     run.endless && index >= ROOM_COUNT && room.kind !== "spar"
       ? `+${Math.round(grownAt(index) - 100)}% health and attack.`
       : null,
+    // The Wilds' rule for the wing the room is in, while it holds.
+    ruleLine({ room: index, wing: run.wing }),
   ];
   return {
     name: `Room ${index + 1}`,

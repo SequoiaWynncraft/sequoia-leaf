@@ -704,6 +704,7 @@
           "last": null,
           "own": null,
           "endless": null,
+          "wing": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -878,6 +879,7 @@
           "last": null,
           "own": null,
           "endless": null,
+          "wing": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -1038,6 +1040,7 @@
           "last": null,
           "own": null,
           "endless": null,
+          "wing": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -1245,6 +1248,7 @@
           "last": null,
           "own": null,
           "endless": null,
+          "wing": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -1407,6 +1411,7 @@
           "last": null,
           "own": null,
           "endless": null,
+          "wing": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -2728,6 +2733,7 @@
           "last": null,
           "own": null,
           "endless": null,
+          "wing": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -2816,6 +2822,7 @@
           "last": null,
           "own": null,
           "endless": "wilds",
+          "wing": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
@@ -3663,6 +3670,7 @@
           "last": null,
           "own": null,
           "endless": null,
+          "wing": null,
           "seen": {
             "fielded": [],
             "threeStars": [],

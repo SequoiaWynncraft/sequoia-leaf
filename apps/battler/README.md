@@ -164,7 +164,16 @@ kit's card: "The table needs the guild's server."
   At the table an endless run past room 15 has its room before the track's pips ("Room 23"; on a
   phone the number), the level's plaque says its chairs ("Chairs: 10") once a boss past room 15 has
   given one, a held room's card says who holds it, and a room the forest grows in says by how much
-  ("+41% health and attack"). Its end page says how deep it went and the member's deepest. The
+  ("+41% health and attack"). Its end page says how deep it went and the member's deepest.
+  **The Wilds' rules** (`ui/wilds.ts`, `ui/rulecards.ts`, `closed.ts`, `ui/back.ts`): after each
+  boss from room 5 the pick is two rule cards, each with a small picture of the board under it, and
+  beside them the boss the next five rooms end with. The rule is on each of its rooms' cards; the
+  hexes it closes are drawn on the board (a stump, a column grown over, Long Table's front rows bare
+  while planning), in the fight as well; and in a fight under it, the rule is one line over the
+  bench. Figures moved off a hex that closed are named in one line. Carry on with a run of the Wilds
+  shows a card first: the room and the wing it ends, the rule, the boss waiting, the deepest room ever
+  and the last room, with Carry on and Watch it again (the run's last fight, played on the table,
+  then the room is planned as it was). The
   trails' options are the figures to set out with and the
   three trails (a radio group: the arrows choose; one not open yet can be chosen to look at, and
   then Set out says why it is closed), with what the chosen one is under them. Whatever is chosen,
@@ -363,13 +372,17 @@ timed can be stepped by hand.
 | `src/screen/ui/front.ts`      | The front page: runs laid out, the categories and modes, the chosen mode's card, its board            |
 | `src/screen/ui/endless.ts`    | The endless ways with no page in them: their names, boards from Leaf, rooms taken, the strip's line   |
 | `src/screen/ui/woods.ts`      | The endless ways on the front page: boards and rooms held read from Leaf, a room taken said once      |
+| `src/screen/ui/wilds.ts`      | The Wilds' rules in words: a rule's line, the wing and its boss, the card that picks a run back up    |
+| `src/screen/ui/rulecards.ts`  | The Wilds' rules on the table: the pick's cards and boss, the line over the bench, figures moved off  |
+| `src/screen/ui/back.ts`       | The card that picks a run of the Wilds back up, with Watch it again                                   |
+| `src/screen/closed.ts`        | The hexes a rule closes drawn on the board, and each rule's small picture                             |
 | `src/screen/ui/pages.ts`      | The pages over the table: the almanac, how to play, table looks                                       |
 | `src/screen/ui/ended.ts`      | The end of a run: how far (or how deep), the party, what is new, what it paid, Again                  |
 | `src/screen/ui/nudge.ts`      | The first-time nudges                                                                                 |
 | `src/screen/sides.ts`         | Which side of a fight is the member's own (the away seat of a sparring pair is the second)            |
 | `src/screen/live/`            | A live table: the line to Leaf, the seat, the clock and players, the carousel, the papers, the card   |
 
-`geometry.ts`, `logic.ts`, `keep.ts`, `light.ts`, `rich.ts`, `playback.ts`, `ui/modes.ts` and `ui/endless.ts` have tests beside them;
+`geometry.ts`, `logic.ts`, `keep.ts`, `light.ts`, `rich.ts`, `playback.ts`, `ui/modes.ts`, `ui/endless.ts` and `ui/wilds.ts` have tests beside them;
 `playback.test.ts` holds that the fight on the table, lead-ins, hit-stops and all, is the rules'
 own, event for event, to the same end, at every speed.
 

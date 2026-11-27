@@ -34,8 +34,9 @@ import {
 } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS, traitNumber } from "./content/traits.ts";
+import { isRuleId, RULE_IDS } from "./content/wilds.ts";
 import { lastRoom } from "./endless.ts";
-import type { FightResult, FightSetup, FightSummary, Tally } from "./fight/types.ts";
+import type { FightResult, FightRule, FightSetup, FightSummary, Tally } from "./fight/types.ts";
 import { SEATS } from "./hex.ts";
 import { OWNABLE, readRoster, type Roster } from "./own.ts";
 import { isParty, type Party } from "./party.ts";
@@ -55,6 +56,8 @@ import {
   type Stage,
   stallSize,
 } from "./run.ts";
+import { pickAgain } from "./wilds.ts";
+import type { Wing } from "./wing.ts";
 
 /** Thrown by the readers below on the first thing that is wrong, with what it was. */
 export class Nonsense extends Error {}
@@ -99,7 +102,8 @@ const readOwn = (v: unknown): Roster | null =>
 /** A run's endless way. A run saved before there were endless runs is one of fifteen rooms. */
 const readEndless = (v: unknown): EndlessWay | null =>
   v === undefined || v === null ? null : isEndlessWay(v) ? v : bad("the endless way");
-const isChoiceKind = (v: unknown): v is Choice["kind"] => v === "starter" || v === "component" || v === "boon";
+const isChoiceKind = (v: unknown): v is Choice["kind"] =>
+  v === "starter" || v === "component" || v === "boon" || v === "rule";
 /** A pick waiting, with nothing on offer: as it is shown behind the first, and before it is drawn again. */
 function blankChoice(v: unknown): Choice {
   const c = record(v, "a choice");
@@ -118,6 +122,10 @@ function readChoice(v: unknown): Choice {
   if (c.kind === "component") {
     const options = each(c.options, isComponentId, 8, "the components on offer");
     return options.length === 0 ? bad("the components on offer") : { kind: "component", options };
+  }
+  if (c.kind === "rule") {
+    const options = unique(each(c.options, isRuleId, RULE_IDS.length, "the rules on offer"), "the rules on offer");
+    return options.length === 0 ? bad("the rules on offer") : { kind: "rule", options };
   }
   const blank = blankChoice(c);
   if (blank.kind !== "boon") return bad("a choice");
@@ -141,13 +149,36 @@ function readRecord(v: unknown, room: number): RoomRecord {
 /** A member's Leaf id as a record keeps it: a short string. */
 const isMemberRef = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 64;
 
-/** A fight's setup: a seed and two parties. */
+const isSeat = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0 && v < SEATS;
+/** A Wilds rule a fight is played under: one these rules have, and its stumps. */
+function readFightRule(v: unknown, what: string): FightRule {
+  const r = record(v, what);
+  return { id: one(r.id, isRuleId, what), stumps: unique(each(r.stumps, isSeat, SEATS, what), what) };
+}
+/** A fight's setup: a seed and two parties, and the Wilds rule it is played under. One set up before there were rules has none. */
 function readSetup(v: unknown, what: string): FightSetup {
   const r = record(v, what);
   const sides = list(r.sides, 2, what);
   const ours = one(sides[0], isParty, what);
   const theirs = one(sides[1], isParty, what);
-  return { seed: whole(r.seed, 0, UINT, what), sides: [ours, theirs] };
+  const setup: FightSetup = { seed: whole(r.seed, 0, UINT, what), sides: [ours, theirs] };
+  if (r.rule !== undefined) setup.rule = readFightRule(r.rule, what);
+  return setup;
+}
+/**
+ * The rule a run of the Wilds picked for a wing. A run kept before there were rules has none. So
+ * does one whose rule these rules no longer have, and Leaf's run picks again (`pickAgain`); a run
+ * shown to the page never has one.
+ */
+function readWing(v: unknown, shown: boolean): Wing | null {
+  if (v === undefined || v === null) return null;
+  const w = record(v, "the wing's rule");
+  if (!isRuleId(w.rule)) return shown ? bad("the wing's rule") : null;
+  return {
+    rule: w.rule,
+    at: whole(w.at, 0, ROOMY, "the wing's rule"),
+    stumps: unique(each(w.stumps, isSeat, SEATS, "the stumps"), "the stumps"),
+  };
 }
 /** The last fight's setup. A run saved before it was kept has none. */
 const readLast = (v: unknown): FightSetup | null =>
@@ -290,6 +321,7 @@ function readParts(r: Record<string, unknown>, old: boolean, shown: boolean): { 
     last: drawn(() => readLast(r.last), null, false),
     own: readOwn(r.own),
     endless: readEndless(r.endless),
+    wing: readWing(r.wing, shown),
     seen: {
       fielded: unique(each(seen.fielded, isFigureId, OWNABLE.length, "the almanac notes"), "the almanac notes"),
       threeStars: unique(each(seen.threeStars, isFigureId, OWNABLE.length, "the almanac notes"), "the almanac notes"),
@@ -322,6 +354,7 @@ function readRun(v: unknown, old: boolean): Run {
   };
   if (afresh && run.stage.phase !== "over") layOutAfresh(run, mix(run.rng, 0xa7e5));
   settle(run);
+  pickAgain(run, r.wing);
   return run;
 }
 

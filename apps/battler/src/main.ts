@@ -36,6 +36,7 @@ import {
   startNew,
   toFront,
   traitOn,
+  watchAgain,
 } from "./screen/flow.ts";
 import { stepFx } from "./screen/fx.ts";
 import { openHand, unpick } from "./screen/hand.ts";
@@ -54,6 +55,7 @@ import { renderNudge, stepNudge } from "./screen/ui/nudge.ts";
 import { meetMember } from "./screen/ui/own.ts";
 import { openPages, pageOver, pagesClick, pageUp, renderPages, showPage } from "./screen/ui/pages.ts";
 import { renderPicks } from "./screen/ui/picks.ts";
+import { placeRule, ruleSign, sayShifted } from "./screen/ui/rulecards.ts";
 import { buildTable, placeFoe, renderTable, stepTable, toast, wakeChip } from "./screen/ui/table.ts";
 
 /** What the page says where no Leaf answers: the table is the guild's server's. */
@@ -105,6 +107,7 @@ const STAGE: stage.Hooks = {
   over: drawOver,
   resized() {
     placeFoe();
+    placeRule();
     placeSheet();
     // The stall growing or shrinking lays the page out again too: a card stays beside its thing.
     settle();
@@ -151,10 +154,16 @@ async function boot(): Promise<void> {
     lastFight: lookBack,
     traitOn,
   });
+  // The Wilds' rule, while it holds: one line over the table.
+  document.body.append(ruleSign());
   openPages({
     carryOn: (slot) => {
       showPage(null);
       sitDown(slot);
+    },
+    watch: (slot) => {
+      showPage(null);
+      watchAgain(slot);
     },
     start: (trail, own) => void setOutOn(trail, own),
     endless: (way) => void setOutEndless(way),
@@ -172,6 +181,7 @@ async function boot(): Promise<void> {
   onNotes((notes) => {
     hearNotes(notes);
     tellFirstThreeStars(notes);
+    sayShifted(notes);
   });
   onChange(() => {
     if (S.screen.at === "plan") syncPawns(S.run);

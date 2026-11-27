@@ -6,6 +6,7 @@ import type { BoonId } from "../content/boons.ts";
 import type { Shape, Stars, UnitKind } from "../content/figures.ts";
 import type { ItemId } from "../content/items.ts";
 import type { TraitId } from "../content/traits.ts";
+import type { RuleId } from "../content/wilds.ts";
 import type { Side } from "../hex.ts";
 import type { Party } from "../party.ts";
 
@@ -21,11 +22,18 @@ export type LeapWhy = "sneak" | "ability" | "knocked" | "dash" | "pull";
 /** What a zone is: slime and puddles slow whoever stands in them, dust hurts them every second. */
 export type ZoneKind = "slime" | "puddle" | "dust";
 
-/** Everything a fight needs: two parties and a seed. The same setup always gives the same fight. */
+/** Everything a fight needs: two parties and a seed, and the Wilds' rule it is played under. The same setup always gives the same fight. */
 export interface FightSetup {
   seed: number;
   /** The party at the table first, then the one across from it. */
   sides: [Party, Party];
+  /** The Wilds' rule (`rules.ts`); absent for a fight under none. */
+  rule?: FightRule;
+}
+/** One of the Wilds' rules as a fight is played under it: which, and under Stumps the stumps, as seats, the same on both halves. */
+export interface FightRule {
+  id: RuleId;
+  stumps: number[];
 }
 
 /**
@@ -199,6 +207,8 @@ export interface Fight {
   traits: [Partial<Record<TraitId, number>>, Partial<Record<TraitId, number>>];
   /** Seconds of dusk so far. */
   dusk: number;
+  /** What the Wilds' rule sets in this fight (`rules.ts`): the second dusk falls after, and the furthest an attack reaches. */
+  readonly wilds: { readonly dusk: number; readonly reach: number };
 
   /** The list the step being worked out is writing to. */
   out: FightEvent[];

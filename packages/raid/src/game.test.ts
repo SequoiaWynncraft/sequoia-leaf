@@ -32,6 +32,7 @@ import {
   refusalText,
   runView,
   type Table,
+  TABLE_VERSION,
   tableView,
 } from "./game.ts";
 import { beatenBosses, payout, recordRun, trailCleared, trailOpen } from "./outside.ts";
@@ -463,7 +464,15 @@ describe("keeping a table", () => {
       change(record);
       return JSON.stringify(record);
     };
-    for (const text of ["", "nope", "{}", "[]", "null", changed((r) => (r.v = 4)), changed((r) => (r.game = "x"))]) {
+    for (const text of [
+      "",
+      "nope",
+      "{}",
+      "[]",
+      "null",
+      changed((r) => (r.v = TABLE_VERSION + 1)),
+      changed((r) => (r.game = "x")),
+    ]) {
       expect(RAID.decode(text)).toBeNull();
     }
     expect(RAID.decode(changed((r) => (r.rng = -1)))).toBeNull();

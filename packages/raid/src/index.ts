@@ -162,6 +162,7 @@ export type {
   Fight,
   FightEvent,
   FightResult,
+  FightRule,
   FightSetup,
   FightSummary,
   HealSource,
@@ -243,6 +244,10 @@ export { ENDLESS, ENDLESS_WAYS, type EndlessWay, isEndlessWay } from "./content/
 export { chairsOf, grownAt, heldRoom, heldSlot, isHeld, lastRoom, roomAt, sparAt } from "./endless.ts";
 export { type Deepest, type Depths, depthSlot, type Week, weekAt } from "./depths.ts";
 export { checkRun, type Loaded, readRunView } from "./save.ts";
+// The Wilds' rules, a wing each.
+export { isRuleId, RULE_IDS, type RuleId, RULES, type RuleSpec, WILDS } from "./content/wilds.ts";
+export { closedNow, closedSeats, ruleOf, type Wing, wingEnd, wingOf } from "./wing.ts";
+export { closedCells } from "./fight/rules.ts";
 
 // Between runs.
 export {

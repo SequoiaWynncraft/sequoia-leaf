@@ -64,9 +64,14 @@ export function boardMet(met: Met, levels = false, chairs = 0): Party | null {
   return isParty(board) ? board : null;
 }
 
-/** A regular's party for a sparring room, from the room's seed: as strong as the room says, or as `strength` says. */
-export const regularAt = (seed: number, roomIndex: number, trailIndex: number, strength?: SparStrength): Party =>
-  sparParty(mix(seed, 700 + roomIndex), roomIndex, trailIndex, strength);
+/** A regular's party for a sparring room, from the room's seed: as strong as the room says, or as `strength` says; off the `closed` seats. */
+export const regularAt = (
+  seed: number,
+  roomIndex: number,
+  trailIndex: number,
+  strength?: SparStrength,
+  closed?: ReadonlySet<number>,
+): Party => sparParty(mix(seed, 700 + roomIndex), roomIndex, trailIndex, strength, closed);
 
 /** Who is waiting in a sparring room: a regular, or the board Leaf handed over (`met`), the regular being one of the crowd. */
 function sparring(seed: number, roomIndex: number, trailIndex: number, met: Met | undefined, levels: boolean): Party {
