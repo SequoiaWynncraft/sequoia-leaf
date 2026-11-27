@@ -19,7 +19,7 @@ import {
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts" with { type: "macro" };
 import { FACTORY } from "@sequoia-leaf/factory/game.ts";
 import { keptLater } from "@sequoia-leaf/factory/later.ts";
-import { PULLS, PULLS_VERSION } from "@sequoia-leaf/pulls";
+import { PULLS, PULLS_VERSION, readStaffCommand } from "@sequoia-leaf/pulls";
 import { RAID, TABLE_VERSION } from "@sequoia-leaf/raid/game.ts";
 import { TOWN, TOWN_VERSION } from "@sequoia-leaf/town";
 import { Effect } from "effect";
@@ -96,7 +96,7 @@ export interface Played {
   readonly rules: string;
   /** A new player's state, as the game stores it. */
   readonly create: (ctx: Ctx) => string;
-  /** Whether a command reads as one of the game's. */
+  /** Whether a command reads as one of the game's, or one of the staff's (`StaffCommand`) as the game reads those. */
   readonly reads: (command: unknown) => boolean;
   /** Whether a command is one of the game's that its page sends by itself (`Game.chore`), not for anything the player did. */
   readonly chore: (command: unknown) => boolean;
@@ -129,13 +129,33 @@ const doneOf = <S, N>(done: Done<S, N>) => ({
   pieces: done.keep ?? [],
 });
 
+/**
+ * A command one of the guild's staff give through Leaf's own code (`POST /v1/game/admin/grants`),
+ * with its id, to be done to a player's state as a batch of theirs is (`Play.send`). No page can
+ * send one: nothing read off the wire is ever an instance of a class. A game reads it with the
+ * reader it was given for the staff's (`played`'s `staff`), and never as one of its own.
+ */
+export class StaffCommand {
+  readonly id: string;
+  readonly command: unknown;
+  constructor(id: string, command: unknown) {
+    this.id = id;
+    this.command = command;
+  }
+}
+
+/** A command as a game reads it: one off the wire by its own reader (`Game.command`), one of the staff's by `staff`. */
+const readerOf =
+  <C>(command: (raw: unknown) => C | null, staff: (raw: unknown) => C | null) =>
+  (raw: unknown): C | null =>
+    raw instanceof StaffCommand ? staff(raw.command) : command(raw);
+
 /** What a command off the wire, done to `state` now, would meet (`Game.meets`): null for none, and for one not the game's. */
 function meetsOf<State, Command>(
-  game: Pick<Game<State, Command, unknown, unknown>, "command" | "meets">,
+  game: Pick<Game<State, Command, unknown, unknown>, "meets">,
   state: State,
-  raw: unknown,
+  command: Command | null,
 ): Meeting | null {
-  const command = game.command(raw);
   return command === null ? null : (game.meets?.(state, command) ?? null);
 }
 
@@ -161,7 +181,10 @@ export function played<State, Command, View, Note, Short>(
   game: Game<State, Command, View, Note, Short>,
   room: (player: PlayerId) => string | null = () => null,
   showsDoors = false,
+  /** Reads the staff's commands (`StaffCommand`); none for a game the staff give nothing in. */
+  staff: (raw: unknown) => Command | null = () => null,
 ): Played {
+  const commandOf = readerOf((raw) => game.command(raw), staff);
   const held = (decoded: State, stored: string | null): Held => {
     let state = decoded;
     /** The state as it was before a command that has not been kept. */
@@ -180,9 +203,9 @@ export function played<State, Command, View, Note, Short>(
       return postcard === kept ? null : postcard;
     };
     const opened: Opened = {
-      meets: (raw) => meetsOf(game, current(), raw),
+      meets: (raw) => meetsOf(game, current(), commandOf(raw)),
       attempt: (raw, at) => {
-        const command = game.command(raw);
+        const command = commandOf(raw);
         if (command === null) {
           return { refused: "invalid_command" };
         }
@@ -209,7 +232,7 @@ export function played<State, Command, View, Note, Short>(
       awards: () => game.awards?.(current()) ?? [],
     };
     return {
-      run: (ctx, more, raw) => game.tend?.(current(), ctx, more, game.command(raw) ?? undefined) ?? false,
+      run: (ctx, more, raw) => game.tend?.(current(), ctx, more, commandOf(raw) ?? undefined) ?? false,
       open: (ctx) => {
         state = game.advance(current(), ctx);
         return opened;
@@ -230,9 +253,9 @@ export function played<State, Command, View, Note, Short>(
     id: game.id,
     rules: RULES[game.id],
     create: (ctx) => game.encode(game.create(ctx)),
-    reads: (command) => game.command(command) !== null,
+    reads: (command) => commandOf(command) !== null,
     chore: (raw) => {
-      const command = game.command(raw);
+      const command = commandOf(raw);
       return command !== null && game.chore?.(command) === true;
     },
     read: (text, postcard) => {
@@ -325,7 +348,8 @@ export const GAMES: Readonly<Record<GameId, Played>> = {
   works: played(FACTORY, (player) => visitRoom("works", player)),
   // The town's doors and letter say what each of the member's games tells it.
   town: played(TOWN, campRoom, true),
-  pulls: played(PULLS),
+  // The staff give a prize as a pull would (`POST /v1/game/admin/grants`).
+  pulls: played(PULLS, undefined, false, readStaffCommand),
 };
 
 /** The games whose states tell the town anything (`Played.posts`). */

@@ -443,6 +443,33 @@ export const RequestMade = Schema.Struct({
 /** Seconds, or hours, in each place, by place: `{ "town": 840 }`. */
 const ByPlace = Schema.Record(Schema.String, Schema.Number);
 
+/**
+ * A staff grant of a pull prize: to whom (`player`, a Leaf id), which (one of the raid's figures by
+ * its id, or a banner's headliner by the banner's id), how many copies (1 to 7; 1 if not said), and
+ * with `dry` only what it would do.
+ */
+export const GrantBody = Schema.Struct({
+  player: Schema.String,
+  figure: Schema.optional(Schema.String),
+  banner: Schema.optional(Schema.String),
+  copies: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 7 }))),
+  dry: Schema.optional(Schema.Boolean),
+});
+
+/** A grant made, or with `dry` one that would be: the prize as the pull game names it, the copies held before and after, and the awards that follow. */
+export const Granted = Schema.Struct({
+  dry: Schema.Boolean,
+  player: Schema.Struct({ id: Schema.String, name: Schema.String }),
+  prize: Schema.String,
+  rarity: Schema.String,
+  copies: Schema.Int,
+  had: Schema.Int,
+  have: Schema.Int,
+  awards: Schema.Array(Schema.String),
+  by: Schema.Struct({ id: Schema.String, name: Schema.String }),
+  at: Time,
+});
+
 /** Who played, when, where and for how long, over the last `days` UTC days (see the README). */
 export const ActivityReport = Schema.Struct({
   now: Time,

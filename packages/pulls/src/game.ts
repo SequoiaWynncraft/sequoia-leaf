@@ -28,12 +28,13 @@ import {
   available,
   type Catalog,
   catalogAt,
+  figureOf,
   prizeOf,
   prizeRarities,
   type Rarity,
   rarityIn,
 } from "@sequoia-leaf/raid/content/catalog.ts";
-import { type Era, eraAt, isEra, LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
+import { type Era, eraAt, isEra, LAST_ERA, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 
 export { type Banner, BANNERS } from "@sequoia-leaf/raid/content/banners.ts";
 export type { Rarity } from "@sequoia-leaf/raid/content/catalog.ts";
@@ -201,7 +202,22 @@ export type PullsCommand =
   /** `n` pulls from a pool, paid with Leaf or with free pulls, from the prizes it was shown with in an era (`era`). */
   | { do: "pull"; pool: string; n: 1 | 10; with: "leaf" | "free"; era: Era }
   /** A mid-tier prize the player does not have, for Seeds. */
-  | { do: "exchange"; prize: string };
+  | { do: "exchange"; prize: string }
+  | Grant;
+
+/**
+ * `copies` of a prize given by one of the guild's staff (`by`, their Leaf id, and `name`), for
+ * nothing: only Leaf's staff route sends it (`readStaffCommand`), never a page (`readCommand`).
+ */
+export interface Grant {
+  do: "grant";
+  prize: string;
+  copies: number;
+  by: string;
+  name: string;
+}
+/** The most copies one grant gives: as many as are each told as an award. */
+export const GRANT_MOST = 7;
 
 /** A banner's top-tier prize: the headliner won or lost on the draw, or owed after a loss. */
 export type Fifty = "won" | "lost" | "owed";
@@ -219,7 +235,7 @@ export interface Drawn {
  * from a pull, what `top` stood at, and in a banner the 50/50.
  */
 export interface PullsNote {
-  t: "pull" | "exchange";
+  t: "pull" | "exchange" | "grant";
   prize: string;
   rarity: Rarity;
   have: number;
@@ -248,6 +264,15 @@ export function readCommand(v: unknown): PullsCommand | null {
     return typeof v.prize === "string" && v.prize.length <= 64 ? { do: "exchange", prize: v.prize } : null;
   }
   return null;
+}
+
+/** A grant off Leaf's staff route, or null. Fields it does not use (the command's id) are let be. */
+export function readStaffCommand(v: unknown): Grant | null {
+  if (!isRecord(v) || v.do !== "grant") return null;
+  const { prize, copies, by, name } = v;
+  return isName(prize) && whole(copies, 1, GRANT_MOST) && isName(by) && typeof name === "string" && name.length <= 64
+    ? { do: "grant", prize, copies, by, name }
+    : null;
 }
 
 // ---------- doing things ----------
@@ -357,8 +382,55 @@ function exchange(state: Pulls, prize: string, now: number): Answer {
   return { state: s, notes: [{ t: "exchange", prize, rarity, have: 1 }] };
 }
 
-export const applyCommand = (state: Pulls, c: PullsCommand, ctx: Ctx): Answer =>
-  c.do === "pull" ? pull(state, c, ctx) : exchange(state, c.prize, ctx.now);
+/**
+ * When a prize opens on Leaf's clock, or null for one no release has: a figure as its release
+ * opens, a banner's headliner as its banner does.
+ */
+export function opensAt(prize: string): number | null {
+  const banner = BANNERS.find(({ id }) => headliner(id) === prize);
+  const id = banner?.headliner ?? figureOf(prize);
+  const since = id === null ? undefined : catalogAt(LAST_ERA).figures[id]?.since;
+  const at = RELEASES.find((release) => release.id === since)?.at;
+  if (at === undefined) return null;
+  return banner === undefined ? at : Math.max(at, banner.from);
+}
+
+/** What a player holding `had` copies of a prize is awarded for holding `have`: the awards that follow the grant. */
+export const awardsBetween = (prize: string, had: number, have: number): string[] =>
+  awardsOf(prize, have).slice(Math.min(had, COPIES_TOLD));
+
+/**
+ * A grant: `copies` more of a prize, as a pull would leave them, for nothing: no Leaf, no Seeds, no
+ * counter moved and nothing in the history, which holds pulls. Refused for a prize no release has
+ * (`no_such_prize`) or one not open yet on Leaf's clock (`not_released`). Logged as `pulls_granted`.
+ */
+function grant(state: Pulls, c: Grant, now: number): Answer {
+  const opens = opensAt(c.prize);
+  const rarity = rarityOf(c.prize);
+  if (opens === null || rarity === undefined) return no("no_such_prize");
+  if (now < opens) return no("not_released");
+  const s = copy(state);
+  const had = s.have[c.prize] ?? 0;
+  const have = had + c.copies;
+  s.have[c.prize] = have;
+  const data = { prize: c.prize, copies: c.copies, have, by: c.by, name: c.name };
+  return {
+    state: s,
+    notes: [{ t: "grant", prize: c.prize, rarity, have }],
+    log: [{ kind: LOGGED.pullsGranted, data }],
+  };
+}
+
+export function applyCommand(state: Pulls, c: PullsCommand, ctx: Ctx): Answer {
+  switch (c.do) {
+    case "pull":
+      return pull(state, c, ctx);
+    case "exchange":
+      return exchange(state, c.prize, ctx.now);
+    case "grant":
+      return grant(state, c, ctx.now);
+  }
+}
 
 /** The free pulls fallen due by Leaf's clock. Nothing else passes with time. */
 export function advance(s: Pulls, ctx: Pick<Ctx, "now">): Pulls {

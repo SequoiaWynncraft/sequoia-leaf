@@ -16,8 +16,9 @@ server. It reads sequoia-backend's player credit feed every minute, pays Leaf
 and XP for raids and wars, runs quests on top of them, and pays Leaf for each
 level a member reaches: a tenth of the XP the level took. Signed-in members
 can read their balance, level and quests. There is no way to spend Leaf yet.
-The one staff route is the record of who played the game
-([below](#who-played-the-staffs-view)).
+The staff's routes are the record of who played the game
+([below](#who-played-the-staffs-view)) and a pull prize given by hand
+([a staff grant](#a-staff-grant-of-a-pull-prize)).
 
 It also serves the guild's browser game, Guild Town, at `/play/town/`, and the
 routes only the game uses. Anyone signed in may play it: members, and guests
@@ -427,6 +428,7 @@ reads what it missed itself, then joins the look, and sends each event once.
 | `PUT /v1/game/presence`                 | Says where in the game the player is; lists who is there and resting.  |
 | `GET /v1/game/presence`                 | The same lists, saying nothing: for a page in a live room.             |
 | `GET /v1/game/admin/activity`           | For the staff alone: who played, when, where and for how long.         |
+| `POST /v1/game/admin/grants`            | For the staff alone: gives a player a pull prize, as a pull would.     |
 | `GET /v1/game/play/{game}`              | The player's state in a game Leaf plays, as their page is shown it.    |
 | `POST /v1/game/play/{game}`             | Does a batch of commands in that game, and answers what each did.      |
 | `GET /v1/game/play/{game}/standings`    | The game's board: the twenty highest, and the player's own place.      |
@@ -450,6 +452,7 @@ reads what it missed itself, then joins the look, and sends each event once.
 | `PUT /v1/game/presence`               | Says where in the game the player is; lists who is there and resting. |
 | `GET /v1/game/presence`               | The same lists, saying nothing: for a page in a live room.            |
 | `GET /v1/game/admin/activity`         | For the staff alone: who played, when, where and for how long.        |
+| `POST /v1/game/admin/grants`          | For the staff alone: gives a player a pull prize, as a pull would.    |
 | `GET /v1/game/play/{game}`            | The player's state in a game Leaf plays, as their page is shown it.   |
 | `POST /v1/game/play/{game}`           | Does a batch of commands in that game, and answers what each did.     |
 | `GET /v1/game/play/{game}/standings`  | The game's board: the twenty highest, and the player's own place.     |
@@ -1554,6 +1557,36 @@ Coins are read from the ledger (`coin_entries`), leaving out Coins brought over
 by hand from the old saves (`import:<player>`); refused commands from
 `command_days`. What other players see of someone stays what it was: in town
 now, or dozed off a while ago.
+
+### A staff grant of a pull prize
+
+`POST /v1/game/admin/grants` gives a player one of the pull game's prizes by
+hand, as a pull would give it, for nothing. Like the report it lets in only a
+website admin (403 `staff_only` for anyone else). The body:
+
+```json
+{ "player": "<Leaf id>", "figure": "crab40", "copies": 2, "dry": true }
+```
+
+`figure` is one of the raid's figures by its id, or `banner` a banner's id for
+its headliner (one of the two); `copies` is 1 to 7, 1 when left out; with
+`dry` true nothing is written and the answer says what it would do. It is a
+`grant` command to the player's pulls, which only this route sends (no page
+can), done through the play service as a batch is: the pulls' state holds the
+copies (what the Grove shows), the awards follow from that state
+(`pull:<prize>`, `copies:<prize>:<n>`, which the raid's roster and the camp
+read) in the same transaction, and it is logged to the player's activity as
+`pulls_granted` with `prize`, `copies`, `have`, and who gave it (`by`, `name`),
+which the report's `done` shows. No Leaf, Seeds, counter or history changes.
+
+The answer: `dry`, `player` (`id`, `name`), `prize` as the pull game names it,
+`rarity`, `copies`, `had` and `have` (copies before and after), the `awards`
+that follow, `by` (`id`, `name`) and `at`. A prize not open yet on Leaf's clock
+gets 409 `not_released` ("Not released until 8 December."), one no release has
+409 `no_such_prize`, a player Leaf has not seen 404 `no_such_player`, and a
+body that is not one 400 `invalid_grant`. The grant takes one of the player's
+batches, so while their commands come faster than Leaf takes them it gets 429
+`slow_down`; ask again.
 
 ## Moving over
 

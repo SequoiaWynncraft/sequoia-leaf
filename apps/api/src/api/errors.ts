@@ -65,9 +65,15 @@ export class Invalid extends Schema.Error<Invalid>("Invalid")(
     "invalid_purchase",
     "invalid_key",
     "invalid_report",
+    "invalid_grant",
   ),
   { httpApiStatus: 400 },
 ) {}
+
+/** A staff grant of a pull prize Leaf will not make, changing nothing: no release has the prize, or it is not open yet. */
+export class GrantRefused extends Schema.Error<GrantRefused>("GrantRefused")(answer("no_such_prize", "not_released"), {
+  httpApiStatus: 409,
+}) {}
 
 /**
  * Nothing there: a player with no skin Leaf can find, a game Leaf does not play, a game or a

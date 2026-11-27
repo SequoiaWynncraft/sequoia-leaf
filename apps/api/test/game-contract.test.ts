@@ -376,6 +376,12 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     "bob-token",
   );
   await sittingExchanges(call, recorded, (statement) => leaf.query(statement), { alice, bob, now: clock.now });
+  // The staff give Bob a figure by hand, as a pull would: first what it would do, then done; and a member may not.
+  const grants = "/v1/game/admin/grants";
+  await call("POST /v1/game/admin/grants, a member", "POST", grants, { player: bob, figure: "crab40" });
+  const crab = { player: bob, figure: "crab40", copies: 2 };
+  await call("POST /v1/game/admin/grants, dry", "POST", grants, { ...crab, dry: true }, "staff-token");
+  await call("POST /v1/game/admin/grants", "POST", grants, crab, "staff-token");
   await app.dispose();
   return recorded;
 }
