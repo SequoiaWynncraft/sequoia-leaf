@@ -34,13 +34,14 @@ import {
   put,
   SORTER,
   SPLITTER,
+  takes,
   type Yard,
 } from "@sequoia-leaf/factory";
 import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 import { deck } from "@sequoia-leaf/kit/card.ts";
 
 import { act, clear, ctx, isRecord, kindAt, kindOn, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
-import { asIf, layout } from "./layout.ts";
+import { armsAt, asIf, layout } from "./layout.ts";
 import { markedTiles, pinPulse } from "./pinned.ts";
 import { DRAWN, draws, S, toolHooks } from "./state.ts";
 import {
@@ -371,6 +372,29 @@ describe("a tunnel through a deep culvert", () => {
     ]);
     // From its far mouth alike.
     expect(printOf(tileRef(at(w, ...xy(6, -5))))).toMatchObject({ machine: { price: 26 }, refund: 26 });
+  });
+});
+
+/** A way in at (-6, -5) facing east, fed from behind and from the north, in a yard with tier 5's research to `tier`. */
+function fed(tier: number): { y: Yard; i: number } {
+  const y = create({ seed: 5, tier });
+  expect(build(y, BELT, ...xy(-7, -5), 0, Infinity).ok).toBe(true);
+  expect(build(y, BELT, ...xy(-6, -6), 1, Infinity).ok).toBe(true);
+  expect(build(y, kind("tunnel"), ...xy(-6, -5), 0, Infinity, { span: 2 }).ok).toBe(true);
+  return { y, i: at(y, ...xy(-6, -5)) };
+}
+/** Its arms east, south, west and north: 1 in, 2 out, 0 none. */
+const armsOf = (y: Yard, i: number): number[] => [0, 1, 2, 3].map((side) => (armsAt(y, i) >> (side * 2)) & 3);
+
+describe("a tunnel's way in, drawn", () => {
+  test("takes in from the north with wide mouths and is drawn so; without them, from behind alone, and drawn so", () => {
+    const wide = fed(6);
+    expect([takes(wide.y, wide.i, at(wide.y, ...xy(-6, -6))), armsOf(wide.y, wide.i)]).toEqual([true, [0, 0, 1, 1]]);
+    const narrow = fed(5);
+    expect([takes(narrow.y, narrow.i, at(narrow.y, ...xy(-6, -6))), armsOf(narrow.y, narrow.i)]).toEqual([
+      false,
+      [0, 0, 1, 0],
+    ]);
   });
 });
 
