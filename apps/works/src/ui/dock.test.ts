@@ -67,6 +67,23 @@ test("with nothing in hand the line says how to open a piece's card until one ha
   expect(net.world?.store.getItem("works.card.v1")).toBe("1");
 });
 
+test("idle, with a card learnt and nothing to undo, the line has no words and no buttons, so it is not drawn", async () => {
+  await page();
+  openCard(depot().x, depot().y);
+  const idle = handPrint();
+  expect([idle.line.text, idle.undo, idle.cancel, idle.go, idle.kind, idle.grades.length]).toEqual([
+    "",
+    false,
+    false,
+    null,
+    null,
+    0,
+  ]);
+  // A tool in hand has words and Cancel: drawn.
+  setTool("remove");
+  expect([line() !== "", handPrint().cancel]).toEqual([true, true]);
+});
+
 test("once a card has been asked for, a tool's words still show, and what is said shows for a few seconds", async () => {
   await page();
   openCard(depot().x, depot().y);

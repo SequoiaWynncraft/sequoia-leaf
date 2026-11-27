@@ -552,6 +552,9 @@ function drawHand(p: HandPrint): void {
   );
   row.scrollLeft = scrolled;
   hand.classList.toggle("building", p.building);
+  // With nothing to say and no button, the line is not drawn, but it keeps its place: what measures it
+  // (the card's floor, the yard's inset) measures the same, so nothing moves when it comes back.
+  hand.classList.toggle("quiet", p.line.text === "" && row.childElementCount === 0 && ends.childElementCount === 0);
 }
 
 let dockKey: (() => void) | null = null;

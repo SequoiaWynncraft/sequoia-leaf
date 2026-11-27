@@ -796,6 +796,10 @@
       #hand.building {
         border-image-source: var(--k-f-brass);
       }
+      /* Nothing to say and no button: not drawn, and taps go through to the yard (`dock.ts`). */
+      #hand.quiet {
+        visibility: hidden;
+      }
 
       /* A panel: beside the yard on a wide screen, under it on a tall one. */
       #panel {
