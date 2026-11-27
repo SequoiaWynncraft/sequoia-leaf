@@ -6,7 +6,7 @@
  * its turn opens (`CLOCK.take`, and as long again after the regular before it), so each take is seen
  * on its own. A group's turn ends as soon as everyone in it has taken, or when its time is up, and
  * then whoever in it has taken none gets one of what is left by the dice; the next is let in at that
- * moment, and the carousel ends with the last group's turn.
+ * moment, and the carousel ends a take's length after the last group's turn, its last take seen.
  */
 import { pick, shuffled } from "@sequoia-leaf/core";
 
@@ -98,7 +98,7 @@ function groupFrom(t: Sitting, stage: Carousel, from: number): number {
 /**
  * Lets the next group in at a moment: each may take from then on, its time is up after its wait
  * (and never before each regular in it has had its moment), and the stage's next moment is its
- * first regular's take, or the end of its time.
+ * first regular's take, or the end of its time; with nobody in it still in, that moment.
  */
 function letIn(t: Sitting, stage: Carousel, at: number): void {
   const from = stage.open;
@@ -108,6 +108,8 @@ function letIn(t: Sitting, stage: Carousel, at: number): void {
   stage.open = to;
   stage.ends = later(t, at, Math.max(most, (regulars + 1) * CLOCK.take));
   waitFrom(t, stage, at);
+  // Nobody let in still to take (all of them gone out since it was laid out): the turn is over at once.
+  if (waitingOn(t).length === 0) stage.until = at;
 }
 /** The stage's next moment from `at`: the next regular's take, or the end of the group's time, never past it. */
 function waitFrom(t: Sitting, stage: Carousel, at: number): void {
@@ -142,11 +144,12 @@ export function layCarousel(t: Sitting, at: number, costs: readonly Tier[]): voi
 /**
  * A carousel's next moment: the first regular due takes; then, with everyone let in taken or the
  * group's time up, whoever has taken none gets one of what is left by the dice, and the next group is
- * let in, or with none left it ends. Else it waits for the next regular, or the end of the group's
- * time. Says whether it ended.
+ * let in, or with none left it ends a take's length later, so that the last take is seen. Else it
+ * waits for the next regular, or the end of the group's time. Says whether it ended.
  */
 export function turnCarousel(t: Sitting, stage: Carousel): boolean {
   const at = stage.until;
+  const taken = stage.ring.filter((offer) => offer.by !== null).length;
   const [regular] = regularsDue(t);
   if (regular !== undefined) takeAny(t, stage, regular);
   if (waitingOn(t).length > 0 && at < stage.ends) {
@@ -155,7 +158,15 @@ export function turnCarousel(t: Sitting, stage: Carousel): boolean {
   }
   // The turn is over: whoever let in has taken none gets one of what is left.
   for (const seat of waitingOn(t)) takeAny(t, stage, seat);
-  if (stage.open >= stage.turns.length) return true;
-  letIn(t, stage, at);
+  if (stage.open < stage.turns.length) {
+    letIn(t, stage, at);
+    return false;
+  }
+  // Everyone has taken. The last take is seen before the room is laid out: the carousel ends a take's
+  // length after it (a member's take that ended it early, or one taken now).
+  const tookNow = stage.ring.filter((offer) => offer.by !== null).length > taken;
+  if (!tookNow && at >= stage.ends) return true;
+  stage.ends = later(t, at, CLOCK.take);
+  stage.until = stage.ends;
   return false;
 }

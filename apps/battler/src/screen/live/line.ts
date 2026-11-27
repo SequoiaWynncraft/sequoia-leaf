@@ -10,7 +10,8 @@
  * - The sitting is followed (`follow.ts`): one read at a time, asked for when Leaf says it moved on
  *   past what the page holds (`heard`: others sit, take from the ring, lock), when its stage's
  *   deadline passes, as the page comes back, as the page comes into the live room (`liveMoved`: what
- *   was said before was not heard), and every `POLL_EVERY` while it is not in it (`heard.ts`); asked
+ *   was said before was not heard), and every `POLL_EVERY` while it is not in it (`heard.ts`), every
+ *   `CAROUSEL_EVERY` in a carousel the member has still to take from; asked
  *   for, it is owed until a read that started after the ask lands, and one that fails is tried again
  *   on the kit's timer. Each read sends the `rev` the page has, and its answer is taken only if it is
  *   newer. A read is put off while a command is on its way, and one answered after a command went is
@@ -25,6 +26,7 @@ import { fromLeaf } from "@sequoia-leaf/kit/purse.ts";
 import type { Release, Scope } from "@sequoia-leaf/kit/scope.ts";
 import { type RaidNote, readNotes } from "@sequoia-leaf/raid";
 import type { SittingCommand } from "@sequoia-leaf/raid/sitting/commands.ts";
+import { CLOCK } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import type { SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 import { readSittingView } from "@sequoia-leaf/raid/sitting/wire.ts";
 
@@ -68,6 +70,8 @@ export interface Line {
   owed(): boolean;
   /** Hears each time the view changes. */
   onView(fn: (view: SittingView) => void): void;
+  /** Hears each read of the sitting that lands, whether it changed anything or not. */
+  onRead(fn: () => void): void;
   onGone(fn: (why: Gone) => void): void;
   /** Puts the line away: what is waiting is sent once more (and answered `gone` here), and nothing is read again. */
   close(): void;
@@ -109,6 +113,15 @@ function answerOf(results: readonly unknown[], id: string): Answer {
 
 /** The deadline of a stage, if it has one. */
 const deadlineOf = (view: SittingView): number | null => (view.stage.at === "over" ? null : view.stage.until);
+/**
+ * How often a carousel the member has still to take from is read while the page is not in the live
+ * room: as often as a regular takes, since a turn opens the moment the one before is done, which only
+ * a word from Leaf would say.
+ */
+export const CAROUSEL_EVERY = CLOCK.take;
+/** Whether the member has a figure still to take from the carousel. */
+const stillToTake = ({ stage, you }: SittingView): boolean =>
+  stage.at === "carousel" && you !== null && !stage.ring.some((offer) => offer.by === you);
 
 /** Ids for this page's commands at a sitting: a name of the page's own, and a count. */
 function ids(): () => string {
@@ -148,6 +161,7 @@ class SittingLine implements Line {
   #over = false;
   #timer: Release | null = null;
   readonly #viewers: ((view: SittingView) => void)[] = [];
+  readonly #readers: (() => void)[] = [];
   readonly #goners: ((why: Gone) => void)[] = [];
 
   constructor(scope: Scope, id: string, player: string, opened: Read & { view: SittingView }, live: () => boolean) {
@@ -183,6 +197,9 @@ class SittingLine implements Line {
   }
   onGone(fn: (why: Gone) => void): void {
     this.#goners.push(fn);
+  }
+  onRead(fn: () => void): void {
+    this.#readers.push(fn);
   }
 
   send(command: SittingCommand, predict?: (view: SittingView) => SittingView): Promise<Answer> {
@@ -225,6 +242,7 @@ class SittingLine implements Line {
       return "stop";
     }
     this.#took(answer);
+    for (const fn of this.#readers) fn();
     return "landed";
   }
 
@@ -291,7 +309,8 @@ class SittingLine implements Line {
     if (this.#over) return;
     const due = deadlineOf(this.#base);
     const toDeadline = due === null ? Infinity : due - this.now() + AFTER_DEADLINE;
-    const wait = Math.min(this.#live() ? Infinity : POLL_EVERY, Math.max(AFTER_DEADLINE, toDeadline));
+    const polled = this.#live() ? Infinity : stillToTake(this.#base) ? CAROUSEL_EVERY : POLL_EVERY;
+    const wait = Math.min(polled, Math.max(AFTER_DEADLINE, toDeadline));
     if (Number.isFinite(wait)) this.#timer = this.#scope.after(wait, () => this.#follow.want());
   }
 
@@ -362,5 +381,9 @@ export function openLine(
   live: () => boolean = hearing,
 ): Line | null {
   const opened = readAnswer(first);
-  return opened?.view ? new SittingLine(parent.child(), id, player, { ...opened, view: opened.view }, live) : null;
+  if (opened?.view) return new SittingLine(parent.child(), id, player, { ...opened, view: opened.view }, live);
+  // A sitting's answer whose sitting this page cannot read is a Leaf of other rules, beside this one in a
+  // deploy: the page loads again, as it does when a read finds one (`#readOnce`).
+  if (isRecord(first) && isRecord(first.state)) outside.reload();
+  return null;
 }

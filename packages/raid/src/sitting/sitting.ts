@@ -223,6 +223,7 @@ export const SITTING_REFUSALS = {
   carousel: "The carousel is not over yet.",
   no_carousel: "There is no carousel now.",
   no_fight: "There is no fight now.",
+  moved_on: "The table has moved on.",
   not_your_turn: "It is not your turn yet.",
   picked: "You have taken a figure already.",
   taken: "Somebody took that one.",

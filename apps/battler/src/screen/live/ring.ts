@@ -25,7 +25,7 @@ import { fadePawns, standAlso } from "../scene.ts";
 import { snd } from "../sounds.ts";
 import { artPx, boardSpot, boardToPage, type Standing, toBoard, V } from "../stage.ts";
 import { figureRef } from "../ui/refs.ts";
-import { focusAfter, ringMoves, turnOf } from "./reads.ts";
+import { figureBox, focusAfter, ringMoves, turnOf } from "./reads.ts";
 
 /**
  * The ring on the board, from its corner: its middle, how wide and deep it is, and how fast it turns
@@ -284,7 +284,7 @@ function figureAt(g: Ctx, view: SittingView, offer: Offer, i: number, mine: bool
   const k = Math.min(1, Math.max(0, (V.t - R.came - i * 0.04) / ARRIVE));
   const lift = (1 - k * k) * 30 + (mine ? Math.abs(Math.sin(V.t * 5 + i)) * 2 : 0);
   const hover = hoverAt(offer.kind, V.t, i / 9);
-  placeButton(R.buttons[i], s, framesOf(offer.kind).tall + hover, artPx());
+  placeButton(R.buttons[i], figureBox(s, framesOf(offer.kind).tall + hover, lift), artPx());
   if (k <= 0) return [];
   const draw = (): void => {
     const shown = { hover, beat: beatAt(V.t, i / 9), left: s.left, lit: mine };
@@ -294,12 +294,12 @@ function figureAt(g: Ctx, view: SittingView, offer: Offer, i: number, mine: bool
   return [{ x: s.x, y: s.y, draw, top: () => {} }];
 }
 
-/** Keeps a figure's button over it: a box round the figure and what it holds, on the page. */
-function placeButton(button: HTMLButtonElement | undefined, s: Pt, tall: number, px: number): void {
+/** Keeps a figure's button over it, where it is drawn this frame (`figureBox`), on the page. */
+function placeButton(button: HTMLButtonElement | undefined, box: ReturnType<typeof figureBox>, px: number): void {
   if (!button) return;
-  const top = boardToPage(s.x - 11, s.y - tall - 4);
-  const w = Math.round(22 * px);
-  const h = Math.round((tall + 12) * px);
+  const top = boardToPage(box.x, box.y);
+  const w = Math.round(box.w * px);
+  const h = Math.round(box.h * px);
   button.style.translate = `${Math.round(top.x)}px ${Math.round(top.y)}px`;
   if (button.style.width !== `${w}px`) button.style.width = `${w}px`;
   if (button.style.height !== `${h}px`) button.style.height = `${h}px`;

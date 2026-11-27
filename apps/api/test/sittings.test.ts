@@ -246,7 +246,7 @@ describe("Sittings through the routes", () => {
     expect((await look(id, alice, 1)).body).toMatchObject({ rev: 1, unchanged: true });
     await act(id, alice, [{ id: "a-1", do: "start" }]);
     // The first carousel ends, the regulars taking one by one: the same rev is a sitting that has moved on since.
-    clock.now = T0 + CLOCK.together + 6 * CLOCK.take;
+    clock.now = T0 + CLOCK.together + 7 * CLOCK.take;
     expect((await look(id, alice, 2)).body).toMatchObject({ rev: 3, state: { stage: { at: "plan" } } });
     expect((await look(id, alice, 3)).body).toMatchObject({ rev: 3, unchanged: true });
     // A rev that is not one is no rev.
@@ -265,7 +265,7 @@ describe("Sittings through the routes", () => {
     expect(again.body).toEqual(first.body);
     expect((await stored(id)).rev).toBe(1);
     await act(id, alice, [{ id: "a-1", do: "start" }]);
-    clock.now = T0 + CLOCK.together + 6 * CLOCK.take;
+    clock.now = T0 + CLOCK.together + 7 * CLOCK.take;
     // The figure from the carousel stands in the front row's middle: benched, there is nobody there to bench again.
     const bench = [{ id: "a-2", do: "move", from: { on: "board", at: 3 }, to: { on: "bench", at: 0 } }];
     const moved = await act(id, alice, bench);
@@ -494,9 +494,10 @@ describe("Early ends, decided by Leaf at their moment", () => {
     // Bob's take ends it for the members: the regulars are let in at that moment, the first to take a moment later.
     expect(both.body).toMatchObject({ state: { stage: { at: "carousel", open: 8, until: T0 + 1500 + CLOCK.take } } });
     expect(await due(id)).toEqual({ stage: "carousel", dueAt: T0 + 1500 + CLOCK.take });
-    clock.now = T0 + 1500 + 6 * CLOCK.take;
+    // The last regular takes six takes' length after Bob, and the room is laid out a take's length later.
+    clock.now = T0 + 1500 + 7 * CLOCK.take;
     expect((await look(id, alice)).body).toMatchObject({
-      state: { stage: { at: "plan", until: T0 + 1500 + 6 * CLOCK.take + CLOCK.plan, ready: [] } },
+      state: { stage: { at: "plan", until: T0 + 1500 + 7 * CLOCK.take + CLOCK.plan, ready: [] } },
     });
   });
 
@@ -504,10 +505,10 @@ describe("Early ends, decided by Leaf at their moment", () => {
     const { id, t } = await standingAt("plan");
     const deadline = t.stage.at === "plan" ? t.stage.until : 0;
     clock.now = deadline - 20_000;
-    await act(id, alice, [{ id: "a-r", do: "ready", on: true }]);
+    await act(id, alice, [{ id: "a-r", do: "ready", on: true, room: t.room }]);
     expect(await due(id)).toEqual({ stage: "plan", dueAt: deadline });
     clock.now += 500;
-    const both = await act(id, bob, [{ id: "b-r", do: "ready", on: true }]);
+    const both = await act(id, bob, [{ id: "b-r", do: "ready", on: true, room: t.room }]);
     expect(both.body).toMatchObject({
       results: [{ id: "b-r", notes: [] }],
       state: { stage: { at: "fight", done: [] } },
@@ -524,15 +525,15 @@ describe("Early ends, decided by Leaf at their moment", () => {
     const { id, t } = await standingAt("fight");
     const deadline = t.stage.at === "fight" ? t.stage.until : 0;
     clock.now = deadline - 3000;
-    await act(id, bob, [{ id: "b-w", do: "watched" }]);
+    await act(id, bob, [{ id: "b-w", do: "watched", room: t.room }]);
     expect(await due(id)).toEqual({ stage: "fight", dueAt: deadline });
     clock.now += 100;
-    const both = await act(id, alice, [{ id: "a-w", do: "watched" }]);
+    const both = await act(id, alice, [{ id: "a-w", do: "watched", room: t.room }]);
     expect(both.body).toMatchObject({ state: { stage: { at: "plan", until: clock.now + CLOCK.plan, ready: [] } } });
     expect(await due(id)).toEqual({ stage: "plan", dueAt: clock.now + CLOCK.plan });
     // Late, after it went on: turned down, and nothing changes.
     const rev = (await stored(id)).rev;
-    expect((await act(id, bob, [{ id: "b-w2", do: "watched" }])).body).toMatchObject({
+    expect((await act(id, bob, [{ id: "b-w2", do: "watched", room: t.room }])).body).toMatchObject({
       results: [{ id: "b-w2", refused: "no_fight" }],
     });
     expect((await stored(id)).rev).toBe(rev);

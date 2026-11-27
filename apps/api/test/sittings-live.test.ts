@@ -158,7 +158,7 @@ describe("who is told of a write", () => {
     const held = done(planning, { do: "hold", on: true }, A(T0 + 20_000));
     expect(sorted(toldOf(planning, held))).toEqual([alice]);
     // Alice is ready: everyone sees who is.
-    const ready = done(held, { do: "ready", on: true }, A(T0 + 20_001));
+    const ready = done(held, { do: "ready", on: true, room: held.room }, A(T0 + 20_001));
     expect(sorted(toldOf(held, ready))).toEqual([alice, bob]);
     // The lock, by the clock: the fights.
     const locked = due(ready);

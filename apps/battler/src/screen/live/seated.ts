@@ -20,11 +20,17 @@ import { changed, type Did, go, heldOff, hold, LIVE, refuse, S, type Seated, tel
 import type { Answer, Gone, Line } from "./line.ts";
 import { CLOSED_UNSTARTED, closedUnstarted, NOT_SEATED, paidLines, refusalWords, seatedAt } from "./reads.ts";
 
+/** What the member has said and wants Leaf to show: ready (or not) in a room's planning, and a room's fight watched. */
+interface Wanted {
+  ready: { room: number; on: boolean } | null;
+  watched: number | null;
+}
 const L: {
   line: Line | null;
   /** The seat's run as it set out for the fight it is in: what the room paid is told against it. */
   before: RunView | null;
-} = { line: null, before: null };
+  wanted: Wanted;
+} = { line: null, before: null, wanted: { ready: null, watched: null } };
 const viewHearers: ((view: SittingView, was: SittingView) => void)[] = [];
 const goneHearers: ((why: Gone) => void)[] = [];
 const doneHearers: ((why: string | null) => void)[] = [];
@@ -151,16 +157,42 @@ export function takeFromRing(offer: number): Did | null {
   return line && atLiveTable() ? shownNow(line, { do: "pick", offer }) : null;
 }
 
-/** Ready to fight, or not after all. */
+/** Ready to fight, or not after all: wanted until Leaf shows it, or the room's planning is over (`resendWanted`). */
 export function readyUp(on: boolean): Did | null {
   const line = L.line;
-  return line && atLiveTable() ? shownNow(line, { do: "ready", on }) : null;
+  if (!line || !atLiveTable()) return null;
+  L.wanted.ready = { room: line.view.room, on };
+  return shownNow(line, { do: "ready", on, room: line.view.room });
 }
 
-/** The member's fight has been watched, or skipped: said by the page itself, so a late one turned down is not said. */
+/**
+ * The member's fight has been watched, or skipped: said by the page itself, so a late one turned down
+ * is not said; wanted until Leaf shows it, or the room's fights are over.
+ */
 export function watchedFight(): Did | null {
   const line = L.line;
-  return line && atLiveTable() ? shownNow(line, { do: "watched" }, true) : null;
+  if (!line || !atLiveTable()) return null;
+  L.wanted.watched = line.view.room;
+  return shownNow(line, { do: "watched", room: line.view.room }, true);
+}
+
+/**
+ * With each read that lands: what the member wants that Leaf does not show (a command turned down, or
+ * lost, or an older Leaf's that did not know it) is sent again, by itself; once the room's stage is
+ * over it is wanted no more. Both commands may be sent any number of times.
+ */
+function resendWanted(line: Line): void {
+  const { view } = line;
+  const { ready, watched } = L.wanted;
+  if (ready && !(view.stage.at === "plan" && view.room === ready.room)) L.wanted.ready = null;
+  if (watched !== null && !(view.stage.at === "fight" && view.room === watched)) L.wanted.watched = null;
+  const you = view.you;
+  if (line.waiting() || you === null) return;
+  const want = L.wanted;
+  if (want.ready && view.stage.at === "plan" && view.stage.ready.includes(you) !== want.ready.on)
+    void sent(line, { do: "ready", on: want.ready.on, room: want.ready.room }, true);
+  if (want.watched !== null && view.stage.at === "fight" && !view.stage.done.includes(you))
+    void sent(line, { do: "watched", room: want.watched }, true);
 }
 
 /** The seat's run, if it is in a fight at the table now. */
@@ -210,6 +242,7 @@ export function doneWithTable(why: string | null = null): void {
   L.line?.close();
   L.line = null;
   L.before = null;
+  L.wanted = { ready: null, watched: null };
   for (const fn of doneHearers) fn(why);
 }
 
@@ -230,6 +263,9 @@ export function takeUp(line: Line): void {
     // Leaf shows the member without a seat (left in another tab, or the table closed unstarted): the page lets it go.
     if (!seatedAt(view, line.player)) return doneWithTable(closedUnstarted(view, was) ? CLOSED_UNSTARTED : NOT_SEATED);
     for (const fn of viewHearers) fn(view, was);
+  });
+  line.onRead(() => {
+    if (L.line === line) resendWanted(line);
   });
   line.onGone((why) => {
     if (L.line !== line) return;

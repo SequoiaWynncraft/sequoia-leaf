@@ -217,6 +217,14 @@ export function ringMoves(
 }
 
 /**
+ * A ring figure's button, from the board's corner: round the figure where it is drawn (its feet at
+ * `feet`, lifted `lift` as it drops in or bobs, `tall` over them) and its held mark under them.
+ */
+export function figureBox(feet: { x: number; y: number }, tall: number, lift: number) {
+  return { x: feet.x - 11, y: feet.y - lift - tall - 4, w: 22, h: tall + 14 };
+}
+
+/**
  * Which place of the ring keeps the keyboard when the ring is drawn again (somebody took a figure):
  * the one that had it while it still stands, else the next that does; none when none does.
  */

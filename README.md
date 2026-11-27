@@ -1033,10 +1033,12 @@ moments (`stage.until`, `stage.ended`) are Leaf's milliseconds.
   command, `{ "id", "notes" }` or `{ "id", "refused", "why" }`, the rules' code
   and sentence (`seated_elsewhere`, "You are at another table.", is Leaf's).
   The commands are `sit`, `leave`, `start`, `pick`, `ready` (`"on"`: true or
-  false), `watched` (done with the room's fight, watched or skipped) and the
+  false, and the `"room"` it is for), `watched` (done with that `"room"`'s fight,
+  watched or skipped; either for another room is turned down, `moved_on`) and the
   run's planning commands (`readCommand` in
   `packages/raid/src/sitting/commands.ts`). A stage ends the moment nobody in it
-  has anything left to do: the carousel's turn once everyone let in has taken,
+  has anything left to do: the carousel's turn once everyone let in has taken
+  (the carousel itself a take's length after its last take, so that it is seen),
   planning once every member still in is ready, the fights once every member
   still in has watched; its `until` is the most it can last. A command
   whose id the caller used before at a sitting (Leaf keeps their newest 256)

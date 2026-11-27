@@ -11,6 +11,7 @@ import { mix } from "@sequoia-leaf/core";
 
 import { act, isPlanning, type PlanningCommand, readRunCommand } from "../command.ts";
 import { eraAt } from "../content/releases.ts";
+import { MOST_ROOMS } from "../content/rooms.ts";
 import { isRecord, isWhole } from "../party.ts";
 import { abandon, type Note } from "../run.ts";
 import { cannotTake, take } from "./carousel.ts";
@@ -46,10 +47,10 @@ export type SittingCommand =
   | { do: "start" }
   /** Take the figure at a place in the carousel's ring. */
   | { do: "pick"; offer: number }
-  /** Ready to fight (or, `on` false, not after all), while planning. */
-  | { do: "ready"; on: boolean }
-  /** Done with the room's fight: watched to its end, or skipped. */
-  | { do: "watched" }
+  /** Ready to fight (or, `on` false, not after all), while planning `room`; for any other room it is turned down. */
+  | { do: "ready"; on: boolean; room: number }
+  /** Done with the fight of `room`: watched to its end, or skipped; for any other room it is turned down. */
+  | { do: "watched"; room: number }
   /** The run's own planning commands, for the caller's seat; the rest of a run's are the clock's (its spec's `whose`). */
   | PlanningCommand;
 
@@ -141,9 +142,10 @@ function pickOffer(t: Sitting, offer: number, { player, now }: Call): Did {
 }
 
 /** Ready to fight, or not after all: when every member still in is, planning ends at that moment. */
-function ready(t: Sitting, on: boolean, { player, now }: Call): Did {
+function ready(t: Sitting, on: boolean, room: number, { player, now }: Call): Did {
   const { stage } = t;
   if (stage.at !== "plan") return refuse(notNow(stage.at, "ready") ?? "carousel");
+  if (room !== t.room) return refuse("moved_on");
   const seat = seatIn(t, player.id);
   if (typeof seat !== "number") return seat;
   stage.ready = marked(stage.ready, seat, on);
@@ -152,9 +154,10 @@ function ready(t: Sitting, on: boolean, { player, now }: Call): Did {
 }
 
 /** Done with the room's fight: when every member still in is, the fights end at that moment. */
-function watchedFight(t: Sitting, { player, now }: Call): Did {
+function watchedFight(t: Sitting, room: number, { player, now }: Call): Did {
   const { stage } = t;
   if (stage.at !== "fight") return refuse(notNow(stage.at, "watched") ?? "no_fight");
+  if (room !== t.room) return refuse("moved_on");
   const seat = seatIn(t, player.id);
   if (typeof seat !== "number") return seat;
   stage.done = marked(stage.done, seat, true);
@@ -193,10 +196,14 @@ const SEAT: { readonly [D in SeatDo]: SeatSpec<SeatCommandOf<D>> } = {
     run: (t, c, call) => pickOffer(t, c.offer, call),
   },
   ready: {
-    read: (v) => (typeof v.on === "boolean" ? { do: "ready", on: v.on } : null),
-    run: (t, c, call) => ready(t, c.on, call),
+    read: (v) =>
+      typeof v.on === "boolean" && isWhole(v.room, 0, MOST_ROOMS) ? { do: "ready", on: v.on, room: v.room } : null,
+    run: (t, c, call) => ready(t, c.on, c.room, call),
   },
-  watched: { read: () => ({ do: "watched" }), run: (t, _, call) => watchedFight(t, call) },
+  watched: {
+    read: (v) => (isWhole(v.room, 0, MOST_ROOMS) ? { do: "watched", room: v.room } : null),
+    run: (t, c, call) => watchedFight(t, c.room, call),
+  },
 };
 const seatSpec = <D extends SeatDo>(name: D): SeatSpec<SeatCommandOf<D>> => SEAT[name];
 const isSeatDo = (name: unknown): name is SeatDo => typeof name === "string" && Object.hasOwn(SEAT, name);

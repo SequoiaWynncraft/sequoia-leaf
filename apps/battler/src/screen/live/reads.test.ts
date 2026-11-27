@@ -10,6 +10,7 @@ import {
   clockLine,
   clockText,
   facingLine,
+  figureBox,
   focusAfter,
   ordinal,
   paidLines,
@@ -180,14 +181,14 @@ describe("whom a stage waits for", () => {
     let t = until(started(6, 3), (s) => s.stage.at === "plan");
     const at = deadline(t) - 10_000;
     expect(waitingLine(view(t, 0))).toBe("");
-    t = must(command(t, { do: "ready", on: true }, call(at, 1, 0)));
+    t = must(command(t, { do: "ready", on: true, room: t.room }, call(at, 1, 0)));
     expect(waitingLine(view(t, 0))).toBe("Waiting for 2 players.");
     expect(waitingLine(view(t, 1))).toBe("");
-    t = must(command(t, { do: "ready", on: true }, call(at + 1, 2, 1)));
+    t = must(command(t, { do: "ready", on: true, room: t.room }, call(at + 1, 2, 1)));
     expect(clockLine(view(t, 0), at + 1)).toBe(`Waiting for ${NAMES[2] ?? ""}.`);
-    const fight = must(command(t, { do: "ready", on: true }, call(at + 2, 3, 2)));
+    const fight = must(command(t, { do: "ready", on: true, room: t.room }, call(at + 2, 3, 2)));
     expect(fight.stage.at).toBe("fight");
-    const watched = must(command(fight, { do: "watched" }, call(at + 3, 4, 2)));
+    const watched = must(command(fight, { do: "watched", room: fight.room }, call(at + 3, 4, 2)));
     expect(waitingLine(view(watched, 2))).toBe("Waiting for 2 players.");
   });
 });
@@ -213,6 +214,18 @@ describe("the ring as the sitting changes", () => {
     expect(ringMoves(5, ring([]), 5, ring([2]))).toEqual([2]);
     expect(ringMoves(5, ring([2]), 5, ring([2, 6]))).toEqual([6]);
     expect(ringMoves(5, ring([2, 6]), 5, ring([2, 6]))).toEqual([]);
+  });
+});
+
+describe("the ring's buttons", () => {
+  test("a figure's button is round the figure where it is drawn, dropping in or bobbing as well", () => {
+    const still = figureBox({ x: 40, y: 30 }, 20, 0);
+    const lifted = figureBox({ x: 40, y: 30 }, 20, 12);
+    expect(lifted.y).toBe(still.y - 12);
+    expect([lifted.x, lifted.w, lifted.h]).toEqual([still.x, still.w, still.h]);
+    // The box holds the figure (20 tall over its feet) and its held mark under them.
+    expect(still.y).toBeLessThanOrEqual(30 - 20);
+    expect(still.y + still.h).toBeGreaterThanOrEqual(30 + 9);
   });
 });
 

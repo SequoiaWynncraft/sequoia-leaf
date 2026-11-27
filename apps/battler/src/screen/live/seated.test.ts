@@ -23,7 +23,7 @@ import { EVERY_COMMAND, EVERY_PLANNING } from "@sequoia-leaf/raid/testkit.ts";
 import { ask, doNow, go, onNotes, onRefused, openTable, S, tableNow } from "../state.ts";
 import { openLine } from "./line.ts";
 import { CLOSED_UNSTARTED, NOT_SEATED } from "./reads.ts";
-import { liveLine, liveView, onDone, paidFor, shownRun, sitAt, stepBack, takeUp } from "./seated.ts";
+import { liveLine, liveView, onDone, paidFor, readyUp, shownRun, sitAt, stepBack, takeUp } from "./seated.ts";
 
 const ME = { id: "leaf-0", name: "Mossback" };
 const call = (now: number, seed: number): Call => ({ now, seed, player: ME });
@@ -286,4 +286,46 @@ test("left in another tab: the next read shows the member without a seat, and th
   await until(() => liveLine() === null, 500);
   expect(liveLine()).toBeNull();
   expect(told).toEqual([NOT_SEATED]);
+});
+
+test("Ready is a state the page wants: turned down (an older Leaf's `invalid_command`, mid-deploy), it is sent again with the next read until Leaf shows it", async () => {
+  const { t, now } = planning();
+  const posted: { body: unknown; reply: (r: Reply) => void }[] = [];
+  const ready = command(t, { do: "ready", on: true, room: t.room }, call(now + 2, 21));
+  if (!ready.ok) throw new Error(ready.why);
+  await seated(t, now, {
+    "GET /v1/game/play/raid": { status: 200, body: soloTable() },
+    "GET /v1/game/sittings/s1": {
+      status: 200,
+      body: { id: "s1", rev: 1, now: new Date(now).toISOString(), unchanged: true },
+    },
+    "POST /v1/game/sittings/s1": (sent: Sent) => new Promise<Reply>((reply) => posted.push({ body: sent.body, reply })),
+  });
+  const readies = () =>
+    posted.filter(
+      (p) => isRecord(p.body) && Array.isArray(p.body.commands) && JSON.stringify(p.body.commands).includes('"ready"'),
+    );
+  expect(readyUp(true)?.ok).toBe(true);
+  await until(() => readies().length === 1);
+  readies()[0]?.reply({
+    status: 400,
+    body: { code: "invalid_command", message: "Command x is not one of the table's" },
+  });
+  await until(() => !liveLine()?.waiting());
+  // Leaf has not taken it: the next read the page makes sends it again, with the room it is for.
+  liveLine()?.read();
+  await until(() => readies().length === 2, 500);
+  expect(readies().length).toBe(2);
+  expect(JSON.stringify(readies()[1]?.body)).toContain(`"room":${t.room}`);
+  // Taken: Leaf shows it, and nothing more is sent.
+  const id = (() => {
+    const body = readies()[1]?.body;
+    const c = isRecord(body) && Array.isArray(body.commands) ? body.commands[0] : null;
+    return isRecord(c) ? c.id : "";
+  })();
+  readies()[1]?.reply({ status: 200, body: answer("s1", 2, ready.sitting, now + 2, [{ id, notes: [] }]) });
+  await until(() => !liveLine()?.waiting());
+  liveLine()?.read();
+  await Bun.sleep(150);
+  expect(readies().length).toBe(2);
 });

@@ -108,6 +108,7 @@ function predictOwn(view: SittingView, c: SittingCommand): Predicted | null {
   const { stage, you, run } = view;
   const stop = notNow(stage.at, c.do);
   if (stop) return { refused: stop };
+  if (c.do !== "pick" && c.room !== view.room) return { refused: "moved_on" };
   if (you === null || !run) return { refused: "not_seated" };
   if (view.seats[you]?.place !== null) return { refused: "out" };
   return ownMove(view, c, you, run);
