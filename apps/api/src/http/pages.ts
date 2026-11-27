@@ -30,9 +30,13 @@ const HASHED = /\/index-[0-9a-z]+\.(?:js|css)$/;
 
 /**
  * Hashed files never change under their name; anything else is asked about
- * again each time. Decided by the path alone: a query names no other file.
+ * again each time, decided by the path alone (a query names no other file).
+ * A failure is never kept: while Leaf is updating, the Leaf going away has no
+ * file the new pages name, and a browser keeping that 404 for a year would
+ * open the page without it until then.
  */
-function cacheControl(url: string): string {
+function cacheControl(url: string, status: number): string {
+  if (status >= 400) return "no-store";
   const [path = ""] = url.split("?", 1);
   return HASHED.test(path) ? "public, max-age=31536000, immutable" : "no-cache";
 }
@@ -60,7 +64,7 @@ const pagesFrom = (root: string) =>
         );
         return HttpServerResponse.setHeaders(response, {
           "content-security-policy": PAGE_POLICY,
-          "cache-control": cacheControl(request.url),
+          "cache-control": cacheControl(request.url, response.status),
         });
       });
       yield* router.prefixed("/play").add("GET", "/*", served);

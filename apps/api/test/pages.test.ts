@@ -25,6 +25,7 @@ beforeAll(() => {
     writeFileSync(join(publicDir, app, "index-meamkakx.js"), `console.log("${app}")`);
     writeFileSync(join(publicDir, app, "index-78k15kx1.css"), "body { margin: 0 }");
   }
+  writeFileSync(join(publicDir, "guard.js"), "void 0");
 });
 
 afterAll(() => {
@@ -91,6 +92,19 @@ describe("the game's pages, with PUBLIC_DIR set", () => {
       ["/play/town/?x=/index-meamkakx.js", 200, "no-cache"],
     ]);
     expect(script.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
+    await app.dispose();
+  });
+
+  it("never lets a browser keep a hashed file that is not there", async () => {
+    const app = leafServing(publicDir);
+
+    const missing = await app.request("/play/battler/index-zzzzzzzz.css");
+    const guard = await app.request("/play/guard.js");
+
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get("Cache-Control")).toBe("no-store");
+    expect(guard.status).toBe(200);
+    expect(guard.headers.get("Cache-Control")).toBe("no-cache");
     await app.dispose();
   });
 

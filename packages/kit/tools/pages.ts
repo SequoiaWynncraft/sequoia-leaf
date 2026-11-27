@@ -4,9 +4,8 @@
  *
  * The image's page stage (the Dockerfile's first stage) copies some of the repository into a clean
  * folder, leaving out what `.dockerignore` leaves out, installs the production dependencies, and
- * builds each app's page with `bun build index.html --minify`. This does the same in a folder of its
- * own: the same paths, the same patterns, the same install and the same build, for every app with a
- * page. The folder goes when it is done.
+ * builds the pages with `build-pages.ts`. This does the same in a folder of its own: the same paths,
+ * the same patterns, the same install and the same build. The folder goes when it is done.
  */
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -89,19 +88,8 @@ if (import.meta.main) {
     for (const path of pageSources(readFileSync(join(root, "Dockerfile"), "utf8")))
       copy(path.replace(/\/$/, ""), place, out);
     run([process.execPath, "install", "--frozen-lockfile", "--production", "--silent"], place);
-    const apps = readdirSync(join(place, "apps")).filter((app) => {
-      try {
-        return statSync(join(place, "apps", app, "index.html")).isFile();
-      } catch {
-        return false;
-      }
-    });
-    for (const app of apps)
-      run(
-        [process.execPath, "build", "index.html", "--outdir", join(place, "public", app), "--minify"],
-        join(place, "apps", app),
-      );
-    console.log(`The pages build as the image builds them: ${apps.join(", ")}.`);
+    run([process.execPath, "packages/kit/tools/build-pages.ts", join(place, "public")], place);
+    console.log(`The pages build as the image builds them: ${readdirSync(join(place, "public")).join(", ")}.`);
   } finally {
     rmSync(place, { recursive: true, force: true });
   }

@@ -48,7 +48,9 @@ export {
 export { LOGGED } from "./logged.ts";
 export {
   type Browser,
+  browserOf,
   BROWSERS,
+  GAME_OF,
   PAGE_ERROR_KINDS,
   PAGE_ERROR_MESSAGE,
   PAGE_ERROR_STACK,

@@ -3,7 +3,7 @@
 # (packages/raid, packages/factory and packages/town, which the pages share with
 # Leaf's play service), and the raid's figures, which the raid's page and the
 # town's draw (packages/figures). Each build is plain files, so only
-# /app/public goes on to the image.
+# /app/public goes on to the image, with the pages' guard (packages/kit/tools/build-pages.ts).
 FROM docker.io/oven/bun:1.4.5-slim AS pages
 
 WORKDIR /app
@@ -31,9 +31,7 @@ COPY packages/figures packages/figures
 COPY apps/town apps/town
 COPY apps/works apps/works
 COPY apps/battler apps/battler
-RUN for app in town works battler; do \
-      (cd "apps/$app" && bun build index.html --outdir "/app/public/$app" --minify) || exit 1; \
-    done
+RUN bun packages/kit/tools/build-pages.ts /app/public
 
 FROM docker.io/oven/bun:1.4.5-slim
 

@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { type Browser, PAGE_ERRORS_PATH } from "@sequoia-leaf/core";
+import { type Browser, browserOf, PAGE_ERRORS_PATH } from "@sequoia-leaf/core";
 
 import { restart } from "./live.ts";
-import { AGAIN_MS, browserOf, failedToOpen, heardLive, MOST, plain, watchPage } from "./report.ts";
+import { AGAIN_MS, failedToOpen, heardLive, MOST, plain, watchPage } from "./report.ts";
 import { HELLO, type Reply, type Standin, standin, TESTER } from "./standin.ts";
 
 let world: Standin | null = null;
