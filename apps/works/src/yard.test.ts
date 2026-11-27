@@ -132,6 +132,15 @@ function page(): { window: EventTarget; letter: Part } {
   return { window: win, letter };
 }
 
+/** Lets what the page waits on go on, a second of a held clock at a time, until `done` or `left` seconds have gone. */
+async function seconds(done: () => boolean, left: number, turns = 20): Promise<void> {
+  if (done() || left === 0) return;
+  await Promise.resolve();
+  if (turns > 0) return seconds(done, left, turns - 1);
+  jest.advanceTimersByTime(1000);
+  return seconds(done, left - 1);
+}
+
 describe("the yard, on Leaf", () => {
   test("reads what Leaf really answers a batch of the Works' commands", async () => {
     const contract: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
@@ -175,6 +184,24 @@ describe("the yard, on Leaf", () => {
   test("with no Leaf answering, there is no yard", async () => {
     net.world = standin({ "GET /v1/game/play/works": "offline" });
     expect(await openYard("p", () => undefined)).toBe("closed");
+  });
+
+  test("a yard Leaf will not read (one a newer Leaf kept, on more land) is no yard: once waited for, the page says it could not be read, sending nothing", async () => {
+    net.world = standin({
+      "GET /v1/game/play/works": { status: 409, body: { code: "state_unreadable", message: "Kept" } },
+    });
+    jest.useFakeTimers();
+    let why: Trouble | null | undefined;
+    try {
+      void openYard("p", () => undefined).then((w) => (why = w));
+      // Asked again each second for 30 seconds, on the held clock.
+      await seconds(() => why !== undefined, 40);
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(why).toBe("unreadable");
+    expect(net.world.sent.every((s) => s.method === "GET")).toBe(true);
+    expect(net.world.sent.length).toBeGreaterThan(30);
   });
 
   test("a build shows at once, from the rules, before Leaf has even been asked", async () => {

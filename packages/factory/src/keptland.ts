@@ -7,11 +7,17 @@
  * the map if that land has none. A yard that says no land was kept on the guild's first land, three
  * plots by three with the yard in the middle (`FIRST_LAND`): every version before the land could grow.
  *
+ * A yard kept on more land than the land it is read on (by a newer Leaf, beside this one in a deploy,
+ * or before a rollback) is not read at all (`keptOn`): read, what stood out there would be paid back,
+ * and lost for good once it was kept again. Leaf leaves such a yard as it is, as one a newer version
+ * kept (`later.ts`).
+ *
  * The check (`check.ts`) mixes in each tile the same way (`fromCorner`), so the same yard has the same
  * check on a land of any size.
  */
 import type { KeptPiece } from "./cells.ts";
 import { type Land, tileAt } from "./land.ts";
+import { plotNamed } from "./tables.ts";
 
 /** The land a yard was kept on, as far as its tiles need: its size, and the yard plot's corner on it. */
 export interface KeptLand {
@@ -45,6 +51,35 @@ export function readKeptLand(v: unknown): KeptLand | null {
   const y = below(Reflect.get(v, "y"), h);
   return x === null || y === null ? null : { w, h, x, y };
 }
+
+/** Whether a land reaches as far from its yard plot's corner every way as the land a yard was kept on. */
+const reaches = (land: Land, from: KeptLand): boolean =>
+  from.x <= land.origin[0] &&
+  from.y <= land.origin[1] &&
+  from.w - from.x <= land.w - land.origin[0] &&
+  from.h - from.y <= land.h - land.origin[1];
+
+/** Whether every plot a kept yard says it owns (`names`) is one of a land's. */
+const ownsOnly = (land: Land, names: unknown): boolean =>
+  !Array.isArray(names) ||
+  names.every((name) => {
+    const p = plotNamed(name);
+    return p !== null && land.plots.some((q) => q.plot === p);
+  });
+
+/**
+ * The land a kept yard (`raw`, its `land` and `plots`) was kept on, if it may be read on `land`: one
+ * that reaches no further from the yard plot's corner any way, by a yard that owns no plot `land`
+ * lacks. Null for one kept on more land, as for one that says no land it could be.
+ */
+export function keptOn(raw: { readonly land?: unknown; readonly plots?: unknown }, land: Land): KeptLand | null {
+  const from = readKeptLand(raw.land);
+  return from !== null && reaches(land, from) && ownsOnly(land, raw.plots) ? from : null;
+}
+
+/** Whether a kept yard says a land it could be kept on that is more than `land` (`keptOn`). */
+export const keptBeyond = (raw: { readonly land?: unknown; readonly plots?: unknown }, land: Land): boolean =>
+  readKeptLand(raw.land) !== null && keptOn(raw, land) === null;
 
 /** The tile of a land as far from its yard plot's corner as a tile (`i`) of the land a yard was kept on; -1 off either. */
 export function tileOn(from: KeptLand, land: Land, i: number): number {

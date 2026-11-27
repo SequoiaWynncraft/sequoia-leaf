@@ -7,7 +7,7 @@
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
-import { RING, RINGED } from "./ring.ts";
+import { outward, RINGED } from "./ring.ts";
 import { delivering, junctions, saved, SAVES, staged } from "./yards.ts";
 
 const read8: unknown = await Bun.file(`${import.meta.dir}/saves/read-v8.json`).json();
@@ -62,7 +62,7 @@ describe("a ring of plots round the land", () => {
     expect([RINGED.w, RINGED.h]).toEqual([F.LAND.w + 2 * F.PLOT_W, F.LAND.h + 2 * F.PLOT_H]);
     expect(RINGED.origin).toEqual([F.LAND.origin[0] + F.PLOT_W, F.LAND.origin[1] + F.PLOT_H]);
     expect(fromDepot(staged("new"), ...F.LAND.origin)).toEqual([-8, -6]);
-    expect(RINGED.trees.length).toBe(F.LAND.trees.length + RING.length);
+    expect(RINGED.trees.length).toBe(F.LAND.trees.length + RINGED.plots.length - F.LAND.plots.length);
   });
 
   for (const [name, make] of YARDS)
@@ -75,9 +75,11 @@ describe("a ring of plots round the land", () => {
       expect(large.history).toEqual([]);
       small.history = [];
       expect(F.check(large)).toBe(F.check(small));
-      // Kept on the larger land, it reads back on it the same, and on the guild's land as it was.
+      // Kept on the larger land, it reads back on it the same; on the guild's land, a Leaf with less
+      // land, it does not read at all, and is a newer Leaf's, to be left as it is.
       expect(F.check(read(F.encode(large), RINGED))).toBe(F.check(large));
-      expect(F.encode(read(F.encode(large), F.LAND))).toBe(F.encode(small));
+      expect([F.decode(F.encode(large), F.LAND), F.keptLater(F.encode(large))]).toEqual([null, true]);
+      expect(F.keptLater(text)).toBe(false);
       // An hour on, the same tick by tick: every tick of the first minute, then every minute.
       for (let t = 1; t <= 60 * F.MINUTE; t++) {
         F.step(small);
@@ -89,6 +91,23 @@ describe("a ring of plots round the land", () => {
       }
       expect(places(large)).toEqual(places(small));
     });
+});
+
+describe("a Leaf with less land", () => {
+  test("never reads a yard kept on more land: it is a newer Leaf's, left as it is, not read with its ring paid back", () => {
+    const y = outward();
+    expect([y.kind.includes(F.CRATE), y.felled.includes(1), y.blueprints[0]?.whole]).toEqual([true, true, true]);
+    const text = F.encode(y);
+    expect(F.decode(text, F.LAND)).toBeNull();
+    expect([F.keptLater(text), F.keptLater(text, RINGED)]).toEqual([true, false]);
+  });
+
+  test("never reads a yard that owns a plot its land lacks, wherever its pieces are", () => {
+    const y = F.create({ seed: 5 });
+    const record: unknown = JSON.parse(F.encode(y));
+    const kept = JSON.stringify(Object.assign({}, record, { plots: ["yard", "moon"] }));
+    expect([F.decode(kept), F.keptLater(kept)]).toEqual([null, true]);
+  });
 });
 
 describe("every save in saves/", () => {

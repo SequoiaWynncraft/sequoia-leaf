@@ -33,6 +33,7 @@ export {
 export * from "./game.ts";
 export { UNDO_BYTES, UNDO_ENTRY, UNDO_MOST } from "./history.ts";
 export * from "./land.ts";
+export { keptLater } from "./later.ts";
 export { join, lineOf, paint } from "./lines.ts";
 export * from "./orders.ts";
 export * from "./page.ts";
