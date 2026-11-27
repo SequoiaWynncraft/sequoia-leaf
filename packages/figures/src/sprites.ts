@@ -52,6 +52,8 @@ export interface Frames {
   readonly wide: number;
   /** The row its head starts at, for a small picture of it. */
   readonly head: number;
+  /** How many of its rows a small picture of it shows (`portrait`): all of them, or its top rows for one as tall as Seqwawa. */
+  readonly room: number;
   readonly flies: boolean;
 }
 
@@ -150,6 +152,7 @@ function person(body: Body): { right: Frames; left: Frames } {
       castTall: RIG.tall,
       wide: RIG.wide,
       head: 0,
+      room: RIG.tall,
       flies: false,
     };
   };
@@ -207,6 +210,7 @@ function bake(kind: UnitKind, form: Form): { right: Frames; left: Frames } {
     castTall: lists.cast.length,
     wide: widthOf(lists.a),
     head: art.head ?? 0,
+    room: Math.min(lists.a.length, art.room ?? lists.a.length),
     flies: art.flies === true,
   };
   const right: Frames = { ...base, fallen: tipped(idleA, false) };
@@ -345,16 +349,19 @@ export function drawFigure(g: Ctx, kind: UnitKind, x: number, y: number, o: Show
   if (o.alpha !== undefined) g.globalAlpha = 1;
 }
 
-/** A figure standing still on a small canvas of its own, for a card or a button. */
+/**
+ * A figure standing still on a small canvas of its own, for a card or a button: as tall as it stands
+ * (a pose that reaches higher would leave the picture empty at the top), or for one as tall as
+ * Seqwawa its top rows (`room`), its base cut off at the bottom edge.
+ */
 export function portrait(kind: UnitKind, o: Shown = {}): HTMLCanvasElement {
   const f = framesOf(kind, o.left, o.form);
-  // As tall as it stands: a pose that reaches higher would leave the picture empty at the top.
-  const { c, g } = makeCanvas(f.w, f.tall + 2);
+  const { c, g } = makeCanvas(f.w, f.room + 2);
   drawFigure(g, kind, f.ax, f.tall + 1, o);
   return c;
 }
 /** How tall the tallest portrait of a figure a member can own is, for a place that shows any of them. */
-export const portraitRoom = (): number => Math.max(...FIGURE_IDS.map((kind) => framesOf(kind).tall + 2));
+export const portraitRoom = (): number => Math.max(...FIGURE_IDS.map((kind) => framesOf(kind).room + 2));
 
 // ---------- bases ----------
 

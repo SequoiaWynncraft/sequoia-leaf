@@ -52,7 +52,12 @@ test("each of Groot's five has a true form, standing and casting, every row of a
   }
 });
 
-test("Seqwawa stands no taller than the tallest figure before it, so the stall keeps the room it had", () => {
+test("Seqwawa stands a hex and a half tall, and its small picture keeps the room the stall had", () => {
   const before = FIGURE_IDS.filter((id) => id !== "seqwawa").map((id) => artOf(id).rows.length);
-  expect(artOf("seqwawa").rows.length).toBeLessThanOrEqual(Math.max(...before));
+  const tallest = Math.max(...before);
+  const art = artOf("seqwawa");
+  expect(art.rows.length).toBeGreaterThan(tallest);
+  expect(art.room ?? art.rows.length).toBeLessThanOrEqual(tallest);
+  // Its breath and its wind-up are pictures of their own, all typed to one width and height.
+  expect([art.alt?.length, art.cast?.length]).toEqual([art.rows.length, art.rows.length]);
 });

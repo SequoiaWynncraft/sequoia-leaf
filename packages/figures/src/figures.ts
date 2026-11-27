@@ -6,8 +6,10 @@
  *
  * All of them face right. A dark edge is added when they are baked (`sprites.ts`).
  *
- * A figure a member can own is up to 22 wide and 26 tall. Its pictures are all typed to one width,
- * so that a pose stays over the same feet, and its standing picture has no empty row above it.
+ * A figure a member can own is up to 22 wide and 26 tall, but for Seqwawa, a hex and a half tall,
+ * whose small picture shows only its top rows (`room`), so a card keeps the room it had. Its
+ * pictures are all typed to one width, so that a pose stays over the same feet, and its standing
+ * picture has no empty row above it.
  *
  * They are drawn as the town draws its own (`apps/town`): in the town's colours only (`pal.ts`),
  * two or three flat tones to a material, small dark eyes. A gnome, a crab, the glorp, the cat and
@@ -32,6 +34,8 @@ export interface FigureArt {
   readonly sym?: true;
   /** The row its head starts at, for a small picture of it, where that is not the top. */
   readonly head?: number;
+  /** How many of its rows, from the top, a small picture of it shows, where that is not all of them: the rest is cut off at its base. */
+  readonly room?: number;
 }
 
 /** What a figure's pictures say beside their rows: where it breathes, where its head starts, whether it flies or has writing on it. */
@@ -64,6 +68,7 @@ const KEPT: Readonly<Partial<Record<UnitKind, Omit<FigureArt, "rows" | "cast" | 
   greg: { breath: 14, head: 2 },
   whitefox: { breath: 18, head: 5 },
   hearthcat: { breath: 15, head: 1 },
+  seqwawa: { head: 3, room: 25 },
   glorplet: { breath: 2 },
   uncounted: { sym: true },
   biguncounted: { sym: true },

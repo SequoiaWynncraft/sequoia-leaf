@@ -246,8 +246,8 @@ const BODIES: Readonly<
   },
   stare: { wind: (p, k) => (p.lean += Math.round(1.5 * k)), after: (p, d) => (p.lean += d < 2 ? 2 : 0) },
   still: { wind: () => undefined },
-  // Still, but for what grows on top: the cast picture and the standing one in turn, then the cast held.
-  rustle: { wind: (p, k, c) => (p.cast = k > 0.55 || Math.floor(c) % 2 === 0) },
+  // Still, but it shudders (the cast picture and the standing one in turn, its sprout and arms with them), then holds the cast.
+  rustle: { wind: (p, k, c) => (p.cast = k > 0.35 || Math.floor(c) % 2 === 0) },
   dig: { wind: (p, k) => (p.sy -= Math.round(5 * k)) },
   fade: {
     wind: (p, k) => {
