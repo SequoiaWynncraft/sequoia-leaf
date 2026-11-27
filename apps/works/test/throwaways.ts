@@ -461,3 +461,30 @@ export const PLAYED_BIG = Object.fromEntries(
     "saysWaiting",
   ].map((k) => [k, true]),
 );
+
+/**
+ * The planner in the copy, run once its clay is no thing from the ground (`step` 1), so the sifter's
+ * by-product is made by nothing else: what makes it is the sifter, by its recipe for sand, as many as
+ * make that much a minute at one with each sifting, fed by gatherers of stone; and sand, from the
+ * ground still, is gathered, with nothing under it, though the sifter makes it too.
+ */
+export const PLAN_BIG = `import * as F from "./packages/factory/src/index.ts";
+const clay = F.item("clay");
+const sand = F.item("sand");
+const sifter = F.kindNamed("sifter");
+const out: Record<string, boolean> = {};
+const maker = F.makerOf(clay);
+out.byProduct = !F.isRaw(clay) && maker.kind === sifter && maker.recipe?.out === sand && maker.recipe.also === clay;
+const sifting = maker.recipe;
+const pots = F.tree(F.item("pot"), 30);
+const fed = pots.from[0];
+const sifts = sifting ? F.makes(sifter, 1, sifting) : 0;
+out.sized = fed?.item === clay && fed.kind === sifter && sifts > 0 && Math.abs((fed.count ?? 0) * sifts - fed.perMinute) < 1e-9;
+const stone = fed?.from[0];
+out.fedStone = fed?.from.length === 1 && stone?.item === F.item("stone") && stone.kind === F.GATHERING && stone.from.length === 0;
+out.billed = JSON.stringify(F.bill(pots).map((b) => F.kindName(b.kind))) === JSON.stringify(["sifter", "gatherer"]);
+const glass = F.tree(F.item("glass"), 30).from[0];
+out.groundFirst = F.makerOf(sand).kind === F.GATHERING && F.makerOf(sand).recipe === null && glass?.kind === F.GATHERING && glass.from.length === 0;
+console.log(JSON.stringify(out));
+`;
+export const PLANNED_BIG = { byProduct: true, sized: true, fedStone: true, billed: true, groundFirst: true };

@@ -36,6 +36,8 @@ import {
   PAGE_FORGE,
   PAGE_SIFTER,
   PAGED_BIG,
+  PLAN_BIG,
+  PLANNED_BIG,
   PLAY_BIG,
   PLAYED_BIG,
   RECIPE_LINES,
@@ -425,6 +427,14 @@ describe("a new kind of piece", () => {
       const paged = bun(at, "page.ts");
       expect(paged.out).not.toContain("rror");
       expect(JSON.parse(paged.out.trim().split("\n").at(-1) ?? "{}")).toEqual(PAGED_BIG);
+      // Clay made by nothing but the sifter, beside its sand: the planner sends a sifter for it.
+      const items = join(at, "packages/factory/src/content/items.ts");
+      const ground = `clay: { name: "Clay", many: "clay", step: 0,`;
+      expect(readFileSync(items, "utf8")).toContain(ground);
+      writeFileSync(items, readFileSync(items, "utf8").replace(ground, ground.replace("step: 0", "step: 1")));
+      writeFileSync(join(at, "plan.ts"), PLAN_BIG);
+      const planned = bun(at, "plan.ts");
+      expect(JSON.parse(planned.out.trim().split("\n").at(-1) ?? "{}")).toEqual(PLANNED_BIG);
     } finally {
       rmSync(at, { recursive: true, force: true });
     }
