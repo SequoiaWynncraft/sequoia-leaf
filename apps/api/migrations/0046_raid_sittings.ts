@@ -12,8 +12,8 @@ import { SqlClient } from "effect/sql";
 // one, and each member still in at a started one. One row a player, so the database holds that a
 // player is at one sitting at a time.
 //
-// `raid_sitting_places`: each member's place at a finished sitting (1 the winner) of how many seats,
-// and when it ended; kept for good, after the sitting itself is let go of.
+// `raid_sitting_places`: each member's place at a sitting (1 the winner), of how many seats, kept as
+// they go out (the winner's as it ends) with when; kept for good, after the sitting is let go of.
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   yield* sql`

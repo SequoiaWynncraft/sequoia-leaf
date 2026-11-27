@@ -1,8 +1,8 @@
 /**
  * Keeping a sitting: one transaction that checks the `rev` it was read at and writes it, with
  * everything that follows from it: the Coins its members are owed, paid once within what each may
- * still earn; seats taken and freed; the places of a finished one; what it logs; and the answers to
- * the commands that changed it. What is stored having moved on, or a seat taken meanwhile at another
+ * still earn; seats taken and freed; the place of each member it puts out, or first; what it logs;
+ * and the answers to the commands that changed it. What is stored having moved on, or a seat taken meanwhile at another
  * sitting, it fails `Lost` and writes nothing, and the job is done again from what is stored.
  */
 import { type Logged, parsePlayerId } from "@sequoia-leaf/core";
@@ -18,6 +18,11 @@ import { type Place, type SittingStore, sittingStore, type Writing } from "./sto
 
 /** What is stored moved on while a job worked from what it read: another job wrote it, or a seat was taken elsewhere. */
 export class Lost extends Data.TaggedError("Lost") {}
+/** As many sittings are not over as may be (`MOST_NOT_OVER`): a new one is not kept. */
+export class Full extends Data.TaggedError("Full") {}
+
+/** How many sittings may be not over at once; opening one past it is refused. */
+export const MOST_NOT_OVER = 500;
 
 /** The game a sitting's Coins and logs are of. */
 export const GAME = "raid";
@@ -70,12 +75,19 @@ export function writingOf(t: Sitting, state: string): Writing {
     : { state, stage: stage.at, dueAt: stage.until, endedAt: null };
 }
 
-/** Every member's place at a sitting that is over now and was not before. */
-export function placesOf(before: Sitting | null, after: Sitting): Place[] {
-  if (isOver(before) || !isOver(after)) return [];
-  return after.seats.flatMap((seat) =>
+/** Each member's place at a sitting, of those who have one: out, or the sitting over. */
+const placesAt = (t: Sitting): Place[] =>
+  t.seats.flatMap((seat) =>
     seat.who.is === "member" && seat.place !== null ? [{ player: seat.who.id, place: seat.place }] : [],
   );
+
+/**
+ * The places a write settles: each member with a place after it and none before. The order of going
+ * out decides a place, so it is known as a member goes out; the last one in is first, at the end.
+ */
+export function placesOf(before: Sitting | null, after: Sitting): Place[] {
+  const had = new Set((before === null ? [] : placesAt(before)).map((p) => p.player));
+  return placesAt(after).filter((p) => !had.has(p.player));
 }
 
 /** How many rooms a sitting fought: as many as the seat that fought the most has a record of. */
@@ -90,7 +102,7 @@ export function loggedOf(id: string, before: Sitting | null, after: Sitting): Lo
     logged.push({ kind: LOGGED_SITTING.started, data: { sitting: id, members } });
   }
   if (!isOver(before) && isOver(after) && started(after)) {
-    const places = placesOf(before, after);
+    const places = placesAt(after);
     logged.push({ kind: LOGGED_SITTING.ended, data: { sitting: id, rooms: roomsOf(after), places } });
   }
   return logged;
@@ -133,13 +145,17 @@ function followsIn(coins: Coins["Service"], playStore: PlayStore["Service"], sto
     });
 
   return {
-    /** Everything that follows from a sitting written: Coins paid, seats, places and logs. */
+    /**
+     * Everything that follows from a sitting written: Coins paid, seats, places and logs. A place is
+     * kept as of the write that settles it, or of the sitting's end.
+     */
     follow: (id: string, before: Sitting | null, after: Sitting, owed: readonly Owed[], now: number) =>
       Effect.gen(function* () {
         yield* pay(id, owed, now);
         yield* seatAll(id, after, now);
         const places = placesOf(before, after);
-        if (places.length > 0 && after.stage.at === "over") yield* store.place(id, places, CHAIRS, after.stage.ended);
+        const at = after.stage.at === "over" ? after.stage.ended : now;
+        if (places.length > 0) yield* store.place(id, places, CHAIRS, at);
         const logged = loggedOf(id, before, after);
         const by = parsePlayerId(after.by);
         if (by === undefined) return yield* Effect.die(new Error(`A sitting opened by ${after.by}`));
@@ -201,7 +217,11 @@ export const sittingWrites = Effect.gen(function* () {
           .pipe(Effect.catchTag("SqlError", Effect.die));
         return { rev, sitting: after };
       }),
-    /** Stores a new sitting, its opener seated and the opening logged; `Lost` when they are seated at another. */
+    /**
+     * Stores a new sitting, its opener seated and the opening logged, in one transaction that counts
+     * the sittings not over first: `Full` at `MOST_NOT_OVER`, `Lost` when the opener is seated at
+     * another. Either way nothing is kept.
+     */
     create: (id: string, t: Sitting, now: number) =>
       Effect.gen(function* () {
         const by = parsePlayerId(t.by);
@@ -209,6 +229,7 @@ export const sittingWrites = Effect.gen(function* () {
         yield* sql
           .withTransaction(
             Effect.gen(function* () {
+              if ((yield* store.notOver) >= MOST_NOT_OVER) return yield* new Full();
               yield* store.create(id, by, now, writingOf(t, encodeSitting(t)));
               yield* follow(id, null, t, [], now);
             }),

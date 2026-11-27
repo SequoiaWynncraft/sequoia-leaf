@@ -23,10 +23,8 @@ import { Coins } from "../play/coins.ts";
 import { PlayPace } from "../play/pace.ts";
 import { PlayStore } from "../play/store.ts";
 import type { Record } from "./store.ts";
-import { type Answer, ANSWERS, type Loaded, type Lost, sittingWrites } from "./writes.ts";
+import { type Answer, ANSWERS, type Loaded, type Lost, MOST_NOT_OVER, sittingWrites } from "./writes.ts";
 
-/** How many sittings may be not over at once; opening one past it is refused. */
-export const MOST_NOT_OVER = 500;
 /** A player opens at most one sitting in this long. */
 export const OPEN_EVERY_MS = 60_000;
 /** How many open sittings are listed, the longest open first. */
@@ -283,19 +281,22 @@ export class Sittings extends Context.Service<
             if (!pace.take(caller.playerId, now, [1, 1])) return { status: "slow" } satisfies Opening;
             if ((yield* store.openedSince(caller.playerId, now - OPEN_EVERY_MS)) > 0)
               return { status: "too_soon" } satisfies Opening;
-            if ((yield* store.notOver) >= MOST_NOT_OVER) return { status: "full" } satisfies Opening;
             yield* jobs.freeUp(caller.playerId, null);
             if (Option.isSome(yield* store.seatOf(caller.playerId)))
               return { status: "seated_elsewhere" } satisfies Opening;
             const id = `${hex(yield* dice)}${hex(yield* dice)}`;
             const player: Member = { id: caller.playerId, name: yield* jobs.nameOf(caller) };
             const t = openSitting({ now, seed: yield* dice, player });
-            // Seated somewhere meanwhile, by another request of theirs: nothing is kept.
-            const created = yield* writes.create(id, t, now).pipe(
-              Effect.as(true),
-              Effect.catchTag("Lost", () => Effect.succeed(false)),
+            // Seated somewhere meanwhile, by another request of theirs, or the last sitting there may
+            // be opened meanwhile: nothing is kept.
+            const refused = yield* writes.create(id, t, now).pipe(
+              Effect.as(null),
+              Effect.catchTags({
+                Lost: () => Effect.succeed<Opening>({ status: "seated_elsewhere" }),
+                Full: () => Effect.succeed<Opening>({ status: "full" }),
+              }),
             );
-            if (!created) return { status: "seated_elsewhere" } satisfies Opening;
+            if (refused !== null) return refused;
             return { status: "shown", ...(yield* jobs.shown(id, 0, now, t, caller.playerId)) } satisfies Opening;
           }),
         read: (id, viewer, rev) =>

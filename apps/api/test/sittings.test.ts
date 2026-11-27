@@ -8,16 +8,16 @@ import { payout, summariseRun } from "@sequoia-leaf/raid";
 import { advance } from "@sequoia-leaf/raid/sitting/clock.ts";
 import { decodeSitting } from "@sequoia-leaf/raid/sitting/keep.ts";
 import { CLOCK, type Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import type { SqlClient } from "effect/sql";
 
 import { SittingShown } from "../src/api/sittings.ts";
 import type { Settings } from "../src/config.ts";
 import { Coins } from "../src/play/coins.ts";
-import { MOST_NOT_OVER, Sittings } from "../src/sittings/service.ts";
-import { LOGGED_SITTING } from "../src/sittings/writes.ts";
+import { Sittings } from "../src/sittings/service.ts";
+import { LOGGED_SITTING, MOST_NOT_OVER } from "../src/sittings/writes.ts";
 import { playThrough, type Reach, type Seated } from "./sittings-drive.ts";
-import { fakeBackend, type Fakes, MINUTE, sessionOf, steadyDice, testLeaf } from "./support.ts";
+import { fakeBackend, fakeMojang, type Fakes, MINUTE, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
@@ -571,6 +571,44 @@ describe("Limits", () => {
       status: 409,
       body: { code: "sittings_full", message: "As many tables are going as there may be. Try again in a while" },
     });
+  });
+
+  it("opens only one of two sittings opened at once when one more may be going", async () => {
+    // Each opening waits, as it names its opener, until the other has come that far too.
+    const waiting: (() => void)[] = [];
+    const meet = Effect.promise(
+      () =>
+        new Promise<void>((resolve) => {
+          waiting.push(resolve);
+          if (waiting.length === 2) for (const go of waiting) go();
+        }),
+    );
+    const mojang = fakeMojang().service;
+    await restart({ mojang: { ...mojang, profile: () => Effect.as(meet, Option.none()) } });
+    // Players Leaf knows are named by Mojang.
+    for (const [n, player] of [alice, bob].entries()) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      await services.query(
+        (sql) => sql`INSERT INTO banner_people (banner, player_id) VALUES (${`banner-${n + 1}`}, ${player})`,
+      );
+    }
+    for (let n = 0; n < MOST_NOT_OVER - 1; n++) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      await services.query(
+        (sql) => sql`
+          INSERT INTO raid_sittings (id, state, rev, opened_by, opened_at, stage, due_at)
+          VALUES (${`busy-${n}`}, '{}', 0, ${carol}, ${T0}, 'plan', ${clock.now + MINUTE})
+        `,
+      );
+    }
+    const both = await Promise.all([open(alice), open(bob)]);
+    expect(both.map((answer) => answer.status).toSorted((a, b) => a - b)).toEqual([200, 409]);
+    expect(both.find((answer) => answer.status === 409)?.body).toMatchObject({ code: "sittings_full" });
+    expect(await rowsOf((sql) => sql`SELECT count(*) AS n FROM raid_sittings WHERE ended_at IS NULL`)).toEqual([
+      { n: MOST_NOT_OVER },
+    ]);
+    expect(await seats()).toHaveLength(1);
+    expect(waiting).toHaveLength(2);
   });
 
   it("counts commands at a sitting against the player's allowance for every game", async () => {

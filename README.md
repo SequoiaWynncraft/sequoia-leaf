@@ -981,9 +981,9 @@ its stage, when it is next due (its stage's `until`) and when it ended. Who is
 seated where (`raid_sitting_seats`, one row a player): everyone sat at an open
 sitting and each member still in at a started one. The player is the key, so the
 database holds that nobody is at two sittings at once, whatever two requests do
-together. Each member's place at a finished sitting (`raid_sitting_places`: the
-sitting, the player, the place, of how many seats, and when it ended). A sitting
-is let go of a day after it ended; its places are kept for good.
+together. Each member's place at a sitting (`raid_sitting_places`: the sitting,
+the player, the place, of how many seats, and when it was kept). A sitting is let
+go of a day after it ended; its places are kept for good.
 
 **The clock.** Every read and every command brings the sitting to Leaf's clock
 first, one job at a time for each sitting, and writes it only if that changed
@@ -1050,9 +1050,12 @@ for winning: `payout` in `packages/raid/src/outside.ts`) once, under
 `sitting:<id>:seat:<n>`, in the transaction that brings the sitting to that
 moment. It is cut to what they may still earn as it is paid (the same hour's and
 day's caps every game's Coins count against), as a solo run's payout is; the
-rest is not paid later. A regular is paid nothing. When a sitting ends, every
-member who sat in it gets their place, out early or not; a sitting that closed
-without starting has none. The record counts places.
+rest is not paid later. A regular is paid nothing. A member's place is kept in
+the same transaction as they go out (the order of going out decides it), and the
+last one in, first, as the sitting ends; a sitting that closed without starting
+has none. The record counts places. At most 500 sittings are not over: that is
+counted in the transaction that keeps a new one, so two openings at once cannot
+both pass it.
 
 **One person, two players.** When a player who came with Discord alone links a
 Wynncraft account and is taken into its player (`apps/api/src/players/merge.ts`),

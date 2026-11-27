@@ -10,6 +10,8 @@ import { restandAll } from "../src/play/restand.ts";
 import { discordOf, fakeBackend, sessionOf, testLeaf } from "./support.ts";
 
 const Me = Schema.Struct({ player: Schema.Struct({ id: Schema.String }) });
+/** A sitting opened, as its route answers: its id. */
+const Opened = Schema.Struct({ id: Schema.String });
 /** The player's id in an answer from `/v1/game/me`. */
 const idOf = (body: unknown) => Schema.decodeUnknownSync(Me)(body).player.id;
 
@@ -545,6 +547,50 @@ describe("linking a Wynncraft account later", () => {
       { player: account, id: "both", result: '{"notes":[]}' },
       { player: account, id: "g-1", result: '{"notes":[]}' },
     ]);
+  });
+
+  it("keeps the place of a Discord player out of a table early as the account's, once taken in before the table ends", async () => {
+    const { token, guestId } = await nussBeforeLinking();
+    const bob = playerId("00000000-0000-4000-8000-0000000000b0");
+    backend.sessions["bob"] = () => Response.json(sessionOf(bob, "Bob", "RECRUIT"));
+    const play = async (cookie: string, path: string, body: unknown) => {
+      const response = await app.request(path, {
+        method: "POST",
+        headers: { Cookie: cookie, Origin: ORIGIN, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      expect(response.status).toBe(200);
+      return response.json();
+    };
+    const guest = `__Host-leaf_session=${token}`;
+    const id = Schema.decodeUnknownSync(Opened)(await play(guest, "/v1/game/sittings", { player: guestId })).id;
+    const at = `/v1/game/sittings/${id}`;
+    await play("seq_session=bob", at, { player: bob, commands: [{ id: "b-1", do: "sit" }] });
+    await play(guest, at, { player: guestId, commands: [{ id: "g-1", do: "start" }] });
+    const places = () =>
+      leafs.query(
+        (sql) =>
+          sql`SELECT player_id AS player, place FROM raid_sitting_places WHERE sitting = ${id} ORDER BY place DESC`,
+      );
+
+    // Out first, the Discord player has their place at once: last of the eight.
+    await play(guest, at, { player: guestId, commands: [{ id: "g-2", do: "leave" }] });
+    expect(await places()).toEqual([{ player: guestId, place: 8 }]);
+    // Taken into the account's player while the table goes on, and their place with them.
+    await meWith("seq_session=nuss-sequoia");
+    expect(await merges()).toEqual([{ n: 1 }]);
+    expect(await places()).toEqual([{ player: account, place: 8 }]);
+    // Bob gets up too: the regulars play it to its end, and the place stays the account's.
+    await play("seq_session=bob", at, { player: bob, commands: [{ id: "b-2", do: "leave" }] });
+    expect(await leafs.query((sql) => sql`SELECT stage FROM raid_sittings WHERE id = ${id}`)).toEqual([
+      { stage: "over" },
+    ]);
+    expect(await places()).toEqual([
+      { player: account, place: 8 },
+      { player: bob, place: 7 },
+    ]);
+    const record = await app.request("/v1/game/sittings/record", { headers: { Cookie: "seq_session=nuss-sequoia" } });
+    expect(await record.json()).toEqual({ played: 1, won: 0, top_four: 0 });
   });
 
   for (const whose of ["Discord", "account"] as const) {
