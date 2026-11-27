@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import * as F from "../src/index.ts";
 import { folioOf, freeResearch, idOf } from "./goals.ts";
 import { bareLand } from "./land.ts";
-import { lay, must } from "./yards.ts";
+import { generated, lay, must } from "./yards.ts";
 
 const deadfall = F.item("deadfall");
 const plank = F.item("plank");
@@ -119,6 +119,20 @@ describe("what a yard can make and needs a minute", () => {
     const y = sawmill();
     must(y, { do: "build", kind: "boiler", x: 9, y: 7, dir: 0 });
     expect(flows(y).needed[deadfall]).toBe(F.MINUTE / F.TICKS.burn);
+  });
+
+  test("the boilers' deadfall is added once, as many as stand times what one burns, after what the machines need: to the bit", () => {
+    const y = F.decode(F.encode(generated().y), generated().y.land);
+    if (!y) throw new Error("the generated yard does not read back");
+    run(y, 150);
+    const wire = y.wire ?? F.rewire(y);
+    expect(wire.burners.length).toBeGreaterThan(1);
+    // What the machines alone need: the same yard with no burners in its plumbing.
+    y.wire = { ...wire, burners: new Int32Array(0) };
+    const machines = flows(y).needed[deadfall] ?? 0;
+    y.wire = wire;
+    expect(Number.isInteger(machines)).toBe(false);
+    expect(flows(y).needed[deadfall]).toBe(machines + wire.burners.length * (F.MINUTE / F.TICKS.burn));
   });
 
   test("a Study needs the folios the research first in line still wants, at a Study's pace; with nothing studied, none", () => {

@@ -8,7 +8,7 @@
 import { RULES } from "./kinds/list.ts";
 import { holding as holdingOf, type MachineRate, rateOf, type State, STATES, TROUBLE } from "./kinds/say.ts";
 import { litOf } from "./power.ts";
-import { isMaker, type Item, NONE, type Recipe } from "./tables.ts";
+import { ALL_KINDS, BURNS, isMaker, type Item, type Kind, NONE, type Recipe } from "./tables.ts";
 import { KIT, rewire } from "./wire.ts";
 import { type Counts, holderOf, type Yard } from "./yard.ts";
 
@@ -77,8 +77,9 @@ export const machineRate = (y: Yard, i: number, recipe: Recipe | null = aim(y, i
  * A machine is counted for the recipe it is working toward (`aim`). One that holds nothing and is
  * told nothing has none for the moment: it is counted for the recipe it last began (`lastRecipe`),
  * which goes with it when it is taken away. A Study needs the folios the research first in line still
- * wants, in the shares it wants them; what burns for power in reach, what it burns. Each counts at
- * the rate every screen says (`machineRate`), as its kind says (`Hooks.flow`).
+ * wants, in the shares it wants them. Each counts at the rate every screen says (`machineRate`), as
+ * its kind says (`Hooks.flow`). What burns for power in reach needs what it burns (`KindDef.burns`):
+ * a kind's need a minute for as many of it as stand, added once.
  *
  * It runs down the plumbing's lists, so it costs in step with the pieces that work, and makes nothing.
  */
@@ -86,8 +87,18 @@ export function flow(y: Yard, made: Counts, needed: Counts): void {
   const wire = y.wire ?? rewire(y);
   const { work, burners } = wire;
   for (let c = 0; c < work.length; c++) flowAt(y, work[c] ?? 0, made, needed);
-  for (let c = 0; c < burners.length; c++) flowAt(y, burners[c] ?? 0, made, needed);
+  for (let b = 0; b < BURNING.length; b++) {
+    const k = BURNING[b] ?? NONE;
+    const burns = BURNS[k];
+    if (!burns) continue;
+    let n = 0;
+    for (let c = 0; c < burners.length; c++) if (y.kind[burners[c] ?? 0] === k) n++;
+    needed[burns.fuel] = (needed[burns.fuel] ?? 0) + n * (KIT.MINUTE / burns.ticks);
+  }
 }
+
+/** The kinds that burn for power, in the tables' order. */
+const BURNING: readonly Kind[] = ALL_KINDS.filter((k) => BURNS[k] !== null);
 
 /** What the piece on a tile adds a minute to what the yard makes and needs, as its kind says. */
 const flowAt = (y: Yard, i: number, made: Counts, needed: Counts): void =>
