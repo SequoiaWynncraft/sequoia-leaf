@@ -11,6 +11,7 @@
  */
 import { BunRuntime } from "@effect/platform-bun";
 import { parsePlayerId } from "@sequoia-leaf/core";
+import { GRANT_MOST } from "@sequoia-leaf/pulls";
 import { Clock, Effect } from "effect";
 
 import { Services } from "../src/app.ts";
@@ -19,14 +20,21 @@ import { grantPrize, namedOf, prizeNamed } from "../src/play/grant.ts";
 
 const args = process.argv.slice(2);
 const option = (name: string): string | undefined => args.find((a) => a.startsWith(`${name}=`))?.slice(name.length + 1);
-const usage = "bun apps/api/scripts/grant.ts <player id> figure=<id> | banner=<id> by=<staff Leaf id> [copies=1] [dry]";
+const usage = `bun apps/api/scripts/grant.ts <player id> figure=<id> | banner=<id> by=<staff Leaf id> [copies=1 to ${GRANT_MOST}] [dry]`;
 
 const main = Effect.gen(function* () {
   const player = parsePlayerId(args.find((a) => !a.includes("=") && a !== "dry") ?? "");
   const by = parsePlayerId(option("by") ?? "");
   const named = namedOf({ figure: option("figure"), banner: option("banner") });
   const copies = Number(option("copies") ?? 1);
-  if (player === undefined || by === undefined || named === null || !Number.isInteger(copies)) {
+  if (
+    player === undefined ||
+    by === undefined ||
+    named === null ||
+    !Number.isInteger(copies) ||
+    copies < 1 ||
+    copies > GRANT_MOST
+  ) {
     return yield* Effect.die(new Error(usage));
   }
   const prize = prizeNamed(named);
