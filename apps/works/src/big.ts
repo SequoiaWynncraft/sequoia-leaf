@@ -61,24 +61,35 @@ export function pieceOn(y: Yard, tx: number, ty: number): { i: number; k: number
   return i < 0 ? { i, k, x: tx, y: ty } : { i, k, x: i % W, y: Math.floor(i / W) };
 }
 
-/** What a mark covers, by its tiles, worked out once for each mark (`markCovers`). */
-const COVERS = new WeakMap<readonly number[], { readonly all: readonly number[]; readonly on: Uint8Array }>();
+interface Covers {
+  readonly all: readonly number[];
+  readonly on: Uint8Array;
+  /** The yard and its `rev` it was worked out on. */
+  readonly y: Yard;
+  readonly rev: number;
+}
+
+/** What a mark covers, by its tiles, worked out again only when the yard changes (`markCovers`). */
+const COVERS = new WeakMap<readonly number[], Covers>();
 
 /**
- * Every tile the pieces marked on some tiles cover (a mark's, `Mark.tiles`), a piece of more than one
- * by all its tiles, which a mark names by its own: the tiles, and a byte a tile, 1 where one is. What
- * every zoom lights for a mark, and dims for pieces moved. Worked out once for each mark.
+ * Every tile the pieces marked on some tiles cover (a mark's, `Mark.tiles`), each once, a piece of
+ * more than one by all its tiles, which a mark may name by any of them: the tiles, and a byte a tile,
+ * 1 where one is. What every zoom lights for a mark, and dims for pieces moved. Kept for each mark
+ * until the yard changes (`Yard.rev`), as a copy turned and set back over its own tiles changes it.
  */
-export function markCovers(
-  y: Yard,
-  tiles: readonly number[],
-): { readonly all: readonly number[]; readonly on: Uint8Array } {
+export function markCovers(y: Yard, tiles: readonly number[]): Covers {
   const known = COVERS.get(tiles);
-  if (known) return known;
-  const all = tiles.flatMap((i) => piecesTiles(y, i));
+  if (known && known.y === y && known.rev === y.rev) return known;
   const on = new Uint8Array(y.kind.length);
-  for (const i of all) on[i] = 1;
-  const covers = { all, on };
+  const all: number[] = [];
+  for (const t of tiles)
+    for (const i of piecesTiles(y, t))
+      if (on[i] === 0) {
+        on[i] = 1;
+        all.push(i);
+      }
+  const covers = { all, on, y, rev: y.rev };
   COVERS.set(tiles, covers);
   return covers;
 }
