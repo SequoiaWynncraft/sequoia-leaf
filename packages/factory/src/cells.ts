@@ -149,10 +149,13 @@ export function keptPiece(y: Yard, i: number): KeptPiece {
 }
 
 /** The yard's pieces as bytes, in tile order: a piece of more than one tile on its own tile alone. */
-export function packCells(y: Yard): Uint8Array {
+export const packCells = (y: Yard): Uint8Array => packKept(keptPieces(y));
+
+/** Every piece of the yard as kept, in tile order, each once, by its own tile: all but the depot. */
+export function keptPieces(y: Yard): KeptPiece[] {
   const own = (i: number): boolean => y.part[i] === 0 || y.part[i] === OWN;
   const at = Array.from(y.kind.keys()).filter((i) => y.kind[i] !== NONE && FIXED[y.kind[i] ?? NONE] !== 1 && own(i));
-  return packKept(at.map((i) => keptPiece(y, i)));
+  return at.map((i) => keptPiece(y, i));
 }
 
 // ---------- writing ----------
