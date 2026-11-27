@@ -61,13 +61,24 @@ export function readNotes(v: unknown): PullsNote[] | null {
   return notes;
 }
 
-/** A banner as `GET /v1/game/banners` gives it: its dates in Leaf's clock, and its headliner if it has one. */
+/** A player Leaf names: their Leaf id and the name they go by. */
+export interface Named {
+  readonly id: string;
+  readonly name: string;
+}
+/**
+ * A banner as `GET /v1/game/banners` gives it: its dates in Leaf's clock, its headliner if it has
+ * one, and the players it calls on in order (Groot Night's grooters), none until they are put in.
+ */
 export interface BannerPerson {
   readonly id: string;
   readonly from: number;
   readonly until: number;
-  readonly headliner: { readonly id: string; readonly name: string } | null;
+  readonly headliner: Named | null;
+  readonly called: readonly Named[];
 }
+const readNamed = (v: unknown): Named | null =>
+  isRecord(v) && typeof v.id === "string" && typeof v.name === "string" ? { id: v.id, name: v.name } : null;
 
 /** The banners route's answer: the banners these rules know, each with its headliner. Null for anything else. */
 export function readBanners(v: unknown): BannerPerson[] | null {
@@ -77,10 +88,10 @@ export function readBanners(v: unknown): BannerPerson[] | null {
     if (!isRecord(b)) return null;
     const banner = BANNERS.find(({ id }) => id === b.id);
     if (!banner) continue;
-    const h = b.headliner;
-    const headliner =
-      isRecord(h) && typeof h.id === "string" && typeof h.name === "string" ? { id: h.id, name: h.name } : null;
-    out.push({ ...banner, headliner });
+    // A Leaf from before banners called anyone sends no list: nobody is called yet.
+    const called = Array.isArray(b.called) ? b.called.map(readNamed) : [];
+    if (called.some((c) => c === null)) return null;
+    out.push({ ...banner, headliner: readNamed(b.headliner), called: called.filter((c) => c !== null) });
   }
   return out;
 }

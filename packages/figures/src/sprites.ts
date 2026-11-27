@@ -8,7 +8,8 @@
  * A banner's member has no typed rows: it is a person, their skin's pieces on a rig (`rig.ts`), in
  * the same pictures as everyone else here (`person`), from whoever it is said to be (`wear`), and
  * until then nobody yet. A fight poses one a stance at a time (`Shown.act`). It is called by that
- * member's name (`nameOf`).
+ * member's name (`nameOf`). So are the grooters the Commodore calls (`CALLED`): summoned, and
+ * people all the same.
  */
 import { CORAL, GOLD, GREEN, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, flipped, outlined, rgb } from "@sequoia-leaf/kit/pix.ts";
@@ -21,14 +22,15 @@ import {
   isFigureId,
   isSummonId,
   specOf,
+  type SummonId,
   type UnitKind,
 } from "@sequoia-leaf/raid/content/figures.ts";
 import { isMemberId, type MemberId } from "@sequoia-leaf/raid/content/members.ts";
 import type { Form } from "@sequoia-leaf/raid/fight/types.ts";
 
-import { artOf } from "./figures.ts";
+import { artOf, type Carried, carrying } from "./figures.ts";
 import { FOREST_TONES, PAL, SUMMON_TONES, TIER_TONES, type Tones } from "./pal.ts";
-import { REST, RIG, rigPic, type Stance } from "./rig.ts";
+import { handOf, REST, RIG, rigPic, type Stance } from "./rig.ts";
 
 export type Pose = "idle" | "cast" | "fallen";
 
@@ -55,6 +57,8 @@ export interface Frames {
   /** How many of its rows a small picture of it shows (`portrait`): all of them, or its top rows for one as tall as Seqwawa. */
   readonly room: number;
   readonly flies: boolean;
+  /** How many things it carries when it has all of them (`Shown.carries`): Clutch's eggs. */
+  readonly carries: number;
 }
 
 const widthOf = (rows: readonly string[]): number => rows.reduce((m, r) => Math.max(m, r.length), 1);
@@ -134,12 +138,14 @@ const FLASH = "#fff8e0";
  * who only shows them needs (standing, a breath later, arms up for their ability, lying where they
  * fell); a fight poses them itself, a stance at a time (`Shown.act`).
  */
+/** A person using their ability, for anyone who only shows them: both arms up. */
+const CASTING: Stance = { ...REST, arm: 6, offArm: 6, nod: -1 };
 function person(body: Body): { right: Frames; left: Frames } {
   const facing = (left: boolean): Frames => {
     const a = rigPic(body, { ...REST, left });
     return {
       idle: [a, rigPic(body, { ...REST, left, nod: 1 })],
-      cast: rigPic(body, { ...REST, left, arm: 6, offArm: 6, nod: -1 }),
+      cast: rigPic(body, { ...CASTING, left }),
       fallen: rigPic(body, { ...REST, left, lie: true, arm: 3, offArm: 1, leg: 1 }),
       flash: tinted(a, FLASH),
       hurt: reEdged(a, CORAL),
@@ -154,14 +160,42 @@ function person(body: Body): { right: Frames; left: Frames } {
       head: 0,
       room: RIG.tall,
       flies: false,
+      carries: 0,
     };
   };
   return { right: facing(false), left: facing(true) };
 }
 
-/** Who each banner's member is, once somebody has said (`wear`): their name, the figure they are drawn from, and how many times it has been said. */
+/** The grooters the Commodore calls, in turn: summoned figures that are people, each the member Leaf names for that place. */
+export const CALLED = ["grooter1", "grooter2", "grooter3", "grooter4"] as const satisfies readonly SummonId[];
+/** Anyone on the stump drawn as a person from a member's skin: a banner's member, or a grooter called. */
+export type PersonId = MemberId | (typeof CALLED)[number];
+export const isPersonId = (v: unknown): v is PersonId => isMemberId(v) || CALLED.some((id) => id === v);
+
+/**
+ * What a person carries in their leading hand, hanging from it wherever the hand is (`handOf`):
+ * the Commodore's brass hand bell, his Chorus instrument.
+ */
+const IN_HAND: Readonly<Partial<Record<PersonId, readonly string[]>>> = {
+  commodore: ["..n..", ".yYy.", "yyYyy", "..o.."],
+};
+const inHand = new Map<PersonId, HTMLCanvasElement>();
+/** The thing a person carries, edged, made the first time it is asked for; null for one with nothing in hand. */
+function inHandOf(kind: UnitKind): HTMLCanvasElement | null {
+  if (!isPersonId(kind)) return null;
+  const rows = IN_HAND[kind];
+  if (!rows) return null;
+  let c = inHand.get(kind);
+  if (!c) {
+    c = edged(bitmap(rows, PAL));
+    inHand.set(kind, c);
+  }
+  return c;
+}
+
+/** Who each person on the stump is, once somebody has said (`wear`): their name, the figure they are drawn from, and how many times it has been said. */
 const worn = new Map<UnitKind, { readonly name: string; readonly body: Body; readonly said: number }>();
-/** What anyone on the stump is called: a banner's member by the member's own name, everyone else as the catalogue names them. */
+/** What anyone on the stump is called: a person by the name they were given (`wear`), everyone else as the catalogue names them. */
 export const nameOf = (cat: Catalog, kind: UnitKind): string => worn.get(kind)?.name ?? specOf(cat, kind).name;
 /**
  * A word for how a figure is shown now, which changes when its name or its pictures do: for whoever
@@ -171,20 +205,25 @@ export const shownAs = (kind: UnitKind | null): string => (kind ? `${kind}/${wor
 
 /** The body of a figure that is a person on a rig, which a stance poses; null for one drawn from typed rows. */
 export function rigOf(kind: UnitKind): Body | null {
-  if (!isMemberId(kind)) return null;
+  if (!isPersonId(kind)) return null;
   return worn.get(kind)?.body ?? (NOBODY_YET.body ??= walking(paintSkin(NOBODY)));
 }
 const NOBODY_YET: { body?: Body } = {};
 
-function bake(kind: UnitKind, form: Form): { right: Frames; left: Frames } {
+function bake(kind: UnitKind, form: Form, carried: Carried | null): { right: Frames; left: Frames } {
   const body = rigOf(kind);
   if (body) return person(body);
   const art = artOf(kind, form);
   const at = art.breath ?? Math.floor(art.rows.length * 0.6);
+  // What it carries is laid over its pictures: all of it, unless the fight says how many it has now.
+  const { prop } = art;
+  const now = carried ?? { n: prop?.at.length ?? 0, rock: -1 };
+  const carry = (rows: readonly string[], cast = false): readonly string[] =>
+    prop ? carrying(rows, prop.rows, cast ? prop.castAt : prop.at, now) : rows;
   const lists = {
-    a: art.rows,
-    b: art.alt ?? (art.flies ? art.rows : breathe(art.rows, at)),
-    cast: art.cast ?? rear(art.rows, at),
+    a: carry(art.rows),
+    b: carry(art.alt ?? (art.flies ? art.rows : breathe(art.rows, at))),
+    cast: carry(art.cast ?? rear(art.rows, at), true),
   };
   const w = Math.max(widthOf(lists.a), widthOf(lists.b), widthOf(lists.cast));
   const h = Math.max(lists.a.length, lists.b.length, lists.cast.length);
@@ -204,7 +243,7 @@ function bake(kind: UnitKind, form: Form): { right: Frames; left: Frames } {
     dark: outlined(tinted(a, SKY[0]), SKY[2]),
     w: w + 2,
     h: h + 2,
-    ax: 1 + Math.round(widthOf(lists.a) / 2),
+    ax: 1 + (art.feet ?? Math.round(widthOf(lists.a) / 2)),
     ay: h + 1,
     tall: lists.a.length,
     castTall: lists.cast.length,
@@ -212,6 +251,7 @@ function bake(kind: UnitKind, form: Form): { right: Frames; left: Frames } {
     head: art.head ?? 0,
     room: Math.min(lists.a.length, art.room ?? lists.a.length),
     flies: art.flies === true,
+    carries: prop?.at.length ?? 0,
   };
   const right: Frames = { ...base, fallen: tipped(idleA, false) };
   if (art.sym) return { right, left: right };
@@ -229,17 +269,20 @@ function bake(kind: UnitKind, form: Form): { right: Frames; left: Frames } {
 }
 
 const baked = new Map<string, { right: Frames; left: Frames }>();
-/** Has a banner's member be somebody from now on: called by their name, and drawn from their figure. */
-export function wear(kind: MemberId, name: string, body: Body): void {
+/** Has a person on the stump be somebody from now on: called by their name, and drawn from their figure. */
+export function wear(kind: PersonId, name: string, body: Body): void {
   worn.set(kind, { name, body, said: (worn.get(kind)?.said ?? 0) + 1 });
   baked.delete(kind);
 }
-/** A figure's pictures, facing right or left, as itself or (one of Graid's five) in its true form. */
-export function framesOf(kind: UnitKind, left = false, form: Form = "plain"): Frames {
-  const key = form === "true" ? `${kind} true` : kind;
+/**
+ * A figure's pictures, facing right or left, as itself or (one of Graid's five) in its true form,
+ * carrying all it carries, or as much as `carried` says.
+ */
+export function framesOf(kind: UnitKind, left = false, form: Form = "plain", carried?: Carried): Frames {
+  const key = `${kind}${form === "true" ? " true" : ""}${carried ? ` ${carried.n}/${carried.rock}` : ""}`;
   let f = baked.get(key);
   if (!f) {
-    f = bake(kind, form);
+    f = bake(kind, form, carried ?? null);
     baked.set(key, f);
   }
   return left ? f.left : f.right;
@@ -281,6 +324,8 @@ export interface Shown {
   alpha?: number;
   /** For a person on a rig (`rigOf`): the stance they are in, in place of `pose`, `beat`, `left` and `bend`. */
   act?: Stance;
+  /** How much of what it carries it has now (Clutch's eggs); all of it unless said. */
+  carries?: Carried;
 }
 
 const gilt = new Map<HTMLCanvasElement, HTMLCanvasElement>();
@@ -334,7 +379,7 @@ function shownPic(kind: UnitKind, f: Frames, o: Shown): HTMLCanvasElement {
 
 /** Draws a figure with its feet at `x`, `y`. */
 export function drawFigure(g: Ctx, kind: UnitKind, x: number, y: number, o: Shown = {}): void {
-  const f = framesOf(kind, o.left, o.form);
+  const f = framesOf(kind, o.left, o.form, o.carries);
   const px = Math.round(x);
   const py = Math.round(y);
   if (o.alpha !== undefined) g.globalAlpha = o.alpha;
@@ -345,6 +390,12 @@ export function drawFigure(g: Ctx, kind: UnitKind, x: number, y: number, o: Show
     const bend = o.act ? undefined : o.bend;
     if (o.lit) place(g, gilded(pic), px, py, f.ax + 1, f.ay + 1, bend);
     else place(g, pic, px, py, f.ax, f.ay, bend);
+    // What a person carries hangs from their hand, its handle in it.
+    const held = o.dark ? null : inHandOf(kind);
+    if (held) {
+      const hand = handOf(o.act ?? { ...(o.pose === "cast" ? CASTING : REST), left: o.left ?? false });
+      g.drawImage(held, px + hand.x - Math.floor(held.width / 2), py + hand.y - 1);
+    }
   }
   if (o.alpha !== undefined) g.globalAlpha = 1;
 }

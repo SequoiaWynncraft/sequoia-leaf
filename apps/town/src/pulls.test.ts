@@ -48,8 +48,8 @@ const ERA = eraAt(T0);
 const GROVE_PRIZES = prizesOf(catalogAt(ERA), "grove");
 const BANNER_PRIZES = prizesOf(catalogAt(ERA), banner.id);
 /** A banner with a made-up headliner, and the same banner with nobody yet. */
-const WITH: BannerPerson[] = [{ ...banner, headliner: { id: "mossback", name: "Mossback" } }];
-const WITHOUT: BannerPerson[] = [{ ...banner, headliner: null }];
+const WITH: BannerPerson[] = [{ ...banner, headliner: { id: "mossback", name: "Mossback" }, called: [] }];
+const WITHOUT: BannerPerson[] = [{ ...banner, headliner: null, called: [] }];
 
 test("what a reveal says of a prize: its name, whether it is new, and the Seeds it gave; never how a 50/50 fell", () => {
   expect(
@@ -96,6 +96,7 @@ test("a banner is shown only while Leaf's view has it open, a member's once Leaf
     id: banner.id,
     until: banner.until,
     name: "Mossback",
+    title: "Mossback",
     person: { id: "mossback", name: "Mossback" },
     headliner: banner.headliner,
   });
@@ -115,16 +116,28 @@ test("a banner whose headliner the set draws is shown at once: nobody has to be 
   } as const;
   const open = { open: [{ id: penguins.id, until: penguins.until }], era: CAT.era };
   // Leaf's people name nobody for it; the set's own figure is the headliner, by its own name.
-  const people: BannerPerson[] = [{ id: penguins.id, from: 0, until: penguins.until, headliner: null }];
+  const people: BannerPerson[] = [{ id: penguins.id, from: 0, until: penguins.until, headliner: null, called: [] }];
   expect(showing(open, people, [penguins])).toEqual({
     id: penguins.id,
     until: penguins.until,
     name: "Greg",
+    title: "Greg",
     person: null,
     headliner: "greg",
   });
   // A member's banner still waits for Leaf to say who.
   expect(showing(open, people, [{ ...penguins, look: "skin" }])).toBeNull();
+});
+
+test("a banner that shows its headliner by a title is called by its own name, the headliner by the rules', and the member only lends a skin", () => {
+  const night = { ...banner, id: "a-title-banner", name: "A Night Of It", shows: "title" } as const;
+  const open = { open: [{ id: night.id, until: night.until }], era: CAT.era };
+  const lent: BannerPerson = { ...night, headliner: { id: "mossback", name: "Mossback" }, called: [] };
+  const shown = showing(open, [lent], [night]);
+  expect([shown?.title, shown?.name, shown?.person?.id]).toEqual(["A Night Of It", "A guild member", "mossback"]);
+  expect(bannerLine(shown, "UTC")).toBe("A Night Of It is open until 8 December, 00:00.");
+  // Until Leaf says whose skin it is, it waits, as any member's banner does.
+  expect(showing(open, [{ ...lent, headliner: null }], [night])).toBeNull();
 });
 
 test("the chances shown are what RATES makes of a pull with no guarantee near", () => {

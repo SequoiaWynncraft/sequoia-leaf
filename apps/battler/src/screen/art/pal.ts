@@ -1,5 +1,5 @@
 /** The colours that mean something on the table: each trait. The letters' colours are `@sequoia-leaf/figures`'. */
-import { CORAL, EARTH, GOLD, GREEN, LEAF, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
+import { BARK, CORAL, EARTH, GOLD, GREEN, LEAF, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import type { TraitId } from "@sequoia-leaf/raid/content/traits.ts";
 
 /** A colour for each trait: its chip, its icon's ground, and what its abilities look like in the air. */
@@ -13,12 +13,16 @@ export const TRAIT_COLOUR: Readonly<Record<TraitId, string>> = {
   gnome: SKY[4],
   // The gold that ties the four raids' colours (its icon); each true form's ring is its raid's own.
   graid: GOLD[2],
+  // Eggshell: what every Grooter creature wears a piece of.
+  grooter: PAPER[2],
   bulwark: STONE[3],
   fang: "#f4a08c",
   slinger: GOLD[0],
   sage: SKY[3],
   mender: LEAF,
   sneak: SKY[2],
+  chorus: "#e88fb4",
   greg: GREEN[3],
   rooted: GREEN[2],
+  stowaway: BARK[4],
 };

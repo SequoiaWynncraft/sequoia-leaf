@@ -1,8 +1,8 @@
 /**
  * What a person on a rig (`rig.ts`) does, as stances over time: standing, walking, throwing,
  * the three parts of an ability that is aimed and lands later (gathering it at the hip, holding it
- * there while it grows, pushing it out at whoever it is for), being hit, being dazed, falling,
- * cheering. Each is a function of how far through it is, in the steps of whatever clock its table
+ * there while it grows, pushing it out at whoever it is for), ringing for somebody to come, being
+ * hit, being dazed, falling, cheering. Each is a function of how far through it is, in the steps of whatever clock its table
  * keeps (twenty to a second), so the same moment always gives the same stance and nothing here
  * keeps anything.
  *
@@ -107,6 +107,28 @@ export function pushing(since: number, left: boolean, aim: number): Stance {
   const down = 1 - ease((since - 5) / 6);
   const lowered = (angle: number): number => Math.round(angle * down) || 0;
   return { ...pushed, arm: lowered(aim), offArm: lowered(across), leg: 0, sway: down > 0.5 ? 1 : 0 };
+}
+
+/**
+ * Ringing for somebody to come: the leading arm goes up with what it rings (`k` from 0 to 1 over
+ * the wind-up), the other hand to its mouth, knees bent; it rings hard as it goes off (`since` 0
+ * and 1), holds there calling while nobody has come, and lets the arm down once they have
+ * (`down`, 0 to 1).
+ */
+export function ringing(k: number, since: number, down: number, left: boolean): Stance {
+  const up = ease(k);
+  const lowered = 1 - ease(down);
+  const shake = since >= 0 && since < 2 ? since % 2 : 0;
+  return {
+    ...REST,
+    left,
+    turn: 1,
+    arm: Math.round(8 * up * lowered) - shake,
+    offArm: Math.round(6 * up * lowered),
+    leg: up > 0.5 ? 1 : 0,
+    sink: up > 0.5 && lowered > 0.5 ? 1 : 0,
+    nod: since >= 0 && lowered > 0.5 ? -1 : 0,
+  };
 }
 
 /** Hit: knocked away from the blow (`left`: toward our left), arms thrown out and head back, then gathering itself. */

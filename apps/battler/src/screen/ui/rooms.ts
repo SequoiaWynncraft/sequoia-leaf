@@ -105,9 +105,12 @@ export function renderTrack(run: RunView): void {
 /** An endless run's chairs, for the level's plaque: how many figures it may field, once a boss past the fifteenth room has given one (hidden until then). */
 export const chairsTag = (run: RunView): HTMLElement =>
   el("span", "k-leafy chairs", { text: `Chairs: ${fieldCap(run)}`, hidden: chairsOf(run) === 0 });
-/** The chairs the board takes of the room's, for the level's plaque: a Stowaway takes none. */
-export const chairsTaken = (run: RunView): HTMLElement =>
-  el("span", "k-dim fielded", {}, pic(glyph("figure")), `${chairsOn(run)}/${fieldCap(run)}`);
+/** The chairs the board takes of the room's, for the level's plaque: a Stowaway takes none, and is said apart, as one more. */
+export function chairsTaken(run: RunView): HTMLElement {
+  const free = run.board.filter((p) => p !== null).length - chairsOn(run);
+  const extra = free > 0 ? [el("span", "stowed", { text: `+${free}` })] : [];
+  return el("span", "k-dim fielded", {}, pic(glyph("figure")), `${chairsOn(run)}/${fieldCap(run)}`, ...extra);
+}
 
 // ---------- a room's card ----------
 
