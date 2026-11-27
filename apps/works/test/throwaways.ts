@@ -148,6 +148,11 @@ belts(stuck, 22, 24, 11);
 run(stuck, 600);
 out.goesOn = (stuck.depot[F.item("sand")] ?? 0) > 5;
 
+// A tunnel passes under it, as under any piece but the depot.
+const under = fresh();
+F.build(under, SIFTER, 20, 10, 0, Infinity);
+out.tunnelUnder = F.build(under, F.TUNNEL, 19, 11, 0, Infinity, { span: 2 }).ok && under.kind[tile(under, 22, 11)] === F.TUNNEL && covers(under, SIFTER, 20, 10, 21, 11, 20, 10);
+
 // Kept and read back, and the check the same.
 const read = F.decode(F.encode(y), land);
 out.readBack = read !== null && covers(read, SIFTER, 20, 10, 21, 11, 20, 10) && F.check(read) === F.check(y);
@@ -277,6 +282,7 @@ export const PLAYED_BIG = Object.fromEntries(
     "solid",
     "stops",
     "goesOn",
+    "tunnelUnder",
     "readBack",
     "turns",
     "removed",
