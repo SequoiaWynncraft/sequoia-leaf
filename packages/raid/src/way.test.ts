@@ -8,9 +8,10 @@ import { SENSIBLE } from "./bot.ts";
 import type { RaidCommand } from "./command.ts";
 import { TRAILS } from "./content/rooms.ts";
 import { reached } from "./depths.ts";
-import { meets, planCommands, RAID, readCommand, type Table } from "./game.ts";
+import { meets, planCommands, RAID, type RaidNote, readCommand, type Table } from "./game.ts";
 import { decodeSitting } from "./sitting/keep.ts";
 import { TRAIL } from "./sitting/sitting.ts";
+import { runKeptBefore } from "./testkit.ts";
 import {
   counts,
   COURSES,
@@ -27,6 +28,7 @@ import {
   wayOn,
   wayWords,
 } from "./way.ts";
+import { readNotes } from "./wire.ts";
 
 const ROSTER = { crab7: 2, greg: 0 };
 const TRAIL_FAIR = onTrail(1);
@@ -201,6 +203,7 @@ function playOne(start: RaidCommand, slot: "main" | "endless") {
   // Every trail open.
   t.almanac.bosses = [["bigcrab"], ["bigcrab"], []];
   const log: Logged[] = [];
+  const notes: RaidNote[] = [];
   const coins: { key: string }[] = [];
   let n = 2;
   const send = (c: RaidCommand): boolean => {
@@ -208,6 +211,7 @@ function playOne(start: RaidCommand, slot: "main" | "endless") {
     if (isRefused(done)) return false;
     t = done.state;
     log.push(...(done.log ?? []));
+    notes.push(...done.notes);
     coins.push(...(done.coins ?? []));
     return true;
   };
@@ -221,22 +225,24 @@ function playOne(start: RaidCommand, slot: "main" | "endless") {
     if (!send({ do: "fight", ...aim }) || !send({ do: "take", ...aim })) break;
   }
   send({ do: "abandon", ...aim });
-  return { log, coins };
+  return { log, coins, notes };
 }
 
+/** Today's four modes at a table: how each sets out, its way, and its slot. */
+const MODES: [string, RaidCommand, Way, "main" | "endless"][] = [
+  ["a trail, everyone's figures", { do: "start", trail: 1 }, TRAIL_FAIR, "main"],
+  [
+    "a trail, the member's own figures",
+    { do: "start", trail: 2, own: true },
+    onTrail(2, { crab7: 2, greg: 0 }),
+    "main",
+  ],
+  ["the Wilds", { do: "start", course: "wilds" }, WILDS, "endless"],
+  ["the Deep Woods", { do: "start", course: "deep" }, DEEP, "endless"],
+];
+
 describe("a run of each of today's modes pays, records and logs as before", () => {
-  const modes: [string, RaidCommand, Way, "main" | "endless"][] = [
-    ["a trail, everyone's figures", { do: "start", trail: 1 }, TRAIL_FAIR, "main"],
-    [
-      "a trail, the member's own figures",
-      { do: "start", trail: 2, own: true },
-      onTrail(2, { crab7: 2, greg: 0 }),
-      "main",
-    ],
-    ["the Wilds", { do: "start", course: "wilds" }, WILDS, "endless"],
-    ["the Deep Woods", { do: "start", course: "deep" }, DEEP, "endless"],
-  ];
-  test.each(modes)("%s", (_, start, way, slot) => {
+  test.each(MODES)("%s", (_, start, way, slot) => {
     const { log, coins } = playOne(start, slot);
     const before = (l: Logged) => asBefore(way, l);
     const old =
@@ -261,6 +267,23 @@ describe("a run of each of today's modes pays, records and logs as before", () =
     expect(talliedFrom(log)).toEqual(log.flatMap(talliedBefore));
     expect(coins.map((c) => c.key)).toEqual(ended?.coins ? [slot === "main" ? "run:1" : "endless:1"] : []);
   });
+});
+
+describe("a command retried across a deploy is answered as the older Leaf answered it", () => {
+  test.each(MODES)(
+    "%s: the run its saved note ended, kept as an older Leaf kept it, reads to its way",
+    (_, start, way, slot) => {
+      const { notes } = playOne(start, slot);
+      const ended = notes.find((n) => n.t === "ended");
+      if (ended?.t !== "ended") throw new Error("no run ended");
+      // Its run as an older Leaf said it: `trail`, `own` and `endless` in place of `way`.
+      const saved = JSON.parse(JSON.stringify({ ...ended, run: runKeptBefore(ended.run) }));
+      expect(saved.run.way).toBeUndefined();
+      const [read] = readNotes([saved]) ?? [];
+      expect(read?.t === "ended" ? read.run.way : null).toEqual(way);
+      expect(readNotes([JSON.parse(JSON.stringify(ended))])).toEqual([ended]);
+    },
+  );
 });
 
 // ---------- built for the member's own figures in the endless courses ----------

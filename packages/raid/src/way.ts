@@ -153,8 +153,12 @@ const whole = (v: unknown): v is number => typeof v === "number" && Number.isInt
  */
 export function wayOfLogged(v: Readonly<Record<string, unknown>>): Said | null {
   const trail = whole(v.trail) ? v.trail : null;
-  if (v.course === undefined && v.pool === undefined) return saidBefore(v, trail);
-  return isCourseId(v.course) && isPool(v.pool) ? { course: v.course, trail, pool: v.pool } : null;
+  const before = saidBefore(v, trail);
+  // An empty course or pool (none, or null in a row an older Leaf wrote) is the one the line's old fields say.
+  const course = v.course ?? before?.course;
+  const pool = v.pool ?? before?.pool;
+  if (!isCourseId(course) || !isPool(pool)) return null;
+  return { course, trail: v.course == null ? (before?.trail ?? trail) : trail, pool };
 }
 /** A way as a line said it, its trail only where the line had one. */
 type Said = Omit<WayLogged, "trail"> & { trail: number | null };

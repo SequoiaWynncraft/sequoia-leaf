@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { type PlayerId, playerId } from "@sequoia-leaf/core";
 import {
+  eraAt,
   figureIn,
   LEGACY_ERA,
   planCommands,
@@ -15,6 +16,7 @@ import { type FightRecord, readFight } from "@sequoia-leaf/raid/fought.ts";
 import { CAT, EVERYONES } from "@sequoia-leaf/raid/testkit.ts";
 import { Schema } from "effect";
 
+import { fightLines, rowOf } from "../scripts/fight-lines.ts";
 import { GAMES } from "../src/play/games.ts";
 import { FIGHTS_KEPT_MS, LOGGED_A_DAY } from "../src/play/logs.ts";
 import { Play } from "../src/play/service.ts";
@@ -136,6 +138,38 @@ describe("each fight decided", () => {
     expect(party.figures.every((p) => p.level === 6)).toBe(true);
     const [row] = await rows();
     expect(row).toMatchObject({ playerId: bob, way: "own", party: { figures: party.figures } });
+  });
+
+  it("is exported for the fight report with how its run set out and its era, and read back the same; a row an older Leaf wrote, as its way and moment say", async () => {
+    const tier1 = EVERYONES.filter((id) => figureIn(CAT, id).tier === 1);
+    await services.run(
+      PlayStore.use((store) =>
+        store.award(
+          bob,
+          tier1.map((id) => `pull:figure:${id}`),
+          T0,
+        ),
+      ),
+    );
+    await ready();
+    await send([{ do: "fight" }]);
+    await ready(bob, true);
+    await send([{ do: "fight" }], bob);
+    await old(clock.now + 1);
+    const lines = Schema.decodeUnknownSync(Schema.Array(Schema.Struct({ line: Schema.String })))(
+      await services.query(fightLines),
+    );
+    const read = lines.map(({ line }) => rowOf(line));
+    expect(read.map((r) => r && [r.player, r.fight.way, r.fight.course, r.fight.pool, r.fight.era])).toEqual([
+      [alice, "main", "trail", "fair", eraAt(T0)],
+      [bob, "own", "trail", "own", eraAt(T0)],
+      // Written without them: its course and pool as its way says, its era the one live when it was written.
+      [bob, "main", "trail", "fair", eraAt(clock.now + 1)],
+    ]);
+    // The line says what the row keeps: the same line read again is the same fight.
+    expect(
+      read.map((r) => r && rowOf(JSON.stringify({ ...r.fight, at: r.at, player: r.player, rules: r.rules }))),
+    ).toEqual(read);
   });
 
   it("is written once for a command answered twice, and not at all for one refused", async () => {

@@ -109,12 +109,13 @@ function readPiece(v: unknown, nextId: number, meals: boolean): Piece | null {
   };
 }
 /**
- * How a run set out: as it keeps it (`way`); or for a run kept before it kept one (by Leaf; the page
- * is always shown a way), as its trail, its roster (`own`, kept only with the member's own figures)
- * and its endless way (kept only on an endless run) said it.
+ * How a run set out: as it keeps it (`way`); or for a run kept before it kept one, as its trail, its
+ * roster (`own`, kept only with the member's own figures) and its endless way (kept only on an
+ * endless run) said it. That is a run of an older table or sitting, and one an older Leaf said in a
+ * note its answer was kept with: a command retried across a deploy is answered as it was then.
  */
-const readWayOf = (r: Record<string, unknown>, shown: boolean): Way =>
-  (r.way !== undefined || shown ? readWay(r.way) : oldRunWay(r.trail, r.own, r.endless)) ?? bad("the way");
+const readWayOf = (r: Record<string, unknown>): Way =>
+  (r.way === undefined ? oldRunWay(r.trail, r.own, r.endless) : readWay(r.way)) ?? bad("the way");
 const isChoiceKind = (v: unknown): v is Choice["kind"] =>
   v === "starter" || v === "component" || v === "boon" || v === "rule";
 /** A pick waiting, with nothing on offer: as it is shown behind the first, and before it is drawn again. */
@@ -340,7 +341,7 @@ function readParts(
   const seen = record(r.seen, "the almanac notes");
   const run: RunView = {
     era: readEra(r.era, "the era"),
-    way: readWayOf(r, shown),
+    way: readWayOf(r),
     room,
     stage: readStage(r, old, shown, drawn),
     resolve: whole(r.resolve, 0, ROOMY, "the resolve"),

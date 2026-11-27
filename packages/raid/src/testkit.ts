@@ -188,7 +188,7 @@ export const EVERY_PLANNING = Object.values(EVERY_COMMAND).flatMap((each) =>
 );
 
 /** A run as a table before version 8 (or a sitting before version 4) kept it: its way as its trail, its roster (`own`) and its endless way. */
-function runKeptBefore(run: unknown): unknown {
+export function runKeptBefore(run: unknown): unknown {
   if (typeof run !== "object" || run === null || !("way" in run)) return run;
   const { way, ...rest } = run;
   const read = readWay(way);

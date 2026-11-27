@@ -5,16 +5,20 @@ import { join } from "node:path";
 
 import { type Ctx, leaf, playerId } from "@sequoia-leaf/core";
 import { PULLS } from "@sequoia-leaf/pulls";
-import { LEGACY_ERA } from "@sequoia-leaf/raid";
-import { Effect, Layer } from "effect";
+import { eraAt } from "@sequoia-leaf/raid";
+import { Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
+import { fightLines, rowOf } from "../scripts/fight-lines.ts";
 import { AppConfig } from "../src/config.ts";
 import { Database } from "../src/db.ts";
 import { Ledger } from "../src/ledger/store.ts";
 import { rejection, testConfig } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
+/** When the fights the migrations meet were written: Tuesday 1 December 2026, before Groot Night, and a day after it opened. */
+const FOUGHT_AT = Date.UTC(2026, 11, 1);
+const LATER = Date.UTC(2026, 11, 9);
 
 /** The awards the pulls give for further copies of prizes, from a state as stored, in order. */
 function copies(text: string): string[] {
@@ -220,6 +224,14 @@ const beforeTimeIn = (sql: SqlClient.SqlClient) =>
 function query(path: string, statement: (sql: SqlClient.SqlClient) => Effect.Effect<ReadonlyArray<unknown>, unknown>) {
   return onFile(path, SqlClient.SqlClient.use(statement));
 }
+
+/** A raid fight of a way a record said, written at a moment as Leaf wrote them before migration 47. */
+const insertFight = (sql: SqlClient.SqlClient, at: number, way: string) => sql`
+    INSERT INTO raid_fights (player_id, at, rules, run, way, trail, room, kind, across, result, margin, seconds,
+      resolve, level, acorns, party, against)
+    VALUES (${alice}, ${at}, 'r', 1, ${way}, ${way === "main" ? 2 : 0}, 3, 'spar', 'plan:0', 'win', 0.5, 9,
+      20, 3, 4, '{"figures":[],"traits":{},"boons":[]}', NULL)
+  `;
 
 describe("the database", () => {
   it("creates the file and its directory, and keeps what was written when opened again", async () => {
@@ -791,32 +803,39 @@ describe("the database", () => {
     ).toEqual([...given(pulled), ...given(guest)]);
   });
 
-  it("gives each raid fight kept before it the course and pool its way said, of era 2", async () => {
+  it("rewrites no raid fight kept before it, nor one an older Leaf writes after: each is read as its way and its moment say", async () => {
     const path = join(directory, "leaf.db");
     await onFile(
       path,
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
-        // Back to before migration 47: a fight of each way a record said.
         yield* beforeFightsWay(sql);
         yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 47`;
-        for (const [n, way] of ["main", "own", "wilds", "deep"].entries()) {
-          yield* sql`
-            INSERT INTO raid_fights (player_id, at, rules, run, way, trail, room, kind, across, result, margin, seconds,
-              resolve, level, acorns, party, against)
-            VALUES (${alice}, ${n}, 'r', 1, ${way}, ${way === "main" ? 2 : 0}, 3, 'spar', 'plan:0', 'win', 0.5, 9, 20,
-              3, 4, '{}', NULL)
-          `;
-        }
+        for (const [n, way] of ["main", "own"].entries()) yield* insertFight(sql, FOUGHT_AT + n, way);
       }),
     );
-    // The era written is the one the raid reads a fight kept with none as.
-    expect(Number(LEGACY_ERA)).toBe(2);
-    expect(await query(path, (sql) => sql`SELECT way, course, trail, pool, era FROM raid_fights ORDER BY at`)).toEqual([
-      { way: "main", course: "trail", trail: 2, pool: "fair", era: 2 },
-      { way: "own", course: "trail", trail: 0, pool: "own", era: 2 },
-      { way: "wilds", course: "wilds", trail: 0, pool: "fair", era: 2 },
-      { way: "deep", course: "deep", trail: 0, pool: "fair", era: 2 },
+    // After it, an older Leaf still writing during a deploy writes as it always did.
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        for (const [n, way] of ["wilds", "deep"].entries()) yield* insertFight(sql, LATER + n, way);
+      }),
+    );
+    expect(await query(path, (sql) => sql`SELECT way, course, pool, era FROM raid_fights ORDER BY at`)).toEqual(
+      ["main", "own", "wilds", "deep"].map((way) => ({ way, course: null, pool: null, era: null })),
+    );
+    const lines = Schema.decodeUnknownSync(Schema.Array(Schema.Struct({ line: Schema.String })))(
+      await query(path, fightLines),
+    );
+    const read = lines.map(({ line }) => rowOf(line)?.fight);
+    // Each of the era live when it was written: the later two of the release that opened between.
+    expect(Number(eraAt(LATER))).toBe(eraAt(FOUGHT_AT) + 1);
+    expect(read.map((f) => f && [f.way, f.course, f.trail, f.pool, f.era])).toEqual([
+      ["main", "trail", 2, "fair", eraAt(FOUGHT_AT)],
+      ["own", "trail", 0, "own", eraAt(FOUGHT_AT)],
+      ["wilds", "wilds", 0, "fair", eraAt(LATER)],
+      ["deep", "deep", 0, "fair", eraAt(LATER)],
     ]);
   });
 

@@ -19,11 +19,12 @@ import { boonIn } from "@sequoia-leaf/raid/content/boons.ts";
 import { type Catalog, catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { specOf, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { itemName } from "@sequoia-leaf/raid/content/items.ts";
-import { eraAt } from "@sequoia-leaf/raid/content/releases.ts";
-import { type FightRecord, type FoughtSide, readFight } from "@sequoia-leaf/raid/fought.ts";
+import type { FoughtSide } from "@sequoia-leaf/raid/fought.ts";
 import { compOf, placeOf, Tally } from "@sequoia-leaf/raid/rates.ts";
-import { Effect, FileSystem, Option, Schema } from "effect";
+import { Effect, FileSystem, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
+
+import { fightLines, type Row, rowOf } from "./fight-lines.ts";
 
 const args = process.argv.slice(2);
 const option = (name: string): string | undefined => args.find((a) => a.startsWith(`${name}=`))?.slice(name.length + 1);
@@ -33,36 +34,14 @@ const rulesAsked = option("rules")?.split(",");
 const least = Number(option("least") ?? 30);
 const exportTo = option("export");
 
-/** A fight as the report reads it: when, whose, by which rules, and its record. */
-interface Row {
-  readonly at: number;
-  readonly player: string;
-  readonly rules: string;
-  readonly fight: FightRecord;
-}
-const Who = Schema.Struct({ at: Schema.Int, player: Schema.String, rules: Schema.String });
-const json = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown));
-/** A JSON line read back, its record checked as the raid reads one; null for one that does not read. */
-function rowOf(line: string): Row | null {
-  const raw = json(line);
-  const who = Option.flatMap(raw, Schema.decodeUnknownOption(Who));
-  const fight = Option.isSome(raw) ? readFight(raw.value) : null;
-  return Option.isSome(who) && fight !== null ? { ...who.value, fight } : null;
-}
-
-/** Each fight in a database file, oldest first, as a JSON line: the row with its party and the party against it as JSON. */
+/** Each fight in a database file, oldest first, as a JSON line (`fightLines`). */
 const linesOf = (file: string) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const all = SqlSchema.findAll({
       Request: Schema.Void,
       Result: Schema.Struct({ line: Schema.String }),
-      execute: () => sql`
-        SELECT json_object('at', at, 'player', player_id, 'rules', rules, 'run', run, 'way', way, 'trail', trail,
-          'room', room, 'kind', kind, 'across', across, 'result', result, 'margin', margin, 'seconds', seconds,
-          'resolve', resolve, 'level', level, 'acorns', acorns, 'party', json(party), 'against', json(against)) AS line
-        FROM raid_fights ORDER BY id
-      `,
+      execute: () => fightLines(sql),
     });
     return (yield* all(undefined)).map((row) => row.line);
   }).pipe(Effect.provide(SqliteClient.layer({ filename: file, readonly: true })));
@@ -73,8 +52,8 @@ const named = (cat: Catalog, kind: UnitKind): string => specOf(cat, kind).name;
 
 /**
  * The tables, each with the lines a fight's party counts toward in it, each once a fight, read in the
- * catalogue of the fight's own era: the era on Leaf's clock when its row was written, which is the
- * era its run fought it in.
+ * catalogue of the fight's own era: the one its record says it was set up in (for a record that says
+ * none, the era on Leaf's clock when its row was written, which is the era its run fought it in).
  */
 const TABLES: readonly { title: string; mostPlayed?: true; lines: (party: FoughtSide, cat: Catalog) => string[] }[] = [
   { title: "Comps, the most played first", mostPlayed: true, lines: (party, cat) => [compOf(cat, party.traits)] },
@@ -126,8 +105,8 @@ function report(rows: readonly Row[], unread: number): void {
   );
   const all = new Tally();
   const tables = TABLES.map((table) => ({ table, tallies: new Map<string, Tally>() }));
-  for (const { fight, at } of counted) {
-    const cat = catalogAt(eraAt(at));
+  for (const { fight } of counted) {
+    const cat = catalogAt(fight.era);
     const win = fight.result === "win";
     const place = placeOf(fight.trail, fight.room);
     all.add(win, place);

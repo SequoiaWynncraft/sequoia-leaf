@@ -6,7 +6,7 @@
  */
 import { type BoonId, isBoonId } from "./content/boons.ts";
 import { type Catalog, catalogOf } from "./content/catalog.ts";
-import { type Era, isEra, LEGACY_ERA } from "./content/releases.ts";
+import { type Era, eraAt, isEra, LEGACY_ERA } from "./content/releases.ts";
 import { nowCalled, regularOf, type RoomKind, type RoomSpec } from "./content/rooms.ts";
 import { isTraitId, renamedTrait, type TraitId } from "./content/traits.ts";
 import type { FightResult, FightSummary } from "./fight/types.ts";
@@ -120,16 +120,19 @@ function readSide(v: unknown): FoughtSide | null {
 }
 
 /**
- * Where a record's fight was, how its run set out and who was across, read back. A record kept
- * before it said its course, pool and era says its way by `way` alone (`wayOfLogged`), and was set up
- * in the era live then.
+ * Where a record's fight was, how its run set out and who was across, read back. A record with no
+ * course, pool or era (one kept before records said them, or one an older Leaf wrote while a deploy
+ * was under way: the row's columns empty) says its way by `way` alone (`wayOfLogged`), and was set up
+ * in the era live at `at`, the moment its row was written, when the reader has it; else in the era
+ * live before records said theirs (`LEGACY_ERA`).
  */
 function whereOf(
   v: Record<string, unknown>,
+  at: number | undefined,
 ): Pick<FightRecord, "run" | "way" | "course" | "trail" | "pool" | "era" | "room" | "kind" | "across"> | null {
   const { run, way, room, kind, across } = v;
   const said = wayOfLogged(v);
-  const era = v.era === undefined ? LEGACY_ERA : isEra(v.era) ? v.era : null;
+  const era = v.era == null ? (at === undefined ? LEGACY_ERA : eraAt(at)) : isEra(v.era) ? v.era : null;
   if (!whole(run) || !oneOf(way, ["main", "own", "wilds", "deep"]) || said?.trail == null || !whole(room)) return null;
   if (!oneOf(kind, ["trouble", "spar", "boss"]) || typeof across !== "string" || across.length > 80) return null;
   return era === null
@@ -147,10 +150,13 @@ function howOf(
   return { result, margin: by, seconds, resolve, level, acorns };
 }
 
-/** A fight's record read back, as Leaf stores it or a report reads it, checked as the rules have it; null for anything else. */
-export function readFight(v: unknown): FightRecord | null {
+/**
+ * A fight's record read back, as Leaf stores it or a report reads it, checked as the rules have it;
+ * null for anything else. `at` is when its row was written, where the reader has it.
+ */
+export function readFight(v: unknown, at?: number): FightRecord | null {
   if (!isRecord(v)) return null;
-  const where = whereOf(v);
+  const where = whereOf(v, at);
   const how = howOf(v);
   const party = readSide(v.party);
   const against = v.against === null ? null : readSide(v.against);
