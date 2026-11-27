@@ -228,14 +228,18 @@ function wholeIn(
  * setting it down uses them. With `bare`, as if on clear ground: what a blueprint or a copy costs
  * before it is aimed anywhere.
  */
-export function priceOf(y: Yard, pieces: readonly Pick<Piece, "kind" | "x" | "y" | "grade">[], bare = false): number {
+export function priceOf(
+  y: Yard,
+  pieces: readonly Pick<Piece, "kind" | "x" | "y" | "grade" | "span">[],
+  bare = false,
+): number {
   const spare = Uint8Array.from(y.spare);
   let cost = 0;
   for (const p of pieces) {
     const t = bare ? -1 : at(y, p.x, p.y);
     const i = t < 0 ? t : pieceOf(y, t);
     const there = i < 0 ? NONE : (y.kind[i] ?? NONE);
-    cost += bare ? costOf(y, p.kind, p.grade, spare) : priceAt(y, p.kind, p.x, p.y, p.grade, spare);
+    cost += bare ? costOf(y, p.kind, p.grade, spare, p.span) : priceAt(y, p.kind, p.x, p.y, p.grade, spare, p.span);
     if (there === p.kind) continue;
     if (there !== NONE && y.free[i] === 1) spare[there] = (spare[there] ?? 0) + 1;
     if ((spare[p.kind] ?? 0) > 0) spare[p.kind] = (spare[p.kind] ?? 0) - 1;
@@ -519,7 +523,7 @@ const raisable = (y: Yard, tiles: readonly number[]): Piece[] =>
 /** What raising every piece on some tiles to the highest grade the yard may build of its kind costs. */
 export const upgradePrice = (y: Yard, tiles: readonly number[]): number =>
   raisable(y, tiles).reduce(
-    (sum, p) => sum + price(p.kind, highest(y.open, p.kind)) - price(p.kind, gradeOf(p.kind, p.grade)),
+    (sum, p) => sum + price(p.kind, highest(y.open, p.kind), p.span) - price(p.kind, gradeOf(p.kind, p.grade), p.span),
     0,
   );
 

@@ -452,6 +452,7 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
   },
   fell: {
     refused: "cannot_fell",
+    lock: needs({ fell: true }),
     read: (_v, f) => f.spot && { do: "fell", ...f.spot },
     write: spot,
     act: (y, a, coins, no) => spent(y, fell(y, a.x, a.y, coins), REASON.fell, no),

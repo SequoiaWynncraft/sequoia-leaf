@@ -235,7 +235,7 @@ const felledTiles = (y: Yard): number[] =>
 
 /** What a kept piece was paid for at the grade it was kept at, in thousandths of a Coin, at today's prices: one to hand was paid nothing. */
 const paidFor = (o: KeptPiece): number =>
-  o.free === true || !isKind(o.kind) ? 0 : price(o.kind, Math.max(1, o.grade ?? 1)) * MILLI;
+  o.free === true || !isKind(o.kind) ? 0 : price(o.kind, Math.max(1, o.grade ?? 1), o.span ?? 0) * MILLI;
 
 /**
  * Stands each kept piece again through the rules, as play would build it, and gives it the parts it
@@ -289,7 +289,7 @@ function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined,
     }
     kept.push([i, o]);
     // Stood lower than it was kept at: the difference, as today's prices have it.
-    if (grade < kept1 && o.free !== true) owed += (price(k, kept1) - price(k, grade)) * MILLI;
+    if (grade < kept1 && o.free !== true) owed += (price(k, kept1, span) - price(k, grade, span)) * MILLI;
   }
   for (const o of far) {
     const i = whole(o.tile, tiles - 1);

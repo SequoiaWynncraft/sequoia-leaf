@@ -63,7 +63,7 @@ export function yardPlan(y: Yard, print: Print): YardPlan {
     if (y.free[i] === 1) spare[p.kind] = (spare[p.kind] ?? 0) + 1;
   }
   for (const p of stood) {
-    price += costOf(y, p.kind, p.grade, spare);
+    price += costOf(y, p.kind, p.grade, spare, p.span);
     if ((spare[p.kind] ?? 0) > 0) spare[p.kind] = (spare[p.kind] ?? 0) - 1;
   }
   return { up, tiles, stood, why: refusals(y, stood, tiles), price };

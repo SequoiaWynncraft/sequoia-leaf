@@ -161,6 +161,8 @@ export interface KindDef<N extends string = string> {
   readonly fast?: true;
   /** Whether it runs under tiles: a tunnel, whose `span` is how many. */
   readonly spans?: true;
+  /** For one that runs under tiles, what each tile it runs under past `past` adds to its cost, at grade 1. */
+  readonly deeper?: { readonly past: number; readonly each: number };
   /** Whether power's reach goes out from it: a pylon. Standing or taken up, it moves where power reaches. */
   readonly reaches?: true;
   /** Whether it gathers what lies under it: what makes the things from the ground. */
@@ -194,7 +196,11 @@ export interface KindDef<N extends string = string> {
    * whichever way it faces (`sizes.ts`).
    */
   readonly size?: readonly [across: number, down: number];
-  /** Where a piece of more than one tile takes things in and where each of its outputs leaves; a piece of one tile says so by its hooks (`sides`, `next`). */
+  /**
+   * Where a piece of more than one tile takes things in and where each of its outputs leaves. A piece
+   * of one tile says so by its hooks (`sides`, `next`), which may read the ways in its kind declares
+   * here (`Kit.takesAt`): a tunnel's way-in mouth.
+   */
   readonly ports?: Ports;
   /** How it plays. */
   readonly rules: Hooks;
@@ -205,8 +211,12 @@ export interface KindDef<N extends string = string> {
  * the east side), turned with it as it stands (`sizes.ts`; `ports.ts` writes the usual ones).
  */
 export interface Ports {
-  /** The tile-sides it takes things in by: each a tile, across and down from its box's corner, and a side of it, 0 its front, 1 its right, 2 its back and 3 its left. */
-  readonly in: readonly (readonly [x: number, y: number, side: number])[];
+  /**
+   * The tile-sides it takes things in by: each a tile, across and down from its box's corner, and a
+   * side of it, 0 its front, 1 its right, 2 its back and 3 its left; and, for one that takes things in
+   * only once the yard has an unlock, that unlock (`Opened`).
+   */
+  readonly in: readonly (readonly [x: number, y: number, side: number, opened?: Opened])[];
   /**
    * Its outputs, each from a tile of its front to the tile ahead of it: the tile, across and down
    * from its box's corner, and what leaves there, the thing it finished (`"out"`) or what is made
@@ -214,6 +224,9 @@ export interface Ports {
    */
   readonly out: readonly { readonly at: readonly [x: number, y: number]; readonly sends: "out" | "also" }[];
 }
+
+/** An unlock that is one thing or none (`Open`), that a port may wait for. */
+export type Opened = { readonly [K in keyof Open]: Open[K] extends boolean ? K : never }[keyof Open];
 
 /** A kind's module says what it is with this: the name kept as written, for the tables to read. */
 export const kind = <const N extends string>(def: KindDef<N>): KindDef<N> => def;

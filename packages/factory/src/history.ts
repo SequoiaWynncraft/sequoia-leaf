@@ -29,14 +29,14 @@
  *   stood again as new: its
  *   settings, holding nothing, doing nothing; one of the pieces to hand as one. Putting back is not
  *   building: nothing asks whether it may be built now, and its Coins are the recorded opposite;
- * - pieces moved are moved back as one, with what they hold now;
- * - a redwood the command felled stands again on its tiles, bare as the command left them.
+ * - pieces moved are moved back as one, with what they hold now.
+ * Felling a redwood is never undone: it forgets every entry, as buying a plot does.
  * The Coins go the other way: what the command cost is given back, and what it gave back is taken.
  * All or none: everything that can refuse (the entry's name, its check, the Coins; a move's own
  * refusal) is asked before anything changes, and nothing after that can refuse.
  *
  * An entry's bytes: its id (a count, then a byte each), what it is (a byte: 1 a move, 2 a stroke of
- * the brush, 4 too much to keep, 8 a redwood felled, its tiles the entry's), the Coins it moved (a varint, zigzag), the check of its tiles after
+ * the brush, 4 too much to keep), the Coins it moved (a varint, zigzag), the check of its tiles after
  * it (four bytes), the tiles it changed that held nothing before (a count, then each as the tiles
  * since the last less one), for a move the turns and corner that move the pieces back (a byte each),
  * for each piece that stood there, a word of what the command did to it (a count, then a varint each:
@@ -60,7 +60,7 @@ import type { CoinChange } from "@sequoia-leaf/core";
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts" with { type: "macro" };
 
 import { at, type Dir, insTo, isDir, otherMouth, tunnelExit } from "./build.ts";
-import { fromBase64, Reader, Writer } from "./bytes.ts";
+import { fromBase64, Reader, spanByte, spanOfByte, Writer } from "./bytes.ts";
 import type { Act, ActOf } from "./commands.ts";
 import type { Land } from "./land.ts";
 import { lineOf } from "./lines.ts";
@@ -89,7 +89,6 @@ import {
   holderOf,
   place,
   redwoodAt,
-  standingTree,
   tunnelRow,
   uncover,
   vacate,
@@ -127,7 +126,7 @@ export const UNDO_ENTRY = 16 * 1024;
 export const UNDO_BYTES = 2 * UNDO_ENTRY;
 
 /** The commands that change a piece or the Coins with no Undo, which forget every entry. */
-const FORGETS: ReadonlySet<string> = new Set(["recipe", "sort", "crate", "buyPlot"]);
+const FORGETS: ReadonlySet<string> = new Set(["recipe", "sort", "crate", "buyPlot", "fell"]);
 
 /** In what a command did to a piece (`masks`): it took it up. The settings it changed are the bits above. */
 const UP = 1;
@@ -136,7 +135,6 @@ const UP = 1;
 const MOVED = 1;
 const STROKE = 2;
 const TOO_BIG = 4;
-const FELLED = 8;
 
 /** Why an Undo is refused. */
 const UNDO_SAYS = {
@@ -252,7 +250,7 @@ function packSettings(o: Writer, was: readonly Setting[]): void {
       [4, k.tint],
       [8, ways === 0 ? undefined : ways],
       [16, k.grade],
-      [32, s.span === 0 ? undefined : s.span + 8],
+      [32, s.span === 0 ? undefined : spanByte(s.span)],
       [64, s.kind > 15 ? s.kind >> 4 : undefined],
     ];
     const f = parts.reduce((m, [bit, v]) => (v === undefined ? m : m | bit), 0);
@@ -280,7 +278,7 @@ function readSetting(r: Reader, tile: number, seen?: (kind: number) => void): Se
     { ...unpackWays(ways ?? 0), recipe, tint, grade, open: closed === undefined ? undefined : false },
     kind,
   );
-  return { tile, kind, dir, span: span === undefined ? 0 : span - 8, free: (kd & 64) !== 0, kept };
+  return { tile, kind, dir, span: span === undefined ? 0 : spanOfByte(span), free: (kd & 64) !== 0, kept };
 }
 
 /** How pieces stood, read back, for a yard of so many tiles; null for bytes that are not pieces'. */
@@ -303,11 +301,6 @@ const tileOf = (y: Yard, p: { readonly x: number; readonly y: number }): number 
 const one = (y: Yard, a: { readonly x: number; readonly y: number }): number[] => [tileOf(y, a)];
 /** The tiles of the pieces on some tiles: a tunnel's both mouths. */
 const inArea = (y: Yard, a: { readonly tiles: readonly number[] }): number[] => tilesOf(y, piecesAt(y, a.tiles));
-/** Every tile of the redwood standing on the tile a command names, or none. */
-function treeOf(y: Yard, a: { readonly x: number; readonly y: number }): readonly number[] {
-  const t = standingTree(y, tileOf(y, a));
-  return t < 0 ? [] : (y.land.trees[t] ?? []);
-}
 /** Every tile the piece on the tile a turn names would cover turned: a piece of more than one tile's new tiles. */
 function turnedTo(y: Yard, a: ActOf<"turn">): number[] {
   const own = pieceOf(y, tileOf(y, a));
@@ -345,7 +338,6 @@ const REACH: { readonly [D in Name]?: (y: Yard, a: ActOf<D>) => readonly number[
   way: one,
   first: one,
   wayIn: one,
-  fell: treeOf,
 };
 
 /** The tiles a command may change, or null for one with no Undo (`REACH`). */
@@ -455,8 +447,7 @@ function strokeOf(y: Yard, a: Act): Undoing | null {
 }
 
 /** What an entry is, a bit each, by what its command was (`name`, `b` taken before it). */
-const flagsOf = (b: Before, name: Name): number =>
-  (b.back ? MOVED : 0) | (name === "paint" ? STROKE : 0) | (name === "fell" ? FELLED : 0);
+const flagsOf = (b: Before, name: Name): number => (b.back ? MOVED : 0) | (name === "paint" ? STROKE : 0);
 
 /** What a command done (`b` taken before it, `id` its id, `name` what it was) changed, with the stroke it adds to: its entry, but for the check. */
 function undoing(y: Yard, b: Before, id: string, stroke: Undoing | null, coins: number, name: Name): Undone {
@@ -466,9 +457,9 @@ function undoing(y: Yard, b: Before, id: string, stroke: Undoing | null, coins: 
     ...took,
     ...(stroke?.was.flatMap((s, k) => ((stroke.masks[k] ?? 0) & UP ? [s.tile] : [])) ?? []),
   ]);
-  // A move's tiles are all its own, and so are the tiles of a redwood felled: nothing stood there before or after.
+  // A move's tiles are all its own.
   const flags = flagsOf(b, name);
-  const done = flags & (MOVED | FELLED) ? b.tiles : b.tiles.filter((i) => up.has(i) || !standsAs(y, i, b.was.get(i)));
+  const done = flags & MOVED ? b.tiles : b.tiles.filter((i) => up.has(i) || !standsAs(y, i, b.was.get(i)));
   // How the stroke's lines stood before it, over how this command found them.
   const was = new Map([...done.flatMap((i) => b.was.get(i) ?? []), ...(stroke?.was ?? [])].map((s) => [s.tile, s]));
   return {
@@ -550,7 +541,7 @@ function readEntry(bytes: Uint8Array, tiles: number, seen?: (kind: number) => vo
     const big = r.done && !r.over && (flags & ~(TOO_BIG | STROKE)) === 0;
     return big ? { id, flags, coins: 0, sum: 0, tiles: [], was: [], masks: [], back: null } : null;
   }
-  if ((flags & ~(MOVED | STROKE | FELLED)) !== 0) return null;
+  if ((flags & ~(MOVED | STROKE)) !== 0) return null;
   const zig = r.varint();
   const sum = (r.byte() | (r.byte() << 8) | (r.byte() << 16) | (r.byte() << 24)) >>> 0;
   const body = readBody(r, flags, tiles, seen);
@@ -679,12 +670,6 @@ function putBack(y: Yard, u: Undoing): void {
     SETTINGS.forEach((part, n) => (mask >> 1) & (1 << n) && part.to(y, s.tile, part.of(s)));
     cover(y, s.tile, s.kind, y.dir[s.tile] ?? 0);
   });
-  // A redwood felled stands again: every tile of the entry was one of its.
-  if (u.flags & FELLED)
-    for (const i of u.tiles) {
-      const t = y.land.tree[i] ?? -1;
-      if (t >= 0) y.felled[t] = 0;
-    }
 }
 
 /**

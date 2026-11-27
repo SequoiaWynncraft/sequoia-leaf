@@ -22,6 +22,7 @@
  * `test/codec.test.ts` changes every other part of a yard in turn and fails if the check does not
  * change with it.
  */
+import { spanByte } from "./bytes.ts";
 import { fromCorner, tileFromCorner } from "./keptland.ts";
 import type { Land } from "./land.ts";
 import { counting } from "./orders.ts";
@@ -31,6 +32,13 @@ import { type Counts, holderOf, type Holders, PIECE_BYTES, tunnelOf, type Tunnel
 
 /** The kinds a kind's first four bits name: what every yard's check was taken over before kinds went past them. */
 const FOUR_BITS = 16;
+/**
+ * How many tiles of a tunnel's row under the ground the check mixes in at least, empty or not: as
+ * many as a tunnel could run under when every check kept today was made, so that a deeper culvert
+ * changes no yard's check. A tunnel that runs under more mixes in each tile it runs under.
+ */
+const ROW_MIXED = 5;
+
 const f64 = new Float64Array(1);
 const u32 = new Uint32Array(f64.buffer);
 
@@ -53,7 +61,7 @@ const settingsWord = (y: Yard, i: number): number =>
   (y.tint[i] ?? 0) |
   ((y.turn[i] ?? 0) << 4) |
   (waysOn(y, i) << 8) |
-  (((y.span[i] ?? 0) + 8) << 16) |
+  (spanByte(y.span[i] ?? 0) << 16) |
   ((y.set[i] ?? 0) << 24);
 
 /** What a holder is at as a number: the thing it has made, what it is making, its fuel and whether it is open. */
@@ -213,7 +221,8 @@ export function check(y: Yard): number {
     mix(settingsWord(y, i));
     const t = tunnelOf(y, i);
     if (t >= 0) {
-      for (let s = t * SPAN_MOST; s < t * SPAN_MOST + SPAN_MOST; s++) mix(underWord(ts, s));
+      const row = Math.max(ROW_MIXED, y.span[i] ?? 0);
+      for (let s = t * SPAN_MOST; s < t * SPAN_MOST + row; s++) mix(underWord(ts, s));
       continue;
     }
     const r = holderOf(y, i);

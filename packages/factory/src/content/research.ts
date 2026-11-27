@@ -211,4 +211,31 @@ export const RESEARCH: readonly ResearchInfo[] = [
     needs: ["shelves"],
     unlocks: { tools: ["whole"] },
   },
+  // Tier 5, the wire.
+  {
+    id: "felling",
+    tier: 5,
+    name: "Felling",
+    what: "Redwoods on your land can be felled. The first costs 1,000 Coins. Each one after costs 50% more than the one before.",
+    cost: { timber: 6000, brass: 4000 },
+    unlocks: { felling: true },
+  },
+  {
+    id: "deepculvert",
+    tier: 5,
+    name: "A deep culvert",
+    what: "A tunnel passes under up to 12 tiles, up from 5. Each tile beyond 5 adds 2 Coins to its price.",
+    cost: { timber: 8000, brass: 5000 },
+    needs: ["longculvert"],
+    unlocks: { span: 12 },
+  },
+  {
+    id: "widemouths",
+    tier: 5,
+    name: "Wide mouths",
+    what: "A tunnel takes items in from the left and right of its way in, as well as from behind.",
+    cost: { timber: 6000, brass: 6000 },
+    needs: ["deepculvert"],
+    unlocks: { mouths: true },
+  },
 ];

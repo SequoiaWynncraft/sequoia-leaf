@@ -3,7 +3,7 @@
  * kind of work.
  */
 export * from "./build.ts";
-export { fromBase64, toBase64 } from "./bytes.ts";
+export { fromBase64, spanByte, spanOfByte, toBase64 } from "./bytes.ts";
 export { type KeptPiece } from "./cells.ts";
 export { check } from "./check.ts";
 export { blueprintCode, cleanCode, CODE_MOST, CODE_PREFIX, codePieces, codeRefusal, packedCode } from "./code.ts";

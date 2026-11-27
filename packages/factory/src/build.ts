@@ -4,7 +4,7 @@
  * piece may be or be set to is each kind's to say (`kinds/`): where it may stand, what it is laid
  * over, the other tiles it stands on, and what each command that sets something on a piece does.
  */
-import { FELL_PRICE } from "./content/plots.ts";
+import { FELLING } from "./content/plots.ts";
 import { coverRefusal } from "./footprint.ts";
 import type { Setters } from "./kinds/kind.ts";
 import { RULES } from "./kinds/list.ts";
@@ -32,6 +32,7 @@ import {
   REACHES,
   RECIPE,
   type Recipe,
+  SPANS,
   STUDIES,
 } from "./tables.ts";
 import { at, type Dir, ground, kindAt } from "./tiles.ts";
@@ -75,32 +76,41 @@ export interface Lay {
   readonly right?: boolean;
 }
 
-/** What it costs to stand one more of a kind at a grade: its price, less grade 1's while the yard has one to hand (`spare`). */
-export const costOf = (y: Yard, k: Kind, g = 1, spare: Uint8Array = y.spare): number =>
-  price(k, gradeOf(k, g)) - ((spare[k] ?? 0) > 0 ? price(k, gradeOf(k)) : 0);
+/**
+ * What it costs to stand one more of a kind at a grade, a tunnel under `span` tiles: its price, less
+ * the plain price of one (grade 1, as short as its kind is priced alike) while the yard has one to hand (`spare`).
+ */
+export const costOf = (y: Yard, k: Kind, g = 1, spare: Uint8Array = y.spare, span = 0): number =>
+  price(k, gradeOf(k, g), span) - ((spare[k] ?? 0) > 0 ? price(k, gradeOf(k)) : 0);
 
-/** What comes back for the piece on a tile taken away: what it cost at its grade, less grade 1's for one the yard had to hand. */
+/** What comes back for the piece on a tile taken away: what it cost at its grade and span, less the plain price of one for one the yard had to hand. */
 export function worthAt(y: Yard, t: number): number {
   const i = pieceOf(y, t);
   const k = y.kind[i] ?? NONE;
-  return price(k, y.grade[i] ?? 0) - (y.free[i] === 1 ? price(k, gradeOf(k)) : 0);
+  return price(k, y.grade[i] ?? 0, y.span[i] ?? 0) - (y.free[i] === 1 ? price(k, gradeOf(k)) : 0);
 }
 
 /** Whether a kind may be set down in the place of what stands: one its kind says it goes over (a splitter on a belt). */
 export const replaces = (k: number, there: number): boolean => there !== k && (OVER[k] ?? []).includes(there);
 
 /**
- * What building a kind at a grade on a tile takes from the purse: over one of its kind, what its
- * grade costs more (or, lower, gives back); else its cost, less what a replaced piece gives back.
+ * What building a kind at a grade on a tile takes from the purse, a tunnel to run under `span` tiles:
+ * over one of its kind, what its grade costs more (or, lower, gives back), at the span it has; else
+ * its cost, less what a replaced piece gives back.
  */
-export function priceAt(y: Yard, k: Kind, x: number, z: number, g = 1, spare: Uint8Array = y.spare): number {
+export function priceAt(y: Yard, k: Kind, x: number, z: number, g = 1, spare: Uint8Array = y.spare, span = 0): number {
   const t = at(y, x, z);
   const i = t < 0 ? t : pieceOf(y, t);
   const there = i < 0 ? NONE : (y.kind[i] ?? NONE);
-  if (there === NONE) return costOf(y, k, g, spare);
-  if (there === k) return price(k, gradeOf(k, g)) - price(k, y.grade[i] ?? 0);
-  return costOf(y, k, g, spare) - worthAt(y, i);
+  if (there === NONE) return costOf(y, k, g, spare, span);
+  const has = y.span[i] ?? 0;
+  if (there === k) return price(k, gradeOf(k, g), has) - price(k, y.grade[i] ?? 0, has);
+  return costOf(y, k, g, spare, span) - worthAt(y, i);
 }
+
+/** How many tiles a piece set down here facing `d` runs under: for a tunnel, the span asked for, or the nearest it can come up at; 0 for the rest. */
+const spanFor = (y: Yard, k: Kind, x: number, z: number, d: number, lay: Lay): number =>
+  SPANS[k] === 1 ? (lay.span ?? exitOf(KIT, y, x, z, d)?.span ?? 0) : 0;
 
 /** Whether a tunnel may pass under a tile: under anything but the depot. */
 export const digsUnder = (y: Yard, x: number, z: number): boolean => digs(KIT, y, x, z);
@@ -142,7 +152,7 @@ export function refusal(
   if (FIXED[there] === 1) return `The ${lower(there)} stands here`;
   const why = standsOver(y, k, i, d, g, lay);
   if (why !== null) return why;
-  if (coins < priceAt(y, k, x, z, g)) return "Not enough Coins";
+  if (coins < priceAt(y, k, x, z, g, y.spare, spanFor(y, k, x, z, d, lay))) return "Not enough Coins";
   return null;
 }
 
@@ -187,7 +197,7 @@ export function setDown(y: Yard, k: Kind, x: number, z: number, d: Dir, coins: n
   const i = at(y, x, z);
   const there = y.kind[i] ?? NONE;
   const g = gradeOf(k, lay.grade);
-  const cost = priceAt(y, k, x, z, g);
+  const cost = priceAt(y, k, x, z, g, y.spare, spanFor(y, k, x, z, d, lay));
   if (there === k) {
     relay(y, k, i, d, g, lay);
     return { ok: true, cost, laid: [] };
@@ -403,21 +413,32 @@ export function plotRefusal(y: Yard, id: Plot, coins: number): string | null {
   return coins < (plotOf(y, id)?.price ?? 0) ? "Not enough Coins" : null;
 }
 
+/**
+ * What the next redwood costs to fell, by how many the yard has felled (every one, whenever): the
+ * first `FELLING.first`, each after half as much again, rounded down to a whole `FELLING.round`.
+ */
+export function fellPrice(y: Yard): number {
+  let p: number = FELLING.first;
+  for (const t of y.felled) if (t === 1) p = Math.floor((p + Math.floor(p / 2)) / FELLING.round) * FELLING.round;
+  return p;
+}
+
 /** Why the redwood on a tile cannot be felled with `coins` in the purse, or nothing if it can. */
 export function fellRefusal(y: Yard, x: number, z: number, coins: number): string | null {
   const i = at(y, x, z);
   if (i < 0 || !redwoodAt(y, i)) return "There is no redwood here";
   const plot = y.land.plots[y.land.plot[i] ?? NONE];
   if (!plot || !y.plots.includes(plot.plot)) return plot ? `${plot.name} is not the yard's yet` : "That is off the map";
-  return coins < FELL_PRICE ? "Not enough Coins" : null;
+  return coins < fellPrice(y) ? "Not enough Coins" : null;
 }
 
-/** Fells the redwood on a tile, every tile of it, and says what it cost. */
+/** Fells the redwood on a tile, every tile of it, and says what it cost. It is never undone, and its Coins never come back. */
 export function fell(y: Yard, x: number, z: number, coins: number): Spent {
   const why = fellRefusal(y, x, z, coins);
   if (why !== null) return { ok: false, why };
+  const cost = fellPrice(y);
   y.felled[standingTree(y, at(y, x, z))] = 1;
-  return { ok: true, cost: FELL_PRICE };
+  return { ok: true, cost };
 }
 
 /** Buys a plot and says what it cost. */

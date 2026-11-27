@@ -9,7 +9,7 @@ import { coinsText, num, perMinute } from "@sequoia-leaf/core";
 
 import { REACH } from "./content/machines.ts";
 import { START, type Tool, type Unlocks } from "./content/nodes.ts";
-import { PLOTS } from "./content/plots.ts";
+import { FELLING, PLOTS } from "./content/plots.ts";
 import { TIERS } from "./content/tiers.ts";
 import { carried, makes } from "./planner.ts";
 import {
@@ -78,9 +78,11 @@ export type Unlock = Said &
     | { readonly is: "board"; readonly hooks: number }
     | { readonly is: "first" }
     | { readonly is: "ins" }
+    | { readonly is: "felling" }
+    | { readonly is: "mouths" }
   );
 
-/** What a splitter's flags and its ways in each let it do, as their unlocks are listed. */
+/** What each unlock that is one thing or none lets the yard do, as they are listed: a splitter's flags and ways in, felling, wide mouths. */
 const FLAGS = [
   {
     is: "first",
@@ -91,6 +93,16 @@ const FLAGS = [
     is: "ins",
     name: "Ways in",
     says: "A splitter's ahead, left or right can be set to In on its card: it takes items in there as well as from behind, in turn, and sends them out of its other ways.",
+  },
+  {
+    is: "felling",
+    name: "Felling",
+    says: `Redwoods on your land can be felled. The first costs ${coinsText(FELLING.first)}. Each one after costs 50% more than the one before.`,
+  },
+  {
+    is: "mouths",
+    name: "Wide mouths",
+    says: "A tunnel takes items in from the left and right of its way in, as well as from behind.",
   },
 ] as const;
 

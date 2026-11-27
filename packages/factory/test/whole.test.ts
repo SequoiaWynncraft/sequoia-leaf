@@ -107,10 +107,12 @@ function lineHours(g: F.Goal): number {
 }
 
 describe("the research", () => {
-  test("is tier 4's, after the plan chest's shelves, and the most the game asks for any research: about 15 hours of grade III lines", () => {
+  test("is tier 4's, after the plan chest's shelves, and the most the game asks for any research up to tier 4: about 15 hours of grade III lines", () => {
     const info = F.GOALS[WHOLE];
     expect([info?.kind, info?.tier, info?.needs.map((g) => F.GOALS[g]?.id)]).toEqual(["research", 4, ["shelves"]]);
-    const others = F.ALL_GOALS.filter((g) => F.GOALS[g]?.kind === "research" && g !== WHOLE);
+    const others = F.ALL_GOALS.filter(
+      (g) => F.GOALS[g]?.kind === "research" && (F.GOALS[g]?.tier ?? 0) <= 4 && g !== WHOLE,
+    );
     const most = Math.max(...others.map(lineHours));
     console.log(
       `A plan of the whole yard: ${lineHours(WHOLE).toFixed(1)} line-hours; the most of any other: ${most.toFixed(1)}`,

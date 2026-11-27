@@ -3,6 +3,14 @@
  * that keeps text.
  */
 
+/**
+ * A tunnel mouth's span as a byte (`spanOfByte` reads it back): 8 more, so that a far mouth's
+ * (below 0) is a byte too, and wrapped round as a signed byte, so that a far mouth deeper than 8
+ * is one. Any span from -128 to 127; every span of 8 or less is the byte it always was.
+ */
+export const spanByte = (span: number): number => (span + 8) & 255;
+export const spanOfByte = (b: number): number => ((b - 8) << 24) >> 24;
+
 /** Bytes written one after another into a buffer that grows. */
 export class Writer {
   private buf = new Uint8Array(1 << 12);

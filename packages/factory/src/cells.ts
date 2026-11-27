@@ -11,7 +11,7 @@
  * follow, which (varint, a bit each), then those:
  *   2 what it holds: how many kinds (varint), then a thing (byte) and how many (varint) each
  *   4 out (byte)   8 work (varint)   16 making (byte)   32 turn (byte)   64 what it is set to (byte)
- *   128 span (byte, +8), and for a way-in mouth a thing (byte) and its progress (byte) for each tile under
+ *   128 span (a byte, `spanByte`), and for a way-in mouth a thing (byte) and its progress (byte) for each tile under
  *   256 a shut crate   512 fuel (byte)   1024 one of the pieces to hand   2048 tint (byte)
  *   4096 a splitter's ways (byte: its shut ways, the way it puts first and its ways in, `packWays`), or a
  *        sorter's right side (the same byte, as the way it puts first)   8192 a grade above 1 (byte)
@@ -28,7 +28,7 @@
  * shape: a thing they do not have is let go, more of one than a piece holds is clamped as it is put
  * back, and a tunnel longer than tunnels go is a piece that cannot stand.
  */
-import { Reader, Writer } from "./bytes.ts";
+import { Reader, spanByte, spanOfByte, Writer } from "./bytes.ts";
 import { RULES } from "./kinds/list.ts";
 import { waysOn } from "./pieces.ts";
 import { OWN } from "./sizes.ts";
@@ -184,7 +184,7 @@ function writeHeld(o: Writer, pairs: readonly (readonly [number, number])[]): vo
 /** Writes a tunnel mouth's span, and for each tile under a way-in mouth what is there. */
 function writeSpan(o: Writer, p: KeptPiece): void {
   const span = p.span ?? 0;
-  o.byte(span + 8);
+  o.byte(spanByte(span));
   for (let s = 0; s < span; s++) {
     o.byte(p.under?.[s] ?? NONE);
     o.byte(p.along?.[s] ?? 0);
@@ -249,7 +249,7 @@ function heldOf(r: Reader): [number, number][] | null {
 
 /** Reads a tunnel mouth's span onto a piece, and for a way-in mouth what is under the ground. */
 function readSpan(r: Reader, p: Building): void {
-  const span = r.byte() - 8;
+  const span = spanOfByte(r.byte());
   const under: number[] = [];
   const along: number[] = [];
   for (let s = 0; s < span; s++) {

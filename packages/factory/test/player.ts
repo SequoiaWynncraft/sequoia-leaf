@@ -53,6 +53,21 @@ export class Player {
     if (i !== undefined) return { x: i % w, y: Math.floor(i / w) };
     return this.r() < 0.05 ? { x: w + this.int(3), y: this.int(h) } : this.anywhere();
   }
+  /**
+   * The first tile from a spot on, in the land's order and round again, with a piece on it that can be
+   * copied (not the depot), drawing nothing; the spot itself if none is, or if it is off the land.
+   */
+  copyable(at: { x: number; y: number }): { x: number; y: number } {
+    const { w, h } = this.y.land;
+    if (at.x < 0 || at.y < 0 || at.x >= w || at.y >= h) return at;
+    const n = w * h;
+    for (let k = 0; k < n; k++) {
+      const i = (at.y * w + at.x + k) % n;
+      const kind = this.y.kind[i] ?? F.NONE;
+      if (kind !== F.NONE && F.FIXED[kind] !== 1) return { x: i % w, y: Math.floor(i / w) };
+    }
+    return at;
+  }
   /** A tile with one of some kinds of piece on it, if there is one; else any spot. */
   of(...kinds: readonly F.Kind[]): { x: number; y: number } {
     const { w } = this.y.land;
@@ -135,7 +150,7 @@ export class Player {
         // Now and then a copy of one piece onto ground where a piece may stand, which a box at
         // random seldom finds; else a move or a copy, by the size of the box: the same draws either way.
         if (this.r() < 0.15) {
-          const from = this.spot();
+          const from = this.copyable(this.spot());
           const to = this.where();
           return { do: "copy", tiles: F.within(y, from.x, from.y, from.x, from.y), turns: 0, x: to.x, y: to.y };
         }

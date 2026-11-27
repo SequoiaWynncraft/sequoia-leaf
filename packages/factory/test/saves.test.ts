@@ -112,7 +112,7 @@ describe("what depends on today's tuning", () => {
     const back = F.decode(withCells(F.encode(y), tunnel));
     if (!back) throw new Error("the yard does not read");
     expect(back.kind[t.i]).toBe(F.NONE);
-    expect(back.till).toBe(y.till + F.price(F.TUNNEL, 1) * F.MILLI);
+    expect(back.till).toBe(y.till + F.price(F.TUNNEL, 1, span) * F.MILLI);
   });
 
   test("a piece that cannot stand where it is today is paid back, at today's price for its grade", () => {

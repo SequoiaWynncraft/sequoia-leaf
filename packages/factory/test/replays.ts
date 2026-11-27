@@ -138,6 +138,7 @@ export const REPLAYS: readonly (readonly [string, (d: Digest) => void])[] = [
   ["random play, a new yard", played(() => F.create({ seed: 11 }), 101)],
   ["random play, tier 3", played(() => F.create({ seed: 13, tier: 3 }), 103)],
   ["random play, tier 4 done", played(() => F.create({ seed: 14, tier: 5 }), 105)],
+  ["random play, tier 5's research done", played(() => F.create({ seed: 15, tier: 6 }), 106)],
   ["random play, the delivering yard with its board filled", played(boardFilled, 107)],
   ["random play, the generated yard", played(generatedCopy, 109)],
   ["the largest staged yard, tended in slices", tended],

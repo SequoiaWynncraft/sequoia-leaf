@@ -39,7 +39,9 @@ function makeableFor(g: F.Goal): F.Item[] {
 describe("the tables", () => {
   test("every node and every piece of research can be reached", () => {
     expect(ids(reach()).toSorted()).toEqual(ids(F.ALL_GOALS).toSorted());
-    expect(F.openOf(reach()).tier).toBe(F.TIERS.length);
+    // Everything done opens the last tier any goal is of, or, once its commission is done, the one after.
+    const last = Math.max(...F.GOALS.map((g) => g.tier));
+    expect(F.openOf(reach()).tier).toBe(by(last, "commission") > 0 ? last + 1 : last);
   });
 
   test("ids are unique, across the nodes and the research", () => {

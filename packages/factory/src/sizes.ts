@@ -17,6 +17,7 @@
  * tile it covers, the sides of it that take things in, as the plumbing reads every tile's
  * (`Wire.taken`); and each output, the tile it leaves from and the way it leaves, ahead.
  */
+import type { Opened } from "./kinds/kind.ts";
 import { KIND_DEFS } from "./kinds/list.ts";
 import { BIG, SIZE_H, SIZE_W } from "./tables.ts";
 import type { Yard } from "./yard.ts";
@@ -68,11 +69,16 @@ export interface Out {
   readonly also: boolean;
 }
 
-/** A kind as it faces one way: the tiles it covers from its own tile (its own first), the sides of each that take things in, a bit a way (east 1), and its outputs. */
+/**
+ * A kind as it faces one way: the tiles it covers from its own tile (its own first), the sides of each
+ * that take things in, a bit a way (east 1), those that take things in once the yard has an unlock
+ * (`opened`, by the unlock), and its outputs.
+ */
 export interface Facing {
   readonly dx: Int8Array;
   readonly dy: Int8Array;
   readonly takes: Uint8Array;
+  readonly opened: readonly { readonly when: Opened; readonly takes: Uint8Array }[];
   readonly outs: readonly Out[];
 }
 
@@ -85,6 +91,7 @@ function facing(k: number, d: number): Facing {
   const dx = new Int8Array(n);
   const dy = new Int8Array(n);
   const takes = new Uint8Array(n);
+  const opened = new Map<Opened, Uint8Array>();
   const ports = KIND_DEFS[k]?.ports;
   // Its own tile first, then the rest of its box, row by row.
   const tiles = Array.from({ length: n }, (_, t) => [t % bw, Math.floor(t / bw)] as const).toSorted(
@@ -94,14 +101,17 @@ function facing(k: number, d: number): Facing {
     dx[t] = bx + cx;
     dy[t] = by + cy;
     const [lx, ly] = asEast(w, h, d, bx, by);
-    for (const [px, py, side] of ports?.in ?? [])
-      if (px === lx && py === ly) takes[t] = (takes[t] ?? 0) | (1 << ((side + d) & 3));
+    for (const [px, py, side, when] of ports?.in ?? []) {
+      if (px !== lx || py !== ly) continue;
+      const into = when === undefined ? takes : (opened.get(when) ?? opened.set(when, new Uint8Array(n)).get(when));
+      if (into) into[t] = (into[t] ?? 0) | (1 << ((side + d) & 3));
+    }
   });
   const outs = (ports?.out ?? []).map((o): Out => {
     const [bx, by] = asFacing(w, h, d, o.at[0], o.at[1]);
     return { dx: bx + cx, dy: by + cy, way: d, also: o.sends === "also" };
   });
-  return { dx, dy, takes, outs };
+  return { dx, dy, takes, opened: [...opened].map(([when, bits]) => ({ when, takes: bits })), outs };
 }
 
 /** Each kind as it faces each way, by its number and then the way. */
@@ -121,15 +131,23 @@ export function tilesAt(k: number, x: number, z: number, d: number, w: number, h
   });
 }
 
-/** The sides of a tile of a piece of more than one tile that take things in, a bit a way (east 1), as its kind's ports say (`KindDef.ports`). */
-export function takesAt(y: Pick<Yard, "part" | "land" | "kind" | "dir">, i: number): number {
+/**
+ * The sides of a tile of a piece that take things in, a bit a way (east 1), as its kind's ports say
+ * (`KindDef.ports`), those an unlock opens with it once the yard has it.
+ */
+export function takesAt(y: Pick<Yard, "part" | "land" | "kind" | "dir" | "open">, i: number): number {
   const own = pieceOf(y, i);
   const f = FACING[y.kind[own] ?? 0]?.[(y.dir[own] ?? 0) & 3];
   if (!f) return 0;
   const w = y.land.w;
   const dx = (i % w) - (own % w);
   const dy = Math.floor(i / w) - Math.floor(own / w);
-  for (let t = 0; t < f.dx.length; t++) if (f.dx[t] === dx && f.dy[t] === dy) return f.takes[t] ?? 0;
+  for (let t = 0; t < f.dx.length; t++) {
+    if (f.dx[t] !== dx || f.dy[t] !== dy) continue;
+    let bits = f.takes[t] ?? 0;
+    for (const o of f.opened) if (y.open[o.when]) bits |= o.takes[t] ?? 0;
+    return bits;
+  }
   return 0;
 }
 
