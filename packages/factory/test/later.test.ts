@@ -8,6 +8,7 @@
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
+import { Player } from "./player.ts";
 import { bare, TIER5, tunnel } from "./tier5.ts";
 import { generated, must, saved, SAVES, staged } from "./yards.ts";
 
@@ -41,6 +42,38 @@ describe("the version a yard is kept as", () => {
     const y = bare();
     must(y, tunnel(2, 4, 5));
     expect(record(F.encode(y)).v).toBe(F.PLACED);
+  });
+
+  test("asked cheaply as it is kept, it says what the whole scan of the kept yard says: staged, kept, random play, tier 5", () => {
+    expect(F.WIDER).toBe(false);
+    const yards = [
+      ...(["new", "small", "mid", "gate", "large"] as const).map((n) => staged(n)),
+      ...SAVES.map(saved),
+      generated().y,
+      ...Object.values(TIER5).map((make) => make()),
+    ];
+    // Random play from a yard with tier 5's research done, and from one in tier 4: every 25 commands.
+    for (const [seed, tier] of [
+      [31, 6],
+      [32, 5],
+    ] as const) {
+      const y = F.create({ seed, tier });
+      const p = new Player(y, seed * 7919, new Map());
+      for (let k = 0; k < 400; k++) {
+        const c = F.readCommand({ ...p.command(), tick: y.tick });
+        if (c) F.play(y, c);
+        if (k % 25 === 24) yards.push(F.decode(F.encode(y), y.land) ?? y);
+      }
+    }
+    let later = 0;
+    for (const y of yards) {
+      const text = F.encode(y);
+      const names = F.namesOf(record(text), y.land);
+      if (!names) throw new Error("the yard's pieces do not read");
+      expect([F.pastTen(y), record(text).v]).toEqual([!F.knownAt10(names), F.knownAt10(names) ? F.PLACED : F.VERSION]);
+      if (F.pastTen(y)) later++;
+    }
+    expect(later).toBeGreaterThan(10);
   });
 
   test("the version 10 a kind past 15 was kept as still reads", () => {

@@ -409,13 +409,16 @@ function readId(r: Reader): string | null {
 }
 
 /** An entry, its id read from its first bytes. */
-const entry = (bytes: Uint8Array): Entry => ({ id: readId(new Reader(bytes)) ?? "", bytes });
+const entry = (bytes: Uint8Array, span: number): Entry => ({ id: readId(new Reader(bytes)) ?? "", bytes, span });
+/** The most tiles any of some pieces passes under, from either mouth. */
+const longest = (pieces: readonly { readonly span: number }[]): number =>
+  pieces.reduce((most, p) => Math.max(most, Math.abs(p.span)), 0);
 /** An entry that cannot be undone, under its id: a command's own entry over the cap, or a stroke's. */
 function overCap(id: string, flags: number): Entry {
   const o = new Writer();
   writeId(o, id);
   o.byte(TOO_BIG | (flags & STROKE));
-  return entry(o.bytes());
+  return entry(o.bytes(), 0);
 }
 
 /** An entry's bytes, of the yard after its command (`y`); `was` is how the pieces on its tiles stood before. */
@@ -505,7 +508,7 @@ export function after(y: Yard, a: Act, b: Before | null, changes: readonly CoinC
   if (u.tiles.length === 0 && u.coins === 0) return;
   const bytes = written(y, u);
   const kept = stroke ? y.history.slice(0, -1) : y.history;
-  y.history = bytes.length > UNDO_ENTRY ? [overCap(u.id, u.flags)] : capped([...kept, entry(bytes)]);
+  y.history = bytes.length > UNDO_ENTRY ? [overCap(u.id, u.flags)] : capped([...kept, entry(bytes, longest(u.was))]);
 }
 
 // ---------- reading ----------
@@ -586,7 +589,8 @@ export function historyOf(kept: unknown, stamp: unknown, land: Land): Entry[] {
   const tiles = land.w * land.h;
   const read = kept.flatMap((b) => {
     const bytes = typeof b === "string" ? fromBase64(b) : null;
-    return bytes && readEntry(bytes, tiles) ? [entry(bytes)] : [];
+    const named: Named[] = [];
+    return bytes && readEntry(bytes, tiles, (p) => named.push(p)) ? [entry(bytes, longest(named))] : [];
   });
   return read.length === kept.length ? capped(read) : [];
 }

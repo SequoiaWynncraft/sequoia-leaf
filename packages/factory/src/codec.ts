@@ -32,7 +32,7 @@ import { NODES } from "./content/nodes.ts";
 import { historyOf, stampOf } from "./history.ts";
 import { FIRST_LAND, holdsFirst, type KeptLand, keptLandOf, keptOn, piecesOn, tileOn } from "./keptland.ts";
 import { LAND, type Land } from "./land.ts";
-import { keptNames, knownAt10, knownHere } from "./named.ts";
+import { type KeptNames, keptNames, knownAt10, knownHere, pastTen, WIDER } from "./named.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
 import { keptOf, packPieces, type Piece, placed, unpackWays } from "./pieces.ts";
 import { type KeptBlueprint, keptBlueprint, printText } from "./prints.ts";
@@ -158,9 +158,18 @@ export interface Keep {
 export function encode(y: Yard, keep: Keep = {}): string {
   const pieces = keptPieces(y);
   const rec = record(y, keep, pieces);
+  return JSON.stringify({ v: keptPastTen(y, rec, pieces) ? VERSION : PLACED, ...rec });
+}
+
+/**
+ * Whether a yard, kept as `rec` with its `pieces`, keeps anything the last Leaf of version 10 did not
+ * know: cheaply, of what these tables have past it (`pastTen`), or while they have a thing, kind or
+ * plot past it, by the whole scan (`WIDER`).
+ */
+function keptPastTen(y: Yard, rec: Rec, pieces: readonly KeptPiece[]): boolean {
+  if (!WIDER) return pastTen(y);
   const prints: unknown[] = Array.isArray(rec.blueprints) ? rec.blueprints : [];
-  const names = keptNames(rec, pieces, prints.map(keptBlueprint), y.land.w * y.land.h);
-  return JSON.stringify({ v: knownAt10(names) ? PLACED : VERSION, ...rec });
+  return !knownAt10(keptNames(rec, pieces, prints.map(keptBlueprint), y.land.w * y.land.h));
 }
 
 /** A yard as kept, but for its version. */
@@ -199,17 +208,23 @@ function record(y: Yard, keep: Keep, pieces: readonly KeptPiece[]): Rec {
   };
 }
 
+/** What a kept yard, read as JSON, names, on `land` (`keptNames`); nothing for one whose pieces are not pieces, or kept on more land. */
+export function namesOf(raw: unknown, land: Land = LAND): KeptNames | null {
+  if (!isRec(raw) || typeof raw.cells !== "string") return null;
+  const on = keptOn(raw, land);
+  const bytes = fromBase64(raw.cells);
+  const pieces = on && bytes ? unpackCells(bytes, on.w * on.h) : null;
+  const prints: unknown[] = Array.isArray(raw.blueprints) ? raw.blueprints : [];
+  return on && pieces ? keptNames(raw, pieces, prints.map(keptBlueprint), on.w * on.h) : null;
+}
+
 /**
  * Whether a kept yard, read as JSON, names anything this Leaf does not know, or a tunnel longer than
  * its longest, on `land` (`keptLater` asks): a newer Leaf's (`knownHere`).
  */
 export function keptUnknown(raw: unknown, land: Land = LAND): boolean {
-  if (!isRec(raw) || typeof raw.cells !== "string") return false;
-  const on = keptOn(raw, land);
-  const bytes = fromBase64(raw.cells);
-  const pieces = on && bytes ? unpackCells(bytes, on.w * on.h) : null;
-  const prints: unknown[] = Array.isArray(raw.blueprints) ? raw.blueprints : [];
-  return on !== null && pieces !== null && !knownHere(keptNames(raw, pieces, prints.map(keptBlueprint), on.w * on.h));
+  const names = namesOf(raw, land);
+  return names !== null && !knownHere(names);
 }
 
 /** The first tile of each redwood the yard has felled, in the land's order. */

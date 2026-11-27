@@ -138,6 +138,8 @@ export interface Wire {
 export interface Entry {
   readonly id: string;
   readonly bytes: Uint8Array;
+  /** The most tiles any piece it would stand again passes under: what keeping it asks, without reading it again. */
+  readonly span: number;
 }
 
 /** A piece kept in a blueprint, 10 bytes: kind, x, y, way, span, recipe, open, tint, a splitter's ways or a sorter's side (`packWays`), grade. */
