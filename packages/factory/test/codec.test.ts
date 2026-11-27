@@ -324,6 +324,8 @@ const LEFT_OUT = new Set([
   "row",
   // How often each tile has been cleared, for Undo within a command: reading a yard back stands every piece anew.
   "made",
+  // Where a tile's piece of more than one tile stands: worked out from that tile's kind and way, which are mixed in.
+  "part",
   // What Undo would undo is mixed in as its bytes: an entry's id is worked out from them.
   "history.0.id",
   "holders.size",

@@ -181,6 +181,8 @@ export function check(y: Yard): number {
     const r = holderOf(y, i);
     if (r < 0) continue;
     mix((hs.out[r] ?? 0) | ((hs.making[r] ?? 0) << 8) | ((hs.fuel[r] ?? 0) << 16) | ((hs.open[r] ?? 0) << 24));
+    // A by-product held is mixed in only where there is one, so a yard of pieces that make none checks as before.
+    if (hs.also[r] !== NONE) mix(0x10000 | (hs.also[r] ?? 0));
     mix((hs.kinds[r] ?? 0) | ((hs.count[r] ?? 0) << 8));
     mix(hs.work[r] ?? 0);
     for (let n = 0; n < ITEM_COUNT; n++) {

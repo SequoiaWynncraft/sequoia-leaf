@@ -162,6 +162,10 @@ export const MOST: readonly ("stops" | null)[] = KIND_DEFS.map((d: KindDef) => d
 /** What each kind does a minute, as a verb and what it does it to (`KindDef.does`); and whether its price is a tile's. */
 export const DOES: readonly (readonly [string, string] | null)[] = KIND_DEFS.map((d: KindDef) => d.does ?? null);
 export const PER_TILE = flagOf((d) => d.perTile);
+/** Each kind's tiles across and down as it faces east (`KindDef.size`), and whether that is more than one tile (`sizes.ts`). */
+export const SIZE_W = Uint8Array.from(KIND_DEFS, (d: KindDef) => d.size?.[0] ?? 1);
+export const SIZE_H = Uint8Array.from(KIND_DEFS, (d: KindDef) => d.size?.[1] ?? 1);
+export const BIG = Uint8Array.from(SIZE_W, (w, k) => (w * (SIZE_H[k] ?? 1) > 1 ? 1 : 0));
 /** The kind that studies, where research is studied (`KindDef.studies`). */
 export const STUDYING: Kind = sure(
   kindNamed(KIND_DEFS.find((d: KindDef) => d.studies === true)?.name),
@@ -233,6 +237,8 @@ export function countsOf(w: Wants): Float64Array {
  */
 export interface Recipe {
   readonly out: Item;
+  /** What is made beside it, one with each (`RecipeInfo.also`), or `NONE`. */
+  readonly also: number;
   readonly from: readonly Item[];
   readonly need: readonly number[];
   readonly by: Kind;
@@ -244,7 +250,8 @@ export const RECIPES_N: readonly Recipe[] = RECIPES.map((r) => {
   const counts = countsOf(r.from);
   const from = Object.keys(r.from).flatMap((name) => itemNamed(name) ?? []);
   const need = from.map((n) => counts[n] ?? 0);
-  return { out: item(r.out), from, need, by: kind(r.by), ticks: r.ticks, work: r.ticks * 2 };
+  const also = r.also === undefined ? NONE : item(r.also);
+  return { out: item(r.out), also, from, need, by: kind(r.by), ticks: r.ticks, work: r.ticks * 2 };
 });
 /** The recipe that makes each thing, or null for things from the ground. */
 export const RECIPE: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => RECIPES_N.find((r) => r.out === n) ?? null);

@@ -96,6 +96,9 @@ export interface Kit {
   readonly passTo: typeof Wire.passTo;
   readonly passWay: typeof Wire.passWay;
   readonly sendOut: typeof Wire.sendOut;
+  readonly sendPort: typeof Wire.sendPort;
+  readonly portTo: typeof Wire.portTo;
+  readonly outsOf: typeof Wire.outsOf;
   readonly refused: typeof Wire.refused;
   readonly roomBeside: typeof Wire.roomBeside;
   readonly wireOf: typeof Wire.wireOf;

@@ -111,7 +111,8 @@ describe("memory", () => {
     y.away = null;
   }, 60_000);
 
-  test("at worst, a yard of nothing but crates, as many as the land holds, holds under 1 MB", () => {
+  // 1.1 MB since pieces of more than one tile: every tile keeps a byte of the piece it is part of, and every holder one of a by-product.
+  test("at worst, a yard of nothing but crates, as many as the land holds, holds under 1.1 MB", () => {
     const y = F.create({ land, tier: 4, seed: 1 });
     let room = 0;
     for (let z = 0; z < land.h; z++)
@@ -123,7 +124,7 @@ describe("memory", () => {
     F.rewire(y);
     expect(y.kind.filter((k) => k === F.CRATE).length).toBe(room);
     expect(room).toBeGreaterThan(8000);
-    expect(F.bytesHeld(y)).toBeLessThan(1024 * 1024);
+    expect(F.bytesHeld(y)).toBeLessThan(1.1 * 1024 * 1024);
     console.log(`held, ${room} crates: ${kb(F.bytesHeld(y))}`);
   }, 60_000);
 });

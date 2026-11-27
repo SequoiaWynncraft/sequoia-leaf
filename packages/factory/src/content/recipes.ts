@@ -12,6 +12,8 @@ export interface RecipeInfo {
   readonly out: ItemName;
   readonly from: Wants;
   readonly by: Maker;
+  /** A by-product: one of it is made with every one of `out`, and leaves by its maker's own way out for it (`KindDef.ports`). */
+  readonly also?: ItemName;
   /** Ticks of work at grade 1. Ten ticks are a second. */
   readonly ticks: number;
   /** For a mill, which of its faces the work shows: it saws, fires or presses by what arrives. */

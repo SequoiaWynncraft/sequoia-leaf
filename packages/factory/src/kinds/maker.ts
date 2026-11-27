@@ -90,15 +90,20 @@ export function work(k: Kit, y: Yard, i: number, r: number, speed: number, wire:
     h.work[r] = (h.work[r] ?? 0) - rec.work;
     for (let p = 0; p < rec.from.length; p++) k.take(h, r, rec.from[p] ?? k.NONE, rec.need[p] ?? 1);
     h.out[r] = rec.out;
+    h.also[r] = rec.also;
     h.making[r] = k.NONE;
     k.roomBeside(y, i, wire.waiting);
   }
 }
 
-/** A machine making nothing begins the recipe it holds the parts for, if there is one: says whether it did. One that found none looks again only once it is given something. */
+/**
+ * A machine making nothing begins the recipe it holds the parts for, if there is one: says whether it
+ * did. One that found none looks again only once it is given something; one still holding a
+ * by-product begins nothing until that has left too.
+ */
 function begin(k: Kit, y: Yard, i: number, r: number, wire: Wire): boolean {
   const h = y.holders;
-  if (h.idle[r] === 1) return false;
+  if (h.idle[r] === 1 || h.also[r] !== k.NONE) return false;
   const found = choose(k, h, r, wire.recipes[y.kind[i] ?? k.NONE] ?? NO_RECIPES, y.set[i] ?? k.NONE);
   if (found === k.NONE) {
     h.idle[r] = 1;

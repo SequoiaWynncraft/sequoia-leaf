@@ -8,6 +8,7 @@
  * The yard keeps no purse: what it earns gathers in `till` until a command pays it in.
  */
 import type { Land } from "./land.ts";
+import { FACING, OWN, partOf, pieceOf } from "./sizes.ts";
 import {
   BLUEPRINTS_MOST,
   DEPOT,
@@ -43,6 +44,8 @@ export interface Holders {
   tile: Int32Array;
   /** A finished thing waiting to leave, and what is being made next. */
   out: Uint8Array;
+  /** What was made beside it (a recipe's by-product), waiting to leave by its own way out, or `NONE` (`KindDef.ports`). */
+  also: Uint8Array;
   making: Uint8Array;
   /**
    * What a machine last began to make, or `NONE` before it has begun anything (`lastRecipe`). It is
@@ -155,6 +158,11 @@ export interface Yard {
   /** What stands on each tile (`NONE` for nothing), and which way it sends things. */
   readonly kind: Uint8Array;
   readonly dir: Uint8Array;
+  /**
+   * For each tile of a piece of more than one tile, where the piece's own tile is from it (`sizes.ts`:
+   * every other part of the piece is kept on its own tile, once); 0 for every other tile.
+   */
+  readonly part: Uint8Array;
   /** What a belt, splitter, joiner or tunnel mouth carries, and how far across its tile, in eighths. */
   readonly item: Uint8Array;
   readonly prog: Uint8Array;
@@ -261,6 +269,7 @@ const holders = (cap: number): Holders => ({
   size: 0,
   tile: new Int32Array(cap),
   out: new Uint8Array(cap),
+  also: new Uint8Array(cap),
   making: new Uint8Array(cap),
   last: new Uint8Array(cap),
   work: new Uint16Array(cap),
@@ -286,6 +295,7 @@ export function emptyYard(land: Land, tier = 0): Yard {
     land,
     kind: new Uint8Array(n).fill(NONE),
     dir: new Uint8Array(n),
+    part: new Uint8Array(n),
     item: new Uint8Array(n).fill(NONE),
     prog: new Uint8Array(n),
     via: new Uint8Array(n),
@@ -338,11 +348,7 @@ export function emptyYard(land: Land, tier = 0): Yard {
     rev: 0,
   };
   const [cx, cy] = land.depot;
-  for (let dy = -1; dy <= 1; dy++)
-    for (let dx = -1; dx <= 1; dx++) {
-      const i = (cy + dy) * land.w + cx + dx;
-      if (i >= 0 && i < n) y.kind[i] = DEPOT;
-    }
+  place(y, cy * land.w + cx, DEPOT, 0);
   hold(y, nextHand(y.open));
   return y;
 }
@@ -426,6 +432,7 @@ export function holderRow(y: Yard, tile: number): number {
     for (const key of [
       "tile",
       "out",
+      "also",
       "making",
       "last",
       "work",
@@ -443,6 +450,7 @@ export function holderRow(y: Yard, tile: number): number {
   const r = h.size++;
   h.tile[r] = tile;
   h.out[r] = NONE;
+  h.also[r] = NONE;
   h.making[r] = NONE;
   h.last[r] = NONE;
   h.work[r] = 0;
@@ -481,7 +489,19 @@ export function dropRow(y: Yard, tile: number): void {
     const h = y.holders;
     const last = --h.size;
     if (r !== last) {
-      for (const key of ["tile", "out", "making", "last", "work", "idle", "open", "fuel", "kinds", "count"] as const)
+      for (const key of [
+        "tile",
+        "out",
+        "also",
+        "making",
+        "last",
+        "work",
+        "idle",
+        "open",
+        "fuel",
+        "kinds",
+        "count",
+      ] as const)
         h[key][r] = h[key][last] ?? 0;
       h.stock.copyWithin(r * ITEM_COUNT, last * ITEM_COUNT, (last + 1) * ITEM_COUNT);
       y.row[h.tile[r] ?? 0] = r;
@@ -528,18 +548,51 @@ export function enough(h: Holders, r: number, recipe: Recipe): boolean {
 
 // ---------- pieces on tiles ----------
 
-/** Sets a new piece of a kind down on a tile, facing a way, at a grade if its kind has one, with a row if it needs one. */
+/**
+ * Sets a new piece of a kind down on a tile, facing a way, at a grade if its kind has one, with a row
+ * if it needs one; one of more than one tile over every tile it covers (`cover`), which are on the map.
+ */
 export function place(y: Yard, i: number, k: Kind, d: number, g = 1): void {
   vacate(y, i);
   y.kind[i] = k;
   y.dir[i] = d;
   y.grade[i] = gradeOf(k, g);
   if (holds(k)) y.row[i] = holderRow(y, i);
+  if ((FACING[k]?.[d & 3]?.dx.length ?? 1) > 1) cover(y, i, k, d & 3);
 }
 
-/** Takes whatever stands on a tile away, row and all, leaving it as new ground. */
+/** Lays the piece of more than one tile standing on its own tile `i` over the rest of its tiles: each takes its kind and where its own tile is, and nothing else. */
+export function cover(y: Yard, i: number, k: Kind, d: number): void {
+  const f = FACING[k]?.[d];
+  if (!f) return;
+  const w = y.land.w;
+  y.part[i] = OWN;
+  for (let t = 1; t < f.dx.length; t++) {
+    const dx = f.dx[t] ?? 0;
+    const dy = f.dy[t] ?? 0;
+    const c = i + dx + dy * w;
+    vacate(y, c);
+    y.kind[c] = k;
+    y.part[c] = partOf(-dx, -dy);
+  }
+}
+
+/** Takes whatever stands on a tile away, row and all, leaving it as new ground: every tile of a piece of more than one. */
 export function vacate(y: Yard, i: number): void {
+  if ((y.part[i] ?? 0) === 0) {
+    clearTile(y, i);
+    return;
+  }
+  const own = pieceOf(y, i);
+  const f = FACING[y.kind[own] ?? NONE]?.[(y.dir[own] ?? 0) & 3];
+  for (let t = 1; t < (f?.dx.length ?? 0); t++) clearTile(y, own + (f?.dx[t] ?? 0) + (f?.dy[t] ?? 0) * y.land.w);
+  clearTile(y, own);
+}
+
+/** Clears one tile, its row given back. */
+function clearTile(y: Yard, i: number): void {
   dropRow(y, i);
+  y.part[i] = 0;
   y.made[i] = ((y.made[i] ?? 0) + 1) & 255;
   y.kind[i] = NONE;
   y.dir[i] = 0;
