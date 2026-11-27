@@ -21,6 +21,13 @@ export interface Listen {
 
 const nothing: Release = () => undefined;
 
+/**
+ * The scope of each thing the browser holds for one (a listener, a timer's or a frame's function, an
+ * observer, a socket), kept while the browser keeps that thing: a scope lives as long as anything it
+ * started is live, so the page can still close it (`pageScopes`), and no longer than that.
+ */
+const KEPT = new WeakMap<object, Scope>();
+
 export class Scope {
   /** What it holds, as how to let go of each; null once it has closed. */
   #held: Set<Release> | null = new Set();
@@ -90,6 +97,7 @@ export class Scope {
   on(target: EventTarget, kind: string, fn: (e: Event) => void, opts: Listen = {}): Release {
     if (this.closed) return nothing;
     const heard = (e: Event): void => fn(e);
+    KEPT.set(heard, this);
     target.addEventListener(kind, heard, opts);
     return this.#own(() => target.removeEventListener(kind, heard, opts));
   }
@@ -97,10 +105,12 @@ export class Scope {
   /** Runs `fn` once, `ms` from now. */
   after(ms: number, fn: () => void): Release {
     if (this.closed) return nothing;
-    const id = setTimeout(() => {
+    const ran = (): void => {
       off();
       fn();
-    }, ms);
+    };
+    KEPT.set(ran, this);
+    const id = setTimeout(ran, ms);
     const off = this.#own(() => clearTimeout(id));
     return off;
   }
@@ -108,17 +118,21 @@ export class Scope {
   /** Runs `fn` every `ms`. */
   every(ms: number, fn: () => void): Release {
     if (this.closed) return nothing;
-    const id = setInterval(fn, ms);
+    const ran = (): void => fn();
+    KEPT.set(ran, this);
+    const id = setInterval(ran, ms);
     return this.#own(() => clearInterval(id));
   }
 
   /** Runs `fn` before the next frame is drawn, once. */
   frame(fn: (t: number) => void): Release {
     if (this.closed) return nothing;
-    const id = requestAnimationFrame((t) => {
+    const drawn = (t: number): void => {
       off();
       fn(t);
-    });
+    };
+    KEPT.set(drawn, this);
+    const id = requestAnimationFrame(drawn);
     const off = this.#own(() => cancelAnimationFrame(id));
     return off;
   }
@@ -128,10 +142,12 @@ export class Scope {
     if (this.closed) return nothing;
     if (what === "size") {
       const sized = new ResizeObserver(fn);
+      KEPT.set(sized, this);
       sized.observe(node);
       return this.#own(() => sized.disconnect());
     }
     const changed = new MutationObserver(fn);
+    KEPT.set(changed, this);
     changed.observe(node, what);
     return this.#own(() => changed.disconnect());
   }
@@ -143,6 +159,7 @@ export class Scope {
   ): { readonly socket: WebSocket; readonly release: Release } | null {
     if (this.closed) return null;
     const socket = new WebSocket(url, protocols);
+    KEPT.set(socket, this);
     return { socket, release: this.#own(() => socket.close()) };
   }
 
@@ -161,8 +178,9 @@ export const TAKEN = "leaf:taken";
 /**
  * A page's maker of scopes: every scope it makes closes when `events` hears `TAKEN`, so nothing the
  * page opened runs on against a page the guard has taken, and one made after that is closed from the
- * start. It holds them only weakly: a scope nobody closes (one on an element that is thrown away) goes
- * with what it was on, as it would with no page to close it.
+ * start. It holds them only weakly: a scope lives while anything it started is live (`KEPT`), so one
+ * on an element that is thrown away goes with the element, and one listening on the window stays
+ * until it is closed.
  */
 export function pageScopes(events: EventTarget | null): () => Scope {
   const live = new Set<WeakRef<Scope>>();

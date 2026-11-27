@@ -216,12 +216,35 @@ describe("a page's build", () => {
 });
 
 describe("a page's scopes", () => {
-  test("are not kept by the page: one nobody closes goes as nothing else holds it", async () => {
+  test("are not kept by the page: one nobody closes, on a thing thrown away, goes with it", async () => {
     const make = pageScopes(new EventTarget());
-    const lost = (() => new WeakRef(make()))();
+    const lost = (() => {
+      const made = make();
+      made.on(new EventTarget(), "input", () => undefined);
+      return new WeakRef(made);
+    })();
     await Bun.sleep(0);
     Bun.gc(true);
     expect(lost.deref()).toBeUndefined();
+  });
+
+  test("are kept while what they started is live, so the page still closes one nobody else holds", async () => {
+    const events = new EventTarget();
+    const make = pageScopes(events);
+    const window = new EventTarget();
+    const heard: string[] = [];
+    const kept = (() => {
+      const made = make();
+      made.on(window, "resize", () => heard.push("resize"));
+      return new WeakRef(made);
+    })();
+    await Bun.sleep(0);
+    Bun.gc(true);
+    expect(kept.deref()).toBeDefined();
+    window.dispatchEvent(new Event("resize"));
+    events.dispatchEvent(new Event(TAKEN));
+    window.dispatchEvent(new Event("resize"));
+    expect(heard).toEqual(["resize"]);
   });
 
   test("close as the page is taken, and one made after is closed from the start", () => {
