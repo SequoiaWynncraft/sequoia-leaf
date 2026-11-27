@@ -3,7 +3,20 @@
  * it is drawn (once, from its own tile, over the box), where its ways out are, and the box its marks
  * go round. A piece of one tile is its tile, and nothing here changes how it is drawn.
  */
-import { cornerOf, DX, DY, FACING, isItem, NONE, OWN, pieceOf, sizeOf, tileAt, type Yard } from "@sequoia-leaf/factory";
+import {
+  cornerOf,
+  DX,
+  DY,
+  FACING,
+  isItem,
+  NONE,
+  OWN,
+  pieceOf,
+  piecesTiles,
+  sizeOf,
+  tileAt,
+  type Yard,
+} from "@sequoia-leaf/factory";
 
 import { TILE } from "./art/belts.ts";
 import type { Art } from "./art/index.ts";
@@ -46,6 +59,28 @@ export function pieceOn(y: Yard, tx: number, ty: number): { i: number; k: number
   const i = t < 0 ? t : pieceOf(y, t);
   const k = y.kind[i] ?? NONE;
   return i < 0 ? { i, k, x: tx, y: ty } : { i, k, x: i % W, y: Math.floor(i / W) };
+}
+
+/** What a mark covers, by its tiles, worked out once for each mark (`markCovers`). */
+const COVERS = new WeakMap<readonly number[], { readonly all: readonly number[]; readonly on: Uint8Array }>();
+
+/**
+ * Every tile the pieces marked on some tiles cover (a mark's, `Mark.tiles`), a piece of more than one
+ * by all its tiles, which a mark names by its own: the tiles, and a byte a tile, 1 where one is. What
+ * every zoom lights for a mark, and dims for pieces moved. Worked out once for each mark.
+ */
+export function markCovers(
+  y: Yard,
+  tiles: readonly number[],
+): { readonly all: readonly number[]; readonly on: Uint8Array } {
+  const known = COVERS.get(tiles);
+  if (known) return known;
+  const all = tiles.flatMap((i) => piecesTiles(y, i));
+  const on = new Uint8Array(y.kind.length);
+  for (const i of all) on[i] = 1;
+  const covers = { all, on };
+  COVERS.set(tiles, covers);
+  return covers;
 }
 
 /** Whether a piece is drawn from a tile: its own tile, for one of more than one; every tile of one of one. */

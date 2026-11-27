@@ -30,7 +30,6 @@ import {
   NONE,
   openOf,
   PACE,
-  piecesTiles,
   REACH,
   REACHES,
   SHUTS,
@@ -51,7 +50,7 @@ import { BEYOND, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
 import { DEPOT as DEPOT_ART, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
-import { aimBox, boxIn, drawnFrom, heldIn, pointersOn } from "./big.ts";
+import { aimBox, boxIn, drawnFrom, heldIn, markCovers, pointersOn } from "./big.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
 import { bits, floaters, rings } from "./fx.ts";
 import { heldBox, heldMarks } from "./held.ts";
@@ -693,9 +692,6 @@ function notes(): readonly [HTMLCanvasElement, HTMLCanvasElement] {
 
 // ---------- many pieces at once: the area marked, and the pieces in hand ----------
 
-/** The tiles of the mark last drawn, by tile, to find its edges. */
-let masked: { of: Mark["tiles"]; on: Uint8Array; all: readonly number[] } | null = null;
-
 /**
  * The area marked with Select. Every piece in it is lit gold on its tile, with a gold line where
  * the marked pieces end, so they read as one shape however far out the view is; the area itself
@@ -704,14 +700,8 @@ let masked: { of: Mark["tiles"]; on: Uint8Array; all: readonly number[] } | null
  */
 function marked(g: Ctx, w: Yard, m: Mark, cx: number, cy: number): void {
   const W = w.land.w;
-  if (masked?.of !== m.tiles) {
-    const on = new Uint8Array(w.kind.length);
-    // Every tile of a piece of more than one, marked by its own.
-    const all = m.tiles.flatMap((i) => piecesTiles(w, i));
-    for (const i of all) on[i] = 1;
-    masked = { of: m.tiles, on, all };
-  }
-  const { on, all } = masked;
+  // Every tile of a piece of more than one, marked by its own; by tile too, to find the mark's edges.
+  const { on, all } = markCovers(w, m.tiles);
   const leaving = S.group?.as === "move";
   g.globalCompositeOperation = leaving ? "source-over" : "lighter";
   g.fillStyle = leaving ? "rgba(26,15,30,0.5)" : `rgba(255,176,64,${0.26 + 0.07 * Math.sin(S.t * 5)})`;

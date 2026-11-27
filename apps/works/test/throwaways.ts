@@ -393,7 +393,8 @@ import { withArm } from "./apps/works/src/art/belts.ts";
 import { aimBox, drawnFrom, pieceBox } from "./apps/works/src/big.ts";
 import { beltArms } from "./apps/works/src/kinds/carrier.ts";
 import { asIf } from "./apps/works/src/layout.ts";
-import { pickFrom, turnAt } from "./apps/works/src/tools.ts";
+import { drawPlanMarks } from "./apps/works/src/far.ts";
+import { markEnd, markOver, markStart, pickFrom, setTool, turnAt } from "./apps/works/src/tools.ts";
 import { footprint } from "./apps/works/src/figure/reach.ts";
 import { PAGES } from "./apps/works/src/kinds/index.ts";
 import { lampsIn } from "./apps/works/src/lamps.ts";
@@ -440,12 +441,28 @@ F.build(y, F.BELT, 6, 4, 3, Infinity);
 F.build(y, F.BELT, 6, 5, 1, Infinity);
 const fedFromWest = (x, z, d) => beltArms(y, F.at(y, x, z), false) === withArm(withArm(0, d, 2), 2, 1);
 const portArms = fedFromWest(6, 4, 3) && fedFromWest(6, 5, 1);
+// At map zoom (four pixels a tile) the forge on (20, 10), marked with Select, is lit on all nine of its tiles.
+S.view.z = 0.25;
+const rects = () => {
+  const drawn = new Set();
+  const g = new Proxy({}, { get: (_t, k) => (k === "fillRect" ? (x, z, w, h) => drawn.add([x, z, w, h].join(",")) : () => {}), set: () => true });
+  drawPlanMarks(g, y, 0, 0);
+  return drawn;
+};
+const unmarked = rects();
+setTool("select");
+markStart(19, 9);
+markOver(21, 11);
+markEnd();
+const lit = [...rects()].filter((r) => !unmarked.has(r));
+const farMark = lit.length === 9 && tiles.every((t) => lit.includes([(t % 34) * 4, Math.floor(t / 34) * 4, 4, 4].join(",")));
 console.log(
   JSON.stringify({
     preview: laid(preview) === laid(built) && previewOnce === 2,
     pointerPiece: picked && turnedOn,
     reachTurned,
     portArms,
+    farMark,
     aimBoxes: boxes[0] === JSON.stringify({ x: 9, y: 4, w: 3, h: 3 }) && boxes[1] === JSON.stringify({ x: 19, y: 9, w: 3, h: 3 }),
     docked: DRAWN.includes(FORGE) && DRAWN.includes(SIFTER),
     card: tiles.every((t) => refAt(t % 34, Math.floor(t / 34)) === tileRef(own)),
@@ -465,6 +482,7 @@ export const PAGED_BIG = Object.fromEntries(
     "pointerPiece",
     "reachTurned",
     "portArms",
+    "farMark",
     "docked",
     "card",
     "drawnOnce",

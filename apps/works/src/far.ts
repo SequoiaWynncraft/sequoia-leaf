@@ -26,7 +26,7 @@ import { CORAL, CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import type { Ctx } from "@sequoia-leaf/kit/util.ts";
 
 import { PAINTS, TILE } from "./art/belts.ts";
-import { aimBox } from "./big.ts";
+import { aimBox, markCovers } from "./big.ts";
 import { you } from "./figure/you.ts";
 import { heldBox, takenUp } from "./held.ts";
 import type { Layout } from "./layout.ts";
@@ -190,7 +190,7 @@ export function drawPlanMarks(g: Ctx, y: Yard, dx: number, dy: number): void {
     const m = S.mark;
     const leaving = S.group?.as === "move";
     g.fillStyle = leaving ? "rgba(26,15,30,0.55)" : "rgba(255,196,84,0.5)";
-    for (const i of m.tiles) if (y.kind[i] !== NONE) g.fillRect(X(i), Y(i), P, P);
+    for (const i of markCovers(y, m.tiles).all) if (y.kind[i] !== NONE) g.fillRect(X(i), Y(i), P, P);
     g.strokeStyle = CREAM;
     g.lineWidth = 1;
     g.setLineDash([3, 3]);
