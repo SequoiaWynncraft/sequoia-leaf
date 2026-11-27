@@ -86,7 +86,7 @@
     "packages/town/src/game.ts": 97
   },
   "max-lines": {
-    "apps/api/src/play/service.ts": 622,
+    "apps/api/src/play/service.ts": 621,
     "apps/battler/src/screen/ui/pages.ts": 517,
     "apps/battler/src/screen/ui/table.ts": 540,
     "apps/town/src/campart.ts": 1389,

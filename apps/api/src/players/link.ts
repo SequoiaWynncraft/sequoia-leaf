@@ -65,7 +65,9 @@ export const discordPlayer = Effect.fnUntraced(function* (discord: DiscordId, na
  *
  * - A Discord account Leaf does not know yet signs in as its account's player.
  * - A player who came with Discord alone, and now has linked this account, is taken into the
- *   account's player (`mergeInto`): the Leaf the guild paid it, their games, all in one place.
+ *   account's player (`mergeInto`): the Leaf the guild paid it, their games, all in one place. While
+ *   either is at a live raid table the merge waits: the session signs in as the account's player, the
+ *   Discord account stays its own player for now, and the next sign-in tries again.
  * - An account whose player is somebody else's (another Discord account signs in as them) has gone
  *   to this member: it now signs in as the member's player, and the other keeps what they played.
  * - Otherwise (the member made another account their primary) the Discord account follows the
@@ -92,7 +94,7 @@ export const accountPlayer = Effect.fnUntraced(function* (
     return player;
   }
   if (ofDiscord !== undefined && (yield* logins.discordOnly(ofDiscord))) {
-    yield* mergeInto(ofDiscord, ofAccount, account, now);
+    if ((yield* mergeInto(ofDiscord, ofAccount, account, now)).status === "waits") return ofAccount;
   }
   yield* logins.linkDiscord(discord, ofAccount, now);
   return ofAccount;

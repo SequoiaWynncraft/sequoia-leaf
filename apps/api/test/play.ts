@@ -65,16 +65,18 @@
  * the four reach a level n times between them, n more events after those), and `POST /test/play/pulls` one
  * in Tester's pulls (a banner's headliner, Leaf's clock on a day the banner is open, Leaf,
  * counters, Seeds and prizes: `stage-pulls.ts`), and `POST /test/play/tally` fills the Tally's boards
- * with everybody here, Tester off the top of most (`stage-tally.ts`); nothing like them is served
- * by the guild's own Leaf.
+ * with everybody here, Tester off the top of most (`stage-tally.ts`); and for the raid's sittings,
+ * `POST /test/play/sittings` with `{ "stage": [{ "later": ms }] }` moves Leaf's clock on by that
+ * much from now on, and answers Leaf's clock and the largest sitting stored, in bytes
+ * (`sittings-play.ts` plays a whole one with it); nothing like them is served by the guild's own Leaf.
  */
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { CLIENT_HZ, Flag, leaf as leafOf, type PlayerId, playerId, utcDay } from "@sequoia-leaf/core";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import type { SqlClient } from "effect/sql";
+import { SqlClient } from "effect/sql";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
@@ -795,6 +797,21 @@ const stageTheTown = (ops: readonly unknown[]) =>
     }
     return yield* stageTown(tester.id, ops, others);
   });
+/** Moves Leaf's clock on for the raid's sittings, which wait on it: `{ later: ms }`; and says how large the largest stored is. */
+const stageTheSittings = (ops: readonly unknown[]) =>
+  Effect.gen(function* () {
+    for (const op of ops) {
+      if (typeof op === "object" && op !== null && "later" in op && typeof op.later === "number" && op.later > 0)
+        ahead += op.later;
+    }
+    const sql = yield* SqlClient.SqlClient;
+    const [row] = yield* sql`SELECT max(length(state)) AS largest FROM raid_sittings`.pipe(
+      Effect.flatMap(
+        Schema.decodeUnknownEffect(Schema.Array(Schema.Struct({ largest: Schema.NullOr(Schema.Number) }))),
+      ),
+    );
+    return { now: clock.now, largest: row?.largest ?? 0 };
+  });
 /** Everybody but Tester whose yard or camp a tour may stage. */
 const others = [
   ...mates.map((m) => ({ id: m.id, guest: false })),
@@ -811,6 +828,7 @@ const served = await leaf.serve(
     stagingRoute("works", (ops) => stageWorks(tester.id, ops, others)),
     stagingRoute("pulls", (ops) => stageThePulls(ops)),
     stagingRoute("tally", () => stageTally(tester.id, others, clock.now)),
+    stagingRoute("sittings", stageTheSittings),
   ),
 );
 

@@ -3136,5 +3136,575 @@
         }
       ]
     }
+  },
+  "POST /v1/game/sittings": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/sittings",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001"
+      }
+    },
+    "status": 200,
+    "body": {
+      "id": "d61a4489874446dc",
+      "rev": 0,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "by": "10000000-0000-0000-0000-000000000001",
+        "stage": {
+          "at": "open",
+          "until": 1795613100000,
+          "sat": [
+            {
+              "id": "10000000-0000-0000-0000-000000000001",
+              "name": "Alice"
+            }
+          ]
+        },
+        "room": 0,
+        "kind": "trouble",
+        "seats": [],
+        "you": null,
+        "run": null
+      },
+      "purse": {
+        "coins": 275,
+        "leaf": 1163,
+        "version": 22
+      }
+    }
+  },
+  "GET /v1/game/sittings": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/sittings"
+    },
+    "status": 200,
+    "body": {
+      "now": "2026-11-25T12:55:00.000Z",
+      "open": [
+        {
+          "id": "d61a4489874446dc",
+          "by": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "name": "Alice"
+          },
+          "sat": 1,
+          "closes": "2026-11-25T13:25:00.000Z"
+        }
+      ],
+      "yours": null
+    }
+  },
+  "POST /v1/game/sittings/{id}": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/sittings/d61a4489874446dc",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002",
+        "commands": [
+          {
+            "id": "s-1",
+            "do": "sit"
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "id": "d61a4489874446dc",
+      "rev": 1,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "by": "10000000-0000-0000-0000-000000000001",
+        "stage": {
+          "at": "open",
+          "until": 1795613100000,
+          "sat": [
+            {
+              "id": "10000000-0000-0000-0000-000000000001",
+              "name": "Alice"
+            },
+            {
+              "id": "10000000-0000-0000-0000-000000000002",
+              "name": "Bob"
+            }
+          ]
+        },
+        "room": 0,
+        "kind": "trouble",
+        "seats": [],
+        "you": null,
+        "run": null
+      },
+      "purse": {
+        "coins": 300,
+        "leaf": 220,
+        "version": 17
+      },
+      "results": [
+        {
+          "id": "s-1",
+          "notes": []
+        }
+      ]
+    }
+  },
+  "POST /v1/game/sittings/{id}, a refusal": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/sittings/d61a4489874446dc",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002",
+        "commands": [
+          {
+            "id": "s-2",
+            "do": "start"
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "id": "d61a4489874446dc",
+      "rev": 1,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "by": "10000000-0000-0000-0000-000000000001",
+        "stage": {
+          "at": "open",
+          "until": 1795613100000,
+          "sat": [
+            {
+              "id": "10000000-0000-0000-0000-000000000001",
+              "name": "Alice"
+            },
+            {
+              "id": "10000000-0000-0000-0000-000000000002",
+              "name": "Bob"
+            }
+          ]
+        },
+        "room": 0,
+        "kind": "trouble",
+        "seats": [],
+        "you": null,
+        "run": null
+      },
+      "purse": {
+        "coins": 300,
+        "leaf": 220,
+        "version": 17
+      },
+      "results": [
+        {
+          "id": "s-2",
+          "refused": "not_opener",
+          "why": "Whoever opened the table starts it."
+        }
+      ]
+    }
+  },
+  "POST /v1/game/sittings, seated elsewhere": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/sittings",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002"
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "seated_elsewhere",
+      "message": "You are at another table."
+    }
+  },
+  "GET /v1/game/sittings/{id}, unchanged": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/sittings/d61a4489874446dc?rev=1"
+    },
+    "status": 200,
+    "body": {
+      "id": "d61a4489874446dc",
+      "rev": 1,
+      "now": "2026-11-25T12:55:00.000Z",
+      "unchanged": true
+    }
+  },
+  "POST /v1/game/sittings/{id}, started": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/sittings/d61a4489874446dc",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "s-3",
+            "do": "start"
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "id": "d61a4489874446dc",
+      "rev": 2,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "by": "10000000-0000-0000-0000-000000000001",
+        "stage": {
+          "at": "carousel",
+          "until": 1795611312000,
+          "ring": [
+            {
+              "kind": "emberkit",
+              "item": "chestnut",
+              "by": null
+            },
+            {
+              "kind": "barrowgnome",
+              "item": "chestnut",
+              "by": null
+            },
+            {
+              "kind": "moth",
+              "item": "plume",
+              "by": null
+            },
+            {
+              "kind": "crab7",
+              "item": "glowcap",
+              "by": null
+            },
+            {
+              "kind": "worm",
+              "item": "bark",
+              "by": null
+            },
+            {
+              "kind": "mossmote",
+              "item": "bark",
+              "by": null
+            },
+            {
+              "kind": "finch",
+              "item": "thorn",
+              "by": null
+            },
+            {
+              "kind": "finch",
+              "item": "thorn",
+              "by": null
+            },
+            {
+              "kind": "barrowgnome",
+              "item": "glowcap",
+              "by": null
+            }
+          ],
+          "turns": [0, 1, 2, 3, 4, 5, 6, 7],
+          "open": 8
+        },
+        "room": 0,
+        "kind": "trouble",
+        "seats": [
+          {
+            "who": {
+              "is": "member",
+              "id": "10000000-0000-0000-0000-000000000001",
+              "name": "Alice"
+            },
+            "name": "Alice",
+            "resolve": 20,
+            "level": 1,
+            "streak": 0,
+            "place": null,
+            "faces": null,
+            "board": {
+              "who": "Alice",
+              "title": "",
+              "figures": [],
+              "boons": [],
+              "might": 100,
+              "by": "10000000-0000-0000-0000-000000000001"
+            },
+            "fight": null
+          },
+          {
+            "who": {
+              "is": "member",
+              "id": "10000000-0000-0000-0000-000000000002",
+              "name": "Bob"
+            },
+            "name": "Bob",
+            "resolve": 20,
+            "level": 1,
+            "streak": 0,
+            "place": null,
+            "faces": null,
+            "board": {
+              "who": "Bob",
+              "title": "",
+              "figures": [],
+              "boons": [],
+              "might": 100,
+              "by": "10000000-0000-0000-0000-000000000002"
+            },
+            "fight": null
+          },
+          {
+            "who": {
+              "is": "regular",
+              "figure": "chickaree",
+              "habit": "burrow"
+            },
+            "name": "Chickaree",
+            "resolve": 20,
+            "level": 1,
+            "streak": 0,
+            "place": null,
+            "faces": null,
+            "board": {
+              "who": "Chickaree",
+              "title": "",
+              "figures": [],
+              "boons": [],
+              "might": 100
+            },
+            "fight": null
+          },
+          {
+            "who": {
+              "is": "regular",
+              "figure": "mossmote",
+              "habit": "mender"
+            },
+            "name": "Mossmote",
+            "resolve": 20,
+            "level": 1,
+            "streak": 0,
+            "place": null,
+            "faces": null,
+            "board": {
+              "who": "Mossmote",
+              "title": "",
+              "figures": [],
+              "boons": [],
+              "might": 100
+            },
+            "fight": null
+          },
+          {
+            "who": {
+              "is": "regular",
+              "figure": "cindernewt",
+              "habit": "ember"
+            },
+            "name": "Cinder Newt",
+            "resolve": 20,
+            "level": 1,
+            "streak": 0,
+            "place": null,
+            "faces": null,
+            "board": {
+              "who": "Cinder Newt",
+              "title": "",
+              "figures": [],
+              "boons": [],
+              "might": 100
+            },
+            "fight": null
+          },
+          {
+            "who": {
+              "is": "regular",
+              "figure": "rock",
+              "habit": "bulwark"
+            },
+            "name": "Rock",
+            "resolve": 20,
+            "level": 1,
+            "streak": 0,
+            "place": null,
+            "faces": null,
+            "board": {
+              "who": "Rock",
+              "title": "",
+              "figures": [],
+              "boons": [],
+              "might": 100
+            },
+            "fight": null
+          },
+          {
+            "who": {
+              "is": "regular",
+              "figure": "jay",
+              "habit": "feather"
+            },
+            "name": "Dusk Jay",
+            "resolve": 20,
+            "level": 1,
+            "streak": 0,
+            "place": null,
+            "faces": null,
+            "board": {
+              "who": "Dusk Jay",
+              "title": "",
+              "figures": [],
+              "boons": [],
+              "might": 100
+            },
+            "fight": null
+          },
+          {
+            "who": {
+              "is": "regular",
+              "figure": "slug",
+              "habit": "bulwark"
+            },
+            "name": "Slug",
+            "resolve": 20,
+            "level": 1,
+            "streak": 0,
+            "place": null,
+            "faces": null,
+            "board": {
+              "who": "Slug",
+              "title": "",
+              "figures": [],
+              "boons": [],
+              "might": 100
+            },
+            "fight": null
+          }
+        ],
+        "you": 0,
+        "run": {
+          "trail": 0,
+          "room": 0,
+          "stage": {
+            "phase": "plan",
+            "picks": [
+              {
+                "kind": "starter",
+                "options": ["emberkit", "mossmote", "worm"]
+              }
+            ]
+          },
+          "resolve": 20,
+          "acorns": 2,
+          "streak": 0,
+          "level": 1,
+          "xp": 0,
+          "board": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
+          "items": [],
+          "stall": ["moth", "moth", "finch", "barrowgnome", "mossmote"],
+          "held": false,
+          "rustles": 1,
+          "bought": 0,
+          "boons": [],
+          "foe": {
+            "who": "The forest",
+            "title": "A few gnats",
+            "figures": [
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 2,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 4,
+                "items": [],
+                "fed": 0
+              }
+            ],
+            "boons": [],
+            "might": 100
+          },
+          "record": [],
+          "nextId": 1,
+          "last": null,
+          "own": null,
+          "endless": null,
+          "seen": {
+            "fielded": [],
+            "threeStars": [],
+            "forged": [],
+            "topped": []
+          }
+        }
+      },
+      "purse": {
+        "coins": 275,
+        "leaf": 1163,
+        "version": 22
+      },
+      "results": [
+        {
+          "id": "s-3",
+          "notes": []
+        }
+      ]
+    }
+  },
+  "GET /v1/game/sittings/{id}, no such sitting": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/sittings/0123456789abcdef"
+    },
+    "status": 404,
+    "body": {
+      "code": "no_such_sitting",
+      "message": "There is no such table"
+    }
+  },
+  "GET /v1/game/sittings/record": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/sittings/record"
+    },
+    "status": 200,
+    "body": {
+      "played": 2,
+      "won": 1,
+      "top_four": 1
+    }
   }
 }

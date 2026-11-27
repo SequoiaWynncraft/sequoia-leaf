@@ -440,6 +440,32 @@ reads what it missed itself, then joins the look, and sends each event once.
 | `GET /v1/game/requests`                 | The Treasury's aspect and tome requests: their price, or why not.      |
 | `POST /v1/game/requests`                | Buys one with Leaf, through the backend.                               |
 
+| Route                                 | What it returns                                                       |
+| ------------------------------------- | --------------------------------------------------------------------- |
+| `GET /v1/game/hello`                  | Where to sign in, and whether Leaf may be spent. Needs no session.    |
+| `GET /v1/game/me`                     | The player, their rank, Leaf, XP, level, newest event's id and Coins. |
+| `GET /v1/game/skins/{uuid}`           | A player's skin sheet, as a PNG.                                      |
+| `GET /v1/game/guild/events`           | What happened across the guild, oldest first.                         |
+| `GET /v1/game/guild/events/stream`    | The same as it happens, as server-sent events.                        |
+| `PUT /v1/game/presence`               | Says where in the game the player is; lists who is there and resting. |
+| `GET /v1/game/presence`               | The same lists, saying nothing: for a page in a live room.            |
+| `GET /v1/game/admin/activity`         | For the staff alone: who played, when, where and for how long.        |
+| `GET /v1/game/play/{game}`            | The player's state in a game Leaf plays, as their page is shown it.   |
+| `POST /v1/game/play/{game}`           | Does a batch of commands in that game, and answers what each did.     |
+| `GET /v1/game/play/{game}/standings`  | The game's board: the twenty highest, and the player's own place.     |
+| `GET /v1/game/sittings`               | The raid's tables open to sit at, and the player's own.               |
+| `POST /v1/game/sittings`              | Opens a table of the raid, with the player sat at it.                 |
+| `GET /v1/game/sittings/{id}`          | A table as the player is shown it, or unchanged since their `rev`.    |
+| `POST /v1/game/sittings/{id}`         | Does a batch of commands at a table, and answers what each did.       |
+| `GET /v1/game/sittings/record`        | The player's tables finished, won, and finished in the first four.    |
+| `GET /v1/game/tally/{board}/{period}` | A board of the Tally: its top ten, and the player's own place.        |
+| `GET /v1/game/camps`                  | Every camp: whose, the things set out, its likes, the player's own.   |
+| `GET /v1/game/camps/visitors`         | Who likes the player's camp, and who stayed in it this week.          |
+| `PUT /v1/game/camps/{player}/like`    | Likes their camp; `DELETE` takes the like back.                       |
+| `GET /v1/game/banners`                | Every pull banner, its dates, and its headliner's id and name.        |
+| `GET /v1/game/requests`               | The Treasury's aspect and tome requests: their price, or why not.     |
+| `POST /v1/game/requests`              | Buys one with Leaf, through the backend.                              |
+
 Every one but `hello` takes a session, as above, and lets in anyone signed in,
 member of the guild or not. Someone who is neither a member nor a website admin
 plays as a **guest**: they have games, skins and presence like a member, and
@@ -940,6 +966,117 @@ brought over as it is read (`fromFirst` in `packages/factory/src/codec.ts`):
 a new yard at the tier its story had reached, its plots and the pieces that
 tier allows standing where they stood, what cannot stand yet paid back into
 its till, and its totals kept, so its place on the board holds.
+
+### The raid's tables (sittings)
+
+A sitting is The Little Raid played by up to eight at once, on Leaf's clock: what a
+sitting is, its stages and their clocks, its commands and what a page is shown of it
+are in "A sitting" in `packages/raid/src/README.md`. Leaf keeps them
+(`apps/api/src/sittings`) beside the play service, not in it: a sitting is
+nobody's state, so it has no lane of a player's.
+
+**What Leaf keeps.** Each sitting (`raid_sittings`): its id, its state as the rules
+encode it, its `rev` (how many writes have changed it), who opened it and when,
+its stage, when it is next due (its stage's `until`) and when it ended. Who is
+seated where (`raid_sitting_seats`, one row a player): everyone sat at an open
+sitting and each member still in at a started one. The player is the key, so the
+database holds that nobody is at two sittings at once, whatever two requests do
+together. Each member's place at a sitting (`raid_sitting_places`: the sitting,
+the player, the place, of how many seats, and when it was kept). A sitting is let
+go of a day after it ended; its places are kept for good.
+
+**The clock.** Every read and every command brings the sitting to Leaf's clock
+first, one job at a time for each sitting, and writes it only if that changed
+it, in one transaction with everything that follows: seats taken and freed,
+places kept, Coins paid, what it logs, and the answers to the commands. The
+write checks the `rev` it read; another Leaf having written meanwhile, nothing
+is kept and the job is done again from what is stored. No timer has to fire for
+a sitting to be right: once a minute (with the tending, `tend_sweep`) Leaf brings
+every sitting whose due moment has passed to the clock, so that Coins are paid,
+seats freed and tables nobody started closed even when nobody looks. Each
+command gets fresh dice from the machine's secure randomness, never shown.
+
+**Who sits.** Anyone signed in, guests too. A player seated at a sitting that is
+not over may not open or sit at another (`seated_elsewhere`); a solo run of the
+raid does not count. A member out of a started sitting (by resolve, or by
+leaving) is no longer seated and may sit elsewhere, and may still watch the one
+they were at. Before a player opens or sits, the sitting they are seated at is
+brought to the clock, so one over by then frees them.
+
+**The routes.** `now` is Leaf's clock as ISO time; inside `state`, the rules'
+moments (`stage.until`, `stage.ended`) are Leaf's milliseconds.
+
+- `GET /v1/game/sittings` answers `{ "now", "open": [{ "id", "by": { "id",
+"name" }, "sat", "closes" }], "yours" }`: the sittings open to sit at, not yet
+  closed, the longest open first, at most 50; who opened each (their Leaf id and
+  name), how many sat, when it closes; and the id of the sitting the caller is
+  seated at, or null.
+- `POST /v1/game/sittings` takes `{ "player" }` (the caller, as their page
+  believes: another gets 409 `not_you`) and opens a sitting with the caller sat
+  at it, answered as below. Refused: 409 `seated_elsewhere`; 409 `sittings_full`
+  when 500 are not over; 429 `slow_down` for a player who opened one in the last
+  minute, or is past their allowance; nothing is opened.
+- `GET /v1/game/sittings/{id}` answers `{ "id", "rev", "now", "state", "purse" }`:
+  the sitting brought to the clock, `state` as the caller is shown it
+  (`sittingView`: they need not be seated), and their Coins and Leaf as
+  `/v1/game/me` has them. With `?rev=<n>`, the `rev` the page has, and nothing
+  changed since, it answers `{ "id", "rev", "now", "unchanged": true }` and
+  reads no more than the `rev` and the due moment. 404 `no_such_sitting` for
+  none (or one let go of); 409 `state_unreadable` for one stored that does not
+  read, which is logged, has its seats freed and is over.
+- `POST /v1/game/sittings/{id}` takes `{ "player", "commands": [{ "id", "do",
+... }] }`, as a game's batch does (at most 128 commands, each with an id of
+  its own), and answers the same as a read with `results` beside it: for each
+  command, `{ "id", "notes" }` or `{ "id", "refused", "why" }`, the rules' code
+  and sentence (`seated_elsewhere`, "You are at another table.", is Leaf's).
+  The commands are `sit`, `leave`, `start`, `pick` and the run's planning
+  commands (`readCommand` in `packages/raid/src/sitting/commands.ts`). A command
+  whose id the caller used before at a sitting (Leaf keeps their newest 256)
+  answers as it did then and is not done again. Commands take from the player's
+  allowance, the one the play service's take from too (429 `slow_down`). 400
+  `invalid_command` for a batch that is not one.
+- `GET /v1/game/sittings/record` answers `{ "played", "won", "top_four" }`: the
+  caller's sittings finished, won (first place), and finished in the first four.
+
+**Being told.** A page asks again at its stage's `until`, and while a sitting
+is open or in a carousel every 2 seconds (others sit, others take from the
+ring); during planning it needs nothing from the others, whose boards it sees as
+last locked. It sends the `rev` it has, and is mostly answered unchanged.
+There is no live room for sittings yet.
+
+**Coins and places.** When a member's seat goes out, or the sitting ends, the
+member is paid the run's own payout (16 Coins a room won, 50 a boss beaten, 120
+for winning: `payout` in `packages/raid/src/outside.ts`) once, under
+`sitting:<id>:seat:<n>`, in the transaction that brings the sitting to that
+moment. It is cut to what they may still earn as it is paid (the same hour's and
+day's caps every game's Coins count against), as a solo run's payout is; the
+rest is not paid later. A regular is paid nothing. A member's place is kept in
+the same transaction as they go out (the order of going out decides it), and the
+last one in, first, as the sitting ends; a sitting that closed without starting
+has none. The record counts places. At most 500 sittings are not over: that is
+counted in the transaction that keeps a new one, so two openings at once cannot
+both pass it.
+
+**One person, two players.** When a player who came with Discord alone links a
+Wynncraft account and is taken into its player (`apps/api/src/players/merge.ts`),
+that waits while either player is seated at a sitting that is not over ("Finish
+or leave your live table first.", logged): nothing moves and nothing is
+linked, the Discord account plays on as its own player, and the next sign-in
+tries again. A running sitting is never rewritten. Then their places move to the
+kept player, the better place where both finished the same sitting, and the
+answers to their commands at sittings move, but one whose id both used, which is
+let go.
+
+**Logs.** In `activity`, under the raid and whoever opened the sitting:
+`raid_table_opened` (`sitting`), `raid_table_started` (`sitting`, `members`)
+and `raid_table_ended` (`sitting`, `rooms` fought, and the members' `places`,
+each `{ "player", "place" }`).
+
+On the local play server (`apps/api/test/play.ts`), `POST /test/play/sittings`
+with `{ "stage": [{ "later": <ms> }] }` moves Leaf's clock on, and
+`bun apps/api/test/sittings-play.ts <port>` plays a whole sitting as Tester and
+seven regulars with it. `bun apps/api/test/load/sittings.ts` times reads,
+commands and the sweep.
 
 ### Camps
 

@@ -24,6 +24,7 @@ import { GamePresenceHandlers } from "./routes/presence.ts";
 import { GameRaidHandlers } from "./routes/raid.ts";
 import { GameReportsHandlers } from "./routes/reports.ts";
 import { GameRequestsHandlers } from "./routes/requests.ts";
+import { GameSittingsHandlers, SittingBodyErrorsLive } from "./routes/sittings.ts";
 import { GameHelloHandlers, RatesHandlers, SystemHandlers } from "./routes/system.ts";
 import { GameTallyHandlers } from "./routes/tally.ts";
 import { EventTail, GuildFeed, OpenStreams } from "./streams.ts";
@@ -43,6 +44,7 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     GamePresenceHandlers,
     GamePlayHandlers,
     GameRaidHandlers,
+    GameSittingsHandlers,
     GameCampsHandlers,
     GameRequestsHandlers,
     GameTallyHandlers,
@@ -58,6 +60,7 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     RerollBodyErrorsLive,
     PresenceBodyErrorsLive,
     PlayBodyErrorsLive,
+    SittingBodyErrorsLive,
     PageErrorBodyErrorsLive,
     RequestBodyErrorsLive,
     BackendLive,

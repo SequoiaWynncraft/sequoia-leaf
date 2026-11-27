@@ -14,6 +14,7 @@ import { type JobRun, jobRun, jobSucceededAt } from "./metrics.ts";
 import { GAMES } from "./play/games.ts";
 import { restandAll } from "./play/restand.ts";
 import { Play } from "./play/service.ts";
+import { Sittings } from "./sittings/service.ts";
 import type { SyncMode, SyncResult } from "./sync/windowed.ts";
 
 /** The minute of each hour whose run re-reads the last week instead of the last few minutes. */
@@ -160,12 +161,18 @@ const silentVisits = step(
 
 /**
  * Puts a tend in the line of the games' states that go on by themselves, where no page has kept them
- * up for a while (a yard whose owner is away), and waits for none of them.
+ * up for a while (a yard whose owner is away), and waits for none of them; then brings each of the
+ * raid's sittings due by now to the clock (`Sittings.sweep`), so that one nobody looks at goes on.
  */
 const tending = step(
   "tend_sweep",
   "Tending the games' states",
-  Play.use((play) => Effect.as(play.tend(Object.values(GAMES)), "done" as const)),
+  Effect.gen(function* () {
+    yield* Play.use((play) => play.tend(Object.values(GAMES)));
+    const swept = yield* Sittings.use((sittings) => sittings.sweep);
+    if (swept > 0) yield* Effect.annotateLogs(Effect.logInfo("sittings_swept"), { sittings: swept });
+    return "done" as const;
+  }),
 );
 
 /** Works out again where each state stands whose standing was not worked out from it as stored. */
