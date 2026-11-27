@@ -179,7 +179,7 @@ describe("a plan of the whole yard", () => {
     must(y, { do: "undo", entry: "b-1" });
     must(y, { do: "undo", entry: "f-1" });
     const was = F.encode(y);
-    expect(give(y, { do: "placeBlueprint", slot: 0, turns: 0, ...near(-24, -18) })).toMatchObject({
+    expect(give(y, { do: "placeBlueprint", slot: 0, turns: 0, x: 0, y: 0 })).toMatchObject({
       refused: "cannot_place_blueprint",
       why: expect.stringContaining("tree"),
     });
@@ -193,7 +193,7 @@ describe("a plan of the whole yard", () => {
     must(y, { do: "saveYard", slot: 0 });
     must(y, { do: "fell", ...TREE });
     must(y, { do: "build", kind: "belt", ...TREE, dir: 0 });
-    must(y, { do: "placeBlueprint", slot: 0, turns: 0, ...near(-24, -18) });
+    must(y, { do: "placeBlueprint", slot: 0, turns: 0, x: 0, y: 0 });
     expect([y.kind[F.at(y, TREE.x, TREE.y)], F.redwoodAt(y, F.at(y, TREE.x, TREE.y))]).toEqual([F.NONE, false]);
   });
 });

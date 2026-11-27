@@ -364,7 +364,7 @@ describe("the history, for the largest yard", () => {
     bare.blueprints = bare.blueprints.map(() => null);
     // The belts put back over the sorters, which their entry keeps every setting of: the largest entry there is.
     const sizes = ["a", "b", "c", "d"].map((id, k) => {
-      must(sorters, { do: "placeBlueprint", slot: k % 2 === 0 ? 1 : 0, turns: 0, ...near(-24, -18), id });
+      must(sorters, { do: "placeBlueprint", slot: k % 2 === 0 ? 1 : 0, turns: 0, x: 0, y: 0, id });
       return sorters.history.at(-1)?.bytes.length ?? 0;
     });
     const [largest = 0, back = 0] = sizes;
