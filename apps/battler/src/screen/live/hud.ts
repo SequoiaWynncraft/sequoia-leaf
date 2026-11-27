@@ -21,7 +21,16 @@ import { snd } from "../sounds.ts";
 import { boardToPage } from "../stage.ts";
 import { figPic, pic } from "../ui/cards.ts";
 import { headOf } from "../ui/heads.ts";
-import { choosingNow, clockLine, clockOf, placeText, type PlayerRow, playerRows, seatName } from "./reads.ts";
+import {
+  choosingNow,
+  clockLine,
+  clockOf,
+  placeText,
+  type PlayerRow,
+  playerRows,
+  seatName,
+  waitingLine,
+} from "./reads.ts";
 
 const COLS = 7;
 const ROWS = 4;
@@ -71,6 +80,7 @@ export function renderClock(view: SittingView, now: number): void {
   if (HUD.say && HUD.say.textContent !== line) HUD.say.textContent = line;
   if (HUD.say) {
     HUD.say.hidden = line === "";
+    HUD.say.classList.toggle("waiting", waitingLine(view) !== "");
     // In the gap between the board and the bench, clear of the ring and of whoever waits across.
     const at = boardToPage(BOARD_W / 2, (BOARD_H + BENCH_Y) / 2);
     HUD.say.style.top = `${Math.round(at.y)}px`;

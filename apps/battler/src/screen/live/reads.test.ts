@@ -7,7 +7,7 @@ import { CHAIRS, CLOCK, type Member, seatsIn, type Sitting } from "@sequoia-leaf
 import { sittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
 import {
-  carouselEnds,
+  clockLine,
   clockText,
   facingLine,
   focusAfter,
@@ -15,9 +15,11 @@ import {
   paidLines,
   placeText,
   playerRows,
+  ringMoves,
   secondsTo,
   turnLine,
   turnOf,
+  waitingLine,
 } from "./reads.ts";
 
 const NAMES = ["Mossback", "Sootpaw", "Embertoe", "Quillfeather", "Fernwhistle", "Wrenly", "Pipwick", "Tindra"];
@@ -56,6 +58,9 @@ describe("the clock at the top", () => {
     const begun = started(3, 1, 1000);
     const carousel = sittingView(begun, "leaf-0");
     expect(clockText(carousel, 1000)).toBe(`Carousel · ${CLOCK.together / 1000} s`);
+    // The member's take: the regulars' turn, whose length is nobody's to count.
+    const took = must(command(begun, { do: "pick", offer: 0 }, call(1500, 5)));
+    expect(clockText(sittingView(took, "leaf-0"), 1500)).toBe("Carousel");
     const plan = until(begun, (t) => t.stage.at === "plan");
     const at = deadline(plan) - CLOCK.plan;
     expect(clockText(sittingView(plan, "leaf-0"), at)).toBe("Planning · 30 s");
@@ -65,13 +70,13 @@ describe("the clock at the top", () => {
     expect(clockText(sittingView(fight, "leaf-0"), deadline(fight) - 6200)).toBe("The fight · 7 s");
   });
 
-  test("in a carousel counts to its end, not to the next pair", () => {
+  test("in a carousel counts the member's own turn down while it is theirs, and nothing while others choose", () => {
     const later = until(started(5, CHAIRS), (t) => t.stage.at === "carousel" && t.room > 0);
-    const view = sittingView(later, "leaf-0");
-    if (view.stage.at !== "carousel") throw new Error("not a carousel");
-    const ends = carouselEnds(view.stage);
-    expect(ends).toBe(view.stage.until + 2 * CLOCK.pair + CLOCK.last);
-    expect(clockText(view, ends - 9000)).toBe("Carousel · 9 s");
+    if (later.stage.at !== "carousel") throw new Error("not a carousel");
+    const [first = 0, , third = 0] = later.stage.turns;
+    const ends = later.stage.ends;
+    expect(clockText(sittingView(later, member(first).id), ends - 3200)).toBe("Carousel · 4 s");
+    expect(clockText(sittingView(later, member(third).id), ends - 3200)).toBe("Carousel");
   });
 
   test("seconds are whole, never below 0", () => {
@@ -126,17 +131,17 @@ describe("the players' list", () => {
 });
 
 describe("the carousel's turn", () => {
-  test("the first is everyone's at once, until they have taken one", () => {
+  test("the first is the members' at once, until they have taken one", () => {
     const t = started(2, 1, 1000);
     expect(turnOf(sittingView(t, "leaf-0"), 1000)).toEqual({ at: "choosing", seconds: 12 });
-    expect(turnLine(sittingView(t, "leaf-0"), 1000)).toBe("Everyone chooses at once.");
+    expect(turnLine(sittingView(t, "leaf-0"), 1000)).toBe("Your turn: choose one.");
     const took = must(command(t, { do: "pick", offer: 4 }, call(2000, 99)));
     expect(turnOf(sittingView(took, "leaf-0"), 2000)).toEqual({ at: "taken", offer: 4 });
     expect(turnLine(sittingView(took, "leaf-0"), 2000)).toMatch(/^You took [A-Z][\w #'-]+\.$/);
     expect(turnOf(sittingView(took, null), 2000)).toEqual({ at: "none" });
   });
 
-  test("a later one is the member's exactly when the rules let them take, and the wait counts down to it", () => {
+  test("a later one is the member's exactly when the rules let them take, and the wait says how many take first", () => {
     const later = until(started(5, CHAIRS), (t) => t.stage.at === "carousel" && t.room > 0);
     let waited = 0;
     for (let n = 0; n < CHAIRS; n++) {
@@ -153,14 +158,37 @@ describe("the carousel's turn", () => {
         const may = picked.ok || picked.code === "picked" || picked.code === "taken";
         expect(turn.at === "choosing" || turn.at === "taken").toBe(may);
         if (turn.at === "waiting") {
-          expect(turnLine(sittingView(at, id), now)).toBe(`Your turn in ${turn.seconds} s.`);
-          const opens = advance(later, now + turn.seconds * 1000);
-          expect(opens.stage.at === "carousel" && opens.stage.turns.indexOf(n) < opens.stage.open).toBe(true);
+          const { turns, ring } = at.stage;
+          const before = turns.slice(0, turns.indexOf(n)).filter((s) => !ring.some((o) => o.by === s));
+          expect(turn.before).toBe(before.length);
+          expect(turnLine(sittingView(at, id), now)).toBe(
+            `Your turn after ${before.length} ${before.length === 1 ? "player" : "players"}.`,
+          );
           waited++;
         }
       }
     }
     expect(waited).toBeGreaterThan(0);
+  });
+});
+
+/** A sitting as member `n` is shown it. */
+const view = (t: Sitting, n: number) => sittingView(t, member(n).id);
+
+describe("whom a stage waits for", () => {
+  test("once the member is ready or has watched, the others still to: by name for one, by count for more", () => {
+    let t = until(started(6, 3), (s) => s.stage.at === "plan");
+    const at = deadline(t) - 10_000;
+    expect(waitingLine(view(t, 0))).toBe("");
+    t = must(command(t, { do: "ready", on: true }, call(at, 1, 0)));
+    expect(waitingLine(view(t, 0))).toBe("Waiting for 2 players.");
+    expect(waitingLine(view(t, 1))).toBe("");
+    t = must(command(t, { do: "ready", on: true }, call(at + 1, 2, 1)));
+    expect(clockLine(view(t, 0), at + 1)).toBe(`Waiting for ${NAMES[2] ?? ""}.`);
+    const fight = must(command(t, { do: "ready", on: true }, call(at + 2, 3, 2)));
+    expect(fight.stage.at).toBe("fight");
+    const watched = must(command(fight, { do: "watched" }, call(at + 3, 4, 2)));
+    expect(waitingLine(view(watched, 2))).toBe("Waiting for 2 players.");
   });
 });
 
@@ -176,6 +204,17 @@ describe("what a room paid", () => {
 
 /** A ring of nine, with the places in `taken` taken. */
 const ring = (taken: number[]) => Array.from({ length: 9 }, (_, i) => ({ by: taken.includes(i) ? 3 : null }));
+
+describe("the ring as the sitting changes", () => {
+  test("a new carousel is laid out; in the same one only the places taken since move, so a figure being pressed keeps its button", () => {
+    expect(ringMoves(null, [], 0, ring([]))).toBe("lay");
+    expect(ringMoves(0, ring([]), 5, ring([]))).toBe("lay");
+    // Somebody else takes place 2 while the member's finger is on place 6: only 2 moves.
+    expect(ringMoves(5, ring([]), 5, ring([2]))).toEqual([2]);
+    expect(ringMoves(5, ring([2]), 5, ring([2, 6]))).toEqual([6]);
+    expect(ringMoves(5, ring([2, 6]), 5, ring([2, 6]))).toEqual([]);
+  });
+});
 
 describe("the ring drawn again", () => {
   test("the figure that had the keyboard keeps it while it stands; taken, the next still standing has it", () => {

@@ -73,6 +73,30 @@ test("one read at a time: an ask during a read makes one more after it, and an o
   held.close();
 });
 
+test("a stage's deadline is read within 100 ms after it, never before", async () => {
+  const opened = command(openSitting(call(0)), { do: "start" }, { ...call(0), now: 1000 });
+  if (!opened.ok || opened.sitting.stage.at === "over") throw new Error("not started");
+  const due = opened.sitting.stage.until;
+  const reads: number[] = [];
+  world = standin({
+    "GET /v1/game/sittings/s1": () => {
+      reads.push(performance.now());
+      return new Promise<Reply>(() => undefined);
+    },
+  });
+  const held = scope();
+  // Leaf's clock, as its answer says, is 200 ms short of the deadline.
+  const began = performance.now();
+  const line = openLine(held, "s1", "leaf-0", { ...answer(1, opened.sitting), now: new Date(due - 200).toISOString() });
+  if (!line) throw new Error("no line");
+  await until(() => reads.length > 0, 1000);
+  const after = (reads[0] ?? Infinity) - began - 200;
+  expect(after).toBeGreaterThanOrEqual(0);
+  expect(after).toBeLessThan(100);
+  line.close();
+  held.close();
+});
+
 test("putting the line away answers every command still waiting, so nothing waits on it after leaving", async () => {
   const [one] = revisions();
   if (!one) throw new Error("no sitting");

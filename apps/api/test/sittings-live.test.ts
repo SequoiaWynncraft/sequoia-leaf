@@ -146,17 +146,24 @@ describe("who is told of a write", () => {
     expect(turns.includes(aliceTurn)).toBe(true);
     const picked = done(started, { do: "pick", offer: 0 }, A(T0 + 5));
     expect(sorted(toldOf(started, picked))).toEqual([alice, bob]);
-    // The stage, by the clock: planning.
-    const planning = due(picked);
+    // A regular's take, by the clock, and then planning.
+    const regular = due(due(picked));
+    expect(regular.stage.at).toBe("carousel");
+    expect(sorted(toldOf(due(picked), regular))).toEqual([alice, bob]);
+    let planning = regular;
+    for (let n = 0; n < 20 && planning.stage.at === "carousel"; n++) planning = due(planning);
     expect(planning.stage.at).toBe("plan");
     expect(sorted(toldOf(picked, planning))).toEqual([alice, bob]);
     // Alice's own planning, which nobody else sees until the lock: only she is told.
     const held = done(planning, { do: "hold", on: true }, A(T0 + 20_000));
     expect(sorted(toldOf(planning, held))).toEqual([alice]);
+    // Alice is ready: everyone sees who is.
+    const ready = done(held, { do: "ready", on: true }, A(T0 + 20_001));
+    expect(sorted(toldOf(held, ready))).toEqual([alice, bob]);
     // The lock, by the clock: the fights.
-    const locked = due(held);
+    const locked = due(ready);
     expect(locked.stage.at).toBe("fight");
-    expect(sorted(toldOf(held, locked))).toEqual([alice, bob]);
+    expect(sorted(toldOf(ready, locked))).toEqual([alice, bob]);
     // A place: Bob gets up after the start, and is out.
     const out = done(due(locked), { do: "leave" }, B(locked.stage.at === "over" ? 0 : locked.stage.until + 1));
     const placed = out.seats.find((seat) => seat.who.is === "member" && seat.who.id === bob)?.place;

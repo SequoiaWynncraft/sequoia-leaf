@@ -26,7 +26,7 @@ import {
   summariseRun,
 } from "../run.ts";
 import { CAT, EVERYONES, viewWith } from "../testkit.ts";
-import { hasTaken, join } from "./carousel.ts";
+import { join } from "./carousel.ts";
 import { advance, pairings } from "./clock.ts";
 import { type Answer, type Call, command, openSitting, paidOff, readCommand, type SittingCommand } from "./commands.ts";
 import { decodeSitting, encodeSitting, SITTING_VERSION } from "./keep.ts";
@@ -36,6 +36,7 @@ import {
   facing,
   kindOf,
   type Member,
+  planMs,
   type Seat,
   seatsIn,
   sided,
@@ -138,12 +139,14 @@ interface Sent {
 function wishes(seen: Sitting, who: number, members: number, dice: Stream): SittingCommand[] {
   const mine = seat(seen, who);
   if (mine.place !== null) return below(dice, 9) === 0 ? [{ do: "buy", offer: 0 }] : [];
-  if (who === members - 1 && seen.room >= 7) return [{ do: "leave" }];
+  if (who === members - 1 && seen.room >= 3) return [{ do: "leave" }];
   if (seen.stage.at === "carousel") return [{ do: "pick", offer: below(dice, seen.stage.ring.length) }];
-  if (seen.stage.at === "fight") return below(dice, 5) === 0 ? [{ do: "rustle" }] : [];
+  if (seen.stage.at === "fight") return [below(dice, 5) === 0 ? { do: "rustle" } : { do: "watched" }];
   const view = viewWith(runView(mine.run));
   const plan = planCommands(view, SENSIBLE).flatMap((c) => readCommand(c) ?? []);
-  return below(dice, 6) === 0 ? [...plan, { do: "rustle" }] : plan;
+  // Ready when done planning, now and then not after all.
+  const ready: SittingCommand = { do: "ready", on: below(dice, 4) > 0 };
+  return below(dice, 6) === 0 ? [...plan, { do: "rustle" }] : [...plan, ready];
 }
 /** A sitting played by its members' commands, each at a moment: what was sent, how each was answered, and the end. */
 function played(seed: number, members: number): { sent: Sent[]; codes: string[]; end: Sitting } {
@@ -211,7 +214,8 @@ describe("bringing a sitting to a moment", () => {
     const t = started(7, 2);
     const kept = encodeSitting(t);
     expect(advance(t, deadline(t) - 1)).toBe(t);
-    expect(advance(t, deadline(t)).stage.at).toBe("plan");
+    // At it the members' time is up, and the regulars are let in.
+    expect(advance(t, deadline(t)).stage).toMatchObject({ at: "carousel", open: CHAIRS });
     expect(encodeSitting(t)).toBe(kept);
   });
 
@@ -224,10 +228,12 @@ describe("bringing a sitting to a moment", () => {
       const { sent, codes, end } = played(seed, members);
       const dice: Stream = { rng: seed };
       expect(end.stage.at).toBe("over");
-      // The members played: they bought, picked, were refused, and one left.
-      expect(codes.filter((code) => code === "ok").length).toBeGreaterThan(100);
-      expect(new Set(codes).size).toBeGreaterThan(3);
+      // The members played: they bought, picked, said they were ready and had watched, were refused, and one left.
+      expect(codes.filter((code) => code === "ok").length).toBeGreaterThan(40);
+      expect(new Set(codes).size).toBeGreaterThan(2);
       expect(sent.some((entry) => entry.c.do === "leave")).toBe(true);
+      for (const move of ["pick", "ready", "watched"])
+        expect(sent.some((entry, i) => entry.c.do === move && codes[i] === "ok")).toBe(true);
       const bySeconds = again(seed, members, sent, (now) => now + 1000);
       const byChance = again(seed, members, sent, (now) => now + 1 + below(dice, 30_000));
       for (const [theirCodes, theirEnd] of [bySeconds, byChance]) {
@@ -455,12 +461,13 @@ describe("a sparring room", () => {
 // ---------- the carousel ----------
 
 describe("the carousel", () => {
-  test("the first is open to everyone at once, and its figure is who a seat sets out with", () => {
+  test("the first is open to the members at once, and its figure is who a seat sets out with", () => {
     const t = started(51, 3);
     if (t.stage.at !== "carousel") throw new Error("no carousel");
     expect(t.stage.until).toBe(START + CLOCK.together);
+    expect(t.stage.ends).toBe(START + CLOCK.together);
     expect(t.stage.ring.map((offer) => figureIn(CAT, offer.kind).tier)).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1]);
-    expect(t.stage.open).toBe(CHAIRS);
+    expect(t.stage.open).toBe(3);
     // The regulars wait for the members: the whole ring is there to choose from.
     expect(t.stage.ring.every((offer) => offer.by === null)).toBe(true);
     const free = t.stage.ring.findIndex((offer) => offer.by === null);
@@ -475,8 +482,8 @@ describe("the carousel", () => {
     expect(codeOf(command(took, { do: "pick", offer: free + 1 }, call(START + 2000, 4, 1)))).toBe("picked");
     expect(codeOf(command(took, { do: "pick", offer: 40 }, call(START + 2000, 4, 2)))).toBe("not_in_ring");
     // The dice for the late: whoever took none gets one of what is left, and the room is laid out.
-    const after = advance(took, START + CLOCK.together);
-    expect(after.stage).toEqual({ at: "plan", until: START + CLOCK.together + CLOCK.plan });
+    const after = until(took, (s) => s.stage.at === "plan");
+    expect(after.stage).toEqual({ at: "plan", until: deadline(took) + 5 * CLOCK.take + CLOCK.plan, ready: [] });
     for (const s of after.seats) expect(pieces(s.run).length).toBe(1);
     expect(pieces(seat(after, 1).run)).toEqual(pieces(run));
   });
@@ -531,14 +538,18 @@ describe("the carousel", () => {
     expect(carousels).toBe(SITTINGS.length);
   });
 
-  test("everyone in gets one figure of a carousel, the late by the dice", () => {
+  test("everyone in gets one figure of a carousel, the late by the dice as their turn's time is up", () => {
     const t = until(started(52, 8), (s) => s.stage.at === "carousel" && s.room === 5);
     const counts = t.seats.map((s) => pieces(s.run).length + s.run.acorns + s.run.items.length);
-    const last = until(t, (s) => s.stage.at !== "carousel" || s.stage.open === s.stage.turns.length);
-    if (last.stage.at !== "carousel") throw new Error("the carousel ended early");
-    // Nobody chose: when it ends each seat in has taken one, and the ring has given that many.
-    expect(last.stage.ring.filter((offer) => offer.by !== null)).toEqual([]);
-    const after = advance(last, deadline(last));
+    // Nobody chooses: as each pair's time is up the pair gets one each by the dice, and the next is let in.
+    let after = t;
+    while (after.stage.at === "carousel") {
+      const was = after.stage;
+      after = advance(after, deadline(after));
+      expect(after.stage.at === "carousel" ? after.stage.ring.filter((o) => o.by !== null).length : was.open).toBe(
+        was.open,
+      );
+    }
     expect(after.stage.at).toBe("plan");
     const taken = seatsIn(after).length;
     expect(taken).toBeGreaterThan(1);
@@ -546,7 +557,6 @@ describe("the carousel", () => {
       const now = pieces(s.run).length + s.run.acorns + s.run.items.length;
       expect(now - (counts[i] ?? 0)).toBe(s.place === null ? 1 : 0);
     });
-    expect(hasTaken(last.stage, 0)).toBe(false);
   });
 
   test("a taken figure goes to the bench; with a full bench it makes three of a kind, or is sold on the spot", () => {
@@ -574,6 +584,170 @@ describe("the carousel", () => {
         .map((p) => [p.stars, p.items]),
     ).toEqual([[2, ["stump", "thorn"]]]);
     expect(pieces(run).length).toBe(ECONOMY.bench);
+  });
+});
+
+// ---------- early ends ----------
+
+/** The places of the ring nobody has taken. */
+const free = (t: Sitting): number[] =>
+  t.stage.at === "carousel" ? t.stage.ring.flatMap((offer, i) => (offer.by === null ? [i] : [])) : [];
+/** Whether a seat of the sittings `carouselPlayed` plays is a member's: the first two. */
+const isMember = (n: number): boolean => n < 2;
+/** Who took which place of the ring, by place. */
+const takers = (t: Sitting): (number | null)[] => (t.stage.at === "carousel" ? t.stage.ring.map((o) => o.by) : []);
+
+/**
+ * The carousel after the first boss of a sitting of two members and six regulars (`seed`), the
+ * members planning as the bot does: played with each member taking the first figure left `wait` ms
+ * after their turn opens (never, for `Infinity`). The moment each seat's turn opened and it took,
+ * the turns, the sitting after it, and the room it leads to.
+ */
+function carouselPlayed(seed: number, wait: number) {
+  const before = until(started(seed, 2), (s) => s.stage.at === "fight" && BOSS_ROOMS[0] === s.room, true);
+  const laid = deadline(before);
+  let t = advance(before, laid);
+  if (t.stage.at !== "carousel") throw new Error("no carousel");
+  const { turns } = t.stage;
+  const opened = new Map<number, number>();
+  const took = new Map<number, number>();
+  const note = (at: number): void => {
+    if (t.stage.at !== "carousel") return;
+    for (const n of t.stage.turns.slice(0, t.stage.open)) if (!opened.has(n)) opened.set(n, at);
+    for (const { by } of t.stage.ring) if (by !== null && !took.has(by)) took.set(by, at);
+  };
+  note(laid);
+  for (let guard = 0; guard < 60 && t.stage.at === "carousel"; guard++) {
+    const stage = t.stage;
+    const members = [0, 1].filter((m) => opened.has(m) && !took.has(m) && seat(t, m).place === null);
+    const at = Math.min(...members.map((m) => (opened.get(m) ?? 0) + wait));
+    const who = members.find((m) => (opened.get(m) ?? 0) + wait === at);
+    if (who !== undefined && at < stage.until) {
+      t = must(command(t, { do: "pick", offer: free(t)[0] ?? 0 }, call(at, 40 + guard, who)));
+      took.set(who, at);
+      note(at);
+    } else {
+      // Whoever's turn is up is given one at the turn's end: noted with the moment it happened.
+      const next = stage.until;
+      t = advance(t, next);
+      note(next);
+      if (t.stage.at !== "carousel")
+        for (const s of t.seats.keys()) if (!took.has(s) && turns.includes(s)) took.set(s, next);
+    }
+  }
+  return { opened, took, turns, end: t, room: before.room + 1 };
+}
+
+describe("a stage ends as soon as nobody has anything left to do", () => {
+  test("the first carousel: once every member has taken, the regulars take one by one, and it ends with the last", () => {
+    let t = started(53, 3);
+    for (const [n, at] of [START + 1000, START + 1500, START + 2000].entries()) {
+      t = must(command(t, { do: "pick", offer: free(t)[0] ?? 0 }, call(at, 20 + n, n)));
+    }
+    // The last member's take ends the members' turn at once: the regulars are let in.
+    expect(t.stage).toMatchObject({ at: "carousel", open: CHAIRS, until: START + 2000 + CLOCK.take });
+    const moments: number[] = [];
+    while (t.stage.at === "carousel") {
+      const before = takers(t).filter((by) => by !== null).length;
+      moments.push(deadline(t));
+      t = advance(t, deadline(t));
+      if (t.stage.at === "carousel") expect(takers(t).filter((by) => by !== null).length).toBe(before + 1);
+    }
+    expect(moments).toEqual([1, 2, 3, 4, 5].map((k) => START + 2000 + k * CLOCK.take));
+    expect(t.stage).toEqual({ at: "plan", until: START + 2000 + 5 * CLOCK.take + CLOCK.plan, ready: [] });
+    for (const s of t.seats) expect(pieces(s.run).length).toBe(1);
+  });
+
+  test("a later carousel: a regular takes a moment after its turn opens, and a pair's turn ends when both have taken", () => {
+    const { opened, took, turns, end, room } = carouselPlayed(55, 1500);
+    for (let g = 0; g < turns.length; g += 2) {
+      const group = turns.slice(g, g + 2);
+      const from = opened.get(group[0] ?? -1) ?? bad();
+      for (const n of group) expect(opened.get(n)).toBe(from);
+      // Each regular a moment after the turn opens, the second as long again; a member when they take.
+      const regulars = group.filter((n) => !isMember(n));
+      regulars.forEach((n, k) => expect(took.get(n)).toBe(from + (k + 1) * CLOCK.take));
+      for (const n of group.filter(isMember)) expect(took.get(n)).toBe(from + 1500);
+      // The next pair is let in the moment this one has both taken.
+      const done = Math.max(...group.map((n) => took.get(n) ?? bad()));
+      const next = turns[g + 2];
+      if (next !== undefined) expect(opened.get(next)).toBe(done);
+      else expect(end.stage).toEqual({ at: "plan", until: done + planMs(room), ready: [] });
+    }
+  });
+
+  test("planning ends the moment every member still in is ready; Ready can be taken back, and one who leaves counts no more", () => {
+    const t = planned(until(started(56, 3), planning(1)));
+    const end = deadline(t);
+    const at = (ms: number) => end - 20_000 + ms;
+    const after = (s: Sitting, n: number, on: boolean, ms: number) =>
+      must(command(s, { do: "ready", on }, call(at(ms), 50 + ms, n)));
+    let s = after(after(t, 0, true, 0), 1, true, 100);
+    expect(s.stage).toEqual({ at: "plan", until: end, ready: [0, 1] });
+    s = after(s, 1, false, 200);
+    expect(s.stage).toEqual({ at: "plan", until: end, ready: [0] });
+    // The last one ready: the boards lock then, as they would have at the deadline.
+    const locked = after(after(s, 2, true, 300), 1, true, 400);
+    const late = advance(after(after(s, 2, true, 300), 1, false, 400), end);
+    expect(locked.stage).toMatchObject({ at: "fight", done: [] });
+    expect(late.stage).toMatchObject({ at: "fight", done: [] });
+    expect(deadline(locked) - at(400)).toBe(deadline(late) - end);
+    expect(locked.seats.map((x) => x.shown)).toEqual(late.seats.map((x) => x.shown));
+    // One not ready leaves: those left are all ready, and planning ends as they go.
+    const leaves = (ready: boolean) => must(command(after(s, 2, ready, 300), { do: "leave" }, call(at(500), 7, 1)));
+    const left = leaves(true);
+    const leftLate = advance(leaves(false), end);
+    expect(left.stage).toMatchObject({ at: "fight" });
+    expect(deadline(left) - at(500)).toBe(deadline(leftLate) - end);
+  });
+
+  test("the fights end the moment every member still in has watched theirs or skipped it", () => {
+    const t = until(started(57, 2), fighting(1), true);
+    const end = deadline(t);
+    const said = (s: Sitting, n: number, ms: number) =>
+      must(command(s, { do: "watched" }, call(end - 9000 + ms, 9, n)));
+    const one = said(t, 1, 0);
+    expect(one.stage).toEqual({ at: "fight", until: end, done: [1] });
+    expect(said(one, 1, 100).stage).toEqual(one.stage);
+    // The second: the takings then, and the next room laid out, as at the deadline.
+    const both = said(one, 0, 200);
+    const late = advance(t, end);
+    if (late.stage.at !== "plan") throw new Error("not planning after the fights");
+    expect(both.stage).toEqual({ ...late.stage, until: late.stage.until - end + (end - 9000 + 200) });
+    expect(both.seats.map((x) => x.run.resolve)).toEqual(late.seats.map((x) => x.run.resolve));
+  });
+
+  test("the page predicts a take, Ready and a fight watched as Leaf does them", () => {
+    const ring = started(58, 2);
+    const offer = free(ring)[2] ?? 0;
+    const taken = predict(sittingView(ring, member(1).id), { do: "pick", offer });
+    const leaf = must(command(ring, { do: "pick", offer }, call(START + 900, 3, 1)));
+    expect(taken && "view" in taken ? [taken.view.stage, taken.view.run] : null).toEqual([
+      sittingView(leaf, member(1).id).stage,
+      sittingView(leaf, member(1).id).run,
+    ]);
+    expect(predict(sittingView(leaf, member(1).id), { do: "pick", offer: offer + 1 })).toEqual({ refused: "picked" });
+    expect(predict(sittingView(leaf, member(0).id), { do: "pick", offer })).toEqual({ refused: "taken" });
+    const plan = until(started(58, 2), planning(0));
+    const ready = predict(sittingView(plan, member(0).id), { do: "ready", on: true });
+    const readyLeaf = must(command(plan, { do: "ready", on: true }, call(deadline(plan) - 1, 3, 0)));
+    expect(ready && "view" in ready ? ready.view.stage : null).toEqual(readyLeaf.stage);
+    const fight = advance(plan, deadline(plan));
+    const watched = predict(sittingView(fight, member(1).id), { do: "watched" });
+    const watchedLeaf = must(command(fight, { do: "watched" }, call(deadline(plan) + 1, 3, 1)));
+    expect(watched && "view" in watched ? watched.view.stage : null).toEqual(watchedLeaf.stage);
+    expect(predict(sittingView(fight, null), { do: "watched" })).toEqual({ refused: "not_seated" });
+  });
+
+  test("a member who takes nothing gets one by the dice when their turn's time is up, and the next pair goes on", () => {
+    const { opened, took, turns, end } = carouselPlayed(55, Infinity);
+    for (const n of [0, 1]) {
+      const pair = Math.floor(turns.indexOf(n) / 2);
+      const last = pair === Math.floor((turns.length - 1) / 2);
+      expect(took.get(n)).toBe((opened.get(n) ?? bad()) + (last ? CLOCK.last : CLOCK.pair));
+    }
+    expect(end.stage.at).toBe("plan");
+    for (const s of seatsIn(end)) expect(took.has(end.seats.indexOf(s))).toBe(true);
   });
 });
 
@@ -613,13 +787,25 @@ describe("what people do", () => {
 
   test("a command in the wrong stage is refused, by Leaf and by the page's prediction alike", () => {
     const carousel = started(62, 2);
-    const plan = advance(carousel, deadline(carousel));
+    const plan = until(carousel, planning(0));
     const fight = advance(plan, deadline(plan));
     const buy: SittingCommand = { do: "buy", offer: 0 };
     expect(codeOf(command(carousel, buy, call(START + 1, 1)))).toBe("carousel");
     expect(codeOf(command(fight, buy, call(deadline(plan) + 1, 1)))).toBe("fighting");
-    expect(codeOf(command(plan, { do: "pick", offer: 0 }, call(deadline(carousel) + 1, 1)))).toBe("no_carousel");
-    expect(codeOf(command(plan, buy, call(deadline(carousel) + 1, 1, 5)))).toBe("not_seated");
+    expect(codeOf(command(plan, { do: "pick", offer: 0 }, call(deadline(plan) - 1, 1)))).toBe("no_carousel");
+    expect(codeOf(command(plan, buy, call(deadline(plan) - 1, 1, 5)))).toBe("not_seated");
+    // The sitting's own moves, each in its own stage alone, by Leaf and by the page alike.
+    for (const [t, c, code] of [
+      [carousel, { do: "ready", on: true }, "carousel"],
+      [fight, { do: "ready", on: true }, "fighting"],
+      [carousel, { do: "watched" }, "no_fight"],
+      [plan, { do: "watched" }, "no_fight"],
+      [fight, { do: "pick", offer: 0 }, "no_carousel"],
+    ] satisfies [Sitting, SittingCommand, string][]) {
+      const now = t === carousel ? START + 1 : t === plan ? deadline(plan) - 1 : deadline(plan) + 1;
+      expect(codeOf(command(t, c, call(now, 1)))).toBe(code);
+      expect(predict(sittingView(t, member(0).id), c)).toEqual({ refused: code });
+    }
     for (const t of [carousel, fight]) {
       const now = t === carousel ? START + 1 : deadline(plan) + 1;
       expect(predict(sittingView(t, member(0).id), buy)).toEqual({ refused: codeOf(command(t, buy, call(now, 1))) });
@@ -855,6 +1041,10 @@ describe("a stored sitting", () => {
     ).toBeNull();
     expect(spoiled((raw) => void (raw.stage = { at: "open", until: 5, sat: [member(0)] }))).toBeNull();
     expect(spoiled((raw) => void (raw.owed = [{ key: "seat:0", member: "leaf-0", coins: 0 }]))).toBeNull();
+    // Who has watched: each seat once, in seat order.
+    expect(spoiled((raw) => void (raw.stage = { at: "fight", until: deadline(t), done: [0, 1] }))).not.toBeNull();
+    for (const done of [[1, 1], [1, 0], [9]])
+      expect(spoiled((raw) => void (raw.stage = { at: "fight", until: deadline(t), done }))).toBeNull();
     const over = advance(t, FAR);
     expect(
       spoiled((raw) => raw.seats.forEach((s) => void (s.place = s.place === 1 ? null : s.place)), over),

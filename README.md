@@ -1032,8 +1032,13 @@ moments (`stage.until`, `stage.ended`) are Leaf's milliseconds.
   its own), and answers the same as a read with `results` beside it: for each
   command, `{ "id", "notes" }` or `{ "id", "refused", "why" }`, the rules' code
   and sentence (`seated_elsewhere`, "You are at another table.", is Leaf's).
-  The commands are `sit`, `leave`, `start`, `pick` and the run's planning
-  commands (`readCommand` in `packages/raid/src/sitting/commands.ts`). A command
+  The commands are `sit`, `leave`, `start`, `pick`, `ready` (`"on"`: true or
+  false), `watched` (done with the room's fight, watched or skipped) and the
+  run's planning commands (`readCommand` in
+  `packages/raid/src/sitting/commands.ts`). A stage ends the moment nobody in it
+  has anything left to do: the carousel's turn once everyone let in has taken,
+  planning once every member still in is ready, the fights once every member
+  still in has watched; its `until` is the most it can last. A command
   whose id the caller used before at a sitting (Leaf keeps their newest 256)
   answers as it did then and is not done again. Commands take from the player's
   allowance, the one the play service's take from too (429 `slow_down`). 400
@@ -1041,11 +1046,11 @@ moments (`stage.until`, `stage.ended`) are Leaf's milliseconds.
 - `GET /v1/game/sittings/record` answers `{ "played", "won", "top_four" }`: the
   caller's sittings finished, won (first place), and finished in the first four.
 
-**Being told.** A page asks again at its stage's `until`, and while a sitting
-is open or in a carousel every 2 seconds (others sit, others take from the
-ring); during planning it needs nothing from the others, whose boards it sees as
-last locked. It sends the `rev` it has, and is mostly answered unchanged.
-There is no live room for sittings yet.
+**Being told.** Whenever a write moves on what a member at a sitting is shown,
+Leaf tells them its new `rev` on their live connection (`told.ts`), and their
+page reads it then; it also reads at its stage's `until`, and every 5 seconds
+while it has no live connection. It sends the `rev` it has, and is mostly
+answered unchanged.
 
 **Coins and places.** When a member's seat goes out, or the sitting ends, the
 member is paid the run's own payout (16 Coins a room won, 50 a boss beaten, 120

@@ -37,8 +37,12 @@ export type Answer = { readonly notes: RaidNote[] } | { readonly refused: string
 /** Why a line ends: the sitting is gone or does not read, or the member is signed out. */
 export type Gone = "missing" | "unreadable" | "signedout";
 
-/** How long after a deadline the sitting is read: Leaf brings it to its clock as it is read. */
-export const AFTER_DEADLINE = 150;
+/**
+ * How long after a deadline the sitting is read: Leaf brings it to its clock as it is read. The
+ * page's guess of Leaf's clock trails it by the answer's way back, and the read takes its own way
+ * there, so a read sent at the deadline already reaches Leaf after it; this is only a margin.
+ */
+export const AFTER_DEADLINE = 25;
 
 export interface Line {
   readonly id: string;

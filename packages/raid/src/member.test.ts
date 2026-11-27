@@ -195,7 +195,7 @@ describe("the main way while the first banner is open, whatever a member has pul
     const rings = Array.from({ length: 40 }, (_, seed) => {
       const started = command(openSitting({ now, seed, player }), { do: "start" }, { now, seed: seed + 1, player });
       if (!started.ok) throw new Error(started.why);
-      layCarousel(started.sitting, now, [5, 5, 5, 5, 5, 5, 5, 5, 5], false);
+      layCarousel(started.sitting, now, [5, 5, 5, 5, 5, 5, 5, 5, 5]);
       const stage = started.sitting.stage;
       return stage.at === "carousel" ? stage.ring.map((o) => o.kind) : [];
     });

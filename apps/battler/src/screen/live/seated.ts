@@ -82,13 +82,43 @@ function answered(line: Line, answer: Answer): Did | null {
   return { ok: true, notes: answer.notes };
 }
 
-/** Sends a command shown already; should Leaf turn it down, its view is already the line's, and the member hears why. */
-async function sent(line: Line, command: SittingCommand): Promise<void> {
+/**
+ * Sends a command shown already; should Leaf turn it down, its view is already the line's, and the
+ * member hears why (unless `quiet`: one the page sent by itself).
+ */
+async function sent(line: Line, command: SittingCommand, quiet = false): Promise<void> {
   const answer = await line.send(command, (view) => {
     const redone = predict(view, command);
     return redone && "view" in redone ? redone.view : view;
   });
-  if ("refused" in answer) answered(line, answer);
+  if (!("refused" in answer)) return;
+  if (!quiet) answered(line, answer);
+  else if (ours(line)) {
+    S.run = shownRun(line.view);
+    changed();
+  }
+}
+
+/**
+ * Shows a command at once as Leaf will do it, and sends it: the run the table shows, what happened,
+ * and the table drawn again. A command the rules turn down is said so (unless `quiet`) and not sent.
+ */
+function shownNow(line: Line, command: SittingCommand, quiet = false): Did | null {
+  const guess = predict(line.view, command);
+  if (!guess) return null;
+  if ("refused" in guess) {
+    const why = words(guess);
+    if (!quiet) refuse(why);
+    return { ok: false, why };
+  }
+  const was = line.view;
+  void sent(line, command, quiet);
+  S.run = shownRun(line.view);
+  tellNotes(guess.notes);
+  // The sitting's own moves change what the live table shows round the board: it hears them as it hears Leaf.
+  if (isPlanning(command)) changed();
+  else for (const fn of viewHearers) fn(line.view, was);
+  return { ok: true, notes: guess.notes };
 }
 
 /** Sends a command only Leaf can answer, holding the table until it does. */
@@ -104,18 +134,7 @@ const SEAT: Seated = {
   doNow(command) {
     const line = L.line;
     if (!line || heldOff(command) || !isPlanning(command)) return null;
-    const guess = predict(line.view, command);
-    if (!guess) return null;
-    if ("refused" in guess) {
-      const why = words(guess);
-      refuse(why);
-      return { ok: false, why };
-    }
-    void sent(line, command);
-    S.run = shownRun(line.view);
-    tellNotes(guess.notes);
-    changed();
-    return { ok: true, notes: guess.notes };
+    return shownNow(line, command);
   },
   ask(command, waiting) {
     if (heldOff(command)) return Promise.resolve(null);
@@ -126,10 +145,22 @@ const SEAT: Seated = {
   },
 };
 
-/** Takes the figure at a place in the carousel's ring (`waiting`, its button, shows Leaf is answering). */
-export async function takeFromRing(offer: number, waiting: Element | null = null): Promise<Did | null> {
-  if (hold.asking()) return null;
-  return asked({ do: "pick", offer }, waiting);
+/** Takes the figure at a place in the carousel's ring: shown at once, as Leaf will take it; Leaf's answer wins. */
+export function takeFromRing(offer: number): Did | null {
+  const line = L.line;
+  return line && atLiveTable() ? shownNow(line, { do: "pick", offer }) : null;
+}
+
+/** Ready to fight, or not after all. */
+export function readyUp(on: boolean): Did | null {
+  const line = L.line;
+  return line && atLiveTable() ? shownNow(line, { do: "ready", on }) : null;
+}
+
+/** The member's fight has been watched, or skipped: said by the page itself, so a late one turned down is not said. */
+export function watchedFight(): Did | null {
+  const line = L.line;
+  return line && atLiveTable() ? shownNow(line, { do: "watched" }, true) : null;
 }
 
 /** The seat's run, if it is in a fight at the table now. */

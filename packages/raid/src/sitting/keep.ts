@@ -29,16 +29,19 @@ import {
 
 const GAME = "little-raid-sitting";
 /**
- * 5: each seat's run keeps its record as a table of version 9 does: its last rooms as rows, the
- * rooms before them as totals. 4: each seat's run keeps how it set out as one value (`Run.way`), where it kept `trail`, `own` and
+ * 6: a carousel keeps when the turn of the last let in is up (`ends`), planning the members' seats
+ * that are ready, and the fights those that have watched theirs; one of an older version reads with
+ * nobody ready or done yet, and its carousel's turn up at its deadline. 5: each seat's run keeps its
+ * record as a table of version 9 does: its last rooms as rows, the rooms before them as totals. 4:
+ * each seat's run keeps how it set out as one value (`Run.way`), where it kept `trail`, `own` and
  * `endless`. 3: the sitting, each seat's run and each fight's setup keep their era. 2: what Greg has
  * eaten is a share of his health (`feed`), where it was meals of 3% each; its runs keep the Wilds'
  * wing as version 1's did. A sitting of versions 1 to 3 is read as well, each run's way from its
  * three fields; one of versions 1 and 2 is of `LEGACY_ERA`; one of versions 1 to 4 keeps every room
  * of each run as an object.
  */
-export const SITTING_VERSION = 5;
-const READS: readonly number[] = [1, 2, 3, 4, SITTING_VERSION];
+export const SITTING_VERSION = 6;
+const READS: readonly number[] = [1, 2, 3, 4, 5, SITTING_VERSION];
 
 export const encodeSitting = (t: Sitting): string =>
   JSON.stringify({
@@ -100,11 +103,22 @@ function readOffer(v: unknown): Offer {
     by: o.by === null ? null : chair(o.by, "the ring"),
   };
 }
-export function readStage(v: unknown): Stage {
+/** Seats listed once each, in seat order; none in a stage kept before version 6 had the list. */
+function seatList(v: unknown, kept: number, what: string): number[] {
+  if (kept < 6) return [];
+  const seats = unique(
+    list(v, CHAIRS, what).map((x) => chair(x, what)),
+    what,
+  );
+  return seats.join() === seats.toSorted((a, b) => a - b).join() ? seats : bad(what);
+}
+/** A stage, kept by a sitting of version `kept` (a view is always of this one's). */
+export function readStage(v: unknown, kept = SITTING_VERSION): Stage {
   const s = record(v, "the stage");
   if (s.at === "over") return { at: "over", ended: moment(s.ended, "the end") };
   const until = moment(s.until, "the deadline");
-  if (s.at === "plan" || s.at === "fight") return { at: s.at, until };
+  if (s.at === "plan") return { at: "plan", until, ready: seatList(s.ready, kept, "who is ready") };
+  if (s.at === "fight") return { at: "fight", until, done: seatList(s.done, kept, "who has watched") };
   if (s.at === "open") {
     const sat = list(s.sat, CHAIRS - 1, "who has sat").map(readMember);
     unique(
@@ -123,7 +137,9 @@ export function readStage(v: unknown): Stage {
     ring.flatMap((offer) => (offer.by === null ? [] : [offer.by])),
     "the ring",
   );
-  return { at: "carousel", until, ring, turns, open: whole(s.open, 0, turns.length, "the turns") };
+  const ends = kept < 6 ? until : moment(s.ends, "the turn's end");
+  if (ends < until) bad("the turn's end");
+  return { at: "carousel", until, ring, turns, open: whole(s.open, 0, turns.length, "the turns"), ends };
 }
 /** Two different seats. */
 function readTwo(v: unknown, what: string): [number, number] {
@@ -176,7 +192,7 @@ function read(v: unknown): Sitting {
     era: r.v === 1 || r.v === 2 ? LEGACY_ERA : one(r.era, isEra, "the era"),
     by: text(r.by, 64, "who opened it"),
     room: whole(r.room, 0, MOST_ROOMS, "the room"),
-    stage: readStage(r.stage),
+    stage: readStage(r.stage, typeof r.v === "number" ? r.v : SITTING_VERSION),
     seats: list(r.seats, CHAIRS, "the seats").map((seat) =>
       readSeat(seat, r.v === 1, typeof r.v === "number" && r.v >= 5),
     ),

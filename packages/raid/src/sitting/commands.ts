@@ -1,6 +1,8 @@
 /**
  * What people do at a sitting: open one, sit, leave, start it, plan their own seat's room with the
- * run's own commands, and take a figure from the carousel. Each command is done at a moment of
+ * run's own commands, take a figure from the carousel, say they are ready to fight, and say they
+ * have watched their fight (or skipped it). The last three end the stage early once nobody in it has
+ * anything left to do (`settle`). Each command is done at a moment of
  * Leaf's clock: the sitting is brought to that moment first (`advance`), Leaf's dice for the call
  * are stirred into the sitting's stream (and into the seat's run, for a command of the run's)
  * before anything is drawn, and the command is done or refused with a code and a sentence.
@@ -11,19 +13,20 @@ import { act, isPlanning, type PlanningCommand, readRunCommand } from "../comman
 import { eraAt } from "../content/releases.ts";
 import { isRecord, isWhole } from "../party.ts";
 import { abandon, type Note } from "../run.ts";
-import { hasTaken, take } from "./carousel.ts";
-import { advance, begin, gone } from "./clock.ts";
+import { cannotTake, take } from "./carousel.ts";
+import { advance, begin, gone, settle } from "./clock.ts";
 import {
   CHAIRS,
   CLOCK,
+  marked,
   type Member,
+  notNow,
   notPlanning,
   type Refusal,
   refuse,
   type Seat,
   seatsIn,
   type Sitting,
-  watched,
 } from "./sitting.ts";
 
 /** What Leaf tells a sitting about a call: its clock, its dice for the call, and who is calling. */
@@ -43,6 +46,10 @@ export type SittingCommand =
   | { do: "start" }
   /** Take the figure at a place in the carousel's ring. */
   | { do: "pick"; offer: number }
+  /** Ready to fight (or, `on` false, not after all), while planning. */
+  | { do: "ready"; on: boolean }
+  /** Done with the room's fight: watched to its end, or skipped. */
+  | { do: "watched" }
   /** The run's own planning commands, for the caller's seat; the rest of a run's are the clock's (its spec's `whose`). */
   | PlanningCommand;
 
@@ -110,23 +117,49 @@ function leave(t: Sitting, { player, now }: Call): Did {
   if (seat.place !== null) return refuse("out");
   seat.place = seatsIn(t).length;
   abandon(seat.run);
-  if (!gone(t, [seat], now) && !watched(t)) stage.until = now;
+  if (!gone(t, [seat], now)) settle(t, now);
   return did;
 }
 
-function pickOffer(t: Sitting, offer: number, { player }: Call): Did {
+/** The caller's seat at a started sitting, still in; or why not. */
+function seatIn(t: Sitting, id: string): number | Refusal {
+  const at = t.seats.findIndex((s) => s.who.is === "member" && s.who.id === id);
+  if (at < 0) return refuse("not_seated");
+  return t.seats[at]?.place === null ? at : refuse("out");
+}
+
+function pickOffer(t: Sitting, offer: number, { player, now }: Call): Did {
   const { stage } = t;
-  if (stage.at !== "carousel") return refuse(stage.at === "over" ? "table_over" : "no_carousel");
-  const seat = t.seats.findIndex((s) => s.who.is === "member" && s.who.id === player.id);
-  if (seat < 0) return refuse("not_seated");
-  if (t.seats[seat]?.place !== null) return refuse("out");
-  const turn = stage.turns.indexOf(seat);
-  if (turn < 0 || turn >= stage.open) return refuse("not_your_turn");
-  if (hasTaken(stage, seat)) return refuse("picked");
-  const wanted = stage.ring[offer];
-  if (!wanted) return refuse("not_in_ring");
-  if (wanted.by !== null) return refuse("taken");
-  return { ok: true, notes: take(t, stage, seat, offer) };
+  if (stage.at !== "carousel") return refuse(notNow(stage.at, "pick") ?? "no_carousel");
+  const seat = seatIn(t, player.id);
+  if (typeof seat !== "number") return seat;
+  const cannot = cannotTake(stage, seat, offer);
+  if (cannot) return refuse(cannot);
+  const notes = take(t, stage, seat, offer);
+  settle(t, now);
+  return { ok: true, notes };
+}
+
+/** Ready to fight, or not after all: when every member still in is, planning ends at that moment. */
+function ready(t: Sitting, on: boolean, { player, now }: Call): Did {
+  const { stage } = t;
+  if (stage.at !== "plan") return refuse(notNow(stage.at, "ready") ?? "carousel");
+  const seat = seatIn(t, player.id);
+  if (typeof seat !== "number") return seat;
+  stage.ready = marked(stage.ready, seat, on);
+  settle(t, now);
+  return did;
+}
+
+/** Done with the room's fight: when every member still in is, the fights end at that moment. */
+function watchedFight(t: Sitting, { player, now }: Call): Did {
+  const { stage } = t;
+  if (stage.at !== "fight") return refuse(notNow(stage.at, "watched") ?? "no_fight");
+  const seat = seatIn(t, player.id);
+  if (typeof seat !== "number") return seat;
+  stage.done = marked(stage.done, seat, true);
+  settle(t, now);
+  return did;
 }
 
 /** One of the run's own commands, done to the caller's seat by the code Leaf's solo table uses. A seat that is out is refused by its run, which is over. */
@@ -159,6 +192,11 @@ const SEAT: { readonly [D in SeatDo]: SeatSpec<SeatCommandOf<D>> } = {
     read: (v) => (isWhole(v.offer, 0, 63) ? { do: "pick", offer: v.offer } : null),
     run: (t, c, call) => pickOffer(t, c.offer, call),
   },
+  ready: {
+    read: (v) => (typeof v.on === "boolean" ? { do: "ready", on: v.on } : null),
+    run: (t, c, call) => ready(t, c.on, call),
+  },
+  watched: { read: () => ({ do: "watched" }), run: (t, _, call) => watchedFight(t, call) },
 };
 const seatSpec = <D extends SeatDo>(name: D): SeatSpec<SeatCommandOf<D>> => SEAT[name];
 const isSeatDo = (name: unknown): name is SeatDo => typeof name === "string" && Object.hasOwn(SEAT, name);

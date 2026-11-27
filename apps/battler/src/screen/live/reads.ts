@@ -4,7 +4,7 @@
  * words, and what a room paid. Nothing here reads a clock: `now` is Leaf's, given.
  */
 import { catalogOf, ECONOMY, type FightResult, figureIn, refusalText, type RunView } from "@sequoia-leaf/raid";
-import { CHAIRS, CLOCK, SITTING_REFUSALS } from "@sequoia-leaf/raid/sitting/sitting.ts";
+import { CHAIRS, SITTING_REFUSALS, waitingOn } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import type { SeatView, SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
 import { opening } from "../logic.ts";
@@ -20,12 +20,18 @@ const STAGES: Readonly<Record<SittingView["stage"]["at"], string>> = {
   over: "Over",
 };
 
-/** The clock at the top: what this stage is, and the seconds left of it (none before the start or after the end). */
+/**
+ * The clock at the top: what this stage is, and the seconds left of it at the most (it ends sooner
+ * once everyone is done); in a carousel the seconds left of the member's own turn, while it is theirs.
+ * None before the start or after the end.
+ */
 export function clockOf(view: SittingView, now: number): { label: string; seconds: number | null } {
   const { stage } = view;
   const label = STAGES[stage.at];
   if (stage.at === "open" || stage.at === "over") return { label, seconds: null };
-  return { label, seconds: secondsTo(stage.at === "carousel" ? carouselEnds(stage) : stage.until, now) };
+  if (stage.at !== "carousel") return { label, seconds: secondsTo(stage.until, now) };
+  const turn = turnOf(view, now);
+  return { label, seconds: turn.at === "choosing" ? turn.seconds : null };
 }
 /** The clock as one line: "Planning · 23 s". */
 export function clockText(view: SittingView, now: number): string {
@@ -82,20 +88,18 @@ export function ordinal(n: number): string {
 /** A place at the table: "5th of 8". */
 export const placeText = (place: number, seats = CHAIRS): string => `${ordinal(place)} of ${seats}`;
 
-/** Where the member is in a carousel: not in it, waiting their turn (and how long), choosing (and how long is left), or done. */
+/** Where the member is in a carousel: not in it, waiting their turn (and how many choose before them), choosing (and how long is left), or done. */
 export type Turn =
   | { at: "none" }
-  | { at: "waiting"; seconds: number }
+  | { at: "waiting"; before: number }
   | { at: "choosing"; seconds: number }
   | { at: "taken"; offer: number };
 
-/** When the carousel ends: when its last pair has had its time. */
-export function carouselEnds(stage: Extract<SittingView["stage"], { at: "carousel" }>): number {
-  const pairs = Math.ceil((stage.turns.length - stage.open) / 2);
-  return pairs === 0 ? stage.until : stage.until + (pairs - 1) * CLOCK.pair + CLOCK.last;
-}
-
-/** The member's turn at the carousel: pairs are let in lowest health first, a pair each 5 seconds; the first carousel lets everyone in at once. */
+/**
+ * The member's turn at the carousel: seats are let in lowest health first, two at a time (in the
+ * first, the members at once); a turn ends as soon as everyone in it has taken, so how long the wait
+ * is cannot be known, only how many take first.
+ */
 export function turnOf(view: SittingView, now: number): Turn {
   const { stage, you } = view;
   if (stage.at !== "carousel" || you === null) return { at: "none" };
@@ -103,9 +107,10 @@ export function turnOf(view: SittingView, now: number): Turn {
   if (offer >= 0) return { at: "taken", offer };
   const turn = stage.turns.indexOf(you);
   if (turn < 0) return { at: "none" };
-  if (turn < stage.open) return { at: "choosing", seconds: secondsTo(carouselEnds(stage), now) };
-  const opens = stage.until + Math.floor((turn - stage.open) / 2) * CLOCK.pair;
-  return { at: "waiting", seconds: secondsTo(opens, now) };
+  if (turn < stage.open) return { at: "choosing", seconds: secondsTo(stage.ends, now) };
+  const taken = (seat: number): boolean => stage.ring.some((o) => o.by === seat);
+  const before = stage.turns.slice(0, turn).filter((seat) => !taken(seat) && view.seats[seat]?.place === null);
+  return { at: "waiting", before: before.length };
 }
 
 /** Who may take from the ring now: the seats let in that have taken nothing yet. */
@@ -133,7 +138,10 @@ export function refusalWords(code: string, why = ""): string {
   return own ? own[1] : refusalText(code);
 }
 
-/** The carousel in a line, for the member: whose turn it is and how long, or what they took. */
+/** "1 player", "2 players". */
+const players = (n: number): string => `${n} ${n === 1 ? "player" : "players"}`;
+
+/** The carousel in a line, for the member: their turn, how many choose before them, or what they took. */
 export function turnLine(view: SittingView, now: number): string {
   const { stage } = view;
   if (stage.at !== "carousel") return "";
@@ -142,17 +150,31 @@ export function turnLine(view: SittingView, now: number): string {
     const offer = stage.ring[turn.offer];
     return offer ? `You took ${figureIn(catalogOf(view), offer.kind).name}.` : "";
   }
-  if (turn.at === "choosing")
-    return stage.open === stage.turns.length && view.room === 0
-      ? "Everyone chooses at once."
-      : "Your turn: choose one.";
-  return turn.at === "waiting" ? `Your turn in ${turn.seconds} s.` : "";
+  if (turn.at === "choosing") return "Your turn: choose one.";
+  return turn.at === "waiting" ? `Your turn after ${players(turn.before)}.` : "";
 }
 
-/** The clock's second line: the carousel's turn, or in a sparring room whom the member faces. */
+/**
+ * Whom planning or the fights still wait for, once the member has done their part (ready, or their
+ * fight watched): "Waiting for Sootpaw." or "Waiting for 2 players."; empty while the member still
+ * has something to do, or nobody else has.
+ */
+export function waitingLine(view: SittingView): string {
+  const { you, stage } = view;
+  if (you === null || view.seats[you]?.place !== null || (stage.at !== "plan" && stage.at !== "fight")) return "";
+  const left = waitingOn(view);
+  if (left.includes(you)) return "";
+  const [one] = left;
+  const them = one === undefined ? undefined : view.seats[one];
+  if (!them) return "";
+  return left.length === 1 ? `Waiting for ${seatName(them)}.` : `Waiting for ${players(left.length)}.`;
+}
+
+/** The clock's second line: the carousel's turn; while planning or fighting whom it waits for, else whom the member faces in a sparring room. */
 export function clockLine(view: SittingView, now: number): string {
   if (view.stage.at === "carousel") return turnLine(view, now);
-  return view.stage.at === "plan" || view.stage.at === "fight" ? (facingLine(view) ?? "") : "";
+  if (view.stage.at !== "plan" && view.stage.at !== "fight") return "";
+  return waitingLine(view) || (facingLine(view) ?? "");
 }
 
 /** What the page says of a table that closed before anybody started it. */
@@ -175,6 +197,23 @@ export function closedUnstarted(view: SittingView, was: SittingView): boolean {
     was.stage.at === "open" &&
     view.stage.ended >= was.stage.until
   );
+}
+
+/**
+ * What the ring does as the sitting changes, from the ring it showed (of the carousel before room
+ * `room`, or none) to the one Leaf shows now (before room `now`): a new carousel is laid out afresh
+ * ("lay"); in the same one, only the places taken since move (they fly off, and their buttons go).
+ * Nothing else is ever built again, so a figure pressed as somebody else takes another keeps its
+ * button, and the tap.
+ */
+export function ringMoves(
+  room: number | null,
+  was: readonly { readonly by: number | null }[],
+  now: number,
+  ring: readonly { readonly by: number | null }[],
+): "lay" | number[] {
+  if (room !== now || was.length !== ring.length) return "lay";
+  return ring.flatMap((offer, i) => (offer.by !== null && was[i]?.by === null ? [i] : []));
 }
 
 /**

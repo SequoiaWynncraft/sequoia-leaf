@@ -43,6 +43,14 @@ import { drawZone } from "./zone.ts";
 /** When the board was last found full, for flashing its count. */
 export const boardFull = { at: -9 };
 
+/** What else stands on the table this frame, in among everyone by their feet: the live table's carousel. */
+const alsoStanding: ((g: Ctx) => Standing[])[] = [];
+export const standAlso = (fn: (g: Ctx) => Standing[]): void => void alsoStanding.push(fn);
+/** How see-through the party's own figures standing in their places are drawn: the live table's carousel dims them while it stands over them. */
+const pawnFades: (() => number)[] = [];
+export const fadePawns = (fn: () => number): void => void pawnFades.push(fn);
+const pawnFade = (p: Pawn): number => (p.move ? 1 : pawnFades.reduce((k, fade) => k * fade(), 1));
+
 let litMark: HTMLCanvasElement | null = null;
 let aimMark: HTMLCanvasElement | null = null;
 let swapMark: HTMLCanvasElement | null = null;
@@ -137,7 +145,7 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
         g.fillStyle = "rgba(26,15,30,0.3)";
         g.fillRect(Math.round(ox + p.x) - 6, Math.round(oy + p.y) - 1, 12, 2);
       }
-      const alpha = p.alpha * (shine.dim ? DIM : 1);
+      const alpha = p.alpha * (shine.dim ? DIM : 1) * pawnFade(p);
       if (alpha < 1) g.globalAlpha = alpha;
       drawStanding(g, catalogFor(S.run), p.kind, x, y, S.looks.bases, {
         hover,
@@ -417,6 +425,7 @@ function drawTable(g: Ctx): void {
     if (fighting && spotOfPawn(p)?.on === "board") continue;
     list.push(pawnStanding(g, p, V.bx, V.by));
   }
+  list.push(...alsoStanding.flatMap((also) => also(g)));
   list.sort((a, b) => a.y - b.y || a.x - b.x);
   for (const s of list) s.draw();
   // A ring under the figure that has been tapped and is waiting to be told where to go.
