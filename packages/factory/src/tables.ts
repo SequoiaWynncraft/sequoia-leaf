@@ -71,8 +71,8 @@ export const TINTS = 6;
 
 export const ITEM_COUNT = ITEMS.length;
 export const KIND_COUNT = KINDS.length;
-/** The bits a kind is kept in, in a saved piece's first byte and in an Undo entry's: step F3 of tiers 5 to 8 widens them. */
-export const KIND_BITS = 4;
+/** The bits a kind is kept in, in a saved piece and in an Undo entry: the first byte's four, and four more in a part of their own past 15 (`cells.ts`). */
+export const KIND_BITS = 8;
 /** A kind as it is kept, in its bits: one past them is no yard's yet, and is refused out loud rather than kept as another. */
 export function keptKind(k: number): number {
   if (k >= 1 << KIND_BITS) throw new Error(`kind ${k} does not fit in the ${KIND_BITS} bits a save keeps a kind in`);
@@ -162,6 +162,10 @@ export const MOST: readonly ("stops" | null)[] = KIND_DEFS.map((d: KindDef) => d
 /** What each kind does a minute, as a verb and what it does it to (`KindDef.does`); and whether its price is a tile's. */
 export const DOES: readonly (readonly [string, string] | null)[] = KIND_DEFS.map((d: KindDef) => d.does ?? null);
 export const PER_TILE = flagOf((d) => d.perTile);
+/** Each kind's tiles across and down as it faces east (`KindDef.size`), and whether that is more than one tile (`sizes.ts`). */
+export const SIZE_W = Uint8Array.from(KIND_DEFS, (d: KindDef) => d.size?.[0] ?? 1);
+export const SIZE_H = Uint8Array.from(KIND_DEFS, (d: KindDef) => d.size?.[1] ?? 1);
+export const BIG = Uint8Array.from(SIZE_W, (w, k) => (w * (SIZE_H[k] ?? 1) > 1 ? 1 : 0));
 /** The kind that studies, where research is studied (`KindDef.studies`). */
 export const STUDYING: Kind = sure(
   kindNamed(KIND_DEFS.find((d: KindDef) => d.studies === true)?.name),
@@ -233,6 +237,8 @@ export function countsOf(w: Wants): Float64Array {
  */
 export interface Recipe {
   readonly out: Item;
+  /** What is made beside it, one with each (`RecipeInfo.also`), or `NONE`. */
+  readonly also: number;
   readonly from: readonly Item[];
   readonly need: readonly number[];
   readonly by: Kind;
@@ -244,10 +250,27 @@ export const RECIPES_N: readonly Recipe[] = RECIPES.map((r) => {
   const counts = countsOf(r.from);
   const from = Object.keys(r.from).flatMap((name) => itemNamed(name) ?? []);
   const need = from.map((n) => counts[n] ?? 0);
-  return { out: item(r.out), from, need, by: kind(r.by), ticks: r.ticks, work: r.ticks * 2 };
+  const also = r.also === undefined ? NONE : item(r.also);
+  return { out: item(r.out), also, from, need, by: kind(r.by), ticks: r.ticks, work: r.ticks * 2 };
 });
-/** The recipe that makes each thing, or null for things from the ground. */
+/**
+ * The recipe each thing names, the one it is the thing of: what a machine is told to make, and its
+ * lock, are by it. What makes a thing, its by-products too, is `makersOf`.
+ */
 export const RECIPE: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => RECIPES_N.find((r) => r.out === n) ?? null);
+/** Every recipe that makes each thing: the one it is the thing of first, then those that make it beside their own. */
+const MAKING: readonly (readonly Recipe[])[] = ALL_ITEMS.map((n) => [
+  ...RECIPES_N.filter((r) => r.out === n),
+  ...RECIPES_N.filter((r) => r.also === n),
+]);
+/**
+ * The recipes that make a thing: the one it is the thing of first, then each that makes it beside its
+ * own (`Recipe.also`), one with each. The one place what makes a thing is asked: what the yard can make
+ * (`makeableOn`), how a thing is got (`recipeFor`), and so the planner, the work in it and its parts.
+ */
+export const makersOf = (n: number): readonly Recipe[] => MAKING[n] ?? [];
+/** The recipe a thing is got by: none for a thing from the ground, which is gathered; else the first that makes it (`makersOf`). */
+export const recipeFor = (n: Item): Recipe | null => (isRaw(n) ? null : (makersOf(n)[0] ?? null));
 /** The recipes each kind of machine knows, in the table's order. */
 export const MADE_BY: readonly (readonly Recipe[])[] = ALL_KINDS.map((k) => RECIPES_N.filter((r) => r.by === k));
 const MAKERS = Uint8Array.from(MADE_BY, (recipes) => (recipes.length > 0 ? 1 : 0));
@@ -264,12 +287,12 @@ export const holdsMost = (recipes: readonly Recipe[], n: number): number =>
 
 /** Everything that goes into a thing, all the way down to the ground, the thing itself included. */
 export function partsOf(n: Item): Item[] {
-  return [n, ...(RECIPE[n]?.from ?? []).flatMap(partsOf)];
+  return [n, ...(recipeFor(n)?.from ?? []).flatMap(partsOf)];
 }
 
 /** The work in one of a thing: every tick a gatherer and every machine at grade 1 spends on it, all the way down. */
 export function workOf(n: Item): number {
-  const r = RECIPE[n];
+  const r = recipeFor(n);
   if (!r) return TICKS.gather;
   return r.ticks + r.from.reduce((sum, k, p) => sum + (r.need[p] ?? 0) * workOf(k), 0);
 }

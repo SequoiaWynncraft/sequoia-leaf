@@ -1,10 +1,11 @@
 /**
- * The depot: nine tiles of land in the yard's middle, never built, turned, moved or taken up. It takes
- * every item that reaches it, from any side; each counts towards an order that asks for it and pays 1%
- * of its worth. It makes power, as much as what is open says (`open.depot`).
+ * The depot: a piece of three tiles by three in the yard's middle, set down with the yard, never built,
+ * turned, moved or taken up. It takes every item that reaches it, on every side; each counts towards an
+ * order that asks for it and pays 1% of its worth. It makes power, as much as what is open says
+ * (`open.depot`).
  */
 import { kind } from "./kind.ts";
-import { everySide } from "./line.ts";
+import { around } from "./ports.ts";
 import { as } from "./say.ts";
 import { always, anything, sell } from "./sink.ts";
 
@@ -19,8 +20,9 @@ export const depot = kind({
   },
   fixed: true,
   fast: true,
+  size: [3, 3],
+  ports: { in: around(3, 3), out: [] },
   rules: {
-    sides: everySide,
     wants: anything,
     room: always,
     give: sell,

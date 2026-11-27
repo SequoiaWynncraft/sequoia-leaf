@@ -7,7 +7,7 @@
  *
  * Pointing at a thing on the yard says what it is; clicking or tapping pins its card.
  */
-import { at, carries, isItem, NONE, piecesAt, redwoodAt, tilesOf } from "@sequoia-leaf/factory";
+import { at, carries, isItem, NONE, pieceOf, piecesAt, redwoodAt, tilesOf } from "@sequoia-leaf/factory";
 import { canvasCard, close, moveCard, pick, refresh, register, shown, watch } from "@sequoia-leaf/kit/card.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
@@ -38,7 +38,8 @@ export function refAt(x: number, y: number): string | null {
   if (i < 0) return null;
   const plot = w.land.plots[w.land.plot[i] ?? NONE];
   if (plot && !w.plots.includes(plot.plot)) return plotRef(plot.plot);
-  if (w.kind[i] !== NONE) return tileRef(i);
+  // A piece of more than one tile is one card, its own tile's, from any of its tiles.
+  if (w.kind[i] !== NONE) return tileRef(pieceOf(w, i));
   const raw = w.land.deposit[i] ?? NONE;
   if (isItem(raw)) return itemRef(raw);
   if (w.land.water[i] === 1 || redwoodAt(w, i)) return tileRef(i);

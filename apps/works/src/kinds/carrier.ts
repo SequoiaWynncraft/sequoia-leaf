@@ -10,6 +10,9 @@ import {
   LEFT,
   nextOf,
   NONE,
+  outsOf,
+  pieceOf,
+  portTo,
   RIGHT,
   RULES,
   takes,
@@ -28,6 +31,14 @@ export function feeds(y: Yard, from: number, to: number): boolean {
   if (from < 0 || to < 0) return false;
   const k = y.kind[from] ?? NONE;
   if ((RULES[k]?.hands ?? null) === null) return false;
+  // A piece of more than one tile feeds the tile ahead of each of its ways out, from the tile that way
+  // leaves by, as its kind's ports say; but one that hands back into it, as two belts facing each other.
+  const own = pieceOf(y, from);
+  const outs = y.part[from] === 0 ? [] : outsOf(y, own);
+  if (outs.length > 0)
+    return (
+      outs.some((o, p) => own + o.dx + o.dy * y.land.w === from && portTo(y, own, p) === to) && nextOf(y, to) !== from
+    );
   // A splitter or sorter feeds whatever on one of its ways out takes things from it.
   const ways = waysOf(k);
   if (ways > 0) {

@@ -60,6 +60,7 @@ import { GOLD, SKY } from "@sequoia-leaf/kit/palette.ts";
 
 import { buildAct, gradeOn, groupAct, layAct, raisedOn } from "./acts.ts";
 import { PAINTS, TILE } from "./art/belts.ts";
+import { pieceOn } from "./big.ts";
 import { OUT_OF_REACH, reachOf, withReach } from "./figure/reach.ts";
 import { float, flutter, puff, sparkle } from "./fx.ts";
 import { aimOf, groupOf, markOf, runOf, type Tile } from "./hand.ts";
@@ -297,10 +298,9 @@ function lifted(x: number, y: number, cost: number): void {
  * Raises the piece on a tile to the next grade, where it stands, for the difference: what its card
  * offers. Says whether it was raised.
  */
-export function raiseAt(x: number, y: number): boolean {
+export function raiseAt(tx: number, ty: number): boolean {
   const w = S.world;
-  const i = at(w, x, y);
-  const k = i < 0 ? NONE : (w.kind[i] ?? NONE);
+  const { i, k, x, y } = pieceOn(S.world, tx, ty);
   if (!isKind(k) || FIXED[k] === 1) return false;
   const grade = (w.grade[i] ?? 0) + 1;
   const cost = priceAt(w, k, x, y, grade);
@@ -372,9 +372,9 @@ export function paintAt(x: number, y: number, more = false, pointer = -1): boole
 }
 
 /** Turns what stands on a tile a quarter turn to the right. */
-export function turnAt(x: number, y: number): boolean {
+export function turnAt(tx: number, ty: number): boolean {
   const w = S.world;
-  const i = at(w, x, y);
+  const { i, x, y } = pieceOn(S.world, tx, ty);
   if (!turnable(w, x, y)) {
     yardSfx.no();
     return false;
@@ -386,9 +386,9 @@ export function turnAt(x: number, y: number): boolean {
 }
 
 /** Moves one of the ways out of the splitter on a tile (0 ahead, 1 left, 2 right) on a step (`stepWay`). */
-export function wayAt(x: number, y: number, way: number): boolean {
+export function wayAt(tx: number, ty: number, way: number): boolean {
   const w = S.world;
-  const i = at(w, x, y);
+  const { i, x, y } = pieceOn(S.world, tx, ty);
   const act = stepWay(w, i, x, y, way);
   const did = i < 0 ? null : doNow(act);
   if (!did || "refused" in did) {
@@ -451,8 +451,8 @@ export function flip(): void {
 }
 
 /** Flips the sorter on a tile to send the thing it is set to to its other side. Says whether it did. */
-export function flipAt(x: number, y: number): boolean {
-  const i = at(S.world, x, y);
+export function flipAt(tx: number, ty: number): boolean {
+  const { i, x, y } = pieceOn(S.world, tx, ty);
   if (!flips(kindAt(S.world, x, y))) {
     yardSfx.no();
     return false;
@@ -464,10 +464,9 @@ export function flipAt(x: number, y: number): boolean {
 }
 
 /** Takes up the tool for whatever stands on a tile, facing the way it faces (a sorter to its side too), at its grade. */
-export function pickFrom(x: number, y: number): boolean {
-  const k = kindAt(S.world, x, y);
+export function pickFrom(tx: number, ty: number): boolean {
+  const { i, k } = pieceOn(S.world, tx, ty);
   if (k === NONE || FIXED[k] === 1 || !isKind(k) || !usable(k)) return false;
-  const i = at(S.world, x, y);
   S.dir = dirOf(i);
   if (flips(k)) S.right = sendsRight(S.world, i);
   if (isGraded(k)) S.grades[k] = S.world.grade[i] ?? 1;

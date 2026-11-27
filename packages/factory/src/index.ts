@@ -38,14 +38,15 @@ export {
   decode,
   encode,
   type Keep,
-  type KeptBlueprint,
   type KeptOrder,
   keptOrder,
-  type KeptPrint,
+  keptUnknown,
   orderOf,
+  PLACED,
   VERSION,
   vouch,
 } from "./codec.ts";
+export { type KeptBlueprint, type KeptPrint } from "./prints.ts";
 export * from "./game.ts";
 export { UNDO_BYTES, UNDO_ENTRY, UNDO_MOST } from "./history.ts";
 export * from "./land.ts";
@@ -56,7 +57,7 @@ export * from "./page.ts";
 export * from "./pieces.ts";
 export * from "./planner.ts";
 export * from "./postcard.ts";
-export { litOf, repower, squared } from "./power.ts";
+export { litAt, litOf, repower, squared } from "./power.ts";
 export { type Leg, legKind, legPiece, legSpan, route } from "./route.ts";
 export * from "./status.ts";
 export * from "./tables.ts";
@@ -72,6 +73,7 @@ export {
   type Kit,
   KIT,
   nextOf,
+  portTo,
   type Power,
   power,
   rewire,
@@ -82,5 +84,20 @@ export {
   waysOf,
 } from "./wire.ts";
 export { KIND_DEFS, type KindRules, RULES } from "./kinds/list.ts";
+export {
+  cornerOf,
+  FACING,
+  type Facing,
+  isBig,
+  layOver,
+  OWN,
+  type Out,
+  outsOf,
+  pieceOf,
+  piecesTiles,
+  sizeOf,
+  tilesAt,
+} from "./sizes.ts";
+export type { Ports } from "./kinds/kind.ts";
 export type { Hooks, KindDef, Words } from "./kinds/kind.ts";
 export * from "./yard.ts";

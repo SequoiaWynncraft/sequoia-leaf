@@ -15,6 +15,12 @@
  *   256 a shut crate   512 fuel (byte)   1024 one of the pieces to hand   2048 tint (byte)
  *   4096 a splitter's ways (byte: its shut ways, the way it puts first and its ways in, `packWays`), or a
  *        sorter's right side (the same byte, as the way it puts first)   8192 a grade above 1 (byte)
+ *   16384 a kind past 15: its bits above the first byte's four (byte)   32768 a by-product held (byte)
+ *
+ * A piece of more than one tile is kept once, on its own tile (`sizes.ts`), and stands over the rest
+ * of its tiles again as it is read back. A yard with no kind past 15 and no by-product has exactly the
+ * bytes it had before either could be kept; one with either is refused whole by a reader that knows
+ * neither, as bytes with a part it does not know.
  *
  * Bytes that are not pieces are refused whole: bytes cut short or left over, a part this version
  * does not know, more pieces than the land has tiles, and counts no yard could have (more than 255
@@ -25,12 +31,16 @@
 import { Reader, Writer } from "./bytes.ts";
 import { RULES } from "./kinds/list.ts";
 import { waysOn } from "./pieces.ts";
+import { OWN } from "./sizes.ts";
 import { ALL_ITEMS, CARRIES, FIXED, type Goal, isItem, keptKind, NONE, SHUTS, SPAN_MOST, TINTS } from "./tables.ts";
 import { KIT } from "./wire.ts";
 import { held, holderOf, type Holders, tunnelOf, type Yard } from "./yard.ts";
 
 /** The parts a piece's bytes may say follow, a bit each. */
-const PARTS = 0x3ffe;
+const PARTS = 0xfffe;
+/** The parts kept since a kind could pass 15 and a piece hold a by-product, after all the others. */
+const HIGH = 0x4000;
+const ALSO = 0x8000;
 /** The most kinds of thing, and of one thing, a piece's bytes may say it holds: past these the bytes are no yard's. */
 const KINDS_MOST = 255;
 const MANY_MOST = 1_000_000;
@@ -45,6 +55,7 @@ export interface KeptPiece {
   readonly via?: number;
   readonly held?: readonly (readonly [number, number])[];
   readonly out?: number;
+  readonly also?: number;
   readonly work?: number;
   readonly making?: number;
   readonly turn?: number;
@@ -82,9 +93,11 @@ const LATE = [
 function heldBy(h: Holders, r: number): Partial<Building> {
   const kinds = ALL_ITEMS.filter((n) => held(h, r, n) > 0);
   const [out, work, making, fuel] = [h.out[r] ?? NONE, h.work[r] ?? 0, h.making[r] ?? NONE, h.fuel[r] ?? 0];
+  const also = h.also[r] ?? NONE;
   return {
     ...(kinds.length > 0 ? { held: kinds.map((n): [number, number] => [n, held(h, r, n)]) } : {}),
     ...(out === NONE ? {} : { out }),
+    ...(also === NONE ? {} : { also }),
     ...(work === 0 ? {} : { work }),
     ...(making === NONE ? {} : { making }),
     ...(fuel === 0 ? {} : { fuel }),
@@ -135,9 +148,10 @@ export function keptPiece(y: Yard, i: number): KeptPiece {
   };
 }
 
-/** The yard's pieces as bytes, in tile order. */
+/** The yard's pieces as bytes, in tile order: a piece of more than one tile on its own tile alone. */
 export function packCells(y: Yard): Uint8Array {
-  const at = Array.from(y.kind.keys()).filter((i) => y.kind[i] !== NONE && FIXED[y.kind[i] ?? NONE] !== 1);
+  const own = (i: number): boolean => y.part[i] === 0 || y.part[i] === OWN;
+  const at = Array.from(y.kind.keys()).filter((i) => y.kind[i] !== NONE && FIXED[y.kind[i] ?? NONE] !== 1 && own(i));
   return packKept(at.map((i) => keptPiece(y, i)));
 }
 
@@ -152,6 +166,8 @@ function partsOf(p: KeptPiece): number {
     [256, p.closed],
     ...LATE.map(([bit, key]) => [bit, p[key]] as const),
     [1024, p.free],
+    [HIGH, p.kind > 15 ? true : undefined],
+    [ALSO, p.also],
   ];
   return has.reduce((f, [bit, v]) => (v === undefined || v === false ? f : f | bit), 0);
 }
@@ -188,7 +204,7 @@ function writeNumbers(o: Writer, p: KeptPiece, parts: typeof EARLY | typeof LATE
 /** Writes a kept piece, from its first byte. */
 function writeKept(o: Writer, p: KeptPiece): void {
   const f = partsOf(p);
-  o.byte(keptKind(p.kind) | (p.dir << 4) | (p.item === undefined ? 0 : 64) | (f === 0 ? 0 : 128));
+  o.byte((keptKind(p.kind) & 15) | (p.dir << 4) | (p.item === undefined ? 0 : 64) | (f === 0 ? 0 : 128));
   if (p.item !== undefined) {
     o.byte(p.item);
     o.byte((p.prog ?? 0) | ((p.via ?? 0) << 4));
@@ -198,6 +214,8 @@ function writeKept(o: Writer, p: KeptPiece): void {
   writeNumbers(o, p, EARLY);
   if (p.span !== undefined) writeSpan(o, p);
   writeNumbers(o, p, LATE);
+  if (f & HIGH) o.byte(p.kind >> 4);
+  if (p.also !== undefined) o.byte(p.also);
 }
 
 /** Pieces as kept (in tile order, none twice) as bytes: `unpackCells` reads back the same. */
@@ -250,6 +268,16 @@ function readParts(r: Reader, p: Building, f: number): boolean {
   if (f & 128) readSpan(r, p);
   for (const [bit, key] of LATE) if (f & bit) p[key] = r.byte();
   Object.assign(p, f & 256 ? { closed: true } : {}, f & 1024 ? { free: true } : {});
+  if (f & HIGH && !readHigh(r, p)) return false;
+  if (f & ALSO) p.also = r.byte();
+  return true;
+}
+
+/** Reads a kind's bits past four onto a piece: 1 to 15, as only a kind past 15 has (none past 255); false for any other. */
+function readHigh(r: Reader, p: Building): boolean {
+  const high = r.byte();
+  if (high === 0 || high > 15) return false;
+  p.kind |= high << 4;
   return true;
 }
 

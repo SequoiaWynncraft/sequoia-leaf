@@ -6,6 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 
+import { unpackCells } from "../src/cells.ts";
 import * as F from "../src/index.ts";
 import { bareLand } from "./land.ts";
 import { delivering, flatOut, generated, must } from "./yards.ts";
@@ -38,6 +39,9 @@ function running(ticks = 3000): F.Yard {
 
 /** A whole number below 16,384 as the packed bytes write it, seven bits a byte. */
 const varint = (v: number): number[] => (v < 128 ? [v] : [(v & 127) | 128, v >> 7]);
+
+/** A piece on tile 5 whose kind has its bits past four (`high`) in a part of their own (0x4000), as only a kind past 15 has. */
+const wide = (high: number): number[] => [1, 5, F.SPLITTER | 128, 0x80, 0x80, 0x01, high];
 
 /** A kept yard with its pieces' bytes put in place of its own. */
 const withCells = (good: string, bytes: Uint8Array | readonly number[]): string =>
@@ -113,8 +117,8 @@ describe("a yard kept before splitters, joiners and sorters had grades", () => {
     expect(lineGrades(back)).toEqual([2, 2, 2, 2, 2, 2]);
     expect([back.till, back.paid]).toEqual([y.till, y.paid]);
     expect(flatOut(back, 1, 4)).toBe(F.carried(2));
-    // Kept again, it is this version's, and reads back as itself.
-    expect(record(F.encode(back)).v).toBe(F.VERSION);
+    // Kept again, it is this version's for a yard of no kind past 15, and reads back as itself.
+    expect(record(F.encode(back)).v).toBe(F.PLACED);
     roundTrip(back);
     // This version keeps a splitter of grade I as grade I.
     expect(lineGrades(roundTrip(y))).toEqual([2, 1, 1, 1, 2, 2]);
@@ -211,6 +215,14 @@ describe("decode refuses whole", () => {
     // A part this version does not know: the lowest bit, and the one past the highest.
     expect(F.decode(withCells(good, [1, 5, F.BELT | 128, 1]))).toBeNull();
     expect(F.decode(withCells(good, [1, 5, F.BELT | 128, ...varint(8192)]))).toBeNull();
+  });
+
+  test("a kind's bits past four that are none, or more than four", () => {
+    expect(unpackCells(Uint8Array.from(wide(1)), 100)?.map((p) => p.kind)).toEqual([F.SPLITTER | 16]);
+    expect(unpackCells(Uint8Array.from(wide(15)), 100)?.map((p) => p.kind)).toEqual([F.SPLITTER | 240]);
+    expect(unpackCells(Uint8Array.from(wide(0)), 100)).toBeNull();
+    expect(unpackCells(Uint8Array.from(wide(16)), 100)).toBeNull();
+    expect(F.decode(withCells(F.encode(F.create({ seed: 1 })), wide(0)))).toBeNull();
   });
 });
 
@@ -324,6 +336,8 @@ const LEFT_OUT = new Set([
   "row",
   // How often each tile has been cleared, for Undo within a command: reading a yard back stands every piece anew.
   "made",
+  // Where a tile's piece of more than one tile stands: worked out from that tile's kind and way, which are mixed in.
+  "part",
   // What Undo would undo is mixed in as its bytes: an entry's id is worked out from them.
   "history.0.id",
   "holders.size",

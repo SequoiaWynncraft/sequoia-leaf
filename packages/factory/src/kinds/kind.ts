@@ -188,8 +188,31 @@ export interface KindDef<N extends string = string> {
   readonly perTile?: true;
   /** The number of what is open that says how many of it may stand: none for no limit. */
   readonly most?: "stops";
+  /**
+   * Tiles across and down, as it faces east; one tile if not said. A piece of more than one stands on
+   * the tile it is set down on as the middle of its tiles, or for an even side the middle's top left,
+   * whichever way it faces (`sizes.ts`).
+   */
+  readonly size?: readonly [across: number, down: number];
+  /** Where a piece of more than one tile takes things in and where each of its outputs leaves; a piece of one tile says so by its hooks (`sides`, `next`). */
+  readonly ports?: Ports;
   /** How it plays. */
   readonly rules: Hooks;
+}
+
+/**
+ * Where a piece of more than one tile takes things in and sends them out, as it faces east (its front
+ * the east side), turned with it as it stands (`sizes.ts`; `ports.ts` writes the usual ones).
+ */
+export interface Ports {
+  /** The tile-sides it takes things in by: each a tile, across and down from its box's corner, and a side of it, 0 its front, 1 its right, 2 its back and 3 its left. */
+  readonly in: readonly (readonly [x: number, y: number, side: number])[];
+  /**
+   * Its outputs, each from a tile of its front to the tile ahead of it: the tile, across and down
+   * from its box's corner, and what leaves there, the thing it finished (`"out"`) or what is made
+   * beside it (`"also"`, a recipe's by-product).
+   */
+  readonly out: readonly { readonly at: readonly [x: number, y: number]; readonly sends: "out" | "also" }[];
 }
 
 /** A kind's module says what it is with this: the name kept as written, for the tables to read. */

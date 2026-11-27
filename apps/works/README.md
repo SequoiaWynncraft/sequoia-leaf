@@ -27,6 +27,7 @@ bun test                         # the screen's own questions, the yard on a sta
 | building, runs, Select, blueprints, undo    | `tools.ts`, `undos.ts`; `doNow` (`yard.ts`) is the one place a price is judged     |
 | the line over the dock, the dock            | `ui/dock.ts` (a print of the hand)                                                 |
 | a kind of piece: picture, card, lamps, map  | `kinds/<kind>.ts` (one module a kind, listed in `kinds/index.ts`), `kinds/kind.ts` |
+| a piece of more than one tile on the page   | `big.ts` (its box, drawn once from its own tile; its ways out; its marks)          |
 | drawing a frame                             | `scene.ts` (`drawYard`, a layer at a time), `lamps.ts`, `layout.ts`, `art/*.ts`    |
 | the far steps and the map                   | `plan.ts`, `far.ts`, `zoom.ts`, `camera.ts`                                        |
 | cards                                       | `ui/card.ts`, `ui/refs.ts`, `ui/prints.ts` (what a card prints), `ui/cards.ts`     |

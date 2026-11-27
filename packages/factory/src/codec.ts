@@ -1,7 +1,7 @@
 /**
  * Keeping a yard, and reading it back. The yard is written as a small JSON record of its numbers,
  * goals and orders, with its pieces packed into bytes (`cells`, base64, as `cells.ts` packs them) and
- * each of its blueprints the same (`packPrint`; a plan of the whole yard as `{ "whole": ... }`), and
+ * each of its blueprints the same (`prints.ts`; a plan of the whole yard as `{ "whole": ... }`), and
  * what Undo would put back (`history.ts`). Reading is by shape first: a record of the wrong shape or
  * version is refused whole, and nothing else is. Inside a good one, every piece is built again through
  * the rules (`vouch`), and anything that depends on today's tuning (how much a piece holds, how far a
@@ -25,15 +25,16 @@
  * (`UNFELLED`); one kept by version 6 too, but for the grades it did not keep (`UNGRADED`).
  */
 import { build, isDir, plotState, refusal } from "./build.ts";
-import { fromBase64, Reader, toBase64, Writer } from "./bytes.ts";
+import { fromBase64, toBase64 } from "./bytes.ts";
 import { keptOnto, type KeptPiece, packCells, unpackCells } from "./cells.ts";
 import { here } from "./clock.ts";
 import { NODES } from "./content/nodes.ts";
-import { historyOf, stampOf } from "./history.ts";
+import { historyKinds, historyOf, stampOf } from "./history.ts";
 import { FIRST_LAND, holdsFirst, type KeptLand, keptLandOf, keptOn, piecesOn, tileOn } from "./keptland.ts";
 import { LAND, type Land } from "./land.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
-import { keptOf, packPieces, packWays, type Piece, piecesOf, placed, unpackWays } from "./pieces.ts";
+import { keptOf, packPieces, type Piece, placed, unpackWays } from "./pieces.ts";
+import { type KeptBlueprint, keptBlueprint, printText } from "./prints.ts";
 import {
   ALL_GOALS,
   ALL_ITEMS,
@@ -66,14 +67,21 @@ import {
   counts,
   emptyYard,
   hold,
+  PIECE_BYTES,
   type Print,
   reopen,
   type Standing,
   type Yard,
 } from "./yard.ts";
 
+/**
+ * 10: a kind past 15 kept anywhere: a piece, a blueprint, a plan of the whole yard or what Undo would
+ * undo. A yard with none is kept as `PLACED`, byte for byte as before there could be one, so a Leaf
+ * that knows no later version reads it, and refuses one with such a kind as a newer Leaf's.
+ */
+export const VERSION = 10;
 /** 9: the land a yard was kept on, so that its tiles stay where they are as the land grows. */
-export const VERSION = 9;
+export const PLACED = 9;
 /**
  * The version before a yard said the land it was kept on: whole numbers, grades (a splitter's, a
  * joiner's and a sorter's too), goals, research and redwoods felled, on the guild's first land. It
@@ -132,99 +140,6 @@ export function untally(v: unknown, most: number): Counts {
 
 // ---------- writing ----------
 
-/**
- * A blueprint as kept: each piece in its order, as its kind, x and y (a byte each), then its way
- * with a bit for each part that follows (4 span, 8 tint, 16 a splitter's ways, 32 a shut crate,
- * 64 recipe, 128 a grade above 1), then those, a byte each.
- */
-export function packPrint(b: Uint8Array): Uint8Array {
-  const o = new Writer();
-  for (const p of piecesOf(b)) {
-    o.byte(p.kind);
-    o.byte(p.x);
-    o.byte(p.y);
-    const { span, tint = 0, recipe, grade = 1 } = p;
-    const ways = packWays(p.shut ?? 0, (p.first ?? -1) + 1, p.ins ?? 0);
-    o.byte(
-      p.dir |
-        (span > 0 ? 4 : 0) |
-        (tint > 0 ? 8 : 0) |
-        (ways > 0 ? 16 : 0) |
-        (p.open === false ? 32 : 0) |
-        (recipe === undefined ? 0 : 64) |
-        (grade > 1 ? 128 : 0),
-    );
-    if (span > 0) o.byte(span);
-    if (tint > 0) o.byte(tint);
-    if (ways > 0) o.byte(ways);
-    if (recipe !== undefined) o.byte(recipe);
-    if (grade > 1) o.byte(grade);
-  }
-  return o.bytes();
-}
-
-/** A blueprint's pieces as kept, before they are vouched for: every part a plain number. */
-export type KeptPrint = readonly {
-  readonly kind: number;
-  readonly x: number;
-  readonly y: number;
-  readonly dir: number;
-  readonly span: number;
-  readonly recipe: number;
-  readonly open: boolean;
-  readonly tint: number;
-  readonly ways: number;
-  /** Its grade, where it is kept: above the first. */
-  readonly grade?: number;
-}[];
-
-/** A blueprint as kept: its pieces before they are vouched for, and whether it is a plan of the whole yard. */
-export interface KeptBlueprint {
-  readonly pieces: KeptPrint | null;
-  readonly whole: boolean;
-}
-
-/** A kept blueprint's pieces read back from their bytes, or null for bytes that are not pieces. */
-export function unpackPrint(bytes: Uint8Array | null): KeptPrint | null {
-  if (!bytes) return null;
-  const r = new Reader(bytes);
-  const out: KeptPrint[number][] = [];
-  while (!r.done) {
-    const kind = r.byte();
-    const x = r.byte();
-    const y = r.byte();
-    const f = r.byte();
-    const span = f & 4 ? r.byte() : 0;
-    const tint = f & 8 ? r.byte() : 0;
-    const ways = f & 16 ? r.byte() : 0;
-    const recipe = f & 64 ? r.byte() : NONE;
-    const grade = f & 128 ? r.byte() : undefined;
-    if (r.over) return null;
-    out.push({
-      kind,
-      x,
-      y,
-      dir: f & 3,
-      span,
-      recipe,
-      open: (f & 32) === 0,
-      tint,
-      ways,
-      ...(grade === undefined ? {} : { grade }),
-    });
-  }
-  return out;
-}
-
-/** A blueprint's pieces as kept, in base64. */
-const printText = (b: Print): string => toBase64(packPrint(b.pieces));
-/** A blueprint as kept read back: a plan of the whole yard is `{ whole }`, any other its text alone. */
-function keptBlueprint(v: unknown): KeptBlueprint {
-  const all = isRec(v) && typeof v.whole === "string";
-  const text = all ? v.whole : v;
-  return { pieces: typeof text === "string" ? unpackPrint(fromBase64(text)) : null, whole: all };
-}
-
 export interface Keep {
   /** Whether to keep the seed: never in what the page is shown. */
   readonly seed?: boolean;
@@ -236,7 +151,7 @@ export interface Keep {
 export function encode(y: Yard, keep: Keep = {}): string {
   const away = keep.away === undefined ? y.away : keep.away;
   return JSON.stringify({
-    v: VERSION,
+    v: widest(y) > 15 ? VERSION : PLACED,
     land: keptLandOf(y.land),
     ...(y.seed === null || keep.seed === false ? {} : { seed: y.seed }),
     tick: y.tick,
@@ -267,6 +182,49 @@ export function encode(y: Yard, keep: Keep = {}): string {
       : {}),
     ...(y.history.length > 0 ? { history: y.history.map((e) => toBase64(e.bytes)), stamp: stampOf(y.land) } : {}),
   });
+}
+
+/** The highest kind a yard keeps anywhere: a piece standing, a blueprint's or a plan's, or one Undo would stand again. */
+function widest(y: Yard): number {
+  let most = 0;
+  for (const k of y.kind) if (k !== NONE && k > most) most = k;
+  for (const b of y.blueprints) {
+    const pieces = b?.pieces ?? new Uint8Array(0);
+    for (let at = 0; at < pieces.length; at += PIECE_BYTES) most = Math.max(most, pieces[at] ?? 0);
+  }
+  for (const k of historyKinds(
+    y.history.map((e) => e.bytes),
+    y.kind.length,
+  ))
+    most = Math.max(most, k);
+  return most;
+}
+
+/**
+ * Whether a kept yard names a kind this Leaf does not know, anywhere in it: a newer Leaf's (`keptLater`),
+ * never read here with that piece let go. On the land it was kept on (`on`).
+ */
+function namesUnknown(
+  pieces: readonly KeptPiece[],
+  prints: readonly KeptBlueprint[],
+  history: unknown,
+  on: KeptLand,
+): boolean {
+  return (
+    !pieces.every((p) => isKind(p.kind)) ||
+    !prints.every((b) => b.pieces?.every((p) => isKind(p.kind)) ?? true) ||
+    !historyKinds(history, on.w * on.h).every((k) => isKind(k))
+  );
+}
+
+/** Whether a kept yard, read as JSON, names a kind this Leaf does not know, on `land` (`keptLater` asks). */
+export function keptUnknown(raw: unknown, land: Land = LAND): boolean {
+  if (!isRec(raw) || typeof raw.cells !== "string") return false;
+  const on = keptOn(raw, land);
+  const bytes = fromBase64(raw.cells);
+  const pieces = on && bytes ? unpackCells(bytes, on.w * on.h) : null;
+  const prints: unknown[] = Array.isArray(raw.blueprints) ? raw.blueprints : [];
+  return on !== null && pieces !== null && namesUnknown(pieces, prints.map(keptBlueprint), raw.history, on);
 }
 
 /** The first tile of each redwood the yard has felled, in the land's order. */
@@ -441,7 +399,7 @@ function firstPiece(v: unknown): KeptPiece | null {
 }
 
 /** The versions this one reads as its own. */
-const READS: ReadonlySet<unknown> = new Set([VERSION, UNPLACED, UNFELLED, UNGRADED]);
+const READS: ReadonlySet<unknown> = new Set([VERSION, PLACED, UNPLACED, UNFELLED, UNGRADED]);
 
 /** Text as JSON, or nothing for text that is none. */
 function parsed(text: string): unknown {
@@ -465,7 +423,10 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
   const pieces = on && bytes && unpackCells(bytes, on.w * on.h);
   if (!on || !pieces) return null;
   const prints: unknown[] = Array.isArray(raw.blueprints) ? raw.blueprints : [];
-  return vouch(raw, piecesOn(on, land, pieces), prints.map(keptBlueprint), land, on);
+  const kept = prints.map(keptBlueprint);
+  // A kind this Leaf does not know, anywhere: a newer Leaf's yard (`keptLater`), not read with it let go.
+  if (namesUnknown(pieces, kept, raw.history, on)) return null;
+  return vouch(raw, piecesOn(on, land, pieces), kept, land, on);
 }
 
 /**

@@ -17,7 +17,8 @@ import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
 import { besideWater, toward } from "./land.ts";
 import { deliver, giveGoal } from "./orders.ts";
 import { makes, MINUTE } from "./planner.ts";
-import { litOf } from "./power.ts";
+import { litAt, litOf } from "./power.ts";
+import { lit as litBig, outsOf, OWN, pieceOf, roomRound, takesAt } from "./sizes.ts";
 import {
   ALL_ITEMS,
   ALL_KINDS,
@@ -85,11 +86,14 @@ import {
 
 export { sortWay } from "./kinds/sorter.ts";
 export { ahead, behind, WAY_TURN, wayIn } from "./tiles.ts";
+export { outsOf, pieceOf } from "./sizes.ts";
 
 // ---------- who hands to whom ----------
 
 /** The rules of the kind standing on a tile; none where nothing stands. */
 const rulesAt = (y: Yard, i: number) => RULES[y.kind[i] ?? NONE];
+/** Whether a tile is a piece's own: one of one tile, or the tile a piece of more than one stands on (`sizes.ts`). */
+const isOwn = (y: Yard, i: number): boolean => y.part[i] === 0 || y.part[i] === OWN;
 
 /** Whether a kind carries things across its tile. */
 export const carries = (k: number): k is Kind => CARRIES[k] === 1;
@@ -99,7 +103,7 @@ export const waysOf = (k: number): number => WAYS[k] ?? 0;
 /** The one tile a piece hands to, or -1: none for a piece with ways, nor for one that hands nothing on. */
 export function nextOf(y: Yard, i: number): number {
   const r = rulesAt(y, i);
-  return r ? r.next(KIT, y, i) : -1;
+  return r ? r.next(KIT, y, pieceOf(y, i)) : -1;
 }
 
 /** The ways out a piece sends nothing by, a bit each (1 ahead, 2 left, 4 right). */
@@ -115,7 +119,7 @@ export const wayOut = (y: Yard, i: number, way: number): number =>
 /** The ways out (a bit each, as `closedWays`) a piece with ways sends the thing `n` by. */
 export function sendsOf(y: Yard, i: number, n: number): number {
   const r = rulesAt(y, i);
-  return r ? r.sends(KIT, y, i, n) : 0;
+  return r ? r.sends(KIT, y, pieceOf(y, i), n) : 0;
 }
 
 /**
@@ -123,6 +127,7 @@ export function sendsOf(y: Yard, i: number, n: number): number {
  * whatever it holds just now, as its kind says.
  */
 export function sidesTaken(y: Yard, i: number): number {
+  if (y.part[i] !== 0) return takesAt(y, i);
   const r = rulesAt(y, i);
   return r ? r.sides(KIT, y, i) : 0;
 }
@@ -144,7 +149,7 @@ export function takes(y: Yard, to: number, from: number): boolean {
  */
 export function wants(y: Yard, to: number, n: number): boolean {
   const r = rulesAt(y, to);
-  return r ? r.wants(KIT, y, to, n) : false;
+  return r ? r.wants(KIT, y, pieceOf(y, to), n) : false;
 }
 
 // ---------- the one rule by which a piece hands a thing to another ----------
@@ -164,7 +169,7 @@ const PLAIN = Uint8Array.from(RULES, (r) => (r.wants === anything && r.room === 
 export function ready(y: Yard, i: number, to: number): boolean {
   if (i < 0) return false;
   const r = rulesAt(y, i);
-  return r ? r.ready(KIT, y, i, to) : false;
+  return r ? r.ready(KIT, y, pieceOf(y, i), to) : false;
 }
 
 /** Whether the tile at `to` lets things in by turns (a joiner, or a splitter with ways in): a thing it refuses does not wait. */
@@ -204,12 +209,16 @@ export function accepts(y: Yard, to: number, n: number, side: number, wire: Wire
   if (to < 0 || (((wire.taken[to] ?? 0) >> side) & 1) === 0) return false;
   const k = y.kind[to] ?? NONE;
   if (PLAIN[k] === 1) return y.item[to] === NONE;
+  // A piece of more than one tile takes on the tile handed to, by its ports (`Wire.taken`), and as itself.
+  const own = pieceOf(y, to);
   const takesIt = WANTS[k];
   const roomFor = ROOM[k];
   // A machine's, which most of what is not a belt is, by its own name (`tick.ts` says why).
   if (takesIt === makerWants && roomFor === makerRoom)
-    return makerWants(KIT, y, to, n) && makerRoom(KIT, y, to, n, side, wire);
-  return takesIt !== undefined && roomFor !== undefined && takesIt(KIT, y, to, n) && roomFor(KIT, y, to, n, side, wire);
+    return makerWants(KIT, y, own, n) && makerRoom(KIT, y, own, n, side, wire);
+  return (
+    takesIt !== undefined && roomFor !== undefined && takesIt(KIT, y, own, n) && roomFor(KIT, y, own, n, side, wire)
+  );
 }
 
 /** Hands the thing `n` to the tile at `to` from its side `side`, `over` eighths past the edge of the tile it came from. */
@@ -221,9 +230,10 @@ function handTo(y: Yard, to: number, n: number, side: number, over: number, wire
     y.via[to] = 1 + side;
     return;
   }
+  const own = pieceOf(y, to);
   const give = GIVE[k];
-  if (give === keep) keep(KIT, y, to, n, side, over, wire);
-  else if (give) give(KIT, y, to, n, side, over, wire);
+  if (give === keep) keep(KIT, y, own, n, side, over, wire);
+  else if (give) give(KIT, y, own, n, side, over, wire);
 }
 
 /**
@@ -242,6 +252,16 @@ export function roomBeside(y: Yard, i: number, waiting: Uint8Array): void {
   // A far mouth is the one tile with a span below 0. This stays this small so that every hand-off has
   // it inlined: with the far mouth's case in it, it was not, and a line of belts ran 40% slower.
   if ((y.span[i] ?? 0) < 0) mouthBehind(y, i, waiting);
+}
+
+/**
+ * The piece on a tile that holds things may have room, as `roomBeside`: for a piece of more than one
+ * tile, every tile round it (`roomRound`). What carries is one tile, and asks `roomBeside` itself, so
+ * that stays as small as it must.
+ */
+export function roomAt(y: Yard, i: number, waiting: Uint8Array): void {
+  if (y.part[i] !== 0) roomRound(y, i, waiting);
+  else roomBeside(y, i, waiting);
 }
 
 /** A tunnel's far mouth may have room: its way-in mouth stops waiting. */
@@ -291,7 +311,27 @@ export function sendOut(y: Yard, i: number, r: number, wire: Wire): void {
   }
   handTo(y, to, n, side, 0, wire);
   h.out[r] = NONE;
-  roomBeside(y, i, wire.waiting);
+  roomAt(y, i, wire.waiting);
+}
+
+/**
+ * A piece of more than one tile (its own tile `i`, its row `r`) hands what one of its ways out sends
+ * (`port`: its finished thing, or its by-product) to the tile ahead of that way. Says whether it did.
+ * One refused does not wait: its other way out may still send, so it tries again each tick.
+ */
+export function sendPort(y: Yard, i: number, r: number, port: number, wire: Wire): boolean {
+  const o = outsOf(y, i)[port];
+  const slot = o?.also ? y.holders.also : y.holders.out;
+  const n = slot[r] ?? NONE;
+  if (!o || n === NONE) return false;
+  const w = y.land.w;
+  const to = toward(y.land, i + o.dx + o.dy * w, o.way);
+  const side = (o.way + 2) & 3;
+  if (!accepts(y, to, n, side, wire)) return false;
+  handTo(y, to, n, side, 0, wire);
+  slot[r] = NONE;
+  roomRound(y, i, wire.waiting);
+  return true;
 }
 
 // ---------- the plumbing, worked out ----------
@@ -313,9 +353,10 @@ export function rewire(y: Yard): Wire {
   for (let i = 0; i < n; i++) {
     const k = kind[i] ?? NONE;
     const r = RULES[k];
-    if (!r) continue;
+    // A piece of more than one tile is listed once, by its own tile, and has power if any of its tiles has.
+    if (!r || !isOwn(y, i)) continue;
     if (carries(k)) carry.push(i);
-    else if (lit[i] !== 1) continue;
+    else if ((y.part[i] === 0 ? lit[i] : litBig(y, lit, i)) !== 1) continue;
     else if (r.work !== null) {
       work.push(i);
       demand += drawnAt(k, y.grade[i] ?? 0);
@@ -365,7 +406,9 @@ function handingOrder(y: Yard): Int32Array {
   const stack = new Int32Array(n);
   const order: number[] = [];
   let top = 0;
-  const enter = (i: number): void => {
+  // A piece of more than one tile hands on from its own tile, and is handed to on any.
+  const enter = (t: number): void => {
+    const i = t < 0 ? t : pieceOf(y, t);
     if (i < 0 || seen[i] === 1) return;
     seen[i] = 1;
     if (hands(y.kind[i] ?? NONE)) stack[top++] = i;
@@ -375,17 +418,24 @@ function handingOrder(y: Yard): Int32Array {
     while (top > 0) {
       const i = stack[top - 1] ?? 0;
       const c = child[i] ?? 0;
-      const ways = waysOf(y.kind[i] ?? NONE);
+      const outs = y.part[i] === 0 ? 0 : outsOf(y, i).length;
+      const ways = outs > 0 ? outs : waysOf(y.kind[i] ?? NONE);
       if (c >= Math.max(1, ways)) {
         top--;
         order.push(i);
         continue;
       }
       child[i] = c + 1;
-      enter(ways > 0 ? wayOut(y, i, c) : nextOf(y, i));
+      enter(outs > 0 ? portTo(y, i, c) : ways > 0 ? wayOut(y, i, c) : nextOf(y, i));
     }
   }
   return Int32Array.from(order);
+}
+
+/** The tile a piece of more than one tile's way out `port` sends to, or -1. */
+export function portTo(y: Yard, i: number, port: number): number {
+  const o = outsOf(y, i)[port];
+  return o ? toward(y.land, i + o.dx + o.dy * y.land.w, o.way) : -1;
 }
 
 /** The power there is and the power drawn; the share of ticks the machines work on (`pace`), and as every screen says it (`speed`). */
@@ -412,7 +462,7 @@ export function power(y: Yard): Power {
 }
 
 /** How many of each thing the piece on a tile may hold, as its kind says (`Hooks.most`). */
-const mostHeld = (y: Yard, i: number, n: number): number => rulesAt(y, i)?.most(KIT, y, i, n) ?? 0;
+const mostHeld = (y: Yard, i: number, n: number): number => rulesAt(y, i)?.most(KIT, y, pieceOf(y, i), n) ?? 0;
 
 /** A whole number from 0 to `most`, or null. */
 const whole = (v: unknown, most: number): number | null =>
@@ -496,13 +546,17 @@ export const KIT: Kit = {
   passTo,
   passWay,
   sendOut,
+  sendPort,
+  portTo,
+  outsOf,
   refused,
-  roomBeside,
+  roomBeside: roomAt,
   wireOf,
   // What reaches the depot and the research; power.
   deliver,
   giveGoal,
   litOf,
+  litAt,
   pace: (y: Yard): number => power(y).pace,
 };
 export type { Kit };

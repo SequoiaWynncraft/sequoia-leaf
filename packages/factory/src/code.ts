@@ -17,11 +17,11 @@
  * to what the yard has unlocked: a piece the yard may not build is refused when the blueprint is set
  * down, as any other.
  */
-import { DX, DY, isDir } from "./build.ts";
+import { isDir } from "./build.ts";
 import { fromBase64, toBase64 } from "./bytes.ts";
-import { type KeptPrint, packPrint, unpackPrint } from "./codec.ts";
 import { BLUEPRINT } from "./content/machines.ts";
-import { boxOf, keptOf, packPieces, type Piece, unpackWays } from "./pieces.ts";
+import { boxOf, cellsOf, keptOf, packPieces, type Piece, unpackWays } from "./pieces.ts";
+import { type KeptPrint, packPrint, unpackPrint } from "./prints.ts";
 import { FIXED, isKind, locked, type Open, SPAN_MOST, SPANS } from "./tables.ts";
 import type { Print, Yard } from "./yard.ts";
 
@@ -89,13 +89,11 @@ function pieceOf(p: KeptPrint[number]): Piece | null {
   return { kind: k, x: p.x, y: p.y, dir: d, span, ...kept };
 }
 
-/** Whether no two pieces stand on one tile: each on its own, and a tunnel on the one it comes up on too. */
+/** Whether no two pieces stand on one tile: each on its own, a tunnel on the one it comes up on too, a piece of more than one tile on all of its. */
 function apart(pieces: readonly Piece[]): boolean {
   const taken = new Set<number>();
   for (const p of pieces) {
-    const far = SPANS[p.kind] === 1 ? p.span + 1 : 0;
-    const tiles = [p.x + p.y * 1024, ...(far > 0 ? [p.x + DX[p.dir] * far + (p.y + DY[p.dir] * far) * 1024] : [])];
-    for (const t of tiles) {
+    for (const t of cellsOf(p).map(([x, z]) => x + z * 1024)) {
       if (taken.has(t)) return false;
       taken.add(t);
     }

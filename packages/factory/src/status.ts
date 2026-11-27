@@ -7,7 +7,8 @@
  */
 import { RULES } from "./kinds/list.ts";
 import { holding as holdingOf, type MachineRate, rateOf, type State, STATES, TROUBLE } from "./kinds/say.ts";
-import { litOf } from "./power.ts";
+import { litAt } from "./power.ts";
+import { pieceOf } from "./sizes.ts";
 import { ALL_KINDS, BURNS, isMaker, type Item, type Kind, NONE, type Recipe } from "./tables.ts";
 import { KIT, rewire } from "./wire.ts";
 import { type Counts, holderOf, type Yard } from "./yard.ts";
@@ -32,13 +33,13 @@ export const holding = (y: Yard, r: number): string => holdingOf(KIT, y, r);
 /** The recipe a machine is working toward: the one it is pinned to, or the first that uses everything it holds. */
 export function aim(y: Yard, i: number): Recipe | null {
   const r = RULES[y.kind[i] ?? NONE];
-  return r ? r.aim(KIT, y, i) : null;
+  return r ? r.aim(KIT, y, pieceOf(y, i)) : null;
 }
 
 /** The recipe a machine last began, while it stands: what it is counted for while it holds nothing and is told nothing (`flow`); none before it has begun one. */
 export function lastRecipe(y: Yard, i: number): Recipe | null {
   const r = i >= 0 ? RULES[y.kind[i] ?? NONE] : undefined;
-  return r ? r.last(KIT, y, i) : null;
+  return r ? r.last(KIT, y, pieceOf(y, i)) : null;
 }
 
 /**
@@ -66,7 +67,7 @@ export function keepLast(from: Yard, into: Yard): void {
  * it and none where it does not. Anything else does nothing a minute.
  */
 export const machineRate = (y: Yard, i: number, recipe: Recipe | null = aim(y, i)): MachineRate =>
-  rateOf(KIT, y, i, recipe);
+  rateOf(KIT, y, i < 0 ? i : pieceOf(y, i), recipe);
 
 /**
  * What the pieces standing in a yard can make of each thing a minute, and what they need of each a
@@ -112,7 +113,8 @@ const flowAt = (y: Yard, i: number, made: Counts, needed: Counts): void =>
 export function condition(y: Yard, i: number): number {
   const r = i < 0 ? undefined : RULES[y.kind[i] ?? NONE];
   if (!r) return -1;
-  return r.condition(KIT, y, i, litOf(y)[i] === 1);
+  // A piece of more than one tile stands as one, from any of its tiles.
+  return r.condition(KIT, y, pieceOf(y, i), litAt(y, i));
 }
 
 /**
@@ -125,5 +127,5 @@ export function status(y: Yard, i: number): Status | null {
   const state = STATES[c % TROUBLE];
   const r = RULES[y.kind[i] ?? NONE];
   if (c < 0 || state === undefined || !r) return null;
-  return { state, trouble: c >= TROUBLE, ...r.words(KIT, y, i, state) };
+  return { state, trouble: c >= TROUBLE, ...r.words(KIT, y, pieceOf(y, i), state) };
 }

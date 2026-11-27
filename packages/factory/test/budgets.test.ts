@@ -111,7 +111,8 @@ describe("memory", () => {
     y.away = null;
   }, 60_000);
 
-  test("at worst, a yard of nothing but crates, as many as the land holds, holds under 1 MB", () => {
+  // 1.1 MB since pieces of more than one tile: every tile keeps a byte of the piece it is part of, and every holder one of a by-product.
+  test("at worst, a yard of nothing but crates, as many as the land holds, holds under 1.1 MB", () => {
     const y = F.create({ land, tier: 4, seed: 1 });
     let room = 0;
     for (let z = 0; z < land.h; z++)
@@ -123,7 +124,7 @@ describe("memory", () => {
     F.rewire(y);
     expect(y.kind.filter((k) => k === F.CRATE).length).toBe(room);
     expect(room).toBeGreaterThan(8000);
-    expect(F.bytesHeld(y)).toBeLessThan(1024 * 1024);
+    expect(F.bytesHeld(y)).toBeLessThan(1.1 * 1024 * 1024);
     console.log(`held, ${room} crates: ${kb(F.bytesHeld(y))}`);
   }, 60_000);
 });
@@ -212,13 +213,12 @@ describe("allocation", () => {
     // What the rest makes, once a call: its hash's closures, its loops over the goals, the orders, the
     // blueprints and what Undo would undo. Anything more, a per-tile array among it, is new here.
     expect(check.makes.map(kindOf)).toEqual([
-      "check.ts:check: an array",
       "check.ts:check: a closure",
-      "check.ts:check: an iterator",
-      "check.ts:check: a copy",
-      "check.ts:bytes: an array",
-      "check.ts:bytes: an iterator",
+      "check.ts:mixGoals: a closure",
+      "check.ts:mixGoals: an iterator",
+      "check.ts:mixGoals: a copy",
       "check.ts:mixKept: an iterator",
+      "check.ts:mixBoard: an iterator",
     ]);
     // How long it takes here, as a number to read: a shared machine's clock is no limit.
     const y = staged("large");

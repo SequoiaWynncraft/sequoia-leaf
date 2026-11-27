@@ -10,15 +10,18 @@
 import {
   FIXED,
   gradeOf,
+  layOver,
   litOf,
   nextOf,
   NONE,
+  type Piece,
   piecesAt,
   plotState,
   type Plotted,
   REACH,
   REACHES,
   redwoodAt,
+  SPANS,
   squared,
   tilesOf,
   wayOut,
@@ -247,8 +250,8 @@ export function layout(y: Yard): Layout {
   return kept;
 }
 
-/** The arrays a drawing of pieces in hand changes, kept for the next and filled afresh each time. */
-let own: {
+/** The arrays a drawing of pieces in hand changes. */
+interface Drawn {
   kind: Uint8Array;
   dir: Uint8Array;
   span: Int8Array;
@@ -259,16 +262,20 @@ let own: {
   grade: Uint8Array;
   set: Uint8Array;
   row: Int32Array;
-} | null = null;
+  part: Uint8Array;
+}
+/** Those arrays, kept for the next drawing and filled afresh each time. */
+let own: Drawn | null = null;
 
 /**
  * The yard as it would be with the pieces in hand set down where they are aimed, and for a move gone
  * from where they stand (for a plan of the whole yard, the pieces it takes up gone): for drawing them as they would stand, belts joined to each other and
  * to the lines already there. It shares everything with the real yard but the arrays a drawing
  * changes (what stands where, which way, a tunnel's span, a splitter's ways, a colour, a grade,
- * what a sorter is set to, and the rows, none for a piece in hand), which are its own, kept and
- * reused. Nothing is written to the real yard. It is made once for each place the pieces are aimed,
- * not each frame.
+ * what a sorter is set to, the rows, none for a piece in hand, and which piece of more than one tile
+ * a tile is part of), which are its own, kept and reused. A piece of more than one tile is laid over
+ * its tiles by the rules' own step (`layOver`), as the command will lay it. Nothing is written to the
+ * real yard. It is made once for each place the pieces are aimed, not each frame.
  */
 export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
   const n = y.kind.length;
@@ -284,6 +291,7 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
       grade: new Uint8Array(n),
       set: new Uint8Array(n),
       row: new Int32Array(n),
+      part: new Uint8Array(n),
     };
   const o = own;
   o.kind.set(y.kind);
@@ -296,39 +304,54 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
   o.grade.set(y.grade);
   o.set.set(y.set);
   o.row.set(y.row);
-  const empty = (i: number): void => {
-    o.kind[i] = NONE;
-    o.dir[i] = 0;
-    o.span[i] = 0;
-    o.shut[i] = 0;
-    o.ins[i] = 0;
-    o.first[i] = 0;
-    o.tint[i] = 0;
-    o.grade[i] = 0;
-    o.set[i] = NONE;
-    o.row[i] = -1;
-  };
+  o.part.set(y.part);
   // A copy's tiles are what it copies, and stay; a blueprint's are none, but a plan of the whole yard's, which it takes up.
-  if (grp.as !== "copy") for (const i of tilesOf(y, piecesAt(y, grp.tiles))) if (i >= 0) empty(i);
-  for (const p of grp.at) {
-    const [near = -1, far = -1] = tilesOf(y, [p]);
-    for (const [i, span] of [
-      [near, p.span],
-      [far, -p.span],
-    ] as const) {
-      if (i < 0) continue;
-      empty(i);
-      o.kind[i] = p.kind;
-      o.dir[i] = p.dir;
-      o.span[i] = span;
-      o.shut[i] = i === near ? (p.shut ?? 0) : 0;
-      o.ins[i] = i === near ? (p.ins ?? 0) : 0;
-      o.first[i] = i === near ? (p.first ?? -1) + 1 : 0;
-      o.tint[i] = p.tint ?? 0;
-      o.grade[i] = gradeOf(p.kind, p.grade);
-      o.set[i] = p.recipe ?? NONE;
-    }
-  }
+  if (grp.as !== "copy") for (const i of tilesOf(y, piecesAt(y, grp.tiles))) if (i >= 0) emptyIn(o, i);
+  for (const p of grp.at) setDown(o, y, p);
   // Where power reaches is the real yard's, worked out by the rules first; nothing works it out again here.
   return { ...y, ...o, lit: litOf(y), powered: true, wire: null };
+}
+
+/** Empties a tile of a drawing of pieces in hand. */
+function emptyIn(o: Drawn, i: number): void {
+  o.kind[i] = NONE;
+  o.dir[i] = 0;
+  o.span[i] = 0;
+  o.shut[i] = 0;
+  o.ins[i] = 0;
+  o.first[i] = 0;
+  o.tint[i] = 0;
+  o.grade[i] = 0;
+  o.set[i] = NONE;
+  o.row[i] = -1;
+  o.part[i] = 0;
+}
+
+/**
+ * Sets a piece in hand down in a drawing of the yard (`o`), over whatever its tiles held: on its own
+ * tile, and a tunnel's far mouth on its own too; a piece of more than one tile is laid over the rest
+ * of its tiles by the rules' own step (`layOver`), where all of them are on the land.
+ */
+function setDown(o: Drawn, y: Yard, p: Piece): void {
+  const tiles = tilesOf(y, [p]);
+  for (const i of tiles) if (i >= 0) emptyIn(o, i);
+  const [near = -1, far = -1] = tiles;
+  for (const [i, span] of SPANS[p.kind] === 1
+    ? ([
+        [near, p.span],
+        [far, -p.span],
+      ] as const)
+    : ([[near, 0]] as const)) {
+    if (i < 0) continue;
+    o.kind[i] = p.kind;
+    o.dir[i] = p.dir;
+    o.span[i] = span;
+    o.shut[i] = i === near ? (p.shut ?? 0) : 0;
+    o.ins[i] = i === near ? (p.ins ?? 0) : 0;
+    o.first[i] = i === near ? (p.first ?? -1) + 1 : 0;
+    o.tint[i] = p.tint ?? 0;
+    o.grade[i] = gradeOf(p.kind, p.grade);
+    o.set[i] = p.recipe ?? NONE;
+  }
+  if (near >= 0 && tiles.every((i) => i >= 0)) layOver(o.kind, o.part, y.land.w, near, p.kind, p.dir);
 }

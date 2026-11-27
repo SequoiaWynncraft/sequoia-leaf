@@ -17,7 +17,7 @@ import { gradeKept } from "./kept.ts";
 import type { Hooks, Unchecked, Words } from "./kind.ts";
 import type { Kit } from "./kit.ts";
 import { aheadOf, everySide } from "./line.ts";
-import { as, asItem, holding, list, many, NO_POWER, nowhere, rateOf, slow, stuckAs } from "./say.ts";
+import { as, asItem, holding, list, many, NO_POWER, nowhere, rateOf, slow, stuckAs, TROUBLE } from "./say.ts";
 
 const NO_RECIPES: readonly Recipe[] = [];
 
@@ -90,15 +90,20 @@ export function work(k: Kit, y: Yard, i: number, r: number, speed: number, wire:
     h.work[r] = (h.work[r] ?? 0) - rec.work;
     for (let p = 0; p < rec.from.length; p++) k.take(h, r, rec.from[p] ?? k.NONE, rec.need[p] ?? 1);
     h.out[r] = rec.out;
+    h.also[r] = rec.also;
     h.making[r] = k.NONE;
     k.roomBeside(y, i, wire.waiting);
   }
 }
 
-/** A machine making nothing begins the recipe it holds the parts for, if there is one: says whether it did. One that found none looks again only once it is given something. */
+/**
+ * A machine making nothing begins the recipe it holds the parts for, if there is one: says whether it
+ * did. One that found none looks again only once it is given something; one still holding a
+ * by-product begins nothing until that has left too.
+ */
 function begin(k: Kit, y: Yard, i: number, r: number, wire: Wire): boolean {
   const h = y.holders;
-  if (h.idle[r] === 1) return false;
+  if (h.idle[r] === 1 || h.also[r] !== k.NONE) return false;
   const found = choose(k, h, r, wire.recipes[y.kind[i] ?? k.NONE] ?? NO_RECIPES, y.set[i] ?? k.NONE);
   if (found === k.NONE) {
     h.idle[r] = 1;
@@ -135,8 +140,8 @@ function condition(k: Kit, y: Yard, i: number, lit: boolean): number {
   if (!lit) return as("unpowered", true);
   const h = y.holders;
   const r = k.holderOf(y, i);
-  const out = h.out[r] ?? k.NONE;
-  if (k.isItem(out)) return stuckAs(k, y, i, out);
+  const held = heldOut(k, y, i, r);
+  if (held) return stuckAs(k, y, i, held.n, held.also);
   if (k.isItem(h.making[r] ?? k.NONE)) return as("working");
   const rec = aim(k, y, i);
   if (!rec) return as("idle", (h.count[r] ?? 0) > 0);
@@ -151,10 +156,24 @@ function condition(k: Kit, y: Yard, i: number, lit: boolean): number {
   return !missing ? as("working") : full ? as("starved", true) : as("waiting");
 }
 
-/** What a machine holds ready with nowhere to send it says, for one that hands on ahead. */
-export function outWords(k: Kit, y: Yard, i: number, state: string, out: Item): Words {
+/**
+ * What a machine holds ready to leave that it is to be told by: its finished thing or its by-product,
+ * whichever cannot leave by its way out (the by-product only when the thing can), else the one it holds.
+ */
+function heldOut(k: Kit, y: Yard, i: number, r: number): { n: Item; also: boolean } | null {
+  const out = asItem(k, y.holders.out[r] ?? k.NONE);
+  const also = asItem(k, y.holders.also[r] ?? k.NONE);
+  const thing = out === null ? null : { n: out, also: false };
+  const beside = also === null ? null : { n: also, also: true };
+  if (thing && beside && stuckAs(k, y, i, thing.n) < TROUBLE && stuckAs(k, y, i, beside.n, true) >= TROUBLE)
+    return beside;
+  return thing ?? beside;
+}
+
+/** What a machine holds ready with nowhere to send it says (with `also`, its by-product), for one that hands on ahead or by its ways out. */
+export function outWords(k: Kit, y: Yard, i: number, state: string, out: Item, also = false): Words {
   return state === "blocked"
-    ? { line: nowhere(k, y, i, out), stuck: out }
+    ? { line: nowhere(k, y, i, out, also), stuck: out }
     : { line: `Waiting: no room ahead for its ${many(k, out)}.` };
 }
 
@@ -163,8 +182,8 @@ function words(k: Kit, y: Yard, i: number, state: string): Words {
   if (state === "unpowered") return { line: NO_POWER };
   const h = y.holders;
   const r = k.holderOf(y, i);
-  const out = asItem(k, h.out[r] ?? k.NONE);
-  if (out !== null) return outWords(k, y, i, state, out);
+  const held = heldOut(k, y, i, r);
+  if (held) return outWords(k, y, i, state, held.n, held.also);
   const making = asItem(k, h.making[r] ?? k.NONE);
   if (making !== null) return { line: `Making ${many(k, making)}${slow(k, y)}.` };
   const rec = aim(k, y, i);
@@ -191,6 +210,7 @@ function flow(k: Kit, y: Yard, i: number, made: Counts, needed: Counts): void {
   if (!rec) return;
   const batches = rateOf(k, y, i, rec).effective;
   made[rec.out] = (made[rec.out] ?? 0) + batches;
+  if (rec.also !== k.NONE) made[rec.also] = (made[rec.also] ?? 0) + batches;
   for (let p = 0; p < rec.from.length; p++) {
     const n = rec.from[p] ?? k.NONE;
     needed[n] = (needed[n] ?? 0) + batches * (rec.need[p] ?? 1);
@@ -212,7 +232,8 @@ const mayMake = (k: Kit, y: Yard, i: number, n: number | undefined): n is Item =
 
 /**
  * Puts back what a kept machine was told to make, held and was doing, only as the rules let it be now:
- * told to make and holding only what it may make, no more than it keeps; making only what it keeps a
+ * told to make and holding only what it may make, no more than it keeps (and a by-product only of
+ * such a recipe); making only what it keeps a
  * recipe for and holds all of; work only toward that, below what it takes.
  */
 function onto(k: Kit, y: Yard, i: number, r: number, o: KeptPiece): void {
@@ -220,6 +241,10 @@ function onto(k: Kit, y: Yard, i: number, r: number, o: KeptPiece): void {
   if (mayMake(k, y, i, o.recipe)) y.set[i] = o.recipe;
   stockOnto(k, y, i, r, o, 1e6);
   if (mayMake(k, y, i, o.out)) h.out[r] = o.out;
+  // A by-product held only where it is one of a recipe the machine may make.
+  const also = o.also;
+  if (also !== undefined && k.recipesFor(y.open, y.kind[i] ?? k.NONE).some((rec) => rec.also === also))
+    h.also[r] = also;
   const m = o.making;
   const making = m !== undefined && keepsFor(k, y, i).some((rec) => rec.out === m && k.enough(h, r, rec)) ? m : k.NONE;
   if (making !== k.NONE) {

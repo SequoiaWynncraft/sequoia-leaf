@@ -5,7 +5,8 @@
  * boiler, by `KindDef.burns`), each at its own kind's power.
  */
 import { RULES } from "./kinds/list.ts";
-import { litOf } from "./power.ts";
+import { litAt, litOf } from "./power.ts";
+import { OWN } from "./sizes.ts";
 import { ALL_KINDS, BURNS, DRAW, drawnAt, GIVES, HALF, type Kind, NONE } from "./tables.ts";
 import { KIT, type Power, power, rewire } from "./wire.ts";
 import type { Yard } from "./yard.ts";
@@ -145,8 +146,9 @@ function tally(y: Yard): Tally {
   };
   for (let i = 0; i < y.kind.length; i++) {
     const k = y.kind[i] ?? NONE;
-    if (k === NONE) continue;
-    const reached = lit[i] === 1;
+    // A piece of more than one tile counts once, by its own tile, in reach if any of its tiles is.
+    if (k === NONE || (y.part[i] !== 0 && y.part[i] !== OWN)) continue;
+    const reached = y.part[i] === 0 ? lit[i] === 1 : litAt(y, i);
     const counts = reached ? t.lit : t.dark;
     counts[k] = of(counts, k) + 1;
     givers(t, y, i, k, reached);

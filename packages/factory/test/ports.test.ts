@@ -119,3 +119,29 @@ describe("what a piece takes, apart from the side", () => {
     expect([F.wants(y, mill, deadfall), F.wants(y, mill, stone)]).toEqual([true, false]);
   });
 });
+
+/** Whether a kind has a way out that sends a by-product. */
+const sendsAlso = (k: number): boolean => F.FACING[k]?.[0]?.outs.some((o) => o.also) ?? false;
+
+describe("ways out as data", () => {
+  test("a recipe that makes a by-product is made only by a kind with a way out for it, so it can always leave", () => {
+    expect(F.RECIPES_N.filter((r) => r.also !== F.NONE && !sendsAlso(r.by)).map((r) => F.ITEMS[r.out])).toEqual([]);
+  });
+
+  test("the depot is one piece of three by three, set down with the yard, taking things in on all twelve sides round it", () => {
+    const y = yard();
+    const [cx, cy] = y.land.depot;
+    const own = F.at(y, cx, cy);
+    let round = 0;
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const t = F.at(y, cx + dx, cy + dy);
+        expect([F.pieceOf(y, t), y.kind[t]]).toEqual([own, F.DEPOT]);
+        for (let way = 0; way < 4; way++) {
+          const from = F.at(y, cx + dx + (F.DX[way] ?? 0), cy + dy + (F.DY[way] ?? 0));
+          if (y.kind[from] !== F.DEPOT && F.takes(y, t, from)) round++;
+        }
+      }
+    expect(round).toBe(12);
+  });
+});

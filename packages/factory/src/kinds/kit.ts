@@ -96,6 +96,9 @@ export interface Kit {
   readonly passTo: typeof Wire.passTo;
   readonly passWay: typeof Wire.passWay;
   readonly sendOut: typeof Wire.sendOut;
+  readonly sendPort: typeof Wire.sendPort;
+  readonly portTo: typeof Wire.portTo;
+  readonly outsOf: typeof Wire.outsOf;
   readonly refused: typeof Wire.refused;
   readonly roomBeside: typeof Wire.roomBeside;
   readonly wireOf: typeof Wire.wireOf;
@@ -104,6 +107,7 @@ export interface Kit {
   readonly deliver: typeof Orders.deliver;
   readonly giveGoal: typeof Orders.giveGoal;
   readonly litOf: typeof Power.litOf;
+  readonly litAt: typeof Power.litAt;
   /** The share of ticks the yard's machines work at, as its power lets them (`power`). */
   readonly pace: (y: Yard) => number;
 }

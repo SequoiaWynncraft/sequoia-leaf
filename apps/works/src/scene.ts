@@ -25,6 +25,7 @@ import {
   isFilled,
   isItem,
   type Kind,
+  litAt,
   litOf,
   NONE,
   openOf,
@@ -49,6 +50,7 @@ import { BEYOND, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
 import { DEPOT as DEPOT_ART, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
+import { aimBox, boxIn, drawnFrom, heldIn, markCovers, pointersOn } from "./big.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
 import { bits, floaters, rings } from "./fx.ts";
 import { heldBox, heldMarks } from "./held.ts";
@@ -57,6 +59,7 @@ import { pageOf } from "./kinds/index.ts";
 import type { Drawn, KindPage } from "./kinds/kind.ts";
 import { lampsIn } from "./lamps.ts";
 import { armsAt, asIf, type Layout, layout, pylonTop } from "./layout.ts";
+import { boxCorners, corners, pixelRing } from "./marks.ts";
 import { eachPerson } from "./people.ts";
 import { pinMark } from "./pinned.ts";
 import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, standsOn, tileNudge } from "./state.ts";
@@ -440,6 +443,8 @@ const onTile: Drawn = {
   open: true,
   x: 0,
   top: 0,
+  w: TILE,
+  h: TILE,
   foot: 0,
   cx: 0,
   z: 0,
@@ -450,6 +455,7 @@ const onTile: Drawn = {
   working: false,
   r: -1,
   out: NONE,
+  also: NONE,
   making: NONE,
   work: 0,
   t: 0,
@@ -484,31 +490,24 @@ function piece(
   ghost: number,
 ): void {
   const real = ghost === 0;
-  const c = real ? reading(y, i) : -1;
   const page = pageOf(k);
-  if (!page?.draw) return;
-  const h = y.holders;
-  const r = real ? holderOf(y, i) : -1;
+  // A piece of more than one tile standing is drawn once, from its own tile, over every tile it covers.
+  if (!page?.draw || (real && !drawnFrom(y, i))) return;
+  const c = real ? reading(y, i) : -1;
   onTile.i = i;
   onTile.d = d;
   onTile.grade = grade;
   onTile.look = lookOf(grade);
   onTile.span = span;
   onTile.open = open;
-  onTile.x = x;
-  onTile.top = top;
-  onTile.foot = top + TILE;
-  onTile.cx = x + 8;
+  boxIn(onTile, k, d, x, top);
   onTile.z = onTile.foot + camY;
   onTile.a = ghost > 0 ? ghost : 1;
   onTile.real = real;
   onTile.ghost = ghost;
-  onTile.powered = !real || litOf(y)[i] === 1;
+  onTile.powered = !real || litAt(y, i);
   onTile.working = c >= 0 && c % TROUBLE === WORKING;
-  onTile.r = r;
-  onTile.out = r >= 0 ? (h.out[r] ?? NONE) : NONE;
-  onTile.making = r >= 0 ? (h.making[r] ?? NONE) : NONE;
-  onTile.work = r >= 0 ? (h.work[r] ?? 0) : 0;
+  heldIn(onTile, y, real ? holderOf(y, i) : -1);
   onTile.t = S.t;
   onTile.pace = now.pace;
   onTile.seenX = seenX;
@@ -516,7 +515,7 @@ function piece(
   onTile.mem = mem;
   const head = page.draw(art, y, onTile);
   if (head === null) return;
-  wear(art, page, c, head);
+  wear(art, page, k, c, head);
 }
 
 /**
@@ -525,20 +524,11 @@ function piece(
  * its way out, and whatever it holds there with nowhere to send it; and over its head, trouble that
  * has lasted.
  */
-function wear(art: Art, page: KindPage, c: number, head: number): void {
-  const { i, d, x, top, cx, z, a, real, out } = onTile;
+function wear(art: Art, page: KindPage, k: number, c: number, head: number): void {
+  const { i, x, top, cx, z, a, real } = onTile;
   const pip = art.m.pips[onTile.grade - 2];
   if (pip) put(pip, x, top, z + 0.55, a);
-  if (page.pointer) {
-    const p = (onTile.ghost > 0 || S.picked === i ? art.m.pointerLit : art.m.pointer)[d];
-    const ex = cx + DX[d] * 8;
-    const ey = top + 8 + DY[d] * 8;
-    if (p) put(p, ex - Math.floor(p.width / 2), ey - Math.floor(p.height / 2), z + 0.4, a);
-    if (real && isItem(out) && page.pointer === "holding") {
-      const pic = art.item(out);
-      put(pic, ex - DX[d] * 4 - Math.floor(pic.width / 2), ey - DY[d] * 4 - Math.floor(pic.height / 2) - 2, z + 0.5);
-    }
-  }
+  if (page.pointer) pointersOn(art, onTile, k, page.pointer === "holding", onTile.ghost > 0 || S.picked === i);
   if (!real) return;
   // Trouble that has lasted says so over the machine's head: but over one that shows where power does not reach in its own way.
   if (troubled(i) && !(page.sleeps && !onTile.powered)) {
@@ -561,33 +551,6 @@ function grown(s: Sprite): Sprite {
     big.set(s, (made = { c, ax: s.ax * markSize, ay: s.ay * markSize }));
   }
   return made;
-}
-
-function pixelRing(g: Ctx, x: number, y: number, rx: number, ry: number, col: string, gap = 1): void {
-  const n = Math.max(8, Math.round((rx + ry) * 1.6));
-  g.fillStyle = col;
-  for (let i = 0; i < n; i += gap) {
-    const a = (i / n) * Math.PI * 2;
-    g.fillRect(Math.round(x + Math.cos(a) * rx), Math.round(y + Math.sin(a) * ry), 1, 1);
-  }
-}
-
-/** Gold (or coral) corners round a box in the picture: it is being pointed at. */
-function corners(g: Ctx, x: number, y: number, w: number, h: number, col: string, breathe: boolean): void {
-  const k = breathe && Math.sin(S.t * 6) > 0 ? 1 : 0;
-  const x0 = x - 1 + k;
-  const y0 = y - 1 + k;
-  const x1 = x + w - k;
-  const y1 = y + h - k;
-  for (const [px, py, dx, dy] of [
-    [x0, y0, 1, 1],
-    [x1, y0, -1, 1],
-    [x0, y1, 1, -1],
-    [x1, y1, -1, -1],
-  ] as const) {
-    R(g, dx > 0 ? px : px - 3, py, 4, 1, col);
-    R(g, px, dy > 0 ? py : py - 3, 1, 4, col);
-  }
 }
 
 const WIRE = "#2a1519";
@@ -729,9 +692,6 @@ function notes(): readonly [HTMLCanvasElement, HTMLCanvasElement] {
 
 // ---------- many pieces at once: the area marked, and the pieces in hand ----------
 
-/** The tiles of the mark last drawn, by tile, to find its edges. */
-let masked: { of: Mark["tiles"]; on: Uint8Array } | null = null;
-
 /**
  * The area marked with Select. Every piece in it is lit gold on its tile, with a gold line where
  * the marked pieces end, so they read as one shape however far out the view is; the area itself
@@ -740,21 +700,17 @@ let masked: { of: Mark["tiles"]; on: Uint8Array } | null = null;
  */
 function marked(g: Ctx, w: Yard, m: Mark, cx: number, cy: number): void {
   const W = w.land.w;
-  if (masked?.of !== m.tiles) {
-    const on = new Uint8Array(w.kind.length);
-    for (const i of m.tiles) on[i] = 1;
-    masked = { of: m.tiles, on };
-  }
-  const { on } = masked;
+  // Every tile of a piece of more than one, marked by its own; by tile too, to find the mark's edges.
+  const { on, all } = markCovers(w, m.tiles);
   const leaving = S.group?.as === "move";
   g.globalCompositeOperation = leaving ? "source-over" : "lighter";
   g.fillStyle = leaving ? "rgba(26,15,30,0.5)" : `rgba(255,176,64,${0.26 + 0.07 * Math.sin(S.t * 5)})`;
   // Only where a piece still stands: one may have been taken away since.
-  for (const i of m.tiles)
+  for (const i of all)
     if (w.kind[i] !== NONE) g.fillRect((i % W) * TILE - cx, Math.floor(i / W) * TILE - cy, TILE, TILE);
   g.globalCompositeOperation = "source-over";
   g.fillStyle = leaving ? GOLD[0] : GOLD[2];
-  for (const i of m.tiles) {
+  for (const i of all) {
     if (w.kind[i] === NONE) continue;
     const tx = i % W;
     const x = tx * TILE - cx;
@@ -821,7 +777,8 @@ function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, 
     const yard = asIf(w, grp);
     for (const p of grp.at) {
       for (const i of tilesOf(yard, [p])) {
-        if (i < 0) continue;
+        // Each piece once, from its own tile: none for a tile off the map.
+        if (!drawnFrom(yard, i)) continue;
         const x = (i % yard.land.w) * TILE + ox;
         const top = Math.floor(i / yard.land.w) * TILE + oy;
         const k = yard.kind[i] ?? NONE;
@@ -1031,9 +988,10 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     cy,
     w,
     L,
-    tx0: Math.max(0, Math.floor(cx / TILE) - 1),
-    ty0: Math.max(0, Math.floor(cy / TILE) - 1),
-    tx1: Math.min(land.w - 1, Math.ceil((cx + W) / TILE) + 1),
+    // Two tiles past the view: the furthest a piece's own tile is from the tiles it covers.
+    tx0: Math.max(0, Math.floor(cx / TILE) - 2),
+    ty0: Math.max(0, Math.floor(cy / TILE) - 2),
+    tx1: Math.min(land.w - 1, Math.ceil((cx + W) / TILE) + 2),
     ty1: Math.min(land.h - 1, Math.ceil((cy + H) / TILE) + 2),
     steps: ALONG.map((along) => Math.floor((w.tick + now.lead) * along * TILE) % STEPS),
   };
@@ -1413,7 +1371,7 @@ function marksLayer(f: Frame): void {
     const x = on.x * TILE - cx;
     const y = on.y * TILE - cy;
     const bad = S.aim.why !== null;
-    if (tool === "remove") corners(g, x, y, TILE, TILE, CORAL, true);
+    if (tool === "remove") boxCorners(g, aimBox(w, "remove", 0, on.x, on.y), cx, cy, CORAL);
     else if (tool === "paint") {
       // The brush shows its colour on what it would colour, and nothing elsewhere.
       if (!bad) corners(g, x, y, TILE, TILE, PAINTS[S.tint - 1]?.lit ?? CREAM, true);
@@ -1455,7 +1413,7 @@ function marksLayer(f: Frame): void {
         const ring = ((REACH.pylon * w.open.reach) / 10_000) * TILE;
         pixelRing(g, x + 8, y + 8, ring, ring, col, 2);
       }
-      corners(g, x, y, TILE, TILE, col, true);
+      boxCorners(g, aimBox(w, tool, S.dir, on.x, on.y), cx, cy, col);
       // And the tile aimed at, which for a tunnel whose way in is set is where it would come up, or cannot.
       corners(g, S.aim.x * TILE - cx, S.aim.y * TILE - cy, TILE, TILE, col, true);
     }

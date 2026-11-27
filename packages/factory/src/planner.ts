@@ -5,7 +5,7 @@
  * held up; nothing that moves the yard reads it.
  */
 import { TICKS } from "./content/machines.ts";
-import { GATHERING, isRaw, type Item, type Kind, PACE, RECIPE, type Recipe, WORK_OF } from "./tables.ts";
+import { GATHERING, type Item, type Kind, PACE, type Recipe, recipeFor, WORK_OF } from "./tables.ts";
 
 /** Ticks in a minute. */
 export const MINUTE = 600;
@@ -44,10 +44,14 @@ export function needs(grade: number, r: Recipe): { item: Item; perMinute: number
   return r.from.map((item, p) => ({ item, perMinute: often * (r.need[p] ?? 0) }));
 }
 
-/** What makes a thing: a gatherer for a thing from the ground, else its recipe's machine. */
+/**
+ * What makes a thing, and by which recipe (`recipeFor`): a gatherer, by none, for a thing from the
+ * ground; else the machine of the recipe that makes it, its own thing or beside it. A recipe makes one
+ * of its by-product with each of its own (`Recipe.also`), so the machines a pace of either takes are the same.
+ */
 export const makerOf = (n: Item): { kind: Kind; recipe: Recipe | null } => {
-  const r = RECIPE[n] ?? null;
-  return { kind: isRaw(n) || !r ? GATHERING : r.by, recipe: r };
+  const r = recipeFor(n);
+  return { kind: r ? r.by : GATHERING, recipe: r };
 };
 
 /** For each part a machine of a grade needs to make a recipe flat out, how many of the piece before it that is, each at `before`. */
