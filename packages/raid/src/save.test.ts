@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { planRoom, SENSIBLE } from "./bot.ts";
-import { FIGURES } from "./content/figures.ts";
+import { figureIn } from "./content/figures.ts";
 import { FINISHED_IDS, isEmblemId } from "./content/items.ts";
 import { LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY } from "./content/rooms.ts";
@@ -20,7 +20,7 @@ import {
   takeTakings,
 } from "./run.ts";
 import { checkRun, type Loaded } from "./save.ts";
-import { EVERYONES } from "./testkit.ts";
+import { CAT, EVERYONES } from "./testkit.ts";
 
 /** A run as a table keeps it, written out and read back. */
 const saveRun = (run: Run): string => JSON.stringify({ run });
@@ -171,7 +171,7 @@ describe("saving a run", () => {
     const again = loadRun(saveRun(loaded.run));
     expect(again.ok && again.run.items).toEqual(loaded.run.items);
     // A figure holding it is somewhere it is: none is added.
-    const figure = pieces(loaded.run).find((p) => FIGURES[p.kind].kin !== "crab" && p.items.length < 3);
+    const figure = pieces(loaded.run).find((p) => figureIn(CAT, p.kind).kin !== "crab" && p.items.length < 3);
     const spot = figure ? spotOf(loaded.run, figure.id) : null;
     if (!spot) throw new Error("nobody to hold it");
     expect(giveItem(loaded.run, loaded.run.items.indexOf("crabcharm"), spot).ok).toBe(true);

@@ -61,7 +61,7 @@ export function begin(t: Sitting, sat: readonly Member[], at: number): void {
   const regulars = shuffled(t, available(catalogOf(t), { for: "regular" })).slice(0, CHAIRS - sat.length);
   const whos: Who[] = [
     ...sat.map((member): Who => ({ is: "member", id: member.id, name: member.name })),
-    ...regulars.map((figure): Who => ({ is: "regular", figure, habit: pick(t, traitsOf(figure)) })),
+    ...regulars.map((figure): Who => ({ is: "regular", figure, habit: pick(t, traitsOf(catalogOf(t), figure)) })),
   ];
   t.seats = whos.map((who) => {
     const run = startRun(draw32(t), { era: t.era, trail: TRAIL });

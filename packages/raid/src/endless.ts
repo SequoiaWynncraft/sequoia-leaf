@@ -8,6 +8,7 @@
  * was. What binds the room a run is in is `room.ts`'s (`roomOf`), which reads these.
  */
 import { boonNumber } from "./content/boons.ts";
+import { catalogOf } from "./content/catalog.ts";
 import { CYCLE, ENDLESS, type EndlessWay } from "./content/endless.ts";
 import { MAX_LEVEL, ROOM_COUNT, ROOMS, type RoomSpec, type SparStrength } from "./content/rooms.ts";
 import type { RoomRecord, Run } from "./run.ts";
@@ -77,5 +78,5 @@ export function heldRoom(slot: string): number | null {
 }
 
 /** How many figures an endless run's chairs add to what may be fielded, beside An Extra Chair's. */
-export const extraChairs = (run: Pick<Run, "boons" | "record"> & Pick<Way, "endless">): number =>
-  (run.boons.includes("extrachair") ? boonNumber("extrachair", "more") : 0) + chairsOf(run);
+export const extraChairs = (run: Pick<Run, "boons" | "record" | "era"> & Pick<Way, "endless">): number =>
+  (run.boons.includes("extrachair") ? boonNumber(catalogOf(run), "extrachair", "more") : 0) + chairsOf(run);

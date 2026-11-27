@@ -9,13 +9,14 @@ import { GOLD, LEAF } from "@sequoia-leaf/kit/palette.ts";
 import { leave, tell } from "@sequoia-leaf/kit/shell.ts";
 import {
   type AcornsWhy,
+  catalogOf,
   endingOf,
   type EndlessWay,
   picksOf,
   type RaidNote,
   specOf,
   type TraitId,
-  TRAITS,
+  traitIn,
 } from "@sequoia-leaf/raid";
 
 import { glyphPic } from "./art/icons.ts";
@@ -31,7 +32,19 @@ import { endedIn, type Playback, type Screen } from "./screen.ts";
 import { signal } from "./signals.ts";
 import { snd } from "./sounds.ts";
 import { boardSpot } from "./stage.ts";
-import { ask, changed, doNow, go, onScreen, playSlot, prefsChanged, S, type Slot, tableNow } from "./state.ts";
+import {
+  ask,
+  catalogFor,
+  changed,
+  doNow,
+  go,
+  onScreen,
+  playSlot,
+  prefsChanged,
+  S,
+  type Slot,
+  tableNow,
+} from "./state.ts";
 import { acorns } from "./ui/cards.ts";
 import { closeSheet, openSheet, sheetTaking, sheetUp, type Taking } from "./ui/fightsheet.ts";
 import { forgetTable, wakeChip } from "./ui/table.ts";
@@ -128,7 +141,13 @@ export function traitOn(trait: TraitId, step: number): void {
   snd.trait(step);
   cheer(run, trait);
   later(0, () => wakeChip(trait));
-  say(MIDDLE.x, MIDDLE.y + 22, `${TRAITS[trait].name} is on${step > 1 ? `, step ${step}` : ""}`, GOLD[2], { ttl: 1.3 });
+  say(
+    MIDDLE.x,
+    MIDDLE.y + 22,
+    `${traitIn(catalogOf(run), trait).name} is on${step > 1 ? `, step ${step}` : ""}`,
+    GOLD[2],
+    { ttl: 1.3 },
+  );
 }
 
 /** Sends the party in: Leaf locks both boards and decides the fight, and the table plays it. */
@@ -242,7 +261,7 @@ function counting(notes: readonly RaidNote[], play: Playback): void {
   else if (won && play.boss)
     tell({
       town: "news",
-      text: `${specOf(play.boss).name} was seen off at the stump, room ${play.room + 1}.`,
+      text: `${specOf(catalogFor(S.run), play.boss).name} was seen off at the stump, room ${play.room + 1}.`,
       tone: "gold",
     });
   let t = 0.1;

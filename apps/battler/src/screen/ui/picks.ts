@@ -10,19 +10,21 @@ import { add, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import {
   abilityShort,
   type BoonId,
-  BOONS,
+  boonIn,
   boonShort,
+  type Catalog,
+  catalogOf,
   type Choice,
   type ComponentId,
-  COMPONENTS,
+  componentIn,
   type FigureId,
-  FIGURES,
+  figureIn,
   itemAdds,
   picksOf,
   pieces,
   roleLine,
   type RunView,
-  TRAITS,
+  traitIn,
   traitsOf,
 } from "@sequoia-leaf/raid";
 
@@ -57,24 +59,24 @@ function art(c: HTMLCanvasElement, ref: string): HTMLElement {
   return box;
 }
 
-function starterCard(kind: FigureId): HTMLElement[] {
-  const spec = FIGURES[kind];
+function starterCard(cat: Catalog, kind: FigureId): HTMLElement[] {
+  const spec = figureIn(cat, kind);
   return [
     art(portrait(kind), figureRef(kind)),
     el("b", "k-gold", { text: spec.name }),
-    el("div", "k-dim", { text: roleLine(kind) }),
+    el("div", "k-dim", { text: roleLine(cat, kind) }),
     el(
       "div",
       "k-wrap",
       {},
-      ...traitsOf(kind).map((t) => {
-        const chip = el("span", "k-chip", {}, pic(traitIcon(t)), TRAITS[t].name);
+      ...traitsOf(cat, kind).map((t) => {
+        const chip = el("span", "k-chip", {}, pic(traitIcon(t)), traitIn(cat, t).name);
         link(chip, traitRef(t), { acts: true });
         return chip;
       }),
     ),
     el("b", "", { text: spec.ability?.name ?? "" }),
-    rich(abilityShort(kind, 1)),
+    rich(abilityShort(cat, kind, 1)),
   ];
 }
 /**
@@ -84,8 +86,8 @@ function starterCard(kind: FigureId): HTMLElement[] {
  * name are the fielded figures that want anything it makes, and on each line the ones that want
  * that item.
  */
-function componentCard(run: RunView, item: ComponentId): (HTMLElement | null)[] {
-  const lines = makesLines(item, run).map((line) =>
+function componentCard(cat: Catalog, run: RunView, item: ComponentId): (HTMLElement | null)[] {
+  const lines = makesLines(cat, item, run).map((line) =>
     el(
       "div",
       `makes${line.lit ? " lit" : ""}`,
@@ -97,19 +99,19 @@ function componentCard(run: RunView, item: ComponentId): (HTMLElement | null)[] 
   );
   return [
     art(itemIcon(item), itemRef(item)),
-    el("b", "k-gold", { text: COMPONENTS[item].name }),
-    rich(itemAdds(item).join(" · ")),
+    el("b", "k-gold", { text: componentIn(cat, item).name }),
+    rich(itemAdds(cat, item).join(" · ")),
     wantedBy(run, item),
     el("div", "makeslist", {}, ...lines),
   ];
 }
-function boonCardParts(boon: BoonId): HTMLElement[] {
-  const spec = BOONS[boon];
+function boonCardParts(cat: Catalog, boon: BoonId): HTMLElement[] {
+  const spec = boonIn(cat, boon);
   return [
     art(boonIcon(boon), boonRef(boon)),
     el("b", "k-gold", { text: spec.name }),
     el("div", "k-dim", { text: spec.sort === "charm" ? "A charm" : "A boon" }),
-    rich(boonShort(boon)),
+    rich(boonShort(cat, boon)),
   ];
 }
 
@@ -117,11 +119,11 @@ function boonCardParts(boon: BoonId): HTMLElement[] {
 function partsOf(run: RunView, choice: Choice, i: number): (HTMLElement | null)[] {
   switch (choice.kind) {
     case "starter":
-      return starterCard(choice.options[i] ?? "rock");
+      return starterCard(catalogOf(run), choice.options[i] ?? "rock");
     case "component":
-      return componentCard(run, choice.options[i] ?? "thorn");
+      return componentCard(catalogOf(run), run, choice.options[i] ?? "thorn");
     case "boon":
-      return boonCardParts(choice.options[i] ?? "windfall");
+      return boonCardParts(catalogOf(run), choice.options[i] ?? "windfall");
     case "rule":
       return ruleCard(choice.options[i] ?? "fog");
   }

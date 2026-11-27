@@ -7,7 +7,7 @@
 import { nameOf, portrait } from "@sequoia-leaf/figures/sprites.ts";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el } from "@sequoia-leaf/kit/dom.ts";
-import { itemName } from "@sequoia-leaf/raid";
+import { catalogOf, itemName } from "@sequoia-leaf/raid";
 import type { SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
 import { itemIcon } from "../art/icons.ts";
@@ -75,7 +75,7 @@ export function renderRing(view: SittingView, now: number, busy: boolean): void 
           style: spot,
           "data-ring": i,
           "aria-disabled": String(!mine),
-          "aria-label": `${nameOf(offer.kind)}, holding ${itemName(offer.item)}`,
+          "aria-label": `${nameOf(catalogOf(view), offer.kind)}, holding ${itemName(catalogOf(view), offer.item)}`,
           onclick: () => {
             if (mine) RING.take?.(i);
           },

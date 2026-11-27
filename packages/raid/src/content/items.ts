@@ -3,10 +3,16 @@
  * the same figure holds both. A finished item has the stats of both its halves and one effect of
  * its own. And seven emblems, one for each kin, which a charm boon gives: whoever holds one is of
  * that kin as well. Words and numbers only; the effects happen in `fight/`.
+ *
+ * The items here are those the base release brought (`releases/base.ts`); later releases bring
+ * more and change these in their patches (`releases/`). An item is read from a catalogue
+ * (`catalog.ts`), as its era has it.
  */
-import { BOONS } from "./boons.ts";
+import { boonIn } from "./boons.ts";
+import type { Catalog } from "./catalog.ts";
 import { isFigureId, traitsOf, type UnitKind } from "./figures.ts";
-import { type KinId, type TraitId, TRAITS } from "./traits.ts";
+import { opened } from "./patch.ts";
+import { type KinId, type TraitId, traitIn } from "./traits.ts";
 
 export const COMPONENT_IDS = ["thorn", "plume", "glowcap", "bark", "chestnut"] as const;
 export type ComponentId = (typeof COMPONENT_IDS)[number];
@@ -30,7 +36,8 @@ export interface ComponentSpec {
 }
 const none: ItemStats = { attack: 0, speed: 0, power: 0, armour: 0, ward: 0, health: 0 };
 
-export const COMPONENTS: Record<ComponentId, ComponentSpec> = {
+/** The components the base release brought: read only by its patch (`releases/base.ts`). */
+export const BASE_COMPONENTS: Readonly<Partial<Record<ComponentId, ComponentSpec>>> = {
   thorn: {
     name: "Thorn",
     stats: { ...none, attack: 15 },
@@ -110,7 +117,8 @@ export interface FinishedSpec {
   readonly quip: string;
 }
 
-export const FINISHED: Record<FinishedId, FinishedSpec> = {
+/** The finished items the base release brought: read only by its patch (`releases/base.ts`). */
+export const BASE_FINISHED: Readonly<Partial<Record<FinishedId, FinishedSpec>>> = {
   blackthorn: {
     name: "Blackthorn Sprig",
     made: ["thorn", "thorn"],
@@ -233,8 +241,11 @@ export const FINISHED: Record<FinishedId, FinishedSpec> = {
   },
 };
 
-/** The kin each emblem makes whoever holds it. An emblem has no stats and does nothing else. */
-export const EMBLEMS: Readonly<Record<EmblemId, KinId>> = {
+/**
+ * The kin each emblem the base release brought makes whoever holds it: read only by its patch
+ * (`releases/base.ts`). An emblem has no stats and does nothing else.
+ */
+export const BASE_EMBLEMS: Readonly<Partial<Record<EmblemId, KinId>>> = {
   embercharm: "ember",
   mosscharm: "moss",
   mistcharm: "mist",
@@ -248,44 +259,57 @@ export const ITEM_IDS: readonly ItemId[] = [...COMPONENT_IDS, ...FINISHED_IDS, .
 /** How many items one figure can hold. */
 export const HOLDS = 3;
 
-export const isComponentId = (v: unknown): v is ComponentId => typeof v === "string" && Object.hasOwn(COMPONENTS, v);
-export const isFinishedId = (v: unknown): v is FinishedId => typeof v === "string" && Object.hasOwn(FINISHED, v);
-export const isEmblemId = (v: unknown): v is EmblemId => typeof v === "string" && Object.hasOwn(EMBLEMS, v);
+const isOne = <K extends string>(ids: readonly K[], v: unknown): v is K => ids.some((id) => id === v);
+export const isComponentId = (v: unknown): v is ComponentId => isOne(COMPONENT_IDS, v);
+export const isFinishedId = (v: unknown): v is FinishedId => isOne(FINISHED_IDS, v);
+export const isEmblemId = (v: unknown): v is EmblemId => isOne(EMBLEM_IDS, v);
 export const isItemId = (v: unknown): v is ItemId => isComponentId(v) || isFinishedId(v) || isEmblemId(v);
 
+/** A component as a catalogue has it. */
+export const componentIn = (cat: Catalog, id: ComponentId): ComponentSpec => opened(cat.components, id, cat.era);
+/** A finished item as a catalogue has it. */
+export const finishedIn = (cat: Catalog, id: FinishedId): FinishedSpec => opened(cat.finished, id, cat.era);
+/** One of a finished item's numbers; 0 if it has no such number. */
+export const finishedNumber = (cat: Catalog, id: FinishedId, name: string): number => finishedIn(cat, id).n[name] ?? 0;
+/** The kin an emblem makes its holder, as a catalogue has it. */
+export const emblemKin = (cat: Catalog, id: EmblemId): KinId => opened(cat.emblems, id, cat.era);
+
 /** A kin's name with "a" or "an" before it: "a Crab", "an Ember". */
-const aKin = (kin: KinId): string => `${/^[AEIOU]/.test(TRAITS[kin].name) ? "an" : "a"} ${TRAITS[kin].name}`;
+function aKin(cat: Catalog, kin: KinId): string {
+  const { name } = traitIn(cat, kin);
+  return `${/^[AEIOU]/.test(name) ? "an" : "a"} ${name}`;
+}
 
 /** The traits a figure carries: its own, then the kin of each emblem it holds. Nobody else carries any. */
-export function carriedTraits(kind: UnitKind, items: readonly ItemId[]): TraitId[] {
+export function carriedTraits(cat: Catalog, kind: UnitKind, items: readonly ItemId[]): TraitId[] {
   if (!isFigureId(kind)) return [];
-  const out: TraitId[] = [...traitsOf(kind)];
-  for (const item of items) if (isEmblemId(item) && !out.includes(EMBLEMS[item])) out.push(EMBLEMS[item]);
+  const out: TraitId[] = [...traitsOf(cat, kind)];
+  for (const item of items) {
+    if (!isEmblemId(item)) continue;
+    const kin = emblemKin(cat, item);
+    if (!out.includes(kin)) out.push(kin);
+  }
   return out;
 }
 /** Whether a figure carries a trait, as its own or by an emblem it holds. */
-export const carries = (kind: UnitKind, items: readonly ItemId[], trait: TraitId): boolean =>
-  carriedTraits(kind, items).includes(trait);
+export const carries = (cat: Catalog, kind: UnitKind, items: readonly ItemId[], trait: TraitId): boolean =>
+  carriedTraits(cat, kind, items).includes(trait);
 
-const recipes = new Map<string, FinishedId>();
-for (const id of FINISHED_IDS) {
-  const [a, b] = FINISHED[id].made;
-  recipes.set(`${a}+${b}`, id);
-  recipes.set(`${b}+${a}`, id);
-}
-/** What two components make. */
-export function forge(a: ComponentId, b: ComponentId): FinishedId {
-  const made = recipes.get(`${a}+${b}`);
-  if (made === undefined) throw new Error(`nothing is made of ${a} and ${b}`);
-  return made;
+/** What two components make, as a catalogue has its recipes. */
+export function forge(cat: Catalog, a: ComponentId, b: ComponentId): FinishedId {
+  for (const id of FINISHED_IDS) {
+    const made = cat.finished[id]?.made;
+    if (made && ((made[0] === a && made[1] === b) || (made[0] === b && made[1] === a))) return id;
+  }
+  throw new Error(`nothing is made of ${a} and ${b}`);
 }
 /** What an item adds: a component's own stat, both halves of a finished one, or nothing for an emblem. */
-export function itemStats(id: ItemId): ItemStats {
-  if (isComponentId(id)) return COMPONENTS[id].stats;
+export function itemStats(cat: Catalog, id: ItemId): ItemStats {
+  if (isComponentId(id)) return componentIn(cat, id).stats;
   if (isEmblemId(id)) return none;
-  const [a, b] = FINISHED[id].made;
-  const x = COMPONENTS[a].stats;
-  const y = COMPONENTS[b].stats;
+  const [a, b] = finishedIn(cat, id).made;
+  const x = componentIn(cat, a).stats;
+  const y = componentIn(cat, b).stats;
   return {
     attack: x.attack + y.attack,
     speed: x.speed + y.speed,
@@ -295,13 +319,13 @@ export function itemStats(id: ItemId): ItemStats {
     health: x.health + y.health,
   };
 }
-export const itemName = (id: ItemId): string =>
-  isComponentId(id) ? COMPONENTS[id].name : isEmblemId(id) ? BOONS[id].name : FINISHED[id].name;
-export const itemQuip = (id: ItemId): string =>
-  isComponentId(id) ? COMPONENTS[id].quip : isEmblemId(id) ? BOONS[id].quip : FINISHED[id].quip;
+export const itemName = (cat: Catalog, id: ItemId): string =>
+  isComponentId(id) ? componentIn(cat, id).name : isEmblemId(id) ? boonIn(cat, id).name : finishedIn(cat, id).name;
+export const itemQuip = (cat: Catalog, id: ItemId): string =>
+  isComponentId(id) ? componentIn(cat, id).quip : isEmblemId(id) ? boonIn(cat, id).quip : finishedIn(cat, id).quip;
 /** What an item adds, in numbers, as short parts: `+15% attack`, `+20 armour`. */
-export function itemAdds(id: ItemId): string[] {
-  const s = itemStats(id);
+export function itemAdds(cat: Catalog, id: ItemId): string[] {
+  const s = itemStats(cat, id);
   return [
     s.attack ? `+${s.attack}% attack` : "",
     s.speed ? `+${s.speed}% attack speed` : "",
@@ -311,25 +335,28 @@ export function itemAdds(id: ItemId): string[] {
     s.health ? `+${s.health}% health` : "",
   ].filter((part) => part !== "");
 }
-/** What an item does in a few words for a card: a component's stat, a finished item's effect, an emblem's kin. */
-export function itemShort(id: ItemId): string {
-  if (isComponentId(id)) return COMPONENTS[id].short;
-  if (isEmblemId(id)) return `Its holder is ${aKin(EMBLEMS[id])} too.`;
-  const spec = FINISHED[id];
-  return spec.short.replaceAll(/\{(\w+)\}/g, (whole: string, key: string) => {
+/** A finished item's effect words, `{name}` filled from its numbers. */
+const effect = (spec: FinishedSpec, words: string): string =>
+  words.replaceAll(/\{(\w+)\}/g, (whole: string, key: string) => {
     const v = spec.n[key];
     return v === undefined ? whole : String(v);
   });
+/** What an item does in a few words for a card: a component's stat, a finished item's effect, an emblem's kin. */
+export function itemShort(cat: Catalog, id: ItemId): string {
+  if (isComponentId(id)) return componentIn(cat, id).short;
+  if (isEmblemId(id)) return `Its holder is ${aKin(cat, emblemKin(cat, id))} too.`;
+  const spec = finishedIn(cat, id);
+  return effect(spec, spec.short);
 }
 /** What an item does, in a sentence or two: its stats, then its effect if it is a finished one. */
-export function itemText(id: ItemId): string {
-  if (isComponentId(id)) return COMPONENTS[id].text;
+export function itemText(cat: Catalog, id: ItemId): string {
+  if (isComponentId(id)) return componentIn(cat, id).text;
   if (isEmblemId(id)) {
-    const kin = EMBLEMS[id];
-    return `Whoever holds it is ${aKin(kin)} as well, and counts as one more ${TRAITS[kin].name}.`;
+    const kin = emblemKin(cat, id);
+    return `Whoever holds it is ${aKin(cat, kin)} as well, and counts as one more ${traitIn(cat, kin).name}.`;
   }
-  const spec = FINISHED[id];
-  const s = itemStats(id);
+  const spec = finishedIn(cat, id);
+  const s = itemStats(cat, id);
   const stats = [
     s.attack ? `+${s.attack}% attack` : "",
     s.speed ? `+${s.speed}% attack speed` : "",
@@ -337,11 +364,7 @@ export function itemText(id: ItemId): string {
     s.armour ? `+${s.armour} armour and +${s.ward} ward` : "",
     s.health ? `+${s.health}% health` : "",
   ].filter((part) => part !== "");
-  const effect = spec.text.replaceAll(/\{(\w+)\}/g, (whole: string, key: string) => {
-    const v = spec.n[key];
-    return v === undefined ? whole : String(v);
-  });
-  return `${stats.join(", ")}. ${effect}`;
+  return `${stats.join(", ")}. ${effect(spec, spec.text)}`;
 }
 
 /** Why an item cannot be held: no place for it, or an emblem of a kin its holder already carries. */
@@ -353,16 +376,17 @@ export type NotHeld = "hands_full" | "already_kin";
  * already. Gives the new holding and what was forged, or why it cannot be held.
  */
 export function holdItem(
+  cat: Catalog,
   holder: { readonly kind: UnitKind; readonly items: readonly ItemId[] },
   item: ItemId,
 ): { held: ItemId[]; forged: FinishedId | null; with: ComponentId | null } | { refused: NotHeld } {
   const held = holder.items;
-  if (isEmblemId(item) && carries(holder.kind, held, EMBLEMS[item])) return { refused: "already_kin" };
+  if (isEmblemId(item) && carries(cat, holder.kind, held, emblemKin(cat, item))) return { refused: "already_kin" };
   if (isComponentId(item)) {
     const at = held.findIndex(isComponentId);
     const loose = held[at];
     if (loose !== undefined && isComponentId(loose)) {
-      const forged = forge(loose, item);
+      const forged = forge(cat, loose, item);
       return { held: held.with(at, forged), forged, with: loose };
     }
   }

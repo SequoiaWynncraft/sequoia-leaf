@@ -11,7 +11,7 @@
 import { nameOf as figureName, portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
-import { itemName } from "@sequoia-leaf/raid";
+import { type Catalog, catalogOf, itemName } from "@sequoia-leaf/raid";
 import { seatCell } from "@sequoia-leaf/raid/hex.ts";
 import type { SeatView, SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
@@ -141,7 +141,7 @@ export function renderPlayers(view: SittingView): void {
 }
 
 /** A player's board as it stood at the last lock: the far half of a table, back row at the top. */
-function boardOf(seat: SeatView): HTMLElement {
+function boardOf(cat: Catalog, seat: SeatView): HTMLElement {
   const grid = el("div", "scout-board", {});
   const at = new Map(seat.board.figures.map((p) => [seatCell(1, p.seat), p]));
   for (let row = 0; row < ROWS; row++) {
@@ -159,8 +159,8 @@ function boardOf(seat: SeatView): HTMLElement {
           el("span", "held", {}, ...p.items.map((item) => pic(itemIcon(item)))),
         );
         link(who, `figure:${p.kind}/${p.stars}`);
-        const holds = p.items.length > 0 ? `, holding ${p.items.map(itemName).join(", ")}` : "";
-        who.setAttribute("aria-label", `${figureName(p.kind)}, ${p.stars} stars${holds}`);
+        const holds = p.items.length > 0 ? `, holding ${p.items.map((item) => itemName(cat, item)).join(", ")}` : "";
+        who.setAttribute("aria-label", `${figureName(cat, p.kind)}, ${p.stars} stars${holds}`);
         hex.append(who);
       }
       line.append(hex);
@@ -197,7 +197,9 @@ function renderScout(view: SittingView): void {
       ),
     ),
     el("p", "k-d", { text: `${out}. Level ${seat.level}. As it stood at the last fight.` }),
-    seat.board.figures.length > 0 ? boardOf(seat) : el("p", "k-d k-dim", { text: "Nobody on it yet." }),
+    seat.board.figures.length > 0
+      ? boardOf(catalogOf(view), seat)
+      : el("p", "k-d k-dim", { text: "Nobody on it yet." }),
   );
 }
 

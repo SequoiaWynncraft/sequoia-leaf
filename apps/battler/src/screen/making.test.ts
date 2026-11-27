@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   choose,
   type FigureId,
-  FINISHED,
   FINISHED_IDS,
+  finishedIn,
   forgeItems,
   giveItem,
   GOOD_WITH,
@@ -19,6 +19,7 @@ import {
   startRun,
   type TableView,
 } from "@sequoia-leaf/raid";
+import { CAT } from "@sequoia-leaf/raid/testkit.ts";
 
 import { commandsFor, dropOf, type Offer, offerOf, offersFor, onOffer, pairsOf, wanters, wants } from "./making.ts";
 
@@ -90,7 +91,7 @@ describe("what a figure's card offers", () => {
   test("a press makes exactly that item, the figure holds it, and exactly its two components are used", () => {
     // Every finished item, for a figure holding nothing, one half of it, or another component, from a rack with one of each and a spare.
     for (const item of FINISHED_IDS) {
-      const [a, b] = FINISHED[item].made;
+      const [a, b] = finishedIn(CAT, item).made;
       const another = item === "lichen" ? "quilt" : "lichen";
       for (const held of [[], [a], [b], ["glowcap"], [another, "glowcap"]] satisfies ItemId[][]) {
         const run = planning([["rock", [...held]]], ["thorn", "plume", "glowcap", "bark", "chestnut", a, b]);
@@ -173,10 +174,10 @@ describe("who on the board wants an item", () => {
       ["mossmote", ["hoard", "hedgehog", "glowcap"]],
     ]);
     expect(wanters(run, "stewpot").map((p) => p.kind)).toEqual(["mossmote"]);
-    expect(wants({ kind: "kettle", items: ["stewpot"] }, "glowthorn")).toBe(true);
+    expect(wants(CAT, { kind: "kettle", items: ["stewpot"] }, "glowthorn")).toBe(true);
     // Full, but its loose Glowcap is half of a Stewpot: it has a place for one, and for nothing else.
     expect(wanters(run, "chestnut").map((p) => p.kind)).toEqual(["mossmote"]);
-    expect(wants({ kind: "mossmote", items: ["hoard", "hedgehog", "bark"] }, "stewpot")).toBe(false);
+    expect(wants(CAT, { kind: "mossmote", items: ["hoard", "hedgehog", "bark"] }, "stewpot")).toBe(false);
   });
 });
 

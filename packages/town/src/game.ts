@@ -25,6 +25,7 @@ import {
   type Standing,
   utcDay,
 } from "@sequoia-leaf/core";
+import { type Era, eraAt, isEra, LEGACY_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 
 import {
   type Camp,
@@ -43,7 +44,6 @@ import {
   readPets,
   store,
   type Verdict,
-  visitorsCamp,
 } from "./camp.ts";
 import { STALLS } from "./catalogue.ts";
 import {
@@ -61,6 +61,7 @@ import {
 import { isLetter, type Letter, letter, post, tidied } from "./mail.ts";
 import { stretchOf } from "./stretch.ts";
 import { isThing, storedThing, thingOf, thingWon, turnsOf } from "./things.ts";
+import { visitView } from "./visit.ts";
 
 // ---------- the state ----------
 
@@ -124,9 +125,10 @@ type Held = Omit<Town, "rng" | "nextCall" | "called">;
  * lives in the camp (`pets`: `publicCamp`'s), the arrival letter, and what each of their
  * games tells the town, as Leaf keeps it with the game's state (`doors`: `Ctx.postcards`), for the
  * doors and the letter. The counter is shown, so that the page gives a thing it sets down the id
- * Leaf will give it.
+ * Leaf will give it. And the raid's era on Leaf's clock (`era`), which the camp names the raid's
+ * carvings by (`nameCarvings`).
  */
-export type TownView = Held & { pets: PetId[]; arrival: Arrival; doors: Ctx["postcards"] };
+export type TownView = Held & { pets: PetId[]; arrival: Arrival; doors: Ctx["postcards"]; era: Era };
 
 // ---------- commands ----------
 
@@ -402,7 +404,7 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
 // ---------- what the page is shown ----------
 
 /** The state as the member's page is given it, but the arrival letter. Each field is named, so nothing new is shown by accident. */
-const shown = (s: Held): Omit<TownView, "arrival" | "doors"> => ({
+const shown = (s: Held): Omit<TownView, "arrival" | "doors" | "era"> => ({
   sightings: s.sightings,
   spotAt: s.spotAt,
   chestDay: s.chestDay,
@@ -416,33 +418,14 @@ const shown = (s: Held): Omit<TownView, "arrival" | "doors"> => ({
   pets: [...publicCamp(s.camp).pets],
 });
 
+export { visitView } from "./visit.ts";
+
 export const townView = (s: Town, now: number, doors: Ctx["postcards"] = {}): TownView => ({
   ...shown(s),
   // Drawn from a copy of the stream: what `welcome` will post, without moving it on.
   arrival: arrivalOf(s, { rng: s.rng, made: s.made }, now),
   doors,
-});
-
-/**
- * What a visitor is given of somebody's camp: its public part (`publicCamp`: the pet chosen, what
- * stands there, each thing in its own state, and who lives there); nothing else of theirs (no
- * letters, tray or caller, every counter at 0, an arrival letter that says nothing, none of their
- * games' postcards), in the shape the page draws a camp from.
- */
-export const visitView = (s: Town): TownView => ({
-  sightings: 0,
-  spotAt: 0,
-  chestDay: -1,
-  welcomedDay: -1,
-  seenAt: 0,
-  cursor: null,
-  stay: false,
-  camp: visitorsCamp(s.camp),
-  visit: null,
-  made: 0,
-  pets: [...publicCamp(s.camp).pets],
-  arrival: { first: false, newDay: false, away: 0, said: [], mail: [] },
-  doors: {},
+  era: eraAt(now),
 });
 
 /** What a guess on the page's copy is told besides the moment: nothing of Leaf's (`predict`). */
@@ -462,11 +445,11 @@ export function predict(
 ): { view: TownView; notes: TownNote[] } | Refused | null {
   if (ASKED.has(c.do)) return null;
   // Who lives there is worked out again from the camp the command leaves (`shown`).
-  const { arrival, doors, pets: _before, ...rest } = view;
+  const { arrival, doors, era, pets: _before, ...rest } = view;
   // Nothing done here draws from the stream, or reads when the next caller comes.
   const answer = apply({ ...rest, rng: 0, nextCall: 0, called: 0 }, c, { ...ON_THE_PAGE, now });
   if ("refused" in answer) return answer;
-  return { view: { ...shown(answer.state), arrival, doors }, notes: [...answer.notes] };
+  return { view: { ...shown(answer.state), arrival, doors, era }, notes: [...answer.notes] };
 }
 
 /** Where a camp stands among everyone's: the things set out, with how many callers were greeted and how often the crab was spotted. */
@@ -664,7 +647,10 @@ export function readView(v: unknown): TownView | null {
   // A Leaf from before `pets` sends none: they are the camp's as the view has it, as a page from then drew them.
   const pets = v.pets === undefined ? [...publicCamp(held.camp).pets] : readPets(v.pets);
   // A Leaf from before the doors sends none: the town says its own lines.
-  return pets && { ...held, pets, arrival: { first, newDay, away, said, mail }, doors: readPostcards(v.doors) };
+  // A Leaf from before eras sends none: the era live when eras came in.
+  const era = v.era === undefined ? LEGACY_ERA : isEra(v.era) ? v.era : null;
+  if (!pets || era === null) return null;
+  return { ...held, pets, arrival: { first, newDay, away, said, mail }, doors: readPostcards(v.doors), era };
 }
 
 /** What a command answered off the wire: nothing, or the number of a thing set out; null for anything else. */
@@ -708,7 +694,7 @@ export const TOWN: Game<Town, TownCommand, TownView, TownNote> = {
   apply,
   // The doors to the Works and the table say what Leaf keeps of each (`Ctx.postcards`).
   view: (s, ctx) => townView(s, ctx.now, ctx.postcards),
-  visit: visitView,
+  visit: (s, ctx) => visitView(s, ctx.now),
   decode: decodeTown,
   encode: encodeTown,
   command: readCommand,

@@ -22,7 +22,7 @@
 import { fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
 import { BANNERS } from "@sequoia-leaf/raid/content/banners.ts";
 import { available, catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
-import { type FigureId, FIGURES, isFigureId, type Stars } from "@sequoia-leaf/raid/content/figures.ts";
+import { type FigureId, figureIn, isFigureId, type Stars } from "@sequoia-leaf/raid/content/figures.ts";
 import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import { ROOM_COUNT, worth } from "@sequoia-leaf/raid/content/rooms.ts";
 import { CALLINGS, KINS } from "@sequoia-leaf/raid/content/traits.ts";
@@ -32,6 +32,9 @@ import { opposition } from "@sequoia-leaf/raid/foe.ts";
 import { COLS, HOME_ROWS } from "@sequoia-leaf/raid/hex.ts";
 import type { Party, Placed } from "@sequoia-leaf/raid/party.ts";
 import { beginFight, startRun, takeTakings } from "@sequoia-leaf/raid/run.ts";
+
+/** The catalogue with every release open: what these sims play. */
+const NOW = catalogAt(LAST_ERA);
 
 const args = process.argv.slice(2);
 const runs = Number(args[0] ?? 60);
@@ -48,7 +51,7 @@ const MIDDLE_OUT = [3, 2, 4, 1, 5, 0, 6] as const;
 
 /** A free seat for a figure: the back row for a caster, the front row for anyone else, the next row along when that one is full. */
 function freeSeat(kind: FigureId, taken: ReadonlySet<number>): number {
-  const far = FIGURES[kind].range > 1;
+  const far = figureIn(NOW, kind).range > 1;
   for (let n = 0; n < HOME_ROWS; n++) {
     const row = far ? HOME_ROWS - 1 - n : n;
     for (const col of MIDDLE_OUT) if (!taken.has(row * COLS + col)) return row * COLS + col;
@@ -58,7 +61,10 @@ function freeSeat(kind: FigureId, taken: ReadonlySet<number>): number {
 /** A party with its cheapest figures swapped for others, one for each given, holding nothing. */
 function swapped(party: Party, put: readonly (readonly [FigureId, Stars])[]): Party {
   const cheapest = party.figures
-    .map((p, i) => ({ i, worth: isFigureId(p.kind) ? worth(FIGURES[p.kind].tier, p.stars) + p.items.length / 10 : 99 }))
+    .map((p, i) => ({
+      i,
+      worth: isFigureId(p.kind) ? worth(figureIn(NOW, p.kind).tier, p.stars) + p.items.length / 10 : 99,
+    }))
     .toSorted((a, b) => a.worth - b.worth || a.i - b.i)
     .slice(0, put.length)
     .map((c) => c.i);
@@ -140,7 +146,7 @@ function table(title: string, fights: readonly Kept[], put: (kind: FigureId, sta
       }
       return `${pct(all.won, all.fights)} ${pct(hard.won, hard.fights).padStart(5)} ${all.say}`;
     });
-    console.log(`  ${FIGURES[kind].name.padEnd(16)} ${cells.map((c) => c.padStart(26)).join("")}`);
+    console.log(`  ${figureIn(NOW, kind).name.padEnd(16)} ${cells.map((c) => c.padStart(26)).join("")}`);
   }
   console.log("");
 }
@@ -188,5 +194,5 @@ for (const kind of measured) {
     }
     return `${pct(score.won, score.fights)} ${score.say}`;
   });
-  console.log(`  ${FIGURES[kind].name.padEnd(16)} ${cells.map((c) => c.padStart(20)).join("")}`);
+  console.log(`  ${figureIn(NOW, kind).name.padEnd(16)} ${cells.map((c) => c.padStart(20)).join("")}`);
 }

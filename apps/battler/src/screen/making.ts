@@ -5,10 +5,11 @@
  * page never says other than what Leaf will do.
  */
 import {
+  type Catalog,
+  catalogOf,
   type ComponentId,
-  FINISHED,
-  FINISHED_IDS,
   type FinishedId,
+  finishedIn,
   forgeItems,
   giveItem,
   GOOD_WITH,
@@ -29,23 +30,25 @@ export type Holder = Pick<Piece, "kind" | "items">;
 
 /** The loose component a figure holds: the next component handed to it forges with that one. */
 const looseOf = (holder: Holder): ComponentId | undefined => holder.items.find(isComponentId);
-const isHalf = (item: FinishedId, part: ItemId | undefined): boolean => FINISHED[item].made.some((c) => c === part);
+const isHalf = (cat: Catalog, item: FinishedId, part: ItemId | undefined): boolean =>
+  finishedIn(cat, item).made.some((c) => c === part);
 
 /** Whether a figure has a place for a finished item: a free one, or a loose half of it to forge it in. */
-const roomFor = (holder: Holder, item: FinishedId): boolean =>
-  holder.items.length < HOLDS || isHalf(item, looseOf(holder));
+const roomFor = (cat: Catalog, holder: Holder, item: FinishedId): boolean =>
+  holder.items.length < HOLDS || isHalf(cat, item, looseOf(holder));
 
 /** Whether a figure wants a finished item: one of the three that suit it, which it does not hold and has a place for. */
-export const wants = (holder: Holder, item: FinishedId): boolean =>
-  GOOD_WITH[holder.kind].includes(item) && !holder.items.includes(item) && roomFor(holder, item);
+export const wants = (cat: Catalog, holder: Holder, item: FinishedId): boolean =>
+  GOOD_WITH[holder.kind].includes(item) && !holder.items.includes(item) && roomFor(cat, holder, item);
 
 /**
  * The fielded figures that want an item, in the board's order: a finished item, or anything a
  * component makes. Nobody wants an emblem, and the bench wants nothing.
  */
-export function wanters(run: Pick<RunView, "board">, item: ItemId): Piece[] {
-  const made = isFinishedId(item) ? [item] : FINISHED_IDS.filter((id) => isHalf(id, item));
-  return run.board.flatMap((p) => (p && made.some((id) => wants(p, id)) ? [p] : []));
+export function wanters(run: Pick<RunView, "board" | "era">, item: ItemId): Piece[] {
+  const cat = catalogOf(run);
+  const made = isFinishedId(item) ? [item] : cat.ids.finished.filter((id) => isHalf(cat, id, item));
+  return run.board.flatMap((p) => (p && made.some((id) => wants(cat, p, id)) ? [p] : []));
 }
 
 // ---------- what a figure's card offers ----------
@@ -64,10 +67,11 @@ export type Offer = { readonly item: FinishedId } & (
 );
 
 /** What a figure's card says of a finished item, given what the figure holds and what is on the rack. */
-export function offerOf(run: Pick<RunView, "items">, holder: Holder, item: FinishedId): Offer {
+export function offerOf(run: Pick<RunView, "items" | "era">, holder: Holder, item: FinishedId): Offer {
+  const cat = catalogOf(run);
   if (holder.items.includes(item)) return { item, how: "held" };
-  if (!roomFor(holder, item)) return { item, how: "full" };
-  const [a, b] = FINISHED[item].made;
+  if (!roomFor(cat, holder, item)) return { item, how: "full" };
+  const [a, b] = finishedIn(cat, item).made;
   const loose = looseOf(holder);
   const free = holder.items.length < HOLDS;
   // The item is on the rack already.
@@ -91,7 +95,7 @@ export function offerOf(run: Pick<RunView, "items">, holder: Holder, item: Finis
   return { item, how: "needs", needs };
 }
 /** The three finished items that suit a figure, as its card offers them. */
-export const offersFor = (run: Pick<RunView, "items">, holder: Holder): Offer[] =>
+export const offersFor = (run: Pick<RunView, "items" | "era">, holder: Holder): Offer[] =>
   GOOD_WITH[holder.kind].map((item) => offerOf(run, holder, item));
 
 /** Whether an offer can be had now. */

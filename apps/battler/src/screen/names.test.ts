@@ -9,6 +9,7 @@ import { TRUE_FORM_IDS, TRUE_FORMS } from "@sequoia-leaf/raid/content/graid.ts";
 import { LORE } from "@sequoia-leaf/raid/content/lore.ts";
 import { RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 import { HANDLES, nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
+import { CAT } from "@sequoia-leaf/raid/testkit.ts";
 
 import { acrossName } from "./logic.ts";
 import { fedLine, sortWord } from "./ui/words.ts";
@@ -137,7 +138,7 @@ describe("the names", () => {
   test("every figure, summon and boss in the game today has its name from the list, ids unchanged", () => {
     const ids = [...everyShared(), ...SUMMON_IDS, ...BOSS_IDS];
     expect(ids.filter((id) => NAMES[id] === undefined)).toEqual([]);
-    expect(ids.filter((id) => specOf(id).name !== NAMES[id])).toEqual([]);
+    expect(ids.filter((id) => specOf(CAT, id).name !== NAMES[id])).toEqual([]);
   });
 
   test("each true form is Real and its figure's name, and two abilities are renamed", () => {
@@ -148,7 +149,10 @@ describe("the names", () => {
       "Real Greg",
       "Real Orphion",
     ]);
-    expect([specOf("jay").ability?.name, specOf("crab40").ability?.name]).toEqual(["That Does It", "In The Way"]);
+    expect([specOf(CAT, "jay").ability?.name, specOf(CAT, "crab40").ability?.name]).toEqual([
+      "That Does It",
+      "In The Way",
+    ]);
   });
 
   test("the regulars sign with the new names, no article, and parties stored under the old ones still read", () => {
@@ -172,7 +176,7 @@ describe("the names", () => {
       "Big Crab #??",
       "The Crab Nobody Counted",
     ];
-    expect(crabs.map((id) => specOf(id).name)).toEqual(numbers);
+    expect(crabs.map((id) => specOf(CAT, id).name)).toEqual(numbers);
     // Stored since release 1: a regular's signature, a sitting's crab across the table, a boss's title.
     const stored = ["Nipper", "Skip", "Fuss", "Barge", "Miscount", "Big Miscount", "Zero"];
     expect(stored.map(nowCalled)).toEqual(numbers);
@@ -202,7 +206,7 @@ describe("the names", () => {
       );
     });
     expect(left).toEqual([]);
-    expect(everyShared().filter((id) => OLD.some((old) => abilityText(id, 1).includes(old)))).toEqual([]);
+    expect(everyShared().filter((id) => OLD.some((old) => abilityText(CAT, id, 1).includes(old)))).toEqual([]);
   });
 });
 
@@ -222,10 +226,13 @@ describe("the words", () => {
 
   test("the five named after the guild's raids are Graid: the page says Groot only for the Groot Night banner", () => {
     // Groot is the Nest of the Grootslangs; a graid is any guild raid. Old names kept in `RENAMED`, and
-    // the releases' own ids (`groot`, `groot-night`, never shown), are let be.
+    // the releases' own ids (`groot`, `groot-night`, never shown) and the files of their patches, are let be.
     const groot = [...PAGE_TEXT, ...filesUnder(join(ROOT, "packages/figures/src"))].flatMap((path) =>
       stringsIn(textOf(path))
-        .filter((s) => /groot(?!slang)(?! night)/i.test(s) && !RELEASES.some((r) => r.id === s))
+        .filter(
+          (s) =>
+            /groot(?!slang)(?! night)/i.test(s) && !RELEASES.some((r) => [r.id, `./releases/${r.id}.ts`].includes(s)),
+        )
         .map((s) => `${path.slice(ROOT.length + 1)}: ${s}`),
     );
     expect(groot).toEqual([]);
@@ -239,6 +246,6 @@ describe("the words", () => {
   });
 
   test("Greg's card says what he has gained, and the most", () => {
-    expect(fedLine(18)).toBe("Fed: +18% health (40% at most)");
+    expect(fedLine(CAT, 18)).toBe("Fed: +18% health (40% at most)");
   });
 });

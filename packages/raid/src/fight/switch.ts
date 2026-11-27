@@ -5,7 +5,7 @@
  * Greg's meals as he sits down (`seat`), Graid's getting back up as one falls (`enter.ts`).
  */
 import { carries } from "../content/items.ts";
-import { TRAIT_IDS, type TraitId, traitNumber } from "../content/traits.ts";
+import { type TraitId, traitNumber } from "../content/traits.ts";
 import type { Side } from "../hex.ts";
 import { type Party, traitSteps } from "../party.ts";
 import { emit } from "./clock.ts";
@@ -110,17 +110,17 @@ const ON: Readonly<Record<TraitId, On>> = {
   },
 };
 
-/** Switches a side's traits on, in the order of `TRAIT_IDS`, and says so. */
+/** Switches a side's traits on, in the order of the fight's catalogue (`ids.traits`), and says so. */
 export function switchOn(f: Fight, side: Side, party: Party): void {
-  const steps = traitSteps(party);
+  const steps = traitSteps(f.cat, party);
   f.traits[side] = steps;
   const mine = f.units.filter((u) => u.side === side);
-  for (const trait of TRAIT_IDS) {
+  for (const trait of f.cat.ids.traits) {
     const step = steps[trait] ?? 0;
     if (step <= 0) continue;
     // Whoever carries it: as one of its own traits, or by an emblem it holds.
-    const members = mine.filter((u) => carries(u.kind, u.items, trait));
-    const touched = ON[trait]({ mine, members, v: (name) => traitNumber(trait, name, step) });
+    const members = mine.filter((u) => carries(f.cat, u.kind, u.items, trait));
+    const touched = ON[trait]({ mine, members, v: (name) => traitNumber(f.cat, trait, name, step) });
     emit(f, { t: "trait", side, trait, step, ids: touched.map((u) => u.id) });
   }
 }

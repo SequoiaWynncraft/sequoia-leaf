@@ -9,7 +9,8 @@
 import { type Block, type Row, thing } from "@sequoia-leaf/kit/card.ts";
 import { el, shown } from "@sequoia-leaf/kit/dom.ts";
 import {
-  FIGURES,
+  catalogOf,
+  figureIn,
   type FinishedId,
   isFigureId,
   type ItemId,
@@ -32,7 +33,7 @@ import { itemRef } from "./refs.ts";
 export function wantedBy(run: RunView | null, item: ItemId): HTMLElement | null {
   const kinds = [...new Set(run ? wanters(run, item).map((p) => p.kind) : [])];
   if (kinds.length === 0) return null;
-  const names = kinds.map((kind) => FIGURES[kind].name).join(", ");
+  const names = kinds.map((kind) => (run ? figureIn(catalogOf(run), kind).name : kind)).join(", ");
   return el(
     "span",
     "wantedby",
@@ -110,7 +111,7 @@ export function itemsOf(
     rows.push({
       label: "Good with",
       look: "icons",
-      things: offersFor(run ?? { items: [] }, { kind, items: [...items] }).map((offer) => ({
+      things: offersFor(run ?? { items: [], era: S.era }, { kind, items: [...items] }).map((offer) => ({
         ref: itemRef(offer.item),
         lit: run !== null && onOffer(offer),
       })),

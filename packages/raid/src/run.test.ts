@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { boonNumber } from "./content/boons.ts";
 import { catalogAt } from "./content/catalog.ts";
-import { type FigureId, FIGURES, isFigureId, type Stars } from "./content/figures.ts";
+import { type FigureId, figureIn, isFigureId, type Stars } from "./content/figures.ts";
 import { isEmblemId, type ItemId } from "./content/items.ts";
 import { LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, ROOMS, STALL_ODDS } from "./content/rooms.ts";
@@ -48,7 +48,7 @@ import {
   xpToNext,
 } from "./run.ts";
 import { sparParty } from "./spar.ts";
-import { abc, at, EVERYONES, partyOfFigures } from "./testkit.ts";
+import { abc, at, CAT, EVERYONES, partyOfFigures } from "./testkit.ts";
 
 /** A run with its first figure picked. */
 function started(seed = 1): Run {
@@ -119,7 +119,7 @@ describe("starting a run", () => {
     if (choice?.kind !== "starter") return;
     expect(choice.options.length).toBe(3);
     expect(new Set(choice.options).size).toBe(3);
-    for (const kind of choice.options) expect(FIGURES[kind].tier).toBe(1);
+    for (const kind of choice.options) expect(figureIn(CAT, kind).tier).toBe(1);
     expect(buy(run, 0)).toMatchObject({ ok: false, why: "Pick who sets out with you first." });
     expect(beginFight(run).ok).toBe(false);
     expect(choose(run, 7)).toMatchObject({ ok: false, why: "That is not one of the three." });
@@ -136,7 +136,7 @@ describe("starting a run", () => {
     expect(run.room).toBe(0);
     expect(run.stage.phase).toBe("plan");
     expect(run.stall.length).toBe(5);
-    for (const kind of run.stall) expect(kind && FIGURES[kind].tier).toBe(1);
+    for (const kind of run.stall) expect(kind && figureIn(CAT, kind).tier).toBe(1);
     expect(run.board.length).toBe(28);
     expect(run.bench.length).toBe(9);
     expect(run.foe.who).toBe("The forest");
@@ -167,7 +167,7 @@ describe("the stall", () => {
     stock(run, 2, "slug");
     const done = buy(run, 2);
     expect(done.ok).toBe(true);
-    expect(run.acorns).toBe(10 - FIGURES.slug.tier);
+    expect(run.acorns).toBe(10 - figureIn(CAT, "slug").tier);
     expect(run.bench[0]?.kind).toBe("slug");
     expect(run.stall[2]).toBeNull();
     expect(done.ok && done.notes[0]).toMatchObject({ t: "bought", kind: "slug", cost: 2, to: { on: "bench", at: 0 } });
@@ -221,7 +221,8 @@ describe("the stall", () => {
     const roll = (times: number): void => {
       for (let i = 0; i < times; i++) {
         rustle(run);
-        for (const kind of run.stall) if (kind) seen[FIGURES[kind].tier - 1] = (seen[FIGURES[kind].tier - 1] ?? 0) + 1;
+        for (const kind of run.stall)
+          if (kind) seen[figureIn(CAT, kind).tier - 1] = (seen[figureIn(CAT, kind).tier - 1] ?? 0) + 1;
       }
     };
     roll(100);
@@ -248,8 +249,8 @@ describe("selling and moving", () => {
     const run = started();
     const two = onBench(run, "slug", 0, 2, ["wasptail", "bark"]);
     const three = onBench(run, "badger", 1, 3);
-    expect(sellValue(two)).toBe(2 * 3 - 1);
-    expect(sellValue(three)).toBe(4 * 9 - 2);
+    expect(sellValue(CAT, two)).toBe(2 * 3 - 1);
+    expect(sellValue(CAT, three)).toBe(4 * 9 - 2);
     const acorns = run.acorns;
     const done = sell(run, { on: "bench", at: 0 });
     expect(done.ok).toBe(true);
@@ -646,7 +647,7 @@ describe("the takings", () => {
     two.level = 8;
     two.acorns = 0;
     const taken = fight(two);
-    expect(two.acorns).toBe(4 + 1 + traitNumber("gnome", "win", 1));
+    expect(two.acorns).toBe(4 + 1 + traitNumber(CAT, "gnome", "win", 1));
     expect(taken.notes.some((n) => n.t === "acorns" && n.why === "gnomes")).toBe(true);
 
     const lost = losing();
@@ -655,7 +656,7 @@ describe("the takings", () => {
     lost.level = 8;
     lost.acorns = 0;
     fight(lost);
-    expect(lost.acorns).toBe(4 + traitNumber("gnome", "loss", 1));
+    expect(lost.acorns).toBe(4 + traitNumber(CAT, "gnome", "loss", 1));
 
     const four = losing();
     four.level = 8;
@@ -669,8 +670,8 @@ describe("the takings", () => {
     }
     four.acorns = 0;
     fight(four);
-    expect(four.acorns).toBe(4 + traitNumber("gnome", "loss", 2));
-    expect(traitNumber("gnome", "loss", 2)).toBeGreaterThan(traitNumber("gnome", "loss", 1));
+    expect(four.acorns).toBe(4 + traitNumber(CAT, "gnome", "loss", 2));
+    expect(traitNumber(CAT, "gnome", "loss", 2)).toBeGreaterThan(traitNumber(CAT, "gnome", "loss", 1));
   });
   test("two copies of one gnome are one gnome", () => {
     const run = winning();
@@ -900,16 +901,16 @@ const withBoon = (boon: Run["boons"][number], prepare: (run: Run) => void = () =
 /** What sparring partners have spent on their figures in a room, on average. */
 const spent = (room: number, trail: number): number => {
   let total = 0;
-  for (let seed = 1; seed <= 40; seed++) total += partyWorth(sparParty(catalogAt(LEGACY_ERA), seed, room, trail));
+  for (let seed = 1; seed <= 40; seed++) total += partyWorth(CAT, sparParty(catalogAt(LEGACY_ERA), seed, room, trail));
   return total / 40;
 };
 
 describe("boons", () => {
   test("Windfall pays at once; A Basket On The Stump leaves two components; Warm Blanket gives resolve back", () => {
     const start = ECONOMY.startAcorns;
-    expect(withBoon("windfall").acorns).toBe(start + boonNumber("windfall", "acorns"));
-    expect(withBoon("basket").items.length).toBe(boonNumber("basket", "components"));
-    expect(withBoon("blanket", (run) => (run.resolve = 10)).resolve).toBe(10 + boonNumber("blanket", "now"));
+    expect(withBoon("windfall").acorns).toBe(start + boonNumber(CAT, "windfall", "acorns"));
+    expect(withBoon("basket").items.length).toBe(boonNumber(CAT, "basket", "components"));
+    expect(withBoon("blanket", (run) => (run.resolve = 10)).resolve).toBe(10 + boonNumber(CAT, "blanket", "now"));
     expect(withBoon("blanket", (run) => (run.resolve = 19)).resolve).toBe(20);
   });
   test("Warm Blanket makes every lost room cost one less", () => {
@@ -917,7 +918,7 @@ describe("boons", () => {
     run.foe = structuredClone(WALL);
     for (const p of pieces(run)) p.stars = 1;
     fight(run);
-    expect(run.resolve).toBe(20 - (ECONOMY.lossMost - boonNumber("blanket", "less")));
+    expect(run.resolve).toBe(20 - (ECONOMY.lossMost - boonNumber(CAT, "blanket", "less")));
   });
   test("An Extra Chair fields one more than the level", () => {
     const run = withBoon("extrachair");
@@ -944,7 +945,7 @@ describe("boons", () => {
     stock(run, 0, "badger");
     stock(run, 1, "badger");
     stock(run, 2, "worm");
-    expect(priceOf(run, 0)).toBe(4 - boonNumber("haggler", "off"));
+    expect(priceOf(run, 0)).toBe(4 - boonNumber(CAT, "haggler", "off"));
     expect(priceOf(run, 2)).toBe(0);
     buy(run, 0);
     expect(run.acorns).toBe(20 - 2);
@@ -955,12 +956,12 @@ describe("boons", () => {
     study.level = 6;
     study.xp = 0;
     fight(study);
-    expect(study.xp).toBe(boonNumber("quickstudy", "xp"));
+    expect(study.xp).toBe(boonNumber(CAT, "quickstudy", "xp"));
     const pockets = withBoon("deeppockets");
     pockets.acorns = 25;
     expect(interestNow(pockets)).toBe(5);
     pockets.acorns = 300;
-    expect(interestNow(pockets)).toBe(boonNumber("deeppockets", "cap"));
+    expect(interestNow(pockets)).toBe(boonNumber(CAT, "deeppockets", "cap"));
   });
   test("choosing a charm puts its emblem on the item bench, and counts for nothing until a figure holds it", () => {
     const run = winning();
@@ -1043,7 +1044,7 @@ describe("who is waiting", () => {
       for (let seed = 1; seed <= 300; seed++) {
         for (const p of sparParty(catalogAt(LEGACY_ERA), seed * 2654435761, room, 2).figures) {
           if (!isFigureId(p.kind)) throw new Error("a sparring partner brought trouble");
-          const offered = odds[FIGURES[p.kind].tier - 1] ?? 0;
+          const offered = odds[figureIn(CAT, p.kind).tier - 1] ?? 0;
           expect(offered).toBeGreaterThan(0);
           if (p.stars >= 2) expect(offered).toBeGreaterThanOrEqual(12);
           if (p.stars === 3) expect(offered).toBeGreaterThanOrEqual(30);
@@ -1059,7 +1060,7 @@ describe("who is waiting", () => {
       const [kin, calling] = party.title.replace("brought ", "").split(" ");
       for (const p of party.figures) {
         if (!isFigureId(p.kind)) throw new Error("a sparring partner brought trouble");
-        const f = FIGURES[p.kind];
+        const f = figureIn(CAT, p.kind);
         total++;
         if (f.kin === kin?.toLowerCase() || `${f.calling}s` === calling?.toLowerCase()) matching++;
       }
@@ -1124,7 +1125,7 @@ describe("a room laid out afresh", () => {
   });
 });
 
-const costing = (tier: number): FigureId[] => EVERYONES.filter((id) => FIGURES[id].tier === tier);
+const costing = (tier: number): FigureId[] => EVERYONES.filter((id) => figureIn(CAT, id).tier === tier);
 /** How often each figure is offered over many rustles at a level, and whether a place was ever left empty. */
 function stallOver(own: Roster, level: number): { seen: Map<FigureId, number>; empty: boolean } {
   const run = startRun(3, { era: LEGACY_ERA, own });
@@ -1180,8 +1181,8 @@ describe("the stall of a run with the member's own figures", () => {
     for (let seed = 1; seed < 30; seed++) {
       const run = startRun(seed, { era: LEGACY_ERA, own: { greg: 6 } });
       const pick = picksOf(run)[0];
-      expect(pick?.kind === "starter" && pick.options.every((id) => FIGURES[id].tier === 1)).toBe(true);
-      expect(run.stall.every((id) => id !== null && FIGURES[id].tier === 1)).toBe(true);
+      expect(pick?.kind === "starter" && pick.options.every((id) => figureIn(CAT, id).tier === 1)).toBe(true);
+      expect(run.stall.every((id) => id !== null && figureIn(CAT, id).tier === 1)).toBe(true);
     }
   });
   test("a figure's level goes into the party's data, absent for 0; on the main way nobody has one", () => {

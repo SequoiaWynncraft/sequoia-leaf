@@ -13,7 +13,7 @@ import type { FigureId, Tier } from "../content/figures.ts";
 import type { ComponentId } from "../content/items.ts";
 import { COLS } from "../hex.ts";
 import { fielded, merge, newPiece, type Note, pieces, type Run, sellValue } from "../run.ts";
-import { CLOCK, later, type Offer, RING_ITEMS, type Sitting, type Stage } from "./sitting.ts";
+import { CLOCK, later, type Offer, ringItems, type Sitting, type Stage } from "./sitting.ts";
 
 type Carousel = Extract<Stage, { at: "carousel" }>;
 
@@ -34,7 +34,7 @@ export function join(run: Run, kind: FigureId, item: ComponentId): Note[] {
   if (fielded(run) === 0) run.board[Math.floor(COLS / 2)] = piece;
   else if (slot >= 0) run.bench[slot] = piece;
   else if (twins < 2) {
-    run.acorns += sellValue(piece);
+    run.acorns += sellValue(catalogOf(run), piece);
     run.items.push(item);
     return [];
   }
@@ -83,7 +83,7 @@ export function letIn(t: Sitting, stage: Carousel, count: number, last: number, 
  * the lower seat first among equals. `together` opens it to everyone at once; else to the first pair.
  */
 export function layCarousel(t: Sitting, at: number, costs: readonly Tier[], together: boolean): void {
-  const items = shuffled(t, RING_ITEMS);
+  const items = shuffled(t, ringItems(catalogOf(t)));
   const piles = new Map<Tier, FigureId[]>();
   const ring = costs.flatMap((tier, i): Offer[] => {
     const pile = piles.get(tier) ?? [];

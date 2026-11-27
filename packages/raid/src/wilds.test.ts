@@ -35,7 +35,7 @@ import {
   takeTakings,
 } from "./run.ts";
 import { sparParty } from "./spar.ts";
-import { at, onCell, partyOfFigures, ready, stepUntil, stillSide, unitOf } from "./testkit.ts";
+import { at, CAT, onCell, partyOfFigures, ready, stepUntil, stillSide, unitOf } from "./testkit.ts";
 import { wingOf } from "./wing.ts";
 import { readNotes, readView } from "./wire.ts";
 
@@ -349,6 +349,7 @@ describe("closed hexes", () => {
         expect(regular.figures.length).toBeGreaterThan(5);
         expect(regular.figures.filter((p) => closed.has(p.seat))).toEqual([]);
         const seats = arrange(
+          CAT,
           Array.from({ length: 11 }, () => ({ kind: "rock" as const, health: 100 })),
           false,
           closed,

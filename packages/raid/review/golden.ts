@@ -45,10 +45,10 @@ import {
 } from "@sequoia-leaf/core";
 import { CARELESS, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
 import { FIGHT_BOONS, isBoonId } from "@sequoia-leaf/raid/content/boons.ts";
-import { everyFigure } from "@sequoia-leaf/raid/content/catalog.ts";
+import { catalogAt, everyFigure } from "@sequoia-leaf/raid/content/catalog.ts";
 import { isUnitKind, type Stars, traitsOf, TROUBLE_IDS } from "@sequoia-leaf/raid/content/figures.ts";
-import { COMPONENT_IDS, EMBLEMS, FINISHED_IDS, isItemId, type ItemId } from "@sequoia-leaf/raid/content/items.ts";
-import { LEGACY_ERA } from "@sequoia-leaf/raid/content/releases.ts";
+import { COMPONENT_IDS, FINISHED_IDS, isItemId, type ItemId } from "@sequoia-leaf/raid/content/items.ts";
+import { LAST_ERA, LEGACY_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import { LEVELS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { TRAIT_IDS, traitNumber } from "@sequoia-leaf/raid/content/traits.ts";
 import { recordFight } from "@sequoia-leaf/raid/fight/engine.ts";
@@ -251,18 +251,21 @@ export interface Pool {
   readonly fed: number;
 }
 
-/** The pool as the content has it now: the goldens' only read of the content's lists. */
-export const poolNow = (): Pool => ({
-  figures: [...everyFigure()],
-  troubles: [...TROUBLE_IDS],
-  traits: Object.fromEntries(TRAIT_IDS.map((t) => [t, everyFigure().filter((f) => traitsOf(f).includes(t))])),
-  components: [...COMPONENT_IDS],
-  finished: [...FINISHED_IDS],
-  emblems: { ...EMBLEMS },
-  boons: [...FIGHT_BOONS],
-  level: LEVELS.most,
-  fed: traitNumber("greg", "most", 1),
-});
+/** The pool as the content has it now, every release open: the goldens' only read of the content's lists. */
+export function poolNow(): Pool {
+  const cat = catalogAt(LAST_ERA);
+  return {
+    figures: [...everyFigure()],
+    troubles: [...TROUBLE_IDS],
+    traits: Object.fromEntries(TRAIT_IDS.map((t) => [t, everyFigure().filter((f) => traitsOf(cat, f).includes(t))])),
+    components: [...COMPONENT_IDS],
+    finished: [...FINISHED_IDS],
+    emblems: { ...cat.emblems },
+    boons: [...FIGHT_BOONS],
+    level: LEVELS.most,
+    fed: traitNumber(cat, "greg", "most", 1),
+  };
+}
 
 export function poolText(p: Pool): string {
   const rows = [

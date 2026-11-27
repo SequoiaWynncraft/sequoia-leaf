@@ -5,21 +5,33 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import { abilityNumber, FIGURES, type UnitKind } from "../content/figures.ts";
+import { abilityNumber, figureIn, type UnitKind } from "../content/figures.ts";
 import { formNumber } from "../content/graid.ts";
 import { LEGACY_ERA } from "../content/releases.ts";
-import { traitNumber } from "../content/traits.ts";
+import { type TraitId, traitNumber } from "../content/traits.ts";
 import { distance, neighbours, SEATS } from "../hex.ts";
 import { playsAsKept } from "../run.ts";
 import { tally } from "../tally.ts";
-import { at, fightOf, inOrder, only, partyOfFigures, steps, stepUntil, still, stillSide, unitOf } from "../testkit.ts";
+import {
+  at,
+  CAT,
+  fightOf,
+  inOrder,
+  only,
+  partyOfFigures,
+  steps,
+  stepUntil,
+  still,
+  stillSide,
+  unitOf,
+} from "../testkit.ts";
 import { cast } from "./abilities.ts";
 import { heal, hurt, knockBack, secs } from "./core.ts";
 import { recordFight, resolveFight } from "./engine.ts";
 import { pull } from "./moves.ts";
 import type { Fight, FightEvent, Unit } from "./types.ts";
 
-const t = traitNumber;
+const t = (id: TraitId, name: string, step: number): number => traitNumber(CAT, id, name, step);
 /** Our figures in the front row from column 0, against one Mud far off that only stands there. */
 function ours(...kinds: UnitKind[]): Fight {
   const f = fightOf(
@@ -335,7 +347,7 @@ describe("No GG Left Behind", () => {
     for (const o of [crab, ember, gnome]) o.hp = 10;
     const events = said(f, () => expect(cast(f, seq)).toBe(true));
     for (const o of [crab, ember, gnome])
-      expect(only(events, "heal").find((h) => h.id === o.id)?.amount).toBe(abilityNumber("seqwawa", "heal", 1));
+      expect(only(events, "heal").find((h) => h.id === o.id)?.amount).toBe(abilityNumber(CAT, "seqwawa", "heal", 1));
   });
   test("the last friend to fall, if it fell in the last 3 seconds, gets back up with 200 health", () => {
     const { f, seq, crab, ember, gnome } = stump();
@@ -350,7 +362,7 @@ describe("No GG Left Behind", () => {
       {
         t: "rise",
         id: ember.id,
-        hp: abilityNumber("seqwawa", "back", 1),
+        hp: abilityNumber(CAT, "seqwawa", "back", 1),
         why: "seqwawa",
         form: "plain",
         cell: ember.cell,
@@ -380,7 +392,7 @@ describe("No GG Left Behind", () => {
       said(f, () => cast(f, seq)),
       "rise",
     )[0];
-    expect(up?.hp).toBe(Math.round(abilityNumber("seqwawa", "back", 1) * (1 + seq.mending / 100)));
+    expect(up?.hp).toBe(Math.round(abilityNumber(CAT, "seqwawa", "back", 1) * (1 + seq.mending / 100)));
   });
   test("it waits, as a heal does, while everyone is above 85% health", () => {
     const { f, seq } = stump();
@@ -475,7 +487,13 @@ describe("Moss and Mender at 2, 3 and 4", () => {
 });
 
 test("Seqwawa is everyone's: a five-acorn Moss Mender, Rooted, that never attacks", () => {
-  expect(FIGURES.seqwawa).toMatchObject({ tier: 5, kin: "moss", calling: "mender", extra: ["rooted"], attack: 0 });
+  expect(figureIn(CAT, "seqwawa")).toMatchObject({
+    tier: 5,
+    kin: "moss",
+    calling: "mender",
+    extra: ["rooted"],
+    attack: 0,
+  });
   const f = fightOf([at("seqwawa", 3, 3)], [at("mud", 3, 0)]);
   still(unitOf(f, "mud", 1));
   expect(unitOf(f, "seqwawa").rooted).toBe(true);

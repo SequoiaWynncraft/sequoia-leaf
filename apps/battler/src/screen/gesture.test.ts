@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { choose, FINISHED, GOOD_WITH, LEGACY_ERA, pieces, type RunView, spotOf, startRun } from "@sequoia-leaf/raid";
+import { choose, finishedIn, GOOD_WITH, LEGACY_ERA, pieces, type RunView, spotOf, startRun } from "@sequoia-leaf/raid";
+import { CAT } from "@sequoia-leaf/raid/testkit.ts";
 
 import { type Gesture, type HandEvent, handStep, type Held, IDLE, marksOf, tapOf } from "./gesture.ts";
 import { reachOf, reachOfOffer } from "./logic.ts";
@@ -170,7 +171,7 @@ describe("what the table shows of the hand", () => {
     const run = planning();
     const figure = pieces(run)[0];
     if (!figure) throw new Error("no figure");
-    const part = FINISHED[GOOD_WITH[figure.kind][0]].made[0];
+    const part = finishedIn(CAT, GOOD_WITH[figure.kind][0]).made[0];
     expect(marksOf({ at: "picked", held: { what: "item", at: 0, item: part } }, run).wanters).toEqual([figure.id]);
     expect(marksOf(IDLE, run, { aim: null, item: part }).wanters).toEqual([figure.id]);
     expect(marksOf(IDLE, run).wanters).toEqual([]);

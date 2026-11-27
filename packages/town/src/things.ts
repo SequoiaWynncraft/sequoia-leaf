@@ -4,8 +4,20 @@
  * and what touching it shows are the town page's (`campart.ts`, `camptouch.ts`).
  */
 import { BANNERS } from "@sequoia-leaf/raid/content/banners.ts";
-import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
-import { FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
+import { type Catalog, catalogAt, everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
+import type { FigureId } from "@sequoia-leaf/raid/content/figures.ts";
+import { eraOf, LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
+
+/**
+ * A raid figure as its release brought it: what its carving is called until the page hears the era
+ * Leaf's clock is in (`nameCarvings`). Nobody holds a carving before its release opens, so this
+ * never says a release's words early.
+ */
+function asBrought(id: FigureId): { readonly name: string; readonly quip: string } {
+  const since = catalogAt(LAST_ERA).figures[id]?.since;
+  const f = since ? catalogAt(eraOf(since)).figures[id] : undefined;
+  return { name: f?.name ?? id, quip: f?.quip ?? "" };
+}
 
 export const KINDS = [
   "home",
@@ -315,7 +327,7 @@ export const THINGS: readonly Thing[] = [
   // The Little Raid's figures, won at the Grove: each has its name and its line from there. A figure's
   // picture is 20 to 24 pixels wide and a square is 8, so each takes 3 squares.
   ...everyShared().map((id) =>
-    thing(figureThing(id), FIGURES[id].name, "characters", 3, 1, FIGURES[id].quip, "Says its line.", {
+    thing(figureThing(id), asBrought(id).name, "characters", 3, 1, asBrought(id).quip, "Says its line.", {
       turns: "flip",
     }),
   ),
@@ -323,7 +335,7 @@ export const THINGS: readonly Thing[] = [
   // A banner's member, one for each of the pull game's banners: a person, who takes a person's square.
   // Only Leaf knows who; the page gives the thing their name and draws them (`members.ts`).
   ...BANNERS.map(({ id, headliner }) =>
-    thing(memberThing(id), FIGURES[headliner].name, "characters", 1, 1, "", "Hops and looks at you.", {
+    thing(memberThing(id), asBrought(headliner).name, "characters", 1, 1, "", "Hops and looks at you.", {
       turns: "flip",
     }),
   ),
@@ -333,6 +345,21 @@ const BY_ID = new Map(THINGS.map((t) => [t.id, t]));
 
 /** A thing by its name in the record, if there is such a thing. */
 export const thingOf = (id: string): Thing | null => BY_ID.get(id) ?? null;
+
+/**
+ * Names the raid's carvings as a catalogue has their figures, words and all: the page calls it with
+ * the era of Leaf's view of the town, so a carving reads as the raid does now, and a release not
+ * open yet changes nothing. A figure the catalogue does not have keeps its name.
+ */
+export function nameCarvings(cat: Catalog): void {
+  for (const id of everyShared()) {
+    const f = cat.figures[id];
+    const carving = BY_ID.get(figureThing(id));
+    if (!f || !carving) continue;
+    carving.name = f.name;
+    carving.about = f.quip;
+  }
+}
 
 export const isThing = (id: unknown): id is string => typeof id === "string" && BY_ID.has(id);
 

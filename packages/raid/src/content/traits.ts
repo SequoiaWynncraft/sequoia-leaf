@@ -1,12 +1,18 @@
 /**
  * Traits: what a figure is (its kin) and what it does (its calling). A trait switches on when a
  * party fields enough *different* figures that carry it, and switches on harder at each further
- * step. Words and numbers only; what they do in a fight is in `fight.ts`, and what the gnomes find
+ * step. Words and numbers only; what they do in a fight is in `fight/`, and what the gnomes find
  * is in `run.ts`.
+ *
+ * The traits here are those the base release brought (`releases/base.ts`); later releases bring
+ * more and change these in their patches (`releases/`). A trait is read from a catalogue
+ * (`catalog.ts`), as its era has it.
  *
  * In the sentences, `{name}` is filled from the trait's numbers for the step in question. Each step
  * is said twice: `text` in the guild's voice, for the almanac, and `short` for a card on the table.
  */
+import type { Catalog } from "./catalog.ts";
+import { opened } from "./patch.ts";
 import { FIGHT } from "./rooms.ts";
 
 export const KINS = ["ember", "moss", "mist", "burrow", "feather", "crab", "gnome", "graid"] as const;
@@ -34,7 +40,8 @@ export interface TraitSpec {
   readonly n: Readonly<Record<string, readonly number[]>>;
 }
 
-export const TRAITS = {
+/** The traits the base release brought, as it brought them: read only by its patch (`releases/base.ts`). */
+export const BASE_TRAITS: Readonly<Partial<Record<TraitId, TraitSpec>>> = {
   ember: {
     name: "Ember",
     sort: "kin",
@@ -50,19 +57,14 @@ export const TRAITS = {
   moss: {
     name: "Moss",
     sort: "kin",
-    steps: [2, 3, 4],
+    steps: [2, 4],
     gist: "Grows back.",
     text: [
       "The whole party regrows {regrow}% of its health every second.",
       "The whole party regrows {regrow}% of its health every second.",
-      "The whole party regrows {regrow}% of its health every second.",
     ],
-    short: [
-      "Party regrows {regrow}% health/s.",
-      "Party regrows {regrow}% health/s.",
-      "Party regrows {regrow}% health/s.",
-    ],
-    n: { regrow: [1.2, 2, 3] },
+    short: ["Party regrows {regrow}% health/s.", "Party regrows {regrow}% health/s."],
+    n: { regrow: [1.2, 3] },
   },
   mist: {
     name: "Mist",
@@ -196,19 +198,14 @@ export const TRAITS = {
   mender: {
     name: "Mender",
     sort: "calling",
-    steps: [2, 3, 4],
+    steps: [2, 4],
     gist: "Patches people up.",
     text: [
       "Menders' healing and shields count for {mending}% more.",
       "Menders' healing and shields count for {mending}% more.",
-      "Menders' healing and shields count for {mending}% more. Their healing past a friend's full health becomes a shield for {lasts} seconds, up to {over}% of that friend's health.",
     ],
-    short: [
-      "Heals and shields +{mending}%.",
-      "Heals and shields +{mending}%.",
-      "Heals, shields +{mending}%; overheal shields up to {over}%.",
-    ],
-    n: { mending: [20, 30, 35], over: [0, 0, 15], lasts: [0, 0, 4] },
+    short: ["Heals and shields +{mending}%.", "Heals and shields +{mending}%."],
+    n: { mending: [20, 35] },
   },
   sneak: {
     name: "Sneak",
@@ -222,23 +219,6 @@ export const TRAITS = {
     short: ["Leap to the back, first {hits} hits +{extra}%.", "Leap to the back, first {hits} hits +{extra}%."],
     n: { hits: [2, 3], extra: [40, 70] },
   },
-  graid: {
-    name: "Graid",
-    sort: "kin",
-    steps: [2, 3, 5],
-    gist: "Gets back up as the raiders tell it.",
-    text: [
-      "The first Graid figure to fall each fight gets back up {wait} second later in its true form, with {health}% of its health. A Graid figure in its true form has {more}% more attack and ability power.",
-      "Every Graid figure gets back up once a fight, {wait} second after it falls, in its true form, with {health}% of its health. A Graid figure in its true form has {more}% more attack and ability power.",
-      "Every Graid figure gets back up once a fight, {wait} second after it falls, in its true form, with {health}% of its health and its mana bar at least {mana}% full. A Graid figure in its true form has {more}% more attack and ability power.",
-    ],
-    short: [
-      "First Graid down rises in true form, {health}% health.",
-      "Every Graid rises once in true form, {health}% health.",
-      "Every Graid rises once: {health}% health, {mana}% mana.",
-    ],
-    n: { wait: [1, 1, 1], health: [15, 15, 30], every: [0, 1, 1], mana: [0, 0, 50], more: [10, 10, 10] },
-  },
   greg: {
     name: "Greg",
     sort: "own",
@@ -250,32 +230,24 @@ export const TRAITS = {
     short: ["Eats: +{grows}% health per acorn of price, up to {most}%."],
     n: { grows: [2], most: [40] },
   },
-  rooted: {
-    name: "Rooted",
-    sort: "own",
-    steps: [1],
-    gist: "It was a tree first.",
-    text: ["Does not move or attack, cannot be pushed or pulled, and gains {mana} mana a second."],
-    short: ["Never moves or attacks; +{mana} mana a second."],
-    n: { mana: [12] },
-  },
-} as const satisfies Record<TraitId, TraitSpec>;
+};
 
-const specOf = (id: TraitId): TraitSpec => TRAITS[id];
+/** A trait as a catalogue has it. */
+export const traitIn = (cat: Catalog, id: TraitId): TraitSpec => opened(cat.traits, id, cat.era);
 
-/** The step a trait is on for a number of different figures: 0 for not switched on. */
-export function stepFor(id: TraitId, count: number): number {
+/** The step a trait is on for a number of different figures: 0 for not switched on, and for a trait the catalogue does not have. */
+export function stepFor(cat: Catalog, id: TraitId, count: number): number {
   let step = 0;
-  for (const need of specOf(id).steps) if (count >= need) step++;
+  for (const need of count > 0 ? (cat.traits[id]?.steps ?? []) : []) if (count >= need) step++;
   return step;
 }
-/** The top step a trait has. */
-export const topStep = (id: TraitId): number => specOf(id).steps.length;
+/** The top step a trait has; 0 for one the catalogue does not have. */
+export const topStep = (cat: Catalog, id: TraitId): number => cat.traits[id]?.steps.length ?? 0;
 /** One of a trait's numbers at a step (1 is the first step); 0 when the trait is off. */
 export const stepValue = (list: readonly number[], step: number): number => (step > 0 ? (list[step - 1] ?? 0) : 0);
-/** One of a trait's named numbers at a step; 0 when the trait is off or has no such number. */
-export const traitNumber = (id: TraitId, name: string, step: number): number =>
-  stepValue(specOf(id).n[name] ?? [], step);
+/** One of a trait's named numbers at a step; 0 when the trait is off, not in the catalogue, or has no such number. */
+export const traitNumber = (cat: Catalog, id: TraitId, name: string, step: number): number =>
+  step > 0 ? stepValue(cat.traits[id]?.n[name] ?? [], step) : 0;
 /** Fills the `{name}` gaps in a sentence. */
 export const fill = (text: string, values: Readonly<Record<string, number | string>>): string =>
   text.replaceAll(/\{(\w+)\}/g, (whole: string, key: string) => {
@@ -283,31 +255,37 @@ export const fill = (text: string, values: Readonly<Record<string, number | stri
     return v === undefined ? whole : String(v);
   });
 /** One of a trait's sentences for a step, filled with that step's numbers. */
-function stepWords(id: TraitId, step: number, words: (spec: TraitSpec) => readonly string[]): string {
-  const spec = specOf(id);
+function stepWords(spec: TraitSpec, step: number, words: readonly string[]): string {
   const at = Math.min(Math.max(step, 1), spec.steps.length);
   const values: Record<string, number> = {};
   for (const [key, list] of Object.entries(spec.n)) values[key] = list[at - 1] ?? 0;
-  return fill(words(spec)[at - 1] ?? "", values);
+  return fill(words[at - 1] ?? "", values);
 }
 /** What a trait does at a step, in a sentence. */
-export const traitText = (id: TraitId, step: number): string => stepWords(id, step, (spec) => spec.text);
+export function traitText(cat: Catalog, id: TraitId, step: number): string {
+  const spec = traitIn(cat, id);
+  return stepWords(spec, step, spec.text);
+}
 /** What a trait does at a step, in a few words for a card. */
-export const traitShort = (id: TraitId, step: number): string => stepWords(id, step, (spec) => spec.short);
+export function traitShort(cat: Catalog, id: TraitId, step: number): string {
+  const spec = traitIn(cat, id);
+  return stepWords(spec, step, spec.short);
+}
 /**
  * How much a calling draws: enemies pick their target as if a figure of it stood this many hexes
  * nearer (fewer, for a negative number). A figure's draw is the sum over what it carries and holds.
  */
 export const CALLING_DRAW: Readonly<Partial<Record<CallingId, number>>> = { bulwark: 1, sneak: -1 };
-export const isTraitId = (v: unknown): v is TraitId => typeof v === "string" && Object.hasOwn(TRAITS, v);
+export const isTraitId = (v: unknown): v is TraitId => TRAIT_IDS.some((id) => id === v);
 /**
  * Traits a table, sitting or fight row may have kept from before a rename, by their old id: what
- * each is now, and the name it had. Groot became Graid (27 November 2026), since in the guild Groot
- * is the Nest of the Grootslangs and a graid is any guild raid. A reader passes a kept id through
- * `renamedTrait` before `isTraitId`, and a kept sparring partner's title through `renamedTitle`.
+ * each is now, the name it had, and the name it was given. Groot became Graid (27 November 2026),
+ * since in the guild Groot is the Nest of the Grootslangs and a graid is any guild raid. A reader
+ * passes a kept id through `renamedTrait` before `isTraitId`, and a kept sparring partner's title
+ * through `renamedTitle`.
  */
-const RENAMED: Readonly<Record<string, { now: TraitId; name: string }>> = {
-  groot: { now: "graid", name: "Groot" },
+const RENAMED: Readonly<Record<string, { now: TraitId; was: string; is: string }>> = {
+  groot: { now: "graid", was: "Groot", is: "Graid" },
 };
 /** A kept trait id as it is now (`RENAMED`); anything else as it is, for the reader to judge. */
 export const renamedTrait = (v: unknown): unknown =>
@@ -316,12 +294,11 @@ export const renamedTrait = (v: unknown): unknown =>
 export const renamedTraits = (v: unknown): unknown => (Array.isArray(v) ? v.map(renamedTrait) : v);
 /** A sparring partner's title (`spar.ts`, "brought Moss Sages") kept under a trait's old name, as it reads now. */
 export function renamedTitle(title: string): string {
-  for (const { now, name } of Object.values(RENAMED))
-    if (title.startsWith(`brought ${name} `))
-      return `brought ${TRAITS[now].name} ${title.slice(`brought ${name} `.length)}`;
+  for (const { was, is } of Object.values(RENAMED))
+    if (title.startsWith(`brought ${was} `)) return `brought ${is} ${title.slice(`brought ${was} `.length)}`;
   return title;
 }
-export const isKin = (v: TraitId): v is KinId => TRAITS[v].sort === "kin";
-export const isCalling = (v: TraitId): v is CallingId => TRAITS[v].sort === "calling";
+export const isKin = (v: TraitId): v is KinId => KINS.some((id) => id === v);
+export const isCalling = (v: TraitId): v is CallingId => CALLINGS.some((id) => id === v);
 /** What carrying a trait adds to a figure's draw: a calling's own, else 0. */
 export const traitDraw = (id: TraitId): number => (isCalling(id) ? (CALLING_DRAW[id] ?? 0) : 0);

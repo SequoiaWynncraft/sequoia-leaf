@@ -13,6 +13,7 @@ import type { Action } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { LEAF } from "@sequoia-leaf/kit/palette.ts";
 import {
+  catalogOf,
   type Piece,
   pieceAt,
   type RaidCommand,
@@ -53,7 +54,13 @@ export function fillShopHint(run: RunView, from: Spot | null): void {
   const offer = feedOffer(run, from);
   SHOP.feed = offer && "to" in offer ? offer : null;
   hint.classList.toggle("two", SHOP.feed !== null);
-  const sell = el("span", "sell", {}, "Sell for ", el("span", "k-cur", {}, icon("acorn"), `+${sellValue(piece)}`));
+  const sell = el(
+    "span",
+    "sell",
+    {},
+    "Sell for ",
+    el("span", "k-cur", {}, icon("acorn"), `+${sellValue(catalogOf(run), piece)}`),
+  );
   hint.replaceChildren(
     sell,
     ...(offer ? [el("span", "full" in offer ? "feed full" : "feed", { text: feedWords(offer) })] : []),

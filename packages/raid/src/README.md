@@ -331,7 +331,15 @@ last is cleared.
 
 **What exists, when** (`content/releases.ts`, `content/catalog.ts`, `content/banners.ts`). The
 figures come in releases, each opening at a moment of Leaf's clock; an era is how many are open.
-A catalogue is what an era has, and `available(catalog, purpose)` is the only list of figures: what
+A release is a patch (`content/patch.ts`, `content/releases/<id>.ts`): the figures, traits, items
+and boons it brings, and field by field what it changes of those before it. A catalogue is what an
+era has, the base and every patch open by then folded in order, and it is the only door to a
+figure's, trait's, item's or boon's words and numbers (`figureIn`, `traitIn`, `traitNumber(cat,
+...)`, `itemStats(cat, ...)` and the rest): no module exports a table of them. A fight reads its
+setup's (`f.cat`), anything else the catalogue of what it holds (`catalogOf(run)`). The base's
+tables are written where they always were (`figures.ts`, `traits.ts`, `items.ts`, `boons.ts`) and
+read only by the base's patch. A number that changes on a date is a `change` in that date's patch.
+`available(catalog, purpose)` is the only list of figures: what
 a stall, a first pick, a regular, a carousel, a pull, the exchange or the almanac may draw from. A
 table, a run, a sitting, a fight's setup and every view carry their era (`catalogOf`): Leaf sets it
 from its clock before every command and at each of a sitting's deadlines, at the deadline's own
@@ -393,7 +401,7 @@ items (`Unit.grown`), still rooted; Real Greg pulls every enemy within 3 hexes o
 hex nearer, nearest first, before the damage; Real Orphion gives the whole party 8% of its health
 back. A figure carrying Graid with no true form would get back up as itself.
 
-**Seqwawa** (`content/seqwawa.ts`, id `seqwawa`): five acorns, on everyone's stall, Moss · Mender +
+**Seqwawa** (release 1's patch in `content/releases/`, id `seqwawa`): five acorns, on everyone's stall, Moss · Mender +
 Rooted, 850 health, no attack, reach 4 (only so it sits in the back row: it never attacks). **Rooted**
 (its own trait): it never moves or attacks, nothing pushes or pulls it (`spec.rooted`, as the
 Rock's), and it gains 12 mana every second (`Unit.manaRate`, ticked with regrowth in `everySecond`;
@@ -677,17 +685,18 @@ While no member is still in, every wait is 0 (`later`): the regulars play straig
 
 | File                   | What it holds                                                                                                          |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `content/figures.ts`   | The 29 figures, the forest's trouble and bosses, and the summoned: names, numbers, ability sentences, quips            |
-| `content/seqwawa.ts`   | Seqwawa, kept beside the table so it does not grow                                                                     |
+| `content/figures.ts`   | The base's figures, the forest's trouble and bosses, and the summoned: names, numbers, ability sentences, quips        |
 | `content/graid.ts`     | Graid's true forms: names, the one change each, their numbers                                                          |
 | `content/lore.ts`      | Lore lines for the almanac: the expansion's so far                                                                     |
 | `content/members.ts`   | The banners' members: for each pull banner, a figure that is a guild member                                            |
 | `content/releases.ts`  | The releases, each at a moment of Leaf's clock, and the era (how many are open) at a moment                            |
-| `content/catalog.ts`   | What each era has, and `available`: the only list of figures for a draw, the pulls and the almanac                     |
+| `content/catalog.ts`   | What each era has, the patches folded, and `available`: the only list of figures for a draw, the pulls and the almanac |
+| `content/patch.ts`     | What a release's patch is, and how one era's kind of thing folds into the next                                         |
+| `content/releases/`    | Each release's patch: the base (its tables are the files below) and release 1 (Seqwawa, Graid, Moss and Mender 2/3/4)  |
 | `content/banners.ts`   | The pull banners: the release each opens with, its dates, its headliner                                                |
-| `content/traits.ts`    | Kins and callings: steps, sentences, numbers                                                                           |
-| `content/items.ts`     | Components, finished items, emblems, what forges into what, how a figure holds them                                    |
-| `content/boons.ts`     | The boons                                                                                                              |
+| `content/traits.ts`    | Kins and callings, the base's steps, sentences and numbers, and reading them from a catalogue                          |
+| `content/items.ts`     | The base's components, finished items and emblems; what forges into what and how a figure holds them, by a catalogue   |
+| `content/boons.ts`     | The base's boons, and reading them from a catalogue                                                                    |
 | `content/rooms.ts`     | Acorns, levels, stall odds, the fight's clock, the fifteen rooms and their plans, sparring strength, trails, regulars  |
 | `content/keepsakes.ts` | The payout                                                                                                             |
 | `content/advice.ts`    | What kind of fighter each calling makes and where it stands, and three finished items that suit each figure            |

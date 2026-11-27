@@ -1,4 +1,4 @@
-import { nameOf, portrait, portraitRoom, shownAs } from "@sequoia-leaf/figures/sprites.ts";
+import { nameOf, portrait, portraitRoom } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The interface round the table, built from the kit's pieces: the purse and the track along the
  * top, the traits the party has, the rack of items, and the stall along the bottom with the acorns,
@@ -11,12 +11,12 @@ import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { balance, watch } from "@sequoia-leaf/kit/purse.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import {
-  BOONS,
+  boonIn,
+  catalogOf,
   ECONOMY,
   fieldCap,
   fielded,
-  type FigureId,
-  FIGURES,
+  figureIn,
   type ItemId,
   itemName,
   MAX_LEVEL,
@@ -26,9 +26,8 @@ import {
   type RunView,
   rustleCost,
   tally,
-  topStep,
   type TraitId,
-  TRAITS,
+  traitIn,
   traitsNow,
   traitsOf,
 } from "@sequoia-leaf/raid";
@@ -36,14 +35,15 @@ import { nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
 import { boonIcon, glyph, itemIcon, traitIcon } from "../art/icons.ts";
 import { rimTop, stumpOf } from "../art/table.ts";
-import { fightEvents, fightUnits } from "../fightview.ts";
+import { fightCatalog, fightEvents, fightUnits } from "../fightview.ts";
 import type { Speed } from "../keep.ts";
 import { light } from "../light.ts";
 import { acrossName, canBuy, savings, TraitWatch } from "../logic.ts";
 import { facing, shownCounts } from "../screen.ts";
 import { artPx, place, V } from "../stage.ts";
-import { busy, S } from "../state.ts";
+import { busy, catalogFor, S } from "../state.ts";
 import { acorns, boonRef, figPic, figureRef, itemRef, pic, traitRef, unitRef } from "./cards.ts";
+import { rackDrawn, stallDrawn, traitsDrawn, twins } from "./drawn.ts";
 import { forgetLight, paintLight } from "./lit.ts";
 import { oddsRow, runTag, waySign } from "./own.ts";
 import { chairsTag, forgetTrack, renderTrack, trackPlaque } from "./rooms.ts";
@@ -248,7 +248,7 @@ function renderTraits(run: RunView): void {
   const box = byId("traits");
   if (!box) return;
   const states = traitsNow(run);
-  const key = states.map((t) => `${t.trait}${t.count}`).join();
+  const key = traitsDrawn(run, states);
   // A step that has gone up since the last look is an event: the chip lights and the figures answer.
   const ups = traitSteps.look(run, S.runs);
   if (S.screen.at === "plan") {
@@ -260,12 +260,11 @@ function renderTraits(run: RunView): void {
   const wanted = new Set(states.map((t) => t.trait));
   for (const [trait, chip] of chips) if (!wanted.has(trait)) chip.remove();
   states.forEach((state, i) => {
-    const spec = TRAITS[state.trait];
+    const spec = traitIn(catalogOf(run), state.trait);
     const next = spec.steps.find((need) => need > state.count) ?? spec.steps[spec.steps.length - 1] ?? 1;
-    const top = state.step >= topStep(state.trait);
     const chip = chipFor(state.trait);
     chip.classList.toggle("lit", state.step > 0);
-    chip.classList.toggle("top", top);
+    chip.classList.toggle("top", state.step >= spec.steps.length);
     // On a phone the chip shows no name: it is said all the same.
     chip.setAttribute("aria-label", `${spec.name} ${state.count}/${next}`);
     chip.replaceChildren(
@@ -283,7 +282,7 @@ function renderTraits(run: RunView): void {
 function renderRack(run: RunView): void {
   const rack = byId("rack");
   if (!rack) return;
-  const key = `${run.items.join()}|${run.boons.join()}`;
+  const key = rackDrawn(run);
   if (key === rackKey) return;
   rackKey = key;
   rack.replaceChildren();
@@ -294,7 +293,7 @@ function renderRack(run: RunView): void {
       const slot = el(
         "button",
         "k-slot item",
-        { type: "button", "data-item": at, "aria-label": itemName(item) },
+        { type: "button", "data-item": at, "aria-label": itemName(catalogOf(run), item) },
         pic(itemIcon(item)),
       );
       // Tapping an item picks it up to give it; a finger kept on it asks what it is. Its card goes beside the rack.
@@ -306,17 +305,14 @@ function renderRack(run: RunView): void {
   if (run.boons.length > 0) {
     const boons = el("div", "k-plaque boons", {});
     for (const boon of run.boons) {
-      const slot = el("button", "k-slot boon", { type: "button", "aria-label": BOONS[boon].name }, pic(boonIcon(boon)));
+      const { name } = boonIn(catalogOf(run), boon);
+      const slot = el("button", "k-slot boon", { type: "button", "aria-label": name }, pic(boonIcon(boon)));
       link(slot, boonRef(boon));
       boons.append(slot);
     }
     rack.append(boons);
   }
 }
-
-/** How many of a figure the party owns at one star: two means the next one makes three. */
-const twins = (run: RunView, kind: FigureId): number =>
-  pieces(run).filter((p) => p.kind === kind && p.stars === 1).length;
 
 /** The stall whose width is watched, and the watcher. */
 let stallWatched: HTMLElement | null = null;
@@ -325,9 +321,8 @@ let stallWatcher: ResizeObserver | null = null;
 function renderStall(run: RunView): void {
   const stall = byId("stall");
   if (!stall) return;
-  const key = run.stall
-    .map((kind, i) => `${shownAs(kind)}:${priceOf(run, i)}:${canBuy(run, i) ? 1 : 0}:${kind ? twins(run, kind) : 0}`)
-    .join(run.own ? ";" : ",");
+  const key = stallDrawn(run);
+  const cat = catalogOf(run);
   if (key === stallKey) return;
   stallKey = key;
   if (stallWatched !== stall && typeof ResizeObserver === "function") {
@@ -345,22 +340,22 @@ function renderStall(run: RunView): void {
       stall.append(el("div", "k-slot offer gone", {}));
       return;
     }
-    const spec = FIGURES[kind];
+    const spec = figureIn(cat, kind);
     const price = priceOf(run, i);
     const have = twins(run, kind);
     const owned = pieces(run).some((p) => p.kind === kind);
     const card = el(
       "button",
       `k-card offer t${spec.tier}${canBuy(run, i) ? "" : " cant"}${have >= 2 ? " lit" : ""}`,
-      { type: "button", "data-offer": i, "aria-label": `${nameOf(kind)}, ${acornsSaid(price)}` },
+      { type: "button", "data-offer": i, "aria-label": `${nameOf(cat, kind)}, ${acornsSaid(price)}` },
       el("div", "art", { style: `height: calc(var(--u) * ${portraitRoom()} * var(--fs))` }, figPic(portrait(kind))),
-      el("div", "name", { text: nameOf(kind) }),
+      el("div", "name", { text: nameOf(cat, kind) }),
       el(
         "div",
         "foot",
         {},
         el("span", `k-cur${price < spec.tier ? " cut" : ""}`, {}, icon("acorn"), String(price)),
-        el("span", "signs", {}, ...traitsOf(kind).map((t) => pic(traitIcon(t)))),
+        el("span", "signs", {}, ...traitsOf(cat, kind).map((t) => pic(traitIcon(t)))),
       ),
       owned
         ? el("span", `have${have >= 2 ? " ready" : ""}`, { text: have >= 2 ? "3!" : have === 1 ? "2" : "+" })
@@ -553,6 +548,7 @@ let panelTally: TallyView | null = null;
 function renderTally(): void {
   const units = fightUnits();
   panelTally?.show(
+    fightCatalog() ?? catalogFor(S.run),
     units,
     tally(
       fightEvents(),

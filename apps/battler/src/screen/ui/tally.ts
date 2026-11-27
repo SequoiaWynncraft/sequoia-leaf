@@ -13,7 +13,16 @@ import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
-import { type Did, type Measure, measureOf, MEASURES, partsOf, type Party, type Unit } from "@sequoia-leaf/raid";
+import {
+  type Catalog,
+  type Did,
+  type Measure,
+  measureOf,
+  MEASURES,
+  partsOf,
+  type Party,
+  type Unit,
+} from "@sequoia-leaf/raid";
 import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
 import { FV } from "../board.ts";
@@ -70,8 +79,11 @@ export interface TallyView {
   /** The tabs and the switch, which a layout may put elsewhere. */
   readonly tabs: HTMLElement;
   readonly switcher: HTMLElement;
-  /** Shows what everyone in a fight did; `units` says who each one is, and `ours` which side is the member's ("You"; the fight on the table's, unless said). */
-  show(units: readonly Unit[], rows: readonly Did[], ours?: Side): void;
+  /**
+   * Shows what everyone in a fight did, named as its catalogue has them (`cat`, its setup's); `units`
+   * says who each one is, and `ours` which side is the member's ("You"; the fight on the table's, unless said).
+   */
+  show(cat: Catalog, units: readonly Unit[], rows: readonly Did[], ours?: Side): void;
   /** Names the party across the table. */
   across(party: Pick<Party, "who" | "by">): void;
   redraw(): void;
@@ -139,7 +151,7 @@ export function tallyView(refOf: (id: number) => string, cls = ""): TallyView {
       "tv-row",
       { "data-kind": u.kind, "data-id": u.id, tabindex: "0" },
       el("span", "tv-pic", {}, pic(headOf(u.kind))),
-      el("span", "tv-name", { text: nameOf(u.kind) }),
+      el("span", "tv-name", { text: u.name }),
       bar,
       n,
       star,
@@ -215,8 +227,9 @@ export function tallyView(refOf: (id: number) => string, cls = ""): TallyView {
     el: root,
     tabs,
     switcher,
-    show(u, d, ours = FV.ours) {
-      units = u.map((x) => ({ ...x, side: x.side === ours ? 0 : 1 }));
+    show(cat, u, d, ours = FV.ours) {
+      // Each named as the fight's catalogue has it, a banner's member by their own name.
+      units = u.map((x) => ({ ...x, side: x.side === ours ? 0 : 1, name: nameOf(cat, x.kind) }));
       did = d;
       redraw();
     },

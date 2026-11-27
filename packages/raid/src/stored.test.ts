@@ -4,13 +4,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
 
 import { everyFigure } from "./content/catalog.ts";
-import { FIGURES } from "./content/figures.ts";
+import { figureIn } from "./content/figures.ts";
 import { HOLDS } from "./content/items.ts";
 import { LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, TRAIL_COUNT } from "./content/rooms.ts";
 import { traitNumber } from "./content/traits.ts";
 import { RAID, type Table, TABLE_VERSION } from "./game.ts";
 import { type Choice, type Fought, foughtOf, type Phase, picksOf, type Piece, type Run } from "./run.ts";
+import { CAT } from "./testkit.ts";
 
 /**
  * Tables as Leaf stores them, made by the rules of earlier versions and frozen in `../stored`. Each
@@ -221,7 +222,7 @@ describe("a table stored under other numbers", () => {
     expect(crowded.bench).toHaveLength(ECONOMY.bench);
     const free = base.bench.indexOf(null);
     if (free >= 0) expect(crowded.bench[free]).toEqual(extra);
-    else expect(crowded.acorns).toBe(base.acorns + FIGURES.worm.tier);
+    else expect(crowded.acorns).toBe(base.acorns + figureIn(CAT, "worm").tier);
   });
 
   test("starters that no longer cost 1 are offered as they were", () => {
@@ -275,7 +276,7 @@ describe("a table stored under other numbers", () => {
       ),
     );
     expect(run.board.find((p) => p !== null)?.fed).toBe(0);
-    expect(run.bench[0]?.fed).toBe(traitNumber("greg", "most", 1));
+    expect(run.bench[0]?.fed).toBe(traitNumber(CAT, "greg", "most", 1));
   });
 
   test("an almanac kept with another number of trails: one for each trail now", () => {

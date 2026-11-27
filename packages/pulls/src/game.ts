@@ -31,8 +31,9 @@ import {
   prizeOf,
   prizeRarities,
   type Rarity,
+  rarityIn,
 } from "@sequoia-leaf/raid/content/catalog.ts";
-import { type Era, eraAt, isEra } from "@sequoia-leaf/raid/content/releases.ts";
+import { type Era, eraAt, isEra, LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 
 export { type Banner, BANNERS } from "@sequoia-leaf/raid/content/banners.ts";
 export type { Rarity } from "@sequoia-leaf/raid/content/catalog.ts";
@@ -125,9 +126,12 @@ export const EARLIER: Readonly<Partial<Record<Rarity, readonly string[]>>> = {
 };
 
 const isRarity = (v: string): v is Rarity => Object.hasOwn(RARITIES, v);
-/** Every figure of any release as a prize (`prizeRarities`), and what was a prize earlier, with its rarity. */
+/**
+ * Every figure of any release as a prize, and what was a prize earlier, with its rarity: for reading
+ * what was kept (a note, the history, what is had), never for a price, which is the era's (`rarityIn`).
+ */
 const RARITY_OF = new Map<string, Rarity>([
-  ...prizeRarities(),
+  ...prizeRarities(catalogAt(LAST_ERA)),
   ...Object.keys(RARITIES)
     .filter(isRarity)
     .flatMap((rarity) => (EARLIER[rarity] ?? []).map((prize): [string, Rarity] => [prize, rarity])),
@@ -339,8 +343,10 @@ function pull(state: Pulls, c: Extract<PullsCommand, { do: "pull" }>, ctx: Ctx):
 }
 
 function exchange(state: Pulls, prize: string, now: number): Answer {
-  const rarity = RARITY_OF.get(prize);
-  const offered = forSeeds(catalogAt(eraAt(now))).includes(prize);
+  // What it costs is its rarity in the era Leaf's clock is in: a release not open yet changes nothing.
+  const cat = catalogAt(eraAt(now));
+  const rarity = rarityIn(cat, prize);
+  const offered = forSeeds(cat).includes(prize);
   if ((rarity !== "Dryad" && rarity !== "Druid") || !offered) return no("not_for_seeds");
   if (state.have[prize] !== undefined) return no("owned");
   const price = RATES.exchange[rarity];

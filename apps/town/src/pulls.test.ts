@@ -8,6 +8,7 @@ import { BANNERS, draw, EARLIER, headliner, prizesOf, PULLS, type Rarity, RATES 
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
 import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { eraAt, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
+import { CAT } from "@sequoia-leaf/raid/testkit.ts";
 
 import {
   askAgain,
@@ -52,7 +53,7 @@ const WITHOUT: BannerPerson[] = [{ ...banner, headliner: null }];
 
 test("what a reveal says of a prize: its name, whether it is new, and the Seeds it gave; never how a 50/50 fell", () => {
   expect(
-    revealOf({ t: "pull", prize: "figure:greg", rarity: "Treant", have: 1, top: 34, fifty: "lost" }, WITH),
+    revealOf(CAT, { t: "pull", prize: "figure:greg", rarity: "Treant", have: 1, top: 34, fifty: "lost" }, WITH),
   ).toEqual({
     name: "Greg",
     rarity: "Treant",
@@ -60,11 +61,12 @@ test("what a reveal says of a prize: its name, whether it is new, and the Seeds 
     owned: false,
     seeds: `+${RATES.seeds.top} Seeds`,
   });
-  const again = revealOf({ t: "pull", prize: "figure:crab7", rarity: "Leafkin", have: 3 }, WITH);
+  const again = revealOf(CAT, { t: "pull", prize: "figure:crab7", rarity: "Leafkin", have: 3 }, WITH);
   expect([again.have, again.owned, again.seeds]).toEqual(["You have 3", true, "+1 Seed"]);
-  const bought = revealOf({ t: "exchange", prize: "figure:heron", rarity: "Dryad", have: 1 }, WITH);
+  const bought = revealOf(CAT, { t: "exchange", prize: "figure:heron", rarity: "Dryad", have: 1 }, WITH);
   expect([bought.name, bought.seeds]).toEqual(["Reed", null]);
   const person = revealOf(
+    CAT,
     { t: "pull", prize: headliner(banner.id), rarity: "Yggdrasil", have: 1, fifty: "owed" },
     WITH,
   );
@@ -75,8 +77,8 @@ test("what a reveal says of a prize: its name, whether it is new, and the Seeds 
 test("every prize in the pools, and every prize of earlier pulls, has a name", () => {
   const earlier = Object.values(EARLIER).flat();
   for (const prize of [...RARITY_NAMES.flatMap((r) => BANNER_PRIZES[r]), ...earlier])
-    expect(prizeName(prize, WITH)).not.toBe(prize.split(":")[1] ?? "");
-  expect([prizeName("thing:plank-path", WITH), prizeName("look:gingham", WITH)]).toEqual([
+    expect(prizeName(CAT, prize, WITH)).not.toBe(prize.split(":")[1] ?? "");
+  expect([prizeName(CAT, "thing:plank-path", WITH), prizeName(CAT, "look:gingham", WITH)]).toEqual([
     "Plank path",
     "Picnic gingham",
   ]);
@@ -89,7 +91,7 @@ test("the pity line counts towards the pull that is certain, and a lost 50/50 na
 });
 
 test("a banner is shown only while Leaf's view has it open, a member's once Leaf has said who it is", () => {
-  const open = { open: [{ id: banner.id, until: banner.until }] };
+  const open = { open: [{ id: banner.id, until: banner.until }], era: CAT.era };
   expect(showing(open, WITH, BANNERS)).toEqual({
     id: banner.id,
     until: banner.until,
@@ -98,7 +100,7 @@ test("a banner is shown only while Leaf's view has it open, a member's once Leaf
     headliner: banner.headliner,
   });
   expect(showing(open, WITHOUT, BANNERS)).toBeNull();
-  expect(showing({ open: [] }, WITH, BANNERS)).toBeNull();
+  expect(showing({ open: [], era: CAT.era }, WITH, BANNERS)).toBeNull();
   expect(bannerLine(showing(open, WITH, BANNERS), "UTC")).toBe("Mossback's banner is open until 8 December, 00:00.");
 });
 
@@ -111,7 +113,7 @@ test("a banner whose headliner the set draws is shown at once: nobody has to be 
     headliner: "greg",
     look: "set",
   } as const;
-  const open = { open: [{ id: penguins.id, until: penguins.until }] };
+  const open = { open: [{ id: penguins.id, until: penguins.until }], era: CAT.era };
   // Leaf's people name nobody for it; the set's own figure is the headliner, by its own name.
   const people: BannerPerson[] = [{ id: penguins.id, from: 0, until: penguins.until, headliner: null }];
   expect(showing(open, people, [penguins])).toEqual({
@@ -406,7 +408,7 @@ test("the clearing: the always-open pool's first three Treants on their stands, 
   expect(bookCount({ have: { "figure:seqwawa": 1, "figure:greg": 2, "look:baize": 1 } }, book)).toBe(
     `Yours: 2 of ${book.flatMap(([, list]) => list).length}`,
   );
-  const shown = showing({ open: [{ id: banner.id, until: banner.until }] }, WITH, BANNERS);
+  const shown = showing({ open: [{ id: banner.id, until: banner.until }], era: CAT.era }, WITH, BANNERS);
   expect(clearing(view, shown)).toHaveLength(3);
 });
 

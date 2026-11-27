@@ -13,18 +13,21 @@
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts";
 import { CARELESS, fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
 import { GOOD_WITH } from "@sequoia-leaf/raid/content/advice.ts";
-import { BOON_IDS, type BoonId, BOONS } from "@sequoia-leaf/raid/content/boons.ts";
-import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
-import { type FigureId, FIGURES, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
-import { FINISHED, FINISHED_IDS, type FinishedId, holdItem, isFinishedId } from "@sequoia-leaf/raid/content/items.ts";
+import { BOON_IDS, type BoonId, boonIn } from "@sequoia-leaf/raid/content/boons.ts";
+import { catalogAt, everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
+import { type FigureId, figureIn, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
+import { FINISHED_IDS, type FinishedId, finishedIn, holdItem, isFinishedId } from "@sequoia-leaf/raid/content/items.ts";
 import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import { ROOM_COUNT, ROOMS, TRAILS } from "@sequoia-leaf/raid/content/rooms.ts";
-import { CALLINGS, KINS, TRAIT_IDS, type TraitId, TRAITS } from "@sequoia-leaf/raid/content/traits.ts";
+import { CALLINGS, KINS, TRAIT_IDS, type TraitId, traitIn } from "@sequoia-leaf/raid/content/traits.ts";
 import { resolveFight } from "@sequoia-leaf/raid/fight/engine.ts";
 import type { FightSetup, FightSummary } from "@sequoia-leaf/raid/fight/types.ts";
 import { fightRecord, margin } from "@sequoia-leaf/raid/fought.ts";
 import { Tally } from "@sequoia-leaf/raid/rates.ts";
 import { beginFight, endingOf, foughtOf, startRun, takeTakings, traitsNow } from "@sequoia-leaf/raid/run.ts";
+
+/** The catalogue with every release open: what these sims play. */
+const NOW = catalogAt(LAST_ERA);
 
 const args = process.argv.slice(2);
 const runs = Number(args[0] ?? 200);
@@ -66,7 +69,7 @@ function trySuits(setup: FightSetup, base: FightSummary): void {
   ours.figures.forEach((p, i) => {
     if (!isFigureId(p.kind)) return;
     for (const item of FINISHED_IDS) {
-      const held = holdItem(p, item);
+      const held = holdItem(NOW, p, item);
       if ("refused" in held) return;
       const figures = ours.figures.with(i, { ...p, items: held.held });
       const now = margin(resolveFight({ seed: setup.seed, era: setup.era, sides: [{ ...ours, figures }, theirs] }));
@@ -244,10 +247,14 @@ function table(title: string, rows: [string, Tally, string][]): void {
 if (shows("traits")) {
   const rows: [string, Tally, string][] = [];
   for (const trait of TRAIT_IDS) {
-    for (let step = 1; step <= TRAITS[trait].steps.length; step++) {
+    for (let step = 1; step <= traitIn(NOW, trait).steps.length; step++) {
       const key = `${trait} ${step}`;
       const id: TraitId = trait;
-      rows.push([key, byTrait.get(key) ?? new Tally(), `${TRAITS[id].name} ${TRAITS[id].steps[step - 1] ?? ""}`]);
+      rows.push([
+        key,
+        byTrait.get(key) ?? new Tally(),
+        `${traitIn(NOW, id).name} ${traitIn(NOW, id).steps[step - 1] ?? ""}`,
+      ]);
     }
   }
   table("Traits switched on", rows);
@@ -258,7 +265,7 @@ if (shows("figures")) {
     everyShared().map((id): [FigureId, Tally, string] => {
       const s = share.get(id);
       const dealt = s && s.fights > 0 ? ` deals ${pct(s.dealt / s.fights).trim()}` : "";
-      return [id, byFigure.get(id) ?? new Tally(), `${FIGURES[id].tier} ${FIGURES[id].name}${dealt}`];
+      return [id, byFigure.get(id) ?? new Tally(), `${figureIn(NOW, id).tier} ${figureIn(NOW, id).name}${dealt}`];
     }),
   );
   if (sections.has("stars")) {
@@ -271,11 +278,15 @@ if (shows("figures")) {
 if (shows("items")) {
   table(
     "Finished items held",
-    FINISHED_IDS.map((id): [FinishedId, Tally, string] => [id, byItem.get(id) ?? new Tally(), FINISHED[id].name]),
+    FINISHED_IDS.map((id): [FinishedId, Tally, string] => [
+      id,
+      byItem.get(id) ?? new Tally(),
+      finishedIn(NOW, id).name,
+    ]),
   );
   table(
     "Boons held",
-    BOON_IDS.map((id): [BoonId, Tally, string] => [id, byBoon.get(id) ?? new Tally(), BOONS[id].name]),
+    BOON_IDS.map((id): [BoonId, Tally, string] => [id, byBoon.get(id) ?? new Tally(), boonIn(NOW, id).name]),
   );
 }
 /** A change in points of health left, signed, to one place. */
@@ -301,11 +312,11 @@ if (shows("suits")) {
     const named = GOOD_WITH[id].map((item) => {
       const clash = worst.includes(item);
       if (clash) clashes++;
-      return `${FINISHED[item].name} ${points(gain(id, item))}${clash ? " *" : ""}`;
+      return `${finishedIn(NOW, item).name} ${points(gain(id, item))}${clash ? " *" : ""}`;
     });
     const list = (items: readonly FinishedId[]): string =>
-      items.map((item) => `${FINISHED[item].name} ${points(gain(id, item))}`).join(", ");
-    console.log(`  ${FIGURES[id].name} (${n} fights)`);
+      items.map((item) => `${finishedIn(NOW, item).name} ${points(gain(id, item))}`).join(", ");
+    console.log(`  ${figureIn(NOW, id).name} (${n} fights)`);
     console.log(`      good with: ${named.join(", ")}`);
     console.log(`      best: ${list(best)}; worst: ${list(worst)}`);
   }

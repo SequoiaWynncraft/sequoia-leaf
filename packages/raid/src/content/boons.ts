@@ -1,9 +1,16 @@
 /**
  * Boons: three times a run the party is offered three and keeps one. Some change the stall and the
  * purse, some change the fight, and seven are charms, each of which gives the emblem of the same id
- * (`EMBLEMS` in `items.ts`): an item that makes whoever holds it one of a kin as well. Words and
- * numbers only; `run.ts` and `fight/` read the numbers.
+ * (`items.ts`): an item that makes whoever holds it one of a kin as well. Words and numbers only;
+ * `run.ts` and `fight/` read the numbers.
+ *
+ * The boons here are those the base release brought (`releases/base.ts`); later releases bring
+ * more and change these in their patches (`releases/`). A boon is read from a catalogue
+ * (`catalog.ts`), as its era has it.
  */
+import type { Catalog } from "./catalog.ts";
+import { opened } from "./patch.ts";
+
 export const BOON_IDS = [
   "deeppockets",
   "regular",
@@ -39,7 +46,8 @@ export interface BoonSpec {
   readonly quip: string;
 }
 
-export const BOONS: Record<BoonId, BoonSpec> = {
+/** The boons the base release brought: read only by its patch (`releases/base.ts`). */
+export const BASE_BOONS: Readonly<Partial<Record<BoonId, BoonSpec>>> = {
   deeppockets: {
     name: "Deep Pockets",
     sort: "purse",
@@ -202,17 +210,28 @@ export const BOONS: Record<BoonId, BoonSpec> = {
   },
 };
 
-export const isBoonId = (v: unknown): v is BoonId => typeof v === "string" && Object.hasOwn(BOONS, v);
-const filled = (id: BoonId, text: string): string =>
+export const isBoonId = (v: unknown): v is BoonId => BOON_IDS.some((id) => id === v);
+/** A boon as a catalogue has it. */
+export const boonIn = (cat: Catalog, id: BoonId): BoonSpec => opened(cat.boons, id, cat.era);
+const filled = (spec: BoonSpec, text: string): string =>
   text.replaceAll(/\{(\w+)\}/g, (whole: string, key: string) => {
-    const v = BOONS[id].n[key];
+    const v = spec.n[key];
     return v === undefined ? whole : String(v);
   });
 /** What a boon does, in a sentence. */
-export const boonText = (id: BoonId): string => filled(id, BOONS[id].text);
+export function boonText(cat: Catalog, id: BoonId): string {
+  const spec = boonIn(cat, id);
+  return filled(spec, spec.text);
+}
 /** What a boon does, in a few words for a card. */
-export const boonShort = (id: BoonId): string => filled(id, BOONS[id].short);
-/** One of a boon's numbers; 0 if it has no such number. */
-export const boonNumber = (id: BoonId, name: string): number => BOONS[id].n[name] ?? 0;
+export function boonShort(cat: Catalog, id: BoonId): string {
+  const spec = boonIn(cat, id);
+  return filled(spec, spec.short);
+}
+/** One of a boon's numbers; 0 if it has no such number, or the catalogue has no such boon. */
+export const boonNumber = (cat: Catalog, id: BoonId, name: string): number => cat.boons[id]?.n[name] ?? 0;
+/** One of a boon's numbers if it is among the boons held (`has`); else what it is without. */
+export const boonOr = (cat: Catalog, has: readonly BoonId[], id: BoonId, name: string, without: number): number =>
+  has.includes(id) ? boonNumber(cat, id, name) : without;
 /** Boons that change something inside a fight, and so travel with a party. */
 export const FIGHT_BOONS: readonly BoonId[] = ["secondwind", "headstart", "smallfry", "formation"];

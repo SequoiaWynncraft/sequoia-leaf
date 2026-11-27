@@ -15,18 +15,10 @@ import { draw32, type Met, mix, pick, shuffled } from "@sequoia-leaf/core";
  * each room, the components and boons on offer, each fight's seed. `seed` is only where the stream
  * started; nothing the run draws is worked out from it after that.
  */
-import { BOON_IDS, type BoonId, boonNumber, BOONS, FIGHT_BOONS } from "./content/boons.ts";
-import { type BossId, type FigureId, FIGURES, type Stars } from "./content/figures.ts";
-import {
-  COMPONENT_IDS,
-  type ComponentId,
-  EMBLEMS,
-  type FinishedId,
-  holdItem,
-  isEmblemId,
-  type ItemId,
-} from "./content/items.ts";
-import type { Era } from "./content/releases.ts";
+import { type BoonId, boonIn, boonNumber, boonOr, FIGHT_BOONS } from "./content/boons.ts";
+import { type Catalog, catalogOf, type Era } from "./content/catalog.ts";
+import { type BossId, type FigureId, figureIn, type Stars } from "./content/figures.ts";
+import { type ComponentId, emblemKin, type FinishedId, holdItem, isEmblemId, type ItemId } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, type RoomKind, ROOMS, sellPrice, TRAILS } from "./content/rooms.ts";
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
 import { drawOffer, starters } from "./draws.ts";
@@ -300,11 +292,11 @@ export function spotOf(run: Pick<Run, "board" | "bench">, piece: number): Spot |
 export const xpToNext = (run: Pick<Run, "level" | "xp">): number =>
   run.level >= MAX_LEVEL ? 0 : (ECONOMY.levelXp[run.level - 1] ?? 0) - run.xp;
 /** The most interest a room can pay. */
-export const interestCap = (run: Pick<Run, "boons">): number =>
-  run.boons.includes("deeppockets") ? boonNumber("deeppockets", "cap") : ECONOMY.interestMost;
+export const interestCap = (run: Pick<Run, "boons" | "era">): number =>
+  boonOr(catalogOf(run), run.boons, "deeppockets", "cap", ECONOMY.interestMost);
 /** What the acorns now held would earn after the next room. */
-export const interestNow = (run: Pick<Run, "boons" | "acorns">): number => {
-  const per = run.boons.includes("deeppockets") ? boonNumber("deeppockets", "per") : ECONOMY.interestPer;
+export const interestNow = (run: Pick<Run, "boons" | "acorns" | "era">): number => {
+  const per = boonOr(catalogOf(run), run.boons, "deeppockets", "per", ECONOMY.interestPer);
   return Math.min(interestCap(run), Math.floor(run.acorns / per));
 };
 /** The streak after a room: one more win or loss in a row, a new streak of 1 when it turns, 0 after a draw. */
@@ -319,13 +311,13 @@ export function streakPay(streak: number): number {
   return table[Math.min(Math.abs(streak), table.length - 1)] ?? 0;
 }
 /** What an offer on the stall costs right now; 0 for an empty place. */
-export function priceOf(run: Pick<Run, "stall" | "boons" | "bought">, offer: number): number {
+export function priceOf(run: Pick<Run, "stall" | "boons" | "bought" | "era">, offer: number): number {
   const kind = run.stall[offer];
   if (!kind) return 0;
-  const off = run.boons.includes("haggler") && run.bought === 0 ? boonNumber("haggler", "off") : 0;
-  return Math.max(0, FIGURES[kind].tier - off);
+  const off = run.bought === 0 ? boonOr(catalogOf(run), run.boons, "haggler", "off", 0) : 0;
+  return Math.max(0, figureIn(catalogOf(run), kind).tier - off);
 }
-export const sellValue = (piece: Piece): number => sellPrice(FIGURES[piece.kind].tier, piece.stars);
+export const sellValue = (cat: Catalog, piece: Piece): number => sellPrice(figureIn(cat, piece.kind).tier, piece.stars);
 /** What the next rustle costs. */
 export const rustleCost = (run: Pick<Run, "rustles">): number => (run.rustles > 0 ? 0 : ECONOMY.rustle);
 /** The party as it would go into a fight now. */
@@ -339,40 +331,42 @@ export function partyOf(run: Pick<Run, "board" | "boons" | "own">): Party {
   };
 }
 /** The traits the fielded party has any of, with counts and steps, switched-on ones first. */
-export const traitsNow = (run: Pick<Run, "board">): TraitState[] =>
-  traitStates(run.board.flatMap((p) => (p ? [p] : [])));
+export const traitsNow = (run: Pick<Run, "board" | "era">): TraitState[] =>
+  traitStates(catalogOf(run), pieces({ board: run.board, bench: [] }));
 
 // ---------- the stall ----------
 
 /** How many offers the stall has: more with A Wider Stall. */
-export const stallSize = (run: Pick<Run, "boons">): number =>
-  run.boons.includes("widestall") ? boonNumber("widestall", "offers") : ECONOMY.stall;
+export const stallSize = (run: Pick<Run, "boons" | "era">): number =>
+  boonOr(catalogOf(run), run.boons, "widestall", "offers", ECONOMY.stall);
 function restock(run: Run): void {
   run.stall = Array.from({ length: stallSize(run) }, () => drawOffer(run));
 }
 
 // ---------- choices ----------
 
-function boonOptions(run: Run, not: readonly BoonId[]): BoonId[] {
-  const kins = new Set(pieces(run).map((p) => FIGURES[p.kind].kin));
+/** The boons a run is offered after a room: three of those its catalogue has open (`cat`, its era's), one charm at most. */
+export function boonOptions(run: Run, not: readonly BoonId[], cat = catalogOf(run)): BoonId[] {
+  const kins = new Set(pieces(run).map((p) => figureIn(cat, p.kind).kin));
   // A charm only for a kin the party owns a figure of.
-  const fits = (id: BoonId): boolean => !run.boons.includes(id) && (!isEmblemId(id) || kins.has(EMBLEMS[id]));
-  const all = BOON_IDS.filter(fits);
+  const fits = (id: BoonId) => !run.boons.includes(id) && (!isEmblemId(id) || kins.has(emblemKin(cat, id)));
+  const all = cat.ids.boons.filter(fits);
   const fresh = all.filter((id) => !not.includes(id));
   const left = fresh.length >= ECONOMY.boonOptions ? fresh : all;
   const out: BoonId[] = [];
   // One charm at most in any three, so there is always something else to take.
   let charm = false;
   while (out.length < ECONOMY.boonOptions) {
-    const pool = left.filter((id) => !out.includes(id) && !(charm && BOONS[id].sort === "charm"));
+    const pool = left.filter((id) => !out.includes(id) && !(charm && boonIn(cat, id).sort === "charm"));
     if (pool.length === 0) break;
     const id = pick(run, pool);
     out.push(id);
-    if (BOONS[id].sort === "charm") charm = true;
+    if (boonIn(cat, id).sort === "charm") charm = true;
   }
   return out;
 }
-const componentOptions = (run: Run, count: number): ComponentId[] => shuffled(run, COMPONENT_IDS).slice(0, count);
+const componentOptions = (run: Run, count: number): ComponentId[] =>
+  shuffled(run, catalogOf(run).ids.components).slice(0, count);
 
 export function newPiece(run: RunView, kind: FigureId): Piece {
   return { id: run.nextId++, kind, stars: 1, items: [], fed: 0 };
@@ -448,7 +442,7 @@ export function layOutAfresh(run: Run, seed: number): void {
   run.last = null;
   run.held = false;
   run.bought = 0;
-  run.rustles = ECONOMY.freeRustles + (run.boons.includes("regular") ? boonNumber("regular", "rustles") : 0);
+  run.rustles = ECONOMY.freeRustles + boonOr(catalogOf(run), run.boons, "regular", "rustles", 0);
   const picks = picksOf(run).map((choice): Choice => {
     if (choice.kind === "starter") return { kind: "starter", options: starters(run) };
     if (choice.kind === "component") {
@@ -500,22 +494,23 @@ export function choose(run: Run, option: number): Done {
     if (boon === undefined) return no("not_on_offer");
     run.boons.push(boon);
     notes.push({ t: "boon", boon });
+    const cat = catalogOf(run);
     if (boon === "windfall") {
-      const amount = boonNumber(boon, "acorns");
+      const amount = boonNumber(cat, boon, "acorns");
       run.acorns += amount;
       notes.push({ t: "acorns", why: "windfall", amount });
     } else if (boon === "basket") {
-      const items: ItemId[] = Array.from({ length: boonNumber(boon, "components") }, () => pick(run, COMPONENT_IDS));
+      const items = Array.from({ length: boonNumber(cat, boon, "components") }, () => pick(run, cat.ids.components));
       run.items.push(...items);
       notes.push({ t: "items", why: "basket", items });
     } else if (boon === "blanket") {
-      const back = Math.min(boonNumber(boon, "now"), ECONOMY.resolve - run.resolve);
+      const back = Math.min(boonNumber(cat, boon, "now"), ECONOMY.resolve - run.resolve);
       run.resolve += back;
       notes.push({ t: "resolve", change: back, left: run.resolve });
     } else if (boon === "widestall") {
       while (run.stall.length < stallSize(run)) run.stall.push(drawOffer(run));
     } else if (boon === "regular") {
-      run.rustles += boonNumber(boon, "rustles");
+      run.rustles += boonNumber(cat, boon, "rustles");
     } else if (isEmblemId(boon)) {
       // A charm is its emblem, for one figure to hold.
       run.items.push(boon);
@@ -575,7 +570,7 @@ export function merge(run: RunView, loose: Piece | null, notes: Note[]): void {
       else if (from) run.bench[from.at] = null;
       else spare = null;
       for (const item of gone.items) {
-        const got = holdItem(keep, item);
+        const got = holdItem(catalogOf(run), keep, item);
         if ("refused" in got) {
           spilled.push(item);
           continue;
@@ -583,7 +578,7 @@ export function merge(run: RunView, loose: Piece | null, notes: Note[]): void {
         keep.items = got.held;
         if (got.forged) remember(run.seen.forged, got.forged);
       }
-      keep.fed = Math.min(traitNumber("greg", "most", 1), keep.fed + gone.fed);
+      keep.fed = Math.min(traitNumber(catalogOf(run), "greg", "most", 1), keep.fed + gone.fed);
     }
     keep.stars = keep.stars === 1 ? 2 : 3;
     run.items.push(...spilled);
@@ -632,7 +627,7 @@ export function sell(run: RunView, from: Spot): Done {
   const piece = pieceAt(run, from);
   if (!piece) return no("nobody_there");
   if (pieces(run).length <= 1) return no("last_figure");
-  const acorns = sellValue(piece);
+  const acorns = sellValue(catalogOf(run), piece);
   run.acorns += acorns;
   run.items.push(...piece.items);
   put(run, from, null);
@@ -720,7 +715,7 @@ export function giveItem(run: RunView, itemAt: number, to: Spot): Done {
   if (item === undefined) return no("no_such_item");
   const piece = pieceAt(run, to);
   if (!piece) return no("nobody_there");
-  const got = holdItem(piece, item);
+  const got = holdItem(catalogOf(run), piece, item);
   if ("refused" in got) return no(got.refused);
   piece.items = got.held;
   run.items.splice(itemAt, 1);
@@ -741,7 +736,7 @@ export function beginFight(run: Run): Begun {
   if (fielded(run) === 0) return no("board_empty");
   if (fielded(run) > fieldCap(run)) return no("too_many_fielded");
   for (const p of run.board) if (p) remember(run.seen.fielded, p.kind);
-  for (const state of traitsNow(run)) if (state.step >= topStep(state.trait)) remember(run.seen.topped, state.trait);
+  for (const t of traitsNow(run)) if (t.step >= topStep(catalogOf(run), t.trait)) remember(run.seen.topped, t.trait);
   const sides: FightSetup["sides"] = [partyOf(run), structuredClone(run.foe)];
   const setup: FightSetup = { seed: draw32(run), era: run.era, sides, ...setupRules(roomOf(run)) };
   const outcome = resolveFight(setup);
@@ -750,10 +745,10 @@ export function beginFight(run: Run): Begun {
 }
 
 /** What a room not won costs in resolve: a base and one more for each enemy left, a draw only the base; a win nothing. */
-export function resolveLost(run: Pick<Run, "boons">, fight: FightSummary): number {
+export function resolveLost(run: Pick<Run, "boons" | "era">, fight: FightSummary): number {
   if (fight.result === "win") return 0;
   const standing = fight.result === "draw" ? 0 : fight.standing[1];
-  const less = run.boons.includes("blanket") ? boonNumber("blanket", "less") : 0;
+  const less = boonOr(catalogOf(run), run.boons, "blanket", "less", 0);
   return Math.max(1, Math.min(ECONOMY.lossMost, ECONOMY.lossBase + standing) - less);
 }
 
@@ -804,21 +799,20 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   }
 
   // Acorns: the room's pay, the streak, interest on what was held before any of it, and the gnomes.
-  const interest = interestNow(run);
-  const gnomes = traitNumber("gnome", won ? "win" : "loss", traitSteps(partyOf(run)).gnome ?? 0);
+  const cat = catalogOf(run);
   const paid: [AcornsWhy, number][] = [
     ["room", ECONOMY.roomAcorns],
     ["win", won ? ECONOMY.winAcorns : 0],
     ["streak", streakPay(run.streak)],
-    ["interest", interest],
-    ["gnomes", gnomes],
+    ["interest", interestNow(run)],
+    ["gnomes", traitNumber(cat, "gnome", won ? "win" : "loss", traitSteps(cat, partyOf(run)).gnome ?? 0)],
   ];
   for (const [why, amount] of paid) {
     if (amount <= 0) continue;
     notes.push({ t: "acorns", why, amount });
     run.acorns += amount;
   }
-  const xp = run.boons.includes("quickstudy") ? boonNumber("quickstudy", "xp") : ECONOMY.xpRoom;
+  const xp = boonOr(cat, run.boons, "quickstudy", "xp", ECONOMY.xpRoom);
   notes.push({ t: "xp", gained: xp, cost: 0 });
   gainXp(run, xp, notes);
 
@@ -834,7 +828,7 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   run.room = to;
   run.stage = { phase: "plan", picks };
   run.bought = 0;
-  run.rustles = ECONOMY.freeRustles + (run.boons.includes("regular") ? boonNumber("regular", "rustles") : 0);
+  run.rustles = ECONOMY.freeRustles + boonOr(cat, run.boons, "regular", "rustles", 0);
   if (run.held) run.held = false;
   else restock(run);
   notes.push(...enterRoom(run, draw32(run), met));

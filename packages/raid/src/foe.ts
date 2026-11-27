@@ -29,8 +29,8 @@ import { seatOpen } from "./wing.ts";
 export const boardSlot = (trail: number, room: number, own = false): string =>
   `${own ? "own" : "board"}:${trail}:${room}`;
 
-/** The most figures any member can field, as the run's `fieldCap` has it: the top level, and one more with An Extra Chair. */
-const MOST_FIELDED = MAX_LEVEL + boonNumber("extrachair", "more");
+/** The most figures any member can field, as the run's `fieldCap` has it: the top level, and more with An Extra Chair. */
+const mostFielded = (cat: Catalog): number => MAX_LEVEL + boonNumber(cat, "extrachair", "more");
 
 /**
  * One figure of a board met, as it stands across the table. Its level stands only in a run with
@@ -50,14 +50,14 @@ function asMet(p: Placed, levels: boolean): Placed {
 
 /**
  * Another member's board as Leaf hands it over (`Ctx.met`), as the party across the table: only one
- * a member could have fielded (a party of one to `MOST_FIELDED` of the stall's own figures, and
+ * a member could have fielded (a party of one to `mostFielded` of the stall's own figures, and
  * `chairs` more for a board of an endless run), every figure of it open in the era of the run that
  * meets it (`cat`), signed with the member's name and id. A banner's member stands only on a board
  * met by a run with the member's own figures (`levels`). Null for anything else: the regular stays.
  */
 export function boardMet(cat: Catalog, met: Met, levels = false, chairs = 0): Party | null {
   const { data } = met;
-  if (!isParty(data) || data.figures.length === 0 || data.figures.length > MOST_FIELDED + chairs) return null;
+  if (!isParty(data) || data.figures.length === 0 || data.figures.length > mostFielded(cat) + chairs) return null;
   const fits = (kind: string): boolean =>
     isFigureId(kind) && cat.figures[kind] !== undefined && (levels || !isMemberId(kind));
   if (!data.figures.every((p) => fits(p.kind))) return null;

@@ -536,5 +536,5 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
 export function cast(f: Fight, u: Unit): boolean {
   const ability = CASTS[u.kind];
   if (!ability || !wanted(f, u)) return false;
-  return ability(f, u, (name) => abilityNumber(u.kind, name, u.stars));
+  return ability(f, u, (name) => abilityNumber(f.cat, u.kind, name, u.stars));
 }

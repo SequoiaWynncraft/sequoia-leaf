@@ -15,7 +15,7 @@ import type { Marks, Seen } from "../gesture.ts";
 import { type Drop, dropOf, wanters } from "../making.ts";
 import { snd } from "../sounds.ts";
 import { boardSpot } from "../stage.ts";
-import { doNow, S } from "../state.ts";
+import { catalogFor, doNow, S } from "../state.ts";
 import { itemDesc } from "./cards.ts";
 import { dropOfId, itemOfRef } from "./refs.ts";
 
@@ -31,7 +31,7 @@ export const rackSlot = (at: number): HTMLElement | null =>
 function tipOf(drop: Drop, done: () => void): Description {
   if (drop.does === "nothing")
     return {
-      name: itemName(drop.item),
+      name: itemName(catalogFor(S.run), drop.item),
       icon: itemIcon(drop.item),
       blocks: [{ body: el("span", "k-coral", { text: drop.why }) }],
     };
@@ -43,9 +43,9 @@ function tipOf(drop: Drop, done: () => void): Description {
       doNow(drop.command);
     },
   };
-  if (drop.does === "make") return { ...itemDesc(drop.item, null), actions: [act] };
+  if (drop.does === "make") return { ...itemDesc(catalogFor(S.run), drop.item, null), actions: [act] };
   return {
-    ...itemDesc(drop.item, null),
+    ...itemDesc(catalogFor(S.run), drop.item, null),
     rows: [],
     stats: [{ label: "Holds", value: `${drop.holds}/${HOLDS}` }],
     actions: [act],

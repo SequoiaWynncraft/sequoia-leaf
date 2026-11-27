@@ -30,7 +30,7 @@ export interface Room {
 }
 
 /** What `roomOf` reads of a run. */
-export type RoomRun = Pick<RunView, "room" | "wing" | "endless" | "level" | "boons" | "record">;
+export type RoomRun = Pick<RunView, "room" | "wing" | "endless" | "level" | "boons" | "record" | "era">;
 
 /** The picks of components each kind of room leaves: a boss two when it is won, sparring none. */
 const COMPONENT_PICKS: Readonly<Record<RoomKind, { readonly won: number; readonly lost: number }>> = {

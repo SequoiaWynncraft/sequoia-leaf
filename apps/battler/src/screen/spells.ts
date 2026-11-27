@@ -70,7 +70,7 @@ export function hang(
   const caught = FV.actors[who.to];
   if (!fight || !caught) return land();
   const hung = hangs(at, ticks);
-  const livery = liveryOf(kind);
+  const livery = liveryOf(fight.cat, kind);
   const spot = { x: caught.x, y: caught.y };
   const tall = framesOf(caught.unit.kind).tall;
   spells.push({ fight, ...who, hung, livery, spot, tall, lit: 0, free: false, done: false, land });

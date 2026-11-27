@@ -19,7 +19,7 @@ import { advance } from "@sequoia-leaf/raid/sitting/clock.ts";
 import { type Call, command, openSitting } from "@sequoia-leaf/raid/sitting/commands.ts";
 import { CLOCK, type Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import { sittingView } from "@sequoia-leaf/raid/sitting/view.ts";
-import { EVERY_COMMAND, EVERY_PLANNING } from "@sequoia-leaf/raid/testkit.ts";
+import { CAT, EVERY_COMMAND, EVERY_PLANNING } from "@sequoia-leaf/raid/testkit.ts";
 
 import { ask, doNow, go, onNotes, onRefused, openTable, S, tableNow } from "../state.ts";
 import { openLine } from "./line.ts";
@@ -198,7 +198,7 @@ describe("the run's commands at the live seat", () => {
     const leaf = answeringLeaf(now, done);
     await seated(t, now, leaf.routes);
     expect(doNow(forging)).toEqual({ ok: true, notes: done.notes });
-    expect(S.run?.items).toEqual([forge("bark", "thorn")]);
+    expect(S.run?.items).toEqual([forge(CAT, "bark", "thorn")]);
     await until(() => leaf.posted.length > 0 && liveLine()?.waiting() === false);
     expect(leaf.posted).toMatchObject([forging]);
     expect(liveView()).toEqual(sittingView(done.sitting, ME.id));

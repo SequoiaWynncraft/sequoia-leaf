@@ -12,7 +12,7 @@ export const ids = (units: readonly Unit[]): number[] => units.map((o) => o.id);
 
 /** Announces an ability: the hexes it covers, who it is aimed at, how long before it lands, and its pulses if it is channelled. */
 export function say(f: Fight, u: Unit, cells: number[], targets: number[], ticks: number, pulses?: Channel): void {
-  const ability = specOf(u.kind).ability;
+  const ability = specOf(f.cat, u.kind).ability;
   emit(f, {
     t: "cast",
     id: u.id,

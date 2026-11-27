@@ -4,6 +4,7 @@
  * every fight decided, on either way of setting out; nothing a player sees reads it.
  */
 import { type BoonId, isBoonId } from "./content/boons.ts";
+import { type Catalog, catalogOf } from "./content/catalog.ts";
 import { ENDLESS_WAYS, type EndlessWay } from "./content/endless.ts";
 import { nowCalled, regularOf, type RoomKind } from "./content/rooms.ts";
 import { isTraitId, renamedTrait, type TraitId } from "./content/traits.ts";
@@ -65,9 +66,9 @@ function acrossOf(room: number, foe: Party): string {
   return `plan:${roomAt(room)?.plans.findIndex((plan) => plan.name === nowCalled(foe.title)) ?? -1}`;
 }
 
-const sideOf = (party: Party, boons: readonly BoonId[]): FoughtSide => ({
+const sideOf = (cat: Catalog, party: Party, boons: readonly BoonId[]): FoughtSide => ({
   figures: party.figures,
-  traits: traitSteps(party),
+  traits: traitSteps(cat, party),
   boons: [...boons],
 });
 
@@ -88,8 +89,8 @@ export function fightRecord(runs: number, run: Run, { setup, outcome }: Fought):
     resolve: Math.max(0, run.resolve - resolveLost(run, outcome)),
     level: run.level,
     acorns: run.acorns,
-    party: sideOf(ours, run.boons),
-    against: kind === "spar" ? sideOf(theirs, theirs.boons) : null,
+    party: sideOf(catalogOf(setup), ours, run.boons),
+    against: kind === "spar" ? sideOf(catalogOf(setup), theirs, theirs.boons) : null,
   };
 }
 

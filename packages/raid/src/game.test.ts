@@ -15,8 +15,8 @@ import {
 import { SENSIBLE } from "./bot.ts";
 import { legal, type Predicted, type RaidCommand } from "./command.ts";
 import { catalogAt } from "./content/catalog.ts";
-import { FIGURES } from "./content/figures.ts";
-import { EMBLEM_IDS, EMBLEMS } from "./content/items.ts";
+import { figureIn } from "./content/figures.ts";
+import { EMBLEM_IDS, emblemKin } from "./content/items.ts";
 import { newLooks } from "./content/looks.ts";
 import { eraAt, LEGACY_ERA } from "./content/releases.ts";
 import { LEVELS, MAX_LEVEL, regularOf, ROOMS } from "./content/rooms.ts";
@@ -53,7 +53,7 @@ import {
 } from "./run.ts";
 import { sparParty } from "./spar.ts";
 import { RAID_STATS } from "./stats.ts";
-import { EVERYONES } from "./testkit.ts";
+import { CAT, EVERYONES } from "./testkit.ts";
 import { readNotes, readView } from "./wire.ts";
 
 const PLAYER = { id: "10000000-0000-0000-0000-000000000001", guest: false };
@@ -620,7 +620,7 @@ describe("an emblem handed to a figure of its kin already", () => {
     const figure = run ? pieces(run)[0] : undefined;
     const spot = run && figure ? spotOf(run, figure.id) : null;
     if (!run || !figure || !spot) throw new Error("nobody to hand it to");
-    const own = EMBLEM_IDS.find((id) => EMBLEMS[id] === FIGURES[figure.kind].kin);
+    const own = EMBLEM_IDS.find((id) => emblemKin(CAT, id) === figureIn(CAT, figure.kind).kin);
     if (!own) throw new Error("no emblem of its kin");
     run.boons = [own];
     run.items = [own];
@@ -1005,9 +1005,17 @@ describe("another member's board in a sparring room", () => {
     const long = metOf(board, 1000, { name: "x".repeat(81) });
     expect(must(into2, { do: "take" }, { ...at, met: long }).state).toEqual(plain);
     // Nine figures, as many as anybody can field, is a board.
-    expect(fieldCap({ room: 0, wing: null, level: MAX_LEVEL, boons: ["extrachair"], record: [], endless: null })).toBe(
-      9,
-    );
+    expect(
+      fieldCap({
+        room: 0,
+        wing: null,
+        level: MAX_LEVEL,
+        boons: ["extrachair"],
+        record: [],
+        endless: null,
+        era: CAT.era,
+      }),
+    ).toBe(9);
     const nine = { ...board, figures: Array.from({ length: 9 }, (_, seat) => greg(seat)) };
     expect(runOf(must(into2, { do: "take" }, { ...at, met: metOf(nine) }).state).foe.by).toBe(MEMBER);
   });
@@ -1250,7 +1258,7 @@ describe("every fight decided, kept for the staff", () => {
         resolve: runOf(taken.state).resolve,
         level: runOf(sent.state).level,
         acorns: runOf(sent.state).acorns,
-        party: { figures: ours.figures, traits: traitSteps(ours), boons: [] },
+        party: { figures: ours.figures, traits: traitSteps(CAT, ours), boons: [] },
         against: null,
       },
     ]);
@@ -1265,7 +1273,7 @@ describe("every fight decided, kept for the staff", () => {
     const foe = fought(sparred.state)?.setup.sides[1];
     if (!foe) throw new Error("no fight");
     expect(regular?.across).toBe(`regular:${regularOf(foe)?.kind}`);
-    expect(regular?.against).toEqual({ figures: foe.figures, traits: traitSteps(foe), boons: foe.boons });
+    expect(regular?.against).toEqual({ figures: foe.figures, traits: traitSteps(CAT, foe), boons: foe.boons });
     const board = keptBoard();
     const met = must(fighting(1), { do: "take" }, { ...ctx(), met: metOf(board) }).state;
     expect(runOf(met).foe.by).toBe(MEMBER);

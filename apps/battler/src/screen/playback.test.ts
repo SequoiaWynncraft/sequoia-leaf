@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { type FightEvent, type FightSetup, LEGACY_ERA, playsAsKept, recordFight, summarise } from "@sequoia-leaf/raid";
 import { isUnitKind, specOf, type Stars, TROUBLE_IDS, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { CASTS } from "@sequoia-leaf/raid/fight/abilities.ts";
-import { at, EVERYONES, partyOfFigures } from "@sequoia-leaf/raid/testkit.ts";
+import { at, CAT, EVERYONES, partyOfFigures } from "@sequoia-leaf/raid/testkit.ts";
 
 import type { Speed } from "./keep.ts";
 import { leadOf, LOOKS, SWING_LEAD, VOICES } from "./looks.ts";
@@ -24,7 +24,7 @@ import {
 function seated(kinds: readonly UnitKind[], stars: Stars = 1): ReturnType<typeof at>[] {
   const used = new Map<number, number>();
   return kinds.map((kind) => {
-    const range = specOf(kind).range;
+    const range = specOf(CAT, kind).range;
     const row = range <= 1 ? 0 : range === 2 ? 1 : 3;
     const col = used.get(row) ?? 0;
     used.set(row, col + 1);

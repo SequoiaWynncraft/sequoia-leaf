@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { type Ctx, DAY_MS, type Done, LOGGED, type Refused } from "@sequoia-leaf/core";
+import { eraAt } from "@sequoia-leaf/raid/content/releases.ts";
 
 import { canPlace, COSY, MOST_NEW, MOST_OWNED, MOST_PLACED, NEW_CAMP, store, YARD } from "./camp.ts";
 import { STALLS } from "./catalogue.ts";
@@ -82,6 +83,7 @@ describe("a new member's town", () => {
         "pets",
         "arrival",
         "doors",
+        "era",
       ].toSorted(),
     );
     expect(view.arrival).toMatchObject({
@@ -739,6 +741,7 @@ describe("a visit", () => {
       pets: ["fox"],
       arrival: { first: false, newDay: false, away: 0, said: [], mail: [] },
       doors: {},
+      era: eraAt(T0),
     });
     expect(seen?.camp.placed.find((p) => p.id === "lantern-post")?.s).toBe(1);
     expect(encodeTown(s)).toBe(before);

@@ -7,8 +7,12 @@ import { drawFigure, drawStanding, drawStars, framesOf } from "@sequoia-leaf/fig
 import { BARK, CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import { write } from "@sequoia-leaf/kit/text.ts";
 import { makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
-import { everyFigure } from "@sequoia-leaf/raid/content/catalog.ts";
-import { FIGURES, specOf, SUMMON_IDS, TROUBLE_IDS, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
+import { catalogAt, everyFigure } from "@sequoia-leaf/raid/content/catalog.ts";
+import { isFigureId, specOf, SUMMON_IDS, TROUBLE_IDS, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
+import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
+
+/** Every release open: the sheet draws everyone any release has. */
+const NOW = catalogAt(LAST_ERA);
 
 export function showSheet(): void {
   const zoom = 3;
@@ -41,10 +45,10 @@ export function showSheet(): void {
     g.fillStyle = BARK[4];
     g.fillRect(cell.x + 1, cell.y + 1, cell.w - 2, Math.max(46, f.h + 22) - 2);
     const a = cell.x + 4 + f.ax;
-    drawStanding(g, cell.kind, a, foot, "plain");
-    drawStars(g, cell.kind in FIGURES ? 2 : 1, a, foot - f.tall - 2);
+    drawStanding(g, NOW, cell.kind, a, foot, "plain");
+    drawStars(g, isFigureId(cell.kind) ? 2 : 1, a, foot - f.tall - 2);
     const b = a + f.w + 2;
-    drawStanding(g, cell.kind, b, foot, "plain", { pose: "cast", left: true });
+    drawStanding(g, NOW, cell.kind, b, foot, "plain", { pose: "cast", left: true });
     drawFigure(g, cell.kind, b + f.w / 2 + f.fallen.width / 2 + 2, foot, { pose: "fallen" });
   }
   const big = makeCanvas(small.c.width * zoom, small.c.height * zoom);
@@ -52,7 +56,7 @@ export function showSheet(): void {
   for (const cell of cells) {
     const f = framesOf(cell.kind);
     const h = Math.max(46, f.h + 22);
-    write(big.g, specOf(cell.kind).name, (cell.x + 3) * zoom, (cell.y + h - 9) * zoom + 2, {
+    write(big.g, specOf(NOW, cell.kind).name, (cell.x + 3) * zoom, (cell.y + h - 9) * zoom + 2, {
       px: 1,
       colour: CREAM,
       shadow: INK,

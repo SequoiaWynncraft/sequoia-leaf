@@ -11,8 +11,10 @@ import { ask } from "@sequoia-leaf/kit/net.ts";
 import { bake, type Body, lookFor, NOBODY, paintSkin, skinFigure } from "@sequoia-leaf/kit/skin.ts";
 import { readBanners } from "@sequoia-leaf/pulls/wire.ts";
 import { type Banner, BANNERS } from "@sequoia-leaf/raid/content/banners.ts";
-import { specOf } from "@sequoia-leaf/raid/content/figures.ts";
+import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
+import { figureIn } from "@sequoia-leaf/raid/content/figures.ts";
 import { isMemberId, type MemberId } from "@sequoia-leaf/raid/content/members.ts";
+import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 
 import { wear } from "./sprites.ts";
 
@@ -27,9 +29,10 @@ export async function meetMembers(seen: (banner: string, name: string, body: Bod
     seen(banner, name, body);
   };
   const nobody = bake(paintSkin(NOBODY));
+  // Until Leaf says who each is, a banner's member goes by its figure's name, as the catalogue with every release open has it.
   for (const { id } of BANNERS) {
     const figure = memberOf(id, BANNERS);
-    if (figure) known(id, figure, specOf(figure).name, nobody);
+    if (figure) known(id, figure, figureIn(catalogAt(LAST_ERA), figure).name, nobody);
   }
   // Leaf says who by the banner; the figure they are is the one that banner names, whatever its id.
   for (const { id, headliner } of readBanners((await ask("/v1/game/banners")).body) ?? []) {

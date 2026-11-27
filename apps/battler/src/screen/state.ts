@@ -25,6 +25,8 @@
 import { makeHold, openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/kit/play.ts";
 import {
   type Almanac,
+  type Catalog,
+  catalogOf,
   type Era,
   isRunCommand,
   LEGACY_ERA,
@@ -85,6 +87,13 @@ export const S: {
   prefs: newPrefs(),
   screen: { at: "front" },
 };
+
+/**
+ * The catalogue of a run's things (a seat's run is in its sitting's era), or, with no run, of Leaf's
+ * view of the table: never a newer one, and never the page's own clock. A fight's things read their
+ * setup's (`Fight.cat`).
+ */
+export const catalogFor = (run: { readonly era: Era } | null): Catalog => catalogOf(run ?? S);
 
 /** What a command did: its notes, or the sentence it was turned down with. */
 export type Did = { ok: true; notes: RaidNote[] } | { ok: false; why: string };

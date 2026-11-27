@@ -67,7 +67,8 @@ export function registerFought(): void {
     const u = p?.fight.units[Number(raw)];
     if (!p || !u) return null;
     const across = acrossOf(p.setup);
-    return figureDesc(u.kind, u.stars, {
+    // Read in the fight's own catalogue: its setup's era, however long ago it was fought.
+    return figureDesc(p.fight.cat, u.kind, u.stars, {
       unit: u,
       whose: u.side === OWN.side(p.setup) ? "Yours" : `${acrossName(across)}'s`,
       party: p.setup.sides[u.side],
@@ -127,6 +128,7 @@ export function openSheet(
   view.across(acrossOf(p.setup));
   if (leaf?.kept !== false) {
     view.show(
+      p.fight.cat,
       p.fight.units,
       tally(
         p.events,

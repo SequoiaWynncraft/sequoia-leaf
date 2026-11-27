@@ -9,7 +9,7 @@ import { framesOf } from "@sequoia-leaf/figures/sprites.ts";
  * Everything is measured from the board's corner, in art pixels.
  */
 import { GOLD } from "@sequoia-leaf/kit/palette.ts";
-import type { Note, RaidNote, RunView, Spot, Stars } from "@sequoia-leaf/raid";
+import { catalogOf, type Note, type RaidNote, type RunView, type Spot, type Stars } from "@sequoia-leaf/raid";
 import type { FigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { carries } from "@sequoia-leaf/raid/content/items.ts";
 import type { TraitId } from "@sequoia-leaf/raid/content/traits.ts";
@@ -191,7 +191,7 @@ export function spotAt(x: number, y: number): Spot | null {
 export function cheer(run: RunView, trait: TraitId): void {
   let n = 0;
   for (const piece of run.board) {
-    if (!piece || !carries(piece.kind, piece.items, trait)) continue;
+    if (!piece || !carries(catalogOf(run), piece.kind, piece.items, trait)) continue;
     const p = pawns.get(piece.id);
     if (!p) continue;
     p.cheerAt = V.t + n * 0.07;

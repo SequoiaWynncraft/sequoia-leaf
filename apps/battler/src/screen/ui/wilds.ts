@@ -6,8 +6,9 @@
  */
 import {
   type BossId,
+  catalogOf,
   type FightResult,
-  FIGURES,
+  figureIn,
   isBossId,
   type Party,
   picksOf,
@@ -50,10 +51,10 @@ export const ruleTitle = (room: number): string => {
 };
 
 /** Figures moved off hexes a rule closed, as one line; null for none. */
-export function shiftedLine(notes: readonly RaidNote[], run: Pick<RunView, "board" | "bench">): string | null {
+export function shiftedLine(notes: readonly RaidNote[], run: Pick<RunView, "board" | "bench" | "era">): string | null {
   const moved = notes.flatMap((n) => (n.t === "shifted" ? [n.piece] : []));
   if (moved.length === 0) return null;
-  const names = pieces(run).flatMap((p) => (moved.includes(p.id) ? [FIGURES[p.kind].name] : []));
+  const names = pieces(run).flatMap((p) => (moved.includes(p.id) ? [figureIn(catalogOf(run), p.kind).name] : []));
   return `Moved off closed hexes: ${names.join(", ")}.`;
 }
 

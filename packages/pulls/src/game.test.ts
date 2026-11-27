@@ -1,9 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
-import { RAID } from "@sequoia-leaf/raid";
+import { figureIn, RAID } from "@sequoia-leaf/raid";
 import { available, catalogAt, prizeOf } from "@sequoia-leaf/raid/content/catalog.ts";
-import { FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
 import { isBoughtLook } from "@sequoia-leaf/raid/content/looks.ts";
 import { eraAt, eraOf } from "@sequoia-leaf/raid/content/releases.ts";
 import { TOWN } from "@sequoia-leaf/town";
@@ -76,7 +75,7 @@ const tiers = (c: Counters, n: number) =>
  */
 const everyones = available(CAT, { for: "regular" });
 const pooled = everyones.filter((id) => id !== "seqwawa");
-const priced = (price: number): string[] => pooled.filter((id) => FIGURES[id].tier === price).map(prizeOf);
+const priced = (price: number): string[] => pooled.filter((id) => figureIn(CAT, id).tier === price).map(prizeOf);
 /** Every prize of a pool. */
 const all = (prizes: Prizes): string[] => Object.values(prizes).flat();
 /** Whether a prize of earlier pulls is a thing the town has, or a look the raid's table sells. */

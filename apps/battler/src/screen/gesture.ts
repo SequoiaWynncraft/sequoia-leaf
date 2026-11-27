@@ -10,6 +10,7 @@
  * worked out from the gesture and the run (`marksOf`).
  */
 import {
+  catalogOf,
   type FigureId,
   isComponentId,
   type ItemId,
@@ -201,7 +202,10 @@ function reachMarks(held: Held, run: RunView): Partial<Marks> {
     return { seats: reach.seats, slots: reach.slots, zone: zoneOf(run, held.kind) };
   }
   const item = held.item;
-  return { takers: pieces(run).flatMap((p) => (handing(p, item).can ? [p.id] : [])), pairs: pairsOf(run, held.at) };
+  return {
+    takers: pieces(run).flatMap((p) => (handing(catalogOf(run), p, item).can ? [p.id] : [])),
+    pairs: pairsOf(run, held.at),
+  };
 }
 
 /** The hand's marks on the table, worked out from the gesture, the run and what the page says besides. */

@@ -17,12 +17,12 @@ import {
   type RunView,
   specOf,
   TRAILS,
-  TRAITS,
+  traitIn,
 } from "@sequoia-leaf/raid";
 
 import { glyph, itemIcon, traitIcon } from "../art/icons.ts";
 import { endedOf } from "../screen.ts";
-import { S } from "../state.ts";
+import { catalogFor, S } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
 import { WAY_NAMES } from "./endless.ts";
 import { nothingNew, runTag } from "./own.ts";
@@ -69,11 +69,13 @@ function howFar(run: RunView, sum: RunSummary): HTMLElement[] {
 
 /** One thing new in the almanac, with its picture. */
 function newThing(n: News): HTMLElement {
-  if (n.t === "fielded") return el("span", "new", {}, pic(portrait(n.figure)), `Met ${nameOf(n.figure)}`);
-  if (n.t === "threeStars") return el("span", "new", {}, pic(starsPic(3)), `${nameOf(n.figure)} to three stars`);
-  if (n.t === "forged") return el("span", "new", {}, pic(itemIcon(n.item)), `Made ${itemName(n.item)}`);
-  if (n.t === "topped") return el("span", "new", {}, pic(traitIcon(n.trait)), `${TRAITS[n.trait].name} all the way on`);
-  if (n.t === "boss") return el("span", "new", {}, pic(portrait(n.boss)), `Saw off ${specOf(n.boss).name}`);
+  const cat = catalogFor(S.run);
+  if (n.t === "fielded") return el("span", "new", {}, pic(portrait(n.figure)), `Met ${nameOf(cat, n.figure)}`);
+  if (n.t === "threeStars") return el("span", "new", {}, pic(starsPic(3)), `${nameOf(cat, n.figure)} to three stars`);
+  if (n.t === "forged") return el("span", "new", {}, pic(itemIcon(n.item)), `Made ${itemName(cat, n.item)}`);
+  if (n.t === "topped")
+    return el("span", "new", {}, pic(traitIcon(n.trait)), `${traitIn(cat, n.trait).name} all the way on`);
+  if (n.t === "boss") return el("span", "new", {}, pic(portrait(n.boss)), `Saw off ${specOf(cat, n.boss).name}`);
   return el("span", "new", {}, pic(glyph("door")), n.t === "trail" ? `${TRAILS[n.trail]?.name ?? ""} is open` : "");
 }
 

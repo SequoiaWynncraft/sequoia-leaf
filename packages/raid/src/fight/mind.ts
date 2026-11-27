@@ -110,7 +110,7 @@ export function wanted(f: Fight, u: Unit): boolean {
   );
   return (
     hurt ||
-    (u.kind === "seqwawa" && lastFallen(f, u.side, secs(abilityNumber(u.kind, "window", u.stars))) !== undefined)
+    (u.kind === "seqwawa" && lastFallen(f, u.side, secs(abilityNumber(f.cat, u.kind, "window", u.stars))) !== undefined)
   );
 }
 

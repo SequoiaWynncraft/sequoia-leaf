@@ -4,6 +4,7 @@
  * pick drawn and not yet offered, and of another seat's board only what it locked last.
  */
 import { isPredicted, plan } from "../command.ts";
+import { catalogOf } from "../content/catalog.ts";
 import type { Era } from "../content/releases.ts";
 import type { RoomKind } from "../content/rooms.ts";
 import type { FightSetup } from "../fight/types.ts";
@@ -58,7 +59,7 @@ export function sittingView(t: Sitting, viewer: string | null): SittingView {
     kind: kindOf(t.room),
     seats: t.seats.map(({ who, run, place, shown }, i) => ({
       who,
-      name: nameOf(who),
+      name: nameOf(catalogOf(t), who),
       resolve: run.resolve,
       level: run.level,
       streak: run.streak,

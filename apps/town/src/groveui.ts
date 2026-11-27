@@ -29,6 +29,7 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tipAt } from "@sequoia-leaf/kit/tip.ts";
 import { type PullsView, RARITIES, type Rarity, RATES } from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
+import { catalogOf } from "@sequoia-leaf/raid/content/catalog.ts";
 import type { Era } from "@sequoia-leaf/raid/content/releases.ts";
 
 import { $, button, pic, slot } from "./hud.ts";
@@ -128,7 +129,7 @@ function history(host: GroveHost, body: HTMLElement): void {
         "grove-past",
         {},
         plate(p.rarity),
-        el("span", "k-grow", { text: prizeName(p.prize, host.banners()) }),
+        el("span", "k-grow", { text: prizeName(catalogOf(host.view()), p.prize, host.banners()) }),
         p.top ? el("b", "k-gold", { text: p.top }) : null,
         el("span", "k-read k-dim", { text: `${p.pool}, ${p.when}` }),
       ),
@@ -210,7 +211,7 @@ export function makeGroveUi(host: GroveHost) {
   const onBanner = (): Showing | null => (host.pool() === GROVE ? null : host.banner());
   /** The pulls are offered at a ceremony's end, and not on the banner behind it. */
   const atEnd = (): boolean => host.state() === "end";
-  const nameOf = (prize: string): string => prizeName(prize, host.banners());
+  const nameOf = (prize: string): string => prizeName(catalogOf(host.view()), prize, host.banners());
   // ---------- the pulls ----------
 
   /** What the last ceremony was for, so that its end picture offers the same again. */

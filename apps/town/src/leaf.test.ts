@@ -86,7 +86,7 @@ test("a visitor staying while the owner greets their third caller sees the pet t
   let rev = 4;
   world = standin({
     "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: own } },
-    "GET /v1/game/play/town/of/bob": () => ({ status: 200, body: { rev, now: "x", state: visitView(bobs) } }),
+    "GET /v1/game/play/town/of/bob": () => ({ status: 200, body: { rev, now: "x", state: visitView(bobs, 0) } }),
   });
   await openTown("me", () => undefined);
   const bob = await openCamp("bob", "Bob");
@@ -129,7 +129,7 @@ test("a visitor staying while the owner greets their third caller sees the pet t
 test("a camp visited is opened beside the member's own and shown, and nothing but reads is sent", async () => {
   const w = standin({
     "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: own } },
-    "GET /v1/game/play/town/of/bob": { status: 200, body: { rev: 4, now: "x", state: visitView(theirs) } },
+    "GET /v1/game/play/town/of/bob": { status: 200, body: { rev: 4, now: "x", state: visitView(theirs, 0) } },
     "GET /v1/game/people/bob": { status: 200, body: { id: "bob", name: "Bob", games: {}, played: 0, afk: 0 } },
   });
   world = w;
@@ -160,8 +160,8 @@ test("a camp visited is opened beside the member's own and shown, and nothing bu
 test("a camp left is put away: its copy hears the page no more, and is read no more", async () => {
   const w = standin({
     "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: own } },
-    "GET /v1/game/play/town/of/bob": { status: 200, body: { rev: 4, now: "x", state: visitView(theirs) } },
-    "GET /v1/game/play/town/of/carol": { status: 200, body: { rev: 2, now: "x", state: visitView(theirs) } },
+    "GET /v1/game/play/town/of/bob": { status: 200, body: { rev: 4, now: "x", state: visitView(theirs, 0) } },
+    "GET /v1/game/play/town/of/carol": { status: 200, body: { rev: 2, now: "x", state: visitView(theirs, 0) } },
   });
   world = w;
   expect(await openTown("me", () => undefined)).toBeNull();
@@ -183,8 +183,8 @@ test("a camp left is put away: its copy hears the page no more, and is read no m
 test("the camp looked at is read again while the member is in it, and not once they are walking off from it", async () => {
   const w = standin({
     "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: own } },
-    "GET /v1/game/play/town/of/bob": { status: 200, body: { rev: 4, now: "x", state: visitView(theirs) } },
-    "GET /v1/game/play/town/of/carol": { status: 200, body: { rev: 2, now: "x", state: visitView(theirs) } },
+    "GET /v1/game/play/town/of/bob": { status: 200, body: { rev: 4, now: "x", state: visitView(theirs, 0) } },
+    "GET /v1/game/play/town/of/carol": { status: 200, body: { rev: 2, now: "x", state: visitView(theirs, 0) } },
   });
   world = w;
   await openTown("me", () => undefined);
@@ -210,7 +210,7 @@ test("the camp looked at is read again while the member is in it, and not once t
 test("a camp visited is read again as the page comes into its room, after any read already on its way, and not while the page is out of sight", async () => {
   const late = Promise.withResolvers<Reply>();
   let reads = 0;
-  const camp = { status: 200, body: { rev: 4, now: "x", state: visitView(theirs) } };
+  const camp = { status: 200, body: { rev: 4, now: "x", state: visitView(theirs, 0) } };
   const w = standin({
     "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: own } },
     // The second read of Bob's camp left before the room's welcome, and comes back after it.

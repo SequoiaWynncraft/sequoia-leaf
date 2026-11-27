@@ -3,7 +3,8 @@
  * README beside this file for how the pieces fit and how to drive them.
  */
 
-// What exists, when: the one door to the figures (`available`), by the era Leaf's clock is in.
+// What exists, when: the catalogue of an era (`catalogOf`), the one door to every figure, trait, item and boon
+// and their numbers, and to which figures a draw may draw (`available`), by the era Leaf's clock is in.
 export {
   available,
   type Catalog,
@@ -21,7 +22,7 @@ export {
 export { type Era, eraAt, eraOf, isEra, LAST_ERA, LEGACY_ERA, type ReleaseId, RELEASES } from "./content/releases.ts";
 export { type Banner, BANNERS, GROVE } from "./content/banners.ts";
 
-// What is in the game: plain tables.
+// What is in the game: ids, words and numbers, each read from a catalogue.
 export {
   abilityNumber,
   abilityShort,
@@ -31,7 +32,7 @@ export {
   type BossId,
   type FigureId,
   type FigureSpec,
-  FIGURES,
+  figureIn,
   isBossId,
   isFigureId,
   isUnitKind,
@@ -68,11 +69,13 @@ export {
   KINS,
   stepFor,
   topStep,
+  isCalling,
+  isKin,
   isTraitId,
   TRAIT_IDS,
   type TraitId,
+  traitIn,
   traitNumber,
-  TRAITS,
   type TraitSpec,
   traitDraw,
   traitShort,
@@ -84,13 +87,14 @@ export {
   carries,
   COMPONENT_IDS,
   type ComponentId,
-  COMPONENTS,
+  componentIn,
   EMBLEM_IDS,
   type EmblemId,
-  EMBLEMS,
-  FINISHED,
+  emblemKin,
   FINISHED_IDS,
   type FinishedId,
+  finishedIn,
+  finishedNumber,
   forge,
   holdItem,
   HOLDS,
@@ -112,8 +116,8 @@ export {
 export {
   BOON_IDS,
   type BoonId,
+  boonIn,
   boonNumber,
-  BOONS,
   boonShort,
   type BoonSpec,
   boonText,

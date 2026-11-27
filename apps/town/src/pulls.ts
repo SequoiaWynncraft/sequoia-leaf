@@ -25,10 +25,10 @@ import {
 } from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
 import { type Banner, BANNERS, GROVE } from "@sequoia-leaf/raid/content/banners.ts";
-import { catalogOf } from "@sequoia-leaf/raid/content/catalog.ts";
-import { type FigureId, FIGURES, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
+import { type Catalog, catalogAt, catalogOf, rarityIn } from "@sequoia-leaf/raid/content/catalog.ts";
+import { type FigureId, figureIn, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { LOOK_KINDS, LOOKS } from "@sequoia-leaf/raid/content/looks.ts";
-import { eraAt } from "@sequoia-leaf/raid/content/releases.ts";
+import { eraAt, LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import { thingOf } from "@sequoia-leaf/town/things.ts";
 
 /** The pool that is always open (the raid's catalogue names it), and what the page calls it. */
@@ -54,23 +54,27 @@ export interface Showing {
 
 /** The banner to show among the rows (`BANNERS`), if one is open by Leaf's view and its headliner is known: the first such. */
 export function showing(
-  view: Pick<PullsView, "open">,
+  view: Pick<PullsView, "open" | "era">,
   people: readonly BannerPerson[],
   rows: readonly Banner[],
 ): Showing | null {
   for (const { id, until } of view.open) {
     const row = rows.find((b) => b.id === id);
     const person = row?.look === "skin" ? (people.find((b) => b.id === id)?.headliner ?? null) : null;
-    const name = row && (row.look === "set" ? FIGURES[row.headliner].name : person?.name);
+    const name = row && (row.look === "set" ? figureIn(catalogOf(view), row.headliner).name : person?.name);
     if (row && name) return { id, until, name, person, headliner: row.headliner };
   }
   return null;
 }
 
-/** A banner's headliner's name: the set's own figure's, or the member's as Leaf says it; null for one not known. */
+/**
+ * A banner's headliner's name: the set's own figure's, as the catalogue with every release open has
+ * it (a pool or a prize of any banner, open or past), or the member's as Leaf says it; null for one
+ * not known.
+ */
 function headlinerName(banner: string, people: readonly BannerPerson[]): string | null {
   const row = BANNERS.find((b) => b.id === banner);
-  if (row?.look === "set") return FIGURES[row.headliner].name;
+  if (row?.look === "set") return figureIn(catalogAt(LAST_ERA), row.headliner).name;
   return people.find((b) => b.id === banner)?.headliner?.name ?? null;
 }
 /** The figure of the set's own that a banner's headliner is, for its picture; null for one drawn from a member's skin. */
@@ -84,12 +88,12 @@ export const poolName = (pool: string, banners: readonly BannerPerson[]): string
 // ---------- a prize ----------
 
 /**
- * What a prize is called: a figure by its name in the raid, a headliner by their name, which only
- * Leaf knows, and a thing or a look of earlier pulls by its own.
+ * What a prize is called: a figure by its name in the raid's catalogue of Leaf's era, a headliner by
+ * their name, which only Leaf knows, and a thing or a look of earlier pulls by its own.
  */
-export function prizeName(prize: string, banners: readonly BannerPerson[]): string {
+export function prizeName(cat: Catalog, prize: string, banners: readonly BannerPerson[]): string {
   const [kind = "", id = ""] = prize.split(":");
-  if (kind === "figure") return isFigureId(id) ? FIGURES[id].name : id;
+  if (kind === "figure") return isFigureId(id) ? figureIn(cat, id).name : id;
   if (kind === "thing") return thingOf(id)?.name ?? id;
   if (kind === "look") return LOOK_KINDS.flatMap((k) => LOOKS[k]).find((l) => l.id === id)?.name ?? id;
   return headlinerName(id, banners) ?? "The headliner";
@@ -106,9 +110,9 @@ export interface Reveal {
   readonly seeds: string | null;
 }
 
-export function revealOf(note: PullsNote, banners: readonly BannerPerson[]): Reveal {
+export function revealOf(cat: Catalog, note: PullsNote, banners: readonly BannerPerson[]): Reveal {
   return {
-    name: prizeName(note.prize, banners),
+    name: prizeName(cat, note.prize, banners),
     rarity: note.rarity,
     have: note.have > 1 ? `You have ${whole(note.have)}` : "New",
     owned: note.have > 1,
@@ -340,8 +344,9 @@ export function prizeBook(view: Pick<PullsView, "era">, pool: string): [Rarity, 
 
 /** Every prize that can be had for Seeds in the view's era, cheapest first, with whether the player has it or the Seeds for it. */
 export function offers(view: Pick<PullsView, "have" | "seeds" | "era">): Offer[] {
-  return forSeeds(catalogOf(view)).flatMap((prize): Offer[] => {
-    const rarity = rarityOf(prize);
+  const cat = catalogOf(view);
+  return forSeeds(cat).flatMap((prize): Offer[] => {
+    const rarity = rarityIn(cat, prize);
     if (rarity !== "Dryad" && rarity !== "Druid") return [];
     const price = RATES.exchange[rarity];
     return [{ prize, rarity, price, owned: view.have[prize] !== undefined, enough: view.seeds >= price }];

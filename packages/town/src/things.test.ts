@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
-import { FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
+import { catalogAt, everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
+import { figureIn } from "@sequoia-leaf/raid/content/figures.ts";
+import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 
 import { figureThing, footprint, KIND_NAMES, KINDS, memberThing, thingOf, THINGS } from "./things.ts";
+
+/** The camp names the raid's figures as the catalogue with every release open has them. */
+const CAT = catalogAt(LAST_ERA);
 
 describe("the catalogue", () => {
   test("there are forty things and more, each with a name of its own among its kind", () => {
@@ -18,8 +22,8 @@ describe("the catalogue", () => {
     expect(characters.map((t) => t.id)).toEqual([...everyShared().map(figureThing), memberThing("banner-1")]);
     for (const id of everyShared())
       expect(thingOf(figureThing(id))).toMatchObject({
-        name: FIGURES[id].name,
-        about: FIGURES[id].quip,
+        name: figureIn(CAT, id).name,
+        about: figureIn(CAT, id).quip,
         w: 3,
         d: 1,
         turns: "flip",
