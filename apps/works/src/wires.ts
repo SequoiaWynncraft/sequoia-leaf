@@ -113,6 +113,11 @@ export class Wires {
     this.#s = { patches: new Patches(lost), of: null, lost: -1, lines: [], shared: [], on: new Map(), ends: "" };
   }
 
+  /** Lets go of the patches the lines are kept on; they are drawn again when next shown. */
+  release(): void {
+    this.#s.patches.clear();
+  }
+
   /**
    * Draws the lines on a picture whose corner is (`view.x`, `view.y`) of the yard; `corner` is where
    * the picture's corner is in the view, for where each glint starts.

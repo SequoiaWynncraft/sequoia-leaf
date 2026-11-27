@@ -10,6 +10,7 @@
  * them. It is drawn whole or not at all: one two pixels across is one across for the last third of
  * its life, and then it is gone.
  */
+import { rgb as channels } from "@sequoia-leaf/kit/pix.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
@@ -68,15 +69,14 @@ export function dot(colour: string, size: number): HTMLCanvasElement {
 /** The colour of the floor at a point, red, green and blue; nothing where there is no floor. */
 export type Floor = (x: number, y: number) => readonly [number, number, number] | null;
 
-/** The yard's floor as the yard keeps it (`art/ground.ts`), painted a pixel at a time where a foot falls: the picture a figure walks on. */
+/**
+ * The yard's floor as the yard keeps it (`art/ground.ts`): the picture a figure walks on, its own
+ * colour under whatever lies on it, worked out for the one pixel under a foot.
+ */
 export function floorOf(ground: Ground): Floor {
-  const { g } = makeCanvas(1, 1);
   return (x, y) => {
-    const [px, py] = [Math.floor(x), Math.floor(y)];
-    if (px < ground.x || py < ground.y || px >= ground.x + ground.w || py >= ground.y + ground.h) return null;
-    ground.paint(g, { x: px, y: py, w: 1, h: 1 }, () => true);
-    const d = g.getImageData(0, 0, 1, 1).data;
-    return [d[0] ?? 0, d[1] ?? 0, d[2] ?? 0];
+    const col = ground.colour(Math.floor(x), Math.floor(y));
+    return col === null ? null : channels(col);
   };
 }
 

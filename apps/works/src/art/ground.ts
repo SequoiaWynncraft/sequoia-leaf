@@ -41,6 +41,11 @@ export interface Ground extends Box {
    * `g` as it found it, but for what it painted.
    */
   painting(g: Ctx, box: Box, owned: (plot: number) => boolean): Generator<void, void, undefined>;
+  /**
+   * The floor's own colour at a pixel as the yard keeps it, under whatever is drawn over it (a rock,
+   * a branch, a flower), worked out for that pixel alone; null past the ground.
+   */
+  colour(x: number, y: number): string | null;
 }
 
 /** Whether something holds at all four points `r` pixels out from a point. */
@@ -446,7 +451,7 @@ function flowers(g: Ctx, land: Land, t: Tiles): void {
 
 /** A colour as the four bytes of a pixel, read as one number: red first in memory, and opaque. */
 const packed = new Map<string, number>();
-function pack(col: string): number {
+export function pack(col: string): number {
   let n = packed.get(col);
   if (n === undefined) {
     const [r, g, b] = rgb(col);
@@ -542,6 +547,9 @@ export function makeGround(land: Land): Ground {
     *painting(g, b, owned) {
       yield* floorPixels(g, gr, at, b, owned);
       yield* over(g, gr, ranks, b, owned);
+    },
+    colour(x, y) {
+      return x < gr.x || y < gr.y || x >= gr.x + gr.w || y >= gr.y + gr.h ? null : at(x, y, false);
     },
     paint(g, b, owned) {
       // Every step at once.

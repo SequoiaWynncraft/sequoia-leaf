@@ -78,6 +78,15 @@ export class Around {
     this.#lost = true;
   }
 
+  /** Lets go of the canvas's memory: nothing is kept until the view is next followed. */
+  release(): void {
+    if (this.#box.w === 0) return;
+    this.#made.c.width = 0;
+    this.#made.c.height = 0;
+    this.#box = { x: 0, y: 0, w: 0, h: 0 };
+    this.#lost = true;
+  }
+
   /**
    * Keeps the box of the yard round `view`, `pad` pixels more each way, its corner on a grid of
    * `grid` pixels from (`ox`, `oy`). Gives back the boxes of the yard come into it, to be drawn

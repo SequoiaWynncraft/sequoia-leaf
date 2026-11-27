@@ -154,15 +154,22 @@ function pool(g: Ctx, src: HTMLCanvasElement, x: number, y: number, r: number): 
   g.drawImage(at, x + edge, y + edge);
 }
 
+/** A kept picture made `w` by `h`, if it is not already. */
+function fit(b: { c: HTMLCanvasElement; g: Ctx }, w: number, h: number): void {
+  if (b.c.width === w && b.c.height === h) return;
+  b.c.width = w;
+  b.c.height = h;
+  b.g.imageSmoothingEnabled = false;
+}
+
+/** The picture's size; the dusk is made as large when it is next laid. */
 export function sizeBuffers(w: number, h: number, marks: number): void {
   markSize = marks;
-  for (const b of [buf, dusk]) {
-    if (b.c.width === w && b.c.height === h) continue;
-    b.c.width = w;
-    b.c.height = h;
-    b.g.imageSmoothingEnabled = false;
-  }
+  fit(buf, w, h);
 }
+
+/** Whether the page has drawn its first frame: only that one paints the floor before laying it. */
+const opened = { yet: false };
 
 // ---------- things that stand up, far to near ----------
 
@@ -558,23 +565,6 @@ function grown(s: Sprite): Sprite {
 /** The lines between pylons (`wires.ts`). */
 const wiring = new Wires(wipe);
 
-let note: HTMLCanvasElement | null = null;
-let noteDone: HTMLCanvasElement | null = null;
-function notes(): readonly [HTMLCanvasElement, HTMLCanvasElement] {
-  if (!note || !noteDone) {
-    const a = makeCanvas(2, 4);
-    R(a.g, 0, 0, 2, 4, CREAM);
-    R(a.g, 0, 1, 1, 1, "#a35d3b");
-    R(a.g, 0, 3, 2, 1, "#cbb894");
-    const b = makeCanvas(2, 4);
-    R(b.g, 0, 0, 2, 4, GOLD[2]);
-    R(b.g, 0, 3, 2, 1, GOLD[0]);
-    note = a.c;
-    noteDone = b.c;
-  }
-  return [note, noteDone];
-}
-
 // ---------- many pieces at once: the area marked, and the pieces in hand ----------
 
 /**
@@ -834,7 +824,12 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
   const w = S.world;
   const L: Layout = layout(w);
   if (S.view.z < 1) {
-    // Further out than a screen pixel for each of the yard's, the yard is its plan (`far.ts`).
+    // Further out than a screen pixel for each of the yard's, the yard is its plan (`far.ts`); what
+    // only the picture near uses is let go of until the view comes back in.
+    opened.yet = true;
+    fit(dusk, 1, 1);
+    stood?.around.release();
+    wiring.release();
     const [dx, dy] = drawPlan(g, w, L, corner.x, corner.y);
     lap("plan");
     drawPlanMarks(g, w, dx, dy);
@@ -888,7 +883,8 @@ function floorLayer(f: Frame): void {
   // Bought a moment ago: the cleared ground opens out from the signpost, over the forest's floor.
   const clearing = land.plots.flatMap((plot, n) => (S.clearing.has(plot.plot) ? [n] : []));
   const cleared = (n: number): boolean => L.owned[n] === true && !clearing.includes(n);
-  floor.lay(g, view, cleared, clearing, (n) => L.owned[n] === true || clearing.includes(n));
+  floor.lay(g, view, cleared, clearing, (n) => L.owned[n] === true || clearing.includes(n), !opened.yet);
+  opened.yet = true;
   for (const n of clearing) {
     const plot = land.plots[n];
     const at = plot && S.clearing.get(plot.plot);
@@ -1010,7 +1006,7 @@ function standingLayer(f: Frame): void {
   const dt = dfoot - ds.ay;
   if (dl < W && dl + ds.c.width > 0 && dt < H && dfoot > -8) {
     stand(ds, dx, dfoot, dz);
-    const [paper, done] = notes();
+    const [paper, done] = art.notes;
     for (let n = 0; n < w.board.length; n++) {
       const o = w.board[n];
       if (o)
@@ -1131,6 +1127,7 @@ function lamps(f: Frame): void {
 function lampLayer(f: Frame): void {
   const { g, W, H, cx, cy } = f;
   lamps(f);
+  fit(dusk, W, H);
   const d = dusk.g;
   d.globalCompositeOperation = "copy";
   d.globalAlpha = 1;

@@ -33,11 +33,11 @@ import {
 import { pick, shown as cardShown, thing } from "@sequoia-leaf/kit/card.ts";
 import { el, icon, unit } from "@sequoia-leaf/kit/dom.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
-import { CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
+import { CREAM, INK } from "@sequoia-leaf/kit/palette.ts";
 import { PER_MINUTE, perMinute, whole } from "@sequoia-leaf/kit/say.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
-import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
+import { widthOf } from "@sequoia-leaf/kit/text.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
 
 import { countedOver, reached } from "../arrivals.ts";
@@ -51,6 +51,7 @@ import { troubled, troubleGroups } from "../trouble.ts";
 import { NOT_WALKING, type Walk, walkAt, type WalkEvent, walkStep } from "../walk.ts";
 import { closeCard, itemRef, openCard, plotRef, tileRef } from "./card.ts";
 import { mapPress } from "./mappress.ts";
+import { price } from "./mapprice.ts";
 import { closePanel, openPanel, refreshPanel } from "./panels.ts";
 import { $, fitted, iconButton, yardIcon } from "./parts.ts";
 import { type Line, table } from "./table.ts";
@@ -208,21 +209,6 @@ let mapPlan: Plan | null = null;
 const MAP = 3;
 /** How near a tap must be to a piece in trouble to mean it, in CSS pixels: a finger's reach. */
 const REACH = 14;
-
-/** A small coin and a price, centred on a point of the map. */
-function price(g: CanvasRenderingContext2D, text: string, cx: number, cy: number): void {
-  const w = widthOf(g, text, 1);
-  const left = Math.round(cx - (w + 7) / 2);
-  const top = Math.round(cy - 4);
-  g.fillStyle = INK;
-  g.fillRect(left - 1, top + 1, 7, 7);
-  g.fillStyle = GOLD[1];
-  g.fillRect(left + 1, top + 2, 3, 5);
-  g.fillRect(left, top + 3, 5, 3);
-  g.fillStyle = CREAM;
-  g.fillRect(left + 1, top + 3, 1, 1);
-  write(g, text, left + 7, top, { px: 1, colour: GOLD[2], edge: INK });
-}
 
 /**
  * The plots for sale, each with its price as it is written, the middle of it on the map, and whether

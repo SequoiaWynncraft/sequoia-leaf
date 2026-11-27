@@ -2,12 +2,15 @@
  * The floor on the screen: the ground (`art/ground.ts`) kept in patches (`patches.ts`) and painted
  * only where it is needed. A patch is painted when it comes into view, or into the ring of patches
  * round the view, nearest the middle first, a small step at a time and only in the time a frame has
- * left once everything else is drawn, so painting never makes a frame long however large the land;
- * a patch not painted yet shows the map's flat colours until it is. Patches far from the view are
- * given back, so what is kept grows with the screen and not with the land.
+ * left once everything else is drawn, so painting never makes a frame long however large the land.
+ * Only the page's first frame paints before it lays, so the page opens painted. A patch not painted
+ * yet shows the map's flat colours until it is. Patches are kept up to a budget, those seen longest
+ * ago given back first: today's whole land stays painted once seen, and on a larger one what was
+ * seen a moment ago is still there on coming back.
  *
  * What a patch shows depends only on which of the plots under it the yard has cleared: buying a plot
- * paints again only the patches of that plot. While its undergrowth comes down, the plot's patches
+ * paints again only the patches of that plot, and until it has, they show the flat colours, never
+ * what the plot was before. While its undergrowth comes down, the plot's patches
  * as they will be are painted beside those on the screen, shown where the clearing has reached, and
  * put in their place once it is done.
  */
@@ -16,15 +19,20 @@ import { WATER } from "@sequoia-leaf/kit/palette.ts";
 import { type Ctx, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./art/belts.ts";
-import { BEYOND, type Box, type Ground } from "./art/ground.ts";
+import { BEYOND, type Box, type Ground, pack } from "./art/ground.ts";
 import { DEEP } from "./art/pal.ts";
-import { inSpan, PATCH, Patches, placeOf, type Span, spanOf } from "./patches.ts";
+import { inSpan, PATCH, type Patch, Patches, placeOf, type Span, spanOf } from "./patches.ts";
 
 /**
- * Painting's time, in milliseconds: on the first frame, before anything is laid, so the view opens
- * painted; and on every frame after, what is left until this long after the frame began.
+ * Painting's time, in milliseconds: on the page's first frame, before anything is laid, so the view
+ * opens painted; and on every frame, what is left until this long after the frame began.
  */
 const BUDGET = { first: 120, frame: 6 } as const;
+/**
+ * Patches kept at most, but never fewer than the view and the ring round it need: 80 of 48 KiB, under
+ * 4 MiB, more than today's whole land (64 patches with the forest round it).
+ */
+const KEPT = 80;
 /** Frames in a row with no time left after which a step is painted anyway, so the floor is painted where every frame is long. */
 const STARVED = 8;
 /** The flat colours of a patch not painted yet: grass on the yard's own land, the forest's floor, the stream, and past the map. */
@@ -56,8 +64,8 @@ export class Floor {
   readonly #under = new Map<number, readonly number[]>();
   /** The map's flat colours, a pixel a tile, and the plots cleared they were painted for. */
   readonly #rough: { c: HTMLCanvasElement; g: Ctx; key: string };
-  /** Nothing has been painted since the floor was opened or its pictures were lost. */
-  #fresh = true;
+  /** Frames laid, to know which patches were seen longest ago. */
+  #frame = 0;
   /** The patch being painted, a step at a time, and what it is for. */
   #busy: { job: Job; steps: Generator<void, void, undefined> } | null = null;
   /** What the last frame wanted painted, first first; and frames in a row that had no time left for it. */
@@ -83,7 +91,6 @@ export class Floor {
     this.#now.clear();
     this.#next.clear();
     this.#rough.key = "\u0000";
-    this.#fresh = true;
   }
 
   /** The plots under a patch, by their place in the land's list. */
@@ -178,9 +185,10 @@ export class Floor {
    * Lays the floor on a picture whose corner is (`view.x`, `view.y`) of the yard: the yard's own floor
    * on each plot `cleared` says, the forest's elsewhere. `clearing` are plots being cleared, with what
    * clears them (`cleared` and them): their patches are painted first, ready for `layClearing`. What
-   * is missing is painted after the frame is drawn (`paintSpare`), but on the first frame, before.
+   * is missing is painted after the frame is drawn (`paintSpare`), but on the page's first frame
+   * (`opening`), before.
    */
-  lay(g: Ctx, view: Box, cleared: Cleared, clearing: readonly number[], after: Cleared): void {
+  lay(g: Ctx, view: Box, cleared: Cleared, clearing: readonly number[], after: Cleared, opening: boolean): void {
     const mid = { x: view.x + view.w / 2, y: view.y + view.h / 2 };
     const seen = spanOf(view);
     const near = spanOf(view, 1);
@@ -192,11 +200,11 @@ export class Floor {
       ...this.#jobs(this.#now, seen, cleared, mid),
       ...this.#jobs(this.#now, near, cleared, mid, (col, row) => !inSpan(seen, col, row)),
     ];
-    if (this.#fresh) this.#work(this.#wanted, performance.now() + BUDGET.first);
-    this.#fresh = false;
-    this.#layRough(g, view, seen, cleared);
-    this.#now.lay(g, view.x, view.y, view.w, view.h);
-    this.#now.keep(near);
+    if (opening) this.#work(this.#wanted, performance.now() + BUDGET.first);
+    this.#layPatches(g, view, seen, cleared);
+    this.#frame++;
+    for (const p of this.#now.kept) if (inSpan(near, p.col, p.row)) p.seen = this.#frame;
+    this.#now.trim(Math.max(KEPT, (near.c1 - near.c0 + 1) * (near.r1 - near.r0 + 1)));
     if (clearing.length === 0) this.#next.clear();
     else this.#next.keep(near);
   }
@@ -216,47 +224,33 @@ export class Floor {
     }
   }
 
-  /** The map's flat colours under the patches of the view not painted yet. */
-  #layRough(g: Ctx, view: Box, s: Span, cleared: Cleared): void {
-    const missing: { x: number; y: number }[] = [];
+  /**
+   * Each patch of the view as the yard has it now, over the map's flat colours laid once under the
+   * whole view where any patch is not painted for what it must show (not yet, or painted when a plot
+   * under it was someone else's). A patch covers its box whole, so nothing of the flat colours shows
+   * through one that is painted.
+   */
+  #layPatches(g: Ctx, view: Box, s: Span, cleared: Cleared): void {
+    const shown: Patch[] = [];
     for (let row = s.r0; row <= s.r1; row++)
-      for (let col = s.c0; col <= s.c1; col++)
-        if (!this.#now.get(col, row)) missing.push({ x: col * PATCH.w, y: row * PATCH.h });
-    if (missing.length === 0) return;
-    const rough = this.#roughFor(cleared);
+      for (let col = s.c0; col <= s.c1; col++) {
+        const p = this.#now.get(col, row);
+        if (p && p.key === this.#keyOf(col, row, cleared)) shown.push(p);
+      }
+    if (shown.length < (s.c1 - s.c0 + 1) * (s.r1 - s.r0 + 1)) this.#layRough(g, view, cleared);
+    for (const p of shown) g.drawImage(p.c, p.x - view.x, p.y - view.y);
+  }
+
+  /** The map's flat colours over a whole view: past the ground, the forest's floor round the map, and the map a tile a pixel. */
+  #layRough(g: Ctx, view: Box, cleared: Cleared): void {
     const gr = this.#gr;
     const { land } = gr;
     g.imageSmoothingEnabled = false;
-    for (const m of missing) {
-      const x = m.x - view.x;
-      const y = m.y - view.y;
-      g.fillStyle = BEYOND;
-      g.fillRect(x, y, PATCH.w, PATCH.h);
-      // The ground's part of it, the forest's floor, and over that the map's part, a tile a pixel.
-      const gx0 = Math.max(m.x, gr.x);
-      const gy0 = Math.max(m.y, gr.y);
-      const gx1 = Math.min(m.x + PATCH.w, gr.x + gr.w);
-      const gy1 = Math.min(m.y + PATCH.h, gr.y + gr.h);
-      if (gx1 <= gx0 || gy1 <= gy0) continue;
-      g.fillStyle = ROUGH.margin;
-      g.fillRect(gx0 - view.x, gy0 - view.y, gx1 - gx0, gy1 - gy0);
-      const tx0 = Math.max(0, m.x / TILE);
-      const ty0 = Math.max(0, m.y / TILE);
-      const tx1 = Math.min(land.w, (m.x + PATCH.w) / TILE);
-      const ty1 = Math.min(land.h, (m.y + PATCH.h) / TILE);
-      if (tx1 > tx0 && ty1 > ty0)
-        g.drawImage(
-          rough,
-          tx0,
-          ty0,
-          tx1 - tx0,
-          ty1 - ty0,
-          tx0 * TILE - view.x,
-          ty0 * TILE - view.y,
-          (tx1 - tx0) * TILE,
-          (ty1 - ty0) * TILE,
-        );
-    }
+    g.fillStyle = BEYOND;
+    g.fillRect(0, 0, view.w, view.h);
+    g.fillStyle = ROUGH.margin;
+    g.fillRect(gr.x - view.x, gr.y - view.y, gr.w, gr.h);
+    g.drawImage(this.#roughFor(cleared), -view.x, -view.y, land.w * TILE, land.h * TILE);
   }
 
   /** The map's flat colours, painted again when the plots cleared are not those they were painted for. */
@@ -266,12 +260,13 @@ export class Floor {
     const key = land.plots.map((_, n) => (cleared(n) ? "1" : "0")).join("");
     if (r.key === key) return r.c;
     r.key = key;
-    for (let ty = 0; ty < land.h; ty++)
-      for (let tx = 0; tx < land.w; tx++) {
-        const i = ty * land.w + tx;
-        r.g.fillStyle = land.water[i] === 1 ? ROUGH.water : cleared(land.plot[i] ?? -1) ? ROUGH.owned : ROUGH.wild;
-        r.g.fillRect(tx, ty, 1, 1);
-      }
+    // A pixel a tile, written straight in: a land has thousands of tiles.
+    const img = r.g.createImageData(land.w, land.h);
+    const px = new Uint32Array(img.data.buffer);
+    const [water, owned, wild] = [ROUGH.water, ROUGH.owned, ROUGH.wild].map(pack);
+    for (let i = 0; i < px.length; i++)
+      px[i] = (land.water[i] === 1 ? water : cleared(land.plot[i] ?? -1) ? owned : wild) ?? 0;
+    r.g.putImageData(img, 0, 0);
     return r.c;
   }
 }

@@ -1,7 +1,8 @@
 /**
  * A picture as large as the yard's ground, kept as patches: a canvas for each box of `PATCH` of the
  * yard's pixels, lined up with the map's own corner, made when something is drawn there and given
- * back once it is out of view. So what is kept grows with the screen, not with the land. A patch is
+ * back once it is out of view, or seen longest ago when more are kept than a budget allows. So what
+ * is kept is bounded by the screen or the budget, not by the land. A patch is
  * a whole number of tiles each way, and a plot (sixteen tiles by twelve) is two patches by two.
  */
 
@@ -22,6 +23,8 @@ export interface Patch {
   y: number;
   /** What was painted on it, for a picture whose patches are painted by what they show (the floor). */
   key: string;
+  /** The last frame it was in or near the view, for a picture kept by how recently each patch was seen. */
+  seen: number;
   /** How to stop hearing that its canvas came back empty. */
   readonly off: Release;
 }
@@ -74,13 +77,14 @@ export class Patches {
     if (p) p.g.clearRect(0, 0, PATCH.w, PATCH.h);
     else {
       const { c, g } = makeCanvas(PATCH.w, PATCH.h, true);
-      p = { c, g, col, row, x: 0, y: 0, key: "", off: this.#held.on(c, "contextrestored", this.#lost) };
+      p = { c, g, col, row, x: 0, y: 0, key: "", seen: 0, off: this.#held.on(c, "contextrestored", this.#lost) };
     }
     p.col = col;
     p.row = row;
     p.x = col * PATCH.w;
     p.y = row * PATCH.h;
     p.key = "";
+    p.seen = 0;
     this.#kept.set(placeOf(col, row), p);
     return p;
   }
@@ -98,6 +102,13 @@ export class Patches {
         gone?.(p);
         this.#give(p);
       }
+  }
+
+  /** Gives back the patches seen longest ago until no more than `most` are kept. */
+  trim(most: number): void {
+    if (this.#kept.size <= most) return;
+    const oldest = [...this.#kept.values()].toSorted((a, b) => a.seen - b.seen);
+    for (const p of oldest.slice(0, this.#kept.size - most)) this.#give(p);
   }
 
   /** Gives back every patch, telling `gone` of each. */
