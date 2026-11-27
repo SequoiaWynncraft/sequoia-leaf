@@ -319,7 +319,7 @@ async function boot(): Promise<void> {
   window.addEventListener("blur", letGo);
   document.addEventListener("pointerdown", unlock, true);
 
-  /** What a thing is: its card, for a camp thing; a line, for anything else. */
+  /** What a thing is: its card, for a camp thing; a line, for anything else. Pinned (a long press), either stays until put away. */
   function showTip(h: Hover, pinned = false): void {
     const box = pageBox(h);
     if (h.ref) {
@@ -327,7 +327,7 @@ async function boot(): Promise<void> {
       else point(h.ref, box.x, box.y, box.w, box.h);
       return;
     }
-    if (h.tip) tipAt(box, h.tip[0], h.tip[1], TIP);
+    if (h.tip) tipAt(box, h.tip[0], h.tip[1], TIP, { pin: pinned });
   }
 
   // A finger or the mouse down on the world, one at a time (`gesture.ts`).
@@ -340,13 +340,12 @@ async function boot(): Promise<void> {
     drag: (x, y) => scene().drag(toWorld(x, y)),
     release: (x, y) => scene().release(toWorld(x, y), document.elementFromPoint(x, y)),
     cancel: () => scene().cancel(),
-    // A finger kept on a thing asks what it is: a camp thing's card stays until put away, a line goes by itself.
+    // A finger kept on a thing asks what it is: its card, or its line, stays until put away.
     asked(x, y) {
       const h = scene().point(toWorld(x, y));
       if (h) showTip(h, true);
     },
     cleared() {
-      tipOff(TIP);
       scene().point(null);
     },
   });

@@ -8,8 +8,9 @@
  * Pointing at a thing on the yard says what it is; clicking or tapping pins its card.
  */
 import { at, carries, isItem, NONE, piecesAt, redwoodAt, tilesOf } from "@sequoia-leaf/factory";
-import { close, pick, refresh, register, shown, watch } from "@sequoia-leaf/kit/card.ts";
+import { canvasCard, close, moveCard, pick, refresh, register, shown, watch } from "@sequoia-leaf/kit/card.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
+import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
 import { TILE } from "../art/belts.ts";
@@ -153,25 +154,28 @@ export function refreshCard(): void {
 }
 
 /**
- * Keeps the yard in step with the cards: the tile whose card is pinned is marked on the yard, and
- * a sheet along the bottom (a finger's card) does not cover what it is about.
+ * Keeps the yard in step with the cards: the tile whose card is pinned is marked on the yard, with a
+ * tap. A finger's card is a sheet the kit keeps off its tile (along the bottom, or the top); where
+ * that leaves it too short to show whole, the yard moves the tile up under the top bar, and the card
+ * is placed again beside it, whole along the bottom.
  */
 export function followCards(pan: (dx: number, dy: number) => void): void {
   let was = -1;
+  const own = scope();
   watch(() => {
     const now = S.picked;
     if (now === was) return;
     was = now;
     if (now < 0) return;
     sfx.tap();
-    requestAnimationFrame(() => {
+    own.frame(() => {
       const sheet = document.querySelector(".k-info.sheet");
-      if (!sheet || S.picked < 0) return;
-      const w = S.world;
-      const spot = toPage((S.picked % w.land.w) * TILE + 8, Math.floor(S.picked / w.land.w) * TILE + 8);
-      const top = sheet.getBoundingClientRect().top;
-      // Moved up just far enough to stand clear of the card.
-      if (spot.y > top - 24) pan(0, top - 40 - spot.y);
+      if (!sheet || S.picked < 0 || sheet.scrollHeight <= sheet.clientHeight) return;
+      const w = S.world.land.w;
+      const box = (): ReturnType<typeof tileBox> => tileBox(S.picked % w, Math.floor(S.picked / w));
+      const top = Number.parseFloat(getComputedStyle(document.body).getPropertyValue("--sheet-top")) || 0;
+      pan(0, top + 16 - box().y);
+      moveCard(canvasCard, box());
     });
   });
 }

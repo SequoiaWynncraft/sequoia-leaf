@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tips</title>
+    <link rel="stylesheet" href="../src/kit.css" />
+    <script type="module" src="./tips-page.ts"></script>
+    <style>
+      /* The game's bar along the bottom, as the town gives it: a length worked out, not a number. */
+      :root {
+        --sheet-floor: calc(var(--u) * 60);
+      }
+      html body {
+        min-height: 100vh;
+        margin: 0;
+        background: #2f5c34;
+        padding: calc(var(--u) * 8);
+        box-sizing: border-box;
+        display: flex;
+        flex-wrap: wrap;
+        gap: calc(var(--u) * 10);
+        align-items: flex-start;
+        color: var(--k-cream);
+      }
+      .corner {
+        position: fixed;
+      }
+      #tl {
+        left: 4px;
+        top: 120px;
+      }
+      #tr {
+        right: 4px;
+        top: 160px;
+      }
+      #bl {
+        left: 4px;
+        bottom: 4px;
+      }
+      #br {
+        right: 4px;
+        bottom: 4px;
+      }
+      /* Just above the bar: a sheet along the bottom would cover it. */
+      #floor {
+        position: fixed;
+        left: 70%;
+        bottom: calc(var(--u) * 60 + 10px);
+      }
+      /* Where a tall bar (400px, set by the test) would leave a sheet along the bottom no room. */
+      #mid {
+        position: fixed;
+        left: 50%;
+        top: 470px;
+      }
+      /* In the middle: its long card fits whole at neither edge. */
+      #tall {
+        position: fixed;
+        left: 10px;
+        top: 45%;
+      }
+    </style>
+  </head>
+  <body></body>
+</html>
