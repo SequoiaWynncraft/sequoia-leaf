@@ -14,7 +14,7 @@ import { Around } from "./around.ts";
 import { TILE } from "./art/belts.ts";
 import { type Box, type Ground, makeGround } from "./art/ground.ts";
 import { floorOf } from "./figure/dust.ts";
-import { Floor } from "./floor.ts";
+import { type Cleared, Floor, type Hands, handsNow } from "./floor.ts";
 import { PATCH } from "./patches.ts";
 import { labelLeft } from "./ui/mapprice.ts";
 
@@ -56,8 +56,12 @@ afterAll(() => {
   Reflect.deleteProperty(globalThis, "document");
 });
 
-/** The ground of a land, with every box it is asked to paint written down. */
-function watched(land: Land): { gr: Ground; painted: Box[] } {
+/** The ground of a land, and every box it is asked to paint, written down. */
+interface Watched {
+  readonly gr: Ground;
+  readonly painted: Box[];
+}
+function watched(land: Land): Watched {
   const gr = makeGround(land);
   const painted: Box[] = [];
   return {
@@ -69,30 +73,39 @@ function watched(land: Land): { gr: Ground; painted: Box[] } {
 /** A phone's view at the size that suits it, its middle on a tile. */
 const viewAt = (tx: number, ty: number): Box => ({ x: tx * TILE - 90, y: ty * TILE - 200, w: 181, h: 401 });
 
-/** A frame's floor on a view's picture, after the page's first: how many patches were laid, and how many times the map's flat colours. */
-function frame(
-  floor: Floor,
-  land: Land,
-  view: Box,
-  cleared: (plot: number) => boolean,
-): { patches: number; flat: number } {
+/** Whose the land is: `cleared` the plots cleared, every plot the yard's land unless `land` says, none being cleared unless `clearing`. */
+const hands = (cleared: Cleared, land: Cleared = () => true, clearing: readonly number[] = []): Hands => ({
+  cleared,
+  land,
+  clearing,
+});
+
+/** A frame's floor on a view's picture, after the page's first: how many patches were laid, how many times the map's flat colours, and how many patches were painted before laying. */
+function frame(floor: Floor, w: Watched, view: Box, h: Hands): { patches: number; flat: number; painted: number } {
   const { g } = makeCanvas(view.w, view.h);
   const on = made.at(-1);
   laid.length = 0;
-  floor.lay(g, view, cleared, [], cleared, false);
+  w.painted.length = 0;
+  floor.lay(g, view, h, false);
   const mine = laid.filter((l) => l.on === on);
   return {
     patches: mine.filter((l) => l.w === PATCH.w && l.h === PATCH.h).length,
-    flat: mine.filter((l) => l.w === land.w && l.h === land.h).length,
+    flat: mine.filter((l) => l.w === w.gr.land.w && l.h === w.gr.land.h).length,
+    painted: w.painted.length,
   };
 }
 
-/** Lays the floor of a view and paints everything it wants, as frames with time to spare would. */
-function settle(floor: Floor, view: Box, cleared: (plot: number) => boolean): void {
+/** Paints all a floor wants, as frames with time to spare would, until it wants nothing more. */
+function drain(floor: Floor): void {
+  for (let k = 0; k < 8 && floor.waiting > 0; k++) floor.paintSpare(Number.POSITIVE_INFINITY - 1);
+}
+
+/** Lays the floor of a view and paints everything it wants. */
+function settle(floor: Floor, view: Box, h: Hands): void {
   const { g } = makeCanvas(view.w, view.h);
-  for (let k = 0; k < 4; k++) {
-    floor.lay(g, view, cleared, [], cleared, false);
-    floor.paintSpare(Number.POSITIVE_INFINITY - 1);
+  for (let k = 0; k < 3; k++) {
+    floor.lay(g, view, h, false);
+    drain(floor);
   }
 }
 
@@ -102,49 +115,88 @@ const MEADOW = (() => {
   return { x: (p?.x ?? 0) * TILE, y: (p?.y ?? 0) * TILE, w: 2 * PATCH.w, h: 2 * PATCH.h };
 })();
 const meadow = LAND.plots.findIndex((q) => q.name === "Long Meadow");
+const ALL = (): boolean => true;
 
 describe("the floor on the screen", () => {
-  test("a plot that changes hands never shows its old floor: the flat colours until it is painted again", () => {
-    const floor = new Floor(watched(LAND).gr, () => undefined);
+  test("a plot that changes hands is painted for its new owner before the frame is laid: never its old floor, nor flat colours", () => {
+    const w = watched(LAND);
+    const floor = new Floor(w.gr, () => undefined);
     const owned = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8]);
-    settle(floor, MEADOW, (n) => owned.has(n));
-    expect(frame(floor, LAND, MEADOW, (n) => owned.has(n))).toEqual({ patches: 4, flat: 0 });
+    settle(
+      floor,
+      MEADOW,
+      hands((n) => owned.has(n)),
+    );
     owned.delete(meadow);
-    expect(frame(floor, LAND, MEADOW, (n) => owned.has(n))).toEqual({ patches: 0, flat: 1 });
-    settle(floor, MEADOW, (n) => owned.has(n));
-    expect(frame(floor, LAND, MEADOW, (n) => owned.has(n))).toEqual({ patches: 4, flat: 0 });
+    expect(
+      frame(
+        floor,
+        w,
+        MEADOW,
+        hands((n) => owned.has(n)),
+      ),
+    ).toEqual({ patches: 4, flat: 0, painted: 4 });
   });
 
-  test("today's land, once painted, is still painted on coming back from its far corner", () => {
-    const floor = new Floor(watched(LAND).gr, () => undefined);
-    settle(floor, MEADOW, () => true);
-    settle(floor, viewAt(2, 2), () => true);
-    settle(floor, viewAt(46, 2), () => true);
-    expect(frame(floor, LAND, MEADOW, () => true)).toEqual({ patches: 4, flat: 0 });
+  test("a view that crosses today's land row by row and comes back finds every patch of the yard's land still painted", () => {
+    const w = watched(LAND);
+    const floor = new Floor(w.gr, () => undefined);
+    const hollow = viewAt(8, 6);
+    settle(floor, hollow, hands(ALL));
+    for (let ty = 0; ty <= 36; ty += 6) for (let tx = 0; tx <= 48; tx += 8) settle(floor, viewAt(tx, ty), hands(ALL));
+    expect(frame(floor, w, hollow, hands(ALL))).toMatchObject({ flat: 0, painted: 0 });
   });
 
-  test("only the page's first frame paints before it lays: any later one, the first at the picture's zoom too, waits for time to spare", () => {
-    const later = watched(SEVEN);
-    const { g } = makeCanvas(181, 401);
-    new Floor(later.gr, () => undefined).lay(
-      g,
-      viewAt(56, 42),
-      () => true,
-      [],
-      () => true,
-      false,
-    );
-    expect(later.painted).toEqual([]);
-    const first = watched(SEVEN);
-    new Floor(first.gr, () => undefined).lay(
-      g,
-      viewAt(56, 42),
-      () => true,
-      [],
-      () => true,
-      true,
-    );
-    expect(first.painted.length).toBeGreaterThan(0);
+  test("the yard's land is painted ahead and kept whole: on the large land, every patch of it after the view went to every corner", () => {
+    const w = watched(SEVEN);
+    const floor = new Floor(w.gr, () => undefined);
+    for (const [tx, ty] of [
+      [56, 42],
+      [4, 4],
+      [108, 80],
+      [4, 80],
+      [108, 4],
+    ] as const)
+      settle(floor, viewAt(tx, ty), hands(ALL));
+    // Seven plots by seven, two patches by two each, and the forest beyond no more than its budget and the view's.
+    expect(floor.kept).toBeGreaterThanOrEqual(196);
+    expect(floor.kept).toBeLessThanOrEqual(196 + 40 + 24);
+    expect(frame(floor, w, viewAt(56, 42), hands(ALL))).toMatchObject({ flat: 0, painted: 0 });
+  });
+
+  test("at the plan's zoom the land is painted ahead, so the first view near shows it painted, painting nothing first", () => {
+    const w = watched(LAND);
+    const floor = new Floor(w.gr, () => undefined);
+    floor.plan(hands(ALL), { x: 400, y: 300 }, Number.POSITIVE_INFINITY - 1);
+    drain(floor);
+    expect(frame(floor, w, MEADOW, hands(ALL))).toEqual({ patches: 4, flat: 0, painted: 0 });
+  });
+
+  test("after the browser empties the pictures, the next frame paints its view before laying it", () => {
+    const w = watched(LAND);
+    const floor = new Floor(w.gr, () => undefined);
+    settle(floor, MEADOW, hands(ALL));
+    floor.wipe();
+    expect(frame(floor, w, MEADOW, hands(ALL))).toEqual({ patches: 4, flat: 0, painted: 4 });
+  });
+
+  test("a frame paints nothing before laying when nothing in view changed hands, though it is not all painted yet", () => {
+    const w = watched(SEVEN);
+    const floor = new Floor(w.gr, () => undefined);
+    frame(floor, w, viewAt(56, 42), hands(ALL));
+    expect(frame(floor, w, viewAt(20, 20), hands(ALL))).toMatchObject({ painted: 0 });
+  });
+
+  test("a plot bought shows its cleared floor where the clearing has reached from its first frame, with no time to spare", () => {
+    const w = watched(LAND);
+    const floor = new Floor(w.gr, () => undefined);
+    const before = (n: number): boolean => n !== meadow;
+    settle(floor, MEADOW, hands(before));
+    const { g } = makeCanvas(MEADOW.w, MEADOW.h);
+    floor.lay(g, MEADOW, hands(before, ALL, [meadow]), false);
+    laid.length = 0;
+    floor.layClearing(g, MEADOW, meadow);
+    expect(laid.filter((l) => l.w === PATCH.w && l.h === PATCH.h).length).toBe(4);
   });
 
   test("buying a plot paints again only the patches of that plot", () => {
@@ -153,12 +205,20 @@ describe("the floor on the screen", () => {
     const owned = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8]);
     // At the west edge of the guild's land, the first ring's plot beyond it in view.
     const view = viewAt(34, 42);
-    settle(floor, view, (n) => owned.has(n));
+    settle(
+      floor,
+      view,
+      hands((n) => owned.has(n)),
+    );
     const west = SEVEN.plots.findIndex((p) => p.x === 16 && p.y === 36);
     expect(west).toBeGreaterThan(8);
     painted.length = 0;
     owned.add(west);
-    settle(floor, view, (n) => owned.has(n));
+    settle(
+      floor,
+      view,
+      hands((n) => owned.has(n)),
+    );
     const plot = SEVEN.plots[west];
     const inside = (b: Box): boolean =>
       plot !== undefined &&
@@ -169,20 +229,15 @@ describe("the floor on the screen", () => {
     expect(painted.length).toBeGreaterThan(0);
     expect(painted.filter((b) => !inside(b))).toEqual([]);
   });
+});
 
-  test("what is kept stays within its budget wherever the view goes on the large land", () => {
-    const floor = new Floor(watched(SEVEN).gr, () => undefined);
-    for (const [tx, ty] of [
-      [56, 42],
-      [4, 4],
-      [108, 80],
-      [56, 80],
-      [4, 80],
-      [108, 4],
-    ] as const) {
-      settle(floor, viewAt(tx, ty), () => true);
-      expect(floor.kept).toBeLessThanOrEqual(80);
-    }
+describe("whose the land is", () => {
+  test("a plot being cleared that is not the yard's (Leaf put the purchase back) stops clearing at once", () => {
+    const owned = LAND.plots.map((_, n) => n !== meadow);
+    const plot = LAND.plots[meadow]?.plot;
+    const clearing = new Map(plot === undefined ? [] : [[plot, { at: 0, x: 0, y: 0 }]]);
+    const h = handsNow({ owned, signs: [], yard: { land: LAND } }, clearing);
+    expect([h.clearing, clearing.size, h.cleared(meadow)]).toEqual([[], 0, false]);
   });
 });
 

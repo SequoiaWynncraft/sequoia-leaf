@@ -104,11 +104,10 @@ export class Patches {
       }
   }
 
-  /** Gives back the patches seen longest ago until no more than `most` are kept. */
-  trim(most: number): void {
-    if (this.#kept.size <= most) return;
-    const oldest = [...this.#kept.values()].toSorted((a, b) => a.seen - b.seen);
-    for (const p of oldest.slice(0, this.#kept.size - most)) this.#give(p);
+  /** Gives back the patches `may` lets go of, those seen longest ago first, until no more than `most` of them are kept. */
+  trim(most: number, may: (p: Patch) => boolean): void {
+    const oldest = [...this.#kept.values()].filter(may).toSorted((a, b) => a.seen - b.seen);
+    for (const p of oldest.slice(0, Math.max(0, oldest.length - most))) this.#give(p);
   }
 
   /** Gives back every patch, telling `gone` of each. */

@@ -27,7 +27,7 @@ import { makeGround } from "../src/art/ground.ts";
 import { holdView, zoom } from "../src/camera.ts";
 import { floorOf } from "../src/figure/dust.ts";
 import { comeIn } from "../src/figure/you.ts";
-import { spent } from "../src/scene.ts";
+import { floorWaiting, spent } from "../src/scene.ts";
 import { S } from "../src/state.ts";
 import { installHandles } from "./handles.ts";
 
@@ -54,6 +54,8 @@ declare global {
       go: () => void;
       opened: number | null;
       firstFloor: number | null;
+      /** How many patches of the floor are still to be painted, once the page has drawn its floor. */
+      waiting: () => number | null;
       /** Milliseconds for each of `n` colours of the floor under a foot, near the tile (`tx`, `ty`), as the dust asks for them. */
       dust: (tx: number, ty: number, n: number) => number[];
     };
@@ -64,6 +66,7 @@ const hold = {
   go: (): void => undefined,
   opened: null as number | null,
   firstFloor: null as number | null,
+  waiting: floorWaiting,
   dust(tx: number, ty: number, n: number): number[] {
     const under = floorOf(makeGround(S.world.land));
     return Array.from({ length: n }, (_, k) => {

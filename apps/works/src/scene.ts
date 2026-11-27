@@ -55,7 +55,7 @@ import { DEPOT as DEPOT_ART, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
 import { aimBox, boxIn, drawnFrom, heldIn, markCovers, pointersOn } from "./big.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
-import { Floor } from "./floor.ts";
+import { Floor, handsNow } from "./floor.ts";
 import { bits, floaters, rings } from "./fx.ts";
 import { heldBox, heldMarks } from "./held.ts";
 import { straight } from "./kinds/carrier.ts";
@@ -168,7 +168,7 @@ export function sizeBuffers(w: number, h: number, marks: number): void {
   fit(buf, w, h);
 }
 
-/** Whether the page has drawn its first frame: only that one paints the floor before laying it. */
+/** Whether the page has laid its floor yet: the first time paints the view before laying it. */
 const opened = { yet: false };
 
 // ---------- things that stand up, far to near ----------
@@ -681,6 +681,9 @@ function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, 
   corners(g, box.x * TILE - cx, box.y * TILE - cy, box.w * TILE, box.h * TILE, bad ? CORAL : GOLD[2], true);
 }
 
+/** How many patches of the floor are still to be painted, for a review page waiting for the land to fill in. */
+export const floorWaiting = (): number | null => floored?.floor.waiting ?? null;
+
 /** The floor on the screen (`floor.ts`): for the ground it was opened on, and the count of losses it last saw. */
 let floored: { gr: Ground; floor: Floor; lost: number } | null = null;
 function floorFor(gr: Ground): Floor {
@@ -826,7 +829,6 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
   if (S.view.z < 1) {
     // Further out than a screen pixel for each of the yard's, the yard is its plan (`far.ts`); what
     // only the picture near uses is let go of until the view comes back in.
-    opened.yet = true;
     fit(dusk, 1, 1);
     stood?.around.release();
     wiring.release();
@@ -834,6 +836,9 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     lap("plan");
     drawPlanMarks(g, w, dx, dy);
     lap("marks");
+    // The land is painted ahead all the same, for when the view comes back in.
+    floorFor(art.ground).plan(handsNow(L, S.clearing), { x: S.cam.x + S.view.w / 2, y: S.cam.y + S.view.h / 2 }, began);
+    lap("painting");
     return buf.c;
   }
   if (w !== drawn) carry(w);
@@ -876,16 +881,14 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
 
 /** The floor: the forest's everywhere, the yard's own over it where the land is the yard's, the stream's glints and the rings things land with. */
 function floorLayer(f: Frame): void {
-  const { g, W, H, cx, cy, L, tx0, ty0, tx1, ty1 } = f;
+  const { g, W, H, cx, cy, L, tx0, ty0, tx1, ty1, view } = f;
   const { land } = f.w;
   const floor = floorFor(f.art.ground);
-  const { view } = f;
   // Bought a moment ago: the cleared ground opens out from the signpost, over the forest's floor.
-  const clearing = land.plots.flatMap((plot, n) => (S.clearing.has(plot.plot) ? [n] : []));
-  const cleared = (n: number): boolean => L.owned[n] === true && !clearing.includes(n);
-  floor.lay(g, view, cleared, clearing, (n) => L.owned[n] === true || clearing.includes(n), !opened.yet);
+  const hands = handsNow(L, S.clearing);
+  floor.lay(g, view, hands, !opened.yet);
   opened.yet = true;
-  for (const n of clearing) {
+  for (const n of hands.clearing) {
     const plot = land.plots[n];
     const at = plot && S.clearing.get(plot.plot);
     if (!at) continue;
