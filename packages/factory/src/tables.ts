@@ -30,7 +30,12 @@ export const NONE = 255;
 const whole = (n: number, below: number): boolean => n >= 0 && n < below && Math.floor(n) === n;
 export const isItem = (n: number): n is Item => whole(n, ITEMS.length);
 export const isKind = (n: number): n is Kind => whole(n, KINDS.length);
-export const isPlot = (n: number): n is Plot => whole(n, PLOT_IDS.length);
+/** Whether a number is a plot of a plots table: the guild's (`isPlot`), or a longer one a test adds plots to. */
+export const isPlotOf =
+  (ids: readonly string[]) =>
+  (n: number): n is Plot =>
+    whole(n, Math.min(ids.length, NONE));
+export const isPlot = isPlotOf(PLOT_IDS);
 export const isGoal = (n: number): n is Goal => whole(n, NODES.length + RESEARCH.length);
 
 /** A name's number in its table, or null: how a name off the wire is read. */
@@ -268,8 +273,9 @@ export interface Open {
   readonly kinds: Uint8Array;
   /** 1 for each thing whose recipe is known. */
   readonly recipes: Uint8Array;
-  /** A bit for each plot for sale, and for each tool. */
-  readonly plots: number;
+  /** 1 for each plot for sale, by its number: as many as the plots table has. */
+  readonly plots: Uint8Array;
+  /** A bit for each tool. */
   readonly tools: number;
   readonly blueprints: number;
   readonly pieces: number;
@@ -304,7 +310,7 @@ export function openOf(goals: readonly Goal[]): Open {
   for (const g of goals) done[g] = 1;
   const kinds = new Uint8Array(KIND_COUNT);
   const recipes = Uint8Array.from(ALL_ITEMS, (n) => (LOCKED.has(n) ? 0 : 1));
-  let plots = 0;
+  const plots = new Uint8Array(PLOT_IDS.length);
   let tools = 0;
   const unlocks = [START, ...goals.flatMap((g) => GOALS[g]?.unlocks ?? [])];
   for (const u of unlocks) for (const k of u.kinds ?? []) kinds[kind(k)] = 1;
@@ -316,7 +322,7 @@ export function openOf(goals: readonly Goal[]): Open {
       if (n !== null && grade !== undefined && kinds[n] !== 0) kinds[n] = Math.max(kinds[n] ?? 0, grade);
     }
     for (const r of u.recipes ?? []) recipes[item(r)] = 1;
-    for (const p of u.plots ?? []) plots |= 1 << plot(p);
+    for (const p of u.plots ?? []) plots[plot(p)] = 1;
     for (const t of u.tools ?? []) tools |= toolBit(t);
   }
   const top = (f: (u: Unlocks) => number | undefined): number => Math.max(0, ...unlocks.map((u) => f(u) ?? 0));

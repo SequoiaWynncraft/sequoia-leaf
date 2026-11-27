@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
+import { xy } from "./near.ts";
 import { fillHand, give, staged, STAGES } from "./yards.ts";
 
 /** The ids of the nodes of the tiers below `tier`, and of the goals a yard has done, in one order. */
@@ -74,14 +75,14 @@ describe("a staged yard", () => {
       "for sale",
       "for sale",
     ]);
-    const split = F.at(y, 26, 13);
+    const split = F.at(y, ...xy(2, -5));
     expect([y.kind[split], y.first[split], F.locked(y.open, { first: true })]).toEqual([
       F.SPLITTER,
       0,
       "Putting a way first is not unlocked yet",
     ]);
     // Both its open ways lead somewhere, and both have had something.
-    expect([F.takes(y, F.at(y, 25, 13), split), F.takes(y, F.at(y, 26, 14), split)]).toEqual([true, true]);
+    expect([F.takes(y, F.at(y, ...xy(1, -5)), split), F.takes(y, F.at(y, ...xy(2, -4)), split)]).toEqual([true, true]);
   });
 
   test("fed, the node in hand is finished at the depot as in play: paid, the next in hand, and logged with the next command", () => {

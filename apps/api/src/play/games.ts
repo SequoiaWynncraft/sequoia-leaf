@@ -17,8 +17,8 @@ import {
   visitRoom,
 } from "@sequoia-leaf/core";
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts" with { type: "macro" };
-import { VERSION } from "@sequoia-leaf/factory/codec.ts";
 import { FACTORY } from "@sequoia-leaf/factory/game.ts";
+import { keptLater } from "@sequoia-leaf/factory/later.ts";
 import { PULLS, PULLS_VERSION } from "@sequoia-leaf/pulls";
 import { RAID, TABLE_VERSION } from "@sequoia-leaf/raid/game.ts";
 import { TOWN, TOWN_VERSION } from "@sequoia-leaf/town";
@@ -102,7 +102,7 @@ export interface Played {
   readonly chore: (command: unknown) => boolean;
   /** A stored state read into memory, with the postcard stored with it (null: none); null when the text is not one the game can read. */
   readonly read: (text: string, postcard: string | null) => Held | null;
-  /** Whether stored text is a newer Leaf's (`newerThan`), which `read` refuses: it is left exactly as it is. */
+  /** Whether stored text is a newer Leaf's (`NEWER`), which `read` refuses: it is left exactly as it is. */
   readonly newer: (text: string) => boolean;
   /** Whether its states go on by themselves (`Game.tend`), for Leaf to tend. */
   readonly tends: boolean;
@@ -139,12 +139,15 @@ function meetsOf<State, Command>(
   return command === null ? null : (game.meets?.(state, command) ?? null);
 }
 
-/** The version of its stored text each game writes (its `v`): text of a higher one is a newer Leaf's (`Played.newer`). */
-const WRITES: Readonly<Record<GameId, number>> = {
-  raid: TABLE_VERSION,
-  works: VERSION,
-  town: TOWN_VERSION,
-  pulls: PULLS_VERSION,
+/**
+ * Whether stored text is a newer Leaf's (`Played.newer`), for each game: of a version above the one
+ * it writes (its `v`); for the Works, also a yard kept on more land than this Leaf's (`keptLater`).
+ */
+const NEWER: Readonly<Record<GameId, (text: string) => boolean>> = {
+  raid: (text) => newerThan(text, TABLE_VERSION),
+  works: (text) => keptLater(text),
+  town: (text) => newerThan(text, TOWN_VERSION),
+  pulls: (text) => newerThan(text, PULLS_VERSION),
 };
 
 /**
@@ -236,7 +239,7 @@ export function played<State, Command, View, Note, Short>(
       const decoded = game.decode(text);
       return decoded === null ? null : held(decoded, postcard);
     },
-    newer: (text) => newerThan(text, WRITES[game.id]),
+    newer: NEWER[game.id],
     tends: game.tend !== undefined,
     posts: game.postcard !== undefined,
     showsDoors,

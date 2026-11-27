@@ -1,7 +1,7 @@
 import { deflateSync } from "node:zlib";
 
 import { BunServices } from "@effect/platform-bun";
-import { minecraftId, type PlayerId, type Posting, type ReportedActivity, whole } from "@sequoia-leaf/core";
+import { gameId, minecraftId, type PlayerId, type Posting, type ReportedActivity, whole } from "@sequoia-leaf/core";
 import {
   Clock,
   ConfigProvider,
@@ -33,6 +33,7 @@ import { Live, LiveMeter, LiveTuning, type TickTimes } from "../src/live/live.ts
 import { LivePlayers } from "../src/live/players.ts";
 import { Watchers } from "../src/live/watchers.ts";
 import { MetricsListener, metricsText, RuntimeMetrics } from "../src/metrics.ts";
+import { GAMES } from "../src/play/games.ts";
 import { type JobTimes, Play, PlayMeter } from "../src/play/service.ts";
 import { PlayStore } from "../src/play/store.ts";
 import { Sittings } from "../src/sittings/service.ts";
@@ -654,4 +655,16 @@ export function skinPng(colours: {
   fill(0, 16, 16, 32, colours.legs); // the right leg
   fill(16, 48, 32, 64, colours.legs); // the left leg
   return encodePng(64, 64, pixels);
+}
+
+/**
+ * A body as a game's page sends it to `path`: a batch of commands (`/v1/game/play/<game>`) says the
+ * rules the page plays by, Leaf's own, unless it says some itself, as the kit's page does (`play.ts`).
+ */
+export function asPage(path: string, body: unknown): unknown {
+  const name = /^\/v1\/game\/play\/([a-z]+)$/.exec(path)?.[1];
+  const id = name === undefined ? undefined : gameId(name);
+  if (id === undefined || typeof body !== "object" || body === null || Array.isArray(body) || "rules" in body)
+    return body;
+  return { rules: GAMES[id].rules, ...body };
 }

@@ -6,10 +6,28 @@ import { Visits } from "../../activity/visits.ts";
 import { CurrentIdentity, LeafApi } from "../../api/api.ts";
 import { Invalid, Missing, SlowDown } from "../../api/errors.ts";
 import { PlayerNames } from "../../game/names.ts";
-import { Play } from "../../play/service.ts";
+import type { Played } from "../../play/games.ts";
+import { type Opening, Play, type Shown } from "../../play/service.ts";
 import { PlayStore } from "../../play/store.ts";
 import { Tallies } from "../../tally/store.ts";
 import { iso, notYou, playedGame, playingOf, unreadable } from "./shared.ts";
+
+/** Leaf's answer to a batch: the state as it now shows (`Shown`), what each command came to, and Leaf's rules. */
+const answerOf = <R>(shown: Shown, played: Played, results: readonly R[]) => ({
+  rev: shown.rev,
+  now: iso(shown.now),
+  results,
+  state: shown.view,
+  purse: shown.purse,
+  rules: played.rules,
+});
+
+/**
+ * A batch from a page playing by other rules than Leaf's, answered as a read is: none of it done,
+ * with Leaf's rules, on which the page loads again, as any page does on seeing them.
+ */
+const asRead = (shown: Opening, played: Played) =>
+  shown.status === "unreadable" ? Effect.fail(unreadable) : Effect.succeed(answerOf(shown, played, []));
 
 export const GamePlayHandlers = HttpApiBuilder.group(LeafApi, "gamePlay", (handlers) =>
   Effect.gen(function* () {
@@ -49,6 +67,13 @@ export const GamePlayHandlers = HttpApiBuilder.group(LeafApi, "gamePlay", (handl
             if (payload.player !== identity.playerId) {
               return yield* notYou;
             }
+            // A page playing by other rules than Leaf's names places and things as those rules have
+            // them: none of its commands is done (`asRead`). A page from before pages said their rules
+            // says none and is done as before: answered with Leaf's rules, it loads again if they are
+            // not its own, and a page of a game whose rules have not changed has nothing to load.
+            if (payload.rules !== undefined && payload.rules !== played.rules) {
+              return yield* asRead(yield* play.open(playingOf(identity), played, undefined), played);
+            }
             const batch = yield* play.send(playingOf(identity), played, payload.commands);
             if (batch.status === "invalid") {
               return yield* new Invalid({ code: "invalid_command", message: batch.why });
@@ -66,14 +91,7 @@ export const GamePlayHandlers = HttpApiBuilder.group(LeafApi, "gamePlay", (handl
             if (payload.commands.some((command) => !played.chore(command))) {
               yield* visits.acted(identity.playerId, yield* Clock.currentTimeMillis);
             }
-            return {
-              rev: batch.rev,
-              now: iso(batch.now),
-              results: batch.results,
-              state: batch.view,
-              purse: batch.purse,
-              rules: played.rules,
-            };
+            return answerOf(batch, played, batch.results);
           }),
         )
         // A game's board, its players named as the guild's news names them.

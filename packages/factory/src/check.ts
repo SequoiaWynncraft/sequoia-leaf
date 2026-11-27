@@ -7,7 +7,9 @@
  * count), the plots owned and the redwoods felled, the depot's books (what awards and the standing are read from), what was seen at the
  * owner's last command, the pieces to hand, the blueprints, what Undo would undo (each entry's bytes:
  * its id is worked out from them), and every part of every piece, tile by
- * tile, numbered by the tables. Every number that may pass 32 bits (the clock, the counters, the
+ * tile, numbered by the tables. Every tile it mixes in (a piece's, a redwood felled, a piece of a plan
+ * of the whole yard) is mixed in as how far it is from the yard plot's corner (`fromCorner`), so the
+ * same yard has the same check on a land of any size: more land round it changes nothing. Every number that may pass 32 bits (the clock, the counters, the
  * Coins, the books) is mixed in by both halves of its 64.
  *
  * It leaves out only what a yard read back from its kept form works out again or never had, so that
@@ -20,10 +22,12 @@
  * `test/codec.test.ts` changes every other part of a yard in turn and fails if the check does not
  * change with it.
  */
+import { fromCorner, tileFromCorner } from "./keptland.ts";
+import type { Land } from "./land.ts";
 import { counting } from "./orders.ts";
 import { waysOn } from "./pieces.ts";
 import { ITEM_COUNT, NONE, SPAN_MOST } from "./tables.ts";
-import { type Counts, holderOf, tunnelOf, type Yard } from "./yard.ts";
+import { type Counts, holderOf, PIECE_BYTES, tunnelOf, type Yard } from "./yard.ts";
 
 const f64 = new Float64Array(1);
 const u32 = new Uint32Array(f64.buffer);
@@ -53,14 +57,31 @@ function mixBytes(b: Uint8Array, mix: (v: number) => void): void {
 }
 
 /**
+ * Mixes in a plan of the whole yard's pieces (`PIECE_BYTES` each: its kind, x, y, then its other
+ * parts), how many bytes and then each piece, part by part, its x and y as one word of how far it is
+ * from the yard plot's corner.
+ */
+function mixPlan(land: Land, b: Uint8Array, mix: (v: number) => void): void {
+  mix(b.length);
+  for (let k = 0; k + PIECE_BYTES <= b.length; k += PIECE_BYTES) {
+    mix(b[k] ?? 0);
+    mix(fromCorner(land, b[k + 1] ?? 0, b[k + 2] ?? 0));
+    for (let part = 3; part < PIECE_BYTES; part++) mix(b[k + part] ?? 0);
+  }
+}
+
+/**
  * Mixes in the yard's kept bytes: each of its blueprints (or none) and whether it is a plan of the
  * whole yard, then what Undo would undo, how many entries and each one's bytes (its id among them).
  */
 function mixKept(y: Yard, mix: (v: number) => void): void {
   for (const b of y.blueprints) {
     if (b === null) mix(-1);
-    else {
-      mix(b.whole ? -2 : -3);
+    else if (b.whole) {
+      mix(-2);
+      mixPlan(y.land, b.pieces, mix);
+    } else {
+      mix(-3);
       mixBytes(b.pieces, mix);
     }
   }
@@ -68,10 +89,14 @@ function mixKept(y: Yard, mix: (v: number) => void): void {
   for (const { bytes } of y.history) mixBytes(bytes, mix);
 }
 
-/** Mixes in the plots owned, in the order they were bought, and each redwood felled; making nothing. */
+/** Mixes in the plots owned, in the order they were bought, and each redwood felled by its first tile; making nothing. */
 function mixLand(y: Yard, mix: (v: number) => void): void {
   for (let k = 0; k < y.plots.length; k++) mix((y.plots[k] ?? 0) + 32);
-  for (let t = 0; t < y.felled.length; t++) if (y.felled[t] === 1) mix(0x10000 + t);
+  for (let t = 0; t < y.felled.length; t++)
+    if (y.felled[t] === 1) {
+      mix(0x10000);
+      mix(tileFromCorner(y.land, y.land.trees[t]?.[0] ?? 0));
+    }
 }
 
 /** The yard in 32 bits. */
@@ -144,7 +169,7 @@ export function check(y: Yard): number {
   for (let i = 0; i < kind.length; i++) {
     const k = kind[i] ?? NONE;
     if (k === NONE) continue;
-    mix(i);
+    mix(tileFromCorner(y.land, i));
     mix(pieceWord(y, i));
     mix(settingsWord(y, i));
     const t = tunnelOf(y, i);

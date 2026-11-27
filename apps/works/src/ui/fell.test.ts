@@ -6,6 +6,7 @@
 import { expect, test } from "bun:test";
 
 import { at, buyPlot, create, plot, redwoodAt, type Yard } from "@sequoia-leaf/factory";
+import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 import { Deck } from "@sequoia-leaf/kit/card.ts";
 import { el } from "@sequoia-leaf/kit/dom.ts";
 import { aPage, press } from "@sequoia-leaf/kit/standin.ts";
@@ -38,10 +39,10 @@ function cardAt(x: number, y: number, refused: string[] = []) {
 test("on the yard's own plot, Fell costs 100 Coins and asks to be pressed again; the second press fells it and tells Leaf", async () => {
   const fake = await opened(meadow(), 1_000);
   const page = aPage();
-  const { ref, print, card } = cardAt(23, 34);
+  const { ref, print, card } = cardAt(...xy(-1, 16));
   expect([card.name, print]).toEqual([
     "Redwood",
-    { card: "ground", ground: "redwood", fell: { x: 23, y: 34, price: 100, short: 0 } },
+    { card: "ground", ground: "redwood", fell: { ...near(-1, 16), price: 100, short: 0 } },
   ]);
   const [fell] = card.actions ?? [];
   if (!fell) throw new Error("no Fell");
@@ -57,31 +58,31 @@ test("on the yard's own plot, Fell costs 100 Coins and asks to be pressed again;
   press();
   expect(deck.confirms(fell, () => undefined)).toBe(true);
   fell.on(button);
-  const tile = at(S.world, 22, 33);
+  const tile = at(S.world, ...xy(-2, 15));
   expect([redwoodAt(S.world, tile), S.felling.has(S.world.land.tree[tile] ?? -1)]).toEqual([false, true]);
   await until(() => fake.leaf.commands.some((c) => isRecord(c) && c.do === "fell"));
   expect(fake.leaf.commands.filter((c) => isRecord(c) && c.do === "fell")).toEqual([
-    expect.objectContaining({ do: "fell", x: 23, y: 34 }),
+    expect.objectContaining({ do: "fell", ...near(-1, 16) }),
   ]);
   // Gone, the tile has no card: it is ground like any other.
-  expect(refAt(22, 33)).toBeNull();
+  expect(refAt(...xy(-2, 15))).toBeNull();
 });
 
 test("drawn short of Coins, Fell says how many more and fells nothing", async () => {
   await opened(meadow(), 40);
   const page = aPage();
   const refused: string[] = [];
-  const { card } = cardAt(22, 33, refused);
+  const { card } = cardAt(...xy(-2, 15), refused);
   expect(card.blocks).toEqual([{ body: "You need 60 Coins more." }]);
   const [fell] = card.actions ?? [];
   if (!fell) throw new Error("no Fell");
   expect(fell.ask).toBeUndefined();
   fell.on(el("button"));
-  expect([redwoodAt(S.world, at(S.world, 22, 33)), refused]).toEqual([true, ["Not enough Coins"]]);
+  expect([redwoodAt(S.world, at(S.world, ...xy(-2, 15))), refused]).toEqual([true, ["Not enough Coins"]]);
   page.done();
 });
 
 test("a redwood on a plot the yard does not own asks about the plot", async () => {
   await opened(meadow(), 1_000);
-  expect(refAt(10, 14)).toBe(plotRef(plot("bank")));
+  expect(refAt(...xy(-14, -4))).toBe(plotRef(plot("bank")));
 });

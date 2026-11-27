@@ -379,9 +379,13 @@ export async function openPlay<View, Command extends object, Note, Short = never
   /** Leaf's state with every prediction still waiting worked out on top. */
   const rebuild = (waiting: readonly P[]): View => waiting.reduce((on, p) => predicted(p, on), base);
 
-  /** A batch as it goes to Leaf: who the page believes it is, and each command with its id. */
+  /**
+   * A batch as it goes to Leaf: who the page believes it is, the rules it plays by (Leaf does none of
+   * a batch made by other rules than its own, and answers as a read, so the page loads again), and
+   * each command with its id.
+   */
   const bodyOf = (batch: readonly P[]): string =>
-    json({ player: options.player, commands: batch.map((p) => ({ ...p.command, id: p.id })) });
+    json({ player: options.player, rules: RULES[game], commands: batch.map((p) => ({ ...p.command, id: p.id })) });
 
   function tell(differs: boolean): void {
     for (const fn of hearers) fn(copy, differs);

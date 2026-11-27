@@ -21,6 +21,7 @@ import {
   TICK_MS,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 import { staged } from "@sequoia-leaf/factory/test/yards.ts";
 import type { Trouble } from "@sequoia-leaf/kit/play.ts";
 import { balance } from "@sequoia-leaf/kit/purse.ts";
@@ -131,6 +132,15 @@ function page(): { window: EventTarget; letter: Part } {
   return { window: win, letter };
 }
 
+/** Lets what the page waits on go on, a second of a held clock at a time, until `done` or `left` seconds have gone. */
+async function seconds(done: () => boolean, left: number, turns = 20): Promise<void> {
+  if (done() || left === 0) return;
+  await Promise.resolve();
+  if (turns > 0) return seconds(done, left, turns - 1);
+  jest.advanceTimersByTime(1000);
+  return seconds(done, left - 1);
+}
+
 describe("the yard, on Leaf", () => {
   test("reads what Leaf really answers a batch of the Works' commands", async () => {
     const contract: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
@@ -176,6 +186,24 @@ describe("the yard, on Leaf", () => {
     expect(await openYard("p", () => undefined)).toBe("closed");
   });
 
+  test("a yard Leaf will not read (one a newer Leaf kept, on more land) is no yard: once waited for, the page says it could not be read, sending nothing", async () => {
+    net.world = standin({
+      "GET /v1/game/play/works": { status: 409, body: { code: "state_unreadable", message: "Kept" } },
+    });
+    jest.useFakeTimers();
+    let why: Trouble | null | undefined;
+    try {
+      void openYard("p", () => undefined).then((w) => (why = w));
+      // Asked again each second for 30 seconds, on the held clock.
+      await seconds(() => why !== undefined, 40);
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(why).toBe("unreadable");
+    expect(net.world.sent.every((s) => s.method === "GET")).toBe(true);
+    expect(net.world.sent.length).toBeGreaterThan(30);
+  });
+
   test("a build shows at once, from the rules, before Leaf has even been asked", async () => {
     const fake = await opened();
     const [a] = clear(1);
@@ -195,17 +223,17 @@ describe("the yard, on Leaf", () => {
   test("a raise still on its way stays paid for in the purse when Leaf answers the one before it", async () => {
     const yard = create({ seed: 5, tier: 3 });
     yard.at = ctx().now;
-    build(yard, BELT, 20, 16, 0, Infinity);
-    build(yard, BELT, 21, 16, 0, Infinity);
+    build(yard, BELT, ...xy(-4, -2), 0, Infinity);
+    build(yard, BELT, ...xy(-3, -2), 0, Infinity);
     const fake = await opened(yard, 1000);
     const held = holding(fake, "POST /v1/game/play/works");
     // A belt raised to grade 2 where it stands: paid for.
-    doNow(act({ do: "build", kind: "belt", dir: 0, grade: 2, x: 20, y: 16 }));
+    doNow(act({ do: "build", kind: "belt", dir: 0, grade: 2, ...near(-4, -2) }));
     const price = 1000 - balance().coins;
     expect(price).toBeGreaterThan(0);
     await until(() => held.length >= 1);
     // The second waits behind the first; both show paid for at once.
-    doNow(act({ do: "build", kind: "belt", dir: 0, grade: 2, x: 21, y: 16 }));
+    doNow(act({ do: "build", kind: "belt", dir: 0, grade: 2, ...near(-3, -2) }));
     expect(balance().coins).toBe(1000 - 2 * price);
     // Leaf answers the first, with its balances after the first alone: the second is still shown paid for.
     held.shift()?.();

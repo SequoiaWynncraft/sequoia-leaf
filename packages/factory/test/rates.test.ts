@@ -7,6 +7,7 @@
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
+import { near, xy } from "./near.ts";
 import { delivering, must } from "./yards.ts";
 
 const plank = F.item("plank");
@@ -110,17 +111,17 @@ describe("speed", () => {
 describe("a machine's last recipe", () => {
   test("is the one it last began, kept while it holds nothing, and goes with it when it is taken away", () => {
     const y = delivering();
-    const mill = F.at(y, 29, 20);
+    const mill = F.at(y, ...xy(5, 2));
     for (let k = 0; k < 600 && F.aim(y, mill) !== null; k++) F.step(y);
     expect([F.aim(y, mill), F.lastRecipe(y, mill)]).toEqual([null, sawing]);
-    must(y, { do: "remove", x: 29, y: 20 });
-    must(y, { do: "build", kind: "mill", x: 29, y: 20, dir: 2 });
+    must(y, { do: "remove", ...near(5, 2) });
+    must(y, { do: "build", kind: "mill", ...near(5, 2), dir: 2 });
     expect(F.lastRecipe(y, mill)).toBeNull();
   });
 
   test("is what a machine read back in the middle of making something is making, so it keeps it once that is done", () => {
     const y = delivering();
-    const mill = F.at(y, 29, 20);
+    const mill = F.at(y, ...xy(5, 2));
     const row = F.holderOf(y, mill);
     for (let k = 0; k < 600 && (y.holders.making[row] ?? F.NONE) === F.NONE; k++) F.step(y);
     expect(y.holders.making[row]).toBe(plank);
@@ -131,7 +132,7 @@ describe("a machine's last recipe", () => {
 
   test("is not kept in a save, so a yard read afresh takes it from the copy it replaces, where the same machine still stands", () => {
     const y = delivering();
-    const mill = F.at(y, 29, 20);
+    const mill = F.at(y, ...xy(5, 2));
     for (let k = 0; k < 600 && F.aim(y, mill) !== null; k++) F.step(y);
     expect(F.lastRecipe(y, mill)).toBe(sawing);
     const read = (): F.Yard => {
@@ -145,8 +146,8 @@ describe("a machine's last recipe", () => {
     expect(F.lastRecipe(kept, mill)).toBe(sawing);
     // A bench where the mill stood, in the yard as read, takes nothing of the mill's.
     const other = read();
-    must(other, { do: "remove", x: 29, y: 20 });
-    must(other, { do: "build", kind: "bench", x: 29, y: 20, dir: 2 });
+    must(other, { do: "remove", ...near(5, 2) });
+    must(other, { do: "build", kind: "bench", ...near(5, 2), dir: 2 });
     F.keepLast(y, other);
     expect(F.lastRecipe(other, mill)).toBeNull();
   });

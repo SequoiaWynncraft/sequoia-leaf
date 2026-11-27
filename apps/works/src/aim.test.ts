@@ -21,6 +21,7 @@ import {
   TUNNEL,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { col, near, xy } from "@sequoia-leaf/factory/test/near.ts";
 
 import { act, coinsAre, ctx, type FakeLeaf, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { buyLand } from "./plots.ts";
@@ -70,17 +71,17 @@ function copyOf(x0: number, y0: number, x1: number, y1: number): void {
 describe("an aim", () => {
   test("a copy aimed, the crate it copies shut from its card, shows and sets down a shut crate", async () => {
     const y = yardAt(3);
-    build(y, CRATE, 18, 13, 0, Infinity);
+    build(y, CRATE, ...xy(-6, -5), 0, Infinity);
     const fake = await opened(y, 1000);
-    copyOf(18, 13, 18, 13);
-    aimAt(20, 16);
+    copyOf(...xy(-6, -5), ...xy(-6, -5));
+    aimAt(...xy(-4, -2));
     expect(S.group?.at[0]).not.toHaveProperty("open");
     // The crate's card: Shut it.
-    done({ do: "crate", x: 18, y: 13, open: false });
+    done({ do: "crate", ...near(-6, -5), open: false });
     keepAim();
-    expect(S.group?.at[0]).toMatchObject({ kind: CRATE, x: 20, y: 16, open: false });
-    expect(place(20, 16)).toBe(true);
-    const r = holderOf(S.world, at(S.world, 20, 16));
+    expect(S.group?.at[0]).toMatchObject({ kind: CRATE, ...near(-4, -2), open: false });
+    expect(place(...xy(-4, -2))).toBe(true);
+    const r = holderOf(S.world, at(S.world, ...xy(-4, -2)));
     expect(S.world.holders.open[r]).toBe(0);
     await until(() => fake.leaf.posts >= 2);
     expect(differences()).toBe(0);
@@ -89,28 +90,28 @@ describe("an aim", () => {
 
   test("a tunnel aimed east, its far tile then taken, shows its far mouth where it will now come up, or that it cannot", async () => {
     const y = yardAt(2);
-    build(y, BELT, 19, 13, 0, Infinity);
+    build(y, BELT, ...xy(-5, -5), 0, Infinity);
     await opened(y, 1000);
     S.dir = 0;
     setTool(TUNNEL);
-    aimAt(18, 13);
-    expect([S.aim?.far, S.aim?.why]).toEqual([at(S.world, 20, 13), null]);
-    done({ do: "build", kind: "belt", x: 20, y: 13, dir: 0 });
+    aimAt(...xy(-6, -5));
+    expect([S.aim?.far, S.aim?.why]).toEqual([at(S.world, ...xy(-4, -5)), null]);
+    done({ do: "build", kind: "belt", ...near(-4, -5), dir: 0 });
     keepAim();
-    expect([S.aim?.far, S.aim?.why]).toEqual([at(S.world, 21, 13), null]);
-    done({ do: "build", kind: "belt", x: 21, y: 13, dir: 0 });
-    done({ do: "build", kind: "belt", x: 22, y: 13, dir: 0 });
+    expect([S.aim?.far, S.aim?.why]).toEqual([at(S.world, ...xy(-3, -5)), null]);
+    done({ do: "build", kind: "belt", ...near(-3, -5), dir: 0 });
+    done({ do: "build", kind: "belt", ...near(-2, -5), dir: 0 });
     keepAim();
     expect([S.aim?.far, S.aim?.why]).toEqual([-1, "A tunnel needs a free tile to come up on, 1 to 3 tiles ahead"]);
   });
 
   test("reads of the purse only whether it covers the cost, and by how much it falls short", async () => {
     const y = yardAt(3);
-    build(y, CRATE, 18, 13, 0, Infinity);
-    build(y, CRATE, 19, 13, 0, Infinity);
+    build(y, CRATE, ...xy(-6, -5), 0, Infinity);
+    build(y, CRATE, ...xy(-5, -5), 0, Infinity);
     await opened(y, 1000);
-    copyOf(18, 13, 19, 13);
-    aimAt(19, 16);
+    copyOf(...xy(-6, -5), ...xy(-5, -5));
+    aimAt(...xy(-5, -2));
     const covered = S.aim;
     expect(covered?.why).toBeNull();
     // More Coins (the till earning) change nothing it says: it is kept as it was.
@@ -134,13 +135,13 @@ describe("an aim", () => {
     await opened(y, 1000);
     S.finger = true;
     setTool(BELT);
-    tapBelt(17, 21);
-    tapBelt(22, 21);
+    tapBelt(...xy(-7, 3));
+    tapBelt(...xy(-2, 3));
     expect(S.run?.legs.map((l) => l.grade)).toEqual([1, 1, 1, 1, 1, 1]);
     setGrade(2);
     expect(S.run?.legs.map((l) => l.grade)).toEqual([2, 2, 2, 2, 2, 2]);
     expect(confirm()).toBe(true);
-    expect([17, 18, 19, 20, 21, 22].map((x) => S.world.grade[at(S.world, x, 21)])).toEqual([2, 2, 2, 2, 2, 2]);
+    expect([-7, -6, -5, -4, -3, -2].map((dx) => S.world.grade[at(S.world, ...xy(dx, 3))])).toEqual([2, 2, 2, 2, 2, 2]);
   });
 
   test("a finger's run tapped out to beside the depot turns into it", async () => {
@@ -161,24 +162,24 @@ describe("an aim", () => {
     await opened(y, 1000);
     S.finger = true;
     setTool(BELT);
-    tapBelt(17, 21);
-    tapBelt(22, 21);
-    expect(S.run?.legs.map((l) => l.x)).toEqual([17, 18, 19, 20, 21, 22]);
-    done({ do: "build", kind: "belt", x: 19, y: 21, dir: 1 });
+    tapBelt(...xy(-7, 3));
+    tapBelt(...xy(-2, 3));
+    expect(S.run?.legs.map((l) => l.x)).toEqual([-7, -6, -5, -4, -3, -2].map(col));
+    done({ do: "build", kind: "belt", ...near(-5, 3), dir: 1 });
     keepAim();
     expect(S.run?.why).toBeNull();
-    expect(S.run?.legs.some((l) => l.x === 19 && l.y === 21)).toBe(false);
-    expect(S.run?.legs.at(-1)).toMatchObject({ x: 22, y: 21 });
+    expect(S.run?.legs.some((l) => `${l.x},${l.y}` === xy(-5, 3).join())).toBe(false);
+    expect(S.run?.legs.at(-1)).toMatchObject({ ...near(-2, 3) });
   });
 });
 
 /** A yard of tier 3 with two crates and a blueprint of them, opened with `coins` in the purse. */
 async function priced(coins: number): Promise<FakeLeaf> {
   const y = yardAt(3);
-  build(y, CRATE, 18, 13, 0, Infinity);
-  build(y, CRATE, 19, 13, 0, Infinity);
+  build(y, CRATE, ...xy(-6, -5), 0, Infinity);
+  build(y, CRATE, ...xy(-5, -5), 0, Infinity);
   const fake = await opened(y, coins);
-  done({ do: "saveBlueprint", slot: 0, tiles: [at(y, 18, 13), at(y, 19, 13)] });
+  done({ do: "saveBlueprint", slot: 0, tiles: [at(y, ...xy(-6, -5)), at(y, ...xy(-5, -5))] });
   await until(() => fake.leaf.posts >= 1);
   fake.leaf.commands = [];
   return fake;
@@ -192,9 +193,9 @@ describe("whatever costs Coins", () => {
       "a piece built",
       () => {
         setTool(CRATE);
-        aimAt(20, 16);
+        aimAt(...xy(-4, -2));
       },
-      () => place(20, 16),
+      () => place(...xy(-4, -2)),
       () => "Not enough Coins",
     ],
     [
@@ -202,8 +203,8 @@ describe("whatever costs Coins", () => {
       () => {
         S.finger = true;
         setTool(BELT);
-        tapBelt(17, 21);
-        tapBelt(30, 21);
+        tapBelt(...xy(-7, 3));
+        tapBelt(...xy(6, 3));
       },
       confirm,
       (cost) => `Not enough Coins: ${cost} short`,
@@ -211,10 +212,10 @@ describe("whatever costs Coins", () => {
     [
       "a copy",
       () => {
-        copyOf(18, 13, 19, 13);
-        aimAt(19, 16);
+        copyOf(...xy(-6, -5), ...xy(-5, -5));
+        aimAt(...xy(-5, -2));
       },
-      () => place(19, 16),
+      () => place(...xy(-5, -2)),
       (cost) => `Not enough Coins: ${cost} short`,
     ],
     [
@@ -222,9 +223,9 @@ describe("whatever costs Coins", () => {
       () => {
         setTool("select");
         hold(0);
-        aimAt(19, 16);
+        aimAt(...xy(-5, -2));
       },
-      () => place(19, 16),
+      () => place(...xy(-5, -2)),
       (cost) => `Not enough Coins: ${cost} short`,
     ],
     ["a plot", () => undefined, () => buyLand(plot("meadow")), () => "Not enough Coins"],
@@ -250,10 +251,10 @@ describe("whatever costs Coins", () => {
     const fake = await priced(0);
     const said: string[] = [];
     toolHooks.said = (text) => void said.push(text);
-    expect(takeAway(18, 13)).toBe(true);
+    expect(takeAway(...xy(-6, -5))).toBe(true);
     await until(() => fake.leaf.posts >= 2);
     fake.leaf.commands = [];
-    const price = priceAt(S.world, CRATE, 18, 13);
+    const price = priceAt(S.world, CRATE, ...xy(-6, -5));
     // All but two of what it gave back are in the till, whole, and a part; one in the purse: one short.
     for (const y of [S.world, fake.leaf.yard]) y.till = (price - 2) * MILLI + 500;
     coinsAre(1);
@@ -264,7 +265,7 @@ describe("whatever costs Coins", () => {
     // One more in the purse covers it exactly: it is done, and sent as one command.
     coinsAre(2);
     expect(undo()).toBe(true);
-    expect([S.world.kind[at(S.world, 18, 13)], S.world.till]).toEqual([CRATE, 500]);
+    expect([S.world.kind[at(S.world, ...xy(-6, -5))], S.world.till]).toEqual([CRATE, 500]);
     await until(() => fake.leaf.commands.length >= 1);
     expect(fake.leaf.commands).toMatchObject([{ do: "undo" }]);
   });

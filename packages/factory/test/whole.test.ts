@@ -8,6 +8,7 @@
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
+import { near, xy } from "./near.ts";
 import { give, lay, must } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
@@ -45,15 +46,15 @@ function everything(seed = 1): F.Yard {
 function lines(seed = 1): F.Yard {
   const y = F.create({ seed, tier: 5 });
   const depot = y.land.depot;
-  must(y, { do: "build", kind: "gatherer", x: 19, y: 15, dir: 0 });
-  lay(y, [20, 15], depot);
-  must(y, { do: "build", kind: "gatherer", x: 29, y: 21, dir: 3 });
-  must(y, { do: "build", kind: "mill", x: 29, y: 20, dir: 2 });
-  lay(y, [28, 20], depot);
-  must(y, { do: "build", kind: "pylon", x: 27, y: 15, dir: 0 });
-  must(y, { do: "build", kind: "gatherer", x: 30, y: 14, dir: 2 });
-  must(y, { do: "build", kind: "crate", x: 29, y: 14, dir: 2 });
-  lay(y, [28, 14], depot);
+  must(y, { do: "build", kind: "gatherer", ...near(-5, -3), dir: 0 });
+  lay(y, xy(-4, -3), depot);
+  must(y, { do: "build", kind: "gatherer", ...near(5, 3), dir: 3 });
+  must(y, { do: "build", kind: "mill", ...near(5, 2), dir: 2 });
+  lay(y, xy(4, 2), depot);
+  must(y, { do: "build", kind: "pylon", ...near(3, -3), dir: 0 });
+  must(y, { do: "build", kind: "gatherer", ...near(6, -4), dir: 2 });
+  must(y, { do: "build", kind: "crate", ...near(5, -4), dir: 2 });
+  lay(y, xy(4, -4), depot);
   for (let k = 0; k < 600; k++) F.step(y);
   y.history = [];
   return y;
@@ -164,7 +165,7 @@ describe("saving the whole yard", () => {
       refused: "cannot_save_blueprint",
       why: "There is nothing here to save",
     });
-    must(y, { do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
+    must(y, { do: "build", kind: "mill", ...near(-3, -3), dir: 0 });
     expect(give(y, { do: "saveYard", slot: F.BLUEPRINTS_MOST - 1 })).not.toHaveProperty("refused");
     expect(F.readCommand({ tick: 0, do: "saveYard", slot: F.BLUEPRINTS_MOST })).toBeNull();
   });
@@ -190,29 +191,29 @@ describe("putting a plan of the whole yard back", () => {
     must(y, { do: "saveYard", slot: 1 });
     const saved = settings(y, false);
     // A while on something else: the ore line taken up, a bench and a belt where it was, the plank line kept.
-    must(y, { do: "remove", x: 30, y: 14 });
-    must(y, { do: "remove", x: 29, y: 14 });
-    must(y, { do: "build", kind: "bench", x: 30, y: 14, dir: 1 });
-    must(y, { do: "build", kind: "belt", x: 29, y: 14, dir: 1, grade: 3 });
+    must(y, { do: "remove", ...near(6, -4) });
+    must(y, { do: "remove", ...near(5, -4) });
+    must(y, { do: "build", kind: "bench", ...near(6, -4), dir: 1 });
+    must(y, { do: "build", kind: "belt", ...near(5, -4), dir: 1, grade: 3 });
     for (let k = 0; k < 120; k++) F.step(y);
-    const mill = holding(y, 29, 20);
+    const mill = holding(y, ...xy(5, 2));
     const print = y.blueprints[1];
     if (!print) throw new Error("no plan");
     const plan = F.yardPlan(y, print);
     expect(plan.up.map((p) => [F.kindName(p.kind), p.x, p.y])).toEqual([
-      ["belt", 29, 14],
-      ["bench", 30, 14],
+      ["belt", ...xy(5, -4)],
+      ["bench", ...xy(6, -4)],
     ]);
     expect(plan.stood.map((p) => [F.kindName(p.kind), p.x, p.y])).toEqual([
-      ["crate", 29, 14],
-      ["gatherer", 30, 14],
+      ["crate", ...xy(5, -4)],
+      ["gatherer", ...xy(6, -4)],
     ]);
     // A belt III and a bench back, a crate and a gatherer stood.
     const net = F.price(F.CRATE, 1) + F.price(F.GATHERER, 1) - F.price(F.BELT, 3) - F.price(F.BENCH, 1);
     expect(plan.price).toBe(net);
     const did = give(y, place(1));
     expect([coinsOf(did), settings(y, false)]).toEqual([-net, saved]);
-    expect(holding(y, 29, 20)).toEqual(mill);
+    expect(holding(y, ...xy(5, 2))).toEqual(mill);
   });
 
   test("gives back what the yard it replaces is worth more, free, as a piece taken away does", () => {
@@ -275,14 +276,14 @@ describe("putting a plan of the whole yard back", () => {
 
   test("stands a tunnel of another length on the same tile as new, and one of the pieces to hand as the rules use them", () => {
     const y = everything();
-    must(y, { do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
-    must(y, { do: "lay", legs: [{ kind: "tunnel", x: 10, y: 10, dir: 0, span: 2 }] });
+    must(y, { do: "build", kind: "mill", ...near(-3, -3), dir: 0 });
+    must(y, { do: "lay", legs: [{ kind: "tunnel", ...near(-14, -8), dir: 0, span: 2 }] });
     must(y, { do: "saveYard", slot: 0 });
     const saved = settings(y);
-    must(y, { do: "remove", x: 10, y: 10 });
-    must(y, { do: "remove", x: 21, y: 15 });
-    must(y, { do: "build", kind: "mill", x: 22, y: 12, dir: 1 });
-    must(y, { do: "lay", legs: [{ kind: "tunnel", x: 10, y: 10, dir: 0, span: 3 }] });
+    must(y, { do: "remove", ...near(-14, -8) });
+    must(y, { do: "remove", ...near(-3, -3) });
+    must(y, { do: "build", kind: "mill", ...near(-2, -6), dir: 1 });
+    must(y, { do: "lay", legs: [{ kind: "tunnel", ...near(-14, -8), dir: 0, span: 3 }] });
     // The mill to hand stands at (22, 12) now; put back, the mill is to hand again at (21, 15).
     const before = settings(y);
     const did = give(y, place(0, "w-1"));
@@ -297,7 +298,7 @@ describe("putting a plan of the whole yard back", () => {
 describe("Undo of a plan of the whole yard put back", () => {
   test("stands again new a piece the placement took up, however like it what was stood in its place: a crate refilled is put back empty", () => {
     const y = lines();
-    const crate = { x: 29, y: 14 };
+    const crate = { ...near(5, -4) };
     const held = (): number => y.holders.count[F.holderOf(y, F.at(y, crate.x, crate.y))] ?? 0;
     // Kept shut in the plan, then opened: the plan takes the open crate up and stands a shut one.
     must(y, { do: "crate", open: false, ...crate });
@@ -315,9 +316,9 @@ describe("Undo of a plan of the whole yard put back", () => {
   test("is one entry, and puts the yard back as it was, the Coins the other way", () => {
     const y = lines();
     must(y, { do: "saveYard", slot: 1 });
-    must(y, { do: "remove", x: 30, y: 14 });
-    must(y, { do: "remove", x: 29, y: 14 });
-    must(y, { do: "build", kind: "bench", x: 30, y: 14, dir: 1 });
+    must(y, { do: "remove", ...near(6, -4) });
+    must(y, { do: "remove", ...near(5, -4) });
+    must(y, { do: "build", kind: "bench", ...near(6, -4), dir: 1 });
     must(y, { do: "build", kind: "workshop", dir: 0, grade: 2, ...clearTile(y) });
     for (let k = 0; k < 60; k++) F.step(y);
     const before = settings(y);

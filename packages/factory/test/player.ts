@@ -28,13 +28,30 @@ export class Player {
   pick<T>(xs: readonly T[]): T | undefined {
     return xs[this.int(xs.length)];
   }
+  /**
+   * The plots the yard plays on: those it owns or may buy. Plots further out are no part of its
+   * play, so the same player plays the same on a land with more of them.
+   */
+  plotsNear(): F.PlotName[] {
+    return F.PLOT_IDS.filter((id) => F.plotState(this.y, F.plot(id)).state !== "not yet");
+  }
+  /** Anywhere the yard plays: a tile of a plot it owns or may buy (`plotsNear`). */
+  anywhere(): { x: number; y: number } {
+    const y = this.y;
+    const near = y.land.plots.filter((p) => F.plotState(y, p.plot).state !== "not yet");
+    const x0 = Math.min(...near.map((p) => p.x));
+    const y0 = Math.min(...near.map((p) => p.y));
+    const x1 = Math.max(...near.map((p) => p.x + p.w));
+    const y1 = Math.max(...near.map((p) => p.y + p.h));
+    return { x: x0 + this.int(x1 - x0), y: y0 + this.int(y1 - y0) };
+  }
   /** A tile: usually one with something on it, now and then anywhere, once in a while off the map. */
   spot(): { x: number; y: number } {
     const { w, h } = this.y.land;
     const standing = [...this.y.kind.keys()].filter((i) => this.y.kind[i] !== F.NONE);
     const i = this.r() < 0.65 ? this.pick(standing) : undefined;
     if (i !== undefined) return { x: i % w, y: Math.floor(i / w) };
-    return this.r() < 0.05 ? { x: w + this.int(3), y: this.int(h) } : { x: this.int(w), y: this.int(h) };
+    return this.r() < 0.05 ? { x: w + this.int(3), y: this.int(h) } : this.anywhere();
   }
   /** A tile with one of some kinds of piece on it, if there is one; else any spot. */
   of(...kinds: readonly F.Kind[]): { x: number; y: number } {
@@ -47,9 +64,9 @@ export class Player {
   where(only?: F.Kind): Rec {
     const y = this.y;
     const kind = only ?? this.pick(F.ALL_KINDS.filter((k) => (y.open.kinds[k] ?? 0) > 0)) ?? F.BELT;
-    for (let tries = 0; tries < 30; tries++) {
-      const x = this.int(y.land.w);
-      const z = this.int(y.land.h);
+    // A waterwheel stands only beside the stream: it takes many tries to find a tile for one.
+    for (let tries = 0; tries < 200; tries++) {
+      const { x, y: z } = this.anywhere();
       const dir = this.int(4);
       if (F.refusal(y, kind, x, z, Infinity, dir) === null) return { kind: F.kindName(kind), x, y: z, dir };
     }
@@ -162,7 +179,8 @@ export class Player {
         return { do: "way", way, open: r < 0.55, ...this.of(F.SPLITTER) };
       }
       case 17:
-        return { do: "buyPlot", plot: this.pick([...F.PLOT_IDS, "moon"]) };
+        // A plot it owns or may buy, one not for sale yet, or one there is none of.
+        return { do: "buyPlot", plot: this.pick([...this.plotsNear(), "seam", "moon"]) };
       case 18:
         return { do: "take", node: this.pick([...F.NODES.map((n) => n.id), "nap"]) };
       case 19: {
@@ -197,8 +215,12 @@ export class Player {
         // Undo, mostly of what the yard would undo next; now and then of something else, as another tab would ask.
         return { do: "undo", entry: this.r() < 0.9 ? (y.history.at(-1)?.id ?? "") : `elsewhere-${this.int(1e6)}` };
       case 27: {
-        // Mostly a tile of a redwood still standing, on the yard's land or not; now and then anywhere.
-        const standing = y.land.trees.flatMap((tiles) => tiles.filter((i) => F.redwoodAt(y, i)));
+        // Mostly a tile of a redwood still standing, on a plot the yard owns or one it may buy; now and then anywhere.
+        const near = (i: number): boolean => {
+          const plot = y.land.plots[y.land.plot[i] ?? F.NONE];
+          return plot !== undefined && F.plotState(y, plot.plot).state !== "not yet";
+        };
+        const standing = y.land.trees.flatMap((tiles) => tiles.filter((i) => near(i) && F.redwoodAt(y, i)));
         const i = this.r() < 0.85 ? this.pick(standing) : undefined;
         return { do: "fell", ...(i === undefined ? at : { x: i % y.land.w, y: Math.floor(i / y.land.w) }) };
       }

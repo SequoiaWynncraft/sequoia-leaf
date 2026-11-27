@@ -6,12 +6,17 @@
  */
 import { describe, expect, test } from "bun:test";
 
+import { PLOTS } from "../src/content/plots.ts";
 import * as F from "../src/index.ts";
+import { landFrom } from "../src/land.ts";
+import { xy } from "./near.ts";
 
 const ALL_PLOTS = ["yard", "meadow", "bank", "stream", "grove", "hollow", "seam", "quarry", "pond"];
-const W = F.LAND.w;
-/** A tile on the guild's land, by where it is. */
-const tile = (x: number, z: number): number => z * W + x;
+/**
+ * A tile as the first design kept it, from the depot (`near`): a tile of the guild's first land, 48
+ * tiles across, with the depot's middle at (24, 18).
+ */
+const kept = (dx: number, dy: number): number => (18 + dy) * 48 + 24 + dx;
 
 /**
  * Pieces as the first design kept them, all on the yard's own plot and of kinds tier 2 builds: the
@@ -19,12 +24,12 @@ const tile = (x: number, z: number): number => z * W + x;
  * was carrying a log on a painted line, a tunnel under two tiles, and a shut crate.
  */
 const PIECES = [
-  { i: tile(20, 15), k: "gatherer", d: 0, g: 1 },
-  { i: tile(21, 15), k: "mill", d: 0, r: "plank", it: "log", p: 1, v: 2, b: { log: 3 }, w: 4 },
-  { i: tile(22, 15), k: "belt", d: 0, it: "log", p: 3, v: 2, h: 3 },
-  { i: tile(18, 21), k: "tunnel", d: 0, s: 2 },
-  { i: tile(21, 21), k: "tunnel", d: 0, s: -2 },
-  { i: tile(28, 14), k: "crate", d: 1, c: 1 },
+  { i: kept(-4, -3), k: "gatherer", d: 0, g: 1 },
+  { i: kept(-3, -3), k: "mill", d: 0, r: "plank", it: "log", p: 1, v: 2, b: { log: 3 }, w: 4 },
+  { i: kept(-2, -3), k: "belt", d: 0, it: "log", p: 3, v: 2, h: 3 },
+  { i: kept(-6, 3), k: "tunnel", d: 0, s: 2 },
+  { i: kept(-3, 3), k: "tunnel", d: 0, s: -2 },
+  { i: kept(4, -4), k: "crate", d: 1, c: 1 },
 ];
 
 /** A yard as the first design kept it: the fields it wrote, with `PIECES` (or those given), filled to `story` of its twenty story orders. */
@@ -80,20 +85,20 @@ describe("a yard kept by the first design", () => {
 
   test("stands its pieces where they stood and as they were set, but empty", () => {
     const y = read(first(20));
-    const at = (x: number, z: number) => {
-      const i = F.at(y, x, z);
+    const at = (dx: number, dy: number) => {
+      const i = F.at(y, ...xy(dx, dy));
       return [F.KIND_INFO[y.kind[i] ?? F.NONE]?.name, y.dir[i], y.item[i]];
     };
-    expect([at(20, 15), at(21, 15), at(22, 15)]).toEqual([
+    expect([at(-4, -3), at(-3, -3), at(-2, -3)]).toEqual([
       ["Gatherer", 0, F.NONE],
       ["Mill", 0, F.NONE],
       ["Belt", 0, F.NONE],
     ]);
-    expect(F.ITEM_INFO[y.set[F.at(y, 21, 15)] ?? F.NONE]?.name).toBe("Plank");
+    expect(F.ITEM_INFO[y.set[F.at(y, ...xy(-3, -3))] ?? F.NONE]?.name).toBe("Plank");
     // The belt's line's colour, both mouths of the tunnel, and the crate, shut.
-    expect(y.tint[F.at(y, 22, 15)]).toBe(3);
-    expect([y.span[F.at(y, 18, 21)], y.span[F.at(y, 21, 21)]]).toEqual([2, -2]);
-    const crate = F.at(y, 28, 14);
+    expect(y.tint[F.at(y, ...xy(-2, -3))]).toBe(3);
+    expect([y.span[F.at(y, ...xy(-6, 3))], y.span[F.at(y, ...xy(-3, 3))]]).toEqual([2, -2]);
+    const crate = F.at(y, ...xy(4, -4));
     expect([y.kind[crate] === F.CRATE, y.holders.open[F.holderOf(y, crate)]]).toEqual([true, 0]);
     // The gatherer was one of those to hand: the yard has one fewer to hand, and nothing to pay back.
     expect(y.spare[F.GATHERER]).toBe((F.create({ tier: 2 }).spare[F.GATHERER] ?? 0) - 1);
@@ -101,15 +106,15 @@ describe("a yard kept by the first design", () => {
   });
 
   test("has each project of its tier done that opens a kind it had standing, and no other", () => {
-    const boiler = { i: tile(28, 20), k: "boiler", d: 0 };
+    const boiler = { i: kept(4, 2), k: "boiler", d: 0 };
     const tunnel = [
-      { i: tile(18, 21), k: "tunnel", d: 0, s: 2 },
-      { i: tile(21, 21), k: "tunnel", d: 0, s: -2 },
+      { i: kept(-6, 3), k: "tunnel", d: 0, s: 2 },
+      { i: kept(-3, 3), k: "tunnel", d: 0, s: -2 },
     ];
     const y = read(first(6, ["yard"], [boiler, ...tunnel]));
     // Tier 1: its boiler and its tunnel stand, by the projects that open them; crates were not its.
     expect(ids(y.done).filter((id) => !ids(F.create({ tier: 1 }).done).includes(id))).toEqual(["boiler", "culvert"]);
-    expect([y.kind[F.at(y, 28, 20)], y.kind[F.at(y, 18, 21)]]).toEqual([F.BOILER, F.TUNNEL]);
+    expect([y.kind[F.at(y, ...xy(4, 2))], y.kind[F.at(y, ...xy(-6, 3))]]).toEqual([F.BOILER, F.TUNNEL]);
     // Nothing is said of them as newly done, and the node in hand is one still to do.
     expect(y.told).toBe(y.done.length);
     expect(y.hand !== -1 && !y.done.includes(y.hand)).toBe(true);
@@ -118,15 +123,15 @@ describe("a yard kept by the first design", () => {
   test("pays back, into its till, each piece its tier does not let stand: a kind not opened, or on a plot not its own", () => {
     const y0 = F.create({ tier: 2 });
     expect(F.locked(y0.open, { build: F.WORKSHOP })).not.toBeNull();
-    const grove = F.LAND.plots.find((p) => F.plotName(p.plot) === "grove");
-    if (!grove) throw new Error("no grove");
     const refused = [
-      { i: tile(28, 20), k: "workshop", d: 0 },
-      { i: tile(grove.x + 4, grove.y + 6), k: "belt", d: 1 },
+      { i: kept(4, 2), k: "workshop", d: 0 },
+      // On the Resin Grove, north of the yard.
+      { i: kept(-4, -12), k: "belt", d: 1 },
     ];
     const y = read(first(20, ["yard"], [...PIECES, ...refused]));
-    expect(y.kind[F.at(y, 28, 20)]).toBe(F.NONE);
-    expect(y.kind[F.at(y, grove.x + 4, grove.y + 6)]).toBe(F.NONE);
+    expect(y.kind[F.at(y, ...xy(4, 2))]).toBe(F.NONE);
+    expect(y.kind[F.at(y, ...xy(-4, -12))]).toBe(F.NONE);
+    expect(F.LAND.plot[F.at(y, ...xy(-4, -12))]).toBe(F.LAND.plots.findIndex((q) => q.plot === F.plot("grove")));
     expect(y.till).toBe((40 + F.price(F.WORKSHOP, 1) + F.price(F.BELT, 1)) * F.MILLI);
   });
 
@@ -146,7 +151,7 @@ describe("a yard kept by the first design", () => {
 
   test("is paid back, into its till, what the plots its tier does not sell yet would cost again, and is not told it earned it", () => {
     const y = read(first(20, ALL_PLOTS));
-    const unsold = F.LAND.plots.filter((p) => !y.plots.includes(p.plot));
+    const unsold = F.LAND.plots.filter((p) => ALL_PLOTS.includes(F.plotName(p.plot)) && !y.plots.includes(p.plot));
     expect(unsold.length).toBeGreaterThan(0);
     expect(y.till).toBe((40 + unsold.reduce((sum, p) => sum + p.price, 0)) * F.MILLI);
     expect(F.postcard(y).till).toBe(y.till / F.MILLI);
@@ -183,5 +188,11 @@ describe("a yard kept by the first design", () => {
       expect(F.decode(JSON.stringify({ ...raw, [field]: undefined }))).toBeNull();
     }
     expect(F.decode(JSON.stringify({ ...raw, story: -1 }))).toBeNull();
+  });
+
+  test("is not read on less land than the first, which it was kept on", () => {
+    const yardOnly = landFrom(PLOTS.filter((p) => p.id === "yard"));
+    expect(F.decode(first(4, ["yard", "meadow"]), yardOnly)).toBeNull();
+    expect(F.decode(first(4, ["yard", "meadow"]))).not.toBeNull();
   });
 });

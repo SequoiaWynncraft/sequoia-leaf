@@ -8,14 +8,14 @@
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
+import { near, tileNear, xy } from "./near.ts";
 import { give, must } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 
 /** The Meadow's redwood: its corner, and its four tiles. */
-const TREE = { x: 22, y: 33 } as const;
-const tile = (x: number, y: number): number => y * F.LAND.w + x;
-const TILES = [tile(22, 33), tile(23, 33), tile(22, 34), tile(23, 34)];
+const TREE = near(-2, 15);
+const TILES = [tileNear(-2, 15), tileNear(-1, 15), tileNear(-2, 16), tileNear(-1, 16)];
 
 /** A yard at a tier (where tunnels are open, unless said) that owns the Meadow, where a redwood stands, with nothing to undo. */
 function meadow(tier = 4): F.Yard {
@@ -46,7 +46,7 @@ describe("felling a redwood", () => {
         "Nothing can be built on a tree",
       );
     expect(F.FELL_PRICE).toBe(100);
-    const did = play(y, { do: "fell", x: 23, y: 34 }, 100);
+    const did = play(y, { do: "fell", ...near(-1, 16) }, 100);
     expect(coinsOf(did)).toEqual([[-100, "Felled in the Works"]]);
     for (const i of TILES) {
       expect(F.redwoodAt(y, i)).toBe(false);
@@ -61,30 +61,31 @@ describe("felling a redwood", () => {
     const was = F.encode(y);
     expect(play(y, { do: "fell", ...TREE }, 99)).toEqual({ refused: "cannot_fell", why: "Not enough Coins" });
     // The Clay Bank's redwood, on a plot the yard has not bought.
-    expect(play(y, { do: "fell", x: 10, y: 14 })).toEqual({
+    expect(play(y, { do: "fell", ...near(-14, -4) })).toEqual({
       refused: "cannot_fell",
       why: "The Clay Bank is not the yard's yet",
     });
-    expect(play(y, { do: "fell", x: 20, y: 30 })).toEqual({ refused: "cannot_fell", why: "There is no redwood here" });
+    expect(play(y, { do: "fell", ...near(-4, 12) })).toEqual({
+      refused: "cannot_fell",
+      why: "There is no redwood here",
+    });
     expect(F.encode(y)).toBe(was);
     must(y, { do: "fell", ...TREE });
-    expect(play(y, { do: "fell", x: 22, y: 34 })).toEqual({ refused: "cannot_fell", why: "There is no redwood here" });
+    expect(play(y, { do: "fell", ...near(-2, 16) })).toEqual({
+      refused: "cannot_fell",
+      why: "There is no redwood here",
+    });
   });
 
   test("lets the router lay belts across where it stood, and a tunnel come up there", () => {
     const y = meadow();
     // From west of the redwood to east of it, along its first row.
-    const across = (): F.Leg[] | null => F.route(y, [21, 33], [24, 33]);
-    expect(across()?.some((l) => TILES.includes(tile(l.x, l.y)))).toBe(false);
-    expect(F.tunnelExit(y, 20, 33, 0, 1)).toBeNull();
+    const across = (): F.Leg[] | null => F.route(y, xy(-3, 15), xy(0, 15));
+    expect(across()?.some((l) => TILES.includes(F.at(y, l.x, l.y)))).toBe(false);
+    expect(F.tunnelExit(y, ...xy(-4, 15), 0, 1)).toBeNull();
     must(y, { do: "fell", ...TREE });
-    expect(across()?.map((l) => [l.x, l.y])).toEqual([
-      [21, 33],
-      [22, 33],
-      [23, 33],
-      [24, 33],
-    ]);
-    expect(F.tunnelExit(y, 20, 33, 0, 1)).toEqual({ x: 22, y: 33, span: 1 });
+    expect(across()?.map((l) => [l.x, l.y])).toEqual([xy(-3, 15), xy(-2, 15), xy(-1, 15), xy(0, 15)]);
+    expect(F.tunnelExit(y, ...xy(-4, 15), 0, 1)).toEqual({ ...near(-2, 15), span: 1 });
   });
 });
 
@@ -120,11 +121,11 @@ describe("a redwood felled, kept", () => {
     const standing = F.check(y);
     must(y, { do: "fell", ...TREE });
     expect(F.check(y)).not.toBe(standing);
-    must(y, { do: "build", kind: "mill", x: 22, y: 34, dir: 0 });
+    must(y, { do: "build", kind: "mill", ...near(-2, 16), dir: 0 });
     const text = F.encode(y);
     expect(JSON.parse(text)).toMatchObject({ felled: [TILES[0]] });
     const back = F.decode(text, y.land);
-    expect(back && [F.encode(back), F.check(back), back.kind[tile(22, 34)]]).toEqual([text, F.check(y), F.MILL]);
+    expect(back && [F.encode(back), F.check(back), back.kind[tileNear(-2, 16)]]).toEqual([text, F.check(y), F.MILL]);
   });
 
   test("a yard kept before it could fell reads with every redwood standing, and keeps no list of them", () => {
@@ -137,23 +138,23 @@ describe("a redwood felled, kept", () => {
   test("only on a plot the yard owns, and only as a redwood's tile: anything else kept is let go", () => {
     const y = meadow();
     // The Clay Bank's redwood, not the yard's; bare ground; a tile off the map; not a tile at all.
-    const rec = { ...JSON.parse(F.encode(y)), felled: [tile(10, 14), tile(20, 30), 99_999, "a tree"] };
+    const rec = { ...JSON.parse(F.encode(y)), felled: [tileNear(-14, -4), tileNear(-4, 12), 99_999, "a tree"] };
     const back = F.decode(JSON.stringify(rec), y.land);
     expect(back && Array.from(back.felled)).toEqual(Array.from(y.felled));
   });
 
   test("no more entries are read than the land has redwoods: a redwood kept after that many stands", () => {
     const y = meadow();
-    const junk = Array.from({ length: F.LAND.trees.length }, () => tile(20, 30));
+    const junk = Array.from({ length: F.LAND.trees.length }, () => tileNear(-4, 12));
     const rec = { ...JSON.parse(F.encode(y)), felled: [...junk, TILES[0]] };
     const back = F.decode(JSON.stringify(rec), y.land);
     expect(back && F.redwoodAt(back, TILES[0] ?? -1)).toBe(true);
   });
 
-  test("is kept as version 8, so a Leaf that knows only version 7 refuses it rather than plant it back", () => {
+  test("is kept by a version after 7, so a Leaf that knows only version 7 refuses it rather than plant it back", () => {
     const y = meadow();
     must(y, { do: "fell", ...TREE });
-    expect(JSON.parse(F.encode(y)).v).toBe(8);
+    expect(JSON.parse(F.encode(y)).v).toBeGreaterThan(7);
     // A version-7 yard, kept before redwoods could be felled, still reads with every redwood standing.
     const seven = { ...JSON.parse(F.encode(meadow())), v: 7 };
     const back = F.decode(JSON.stringify(seven), y.land);
@@ -188,11 +189,11 @@ describe("a plan of the whole yard", () => {
   test("put back never plants a redwood: kept before it was felled, it leaves the ground clear", () => {
     const y = F.create({ seed: 5, tier: 5 });
     must(y, { do: "buyPlot", plot: "meadow" });
-    must(y, { do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
+    must(y, { do: "build", kind: "mill", ...near(-3, -3), dir: 0 });
     must(y, { do: "saveYard", slot: 0 });
     must(y, { do: "fell", ...TREE });
     must(y, { do: "build", kind: "belt", ...TREE, dir: 0 });
     must(y, { do: "placeBlueprint", slot: 0, turns: 0, x: 0, y: 0 });
-    expect([y.kind[tile(TREE.x, TREE.y)], F.redwoodAt(y, tile(TREE.x, TREE.y))]).toEqual([F.NONE, false]);
+    expect([y.kind[F.at(y, TREE.x, TREE.y)], F.redwoodAt(y, F.at(y, TREE.x, TREE.y))]).toEqual([F.NONE, false]);
   });
 });

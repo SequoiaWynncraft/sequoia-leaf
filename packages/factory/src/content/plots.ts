@@ -3,6 +3,11 @@
  * three tall, with the yard in the middle. Each plot is drawn here as rows of letters, one letter
  * a tile, so the map can be read off the page and drawn from the same data.
  *
+ * Every plot is placed from the yard, which is at column 0 and row 0: a ring is the plots as many
+ * plots away (the eight round the yard are the first). The map is as large as the plots it has, so
+ * more land is more plots here, each with a new id at the end of `PLOT_IDS`; nothing kept moves,
+ * since a yard keeps its tiles measured from the yard plot's corner (`codec.ts`).
+ *
  *   .  clear ground          d  deadfall        s  stone        o  ore
  *   c  clay                  a  sand            r  resin
  *   ~  the stream            T  a redwood (nothing is built on one)        D  the depot
@@ -17,10 +22,10 @@ export const PLOT_H = 12;
 export const PLOT_IDS = ["yard", "meadow", "bank", "stream", "grove", "seam", "quarry", "hollow", "pond"] as const;
 export type PlotName = (typeof PLOT_IDS)[number];
 
-export interface PlotInfo {
-  readonly id: PlotName;
+export interface PlotInfo<Id extends string = PlotName> {
+  readonly id: Id;
   readonly name: string;
-  /** Where it sits on the map, in plots: column and row, 0 to 2. */
+  /** Where it sits, in plots from the yard: column (east) and row (south), below 0 west and north. */
   readonly col: number;
   readonly row: number;
   /** Coins to open it. The yard itself is free. */
@@ -34,8 +39,8 @@ export const PLOTS: readonly PlotInfo[] = [
   {
     id: "hollow",
     name: "Windfall Hollow",
-    col: 0,
-    row: 0,
+    col: -1,
+    row: -1,
     price: 3000,
     why: "Great drifts of deadfall: fuel for a row of boilers, and planks without end.",
     rows: [
@@ -56,8 +61,8 @@ export const PLOTS: readonly PlotInfo[] = [
   {
     id: "grove",
     name: "Resin Grove",
-    col: 1,
-    row: 0,
+    col: 0,
+    row: -1,
     price: 1000,
     why: "Old stumps weeping resin, for lamp oil.",
     rows: [
@@ -78,8 +83,8 @@ export const PLOTS: readonly PlotInfo[] = [
   {
     id: "seam",
     name: "The Far Seam",
-    col: 2,
-    row: 0,
+    col: 1,
+    row: -1,
     price: 2600,
     why: "A second, richer ore seam and more stone, on the far side of the stream.",
     rows: [
@@ -100,8 +105,8 @@ export const PLOTS: readonly PlotInfo[] = [
   {
     id: "bank",
     name: "The Clay Bank",
-    col: 0,
-    row: 1,
+    col: -1,
+    row: 0,
     price: 500,
     why: "Clay, for pots.",
     rows: [
@@ -122,8 +127,8 @@ export const PLOTS: readonly PlotInfo[] = [
   {
     id: "yard",
     name: "The Yard",
-    col: 1,
-    row: 1,
+    col: 0,
+    row: 0,
     price: 0,
     why: "The cleared ground behind the workshop, with the depot in the middle of it.",
     rows: [
@@ -144,8 +149,8 @@ export const PLOTS: readonly PlotInfo[] = [
   {
     id: "stream",
     name: "Stream Bend",
-    col: 2,
-    row: 1,
+    col: 1,
+    row: 0,
     price: 900,
     why: "Sand on both banks for glass, and the stream itself, to turn waterwheels.",
     rows: [
@@ -166,8 +171,8 @@ export const PLOTS: readonly PlotInfo[] = [
   {
     id: "quarry",
     name: "The Old Quarry",
-    col: 0,
-    row: 2,
+    col: -1,
+    row: 1,
     price: 1500,
     why: "More stone than the yard could ever use, and a little ore.",
     rows: [
@@ -188,8 +193,8 @@ export const PLOTS: readonly PlotInfo[] = [
   {
     id: "meadow",
     name: "Long Meadow",
-    col: 1,
-    row: 2,
+    col: 0,
+    row: 1,
     price: 300,
     why: "Open ground: room to lay things out properly, and a drift of deadfall.",
     rows: [
@@ -210,8 +215,8 @@ export const PLOTS: readonly PlotInfo[] = [
   {
     id: "pond",
     name: "The Millpond",
-    col: 2,
-    row: 2,
+    col: 1,
+    row: 1,
     price: 5000,
     why: "The stream slows into a pond: a long bank for waterwheels, with sand and clay beside it.",
     rows: [

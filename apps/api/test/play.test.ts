@@ -50,6 +50,8 @@ import {
   writeAct,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { near, tileNear, xy } from "@sequoia-leaf/factory/test/near.ts";
+import { outward } from "@sequoia-leaf/factory/test/ring.ts";
 import { staged as stagedYard } from "@sequoia-leaf/factory/test/yards.ts";
 import { PULLS } from "@sequoia-leaf/pulls";
 import {
@@ -81,7 +83,17 @@ import { keptPieces } from "../src/play/kept.ts";
 import { ACTIVITY_KEPT_MS, LOGGED_A_DAY } from "../src/play/logs.ts";
 import { type JobTimes, Play, TEND_AFTER } from "../src/play/service.ts";
 import { ANSWERS_KEPT, BOARD_MOST, dueAgain, PlayStore } from "../src/play/store.ts";
-import { DAY, fakeBackend, fakeMojang, type Fakes, noNetwork, sessionOf, steadyDice, testLeaf } from "./support.ts";
+import {
+  asPage,
+  DAY,
+  fakeBackend,
+  fakeMojang,
+  type Fakes,
+  noNetwork,
+  sessionOf,
+  steadyDice,
+  testLeaf,
+} from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
@@ -133,7 +145,8 @@ afterEach(async () => {
  * that is an object, the player the page believes it is (unless the body names one itself).
  */
 function send(method: string, path: string, body?: unknown, player: PlayerId = alice): Promise<Response> {
-  const sent = typeof body === "object" && body !== null && !Array.isArray(body) ? { player, ...body } : body;
+  const sent =
+    typeof body === "object" && body !== null && !Array.isArray(body) ? asPage(path, { player, ...body }) : body;
   return Promise.resolve(
     app.request(path, {
       method,
@@ -1646,12 +1659,12 @@ describe("the Works", () => {
     const { clock: tick, yard } = yardOf(Schema.decodeUnknownSync(Shown)(await opening.json()).state);
     expect(yard.seed).toBeNull();
     // The starter gatherer and mill on the deadfall by the depot, and a run of belt to it.
-    const { legs } = writeAct({ do: "lay", legs: route(yard, [22, 15], [23, 17]) ?? [] });
+    const { legs } = writeAct({ do: "lay", legs: route(yard, xy(-2, -3), xy(-1, -1)) ?? [] });
     expect(Array.isArray(legs) && legs.length).toBeGreaterThan(0);
     const built = await send("POST", "/v1/game/play/works", {
       commands: [
-        { id: "w-1", do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick },
-        { id: "w-2", do: "build", kind: "mill", x: 21, y: 15, dir: 0, tick },
+        { id: "w-1", do: "build", kind: "gatherer", ...near(-4, -3), dir: 0, tick },
+        { id: "w-2", do: "build", kind: "mill", ...near(-3, -3), dir: 0, tick },
         { id: "w-3", do: "lay", legs, tick },
       ],
     });
@@ -1719,6 +1732,57 @@ const roomNow = () => services.run(Coins.use((coins) => coins.room(alice, clock.
 const yardShown = async (): Promise<Yard> =>
   yardOf(Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json()).state).yard;
 
+describe("a page playing by other rules than Leaf's", () => {
+  it("has none of its batch done, from a land other than Leaf's: it is answered as a read, with Leaf's rules", async () => {
+    const opening = await send("GET", "/v1/game/play/works");
+    const { clock: tick } = yardOf(Schema.decodeUnknownSync(Shown)(await opening.json()).state);
+    const built = await send("POST", "/v1/game/play/works", {
+      commands: [{ id: "w-1", do: "build", kind: "belt", ...near(-4, -3), dir: 0, tick }],
+    });
+    expect(Schema.decodeUnknownSync(Answered)(await built.json()).results).toEqual([{ id: "w-1", notes: [] }]);
+    const before = await storedYard();
+    // A tab left open across a change of rules: where it says a belt stands, on its land, may be another piece on Leaf's.
+    const remove = async (rules: string | undefined) => {
+      const sent = await send("POST", "/v1/game/play/works", {
+        rules,
+        commands: [{ id: `r-${String(rules)}`, do: "remove", ...near(-4, -3), tick }],
+      });
+      const body: unknown = await sent.json();
+      return { answer: [sent.status, Object(body).results, Object(body).rules], kept: await storedYard() };
+    };
+    const answered = { answer: [200, [], GAMES.works.rules], kept: before };
+    expect(await remove("a-page-of-other-rules")).toEqual(answered);
+    expect((await yardShown()).kind[tileNear(-4, -3)]).toBe(BELT);
+    // A page from before pages said their rules (a raid or town tab open across the deploy that
+    // brought this in, whose rules did not change) has its batch done as before, with Leaf's rules.
+    const legacy = await remove(undefined);
+    expect(legacy.answer[0]).toBe(200);
+    expect(legacy.answer[1]).toHaveLength(1);
+    expect(legacy.answer[2]).toBe(GAMES.works.rules);
+    expect((await yardShown()).kind[tileNear(-4, -3)]).not.toBe(BELT);
+  });
+});
+
+describe("a yard kept on more land than Leaf's", () => {
+  it("is left exactly as it is, as a newer Leaf's: still due, through a tend, a read and a command", async () => {
+    const text = FACTORY.encode(outward());
+    await services.query(
+      (sql) => sql`
+        INSERT INTO play_state (player_id, game, rev, state, updated_at, due_at) VALUES (${alice}, 'works', 1, ${text}, ${T0}, ${T0})
+      `,
+    );
+    const before = await services.query((sql) => sql`SELECT * FROM play_state WHERE player_id = ${alice}`);
+    clock.now += 60_000;
+    await tending();
+    const opening = await send("GET", "/v1/game/play/works");
+    expect([opening.status, await codeOf(opening)]).toEqual([409, "state_unreadable"]);
+    const sent = await send("POST", "/v1/game/play/works", { commands: [{ id: "w-1", do: "collect", tick: 0 }] });
+    expect([sent.status, await codeOf(sent)]).toEqual([409, "state_unreadable"]);
+    expect(await services.query((sql) => sql`SELECT * FROM play_state WHERE player_id = ${alice}`)).toEqual(before);
+    expect(await dueOf("works")).toBe(T0);
+  });
+});
+
 describe("a blueprint code in the Works", () => {
   it("keeps the blueprint a code from another yard is, as Leaf reads it; a broken code is refused and keeps nothing", async () => {
     // A yard somewhere else keeps a mill and a belt; its code is what its owner would paste in Discord.
@@ -1727,9 +1791,9 @@ describe("a blueprint code in the Works", () => {
       const read = readCommand({ tick: other.tick, ...c });
       if (!read || "refused" in playWorks(other, read)) throw new Error(`${JSON.stringify(c)} was not done`);
     };
-    done({ do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
-    done({ do: "build", kind: "belt", x: 22, y: 15, dir: 0 });
-    done({ do: "saveBlueprint", slot: 0, tiles: inArea(other, 21, 15, 22, 15) });
+    done({ do: "build", kind: "mill", ...near(-3, -3), dir: 0 });
+    done({ do: "build", kind: "belt", ...near(-2, -3), dir: 0 });
+    done({ do: "saveBlueprint", slot: 0, tiles: inArea(other, ...xy(-3, -3), ...xy(-2, -3)) });
     const kept = other.blueprints[0];
     const code = kept ? blueprintCode(kept) : null;
     // Alice's yard, with a place for one blueprint and nothing kept in it.
@@ -1769,9 +1833,9 @@ describe("an Undo in the Works", () => {
   }
   /** The mill to hand by the depot, then a mill paid for, taken away: what it gave back is the newest Coins entry. */
   const millTaken = [
-    { do: "build", kind: "mill", x: 21, y: 15, dir: 0 },
-    { do: "build", kind: "mill", x: 24, y: 12, dir: 0 },
-    { do: "remove", x: 24, y: 12 },
+    { do: "build", kind: "mill", ...near(-3, -3), dir: 0 },
+    { do: "build", kind: "mill", ...near(0, -6), dir: 0 },
+    { do: "remove", ...near(0, -6) },
   ];
 
   it("puts back what was taken away and takes back what it gave; undone again, gives back what it cost: the Coins net to nothing, none of it earned", async () => {
@@ -1810,12 +1874,12 @@ describe("an Undo in the Works", () => {
         async (r) => Schema.decodeUnknownSync(Answered)(await r.json()).results,
       );
     // Page A builds a belt. Page B, not yet told of it, builds a mill there and presses Undo at once.
-    expect(await commands({ id: "a-1", do: "build", kind: "belt", x: 21, y: 15, dir: 0 })).toEqual([
+    expect(await commands({ id: "a-1", do: "build", kind: "belt", ...near(-3, -3), dir: 0 })).toEqual([
       { id: "a-1", notes: [] },
     ]);
     expect(
       await commands(
-        { id: "b-1", do: "build", kind: "mill", x: 21, y: 15, dir: 0 },
+        { id: "b-1", do: "build", kind: "mill", ...near(-3, -3), dir: 0 },
         { id: "b-2", do: "undo", entry: "b-1" },
       ),
     ).toEqual([
@@ -1823,7 +1887,7 @@ describe("an Undo in the Works", () => {
       { id: "b-2", refused: "cannot_undo" },
     ]);
     const yard = await yardShown();
-    expect([yard.kind[21 + 15 * yard.land.w], yard.history.map((e) => e.id)]).toEqual([BELT, ["a-1"]]);
+    expect([yard.kind[tileNear(-3, -3)], yard.history.map((e) => e.id)]).toEqual([BELT, ["a-1"]]);
   });
 
   it("puts a plan of the whole yard back as one command for its net price, and undoes it as one: the ledger nets to nothing", async () => {
@@ -1833,12 +1897,12 @@ describe("an Undo in the Works", () => {
       const read = readCommand({ tick: w.tick, ...c });
       if (!read || "refused" in playWorks(w, read)) throw new Error(`${JSON.stringify(c)} was not done`);
     };
-    done({ do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
-    done({ do: "build", kind: "crate", x: 24, y: 12, dir: 0 });
-    done({ do: "build", kind: "bench", x: 25, y: 12, dir: 0 });
+    done({ do: "build", kind: "mill", ...near(-3, -3), dir: 0 });
+    done({ do: "build", kind: "crate", ...near(0, -6), dir: 0 });
+    done({ do: "build", kind: "bench", ...near(1, -6), dir: 0 });
     done({ do: "saveYard", slot: 0 });
-    done({ do: "remove", x: 24, y: 12 });
-    done({ do: "remove", x: 25, y: 12 });
+    done({ do: "remove", ...near(0, -6) });
+    done({ do: "remove", ...near(1, -6) });
     w.history = [];
     w.at = clock.now;
     // Opened first, so that her Coins open with the welcome, then written over as a staging step does.
@@ -1849,15 +1913,14 @@ describe("an Undo in the Works", () => {
         sql`UPDATE play_state SET rev = rev + 1, state = ${text}, updated_at = ${clock.now} WHERE player_id = ${alice}`,
     );
     const before = await yardShown();
-    const tile = (x: number, y: number) => x + y * before.land.w;
     expect((await works([{ do: "placeBlueprint", slot: 0, turns: 0, x: 0, y: 0 }])).results).toEqual([
       { id: `u-${ids}`, notes: [] },
     ]);
     const placed = await yardShown();
-    expect([placed.kind[tile(24, 12)], placed.kind[tile(25, 12)], placed.kind[tile(21, 15)]]).toEqual([
+    expect([placed.kind[tileNear(0, -6)], placed.kind[tileNear(1, -6)], placed.kind[tileNear(-3, -3)]]).toEqual([
       CRATE,
       BENCH,
-      before.kind[tile(21, 15)],
+      before.kind[tileNear(-3, -3)],
     ]);
     // A crate and a bench stood, the mill left standing: one entry, for both.
     expect((await entries(alice)).slice(-1)).toEqual([
@@ -1885,15 +1948,17 @@ describe("an Undo in the Works", () => {
       (sql) =>
         sql`UPDATE play_state SET rev = rev + 1, state = ${text}, updated_at = ${clock.now} WHERE player_id = ${alice}`,
     );
-    const tree = 22 + 33 * w.land.w;
-    expect((await works([{ do: "fell", x: 10, y: 14 }])).results).toEqual([{ id: `u-${ids}`, refused: "cannot_fell" }]);
-    expect((await works([{ do: "fell", x: 23, y: 34 }])).results).toEqual([{ id: `u-${ids}`, notes: [] }]);
+    const tree = tileNear(-2, 15);
+    expect((await works([{ do: "fell", ...near(-14, -4) }])).results).toEqual([
+      { id: `u-${ids}`, refused: "cannot_fell" },
+    ]);
+    expect((await works([{ do: "fell", ...near(-1, 16) }])).results).toEqual([{ id: `u-${ids}`, notes: [] }]);
     expect((await entries(alice)).slice(-1)).toEqual([
       { amount: -100, reason: "Felled in the Works", game: "works", key: expect.any(String) },
     ]);
     const felled = await yardShown();
     expect([await coinsOf(alice), redwoodAt(felled, tree)]).toEqual([200, false]);
-    expect((await works([{ do: "build", kind: "belt", x: 22, y: 33, dir: 0 }])).results).toEqual([
+    expect((await works([{ do: "build", kind: "belt", ...near(-2, 15), dir: 0 }])).results).toEqual([
       { id: `u-${ids}`, notes: [] },
     ]);
     const undo = async () => works([{ do: "undo", entry: (await yardShown()).history.at(-1)?.id }]);
@@ -1928,10 +1993,10 @@ describe("a batch's answer", () => {
     const opening = Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json());
     const { clock: tick, yard: copy } = yardOf(opening.state);
     const built = await send("POST", "/v1/game/play/works", {
-      commands: [{ id: "w-1", do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick }],
+      commands: [{ id: "w-1", do: "build", kind: "gatherer", ...near(-4, -3), dir: 0, tick }],
     });
     // The page's copy, with the same command done to it at the same tick.
-    const same = readCommand({ id: "w-1", do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick });
+    const same = readCommand({ id: "w-1", do: "build", kind: "gatherer", ...near(-4, -3), dir: 0, tick });
     if (!same) throw new Error("not a command");
     expect("refused" in playWorks(copy, same)).toBe(false);
     const { state } = Schema.decodeUnknownSync(Answered)(await built.json());
@@ -2217,6 +2282,7 @@ describe("a yard the Works' first design kept", () => {
       sold: 16_597,
       paid: 40_230,
       // The gatherer it was given, where it stood on the deadfall by the depot.
+      // A tile of the guild's first land, 48 tiles across, as the first design kept it.
       cells: [{ i: 15 * 48 + 20, k: "gatherer", d: 0, g: 1 }],
     });
     await services.query(
@@ -2236,7 +2302,7 @@ describe("a yard the Works' first design kept", () => {
     expect(opening.status).toBe(200);
     const { clock: tick, yard } = yardOf(Schema.decodeUnknownSync(Shown)(await opening.json()).state);
     expect([yard.open.tier, yard.handed, Math.floor((yard.paid + yard.sold) / MILLI)]).toEqual([2, 27, 56_827]);
-    expect(yard.kind[15 * 48 + 20]).toBe(GATHERER);
+    expect(yard.kind[tileNear(-4, -3)]).toBe(GATHERER);
     // Grove, the Far Seam, Windfall Hollow and the Millpond are for later tiers: 11,600 Coins back.
     expect(yard.till).toBe(11_600 * MILLI);
     const collected = await send("POST", "/v1/game/play/works", { commands: [{ id: "f-1", do: "collect", tick }] });

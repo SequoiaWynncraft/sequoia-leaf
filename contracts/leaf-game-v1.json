@@ -2349,7 +2349,7 @@
       "rev": 0,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "yard": "{\"v\":8,\"tick\":0,\"charge\":0,\"at\":1795611300000,\"till\":0,\"bank\":0,\"told\":0,\"seen\":{\"tick\":0,\"till\":0,\"depot\":{}},\"plots\":[\"yard\"],\"done\":[],\"hand\":\"planks\",\"line\":[],\"got\":{\"planks\":{}},\"board\":[],\"serial\":0,\"handed\":0,\"swapAt\":0,\"depot\":{},\"sold\":0,\"paid\":0,\"cells\":\"AA==\"}",
+        "yard": "{\"v\":9,\"land\":{\"w\":48,\"h\":36,\"x\":16,\"y\":12},\"tick\":0,\"charge\":0,\"at\":1795611300000,\"till\":0,\"bank\":0,\"told\":0,\"seen\":{\"tick\":0,\"till\":0,\"depot\":{}},\"plots\":[\"yard\"],\"done\":[],\"hand\":\"planks\",\"line\":[],\"got\":{\"planks\":{}},\"board\":[],\"serial\":0,\"handed\":0,\"swapAt\":0,\"depot\":{},\"sold\":0,\"paid\":0,\"cells\":\"AA==\"}",
         "clock": 0
       },
       "purse": {
@@ -3237,7 +3237,7 @@
       "state": {
         "clock": 0,
         "tick": 0,
-        "check": 3477093712,
+        "check": 713272288,
         "hung": []
       },
       "purse": {
@@ -3284,7 +3284,7 @@
       "state": {
         "clock": 0,
         "tick": 0,
-        "check": 2784240161,
+        "check": 707902033,
         "hung": [
           {
             "id": 0,

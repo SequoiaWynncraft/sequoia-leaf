@@ -4,7 +4,7 @@
  * when, what a grade costs) is clamped or carried, never a reason to refuse a yard, and nothing a
  * player has is lost: a piece that cannot stand today is paid back into the till.
  *
- * `saves/` holds yards as each version kept them (7, 6, and the first design's 3), written once and
+ * `saves/` holds yards as each version kept them (8, 7, 6, and the first design's 3), written once and
  * never again: each must keep reading, with what it read then.
  */
 import { describe, expect, test } from "bun:test";

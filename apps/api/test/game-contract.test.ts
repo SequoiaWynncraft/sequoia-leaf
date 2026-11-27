@@ -3,12 +3,14 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { leaf as leafOf, playerId } from "@sequoia-leaf/core";
-import { blueprintCode, create as createYard, FACTORY, play, readCommand, within } from "@sequoia-leaf/factory";
+import { create as createYard, FACTORY } from "@sequoia-leaf/factory";
+import { near } from "@sequoia-leaf/factory/test/near.ts";
+import { codeOfRow } from "@sequoia-leaf/factory/test/yards.ts";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
 import { sittingExchanges } from "./sittings-contract.ts";
-import { fakeBackend, fakeMojang, MINUTE, rewardQueue, sessionOf, steadyDice, testLeaf } from "./support.ts";
+import { asPage, fakeBackend, fakeMojang, MINUTE, rewardQueue, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 /**
  * The game's routes as the game sees them, from the real routes:
@@ -108,11 +110,12 @@ async function exchanges(): Promise<Record<string, Exchange>> {
 
   const recorded: Record<string, Exchange> = {};
   async function call(name: string, method: string, path: string, body?: unknown, session = "alice-token") {
-    // As the game sends it: the website's cookie, from Leaf's own page.
+    // As the game sends it: the website's cookie, from Leaf's own page, a batch saying its rules;
+    // kept without them, as the answers are (`withoutRules`).
     const response = await app.request(path, {
       method,
       headers: { Cookie: `seq_session=${session}`, Origin: ORIGIN, "Content-Type": "application/json" },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(body === undefined ? {} : { body: JSON.stringify(asPage(path, body)) }),
     });
     recorded[name] = {
       request: body === undefined ? { method, path } : { method, path, body },
@@ -338,7 +341,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   // A batch in the Works, answered short: Bob sets a gatherer down at the tick his page was given.
   const works = await app.request("/v1/game/play/works", { headers: { Authorization: "Bearer bob-token" } });
   const tick = field(field(await works.json(), "state"), "clock");
-  const gatherer = { id: "w-1", do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick };
+  const gatherer = { id: "w-1", do: "build", kind: "gatherer", ...near(-4, -3), dir: 0, tick };
   await call(
     "POST /v1/game/play/{game}, the Works",
     "POST",
@@ -358,7 +361,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     (sql) => sql`UPDATE play_state SET rev = rev + 1, state = ${staged}, updated_at = ${clock.now}
                  WHERE player_id = ${bob} AND game = 'works'`,
   );
-  const code = millAndBelt();
+  const code = codeOfRow(3, ["mill", "belt"]);
   await call(
     "POST /v1/game/play/{game}, the Works, a blueprint code",
     "POST",
@@ -375,22 +378,6 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await sittingExchanges(call, recorded, (statement) => leaf.query(statement), { alice, bob, now: clock.now });
   await app.dispose();
   return recorded;
-}
-
-/** The code of a blueprint of a mill and a belt, kept in a yard somewhere else. */
-function millAndBelt(): string {
-  const y = createYard({ seed: 3, tier: 5 });
-  const done = (c: Record<string, unknown>): void => {
-    const read = readCommand({ tick: y.tick, ...c });
-    if (!read || "refused" in play(y, read)) throw new Error(`${JSON.stringify(c)} was not done`);
-  };
-  done({ do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
-  done({ do: "build", kind: "belt", x: 22, y: 15, dir: 0 });
-  done({ do: "saveBlueprint", slot: 0, tiles: within(y, 21, 15, 22, 15) });
-  const kept = y.blueprints[0];
-  const code = kept ? blueprintCode(kept) : null;
-  if (code === null) throw new Error("no code");
-  return code;
 }
 
 /**

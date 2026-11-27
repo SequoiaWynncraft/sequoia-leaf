@@ -12,7 +12,7 @@ import { PlayerNames } from "../src/game/names.ts";
 import { played } from "../src/play/games.ts";
 import { Play } from "../src/play/service.ts";
 import { PlayStore } from "../src/play/store.ts";
-import { fakeBackend, sessionOf, steadyDice, testLeaf } from "./support.ts";
+import { asPage, fakeBackend, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
@@ -162,7 +162,9 @@ async function raided(player: PlayerId, commands: readonly object[]): Promise<Ta
   const response = await app.request("/v1/game/play/raid", {
     method: "POST",
     headers: { Cookie: `seq_session=${SESSIONS[player]}`, Origin: ORIGIN, "Content-Type": "application/json" },
-    body: JSON.stringify({ player, commands: commands.map((c) => ({ id: `r-${++made}`, ...c })) }),
+    body: JSON.stringify(
+      asPage("/v1/game/play/raid", { player, commands: commands.map((c) => ({ id: `r-${++made}`, ...c })) }),
+    ),
   });
   const body = Schema.decodeUnknownSync(Schema.Struct({ state: Schema.Unknown }))(await response.json());
   const view = readView(body.state);

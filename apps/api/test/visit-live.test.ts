@@ -13,12 +13,13 @@ import {
   writeAct,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 import { Effect, Schema } from "effect";
 
 import { Live, TICK } from "../src/live/live.ts";
 import { Watchers } from "../src/live/watchers.ts";
 import { LiveClient } from "./live-client.ts";
-import { fakeBackend, sessionOf, testLeaf } from "./support.ts";
+import { asPage, fakeBackend, sessionOf, testLeaf } from "./support.ts";
 
 /**
  * A visit's room: everybody visiting a player's yard hears each batch Leaf keeps of it as Leaf
@@ -63,7 +64,7 @@ function call(method: string, path: string, who: PlayerId, body?: unknown): Prom
   return fetch(`${server?.origin ?? ""}${path}`, {
     method,
     headers: { Cookie: `seq_session=${token(who)}`, Origin: ORIGIN, "Content-Type": "application/json" },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    ...(body === undefined ? {} : { body: JSON.stringify(asPage(path, body)) }),
   });
 }
 
@@ -81,12 +82,12 @@ async function yardOf(answer: Response): Promise<{ rev: number; clock: number; y
 /** The owner opens their yard and puts the starter line down by the depot, in one batch from their page. */
 async function buildStarter(owner: PlayerId): Promise<Response> {
   const { clock: tick, yard } = await yardOf(await call("GET", "/v1/game/play/works", owner));
-  const { legs } = writeAct({ do: "lay", legs: route(yard, [22, 15], [23, 17]) ?? [] });
+  const { legs } = writeAct({ do: "lay", legs: route(yard, xy(-2, -3), xy(-1, -1)) ?? [] });
   return call("POST", "/v1/game/play/works", owner, {
     player: owner,
     commands: [
-      { id: `${owner}-1`, do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick },
-      { id: `${owner}-2`, do: "build", kind: "mill", x: 21, y: 15, dir: 0, tick },
+      { id: `${owner}-1`, do: "build", kind: "gatherer", ...near(-4, -3), dir: 0, tick },
+      { id: `${owner}-2`, do: "build", kind: "mill", ...near(-3, -3), dir: 0, tick },
       { id: `${owner}-3`, do: "lay", legs, tick },
       // Refused: there is nothing there. A visitor is told only what was done.
       { id: `${owner}-4`, do: "remove", x: 0, y: 0, tick },

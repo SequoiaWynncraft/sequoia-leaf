@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { at, build, create, encode, SPLITTER, type Yard } from "@sequoia-leaf/factory";
+import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 
 import { ctx, type FakeLeaf, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { S } from "./state.ts";
@@ -19,12 +20,12 @@ useFakeLeaf();
 function withSplitter(tier: number): Yard {
   const y = create({ seed: 5, tier });
   y.at = ctx().now;
-  build(y, SPLITTER, 20, 16, 0, Infinity);
+  build(y, SPLITTER, ...xy(-4, -2), 0, Infinity);
   setTool(null);
   return y;
 }
 /** How each way of the splitter stands on the page: ahead, left, right. */
-const ways = (): string[] => [0, 1, 2].map((k) => wayState(S.world, at(S.world, 20, 16), k));
+const ways = (): string[] => [0, 1, 2].map((k) => wayState(S.world, at(S.world, ...xy(-4, -2)), k));
 /** Leaf has had every command the page did, found nothing to differ, and holds the same yard. */
 async function inStep(fake: FakeLeaf): Promise<void> {
   const same = (): boolean => encode(S.world) === encode({ ...fake.leaf.yard, seed: null });
@@ -44,7 +45,7 @@ describe("a splitter's ways on its card", () => {
     const fake = await opened(withSplitter(5));
     const steps: string[] = [];
     for (let k = 0; k < 4; k++) {
-      expect(wayAt(20, 16, 1)).toBe(true);
+      expect(wayAt(...xy(-4, -2), 1)).toBe(true);
       steps.push(ways()[1] ?? "");
     }
     expect(steps).toEqual(["first", "shut", "in", "open"]);
@@ -53,7 +54,7 @@ describe("a splitter's ways on its card", () => {
       [1, 3],
       [0, 2],
     ] as const)
-      for (let k = 0; k < presses; k++) wayAt(20, 16, way);
+      for (let k = 0; k < presses; k++) wayAt(...xy(-4, -2), way);
     expect(ways()).toEqual(["shut", "in", "open"]);
     await inStep(fake);
     await undoTo(fake, ["first", "in", "open"]);
@@ -63,20 +64,20 @@ describe("a splitter's ways on its card", () => {
 
   test("a run of belt from a splitter begins on its first way out that sends, not one taking things in", () => {
     const y = withSplitter(5);
-    const i = at(y, 20, 16);
-    expect(runOut(y, i)).toBe(at(y, 21, 16));
+    const i = at(y, ...xy(-4, -2));
+    expect(runOut(y, i)).toBe(at(y, ...xy(-3, -2)));
     y.ins[i] = 1;
-    expect(runOut(y, i)).toBe(at(y, 20, 15));
+    expect(runOut(y, i)).toBe(at(y, ...xy(-4, -3)));
     y.shut[i] = 6;
     expect(runOut(y, i)).toBe(-1);
   });
 
   test("before ways in are studied, a shut way opens; before a way may be put first, an open way shuts", () => {
     const y = withSplitter(4);
-    const i = at(y, 20, 16);
+    const i = at(y, ...xy(-4, -2));
     expect([y.open.first, y.open.ins]).toEqual([false, false]);
-    expect(stepWay(y, i, 20, 16, 0)).toEqual({ do: "way", x: 20, y: 16, way: 0, open: false });
+    expect(stepWay(y, i, ...xy(-4, -2), 0)).toEqual({ do: "way", ...near(-4, -2), way: 0, open: false });
     y.shut[i] = 1;
-    expect(stepWay(y, i, 20, 16, 0)).toEqual({ do: "way", x: 20, y: 16, way: 0, open: true });
+    expect(stepWay(y, i, ...xy(-4, -2), 0)).toEqual({ do: "way", ...near(-4, -2), way: 0, open: true });
   });
 });
