@@ -67,20 +67,25 @@ export interface Named {
   readonly id: string;
   readonly name: string;
 }
+/** A player a banner calls, in their seat, counted from 1 (Groot Night's grooters: `grooterN` is seat N). */
+export interface Called extends Named {
+  readonly seat: number;
+}
 /**
  * A banner as `GET /v1/game/banners` gives it: its dates in Leaf's clock, its headliner if it has
- * one, and the players it calls, in order (Groot Night's grooters: `grooterN` is `called[N - 1]`),
- * none until they are put in.
+ * one, and the players it calls, each in their seat, none until they are put in.
  */
 export interface BannerPerson {
   readonly id: string;
   readonly from: number;
   readonly until: number;
   readonly headliner: Named | null;
-  readonly called: readonly Named[];
+  readonly called: readonly Called[];
 }
 const readNamed = (v: unknown): Named | null =>
   isRecord(v) && typeof v.id === "string" && typeof v.name === "string" ? { id: v.id, name: v.name } : null;
+/** A seat: a whole number from 1. */
+const isSeat = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 1;
 
 /** The banners route's answer: the banners these rules know, each with its headliner. Null for anything else. */
 export function readBanners(v: unknown): BannerPerson[] | null {
@@ -93,9 +98,13 @@ export function readBanners(v: unknown): BannerPerson[] | null {
     // A Leaf from before banners called anyone says nothing of it: nobody is called yet.
     const said = b.called ?? [];
     if (!Array.isArray(said)) return null;
-    const called = said.map(readNamed);
-    if (called.some((c) => c === null)) return null;
-    out.push({ ...banner, headliner: readNamed(b.headliner), called: called.filter((c) => c !== null) });
+    const named = said.map((c: unknown) => [c, readNamed(c)] as const);
+    if (named.some(([, c]) => c === null)) return null;
+    // One with no seat, or with what is no seat, is left out: their seat stays empty, and nobody moves up into it.
+    const called = named.flatMap(([c, person]) =>
+      person && isRecord(c) && isSeat(c.seat) ? [{ seat: c.seat, ...person }] : [],
+    );
+    out.push({ ...banner, headliner: readNamed(b.headliner), called });
   }
   return out;
 }

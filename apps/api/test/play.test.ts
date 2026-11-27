@@ -3783,6 +3783,10 @@ async function banners() {
 }
 
 describe("the banners", () => {
+  /** Groot Night's dates as the route gives them. */
+  const NIGHT = { id: "groot-night", from: "2026-12-08T00:00:00.000Z", until: "2026-12-22T00:00:00.000Z" };
+  const OPENS = Date.UTC(2026, 11, 8);
+
   it("are listed with their dates and headliner, who Leaf then knows, so their name and face are looked up", async () => {
     await app.dispose();
     const mojang = fakeMojang();
@@ -3790,14 +3794,7 @@ describe("the banners", () => {
     mojang.profiles.set(headliner, { name: "Fernwhistle", skin: undefined });
     start({ mojang: mojang.service });
     const dates = { id: "banner-1", from: "2026-11-23T00:00:00.000Z", until: "2026-12-08T00:00:00.000Z" };
-    // Groot Night is listed with its dates from the first: the page opens it by Leaf's clock alone.
-    const night = { id: "groot-night", from: "2026-12-08T00:00:00.000Z", until: "2026-12-22T00:00:00.000Z" };
-    expect(await banners()).toEqual({
-      banners: [
-        { ...dates, headliner: null, called: [] },
-        { ...night, headliner: null, called: [] },
-      ],
-    });
+    expect(await banners()).toEqual({ banners: [{ ...dates, headliner: null, called: [] }] });
     const known = () =>
       services.run(
         Effect.gen(function* () {
@@ -3809,22 +3806,44 @@ describe("the banners", () => {
 
     await services.query((sql) => sql`INSERT INTO banner_people (banner, player_id) VALUES ('banner-1', ${headliner})`);
     expect(await banners()).toEqual({
-      banners: [
-        { ...dates, headliner: { id: headliner, name: "Fernwhistle" }, called: [] },
-        { ...night, headliner: null, called: [] },
-      ],
+      banners: [{ ...dates, headliner: { id: headliner, name: "Fernwhistle" }, called: [] }],
     });
     expect(await known()).toEqual([headliner]);
     expect((await app.request("/v1/game/banners")).status).toBe(401);
   });
 
-  it("list whom Groot Night calls, seat by seat, who Leaf then knows; a row naming no player names nobody", async () => {
+  it("list a banner only once its day has come on Leaf's clock, people and all; one that has ended stays", async () => {
+    await app.dispose();
+    const mojang = fakeMojang();
+    const [commodore, first] = [stranger(9), stranger(6)];
+    mojang.profiles.set(commodore, { name: "Mossway", skin: undefined });
+    mojang.profiles.set(first, { name: "Ashgrove", skin: undefined });
+    start({ mojang: mojang.service });
+    await services.query(
+      (sql) => sql`INSERT INTO banner_people (banner, player_id) VALUES ('groot-night', ${commodore})`,
+    );
+    await services.query(
+      (sql) => sql`INSERT INTO banner_called (banner, seat, player_id) VALUES ('groot-night', 1, ${first})`,
+    );
+    clock.now = OPENS - 1;
+    expect((await banners()).banners.map((b) => b.id)).toEqual(["banner-1"]);
+    clock.now = OPENS;
+    expect((await banners()).banners.map((b) => b.id)).toEqual(["banner-1", "groot-night"]);
+    expect((await banners()).banners.find((b) => b.id === "groot-night")).toEqual({
+      ...NIGHT,
+      headliner: { id: commodore, name: "Mossway" },
+      called: [{ seat: 1, id: first, name: "Ashgrove" }],
+    });
+  });
+
+  it("list whom Groot Night calls by their seats, who Leaf then knows; a row naming no player names nobody", async () => {
     await app.dispose();
     const mojang = fakeMojang();
     const [first, second, fourth] = [stranger(6), stranger(7), stranger(8)];
     mojang.profiles.set(first, { name: "Ashgrove", skin: undefined });
     mojang.profiles.set(second, { name: "Birchwood", skin: undefined });
     start({ mojang: mojang.service });
+    clock.now = OPENS;
     const knows = () =>
       services.run(
         Effect.gen(function* () {
@@ -3833,7 +3852,7 @@ describe("the banners", () => {
         }),
       );
     expect(await knows()).toEqual([]);
-    // Put in by hand, in any order; the third seat is a mistake.
+    // Put in by hand, in any order; the third seat is a mistake, and stays empty: the fourth keeps its seat.
     await services.query(
       (sql) => sql`
         INSERT INTO banner_called (banner, seat, player_id)
@@ -3842,9 +3861,9 @@ describe("the banners", () => {
     );
     const night = (await banners()).banners.find((b) => b.id === "groot-night");
     expect(night?.called).toEqual([
-      { id: first, name: "Ashgrove" },
-      { id: second, name: "Birchwood" },
-      { id: fourth, name: "Someone" },
+      { seat: 1, id: first, name: "Ashgrove" },
+      { seat: 2, id: second, name: "Birchwood" },
+      { seat: 4, id: fourth, name: "Someone" },
     ]);
     expect(night?.headliner).toBeNull();
     expect(await knows()).toEqual([first, second, fourth].toSorted());

@@ -575,23 +575,25 @@ describe("a banner's featured figures", () => {
     expect(featuredOf(catalogAt(eraAt(opens - 1)), "groot-night")).toEqual([]);
   });
 
-  it("are one of a pull's prizes of their rarity half the time, evenly, and anything of it the other half", () => {
-    // Sprite: Crab #31 and Munch of eight. 50% for them, and 2 in 8 of the rest: 62.5%, evenly.
+  it("are half of a pull's prizes of their rarity, evenly, and the other half is the rest of that rarity, evenly", () => {
+    // Sprite: Crab #31 and Munch of eight. 50% for the two, and 50% for the other six.
     const sprites = drawn("Sprite", 0, 0, featured);
     expect(night.Sprite).toHaveLength(8);
-    expect(share(sprites, ["figure:crab31", "figure:munch"])).toBeCloseTo(0.5 + 0.5 * (2 / 8), 1);
+    expect(share(sprites, ["figure:crab31", "figure:munch"])).toBeCloseTo(0.5, 1);
     expect((sprites.get("figure:crab31") ?? 0) / (sprites.get("figure:munch") ?? 1)).toBeCloseTo(1, 0);
-    // Leafkin: Peep of eight, 56%; Druid: Clutch of three, 67%.
-    expect(share(drawn("Leafkin", 0, 0, featured), ["figure:peep"])).toBeCloseTo(0.5 + 0.5 / 8, 1);
-    expect(share(drawn("Druid", 0, 9, featured), ["figure:clutch"])).toBeCloseTo(0.5 + 0.5 / 3, 1);
-    // Treant, from a lost 50/50 (owed is false here, so it is drawn): Crab #8 and Seqwawa of five, 70%.
+    const rest = night.Sprite.filter((p) => !featured.includes(p));
+    for (const p of rest) expect([p, share(sprites, [p])]).toEqual([p, expect.closeTo(0.5 / rest.length, 1)]);
+    // Leafkin: Peep, one of eight; Druid: Clutch, one of three. Half of each.
+    expect(share(drawn("Leafkin", 0, 0, featured), ["figure:peep"])).toBeCloseTo(0.5, 1);
+    expect(share(drawn("Druid", 0, 9, featured), ["figure:clutch"])).toBeCloseTo(0.5, 1);
+    // Treant, from a lost 50/50 (owed is false here, so it is drawn): Crab #8 and Seqwawa of five, half.
     const treant = new Map<string, number>();
     for (let seed = 0; seed < 40_000; seed++) {
       const d = draw(counters(79), night, { rng: seed }, featured);
       if (d.rarity === "Treant") treant.set(d.prize, (treant.get(d.prize) ?? 0) + 1);
     }
     expect(night.Treant).toHaveLength(5);
-    expect(share(treant, ["figure:crab8", "figure:seqwawa"])).toBeCloseTo(0.5 + 0.5 * (2 / 5), 1);
+    expect(share(treant, ["figure:crab8", "figure:seqwawa"])).toBeCloseTo(0.5, 1);
     // Without them the same pulls are even.
     expect(share(drawn("Sprite", 0, 0, []), ["figure:crab31", "figure:munch"])).toBeCloseTo(2 / 8, 1);
   });

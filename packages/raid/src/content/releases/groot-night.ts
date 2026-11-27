@@ -183,7 +183,7 @@ export const GROOT_NIGHT: Patch = {
         ability: {
           name: "Any grooters in chat?",
           shape: "summon",
-          text: "Rings for the grooters, and {wait} seconds later up to {most} of them stand on free hexes within 2 of the Commodore, each the next in turn, with {health} health and {attack} attack. A grooter still standing is healed to full instead.",
+          text: "Rings for the grooters, and {wait} seconds later up to {most} of them stand on free hexes within 2 of the Commodore, each the next in turn, with {health} health and {attack} attack. Any grooter standing then is healed to full.",
           n: { health: [460, 600, 1180], attack: [75, 97, 190], most: [3, 3, 3], wait: [0.8, 0.8, 0.8] },
           short: "Calls {most} grooters: {health} health, {attack} attack. Heals those still up to full.",
         },

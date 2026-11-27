@@ -30,6 +30,8 @@ import {
   clearing,
   GROVE,
   groveState,
+  heardPeople,
+  missingPeople,
   nextFree,
   offers,
   onward,
@@ -192,6 +194,10 @@ test("the rules are written from RATES", () => {
   ]);
   expect(rules(null)).toHaveLength(4);
   expect(rules(null)[0]).toStartWith("Top prize (Treant): ");
+  // A banner with featured figures says their odds as the draw makes them: half featured, half the rest.
+  expect(rules("Mossback", ["Leafkin", "Sprite"])[2]).toBe(
+    "Featured: 50% of the Leafkin or Sprite drawn here are featured figures, and 50% are the other figures of that rarity, each as likely as the others in its half.",
+  );
 });
 
 /** The numbers in a line, in order, a percentage as a share. */
@@ -461,4 +467,32 @@ test("a town left open across a banner's closing asks Leaf again once it is due,
   expect(card(PULLS.view(state, ctxAt(ends)))).toBeNull();
   // With no pulls yet the card asks, a minute apart at most.
   expect([asksNow(null, ends, ends - 60_000), asksNow(null, ends, ends - 59_999)]).toEqual([true, false]);
+});
+
+test("the Grove keeps each banner's people by banner, and asks again while an open banner's headliner is not known", () => {
+  const first = WITH[0];
+  if (!first) throw new Error("no banner");
+  const later = { id: "groot-night", from: 0, until: 1, headliner: null, called: [] };
+  // Leaf has named banner-1's headliner; a later banner opens and nobody is named for it yet.
+  const known = heardPeople([], [first]);
+  const both = {
+    open: [
+      { id: banner.id, until: banner.until },
+      { id: "groot-night", until: 1 },
+    ],
+  };
+  expect(missingPeople(both, known)).toBe(true);
+  expect(missingPeople({ open: [{ id: banner.id, until: banner.until }] }, known)).toBe(false);
+  // Leaf's next word names the later one: kept beside the first, each by its own banner.
+  const named = { ...later, headliner: { id: "mossway", name: "Mossway" } };
+  const heard = heardPeople(known, [named]);
+  expect(heard.map((b) => [b.id, b.headliner?.name])).toEqual([
+    ["banner-1", "Mossback"],
+    ["groot-night", "Mossway"],
+  ]);
+  expect(missingPeople(both, heard)).toBe(false);
+  // A banner the set draws needs nobody named.
+  expect(
+    missingPeople({ open: [{ id: "the-sets-own", until: 1 }] }, [], [{ ...banner, id: "the-sets-own", look: "set" }]),
+  ).toBe(false);
 });

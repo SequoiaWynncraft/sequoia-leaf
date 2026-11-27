@@ -32,8 +32,10 @@ import {
 } from "./shared.ts";
 
 /**
- * `GET /v1/game/banners`: every pull banner, its headliner and whom it calls besides, named as the
- * boards name players. The rows are put in by hand: a row whose id is not a player's names nobody.
+ * `GET /v1/game/banners`: every pull banner whose day has come on Leaf's clock (`from`), ended or
+ * not, with its headliner and whom it calls besides, each by their seat, named as the boards name
+ * players. One still to come is not said, nor are its people. The rows are put in by hand: a row
+ * whose id is not a player's names nobody, and its seat stays empty.
  */
 const bannersNow = (sql: SqlClient.SqlClient, names: PlayerNames["Service"]) =>
   Effect.gen(function* () {
@@ -50,21 +52,24 @@ const bannersNow = (sql: SqlClient.SqlClient, names: PlayerNames["Service"]) =>
         return id === undefined ? [] : [[banner, id] as const];
       }),
     );
-    const called = calls.flatMap(({ banner, playerId }) => {
+    const called = calls.flatMap(({ banner, seat, playerId }) => {
       const id = parsePlayerId(playerId);
-      return id === undefined ? [] : [{ banner, id }];
+      return id === undefined ? [] : [{ banner, seat, id }];
     });
+    const now = yield* Clock.currentTimeMillis;
     const named = yield* names.of([...people.values(), ...called.map(({ id }) => id)]);
     const nameOf = (player: PlayerId) => ({ id: player, name: named.get(player) ?? "Someone" });
     return {
-      banners: BANNERS.map(({ id, from, until }) => {
+      banners: BANNERS.filter(({ from }) => from <= now).map(({ id, from, until }) => {
         const person = people.get(id);
         return {
           id,
           from: iso(from),
           until: iso(until),
           headliner: person === undefined ? null : nameOf(person),
-          called: called.filter((c) => c.banner === id).map((c) => nameOf(c.id)),
+          called: called
+            .filter((c) => c.banner === id)
+            .map((c) => ({ seat: c.seat, id: c.id, name: named.get(c.id) ?? "Someone" })),
         };
       }),
     };

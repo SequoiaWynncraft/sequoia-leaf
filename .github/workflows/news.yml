@@ -3,11 +3,14 @@ name: News
 # Each patch note in the town's News tab (apps/town/src/notes.json) is posted to Discord once it is
 # out, by each webhook kept as the secrets NEWS_WEBHOOK and NEWS_WEBHOOK_2, each in its own job, so
 # one that fails or hangs never keeps the notes from the other. A secret that is not set is skipped.
-# A note is out from its `at`: a merge to main posts the notes it added that are out by then, and
-# twice an hour the clock posts those merged ahead of their `at` (a banner's, for its opening) whose
-# `at` came since its last run. Which notes is `toPost`'s to say (apps/town/src/notes.ts, tested
-# there); apps/town/review/news.ts writes them as messages. A note changed after it was posted is not
-# posted again, and none is posted before its `at`.
+# A note is out from its `at`, so one merged ahead of its day (a banner's) waits for it.
+#
+# Each channel keeps its own record: a note it took is marked on the commit that added the note, as
+# the commit status `news/<channel>/<note id>`. Each run, on a merge and twice an hour, posts every
+# note that is out, in the last week, and not yet marked for that channel, and marks only what the
+# channel took: a 429, a 5xx or no answer is tried again on the next run. Which notes is `toPost`'s
+# to say and what counts as taken `deliver`'s (apps/town/src/notes.ts, tested there);
+# apps/town/review/news.ts runs them. A note changed after it was posted is not posted again.
 on:
   push:
     branches: [main]
@@ -17,8 +20,8 @@ on:
 
 permissions:
   contents: read
-  # The clock reads when its last run was.
-  actions: read
+  # Each channel's record: the notes it took, marked on the commits that added them.
+  statuses: write
 
 concurrency:
   group: news
@@ -36,60 +39,33 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # The merge and the main it was merged onto, to tell which notes are new.
-          fetch-depth: 2
-      # By the clock: the window since its last run that ran (a cancelled one never did), or the last
-      # hour for its first, and whether any note's `at` is in it. Most runs stop here.
-      - name: Find the window
+      # Whether any note came out in the last week: only those are ever tried. Most runs stop here.
+      - name: Look for notes out this week
         id: window
-        if: github.event_name == 'schedule'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          runs="repos/$GITHUB_REPOSITORY/actions/workflows/news.yml/runs"
-          now=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq '.created_at | fromdateiso8601 * 1000')
-          since=$(gh api "$runs?event=schedule&status=completed&per_page=20" --jq "
-            [.workflow_runs[] | select(.id != $GITHUB_RUN_ID and (.conclusion == \"success\" or .conclusion == \"failure\"))
-              | .created_at | fromdateiso8601 * 1000] | max // ($now - 3600000)")
-          due=$(jq --argjson since "$since" --argjson now "$now" '
+          now=$(date +%s000)
+          due=$(jq --argjson now "$now" '
             map(.at | (if test("T") then sub("Z$"; ":00Z") else . + "T00:00:00Z" end) | fromdateiso8601 * 1000
-              | select(. > $since and . <= $now)) | length' apps/town/src/notes.json)
-          printf 'since=%s\nnow=%s\ndue=%s\n' "$since" "$now" "$due" | tee -a "$GITHUB_OUTPUT"
-      # When each note was merged, for the clock to tell one that waited from one a merge posted.
+              | select(. <= $now and . > $now - 604800000)) | length' apps/town/src/notes.json)
+          printf 'due=%s\n' "$due" | tee -a "$GITHUB_OUTPUT"
+      # When each note was added, and when the record began, are in the history.
       - name: Fetch the history
-        if: github.event_name == 'schedule' && steps.window.outputs.due != '0'
+        if: steps.window.outputs.due != '0'
         run: git fetch --unshallow --quiet origin "$GITHUB_REF"
       - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
-        if: github.event_name == 'push' || steps.window.outputs.due != '0'
+        if: steps.window.outputs.due != '0'
         with:
           version: "2026.10.17"
           sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
           install_args: bun
-      - name: Post the notes that are out
-        if: github.event_name == 'push' || steps.window.outputs.due != '0'
+      - name: Post the notes the channel has not taken
+        if: steps.window.outputs.due != '0'
         env:
           NAME: ${{ matrix.webhook }}
           WEBHOOK: ${{ secrets[matrix.webhook] }}
-          SINCE: ${{ steps.window.outputs.since }}
-          NOW: ${{ steps.window.outputs.now }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [ -z "$WEBHOOK" ]; then echo "No $NAME: nothing posted."; exit 0; fi
-          notes=apps/town/src/notes.json
-          if [ "$GITHUB_EVENT_NAME" = push ]; then
-            git show "HEAD^1:$notes" > /tmp/before.json 2>/dev/null || echo '[]' > /tmp/before.json
-            bun apps/town/review/news.ts merge /tmp/before.json "$(git log -1 --format=%ct HEAD)000" > /tmp/messages.jsonl
-          else
-            bun apps/town/review/news.ts clock "$SINCE" "$NOW" > /tmp/messages.jsonl
-          fi
-          # Every note is tried; any that fails is named, and the job fails at the end.
-          failed=0
-          while read -r message; do
-            if ! curl -fsS --max-time 15 -o /dev/null -H 'Content-Type: application/json' --data "$message" "$WEBHOOK"; then
-              echo "::error::$NAME did not take the note \"$(jq -r '.embeds[0].title' <<< "$message")\"."
-              failed=1
-            fi
-            sleep 1
-          done < /tmp/messages.jsonl
-          exit "$failed"
+          bun apps/town/review/news.ts

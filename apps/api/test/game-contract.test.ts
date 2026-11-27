@@ -267,7 +267,11 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     (sql) =>
       sql`INSERT INTO banner_called (banner, seat, player_id) VALUES ('groot-night', 2, ${bob}), ('groot-night', 1, ${alice})`,
   );
+  // Not said before its day; on it, with its people by their seats.
+  const was = clock.now;
+  clock.now = Date.UTC(2026, 11, 8);
   await call("GET /v1/game/banners, a banner that calls", "GET", "/v1/game/banners");
+  clock.now = was;
   // A page left open after someone else signed in.
   await call("POST /v1/game/play/{game}, not you", "POST", "/v1/game/play/raid", { ...firstRoom, player: bob });
   // A raid run of Alice's, as the play service logs it.

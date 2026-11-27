@@ -69,7 +69,7 @@ export const RATES = {
   top: { chance: 0.008, rampAfter: 65, certainAt: 80, headliner: 0.5 },
   /**
    * In a banner, a prize of a rarity that has featured figures (`Banner.featured`) is one of them,
-   * evenly, with this chance, and anything of that rarity otherwise.
+   * evenly, with this chance, and otherwise one of the others of that rarity, evenly.
    */
   featured: 0.5,
   /** If not top, a mid-tier prize: `chance`, or certain on the `certainAt`th pull since the last mid-tier or better. Dryad and Druid by weight. */
@@ -312,11 +312,14 @@ export function isOpen(pool: string, now: number): boolean {
 
 /**
  * A prize of a rarity: one of the pool's featured prizes of that rarity, evenly, with the chance
- * `RATES.featured`, else any of that rarity. A rarity with none featured draws as it always has.
+ * `RATES.featured`, else one of the others of that rarity, evenly, so the chance said is the chance
+ * there is. A rarity with none featured draws as it always has; one with nothing else, a featured.
  */
 function prizeOfRarity(prizes: Prizes, rarity: Rarity, featured: readonly string[], s: Stream): string {
   const favoured = featured.filter((prize) => prizes[rarity].includes(prize));
-  return favoured.length > 0 && chance(s) < RATES.featured ? pick(s, favoured) : pick(s, prizes[rarity]);
+  const others = prizes[rarity].filter((prize) => !favoured.includes(prize));
+  if (favoured.length === 0 || others.length === 0) return pick(s, prizes[rarity]);
+  return chance(s) < RATES.featured ? pick(s, favoured) : pick(s, others);
 }
 
 /**

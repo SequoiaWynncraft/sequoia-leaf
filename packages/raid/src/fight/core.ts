@@ -172,8 +172,8 @@ export function gainMana(u: Unit, amount: number): void {
 }
 /**
  * Mana from a friend's ability: never to its giver, never to one with no mana bar, and at most
- * `FIGHT.giftMost` to one figure in any `FIGHT.giftOver` seconds, whoever gives it. Gives back what
- * it gave.
+ * `FIGHT.giftMost` received by one figure in any `FIGHT.giftOver` seconds, whoever gives it. Gives
+ * back what it received.
  */
 export function giveMana(f: Fight, to: Unit, n: number, by: Unit): number {
   if (to.id === by.id || to.manaFull <= 0 || !to.alive || n <= 0) return 0;
@@ -181,9 +181,12 @@ export function giveMana(f: Fight, to: Unit, n: number, by: Unit): number {
   const given = to.gifts.reduce((sum, g) => sum + g.n, 0);
   const amount = Math.min(n, FIGHT.giftMost - given);
   if (amount <= 0) return 0;
-  to.gifts.push({ at: f.tick, n: amount });
+  // What it received, which a full bar may make less than what it was given: that is what counts.
+  const had = to.mana;
   gainMana(to, amount);
-  return amount;
+  const got = to.mana - had;
+  if (got > 0) to.gifts.push({ at: f.tick, n: got });
+  return got;
 }
 
 // ---------- cracking ----------
@@ -194,7 +197,8 @@ export function giveMana(f: Fight, to: Unit, n: number, by: Unit): number {
  * it says as a status.
  */
 export function crack(f: Fight, target: Unit, n: number, by: Unit | null): void {
-  if (!target.alive || n <= 0) return;
+  // Only on one a hit can land on: never the fallen, nor one nothing can reach (hidden).
+  if (!targetable(f, target) || n <= 0) return;
   target.armour = Math.max(0, target.armour - n);
   target.ward = Math.max(0, target.ward - n);
   target.cracked += n;

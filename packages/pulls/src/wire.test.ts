@@ -59,24 +59,31 @@ test("the banners route reads into this package's banners, each with its headlin
   ]);
   expect(readBanners(sent(null))).toEqual([{ ...banner, headliner: null, called: [] }]);
   expect(readBanners({})).toBeNull();
-  // Groot Night calls four players besides its headliner, in order: grooterN is the Nth.
+  // Groot Night calls players besides its headliner, each in their seat: grooterN is seat N.
   const calls = [
-    { id: "a", name: "Ash" },
-    { id: "b", name: "Birch" },
+    { seat: 1, id: "a", name: "Ash" },
+    { seat: 3, id: "b", name: "Birch" },
   ];
   const groot = { id: "groot-night", from: "", until: "", headliner: { id: "c", name: "Cedar" }, called: calls };
   if (!night) throw new Error("no second banner");
   expect(readBanners({ banners: [groot] })).toEqual([{ ...night, headliner: groot.headliner, called: calls }]);
   // Anything but players there does not read.
-  expect(readBanners({ banners: [{ ...groot, called: [{ id: 1 }] }] })).toBeNull();
+  expect(readBanners({ banners: [{ ...groot, called: [{ seat: 1, id: 1 }] }] })).toBeNull();
   expect(readBanners({ banners: [{ ...groot, called: "Ash" }] })).toBeNull();
 });
 
-test("a banner's called players read in order; a list with anything but players in it is not these rules'", () => {
-  const two = [
-    { id: "p1", name: "Fernwhistle" },
-    { id: "p2", name: "Nettlebark" },
+test("a called player with no seat, or a seat that is no seat, is left out: nobody moves into it", () => {
+  const said = [
+    { seat: 2, id: "p2", name: "Nettlebark" },
+    { id: "p0", name: "Seatless" },
+    { seat: 0, id: "p9", name: "Nowhere" },
+    { seat: 1.5, id: "p8", name: "Halfway" },
+    { seat: "4", id: "p4", name: "Wordy" },
+    { seat: 4, id: "p5", name: "Fernwhistle" },
   ];
-  expect(readBanners(sent(null, two))).toEqual([{ ...banner, headliner: null, called: two }]);
-  expect(readBanners(sent(null, [{ id: "p1" }]))).toBeNull();
+  expect(readBanners(sent(null, said))?.[0]?.called).toEqual([
+    { seat: 2, id: "p2", name: "Nettlebark" },
+    { seat: 4, id: "p5", name: "Fernwhistle" },
+  ]);
+  expect(readBanners(sent(null, [{ seat: 1, id: "p1" }]))).toBeNull();
 });

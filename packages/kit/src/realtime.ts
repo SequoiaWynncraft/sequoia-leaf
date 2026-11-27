@@ -66,13 +66,15 @@ export { Flag, type LiveMember, type Motion } from "@sequoia-leaf/core";
 
 // ---------- Leaf's clock ----------
 
-/** How far Leaf's clock is ahead of this page's, as any room on the page last heard. */
-let leafAhead = 0;
+/** How far Leaf's clock is ahead of this page's, as any room on the page last heard; null until one has. */
+let leafAhead: number | null = null;
 /**
  * Leaf's clock at a moment of this page's (`now`), as last heard: between connections and out of
  * a room the last word stands, so nothing timed by it jumps. The page's own until a room has heard.
  */
-export const leafClock = (now: number): number => now + leafAhead;
+export const leafClock = (now: number): number => now + (leafAhead ?? 0);
+/** Whether this page has heard Leaf's clock: from a room's welcome or a ping, never from its own. */
+export const leafKnown = (): boolean => leafAhead !== null;
 
 /**
  * Leaf's clock as this page can know it, from pings: each answer says how far Leaf's clock is from

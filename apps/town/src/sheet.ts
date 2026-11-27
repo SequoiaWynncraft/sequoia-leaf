@@ -1,13 +1,16 @@
 /** A contact sheet of the art, for looking at it large while drawing it: open the page with `?sheet`. */
 
 import { REQUEST_KINDS } from "@sequoia-leaf/core";
+import { ask } from "@sequoia-leaf/kit/net.ts";
 import { CREAM, GOLD, GREEN } from "@sequoia-leaf/kit/palette.ts";
 import type { Body } from "@sequoia-leaf/kit/skin.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
+import type { Catalog } from "@sequoia-leaf/raid/content/catalog.ts";
+import { type Era, eraAt, isEra } from "@sequoia-leaf/raid/content/releases.ts";
 import { PETS } from "@sequoia-leaf/town/camp.ts";
 import { PLACES } from "@sequoia-leaf/town/map/map.ts";
-import { KIND_NAMES, KINDS, THINGS } from "@sequoia-leaf/town/things.ts";
+import { KIND_NAMES, KINDS, thingOpen, THINGS } from "@sequoia-leaf/town/things.ts";
 
 import { type CampArt, campIcon } from "./campart.ts";
 import { paintBackdrop, paintGround, paintNear, paintTrunk } from "./ground.ts";
@@ -91,10 +94,21 @@ export function showSheet(s: Sprites, bodies: readonly Body[], folk: readonly Sp
 }
 
 /**
- * Every camp thing with its name under it, kind by kind, three screen pixels to each of its own:
- * `?sheet=camp`. The pets and the cabin's roofs come last.
+ * The era Leaf gives this page, from its view of the member's town; when Leaf does not say (signed
+ * out, or no answer), the era every page has from the first, which has nothing dated in it.
  */
-export function showCampSheet(art: CampArt): void {
+export async function eraFromLeaf(): Promise<Era> {
+  const { status, body } = await ask("/v1/game/play/town");
+  const state = status === 200 && isRecord(body) && isRecord(body.state) ? body.state : null;
+  return state && isEra(state.era) ? state.era : eraAt(0);
+}
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
+
+/**
+ * Every camp thing open in the era Leaf gave the page (`thingOpen`) with its name under it, kind by
+ * kind, three screen pixels to each of its own: `?sheet=camp`. The pets and the cabin's roofs come last.
+ */
+export function showCampSheet(art: CampArt, cat: Catalog): void {
   const WIDE = 1400;
   const ZOOM = 3;
   const PAD = 14;
@@ -104,9 +118,10 @@ export function showCampSheet(art: CampArt): void {
     head?: true;
   }
   const entries: Entry[] = [];
+  const open = THINGS.filter((t) => thingOpen(cat, t.id));
   for (const kind of KINDS) {
     entries.push({ pics: [], name: KIND_NAMES[kind], head: true });
-    for (const t of THINGS) {
+    for (const t of open) {
       if (t.kind !== kind) continue;
       const ways = art.things[t.id] ?? [];
       // Each way round, and for the first way each state it can be in.

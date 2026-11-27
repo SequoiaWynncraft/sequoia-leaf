@@ -11,7 +11,7 @@
  */
 import { ask } from "@sequoia-leaf/kit/net.ts";
 import { bake, type Body, lookFor, NOBODY, paintSkin, skinFigure } from "@sequoia-leaf/kit/skin.ts";
-import { readBanners } from "@sequoia-leaf/pulls/wire.ts";
+import { type Called, readBanners } from "@sequoia-leaf/pulls/wire.ts";
 import { type Banner, BANNERS } from "@sequoia-leaf/raid/content/banners.ts";
 import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { figureIn, SUMMONS } from "@sequoia-leaf/raid/content/figures.ts";
@@ -46,12 +46,16 @@ export async function meetMembers(seen: (banner: string, name: string, body: Bod
       known(id, figure, name, bake(paintSkin(lookFor(headliner.name))));
       skinFigure(headliner.id, (body) => known(id, figure, name, body));
     }
-    called.forEach((person, i) => {
-      const grooter = CALLED[i];
-      if (grooter) meet(grooter, person.id, person.name);
-    });
+    for (const [grooter, person] of seated(called)) meet(grooter, person.id, person.name);
   }
 }
+
+/** Who wears which grooter: seat N is the Nth; a seat beyond them wears nobody, and an empty one stays a stand-in. */
+export const seated = (called: readonly Called[]): (readonly [PersonId, Called])[] =>
+  called.flatMap((person) => {
+    const grooter = CALLED[person.seat - 1];
+    return grooter === undefined ? [] : [[grooter, person] as const];
+  });
 
 /** Has a person who is no headliner be a member from now on: their made-up look at once, their skin once it comes. */
 function meet(figure: PersonId, id: string, name: string): void {

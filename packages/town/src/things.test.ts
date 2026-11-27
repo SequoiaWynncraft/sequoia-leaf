@@ -2,9 +2,19 @@ import { describe, expect, test } from "bun:test";
 
 import { catalogAt, everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
 import { figureIn } from "@sequoia-leaf/raid/content/figures.ts";
-import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
+import { eraOf, LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 
-import { figureThing, footprint, isMemberThing, KIND_NAMES, KINDS, memberThing, thingOf, THINGS } from "./things.ts";
+import {
+  figureThing,
+  footprint,
+  isMemberThing,
+  KIND_NAMES,
+  KINDS,
+  memberThing,
+  thingOf,
+  thingOpen,
+  THINGS,
+} from "./things.ts";
 
 /** The camp names the raid's figures as the catalogue with every release open has them. */
 const CAT = catalogAt(LAST_ERA);
@@ -82,5 +92,37 @@ describe("the catalogue", () => {
     expect(fence && footprint(fence, 1)).toEqual([1, 2]);
     const gnome = thingOf("gnome");
     expect(gnome && footprint(gnome, 1)).toEqual([1, 1]);
+  });
+});
+
+describe("what is open of the camp's things", () => {
+  test("a figure's carving and a banner's member are open from their release on; everything else always", () => {
+    const before = catalogAt(eraOf("gaz-stall"));
+    const night = catalogAt(eraOf("groot-night"));
+    expect(
+      ["figure-greg", "figure-peep", "member-banner-1", "member-groot-night", "lantern-post"].map((id) =>
+        thingOpen(before, id),
+      ),
+    ).toEqual([true, false, true, false, true]);
+    expect(["figure-peep", "figure-crab8", "member-groot-night"].map((id) => thingOpen(night, id))).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    // What the camp sheet shows before 8 December: no figure or member Groot Night brings.
+    const shown = THINGS.filter((t) => thingOpen(before, t.id)).map((t) => t.id);
+    expect(
+      shown.filter((id) =>
+        [
+          "figure-peep",
+          "figure-munch",
+          "figure-clutch",
+          "figure-crab31",
+          "figure-crab8",
+          "member-groot-night",
+        ].includes(id),
+      ),
+    ).toEqual([]);
+    expect(shown.length).toBe(THINGS.length - 6);
   });
 });

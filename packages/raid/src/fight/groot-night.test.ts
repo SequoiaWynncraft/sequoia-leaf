@@ -15,7 +15,7 @@ import { cellAt, distance } from "../hex.ts";
 import { chairsUsed, type Placed, traitSteps } from "../party.ts";
 import { beginFight, choose, move, newPiece, startRun } from "../run.ts";
 import { CAT, onCell, only, partyOfFigures, ready, steps, stepUntil, still, unitOf, unitsOf } from "../testkit.ts";
-import { crack, giveMana, hurt, HZ } from "./core.ts";
+import { crack, giveMana, hide, hurt, HZ } from "./core.ts";
 import { openFight } from "./engine.ts";
 import type { Fight, FightEvent, Unit } from "./types.ts";
 
@@ -357,8 +357,8 @@ describe("Was Never Here (Crab #8)", () => {
     two.hp = 10;
     three.hp = 4000;
     const events = stepUntil(f, (e) => e.t === "hit" && e.by === u.id && e.id === three.id);
-    const hide = only(events, "status").find((e) => e.id === u.id && e.status === "hidden");
-    expect(hide?.ticks).toBe(n("crab8", "hides") * HZ);
+    const hid = only(events, "status").find((e) => e.id === u.id && e.status === "hidden");
+    expect(hid?.ticks).toBe(n("crab8", "hides") * HZ);
     // It picks as it comes up: Two first, who falls; then at once the next with the least, Three.
     const hits = only(events, "hit").filter((e) => e.by === u.id && e.source === "ability");
     expect(hits.map((e) => e.id)).toEqual([two.id, three.id]);
@@ -511,5 +511,51 @@ describe("the emblems Groot Night brings", () => {
     );
     expect([f.traits[0].chorus, unitOf(f, "moth").manaRate]).toEqual([1, t("chorus", "own", 1)]);
     expect([f.traits[0].grooter, unitOf(f, "worm").crack]).toEqual([1, t("grooter", "crack", 1)]);
+  });
+});
+
+// ---------- review fixes ----------
+
+describe("what lands, and what is received", () => {
+  test("the gift cap counts the mana a figure received, not the mana it was offered", () => {
+    const f = night([onCell("crab31", 0, HOME), onCell("moth", 0, cellAt(2, 5))], [onCell("mud", 1, NEAR)]);
+    const [giver, moth] = [unitOf(f, "crab31"), unitOf(f, "moth")];
+    moth.manaFull = 100;
+    moth.mana = 90;
+    // Offered 30 with 10 to fill: it receives 10, and 40 more may still come within the 2 seconds.
+    expect(giveMana(f, moth, 30, giver)).toBe(10);
+    moth.mana = 0;
+    expect(giveMana(f, moth, 50, giver)).toBe(FIGHT.giftMost - 10);
+    expect(moth.mana).toBe(FIGHT.giftMost - 10);
+  });
+  test("a crack lands only with a hit that lands: a hidden Crab #8 is neither hurt nor cracked by Peep's hat", () => {
+    const f = night([onCell("peep", 0, HOME)], [onCell("crab8", 1, NEAR)]);
+    const [peep, crab8] = [unitOf(f, "peep"), unitOf(f, "crab8", 1)];
+    still(crab8);
+    peep.attack = 0;
+    ready(peep);
+    // The hat is thrown at it; it goes into its shell before the hat arrives.
+    stepUntil(f, castBy(peep));
+    hide(f, crab8, 40);
+    const later = steps(f, 30);
+    expect(only(later, "hit").filter((e) => e.id === crab8.id)).toEqual([]);
+    expect([crab8.cracked, crab8.armour, cracks(later, crab8)]).toEqual([0, 0, []]);
+    // Nor does a crack land of itself on one nothing can reach (Munch's bites, Grooter's hits).
+    crack(f, crab8, 10, peep);
+    expect(crab8.cracked).toBe(0);
+  });
+  test("the Commodore heals the grooters hurt when the heal lands, not those hurt when he rang", () => {
+    const { f, u } = scene("commodore", [FOUR]);
+    stepUntil(f, castBy(u));
+    steps(f, 0.8 * HZ);
+    const [one, two] = [unitOf(f, "grooter1"), unitOf(f, "grooter2")];
+    // Kill the third, so he rings again; nobody is hurt as he rings, and the second is hurt during the wait.
+    hurt(f, unitOf(f, "grooter3"), 1e6, "true", "dusk", null);
+    ready(u);
+    const rung = only(stepUntil(f, castBy(u)), "cast").find((e) => e.id === u.id);
+    expect(rung?.targets).toEqual([]);
+    two.hp = 10;
+    steps(f, 0.8 * HZ);
+    expect([one.hp, two.hp]).toEqual([one.maxHp, two.maxHp]);
   });
 });

@@ -55,6 +55,8 @@ import {
   GROVE,
   type GroveState,
   groveState,
+  heardPeople,
+  missingPeople,
   onward,
   refusedLine,
   revealOf,
@@ -238,13 +240,17 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
     if (pool !== GROVE && pool !== b?.id) pool = GROVE;
   }
 
-  /** Asks Leaf who headlines the banners, while it has said of none: at once, or `every` milliseconds apart at most. */
+  /**
+   * Asks Leaf who the banners' people are, before the pulls are open and while an open banner has no
+   * headliner known: at once, or `every` milliseconds apart at most. Each banner is kept as Leaf last
+   * said it.
+   */
   async function meetBanners(every = 60_000): Promise<void> {
     const now = Date.now();
-    if (banners.some((b) => b.headliner) || now - metAt < every) return;
+    if ((play !== null && !missingPeople(play.state, banners)) || now - metAt < every) return;
     metAt = now;
     const said = await askLeaf("/v1/game/banners");
-    banners = (said.status === 200 ? readBanners(said.body) : null) ?? banners;
+    banners = heardPeople(banners, (said.status === 200 ? readBanners(said.body) : null) ?? []);
   }
 
   async function open(): Promise<Trouble | null> {

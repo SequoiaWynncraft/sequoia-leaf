@@ -59,9 +59,9 @@ export const GROOT_NIGHT_CASTS: Partial<Record<UnitKind, Cast>> = {
     if (!t) return false;
     const damage = powered(u, n("damage"));
     say(f, u, [t.cell], [t.id], flight(u.cell, t.cell));
+    // The crack comes with the hat, and only if the hat lands.
     const land = (): void => {
-      hurt(f, t, damage, "physical", "ability", u);
-      crack(f, t, n("crack"), u);
+      if (hurt(f, t, damage, "physical", "ability", u) > 0) crack(f, t, n("crack"), u);
     };
     send(f, u, u.cell, t, land, 0, [damage, "physical"]);
     return true;
@@ -89,8 +89,7 @@ export const GROOT_NIGHT_CASTS: Partial<Record<UnitKind, Cast>> = {
       // Each bite at whoever it is after as it bites.
       const at = aim(f, u);
       if (!at) return;
-      hurt(f, at, damage, "physical", "ability", u);
-      crack(f, at, n("crack"), u);
+      if (hurt(f, at, damage, "physical", "ability", u) > 0) crack(f, at, n("crack"), u);
     });
     return true;
   },
@@ -133,8 +132,9 @@ export const GROOT_NIGHT_CASTS: Partial<Record<UnitKind, Cast>> = {
   },
 
   commodore: (f, u, n) => {
-    // He rings at once: the free places for those missing are marked, and the grooters still up are
-    // who he heals. They come, and the heals land, after the wait, while he stands ringing.
+    // He rings at once: the free places for those missing are marked, and the grooters hurt then are
+    // named. They come, and the heals land on whoever of his is hurt then, after the wait, while he
+    // stands ringing.
     const up = f.units.filter((o) => o.alive && o.owner === u.id && isGrooterId(o.kind));
     const hurting = up.filter((o) => o.hp < o.maxHp);
     const cells = freeAround(f, u.cell, 2, Math.max(0, n("most") - up.length));
@@ -147,10 +147,10 @@ export const GROOT_NIGHT_CASTS: Partial<Record<UnitKind, Cast>> = {
     later(f, wait, () => {
       // It lasts only in the life it began in.
       if (!u.alive || u.downs !== life) return;
-      for (const o of hurting) if (o.alive) heal(f, o, o.maxHp - o.hp, "ability", u);
-      const standing = new Set<UnitKind>(
-        f.units.filter((o) => o.alive && o.owner === u.id && isGrooterId(o.kind)).map((o) => o.kind),
-      );
+      // Those of his grooters hurt as it lands are healed to full, whoever was hurt as he rang.
+      const mine = f.units.filter((o) => o.alive && o.owner === u.id && isGrooterId(o.kind));
+      for (const o of mine) if (o.hp < o.maxHp) heal(f, o, o.maxHp - o.hp, "ability", u);
+      const standing = new Set<UnitKind>(mine.map((o) => o.kind));
       for (const marked of cells) {
         // A marked place taken meanwhile: the nearest free one within 2 of him instead.
         const cell = f.taken[marked] === -1 ? marked : (freeAround(f, u.cell, 2, 1)[0] ?? -1);

@@ -71,6 +71,20 @@ export function showing(
   return null;
 }
 
+/** What the Grove knows of the banners' people, by banner: each as Leaf last said it, a later word replacing an earlier. */
+export const heardPeople = (known: readonly BannerPerson[], said: readonly BannerPerson[]): BannerPerson[] => [
+  ...new Map([...known, ...said].map((b) => [b.id, b])).values(),
+];
+/** Whether Leaf is to be asked who the banners' people are: an open banner drawn from a member's skin has no headliner known. */
+export const missingPeople = (
+  view: Pick<PullsView, "open">,
+  people: readonly BannerPerson[],
+  rows: readonly Banner[] = BANNERS,
+): boolean =>
+  view.open.some(
+    ({ id }) => rows.find((b) => b.id === id)?.look === "skin" && !people.find((b) => b.id === id)?.headliner,
+  );
+
 /**
  * A banner's headliner's name: the set's own figure's, as the catalogue with every release open has
  * it (a pool or a prize of any banner, open or past), or the member's as Leaf says it; null for one
@@ -186,7 +200,7 @@ export function rules(headliner: string | null, featured: readonly Rarity[] = []
     ...(featured.length === 0
       ? []
       : [
-          `Featured: a ${either(featured)} drawn here is one of the featured figures ${percent(RATES.featured)} of the time.`,
+          `Featured: ${percent(RATES.featured)} of the ${either(featured)} drawn here are featured figures, and ${percent(1 - RATES.featured)} are the other figures of that rarity, each as likely as the others in its half.`,
         ]),
     `${named("mid")}: ${percent(mid.chance)} of the pulls that are not a top prize, so ${percent((1 - top.chance) * mid.chance)} a pull while a top prize is ${percent(top.chance)}. At least 1 pull in every ${mid.certainAt} is ${RARITY_NAMES.find((r) => tierOf(r) === "mid")} or better.`,
     `Seeds: ${s.filler} for ${named("filler")}, ${s.mid} for ${named("mid")}, ${s.top} for a top prize.`,
